@@ -1,11 +1,11 @@
 export default defineNuxtRouteMiddleware((to) => {
-  const email = useCookie('auth_email')
+  const username = useCookie('auth_username')
   
-  if (!email.value && to.path !== '/login' && !to.path.startsWith('/print')) {
+  if (!username.value && to.path !== '/login' && !to.path.startsWith('/print')) {
     return navigateTo('/login')
   }
   
-  if (email.value && to.path === '/login') {
+  if (username.value && to.path === '/login') {
     return navigateTo('/')
   }
 })

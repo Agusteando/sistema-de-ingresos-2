@@ -10,9 +10,8 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "dayjs": "^1.11.10",
-    "google-auth-library": "^9.6.3",
-    "googleapis": "^133.0.0",
     "lucide-vue-next": "^0.344.0",
     "mysql2": "^3.9.2",
     "nuxt": "^3.10.3",
