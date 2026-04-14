@@ -1,56 +1,64 @@
+import { OAuth2Client } from 'google-auth-library'
 import { query } from '../../utils/db'
-import bcrypt from 'bcryptjs'
 
 export default defineEventHandler(async (event) => {
-  const { username, password } = await readBody(event)
-
-  if (!username || !password) {
-    throw createError({ statusCode: 400, message: 'Credenciales incompletas' })
+  const body = await readBody(event)
+  const config = useRuntimeConfig()
+  
+  if (!config.public.googleClientId) {
+    throw createError({ statusCode: 500, message: 'Configuración de Google ausente' })
   }
 
-  const users = await query<any[]>('SELECT * FROM users')
+  const client = new OAuth2Client(config.public.googleClientId)
   
-  // Auto-provision default admin if the users table is completely empty to prevent lockout
-  if (users.length === 0 && username === 'admin' && password === 'admin') {
-    const hash = bcrypt.hashSync('admin', 10)
-    await query("INSERT INTO users (username, password, email, plantel) VALUES ('admin', ?, 'admin@ejemplo.com', 'PT')", [hash])
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken: body.credential,
+      audience: config.public.googleClientId
+    })
     
-    setCookie(event, 'auth_username', 'admin', { path: '/', maxAge: 86400 * 7 })
-    setCookie(event, 'auth_id', '1', { path: '/', maxAge: 86400 * 7 })
-    setCookie(event, 'auth_name', 'Administrador Principal', { path: '/', maxAge: 86400 * 7 })
+    const payload = ticket.getPayload()
+    if (!payload || !payload.email) throw new Error('Token inválido')
+    
+    // Look up user by Google email
+    let [user] = await query<any[]>('SELECT * FROM users WHERE email = ? OR username = ?', [payload.email, payload.email])
+    
+    // Just-In-Time (JIT) Provisioning
+    if (!user) {
+      const allUsers = await query<any[]>('SELECT id FROM users LIMIT 1')
+      // If this is the absolute first login to the entire system, grant global admin
+      const defaultRole = allUsers.length === 0 ? 'global' : 'plantel'
+      const defaultPlantel = 'PT' 
+      
+      const result: any = await query(
+        'INSERT INTO users (username, password, email, plantel, role, avatar) VALUES (?, ?, ?, ?, ?, ?)', 
+        [payload.name || payload.email, 'GOOGLE_AUTH', payload.email, defaultPlantel, defaultRole, payload.picture || null]
+      )
+      
+      user = {
+        id: result.insertId,
+        username: payload.name || payload.email,
+        email: payload.email,
+        plantel: defaultPlantel,
+        role: defaultRole,
+        avatar: payload.picture || null
+      }
+    } else {
+      // Opportunistically update avatar to keep it fresh
+      if (payload.picture && user.avatar !== payload.picture) {
+        await query('UPDATE users SET avatar = ? WHERE id = ?', [payload.picture, user.id])
+      }
+    }
+    
+    // Strictly establish secure, client-accessible session cookies
+    const cookieOpts = { secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 86400 * 7 }
+    setCookie(event, 'auth_email', user.email || payload.email, cookieOpts)
+    setCookie(event, 'auth_name', user.username || payload.name, cookieOpts)
+    setCookie(event, 'auth_role', user.role || 'plantel', cookieOpts)
+    setCookie(event, 'auth_plantel', user.plantel || 'PT', cookieOpts)
+    
     return { success: true }
+  } catch (error) {
+    throw createError({ statusCode: 401, message: 'Fallo de autenticación con Google' })
   }
-
-  const [user] = await query<any[]>('SELECT * FROM users WHERE username = ?', [username])
-  
-  if (!user) {
-    throw createError({ statusCode: 401, message: 'Credenciales inválidas' })
-  }
-
-  // Gracefully handle both plain text legacy passwords and proper bcrypt hashes
-  const isMatch = (password === user.password) || bcrypt.compareSync(password, user.password)
-
-  if (!isMatch) {
-    throw createError({ statusCode: 401, message: 'Credenciales inválidas' })
-  }
-  
-  setCookie(event, 'auth_username', user.username, { 
-    secure: process.env.NODE_ENV === 'production', 
-    path: '/', 
-    maxAge: 86400 * 7 
-  })
-  
-  setCookie(event, 'auth_id', String(user.id), { 
-    secure: process.env.NODE_ENV === 'production', 
-    path: '/', 
-    maxAge: 86400 * 7 
-  })
-
-  setCookie(event, 'auth_name', user.username, { 
-    secure: process.env.NODE_ENV === 'production',
-    path: '/', 
-    maxAge: 86400 * 7 
-  })
-  
-  return { success: true }
 })

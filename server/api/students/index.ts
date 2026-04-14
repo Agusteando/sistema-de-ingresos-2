@@ -2,11 +2,18 @@ import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
   const method = event.node.req.method
+  const user = event.context.user
 
   if (method === 'GET') {
     const { q = '', ciclo = '2024' } = getQuery(event)
     let whereClause = "A.estatus = 'Activo'"
     const params: any[] = []
+
+    // Hard RBAC scope enforcement for listing
+    if (user.role !== 'global') {
+      whereClause += " AND A.plantel = ?"
+      params.push(user.plantel)
+    }
 
     if (q) {
       whereClause += " AND (A.nombreCompleto LIKE ? OR A.matricula = ?)"
@@ -36,18 +43,20 @@ export default defineEventHandler(async (event) => {
   if (method === 'POST') {
     const body = await readBody(event)
     
-    // Exactly 15 parameters mapped to 15 columns for legacy base table
+    // RBAC: Non-global users can only create students in their own plantel
+    const assignedPlantel = user.role === 'global' ? body.plantel : user.plantel
+
     await query(`
       INSERT INTO base (
         matricula, apellidoPaterno, apellidoMaterno, nombres, 
         \`Fecha de nacimiento\`, genero, plantel, nivel, grado, grupo, 
         \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Admin', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      '', // Handled by trigger
+      '', 
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      body.birth, body.genero, body.plantel, body.nivel, body.grado, body.grupo,
-      body.padre, body.telefono, body.correo, body.ciclo
+      body.birth, body.genero, assignedPlantel, body.nivel, body.grado, body.grupo,
+      body.padre, body.telefono, body.correo, user.name, body.ciclo
     ])
     return { success: true }
   }

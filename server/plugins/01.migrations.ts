@@ -3,7 +3,6 @@ import { getDb } from '../utils/db'
 export default defineNitroPlugin(async () => {
   const db = getDb()
   try {
-    // Only creating missing new tables; strict backward compatibility for existing ones.
     await db.query(`
       CREATE TABLE IF NOT EXISTS facturas (
         id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -19,6 +18,12 @@ export default defineNitroPlugin(async () => {
         fecha DATETIME DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `)
+
+    // Safe strictly additive backward-compatible schema updates
+    const [roleCols]: any = await db.query(`SHOW COLUMNS FROM users LIKE 'role'`)
+    if (roleCols.length === 0) {
+      await db.query(`ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'plantel'`)
+    }
   } catch (error) {
     console.error('Schema check error:', error)
   }

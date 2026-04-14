@@ -2,17 +2,22 @@ import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
   const { q = '', ciclo = '2024' } = getQuery(event)
+  const user = event.context.user
   
-  // Dynamic Select Reverse Engineering: Get active students and calculate global totals
   let whereClause = "A.estatus = 'Activo'"
   const params: any[] = []
+
+  // Hard RBAC enforcement at database level
+  if (user.role !== 'global') {
+    whereClause += " AND A.plantel = ?"
+    params.push(user.plantel)
+  }
 
   if (q) {
     whereClause += " AND (A.nombreCompleto LIKE ? OR A.matricula = ?)"
     params.push(`%${q}%`, q)
   }
 
-  // Same logic as legacy dynamicSelect.php but optimized and clean
   const sql = `
     SELECT 
       A.matricula, A.nombreCompleto, A.grado, A.grupo, A.nivel, A.plantel, A.estatus, A.correo,

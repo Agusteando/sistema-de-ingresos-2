@@ -12,17 +12,17 @@
         <NuxtLink to="/" class="nav-item group">
           <LucideUsers :size="18" class="group-hover:text-white transition-colors" /> Padrón de Alumnos
         </NuxtLink>
-        <NuxtLink to="/reportes" class="nav-item group">
-          <LucidePieChart :size="18" class="group-hover:text-white transition-colors" /> Corte de Caja
+        <NuxtLink to="/reportes" class="nav-item group" v-if="userRole === 'global'">
+          <LucidePieChart :size="18" class="group-hover:text-white transition-colors" /> Consolidación de Ingresos
         </NuxtLink>
         <NuxtLink to="/conceptos" class="nav-item group">
           <LucideSettings :size="18" class="group-hover:text-white transition-colors" /> Catálogo de Documentos
         </NuxtLink>
         <NuxtLink to="/facturas" class="nav-item group">
-          <LucideFileText :size="18" class="group-hover:text-white transition-colors" /> Facturación CFDI
+          <LucideFileText :size="18" class="group-hover:text-white transition-colors" /> Navegador CFDI
         </NuxtLink>
-        <NuxtLink to="/usuarios" class="nav-item group">
-          <LucideShield :size="18" class="group-hover:text-white transition-colors" /> Gestión de Usuarios
+        <NuxtLink to="/usuarios" class="nav-item group" v-if="userRole === 'global'">
+          <LucideShield :size="18" class="group-hover:text-white transition-colors" /> Gestión de Accesos
         </NuxtLink>
       </nav>
       
@@ -43,7 +43,9 @@
             </div>
             <div class="flex flex-col overflow-hidden max-w-[140px]">
               <span class="text-[0.8125rem] text-white font-semibold leading-tight truncate">{{ adminName }}</span>
-              <span class="text-[0.65rem] text-brand-leaf font-bold uppercase tracking-wider">Autorizado</span>
+              <span class="text-[0.65rem] font-bold uppercase tracking-wider" :class="userRole === 'global' ? 'text-accent-gold' : 'text-brand-leaf'">
+                {{ userRole === 'global' ? 'ADMINISTRADOR GLOBAL' : `PLANTEL ${userPlantel}` }}
+              </span>
             </div>
           </div>
           <button @click="logout" title="Cerrar Sesión" class="text-white/50 hover:text-accent-coral transition-colors shrink-0">
@@ -82,7 +84,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useState } from '#app'
+import { useCookie, useState } from '#app'
 import { LucideUsers, LucidePieChart, LucideSettings, LucideFileText, LucideShield, LucideUser, LucideCheckCircle, LucideAlertCircle, LucideLogOut } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 
@@ -91,7 +93,9 @@ const route = useRoute()
 const state = useState('globalState', () => ({ lateFeeActive: true, ciclo: '2024' }))
 
 const adminPhoto = ref(null)
-const adminName = ref('Administrador')
+const adminName = ref('Usuario')
+const userRole = ref(useCookie('auth_role').value || 'plantel')
+const userPlantel = ref(useCookie('auth_plantel').value || 'PT')
 
 onMounted(async () => {
   try {
