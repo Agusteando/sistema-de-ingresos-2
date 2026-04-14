@@ -5,7 +5,6 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'GET') {
     const { q = '', ciclo = '2024' } = getQuery(event)
-    
     let whereClause = "A.estatus = 'Activo'"
     const params: any[] = []
 
@@ -16,7 +15,7 @@ export default defineEventHandler(async (event) => {
 
     const sql = `
       SELECT 
-        A.matricula, A.nombreCompleto, A.grado, A.grupo, A.nivel, A.plantel, A.estatus, A.correo, A.telefono, A.padre, A.birth,
+        A.matricula, A.nombreCompleto, A.grado, A.grupo, A.nivel, A.plantel, A.estatus, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth,
         IFNULL(B.pagosTotal, 0) AS pagosTotal,
         IFNULL(C.saldo, 0) AS importeTotal,
         (IFNULL(C.saldo, 0) - IFNULL(B.pagosTotal, 0)) AS saldoNeto,
@@ -29,23 +28,27 @@ export default defineEventHandler(async (event) => {
         SELECT matricula, SUM(((100 - IFNULL(beca, 0)) * costo / 100) * IFNULL(meses, 1)) AS saldo FROM documentos WHERE ciclo = ? GROUP BY matricula
       ) C ON A.matricula = C.matricula
       WHERE ${whereClause}
-      ORDER BY A.nombreCompleto ASC LIMIT 50;
+      ORDER BY A.nombreCompleto ASC LIMIT 100;
     `
     return await query(sql, [ciclo, ciclo, ciclo, ...params])
   }
 
   if (method === 'POST') {
     const body = await readBody(event)
+    
+    // Strict exact matching to the legacy 19 column setup. 
+    // We explicitly name the 15 columns we want to insert to prevent value count errors.
     await query(`
       INSERT INTO base (
-        matricula, nombreCompleto, apellidoPaterno, apellidoMaterno, nombres, 
-        birth, padre, genero, plantel, nivel, grado, grupo, telefono, correo, ciclo
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE 
-        nombreCompleto = VALUES(nombreCompleto), nivel = VALUES(nivel), grado = VALUES(grado), grupo = VALUES(grupo)
+        matricula, apellidoPaterno, apellidoMaterno, nombres, 
+        \`Fecha de nacimiento\`, genero, plantel, nivel, grado, grupo, 
+        \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Admin', ?)
     `, [
-      body.matricula, body.nombreCompleto, body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      body.birth, body.padre, body.genero, body.plantel, body.nivel, body.grado, body.grupo, body.telefono, body.correo, body.ciclo
+      '', // Let legacy matricula trigger overwrite this
+      body.apellidoPaterno, body.apellidoMaterno, body.nombres,
+      body.birth, body.genero, body.plantel, body.nivel, body.grado, body.grupo,
+      body.padre, body.telefono, body.correo, body.ciclo
     ])
     return { success: true }
   }

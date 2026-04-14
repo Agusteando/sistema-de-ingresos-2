@@ -8,11 +8,11 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event)
     await query(`
       UPDATE base SET 
-        apellidoPaterno = ?, apellidoMaterno = ?, nombres = ?, nombreCompleto = ?,
-        birth = ?, padre = ?, plantel = ?, nivel = ?, grado = ?, grupo = ?, telefono = ?, correo = ?, ciclo = ?
+        apellidoPaterno = ?, apellidoMaterno = ?, nombres = ?, nombreCompleto = CONCAT(?, ' ', ?, ' ', ?),
+        \`Fecha de nacimiento\` = ?, \`Nombre del padre o tutor\` = ?, plantel = ?, nivel = ?, grado = ?, grupo = ?, telefono = ?, correo = ?, ciclo = ?
       WHERE matricula = ?
     `, [
-      body.apellidoPaterno, body.apellidoMaterno, body.nombres, body.nombreCompleto,
+      body.apellidoPaterno, body.apellidoMaterno, body.nombres, body.apellidoPaterno, body.apellidoMaterno, body.nombres,
       body.birth, body.padre, body.plantel, body.nivel, body.grado, body.grupo, body.telefono, body.correo, body.ciclo,
       matricula
     ])
