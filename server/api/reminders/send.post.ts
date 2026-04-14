@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
       <h2 style="color: #4E844E;">Aviso de Saldo Pendiente - IECS IEDIS</h2>
       <p>Estimado(a) Padre, Madre o Tutor,</p>
       <p>${body.mensaje}</p>
-      <p>Atentamente,<br/><strong>Administración SISTEMA DE INGRESOS 2</strong></p>
+      <p>Atentamente,<br/><strong>Sistema de Ingresos 2</strong></p>
     </div>
   `
   await sendEmail(body.correo, body.asunto, htmlTemplate)

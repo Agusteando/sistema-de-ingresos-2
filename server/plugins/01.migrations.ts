@@ -1,4 +1,5 @@
 import { getDb } from '../utils/db'
+import bcrypt from 'bcryptjs'
 
 export default defineNitroPlugin(async () => {
   const db = getDb()
@@ -19,11 +20,31 @@ export default defineNitroPlugin(async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `)
 
-    // Safe strictly additive backward-compatible schema updates
+    // Safe strictly additive backward-compatible schema updates for RBAC
     const [roleCols]: any = await db.query(`SHOW COLUMNS FROM users LIKE 'role'`)
     if (roleCols.length === 0) {
       await db.query(`ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'plantel'`)
     }
+
+    const [plantelesCols]: any = await db.query(`SHOW COLUMNS FROM users LIKE 'planteles'`)
+    if (plantelesCols.length === 0) {
+      await db.query(`ALTER TABLE users ADD COLUMN planteles TEXT`)
+      // Migrate legacy single plantel to multiple planteles structure
+      await db.query(`UPDATE users SET planteles = plantel WHERE plantel IS NOT NULL AND planteles IS NULL`)
+    }
+
+    // Seed super admin immediately
+    const superAdminEmail = 'desarrollo.tecnologico@casitaiedis.edu.mx'
+    const [existingAdmin]: any = await db.query(`SELECT id FROM users WHERE email = ?`, [superAdminEmail])
+    if (existingAdmin.length === 0) {
+      const hash = bcrypt.hashSync('SUPER_ADMIN_AUTO_SEED', 10)
+      const allPlanteles = 'PREEM,PREET,CT,CM,DM,CO,DC,PM,PT,SM,ST,IS,ISM'
+      await db.query(
+        `INSERT INTO users (username, password, email, planteles, role) VALUES (?, ?, ?, ?, 'global')`,
+        ['Super Administrador', hash, superAdminEmail, allPlanteles]
+      )
+    }
+
   } catch (error) {
     console.error('Schema check error:', error)
   }

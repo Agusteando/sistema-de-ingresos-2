@@ -7,16 +7,18 @@ export default defineEventHandler(async (event) => {
   const user = event.context.user
 
   if (user.role !== 'global') {
-    throw createError({ statusCode: 403, message: 'Acceso denegado' })
+    throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
   }
 
   if (method === 'PUT') {
-    const { username, password, email, plantel, role } = await readBody(event)
+    const { username, password, email, planteles, role } = await readBody(event)
+    const plantelesStr = Array.isArray(planteles) ? planteles.join(',') : planteles
+
     if (password && password.trim() !== '') {
       const hash = bcrypt.hashSync(password, 10)
-      await query('UPDATE users SET username=?, password=?, email=?, plantel=?, role=? WHERE id=?', [username, hash, email, plantel, role, id])
+      await query('UPDATE users SET username=?, password=?, email=?, planteles=?, role=? WHERE id=?', [username, hash, email, plantelesStr, role, id])
     } else {
-      await query('UPDATE users SET username=?, email=?, plantel=?, role=? WHERE id=?', [username, email, plantel, role, id])
+      await query('UPDATE users SET username=?, email=?, planteles=?, role=? WHERE id=?', [username, email, plantelesStr, role, id])
     }
     return { success: true }
   }

@@ -11,12 +11,10 @@
         <input type="date" v-model="filtros.fin" class="input-field shadow-sm">
       </div>
       <div class="form-group m-0 flex-1 w-full">
-        <label class="form-label text-gray-500">Entidad Escolar</label>
+        <label class="form-label text-gray-500">Entidad Escolar a Filtrar</label>
         <select v-model="filtros.plantel" class="input-field shadow-sm">
-          <option value="">Consolidado Global</option>
-          <option value="PT">Primaria Toluca</option>
-          <option value="PM">Primaria Metepec</option>
-          <option value="SM">Secundaria Metepec</option>
+          <option value="">Consolidado de Planteles</option>
+          <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
         </select>
       </div>
       <button class="btn btn-secondary h-[46px] min-w-[200px] w-full md:w-auto shadow-sm" @click="loadData" :disabled="loading">
@@ -44,7 +42,9 @@
         <tbody>
           <tr v-if="loading"><td colspan="5" class="text-center font-medium text-gray-500 py-16">Agrupando datos de ingresos...</td></tr>
           <tr v-else-if="!datos.length"><td colspan="5" class="text-center text-gray-400 py-16">El corte no arrojó resultados en el periodo indicado.</td></tr>
-          <tr v-else v-for="(row, idx) in datos" :key="idx" class="hover:bg-gray-50/80 transition-colors border-b border-gray-50 last:border-none">
+          <tr v-else v-for="(row, idx) in datos" :key="idx" 
+              class="hover:bg-gray-50/80 transition-colors border-b border-gray-50 last:border-none cursor-context-menu"
+              @contextmenu.prevent="showContextMenu($event, row)">
             <td class="py-4 px-6 text-gray-600 font-medium">{{ new Date(row.fecha).toLocaleDateString() }}</td>
             <td class="py-4 px-6 font-bold text-gray-800">{{ row.categoria }}</td>
             <td class="py-4 px-6"><span class="badge bg-blue-100 text-blue-800">{{ row.formaDePago }}</span></td>
@@ -59,10 +59,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { LucideFilter } from 'lucide-vue-next'
+import { LucideFilter, LucidePrinter } from 'lucide-vue-next'
+import { PLANTELES_LIST } from '~/utils/constants'
 import { useState } from '#app'
+import { useContextMenu } from '~/composables/useContextMenu'
 
 const state = useState('globalState')
+const { openMenu } = useContextMenu()
 const filtros = ref({ inicio: '', fin: '', plantel: '' })
 const datos = ref([])
 const loading = ref(false)
@@ -76,5 +79,14 @@ const loadData = async () => {
   } catch (e) { alert('Anomalía calculando corte de caja') } 
   finally { loading.value = false }
 }
+
+const showContextMenu = (event, row) => {
+  openMenu(event, [
+    { label: `Fila: $${Number(row.total).toFixed(2)}`, disabled: true },
+    { label: '-' },
+    { label: 'Imprimir Detalle de Fila (Proximamente)', icon: LucidePrinter, disabled: true, action: () => {} }
+  ])
+}
+
 onMounted(loadData)
 </script>

@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const { matricula, pagos, formaDePago, ciclo = '2024' } = body
 
   if (!matricula || !pagos || !pagos.length) {
-    throw createError({ statusCode: 400, message: 'Faltan parámetros operativos' })
+    throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
   }
 
   const [studentRef] = await query<any[]>(`SELECT nombreCompleto, plantel FROM base WHERE matricula = ?`, [matricula])
@@ -21,7 +21,6 @@ export default defineEventHandler(async (event) => {
       
       const letra = numeroALetras(p.montoPagado)
       
-      // Strict exact column mapping (19 positional elements)
       const [insert] = await conn.execute(`
         INSERT INTO referenciasdepago (
           matricula, documento, mes, mesReal, nombreCompleto, concepto, conceptoNombre,

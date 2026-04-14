@@ -9,10 +9,9 @@ export default defineEventHandler(async (event) => {
     let whereClause = "A.estatus = 'Activo'"
     const params: any[] = []
 
-    // Hard RBAC scope enforcement for listing
-    if (user.role !== 'global') {
+    if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
       whereClause += " AND A.plantel = ?"
-      params.push(user.plantel)
+      params.push(user.active_plantel)
     }
 
     if (q) {
@@ -43,8 +42,7 @@ export default defineEventHandler(async (event) => {
   if (method === 'POST') {
     const body = await readBody(event)
     
-    // RBAC: Non-global users can only create students in their own plantel
-    const assignedPlantel = user.role === 'global' ? body.plantel : user.plantel
+    const assignedPlantel = user.role === 'global' ? body.plantel : user.active_plantel
 
     await query(`
       INSERT INTO base (

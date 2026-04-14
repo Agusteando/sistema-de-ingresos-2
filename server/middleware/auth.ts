@@ -5,15 +5,15 @@ export default defineEventHandler((event) => {
     const email = getCookie(event, 'auth_email')
     
     if (!email) {
-      throw createError({ statusCode: 401, message: 'Acceso no autorizado al sistema' })
+      throw createError({ statusCode: 401, message: 'Acceso no autorizado.' })
     }
 
-    // Attach verified session state to the event context for robust RBAC enforcement
     event.context.user = {
       email,
       name: getCookie(event, 'auth_name') || 'Usuario',
       role: getCookie(event, 'auth_role') || 'plantel',
-      plantel: getCookie(event, 'auth_plantel') || 'PT'
+      planteles: getCookie(event, 'auth_planteles') || '',
+      active_plantel: getCookie(event, 'auth_active_plantel') || ''
     }
   }
 })
