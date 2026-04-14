@@ -2,6 +2,12 @@ import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
   const { inicio, fin, plantel, ciclo = '2024' } = getQuery(event)
+  const user = event.context.user
+  
+  // Strict RBAC limit: Local roles absolutely cannot generate financial consolidated reporting 
+  if (user.role !== 'global') {
+     throw createError({ statusCode: 403, message: 'Operación financiera denegada para este perfil' })
+  }
   
   let where = "r.estatus = 'Vigente' AND r.ciclo = ?"
   const params: any[] = [ciclo]
