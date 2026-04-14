@@ -26,6 +26,15 @@
               </select>
             </div>
 
+            <!-- Control Explícito para Interno / Externo -->
+            <div class="form-group">
+              <label class="form-label">Tipo de Ingreso</label>
+              <select v-model="form.interno" class="input-field" required>
+                <option :value="1">Interno (Reingreso)</option>
+                <option :value="0">Externo (Nuevo ingreso)</option>
+              </select>
+            </div>
+
             <div class="form-group"><label class="form-label">Nivel Académico</label><select v-model="form.nivel" class="input-field" required><option value="Preescolar">Preescolar</option><option value="Primaria">Primaria</option><option value="Secundaria">Secundaria</option></select></div>
             <div class="form-group"><label class="form-label">Grado</label><select v-model="form.grado" class="input-field" required><option value="Primero">Primero</option><option value="Segundo">Segundo</option><option value="Tercero">Tercero</option><option value="Cuarto">Cuarto</option><option value="Quinto">Quinto</option><option value="Sexto">Sexto</option></select></div>
             <div class="form-group"><label class="form-label">Grupo</label><select v-model="form.grupo" class="input-field" required><option value="A">A</option><option value="B">B</option><option value="C">C</option></select></div>
@@ -64,7 +73,7 @@ const loading = ref(false)
 
 const form = ref({
   matricula: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
-  birth: '', genero: '1', plantel: defaultPlantel, nivel: 'Primaria', grado: 'Primero', grupo: 'A',
+  birth: '', genero: '1', plantel: defaultPlantel, interno: 1, nivel: 'Primaria', grado: 'Primero', grupo: 'A',
   padre: '', telefono: '', correo: '', ciclo: state.value.ciclo
 })
 
@@ -73,7 +82,7 @@ onMounted(() => {
     const s = props.student
     form.value = {
       matricula: s.matricula, apellidoPaterno: s.apellidoPaterno, apellidoMaterno: s.apellidoMaterno, nombres: s.nombres, 
-      birth: s.birth ? s.birth.split('T')[0] : '', genero: s.genero || '1', plantel: s.plantel || defaultPlantel, nivel: s.nivel, grado: s.grado, grupo: s.grupo,
+      birth: s.birth ? s.birth.split('T')[0] : '', genero: s.genero || '1', plantel: s.plantel || defaultPlantel, interno: s.interno !== undefined ? Number(s.interno) : 1, nivel: s.nivel, grado: s.grado, grupo: s.grupo,
       padre: s.padre, telefono: s.telefono, correo: s.correo, ciclo: s.ciclo || state.value.ciclo
     }
   }
