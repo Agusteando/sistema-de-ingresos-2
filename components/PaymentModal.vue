@@ -24,21 +24,21 @@
           </div>
         </div>
 
-        <div class="border border-neutral-mist rounded-md overflow-hidden">
+        <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
           <table class="w-full">
-            <thead class="bg-app">
+            <thead class="bg-gray-50/80">
               <tr>
-                <th class="py-3 px-4 text-xs font-bold uppercase text-brand-teal text-left">Concepto</th>
-                <th class="py-3 px-4 text-xs font-bold uppercase text-brand-teal text-left">Mes</th>
-                <th class="py-3 px-4 text-xs font-bold uppercase text-brand-teal text-right w-40">Monto</th>
+                <th class="py-4 px-5 text-xs font-bold uppercase tracking-wider text-gray-500 text-left border-b border-gray-200">Documento</th>
+                <th class="py-4 px-5 text-xs font-bold uppercase tracking-wider text-gray-500 text-left border-b border-gray-200">Mes</th>
+                <th class="py-4 px-5 text-xs font-bold uppercase tracking-wider text-gray-500 text-right border-b border-gray-200 w-40">Monto</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(debt, i) in processedDebts" :key="i" class="border-t border-neutral-mist">
-                <td class="font-bold py-3 px-4">{{ debt.conceptoNombre }}</td>
-                <td class="py-3 px-4">{{ debt.mesLabel }}</td>
-                <td class="text-right py-3 px-4">
-                  <input type="number" class="input-field text-right font-bold py-2 px-3" v-model.number="debt.montoPagado" :max="debt.saldoFinal" min="0" step="0.01">
+              <tr v-for="(debt, i) in processedDebts" :key="i" class="border-t border-gray-100 hover:bg-gray-50/50 transition-colors">
+                <td class="font-bold py-4 px-5 text-gray-700">{{ debt.conceptoNombre }}</td>
+                <td class="py-4 px-5 text-gray-600">{{ debt.mesLabel }}</td>
+                <td class="text-right py-3 px-5">
+                  <input type="number" class="input-field text-right font-bold py-2 px-3 focus:ring-brand-leaf focus:border-brand-leaf bg-white" v-model.number="debt.montoPagado" :max="debt.saldoFinal" min="0" step="0.01">
                 </td>
               </tr>
             </tbody>
@@ -47,6 +47,9 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" @click="$emit('close')" :disabled="processing">Cancelar</button>
+        <button class="btn btn-outline" type="button" @click="previewReceipt" :disabled="processing || totalCobrar <= 0">
+          <LucideEye :size="18"/> Previsualizar
+        </button>
         <button class="btn btn-primary" @click="submit" :disabled="processing || totalCobrar <= 0">
           <LucideCheckCircle :size="18"/> Confirmar Operación
         </button>
@@ -57,7 +60,7 @@
 
 <script setup>
 import { ref, watch, computed } from 'vue'
-import { LucideCheckCircle } from 'lucide-vue-next'
+import { LucideCheckCircle, LucideEye } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useState } from '#app'
 
@@ -86,6 +89,26 @@ watch(() => [props.debts, formaDePago.value], () => {
 
 const totalCobrar = computed(() => processedDebts.value.reduce((a, b) => a + (b.montoPagado || 0), 0))
 
+const previewReceipt = () => {
+  const previewData = {
+    folios: 'PREVIO',
+    fecha: new Date().toISOString(),
+    nombreCompleto: props.student.nombreCompleto,
+    matricula: props.student.matricula,
+    nivel: props.student.nivel,
+    grado: props.student.grado,
+    grupo: props.student.grupo,
+    items: processedDebts.value.filter(d => d.montoPagado > 0).map((d, i) => ({
+      folio: 'PREV-' + (i+1),
+      conceptoNombre: d.conceptoNombre,
+      formaDePago: formaDePago.value,
+      monto: d.montoPagado
+    }))
+  }
+  sessionStorage.setItem('receipt_preview', JSON.stringify(previewData))
+  window.open('/print/recibo?preview=true', '_blank', 'width=850,height=800')
+}
+
 const submit = async () => {
   processing.value = true
   try {
@@ -94,7 +117,7 @@ const submit = async () => {
       body: { matricula: props.student.matricula, formaDePago: formaDePago.value, ciclo: state.value.ciclo, pagos: processedDebts.value }
     })
     show('Liquidación registrada con éxito')
-    window.open(`/api/payments/receipt?folios=${folios.join(',')}`, '_blank', 'width=800,height=600')
+    window.open(`/print/recibo?folios=${folios.join(',')}`, '_blank', 'width=850,height=800')
     emit('success')
   } catch (e) {
     show('Fallo interno al procesar el ingreso', 'danger')

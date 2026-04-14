@@ -2,7 +2,7 @@
   <div class="modal-overlay" @click.self="$emit('close')">
     <div class="modal-container large">
       <div class="modal-header">
-        <h2 class="text-xl font-bold text-brand-campus">Facturar Pagos</h2>
+        <h2 class="text-xl font-bold text-brand-campus">Facturar Documentos</h2>
       </div>
       <form @submit.prevent="submit">
         <div class="modal-content">
@@ -40,8 +40,8 @@
             </div>
           </div>
           
-          <div class="bg-app p-4 rounded-md border border-neutral-mist mt-5">
-            <p class="font-semibold text-sm">Monto a Facturar: <span class="text-brand-campus text-lg font-bold ml-2">${{ total.toFixed(2) }}</span></p>
+          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mt-6 shadow-inner">
+            <p class="font-semibold text-sm text-gray-700">Monto a Facturar: <span class="text-brand-campus text-lg font-bold ml-2">${{ total.toFixed(2) }}</span></p>
           </div>
         </div>
         <div class="modal-footer">
@@ -63,7 +63,7 @@ const { show } = useToast()
 
 const total = computed(() => props.debts.reduce((s, d) => s + (d.pagos || 0), 0))
 const foliosAsociados = computed(() => {
-  const f = []
+  const f =[]
   props.debts.forEach(d => { if(d.historialPagos) d.historialPagos.forEach(h => f.push(h.folio)) })
   return f
 })

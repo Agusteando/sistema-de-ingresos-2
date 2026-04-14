@@ -7,8 +7,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Acceso no autorizado' })
   }
   
-  // Attempt to fetch the administrator's profile image dynamically.
-  // Will gracefully fall back to null if the user has no photo or the API fails.
+  // Resolve the current administrator by email and fetch their profile image reliably
   const photoUrl = await getAdminProfilePhoto(email)
   const name = getCookie(event, 'auth_name') || 'Administrador Central'
   
