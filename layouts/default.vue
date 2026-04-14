@@ -1,7 +1,6 @@
 <template>
   <div class="flex h-screen overflow-hidden bg-[#F4F6F8] font-sans">
     
-    <!-- Sidebar -->
     <aside class="w-[280px] bg-[#3F8468] text-white flex flex-col shadow-2xl z-20 shrink-0 relative overflow-hidden">
       <div class="absolute inset-0 bg-black/10 pointer-events-none"></div>
       <div class="py-8 px-6 text-center border-b border-white/10 relative z-10">
@@ -19,6 +18,12 @@
         <NuxtLink to="/conceptos" class="nav-item group">
           <LucideSettings :size="18" class="group-hover:text-white transition-colors" /> Catálogo de Documentos
         </NuxtLink>
+        <NuxtLink to="/facturas" class="nav-item group">
+          <LucideFileText :size="18" class="group-hover:text-white transition-colors" /> Facturación CFDI
+        </NuxtLink>
+        <NuxtLink to="/usuarios" class="nav-item group">
+          <LucideShield :size="18" class="group-hover:text-white transition-colors" /> Gestión de Usuarios
+        </NuxtLink>
       </nav>
       
       <div class="p-6 bg-black/20 relative z-10">
@@ -34,7 +39,7 @@
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-full bg-black/30 flex items-center justify-center overflow-hidden border-2 border-white/40 shadow-md">
               <img v-if="adminPhoto" :src="adminPhoto" alt="Perfil" class="w-full h-full object-cover" />
-              <LucideShieldCheck v-else :size="20" class="text-white/80" />
+              <LucideUser v-else :size="20" class="text-white/80" />
             </div>
             <div class="flex flex-col overflow-hidden max-w-[140px]">
               <span class="text-[0.8125rem] text-white font-semibold leading-tight truncate">{{ adminName }}</span>
@@ -48,7 +53,6 @@
       </div>
     </aside>
 
-    <!-- Main Content -->
     <main class="flex-1 overflow-y-auto flex flex-col relative">
       <header class="bg-white/80 backdrop-blur-md px-10 py-5 border-b border-gray-200 flex items-center justify-between sticky top-0 z-10">
         <h1 class="text-xl font-bold text-gray-800 tracking-tight">{{ currentRouteName }}</h1>
@@ -64,7 +68,6 @@
       </div>
     </main>
 
-    <!-- Toast Notifications -->
     <div class="fixed bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-none">
       <div v-for="toast in toasts" :key="toast.id" 
            :class="['pointer-events-auto px-5 py-4 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-semibold text-white animate-[slideInRight_0.3s_ease-out] border-l-4', toast.type === 'success' ? 'bg-neutral-ink border-brand-leaf' : 'bg-neutral-ink border-accent-coral']">
@@ -80,7 +83,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useState } from '#app'
-import { LucideUsers, LucidePieChart, LucideSettings, LucideShieldCheck, LucideCheckCircle, LucideAlertCircle, LucideLogOut } from 'lucide-vue-next'
+import { LucideUsers, LucidePieChart, LucideSettings, LucideFileText, LucideShield, LucideUser, LucideCheckCircle, LucideAlertCircle, LucideLogOut } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 
 const { toasts } = useToast()
@@ -102,6 +105,8 @@ const currentRouteName = computed(() => {
   if (route.path === '/') return 'Control Operativo de Alumnos'
   if (route.path === '/reportes') return 'Consolidación de Ingresos'
   if (route.path === '/conceptos') return 'Catálogo Maestro de Documentos'
+  if (route.path === '/facturas') return 'Navegador de Facturas CFDI'
+  if (route.path === '/usuarios') return 'Gestión de Accesos'
   return 'SISTEMA DE INGRESOS 2'
 })
 

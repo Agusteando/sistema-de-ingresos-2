@@ -1,19 +1,17 @@
-import { getAdminProfilePhoto } from '../../utils/googleAdmin'
+import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
-  const email = getCookie(event, 'auth_email')
+  const username = getCookie(event, 'auth_username')
   
-  if (!email) {
+  if (!username) {
     throw createError({ statusCode: 401, message: 'Acceso no autorizado' })
   }
   
-  // Resolve the current administrator by email and fetch their profile image reliably
-  const photoUrl = await getAdminProfilePhoto(email)
-  const name = getCookie(event, 'auth_name') || 'Administrador Central'
+  const [user] = await query<any[]>('SELECT avatar, username as name, email FROM users WHERE username = ?', [username])
   
   return { 
-    photoUrl, 
-    email, 
-    name 
+    photoUrl: user?.avatar || null, 
+    email: user?.email || '', 
+    name: user?.name || 'Administrador' 
   }
 })

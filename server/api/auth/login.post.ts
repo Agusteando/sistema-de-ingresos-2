@@ -1,42 +1,56 @@
-import { OAuth2Client } from 'google-auth-library'
+import { query } from '../../utils/db'
+import bcrypt from 'bcryptjs'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
-  const config = useRuntimeConfig()
-  
-  if (!config.public.googleClientId) {
-    throw createError({ statusCode: 500, message: 'Configuración de Google ausente' })
+  const { username, password } = await readBody(event)
+
+  if (!username || !password) {
+    throw createError({ statusCode: 400, message: 'Credenciales incompletas' })
   }
 
-  const client = new OAuth2Client(config.public.googleClientId)
+  const users = await query<any[]>('SELECT * FROM users')
   
-  try {
-    const ticket = await client.verifyIdToken({
-      idToken: body.credential,
-      audience: config.public.googleClientId
-    })
+  // Auto-provision default admin if the users table is completely empty to prevent lockout
+  if (users.length === 0 && username === 'admin' && password === 'admin') {
+    const hash = bcrypt.hashSync('admin', 10)
+    await query("INSERT INTO users (username, password, email, plantel) VALUES ('admin', ?, 'admin@ejemplo.com', 'PT')", [hash])
     
-    const payload = ticket.getPayload()
-    if (!payload || !payload.email) throw new Error('Token inválido')
-    
-    // CRITICAL FIX: Removed `httpOnly: true`. 
-    // Nuxt's client-side middleware uses `useCookie('auth_email')` to check if the user is authenticated.
-    // If httpOnly is true, the browser hides the cookie from JavaScript, causing the middleware
-    // to incorrectly believe the user is logged out and forcefully redirect back to /login.
-    setCookie(event, 'auth_email', payload.email, { 
-      secure: process.env.NODE_ENV === 'production', 
-      path: '/', 
-      maxAge: 86400 * 7 
-    })
-    
-    setCookie(event, 'auth_name', payload.name || 'Admin', { 
-      secure: process.env.NODE_ENV === 'production',
-      path: '/', 
-      maxAge: 86400 * 7 
-    })
-    
+    setCookie(event, 'auth_username', 'admin', { path: '/', maxAge: 86400 * 7 })
+    setCookie(event, 'auth_id', '1', { path: '/', maxAge: 86400 * 7 })
+    setCookie(event, 'auth_name', 'Administrador Principal', { path: '/', maxAge: 86400 * 7 })
     return { success: true }
-  } catch (error) {
-    throw createError({ statusCode: 401, message: 'Fallo de autenticación con Google' })
   }
+
+  const [user] = await query<any[]>('SELECT * FROM users WHERE username = ?', [username])
+  
+  if (!user) {
+    throw createError({ statusCode: 401, message: 'Credenciales inválidas' })
+  }
+
+  // Gracefully handle both plain text legacy passwords and proper bcrypt hashes
+  const isMatch = (password === user.password) || bcrypt.compareSync(password, user.password)
+
+  if (!isMatch) {
+    throw createError({ statusCode: 401, message: 'Credenciales inválidas' })
+  }
+  
+  setCookie(event, 'auth_username', user.username, { 
+    secure: process.env.NODE_ENV === 'production', 
+    path: '/', 
+    maxAge: 86400 * 7 
+  })
+  
+  setCookie(event, 'auth_id', String(user.id), { 
+    secure: process.env.NODE_ENV === 'production', 
+    path: '/', 
+    maxAge: 86400 * 7 
+  })
+
+  setCookie(event, 'auth_name', user.username, { 
+    secure: process.env.NODE_ENV === 'production',
+    path: '/', 
+    maxAge: 86400 * 7 
+  })
+  
+  return { success: true }
 })
