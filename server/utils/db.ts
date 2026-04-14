@@ -23,3 +23,19 @@ export const query = async <T>(sql: string, params?: any[]) => {
   const [rows] = await db.execute(sql, params)
   return rows as T
 }
+
+export const executeTransaction = async (callback: (connection: mysql.PoolConnection) => Promise<any>) => {
+  const db = getDb()
+  const connection = await db.getConnection()
+  await connection.beginTransaction()
+  try {
+    const result = await callback(connection)
+    await connection.commit()
+    return result
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}

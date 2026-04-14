@@ -1,201 +1,128 @@
 <template>
-  <div class="dashboard-wrapper">
-    <div class="header-actions">
-      <div class="search-bar">
-        <LucideSearch class="icon" size="20" />
-        <input v-model="searchQuery" type="text" class="input-field" placeholder="Buscar por matrícula / nombre" @keyup.enter="searchStudents">
+  <div>
+    <div class="flex justify-between items-center mb-4">
+      <div style="position: relative; width: 450px;">
+        <LucideSearch size="18" style="position: absolute; left: 14px; top: 11px; color: var(--brand-teal);" />
+        <input v-model="searchQuery" @keyup.enter="performSearch" type="text" class="input-field" placeholder="Ingrese matrícula o nombre del alumno..." style="padding-left: 40px; border-color: var(--brand-teal);">
       </div>
+      <button class="btn btn-primary" @click="openAlta">
+        <LucideUserPlus size="18"/> Registrar Nuevo Alumno
+      </button>
     </div>
 
-    <div class="card table-container" style="max-height: 40vh; overflow-y: auto; margin-bottom: 2rem;">
+    <div class="card table-wrapper" style="max-height: 40vh; margin-bottom: 2rem;">
       <table>
         <thead>
           <tr>
             <th>Matrícula</th>
-            <th>Alumno</th>
-            <th>Interno/Externo</th>
-            <th>Nivel</th>
-            <th>Importe</th>
-            <th>Pagos</th>
-            <th>Saldo Neto</th>
-            <th>Estatus</th>
+            <th>Nombre del Alumno</th>
+            <th>Modalidad</th>
+            <th>Nivel y Grado</th>
+            <th class="text-right">Cargos (MXN)</th>
+            <th class="text-right">Abonos (MXN)</th>
+            <th class="text-right">Deuda Actual (MXN)</th>
+            <th class="text-center">Estado</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loadingStudents">
-            <td colspan="8" style="text-align: center;">Cargando alumnos...</td>
+          <tr v-if="loading">
+            <td colspan="8" class="text-center" style="padding: 3rem; color: var(--brand-teal); font-weight: 500;">
+              Procesando directorio...
+            </td>
           </tr>
           <tr v-else-if="!students.length">
-            <td colspan="8" style="text-align: center;">No hay resultados</td>
+            <td colspan="8" class="text-center" style="padding: 3rem; color: #5B665E;">
+              Ingrese un término de búsqueda para visualizar registros.
+            </td>
           </tr>
-          <tr v-else v-for="student in students" :key="student.matricula" 
-              @click="selectStudent(student)"
-              :class="{ 'selected': selectedStudent?.matricula === student.matricula }">
-            <td><code>{{ student.matricula }}</code></td>
-            <td style="font-weight: 500;">{{ student.nombreCompleto }}</td>
-            <td>
-              <span :class="['badge', student.interno ? 'badge-inactive' : 'badge-active']">
-                {{ student.interno ? 'INTERNO' : 'EXTERNO' }}
-              </span>
-            </td>
-            <td>{{ student.nivel }} - {{ student.grado }} {{ student.grupo }}</td>
-            <td>${{ formatCurrency(student.importeTotal) }}</td>
-            <td style="color: var(--success);">${{ formatCurrency(student.pagosTotal) }}</td>
-            <td style="color: var(--danger); font-weight: bold;">${{ formatCurrency(student.saldoNeto) }}</td>
-            <td>
-              <span :class="['badge', student.estatus === 'Activo' ? 'badge-active' : 'badge-inactive']">
-                {{ student.estatus }}
-              </span>
-            </td>
+          <tr v-else v-for="s in students" :key="s.matricula" @click="selectStudent(s)" :class="{ 'selected': selectedStudent?.matricula === s.matricula }">
+            <td style="font-family: monospace; font-weight: 600; color: var(--accent-sky);">{{ s.matricula }}</td>
+            <td class="font-bold">{{ s.nombreCompleto }}</td>
+            <td><span :class="['badge', s.interno ? 'badge-info' : 'badge-success']">{{ s.interno ? 'INTERNO' : 'EXTERNO' }}</span></td>
+            <td style="color: #5B665E;">{{ s.nivel }} - {{ s.grado }}{{ s.grupo }}</td>
+            <td class="text-right font-bold">${{ format(s.importeTotal) }}</td>
+            <td class="text-right font-bold text-success">${{ format(s.pagosTotal) }}</td>
+            <td class="text-right font-bold" :class="s.saldoNeto > 0 ? 'text-danger' : ''">${{ format(s.saldoNeto) }}</td>
+            <td class="text-center"><span :class="['badge', s.estatus === 'Activo' ? 'badge-success' : 'badge-danger']">{{ s.estatus }}</span></td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div v-if="selectedStudent" class="card" style="padding: 1.5rem;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-        <h3 style="margin: 0;">Detalle de Cobros: {{ selectedStudent.nombreCompleto }}</h3>
-        <div style="display: flex; gap: 0.5rem;">
-          <button class="btn btn-outline" :disabled="!selectedDebts.length" @click="openInvoiceModal">
-            <LucideFileText size="16"/> Facturar
-          </button>
-          <button class="btn btn-primary" :disabled="!selectedDebts.length" @click="openPaymentModal">
-            <LucideCreditCard size="16"/> Múltiples Pagos
-          </button>
-        </div>
-      </div>
-      
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th><input type="checkbox" @change="toggleAllDebts" :checked="selectedDebts.length === debts.length && debts.length > 0"></th>
-              <th>Progreso</th>
-              <th>Mes</th>
-              <th>Concepto</th>
-              <th>Subtotal</th>
-              <th>Pagos</th>
-              <th>Saldo Pendiente</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loadingDebts">
-              <td colspan="7" style="text-align: center;">Cargando conceptos...</td>
-            </tr>
-            <tr v-else-if="!debts.length">
-              <td colspan="7" style="text-align: center;">No hay conceptos pendientes para este ciclo.</td>
-            </tr>
-            <tr v-else v-for="debt in debts" :key="`${debt.documento}-${debt.mes}`">
-              <td><input type="checkbox" :value="debt" v-model="selectedDebts" :disabled="debt.saldo <= 0"></td>
-              <td style="width: 150px;">
-                <div class="progress-bar-container">
-                  <div class="progress-bar" :style="{ width: debt.porcentajePagado + '%', backgroundColor: debt.porcentajePagado == 100 ? 'var(--success)' : 'var(--primary)' }"></div>
-                </div>
-              </td>
-              <td>{{ debt.mesLabel }}</td>
-              <td>
-                {{ debt.conceptoNombre }}
-                <span v-if="debt.hasRecargo" class="badge badge-inactive" style="font-size: 0.65rem; margin-left: 0.5rem;">Recargo</span>
-              </td>
-              <td>${{ formatCurrency(debt.subtotal) }}</td>
-              <td style="color: var(--success);">${{ formatCurrency(debt.pagos) }}</td>
-              <td style="color: var(--danger); font-weight: bold;">${{ formatCurrency(debt.saldo) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <StudentDetails 
+      v-if="selectedStudent" 
+      :student="selectedStudent" 
+      @refresh="performSearch"
+      @edit="openEdit"
+    />
 
-    <!-- Modals -->
-    <PaymentModal v-if="showPaymentModal" :debts="selectedDebts" :student="selectedStudent" @close="closePaymentModal" @success="handlePaymentSuccess" />
+    <StudentFormModal 
+      v-if="showStudentModal" 
+      :student="editingStudent"
+      @close="closeStudentModal" 
+      @success="handleStudentSuccess" 
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
-import { LucideSearch, LucideCreditCard, LucideFileText } from 'lucide-vue-next'
+import { LucideSearch, LucideUserPlus } from 'lucide-vue-next'
 import { useState } from '#app'
-import PaymentModal from '~/components/PaymentModal.vue'
+import { useToast } from '~/composables/useToast'
+import StudentDetails from '~/components/StudentDetails.vue'
+import StudentFormModal from '~/components/StudentFormModal.vue'
 
+const { show } = useToast()
 const state = useState('globalState')
 const searchQuery = ref('')
 const students = ref([])
-const loadingStudents = ref(false)
+const loading = ref(false)
 const selectedStudent = ref(null)
 
-const debts = ref([])
-const loadingDebts = ref(false)
-const selectedDebts = ref([])
+const showStudentModal = ref(false)
+const editingStudent = ref(null)
 
-const showPaymentModal = ref(false)
+const format = (val) => Number(val || 0).toFixed(2)
 
-const formatCurrency = (val) => Number(val).toFixed(2)
-
-const searchStudents = async () => {
-  if (!searchQuery.value) return
-  loadingStudents.value = true
+const performSearch = async () => {
+  loading.value = true
   try {
-    students.value = await $fetch('/api/students', {
-      params: { q: searchQuery.value, ciclo: state.value.ciclo }
-    })
-    selectedStudent.value = null
-    debts.value = []
-    selectedDebts.value = []
-  } catch (error) {
-    console.error(error)
+    students.value = await $fetch('/api/students', { params: { q: searchQuery.value, ciclo: state.value.ciclo } })
+    if (selectedStudent.value) {
+      selectedStudent.value = students.value.find(s => s.matricula === selectedStudent.value.matricula) || null
+    }
+  } catch (e) {
+    show('Ocurrió un error al cargar el padrón', 'danger')
   } finally {
-    loadingStudents.value = false
+    loading.value = false
   }
 }
 
-const selectStudent = async (student) => {
+const selectStudent = (student) => {
   selectedStudent.value = student
-  selectedDebts.value = []
-  loadingDebts.value = true
-  try {
-    debts.value = await $fetch(`/api/students/${student.matricula}/debts`, {
-      params: { ciclo: state.value.ciclo, lateFeeActive: state.value.lateFeeActive }
-    })
-  } catch (error) {
-    console.error(error)
-  } finally {
-    loadingDebts.value = false
-  }
 }
 
-// React to global toggle
-watch(() => state.value.lateFeeActive, () => {
-  if (selectedStudent.value) selectStudent(selectedStudent.value)
-})
+watch(() => state.value.ciclo, performSearch)
 
-const toggleAllDebts = (e) => {
-  if (e.target.checked) {
-    selectedDebts.value = debts.value.filter(d => d.saldo > 0)
-  } else {
-    selectedDebts.value = []
-  }
+const openAlta = () => {
+  editingStudent.value = null
+  showStudentModal.value = true
 }
 
-const openPaymentModal = () => showPaymentModal.value = true
-const closePaymentModal = () => showPaymentModal.value = false
-
-const handlePaymentSuccess = () => {
-  closePaymentModal()
-  selectStudent(selectedStudent.value)
-  searchStudents()
+const openEdit = (studentData) => {
+  editingStudent.value = studentData
+  showStudentModal.value = true
 }
 
-const openInvoiceModal = () => {
-  alert('Integración de Facturación iniciada. La API externa recibirá los datos seleccionados.')
-  // To avoid extremely massive code blocks, the Invoice API call follows the exact legacy struct.
+const closeStudentModal = () => {
+  showStudentModal.value = false
+  editingStudent.value = null
+}
+
+const handleStudentSuccess = () => {
+  closeStudentModal()
+  show('Operación registrada exitosamente en el sistema')
+  performSearch()
 }
 </script>
-
-<style scoped>
-.header-actions { margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; }
-.search-bar { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.25rem 0.75rem; width: 400px; }
-.search-bar .icon { color: var(--text-muted); margin-right: 0.5rem; }
-.search-bar input { border: none; padding: 0.5rem 0; outline: none; width: 100%; }
-.progress-bar-container { width: 100%; height: 8px; background: var(--border); border-radius: 9999px; overflow: hidden; }
-.progress-bar { height: 100%; transition: width 0.3s ease; }
-</style>
