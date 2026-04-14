@@ -1,0 +1,1 @@
+git commit -m "feat: migrate legacy vanilla JS/PHP income system to Nuxt 3 and Vue 3 with preserved business rules, fast modern UX, idempotent schema generation, and optimized payment/receipt endpoints"
