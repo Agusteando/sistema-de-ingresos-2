@@ -4,13 +4,24 @@ export default defineEventHandler(async (event) => {
   const { ciclo = '2024' } = getQuery(event)
   const user = event.context.user
   
-  // Guard clause: Strict RBAC check ensuring KPIs are entirely hidden from non-globals
   if (user.role !== 'global') {
-    throw createError({ statusCode: 403, message: 'Información confidencial restringida a nivel global' })
+    throw createError({ statusCode: 403, message: 'Información restringida a nivel global.' })
   }
 
-  const [alumnosData] = await query<any[]>(`SELECT COUNT(*) as total FROM base WHERE estatus = 'Activo'`)
-  const [ingresosData] = await query<any[]>(`SELECT SUM(monto) as total FROM referenciasdepago WHERE ciclo = ? AND estatus = 'Vigente' AND MONTH(fecha) = MONTH(CURRENT_DATE())`, [ciclo])
+  let alumnosWhere = "estatus = 'Activo'"
+  let ingresosWhere = "ciclo = ? AND estatus = 'Vigente' AND MONTH(fecha) = MONTH(CURRENT_DATE())"
+  const paramArr: any[] = [ciclo]
+
+  if (user.active_plantel !== 'GLOBAL') {
+    alumnosWhere += " AND plantel = ?"
+    ingresosWhere += " AND plantel = ?"
+    paramArr.push(user.active_plantel)
+  }
+
+  const alumnosParams = user.active_plantel !== 'GLOBAL' ? [user.active_plantel] : []
+
+  const [alumnosData] = await query<any[]>(`SELECT COUNT(*) as total FROM base WHERE ${alumnosWhere}`, alumnosParams)
+  const [ingresosData] = await query<any[]>(`SELECT SUM(monto) as total FROM referenciasdepago WHERE ${ingresosWhere}`, paramArr)
   const [conceptosData] = await query<any[]>(`SELECT COUNT(*) as total FROM conceptos WHERE ciclo = ?`, [ciclo])
 
   return {

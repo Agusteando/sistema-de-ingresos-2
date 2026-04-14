@@ -1,30 +1,25 @@
 import { query } from '../../utils/db'
+import dayjs from 'dayjs'
 
 export default defineEventHandler(async (event) => {
-  const { q = '', ciclo = '2024' } = getQuery(event)
+  const { ciclo = '2024' } = getQuery(event)
   const user = event.context.user
   
   let whereClause = "A.estatus = 'Activo'"
-  const params: any[] = []
+  const params: any[] = [ciclo, ciclo]
 
-  // Hard RBAC enforcement considering the active scope applied via the switcher
   if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
     whereClause += " AND A.plantel = ?"
     params.push(user.active_plantel)
   }
 
-  if (q) {
-    whereClause += " AND (A.nombreCompleto LIKE ? OR A.matricula = ?)"
-    params.push(`%${q}%`, q)
-  }
-
+  // Optimize query to fetch active debtors accurately with required communication data
   const sql = `
     SELECT 
-      A.matricula, A.nombreCompleto, A.grado, A.grupo, A.nivel, A.plantel, A.estatus, A.correo,
-      IFNULL(B.pagosTotal, 0) AS pagosTotal,
+      A.matricula, A.nombreCompleto, A.grado, A.grupo, A.nivel, A.plantel, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre,
       IFNULL(C.saldo, 0) AS importeTotal,
-      (IFNULL(C.saldo, 0) - IFNULL(B.pagosTotal, 0)) AS saldoNeto,
-      IF(A.ciclo = ?, 0, 1) as interno
+      IFNULL(B.pagosTotal, 0) AS pagosTotal,
+      (IFNULL(C.saldo, 0) - IFNULL(B.pagosTotal, 0)) AS deudaVigente
     FROM base A
     LEFT JOIN (
       SELECT matricula, SUM(monto) AS pagosTotal
@@ -35,16 +30,14 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN (
       SELECT matricula, SUM(((100 - IFNULL(beca, 0)) * costo / 100) * IFNULL(meses, 1)) AS saldo
       FROM documentos
-      WHERE ciclo = ?
+      WHERE ciclo = ? AND estatus = 'Vigente'
       GROUP BY matricula
     ) C ON A.matricula = C.matricula
     WHERE ${whereClause}
-    ORDER BY A.nombreCompleto ASC
-    LIMIT 100;
+    HAVING deudaVigente > 0
+    ORDER BY deudaVigente DESC, A.nombreCompleto ASC
   `
   
-  const queryParams = [ciclo, ciclo, ciclo, ...params]
-  const students = await query(sql, queryParams)
-  
-  return students
+  const deudores = await query(sql, params)
+  return deudores
 })

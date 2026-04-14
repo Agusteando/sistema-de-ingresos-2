@@ -4,9 +4,8 @@ export default defineEventHandler(async (event) => {
   const { inicio, fin, plantel, ciclo = '2024' } = getQuery(event)
   const user = event.context.user
   
-  // Strict RBAC limit: Local roles absolutely cannot generate financial consolidated reporting 
   if (user.role !== 'global') {
-     throw createError({ statusCode: 403, message: 'Operación financiera denegada para este perfil' })
+     throw createError({ statusCode: 403, message: 'No tiene permisos para acceder a este reporte.' })
   }
   
   let where = "r.estatus = 'Vigente' AND r.ciclo = ?"
@@ -16,7 +15,11 @@ export default defineEventHandler(async (event) => {
     where += " AND DATE(r.fecha) BETWEEN ? AND ?"
     params.push(inicio, fin)
   }
-  if (plantel) {
+
+  if (user.role !== 'global' || user.active_plantel !== 'GLOBAL') {
+    where += " AND r.plantel = ?"
+    params.push(user.active_plantel)
+  } else if (plantel) {
     where += " AND r.plantel = ?"
     params.push(plantel)
   }

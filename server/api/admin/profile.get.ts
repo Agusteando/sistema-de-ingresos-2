@@ -1,13 +1,13 @@
 import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
-  const username = getCookie(event, 'auth_username')
+  const email = getCookie(event, 'auth_email')
   
-  if (!username) {
-    throw createError({ statusCode: 401, message: 'Acceso no autorizado' })
+  if (!email) {
+    throw createError({ statusCode: 401, message: 'Acceso no autorizado.' })
   }
   
-  const [user] = await query<any[]>('SELECT avatar, username as name, email FROM users WHERE username = ?', [username])
+  const [user] = await query<any[]>('SELECT avatar, username as name, email FROM users WHERE email = ?', [email])
   
   return { 
     photoUrl: user?.avatar || null, 
