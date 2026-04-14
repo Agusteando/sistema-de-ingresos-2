@@ -1,51 +1,74 @@
 <template>
-  <div style="display: flex; height: 100vh; overflow: hidden; background: var(--bg-app);">
-    <aside style="width: 250px; background: var(--neutral-ink); color: var(--neutral-canvas); display: flex; flex-direction: column; z-index: 10;">
-      <div style="padding: 1.5rem; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1);">
-        <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="IECS IEDIS" style="max-height: 48px; margin-bottom: 0.5rem; filter: brightness(0) invert(1);" />
-        <h2 style="font-weight: 700; font-size: 0.875rem; letter-spacing: 0.05em; margin: 0; color: var(--brand-leaf);">SISTEMA DE INGRESOS 2</h2>
+  <div class="flex h-screen overflow-hidden bg-app font-sans">
+    
+    <!-- Sidebar -->
+    <aside class="w-[280px] bg-brand-campus text-white flex flex-col shadow-xl z-20 shrink-0">
+      <div class="py-8 px-6 text-center border-b border-white/10">
+        <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="IECS IEDIS" class="max-h-[54px] mx-auto mb-4 brightness-0 invert" />
+        <h2 class="font-bold text-base tracking-wider m-0 text-brand-leaf uppercase">Sistema de Ingresos 2</h2>
       </div>
-      <nav style="flex: 1; padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 0.25rem;">
-        <NuxtLink to="/" class="nav-item"><LucideUsers size="16"/> Alumnos</NuxtLink>
-        <NuxtLink to="/reportes" class="nav-item"><LucidePieChart size="16"/> Corte de Caja</NuxtLink>
-        <NuxtLink to="/conceptos" class="nav-item"><LucideSettings size="16"/> Conceptos</NuxtLink>
+      
+      <nav class="flex-1 py-6 px-4 flex flex-col gap-2">
+        <NuxtLink to="/" class="nav-item group">
+          <LucideUsers :size="18" class="group-hover:text-white transition-colors" /> Padrón de Alumnos
+        </NuxtLink>
+        <NuxtLink to="/reportes" class="nav-item group">
+          <LucidePieChart :size="18" class="group-hover:text-white transition-colors" /> Corte de Caja
+        </NuxtLink>
+        <NuxtLink to="/conceptos" class="nav-item group">
+          <LucideSettings :size="18" class="group-hover:text-white transition-colors" /> Catálogo de Conceptos
+        </NuxtLink>
       </nav>
-      <div style="padding: 1.5rem; background: rgba(0,0,0,0.25);">
-        <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; margin-bottom: 1.25rem;">
-          <span style="font-size: 0.8125rem; font-weight: 600;">Aplicar Recargos</span>
-          <div class="toggle">
-            <input type="checkbox" v-model="state.lateFeeActive" style="display:none">
-            <div class="toggle-track" :class="{ 'active': state.lateFeeActive }"></div>
+      
+      <div class="p-6 bg-neutral-ink/40">
+        <label class="flex items-center justify-between cursor-pointer mb-6 group">
+          <span class="text-[0.8125rem] font-bold uppercase tracking-wider text-gray-200 group-hover:text-white transition-colors">Aplicar Recargos</span>
+          <div class="relative w-10 h-6 bg-white/20 rounded-full transition-colors duration-300" :class="{ '!bg-brand-leaf': state.lateFeeActive }">
+            <input type="checkbox" v-model="state.lateFeeActive" class="hidden">
+            <div class="absolute top-[3px] left-[3px] w-[18px] h-[18px] bg-white rounded-full transition-transform duration-300 shadow-sm" :class="{ 'translate-x-[16px]': state.lateFeeActive }"></div>
           </div>
         </label>
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <div class="avatar-circle">
-            <img v-if="adminPhoto" :src="adminPhoto" alt="Perfil" />
-            <LucideUser v-else size="18"/>
+        
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-brand-teal flex items-center justify-center overflow-hidden border-2 border-white/80 shadow-md">
+              <img v-if="adminPhoto" :src="adminPhoto" alt="Perfil" class="w-full h-full object-cover" />
+              <LucideShieldCheck v-else :size="20" class="text-white" />
+            </div>
+            <div class="flex flex-col overflow-hidden max-w-[140px]">
+              <span class="text-[0.8125rem] text-white font-semibold leading-tight truncate">{{ adminName }}</span>
+              <span class="text-[0.65rem] text-brand-leaf font-bold uppercase tracking-wider">Autorizado</span>
+            </div>
           </div>
-          <span style="font-size: 0.8125rem; color: var(--neutral-mist); font-weight: 500;">Administrador</span>
+          <button @click="logout" title="Cerrar Sesión" class="text-gray-400 hover:text-accent-coral transition-colors shrink-0">
+            <LucideLogOut :size="18" />
+          </button>
         </div>
       </div>
     </aside>
 
-    <main style="flex: 1; overflow-y: auto; display: flex; flex-direction: column;">
-      <header style="background: var(--neutral-canvas); padding: 1rem 2rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
-        <h1 style="font-size: 1.125rem; font-weight: 700; color: var(--brand-campus);">{{ currentRouteName }}</h1>
-        <select v-model="state.ciclo" class="input-field" style="width: 140px; font-weight: 600;">
-          <option value="2023">Ciclo 23-24</option>
-          <option value="2024">Ciclo 24-25</option>
-          <option value="2025">Ciclo 25-26</option>
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto flex flex-col relative">
+      <header class="bg-white px-10 py-5 border-b border-gray-200 flex items-center justify-between sticky top-0 z-10">
+        <h1 class="text-2xl font-bold text-brand-teal tracking-tight">{{ currentRouteName }}</h1>
+        <select v-model="state.ciclo" class="input-field !w-48 font-bold border-brand-leaf text-brand-campus">
+          <option value="2023">Ciclo Escolar 23-24</option>
+          <option value="2024">Ciclo Escolar 24-25</option>
+          <option value="2025">Ciclo Escolar 25-26</option>
         </select>
       </header>
-      <div style="padding: 2rem; flex: 1;">
+      
+      <div class="p-10 flex-1">
         <slot />
       </div>
     </main>
 
-    <div class="toast-container">
-      <div v-for="toast in toasts" :key="toast.id" :class="['toast', toast.type]">
-        <LucideCheckCircle v-if="toast.type === 'success'" size="16"/>
-        <LucideAlertCircle v-else size="16"/>
+    <!-- Toast Notifications -->
+    <div class="fixed bottom-8 right-8 z-50 flex flex-col gap-3 pointer-events-none">
+      <div v-for="toast in toasts" :key="toast.id" 
+           :class="['pointer-events-auto px-5 py-4 rounded-md shadow-xl flex items-center gap-3 text-sm font-semibold text-white animate-[slideInRight_0.3s_ease-out] border-l-4', toast.type === 'success' ? 'bg-neutral-ink border-brand-leaf' : 'bg-neutral-ink border-accent-coral']">
+        <LucideCheckCircle v-if="toast.type === 'success'" :size="18" class="text-brand-leaf" />
+        <LucideAlertCircle v-else :size="18" class="text-accent-coral" />
         {{ toast.message }}
       </div>
     </div>
@@ -55,43 +78,47 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { LucideUsers, LucidePieChart, LucideSettings, LucideUser, LucideCheckCircle, LucideAlertCircle } from 'lucide-vue-next'
 import { useState } from '#app'
+import { LucideUsers, LucidePieChart, LucideSettings, LucideShieldCheck, LucideCheckCircle, LucideAlertCircle, LucideLogOut } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 
 const { toasts } = useToast()
 const route = useRoute()
 const state = useState('globalState', () => ({ lateFeeActive: true, ciclo: '2024' }))
+
 const adminPhoto = ref(null)
+const adminName = ref('Administrador')
 
 onMounted(async () => {
   try {
-    const { photoUrl } = await $fetch('/api/admin/profile')
-    if (photoUrl) adminPhoto.value = photoUrl
+    const res = await $fetch('/api/admin/profile')
+    if (res.photoUrl) adminPhoto.value = res.photoUrl
+    if (res.name) adminName.value = res.name
   } catch(e) {}
 })
 
 const currentRouteName = computed(() => {
-  if (route.path === '/') return 'Control de Alumnos'
-  if (route.path === '/reportes') return 'Corte de Caja'
-  if (route.path === '/conceptos') return 'Conceptos de Cobro'
+  if (route.path === '/') return 'Control Operativo de Alumnos'
+  if (route.path === '/reportes') return 'Consolidación de Ingresos'
+  if (route.path === '/conceptos') return 'Catálogo Maestro de Conceptos'
   return 'SISTEMA DE INGRESOS 2'
 })
+
+const logout = async () => {
+  await $fetch('/api/auth/logout', { method: 'POST' })
+  // Use a hard redirect consistently to completely clear application state and memory
+  window.location.href = '/login'
+}
 </script>
 
 <style scoped>
 .nav-item {
-  display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.75rem;
-  color: var(--neutral-mist); text-decoration: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 500; transition: all 0.15s;
+  @apply flex items-center gap-3 px-5 py-3 text-gray-300 no-underline rounded-lg text-sm font-semibold transition-all duration-200;
 }
-.nav-item:hover { background: rgba(255,255,255,0.05); color: var(--neutral-canvas); }
-.nav-item.router-link-active { background: var(--brand-campus); color: var(--neutral-canvas); }
-
-.toggle-track { width: 32px; height: 18px; background: rgba(255,255,255,0.2); border-radius: 999px; position: relative; transition: 0.2s; }
-.toggle-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--neutral-canvas); border-radius: 50%; transition: 0.2s; }
-.toggle-track.active { background: var(--brand-leaf); }
-.toggle-track.active::after { transform: translateX(14px); }
-
-.avatar-circle { width: 32px; height: 32px; border-radius: 50%; background: var(--brand-teal); display: flex; align-items: center; justify-content: center; overflow: hidden; color: white; }
-.avatar-circle img { width: 100%; height: 100%; object-fit: cover; }
+.nav-item:hover {
+  @apply bg-white/10 text-white;
+}
+.nav-item.router-link-active {
+  @apply bg-brand-teal text-white shadow-[inset_4px_0_0_0_#8EC153];
+}
 </style>

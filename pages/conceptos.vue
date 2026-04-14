@@ -1,26 +1,26 @@
 <template>
-  <div style="max-width: 1200px; margin: 0 auto;">
-    <div class="flex justify-between items-center mb-4">
-      <h2 style="color: var(--brand-campus); font-weight: 700; font-size: 1.25rem;">Tarifas</h2>
+  <div class="max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-xl font-bold text-brand-campus">Catálogo de Tarifas</h2>
       <button class="btn btn-primary" @click="showForm = !showForm">
         {{ showForm ? 'Cerrar Formulario' : 'Crear Tarifa' }}
       </button>
     </div>
 
-    <div v-if="showForm" class="card mb-4" style="padding: 1.5rem; background: var(--bg-app); border: 1px dashed var(--brand-teal);">
-      <form @submit.prevent="createConcept" class="grid-3">
+    <div v-if="showForm" class="card mb-8 p-6 bg-app border-dashed border-brand-teal">
+      <form @submit.prevent="createConcept" class="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div class="form-group"><label class="form-label">Concepto</label><input type="text" v-model="form.concepto" class="input-field" required></div>
         <div class="form-group"><label class="form-label">Descripción</label><input type="text" v-model="form.description" class="input-field"></div>
         <div class="form-group"><label class="form-label">Costo Base</label><input type="number" v-model="form.costo" class="input-field" step="0.01" required></div>
         <div class="form-group"><label class="form-label">Meses / Plazos</label><input type="number" v-model="form.plazo" class="input-field" min="1" required></div>
-        <div class="form-group" style="display:flex; align-items:flex-end;">
-          <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
-            <input type="checkbox" v-model="form.eventual">
-            <span class="font-bold">Es Eventual (Pago único)</span>
+        <div class="form-group flex items-end">
+          <label class="flex items-center gap-2 cursor-pointer pb-2.5">
+            <input type="checkbox" v-model="form.eventual" class="w-4 h-4 text-brand-leaf border-gray-300 rounded focus:ring-brand-leaf">
+            <span class="font-bold text-sm">Es Eventual (Pago único)</span>
           </label>
         </div>
-        <div class="form-group" style="display:flex; align-items:flex-end; justify-content:flex-end;">
-          <button type="submit" class="btn btn-secondary" :disabled="loading">Guardar Tarifa</button>
+        <div class="form-group flex items-end justify-end">
+          <button type="submit" class="btn btn-secondary w-full md:w-auto" :disabled="loading">Guardar Tarifa</button>
         </div>
       </form>
     </div>
@@ -37,12 +37,12 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loadingTable"><td colspan="5" class="text-center" style="padding: 2rem;">Cargando...</td></tr>
-          <tr v-else-if="!conceptos.length"><td colspan="5" class="text-center" style="padding: 2rem;">No hay tarifas registradas.</td></tr>
+          <tr v-if="loadingTable"><td colspan="5" class="text-center py-12">Cargando catálogo...</td></tr>
+          <tr v-else-if="!conceptos.length"><td colspan="5" class="text-center py-12 text-gray-500">No hay tarifas registradas en este ciclo.</td></tr>
           <tr v-else v-for="c in conceptos" :key="c.id">
-            <td style="font-family: monospace;">{{ c.id }}</td>
+            <td class="font-mono text-gray-500">{{ c.id }}</td>
             <td class="font-bold">{{ c.concepto }}</td>
-            <td class="text-right font-bold text-success">${{ Number(c.costo).toFixed(2) }}</td>
+            <td class="text-right font-bold text-brand-campus">${{ Number(c.costo).toFixed(2) }}</td>
             <td class="text-center">{{ c.plazo }} Meses</td>
             <td class="text-center"><span :class="['badge', c.eventual ? 'badge-info' : 'badge-neutral']">{{ c.eventual ? 'Único' : 'Recurrente' }}</span></td>
           </tr>
@@ -71,7 +71,7 @@ const loadConceptos = async () => {
   loadingTable.value = true
   try {
     conceptos.value = await $fetch('/api/conceptos', { params: { ciclo: state.value.ciclo } })
-  } catch(e) { show('Error cargando tarifas', 'danger') }
+  } catch(e) { show('Fallo de conexión al catálogo', 'danger') }
   finally { loadingTable.value = false }
 }
 
@@ -82,11 +82,11 @@ const createConcept = async () => {
   loading.value = true
   try {
     await $fetch('/api/conceptos', { method: 'POST', body: { ...form.value, ciclo: state.value.ciclo } })
-    show('Tarifa guardada')
+    show('Tarifa administrativa guardada')
     showForm.value = false
     form.value = { concepto: '', description: '', costo: 0, plazo: 10, eventual: false }
     loadConceptos()
-  } catch(e) { show('Error guardando', 'danger') } 
+  } catch(e) { show('Error en registro tarifario', 'danger') } 
   finally { loading.value = false }
 }
 </script>

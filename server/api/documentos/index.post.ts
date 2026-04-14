@@ -5,11 +5,8 @@ export default defineEventHandler(async (event) => {
   
   const [conceptoRef] = await query<any[]>(`SELECT concepto FROM conceptos WHERE id = ?`, [body.conceptoId])
   const conceptoNombre = conceptoRef ? conceptoRef.concepto : 'Cargo'
-
-  // Legacy Plazo format requirement: Array encoded to string.
   const plazosArray = JSON.stringify(Array.from({length: Number(body.meses)}, (_, i) => i + 1))
 
-  // Exact match to legacy fields
   const result = await query<any>(`
     INSERT INTO documentos (concepto, conceptoNombre, matricula, costo, plazo, meses, beca, ciclo, eventual, responsable)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Admin')

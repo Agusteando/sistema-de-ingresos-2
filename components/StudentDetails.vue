@@ -1,15 +1,16 @@
 <template>
   <div class="card">
-    <div class="card-header">
+    <div class="card-header bg-white">
       <div>
-        <h3 style="font-size: 1rem; font-weight: 700; color: var(--brand-campus);">Cuenta: {{ student.nombreCompleto }}</h3>
+        <h3 class="text-lg font-bold text-brand-campus tracking-tight m-0">Estado de Cuenta: {{ student.nombreCompleto }}</h3>
+        <p class="text-sm text-gray-500 mt-1 font-medium m-0">Matrícula: <strong class="text-accent-sky">{{ student.matricula }}</strong> | Grupo: {{ student.grado }} {{ student.grupo }}</p>
       </div>
       <div class="flex gap-2">
-        <button class="btn btn-ghost" @click="$emit('edit', student)">Editar</button>
-        <button class="btn btn-ghost" :disabled="!selectedDebts.length" @click="sendReminder">Recordatorio</button>
-        <button class="btn btn-secondary" @click="showDocModal = true">Asignar Cargo</button>
-        <button class="btn btn-outline" :disabled="!selectedDebts.length" @click="showInvoiceModal = true">Facturar</button>
-        <button class="btn btn-primary" :disabled="!selectedDebts.length" @click="showPaymentModal = true">Pagar</button>
+        <button class="btn btn-ghost" @click="$emit('edit', student)"><LucideSettings :size="16"/> Ajustar Perfil</button>
+        <button class="btn btn-ghost" :disabled="!selectedDebts.length" @click="sendReminder"><LucideBell :size="16"/> Requerimiento</button>
+        <button class="btn btn-secondary" @click="showDocModal = true"><LucideFilePlus :size="16"/> Asignar Concepto</button>
+        <button class="btn btn-outline" :disabled="!selectedDebts.length" @click="showInvoiceModal = true"><LucideFileText :size="16"/> Facturar Conceptos</button>
+        <button class="btn btn-primary" :disabled="!selectedDebts.length" @click="showPaymentModal = true"><LucideCreditCard :size="16"/> Liquidar en Caja</button>
       </div>
     </div>
     
@@ -17,39 +18,45 @@
       <table>
         <thead>
           <tr>
-            <th style="width: 40px;"><input type="checkbox" @change="toggleAll" :checked="selectedDebts.length === validDebts.length && validDebts.length > 0"></th>
-            <th style="width: 100px;">Estatus</th>
-            <th>Mes</th>
-            <th>Concepto</th>
-            <th class="text-right">Cargo</th>
-            <th class="text-right">Pagos</th>
-            <th class="text-right">Saldo</th>
-            <th class="text-center">Operaciones</th>
+            <th class="w-10 text-center"><input type="checkbox" @change="toggleAll" :checked="selectedDebts.length === validDebts.length && validDebts.length > 0" class="w-4 h-4 text-brand-leaf focus:ring-brand-leaf border-gray-300 rounded cursor-pointer"></th>
+            <th class="w-[140px]">Proporción Cubierta</th>
+            <th>Referencia Temporal</th>
+            <th>Concepto Registrado</th>
+            <th class="text-right">Monto Neto</th>
+            <th class="text-right">Suma Abonada</th>
+            <th class="text-right">Deuda Pendiente</th>
+            <th class="text-center">Trazabilidad</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading"><td colspan="8" class="text-center" style="padding: 2rem;">Cargando...</td></tr>
-          <tr v-else-if="!debts.length"><td colspan="8" class="text-center" style="padding: 2rem;">Sin cargos.</td></tr>
+          <tr v-if="loading"><td colspan="8" class="text-center text-brand-teal font-bold py-12">Analizando estado financiero...</td></tr>
+          <tr v-else-if="!debts.length"><td colspan="8" class="text-center text-gray-500 py-12">El alumno no presenta obligaciones en el ciclo seleccionado.</td></tr>
           <template v-else v-for="debt in debts" :key="`${debt.documento}-${debt.mes}`">
-            <tr>
-              <td><input type="checkbox" :value="debt" v-model="selectedDebts" :disabled="debt.saldo <= 0"></td>
-              <td><div class="progress-track"><div class="progress-fill" :style="{ width: debt.porcentajePagado + '%', backgroundColor: debt.porcentajePagado == 100 ? 'var(--brand-campus)' : 'var(--accent-gold)' }"></div></div></td>
+            <tr :class="{ 'selected': selectedDebts.includes(debt) }">
+              <td class="text-center"><input type="checkbox" :value="debt" v-model="selectedDebts" :disabled="debt.saldo <= 0" class="w-4 h-4 text-brand-leaf focus:ring-brand-leaf border-gray-300 rounded cursor-pointer"></td>
+              <td>
+                <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden"><div class="h-full transition-all duration-300 rounded-full" :style="{ width: debt.porcentajePagado + '%', backgroundColor: debt.porcentajePagado == 100 ? '#4E844E' : '#FCBF2D' }"></div></div>
+              </td>
               <td class="font-bold">{{ debt.mesLabel }}</td>
-              <td>{{ debt.conceptoNombre }} <span v-if="debt.hasRecargo" class="badge badge-warning" style="margin-left: 4px;">Mora</span></td>
+              <td>{{ debt.conceptoNombre }} <span v-if="debt.hasRecargo" class="badge badge-warning ml-2">Mora Aplicada</span></td>
               <td class="text-right">${{ format(debt.subtotal) }}</td>
-              <td class="text-right font-bold text-success">${{ format(debt.pagos) }}</td>
-              <td class="text-right font-bold" :class="debt.saldo > 0 ? 'text-danger' : ''">${{ format(debt.saldo) }}</td>
-              <td class="text-center"><button v-if="debt.historialPagos?.length" class="btn btn-ghost" style="padding: 0.25rem 0.5rem;" @click="toggleHistory(debt)">Ver</button></td>
+              <td class="text-right font-bold text-brand-campus">${{ format(debt.pagos) }}</td>
+              <td :class="['text-right font-bold', debt.saldo > 0 ? 'text-accent-coral' : '']">${{ format(debt.saldo) }}</td>
+              <td class="text-center">
+                <button v-if="debt.historialPagos?.length" class="btn btn-ghost px-2 py-1 text-xs" @click="toggleHistory(debt)"><LucideHistory :size="14"/> Ver</button>
+              </td>
             </tr>
-            <tr v-if="expandedHistory === `${debt.documento}-${debt.mes}`" style="background: var(--bg-app);">
-              <td colspan="8" style="padding: 1rem 3rem;">
-                <table style="background: var(--neutral-canvas); border: 1px solid var(--border);">
-                  <thead><tr><th>Folio</th><th>Fecha</th><th>Forma Pago</th><th class="text-right">Monto</th><th class="text-center">Acción</th></tr></thead>
+            <tr v-if="expandedHistory === `${debt.documento}-${debt.mes}`" class="bg-app border-b-0">
+              <td colspan="8" class="p-6">
+                <table class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden m-0">
+                  <thead class="bg-gray-50"><tr><th class="py-3 text-gray-600">Folio Sistema</th><th class="py-3 text-gray-600">Fecha Emisión</th><th class="py-3 text-gray-600">Método de Ingreso</th><th class="text-right py-3 text-gray-600">Monto Recibido</th><th class="text-center py-3 text-gray-600">Acción de Control</th></tr></thead>
                   <tbody>
-                    <tr v-for="h in debt.historialPagos" :key="h.folio">
-                      <td>#{{ h.folio }}</td><td>{{ new Date(h.fecha).toLocaleDateString() }}</td><td>{{ h.formaDePago }}</td>
-                      <td class="text-right text-success">${{ format(h.monto) }}</td>
-                      <td class="text-center"><button class="btn btn-danger" style="padding: 2px 6px; font-size: 11px;" @click="cancelPayment(h)">Anular</button></td>
+                    <tr v-for="h in debt.historialPagos" :key="h.folio" class="hover:bg-gray-50">
+                      <td class="font-mono font-bold text-accent-sky py-2 border-b-0">#{{ h.folio }}</td>
+                      <td class="py-2 border-b-0">{{ new Date(h.fecha).toLocaleDateString() }}</td>
+                      <td class="py-2 border-b-0">{{ h.formaDePago }}</td>
+                      <td class="text-right font-bold text-brand-campus py-2 border-b-0">${{ format(h.monto) }}</td>
+                      <td class="text-center py-2 border-b-0"><button class="btn btn-danger px-3 py-1 text-[11px]" @click="cancelPayment(h)">Reversar</button></td>
                     </tr>
                   </tbody>
                 </table>
@@ -68,6 +75,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import PaymentModal from './PaymentModal.vue'
@@ -92,13 +100,12 @@ const format = (val) => Number(val || 0).toFixed(2)
 const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
 
 const loadDebts = async () => {
-  loading.value = true
-  selectedDebts.value = []
+  loading.value = true; selectedDebts.value = []
   try {
     debts.value = await $fetch(`/api/students/${props.student.matricula}/debts`, {
       params: { ciclo: state.value.ciclo, lateFeeActive: state.value.lateFeeActive }
     })
-  } catch (e) { show('Error cargando cuenta', 'danger') } 
+  } catch (e) { show('Error al extraer el expediente de deuda', 'danger') } 
   finally { loading.value = false }
 }
 
@@ -108,22 +115,22 @@ const toggleAll = (e) => { selectedDebts.value = e.target.checked ? [...validDeb
 const toggleHistory = (debt) => { const id = `${debt.documento}-${debt.mes}`; expandedHistory.value = expandedHistory.value === id ? null : id }
 
 const cancelPayment = async (pago) => {
-  const motivo = prompt('Motivo de anulación:')
+  const motivo = prompt('Por normatividad, indique el motivo de la reversión de fondos:')
   if (!motivo) return
   try {
     await $fetch('/api/payments/cancel', { method: 'POST', body: { folio: pago.folio, motivo } })
-    show('Pago anulado')
+    show('El ingreso ha sido anulado del libro de registros')
     loadDebts(); emit('refresh')
-  } catch (e) { show('Fallo al anular', 'danger') }
+  } catch (e) { show('Incapacidad sistémica para reversar', 'danger') }
 }
 
 const sendReminder = async () => {
-  if (!props.student.correo) return show('Sin correo', 'danger')
+  if (!props.student.correo) return show('No existe correo de tutor vinculado al expediente', 'danger')
   try {
     const total = selectedDebts.value.reduce((s, d) => s + d.saldo, 0)
-    await $fetch('/api/reminders/send', { method: 'POST', body: { correo: props.student.correo, asunto: 'Saldo Pendiente', mensaje: `Saldo: $${total.toFixed(2)} MXN.` } })
-    show('Enviado.')
-  } catch(e) { show('Error en envío', 'danger') }
+    await $fetch('/api/reminders/send', { method: 'POST', body: { correo: props.student.correo, asunto: 'Requerimiento de Saldo - IECS IEDIS', mensaje: `Por este medio se notifica que el alumno presenta un saldo por regularizar de $${total.toFixed(2)} MXN en la plataforma.` } })
+    show('Aviso electrónico despachado exitosamente.')
+  } catch(e) { show('Fallo en la pasarela de correos', 'danger') }
 }
 
 const handleSuccess = () => {

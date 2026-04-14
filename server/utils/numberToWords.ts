@@ -1,6 +1,5 @@
-// Legacy exact match function for 'montoLetra' column
 export function numeroALetras(monto: number): string {
-  // Simplistic fallback implementation ensuring exact schema column fill
-  // In production, insert robust Spanish conversion logic here.
-  return `CANTIDAD DE ${monto.toFixed(2)} PESOS`
+  // Simple mapping to fulfill legacy non-null constraint.
+  // In production, insert a robust numerical-to-Spanish-text parser here.
+  return `LA CANTIDAD DE ${monto.toFixed(2)} PESOS 00/100 M.N.`
 }
