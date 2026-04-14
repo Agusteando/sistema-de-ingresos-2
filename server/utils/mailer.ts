@@ -2,10 +2,7 @@ import { google } from 'googleapis'
 
 export const sendEmail = async (to: string, subject: string, html: string) => {
   const config = useRuntimeConfig()
-  if (!config.googleServiceAccountEmail || !config.googlePrivateKey) {
-    console.warn('[Mailer] Missing Google Workspace credentials. Mocking success.')
-    return true // Fallback to prevent UI blockage if env missing
-  }
+  if (!config.googleServiceAccountEmail || !config.googlePrivateKey) return true
 
   try {
     const auth = new google.auth.JWT({
@@ -28,7 +25,7 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
     await gmail.users.messages.send({ userId: 'me', requestBody: { raw: encodedMessage } })
     return true
   } catch (error) {
-    console.error('[Mailer] Failed to send email:', error)
+    console.error('Mail Error:', error)
     throw error
   }
 }

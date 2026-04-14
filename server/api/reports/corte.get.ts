@@ -11,20 +11,17 @@ export default defineEventHandler(async (event) => {
     params.push(inicio, fin)
   }
   if (plantel) {
-    where += " AND b.plantel = ?"
+    where += " AND r.plantel = ?"
     params.push(plantel)
   }
 
   const sql = `
     SELECT 
-      DATE(r.fecha) as fecha, r.formaDePago, c.concepto as categoria, 
+      DATE(r.fecha) as fecha, r.formaDePago, r.conceptoNombre as categoria, 
       COUNT(r.folio) as transacciones, SUM(r.monto) as total
     FROM referenciasdepago r
-    LEFT JOIN base b ON r.matricula = b.matricula
-    LEFT JOIN documentos d ON r.documento = d.documento
-    LEFT JOIN conceptos c ON d.conceptoId = c.id
     WHERE ${where}
-    GROUP BY DATE(r.fecha), r.formaDePago, c.concepto
+    GROUP BY DATE(r.fecha), r.formaDePago, r.conceptoNombre
     ORDER BY fecha DESC, total DESC
   `
   return await query(sql, params)

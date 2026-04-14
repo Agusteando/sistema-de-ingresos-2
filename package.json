@@ -1,5 +1,5 @@
 {
-  "name": "sistema-ingresos-iecs-iedis",
+  "name": "sistema-ingresos-2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,15 +11,11 @@
   },
   "dependencies": {
     "dayjs": "^1.11.10",
-    "exceljs": "^4.4.0",
     "google-auth-library": "^9.6.3",
     "googleapis": "^133.0.0",
-    "jsonwebtoken": "^9.0.2",
-    "lru-cache": "^10.2.0",
     "lucide-vue-next": "^0.344.0",
     "mysql2": "^3.9.2",
     "nuxt": "^3.10.3",
-    "three": "^0.162.0",
     "vue": "^3.4.21",
     "vue-router": "^4.3.0"
   }

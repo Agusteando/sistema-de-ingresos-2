@@ -2,10 +2,21 @@ import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
+  
+  const [conceptoRef] = await query<any[]>(`SELECT concepto FROM conceptos WHERE id = ?`, [body.conceptoId])
+  const conceptoNombre = conceptoRef ? conceptoRef.concepto : 'Cargo'
+
+  // Legacy Plazo format requirement: Array encoded to string.
+  const plazosArray = JSON.stringify(Array.from({length: Number(body.meses)}, (_, i) => i + 1))
+
+  // Exact match to legacy fields
   const result = await query<any>(`
-    INSERT INTO documentos (matricula, conceptoId, costo, meses, beca, ciclo)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `, [body.matricula, body.conceptoId, body.costo, body.meses, body.beca || 0, body.ciclo])
+    INSERT INTO documentos (concepto, conceptoNombre, matricula, costo, plazo, meses, beca, ciclo, eventual, responsable)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Admin')
+  `, [
+    body.conceptoId, conceptoNombre, body.matricula, body.costo, plazosArray, 
+    body.meses, body.beca || 0, body.ciclo, body.eventual ? 1 : 0
+  ])
   
   return { success: true, documento: result.insertId }
 })

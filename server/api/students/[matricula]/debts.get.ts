@@ -7,9 +7,9 @@ export default defineEventHandler(async (event) => {
   if (!matricula) throw createError({ statusCode: 400, message: 'Matrícula requerida' })
 
   const documentos = await query<any[]>(`
-    SELECT d.documento, d.matricula, d.costo, d.meses, d.beca, d.ciclo, c.concepto as conceptoNombre, c.eventual
-    FROM documentos d LEFT JOIN conceptos c ON d.conceptoId = c.id
-    WHERE d.matricula = ? AND d.ciclo = ?
+    SELECT d.documento, d.matricula, d.costo, d.meses, d.beca, d.ciclo, d.conceptoNombre, d.eventual
+    FROM documentos d
+    WHERE d.matricula = ? AND d.ciclo = ? AND d.estatus = 'Vigente'
   `, [matricula, ciclo])
 
   const pagosRows = await query<any[]>(`
@@ -22,14 +22,17 @@ export default defineEventHandler(async (event) => {
   const today = dayjs()
 
   for (const doc of documentos) {
-    const isEventual = doc.eventual === 1
-    const totalOriginal = ((100 - parseFloat(doc.beca || '0')) * parseFloat(doc.costo)) / 100
-    const plazos = doc.meses || 1
+    const isEventual = String(doc.eventual) === '1'
+    const costoBase = parseFloat(doc.costo) || 0
+    const beca = parseFloat(doc.beca) || 0
+    const totalOriginal = ((100 - beca) * costoBase) / 100
+    const plazos = parseInt(doc.meses) || 1
 
     for (let mes = 1; mes <= plazos; mes++) {
-      const pagosDelMes = pagosRows.filter(p => p.documento === doc.documento && p.mes === mes)
+      const mesStr = String(mes)
+      const pagosDelMes = pagosRows.filter(p => String(p.documento) === String(doc.documento) && String(p.mes) === mesStr)
       const pagosTotalMes = pagosDelMes.reduce((sum, p) => sum + parseFloat(p.monto), 0)
-      const hasRecargoManual = pagosDelMes.some(p => p.recargo === 1)
+      const hasRecargoManual = pagosDelMes.some(p => String(p.recargo) === '1')
 
       let subtotal = totalOriginal
       let saldoAntes = subtotal - pagosTotalMes
@@ -47,13 +50,13 @@ export default defineEventHandler(async (event) => {
       debts.push({
         documento: doc.documento,
         conceptoNombre: doc.conceptoNombre,
-        mes,
-        mesLabel: isEventual ? 'Evento/Anual' : `Mes ${mes}`,
+        mes: mesStr,
+        mesLabel: isEventual ? 'Pago Único' : `Mes ${mesStr}`,
         costoOriginal: totalOriginal,
         subtotal,
         pagos: pagosTotalMes,
         saldo: saldoAntes,
-        beca: doc.beca || 0,
+        beca,
         porcentajePagado: subtotal > 0 ? Math.min(100, (pagosTotalMes * 100) / subtotal).toFixed(1) : 100,
         isLate,
         hasRecargo: subtotal > totalOriginal,
