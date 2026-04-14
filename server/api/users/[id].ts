@@ -1,4 +1,4 @@
-import { query } from '../../../utils/db'
+import { query } from '../../utils/db'
 import bcrypt from 'bcryptjs'
 
 export default defineEventHandler(async (event) => {
