@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
         documento: doc.documento,
         conceptoNombre: doc.conceptoNombre,
         mes: mesStr,
-        mesLabel: isEventual ? 'Pago Único' : `Mes ${mesStr}`,
+        mesLabel: isEventual ? 'Cargo Único' : `Mensualidad ${mesStr}`,
         costoOriginal: totalOriginal,
         subtotal,
         pagos: pagosTotalMes,

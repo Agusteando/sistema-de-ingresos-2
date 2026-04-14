@@ -36,8 +36,7 @@ export default defineEventHandler(async (event) => {
   if (method === 'POST') {
     const body = await readBody(event)
     
-    // Strict exact matching to the legacy 19 column setup. 
-    // We explicitly name the 15 columns we want to insert to prevent value count errors.
+    // Exactly 15 parameters mapped to 15 columns for legacy base table
     await query(`
       INSERT INTO base (
         matricula, apellidoPaterno, apellidoMaterno, nombres, 
@@ -45,7 +44,7 @@ export default defineEventHandler(async (event) => {
         \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Admin', ?)
     `, [
-      '', // Let legacy matricula trigger overwrite this
+      '', // Handled by trigger
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
       body.birth, body.genero, body.plantel, body.nivel, body.grado, body.grupo,
       body.padre, body.telefono, body.correo, body.ciclo

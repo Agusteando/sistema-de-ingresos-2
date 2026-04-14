@@ -14,8 +14,8 @@ export default defineEventHandler(async (event) => {
     WHERE r.folio IN (${placeholders}) AND r.estatus = 'Vigente'
   `, folioList)
 
-  if (raw) return refs
+  if (raw === 'true') return refs
   
-  // Standard HTML fallback logic
-  return { html: 'Use print view router mapping instead.' }
+  // HTML Fallback instruction
+  return { error: 'Please consume via the UI print route /print/recibo' }
 })

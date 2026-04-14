@@ -1,52 +1,62 @@
 <template>
-  <div class="print-container">
-    <div class="receipt">
-      <div class="header">
-        <div class="brand">
-          <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo" class="logo" />
-          <div class="text">
-            <h2>{{ institutoNombre }}</h2>
-            <p>Comprobante de Pago</p>
+  <div class="bg-white min-h-screen p-10 font-sans text-neutral-ink print:p-0">
+    <div class="max-w-[850px] mx-auto border border-neutral-mist p-10 rounded-lg print:border-none print:p-5">
+      <div class="flex justify-between border-b-2 border-brand-campus pb-5 mb-8">
+        <div class="flex items-center gap-5">
+          <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo" class="h-[70px] grayscale contrast-200" />
+          <div>
+            <h2 class="m-0 text-base font-bold text-brand-campus">{{ institutoNombre }}</h2>
+            <p class="m-0 mt-1 text-xs text-brand-teal uppercase font-semibold">Comprobante de Caja</p>
           </div>
         </div>
-        <div class="meta">
-          <p><strong>Fecha:</strong> {{ fecha }}</p>
-          <p><strong>Folios:</strong> {{ route.query.folios }}</p>
+        <div class="text-right text-xs text-gray-600">
+          <p class="m-0 mb-1"><strong class="text-neutral-ink">Emisión:</strong> {{ fecha }}</p>
+          <p class="m-0"><strong class="text-neutral-ink">Folios:</strong> {{ route.query.folios }}</p>
         </div>
       </div>
       
-      <div class="student-info">
-        <p><strong>Alumno:</strong> {{ receiptData.nombreCompleto }}</p>
-        <p><strong>Matrícula:</strong> {{ receiptData.matricula }}</p>
-        <p><strong>Nivel:</strong> {{ receiptData.nivel }} - {{ receiptData.grado }} {{ receiptData.grupo }}</p>
+      <div class="grid grid-cols-3 gap-5 mb-8 bg-app p-4 rounded-md border border-neutral-mist">
+        <div>
+          <label class="block text-[10px] uppercase text-brand-teal font-bold mb-1">Alumno</label>
+          <div class="text-sm font-semibold">{{ receiptData.nombreCompleto }}</div>
+        </div>
+        <div>
+          <label class="block text-[10px] uppercase text-brand-teal font-bold mb-1">Matrícula</label>
+          <div class="text-sm font-semibold">{{ receiptData.matricula }}</div>
+        </div>
+        <div>
+          <label class="block text-[10px] uppercase text-brand-teal font-bold mb-1">Grado Escolar</label>
+          <div class="text-sm font-semibold">{{ receiptData.nivel }} - {{ receiptData.grado }} {{ receiptData.grupo }}</div>
+        </div>
       </div>
       
-      <table class="items-table">
+      <table class="w-full border-collapse mb-8 text-left">
         <thead>
           <tr>
-            <th>Folio</th>
-            <th>Concepto</th>
-            <th>Forma de Pago</th>
-            <th class="amount">Importe</th>
+            <th class="bg-app uppercase text-[11px] font-bold text-gray-600 border-b border-neutral-mist px-2 py-3">Folio Transacción</th>
+            <th class="bg-app uppercase text-[11px] font-bold text-gray-600 border-b border-neutral-mist px-2 py-3">Concepto Desglosado</th>
+            <th class="bg-app uppercase text-[11px] font-bold text-gray-600 border-b border-neutral-mist px-2 py-3">Vía de Pago</th>
+            <th class="bg-app uppercase text-[11px] font-bold text-gray-600 border-b border-neutral-mist px-2 py-3 text-right">Importe Neto</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="r in items" :key="r.folio">
-            <td>{{ r.folio }}</td>
-            <td>{{ r.conceptoNombre }}</td>
-            <td>{{ r.formaDePago }}</td>
-            <td class="amount">${{ Number(r.monto).toFixed(2) }}</td>
+            <td class="border-b border-neutral-mist px-2 py-3 text-[13px]">{{ r.folio }}</td>
+            <td class="border-b border-neutral-mist px-2 py-3 text-[13px]">{{ r.conceptoNombre }}</td>
+            <td class="border-b border-neutral-mist px-2 py-3 text-[13px]">{{ r.formaDePago }}</td>
+            <td class="border-b border-neutral-mist px-2 py-3 text-[13px] text-right">${{ Number(r.monto).toFixed(2) }}</td>
           </tr>
         </tbody>
       </table>
 
-      <div class="total-section">
-        <p><strong>Total Pagado:</strong> ${{ total.toFixed(2) }}</p>
+      <div class="flex justify-between items-center p-4 bg-[#E6F2D8] rounded-md border border-brand-leaf mb-10">
+        <div class="text-sm font-bold uppercase text-brand-campus">Suma Recibida (MXN)</div>
+        <div class="text-2xl font-bold text-neutral-ink">${{ total.toFixed(2) }}</div>
       </div>
 
-      <div class="footer">
-        <p>Compartimos contigo la formación integral de tus hijos</p>
-        <p>SISTEMA DE INGRESOS 2</p>
+      <div class="text-center text-xs text-gray-600">
+        <p class="mb-1">“Compartimos contigo la formación integral de tus hijos”</p>
+        <p class="font-semibold text-neutral-ink">SISTEMA DE INGRESOS 2</p>
       </div>
     </div>
   </div>
@@ -67,13 +77,12 @@ const fecha = dayjs().format('DD/MM/YYYY HH:mm')
 onMounted(async () => {
   const folios = route.query.folios
   if (!folios) return
-  
   try {
     const res = await $fetch(`/api/payments/receipt?folios=${folios}&raw=true`)
     if (res && res.length) {
       items.value = res
       receiptData.value = res[0]
-      setTimeout(() => window.print(), 500)
+      setTimeout(() => window.print(), 800)
     }
   } catch(e) {}
 })
@@ -87,25 +96,8 @@ const institutoNombre = computed(() => {
 </script>
 
 <style scoped>
-.print-container { background: white; width: 100vw; min-height: 100vh; padding: 20px; font-family: 'Inter', sans-serif; color: black; }
-.receipt { max-width: 800px; margin: 0 auto; }
-.header { display: flex; justify-content: space-between; border-bottom: 2px solid black; padding-bottom: 20px; margin-bottom: 20px; }
-.brand { display: flex; align-items: center; gap: 15px; }
-.logo { height: 60px; filter: grayscale(100%); }
-.text h2 { margin: 0; font-size: 16px; text-transform: uppercase; }
-.text p { margin: 5px 0 0; font-size: 14px; }
-.meta { text-align: right; font-size: 14px; }
-.meta p { margin: 0 0 5px; }
-.student-info { margin-bottom: 20px; font-size: 14px; }
-.student-info p { margin: 0 0 5px; }
-.items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-.items-table th, .items-table td { border: 1px solid black; padding: 8px; font-size: 14px; text-align: left; }
-.items-table th { background: #f0f0f0; }
-.amount { text-align: right !important; }
-.total-section { text-align: right; font-size: 18px; margin-bottom: 40px; }
-.footer { text-align: center; font-size: 12px; border-top: 1px solid black; padding-top: 20px; }
 @media print {
-  @page { margin: 0.5cm; }
+  @page { margin: 0; }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 </style>

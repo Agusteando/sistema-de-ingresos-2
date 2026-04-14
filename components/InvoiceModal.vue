@@ -2,14 +2,14 @@
   <div class="modal-overlay" @click.self="$emit('close')">
     <div class="modal-container large">
       <div class="modal-header">
-        <h2 style="font-size: 1.25rem; font-weight: 700;">Facturar Pagos</h2>
+        <h2 class="text-xl font-bold text-brand-campus">Facturar Pagos</h2>
       </div>
       <form @submit.prevent="submit">
         <div class="modal-content">
-          <div class="grid-2">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div class="form-group">
               <label class="form-label">RFC</label>
-              <input type="text" v-model="form.rfc" class="input-field" required style="text-transform: uppercase;">
+              <input type="text" v-model="form.rfc" class="input-field uppercase" required>
             </div>
             <div class="form-group">
               <label class="form-label">Razón Social</label>
@@ -40,8 +40,8 @@
             </div>
           </div>
           
-          <div style="background: var(--bg-app); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 1rem;">
-            <p style="font-weight: 600; font-size: 0.875rem;">Monto a Facturar: <span style="color: var(--brand-campus); font-size: 1.125rem;">${{ total.toFixed(2) }}</span></p>
+          <div class="bg-app p-4 rounded-md border border-neutral-mist mt-5">
+            <p class="font-semibold text-sm">Monto a Facturar: <span class="text-brand-campus text-lg font-bold ml-2">${{ total.toFixed(2) }}</span></p>
           </div>
         </div>
         <div class="modal-footer">
@@ -72,16 +72,16 @@ const loading = ref(false)
 const form = ref({ rfc: '', razonSocial: '', regimenFiscal: '616', usoCfdi: 'D10', cp: '', correo: props.student.correo || '' })
 
 const submit = async () => {
-  if (total.value <= 0) return show('No existen pagos para facturar', 'danger')
+  if (total.value <= 0) return show('No existen pagos válidos para facturar', 'danger')
   loading.value = true
   try {
     await $fetch('/api/invoices', {
       method: 'POST',
       body: { matricula: props.student.matricula, rfc: form.value.rfc.toUpperCase(), razonSocial: form.value.razonSocial, regimenFiscal: form.value.regimenFiscal, usoCfdi: form.value.usoCfdi, cp: form.value.cp, correo: form.value.correo, total: total.value, folios: foliosAsociados.value }
     })
-    show('Factura emitida')
+    show('Solicitud de factura emitida correctamente')
     emit('success')
-  } catch (e) { show('Error al facturar', 'danger') } 
+  } catch (e) { show('Error al procesar la facturación', 'danger') } 
   finally { loading.value = false }
 }
 </script>
