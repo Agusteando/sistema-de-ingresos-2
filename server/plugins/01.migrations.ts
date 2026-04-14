@@ -1,15 +1,15 @@
 import { getDb } from '../utils/db'
 
 export default defineNitroPlugin(async () => {
-  console.log('[DB] Iniciando verificación de esquemas y migraciones...')
+  console.log('[Schema] Verifying IECS-IEDIS database structure...')
   const db = getDb()
 
   try {
-    // Legacy compatible tables creation (Idempotent)
+    // Core legacy tables
     await db.query(`
       CREATE TABLE IF NOT EXISTS base (
         matricula VARCHAR(50) PRIMARY KEY,
-        nombreCompleto VARCHAR(255),
+        nombreCompleto VARCHAR(255) NOT NULL,
         apellidoPaterno VARCHAR(100),
         apellidoMaterno VARCHAR(100),
         nombres VARCHAR(100),
@@ -26,7 +26,7 @@ export default defineNitroPlugin(async () => {
         estatus VARCHAR(50) DEFAULT 'Activo',
         ciclo VARCHAR(20),
         interno TINYINT(1) DEFAULT 0
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `)
 
     await db.query(`
@@ -38,7 +38,7 @@ export default defineNitroPlugin(async () => {
         eventual TINYINT(1) DEFAULT 0,
         ciclo VARCHAR(20),
         plazo INT DEFAULT 1
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `)
 
     await db.query(`
@@ -51,7 +51,7 @@ export default defineNitroPlugin(async () => {
         beca DECIMAL(5,2) DEFAULT 0,
         ciclo VARCHAR(20),
         INDEX idx_matricula (matricula)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `)
 
     await db.query(`
@@ -71,11 +71,29 @@ export default defineNitroPlugin(async () => {
         estatus VARCHAR(50) DEFAULT 'Vigente',
         INDEX idx_doc (documento),
         INDEX idx_mat (matricula)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `)
 
-    console.log('[DB] Base de datos y esquemas listos.')
+    // New table required for end-to-end Facturación persistence
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS facturas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        matricula VARCHAR(50) NOT NULL,
+        rfc VARCHAR(20) NOT NULL,
+        razonSocial VARCHAR(255) NOT NULL,
+        regimenFiscal VARCHAR(10),
+        usoCfdi VARCHAR(10),
+        cp VARCHAR(10),
+        correo VARCHAR(255),
+        total DECIMAL(10,2) NOT NULL,
+        folios TEXT NOT NULL,
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_mat_fac (matricula)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `)
+
+    console.log('[Schema] Initialization complete. Data preserved.')
   } catch (error) {
-    console.error('[DB] Error ejecutando migraciones:', error)
+    console.error('[Schema] Migration failed:', error)
   }
 })
