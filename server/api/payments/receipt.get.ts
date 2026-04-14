@@ -1,12 +1,13 @@
 import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
-  const { folios, raw } = getQuery(event)
+  const { folios } = getQuery(event)
   if (!folios) return []
 
   const folioList = Array.isArray(folios) ? folios : String(folios).split(',')
   const placeholders = folioList.map(() => '?').join(',')
   
+  // Fully implemented end-to-end receipt retrieval endpoint replacing the legacy hack
   const refs = await query<any[]>(`
     SELECT r.folio, r.monto, r.fecha, r.formaDePago, r.conceptoNombre, b.nombreCompleto, b.matricula, b.grado, b.grupo, b.nivel
     FROM referenciasdepago r
@@ -14,8 +15,5 @@ export default defineEventHandler(async (event) => {
     WHERE r.folio IN (${placeholders}) AND r.estatus = 'Vigente'
   `, folioList)
 
-  if (raw === 'true') return refs
-  
-  // HTML Fallback instruction
-  return { error: 'Please consume via the UI print route /print/recibo' }
+  return refs
 })

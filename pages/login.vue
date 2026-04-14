@@ -1,12 +1,18 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-app px-4 font-sans">
-    <div class="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center">
-      <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo Institucional" class="h-16 mx-auto mb-6" />
-      <h1 class="text-2xl font-bold text-brand-campus mb-2">Sistema de Ingresos 2</h1>
-      <p class="text-gray-500 mb-8 text-sm">Autenticación requerida para acceder al panel de administración operativa e información financiera.</p>
+  <div class="min-h-screen flex items-center justify-center bg-[#F4F6F8] px-4 font-sans relative overflow-hidden">
+    <!-- Abstract background elements for premium feel -->
+    <div class="absolute top-[-10%] left-[-10%] w-96 h-96 bg-brand-leaf/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[30rem] h-[30rem] bg-brand-campus/10 rounded-full blur-3xl pointer-events-none"></div>
+
+    <div class="max-w-md w-full bg-white/80 backdrop-blur-xl rounded-3xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] border border-white p-10 text-center relative z-10">
+      <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo Institucional" class="h-20 mx-auto mb-8 drop-shadow-sm" />
+      <h1 class="text-2xl font-black text-gray-800 mb-3 tracking-tight">Sistema de Ingresos 2</h1>
+      <p class="text-gray-500 mb-10 text-sm font-medium leading-relaxed">Autenticación requerida para acceder al panel de administración operativa e información financiera.</p>
       
-      <div id="google-btn" class="flex justify-center min-h-[44px] mb-2"></div>
-      <p v-if="errorMsg" class="mt-4 text-sm text-accent-coral font-semibold">{{ errorMsg }}</p>
+      <div class="flex justify-center w-full min-h-[48px] mb-4 bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow overflow-hidden">
+         <div id="google-btn" class="w-full flex justify-center"></div>
+      </div>
+      <p v-if="errorMsg" class="mt-5 text-sm text-accent-coral font-bold bg-accent-coral/10 py-2 px-4 rounded-lg">{{ errorMsg }}</p>
     </div>
   </div>
 </template>
@@ -40,10 +46,6 @@ onMounted(() => {
             body: { credential: response.credential }
           })
           
-          // CRITICAL FIX: Use window.location.href instead of Nuxt's navigateTo() here.
-          // Since this callback is executed by an external Google script outside of Vue's
-          // internal reactivity context, navigateTo() can lose context or trigger race conditions.
-          // A hard redirect ensures the server fully rehydrates with the newly injected cookies.
           window.location.href = '/'
         } catch (e) {
           errorMsg.value = 'Credenciales institucionales no autorizadas.'

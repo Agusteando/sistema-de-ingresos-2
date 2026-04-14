@@ -6,10 +6,10 @@
       </div>
       <form @submit.prevent="submit">
         <div class="modal-content">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div class="form-group col-span-3" v-if="isEdit">
               <label class="form-label">Matrícula Asignada</label>
-              <input type="text" v-model="form.matricula" class="input-field font-mono" disabled>
+              <input type="text" v-model="form.matricula" class="input-field font-mono font-bold bg-gray-100 text-gray-500" disabled>
             </div>
             
             <div class="form-group"><label class="form-label">Apellido Paterno</label><input type="text" v-model="form.apellidoPaterno" class="input-field" required></div>
