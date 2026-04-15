@@ -1,4 +1,10 @@
-export default defineEventHandler((event) => {
+import { ensureSchema } from '../utils/db'
+
+export default defineEventHandler(async (event) => {
+  // Garantizamos que el esquema esté inyectado y listo ANTES de procesar peticiones web.
+  // Esto previene race-conditions en entornos Serverless (Vercel)
+  await ensureSchema()
+
   const url = getRequestURL(event)
   
   if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/auth/')) {
