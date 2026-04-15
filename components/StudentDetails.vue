@@ -6,6 +6,7 @@
         <p class="text-sm text-gray-500 mt-1 font-medium m-0">Matrícula: <strong class="text-accent-sky">{{ student.matricula }}</strong> | Grupo: {{ student.grado }} {{ student.grupo }}</p>
       </div>
       <div class="flex flex-wrap gap-2 md:justify-end">
+        <button class="btn btn-ghost" @click="printBeca"><LucideAward :size="16"/> Carta beca</button>
         <button class="btn btn-ghost" @click="$emit('edit', student)"><LucideSettings :size="16"/> Editar</button>
         <button class="btn btn-ghost" :disabled="!selectedDebts.length" @click="sendReminder"><LucideBell :size="16"/> Recordatorio</button>
         <button class="btn btn-secondary" @click="showDocModal = true"><LucideFilePlus :size="16"/> Agregar documento</button>
@@ -82,7 +83,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -125,6 +126,10 @@ const toggleHistory = (debt) => { const id = `${debt.documento}-${debt.mes}`; ex
 
 const reprintPayment = (pago) => {
   window.open(`/print/recibo?folios=${pago.folio}`, '_blank', 'width=850,height=800')
+}
+
+const printBeca = () => {
+  window.open(`/print/beca?matricula=${props.student.matricula}`, '_blank', 'width=850,height=800')
 }
 
 const cancelPayment = async (pago) => {

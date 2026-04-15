@@ -9,38 +9,34 @@ export const getAdminProfilePhoto = async (userEmail: string): Promise<string | 
   }
 
   try {
-    // Normalizar la llave privada: Evita errores por comillas literales inyectadas por entornos
     const privateKey = config.googlePrivateKey
       .replace(/\\n/g, '\n')
       .replace(/^"|"$/g, '')
 
-    // 1. Crear un cliente JWT autenticado asumiendo la identidad del administrador del dominio
+    // Autenticación con Delegación de Dominio (DWD) usando el administrador configurado
     const jwtClient = new google.auth.JWT({
       email: config.googleServiceAccountEmail,
       key: privateKey,
-      scopes:['https://www.googleapis.com/auth/admin.directory.user.readonly'],
+      scopes: ['https://www.googleapis.com/auth/admin.directory.user.readonly'],
       subject: config.adminEmailToImpersonate
     })
 
-    // 2. Instanciar el servicio Directory API
-    const service = google.admin({ version: 'directory_v1', auth: jwtClient })
+    const admin = google.admin({ version: 'directory_v1', auth: jwtClient })
 
-    // 3. Consultar la API utilizando users.get para recuperar el thumbnailPhotoUrl de forma segura y directa
-    const userResponse = await service.users.get({
+    // Se obtiene el perfil público del dominio para acceder a la URL real de la foto de perfil en Workspace
+    const response = await admin.users.get({
       userKey: userEmail,
-      projection: 'basic'
+      projection: 'full',
+      viewType: 'domain_public'
     })
 
-    // 4. Retornar la URL directa que proporciona Google para el DP
-    if (userResponse.data && userResponse.data.thumbnailPhotoUrl) {
-      return userResponse.data.thumbnailPhotoUrl
+    if (response.data && response.data.thumbnailPhotoUrl) {
+      return response.data.thumbnailPhotoUrl
     }
 
     return null
   } catch (error: any) {
-    if (error?.code !== 404) {
-      console.error('[Directorio Institucional] Hubo un error al obtener la imagen de perfil:', error.message || error)
-    }
+    console.error('[Google Admin SDK] Error al resolver la foto de perfil de Workspace:', error.message || error)
     return null
   }
 }
