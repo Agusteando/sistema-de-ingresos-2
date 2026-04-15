@@ -60,45 +60,47 @@
     </div>
 
     <!-- Mass Email Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
-      <div class="modal-container large w-[800px] max-w-[95vw]">
-        <div class="modal-header bg-white">
-          <h2 class="text-xl font-bold text-brand-campus flex items-center gap-3"><LucideMail :size="24"/> Enviar recordatorio de pago</h2>
-        </div>
-        <div class="modal-content bg-gray-50/50">
-          <div class="mb-5 px-5 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm font-semibold text-blue-800 flex justify-between items-center">
-            <span>Destinatarios: {{ selectedDeudores.length }}</span>
-            <span class="text-accent-coral" v-if="selectedDeudores.some(d => !d.correo)">{{ selectedDeudores.filter(d => !d.correo).length }} alumnos no tienen correo.</span>
+    <Teleport to="body">
+      <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
+        <div class="modal-container large w-[800px] max-w-[95vw]">
+          <div class="modal-header bg-white">
+            <h2 class="text-xl font-bold text-brand-campus flex items-center gap-3"><LucideMail :size="24"/> Enviar recordatorio de pago</h2>
           </div>
+          <div class="modal-content bg-gray-50/50">
+            <div class="mb-5 px-5 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm font-semibold text-blue-800 flex justify-between items-center">
+              <span>Destinatarios: {{ selectedDeudores.length }}</span>
+              <span class="text-accent-coral" v-if="selectedDeudores.some(d => !d.correo)">{{ selectedDeudores.filter(d => !d.correo).length }} alumnos no tienen correo.</span>
+            </div>
 
-          <div class="form-group mb-5">
-            <label class="form-label">Asunto</label>
-            <input type="text" v-model="emailForm.asunto" class="input-field font-bold" required>
-          </div>
+            <div class="form-group mb-5">
+              <label class="form-label">Asunto</label>
+              <input type="text" v-model="emailForm.asunto" class="input-field font-bold" required>
+            </div>
 
-          <div class="form-group mb-2">
-            <label class="form-label flex justify-between items-end">
-              <span>Mensaje (Soporta HTML)</span>
-              <div class="text-[10px] bg-white px-2 py-1 rounded border border-gray-200 text-gray-500 font-mono">
-                Variables: {{nombre_alumno}}, {{tutor}}, {{deuda}}, {{matricula}}
-              </div>
-            </label>
-            <textarea v-model="emailForm.template" class="input-field min-h-[250px] font-mono text-[13px] leading-relaxed resize-y" required></textarea>
+            <div class="form-group mb-2">
+              <label class="form-label flex justify-between items-end">
+                <span>Mensaje (Soporta HTML)</span>
+                <div class="text-[10px] bg-white px-2 py-1 rounded border border-gray-200 text-gray-500 font-mono">
+                  Variables: {{nombre_alumno}}, {{tutor}}, {{deuda}}, {{matricula}}
+                </div>
+              </label>
+              <textarea v-model="emailForm.template" class="input-field min-h-[250px] font-mono text-[13px] leading-relaxed resize-y" required></textarea>
+            </div>
           </div>
-        </div>
-        <div class="modal-footer bg-white">
-          <button class="btn btn-ghost" @click="showModal = false" :disabled="sending">Cancelar</button>
-          <button class="btn btn-primary px-8" @click="executeBatch" :disabled="sending">
-            <LucideSend :size="18" :class="{'animate-pulse': sending}"/> {{ sending ? 'Enviando...' : 'Enviar' }}
-          </button>
+          <div class="modal-footer bg-white">
+            <button class="btn btn-ghost" @click="showModal = false" :disabled="sending">Cancelar</button>
+            <button class="btn btn-primary px-8" @click="executeBatch" :disabled="sending">
+              <LucideSend :size="18" :class="{'animate-pulse': sending}"/> {{ sending ? 'Enviando...' : 'Enviar' }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { LucideMail, LucideRefreshCw, LucideSend, LucideEye, LucideUserCheck } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
@@ -122,6 +124,18 @@ const emailForm = ref({
 <p>Le recordamos que el alumno(a) <strong>{{nombre_alumno}}</strong> (Matrícula: {{matricula}}) presenta un saldo pendiente de <strong>\${{deuda}} MXN</strong>.</p>
 <p>Le solicitamos atentamente regularizar este importe a la brevedad.</p>
 <p>Si usted ya realizó el pago, haga caso omiso a este mensaje.</p>`
+})
+
+watch(showModal, (val) => {
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = val ? 'hidden' : ''
+  }
+})
+
+onUnmounted(() => {
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = ''
+  }
 })
 
 const loadData = async () => {

@@ -16,7 +16,7 @@
           <LucideFileText :size="16" /> Generar CFDI
         </button>
         <button class="btn btn-primary" @click="triggerPrint">
-          <LucidePrinter :size="16" /> Imprimir
+          <LucidePrinter :size="16" /> Imprimir recibo
         </button>
       </div>
     </div>
@@ -24,8 +24,8 @@
     <div class="max-w-[850px] mx-auto border border-gray-200 p-10 rounded-2xl print:border-none print:p-5 relative z-10 bg-white shadow-xl print:shadow-none print:max-w-none w-full min-h-[900px] flex flex-col justify-between">
       
       <div>
-        <!-- ENCABEZADO CON PARIDAD FPDF -->
-        <div class="flex justify-between border-b-2 border-brand-campus pb-6 mb-8">
+        <!-- ENCABEZADO PARITY -->
+        <div class="flex justify-between items-start border-b-2 border-brand-campus pb-6 mb-8">
           <div class="flex items-center gap-6 w-2/3">
             <img :src="logoSrc" alt="Logo" class="h-[80px] object-contain" />
             <div>
@@ -37,51 +37,82 @@
           <div class="w-1/3 text-right flex flex-col justify-center">
             <div class="inline-block bg-gray-50 border border-gray-200 rounded-lg p-3 text-left w-full">
               <p class="m-0 mb-1 text-xs flex justify-between"><strong class="text-gray-700 uppercase">Emisión:</strong> <span class="font-mono text-gray-600 font-bold">{{ fecha }}</span></p>
-              <p class="m-0 text-xs flex justify-between"><strong class="text-gray-700 uppercase">Usuario:</strong> <span class="text-gray-600 font-bold truncate max-w-[130px] text-right">{{ receiptData.usuario || 'Sistema' }}</span></p>
+              <p class="m-0 text-xs flex justify-between"><strong class="text-gray-700 uppercase">Usuario:</strong> <span class="text-gray-600 font-bold truncate max-w-[130px] text-right">{{ receiptData.usuario || activeUserName }}</span></p>
+              <p class="m-0 mt-1 text-xs flex justify-between"><strong class="text-gray-700 uppercase">Página:</strong> <span class="text-gray-600 font-bold text-right">1 / 1</span></p>
             </div>
           </div>
         </div>
         
-        <!-- DATOS DEL ALUMNO -->
-        <div class="grid grid-cols-4 gap-6 mb-10 bg-gray-50/80 p-6 rounded-xl border border-gray-200 shadow-inner">
-          <div class="col-span-2">
-            <label class="block text-[10px] uppercase text-brand-teal font-black tracking-widest mb-1.5">Nombre del Alumno</label>
-            <div class="text-sm font-bold text-gray-800">{{ receiptData.nombreCompleto || 'ALUMNO NO ESPECIFICADO' }}</div>
-          </div>
-          <div>
-            <label class="block text-[10px] uppercase text-brand-teal font-black tracking-widest mb-1.5">Matrícula</label>
-            <div class="text-sm font-bold text-gray-800 font-mono">{{ receiptData.matricula || 'N/A' }}</div>
-          </div>
-          <div>
-            <label class="block text-[10px] uppercase text-brand-teal font-black tracking-widest mb-1.5">Grado Escolar</label>
-            <div class="text-sm font-bold text-gray-800">{{ receiptData.nivel || '' }} - {{ receiptData.grado || '' }} {{ receiptData.grupo || '' }}</div>
-          </div>
-        </div>
+        <!-- DATOS DEL ALUMNO (Paridad legacy de templateEncabezado.txt) -->
+        <table class="w-full text-sm mb-8 border-t-2 border-b-2 border-gray-200">
+          <thead>
+            <tr class="text-left text-gray-600">
+              <th class="py-2 font-bold uppercase tracking-wider text-[11px]">Matrícula</th>
+              <th class="py-2 font-bold uppercase tracking-wider text-[11px]">Alumno</th>
+              <th class="py-2 font-bold uppercase tracking-wider text-[11px]">Ciclo Escolar</th>
+              <th class="py-2 font-bold uppercase tracking-wider text-[11px]">Grado y grupo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="py-3 font-mono font-bold text-gray-900">{{ receiptData.matricula || 'N/A' }}</td>
+              <td class="py-3 font-bold text-gray-900">{{ receiptData.nombreCompleto || 'ALUMNO NO ESPECIFICADO' }}</td>
+              <td class="py-3 font-medium text-gray-800">{{ receiptData.ciclo || '2024' }}-{{ Number(receiptData.ciclo || '2024')+1 }}</td>
+              <td class="py-3 font-medium text-gray-800">{{ receiptData.grado || '' }} {{ receiptData.grupo || '' }}</td>
+            </tr>
+          </tbody>
+        </table>
         
-        <!-- TABLA DE CONCEPTOS -->
-        <div class="border border-gray-200 rounded-xl overflow-hidden mb-8">
-          <table class="w-full border-collapse text-left">
-            <thead>
-              <tr>
-                <th class="bg-gray-100/80 uppercase text-[10px] font-black tracking-widest text-gray-600 border-b border-gray-200 px-5 py-3">Concepto</th>
-                <th class="bg-gray-100/80 uppercase text-[10px] font-black tracking-widest text-gray-600 border-b border-gray-200 px-5 py-3 text-center">Mes Aplicable</th>
-                <th class="bg-gray-100/80 uppercase text-[10px] font-black tracking-widest text-gray-600 border-b border-gray-200 px-5 py-3 text-center">Vía de Ingreso</th>
-                <th class="bg-gray-100/80 uppercase text-[10px] font-black tracking-widest text-gray-600 border-b border-gray-200 px-5 py-3 text-right">Importe</th>
-              </tr>
-            </thead>
+        <!-- RECIBOS INDIVIDUALES Y SUS CAMPOS (Paridad legacy de templateRecibo.txt) -->
+        <div v-for="(r, i) in items" :key="i" class="mb-8">
+          <table class="w-full text-[12px] border-collapse">
             <tbody>
-              <tr v-for="r in items" :key="r.folio">
-                <td class="border-b border-gray-100 px-5 py-4 text-[13px] font-bold text-gray-900">{{ r.conceptoNombre }}</td>
-                <td class="border-b border-gray-100 px-5 py-4 text-[12px] font-medium text-gray-700 text-center">{{ String(r.mes) === 'ev' ? new Date(r.fecha).toLocaleDateString() : (r.mesReal || r.mesLabel || `Mensualidad ${r.mes}`) }}</td>
-                <td class="border-b border-gray-100 px-5 py-4 text-[12px] text-gray-600 font-medium text-center bg-gray-50/50">{{ r.formaDePago }}</td>
-                <td class="border-b border-gray-100 px-5 py-4 text-[14px] text-right font-black text-brand-campus font-mono">${{ Number(r.monto).toFixed(2) }}</td>
+              <tr class="bg-gray-50/80 border-b border-gray-200">
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider w-1/5">Folio</th>
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider w-1/5">Método de pago</th>
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider w-1/5">Saldo</th>
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider w-1/5">Importe total</th>
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider w-1/5">Pago</th>
+              </tr>
+              <tr>
+                <td class="py-2 px-3 font-mono font-bold text-gray-900">{{ r.folio_plantel || r.folio }}</td>
+                <td class="py-2 px-3 text-gray-800 font-medium">{{ r.formaDePago }}</td>
+                <td class="py-2 px-3 text-gray-800 font-medium">${{ Number(r.saldoDespues || 0).toFixed(2) }}</td>
+                <td class="py-2 px-3 text-gray-800 font-medium">${{ Number(r.importeTotal || 0).toFixed(2) }}</td>
+                <td class="py-2 px-3 text-brand-campus font-black">${{ Number(r.monto || 0).toFixed(2) }}</td>
+              </tr>
+
+              <tr class="bg-gray-50/80 border-b border-t border-gray-200">
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Documento</th>
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Saldo previo</th>
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Acumulado previo</th>
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Acumulado actual</th>
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Importe aplicable a</th>
+              </tr>
+              <tr>
+                <td class="py-2 px-3 font-mono font-medium text-gray-800">{{ String(r.documento).padStart(7, '0') }}</td>
+                <td class="py-2 px-3 font-medium text-gray-800">${{ Number(r.saldoAntes || 0).toFixed(2) }}</td>
+                <td class="py-2 px-3 font-medium text-gray-800">${{ Number(r.pagos || 0).toFixed(2) }}</td>
+                <td class="py-2 px-3 font-medium text-gray-800">${{ Number(r.pagosDespues || 0).toFixed(2) }}</td>
+                <td class="py-2 px-3 font-medium text-gray-800">{{ r.mes === 'ev' ? new Date(r.fecha).toLocaleDateString() : (r.mesReal || r.mes) }}</td>
+              </tr>
+
+              <tr class="bg-gray-50/80 border-b border-t border-gray-200">
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Por concepto de:</th>
+                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider" colspan="4">Detalle de Operación</th>
+              </tr>
+              <tr>
+                <td class="py-2 px-3 font-bold text-gray-900">{{ r.conceptoNombre }}</td>
+                <td class="py-2 px-3 font-medium text-gray-800">{{ new Date(r.fecha).toLocaleDateString() }}</td>
+                <td class="py-2 px-3 font-medium text-gray-800 italic" colspan="3">{{ r.montoLetra }} 00/100 MXN</td>
               </tr>
             </tbody>
           </table>
+          <hr class="mt-4 border-gray-200 border-dashed" />
         </div>
 
-        <!-- TOTAL Y LETRAS -->
-        <div class="flex justify-between items-center p-6 bg-brand-leaf/10 rounded-xl border border-brand-leaf/30 mb-8">
+        <!-- TOTAL SUMMARY -->
+        <div class="flex justify-between items-center p-6 bg-brand-leaf/10 rounded-xl border border-brand-leaf/30 mt-6 mb-8">
           <div class="flex-1 pr-8">
             <div class="text-[10px] font-bold uppercase tracking-widest text-brand-teal mb-1">Importe en Letra</div>
             <div class="text-sm font-semibold text-gray-800 leading-tight">{{ letrasGeneradas }}</div>
@@ -91,9 +122,10 @@
             <div class="text-3xl font-black text-brand-campus font-mono">${{ total.toFixed(2) }}</div>
           </div>
         </div>
+
       </div>
 
-      <!-- FIRMAS Y PIE DE PÁGINA AL FINAL -->
+      <!-- FIRMAS Y PIE DE PÁGINA -->
       <div class="mt-auto">
         <div class="grid grid-cols-2 gap-20 px-10 mt-16 pt-10 border-t-2 border-dashed border-gray-200 text-center">
           <div>
@@ -146,7 +178,10 @@ onMounted(async () => {
   if (isPreview.value) {
     try {
       const data = JSON.parse(sessionStorage.getItem('receipt_preview') || '{}')
-      items.value = data.items || []
+      items.value = (data.items || []).map(r => ({
+        ...r,
+        montoLetra: r.montoLetra || numeroALetras(Number(r.monto || 0))
+      }))
       receiptData.value = { ...data, usuario: activeUserName }
     } catch (e) {}
     return
@@ -157,16 +192,19 @@ onMounted(async () => {
   try {
     const res = await $fetch(`/api/payments/receipt?folios=${folios}`)
     if (res && res.length) {
-      items.value = res
+      items.value = res.map(r => ({
+        ...r,
+        montoLetra: r.montoLetra || numeroALetras(Number(r.monto || 0))
+      }))
       receiptData.value = res[0]
       setTimeout(() => window.print(), 800)
     }
   } catch(e) {}
 })
 
-const total = computed(() => items.value.reduce((a,b) => a + Number(b.monto), 0))
+const total = computed(() => items.value.reduce((a,b) => a + Number(b.monto || 0), 0))
 const letrasGeneradas = computed(() => numeroALetras(total.value))
-const logoSrc = computed(() => receiptData.value.instituto === 1 ? 'https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp' : 'https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp') // Adaptable paths per institute
+const logoSrc = computed(() => receiptData.value.instituto === 1 ? 'https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp' : 'https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp')
 
 const institutoNombre = computed(() => {
   return receiptData.value.nivel === 'Secundaria' 
@@ -196,11 +234,10 @@ const emailReceipt = async () => {
 }
 
 const openInvoiceModal = () => {
-  // Conversión estructural on-the-fly para CFDI Modal
   invoiceDebts.value = items.value.map(item => ({
     conceptoNombre: item.conceptoNombre,
     pagos: item.monto,
-    documento: item.folio // O ID lógico de referenciado
+    documento: item.folio
   }))
 
   invoiceStudent.value = {

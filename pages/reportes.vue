@@ -17,8 +17,11 @@
           <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
         </select>
       </div>
-      <button class="btn btn-secondary h-[46px] min-w-[200px] w-full md:w-auto shadow-sm" @click="loadData" :disabled="loading">
+      <button class="btn btn-secondary h-[46px] min-w-[160px] w-full md:w-auto shadow-sm" @click="loadData" :disabled="loading">
         <LucideFilter :size="18"/> Ejecutar Corte
+      </button>
+      <button class="btn btn-primary h-[46px] shadow-sm" @click="printCorte" :disabled="loading">
+        <LucidePrinter :size="18"/> Imprimir Corte
       </button>
     </div>
 
@@ -80,11 +83,16 @@ const loadData = async () => {
   finally { loading.value = false }
 }
 
+const printCorte = () => {
+  const q = new URLSearchParams({ ...filtros.value, ciclo: state.value.ciclo }).toString()
+  window.open(`/print/corte?${q}`, '_blank', 'width=850,height=800')
+}
+
 const showContextMenu = (event, row) => {
   openMenu(event, [
     { label: `Fila: $${Number(row.total).toFixed(2)}`, disabled: true },
     { label: '-' },
-    { label: 'Imprimir Detalle de Fila (Proximamente)', icon: LucidePrinter, disabled: true, action: () => {} }
+    { label: 'Imprimir Corte de Caja', icon: LucidePrinter, action: printCorte }
   ])
 }
 

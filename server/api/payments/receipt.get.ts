@@ -8,7 +8,6 @@ export default defineEventHandler(async (event) => {
     ? folios.map(Number) 
     : String(folios).split(',').map(Number)
   
-  // Utilizando Prisma para garantizar la extracción segura y tipada del recibo
   const refs = await prisma.referenciasDePago.findMany({
     where: {
       folio: { in: folioList },
@@ -18,15 +17,20 @@ export default defineEventHandler(async (event) => {
 
   if (refs.length === 0) return []
 
-  // Obtener datos del alumno correspondientes
   const studentData = await prisma.base.findFirst({
     where: { matricula: refs[0].matricula }
   })
 
-  // Fusión relacional para mantener estructura requerida por el frontend
   return refs.map(ref => ({
     folio: ref.folio,
+    folio_plantel: ref.folio_plantel,
+    documento: ref.documento,
     monto: Number(ref.monto),
+    importeTotal: Number(ref.importeTotal),
+    saldoAntes: Number(ref.saldoAntes),
+    saldoDespues: Number(ref.saldoDespues),
+    pagos: Number(ref.pagos),
+    pagosDespues: Number(ref.pagosDespues),
     fecha: ref.fecha,
     formaDePago: ref.formaDePago,
     conceptoNombre: ref.conceptoNombre,
@@ -35,6 +39,9 @@ export default defineEventHandler(async (event) => {
     usuario: ref.usuario,
     nombreCompleto: ref.nombreCompleto,
     matricula: ref.matricula,
+    montoLetra: ref.montoLetra,
+    instituto: ref.instituto,
+    ciclo: ref.ciclo,
     grado: studentData?.grado || '',
     grupo: studentData?.grupo || '',
     nivel: studentData?.nivel || ''

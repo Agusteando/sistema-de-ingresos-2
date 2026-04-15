@@ -44,53 +44,55 @@
       </table>
     </div>
 
-    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
-      <div class="modal-container large">
-        <div class="modal-header">
-          <h2 class="text-xl font-bold text-brand-campus">{{ editingId ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
-        </div>
-        <form @submit.prevent="saveUser">
-          <div class="modal-content grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div class="form-group m-0"><label class="form-label">Nombre</label><input type="text" v-model="form.username" class="input-field" required></div>
-            <div class="form-group m-0">
-              <label class="form-label">Contraseña</label>
-              <input type="password" v-model="form.password" class="input-field" :placeholder="editingId ? 'Dejar en blanco para no cambiar' : ''" :required="!editingId">
-            </div>
-            <div class="form-group m-0 col-span-2 md:col-span-1"><label class="form-label">Correo electrónico (Para Google Auth)</label><input type="email" v-model="form.email" class="input-field"></div>
-            <div class="form-group m-0 col-span-2 md:col-span-1">
-              <label class="form-label">Rol</label>
-              <select v-model="form.role" class="input-field" required>
-                <option value="plantel">Usuario (Acceso a planteles seleccionados)</option>
-                <option value="global">Super Admin (Acceso a todo)</option>
-              </select>
-            </div>
-            
-            <div class="form-group m-0 col-span-2 mt-2 p-5 bg-gray-50 border border-gray-200 rounded-xl">
-              <label class="form-label mb-3">Planteles permitidos</label>
-              <div class="grid grid-cols-3 md:grid-cols-5 gap-3">
-                <label v-for="p in PLANTELES_LIST" :key="p" class="flex items-center gap-2 cursor-pointer text-sm font-bold text-gray-700 bg-white px-3 py-2.5 rounded-lg border border-gray-200 hover:border-brand-leaf transition-colors shadow-sm" :class="{'bg-brand-leaf/5 border-brand-leaf': form.planteles.includes(p)}">
-                  <input type="checkbox" :value="p" v-model="form.planteles" class="w-4 h-4 text-brand-leaf rounded border-gray-300 focus:ring-brand-leaf">
-                  {{ p }}
-                </label>
+    <Teleport to="body">
+      <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
+        <div class="modal-container large">
+          <div class="modal-header">
+            <h2 class="text-xl font-bold text-brand-campus">{{ editingId ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
+          </div>
+          <form @submit.prevent="saveUser">
+            <div class="modal-content grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div class="form-group m-0"><label class="form-label">Nombre</label><input type="text" v-model="form.username" class="input-field" required></div>
+              <div class="form-group m-0">
+                <label class="form-label">Contraseña</label>
+                <input type="password" v-model="form.password" class="input-field" :placeholder="editingId ? 'Dejar en blanco para no cambiar' : ''" :required="!editingId">
+              </div>
+              <div class="form-group m-0 col-span-2 md:col-span-1"><label class="form-label">Correo electrónico (Para Google Auth)</label><input type="email" v-model="form.email" class="input-field"></div>
+              <div class="form-group m-0 col-span-2 md:col-span-1">
+                <label class="form-label">Rol</label>
+                <select v-model="form.role" class="input-field" required>
+                  <option value="plantel">Usuario (Acceso a planteles seleccionados)</option>
+                  <option value="global">Super Admin (Acceso a todo)</option>
+                </select>
+              </div>
+              
+              <div class="form-group m-0 col-span-2 mt-2 p-5 bg-gray-50 border border-gray-200 rounded-xl">
+                <label class="form-label mb-3">Planteles permitidos</label>
+                <div class="grid grid-cols-3 md:grid-cols-5 gap-3">
+                  <label v-for="p in PLANTELES_LIST" :key="p" class="flex items-center gap-2 cursor-pointer text-sm font-bold text-gray-700 bg-white px-3 py-2.5 rounded-lg border border-gray-200 hover:border-brand-leaf transition-colors shadow-sm" :class="{'bg-brand-leaf/5 border-brand-leaf': form.planteles.includes(p)}">
+                    <input type="checkbox" :value="p" v-model="form.planteles" class="w-4 h-4 text-brand-leaf rounded border-gray-300 focus:ring-brand-leaf">
+                    {{ p }}
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="modal-footer flex justify-between">
-            <button type="button" class="btn btn-ghost text-accent-coral hover:bg-accent-coral/10 hover:text-accent-coral" v-if="editingId" @click="deleteUser"><LucideTrash2 :size="16"/> Eliminar</button>
-            <div v-else></div>
-            <div class="flex gap-2">
-              <button type="button" class="btn btn-ghost" @click="showModal = false">Cancelar</button>
-              <button type="submit" class="btn btn-primary" :disabled="saving || form.planteles.length === 0">Guardar</button>
+            <div class="modal-footer flex justify-between">
+              <button type="button" class="btn btn-ghost text-accent-coral hover:bg-accent-coral/10 hover:text-accent-coral" v-if="editingId" @click="deleteUser"><LucideTrash2 :size="16"/> Eliminar</button>
+              <div v-else></div>
+              <div class="flex gap-2">
+                <button type="button" class="btn btn-ghost" @click="showModal = false">Cancelar</button>
+                <button type="submit" class="btn btn-primary" :disabled="saving || form.planteles.length === 0">Guardar</button>
+              </div>
             </div>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { LucideUserPlus, LucideSettings, LucideTrash2 } from 'lucide-vue-next'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { useToast } from '~/composables/useToast'
@@ -106,6 +108,18 @@ const saving = ref(false)
 const editingId = ref(null)
 
 const form = ref({ username: '', password: '', email: '', planteles: [], role: 'plantel' })
+
+watch(showModal, (val) => {
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = val ? 'hidden' : ''
+  }
+})
+
+onUnmounted(() => {
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = ''
+  }
+})
 
 const loadUsers = async () => {
   loadingTable.value = true
