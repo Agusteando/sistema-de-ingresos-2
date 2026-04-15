@@ -20,6 +20,16 @@ export default defineNitroPlugin(async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `)
 
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS familias (
+        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        apellidos VARCHAR(255) NOT NULL,
+        tutor VARCHAR(255) NOT NULL,
+        telefono VARCHAR(255) DEFAULT NULL,
+        correo VARCHAR(255) DEFAULT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `)
+
     const [roleCols]: any = await db.query(`SHOW COLUMNS FROM users LIKE 'role'`)
     if (roleCols.length === 0) {
       await db.query(`ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'plantel'`)
@@ -34,6 +44,11 @@ export default defineNitroPlugin(async () => {
     const [internoCols]: any = await db.query(`SHOW COLUMNS FROM base LIKE 'interno'`)
     if (internoCols.length === 0) {
       await db.query(`ALTER TABLE base ADD COLUMN interno TINYINT(1) NOT NULL DEFAULT 1`)
+    }
+
+    const [familiaIdCols]: any = await db.query(`SHOW COLUMNS FROM base LIKE 'familiaId'`)
+    if (familiaIdCols.length === 0) {
+      await db.query(`ALTER TABLE base ADD COLUMN familiaId INT DEFAULT NULL`)
     }
 
     const superAdminEmail = 'desarrollo.tecnologico@casitaiedis.edu.mx'

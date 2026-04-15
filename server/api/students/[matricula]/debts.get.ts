@@ -21,6 +21,12 @@ export default defineEventHandler(async (event) => {
   const debts = []
   const today = dayjs()
 
+  const spanishMonths = [
+    'Septiembre', 'Octubre', 'Noviembre', 'Diciembre', 
+    'Enero', 'Febrero', 'Marzo', 'Abril', 
+    'Mayo', 'Junio', 'Julio', 'Agosto'
+  ]
+
   for (const doc of documentos) {
     const isEventual = String(doc.eventual) === '1'
     const costoBase = parseFloat(doc.costo) || 0
@@ -47,11 +53,13 @@ export default defineEventHandler(async (event) => {
       }
       if (saldoAntes < 0) saldoAntes = 0
 
+      const mesLabel = isEventual ? 'Cargo Único' : (spanishMonths[mes - 1] || `Mensualidad ${mesStr}`)
+
       debts.push({
         documento: doc.documento,
         conceptoNombre: doc.conceptoNombre,
         mes: mesStr,
-        mesLabel: isEventual ? 'Cargo Único' : `Mensualidad ${mesStr}`,
+        mesLabel,
         costoOriginal: totalOriginal,
         subtotal,
         pagos: pagosTotalMes,

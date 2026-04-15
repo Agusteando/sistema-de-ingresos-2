@@ -24,6 +24,16 @@ model Alumnos {
   @@map("alumnos")
 }
 
+model Familias {
+  id          Int      @id @default(autoincrement())
+  apellidos   String   @db.VarChar(255)
+  tutor       String   @db.VarChar(255)
+  telefono    String?  @db.VarChar(255)
+  correo      String?  @db.VarChar(255)
+
+  @@map("familias")
+}
+
 model Base {
   id              Int      @id @default(autoincrement())
   matricula       String   @db.VarChar(255)
@@ -45,6 +55,7 @@ model Base {
   contingencia    Boolean? @default(false)
   ciclo           String?  @db.VarChar(255)
   interno         Boolean? @default(true)
+  familiaId       Int?
 
   @@map("base")
 }
