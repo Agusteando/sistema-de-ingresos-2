@@ -9,6 +9,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: 'Configuración de Google ausente' })
   }
 
+  if (!body || !body.credential) {
+    throw createError({ statusCode: 400, message: 'Credencial ausente' })
+  }
+
   const client = new OAuth2Client(config.public.googleClientId)
   
   try {
@@ -66,7 +70,8 @@ export default defineEventHandler(async (event) => {
     setCookie(event, 'auth_active_plantel', activePlantel, cookieOpts)
     
     return { success: true }
-  } catch (error) {
-    throw createError({ statusCode: 401, message: 'Error de autenticación con Google.' })
+  } catch (error: any) {
+    console.error('[Auth Login Error]', error)
+    throw createError({ statusCode: 401, message: error?.message || 'Error de autenticación con Google.' })
   }
 })
