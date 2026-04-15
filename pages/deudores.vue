@@ -5,11 +5,14 @@
         <h2 class="text-lg font-bold text-gray-800 tracking-tight">Deudores</h2>
         <p class="text-gray-500 text-sm mt-0.5">Gestión de alumnos con saldos vencidos y notificación masiva.</p>
       </div>
-      <div class="flex gap-3 w-full md:w-auto">
+      <div class="flex gap-3 w-full md:w-auto flex-wrap">
         <button class="btn btn-outline flex-1 md:flex-none" @click="loadData" :disabled="loading">
           <LucideRefreshCw :size="16" :class="{'animate-spin': loading}"/> Actualizar
         </button>
-        <button class="btn btn-primary flex-1 md:flex-none" :disabled="selectedDeudores.length === 0" @click="openMassEmailModal">
+        <button class="btn btn-secondary flex-1 md:flex-none" @click="exportData" :disabled="loading || filteredDeudores.length === 0">
+          <LucideDownload :size="16"/> Exportar CSV
+        </button>
+        <button class="btn btn-primary flex-1 md:flex-none w-full" :disabled="selectedDeudores.length === 0" @click="openMassEmailModal">
           <LucideMail :size="16"/> Enviar recordatorio ({{ selectedDeudores.length }})
         </button>
       </div>
@@ -49,8 +52,8 @@
               @contextmenu.prevent="showContextMenu($event, d)">
             <td class="text-center"><input type="checkbox" :value="d" v-model="selectedDeudores" class="w-4 h-4 text-brand-leaf border-gray-300 rounded focus:ring-brand-leaf cursor-pointer"></td>
             <td class="font-mono text-xs font-semibold text-accent-sky">{{ d.matricula }}</td>
-            <td class="font-semibold text-gray-800">{{ d.nombreCompleto }}</td>
-            <td class="text-gray-600">{{ d.nivel }} - {{ d.grado }} {{ d.grupo }}</td>
+            <td class="font-bold text-gray-800">{{ d.nombreCompleto }}</td>
+            <td class="text-gray-600 font-medium">{{ d.nivel }} - {{ d.grado }} {{ d.grupo }}</td>
             <td>
               <div class="text-gray-800 truncate max-w-[200px]">{{ d.padre || 'No registrado' }}</div>
               <div class="text-[11px] font-semibold text-brand-teal mt-0.5" v-if="d.correo">{{ d.correo }}</div>
@@ -101,10 +104,11 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { LucideMail, LucideRefreshCw, LucideSend, LucideEye, LucideUserCheck } from 'lucide-vue-next'
+import { LucideMail, LucideRefreshCw, LucideSend, LucideEye, LucideUserCheck, LucideDownload } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
+import { exportToCSV } from '~/utils/export'
 
 const state = useState('globalState')
 const { show } = useToast()
@@ -118,12 +122,12 @@ const showModal = ref(false)
 const sending = ref(false)
 
 const emailForm = ref({
-  asunto: 'Recordatorio de pago - IECS IEDIS',
+  asunto: 'Recordatorio de pago - Estado de Cuenta Institucional',
   template: `<p>Estimado(a) <strong>{{tutor}}</strong>,</p>
 <p>Esperando que se encuentre muy bien, nos dirigimos a usted por parte de la administración del Instituto.</p>
-<p>Le recordamos que el alumno(a) <strong>{{nombre_alumno}}</strong> (Matrícula: {{matricula}}) presenta un saldo pendiente de <strong>\${{deuda}} MXN</strong>.</p>
-<p>Le solicitamos atentamente regularizar este importe a la brevedad.</p>
-<p>Si usted ya realizó el pago, haga caso omiso a este mensaje.</p>`
+<p>Le recordamos amablemente que el alumno(a) <strong>{{nombre_alumno}}</strong> (Matrícula: {{matricula}}) presenta un saldo pendiente en su estado de cuenta por un total de <strong>\${{deuda}} MXN</strong>.</p>
+<p>Le solicitamos atentamente regularizar este importe a la brevedad para evitar inconvenientes administrativos.</p>
+<p>Si usted ya realizó el pago en las últimas 24 horas, le pedimos hacer caso omiso a este mensaje automático.</p>`
 })
 
 watch(showModal, (val) => {
@@ -168,11 +172,24 @@ const toggleAll = (e) => {
 
 const showContextMenu = (event, d) => {
   openMenu(event, [
-    { label: `Saldo: $${Number(d.deudaVigente).toFixed(2)}`, disabled: true },
+    { label: `Saldo Pendiente: $${Number(d.deudaVigente).toFixed(2)}`, disabled: true },
     { label: '-' },
     { label: 'Seleccionar para correo', icon: LucideUserCheck, action: () => { if (!selectedDeudores.value.includes(d)) selectedDeudores.value.push(d) } },
-    { label: 'Ver alumno', icon: LucideEye, action: () => { window.location.href = `/?q=${d.matricula}` } }
+    { label: 'Ver detalles de alumno', icon: LucideEye, action: () => { window.location.href = `/?q=${d.matricula}` } }
   ])
+}
+
+const exportData = () => {
+  const exportList = filteredDeudores.value.map(d => ({
+    Matrícula: d.matricula,
+    Nombre: d.nombreCompleto,
+    Grado: `${d.nivel} - ${d.grado} ${d.grupo}`,
+    Tutor: d.padre || 'No registrado',
+    Correo: d.correo || 'Sin correo',
+    Teléfono: d.telefono || '',
+    Saldo_Pendiente_MXN: Number(d.deudaVigente).toFixed(2)
+  }))
+  exportToCSV(`Deudores_${state.value.ciclo}.csv`, exportList)
 }
 
 const openMassEmailModal = () => {
@@ -192,14 +209,14 @@ const executeBatch = async () => {
       }
     })
     if (res.success) {
-      show(`Enviados: ${res.results.sent}. Fallidos: ${res.results.failed}`)
+      show(`Reporte de envío: ${res.results.sent} exitosos, ${res.results.failed} fallidos.`)
       showModal.value = false
       selectedDeudores.value = []
     } else {
-      show(res.message || 'Error al enviar correos', 'danger')
+      show(res.message || 'Ocurrió un error al procesar el envío masivo.', 'danger')
     }
   } catch (e) {
-    show('Error de conexión', 'danger')
+    show('Error de red al establecer comunicación.', 'danger')
   } finally {
     sending.value = false
   }

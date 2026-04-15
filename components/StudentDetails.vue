@@ -1,14 +1,20 @@
 <template>
-  <div class="card mt-8">
-    <div class="card-header border-b-2">
+  <div class="card mt-8 animate-[slideUp_0.3s_ease-out]">
+    <div class="card-header border-b border-gray-200">
       <div>
-        <h3 class="text-lg font-bold text-gray-800 tracking-tight m-0">{{ student.nombreCompleto }}</h3>
+        <h3 class="text-xl font-bold text-gray-800 tracking-tight m-0">{{ student.nombreCompleto }}</h3>
         <p class="text-[0.8rem] text-gray-500 mt-0.5 font-medium m-0">
-          Matrícula: <strong class="text-accent-sky font-mono">{{ student.matricula }}</strong> &nbsp;|&nbsp; 
+          Matrícula: <strong class="text-accent-sky font-mono bg-blue-50 px-1.5 py-0.5 rounded">{{ student.matricula }}</strong> &nbsp;|&nbsp; 
           Grupo: {{ student.grado }} {{ student.grupo }}
         </p>
+        <div v-if="siblings.length" class="mt-3 flex gap-2 items-center text-sm flex-wrap">
+          <span class="text-gray-400 font-semibold uppercase tracking-wide text-[10px]">Familia / Hermanos vinculados:</span>
+          <button v-for="sib in siblings" :key="sib.matricula" class="badge bg-blue-50 text-blue-700 cursor-pointer hover:bg-blue-100 transition-colors border border-blue-100" @click="switchToSibling(sib.matricula)">
+            <LucideUsers :size="10" class="inline mr-1" /> {{ sib.nombreCompleto }} ({{ sib.nivel }})
+          </button>
+        </div>
       </div>
-      <div class="flex flex-wrap gap-2 md:justify-end">
+      <div class="flex flex-wrap gap-2 md:justify-end mt-4 md:mt-0">
         <button class="btn btn-ghost !px-3" @click="printBeca"><LucideAward :size="14"/> Carta beca</button>
         <button class="btn btn-ghost !px-3" @click="$emit('edit', student)"><LucideSettings :size="14"/> Editar</button>
         <button class="btn btn-ghost !px-3" :disabled="!selectedDebts.length" @click="sendReminder"><LucideBell :size="14"/> Recordatorio</button>
@@ -33,8 +39,8 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading"><td colspan="8" class="text-center text-gray-500 font-medium py-10">Cargando datos...</td></tr>
-          <tr v-else-if="!debts.length"><td colspan="8" class="text-center text-gray-400 py-10">Sin adeudos o documentos registrados.</td></tr>
+          <tr v-if="loading"><td colspan="8" class="text-center text-gray-500 font-medium py-10">Cargando datos del estado de cuenta...</td></tr>
+          <tr v-else-if="!debts.length"><td colspan="8" class="text-center text-gray-400 py-10">Sin adeudos o documentos registrados en este ciclo escolar.</td></tr>
           <template v-else v-for="debt in debts" :key="`${debt.documento}-${debt.mes}`">
             <tr :class="{ 'selected': selectedDebts.includes(debt) }"
                 class="cursor-context-menu"
@@ -43,7 +49,7 @@
               <td>
                 <div class="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200/50"><div class="h-full transition-all duration-300 rounded-full" :style="{ width: debt.porcentajePagado + '%', backgroundColor: debt.porcentajePagado == 100 ? '#8EC153' : '#FCBF2D' }"></div></div>
               </td>
-              <td class="font-semibold text-gray-700 text-xs">{{ debt.mesLabel }}</td>
+              <td class="font-bold text-gray-700 text-xs">{{ debt.mesLabel }}</td>
               <td class="text-gray-800 text-sm">{{ debt.conceptoNombre }} <span v-if="debt.hasRecargo" class="badge badge-warning ml-1 !text-[9px]">Recargo</span></td>
               <td class="text-right text-gray-600 font-mono text-sm">${{ format(debt.subtotal) }}</td>
               <td class="text-right font-semibold text-brand-campus font-mono text-sm">${{ format(debt.pagos) }}</td>
@@ -57,14 +63,14 @@
                 <table class="bg-white rounded-lg border border-gray-200 shadow-sm w-full">
                   <thead><tr><th class="py-2 px-4 text-[10px]">Folio</th><th class="py-2 px-4 text-[10px]">Fecha</th><th class="py-2 px-4 text-[10px]">Forma de Pago</th><th class="text-right py-2 px-4 text-[10px]">Monto</th><th class="text-center py-2 px-4 text-[10px]">Opciones</th></tr></thead>
                   <tbody>
-                    <tr v-for="h in debt.historialPagos" :key="h.folio" class="hover:bg-gray-50">
-                      <td class="font-mono text-xs font-semibold text-accent-sky py-2 px-4 border-b border-gray-100">#{{ h.folio }}</td>
-                      <td class="py-2 px-4 text-xs text-gray-600 border-b border-gray-100">{{ new Date(h.fecha).toLocaleDateString() }}</td>
-                      <td class="py-2 px-4 text-xs text-gray-600 border-b border-gray-100">{{ h.formaDePago }}</td>
-                      <td class="text-right font-semibold text-brand-campus text-xs py-2 px-4 border-b border-gray-100">${{ format(h.monto) }}</td>
+                    <tr v-for="h in debt.historialPagos" :key="h.folio" class="hover:bg-gray-50 transition-colors">
+                      <td class="font-mono text-xs font-bold text-accent-sky py-2 px-4 border-b border-gray-100">#{{ h.folio }}</td>
+                      <td class="py-2 px-4 text-xs font-semibold text-gray-600 border-b border-gray-100">{{ new Date(h.fecha).toLocaleString('es-MX') }}</td>
+                      <td class="py-2 px-4 text-xs text-gray-600 border-b border-gray-100"><span class="bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-[10px]">{{ h.formaDePago }}</span></td>
+                      <td class="text-right font-bold text-brand-campus font-mono text-xs py-2 px-4 border-b border-gray-100">${{ format(h.monto) }}</td>
                       <td class="text-center py-2 px-4 border-b border-gray-100 flex justify-center gap-1">
                         <button class="btn btn-outline !px-2 !py-0.5 text-[10px]" @click="reprintPayment(h)"><LucidePrinter :size="12" class="mr-1 inline-block"/> PDF</button>
-                        <button class="btn btn-ghost text-accent-coral !px-2 !py-0.5 text-[10px]" @click="cancelPayment(h)"><LucideUndo :size="12" class="mr-1 inline-block"/> Anular</button>
+                        <button class="btn btn-ghost text-accent-coral !px-2 !py-0.5 text-[10px] hover:bg-accent-coral/10" @click="cancelPayment(h)"><LucideUndo :size="12" class="mr-1 inline-block"/> Anular</button>
                       </td>
                     </tr>
                   </tbody>
@@ -83,9 +89,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward } from 'lucide-vue-next'
-import { useState } from '#app'
+import { ref, computed, watch, onMounted } from 'vue'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers } from 'lucide-vue-next'
+import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import PaymentModal from './PaymentModal.vue'
@@ -93,12 +99,13 @@ import DocumentModal from './DocumentModal.vue'
 import InvoiceModal from './InvoiceModal.vue'
 
 const props = defineProps({ student: Object })
-const emit = defineEmits(['refresh', 'edit'])
+const emit = defineEmits(['refresh', 'edit', 'switch-student'])
 const { show } = useToast()
 const { openMenu } = useContextMenu()
 const state = useState('globalState')
 
 const debts = ref([])
+const siblings = ref([])
 const loading = ref(false)
 const selectedDebts = ref([])
 const expandedHistory = ref(null)
@@ -111,7 +118,7 @@ const format = (val) => Number(val || 0).toFixed(2)
 const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
 
 const loadDebts = async () => {
-  loading.value = true; selectedDebts.value =[]
+  loading.value = true; selectedDebts.value = []
   try {
     debts.value = await $fetch(`/api/students/${props.student.matricula}/debts`, {
       params: { ciclo: state.value.ciclo, lateFeeActive: state.value.lateFeeActive }
@@ -120,9 +127,22 @@ const loadDebts = async () => {
   finally { loading.value = false }
 }
 
-watch(() =>[props.student, state.value.lateFeeActive], loadDebts, { immediate: true })
+const loadSiblings = async () => {
+  try {
+    siblings.value = await $fetch(`/api/students/${props.student.matricula}/siblings`)
+  } catch(e) {}
+}
 
-const toggleAll = (e) => { selectedDebts.value = e.target.checked ? [...validDebts.value] :[] }
+const switchToSibling = (matricula) => {
+  window.location.href = `/?q=${matricula}`
+}
+
+watch(() => [props.student, state.value.lateFeeActive], () => {
+  loadDebts()
+  loadSiblings()
+}, { immediate: true })
+
+const toggleAll = (e) => { selectedDebts.value = e.target.checked ? [...validDebts.value] : [] }
 const toggleHistory = (debt) => { const id = `${debt.documento}-${debt.mes}`; expandedHistory.value = expandedHistory.value === id ? null : id }
 
 const reprintPayment = (pago) => {
@@ -134,22 +154,64 @@ const printBeca = () => {
 }
 
 const cancelPayment = async (pago) => {
-  const motivo = prompt('Motivo de la cancelación:')
+  if (pago.estatus === 'Cancelada' || pago.estatus === 'cancelado') {
+    return show('Este folio ya estaba cancelado.', 'danger')
+  }
+
+  if (!confirm("Contacta a alguna de las personas autorizadas (Ismael | Eugenio Álvarez) y solicítales el código que les va a llegar por Telegram.")) {
+    return
+  }
+
+  const motivo = prompt("Motivo de cancelación:")
   if (!motivo) return
+
+  const secret = Math.floor(Math.random() * 9000) + 1000
+  const userName = useCookie('auth_name').value || 'Operador'
+  const stringMsg = `*${userName}* solicita una cancelación del concepto _${pago.conceptoNombre}_ por el monto de _$${pago.monto}_ con motivo de _${motivo}_\nCódigo para cancelar: *${secret}*`
+
   try {
-    await $fetch('/api/payments/cancel', { method: 'POST', body: { folio: pago.folio, motivo } })
-    show('Pago cancelado')
-    loadDebts(); emit('refresh')
-  } catch (e) { show('Error al cancelar', 'danger') }
+    await fetch("https://tgbot.casitaapps.com/sendMessages", {
+      method: "POST",
+      body: JSON.stringify({ chatId: ["-4885991203"], message: stringMsg }),
+      headers: { "Content-Type": "application/json" },
+    })
+
+    const input = prompt("Ingresa el código de cancelación de 4 dígitos proporcionado:")
+    
+    if (input === secret.toString()) {
+      const res = await $fetch('/api/payments/cancel', { 
+        method: 'POST', 
+        body: { folio: pago.folio, motivo, force_direct: true } 
+      })
+      
+      if (res.success) {
+        show('Cancelación exitosa', 'success')
+        await fetch("https://tgbot.casitaapps.com/sendMessages", {
+          method: "POST",
+          body: JSON.stringify({
+            chatId: ["-4885991203"],
+            message: `La solicitud de cancelación de *${userName}* con código *${secret}* ha sido procesada exitosamente.`,
+          }),
+          headers: { "Content-Type": "application/json" },
+        })
+        loadDebts()
+        emit('refresh')
+      }
+    } else {
+      alert("Código incorrecto. Operación abortada.")
+    }
+  } catch (e) {
+    show('Error al procesar la cancelación, contacte a soporte.', 'danger')
+  }
 }
 
 const sendReminder = async () => {
-  if (!props.student.correo) return show('Sin correo registrado', 'danger')
+  if (!props.student.correo) return show('El alumno no cuenta con correo registrado', 'danger')
   try {
     const total = selectedDebts.value.reduce((s, d) => s + d.saldo, 0)
-    await $fetch('/api/reminders/send', { method: 'POST', body: { correo: props.student.correo, asunto: 'Recordatorio de pago', mensaje: `Le recordamos que el alumno presenta un saldo pendiente de $${total.toFixed(2)} MXN.` } })
-    show('Recordatorio enviado.')
-  } catch(e) { show('Error al enviar', 'danger') }
+    await $fetch('/api/reminders/send', { method: 'POST', body: { correo: props.student.correo, asunto: 'Recordatorio de pago - Estado de Cuenta', mensaje: `Le recordamos amablemente que el alumno presenta un saldo pendiente de $${total.toFixed(2)} MXN.` } })
+    show('Recordatorio enviado exitosamente al correo registrado.')
+  } catch(e) { show('Error de red al enviar recordatorio', 'danger') }
 }
 
 const showDebtContextMenu = (event, debt) => {
@@ -163,6 +225,6 @@ const showDebtContextMenu = (event, debt) => {
 
 const handleSuccess = () => {
   showPaymentModal.value = false; showDocModal.value = false; showInvoiceModal.value = false
-  selectedDebts.value =[]; loadDebts(); emit('refresh')
+  selectedDebts.value = []; loadDebts(); emit('refresh')
 }
 </script>
