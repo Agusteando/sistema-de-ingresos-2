@@ -17,8 +17,14 @@ export default defineEventHandler(async (event) => {
     const { username, password, email, planteles, role } = await readBody(event)
     const hash = bcrypt.hashSync(password, 10)
     const plantelesStr = Array.isArray(planteles) ? planteles.join(',') : planteles
+    
+    // Inyectar compatibilidad con base de datos legacy para evitar error de STRICT MODE (Field 'plantel' doesn't have a default value)
+    const legacyPlantel = Array.isArray(planteles) && planteles.length > 0 ? planteles[0] : ''
 
-    await query('INSERT INTO users (username, password, email, planteles, role) VALUES (?, ?, ?, ?, ?)', [username, hash, email, plantelesStr, role])
+    await query(
+      'INSERT INTO users (username, password, email, planteles, role, plantel) VALUES (?, ?, ?, ?, ?, ?)', 
+      [username, hash, email, plantelesStr, role, legacyPlantel]
+    )
     return { success: true }
   }
 })
