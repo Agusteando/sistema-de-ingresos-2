@@ -10,7 +10,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
   }
 
-  // Leer información vital del estudiante mediante Prisma garantizando modelo estricto
   const studentRef = await prisma.base.findFirst({
     where: { matricula: matricula }
   })
@@ -23,7 +22,6 @@ export default defineEventHandler(async (event) => {
   const plantel = studentRef.plantel || 'PT'
   const instituto = (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0
 
-  // Migración a Prisma Client Transaction
   const resultFolios = await prisma.$transaction(async (tx) => {
     const folios: number[] = []
 

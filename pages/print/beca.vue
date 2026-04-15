@@ -2,13 +2,13 @@
   <div class="bg-white min-h-screen p-10 font-sans text-neutral-ink print:p-0 relative">
     <div class="max-w-[850px] mx-auto mb-6 print:hidden flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-200">
       <button class="btn btn-ghost" @click="closeWindow">Volver</button>
-      <button class="btn btn-primary" @click="triggerPrint"><LucidePrinter :size="16" /> Imprimir carta de beca</button>
+      <button class="btn btn-primary" @click="triggerPrint"><LucidePrinter :size="16" /> Imprimir carta</button>
     </div>
 
     <div class="max-w-[850px] mx-auto border border-gray-200 p-10 rounded-2xl print:border-none print:p-5 relative bg-white min-h-[900px] flex flex-col">
       <div class="text-center mb-10">
         <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo Institucional" class="h-[80px] object-contain inline-block" />
-        <h2 class="mt-4 text-[14px] font-black tracking-widest uppercase text-gray-900">Instituto Educativo para el Desarrollo Integral del Saber SC</h2>
+        <h2 class="mt-4 text-[14px] font-bold tracking-widest uppercase text-gray-900">Instituto Educativo para el Desarrollo Integral del Saber SC</h2>
       </div>
 
       <div class="text-right text-[14px] mb-12 font-medium text-gray-800">

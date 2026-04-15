@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-[1400px] mx-auto">
-    <div class="card p-6 mb-6 shadow-sm border border-gray-100 bg-white/80 backdrop-blur-md">
-      <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-5">
+    <div class="card p-5 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <div class="form-group m-0"><label class="form-label">Buscar</label><input type="text" v-model="filters.q" @keyup.enter="performSearch" placeholder="Nombre o folio..." class="input-field"></div>
         <div class="form-group m-0"><label class="form-label">RFC</label><input type="text" v-model="filters.tax_id" @keyup.enter="performSearch" placeholder="XAXX010101000" class="input-field uppercase"></div>
         <div class="form-group m-0"><label class="form-label">Serie</label><input type="text" v-model="filters.series" @keyup.enter="performSearch" placeholder="PT / ST" class="input-field uppercase"></div>
@@ -18,62 +18,60 @@
       </div>
       <div class="flex justify-end mt-4 pt-4 border-t border-gray-100 gap-3">
         <button class="btn btn-ghost" @click="resetFilters">Limpiar</button>
-        <button class="btn btn-primary min-w-[200px]" @click="performSearch" :disabled="loading"><LucideSearch :size="18"/> Buscar facturas</button>
+        <button class="btn btn-primary w-full md:w-auto px-6" @click="performSearch" :disabled="loading"><LucideSearch :size="16"/> Buscar</button>
       </div>
     </div>
 
-    <div class="card table-wrapper shadow-sm border border-gray-100 mb-10">
+    <div class="card table-wrapper mb-8">
       <table class="w-full">
-        <thead class="bg-gray-50/90">
+        <thead>
           <tr>
-            <th class="w-28 text-center border-b border-gray-200">Folio</th>
-            <th class="border-b border-gray-200">Datos</th>
-            <th class="border-b border-gray-200">Receptor</th>
-            <th class="text-center border-b border-gray-200">Estatus</th>
-            <th class="text-center w-32 border-b border-gray-200">Acciones</th>
+            <th class="w-24 text-center">Folio</th>
+            <th>Datos</th>
+            <th>Receptor</th>
+            <th class="text-center">Estatus</th>
+            <th class="text-center w-28">Acciones</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading"><td colspan="5" class="text-center py-16 text-gray-500 font-medium">Buscando...</td></tr>
-          <tr v-else-if="!invoices.length"><td colspan="5" class="text-center py-16 text-gray-500">No se encontraron facturas.</td></tr>
+          <tr v-if="loading"><td colspan="5" class="text-center py-12 text-gray-500 font-medium">Buscando...</td></tr>
+          <tr v-else-if="!invoices.length"><td colspan="5" class="text-center py-12 text-gray-500">No se encontraron facturas.</td></tr>
           <tr v-else v-for="inv in invoices" :key="inv.id" 
-              class="hover:bg-gray-50/80 transition-colors cursor-context-menu"
+              class="cursor-context-menu"
               @contextmenu.prevent="showContextMenu($event, inv)">
             <td class="text-center">
-              <div class="font-black text-brand-campus text-lg tracking-tight">{{ inv.series || '' }}{{ inv.folio_number || '' }}</div>
-              <div class="font-mono text-gray-400 text-[10px] mt-1">{{ inv.invoice_id || inv.id }}</div>
+              <div class="font-bold text-gray-800 text-sm tracking-tight">{{ inv.series || '' }}{{ inv.folio_number || '' }}</div>
+              <div class="font-mono text-gray-400 text-[10px] mt-0.5">{{ inv.invoice_id || inv.id }}</div>
             </td>
             <td>
-              <div class="font-bold text-gray-800">{{ new Date(inv.created_at).toLocaleString('es-MX') }}</div>
-              <div class="text-gray-500 text-sm mt-1">Forma de pago: <span class="font-bold">{{ inv.payment_form }}</span></div>
+              <div class="font-semibold text-gray-800 text-sm">{{ new Date(inv.created_at).toLocaleString('es-MX') }}</div>
+              <div class="text-gray-500 text-xs mt-0.5">Pago: <span class="font-semibold">{{ inv.payment_form }}</span></div>
             </td>
             <td>
-              <div class="font-mono font-bold text-gray-800">{{ inv.customer_tax_id }}</div>
-              <div class="text-sm text-gray-600 truncate max-w-xs" :title="inv.customer_name">{{ inv.customer_name }}</div>
+              <div class="font-mono font-semibold text-gray-800 text-sm">{{ inv.customer_tax_id }}</div>
+              <div class="text-xs text-gray-500 truncate max-w-[200px]" :title="inv.customer_name">{{ inv.customer_name }}</div>
             </td>
             <td class="text-center">
-              <span :class="['badge mb-2 block w-max mx-auto', inv.status === 'valid' && (!inv.cancel_status_label || inv.cancel_status_label.includes('none') || inv.cancel_status_label === '') ? 'badge-success' : 'badge-warning']">
+              <span :class="['badge block w-max mx-auto', inv.status === 'valid' && (!inv.cancel_status_label || inv.cancel_status_label.includes('none') || inv.cancel_status_label === '') ? 'badge-success' : 'badge-warning']">
                 {{ inv.cancel_status_label || (inv.status === 'valid' ? 'Vigente' : 'Cancelada') }}
               </span>
-              <button v-if="inv.status === 'valid' && (!inv.cancel_status_label || inv.cancel_status_label.includes('none') || inv.cancel_status_label === '')" class="text-[11px] font-bold text-accent-coral hover:underline" @click="cancelInvoice(inv)">Cancelar factura</button>
             </td>
             <td class="text-center">
-              <div class="flex flex-col gap-1 items-center">
-                <button class="btn btn-ghost !py-1 !px-2 text-[11px] w-full text-brand-teal" @click="downloadPdf(inv)">PDF</button>
-                <button class="btn btn-ghost !py-1 !px-2 text-[11px] w-full text-gray-500" @click="downloadXml(inv)">XML</button>
-                <button class="btn btn-outline !py-1 !px-2 text-[11px] w-full mt-1" @click="sendEmail(inv)">Enviar Correo</button>
+              <div class="flex gap-1 justify-center">
+                <button class="btn btn-outline !px-2 !py-1 text-xs text-brand-teal" title="PDF" @click="downloadPdf(inv)"><LucideFileDown :size="14"/></button>
+                <button class="btn btn-outline !px-2 !py-1 text-xs text-gray-500" title="XML" @click="downloadXml(inv)"><LucideFileText :size="14"/></button>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
       
-      <div v-if="pages > 1" class="flex justify-between items-center p-4 bg-gray-50 border-t border-gray-100">
-        <span class="text-sm text-gray-500 font-bold">Mostrando {{ invoices.length }} de {{ total }}</span>
+      <div v-if="pages > 1" class="flex justify-between items-center p-3 bg-gray-50 border-t border-gray-200">
+        <span class="text-xs text-gray-500 font-semibold">Mostrando {{ invoices.length }} de {{ total }}</span>
         <div class="flex gap-2">
-          <button class="btn btn-ghost" :disabled="filters.page <= 1" @click="filters.page--; performSearch()">Anterior</button>
-          <span class="px-4 py-2 font-bold text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm">Página {{ filters.page }} / {{ pages }}</span>
-          <button class="btn btn-ghost" :disabled="filters.page >= pages" @click="filters.page++; performSearch()">Siguiente</button>
+          <button class="btn btn-ghost !px-3 !py-1 text-xs" :disabled="filters.page <= 1" @click="filters.page--; performSearch()">Anterior</button>
+          <span class="px-3 py-1 font-semibold text-xs text-gray-700 bg-white border border-gray-200 rounded-md shadow-sm">{{ filters.page }} / {{ pages }}</span>
+          <button class="btn btn-ghost !px-3 !py-1 text-xs" :disabled="filters.page >= pages" @click="filters.page++; performSearch()">Siguiente</button>
         </div>
       </div>
     </div>
@@ -82,7 +80,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { LucideSearch, LucideFileDown, LucideMail, LucideXCircle } from 'lucide-vue-next'
+import { LucideSearch, LucideFileDown, LucideFileText, LucideMail, LucideXCircle } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 

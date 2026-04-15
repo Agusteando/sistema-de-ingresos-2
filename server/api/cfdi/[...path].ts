@@ -4,7 +4,6 @@ export default defineEventHandler(async (event) => {
   const method = event.node.req.method
   const body = method !== 'GET' ? await readBody(event) : undefined
 
-  // Pass-through proxy to the legacy CFDI remote server
   const qStr = new URLSearchParams(query as any).toString()
   const url = `https://update.casitaapps.com/api/${path}${qStr ? '?' + qStr : ''}`
 

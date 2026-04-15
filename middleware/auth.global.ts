@@ -11,12 +11,10 @@ export default defineNuxtRouteMiddleware((to) => {
     return navigateTo('/')
   }
 
-  // Force onboarding if user is authenticated but lacks any assigned plantel
   if (email.value && role.value !== 'global' && !planteles.value && to.path !== '/onboarding' && !to.path.startsWith('/print')) {
     return navigateTo('/onboarding')
   }
 
-  // Prevent users from accessing onboarding if they already have an assignment
   if (email.value && planteles.value && to.path === '/onboarding') {
     return navigateTo('/')
   }

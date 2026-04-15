@@ -16,7 +16,6 @@ export default defineEventHandler(async (event) => {
     alumnosParams.push(user.active_plantel)
   }
 
-  // Segmentación explícita para la operación
   const [alumnosData] = await query<any[]>(`
     SELECT 
       COUNT(*) as total,

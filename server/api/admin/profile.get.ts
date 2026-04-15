@@ -13,13 +13,11 @@ export default defineEventHandler(async (event) => {
   let photoUrl = user?.avatar || null
   
   try {
-    // Resolver la imagen real de Workspace servidor a servidor
     const workspacePhoto = await getAdminProfilePhoto(email)
     
     if (workspacePhoto) {
       photoUrl = workspacePhoto
       
-      // Sincronizar silenciosamente la base de datos si la foto de Google Workspace cambió
       if (workspacePhoto !== user?.avatar) {
         await query('UPDATE users SET avatar = ? WHERE email = ?', [workspacePhoto, email])
       }

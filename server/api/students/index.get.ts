@@ -7,7 +7,6 @@ export default defineEventHandler(async (event) => {
   let whereClause = "A.estatus = 'Activo'"
   const params: any[] = []
 
-  // Hard RBAC enforcement considering the active scope applied via the switcher
   if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
     whereClause += " AND A.plantel = ?"
     params.push(user.active_plantel)

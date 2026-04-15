@@ -1,5 +1,4 @@
 import { query } from '../../utils/db'
-import dayjs from 'dayjs'
 
 export default defineEventHandler(async (event) => {
   const { ciclo = '2024' } = getQuery(event)
@@ -13,7 +12,6 @@ export default defineEventHandler(async (event) => {
     params.push(user.active_plantel)
   }
 
-  // Optimize query to fetch active debtors accurately with required communication data
   const sql = `
     SELECT 
       A.matricula, A.nombreCompleto, A.grado, A.grupo, A.nivel, A.plantel, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre,
