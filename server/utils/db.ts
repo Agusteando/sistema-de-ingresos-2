@@ -43,13 +43,13 @@ const checkAndAddColumn = async (db: mysql.Pool, table: string, column: string, 
     if (cols.length === 0) {
       await db.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
       if (defaultAction) {
-        try { await db.query(defaultAction) } catch(e) {} // Evita fallos si la tabla heredada no tiene las columnas del defaultAction
+        try { await db.query(defaultAction) } catch(e) {}
       }
     }
   } catch (err: any) {
     if (err.code !== 'ER_DUP_FIELDNAME') {
       console.error(`[Schema Update Error] No se pudo agregar la columna ${column} a ${table}:`, err.message)
-      throw err // Si hay error estricto de permisos o bloqueos, aborta la promesa para permitir reintentos.
+      throw err 
     }
   }
 }
@@ -60,7 +60,6 @@ export const ensureSchema = async () => {
     schemaPromise = (async () => {
       const db = getDb()
       
-      // 1. Creación de tablas base ausentes
       await runSafeQuery(db, `
         CREATE TABLE IF NOT EXISTS facturas (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -97,7 +96,6 @@ export const ensureSchema = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
-      // 2. Parcheo de columnas no destructivo para tablas Legacy
       await checkAndAddColumn(db, 'users', 'role', "VARCHAR(20) NOT NULL DEFAULT 'plantel'")
       await checkAndAddColumn(db, 'users', 'planteles', "TEXT", "UPDATE users SET planteles = plantel WHERE plantel IS NOT NULL AND (planteles IS NULL OR planteles = '')")
       await checkAndAddColumn(db, 'users', 'email', "VARCHAR(255) DEFAULT NULL")
@@ -111,7 +109,6 @@ export const ensureSchema = async () => {
         }
       } catch(e) {}
 
-      // 3. Sembrado del Super Administrador
       try {
         const superAdminEmail = 'desarrollo.tecnologico@casitaiedis.edu.mx'
         const [existingAdmin]: any = await db.query(`SELECT id FROM users WHERE email = ?`, [superAdminEmail])
@@ -119,9 +116,10 @@ export const ensureSchema = async () => {
         if (existingAdmin.length === 0) {
           const hash = bcrypt.hashSync('SUPER_ADMIN_AUTO_SEED', 10)
           const allPlanteles = 'PREEM,PREET,CT,CM,DM,CO,DC,PM,PT,SM,ST,IS,ISM'
+          // Incluimos el campo legacy 'plantel' para evitar el fallo en strict mode
           await db.query(
-            `INSERT INTO users (username, password, email, planteles, role) VALUES (?, ?, ?, ?, 'global')`,
-            ['Super Administrador', hash, superAdminEmail, allPlanteles]
+            `INSERT INTO users (username, password, email, planteles, role, plantel) VALUES (?, ?, ?, ?, 'global', ?)`,
+            ['Super Administrador', hash, superAdminEmail, allPlanteles, 'PREEM']
           )
         }
       } catch (err: any) {
@@ -130,7 +128,7 @@ export const ensureSchema = async () => {
 
       isSchemaReady = true
     })().catch(err => {
-      schemaPromise = null // Permite que la siguiente petición intente correr la actualización nuevamente
+      schemaPromise = null
       throw err
     })
   }
@@ -141,13 +139,9 @@ export const query = async <T>(sql: string, params?: any[], isRetry = false): Pr
   await ensureSchema()
   const db = getDb()
   try {
-    // Usar .query() en lugar de .execute() elude el fallo de caché de sentencias en Serverless
     const [rows] = await db.query(sql, params)
     return rows as T
   } catch (err: any) {
-    // PATRÓN SELF-HEALING (Auto-Recuperación):
-    // Si la DB reporta que falta una columna debido a una Race-Condition en Serverless (Vercel),
-    // el sistema pausa, fuerza la reconstrucción del esquema y reintenta la consulta automáticamente.
     if (!isRetry && (err.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_NO_SUCH_TABLE')) {
       console.warn('[DB Auto-Healing] Detectado esquema incompleto o desincronizado. Forzando re-evaluación...')
       isSchemaReady = false

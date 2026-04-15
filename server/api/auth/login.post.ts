@@ -35,10 +35,11 @@ export default defineEventHandler(async (event) => {
       
       const defaultRole = (isSeedAdmin || isFirstUser) ? 'global' : 'plantel'
       const defaultPlanteles = (isSeedAdmin || isFirstUser) ? 'PREEM,PREET,CT,CM,DM,CO,DC,PM,PT,SM,ST,IS,ISM' : ''
+      const fallbackPlantelLegacy = (isSeedAdmin || isFirstUser) ? 'PREEM' : ''
       
       const result: any = await query(
-        'INSERT INTO users (username, password, email, planteles, role, avatar) VALUES (?, ?, ?, ?, ?, ?)', 
-        [payload.name || payload.email, 'GOOGLE_AUTH', payload.email, defaultPlanteles, defaultRole, payload.picture || null]
+        'INSERT INTO users (username, password, email, planteles, role, avatar, plantel) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+        [payload.name || payload.email, 'GOOGLE_AUTH', payload.email, defaultPlanteles, defaultRole, payload.picture || null, fallbackPlantelLegacy]
       )
       
       user = {
@@ -47,7 +48,8 @@ export default defineEventHandler(async (event) => {
         email: payload.email,
         planteles: defaultPlanteles,
         role: defaultRole,
-        avatar: payload.picture || null
+        avatar: payload.picture || null,
+        plantel: fallbackPlantelLegacy
       }
     } else {
       if (isSeedAdmin && user.role !== 'global') {
@@ -60,7 +62,7 @@ export default defineEventHandler(async (event) => {
     }
     
     const plantelesArr = user.planteles ? user.planteles.split(',') : []
-    const activePlantel = plantelesArr.length > 0 ? plantelesArr[0] : ''
+    const activePlantel = plantelesArr.length > 0 ? plantelesArr[0] : (user.plantel || '')
 
     const cookieOpts = { secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 86400 * 7 }
     setCookie(event, 'auth_email', user.email || payload.email, cookieOpts)
