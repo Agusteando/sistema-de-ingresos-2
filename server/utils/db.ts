@@ -1,7 +1,14 @@
+import { PrismaClient } from '@prisma/client'
 import mysql from 'mysql2/promise'
+
+// Inicialización de Prisma asegurada contra reconexiones de Hot Reload
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
+export const prisma = globalForPrisma.prisma || new PrismaClient()
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
 let pool: mysql.Pool
 
+// Soporte transicional legacy. Toda nueva escritura debe fluir mediante Prisma
 export const getDb = () => {
   if (!pool) {
     const config = useRuntimeConfig()
