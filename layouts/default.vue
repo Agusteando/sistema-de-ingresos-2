@@ -1,93 +1,93 @@
 <template>
   <div class="flex h-screen overflow-hidden bg-[#F4F6F8] font-sans">
     
-    <aside class="w-[280px] bg-[#3F8468] text-white flex flex-col shadow-2xl z-20 shrink-0 relative overflow-hidden">
-      <div class="absolute inset-0 bg-black/10 pointer-events-none"></div>
-      <div class="py-8 px-6 text-center border-b border-white/10 relative z-10">
-        <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="IECS IEDIS" class="max-h-[54px] mx-auto mb-4 brightness-0 invert opacity-90" />
-        <h2 class="font-bold text-sm tracking-widest m-0 text-white/90 uppercase">Sistema de Ingresos 2</h2>
+    <aside class="w-[240px] bg-[#3F8468] text-white flex flex-col shadow-xl z-20 shrink-0 relative overflow-hidden">
+      <div class="absolute inset-0 bg-black/5 pointer-events-none"></div>
+      <div class="py-6 px-5 text-center border-b border-white/10 relative z-10">
+        <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="IECS IEDIS" class="max-h-[48px] mx-auto mb-3 brightness-0 invert opacity-90" />
+        <h2 class="font-bold text-xs tracking-widest m-0 text-white/90 uppercase">Sistema de Ingresos</h2>
       </div>
       
-      <nav class="flex-1 py-6 px-4 flex flex-col gap-2 relative z-10">
+      <nav class="flex-1 py-5 px-3 flex flex-col gap-1.5 relative z-10">
         <NuxtLink to="/" class="nav-item group">
-          <LucideUsers :size="18" class="group-hover:text-white transition-colors" /> Alumnos
+          <LucideUsers :size="16" class="group-hover:text-white transition-colors" /> Alumnos
         </NuxtLink>
         <NuxtLink to="/deudores" class="nav-item group">
-          <LucideAlertTriangle :size="18" class="group-hover:text-white transition-colors" /> Deudores
+          <LucideAlertTriangle :size="16" class="group-hover:text-white transition-colors" /> Deudores
         </NuxtLink>
         <NuxtLink to="/reportes" class="nav-item group" v-if="userRole === 'global'">
-          <LucidePieChart :size="18" class="group-hover:text-white transition-colors" /> Ingresos
+          <LucidePieChart :size="16" class="group-hover:text-white transition-colors" /> Ingresos
         </NuxtLink>
         <NuxtLink to="/conceptos" class="nav-item group">
-          <LucideSettings :size="18" class="group-hover:text-white transition-colors" /> Catálogo de conceptos
+          <LucideSettings :size="16" class="group-hover:text-white transition-colors" /> Conceptos
         </NuxtLink>
         <NuxtLink to="/facturas" class="nav-item group">
-          <LucideFileText :size="18" class="group-hover:text-white transition-colors" /> Facturas CFDI
+          <LucideFileText :size="16" class="group-hover:text-white transition-colors" /> Facturas CFDI
         </NuxtLink>
         <NuxtLink to="/usuarios" class="nav-item group" v-if="userRole === 'global'">
-          <LucideShield :size="18" class="group-hover:text-white transition-colors" /> Usuarios
+          <LucideShield :size="16" class="group-hover:text-white transition-colors" /> Usuarios
         </NuxtLink>
       </nav>
 
-      <div class="px-6 pb-4 relative z-10" v-if="userPlanteles.length > 1 || userRole === 'global'">
-        <label class="block text-[0.65rem] font-bold uppercase tracking-wider text-white/50 mb-1">Plantel activo</label>
-        <select v-model="activePlantel" @change="switchPlantel" class="w-full bg-black/20 text-white border-none rounded-lg text-sm font-semibold py-2 px-3 focus:ring-1 focus:ring-white/30 cursor-pointer outline-none transition-colors hover:bg-black/30">
-          <option v-if="userRole === 'global'" value="GLOBAL" class="text-neutral-ink font-bold">🌐 CONSOLIDADO GLOBAL</option>
-          <option v-for="p in userPlanteles" :key="p" :value="p" class="text-neutral-ink font-bold">PLANTEL {{ p }}</option>
+      <div class="px-5 pb-4 relative z-10" v-if="userPlanteles.length > 1 || userRole === 'global'">
+        <label class="block text-[0.65rem] font-semibold uppercase tracking-wider text-white/60 mb-1">Plantel activo</label>
+        <select v-model="activePlantel" @change="switchPlantel" class="w-full bg-black/15 text-white border-none rounded-lg text-xs font-semibold py-2 px-3 focus:ring-1 focus:ring-white/30 cursor-pointer outline-none transition-colors hover:bg-black/20">
+          <option v-if="userRole === 'global'" value="GLOBAL" class="text-gray-800 font-semibold">🌐 CONSOLIDADO</option>
+          <option v-for="p in userPlanteles" :key="p" :value="p" class="text-gray-800 font-semibold">PLANTEL {{ p }}</option>
         </select>
       </div>
       
-      <div class="p-6 bg-black/20 relative z-10">
-        <label class="flex items-center justify-between cursor-pointer mb-6 group">
-          <span class="text-[0.8125rem] font-bold uppercase tracking-wider text-gray-200 group-hover:text-white transition-colors">Recargos Automáticos</span>
-          <div class="relative w-10 h-6 bg-white/20 rounded-full transition-colors duration-300" :class="{ '!bg-brand-leaf': state.lateFeeActive }">
+      <div class="p-5 bg-black/15 relative z-10">
+        <label class="flex items-center justify-between cursor-pointer mb-5 group">
+          <span class="text-[0.75rem] font-semibold uppercase text-gray-200 group-hover:text-white transition-colors">Recargos Automáticos</span>
+          <div class="relative w-9 h-5 bg-white/20 rounded-full transition-colors duration-200" :class="{ '!bg-brand-leaf': state.lateFeeActive }">
             <input type="checkbox" v-model="state.lateFeeActive" class="hidden">
-            <div class="absolute top-[3px] left-[3px] w-[18px] h-[18px] bg-white rounded-full transition-transform duration-300 shadow-sm" :class="{ 'translate-x-[16px]': state.lateFeeActive }"></div>
+            <div class="absolute top-[2px] left-[2px] w-[16px] h-[16px] bg-white rounded-full transition-transform duration-200 shadow-sm" :class="{ 'translate-x-[16px]': state.lateFeeActive }"></div>
           </div>
         </label>
         
         <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-black/30 flex items-center justify-center overflow-hidden border-2 border-white/40 shadow-md">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-full bg-black/20 flex items-center justify-center overflow-hidden border border-white/30 shadow-sm">
               <img v-if="adminPhoto" :src="adminPhoto" alt="Perfil" class="w-full h-full object-cover" />
-              <LucideUser v-else :size="20" class="text-white/80" />
+              <LucideUser v-else :size="16" class="text-white/80" />
             </div>
-            <div class="flex flex-col overflow-hidden max-w-[140px]">
-              <span class="text-[0.8125rem] text-white font-semibold leading-tight truncate">{{ adminName }}</span>
-              <span class="text-[0.65rem] font-bold uppercase tracking-wider" :class="userRole === 'global' ? 'text-accent-gold' : 'text-brand-leaf'">
-                {{ userRole === 'global' ? 'SUPER ADMIN' : 'USUARIO' }}
+            <div class="flex flex-col overflow-hidden max-w-[120px]">
+              <span class="text-[0.8rem] text-white font-semibold leading-tight truncate">{{ adminName }}</span>
+              <span class="text-[0.6rem] font-semibold uppercase" :class="userRole === 'global' ? 'text-accent-gold' : 'text-brand-leaf'">
+                {{ userRole === 'global' ? 'ADMIN' : 'USUARIO' }}
               </span>
             </div>
           </div>
-          <button @click="logout" title="Cerrar Sesión" class="text-white/50 hover:text-accent-coral transition-colors shrink-0">
-            <LucideLogOut :size="18" />
+          <button @click="logout" title="Cerrar Sesión" class="text-white/60 hover:text-white transition-colors shrink-0">
+            <LucideLogOut :size="16" />
           </button>
         </div>
       </div>
     </aside>
 
     <main class="flex-1 overflow-y-auto flex flex-col relative">
-      <header class="bg-white/80 backdrop-blur-md px-10 py-5 border-b border-gray-200 flex items-center justify-between sticky top-0 z-10">
-        <h1 class="text-xl font-bold text-gray-800 tracking-tight">{{ currentRouteName }}</h1>
-        <select v-model="state.ciclo" class="input-field !w-48 font-bold border-gray-300 text-brand-campus shadow-sm hover:border-brand-leaf">
+      <header class="bg-white/90 backdrop-blur-sm px-8 py-3.5 h-[60px] border-b border-gray-200 flex items-center justify-between sticky top-0 z-10">
+        <h1 class="text-lg font-bold text-gray-800 tracking-tight">{{ currentRouteName }}</h1>
+        <select v-model="state.ciclo" class="input-field !w-40 font-bold border-gray-200 text-brand-campus shadow-none hover:border-brand-leaf bg-gray-50 h-[34px] !py-1">
           <option value="2023">Ciclo 23-24</option>
           <option value="2024">Ciclo 24-25</option>
           <option value="2025">Ciclo 25-26</option>
         </select>
       </header>
       
-      <div class="p-10 flex-1 relative z-0">
+      <div class="p-8 flex-1 relative z-0">
         <slot />
       </div>
     </main>
 
     <ContextMenu />
 
-    <div class="fixed bottom-8 right-8 z-[9999] flex flex-col gap-3 pointer-events-none">
+    <div class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none">
       <div v-for="toast in toasts" :key="toast.id" 
-           :class="['pointer-events-auto px-5 py-4 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-semibold text-white animate-[slideInRight_0.3s_ease-out] border-l-4', toast.type === 'success' ? 'bg-neutral-ink border-brand-leaf' : 'bg-neutral-ink border-accent-coral']">
-        <LucideCheckCircle v-if="toast.type === 'success'" :size="18" class="text-brand-leaf" />
-        <LucideAlertCircle v-else :size="18" class="text-accent-coral" />
+           :class="['pointer-events-auto px-4 py-3 rounded-lg shadow-lg flex items-center gap-2.5 text-sm font-medium text-white animate-[slideInRight_0.2s_ease-out] border-l-4', toast.type === 'success' ? 'bg-neutral-ink border-brand-leaf' : 'bg-neutral-ink border-accent-coral']">
+        <LucideCheckCircle v-if="toast.type === 'success'" :size="16" class="text-brand-leaf" />
+        <LucideAlertCircle v-else :size="16" class="text-accent-coral" />
         {{ toast.message }}
       </div>
     </div>
@@ -130,7 +130,7 @@ const currentRouteName = computed(() => {
   if (route.path === '/conceptos') return 'Catálogo de conceptos'
   if (route.path === '/facturas') return 'Facturas CFDI'
   if (route.path === '/usuarios') return 'Usuarios'
-  return 'SISTEMA DE INGRESOS 2'
+  return 'SISTEMA DE INGRESOS'
 })
 
 const switchPlantel = async () => {
@@ -150,13 +150,13 @@ const logout = async () => {
 
 <style scoped>
 .nav-item {
-  @apply flex items-center gap-3 px-5 py-3 text-white/70 no-underline rounded-xl text-sm font-semibold transition-all duration-200;
+  @apply flex items-center gap-2.5 px-4 py-2.5 text-white/70 no-underline rounded-lg text-[0.85rem] font-medium transition-all duration-150;
 }
 .nav-item:hover {
-  @apply bg-white/10 text-white shadow-sm;
+  @apply bg-white/10 text-white;
 }
 .nav-item.router-link-active {
-  @apply bg-white text-brand-campus shadow-md;
+  @apply bg-white text-brand-campus shadow-sm font-semibold;
 }
 .nav-item.router-link-active svg {
   @apply text-brand-campus;

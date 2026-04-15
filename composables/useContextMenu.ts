@@ -19,18 +19,17 @@ export const useContextMenu = () => {
     isVisible.value = true
     items.value = newItems
 
-    // Prevent menu from overflowing the viewport
-    const menuWidth = 240
-    const menuHeight = newItems.length * 40 + 16 // Approximation
+    const menuWidth = 220
+    const menuHeight = newItems.length * 36 + 12
     
     let targetX = event.clientX
     let targetY = event.clientY
 
     if (targetX + menuWidth > window.innerWidth) {
-      targetX = window.innerWidth - menuWidth - 10
+      targetX = window.innerWidth - menuWidth - 8
     }
     if (targetY + menuHeight > window.innerHeight) {
-      targetY = window.innerHeight - menuHeight - 10
+      targetY = window.innerHeight - menuHeight - 8
     }
 
     x.value = targetX

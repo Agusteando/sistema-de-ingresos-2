@@ -1,33 +1,33 @@
 <template>
   <div class="max-w-6xl mx-auto">
     <div class="flex justify-between items-center mb-6">
-      <h2 class="text-xl font-bold text-brand-campus">Catálogo de conceptos</h2>
+      <h2 class="text-xl font-bold text-gray-800 tracking-tight">Catálogo de conceptos</h2>
       <button class="btn btn-primary" @click="showForm = !showForm">
-        {{ showForm ? 'Cerrar Formulario' : 'Crear concepto' }}
+        {{ showForm ? 'Cerrar formulario' : 'Crear concepto' }}
       </button>
     </div>
 
-    <div v-if="showForm" class="card mb-8 p-8 bg-gray-50/50 border border-gray-200 shadow-sm transition-all duration-300 ease-in-out">
-      <form @submit.prevent="createConcept" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="form-group"><label class="form-label">Concepto</label><input type="text" v-model="form.concepto" class="input-field" required></div>
-        <div class="form-group"><label class="form-label">Descripción</label><input type="text" v-model="form.description" class="input-field"></div>
-        <div class="form-group"><label class="form-label">Costo Base</label><input type="number" v-model="form.costo" class="input-field font-mono font-bold" step="0.01" required></div>
-        <div class="form-group"><label class="form-label">Meses</label><input type="number" v-model="form.plazo" class="input-field font-mono font-bold" min="1" required></div>
-        <div class="form-group flex items-end">
-          <label class="flex items-center gap-3 cursor-pointer pb-2.5 group">
-            <input type="checkbox" v-model="form.eventual" class="w-5 h-5 text-brand-leaf border-gray-300 rounded focus:ring-brand-leaf transition-colors">
-            <span class="font-bold text-sm text-gray-700 group-hover:text-brand-campus transition-colors">Es eventual (Pago único)</span>
+    <div v-if="showForm" class="card mb-6 p-5 bg-gray-50/50">
+      <form @submit.prevent="createConcept" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="form-group mb-0"><label class="form-label">Concepto</label><input type="text" v-model="form.concepto" class="input-field" required></div>
+        <div class="form-group mb-0"><label class="form-label">Descripción</label><input type="text" v-model="form.description" class="input-field"></div>
+        <div class="form-group mb-0"><label class="form-label">Costo Base</label><input type="number" v-model="form.costo" class="input-field font-mono font-bold" step="0.01" required></div>
+        <div class="form-group mb-0"><label class="form-label">Meses</label><input type="number" v-model="form.plazo" class="input-field font-mono font-bold" min="1" required></div>
+        <div class="form-group mb-0 flex items-center h-full pt-6">
+          <label class="flex items-center gap-2 cursor-pointer group">
+            <input type="checkbox" v-model="form.eventual" class="w-4 h-4 text-brand-leaf border-gray-300 rounded focus:ring-brand-leaf transition-colors">
+            <span class="font-semibold text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Es eventual (Pago único)</span>
           </label>
         </div>
-        <div class="form-group flex items-end justify-end">
+        <div class="form-group mb-0 flex items-end justify-end">
           <button type="submit" class="btn btn-secondary w-full md:w-auto" :disabled="loading">Guardar concepto</button>
         </div>
       </form>
     </div>
 
-    <div class="card table-wrapper shadow-sm border border-gray-100">
+    <div class="card table-wrapper">
       <table>
-        <thead class="bg-gray-50/90">
+        <thead>
           <tr>
             <th class="w-20">ID</th>
             <th>Concepto</th>
@@ -37,15 +37,15 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loadingTable"><td colspan="5" class="text-center py-16 text-gray-500 font-medium">Cargando...</td></tr>
-          <tr v-else-if="!conceptos.length"><td colspan="5" class="text-center py-16 text-gray-500">No hay conceptos registrados.</td></tr>
+          <tr v-if="loadingTable"><td colspan="5" class="text-center py-12 text-gray-500 font-medium">Cargando...</td></tr>
+          <tr v-else-if="!conceptos.length"><td colspan="5" class="text-center py-12 text-gray-500">No hay conceptos registrados.</td></tr>
           <tr v-else v-for="c in conceptos" :key="c.id" 
-              class="hover:bg-gray-50/80 transition-colors cursor-context-menu"
+              class="cursor-context-menu"
               @contextmenu.prevent="showContextMenu($event, c)">
             <td class="font-mono text-gray-400 text-xs">{{ c.id }}</td>
-            <td class="font-bold text-gray-700">{{ c.concepto }}</td>
-            <td class="text-right font-bold text-brand-campus font-mono">${{ Number(c.costo).toFixed(2) }}</td>
-            <td class="text-center text-gray-600 font-medium">{{ c.plazo }}</td>
+            <td class="font-semibold text-gray-700">{{ c.concepto }}</td>
+            <td class="text-right font-bold text-gray-800 font-mono">${{ Number(c.costo).toFixed(2) }}</td>
+            <td class="text-center text-gray-600">{{ c.plazo }}</td>
             <td class="text-center"><span :class="['badge', c.eventual ? 'badge-info' : 'badge-neutral']">{{ c.eventual ? 'Único' : 'Recurrente' }}</span></td>
           </tr>
         </tbody>

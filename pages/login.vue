@@ -3,15 +3,15 @@
     <div class="absolute top-[-10%] left-[-10%] w-96 h-96 bg-brand-leaf/20 rounded-full blur-3xl pointer-events-none"></div>
     <div class="absolute bottom-[-10%] right-[-10%] w-[30rem] h-[30rem] bg-brand-campus/10 rounded-full blur-3xl pointer-events-none"></div>
 
-    <div class="max-w-md w-full bg-white/80 backdrop-blur-xl rounded-3xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] border border-white p-10 text-center relative z-10">
-      <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo Institucional" class="h-20 mx-auto mb-8 drop-shadow-sm" />
-      <h1 class="text-2xl font-black text-gray-800 mb-3 tracking-tight">Sistema de Ingresos 2</h1>
-      <p class="text-gray-500 mb-10 text-sm font-medium leading-relaxed">Por favor, inicie sesión con su cuenta institucional para acceder al sistema.</p>
+    <div class="max-w-md w-full bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white p-10 text-center relative z-10">
+      <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo Institucional" class="h-16 mx-auto mb-6" />
+      <h1 class="text-xl font-bold text-gray-800 mb-2 tracking-tight">Sistema de Ingresos 2</h1>
+      <p class="text-gray-500 mb-8 text-sm font-medium">Inicie sesión con su cuenta institucional.</p>
       
-      <div class="flex justify-center w-full min-h-[48px] mb-4 bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow overflow-hidden">
+      <div class="flex justify-center w-full min-h-[44px] mb-4 bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
          <div id="google-btn" class="w-full flex justify-center"></div>
       </div>
-      <p v-if="errorMsg" class="mt-5 text-sm text-accent-coral font-bold bg-accent-coral/10 py-2 px-4 rounded-lg">{{ errorMsg }}</p>
+      <p v-if="errorMsg" class="mt-4 text-xs text-accent-coral font-semibold bg-accent-coral/10 py-2 px-3 rounded-md">{{ errorMsg }}</p>
     </div>
   </div>
 </template>
@@ -27,7 +27,7 @@ const config = useRuntimeConfig()
 
 onMounted(() => {
   if (!config.public.googleClientId) {
-    errorMsg.value = 'Error interno: Credenciales de Google no configuradas.'
+    errorMsg.value = 'Error: Credenciales no configuradas.'
     return
   }
 

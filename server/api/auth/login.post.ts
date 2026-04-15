@@ -22,7 +22,6 @@ export default defineEventHandler(async (event) => {
     
     let [user] = await query<any[]>('SELECT * FROM users WHERE email = ?', [payload.email])
     
-    // Default super admin seeds logic
     const seedEmails = ['desarrollo.tecnologico@casitaiedis.edu.mx', 'coord.admon@casitaiedis.edu.mx']
     const isSeedAdmin = seedEmails.includes(payload.email)
 
@@ -47,7 +46,6 @@ export default defineEventHandler(async (event) => {
         avatar: payload.picture || null
       }
     } else {
-      // Force correct role for seeds if corrupted
       if (isSeedAdmin && user.role !== 'global') {
         user.role = 'global'
         await query('UPDATE users SET role = ? WHERE id = ?', ['global', user.id])

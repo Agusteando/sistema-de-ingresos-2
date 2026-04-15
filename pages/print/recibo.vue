@@ -2,151 +2,143 @@
   <div class="bg-white min-h-screen p-10 font-sans text-neutral-ink print:p-0 relative overflow-hidden">
     
     <div v-if="isPreview" class="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-      <div class="text-[120px] font-black text-gray-200 uppercase rotate-[-45deg] tracking-widest opacity-50">Vista Previa</div>
+      <div class="text-[100px] font-bold text-gray-100 uppercase rotate-[-45deg] tracking-widest opacity-60">Vista Previa</div>
     </div>
 
-    <!-- Barra de acciones (Oculta en modo impresión) -->
     <div class="max-w-[850px] mx-auto mb-6 print:hidden flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm relative z-20">
       <button class="btn btn-ghost" @click="closeWindow">Volver</button>
-      <div class="flex gap-3">
+      <div class="flex gap-2">
         <button class="btn btn-outline" @click="emailReceipt" :disabled="emailing || isPreview">
-          <LucideMail :size="16" /> {{ emailing ? 'Enviando...' : 'Enviar por correo' }}
+          <LucideMail :size="16" /> {{ emailing ? 'Enviando...' : 'Enviar email' }}
         </button>
         <button class="btn btn-secondary" @click="openInvoiceModal" :disabled="isPreview">
-          <LucideFileText :size="16" /> Generar CFDI
+          <LucideFileText :size="16" /> Facturar CFDI
         </button>
         <button class="btn btn-primary" @click="triggerPrint">
-          <LucidePrinter :size="16" /> Imprimir recibo
+          <LucidePrinter :size="16" /> Imprimir
         </button>
       </div>
     </div>
 
-    <div class="max-w-[850px] mx-auto border border-gray-200 p-10 rounded-2xl print:border-none print:p-5 relative z-10 bg-white shadow-xl print:shadow-none print:max-w-none w-full min-h-[900px] flex flex-col justify-between">
+    <div class="max-w-[850px] mx-auto border border-gray-200 p-8 rounded-2xl print:border-none print:p-5 relative z-10 bg-white shadow-lg print:shadow-none print:max-w-none w-full min-h-[900px] flex flex-col justify-between">
       
       <div>
-        <!-- ENCABEZADO PARITY -->
-        <div class="flex justify-between items-start border-b-2 border-brand-campus pb-6 mb-8">
-          <div class="flex items-center gap-6 w-2/3">
-            <img :src="logoSrc" alt="Logo" class="h-[80px] object-contain" />
+        <div class="flex justify-between items-start border-b border-gray-300 pb-5 mb-6">
+          <div class="flex items-center gap-5 w-2/3">
+            <img :src="logoSrc" alt="Logo" class="h-[60px] object-contain" />
             <div>
-              <h2 class="m-0 text-[0.95rem] font-black text-gray-900 tracking-tight leading-tight">{{ institutoNombre }}</h2>
-              <p class="m-0 mt-1 text-xs text-brand-teal uppercase font-bold tracking-wider">{{ isPreview ? 'Vista previa, carece de validez' : 'Comprobante de pago' }}</p>
-              <p class="m-0 mt-2 text-[10px] text-gray-500 leading-tight">Documento no válido como comprobante fiscal.<br/>Conserve este recibo para cualquier aclaración futura.</p>
+              <h2 class="m-0 text-sm font-bold text-gray-900 tracking-tight">{{ institutoNombre }}</h2>
+              <p class="m-0 mt-0.5 text-[11px] text-brand-teal uppercase font-semibold">{{ isPreview ? 'Vista previa, carece de validez' : 'Comprobante de pago' }}</p>
+              <p class="m-0 mt-1 text-[10px] text-gray-500">Documento no válido como comprobante fiscal.</p>
             </div>
           </div>
           <div class="w-1/3 text-right flex flex-col justify-center">
-            <div class="inline-block bg-gray-50 border border-gray-200 rounded-lg p-3 text-left w-full">
-              <p class="m-0 mb-1 text-xs flex justify-between"><strong class="text-gray-700 uppercase">Emisión:</strong> <span class="font-mono text-gray-600 font-bold">{{ fecha }}</span></p>
-              <p class="m-0 text-xs flex justify-between"><strong class="text-gray-700 uppercase">Usuario:</strong> <span class="text-gray-600 font-bold truncate max-w-[130px] text-right">{{ receiptData.usuario || activeUserName }}</span></p>
-              <p class="m-0 mt-1 text-xs flex justify-between"><strong class="text-gray-700 uppercase">Página:</strong> <span class="text-gray-600 font-bold text-right">1 / 1</span></p>
+            <div class="bg-gray-50 border border-gray-200 rounded p-2 text-left w-full text-[11px]">
+              <p class="m-0 mb-1 flex justify-between"><strong class="text-gray-600 uppercase">Emisión:</strong> <span class="font-mono text-gray-800">{{ fecha }}</span></p>
+              <p class="m-0 flex justify-between"><strong class="text-gray-600 uppercase">Cajero:</strong> <span class="text-gray-800 truncate max-w-[120px]">{{ receiptData.usuario || activeUserName }}</span></p>
             </div>
           </div>
         </div>
         
-        <!-- DATOS DEL ALUMNO (Paridad legacy de templateEncabezado.txt) -->
-        <table class="w-full text-sm mb-8 border-t-2 border-b-2 border-gray-200">
+        <table class="w-full text-xs mb-6 border-y border-gray-200">
           <thead>
-            <tr class="text-left text-gray-600">
-              <th class="py-2 font-bold uppercase tracking-wider text-[11px]">Matrícula</th>
-              <th class="py-2 font-bold uppercase tracking-wider text-[11px]">Alumno</th>
-              <th class="py-2 font-bold uppercase tracking-wider text-[11px]">Ciclo Escolar</th>
-              <th class="py-2 font-bold uppercase tracking-wider text-[11px]">Grado y grupo</th>
+            <tr class="text-left text-gray-500">
+              <th class="py-2 font-semibold uppercase">Matrícula</th>
+              <th class="py-2 font-semibold uppercase">Alumno</th>
+              <th class="py-2 font-semibold uppercase">Ciclo Escolar</th>
+              <th class="py-2 font-semibold uppercase">Grado y grupo</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td class="py-3 font-mono font-bold text-gray-900">{{ receiptData.matricula || 'N/A' }}</td>
-              <td class="py-3 font-bold text-gray-900">{{ receiptData.nombreCompleto || 'ALUMNO NO ESPECIFICADO' }}</td>
-              <td class="py-3 font-medium text-gray-800">{{ receiptData.ciclo || '2024' }}-{{ Number(receiptData.ciclo || '2024')+1 }}</td>
-              <td class="py-3 font-medium text-gray-800">{{ receiptData.grado || '' }} {{ receiptData.grupo || '' }}</td>
+              <td class="py-2 font-mono font-semibold text-gray-900">{{ receiptData.matricula || 'N/A' }}</td>
+              <td class="py-2 font-semibold text-gray-900">{{ receiptData.nombreCompleto || '—' }}</td>
+              <td class="py-2 text-gray-700">{{ receiptData.ciclo || '2024' }}-{{ Number(receiptData.ciclo || '2024')+1 }}</td>
+              <td class="py-2 text-gray-700">{{ receiptData.grado || '' }} {{ receiptData.grupo || '' }}</td>
             </tr>
           </tbody>
         </table>
         
-        <!-- RECIBOS INDIVIDUALES Y SUS CAMPOS (Paridad legacy de templateRecibo.txt) -->
-        <div v-for="(r, i) in items" :key="i" class="mb-8">
-          <table class="w-full text-[12px] border-collapse">
+        <div v-for="(r, i) in items" :key="i" class="mb-6">
+          <table class="w-full text-[11px] border-collapse">
             <tbody>
               <tr class="bg-gray-50/80 border-b border-gray-200">
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider w-1/5">Folio</th>
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider w-1/5">Método de pago</th>
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider w-1/5">Saldo</th>
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider w-1/5">Importe total</th>
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider w-1/5">Pago</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase">Folio</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase">Método</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase">Saldo</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase">Total Doc.</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase text-brand-campus">Pago</th>
               </tr>
               <tr>
-                <td class="py-2 px-3 font-mono font-bold text-gray-900">{{ r.folio_plantel || r.folio }}</td>
-                <td class="py-2 px-3 text-gray-800 font-medium">{{ r.formaDePago }}</td>
-                <td class="py-2 px-3 text-gray-800 font-medium">${{ Number(r.saldoDespues || 0).toFixed(2) }}</td>
-                <td class="py-2 px-3 text-gray-800 font-medium">${{ Number(r.importeTotal || 0).toFixed(2) }}</td>
-                <td class="py-2 px-3 text-brand-campus font-black">${{ Number(r.monto || 0).toFixed(2) }}</td>
+                <td class="py-1.5 px-2 font-mono font-semibold text-gray-800">{{ r.folio_plantel || r.folio }}</td>
+                <td class="py-1.5 px-2 text-gray-700">{{ r.formaDePago }}</td>
+                <td class="py-1.5 px-2 text-gray-700">${{ Number(r.saldoDespues || 0).toFixed(2) }}</td>
+                <td class="py-1.5 px-2 text-gray-700">${{ Number(r.importeTotal || 0).toFixed(2) }}</td>
+                <td class="py-1.5 px-2 font-bold text-brand-campus">${{ Number(r.monto || 0).toFixed(2) }}</td>
               </tr>
 
               <tr class="bg-gray-50/80 border-b border-t border-gray-200">
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Documento</th>
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Saldo previo</th>
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Acumulado previo</th>
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Acumulado actual</th>
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Importe aplicable a</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase">Documento</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase">Saldo previo</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase">Acumulado</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase">Nuevo Acum.</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase">Mes/Ref</th>
               </tr>
               <tr>
-                <td class="py-2 px-3 font-mono font-medium text-gray-800">{{ String(r.documento).padStart(7, '0') }}</td>
-                <td class="py-2 px-3 font-medium text-gray-800">${{ Number(r.saldoAntes || 0).toFixed(2) }}</td>
-                <td class="py-2 px-3 font-medium text-gray-800">${{ Number(r.pagos || 0).toFixed(2) }}</td>
-                <td class="py-2 px-3 font-medium text-gray-800">${{ Number(r.pagosDespues || 0).toFixed(2) }}</td>
-                <td class="py-2 px-3 font-medium text-gray-800">{{ r.mes === 'ev' ? new Date(r.fecha).toLocaleDateString() : (r.mesReal || r.mes) }}</td>
+                <td class="py-1.5 px-2 font-mono text-gray-700">{{ String(r.documento).padStart(7, '0') }}</td>
+                <td class="py-1.5 px-2 text-gray-700">${{ Number(r.saldoAntes || 0).toFixed(2) }}</td>
+                <td class="py-1.5 px-2 text-gray-700">${{ Number(r.pagos || 0).toFixed(2) }}</td>
+                <td class="py-1.5 px-2 text-gray-700">${{ Number(r.pagosDespues || 0).toFixed(2) }}</td>
+                <td class="py-1.5 px-2 text-gray-700">{{ r.mes === 'ev' ? new Date(r.fecha).toLocaleDateString() : (r.mesReal || r.mes) }}</td>
               </tr>
 
               <tr class="bg-gray-50/80 border-b border-t border-gray-200">
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider">Por concepto de:</th>
-                <th class="py-2 px-3 text-left font-bold text-gray-600 uppercase tracking-wider" colspan="4">Detalle de Operación</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase">Concepto:</th>
+                <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase" colspan="4">Detalle</th>
               </tr>
               <tr>
-                <td class="py-2 px-3 font-bold text-gray-900">{{ r.conceptoNombre }}</td>
-                <td class="py-2 px-3 font-medium text-gray-800">{{ new Date(r.fecha).toLocaleDateString() }}</td>
-                <td class="py-2 px-3 font-medium text-gray-800 italic" colspan="3">{{ r.montoLetra }} 00/100 MXN</td>
+                <td class="py-1.5 px-2 font-semibold text-gray-800">{{ r.conceptoNombre }}</td>
+                <td class="py-1.5 px-2 text-gray-700">{{ new Date(r.fecha).toLocaleDateString() }}</td>
+                <td class="py-1.5 px-2 text-gray-600 italic" colspan="3">{{ r.montoLetra }} 00/100 MXN</td>
               </tr>
             </tbody>
           </table>
           <hr class="mt-4 border-gray-200 border-dashed" />
         </div>
 
-        <!-- TOTAL SUMMARY -->
-        <div class="flex justify-between items-center p-6 bg-brand-leaf/10 rounded-xl border border-brand-leaf/30 mt-6 mb-8">
-          <div class="flex-1 pr-8">
-            <div class="text-[10px] font-bold uppercase tracking-widest text-brand-teal mb-1">Importe en Letra</div>
-            <div class="text-sm font-semibold text-gray-800 leading-tight">{{ letrasGeneradas }}</div>
+        <div class="flex justify-between items-center p-5 bg-brand-leaf/5 rounded-lg border border-brand-leaf/20 mt-4 mb-6">
+          <div class="flex-1 pr-6">
+            <div class="text-[10px] font-semibold uppercase text-brand-teal mb-1">Importe en Letra</div>
+            <div class="text-xs font-medium text-gray-700 leading-tight">{{ letrasGeneradas }}</div>
           </div>
-          <div class="text-right border-l border-brand-leaf/20 pl-8">
-            <div class="text-xs font-bold uppercase tracking-widest text-brand-campus mb-1">Importe total</div>
-            <div class="text-3xl font-black text-brand-campus font-mono">${{ total.toFixed(2) }}</div>
+          <div class="text-right border-l border-brand-leaf/20 pl-6">
+            <div class="text-[10px] font-semibold uppercase text-brand-campus mb-1">Total abonado</div>
+            <div class="text-xl font-bold text-brand-campus font-mono">${{ total.toFixed(2) }}</div>
           </div>
         </div>
 
       </div>
 
-      <!-- FIRMAS Y PIE DE PÁGINA -->
       <div class="mt-auto">
-        <div class="grid grid-cols-2 gap-20 px-10 mt-16 pt-10 border-t-2 border-dashed border-gray-200 text-center">
+        <div class="grid grid-cols-2 gap-16 px-10 mt-10 pt-8 border-t border-dashed border-gray-300 text-center">
           <div>
-            <div class="border-b border-gray-400 h-10 mb-2"></div>
-            <div class="text-xs font-bold text-gray-800 uppercase tracking-wide">Firma del Cajero</div>
-            <div class="text-[10px] text-gray-500 mt-1">SISTEMA DE INGRESOS 2</div>
+            <div class="border-b border-gray-400 h-8 mb-2"></div>
+            <div class="text-[10px] font-semibold text-gray-700 uppercase">Firma del Cajero</div>
+            <div class="text-[9px] text-gray-500 mt-1">SISTEMA DE INGRESOS</div>
           </div>
           <div>
-            <div class="border-b border-gray-400 h-10 mb-2"></div>
-            <div class="text-xs font-bold text-gray-800 uppercase tracking-wide">Firma de Conformidad</div>
-            <div class="text-[10px] text-gray-500 mt-1">Padre, Madre o Tutor</div>
+            <div class="border-b border-gray-400 h-8 mb-2"></div>
+            <div class="text-[10px] font-semibold text-gray-700 uppercase">Firma de Conformidad</div>
+            <div class="text-[9px] text-gray-500 mt-1">Titular de la cuenta</div>
           </div>
         </div>
 
-        <div class="text-center mt-12 mb-4">
-          <p class="mb-2 italic font-medium text-gray-500 text-xs">“Compartimos contigo la formación integral de tus hijos”</p>
+        <div class="text-center mt-8 mb-2">
+          <p class="italic text-gray-400 text-[10px]">“Compartimos contigo la formación integral de tus hijos”</p>
         </div>
       </div>
     </div>
 
-    <!-- Integración Inline de Facturación -->
     <InvoiceModal v-if="showInvoiceModal" :debts="invoiceDebts" :student="invoiceStudent" @close="showInvoiceModal = false" @success="handleInvoiceSuccess" />
   </div>
 </template>
@@ -165,7 +157,7 @@ definePageMeta({ layout: false })
 const route = useRoute()
 const items = ref([])
 const receiptData = ref({})
-const fecha = dayjs().format('DD/MM/YYYY HH:mm:ss')
+const fecha = dayjs().format('DD/MM/YYYY HH:mm')
 const isPreview = computed(() => route.query.preview === 'true')
 const activeUserName = useCookie('auth_name').value || 'Administrador'
 const emailing = ref(false)

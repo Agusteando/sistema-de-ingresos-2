@@ -12,7 +12,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Pago no encontrado en el sistema.' })
   }
 
-  // Lógica de cancelación fiel al legacy: Operadores solicitan, Global Admin ejecuta
   if (user.role === 'global') {
     await prisma.referenciasDePago.update({
       where: { folio: pago.folio },
@@ -28,7 +27,7 @@ export default defineEventHandler(async (event) => {
         nombreCompleto: pago.nombreCompleto,
         conceptoNombre: pago.conceptoNombre,
         usuario: user.name,
-        usuarioId: 0, // Identificador de paso
+        usuarioId: 0,
         status: 'pendiente'
       }
     })

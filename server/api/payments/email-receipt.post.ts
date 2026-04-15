@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
   `).join('')
 
   const htmlContent = `
-    <div style="font-family: 'Inter', sans-serif; color: #232C25; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #E5E7EB; border-radius: 12px;">
+    <div style="font-family: 'Inter', sans-serif; color: #1F2937; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #E5E7EB; border-radius: 12px;">
       <h2 style="color: #4E844E; margin-bottom: 20px;">Comprobante de Pago Institucional</h2>
       <p>Estimado(a), adjunto encontrará el desglose de su pago procesado en el Instituto.</p>
       

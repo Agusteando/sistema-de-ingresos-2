@@ -20,7 +20,6 @@ export default defineNitroPlugin(async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `)
 
-    // Controles de acceso y roles
     const [roleCols]: any = await db.query(`SHOW COLUMNS FROM users LIKE 'role'`)
     if (roleCols.length === 0) {
       await db.query(`ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'plantel'`)
@@ -32,13 +31,11 @@ export default defineNitroPlugin(async () => {
       await db.query(`UPDATE users SET planteles = plantel WHERE plantel IS NOT NULL AND planteles IS NULL`)
     }
 
-    // Asegurar columna `interno` en `base` de forma explícita
     const [internoCols]: any = await db.query(`SHOW COLUMNS FROM base LIKE 'interno'`)
     if (internoCols.length === 0) {
       await db.query(`ALTER TABLE base ADD COLUMN interno TINYINT(1) NOT NULL DEFAULT 1`)
     }
 
-    // Sembrar super administrador por defecto
     const superAdminEmail = 'desarrollo.tecnologico@casitaiedis.edu.mx'
     const [existingAdmin]: any = await db.query(`SELECT id FROM users WHERE email = ?`, [superAdminEmail])
     if (existingAdmin.length === 0) {
