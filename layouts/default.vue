@@ -80,6 +80,7 @@
     </main>
 
     <ContextMenu />
+    <SyncBadge />
 
     <div class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none">
       <div v-for="toast in toasts" :key="toast.id" 
@@ -99,6 +100,7 @@ import { useCookie, useState } from '#app'
 import { LucideUsers, LucidePieChart, LucideSettings, LucideFileText, LucideShield, LucideUser, LucideCheckCircle, LucideAlertCircle, LucideLogOut, LucideAlertTriangle } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import ContextMenu from '~/components/ContextMenu.vue'
+import SyncBadge from '~/components/SyncBadge.vue'
 import { CICLOS_LIST } from '~/utils/constants'
 
 const { toasts } = useToast()

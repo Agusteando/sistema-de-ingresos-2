@@ -23,6 +23,8 @@ export default defineNuxtConfig({
     gcpClientEmail: process.env.GCP_CLIENT_EMAIL,
     gcpPrivateKey: process.env.GCP_PRIVATE_KEY,
     gcpAdminSubject: process.env.GCP_ADMIN_SUBJECT,
+    
+    externalSyncApiKey: process.env.EXTERNAL_SYNC_API_KEY || '',
 
     public: {
       googleClientId: process.env.GOOGLE_CLIENT_ID || ''
