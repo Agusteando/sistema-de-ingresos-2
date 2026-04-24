@@ -1,4 +1,4 @@
-import { query } from '../../utils/db'
+import { enterBridgeAgentId, query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -6,6 +6,13 @@ export default defineEventHandler(async (event) => {
 
   if (!email) {
     throw createError({ statusCode: 401, message: 'Sesión expirada o no válida.' })
+  }
+
+  const bridgeAgentId = getCookie(event, 'db_bridge_agent_id') || getCookie(event, 'auth_active_plantel') || ''
+
+  if (bridgeAgentId && bridgeAgentId !== 'GLOBAL') {
+    event.context.dbBridgeAgentId = bridgeAgentId
+    enterBridgeAgentId(bridgeAgentId)
   }
 
   const plantelesArr = Array.isArray(body.planteles) ? body.planteles : []
