@@ -1,7 +1,6 @@
 import { getCookie, getHeader } from 'h3'
 import mysql, { type PoolConnection } from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
-import { useEvent } from 'nitropack/runtime'
 
 type DbTransport = 'direct' | 'bridge'
 type SqlParams = any[] | Record<string, any>
@@ -76,6 +75,14 @@ const getBridgeAgentIdCookieName = () => {
   return String(config.dbBridgeAgentIdCookie || 'db_bridge_agent_id').trim() || 'db_bridge_agent_id'
 }
 
+const getRequestEventSafe = () => {
+  try {
+    return useRequestEvent()
+  } catch (e) {
+    return null
+  }
+}
+
 export const getBridgeAgentId = () => {
   const configuredAgentId = getConfiguredBridgeAgentId()
 
@@ -83,15 +90,15 @@ export const getBridgeAgentId = () => {
     return configuredAgentId
   }
 
-  const event = (() => {
-    try {
-      return useEvent()
-    } catch (e) {
-      return null
-    }
-  })()
+  const event = getRequestEventSafe()
 
   if (event) {
+    const headerAgentId = String(getHeader(event, 'x-db-agent-id') || '').trim()
+
+    if (headerAgentId) {
+      return headerAgentId
+    }
+
     const bridgeCookieAgentId = String(getCookie(event, getBridgeAgentIdCookieName()) || '').trim()
 
     if (bridgeCookieAgentId) {
@@ -103,15 +110,9 @@ export const getBridgeAgentId = () => {
     if (activePlantel) {
       return activePlantel
     }
-
-    const headerAgentId = String(getHeader(event, 'x-db-agent-id') || '').trim()
-
-    if (headerAgentId) {
-      return headerAgentId
-    }
   }
 
-  throw new Error('No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID, db_bridge_agent_id cookie, auth_active_plantel cookie, or x-db-agent-id header.')
+  throw new Error('No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID, x-db-agent-id header, db_bridge_agent_id cookie, or auth_active_plantel cookie.')
 }
 
 const getSchemaStateKey = () => {
@@ -119,7 +120,8 @@ const getSchemaStateKey = () => {
     return `bridge:${getBridgeAgentId()}`
   }
 
-  return 'direct'
+  const config = getRuntimeDbConfig()
+  return `direct:${config.mysqlHost || 'localhost'}:${config.mysqlDatabase || 'sistema_ingresos'}`
 }
 
 const getBridgeBaseUrl = () => {
