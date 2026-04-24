@@ -339,6 +339,34 @@ export const ensureSchema = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS external_base_sync (
+          matricula VARCHAR(255) PRIMARY KEY,
+          plantel VARCHAR(255) NOT NULL,
+          source_hash VARCHAR(64) NOT NULL,
+          last_synced_at DATETIME NOT NULL,
+          last_payload JSON NULL,
+          last_error TEXT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS external_sync_runs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          plantel VARCHAR(255) NOT NULL,
+          status VARCHAR(30) NOT NULL,
+          started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          finished_at DATETIME NULL,
+          total_rows INT DEFAULT 0,
+          processed_rows INT DEFAULT 0,
+          updated_rows INT DEFAULT 0,
+          skipped_rows INT DEFAULT 0,
+          error_rows INT DEFAULT 0,
+          cancelled TINYINT(1) DEFAULT 0,
+          message TEXT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
       await checkAndAddColumn('users', 'role', "VARCHAR(20) NOT NULL DEFAULT 'plantel'")
       await checkAndAddColumn('users', 'planteles', "TEXT", "UPDATE users SET planteles = plantel WHERE plantel IS NOT NULL AND (planteles IS NULL OR planteles = '')")
       await checkAndAddColumn('users', 'email', "VARCHAR(255) DEFAULT NULL")
