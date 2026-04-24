@@ -1,4 +1,4 @@
-import { prisma } from '../../utils/db'
+import { executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 
 export default defineEventHandler(async (event) => {
@@ -10,9 +10,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
   }
 
-  const studentRef = await prisma.base.findFirst({
-    where: { matricula: matricula }
-  })
+  const [studentRef] = await query<any[]>(
+    `SELECT * FROM base WHERE matricula = ? LIMIT 1`,
+    [matricula]
+  )
 
   if (!studentRef) {
     throw createError({ statusCode: 404, message: 'Alumno no encontrado.' })
@@ -22,46 +23,68 @@ export default defineEventHandler(async (event) => {
   const plantel = studentRef.plantel || 'PT'
   const instituto = (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0
 
-  const resultFolios = await prisma.$transaction(async (tx) => {
-    const folios: number[] = []
+  const statements: SqlStatement[] = []
 
-    for (const p of pagos) {
-      if (p.montoPagado <= 0) continue
+  for (const p of pagos) {
+    if (p.montoPagado <= 0) continue
 
-      const montoDecimal = Number(p.montoPagado)
-      const letra = numeroALetras(montoDecimal)
+    const montoDecimal = Number(p.montoPagado)
+    const letra = numeroALetras(montoDecimal)
 
-      const nuevoPago = await tx.referenciasDePago.create({
-        data: {
-          matricula: matricula,
-          documento: Number(p.documento),
-          mes: p.mes,
-          mesReal: p.mesLabel,
-          nombreCompleto: nombreCompleto,
-          concepto: String(p.documento),
-          conceptoNombre: p.conceptoNombre,
-          monto: montoDecimal,
-          montoLetra: letra,
-          importeTotal: Number(p.subtotal),
-          saldoAntes: Number(p.saldoAntes),
-          saldoDespues: Number(p.saldoAntes) - montoDecimal,
-          pagos: Number(p.pagosPrevios),
-          pagosDespues: Number(p.pagosPrevios) + montoDecimal,
-          recargo: p.hasRecargo ? 1 : 0,
-          usuario: user?.name || 'Sistema',
-          formaDePago: formaDePago,
-          plantel: plantel,
-          instituto: instituto,
-          ciclo: ciclo,
-          estatus: 'Vigente'
-        }
-      })
+    statements.push({
+      sql: `
+        INSERT INTO referenciasdepago (
+          matricula,
+          documento,
+          mes,
+          mesReal,
+          nombreCompleto,
+          concepto,
+          conceptoNombre,
+          monto,
+          montoLetra,
+          importeTotal,
+          saldoAntes,
+          saldoDespues,
+          pagos,
+          pagosDespues,
+          recargo,
+          usuario,
+          formaDePago,
+          plantel,
+          instituto,
+          ciclo,
+          estatus
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      params: [
+        matricula,
+        Number(p.documento),
+        p.mes,
+        p.mesLabel,
+        nombreCompleto,
+        String(p.documento),
+        p.conceptoNombre,
+        montoDecimal,
+        letra,
+        Number(p.subtotal),
+        Number(p.saldoAntes),
+        Number(p.saldoAntes) - montoDecimal,
+        Number(p.pagosPrevios),
+        Number(p.pagosPrevios) + montoDecimal,
+        p.hasRecargo ? 1 : 0,
+        user?.name || 'Sistema',
+        formaDePago,
+        plantel,
+        instituto,
+        ciclo,
+        'Vigente'
+      ]
+    })
+  }
 
-      folios.push(nuevoPago.folio)
-    }
-
-    return folios
-  })
+  const results = await executeStatementTransaction<any>(statements)
+  const resultFolios = results.map(result => Number(result.insertId)).filter(Boolean)
 
   return { success: true, folios: resultFolios }
 })

@@ -1,35 +1,193 @@
-import { PrismaClient } from '@prisma/client'
-import mysql from 'mysql2/promise'
+import mysql, { type PoolConnection } from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
-export const prisma = globalForPrisma.prisma || new PrismaClient()
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+type DbTransport = 'direct' | 'bridge'
+type SqlParams = any[] | Record<string, any>
+
+type RuntimeDbConfig = {
+  dbTransport?: string
+  dbBridgeUrl?: string
+  dbBridgeToken?: string
+  dbBridgeTimeoutMs?: string | number
+
+  mysqlHost?: string
+  mysqlPort?: string | number
+  mysqlUser?: string
+  mysqlPassword?: string
+  mysqlDatabase?: string
+}
+
+type BridgeQueryResponse = {
+  ok: true
+  rows: any
+  fields?: Array<{
+    name: string
+    table?: string
+    orgTable?: string
+    type?: number
+  }>
+  affectedRows?: number
+  insertId?: number
+  changedRows?: number
+  warningStatus?: number
+}
+
+type BridgeErrorResponse = {
+  ok: false
+  error: {
+    message: string
+    code?: string
+    errno?: number
+    sqlState?: string
+  }
+}
+
+export type SqlStatement = {
+  sql: string
+  params?: SqlParams
+}
 
 let pool: mysql.Pool
 
+const getRuntimeDbConfig = () => useRuntimeConfig() as unknown as RuntimeDbConfig
+
+const getTransport = (): DbTransport => {
+  const config = getRuntimeDbConfig()
+  return String(config.dbTransport || 'direct').toLowerCase() === 'bridge' ? 'bridge' : 'direct'
+}
+
+const getBridgeBaseUrl = () => {
+  const config = getRuntimeDbConfig()
+  const url = String(config.dbBridgeUrl || '').trim().replace(/\/+$/, '')
+
+  if (!url) {
+    throw new Error('DB_BRIDGE_URL no está configurado.')
+  }
+
+  return url
+}
+
+const getBridgeTimeoutMs = () => {
+  const config = getRuntimeDbConfig()
+  const raw = Number(config.dbBridgeTimeoutMs || 45000)
+  return Number.isFinite(raw) && raw > 0 ? raw : 45000
+}
+
+const makeBridgeError = (payload: BridgeErrorResponse, fallbackStatus?: number) => {
+  const err: any = new Error(payload.error?.message || `DB bridge error${fallbackStatus ? ` (${fallbackStatus})` : ''}`)
+  err.code = payload.error?.code
+  err.errno = payload.error?.errno
+  err.sqlState = payload.error?.sqlState
+  return err
+}
+
+const normalizeBridgeQueryResult = <T>(payload: BridgeQueryResponse): T => {
+  const isWriteResult =
+    typeof payload.affectedRows === 'number' ||
+    typeof payload.insertId === 'number' ||
+    typeof payload.changedRows === 'number' ||
+    typeof payload.warningStatus === 'number'
+
+  if (isWriteResult) {
+    return {
+      affectedRows: payload.affectedRows || 0,
+      insertId: payload.insertId || 0,
+      changedRows: payload.changedRows || 0,
+      warningStatus: payload.warningStatus || 0
+    } as T
+  }
+
+  return payload.rows as T
+}
+
+const bridgeFetch = async <T>(path: string, body?: unknown): Promise<T> => {
+  const config = getRuntimeDbConfig()
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), getBridgeTimeoutMs())
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    }
+
+    if (config.dbBridgeToken) {
+      headers.Authorization = `Bearer ${config.dbBridgeToken}`
+    }
+
+    const response = await fetch(`${getBridgeBaseUrl()}${path}`, {
+      method: body ? 'POST' : 'GET',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
+    })
+
+    const payload = await response.json().catch(() => null)
+
+    if (!response.ok || !payload) {
+      throw new Error(`DB bridge respondió con HTTP ${response.status}.`)
+    }
+
+    if (payload.ok === false) {
+      throw makeBridgeError(payload, response.status)
+    }
+
+    return payload as T
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export const getDb = () => {
+  if (getTransport() === 'bridge') {
+    throw new Error('getDb() no está disponible con DB_TRANSPORT=bridge. Usa query() o executeStatementTransaction().')
+  }
+
   if (!pool) {
-    const config = useRuntimeConfig()
+    const config = getRuntimeDbConfig()
     pool = mysql.createPool({
-      host: config.mysqlHost,
-      user: config.mysqlUser,
-      password: config.mysqlPassword,
-      database: config.mysqlDatabase,
+      host: config.mysqlHost || 'localhost',
+      port: Number(config.mysqlPort || 3306),
+      user: config.mysqlUser || 'root',
+      password: config.mysqlPassword || '',
+      database: config.mysqlDatabase || 'sistema_ingresos',
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0
     })
   }
+
   return pool
+}
+
+const directQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
+  const db = getDb()
+  const [rows] = await db.query(sql, params as never)
+  return rows as T
+}
+
+const bridgeQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
+  const payload = await bridgeFetch<BridgeQueryResponse>('/query', {
+    sql,
+    params: params || []
+  })
+
+  return normalizeBridgeQueryResult<T>(payload)
+}
+
+const rawQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
+  if (getTransport() === 'bridge') {
+    return await bridgeQuery<T>(sql, params)
+  }
+
+  return await directQuery<T>(sql, params)
 }
 
 let isSchemaReady = false
 let schemaPromise: Promise<void> | null = null
 
-const runSafeQuery = async (db: mysql.Pool, sql: string) => {
+const runSafeQuery = async (sql: string) => {
   try {
-    await db.query(sql)
+    await rawQuery(sql)
   } catch (err: any) {
     if (err.code !== 'ER_DUP_FIELDNAME' && err.code !== 'ER_CANT_DROP_FIELD_OR_KEY') {
       console.error(`[Schema Update Error] ${sql.substring(0, 50)}... ->`, err.message)
@@ -37,30 +195,33 @@ const runSafeQuery = async (db: mysql.Pool, sql: string) => {
   }
 }
 
-const checkAndAddColumn = async (db: mysql.Pool, table: string, column: string, definition: string, defaultAction?: string) => {
+const checkAndAddColumn = async (table: string, column: string, definition: string, defaultAction?: string) => {
   try {
-    const [cols]: any = await db.query(`SHOW COLUMNS FROM ${table} LIKE '${column}'`)
+    const cols = await rawQuery<any[]>(`SHOW COLUMNS FROM ${table} LIKE '${column}'`)
+
     if (cols.length === 0) {
-      await db.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+      await rawQuery(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+
       if (defaultAction) {
-        try { await db.query(defaultAction) } catch(e) {}
+        try {
+          await rawQuery(defaultAction)
+        } catch (e) {}
       }
     }
   } catch (err: any) {
     if (err.code !== 'ER_DUP_FIELDNAME') {
       console.error(`[Schema Update Error] No se pudo agregar la columna ${column} a ${table}:`, err.message)
-      throw err 
+      throw err
     }
   }
 }
 
 export const ensureSchema = async () => {
   if (isSchemaReady) return
+
   if (!schemaPromise) {
     schemaPromise = (async () => {
-      const db = getDb()
-      
-      await runSafeQuery(db, `
+      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS facturas (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
           matricula VARCHAR(50) NOT NULL,
@@ -75,8 +236,8 @@ export const ensureSchema = async () => {
           fecha DATETIME DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
-      
-      await runSafeQuery(db, `
+
+      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS familias (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
           apellidos VARCHAR(255) NOT NULL,
@@ -85,8 +246,8 @@ export const ensureSchema = async () => {
           correo VARCHAR(255) DEFAULT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
-      
-      await runSafeQuery(db, `
+
+      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS users (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
           username VARCHAR(50) NOT NULL,
@@ -96,28 +257,29 @@ export const ensureSchema = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
-      await checkAndAddColumn(db, 'users', 'role', "VARCHAR(20) NOT NULL DEFAULT 'plantel'")
-      await checkAndAddColumn(db, 'users', 'planteles', "TEXT", "UPDATE users SET planteles = plantel WHERE plantel IS NOT NULL AND (planteles IS NULL OR planteles = '')")
-      await checkAndAddColumn(db, 'users', 'email', "VARCHAR(255) DEFAULT NULL")
-      await checkAndAddColumn(db, 'users', 'avatar', "VARCHAR(255) DEFAULT NULL")
+      await checkAndAddColumn('users', 'role', "VARCHAR(20) NOT NULL DEFAULT 'plantel'")
+      await checkAndAddColumn('users', 'planteles', "TEXT", "UPDATE users SET planteles = plantel WHERE plantel IS NOT NULL AND (planteles IS NULL OR planteles = '')")
+      await checkAndAddColumn('users', 'email', "VARCHAR(255) DEFAULT NULL")
+      await checkAndAddColumn('users', 'avatar', "VARCHAR(255) DEFAULT NULL")
 
       try {
-        const [tables]: any = await db.query(`SHOW TABLES LIKE 'base'`)
+        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'base'`)
+
         if (tables.length > 0) {
-          await checkAndAddColumn(db, 'base', 'interno', "TINYINT(1) NOT NULL DEFAULT 1")
-          await checkAndAddColumn(db, 'base', 'familiaId', "INT DEFAULT NULL")
+          await checkAndAddColumn('base', 'interno', "TINYINT(1) NOT NULL DEFAULT 1")
+          await checkAndAddColumn('base', 'familiaId', "INT DEFAULT NULL")
         }
-      } catch(e) {}
+      } catch (e) {}
 
       try {
         const superAdminEmail = 'desarrollo.tecnologico@casitaiedis.edu.mx'
-        const [existingAdmin]: any = await db.query(`SELECT id FROM users WHERE email = ?`, [superAdminEmail])
+        const existingAdmin = await rawQuery<any[]>(`SELECT id FROM users WHERE email = ?`, [superAdminEmail])
 
         if (existingAdmin.length === 0) {
           const hash = bcrypt.hashSync('SUPER_ADMIN_AUTO_SEED', 10)
           const allPlanteles = 'PREEM,PREET,CT,CM,DM,CO,DC,PM,PT,SM,ST,IS,ISM'
-          // Incluimos el campo legacy 'plantel' para evitar el fallo en strict mode
-          await db.query(
+
+          await rawQuery(
             `INSERT INTO users (username, password, email, planteles, role, plantel) VALUES (?, ?, ?, ?, 'global', ?)`,
             ['Super Administrador', hash, superAdminEmail, allPlanteles, 'PREEM']
           )
@@ -132,33 +294,76 @@ export const ensureSchema = async () => {
       throw err
     })
   }
+
   await schemaPromise
 }
 
-export const query = async <T>(sql: string, params?: any[], isRetry = false): Promise<T> => {
+export const query = async <T>(sql: string, params?: SqlParams, isRetry = false): Promise<T> => {
   await ensureSchema()
-  const db = getDb()
+
   try {
-    const [rows] = await db.query(sql, params)
-    return rows as T
+    return await rawQuery<T>(sql, params)
   } catch (err: any) {
     if (!isRetry && (err.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_NO_SUCH_TABLE')) {
       console.warn('[DB Auto-Healing] Detectado esquema incompleto o desincronizado. Forzando re-evaluación...')
       isSchemaReady = false
       schemaPromise = null
       await ensureSchema()
-      const [rows] = await db.query(sql, params)
-      return rows as T
+      return await rawQuery<T>(sql, params)
     }
+
     throw err
   }
 }
 
-export const executeTransaction = async (callback: (connection: mysql.PoolConnection) => Promise<any>) => {
+export const executeStatementTransaction = async <T = any>(statements: SqlStatement[]): Promise<T[]> => {
   await ensureSchema()
+
+  if (!statements.length) return []
+
+  if (getTransport() === 'bridge') {
+    const payload = await bridgeFetch<{ ok: true; results: BridgeQueryResponse[] }>('/transaction', {
+      statements
+    })
+
+    return payload.results.map(result => normalizeBridgeQueryResult<T>(result))
+  }
+
   const db = getDb()
   const connection = await db.getConnection()
+
   await connection.beginTransaction()
+
+  try {
+    const results: T[] = []
+
+    for (const statement of statements) {
+      const [rows] = await connection.query(statement.sql, (statement.params || []) as never)
+      results.push(rows as T)
+    }
+
+    await connection.commit()
+    return results
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export const executeTransaction = async (callback: (connection: PoolConnection) => Promise<any>) => {
+  await ensureSchema()
+
+  if (getTransport() === 'bridge') {
+    throw new Error('executeTransaction(callback) no está disponible con DB_TRANSPORT=bridge. Usa executeStatementTransaction().')
+  }
+
+  const db = getDb()
+  const connection = await db.getConnection()
+
+  await connection.beginTransaction()
+
   try {
     const result = await callback(connection)
     await connection.commit()
