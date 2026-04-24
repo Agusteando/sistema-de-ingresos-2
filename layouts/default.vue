@@ -70,9 +70,7 @@
       <header class="bg-white/90 backdrop-blur-sm px-8 py-3.5 h-[60px] border-b border-gray-200 flex items-center justify-between sticky top-0 z-10">
         <h1 class="text-lg font-bold text-gray-800 tracking-tight">{{ currentRouteName }}</h1>
         <select v-model="state.ciclo" class="input-field !w-40 font-bold border-gray-200 text-brand-campus shadow-none hover:border-brand-leaf bg-gray-50 h-[34px] !py-1">
-          <option value="2023">Ciclo 23-24</option>
-          <option value="2024">Ciclo 24-25</option>
-          <option value="2025">Ciclo 25-26</option>
+          <option v-for="c in CICLOS_LIST" :key="c.value" :value="c.value">{{ c.label }}</option>
         </select>
       </header>
       
@@ -95,16 +93,28 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
 import { LucideUsers, LucidePieChart, LucideSettings, LucideFileText, LucideShield, LucideUser, LucideCheckCircle, LucideAlertCircle, LucideLogOut, LucideAlertTriangle } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import ContextMenu from '~/components/ContextMenu.vue'
+import { CICLOS_LIST } from '~/utils/constants'
 
 const { toasts } = useToast()
 const route = useRoute()
-const state = useState('globalState', () => ({ lateFeeActive: true, ciclo: '2024' }))
+
+const cicloCookie = useCookie('active_ciclo', { maxAge: 31536000 })
+const getValidCiclo = (val) => CICLOS_LIST.find(c => c.value === val) ? val : '2025'
+
+const state = useState('globalState', () => ({ 
+  lateFeeActive: true, 
+  ciclo: getValidCiclo(cicloCookie.value) 
+}))
+
+watch(() => state.value.ciclo, (newVal) => {
+  cicloCookie.value = getValidCiclo(newVal)
+})
 
 const adminPhoto = ref(null)
 const adminName = ref(useCookie('auth_name').value || 'Usuario')

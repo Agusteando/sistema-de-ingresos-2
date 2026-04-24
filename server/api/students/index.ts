@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
   const user = event.context.user
 
   if (method === 'GET') {
-    const { q = '', ciclo = '2024', nivel = '', grado = '', grupo = '' } = getQuery(event)
+    const { q = '', ciclo = '2025', nivel = '', grado = '', grupo = '' } = getQuery(event)
     let whereClause = "A.estatus = 'Activo'"
     const params: any[] = []
 

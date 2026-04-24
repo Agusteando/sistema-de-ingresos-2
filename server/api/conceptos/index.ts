@@ -4,7 +4,7 @@ export default defineEventHandler(async (event) => {
   const method = event.node.req.method
   
   if (method === 'GET') {
-    const { ciclo = '2024' } = getQuery(event)
+    const { ciclo = '2025' } = getQuery(event)
     return await query(`SELECT * FROM conceptos WHERE ciclo = ? ORDER BY concepto ASC`, [ciclo])
   }
 

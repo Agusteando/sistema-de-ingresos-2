@@ -1,0 +1,1 @@
+git commit -m "feat: redesign filter UX into a premium KPI-driven operator interface, restrict selectable cycles to 2025 and 2026 with deterministic cookies, implement high-performance grade/group chips, and migrate strict defaults"

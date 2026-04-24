@@ -1,76 +1,73 @@
 <template>
   <div class="max-w-[1400px] mx-auto pb-12">
-    <header class="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-8 gap-5 border-b border-gray-200/60 pb-6">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-5">
       <div>
-        <h1 class="text-2xl font-bold text-gray-800 tracking-tight m-0">
-          {{ isPadronMode ? 'Padrón de Alumnos' : `Inscripciones ${state.ciclo}` }}
-        </h1>
+        <h1 class="text-2xl font-bold text-gray-800 tracking-tight m-0">Gestión de Alumnos</h1>
         <p class="text-[0.85rem] text-gray-500 mt-1.5 font-medium m-0 max-w-2xl">
-          {{ isPadronMode ? 'Directorio general e histórico de la base de datos completa de registros activos en el sistema.' : 'Población real matriculada y confirmada con concepto de inscripción para el ciclo escolar activo.' }}
+          Administración general de matrícula y estado de cuenta financiero.
         </p>
       </div>
-      <div class="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-        <select v-model="state.ciclo" class="input-field !w-32 font-bold text-gray-700 bg-white shadow-sm border-gray-200 h-[38px] cursor-pointer focus:ring-brand-leaf/30">
-          <option v-for="c in availableCiclos" :key="c" :value="c">{{ c }}</option>
-        </select>
-        <button class="btn font-semibold text-sm transition-all shadow-sm h-[38px] px-5 flex-1 xl:flex-none"
-                :class="isPadronMode ? 'bg-brand-campus text-white border-brand-campus hover:bg-brand-teal' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900'"
-                @click="isPadronMode = !isPadronMode">
-          {{ isPadronMode ? 'Mostrando Padrón (Volver a Inscripciones)' : 'Ver todos los alumnos' }}
-        </button>
-        <button class="btn btn-primary shadow-sm h-[38px] px-5 flex-1 xl:flex-none" @click="openAlta">
-          <LucideUserPlus :size="16"/> Alta de Alumno
+      <div class="flex items-center gap-4">
+        <div v-if="userRole === 'global'" class="bg-accent-gold/10 px-4 py-2 rounded-lg border border-accent-gold/20 flex flex-col items-end">
+          <span class="text-[0.65rem] font-bold text-yellow-800 uppercase tracking-widest">Ingresos del Mes</span>
+          <span class="text-lg font-bold text-yellow-900 leading-none">${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', {minimumFractionDigits:2}) }}</span>
+        </div>
+        <button class="btn btn-primary shadow-sm h-[38px] px-5" @click="openAlta">
+          <LucideUserPlus :size="16"/> Nuevo Alumno
         </button>
       </div>
     </header>
 
-    <div v-if="!isPadronMode" class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
-      <div class="card p-5 border-l-4 border-gray-400 flex flex-col justify-center">
-        <h4 class="text-[0.65rem] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Inscritos</h4>
-        <div class="text-3xl font-bold text-gray-800 leading-none">{{ realKpis.total }}</div>
-      </div>
-      <div class="card p-5 border-l-4 border-brand-teal flex flex-col justify-center">
-        <h4 class="text-[0.65rem] font-bold text-gray-400 uppercase tracking-widest mb-1">Internos</h4>
-        <div class="text-3xl font-bold text-brand-teal leading-none">{{ realKpis.internos }}</div>
-      </div>
-      <div class="card p-5 border-l-4 border-accent-sky flex flex-col justify-center">
-        <h4 class="text-[0.65rem] font-bold text-gray-400 uppercase tracking-widest mb-1">Externos</h4>
-        <div class="text-3xl font-bold text-accent-sky leading-none">{{ realKpis.externos }}</div>
-      </div>
-      <div class="card p-5 border-l-4 border-accent-gold flex flex-col justify-center" v-if="userRole === 'global'">
-        <h4 class="text-[0.65rem] font-bold text-gray-400 uppercase tracking-widest mb-1">Ingresos del Mes</h4>
-        <div class="text-3xl font-bold text-gray-800 leading-none">${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', {minimumFractionDigits:2}) }}</div>
-      </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <button @click="activeFilter = 'inscritos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'inscritos' ? 'ring-2 ring-brand-campus shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
+        <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'inscritos' ? 'bg-brand-campus/10' : 'bg-gray-50']"></div>
+        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'inscritos' ? 'text-brand-campus' : 'text-gray-500'">Inscritos</h4>
+        <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.inscritos }}</div>
+      </button>
+      
+      <button @click="activeFilter = 'internos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'internos' ? 'ring-2 ring-brand-teal shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
+        <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'internos' ? 'bg-brand-teal/10' : 'bg-gray-50']"></div>
+        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'internos' ? 'text-brand-teal' : 'text-gray-500'">Internos</h4>
+        <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.internos }}</div>
+      </button>
+
+      <button @click="activeFilter = 'externos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'externos' ? 'ring-2 ring-accent-sky shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
+        <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'externos' ? 'bg-accent-sky/10' : 'bg-gray-50']"></div>
+        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'externos' ? 'text-accent-sky' : 'text-gray-500'">Externos</h4>
+        <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.externos }}</div>
+      </button>
+
+      <button @click="activeFilter = 'no_inscritos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'no_inscritos' ? 'ring-2 ring-accent-coral shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
+        <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'no_inscritos' ? 'bg-accent-coral/10' : 'bg-gray-50']"></div>
+        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'no_inscritos' ? 'text-accent-coral' : 'text-gray-500'">Bajas / No inscritos</h4>
+        <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.no_inscritos }}</div>
+      </button>
     </div>
 
-    <div v-if="!isPadronMode && gradeBreakdown.length" class="flex gap-4 mb-6 overflow-x-auto pb-3 hide-scrollbar snap-x">
-      <div v-for="g in gradeBreakdown" :key="g.name" class="shrink-0 bg-white border border-gray-200 rounded-xl p-4 min-w-[160px] flex flex-col justify-between shadow-sm snap-start">
-        <div class="text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider mb-3">{{ g.name }}</div>
-        <div class="text-2xl font-bold text-gray-800 leading-none mb-4">{{ g.total }}</div>
-        <div class="flex flex-wrap gap-1.5 pt-3 border-t border-gray-100">
-           <span v-for="(count, grp) in g.groups" :key="grp" class="text-[0.65rem] font-bold text-gray-500 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-md">
-             {{ grp }}: <span class="text-brand-campus">{{ count }}</span>
-           </span>
-        </div>
-      </div>
-    </div>
-
-    <div class="flex flex-col md:flex-row gap-3 mb-6">
-      <div class="card p-2 flex-1 flex flex-col md:flex-row gap-2 items-center shadow-sm">
-        <div class="relative w-full md:w-auto flex-1">
+    <div class="flex flex-col md:flex-row gap-3 items-center mb-6">
+      <div class="card p-2 flex-1 flex flex-row gap-2 items-center shadow-sm w-full">
+        <div class="relative w-full">
           <LucideSearch class="absolute left-3 top-2.5 text-gray-400" :size="16" />
           <input v-model="filters.q" class="input-field pl-9 border-none shadow-none focus:ring-0 bg-transparent w-full text-sm font-medium placeholder-gray-400" placeholder="Buscar por nombre o matrícula..." />
         </div>
-        <div class="w-full md:w-auto h-px md:h-6 md:w-px bg-gray-200 mx-1"></div>
-        <select v-model="filters.nivel" class="input-field w-full md:w-48 border-none shadow-none bg-transparent text-gray-600 font-semibold cursor-pointer hover:bg-gray-50 transition-colors">
-          <option value="">Cualquier nivel</option>
-          <option value="Preescolar">Preescolar</option>
-          <option value="Primaria">Primaria</option>
-          <option value="Secundaria">Secundaria</option>
-        </select>
       </div>
-      <button class="btn btn-secondary h-auto md:h-auto py-2.5 px-5 shadow-sm shrink-0" @click="exportData">
-        <LucideDownload :size="16"/> Exportar
+      
+      <div class="flex items-center gap-2 overflow-x-auto hide-scrollbar flex-1 w-full md:w-auto">
+        <button @click="activeGrado = ''; activeGrupo = ''" :class="['px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap border', activeGrado === '' ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 shadow-sm']">Todos los grados</button>
+        <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" :class="['px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap border', activeGrado === g ? 'bg-brand-campus text-white border-brand-campus shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 shadow-sm']">
+          {{ g }}
+        </button>
+      </div>
+
+      <div v-if="activeGrado && availableGrupos.length" class="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 border-l border-gray-200">
+        <button @click="activeGrupo = ''" :class="['px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap border', activeGrupo === '' ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 shadow-sm']">Todos</button>
+        <button v-for="grp in availableGrupos" :key="grp" @click="activeGrupo = grp" :class="['px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap border', activeGrupo === grp ? 'bg-brand-teal text-white border-brand-teal shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 shadow-sm']">
+          {{ grp }}
+        </button>
+      </div>
+      
+      <button class="btn btn-secondary h-auto py-2.5 px-4 shadow-sm shrink-0" @click="exportData">
+        <LucideDownload :size="14"/> Exportar
       </button>
     </div>
 
@@ -143,6 +140,7 @@ import { LucideSearch, LucideUserPlus, LucideDownload, LucideEdit2, LucideUserMi
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { exportToCSV } from '~/utils/export'
+import { CICLOS_LIST, GRADOS_ORDEN } from '~/utils/constants'
 import StudentDetails from '~/components/StudentDetails.vue'
 import StudentFormModal from '~/components/StudentFormModal.vue'
 import DocumentModal from '~/components/DocumentModal.vue'
@@ -153,9 +151,11 @@ const route = useRoute()
 const state = useState('globalState')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 
-const filters = ref({ q: '', nivel: '', grado: '', grupo: '' })
-const isPadronMode = ref(false)
-const availableCiclos = ref(['2023', '2024', '2025'])
+const filters = ref({ q: '' })
+const activeFilter = ref('inscritos')
+const activeGrado = ref('')
+const activeGrupo = ref('')
+
 const externalConcepts = ref(['inscripcion', 'inscripción', 'reinscripción', 'reinscripcion'])
 
 const students = ref([])
@@ -178,18 +178,6 @@ const parseEnrollmentConfig = (obj) => {
     if (Array.isArray(o)) o.forEach(traverse)
     else if (typeof o === 'object') {
       if (o.concepto_nombre) concepts.push(o.concepto_nombre)
-      if (o.cicloActual && !state.value.configLoaded) {
-        const mappedCycle = String(o.cicloActual).split('-')[0]
-        if (!availableCiclos.value.includes(mappedCycle)) availableCiclos.value.push(mappedCycle)
-        state.value.ciclo = mappedCycle
-        state.value.configLoaded = true
-      }
-      if (o.ciclos && Array.isArray(o.ciclos)) {
-        o.ciclos.forEach(c => {
-          const mapped = String(c).split('-')[0]
-          if (!availableCiclos.value.includes(mapped)) availableCiclos.value.push(mapped)
-        })
-      }
       Object.values(o).forEach(traverse)
     }
   }
@@ -197,7 +185,6 @@ const parseEnrollmentConfig = (obj) => {
   if (concepts.length > 0) {
     externalConcepts.value = [...new Set(concepts.map(c => c.toLowerCase().trim()))]
   }
-  availableCiclos.value = [...new Set(availableCiclos.value)].sort().reverse()
 }
 
 const loadGlobalKpis = async () => {
@@ -210,7 +197,7 @@ const loadGlobalKpis = async () => {
 const performSearch = async () => {
   loading.value = true
   try {
-    const res = await $fetch('/api/students', { params: { ...filters.value, ciclo: state.value.ciclo } })
+    const res = await $fetch('/api/students', { params: { ciclo: state.value.ciclo } })
     students.value = res || []
     
     if (selectedStudent.value) {
@@ -231,48 +218,59 @@ const isEnrolled = (student) => {
   return externalConcepts.value.some(c => conceptsStr.includes(c))
 }
 
-const localFilteredStudents = computed(() => {
+const kpiCounts = computed(() => {
+  let inscritos = 0, internos = 0, externos = 0, no_inscritos = 0
+  students.value.forEach(s => {
+    if (isEnrolled(s)) {
+      inscritos++
+      if (String(s.interno) === '1') internos++
+      else externos++
+    } else {
+      no_inscritos++
+    }
+  })
+  return { inscritos, internos, externos, no_inscritos }
+})
+
+const displayedStudents = computed(() => {
   let list = students.value
+  
   if (filters.value.q) {
     const qTerm = filters.value.q.toLowerCase()
     list = list.filter(s => s.nombreCompleto.toLowerCase().includes(qTerm) || s.matricula.toLowerCase().includes(qTerm))
   }
-  if (filters.value.nivel) {
-    list = list.filter(s => s.nivel === filters.value.nivel)
-  }
+
+  if (activeGrado.value) list = list.filter(s => s.grado === activeGrado.value)
+  if (activeGrupo.value) list = list.filter(s => s.grupo === activeGrupo.value)
+
+  if (activeFilter.value === 'inscritos') list = list.filter(s => isEnrolled(s))
+  else if (activeFilter.value === 'internos') list = list.filter(s => isEnrolled(s) && String(s.interno) === '1')
+  else if (activeFilter.value === 'externos') list = list.filter(s => isEnrolled(s) && String(s.interno) === '0')
+  else if (activeFilter.value === 'no_inscritos') list = list.filter(s => !isEnrolled(s))
+
   return list
 })
 
-const activePopulation = computed(() => localFilteredStudents.value.filter(s => isEnrolled(s)))
-
-const displayedStudents = computed(() => isPadronMode.value ? localFilteredStudents.value : activePopulation.value)
-
-const realKpis = computed(() => {
-  const list = activePopulation.value
-  return {
-    total: list.length,
-    internos: list.filter(s => String(s.interno) === '1').length,
-    externos: list.filter(s => String(s.interno) === '0').length
-  }
+const availableGrados = computed(() => {
+  const set = new Set()
+  const subset = students.value.filter(s => {
+    if (activeFilter.value === 'inscritos') return isEnrolled(s)
+    if (activeFilter.value === 'internos') return isEnrolled(s) && String(s.interno) === '1'
+    if (activeFilter.value === 'externos') return isEnrolled(s) && String(s.interno) === '0'
+    if (activeFilter.value === 'no_inscritos') return !isEnrolled(s)
+    return true
+  })
+  subset.forEach(s => { if (s.grado && s.grado !== 'null') set.add(s.grado) })
+  return Array.from(set).sort((a, b) => (GRADOS_ORDEN[a] || 99) - (GRADOS_ORDEN[b] || 99))
 })
 
-const gradeBreakdown = computed(() => {
-  const groups = {}
-  activePopulation.value.forEach(s => {
-    const grade = s.grado || 'Sin Asignar'
-    if (!groups[grade]) groups[grade] = { total: 0, groups: {} }
-    groups[grade].total++
-    const grp = s.grupo || '-'
-    if (!groups[grade].groups[grp]) groups[grade].groups[grp] = 0
-    groups[grade].groups[grp]++
+const availableGrupos = computed(() => {
+  if (!activeGrado.value) return []
+  const set = new Set()
+  students.value.forEach(s => {
+    if (s.grado === activeGrado.value && s.grupo && s.grupo !== 'null') set.add(s.grupo)
   })
-  const sortedGrades = ['Preescolar', 'Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto']
-  return Object.entries(groups).map(([name, data]) => ({ name, ...data })).sort((a, b) => {
-     const idxA = sortedGrades.indexOf(a.name)
-     const idxB = sortedGrades.indexOf(b.name)
-     if (idxA !== -1 && idxB !== -1) return idxA - idxB
-     return a.name.localeCompare(b.name)
-  })
+  return Array.from(set).sort()
 })
 
 const exportData = () => {

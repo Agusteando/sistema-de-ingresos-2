@@ -53,7 +53,7 @@
             <tr>
               <td class="py-2 font-mono font-semibold text-gray-900">{{ receiptData.matricula || 'N/A' }}</td>
               <td class="py-2 font-semibold text-gray-900">{{ receiptData.nombreCompleto || '—' }}</td>
-              <td class="py-2 text-gray-700">{{ receiptData.ciclo || '2024' }}-{{ Number(receiptData.ciclo || '2024')+1 }}</td>
+              <td class="py-2 text-gray-700">{{ receiptData.ciclo || '2025' }}-{{ Number(receiptData.ciclo || '2025')+1 }}</td>
               <td class="py-2 text-gray-700">{{ receiptData.grado || '' }} {{ receiptData.grupo || '' }}</td>
             </tr>
           </tbody>

@@ -1,7 +1,7 @@
 import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
-  const { inicio, fin, plantel, ciclo = '2024' } = getQuery(event)
+  const { inicio, fin, plantel, ciclo = '2025' } = getQuery(event)
   const user = event.context.user
   
   if (user.role !== 'global') {
