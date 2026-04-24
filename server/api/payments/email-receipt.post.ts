@@ -1,5 +1,5 @@
 import { sendEmail } from '../../utils/mailer'
-import { prisma } from '../../utils/db'
+import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -9,18 +9,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
   }
 
-  const folioList = Array.isArray(folios) ? folios.map(Number) : String(folios).split(',').map(Number)
+  const folioList = Array.isArray(folios)
+    ? folios.map(Number)
+    : String(folios).split(',').map(Number)
 
-  const items = await prisma.referenciasDePago.findMany({
-    where: { folio: { in: folioList }, estatus: 'Vigente' }
-  })
+  const items = await query<any[]>(
+    `SELECT * FROM referenciasdepago WHERE folio IN (?) AND estatus = 'Vigente'`,
+    [folioList]
+  )
 
   if (!items.length) {
     throw createError({ statusCode: 404, message: 'Recibos no vigentes o no encontrados.' })
   }
 
   const total = items.reduce((sum, item) => sum + Number(item.monto), 0)
-  
+
   const templateRows = items.map(i => `
     <tr>
       <td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">${i.conceptoNombre}</td>
@@ -58,5 +61,6 @@ export default defineEventHandler(async (event) => {
   `
 
   await sendEmail(email, 'Comprobante de Pago Institucional', htmlContent)
+
   return { success: true }
 })

@@ -1,25 +1,25 @@
-import { prisma } from '../../utils/db'
+import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
   const { folios } = getQuery(event)
+
   if (!folios) return []
 
-  const folioList = Array.isArray(folios) 
-    ? folios.map(Number) 
+  const folioList = Array.isArray(folios)
+    ? folios.map(Number)
     : String(folios).split(',').map(Number)
-  
-  const refs = await prisma.referenciasDePago.findMany({
-    where: {
-      folio: { in: folioList },
-      estatus: 'Vigente'
-    }
-  })
+
+  const refs = await query<any[]>(
+    `SELECT * FROM referenciasdepago WHERE folio IN (?) AND estatus = 'Vigente'`,
+    [folioList]
+  )
 
   if (refs.length === 0) return []
 
-  const studentData = await prisma.base.findFirst({
-    where: { matricula: refs[0].matricula }
-  })
+  const [studentData] = await query<any[]>(
+    `SELECT grado, grupo, nivel FROM base WHERE matricula = ? LIMIT 1`,
+    [refs[0].matricula]
+  )
 
   return refs.map(ref => ({
     folio: ref.folio,

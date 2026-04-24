@@ -1,36 +1,44 @@
-import { prisma } from '../../utils/db'
+import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const user = event.context.user
 
-  const pago = await prisma.referenciasDePago.findUnique({
-    where: { folio: Number(body.folio) }
-  })
+  const [pago] = await query<any[]>(
+    `SELECT * FROM referenciasdepago WHERE folio = ? LIMIT 1`,
+    [Number(body.folio)]
+  )
 
   if (!pago) {
     throw createError({ statusCode: 404, message: 'Pago no encontrado en el sistema.' })
   }
 
   if (user.role === 'global' || body.force_direct) {
-    await prisma.referenciasDePago.update({
-      where: { folio: pago.folio },
-      data: { estatus: 'Cancelada', cancelada_por: user.name }
-    })
+    await query(
+      `UPDATE referenciasdepago SET estatus = 'Cancelada', cancelada_por = ? WHERE folio = ?`,
+      [user.name, pago.folio]
+    )
+
     return { success: true, status: 'canceled' }
-  } else {
-    await prisma.solicitudesCancelaciones.create({
-      data: {
-        folio: pago.folio,
-        motivo: body.motivo || 'Solicitud generada por operador',
-        monto: Number(pago.monto),
-        nombreCompleto: pago.nombreCompleto,
-        conceptoNombre: pago.conceptoNombre,
-        usuario: user.name,
-        usuarioId: 0,
-        status: 'pendiente'
-      }
-    })
-    return { success: true, status: 'pending' }
   }
+
+  await query(
+    `
+      INSERT INTO solicitudescancelaciones (
+        folio, motivo, monto, nombreCompleto, conceptoNombre, usuario, usuarioId, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      pago.folio,
+      body.motivo || 'Solicitud generada por operador',
+      Number(pago.monto),
+      pago.nombreCompleto,
+      pago.conceptoNombre,
+      user.name,
+      0,
+      'pendiente'
+    ]
+  )
+
+  return { success: true, status: 'pending' }
 })
