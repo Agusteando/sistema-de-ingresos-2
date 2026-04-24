@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { getCookie, getHeader } from 'h3'
 import mysql, { type PoolConnection } from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
@@ -47,6 +48,10 @@ type BridgeErrorResponse = {
   }
 }
 
+type BridgeAgentContext = {
+  agentId?: string
+}
+
 export type SqlStatement = {
   sql: string
   params?: SqlParams
@@ -55,6 +60,11 @@ export type SqlStatement = {
 let pool: mysql.Pool
 const ensuredSchemaKeys = new Set<string>()
 const schemaPromises = new Map<string, Promise<void>>()
+const bridgeAgentContext = new AsyncLocalStorage<BridgeAgentContext>()
+
+export const runWithBridgeAgentId = async <T>(agentId: string | undefined | null, callback: () => Promise<T>): Promise<T> => {
+  return await bridgeAgentContext.run({ agentId: String(agentId || '').trim() }, callback)
+}
 
 const getRuntimeDbConfig = () => useRuntimeConfig() as unknown as RuntimeDbConfig
 
@@ -90,13 +100,19 @@ export const getBridgeAgentId = () => {
     return configuredAgentId
   }
 
+  const contextAgentId = String(bridgeAgentContext.getStore()?.agentId || '').trim()
+
+  if (contextAgentId) {
+    return contextAgentId
+  }
+
   const event = getRequestEventSafe()
 
   if (event) {
-    const contextAgentId = String((event.context as any)?.dbBridgeAgentId || '').trim()
+    const eventContextAgentId = String((event.context as any)?.dbBridgeAgentId || '').trim()
 
-    if (contextAgentId) {
-      return contextAgentId
+    if (eventContextAgentId) {
+      return eventContextAgentId
     }
 
     const headerAgentId = String(getHeader(event, 'x-db-agent-id') || '').trim()
@@ -118,7 +134,7 @@ export const getBridgeAgentId = () => {
     }
   }
 
-  throw new Error('No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID, request context dbBridgeAgentId, x-db-agent-id header, db_bridge_agent_id cookie, or auth_active_plantel cookie.')
+  throw new Error('No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID, async request bridge context, event.context.dbBridgeAgentId, x-db-agent-id header, db_bridge_agent_id cookie, or auth_active_plantel cookie.')
 }
 
 const getSchemaStateKey = () => {
@@ -242,6 +258,7 @@ const directQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
 
 const bridgeQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
   const agentId = getBridgeAgentId()
+
   const payload = await bridgeFetch<BridgeQueryResponse>(`/agents/${encodeURIComponent(agentId)}/query`, {
     sql,
     params: params || []
@@ -401,6 +418,7 @@ export const executeStatementTransaction = async <T = any>(statements: SqlStatem
 
   if (getTransport() === 'bridge') {
     const agentId = getBridgeAgentId()
+
     const payload = await bridgeFetch<{ ok: true; results: BridgeQueryResponse[] }>(`/agents/${encodeURIComponent(agentId)}/transaction`, {
       statements
     })
