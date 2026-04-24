@@ -3,7 +3,7 @@ import { numeroALetras } from '../../utils/numberToWords'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const { matricula, pagos, formaDePago, ciclo = '2024' } = body
+  const { matricula, pagos, formaDePago, ciclo = '2025' } = body
   const user = event.context.user
 
   if (!matricula || !pagos || !pagos.length) {

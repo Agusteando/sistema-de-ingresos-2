@@ -3,7 +3,7 @@ import dayjs from 'dayjs'
 
 export default defineEventHandler(async (event) => {
   const matricula = event.context.params?.matricula
-  const { ciclo = '2024', lateFeeActive = 'true' } = getQuery(event)
+  const { ciclo = '2025', lateFeeActive = 'true' } = getQuery(event)
   if (!matricula) throw createError({ statusCode: 400, message: 'Matrícula requerida' })
 
   const documentos = await query<any[]>(`

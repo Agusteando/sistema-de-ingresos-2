@@ -1,7 +1,7 @@
 import { query } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
-  const { ciclo = '2024' } = getQuery(event)
+  const { ciclo = '2025' } = getQuery(event)
   const user = event.context.user
   
   let whereClause = "A.estatus = 'Activo'"
