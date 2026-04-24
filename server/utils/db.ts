@@ -93,6 +93,12 @@ export const getBridgeAgentId = () => {
   const event = getRequestEventSafe()
 
   if (event) {
+    const contextAgentId = String((event.context as any)?.dbBridgeAgentId || '').trim()
+
+    if (contextAgentId) {
+      return contextAgentId
+    }
+
     const headerAgentId = String(getHeader(event, 'x-db-agent-id') || '').trim()
 
     if (headerAgentId) {
@@ -112,7 +118,7 @@ export const getBridgeAgentId = () => {
     }
   }
 
-  throw new Error('No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID, x-db-agent-id header, db_bridge_agent_id cookie, or auth_active_plantel cookie.')
+  throw new Error('No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID, request context dbBridgeAgentId, x-db-agent-id header, db_bridge_agent_id cookie, or auth_active_plantel cookie.')
 }
 
 const getSchemaStateKey = () => {

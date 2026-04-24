@@ -22,6 +22,10 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const requestedPlantel = getRequestedPlantel(event, body)
 
+  if (requestedPlantel) {
+    event.context.dbBridgeAgentId = requestedPlantel
+  }
+
   if (!config.public.googleClientId) {
     throw createError({ statusCode: 500, message: 'Configuración de Google ausente' })
   }
@@ -127,6 +131,9 @@ export default defineEventHandler(async (event) => {
     return { success: true, activePlantel }
   } catch (error: any) {
     console.error('[Auth Login Error]', error)
-    throw createError({ statusCode: 401, message: error?.message || 'Error de autenticación con Google.' })
+    throw createError({
+      statusCode: error?.statusCode || 401,
+      message: error?.message || 'Error de autenticación con Google.'
+    })
   }
 })
