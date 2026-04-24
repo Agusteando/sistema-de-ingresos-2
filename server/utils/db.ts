@@ -1,5 +1,7 @@
+import { getCookie, getHeader } from 'h3'
 import mysql, { type PoolConnection } from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
+import { useEvent } from 'nitropack/runtime'
 
 type DbTransport = 'direct' | 'bridge'
 type SqlParams = any[] | Record<string, any>
@@ -9,6 +11,9 @@ type RuntimeDbConfig = {
   dbBridgeUrl?: string
   dbBridgeToken?: string
   dbBridgeTimeoutMs?: string | number
+  dbBridgeAgentId?: string
+  dbBridgeAgentIdCookie?: string
+  dbBridgeAutoMigrateOnStartup?: string | boolean
 
   mysqlHost?: string
   mysqlPort?: string | number
@@ -19,7 +24,8 @@ type RuntimeDbConfig = {
 
 type BridgeQueryResponse = {
   ok: true
-  rows: any
+  rows?: any
+  result?: any
   fields?: Array<{
     name: string
     table?: string
@@ -48,6 +54,8 @@ export type SqlStatement = {
 }
 
 let pool: mysql.Pool
+const ensuredSchemaKeys = new Set<string>()
+const schemaPromises = new Map<string, Promise<void>>()
 
 const getRuntimeDbConfig = () => useRuntimeConfig() as unknown as RuntimeDbConfig
 
@@ -56,12 +64,70 @@ const getTransport = (): DbTransport => {
   return String(config.dbTransport || 'direct').toLowerCase() === 'bridge' ? 'bridge' : 'direct'
 }
 
+export const getDbTransport = () => getTransport()
+
+const getConfiguredBridgeAgentId = () => {
+  const config = getRuntimeDbConfig()
+  return String(config.dbBridgeAgentId || '').trim()
+}
+
+const getBridgeAgentIdCookieName = () => {
+  const config = getRuntimeDbConfig()
+  return String(config.dbBridgeAgentIdCookie || 'db_bridge_agent_id').trim() || 'db_bridge_agent_id'
+}
+
+export const getBridgeAgentId = () => {
+  const configuredAgentId = getConfiguredBridgeAgentId()
+
+  if (configuredAgentId) {
+    return configuredAgentId
+  }
+
+  const event = (() => {
+    try {
+      return useEvent()
+    } catch (e) {
+      return null
+    }
+  })()
+
+  if (event) {
+    const bridgeCookieAgentId = String(getCookie(event, getBridgeAgentIdCookieName()) || '').trim()
+
+    if (bridgeCookieAgentId) {
+      return bridgeCookieAgentId
+    }
+
+    const activePlantel = String(getCookie(event, 'auth_active_plantel') || '').trim()
+
+    if (activePlantel) {
+      return activePlantel
+    }
+
+    const headerAgentId = String(getHeader(event, 'x-db-agent-id') || '').trim()
+
+    if (headerAgentId) {
+      return headerAgentId
+    }
+  }
+
+  throw new Error('No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID, db_bridge_agent_id cookie, auth_active_plantel cookie, or x-db-agent-id header.')
+}
+
+const getSchemaStateKey = () => {
+  if (getTransport() === 'bridge') {
+    return `bridge:${getBridgeAgentId()}`
+  }
+
+  return 'direct'
+}
+
 const getBridgeBaseUrl = () => {
   const config = getRuntimeDbConfig()
   const url = String(config.dbBridgeUrl || '').trim().replace(/\/+$/, '')
 
   if (!url) {
-    throw new Error('DB_BRIDGE_URL no está configurado.')
+    throw new Error('DB_BRIDGE_URL no esta configurado.')
   }
 
   return url
@@ -82,6 +148,7 @@ const makeBridgeError = (payload: BridgeErrorResponse, fallbackStatus?: number) 
 }
 
 const normalizeBridgeQueryResult = <T>(payload: BridgeQueryResponse): T => {
+  const rows = payload.rows ?? payload.result
   const isWriteResult =
     typeof payload.affectedRows === 'number' ||
     typeof payload.insertId === 'number' ||
@@ -97,7 +164,7 @@ const normalizeBridgeQueryResult = <T>(payload: BridgeQueryResponse): T => {
     } as T
   }
 
-  return payload.rows as T
+  return rows as T
 }
 
 const bridgeFetch = async <T>(path: string, body?: unknown): Promise<T> => {
@@ -124,7 +191,7 @@ const bridgeFetch = async <T>(path: string, body?: unknown): Promise<T> => {
     const payload = await response.json().catch(() => null)
 
     if (!response.ok || !payload) {
-      throw new Error(`DB bridge respondió con HTTP ${response.status}.`)
+      throw new Error(`DB bridge respondio con HTTP ${response.status}.`)
     }
 
     if (payload.ok === false) {
@@ -139,7 +206,7 @@ const bridgeFetch = async <T>(path: string, body?: unknown): Promise<T> => {
 
 export const getDb = () => {
   if (getTransport() === 'bridge') {
-    throw new Error('getDb() no está disponible con DB_TRANSPORT=bridge. Usa query() o executeStatementTransaction().')
+    throw new Error('getDb() no esta disponible con DB_TRANSPORT=bridge. Usa query() o executeStatementTransaction().')
   }
 
   if (!pool) {
@@ -166,7 +233,8 @@ const directQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
 }
 
 const bridgeQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
-  const payload = await bridgeFetch<BridgeQueryResponse>('/query', {
+  const agentId = getBridgeAgentId()
+  const payload = await bridgeFetch<BridgeQueryResponse>(`/agents/${encodeURIComponent(agentId)}/query`, {
     sql,
     params: params || []
   })
@@ -181,9 +249,6 @@ const rawQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
 
   return await directQuery<T>(sql, params)
 }
-
-let isSchemaReady = false
-let schemaPromise: Promise<void> | null = null
 
 const runSafeQuery = async (sql: string) => {
   try {
@@ -217,10 +282,12 @@ const checkAndAddColumn = async (table: string, column: string, definition: stri
 }
 
 export const ensureSchema = async () => {
-  if (isSchemaReady) return
+  const schemaKey = getSchemaStateKey()
 
-  if (!schemaPromise) {
-    schemaPromise = (async () => {
+  if (ensuredSchemaKeys.has(schemaKey)) return
+
+  if (!schemaPromises.has(schemaKey)) {
+    const schemaPromise = (async () => {
       await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS facturas (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -288,14 +355,16 @@ export const ensureSchema = async () => {
         console.error('[Schema Update Error] Falla en sembrado admin:', err.message)
       }
 
-      isSchemaReady = true
+      ensuredSchemaKeys.add(schemaKey)
     })().catch(err => {
-      schemaPromise = null
+      schemaPromises.delete(schemaKey)
       throw err
     })
+
+    schemaPromises.set(schemaKey, schemaPromise)
   }
 
-  await schemaPromise
+  await schemaPromises.get(schemaKey)
 }
 
 export const query = async <T>(sql: string, params?: SqlParams, isRetry = false): Promise<T> => {
@@ -305,9 +374,10 @@ export const query = async <T>(sql: string, params?: SqlParams, isRetry = false)
     return await rawQuery<T>(sql, params)
   } catch (err: any) {
     if (!isRetry && (err.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_NO_SUCH_TABLE')) {
-      console.warn('[DB Auto-Healing] Detectado esquema incompleto o desincronizado. Forzando re-evaluación...')
-      isSchemaReady = false
-      schemaPromise = null
+      console.warn('[DB Auto-Healing] Detectado esquema incompleto o desincronizado. Forzando re-evaluacion...')
+      const schemaKey = getSchemaStateKey()
+      ensuredSchemaKeys.delete(schemaKey)
+      schemaPromises.delete(schemaKey)
       await ensureSchema()
       return await rawQuery<T>(sql, params)
     }
@@ -322,7 +392,8 @@ export const executeStatementTransaction = async <T = any>(statements: SqlStatem
   if (!statements.length) return []
 
   if (getTransport() === 'bridge') {
-    const payload = await bridgeFetch<{ ok: true; results: BridgeQueryResponse[] }>('/transaction', {
+    const agentId = getBridgeAgentId()
+    const payload = await bridgeFetch<{ ok: true; results: BridgeQueryResponse[] }>(`/agents/${encodeURIComponent(agentId)}/transaction`, {
       statements
     })
 
@@ -356,7 +427,7 @@ export const executeTransaction = async (callback: (connection: PoolConnection) 
   await ensureSchema()
 
   if (getTransport() === 'bridge') {
-    throw new Error('executeTransaction(callback) no está disponible con DB_TRANSPORT=bridge. Usa executeStatementTransaction().')
+    throw new Error('executeTransaction(callback) no esta disponible con DB_TRANSPORT=bridge. Usa executeStatementTransaction().')
   }
 
   const db = getDb()
