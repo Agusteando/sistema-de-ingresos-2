@@ -1,4 +1,4 @@
-import { ensureSchema } from '../utils/db'
+import { enterBridgeAgentId, ensureSchema } from '../utils/db'
 
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
@@ -34,6 +34,7 @@ export default defineEventHandler(async (event) => {
 
   if (bridgeAgentId && bridgeAgentId !== 'GLOBAL') {
     event.context.dbBridgeAgentId = bridgeAgentId
+    enterBridgeAgentId(bridgeAgentId)
   }
 
   await ensureSchema()
