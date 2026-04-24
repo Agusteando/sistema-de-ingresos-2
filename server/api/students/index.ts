@@ -27,17 +27,21 @@ export default defineEventHandler(async (event) => {
       SELECT 
         A.matricula, A.nombreCompleto, A.grado, A.grupo, A.nivel, A.plantel, A.estatus, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno,
         IFNULL(B.pagosTotal, 0) AS pagosTotal,
+        B.conceptosPagados,
         IFNULL(C.saldo, 0) AS importeTotal,
+        C.conceptosCargados,
         (IFNULL(C.saldo, 0) - IFNULL(B.pagosTotal, 0)) AS saldoNeto
       FROM base A
       LEFT JOIN (
-        SELECT matricula, SUM(monto) AS pagosTotal FROM referenciasdepago WHERE ciclo = ? AND estatus = 'Vigente' GROUP BY matricula
+        SELECT matricula, SUM(monto) AS pagosTotal, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') as conceptosPagados
+        FROM referenciasdepago WHERE ciclo = ? AND estatus = 'Vigente' GROUP BY matricula
       ) B ON A.matricula = B.matricula
       LEFT JOIN (
-        SELECT matricula, SUM(((100 - IFNULL(beca, 0)) * costo / 100) * IFNULL(meses, 1)) AS saldo FROM documentos WHERE ciclo = ? GROUP BY matricula
+        SELECT matricula, SUM(((100 - IFNULL(beca, 0)) * costo / 100) * IFNULL(meses, 1)) AS saldo, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') as conceptosCargados
+        FROM documentos WHERE ciclo = ? GROUP BY matricula
       ) C ON A.matricula = C.matricula
       WHERE ${whereClause}
-      ORDER BY A.nombreCompleto ASC LIMIT 100;
+      ORDER BY A.nombreCompleto ASC LIMIT 5000;
     `
     return await query(sql, [ciclo, ciclo, ...params])
   }
