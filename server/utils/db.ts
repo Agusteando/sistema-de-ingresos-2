@@ -1,6 +1,4 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { getCookie, getHeader } from 'h3'
-import { useRequestEvent, useRuntimeConfig } from '#imports'
 import mysql, { type PoolConnection } from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
 
@@ -101,20 +99,6 @@ const getConfiguredBridgeAgentId = () => {
   return String(config.dbBridgeAgentId || '').trim()
 }
 
-const getBridgeAgentIdCookieName = () => {
-  const config = getRuntimeDbConfig()
-  return String(config.dbBridgeAgentIdCookie || 'db_bridge_agent_id').trim() || 'db_bridge_agent_id'
-}
-
-const getRequestEventSafe = () => {
-  try {
-    return useRequestEvent()
-  } catch (error: any) {
-    debugBridge('useRequestEvent unavailable', { message: error?.message || String(error) })
-    return null
-  }
-}
-
 export const getBridgeAgentId = () => {
   const configuredAgentId = getConfiguredBridgeAgentId()
 
@@ -130,53 +114,7 @@ export const getBridgeAgentId = () => {
     return asyncContextAgentId
   }
 
-  const event = getRequestEventSafe()
-
-  if (event) {
-    const eventContextAgentId = String((event.context as any)?.dbBridgeAgentId || '').trim()
-
-    if (eventContextAgentId) {
-      debugBridge('agent resolved from event.context.dbBridgeAgentId', { agentId: eventContextAgentId })
-      return eventContextAgentId
-    }
-
-    const headerAgentId = String(getHeader(event, 'x-db-agent-id') || '').trim()
-
-    if (headerAgentId) {
-      debugBridge('agent resolved from x-db-agent-id header', { agentId: headerAgentId })
-      return headerAgentId
-    }
-
-    const bridgeCookieName = getBridgeAgentIdCookieName()
-    const bridgeCookieAgentId = String(getCookie(event, bridgeCookieName) || '').trim()
-
-    if (bridgeCookieAgentId) {
-      debugBridge('agent resolved from bridge cookie', {
-        cookieName: bridgeCookieName,
-        agentId: bridgeCookieAgentId
-      })
-      return bridgeCookieAgentId
-    }
-
-    const activePlantel = String(getCookie(event, 'auth_active_plantel') || '').trim()
-
-    if (activePlantel) {
-      debugBridge('agent resolved from auth_active_plantel cookie', { agentId: activePlantel })
-      return activePlantel
-    }
-
-    debugBridge('event found but no agent source present', {
-      hasCookieHeader: Boolean(getHeader(event, 'cookie')),
-      bridgeCookieName,
-      authActivePlantel: getCookie(event, 'auth_active_plantel') || null,
-      bridgeCookie: getCookie(event, bridgeCookieName) || null,
-      xDbAgentId: getHeader(event, 'x-db-agent-id') || null
-    })
-  } else {
-    debugBridge('no active request event found')
-  }
-
-  throw new Error('No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID, async request bridge context, event.context.dbBridgeAgentId, x-db-agent-id header, db_bridge_agent_id cookie, or auth_active_plantel cookie.')
+  throw new Error('No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID or call enterBridgeAgentId/runWithBridgeAgentId before database access.')
 }
 
 const getSchemaStateKey = () => {
