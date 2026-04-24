@@ -1,6 +1,15 @@
-import { getBridgeAgentId, getDbTransport } from '../../utils/db'
+import { enterBridgeAgentId, getBridgeAgentId, getDbTransport } from '../../utils/db'
 
 export default defineEventHandler((event) => {
+  const bridgeCookieAgentId = getCookie(event, 'db_bridge_agent_id') || ''
+  const activePlantel = getCookie(event, 'auth_active_plantel') || ''
+  const requestedAgentId = bridgeCookieAgentId || activePlantel
+
+  if (requestedAgentId && requestedAgentId !== 'GLOBAL') {
+    event.context.dbBridgeAgentId = requestedAgentId
+    enterBridgeAgentId(requestedAgentId)
+  }
+
   const cookies = {
     auth_email: getCookie(event, 'auth_email') || null,
     auth_role: getCookie(event, 'auth_role') || null,

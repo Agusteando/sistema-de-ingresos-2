@@ -63,6 +63,14 @@ const ensuredSchemaKeys = new Set<string>()
 const schemaPromises = new Map<string, Promise<void>>()
 const bridgeAgentContext = new AsyncLocalStorage<BridgeAgentContext>()
 
+export const enterBridgeAgentId = (agentId: string | undefined | null) => {
+  const normalized = String(agentId || '').trim()
+
+  if (normalized) {
+    bridgeAgentContext.enterWith({ agentId: normalized })
+  }
+}
+
 export const runWithBridgeAgentId = async <T>(
   agentId: string | undefined | null,
   callback: () => Promise<T>
