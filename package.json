@@ -1,12 +1,3 @@
-package.json
-nuxt.config.ts
-server/utils/db.ts
-server/api/payments/cancel.post.ts
-server/api/payments/email-receipt.post.ts
-server/api/payments/pay.post.ts
-server/api/payments/receipt.get.ts
-server/api/documentos/[id].delete.ts
-
 {
   "name": "sistema-ingresos-iecs-iedis",
   "private": true,
