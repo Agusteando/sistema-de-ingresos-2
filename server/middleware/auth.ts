@@ -11,7 +11,9 @@ export default defineEventHandler(async (event) => {
     return
   }
 
-  await ensureSchema()
+  if (url.pathname.startsWith('/api/debug/')) {
+    return
+  }
 
   const email = getCookie(event, 'auth_email')
 
@@ -19,11 +21,20 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Acceso no autorizado.' })
   }
 
+  const activePlantel = getCookie(event, 'auth_active_plantel') || ''
+  const bridgeAgentId = getCookie(event, 'db_bridge_agent_id') || activePlantel
+
   event.context.user = {
     email,
     name: getCookie(event, 'auth_name') || 'Usuario',
     role: getCookie(event, 'auth_role') || 'plantel',
     planteles: getCookie(event, 'auth_planteles') || '',
-    active_plantel: getCookie(event, 'auth_active_plantel') || ''
+    active_plantel: activePlantel
   }
+
+  if (bridgeAgentId && bridgeAgentId !== 'GLOBAL') {
+    event.context.dbBridgeAgentId = bridgeAgentId
+  }
+
+  await ensureSchema()
 })
