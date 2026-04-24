@@ -7,6 +7,9 @@ export default defineNuxtConfig({
     dbBridgeUrl: process.env.DB_BRIDGE_URL || 'http://127.0.0.1:8787',
     dbBridgeToken: process.env.DB_BRIDGE_TOKEN || '',
     dbBridgeTimeoutMs: process.env.DB_BRIDGE_TIMEOUT_MS || '45000',
+    dbBridgeAgentId: process.env.DB_BRIDGE_AGENT_ID || '',
+    dbBridgeAgentIdCookie: process.env.DB_BRIDGE_AGENT_ID_COOKIE || 'db_bridge_agent_id',
+    dbBridgeAutoMigrateOnStartup: process.env.DB_BRIDGE_AUTO_MIGRATE_ON_STARTUP || '',
 
     mysqlHost: process.env.MYSQL_HOST || 'localhost',
     mysqlPort: process.env.MYSQL_PORT || '3306',

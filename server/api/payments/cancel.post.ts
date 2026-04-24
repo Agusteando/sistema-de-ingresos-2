@@ -1,5 +1,19 @@
 import { query } from '../../utils/db'
 
+const getCancellationRequestsTable = async () => {
+  const candidates = ['solicitudescancelaciones', 'solicitudesCancelaciones']
+
+  for (const candidate of candidates) {
+    const rows = await query<any[]>(`SHOW TABLES LIKE ?`, [candidate])
+
+    if (rows.length > 0) {
+      return candidate
+    }
+  }
+
+  return 'solicitudescancelaciones'
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const user = event.context.user
@@ -22,9 +36,11 @@ export default defineEventHandler(async (event) => {
     return { success: true, status: 'canceled' }
   }
 
+  const cancellationRequestsTable = await getCancellationRequestsTable()
+
   await query(
     `
-      INSERT INTO solicitudescancelaciones (
+      INSERT INTO ${cancellationRequestsTable} (
         folio, motivo, monto, nombreCompleto, conceptoNombre, usuario, usuarioId, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
