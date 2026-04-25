@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN (
       SELECT matricula, SUM(((100 - IFNULL(beca, 0)) * costo / 100) * IFNULL(meses, 1)) AS saldo, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') as conceptosCargados
       FROM documentos
-      WHERE ciclo = ? AND estatus = 'Vigente'
+      WHERE ciclo = ? AND estatus = 'Activo'
       GROUP BY matricula
     ) C ON A.matricula = C.matricula
     WHERE ${whereClause}
