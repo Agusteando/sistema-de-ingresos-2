@@ -58,11 +58,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { LucideFilter, LucidePrinter } from 'lucide-vue-next'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { useState } from '#app'
 import { useContextMenu } from '~/composables/useContextMenu'
+import { normalizeCicloKey } from '~/shared/utils/ciclo'
 
 const state = useState('globalState')
 const { openMenu } = useContextMenu()
@@ -75,13 +76,13 @@ const totalGlobal = computed(() => datos.value.reduce((sum, row) => sum + Number
 const loadData = async () => {
   loading.value = true
   try {
-    datos.value = await $fetch('/api/reports/corte', { params: { ...filtros.value, ciclo: state.value.ciclo } })
+    datos.value = await $fetch('/api/reports/corte', { params: { ...filtros.value, ciclo: normalizeCicloKey(state.value.ciclo) } })
   } catch (e) {} 
   finally { loading.value = false }
 }
 
 const printCorte = () => {
-  const q = new URLSearchParams({ ...filtros.value, ciclo: state.value.ciclo }).toString()
+  const q = new URLSearchParams({ ...filtros.value, ciclo: normalizeCicloKey(state.value.ciclo) }).toString()
   window.open(`/print/corte?${q}`, '_blank', 'width=850,height=800')
 }
 
@@ -94,4 +95,5 @@ const showContextMenu = (event, row) => {
 }
 
 onMounted(loadData)
+watch(() => normalizeCicloKey(state.value.ciclo), loadData)
 </script>

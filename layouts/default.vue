@@ -162,22 +162,23 @@ import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import ContextMenu from '~/components/ContextMenu.vue'
 import SyncBadge from '~/components/SyncBadge.vue'
-import { CICLOS_LIST } from '~/utils/constants'
+import { CICLOS_LIST, normalizeCicloOption } from '~/utils/constants'
 
 const { toasts } = useToast()
 const { syncState, syncMessage } = useOptimisticSync()
 const route = useRoute()
 
 const cicloCookie = useCookie('active_ciclo', { maxAge: 31536000 })
-const getValidCiclo = (val) => CICLOS_LIST.find(c => c.value === val) ? val : '2025'
 
 const state = useState('globalState', () => ({
   lateFeeActive: true,
-  ciclo: getValidCiclo(cicloCookie.value)
+  ciclo: normalizeCicloOption(cicloCookie.value)
 }))
 
 watch(() => state.value.ciclo, (newVal) => {
-  cicloCookie.value = getValidCiclo(newVal)
+  const cicloKey = normalizeCicloOption(newVal)
+  state.value.ciclo = cicloKey
+  cicloCookie.value = cicloKey
 })
 
 const adminPhoto = ref(null)

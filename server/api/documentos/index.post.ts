@@ -1,7 +1,9 @@
 import { query } from '../../utils/db'
+import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
+  const cicloKey = normalizeCicloKey(body.ciclo)
   
   const [conceptoRef] = await query<any[]>(`SELECT concepto FROM conceptos WHERE id = ?`, [body.conceptoId])
   const conceptoNombre = conceptoRef ? conceptoRef.concepto : 'Cargo'
@@ -12,7 +14,7 @@ export default defineEventHandler(async (event) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Admin')
   `, [
     body.conceptoId, conceptoNombre, body.matricula, body.costo, plazosArray, 
-    body.meses, body.beca || 0, body.ciclo, body.eventual ? 1 : 0
+    body.meses, body.beca || 0, cicloKey, body.eventual ? 1 : 0
   ])
   
   return { success: true, documento: result.insertId }

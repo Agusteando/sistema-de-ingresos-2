@@ -1,28 +1,24 @@
 import { query } from '../../../utils/db'
 import dayjs from 'dayjs'
+import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => {
   const matricula = event.context.params?.matricula
   const { ciclo = '2025', lateFeeActive = 'true' } = getQuery(event)
+  const cicloKey = normalizeCicloKey(ciclo)
   if (!matricula) throw createError({ statusCode: 400, message: 'Matrícula requerida' })
-
-  console.info(`[DEBUG_EDC_TRACE_1] Fetching debts for matricula: ${matricula}, ciclo: ${ciclo}`);
 
   const documentos = await query<any[]>(`
     SELECT d.documento, d.matricula, d.costo, d.meses, d.plazo, d.beca, d.ciclo, d.conceptoNombre, d.eventual
     FROM documentos d
     WHERE d.matricula = ? AND d.ciclo = ? AND d.estatus = 'Vigente'
-  `, [matricula.trim(), ciclo.trim()])
-
-  console.info(`[DEBUG_EDC_TRACE_2] Found ${documentos.length} documentos`);
+  `, [matricula.trim(), cicloKey])
 
   const pagosRows = await query<any[]>(`
     SELECT folio, documento, mes, recargo, monto, fecha, formaDePago
     FROM referenciasdepago
     WHERE matricula = ? AND ciclo = ? AND estatus = 'Vigente'
-  `, [matricula.trim(), ciclo.trim()])
-
-  console.info(`[DEBUG_EDC_TRACE_3] Found ${pagosRows.length} pagos vigentes`);
+  `, [matricula.trim(), cicloKey])
 
   const debts = []
   const today = dayjs()
@@ -95,6 +91,16 @@ export default defineEventHandler(async (event) => {
       })
     }
   }
+
+  console.info('[EstadoCuentaDebug] Estado de Cuenta DB result', {
+    matricula: matricula.trim(),
+    selectedCicloRaw: ciclo,
+    normalizedCicloKey: cicloKey,
+    apiQueryCiclo: cicloKey,
+    returnedDocumentosCount: documentos.length,
+    returnedReferenciasCount: pagosRows.length,
+    renderedConceptosCount: debts.length
+  })
 
   return debts
 })

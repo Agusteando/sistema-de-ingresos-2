@@ -1,11 +1,13 @@
 import { query } from '../../utils/db'
+import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => {
   const { ciclo = '2025' } = getQuery(event)
+  const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
   
   let whereClause = "A.estatus = 'Activo'"
-  const params: any[] = [ciclo, ciclo]
+  const params: any[] = [cicloKey, cicloKey]
 
   if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
     whereClause += " AND A.plantel = ?"

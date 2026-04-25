@@ -1,8 +1,10 @@
 import { query } from '../../utils/db'
 import { calculatePromotedGrado, displayGrado } from '../../../shared/utils/grado'
+import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => {
   const { q = '', ciclo = '2025' } = getQuery(event)
+  const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
   
   let whereClause = "1=1"
@@ -19,7 +21,7 @@ export default defineEventHandler(async (event) => {
   } else {
     // If no search query, optimize by only loading active students OR inactive students touched in this cycle
     whereClause += " AND (A.estatus = 'Activo' OR A.ciclo = ?)"
-    params.push(ciclo)
+    params.push(cicloKey)
   }
 
   const sql = `
@@ -48,11 +50,11 @@ export default defineEventHandler(async (event) => {
     LIMIT 5000;
   `
   
-  const queryParams = [ciclo, ciclo, ...params]
+  const queryParams = [cicloKey, cicloKey, ...params]
   const rows = await query<any[]>(sql, queryParams)
   
   return rows.map(r => {
-    const promoted = calculatePromotedGrado(r.gradoBase, r.nivelBase, r.cicloBase, String(ciclo))
+    const promoted = calculatePromotedGrado(r.gradoBase, r.nivelBase, r.cicloBase, cicloKey)
     return {
       ...r,
       grado: displayGrado(promoted.grado),

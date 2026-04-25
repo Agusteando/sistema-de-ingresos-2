@@ -153,6 +153,7 @@ import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { exportToCSV } from '~/utils/export'
 import { GRADOS_ORDEN } from '~/utils/constants'
+import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import StudentDetails from '~/components/StudentDetails.vue'
 import StudentFormModal from '~/components/StudentFormModal.vue'
 
@@ -198,7 +199,8 @@ const parseEnrollmentConfig = (obj) => {
 
 const loadGlobalKpis = async () => {
   try {
-    const res = await $fetch('/api/dashboard/kpis', { params: { ciclo: state.value.ciclo } })
+    const cicloKey = normalizeCicloKey(state.value.ciclo)
+    const res = await $fetch('/api/dashboard/kpis', { params: { ciclo: cicloKey } })
     globalKpis.value.ingresosMes = res.ingresosMes || 0
   } catch(e) {}
 }
@@ -206,7 +208,8 @@ const loadGlobalKpis = async () => {
 const performSearch = async () => {
   loading.value = true
   try {
-    const res = await $fetch('/api/students', { params: { ciclo: state.value.ciclo, q: filters.value.q } })
+    const cicloKey = normalizeCicloKey(state.value.ciclo)
+    const res = await $fetch('/api/students', { params: { ciclo: cicloKey, q: filters.value.q } })
     students.value = res || []
     
     if (selectedStudent.value) {
@@ -296,7 +299,7 @@ const exportData = () => {
     Saldo_MXN: Number(s.saldoNeto).toFixed(2),
     Estatus: s.estatus
   }))
-  exportToCSV(`Alumnos_${state.value.ciclo}.csv`, exportList)
+  exportToCSV(`Alumnos_${normalizeCicloKey(state.value.ciclo)}.csv`, exportList)
 }
 
 const selectStudent = (student) => { selectedStudent.value = student }

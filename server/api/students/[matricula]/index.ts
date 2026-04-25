@@ -1,5 +1,6 @@
 import { query } from '../../../utils/db'
 import { normalizeGrado } from '../../../../shared/utils/grado'
+import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => {
   const matricula = event.context.params?.matricula
@@ -7,6 +8,7 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'PUT') {
     const body = await readBody(event)
+    const cicloKey = normalizeCicloKey(body.ciclo)
     await query(`
       UPDATE base SET 
         apellidoPaterno = ?, apellidoMaterno = ?, nombres = ?, nombreCompleto = CONCAT(?, ' ', ?, ' ', ?),
@@ -14,7 +16,7 @@ export default defineEventHandler(async (event) => {
       WHERE matricula = ?
     `, [
       body.apellidoPaterno, body.apellidoMaterno, body.nombres, body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      body.birth, body.padre, body.plantel, body.nivel, normalizeGrado(body.grado), body.grupo, body.telefono, body.correo, body.ciclo, body.interno, body.estatus || 'Activo',
+      body.birth, body.padre, body.plantel, body.nivel, normalizeGrado(body.grado), body.grupo, body.telefono, body.correo, cicloKey, body.interno, body.estatus || 'Activo',
       matricula
     ])
     return { success: true }

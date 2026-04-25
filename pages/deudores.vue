@@ -109,6 +109,7 @@ import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { exportToCSV } from '~/utils/export'
+import { normalizeCicloKey } from '~/shared/utils/ciclo'
 
 const state = useState('globalState')
 const { show } = useToast()
@@ -146,7 +147,7 @@ const loadData = async () => {
   loading.value = true
   selectedDeudores.value = []
   try {
-    deudores.value = await $fetch('/api/deudores', { params: { ciclo: state.value.ciclo } })
+    deudores.value = await $fetch('/api/deudores', { params: { ciclo: normalizeCicloKey(state.value.ciclo) } })
   } catch (e) {
     show('Error al cargar alumnos deudores', 'danger')
   } finally {
@@ -155,6 +156,7 @@ const loadData = async () => {
 }
 
 onMounted(loadData)
+watch(() => normalizeCicloKey(state.value.ciclo), loadData)
 
 const filteredDeudores = computed(() => {
   if (!search.value) return deudores.value
@@ -189,7 +191,7 @@ const exportData = () => {
     Teléfono: d.telefono || '',
     Saldo_Pendiente_MXN: Number(d.deudaVigente).toFixed(2)
   }))
-  exportToCSV(`Deudores_${state.value.ciclo}.csv`, exportList)
+  exportToCSV(`Deudores_${normalizeCicloKey(state.value.ciclo)}.csv`, exportList)
 }
 
 const openMassEmailModal = () => {

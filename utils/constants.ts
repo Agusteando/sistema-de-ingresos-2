@@ -1,3 +1,5 @@
+import { normalizeCicloKey } from '../shared/utils/ciclo'
+
 export const PLANTELES_LIST = [
   'PREEM', 'PREET', 'CT', 'CM', 'DM', 'CO', 'DC', 'PM', 'PT', 'SM', 'ST', 'IS', 'ISM'
 ]
@@ -14,4 +16,9 @@ export const GRADOS_ORDEN: Record<string, number> = {
   'Cuarto': 4,
   'Quinto': 5,
   'Sexto': 6
+}
+
+export const normalizeCicloOption = (value: string | number | null | undefined) => {
+  const cicloKey = normalizeCicloKey(value)
+  return CICLOS_LIST.find(c => c.value === cicloKey) ? cicloKey : CICLOS_LIST[0].value
 }

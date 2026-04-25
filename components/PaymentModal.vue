@@ -64,6 +64,7 @@ import { LucideCheckCircle, LucideEye } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
+import { normalizeCicloKey } from '~/shared/utils/ciclo'
 
 const props = defineProps({ debts: Array, student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -101,7 +102,7 @@ const previewReceipt = () => {
     nivel: props.student.nivel,
     grado: props.student.grado,
     grupo: props.student.grupo,
-    ciclo: state.value.ciclo,
+    ciclo: normalizeCicloKey(state.value.ciclo),
     instituto: props.student.plantel === 'PT' || props.student.plantel === 'PM' || props.student.plantel === 'SM' ? 1 : 0,
     items: processedDebts.value.filter(d => d.montoPagado > 0).map((d, i) => ({
       folio: 'PREV-' + (i+1),
@@ -125,7 +126,7 @@ const previewReceipt = () => {
 }
 
 const submit = async () => {
-  const payload = { matricula: props.student.matricula, formaDePago: formaDePago.value, ciclo: state.value.ciclo, pagos: processedDebts.value }
+  const payload = { matricula: props.student.matricula, formaDePago: formaDePago.value, ciclo: normalizeCicloKey(state.value.ciclo), pagos: processedDebts.value }
   processing.value = true
   
   await executeOptimistic(

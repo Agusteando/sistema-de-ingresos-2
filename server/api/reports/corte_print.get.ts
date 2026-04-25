@@ -1,7 +1,9 @@
 import { query } from '../../utils/db'
+import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => {
   const { inicio, fin, plantel, ciclo = '2025' } = getQuery(event)
+  const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
   
   if (user.role !== 'global') {
@@ -9,7 +11,7 @@ export default defineEventHandler(async (event) => {
   }
   
   let where = "r.estatus = 'Vigente' AND r.ciclo = ?"
-  const params: any[] = [ciclo]
+  const params: any[] = [cicloKey]
 
   if (inicio && fin) {
     where += " AND DATE(r.fecha) BETWEEN ? AND ?"

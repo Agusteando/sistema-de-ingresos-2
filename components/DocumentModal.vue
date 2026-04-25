@@ -69,6 +69,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
+import { normalizeCicloKey } from '~/shared/utils/ciclo'
 
 const props = defineProps({ student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -85,7 +86,7 @@ const form = ref({ costo: 0, meses: 1, eventual: false })
 const becaType = ref('percentage')
 const becaInput = ref(0)
 
-onMounted(async () => { conceptos.value = await $fetch('/api/conceptos', { params: { ciclo: state.value.ciclo } }) })
+onMounted(async () => { conceptos.value = await $fetch('/api/conceptos', { params: { ciclo: normalizeCicloKey(state.value.ciclo) } }) })
 
 const onDocumentoChange = () => {
   const c = conceptos.value.find(x => x.id === selectedDocumentoId.value)
@@ -123,7 +124,7 @@ const submit = async () => {
         costo: form.value.costo, 
         meses: form.value.meses, 
         beca: finalBecaPercentage, 
-        ciclo: state.value.ciclo, 
+        ciclo: normalizeCicloKey(state.value.ciclo), 
         eventual: form.value.eventual 
       }
     })

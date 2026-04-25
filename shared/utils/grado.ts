@@ -1,3 +1,5 @@
+import { normalizeCicloKey } from './ciclo'
+
 export const GRADOS_NORMALIZADOS = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto']
 
 export const normalizeGrado = (grado: string) => {
@@ -19,8 +21,8 @@ export const calculatePromotedGrado = (gradoBase: string, nivelBase: string, cic
     return { grado: normalizedGrado, nivel: defaultNivel }
   }
 
-  const baseYear = parseInt(String(cicloBase).slice(0, 4), 10)
-  const selectedYear = parseInt(String(selectedCiclo).slice(0, 4), 10)
+  const baseYear = parseInt(normalizeCicloKey(cicloBase), 10)
+  const selectedYear = parseInt(normalizeCicloKey(selectedCiclo), 10)
   
   if (isNaN(baseYear) || isNaN(selectedYear)) {
     return { grado: normalizedGrado, nivel: defaultNivel }
