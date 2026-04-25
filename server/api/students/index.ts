@@ -1,5 +1,6 @@
 import { query } from '../../utils/db'
 import { calculatePromotedGrado, displayGrado, normalizeGrado } from '../../../shared/utils/grado'
+import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => {
   const method = event.node.req.method
@@ -7,6 +8,7 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'GET') {
     const { q = '', ciclo = '2025', nivel = '', grado = '', grupo = '' } = getQuery(event)
+    const cicloKey = normalizeCicloKey(ciclo)
     
     let whereClause = "1=1"
     const params: any[] = []
@@ -21,7 +23,7 @@ export default defineEventHandler(async (event) => {
       params.push(`%${q}%`, q)
     } else {
       whereClause += " AND (A.estatus = 'Activo' OR A.ciclo = ?)"
-      params.push(ciclo)
+      params.push(cicloKey)
     }
 
     const sql = `
@@ -44,9 +46,9 @@ export default defineEventHandler(async (event) => {
       WHERE ${whereClause}
       ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC LIMIT 5000;
     `
-    const rows = await query<any[]>(sql, [ciclo, ciclo, ...params])
+    const rows = await query<any[]>(sql, [cicloKey, cicloKey, ...params])
     let mapped = rows.map(r => {
-      const p = calculatePromotedGrado(r.gradoBase, r.nivelBase, r.cicloBase, String(ciclo))
+      const p = calculatePromotedGrado(r.gradoBase, r.nivelBase, r.cicloBase, cicloKey)
       return {
         ...r,
         grado: displayGrado(p.grado),
@@ -64,6 +66,7 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'POST') {
     const body = await readBody(event)
+    const cicloKey = normalizeCicloKey(body.ciclo)
     const assignedPlantel = user.role === 'global' ? body.plantel : user.active_plantel
 
     await query(`
@@ -76,7 +79,7 @@ export default defineEventHandler(async (event) => {
       '', 
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
       body.birth, body.genero, assignedPlantel, body.nivel, normalizeGrado(body.grado), body.grupo,
-      body.padre, body.telefono, body.correo, user.name, body.ciclo, body.interno, body.estatus || 'Activo'
+      body.padre, body.telefono, body.correo, user.name, cicloKey, body.interno, body.estatus || 'Activo'
     ])
     return { success: true }
   }

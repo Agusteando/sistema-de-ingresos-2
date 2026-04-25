@@ -116,6 +116,7 @@ import { PLANTELES_LIST } from '~/utils/constants'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
+import { normalizeCicloKey } from '~/shared/utils/ciclo'
 
 const props = defineProps({ student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -133,7 +134,7 @@ const loading = ref(false)
 const form = ref({
   matricula: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
   birth: '', genero: '1', plantel: defaultPlantel, interno: 1, nivel: 'Primaria', grado: 'Primero', grupo: 'A',
-  padre: '', telefono: '', correo: '', ciclo: state.value.ciclo, estatus: 'Activo'
+  padre: '', telefono: '', correo: '', ciclo: normalizeCicloKey(state.value.ciclo), estatus: 'Activo'
 })
 
 onMounted(() => {
@@ -154,7 +155,7 @@ onMounted(() => {
       padre: s.padre || '', 
       telefono: s.telefono || '', 
       correo: s.correo || '', 
-      ciclo: s.ciclo || state.value.ciclo,
+      ciclo: normalizeCicloKey(s.ciclo || state.value.ciclo),
       estatus: s.estatus || 'Activo'
     }
   }
@@ -165,7 +166,7 @@ const submit = async () => {
   try {
     const url = isEdit ? `/api/students/${form.value.matricula}` : '/api/students'
     const method = isEdit ? 'PUT' : 'POST'
-    await $fetch(url, { method, body: form.value })
+    await $fetch(url, { method, body: { ...form.value, ciclo: normalizeCicloKey(form.value.ciclo) } })
     show(isEdit ? 'Alumno actualizado correctamente' : 'Alumno registrado exitosamente', 'success')
     emit('success')
   } catch (e) { 

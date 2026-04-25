@@ -144,6 +144,7 @@ import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
+import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import PaymentModal from './PaymentModal.vue'
 import DocumentModal from './DocumentModal.vue'
 import InvoiceModal from './InvoiceModal.vue'
@@ -171,14 +172,26 @@ const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
 const loadDebts = async () => {
   loading.value = true; selectedDebts.value = []
   try {
-    console.info(`[DEBUG_EDC_TRACE_4] Requesting debts for ${props.student.matricula} in ciclo ${state.value.ciclo}`);
-    const res = await $fetch(`/api/students/${props.student.matricula}/debts`, {
-      params: { ciclo: state.value.ciclo, lateFeeActive: state.value.lateFeeActive }
+    const cicloKey = normalizeCicloKey(state.value.ciclo)
+    console.info('[EstadoCuentaDebug] Estado de Cuenta request', {
+      matricula: props.student.matricula,
+      selectedCicloRaw: state.value.ciclo,
+      normalizedCicloKey: cicloKey,
+      apiQueryCiclo: cicloKey
     })
-    console.info(`[DEBUG_EDC_TRACE_5] UI Received debts:`, res);
+    const res = await $fetch(`/api/students/${props.student.matricula}/debts`, {
+      params: { ciclo: cicloKey, lateFeeActive: state.value.lateFeeActive }
+    })
     debts.value = res || []
+    console.info('[EstadoCuentaDebug] Estado de Cuenta render', {
+      matricula: props.student.matricula,
+      selectedCicloRaw: state.value.ciclo,
+      normalizedCicloKey: cicloKey,
+      apiQueryCiclo: cicloKey,
+      renderedConceptosCount: debts.value.length
+    })
   } catch (e) {
-    console.error(`[DEBUG_EDC_TRACE_ERROR]`, e);
+    console.error('[EstadoCuentaDebug] Estado de Cuenta error', e)
   } finally { loading.value = false }
 }
 
@@ -188,7 +201,7 @@ const loadSiblings = async () => {
   } catch(e) {}
 }
 
-watch(() => [props.student, state.value.lateFeeActive], () => {
+watch(() => [props.student, state.value.lateFeeActive, normalizeCicloKey(state.value.ciclo)], () => {
   if (props.student) {
     loadDebts()
     loadSiblings()

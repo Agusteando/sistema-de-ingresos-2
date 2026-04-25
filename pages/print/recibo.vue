@@ -53,7 +53,7 @@
             <tr>
               <td class="py-2 font-mono font-semibold text-gray-900">{{ receiptData.matricula || 'N/A' }}</td>
               <td class="py-2 font-semibold text-gray-900">{{ receiptData.nombreCompleto || '—' }}</td>
-              <td class="py-2 text-gray-700">{{ receiptData.ciclo || '2025' }}-{{ Number(receiptData.ciclo || '2025')+1 }}</td>
+              <td class="py-2 text-gray-700">{{ formatCicloLabel(receiptData.ciclo || '2025') }}</td>
               <td class="py-2 text-gray-700">{{ receiptData.grado || '' }} {{ receiptData.grupo || '' }}</td>
             </tr>
           </tbody>
@@ -150,6 +150,7 @@ import { useCookie } from '#app'
 import { LucidePrinter, LucideMail, LucideFileText } from 'lucide-vue-next'
 import dayjs from 'dayjs'
 import { numeroALetras } from '~/server/utils/numberToWords'
+import { formatCicloLabel } from '~/shared/utils/ciclo'
 import InvoiceModal from '~/components/InvoiceModal.vue'
 
 definePageMeta({ layout: false })

@@ -60,6 +60,7 @@ import { useState } from '#app'
 import { LucideSettings, LucideTrash2 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
+import { normalizeCicloKey } from '~/shared/utils/ciclo'
 
 const state = useState('globalState')
 const { show } = useToast()
@@ -75,7 +76,7 @@ const form = ref({ concepto: '', description: '', costo: 0, plazo: 10, eventual:
 const loadConceptos = async () => {
   loadingTable.value = true
   try {
-    conceptos.value = await $fetch('/api/conceptos', { params: { ciclo: state.value.ciclo } })
+    conceptos.value = await $fetch('/api/conceptos', { params: { ciclo: normalizeCicloKey(state.value.ciclo) } })
   } catch(e) { show('Error cargando conceptos', 'danger') }
   finally { loadingTable.value = false }
 }
@@ -100,7 +101,7 @@ const showContextMenu = (event, c) => {
 const createConcept = async () => {
   loading.value = true
   try {
-    await $fetch('/api/conceptos', { method: 'POST', body: { ...form.value, ciclo: state.value.ciclo } })
+    await $fetch('/api/conceptos', { method: 'POST', body: { ...form.value, ciclo: normalizeCicloKey(state.value.ciclo) } })
     show('Concepto guardado')
     showForm.value = false
     form.value = { concepto: '', description: '', costo: 0, plazo: 10, eventual: false }

@@ -1,9 +1,11 @@
 import { executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
+import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { matricula, pagos, formaDePago, ciclo = '2025' } = body
+  const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
 
   if (!matricula || !pagos || !pagos.length) {
@@ -77,7 +79,7 @@ export default defineEventHandler(async (event) => {
         formaDePago,
         plantel,
         instituto,
-        ciclo,
+        cicloKey,
         'Vigente'
       ]
     })
