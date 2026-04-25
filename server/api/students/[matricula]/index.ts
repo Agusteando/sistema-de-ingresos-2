@@ -1,4 +1,5 @@
 import { query } from '../../../utils/db'
+import { normalizeGrado } from '../../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => {
   const matricula = event.context.params?.matricula
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
       WHERE matricula = ?
     `, [
       body.apellidoPaterno, body.apellidoMaterno, body.nombres, body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      body.birth, body.padre, body.plantel, body.nivel, body.grado, body.grupo, body.telefono, body.correo, body.ciclo, body.interno,
+      body.birth, body.padre, body.plantel, body.nivel, normalizeGrado(body.grado), body.grupo, body.telefono, body.correo, body.ciclo, body.interno,
       matricula
     ])
     return { success: true }

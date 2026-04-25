@@ -1,6 +1,6 @@
 <template>
-  <div class="max-w-[1400px] mx-auto pb-12">
-    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-5">
+  <div class="h-full flex flex-col mx-auto max-w-[1500px]">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-5 shrink-0">
       <div>
         <h1 class="text-2xl font-bold text-gray-800 tracking-tight m-0">Gestión de Alumnos</h1>
         <p class="text-[0.85rem] text-gray-500 mt-1.5 font-medium m-0 max-w-2xl">
@@ -18,25 +18,22 @@
       </div>
     </header>
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4 shrink-0">
       <button @click="activeFilter = 'inscritos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'inscritos' ? 'ring-2 ring-brand-campus shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
         <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'inscritos' ? 'bg-brand-campus/10' : 'bg-gray-50']"></div>
         <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'inscritos' ? 'text-brand-campus' : 'text-gray-500'">Inscritos</h4>
         <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.inscritos }}</div>
       </button>
-      
       <button @click="activeFilter = 'internos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'internos' ? 'ring-2 ring-brand-teal shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
         <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'internos' ? 'bg-brand-teal/10' : 'bg-gray-50']"></div>
         <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'internos' ? 'text-brand-teal' : 'text-gray-500'">Internos</h4>
         <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.internos }}</div>
       </button>
-
       <button @click="activeFilter = 'externos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'externos' ? 'ring-2 ring-accent-sky shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
         <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'externos' ? 'bg-accent-sky/10' : 'bg-gray-50']"></div>
         <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'externos' ? 'text-accent-sky' : 'text-gray-500'">Externos</h4>
         <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.externos }}</div>
       </button>
-
       <button @click="activeFilter = 'no_inscritos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'no_inscritos' ? 'ring-2 ring-accent-coral shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
         <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'no_inscritos' ? 'bg-accent-coral/10' : 'bg-gray-50']"></div>
         <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'no_inscritos' ? 'text-accent-coral' : 'text-gray-500'">Bajas / No inscritos</h4>
@@ -44,91 +41,96 @@
       </button>
     </div>
 
-    <div class="flex flex-col md:flex-row gap-3 items-center mb-6">
-      <div class="card p-2 flex-1 flex flex-row gap-2 items-center shadow-sm w-full">
+    <div class="flex items-center justify-between mb-5 bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm shrink-0">
+      <div class="flex items-center gap-3 w-[250px] md:w-[300px]">
         <div class="relative w-full">
           <LucideSearch class="absolute left-3 top-2.5 text-gray-400" :size="16" />
-          <input v-model="filters.q" class="input-field pl-9 border-none shadow-none focus:ring-0 bg-transparent w-full text-sm font-medium placeholder-gray-400" placeholder="Buscar por nombre o matrícula..." />
+          <input v-model="filters.q" class="input-field pl-9 bg-gray-50/50 border-gray-200 shadow-none focus:bg-white text-sm h-[36px]" placeholder="Matrícula o nombre..." />
         </div>
       </div>
       
-      <div class="flex items-center gap-2 overflow-x-auto hide-scrollbar flex-1 w-full md:w-auto">
-        <button @click="activeGrado = ''; activeGrupo = ''" :class="['px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap border', activeGrado === '' ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 shadow-sm']">Todos los grados</button>
-        <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" :class="['px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap border', activeGrado === g ? 'bg-brand-campus text-white border-brand-campus shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 shadow-sm']">
-          {{ g }}
-        </button>
+      <div class="flex-1 overflow-hidden ml-4 flex items-center">
+        <div class="flex items-center gap-1.5 overflow-x-auto hide-scrollbar w-full mask-edges pr-8">
+           <button @click="activeGrado = ''; activeGrupo = ''" class="chip" :class="{'active': activeGrado === ''}">Todos los grados</button>
+           <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" class="chip" :class="{'active': activeGrado === g}">{{ g }}</button>
+           
+           <template v-if="activeGrado && availableGrupos.length">
+             <div class="w-px h-5 bg-gray-300 mx-1"></div>
+             <button @click="activeGrupo = ''" class="chip" :class="{'active-group': activeGrupo === ''}">Todos</button>
+             <button v-for="grp in availableGrupos" :key="grp" @click="activeGrupo = grp" class="chip" :class="{'active-group': activeGrupo === grp}">Grupo {{ grp }}</button>
+           </template>
+        </div>
       </div>
 
-      <div v-if="activeGrado && availableGrupos.length" class="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 border-l border-gray-200">
-        <button @click="activeGrupo = ''" :class="['px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap border', activeGrupo === '' ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 shadow-sm']">Todos</button>
-        <button v-for="grp in availableGrupos" :key="grp" @click="activeGrupo = grp" :class="['px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap border', activeGrupo === grp ? 'bg-brand-teal text-white border-brand-teal shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 shadow-sm']">
-          {{ grp }}
-        </button>
-      </div>
-      
-      <button class="btn btn-secondary h-auto py-2.5 px-4 shadow-sm shrink-0" @click="exportData">
+      <button class="btn btn-secondary h-[36px] px-4 shadow-sm shrink-0 ml-3" @click="exportData">
         <LucideDownload :size="14"/> Exportar
       </button>
     </div>
 
-    <div class="card table-wrapper shadow-sm border-gray-200">
-      <table class="w-full">
-        <thead class="bg-gray-50/80">
-          <tr>
-            <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-left">Alumno</th>
-            <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-left">Asignación</th>
-            <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-left">Tipo</th>
-            <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-right">Cargos</th>
-            <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-right">Abonos</th>
-            <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-right">Saldo</th>
-            <th class="w-24 text-right pr-5"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading"><td colspan="7" class="text-center text-gray-500 font-medium py-16">Cargando registros...</td></tr>
-          <tr v-else-if="!displayedStudents.length"><td colspan="7" class="text-center text-gray-400 py-16">No hay registros bajo los filtros actuales.</td></tr>
-          <tr v-else v-for="s in displayedStudents" :key="s.matricula" 
-              @click="selectStudent(s)" 
-              @contextmenu.prevent="showStudentMenu($event, s)"
-              :class="{ 'bg-brand-leaf/5 border-l-2 border-l-brand-leaf': selectedStudent?.matricula === s.matricula }" 
-              class="group relative cursor-pointer hover:bg-gray-50/80 transition-all border-b border-gray-100/80 border-l-2 border-l-transparent">
-            <td class="py-3.5 px-5 align-middle">
-              <div class="font-bold text-gray-800 text-sm tracking-tight">{{ s.nombreCompleto }}</div>
-              <div class="text-[0.7rem] text-gray-400 font-mono mt-0.5 tracking-wider">{{ s.matricula }}</div>
-            </td>
-            <td class="py-3.5 px-5 text-sm text-gray-600 font-medium align-middle">
-              {{ s.nivel }} <span class="text-gray-300 mx-1.5">•</span> {{ s.grado }} <span class="text-gray-400 font-bold ml-1">"{{ s.grupo }}"</span>
-            </td>
-            <td class="py-3.5 px-5 align-middle">
-              <span class="text-[0.65rem] font-bold text-gray-500 uppercase tracking-widest">{{ String(s.interno) === '1' ? 'Interno' : 'Externo' }}</span>
-            </td>
-            <td class="py-3.5 px-5 text-right align-middle">
-              <div class="font-mono text-sm text-gray-400 font-medium">${{ format(s.importeTotal) }}</div>
-            </td>
-            <td class="py-3.5 px-5 text-right align-middle">
-              <div class="font-mono text-sm font-semibold text-brand-campus">${{ format(s.pagosTotal) }}</div>
-            </td>
-            <td class="py-3.5 px-5 text-right align-middle">
-              <div class="font-mono text-sm font-bold" :class="s.saldoNeto > 0 ? 'text-accent-coral' : 'text-gray-400'">${{ format(s.saldoNeto) }}</div>
-            </td>
-            <td class="w-24 text-right pr-5 align-middle">
-              <div class="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button @click.stop="openEdit(s)" class="p-1.5 text-gray-400 hover:text-brand-teal hover:bg-brand-leaf/10 rounded transition-colors" title="Editar">
-                  <LucideEdit2 :size="16" />
-                </button>
-                <button @click.stop="bajaAlumno(s)" class="p-1.5 text-gray-400 hover:text-accent-coral hover:bg-red-50 rounded transition-colors" title="Dar de baja">
-                  <LucideUserMinus :size="16" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="flex gap-6 flex-1 min-h-0 relative">
+      
+      <div :class="selectedStudent ? 'w-[38%] xl:w-[35%] border-r border-gray-200 pr-6 shrink-0' : 'w-full'" class="flex flex-col h-full transition-all duration-300 overflow-hidden">
+        <div class="flex-1 overflow-y-auto card table-wrapper shadow-sm border-gray-200 rounded-xl relative h-full">
+          <table class="w-full relative">
+            <thead class="bg-gray-50/90 backdrop-blur sticky top-0 z-10">
+              <tr>
+                <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-left">Alumno</th>
+                <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-left" v-if="!selectedStudent">Asignación</th>
+                <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-right" v-if="!selectedStudent">Cargos</th>
+                <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-right" v-if="!selectedStudent">Abonos</th>
+                <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-right">Saldo</th>
+                <th class="w-14 text-right pr-5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loading"><td :colspan="selectedStudent ? 3 : 6" class="text-center text-gray-500 font-medium py-16">Cargando registros...</td></tr>
+              <tr v-else-if="!displayedStudents.length"><td :colspan="selectedStudent ? 3 : 6" class="text-center text-gray-400 py-16">No hay registros bajo los filtros actuales.</td></tr>
+              <tr v-else v-for="s in displayedStudents" :key="s.matricula" 
+                  @click="selectStudent(s)" 
+                  @contextmenu.prevent="showStudentMenu($event, s)"
+                  :class="{ 'bg-brand-leaf/5 border-l-2 border-l-brand-leaf': selectedStudent?.matricula === s.matricula }" 
+                  class="group relative cursor-pointer hover:bg-gray-50/80 transition-all border-b border-gray-100/80 border-l-2 border-l-transparent">
+                <td class="py-3 px-5 align-middle">
+                  <div class="font-bold text-gray-800 text-sm tracking-tight truncate max-w-[220px]" :title="s.nombreCompleto">{{ s.nombreCompleto }}</div>
+                  <div class="text-[0.7rem] text-gray-400 font-mono mt-0.5 tracking-wider">{{ s.matricula }} <span v-if="selectedStudent" class="ml-1 text-gray-300 font-sans font-medium">• {{ s.grado }} "{{ s.grupo }}"</span></div>
+                </td>
+                <td class="py-3 px-5 text-sm text-gray-600 font-medium align-middle whitespace-nowrap" v-if="!selectedStudent">
+                  {{ s.nivel }} <span class="text-gray-300 mx-1.5">•</span> {{ s.grado }} <span class="text-gray-400 font-bold ml-1">"{{ s.grupo }}"</span>
+                </td>
+                <td class="py-3 px-5 text-right align-middle" v-if="!selectedStudent">
+                  <div class="font-mono text-sm text-gray-400 font-medium">${{ format(s.importeTotal) }}</div>
+                </td>
+                <td class="py-3 px-5 text-right align-middle" v-if="!selectedStudent">
+                  <div class="font-mono text-sm font-semibold text-brand-campus">${{ format(s.pagosTotal) }}</div>
+                </td>
+                <td class="py-3 px-5 text-right align-middle">
+                  <div class="font-mono text-sm font-bold" :class="s.saldoNeto > 0 ? 'text-accent-coral' : 'text-gray-400'">${{ format(s.saldoNeto) }}</div>
+                </td>
+                <td class="w-14 text-right pr-5 align-middle">
+                  <div class="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button @click.stop="openEdit(s)" class="p-1.5 text-gray-400 hover:text-brand-teal hover:bg-brand-leaf/10 rounded transition-colors" title="Editar">
+                      <LucideEdit2 :size="16" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div v-if="selectedStudent" class="w-[62%] xl:w-[65%] flex-1 h-full overflow-hidden animate-[slideInRight_0.2s_ease-out] border border-gray-200 bg-white rounded-xl shadow-sm flex flex-col">
+        <StudentDetails 
+          :student="selectedStudent" 
+          @refresh="performSearch" 
+          @edit="openEdit" 
+          @close="selectedStudent = null"
+          @switch-student="selectStudentByMatricula"
+          @baja="bajaAlumno" />
+      </div>
     </div>
 
-    <StudentDetails v-if="selectedStudent" :student="selectedStudent" @refresh="performSearch" @edit="openEdit" />
     <StudentFormModal v-if="showStudentModal" :student="editingStudent" @close="closeStudentModal" @success="handleStudentSuccess" />
-    <DocumentModal v-if="showFastDocModal" :student="fastDocStudent" @close="showFastDocModal = false" @success="handleStudentSuccess" />
   </div>
 </template>
 
@@ -139,14 +141,16 @@ import { useCookie, useState } from '#app'
 import { LucideSearch, LucideUserPlus, LucideDownload, LucideEdit2, LucideUserMinus, LucideEye, LucideSettings, LucideFilePlus } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
+import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { exportToCSV } from '~/utils/export'
-import { CICLOS_LIST, GRADOS_ORDEN } from '~/utils/constants'
+import { GRADOS_ORDEN } from '~/utils/constants'
+import { displayGrado } from '~/shared/utils/grado'
 import StudentDetails from '~/components/StudentDetails.vue'
 import StudentFormModal from '~/components/StudentFormModal.vue'
-import DocumentModal from '~/components/DocumentModal.vue'
 
 const { show } = useToast()
 const { openMenu } = useContextMenu()
+const { executeOptimistic } = useOptimisticSync()
 const route = useRoute()
 const state = useState('globalState')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
@@ -165,9 +169,6 @@ const selectedStudent = ref(null)
 const globalKpis = ref({ ingresosMes: 0 })
 const showStudentModal = ref(false)
 const editingStudent = ref(null)
-
-const showFastDocModal = ref(false)
-const fastDocStudent = ref(null)
 
 const format = (val) => Number(val || 0).toFixed(2)
 
@@ -290,10 +291,9 @@ const exportData = () => {
 }
 
 const selectStudent = (student) => { selectedStudent.value = student }
-
-const openFastDoc = (student) => {
-  fastDocStudent.value = student
-  showFastDocModal.value = true
+const selectStudentByMatricula = (matricula) => { 
+  const match = students.value.find(s => s.matricula === matricula)
+  if (match) selectStudent(match)
 }
 
 const bajaAlumno = async (student) => {
@@ -301,23 +301,21 @@ const bajaAlumno = async (student) => {
   const motivo = prompt("Detalle claramente la causa de baja:")
   if (!motivo) return
 
-  try {
-    await $fetch(`/api/students/${student.matricula}`, { method: 'DELETE', body: { motivo } })
-    show('Alumno dado de baja exitosamente en el sistema.')
-    performSearch()
-    loadGlobalKpis()
-    if (selectedStudent.value?.matricula === student.matricula) {
-      selectedStudent.value = null
-    }
-  } catch (e) {
-    show('Ocurrió un error al procesar la baja.', 'danger')
-  }
+  await executeOptimistic(
+    () => $fetch(`/api/students/${student.matricula}`, { method: 'DELETE', body: { motivo } }),
+    () => {
+      const s = students.value.find(x => x.matricula === student.matricula)
+      if (s) s.estatus = motivo
+      if (selectedStudent.value?.matricula === student.matricula) selectedStudent.value = null
+    },
+    () => performSearch(),
+    { pending: 'Procesando baja...', success: 'Alumno dado de baja', error: 'Fallo al dar de baja' }
+  )
 }
 
 const showStudentMenu = (event, student) => {
   openMenu(event, [
-    { label: 'Ver detalles de cuenta', icon: LucideEye, action: () => selectStudent(student) },
-    { label: 'Agregar documento', icon: LucideFilePlus, action: () => openFastDoc(student) },
+    { label: 'Ver detalles', icon: LucideEye, action: () => selectStudent(student) },
     { label: '-' },
     { label: 'Editar alumno', icon: LucideSettings, action: () => openEdit(student) },
     { label: '-' },
@@ -349,7 +347,6 @@ const closeStudentModal = () => { showStudentModal.value = false; editingStudent
 
 const handleStudentSuccess = () => {
   closeStudentModal()
-  showFastDocModal.value = false
   performSearch()
   loadGlobalKpis()
 }
@@ -362,5 +359,8 @@ const handleStudentSuccess = () => {
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+.mask-edges {
+  mask-image: linear-gradient(to right, black 95%, transparent 100%);
 }
 </style>

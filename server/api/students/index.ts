@@ -1,4 +1,5 @@
 import { query } from '../../utils/db'
+import { calculatePromotedGrado, displayGrado, normalizeGrado } from '../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => {
   const method = event.node.req.method
@@ -14,10 +15,6 @@ export default defineEventHandler(async (event) => {
       params.push(user.active_plantel)
     }
 
-    if (nivel) { whereClause += " AND A.nivel = ?"; params.push(nivel) }
-    if (grado) { whereClause += " AND A.grado = ?"; params.push(grado) }
-    if (grupo) { whereClause += " AND A.grupo = ?"; params.push(grupo) }
-
     if (q) {
       whereClause += " AND (A.nombreCompleto LIKE ? OR A.matricula = ?)"
       params.push(`%${q}%`, q)
@@ -25,7 +22,7 @@ export default defineEventHandler(async (event) => {
 
     const sql = `
       SELECT 
-        A.matricula, A.nombreCompleto, A.grado, A.grupo, A.nivel, A.plantel, A.estatus, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno,
+        A.matricula, A.nombreCompleto, A.grado as gradoBase, A.grupo, A.nivel as nivelBase, A.ciclo as cicloBase, A.plantel, A.estatus, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno as internoBase,
         IFNULL(B.pagosTotal, 0) AS pagosTotal,
         B.conceptosPagados,
         IFNULL(C.saldo, 0) AS importeTotal,
@@ -43,7 +40,22 @@ export default defineEventHandler(async (event) => {
       WHERE ${whereClause}
       ORDER BY A.nombreCompleto ASC LIMIT 5000;
     `
-    return await query(sql, [ciclo, ciclo, ...params])
+    const rows = await query<any[]>(sql, [ciclo, ciclo, ...params])
+    let mapped = rows.map(r => {
+      const p = calculatePromotedGrado(r.gradoBase, r.nivelBase, r.cicloBase, String(ciclo))
+      return {
+        ...r,
+        grado: displayGrado(p.grado),
+        nivel: p.nivel,
+        interno: r.internoBase
+      }
+    })
+
+    if (nivel) mapped = mapped.filter(r => String(r.nivel).toLowerCase() === String(nivel).toLowerCase())
+    if (grado) mapped = mapped.filter(r => String(r.grado).toLowerCase() === String(grado).toLowerCase())
+    if (grupo) mapped = mapped.filter(r => r.grupo === grupo)
+
+    return mapped
   }
 
   if (method === 'POST') {
@@ -59,7 +71,7 @@ export default defineEventHandler(async (event) => {
     `, [
       '', 
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      body.birth, body.genero, assignedPlantel, body.nivel, body.grado, body.grupo,
+      body.birth, body.genero, assignedPlantel, body.nivel, normalizeGrado(body.grado), body.grupo,
       body.padre, body.telefono, body.correo, user.name, body.ciclo, body.interno
     ])
     return { success: true }
