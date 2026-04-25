@@ -1,5 +1,3 @@
-## components/StudentDetails.vue
-
 <template>
   <div class="h-full flex flex-col bg-white overflow-hidden">
     
@@ -195,23 +193,10 @@ const loadDebts = async () => {
   loading.value = true; selectedDebts.value = []
   try {
     const cicloKey = normalizeCicloKey(state.value.ciclo)
-    console.info('[EstadoCuentaDebug] Estado de Cuenta request', {
-      matricula: props.student.matricula,
-      selectedCicloRaw: state.value.ciclo,
-      normalizedCicloKey: cicloKey,
-      apiQueryCiclo: cicloKey
-    })
     const res = await $fetch(`/api/students/${props.student.matricula}/debts`, {
       params: { ciclo: cicloKey, lateFeeActive: state.value.lateFeeActive }
     })
     debts.value = res || []
-    console.info('[EstadoCuentaDebug] Estado de Cuenta render', {
-      matricula: props.student.matricula,
-      selectedCicloRaw: state.value.ciclo,
-      normalizedCicloKey: cicloKey,
-      apiQueryCiclo: cicloKey,
-      renderedConceptosCount: debts.value.length
-    })
   } catch (e) {
     console.error('[EstadoCuentaDebug] Estado de Cuenta error', e)
   } finally { loading.value = false }
@@ -226,9 +211,10 @@ const loadSiblings = async () => {
 const loadPhoto = async () => {
   if (!props.student?.matricula) return
   const key = `foto_${props.student.matricula}`
+  
   const cached = sessionStorage.getItem(key)
   if (cached) {
-    photoUrl.value = cached
+    photoUrl.value = cached === 'none' ? null : cached
     return
   }
   
@@ -236,7 +222,7 @@ const loadPhoto = async () => {
   photoUrl.value = null
 
   try {
-    const res = await $fetch(`/api/students/${props.student.matricula}/photo`)
+    const res = await $fetch(`https://matricula.casitaapps.com/api/students/${encodeURIComponent(props.student.matricula)}/photo?format=json`)
     if (res && res.photoUrl) {
       photoUrl.value = res.photoUrl
       sessionStorage.setItem(key, res.photoUrl)
