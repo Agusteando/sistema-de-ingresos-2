@@ -1,3 +1,5 @@
+## pages/index.vue
+
 <template>
   <div class="h-full flex flex-col mx-auto max-w-[1500px]">
     <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-5 shrink-0">
@@ -94,29 +96,18 @@
                     s.estatus !== 'Activo' ? 'bg-red-50/10 hover:bg-red-50/30' : (!isEnrolled(s) ? 'bg-orange-50/10 hover:bg-orange-50/30' : '')
                   ]">
                 <td class="py-3 px-5 align-middle">
-                  <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border"
-                         :class="s.estatus !== 'Activo' ? 'bg-red-50 border-red-200 text-red-500' : (!isEnrolled(s) ? 'bg-orange-50 border-orange-200 text-orange-500' : 'bg-gray-50 border-gray-200 text-gray-400')">
-                      <LucideUserX v-if="s.estatus !== 'Activo'" :size="14" stroke-width="2.5" />
-                      <LucideUserMinus v-else-if="!isEnrolled(s)" :size="14" stroke-width="2.5" />
-                      <LucideUser v-else :size="14" stroke-width="2.5" />
-                    </div>
-                    
-                    <div>
-                      <div class="font-bold text-sm tracking-tight truncate max-w-[200px]" 
-                           :class="s.estatus !== 'Activo' ? 'text-red-900 line-through decoration-red-400/50' : (!isEnrolled(s) ? 'text-orange-900' : 'text-gray-800')" 
-                           :title="s.nombreCompleto">
-                        {{ s.nombreCompleto }}
-                      </div>
-                      <div class="text-[0.7rem] font-mono mt-0.5 tracking-wider" 
-                           :class="s.estatus !== 'Activo' ? 'text-red-700/70' : (!isEnrolled(s) ? 'text-orange-700/70' : 'text-gray-400')">
-                        {{ s.matricula }} 
-                        <span v-if="selectedStudent" class="ml-1 font-sans font-medium" 
-                              :class="s.estatus !== 'Activo' ? 'text-red-700/50' : (!isEnrolled(s) ? 'text-orange-700/50' : 'text-gray-300')">
-                          • {{ s.grado }} "{{ s.grupo }}"
-                        </span>
-                      </div>
-                    </div>
+                  <div class="font-bold text-sm tracking-tight truncate max-w-[220px]" 
+                       :class="s.estatus !== 'Activo' ? 'text-red-900 line-through decoration-red-400/50' : (!isEnrolled(s) ? 'text-orange-900' : 'text-gray-800')" 
+                       :title="s.nombreCompleto">
+                    {{ s.nombreCompleto }}
+                  </div>
+                  <div class="text-[0.7rem] font-mono mt-0.5 tracking-wider" 
+                       :class="s.estatus !== 'Activo' ? 'text-red-700/70' : (!isEnrolled(s) ? 'text-orange-700/70' : 'text-gray-400')">
+                    {{ s.matricula }} 
+                    <span v-if="selectedStudent" class="ml-1 font-sans font-medium" 
+                          :class="s.estatus !== 'Activo' ? 'text-red-700/50' : (!isEnrolled(s) ? 'text-orange-700/50' : 'text-gray-300')">
+                      • {{ s.grado }} "{{ s.grupo }}"
+                    </span>
                   </div>
                 </td>
                 <td class="py-3 px-5 text-sm font-medium align-middle whitespace-nowrap" v-if="!selectedStudent">

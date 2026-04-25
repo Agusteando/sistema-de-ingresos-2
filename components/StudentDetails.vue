@@ -1,15 +1,21 @@
+## components/StudentDetails.vue
+
 <template>
   <div class="h-full flex flex-col bg-white overflow-hidden">
     
     <div class="px-6 py-5 border-b border-gray-200 shrink-0 relative z-10 transition-colors" :class="student.estatus !== 'Activo' ? 'bg-red-50/30' : (!isEnrolled ? 'bg-orange-50/30' : 'bg-white')">
       <div class="flex justify-between items-start">
         <div class="flex gap-4 items-center pr-6">
-          <div class="w-14 h-14 rounded-full bg-gray-100 border-2 shadow-sm overflow-hidden flex items-center justify-center shrink-0"
+          <div v-if="photoLoading" class="w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 shadow-sm flex items-center justify-center shrink-0">
+            <LucideLoader2 class="text-gray-300 animate-spin" :size="20" />
+          </div>
+          <div v-else-if="photoUrl && photoUrl !== 'none'" class="w-14 h-14 rounded-xl bg-gray-100 border shadow-sm overflow-hidden flex items-center justify-center shrink-0"
                :class="student.estatus !== 'Activo' ? 'border-red-200' : (!isEnrolled ? 'border-orange-200' : 'border-gray-200')">
-            <img v-if="photoUrl && photoUrl !== 'none'" :src="photoUrl" class="w-full h-full object-cover" />
-            <LucideUserX v-else-if="student.estatus !== 'Activo'" class="text-red-400" :size="24" />
-            <LucideUserMinus v-else-if="!isEnrolled" class="text-orange-400" :size="24" />
-            <LucideUser v-else class="text-gray-400" :size="24" />
+            <img :src="photoUrl" class="w-full h-full object-cover" />
+          </div>
+          <div v-else class="w-14 h-14 rounded-xl bg-gray-50/50 border border-dashed flex items-center justify-center shrink-0"
+               :class="student.estatus !== 'Activo' ? 'border-red-200/50' : (!isEnrolled ? 'border-orange-200/50' : 'border-gray-200/60')">
+            <LucideUser class="text-gray-300 opacity-50" :size="20" stroke-width="1.5" />
           </div>
           <div>
             <h2 class="text-xl font-bold tracking-tight flex items-center gap-2" :class="student.estatus !== 'Activo' ? 'text-red-900' : (!isEnrolled ? 'text-orange-900' : 'text-gray-900')">
@@ -152,7 +158,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserMinus, LucideUserX, LucideUser } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserMinus, LucideUserX, LucideUser, LucideLoader2 } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -174,7 +180,9 @@ const siblings = ref([])
 const loading = ref(false)
 const selectedDebts = ref([])
 const expandedHistory = ref(null)
+
 const photoUrl = ref(null)
+const photoLoading = ref(false)
 
 const showPaymentModal = ref(false)
 const showDocModal = ref(false)
@@ -224,11 +232,14 @@ const loadPhoto = async () => {
     return
   }
   
+  photoLoading.value = true
+  photoUrl.value = null
+
   try {
     const res = await $fetch(`/api/students/${props.student.matricula}/photo`)
-    if (res && res.foto) {
-      photoUrl.value = res.foto
-      sessionStorage.setItem(key, res.foto)
+    if (res && res.photoUrl) {
+      photoUrl.value = res.photoUrl
+      sessionStorage.setItem(key, res.photoUrl)
     } else {
       photoUrl.value = 'none'
       sessionStorage.setItem(key, 'none')
@@ -236,6 +247,8 @@ const loadPhoto = async () => {
   } catch (e) {
     photoUrl.value = 'none'
     sessionStorage.setItem(key, 'none')
+  } finally {
+    photoLoading.value = false
   }
 }
 
