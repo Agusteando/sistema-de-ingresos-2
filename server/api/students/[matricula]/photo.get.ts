@@ -1,19 +1,55 @@
-import { query } from '../../../utils/db'
+## server/api/students/[matricula]/photo.get.ts
+
+import { getExternalSyncConfig, buildExternalHeaders } from '../../../utils/externalBaseSync'
+
+const memoryCache = new Map<string, { url: string | null, expiresAt: number }>()
 
 export default defineEventHandler(async (event) => {
-  const matricula = event.context.params?.matricula
-  if (!matricula) return { foto: null }
+  const matriculaRaw = event.context.params?.matricula
+  const matricula = String(matriculaRaw || '').trim().toUpperCase()
+  
+  if (!matricula) return { matricula: '', photoUrl: null }
+
+  const now = Date.now()
+  const cached = memoryCache.get(matricula)
+  if (cached && cached.expiresAt > now) {
+    return { matricula, photoUrl: cached.url }
+  }
+
+  const syncConfig = getExternalSyncConfig()
+  if (!syncConfig.apiKey) {
+    return { matricula, photoUrl: null }
+  }
+
+  const externalUrl = `https://matricula.casitaapps.com/api/students/${encodeURIComponent(matricula)}/photo?format=json`
+  const headers = buildExternalHeaders(syncConfig)
 
   try {
-    const rows = await query<any[]>('SELECT last_payload FROM external_base_sync WHERE matricula = ? LIMIT 1', [matricula])
-    if (rows && rows.length > 0 && rows[0].last_payload) {
-      const payload = typeof rows[0].last_payload === 'string' ? JSON.parse(rows[0].last_payload) : rows[0].last_payload
-      if (payload && payload.foto) {
-        return { foto: payload.foto }
-      }
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+    const response = await fetch(externalUrl, {
+      method: 'GET',
+      headers,
+      signal: controller.signal
+    })
+    
+    clearTimeout(timeoutId)
+
+    if (response.ok) {
+      const data = await response.json().catch(() => null)
+      const photoUrl = data?.photoUrl || null
+      const ttl = photoUrl ? 86400000 : 300000
+      
+      memoryCache.set(matricula, { url: photoUrl, expiresAt: now + ttl })
+      return { matricula, photoUrl }
+    } else {
+      memoryCache.set(matricula, { url: null, expiresAt: now + 300000 })
+      return { matricula, photoUrl: null }
     }
-  } catch (e) {
-    // Ignore error
+
+  } catch (error) {
+    memoryCache.set(matricula, { url: null, expiresAt: now + 60000 })
+    return { matricula, photoUrl: null }
   }
-  return { foto: null }
 })
