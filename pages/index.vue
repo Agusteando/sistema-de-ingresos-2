@@ -91,20 +91,40 @@
                   :class="[
                     'group relative cursor-pointer transition-all border-b border-gray-100/80 border-l-2',
                     selectedStudent?.matricula === s.matricula ? 'bg-brand-leaf/5 border-l-brand-leaf' : 'border-l-transparent hover:bg-gray-50/80',
-                    s.estatus !== 'Activo' ? 'opacity-60 bg-red-50/20 hover:bg-red-50/40 text-red-900' : ''
+                    s.estatus !== 'Activo' ? 'bg-red-50/10 hover:bg-red-50/30' : (!isEnrolled(s) ? 'bg-orange-50/10 hover:bg-orange-50/30' : '')
                   ]">
                 <td class="py-3 px-5 align-middle">
-                  <div class="font-bold text-sm tracking-tight truncate max-w-[220px]" :class="s.estatus !== 'Activo' ? 'text-red-900 line-through decoration-red-400/50' : 'text-gray-800'" :title="s.nombreCompleto">
-                    <span v-if="s.estatus !== 'Activo'" class="inline-block px-1.5 py-0.5 rounded bg-accent-coral text-white text-[9px] uppercase font-bold mr-1 align-middle no-underline">BAJA</span>
-                    {{ s.nombreCompleto }}
-                  </div>
-                  <div class="text-[0.7rem] font-mono mt-0.5 tracking-wider" :class="s.estatus !== 'Activo' ? 'text-red-700/70' : 'text-gray-400'">
-                    {{ s.matricula }} 
-                    <span v-if="selectedStudent" class="ml-1 font-sans font-medium" :class="s.estatus !== 'Activo' ? 'text-red-700/50' : 'text-gray-300'">• {{ s.grado }} "{{ s.grupo }}"</span>
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border"
+                         :class="s.estatus !== 'Activo' ? 'bg-red-50 border-red-200 text-red-500' : (!isEnrolled(s) ? 'bg-orange-50 border-orange-200 text-orange-500' : 'bg-gray-50 border-gray-200 text-gray-400')">
+                      <LucideUserX v-if="s.estatus !== 'Activo'" :size="14" stroke-width="2.5" />
+                      <LucideUserMinus v-else-if="!isEnrolled(s)" :size="14" stroke-width="2.5" />
+                      <LucideUser v-else :size="14" stroke-width="2.5" />
+                    </div>
+                    
+                    <div>
+                      <div class="font-bold text-sm tracking-tight truncate max-w-[200px]" 
+                           :class="s.estatus !== 'Activo' ? 'text-red-900 line-through decoration-red-400/50' : (!isEnrolled(s) ? 'text-orange-900' : 'text-gray-800')" 
+                           :title="s.nombreCompleto">
+                        {{ s.nombreCompleto }}
+                      </div>
+                      <div class="text-[0.7rem] font-mono mt-0.5 tracking-wider" 
+                           :class="s.estatus !== 'Activo' ? 'text-red-700/70' : (!isEnrolled(s) ? 'text-orange-700/70' : 'text-gray-400')">
+                        {{ s.matricula }} 
+                        <span v-if="selectedStudent" class="ml-1 font-sans font-medium" 
+                              :class="s.estatus !== 'Activo' ? 'text-red-700/50' : (!isEnrolled(s) ? 'text-orange-700/50' : 'text-gray-300')">
+                          • {{ s.grado }} "{{ s.grupo }}"
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </td>
-                <td class="py-3 px-5 text-sm font-medium align-middle whitespace-nowrap" :class="s.estatus !== 'Activo' ? 'text-red-800' : 'text-gray-600'" v-if="!selectedStudent">
-                  {{ s.nivel }} <span class="mx-1.5" :class="s.estatus !== 'Activo' ? 'text-red-300' : 'text-gray-300'">•</span> {{ s.grado }} <span class="font-bold ml-1" :class="s.estatus !== 'Activo' ? 'text-red-900' : 'text-gray-400'">"{{ s.grupo }}"</span>
+                <td class="py-3 px-5 text-sm font-medium align-middle whitespace-nowrap" v-if="!selectedStudent">
+                  <span v-if="s.estatus !== 'Activo'" class="badge bg-red-100 text-red-800 border border-red-200">BAJA</span>
+                  <span v-else-if="!isEnrolled(s)" class="badge bg-orange-100 text-orange-800 border border-orange-200">NO INSCRITO</span>
+                  <template v-else>
+                    <span class="text-gray-600">{{ s.nivel }}</span> <span class="mx-1.5 text-gray-300">•</span> <span class="text-gray-600">{{ s.grado }}</span> <span class="font-bold ml-1 text-gray-400">"{{ s.grupo }}"</span>
+                  </template>
                 </td>
                 <td class="py-3 px-5 text-right align-middle" v-if="!selectedStudent">
                   <div class="font-mono text-sm font-medium" :class="s.estatus !== 'Activo' ? 'text-red-800/70' : 'text-gray-400'">${{ format(s.importeTotal) }}</div>
@@ -131,6 +151,7 @@
       <div v-if="selectedStudent" class="w-full lg:flex-1 h-full overflow-hidden animate-[slideInRight_0.2s_ease-out] border border-gray-200 bg-white rounded-xl shadow-sm flex flex-col">
         <StudentDetails 
           :student="selectedStudent" 
+          :is-enrolled="isEnrolled(selectedStudent)"
           @refresh="performSearch" 
           @edit="openEdit" 
           @close="selectedStudent = null"
@@ -147,7 +168,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
-import { LucideSearch, LucideUserPlus, LucideDownload, LucideEdit2, LucideUserMinus, LucideEye, LucideSettings, LucideFilePlus } from 'lucide-vue-next'
+import { LucideSearch, LucideUserPlus, LucideDownload, LucideEdit2, LucideUserMinus, LucideUserX, LucideUser, LucideUserCheck, LucideEye, LucideSettings, LucideFilePlus } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -234,7 +255,9 @@ const isEnrolled = (student) => {
 const kpiCounts = computed(() => {
   let inscritos = 0, internos = 0, externos = 0, no_inscritos = 0
   students.value.forEach(s => {
-    if (isEnrolled(s)) {
+    if (s.estatus !== 'Activo') {
+      no_inscritos++
+    } else if (isEnrolled(s)) {
       inscritos++
       if (String(s.interno) === '1') internos++
       else externos++
@@ -336,7 +359,7 @@ const showStudentMenu = (event, student) => {
     { label: '-' },
     { label: 'Editar alumno', icon: LucideSettings, action: () => openEdit(student) },
     { label: '-' },
-    { label: 'Dar de baja', icon: LucideUserMinus, class: 'text-accent-coral font-bold', disabled: student.estatus !== 'Activo', action: () => bajaAlumno(student) }
+    { label: 'Dar de baja', icon: LucideUserX, class: 'text-accent-coral font-bold', disabled: student.estatus !== 'Activo', action: () => bajaAlumno(student) }
   ])
 }
 
