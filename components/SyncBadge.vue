@@ -25,7 +25,7 @@
             Sincronización Base
           </h3>
           <p class="mt-1 text-[10px] font-medium leading-snug text-gray-500">
-            Modo sin polling: Vercel solo recibe solicitudes manuales.
+            Actualización de alumnos desde la base institucional.
           </p>
         </div>
 
@@ -46,14 +46,14 @@
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-bold text-gray-800">{{ statusLabel }}</p>
             <p class="truncate text-[11px] font-medium text-gray-500" :title="message">
-              {{ message || 'Sin consulta remota en esta sesión.' }}
+              {{ message || 'Sin actividad reciente.' }}
             </p>
           </div>
         </div>
 
         <div v-if="isProcessing" class="space-y-1.5">
           <div class="flex justify-between text-[10px] font-semibold text-gray-500">
-            <span>Progreso reportado</span>
+            <span>Progreso</span>
             <span>{{ Math.round(progressPercentage) }}% ({{ processed }}/{{ total }})</span>
           </div>
           <div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
@@ -76,12 +76,8 @@
           </div>
         </div>
 
-        <div class="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] font-medium leading-relaxed text-amber-800">
-          No se consulta automáticamente al abrir la app y no hay intervalos activos. Use “Consultar estado” solo cuando necesite validar la última ejecución.
-        </div>
-
-        <div v-if="lastSyncedText" class="text-center text-[10px] text-gray-400">
-          Última finalización registrada: {{ lastSyncedText }}
+        <div v-if="lastSyncedText" class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] font-medium text-gray-500">
+          Última finalización: {{ lastSyncedText }}
         </div>
       </div>
 
@@ -114,7 +110,7 @@
           :disabled="requestingStatus || starting || cancelling"
         >
           <LucideRefreshCcw :size="12" :class="{ 'animate-spin': starting }" />
-          {{ starting ? 'Sincronizando...' : 'Sincronizar ahora' }}
+          {{ starting ? 'Sincronizando...' : 'Sincronizar' }}
         </button>
       </div>
     </div>
@@ -168,34 +164,32 @@ const compactLabel = computed(() => {
   if (status.value === 'completed') return 'Base al día'
   if (status.value === 'error') return 'Error sync'
   if (status.value === 'cancelled') return 'Sync cancelado'
-  if (status.value === 'abandoned') return 'Sync abandonado'
+  if (status.value === 'abandoned') return 'Sync pendiente'
   return 'Base externa'
 })
 
-const buttonTitle = computed(() => {
-  return `${compactLabel.value}. No hay polling automático.`
-})
+const buttonTitle = computed(() => compactLabel.value)
 
 const statusLabel = computed(() => {
   switch (status.value) {
     case 'running':
       return 'Preparando sincronización'
     case 'fetching':
-      return 'Consultando matrícula externa'
+      return 'Consultando base externa'
     case 'processing':
-      return 'Actualizando base local'
+      return 'Actualizando alumnos'
     case 'completed':
       return 'Sincronización finalizada'
     case 'cancelled':
       return 'Sincronización cancelada'
     case 'abandoned':
-      return 'Ejecución anterior abandonada'
+      return 'Sincronización pendiente'
     case 'error':
       return 'Error de sincronización'
     case 'idle':
-      return 'Sincronización no aplicable'
+      return 'No aplicable'
     default:
-      return 'Sin consulta remota'
+      return 'Base externa'
   }
 })
 
@@ -242,7 +236,8 @@ const loadCachedState = () => {
 
     const cached = JSON.parse(raw)
     applyStatusPayload(cached, false)
-    console.info('[External Sync UI] Loaded cached status only. No network request was made.', {
+
+    console.info('[External Sync UI] Cached sync status loaded.', {
       plantel: activePlantel.value,
       status: status.value,
       runId: runId.value
@@ -320,7 +315,7 @@ const startSync = async () => {
 
   starting.value = true
   status.value = 'processing'
-  message.value = 'Sincronización manual en curso. No se está haciendo polling.'
+  message.value = 'Sincronización en curso.'
   processed.value = 0
   total.value = 0
   persistState()
@@ -346,7 +341,7 @@ const startSync = async () => {
   } catch (error) {
     console.error('[External Sync UI] Manual sync failed.', error)
     status.value = 'error'
-    message.value = error?.data?.message || error?.message || 'No se pudo iniciar o completar la sincronización.'
+    message.value = error?.data?.message || error?.message || 'No se pudo completar la sincronización.'
     persistState()
   } finally {
     starting.value = false

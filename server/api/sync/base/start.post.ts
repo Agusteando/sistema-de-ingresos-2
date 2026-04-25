@@ -9,37 +9,19 @@ type SyncCounters = {
   errors: number
 }
 
-type ExternalSyncAuthMode = 'compat' | 'bearer' | 'x-api-key' | 'query' | 'none'
-
 type SyncRuntimeConfig = {
   apiUrl: string
   apiKey: string
-  authMode: ExternalSyncAuthMode
-  apiKeyHeader: string
-  apiKeyQueryParam: string
   timeoutMs: number
   staleAfterMinutes: number
-  debug: boolean
 }
 
 const ACTIVE_STATUSES = ['running', 'fetching', 'processing']
 const DEFAULT_CICLO = '2025'
+const EXTERNAL_SYNC_URL = 'https://matricula.casitaapps.com/api/sync'
+const EXTERNAL_SYNC_TIMEOUT_MS = 60000
+const EXTERNAL_SYNC_STALE_AFTER_MINUTES = 30
 const LOG_PREFIX = '[External Base Sync]'
-
-const parsePositiveInteger = (value: unknown, fallback: number) => {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
-}
-
-const normalizeAuthMode = (value: unknown): ExternalSyncAuthMode => {
-  const normalized = String(value || '').trim().toLowerCase()
-
-  if (['compat', 'bearer', 'x-api-key', 'query', 'none'].includes(normalized)) {
-    return normalized as ExternalSyncAuthMode
-  }
-
-  return 'compat'
-}
 
 const cleanApiKey = (value: unknown) => {
   return String(value || '')
@@ -53,14 +35,10 @@ const getSyncRuntimeConfig = (): SyncRuntimeConfig => {
   const config = useRuntimeConfig()
 
   return {
-    apiUrl: String(config.externalSyncUrl || 'https://matricula.casitaapps.com/api/sync').trim(),
+    apiUrl: EXTERNAL_SYNC_URL,
     apiKey: cleanApiKey(config.externalSyncApiKey),
-    authMode: normalizeAuthMode(config.externalSyncAuthMode),
-    apiKeyHeader: String(config.externalSyncApiKeyHeader || 'x-api-key').trim() || 'x-api-key',
-    apiKeyQueryParam: String(config.externalSyncApiKeyQueryParam || 'api_key').trim() || 'api_key',
-    timeoutMs: parsePositiveInteger(config.externalSyncTimeoutMs, 60000),
-    staleAfterMinutes: parsePositiveInteger(config.externalSyncStaleAfterMinutes, 30),
-    debug: String(config.externalSyncDebug || process.env.DEBUG_EXTERNAL_SYNC || '').toLowerCase() === 'true'
+    timeoutMs: EXTERNAL_SYNC_TIMEOUT_MS,
+    staleAfterMinutes: EXTERNAL_SYNC_STALE_AFTER_MINUTES
   }
 }
 
@@ -81,63 +59,31 @@ const logError = (message: string, payload: Record<string, any> = {}) => {
   console.error(`${LOG_PREFIX} ${message}`, payload)
 }
 
-const logDebug = (syncConfig: SyncRuntimeConfig, message: string, payload: Record<string, any> = {}) => {
-  if (!syncConfig.debug) return
-  console.info(`${LOG_PREFIX} DEBUG ${message}`, payload)
-}
-
 const normalizeMatricula = (value: unknown) => String(value || '').trim()
 
 const buildExternalUrl = (syncConfig: SyncRuntimeConfig, plantel: string) => {
   const url = new URL(syncConfig.apiUrl)
   url.searchParams.set('plantel', plantel)
-
-  if (syncConfig.authMode === 'query') {
-    if (!syncConfig.apiKey) {
-      throw new Error('EXTERNAL_SYNC_API_KEY no está configurada.')
-    }
-
-    url.searchParams.set(syncConfig.apiKeyQueryParam, syncConfig.apiKey)
-  }
-
   return url.toString()
 }
 
 const buildExternalHeaders = (syncConfig: SyncRuntimeConfig) => {
-  const headers: Record<string, string> = {
-    Accept: 'application/json'
-  }
-
-  if (syncConfig.authMode === 'none') {
-    return headers
-  }
-
   if (!syncConfig.apiKey) {
-    throw new Error('EXTERNAL_SYNC_API_KEY no está configurada.')
+    throw new Error('EXTERNAL_SYNC_API_KEY no está configurada en producción.')
   }
 
-  if (syncConfig.authMode === 'bearer' || syncConfig.authMode === 'compat') {
-    headers.Authorization = `Bearer ${syncConfig.apiKey}`
+  return {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${syncConfig.apiKey}`,
+    'x-api-key': syncConfig.apiKey
   }
-
-  if (syncConfig.authMode === 'x-api-key' || syncConfig.authMode === 'compat') {
-    headers[syncConfig.apiKeyHeader] = syncConfig.apiKey
-  }
-
-  return headers
 }
 
 const getAuthDiagnostic = (syncConfig: SyncRuntimeConfig) => ({
-  authMode: syncConfig.authMode,
   apiKeyConfigured: Boolean(syncConfig.apiKey),
   apiKeyLength: syncConfig.apiKey.length,
-  apiKeyFingerprint: fingerprintSecret(syncConfig.apiKey),
-  apiKeyHeader: syncConfig.authMode === 'x-api-key' || syncConfig.authMode === 'compat'
-    ? syncConfig.apiKeyHeader
-    : null,
-  apiKeyQueryParam: syncConfig.authMode === 'query'
-    ? syncConfig.apiKeyQueryParam
-    : null
+  apiKeyFingerprint: fingerprintSecret(syncConfig.apiKey)
 })
 
 const safeErrorMessage = (error: any) => {
@@ -210,7 +156,7 @@ const cleanupBlockingRuns = async (plantel: string, staleAfterMinutes: number) =
     `UPDATE external_sync_runs
      SET status = 'abandoned',
          finished_at = COALESCE(finished_at, CURRENT_TIMESTAMP),
-         message = CONCAT(COALESCE(message, ''), ' | Marcada como abandonada antes de iniciar una nueva sincronización.')
+         message = CONCAT(COALESCE(message, ''), ' | Ejecución anterior marcada como pendiente por exceder la ventana de ejecución.')
      WHERE plantel = ?
        AND cancelled = 0
        AND status IN ('running', 'fetching', 'processing')
@@ -351,7 +297,6 @@ const fetchExternalRows = async (syncConfig: SyncRuntimeConfig, plantel: string,
         throw new Error(
           `Error en API externa: ${response.status} ${response.statusText}. ` +
           `Autenticación rechazada por matricula.casitaapps.com. ` +
-          `Modo usado: ${syncConfig.authMode}. ` +
           `API key configurada: ${syncConfig.apiKey ? 'sí' : 'no'}. ` +
           `Fingerprint: ${fingerprintSecret(syncConfig.apiKey) || 'none'}.`
         )
@@ -367,11 +312,10 @@ const fetchExternalRows = async (syncConfig: SyncRuntimeConfig, plantel: string,
       throw new Error('La API externa no devolvió un arreglo ni un objeto con propiedad data[].')
     }
 
-    logDebug(syncConfig, 'External API payload summary.', {
+    logInfo('External API payload accepted.', {
       runId,
       plantel,
-      rows: rows.length,
-      firstRowKeys: rows[0] ? Object.keys(rows[0]).slice(0, 20) : []
+      rows: rows.length
     })
 
     return rows
@@ -380,7 +324,7 @@ const fetchExternalRows = async (syncConfig: SyncRuntimeConfig, plantel: string,
   }
 }
 
-const processRow = async (row: any, plantel: string, syncConfig: SyncRuntimeConfig, runId: number, rowIndex: number) => {
+const processRow = async (row: any, plantel: string, runId: number, rowIndex: number) => {
   const matricula = normalizeMatricula(row?.matricula)
 
   if (!matricula) {
@@ -408,12 +352,6 @@ const processRow = async (row: any, plantel: string, syncConfig: SyncRuntimeConf
   const localEstatus = String(state?.local_estatus || '').trim()
 
   if (localExists && state?.source_hash === sourceHash) {
-    logDebug(syncConfig, 'Row skipped because source hash is unchanged.', {
-      runId,
-      plantel,
-      rowIndex,
-      matricula
-    })
     return 'skipped'
   }
 
@@ -516,15 +454,6 @@ const processRow = async (row: any, plantel: string, syncConfig: SyncRuntimeConf
 
   await executeStatementTransaction(statements)
 
-  logDebug(syncConfig, 'Row applied.', {
-    runId,
-    plantel,
-    rowIndex,
-    matricula,
-    action: localExists ? 'update' : 'insert',
-    finalEstatus
-  })
-
   return 'updated'
 }
 
@@ -570,14 +499,13 @@ export default defineEventHandler(async (event) => {
     user: user.email || user.name || 'unknown',
     timeoutMs: syncConfig.timeoutMs,
     staleAfterMinutes: syncConfig.staleAfterMinutes,
-    debug: syncConfig.debug,
     ...getAuthDiagnostic(syncConfig)
   })
 
-  if (syncConfig.authMode !== 'none' && !syncConfig.apiKey) {
+  if (!syncConfig.apiKey) {
     throw createError({
       statusCode: 500,
-      message: 'EXTERNAL_SYNC_API_KEY no está configurada en Vercel production.'
+      message: 'EXTERNAL_SYNC_API_KEY no está configurada en producción.'
     })
   }
 
@@ -609,7 +537,7 @@ export default defineEventHandler(async (event) => {
 
   const insertResult: any = await query(
     `INSERT INTO external_sync_runs (plantel, status, message)
-     VALUES (?, 'fetching', 'Consultando matrícula externa...')`,
+     VALUES (?, 'fetching', 'Consultando base externa...')`,
     [plantel]
   )
 
@@ -649,10 +577,10 @@ async function runSyncProcess(runId: number, plantel: string, agentId: string, s
 
       if (await isRunCancelled(runId)) {
         logWarn('Run cancelled after external fetch.', { runId, plantel })
-        return await finishRun(runId, 'cancelled', 'Sincronización cancelada después de consultar la API externa.', counters)
+        return await finishRun(runId, 'cancelled', 'Sincronización cancelada después de consultar la base externa.', counters)
       }
 
-      await markRunStatus(runId, 'processing', 'Procesando datos externos...', counters)
+      await markRunStatus(runId, 'processing', 'Actualizando alumnos...', counters)
 
       logInfo('Processing rows.', {
         runId,
@@ -676,12 +604,12 @@ async function runSyncProcess(runId: number, plantel: string, agentId: string, s
           await updateRunProgress(
             runId,
             counters,
-            `Procesando datos externos... ${counters.processed}/${counters.total}`
+            `Actualizando alumnos... ${counters.processed}/${counters.total}`
           )
         }
 
         try {
-          const result = await processRow(rows[index], plantel, syncConfig, runId, index)
+          const result = await processRow(rows[index], plantel, runId, index)
 
           counters.processed++
 

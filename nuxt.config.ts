@@ -25,17 +25,9 @@ export default defineNuxtConfig({
     gcpAdminSubject: process.env.GCP_ADMIN_SUBJECT,
 
     externalSyncApiKey: process.env.EXTERNAL_SYNC_API_KEY || '',
-    externalSyncUrl: process.env.EXTERNAL_SYNC_URL || 'https://matricula.casitaapps.com/api/sync',
-    externalSyncTimeoutMs: process.env.EXTERNAL_SYNC_TIMEOUT_MS || '60000',
-    externalSyncStaleAfterMinutes: process.env.EXTERNAL_SYNC_STALE_AFTER_MINUTES || '30',
-    externalSyncAuthMode: process.env.EXTERNAL_SYNC_AUTH_MODE || 'compat',
-    externalSyncApiKeyHeader: process.env.EXTERNAL_SYNC_API_KEY_HEADER || 'x-api-key',
-    externalSyncApiKeyQueryParam: process.env.EXTERNAL_SYNC_API_KEY_QUERY_PARAM || 'api_key',
-    externalSyncDebug: process.env.DEBUG_EXTERNAL_SYNC || '',
 
     public: {
-      googleClientId: process.env.GOOGLE_CLIENT_ID || '',
-      defaultPlantel: process.env.DEFAULT_PLANTEL || 'PT'
+      googleClientId: process.env.GOOGLE_CLIENT_ID || ''
     }
   },
   app: {
