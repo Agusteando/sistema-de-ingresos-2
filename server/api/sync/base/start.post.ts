@@ -74,7 +74,6 @@ const buildExternalHeaders = (syncConfig: SyncRuntimeConfig) => {
 
   return {
     Accept: 'application/json',
-    'Content-Type': 'application/json',
     Authorization: `Bearer ${syncConfig.apiKey}`,
     'x-api-key': syncConfig.apiKey
   }
@@ -246,6 +245,44 @@ const isRunCancelled = async (runId: number) => {
   return Number(run?.cancelled || 0) === 1
 }
 
+const extractExternalRows = (rawData: any) => {
+  if (Array.isArray(rawData)) {
+    return {
+      rows: rawData,
+      meta: {
+        responseShape: 'array'
+      }
+    }
+  }
+
+  if (rawData && typeof rawData === 'object' && Array.isArray(rawData.rows)) {
+    return {
+      rows: rawData.rows,
+      meta: {
+        responseShape: 'object.rows',
+        hasMore: Boolean(rawData.hasMore),
+        externalMs: rawData.ms ?? null,
+        externalReqId: rawData.reqId || null
+      }
+    }
+  }
+
+  if (rawData && typeof rawData === 'object' && Array.isArray(rawData.data)) {
+    return {
+      rows: rawData.data,
+      meta: {
+        responseShape: 'object.data',
+        hasMore: Boolean(rawData.hasMore),
+        externalMs: rawData.ms ?? null,
+        externalReqId: rawData.reqId || null
+      }
+    }
+  }
+
+  const keys = rawData && typeof rawData === 'object' ? Object.keys(rawData) : []
+  throw new Error(`La API externa no devolvió una estructura válida de filas. Claves recibidas: ${keys.join(', ') || '(sin claves)'}.`)
+}
+
 const fetchExternalRows = async (syncConfig: SyncRuntimeConfig, plantel: string, runId: number) => {
   const apiUrl = buildExternalUrl(syncConfig, plantel)
   const headers = buildExternalHeaders(syncConfig)
@@ -306,17 +343,23 @@ const fetchExternalRows = async (syncConfig: SyncRuntimeConfig, plantel: string,
     }
 
     const rawData = await response.json()
-    const rows = Array.isArray(rawData) ? rawData : rawData?.data
-
-    if (!Array.isArray(rows)) {
-      throw new Error('La API externa no devolvió un arreglo ni un objeto con propiedad data[].')
-    }
+    const { rows, meta } = extractExternalRows(rawData)
 
     logInfo('External API payload accepted.', {
       runId,
       plantel,
-      rows: rows.length
+      rows: rows.length,
+      ...meta
     })
+
+    if (meta.hasMore) {
+      logWarn('External API reported hasMore=true, but local sync endpoint expects the no-pagination response.', {
+        runId,
+        plantel,
+        rows: rows.length,
+        externalReqId: meta.externalReqId || null
+      })
+    }
 
     return rows
   } finally {
