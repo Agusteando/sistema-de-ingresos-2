@@ -1,5 +1,3 @@
-## server/api/students/[matricula]/photo.get.ts
-
 import { getExternalSyncConfig, buildExternalHeaders } from '../../../utils/externalBaseSync'
 
 const memoryCache = new Map<string, { url: string | null, expiresAt: number }>()
