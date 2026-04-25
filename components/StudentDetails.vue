@@ -1,25 +1,41 @@
 <template>
   <div class="h-full flex flex-col bg-white overflow-hidden">
     
-    <div class="px-6 py-5 border-b border-gray-200 shrink-0 bg-white relative z-10" :class="student.estatus !== 'Activo' ? 'bg-red-50/30' : ''">
+    <div class="px-6 py-5 border-b border-gray-200 shrink-0 relative z-10 transition-colors" :class="student.estatus !== 'Activo' ? 'bg-red-50/30' : (!isEnrolled ? 'bg-orange-50/30' : 'bg-white')">
       <div class="flex justify-between items-start">
-        <div class="pr-6">
-          <h2 class="text-xl font-bold tracking-tight flex items-center gap-2" :class="student.estatus !== 'Activo' ? 'text-red-900' : 'text-gray-900'">
-            <span v-if="student.estatus !== 'Activo'" class="badge bg-accent-coral text-white border border-red-600 shadow-sm text-[10px] tracking-widest px-2 py-1">BAJA</span>
-            <span :class="student.estatus !== 'Activo' ? 'line-through decoration-red-400/50' : ''">{{ student.nombreCompleto }}</span>
-          </h2>
-          <p class="text-sm font-medium mt-1.5" :class="student.estatus !== 'Activo' ? 'text-red-800/80' : 'text-gray-500'">
-            <span class="font-mono px-1.5 py-0.5 rounded" :class="student.estatus !== 'Activo' ? 'bg-red-100 text-red-900' : 'bg-blue-50 text-accent-sky'">{{ student.matricula }}</span>
-            <span class="mx-2" :class="student.estatus !== 'Activo' ? 'text-red-300' : 'text-gray-300'">|</span>
-            {{ student.nivel }} • {{ student.grado }} "{{ student.grupo }}"
-            <span class="mx-2" :class="student.estatus !== 'Activo' ? 'text-red-300' : 'text-gray-300'">|</span>
-            {{ String(student.interno) === '1' ? 'Interno' : 'Externo' }}
-            <span v-if="student.estatus !== 'Activo'" class="ml-2 italic text-red-600 text-xs">(Motivo: {{ student.estatus }})</span>
-          </p>
+        <div class="flex gap-4 items-center pr-6">
+          <div class="w-14 h-14 rounded-full bg-gray-100 border-2 shadow-sm overflow-hidden flex items-center justify-center shrink-0"
+               :class="student.estatus !== 'Activo' ? 'border-red-200' : (!isEnrolled ? 'border-orange-200' : 'border-gray-200')">
+            <img v-if="photoUrl && photoUrl !== 'none'" :src="photoUrl" class="w-full h-full object-cover" />
+            <LucideUserX v-else-if="student.estatus !== 'Activo'" class="text-red-400" :size="24" />
+            <LucideUserMinus v-else-if="!isEnrolled" class="text-orange-400" :size="24" />
+            <LucideUser v-else class="text-gray-400" :size="24" />
+          </div>
+          <div>
+            <h2 class="text-xl font-bold tracking-tight flex items-center gap-2" :class="student.estatus !== 'Activo' ? 'text-red-900' : (!isEnrolled ? 'text-orange-900' : 'text-gray-900')">
+              <span v-if="student.estatus !== 'Activo'" class="badge bg-accent-coral text-white border border-red-600 shadow-sm text-[10px] tracking-widest px-2 py-1">BAJA</span>
+              <span v-else-if="!isEnrolled" class="badge bg-orange-500 text-white border border-orange-600 shadow-sm text-[10px] tracking-widest px-2 py-1">NO INSCRITO</span>
+              <span :class="student.estatus !== 'Activo' ? 'line-through decoration-red-400/50' : ''">{{ student.nombreCompleto }}</span>
+            </h2>
+            <p class="text-sm font-medium mt-1.5" :class="student.estatus !== 'Activo' ? 'text-red-800/80' : (!isEnrolled ? 'text-orange-800/80' : 'text-gray-500')">
+              <span class="font-mono px-1.5 py-0.5 rounded" :class="student.estatus !== 'Activo' ? 'bg-red-100 text-red-900' : (!isEnrolled ? 'bg-orange-100 text-orange-900' : 'bg-blue-50 text-accent-sky')">{{ student.matricula }}</span>
+              <span class="mx-2" :class="student.estatus !== 'Activo' ? 'text-red-300' : (!isEnrolled ? 'text-orange-300' : 'text-gray-300')">|</span>
+              {{ student.nivel }} • {{ student.grado }} "{{ student.grupo }}"
+              <span class="mx-2" :class="student.estatus !== 'Activo' ? 'text-red-300' : (!isEnrolled ? 'text-orange-300' : 'text-gray-300')">|</span>
+              {{ String(student.interno) === '1' ? 'Interno' : 'Externo' }}
+              <span v-if="student.estatus !== 'Activo'" class="ml-2 italic text-red-600 text-xs">(Motivo: {{ student.estatus }})</span>
+            </p>
+          </div>
         </div>
-        <button class="btn btn-ghost !p-1.5 rounded-full" :class="student.estatus !== 'Activo' ? 'text-red-400 hover:text-red-900 hover:bg-red-100' : 'text-gray-400 hover:text-gray-800'" @click="$emit('close')">
-          <LucideX :size="20"/>
-        </button>
+        
+        <div class="flex items-center gap-1 shrink-0">
+          <button v-if="student.estatus === 'Activo'" class="btn btn-ghost !p-1.5 rounded-full text-red-400 hover:text-red-600 hover:bg-red-50" title="Dar de baja" @click="$emit('baja', student)">
+            <LucideUserX :size="20"/>
+          </button>
+          <button class="btn btn-ghost !p-1.5 rounded-full" :class="student.estatus !== 'Activo' ? 'text-red-400 hover:text-red-900 hover:bg-red-100' : (!isEnrolled ? 'text-orange-400 hover:text-orange-900 hover:bg-orange-100' : 'text-gray-400 hover:text-gray-800')" @click="$emit('close')" title="Cerrar detalles">
+            <LucideX :size="20"/>
+          </button>
+        </div>
       </div>
 
       <div class="flex gap-2 mt-5 overflow-x-auto hide-scrollbar mask-edges pr-4">
@@ -41,9 +57,6 @@
         </button>
         <button class="btn btn-ghost shrink-0" :disabled="!validDebts.length || !student.correo" @click="sendReminder">
           <LucideBell :size="14"/> Enviar aviso
-        </button>
-        <button v-if="student.estatus === 'Activo'" class="btn btn-danger !px-3 shrink-0 ml-1 shadow-sm" @click="$emit('baja', student)">
-          <LucideUserX :size="14"/> Dar de Baja
         </button>
       </div>
     </div>
@@ -139,7 +152,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserMinus, LucideUserX } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserMinus, LucideUserX, LucideUser } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -149,7 +162,7 @@ import PaymentModal from './PaymentModal.vue'
 import DocumentModal from './DocumentModal.vue'
 import InvoiceModal from './InvoiceModal.vue'
 
-const props = defineProps({ student: Object })
+const props = defineProps({ student: Object, isEnrolled: { type: Boolean, default: true } })
 const emit = defineEmits(['refresh', 'edit', 'close', 'switch-student', 'baja'])
 const { show } = useToast()
 const { openMenu } = useContextMenu()
@@ -161,6 +174,7 @@ const siblings = ref([])
 const loading = ref(false)
 const selectedDebts = ref([])
 const expandedHistory = ref(null)
+const photoUrl = ref(null)
 
 const showPaymentModal = ref(false)
 const showDocModal = ref(false)
@@ -201,10 +215,36 @@ const loadSiblings = async () => {
   } catch(e) {}
 }
 
+const loadPhoto = async () => {
+  if (!props.student?.matricula) return
+  const key = `foto_${props.student.matricula}`
+  const cached = sessionStorage.getItem(key)
+  if (cached) {
+    photoUrl.value = cached
+    return
+  }
+  
+  try {
+    const res = await $fetch(`/api/students/${props.student.matricula}/photo`)
+    if (res && res.foto) {
+      photoUrl.value = res.foto
+      sessionStorage.setItem(key, res.foto)
+    } else {
+      photoUrl.value = 'none'
+      sessionStorage.setItem(key, 'none')
+    }
+  } catch (e) {
+    photoUrl.value = 'none'
+    sessionStorage.setItem(key, 'none')
+  }
+}
+
 watch(() => [props.student, state.value.lateFeeActive, normalizeCicloKey(state.value.ciclo)], () => {
+  photoUrl.value = null
   if (props.student) {
     loadDebts()
     loadSiblings()
+    loadPhoto()
   }
 }, { immediate: true })
 
