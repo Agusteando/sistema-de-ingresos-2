@@ -6,7 +6,7 @@
       class="h-[34px] inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs font-bold text-gray-700 shadow-none transition-colors hover:border-brand-leaf hover:bg-white"
       :title="buttonTitle"
     >
-      <LucideRefreshCcw v-if="isProcessing || starting" :size="14" class="text-brand-campus animate-spin" />
+      <LucideRefreshCcw v-if="isProcessing || starting || batching" :size="14" class="text-brand-campus animate-spin" />
       <LucideCheckCircle v-else-if="status === 'completed'" :size="14" class="text-brand-leaf" />
       <LucideAlertCircle v-else-if="status === 'error' || status === 'cancelled' || status === 'abandoned'" :size="14" class="text-accent-coral" />
       <LucideCloud v-else :size="14" class="text-gray-500" />
@@ -37,7 +37,7 @@
       <div class="space-y-3 p-4">
         <div class="flex items-center gap-3">
           <div :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-full', statusColorClass]">
-            <LucideRefreshCcw v-if="isProcessing || starting" :size="15" class="animate-spin text-white" />
+            <LucideRefreshCcw v-if="isProcessing || starting || batching" :size="15" class="animate-spin text-white" />
             <LucideCheck v-else-if="status === 'completed'" :size="15" class="text-white" />
             <LucideX v-else-if="status === 'error' || status === 'cancelled' || status === 'abandoned'" :size="15" class="text-white" />
             <LucideCloud v-else :size="15" class="text-white" />
@@ -51,13 +51,22 @@
           </div>
         </div>
 
-        <div v-if="isProcessing" class="space-y-1.5">
+        <div v-if="isProcessing || starting || batching" class="space-y-1.5">
           <div class="flex justify-between text-[10px] font-semibold text-gray-500">
-            <span>Progreso</span>
-            <span>{{ Math.round(progressPercentage) }}% ({{ processed }}/{{ total }})</span>
+            <span>{{ progressLabel }}</span>
+            <span v-if="total > 0">{{ Math.round(progressPercentage) }}% ({{ processed }}/{{ total }})</span>
           </div>
+
           <div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-            <div class="h-full rounded-full bg-brand-campus transition-all duration-300" :style="{ width: `${progressPercentage}%` }"></div>
+            <div
+              v-if="total > 0"
+              class="h-full rounded-full bg-brand-campus transition-all duration-300"
+              :style="{ width: `${progressPercentage}%` }"
+            ></div>
+            <div
+              v-else
+              class="h-full w-1/2 rounded-full bg-brand-campus animate-pulse"
+            ></div>
           </div>
         </div>
 
@@ -86,14 +95,14 @@
           type="button"
           @click="loadStatus"
           class="btn btn-outline flex-1 text-xs !h-8"
-          :disabled="requestingStatus || starting || cancelling"
+          :disabled="requestingStatus || starting || batching || cancelling"
         >
           <LucideSearch :size="12" :class="{ 'animate-spin': requestingStatus }" />
           {{ requestingStatus ? 'Consultando...' : 'Consultar estado' }}
         </button>
 
         <button
-          v-if="isProcessing || starting"
+          v-if="isProcessing || starting || batching"
           type="button"
           @click="cancelSync"
           class="btn btn-ghost flex-1 text-xs !h-8 !text-accent-coral hover:!bg-accent-coral/10"
@@ -107,7 +116,7 @@
           type="button"
           @click="startSync"
           class="btn btn-secondary flex-1 text-xs !h-8"
-          :disabled="requestingStatus || starting || cancelling"
+          :disabled="requestingStatus || starting || batching || cancelling"
         >
           <LucideRefreshCcw :size="12" :class="{ 'animate-spin': starting }" />
           {{ starting ? 'Sincronizando...' : 'Sincronizar' }}
@@ -131,6 +140,8 @@ import {
   LucideX
 } from 'lucide-vue-next'
 
+const BATCH_SIZE = 25
+
 const status = ref('none')
 const total = ref(0)
 const processed = ref(0)
@@ -143,8 +154,10 @@ const runId = ref(null)
 
 const isExpanded = ref(false)
 const starting = ref(false)
+const batching = ref(false)
 const cancelling = ref(false)
 const requestingStatus = ref(false)
+const cancellationRequested = ref(false)
 
 const activePlantel = useCookie('auth_active_plantel')
 
@@ -158,8 +171,15 @@ const progressPercentage = computed(() => {
   return Math.min(100, (processed.value / total.value) * 100)
 })
 
+const progressLabel = computed(() => {
+  if (status.value === 'fetching' || starting.value) return 'Consultando base externa'
+  if (batching.value || status.value === 'processing') return 'Actualizando alumnos'
+  return 'Progreso'
+})
+
 const compactLabel = computed(() => {
-  if (starting.value) return 'Sincronizando'
+  if (starting.value) return 'Consultando'
+  if (batching.value) return 'Actualizando'
   if (requestingStatus.value) return 'Consultando'
   if (status.value === 'completed') return 'Base al día'
   if (status.value === 'error') return 'Error sync'
@@ -194,7 +214,7 @@ const statusLabel = computed(() => {
 })
 
 const statusColorClass = computed(() => {
-  if (isProcessing.value || starting.value) return 'bg-brand-campus'
+  if (isProcessing.value || starting.value || batching.value) return 'bg-brand-campus'
   if (status.value === 'completed') return 'bg-brand-leaf'
   if (status.value === 'error' || status.value === 'cancelled' || status.value === 'abandoned') return 'bg-accent-coral'
   return 'bg-gray-400'
@@ -236,12 +256,6 @@ const loadCachedState = () => {
 
     const cached = JSON.parse(raw)
     applyStatusPayload(cached, false)
-
-    console.info('[External Sync UI] Cached sync status loaded.', {
-      plantel: activePlantel.value,
-      status: status.value,
-      runId: runId.value
-    })
   } catch (error) {
     console.warn('[External Sync UI] Failed to read cached sync status.', error)
     resetState()
@@ -285,21 +299,10 @@ const loadStatus = async () => {
   if (!isVisible.value) return
 
   requestingStatus.value = true
-  console.info('[External Sync UI] Manual status check requested.', {
-    plantel: activePlantel.value
-  })
 
   try {
     const res = await $fetch('/api/sync/base/status')
     applyStatusPayload(res)
-
-    console.info('[External Sync UI] Manual status check completed.', {
-      plantel: activePlantel.value,
-      status: status.value,
-      runId: runId.value,
-      processed: processed.value,
-      total: total.value
-    })
   } catch (error) {
     console.error('[External Sync UI] Manual status check failed.', error)
     status.value = 'error'
@@ -310,34 +313,79 @@ const loadStatus = async () => {
   }
 }
 
+const processRowsInBatches = async (rows) => {
+  if (!runId.value || !Array.isArray(rows) || rows.length === 0) return
+
+  batching.value = true
+  status.value = 'processing'
+  total.value = rows.length
+  message.value = `Actualizando alumnos... ${processed.value}/${total.value}`
+  persistState()
+
+  try {
+    for (let index = 0; index < rows.length; index += BATCH_SIZE) {
+      if (cancellationRequested.value) break
+
+      const batch = rows.slice(index, index + BATCH_SIZE)
+
+      const res = await $fetch('/api/sync/base/batch', {
+        method: 'POST',
+        body: {
+          run_id: runId.value,
+          rows: batch
+        }
+      })
+
+      applyStatusPayload(res)
+
+      if (['completed', 'cancelled', 'error', 'abandoned'].includes(status.value)) {
+        break
+      }
+
+      await new Promise(resolve => window.requestAnimationFrame(resolve))
+    }
+  } catch (error) {
+    console.error('[External Sync UI] Batch processing failed.', error)
+    status.value = 'error'
+    message.value = error?.data?.message || error?.message || 'No se pudo completar la actualización.'
+    persistState()
+  } finally {
+    batching.value = false
+  }
+}
+
 const startSync = async () => {
   if (!isVisible.value) return
 
+  cancellationRequested.value = false
   starting.value = true
-  status.value = 'processing'
-  message.value = 'Sincronización en curso.'
+  batching.value = false
+  status.value = 'fetching'
+  message.value = 'Consultando base externa...'
   processed.value = 0
   total.value = 0
+  updated.value = 0
+  skipped.value = 0
+  errors.value = 0
   persistState()
-
-  console.info('[External Sync UI] Manual sync requested.', {
-    plantel: activePlantel.value
-  })
 
   try {
     const res = await $fetch('/api/sync/base/start', { method: 'POST' })
+    const rows = Array.isArray(res?.rows) ? res.rows : []
+
     applyStatusPayload(res)
 
-    console.info('[External Sync UI] Manual sync completed.', {
-      plantel: activePlantel.value,
-      status: status.value,
-      runId: runId.value,
-      processed: processed.value,
-      total: total.value,
-      updated: updated.value,
-      skipped: skipped.value,
-      errors: errors.value
-    })
+    if (['completed', 'cancelled', 'error', 'abandoned'].includes(status.value)) {
+      return
+    }
+
+    if (rows.length === 0) {
+      await loadStatus()
+      return
+    }
+
+    starting.value = false
+    await processRowsInBatches(rows)
   } catch (error) {
     console.error('[External Sync UI] Manual sync failed.', error)
     status.value = 'error'
@@ -351,21 +399,12 @@ const startSync = async () => {
 const cancelSync = async () => {
   if (!isVisible.value) return
 
+  cancellationRequested.value = true
   cancelling.value = true
-  console.info('[External Sync UI] Manual cancellation requested.', {
-    plantel: activePlantel.value,
-    runId: runId.value
-  })
 
   try {
     const res = await $fetch('/api/sync/base/cancel', { method: 'POST' })
     applyStatusPayload(res)
-
-    console.info('[External Sync UI] Manual cancellation registered.', {
-      plantel: activePlantel.value,
-      status: status.value,
-      runId: runId.value
-    })
   } catch (error) {
     console.error('[External Sync UI] Manual cancellation failed.', error)
     message.value = 'No se pudo registrar la cancelación.'
@@ -381,6 +420,7 @@ onMounted(() => {
 
 watch(() => activePlantel.value, () => {
   isExpanded.value = false
+  cancellationRequested.value = false
   loadCachedState()
 })
 </script>
