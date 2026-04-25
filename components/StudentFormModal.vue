@@ -14,7 +14,7 @@
                 <div class="text-lg font-mono font-bold text-brand-campus">{{ form.matricula }}</div>
               </div>
               <div class="text-right">
-                <span class="text-xs font-bold text-gray-500 uppercase tracking-wide">Estatus</span>
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wide">Estatus Actual</span>
                 <div>
                   <span :class="['badge mt-1', props.student?.estatus === 'Activo' ? 'badge-success' : 'badge-danger']">
                     {{ props.student?.estatus || 'Activo' }}
@@ -87,6 +87,16 @@
                   <div class="form-group mb-0"><label class="form-label">Correo electrónico</label><input type="email" v-model="form.correo" class="input-field" required></div>
                 </div>
               </div>
+
+              <div v-if="isEdit" class="space-y-4 md:col-span-2 mt-2 p-4 bg-red-50/50 border border-red-100 rounded-lg">
+                <h3 class="text-xs font-bold text-accent-coral uppercase tracking-wide border-b border-red-200 pb-2">Administración de Estatus</h3>
+                <div class="form-group mb-0">
+                  <label class="form-label text-red-900">Estatus (Activo o motivo de baja)</label>
+                  <input type="text" v-model="form.estatus" class="input-field border-red-200 focus:border-red-400 focus:ring-red-400/20" required placeholder="Escriba 'Activo' para reactivar">
+                  <p class="text-[10px] text-red-800/70 mt-1">Modifique este campo para reactivar un alumno dado de baja o ajustar su motivo.</p>
+                </div>
+              </div>
+
             </div>
 
           </div>
@@ -123,7 +133,7 @@ const loading = ref(false)
 const form = ref({
   matricula: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
   birth: '', genero: '1', plantel: defaultPlantel, interno: 1, nivel: 'Primaria', grado: 'Primero', grupo: 'A',
-  padre: '', telefono: '', correo: '', ciclo: state.value.ciclo
+  padre: '', telefono: '', correo: '', ciclo: state.value.ciclo, estatus: 'Activo'
 })
 
 onMounted(() => {
@@ -144,7 +154,8 @@ onMounted(() => {
       padre: s.padre || '', 
       telefono: s.telefono || '', 
       correo: s.correo || '', 
-      ciclo: s.ciclo || state.value.ciclo
+      ciclo: s.ciclo || state.value.ciclo,
+      estatus: s.estatus || 'Activo'
     }
   }
 })

@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
   const { q = '', ciclo = '2025' } = getQuery(event)
   const user = event.context.user
   
-  let whereClause = "A.estatus = 'Activo'"
+  let whereClause = "1=1"
   const params: any[] = []
 
   if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
@@ -16,6 +16,10 @@ export default defineEventHandler(async (event) => {
   if (q) {
     whereClause += " AND (A.nombreCompleto LIKE ? OR A.matricula = ?)"
     params.push(`%${q}%`, q)
+  } else {
+    // If no search query, optimize by only loading active students OR inactive students touched in this cycle
+    whereClause += " AND (A.estatus = 'Activo' OR A.ciclo = ?)"
+    params.push(ciclo)
   }
 
   const sql = `
@@ -36,11 +40,11 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN (
       SELECT matricula, SUM(((100 - IFNULL(beca, 0)) * costo / 100) * IFNULL(meses, 1)) AS saldo, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') as conceptosCargados
       FROM documentos
-      WHERE ciclo = ?
+      WHERE ciclo = ? AND estatus = 'Vigente'
       GROUP BY matricula
     ) C ON A.matricula = C.matricula
     WHERE ${whereClause}
-    ORDER BY A.nombreCompleto ASC
+    ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC
     LIMIT 5000;
   `
   

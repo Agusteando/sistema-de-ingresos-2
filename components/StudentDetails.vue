@@ -1,22 +1,23 @@
 <template>
   <div class="h-full flex flex-col bg-white overflow-hidden">
     
-    <div class="px-6 py-5 border-b border-gray-200 shrink-0 bg-white relative z-10">
+    <div class="px-6 py-5 border-b border-gray-200 shrink-0 bg-white relative z-10" :class="student.estatus !== 'Activo' ? 'bg-red-50/30' : ''">
       <div class="flex justify-between items-start">
         <div class="pr-6">
-          <h2 class="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            {{ student.nombreCompleto }}
-            <span v-if="student.estatus !== 'Activo'" class="badge badge-danger text-[10px]">{{ student.estatus }}</span>
+          <h2 class="text-xl font-bold tracking-tight flex items-center gap-2" :class="student.estatus !== 'Activo' ? 'text-red-900' : 'text-gray-900'">
+            <span v-if="student.estatus !== 'Activo'" class="badge bg-accent-coral text-white border border-red-600 shadow-sm text-[10px] tracking-widest px-2 py-1">BAJA</span>
+            <span :class="student.estatus !== 'Activo' ? 'line-through decoration-red-400/50' : ''">{{ student.nombreCompleto }}</span>
           </h2>
-          <p class="text-sm text-gray-500 font-medium mt-1">
-            <span class="font-mono text-accent-sky bg-blue-50 px-1.5 py-0.5 rounded">{{ student.matricula }}</span>
-            <span class="mx-2 text-gray-300">|</span>
+          <p class="text-sm font-medium mt-1.5" :class="student.estatus !== 'Activo' ? 'text-red-800/80' : 'text-gray-500'">
+            <span class="font-mono px-1.5 py-0.5 rounded" :class="student.estatus !== 'Activo' ? 'bg-red-100 text-red-900' : 'bg-blue-50 text-accent-sky'">{{ student.matricula }}</span>
+            <span class="mx-2" :class="student.estatus !== 'Activo' ? 'text-red-300' : 'text-gray-300'">|</span>
             {{ student.nivel }} • {{ student.grado }} "{{ student.grupo }}"
-            <span class="mx-2 text-gray-300">|</span>
+            <span class="mx-2" :class="student.estatus !== 'Activo' ? 'text-red-300' : 'text-gray-300'">|</span>
             {{ String(student.interno) === '1' ? 'Interno' : 'Externo' }}
+            <span v-if="student.estatus !== 'Activo'" class="ml-2 italic text-red-600 text-xs">(Motivo: {{ student.estatus }})</span>
           </p>
         </div>
-        <button class="btn btn-ghost !p-1.5 text-gray-400 hover:text-gray-800 rounded-full" @click="$emit('close')">
+        <button class="btn btn-ghost !p-1.5 rounded-full" :class="student.estatus !== 'Activo' ? 'text-red-400 hover:text-red-900 hover:bg-red-100' : 'text-gray-400 hover:text-gray-800'" @click="$emit('close')">
           <LucideX :size="20"/>
         </button>
       </div>
@@ -38,11 +39,11 @@
         <button class="btn btn-ghost shrink-0" @click="printBeca">
           <LucideAward :size="14"/> Carta beca
         </button>
-        <button class="btn btn-ghost shrink-0" :disabled="!validDebts.length" @click="sendReminder">
+        <button class="btn btn-ghost shrink-0" :disabled="!validDebts.length || !student.correo" @click="sendReminder">
           <LucideBell :size="14"/> Enviar aviso
         </button>
-        <button class="btn btn-ghost !text-accent-coral hover:!bg-red-50 shrink-0" @click="$emit('baja', student)">
-          <LucideUserMinus :size="14"/> Baja
+        <button v-if="student.estatus === 'Activo'" class="btn btn-danger !px-3 shrink-0 ml-1 shadow-sm" @click="$emit('baja', student)">
+          <LucideUserX :size="14"/> Dar de Baja
         </button>
       </div>
     </div>
@@ -138,7 +139,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserMinus } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserMinus, LucideUserX } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -170,11 +171,15 @@ const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
 const loadDebts = async () => {
   loading.value = true; selectedDebts.value = []
   try {
-    debts.value = await $fetch(`/api/students/${props.student.matricula}/debts`, {
+    console.info(`[DEBUG_EDC_TRACE_4] Requesting debts for ${props.student.matricula} in ciclo ${state.value.ciclo}`);
+    const res = await $fetch(`/api/students/${props.student.matricula}/debts`, {
       params: { ciclo: state.value.ciclo, lateFeeActive: state.value.lateFeeActive }
     })
-  } catch (e) {} 
-  finally { loading.value = false }
+    console.info(`[DEBUG_EDC_TRACE_5] UI Received debts:`, res);
+    debts.value = res || []
+  } catch (e) {
+    console.error(`[DEBUG_EDC_TRACE_ERROR]`, e);
+  } finally { loading.value = false }
 }
 
 const loadSiblings = async () => {
@@ -229,9 +234,7 @@ const cancelPayment = async (pago) => {
     if (input === secret.toString()) {
       await executeOptimistic(
         () => $fetch('/api/payments/cancel', { method: 'POST', body: { folio: pago.folio, motivo, force_direct: true } }),
-        () => {
-          // Optimistically remove payment from history or update balance
-        },
+        () => {},
         () => {
           loadDebts()
           emit('refresh')
