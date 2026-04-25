@@ -4,13 +4,16 @@
 
 @layer base {
   body {
-    @apply bg-[#F4F6F8] text-gray-800 font-sans antialiased leading-relaxed m-0;
+    @apply bg-app text-gray-800 font-sans antialiased leading-relaxed m-0;
   }
 }
 
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-4 py-1.5 font-medium text-sm rounded-lg transition-all duration-200 ease-out whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-[0.98] h-[36px] cursor-pointer;
+  }
+  .btn-sm {
+    @apply h-[30px] px-3 py-1 text-xs;
   }
   .btn-primary {
     @apply bg-brand-leaf text-neutral-ink hover:bg-[#7EB144] focus:ring-brand-leaf shadow-sm;
@@ -55,8 +58,8 @@
   .badge-neutral { @apply bg-gray-100 text-gray-600; }
 
   .chip {
-    @apply px-3 py-1.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider transition-all border whitespace-nowrap;
-    @apply bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:border-gray-300 shadow-sm;
+    @apply px-2.5 py-1 text-[0.65rem] rounded-full font-bold uppercase tracking-wider transition-all border whitespace-nowrap;
+    @apply bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:border-gray-300 shadow-sm cursor-pointer;
   }
   .chip.active {
     @apply bg-brand-campus text-white border-brand-campus shadow-sm ring-1 ring-offset-1 ring-brand-campus;
@@ -66,13 +69,13 @@
   }
 
   .table-wrapper {
-    @apply w-full overflow-x-auto bg-white rounded-xl border border-gray-200;
+    @apply w-full bg-white rounded-xl border border-gray-200 flex flex-col min-h-0;
   }
   table {
     @apply w-full text-left border-collapse;
   }
   th {
-    @apply px-4 py-2.5 text-[0.7rem] font-bold uppercase tracking-wider text-gray-500 border-b border-gray-200 bg-gray-50/80 whitespace-nowrap;
+    @apply px-4 py-2.5 text-[0.7rem] font-bold uppercase tracking-wider text-gray-500 border-b border-gray-200 bg-gray-50/95 backdrop-blur whitespace-nowrap;
   }
   td {
     @apply px-4 py-2.5 text-sm text-gray-700 border-b border-gray-100 align-middle;
@@ -94,13 +97,13 @@
     @apply max-w-3xl;
   }
   .modal-header {
-    @apply px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white;
+    @apply px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white shrink-0;
   }
   .modal-content {
-    @apply p-6 overflow-y-auto flex-1 bg-white;
+    @apply p-6 overflow-y-auto flex-1 bg-white min-h-0;
   }
   .modal-footer {
-    @apply px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-xl;
+    @apply px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-xl shrink-0;
   }
 }
 
