@@ -1,140 +1,140 @@
 <template>
-  <div class="h-full flex flex-col bg-white overflow-hidden">
+  <div class="h-full flex flex-col bg-white overflow-hidden min-h-0 rounded-xl border border-gray-200 shadow-sm">
     
-    <div class="px-6 py-5 border-b border-gray-200 shrink-0 relative z-10 transition-colors" :class="student.estatus !== 'Activo' ? 'bg-red-50/30' : (!isEnrolled ? 'bg-orange-50/30' : 'bg-white')">
+    <div class="px-5 py-3 border-b border-gray-200 shrink-0 relative z-10 transition-colors" :class="student.estatus !== 'Activo' ? 'bg-red-50/30' : (!isEnrolled ? 'bg-orange-50/30' : 'bg-white')">
       <div class="flex justify-between items-start">
-        <div class="flex gap-4 items-center pr-6">
-          <div v-if="photoLoading" class="w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 shadow-sm flex items-center justify-center shrink-0">
+        <div class="flex gap-3 items-center pr-4">
+          <div v-if="photoLoading" class="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 shadow-sm flex items-center justify-center shrink-0">
             <LucideLoader2 class="text-gray-300 animate-spin" :size="20" />
           </div>
-          <div v-else-if="photoUrl && photoUrl !== 'none'" class="w-14 h-14 rounded-xl bg-gray-100 border shadow-sm overflow-hidden flex items-center justify-center shrink-0"
+          <div v-else-if="photoUrl && photoUrl !== 'none'" class="w-12 h-12 rounded-xl bg-gray-100 border shadow-sm overflow-hidden flex items-center justify-center shrink-0"
                :class="student.estatus !== 'Activo' ? 'border-red-200' : (!isEnrolled ? 'border-orange-200' : 'border-gray-200')">
             <img :src="photoUrl" class="w-full h-full object-cover" />
           </div>
-          <div v-else class="w-14 h-14 rounded-xl bg-gray-50/50 border border-dashed flex items-center justify-center shrink-0"
+          <div v-else class="w-12 h-12 rounded-xl bg-gray-50/50 border border-dashed flex items-center justify-center shrink-0"
                :class="student.estatus !== 'Activo' ? 'border-red-200/50' : (!isEnrolled ? 'border-orange-200/50' : 'border-gray-200/60')">
             <LucideUser class="text-gray-300 opacity-50" :size="20" stroke-width="1.5" />
           </div>
           <div>
-            <h2 class="text-xl font-bold tracking-tight flex items-center gap-2" :class="student.estatus !== 'Activo' ? 'text-red-900' : (!isEnrolled ? 'text-orange-900' : 'text-gray-900')">
-              <span v-if="student.estatus !== 'Activo'" class="badge bg-accent-coral text-white border border-red-600 shadow-sm text-[10px] tracking-widest px-2 py-1">BAJA</span>
-              <span v-else-if="!isEnrolled" class="badge bg-orange-500 text-white border border-orange-600 shadow-sm text-[10px] tracking-widest px-2 py-1">NO INSCRITO</span>
+            <h2 class="text-base font-bold tracking-tight flex items-center gap-2" :class="student.estatus !== 'Activo' ? 'text-red-900' : (!isEnrolled ? 'text-orange-900' : 'text-gray-900')">
+              <span v-if="student.estatus !== 'Activo'" class="badge bg-accent-coral text-white border border-red-600 shadow-sm text-[9px] tracking-widest px-1.5 py-0.5">BAJA</span>
+              <span v-else-if="!isEnrolled" class="badge bg-orange-500 text-white border border-orange-600 shadow-sm text-[9px] tracking-widest px-1.5 py-0.5">NO INSCRITO</span>
               <span :class="student.estatus !== 'Activo' ? 'line-through decoration-red-400/50' : ''">{{ student.nombreCompleto }}</span>
             </h2>
-            <p class="text-sm font-medium mt-1.5" :class="student.estatus !== 'Activo' ? 'text-red-800/80' : (!isEnrolled ? 'text-orange-800/80' : 'text-gray-500')">
-              <span class="font-mono px-1.5 py-0.5 rounded" :class="student.estatus !== 'Activo' ? 'bg-red-100 text-red-900' : (!isEnrolled ? 'bg-orange-100 text-orange-900' : 'bg-blue-50 text-accent-sky')">{{ student.matricula }}</span>
-              <span class="mx-2" :class="student.estatus !== 'Activo' ? 'text-red-300' : (!isEnrolled ? 'text-orange-300' : 'text-gray-300')">|</span>
+            <p class="text-[0.75rem] font-medium mt-1" :class="student.estatus !== 'Activo' ? 'text-red-800/80' : (!isEnrolled ? 'text-orange-800/80' : 'text-gray-500')">
+              <span class="font-mono px-1 py-0.5 rounded" :class="student.estatus !== 'Activo' ? 'bg-red-100 text-red-900' : (!isEnrolled ? 'bg-orange-100 text-orange-900' : 'bg-blue-50 text-accent-sky')">{{ student.matricula }}</span>
+              <span class="mx-1.5" :class="student.estatus !== 'Activo' ? 'text-red-300' : (!isEnrolled ? 'text-orange-300' : 'text-gray-300')">|</span>
               {{ student.nivel }} • {{ student.grado }} "{{ student.grupo }}"
-              <span class="mx-2" :class="student.estatus !== 'Activo' ? 'text-red-300' : (!isEnrolled ? 'text-orange-300' : 'text-gray-300')">|</span>
+              <span class="mx-1.5" :class="student.estatus !== 'Activo' ? 'text-red-300' : (!isEnrolled ? 'text-orange-300' : 'text-gray-300')">|</span>
               {{ String(student.interno) === '1' ? 'Interno' : 'Externo' }}
-              <span v-if="student.estatus !== 'Activo'" class="ml-2 italic text-red-600 text-xs">(Motivo: {{ student.estatus }})</span>
+              <span v-if="student.estatus !== 'Activo'" class="ml-1 italic text-red-600 text-[10px]">(Motivo: {{ student.estatus }})</span>
             </p>
           </div>
         </div>
         
         <div class="flex items-center gap-1 shrink-0">
           <button v-if="student.estatus === 'Activo'" class="btn btn-ghost !p-1.5 rounded-full text-red-400 hover:text-red-600 hover:bg-red-50" title="Dar de baja" @click="$emit('baja', student)">
-            <LucideUserX :size="20"/>
+            <LucideUserX :size="16"/>
           </button>
           <button class="btn btn-ghost !p-1.5 rounded-full" :class="student.estatus !== 'Activo' ? 'text-red-400 hover:text-red-900 hover:bg-red-100' : (!isEnrolled ? 'text-orange-400 hover:text-orange-900 hover:bg-orange-100' : 'text-gray-400 hover:text-gray-800')" @click="$emit('close')" title="Cerrar detalles">
-            <LucideX :size="20"/>
+            <LucideX :size="16"/>
           </button>
         </div>
       </div>
 
-      <div class="flex gap-2 mt-5 overflow-x-auto hide-scrollbar mask-edges pr-4">
-        <button class="btn btn-primary shrink-0" :disabled="!selectedDebts.length" @click="showPaymentModal = true">
-          <LucideCreditCard :size="14"/> Pagar ({{ selectedDebts.length }})
+      <div class="flex gap-2 mt-3 overflow-x-auto hide-scrollbar mask-edges pr-4 pb-0.5">
+        <button class="btn btn-primary !text-[0.7rem] !px-3 !py-1 !h-[28px] shrink-0" :disabled="!selectedDebts.length" @click="showPaymentModal = true">
+          <LucideCreditCard :size="12"/> Pagar ({{ selectedDebts.length }})
         </button>
-        <button class="btn btn-secondary shrink-0" :disabled="!selectedDebts.length" @click="showInvoiceModal = true">
-          <LucideFileText :size="14"/> Facturar
+        <button class="btn btn-secondary !text-[0.7rem] !px-3 !py-1 !h-[28px] shrink-0" :disabled="!selectedDebts.length" @click="showInvoiceModal = true">
+          <LucideFileText :size="12"/> Facturar
         </button>
-        <button class="btn btn-outline shrink-0" @click="showDocModal = true">
-          <LucideFilePlus :size="14"/> Cargo extra
+        <button class="btn btn-outline !text-[0.7rem] !px-3 !py-1 !h-[28px] shrink-0" @click="showDocModal = true">
+          <LucideFilePlus :size="12"/> Cargo extra
         </button>
-        <div class="w-px h-6 bg-gray-200 mx-1 my-auto shrink-0"></div>
-        <button class="btn btn-ghost shrink-0" @click="$emit('edit', student)">
-          <LucideSettings :size="14"/> Editar
+        <div class="w-px h-5 bg-gray-200 mx-1 my-auto shrink-0"></div>
+        <button class="btn btn-ghost !text-[0.7rem] !px-3 !py-1 !h-[28px] shrink-0" @click="$emit('edit', student)">
+          <LucideSettings :size="12"/> Editar
         </button>
-        <button class="btn btn-ghost shrink-0" @click="printBeca">
-          <LucideAward :size="14"/> Carta beca
+        <button class="btn btn-ghost !text-[0.7rem] !px-3 !py-1 !h-[28px] shrink-0" @click="printBeca">
+          <LucideAward :size="12"/> Carta beca
         </button>
-        <button class="btn btn-ghost shrink-0" :disabled="!validDebts.length || !student.correo" @click="sendReminder">
-          <LucideBell :size="14"/> Enviar aviso
+        <button class="btn btn-ghost !text-[0.7rem] !px-3 !py-1 !h-[28px] shrink-0" :disabled="!validDebts.length || !student.correo" @click="sendReminder">
+          <LucideBell :size="12"/> Enviar aviso
         </button>
       </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto p-6 bg-gray-50/50">
+    <div class="flex-1 overflow-y-auto p-4 lg:p-5 bg-gray-50/50 min-h-0 flex flex-col">
       
-      <div v-if="siblings.length" class="mb-6 p-4 bg-blue-50/60 border border-blue-100 rounded-xl">
-        <h4 class="text-[10px] font-bold uppercase tracking-wider text-blue-800 mb-2">Familia / Hermanos</h4>
+      <div v-if="siblings.length" class="mb-4 p-3 bg-blue-50/60 border border-blue-100 rounded-xl shrink-0">
+        <h4 class="text-[9px] font-bold uppercase tracking-wider text-blue-800 mb-1.5">Familia / Hermanos</h4>
         <div class="flex gap-2 flex-wrap">
-          <button v-for="sib in siblings" :key="sib.matricula" class="badge bg-white text-blue-700 hover:bg-blue-600 hover:text-white transition-colors border border-blue-200 shadow-sm px-2.5 py-1" @click="$emit('switch-student', sib.matricula)">
-            <LucideUsers :size="12" class="inline mr-1 opacity-70" /> {{ sib.nombreCompleto }} ({{ sib.grado }})
+          <button v-for="sib in siblings" :key="sib.matricula" class="badge bg-white text-blue-700 hover:bg-blue-600 hover:text-white transition-colors border border-blue-200 shadow-sm !px-2 !py-0.5 text-[0.6rem]" @click="$emit('switch-student', sib.matricula)">
+            <LucideUsers :size="10" class="inline mr-1 opacity-70" /> {{ sib.nombreCompleto }} ({{ sib.grado }})
           </button>
         </div>
       </div>
 
-      <div class="card shadow-sm border-gray-200">
-        <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
-          <h3 class="font-bold text-gray-800">Estado de Cuenta</h3>
-          <div class="text-xs font-bold text-accent-coral bg-red-50 px-3 py-1 rounded-lg border border-red-100">
+      <div class="card shadow-sm border-gray-200 flex flex-col min-h-0 flex-1">
+        <div class="px-4 py-2.5 border-b border-gray-100 flex justify-between items-center bg-white shrink-0 z-10 relative">
+          <h3 class="font-bold text-gray-800 text-xs uppercase tracking-wide">Estado de Cuenta</h3>
+          <div class="text-[0.65rem] font-bold text-accent-coral bg-red-50 px-2 py-0.5 rounded border border-red-100">
             Deuda total: ${{ format(validDebts.reduce((acc,d) => acc + d.saldo, 0)) }}
           </div>
         </div>
         
-        <div class="w-full overflow-x-auto">
-          <table class="w-full min-w-[700px]">
-            <thead>
+        <div class="flex-1 overflow-auto bg-white min-h-0 relative">
+          <table class="w-full min-w-[650px]">
+            <thead class="sticky top-0 z-10">
               <tr>
-                <th class="w-10 text-center"><input type="checkbox" @change="toggleAll" :checked="selectedDebts.length === validDebts.length && validDebts.length > 0" class="w-4 h-4 text-brand-leaf focus:ring-brand-leaf border-gray-300 rounded cursor-pointer"></th>
-                <th class="w-24">Progreso</th>
-                <th>Concepto / Mes</th>
-                <th class="text-right">Monto</th>
-                <th class="text-right">Pagos</th>
-                <th class="text-right">Saldo</th>
-                <th class="text-center w-16"></th>
+                <th class="w-10 text-center !py-2 !px-3 bg-gray-50/95 backdrop-blur border-b border-gray-200 !text-[0.6rem]"><input type="checkbox" @change="toggleAll" :checked="selectedDebts.length === validDebts.length && validDebts.length > 0" class="w-3.5 h-3.5 text-brand-leaf focus:ring-brand-leaf border-gray-300 rounded cursor-pointer"></th>
+                <th class="w-20 !py-2 !px-3 bg-gray-50/95 backdrop-blur border-b border-gray-200 !text-[0.6rem]">Progreso</th>
+                <th class="!py-2 !px-3 bg-gray-50/95 backdrop-blur border-b border-gray-200 !text-[0.6rem]">Concepto / Mes</th>
+                <th class="text-right !py-2 !px-3 bg-gray-50/95 backdrop-blur border-b border-gray-200 !text-[0.6rem]">Monto</th>
+                <th class="text-right !py-2 !px-3 bg-gray-50/95 backdrop-blur border-b border-gray-200 !text-[0.6rem]">Pagos</th>
+                <th class="text-right !py-2 !px-3 bg-gray-50/95 backdrop-blur border-b border-gray-200 !text-[0.6rem]">Saldo</th>
+                <th class="text-center w-10 !py-2 !px-3 bg-gray-50/95 backdrop-blur border-b border-gray-200 !text-[0.6rem]"></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-if="loading"><td colspan="7" class="text-center text-gray-500 font-medium py-10">Cargando estado de cuenta...</td></tr>
-              <tr v-else-if="!debts.length"><td colspan="7" class="text-center text-gray-400 py-10">Sin adeudos o documentos registrados en este ciclo escolar.</td></tr>
+              <tr v-if="loading"><td colspan="7" class="text-center text-gray-500 font-medium py-10 text-sm">Cargando estado de cuenta...</td></tr>
+              <tr v-else-if="!debts.length"><td colspan="7" class="text-center text-gray-400 py-10 text-sm">Sin adeudos o documentos registrados en este ciclo escolar.</td></tr>
               <template v-else v-for="debt in debts" :key="`${debt.documento}-${debt.mes}`">
                 <tr :class="{ 'selected': selectedDebts.includes(debt) }"
                     class="cursor-context-menu group hover:bg-gray-50/80 transition-colors"
                     @contextmenu.prevent="showDebtContextMenu($event, debt)">
-                  <td class="text-center"><input type="checkbox" :value="debt" v-model="selectedDebts" :disabled="debt.saldo <= 0" class="w-4 h-4 text-brand-leaf focus:ring-brand-leaf border-gray-300 rounded cursor-pointer"></td>
-                  <td class="pr-4">
+                  <td class="text-center !py-2 !px-3 border-b border-gray-100"><input type="checkbox" :value="debt" v-model="selectedDebts" :disabled="debt.saldo <= 0" class="w-3.5 h-3.5 text-brand-leaf focus:ring-brand-leaf border-gray-300 rounded cursor-pointer"></td>
+                  <td class="pr-3 !py-2 !px-3 border-b border-gray-100">
                     <div class="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200/50"><div class="h-full transition-all duration-300 rounded-full" :style="{ width: debt.porcentajePagado + '%', backgroundColor: debt.porcentajePagado == 100 ? '#8EC153' : '#FCBF2D' }"></div></div>
                   </td>
-                  <td>
-                    <div class="text-gray-800 text-sm font-semibold">{{ debt.conceptoNombre }}</div>
-                    <div class="font-bold text-gray-500 text-[10px] uppercase tracking-wide mt-0.5">
+                  <td class="!py-2 !px-3 border-b border-gray-100">
+                    <div class="text-gray-800 text-[0.75rem] font-semibold">{{ debt.conceptoNombre }}</div>
+                    <div class="font-bold text-gray-500 text-[9px] uppercase tracking-wide mt-0.5">
                       {{ debt.mesLabel }} 
-                      <span v-if="debt.hasRecargo" class="badge badge-warning !text-[9px] ml-1">Recargo</span>
+                      <span v-if="debt.hasRecargo" class="badge badge-warning !text-[8px] !px-1 ml-1">Recargo</span>
                     </div>
                   </td>
-                  <td class="text-right text-gray-600 font-mono text-sm">${{ format(debt.subtotal) }}</td>
-                  <td class="text-right font-semibold text-brand-campus font-mono text-sm">${{ format(debt.pagos) }}</td>
-                  <td :class="['text-right font-semibold font-mono text-sm', debt.saldo > 0 ? 'text-accent-coral' : 'text-gray-600']">${{ format(debt.saldo) }}</td>
-                  <td class="text-center">
-                    <button v-if="debt.historialPagos?.length" class="p-1.5 text-gray-400 hover:text-brand-teal hover:bg-brand-leaf/10 rounded transition-colors" @click="toggleHistory(debt)" title="Historial"><LucideHistory :size="16"/></button>
+                  <td class="text-right text-gray-600 font-mono text-[0.75rem] !py-2 !px-3 border-b border-gray-100">${{ format(debt.subtotal) }}</td>
+                  <td class="text-right font-semibold text-brand-campus font-mono text-[0.75rem] !py-2 !px-3 border-b border-gray-100">${{ format(debt.pagos) }}</td>
+                  <td :class="['text-right font-semibold font-mono text-[0.75rem] !py-2 !px-3 border-b border-gray-100', debt.saldo > 0 ? 'text-accent-coral' : 'text-gray-600']">${{ format(debt.saldo) }}</td>
+                  <td class="text-center !py-2 !px-3 border-b border-gray-100">
+                    <button v-if="debt.historialPagos?.length" class="p-1 text-gray-400 hover:text-brand-teal hover:bg-brand-leaf/10 rounded transition-colors" @click="toggleHistory(debt)" title="Historial"><LucideHistory :size="14"/></button>
                   </td>
                 </tr>
                 <tr v-if="expandedHistory === `${debt.documento}-${debt.mes}`" class="bg-gray-50/50">
-                  <td colspan="7" class="p-4 border-b border-gray-100">
+                  <td colspan="7" class="p-3 border-b border-gray-100">
                     <table class="bg-white rounded-lg border border-gray-200 shadow-sm w-full">
-                      <thead><tr><th class="py-2 px-4 text-[10px]">Folio</th><th class="py-2 px-4 text-[10px]">Fecha</th><th class="py-2 px-4 text-[10px]">Forma de Pago</th><th class="text-right py-2 px-4 text-[10px]">Monto</th><th class="text-center py-2 px-4 text-[10px]">Opciones</th></tr></thead>
+                      <thead><tr><th class="py-1.5 px-3 text-[9px]">Folio</th><th class="py-1.5 px-3 text-[9px]">Fecha</th><th class="py-1.5 px-3 text-[9px]">Forma de Pago</th><th class="text-right py-1.5 px-3 text-[9px]">Monto</th><th class="text-center py-1.5 px-3 text-[9px]">Opciones</th></tr></thead>
                       <tbody>
                         <tr v-for="h in debt.historialPagos" :key="h.folio" class="hover:bg-gray-50 transition-colors">
-                          <td class="font-mono text-xs font-bold text-accent-sky py-2 px-4 border-b border-gray-100">#{{ h.folio }}</td>
-                          <td class="py-2 px-4 text-xs font-semibold text-gray-600 border-b border-gray-100">{{ new Date(h.fecha).toLocaleString('es-MX') }}</td>
-                          <td class="py-2 px-4 text-xs text-gray-600 border-b border-gray-100"><span class="bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-[10px]">{{ h.formaDePago }}</span></td>
-                          <td class="text-right font-bold text-brand-campus font-mono text-xs py-2 px-4 border-b border-gray-100">${{ format(h.monto) }}</td>
-                          <td class="text-center py-2 px-4 border-b border-gray-100 flex justify-center gap-1">
-                            <button class="btn btn-outline !px-2 !py-0.5 text-[10px]" @click="reprintPayment(h)"><LucidePrinter :size="12" class="mr-1 inline-block"/> PDF</button>
-                            <button class="btn btn-ghost text-accent-coral !px-2 !py-0.5 text-[10px] hover:bg-accent-coral/10" @click="cancelPayment(h)"><LucideUndo :size="12" class="mr-1 inline-block"/> Anular</button>
+                          <td class="font-mono text-[10px] font-bold text-accent-sky py-1.5 px-3 border-b border-gray-100">#{{ h.folio }}</td>
+                          <td class="py-1.5 px-3 text-[10px] font-semibold text-gray-600 border-b border-gray-100">{{ new Date(h.fecha).toLocaleString('es-MX') }}</td>
+                          <td class="py-1.5 px-3 text-[10px] text-gray-600 border-b border-gray-100"><span class="bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded text-[9px]">{{ h.formaDePago }}</span></td>
+                          <td class="text-right font-bold text-brand-campus font-mono text-[10px] py-1.5 px-3 border-b border-gray-100">${{ format(h.monto) }}</td>
+                          <td class="text-center py-1.5 px-3 border-b border-gray-100 flex justify-center gap-1">
+                            <button class="btn btn-outline !px-1.5 !py-0.5 text-[9px]" @click="reprintPayment(h)"><LucidePrinter :size="10" class="mr-1 inline-block"/> PDF</button>
+                            <button class="btn btn-ghost text-accent-coral !px-1.5 !py-0.5 text-[9px] hover:bg-accent-coral/10" @click="cancelPayment(h)"><LucideUndo :size="10" class="mr-1 inline-block"/> Anular</button>
                           </td>
                         </tr>
                       </tbody>

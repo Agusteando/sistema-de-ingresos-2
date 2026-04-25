@@ -87,8 +87,8 @@
       </div>
     </aside>
 
-    <main class="flex-1 overflow-y-auto flex flex-col relative">
-      <header class="bg-white/90 backdrop-blur-sm px-8 py-3.5 h-[60px] border-b border-gray-200 flex items-center justify-between sticky top-0 z-10 shrink-0">
+    <main class="flex-1 overflow-hidden flex flex-col relative min-w-0">
+      <header class="bg-white/90 backdrop-blur-sm px-6 py-3 h-[60px] border-b border-gray-200 flex items-center justify-between z-10 shrink-0">
         <h1 class="text-lg font-bold text-gray-800 tracking-tight">{{ currentRouteName }}</h1>
 
         <div class="flex items-center gap-3">
@@ -102,7 +102,7 @@
         </div>
       </header>
 
-      <div class="p-8 flex-1 relative z-0 flex flex-col">
+      <div class="flex-1 relative z-0 flex flex-col min-h-0 overflow-y-auto p-4 md:p-5 lg:p-6">
         <slot />
       </div>
     </main>
@@ -124,7 +124,6 @@
       </div>
     </div>
 
-    <!-- Optimistic Sync Indicator -->
     <div v-if="syncState !== 'idle'" 
          class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-5 py-2.5 rounded-full shadow-lg border flex items-center gap-2.5 z-[9999] text-xs font-bold uppercase tracking-widest transition-all duration-300"
          :class="{

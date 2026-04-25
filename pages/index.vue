@@ -1,92 +1,90 @@
-## pages/index.vue
-
 <template>
-  <div class="h-full flex flex-col mx-auto max-w-[1500px]">
-    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-5 shrink-0">
+  <div class="h-full flex flex-col mx-auto max-w-[1500px] w-full min-h-0">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4 shrink-0">
       <div>
-        <h1 class="text-2xl font-bold text-gray-800 tracking-tight m-0">Gestión de Alumnos</h1>
-        <p class="text-[0.85rem] text-gray-500 mt-1.5 font-medium m-0 max-w-2xl">
+        <h1 class="text-xl font-bold text-gray-800 tracking-tight m-0">Gestión de Alumnos</h1>
+        <p class="text-[0.8rem] text-gray-500 mt-1 font-medium m-0 max-w-2xl">
           Administración general de matrícula y estado de cuenta financiero.
         </p>
       </div>
-      <div class="flex items-center gap-4">
-        <div v-if="userRole === 'global'" class="bg-accent-gold/10 px-4 py-2 rounded-lg border border-accent-gold/20 flex flex-col items-end hidden md:flex">
-          <span class="text-[0.65rem] font-bold text-yellow-800 uppercase tracking-widest">Ingresos del Mes</span>
-          <span class="text-lg font-bold text-yellow-900 leading-none">${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', {minimumFractionDigits:2}) }}</span>
+      <div class="flex items-center gap-3">
+        <div v-if="userRole === 'global'" class="bg-accent-gold/10 px-3 py-1.5 rounded-lg border border-accent-gold/20 flex flex-col items-end hidden md:flex">
+          <span class="text-[0.6rem] font-bold text-yellow-800 uppercase tracking-widest">Ingresos Mes</span>
+          <span class="text-base font-bold text-yellow-900 leading-none">${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', {minimumFractionDigits:2}) }}</span>
         </div>
-        <button class="btn btn-primary shadow-sm h-[38px] px-5" @click="openAlta">
-          <LucideUserPlus :size="16"/> Nuevo Alumno
+        <button class="btn btn-primary shadow-sm h-[34px] px-4 text-xs" @click="openAlta">
+          <LucideUserPlus :size="14"/> Nuevo Alumno
         </button>
       </div>
     </header>
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4 shrink-0">
-      <button @click="activeFilter = 'inscritos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'inscritos' ? 'ring-2 ring-brand-campus shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
-        <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'inscritos' ? 'bg-brand-campus/10' : 'bg-gray-50']"></div>
-        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'inscritos' ? 'text-brand-campus' : 'text-gray-500'">Inscritos</h4>
-        <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.inscritos }}</div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4 shrink-0">
+      <button @click="activeFilter = 'inscritos'" :class="['card p-4 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'inscritos' ? 'ring-2 ring-brand-campus shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
+        <div :class="['absolute right-0 top-0 w-20 h-20 rounded-bl-full -mr-6 -mt-6 transition-colors', activeFilter === 'inscritos' ? 'bg-brand-campus/10' : 'bg-gray-50']"></div>
+        <h4 class="text-[0.6rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'inscritos' ? 'text-brand-campus' : 'text-gray-500'">Inscritos</h4>
+        <div class="text-2xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.inscritos }}</div>
       </button>
-      <button @click="activeFilter = 'internos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'internos' ? 'ring-2 ring-brand-teal shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
-        <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'internos' ? 'bg-brand-teal/10' : 'bg-gray-50']"></div>
-        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'internos' ? 'text-brand-teal' : 'text-gray-500'">Internos</h4>
-        <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.internos }}</div>
+      <button @click="activeFilter = 'internos'" :class="['card p-4 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'internos' ? 'ring-2 ring-brand-teal shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
+        <div :class="['absolute right-0 top-0 w-20 h-20 rounded-bl-full -mr-6 -mt-6 transition-colors', activeFilter === 'internos' ? 'bg-brand-teal/10' : 'bg-gray-50']"></div>
+        <h4 class="text-[0.6rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'internos' ? 'text-brand-teal' : 'text-gray-500'">Internos</h4>
+        <div class="text-2xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.internos }}</div>
       </button>
-      <button @click="activeFilter = 'externos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'externos' ? 'ring-2 ring-accent-sky shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
-        <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'externos' ? 'bg-accent-sky/10' : 'bg-gray-50']"></div>
-        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'externos' ? 'text-accent-sky' : 'text-gray-500'">Externos</h4>
-        <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.externos }}</div>
+      <button @click="activeFilter = 'externos'" :class="['card p-4 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'externos' ? 'ring-2 ring-accent-sky shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
+        <div :class="['absolute right-0 top-0 w-20 h-20 rounded-bl-full -mr-6 -mt-6 transition-colors', activeFilter === 'externos' ? 'bg-accent-sky/10' : 'bg-gray-50']"></div>
+        <h4 class="text-[0.6rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'externos' ? 'text-accent-sky' : 'text-gray-500'">Externos</h4>
+        <div class="text-2xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.externos }}</div>
       </button>
-      <button @click="activeFilter = 'no_inscritos'" :class="['card p-5 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'no_inscritos' ? 'ring-2 ring-accent-coral shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
-        <div :class="['absolute right-0 top-0 w-24 h-24 rounded-bl-full -mr-8 -mt-8 transition-colors', activeFilter === 'no_inscritos' ? 'bg-accent-coral/10' : 'bg-gray-50']"></div>
-        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'no_inscritos' ? 'text-accent-coral' : 'text-gray-500'">Bajas / No inscritos</h4>
-        <div class="text-3xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.no_inscritos }}</div>
+      <button @click="activeFilter = 'no_inscritos'" :class="['card p-4 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'no_inscritos' ? 'ring-2 ring-accent-coral shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
+        <div :class="['absolute right-0 top-0 w-20 h-20 rounded-bl-full -mr-6 -mt-6 transition-colors', activeFilter === 'no_inscritos' ? 'bg-accent-coral/10' : 'bg-gray-50']"></div>
+        <h4 class="text-[0.6rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'no_inscritos' ? 'text-accent-coral' : 'text-gray-500'">Bajas / No inscritos</h4>
+        <div class="text-2xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.no_inscritos }}</div>
       </button>
     </div>
 
-    <div class="flex flex-col md:flex-row items-center justify-between mb-5 bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm shrink-0 gap-3">
-      <div class="flex items-center gap-3 w-full md:w-[300px]">
+    <div class="flex flex-col md:flex-row items-center justify-between mb-4 bg-white p-2 rounded-xl border border-gray-200 shadow-sm shrink-0 gap-3">
+      <div class="flex items-center gap-3 w-full md:w-[280px]">
         <div class="relative w-full">
-          <LucideSearch class="absolute left-3 top-2.5 text-gray-400" :size="16" />
-          <input v-model="filters.q" @keyup.enter="performSearch" class="input-field pl-9 bg-gray-50/50 border-gray-200 shadow-none focus:bg-white text-sm h-[36px]" placeholder="Matrícula o nombre..." />
+          <LucideSearch class="absolute left-3 top-2.5 text-gray-400" :size="14" />
+          <input v-model="filters.q" @keyup.enter="performSearch" class="input-field pl-8 bg-gray-50/50 border-gray-200 shadow-none focus:bg-white text-xs h-[32px]" placeholder="Matrícula o nombre..." />
         </div>
       </div>
       
       <div class="flex-1 overflow-hidden flex items-center w-full">
         <div class="flex items-center gap-1.5 overflow-x-auto hide-scrollbar w-full mask-edges pr-8">
-           <button @click="activeGrado = ''; activeGrupo = ''" class="chip" :class="{'active': activeGrado === ''}">Todos</button>
-           <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" class="chip" :class="{'active': activeGrado === g}">{{ g }}</button>
+           <button @click="activeGrado = ''; activeGrupo = ''" class="chip !text-[0.6rem] !py-1 !px-2.5" :class="{'active': activeGrado === ''}">Todos</button>
+           <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" class="chip !text-[0.6rem] !py-1 !px-2.5" :class="{'active': activeGrado === g}">{{ g }}</button>
            
            <template v-if="activeGrado && availableGrupos.length">
-             <div class="w-px h-5 bg-gray-300 mx-1"></div>
-             <button @click="activeGrupo = ''" class="chip" :class="{'active-group': activeGrupo === ''}">Todos</button>
-             <button v-for="grp in availableGrupos" :key="grp" @click="activeGrupo = grp" class="chip" :class="{'active-group': activeGrupo === grp}">Grupo {{ grp }}</button>
+             <div class="w-px h-4 bg-gray-300 mx-1"></div>
+             <button @click="activeGrupo = ''" class="chip !text-[0.6rem] !py-1 !px-2.5" :class="{'active-group': activeGrupo === ''}">Todos</button>
+             <button v-for="grp in availableGrupos" :key="grp" @click="activeGrupo = grp" class="chip !text-[0.6rem] !py-1 !px-2.5" :class="{'active-group': activeGrupo === grp}">Grupo {{ grp }}</button>
            </template>
         </div>
       </div>
 
-      <button class="btn btn-secondary h-[36px] px-4 shadow-sm shrink-0 w-full md:w-auto" @click="exportData">
+      <button class="btn btn-secondary h-[32px] px-3 !text-xs shadow-sm shrink-0 w-full md:w-auto" @click="exportData">
         <LucideDownload :size="14"/> Exportar
       </button>
     </div>
 
-    <div class="flex gap-6 flex-1 min-h-0 relative">
+    <div class="flex gap-4 lg:gap-5 flex-1 min-h-0 relative">
       
-      <div :class="selectedStudent ? 'hidden lg:flex w-[320px] xl:w-[380px] border-r border-gray-200 pr-6 shrink-0' : 'w-full flex'" class="flex-col h-full transition-all duration-300 overflow-hidden">
+      <div :class="selectedStudent ? 'hidden lg:flex w-[320px] xl:w-[380px] border-r border-gray-200 pr-4 shrink-0' : 'w-full flex'" class="flex-col h-full transition-all duration-300 overflow-hidden min-h-0">
         <div class="flex-1 overflow-y-auto card table-wrapper shadow-sm border-gray-200 rounded-xl relative h-full">
           <table class="w-full relative">
             <thead class="bg-gray-50/90 backdrop-blur sticky top-0 z-10">
               <tr>
-                <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-left">Alumno</th>
-                <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-left" v-if="!selectedStudent">Asignación</th>
-                <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-right" v-if="!selectedStudent">Cargos</th>
-                <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-right" v-if="!selectedStudent">Abonos</th>
-                <th class="py-3 px-5 text-[0.65rem] font-bold text-gray-400 uppercase tracking-wider text-right">Saldo</th>
-                <th class="w-14 text-right pr-5"></th>
+                <th class="!py-2 !px-3 !text-[0.65rem] font-bold text-gray-500 uppercase tracking-wider text-left">Alumno</th>
+                <th class="!py-2 !px-3 !text-[0.65rem] font-bold text-gray-500 uppercase tracking-wider text-left" v-if="!selectedStudent">Asignación</th>
+                <th class="!py-2 !px-3 !text-[0.65rem] font-bold text-gray-500 uppercase tracking-wider text-right" v-if="!selectedStudent">Cargos</th>
+                <th class="!py-2 !px-3 !text-[0.65rem] font-bold text-gray-500 uppercase tracking-wider text-right" v-if="!selectedStudent">Abonos</th>
+                <th class="!py-2 !px-3 !text-[0.65rem] font-bold text-gray-500 uppercase tracking-wider text-right">Saldo</th>
+                <th class="w-10 text-right pr-3"></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-if="loading"><td :colspan="selectedStudent ? 3 : 6" class="text-center text-gray-500 font-medium py-16">Cargando registros...</td></tr>
-              <tr v-else-if="!displayedStudents.length"><td :colspan="selectedStudent ? 3 : 6" class="text-center text-gray-400 py-16">No hay registros bajo los filtros actuales.</td></tr>
+              <tr v-if="loading"><td :colspan="selectedStudent ? 3 : 6" class="text-center text-gray-500 font-medium py-12">Cargando registros...</td></tr>
+              <tr v-else-if="!displayedStudents.length"><td :colspan="selectedStudent ? 3 : 6" class="text-center text-gray-400 py-12">No hay registros bajo los filtros actuales.</td></tr>
               <tr v-else v-for="s in displayedStudents" :key="s.matricula" 
                   @click="selectStudent(s)" 
                   @contextmenu.prevent="showStudentMenu($event, s)"
@@ -95,13 +93,13 @@
                     selectedStudent?.matricula === s.matricula ? 'bg-brand-leaf/5 border-l-brand-leaf' : 'border-l-transparent hover:bg-gray-50/80',
                     s.estatus !== 'Activo' ? 'bg-red-50/10 hover:bg-red-50/30' : (!isEnrolled(s) ? 'bg-orange-50/10 hover:bg-orange-50/30' : '')
                   ]">
-                <td class="py-3 px-5 align-middle">
-                  <div class="font-bold text-sm tracking-tight truncate max-w-[220px]" 
+                <td class="!py-2 !px-3 align-middle">
+                  <div class="font-bold text-[0.8rem] tracking-tight truncate max-w-[200px]" 
                        :class="s.estatus !== 'Activo' ? 'text-red-900 line-through decoration-red-400/50' : (!isEnrolled(s) ? 'text-orange-900' : 'text-gray-800')" 
                        :title="s.nombreCompleto">
                     {{ s.nombreCompleto }}
                   </div>
-                  <div class="text-[0.7rem] font-mono mt-0.5 tracking-wider" 
+                  <div class="text-[0.65rem] font-mono mt-0.5 tracking-wider" 
                        :class="s.estatus !== 'Activo' ? 'text-red-700/70' : (!isEnrolled(s) ? 'text-orange-700/70' : 'text-gray-400')">
                     {{ s.matricula }} 
                     <span v-if="selectedStudent" class="ml-1 font-sans font-medium" 
@@ -110,26 +108,26 @@
                     </span>
                   </div>
                 </td>
-                <td class="py-3 px-5 text-sm font-medium align-middle whitespace-nowrap" v-if="!selectedStudent">
-                  <span v-if="s.estatus !== 'Activo'" class="badge bg-red-100 text-red-800 border border-red-200">BAJA</span>
-                  <span v-else-if="!isEnrolled(s)" class="badge bg-orange-100 text-orange-800 border border-orange-200">NO INSCRITO</span>
+                <td class="!py-2 !px-3 text-[0.8rem] font-medium align-middle whitespace-nowrap" v-if="!selectedStudent">
+                  <span v-if="s.estatus !== 'Activo'" class="badge bg-red-100 text-red-800 border border-red-200 !text-[0.6rem]">BAJA</span>
+                  <span v-else-if="!isEnrolled(s)" class="badge bg-orange-100 text-orange-800 border border-orange-200 !text-[0.6rem]">NO INSCRITO</span>
                   <template v-else>
                     <span class="text-gray-600">{{ s.nivel }}</span> <span class="mx-1.5 text-gray-300">•</span> <span class="text-gray-600">{{ s.grado }}</span> <span class="font-bold ml-1 text-gray-400">"{{ s.grupo }}"</span>
                   </template>
                 </td>
-                <td class="py-3 px-5 text-right align-middle" v-if="!selectedStudent">
-                  <div class="font-mono text-sm font-medium" :class="s.estatus !== 'Activo' ? 'text-red-800/70' : 'text-gray-400'">${{ format(s.importeTotal) }}</div>
+                <td class="!py-2 !px-3 text-right align-middle" v-if="!selectedStudent">
+                  <div class="font-mono text-[0.8rem] font-medium" :class="s.estatus !== 'Activo' ? 'text-red-800/70' : 'text-gray-400'">${{ format(s.importeTotal) }}</div>
                 </td>
-                <td class="py-3 px-5 text-right align-middle" v-if="!selectedStudent">
-                  <div class="font-mono text-sm font-semibold" :class="s.estatus !== 'Activo' ? 'text-red-900' : 'text-brand-campus'">${{ format(s.pagosTotal) }}</div>
+                <td class="!py-2 !px-3 text-right align-middle" v-if="!selectedStudent">
+                  <div class="font-mono text-[0.8rem] font-semibold" :class="s.estatus !== 'Activo' ? 'text-red-900' : 'text-brand-campus'">${{ format(s.pagosTotal) }}</div>
                 </td>
-                <td class="py-3 px-5 text-right align-middle">
-                  <div class="font-mono text-sm font-bold" :class="s.saldoNeto > 0 ? 'text-accent-coral' : (s.estatus !== 'Activo' ? 'text-red-800/70' : 'text-gray-400')">${{ format(s.saldoNeto) }}</div>
+                <td class="!py-2 !px-3 text-right align-middle">
+                  <div class="font-mono text-[0.8rem] font-bold" :class="s.saldoNeto > 0 ? 'text-accent-coral' : (s.estatus !== 'Activo' ? 'text-red-800/70' : 'text-gray-400')">${{ format(s.saldoNeto) }}</div>
                 </td>
-                <td class="w-14 text-right pr-5 align-middle">
+                <td class="w-10 text-right pr-3 align-middle">
                   <div class="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button @click.stop="openEdit(s)" class="p-1.5 rounded transition-colors" :class="s.estatus !== 'Activo' ? 'text-red-700 hover:bg-red-100' : 'text-gray-400 hover:text-brand-teal hover:bg-brand-leaf/10'" title="Editar">
-                      <LucideEdit2 :size="16" />
+                    <button @click.stop="openEdit(s)" class="p-1 rounded transition-colors" :class="s.estatus !== 'Activo' ? 'text-red-700 hover:bg-red-100' : 'text-gray-400 hover:text-brand-teal hover:bg-brand-leaf/10'" title="Editar">
+                      <LucideEdit2 :size="14" />
                     </button>
                   </div>
                 </td>
@@ -139,7 +137,7 @@
         </div>
       </div>
 
-      <div v-if="selectedStudent" class="w-full lg:flex-1 h-full overflow-hidden animate-[slideInRight_0.2s_ease-out] border border-gray-200 bg-white rounded-xl shadow-sm flex flex-col">
+      <div v-if="selectedStudent" class="w-full lg:flex-1 h-full overflow-hidden animate-[slideInRight_0.2s_ease-out] flex flex-col min-h-0">
         <StudentDetails 
           :student="selectedStudent" 
           :is-enrolled="isEnrolled(selectedStudent)"
