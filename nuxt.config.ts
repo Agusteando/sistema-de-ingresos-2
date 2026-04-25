@@ -23,11 +23,16 @@ export default defineNuxtConfig({
     gcpClientEmail: process.env.GCP_CLIENT_EMAIL,
     gcpPrivateKey: process.env.GCP_PRIVATE_KEY,
     gcpAdminSubject: process.env.GCP_ADMIN_SUBJECT,
-    
+
     externalSyncApiKey: process.env.EXTERNAL_SYNC_API_KEY || '',
+    externalSyncUrl: process.env.EXTERNAL_SYNC_URL || 'https://matricula.casitaapps.com/api/sync',
+    externalSyncTimeoutMs: process.env.EXTERNAL_SYNC_TIMEOUT_MS || '60000',
+    externalSyncStaleAfterMinutes: process.env.EXTERNAL_SYNC_STALE_AFTER_MINUTES || '30',
+    externalSyncDebug: process.env.DEBUG_EXTERNAL_SYNC || '',
 
     public: {
-      googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+      googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+      defaultPlantel: process.env.DEFAULT_PLANTEL || 'PT'
     }
   },
   app: {
