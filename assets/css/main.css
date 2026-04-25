@@ -54,6 +54,17 @@
   .badge-info { @apply bg-accent-sky/15 text-blue-800; }
   .badge-neutral { @apply bg-gray-100 text-gray-600; }
 
+  .chip {
+    @apply px-3 py-1.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider transition-all border whitespace-nowrap;
+    @apply bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:border-gray-300 shadow-sm;
+  }
+  .chip.active {
+    @apply bg-brand-campus text-white border-brand-campus shadow-sm ring-1 ring-offset-1 ring-brand-campus;
+  }
+  .chip.active-group {
+    @apply bg-brand-teal text-white border-brand-teal shadow-sm ring-1 ring-offset-1 ring-brand-teal;
+  }
+
   .table-wrapper {
     @apply w-full overflow-x-auto bg-white rounded-xl border border-gray-200;
   }

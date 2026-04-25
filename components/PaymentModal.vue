@@ -61,14 +61,14 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { LucideCheckCircle, LucideEye } from 'lucide-vue-next'
-import { useToast } from '~/composables/useToast'
 import { useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
+import { useOptimisticSync } from '~/composables/useOptimisticSync'
 
 const props = defineProps({ debts: Array, student: Object })
 const emit = defineEmits(['close', 'success'])
-const { show } = useToast()
 const state = useState('globalState')
+const { executeOptimistic } = useOptimisticSync()
 
 useScrollLock()
 
@@ -125,17 +125,20 @@ const previewReceipt = () => {
 }
 
 const submit = async () => {
+  const payload = { matricula: props.student.matricula, formaDePago: formaDePago.value, ciclo: state.value.ciclo, pagos: processedDebts.value }
   processing.value = true
-  try {
-    const { folios } = await $fetch('/api/payments/pay', {
-      method: 'POST',
-      body: { matricula: props.student.matricula, formaDePago: formaDePago.value, ciclo: state.value.ciclo, pagos: processedDebts.value }
-    })
-    show('Pago procesado correctamente')
-    window.open(`/print/recibo?folios=${folios.join(',')}`, '_blank', 'width=850,height=800')
-    emit('success')
-  } catch (e) {
-    show('Fallo interno al procesar', 'danger')
-  } finally { processing.value = false }
+  
+  await executeOptimistic(
+    () => $fetch('/api/payments/pay', { method: 'POST', body: payload }),
+    () => emit('success'),
+    () => emit('success'),
+    { pending: 'Registrando pago...', success: 'Pago exitoso', error: 'Error al registrar' }
+  ).then((res) => {
+    if (res && res.folios) {
+      window.open(`/print/recibo?folios=${res.folios.join(',')}`, '_blank', 'width=850,height=800')
+    }
+  }).catch(() => {}).finally(() => {
+    processing.value = false
+  })
 }
 </script>

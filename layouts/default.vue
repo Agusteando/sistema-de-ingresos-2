@@ -88,7 +88,7 @@
     </aside>
 
     <main class="flex-1 overflow-y-auto flex flex-col relative">
-      <header class="bg-white/90 backdrop-blur-sm px-8 py-3.5 h-[60px] border-b border-gray-200 flex items-center justify-between sticky top-0 z-10">
+      <header class="bg-white/90 backdrop-blur-sm px-8 py-3.5 h-[60px] border-b border-gray-200 flex items-center justify-between sticky top-0 z-10 shrink-0">
         <h1 class="text-lg font-bold text-gray-800 tracking-tight">{{ currentRouteName }}</h1>
 
         <div class="flex items-center gap-3">
@@ -102,7 +102,7 @@
         </div>
       </header>
 
-      <div class="p-8 flex-1 relative z-0">
+      <div class="p-8 flex-1 relative z-0 flex flex-col">
         <slot />
       </div>
     </main>
@@ -123,6 +123,21 @@
         {{ toast.message }}
       </div>
     </div>
+
+    <!-- Optimistic Sync Indicator -->
+    <div v-if="syncState !== 'idle'" 
+         class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-5 py-2.5 rounded-full shadow-lg border flex items-center gap-2.5 z-[9999] text-xs font-bold uppercase tracking-widest transition-all duration-300"
+         :class="{
+           'border-gray-200 text-gray-600': syncState === 'pending',
+           'border-brand-leaf text-brand-campus': syncState === 'synced',
+           'border-accent-coral text-accent-coral': syncState === 'failed'
+         }">
+      <LucideRefreshCw v-if="syncState === 'pending'" class="animate-spin text-brand-campus" :size="14" />
+      <LucideCheckCircle v-else-if="syncState === 'synced'" class="text-brand-leaf" :size="14" />
+      <LucideAlertCircle v-else class="text-accent-coral" :size="14" />
+      {{ syncMessage }}
+    </div>
+
   </div>
 </template>
 
@@ -140,14 +155,17 @@ import {
   LucideCheckCircle,
   LucideAlertCircle,
   LucideLogOut,
-  LucideAlertTriangle
+  LucideAlertTriangle,
+  LucideRefreshCw
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
+import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import ContextMenu from '~/components/ContextMenu.vue'
 import SyncBadge from '~/components/SyncBadge.vue'
 import { CICLOS_LIST } from '~/utils/constants'
 
 const { toasts } = useToast()
+const { syncState, syncMessage } = useOptimisticSync()
 const route = useRoute()
 
 const cicloCookie = useCookie('active_ciclo', { maxAge: 31536000 })

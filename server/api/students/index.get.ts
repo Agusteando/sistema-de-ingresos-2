@@ -1,4 +1,5 @@
 import { query } from '../../utils/db'
+import { calculatePromotedGrado, displayGrado } from '../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => {
   const { q = '', ciclo = '2025' } = getQuery(event)
@@ -19,13 +20,12 @@ export default defineEventHandler(async (event) => {
 
   const sql = `
     SELECT 
-      A.matricula, A.nombreCompleto, A.grado, A.grupo, A.nivel, A.plantel, A.estatus, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno,
+      A.matricula, A.nombreCompleto, A.grado as gradoBase, A.grupo, A.nivel as nivelBase, A.ciclo as cicloBase, A.plantel, A.estatus, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno as internoBase,
       IFNULL(B.pagosTotal, 0) AS pagosTotal,
       B.conceptosPagados,
       IFNULL(C.saldo, 0) AS importeTotal,
       C.conceptosCargados,
-      (IFNULL(C.saldo, 0) - IFNULL(B.pagosTotal, 0)) AS saldoNeto,
-      IF(A.ciclo = ?, 0, 1) as interno
+      (IFNULL(C.saldo, 0) - IFNULL(B.pagosTotal, 0)) AS saldoNeto
     FROM base A
     LEFT JOIN (
       SELECT matricula, SUM(monto) AS pagosTotal, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') as conceptosPagados
@@ -44,8 +44,16 @@ export default defineEventHandler(async (event) => {
     LIMIT 5000;
   `
   
-  const queryParams = [ciclo, ciclo, ciclo, ...params]
-  const students = await query(sql, queryParams)
+  const queryParams = [ciclo, ciclo, ...params]
+  const rows = await query<any[]>(sql, queryParams)
   
-  return students
+  return rows.map(r => {
+    const promoted = calculatePromotedGrado(r.gradoBase, r.nivelBase, r.cicloBase, String(ciclo))
+    return {
+      ...r,
+      grado: displayGrado(promoted.grado),
+      nivel: promoted.nivel,
+      interno: r.internoBase
+    }
+  })
 })
