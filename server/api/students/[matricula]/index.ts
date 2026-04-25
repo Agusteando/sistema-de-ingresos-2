@@ -10,11 +10,11 @@ export default defineEventHandler(async (event) => {
     await query(`
       UPDATE base SET 
         apellidoPaterno = ?, apellidoMaterno = ?, nombres = ?, nombreCompleto = CONCAT(?, ' ', ?, ' ', ?),
-        \`Fecha de nacimiento\` = ?, \`Nombre del padre o tutor\` = ?, plantel = ?, nivel = ?, grado = ?, grupo = ?, telefono = ?, correo = ?, ciclo = ?, interno = ?
+        \`Fecha de nacimiento\` = ?, \`Nombre del padre o tutor\` = ?, plantel = ?, nivel = ?, grado = ?, grupo = ?, telefono = ?, correo = ?, ciclo = ?, interno = ?, estatus = ?
       WHERE matricula = ?
     `, [
       body.apellidoPaterno, body.apellidoMaterno, body.nombres, body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      body.birth, body.padre, body.plantel, body.nivel, normalizeGrado(body.grado), body.grupo, body.telefono, body.correo, body.ciclo, body.interno,
+      body.birth, body.padre, body.plantel, body.nivel, normalizeGrado(body.grado), body.grupo, body.telefono, body.correo, body.ciclo, body.interno, body.estatus || 'Activo',
       matricula
     ])
     return { success: true }

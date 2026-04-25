@@ -7,7 +7,8 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'GET') {
     const { q = '', ciclo = '2025', nivel = '', grado = '', grupo = '' } = getQuery(event)
-    let whereClause = "A.estatus = 'Activo'"
+    
+    let whereClause = "1=1"
     const params: any[] = []
 
     if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
@@ -18,6 +19,9 @@ export default defineEventHandler(async (event) => {
     if (q) {
       whereClause += " AND (A.nombreCompleto LIKE ? OR A.matricula = ?)"
       params.push(`%${q}%`, q)
+    } else {
+      whereClause += " AND (A.estatus = 'Activo' OR A.ciclo = ?)"
+      params.push(ciclo)
     }
 
     const sql = `
@@ -35,10 +39,10 @@ export default defineEventHandler(async (event) => {
       ) B ON A.matricula = B.matricula
       LEFT JOIN (
         SELECT matricula, SUM(((100 - IFNULL(beca, 0)) * costo / 100) * IFNULL(meses, 1)) AS saldo, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') as conceptosCargados
-        FROM documentos WHERE ciclo = ? GROUP BY matricula
+        FROM documentos WHERE ciclo = ? AND estatus = 'Vigente' GROUP BY matricula
       ) C ON A.matricula = C.matricula
       WHERE ${whereClause}
-      ORDER BY A.nombreCompleto ASC LIMIT 5000;
+      ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC LIMIT 5000;
     `
     const rows = await query<any[]>(sql, [ciclo, ciclo, ...params])
     let mapped = rows.map(r => {
@@ -66,13 +70,13 @@ export default defineEventHandler(async (event) => {
       INSERT INTO base (
         matricula, apellidoPaterno, apellidoMaterno, nombres, 
         \`Fecha de nacimiento\`, genero, plantel, nivel, grado, grupo, 
-        \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo, interno
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo, interno, estatus
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       '', 
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
       body.birth, body.genero, assignedPlantel, body.nivel, normalizeGrado(body.grado), body.grupo,
-      body.padre, body.telefono, body.correo, user.name, body.ciclo, body.interno
+      body.padre, body.telefono, body.correo, user.name, body.ciclo, body.interno, body.estatus || 'Activo'
     ])
     return { success: true }
   }

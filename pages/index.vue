@@ -8,7 +8,7 @@
         </p>
       </div>
       <div class="flex items-center gap-4">
-        <div v-if="userRole === 'global'" class="bg-accent-gold/10 px-4 py-2 rounded-lg border border-accent-gold/20 flex flex-col items-end">
+        <div v-if="userRole === 'global'" class="bg-accent-gold/10 px-4 py-2 rounded-lg border border-accent-gold/20 flex flex-col items-end hidden md:flex">
           <span class="text-[0.65rem] font-bold text-yellow-800 uppercase tracking-widest">Ingresos del Mes</span>
           <span class="text-lg font-bold text-yellow-900 leading-none">${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', {minimumFractionDigits:2}) }}</span>
         </div>
@@ -41,17 +41,17 @@
       </button>
     </div>
 
-    <div class="flex items-center justify-between mb-5 bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm shrink-0">
-      <div class="flex items-center gap-3 w-[250px] md:w-[300px]">
+    <div class="flex flex-col md:flex-row items-center justify-between mb-5 bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm shrink-0 gap-3">
+      <div class="flex items-center gap-3 w-full md:w-[300px]">
         <div class="relative w-full">
           <LucideSearch class="absolute left-3 top-2.5 text-gray-400" :size="16" />
-          <input v-model="filters.q" class="input-field pl-9 bg-gray-50/50 border-gray-200 shadow-none focus:bg-white text-sm h-[36px]" placeholder="Matrícula o nombre..." />
+          <input v-model="filters.q" @keyup.enter="performSearch" class="input-field pl-9 bg-gray-50/50 border-gray-200 shadow-none focus:bg-white text-sm h-[36px]" placeholder="Matrícula o nombre..." />
         </div>
       </div>
       
-      <div class="flex-1 overflow-hidden ml-4 flex items-center">
+      <div class="flex-1 overflow-hidden flex items-center w-full">
         <div class="flex items-center gap-1.5 overflow-x-auto hide-scrollbar w-full mask-edges pr-8">
-           <button @click="activeGrado = ''; activeGrupo = ''" class="chip" :class="{'active': activeGrado === ''}">Todos los grados</button>
+           <button @click="activeGrado = ''; activeGrupo = ''" class="chip" :class="{'active': activeGrado === ''}">Todos</button>
            <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" class="chip" :class="{'active': activeGrado === g}">{{ g }}</button>
            
            <template v-if="activeGrado && availableGrupos.length">
@@ -62,14 +62,14 @@
         </div>
       </div>
 
-      <button class="btn btn-secondary h-[36px] px-4 shadow-sm shrink-0 ml-3" @click="exportData">
+      <button class="btn btn-secondary h-[36px] px-4 shadow-sm shrink-0 w-full md:w-auto" @click="exportData">
         <LucideDownload :size="14"/> Exportar
       </button>
     </div>
 
     <div class="flex gap-6 flex-1 min-h-0 relative">
       
-      <div :class="selectedStudent ? 'w-[38%] xl:w-[35%] border-r border-gray-200 pr-6 shrink-0' : 'w-full'" class="flex flex-col h-full transition-all duration-300 overflow-hidden">
+      <div :class="selectedStudent ? 'hidden lg:flex w-[320px] xl:w-[380px] border-r border-gray-200 pr-6 shrink-0' : 'w-full flex'" class="flex-col h-full transition-all duration-300 overflow-hidden">
         <div class="flex-1 overflow-y-auto card table-wrapper shadow-sm border-gray-200 rounded-xl relative h-full">
           <table class="w-full relative">
             <thead class="bg-gray-50/90 backdrop-blur sticky top-0 z-10">
@@ -88,27 +88,36 @@
               <tr v-else v-for="s in displayedStudents" :key="s.matricula" 
                   @click="selectStudent(s)" 
                   @contextmenu.prevent="showStudentMenu($event, s)"
-                  :class="{ 'bg-brand-leaf/5 border-l-2 border-l-brand-leaf': selectedStudent?.matricula === s.matricula }" 
-                  class="group relative cursor-pointer hover:bg-gray-50/80 transition-all border-b border-gray-100/80 border-l-2 border-l-transparent">
+                  :class="[
+                    'group relative cursor-pointer transition-all border-b border-gray-100/80 border-l-2',
+                    selectedStudent?.matricula === s.matricula ? 'bg-brand-leaf/5 border-l-brand-leaf' : 'border-l-transparent hover:bg-gray-50/80',
+                    s.estatus !== 'Activo' ? 'opacity-60 bg-red-50/20 hover:bg-red-50/40 text-red-900' : ''
+                  ]">
                 <td class="py-3 px-5 align-middle">
-                  <div class="font-bold text-gray-800 text-sm tracking-tight truncate max-w-[220px]" :title="s.nombreCompleto">{{ s.nombreCompleto }}</div>
-                  <div class="text-[0.7rem] text-gray-400 font-mono mt-0.5 tracking-wider">{{ s.matricula }} <span v-if="selectedStudent" class="ml-1 text-gray-300 font-sans font-medium">• {{ s.grado }} "{{ s.grupo }}"</span></div>
+                  <div class="font-bold text-sm tracking-tight truncate max-w-[220px]" :class="s.estatus !== 'Activo' ? 'text-red-900 line-through decoration-red-400/50' : 'text-gray-800'" :title="s.nombreCompleto">
+                    <span v-if="s.estatus !== 'Activo'" class="inline-block px-1.5 py-0.5 rounded bg-accent-coral text-white text-[9px] uppercase font-bold mr-1 align-middle no-underline">BAJA</span>
+                    {{ s.nombreCompleto }}
+                  </div>
+                  <div class="text-[0.7rem] font-mono mt-0.5 tracking-wider" :class="s.estatus !== 'Activo' ? 'text-red-700/70' : 'text-gray-400'">
+                    {{ s.matricula }} 
+                    <span v-if="selectedStudent" class="ml-1 font-sans font-medium" :class="s.estatus !== 'Activo' ? 'text-red-700/50' : 'text-gray-300'">• {{ s.grado }} "{{ s.grupo }}"</span>
+                  </div>
                 </td>
-                <td class="py-3 px-5 text-sm text-gray-600 font-medium align-middle whitespace-nowrap" v-if="!selectedStudent">
-                  {{ s.nivel }} <span class="text-gray-300 mx-1.5">•</span> {{ s.grado }} <span class="text-gray-400 font-bold ml-1">"{{ s.grupo }}"</span>
+                <td class="py-3 px-5 text-sm font-medium align-middle whitespace-nowrap" :class="s.estatus !== 'Activo' ? 'text-red-800' : 'text-gray-600'" v-if="!selectedStudent">
+                  {{ s.nivel }} <span class="mx-1.5" :class="s.estatus !== 'Activo' ? 'text-red-300' : 'text-gray-300'">•</span> {{ s.grado }} <span class="font-bold ml-1" :class="s.estatus !== 'Activo' ? 'text-red-900' : 'text-gray-400'">"{{ s.grupo }}"</span>
                 </td>
                 <td class="py-3 px-5 text-right align-middle" v-if="!selectedStudent">
-                  <div class="font-mono text-sm text-gray-400 font-medium">${{ format(s.importeTotal) }}</div>
+                  <div class="font-mono text-sm font-medium" :class="s.estatus !== 'Activo' ? 'text-red-800/70' : 'text-gray-400'">${{ format(s.importeTotal) }}</div>
                 </td>
                 <td class="py-3 px-5 text-right align-middle" v-if="!selectedStudent">
-                  <div class="font-mono text-sm font-semibold text-brand-campus">${{ format(s.pagosTotal) }}</div>
+                  <div class="font-mono text-sm font-semibold" :class="s.estatus !== 'Activo' ? 'text-red-900' : 'text-brand-campus'">${{ format(s.pagosTotal) }}</div>
                 </td>
                 <td class="py-3 px-5 text-right align-middle">
-                  <div class="font-mono text-sm font-bold" :class="s.saldoNeto > 0 ? 'text-accent-coral' : 'text-gray-400'">${{ format(s.saldoNeto) }}</div>
+                  <div class="font-mono text-sm font-bold" :class="s.saldoNeto > 0 ? 'text-accent-coral' : (s.estatus !== 'Activo' ? 'text-red-800/70' : 'text-gray-400')">${{ format(s.saldoNeto) }}</div>
                 </td>
                 <td class="w-14 text-right pr-5 align-middle">
                   <div class="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button @click.stop="openEdit(s)" class="p-1.5 text-gray-400 hover:text-brand-teal hover:bg-brand-leaf/10 rounded transition-colors" title="Editar">
+                    <button @click.stop="openEdit(s)" class="p-1.5 rounded transition-colors" :class="s.estatus !== 'Activo' ? 'text-red-700 hover:bg-red-100' : 'text-gray-400 hover:text-brand-teal hover:bg-brand-leaf/10'" title="Editar">
                       <LucideEdit2 :size="16" />
                     </button>
                   </div>
@@ -119,7 +128,7 @@
         </div>
       </div>
 
-      <div v-if="selectedStudent" class="w-[62%] xl:w-[65%] flex-1 h-full overflow-hidden animate-[slideInRight_0.2s_ease-out] border border-gray-200 bg-white rounded-xl shadow-sm flex flex-col">
+      <div v-if="selectedStudent" class="w-full lg:flex-1 h-full overflow-hidden animate-[slideInRight_0.2s_ease-out] border border-gray-200 bg-white rounded-xl shadow-sm flex flex-col">
         <StudentDetails 
           :student="selectedStudent" 
           @refresh="performSearch" 
@@ -144,7 +153,6 @@ import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { exportToCSV } from '~/utils/export'
 import { GRADOS_ORDEN } from '~/utils/constants'
-import { displayGrado } from '~/shared/utils/grado'
 import StudentDetails from '~/components/StudentDetails.vue'
 import StudentFormModal from '~/components/StudentFormModal.vue'
 
@@ -198,7 +206,7 @@ const loadGlobalKpis = async () => {
 const performSearch = async () => {
   loading.value = true
   try {
-    const res = await $fetch('/api/students', { params: { ciclo: state.value.ciclo } })
+    const res = await $fetch('/api/students', { params: { ciclo: state.value.ciclo, q: filters.value.q } })
     students.value = res || []
     
     if (selectedStudent.value) {
@@ -215,6 +223,7 @@ const performSearch = async () => {
 }
 
 const isEnrolled = (student) => {
+  if (student.estatus !== 'Activo') return false;
   const conceptsStr = ((student.conceptosCargados || '') + '|' + (student.conceptosPagados || '')).toLowerCase()
   return externalConcepts.value.some(c => conceptsStr.includes(c))
 }
@@ -297,19 +306,24 @@ const selectStudentByMatricula = (matricula) => {
 }
 
 const bajaAlumno = async (student) => {
-  if (!confirm(`¿Está seguro de procesar la baja del alumno(a) ${student.nombreCompleto}?`)) return
+  if (!confirm(`¿Está seguro de procesar la baja definitiva del alumno(a) ${student.nombreCompleto}?`)) return
   const motivo = prompt("Detalle claramente la causa de baja:")
   if (!motivo) return
+
+  const previousEstatus = student.estatus
 
   await executeOptimistic(
     () => $fetch(`/api/students/${student.matricula}`, { method: 'DELETE', body: { motivo } }),
     () => {
       const s = students.value.find(x => x.matricula === student.matricula)
       if (s) s.estatus = motivo
-      if (selectedStudent.value?.matricula === student.matricula) selectedStudent.value = null
     },
-    () => performSearch(),
-    { pending: 'Procesando baja...', success: 'Alumno dado de baja', error: 'Fallo al dar de baja' }
+    () => {
+      const s = students.value.find(x => x.matricula === student.matricula)
+      if (s) s.estatus = previousEstatus
+      performSearch()
+    },
+    { pending: 'Procesando baja...', success: 'Alumno dado de baja exitosamente', error: 'Fallo al procesar baja' }
   )
 }
 
@@ -319,7 +333,7 @@ const showStudentMenu = (event, student) => {
     { label: '-' },
     { label: 'Editar alumno', icon: LucideSettings, action: () => openEdit(student) },
     { label: '-' },
-    { label: 'Baja de Alumno', icon: LucideUserMinus, class: 'text-accent-coral', action: () => bajaAlumno(student) }
+    { label: 'Dar de baja', icon: LucideUserMinus, class: 'text-accent-coral font-bold', disabled: student.estatus !== 'Activo', action: () => bajaAlumno(student) }
   ])
 }
 
