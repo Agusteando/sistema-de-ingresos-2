@@ -3,36 +3,71 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --ink: #162641;
+    --muted: #66728a;
+    --line: #dfe6ef;
+    --soft-line: #edf2f7;
+    --canvas: #f9fbfa;
+    --mint: #eaf8e7;
+    --leaf: #65a744;
+    --leaf-dark: #3f7e36;
+    --teal: #1ca99e;
+    --sky: #397fe8;
+    --coral: #ff4d38;
+    --shadow-soft: 0 16px 42px rgba(22, 38, 65, 0.08);
+    --shadow-card: 0 10px 28px rgba(22, 38, 65, 0.07);
+  }
+
+  html {
+    @apply h-full;
+  }
+
   body {
-    @apply bg-app text-gray-800 font-sans antialiased leading-relaxed m-0;
+    @apply bg-app text-gray-800 font-sans antialiased leading-relaxed m-0 h-full;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at 32% -12%, rgba(142, 193, 83, 0.12), transparent 32rem),
+      linear-gradient(135deg, #fbfdfc 0%, #f7fafc 55%, #fbfdfb 100%);
   }
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-1.5 font-medium text-sm rounded-lg transition-all duration-200 ease-out whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-[0.98] h-[36px] cursor-pointer;
+    @apply inline-flex items-center justify-center gap-2 px-3.5 py-1.5 font-semibold text-[0.82rem] rounded-xl transition-all duration-200 ease-out whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-[0.98] h-[36px] cursor-pointer;
+    border: 1px solid transparent;
   }
   .btn-sm {
-    @apply h-[30px] px-3 py-1 text-xs;
+    @apply h-[32px] px-3 py-1 text-[0.72rem];
   }
   .btn-primary {
-    @apply bg-brand-leaf text-neutral-ink hover:bg-[#7EB144] focus:ring-brand-leaf shadow-sm;
+    @apply text-white focus:ring-brand-leaf;
+    background: linear-gradient(135deg, #86c85b 0%, #4e9443 100%);
+    box-shadow: 0 12px 24px rgba(78, 148, 67, 0.22);
   }
   .btn-secondary {
-    @apply bg-brand-campus text-white hover:bg-brand-teal focus:ring-brand-campus shadow-sm;
+    @apply bg-white focus:ring-brand-campus;
+    color: #2d6b31;
+    border-color: rgba(78, 132, 78, 0.28);
+    box-shadow: 0 8px 20px rgba(22, 38, 65, 0.05);
   }
   .btn-danger {
     @apply bg-accent-coral text-white hover:bg-red-600 focus:ring-accent-coral shadow-sm;
   }
   .btn-outline {
-    @apply bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 focus:ring-gray-200 shadow-sm;
+    @apply bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 focus:ring-gray-200;
+    border-color: var(--line);
+    box-shadow: 0 8px 20px rgba(22, 38, 65, 0.04);
   }
   .btn-ghost {
-    @apply bg-transparent border border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus:ring-gray-200;
+    @apply bg-transparent border border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus:ring-gray-200 shadow-none;
   }
 
   .input-field {
-    @apply w-full px-3 py-1.5 text-sm font-medium text-gray-800 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-leaf/20 focus:border-brand-leaf transition-colors disabled:bg-gray-50 disabled:text-gray-400 shadow-sm h-[36px];
+    @apply w-full px-3 py-1.5 text-[0.82rem] font-medium bg-white border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-leaf/20 focus:border-brand-leaf transition-colors disabled:bg-gray-50 disabled:text-gray-400 h-[36px];
+    color: var(--ink);
+    border-color: var(--line);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
   }
   .form-group {
     @apply mb-4;
@@ -42,14 +77,17 @@
   }
 
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden;
+    @apply bg-white rounded-2xl border overflow-hidden;
+    border-color: var(--line);
+    box-shadow: var(--shadow-card);
   }
   .card-header {
-    @apply px-5 py-4 border-b border-gray-200 flex flex-col md:flex-row md:justify-between items-start md:items-center bg-white gap-3;
+    @apply px-5 py-4 border-b flex flex-col md:flex-row md:justify-between items-start md:items-center bg-white gap-3;
+    border-color: var(--soft-line);
   }
 
   .badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded text-[0.65rem] font-bold tracking-wider uppercase;
+    @apply inline-flex items-center px-2 py-0.5 rounded-md text-[0.65rem] font-bold tracking-wider uppercase;
   }
   .badge-success { @apply bg-brand-leaf/15 text-brand-campus; }
   .badge-danger { @apply bg-accent-coral/10 text-accent-coral; }
@@ -58,27 +96,34 @@
   .badge-neutral { @apply bg-gray-100 text-gray-600; }
 
   .chip {
-    @apply px-2.5 py-1 text-[0.65rem] rounded-full font-bold uppercase tracking-wider transition-all border whitespace-nowrap;
-    @apply bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:border-gray-300 shadow-sm cursor-pointer;
+    @apply px-3.5 py-1.5 text-[0.66rem] rounded-full font-bold transition-all border whitespace-nowrap;
+    @apply bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 cursor-pointer;
+    border-color: var(--line);
+    box-shadow: 0 5px 14px rgba(22, 38, 65, 0.04);
   }
   .chip.active {
-    @apply bg-brand-campus text-white border-brand-campus shadow-sm ring-1 ring-offset-1 ring-brand-campus;
+    @apply text-white border-brand-campus shadow-sm ring-0;
+    background: linear-gradient(135deg, #6ead4f 0%, #437f38 100%);
   }
   .chip.active-group {
-    @apply bg-brand-teal text-white border-brand-teal shadow-sm ring-1 ring-offset-1 ring-brand-teal;
+    @apply text-white border-brand-teal shadow-sm ring-0;
+    background: linear-gradient(135deg, #52b899 0%, #267a66 100%);
   }
 
   .table-wrapper {
-    @apply w-full bg-white rounded-xl border border-gray-200 flex flex-col min-h-0;
+    @apply w-full bg-white rounded-2xl border flex flex-col min-h-0;
+    border-color: var(--line);
   }
   table {
     @apply w-full text-left border-collapse;
   }
   th {
-    @apply px-4 py-2.5 text-[0.7rem] font-bold uppercase tracking-wider text-gray-500 border-b border-gray-200 bg-gray-50/95 backdrop-blur whitespace-nowrap;
+    @apply px-4 py-2.5 text-[0.7rem] font-bold uppercase tracking-wider text-gray-500 border-b bg-gray-50/95 backdrop-blur whitespace-nowrap;
+    border-color: var(--soft-line);
   }
   td {
-    @apply px-4 py-2.5 text-sm text-gray-700 border-b border-gray-100 align-middle;
+    @apply px-4 py-2.5 text-sm text-gray-700 border-b align-middle;
+    border-color: var(--soft-line);
   }
   tbody tr {
     @apply transition-colors hover:bg-gray-50/60;
@@ -91,7 +136,7 @@
     @apply fixed inset-0 bg-neutral-ink/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out];
   }
   .modal-container {
-    @apply bg-white rounded-xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl border border-gray-200 animate-[slideUp_0.2s_ease-out];
+    @apply bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl border border-gray-200 animate-[slideUp_0.2s_ease-out];
   }
   .modal-container.large {
     @apply max-w-3xl;
@@ -103,7 +148,7 @@
     @apply p-6 overflow-y-auto flex-1 bg-white min-h-0;
   }
   .modal-footer {
-    @apply px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-xl shrink-0;
+    @apply px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-2xl shrink-0;
   }
 }
 

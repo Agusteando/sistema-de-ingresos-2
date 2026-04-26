@@ -1,152 +1,206 @@
 <template>
-  <div class="h-full flex flex-col mx-auto max-w-[1600px] w-full">
-    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4 shrink-0">
-      <div>
-        <h1 class="text-xl font-bold text-gray-800 tracking-tight m-0">Gestión de Alumnos</h1>
-        <p class="text-[0.8rem] text-gray-500 mt-1 font-medium m-0 max-w-2xl">
-          Administración general de matrícula y estado de cuenta financiero.
-        </p>
+  <div class="students-screen">
+    <header class="students-hero">
+      <div class="hero-copy">
+        <h1>Gestión de Alumnos</h1>
+        <p>Administración general de matrícula y estado de cuenta financiero.</p>
       </div>
-      <div class="flex items-center gap-3">
-        <div v-if="userRole === 'global'" class="bg-accent-gold/10 px-3 py-1.5 rounded-lg border border-accent-gold/20 flex flex-col items-end hidden md:flex shadow-sm">
-          <span class="text-[0.6rem] font-bold text-yellow-800 uppercase tracking-widest">Ingresos del Mes</span>
-          <span class="text-base font-bold text-yellow-900 leading-none">${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', {minimumFractionDigits:2}) }}</span>
+      <div class="hero-actions">
+        <div v-if="userRole === 'global'" class="monthly-income">
+          <div>
+            <span>Ingresos del mes</span>
+            <strong>${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', {minimumFractionDigits:2}) }}</strong>
+          </div>
+          <svg viewBox="0 0 122 42" aria-hidden="true">
+            <polyline points="2,34 22,25 40,29 58,18 78,23 96,13 116,5" />
+          </svg>
         </div>
-        <button class="btn btn-primary shadow-sm h-[34px] px-4" @click="openAlta">
-          <LucideUserPlus :size="16"/> Nuevo Alumno
+        <button class="btn btn-primary new-student-button" @click="openAlta">
+          <LucideUserPlus :size="22"/> Nuevo Alumno
         </button>
       </div>
     </header>
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4 shrink-0">
-      <button @click="activeFilter = 'inscritos'" :class="['card p-3 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'inscritos' ? 'ring-2 ring-brand-campus shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
-        <div :class="['absolute right-0 top-0 w-16 h-16 rounded-bl-full -mr-6 -mt-6 transition-colors', activeFilter === 'inscritos' ? 'bg-brand-campus/10' : 'bg-gray-50']"></div>
-        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'inscritos' ? 'text-brand-campus' : 'text-gray-500'">Inscritos</h4>
-        <div class="text-2xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.inscritos }}</div>
+    <div class="kpi-grid">
+      <button
+        @click="activeFilter = 'inscritos'"
+        :class="['kpi-card kpi-green', { active: activeFilter === 'inscritos' }]"
+      >
+        <span class="kpi-icon"><LucideUsers :size="24" /></span>
+        <span class="kpi-text">
+          <span>Inscritos</span>
+          <strong>{{ kpiCounts.inscritos }}</strong>
+          <em>Alumnos activos</em>
+        </span>
+        <svg viewBox="0 0 104 42" aria-hidden="true">
+          <polyline points="0,34 15,27 31,29 46,18 63,21 78,13 93,15 104,4" />
+        </svg>
       </button>
-      <button @click="activeFilter = 'internos'" :class="['card p-3 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'internos' ? 'ring-2 ring-brand-teal shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
-        <div :class="['absolute right-0 top-0 w-16 h-16 rounded-bl-full -mr-6 -mt-6 transition-colors', activeFilter === 'internos' ? 'bg-brand-teal/10' : 'bg-gray-50']"></div>
-        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'internos' ? 'text-brand-teal' : 'text-gray-500'">Internos</h4>
-        <div class="text-2xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.internos }}</div>
+
+      <button
+        @click="activeFilter = 'internos'"
+        :class="['kpi-card kpi-teal', { active: activeFilter === 'internos' }]"
+      >
+        <span class="kpi-icon"><LucideUserCheck :size="24" /></span>
+        <span class="kpi-text">
+          <span>Internos</span>
+          <strong>{{ kpiCounts.internos }}</strong>
+          <em>Alumnos</em>
+        </span>
+        <svg viewBox="0 0 104 42" aria-hidden="true">
+          <polyline points="0,35 18,31 35,22 51,16 69,18 88,15 104,3" />
+        </svg>
       </button>
-      <button @click="activeFilter = 'externos'" :class="['card p-3 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'externos' ? 'ring-2 ring-accent-sky shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
-        <div :class="['absolute right-0 top-0 w-16 h-16 rounded-bl-full -mr-6 -mt-6 transition-colors', activeFilter === 'externos' ? 'bg-accent-sky/10' : 'bg-gray-50']"></div>
-        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'externos' ? 'text-accent-sky' : 'text-gray-500'">Externos</h4>
-        <div class="text-2xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.externos }}</div>
+
+      <button
+        @click="activeFilter = 'externos'"
+        :class="['kpi-card kpi-blue', { active: activeFilter === 'externos' }]"
+      >
+        <span class="kpi-icon"><LucideGlobe2 :size="24" /></span>
+        <span class="kpi-text">
+          <span>Externos</span>
+          <strong>{{ kpiCounts.externos }}</strong>
+          <em>Alumnos</em>
+        </span>
+        <svg viewBox="0 0 104 42" aria-hidden="true">
+          <polyline points="0,34 15,28 28,30 43,19 56,20 72,9 87,12 104,2" />
+        </svg>
       </button>
-      <button @click="activeFilter = 'no_inscritos'" :class="['card p-3 text-left transition-all relative overflow-hidden focus:outline-none', activeFilter === 'no_inscritos' ? 'ring-2 ring-accent-coral shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm']">
-        <div :class="['absolute right-0 top-0 w-16 h-16 rounded-bl-full -mr-6 -mt-6 transition-colors', activeFilter === 'no_inscritos' ? 'bg-accent-coral/10' : 'bg-gray-50']"></div>
-        <h4 class="text-[0.65rem] font-bold uppercase tracking-widest mb-1 relative z-10" :class="activeFilter === 'no_inscritos' ? 'text-accent-coral' : 'text-gray-500'">Bajas / No inscritos</h4>
-        <div class="text-2xl font-bold text-gray-800 leading-none relative z-10">{{ kpiCounts.no_inscritos }}</div>
+
+      <button
+        @click="activeFilter = 'no_inscritos'"
+        :class="['kpi-card kpi-red', { active: activeFilter === 'no_inscritos' }]"
+      >
+        <span class="kpi-icon"><LucideUserX :size="24" /></span>
+        <span class="kpi-text">
+          <span>Bajas / No inscritos</span>
+          <strong>{{ kpiCounts.no_inscritos }}</strong>
+          <em>Alumnos</em>
+        </span>
+        <svg viewBox="0 0 104 42" aria-hidden="true">
+          <polyline points="0,35 14,29 29,30 43,19 57,16 72,23 88,15 104,4" />
+        </svg>
       </button>
     </div>
 
-    <div class="flex flex-col md:flex-row items-center justify-between mb-4 bg-white p-2 rounded-xl border border-gray-200 shadow-sm shrink-0 gap-3">
-      <div class="flex items-center gap-3 w-full md:w-[280px]">
-        <div class="relative w-full">
-          <LucideSearch class="absolute left-3 top-2 text-gray-400" :size="15" />
-          <input v-model="filters.q" @keyup.enter="performSearch" class="input-field pl-9 bg-gray-50/50 border-gray-200 shadow-none focus:bg-white text-xs h-[32px]" placeholder="Matrícula o nombre..." />
-        </div>
-      </div>
-      
-      <div class="flex-1 overflow-hidden flex items-center w-full min-w-0">
-        <div class="flex items-center gap-1.5 overflow-x-auto hide-scrollbar w-full mask-edges pr-4">
-           <button @click="activeGrado = ''; activeGrupo = ''" class="chip" :class="{'active': activeGrado === ''}">Todos</button>
-           <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" class="chip" :class="{'active': activeGrado === g}">{{ g }}</button>
-           
-           <template v-if="activeGrado && availableGrupos.length">
-             <div class="w-px h-5 bg-gray-300 mx-1"></div>
-             <button @click="activeGrupo = ''" class="chip" :class="{'active-group': activeGrupo === ''}">Todos</button>
-             <button v-for="grp in availableGrupos" :key="grp" @click="activeGrupo = grp" class="chip" :class="{'active-group': activeGrupo === grp}">Grupo {{ grp }}</button>
-           </template>
-        </div>
+    <div class="filter-bar">
+      <div class="search-control">
+        <LucideSearch :size="19" />
+        <input
+          v-model="filters.q"
+          @keyup.enter="performSearch"
+          placeholder="Matrícula o nombre del alumno..."
+        />
       </div>
 
-      <button class="btn btn-secondary h-[32px] px-4 shadow-sm shrink-0 w-full md:w-auto text-xs" @click="exportData">
-        <LucideDownload :size="14"/> Exportar
+      <div class="grade-tabs">
+        <button @click="activeGrado = ''; activeGrupo = ''" class="chip" :class="{'active': activeGrado === ''}">Todos</button>
+        <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" class="chip" :class="{'active': activeGrado === g}">{{ g }}</button>
+
+        <template v-if="activeGrado && availableGrupos.length">
+          <span class="tab-divider"></span>
+          <button @click="activeGrupo = ''" class="chip" :class="{'active-group': activeGrupo === ''}">Todos</button>
+          <button v-for="grp in availableGrupos" :key="grp" @click="activeGrupo = grp" class="chip" :class="{'active-group': activeGrupo === grp}">Grupo {{ grp }}</button>
+        </template>
+      </div>
+
+      <button class="btn btn-secondary export-button" @click="exportData">
+        <LucideDownload :size="18"/> Exportar
       </button>
     </div>
 
-    <div class="flex gap-4 flex-1 min-h-0 relative">
-      
-      <div :class="selectedStudent ? 'hidden lg:flex w-[320px] xl:w-[380px] shrink-0' : 'w-full flex'" class="flex-col h-full transition-all duration-300 overflow-hidden">
-        <div class="flex-1 overflow-y-auto card table-wrapper shadow-sm border-gray-200 rounded-xl relative h-full">
-          <table class="w-full relative border-collapse">
-            <thead class="bg-gray-50/95 backdrop-blur sticky top-0 z-10 border-b border-gray-200 shadow-sm">
-              <tr>
-                <th class="py-2.5 px-4 text-[0.65rem] font-bold text-gray-500 uppercase tracking-wider text-left">Alumno</th>
-                <th class="py-2.5 px-4 text-[0.65rem] font-bold text-gray-500 uppercase tracking-wider text-left" v-if="!selectedStudent">Asignación</th>
-                <th class="py-2.5 px-4 text-[0.65rem] font-bold text-gray-500 uppercase tracking-wider text-right" v-if="!selectedStudent">Cargos</th>
-                <th class="py-2.5 px-4 text-[0.65rem] font-bold text-gray-500 uppercase tracking-wider text-right" v-if="!selectedStudent">Abonos</th>
-                <th class="py-2.5 px-4 text-[0.65rem] font-bold text-gray-500 uppercase tracking-wider text-right">Saldo</th>
-                <th class="w-12 text-right pr-4"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="loading"><td :colspan="selectedStudent ? 3 : 6" class="text-center text-gray-500 font-medium py-16">Cargando registros...</td></tr>
-              <tr v-else-if="!displayedStudents.length"><td :colspan="selectedStudent ? 3 : 6" class="text-center text-gray-400 py-16">No hay registros bajo los filtros actuales.</td></tr>
-              <tr v-else v-for="s in displayedStudents" :key="s.matricula" 
-                  @click="selectStudent(s)" 
-                  @contextmenu.prevent="showStudentMenu($event, s)"
-                  :class="[
-                    'group relative cursor-pointer transition-all border-b border-gray-100/80 border-l-2',
-                    selectedStudent?.matricula === s.matricula ? 'bg-brand-leaf/5 border-l-brand-leaf' : 'border-l-transparent hover:bg-gray-50/80',
-                    s.estatus !== 'Activo' ? 'bg-red-50/10 hover:bg-red-50/30' : (!isEnrolled(s) ? 'bg-orange-50/10 hover:bg-orange-50/30' : '')
-                  ]">
-                <td class="py-2.5 px-4 align-middle">
-                  <div class="font-bold text-sm tracking-tight truncate max-w-[200px]" 
-                       :class="s.estatus !== 'Activo' ? 'text-red-900 line-through decoration-red-400/50' : (!isEnrolled(s) ? 'text-orange-900' : 'text-gray-800')" 
-                       :title="s.nombreCompleto">
+    <div class="students-workspace">
+      <section :class="['student-list-panel', selectedStudent ? 'is-compact' : 'is-full']">
+        <div class="student-list-card">
+          <div class="list-titlebar">
+            <h2>Lista de alumnos <span>{{ displayedStudents.length }}</span></h2>
+            <button type="button" aria-label="Filtros">
+              <LucideSlidersHorizontal :size="17" />
+            </button>
+          </div>
+
+          <div :class="['list-columns', selectedStudent ? 'compact' : 'full']">
+            <span>Alumno</span>
+            <span v-if="!selectedStudent">Asignación</span>
+            <span v-if="!selectedStudent">Cargos</span>
+            <span v-if="!selectedStudent">Abonos</span>
+            <span>Saldo</span>
+            <span></span>
+          </div>
+
+          <div class="student-list-scroll">
+            <div v-if="loading" class="empty-state">Cargando registros...</div>
+            <div v-else-if="!displayedStudents.length" class="empty-state muted">No hay registros bajo los filtros actuales.</div>
+            <button
+              v-else
+              v-for="s in displayedStudents"
+              :key="s.matricula"
+              @click="selectStudent(s)"
+              @contextmenu.prevent="showStudentMenu($event, s)"
+              :class="[
+                'student-row',
+                selectedStudent ? 'compact' : 'full',
+                selectedStudent?.matricula === s.matricula ? 'selected' : '',
+                s.estatus !== 'Activo' ? 'inactive' : (!isEnrolled(s) ? 'unenrolled' : '')
+              ]"
+            >
+              <span class="student-identity">
+                <span class="student-avatar">
+                  <img v-if="photoCache[s.matricula]" :src="photoCache[s.matricula]" alt="" />
+                  <template v-else>{{ initials(s.nombreCompleto) }}</template>
+                </span>
+                <span class="student-copy">
+                  <strong
+                    :title="s.nombreCompleto"
+                    :class="s.estatus !== 'Activo' ? 'line-through decoration-red-400/50' : ''"
+                  >
                     {{ s.nombreCompleto }}
-                  </div>
-                  <div class="text-[0.7rem] font-mono mt-0.5 tracking-wider" 
-                       :class="s.estatus !== 'Activo' ? 'text-red-700/70' : (!isEnrolled(s) ? 'text-orange-700/70' : 'text-gray-400')">
-                    {{ s.matricula }} 
-                    <span v-if="selectedStudent" class="ml-1 font-sans font-medium" 
-                          :class="s.estatus !== 'Activo' ? 'text-red-700/50' : (!isEnrolled(s) ? 'text-orange-700/50' : 'text-gray-400')">
-                      • {{ s.grado }} "{{ s.grupo }}"
-                    </span>
-                  </div>
-                </td>
-                <td class="py-2.5 px-4 text-xs font-medium align-middle whitespace-nowrap" v-if="!selectedStudent">
-                  <span v-if="s.estatus !== 'Activo'" class="badge bg-red-100 text-red-800 border border-red-200">BAJA</span>
-                  <span v-else-if="!isEnrolled(s)" class="badge bg-orange-100 text-orange-800 border border-orange-200">NO INSCRITO</span>
-                  <template v-else>
-                    <span class="text-gray-600">{{ s.nivel }}</span> <span class="mx-1.5 text-gray-300">•</span> <span class="text-gray-600">{{ s.grado }}</span> <span class="font-bold ml-1 text-gray-400">"{{ s.grupo }}"</span>
-                  </template>
-                </td>
-                <td class="py-2.5 px-4 text-right align-middle" v-if="!selectedStudent">
-                  <div class="font-mono text-xs font-medium" :class="s.estatus !== 'Activo' ? 'text-red-800/70' : 'text-gray-400'">${{ format(s.importeTotal) }}</div>
-                </td>
-                <td class="py-2.5 px-4 text-right align-middle" v-if="!selectedStudent">
-                  <div class="font-mono text-xs font-semibold" :class="s.estatus !== 'Activo' ? 'text-red-900' : 'text-brand-campus'">${{ format(s.pagosTotal) }}</div>
-                </td>
-                <td class="py-2.5 px-4 text-right align-middle">
-                  <div class="font-mono text-sm font-bold" :class="s.saldoNeto > 0 ? 'text-accent-coral' : (s.estatus !== 'Activo' ? 'text-red-800/70' : 'text-gray-400')">${{ format(s.saldoNeto) }}</div>
-                </td>
-                <td class="w-10 text-right pr-4 align-middle">
-                  <div class="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button @click.stop="openEdit(s)" class="p-1.5 rounded transition-colors" :class="s.estatus !== 'Activo' ? 'text-red-700 hover:bg-red-100' : 'text-gray-400 hover:text-brand-teal hover:bg-brand-leaf/10'" title="Editar">
-                      <LucideEdit2 :size="14" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+                  </strong>
+                  <em>
+                    {{ s.matricula }}
+                    <template v-if="selectedStudent"> · {{ s.grado }} "{{ s.grupo }}"</template>
+                  </em>
+                </span>
+              </span>
 
-      <div v-if="selectedStudent" class="w-full lg:flex-1 h-full overflow-hidden animate-[slideInRight_0.2s_ease-out] border border-gray-200 bg-white rounded-xl shadow-sm flex flex-col min-w-0">
-        <StudentDetails 
-          :student="selectedStudent" 
+              <span v-if="!selectedStudent" class="assignment">
+                <b v-if="s.estatus !== 'Activo'" class="status-pill red">BAJA</b>
+                <b v-else-if="!isEnrolled(s)" class="status-pill orange">NO INSCRITO</b>
+                <template v-else>
+                  {{ s.nivel }} <i>·</i> {{ s.grado }} <b>"{{ s.grupo }}"</b>
+                </template>
+              </span>
+
+              <span v-if="!selectedStudent" class="money muted">${{ format(s.importeTotal) }}</span>
+              <span v-if="!selectedStudent" class="money paid">${{ format(s.pagosTotal) }}</span>
+              <span class="money balance" :class="{ danger: s.saldoNeto > 0 }">${{ format(s.saldoNeto) }}</span>
+              <span class="row-actions">
+                <button @click.stop="openEdit(s)" title="Editar">
+                  <LucideEdit2 :size="14" />
+                </button>
+                <LucideChevronRight :size="18" />
+              </span>
+            </button>
+          </div>
+
+          <div class="list-footer">
+            <span>{{ listRangeLabel }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="selectedStudent" class="student-detail-panel">
+        <StudentDetails
+          :student="selectedStudent"
           :is-enrolled="isEnrolled(selectedStudent)"
-          @refresh="performSearch" 
-          @edit="openEdit" 
+          @refresh="performSearch"
+          @edit="openEdit"
           @close="selectedStudent = null"
           @switch-student="selectStudentByMatricula"
-          @baja="bajaAlumno" />
-      </div>
+          @photo-loaded="cacheStudentPhoto"
+          @baja="bajaAlumno"
+        />
+      </section>
     </div>
 
     <StudentFormModal v-if="showStudentModal" :student="editingStudent" @close="closeStudentModal" @success="handleStudentSuccess" />
@@ -157,7 +211,20 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
-import { LucideSearch, LucideUserPlus, LucideDownload, LucideEdit2, LucideUserMinus, LucideUserX, LucideUser, LucideUserCheck, LucideEye, LucideSettings, LucideFilePlus } from 'lucide-vue-next'
+import {
+  LucideSearch,
+  LucideUserPlus,
+  LucideDownload,
+  LucideEdit2,
+  LucideUserX,
+  LucideUserCheck,
+  LucideEye,
+  LucideSettings,
+  LucideUsers,
+  LucideGlobe2,
+  LucideSlidersHorizontal,
+  LucideChevronRight
+} from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -184,12 +251,38 @@ const externalConcepts = ref(['inscripcion', 'inscripción', 'reinscripción', '
 const students = ref([])
 const loading = ref(false)
 const selectedStudent = ref(null)
+const photoCache = ref({})
 
 const globalKpis = ref({ ingresosMes: 0 })
 const showStudentModal = ref(false)
 const editingStudent = ref(null)
 
 const format = (val) => Number(val || 0).toFixed(2)
+const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') || 'AL'
+const photoStorageKey = (matricula) => `foto_${matricula}`
+
+const readCachedStudentPhotos = () => {
+  if (!process.client) return
+  const next = {}
+  students.value.forEach((student) => {
+    const cached = sessionStorage.getItem(photoStorageKey(student.matricula))
+    if (cached && cached !== 'none') next[student.matricula] = cached
+  })
+  photoCache.value = next
+}
+
+const cacheStudentPhoto = ({ matricula, photoUrl }) => {
+  if (!matricula) return
+  if (photoUrl && photoUrl !== 'none') {
+    photoCache.value = { ...photoCache.value, [matricula]: photoUrl }
+  }
+}
+
+const listRangeLabel = computed(() => {
+  const total = displayedStudents.value.length
+  if (!total) return 'Sin alumnos para mostrar'
+  return `Mostrando 1-${Math.min(total, 7)} de ${total} alumnos`
+})
 
 const parseEnrollmentConfig = (obj) => {
   let concepts = []
@@ -221,17 +314,18 @@ const performSearch = async () => {
     const cicloKey = normalizeCicloKey(state.value.ciclo)
     const res = await $fetch('/api/students', { params: { ciclo: cicloKey, q: filters.value.q } })
     students.value = res || []
-    
+    readCachedStudentPhotos()
+
     if (selectedStudent.value) {
       selectedStudent.value = students.value.find(s => s.matricula === selectedStudent.value.matricula) || null
     } else if (route.query.q) {
       const match = students.value.find(s => s.matricula === route.query.q)
       if (match) selectStudent(match)
     }
-  } catch (e) { 
-    show('Error al cargar la base de datos', 'danger') 
-  } finally { 
-    loading.value = false 
+  } catch (e) {
+    show('Error al cargar la base de datos', 'danger')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -259,7 +353,7 @@ const kpiCounts = computed(() => {
 
 const displayedStudents = computed(() => {
   let list = students.value
-  
+
   if (filters.value.q) {
     const qTerm = filters.value.q.toLowerCase()
     list = list.filter(s => s.nombreCompleto.toLowerCase().includes(qTerm) || s.matricula.toLowerCase().includes(qTerm))
@@ -315,7 +409,7 @@ const exportData = () => {
 }
 
 const selectStudent = (student) => { selectedStudent.value = student }
-const selectStudentByMatricula = (matricula) => { 
+const selectStudentByMatricula = (matricula) => {
   const match = students.value.find(s => s.matricula === matricula)
   if (match) selectStudent(match)
 }
@@ -359,7 +453,7 @@ onMounted(async () => {
   } catch (e) {
     console.warn('Fallback al carecer de configuración externa.')
   }
-  
+
   if (route.query.q) filters.value.q = String(route.query.q)
   performSearch()
   loadGlobalKpis()
@@ -382,14 +476,767 @@ const handleStudentSuccess = () => {
 </script>
 
 <style scoped>
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
+.students-screen {
+  display: flex;
+  width: 100%;
+  max-width: 1188px;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  margin: 0 auto;
+  overflow: hidden;
 }
-.hide-scrollbar {
-  -ms-overflow-style: none;
+
+.students-hero {
+  display: flex;
+  min-height: 64px;
+  flex-shrink: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 0 0 10px;
+}
+
+.hero-copy h1 {
+  margin: 0 0 5px;
+  color: #162641;
+  font-size: clamp(1.22rem, 1.42vw, 1.48rem);
+  font-weight: 850;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+.hero-copy p {
+  margin: 0;
+  color: #737f96;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.hero-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 14px;
+  padding-top: 0;
+}
+
+.monthly-income {
+  display: flex;
+  width: 224px;
+  height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #dfe6ef;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 9px 13px 9px 16px;
+  box-shadow: 0 14px 30px rgba(22, 38, 65, 0.05);
+}
+
+.monthly-income span {
+  display: block;
+  color: #417b39;
+  font-size: 0.61rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.monthly-income strong {
+  display: block;
+  margin-top: 4px;
+  color: #297334;
+  font-size: 1rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.monthly-income svg {
+  width: 76px;
+  height: 34px;
+  overflow: visible;
+}
+
+.monthly-income polyline {
+  fill: none;
+  stroke: #66af46;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+}
+
+.new-student-button {
+  height: 52px;
+  min-width: 185px;
+  border-radius: 13px;
+  font-size: 0.9rem;
+}
+
+.kpi-grid {
+  display: grid;
+  flex-shrink: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.kpi-card {
+  position: relative;
+  display: grid;
+  min-height: 86px;
+  grid-template-columns: 50px minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 9px;
+  overflow: hidden;
+  border: 1px solid #dfe6ef;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.88) 100%);
+  padding: 11px 12px;
+  text-align: left;
+  box-shadow:
+    0 14px 34px rgba(22, 38, 65, 0.052),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.kpi-card::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: -20px;
+  bottom: -24px;
+  width: 116px;
+  height: 82px;
+  opacity: 0.58;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-image: url("data:image/svg+xml,%3Csvg width='134' height='92' viewBox='0 0 134 92' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M92 88C77 54 86 28 123 8C130 48 114 75 92 88Z' stroke='%23dce8de' stroke-width='1'/%3E%3Cpath d='M57 88C50 54 63 30 103 18C101 57 84 78 57 88Z' stroke='%23dce8de' stroke-width='1'/%3E%3Cpath d='M18 90C39 66 68 56 113 55' stroke='%23dce8de' stroke-width='1'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.kpi-card::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.kpi-card:hover,
+.kpi-card.active {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 42px rgba(22, 38, 65, 0.08);
+}
+
+.kpi-card.active {
+  border-color: rgba(101, 167, 68, 0.42);
+}
+
+.kpi-card.active::after,
+.kpi-card:hover::after {
+  opacity: 1;
+}
+
+.kpi-icon {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+.kpi-green .kpi-icon { background: radial-gradient(circle at 32% 22%, #eff9e9, #dff1d6 70%); color: #58a93f; }
+.kpi-teal .kpi-icon { background: radial-gradient(circle at 32% 22%, #e8fbf8, #d6f2ee 70%); color: #0ba496; }
+.kpi-blue .kpi-icon { background: radial-gradient(circle at 32% 22%, #eff5ff, #e0ebff 70%); color: #397fe8; }
+.kpi-red .kpi-icon { background: radial-gradient(circle at 32% 22%, #fff0ed, #ffe1dc 70%); color: #ff4d38; }
+
+.kpi-green::after { background: linear-gradient(90deg, rgba(224, 242, 216, 0.52), transparent 46%); }
+.kpi-teal::after { background: linear-gradient(90deg, rgba(216, 244, 240, 0.5), transparent 46%); }
+.kpi-blue::after { background: linear-gradient(90deg, rgba(224, 235, 255, 0.46), transparent 46%); }
+.kpi-red::after { background: linear-gradient(90deg, rgba(255, 228, 223, 0.46), transparent 46%); }
+
+.kpi-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.kpi-text span {
+  color: #3f684b;
+  font-size: 0.61rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.kpi-teal .kpi-text span { color: #187f79; }
+.kpi-blue .kpi-text span { color: #335878; }
+.kpi-red .kpi-text span { color: #354158; }
+
+.kpi-text strong {
+  margin-top: 4px;
+  color: #172841;
+  font-size: 1.38rem;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.kpi-text em {
+  margin-top: 6px;
+  color: #78849a;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.kpi-icon svg {
+  width: 24px;
+  height: 24px;
+  align-self: center;
+  margin: 0;
+  filter: none;
+}
+
+.kpi-card > svg {
+  position: relative;
+  z-index: 1;
+  align-self: end;
+  width: 70px;
+  height: 30px;
+  margin-bottom: -2px;
+  filter: drop-shadow(0 3px 4px rgba(101, 167, 68, 0.08));
+}
+
+.kpi-card polyline {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.05;
+}
+
+.kpi-green polyline { stroke: #66af46; }
+.kpi-teal polyline { stroke: #12aaa1; }
+.kpi-blue polyline { stroke: #397fe8; }
+.kpi-red polyline { stroke: #ff4d38; }
+
+.filter-bar {
+  display: grid;
+  grid-template-columns: minmax(260px, 365px) minmax(0, 1fr) auto;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  margin-bottom: 10px;
+  border: 1px solid #dfe6ef;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 8px 9px;
+  box-shadow: 0 12px 28px rgba(22, 38, 65, 0.045);
+}
+
+.search-control {
+  display: flex;
+  height: 32px;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #dfe6ef;
+  border-radius: 10px;
+  background: #fbfcfd;
+  padding: 0 13px;
+  color: #8190a8;
+}
+
+.search-control input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #172841;
+  font-size: 0.72rem;
+  font-weight: 650;
+  outline: none;
+}
+
+.search-control input::placeholder {
+  color: #7d879d;
+}
+
+.grade-tabs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 2px 0;
   scrollbar-width: none;
 }
-.mask-edges {
-  mask-image: linear-gradient(to right, black 95%, transparent 100%);
+
+.grade-tabs::-webkit-scrollbar,
+.student-list-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-divider {
+  width: 1px;
+  height: 24px;
+  flex-shrink: 0;
+  background: #dfe6ef;
+}
+
+.export-button {
+  min-width: 138px;
+  height: 34px;
+}
+
+.students-workspace {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  gap: 14px;
+}
+
+.student-list-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  transition: width 200ms ease;
+}
+
+.student-list-panel.is-compact {
+  width: clamp(350px, 29vw, 410px);
+  flex: 0 0 clamp(350px, 29vw, 410px);
+}
+
+.student-list-panel.is-full {
+  width: 100%;
+  flex: 1 1 auto;
+}
+
+.student-list-card,
+.student-detail-panel {
+  min-height: 0;
+  border: 1px solid #dfe6ef;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 34px rgba(22, 38, 65, 0.055);
+}
+
+.student-list-card {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.list-titlebar {
+  display: flex;
+  height: 38px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e8eef5;
+  padding: 0 17px;
+}
+
+.list-titlebar h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  color: #31405a;
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.list-titlebar h2 span {
+  border-radius: 999px;
+  background: #dcefd6;
+  color: #3e873b;
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.list-titlebar button {
+  border: 0;
+  background: transparent;
+  color: #64748b;
+}
+
+.list-columns {
+  display: grid;
+  height: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  border-bottom: 1px solid #e8eef5;
+  color: #657089;
+  font-size: 0.6rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  padding: 0 17px;
+  text-transform: uppercase;
+}
+
+.list-columns.compact,
+.student-row.compact {
+  grid-template-columns: minmax(0, 1fr) 104px 28px;
+}
+
+.list-columns.full,
+.student-row.full {
+  grid-template-columns: minmax(250px, 1.4fr) minmax(190px, 0.9fr) 120px 120px 120px 42px;
+}
+
+.list-columns span:nth-last-child(2),
+.list-columns.full span:nth-child(n+3) {
+  text-align: right;
+}
+
+.student-list-scroll {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.student-row {
+  position: relative;
+  display: grid;
+  min-height: 46px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid #e8eef5;
+  border-left: 4px solid transparent;
+  background: transparent;
+  padding: 0 14px 0 13px;
+  text-align: left;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.student-row:hover {
+  background: #fbfdfb;
+}
+
+.student-row.selected {
+  border-left-color: #54ad3c;
+  background: linear-gradient(90deg, rgba(225, 242, 216, 0.9) 0%, rgba(255, 255, 255, 0.9) 100%);
+}
+
+.student-row.inactive {
+  background: rgba(255, 77, 56, 0.035);
+}
+
+.student-row.unenrolled {
+  background: rgba(252, 191, 45, 0.04);
+}
+
+.student-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.student-avatar {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #e4f2dc;
+  color: #3e873b;
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.student-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.student-row:nth-child(4n+2) .student-avatar { background: #e7eefc; color: #2e62b9; }
+.student-row:nth-child(4n+3) .student-avatar { background: #ddf3ed; color: #198d7c; }
+.student-row:nth-child(4n+4) .student-avatar { background: #eee8f6; color: #71509e; }
+
+.student-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.student-copy strong {
+  overflow: hidden;
+  color: #24344f;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-copy em,
+.assignment {
+  color: #6f7d94;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.assignment {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assignment i {
+  color: #c5cfdb;
+  font-style: normal;
+  margin: 0 6px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+
+.status-pill.red {
+  background: #ffe7e4;
+  color: #d52626;
+}
+
+.status-pill.orange {
+  background: #fff1d7;
+  color: #b66a10;
+}
+
+.money {
+  color: #24344f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.money.muted {
+  color: #77849a;
+}
+
+.money.paid {
+  color: #2f7b31;
+}
+
+.money.balance.danger {
+  color: #ff2f38;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: #637089;
+}
+
+.row-actions button {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #637089;
+  opacity: 0;
+  transition: opacity 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.student-row:hover .row-actions button {
+  opacity: 1;
+}
+
+.row-actions button:hover {
+  background: rgba(101, 167, 68, 0.12);
+  color: #2d7537;
+}
+
+.empty-state {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  color: #66728a;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.empty-state.muted {
+  color: #9aa5b7;
+}
+
+.list-footer {
+  display: flex;
+  height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #e8eef5;
+  padding: 0 17px;
+  color: #627089;
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.student-detail-panel {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (max-width: 1280px) {
+  .students-screen {
+    max-width: none;
+  }
+
+  .kpi-card {
+    grid-template-columns: 46px minmax(0, 1fr) 60px;
+    padding-right: 12px;
+  }
+
+  .kpi-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .kpi-card > svg {
+    width: 60px;
+  }
+
+  .student-list-panel.is-compact {
+    width: 350px;
+    flex-basis: 350px;
+  }
+}
+
+@media (max-height: 920px) and (min-width: 1081px) {
+  .students-hero {
+    min-height: 56px;
+    padding-bottom: 8px;
+  }
+
+  .hero-copy h1 {
+    font-size: 1.18rem;
+  }
+
+  .hero-copy p {
+    font-size: 0.74rem;
+  }
+
+  .monthly-income {
+    height: 48px;
+    width: 212px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .monthly-income strong {
+    font-size: 0.94rem;
+  }
+
+  .new-student-button {
+    height: 48px;
+  }
+
+  .kpi-grid {
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .kpi-card {
+    min-height: 80px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  .kpi-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .kpi-text strong {
+    font-size: 1.28rem;
+  }
+
+  .kpi-text em {
+    margin-top: 5px;
+    font-size: 0.64rem;
+  }
+
+  .filter-bar {
+    min-height: 44px;
+    margin-bottom: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .student-row {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .students-workspace {
+    overflow: auto;
+  }
+
+  .student-list-panel.is-compact {
+    display: none;
+  }
+
+  .filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-actions {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 12px;
+  }
 }
 </style>

@@ -1,0 +1,183 @@
+
+[41m[30m ERROR [39m[49m Pre-transform error: Failed to resolve import "#app-manifest" from "node_modules/nuxt/dist/app/composables/manifest.js?v=3652a98a". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/hp/sistema-de-ingresos-2/node_modules/nuxt/dist/app/composables/manifest.js?v=3652a98a[39m:12:22
+[33m  10 |    }
+  11 |    if (false) {
+  12 |      manifest = import("#app-manifest");
+     |                        ^
+  13 |    } else {
+  14 |      manifest = $fetch(buildAssetsURL([36mbuilds/meta/${useRuntimeConfig().app.buildId}.json[39m), {[39m
+
+
+[41m[30m ERROR [39m[49m Pre-transform error: Failed to resolve import "#app-manifest" from "node_modules/nuxt/dist/app/composables/manifest.js?v=3652a98a". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/hp/sistema-de-ingresos-2/node_modules/nuxt/dist/app/composables/manifest.js?v=3652a98a[39m:12:22
+[33m  10 |    }
+  11 |    if (false) {
+  12 |      manifest = import("#app-manifest");
+     |                        ^
+  13 |    } else {
+  14 |      manifest = $fetch(buildAssetsURL([36mbuilds/meta/${useRuntimeConfig().app.buildId}.json[39m), {[39m[2m (x2)[22m
+
+
+[41m[30m ERROR [39m[49m Pre-transform error: Failed to resolve import "#app-manifest" from "node_modules/nuxt/dist/app/composables/manifest.js?v=3652a98a". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/hp/sistema-de-ingresos-2/node_modules/nuxt/dist/app/composables/manifest.js?v=3652a98a[39m:12:22
+[33m  10 |    }
+  11 |    if (false) {
+  12 |      manifest = import("#app-manifest");
+     |                        ^
+  13 |    } else {
+  14 |      manifest = $fetch(buildAssetsURL([36mbuilds/meta/${useRuntimeConfig().app.buildId}.json[39m), {[39m[2m (x3)[22m
+
+
+[41m[30m ERROR [39m[49m Pre-transform error: Failed to resolve import "#app-manifest" from "node_modules/nuxt/dist/app/composables/manifest.js?v=3652a98a". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/hp/sistema-de-ingresos-2/node_modules/nuxt/dist/app/composables/manifest.js?v=3652a98a[39m:12:22
+[33m  10 |    }
+  11 |    if (false) {
+  12 |      manifest = import("#app-manifest");
+     |                        ^
+  13 |    } else {
+  14 |      manifest = $fetch(buildAssetsURL([36mbuilds/meta/${useRuntimeConfig().app.buildId}.json[39m), {[39m[2m (x4)[22m
+
+
+[41m[30m ERROR [39m[49m Pre-transform error: Failed to resolve import "#app-manifest" from "node_modules/nuxt/dist/app/composables/manifest.js?v=3652a98a". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/hp/sistema-de-ingresos-2/node_modules/nuxt/dist/app/composables/manifest.js?v=3652a98a[39m:12:22
+[33m  10 |    }
+  11 |    if (false) {
+  12 |      manifest = import("#app-manifest");
+     |                        ^
+  13 |    } else {
+  14 |      manifest = $fetch(buildAssetsURL([36mbuilds/meta/${useRuntimeConfig().app.buildId}.json[39m), {[39m[2m (x5)[22m
+
+
+[41m[30m ERROR [39m[49m [request error] [unhandled] [GET] http://127.0.0.1:3001/
+
+ 
+[31mℹ Error: Package import specifier "#internal/nuxt/paths" is not defined in package .\package.json imported from .\.nuxt\dist\server\server.mjs[39m
+
+[2m ⁃ at [3mimportNotDefined[23m ([3mnode:internal/modules/esm/resolve:301:10[23m)[22m
+[2m ⁃ at [3mpackageImportsResolve[23m ([3mnode:internal/modules/esm/resolve:752:9[23m)[22m
+[2m ⁃ at [3mmoduleResolve[23m ([3mnode:internal/modules/esm/resolve:916:16[23m)[22m
+[2m ⁃ at [3mdefaultResolve[23m ([3mnode:internal/modules/esm/resolve:1056:11[23m)[22m
+[2m ⁃ at [3mModuleLoader.defaultResolve[23m ([3mnode:internal/modules/esm/loader:654:12[23m)[22m
+[2m ⁃ at [3m#cachedDefaultResolve[23m ([3mnode:internal/modules/esm/loader:603:25[23m)[22m
+[2m ⁃ at [3mModuleLoader.resolve[23m ([3mnode:internal/modules/esm/loader:586:38[23m)[22m
+[2m ⁃ at [3mModuleLoader.getModuleJobForImport[23m ([3mnode:internal/modules/esm/loader:242:38[23m)[22m
+[2m ⁃ at [3mModuleJob._link[23m ([3mnode:internal/modules/esm/module_job:135:49[23m)[22m
+
+[31m[CAUSE][39m
+TypeError {
+  stack: 'Package import specifier "#internal/nuxt/paths" is not defined in package C:\\Users\\hp\\sistema-de-ingresos-2\\package.json imported from C:\\Users\\hp\\sistema-de-ingresos-2\\.nuxt\\dist\\server\\server.mjs\n' +
+  '    at importNotDefined (node:internal/modules/esm/resolve:301:10)\n' +
+  '    at packageImportsResolve (node:internal/modules/esm/resolve:752:9)\n' +
+  '    at moduleResolve (node:internal/modules/esm/resolve:916:16)\n' +
+  '    at defaultResolve (node:internal/modules/esm/resolve:1056:11)\n' +
+  '    at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:654:12)\n' +
+  '    at #cachedDefaultResolve (node:internal/modules/esm/loader:603:25)\n' +
+  '    at ModuleLoader.resolve (node:internal/modules/esm/loader:586:38)\n' +
+  '    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:242:38)\n' +
+  '    at ModuleJob._link (node:internal/modules/esm/module_job:135:49)',
+  code: 'ERR_PACKAGE_IMPORT_NOT_DEFINED',
+  message: 'Package import specifier "#internal/nuxt/paths" is not defined in 
+  package C:\\Users\\hp\\sistema-de-ingresos-2\\package.json imported 
+  from 
+  C:\\Users\\hp\\sistema-de-ingresos-2\\.nuxt\\dist\\server\\server.mjs',
+}
+
+
+
+[41m[30m ERROR [39m[49m [request error] [unhandled] [GET] http://127.0.0.1:3001/__nuxt_error?error=true&url=%2F&statusCode=500&statusMessage=Server+Error&message=Package+import+specifier+%22%23internal%2Fnuxt%2Fpaths%22+is+not+defined+in+package+C:%5CUsers%5Chp%5Csistema-de-ingresos-2%5Cpackage.json+imported+from+C:%5CUsers%5Chp%5Csistema-de-ingresos-2%5C.nuxt%5Cdist%5Cserver%5Cserver.mjs&stack=Package+import+specifier+%22%23internal%2Fnuxt%2Fpaths%22+is+not+defined+in+package+C:%5CUsers%5Chp%5Csistema-de-ingresos-2%5Cpackage.json+imported+from+C:%5CUsers%5Chp%5Csistema-de-ingresos-2%5C.nuxt%5Cdist%5Cserver%5Cserver.mjs%0Aat+importNotDefined+(node:internal%2Fmodules%2Fesm%2Fresolve:301:10)%0Aat+packageImportsResolve+(node:internal%2Fmodules%2Fesm%2Fresolve:752:9)%0Aat+moduleResolve+(node:internal%2Fmodules%2Fesm%2Fresolve:916:16)%0Aat+defaultResolve+(node:internal%2Fmodules%2Fesm%2Fresolve:1056:11)%0Aat+ModuleLoader.defaultResolve+(node:internal%2Fmodules%2Fesm%2Floader:654:12)%0Aat+%23cachedDefaultResolve+(node:internal%2Fmodules%2Fesm%2Floader:603:25)%0Aat+ModuleLoader.resolve+(node:internal%2Fmodules%2Fesm%2Floader:586:38)%0Aat+ModuleLoader.getModuleJobForImport+(node:internal%2Fmodules%2Fesm%2Floader:242:38)%0Aat+ModuleJob._link+(node:internal%2Fmodules%2Fesm%2Fmodule_job:135:49)
+
+ 
+[31mℹ Error: Package import specifier "#internal/nuxt/paths" is not defined in package .\package.json imported from .\.nuxt\dist\server\server.mjs[39m
+
+[2m ⁃ at [3mimportNotDefined[23m ([3mnode:internal/modules/esm/resolve:301:10[23m)[22m
+[2m ⁃ at [3mpackageImportsResolve[23m ([3mnode:internal/modules/esm/resolve:752:9[23m)[22m
+[2m ⁃ at [3mmoduleResolve[23m ([3mnode:internal/modules/esm/resolve:916:16[23m)[22m
+[2m ⁃ at [3mdefaultResolve[23m ([3mnode:internal/modules/esm/resolve:1056:11[23m)[22m
+[2m ⁃ at [3mModuleLoader.defaultResolve[23m ([3mnode:internal/modules/esm/loader:654:12[23m)[22m
+[2m ⁃ at [3m#cachedDefaultResolve[23m ([3mnode:internal/modules/esm/loader:603:25[23m)[22m
+[2m ⁃ at [3mModuleLoader.resolve[23m ([3mnode:internal/modules/esm/loader:586:38[23m)[22m
+[2m ⁃ at [3mModuleLoader.getModuleJobForImport[23m ([3mnode:internal/modules/esm/loader:242:38[23m)[22m
+[2m ⁃ at [3mModuleJob._link[23m ([3mnode:internal/modules/esm/module_job:135:49[23m)[22m
+
+[31m[CAUSE][39m
+TypeError {
+  stack: 'Package import specifier "#internal/nuxt/paths" is not defined in package C:\\Users\\hp\\sistema-de-ingresos-2\\package.json imported from C:\\Users\\hp\\sistema-de-ingresos-2\\.nuxt\\dist\\server\\server.mjs\n' +
+  '    at importNotDefined (node:internal/modules/esm/resolve:301:10)\n' +
+  '    at packageImportsResolve (node:internal/modules/esm/resolve:752:9)\n' +
+  '    at moduleResolve (node:internal/modules/esm/resolve:916:16)\n' +
+  '    at defaultResolve (node:internal/modules/esm/resolve:1056:11)\n' +
+  '    at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:654:12)\n' +
+  '    at #cachedDefaultResolve (node:internal/modules/esm/loader:603:25)\n' +
+  '    at ModuleLoader.resolve (node:internal/modules/esm/loader:586:38)\n' +
+  '    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:242:38)\n' +
+  '    at ModuleJob._link (node:internal/modules/esm/module_job:135:49)',
+  code: 'ERR_PACKAGE_IMPORT_NOT_DEFINED',
+  message: 'Package import specifier "#internal/nuxt/paths" is not defined in 
+  package C:\\Users\\hp\\sistema-de-ingresos-2\\package.json imported 
+  from 
+  C:\\Users\\hp\\sistema-de-ingresos-2\\.nuxt\\dist\\server\\server.mjs',
+}
+
+
+
+[41m[30m ERROR [39m[49m [request error] [unhandled] [GET] http://127.0.0.1:3001/
+
+ 
+[31mℹ Error: Package import specifier "#internal/nuxt/paths" is not defined in package .\package.json imported from .\.nuxt\dist\server\server.mjs[39m
+
+[2m ⁃ at [3mimportNotDefined[23m ([3mnode:internal/modules/esm/resolve:301:10[23m)[22m
+[2m ⁃ at [3mpackageImportsResolve[23m ([3mnode:internal/modules/esm/resolve:752:9[23m)[22m
+[2m ⁃ at [3mmoduleResolve[23m ([3mnode:internal/modules/esm/resolve:916:16[23m)[22m
+[2m ⁃ at [3mdefaultResolve[23m ([3mnode:internal/modules/esm/resolve:1056:11[23m)[22m
+[2m ⁃ at [3mModuleLoader.defaultResolve[23m ([3mnode:internal/modules/esm/loader:654:12[23m)[22m
+[2m ⁃ at [3m#cachedDefaultResolve[23m ([3mnode:internal/modules/esm/loader:603:25[23m)[22m
+[2m ⁃ at [3mModuleLoader.resolve[23m ([3mnode:internal/modules/esm/loader:586:38[23m)[22m
+[2m ⁃ at [3mModuleLoader.getModuleJobForImport[23m ([3mnode:internal/modules/esm/loader:242:38[23m)[22m
+[2m ⁃ at [3mModuleJob._link[23m ([3mnode:internal/modules/esm/module_job:135:49[23m)[22m
+
+[31m[CAUSE][39m
+TypeError {
+  stack: 'Package import specifier "#internal/nuxt/paths" is not defined in package C:\\Users\\hp\\sistema-de-ingresos-2\\package.json imported from C:\\Users\\hp\\sistema-de-ingresos-2\\.nuxt\\dist\\server\\server.mjs\n' +
+  '    at importNotDefined (node:internal/modules/esm/resolve:301:10)\n' +
+  '    at packageImportsResolve (node:internal/modules/esm/resolve:752:9)\n' +
+  '    at moduleResolve (node:internal/modules/esm/resolve:916:16)\n' +
+  '    at defaultResolve (node:internal/modules/esm/resolve:1056:11)\n' +
+  '    at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:654:12)\n' +
+  '    at #cachedDefaultResolve (node:internal/modules/esm/loader:603:25)\n' +
+  '    at ModuleLoader.resolve (node:internal/modules/esm/loader:586:38)\n' +
+  '    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:242:38)\n' +
+  '    at ModuleJob._link (node:internal/modules/esm/module_job:135:49)',
+  code: 'ERR_PACKAGE_IMPORT_NOT_DEFINED',
+  message: 'Package import specifier "#internal/nuxt/paths" is not defined in 
+  package C:\\Users\\hp\\sistema-de-ingresos-2\\package.json imported 
+  from 
+  C:\\Users\\hp\\sistema-de-ingresos-2\\.nuxt\\dist\\server\\server.mjs',
+}
+
+
+
+<--- Last few GCs --->
+
+[19248:0000020F059F1000]  6794279 ms: Mark-Compact 8084.0 (8237.1) -> 8071.8 (8237.6) MB, pooled: 0 MB, 3485.88 / 0.00 ms  (average mu = 0.105, current mu = 0.063) task; scavenge might not succeed
+[19248:0000020F059F1000]  6798049 ms: Mark-Compact 8084.6 (8237.6) -> 8072.3 (8238.4) MB, pooled: 0 MB, 3527.03 / 0.00 ms  (average mu = 0.085, current mu = 0.065) task; scavenge might not succeed
+
+
+<--- JS stacktrace --->
+
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 00007FF7DBD7BA4B node::SetCppgcReference+16011
+ 2: 00007FF7DBCE53F8 SSL_get_quiet_shutdown+92008
+ 3: 00007FF7DC872D81 v8::Isolate::ReportExternalAllocationLimitReached+65
+ 4: 00007FF7DC85FB86 v8::Function::Experimental_IsNopFunction+2918
+ 5: 00007FF7DC6AB830 v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+31552
+ 6: 00007FF7DC6A54FD v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+6157
+ 7: 00007FF7DC6A0D95 v8::internal::ThreadIsolation::JitPageReference::Size+190789
+ 8: 00007FF7DC01A30D BIO_ssl_shutdown+189

@@ -3,7 +3,7 @@
     <button
       type="button"
       @click="isExpanded = !isExpanded"
-      class="h-[34px] inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs font-bold text-gray-700 shadow-none transition-colors hover:border-brand-leaf hover:bg-white"
+      class="h-[38px] inline-flex items-center gap-2 rounded-[11px] border border-[#dfe6ef] bg-white/90 px-3 text-[0.8rem] font-bold text-[#20304d] shadow-[0_8px_18px_rgba(22,38,65,0.04)] transition-colors hover:border-brand-leaf hover:bg-white"
       :title="buttonTitle"
     >
       <LucideRefreshCcw v-if="isProcessing || starting || batching" :size="14" class="text-brand-campus animate-spin" />

@@ -1,108 +1,123 @@
 <template>
-  <div class="flex h-screen overflow-hidden bg-app font-sans">
-    <aside class="w-[240px] bg-brand-teal text-white flex flex-col shadow-xl z-20 shrink-0 relative overflow-hidden">
-      <div class="absolute inset-0 bg-black/5 pointer-events-none"></div>
+  <div class="income-shell font-sans">
+    <aside class="income-sidebar">
+      <div class="sidebar-sheen"></div>
+      <div class="sidebar-rings sidebar-rings-top"></div>
+      <div class="sidebar-rings sidebar-rings-mid"></div>
+      <div class="sidebar-rings sidebar-rings-low"></div>
+      <div class="sidebar-arc"></div>
+      <div class="sidebar-leaves">
+        <i></i>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
 
-      <div class="py-6 px-5 text-center border-b border-white/10 relative z-10">
+      <div class="sidebar-brand">
         <img
           src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp"
           alt="IECS IEDIS"
-          class="max-h-[48px] mx-auto mb-3 brightness-0 invert opacity-90"
+          class="sidebar-logo"
         />
-        <h2 class="font-bold text-xs tracking-widest m-0 text-white/90 uppercase">Sistema de Ingresos</h2>
+        <h2>Sistema de Ingresos</h2>
       </div>
 
-      <nav class="flex-1 py-5 px-3 flex flex-col gap-1.5 relative z-10 overflow-y-auto">
+      <nav class="sidebar-nav">
         <NuxtLink to="/" class="nav-item group">
-          <LucideUsers :size="16" class="group-hover:text-white transition-colors" /> Alumnos
+          <LucideUsers :size="22" stroke-width="2.2" /> Alumnos
         </NuxtLink>
         <NuxtLink to="/deudores" class="nav-item group">
-          <LucideAlertTriangle :size="16" class="group-hover:text-white transition-colors" /> Deudores
+          <LucideAlertTriangle :size="22" stroke-width="2" /> Deudores
         </NuxtLink>
         <NuxtLink to="/reportes" class="nav-item group" v-if="userRole === 'global'">
-          <LucidePieChart :size="16" class="group-hover:text-white transition-colors" /> Ingresos
+          <LucidePieChart :size="22" stroke-width="2" /> Ingresos
         </NuxtLink>
         <NuxtLink to="/conceptos" class="nav-item group">
-          <LucideSettings :size="16" class="group-hover:text-white transition-colors" /> Conceptos
+          <LucideSettings :size="22" stroke-width="2" /> Conceptos
         </NuxtLink>
         <NuxtLink to="/facturas" class="nav-item group">
-          <LucideFileText :size="16" class="group-hover:text-white transition-colors" /> Facturas CFDI
+          <LucideFileText :size="22" stroke-width="2" /> Facturas CFDI
         </NuxtLink>
         <NuxtLink to="/usuarios" class="nav-item group" v-if="userRole === 'global'">
-          <LucideShield :size="16" class="group-hover:text-white transition-colors" /> Usuarios
+          <LucideShield :size="22" stroke-width="2" /> Usuarios
         </NuxtLink>
       </nav>
 
-      <div class="px-5 pb-4 relative z-10" v-if="userPlanteles.length > 1 || userRole === 'global'">
-        <label class="block text-[0.65rem] font-semibold uppercase tracking-wider text-white/60 mb-1">
-          Plantel activo
-        </label>
-        <select
-          v-model="activePlantel"
-          @change="switchPlantel"
-          class="w-full bg-black/15 text-white border-none rounded-lg text-xs font-semibold py-2 px-3 focus:ring-1 focus:ring-white/30 cursor-pointer outline-none transition-colors hover:bg-black/20"
-        >
-          <option v-if="userRole === 'global'" value="GLOBAL" class="text-gray-800 font-semibold">🌐 CONSOLIDADO</option>
-          <option v-for="p in userPlanteles" :key="p" :value="p" class="text-gray-800 font-semibold">PLANTEL {{ p }}</option>
-        </select>
-      </div>
+      <div class="sidebar-footer">
+        <div class="plantel-block" v-if="userPlanteles.length > 1 || userRole === 'global'">
+          <label>Plantel activo</label>
+          <div class="plantel-select">
+            <LucideBuilding2 :size="21" />
+            <select
+              v-model="activePlantel"
+              @change="switchPlantel"
+            >
+              <option v-if="userRole === 'global'" value="GLOBAL">CONSOLIDADO</option>
+              <option v-for="p in userPlanteles" :key="p" :value="p">PLANTEL {{ p }}</option>
+            </select>
+            <LucideChevronDown :size="16" />
+          </div>
+        </div>
 
-      <div class="p-5 bg-black/15 relative z-10 shrink-0">
-        <label class="flex items-center justify-between cursor-pointer mb-5 group">
-          <span class="text-[0.75rem] font-semibold uppercase text-gray-200 group-hover:text-white transition-colors">
-            Recargos Automáticos
-          </span>
+        <label class="late-fee-toggle group">
+          <span>Recargos Automáticos</span>
           <div
-            class="relative w-9 h-5 bg-white/20 rounded-full transition-colors duration-200"
-            :class="{ '!bg-brand-leaf': state.lateFeeActive }"
+            class="toggle-track"
+            :class="{ 'toggle-track-on': state.lateFeeActive }"
           >
             <input type="checkbox" v-model="state.lateFeeActive" class="hidden" />
             <div
-              class="absolute top-[2px] left-[2px] w-[16px] h-[16px] bg-white rounded-full transition-transform duration-200 shadow-sm"
-              :class="{ 'translate-x-[16px]': state.lateFeeActive }"
+              class="toggle-thumb"
+              :class="{ 'toggle-thumb-on': state.lateFeeActive }"
             ></div>
           </div>
         </label>
 
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2.5">
-            <div class="w-8 h-8 rounded-full bg-black/20 flex items-center justify-center overflow-hidden border border-white/30 shadow-sm shrink-0">
-              <img v-if="adminPhoto" :src="adminPhoto" alt="Perfil" class="w-full h-full object-cover" />
-              <LucideUser v-else :size="16" class="text-white/80" />
+        <div class="admin-card">
+          <div class="admin-profile">
+            <div class="admin-avatar">
+              <img v-if="adminPhoto" :src="adminPhoto" alt="Perfil" />
+              <LucideUser v-else :size="18" />
             </div>
-            <div class="flex flex-col overflow-hidden max-w-[120px]">
-              <span class="text-[0.8rem] text-white font-semibold leading-tight truncate">{{ adminName }}</span>
-              <span
-                class="text-[0.6rem] font-semibold uppercase"
-                :class="userRole === 'global' ? 'text-accent-gold' : 'text-brand-leaf'"
-              >
-                {{ userRole === 'global' ? 'ADMIN' : 'USUARIO' }}
-              </span>
+            <div class="admin-meta">
+              <span>{{ adminName }}</span>
+              <strong>{{ userRole === 'global' ? 'ADMIN' : 'USUARIO' }}</strong>
             </div>
           </div>
-          <button @click="logout" title="Cerrar Sesión" class="text-white/60 hover:text-white transition-colors shrink-0">
-            <LucideLogOut :size="16" />
+          <button @click="logout" title="Cerrar Sesión" class="logout-button">
+            <LucideLogOut :size="18" />
           </button>
         </div>
       </div>
     </aside>
 
-    <main class="flex-1 overflow-y-auto flex flex-col relative min-w-0 min-h-0 bg-app">
-      <header class="bg-white/90 backdrop-blur-sm px-6 md:px-8 py-3 h-[60px] border-b border-gray-200 flex items-center justify-between sticky top-0 z-20 shrink-0 shadow-sm">
-        <h1 class="text-lg font-bold text-gray-800 tracking-tight">{{ currentRouteName }}</h1>
+    <main class="income-main">
+      <header class="app-header">
+        <h1>{{ currentRouteName }}</h1>
 
-        <div class="flex items-center gap-3">
+        <div class="header-actions">
           <SyncBadge />
-          <select
-            v-model="state.ciclo"
-            class="input-field !w-40 font-bold border-gray-200 text-brand-campus shadow-none hover:border-brand-leaf bg-gray-50 h-[34px] !py-1 transition-colors"
-          >
-            <option v-for="c in CICLOS_LIST" :key="c.value" :value="c.value">{{ c.label }}</option>
-          </select>
+          <div class="ciclo-picker">
+            <LucideCalendarDays :size="18" />
+            <select
+              v-model="state.ciclo"
+              aria-label="Ciclo escolar"
+            >
+              <option v-for="c in CICLOS_LIST" :key="c.value" :value="c.value">{{ c.label }}</option>
+            </select>
+            <LucideChevronDown :size="16" />
+          </div>
+          <button type="button" class="header-icon-button" title="Notificaciones" aria-label="Notificaciones">
+            <LucideBell :size="20" />
+          </button>
+          <NuxtLink to="/" class="header-home-button" title="Inicio" aria-label="Inicio">
+            <LucideSchool :size="23" />
+          </NuxtLink>
         </div>
       </header>
 
-      <div class="p-4 md:p-6 lg:p-8 flex-1 relative z-0 flex flex-col min-h-0">
+      <div class="income-content">
         <slot />
       </div>
     </main>
@@ -124,14 +139,15 @@
       </div>
     </div>
 
-    <!-- Optimistic Sync Indicator -->
-    <div v-if="syncState !== 'idle'" 
-         class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border flex items-center gap-2.5 z-[9999] text-xs font-bold uppercase tracking-widest transition-all duration-300"
-         :class="{
-           'border-gray-200 text-gray-600': syncState === 'pending',
-           'border-brand-leaf text-brand-campus': syncState === 'synced',
-           'border-accent-coral text-accent-coral': syncState === 'failed'
-         }">
+    <div
+      v-if="syncState !== 'idle'"
+      class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border flex items-center gap-2.5 z-[9999] text-xs font-bold uppercase tracking-widest transition-all duration-300"
+      :class="{
+        'border-gray-200 text-gray-600': syncState === 'pending',
+        'border-brand-leaf text-brand-campus': syncState === 'synced',
+        'border-accent-coral text-accent-coral': syncState === 'failed'
+      }"
+    >
       <LucideRefreshCw v-if="syncState === 'pending'" class="animate-spin text-brand-campus" :size="14" />
       <LucideCheckCircle v-else-if="syncState === 'synced'" class="text-brand-leaf" :size="14" />
       <LucideAlertCircle v-else class="text-accent-coral" :size="14" />
@@ -155,7 +171,12 @@ import {
   LucideAlertCircle,
   LucideLogOut,
   LucideAlertTriangle,
-  LucideRefreshCw
+  LucideRefreshCw,
+  LucideCalendarDays,
+  LucideBell,
+  LucideSchool,
+  LucideBuilding2,
+  LucideChevronDown
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -223,16 +244,608 @@ const logout = async () => {
 </script>
 
 <style scoped>
+.income-shell {
+  display: flex;
+  height: 100vh;
+  min-width: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 54% 7%, rgba(142, 193, 83, 0.09), transparent 17rem),
+    linear-gradient(180deg, #ffffff 0%, #f9fbfa 100%);
+}
+
+.income-sidebar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  width: 260px;
+  flex-shrink: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(200, 219, 204, 0.86);
+  border-radius: 34px;
+  background:
+    radial-gradient(ellipse at 71% -4%, rgba(249, 255, 246, 0.95) 0 6.6rem, rgba(229, 247, 221, 0.58) 6.7rem, transparent 11rem),
+    radial-gradient(ellipse at 8% 41%, rgba(233, 249, 229, 0.72), transparent 13rem),
+    linear-gradient(155deg, rgba(255, 255, 255, 0.96) 0%, rgba(246, 253, 245, 0.94) 28%, rgba(228, 248, 222, 0.88) 58%, rgba(248, 253, 249, 0.96) 100%);
+  box-shadow:
+    14px 0 38px rgba(56, 89, 66, 0.075),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.82),
+    inset -26px 0 48px rgba(201, 238, 191, 0.28);
+  color: #1b2a45;
+}
+
+.income-sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(98deg, rgba(255, 255, 255, 0.72), transparent 31%),
+    radial-gradient(ellipse at 86% 77%, rgba(180, 235, 201, 0.32), transparent 17rem);
+  pointer-events: none;
+}
+
+.income-sidebar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.52);
+  pointer-events: none;
+}
+
+.sidebar-brand {
+  position: relative;
+  z-index: 3;
+  padding: 38px 24px 31px;
+  text-align: center;
+}
+
+.sidebar-logo {
+  display: block;
+  max-height: 48px;
+  max-width: 106px;
+  margin: 0 auto 14px;
+  object-fit: contain;
+}
+
+.sidebar-brand h2 {
+  margin: 0;
+  color: #267447;
+  font-size: 0.73rem;
+  font-weight: 800;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.sidebar-nav {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 2px 18px 14px;
+}
+
 .nav-item {
-  @apply flex items-center gap-2.5 px-4 py-2.5 text-white/70 no-underline rounded-lg text-[0.85rem] font-medium transition-all duration-150;
+  display: flex;
+  min-height: 43px;
+  align-items: center;
+  gap: 13px;
+  border-radius: 12px;
+  padding: 0 17px;
+  color: #33405b;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-decoration: none;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
+
+.nav-item svg {
+  flex-shrink: 0;
+  color: #33405b;
+  transition: color 160ms ease;
+}
+
 .nav-item:hover {
-  @apply bg-white/10 text-white;
+  background: rgba(255, 255, 255, 0.62);
+  color: #286d2b;
+  transform: translateX(1px);
 }
-.nav-item.router-link-active {
-  @apply bg-white text-brand-campus shadow-sm font-semibold;
-}
+
+.nav-item:hover svg,
 .nav-item.router-link-active svg {
-  @apply text-brand-campus;
+  color: #2e7c2e;
+}
+
+.nav-item.router-link-active {
+  background: linear-gradient(90deg, rgba(224, 246, 217, 0.78) 0%, rgba(255, 255, 255, 0.96) 72%);
+  box-shadow:
+    0 12px 31px rgba(44, 95, 56, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  color: #1e6b23;
+}
+
+.sidebar-footer {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 0 20px 23px;
+}
+
+.plantel-block label,
+.late-fee-toggle span {
+  display: block;
+  margin-bottom: 7px;
+  color: #2a5d4a;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.plantel-select,
+.admin-card {
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(210, 225, 213, 0.9);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 12px 24px rgba(58, 112, 71, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.plantel-select {
+  height: 42px;
+  gap: 10px;
+  padding: 0 13px;
+  color: #286d2b;
+}
+
+.plantel-select select {
+  min-width: 0;
+  flex: 1;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #1e2d49;
+  font-size: 0.82rem;
+  font-weight: 800;
+  outline: none;
+}
+
+.late-fee-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.late-fee-toggle span {
+  margin-bottom: 0;
+}
+
+.toggle-track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: #d7e6d1;
+  box-shadow: inset 0 1px 3px rgba(22, 38, 65, 0.12);
+  transition: background 180ms ease;
+}
+
+.toggle-track-on {
+  background: linear-gradient(135deg, #9bd04f, #5ca342);
+}
+
+.toggle-thumb {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(22, 38, 65, 0.18);
+  transition: transform 180ms ease;
+}
+
+.toggle-thumb-on {
+  transform: translateX(18px);
+}
+
+.admin-card {
+  min-height: 66px;
+  justify-content: space-between;
+  padding: 10px 11px;
+}
+
+.admin-profile {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-avatar {
+  display: flex;
+  width: 37px;
+  height: 37px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf7ec;
+  color: #2d6d38;
+}
+
+.admin-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-meta span {
+  max-width: 135px;
+  overflow: hidden;
+  color: #1c2a43;
+  font-size: 0.73rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-meta strong {
+  color: #2a8a2f;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.logout-button {
+  display: flex;
+  height: 34px;
+  width: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #68748a;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.logout-button:hover {
+  background: rgba(232, 63, 75, 0.09);
+  color: #e83f4b;
+}
+
+.sidebar-sheen,
+.sidebar-rings,
+.sidebar-arc,
+.sidebar-leaves {
+  pointer-events: none;
+  position: absolute;
+}
+
+.sidebar-sheen {
+  z-index: 1;
+  inset: 0;
+  background:
+    linear-gradient(104deg, rgba(255, 255, 255, 0.54) 0 19%, transparent 31%),
+    radial-gradient(circle at 74% 4%, rgba(255, 255, 255, 0.86), transparent 8.8rem);
+}
+
+.sidebar-rings {
+  border-radius: 999px;
+  z-index: 1;
+  opacity: 0.5;
+}
+
+.sidebar-rings-top {
+  right: -6.3rem;
+  top: -6.7rem;
+  width: 19rem;
+  height: 19rem;
+  background: repeating-radial-gradient(circle, rgba(104, 163, 70, 0.13) 0 1px, transparent 1px 6px);
+}
+
+.sidebar-rings-mid {
+  right: -9.7rem;
+  top: 20.7rem;
+  width: 25rem;
+  height: 25rem;
+  opacity: 0.42;
+  background: repeating-radial-gradient(circle, rgba(88, 164, 65, 0.16) 0 1px, transparent 1px 5px);
+}
+
+.sidebar-rings-low {
+  left: -8.7rem;
+  bottom: -8.9rem;
+  width: 19rem;
+  height: 19rem;
+  opacity: 0.28;
+  background: repeating-radial-gradient(circle, rgba(68, 154, 81, 0.2) 0 1px, transparent 1px 7px);
+}
+
+.sidebar-arc {
+  z-index: 1;
+  right: -2.7rem;
+  top: 22.2rem;
+  width: 13rem;
+  height: 18rem;
+  border: 1px solid rgba(91, 168, 78, 0.18);
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  transform: rotate(20deg);
+}
+
+.sidebar-leaves {
+  z-index: 1;
+  left: 68px;
+  bottom: 100px;
+  width: 170px;
+  height: 212px;
+  opacity: 0.77;
+}
+
+.sidebar-leaves span {
+  position: absolute;
+  display: block;
+  border-radius: 100% 0 100% 0;
+  background: linear-gradient(145deg, rgba(117, 196, 122, 0.62), rgba(50, 168, 126, 0.22));
+  transform-origin: 100% 100%;
+}
+
+.sidebar-leaves i {
+  position: absolute;
+  left: 51px;
+  bottom: 23px;
+  display: block;
+  width: 142px;
+  height: 142px;
+  border-top: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 50%;
+  transform: rotate(-27deg);
+}
+
+.sidebar-leaves span:nth-of-type(1) {
+  left: 2px;
+  bottom: 25px;
+  width: 82px;
+  height: 132px;
+  background: linear-gradient(145deg, rgba(142, 210, 126, 0.72), rgba(74, 188, 139, 0.2));
+  transform: rotate(-43deg);
+}
+
+.sidebar-leaves span:nth-of-type(2) {
+  left: 56px;
+  bottom: 72px;
+  width: 92px;
+  height: 158px;
+  background: linear-gradient(145deg, rgba(114, 211, 160, 0.55), rgba(41, 174, 124, 0.18));
+  transform: rotate(-27deg);
+}
+
+.sidebar-leaves span:nth-of-type(3) {
+  left: 45px;
+  bottom: 2px;
+  width: 120px;
+  height: 165px;
+  background: linear-gradient(145deg, rgba(82, 181, 93, 0.52), rgba(31, 162, 132, 0.16));
+  transform: rotate(-62deg);
+}
+
+.sidebar-leaves span:nth-of-type(4) {
+  left: 116px;
+  bottom: 34px;
+  width: 102px;
+  height: 136px;
+  background: linear-gradient(145deg, rgba(39, 157, 91, 0.35), rgba(33, 171, 138, 0.11));
+  transform: rotate(-84deg);
+}
+
+.income-main {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 42% -3%, rgba(142, 193, 83, 0.13), transparent 15rem),
+    linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+}
+
+.income-main::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 68px;
+  left: min(28vw, 360px);
+  width: 360px;
+  height: 120px;
+  opacity: 0.38;
+  background:
+    repeating-radial-gradient(ellipse at 50% 0%, rgba(126, 181, 92, 0.18) 0 1px, transparent 1px 5px);
+  clip-path: ellipse(50% 45% at 50% 0%);
+  pointer-events: none;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 18;
+  display: flex;
+  height: 64px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #dfe6ef;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0 30px;
+  backdrop-filter: blur(14px);
+}
+
+.app-header h1 {
+  margin: 0;
+  color: #142641;
+  font-size: 1.32rem;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ciclo-picker,
+.header-icon-button,
+.header-home-button {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  border: 1px solid #dfe6ef;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #20304d;
+  box-shadow: 0 10px 22px rgba(22, 38, 65, 0.04);
+}
+
+.ciclo-picker {
+  min-width: 160px;
+  gap: 9px;
+  padding: 0 12px;
+}
+
+.ciclo-picker svg:first-child {
+  color: #2d7132;
+}
+
+.ciclo-picker select {
+  min-width: 0;
+  flex: 1;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #20304d;
+  font-size: 0.84rem;
+  font-weight: 800;
+  outline: none;
+}
+
+.header-icon-button,
+.header-home-button {
+  width: 38px;
+  justify-content: center;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.header-icon-button:hover,
+.header-home-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(22, 38, 65, 0.08);
+}
+
+.header-home-button {
+  border-color: transparent;
+  background: linear-gradient(135deg, #78b854 0%, #4a8a42 100%);
+  color: #fff;
+}
+
+.income-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 18px 30px 16px;
+}
+
+@media (max-height: 920px) and (min-width: 1081px) {
+  .app-header {
+    height: 60px;
+  }
+
+  .income-content {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .sidebar-brand {
+    padding-top: 32px;
+    padding-bottom: 25px;
+  }
+
+  .sidebar-nav {
+    gap: 7px;
+  }
+
+  .nav-item {
+    min-height: 41px;
+  }
+
+  .sidebar-footer {
+    gap: 13px;
+    padding-bottom: 20px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .income-sidebar {
+    width: 238px;
+  }
+
+  .app-header,
+  .income-content {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+}
+
+@media (max-width: 860px) {
+  .income-shell {
+    overflow: auto;
+  }
+
+  .income-sidebar {
+    width: 220px;
+  }
+
+  .app-header {
+    gap: 16px;
+  }
+
+  .header-actions {
+    gap: 10px;
+  }
+
+  .ciclo-picker {
+    min-width: 150px;
+  }
 }
 </style>
