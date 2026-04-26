@@ -1,7 +1,20 @@
+import { fileURLToPath } from 'node:url'
+
+const clientAppManifestFallback = fileURLToPath(new URL('./node_modules/mocked-exports/lib/empty.mjs', import.meta.url))
+
 export default defineNuxtConfig({
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
   modules: ['@nuxtjs/tailwindcss'],
+  vite: {
+    $client: {
+      resolve: {
+        alias: {
+          '#app-manifest': clientAppManifestFallback
+        }
+      }
+    }
+  },
   runtimeConfig: {
     dbTransport: process.env.DB_TRANSPORT || 'direct',
     dbBridgeUrl: process.env.DB_BRIDGE_URL || 'http://127.0.0.1:8787',
@@ -25,6 +38,7 @@ export default defineNuxtConfig({
     gcpAdminSubject: process.env.GCP_ADMIN_SUBJECT,
 
     externalSyncApiKey: process.env.EXTERNAL_SYNC_API_KEY || '',
+    studentPhotoBaseUrl: process.env.STUDENT_PHOTO_BASE_URL || 'https://matricula.casitaapps.com',
 
     public: {
       googleClientId: process.env.GOOGLE_CLIENT_ID || ''

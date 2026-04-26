@@ -108,9 +108,6 @@
             </select>
             <LucideChevronDown :size="16" />
           </div>
-          <button type="button" class="header-icon-button" title="Notificaciones" aria-label="Notificaciones">
-            <LucideBell :size="20" />
-          </button>
           <NuxtLink to="/" class="header-home-button" title="Inicio" aria-label="Inicio">
             <LucideSchool :size="23" />
           </NuxtLink>
@@ -173,7 +170,6 @@ import {
   LucideAlertTriangle,
   LucideRefreshCw,
   LucideCalendarDays,
-  LucideBell,
   LucideSchool,
   LucideBuilding2,
   LucideChevronDown
@@ -722,7 +718,6 @@ const logout = async () => {
 }
 
 .ciclo-picker,
-.header-icon-button,
 .header-home-button {
   display: inline-flex;
   height: 38px;
@@ -756,14 +751,12 @@ const logout = async () => {
   outline: none;
 }
 
-.header-icon-button,
 .header-home-button {
   width: 38px;
   justify-content: center;
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
-.header-icon-button:hover,
 .header-home-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 14px 24px rgba(22, 38, 65, 0.08);
