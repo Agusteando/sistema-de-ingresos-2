@@ -23,7 +23,7 @@
 
     <div class="kpi-grid">
       <button
-        @click="activeFilter = 'inscritos'"
+        @click="setActiveFilter('inscritos')"
         :class="['kpi-card kpi-green', { active: activeFilter === 'inscritos' }]"
       >
         <span class="kpi-icon"><LucideUsers :size="24" /></span>
@@ -38,7 +38,7 @@
       </button>
 
       <button
-        @click="activeFilter = 'internos'"
+        @click="setActiveFilter('internos')"
         :class="['kpi-card kpi-teal', { active: activeFilter === 'internos' }]"
       >
         <span class="kpi-icon"><LucideUserCheck :size="24" /></span>
@@ -53,7 +53,7 @@
       </button>
 
       <button
-        @click="activeFilter = 'externos'"
+        @click="setActiveFilter('externos')"
         :class="['kpi-card kpi-blue', { active: activeFilter === 'externos' }]"
       >
         <span class="kpi-icon"><LucideGlobe2 :size="24" /></span>
@@ -68,7 +68,7 @@
       </button>
 
       <button
-        @click="activeFilter = 'no_inscritos'"
+        @click="setActiveFilter('no_inscritos')"
         :class="['kpi-card kpi-red', { active: activeFilter === 'no_inscritos' }]"
       >
         <span class="kpi-icon"><LucideUserX :size="24" /></span>
@@ -114,8 +114,8 @@
         <div class="student-list-card">
           <div class="list-titlebar">
             <h2>Lista de alumnos <span>{{ displayedStudents.length }}</span></h2>
-            <button type="button" aria-label="Filtros">
-              <LucideSlidersHorizontal :size="17" />
+            <button v-if="hasActiveFilters" type="button" aria-label="Limpiar filtros" title="Limpiar filtros" @click="clearFilters">
+              <LucideRotateCcw :size="16" />
             </button>
           </div>
 
@@ -146,7 +146,7 @@
             >
               <span class="student-identity">
                 <span class="student-avatar">
-                  <img v-if="photoCache[s.matricula]" :src="photoCache[s.matricula]" alt="" />
+                  <img v-if="photoCache[normalizeStudentMatricula(s.matricula)]" :src="photoCache[normalizeStudentMatricula(s.matricula)]" alt="" />
                   <template v-else>{{ initials(s.nombreCompleto) }}</template>
                 </span>
                 <span class="student-copy">
@@ -222,7 +222,7 @@ import {
   LucideSettings,
   LucideUsers,
   LucideGlobe2,
-  LucideSlidersHorizontal,
+  LucideRotateCcw,
   LucideChevronRight
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
@@ -259,23 +259,48 @@ const editingStudent = ref(null)
 
 const format = (val) => Number(val || 0).toFixed(2)
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') || 'AL'
-const photoStorageKey = (matricula) => `foto_${matricula}`
+const normalizeStudentMatricula = (value) => String(value || '').trim().toUpperCase()
+const photoStorageKey = (matricula) => `foto_${normalizeStudentMatricula(matricula)}`
 
 const readCachedStudentPhotos = () => {
   if (!process.client) return
   const next = {}
   students.value.forEach((student) => {
-    const cached = sessionStorage.getItem(photoStorageKey(student.matricula))
-    if (cached && cached !== 'none') next[student.matricula] = cached
+    const matricula = normalizeStudentMatricula(student.matricula)
+    const cached = sessionStorage.getItem(photoStorageKey(matricula))
+    if (cached && cached !== 'none') next[matricula] = cached
   })
   photoCache.value = next
 }
 
 const cacheStudentPhoto = ({ matricula, photoUrl }) => {
-  if (!matricula) return
+  const normalized = normalizeStudentMatricula(matricula)
+  if (!normalized) return
   if (photoUrl && photoUrl !== 'none') {
-    photoCache.value = { ...photoCache.value, [matricula]: photoUrl }
+    photoCache.value = { ...photoCache.value, [normalized]: photoUrl }
+    if (process.client) sessionStorage.setItem(photoStorageKey(normalized), photoUrl)
   }
+}
+
+const hasActiveFilters = computed(() => Boolean(
+  activeFilter.value ||
+  activeGrado.value ||
+  activeGrupo.value ||
+  filters.value.q
+))
+
+const setActiveFilter = (filter) => {
+  activeFilter.value = activeFilter.value === filter ? '' : filter
+  activeGrado.value = ''
+  activeGrupo.value = ''
+}
+
+const clearFilters = () => {
+  filters.value.q = ''
+  activeFilter.value = ''
+  activeGrado.value = ''
+  activeGrupo.value = ''
+  performSearch()
 }
 
 const listRangeLabel = computed(() => {
@@ -317,9 +342,9 @@ const performSearch = async () => {
     readCachedStudentPhotos()
 
     if (selectedStudent.value) {
-      selectedStudent.value = students.value.find(s => s.matricula === selectedStudent.value.matricula) || null
+      selectedStudent.value = students.value.find(s => normalizeStudentMatricula(s.matricula) === normalizeStudentMatricula(selectedStudent.value.matricula)) || null
     } else if (route.query.q) {
-      const match = students.value.find(s => s.matricula === route.query.q)
+      const match = students.value.find(s => normalizeStudentMatricula(s.matricula) === normalizeStudentMatricula(route.query.q))
       if (match) selectStudent(match)
     }
   } catch (e) {
@@ -410,7 +435,7 @@ const exportData = () => {
 
 const selectStudent = (student) => { selectedStudent.value = student }
 const selectStudentByMatricula = (matricula) => {
-  const match = students.value.find(s => s.matricula === matricula)
+  const match = students.value.find(s => normalizeStudentMatricula(s.matricula) === normalizeStudentMatricula(matricula))
   if (match) selectStudent(match)
 }
 
@@ -489,12 +514,12 @@ const handleStudentSuccess = () => {
 
 .students-hero {
   display: flex;
-  min-height: 64px;
+  min-height: 54px;
   flex-shrink: 0;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
-  padding: 0 0 10px;
+  gap: 20px;
+  padding: 0 0 8px;
 }
 
 .hero-copy h1 {
@@ -530,10 +555,10 @@ const handleStudentSuccess = () => {
   justify-content: space-between;
   gap: 10px;
   border: 1px solid #dfe6ef;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.88);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
   padding: 9px 13px 9px 16px;
-  box-shadow: 0 14px 30px rgba(22, 38, 65, 0.05);
+  box-shadow: 0 8px 22px rgba(22, 38, 65, 0.045);
 }
 
 .monthly-income span {
@@ -570,9 +595,9 @@ const handleStudentSuccess = () => {
 }
 
 .new-student-button {
-  height: 52px;
+  height: 46px;
   min-width: 185px;
-  border-radius: 13px;
+  border-radius: 10px;
   font-size: 0.9rem;
 }
 
@@ -580,27 +605,24 @@ const handleStudentSuccess = () => {
   display: grid;
   flex-shrink: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .kpi-card {
   position: relative;
   display: grid;
-  min-height: 86px;
-  grid-template-columns: 50px minmax(0, 1fr) 72px;
+  min-height: 74px;
+  grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   overflow: hidden;
   border: 1px solid #dfe6ef;
-  border-radius: 12px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.88) 100%);
-  padding: 11px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 10px 12px;
   text-align: left;
-  box-shadow:
-    0 14px 34px rgba(22, 38, 65, 0.052),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 24px rgba(22, 38, 65, 0.045);
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -612,7 +634,7 @@ const handleStudentSuccess = () => {
   bottom: -24px;
   width: 116px;
   height: 82px;
-  opacity: 0.58;
+  opacity: 0.28;
   background-repeat: no-repeat;
   background-size: contain;
   background-image: url("data:image/svg+xml,%3Csvg width='134' height='92' viewBox='0 0 134 92' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M92 88C77 54 86 28 123 8C130 48 114 75 92 88Z' stroke='%23dce8de' stroke-width='1'/%3E%3Cpath d='M57 88C50 54 63 30 103 18C101 57 84 78 57 88Z' stroke='%23dce8de' stroke-width='1'/%3E%3Cpath d='M18 90C39 66 68 56 113 55' stroke='%23dce8de' stroke-width='1'/%3E%3C/svg%3E");
@@ -632,7 +654,7 @@ const handleStudentSuccess = () => {
 .kpi-card:hover,
 .kpi-card.active {
   transform: translateY(-1px);
-  box-shadow: 0 18px 42px rgba(22, 38, 65, 0.08);
+  box-shadow: 0 12px 28px rgba(22, 38, 65, 0.065);
 }
 
 .kpi-card.active {
@@ -648,8 +670,8 @@ const handleStudentSuccess = () => {
   position: relative;
   z-index: 1;
   display: flex;
-  width: 46px;
-  height: 46px;
+  width: 38px;
+  height: 38px;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
@@ -686,16 +708,16 @@ const handleStudentSuccess = () => {
 .kpi-red .kpi-text span { color: #354158; }
 
 .kpi-text strong {
-  margin-top: 4px;
+  margin-top: 3px;
   color: #172841;
-  font-size: 1.38rem;
+  font-size: 1.18rem;
   font-weight: 850;
   letter-spacing: -0.03em;
   line-height: 1;
 }
 
 .kpi-text em {
-  margin-top: 6px;
+  margin-top: 4px;
   color: #78849a;
   font-size: 0.68rem;
   font-style: normal;
@@ -703,21 +725,15 @@ const handleStudentSuccess = () => {
 }
 
 .kpi-icon svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   align-self: center;
   margin: 0;
   filter: none;
 }
 
 .kpi-card > svg {
-  position: relative;
-  z-index: 1;
-  align-self: end;
-  width: 70px;
-  height: 30px;
-  margin-bottom: -2px;
-  filter: drop-shadow(0 3px 4px rgba(101, 167, 68, 0.08));
+  display: none;
 }
 
 .kpi-card polyline {
@@ -738,13 +754,13 @@ const handleStudentSuccess = () => {
   flex-shrink: 0;
   align-items: center;
   gap: 12px;
-  min-height: 48px;
-  margin-bottom: 10px;
+  min-height: 44px;
+  margin-bottom: 8px;
   border: 1px solid #dfe6ef;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.88);
-  padding: 8px 9px;
-  box-shadow: 0 12px 28px rgba(22, 38, 65, 0.045);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 6px 8px;
+  box-shadow: 0 8px 22px rgba(22, 38, 65, 0.04);
 }
 
 .search-control {
@@ -829,9 +845,9 @@ const handleStudentSuccess = () => {
 .student-detail-panel {
   min-height: 0;
   border: 1px solid #dfe6ef;
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 14px 34px rgba(22, 38, 65, 0.055);
+  box-shadow: 0 10px 26px rgba(22, 38, 65, 0.048);
 }
 
 .student-list-card {
@@ -843,7 +859,7 @@ const handleStudentSuccess = () => {
 
 .list-titlebar {
   display: flex;
-  height: 38px;
+  height: 36px;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
@@ -873,9 +889,22 @@ const handleStudentSuccess = () => {
 }
 
 .list-titlebar button {
-  border: 0;
-  background: transparent;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #f7fafc;
   color: #64748b;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.list-titlebar button:hover {
+  border-color: #dfe6ef;
+  background: #fff;
+  color: #2d7132;
 }
 
 .list-columns {
@@ -919,7 +948,7 @@ const handleStudentSuccess = () => {
 .student-row {
   position: relative;
   display: grid;
-  min-height: 46px;
+  min-height: 43px;
   align-items: center;
   gap: 8px;
   border: 0;
@@ -932,12 +961,12 @@ const handleStudentSuccess = () => {
 }
 
 .student-row:hover {
-  background: #fbfdfb;
+  background: #f8fbf9;
 }
 
 .student-row.selected {
   border-left-color: #54ad3c;
-  background: linear-gradient(90deg, rgba(225, 242, 216, 0.9) 0%, rgba(255, 255, 255, 0.9) 100%);
+  background: linear-gradient(90deg, rgba(231, 244, 225, 0.72) 0%, rgba(255, 255, 255, 0.92) 100%);
 }
 
 .student-row.inactive {
@@ -1075,7 +1104,7 @@ const handleStudentSuccess = () => {
   border-radius: 9px;
   background: transparent;
   color: #637089;
-  opacity: 0;
+  opacity: 0.45;
   transition: opacity 150ms ease, background 150ms ease, color 150ms ease;
 }
 
@@ -1131,17 +1160,13 @@ const handleStudentSuccess = () => {
   }
 
   .kpi-card {
-    grid-template-columns: 46px minmax(0, 1fr) 60px;
+    grid-template-columns: 40px minmax(0, 1fr);
     padding-right: 12px;
   }
 
   .kpi-icon {
-    width: 42px;
-    height: 42px;
-  }
-
-  .kpi-card > svg {
-    width: 60px;
+    width: 38px;
+    height: 38px;
   }
 
   .student-list-panel.is-compact {
@@ -1185,14 +1210,14 @@ const handleStudentSuccess = () => {
   }
 
   .kpi-card {
-    min-height: 80px;
+    min-height: 72px;
     padding-top: 9px;
     padding-bottom: 9px;
   }
 
   .kpi-icon {
-    width: 42px;
-    height: 42px;
+    width: 38px;
+    height: 38px;
   }
 
   .kpi-text strong {

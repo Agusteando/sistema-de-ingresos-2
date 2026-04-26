@@ -174,6 +174,10 @@
   </div>
 </template>
 
+<script>
+const studentPhotoRequests = new Map()
+</script>
+
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2 } from 'lucide-vue-next'
@@ -208,6 +212,8 @@ const showInvoiceModal = ref(false)
 
 const format = (val) => Number(val || 0).toFixed(2)
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') || 'AL'
+const normalizePhotoMatricula = (value) => String(value || '').trim().toUpperCase()
+const photoStorageKey = (matricula) => `foto_${normalizePhotoMatricula(matricula)}`
 const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
 
 const loadDebts = async () => {
@@ -230,13 +236,15 @@ const loadSiblings = async () => {
 }
 
 const loadPhoto = async () => {
-  if (!props.student?.matricula) return
-  const key = `foto_${props.student.matricula}`
+  const matricula = normalizePhotoMatricula(props.student?.matricula)
+  if (!matricula) return
+  if (!process.client) return
+  const key = photoStorageKey(matricula)
 
   const cached = sessionStorage.getItem(key)
   if (cached) {
     photoUrl.value = cached === 'none' ? null : cached
-    if (cached !== 'none') emit('photo-loaded', { matricula: props.student.matricula, photoUrl: cached })
+    if (cached !== 'none') emit('photo-loaded', { matricula, photoUrl: cached })
     return
   }
 
@@ -244,30 +252,52 @@ const loadPhoto = async () => {
   photoUrl.value = null
 
   try {
-    const res = await $fetch(`https://matricula.casitaapps.com/api/students/${encodeURIComponent(props.student.matricula)}/photo?format=json`)
+    let request = studentPhotoRequests.get(matricula)
+    if (!request) {
+      request = $fetch(`/api/students/${encodeURIComponent(matricula)}/photo`, {
+        params: { format: 'json' }
+      }).finally(() => {
+        studentPhotoRequests.delete(matricula)
+      })
+      studentPhotoRequests.set(matricula, request)
+    }
+
+    const res = await request
+    if (normalizePhotoMatricula(props.student?.matricula) !== matricula) return
+
     if (res && res.photoUrl) {
       photoUrl.value = res.photoUrl
       sessionStorage.setItem(key, res.photoUrl)
-      emit('photo-loaded', { matricula: props.student.matricula, photoUrl: res.photoUrl })
+      emit('photo-loaded', { matricula, photoUrl: res.photoUrl })
     } else {
-      photoUrl.value = 'none'
+      photoUrl.value = null
       sessionStorage.setItem(key, 'none')
     }
   } catch (e) {
-    photoUrl.value = 'none'
-    sessionStorage.setItem(key, 'none')
+    if (normalizePhotoMatricula(props.student?.matricula) === matricula) {
+      photoUrl.value = null
+      if (e?.statusCode === 404 || e?.response?.status === 404) {
+        sessionStorage.setItem(key, 'none')
+      }
+    }
   } finally {
-    photoLoading.value = false
+    if (normalizePhotoMatricula(props.student?.matricula) === matricula) {
+      photoLoading.value = false
+    }
   }
 }
 
-watch(() => [props.student, state.value.lateFeeActive, normalizeCicloKey(state.value.ciclo)], () => {
-  photoUrl.value = null
+watch(() => [props.student?.matricula, state.value.lateFeeActive, normalizeCicloKey(state.value.ciclo)], () => {
   if (props.student) {
     loadDebts()
     loadSiblings()
-    loadPhoto()
   }
+}, { immediate: true })
+
+watch(() => props.student?.matricula, () => {
+  photoUrl.value = null
+  photoLoading.value = false
+  if (props.student) loadPhoto()
 }, { immediate: true })
 
 const toggleAll = (e) => { selectedDebts.value = e.target.checked ? [...validDebts.value] : [] }
@@ -370,7 +400,7 @@ const handleSuccess = () => {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   overflow: hidden;
 }
 
@@ -378,15 +408,15 @@ const handleSuccess = () => {
 .siblings-card,
 .account-card {
   border: 1px solid #dfe6ef;
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 12px 28px rgba(22, 38, 65, 0.05);
+  box-shadow: 0 8px 24px rgba(22, 38, 65, 0.045);
 }
 
 .student-profile-card {
   flex-shrink: 0;
   overflow: hidden;
-  padding: 12px 16px 10px;
+  padding: 11px 14px 10px;
 }
 
 .student-profile-card.inactive {
@@ -413,8 +443,8 @@ const handleSuccess = () => {
 
 .profile-avatar {
   display: flex;
-  width: 50px;
-  height: 50px;
+  width: 46px;
+  height: 46px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
@@ -461,7 +491,7 @@ const handleSuccess = () => {
   gap: 7px;
   margin: 0;
   color: #172841;
-  font-size: 1.02rem;
+  font-size: 0.96rem;
   font-weight: 850;
   letter-spacing: -0.015em;
   line-height: 1.2;
@@ -565,7 +595,8 @@ const handleSuccess = () => {
   min-width: 0;
   align-items: center;
   gap: 8px;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  overflow: visible;
   padding-top: 8px;
   scrollbar-width: none;
 }
@@ -645,7 +676,7 @@ const handleSuccess = () => {
 
 .account-header {
   display: flex;
-  height: 42px;
+  height: 40px;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
@@ -664,9 +695,9 @@ const handleSuccess = () => {
 
 .account-header div {
   border-radius: 7px;
-  background: #ffecee;
+  background: #fff0f1;
   color: #ff2f38;
-  padding: 6px 14px;
+  padding: 5px 12px;
   font-size: 0.74rem;
   font-weight: 850;
 }
@@ -675,7 +706,7 @@ const handleSuccess = () => {
   min-height: 0;
   flex: 1;
   overflow: auto;
-  padding: 0 12px;
+  padding: 0 10px;
   scrollbar-width: none;
 }
 
@@ -709,7 +740,7 @@ const handleSuccess = () => {
 
 .account-table-wrap td,
 .account-table-wrap th {
-  padding: 6px 9px;
+  padding: 6px 8px;
 }
 
 .account-table-wrap td {
@@ -724,7 +755,7 @@ const handleSuccess = () => {
 
 .debt-row:hover,
 .debt-row.selected {
-  background: #fbfdfb;
+  background: #f8fbf9;
 }
 
 .check-cell {
