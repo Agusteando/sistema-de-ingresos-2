@@ -1,0 +1,59 @@
+
+> dev
+> nuxt dev --host 127.0.0.1 --port 3001
+
+|
+•  [32mNuxt [1m3.21.2[22m[39m[90m (with [39m[90mNitro [1m2.13.3[22m[39m[90m, Vite [1m7.3.2[22m[39m[90m and Vue [1m3.5.32[22m[39m[90m)[39m
+
+[32m  ➜ Local:   [39m [36m[4mhttp://127.0.0.1:[1m3001[22m/[24m[39m
+[90m  ➜ Network:  use [37m--host[90m to expose[39m
+
+[90m[[90mnuxt:tailwindcss[90m][39m [36mi[39m Using default Tailwind CSS file
+[90m[[90mnuxt:tailwindcss[90m][39m [36mi[39m Tailwind Viewer: [4m[33mhttp://127.0.0.1:3001/_tailwind/[39m[24m
+[32m√[39m Vite client built in 47ms
+[32m√[39m Vite server built in 590ms
+[90m[[90mnitro[90m][39m [32m√[39m Nuxt Nitro server built in 1317ms
+[36mi[39m Vite server warmed up in 1ms
+[36mi[39m Vite client warmed up in 2ms
+[32m√[39m Vite server hmr 2 files in 884.975ms
+[32m√[39m Vite server hmr 1 files in 0.002ms
+[36mi[39m [EstadoCuentaDebug] Estado de Cuenta DB result { matricula: 'ST1249',
+  selectedCicloRaw: '2025',
+  normalizedCicloKey: '2025',
+  apiQueryCiclo: '2025',
+  returnedDocumentosCount: 10,
+  returnedReferenciasCount: 26,
+  renderedConceptosCount: 31 }
+[36mi[39m [32mpage reload [39m[2mstudent-ops-final-check.png[22m
+[32m√[39m Vite server hmr 2 files in 0.003ms
+[36mi[39m [32mhmr update [39m[2m/assets/css/main.css, /node_modules/tailwindcss/tailwind.css, /node_modules/tailwindcss/tailwind.css?direct, /assets/css/main.css?direct, /components/StudentDetails.vue?direct&vue&type=style&index=0&scoped=136a4480&lang.css, /components/StudentDetails.vue, /components/StudentDetails.vue?vue&type=style&index=0&scoped=136a4480&lang.css[22m
+[36mi[39m [32mhmr update [39m[2m/node_modules/tailwindcss/tailwind.css, /assets/css/main.css, /@id/virtual:nuxt:C%3A%2FUsers%2Fhp%2Fsistema-de-ingresos-2%2F.nuxt%2Froutes.mjs, /components/StudentDetails.vue?vue&type=style&index=0&scoped=136a4480&lang.css[22m
+[36mi[39m [32mhmr update [39m[2m/node_modules/tailwindcss/tailwind.css, /assets/css/main.css, /@id/virtual:nuxt:C%3A%2FUsers%2Fhp%2Fsistema-de-ingresos-2%2F.nuxt%2Froutes.mjs, /components/StudentDetails.vue?vue&type=style&index=0&scoped=136a4480&lang.css[22m[2m (x2)[22m
+[36mi[39m [32mhmr update [39m[2m/assets/css/main.css, /node_modules/tailwindcss/tailwind.css, /node_modules/tailwindcss/tailwind.css?direct, /assets/css/main.css?direct, /components/StudentDetails.vue?direct&vue&type=style&index=0&scoped=136a4480&lang.css, /components/StudentDetails.vue, /components/StudentDetails.vue?vue&type=style&index=0&scoped=136a4480&lang.css[22m
+[36mi[39m [32mpage reload [39m[2mlayouts/default.vue[22m
+[36mi[39m [32mhmr update [39m[2m/layouts/default.vue, /layouts/default.vue?direct&vue&type=style&index=0&scoped=433a9abd&lang.css, /layouts/default.vue?vue&type=style&index=0&scoped=433a9abd&lang.css, /assets/css/main.css, /node_modules/tailwindcss/tailwind.css, /node_modules/tailwindcss/tailwind.css?direct, /assets/css/main.css?direct[22m
+[36mi[39m [32mhmr update [39m[2m/node_modules/tailwindcss/tailwind.css, /assets/css/main.css, /@id/virtual:nuxt:C%3A%2FUsers%2Fhp%2Fsistema-de-ingresos-2%2F.nuxt%2Froutes.mjs, /pages/index.vue?vue&type=style&index=0&scoped=02281a80&lang.css, /pages/index.vue?macro=true[22m
+[36mi[39m [32mhmr update [39m[2m/pages/index.vue, /pages/index.vue?direct&vue&type=style&index=0&scoped=02281a80&lang.css, /pages/index.vue?vue&type=style&index=0&scoped=02281a80&lang.css, /assets/css/main.css, /node_modules/tailwindcss/tailwind.css, /node_modules/tailwindcss/tailwind.css?direct, /assets/css/main.css?direct, /pages/index.vue?macro=true, /@id/virtual:nuxt:C%3A%2FUsers%2Fhp%2Fsistema-de-ingresos-2%2F.nuxt%2Froutes.mjs[22m
+[36mi[39m [32m.env changed, restarting server...[39m
+[36mi[39m [32m.env changed, restarting server...[39m[2m (x2)[22m
+[36mi[39m server restarted.
+[36mi[39m server restarted.[2m (x2)[22m
+[36mi[39m [32m.env changed, restarting server...[39m
+[36mi[39m server restarted.
+
+[32m  ➜ Local:   [39m [36m[4mhttp://127.0.0.1:[1m3001[22m/[24m[39m
+[90m  ➜ Network:  use [37m--host[90m to expose[39m
+
+[90m[[90mnuxt:tailwindcss[90m][39m [36mi[39m Using default Tailwind CSS file
+[90m[[90mnuxt:tailwindcss[90m][39m [36mi[39m Tailwind Viewer: [4m[33mhttp://127.0.0.1:3001/_tailwind/[39m[24m
+[32m√[39m Vite client built in 99ms
+[32m√[39m Vite server built in 1499ms
+[90m[[90mnitro[90m][39m [32m√[39m Nuxt Nitro server built in 2224ms
+[36mi[39m Vite server warmed up in 1ms
+[36mi[39m Vite client warmed up in 2ms
+[36mi[39m [32mhmr update [39m[2m/assets/css/main.css[22m
+[36mi[39m [32mhmr update [39m[2m/node_modules/tailwindcss/tailwind.css, /assets/css/main.css[22m
+[36mi[39m [32mhmr update [39m[2m/node_modules/tailwindcss/tailwind.css, /assets/css/main.css[22m[2m (x2)[22m
+[36mi[39m [32mhmr update [39m[2m/node_modules/tailwindcss/tailwind.css, /assets/css/main.css, /pages/index.vue?macro=true, /@id/virtual:nuxt:C%3A%2FUsers%2Fhp%2Fsistema-de-ingresos-2%2F.nuxt%2Froutes.mjs[22m
+[36mi[39m [32mhmr update [39m[2m/node_modules/tailwindcss/tailwind.css, /assets/css/main.css[22m
+[36mi[39m [32mhmr update [39m[2m/assets/css/main.css[22m
