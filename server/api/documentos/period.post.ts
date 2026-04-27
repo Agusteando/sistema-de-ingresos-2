@@ -1,5 +1,6 @@
 import { executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 
 const toMesNumber = (value: unknown) => {
   const raw = String(value || '').trim().toLowerCase()
@@ -86,7 +87,15 @@ export default defineEventHandler(async (event) => {
   }
 
   const [doc] = await query<any[]>(
-    `SELECT documento, ciclo, meses, plazo, estatus FROM documentos WHERE documento = ? LIMIT 1`,
+    `
+      SELECT
+        D.documento, D.ciclo, D.meses, D.plazo, D.estatus, D.matricula,
+        B.plantel, B.grado as gradoBase, B.ciclo as cicloBase
+      FROM documentos D
+      LEFT JOIN base B ON B.matricula = D.matricula
+      WHERE D.documento = ?
+      LIMIT 1
+    `,
     [documento]
   )
 
@@ -96,6 +105,16 @@ export default defineEventHandler(async (event) => {
 
   if (String(doc.estatus).toLowerCase() !== 'activo') {
     throw createError({ statusCode: 409, message: 'El documento no esta activo.' })
+  }
+
+  if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
+    if (String(doc.plantel || '') !== String(user.active_plantel || '')) {
+      throw createError({ statusCode: 403, message: 'Alumno fuera del plantel activo.' })
+    }
+  }
+
+  if (isOutOfScopeForPlantelCiclo(doc.gradoBase, doc.plantel, doc.cicloBase, cicloKey)) {
+    throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 
   const maxMes = countPlazos(doc)

@@ -1,5 +1,6 @@
 import { query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => {
   const { inicio, fin, plantel, ciclo = '2025' } = getQuery(event)
@@ -26,14 +27,45 @@ export default defineEventHandler(async (event) => {
     params.push(plantel)
   }
 
-  const sql = `
-    SELECT 
-      DATE(r.fecha) as fecha, r.formaDePago, r.conceptoNombre as categoria, 
-      COUNT(r.folio) as transacciones, SUM(r.monto) as total
+  const rows = await query<any[]>(`
+    SELECT
+      DATE(r.fecha) as fecha,
+      r.formaDePago,
+      r.conceptoNombre as categoria,
+      r.folio,
+      r.monto,
+      A.grado as gradoBase,
+      A.ciclo as cicloBase,
+      COALESCE(A.plantel, r.plantel) as plantel
     FROM referenciasdepago r
+    LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${where}
-    GROUP BY DATE(r.fecha), r.formaDePago, r.conceptoNombre
-    ORDER BY fecha DESC, total DESC
-  `
-  return await query(sql, params)
+    ORDER BY r.fecha DESC, r.folio ASC
+  `, params)
+
+  const grouped = new Map<string, any>()
+
+  rows
+    .filter(row => !isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey))
+    .forEach((row) => {
+      const fecha = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : String(row.fecha).slice(0, 10)
+      const key = `${fecha}|${row.formaDePago}|${row.categoria}`
+      const current = grouped.get(key) || {
+        fecha,
+        formaDePago: row.formaDePago,
+        categoria: row.categoria,
+        transacciones: 0,
+        total: 0
+      }
+
+      current.transacciones += 1
+      current.total += Number(row.monto || 0)
+      grouped.set(key, current)
+    })
+
+  return Array.from(grouped.values())
+    .sort((a, b) => {
+      const dateDiff = new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+      return dateDiff || Number(b.total || 0) - Number(a.total || 0)
+    })
 })

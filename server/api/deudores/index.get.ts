@@ -54,8 +54,10 @@ export default defineEventHandler(async (event) => {
   `
   
   const deudores = await query<any[]>(sql, params)
-  return deudores.map((row) => {
+  return deudores.flatMap((row) => {
     const promoted = calculatePromotedGrado(row.gradoBase, row.plantel, row.cicloBase, cicloKey)
+    if (promoted.outOfScope) return []
+
     return {
       ...row,
       grado: displayGrado(promoted.grado),

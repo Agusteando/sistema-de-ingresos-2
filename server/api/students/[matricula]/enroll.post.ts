@@ -1,5 +1,6 @@
 import { executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
+import { isOutOfScopeForPlantelCiclo } from '../../../../shared/utils/grado'
 
 const parseMeses = (concepto: any) => {
   if (Number(concepto.eventual || 0) === 1) return 1
@@ -34,7 +35,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const [student] = await query<any[]>(
-    `SELECT matricula, plantel, estatus FROM base WHERE matricula = ? LIMIT 1`,
+    `SELECT matricula, plantel, grado as gradoBase, ciclo as cicloBase, estatus FROM base WHERE matricula = ? LIMIT 1`,
     [matricula]
   )
 
@@ -50,6 +51,10 @@ export default defineEventHandler(async (event) => {
     if (String(student.plantel || '') !== String(user.active_plantel || '')) {
       throw createError({ statusCode: 403, message: 'Alumno fuera del plantel activo.' })
     }
+  }
+
+  if (isOutOfScopeForPlantelCiclo(student.gradoBase, student.plantel, student.cicloBase, cicloKey)) {
+    throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 
   const conceptos = await query<any[]>(`
