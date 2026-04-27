@@ -1,6 +1,6 @@
 import { executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
-import { isOutOfScopeForPlantelCiclo } from '../../../../shared/utils/grado'
+import { calculatePromotedGrado, nivelFromPlantel } from '../../../../shared/utils/grado'
 
 const parseMeses = (concepto: any) => {
   if (Number(concepto.eventual || 0) === 1) return 1
@@ -53,7 +53,9 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (isOutOfScopeForPlantelCiclo(student.gradoBase, student.plantel, student.cicloBase, cicloKey)) {
+  const promoted = calculatePromotedGrado(student.gradoBase, student.plantel, student.cicloBase, cicloKey)
+
+  if (promoted.outOfScope) {
     throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 
@@ -88,12 +90,28 @@ export default defineEventHandler(async (event) => {
 
   const existing = new Set(existingDocs.map(doc => String(doc.concepto)))
   const selectedConceptos = conceptos.filter(concepto => !existing.has(String(concepto.id)))
+  const academicUpdate: SqlStatement = {
+    sql: `
+      UPDATE base
+      SET grado = ?,
+          nivel = ?,
+          ciclo = ?
+      WHERE matricula = ?
+    `,
+    params: [
+      promoted.grado,
+      nivelFromPlantel(student.plantel),
+      cicloKey,
+      matricula
+    ]
+  }
 
   if (!selectedConceptos.length) {
+    await executeStatementTransaction([academicUpdate])
     return { success: true, inserted: 0, skipped: conceptos.length, conceptos: [] }
   }
 
-  const statements: SqlStatement[] = selectedConceptos.map((concepto) => {
+  const statements: SqlStatement[] = [academicUpdate, ...selectedConceptos.map((concepto) => {
     const meses = parseMeses(concepto)
     const plazoLegacy = Array.from({ length: meses }, (_, i) => i + 1).join(',')
 
@@ -113,7 +131,7 @@ export default defineEventHandler(async (event) => {
         Number(concepto.eventual || 0) === 1 ? 1 : 0
       ]
     }
-  })
+  })]
 
   await executeStatementTransaction(statements)
 
