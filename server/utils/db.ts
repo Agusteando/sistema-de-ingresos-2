@@ -380,6 +380,23 @@ export const ensureSchema = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS documento_concepto_periodos (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          documento INT NOT NULL,
+          start_mes INT NOT NULL DEFAULT 1,
+          end_mes INT DEFAULT NULL,
+          concepto_id INT DEFAULT NULL,
+          conceptoNombre VARCHAR(255) DEFAULT NULL,
+          costo DECIMAL(65,2) DEFAULT NULL,
+          accion VARCHAR(30) NOT NULL DEFAULT 'cambio',
+          estatus VARCHAR(30) NOT NULL DEFAULT 'Activo',
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_by VARCHAR(255) DEFAULT NULL,
+          INDEX idx_documento_periodo (documento, start_mes, end_mes, estatus)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
       await checkAndAddColumn('users', 'role', "VARCHAR(20) NOT NULL DEFAULT 'plantel'")
       await checkAndAddColumn('users', 'planteles', "TEXT", "UPDATE users SET planteles = plantel WHERE plantel IS NOT NULL AND (planteles IS NULL OR planteles = '')")
       await checkAndAddColumn('users', 'email', "VARCHAR(255) DEFAULT NULL")
@@ -400,6 +417,16 @@ export const ensureSchema = async () => {
           await checkAndAddColumn('base', 'interno', "TINYINT(1) NOT NULL DEFAULT 1")
           await checkAndAddColumn('base', 'familiaId', "INT DEFAULT NULL")
           await checkAndAddColumn('base', 'genero', "VARCHAR(255) DEFAULT '1'")
+        }
+      } catch (e) {}
+
+      try {
+        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'referenciasdepago'`)
+
+        if (tables.length > 0) {
+          await checkAndAddColumn('referenciasdepago', 'depurado', "TINYINT(1) NOT NULL DEFAULT 0")
+          await checkAndAddColumn('referenciasdepago', 'depurado_por', "VARCHAR(255) DEFAULT NULL")
+          await checkAndAddColumn('referenciasdepago', 'depurado_fecha', "DATETIME DEFAULT NULL")
         }
       } catch (e) {}
 

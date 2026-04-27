@@ -39,6 +39,9 @@
         <NuxtLink to="/facturas" class="nav-item group">
           <LucideFileText :size="22" stroke-width="2" /> Facturas CFDI
         </NuxtLink>
+        <a href="http://localhost/Sistema%20de%20ingresos/login.php" class="nav-item group" target="_blank" rel="noopener">
+          <LucideExternalLink :size="22" stroke-width="2" /> Sistema de Contingencia
+        </a>
         <NuxtLink to="/usuarios" class="nav-item group" v-if="userRole === 'global'">
           <LucideShield :size="22" stroke-width="2" /> Usuarios
         </NuxtLink>
@@ -172,7 +175,8 @@ import {
   LucideCalendarDays,
   LucideSchool,
   LucideBuilding2,
-  LucideChevronDown
+  LucideChevronDown,
+  LucideExternalLink
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'

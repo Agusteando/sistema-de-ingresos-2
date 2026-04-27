@@ -50,7 +50,9 @@
             <LucideEye :size="16"/> Previa
           </button>
           <button class="btn btn-primary" @click="submit" :disabled="processing || totalCobrar <= 0">
-            <LucideCheckCircle :size="16"/> Registrar Pago
+            <LucideLoader2 v-if="processing" class="animate-spin" :size="16"/>
+            <LucideCheckCircle v-else :size="16"/>
+            {{ processing ? 'Registrando...' : 'Registrar Pago' }}
           </button>
         </div>
       </div>
@@ -60,7 +62,7 @@
 
 <script setup>
 import { ref, watch, computed } from 'vue'
-import { LucideCheckCircle, LucideEye } from 'lucide-vue-next'
+import { LucideCheckCircle, LucideEye, LucideLoader2 } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
