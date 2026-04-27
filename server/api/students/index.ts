@@ -70,8 +70,10 @@ export default defineEventHandler(async (event) => {
       ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC LIMIT 5000;
     `
     const rows = await query<any[]>(sql, [cicloKey, cicloKey, ...params])
-    let mapped = rows.map(r => {
+    let mapped = rows.flatMap(r => {
       const p = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey)
+      if (p.outOfScope) return []
+
       return {
         ...r,
         grado: displayGrado(p.grado),

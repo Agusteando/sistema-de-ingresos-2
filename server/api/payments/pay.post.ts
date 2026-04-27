@@ -1,6 +1,7 @@
 import { executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 
 const normalizePaymentMethod = (value: unknown) => String(value || '')
   .normalize('NFD')
@@ -33,6 +34,17 @@ export default defineEventHandler(async (event) => {
 
   const nombreCompleto = studentRef.nombreCompleto
   const plantel = studentRef.plantel || 'PT'
+
+  if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
+    if (String(plantel || '') !== String(user.active_plantel || '')) {
+      throw createError({ statusCode: 403, message: 'Alumno fuera del plantel activo.' })
+    }
+  }
+
+  if (isOutOfScopeForPlantelCiclo(studentRef.grado, plantel, studentRef.ciclo, cicloKey)) {
+    throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
+  }
+
   const instituto = (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0
 
   const statements: SqlStatement[] = []

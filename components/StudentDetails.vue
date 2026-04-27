@@ -286,7 +286,9 @@ const loadDebts = async () => {
 
 const loadSiblings = async () => {
   try {
-    const res = await $fetch(`/api/students/${props.student.matricula}/siblings`)
+    const res = await $fetch(`/api/students/${props.student.matricula}/siblings`, {
+      params: { ciclo: normalizeCicloKey(state.value.ciclo) }
+    })
     siblings.value = Array.isArray(res) ? res : (res?.siblings || [])
     siblingSource.value = Array.isArray(res) ? 'legacy' : (res?.source || 'none')
   } catch(e) {}

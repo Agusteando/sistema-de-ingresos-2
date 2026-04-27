@@ -1,6 +1,7 @@
 import { query } from '../../../utils/db'
 import dayjs from 'dayjs'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
+import { isOutOfScopeForPlantelCiclo } from '../../../../shared/utils/grado'
 
 const normalizePaymentMethod = (value: unknown) => String(value || '')
   .normalize('NFD')
@@ -18,6 +19,22 @@ export default defineEventHandler(async (event) => {
   const { ciclo = '2025', lateFeeActive = 'true' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   if (!matricula) throw createError({ statusCode: 400, message: 'Matrícula requerida' })
+
+  const [studentRef] = await query<any[]>(
+    `SELECT matricula, plantel, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
+    [matricula.trim()]
+  )
+
+  if (!studentRef) return []
+
+  const user = event.context.user
+  if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
+    if (String(studentRef.plantel || '') !== String(user.active_plantel || '')) return []
+  }
+
+  if (isOutOfScopeForPlantelCiclo(studentRef.gradoBase, studentRef.plantel, studentRef.cicloBase, cicloKey)) {
+    return []
+  }
 
   const documentos = await query<any[]>(`
     SELECT d.documento, d.matricula, d.costo, d.meses, d.plazo, d.beca, d.ciclo, d.conceptoNombre, d.eventual

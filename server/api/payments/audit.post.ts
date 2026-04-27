@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto'
 import { query } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 
 type PendingDepuracion = {
   code: string
@@ -94,12 +95,22 @@ export default defineEventHandler(async (event) => {
     }
 
     const [studentRef] = await query<any[]>(
-      `SELECT nombreCompleto, plantel FROM base WHERE matricula = ? LIMIT 1`,
+      `SELECT nombreCompleto, plantel, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
       [matricula]
     )
 
     if (!studentRef) {
       throw createError({ statusCode: 404, message: 'Alumno no encontrado.' })
+    }
+
+    if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
+      if (String(studentRef.plantel || '') !== String(user.active_plantel || '')) {
+        throw createError({ statusCode: 403, message: 'Alumno fuera del plantel activo.' })
+      }
+    }
+
+    if (isOutOfScopeForPlantelCiclo(studentRef.gradoBase, studentRef.plantel, studentRef.cicloBase, ciclo)) {
+      throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
     }
 
     const [documentRef] = await query<any[]>(

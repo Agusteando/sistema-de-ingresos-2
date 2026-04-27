@@ -74,8 +74,10 @@ export default defineEventHandler(async (event) => {
   const queryParams = [cicloKey, cicloKey, ...params]
   const rows = await query<any[]>(sql, queryParams)
   
-  return rows.map(r => {
+  return rows.flatMap(r => {
     const promoted = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey)
+    if (promoted.outOfScope) return []
+
     return {
       ...r,
       grado: displayGrado(promoted.grado),
