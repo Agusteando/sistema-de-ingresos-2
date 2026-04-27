@@ -191,6 +191,8 @@
 </template>
 
 <script>
+// Photo requests stay detail-only: opening Estado de Cuenta resolves the photo,
+// then the matrícula-keyed session cache lets the list reuse it later.
 const studentPhotoRequests = new Map()
 </script>
 
@@ -462,7 +464,7 @@ const handleSuccess = () => {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   overflow: hidden;
 }
 
@@ -479,7 +481,7 @@ const handleSuccess = () => {
   flex-shrink: 0;
   overflow: hidden;
   border-color: #d9e6d2;
-  padding: 11px 14px 10px;
+  padding: 8px 12px;
   box-shadow: 0 8px 24px rgba(45, 78, 48, 0.045);
 }
 
@@ -495,20 +497,20 @@ const handleSuccess = () => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .profile-identity {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .profile-avatar {
   display: flex;
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
@@ -555,7 +557,7 @@ const handleSuccess = () => {
   gap: 7px;
   margin: 0;
   color: #23324a;
-  font-size: 1rem;
+  font-size: 0.94rem;
   font-weight: 740;
   letter-spacing: 0;
   line-height: 1.2;
@@ -574,9 +576,9 @@ const handleSuccess = () => {
   flex-wrap: wrap;
   align-items: center;
   gap: 7px;
-  margin: 5px 0 0;
+  margin: 3px 0 0;
   color: #788397;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 500;
 }
 
@@ -629,8 +631,8 @@ const handleSuccess = () => {
 .danger-icon-button,
 .plain-icon-button {
   display: flex;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -658,10 +660,10 @@ const handleSuccess = () => {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   overflow: visible;
-  padding-top: 8px;
+  padding-top: 6px;
   scrollbar-width: none;
 }
 
@@ -670,7 +672,7 @@ const handleSuccess = () => {
 }
 
 .profile-actions .btn {
-  min-width: 102px;
+  min-width: 96px;
   border-radius: 8px;
 }
 
@@ -680,12 +682,12 @@ const handleSuccess = () => {
 }
 
 .action-pay {
-  min-width: 116px;
+  min-width: 108px;
 }
 
 .action-divider {
   width: 1px;
-  height: 22px;
+  height: 20px;
   flex-shrink: 0;
   background: #dfe6ef;
 }
@@ -775,12 +777,12 @@ const handleSuccess = () => {
 
 .account-header {
   display: flex;
-  height: 48px;
+  height: 42px;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 18px;
+  padding: 0 14px;
 }
 
 .account-header h3 {
@@ -796,7 +798,7 @@ const handleSuccess = () => {
   border-radius: 7px;
   background: #fff4f4;
   color: #b84f56;
-  padding: 5px 12px;
+  padding: 4px 10px;
   font-size: 0.74rem;
   font-weight: 720;
 }
@@ -805,14 +807,14 @@ const handleSuccess = () => {
   min-height: 0;
   flex: 1;
   overflow: auto;
-  padding: 0 12px 4px;
+  padding: 0 10px 6px;
   scrollbar-color: #cbd5e1 transparent;
   scrollbar-width: thin;
 }
 
 .account-table-wrap table {
   width: 100%;
-  min-width: 700px;
+  min-width: 660px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -825,7 +827,7 @@ const handleSuccess = () => {
   border-bottom: 1px solid #e3e9f0;
   background: #f6f8fb;
   color: #687386;
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   font-weight: 680;
   letter-spacing: 0.045em;
   text-transform: uppercase;
@@ -841,13 +843,13 @@ const handleSuccess = () => {
 
 .account-table-wrap td,
 .account-table-wrap th {
-  padding: 9px 10px;
+  padding: 6px 8px;
 }
 
 .account-table-wrap td {
   border-bottom: 1px solid #e8eef5;
   color: #334159;
-  font-size: 0.74rem;
+  font-size: 0.7rem;
 }
 
 .debt-row {
@@ -874,7 +876,7 @@ const handleSuccess = () => {
 }
 
 .progress-cell {
-  width: 100px;
+  width: 86px;
 }
 
 .progress-track {
@@ -906,16 +908,16 @@ const handleSuccess = () => {
   max-width: 320px;
   overflow: hidden;
   color: #2f3d55;
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 680;
-  line-height: 1.25;
+  line-height: 1.18;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .account-table-wrap td small {
   display: block;
-  margin-top: 4px;
+  margin-top: 2px;
   color: #7b8798;
   font-size: 0.62rem;
   font-weight: 520;
@@ -935,7 +937,7 @@ const handleSuccess = () => {
 .money-cell {
   color: #627086;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 680;
   text-align: right;
   white-space: nowrap;
@@ -956,8 +958,8 @@ const handleSuccess = () => {
 
 .menu-cell button {
   display: inline-flex;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -975,7 +977,7 @@ const handleSuccess = () => {
 }
 
 .account-empty {
-  height: 96px;
+  height: 72px;
   text-align: center;
   color: #66728a;
   font-weight: 500;
@@ -987,7 +989,7 @@ const handleSuccess = () => {
 
 .history-row > td {
   background: #f8fafc;
-  padding: 8px;
+  padding: 6px;
 }
 
 .history-table {
@@ -1026,7 +1028,7 @@ const handleSuccess = () => {
 
 .account-footer {
   display: flex;
-  height: 36px;
+  height: 28px;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
@@ -1052,48 +1054,48 @@ const handleSuccess = () => {
 
 @media (max-height: 900px) and (min-width: 1081px) {
   .student-details-shell {
-    gap: 8px;
+    gap: 5px;
   }
 
   .student-profile-card {
-    padding: 10px 14px 9px;
+    padding: 7px 12px;
   }
 
   .profile-avatar {
-    width: 44px;
-    height: 44px;
-    font-size: 1rem;
+    width: 38px;
+    height: 38px;
+    font-size: 0.94rem;
   }
 
   .profile-copy h2 {
-    font-size: 0.96rem;
+    font-size: 0.9rem;
   }
 
   .profile-copy p {
-    margin-top: 4px;
-    font-size: 0.66rem;
+    margin-top: 2px;
+    font-size: 0.63rem;
   }
 
   .profile-actions {
-    padding-top: 7px;
+    padding-top: 5px;
   }
 
   .profile-actions .btn {
-    height: 30px;
+    height: 28px;
   }
 
   .account-header {
-    height: 42px;
+    height: 36px;
   }
 
   .account-table-wrap td,
   .account-table-wrap th {
-    padding-top: 7px;
-    padding-bottom: 7px;
+    padding-top: 5px;
+    padding-bottom: 5px;
   }
 
   .account-footer {
-    height: 30px;
+    height: 24px;
   }
 }
 </style>
