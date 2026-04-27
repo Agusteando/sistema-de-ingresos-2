@@ -111,7 +111,7 @@
                 <td class="check-cell"><input type="checkbox" :value="debt" v-model="selectedDebts" :disabled="debt.saldo <= 0" class="debt-check"></td>
                 <td class="progress-cell">
                   <div class="progress-track">
-                    <span :style="{ width: debt.porcentajePagado + '%', backgroundColor: debt.porcentajePagado == 100 ? '#70b34f' : '#FCBF2D' }"></span>
+                    <span :style="{ width: debt.porcentajePagado + '%', backgroundColor: debt.porcentajePagado == 100 ? '#70b34f' : '#d8b449' }"></span>
                   </div>
                   <em>{{ debt.porcentajePagado }}%</em>
                 </td>
@@ -407,16 +407,18 @@ const handleSuccess = () => {
 .student-profile-card,
 .siblings-card,
 .account-card {
-  border: 1px solid #dfe6ef;
+  border: 1px solid #e3eaf2;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 8px 24px rgba(22, 38, 65, 0.045);
+  box-shadow: 0 5px 18px rgba(22, 38, 65, 0.032);
 }
 
 .student-profile-card {
   flex-shrink: 0;
   overflow: hidden;
+  border-color: #d9e6d2;
   padding: 11px 14px 10px;
+  box-shadow: 0 8px 24px rgba(45, 78, 48, 0.045);
 }
 
 .student-profile-card.inactive {
@@ -450,11 +452,11 @@ const handleSuccess = () => {
   justify-content: center;
   overflow: hidden;
   border-radius: 999px;
-  border: 1px solid rgba(151, 205, 132, 0.42);
-  background: #e2f2dc;
-  color: #3e873b;
+  border: 1px solid rgba(151, 205, 132, 0.34);
+  background: #edf5e9;
+  color: #517947;
   font-size: 1.12rem;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .profile-avatar.photo img {
@@ -490,10 +492,10 @@ const handleSuccess = () => {
   align-items: center;
   gap: 7px;
   margin: 0;
-  color: #172841;
-  font-size: 0.96rem;
-  font-weight: 850;
-  letter-spacing: -0.015em;
+  color: #23324a;
+  font-size: 1rem;
+  font-weight: 740;
+  letter-spacing: 0;
   line-height: 1.2;
 }
 
@@ -511,9 +513,9 @@ const handleSuccess = () => {
   align-items: center;
   gap: 7px;
   margin: 5px 0 0;
-  color: #6d7890;
+  color: #788397;
   font-size: 0.7rem;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .profile-copy i {
@@ -531,10 +533,10 @@ const handleSuccess = () => {
 .student-code {
   border-radius: 6px;
   background: #e6f0ff;
-  color: #3d87e7;
+  color: #416fa8;
   padding: 2px 7px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .state-badge {
@@ -543,16 +545,16 @@ const handleSuccess = () => {
   padding: 3px 6px;
   color: #fff;
   font-size: 0.52rem;
-  font-weight: 850;
-  letter-spacing: 0.06em;
+  font-weight: 720;
+  letter-spacing: 0.04em;
 }
 
 .state-badge.red {
-  background: #ff4d38;
+  background: #c95b4d;
 }
 
 .state-badge.orange {
-  background: #f59e0b;
+  background: #c8892e;
 }
 
 .profile-top-actions {
@@ -572,13 +574,13 @@ const handleSuccess = () => {
   border: 0;
   border-radius: 9px;
   background: #fff;
-  color: #66728a;
+  color: #7a8698;
   transition: background 150ms ease, color 150ms ease;
 }
 
 .danger-icon-button {
-  background: #fff1f0;
-  color: #ff4d38;
+  background: #fff3f1;
+  color: #bd5a4f;
 }
 
 .danger-icon-button:hover {
@@ -613,7 +615,7 @@ const handleSuccess = () => {
 
 .profile-actions .btn-ghost {
   min-width: auto;
-  color: #35435d;
+  color: #566176;
 }
 
 .action-pay {
@@ -629,15 +631,18 @@ const handleSuccess = () => {
 
 .siblings-card {
   flex-shrink: 0;
+  border-color: #edf2f6;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: none;
   padding: 8px 12px;
 }
 
 .siblings-card h4 {
   margin: 0 0 6px;
-  color: #2d65a5;
+  color: #64748b;
   font-size: 0.62rem;
-  font-weight: 850;
-  letter-spacing: 0.06em;
+  font-weight: 680;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
 
@@ -651,19 +656,19 @@ const handleSuccess = () => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid #cfe0f8;
+  border: 1px solid #dbe5f0;
   border-radius: 999px;
   background: #fff;
-  color: #2d65a5;
+  color: #516174;
   padding: 4px 8px;
   font-size: 0.66rem;
-  font-weight: 750;
+  font-weight: 550;
   transition: background 150ms ease, color 150ms ease;
 }
 
 .siblings-card button:hover {
-  background: #2d65a5;
-  color: #fff;
+  background: #eef5fb;
+  color: #315f8b;
 }
 
 .account-card {
@@ -672,6 +677,9 @@ const handleSuccess = () => {
   flex: 1;
   flex-direction: column;
   overflow: hidden;
+  border-color: #dbe6d4;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 10px 28px rgba(22, 38, 65, 0.05);
 }
 
 .account-header {
@@ -688,18 +696,18 @@ const handleSuccess = () => {
   margin: 0;
   color: #263752;
   font-size: 0.74rem;
-  font-weight: 850;
-  letter-spacing: 0.02em;
+  font-weight: 740;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
 .account-header div {
   border-radius: 7px;
-  background: #fff0f1;
-  color: #ff2f38;
+  background: #fff4f4;
+  color: #b84f56;
   padding: 5px 12px;
   font-size: 0.74rem;
-  font-weight: 850;
+  font-weight: 720;
 }
 
 .account-table-wrap {
@@ -723,10 +731,10 @@ const handleSuccess = () => {
   border: 0;
   border-bottom: 1px solid #e3e9f0;
   background: #f6f8fb;
-  color: #5d6980;
+  color: #687386;
   font-size: 0.58rem;
-  font-weight: 850;
-  letter-spacing: 0.06em;
+  font-weight: 680;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
 
@@ -745,7 +753,7 @@ const handleSuccess = () => {
 
 .account-table-wrap td {
   border-bottom: 1px solid #e8eef5;
-  color: #253550;
+  color: #334159;
   font-size: 0.7rem;
 }
 
@@ -793,10 +801,10 @@ const handleSuccess = () => {
 .progress-cell em {
   display: block;
   margin-top: 3px;
-  color: #6a7488;
+  color: #7f8999;
   font-size: 0.58rem;
   font-style: normal;
-  font-weight: 750;
+  font-weight: 500;
   text-align: right;
 }
 
@@ -804,9 +812,9 @@ const handleSuccess = () => {
   display: block;
   max-width: 240px;
   overflow: hidden;
-  color: #263752;
+  color: #2f3d55;
   font-size: 0.7rem;
-  font-weight: 850;
+  font-weight: 680;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -815,10 +823,10 @@ const handleSuccess = () => {
 .account-table-wrap td small {
   display: block;
   margin-top: 2px;
-  color: #68748a;
+  color: #7b8798;
   font-size: 0.58rem;
-  font-weight: 850;
-  letter-spacing: 0.03em;
+  font-weight: 520;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -832,20 +840,20 @@ const handleSuccess = () => {
 }
 
 .money-cell {
-  color: #5f6d84;
+  color: #627086;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.68rem;
-  font-weight: 850;
+  font-weight: 680;
   text-align: right;
   white-space: nowrap;
 }
 
 .money-cell.paid {
-  color: #2e7b34;
+  color: #477a49;
 }
 
 .money-cell.danger {
-  color: #ff2f38;
+  color: #b84f56;
 }
 
 .menu-cell {
@@ -861,15 +869,23 @@ const handleSuccess = () => {
   justify-content: center;
   border: 0;
   border-radius: 999px;
+  background: transparent;
+  color: #7f8a9b;
+  opacity: 0.58;
+  transition: background 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+.menu-cell button:hover {
   background: #eef8f6;
   color: #437c8a;
+  opacity: 1;
 }
 
 .account-empty {
   height: 96px;
   text-align: center;
   color: #66728a;
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .account-empty.muted {
@@ -896,7 +912,7 @@ const handleSuccess = () => {
 .folio {
   color: #397fe8;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-weight: 850;
+  font-weight: 680;
 }
 
 .method-pill {
@@ -922,9 +938,9 @@ const handleSuccess = () => {
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  color: #66728a;
+  color: #7d8798;
   font-size: 0.68rem;
-  font-weight: 650;
+  font-weight: 450;
 }
 
 @media (max-width: 1220px) {
@@ -957,7 +973,7 @@ const handleSuccess = () => {
   }
 
   .profile-copy h2 {
-    font-size: 0.94rem;
+    font-size: 0.96rem;
   }
 
   .profile-copy p {

@@ -39,6 +39,7 @@ export default defineNuxtConfig({
 
     externalSyncApiKey: process.env.EXTERNAL_SYNC_API_KEY || '',
     studentPhotoBaseUrl: process.env.STUDENT_PHOTO_BASE_URL || 'https://matricula.casitaapps.com',
+    studentPhotoApiKey: process.env.STUDENT_PHOTO_API_KEY || process.env.EXTERNAL_SYNC_API_KEY || '',
 
     public: {
       googleClientId: process.env.GOOGLE_CLIENT_ID || ''

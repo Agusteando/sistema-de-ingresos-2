@@ -504,7 +504,7 @@ const handleStudentSuccess = () => {
 .students-screen {
   display: flex;
   width: 100%;
-  max-width: 1188px;
+  max-width: 1208px;
   min-height: 0;
   flex: 1;
   flex-direction: column;
@@ -524,19 +524,19 @@ const handleStudentSuccess = () => {
 
 .hero-copy h1 {
   margin: 0 0 5px;
-  color: #162641;
-  font-size: clamp(1.22rem, 1.42vw, 1.48rem);
-  font-weight: 850;
-  line-height: 1.1;
-  letter-spacing: -0.025em;
+  color: #23324a;
+  font-size: clamp(1.16rem, 1.32vw, 1.38rem);
+  font-weight: 720;
+  line-height: 1.14;
+  letter-spacing: 0;
 }
 
 .hero-copy p {
   margin: 0;
-  color: #737f96;
+  color: #7b879a;
   font-size: 0.78rem;
-  font-weight: 600;
-  line-height: 1.35;
+  font-weight: 450;
+  line-height: 1.45;
 }
 
 .hero-actions {
@@ -554,19 +554,19 @@ const handleStudentSuccess = () => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  border: 1px solid #dfe6ef;
+  border: 1px solid #e6ecf3;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.9);
   padding: 9px 13px 9px 16px;
-  box-shadow: 0 8px 22px rgba(22, 38, 65, 0.045);
+  box-shadow: 0 4px 14px rgba(22, 38, 65, 0.03);
 }
 
 .monthly-income span {
   display: block;
-  color: #417b39;
+  color: #5f7f58;
   font-size: 0.61rem;
-  font-weight: 850;
-  letter-spacing: 0.08em;
+  font-weight: 680;
+  letter-spacing: 0.06em;
   line-height: 1.1;
   text-transform: uppercase;
 }
@@ -574,9 +574,9 @@ const handleStudentSuccess = () => {
 .monthly-income strong {
   display: block;
   margin-top: 4px;
-  color: #297334;
+  color: #335d3a;
   font-size: 1rem;
-  font-weight: 850;
+  font-weight: 720;
   line-height: 1;
 }
 
@@ -584,6 +584,7 @@ const handleStudentSuccess = () => {
   width: 76px;
   height: 34px;
   overflow: visible;
+  opacity: 0.55;
 }
 
 .monthly-income polyline {
@@ -612,17 +613,17 @@ const handleStudentSuccess = () => {
 .kpi-card {
   position: relative;
   display: grid;
-  min-height: 74px;
-  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 66px;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   overflow: hidden;
-  border: 1px solid #dfe6ef;
+  border: 1px solid #e6ecf3;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.92);
-  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.84);
+  padding: 9px 11px;
   text-align: left;
-  box-shadow: 0 8px 24px rgba(22, 38, 65, 0.045);
+  box-shadow: 0 4px 16px rgba(22, 38, 65, 0.028);
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -634,7 +635,7 @@ const handleStudentSuccess = () => {
   bottom: -24px;
   width: 116px;
   height: 82px;
-  opacity: 0.28;
+  opacity: 0.12;
   background-repeat: no-repeat;
   background-size: contain;
   background-image: url("data:image/svg+xml,%3Csvg width='134' height='92' viewBox='0 0 134 92' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M92 88C77 54 86 28 123 8C130 48 114 75 92 88Z' stroke='%23dce8de' stroke-width='1'/%3E%3Cpath d='M57 88C50 54 63 30 103 18C101 57 84 78 57 88Z' stroke='%23dce8de' stroke-width='1'/%3E%3Cpath d='M18 90C39 66 68 56 113 55' stroke='%23dce8de' stroke-width='1'/%3E%3C/svg%3E");
@@ -654,11 +655,12 @@ const handleStudentSuccess = () => {
 .kpi-card:hover,
 .kpi-card.active {
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px rgba(22, 38, 65, 0.065);
+  box-shadow: 0 8px 22px rgba(22, 38, 65, 0.045);
 }
 
 .kpi-card.active {
-  border-color: rgba(101, 167, 68, 0.42);
+  border-color: rgba(101, 167, 68, 0.34);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .kpi-card.active::after,
@@ -670,17 +672,17 @@ const handleStudentSuccess = () => {
   position: relative;
   z-index: 1;
   display: flex;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
 }
 
 .kpi-green .kpi-icon { background: radial-gradient(circle at 32% 22%, #eff9e9, #dff1d6 70%); color: #58a93f; }
-.kpi-teal .kpi-icon { background: radial-gradient(circle at 32% 22%, #e8fbf8, #d6f2ee 70%); color: #0ba496; }
-.kpi-blue .kpi-icon { background: radial-gradient(circle at 32% 22%, #eff5ff, #e0ebff 70%); color: #397fe8; }
-.kpi-red .kpi-icon { background: radial-gradient(circle at 32% 22%, #fff0ed, #ffe1dc 70%); color: #ff4d38; }
+.kpi-teal .kpi-icon { background: radial-gradient(circle at 32% 22%, #e8fbf8, #d6f2ee 70%); color: #238a83; }
+.kpi-blue .kpi-icon { background: radial-gradient(circle at 32% 22%, #eff5ff, #e0ebff 70%); color: #416fa8; }
+.kpi-red .kpi-icon { background: radial-gradient(circle at 32% 22%, #fff0ed, #ffe1dc 70%); color: #c95b4d; }
 
 .kpi-green::after { background: linear-gradient(90deg, rgba(224, 242, 216, 0.52), transparent 46%); }
 .kpi-teal::after { background: linear-gradient(90deg, rgba(216, 244, 240, 0.5), transparent 46%); }
@@ -696,37 +698,37 @@ const handleStudentSuccess = () => {
 }
 
 .kpi-text span {
-  color: #3f684b;
+  color: #536b58;
   font-size: 0.61rem;
-  font-weight: 850;
-  letter-spacing: 0.07em;
+  font-weight: 680;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
 
-.kpi-teal .kpi-text span { color: #187f79; }
-.kpi-blue .kpi-text span { color: #335878; }
-.kpi-red .kpi-text span { color: #354158; }
+.kpi-teal .kpi-text span { color: #47716e; }
+.kpi-blue .kpi-text span { color: #4f6072; }
+.kpi-red .kpi-text span { color: #655d5b; }
 
 .kpi-text strong {
   margin-top: 3px;
-  color: #172841;
-  font-size: 1.18rem;
-  font-weight: 850;
-  letter-spacing: -0.03em;
+  color: #25344e;
+  font-size: 1.05rem;
+  font-weight: 720;
+  letter-spacing: 0;
   line-height: 1;
 }
 
 .kpi-text em {
   margin-top: 4px;
-  color: #78849a;
+  color: #8791a1;
   font-size: 0.68rem;
   font-style: normal;
-  font-weight: 650;
+  font-weight: 460;
 }
 
 .kpi-icon svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   align-self: center;
   margin: 0;
   filter: none;
@@ -756,11 +758,11 @@ const handleStudentSuccess = () => {
   gap: 12px;
   min-height: 44px;
   margin-bottom: 8px;
-  border: 1px solid #dfe6ef;
+  border: 1px solid #e6ecf3;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.82);
   padding: 6px 8px;
-  box-shadow: 0 8px 22px rgba(22, 38, 65, 0.04);
+  box-shadow: 0 4px 14px rgba(22, 38, 65, 0.025);
 }
 
 .search-control {
@@ -782,7 +784,7 @@ const handleStudentSuccess = () => {
   background: transparent;
   color: #172841;
   font-size: 0.72rem;
-  font-weight: 650;
+  font-weight: 500;
   outline: none;
 }
 
@@ -832,8 +834,8 @@ const handleStudentSuccess = () => {
 }
 
 .student-list-panel.is-compact {
-  width: clamp(350px, 29vw, 410px);
-  flex: 0 0 clamp(350px, 29vw, 410px);
+  width: clamp(318px, 25vw, 370px);
+  flex: 0 0 clamp(318px, 25vw, 370px);
 }
 
 .student-list-panel.is-full {
@@ -844,10 +846,10 @@ const handleStudentSuccess = () => {
 .student-list-card,
 .student-detail-panel {
   min-height: 0;
-  border: 1px solid #dfe6ef;
+  border: 1px solid #e6ecf3;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 10px 26px rgba(22, 38, 65, 0.048);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 5px 18px rgba(22, 38, 65, 0.032);
 }
 
 .student-list-card {
@@ -855,6 +857,37 @@ const handleStudentSuccess = () => {
   width: 100%;
   flex-direction: column;
   overflow: hidden;
+}
+
+.student-list-panel.is-compact .student-list-card {
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: none;
+}
+
+.student-list-panel.is-compact .list-titlebar,
+.student-list-panel.is-compact .list-columns,
+.student-list-panel.is-compact .student-row {
+  border-color: #edf2f6;
+}
+
+.student-list-panel.is-compact .student-row:not(.selected) {
+  opacity: 0.82;
+}
+
+.student-list-panel.is-compact .student-row:not(.selected):hover {
+  opacity: 1;
+}
+
+.student-list-panel.is-compact .student-copy strong {
+  font-weight: 620;
+}
+
+.student-list-panel.is-compact .money {
+  color: #6e7b90;
+}
+
+.student-list-panel.is-compact .money.balance.danger {
+  color: #a95d62;
 }
 
 .list-titlebar {
@@ -872,17 +905,17 @@ const handleStudentSuccess = () => {
   align-items: center;
   gap: 9px;
   margin: 0;
-  color: #31405a;
+  color: #4f5c71;
   font-size: 0.72rem;
-  font-weight: 850;
-  letter-spacing: 0.02em;
+  font-weight: 680;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
 .list-titlebar h2 span {
   border-radius: 999px;
-  background: #dcefd6;
-  color: #3e873b;
+  background: #e8f2e4;
+  color: #517947;
   padding: 3px 9px;
   font-size: 0.72rem;
   line-height: 1;
@@ -913,10 +946,10 @@ const handleStudentSuccess = () => {
   flex-shrink: 0;
   align-items: center;
   border-bottom: 1px solid #e8eef5;
-  color: #657089;
+  color: #7b8798;
   font-size: 0.6rem;
-  font-weight: 850;
-  letter-spacing: 0.04em;
+  font-weight: 680;
+  letter-spacing: 0.035em;
   padding: 0 17px;
   text-transform: uppercase;
 }
@@ -952,8 +985,8 @@ const handleStudentSuccess = () => {
   align-items: center;
   gap: 8px;
   border: 0;
-  border-bottom: 1px solid #e8eef5;
-  border-left: 4px solid transparent;
+  border-bottom: 1px solid #edf2f6;
+  border-left: 3px solid transparent;
   background: transparent;
   padding: 0 14px 0 13px;
   text-align: left;
@@ -965,8 +998,9 @@ const handleStudentSuccess = () => {
 }
 
 .student-row.selected {
-  border-left-color: #54ad3c;
-  background: linear-gradient(90deg, rgba(231, 244, 225, 0.72) 0%, rgba(255, 255, 255, 0.92) 100%);
+  border-left-color: #6aa957;
+  background: linear-gradient(90deg, rgba(236, 246, 231, 0.76) 0%, rgba(255, 255, 255, 0.86) 100%);
+  opacity: 1;
 }
 
 .student-row.inactive {
@@ -992,10 +1026,10 @@ const handleStudentSuccess = () => {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #e4f2dc;
-  color: #3e873b;
+  background: #ecf4e8;
+  color: #527d49;
   font-size: 0.74rem;
-  font-weight: 850;
+  font-weight: 680;
 }
 
 .student-avatar img {
@@ -1004,9 +1038,9 @@ const handleStudentSuccess = () => {
   object-fit: cover;
 }
 
-.student-row:nth-child(4n+2) .student-avatar { background: #e7eefc; color: #2e62b9; }
-.student-row:nth-child(4n+3) .student-avatar { background: #ddf3ed; color: #198d7c; }
-.student-row:nth-child(4n+4) .student-avatar { background: #eee8f6; color: #71509e; }
+.student-row:nth-child(4n+2) .student-avatar { background: #edf2fb; color: #536f9e; }
+.student-row:nth-child(4n+3) .student-avatar { background: #e9f5f1; color: #4b8177; }
+.student-row:nth-child(4n+4) .student-avatar { background: #f0edf6; color: #72638b; }
 
 .student-copy {
   display: flex;
@@ -1017,9 +1051,9 @@ const handleStudentSuccess = () => {
 
 .student-copy strong {
   overflow: hidden;
-  color: #24344f;
+  color: #2f3d55;
   font-size: 0.72rem;
-  font-weight: 850;
+  font-weight: 700;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1027,10 +1061,10 @@ const handleStudentSuccess = () => {
 
 .student-copy em,
 .assignment {
-  color: #6f7d94;
+  color: #7b8798;
   font-size: 0.62rem;
   font-style: normal;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.2;
 }
 
@@ -1067,10 +1101,10 @@ const handleStudentSuccess = () => {
 }
 
 .money {
-  color: #24344f;
+  color: #344158;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: 680;
   text-align: right;
   white-space: nowrap;
 }
@@ -1080,18 +1114,18 @@ const handleStudentSuccess = () => {
 }
 
 .money.paid {
-  color: #2f7b31;
+  color: #477a49;
 }
 
 .money.balance.danger {
-  color: #ff2f38;
+  color: #b84f56;
 }
 
 .row-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  color: #637089;
+  color: #7c8798;
 }
 
 .row-actions button {
@@ -1103,18 +1137,22 @@ const handleStudentSuccess = () => {
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: #637089;
-  opacity: 0.45;
+  color: #7c8798;
+  opacity: 0.22;
   transition: opacity 150ms ease, background 150ms ease, color 150ms ease;
 }
 
 .student-row:hover .row-actions button {
-  opacity: 1;
+  opacity: 0.75;
 }
 
 .row-actions button:hover {
-  background: rgba(101, 167, 68, 0.12);
-  color: #2d7537;
+  background: rgba(101, 167, 68, 0.09);
+  color: #426d3b;
+}
+
+.row-actions > svg {
+  opacity: 0.32;
 }
 
 .empty-state {
@@ -1139,9 +1177,9 @@ const handleStudentSuccess = () => {
   justify-content: space-between;
   border-top: 1px solid #e8eef5;
   padding: 0 17px;
-  color: #627089;
+  color: #818b9b;
   font-size: 0.68rem;
-  font-weight: 650;
+  font-weight: 450;
 }
 
 .student-detail-panel {
@@ -1165,13 +1203,13 @@ const handleStudentSuccess = () => {
   }
 
   .kpi-icon {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
   }
 
   .student-list-panel.is-compact {
-    width: 350px;
-    flex-basis: 350px;
+    width: 318px;
+    flex-basis: 318px;
   }
 }
 
@@ -1210,18 +1248,18 @@ const handleStudentSuccess = () => {
   }
 
   .kpi-card {
-    min-height: 72px;
+    min-height: 66px;
     padding-top: 9px;
     padding-bottom: 9px;
   }
 
   .kpi-icon {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
   }
 
   .kpi-text strong {
-    font-size: 1.28rem;
+    font-size: 1.08rem;
   }
 
   .kpi-text em {

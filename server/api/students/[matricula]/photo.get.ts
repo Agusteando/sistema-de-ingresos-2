@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { query } from '../../../utils/db'
+import { cleanApiKey } from '../../../utils/externalBaseSync'
 
 type PhotoCacheEntry = {
   matricula: string
@@ -8,9 +8,23 @@ type PhotoCacheEntry = {
   expiresAt: number
 }
 
+class ExternalPhotoError extends Error {
+  statusCode: number
+  code: string
+  externalStatus?: number
+
+  constructor(statusCode: number, code: string, message: string, externalStatus?: number) {
+    super(message)
+    this.statusCode = statusCode
+    this.code = code
+    this.externalStatus = externalStatus
+  }
+}
+
 const SUCCESS_TTL_MS = 1000 * 60 * 60 * 6
-const NOT_FOUND_MAX_AGE_SECONDS = 60
 const CLIENT_MAX_AGE_SECONDS = 900
+const NOT_FOUND_MAX_AGE_SECONDS = 60
+const EXTERNAL_TIMEOUT_MS = 10000
 
 const photoCache = new Map<string, PhotoCacheEntry>()
 const pendingLookups = new Map<string, Promise<PhotoCacheEntry | null>>()
@@ -21,12 +35,21 @@ const isValidMatricula = (value: string) => {
   return value.length > 0 && value.length <= 64 && /^[A-Z0-9][A-Z0-9_-]*$/.test(value)
 }
 
-const getPhotoBaseUrl = (event: any) => {
+const getPhotoBaseUrl = () => {
   const config = useRuntimeConfig() as any
   const configured = String(config.studentPhotoBaseUrl || '').trim()
-  if (configured) return configured.replace(/\/+$/, '')
+  return (configured || 'https://matricula.casitaapps.com').replace(/\/+$/, '')
+}
 
-  return 'https://matricula.casitaapps.com'
+const getExternalApiKey = () => {
+  const config = useRuntimeConfig() as any
+  return cleanApiKey(config.studentPhotoApiKey || config.externalSyncApiKey)
+}
+
+const buildExternalPhotoUrl = (matricula: string) => {
+  const url = new URL(`/api/students/${encodeURIComponent(matricula)}/photo`, getPhotoBaseUrl())
+  url.searchParams.set('format', 'json')
+  return url.toString()
 }
 
 const encodePath = (value: string) => {
@@ -37,19 +60,14 @@ const encodePath = (value: string) => {
     .join('/')
 }
 
-const resolvePhotoUrl = (event: any, rawValue: unknown) => {
+const resolvePhotoUrl = (rawValue: unknown) => {
   const value = String(rawValue || '').trim()
   if (!value) return null
 
-  if (/^https?:\/\//i.test(value)) {
-    return value
-  }
+  if (/^https?:\/\//i.test(value)) return value
+  if (value.startsWith('//')) return `https:${value}`
 
-  if (value.startsWith('//')) {
-    return `https:${value}`
-  }
-
-  const baseUrl = getPhotoBaseUrl(event)
+  const baseUrl = getPhotoBaseUrl()
 
   if (value.startsWith('/')) {
     return new URL(value, baseUrl).toString()
@@ -67,14 +85,10 @@ const createEtag = (matricula: string, photoUrl: string) => {
   return `"student-photo-${hash}"`
 }
 
-const cacheHeaders = (event: any, entry?: PhotoCacheEntry | null) => {
+const setCacheHeaders = (event: any, entry?: PhotoCacheEntry | null) => {
   if (entry) {
     setResponseHeader(event, 'ETag', entry.etag)
-    setResponseHeader(
-      event,
-      'Cache-Control',
-      `private, max-age=${CLIENT_MAX_AGE_SECONDS}, stale-while-revalidate=3600`
-    )
+    setResponseHeader(event, 'Cache-Control', `private, max-age=${CLIENT_MAX_AGE_SECONDS}, stale-while-revalidate=3600`)
     return
   }
 
@@ -83,8 +97,9 @@ const cacheHeaders = (event: any, entry?: PhotoCacheEntry | null) => {
 
 const jsonError = (event: any, statusCode: number, code: string, message: string, extra: Record<string, any> = {}) => {
   setResponseStatus(event, statusCode)
+
   if (statusCode === 404) {
-    cacheHeaders(event, null)
+    setCacheHeaders(event, null)
   } else {
     setResponseHeader(event, 'Cache-Control', 'no-store')
   }
@@ -96,35 +111,80 @@ const jsonError = (event: any, statusCode: number, code: string, message: string
   }
 }
 
-const queryActiveStudentPhoto = async (event: any, matricula: string): Promise<PhotoCacheEntry | null> => {
-  const rows = await query<any[]>(
-    `
-      SELECT b.matricula, m.foto
-      FROM base b
-      INNER JOIN \`matricula\` m
-        ON UPPER(TRIM(m.matricula)) = UPPER(TRIM(b.matricula))
-      WHERE UPPER(TRIM(b.matricula)) = ?
-        AND b.estatus = 'Activo'
-        AND m.foto IS NOT NULL
-        AND TRIM(m.foto) != ''
-      ORDER BY b.id DESC
-      LIMIT 1
-    `,
-    [matricula]
+const extractPhotoUrl = (payload: any) => {
+  return resolvePhotoUrl(
+    payload?.photoUrl ||
+    payload?.url ||
+    payload?.data?.photoUrl ||
+    payload?.data?.url ||
+    payload?.student?.photoUrl ||
+    payload?.student?.foto
   )
+}
 
-  const photoUrl = resolvePhotoUrl(event, rows[0]?.foto)
-  if (!photoUrl) return null
+const fetchExternalPhoto = async (matricula: string): Promise<PhotoCacheEntry | null> => {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), EXTERNAL_TIMEOUT_MS)
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  const apiKey = getExternalApiKey()
 
-  return {
-    matricula,
-    photoUrl,
-    etag: createEtag(matricula, photoUrl),
-    expiresAt: Date.now() + SUCCESS_TTL_MS
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`
+    headers['x-api-key'] = apiKey
+  }
+
+  try {
+    const response = await fetch(buildExternalPhotoUrl(matricula), {
+      method: 'GET',
+      headers,
+      signal: controller.signal
+    })
+
+    if (response.status === 404) return null
+
+    if (response.status === 401 || response.status === 403) {
+      throw new ExternalPhotoError(
+        502,
+        'EXTERNAL_PHOTO_UNAUTHORIZED',
+        'El servicio externo de matricula rechazo la consulta de foto.',
+        response.status
+      )
+    }
+
+    if (!response.ok) {
+      throw new ExternalPhotoError(
+        502,
+        'EXTERNAL_PHOTO_FAILED',
+        'El servicio externo de matricula no pudo resolver la foto.',
+        response.status
+      )
+    }
+
+    const payload = await response.json().catch(() => null)
+    const photoUrl = extractPhotoUrl(payload)
+
+    if (!photoUrl) return null
+
+    return {
+      matricula,
+      photoUrl,
+      etag: createEtag(matricula, photoUrl),
+      expiresAt: Date.now() + SUCCESS_TTL_MS
+    }
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new ExternalPhotoError(504, 'EXTERNAL_PHOTO_TIMEOUT', 'Tiempo agotado consultando la foto externa.')
+    }
+
+    if (error instanceof ExternalPhotoError) throw error
+
+    throw new ExternalPhotoError(502, 'EXTERNAL_PHOTO_FAILED', 'No se pudo consultar la foto externa.')
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
-const resolveEntry = async (event: any, matricula: string, refresh: boolean) => {
+const resolveEntry = async (matricula: string, refresh: boolean) => {
   const cached = photoCache.get(matricula)
 
   if (!refresh && cached && cached.expiresAt > Date.now()) {
@@ -136,7 +196,7 @@ const resolveEntry = async (event: any, matricula: string, refresh: boolean) => 
     return await pending
   }
 
-  const lookup = queryActiveStudentPhoto(event, matricula)
+  const lookup = fetchExternalPhoto(matricula)
     .then(entry => {
       if (entry) {
         photoCache.set(matricula, entry)
@@ -155,9 +215,8 @@ const resolveEntry = async (event: any, matricula: string, refresh: boolean) => 
 }
 
 export default defineEventHandler(async (event) => {
-  const paramsMatricula = event.context.params?.matricula
   const requestQuery = getQuery(event)
-  const matricula = normalizeMatricula(paramsMatricula)
+  const matricula = normalizeMatricula(event.context.params?.matricula)
   const wantsJson = String(requestQuery.format || '').toLowerCase() === 'json'
   const refresh = String(requestQuery.refresh || '') === '1'
 
@@ -166,13 +225,13 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const entry = await resolveEntry(event, matricula, refresh)
+    const entry = await resolveEntry(matricula, refresh)
 
     if (!entry) {
-      return jsonError(event, 404, 'PHOTO_NOT_FOUND', 'No hay foto activa para esta matricula.', { matricula })
+      return jsonError(event, 404, 'PHOTO_NOT_FOUND', 'No hay foto disponible para esta matricula.', { matricula })
     }
 
-    cacheHeaders(event, entry)
+    setCacheHeaders(event, entry)
 
     if (getRequestHeader(event, 'if-none-match') === entry.etag) {
       setResponseStatus(event, 304)
@@ -191,12 +250,25 @@ export default defineEventHandler(async (event) => {
 
     return sendRedirect(event, entry.photoUrl, 302)
   } catch (error: any) {
-    console.error('[StudentPhoto] Error resolving photo', {
+    const statusCode = Number(error?.statusCode || 502)
+    const code = error?.code || 'EXTERNAL_PHOTO_FAILED'
+
+    console.error('[StudentPhoto] External resolver failed', {
       matricula,
-      message: error?.message,
-      code: error?.code
+      code,
+      externalStatus: error?.externalStatus,
+      message: error?.message
     })
 
-    return jsonError(event, 500, 'PHOTO_LOOKUP_FAILED', 'No se pudo resolver la foto del alumno.', { matricula })
+    return jsonError(
+      event,
+      statusCode,
+      code,
+      error?.message || 'No se pudo resolver la foto externa del alumno.',
+      {
+        matricula,
+        externalStatus: error?.externalStatus
+      }
+    )
   }
 })
