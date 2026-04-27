@@ -15,7 +15,8 @@ export const GRADOS_ORDEN: Record<string, number> = {
   'Tercero': 3,
   'Cuarto': 4,
   'Quinto': 5,
-  'Sexto': 6
+  'Sexto': 6,
+  'Egresado': 99
 }
 
 export const normalizeCicloOption = (value: string | number | null | undefined) => {

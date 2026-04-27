@@ -73,12 +73,27 @@
       >
         <span class="kpi-icon"><LucideUserX :size="24" /></span>
         <span class="kpi-text">
-          <span>Bajas / No inscritos</span>
+          <span>No inscritos</span>
           <strong>{{ kpiCounts.no_inscritos }}</strong>
-          <em>Alumnos</em>
+          <em>Activos sin inscripcion</em>
         </span>
         <svg viewBox="0 0 104 42" aria-hidden="true">
           <polyline points="0,35 14,29 29,30 43,19 57,16 72,23 88,15 104,4" />
+        </svg>
+      </button>
+
+      <button
+        @click="setActiveFilter('bajas')"
+        :class="['kpi-card kpi-gray', { active: activeFilter === 'bajas' }]"
+      >
+        <span class="kpi-icon"><LucideUserX :size="24" /></span>
+        <span class="kpi-text">
+          <span>Bajas</span>
+          <strong>{{ kpiCounts.bajas }}</strong>
+          <em>Con motivo registrado</em>
+        </span>
+        <svg viewBox="0 0 104 42" aria-hidden="true">
+          <polyline points="0,34 16,31 31,23 47,26 63,17 80,19 96,10 104,8" />
         </svg>
       </button>
     </div>
@@ -107,6 +122,10 @@
       <button class="btn btn-secondary export-button" @click="exportData">
         <LucideDownload :size="18"/> Exportar
       </button>
+    </div>
+
+    <div v-if="selectedFilterTags.length" class="active-filter-strip">
+      <span v-for="tag in selectedFilterTags" :key="tag" class="filter-token">{{ tag }}</span>
     </div>
 
     <div class="students-workspace">
@@ -289,6 +308,23 @@ const hasActiveFilters = computed(() => Boolean(
   filters.value.q
 ))
 
+const activeFilterLabel = computed(() => ({
+  inscritos: 'Inscritos',
+  internos: 'Internos',
+  externos: 'Externos',
+  no_inscritos: 'No inscritos',
+  bajas: 'Bajas'
+}[activeFilter.value] || 'Todos los estados'))
+
+const selectedFilterTags = computed(() => {
+  const tags = []
+  if (activeFilter.value) tags.push(`Estado: ${activeFilterLabel.value}`)
+  if (activeGrado.value) tags.push(`Grado: ${activeGrado.value}`)
+  if (activeGrupo.value) tags.push(`Grupo: ${activeGrupo.value}`)
+  if (filters.value.q) tags.push(`Busqueda: ${filters.value.q}`)
+  return tags
+})
+
 const setActiveFilter = (filter) => {
   activeFilter.value = activeFilter.value === filter ? '' : filter
   activeGrado.value = ''
@@ -306,7 +342,8 @@ const clearFilters = () => {
 const listRangeLabel = computed(() => {
   const total = displayedStudents.value.length
   if (!total) return 'Sin alumnos para mostrar'
-  return `Mostrando 1-${Math.min(total, 7)} de ${total} alumnos`
+  if (total > 7) return `${total} alumnos; desplaza la lista para ver mas`
+  return `${total} alumnos visibles`
 })
 
 const parseEnrollmentConfig = (obj) => {
@@ -337,6 +374,7 @@ const performSearch = async () => {
   loading.value = true
   try {
     const cicloKey = normalizeCicloKey(state.value.ciclo)
+    if (filters.value.q && activeFilter.value === 'inscritos') activeFilter.value = ''
     const res = await $fetch('/api/students', { params: { ciclo: cicloKey, q: filters.value.q } })
     students.value = res || []
     readCachedStudentPhotos()
@@ -361,10 +399,10 @@ const isEnrolled = (student) => {
 }
 
 const kpiCounts = computed(() => {
-  let inscritos = 0, internos = 0, externos = 0, no_inscritos = 0
+  let inscritos = 0, internos = 0, externos = 0, no_inscritos = 0, bajas = 0
   students.value.forEach(s => {
     if (s.estatus !== 'Activo') {
-      no_inscritos++
+      bajas++
     } else if (isEnrolled(s)) {
       inscritos++
       if (String(s.interno) === '1') internos++
@@ -373,7 +411,7 @@ const kpiCounts = computed(() => {
       no_inscritos++
     }
   })
-  return { inscritos, internos, externos, no_inscritos }
+  return { inscritos, internos, externos, no_inscritos, bajas }
 })
 
 const displayedStudents = computed(() => {
@@ -390,7 +428,8 @@ const displayedStudents = computed(() => {
   if (activeFilter.value === 'inscritos') list = list.filter(s => isEnrolled(s))
   else if (activeFilter.value === 'internos') list = list.filter(s => isEnrolled(s) && String(s.interno) === '1')
   else if (activeFilter.value === 'externos') list = list.filter(s => isEnrolled(s) && String(s.interno) === '0')
-  else if (activeFilter.value === 'no_inscritos') list = list.filter(s => !isEnrolled(s))
+  else if (activeFilter.value === 'no_inscritos') list = list.filter(s => s.estatus === 'Activo' && !isEnrolled(s))
+  else if (activeFilter.value === 'bajas') list = list.filter(s => s.estatus !== 'Activo')
 
   return list
 })
@@ -401,7 +440,8 @@ const availableGrados = computed(() => {
     if (activeFilter.value === 'inscritos') return isEnrolled(s)
     if (activeFilter.value === 'internos') return isEnrolled(s) && String(s.interno) === '1'
     if (activeFilter.value === 'externos') return isEnrolled(s) && String(s.interno) === '0'
-    if (activeFilter.value === 'no_inscritos') return !isEnrolled(s)
+    if (activeFilter.value === 'no_inscritos') return s.estatus === 'Activo' && !isEnrolled(s)
+    if (activeFilter.value === 'bajas') return s.estatus !== 'Activo'
     return true
   })
   subset.forEach(s => { if (s.grado && s.grado !== 'null') set.add(s.grado) })
@@ -605,7 +645,7 @@ const handleStudentSuccess = () => {
 .kpi-grid {
   display: grid;
   flex-shrink: 0;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 8px;
 }
@@ -661,6 +701,7 @@ const handleStudentSuccess = () => {
 .kpi-card.active {
   border-color: rgba(101, 167, 68, 0.34);
   background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 0 0 2px rgba(101, 167, 68, 0.24), 0 8px 22px rgba(22, 38, 65, 0.045);
 }
 
 .kpi-card.active::after,
@@ -683,11 +724,13 @@ const handleStudentSuccess = () => {
 .kpi-teal .kpi-icon { background: radial-gradient(circle at 32% 22%, #e8fbf8, #d6f2ee 70%); color: #238a83; }
 .kpi-blue .kpi-icon { background: radial-gradient(circle at 32% 22%, #eff5ff, #e0ebff 70%); color: #416fa8; }
 .kpi-red .kpi-icon { background: radial-gradient(circle at 32% 22%, #fff0ed, #ffe1dc 70%); color: #c95b4d; }
+.kpi-gray .kpi-icon { background: radial-gradient(circle at 32% 22%, #f3f6fa, #e4eaf2 70%); color: #66728a; }
 
 .kpi-green::after { background: linear-gradient(90deg, rgba(224, 242, 216, 0.52), transparent 46%); }
 .kpi-teal::after { background: linear-gradient(90deg, rgba(216, 244, 240, 0.5), transparent 46%); }
 .kpi-blue::after { background: linear-gradient(90deg, rgba(224, 235, 255, 0.46), transparent 46%); }
 .kpi-red::after { background: linear-gradient(90deg, rgba(255, 228, 223, 0.46), transparent 46%); }
+.kpi-gray::after { background: linear-gradient(90deg, rgba(226, 232, 240, 0.5), transparent 46%); }
 
 .kpi-text {
   position: relative;
@@ -749,6 +792,7 @@ const handleStudentSuccess = () => {
 .kpi-teal polyline { stroke: #12aaa1; }
 .kpi-blue polyline { stroke: #397fe8; }
 .kpi-red polyline { stroke: #ff4d38; }
+.kpi-gray polyline { stroke: #64748b; }
 
 .filter-bar {
   display: grid;
@@ -763,6 +807,29 @@ const handleStudentSuccess = () => {
   background: rgba(255, 255, 255, 0.82);
   padding: 6px 8px;
   box-shadow: 0 4px 14px rgba(22, 38, 65, 0.025);
+}
+
+.active-filter-strip {
+  display: flex;
+  min-height: 30px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 8px;
+  overflow-x: auto;
+}
+
+.filter-token {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #cfe0c8;
+  border-radius: 999px;
+  background: #f1f8ee;
+  color: #416d3b;
+  padding: 5px 10px;
+  font-size: 0.66rem;
+  font-weight: 680;
+  white-space: nowrap;
 }
 
 .search-control {
@@ -802,8 +869,7 @@ const handleStudentSuccess = () => {
   scrollbar-width: none;
 }
 
-.grade-tabs::-webkit-scrollbar,
-.student-list-scroll::-webkit-scrollbar {
+.grade-tabs::-webkit-scrollbar {
   display: none;
 }
 
@@ -975,7 +1041,8 @@ const handleStudentSuccess = () => {
   flex: 1;
   flex-direction: column;
   overflow-y: auto;
-  scrollbar-width: none;
+  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-width: thin;
 }
 
 .student-row {

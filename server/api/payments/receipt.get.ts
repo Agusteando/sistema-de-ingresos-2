@@ -1,4 +1,5 @@
 import { query } from '../../utils/db'
+import { nivelFromPlantel } from '../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => {
   const { folios } = getQuery(event)
@@ -17,7 +18,7 @@ export default defineEventHandler(async (event) => {
   if (refs.length === 0) return []
 
   const [studentData] = await query<any[]>(
-    `SELECT grado, grupo, nivel FROM base WHERE matricula = ? LIMIT 1`,
+    `SELECT grado, grupo, plantel FROM base WHERE matricula = ? LIMIT 1`,
     [refs[0].matricula]
   )
 
@@ -44,6 +45,6 @@ export default defineEventHandler(async (event) => {
     ciclo: ref.ciclo,
     grado: studentData?.grado || '',
     grupo: studentData?.grupo || '',
-    nivel: studentData?.nivel || ''
+    nivel: studentData ? nivelFromPlantel(studentData.plantel) : ''
   }))
 })

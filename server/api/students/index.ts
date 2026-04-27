@@ -1,5 +1,5 @@
 import { query } from '../../utils/db'
-import { calculatePromotedGrado, displayGrado, normalizeGrado } from '../../../shared/utils/grado'
+import { calculatePromotedGrado, displayGrado, nivelFromPlantel, normalizeGradoForPlantel } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => {
@@ -28,7 +28,11 @@ export default defineEventHandler(async (event) => {
 
     const sql = `
       SELECT 
-        A.matricula, A.nombreCompleto, A.grado as gradoBase, A.grupo, A.nivel as nivelBase, A.ciclo as cicloBase, A.plantel, A.estatus, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno as internoBase,
+        A.matricula, A.nombreCompleto, A.apellidoPaterno, A.apellidoMaterno, A.nombres, A.genero,
+        A.grado as gradoBase, A.grupo, A.ciclo as cicloBase, A.ciclo, A.plantel, A.estatus,
+        A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno as internoBase,
+        Prev.previous_matricula AS matriculaAnterior,
+        Next.successor_matricula AS matriculaSiguiente,
         IFNULL(B.pagosTotal, 0) AS pagosTotal,
         B.conceptosPagados,
         IFNULL(C.saldo, 0) AS importeTotal,
@@ -43,12 +47,14 @@ export default defineEventHandler(async (event) => {
         SELECT matricula, SUM(((100 - IFNULL(beca, 0)) * costo / 100) * IFNULL(meses, 1)) AS saldo, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') as conceptosCargados
         FROM documentos WHERE ciclo = ? AND estatus = 'Activo' GROUP BY matricula
       ) C ON A.matricula = C.matricula
+      LEFT JOIN alumno_matricula_links Prev ON Prev.successor_matricula = A.matricula
+      LEFT JOIN alumno_matricula_links Next ON Next.previous_matricula = A.matricula
       WHERE ${whereClause}
       ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC LIMIT 5000;
     `
     const rows = await query<any[]>(sql, [cicloKey, cicloKey, ...params])
     let mapped = rows.map(r => {
-      const p = calculatePromotedGrado(r.gradoBase, r.nivelBase, r.cicloBase, cicloKey)
+      const p = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey)
       return {
         ...r,
         grado: displayGrado(p.grado),
@@ -68,17 +74,20 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event)
     const cicloKey = normalizeCicloKey(body.ciclo)
     const assignedPlantel = user.role === 'global' ? body.plantel : user.active_plantel
+    const assignedNivel = nivelFromPlantel(assignedPlantel)
 
     await query(`
       INSERT INTO base (
         matricula, apellidoPaterno, apellidoMaterno, nombres, 
+        nombreCompleto,
         \`Fecha de nacimiento\`, genero, plantel, nivel, grado, grupo, 
         \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo, interno, estatus
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, CONCAT(?, ' ', ?, ' ', ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       '', 
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      body.birth, body.genero, assignedPlantel, body.nivel, normalizeGrado(body.grado), body.grupo,
+      body.apellidoPaterno, body.apellidoMaterno, body.nombres,
+      body.birth, body.genero, assignedPlantel, assignedNivel, normalizeGradoForPlantel(body.grado, assignedPlantel), body.grupo,
       body.padre, body.telefono, body.correo, user.name, cicloKey, body.interno, body.estatus || 'Activo'
     ])
     return { success: true }

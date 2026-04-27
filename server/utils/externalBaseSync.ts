@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { executeStatementTransaction, query, type SqlStatement } from './db'
+import { nivelFromPlantel, normalizeGradoForPlantel } from '../../shared/utils/grado'
 
 export type SyncCounters = {
   total: number
@@ -343,32 +344,160 @@ export const fetchExternalRows = async (syncConfig: SyncRuntimeConfig, plantel: 
   }
 }
 
-export function mapExternalRow(row: any) {
-  const padreFullName = [
-    row.nombre_padre,
-    row.apellido_paterno_padre,
-    row.apellido_materno_padre
-  ].filter(Boolean).join(' ').trim()
+const normalizePayloadKey = (key: unknown) => String(key || '')
+  .toLowerCase()
+  .trim()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]/g, '')
 
-  const madreFullName = [
-    row.nombre_madre,
-    row.apellido_paterno_madre,
-    row.apellido_materno_madre
-  ].filter(Boolean).join(' ').trim()
+const firstPayloadValue = (row: any, aliases: string[]) => {
+  if (!row || typeof row !== 'object') return ''
 
-  const padreTutor = padreFullName || madreFullName || 'No especificado'
+  for (const alias of aliases) {
+    const direct = row[alias]
+    if (direct !== undefined && direct !== null && String(direct).trim() !== '') {
+      return String(direct).trim()
+    }
+  }
+
+  const normalizedAliases = new Set(aliases.map(normalizePayloadKey))
+  const entry = Object.entries(row).find(([key, value]) => {
+    return normalizedAliases.has(normalizePayloadKey(key)) && value !== undefined && value !== null && String(value).trim() !== ''
+  })
+
+  return entry ? String(entry[1]).trim() : ''
+}
+
+const joinName = (...parts: string[]) => parts.map(part => String(part || '').trim()).filter(Boolean).join(' ').trim()
+
+const normalizeDateValue = (value: unknown) => {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+
+  const ymd = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+  if (ymd) {
+    const [, year, month, day] = ymd
+    return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  const dmy = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
+  if (dmy) {
+    const [, day, month, year] = dmy
+    return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  return raw
+}
+
+const birthFromCurp = (curp: unknown) => {
+  const normalized = String(curp || '').trim().toUpperCase()
+  const match = normalized.match(/^[A-Z]{4}(\d{2})(\d{2})(\d{2})[HM]/)
+  if (!match) return ''
+
+  const yy = Number(match[1])
+  const mm = Number(match[2])
+  const dd = Number(match[3])
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return ''
+
+  const currentTwoDigitYear = Number(String(new Date().getFullYear()).slice(-2))
+  const fullYear = yy <= currentTwoDigitYear + 1 ? 2000 + yy : 1900 + yy
+  return `${fullYear}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+}
+
+const generoFromValue = (value: unknown, curp: unknown) => {
+  const raw = String(value || '').trim().toLowerCase()
+  const curpGender = String(curp || '').trim().toUpperCase().match(/^[A-Z]{4}\d{6}([HM])/)
+  const resolved = raw || (curpGender?.[1] === 'H' ? 'masculino' : curpGender?.[1] === 'M' ? 'femenino' : '')
+
+  if (['1', 'h', 'm', 'masculino', 'hombre', 'male'].includes(resolved)) return '1'
+  if (['0', 'f', 'femenino', 'mujer', 'female'].includes(resolved)) return '0'
+  return '1'
+}
+
+const normalizeInscritoBoolean = (value: unknown) => {
+  const raw = String(value || '').trim().toLowerCase()
+  return !(value === false || value === 0 || ['false', '0', 'no', 'externo'].includes(raw))
+}
+
+export function mapExternalRow(row: any, plantel: string) {
+  const curp = firstPayloadValue(row, ['curp', 'CURP'])
+  const tutorFullName = joinName(
+    firstPayloadValue(row, ['nombre_tutor', 'tutor_nombre', 'nombreTutor']),
+    firstPayloadValue(row, ['apellido_paterno_tutor', 'tutor_apellido_paterno', 'apellidoPaternoTutor']),
+    firstPayloadValue(row, ['apellido_materno_tutor', 'tutor_apellido_materno', 'apellidoMaternoTutor'])
+  ) || firstPayloadValue(row, ['tutor', 'padre_tutor', 'padreTutor', 'nombre_padre_tutor', 'nombrePadreTutor'])
+
+  const padreFullName = joinName(
+    firstPayloadValue(row, ['nombre_padre', 'padre_nombre', 'nombrePadre']),
+    firstPayloadValue(row, ['apellido_paterno_padre', 'padre_apellido_paterno', 'apellidoPaternoPadre']),
+    firstPayloadValue(row, ['apellido_materno_padre', 'padre_apellido_materno', 'apellidoMaternoPadre'])
+  ) || firstPayloadValue(row, ['padre', 'nombre_padre_completo', 'nombrePadreCompleto'])
+
+  const madreFullName = joinName(
+    firstPayloadValue(row, ['nombre_madre', 'madre_nombre', 'nombreMadre']),
+    firstPayloadValue(row, ['apellido_paterno_madre', 'madre_apellido_paterno', 'apellidoPaternoMadre']),
+    firstPayloadValue(row, ['apellido_materno_madre', 'madre_apellido_materno', 'apellidoMaternoMadre'])
+  ) || firstPayloadValue(row, ['madre', 'nombre_madre_completo', 'nombreMadreCompleto'])
+
+  const padreTutor = tutorFullName || [padreFullName, madreFullName].filter(Boolean).join(' / ') || 'No especificado'
+  const birth = normalizeDateValue(firstPayloadValue(row, [
+    'fecha_nacimiento',
+    'fecha_de_nacimiento',
+    'fechaNacimiento',
+    'nacimiento',
+    'birth',
+    'birthdate'
+  ])) || birthFromCurp(curp)
 
   return {
-    apellidoPaterno: String(row.apellido_paterno || '').trim(),
-    apellidoMaterno: String(row.apellido_materno || '').trim(),
-    nombres: String(row.nombres || '').trim(),
-    nivel: String(row.nivel || 'Primaria').trim(),
-    grado: String(row.grado || 'Primero').trim(),
-    grupo: String(row.grupo || 'A').trim(),
-    interno: (row.interno === false || row.interno === 0 || String(row.interno).toLowerCase() === 'false') ? 0 : 1,
-    correo: String(row.email_padre || row.email_madre || '').trim(),
-    telefono: String(row.telefono_padre || row.telefono_madre || '').trim(),
+    apellidoPaterno: firstPayloadValue(row, ['apellido_paterno', 'apellidoPaterno', 'primer_apellido']),
+    apellidoMaterno: firstPayloadValue(row, ['apellido_materno', 'apellidoMaterno', 'segundo_apellido']),
+    nombres: firstPayloadValue(row, ['nombres', 'nombre', 'nombre_alumno', 'nombreAlumno']),
+    nivel: nivelFromPlantel(plantel),
+    grado: normalizeGradoForPlantel(firstPayloadValue(row, ['grado', 'grado_actual', 'gradoActual']) || 'Primero', plantel),
+    grupo: firstPayloadValue(row, ['grupo', 'grupo_actual', 'grupoActual']) || 'A',
+    interno: normalizeInscritoBoolean(firstPayloadValue(row, ['interno', 'tipo_ingreso', 'tipoIngreso'])) ? 1 : 0,
+    correo: firstPayloadValue(row, [
+      'email_tutor',
+      'correo_tutor',
+      'email_padre',
+      'correo_padre',
+      'email_madre',
+      'correo_madre',
+      'correo',
+      'email'
+    ]),
+    telefono: firstPayloadValue(row, [
+      'telefono_tutor',
+      'celular_tutor',
+      'telefono_padre',
+      'celular_padre',
+      'telefono_madre',
+      'celular_madre',
+      'telefono',
+      'celular'
+    ]),
     padre: padreTutor,
+    birth,
+    genero: generoFromValue(firstPayloadValue(row, ['genero', 'sexo']), curp),
+    curp,
+    matriculaAnterior: normalizeMatricula(firstPayloadValue(row, [
+      'matricula_anterior',
+      'matriculaAnterior',
+      'previous_matricula',
+      'previousMatricula',
+      'matricula_previa',
+      'matriculaPrevia'
+    ])),
+    matriculaSiguiente: normalizeMatricula(firstPayloadValue(row, [
+      'matricula_siguiente',
+      'matriculaSiguiente',
+      'successor_matricula',
+      'successorMatricula',
+      'nueva_matricula',
+      'nuevaMatricula'
+    ])),
     baja: row.baja,
     motivo_baja: row.motivo_baja,
     categoria_baja: row.categoria_baja
@@ -383,8 +512,8 @@ export function computeHash(mappedData: any) {
 }
 
 export const signExternalRow = (row: any, runId: number, plantel: string, apiKey: string) => {
-  const matricula = normalizeMatricula(row?.matricula).toUpperCase()
-  const mappedHash = computeHash(mapExternalRow(row))
+  const matricula = normalizeMatricula(row?.matricula || firstPayloadValue(row, ['matricula', 'matricula_alumno', 'matriculaAlumno'])).toUpperCase()
+  const mappedHash = computeHash({ raw: row, mapped: mapExternalRow(row, plantel) })
   const payload = `${runId}|${plantel.toUpperCase()}|${matricula}|${mappedHash}`
 
   return crypto
@@ -476,7 +605,7 @@ export const processExternalRowsBatch = async (
     }
 
     const row = verification.row
-    const matricula = normalizeMatricula(row?.matricula)
+    const matricula = normalizeMatricula(row?.matricula || firstPayloadValue(row, ['matricula', 'matricula_alumno', 'matriculaAlumno']))
     const matriculaKey = matricula.toUpperCase()
 
     if (!matricula) {
@@ -503,8 +632,8 @@ export const processExternalRowsBatch = async (
 
     seenMatriculas.add(matriculaKey)
 
-    const mapped = mapExternalRow(row)
-    const sourceHash = computeHash(mapped)
+    const mapped = mapExternalRow(row, plantel)
+    const sourceHash = computeHash({ raw: row, mapped })
 
     validEntries.push({
       row,
@@ -522,7 +651,21 @@ export const processExternalRowsBatch = async (
   const matriculas = validEntries.map(entry => entry.matricula)
 
   const localRows = await query<any[]>(
-    `SELECT matricula, estatus FROM base WHERE matricula IN (?)`,
+    `
+      SELECT
+        matricula,
+        estatus,
+        apellidoPaterno,
+        apellidoMaterno,
+        nombres,
+        correo,
+        telefono,
+        \`Nombre del padre o tutor\` AS padre,
+        \`Fecha de nacimiento\` AS birth,
+        genero
+      FROM base
+      WHERE matricula IN (?)
+    `,
     [matriculas]
   )
 
@@ -544,8 +687,20 @@ export const processExternalRowsBatch = async (
   for (const entry of validEntries) {
     const localStudent = localByMatricula.get(entry.matriculaKey)
     const existingMeta = metaByMatricula.get(entry.matriculaKey)
+    const localMissingMappedField = Boolean(localStudent) && [
+      ['apellidoPaterno', entry.mapped.apellidoPaterno],
+      ['apellidoMaterno', entry.mapped.apellidoMaterno],
+      ['nombres', entry.mapped.nombres],
+      ['correo', entry.mapped.correo],
+      ['telefono', entry.mapped.telefono],
+      ['padre', entry.mapped.padre],
+      ['birth', entry.mapped.birth],
+      ['genero', entry.mapped.genero]
+    ].some(([field, mappedValue]) => {
+      return String(mappedValue || '').trim() !== '' && String(localStudent?.[field] || '').trim() === ''
+    })
 
-    if (localStudent && existingMeta?.source_hash === entry.sourceHash) {
+    if (localStudent && existingMeta?.source_hash === entry.sourceHash && !localMissingMappedField) {
       counters.skipped++
       continue
     }
@@ -562,23 +717,26 @@ export const processExternalRowsBatch = async (
       entry.mapped.apellidoPaterno,
       entry.mapped.apellidoMaterno,
       entry.mapped.nombres
-    ].filter(Boolean).join(' ').trim() || entry.matricula
+    ].filter(Boolean).join(' ').trim()
+    const fullNameForInsert = fullName || entry.matricula
 
     if (localStudent) {
       statements.push({
         sql: `
           UPDATE base SET
-            apellidoPaterno = ?,
-            apellidoMaterno = ?,
-            nombres = ?,
-            nombreCompleto = ?,
+            apellidoPaterno = COALESCE(NULLIF(?, ''), apellidoPaterno),
+            apellidoMaterno = COALESCE(NULLIF(?, ''), apellidoMaterno),
+            nombres = COALESCE(NULLIF(?, ''), nombres),
+            nombreCompleto = COALESCE(NULLIF(?, ''), nombreCompleto),
             nivel = ?,
             grado = ?,
-            grupo = ?,
+            grupo = COALESCE(NULLIF(?, ''), grupo),
             interno = ?,
-            correo = ?,
-            telefono = ?,
-            \`Nombre del padre o tutor\` = ?,
+            correo = COALESCE(NULLIF(?, ''), correo),
+            telefono = COALESCE(NULLIF(?, ''), telefono),
+            \`Nombre del padre o tutor\` = COALESCE(NULLIF(?, ''), \`Nombre del padre o tutor\`),
+            \`Fecha de nacimiento\` = COALESCE(NULLIF(?, ''), \`Fecha de nacimiento\`),
+            genero = COALESCE(NULLIF(?, ''), genero),
             estatus = ?
           WHERE matricula = ?
         `,
@@ -594,6 +752,8 @@ export const processExternalRowsBatch = async (
           entry.mapped.correo,
           entry.mapped.telefono,
           entry.mapped.padre,
+          entry.mapped.birth,
+          entry.mapped.genero,
           finalEstatus,
           entry.matricula
         ]
@@ -617,9 +777,10 @@ export const processExternalRowsBatch = async (
             \`Nombre del padre o tutor\`,
             estatus,
             \`Fecha de nacimiento\`,
+            genero,
             ciclo,
             usuario
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Sistema Sync')
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Sistema Sync')
         `,
         params: [
           entry.matricula,
@@ -627,7 +788,7 @@ export const processExternalRowsBatch = async (
           entry.mapped.apellidoPaterno,
           entry.mapped.apellidoMaterno,
           entry.mapped.nombres,
-          fullName,
+          fullNameForInsert,
           entry.mapped.nivel,
           entry.mapped.grado,
           entry.mapped.grupo,
@@ -636,7 +797,8 @@ export const processExternalRowsBatch = async (
           entry.mapped.telefono,
           entry.mapped.padre,
           finalEstatus,
-          '',
+          entry.mapped.birth,
+          entry.mapped.genero,
           DEFAULT_SYNC_CICLO
         ]
       })
@@ -653,8 +815,45 @@ export const processExternalRowsBatch = async (
           last_payload = VALUES(last_payload),
           last_error = NULL
       `,
-      params: [entry.matricula, plantel, entry.sourceHash, JSON.stringify(entry.row)]
+      params: [entry.matricula, plantel, entry.sourceHash, JSON.stringify({ raw: entry.row, mapped: entry.mapped })]
     })
+
+    const previousMatricula = normalizeMatricula(entry.mapped.matriculaAnterior)
+    const successorMatricula = normalizeMatricula(entry.mapped.matriculaSiguiente)
+
+    if (previousMatricula && previousMatricula.toUpperCase() !== entry.matriculaKey) {
+      statements.push({
+        sql: `DELETE FROM alumno_matricula_links WHERE previous_matricula = ? OR successor_matricula = ?`,
+        params: [previousMatricula, entry.matricula]
+      })
+      statements.push({
+        sql: `
+          INSERT INTO alumno_matricula_links (previous_matricula, successor_matricula)
+          VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE
+            successor_matricula = VALUES(successor_matricula),
+            updated_at = CURRENT_TIMESTAMP
+        `,
+        params: [previousMatricula, entry.matricula]
+      })
+    }
+
+    if (successorMatricula && successorMatricula.toUpperCase() !== entry.matriculaKey) {
+      statements.push({
+        sql: `DELETE FROM alumno_matricula_links WHERE previous_matricula = ? OR successor_matricula = ?`,
+        params: [entry.matricula, successorMatricula]
+      })
+      statements.push({
+        sql: `
+          INSERT INTO alumno_matricula_links (previous_matricula, successor_matricula)
+          VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE
+            successor_matricula = VALUES(successor_matricula),
+            updated_at = CURRENT_TIMESTAMP
+        `,
+        params: [entry.matricula, successorMatricula]
+      })
+    }
 
     counters.updated++
   }
