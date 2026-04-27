@@ -232,8 +232,28 @@ model ReferenciasDePago {
   filename       String?  @db.VarChar(255)
   folio_plantel  String?  @db.VarChar(255)
   aplicable      String?  @db.VarChar(255)
+  depurado       Boolean  @default(false)
+  depurado_por   String?  @db.VarChar(255)
+  depurado_fecha DateTime? @db.DateTime(0)
 
   @@map("referenciasdepago")
+}
+
+model DocumentoConceptoPeriodos {
+  id             Int       @id @default(autoincrement())
+  documento      Int
+  start_mes      Int       @default(1)
+  end_mes        Int?
+  concepto_id    Int?
+  conceptoNombre String?   @db.VarChar(255)
+  costo          Decimal?  @db.Decimal(65, 2)
+  accion         String    @default("cambio") @db.VarChar(30)
+  estatus        String    @default("Activo") @db.VarChar(30)
+  created_at     DateTime  @default(now()) @db.DateTime(0)
+  created_by     String?   @db.VarChar(255)
+
+  @@index([documento, start_mes, end_mes, estatus], map: "idx_documento_periodo")
+  @@map("documento_concepto_periodos")
 }
 
 model SolicitudesCancelaciones {

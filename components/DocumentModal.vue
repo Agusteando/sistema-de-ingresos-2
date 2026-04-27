@@ -9,8 +9,8 @@
           <form @submit.prevent="submit" class="grid grid-cols-2 gap-4">
             <div class="form-group col-span-2 mb-0">
               <label class="form-label">Concepto</label>
-              <select v-model="selectedDocumentoId" class="input-field" required @change="onDocumentoChange">
-                <option disabled value="">Seleccione un concepto...</option>
+              <select v-model="selectedDocumentoId" class="input-field" required @change="onDocumentoChange" :disabled="loadingConcepts">
+                <option disabled value="">{{ loadingConcepts ? 'Cargando conceptos...' : 'Seleccione un concepto...' }}</option>
                 <option v-for="c in conceptos" :key="c.id" :value="c.id">{{ c.concepto }} - ${{ Number(c.costo).toFixed(2) }}</option>
               </select>
             </div>
@@ -57,7 +57,10 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="$emit('close')" type="button">Cancelar</button>
-          <button class="btn btn-primary" @click="submit" :disabled="loading || !selectedDocumentoId">Agregar</button>
+          <button class="btn btn-primary" @click="submit" :disabled="loading || loadingConcepts || !selectedDocumentoId">
+            <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
+            {{ loading ? 'Agregando...' : 'Agregar' }}
+          </button>
         </div>
       </div>
     </div>
@@ -66,6 +69,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { LucideLoader2 } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
@@ -81,12 +85,22 @@ useScrollLock()
 const conceptos = ref([])
 const selectedDocumentoId = ref('')
 const loading = ref(false)
+const loadingConcepts = ref(false)
 const form = ref({ costo: 0, meses: 1, eventual: false })
 
 const becaType = ref('percentage')
 const becaInput = ref(0)
 
-onMounted(async () => { conceptos.value = await $fetch('/api/conceptos', { params: { ciclo: normalizeCicloKey(state.value.ciclo) } }) })
+onMounted(async () => {
+  loadingConcepts.value = true
+  try {
+    conceptos.value = await $fetch('/api/conceptos', { params: { ciclo: normalizeCicloKey(state.value.ciclo) } })
+  } catch (e) {
+    show('Error al cargar conceptos', 'danger')
+  } finally {
+    loadingConcepts.value = false
+  }
+})
 
 const onDocumentoChange = () => {
   const c = conceptos.value.find(x => x.id === selectedDocumentoId.value)

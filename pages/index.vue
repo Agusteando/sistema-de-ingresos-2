@@ -108,15 +108,18 @@
         />
       </div>
 
-      <div class="grade-tabs">
-        <button @click="activeGrado = ''; activeGrupo = ''" class="chip" :class="{'active': activeGrado === ''}">Todos</button>
-        <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" class="chip" :class="{'active': activeGrado === g}">{{ g }}</button>
+      <div class="grade-filter">
+        <div class="grade-tabs" aria-label="Filtrar por grado">
+          <button @click="activeGrado = ''; activeGrupo = ''" class="chip" :class="{'active': activeGrado === ''}">Todos</button>
+          <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" class="chip" :class="{'active': activeGrado === g}">{{ g }}</button>
+        </div>
 
-        <template v-if="activeGrado && availableGrupos.length">
-          <span class="tab-divider"></span>
-          <button @click="activeGrupo = ''" class="chip" :class="{'active-group': activeGrupo === ''}">Todos</button>
-          <button v-for="grp in availableGrupos" :key="grp" @click="activeGrupo = grp" class="chip" :class="{'active-group': activeGrupo === grp}">Grupo {{ grp }}</button>
-        </template>
+        <Transition name="filter-groups">
+          <div v-if="activeGrado && availableGrupos.length" class="group-tabs" aria-label="Filtrar por grupo">
+            <button @click="activeGrupo = ''" class="chip" :class="{'active-group': activeGrupo === ''}">Todos los grupos</button>
+            <button v-for="grp in availableGrupos" :key="grp" @click="activeGrupo = grp" class="chip" :class="{'active-group': activeGrupo === grp}">Grupo {{ grp }}</button>
+          </div>
+        </Transition>
       </div>
 
       <button class="btn btn-secondary export-button" @click="exportData">
@@ -148,7 +151,10 @@
           </div>
 
           <div class="student-list-scroll">
-            <div v-if="loading" class="empty-state">Cargando registros...</div>
+            <div v-if="loading" class="empty-state loading-state">
+              <span class="liquid-loader" aria-hidden="true"><i></i><i></i><i></i></span>
+              Cargando estudiantes...
+            </div>
             <div v-else-if="!displayedStudents.length" class="empty-state muted">No hay registros bajo los filtros actuales.</div>
             <button
               v-else
@@ -208,7 +214,8 @@
         </div>
       </section>
 
-      <section v-if="selectedStudent" class="student-detail-panel">
+      <Transition name="detail-flow" mode="out-in">
+      <section v-if="selectedStudent" :key="selectedStudent.matricula" class="student-detail-panel">
         <StudentDetails
           :student="selectedStudent"
           :is-enrolled="isEnrolled(selectedStudent)"
@@ -220,9 +227,11 @@
           @baja="bajaAlumno"
         />
       </section>
+      </Transition>
     </div>
 
     <StudentFormModal v-if="showStudentModal" :student="editingStudent" @close="closeStudentModal" @success="handleStudentSuccess" />
+    <BajaReasonModal v-if="pendingBajaStudent" :student="pendingBajaStudent" @close="pendingBajaStudent = null" @confirm="confirmBaja" />
   </div>
 </template>
 
@@ -252,6 +261,7 @@ import { GRADOS_ORDEN } from '~/utils/constants'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import StudentDetails from '~/components/StudentDetails.vue'
 import StudentFormModal from '~/components/StudentFormModal.vue'
+import BajaReasonModal from '~/components/BajaReasonModal.vue'
 
 const { show } = useToast()
 const { openMenu } = useContextMenu()
@@ -275,6 +285,7 @@ const photoCache = ref({})
 const globalKpis = ref({ ingresosMes: 0 })
 const showStudentModal = ref(false)
 const editingStudent = ref(null)
+const pendingBajaStudent = ref(null)
 
 const format = (val) => Number(val || 0).toFixed(2)
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') || 'AL'
@@ -479,26 +490,31 @@ const selectStudentByMatricula = (matricula) => {
   if (match) selectStudent(match)
 }
 
-const bajaAlumno = async (student) => {
-  if (!confirm(`¿Está seguro de procesar la baja definitiva del alumno(a) ${student.nombreCompleto}?`)) return
-  const motivo = prompt("Detalle claramente la causa de baja:")
-  if (!motivo) return
+const bajaAlumno = (student) => {
+  pendingBajaStudent.value = student
+}
 
+const confirmBaja = async (motivo) => {
+  const student = pendingBajaStudent.value
+  if (!student || !motivo) return
   const previousEstatus = student.estatus
 
-  await executeOptimistic(
-    () => $fetch(`/api/students/${student.matricula}`, { method: 'DELETE', body: { motivo } }),
-    () => {
-      const s = students.value.find(x => x.matricula === student.matricula)
-      if (s) s.estatus = motivo
-    },
-    () => {
-      const s = students.value.find(x => x.matricula === student.matricula)
-      if (s) s.estatus = previousEstatus
-      performSearch()
-    },
-    { pending: 'Procesando baja...', success: 'Alumno dado de baja exitosamente', error: 'Fallo al procesar baja' }
-  )
+  try {
+    await executeOptimistic(
+      () => $fetch(`/api/students/${student.matricula}`, { method: 'DELETE', body: { motivo } }),
+      () => {
+        const s = students.value.find(x => x.matricula === student.matricula)
+        if (s) s.estatus = motivo
+      },
+      () => {
+        const s = students.value.find(x => x.matricula === student.matricula)
+        if (s) s.estatus = previousEstatus
+        performSearch()
+      },
+      { pending: 'Procesando baja...', success: 'Alumno dado de baja exitosamente', error: 'Fallo al procesar baja' }
+    )
+    pendingBajaStudent.value = null
+  } catch (e) {}
 }
 
 const showStudentMenu = (event, student) => {
@@ -798,7 +814,7 @@ const handleStudentSuccess = () => {
   display: grid;
   grid-template-columns: minmax(260px, 365px) minmax(0, 1fr) auto;
   flex-shrink: 0;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   min-height: 38px;
   margin-bottom: 6px;
@@ -835,6 +851,7 @@ const handleStudentSuccess = () => {
 .search-control {
   display: flex;
   height: 30px;
+  margin-top: 2px;
   align-items: center;
   gap: 9px;
   border: 1px solid #dfe6ef;
@@ -859,18 +876,33 @@ const handleStudentSuccess = () => {
   color: #7d879d;
 }
 
-.grade-tabs {
+.grade-filter {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  overflow: visible;
+}
+
+.grade-tabs,
+.group-tabs {
   display: flex;
   min-width: 0;
   align-items: center;
+  flex-wrap: wrap;
   gap: 7px;
-  overflow-x: auto;
+  overflow: visible;
   padding: 2px 0;
-  scrollbar-width: none;
 }
 
-.grade-tabs::-webkit-scrollbar {
-  display: none;
+.group-tabs {
+  border-top: 1px solid #edf2f6;
+  padding-top: 6px;
+}
+
+.grade-tabs .chip,
+.group-tabs .chip {
+  flex: 0 0 auto;
 }
 
 .tab-divider {
@@ -1232,6 +1264,11 @@ const handleStudentSuccess = () => {
   font-weight: 700;
 }
 
+.loading-state {
+  flex-direction: column;
+  gap: 12px;
+}
+
 .empty-state.muted {
   color: #9aa5b7;
 }
@@ -1257,6 +1294,25 @@ const handleStudentSuccess = () => {
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.filter-groups-enter-active,
+.filter-groups-leave-active,
+.detail-flow-enter-active,
+.detail-flow-leave-active {
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+
+.filter-groups-enter-from,
+.filter-groups-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.detail-flow-enter-from,
+.detail-flow-leave-to {
+  opacity: 0;
+  transform: translateX(10px);
 }
 
 @media (max-width: 1280px) {

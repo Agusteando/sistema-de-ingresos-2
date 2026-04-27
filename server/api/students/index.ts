@@ -44,8 +44,25 @@ export default defineEventHandler(async (event) => {
         FROM referenciasdepago WHERE ciclo = ? AND estatus = 'Vigente' GROUP BY matricula
       ) B ON A.matricula = B.matricula
       LEFT JOIN (
-        SELECT matricula, SUM(((100 - IFNULL(beca, 0)) * costo / 100) * IFNULL(meses, 1)) AS saldo, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') as conceptosCargados
-        FROM documentos WHERE ciclo = ? AND estatus = 'Activo' GROUP BY matricula
+        SELECT cargos.matricula, SUM(cargos.monto) AS saldo, GROUP_CONCAT(DISTINCT cargos.conceptoNombre SEPARATOR '|') as conceptosCargados
+        FROM (
+          SELECT
+            D.matricula,
+            ((100 - IFNULL(D.beca, 0)) * IFNULL(P.costo, D.costo) / 100) AS monto,
+            IFNULL(P.conceptoNombre, D.conceptoNombre) AS conceptoNombre
+          FROM documentos D
+          JOIN (
+            SELECT 1 AS mes UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6
+            UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12
+          ) M ON M.mes <= GREATEST(1, CAST(IFNULL(NULLIF(D.meses, ''), '1') AS UNSIGNED))
+          LEFT JOIN documento_concepto_periodos P
+            ON P.documento = D.documento
+            AND P.estatus = 'Activo'
+            AND M.mes >= P.start_mes
+            AND (P.end_mes IS NULL OR M.mes <= P.end_mes)
+          WHERE D.ciclo = ? AND D.estatus = 'Activo' AND (P.accion IS NULL OR P.accion <> 'cancelacion')
+        ) cargos
+        GROUP BY cargos.matricula
       ) C ON A.matricula = C.matricula
       LEFT JOIN alumno_matricula_links Prev ON Prev.successor_matricula = A.matricula
       LEFT JOIN alumno_matricula_links Next ON Next.previous_matricula = A.matricula

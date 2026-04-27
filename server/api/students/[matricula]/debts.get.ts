@@ -15,10 +15,27 @@ export default defineEventHandler(async (event) => {
   `, [matricula.trim(), cicloKey])
 
   const pagosRows = await query<any[]>(`
-    SELECT folio, documento, mes, recargo, monto, fecha, formaDePago
+    SELECT folio, documento, mes, recargo, monto, fecha, formaDePago, conceptoNombre, estatus, depurado, depurado_por, depurado_fecha
     FROM referenciasdepago
     WHERE matricula = ? AND ciclo = ? AND estatus = 'Vigente'
   `, [matricula.trim(), cicloKey])
+
+  const periodRows = documentos.length
+    ? await query<any[]>(`
+        SELECT id, documento, start_mes, end_mes, concepto_id, conceptoNombre, costo, accion, estatus
+        FROM documento_concepto_periodos
+        WHERE documento IN (${documentos.map(() => '?').join(',')}) AND estatus = 'Activo'
+        ORDER BY documento ASC, start_mes ASC, id ASC
+      `, documentos.map(doc => doc.documento))
+    : []
+
+  const periodsByDocument = new Map<number, any[]>()
+  periodRows.forEach((period) => {
+    const key = Number(period.documento)
+    const list = periodsByDocument.get(key) || []
+    list.push(period)
+    periodsByDocument.set(key, list)
+  })
 
   const debts = []
   const today = dayjs()
@@ -31,9 +48,7 @@ export default defineEventHandler(async (event) => {
 
   for (const doc of documentos) {
     const isEventual = String(doc.eventual) === '1'
-    const costoBase = parseFloat(doc.costo) || 0
     const beca = parseFloat(doc.beca) || 0
-    const totalOriginal = ((100 - beca) * costoBase) / 100
     
     let plazos = 1
     const plazoRaw = doc.plazo || doc.meses
@@ -50,6 +65,18 @@ export default defineEventHandler(async (event) => {
 
     for (let mes = 1; mes <= plazos; mes++) {
       const mesStr = isEventual ? 'ev' : String(mes)
+      const mesNumber = isEventual ? 1 : mes
+      const activePeriod = (periodsByDocument.get(Number(doc.documento)) || []).find((period) => {
+        const startMes = Number(period.start_mes || 1)
+        const endMes = period.end_mes == null ? Number.POSITIVE_INFINITY : Number(period.end_mes)
+        return mesNumber >= startMes && mesNumber <= endMes
+      })
+
+      if (activePeriod?.accion === 'cancelacion') continue
+
+      const conceptoNombre = activePeriod?.conceptoNombre || doc.conceptoNombre
+      const costoBase = activePeriod?.costo != null ? parseFloat(activePeriod.costo) : (parseFloat(doc.costo) || 0)
+      const totalOriginal = ((100 - beca) * costoBase) / 100
       
       // Support matching mes by strict string, or fallback to the numeric representation
       const pagosDelMes = pagosRows.filter(p => 
@@ -58,6 +85,9 @@ export default defineEventHandler(async (event) => {
       )
       
       const pagosTotalMes = pagosDelMes.reduce((sum, p) => sum + parseFloat(p.monto), 0)
+      const depuradoTotalMes = pagosDelMes
+        .filter(p => String(p.depurado) === '1' || p.depurado === true)
+        .reduce((sum, p) => sum + parseFloat(p.monto), 0)
       const hasRecargoManual = pagosDelMes.some(p => String(p.recargo) === '1')
 
       let subtotal = totalOriginal
@@ -77,18 +107,23 @@ export default defineEventHandler(async (event) => {
 
       debts.push({
         documento: doc.documento,
-        conceptoNombre: doc.conceptoNombre,
+        conceptoNombre,
         mes: mesStr, // Pass the parsed mes value ('ev' or numeric string) for reliable future binding
         mesLabel,
         costoOriginal: totalOriginal,
         subtotal,
         pagos: pagosTotalMes,
+        pagosDepurados: depuradoTotalMes,
         saldo: saldoAntes,
         beca,
         porcentajePagado: subtotal > 0 ? Math.min(100, (pagosTotalMes * 100) / subtotal).toFixed(1) : 100,
+        porcentajeDepurado: pagosTotalMes > 0 ? Math.min(100, (depuradoTotalMes * 100) / pagosTotalMes).toFixed(1) : 0,
         isLate,
         hasRecargo: subtotal > totalOriginal,
-        historialPagos: pagosDelMes
+        historialPagos: pagosDelMes.map(p => ({
+          ...p,
+          depurado: String(p.depurado) === '1' || p.depurado === true
+        }))
       })
     }
   }

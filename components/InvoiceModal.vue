@@ -89,7 +89,10 @@
         <div class="modal-footer rounded-b-xl sticky bottom-0 z-10">
           <span class="text-xs text-gray-400 font-medium absolute left-6 top-5 hidden md:block"><LucideShieldCheck :size="14" class="inline mr-1"/> Conexión SAT</span>
           <button class="btn btn-ghost" @click="$emit('close')" type="button">Cancelar</button>
-          <button class="btn btn-primary" @click="submit" :disabled="loading || conceptos.length === 0">Emitir CFDI</button>
+          <button class="btn btn-primary" @click="submit" :disabled="loading || conceptos.length === 0">
+            <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
+            {{ loading ? 'Timbrando...' : 'Emitir CFDI' }}
+          </button>
         </div>
       </div>
     </div>
@@ -98,7 +101,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { LucideTrash2, LucideShieldCheck } from 'lucide-vue-next'
+import { LucideLoader2, LucideTrash2, LucideShieldCheck } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
 

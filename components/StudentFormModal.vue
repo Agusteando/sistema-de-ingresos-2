@@ -105,7 +105,10 @@
           </div>
           <div class="modal-footer">
             <button class="btn btn-ghost" @click="$emit('close')" type="button">Cancelar</button>
-            <button class="btn btn-primary" type="submit" :disabled="loading">Guardar alumno</button>
+            <button class="btn btn-primary" type="submit" :disabled="loading">
+              <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
+              {{ loading ? 'Guardando...' : 'Guardar alumno' }}
+            </button>
           </div>
         </form>
       </div>
@@ -115,6 +118,7 @@
 
 <script setup>
 import { computed, ref, onMounted, watch } from 'vue'
+import { LucideLoader2 } from 'lucide-vue-next'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'

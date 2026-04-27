@@ -67,7 +67,8 @@
           <LucideFilePlus :size="15"/> Cargo extra
         </button>
         <button v-if="student.estatus === 'Activo' && !isEnrolled" class="btn btn-secondary btn-sm" :disabled="enrolling" @click="quickEnroll">
-          <LucideFilePlus :size="15"/> Inscribir
+          <LucideLoader2 v-if="enrolling" class="animate-spin" :size="15"/>
+          <LucideFilePlus v-else :size="15"/> Inscribir
         </button>
         <span class="action-divider"></span>
         <button class="btn btn-ghost btn-sm" @click="$emit('edit', student)">
@@ -76,8 +77,9 @@
         <button class="btn btn-ghost btn-sm" @click="printBeca">
           <LucideAward :size="15"/> Carta beca
         </button>
-        <button class="btn btn-ghost btn-sm" :disabled="!validDebts.length || !student.correo" @click="sendReminder">
-          <LucideBell :size="15"/> Enviar aviso
+        <button class="btn btn-ghost btn-sm" :disabled="reminding || !validDebts.length || !student.correo" @click="sendReminder">
+          <LucideLoader2 v-if="reminding" class="animate-spin" :size="15"/>
+          <LucideBell v-else :size="15"/> Enviar aviso
         </button>
       </div>
     </section>
@@ -99,15 +101,20 @@
     <section class="account-card">
       <div class="account-header">
         <h3>Estado de Cuenta</h3>
-        <div>Deuda: ${{ format(validDebts.reduce((acc,d) => acc + d.saldo, 0)) }}</div>
+        <div class="account-totals">
+          <span class="audit-total">Depurado {{ auditPercent }}%</span>
+          <span>Deuda: ${{ format(validDebts.reduce((acc,d) => acc + d.saldo, 0)) }}</span>
+        </div>
       </div>
 
-      <div class="account-table-wrap">
+      <Transition name="account-flow" mode="out-in">
+      <div class="account-table-wrap" :key="student.matricula">
         <table>
           <thead>
             <tr>
               <th class="check-cell"><input type="checkbox" @change="toggleAll" :checked="selectedDebts.length === validDebts.length && validDebts.length > 0" class="debt-check"></th>
               <th class="progress-cell">Progreso</th>
+              <th class="audit-cell">Depuración</th>
               <th>Concepto / Mes</th>
               <th class="money-cell">Monto</th>
               <th class="money-cell">Pagos</th>
@@ -116,11 +123,16 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loading"><td colspan="7" class="account-empty">Cargando estado de cuenta...</td></tr>
-            <tr v-else-if="!debts.length"><td colspan="7" class="account-empty muted">Sin adeudos o documentos registrados en este ciclo escolar.</td></tr>
+            <tr v-if="loading">
+              <td colspan="8" class="account-empty">
+                <span class="liquid-loader small" aria-hidden="true"><i></i><i></i><i></i></span>
+                Cargando estado de cuenta...
+              </td>
+            </tr>
+            <tr v-else-if="!debts.length"><td colspan="8" class="account-empty muted">Sin adeudos o documentos registrados en este ciclo escolar.</td></tr>
             <template v-else v-for="debt in debts" :key="`${debt.documento}-${debt.mes}`">
               <tr
-                :class="{ selected: selectedDebts.includes(debt) }"
+                :class="{ selected: selectedDebts.includes(debt), audited: debt.pagos > 0 && Number(debt.porcentajeDepurado) >= 100 }"
                 class="debt-row"
                 @contextmenu.prevent="showDebtContextMenu($event, debt)"
               >
@@ -130,6 +142,14 @@
                     <span :style="{ width: debt.porcentajePagado + '%', backgroundColor: debt.porcentajePagado == 100 ? '#70b34f' : '#d8b449' }"></span>
                   </div>
                   <em>{{ debt.porcentajePagado }}%</em>
+                </td>
+                <td class="audit-cell">
+                  <div class="audit-track">
+                    <span :style="{ width: debt.porcentajeDepurado + '%' }"></span>
+                  </div>
+                  <em :class="{ complete: debt.pagos > 0 && Number(debt.porcentajeDepurado) >= 100 }">
+                    {{ auditStatusLabel(debt) }}
+                  </em>
                 </td>
                 <td>
                   <strong>{{ debt.conceptoNombre }}</strong>
@@ -142,19 +162,23 @@
                 <td class="money-cell paid">${{ format(debt.pagos) }}</td>
                 <td class="money-cell" :class="{ danger: debt.saldo > 0 }">${{ format(debt.saldo) }}</td>
                 <td class="menu-cell">
+                  <button @click="openConceptChange(debt)" title="Ajustar concepto">
+                    <LucideSettings :size="16"/>
+                  </button>
                   <button v-if="debt.historialPagos?.length" @click="toggleHistory(debt)" title="Historial">
                     <LucideHistory :size="16"/>
                   </button>
                 </td>
               </tr>
               <tr v-if="expandedHistory === `${debt.documento}-${debt.mes}`" class="history-row">
-                <td colspan="7">
+                <td colspan="8">
                   <table class="history-table">
                     <thead>
                       <tr>
                         <th>Folio</th>
                         <th>Fecha</th>
                         <th>Forma de Pago</th>
+                        <th>Depuración</th>
                         <th class="money-cell">Monto</th>
                         <th class="menu-cell">Opciones</th>
                       </tr>
@@ -164,9 +188,19 @@
                         <td class="folio">#{{ h.folio }}</td>
                         <td>{{ new Date(h.fecha).toLocaleString('es-MX') }}</td>
                         <td><span class="method-pill">{{ h.formaDePago }}</span></td>
+                        <td>
+                          <span :class="['audit-pill', h.depurado ? 'done' : 'pending']">
+                            {{ h.depurado ? 'Depurado' : 'Pendiente' }}
+                          </span>
+                        </td>
                         <td class="money-cell paid">${{ format(h.monto) }}</td>
                         <td class="history-actions">
                           <button class="btn btn-outline !px-2 !py-1 text-[10px]" @click="reprintPayment(h)"><LucidePrinter :size="11" /> PDF</button>
+                          <button class="btn btn-outline !px-2 !py-1 text-[10px] audit-action" @click="togglePaymentAudit(h)">
+                            <LucideLoader2 v-if="auditingFolio === h.folio" class="animate-spin" :size="11" />
+                            <LucideCheckCircle v-else :size="11" />
+                            {{ h.depurado ? 'Reabrir' : 'Depurar' }}
+                          </button>
                           <button class="btn btn-ghost !px-2 !py-1 text-[10px] !text-accent-coral hover:!bg-accent-coral/10" @click="cancelPayment(h)"><LucideUndo :size="11" /> Anular</button>
                         </td>
                       </tr>
@@ -178,6 +212,7 @@
           </tbody>
         </table>
       </div>
+      </Transition>
 
       <div class="account-footer">
         <span>{{ accountFooterLabel }}</span>
@@ -187,6 +222,7 @@
     <PaymentModal v-if="showPaymentModal" :debts="selectedDebts" :student="student" @close="showPaymentModal = false" @success="handleSuccess" />
     <DocumentModal v-if="showDocModal" :student="student" @close="showDocModal = false" @success="handleSuccess" />
     <InvoiceModal v-if="showInvoiceModal" :debts="selectedDebts" :student="student" @close="showInvoiceModal = false" @success="handleSuccess" />
+    <ConceptChangeModal v-if="showConceptModal" :debt="selectedConceptDebt" @close="closeConceptModal" @success="handleSuccess" />
   </div>
 </template>
 
@@ -198,7 +234,7 @@ const studentPhotoRequests = new Map()
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2 } from 'lucide-vue-next'
+import { LucideCheckCircle, LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2 } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -207,6 +243,7 @@ import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import PaymentModal from './PaymentModal.vue'
 import DocumentModal from './DocumentModal.vue'
 import InvoiceModal from './InvoiceModal.vue'
+import ConceptChangeModal from './ConceptChangeModal.vue'
 
 const props = defineProps({ student: Object, isEnrolled: { type: Boolean, default: true } })
 const emit = defineEmits(['refresh', 'edit', 'close', 'switch-student', 'baja', 'photo-loaded'])
@@ -220,8 +257,10 @@ const siblings = ref([])
 const siblingSource = ref('none')
 const loading = ref(false)
 const enrolling = ref(false)
+const reminding = ref(false)
 const selectedDebts = ref([])
 const expandedHistory = ref(null)
+const auditingFolio = ref(null)
 
 const photoUrl = ref(null)
 const photoLoading = ref(false)
@@ -229,17 +268,32 @@ const photoLoading = ref(false)
 const showPaymentModal = ref(false)
 const showDocModal = ref(false)
 const showInvoiceModal = ref(false)
+const showConceptModal = ref(false)
+const selectedConceptDebt = ref(null)
 
 const format = (val) => Number(val || 0).toFixed(2)
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') || 'AL'
 const normalizePhotoMatricula = (value) => String(value || '').trim().toUpperCase()
 const photoStorageKey = (matricula) => `foto_${normalizePhotoMatricula(matricula)}`
 const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
+const auditPaidTotal = computed(() => debts.value.reduce((sum, debt) => sum + Number(debt.pagos || 0), 0))
+const auditDepuradoTotal = computed(() => debts.value.reduce((sum, debt) => sum + Number(debt.pagosDepurados || 0), 0))
+const auditPercent = computed(() => {
+  if (!auditPaidTotal.value) return '0.0'
+  return Math.min(100, (auditDepuradoTotal.value * 100) / auditPaidTotal.value).toFixed(1)
+})
 const accountFooterLabel = computed(() => {
   if (!debts.value.length) return 'Sin conceptos en este ciclo'
   if (debts.value.length > 5) return `${debts.value.length} conceptos; desplaza la tabla para ver mas`
   return `${debts.value.length} conceptos visibles`
 })
+
+const auditStatusLabel = (debt) => {
+  if (!debt.pagos) return 'Sin pagos'
+  if (Number(debt.porcentajeDepurado) >= 100) return '100% depurado'
+  if (Number(debt.porcentajeDepurado) > 0) return `${debt.porcentajeDepurado}% depurado`
+  return 'Pendiente'
+}
 
 const loadDebts = async () => {
   loading.value = true; selectedDebts.value = []
@@ -432,13 +486,44 @@ const cancelPayment = async (pago) => {
 const sendReminder = async () => {
   if (!props.student.correo) return show('El alumno no cuenta con correo registrado', 'danger')
   const total = validDebts.value.reduce((s, d) => s + d.saldo, 0)
+  reminding.value = true
 
-  await executeOptimistic(
-    () => $fetch('/api/reminders/send', { method: 'POST', body: { correo: props.student.correo, asunto: 'Recordatorio de pago - Estado de Cuenta', mensaje: `Le recordamos amablemente que el alumno presenta un saldo pendiente de $${total.toFixed(2)} MXN.` } }),
-    () => {},
-    () => {},
-    { pending: 'Enviando aviso...', success: 'Aviso enviado', error: 'Error al enviar' }
-  )
+  try {
+    await executeOptimistic(
+      () => $fetch('/api/reminders/send', { method: 'POST', body: { correo: props.student.correo, asunto: 'Recordatorio de pago - Estado de Cuenta', mensaje: `Le recordamos amablemente que el alumno presenta un saldo pendiente de $${total.toFixed(2)} MXN.` } }),
+      () => {},
+      () => {},
+      { pending: 'Enviando aviso...', success: 'Aviso enviado', error: 'Error al enviar' }
+    )
+  } finally {
+    reminding.value = false
+  }
+}
+
+const togglePaymentAudit = async (pago) => {
+  if (auditingFolio.value) return
+  auditingFolio.value = pago.folio
+
+  try {
+    const nextValue = !pago.depurado
+    await $fetch('/api/payments/audit', { method: 'POST', body: { folio: pago.folio, depurado: nextValue } })
+    show(nextValue ? 'Pago depurado' : 'Pago reabierto para revision', 'success')
+    await loadDebts()
+  } catch (e) {
+    show('No se pudo actualizar la depuracion', 'danger')
+  } finally {
+    auditingFolio.value = null
+  }
+}
+
+const openConceptChange = (debt) => {
+  selectedConceptDebt.value = debt
+  showConceptModal.value = true
+}
+
+const closeConceptModal = () => {
+  showConceptModal.value = false
+  selectedConceptDebt.value = null
 }
 
 const showDebtContextMenu = (event, debt) => {
@@ -446,12 +531,14 @@ const showDebtContextMenu = (event, debt) => {
   openMenu(event, [
     { label: canPay ? 'Pagar este concepto' : 'Completado', icon: LucideCreditCard, disabled: !canPay, action: () => { selectedDebts.value = [debt]; showPaymentModal.value = true } },
     { label: 'Facturar', icon: LucideFileText, action: () => { selectedDebts.value = [debt]; showInvoiceModal.value = true } },
-    { label: 'Historial', icon: LucideHistory, action: () => toggleHistory(debt) }
+    { label: 'Historial', icon: LucideHistory, action: () => toggleHistory(debt) },
+    { label: '-' },
+    { label: 'Ajustar concepto', icon: LucideSettings, action: () => openConceptChange(debt) }
   ])
 }
 
 const handleSuccess = () => {
-  showPaymentModal.value = false; showDocModal.value = false; showInvoiceModal.value = false
+  showPaymentModal.value = false; showDocModal.value = false; showInvoiceModal.value = false; closeConceptModal()
   selectedDebts.value = []; loadDebts(); emit('refresh')
 }
 </script>
@@ -794,13 +881,25 @@ const handleSuccess = () => {
   text-transform: uppercase;
 }
 
-.account-header div {
+.account-totals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.account-totals > span {
   border-radius: 7px;
   background: #fff4f4;
   color: #b84f56;
   padding: 4px 10px;
   font-size: 0.74rem;
   font-weight: 720;
+}
+
+.account-totals > .audit-total {
+  background: #eef7ff;
+  color: #356b9d;
 }
 
 .account-table-wrap {
@@ -814,7 +913,7 @@ const handleSuccess = () => {
 
 .account-table-wrap table {
   width: 100%;
-  min-width: 660px;
+  min-width: 760px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -875,25 +974,33 @@ const handleSuccess = () => {
   cursor: pointer;
 }
 
-.progress-cell {
+.progress-cell,
+.audit-cell {
   width: 86px;
 }
 
-.progress-track {
+.progress-track,
+.audit-track {
   height: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: #e7eaee;
 }
 
-.progress-track span {
+.progress-track span,
+.audit-track span {
   display: block;
   height: 100%;
   border-radius: inherit;
   transition: width 200ms ease;
 }
 
-.progress-cell em {
+.audit-track span {
+  background: linear-gradient(90deg, #60a5fa, #35b6a4);
+}
+
+.progress-cell em,
+.audit-cell em {
   display: block;
   margin-top: 3px;
   color: #7f8999;
@@ -901,6 +1008,15 @@ const handleSuccess = () => {
   font-style: normal;
   font-weight: 500;
   text-align: right;
+}
+
+.audit-cell em.complete {
+  color: #287b74;
+  font-weight: 680;
+}
+
+.debt-row.audited {
+  background: linear-gradient(90deg, rgba(226, 245, 241, 0.68), rgba(255, 255, 255, 0.96));
 }
 
 .account-table-wrap td strong {
@@ -952,8 +1068,14 @@ const handleSuccess = () => {
 }
 
 .menu-cell {
-  width: 34px;
+  width: 64px;
   text-align: center;
+}
+
+.account-table-wrap td.menu-cell {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
 }
 
 .menu-cell button {
@@ -1016,6 +1138,31 @@ const handleSuccess = () => {
   padding: 3px 7px;
 }
 
+.audit-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 0.56rem;
+  font-weight: 720;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.audit-pill.done {
+  background: #e5f7f3;
+  color: #267a66;
+}
+
+.audit-pill.pending {
+  background: #eef2f7;
+  color: #66728a;
+}
+
+.audit-action {
+  color: #287b74;
+}
+
 .history-actions {
   display: flex;
   justify-content: center;
@@ -1024,6 +1171,17 @@ const handleSuccess = () => {
 
 .history-actions .btn {
   height: 24px;
+}
+
+.account-flow-enter-active,
+.account-flow-leave-active {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.account-flow-enter-from,
+.account-flow-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
 .account-footer {
