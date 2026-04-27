@@ -2,6 +2,12 @@ import { executeStatementTransaction, query, type SqlStatement } from '../../uti
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
+const normalizePaymentMethod = (value: unknown) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim()
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { matricula, pagos, formaDePago, ciclo = '2025' } = body
@@ -10,6 +16,10 @@ export default defineEventHandler(async (event) => {
 
   if (!matricula || !pagos || !pagos.length) {
     throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
+  }
+
+  if (normalizePaymentMethod(formaDePago) === 'depuracion') {
+    throw createError({ statusCode: 400, message: 'La depuración requiere autorización por código.' })
   }
 
   const [studentRef] = await query<any[]>(
