@@ -2,6 +2,17 @@ import { query } from '../../../utils/db'
 import dayjs from 'dayjs'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 
+const normalizePaymentMethod = (value: unknown) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim()
+
+const isDepuracionPayment = (payment: any) => (
+  normalizePaymentMethod(payment.formaDePago) === 'depuracion' &&
+  (String(payment.depurado) === '1' || payment.depurado === true)
+)
+
 export default defineEventHandler(async (event) => {
   const matricula = event.context.params?.matricula
   const { ciclo = '2025', lateFeeActive = 'true' } = getQuery(event)
@@ -84,14 +95,16 @@ export default defineEventHandler(async (event) => {
         (String(p.mes) === mesStr || String(p.mes) === String(mes))
       )
       
-      const pagosTotalMes = pagosDelMes.reduce((sum, p) => sum + parseFloat(p.monto), 0)
-      const depuradoTotalMes = pagosDelMes
-        .filter(p => String(p.depurado) === '1' || p.depurado === true)
+      const pagosAplicadosDelMes = pagosDelMes.filter(p => !isDepuracionPayment(p))
+      const depuracionesDelMes = pagosDelMes.filter(isDepuracionPayment)
+      const pagosTotalMes = pagosAplicadosDelMes.reduce((sum, p) => sum + parseFloat(p.monto), 0)
+      const depuradoTotalMes = depuracionesDelMes
         .reduce((sum, p) => sum + parseFloat(p.monto), 0)
+      const resueltoTotalMes = pagosTotalMes + depuradoTotalMes
       const hasRecargoManual = pagosDelMes.some(p => String(p.recargo) === '1')
 
       let subtotal = totalOriginal
-      let saldoAntes = subtotal - pagosTotalMes
+      let saldoAntes = subtotal - resueltoTotalMes
 
       const monthOffset = mes > 5 ? (mes - 6) : (mes + 6)
       const limitDate = dayjs().year(today.year()).month(monthOffset).date(12)
@@ -99,7 +112,7 @@ export default defineEventHandler(async (event) => {
 
       if (lateFeeActive === 'true' && !isEventual && (hasRecargoManual || (isLate && saldoAntes > 10))) {
         subtotal = Math.trunc(totalOriginal * 1.1)
-        saldoAntes = subtotal - pagosTotalMes
+        saldoAntes = subtotal - resueltoTotalMes
       }
       if (saldoAntes < 0) saldoAntes = 0
 
@@ -113,16 +126,19 @@ export default defineEventHandler(async (event) => {
         costoOriginal: totalOriginal,
         subtotal,
         pagos: pagosTotalMes,
+        pagosRegistrados: pagosTotalMes,
+        resuelto: resueltoTotalMes,
         pagosDepurados: depuradoTotalMes,
         saldo: saldoAntes,
         beca,
-        porcentajePagado: subtotal > 0 ? Math.min(100, (pagosTotalMes * 100) / subtotal).toFixed(1) : 100,
-        porcentajeDepurado: pagosTotalMes > 0 ? Math.min(100, (depuradoTotalMes * 100) / pagosTotalMes).toFixed(1) : 0,
+        porcentajePagado: subtotal > 0 ? Math.min(100, (resueltoTotalMes * 100) / subtotal).toFixed(1) : 100,
+        porcentajePagoReal: subtotal > 0 ? Math.min(100, (pagosTotalMes * 100) / subtotal).toFixed(1) : 100,
+        porcentajeDepurado: subtotal > 0 ? Math.min(100, (depuradoTotalMes * 100) / subtotal).toFixed(1) : 0,
         isLate,
         hasRecargo: subtotal > totalOriginal,
         historialPagos: pagosDelMes.map(p => ({
           ...p,
-          depurado: String(p.depurado) === '1' || p.depurado === true
+          depurado: isDepuracionPayment(p)
         }))
       })
     }

@@ -11,8 +11,8 @@
               <label class="form-label">Forma de Pago</label>
               <select v-model="formaDePago" class="input-field bg-white">
                 <option value="Efectivo">Efectivo</option>
-                <option value="Tarjeta de débito">Tarjeta de Débito (+1.5%)</option>
-                <option value="Tarjeta de crédito">Tarjeta de Crédito (+3.0%)</option>
+                <option value="Tarjeta de débito">Tarjeta de Débito</option>
+                <option value="Tarjeta de crédito">Tarjeta de Crédito</option>
                 <option value="Transferencia">Transferencia</option>
                 <option value="Cheque">Cheque</option>
               </select>
@@ -79,17 +79,11 @@ const formaDePago = ref('Efectivo')
 const processing = ref(false)
 const processedDebts = ref([])
 
-const getMod = () => {
-  if (formaDePago.value === 'Tarjeta de débito') return 1.015
-  if (formaDePago.value === 'Tarjeta de crédito') return 1.03
-  return 1
-}
-
 watch(() => [props.debts, formaDePago.value], () => {
-  const mod = getMod()
   processedDebts.value = props.debts.map(d => {
-    const final = d.saldo * mod
-    return { ...d, saldoFinal: final, montoPagado: final, pagosPrevios: d.pagos, saldoAntes: d.subtotal - d.pagos }
+    const final = d.saldo
+    const resuelto = d.resuelto ?? d.pagos
+    return { ...d, saldoFinal: final, montoPagado: final, pagosPrevios: resuelto, saldoAntes: d.subtotal - resuelto }
   })
 }, { immediate: true })
 

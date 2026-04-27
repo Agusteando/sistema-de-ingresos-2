@@ -102,7 +102,6 @@
       <div class="account-header">
         <h3>Estado de Cuenta</h3>
         <div class="account-totals">
-          <span class="audit-total">Depurado {{ auditPercent }}%</span>
           <span>Deuda: ${{ format(validDebts.reduce((acc,d) => acc + d.saldo, 0)) }}</span>
         </div>
       </div>
@@ -114,7 +113,6 @@
             <tr>
               <th class="check-cell"><input type="checkbox" @change="toggleAll" :checked="selectedDebts.length === validDebts.length && validDebts.length > 0" class="debt-check"></th>
               <th class="progress-cell">Progreso</th>
-              <th class="audit-cell">Depuración</th>
               <th>Concepto / Mes</th>
               <th class="money-cell">Monto</th>
               <th class="money-cell">Pagos</th>
@@ -124,32 +122,25 @@
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="8" class="account-empty">
+              <td colspan="7" class="account-empty">
                 <span class="liquid-loader small" aria-hidden="true"><i></i><i></i><i></i></span>
                 Cargando estado de cuenta...
               </td>
             </tr>
-            <tr v-else-if="!debts.length"><td colspan="8" class="account-empty muted">Sin adeudos o documentos registrados en este ciclo escolar.</td></tr>
+            <tr v-else-if="!debts.length"><td colspan="7" class="account-empty muted">Sin adeudos o documentos registrados en este ciclo escolar.</td></tr>
             <template v-else v-for="debt in debts" :key="`${debt.documento}-${debt.mes}`">
               <tr
-                :class="{ selected: selectedDebts.includes(debt), audited: debt.pagos > 0 && Number(debt.porcentajeDepurado) >= 100 }"
+                :class="{ selected: selectedDebts.includes(debt), cleared: Number(debt.pagosDepurados) > 0 && debt.saldo <= 0 }"
                 class="debt-row"
                 @contextmenu.prevent="showDebtContextMenu($event, debt)"
               >
                 <td class="check-cell"><input type="checkbox" :value="debt" v-model="selectedDebts" :disabled="debt.saldo <= 0" class="debt-check"></td>
                 <td class="progress-cell">
                   <div class="progress-track">
-                    <span :style="{ width: debt.porcentajePagado + '%', backgroundColor: debt.porcentajePagado == 100 ? '#70b34f' : '#d8b449' }"></span>
+                    <span class="paid-progress" :style="{ width: progressPaidWidth(debt), backgroundColor: progressColor(debt) }"></span>
+                    <span v-if="Number(debt.pagosDepurados) > 0" class="cleanup-progress" :style="{ width: progressCleanupWidth(debt) }"></span>
                   </div>
-                  <em>{{ debt.porcentajePagado }}%</em>
-                </td>
-                <td class="audit-cell">
-                  <div class="audit-track">
-                    <span :style="{ width: debt.porcentajeDepurado + '%' }"></span>
-                  </div>
-                  <em :class="{ complete: debt.pagos > 0 && Number(debt.porcentajeDepurado) >= 100 }">
-                    {{ auditStatusLabel(debt) }}
-                  </em>
+                  <em :class="{ complete: debt.saldo <= 0 }">{{ progressStatusLabel(debt) }}</em>
                 </td>
                 <td>
                   <strong>{{ debt.conceptoNombre }}</strong>
@@ -171,14 +162,13 @@
                 </td>
               </tr>
               <tr v-if="expandedHistory === `${debt.documento}-${debt.mes}`" class="history-row">
-                <td colspan="8">
+                <td colspan="7">
                   <table class="history-table">
                     <thead>
                       <tr>
                         <th>Folio</th>
                         <th>Fecha</th>
                         <th>Forma de Pago</th>
-                        <th>Depuración</th>
                         <th class="money-cell">Monto</th>
                         <th class="menu-cell">Opciones</th>
                       </tr>
@@ -187,20 +177,10 @@
                       <tr v-for="h in debt.historialPagos" :key="h.folio">
                         <td class="folio">#{{ h.folio }}</td>
                         <td>{{ new Date(h.fecha).toLocaleString('es-MX') }}</td>
-                        <td><span class="method-pill">{{ h.formaDePago }}</span></td>
-                        <td>
-                          <span :class="['audit-pill', h.depurado ? 'done' : 'pending']">
-                            {{ h.depurado ? 'Depurado' : 'Pendiente' }}
-                          </span>
-                        </td>
+                        <td><span :class="['method-pill', h.depurado ? 'cleanup' : '']">{{ h.formaDePago }}</span></td>
                         <td class="money-cell paid">${{ format(h.monto) }}</td>
                         <td class="history-actions">
                           <button class="btn btn-outline !px-2 !py-1 text-[10px]" @click="reprintPayment(h)"><LucidePrinter :size="11" /> PDF</button>
-                          <button class="btn btn-outline !px-2 !py-1 text-[10px] audit-action" @click="togglePaymentAudit(h)">
-                            <LucideLoader2 v-if="auditingFolio === h.folio" class="animate-spin" :size="11" />
-                            <LucideCheckCircle v-else :size="11" />
-                            {{ h.depurado ? 'Reabrir' : 'Depurar' }}
-                          </button>
                           <button class="btn btn-ghost !px-2 !py-1 text-[10px] !text-accent-coral hover:!bg-accent-coral/10" @click="cancelPayment(h)"><LucideUndo :size="11" /> Anular</button>
                         </td>
                       </tr>
@@ -234,7 +214,7 @@ const studentPhotoRequests = new Map()
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { LucideCheckCircle, LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2 } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -260,7 +240,7 @@ const enrolling = ref(false)
 const reminding = ref(false)
 const selectedDebts = ref([])
 const expandedHistory = ref(null)
-const auditingFolio = ref(null)
+const depurandoDebt = ref(null)
 
 const photoUrl = ref(null)
 const photoLoading = ref(false)
@@ -276,23 +256,19 @@ const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).ma
 const normalizePhotoMatricula = (value) => String(value || '').trim().toUpperCase()
 const photoStorageKey = (matricula) => `foto_${normalizePhotoMatricula(matricula)}`
 const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
-const auditPaidTotal = computed(() => debts.value.reduce((sum, debt) => sum + Number(debt.pagos || 0), 0))
-const auditDepuradoTotal = computed(() => debts.value.reduce((sum, debt) => sum + Number(debt.pagosDepurados || 0), 0))
-const auditPercent = computed(() => {
-  if (!auditPaidTotal.value) return '0.0'
-  return Math.min(100, (auditDepuradoTotal.value * 100) / auditPaidTotal.value).toFixed(1)
-})
 const accountFooterLabel = computed(() => {
   if (!debts.value.length) return 'Sin conceptos en este ciclo'
   if (debts.value.length > 5) return `${debts.value.length} conceptos; desplaza la tabla para ver mas`
   return `${debts.value.length} conceptos visibles`
 })
 
-const auditStatusLabel = (debt) => {
-  if (!debt.pagos) return 'Sin pagos'
-  if (Number(debt.porcentajeDepurado) >= 100) return '100% depurado'
-  if (Number(debt.porcentajeDepurado) > 0) return `${debt.porcentajeDepurado}% depurado`
-  return 'Pendiente'
+const progressPaidWidth = (debt) => `${Math.min(100, Number(debt.porcentajePagoReal ?? debt.porcentajePagado) || 0)}%`
+const progressCleanupWidth = (debt) => `${Math.min(100, Number(debt.porcentajeDepurado) || 0)}%`
+const progressColor = (debt) => Number(debt.porcentajePagado) >= 100 && Number(debt.pagosDepurados) <= 0 ? '#70b34f' : '#d8b449'
+const progressStatusLabel = (debt) => {
+  if (Number(debt.pagosDepurados) > 0 && debt.saldo <= 0) return '100% resuelto'
+  if (Number(debt.porcentajePagado) >= 100) return '100% pagado'
+  return `${debt.porcentajePagado}%`
 }
 
 const loadDebts = async () => {
@@ -500,19 +476,69 @@ const sendReminder = async () => {
   }
 }
 
-const togglePaymentAudit = async (pago) => {
-  if (auditingFolio.value) return
-  auditingFolio.value = pago.folio
+const debtKey = (debt) => `${debt.documento}-${debt.mes}`
+const canDepurarDebt = (debt) => (
+  debt &&
+  Number(debt.saldo || 0) > 0 &&
+  Number(debt.pagos ?? 0) > 0
+)
+
+const requestDepuracion = async (debt) => {
+  if (!canDepurarDebt(debt)) {
+    return show('La depuración solo completa conceptos con avance previo y saldo pendiente.', 'danger')
+  }
+
+  if (depurandoDebt.value) return
+
+  const saldo = Number(debt.saldo || 0)
+  const message = `La depuración completará el saldo restante de ${debt.conceptoNombre} (${debt.mesLabel}) por $${saldo.toFixed(2)}. No se registrará como pago ordinario y requiere código de autorización por Telegram.`
+
+  if (!confirm(message)) return
+
+  const motivo = prompt('Motivo de depuración:')
+  if (!motivo) return
+
+  depurandoDebt.value = debtKey(debt)
 
   try {
-    const nextValue = !pago.depurado
-    await $fetch('/api/payments/audit', { method: 'POST', body: { folio: pago.folio, depurado: nextValue } })
-    show(nextValue ? 'Pago depurado' : 'Pago reabierto para revision', 'success')
+    const request = await $fetch('/api/payments/audit', {
+      method: 'POST',
+      body: {
+        action: 'request',
+        matricula: props.student.matricula,
+        documento: debt.documento,
+        mes: debt.mes,
+        ciclo: normalizeCicloKey(state.value.ciclo),
+        conceptoNombre: debt.conceptoNombre,
+        mesLabel: debt.mesLabel,
+        subtotal: debt.subtotal,
+        saldo: debt.saldo,
+        pagos: debt.resuelto ?? debt.pagos,
+        pagosRegistrados: debt.pagos,
+        hasRecargo: debt.hasRecargo,
+        motivo
+      }
+    })
+
+    const input = prompt('Ingresa el código de depuración de 5 dígitos enviado por Telegram:')
+    if (!input) return show('Depuración cancelada', 'danger')
+
+    await $fetch('/api/payments/audit', {
+      method: 'POST',
+      body: {
+        action: 'confirm',
+        requestId: request.requestId,
+        code: String(input).trim()
+      }
+    })
+
+    show('Saldo depurado y progreso completado', 'success')
     await loadDebts()
+    emit('refresh')
   } catch (e) {
-    show('No se pudo actualizar la depuracion', 'danger')
+    show(e?.data?.message || 'No se pudo aplicar la depuración', 'danger')
   } finally {
-    auditingFolio.value = null
+    depurandoDebt.value = null
   }
 }
 
@@ -528,13 +554,25 @@ const closeConceptModal = () => {
 
 const showDebtContextMenu = (event, debt) => {
   const canPay = debt.saldo > 0
-  openMenu(event, [
+  const menuItems = [
     { label: canPay ? 'Pagar este concepto' : 'Completado', icon: LucideCreditCard, disabled: !canPay, action: () => { selectedDebts.value = [debt]; showPaymentModal.value = true } },
     { label: 'Facturar', icon: LucideFileText, action: () => { selectedDebts.value = [debt]; showInvoiceModal.value = true } },
     { label: 'Historial', icon: LucideHistory, action: () => toggleHistory(debt) },
-    { label: '-' },
-    { label: 'Ajustar concepto', icon: LucideSettings, action: () => openConceptChange(debt) }
-  ])
+    { label: '-' }
+  ]
+
+  if (canDepurarDebt(debt)) {
+    menuItems.push({
+      label: depurandoDebt.value === debtKey(debt) ? 'Depurando saldo...' : 'Depurar saldo restante',
+      icon: LucideShieldCheck,
+      disabled: Boolean(depurandoDebt.value),
+      action: () => requestDepuracion(debt)
+    })
+    menuItems.push({ label: '-' })
+  }
+
+  menuItems.push({ label: 'Ajustar concepto', icon: LucideSettings, action: () => openConceptChange(debt) })
+  openMenu(event, menuItems)
 }
 
 const handleSuccess = () => {
@@ -897,11 +935,6 @@ const handleSuccess = () => {
   font-weight: 720;
 }
 
-.account-totals > .audit-total {
-  background: #eef7ff;
-  color: #356b9d;
-}
-
 .account-table-wrap {
   min-height: 0;
   flex: 1;
@@ -974,33 +1007,41 @@ const handleSuccess = () => {
   cursor: pointer;
 }
 
-.progress-cell,
-.audit-cell {
-  width: 86px;
+.progress-cell {
+  width: 112px;
 }
 
-.progress-track,
-.audit-track {
+.progress-track {
+  display: flex;
   height: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: #e7eaee;
 }
 
-.progress-track span,
-.audit-track span {
+.progress-track span {
   display: block;
   height: 100%;
-  border-radius: inherit;
   transition: width 200ms ease;
 }
 
-.audit-track span {
-  background: linear-gradient(90deg, #60a5fa, #35b6a4);
+.progress-track span:first-child {
+  border-radius: 999px 0 0 999px;
 }
 
-.progress-cell em,
-.audit-cell em {
+.progress-track span:last-child {
+  border-radius: 0 999px 999px 0;
+}
+
+.progress-track span:only-child {
+  border-radius: 999px;
+}
+
+.progress-track .cleanup-progress {
+  background: repeating-linear-gradient(135deg, #35b6a4 0, #35b6a4 4px, #60a5fa 4px, #60a5fa 8px);
+}
+
+.progress-cell em {
   display: block;
   margin-top: 3px;
   color: #7f8999;
@@ -1010,12 +1051,12 @@ const handleSuccess = () => {
   text-align: right;
 }
 
-.audit-cell em.complete {
+.progress-cell em.complete {
   color: #287b74;
   font-weight: 680;
 }
 
-.debt-row.audited {
+.debt-row.cleared {
   background: linear-gradient(90deg, rgba(226, 245, 241, 0.68), rgba(255, 255, 255, 0.96));
 }
 
@@ -1138,29 +1179,9 @@ const handleSuccess = () => {
   padding: 3px 7px;
 }
 
-.audit-pill {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 3px 7px;
-  font-size: 0.56rem;
-  font-weight: 720;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
-}
-
-.audit-pill.done {
+.method-pill.cleanup {
   background: #e5f7f3;
   color: #267a66;
-}
-
-.audit-pill.pending {
-  background: #eef2f7;
-  color: #66728a;
-}
-
-.audit-action {
-  color: #287b74;
 }
 
 .history-actions {
