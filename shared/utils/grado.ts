@@ -1,78 +1,108 @@
 import { normalizeCicloKey } from './ciclo'
 
 export const GRADOS_NORMALIZADOS = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto']
+export const GRADOS_DISPLAY = ['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto']
 
-export const normalizeGrado = (grado: string) => {
-  if (!grado) return 'primero'
-  const g = String(grado).toLowerCase().trim()
-  return GRADOS_NORMALIZADOS.includes(g) ? g : 'primero'
+const PRIMARIA_PLANTELES = new Set(['PM', 'PT'])
+const SECUNDARIA_PLANTELES = new Set(['SM', 'ST'])
+
+const GRADO_NUMERICO: Record<string, string> = {
+  '1': 'primero',
+  '01': 'primero',
+  primero: 'primero',
+  primer: 'primero',
+  '2': 'segundo',
+  '02': 'segundo',
+  segundo: 'segundo',
+  '3': 'tercero',
+  '03': 'tercero',
+  tercero: 'tercero',
+  tercer: 'tercero',
+  '4': 'cuarto',
+  '04': 'cuarto',
+  cuarto: 'cuarto',
+  '5': 'quinto',
+  '05': 'quinto',
+  quinto: 'quinto',
+  '6': 'sexto',
+  '06': 'sexto',
+  sexto: 'sexto'
 }
 
-export const displayGrado = (grado: string) => {
+export const normalizePlantel = (plantel: unknown) => String(plantel || '').trim().toUpperCase()
+
+export const nivelFromPlantel = (plantel: unknown) => {
+  const normalized = normalizePlantel(plantel)
+  if (PRIMARIA_PLANTELES.has(normalized)) return 'Primaria'
+  if (SECUNDARIA_PLANTELES.has(normalized)) return 'Secundaria'
+  return 'Preescolar'
+}
+
+export const maxGradoForPlantel = (plantel: unknown) => {
+  const nivel = nivelFromPlantel(plantel)
+  return nivel === 'Primaria' ? 6 : 3
+}
+
+export const normalizeGrado = (grado: unknown) => {
+  if (!grado) return 'primero'
+  const key = String(grado)
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+
+  return GRADO_NUMERICO[key] || 'primero'
+}
+
+export const normalizeGradoForPlantel = (grado: unknown, plantel: unknown) => {
+  const normalized = normalizeGrado(grado)
+  const max = maxGradoForPlantel(plantel)
+  const index = GRADOS_NORMALIZADOS.indexOf(normalized)
+  return GRADOS_NORMALIZADOS[Math.min(Math.max(index, 0), max - 1)]
+}
+
+export const displayGrado = (grado: unknown) => {
+  if (String(grado || '').toLowerCase().trim() === 'egresado') return 'Egresado'
   const g = normalizeGrado(grado)
   return g.charAt(0).toUpperCase() + g.slice(1)
 }
 
-export const calculatePromotedGrado = (gradoBase: string, nivelBase: string, cicloBase: string, selectedCiclo: string) => {
-  const normalizedGrado = normalizeGrado(gradoBase)
-  const defaultNivel = nivelBase ? (String(nivelBase).charAt(0).toUpperCase() + String(nivelBase).slice(1).toLowerCase()) : 'Primaria'
-  
+export const gradeOptionsForPlantel = (plantel: unknown) => {
+  return GRADOS_DISPLAY.slice(0, maxGradoForPlantel(plantel))
+}
+
+export const calculatePromotedGrado = (
+  gradoBase: unknown,
+  plantel: unknown,
+  cicloBase: unknown,
+  selectedCiclo: unknown
+) => {
+  const normalizedGrado = normalizeGradoForPlantel(gradoBase, plantel)
+  const nivel = nivelFromPlantel(plantel)
+
   if (!cicloBase || !selectedCiclo) {
-    return { grado: normalizedGrado, nivel: defaultNivel }
+    return { grado: normalizedGrado, nivel, egresado: false }
   }
 
   const baseYear = parseInt(normalizeCicloKey(cicloBase), 10)
   const selectedYear = parseInt(normalizeCicloKey(selectedCiclo), 10)
-  
+
   if (isNaN(baseYear) || isNaN(selectedYear)) {
-    return { grado: normalizedGrado, nivel: defaultNivel }
+    return { grado: normalizedGrado, nivel, egresado: false }
   }
 
-  let diff = selectedYear - baseYear
-  if (diff === 0) return { grado: normalizedGrado, nivel: defaultNivel }
+  const diff = selectedYear - baseYear
+  const max = maxGradoForPlantel(plantel)
+  const baseIndex = GRADOS_NORMALIZADOS.indexOf(normalizedGrado)
+  const promotedIndex = Math.max(0, baseIndex + diff)
 
-  const niveles = ['Preescolar', 'Primaria', 'Secundaria', 'Bachillerato']
-  const maxGrados: Record<string, number> = {
-    'Preescolar': 3,
-    'Primaria': 6,
-    'Secundaria': 3,
-    'Bachillerato': 6
-  }
-
-  let nIndex = niveles.indexOf(defaultNivel)
-  if (nIndex === -1) return { grado: normalizedGrado, nivel: defaultNivel }
-
-  let gIndex = GRADOS_NORMALIZADOS.indexOf(normalizedGrado)
-
-  if (diff > 0) {
-    for (let i = 0; i < diff; i++) {
-      gIndex++
-      if (gIndex >= (maxGrados[niveles[nIndex]] || 6)) {
-        gIndex = 0
-        nIndex++
-        if (nIndex >= niveles.length) {
-          nIndex = niveles.length - 1
-          gIndex = maxGrados[niveles[nIndex]] - 1
-        }
-      }
-    }
-  } else {
-    for (let i = 0; i > diff; i--) {
-      gIndex--
-      if (gIndex < 0) {
-        nIndex--
-        if (nIndex < 0) {
-          nIndex = 0
-          gIndex = 0
-        } else {
-          gIndex = (maxGrados[niveles[nIndex]] || 6) - 1
-        }
-      }
-    }
+  if (promotedIndex >= max) {
+    return { grado: 'egresado', nivel: 'Egresado', egresado: true }
   }
 
   return {
-    grado: GRADOS_NORMALIZADOS[gIndex],
-    nivel: niveles[nIndex]
+    grado: GRADOS_NORMALIZADOS[promotedIndex],
+    nivel,
+    egresado: false
   }
 }

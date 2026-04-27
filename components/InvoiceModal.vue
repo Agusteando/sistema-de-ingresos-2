@@ -59,7 +59,6 @@
                   <option value="Preescolar">Preescolar</option>
                   <option value="Primaria">Primaria</option>
                   <option value="Secundaria">Secundaria</option>
-                  <option value="Bachillerato o su equivalente">Bachillerato</option>
                 </select>
               </div>
               <div class="col-span-12 md:col-span-6 form-group mb-0"><label class="form-label">RVOE</label><input type="text" v-model="form.autRVOE" class="input-field font-mono"></div>
@@ -110,11 +109,16 @@ const { show } = useToast()
 useScrollLock()
 
 const loading = ref(false)
+const sanitizeNivel = (value) => {
+  const allowed = ['Preescolar', 'Primaria', 'Secundaria']
+  return allowed.includes(value) ? value : (allowed.includes(props.student.nivel) ? props.student.nivel : 'Preescolar')
+}
+
 const form = ref({
   legal_name: '', tax_id: '', email: props.student.correo || '', zip: '',
   tax_system: '616', use: 'D10', invoiceDate: new Date().toISOString().slice(0, 16),
   facturaCon: 'IECS', series: '', productKeyGlobal: '86121503',
-  nombreCompleto: props.student.nombreCompleto || '', CURP: '', nivelEducativo: props.student.nivel || 'Primaria', autRVOE: ''
+  nombreCompleto: props.student.nombreCompleto || '', CURP: '', nivelEducativo: sanitizeNivel(props.student.nivel), autRVOE: ''
 })
 
 const conceptos = ref([])
@@ -130,6 +134,7 @@ onMounted(async () => {
     const res = await $fetch('/api/cfdi/getCompanyData', { params: { matricula: props.student.matricula } })
     if (res && res.data) {
       Object.assign(form.value, res.data)
+      form.value.nivelEducativo = sanitizeNivel(form.value.nivelEducativo)
       form.value.invoiceDate = new Date().toISOString().slice(0, 16)
     }
   } catch(e) {}
@@ -147,7 +152,7 @@ const submit = async () => {
       zip: form.value.zip,
       nombreCompleto: form.value.nombreCompleto,
       CURP: form.value.CURP.toUpperCase(),
-      nivelEducativo: form.value.nivelEducativo,
+      nivelEducativo: sanitizeNivel(form.value.nivelEducativo),
       autRVOE: form.value.autRVOE
     },
     invoiceData: {

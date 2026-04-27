@@ -26,7 +26,11 @@ export default defineEventHandler(async (event) => {
 
   const sql = `
     SELECT 
-      A.matricula, A.nombreCompleto, A.grado as gradoBase, A.grupo, A.nivel as nivelBase, A.ciclo as cicloBase, A.plantel, A.estatus, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno as internoBase,
+      A.matricula, A.nombreCompleto, A.apellidoPaterno, A.apellidoMaterno, A.nombres, A.genero,
+      A.grado as gradoBase, A.grupo, A.ciclo as cicloBase, A.ciclo, A.plantel, A.estatus,
+      A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno as internoBase,
+      Prev.previous_matricula AS matriculaAnterior,
+      Next.successor_matricula AS matriculaSiguiente,
       IFNULL(B.pagosTotal, 0) AS pagosTotal,
       B.conceptosPagados,
       IFNULL(C.saldo, 0) AS importeTotal,
@@ -45,6 +49,8 @@ export default defineEventHandler(async (event) => {
       WHERE ciclo = ? AND estatus = 'Activo'
       GROUP BY matricula
     ) C ON A.matricula = C.matricula
+    LEFT JOIN alumno_matricula_links Prev ON Prev.successor_matricula = A.matricula
+    LEFT JOIN alumno_matricula_links Next ON Next.previous_matricula = A.matricula
     WHERE ${whereClause}
     ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC
     LIMIT 5000;
@@ -54,7 +60,7 @@ export default defineEventHandler(async (event) => {
   const rows = await query<any[]>(sql, queryParams)
   
   return rows.map(r => {
-    const promoted = calculatePromotedGrado(r.gradoBase, r.nivelBase, r.cicloBase, cicloKey)
+    const promoted = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey)
     return {
       ...r,
       grado: displayGrado(promoted.grado),

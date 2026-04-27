@@ -33,6 +33,14 @@
               {{ student.nivel }} · {{ student.grado }} "{{ student.grupo }}"
               <i></i>
               {{ String(student.interno) === '1' ? 'Interno' : 'Externo' }}
+              <template v-if="student.matriculaAnterior">
+                <i></i>
+                Ant. {{ student.matriculaAnterior }}
+              </template>
+              <template v-if="student.matriculaSiguiente">
+                <i></i>
+                Sig. {{ student.matriculaSiguiente }}
+              </template>
               <em v-if="student.estatus !== 'Activo'">(Motivo: {{ student.estatus }})</em>
             </p>
           </div>
@@ -58,6 +66,9 @@
         <button class="btn btn-outline btn-sm" @click="showDocModal = true">
           <LucideFilePlus :size="15"/> Cargo extra
         </button>
+        <button v-if="student.estatus === 'Activo' && !isEnrolled" class="btn btn-secondary btn-sm" :disabled="enrolling" @click="quickEnroll">
+          <LucideFilePlus :size="15"/> Inscribir
+        </button>
         <span class="action-divider"></span>
         <button class="btn btn-ghost btn-sm" @click="$emit('edit', student)">
           <LucideSettings :size="15"/> Editar
@@ -72,8 +83,13 @@
     </section>
 
     <section v-if="siblings.length" class="siblings-card">
-      <h4>Familia / Hermanos</h4>
-      <div>
+      <div class="siblings-header">
+        <h4>Familia / Hermanos</h4>
+        <button class="siblings-clear" title="Limpiar vinculos" @click="clearSiblingLinks">
+          <LucideUndo :size="12" /> Limpiar
+        </button>
+      </div>
+      <div class="siblings-list">
         <button v-for="sib in siblings" :key="sib.matricula" @click="$emit('switch-student', sib.matricula)">
           <LucideUsers :size="13" /> {{ sib.nombreCompleto }} ({{ sib.grado }})
         </button>
@@ -164,7 +180,7 @@
       </div>
 
       <div class="account-footer">
-        <span>Mostrando {{ Math.min(debts.length, 5) }} de {{ debts.length }} conceptos</span>
+        <span>{{ accountFooterLabel }}</span>
       </div>
     </section>
 
@@ -199,7 +215,9 @@ const state = useState('globalState')
 
 const debts = ref([])
 const siblings = ref([])
+const siblingSource = ref('none')
 const loading = ref(false)
+const enrolling = ref(false)
 const selectedDebts = ref([])
 const expandedHistory = ref(null)
 
@@ -215,6 +233,11 @@ const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).ma
 const normalizePhotoMatricula = (value) => String(value || '').trim().toUpperCase()
 const photoStorageKey = (matricula) => `foto_${normalizePhotoMatricula(matricula)}`
 const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
+const accountFooterLabel = computed(() => {
+  if (!debts.value.length) return 'Sin conceptos en este ciclo'
+  if (debts.value.length > 5) return `${debts.value.length} conceptos; desplaza la tabla para ver mas`
+  return `${debts.value.length} conceptos visibles`
+})
 
 const loadDebts = async () => {
   loading.value = true; selectedDebts.value = []
@@ -231,8 +254,47 @@ const loadDebts = async () => {
 
 const loadSiblings = async () => {
   try {
-    siblings.value = await $fetch(`/api/students/${props.student.matricula}/siblings`)
+    const res = await $fetch(`/api/students/${props.student.matricula}/siblings`)
+    siblings.value = Array.isArray(res) ? res : (res?.siblings || [])
+    siblingSource.value = Array.isArray(res) ? 'legacy' : (res?.source || 'none')
   } catch(e) {}
+}
+
+const clearSiblingLinks = async () => {
+  if (!siblings.value.length || siblingSource.value !== 'local') return
+  if (!confirm('Limpiar los vinculos familiares locales de este grupo?')) return
+
+  try {
+    await $fetch(`/api/students/${props.student.matricula}/siblings`, { method: 'DELETE' })
+    siblings.value = []
+    siblingSource.value = 'none'
+    show('Vinculos familiares limpiados', 'success')
+    emit('refresh')
+  } catch (e) {
+    show('Error al limpiar vinculos familiares', 'danger')
+  }
+}
+
+const quickEnroll = async () => {
+  enrolling.value = true
+  try {
+    const cicloKey = normalizeCicloKey(state.value.ciclo)
+    const res = await $fetch(`/api/students/${props.student.matricula}/enroll`, {
+      method: 'POST',
+      body: { ciclo: cicloKey }
+    })
+    if (res?.inserted > 0) {
+      show(`Inscripcion agregada (${res.inserted})`, 'success')
+    } else {
+      show('El alumno ya tenia conceptos de inscripcion', 'success')
+    }
+    loadDebts()
+    emit('refresh')
+  } catch (e) {
+    show(e?.data?.message || 'No se pudo inscribir al alumno', 'danger')
+  } finally {
+    enrolling.value = false
+  }
 }
 
 const loadPhoto = async () => {
@@ -603,8 +665,7 @@ const handleSuccess = () => {
   scrollbar-width: none;
 }
 
-.profile-actions::-webkit-scrollbar,
-.account-table-wrap::-webkit-scrollbar {
+.profile-actions::-webkit-scrollbar {
   display: none;
 }
 
@@ -637,6 +698,14 @@ const handleSuccess = () => {
   padding: 8px 12px;
 }
 
+.siblings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
 .siblings-card h4 {
   margin: 0 0 6px;
   color: #64748b;
@@ -646,7 +715,29 @@ const handleSuccess = () => {
   text-transform: uppercase;
 }
 
-.siblings-card div {
+.siblings-header h4 {
+  margin-bottom: 0;
+}
+
+.siblings-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #fff;
+  color: #7a8698;
+  padding: 3px 7px;
+  font-size: 0.6rem;
+  font-weight: 650;
+}
+
+.siblings-clear:hover {
+  background: #f8fafc;
+  color: #b84f56;
+}
+
+.siblings-list {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -684,12 +775,12 @@ const handleSuccess = () => {
 
 .account-header {
   display: flex;
-  height: 40px;
+  height: 48px;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 16px;
+  padding: 0 18px;
 }
 
 .account-header h3 {
@@ -714,12 +805,14 @@ const handleSuccess = () => {
   min-height: 0;
   flex: 1;
   overflow: auto;
-  padding: 0 10px;
-  scrollbar-width: none;
+  padding: 0 12px 4px;
+  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-width: thin;
 }
 
 .account-table-wrap table {
-  min-width: 640px;
+  width: 100%;
+  min-width: 700px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -748,13 +841,13 @@ const handleSuccess = () => {
 
 .account-table-wrap td,
 .account-table-wrap th {
-  padding: 6px 8px;
+  padding: 9px 10px;
 }
 
 .account-table-wrap td {
   border-bottom: 1px solid #e8eef5;
   color: #334159;
-  font-size: 0.7rem;
+  font-size: 0.74rem;
 }
 
 .debt-row {
@@ -810,10 +903,10 @@ const handleSuccess = () => {
 
 .account-table-wrap td strong {
   display: block;
-  max-width: 240px;
+  max-width: 320px;
   overflow: hidden;
   color: #2f3d55;
-  font-size: 0.7rem;
+  font-size: 0.74rem;
   font-weight: 680;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -822,9 +915,9 @@ const handleSuccess = () => {
 
 .account-table-wrap td small {
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
   color: #7b8798;
-  font-size: 0.58rem;
+  font-size: 0.62rem;
   font-weight: 520;
   letter-spacing: 0.025em;
   text-transform: uppercase;
@@ -933,7 +1026,7 @@ const handleSuccess = () => {
 
 .account-footer {
   display: flex;
-  height: 32px;
+  height: 36px;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
@@ -990,13 +1083,13 @@ const handleSuccess = () => {
   }
 
   .account-header {
-    height: 38px;
+    height: 42px;
   }
 
   .account-table-wrap td,
   .account-table-wrap th {
-    padding-top: 5px;
-    padding-bottom: 5px;
+    padding-top: 7px;
+    padding-bottom: 7px;
   }
 
   .account-footer {

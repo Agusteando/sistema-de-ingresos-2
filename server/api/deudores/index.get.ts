@@ -1,5 +1,6 @@
 import { query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { calculatePromotedGrado, displayGrado, nivelFromPlantel } from '../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => {
   const { ciclo = '2025' } = getQuery(event)
@@ -16,7 +17,7 @@ export default defineEventHandler(async (event) => {
 
   const sql = `
     SELECT 
-      A.matricula, A.nombreCompleto, A.grado, A.grupo, A.nivel, A.plantel, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre,
+      A.matricula, A.nombreCompleto, A.grado as gradoBase, A.grupo, A.ciclo as cicloBase, A.plantel, A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre,
       IFNULL(C.saldo, 0) AS importeTotal,
       IFNULL(B.pagosTotal, 0) AS pagosTotal,
       (IFNULL(C.saldo, 0) - IFNULL(B.pagosTotal, 0)) AS deudaVigente
@@ -38,6 +39,13 @@ export default defineEventHandler(async (event) => {
     ORDER BY deudaVigente DESC, A.nombreCompleto ASC
   `
   
-  const deudores = await query(sql, params)
-  return deudores
+  const deudores = await query<any[]>(sql, params)
+  return deudores.map((row) => {
+    const promoted = calculatePromotedGrado(row.gradoBase, row.plantel, row.cicloBase, cicloKey)
+    return {
+      ...row,
+      grado: displayGrado(promoted.grado),
+      nivel: promoted.egresado ? promoted.nivel : nivelFromPlantel(row.plantel)
+    }
+  })
 })

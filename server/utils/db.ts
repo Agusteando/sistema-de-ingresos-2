@@ -367,10 +367,31 @@ export const ensureSchema = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS alumno_matricula_links (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          previous_matricula VARCHAR(255) NOT NULL,
+          successor_matricula VARCHAR(255) NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_previous_matricula (previous_matricula),
+          UNIQUE KEY uniq_successor_matricula (successor_matricula),
+          INDEX idx_matricula_link_pair (previous_matricula, successor_matricula)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
       await checkAndAddColumn('users', 'role', "VARCHAR(20) NOT NULL DEFAULT 'plantel'")
       await checkAndAddColumn('users', 'planteles', "TEXT", "UPDATE users SET planteles = plantel WHERE plantel IS NOT NULL AND (planteles IS NULL OR planteles = '')")
       await checkAndAddColumn('users', 'email', "VARCHAR(255) DEFAULT NULL")
       await checkAndAddColumn('users', 'avatar', "VARCHAR(255) DEFAULT NULL")
+
+      try {
+        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'conceptos'`)
+
+        if (tables.length > 0) {
+          await checkAndAddColumn('conceptos', 'plantel', "VARCHAR(255) NOT NULL DEFAULT 'global'")
+        }
+      } catch (e) {}
 
       try {
         const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'base'`)
@@ -378,6 +399,7 @@ export const ensureSchema = async () => {
         if (tables.length > 0) {
           await checkAndAddColumn('base', 'interno', "TINYINT(1) NOT NULL DEFAULT 1")
           await checkAndAddColumn('base', 'familiaId', "INT DEFAULT NULL")
+          await checkAndAddColumn('base', 'genero', "VARCHAR(255) DEFAULT '1'")
         }
       } catch (e) {}
 

@@ -60,6 +60,17 @@ model Base {
   @@map("base")
 }
 
+model AlumnoMatriculaLinks {
+  id                  Int      @id @default(autoincrement())
+  previous_matricula  String   @unique(map: "uniq_previous_matricula") @db.VarChar(255)
+  successor_matricula String   @unique(map: "uniq_successor_matricula") @db.VarChar(255)
+  created_at          DateTime @default(now()) @db.DateTime(0)
+  updated_at          DateTime @updatedAt @db.DateTime(0)
+
+  @@index([previous_matricula, successor_matricula], map: "idx_matricula_link_pair")
+  @@map("alumno_matricula_links")
+}
+
 model Becas {
   id         Int    @id @default(autoincrement())
   concepto   String @unique(map: "id") @db.VarChar(255)
