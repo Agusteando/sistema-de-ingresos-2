@@ -10,18 +10,73 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event)
     const cicloKey = normalizeCicloKey(body.ciclo)
     const plantel = String(body.plantel || '').trim()
+    const normalizedGrado = normalizeGradoForPlantel(body.grado, plantel)
+    const [currentStudent] = await query<any[]>(
+      `SELECT plantel, grado, ciclo FROM base WHERE matricula = ? LIMIT 1`,
+      [matricula]
+    )
+
+    if (!currentStudent) {
+      throw createError({ statusCode: 404, message: 'Alumno no encontrado' })
+    }
+
+    const normalizedCurrentGrado = normalizeGradoForPlantel(currentStudent.grado, currentStudent.plantel || plantel)
+    const normalizedCurrentCiclo = currentStudent.ciclo ? normalizeCicloKey(currentStudent.ciclo) : ''
+    const academicChangedByValue =
+      String(currentStudent.plantel || '').trim() !== plantel ||
+      normalizedCurrentGrado !== normalizedGrado ||
+      normalizedCurrentCiclo !== cicloKey
+    const hasAcademicChangedFlag = Object.prototype.hasOwnProperty.call(body, 'academicChanged')
+    const academicChangedByClient = hasAcademicChangedFlag
+      ? body.academicChanged === true || String(body.academicChanged).toLowerCase() === 'true'
+      : academicChangedByValue
+    const shouldWriteCiclo = academicChangedByClient && academicChangedByValue
+    const setClauses = [
+      'apellidoPaterno = ?',
+      'apellidoMaterno = ?',
+      'nombres = ?',
+      "nombreCompleto = CONCAT(?, ' ', ?, ' ', ?)",
+      '`Fecha de nacimiento` = ?',
+      '`Nombre del padre o tutor` = ?',
+      'plantel = ?',
+      'nivel = ?',
+      'grado = ?',
+      'grupo = ?',
+      'telefono = ?',
+      'correo = ?'
+    ]
+    const updateParams = [
+      body.apellidoPaterno,
+      body.apellidoMaterno,
+      body.nombres,
+      body.apellidoPaterno,
+      body.apellidoMaterno,
+      body.nombres,
+      body.birth,
+      body.padre,
+      plantel,
+      nivelFromPlantel(plantel),
+      normalizedGrado,
+      body.grupo,
+      body.telefono,
+      body.correo
+    ]
+
+    if (shouldWriteCiclo) {
+      setClauses.push('ciclo = ?')
+      updateParams.push(cicloKey)
+    }
+
+    setClauses.push('interno = ?', 'estatus = ?')
+    updateParams.push(body.interno, body.estatus || 'Activo', matricula)
+
     const statements: SqlStatement[] = [{
       sql: `
-        UPDATE base SET 
-          apellidoPaterno = ?, apellidoMaterno = ?, nombres = ?, nombreCompleto = CONCAT(?, ' ', ?, ' ', ?),
-          \`Fecha de nacimiento\` = ?, \`Nombre del padre o tutor\` = ?, plantel = ?, nivel = ?, grado = ?, grupo = ?, telefono = ?, correo = ?, ciclo = ?, interno = ?, estatus = ?
+        UPDATE base SET
+          ${setClauses.join(',\n          ')}
         WHERE matricula = ?
       `,
-      params: [
-        body.apellidoPaterno, body.apellidoMaterno, body.nombres, body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-        body.birth, body.padre, plantel, nivelFromPlantel(plantel), normalizeGradoForPlantel(body.grado, plantel), body.grupo, body.telefono, body.correo, cicloKey, body.interno, body.estatus || 'Activo',
-        matricula
-      ]
+      params: updateParams
     }]
 
     const hasPreviousMatricula = Object.prototype.hasOwnProperty.call(body, 'matriculaAnterior')

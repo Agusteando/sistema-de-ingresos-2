@@ -146,8 +146,27 @@ const form = ref({
   matriculaAnterior: '', matriculaSiguiente: ''
 })
 
+const originalAcademic = ref({
+  plantel: defaultPlantel,
+  grado: 'Primero',
+  ciclo: normalizeCicloKey(state.value.ciclo)
+})
+
 const derivedNivel = computed(() => nivelFromPlantel(form.value.plantel))
 const availableGrades = computed(() => gradeOptionsForPlantel(form.value.plantel))
+const academicChanged = computed(() => {
+  if (!isEdit) return true
+
+  const current = {
+    plantel: String(form.value.plantel || '').trim(),
+    grado: displayGrado(form.value.grado || 'Primero').toLowerCase(),
+    ciclo: normalizeCicloKey(form.value.ciclo)
+  }
+
+  return current.plantel !== originalAcademic.value.plantel ||
+    current.grado !== originalAcademic.value.grado.toLowerCase() ||
+    current.ciclo !== originalAcademic.value.ciclo
+})
 
 watch(() => form.value.plantel, () => {
   form.value.nivel = derivedNivel.value
@@ -178,6 +197,11 @@ onMounted(() => {
       matriculaAnterior: s.matriculaAnterior || '',
       matriculaSiguiente: s.matriculaSiguiente || ''
     }
+    originalAcademic.value = {
+      plantel: String(form.value.plantel || '').trim(),
+      grado: displayGrado(form.value.grado || 'Primero'),
+      ciclo: normalizeCicloKey(form.value.ciclo)
+    }
   }
 })
 
@@ -186,7 +210,15 @@ const submit = async () => {
   try {
     const url = isEdit ? `/api/students/${form.value.matricula}` : '/api/students'
     const method = isEdit ? 'PUT' : 'POST'
-    await $fetch(url, { method, body: { ...form.value, nivel: derivedNivel.value, ciclo: normalizeCicloKey(form.value.ciclo) } })
+    await $fetch(url, {
+      method,
+      body: {
+        ...form.value,
+        nivel: derivedNivel.value,
+        ciclo: normalizeCicloKey(form.value.ciclo),
+        academicChanged: academicChanged.value
+      }
+    })
     show(isEdit ? 'Alumno actualizado correctamente' : 'Alumno registrado exitosamente', 'success')
     emit('success')
   } catch (e) { 
