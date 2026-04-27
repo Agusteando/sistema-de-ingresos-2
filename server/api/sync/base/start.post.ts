@@ -5,6 +5,7 @@ import {
   cleanupBlockingRuns,
   createEmptyCounters,
   fetchExternalRows,
+  fetchCurrentEnrollmentCicloKey,
   finishRun,
   getExternalSyncConfig,
   isRunCancelled,
@@ -90,6 +91,14 @@ export default defineEventHandler(async (event) => {
 
   return await runWithBridgeAgentId(dbAgentId, async () => {
     try {
+      const syncCicloKey = await fetchCurrentEnrollmentCicloKey()
+
+      logSyncInfo('Current ciclo resolved for sync run.', {
+        plantel,
+        runId,
+        ciclo: syncCicloKey
+      })
+
       const rows = await fetchExternalRows(syncConfig, plantel, runId)
       const counters = createEmptyCounters(rows.length)
 
@@ -124,17 +133,19 @@ export default defineEventHandler(async (event) => {
       await markRunStatus(runId, 'processing', 'Listo para actualizar alumnos.', counters)
 
       const run = await readSyncRun(runId)
-      const signedRows = attachRowSignatures(rows, runId, plantel, syncConfig.apiKey)
+      const signedRows = attachRowSignatures(rows, runId, plantel, syncConfig.apiKey, syncCicloKey)
 
       logSyncInfo('Rows prepared for client-side batch orchestration.', {
         plantel,
         runId,
+        ciclo: syncCicloKey,
         rows: signedRows.length
       })
 
       return toStatusPayload(run, {
         rows: signedRows,
-        start_result: 'ready'
+        start_result: 'ready',
+        ciclo: syncCicloKey
       })
     } catch (error: any) {
       const message = safeErrorMessage(error)

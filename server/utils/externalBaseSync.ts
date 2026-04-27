@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import { executeStatementTransaction, query, type SqlStatement } from './db'
 import { nivelFromPlantel, normalizeGradoForPlantel } from '../../shared/utils/grado'
+import { normalizeCicloKey } from '../../shared/utils/ciclo'
 
 export type SyncCounters = {
   total: number
@@ -18,11 +19,12 @@ export type SyncRuntimeConfig = {
 }
 
 export const ACTIVE_SYNC_STATUSES = ['running', 'fetching', 'processing']
-export const DEFAULT_SYNC_CICLO = '2025'
+export const ENROLLMENT_CONFIG_URL = 'https://matricula.casitaapps.com/api/enrollment-config/all'
 export const EXTERNAL_SYNC_URL = 'https://matricula.casitaapps.com/api/sync'
 export const EXTERNAL_SYNC_TIMEOUT_MS = 60000
 export const EXTERNAL_SYNC_STALE_AFTER_MINUTES = 30
 export const EXTERNAL_SYNC_BATCH_LIMIT = 50
+export const ENROLLMENT_CONFIG_TIMEOUT_MS = 15000
 export const LOG_PREFIX = '[External Base Sync]'
 
 export const createEmptyCounters = (total = 0): SyncCounters => ({
@@ -344,6 +346,100 @@ export const fetchExternalRows = async (syncConfig: SyncRuntimeConfig, plantel: 
   }
 }
 
+const extractSimpleCicloKey = (value: unknown) => {
+  const match = String(value || '').trim().match(/\d{4}/)
+  return match ? normalizeCicloKey(match[0], match[0]) : ''
+}
+
+const requireSimpleCicloKey = (value: unknown, source: string) => {
+  const cicloKey = extractSimpleCicloKey(value)
+  if (!cicloKey) {
+    throw new Error(`No se pudo resolver el ciclo escolar actual desde ${source}.`)
+  }
+
+  return cicloKey
+}
+
+const isTruthyCurrentFlag = (value: any) => (
+  value === true ||
+  value === 1 ||
+  String(value || '').trim().toLowerCase() === 'true' ||
+  String(value || '').trim().toLowerCase() === 'actual' ||
+  String(value || '').trim().toLowerCase() === 'vigente'
+)
+
+const currentFlagKeys = ['esActual', 'actual', 'current', 'vigente', 'isCurrent', 'active']
+const directCicloKeys = [
+  'cicloActual',
+  'ciclo_actual',
+  'currentCiclo',
+  'current_ciclo',
+  'cicloEscolarActual',
+  'ciclo_escolar_actual'
+]
+
+const cicloValueKeys = ['ciclo', 'ciclo_escolar', 'cicloEscolar', 'value', 'label', 'nombre']
+
+const readCurrentCicloFromConfig = (configData: any): unknown => {
+  if (!configData || typeof configData !== 'object') return ''
+
+  for (const key of directCicloKeys) {
+    if (configData[key]) return configData[key]
+  }
+
+  const ciclos = configData.ciclos
+
+  if (Array.isArray(ciclos)) {
+    const current = ciclos.find((entry) => {
+      if (!entry || typeof entry !== 'object') return false
+      return currentFlagKeys.some(key => isTruthyCurrentFlag(entry[key]))
+    })
+
+    if (current) {
+      for (const key of cicloValueKeys) {
+        if (current[key]) return current[key]
+      }
+    }
+  }
+
+  if (ciclos && typeof ciclos === 'object') {
+    const currentEntry = Object.entries(ciclos).find(([, value]) => {
+      if (!value || typeof value !== 'object') return false
+      return currentFlagKeys.some(key => isTruthyCurrentFlag((value as any)[key]))
+    })
+
+    if (currentEntry) return currentEntry[0]
+  }
+
+  return ''
+}
+
+export const fetchCurrentEnrollmentCicloKey = async () => {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), ENROLLMENT_CONFIG_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(ENROLLMENT_CONFIG_URL, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal: controller.signal
+    })
+
+    if (!response.ok) {
+      throw new Error(`Configuracion de ciclo respondio con HTTP ${response.status}.`)
+    }
+
+    const configData = await response.json()
+    return requireSimpleCicloKey(
+      readCurrentCicloFromConfig(configData),
+      ENROLLMENT_CONFIG_URL
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 const normalizePayloadKey = (key: unknown) => String(key || '')
   .toLowerCase()
   .trim()
@@ -511,10 +607,11 @@ export function computeHash(mappedData: any) {
     .digest('hex')
 }
 
-export const signExternalRow = (row: any, runId: number, plantel: string, apiKey: string) => {
+export const signExternalRow = (row: any, runId: number, plantel: string, apiKey: string, syncCicloKey: string) => {
+  const cicloKey = requireSimpleCicloKey(syncCicloKey, 'la sincronizacion actual')
   const matricula = normalizeMatricula(row?.matricula || firstPayloadValue(row, ['matricula', 'matricula_alumno', 'matriculaAlumno'])).toUpperCase()
   const mappedHash = computeHash({ raw: row, mapped: mapExternalRow(row, plantel) })
-  const payload = `${runId}|${plantel.toUpperCase()}|${matricula}|${mappedHash}`
+  const payload = `${runId}|${plantel.toUpperCase()}|${matricula}|${cicloKey}|${mappedHash}`
 
   return crypto
     .createHmac('sha256', apiKey)
@@ -522,23 +619,31 @@ export const signExternalRow = (row: any, runId: number, plantel: string, apiKey
     .digest('hex')
 }
 
-export const attachRowSignatures = (rows: any[], runId: number, plantel: string, apiKey: string) => {
+export const attachRowSignatures = (rows: any[], runId: number, plantel: string, apiKey: string, syncCicloKey: string) => {
+  const cicloKey = requireSimpleCicloKey(syncCicloKey, 'la sincronizacion actual')
+
   return rows.map(row => ({
     ...row,
-    __syncSignature: signExternalRow(row, runId, plantel, apiKey)
+    __syncCiclo: cicloKey,
+    __syncSignature: signExternalRow(row, runId, plantel, apiKey, cicloKey)
   }))
 }
 
 export const detachAndVerifySignedRow = (signedRow: any, runId: number, plantel: string, apiKey: string) => {
   const raw = signedRow && typeof signedRow === 'object' ? signedRow : {}
-  const { __syncSignature, ...row } = raw
+  const { __syncSignature, __syncCiclo, ...row } = raw
   const signature = String(__syncSignature || '').trim()
+  const cicloKey = extractSimpleCicloKey(__syncCiclo)
 
   if (!/^[a-f0-9]{64}$/i.test(signature)) {
     return { ok: false, row, reason: 'missing_signature' }
   }
 
-  const expected = signExternalRow(row, runId, plantel, apiKey)
+  if (!cicloKey) {
+    return { ok: false, row, reason: 'missing_sync_ciclo' }
+  }
+
+  const expected = signExternalRow(row, runId, plantel, apiKey, cicloKey)
   const expectedBuffer = Buffer.from(expected, 'hex')
   const actualBuffer = Buffer.from(signature, 'hex')
 
@@ -550,7 +655,7 @@ export const detachAndVerifySignedRow = (signedRow: any, runId: number, plantel:
     return { ok: false, row, reason: 'signature_mismatch' }
   }
 
-  return { ok: true, row, reason: '' }
+  return { ok: true, row, reason: '', cicloKey }
 }
 
 export const resolveFinalEstatus = (row: any, localEstatus: string, matricula: string, runId: number, plantel: string) => {
@@ -585,6 +690,7 @@ export const processExternalRowsBatch = async (
     row: any
     matricula: string
     matriculaKey: string
+    syncCicloKey: string
     mapped: ReturnType<typeof mapExternalRow>
     sourceHash: string
   }> = []
@@ -605,6 +711,7 @@ export const processExternalRowsBatch = async (
     }
 
     const row = verification.row
+    const syncCicloKey = requireSimpleCicloKey(verification.cicloKey, 'el lote de sincronizacion firmado')
     const matricula = normalizeMatricula(row?.matricula || firstPayloadValue(row, ['matricula', 'matricula_alumno', 'matriculaAlumno']))
     const matriculaKey = matricula.toUpperCase()
 
@@ -639,6 +746,7 @@ export const processExternalRowsBatch = async (
       row,
       matricula,
       matriculaKey,
+      syncCicloKey,
       mapped,
       sourceHash
     })
@@ -662,7 +770,8 @@ export const processExternalRowsBatch = async (
         telefono,
         \`Nombre del padre o tutor\` AS padre,
         \`Fecha de nacimiento\` AS birth,
-        genero
+        genero,
+        ciclo
       FROM base
       WHERE matricula IN (?)
     `,
@@ -687,6 +796,7 @@ export const processExternalRowsBatch = async (
   for (const entry of validEntries) {
     const localStudent = localByMatricula.get(entry.matriculaKey)
     const existingMeta = metaByMatricula.get(entry.matriculaKey)
+    const localCicloNeedsRefresh = Boolean(localStudent) && String(localStudent?.ciclo || '').trim() !== entry.syncCicloKey
     const localMissingMappedField = Boolean(localStudent) && [
       ['apellidoPaterno', entry.mapped.apellidoPaterno],
       ['apellidoMaterno', entry.mapped.apellidoMaterno],
@@ -700,7 +810,7 @@ export const processExternalRowsBatch = async (
       return String(mappedValue || '').trim() !== '' && String(localStudent?.[field] || '').trim() === ''
     })
 
-    if (localStudent && existingMeta?.source_hash === entry.sourceHash && !localMissingMappedField) {
+    if (localStudent && existingMeta?.source_hash === entry.sourceHash && !localMissingMappedField && !localCicloNeedsRefresh) {
       counters.skipped++
       continue
     }
@@ -737,6 +847,7 @@ export const processExternalRowsBatch = async (
             \`Nombre del padre o tutor\` = COALESCE(NULLIF(?, ''), \`Nombre del padre o tutor\`),
             \`Fecha de nacimiento\` = COALESCE(NULLIF(?, ''), \`Fecha de nacimiento\`),
             genero = COALESCE(NULLIF(?, ''), genero),
+            ciclo = ?,
             estatus = ?
           WHERE matricula = ?
         `,
@@ -754,6 +865,7 @@ export const processExternalRowsBatch = async (
           entry.mapped.padre,
           entry.mapped.birth,
           entry.mapped.genero,
+          entry.syncCicloKey,
           finalEstatus,
           entry.matricula
         ]
@@ -799,7 +911,7 @@ export const processExternalRowsBatch = async (
           finalEstatus,
           entry.mapped.birth,
           entry.mapped.genero,
-          DEFAULT_SYNC_CICLO
+          entry.syncCicloKey
         ]
       })
     }
@@ -815,7 +927,7 @@ export const processExternalRowsBatch = async (
           last_payload = VALUES(last_payload),
           last_error = NULL
       `,
-      params: [entry.matricula, plantel, entry.sourceHash, JSON.stringify({ raw: entry.row, mapped: entry.mapped })]
+      params: [entry.matricula, plantel, entry.sourceHash, JSON.stringify({ raw: entry.row, mapped: entry.mapped, syncCiclo: entry.syncCicloKey })]
     })
 
     const previousMatricula = normalizeMatricula(entry.mapped.matriculaAnterior)
