@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { cleanApiKey } from '../../../utils/externalBaseSync'
+import { buildExternalHeaders, getExternalSyncConfig } from '../../../utils/externalBaseSync'
 
 type PhotoCacheEntry = {
   matricula: string
@@ -41,11 +41,19 @@ const getPhotoBaseUrl = () => {
   return (configured || 'https://matricula.casitaapps.com').replace(/\/+$/, '')
 }
 
-const getExternalApiKey = () => {
-  const config = useRuntimeConfig() as any
-  return cleanApiKey(config.studentPhotoApiKey || config.externalSyncApiKey)
+// IMPORTANT: matricula.casitaapps.com photo lookup uses the same API-key
+// contract as the external base sync. Do not casually change this auth shape:
+// the external service expects the EXTERNAL_SYNC_API_KEY-derived Bearer token
+// and x-api-key headers produced by buildExternalHeaders().
+const buildExternalPhotoHeaders = () => {
+  const syncConfig = getExternalSyncConfig()
+  if (!syncConfig.apiKey) return null
+  return buildExternalHeaders(syncConfig)
 }
 
+// IMPORTANT: this endpoint shape is the external matricula photo contract.
+// Keep the path + format=json request stable unless the external service owner
+// confirms a coordinated contract change.
 const buildExternalPhotoUrl = (matricula: string) => {
   const url = new URL(`/api/students/${encodeURIComponent(matricula)}/photo`, getPhotoBaseUrl())
   url.searchParams.set('format', 'json')
@@ -115,28 +123,31 @@ const extractPhotoUrl = (payload: any) => {
   return resolvePhotoUrl(
     payload?.photoUrl ||
     payload?.url ||
+    payload?.foto ||
+    payload?.photo ||
     payload?.data?.photoUrl ||
     payload?.data?.url ||
+    payload?.data?.foto ||
+    payload?.data?.photo ||
     payload?.student?.photoUrl ||
-    payload?.student?.foto
+    payload?.student?.foto ||
+    payload?.alumno?.photoUrl ||
+    payload?.alumno?.foto
   )
 }
 
 const fetchExternalPhoto = async (matricula: string): Promise<PhotoCacheEntry | null> => {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), EXTERNAL_TIMEOUT_MS)
-  const headers: Record<string, string> = { Accept: 'application/json' }
-  const apiKey = getExternalApiKey()
+  const headers = buildExternalPhotoHeaders()
 
-  if (apiKey) {
-    headers.Authorization = `Bearer ${apiKey}`
-    headers['x-api-key'] = apiKey
-  }
+  if (!headers) return null
 
   try {
     const response = await fetch(buildExternalPhotoUrl(matricula), {
       method: 'GET',
       headers,
+      cache: 'no-store',
       signal: controller.signal
     })
 

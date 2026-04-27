@@ -544,7 +544,7 @@ const handleStudentSuccess = () => {
 .students-screen {
   display: flex;
   width: 100%;
-  max-width: 1208px;
+  max-width: 1360px;
   min-height: 0;
   flex: 1;
   flex-direction: column;
@@ -554,12 +554,12 @@ const handleStudentSuccess = () => {
 
 .students-hero {
   display: flex;
-  min-height: 54px;
+  min-height: 48px;
   flex-shrink: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  padding: 0 0 8px;
+  padding: 0 0 6px;
 }
 
 .hero-copy h1 {
@@ -589,15 +589,15 @@ const handleStudentSuccess = () => {
 
 .monthly-income {
   display: flex;
-  width: 224px;
-  height: 52px;
+  width: 212px;
+  height: 48px;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   border: 1px solid #e6ecf3;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.9);
-  padding: 9px 13px 9px 16px;
+  padding: 8px 12px 8px 14px;
   box-shadow: 0 4px 14px rgba(22, 38, 65, 0.03);
 }
 
@@ -621,8 +621,8 @@ const handleStudentSuccess = () => {
 }
 
 .monthly-income svg {
-  width: 76px;
-  height: 34px;
+  width: 70px;
+  height: 32px;
   overflow: visible;
   opacity: 0.55;
 }
@@ -636,7 +636,7 @@ const handleStudentSuccess = () => {
 }
 
 .new-student-button {
-  height: 46px;
+  height: 42px;
   min-width: 185px;
   border-radius: 10px;
   font-size: 0.9rem;
@@ -646,22 +646,22 @@ const handleStudentSuccess = () => {
   display: grid;
   flex-shrink: 0;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .kpi-card {
   position: relative;
   display: grid;
-  min-height: 66px;
-  grid-template-columns: 38px minmax(0, 1fr);
+  min-height: 58px;
+  grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   overflow: hidden;
   border: 1px solid #e6ecf3;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.84);
-  padding: 9px 11px;
+  padding: 7px 10px;
   text-align: left;
   box-shadow: 0 4px 16px rgba(22, 38, 65, 0.028);
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
@@ -713,8 +713,8 @@ const handleStudentSuccess = () => {
   position: relative;
   z-index: 1;
   display: flex;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
@@ -753,25 +753,25 @@ const handleStudentSuccess = () => {
 .kpi-red .kpi-text span { color: #655d5b; }
 
 .kpi-text strong {
-  margin-top: 3px;
+  margin-top: 2px;
   color: #25344e;
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 720;
   letter-spacing: 0;
   line-height: 1;
 }
 
 .kpi-text em {
-  margin-top: 4px;
+  margin-top: 2px;
   color: #8791a1;
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-style: normal;
   font-weight: 460;
 }
 
 .kpi-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   align-self: center;
   margin: 0;
   filter: none;
@@ -799,23 +799,23 @@ const handleStudentSuccess = () => {
   grid-template-columns: minmax(260px, 365px) minmax(0, 1fr) auto;
   flex-shrink: 0;
   align-items: center;
-  gap: 12px;
-  min-height: 44px;
-  margin-bottom: 8px;
+  gap: 10px;
+  min-height: 38px;
+  margin-bottom: 6px;
   border: 1px solid #e6ecf3;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.82);
-  padding: 6px 8px;
+  padding: 5px 8px;
   box-shadow: 0 4px 14px rgba(22, 38, 65, 0.025);
 }
 
 .active-filter-strip {
   display: flex;
-  min-height: 30px;
+  min-height: 26px;
   flex-shrink: 0;
   align-items: center;
   gap: 8px;
-  margin: -2px 0 8px;
+  margin: -1px 0 6px;
   overflow-x: auto;
 }
 
@@ -826,7 +826,7 @@ const handleStudentSuccess = () => {
   border-radius: 999px;
   background: #f1f8ee;
   color: #416d3b;
-  padding: 5px 10px;
+  padding: 4px 9px;
   font-size: 0.66rem;
   font-weight: 680;
   white-space: nowrap;
@@ -834,7 +834,7 @@ const handleStudentSuccess = () => {
 
 .search-control {
   display: flex;
-  height: 32px;
+  height: 30px;
   align-items: center;
   gap: 9px;
   border: 1px solid #dfe6ef;
@@ -882,14 +882,14 @@ const handleStudentSuccess = () => {
 
 .export-button {
   min-width: 138px;
-  height: 34px;
+  height: 32px;
 }
 
 .students-workspace {
   display: flex;
   min-height: 0;
   flex: 1;
-  gap: 14px;
+  gap: 10px;
 }
 
 .student-list-panel {
@@ -900,8 +900,8 @@ const handleStudentSuccess = () => {
 }
 
 .student-list-panel.is-compact {
-  width: clamp(318px, 25vw, 370px);
-  flex: 0 0 clamp(318px, 25vw, 370px);
+  width: clamp(286px, 21vw, 326px);
+  flex: 0 0 clamp(286px, 21vw, 326px);
 }
 
 .student-list-panel.is-full {
@@ -958,7 +958,7 @@ const handleStudentSuccess = () => {
 
 .list-titlebar {
   display: flex;
-  height: 36px;
+  height: 32px;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
@@ -1008,7 +1008,7 @@ const handleStudentSuccess = () => {
 
 .list-columns {
   display: grid;
-  height: 28px;
+  height: 24px;
   flex-shrink: 0;
   align-items: center;
   border-bottom: 1px solid #e8eef5;
@@ -1022,7 +1022,7 @@ const handleStudentSuccess = () => {
 
 .list-columns.compact,
 .student-row.compact {
-  grid-template-columns: minmax(0, 1fr) 104px 28px;
+  grid-template-columns: minmax(0, 1fr) 90px 26px;
 }
 
 .list-columns.full,
@@ -1048,14 +1048,14 @@ const handleStudentSuccess = () => {
 .student-row {
   position: relative;
   display: grid;
-  min-height: 43px;
+  min-height: 38px;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   border: 0;
   border-bottom: 1px solid #edf2f6;
   border-left: 3px solid transparent;
   background: transparent;
-  padding: 0 14px 0 13px;
+  padding: 0 12px 0 11px;
   text-align: left;
   transition: background 150ms ease, border-color 150ms ease;
 }
@@ -1082,20 +1082,20 @@ const handleStudentSuccess = () => {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
 }
 
 .student-avatar {
   display: flex;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   background: #ecf4e8;
   color: #527d49;
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 680;
 }
 
@@ -1119,7 +1119,7 @@ const handleStudentSuccess = () => {
 .student-copy strong {
   overflow: hidden;
   color: #2f3d55;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -1129,7 +1129,7 @@ const handleStudentSuccess = () => {
 .student-copy em,
 .assignment {
   color: #7b8798;
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-style: normal;
   font-weight: 500;
   line-height: 1.2;
@@ -1170,7 +1170,7 @@ const handleStudentSuccess = () => {
 .money {
   color: #344158;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 680;
   text-align: right;
   white-space: nowrap;
@@ -1197,8 +1197,8 @@ const handleStudentSuccess = () => {
 
 .row-actions button {
   display: flex;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -1238,7 +1238,7 @@ const handleStudentSuccess = () => {
 
 .list-footer {
   display: flex;
-  height: 34px;
+  height: 30px;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
@@ -1275,74 +1275,91 @@ const handleStudentSuccess = () => {
   }
 
   .student-list-panel.is-compact {
-    width: 318px;
-    flex-basis: 318px;
+    width: 292px;
+    flex-basis: 292px;
   }
 }
 
 @media (max-height: 920px) and (min-width: 1081px) {
   .students-hero {
-    min-height: 56px;
-    padding-bottom: 8px;
+    min-height: 44px;
+    padding-bottom: 5px;
   }
 
   .hero-copy h1 {
-    font-size: 1.18rem;
-  }
-
-  .hero-copy p {
-    font-size: 0.74rem;
-  }
-
-  .monthly-income {
-    height: 48px;
-    width: 212px;
-    padding-top: 8px;
-    padding-bottom: 8px;
-  }
-
-  .monthly-income strong {
-    font-size: 0.94rem;
-  }
-
-  .new-student-button {
-    height: 48px;
-  }
-
-  .kpi-grid {
-    gap: 10px;
-    margin-bottom: 8px;
-  }
-
-  .kpi-card {
-    min-height: 66px;
-    padding-top: 9px;
-    padding-bottom: 9px;
-  }
-
-  .kpi-icon {
-    width: 34px;
-    height: 34px;
-  }
-
-  .kpi-text strong {
     font-size: 1.08rem;
   }
 
-  .kpi-text em {
-    margin-top: 5px;
-    font-size: 0.64rem;
+  .hero-copy p {
+    font-size: 0.7rem;
   }
 
-  .filter-bar {
-    min-height: 44px;
-    margin-bottom: 8px;
+  .monthly-income {
+    height: 42px;
+    width: 198px;
     padding-top: 6px;
     padding-bottom: 6px;
   }
 
+  .monthly-income strong {
+    font-size: 0.9rem;
+  }
+
+  .new-student-button {
+    height: 40px;
+  }
+
+  .kpi-grid {
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .kpi-card {
+    min-height: 54px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .kpi-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .kpi-text strong {
+    font-size: 0.98rem;
+  }
+
+  .kpi-text em {
+    margin-top: 2px;
+    font-size: 0.6rem;
+  }
+
+  .filter-bar {
+    min-height: 36px;
+    margin-bottom: 5px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .active-filter-strip {
+    min-height: 24px;
+    margin-bottom: 5px;
+  }
+
+  .list-titlebar {
+    height: 30px;
+  }
+
+  .list-columns {
+    height: 22px;
+  }
+
   .student-row {
-    min-height: 44px;
+    min-height: 36px;
+  }
+
+  .list-footer {
+    height: 28px;
   }
 }
 
