@@ -3,9 +3,10 @@ import { getDeudoresGlobal } from '../../utils/deudores'
 import { calculatePromotedGrado, displayGrado, nivelFromPlantel } from '../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => {
-  const { ciclo = '2025', estatus = 'deudores' } = getQuery(event)
+  const { ciclo = '2025', estatus = 'deudores', detalles = '0' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
+  const includeDesglose = detalles === '1' || detalles === 'true'
 
   const scopedPlantel = (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL'))
     ? user.active_plantel
@@ -14,7 +15,8 @@ export default defineEventHandler(async (event) => {
   const rows = await getDeudoresGlobal({
     ciclo: cicloKey,
     plantel: scopedPlantel,
-    userEmail: user?.email
+    userEmail: user?.email,
+    includeDesglose
   })
 
   const enriched = rows.map((row) => {

@@ -12,7 +12,8 @@ const getDeudorContext = async (matricula: string, ciclo: string, mes: number, u
     plantel: user?.role !== 'global' || (user?.role === 'global' && user?.active_plantel !== 'GLOBAL')
       ? user?.active_plantel
       : undefined,
-    userEmail: user?.email
+    userEmail: user?.email,
+    matricula
   })
 
   return rows.find(row => row.matricula === matricula && Number(row.mes) === mes)

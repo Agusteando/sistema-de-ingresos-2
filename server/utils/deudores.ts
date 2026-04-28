@@ -58,6 +58,14 @@ const stageByDay = (day: number) => {
   return { stage: 'deudor_oficial', actionToday: 'llamada_telefonica', deudorOficial: true }
 }
 
+const money = (value: unknown) => Number(Number(value || 0).toFixed(2))
+
+const shouldExposeBreakdownItem = (item: any) => {
+  return Number(item.saldo || 0) > 0 ||
+    Number(item.pendienteConciliacion || 0) > 0 ||
+    Number(item.beca || 0) >= 100
+}
+
 const getCobranzaDateParts = () => {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Mexico_City',
@@ -72,55 +80,124 @@ const getCobranzaDateParts = () => {
   }
 }
 
-export const getDeudoresGlobal = async ({ ciclo, plantel, userEmail }: { ciclo: string, plantel?: string, userEmail?: string }) => {
-  const documentos = await query<any[]>(`
-    SELECT d.documento, d.matricula, d.costo, d.meses, d.plazo, d.beca, d.conceptoNombre, d.eventual,
-      b.nombreCompleto, b.grado, b.grupo, b.plantel, b.correo, b.telefono, b.\`Nombre del padre o tutor\` as padre
-    FROM documentos d
-    JOIN base b ON b.matricula = d.matricula
-    WHERE d.ciclo = ? AND d.estatus = 'Activo' AND b.estatus = 'Activo'
-      ${plantel ? ' AND b.plantel = ? ' : ''}
-  `, plantel ? [ciclo, plantel] : [ciclo])
+export const getDeudoresGlobal = async ({
+  ciclo,
+  plantel,
+  userEmail,
+  includeDesglose = true,
+  matricula
+}: {
+  ciclo: string,
+  plantel?: string,
+  userEmail?: string,
+  includeDesglose?: boolean,
+  matricula?: string
+}) => {
+  let documentos: any[] = []
+  const matriculaFiltro = String(matricula || '').trim()
+
+  if (matriculaFiltro) {
+    const alumnosActivos = await query<any[]>(`
+      SELECT matricula, nombreCompleto, grado, grupo, plantel, correo, telefono, \`Nombre del padre o tutor\` as padre
+      FROM base
+      WHERE estatus = 'Activo' AND matricula = ? ${plantel ? 'AND plantel = ?' : ''}
+    `, plantel ? [matriculaFiltro, plantel] : [matriculaFiltro])
+
+    if (!alumnosActivos.length) return []
+
+    const alumno = alumnosActivos[0]
+    const docs = await query<any[]>(`
+      SELECT documento, matricula, costo, meses, plazo, beca, conceptoNombre, eventual
+      FROM documentos
+      WHERE ciclo = ? AND estatus = 'Activo' AND matricula = ?
+    `, [ciclo, matriculaFiltro])
+
+    documentos = docs.map(doc => ({ ...doc, ...alumno }))
+  } else if (plantel) {
+    const alumnosActivos = await query<any[]>(`
+      SELECT matricula, nombreCompleto, grado, grupo, plantel, correo, telefono, \`Nombre del padre o tutor\` as padre
+      FROM base
+      WHERE estatus = 'Activo' AND plantel = ?
+    `, [plantel])
+
+    if (!alumnosActivos.length) return []
+
+    const alumnosByMatricula = new Map(alumnosActivos.map(alumno => [String(alumno.matricula), alumno]))
+    const matriculasPlantel = [...alumnosByMatricula.keys()]
+    const docs = await query<any[]>(`
+      SELECT documento, matricula, costo, meses, plazo, beca, conceptoNombre, eventual
+      FROM documentos
+      WHERE ciclo = ? AND estatus = 'Activo' AND matricula IN (${matriculasPlantel.map(() => '?').join(',')})
+    `, [ciclo, ...matriculasPlantel])
+
+    documentos = docs
+      .map(doc => ({ ...doc, ...alumnosByMatricula.get(String(doc.matricula)) }))
+      .filter(doc => doc.nombreCompleto)
+  } else {
+    const docs = await query<any[]>(`
+      SELECT documento, matricula, costo, meses, plazo, beca, conceptoNombre, eventual
+      FROM documentos
+      WHERE ciclo = ? AND estatus = 'Activo'
+    `, [ciclo])
+
+    if (!docs.length) return []
+
+    const matriculasDocs = [...new Set(docs.map(doc => String(doc.matricula)))]
+    const alumnosActivos = await query<any[]>(`
+      SELECT matricula, nombreCompleto, grado, grupo, plantel, correo, telefono, \`Nombre del padre o tutor\` as padre
+      FROM base
+      WHERE estatus = 'Activo' AND matricula IN (${matriculasDocs.map(() => '?').join(',')})
+    `, matriculasDocs)
+    const alumnosByMatricula = new Map(alumnosActivos.map(alumno => [String(alumno.matricula), alumno]))
+
+    documentos = docs
+      .map(doc => ({ ...doc, ...alumnosByMatricula.get(String(doc.matricula)) }))
+      .filter(doc => doc.nombreCompleto)
+  }
 
   if (!documentos.length) return []
 
   const docIds = documentos.map(doc => Number(doc.documento))
   const matriculas = [...new Set(documentos.map(doc => String(doc.matricula)))]
+  const now = new Date()
+  const { month: currentMonth, day } = getCobranzaDateParts()
+  const flow = stageByDay(day)
+  const paymentMeses = ['ev', ...Array.from({ length: Math.max(1, currentMonth) }, (_, index) => String(index + 1))]
 
-  const periodRows = await query<any[]>(`
-    SELECT documento, start_mes, end_mes, costo, accion, estatus
-    FROM documento_concepto_periodos
-    WHERE documento IN (${docIds.map(() => '?').join(',')}) AND estatus = 'Activo'
-    ORDER BY documento ASC, start_mes ASC, id ASC
-  `, docIds)
-
-  const pagosRows = await query<any[]>(`
-    SELECT matricula, documento, mes, monto, estatus
-    FROM referenciasdepago
-    WHERE ciclo = ?
-      AND matricula IN (${matriculas.map(() => '?').join(',')})
-      AND estatus IN ('Vigente', 'Pendiente', 'PendienteConciliacion', 'PorConciliar')
-  `, [ciclo, ...matriculas])
-
-  const excepciones = await query<any[]>(`
-    SELECT matricula, mes, fecha_limite_especial, activa, motivo
-    FROM cobranza_excepciones
-    WHERE ciclo = ? AND activa = 1 AND matricula IN (${matriculas.map(() => '?').join(',')})
-  `, [ciclo, ...matriculas])
-
-  const observaciones = await query<any[]>(`
-    SELECT matricula, texto, usuario, fecha
-    FROM cobranza_observaciones
-    WHERE ciclo = ? AND matricula IN (${matriculas.map(() => '?').join(',')})
-    ORDER BY fecha DESC
-  `, [ciclo, ...matriculas])
-
-  const eventos = await query<any[]>(`
-    SELECT matricula, mes, accion, fecha, usuario
-    FROM cobranza_eventos
-    WHERE ciclo = ? AND matricula IN (${matriculas.map(() => '?').join(',')})
-    ORDER BY fecha DESC
-  `, [ciclo, ...matriculas])
+  const [periodRows, pagosRows, excepciones, observaciones, eventos] = await Promise.all([
+    query<any[]>(`
+      SELECT documento, start_mes, end_mes, costo, accion, estatus
+      FROM documento_concepto_periodos
+      WHERE documento IN (${docIds.map(() => '?').join(',')}) AND estatus = 'Activo'
+      ORDER BY documento ASC, start_mes ASC, id ASC
+    `, docIds),
+    query<any[]>(`
+      SELECT matricula, documento, mes, monto, estatus
+      FROM referenciasdepago
+      WHERE ciclo = ?
+        AND matricula IN (${matriculas.map(() => '?').join(',')})
+        AND documento IN (${docIds.map(() => '?').join(',')})
+        AND mes IN (${paymentMeses.map(() => '?').join(',')})
+        AND estatus IN ('Vigente', 'Pendiente', 'PendienteConciliacion', 'PorConciliar')
+    `, [ciclo, ...matriculas, ...docIds, ...paymentMeses]),
+    query<any[]>(`
+      SELECT matricula, mes, fecha_limite_especial, activa, motivo
+      FROM cobranza_excepciones
+      WHERE ciclo = ? AND activa = 1 AND matricula IN (${matriculas.map(() => '?').join(',')})
+    `, [ciclo, ...matriculas]),
+    query<any[]>(`
+      SELECT matricula, texto, usuario, fecha
+      FROM cobranza_observaciones
+      WHERE ciclo = ? AND matricula IN (${matriculas.map(() => '?').join(',')})
+      ORDER BY fecha DESC
+    `, [ciclo, ...matriculas]),
+    query<any[]>(`
+      SELECT matricula, mes, accion, fecha, usuario
+      FROM cobranza_eventos
+      WHERE ciclo = ? AND matricula IN (${matriculas.map(() => '?').join(',')})
+      ORDER BY fecha DESC
+    `, [ciclo, ...matriculas])
+  ])
 
   const periodByDoc = new Map<number, any[]>()
   periodRows.forEach((row) => {
@@ -160,10 +237,6 @@ export const getDeudoresGlobal = async ({ ciclo, plantel, userEmail }: { ciclo: 
     list.push(evt)
     eventByKey.set(key, list)
   })
-
-  const now = new Date()
-  const { month: currentMonth, day } = getCobranzaDateParts()
-  const flow = stageByDay(day)
 
   const bucket = new Map<string, any>()
 
@@ -244,18 +317,20 @@ export const getDeudoresGlobal = async ({ ciclo, plantel, userEmail }: { ciclo: 
         existing.excepcion = excepcionMes
       }
 
-      existing.desglose.push({
-        documento: doc.documento,
-        conceptoNombre: doc.conceptoNombre,
-        mesCargo: periodo.mesCargo,
-        mesLabel: periodo.mesLabel,
-        costoBase,
-        beca,
-        subtotal,
-        pagado,
-        pendienteConciliacion,
-        saldo
-      })
+      if (includeDesglose) {
+        existing.desglose.push({
+          documento: doc.documento,
+          conceptoNombre: doc.conceptoNombre,
+          mesCargo: periodo.mesCargo,
+          mesLabel: periodo.mesLabel,
+          costoBase: money(costoBase),
+          beca: money(beca),
+          subtotal: money(subtotal),
+          pagado: money(pagado),
+          pendienteConciliacion: money(pendienteConciliacion),
+          saldo: money(saldo)
+        })
+      }
 
       const evts = eventByKey.get(key) || []
       existing.accionesRealizadas = evts
@@ -283,6 +358,11 @@ export const getDeudoresGlobal = async ({ ciclo, plantel, userEmail }: { ciclo: 
       saldoPendiente: Number(saldoPendiente.toFixed(2)),
       saldoColegiatura: Number(saldoPendiente.toFixed(2)),
       saldoConceptos: Number(saldoPendiente.toFixed(2)),
+      totalCargos: money(row.totalCargos),
+      totalAntesBeca: money(row.totalAntesBeca),
+      totalPagado: money(row.totalPagado),
+      totalPendienteConciliacion: money(row.totalPendienteConciliacion),
+      desglose: includeDesglose ? (row.desglose || []).filter(shouldExposeBreakdownItem) : [],
       estatusFlujo: isDeudor ? flow.stage : 'sin_adeudo',
       accionHoy: isDeudor ? flow.actionToday : null,
       deudorOficial: isDeudor ? flow.deudorOficial : false,
