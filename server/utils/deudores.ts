@@ -21,6 +21,15 @@ const spanishMonths = [
   'Mayo', 'Junio', 'Julio', 'Agosto'
 ]
 
+const ACTION_SEQUENCE = [
+  { action: 'correo_recordatorio', thresholdDay: 13, label: 'Correo de recordatorio' },
+  { action: 'reporte_deudores', thresholdDay: 14, label: 'Corte de deudores' },
+  { action: 'whatsapp_contacto', thresholdDay: 20, label: 'Seguimiento por WhatsApp' },
+  { action: 'carta_suspension', thresholdDay: 27, label: 'Carta de suspensión' }
+]
+
+const END_OF_MONTH_ACTION = { action: 'llamada_telefonica', label: 'Llamada de cierre' }
+
 const isEventual = (doc: any) => String(doc?.eventual || '') === '1'
 
 const getDuePeriods = (doc: any, currentMonth: number) => {
@@ -28,7 +37,7 @@ const getDuePeriods = (doc: any, currentMonth: number) => {
     return [{
       mesCargo: 'ev',
       mesCobranza: currentMonth,
-      mesLabel: 'Cargo unico',
+      mesLabel: 'Cargo único',
       paymentKeys: ['ev', '1']
     }]
   }
@@ -47,15 +56,147 @@ const getDuePeriods = (doc: any, currentMonth: number) => {
   })
 }
 
-const stageByDay = (day: number) => {
-  if (day <= 12) return { stage: 'sin_gestion', actionToday: null, deudorOficial: false }
-  if (day === 13) return { stage: 'seguimiento', actionToday: 'correo_recordatorio', deudorOficial: false }
-  if (day === 14) return { stage: 'reporte_actualizado', actionToday: 'reporte_deudores', deudorOficial: false }
-  if (day >= 15 && day <= 19) return { stage: 'reporte_actualizado', actionToday: null, deudorOficial: false }
-  if (day === 20) return { stage: 'contacto_whatsapp', actionToday: 'whatsapp_contacto', deudorOficial: false }
-  if (day >= 21 && day <= 26) return { stage: 'contacto_whatsapp', actionToday: null, deudorOficial: false }
-  if (day === 27) return { stage: 'carta_suspension', actionToday: 'carta_suspension', deudorOficial: false }
-  return { stage: 'deudor_oficial', actionToday: 'llamada_telefonica', deudorOficial: true }
+const padDatePart = (value: number) => String(value).padStart(2, '0')
+
+const getLastDayOfMonth = (year: number, month: number) => {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
+
+const getCobranzaDateParts = () => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    day: 'numeric',
+    month: 'numeric'
+  }).formatToParts(new Date())
+
+  const value = (type: string) => Number(parts.find(part => part.type === type)?.value || 0)
+  const now = new Date()
+  const year = value('year') || now.getFullYear()
+  const month = value('month') || (now.getMonth() + 1)
+  const day = value('day') || now.getDate()
+  const lastDay = getLastDayOfMonth(year, month)
+
+  return {
+    year,
+    month,
+    day,
+    lastDay,
+    currentDateKey: `${year}-${padDatePart(month)}-${padDatePart(day)}`,
+    standardPaymentLimit: `${year}-${padDatePart(month)}-12`
+  }
+}
+
+const normalizeDateKey = (value: unknown) => {
+  if (!value) return ''
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10)
+
+  const raw = String(value).trim()
+  const match = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+  if (!match) return ''
+
+  return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
+}
+
+const stageByDay = (day: number, lastDay: number) => {
+  const isMonthClose = day >= lastDay
+
+  if (day <= 12) {
+    return {
+      stage: 'periodo_pago',
+      stageLabel: 'Periodo de pago',
+      actionToday: null,
+      deudorOficial: false,
+      isMonthClose,
+      accionesEsperadas: []
+    }
+  }
+
+  if (day === 13) {
+    return {
+      stage: 'recordatorio_correo',
+      stageLabel: 'Recordatorio por correo',
+      actionToday: 'correo_recordatorio',
+      deudorOficial: false,
+      isMonthClose,
+      accionesEsperadas: ACTION_SEQUENCE.filter(item => item.thresholdDay <= day)
+    }
+  }
+
+  if (day === 14) {
+    return {
+      stage: 'corte_deudores',
+      stageLabel: 'Corte de deudores',
+      actionToday: 'reporte_deudores',
+      deudorOficial: false,
+      isMonthClose,
+      accionesEsperadas: ACTION_SEQUENCE.filter(item => item.thresholdDay <= day)
+    }
+  }
+
+  if (day >= 15 && day <= 19) {
+    return {
+      stage: 'corte_deudores',
+      stageLabel: 'Corte vigente',
+      actionToday: null,
+      deudorOficial: false,
+      isMonthClose,
+      accionesEsperadas: ACTION_SEQUENCE.filter(item => item.thresholdDay <= day)
+    }
+  }
+
+  if (day === 20) {
+    return {
+      stage: 'seguimiento_whatsapp',
+      stageLabel: 'Seguimiento por WhatsApp',
+      actionToday: 'whatsapp_contacto',
+      deudorOficial: false,
+      isMonthClose,
+      accionesEsperadas: ACTION_SEQUENCE.filter(item => item.thresholdDay <= day)
+    }
+  }
+
+  if (day >= 21 && day <= 26) {
+    return {
+      stage: 'seguimiento_whatsapp',
+      stageLabel: 'Seguimiento activo',
+      actionToday: null,
+      deudorOficial: false,
+      isMonthClose,
+      accionesEsperadas: ACTION_SEQUENCE.filter(item => item.thresholdDay <= day)
+    }
+  }
+
+  if (day === 27) {
+    return {
+      stage: 'carta_suspension',
+      stageLabel: 'Carta de suspensión',
+      actionToday: 'carta_suspension',
+      deudorOficial: false,
+      isMonthClose,
+      accionesEsperadas: ACTION_SEQUENCE.filter(item => item.thresholdDay <= day)
+    }
+  }
+
+  if (isMonthClose) {
+    return {
+      stage: 'cierre_mes',
+      stageLabel: 'Cierre de mes',
+      actionToday: 'llamada_telefonica',
+      deudorOficial: true,
+      isMonthClose,
+      accionesEsperadas: [...ACTION_SEQUENCE, END_OF_MONTH_ACTION]
+    }
+  }
+
+  return {
+    stage: 'pre_cierre',
+    stageLabel: 'Preparación de cierre',
+    actionToday: null,
+    deudorOficial: false,
+    isMonthClose,
+    accionesEsperadas: ACTION_SEQUENCE.filter(item => item.thresholdDay <= day)
+  }
 }
 
 const money = (value: unknown) => Number(Number(value || 0).toFixed(2))
@@ -64,20 +205,6 @@ const shouldExposeBreakdownItem = (item: any) => {
   return Number(item.saldo || 0) > 0 ||
     Number(item.pendienteConciliacion || 0) > 0 ||
     Number(item.beca || 0) >= 100
-}
-
-const getCobranzaDateParts = () => {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Mexico_City',
-    day: 'numeric',
-    month: 'numeric'
-  }).formatToParts(new Date())
-
-  const value = (type: string) => Number(parts.find(part => part.type === type)?.value || 0)
-  return {
-    day: value('day') || new Date().getDate(),
-    month: value('month') || (new Date().getMonth() + 1)
-  }
 }
 
 export const getDeudoresGlobal = async ({
@@ -122,7 +249,7 @@ export const getDeudoresGlobal = async ({
 
     if (!alumnosActivos.length) return []
 
-    const alumnosByMatricula = new Map(alumnosActivos.map(alumno => [String(alumno.matricula), alumno]))
+    const alumnosByMatricula = new Map<string, any>(alumnosActivos.map(alumno => [String(alumno.matricula), alumno]))
     const matriculasPlantel = [...alumnosByMatricula.keys()]
     const docs = await query<any[]>(`
       SELECT documento, matricula, costo, meses, plazo, beca, conceptoNombre, eventual
@@ -148,7 +275,7 @@ export const getDeudoresGlobal = async ({
       FROM base
       WHERE estatus = 'Activo' AND matricula IN (${matriculasDocs.map(() => '?').join(',')})
     `, matriculasDocs)
-    const alumnosByMatricula = new Map(alumnosActivos.map(alumno => [String(alumno.matricula), alumno]))
+    const alumnosByMatricula = new Map<string, any>(alumnosActivos.map(alumno => [String(alumno.matricula), alumno]))
 
     documentos = docs
       .map(doc => ({ ...doc, ...alumnosByMatricula.get(String(doc.matricula)) }))
@@ -159,9 +286,9 @@ export const getDeudoresGlobal = async ({
 
   const docIds = documentos.map(doc => Number(doc.documento))
   const matriculas = [...new Set(documentos.map(doc => String(doc.matricula)))]
-  const now = new Date()
-  const { month: currentMonth, day } = getCobranzaDateParts()
-  const flow = stageByDay(day)
+  const cobranzaDate = getCobranzaDateParts()
+  const { month: currentMonth, day, lastDay, currentDateKey, standardPaymentLimit } = cobranzaDate
+  const flow = stageByDay(day, lastDay)
   const paymentMeses = ['ev', ...Array.from({ length: Math.max(1, currentMonth) }, (_, index) => String(index + 1))]
 
   const [periodRows, pagosRows, excepciones, observaciones, eventos] = await Promise.all([
@@ -265,9 +392,8 @@ export const getDeudoresGlobal = async ({
       const saldo = Math.max(0, subtotal - pagado)
 
       const excepcionMes = (excepcionByKey.get(`${doc.matricula}-${periodo.mesCobranza}`) || []).find((e) => {
-        if (!e.fecha_limite_especial) return false
-        const limite = new Date(e.fecha_limite_especial)
-        return limite >= now
+        const limite = normalizeDateKey(e.fecha_limite_especial)
+        return Boolean(limite) && limite >= currentDateKey
       })
 
       const key = `${doc.matricula}-${periodo.mesCobranza}`
@@ -297,6 +423,7 @@ export const getDeudoresGlobal = async ({
         pagoPendienteConciliacion: false,
         fechaLimiteEspecialVigente: false,
         excepcion: null,
+        fechaLimitePago: standardPaymentLimit,
         accionesRealizadas: [],
         observaciones: obsByMatricula.get(String(doc.matricula)) || []
       }
@@ -314,7 +441,11 @@ export const getDeudoresGlobal = async ({
       existing.pagoPendienteConciliacion = existing.pagoPendienteConciliacion || pagosPendientesConciliacion.length > 0
       if (excepcionMes) {
         existing.fechaLimiteEspecialVigente = true
-        existing.excepcion = excepcionMes
+        existing.excepcion = {
+          ...excepcionMes,
+          fecha_limite_especial: normalizeDateKey(excepcionMes.fecha_limite_especial)
+        }
+        existing.fechaLimitePago = normalizeDateKey(excepcionMes.fecha_limite_especial) || existing.fechaLimitePago
       }
 
       if (includeDesglose) {
@@ -344,14 +475,16 @@ export const getDeudoresGlobal = async ({
   return [...bucket.values()].map((row) => {
     row.todoCubiertoPorBeca100 = row.totalAntesBeca > 0 && row.conceptosCobrables === 0 && row.conceptosConBeca100 > 0
 
-    // Orden deterministico: saldo -> beca100 -> conciliacion -> excepcion -> dia.
     const saldoPendiente = Number(row.saldoPendiente || 0)
     const noEsDeudorPorSaldo = saldoPendiente <= 0
     const noEsDeudorPorBeca = row.todoCubiertoPorBeca100
     const noEsDeudorPorConciliacion = !noEsDeudorPorSaldo && row.pagoPendienteConciliacion
     const noEsDeudorPorExcepcion = !noEsDeudorPorSaldo && !noEsDeudorPorConciliacion && row.fechaLimiteEspecialVigente
-
     const isDeudor = !(noEsDeudorPorSaldo || noEsDeudorPorConciliacion || noEsDeudorPorExcepcion) && day >= 13
+    const completedActions = new Set((row.accionesRealizadas || []).map((evt: any) => String(evt.accion)))
+    const accionesEsperadas = isDeudor ? flow.accionesEsperadas : []
+    const accionesPendientes = accionesEsperadas.filter((item: any) => !completedActions.has(item.action))
+    const desgloseVisible = includeDesglose ? (row.desglose || []).filter(shouldExposeBreakdownItem) : []
 
     return {
       ...row,
@@ -362,11 +495,25 @@ export const getDeudoresGlobal = async ({
       totalAntesBeca: money(row.totalAntesBeca),
       totalPagado: money(row.totalPagado),
       totalPendienteConciliacion: money(row.totalPendienteConciliacion),
-      desglose: includeDesglose ? (row.desglose || []).filter(shouldExposeBreakdownItem) : [],
+      desglose: desgloseVisible,
+      desgloseCorte: flow.stage === 'corte_deudores' || day >= 14 ? desgloseVisible : [],
       estatusFlujo: isDeudor ? flow.stage : 'sin_adeudo',
+      estatusFlujoLabel: isDeudor ? flow.stageLabel : 'Sin adeudo exigible',
       accionHoy: isDeudor ? flow.actionToday : null,
       deudorOficial: isDeudor ? flow.deudorOficial : false,
       isDeudor,
+      corteDeudores: isDeudor && day >= 14,
+      cierreProceso: isDeudor && flow.isMonthClose,
+      diaCobranza: day,
+      mesCobranza: currentMonth,
+      ultimoDiaMes: lastDay,
+      fechaCobranza: currentDateKey,
+      fechaLimitePago: row.fechaLimitePago,
+      fechaLimiteEspecial: row.excepcion?.fecha_limite_especial || null,
+      notaFechaLimiteEspecial: row.excepcion?.motivo || '',
+      accionesEsperadas,
+      accionesPendientes,
+      proximaAccion: accionesPendientes[0]?.action || null,
       alcance: 'global_conceptos',
       razonesNoDeudor: {
         saldoCero: noEsDeudorPorSaldo,

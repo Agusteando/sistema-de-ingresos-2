@@ -1,14 +1,19 @@
 <template>
-  <section class="card whatsapp-onboarding">
+  <section class="card whatsapp-onboarding" :class="{ compact }">
     <div class="wa-head">
       <div class="wa-title">
         <div class="wa-icon"><LucideMessageCircle :size="18" /></div>
         <div>
           <h3>WhatsApp Cobranza</h3>
-          <p>{{ activeClient ? activeClient.display_name || activeClient.client_id : 'Vinculacion de cuenta' }}</p>
+          <p>{{ activeClient ? activeClient.display_name || activeClient.client_id : 'Preparación de cuenta' }}</p>
         </div>
       </div>
       <span class="badge" :class="statusBadgeClass">{{ statusLabel }}</span>
+    </div>
+
+    <div v-if="autoStart && !isReady" class="wa-guide">
+      <strong>Preparación automática</strong>
+      <span>El sistema prepara la instancia y muestra el QR cuando esté disponible. El envío a familias siempre requiere una acción manual.</span>
     </div>
 
     <div v-if="!activeClient" class="wa-grid">
@@ -22,7 +27,7 @@
     </div>
 
     <div v-else class="wa-body">
-      <div class="wa-config">
+      <div class="wa-config" v-if="!compact">
         <div class="wa-field">
           <label class="form-label">Nombre visible</label>
           <input v-model="displayName" class="input-field" placeholder="Cobranza IECS IEDIS">
@@ -40,7 +45,7 @@
           <LucideRefreshCw :size="16" :class="{ 'animate-spin': qrLoading }" /> Nuevo QR
         </button>
         <button class="btn btn-outline" :disabled="statusLoading" @click="checkStatus">
-          <LucideWifi :size="16" /> Revisar sesion
+          <LucideWifi :size="16" /> Revisar sesión
         </button>
       </div>
 
@@ -88,7 +93,9 @@ import { useCookie } from '#app'
 
 const props = defineProps({
   showSkip: { type: Boolean, default: false },
-  initialDisplayName: { type: String, default: '' }
+  initialDisplayName: { type: String, default: '' },
+  autoStart: { type: Boolean, default: false },
+  compact: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['ready', 'skip'])
@@ -102,6 +109,8 @@ const loading = ref(false)
 const qrLoading = ref(false)
 const statusLoading = ref(false)
 const configLoading = ref(false)
+const autoStarting = ref(false)
+const autoStarted = ref(false)
 const sessionStatus = ref('')
 const qrSvg = ref('')
 const qrImageSrc = ref('')
@@ -115,6 +124,7 @@ const activeClient = computed(() => clients.value[0] || null)
 const normalizedStatus = computed(() => String(sessionStatus.value || activeClient.value?.status || 'pending').toLowerCase())
 const isReady = computed(() => normalizedStatus.value === 'ready')
 const statusLabel = computed(() => {
+  if (autoStarting.value) return 'Preparando'
   if (isReady.value) return 'Lista'
   if (normalizedStatus.value === 'error') return 'Error'
   return activeClient.value ? 'Pendiente' : 'Sin instancia'
@@ -125,7 +135,7 @@ const statusBadgeClass = computed(() => {
   return 'badge-warning'
 })
 const qrStatusLabel = computed(() => {
-  if (isReady.value) return 'Sesion lista'
+  if (isReady.value) return 'Sesión lista'
   if (qrStatus.value) return qrStatus.value
   return 'QR disponible'
 })
@@ -152,13 +162,13 @@ const renderQr = (payload) => {
     qrSvg.value = ''
     qrImageSrc.value = ''
     emit('ready')
-    setMessage('Sesion vinculada.')
+    setMessage('Sesión vinculada.')
     return
   }
 
   const raw = String(qr.qr || '')
   if (!raw) {
-    throw new Error('La API no devolvio un QR disponible.')
+    throw new Error('La API no devolvió un QR disponible.')
   }
 
   qrVisible.value = true
@@ -173,7 +183,7 @@ const renderQr = (payload) => {
   qrSvg.value = renderSVG(raw, {
     ecc: 'M',
     border: 2,
-    pixelSize: 7,
+    pixelSize: props.compact ? 5 : 7,
     whiteColor: '#ffffff',
     blackColor: '#111827'
   })
@@ -185,7 +195,7 @@ const loadClients = async () => {
     const res = await $fetch('/api/whatsapp/instances')
     clients.value = Array.isArray(res?.local) ? res.local : []
   } catch (error) {
-    setMessage('No se pudo cargar la configuracion de WhatsApp.', 'danger')
+    setMessage('No se pudo cargar la configuración de WhatsApp.', 'danger')
   } finally {
     loading.value = false
   }
@@ -206,8 +216,10 @@ const createInstance = async () => {
     }]
     sessionStatus.value = instance.status || 'pending'
     setMessage('Instancia creada.')
+    return clients.value[0]
   } catch (error) {
     setMessage(error?.statusMessage || 'No se pudo crear la instancia.', 'danger')
+    return null
   } finally {
     loading.value = false
   }
@@ -240,9 +252,9 @@ const checkStatus = async () => {
       qrVisible.value = false
       emit('ready')
     }
-    setMessage(String(nextStatus).toLowerCase() === 'ready' ? 'Sesion lista.' : 'Sesion pendiente.')
+    setMessage(String(nextStatus).toLowerCase() === 'ready' ? 'Sesión lista.' : 'Sesión pendiente.')
   } catch (error) {
-    setMessage(error?.statusMessage || 'No se pudo revisar la sesion.', 'danger')
+    setMessage(error?.statusMessage || 'No se pudo revisar la sesión.', 'danger')
   } finally {
     statusLoading.value = false
   }
@@ -260,15 +272,43 @@ const saveConfiguration = async () => {
       }
     })
     await loadClients()
-    setMessage('Configuracion guardada.')
+    setMessage('Configuración guardada.')
   } catch (error) {
-    setMessage(error?.statusMessage || 'No se pudo guardar la configuracion.', 'danger')
+    setMessage(error?.statusMessage || 'No se pudo guardar la configuración.', 'danger')
   } finally {
     configLoading.value = false
   }
 }
 
-onMounted(loadClients)
+const startAutomaticSetup = async () => {
+  if (!props.autoStart || autoStarted.value) return
+  autoStarted.value = true
+  autoStarting.value = true
+
+  try {
+    await loadClients()
+    if (!activeClient.value && displayName.value.trim()) {
+      await createInstance()
+    }
+    if (activeClient.value && !isReady.value) {
+      await showQr(false)
+    }
+    if (activeClient.value) {
+      await checkStatus()
+    }
+  } finally {
+    autoStarting.value = false
+  }
+}
+
+onMounted(async () => {
+  if (props.autoStart) {
+    await startAutomaticSetup()
+    return
+  }
+
+  await loadClients()
+})
 </script>
 
 <style scoped>
@@ -277,6 +317,12 @@ onMounted(loadClients)
   flex-direction: column;
   gap: 18px;
   padding: 18px;
+}
+
+.whatsapp-onboarding.compact {
+  gap: 12px;
+  border-radius: 22px;
+  padding: 16px;
 }
 
 .wa-head,
@@ -332,6 +378,28 @@ onMounted(loadClients)
   color: #16806e;
 }
 
+.wa-guide {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #dbeee3;
+  border-radius: 14px;
+  background: #f2fbf5;
+  padding: 10px;
+}
+
+.wa-guide strong {
+  color: #267447;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.wa-guide span {
+  color: #587067;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
 .wa-grid,
 .wa-config {
   gap: 12px;
@@ -346,6 +414,10 @@ onMounted(loadClients)
   gap: 14px;
 }
 
+.whatsapp-onboarding.compact .wa-body {
+  gap: 10px;
+}
+
 .wa-field {
   min-width: 0;
   flex: 1;
@@ -358,6 +430,10 @@ onMounted(loadClients)
 .wa-actions {
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.whatsapp-onboarding.compact .wa-actions .btn {
+  flex: 1 1 120px;
 }
 
 .wa-qr-wrap {
@@ -379,11 +455,23 @@ onMounted(loadClients)
   background: #fff;
 }
 
+.whatsapp-onboarding.compact .wa-qr {
+  width: 168px;
+  min-height: 168px;
+  flex-basis: 168px;
+}
+
 .wa-qr img,
 .wa-qr-svg :deep(svg) {
   display: block;
   width: 190px;
   height: 190px;
+}
+
+.whatsapp-onboarding.compact .wa-qr img,
+.whatsapp-onboarding.compact .wa-qr-svg :deep(svg) {
+  width: 148px;
+  height: 148px;
 }
 
 .wa-empty {
@@ -444,7 +532,8 @@ onMounted(loadClients)
     flex-direction: column;
   }
 
-  .wa-qr {
+  .wa-qr,
+  .whatsapp-onboarding.compact .wa-qr {
     width: 100%;
     flex-basis: auto;
   }
