@@ -269,7 +269,7 @@ const runSafeQuery = async (sql: string) => {
   try {
     await rawQuery(sql)
   } catch (err: any) {
-    if (err.code !== 'ER_DUP_FIELDNAME' && err.code !== 'ER_CANT_DROP_FIELD_OR_KEY') {
+    if (err.code !== 'ER_DUP_FIELDNAME' && err.code !== 'ER_DUP_KEYNAME' && err.code !== 'ER_CANT_DROP_FIELD_OR_KEY') {
       console.error(`[Schema Update Error] ${sql.substring(0, 50)}... ->`, err.message)
     }
   }
@@ -417,6 +417,8 @@ export const ensureSchema = async () => {
           await checkAndAddColumn('base', 'interno', "TINYINT(1) NOT NULL DEFAULT 1")
           await checkAndAddColumn('base', 'familiaId', "INT DEFAULT NULL")
           await checkAndAddColumn('base', 'genero', "VARCHAR(255) DEFAULT '1'")
+          await runSafeQuery(`ALTER TABLE base ADD INDEX idx_base_matricula_estatus (matricula(64), estatus(20))`)
+          await runSafeQuery(`ALTER TABLE base ADD INDEX idx_base_plantel_estatus (plantel(20), estatus(20))`)
         }
       } catch (e) {}
 
@@ -427,6 +429,15 @@ export const ensureSchema = async () => {
           await checkAndAddColumn('referenciasdepago', 'depurado', "TINYINT(1) NOT NULL DEFAULT 0")
           await checkAndAddColumn('referenciasdepago', 'depurado_por', "VARCHAR(255) DEFAULT NULL")
           await checkAndAddColumn('referenciasdepago', 'depurado_fecha', "DATETIME DEFAULT NULL")
+          await runSafeQuery(`ALTER TABLE referenciasdepago ADD INDEX idx_ref_ciclo_matricula_documento_mes_estatus (ciclo(20), matricula(64), documento, mes(20), estatus(30))`)
+        }
+      } catch (e) {}
+
+      try {
+        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'documentos'`)
+
+        if (tables.length > 0) {
+          await runSafeQuery(`ALTER TABLE documentos ADD INDEX idx_documentos_ciclo_estatus_matricula (ciclo(20), estatus(20), matricula(64))`)
         }
       } catch (e) {}
 
@@ -510,7 +521,7 @@ export const ensureSchema = async () => {
         VALUES (
           'deudores_recordatorio',
           'Recordatorio de pago - Estado de cuenta',
-          '<div style="font-family: Inter, Arial, sans-serif; color: #1f2937; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;"><div style="background:#0f766e;color:#fff;padding:18px 24px;"><h2 style="margin:0;font-size:18px;">Recordatorio de pago</h2></div><div style="padding:24px;"><p style="margin-top:0;">Estimado(a) <strong>{{tutor}}</strong>,</p><p>Le recordamos que el estado de cuenta del alumno <strong>{{nombre_alumno}}</strong> (Matricula: <strong>{{matricula}}</strong>) correspondiente al periodo <strong>{{mes}}/{{ciclo}}</strong> presenta saldo pendiente por <strong>${{deuda}} MXN</strong>.</p><p style="margin:16px 0 6px;"><strong>Desglose:</strong></p><p style="margin-top:0;">{{desglose}}</p><p>Si ya realizo el pago y se encuentra en proceso de conciliacion, por favor haga caso omiso a este mensaje.</p><p>Quedamos atentos para apoyarle en cualquier duda.</p><p style="margin-bottom:0;">Atentamente,<br><strong>Administracion y Cobranza</strong></p></div></div>',
+          '<div style="font-family: Inter, Arial, sans-serif; color: #1f2937; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;"><div style="background:#0f766e;color:#fff;padding:18px 24px;"><h2 style="margin:0;font-size:18px;">Recordatorio de pago</h2></div><div style="padding:24px;"><p style="margin-top:0;">Estimado(a) <strong>{{tutor}}</strong>,</p><p>Le recordamos que el estado de cuenta del alumno <strong>{{nombre_alumno}}</strong> (Matricula: <strong>{{matricula}}</strong>) correspondiente al periodo <strong>{{mes}}/{{ciclo}}</strong> presenta saldo pendiente por <strong>\${{deuda}} MXN</strong>.</p><p style="margin:16px 0 6px;"><strong>Desglose:</strong></p><p style="margin-top:0;">{{desglose}}</p><p>Si ya realizo el pago y se encuentra en proceso de conciliacion, por favor haga caso omiso a este mensaje.</p><p>Quedamos atentos para apoyarle en cualquier duda.</p><p style="margin-bottom:0;">Atentamente,<br><strong>Administracion y Cobranza</strong></p></div></div>',
           'system'
         )
         ON DUPLICATE KEY UPDATE code = code;

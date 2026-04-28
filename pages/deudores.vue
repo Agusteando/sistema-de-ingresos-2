@@ -201,23 +201,41 @@ const showContextMenu = (event, d) => {
   ])
 }
 
-const exportData = () => {
-  const exportList = filteredDeudores.value.map(d => ({
-    Matricula: d.matricula,
-    Nombre: d.nombreCompleto,
-    Grado: `${d.nivel} - ${d.grado} ${d.grupo}`,
-    Tutor: d.padre || 'No registrado',
-    Correo: d.correo || 'Sin correo',
-    Telefono: d.telefono || '',
-    Saldo_Pendiente_MXN: saldoValue(d).toFixed(2),
-    Conceptos_Adeudados: (d.desglose || [])
-      .filter(item => Number(item.saldo || 0) > 0)
-      .map(item => `${item.conceptoNombre} ${item.mesLabel || ''}`.trim())
-      .join(' | '),
-    Estatus_Flujo: d.estatusFlujo,
-    Accion_Hoy: d.accionHoy || ''
-  }))
-  exportToCSV(`Deudores_${normalizeCicloKey(state.value.ciclo)}.csv`, exportList)
+const exportData = async () => {
+  loading.value = true
+  try {
+    const rows = await $fetch('/api/deudores', {
+      params: {
+        ciclo: normalizeCicloKey(state.value.ciclo),
+        estatus: estatusFiltro.value,
+        detalles: '1'
+      }
+    })
+    const q = search.value.toLowerCase()
+    const rowsForExport = q
+      ? rows.filter(d => String(d.nombreCompleto || '').toLowerCase().includes(q) || String(d.matricula || '').toLowerCase().includes(q))
+      : rows
+    const exportList = rowsForExport.map(d => ({
+      Matricula: d.matricula,
+      Nombre: d.nombreCompleto,
+      Grado: `${d.nivel} - ${d.grado} ${d.grupo}`,
+      Tutor: d.padre || 'No registrado',
+      Correo: d.correo || 'Sin correo',
+      Telefono: d.telefono || '',
+      Saldo_Pendiente_MXN: saldoValue(d).toFixed(2),
+      Conceptos_Adeudados: (d.desglose || [])
+        .filter(item => Number(item.saldo || 0) > 0)
+        .map(item => `${item.conceptoNombre} ${item.mesLabel || ''}`.trim())
+        .join(' | '),
+      Estatus_Flujo: d.estatusFlujo,
+      Accion_Hoy: d.accionHoy || ''
+    }))
+    exportToCSV(`Deudores_${normalizeCicloKey(state.value.ciclo)}.csv`, exportList)
+  } catch (e) {
+    show('Error al exportar reporte de deudores', 'danger')
+  } finally {
+    loading.value = false
+  }
 }
 
 const openMassEmailModal = () => {
