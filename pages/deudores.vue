@@ -1518,7 +1518,7 @@ button:disabled {
 
 .workflow-shell {
   display: grid;
-  grid-template-columns: minmax(270px, 318px) minmax(0, 1fr);
+  grid-template-columns: minmax(250px, 292px) minmax(0, 1fr);
   gap: 14px;
   align-items: start;
 }
@@ -1744,9 +1744,9 @@ button:disabled {
 .list-head,
 .debtor-row {
   display: grid;
-  grid-template-columns: 34px minmax(230px, 1.45fr) minmax(130px, 0.55fr) minmax(165px, 0.7fr) minmax(190px, 0.85fr) minmax(205px, 0.75fr);
+  grid-template-columns: 30px minmax(170px, 1.35fr) minmax(92px, 0.5fr) minmax(112px, 0.55fr) minmax(134px, 0.65fr) minmax(128px, 0.55fr);
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .list-head {
@@ -1932,8 +1932,8 @@ input[type="checkbox"] {
 .row-primary,
 .row-secondary {
   min-height: 32px;
-  padding: 0 10px;
-  font-size: 0.72rem;
+  padding: 0 8px;
+  font-size: 0.68rem;
 }
 
 .row-primary {
