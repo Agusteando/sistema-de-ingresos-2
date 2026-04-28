@@ -10,20 +10,31 @@
 
 [90m[[90mnuxt:tailwindcss[90m][39m [36mi[39m Using default Tailwind CSS file
 [90m[[90mnuxt:tailwindcss[90m][39m [36mi[39m Tailwind Viewer: [4m[33mhttp://127.0.0.1:3001/_tailwind/[39m[24m
-[32m√[39m Vite client built in 66ms
-[32m√[39m Vite server built in 854ms
-[90m[[90mnitro[90m][39m [32m√[39m Nuxt Nitro server built in 2120ms
+[32m√[39m Vite client built in 144ms
+[32m√[39m Vite server built in 2688ms
+[90m[[90mnitro[90m][39m [32m√[39m Nuxt Nitro server built in 4381ms
 [36mi[39m Vite server warmed up in 1ms
-[36mi[39m Vite client warmed up in 3ms
-[32m√[39m Vite server hmr 1 files in 1460.002ms
-[32m√[39m Vite server hmr 2 files in 0.005ms
+[36mi[39m Vite client warmed up in 4ms
+[36mi[39m .nuxt/dist directory has been removed. Restarting Nuxt...
+[90m[[90mnuxt:tailwindcss[90m][39m [36mi[39m Using default Tailwind CSS file
+[90m[[90mnuxt:tailwindcss[90m][39m [36mi[39m Tailwind Viewer: [4m[33mhttp://127.0.0.1:3001/_tailwind/[39m[24m
+[32m√[39m Vite client built in 60ms
+[32m√[39m Vite server built in 2403ms
+[90m[[90mnitro[90m][39m [32m√[39m Nuxt Nitro server built in 3405ms
+[36mi[39m Vite server warmed up in 2ms
+[36mi[39m Vite client warmed up in 2ms
+[32m√[39m Vite server hmr 1 files in 2551.945ms
+[32m√[39m Vite server hmr 1 files in 0.005ms
+[32m√[39m Vite server hmr 1 files in 0.003ms
+[32m√[39m Vite server hmr 1 files in 0.005ms
+[32m√[39m Vite server hmr 2 files in 0.007ms
 [41m[30m ERROR [39m[49m [Schema Update Error] ALTER TABLE base ADD INDEX idx_base_matricula_esta... -> DB bridge respondio con HTTP 502.
 [41m[30m ERROR [39m[49m [Schema Update Error] ALTER TABLE base ADD INDEX idx_base_plantel_estatu... -> DB bridge respondio con HTTP 502.
+[32m√[39m Vite server hmr 2 files in 0.002ms
 [41m[30m ERROR [39m[49m [Schema Update Error] ALTER TABLE referenciasdepago ADD INDEX idx_ref_ci... -> DB bridge respondio con HTTP 502.
 [41m[30m ERROR [39m[49m [Schema Update Error] ALTER TABLE documentos ADD INDEX idx_documentos_ci... -> DB bridge respondio con HTTP 502.
-[32m√[39m Vite server hmr 2 files in 0.005ms
-[32m√[39m Vite server hmr 2 files in 0.007ms
-[32m√[39m Vite server hmr 2 files in 0.015ms
-[32m√[39m Vite server hmr 2 files in 0.003ms
-[32m√[39m Vite server hmr 2 files in 0.003ms
-[32m√[39m Vite server hmr 2 files in 0.003ms
+[36mi[39m [32mhmr update [39m[2m/pages/deudores.vue?direct&vue&type=style&index=0&scoped=2381b154&lang.css, /pages/deudores.vue?vue&type=style&index=0&scoped=2381b154&lang.css, /node_modules/tailwindcss/tailwind.css, /assets/css/main.css, /node_modules/tailwindcss/tailwind.css?direct, /assets/css/main.css?direct, /pages/deudores.vue?macro=true, /@id/virtual:nuxt:C%3A%2FUsers%2Fhp%2Fsistema-de-ingresos-2%2F.nuxt%2Froutes.mjs[22m
+[36mi[39m [32mhmr update [39m[2m/node_modules/tailwindcss/tailwind.css, /assets/css/main.css, /pages/deudores.vue?vue&type=style&index=0&scoped=2381b154&lang.css, /pages/deudores.vue?macro=true, /@id/virtual:nuxt:C%3A%2FUsers%2Fhp%2Fsistema-de-ingresos-2%2F.nuxt%2Froutes.mjs[22m
+[32m√[39m Vite server hmr 13 files in 83.192ms
+[32m√[39m Vite server hmr 2 files in 0.009ms
+[90m[[90mnuxt[90m][39m [36mi[39m Compiled [36mtypes/plugins.d.ts[39m in 563.76ms

@@ -1,161 +1,183 @@
 <template>
-  <div class="debt-workspace">
-    <section class="debt-hero" aria-labelledby="debt-title">
-      <div class="hero-copy">
-        <span class="eyebrow">Cobranza escolar</span>
-        <h2 id="debt-title">Lo importante de hoy, sin ruido</h2>
-        <p>
-          Revisa alumnos con saldo vencido, confirma contactos, exporta reportes y ejecuta seguimientos desde un flujo claro.
-        </p>
-        <div class="hero-actions">
-          <button class="btn btn-outline" @click="loadData" :disabled="loading">
-            <LucideRefreshCw :size="16" :class="{ 'animate-spin': loading }" />
-            Actualizar
-          </button>
-          <button class="btn btn-secondary" @click="exportData" :disabled="loading || filteredDeudores.length === 0">
-            <LucideDownload :size="16" />
-            Exportar vista
+  <div class="collections-workspace">
+    <section class="command-panel" aria-labelledby="debt-title">
+      <div class="command-main">
+        <div class="command-topline">
+          <span class="kicker">Cobranza guiada</span>
+          <div class="command-buttons">
+            <button class="quiet-button" @click="loadData" :disabled="loading">
+              <LucideRefreshCw :size="16" :class="{ 'animate-spin': loading }" />
+              Actualizar
+            </button>
+            <button class="quiet-button strong" @click="exportData" :disabled="loading || filteredDeudores.length === 0">
+              <LucideDownload :size="16" />
+              Exportar Excel
+            </button>
+          </div>
+        </div>
+
+        <div class="headline-grid">
+          <div>
+            <h2 id="debt-title">{{ debtorCount }} alumnos con adeudo</h2>
+            <p>{{ currentStageCopy }}</p>
+          </div>
+          <div class="primary-total">
+            <span>Saldo por cobrar</span>
+            <strong>{{ formatMoney(totalDebtBalance) }}</strong>
+          </div>
+        </div>
+
+        <div class="today-action-card">
+          <div class="today-action-icon">
+            <component :is="selectedActionMeta.icon" :size="21" />
+          </div>
+          <div class="today-action-copy">
+            <span>Accion recomendada</span>
+            <strong>{{ selectedActionMeta.massLabel }}</strong>
+            <p>{{ selectedActionCopy }}</p>
+          </div>
+          <button class="primary-action" :disabled="actionableRowsForSelectedAction.length === 0" @click="selectEligibleForAction(selectedMassAction)">
+            <LucideListChecks :size="16" />
+            Seleccionar {{ actionableRowsForSelectedAction.length }}
           </button>
         </div>
       </div>
 
-      <aside class="hero-summary" aria-label="Resumen de cartera">
-        <div class="summary-stage">
-          <div>
-            <span>Día {{ currentDebtDay }} de {{ currentMonthLastDay }}</span>
-            <strong>{{ currentStageTitle }}</strong>
-          </div>
-          <LucideCalendarClock :size="22" />
+      <aside class="metric-stack" aria-label="Resumen de cobranza">
+        <div class="metric-card primary">
+          <span>Necesitan accion</span>
+          <strong>{{ actionableRowsForSelectedAction.length }}</strong>
+          <small>{{ selectedActionMeta.shortLabel }} disponible</small>
         </div>
-        <div class="summary-amount">
-          <span>Cartera vencida</span>
-          <strong>{{ formatMoney(totalCartera) }}</strong>
+        <div class="metric-card">
+          <span>Seleccionados</span>
+          <strong>{{ selectedRows.length }}</strong>
+          <small>{{ eligibleSelectedRows.length }} listos para ejecutar</small>
         </div>
-        <div class="summary-progress" aria-hidden="true">
-          <span :style="{ width: `${stageProgress}%` }"></span>
-        </div>
-        <div class="summary-grid">
-          <div v-for="metric in heroMetrics" :key="metric.label">
-            <component :is="metric.icon" :size="16" />
-            <span>{{ metric.label }}</span>
-            <strong>{{ metric.value }}</strong>
-          </div>
+        <div class="metric-card">
+          <span>Atencion</span>
+          <strong>{{ attentionCount }}</strong>
+          <small>contacto, fecha o conciliacion</small>
         </div>
       </aside>
     </section>
 
-    <section class="journey-band" aria-label="Flujo de cobranza">
-      <header class="journey-heading">
-        <div>
-          <span>Proceso del mes</span>
-          <strong>{{ currentStageTitle }}</strong>
-        </div>
-        <p>{{ currentStageCopy }}</p>
-      </header>
-      <div class="journey-steps">
+    <section class="stage-strip" aria-label="Calendario de cobranza">
+      <div class="stage-summary">
+        <span>Dia {{ currentDebtDay }} de {{ currentMonthLastDay }}</span>
+        <strong>{{ currentStageTitle }}</strong>
+        <div class="stage-progress" aria-hidden="true"><i :style="{ width: `${stageProgress}%` }"></i></div>
+      </div>
+      <div class="stage-steps">
         <article
           v-for="step in flowSteps"
           :key="step.key"
-          class="journey-step"
+          class="stage-step"
           :class="{ active: isStepActive(step), today: isStepToday(step) }"
         >
-          <div class="step-icon">
-            <component :is="step.icon" :size="17" />
-          </div>
-          <div>
-            <span>{{ step.dayLabel }}</span>
-            <strong>{{ step.title }}</strong>
-            <p>{{ step.description }}</p>
-          </div>
+          <span>{{ step.dayLabel }}</span>
+          <strong>{{ step.title }}</strong>
         </article>
       </div>
     </section>
 
-    <section class="collections-layout">
-      <aside class="guidance-column" aria-label="Acciones de cobranza">
-        <section class="guide-panel next-action-panel">
-          <span class="panel-kicker">Siguiente acción</span>
-          <h3>{{ selectedActionMeta.massLabel }}</h3>
-          <p>{{ selectedActionCopy }}</p>
+    <section class="workflow-shell">
+      <aside class="workflow-panel" aria-label="Flujo de cobranza">
+        <section class="workflow-card">
+          <header>
+            <span class="kicker">Elegir accion</span>
+            <strong>{{ selectedActionMeta.title }}</strong>
+          </header>
 
-          <div class="next-stats">
-            <div>
-              <span>Listos</span>
-              <strong>{{ eligibleSelectedRows.length }}</strong>
-            </div>
+          <div class="action-picker" role="group" aria-label="Acciones de cobranza">
+            <button
+              v-for="action in actionCatalog"
+              :key="action.action"
+              class="action-choice"
+              :class="{ active: selectedMassAction === action.action }"
+              @click="selectedMassAction = action.action"
+            >
+              <component :is="action.icon" :size="16" />
+              <span>{{ action.shortLabel }}</span>
+              <strong>{{ actionReadyCount(action.action) }}</strong>
+            </button>
+          </div>
+
+          <button
+            v-if="selectedMassAction === 'whatsapp_contacto'"
+            class="setup-link"
+            @click="openWhatsappSetup"
+          >
+            <LucideMessageCircle :size="16" />
+            Preparar WhatsApp
+          </button>
+        </section>
+
+        <section class="workflow-card">
+          <header>
+            <span class="kicker">Ejecutar seguimiento</span>
+            <strong>{{ eligibleSelectedRows.length }} listos</strong>
+          </header>
+
+          <div class="selection-meter">
             <div>
               <span>Seleccionados</span>
               <strong>{{ selectedRows.length }}</strong>
             </div>
+            <div>
+              <span>No listos</span>
+              <strong>{{ blockedSelectedCount }}</strong>
+            </div>
           </div>
 
-          <button class="primary-wide" :disabled="!actionableRowsForSelectedAction.length" @click="selectEligibleForAction(selectedMassAction)">
-            <LucideListChecks :size="16" />
-            Seleccionar listos
+          <button
+            class="run-button"
+            :disabled="eligibleSelectedRows.length === 0 || Boolean(runningAction)"
+            @click="executeMassAction"
+          >
+            <component :is="selectedActionMeta.icon" :size="16" />
+            {{ runningAction ? 'Procesando' : selectedActionMeta.massLabel }}
           </button>
         </section>
 
-        <WhatsappOnboarding compact class="whatsapp-guide" />
-
-        <section class="guide-panel signal-panel">
-          <div class="panel-title-row">
-            <div>
-              <span class="panel-kicker">Señales</span>
-              <h3>{{ filteredDeudores.length }} casos visibles</h3>
-            </div>
-          </div>
-          <div class="signal-list">
-            <div v-for="metric in riskMetrics" :key="metric.label" :class="['signal-item', metric.tone]">
-              <component :is="metric.icon" :size="16" />
-              <span>{{ metric.label }}</span>
-              <strong>{{ metric.value }}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section class="guide-panel export-panel">
-          <span class="panel-kicker">Reporte</span>
-          <h3>Exportación lista para administración</h3>
-          <p>El archivo respeta búsqueda, filtros y fechas límite vigentes.</p>
-          <button class="secondary-wide" :disabled="loading || filteredDeudores.length === 0" @click="exportData">
+        <section class="workflow-card">
+          <header>
+            <span class="kicker">Reporte</span>
+            <strong>Excel limpio</strong>
+          </header>
+          <p>Incluye saldo, contacto, accion sugerida, historial visible y desglose por concepto.</p>
+          <button class="report-button" :disabled="loading || filteredDeudores.length === 0" @click="exportData">
             <LucideDownload :size="16" />
-            Descargar CSV
+            Exportar vista actual
           </button>
         </section>
       </aside>
 
-      <main class="cases-column">
-        <section class="cases-header">
-          <div>
-            <span class="panel-kicker">Quiénes requieren atención</span>
-            <h3>{{ filteredDeudores.length }} alumnos</h3>
+      <main class="debtor-board">
+        <section class="board-toolbar" aria-label="Busqueda y filtros">
+          <div class="board-title">
+            <span class="kicker">Casos de cobranza</span>
+            <strong>{{ filteredDeudores.length }} en pantalla</strong>
           </div>
-          <div class="visible-total">
-            <span>Saldo visible</span>
-            <strong>{{ formatMoney(filteredTotalCartera) }}</strong>
-          </div>
-        </section>
 
-        <section class="filters-panel" aria-label="Filtros de cartera">
-          <label class="search-box">
+          <label class="search-field">
             <LucideSearch :size="17" />
-            <input v-model="search" type="text" placeholder="Buscar alumno, matrícula, tutor, correo o teléfono">
+            <input v-model="search" type="text" placeholder="Buscar alumno, matricula, tutor, correo o telefono">
           </label>
 
-          <label class="filter-field">
-            <span>Estado</span>
+          <label class="scope-select">
+            <span>Alcance</span>
             <select v-model="estatusFiltro">
-              <option value="deudores">Solo vencidos</option>
+              <option value="deudores">Con adeudo</option>
               <option value="todos">Todos</option>
               <option value="no_deudores">Sin adeudo exigible</option>
             </select>
           </label>
 
-          <div class="segment-control" aria-label="Prioridad">
+          <div class="view-tabs" role="group" aria-label="Vista de casos">
             <button
               v-for="option in segmentOptions"
               :key="option.value"
-              class="segment-button"
               :class="{ active: segmentFilter === option.value }"
               @click="segmentFilter = option.value"
             >
@@ -164,221 +186,165 @@
           </div>
         </section>
 
-        <section class="action-console" aria-label="Acciones masivas">
-          <label class="select-all">
+        <section class="selection-bar" aria-label="Seleccion">
+          <label class="select-visible">
             <input
               type="checkbox"
               :checked="allVisibleSelected"
               :disabled="filteredDeudores.length === 0"
               @change="toggleAllVisible($event.target.checked)"
             >
-            <span>Seleccionar vista</span>
+            <span>Seleccionar pantalla</span>
           </label>
-
-          <div class="action-copy">
-            <strong>{{ selectedActionMeta.massLabel }}</strong>
-            <span>{{ eligibleSelectedRows.length }} de {{ selectedRows.length }} seleccionados pueden ejecutarse ahora.</span>
+          <div>
+            <strong>{{ selectedRows.length }} seleccionados</strong>
+            <span>{{ eligibleSelectedRows.length }} pueden recibir {{ selectedActionMeta.shortLabel.toLowerCase() }}</span>
           </div>
-
-          <div class="mass-action">
-            <select v-model="selectedMassAction">
-              <option v-for="action in actionCatalog" :key="action.action" :value="action.action">
-                {{ action.massLabel }}
-              </option>
-            </select>
-            <button
-              class="btn btn-primary"
-              :disabled="eligibleSelectedRows.length === 0 || Boolean(runningAction)"
-              @click="executeMassAction"
-            >
-              <component :is="selectedActionMeta.icon" :size="16" />
-              {{ runningAction ? 'Procesando' : 'Ejecutar' }}
-            </button>
-          </div>
+          <button class="clear-button" :disabled="selectedRows.length === 0" @click="selectedKeys = []">Limpiar</button>
         </section>
 
-        <section class="quick-actions" aria-label="Atajos de selección">
-          <button
-            v-for="action in actionCatalog"
-            :key="`pick-${action.action}`"
-            :disabled="loading"
-            @click="selectEligibleForAction(action.action)"
-          >
-            <component :is="action.icon" :size="15" />
-            {{ action.pickLabel }}
-          </button>
-        </section>
+        <section class="debtor-list" :class="{ loading }">
+          <div class="list-head" aria-hidden="true">
+            <span>Alumno</span>
+            <span>Saldo</span>
+            <span>Contacto</span>
+            <span>Siguiente paso</span>
+            <span></span>
+          </div>
 
-        <section class="cases-list" :class="{ loading }">
           <div v-if="loading" class="empty-state">
             <span class="liquid-loader"><i></i><i></i><i></i></span>
             <strong>Cargando cartera</strong>
-            <p>Preparando saldos, contactos y desglose por concepto.</p>
+            <p>Preparando saldos, contactos y gestiones registradas.</p>
           </div>
 
           <div v-else-if="!filteredDeudores.length" class="empty-state">
             <LucideCheckCircle :size="34" />
             <strong>No hay alumnos en esta vista</strong>
-            <p>Ajusta búsqueda o filtros para revisar otros casos.</p>
+            <p>Cambia busqueda, alcance o accion para revisar otros casos.</p>
           </div>
 
           <template v-else>
-          <article
-            v-for="d in filteredDeudores"
-            :key="rowKey(d)"
-            class="student-row"
-            :class="{
-              selected: isSelected(d),
-              official: d.deudorOficial,
-              exception: d.fechaLimiteEspecialVigente
-            }"
-          >
-            <div class="row-select">
-              <label :aria-label="`Seleccionar ${d.nombreCompleto}`">
-                <input type="checkbox" :checked="isSelected(d)" @change="toggleOne(d)">
-              </label>
-            </div>
-
-            <div class="student-main">
-              <header class="student-header">
-                <div class="student-avatar">{{ initials(d.nombreCompleto) }}</div>
-                <div class="student-identity">
-                  <div class="name-line">
-                    <strong>{{ d.nombreCompleto }}</strong>
-                    <span>{{ d.matricula }}</span>
-                  </div>
-                  <p>{{ d.nivel }} · {{ d.grado }} {{ d.grupo || '' }} · {{ d.plantel }}</p>
-                </div>
-                <div class="balance-box">
-                  <span>Saldo</span>
-                  <strong>{{ formatMoney(saldoValue(d)) }}</strong>
-                </div>
-              </header>
-
-              <div class="status-line">
-                <span class="status-pill" :class="statusClass(d)">{{ statusLabel(d) }}</span>
-                <span v-if="d.fechaLimiteEspecialVigente" class="info-pill">Fecha especial: {{ formatDate(d.fechaLimitePago) }}</span>
-                <span v-if="d.pagoPendienteConciliacion" class="warning-pill">Pago por conciliar</span>
+            <article
+              v-for="d in orderedFilteredDeudores"
+              :key="rowKey(d)"
+              class="debtor-row"
+              :class="{ selected: isSelected(d), ready: canRunAction(d, selectedMassAction) }"
+            >
+              <div class="row-check">
+                <input type="checkbox" :checked="isSelected(d)" :aria-label="`Seleccionar ${d.nombreCompleto}`" @change="toggleOne(d)">
               </div>
 
-              <div class="contact-strip">
-                <div>
-                  <span>Tutor</span>
-                  <strong>{{ d.padre || 'No registrado' }}</strong>
-                </div>
-                <div>
-                  <span>Correo</span>
-                  <strong>{{ d.correo || 'Sin correo' }}</strong>
-                </div>
-                <div>
-                  <span>Teléfono</span>
-                  <strong>{{ d.telefono || 'Sin teléfono' }}</strong>
-                </div>
-                <div>
-                  <span>Último movimiento</span>
-                  <strong>{{ d.ultimoMovimiento ? formatDate(d.ultimoMovimiento) : 'Sin registro' }}</strong>
-                </div>
-              </div>
-
-              <section v-if="d.desglose?.length" class="breakdown-strip">
-                <div class="breakdown-title">
-                  <span>Desglose vencido</span>
-                  <strong>{{ d.desglose.length }} conceptos</strong>
-                </div>
-                <div class="breakdown-lines">
-                  <div
-                    v-for="item in d.desglose.slice(0, 2)"
-                    :key="`${rowKey(d)}-${item.documento}-${item.mesCargo}`"
-                  >
-                    <span>{{ item.conceptoNombre }} · {{ item.mesLabel || item.mesCargo }}</span>
-                    <strong>{{ formatMoney(item.saldo) }}</strong>
-                  </div>
-                  <button v-if="d.desglose.length > 2" @click="openDetails(d)">
-                    Ver {{ d.desglose.length - 2 }} más
-                  </button>
-                </div>
-              </section>
-            </div>
-
-            <aside class="row-actions">
-              <div class="action-progress" aria-label="Avance de gestiones">
-                <span
-                  v-for="action in actionCatalog"
-                  :key="`${rowKey(d)}-${action.action}`"
-                  :class="{
-                    done: isActionCompleted(d, action.action),
-                    ready: isActionExpected(d, action.action) && !isActionCompleted(d, action.action)
-                  }"
-                  :title="action.massLabel"
-                ></span>
-              </div>
-
-              <button
-                v-if="nextRunnableAction(d)"
-                class="primary-row-action"
-                :disabled="Boolean(runningAction)"
-                @click="runSingleAction(d, nextRunnableAction(d).action)"
-              >
-                <component :is="nextRunnableAction(d).icon" :size="15" />
-                {{ nextRunnableAction(d).shortLabel }}
-              </button>
-              <button v-else class="primary-row-action disabled" disabled>
-                <LucideCheckCircle :size="15" />
-                Sin acción lista
+              <button class="student-cell" @click="openDetails(d)">
+                <span class="student-avatar">{{ initials(d.nombreCompleto) }}</span>
+                <span class="student-copy">
+                  <strong>{{ d.nombreCompleto }}</strong>
+                  <small>{{ d.matricula }} - {{ d.nivel }} - {{ d.grado }} {{ d.grupo || '' }}</small>
+                  <em>{{ d.padre || 'Tutor no registrado' }}</em>
+                </span>
               </button>
 
-              <div class="secondary-row-actions">
-                <button @click="openException(d)">
+              <div class="amount-cell">
+                <strong>{{ formatMoney(saldoValue(d)) }}</strong>
+                <span>{{ d.desglose?.length || 0 }} conceptos</span>
+              </div>
+
+              <div class="contact-cell">
+                <span :class="['contact-pill', d.correo ? 'ok' : 'missing']">
+                  <LucideMail :size="13" />
+                  {{ d.correo ? 'Correo' : 'Sin correo' }}
+                </span>
+                <span :class="['contact-pill', d.telefono ? 'ok' : 'missing']">
+                  <LucidePhone :size="13" />
+                  {{ d.telefono ? 'Telefono' : 'Sin telefono' }}
+                </span>
+              </div>
+
+              <div class="next-cell">
+                <span class="status-pill" :class="readinessClass(d)">{{ readinessLabel(d) }}</span>
+                <small>{{ rowNextCopy(d) }}</small>
+              </div>
+
+              <div class="row-actions">
+                <button
+                  v-if="rowRunnableAction(d)"
+                  class="row-primary"
+                  :disabled="Boolean(runningAction)"
+                  @click="runSingleAction(d, rowRunnableAction(d).action)"
+                >
+                  <component :is="rowRunnableAction(d).icon" :size="15" />
+                  {{ rowRunnableAction(d).shortLabel }}
+                </button>
+                <button v-else class="row-primary muted" disabled>
+                  <LucideCheckCircle :size="15" />
+                  Sin accion
+                </button>
+                <button class="row-secondary" @click="openException(d)">
                   <LucideCalendarClock :size="15" />
                   Fecha
                 </button>
-                <button @click="openDetails(d)">
+                <button class="row-secondary" @click="openDetails(d)">
                   <LucideEye :size="15" />
                   Detalle
                 </button>
               </div>
-            </aside>
-          </article>
+            </article>
           </template>
         </section>
       </main>
     </section>
 
     <Teleport to="body">
-      <div v-if="showExceptionModal" class="modal-overlay" @click.self="closeException">
-        <div class="modal-container">
-          <div class="modal-header">
-            <h2 class="modal-title">
-              <LucideCalendarClock :size="20" />
-              Fecha límite especial
-            </h2>
-            <button class="btn btn-ghost btn-sm" @click="closeException"><LucideX :size="16" /></button>
-          </div>
-          <div class="modal-content">
-            <div class="exception-summary" v-if="exceptionTarget">
+      <div v-if="showExceptionModal" class="dialog-overlay" @click.self="closeException">
+        <div class="dialog">
+          <header class="dialog-header">
+            <div>
+              <span class="kicker">Excepcion</span>
+              <h3>Fecha limite especial</h3>
+            </div>
+            <button class="icon-button" @click="closeException"><LucideX :size="16" /></button>
+          </header>
+          <div class="dialog-body">
+            <div v-if="exceptionTarget" class="exception-summary">
               <strong>{{ exceptionTarget.nombreCompleto }}</strong>
-              <span>{{ exceptionTarget.matricula }} · Periodo {{ exceptionTarget.mes }}/{{ normalizeCicloKey(state.ciclo) }}</span>
+              <span>{{ exceptionTarget.matricula }} - Periodo {{ exceptionTarget.mes }}/{{ normalizeCicloKey(state.ciclo) }}</span>
             </div>
-            <div class="form-group">
-              <label class="form-label">Nueva fecha límite</label>
-              <input v-model="exceptionForm.fecha" type="date" class="input-field" required>
-            </div>
-            <div class="form-group mb-0">
-              <label class="form-label">Nota de excepción</label>
+            <label class="form-row">
+              <span>Nueva fecha limite</span>
+              <input v-model="exceptionForm.fecha" type="date" required>
+            </label>
+            <label class="form-row">
+              <span>Nota</span>
               <textarea
                 v-model="exceptionForm.motivo"
-                class="input-field exception-note"
-                placeholder="Ejemplo: convenio autorizado por Dirección para pago posterior."
+                placeholder="Ejemplo: convenio autorizado para pago posterior."
                 required
               ></textarea>
-            </div>
+            </label>
           </div>
-          <div class="modal-footer">
-            <button class="btn btn-ghost" @click="closeException" :disabled="savingException">Cancelar</button>
-            <button class="btn btn-primary" @click="saveException" :disabled="savingException || !exceptionForm.fecha || !exceptionForm.motivo.trim()">
+          <footer class="dialog-footer">
+            <button class="quiet-button" @click="closeException" :disabled="savingException">Cancelar</button>
+            <button class="primary-action" @click="saveException" :disabled="savingException || !exceptionForm.fecha || !exceptionForm.motivo.trim()">
               <LucideCheckCircle :size="16" />
-              Guardar excepción
+              Guardar
             </button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="showWhatsappSetup" class="dialog-overlay" @click.self="closeWhatsappSetup">
+        <div class="dialog wide">
+          <header class="dialog-header">
+            <div>
+              <span class="kicker">WhatsApp</span>
+              <h3>Preparar seguimiento</h3>
+            </div>
+            <button class="icon-button" @click="closeWhatsappSetup"><LucideX :size="16" /></button>
+          </header>
+          <div class="dialog-body whatsapp-dialog-body">
+            <WhatsappOnboarding show-skip auto-start @ready="handleWhatsappReady" @skip="closeWhatsappSetup" />
           </div>
         </div>
       </div>
@@ -389,42 +355,63 @@
         <aside class="detail-drawer">
           <header class="drawer-header">
             <div>
-              <span>Detalle de adeudo</span>
+              <span class="kicker">Detalle de cobranza</span>
               <h3>{{ detailsTarget.nombreCompleto }}</h3>
-              <p>{{ detailsTarget.matricula }} · {{ detailsTarget.nivel }} · {{ detailsTarget.grado }} {{ detailsTarget.grupo || '' }}</p>
+              <p>{{ detailsTarget.matricula }} - {{ detailsTarget.nivel }} - {{ detailsTarget.grado }} {{ detailsTarget.grupo || '' }} - {{ detailsTarget.plantel }}</p>
             </div>
-            <button class="btn btn-ghost btn-sm" @click="closeDetails"><LucideX :size="16" /></button>
+            <button class="icon-button" @click="closeDetails"><LucideX :size="16" /></button>
           </header>
 
-          <section class="drawer-total">
-            <span>Saldo pendiente</span>
-            <strong>{{ formatMoney(saldoValue(detailsTarget)) }}</strong>
-          </section>
-
-          <section class="drawer-contact">
+          <section class="drawer-summary">
             <div>
-              <span>Tutor</span>
-              <strong>{{ detailsTarget.padre || 'No registrado' }}</strong>
+              <span>Saldo pendiente</span>
+              <strong>{{ formatMoney(saldoValue(detailsTarget)) }}</strong>
             </div>
             <div>
-              <span>Correo</span>
-              <strong>{{ detailsTarget.correo || 'Sin correo' }}</strong>
+              <span>Siguiente paso</span>
+              <strong>{{ rowRunnableAction(detailsTarget)?.shortLabel || 'Sin accion' }}</strong>
             </div>
             <div>
-              <span>Teléfono</span>
-              <strong>{{ detailsTarget.telefono || 'Sin teléfono' }}</strong>
-            </div>
-            <div>
-              <span>Fecha límite</span>
+              <span>Fecha limite</span>
               <strong>{{ formatDate(detailsTarget.fechaLimitePago) }}</strong>
             </div>
           </section>
 
           <section class="drawer-section">
-            <h4>Desglose vencido</h4>
+            <h4>Acciones</h4>
+            <div class="drawer-actions-grid">
+              <button
+                v-for="action in actionCatalog"
+                :key="`drawer-${action.action}`"
+                :class="{ ready: canRunAction(detailsTarget, action.action), done: isActionCompleted(detailsTarget, action.action) }"
+                :disabled="!canRunAction(detailsTarget, action.action) || Boolean(runningAction)"
+                @click="runSingleAction(detailsTarget, action.action)"
+              >
+                <component :is="action.icon" :size="15" />
+                {{ action.shortLabel }}
+              </button>
+              <button class="neutral" @click="openException(detailsTarget)">
+                <LucideCalendarClock :size="15" />
+                Fecha especial
+              </button>
+            </div>
+          </section>
+
+          <section class="drawer-section">
+            <h4>Contacto</h4>
+            <div class="drawer-contact">
+              <div><span>Tutor</span><strong>{{ detailsTarget.padre || 'No registrado' }}</strong></div>
+              <div><span>Correo</span><strong>{{ detailsTarget.correo || 'Sin correo' }}</strong></div>
+              <div><span>Telefono</span><strong>{{ detailsTarget.telefono || 'Sin telefono' }}</strong></div>
+              <div><span>Ultima gestion</span><strong>{{ detailsTarget.ultimoMovimiento ? formatDate(detailsTarget.ultimoMovimiento) : 'Sin registro' }}</strong></div>
+            </div>
+          </section>
+
+          <section class="drawer-section">
+            <h4>Desglose</h4>
             <div v-if="detailsTarget.desglose?.length" class="drawer-list">
               <div v-for="item in detailsTarget.desglose" :key="`${item.documento}-${item.mesCargo}`">
-                <span>{{ item.conceptoNombre }} · {{ item.mesLabel || item.mesCargo }}</span>
+                <span>{{ item.conceptoNombre }} - {{ item.mesLabel || item.mesCargo }}</span>
                 <strong>{{ formatMoney(item.saldo) }}</strong>
               </div>
             </div>
@@ -432,19 +419,19 @@
           </section>
 
           <section class="drawer-section">
-            <h4>Acciones registradas</h4>
-            <div v-if="detailsTarget.accionesRealizadas?.length" class="drawer-list action-history">
+            <h4>Historial</h4>
+            <div v-if="detailsTarget.accionesRealizadas?.length" class="drawer-list">
               <div v-for="evt in detailsTarget.accionesRealizadas" :key="`${evt.accion}-${evt.fecha}`">
                 <span>{{ getActionMeta(evt.accion).massLabel }}</span>
                 <strong>{{ formatDate(evt.fecha) }}</strong>
               </div>
             </div>
-            <p v-else class="drawer-muted">Aún no hay acciones registradas para este periodo.</p>
+            <p v-else class="drawer-muted">Aun no hay acciones registradas para este periodo.</p>
           </section>
 
           <section v-if="detailsTarget.observaciones?.length" class="drawer-section">
             <h4>Observaciones</h4>
-            <div class="drawer-list action-history">
+            <div class="drawer-list">
               <div v-for="obs in detailsTarget.observaciones.slice(0, 4)" :key="`${obs.fecha}-${obs.texto}`">
                 <span>{{ obs.texto }}</span>
                 <strong>{{ formatDate(obs.fecha) }}</strong>
@@ -453,27 +440,9 @@
           </section>
 
           <section v-if="detailsTarget.notaFechaLimiteEspecial" class="drawer-section">
-            <h4>Nota de fecha especial</h4>
+            <h4>Nota de excepcion</h4>
             <p class="drawer-note">{{ detailsTarget.notaFechaLimiteEspecial }}</p>
           </section>
-
-          <footer class="drawer-actions">
-            <button
-              v-for="action in actionCatalog"
-              :key="`drawer-${action.action}`"
-              class="drawer-action"
-              :class="{ ready: canRunAction(detailsTarget, action.action), done: isActionCompleted(detailsTarget, action.action) }"
-              :disabled="!canRunAction(detailsTarget, action.action) || Boolean(runningAction)"
-              @click="runSingleAction(detailsTarget, action.action)"
-            >
-              <component :is="action.icon" :size="15" />
-              {{ action.shortLabel }}
-            </button>
-            <button class="drawer-action neutral" @click="openException(detailsTarget)">
-              <LucideCalendarClock :size="15" />
-              Fecha especial
-            </button>
-          </footer>
         </aside>
       </div>
     </Teleport>
@@ -502,7 +471,7 @@ import {
 } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
-import { exportToCSV } from '~/utils/export'
+import { exportToExcel } from '~/utils/export'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import WhatsappOnboarding from '~/components/WhatsappOnboarding.vue'
 
@@ -521,17 +490,18 @@ const detailsTarget = ref(null)
 const exceptionTarget = ref(null)
 const showExceptionModal = ref(false)
 const savingException = ref(false)
+const showWhatsappSetup = ref(false)
 const exceptionForm = ref({ fecha: '', motivo: '' })
 
 const actionCatalog = [
   {
     action: 'correo_recordatorio',
     day: 13,
-    dayLabel: 'Día 13',
+    dayLabel: 'Dia 13',
     shortLabel: 'Correo',
     pickLabel: 'Correos listos',
     massLabel: 'Enviar recordatorio por correo',
-    title: 'Correo de recordatorio',
+    title: 'Recordatorio por correo',
     description: 'Primer aviso formal con desglose claro.',
     icon: LucideMail,
     requires: 'correo'
@@ -539,34 +509,34 @@ const actionCatalog = [
   {
     action: 'reporte_deudores',
     day: 14,
-    dayLabel: 'Día 14',
+    dayLabel: 'Dia 14',
     shortLabel: 'Corte',
     pickLabel: 'Cortes listos',
     massLabel: 'Registrar corte de deudores',
     title: 'Corte con desglose',
-    description: 'Confirma el saldo vencido por concepto.',
+    description: 'Reporte administrativo del saldo vencido.',
     icon: LucideClipboardList
   },
   {
     action: 'whatsapp_contacto',
     day: 20,
-    dayLabel: 'Día 20',
+    dayLabel: 'Dia 20',
     shortLabel: 'WhatsApp',
     pickLabel: 'WhatsApp listos',
     massLabel: 'Enviar seguimiento por WhatsApp',
     title: 'Seguimiento por WhatsApp',
-    description: 'Mensaje breve para familias con teléfono.',
+    description: 'Mensaje breve para familias con telefono.',
     icon: LucideMessageCircle,
     requires: 'telefono'
   },
   {
     action: 'carta_suspension',
     day: 27,
-    dayLabel: 'Día 27',
+    dayLabel: 'Dia 27',
     shortLabel: 'Carta',
     pickLabel: 'Cartas listas',
-    massLabel: 'Generar carta de suspensión',
-    title: 'Carta de suspensión',
+    massLabel: 'Generar carta de suspension',
+    title: 'Carta de suspension',
     description: 'Documento administrativo para casos avanzados.',
     icon: LucideFileText
   },
@@ -577,8 +547,8 @@ const actionCatalog = [
     shortLabel: 'Llamada',
     pickLabel: 'Llamadas listas',
     massLabel: 'Registrar llamada de cierre',
-    title: 'Llamadas de cierre',
-    description: 'Cierre de mes y seguimiento final.',
+    title: 'Llamada de cierre',
+    description: 'Gestion final antes de cerrar el periodo.',
     icon: LucidePhone,
     requires: 'telefono'
   }
@@ -586,28 +556,19 @@ const actionCatalog = [
 
 const segmentOptions = [
   { value: 'todos', label: 'Todos' },
-  { value: 'accion', label: 'Listos' },
-  { value: 'oficiales', label: 'Oficiales' },
+  { value: 'listos', label: 'Listos para accion' },
+  { value: 'contacto', label: 'Revisar contacto' },
   { value: 'excepciones', label: 'Fecha especial' },
-  { value: 'sin_contacto', label: 'Sin contacto' }
+  { value: 'conciliacion', label: 'Pago por conciliar' }
 ]
 
 const flowSteps = computed(() => [
-  {
-    key: 'periodo-pago',
-    day: 1,
-    dayEnd: 12,
-    dayLabel: '1-12',
-    title: 'Periodo de pago',
-    description: 'Pagos regulares antes del vencimiento.',
-    icon: LucideUsers
-  },
+  { key: 'periodo-pago', day: 1, dayLabel: '1-12', title: 'Pago regular', icon: LucideUsers },
   ...actionCatalog.map(action => ({
     key: action.action,
     day: action.day,
     dayLabel: action.dayLabel,
     title: action.title,
-    description: action.description,
     icon: action.icon
   }))
 ])
@@ -644,30 +605,31 @@ const stageProgress = computed(() => Math.min(100, Math.max(0, Math.round((curre
 const currentStageTitle = computed(() => {
   const day = currentDebtDay.value
   if (day <= 12) return 'Periodo de pago'
-  if (day === 13) return 'Correo de recordatorio'
+  if (day === 13) return 'Recordatorio por correo'
   if (day >= 14 && day <= 19) return 'Corte de deudores'
   if (day >= 20 && day <= 26) return 'Seguimiento por WhatsApp'
-  if (day === 27) return 'Carta de suspensión'
+  if (day === 27) return 'Carta de suspension'
   if (day >= currentMonthLastDay.value) return 'Cierre de mes'
-  return 'Preparación de cierre'
+  return 'Preparacion de cierre'
 })
 
 const currentStageCopy = computed(() => {
   const day = currentDebtDay.value
-  if (day <= 12) return 'El mes actual aún está dentro del periodo regular; solo aparecen saldos que ya vencieron.'
-  if (day === 13) return 'Los recordatorios por correo ya pueden ejecutarse para alumnos con saldo vencido.'
-  if (day >= 14 && day <= 19) return 'El corte muestra alumnos deudores y desglose por concepto adeudado.'
-  if (day >= 20 && day <= 26) return 'El seguimiento por WhatsApp queda disponible para casos con teléfono registrado.'
-  if (day === 27) return 'La carta de suspensión puede generarse para los casos seleccionados.'
-  if (day >= currentMonthLastDay.value) return 'Las llamadas cierran el proceso y dejan trazabilidad del seguimiento.'
-  return 'Las acciones previas siguen disponibles cuando aún no han sido registradas.'
+  if (day <= 12) return 'El periodo regular sigue abierto. La pantalla muestra saldos vencidos reales y evita acciones prematuras.'
+  if (day === 13) return 'Hoy conviene enviar el primer recordatorio a familias con correo registrado.'
+  if (day >= 14 && day <= 19) return 'La prioridad es confirmar el corte y tener un reporte claro por alumno y concepto.'
+  if (day >= 20 && day <= 26) return 'El seguimiento se mueve a WhatsApp para los alumnos con telefono registrado.'
+  if (day === 27) return 'Los casos avanzados ya pueden pasar a carta administrativa.'
+  if (day >= currentMonthLastDay.value) return 'El cierre requiere llamadas registradas y un historial limpio de seguimiento.'
+  return 'Las acciones vencidas siguen disponibles; atiende primero las que ya estan listas.'
 })
 
 const getActionMeta = (action) => actionCatalog.find(item => item.action === action) || {
   action,
-  shortLabel: String(action || 'Acción'),
-  pickLabel: String(action || 'Acción'),
-  massLabel: String(action || 'Acción'),
+  shortLabel: String(action || 'Accion'),
+  pickLabel: String(action || 'Accion'),
+  massLabel: String(action || 'Accion'),
+  title: String(action || 'Accion'),
   icon: LucideShieldCheck
 }
 
@@ -689,21 +651,45 @@ const nextRunnableAction = (d) => {
   return actionCatalog.find(action => canRunAction(d, action.action)) || null
 }
 
+const rowRunnableAction = (d) => {
+  if (canRunAction(d, selectedMassAction.value)) return selectedActionMeta.value
+  return nextRunnableAction(d)
+}
+
+const missingRequirementForAction = (d, action = selectedMassAction.value) => {
+  const meta = getActionMeta(action)
+  if (meta.requires === 'correo' && !d?.correo) return 'correo'
+  if (meta.requires === 'telefono' && !d?.telefono) return 'telefono'
+  return ''
+}
+
+const needsContactAttention = (d) => Boolean(missingRequirementForAction(d)) || !d.correo || !d.telefono
+
 const rowMatchesView = (d, query = normalizeText(search.value), segment = segmentFilter.value) => {
-  const matchesSearch = !query || [d.nombreCompleto, d.matricula, d.padre, d.correo, d.telefono]
+  const matchesSearch = !query || [d.nombreCompleto, d.matricula, d.padre, d.correo, d.telefono, d.plantel]
     .some(value => normalizeText(value).includes(query))
 
   if (!matchesSearch) return false
-  if (segment === 'accion') return Boolean(canRunAction(d, selectedMassAction.value))
-  if (segment === 'oficiales') return Boolean(d.deudorOficial)
+  if (segment === 'listos') return Boolean(canRunAction(d, selectedMassAction.value))
+  if (segment === 'contacto') return needsContactAttention(d)
   if (segment === 'excepciones') return Boolean(d.fechaLimiteEspecialVigente)
-  if (segment === 'sin_contacto') return !d.correo || !d.telefono
+  if (segment === 'conciliacion') return Boolean(d.pagoPendienteConciliacion)
   return true
 }
 
 const filteredDeudores = computed(() => {
   const q = normalizeText(search.value)
   return deudores.value.filter(d => rowMatchesView(d, q, segmentFilter.value))
+})
+
+const orderedFilteredDeudores = computed(() => {
+  return [...filteredDeudores.value].sort((a, b) => {
+    const readyDelta = Number(canRunAction(b, selectedMassAction.value)) - Number(canRunAction(a, selectedMassAction.value))
+    if (readyDelta) return readyDelta
+    const contactDelta = Number(needsContactAttention(b)) - Number(needsContactAttention(a))
+    if (contactDelta) return contactDelta
+    return saldoValue(b) - saldoValue(a) || String(a.nombreCompleto || '').localeCompare(String(b.nombreCompleto || ''), 'es')
+  })
 })
 
 const selectedRows = computed(() => {
@@ -715,40 +701,30 @@ const allVisibleSelected = computed(() => {
   return filteredDeudores.value.length > 0 && filteredDeudores.value.every(d => selectedKeys.value.includes(rowKey(d)))
 })
 
-const totalCartera = computed(() => deudores.value.reduce((sum, d) => sum + saldoValue(d), 0))
-const filteredTotalCartera = computed(() => filteredDeudores.value.reduce((sum, d) => sum + saldoValue(d), 0))
-const officialCount = computed(() => filteredDeudores.value.filter(d => d.deudorOficial).length)
-const exceptionCount = computed(() => filteredDeudores.value.filter(d => d.fechaLimiteEspecialVigente).length)
-const pendingConciliationCount = computed(() => filteredDeudores.value.filter(d => d.pagoPendienteConciliacion).length)
-const noEmailCount = computed(() => filteredDeudores.value.filter(d => !d.correo).length)
-const noPhoneCount = computed(() => filteredDeudores.value.filter(d => !d.telefono).length)
-const noContactCount = computed(() => filteredDeudores.value.filter(d => !d.correo || !d.telefono).length)
-
-const heroMetrics = computed(() => [
-  { label: 'Alumnos', value: deudores.value.length, icon: LucideUsers },
-  { label: 'Visibles', value: filteredDeudores.value.length, icon: LucideEye },
-  { label: 'Oficiales', value: officialCount.value, icon: LucideShieldCheck }
-])
-
-const riskMetrics = computed(() => [
-  { label: 'Con fecha especial', value: exceptionCount.value, icon: LucideCalendarClock, tone: 'tone-blue' },
-  { label: 'Pago por conciliar', value: pendingConciliationCount.value, icon: LucideAlertTriangle, tone: 'tone-amber' },
-  { label: 'Sin correo', value: noEmailCount.value, icon: LucideMail, tone: 'tone-coral' },
-  { label: 'Sin teléfono', value: noPhoneCount.value, icon: LucidePhone, tone: 'tone-coral' }
-])
+const debtorRows = computed(() => deudores.value.filter(d => d.isDeudor))
+const debtorCount = computed(() => debtorRows.value.length)
+const totalDebtBalance = computed(() => debtorRows.value.reduce((sum, d) => sum + saldoValue(d), 0))
+const pendingConciliationCount = computed(() => deudores.value.filter(d => d.pagoPendienteConciliacion).length)
+const exceptionCount = computed(() => deudores.value.filter(d => d.fechaLimiteEspecialVigente).length)
+const contactAttentionCount = computed(() => deudores.value.filter(d => needsContactAttention(d)).length)
+const attentionCount = computed(() => pendingConciliationCount.value + exceptionCount.value + contactAttentionCount.value)
 
 const selectedActionMeta = computed(() => getActionMeta(selectedMassAction.value))
 const actionableRowsForSelectedAction = computed(() => filteredDeudores.value.filter(d => canRunAction(d, selectedMassAction.value)))
 const eligibleSelectedRows = computed(() => selectedRows.value.filter(d => canRunAction(d, selectedMassAction.value)))
+const blockedSelectedCount = computed(() => Math.max(0, selectedRows.value.length - eligibleSelectedRows.value.length))
+
 const selectedActionCopy = computed(() => {
-  if (selectedMassAction.value === 'correo_recordatorio') return 'Elige alumnos con correo y saldo vencido para enviar el primer aviso.'
-  if (selectedMassAction.value === 'reporte_deudores') return 'Registra el corte y descarga el desglose que necesita administración.'
-  if (selectedMassAction.value === 'whatsapp_contacto') return 'Usa WhatsApp solo con casos que ya tienen teléfono y sesión vinculada.'
-  if (selectedMassAction.value === 'carta_suspension') return 'Genera cartas para casos avanzados sin perder el historial del seguimiento.'
-  return 'Registra llamadas para dejar trazabilidad al cierre del periodo.'
+  if (selectedMassAction.value === 'correo_recordatorio') return 'Selecciona alumnos con correo y saldo vencido para enviar el primer aviso.'
+  if (selectedMassAction.value === 'reporte_deudores') return 'Registra el corte y descarga un Excel con el desglose que necesita administracion.'
+  if (selectedMassAction.value === 'whatsapp_contacto') return 'Usa WhatsApp solo con telefono registrado; la vinculacion aparece como paso guiado cuando haga falta.'
+  if (selectedMassAction.value === 'carta_suspension') return 'Genera cartas para casos avanzados sin perder el historial.'
+  return 'Registra llamadas para cerrar el periodo con trazabilidad.'
 })
 
-const hasBlockingOverlay = computed(() => showExceptionModal.value || Boolean(detailsTarget.value))
+const actionReadyCount = (action) => filteredDeudores.value.filter(d => canRunAction(d, action)).length
+
+const hasBlockingOverlay = computed(() => showExceptionModal.value || showWhatsappSetup.value || Boolean(detailsTarget.value))
 
 watch(hasBlockingOverlay, (val) => {
   if (typeof document !== 'undefined') document.body.style.overflow = val ? 'hidden' : ''
@@ -761,8 +737,10 @@ watch(deudores, () => {
   const validKeys = new Set(deudores.value.map(rowKey))
   selectedKeys.value = selectedKeys.value.filter(key => validKeys.has(key))
 
+  const actionToday = deudores.value.find(d => d.accionHoy)?.accionHoy
   const nextAction = deudores.value.find(d => d.proximaAccion)?.proximaAccion
-  if (nextAction) selectedMassAction.value = nextAction
+  if (actionToday) selectedMassAction.value = actionToday
+  else if (nextAction) selectedMassAction.value = nextAction
 })
 
 onMounted(() => {
@@ -813,17 +791,39 @@ const initials = (name) => String(name || 'NA')
   .map(part => part[0]?.toUpperCase())
   .join('') || 'NA'
 
-const statusClass = (d) => {
-  if (d.deudorOficial) return 'status-danger'
-  if (d.fechaLimiteEspecialVigente) return 'status-info'
-  if (d.isDeudor) return 'status-warning'
-  return 'status-success'
+const readinessClass = (d) => {
+  if (!d.isDeudor) return 'muted'
+  if (d.pagoPendienteConciliacion) return 'info'
+  if (d.fechaLimiteEspecialVigente) return 'info'
+  if (canRunAction(d, selectedMassAction.value)) return 'ready'
+  if (isActionCompleted(d, selectedMassAction.value)) return 'done'
+  if (missingRequirementForAction(d)) return 'warning'
+  if (d.deudorOficial) return 'danger'
+  return 'muted'
 }
 
-const statusLabel = (d) => {
-  if (d.deudorOficial) return 'Deudor oficial'
+const readinessLabel = (d) => {
+  if (!d.isDeudor) return 'Sin adeudo exigible'
+  if (d.pagoPendienteConciliacion) return 'Pago por conciliar'
   if (d.fechaLimiteEspecialVigente) return 'Fecha especial'
-  return d.estatusFlujoLabel || (d.isDeudor ? 'Deudor' : 'Sin adeudo')
+  if (canRunAction(d, selectedMassAction.value)) return 'Listo'
+  if (isActionCompleted(d, selectedMassAction.value)) return 'Registrado'
+  const missing = missingRequirementForAction(d)
+  if (missing === 'correo') return 'Falta correo'
+  if (missing === 'telefono') return 'Falta telefono'
+  if (d.deudorOficial) return 'Cierre administrativo'
+  return d.estatusFlujoLabel || 'En seguimiento'
+}
+
+const rowNextCopy = (d) => {
+  const runnable = rowRunnableAction(d)
+  if (runnable) return `${runnable.massLabel}`
+  if (d.pagoPendienteConciliacion) return 'Verifica conciliacion antes de contactar.'
+  if (d.fechaLimiteEspecialVigente) return `Esperar hasta ${formatDate(d.fechaLimitePago)}.`
+  const missing = missingRequirementForAction(d)
+  if (missing) return `Actualiza ${missing} para continuar.`
+  if (!d.isDeudor) return 'No requiere cobranza.'
+  return 'Sin accion disponible por regla de dia.'
 }
 
 const isSelected = (d) => selectedKeys.value.includes(rowKey(d))
@@ -846,6 +846,7 @@ const toggleAllVisible = (checked) => {
 
 const selectEligibleForAction = (action) => {
   selectedMassAction.value = action
+  segmentFilter.value = 'listos'
   selectedKeys.value = filteredDeudores.value
     .filter(d => canRunAction(d, action))
     .map(rowKey)
@@ -880,18 +881,51 @@ const executeManualAction = async (targets, action, options = {}) => {
     const duplicated = Number(response?.duplicated || 0)
     const failed = Number(response?.failed || 0)
     const parts = [`${completed} registrados`]
-    if (duplicated) parts.push(`${duplicated} ya existían`)
+    if (duplicated) parts.push(`${duplicated} ya existian`)
     if (failed) parts.push(`${failed} fallidos`)
     show(parts.join(', ') + '.')
+
+    const whatsappBlocked = action === 'whatsapp_contacto' && failed > 0 && (response?.results || [])
+      .some(item => /whatsapp|cliente|vinculad/i.test(String(item?.message || '')))
+    if (whatsappBlocked) openWhatsappSetup()
 
     if (options.clearSelection) selectedKeys.value = []
     await loadData()
   } catch (e) {
-    show(e?.statusMessage || 'No se pudo ejecutar la acción.', 'danger')
+    show(e?.statusMessage || 'No se pudo ejecutar la accion.', 'danger')
+    if (action === 'whatsapp_contacto' && /whatsapp|cliente|vinculad/i.test(String(e?.statusMessage || e?.message || ''))) {
+      openWhatsappSetup()
+    }
   } finally {
     runningAction.value = ''
   }
 }
+
+const exportColumns = [
+  { key: 'Prioridad', label: 'Prioridad', type: 'text' },
+  { key: 'Accion_Sugerida', label: 'Accion sugerida', type: 'text' },
+  { key: 'Estado_Cobranza', label: 'Estado de cobranza', type: 'text' },
+  { key: 'Alumno', label: 'Alumno', type: 'text' },
+  { key: 'Matricula', label: 'Matricula', type: 'text' },
+  { key: 'Plantel', label: 'Plantel', type: 'text' },
+  { key: 'Nivel', label: 'Nivel', type: 'text' },
+  { key: 'Grado', label: 'Grado', type: 'text' },
+  { key: 'Grupo', label: 'Grupo', type: 'text' },
+  { key: 'Tutor', label: 'Tutor', type: 'text' },
+  { key: 'Correo', label: 'Correo', type: 'text' },
+  { key: 'Telefono', label: 'Telefono', type: 'text' },
+  { key: 'Saldo_Total_MXN', label: 'Saldo total MXN', type: 'currency' },
+  { key: 'Fecha_Limite', label: 'Fecha limite', type: 'date' },
+  { key: 'Fecha_Especial', label: 'Fecha especial vigente', type: 'text' },
+  { key: 'Pago_Por_Conciliar', label: 'Pago por conciliar', type: 'text' },
+  { key: 'Ultima_Gestion', label: 'Ultima gestion', type: 'date' },
+  { key: 'Conceptos_Vencidos', label: 'Conceptos vencidos', type: 'number' },
+  { key: 'Concepto', label: 'Concepto', type: 'text' },
+  { key: 'Periodo', label: 'Periodo', type: 'text' },
+  { key: 'Saldo_Concepto_MXN', label: 'Saldo concepto MXN', type: 'currency' },
+  { key: 'Total_Pagado_MXN', label: 'Total pagado MXN', type: 'currency' },
+  { key: 'Nota', label: 'Nota', type: 'text' }
+]
 
 const exportData = async () => {
   loading.value = true
@@ -906,7 +940,17 @@ const exportData = async () => {
     const q = normalizeText(search.value)
     const rowsForExport = rows.filter(d => rowMatchesView(d, q, segmentFilter.value))
 
-    exportToCSV(`Deudores_${normalizeCicloKey(state.value.ciclo)}.csv`, buildExportRows(rowsForExport))
+    if (!rowsForExport.length) {
+      show('No hay datos para exportar.', 'danger')
+      return
+    }
+
+    exportToExcel(`Reporte_deudores_${normalizeCicloKey(state.value.ciclo)}.xls`, buildExportRows(rowsForExport), {
+      title: 'Reporte de cobranza escolar',
+      subtitle: `${rowsForExport.length} alumnos en la vista - ${selectedActionMeta.value.massLabel} - ciclo ${normalizeCicloKey(state.value.ciclo)}`,
+      sheetName: 'Cobranza',
+      columns: exportColumns
+    })
   } catch (e) {
     show('No se pudo exportar el reporte de deudores.', 'danger')
   } finally {
@@ -915,20 +959,28 @@ const exportData = async () => {
 }
 
 const buildExportRows = (rows) => rows.flatMap((d) => {
-  const nextAction = nextRunnableAction(d)
+  const nextAction = rowRunnableAction(d) || nextRunnableAction(d)
   const base = {
-    Matricula: d.matricula,
-    Nombre: d.nombreCompleto,
-    Grado: `${d.nivel} - ${d.grado} ${d.grupo || ''}`.trim(),
+    Prioridad: readinessLabel(d),
+    Accion_Sugerida: nextAction?.massLabel || '',
+    Estado_Cobranza: d.estatusFlujoLabel || d.estatusFlujo || '',
+    Alumno: d.nombreCompleto || '',
+    Matricula: d.matricula || '',
+    Plantel: d.plantel || '',
+    Nivel: d.nivel || '',
+    Grado: d.grado || '',
+    Grupo: d.grupo || '',
     Tutor: d.padre || 'No registrado',
     Correo: d.correo || 'Sin correo',
-    Telefono: d.telefono || '',
-    Saldo_Pendiente_MXN: saldoValue(d).toFixed(2),
-    Estatus_Flujo: d.estatusFlujoLabel || d.estatusFlujo,
-    Accion_Sugerida: nextAction?.massLabel || '',
+    Telefono: d.telefono || 'Sin telefono',
+    Saldo_Total_MXN: saldoValue(d).toFixed(2),
     Fecha_Limite: d.fechaLimitePago || '',
-    Nota_Excepcion: d.notaFechaLimiteEspecial || '',
-    Deudor_Oficial: d.deudorOficial ? 'Sí' : 'No'
+    Fecha_Especial: d.fechaLimiteEspecialVigente ? 'Si' : 'No',
+    Pago_Por_Conciliar: d.pagoPendienteConciliacion ? 'Si' : 'No',
+    Ultima_Gestion: d.ultimoMovimiento || '',
+    Conceptos_Vencidos: d.desglose?.length || 0,
+    Total_Pagado_MXN: Number(d.totalPagado || 0).toFixed(2),
+    Nota: d.notaFechaLimiteEspecial || ''
   }
 
   if (!d.desglose?.length) return [{ ...base, Concepto: '', Periodo: '', Saldo_Concepto_MXN: '' }]
@@ -942,7 +994,12 @@ const buildExportRows = (rows) => rows.flatMap((d) => {
 })
 
 const exportCorteDeudores = (rows) => {
-  exportToCSV(`Corte_deudores_${normalizeCicloKey(state.value.ciclo)}.csv`, buildExportRows(rows))
+  exportToExcel(`Corte_deudores_${normalizeCicloKey(state.value.ciclo)}.xls`, buildExportRows(rows), {
+    title: 'Corte de deudores',
+    subtitle: `${rows.length} alumnos seleccionados - ciclo ${normalizeCicloKey(state.value.ciclo)}`,
+    sheetName: 'Corte',
+    columns: exportColumns
+  })
 }
 
 const escapeHtml = (value) => String(value || '')
@@ -969,7 +1026,7 @@ const suspensionLetter = (d) => `
   <section class="letter">
     <header>
       <strong>Instituto IECS-IEDIS</strong>
-      <span>Carta de suspensión · ${formatDate(new Date())}</span>
+      <span>Carta de suspension - ${formatDate(new Date())}</span>
     </header>
     <p>Padre, madre o tutor de <strong>${escapeHtml(d.nombreCompleto)}</strong>:</p>
     <p>Por este medio se informa que el alumno presenta saldo pendiente al cierre del proceso de cobranza del periodo ${escapeHtml(String(d.mes))}/${escapeHtml(normalizeCicloKey(state.value.ciclo))}.</p>
@@ -987,7 +1044,7 @@ const suspensionLetter = (d) => `
     </table>
     <p>Saldo total pendiente: <strong>${formatMoney(saldoValue(d))}</strong>.</p>
     <p>Se solicita regularizar el estado de cuenta para evitar medidas administrativas adicionales.</p>
-    <footer>Administración y Cobranza</footer>
+    <footer>Administracion y Cobranza</footer>
   </section>
 `
 
@@ -996,10 +1053,10 @@ const downloadSuspensionLetters = (rows) => {
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Cartas de suspensión</title>
+  <title>Cartas de suspension</title>
   <style>
     body { margin: 0; font-family: Arial, sans-serif; color: #162641; background: #f8fafc; }
-    .letter { width: min(760px, calc(100% - 48px)); margin: 24px auto; padding: 34px; background: #fff; border: 1px solid #dfe6ef; border-radius: 18px; page-break-after: always; }
+    .letter { width: min(760px, calc(100% - 48px)); margin: 24px auto; padding: 34px; background: #fff; border: 1px solid #dfe6ef; border-radius: 8px; page-break-after: always; }
     header { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid #dfe6ef; padding-bottom: 16px; margin-bottom: 24px; }
     header strong { color: #2f7d3f; font-size: 18px; }
     header span { color: #66728a; font-size: 13px; }
@@ -1017,6 +1074,7 @@ const downloadSuspensionLetters = (rows) => {
 }
 
 const openException = (d) => {
+  detailsTarget.value = null
   exceptionTarget.value = d
   exceptionForm.value = {
     fecha: d.fechaLimiteEspecial || d.fechaLimitePago || '',
@@ -1045,11 +1103,11 @@ const saveException = async () => {
         motivo: exceptionForm.value.motivo.trim()
       }
     })
-    show('Fecha límite especial guardada.')
+    show('Fecha limite especial guardada.')
     closeException()
     await loadData()
   } catch (e) {
-    show(e?.statusMessage || 'No se pudo guardar la excepción.', 'danger')
+    show(e?.statusMessage || 'No se pudo guardar la excepcion.', 'danger')
   } finally {
     savingException.value = false
   }
@@ -1062,30 +1120,42 @@ const openDetails = (d) => {
 const closeDetails = () => {
   detailsTarget.value = null
 }
+
+const openWhatsappSetup = () => {
+  showWhatsappSetup.value = true
+}
+
+const closeWhatsappSetup = () => {
+  showWhatsappSetup.value = false
+}
+
+const handleWhatsappReady = () => {
+  show('WhatsApp listo para seguimiento.')
+  closeWhatsappSetup()
+}
 </script>
 
 <style scoped>
 :global(body.deudores-page-active) {
-  --debt-ink: #172338;
-  --debt-soft-ink: #2c3b52;
-  --debt-muted: #667386;
-  --debt-faint: #8a96a8;
+  --debt-ink: #162235;
+  --debt-muted: #627086;
+  --debt-faint: #8792a3;
   --debt-line: #dde6e2;
-  --debt-soft-line: #edf2ef;
+  --debt-soft-line: #eef3ef;
   --debt-paper: #ffffff;
-  --debt-canvas: #f7f9f7;
-  --debt-green: #4f8549;
-  --debt-teal: #247c73;
-  --debt-blue: #2f6fb3;
-  --debt-amber: #a96f16;
-  --debt-coral: #c94a3f;
-  --debt-shadow: 0 16px 38px rgba(31, 46, 41, 0.07);
+  --debt-canvas: #f7faf8;
+  --debt-green: #3f7e36;
+  --debt-teal: #168575;
+  --debt-blue: #3469a6;
+  --debt-amber: #9a6817;
+  --debt-coral: #bd493e;
+  --debt-shadow: 0 16px 38px rgba(22, 34, 53, 0.07);
 }
 
 :global(body.deudores-page-active .income-main) {
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  background: linear-gradient(180deg, #fbfcfb 0%, var(--debt-canvas) 100%);
+  background: linear-gradient(180deg, #ffffff 0%, var(--debt-canvas) 100%);
 }
 
 :global(body.deudores-page-active .income-main::before) {
@@ -1096,7 +1166,7 @@ const closeDetails = () => {
   display: block;
   min-height: auto;
   overflow: visible;
-  padding-top: 20px;
+  padding-top: 18px;
   padding-bottom: 40px;
 }
 
@@ -1105,71 +1175,86 @@ const closeDetails = () => {
   overscroll-behavior: contain;
 }
 
-.debt-workspace {
+.collections-workspace {
   display: grid;
   width: min(100%, 1540px);
   margin: 0 auto;
-  gap: 18px;
-}
-
-.debt-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(330px, 0.55fr);
   gap: 14px;
 }
 
-.hero-copy,
-.hero-summary,
-.journey-band,
-.guide-panel,
-.cases-header,
-.filters-panel,
-.action-console,
-.student-row,
-.empty-state {
+.command-panel,
+.stage-strip,
+.workflow-card,
+.board-toolbar,
+.selection-bar,
+.debtor-list,
+.debtor-row,
+.empty-state,
+.dialog,
+.detail-drawer {
   border: 1px solid var(--debt-line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--debt-shadow);
 }
 
-.hero-copy {
-  position: relative;
+.command-panel {
   display: grid;
-  min-height: 250px;
-  align-content: center;
-  gap: 16px;
-  overflow: hidden;
-  padding: 34px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 330px);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.command-main {
+  display: grid;
+  gap: 20px;
+  min-height: 260px;
+  border: 1px solid var(--debt-line);
+  border-radius: 8px;
   background:
-    linear-gradient(90deg, rgba(79, 133, 73, 0.045) 1px, transparent 1px),
-    linear-gradient(180deg, #ffffff 0%, #f8fbf8 100%);
+    linear-gradient(90deg, rgba(63, 126, 54, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, #ffffff 0%, #f9fbfa 100%);
   background-size: 42px 42px, auto;
+  padding: 28px;
+  box-shadow: var(--debt-shadow);
 }
 
-.hero-copy::after {
-  content: "";
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 3px;
-  background: linear-gradient(90deg, #91bd80, #78b8b0, #9cb8d6, #d7b86a);
+.command-topline,
+.headline-grid,
+.command-buttons,
+.today-action-card,
+.stage-strip,
+.selection-bar,
+.dialog-header,
+.dialog-footer,
+.drawer-header {
+  display: flex;
+  align-items: center;
 }
 
-.eyebrow,
-.panel-kicker,
-.summary-stage span,
-.summary-amount span,
-.summary-grid span,
-.journey-heading span,
-.journey-step span,
-.visible-total span,
-.filter-field span,
-.balance-box span,
-.contact-strip span,
-.breakdown-title span,
-.next-stats span,
-.drawer-header span,
-.drawer-total span,
+.command-topline,
+.headline-grid,
+.stage-strip,
+.selection-bar,
+.dialog-header,
+.dialog-footer,
+.drawer-header {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.kicker,
+.primary-total span,
+.metric-card span,
+.metric-card small,
+.stage-summary span,
+.stage-step span,
+.board-title span,
+.scope-select span,
+.selection-bar span,
+.today-action-copy span,
+.selection-meter span,
+.drawer-summary span,
 .drawer-contact span {
   color: var(--debt-muted);
   font-size: 0.68rem;
@@ -1178,298 +1263,335 @@ const closeDetails = () => {
   text-transform: uppercase;
 }
 
-.eyebrow {
+.kicker {
   color: var(--debt-green);
 }
 
-.hero-copy h2,
-.hero-copy p,
-.guide-panel h3,
-.cases-header h3,
-.journey-heading strong {
-  margin: 0;
-}
-
-.hero-copy h2 {
-  max-width: 780px;
-  color: var(--debt-ink);
-  font-size: 2.5rem;
-  font-weight: 900;
-  line-height: 1.04;
-  letter-spacing: 0;
-}
-
-.hero-copy p {
-  max-width: 780px;
-  color: var(--debt-muted);
-  font-size: 0.98rem;
-  font-weight: 620;
-  line-height: 1.62;
-}
-
-.hero-actions {
-  display: flex;
+.command-buttons {
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.btn,
-.primary-wide,
-.secondary-wide,
-.primary-row-action,
-.secondary-row-actions button,
-.drawer-action,
-.quick-actions button {
+.quiet-button,
+.primary-action,
+.run-button,
+.report-button,
+.setup-link,
+.clear-button,
+.action-choice,
+.row-primary,
+.row-secondary,
+.icon-button,
+.drawer-actions-grid button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  min-height: 38px;
   border-radius: 7px;
+  border: 1px solid var(--debt-line);
+  background: #fff;
+  color: var(--debt-ink);
+  font-size: 0.78rem;
   font-weight: 820;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
-.hero-copy .btn {
-  min-height: 39px;
-  padding: 0 14px;
+.quiet-button,
+.primary-action,
+.run-button,
+.report-button,
+.setup-link,
+.clear-button,
+.row-primary,
+.row-secondary,
+.icon-button,
+.drawer-actions-grid button {
+  padding: 0 12px;
 }
 
-.btn-outline,
-.btn-secondary {
-  border: 1px solid #d9e4dc;
-  background: #fff;
-  color: #304536;
+.quiet-button.strong,
+.primary-action,
+.run-button {
+  border-color: #bfd9c4;
+  background: #edf7ee;
+  color: #285f33;
 }
 
-.btn-secondary {
-  background: #f2f8f2;
+.report-button {
+  width: 100%;
 }
 
-.btn-primary,
-.primary-wide,
-.primary-row-action {
-  border: 1px solid #bfd7c2;
-  background: #edf6ee;
-  color: #315b39;
+.quiet-button:hover:not(:disabled),
+.primary-action:hover:not(:disabled),
+.run-button:hover:not(:disabled),
+.report-button:hover:not(:disabled),
+.setup-link:hover:not(:disabled),
+.row-primary:hover:not(:disabled),
+.row-secondary:hover:not(:disabled),
+.drawer-actions-grid button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(22, 34, 53, 0.08);
 }
 
-.btn:disabled,
-.primary-wide:disabled,
-.secondary-wide:disabled,
-.primary-row-action:disabled,
-.drawer-action:disabled,
-.quick-actions button:disabled {
+button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 
-.hero-summary {
-  display: grid;
-  gap: 15px;
-  padding: 18px;
+.headline-grid {
+  align-items: end;
 }
 
-.summary-stage {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  border-bottom: 1px solid var(--debt-soft-line);
-  padding-bottom: 14px;
-}
-
-.summary-stage strong {
-  display: block;
-  margin-top: 3px;
+.headline-grid h2 {
+  max-width: 760px;
+  margin: 0;
   color: var(--debt-ink);
-  font-size: 1rem;
-}
-
-.summary-stage svg,
-.summary-grid svg {
-  color: var(--debt-teal);
-}
-
-.summary-amount strong {
-  display: block;
-  margin-top: 3px;
-  color: var(--debt-coral);
-  font-size: 2.08rem;
-  line-height: 1.05;
+  font-size: clamp(2rem, 4vw, 3.6rem);
+  font-weight: 920;
+  line-height: 1.02;
   letter-spacing: 0;
 }
 
-.summary-progress {
-  height: 7px;
-  overflow: hidden;
-  border: 1px solid #dfe8e2;
-  border-radius: 999px;
-  background: #f1f4f2;
+.headline-grid p,
+.workflow-card p,
+.empty-state p,
+.drawer-header p {
+  margin: 8px 0 0;
+  color: var(--debt-muted);
+  font-size: 0.9rem;
+  font-weight: 620;
+  line-height: 1.55;
 }
 
-.summary-progress span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #6f9d65, #6ea9a2, #c3a45b);
+.primary-total {
+  min-width: 210px;
+  border-left: 1px solid var(--debt-soft-line);
+  padding-left: 18px;
+  text-align: right;
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 1px solid var(--debt-soft-line);
-}
-
-.summary-grid div {
-  display: grid;
-  gap: 5px;
-  border-right: 1px solid var(--debt-soft-line);
-  padding: 12px 10px 0 0;
-}
-
-.summary-grid div:last-child {
-  border-right: 0;
-  padding-left: 10px;
-}
-
-.summary-grid strong {
-  color: var(--debt-ink);
-  font-size: 1.22rem;
-}
-
-.journey-band {
-  display: grid;
-  gap: 15px;
-  padding: 16px;
-  box-shadow: 0 10px 28px rgba(31, 46, 41, 0.045);
-}
-
-.journey-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 22px;
-  border-bottom: 1px solid var(--debt-soft-line);
-  padding-bottom: 13px;
-}
-
-.journey-heading strong {
+.primary-total strong {
   display: block;
   margin-top: 3px;
-  color: var(--debt-ink);
+  color: var(--debt-coral);
+  font-size: 1.85rem;
+  line-height: 1;
 }
 
-.journey-heading p {
-  max-width: 680px;
-  margin: 0;
-  color: var(--debt-muted);
-  font-size: 0.84rem;
-  font-weight: 620;
-  line-height: 1.5;
-}
-
-.journey-steps {
+.today-action-card {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid #dce8df;
+  border-radius: 8px;
+  background: #fbfdfb;
+  padding: 14px;
 }
 
-.journey-step {
+.today-action-icon,
+.student-avatar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  min-width: 0;
-  border-left: 1px solid var(--debt-soft-line);
-  padding: 4px 13px 2px;
-}
-
-.journey-step:first-child {
-  border-left: 0;
-  padding-left: 0;
-}
-
-.journey-step.today {
-  box-shadow: inset 0 2px 0 #86b477;
-}
-
-.journey-step.active .step-icon {
-  background: #edf6ee;
+  place-items: center;
+  border-radius: 8px;
+  background: #eaf6ee;
   color: var(--debt-green);
 }
 
-.step-icon {
+.today-action-icon {
+  width: 46px;
+  height: 46px;
+}
+
+.today-action-copy strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--debt-ink);
+  font-size: 1.02rem;
+  line-height: 1.2;
+}
+
+.today-action-copy p {
+  margin: 3px 0 0;
+  color: var(--debt-muted);
+  font-size: 0.8rem;
+  font-weight: 640;
+}
+
+.metric-stack {
   display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  place-items: center;
+  gap: 10px;
+}
+
+.metric-card {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--debt-line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 16px;
+}
+
+.metric-card.primary {
+  background: #fbf7ef;
+}
+
+.metric-card strong {
+  color: var(--debt-ink);
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.metric-card.primary strong {
+  color: var(--debt-amber);
+}
+
+.metric-card small {
+  text-transform: none;
+  font-size: 0.72rem;
+}
+
+.stage-strip {
+  padding: 13px 15px;
+  box-shadow: 0 10px 28px rgba(22, 34, 53, 0.045);
+}
+
+.stage-summary {
+  min-width: 210px;
+}
+
+.stage-summary strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--debt-ink);
+  font-size: 0.95rem;
+}
+
+.stage-progress {
+  height: 6px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2ef;
+}
+
+.stage-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5b9850, #249486, #c79a4a);
+}
+
+.stage-steps {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.stage-step {
+  min-width: 0;
   border: 1px solid var(--debt-soft-line);
   border-radius: 8px;
-  background: #f8faf8;
-  color: var(--debt-teal);
+  background: #fbfcfb;
+  padding: 9px 10px;
 }
 
-.journey-step strong {
+.stage-step.active {
+  border-color: #d0e5d4;
+  background: #f3faf3;
+}
+
+.stage-step.today {
+  box-shadow: inset 0 3px 0 var(--debt-green);
+}
+
+.stage-step strong {
   display: block;
-  overflow-wrap: anywhere;
+  overflow: hidden;
   color: var(--debt-ink);
-  font-size: 0.81rem;
-  line-height: 1.25;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.journey-step p {
-  margin: 4px 0 0;
-  color: var(--debt-muted);
-  font-size: 0.72rem;
-  font-weight: 620;
-  line-height: 1.35;
-}
-
-.collections-layout {
+.workflow-shell {
   display: grid;
-  grid-template-columns: minmax(300px, 350px) minmax(0, 1fr);
+  grid-template-columns: minmax(270px, 318px) minmax(0, 1fr);
+  gap: 14px;
   align-items: start;
-  gap: 16px;
 }
 
-.guidance-column {
+.workflow-panel {
   position: sticky;
   top: 82px;
   display: grid;
-  max-height: calc(100vh - 104px);
+  max-height: calc(100vh - 106px);
   gap: 12px;
   overflow-y: auto;
   padding-right: 3px;
   overscroll-behavior: contain;
 }
 
-.guide-panel {
+.workflow-card {
   display: grid;
   gap: 13px;
   padding: 15px;
   box-shadow: none;
 }
 
-.guide-panel h3 {
+.workflow-card header {
+  display: grid;
+  gap: 3px;
+}
+
+.workflow-card header strong {
   color: var(--debt-ink);
-  font-size: 0.98rem;
-  line-height: 1.25;
+  font-size: 1rem;
 }
 
-.guide-panel p {
-  margin: 0;
-  color: var(--debt-muted);
-  font-size: 0.78rem;
-  font-weight: 620;
-  line-height: 1.55;
+.action-picker {
+  display: grid;
+  gap: 7px;
 }
 
-.next-stats {
+.action-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  width: 100%;
+  justify-content: stretch;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.action-choice span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-choice.active {
+  border-color: #c9dfcd;
+  background: #f2f8f3;
+  color: #285f33;
+}
+
+.setup-link {
+  justify-self: start;
+  border-color: #c7dfe0;
+  background: #f2f9f8;
+  color: var(--debt-teal);
+}
+
+.selection-meter {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.next-stats div {
+.selection-meter div {
   display: grid;
   gap: 3px;
   border: 1px solid var(--debt-soft-line);
@@ -1478,308 +1600,364 @@ const closeDetails = () => {
   padding: 10px;
 }
 
-.next-stats strong {
+.selection-meter strong {
   color: var(--debt-ink);
-  font-size: 1.25rem;
+  font-size: 1.3rem;
   line-height: 1;
 }
 
-.primary-wide,
-.secondary-wide {
-  min-height: 38px;
+.run-button {
   width: 100%;
-  border-style: solid;
-  padding: 0 12px;
-  font-size: 0.78rem;
 }
 
-.secondary-wide {
-  border: 1px solid var(--debt-line);
-  background: #fff;
-  color: var(--debt-soft-ink);
-}
-
-.whatsapp-guide {
-  border: 1px solid var(--debt-line);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: none;
-}
-
-.whatsapp-guide :deep(.wa-icon),
-.whatsapp-guide :deep(.wa-guide),
-.whatsapp-guide :deep(.wa-qr),
-.whatsapp-guide :deep(.wa-message),
-.whatsapp-guide :deep(.btn) {
-  border-radius: 8px;
-}
-
-.whatsapp-guide :deep(.wa-title h3) {
-  color: var(--debt-ink);
-  font-size: 0.92rem;
-}
-
-.whatsapp-guide :deep(.wa-guide) {
-  border-color: #d7eadc;
-  background: #f5fbf6;
-}
-
-.whatsapp-guide :deep(.btn-primary) {
-  border-color: #bfd7c2;
-  background: #edf6ee;
-  color: #315b39;
-  box-shadow: none;
-}
-
-.panel-title-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.signal-list {
-  display: grid;
-  gap: 7px;
-}
-
-.signal-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 9px;
-  border: 1px solid var(--debt-soft-line);
-  border-radius: 8px;
-  background: #fbfdfb;
-  padding: 9px 10px;
-}
-
-.signal-item span {
-  min-width: 0;
-  color: var(--debt-muted);
-  font-size: 0.72rem;
-  font-weight: 760;
-}
-
-.signal-item strong {
-  color: var(--debt-ink);
-  font-size: 1rem;
-}
-
-.tone-blue svg,
-.tone-blue strong {
-  color: var(--debt-blue);
-}
-
-.tone-amber svg,
-.tone-amber strong {
-  color: var(--debt-amber);
-}
-
-.tone-coral svg,
-.tone-coral strong {
-  color: var(--debt-coral);
-}
-
-.cases-column {
+.debtor-board {
   display: grid;
   min-width: 0;
-  gap: 12px;
-}
-
-.cases-header {
-  display: flex;
-  min-height: 62px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 14px;
-}
-
-.cases-header h3 {
-  color: var(--debt-ink);
-  font-size: 1.28rem;
-  letter-spacing: 0;
-}
-
-.visible-total {
-  text-align: right;
-}
-
-.visible-total strong {
-  display: block;
-  color: var(--debt-coral);
-  font-size: 1.05rem;
-}
-
-.filters-panel {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(150px, 180px);
   gap: 10px;
-  padding: 12px;
 }
 
-.search-box,
-.filter-field select,
-.mass-action select {
-  min-height: 40px;
+.board-toolbar {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(260px, 1fr) minmax(140px, 176px);
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  box-shadow: none;
+}
+
+.board-title {
+  display: grid;
+  gap: 2px;
+}
+
+.board-title strong {
+  color: var(--debt-ink);
+  font-size: 1.15rem;
+}
+
+.search-field,
+.scope-select select {
+  min-height: 42px;
   border: 1px solid var(--debt-line);
-  border-radius: 7px;
+  border-radius: 8px;
   background: #fbfcfb;
 }
 
-.search-box {
+.search-field {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 0 11px;
+  padding: 0 12px;
 }
 
-.search-box svg {
+.search-field svg {
   color: var(--debt-muted);
 }
 
-.search-box input,
-.filter-field select,
-.mass-action select {
-  min-width: 0;
+.search-field input,
+.scope-select select,
+.form-row input,
+.form-row textarea {
   width: 100%;
+  min-width: 0;
   border: 0;
   background: transparent;
   color: var(--debt-ink);
-  font-size: 0.82rem;
-  font-weight: 740;
+  font-size: 0.84rem;
+  font-weight: 720;
   outline: none;
 }
 
-.filter-field {
+.scope-select {
   display: grid;
   gap: 4px;
 }
 
-.filter-field select {
+.scope-select select {
   padding: 0 10px;
 }
 
-.segment-control {
+.view-tabs {
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   min-height: 40px;
   border: 1px solid var(--debt-line);
-  border-radius: 7px;
+  border-radius: 8px;
   background: #f3f6f4;
   padding: 3px;
 }
 
-.segment-button {
+.view-tabs button {
   min-width: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--debt-muted);
   font-size: 0.72rem;
-  font-weight: 830;
-}
-
-.segment-button.active {
-  background: #fff;
-  color: var(--debt-ink);
-  box-shadow: 0 4px 12px rgba(18, 32, 51, 0.06);
-}
-
-.action-console {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(330px, auto);
-  align-items: center;
-  gap: 13px;
-  padding: 12px;
-}
-
-.select-all {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--debt-soft-ink);
-  font-size: 0.78rem;
   font-weight: 850;
 }
 
-.select-all input,
-.row-select input {
+.view-tabs button.active {
+  background: #fff;
+  color: var(--debt-ink);
+  box-shadow: 0 5px 14px rgba(22, 34, 53, 0.06);
+}
+
+.selection-bar {
+  min-height: 58px;
+  padding: 10px 12px;
+  box-shadow: none;
+}
+
+.select-visible {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--debt-ink);
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.selection-bar div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.selection-bar strong {
+  color: var(--debt-ink);
+  font-size: 0.9rem;
+}
+
+.clear-button {
+  min-height: 34px;
+}
+
+.debtor-list {
+  display: grid;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.list-head,
+.debtor-row {
+  display: grid;
+  grid-template-columns: 34px minmax(230px, 1.45fr) minmax(130px, 0.55fr) minmax(165px, 0.7fr) minmax(190px, 0.85fr) minmax(205px, 0.75fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.list-head {
+  border-bottom: 1px solid var(--debt-soft-line);
+  background: #f8faf8;
+  padding: 10px 14px;
+  color: var(--debt-muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.list-head span:first-child {
+  grid-column: 2;
+}
+
+.debtor-row {
+  border: 0;
+  border-bottom: 1px solid var(--debt-soft-line);
+  border-radius: 0;
+  padding: 12px 14px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.debtor-row:last-child {
+  border-bottom: 0;
+}
+
+.debtor-row.selected {
+  background: #f4faf5;
+}
+
+.debtor-row.ready {
+  box-shadow: inset 3px 0 0 #6ba85b;
+}
+
+.row-check {
+  display: grid;
+  place-items: center;
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
   accent-color: var(--debt-green);
 }
 
-.action-copy {
+.student-cell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+
+.student-avatar {
+  width: 42px;
+  height: 42px;
+  color: #285f33;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.student-copy {
   display: grid;
   min-width: 0;
   gap: 2px;
 }
 
-.action-copy strong {
+.student-copy strong {
+  min-width: 0;
   overflow: hidden;
   color: var(--debt-ink);
-  font-size: 0.84rem;
+  font-size: 0.92rem;
+  font-weight: 850;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.action-copy span {
+.student-copy small,
+.student-copy em,
+.amount-cell span,
+.next-cell small {
+  min-width: 0;
+  overflow: hidden;
   color: var(--debt-muted);
   font-size: 0.74rem;
+  font-style: normal;
   font-weight: 650;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.mass-action {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+.amount-cell {
+  display: grid;
+  gap: 3px;
 }
 
-.mass-action select {
-  width: 250px;
-  padding: 0 10px;
+.amount-cell strong {
+  color: var(--debt-coral);
+  font-size: 1rem;
 }
 
-.mass-action .btn {
-  min-height: 40px;
-  padding: 0 13px;
-}
-
-.quick-actions {
+.contact-cell {
   display: flex;
   flex-wrap: wrap;
+  gap: 5px;
+}
+
+.contact-pill,
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 0.66rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.contact-pill.ok {
+  background: #eef7ef;
+  color: #2e6f35;
+}
+
+.contact-pill.missing {
+  background: #fff4e2;
+  color: var(--debt-amber);
+}
+
+.next-cell {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.status-pill.ready {
+  background: #eaf7eb;
+  color: #2e6f35;
+}
+
+.status-pill.done {
+  background: #e9f0f8;
+  color: var(--debt-blue);
+}
+
+.status-pill.info {
+  background: #eef8f7;
+  color: var(--debt-teal);
+}
+
+.status-pill.warning {
+  background: #fff4e2;
+  color: var(--debt-amber);
+}
+
+.status-pill.danger {
+  background: #fdecea;
+  color: var(--debt-coral);
+}
+
+.status-pill.muted {
+  background: #f1f3f4;
+  color: var(--debt-muted);
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 
-.quick-actions button {
+.row-primary,
+.row-secondary {
   min-height: 32px;
-  border: 1px solid var(--debt-line);
-  background: #fff;
-  color: var(--debt-soft-ink);
   padding: 0 10px;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
 }
 
-.quick-actions button:hover:not(:disabled) {
-  border-color: rgba(79, 133, 73, 0.36);
-  background: #f3faf3;
-  color: var(--debt-green);
-  transform: translateY(-1px);
+.row-primary {
+  border-color: #bfd9c4;
+  background: #edf7ee;
+  color: #285f33;
 }
 
-.cases-list {
-  display: grid;
-  gap: 9px;
+.row-primary.muted,
+.row-secondary {
+  border-color: var(--debt-soft-line);
+  background: #fff;
+  color: var(--debt-muted);
 }
 
 .empty-state {
   display: grid;
-  min-height: 340px;
   place-items: center;
-  align-content: center;
-  gap: 10px;
-  padding: 24px;
+  gap: 8px;
+  min-height: 260px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 32px;
   text-align: center;
 }
 
@@ -1788,421 +1966,82 @@ const closeDetails = () => {
   font-size: 1rem;
 }
 
-.empty-state p {
-  max-width: 390px;
-  margin: 0;
-  color: var(--debt-muted);
-  font-size: 0.84rem;
-  line-height: 1.5;
-}
-
 .empty-state svg {
   color: var(--debt-green);
 }
 
-.liquid-loader {
-  display: inline-flex;
-  gap: 5px;
-}
-
-.liquid-loader i {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--debt-green);
-  animation: pulse-dot 860ms ease-in-out infinite;
-}
-
-.liquid-loader i:nth-child(2) {
-  animation-delay: 120ms;
-}
-
-.liquid-loader i:nth-child(3) {
-  animation-delay: 240ms;
-}
-
-.student-row {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(170px, 190px);
-  gap: 14px;
-  overflow: hidden;
-  padding: 14px;
-  box-shadow: none;
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-}
-
-.student-row::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--debt-line);
-}
-
-.student-row:hover {
-  border-color: rgba(47, 111, 179, 0.32);
-  box-shadow: var(--debt-shadow);
-  transform: translateY(-1px);
-}
-
-.student-row.selected {
-  border-color: rgba(79, 133, 73, 0.48);
-  background: #fbfefb;
-}
-
-.student-row.selected::before {
-  background: var(--debt-green);
-}
-
-.student-row.official::before {
-  background: var(--debt-coral);
-}
-
-.student-row.exception::before {
-  background: var(--debt-blue);
-}
-
-.row-select {
-  padding-top: 11px;
-}
-
-.row-select label {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-}
-
-.student-main {
-  display: grid;
-  min-width: 0;
-  gap: 10px;
-}
-
-.student-header {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-}
-
-.student-avatar {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid #dbe7dc;
-  border-radius: 8px;
-  background: #eef7ee;
-  color: var(--debt-green);
-  font-size: 0.74rem;
-  font-weight: 900;
-}
-
-.student-identity {
-  min-width: 0;
-}
-
-.name-line {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
-}
-
-.name-line strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--debt-ink);
-  font-size: 0.98rem;
-  line-height: 1.25;
-}
-
-.name-line span {
-  flex: 0 0 auto;
-  border: 1px solid #dbe7f3;
-  border-radius: 5px;
-  background: #f7fbff;
-  color: var(--debt-blue);
-  padding: 2px 6px;
-  font-size: 0.62rem;
-  font-weight: 850;
-}
-
-.student-identity p {
-  margin: 3px 0 0;
-  color: var(--debt-muted);
-  font-size: 0.74rem;
-  font-weight: 680;
-}
-
-.balance-box {
-  min-width: 120px;
-  text-align: right;
-}
-
-.balance-box strong {
-  display: block;
-  color: var(--debt-coral);
-  font-size: 1.06rem;
-  line-height: 1.1;
-}
-
-.status-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.status-pill,
-.info-pill,
-.warning-pill {
-  display: inline-flex;
-  min-height: 24px;
-  align-items: center;
-  border-radius: 5px;
-  padding: 0 8px;
-  font-size: 0.66rem;
-  font-weight: 850;
-}
-
-.status-success {
-  background: #ebf7ed;
-  color: var(--debt-green);
-}
-
-.status-warning {
-  background: #fff6df;
-  color: var(--debt-amber);
-}
-
-.status-danger {
-  background: #fff0ed;
-  color: var(--debt-coral);
-}
-
-.status-info,
-.info-pill {
-  background: #edf6ff;
-  color: var(--debt-blue);
-}
-
-.warning-pill {
-  background: #fff6df;
-  color: var(--debt-amber);
-}
-
-.contact-strip {
-  display: grid;
-  grid-template-columns: 1.1fr 1.2fr 0.9fr 0.9fr;
-  gap: 0;
-  border-top: 1px solid var(--debt-soft-line);
-  border-bottom: 1px solid var(--debt-soft-line);
-}
-
-.contact-strip div {
-  min-width: 0;
-  border-right: 1px solid var(--debt-soft-line);
-  padding: 9px 12px 8px 0;
-}
-
-.contact-strip div + div {
-  padding-left: 12px;
-}
-
-.contact-strip div:last-child {
-  border-right: 0;
-}
-
-.contact-strip strong {
-  display: block;
-  overflow: hidden;
-  color: var(--debt-soft-ink);
-  font-size: 0.75rem;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.breakdown-strip {
-  display: grid;
-  gap: 7px;
-  border: 1px solid var(--debt-soft-line);
-  border-radius: 8px;
-  background: #fbfdfb;
-  padding: 10px;
-}
-
-.breakdown-title {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.breakdown-title strong {
-  color: var(--debt-blue);
-  font-size: 0.74rem;
-}
-
-.breakdown-lines {
-  display: grid;
-  gap: 5px;
-}
-
-.breakdown-lines div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--debt-soft-ink);
-  font-size: 0.74rem;
-  font-weight: 680;
-}
-
-.breakdown-lines span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.breakdown-lines strong {
-  flex: 0 0 auto;
-  color: var(--debt-coral);
-}
-
-.breakdown-lines button {
-  width: max-content;
-  border: 0;
-  background: transparent;
-  color: var(--debt-blue);
-  font-size: 0.72rem;
-  font-weight: 850;
-  padding: 0;
-}
-
-.row-actions {
-  display: grid;
-  align-content: start;
-  gap: 9px;
-}
-
-.action-progress {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 4px;
-}
-
-.action-progress span {
-  height: 6px;
-  border-radius: 999px;
-  background: #e8eee9;
-}
-
-.action-progress span.ready {
-  background: #d7e8d1;
-}
-
-.action-progress span.done {
-  background: var(--debt-green);
-}
-
-.primary-row-action {
-  min-height: 36px;
-  width: 100%;
-  padding: 0 10px;
-  font-size: 0.74rem;
-}
-
-.primary-row-action.disabled {
-  border-color: var(--debt-line);
-  background: #f7f9f8;
-  color: var(--debt-muted);
-}
-
-.secondary-row-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.secondary-row-actions button {
-  min-height: 32px;
-  border: 1px solid var(--debt-line);
-  background: #fff;
-  color: var(--debt-soft-ink);
-  font-size: 0.69rem;
-}
-
-.modal-overlay,
+.dialog-overlay,
 .drawer-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 80;
   display: flex;
-  background: rgba(18, 32, 51, 0.38);
+  background: rgba(22, 34, 53, 0.34);
+  backdrop-filter: blur(6px);
 }
 
-.modal-overlay {
+.dialog-overlay {
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 18px;
 }
 
-.modal-container {
-  width: min(520px, 100%);
+.dialog {
+  width: min(100%, 560px);
+  max-height: min(90vh, calc(100dvh - 36px));
   overflow: hidden;
-  border: 1px solid var(--debt-line);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 24px 64px rgba(18, 32, 51, 0.2);
 }
 
-.modal-header,
-.modal-content,
-.modal-footer {
-  padding: 16px;
+.dialog.wide {
+  width: min(100%, 780px);
 }
 
-.modal-header,
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.modal-header {
+.dialog-header {
   border-bottom: 1px solid var(--debt-soft-line);
+  padding: 16px 18px;
 }
 
-.modal-footer {
-  border-top: 1px solid var(--debt-soft-line);
-}
-
-.modal-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
+.dialog-header h3,
+.drawer-header h3 {
+  margin: 2px 0 0;
   color: var(--debt-ink);
-  font-size: 1rem;
+  font-size: 1.16rem;
 }
 
-.modal-content {
+.dialog-body {
   display: grid;
   gap: 14px;
+  max-height: calc(90vh - 132px);
+  overflow-y: auto;
+  padding: 18px;
 }
 
-.exception-summary,
-.drawer-muted,
-.drawer-note {
-  display: grid;
-  gap: 3px;
+.whatsapp-dialog-body {
+  background: #f9fbfa;
+}
+
+.whatsapp-dialog-body :deep(.whatsapp-onboarding) {
   border-radius: 8px;
-  background: #f7f9f8;
+  box-shadow: none;
+}
+
+.dialog-footer {
+  border-top: 1px solid var(--debt-soft-line);
+  padding: 14px 18px;
+}
+
+.icon-button {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.exception-summary {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--debt-soft-line);
+  border-radius: 8px;
+  background: #fbfdfb;
   padding: 12px;
 }
 
@@ -2210,87 +2049,121 @@ const closeDetails = () => {
   color: var(--debt-ink);
 }
 
-.exception-summary span,
-.drawer-muted,
-.drawer-note {
+.exception-summary span {
   color: var(--debt-muted);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+  font-weight: 650;
 }
 
-.form-group {
+.form-row {
   display: grid;
   gap: 6px;
 }
 
-.form-label {
-  color: var(--debt-soft-ink);
-  font-size: 0.76rem;
+.form-row span {
+  color: var(--debt-muted);
+  font-size: 0.72rem;
   font-weight: 850;
+  text-transform: uppercase;
 }
 
-.input-field {
-  width: 100%;
+.form-row input,
+.form-row textarea {
   border: 1px solid var(--debt-line);
   border-radius: 8px;
-  background: #fbfcfb;
-  color: var(--debt-ink);
-  padding: 10px 11px;
-  font: inherit;
-  outline: none;
+  background: #fff;
+  padding: 10px 12px;
 }
 
-.exception-note {
+.form-row textarea {
   min-height: 110px;
   resize: vertical;
 }
 
+.drawer-overlay {
+  justify-content: flex-end;
+}
+
 .detail-drawer {
   display: grid;
-  width: min(590px, 100%);
-  height: 100%;
-  margin-left: auto;
+  width: min(560px, 100%);
+  max-height: 100dvh;
   overflow-y: auto;
-  align-content: start;
-  gap: 13px;
-  border-left: 1px solid var(--debt-line);
-  background: #fff;
-  padding: 18px;
-  box-shadow: -18px 0 44px rgba(18, 32, 51, 0.18);
+  border-radius: 8px 0 0 8px;
+  box-shadow: -18px 0 38px rgba(22, 34, 53, 0.12);
 }
 
 .drawer-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  align-items: flex-start;
   border-bottom: 1px solid var(--debt-soft-line);
-  padding-bottom: 14px;
+  padding: 20px;
 }
 
-.drawer-header h3 {
-  margin: 3px 0;
-  color: var(--debt-ink);
-  font-size: 1.25rem;
-  line-height: 1.2;
+.drawer-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 20px;
 }
 
-.drawer-header p {
-  margin: 0;
-  color: var(--debt-muted);
-  font-size: 0.82rem;
-}
-
-.drawer-total {
+.drawer-summary div {
   display: grid;
   gap: 3px;
-  border: 1px solid #f1d7d2;
+  border: 1px solid var(--debt-soft-line);
   border-radius: 8px;
-  background: #fff6f4;
-  padding: 14px;
+  background: #fbfdfb;
+  padding: 10px;
 }
 
-.drawer-total strong {
-  color: var(--debt-coral);
-  font-size: 1.7rem;
+.drawer-summary strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--debt-ink);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-section {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--debt-soft-line);
+  padding: 16px 20px;
+}
+
+.drawer-section h4 {
+  margin: 0;
+  color: var(--debt-ink);
+  font-size: 0.92rem;
+}
+
+.drawer-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.drawer-actions-grid button {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 8px;
+  font-size: 0.72rem;
+}
+
+.drawer-actions-grid button.ready {
+  border-color: #bfd9c4;
+  background: #edf7ee;
+  color: #285f33;
+}
+
+.drawer-actions-grid button.done {
+  border-color: #d8e5f4;
+  background: #eef5fc;
+  color: var(--debt-blue);
+}
+
+.drawer-actions-grid button.neutral {
+  color: var(--debt-muted);
 }
 
 .drawer-contact {
@@ -2299,9 +2172,9 @@ const closeDetails = () => {
   gap: 8px;
 }
 
-.drawer-contact div,
-.drawer-list div {
-  min-width: 0;
+.drawer-contact div {
+  display: grid;
+  gap: 3px;
   border: 1px solid var(--debt-soft-line);
   border-radius: 8px;
   background: #fbfdfb;
@@ -2309,169 +2182,95 @@ const closeDetails = () => {
 }
 
 .drawer-contact strong {
-  display: block;
+  min-width: 0;
   overflow-wrap: anywhere;
-  color: var(--debt-soft-ink);
-  font-size: 0.82rem;
-}
-
-.drawer-section {
-  display: grid;
-  gap: 8px;
-}
-
-.drawer-section h4 {
-  margin: 0;
   color: var(--debt-ink);
-  font-size: 0.88rem;
+  font-size: 0.82rem;
 }
 
 .drawer-list {
   display: grid;
-  gap: 6px;
+  gap: 7px;
 }
 
 .drawer-list div {
   display: flex;
   justify-content: space-between;
   gap: 14px;
+  border: 1px solid var(--debt-soft-line);
+  border-radius: 8px;
+  background: #fbfdfb;
+  padding: 10px;
 }
 
 .drawer-list span {
   min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--debt-soft-ink);
-  font-size: 0.8rem;
-  font-weight: 700;
+  color: var(--debt-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
 }
 
 .drawer-list strong {
-  flex: 0 0 auto;
-  color: var(--debt-coral);
+  color: var(--debt-ink);
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
-.drawer-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  border-top: 1px solid var(--debt-soft-line);
-  padding-top: 13px;
-}
-
-.drawer-action {
-  min-height: 32px;
-  border: 1px solid var(--debt-line);
-  background: #fff;
+.drawer-muted,
+.drawer-note {
+  margin: 0;
   color: var(--debt-muted);
-  padding: 0 10px;
-  font-size: 0.7rem;
-}
-
-.drawer-action.ready {
-  border-color: rgba(79, 133, 73, 0.34);
-  background: #f4faf3;
-  color: var(--debt-green);
-}
-
-.drawer-action.done {
-  border-color: rgba(79, 133, 73, 0.22);
-  background: #eaf5e9;
-  color: var(--debt-green);
-}
-
-.drawer-action.neutral {
-  color: var(--debt-soft-ink);
-}
-
-.btn-sm {
-  min-height: 32px;
-  padding: 0 10px;
-}
-
-.btn-ghost {
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--debt-muted);
-}
-
-@keyframes pulse-dot {
-  0%, 100% {
-    transform: translateY(0);
-    opacity: 0.45;
-  }
-  50% {
-    transform: translateY(-4px);
-    opacity: 1;
-  }
-}
-
-@media (max-width: 1320px) {
-  .journey-steps {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    row-gap: 12px;
-  }
-
-  .journey-step:nth-child(4) {
-    border-left: 0;
-    padding-left: 0;
-  }
-
-  .action-console {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .mass-action {
-    grid-column: 1 / -1;
-  }
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.55;
 }
 
 @media (max-width: 1180px) {
-  .collections-layout {
+  .command-panel,
+  .workflow-shell {
     grid-template-columns: 1fr;
   }
 
-  .guidance-column {
+  .metric-stack {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workflow-panel {
     position: static;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     max-height: none;
-    overflow: visible;
-    padding-right: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .whatsapp-guide,
-  .signal-panel {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 980px) {
-  .debt-hero {
-    grid-template-columns: 1fr;
+  .list-head {
+    display: none;
   }
 
-  .student-row {
-    grid-template-columns: auto minmax(0, 1fr);
+  .debtor-row {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: start;
   }
 
+  .student-cell {
+    grid-column: 2 / 3;
+  }
+
+  .amount-cell {
+    grid-column: 3 / 4;
+    text-align: right;
+  }
+
+  .contact-cell,
+  .next-cell,
   .row-actions {
     grid-column: 2 / -1;
   }
 
-  .contact-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .contact-strip div:nth-child(2) {
-    border-right: 0;
-  }
-
-  .contact-strip div:nth-child(n + 3) {
-    border-top: 1px solid var(--debt-soft-line);
+  .row-actions {
+    justify-content: flex-start;
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 860px) {
   :global(body.deudores-page-active .income-shell) {
     display: block;
     height: auto;
@@ -2535,123 +2334,125 @@ const closeDetails = () => {
     padding: 10px 14px;
   }
 
+  :global(body.deudores-page-active .app-header h1) {
+    font-size: 1.45rem;
+  }
+
+  :global(body.deudores-page-active .header-actions) {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   :global(body.deudores-page-active .income-content) {
     padding-left: 14px;
     padding-right: 14px;
   }
 
-  .hero-copy {
-    min-height: auto;
-    padding: 24px;
+  .command-main {
+    padding: 20px;
   }
 
-  .hero-copy h2 {
-    font-size: 2rem;
+  .headline-grid,
+  .today-action-card,
+  .stage-strip,
+  .selection-bar {
+    align-items: stretch;
+    flex-direction: column;
   }
 
-  .summary-grid,
-  .journey-steps,
-  .guidance-column,
-  .filters-panel,
-  .segment-control,
-  .contact-strip,
+  .today-action-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .today-action-card .primary-action {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .primary-total {
+    border-left: 0;
+    border-top: 1px solid var(--debt-soft-line);
+    padding-top: 12px;
+    padding-left: 0;
+    text-align: left;
+  }
+
+  .metric-stack,
+  .workflow-panel,
+  .board-toolbar,
+  .drawer-summary,
   .drawer-contact {
     grid-template-columns: 1fr;
   }
 
-  .summary-grid div,
-  .summary-grid div:last-child {
-    border-right: 0;
-    border-bottom: 1px solid var(--debt-soft-line);
-    padding: 11px 0;
-  }
-
-  .summary-grid div:last-child {
-    border-bottom: 0;
-  }
-
-  .journey-heading,
-  .cases-header,
-  .action-console {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .journey-step,
-  .journey-step:nth-child(4) {
-    border-left: 0;
-    border-top: 1px solid var(--debt-soft-line);
-    padding: 12px 0 0;
-  }
-
-  .journey-step:first-child {
-    border-top: 0;
-  }
-
-  .action-console {
-    grid-template-columns: 1fr;
-  }
-
-  .mass-action {
-    justify-content: stretch;
-  }
-
-  .mass-action select,
-  .mass-action .btn {
+  .stage-steps,
+  .view-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
 
-  .student-header {
-    grid-template-columns: auto minmax(0, 1fr);
+  .board-toolbar {
+    align-items: stretch;
   }
 
-  .balance-box {
-    grid-column: 1 / -1;
-    min-width: 0;
+  .debtor-row {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+
+  .amount-cell,
+  .contact-cell,
+  .next-cell,
+  .row-actions {
+    grid-column: 2 / -1;
     text-align: left;
   }
 
-  .contact-strip div,
-  .contact-strip div + div {
-    border-right: 0;
-    border-top: 1px solid var(--debt-soft-line);
-    padding: 9px 0;
-  }
-
-  .contact-strip div:first-child {
-    border-top: 0;
-  }
-
   .row-actions {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 520px) {
-  .hero-actions,
-  .mass-action,
-  .drawer-actions {
-    flex-direction: column;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .hero-actions .btn,
-  .mass-action .btn,
-  .drawer-action {
+  .row-primary,
+  .row-secondary {
     width: 100%;
   }
 
-  .student-row {
+  .drawer-actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .collections-workspace {
+    gap: 10px;
+  }
+
+  .command-buttons,
+  .row-actions,
+  .drawer-actions-grid {
+    display: grid;
     grid-template-columns: 1fr;
   }
 
-  .row-select {
-    padding-top: 0;
+  .headline-grid h2 {
+    font-size: 2rem;
   }
 
-  .row-select label {
-    width: auto;
-    justify-content: flex-start;
+  .stage-steps,
+  .view-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .student-copy strong,
+  .student-copy small,
+  .student-copy em,
+  .next-cell small {
+    white-space: normal;
+  }
+
+  .detail-drawer {
+    border-radius: 0;
   }
 }
 </style>
