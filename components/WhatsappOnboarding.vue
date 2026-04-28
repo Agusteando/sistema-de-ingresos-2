@@ -4,25 +4,40 @@
       <div class="wa-title">
         <div class="wa-icon"><LucideMessageCircle :size="18" /></div>
         <div>
-          <h3>WhatsApp Cobranza</h3>
-          <p>{{ activeClient ? activeClient.display_name || activeClient.client_id : 'Preparación de cuenta' }}</p>
+          <h3>{{ headerTitle }}</h3>
+          <p>{{ headerSubtitle }}</p>
         </div>
       </div>
       <span class="badge" :class="statusBadgeClass">{{ statusLabel }}</span>
     </div>
 
-    <div v-if="autoStart && !isReady" class="wa-guide">
-      <strong>Preparación automática</strong>
-      <span>El sistema prepara la instancia y muestra el QR cuando esté disponible. El envío a familias siempre requiere una acción manual.</span>
+    <div v-if="(autoStart || compact) && !isReady" class="wa-guide">
+      <strong>{{ guideTitle }}</strong>
+      <span>{{ guideCopy }}</span>
     </div>
+
+    <ol v-if="compact" class="wa-steps">
+      <li :class="{ active: !activeClient, done: activeClient }">
+        <span>1</span>
+        <strong>Preparar QR</strong>
+      </li>
+      <li :class="{ active: activeClient && !isReady, done: isReady }">
+        <span>2</span>
+        <strong>Escanear</strong>
+      </li>
+      <li :class="{ active: isReady }">
+        <span>3</span>
+        <strong>Enviar seguimientos</strong>
+      </li>
+    </ol>
 
     <div v-if="!activeClient" class="wa-grid">
       <div class="wa-field">
-        <label class="form-label">Nombre visible</label>
+        <label class="form-label">Nombre del remitente</label>
         <input v-model="displayName" class="input-field" placeholder="Cobranza IECS IEDIS">
       </div>
       <button class="btn btn-primary wa-action" :disabled="loading || !displayName.trim()" @click="createInstance">
-        <LucidePlus :size="16" /> Crear instancia
+        <LucidePlus :size="16" /> {{ compact ? 'Preparar QR' : 'Crear instancia' }}
       </button>
     </div>
 
@@ -39,13 +54,13 @@
 
       <div class="wa-actions">
         <button class="btn btn-secondary" :disabled="qrLoading" @click="showQr(false)">
-          <LucideQrCode :size="16" /> Mostrar QR
+          <LucideQrCode :size="16" /> {{ compact ? 'Escanear QR' : 'Mostrar QR' }}
         </button>
         <button class="btn btn-outline" :disabled="qrLoading" @click="showQr(true)">
           <LucideRefreshCw :size="16" :class="{ 'animate-spin': qrLoading }" /> Nuevo QR
         </button>
         <button class="btn btn-outline" :disabled="statusLoading" @click="checkStatus">
-          <LucideWifi :size="16" /> Revisar sesión
+          <LucideWifi :size="16" /> {{ compact ? 'Validar' : 'Revisar sesión' }}
         </button>
       </div>
 
@@ -120,6 +135,18 @@ const lastMessage = ref('')
 const lastMessageType = ref('success')
 
 const activeClient = computed(() => clients.value[0] || null)
+const headerTitle = computed(() => props.compact ? 'WhatsApp para seguimiento' : 'WhatsApp Cobranza')
+const headerSubtitle = computed(() => {
+  if (activeClient.value) return activeClient.value.display_name || activeClient.value.client_id
+  return props.compact ? 'Opcional, bajo tu control' : 'Preparación de cuenta'
+})
+const guideTitle = computed(() => props.compact ? 'Canal de seguimiento' : 'Preparación automática')
+const guideCopy = computed(() => {
+  if (props.compact) {
+    return 'Prepara la sesión, escanea el QR y usa WhatsApp solo para los alumnos que ya estén listos para seguimiento.'
+  }
+  return 'El sistema prepara la instancia y muestra el QR cuando esté disponible. El envío a familias siempre requiere una acción manual.'
+})
 
 const normalizedStatus = computed(() => String(sessionStatus.value || activeClient.value?.status || 'pending').toLowerCase())
 const isReady = computed(() => normalizedStatus.value === 'ready')
@@ -136,6 +163,7 @@ const statusBadgeClass = computed(() => {
 })
 const qrStatusLabel = computed(() => {
   if (isReady.value) return 'Sesión lista'
+  if (props.compact && qrVisible.value) return 'Escanea el QR con WhatsApp'
   if (qrStatus.value) return qrStatus.value
   return 'QR disponible'
 })
@@ -215,7 +243,10 @@ const createInstance = async () => {
       status: instance.status || 'pending'
     }]
     sessionStatus.value = instance.status || 'pending'
-    setMessage('Instancia creada.')
+    setMessage(props.compact ? 'QR preparado para vincular WhatsApp.' : 'Instancia creada.')
+    if (props.compact && clients.value[0]?.client_id) {
+      await showQr(false)
+    }
     return clients.value[0]
   } catch (error) {
     setMessage(error?.statusMessage || 'No se pudo crear la instancia.', 'danger')
@@ -400,6 +431,65 @@ onMounted(async () => {
   line-height: 1.45;
 }
 
+.wa-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wa-steps li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e2ebe4;
+  border-radius: 10px;
+  background: #fbfdfb;
+  padding: 8px;
+  color: #66728a;
+}
+
+.wa-steps li span {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eef3ef;
+  color: #66728a;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.wa-steps li strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-steps li.active {
+  border-color: #cfe5d2;
+  background: #f4faf3;
+  color: #315b39;
+}
+
+.wa-steps li.active span,
+.wa-steps li.done span {
+  background: #dff0df;
+  color: #315b39;
+}
+
+.wa-steps li.done {
+  color: #315b39;
+}
+
 .wa-grid,
 .wa-config {
   gap: 12px;
@@ -530,6 +620,10 @@ onMounted(async () => {
   .wa-qr-wrap {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .wa-steps {
+    grid-template-columns: 1fr;
   }
 
   .wa-qr,
