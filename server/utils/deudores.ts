@@ -32,28 +32,67 @@ const END_OF_MONTH_ACTION = { action: 'llamada_telefonica', label: 'Llamada de c
 
 const isEventual = (doc: any) => String(doc?.eventual || '') === '1'
 
-const getDuePeriods = (doc: any, currentMonth: number) => {
+const getCycleStartYear = (ciclo: string, fallbackYear: number) => {
+  const parsed = Number.parseInt(String(ciclo || '').match(/\d{4}/)?.[0] || '', 10)
+  return Number.isFinite(parsed) ? parsed : fallbackYear
+}
+
+const getSchoolMonthForCycle = ({
+  year,
+  month,
+  cycleStartYear
+}: {
+  year: number,
+  month: number,
+  cycleStartYear: number
+}) => {
+  if (year < cycleStartYear || (year === cycleStartYear && month < 9)) return 0
+  if (year === cycleStartYear && month >= 9) return month - 8
+  if (year === cycleStartYear + 1 && month <= 8) return month + 4
+  return 12
+}
+
+const getSchoolPeriodDeadline = (cycleStartYear: number, schoolMonth: number) => {
+  const normalized = Math.min(12, Math.max(1, schoolMonth))
+  const calendarYear = normalized <= 4 ? cycleStartYear : cycleStartYear + 1
+  const calendarMonth = normalized <= 4 ? normalized + 8 : normalized - 4
+  return `${calendarYear}-${padDatePart(calendarMonth)}-12`
+}
+
+const isPastPaymentDeadline = (deadline: string, currentDateKey: string) => {
+  return Boolean(deadline) && deadline < currentDateKey
+}
+
+const getDuePeriods = (doc: any, currentSchoolMonth: number, currentDateKey: string, cycleStartYear: number) => {
+  if (currentSchoolMonth < 1) return []
+
   if (isEventual(doc)) {
+    const fechaLimitePago = getSchoolPeriodDeadline(cycleStartYear, currentSchoolMonth)
+    if (!isPastPaymentDeadline(fechaLimitePago, currentDateKey)) return []
+
     return [{
       mesCargo: 'ev',
-      mesCobranza: currentMonth,
+      mesCobranza: currentSchoolMonth,
       mesLabel: 'Cargo único',
+      fechaLimitePago,
       paymentKeys: ['ev', '1']
     }]
   }
 
   const plazos = parsePlazos(doc.plazo, doc.meses)
-  const dueUntil = Math.min(plazos, currentMonth)
+  const dueUntil = Math.min(plazos, currentSchoolMonth)
 
   return Array.from({ length: dueUntil }, (_, index) => {
     const mes = index + 1
+    const fechaLimitePago = getSchoolPeriodDeadline(cycleStartYear, mes)
     return {
       mesCargo: String(mes),
-      mesCobranza: currentMonth,
+      mesCobranza: currentSchoolMonth,
       mesLabel: spanishMonths[index] || `Mensualidad ${mes}`,
+      fechaLimitePago,
       paymentKeys: [String(mes)]
     }
-  })
+  }).filter(period => isPastPaymentDeadline(period.fechaLimitePago, currentDateKey))
 }
 
 const padDatePart = (value: number) => String(value).padStart(2, '0')
@@ -287,9 +326,18 @@ export const getDeudoresGlobal = async ({
   const docIds = documentos.map(doc => Number(doc.documento))
   const matriculas = [...new Set(documentos.map(doc => String(doc.matricula)))]
   const cobranzaDate = getCobranzaDateParts()
-  const { month: currentMonth, day, lastDay, currentDateKey, standardPaymentLimit } = cobranzaDate
+  const cycleStartYear = getCycleStartYear(ciclo, cobranzaDate.year)
+  const currentSchoolMonth = getSchoolMonthForCycle({
+    year: cobranzaDate.year,
+    month: cobranzaDate.month,
+    cycleStartYear
+  })
+  const { day, lastDay, currentDateKey, standardPaymentLimit: calendarPaymentLimit } = cobranzaDate
+  const standardPaymentLimit = currentSchoolMonth > 0
+    ? getSchoolPeriodDeadline(cycleStartYear, currentSchoolMonth)
+    : calendarPaymentLimit
   const flow = stageByDay(day, lastDay)
-  const paymentMeses = ['ev', ...Array.from({ length: Math.max(1, currentMonth) }, (_, index) => String(index + 1))]
+  const paymentMeses = ['ev', ...Array.from({ length: Math.max(0, currentSchoolMonth) }, (_, index) => String(index + 1))]
 
   const [periodRows, pagosRows, excepciones, observaciones, eventos] = await Promise.all([
     query<any[]>(`
@@ -369,7 +417,7 @@ export const getDeudoresGlobal = async ({
 
   documentos.forEach((doc) => {
     const beca = Number.parseFloat(doc.beca || 0)
-    const periods = getDuePeriods(doc, currentMonth)
+    const periods = getDuePeriods(doc, currentSchoolMonth, currentDateKey, cycleStartYear)
 
     for (const periodo of periods) {
       const mesCargoNumber = periodo.mesCargo === 'ev' ? 1 : Number(periodo.mesCargo)
@@ -423,9 +471,13 @@ export const getDeudoresGlobal = async ({
         pagoPendienteConciliacion: false,
         fechaLimiteEspecialVigente: false,
         excepcion: null,
-        fechaLimitePago: standardPaymentLimit,
+        fechaLimitePago: periodo.fechaLimitePago || standardPaymentLimit,
         accionesRealizadas: [],
         observaciones: obsByMatricula.get(String(doc.matricula)) || []
+      }
+
+      if (!existing.fechaLimiteEspecialVigente && periodo.fechaLimitePago && periodo.fechaLimitePago > normalizeDateKey(existing.fechaLimitePago)) {
+        existing.fechaLimitePago = periodo.fechaLimitePago
       }
 
       existing.saldoPendiente += saldo
@@ -480,11 +532,14 @@ export const getDeudoresGlobal = async ({
     const noEsDeudorPorBeca = row.todoCubiertoPorBeca100
     const noEsDeudorPorConciliacion = !noEsDeudorPorSaldo && row.pagoPendienteConciliacion
     const noEsDeudorPorExcepcion = !noEsDeudorPorSaldo && !noEsDeudorPorConciliacion && row.fechaLimiteEspecialVigente
-    const isDeudor = !(noEsDeudorPorSaldo || noEsDeudorPorConciliacion || noEsDeudorPorExcepcion) && day >= 13
+    const isDeudor = !(noEsDeudorPorSaldo || noEsDeudorPorConciliacion || noEsDeudorPorExcepcion)
     const completedActions = new Set((row.accionesRealizadas || []).map((evt: any) => String(evt.accion)))
     const accionesEsperadas = isDeudor ? flow.accionesEsperadas : []
     const accionesPendientes = accionesEsperadas.filter((item: any) => !completedActions.has(item.action))
     const desgloseVisible = includeDesglose ? (row.desglose || []).filter(shouldExposeBreakdownItem) : []
+    const estatusFlujoLabel = isDeudor && flow.stage === 'periodo_pago'
+      ? 'Adeudo vencido'
+      : (isDeudor ? flow.stageLabel : 'Sin adeudo exigible')
 
     return {
       ...row,
@@ -498,14 +553,14 @@ export const getDeudoresGlobal = async ({
       desglose: desgloseVisible,
       desgloseCorte: flow.stage === 'corte_deudores' || day >= 14 ? desgloseVisible : [],
       estatusFlujo: isDeudor ? flow.stage : 'sin_adeudo',
-      estatusFlujoLabel: isDeudor ? flow.stageLabel : 'Sin adeudo exigible',
+      estatusFlujoLabel,
       accionHoy: isDeudor ? flow.actionToday : null,
       deudorOficial: isDeudor ? flow.deudorOficial : false,
       isDeudor,
       corteDeudores: isDeudor && day >= 14,
       cierreProceso: isDeudor && flow.isMonthClose,
       diaCobranza: day,
-      mesCobranza: currentMonth,
+      mesCobranza: currentSchoolMonth,
       ultimoDiaMes: lastDay,
       fechaCobranza: currentDateKey,
       fechaLimitePago: row.fechaLimitePago,

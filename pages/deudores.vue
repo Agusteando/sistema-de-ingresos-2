@@ -1,13 +1,12 @@
 <template>
-  <div class="debt-command">
+  <div class="debt-workspace">
     <section class="debt-hero" aria-labelledby="debt-title">
       <div class="hero-copy">
-        <span class="eyebrow">Cobranza mensual</span>
-        <h2 id="debt-title">Deudores</h2>
+        <span class="eyebrow">Cobranza escolar</span>
+        <h2 id="debt-title">Lo importante de hoy, sin ruido</h2>
         <p>
-          Seguimiento visual de saldos pendientes, corte del día 14, excepciones autorizadas y gestiones manuales por alumno.
+          Revisa alumnos con saldo vencido, confirma contactos, exporta reportes y ejecuta seguimientos desde un flujo claro.
         </p>
-
         <div class="hero-actions">
           <button class="btn btn-outline" @click="loadData" :disabled="loading">
             <LucideRefreshCw :size="16" :class="{ 'animate-spin': loading }" />
@@ -15,59 +14,55 @@
           </button>
           <button class="btn btn-secondary" @click="exportData" :disabled="loading || filteredDeudores.length === 0">
             <LucideDownload :size="16" />
-            Exportar
+            Exportar vista
           </button>
         </div>
       </div>
 
-      <div class="hero-snapshot" aria-label="Resumen de cobranza">
-        <div class="snapshot-stage">
+      <aside class="hero-summary" aria-label="Resumen de cartera">
+        <div class="summary-stage">
           <div>
             <span>Día {{ currentDebtDay }} de {{ currentMonthLastDay }}</span>
             <strong>{{ currentStageTitle }}</strong>
           </div>
           <LucideCalendarClock :size="22" />
         </div>
-
-        <div class="snapshot-amount">
-          <span>Cartera pendiente</span>
+        <div class="summary-amount">
+          <span>Cartera vencida</span>
           <strong>{{ formatMoney(totalCartera) }}</strong>
         </div>
-
-        <div class="snapshot-progress" aria-hidden="true">
+        <div class="summary-progress" aria-hidden="true">
           <span :style="{ width: `${stageProgress}%` }"></span>
         </div>
-
-        <div class="snapshot-grid">
-          <div v-for="metric in heroMetrics" :key="metric.label" class="snapshot-metric">
+        <div class="summary-grid">
+          <div v-for="metric in heroMetrics" :key="metric.label">
             <component :is="metric.icon" :size="16" />
             <span>{{ metric.label }}</span>
             <strong>{{ metric.value }}</strong>
           </div>
         </div>
-      </div>
+      </aside>
     </section>
 
-    <section class="flow-strip" aria-label="Calendario de cobranza">
-      <div class="flow-heading">
+    <section class="journey-band" aria-label="Flujo de cobranza">
+      <header class="journey-heading">
         <div>
-          <span>Calendario operativo</span>
+          <span>Proceso del mes</span>
           <strong>{{ currentStageTitle }}</strong>
         </div>
         <p>{{ currentStageCopy }}</p>
-      </div>
-
-      <div class="flow-track">
+      </header>
+      <div class="journey-steps">
         <article
           v-for="step in flowSteps"
           :key="step.key"
-          class="flow-card"
-          :class="{ 'flow-card-active': isStepActive(step), 'flow-card-today': isStepToday(step) }"
+          class="journey-step"
+          :class="{ active: isStepActive(step), today: isStepToday(step) }"
         >
-          <div class="flow-marker">
-            <component :is="step.icon" :size="18" />
+          <div class="step-icon">
+            <component :is="step.icon" :size="17" />
           </div>
-          <div class="flow-body">
+          <div>
             <span>{{ step.dayLabel }}</span>
             <strong>{{ step.title }}</strong>
             <p>{{ step.description }}</p>
@@ -76,36 +71,41 @@
       </div>
     </section>
 
-    <section class="operations-grid">
-      <aside class="operations-side" aria-label="Resumen operativo">
-        <section class="manual-card">
-          <div class="manual-head">
-            <div class="manual-icon"><LucideShieldCheck :size="20" /></div>
+    <section class="collections-layout">
+      <aside class="guidance-column" aria-label="Acciones de cobranza">
+        <section class="guide-panel next-action-panel">
+          <span class="panel-kicker">Siguiente acción</span>
+          <h3>{{ selectedActionMeta.massLabel }}</h3>
+          <p>{{ selectedActionCopy }}</p>
+
+          <div class="next-stats">
             <div>
-              <span>Modo manual</span>
-              <strong>Sin gestiones automáticas</strong>
+              <span>Listos</span>
+              <strong>{{ eligibleSelectedRows.length }}</strong>
+            </div>
+            <div>
+              <span>Seleccionados</span>
+              <strong>{{ selectedRows.length }}</strong>
             </div>
           </div>
-          <p>
-            El sistema prepara la información, pero correos, WhatsApp, cartas, llamadas y operaciones masivas requieren clic del usuario.
-          </p>
-          <ul>
-            <li v-for="item in manualModeItems" :key="item">
-              <LucideCheckCircle :size="14" />
-              {{ item }}
-            </li>
-          </ul>
+
+          <button class="primary-wide" :disabled="!actionableRowsForSelectedAction.length" @click="selectEligibleForAction(selectedMassAction)">
+            <LucideListChecks :size="16" />
+            Seleccionar listos
+          </button>
         </section>
 
-        <WhatsappOnboarding auto-start compact class="wa-card" />
+        <WhatsappOnboarding compact class="whatsapp-guide" />
 
-        <section class="side-panel">
-          <div class="side-title">
-            <span>Señales de cartera</span>
-            <strong>{{ filteredDeudores.length }} casos visibles</strong>
+        <section class="guide-panel signal-panel">
+          <div class="panel-title-row">
+            <div>
+              <span class="panel-kicker">Señales</span>
+              <h3>{{ filteredDeudores.length }} casos visibles</h3>
+            </div>
           </div>
-          <div class="signal-grid">
-            <div v-for="metric in riskMetrics" :key="metric.label" class="signal-card" :class="metric.tone">
+          <div class="signal-list">
+            <div v-for="metric in riskMetrics" :key="metric.label" :class="['signal-item', metric.tone]">
               <component :is="metric.icon" :size="16" />
               <span>{{ metric.label }}</span>
               <strong>{{ metric.value }}</strong>
@@ -113,50 +113,50 @@
           </div>
         </section>
 
-        <section class="stage-note">
-          <div>
-            <LucideAlertTriangle :size="18" />
-            <strong>Corte del día 14</strong>
-          </div>
-          <p>
-            A partir del corte se muestra el desglose por concepto adeudado y se conserva la fecha límite especial cuando exista una nota autorizada.
-          </p>
+        <section class="guide-panel export-panel">
+          <span class="panel-kicker">Reporte</span>
+          <h3>Exportación lista para administración</h3>
+          <p>El archivo respeta búsqueda, filtros y fechas límite vigentes.</p>
+          <button class="secondary-wide" :disabled="loading || filteredDeudores.length === 0" @click="exportData">
+            <LucideDownload :size="16" />
+            Descargar CSV
+          </button>
         </section>
       </aside>
 
-      <main class="case-panel">
-        <header class="panel-heading">
+      <main class="cases-column">
+        <section class="cases-header">
           <div>
-            <span>Cartera activa</span>
+            <span class="panel-kicker">Quiénes requieren atención</span>
             <h3>{{ filteredDeudores.length }} alumnos</h3>
           </div>
-          <div class="panel-mini">
-            <span>{{ selectedRows.length }} seleccionados</span>
-            <strong>{{ eligibleSelectedRows.length }} listos</strong>
+          <div class="visible-total">
+            <span>Saldo visible</span>
+            <strong>{{ formatMoney(filteredTotalCartera) }}</strong>
           </div>
-        </header>
+        </section>
 
-        <section class="filters-shell" aria-label="Filtros de cartera">
+        <section class="filters-panel" aria-label="Filtros de cartera">
           <label class="search-box">
             <LucideSearch :size="17" />
-            <input v-model="search" type="text" placeholder="Buscar por matrícula, alumno o tutor">
+            <input v-model="search" type="text" placeholder="Buscar alumno, matrícula, tutor, correo o teléfono">
           </label>
 
           <label class="filter-field">
             <span>Estado</span>
             <select v-model="estatusFiltro">
-              <option value="deudores">Solo deudores</option>
+              <option value="deudores">Solo vencidos</option>
               <option value="todos">Todos</option>
-              <option value="no_deudores">No deudores</option>
+              <option value="no_deudores">Sin adeudo exigible</option>
             </select>
           </label>
 
-          <div class="segment-control" aria-label="Vista">
+          <div class="segment-control" aria-label="Prioridad">
             <button
               v-for="option in segmentOptions"
               :key="option.value"
               class="segment-button"
-              :class="{ 'segment-button-active': segmentFilter === option.value }"
+              :class="{ active: segmentFilter === option.value }"
               @click="segmentFilter = option.value"
             >
               {{ option.label }}
@@ -164,7 +164,7 @@
           </div>
         </section>
 
-        <section class="bulk-console" aria-label="Acciones masivas manuales">
+        <section class="action-console" aria-label="Acciones masivas">
           <label class="select-all">
             <input
               type="checkbox"
@@ -175,7 +175,7 @@
             <span>Seleccionar vista</span>
           </label>
 
-          <div class="bulk-meta">
+          <div class="action-copy">
             <strong>{{ selectedActionMeta.massLabel }}</strong>
             <span>{{ eligibleSelectedRows.length }} de {{ selectedRows.length }} seleccionados pueden ejecutarse ahora.</span>
           </div>
@@ -192,151 +192,154 @@
               @click="executeMassAction"
             >
               <component :is="selectedActionMeta.icon" :size="16" />
-              {{ runningAction ? 'Procesando' : 'Ejecutar manualmente' }}
+              {{ runningAction ? 'Procesando' : 'Ejecutar' }}
             </button>
           </div>
         </section>
 
-        <div class="quick-picks">
+        <section class="quick-actions" aria-label="Atajos de selección">
           <button
             v-for="action in actionCatalog"
             :key="`pick-${action.action}`"
-            class="quick-pick"
             :disabled="loading"
             @click="selectEligibleForAction(action.action)"
           >
             <component :is="action.icon" :size="15" />
             {{ action.pickLabel }}
           </button>
-        </div>
+        </section>
 
-        <section class="cases-grid" :class="{ 'is-loading': loading }">
+        <section class="cases-list" :class="{ loading }">
           <div v-if="loading" class="empty-state">
             <span class="liquid-loader"><i></i><i></i><i></i></span>
             <strong>Cargando cartera</strong>
-            <p>Preparando saldos, contactos, corte y desglose por concepto.</p>
+            <p>Preparando saldos, contactos y desglose por concepto.</p>
           </div>
 
           <div v-else-if="!filteredDeudores.length" class="empty-state">
             <LucideCheckCircle :size="34" />
             <strong>No hay alumnos en esta vista</strong>
-            <p>Cambia los filtros o actualiza la cartera.</p>
+            <p>Ajusta búsqueda o filtros para revisar otros casos.</p>
           </div>
 
+          <template v-else>
           <article
-            v-else
             v-for="d in filteredDeudores"
             :key="rowKey(d)"
-            class="debtor-card"
+            class="student-row"
             :class="{
-              'debtor-card-selected': isSelected(d),
-              'debtor-card-official': d.deudorOficial,
-              'debtor-card-exception': d.fechaLimiteEspecialVigente
+              selected: isSelected(d),
+              official: d.deudorOficial,
+              exception: d.fechaLimiteEspecialVigente
             }"
           >
-            <header class="debtor-head">
-              <label class="debtor-check" :aria-label="`Seleccionar ${d.nombreCompleto}`">
+            <div class="row-select">
+              <label :aria-label="`Seleccionar ${d.nombreCompleto}`">
                 <input type="checkbox" :checked="isSelected(d)" @change="toggleOne(d)">
               </label>
+            </div>
 
-              <div class="debtor-avatar">{{ initials(d.nombreCompleto) }}</div>
-
-              <div class="debtor-title">
-                <div class="name-line">
-                  <strong>{{ d.nombreCompleto }}</strong>
-                  <span class="matricula">{{ d.matricula }}</span>
+            <div class="student-main">
+              <header class="student-header">
+                <div class="student-avatar">{{ initials(d.nombreCompleto) }}</div>
+                <div class="student-identity">
+                  <div class="name-line">
+                    <strong>{{ d.nombreCompleto }}</strong>
+                    <span>{{ d.matricula }}</span>
+                  </div>
+                  <p>{{ d.nivel }} · {{ d.grado }} {{ d.grupo || '' }} · {{ d.plantel }}</p>
                 </div>
-                <span>{{ d.nivel }} · {{ d.grado }} {{ d.grupo || '' }} · {{ d.plantel }}</span>
+                <div class="balance-box">
+                  <span>Saldo</span>
+                  <strong>{{ formatMoney(saldoValue(d)) }}</strong>
+                </div>
+              </header>
+
+              <div class="status-line">
+                <span class="status-pill" :class="statusClass(d)">{{ statusLabel(d) }}</span>
+                <span v-if="d.fechaLimiteEspecialVigente" class="info-pill">Fecha especial: {{ formatDate(d.fechaLimitePago) }}</span>
+                <span v-if="d.pagoPendienteConciliacion" class="warning-pill">Pago por conciliar</span>
               </div>
 
-              <div class="saldo-block">
-                <span>Saldo</span>
-                <strong>{{ formatMoney(saldoValue(d)) }}</strong>
+              <div class="contact-strip">
+                <div>
+                  <span>Tutor</span>
+                  <strong>{{ d.padre || 'No registrado' }}</strong>
+                </div>
+                <div>
+                  <span>Correo</span>
+                  <strong>{{ d.correo || 'Sin correo' }}</strong>
+                </div>
+                <div>
+                  <span>Teléfono</span>
+                  <strong>{{ d.telefono || 'Sin teléfono' }}</strong>
+                </div>
+                <div>
+                  <span>Último movimiento</span>
+                  <strong>{{ d.ultimoMovimiento ? formatDate(d.ultimoMovimiento) : 'Sin registro' }}</strong>
+                </div>
               </div>
-            </header>
 
-            <div class="debtor-status-row">
-              <span class="status-pill" :class="statusClass(d)">{{ statusLabel(d) }}</span>
-              <span v-if="d.fechaLimiteEspecialVigente" class="exception-pill">
-                Fecha especial: {{ formatDate(d.fechaLimitePago) }}
-              </span>
-              <span v-if="d.pagoPendienteConciliacion" class="conciliation-pill">Pago por conciliar</span>
+              <section v-if="d.desglose?.length" class="breakdown-strip">
+                <div class="breakdown-title">
+                  <span>Desglose vencido</span>
+                  <strong>{{ d.desglose.length }} conceptos</strong>
+                </div>
+                <div class="breakdown-lines">
+                  <div
+                    v-for="item in d.desglose.slice(0, 2)"
+                    :key="`${rowKey(d)}-${item.documento}-${item.mesCargo}`"
+                  >
+                    <span>{{ item.conceptoNombre }} · {{ item.mesLabel || item.mesCargo }}</span>
+                    <strong>{{ formatMoney(item.saldo) }}</strong>
+                  </div>
+                  <button v-if="d.desglose.length > 2" @click="openDetails(d)">
+                    Ver {{ d.desglose.length - 2 }} más
+                  </button>
+                </div>
+              </section>
             </div>
 
-            <div class="action-lane" aria-label="Avance de gestiones">
-              <div
-                v-for="action in actionCatalog"
-                :key="`${rowKey(d)}-${action.action}`"
-                class="action-step"
-                :class="{
-                  'action-step-done': isActionCompleted(d, action.action),
-                  'action-step-ready': isActionExpected(d, action.action) && !isActionCompleted(d, action.action),
-                  'action-step-blocked': !isActionExpected(d, action.action)
-                }"
-                :title="action.massLabel"
-              >
-                <component :is="action.icon" :size="14" />
-                <span>{{ action.shortLabel }}</span>
+            <aside class="row-actions">
+              <div class="action-progress" aria-label="Avance de gestiones">
+                <span
+                  v-for="action in actionCatalog"
+                  :key="`${rowKey(d)}-${action.action}`"
+                  :class="{
+                    done: isActionCompleted(d, action.action),
+                    ready: isActionExpected(d, action.action) && !isActionCompleted(d, action.action)
+                  }"
+                  :title="action.massLabel"
+                ></span>
               </div>
-            </div>
 
-            <div class="debtor-info-grid">
-              <div>
-                <span>Tutor</span>
-                <strong>{{ d.padre || 'No registrado' }}</strong>
-              </div>
-              <div>
-                <span>Correo</span>
-                <strong>{{ d.correo || 'Sin correo' }}</strong>
-              </div>
-              <div>
-                <span>Teléfono</span>
-                <strong>{{ d.telefono || 'Sin teléfono' }}</strong>
-              </div>
-              <div>
-                <span>Último movimiento</span>
-                <strong>{{ d.ultimoMovimiento ? formatDate(d.ultimoMovimiento) : 'Sin registro' }}</strong>
-              </div>
-            </div>
-
-            <section v-if="d.desglose?.length" class="breakdown-preview">
-              <div class="breakdown-head">
-                <span>Desglose del corte</span>
-                <strong>{{ d.desglose.length }} conceptos</strong>
-              </div>
-              <div
-                v-for="item in d.desglose.slice(0, 3)"
-                :key="`${rowKey(d)}-${item.documento}-${item.mesCargo}`"
-                class="breakdown-line"
-              >
-                <span>{{ item.conceptoNombre }} · {{ item.mesLabel || item.mesCargo }}</span>
-                <strong>{{ formatMoney(item.saldo) }}</strong>
-              </div>
-              <button v-if="d.desglose.length > 3" @click="openDetails(d)">Ver {{ d.desglose.length - 3 }} más</button>
-            </section>
-
-            <footer class="card-actions">
               <button
-                v-for="action in actionCatalog"
-                :key="`${rowKey(d)}-action-${action.action}`"
-                class="manual-action"
-                :class="manualActionClass(d, action.action)"
-                :disabled="!canRunAction(d, action.action) || Boolean(runningAction)"
-                @click="runSingleAction(d, action.action)"
+                v-if="nextRunnableAction(d)"
+                class="primary-row-action"
+                :disabled="Boolean(runningAction)"
+                @click="runSingleAction(d, nextRunnableAction(d).action)"
               >
-                <component :is="action.icon" :size="15" />
-                {{ action.shortLabel }}
+                <component :is="nextRunnableAction(d).icon" :size="15" />
+                {{ nextRunnableAction(d).shortLabel }}
               </button>
-              <button class="manual-action neutral" @click="openException(d)">
-                <LucideCalendarClock :size="15" />
-                Fecha especial
+              <button v-else class="primary-row-action disabled" disabled>
+                <LucideCheckCircle :size="15" />
+                Sin acción lista
               </button>
-              <button class="manual-action neutral" @click="openDetails(d)">
-                <LucideEye :size="15" />
-                Detalle
-              </button>
-            </footer>
+
+              <div class="secondary-row-actions">
+                <button @click="openException(d)">
+                  <LucideCalendarClock :size="15" />
+                  Fecha
+                </button>
+                <button @click="openDetails(d)">
+                  <LucideEye :size="15" />
+                  Detalle
+                </button>
+              </div>
+            </aside>
           </article>
+          </template>
         </section>
       </main>
     </section>
@@ -418,7 +421,7 @@
           </section>
 
           <section class="drawer-section">
-            <h4>Desglose del corte</h4>
+            <h4>Desglose vencido</h4>
             <div v-if="detailsTarget.desglose?.length" class="drawer-list">
               <div v-for="item in detailsTarget.desglose" :key="`${item.documento}-${item.mesCargo}`">
                 <span>{{ item.conceptoNombre }} · {{ item.mesLabel || item.mesCargo }}</span>
@@ -458,15 +461,15 @@
             <button
               v-for="action in actionCatalog"
               :key="`drawer-${action.action}`"
-              class="manual-action"
-              :class="manualActionClass(detailsTarget, action.action)"
+              class="drawer-action"
+              :class="{ ready: canRunAction(detailsTarget, action.action), done: isActionCompleted(detailsTarget, action.action) }"
               :disabled="!canRunAction(detailsTarget, action.action) || Boolean(runningAction)"
               @click="runSingleAction(detailsTarget, action.action)"
             >
               <component :is="action.icon" :size="15" />
               {{ action.shortLabel }}
             </button>
-            <button class="manual-action neutral" @click="openException(detailsTarget)">
+            <button class="drawer-action neutral" @click="openException(detailsTarget)">
               <LucideCalendarClock :size="15" />
               Fecha especial
             </button>
@@ -487,6 +490,7 @@ import {
   LucideDownload,
   LucideEye,
   LucideFileText,
+  LucideListChecks,
   LucideMail,
   LucideMessageCircle,
   LucidePhone,
@@ -525,10 +529,10 @@ const actionCatalog = [
     day: 13,
     dayLabel: 'Día 13',
     shortLabel: 'Correo',
-    pickLabel: 'Seleccionar correos',
+    pickLabel: 'Correos listos',
     massLabel: 'Enviar recordatorio por correo',
     title: 'Correo de recordatorio',
-    description: 'Disponible desde el día 13.',
+    description: 'Primer aviso formal con desglose claro.',
     icon: LucideMail,
     requires: 'correo'
   },
@@ -537,10 +541,10 @@ const actionCatalog = [
     day: 14,
     dayLabel: 'Día 14',
     shortLabel: 'Corte',
-    pickLabel: 'Seleccionar corte',
+    pickLabel: 'Cortes listos',
     massLabel: 'Registrar corte de deudores',
     title: 'Corte con desglose',
-    description: 'Desglosa el concepto adeudado.',
+    description: 'Confirma el saldo vencido por concepto.',
     icon: LucideClipboardList
   },
   {
@@ -548,10 +552,10 @@ const actionCatalog = [
     day: 20,
     dayLabel: 'Día 20',
     shortLabel: 'WhatsApp',
-    pickLabel: 'Seleccionar WhatsApp',
+    pickLabel: 'WhatsApp listos',
     massLabel: 'Enviar seguimiento por WhatsApp',
     title: 'Seguimiento por WhatsApp',
-    description: 'Disponible desde la cuenta vinculada.',
+    description: 'Mensaje breve para familias con teléfono.',
     icon: LucideMessageCircle,
     requires: 'telefono'
   },
@@ -560,10 +564,10 @@ const actionCatalog = [
     day: 27,
     dayLabel: 'Día 27',
     shortLabel: 'Carta',
-    pickLabel: 'Seleccionar cartas',
+    pickLabel: 'Cartas listas',
     massLabel: 'Generar carta de suspensión',
     title: 'Carta de suspensión',
-    description: 'Genera documento y registra la acción.',
+    description: 'Documento administrativo para casos avanzados.',
     icon: LucideFileText
   },
   {
@@ -571,10 +575,10 @@ const actionCatalog = [
     day: null,
     dayLabel: 'Cierre',
     shortLabel: 'Llamada',
-    pickLabel: 'Seleccionar llamadas',
+    pickLabel: 'Llamadas listas',
     massLabel: 'Registrar llamada de cierre',
     title: 'Llamadas de cierre',
-    description: 'Cierre de mes y deudor oficial.',
+    description: 'Cierre de mes y seguimiento final.',
     icon: LucidePhone,
     requires: 'telefono'
   }
@@ -582,15 +586,10 @@ const actionCatalog = [
 
 const segmentOptions = [
   { value: 'todos', label: 'Todos' },
-  { value: 'pendientes', label: 'Pendientes' },
+  { value: 'accion', label: 'Listos' },
   { value: 'oficiales', label: 'Oficiales' },
-  { value: 'excepciones', label: 'Excepciones' }
-]
-
-const manualModeItems = [
-  'Correos y WhatsApp se envían solo con clic.',
-  'Cartas y cortes se generan solo por selección.',
-  'Las fechas especiales exigen nota.'
+  { value: 'excepciones', label: 'Fecha especial' },
+  { value: 'sin_contacto', label: 'Sin contacto' }
 ]
 
 const flowSteps = computed(() => [
@@ -600,7 +599,7 @@ const flowSteps = computed(() => [
     dayEnd: 12,
     dayLabel: '1-12',
     title: 'Periodo de pago',
-    description: 'Pago regular sin gestión de cobranza.',
+    description: 'Pagos regulares antes del vencimiento.',
     icon: LucideUsers
   },
   ...actionCatalog.map(action => ({
@@ -655,27 +654,56 @@ const currentStageTitle = computed(() => {
 
 const currentStageCopy = computed(() => {
   const day = currentDebtDay.value
-  if (day <= 12) return 'Los padres tienen del día 1 al 12 para pagar sin gestión de cobranza.'
-  if (day === 13) return 'El recordatorio por correo ya puede ejecutarse de forma manual.'
+  if (day <= 12) return 'El mes actual aún está dentro del periodo regular; solo aparecen saldos que ya vencieron.'
+  if (day === 13) return 'Los recordatorios por correo ya pueden ejecutarse para alumnos con saldo vencido.'
   if (day >= 14 && day <= 19) return 'El corte muestra alumnos deudores y desglose por concepto adeudado.'
-  if (day >= 20 && day <= 26) return 'El seguimiento por WhatsApp queda disponible para ejecución manual.'
+  if (day >= 20 && day <= 26) return 'El seguimiento por WhatsApp queda disponible para casos con teléfono registrado.'
   if (day === 27) return 'La carta de suspensión puede generarse para los casos seleccionados.'
-  if (day >= currentMonthLastDay.value) return 'Las llamadas cierran el proceso y dejan el caso como deudor oficial.'
-  return 'Las acciones previas siguen disponibles si aún no han sido registradas.'
+  if (day >= currentMonthLastDay.value) return 'Las llamadas cierran el proceso y dejan trazabilidad del seguimiento.'
+  return 'Las acciones previas siguen disponibles cuando aún no han sido registradas.'
 })
+
+const getActionMeta = (action) => actionCatalog.find(item => item.action === action) || {
+  action,
+  shortLabel: String(action || 'Acción'),
+  pickLabel: String(action || 'Acción'),
+  massLabel: String(action || 'Acción'),
+  icon: LucideShieldCheck
+}
+
+const isActionCompleted = (d, action) => (d?.accionesRealizadas || []).some(evt => String(evt.accion) === action)
+const isActionExpected = (d, action) => (d?.accionesEsperadas || []).some(item => String(item.action) === action)
+
+const canRunAction = (d, action) => {
+  if (!d?.isDeudor) return false
+  if (isActionCompleted(d, action)) return false
+  if (!isActionExpected(d, action)) return false
+  const meta = getActionMeta(action)
+  if (meta.requires === 'correo' && !d.correo) return false
+  if (meta.requires === 'telefono' && !d.telefono) return false
+  return true
+}
+
+const nextRunnableAction = (d) => {
+  if (d?.proximaAccion && canRunAction(d, d.proximaAccion)) return getActionMeta(d.proximaAccion)
+  return actionCatalog.find(action => canRunAction(d, action.action)) || null
+}
+
+const rowMatchesView = (d, query = normalizeText(search.value), segment = segmentFilter.value) => {
+  const matchesSearch = !query || [d.nombreCompleto, d.matricula, d.padre, d.correo, d.telefono]
+    .some(value => normalizeText(value).includes(query))
+
+  if (!matchesSearch) return false
+  if (segment === 'accion') return Boolean(canRunAction(d, selectedMassAction.value))
+  if (segment === 'oficiales') return Boolean(d.deudorOficial)
+  if (segment === 'excepciones') return Boolean(d.fechaLimiteEspecialVigente)
+  if (segment === 'sin_contacto') return !d.correo || !d.telefono
+  return true
+}
 
 const filteredDeudores = computed(() => {
   const q = normalizeText(search.value)
-  return deudores.value.filter((d) => {
-    const matchesSearch = !q || [d.nombreCompleto, d.matricula, d.padre, d.correo, d.telefono]
-      .some(value => normalizeText(value).includes(q))
-
-    if (!matchesSearch) return false
-    if (segmentFilter.value === 'pendientes') return Boolean(d.accionesPendientes?.length)
-    if (segmentFilter.value === 'oficiales') return Boolean(d.deudorOficial)
-    if (segmentFilter.value === 'excepciones') return Boolean(d.fechaLimiteEspecialVigente)
-    return true
-  })
+  return deudores.value.filter(d => rowMatchesView(d, q, segmentFilter.value))
 })
 
 const selectedRows = computed(() => {
@@ -687,29 +715,40 @@ const allVisibleSelected = computed(() => {
   return filteredDeudores.value.length > 0 && filteredDeudores.value.every(d => selectedKeys.value.includes(rowKey(d)))
 })
 
-const totalCartera = computed(() => filteredDeudores.value.reduce((sum, d) => sum + saldoValue(d), 0))
+const totalCartera = computed(() => deudores.value.reduce((sum, d) => sum + saldoValue(d), 0))
+const filteredTotalCartera = computed(() => filteredDeudores.value.reduce((sum, d) => sum + saldoValue(d), 0))
 const officialCount = computed(() => filteredDeudores.value.filter(d => d.deudorOficial).length)
 const exceptionCount = computed(() => filteredDeudores.value.filter(d => d.fechaLimiteEspecialVigente).length)
 const pendingConciliationCount = computed(() => filteredDeudores.value.filter(d => d.pagoPendienteConciliacion).length)
 const noEmailCount = computed(() => filteredDeudores.value.filter(d => !d.correo).length)
 const noPhoneCount = computed(() => filteredDeudores.value.filter(d => !d.telefono).length)
+const noContactCount = computed(() => filteredDeudores.value.filter(d => !d.correo || !d.telefono).length)
 
 const heroMetrics = computed(() => [
-  { label: 'Alumnos', value: filteredDeudores.value.length, icon: LucideUsers },
-  { label: 'Oficiales', value: officialCount.value, icon: LucideShieldCheck },
-  { label: 'Excepciones', value: exceptionCount.value, icon: LucideCalendarClock }
+  { label: 'Alumnos', value: deudores.value.length, icon: LucideUsers },
+  { label: 'Visibles', value: filteredDeudores.value.length, icon: LucideEye },
+  { label: 'Oficiales', value: officialCount.value, icon: LucideShieldCheck }
 ])
 
 const riskMetrics = computed(() => [
-  { label: 'Con excepción', value: exceptionCount.value, icon: LucideCalendarClock, tone: 'tone-blue' },
-  { label: 'Conciliación', value: pendingConciliationCount.value, icon: LucideAlertTriangle, tone: 'tone-amber' },
+  { label: 'Con fecha especial', value: exceptionCount.value, icon: LucideCalendarClock, tone: 'tone-blue' },
+  { label: 'Pago por conciliar', value: pendingConciliationCount.value, icon: LucideAlertTriangle, tone: 'tone-amber' },
   { label: 'Sin correo', value: noEmailCount.value, icon: LucideMail, tone: 'tone-coral' },
   { label: 'Sin teléfono', value: noPhoneCount.value, icon: LucidePhone, tone: 'tone-coral' }
 ])
 
-const hasBlockingOverlay = computed(() => showExceptionModal.value || Boolean(detailsTarget.value))
 const selectedActionMeta = computed(() => getActionMeta(selectedMassAction.value))
+const actionableRowsForSelectedAction = computed(() => filteredDeudores.value.filter(d => canRunAction(d, selectedMassAction.value)))
 const eligibleSelectedRows = computed(() => selectedRows.value.filter(d => canRunAction(d, selectedMassAction.value)))
+const selectedActionCopy = computed(() => {
+  if (selectedMassAction.value === 'correo_recordatorio') return 'Elige alumnos con correo y saldo vencido para enviar el primer aviso.'
+  if (selectedMassAction.value === 'reporte_deudores') return 'Registra el corte y descarga el desglose que necesita administración.'
+  if (selectedMassAction.value === 'whatsapp_contacto') return 'Usa WhatsApp solo con casos que ya tienen teléfono y sesión vinculada.'
+  if (selectedMassAction.value === 'carta_suspension') return 'Genera cartas para casos avanzados sin perder el historial del seguimiento.'
+  return 'Registra llamadas para dejar trazabilidad al cierre del periodo.'
+})
+
+const hasBlockingOverlay = computed(() => showExceptionModal.value || Boolean(detailsTarget.value))
 
 watch(hasBlockingOverlay, (val) => {
   if (typeof document !== 'undefined') document.body.style.overflow = val ? 'hidden' : ''
@@ -773,33 +812,6 @@ const initials = (name) => String(name || 'NA')
   .slice(0, 2)
   .map(part => part[0]?.toUpperCase())
   .join('') || 'NA'
-
-const getActionMeta = (action) => actionCatalog.find(item => item.action === action) || {
-  action,
-  shortLabel: String(action || 'Acción'),
-  pickLabel: String(action || 'Acción'),
-  massLabel: String(action || 'Acción'),
-  icon: LucideShieldCheck
-}
-
-const isActionCompleted = (d, action) => (d?.accionesRealizadas || []).some(evt => String(evt.accion) === action)
-const isActionExpected = (d, action) => (d?.accionesEsperadas || []).some(item => String(item.action) === action)
-
-const canRunAction = (d, action) => {
-  if (!d?.isDeudor) return false
-  if (isActionCompleted(d, action)) return false
-  if (!isActionExpected(d, action)) return false
-  const meta = getActionMeta(action)
-  if (meta.requires === 'correo' && !d.correo) return false
-  if (meta.requires === 'telefono' && !d.telefono) return false
-  return true
-}
-
-const manualActionClass = (d, action) => {
-  if (isActionCompleted(d, action)) return 'done'
-  if (canRunAction(d, action)) return 'ready'
-  return 'idle'
-}
 
 const statusClass = (d) => {
   if (d.deudorOficial) return 'status-danger'
@@ -875,7 +887,7 @@ const executeManualAction = async (targets, action, options = {}) => {
     if (options.clearSelection) selectedKeys.value = []
     await loadData()
   } catch (e) {
-    show(e?.statusMessage || 'No se pudo ejecutar la acción manual.', 'danger')
+    show(e?.statusMessage || 'No se pudo ejecutar la acción.', 'danger')
   } finally {
     runningAction.value = ''
   }
@@ -892,9 +904,7 @@ const exportData = async () => {
       }
     })
     const q = normalizeText(search.value)
-    const rowsForExport = q
-      ? rows.filter(d => [d.nombreCompleto, d.matricula, d.padre].some(value => normalizeText(value).includes(q)))
-      : rows
+    const rowsForExport = rows.filter(d => rowMatchesView(d, q, segmentFilter.value))
 
     exportToCSV(`Deudores_${normalizeCicloKey(state.value.ciclo)}.csv`, buildExportRows(rowsForExport))
   } catch (e) {
@@ -905,6 +915,7 @@ const exportData = async () => {
 }
 
 const buildExportRows = (rows) => rows.flatMap((d) => {
+  const nextAction = nextRunnableAction(d)
   const base = {
     Matricula: d.matricula,
     Nombre: d.nombreCompleto,
@@ -914,6 +925,7 @@ const buildExportRows = (rows) => rows.flatMap((d) => {
     Telefono: d.telefono || '',
     Saldo_Pendiente_MXN: saldoValue(d).toFixed(2),
     Estatus_Flujo: d.estatusFlujoLabel || d.estatusFlujo,
+    Accion_Sugerida: nextAction?.massLabel || '',
     Fecha_Limite: d.fechaLimitePago || '',
     Nota_Excepcion: d.notaFechaLimiteEspecial || '',
     Deudor_Oficial: d.deudorOficial ? 'Sí' : 'No'
@@ -1053,81 +1065,134 @@ const closeDetails = () => {
 </script>
 
 <style scoped>
+:global(body.deudores-page-active) {
+  --debt-ink: #172338;
+  --debt-soft-ink: #2c3b52;
+  --debt-muted: #667386;
+  --debt-faint: #8a96a8;
+  --debt-line: #dde6e2;
+  --debt-soft-line: #edf2ef;
+  --debt-paper: #ffffff;
+  --debt-canvas: #f7f9f7;
+  --debt-green: #4f8549;
+  --debt-teal: #247c73;
+  --debt-blue: #2f6fb3;
+  --debt-amber: #a96f16;
+  --debt-coral: #c94a3f;
+  --debt-shadow: 0 16px 38px rgba(31, 46, 41, 0.07);
+}
+
 :global(body.deudores-page-active .income-main) {
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  background: linear-gradient(180deg, #fbfcfb 0%, var(--debt-canvas) 100%);
+}
+
+:global(body.deudores-page-active .income-main::before) {
+  display: none;
 }
 
 :global(body.deudores-page-active .income-content) {
+  display: block;
   min-height: auto;
   overflow: visible;
+  padding-top: 20px;
+  padding-bottom: 40px;
 }
 
-.debt-command {
+:global(body.deudores-page-active .income-sidebar) {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.debt-workspace {
   display: grid;
-  width: min(100%, 1680px);
-  min-width: 0;
-  gap: 18px;
+  width: min(100%, 1540px);
   margin: 0 auto;
-  padding-bottom: 28px;
-  overflow: visible;
+  gap: 18px;
 }
 
 .debt-hero {
   display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(0, 1.25fr) minmax(330px, 0.75fr);
-  gap: 18px;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1.45fr) minmax(330px, 0.55fr);
+  gap: 14px;
 }
 
 .hero-copy,
-.hero-snapshot,
-.flow-strip,
-.manual-card,
-.side-panel,
-.stage-note,
-.case-panel,
-.debtor-card {
-  border: 1px solid rgba(223, 230, 239, 0.96);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 16px 42px rgba(22, 38, 65, 0.07);
+.hero-summary,
+.journey-band,
+.guide-panel,
+.cases-header,
+.filters-panel,
+.action-console,
+.student-row,
+.empty-state {
+  border: 1px solid var(--debt-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--debt-shadow);
 }
 
 .hero-copy {
+  position: relative;
   display: grid;
-  min-width: 0;
+  min-height: 250px;
   align-content: center;
   gap: 16px;
-  border-radius: 26px;
-  padding: 28px;
+  overflow: hidden;
+  padding: 34px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 244, 0.95)),
-    repeating-linear-gradient(90deg, rgba(101, 167, 68, 0.06) 0 1px, transparent 1px 22px);
+    linear-gradient(90deg, rgba(79, 133, 73, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, #ffffff 0%, #f8fbf8 100%);
+  background-size: 42px 42px, auto;
+}
+
+.hero-copy::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 3px;
+  background: linear-gradient(90deg, #91bd80, #78b8b0, #9cb8d6, #d7b86a);
 }
 
 .eyebrow,
-.flow-heading span,
-.side-title span,
-.manual-head span,
-.panel-heading span,
+.panel-kicker,
+.summary-stage span,
+.summary-amount span,
+.summary-grid span,
+.journey-heading span,
+.journey-step span,
+.visible-total span,
 .filter-field span,
-.hero-snapshot span,
-.saldo-block span,
-.debtor-info-grid span,
-.breakdown-head span,
-.drawer-contact span,
-.drawer-total span {
-  color: #66728a;
+.balance-box span,
+.contact-strip span,
+.breakdown-title span,
+.next-stats span,
+.drawer-header span,
+.drawer-total span,
+.drawer-contact span {
+  color: var(--debt-muted);
   font-size: 0.68rem;
   font-weight: 850;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
-.hero-copy h2 {
+.eyebrow {
+  color: var(--debt-green);
+}
+
+.hero-copy h2,
+.hero-copy p,
+.guide-panel h3,
+.cases-header h3,
+.journey-heading strong {
   margin: 0;
-  color: #142641;
+}
+
+.hero-copy h2 {
+  max-width: 780px;
+  color: var(--debt-ink);
   font-size: 2.5rem;
   font-weight: 900;
   line-height: 1.04;
@@ -1135,461 +1200,442 @@ const closeDetails = () => {
 }
 
 .hero-copy p {
-  max-width: 760px;
-  margin: 0;
-  color: #526078;
-  font-size: 1rem;
-  font-weight: 650;
-  line-height: 1.6;
+  max-width: 780px;
+  color: var(--debt-muted);
+  font-size: 0.98rem;
+  font-weight: 620;
+  line-height: 1.62;
 }
 
-.hero-actions,
-.panel-actions,
-.debtor-status-row,
-.card-actions,
-.drawer-actions {
+.hero-actions {
   display: flex;
-  min-width: 0;
   flex-wrap: wrap;
-  gap: 9px;
+  gap: 8px;
 }
 
-.hero-snapshot {
+.btn,
+.primary-wide,
+.secondary-wide,
+.primary-row-action,
+.secondary-row-actions button,
+.drawer-action,
+.quick-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 7px;
+  font-weight: 820;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.hero-copy .btn {
+  min-height: 39px;
+  padding: 0 14px;
+}
+
+.btn-outline,
+.btn-secondary {
+  border: 1px solid #d9e4dc;
+  background: #fff;
+  color: #304536;
+}
+
+.btn-secondary {
+  background: #f2f8f2;
+}
+
+.btn-primary,
+.primary-wide,
+.primary-row-action {
+  border: 1px solid #bfd7c2;
+  background: #edf6ee;
+  color: #315b39;
+}
+
+.btn:disabled,
+.primary-wide:disabled,
+.secondary-wide:disabled,
+.primary-row-action:disabled,
+.drawer-action:disabled,
+.quick-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.hero-summary {
   display: grid;
-  min-width: 0;
-  gap: 14px;
-  border-radius: 26px;
+  gap: 15px;
   padding: 18px;
-  background: linear-gradient(145deg, #172943, #203956 58%, #143f47);
-  color: #fff;
 }
 
-.snapshot-stage {
+.summary-stage {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  border-bottom: 1px solid var(--debt-soft-line);
+  padding-bottom: 14px;
 }
 
-.snapshot-stage span,
-.snapshot-amount span {
-  color: rgba(255, 255, 255, 0.68);
-}
-
-.snapshot-stage strong,
-.snapshot-amount strong {
+.summary-stage strong {
   display: block;
-  margin-top: 4px;
-  color: #fff;
-  font-weight: 900;
+  margin-top: 3px;
+  color: var(--debt-ink);
+  font-size: 1rem;
+}
+
+.summary-stage svg,
+.summary-grid svg {
+  color: var(--debt-teal);
+}
+
+.summary-amount strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--debt-coral);
+  font-size: 2.08rem;
+  line-height: 1.05;
   letter-spacing: 0;
 }
 
-.snapshot-stage strong {
-  font-size: 1.05rem;
-}
-
-.snapshot-stage svg {
-  flex: 0 0 auto;
-  color: #93d36a;
-}
-
-.snapshot-amount {
-  min-width: 0;
-}
-
-.snapshot-amount strong {
+.summary-progress {
+  height: 7px;
   overflow: hidden;
-  font-size: 2rem;
-  line-height: 1.05;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.snapshot-progress {
-  height: 9px;
-  overflow: hidden;
+  border: 1px solid #dfe8e2;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: #f1f4f2;
 }
 
-.snapshot-progress span {
+.summary-progress span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #93d36a, #2fb4a1 54%, #fcbf2d);
+  background: linear-gradient(90deg, #6f9d65, #6ea9a2, #c3a45b);
 }
 
-.snapshot-grid {
+.summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  border-top: 1px solid var(--debt-soft-line);
 }
 
-.snapshot-metric {
+.summary-grid div {
   display: grid;
-  min-width: 0;
   gap: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 12px;
+  border-right: 1px solid var(--debt-soft-line);
+  padding: 12px 10px 0 0;
 }
 
-.snapshot-metric svg {
-  color: #93d36a;
+.summary-grid div:last-child {
+  border-right: 0;
+  padding-left: 10px;
 }
 
-.snapshot-metric span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.snapshot-metric strong {
-  color: #fff;
+.summary-grid strong {
+  color: var(--debt-ink);
   font-size: 1.22rem;
-  font-weight: 900;
 }
 
-.flow-strip {
+.journey-band {
   display: grid;
-  gap: 14px;
-  border-radius: 24px;
+  gap: 15px;
   padding: 16px;
+  box-shadow: 0 10px 28px rgba(31, 46, 41, 0.045);
 }
 
-.flow-heading {
+.journey-heading {
   display: flex;
-  min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 22px;
+  border-bottom: 1px solid var(--debt-soft-line);
+  padding-bottom: 13px;
 }
 
-.flow-heading strong {
+.journey-heading strong {
   display: block;
-  margin-top: 2px;
-  color: #172943;
-  font-size: 1.04rem;
-  font-weight: 900;
+  margin-top: 3px;
+  color: var(--debt-ink);
 }
 
-.flow-heading p {
-  max-width: 620px;
+.journey-heading p {
+  max-width: 680px;
   margin: 0;
-  color: #66728a;
-  font-size: 0.86rem;
-  font-weight: 650;
+  color: var(--debt-muted);
+  font-size: 0.84rem;
+  font-weight: 620;
   line-height: 1.5;
 }
 
-.flow-track {
+.journey-steps {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
 }
 
-.flow-card {
+.journey-step {
   display: grid;
-  min-width: 0;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
-  align-items: start;
-  border: 1px solid #edf2f7;
-  border-radius: 18px;
-  background: #fbfcfd;
-  padding: 12px;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
-}
-
-.flow-card-active {
-  border-color: rgba(101, 167, 68, 0.44);
-  background: #f4fbf1;
-}
-
-.flow-card-today {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(101, 167, 68, 0.14);
-}
-
-.flow-marker {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 14px;
-  background: #fff;
-  color: #3f8468;
-  box-shadow: inset 0 0 0 1px #edf2f7;
-}
-
-.flow-card-active .flow-marker {
-  background: #eaf8e7;
-  color: #2e7235;
-}
-
-.flow-body {
   min-width: 0;
+  border-left: 1px solid var(--debt-soft-line);
+  padding: 4px 13px 2px;
 }
 
-.flow-body span,
-.flow-body strong,
-.flow-body p {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.journey-step:first-child {
+  border-left: 0;
+  padding-left: 0;
 }
 
-.flow-body span {
-  color: #397fe8;
-  font-size: 0.68rem;
-  font-weight: 900;
-  white-space: nowrap;
+.journey-step.today {
+  box-shadow: inset 0 2px 0 #86b477;
 }
 
-.flow-body strong {
-  margin-top: 2px;
-  color: #172943;
-  font-size: 0.82rem;
-  font-weight: 900;
-  white-space: nowrap;
+.journey-step.active .step-icon {
+  background: #edf6ee;
+  color: var(--debt-green);
 }
 
-.flow-body p {
-  display: -webkit-box;
-  margin: 4px 0 0;
-  color: #66728a;
-  font-size: 0.73rem;
-  font-weight: 650;
-  line-height: 1.35;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.operations-grid {
+.step-icon {
   display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
-  gap: 18px;
-  align-items: start;
-}
-
-.operations-side {
-  position: sticky;
-  top: 84px;
-  display: grid;
-  min-width: 0;
-  gap: 14px;
-}
-
-.manual-card,
-.side-panel,
-.stage-note,
-.case-panel {
-  border-radius: 24px;
-}
-
-.manual-card,
-.side-panel,
-.stage-note {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-}
-
-.manual-head,
-.side-title,
-.stage-note > div {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 10px;
-}
-
-.manual-icon {
-  display: grid;
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 15px;
-  background: #eaf8e7;
-  color: #2e7235;
+  border: 1px solid var(--debt-soft-line);
+  border-radius: 8px;
+  background: #f8faf8;
+  color: var(--debt-teal);
 }
 
-.manual-head strong,
-.side-title strong,
-.stage-note strong {
+.journey-step strong {
   display: block;
-  color: #172943;
-  font-size: 0.95rem;
-  font-weight: 900;
+  overflow-wrap: anywhere;
+  color: var(--debt-ink);
+  font-size: 0.81rem;
+  line-height: 1.25;
 }
 
-.manual-card p,
-.stage-note p {
+.journey-step p {
+  margin: 4px 0 0;
+  color: var(--debt-muted);
+  font-size: 0.72rem;
+  font-weight: 620;
+  line-height: 1.35;
+}
+
+.collections-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 350px) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.guidance-column {
+  position: sticky;
+  top: 82px;
+  display: grid;
+  max-height: calc(100vh - 104px);
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 3px;
+  overscroll-behavior: contain;
+}
+
+.guide-panel {
+  display: grid;
+  gap: 13px;
+  padding: 15px;
+  box-shadow: none;
+}
+
+.guide-panel h3 {
+  color: var(--debt-ink);
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.guide-panel p {
   margin: 0;
-  color: #66728a;
-  font-size: 0.82rem;
-  font-weight: 650;
+  color: var(--debt-muted);
+  font-size: 0.78rem;
+  font-weight: 620;
   line-height: 1.55;
 }
 
-.manual-card ul {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.manual-card li {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  color: #526078;
-  font-size: 0.78rem;
-  font-weight: 760;
-  line-height: 1.35;
-}
-
-.manual-card li svg {
-  flex: 0 0 auto;
-  color: #65a744;
-  margin-top: 1px;
-}
-
-.wa-card {
-  min-width: 0;
-}
-
-.signal-grid {
+.next-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.signal-card {
+.next-stats div {
   display: grid;
+  gap: 3px;
+  border: 1px solid var(--debt-soft-line);
+  border-radius: 8px;
+  background: #fbfdfb;
+  padding: 10px;
+}
+
+.next-stats strong {
+  color: var(--debt-ink);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.primary-wide,
+.secondary-wide {
+  min-height: 38px;
+  width: 100%;
+  border-style: solid;
+  padding: 0 12px;
+  font-size: 0.78rem;
+}
+
+.secondary-wide {
+  border: 1px solid var(--debt-line);
+  background: #fff;
+  color: var(--debt-soft-ink);
+}
+
+.whatsapp-guide {
+  border: 1px solid var(--debt-line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.whatsapp-guide :deep(.wa-icon),
+.whatsapp-guide :deep(.wa-guide),
+.whatsapp-guide :deep(.wa-qr),
+.whatsapp-guide :deep(.wa-message),
+.whatsapp-guide :deep(.btn) {
+  border-radius: 8px;
+}
+
+.whatsapp-guide :deep(.wa-title h3) {
+  color: var(--debt-ink);
+  font-size: 0.92rem;
+}
+
+.whatsapp-guide :deep(.wa-guide) {
+  border-color: #d7eadc;
+  background: #f5fbf6;
+}
+
+.whatsapp-guide :deep(.btn-primary) {
+  border-color: #bfd7c2;
+  background: #edf6ee;
+  color: #315b39;
+  box-shadow: none;
+}
+
+.panel-title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.signal-list {
+  display: grid;
+  gap: 7px;
+}
+
+.signal-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--debt-soft-line);
+  border-radius: 8px;
+  background: #fbfdfb;
+  padding: 9px 10px;
+}
+
+.signal-item span {
   min-width: 0;
-  gap: 5px;
-  border-radius: 16px;
-  background: #f8fafc;
-  padding: 12px;
+  color: var(--debt-muted);
+  font-size: 0.72rem;
+  font-weight: 760;
 }
 
-.signal-card svg {
-  color: #3f8468;
-}
-
-.signal-card span {
-  overflow: hidden;
-  color: #66728a;
-  font-size: 0.66rem;
-  font-weight: 850;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.signal-card strong {
-  color: #172943;
-  font-size: 1.35rem;
-  font-weight: 900;
+.signal-item strong {
+  color: var(--debt-ink);
+  font-size: 1rem;
 }
 
 .tone-blue svg,
 .tone-blue strong {
-  color: #397fe8;
+  color: var(--debt-blue);
 }
 
 .tone-amber svg,
 .tone-amber strong {
-  color: #a56b00;
+  color: var(--debt-amber);
 }
 
 .tone-coral svg,
 .tone-coral strong {
-  color: #e83f4b;
+  color: var(--debt-coral);
 }
 
-.stage-note {
-  border-color: rgba(252, 191, 45, 0.36);
-  background: #fffaf0;
-}
-
-.stage-note svg {
-  flex: 0 0 auto;
-  color: #a56b00;
-}
-
-.case-panel {
+.cases-column {
   display: grid;
   min-width: 0;
-  gap: 14px;
-  padding: 16px;
+  gap: 12px;
 }
 
-.panel-heading {
+.cases-header {
   display: flex;
-  min-width: 0;
+  min-height: 62px;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding: 12px 14px;
 }
 
-.panel-heading h3 {
-  margin: 2px 0 0;
-  color: #172943;
-  font-size: 1.35rem;
-  font-weight: 900;
+.cases-header h3 {
+  color: var(--debt-ink);
+  font-size: 1.28rem;
+  letter-spacing: 0;
 }
 
-.panel-mini {
+.visible-total {
+  text-align: right;
+}
+
+.visible-total strong {
+  display: block;
+  color: var(--debt-coral);
+  font-size: 1.05rem;
+}
+
+.filters-panel {
   display: grid;
-  min-width: 140px;
-  justify-items: end;
-  gap: 2px;
-  color: #66728a;
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.panel-mini strong {
-  color: #2e7235;
-  font-size: 0.86rem;
-}
-
-.filters-shell {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(260px, 1fr) 180px minmax(360px, 0.95fr);
+  grid-template-columns: minmax(240px, 1fr) minmax(150px, 180px);
   gap: 10px;
-  align-items: end;
+  padding: 12px;
 }
 
 .search-box,
 .filter-field select,
 .mass-action select {
-  border: 1px solid #dfe6ef;
-  border-radius: 15px;
-  background: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  min-height: 40px;
+  border: 1px solid var(--debt-line);
+  border-radius: 7px;
+  background: #fbfcfb;
 }
 
 .search-box {
   display: flex;
-  min-width: 0;
-  height: 42px;
   align-items: center;
   gap: 9px;
-  padding: 0 12px;
+  padding: 0 11px;
 }
 
 .search-box svg {
-  flex: 0 0 auto;
-  color: #66728a;
+  color: var(--debt-muted);
 }
 
 .search-box input,
@@ -1599,577 +1645,652 @@ const closeDetails = () => {
   width: 100%;
   border: 0;
   background: transparent;
-  color: #172943;
-  font-size: 0.84rem;
-  font-weight: 760;
+  color: var(--debt-ink);
+  font-size: 0.82rem;
+  font-weight: 740;
   outline: none;
 }
 
 .filter-field {
   display: grid;
-  min-width: 0;
-  gap: 5px;
+  gap: 4px;
 }
 
-.filter-field select,
-.mass-action select {
-  height: 42px;
-  padding: 0 11px;
+.filter-field select {
+  padding: 0 10px;
 }
 
 .segment-control {
   display: grid;
-  min-width: 0;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
-  border: 1px solid #dfe6ef;
-  border-radius: 16px;
-  background: #f4f7fa;
-  padding: 4px;
+  min-height: 40px;
+  border: 1px solid var(--debt-line);
+  border-radius: 7px;
+  background: #f3f6f4;
+  padding: 3px;
 }
 
 .segment-button {
   min-width: 0;
-  min-height: 34px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 5px;
   background: transparent;
-  color: #66728a;
-  padding: 0 8px;
+  color: var(--debt-muted);
   font-size: 0.72rem;
-  font-weight: 850;
-  overflow-wrap: anywhere;
-  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  font-weight: 830;
 }
 
-.segment-button-active {
+.segment-button.active {
   background: #fff;
-  color: #2e7235;
-  box-shadow: 0 8px 16px rgba(22, 38, 65, 0.06);
+  color: var(--debt-ink);
+  box-shadow: 0 4px 12px rgba(18, 32, 51, 0.06);
 }
 
-.bulk-console {
+.action-console {
   display: grid;
-  min-width: 0;
-  grid-template-columns: auto minmax(170px, 1fr) minmax(300px, auto);
-  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) minmax(330px, auto);
   align-items: center;
-  border: 1px solid #dfe6ef;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #fbfcfd, #ffffff);
+  gap: 13px;
   padding: 12px;
 }
 
-.select-all,
-.mass-action {
-  display: flex;
-  min-width: 0;
+.select-all {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-}
-
-.select-all span {
-  color: #172943;
-  font-size: 0.82rem;
+  gap: 8px;
+  color: var(--debt-soft-ink);
+  font-size: 0.78rem;
   font-weight: 850;
-  white-space: nowrap;
 }
 
-.bulk-meta {
+.select-all input,
+.row-select input {
+  accent-color: var(--debt-green);
+}
+
+.action-copy {
   display: grid;
   min-width: 0;
   gap: 2px;
 }
 
-.bulk-meta strong {
+.action-copy strong {
   overflow: hidden;
-  color: #172943;
-  font-size: 0.88rem;
-  font-weight: 900;
+  color: var(--debt-ink);
+  font-size: 0.84rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.bulk-meta span {
-  color: #66728a;
-  font-size: 0.76rem;
-  font-weight: 680;
+.action-copy span {
+  color: var(--debt-muted);
+  font-size: 0.74rem;
+  font-weight: 650;
 }
 
 .mass-action {
+  display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .mass-action select {
   width: 250px;
+  padding: 0 10px;
 }
 
-.quick-picks {
+.mass-action .btn {
+  min-height: 40px;
+  padding: 0 13px;
+}
+
+.quick-actions {
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.quick-pick {
-  display: inline-flex;
-  min-height: 34px;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid #dfe6ef;
-  border-radius: 999px;
+.quick-actions button {
+  min-height: 32px;
+  border: 1px solid var(--debt-line);
   background: #fff;
-  color: #526078;
-  padding: 0 12px;
-  font-size: 0.72rem;
-  font-weight: 850;
-  transition: border-color 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
+  color: var(--debt-soft-ink);
+  padding: 0 10px;
+  font-size: 0.7rem;
 }
 
-.quick-pick:hover:not(:disabled) {
-  border-color: rgba(101, 167, 68, 0.42);
-  background: #f7fcf4;
-  color: #2e7235;
+.quick-actions button:hover:not(:disabled) {
+  border-color: rgba(79, 133, 73, 0.36);
+  background: #f3faf3;
+  color: var(--debt-green);
   transform: translateY(-1px);
 }
 
-.cases-grid {
+.cases-list {
   display: grid;
-  min-width: 0;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
-  gap: 12px;
+  gap: 9px;
 }
 
 .empty-state {
   display: grid;
-  min-height: 320px;
-  grid-column: 1 / -1;
+  min-height: 340px;
   place-items: center;
   align-content: center;
-  gap: 8px;
-  border: 1px dashed #d8e2eb;
-  border-radius: 22px;
-  color: #66728a;
+  gap: 10px;
+  padding: 24px;
   text-align: center;
 }
 
 .empty-state strong {
-  color: #172943;
-  font-weight: 900;
+  color: var(--debt-ink);
+  font-size: 1rem;
 }
 
 .empty-state p {
-  max-width: 370px;
+  max-width: 390px;
   margin: 0;
+  color: var(--debt-muted);
   font-size: 0.84rem;
-  font-weight: 650;
+  line-height: 1.5;
 }
 
 .empty-state svg {
-  color: #65a744;
+  color: var(--debt-green);
 }
 
-.debtor-card {
+.liquid-loader {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.liquid-loader i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--debt-green);
+  animation: pulse-dot 860ms ease-in-out infinite;
+}
+
+.liquid-loader i:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.liquid-loader i:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.student-row {
   position: relative;
   display: grid;
-  min-width: 0;
-  align-content: start;
-  gap: 13px;
+  grid-template-columns: auto minmax(0, 1fr) minmax(170px, 190px);
+  gap: 14px;
   overflow: hidden;
-  border-radius: 22px;
-  padding: 15px;
+  padding: 14px;
+  box-shadow: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
-.debtor-card::before {
+.student-row::before {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 5px;
-  background: #dfe6ef;
+  width: 3px;
+  background: var(--debt-line);
 }
 
-.debtor-card-selected {
-  border-color: rgba(101, 167, 68, 0.58);
-  background: #fbfff9;
+.student-row:hover {
+  border-color: rgba(47, 111, 179, 0.32);
+  box-shadow: var(--debt-shadow);
+  transform: translateY(-1px);
 }
 
-.debtor-card-selected::before {
-  background: #65a744;
+.student-row.selected {
+  border-color: rgba(79, 133, 73, 0.48);
+  background: #fbfefb;
 }
 
-.debtor-card-official::before {
-  background: #e83f4b;
+.student-row.selected::before {
+  background: var(--debt-green);
 }
 
-.debtor-card-exception::before {
-  background: #397fe8;
+.student-row.official::before {
+  background: var(--debt-coral);
 }
 
-.debtor-head {
+.student-row.exception::before {
+  background: var(--debt-blue);
+}
+
+.row-select {
+  padding-top: 11px;
+}
+
+.row-select label {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+}
+
+.student-main {
   display: grid;
   min-width: 0;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.student-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
 }
 
-.debtor-check {
+.student-avatar {
   display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
   place-items: center;
-}
-
-.debtor-check input,
-.select-all input {
-  width: 16px;
-  height: 16px;
-  accent-color: #65a744;
-}
-
-.debtor-avatar {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  place-items: center;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #eaf8e7, #eef7ff);
-  color: #2e7235;
-  font-size: 0.78rem;
+  border: 1px solid #dbe7dc;
+  border-radius: 8px;
+  background: #eef7ee;
+  color: var(--debt-green);
+  font-size: 0.74rem;
   font-weight: 900;
 }
 
-.debtor-title {
+.student-identity {
   min-width: 0;
 }
 
 .name-line {
   display: flex;
   min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
 
 .name-line strong {
-  overflow: hidden;
-  color: #172943;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--debt-ink);
   font-size: 0.98rem;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
 }
 
-.matricula {
+.name-line span {
   flex: 0 0 auto;
-  border-radius: 999px;
-  background: #f2f7fb;
-  color: #397fe8;
-  padding: 2px 7px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.65rem;
+  border: 1px solid #dbe7f3;
+  border-radius: 5px;
+  background: #f7fbff;
+  color: var(--debt-blue);
+  padding: 2px 6px;
+  font-size: 0.62rem;
   font-weight: 850;
 }
 
-.debtor-title > span {
-  display: block;
-  overflow: hidden;
-  color: #66728a;
-  font-size: 0.76rem;
-  font-weight: 720;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.student-identity p {
+  margin: 3px 0 0;
+  color: var(--debt-muted);
+  font-size: 0.74rem;
+  font-weight: 680;
 }
 
-.saldo-block {
-  min-width: 112px;
+.balance-box {
+  min-width: 120px;
   text-align: right;
 }
 
-.saldo-block strong {
+.balance-box strong {
   display: block;
-  color: #e83f4b;
-  font-size: 1.1rem;
-  font-weight: 900;
+  color: var(--debt-coral);
+  font-size: 1.06rem;
+  line-height: 1.1;
 }
 
-.debtor-status-row {
-  align-items: center;
-}
-
-.status-pill,
-.exception-pill,
-.conciliation-pill {
-  display: inline-flex;
-  min-height: 27px;
-  align-items: center;
-  border-radius: 999px;
-  padding: 0 10px;
-  font-size: 0.69rem;
-  font-weight: 850;
-}
-
-.status-success { background: #eaf8e7; color: #2e7235; }
-.status-warning { background: #fff8df; color: #8a6500; }
-.status-danger { background: #fff0ed; color: #d83a2a; }
-.status-info { background: #edf6ff; color: #2d65ba; }
-.exception-pill { background: #edf6ff; color: #2d65ba; }
-.conciliation-pill { background: #fff8df; color: #8a6500; }
-
-.action-lane {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+.status-line {
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
-.action-step {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: auto minmax(0, 1fr);
+.status-pill,
+.info-pill,
+.warning-pill {
+  display: inline-flex;
+  min-height: 24px;
   align-items: center;
-  gap: 5px;
-  min-height: 30px;
-  border: 1px solid #edf2f7;
-  border-radius: 12px;
-  background: #fbfcfd;
-  color: #9aa6b8;
+  border-radius: 5px;
   padding: 0 8px;
-}
-
-.action-step span {
-  overflow: hidden;
   font-size: 0.66rem;
   font-weight: 850;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.action-step-ready {
-  border-color: rgba(252, 191, 45, 0.44);
-  background: #fffaf0;
-  color: #9a6400;
+.status-success {
+  background: #ebf7ed;
+  color: var(--debt-green);
 }
 
-.action-step-done {
-  border-color: rgba(101, 167, 68, 0.32);
-  background: #f1faed;
-  color: #2e7235;
+.status-warning {
+  background: #fff6df;
+  color: var(--debt-amber);
 }
 
-.debtor-info-grid {
+.status-danger {
+  background: #fff0ed;
+  color: var(--debt-coral);
+}
+
+.status-info,
+.info-pill {
+  background: #edf6ff;
+  color: var(--debt-blue);
+}
+
+.warning-pill {
+  background: #fff6df;
+  color: var(--debt-amber);
+}
+
+.contact-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: 1.1fr 1.2fr 0.9fr 0.9fr;
+  gap: 0;
+  border-top: 1px solid var(--debt-soft-line);
+  border-bottom: 1px solid var(--debt-soft-line);
 }
 
-.debtor-info-grid div {
+.contact-strip div {
   min-width: 0;
-  border-radius: 14px;
-  background: #f8fafc;
-  padding: 10px;
+  border-right: 1px solid var(--debt-soft-line);
+  padding: 9px 12px 8px 0;
 }
 
-.debtor-info-grid strong {
+.contact-strip div + div {
+  padding-left: 12px;
+}
+
+.contact-strip div:last-child {
+  border-right: 0;
+}
+
+.contact-strip strong {
   display: block;
   overflow: hidden;
-  margin-top: 3px;
-  color: #172943;
-  font-size: 0.76rem;
-  font-weight: 800;
+  color: var(--debt-soft-ink);
+  font-size: 0.75rem;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.breakdown-preview {
+.breakdown-strip {
   display: grid;
   gap: 7px;
-  border: 1px solid #edf2f7;
-  border-radius: 16px;
-  background: #fbfcfd;
+  border: 1px solid var(--debt-soft-line);
+  border-radius: 8px;
+  background: #fbfdfb;
   padding: 10px;
 }
 
-.breakdown-head,
-.breakdown-line {
+.breakdown-title {
   display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.breakdown-title strong {
+  color: var(--debt-blue);
+  font-size: 0.74rem;
+}
+
+.breakdown-lines {
+  display: grid;
+  gap: 5px;
+}
+
+.breakdown-lines div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--debt-soft-ink);
+  font-size: 0.74rem;
+  font-weight: 680;
+}
+
+.breakdown-lines span {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breakdown-lines strong {
+  flex: 0 0 auto;
+  color: var(--debt-coral);
+}
+
+.breakdown-lines button {
+  width: max-content;
+  border: 0;
+  background: transparent;
+  color: var(--debt-blue);
+  font-size: 0.72rem;
+  font-weight: 850;
+  padding: 0;
+}
+
+.row-actions {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+
+.action-progress {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.action-progress span {
+  height: 6px;
+  border-radius: 999px;
+  background: #e8eee9;
+}
+
+.action-progress span.ready {
+  background: #d7e8d1;
+}
+
+.action-progress span.done {
+  background: var(--debt-green);
+}
+
+.primary-row-action {
+  min-height: 36px;
+  width: 100%;
+  padding: 0 10px;
+  font-size: 0.74rem;
+}
+
+.primary-row-action.disabled {
+  border-color: var(--debt-line);
+  background: #f7f9f8;
+  color: var(--debt-muted);
+}
+
+.secondary-row-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.secondary-row-actions button {
+  min-height: 32px;
+  border: 1px solid var(--debt-line);
+  background: #fff;
+  color: var(--debt-soft-ink);
+  font-size: 0.69rem;
+}
+
+.modal-overlay,
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  background: rgba(18, 32, 51, 0.38);
+}
+
+.modal-overlay {
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-container {
+  width: min(520px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--debt-line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 24px 64px rgba(18, 32, 51, 0.2);
+}
+
+.modal-header,
+.modal-content,
+.modal-footer {
+  padding: 16px;
+}
+
+.modal-header,
+.modal-footer {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.breakdown-head strong {
-  color: #397fe8;
-  font-size: 0.72rem;
-  font-weight: 900;
-  white-space: nowrap;
+.modal-header {
+  border-bottom: 1px solid var(--debt-soft-line);
 }
 
-.breakdown-line {
-  color: #526078;
-  font-size: 0.76rem;
-  font-weight: 760;
-}
-
-.breakdown-line span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.breakdown-line strong {
-  color: #e83f4b;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  white-space: nowrap;
-}
-
-.breakdown-preview button {
-  justify-self: start;
-  border: 0;
-  background: transparent;
-  color: #397fe8;
-  padding: 0;
-  font-size: 0.74rem;
-  font-weight: 850;
-}
-
-.manual-action {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid #dfe6ef;
-  border-radius: 999px;
-  background: #fff;
-  color: #66728a;
-  padding: 0 11px;
-  font-size: 0.72rem;
-  font-weight: 850;
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease;
-}
-
-.manual-action.ready {
-  border-color: rgba(101, 167, 68, 0.46);
-  background: #f7fcf4;
-  color: #2e7235;
-}
-
-.manual-action.done {
-  border-color: rgba(101, 167, 68, 0.25);
-  background: #eaf8e7;
-  color: #2e7235;
-}
-
-.manual-action.neutral {
-  color: #526078;
-}
-
-.manual-action:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.manual-action:disabled {
-  opacity: 0.48;
-  cursor: not-allowed;
+.modal-footer {
+  border-top: 1px solid var(--debt-soft-line);
 }
 
 .modal-title {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   margin: 0;
-  color: #172943;
+  color: var(--debt-ink);
   font-size: 1rem;
-  font-weight: 900;
 }
 
-.exception-summary {
+.modal-content {
+  display: grid;
+  gap: 14px;
+}
+
+.exception-summary,
+.drawer-muted,
+.drawer-note {
   display: grid;
   gap: 3px;
-  margin-bottom: 18px;
-  border-radius: 16px;
-  background: #f8fafc;
+  border-radius: 8px;
+  background: #f7f9f8;
   padding: 12px;
 }
 
 .exception-summary strong {
-  color: #172943;
-  font-weight: 900;
+  color: var(--debt-ink);
 }
 
-.exception-summary span {
-  color: #66728a;
-  font-size: 0.8rem;
-  font-weight: 700;
+.exception-summary span,
+.drawer-muted,
+.drawer-note {
+  color: var(--debt-muted);
+  font-size: 0.82rem;
+}
+
+.form-group {
+  display: grid;
+  gap: 6px;
+}
+
+.form-label {
+  color: var(--debt-soft-ink);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.input-field {
+  width: 100%;
+  border: 1px solid var(--debt-line);
+  border-radius: 8px;
+  background: #fbfcfb;
+  color: var(--debt-ink);
+  padding: 10px 11px;
+  font: inherit;
+  outline: none;
 }
 
 .exception-note {
-  min-height: 116px;
+  min-height: 110px;
   resize: vertical;
-}
-
-.drawer-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  justify-content: flex-end;
-  background: rgba(22, 38, 65, 0.28);
-  backdrop-filter: blur(8px);
 }
 
 .detail-drawer {
   display: grid;
-  width: min(560px, 100%);
+  width: min(590px, 100%);
   height: 100%;
-  grid-template-rows: auto auto auto auto auto auto 1fr;
-  gap: 14px;
+  margin-left: auto;
   overflow-y: auto;
+  align-content: start;
+  gap: 13px;
+  border-left: 1px solid var(--debt-line);
   background: #fff;
-  padding: 22px;
-  box-shadow: -20px 0 48px rgba(22, 38, 65, 0.16);
+  padding: 18px;
+  box-shadow: -18px 0 44px rgba(18, 32, 51, 0.18);
 }
 
 .drawer-header {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-}
-
-.drawer-header span {
-  color: #3f8468;
-  font-size: 0.68rem;
-  font-weight: 850;
-  text-transform: uppercase;
+  gap: 16px;
+  border-bottom: 1px solid var(--debt-soft-line);
+  padding-bottom: 14px;
 }
 
 .drawer-header h3 {
-  margin: 4px 0;
-  color: #172943;
-  font-size: 1.4rem;
-  font-weight: 900;
+  margin: 3px 0;
+  color: var(--debt-ink);
+  font-size: 1.25rem;
+  line-height: 1.2;
 }
 
 .drawer-header p {
   margin: 0;
-  color: #66728a;
-  font-size: 0.84rem;
-  font-weight: 680;
+  color: var(--debt-muted);
+  font-size: 0.82rem;
 }
 
 .drawer-total {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-radius: 20px;
-  background: #fff5f3;
-  padding: 16px;
+  display: grid;
+  gap: 3px;
+  border: 1px solid #f1d7d2;
+  border-radius: 8px;
+  background: #fff6f4;
+  padding: 14px;
 }
 
 .drawer-total strong {
-  color: #e83f4b;
-  font-size: 1.48rem;
-  font-weight: 900;
+  color: var(--debt-coral);
+  font-size: 1.7rem;
 }
 
 .drawer-contact {
@@ -2178,34 +2299,31 @@ const closeDetails = () => {
   gap: 8px;
 }
 
-.drawer-contact div {
+.drawer-contact div,
+.drawer-list div {
   min-width: 0;
-  border: 1px solid #edf2f7;
-  border-radius: 14px;
+  border: 1px solid var(--debt-soft-line);
+  border-radius: 8px;
+  background: #fbfdfb;
   padding: 10px;
 }
 
 .drawer-contact strong {
   display: block;
-  overflow: hidden;
-  margin-top: 3px;
-  color: #172943;
-  font-size: 0.8rem;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  color: var(--debt-soft-ink);
+  font-size: 0.82rem;
 }
 
 .drawer-section {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .drawer-section h4 {
   margin: 0;
-  color: #172943;
-  font-size: 0.9rem;
-  font-weight: 900;
+  color: var(--debt-ink);
+  font-size: 0.88rem;
 }
 
 .drawer-list {
@@ -2215,93 +2333,263 @@ const closeDetails = () => {
 
 .drawer-list div {
   display: flex;
-  min-width: 0;
   justify-content: space-between;
-  gap: 12px;
-  border: 1px solid #edf2f7;
-  border-radius: 14px;
-  padding: 10px;
+  gap: 14px;
 }
 
 .drawer-list span {
   min-width: 0;
-  color: #526078;
-  font-size: 0.8rem;
-  font-weight: 760;
   overflow-wrap: anywhere;
+  color: var(--debt-soft-ink);
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .drawer-list strong {
-  color: #172943;
+  flex: 0 0 auto;
+  color: var(--debt-coral);
   font-size: 0.8rem;
-  font-weight: 850;
-  white-space: nowrap;
-}
-
-.drawer-muted,
-.drawer-note {
-  margin: 0;
-  border-radius: 14px;
-  background: #f8fafc;
-  color: #66728a;
-  padding: 12px;
-  font-size: 0.84rem;
-  font-weight: 650;
-  line-height: 1.5;
 }
 
 .drawer-actions {
-  align-self: end;
-  border-top: 1px solid #edf2f7;
-  padding-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  border-top: 1px solid var(--debt-soft-line);
+  padding-top: 13px;
 }
 
-@media (max-width: 1360px) {
-  .flow-track {
+.drawer-action {
+  min-height: 32px;
+  border: 1px solid var(--debt-line);
+  background: #fff;
+  color: var(--debt-muted);
+  padding: 0 10px;
+  font-size: 0.7rem;
+}
+
+.drawer-action.ready {
+  border-color: rgba(79, 133, 73, 0.34);
+  background: #f4faf3;
+  color: var(--debt-green);
+}
+
+.drawer-action.done {
+  border-color: rgba(79, 133, 73, 0.22);
+  background: #eaf5e9;
+  color: var(--debt-green);
+}
+
+.drawer-action.neutral {
+  color: var(--debt-soft-ink);
+}
+
+.btn-sm {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.btn-ghost {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--debt-muted);
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 1320px) {
+  .journey-steps {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 12px;
   }
 
-  .filters-shell {
-    grid-template-columns: minmax(240px, 1fr) 170px;
+  .journey-step:nth-child(4) {
+    border-left: 0;
+    padding-left: 0;
   }
 
-  .segment-control {
+  .action-console {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .mass-action {
     grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 1180px) {
-  .operations-grid {
+  .collections-layout {
     grid-template-columns: 1fr;
   }
 
-  .operations-side {
+  .guidance-column {
     position: static;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
 
-  .operations-side .wa-card,
-  .stage-note {
+  .whatsapp-guide,
+  .signal-panel {
     grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 980px) {
-  .debt-command {
-    gap: 14px;
-  }
-
   .debt-hero {
     grid-template-columns: 1fr;
   }
 
-  .flow-heading {
-    display: grid;
+  .student-row {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .bulk-console {
+  .row-actions {
+    grid-column: 2 / -1;
+  }
+
+  .contact-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .contact-strip div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .contact-strip div:nth-child(n + 3) {
+    border-top: 1px solid var(--debt-soft-line);
+  }
+}
+
+@media (max-width: 760px) {
+  :global(body.deudores-page-active .income-shell) {
+    display: block;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  :global(body.deudores-page-active .income-sidebar) {
+    width: auto;
+    min-height: auto;
+    margin: 10px;
+    border-radius: 10px;
+  }
+
+  :global(body.deudores-page-active .sidebar-sheen),
+  :global(body.deudores-page-active .sidebar-rings),
+  :global(body.deudores-page-active .sidebar-arc),
+  :global(body.deudores-page-active .sidebar-leaves) {
+    display: none;
+  }
+
+  :global(body.deudores-page-active .sidebar-brand) {
+    padding: 18px 14px 12px;
+  }
+
+  :global(body.deudores-page-active .sidebar-logo) {
+    max-height: 38px;
+    margin-bottom: 8px;
+  }
+
+  :global(body.deudores-page-active .sidebar-nav) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex: none;
+    gap: 7px;
+    overflow: visible;
+    padding: 0 12px 12px;
+  }
+
+  :global(body.deudores-page-active .nav-item) {
+    min-height: 38px;
+    gap: 8px;
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 0.76rem;
+  }
+
+  :global(body.deudores-page-active .sidebar-footer) {
+    gap: 10px;
+    padding: 0 12px 12px;
+  }
+
+  :global(body.deudores-page-active .income-main) {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  :global(body.deudores-page-active .app-header) {
+    height: auto;
+    min-height: 58px;
+    padding: 10px 14px;
+  }
+
+  :global(body.deudores-page-active .income-content) {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .hero-copy {
+    min-height: auto;
+    padding: 24px;
+  }
+
+  .hero-copy h2 {
+    font-size: 2rem;
+  }
+
+  .summary-grid,
+  .journey-steps,
+  .guidance-column,
+  .filters-panel,
+  .segment-control,
+  .contact-strip,
+  .drawer-contact {
     grid-template-columns: 1fr;
+  }
+
+  .summary-grid div,
+  .summary-grid div:last-child {
+    border-right: 0;
+    border-bottom: 1px solid var(--debt-soft-line);
+    padding: 11px 0;
+  }
+
+  .summary-grid div:last-child {
+    border-bottom: 0;
+  }
+
+  .journey-heading,
+  .cases-header,
+  .action-console {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .journey-step,
+  .journey-step:nth-child(4) {
+    border-left: 0;
+    border-top: 1px solid var(--debt-soft-line);
+    padding: 12px 0 0;
+  }
+
+  .journey-step:first-child {
+    border-top: 0;
+  }
+
+  .action-console {
+    grid-template-columns: 1fr;
   }
 
   .mass-action {
@@ -2309,82 +2597,39 @@ const closeDetails = () => {
   }
 
   .mass-action select,
-  .mass-action button {
-    width: auto;
-    flex: 1;
-  }
-}
-
-@media (max-width: 760px) {
-  :global(body.deudores-page-active .income-content) {
-    padding-left: 14px;
-    padding-right: 14px;
+  .mass-action .btn {
+    width: 100%;
   }
 
-  .hero-copy,
-  .hero-snapshot,
-  .flow-strip,
-  .case-panel,
-  .manual-card,
-  .side-panel,
-  .stage-note,
-  .debtor-card {
-    border-radius: 18px;
+  .student-header {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .hero-copy {
-    padding: 22px;
-  }
-
-  .hero-copy h2 {
-    font-size: 1.95rem;
-  }
-
-  .snapshot-grid,
-  .flow-track,
-  .operations-side,
-  .filters-shell,
-  .debtor-info-grid,
-  .drawer-contact {
-    grid-template-columns: 1fr;
-  }
-
-  .segment-control {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .panel-heading,
-  .debtor-head {
-    align-items: stretch;
-  }
-
-  .panel-mini {
-    justify-items: start;
-  }
-
-  .debtor-head {
-    grid-template-columns: auto auto minmax(0, 1fr);
-  }
-
-  .saldo-block {
+  .balance-box {
     grid-column: 1 / -1;
     min-width: 0;
     text-align: left;
   }
 
-  .action-lane {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .contact-strip div,
+  .contact-strip div + div {
+    border-right: 0;
+    border-top: 1px solid var(--debt-soft-line);
+    padding: 9px 0;
   }
 
-  .detail-drawer {
-    padding: 18px;
+  .contact-strip div:first-child {
+    border-top: 0;
+  }
+
+  .row-actions {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 520px) {
   .hero-actions,
   .mass-action,
-  .card-actions,
   .drawer-actions {
     flex-direction: column;
     align-items: stretch;
@@ -2392,15 +2637,21 @@ const closeDetails = () => {
 
   .hero-actions .btn,
   .mass-action .btn,
-  .card-actions .manual-action,
-  .drawer-actions .manual-action {
+  .drawer-action {
     width: 100%;
   }
 
-  .name-line {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
+  .student-row {
+    grid-template-columns: 1fr;
+  }
+
+  .row-select {
+    padding-top: 0;
+  }
+
+  .row-select label {
+    width: auto;
+    justify-content: flex-start;
   }
 }
 </style>

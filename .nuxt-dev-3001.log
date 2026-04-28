@@ -1,0 +1,29 @@
+
+> dev
+> nuxt dev --host 127.0.0.1 --port 3001
+
+|
+•  [32mNuxt [1m3.21.2[22m[39m[90m (with [39m[90mNitro [1m2.13.3[22m[39m[90m, Vite [1m7.3.2[22m[39m[90m and Vue [1m3.5.32[22m[39m[90m)[39m
+
+[32m  ➜ Local:   [39m [36m[4mhttp://127.0.0.1:[1m3001[22m/[24m[39m
+[90m  ➜ Network:  use [37m--host[90m to expose[39m
+
+[90m[[90mnuxt:tailwindcss[90m][39m [36mi[39m Using default Tailwind CSS file
+[90m[[90mnuxt:tailwindcss[90m][39m [36mi[39m Tailwind Viewer: [4m[33mhttp://127.0.0.1:3001/_tailwind/[39m[24m
+[32m√[39m Vite client built in 66ms
+[32m√[39m Vite server built in 854ms
+[90m[[90mnitro[90m][39m [32m√[39m Nuxt Nitro server built in 2120ms
+[36mi[39m Vite server warmed up in 1ms
+[36mi[39m Vite client warmed up in 3ms
+[32m√[39m Vite server hmr 1 files in 1460.002ms
+[32m√[39m Vite server hmr 2 files in 0.005ms
+[41m[30m ERROR [39m[49m [Schema Update Error] ALTER TABLE base ADD INDEX idx_base_matricula_esta... -> DB bridge respondio con HTTP 502.
+[41m[30m ERROR [39m[49m [Schema Update Error] ALTER TABLE base ADD INDEX idx_base_plantel_estatu... -> DB bridge respondio con HTTP 502.
+[41m[30m ERROR [39m[49m [Schema Update Error] ALTER TABLE referenciasdepago ADD INDEX idx_ref_ci... -> DB bridge respondio con HTTP 502.
+[41m[30m ERROR [39m[49m [Schema Update Error] ALTER TABLE documentos ADD INDEX idx_documentos_ci... -> DB bridge respondio con HTTP 502.
+[32m√[39m Vite server hmr 2 files in 0.005ms
+[32m√[39m Vite server hmr 2 files in 0.007ms
+[32m√[39m Vite server hmr 2 files in 0.015ms
+[32m√[39m Vite server hmr 2 files in 0.003ms
+[32m√[39m Vite server hmr 2 files in 0.003ms
+[32m√[39m Vite server hmr 2 files in 0.003ms
