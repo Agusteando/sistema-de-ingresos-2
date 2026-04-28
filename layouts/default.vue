@@ -30,8 +30,8 @@
         <NuxtLink to="/deudores" class="nav-item group">
           <LucideAlertTriangle :size="22" stroke-width="2" /> Deudores
         </NuxtLink>
-        <NuxtLink to="/reportes" class="nav-item group" v-if="userRole === 'global'">
-          <LucidePieChart :size="22" stroke-width="2" /> Ingresos
+        <NuxtLink to="/reportes" class="nav-item group">
+          <LucidePieChart :size="22" stroke-width="2" /> Reportes
         </NuxtLink>
         <NuxtLink to="/conceptos" class="nav-item group">
           <LucideSettings :size="22" stroke-width="2" /> Conceptos
@@ -221,8 +221,8 @@ onMounted(async () => {
 const currentRouteName = computed(() => {
   if (route.path === '/') return 'Alumnos'
   if (route.path === '/deudores') return 'Deudores'
-  if (route.path === '/reportes') return 'Ingresos'
-  if (route.path === '/conceptos') return 'Catálogo de conceptos'
+  if (route.path === '/reportes') return 'Centro de reportes'
+  if (route.path === '/conceptos') return 'Conceptos'
   if (route.path === '/facturas') return 'Facturas CFDI'
   if (route.path === '/usuarios') return 'Usuarios'
   return 'SISTEMA DE INGRESOS'

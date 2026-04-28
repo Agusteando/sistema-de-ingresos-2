@@ -5,18 +5,31 @@ export default defineEventHandler(async (event) => {
   const method = event.node.req.method
   
   if (method === 'GET') {
-    const { ciclo = '2025' } = getQuery(event)
+    const { ciclo = '2025', q = '' } = getQuery(event)
     const cicloKey = normalizeCicloKey(ciclo)
-    return await query(`SELECT * FROM conceptos WHERE ciclo = ? ORDER BY concepto ASC`, [cicloKey])
+    const search = String(Array.isArray(q) ? q[0] : q || '').trim()
+    const params: any[] = [cicloKey]
+    let where = 'ciclo = ?'
+
+    if (search) {
+      where += ' AND (concepto LIKE ? OR description LIKE ? OR CAST(id AS CHAR) = ?)'
+      params.push(`%${search}%`, `%${search}%`, search)
+    }
+
+    return await query(`
+      SELECT id, concepto, costo, description, plantel, eventual, plazo, ciclo
+      FROM conceptos
+      WHERE ${where}
+      ORDER BY concepto ASC
+    `, params)
   }
 
   if (method === 'POST') {
-    const body = await readBody(event)
-    const cicloKey = normalizeCicloKey(body.ciclo)
-    await query(`
-      INSERT INTO conceptos (concepto, description, costo, eventual, ciclo, plazo)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [body.concepto, body.description, body.costo, body.eventual ? 1 : 0, cicloKey, body.plazo])
-    return { success: true }
+    throw createError({
+      statusCode: 405,
+      message: 'Los conceptos se administran desde la fuente central.'
+    })
   }
+
+  throw createError({ statusCode: 405, message: 'Metodo no permitido.' })
 })
