@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
     `
 
     try {
-      await sendEmail(dest.correo, asunto, fullHtml)
+      await sendEmail(dest.correo, asunto, fullHtml, user?.email)
       results.sent++
     } catch (error) {
       results.failed++

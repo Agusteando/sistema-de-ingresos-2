@@ -430,6 +430,91 @@ export const ensureSchema = async () => {
         }
       } catch (e) {}
 
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS cobranza_eventos (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          matricula VARCHAR(255) NOT NULL,
+          ciclo VARCHAR(50) NOT NULL,
+          mes INT NOT NULL,
+          accion VARCHAR(50) NOT NULL,
+          fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          usuario VARCHAR(255) NOT NULL,
+          metadata JSON NULL,
+          UNIQUE KEY uniq_cobranza_accion_periodo (matricula, ciclo, mes, accion),
+          INDEX idx_cobranza_matricula_periodo (matricula, ciclo, mes)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS cobranza_observaciones (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          matricula VARCHAR(255) NOT NULL,
+          ciclo VARCHAR(50) NOT NULL,
+          texto TEXT NOT NULL,
+          usuario VARCHAR(255) NOT NULL,
+          fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_cobranza_obs_lookup (matricula, ciclo, fecha)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS cobranza_excepciones (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          matricula VARCHAR(255) NOT NULL,
+          ciclo VARCHAR(50) NOT NULL,
+          mes INT NOT NULL,
+          fecha_limite_especial DATE NOT NULL,
+          motivo TEXT NULL,
+          activa TINYINT(1) NOT NULL DEFAULT 1,
+          created_by VARCHAR(255) NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_cobranza_excepcion_periodo (matricula, ciclo, mes),
+          INDEX idx_cobranza_excepciones_activa (ciclo, mes, activa)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS cobranza_email_templates (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          code VARCHAR(100) NOT NULL,
+          subject VARCHAR(255) NOT NULL,
+          html_template LONGTEXT NOT NULL,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          updated_by VARCHAR(255) NULL,
+          UNIQUE KEY uniq_cobranza_email_template_code (code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS cobranza_whatsapp_clients (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          client_id VARCHAR(255) NOT NULL,
+          integration_id VARCHAR(255) NULL,
+          status VARCHAR(50) NOT NULL DEFAULT 'pending',
+          display_name VARCHAR(255) NULL,
+          user_email VARCHAR(255) NULL,
+          endpoint_status VARCHAR(500) NULL,
+          endpoint_qr_status VARCHAR(500) NULL,
+          endpoint_qr_stream VARCHAR(500) NULL,
+          endpoint_send_message VARCHAR(500) NULL,
+          metadata JSON NULL,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_cobranza_wa_client_id (client_id),
+          INDEX idx_cobranza_wa_user (user_email)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        INSERT INTO cobranza_email_templates (code, subject, html_template, updated_by)
+        VALUES (
+          'deudores_recordatorio',
+          'Recordatorio de pago - Estado de cuenta',
+          '<div style="font-family: Inter, Arial, sans-serif; color: #1f2937; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;"><div style="background:#0f766e;color:#fff;padding:18px 24px;"><h2 style="margin:0;font-size:18px;">Recordatorio de pago</h2></div><div style="padding:24px;"><p style="margin-top:0;">Estimado(a) <strong>{{tutor}}</strong>,</p><p>Le recordamos que el estado de cuenta del alumno <strong>{{nombre_alumno}}</strong> (Matricula: <strong>{{matricula}}</strong>) correspondiente al periodo <strong>{{mes}}/{{ciclo}}</strong> presenta saldo pendiente por <strong>${{deuda}} MXN</strong>.</p><p style="margin:16px 0 6px;"><strong>Desglose:</strong></p><p style="margin-top:0;">{{desglose}}</p><p>Si ya realizo el pago y se encuentra en proceso de conciliacion, por favor haga caso omiso a este mensaje.</p><p>Quedamos atentos para apoyarle en cualquier duda.</p><p style="margin-bottom:0;">Atentamente,<br><strong>Administracion y Cobranza</strong></p></div></div>',
+          'system'
+        )
+        ON DUPLICATE KEY UPDATE code = code;
+      `)
       try {
         const superAdminEmail = 'desarrollo.tecnologico@casitaiedis.edu.mx'
         const existingAdmin = await rawQuery<any[]>(`SELECT id FROM users WHERE email = ?`, [superAdminEmail])
