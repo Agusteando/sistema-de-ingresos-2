@@ -3,7 +3,7 @@
     <div class="card p-5 mb-6 border-l-4 border-accent-coral flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div>
         <h2 class="text-lg font-bold text-gray-800 tracking-tight">Deudores</h2>
-        <p class="text-gray-500 text-sm mt-0.5">Gestión de alumnos con saldos vencidos y notificación masiva.</p>
+        <p class="text-gray-500 text-sm mt-0.5">Gestión de deudores de colegiatura con flujo mensual, evidencias y notificación.</p>
       </div>
       <div class="flex gap-3 w-full md:w-auto flex-wrap">
         <button class="btn btn-outline flex-1 md:flex-none" @click="loadData" :disabled="loading">
@@ -23,7 +23,15 @@
         <label class="form-label">Buscar</label>
         <input type="text" v-model="search" class="input-field" placeholder="Matrícula o nombre...">
       </div>
-      <div class="form-group m-0 md:col-span-3 flex items-end">
+      <div class="form-group m-0">
+        <label class="form-label">Estatus</label>
+        <select v-model="estatusFiltro" class="input-field">
+          <option value="deudores">Solo deudores</option>
+          <option value="todos">Todos</option>
+          <option value="no_deudores">No deudores</option>
+        </select>
+      </div>
+      <div class="form-group m-0 md:col-span-2 flex items-end">
         <div class="flex items-center gap-4 px-5 h-[36px] bg-gray-50 rounded-lg border border-gray-200 w-full">
           <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total adeudado:</div>
           <div class="text-lg font-bold text-accent-coral font-mono">${{ totalCartera.toLocaleString('es-MX', {minimumFractionDigits:2}) }}</div>
@@ -40,12 +48,14 @@
             <th>Alumno</th>
             <th>Grado</th>
             <th>Tutor</th>
+            <th>Estatus</th>
+            <th>Acción hoy</th>
             <th class="text-right">Saldo</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading"><td colspan="6" class="text-center font-medium py-12 text-gray-500">Cargando...</td></tr>
-          <tr v-else-if="!filteredDeudores.length"><td colspan="6" class="text-center py-12 text-gray-400">No hay alumnos con saldos vencidos bajo estos filtros.</td></tr>
+          <tr v-if="loading"><td colspan="8" class="text-center font-medium py-12 text-gray-500">Cargando...</td></tr>
+          <tr v-else-if="!filteredDeudores.length"><td colspan="8" class="text-center py-12 text-gray-400">No hay alumnos con saldos vencidos bajo estos filtros.</td></tr>
           <tr v-else v-for="d in filteredDeudores" :key="d.matricula" 
               class="cursor-context-menu"
               :class="{'selected': selectedDeudores.includes(d)}"
@@ -59,7 +69,9 @@
               <div class="text-[11px] font-semibold text-brand-teal mt-0.5" v-if="d.correo">{{ d.correo }}</div>
               <div class="text-[11px] text-accent-coral mt-0.5 font-semibold" v-else>Sin correo</div>
             </td>
-            <td class="text-right font-bold text-accent-coral font-mono text-sm">${{ Number(d.deudaVigente).toFixed(2) }}</td>
+            <td><span class="text-[11px] font-semibold uppercase" :class="d.isDeudor ? 'text-accent-coral' : 'text-brand-teal'">{{ d.estatusFlujo }}</span></td>
+            <td class="text-[11px] text-gray-600">{{ d.accionHoy || '-' }}</td>
+            <td class="text-right font-bold text-accent-coral font-mono text-sm">${{ Number(d.saldoColegiatura).toFixed(2) }}</td>
           </tr>
         </tbody>
       </table>
@@ -116,6 +128,7 @@ const { show } = useToast()
 const { openMenu } = useContextMenu()
 
 const deudores = ref([])
+const estatusFiltro = ref('deudores')
 const loading = ref(false)
 const search = ref('')
 const selectedDeudores = ref([])
@@ -147,7 +160,7 @@ const loadData = async () => {
   loading.value = true
   selectedDeudores.value = []
   try {
-    deudores.value = await $fetch('/api/deudores', { params: { ciclo: normalizeCicloKey(state.value.ciclo) } })
+    deudores.value = await $fetch('/api/deudores', { params: { ciclo: normalizeCicloKey(state.value.ciclo), estatus: estatusFiltro.value } })
   } catch (e) {
     show('Error al cargar alumnos deudores', 'danger')
   } finally {
@@ -157,6 +170,7 @@ const loadData = async () => {
 
 onMounted(loadData)
 watch(() => normalizeCicloKey(state.value.ciclo), loadData)
+watch(estatusFiltro, loadData)
 
 const filteredDeudores = computed(() => {
   if (!search.value) return deudores.value
@@ -166,7 +180,7 @@ const filteredDeudores = computed(() => {
   )
 })
 
-const totalCartera = computed(() => filteredDeudores.value.reduce((sum, d) => sum + Number(d.deudaVigente), 0))
+const totalCartera = computed(() => filteredDeudores.value.reduce((sum, d) => sum + Number(d.saldoColegiatura), 0))
 
 const toggleAll = (e) => {
   selectedDeudores.value = e.target.checked ? [...filteredDeudores.value] : []
@@ -174,7 +188,7 @@ const toggleAll = (e) => {
 
 const showContextMenu = (event, d) => {
   openMenu(event, [
-    { label: `Saldo Pendiente: $${Number(d.deudaVigente).toFixed(2)}`, disabled: true },
+    { label: `Saldo Pendiente: $${Number(d.saldoColegiatura).toFixed(2)}`, disabled: true },
     { label: '-' },
     { label: 'Seleccionar para correo', icon: LucideUserCheck, action: () => { if (!selectedDeudores.value.includes(d)) selectedDeudores.value.push(d) } },
     { label: 'Ver detalles de alumno', icon: LucideEye, action: () => { window.location.href = `/?q=${d.matricula}` } }
@@ -189,7 +203,9 @@ const exportData = () => {
     Tutor: d.padre || 'No registrado',
     Correo: d.correo || 'Sin correo',
     Teléfono: d.telefono || '',
-    Saldo_Pendiente_MXN: Number(d.deudaVigente).toFixed(2)
+    Saldo_Colegiatura_MXN: Number(d.saldoColegiatura).toFixed(2),
+    Estatus_Flujo: d.estatusFlujo,
+    Accion_Hoy: d.accionHoy || ''
   }))
   exportToCSV(`Deudores_${normalizeCicloKey(state.value.ciclo)}.csv`, exportList)
 }
@@ -202,21 +218,28 @@ const openMassEmailModal = () => {
 const executeBatch = async () => {
   sending.value = true
   try {
-    const res = await $fetch('/api/reminders/batch', {
-      method: 'POST',
-      body: {
-        asunto: emailForm.value.asunto,
-        template: emailForm.value.template,
-        destinatarios: selectedDeudores.value
+    let sent = 0
+    let failed = 0
+    for (const dest of selectedDeudores.value) {
+      try {
+        await $fetch('/api/deudores/actions', {
+          method: 'POST',
+          body: {
+            matricula: dest.matricula,
+            ciclo: normalizeCicloKey(state.value.ciclo),
+            mes: dest.mes,
+            accion: 'correo_recordatorio'
+          }
+        })
+        sent++
+      } catch (e) {
+        failed++
       }
-    })
-    if (res.success) {
-      show(`Reporte de envío: ${res.results.sent} exitosos, ${res.results.failed} fallidos.`)
-      showModal.value = false
-      selectedDeudores.value = []
-    } else {
-      show(res.message || 'Ocurrió un error al procesar el envío masivo.', 'danger')
     }
+    show(`Reporte de envío: ${sent} exitosos, ${failed} fallidos.`)
+    showModal.value = false
+    selectedDeudores.value = []
+    await loadData()
   } catch (e) {
     show('Error de red al establecer comunicación.', 'danger')
   } finally {
