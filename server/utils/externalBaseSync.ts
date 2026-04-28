@@ -368,7 +368,8 @@ const isTruthyCurrentFlag = (value: any) => (
   String(value || '').trim().toLowerCase() === 'vigente'
 )
 
-const currentFlagKeys = ['esActual', 'actual', 'current', 'vigente', 'isCurrent', 'active']
+const currentCicloFlagKeys = ['esActual']
+const legacyCurrentFlagKeys = ['actual', 'current', 'vigente', 'isCurrent', 'active']
 const directCicloKeys = [
   'cicloActual',
   'ciclo_actual',
@@ -380,35 +381,74 @@ const directCicloKeys = [
 
 const cicloValueKeys = ['ciclo', 'ciclo_escolar', 'cicloEscolar', 'value', 'label', 'nombre']
 
-const readCurrentCicloFromConfig = (configData: any): unknown => {
-  if (!configData || typeof configData !== 'object') return ''
-
-  for (const key of directCicloKeys) {
-    if (configData[key]) return configData[key]
-  }
-
-  const ciclos = configData.ciclos
-
-  if (Array.isArray(ciclos)) {
-    const current = ciclos.find((entry) => {
-      if (!entry || typeof entry !== 'object') return false
-      return currentFlagKeys.some(key => isTruthyCurrentFlag(entry[key]))
-    })
-
-    if (current) {
-      for (const key of cicloValueKeys) {
-        if (current[key]) return current[key]
-      }
+const readCicloValueFromEntry = (entry: any, fallback: unknown = ''): unknown => {
+  if (entry && typeof entry === 'object') {
+    for (const key of cicloValueKeys) {
+      if (entry[key]) return entry[key]
     }
   }
 
-  if (ciclos && typeof ciclos === 'object') {
-    const currentEntry = Object.entries(ciclos).find(([, value]) => {
-      if (!value || typeof value !== 'object') return false
-      return currentFlagKeys.some(key => isTruthyCurrentFlag((value as any)[key]))
-    })
+  return fallback || entry || ''
+}
 
-    if (currentEntry) return currentEntry[0]
+const entryHasAnyFlag = (entry: any, flagKeys: string[]) => {
+  if (!entry || typeof entry !== 'object') return false
+  return flagKeys.some(key => Object.prototype.hasOwnProperty.call(entry, key))
+}
+
+const collectionHasAnyFlag = (ciclos: any, flagKeys: string[]) => {
+  if (Array.isArray(ciclos)) {
+    return ciclos.some(entry => entryHasAnyFlag(entry, flagKeys))
+  }
+
+  if (ciclos && typeof ciclos === 'object') {
+    return Object.values(ciclos).some(entry => entryHasAnyFlag(entry, flagKeys))
+  }
+
+  return false
+}
+
+const entryHasTruthyFlag = (entry: any, flagKeys: string[]) => {
+  if (!entry || typeof entry !== 'object') return false
+  return flagKeys.some(key => isTruthyCurrentFlag(entry[key]))
+}
+
+const readCicloFromCollectionByFlag = (ciclos: any, flagKeys: string[]): unknown => {
+  if (Array.isArray(ciclos)) {
+    const current = ciclos.find(entry => entryHasTruthyFlag(entry, flagKeys))
+    return current ? readCicloValueFromEntry(current) : ''
+  }
+
+  if (ciclos && typeof ciclos === 'object') {
+    const currentEntry = Object.entries(ciclos).find(([, value]) => entryHasTruthyFlag(value, flagKeys))
+    if (!currentEntry) return ''
+
+    const [key, value] = currentEntry
+    return readCicloValueFromEntry(value, key)
+  }
+
+  return ''
+}
+
+const readCurrentCicloFromConfig = (configData: any): unknown => {
+  if (!configData || typeof configData !== 'object') return ''
+
+  const ciclos = Array.isArray(configData) ? configData : configData.ciclos
+  const currentFromEsActual = readCicloFromCollectionByFlag(ciclos, currentCicloFlagKeys)
+  if (currentFromEsActual) return currentFromEsActual
+
+  // esActual is authoritative when present; direct values are only a legacy fallback.
+  if (collectionHasAnyFlag(ciclos, currentCicloFlagKeys)) {
+    return ''
+  }
+
+  const legacyCurrent = readCicloFromCollectionByFlag(ciclos, legacyCurrentFlagKeys)
+  if (legacyCurrent) return legacyCurrent
+
+  if (!Array.isArray(configData)) {
+    for (const key of directCicloKeys) {
+      if (configData[key]) return configData[key]
+    }
   }
 
   return ''
