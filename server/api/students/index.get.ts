@@ -1,6 +1,7 @@
 import { query } from '../../utils/db'
 import { calculatePromotedGrado, displayGrado } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 
 export default defineEventHandler(async (event) => {
   const { q = '', ciclo = '2025' } = getQuery(event)
@@ -74,7 +75,7 @@ export default defineEventHandler(async (event) => {
   const queryParams = [cicloKey, cicloKey, ...params]
   const rows = await query<any[]>(sql, queryParams)
   
-  return rows.flatMap(r => {
+  const mapped = rows.flatMap(r => {
     const promoted = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey)
     if (promoted.outOfScope) return []
 
@@ -85,4 +86,6 @@ export default defineEventHandler(async (event) => {
       interno: r.internoBase
     }
   })
+
+  return await attachCustomSectionsToStudents(mapped, user)
 })

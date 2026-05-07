@@ -15,6 +15,9 @@
             <polyline points="2,34 22,25 40,29 58,18 78,23 96,13 116,5" />
           </svg>
         </div>
+        <button class="btn btn-secondary section-manage-button" @click="openSectionModal(null)">
+          <LucideTags :size="18"/> Secciones
+        </button>
         <button class="btn btn-primary new-student-button" @click="openAlta">
           <LucideUserPlus :size="22"/> Nuevo Alumno
         </button>
@@ -94,6 +97,24 @@
         </span>
         <svg viewBox="0 0 104 42" aria-hidden="true">
           <polyline points="0,34 16,31 31,23 47,26 63,17 80,19 96,10 104,8" />
+        </svg>
+      </button>
+
+
+      <button
+        v-for="section in customSections"
+        :key="`section-kpi-${section.id}`"
+        @click="setActiveFilter(sectionFilterKey(section.id))"
+        :class="['kpi-card kpi-section', { active: activeFilter === sectionFilterKey(section.id) }]"
+      >
+        <span class="kpi-icon"><LucideTag :size="24" /></span>
+        <span class="kpi-text">
+          <span>{{ section.name }}</span>
+          <strong>{{ customSectionCounts[section.id] || 0 }}</strong>
+          <em>Seccion personalizada</em>
+        </span>
+        <svg viewBox="0 0 104 42" aria-hidden="true">
+          <polyline points="0,34 16,28 32,30 48,19 64,21 82,12 104,5" />
         </svg>
       </button>
     </div>
@@ -185,6 +206,9 @@
                     {{ s.matricula }}
                     <template v-if="selectedStudent"> · {{ s.grado }} "{{ s.grupo }}"</template>
                   </em>
+                  <span v-if="s.customSections?.length" class="student-section-badges">
+                    <b v-for="section in s.customSections" :key="`row-section-${s.matricula}-${section.id}`">{{ section.name }}</b>
+                  </span>
                 </span>
               </span>
 
@@ -225,6 +249,7 @@
           @switch-student="selectStudentByMatricula"
           @photo-loaded="cacheStudentPhoto"
           @baja="bajaAlumno"
+          @manage-sections="openSectionModal"
         />
       </section>
       </Transition>
@@ -232,6 +257,48 @@
 
     <StudentFormModal v-if="showStudentModal" :student="editingStudent" @close="closeStudentModal" @success="handleStudentSuccess" />
     <BajaReasonModal v-if="pendingBajaStudent" :student="pendingBajaStudent" @close="pendingBajaStudent = null" @confirm="confirmBaja" />
+
+    <Teleport to="body">
+      <div v-if="showSectionModal" class="section-modal-backdrop" @click.self="closeSectionModal">
+        <div class="section-modal-card">
+          <header>
+            <div>
+              <span>Secciones personalizadas</span>
+              <h3 v-if="sectionModalStudent">{{ sectionModalStudent.nombreCompleto }}</h3>
+              <h3 v-else>Administrar secciones</h3>
+            </div>
+            <button type="button" class="plain-icon-button" @click="closeSectionModal"><LucideX :size="18" /></button>
+          </header>
+
+          <div class="section-create-row">
+            <input v-model="newSectionName" placeholder="Nueva seccion local..." @keyup.enter="createCustomSection" />
+            <button class="btn btn-primary btn-sm" :disabled="creatingSection || !newSectionName.trim()" @click="createCustomSection">
+              <LucidePlus :size="14" /> Crear
+            </button>
+          </div>
+
+          <div v-if="!customSections.length" class="section-empty-state">Aun no hay secciones personalizadas.</div>
+          <div v-else class="section-option-list">
+            <label v-for="section in customSections" :key="`section-option-${section.id}`" class="section-option">
+              <span>
+                <strong>{{ section.name }}</strong>
+                <em>{{ customSectionCounts[section.id] || 0 }} alumnos</em>
+              </span>
+              <input
+                v-if="sectionModalStudent"
+                type="checkbox"
+                :checked="studentHasSection(sectionModalStudent, section.id)"
+                :disabled="assigningSections"
+                @change="toggleStudentSection(sectionModalStudent, section.id, $event.target.checked)"
+              />
+              <button v-else type="button" class="section-delete" title="Eliminar seccion" @click.prevent="deleteCustomSection(section)">
+                <LucideTrash2 :size="14" />
+              </button>
+            </label>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -251,7 +318,12 @@ import {
   LucideUsers,
   LucideGlobe2,
   LucideRotateCcw,
-  LucideChevronRight
+  LucideChevronRight,
+  LucideTags,
+  LucideTag,
+  LucideX,
+  LucidePlus,
+  LucideTrash2
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -286,11 +358,22 @@ const globalKpis = ref({ ingresosMes: 0 })
 const showStudentModal = ref(false)
 const editingStudent = ref(null)
 const pendingBajaStudent = ref(null)
+const customSections = ref([])
+const showSectionModal = ref(false)
+const sectionModalStudent = ref(null)
+const newSectionName = ref('')
+const creatingSection = ref(false)
+const assigningSections = ref(false)
 
 const format = (val) => Number(val || 0).toFixed(2)
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') || 'AL'
 const normalizeStudentMatricula = (value) => String(value || '').trim().toUpperCase()
 const photoStorageKey = (matricula) => `foto_${normalizeStudentMatricula(matricula)}`
+const sectionFilterKey = (id) => `section:${Number(id)}`
+const isSectionFilter = (filter) => String(filter || '').startsWith('section:')
+const sectionIdFromFilter = (filter) => Number(String(filter || '').split(':')[1] || 0)
+const normalizeSectionIds = (sections = []) => sections.map(section => Number(section.id)).filter(Boolean)
+const studentHasSection = (student, sectionId) => normalizeSectionIds(student?.customSections || []).includes(Number(sectionId))
 
 const readCachedStudentPhotos = () => {
   if (!process.client) return
@@ -319,17 +402,24 @@ const hasActiveFilters = computed(() => Boolean(
   filters.value.q
 ))
 
-const activeFilterLabel = computed(() => ({
-  inscritos: 'Inscritos',
-  internos: 'Internos',
-  externos: 'Externos',
-  no_inscritos: 'No inscritos',
-  bajas: 'Bajas'
-}[activeFilter.value] || 'Todos los estados'))
+const activeFilterLabel = computed(() => {
+  if (isSectionFilter(activeFilter.value)) {
+    const sectionId = sectionIdFromFilter(activeFilter.value)
+    return customSections.value.find(section => Number(section.id) === sectionId)?.name || 'Seccion personalizada'
+  }
+
+  return ({
+    inscritos: 'Inscritos',
+    internos: 'Internos',
+    externos: 'Externos',
+    no_inscritos: 'No inscritos',
+    bajas: 'Bajas'
+  }[activeFilter.value] || 'Todos los estados')
+})
 
 const selectedFilterTags = computed(() => {
   const tags = []
-  if (activeFilter.value) tags.push(`Estado: ${activeFilterLabel.value}`)
+  if (activeFilter.value) tags.push(`${isSectionFilter(activeFilter.value) ? 'Seccion' : 'Estado'}: ${activeFilterLabel.value}`)
   if (activeGrado.value) tags.push(`Grado: ${activeGrado.value}`)
   if (activeGrupo.value) tags.push(`Grupo: ${activeGrupo.value}`)
   if (filters.value.q) tags.push(`Busqueda: ${filters.value.q}`)
@@ -381,6 +471,15 @@ const loadGlobalKpis = async () => {
   } catch(e) {}
 }
 
+const loadCustomSections = async () => {
+  try {
+    const res = await $fetch('/api/student-sections')
+    customSections.value = Array.isArray(res) ? res : []
+  } catch (e) {
+    customSections.value = []
+  }
+}
+
 const performSearch = async () => {
   loading.value = true
   try {
@@ -425,6 +524,28 @@ const kpiCounts = computed(() => {
   return { inscritos, internos, externos, no_inscritos, bajas }
 })
 
+const customSectionCounts = computed(() => {
+  const counts = {}
+  students.value.forEach((student) => {
+    ;(student.customSections || []).forEach((section) => {
+      const id = Number(section.id)
+      if (!id) return
+      counts[id] = (counts[id] || 0) + 1
+    })
+  })
+  return counts
+})
+
+const studentMatchesActiveFilter = (student) => {
+  if (activeFilter.value === 'inscritos') return isEnrolled(student)
+  if (activeFilter.value === 'internos') return isEnrolled(student) && String(student.interno) === '1'
+  if (activeFilter.value === 'externos') return isEnrolled(student) && String(student.interno) === '0'
+  if (activeFilter.value === 'no_inscritos') return student.estatus === 'Activo' && !isEnrolled(student)
+  if (activeFilter.value === 'bajas') return student.estatus !== 'Activo'
+  if (isSectionFilter(activeFilter.value)) return studentHasSection(student, sectionIdFromFilter(activeFilter.value))
+  return true
+}
+
 const displayedStudents = computed(() => {
   let list = students.value
 
@@ -436,25 +557,14 @@ const displayedStudents = computed(() => {
   if (activeGrado.value) list = list.filter(s => s.grado === activeGrado.value)
   if (activeGrupo.value) list = list.filter(s => s.grupo === activeGrupo.value)
 
-  if (activeFilter.value === 'inscritos') list = list.filter(s => isEnrolled(s))
-  else if (activeFilter.value === 'internos') list = list.filter(s => isEnrolled(s) && String(s.interno) === '1')
-  else if (activeFilter.value === 'externos') list = list.filter(s => isEnrolled(s) && String(s.interno) === '0')
-  else if (activeFilter.value === 'no_inscritos') list = list.filter(s => s.estatus === 'Activo' && !isEnrolled(s))
-  else if (activeFilter.value === 'bajas') list = list.filter(s => s.estatus !== 'Activo')
+  if (activeFilter.value) list = list.filter(studentMatchesActiveFilter)
 
   return list
 })
 
 const availableGrados = computed(() => {
   const set = new Set()
-  const subset = students.value.filter(s => {
-    if (activeFilter.value === 'inscritos') return isEnrolled(s)
-    if (activeFilter.value === 'internos') return isEnrolled(s) && String(s.interno) === '1'
-    if (activeFilter.value === 'externos') return isEnrolled(s) && String(s.interno) === '0'
-    if (activeFilter.value === 'no_inscritos') return s.estatus === 'Activo' && !isEnrolled(s)
-    if (activeFilter.value === 'bajas') return s.estatus !== 'Activo'
-    return true
-  })
+  const subset = students.value.filter(studentMatchesActiveFilter)
   subset.forEach(s => { if (s.grado && s.grado !== 'null') set.add(s.grado) })
   return Array.from(set).sort((a, b) => (GRADOS_ORDEN[a] || 99) - (GRADOS_ORDEN[b] || 99))
 })
@@ -479,7 +589,8 @@ const exportData = () => {
     Cargos_MXN: Number(s.importeTotal).toFixed(2),
     Pagos_MXN: Number(s.pagosTotal).toFixed(2),
     Saldo_MXN: Number(s.saldoNeto).toFixed(2),
-    Estatus: s.estatus
+    Estatus: s.estatus,
+    Secciones: (s.customSections || []).map(section => section.name).join(' | ')
   }))
   exportToCSV(`Alumnos_${normalizeCicloKey(state.value.ciclo)}.csv`, exportList)
 }
@@ -517,11 +628,101 @@ const confirmBaja = async (motivo) => {
   } catch (e) {}
 }
 
+const updateStudentSections = (matricula, sections) => {
+  const normalized = normalizeStudentMatricula(matricula)
+  students.value = students.value.map((student) => normalizeStudentMatricula(student.matricula) === normalized
+    ? { ...student, customSections: sections || [] }
+    : student
+  )
+  if (selectedStudent.value && normalizeStudentMatricula(selectedStudent.value.matricula) === normalized) {
+    selectedStudent.value = { ...selectedStudent.value, customSections: sections || [] }
+  }
+  if (sectionModalStudent.value && normalizeStudentMatricula(sectionModalStudent.value.matricula) === normalized) {
+    sectionModalStudent.value = { ...sectionModalStudent.value, customSections: sections || [] }
+  }
+}
+
+const openSectionModal = (student = null) => {
+  sectionModalStudent.value = student
+  newSectionName.value = ''
+  showSectionModal.value = true
+}
+
+const closeSectionModal = () => {
+  showSectionModal.value = false
+  sectionModalStudent.value = null
+  newSectionName.value = ''
+}
+
+const createCustomSection = async () => {
+  const name = newSectionName.value.trim()
+  if (!name || creatingSection.value) return
+  creatingSection.value = true
+  try {
+    const section = await $fetch('/api/student-sections', { method: 'POST', body: { name } })
+    if (section?.id && !customSections.value.some(existing => Number(existing.id) === Number(section.id))) {
+      customSections.value = [...customSections.value, section]
+    }
+    newSectionName.value = ''
+    show('Seccion creada', 'success')
+  } catch (e) {
+    show(e?.data?.message || 'No se pudo crear la seccion', 'danger')
+  } finally {
+    creatingSection.value = false
+  }
+}
+
+const toggleStudentSection = async (student, sectionId, checked) => {
+  if (!student || assigningSections.value) return
+  assigningSections.value = true
+  const currentIds = new Set(normalizeSectionIds(student.customSections || []))
+  if (checked) currentIds.add(Number(sectionId))
+  else currentIds.delete(Number(sectionId))
+
+  try {
+    const res = await $fetch(`/api/students/${student.matricula}/sections`, {
+      method: 'PUT',
+      body: { sectionIds: Array.from(currentIds) }
+    })
+    updateStudentSections(student.matricula, res?.sections || [])
+    show('Secciones actualizadas', 'success')
+  } catch (e) {
+    show(e?.data?.message || 'No se pudo actualizar la seccion del alumno', 'danger')
+  } finally {
+    assigningSections.value = false
+  }
+}
+
+const deleteCustomSection = async (section) => {
+  if (!section?.id) return
+  if (!confirm(`Eliminar la seccion "${section.name}"?`)) return
+
+  try {
+    await $fetch(`/api/student-sections/${section.id}`, { method: 'DELETE' })
+    customSections.value = customSections.value.filter(existing => Number(existing.id) !== Number(section.id))
+    students.value = students.value.map(student => ({
+      ...student,
+      customSections: (student.customSections || []).filter(current => Number(current.id) !== Number(section.id))
+    }))
+    if (selectedStudent.value) {
+      selectedStudent.value = {
+        ...selectedStudent.value,
+        customSections: (selectedStudent.value.customSections || []).filter(current => Number(current.id) !== Number(section.id))
+      }
+    }
+    if (activeFilter.value === sectionFilterKey(section.id)) activeFilter.value = ''
+    show('Seccion eliminada', 'success')
+  } catch (e) {
+    show(e?.data?.message || 'No se pudo eliminar la seccion', 'danger')
+  }
+}
+
 const showStudentMenu = (event, student) => {
   openMenu(event, [
     { label: 'Ver detalles', icon: LucideEye, action: () => selectStudent(student) },
     { label: '-' },
     { label: 'Editar alumno', icon: LucideSettings, action: () => openEdit(student) },
+    { label: 'Asignar seccion', icon: LucideTags, action: () => openSectionModal(student) },
     { label: '-' },
     { label: 'Dar de baja', icon: LucideUserX, class: 'text-accent-coral font-bold', disabled: student.estatus !== 'Activo', action: () => bajaAlumno(student) }
   ])
@@ -536,6 +737,7 @@ onMounted(async () => {
   }
 
   if (route.query.q) filters.value.q = String(route.query.q)
+  loadCustomSections()
   performSearch()
   loadGlobalKpis()
 })
@@ -661,7 +863,7 @@ const handleStudentSuccess = () => {
 .kpi-grid {
   display: grid;
   flex-shrink: 0;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
   gap: 8px;
   margin-bottom: 6px;
 }
@@ -741,12 +943,14 @@ const handleStudentSuccess = () => {
 .kpi-blue .kpi-icon { background: radial-gradient(circle at 32% 22%, #eff5ff, #e0ebff 70%); color: #416fa8; }
 .kpi-red .kpi-icon { background: radial-gradient(circle at 32% 22%, #fff0ed, #ffe1dc 70%); color: #c95b4d; }
 .kpi-gray .kpi-icon { background: radial-gradient(circle at 32% 22%, #f3f6fa, #e4eaf2 70%); color: #66728a; }
+.kpi-section .kpi-icon { background: radial-gradient(circle at 32% 22%, #f4f2ff, #e7e2ff 70%); color: #6554b8; }
 
 .kpi-green::after { background: linear-gradient(90deg, rgba(224, 242, 216, 0.52), transparent 46%); }
 .kpi-teal::after { background: linear-gradient(90deg, rgba(216, 244, 240, 0.5), transparent 46%); }
 .kpi-blue::after { background: linear-gradient(90deg, rgba(224, 235, 255, 0.46), transparent 46%); }
 .kpi-red::after { background: linear-gradient(90deg, rgba(255, 228, 223, 0.46), transparent 46%); }
 .kpi-gray::after { background: linear-gradient(90deg, rgba(226, 232, 240, 0.5), transparent 46%); }
+.kpi-section::after { background: linear-gradient(90deg, rgba(231, 226, 255, 0.5), transparent 46%); }
 
 .kpi-text {
   position: relative;
@@ -767,6 +971,7 @@ const handleStudentSuccess = () => {
 .kpi-teal .kpi-text span { color: #47716e; }
 .kpi-blue .kpi-text span { color: #4f6072; }
 .kpi-red .kpi-text span { color: #655d5b; }
+.kpi-section .kpi-text span { color: #5d4b9a; }
 
 .kpi-text strong {
   margin-top: 2px;
@@ -809,6 +1014,7 @@ const handleStudentSuccess = () => {
 .kpi-blue polyline { stroke: #397fe8; }
 .kpi-red polyline { stroke: #ff4d38; }
 .kpi-gray polyline { stroke: #64748b; }
+.kpi-section polyline { stroke: #7c68d9; }
 
 .filter-bar {
   display: grid;
@@ -1442,4 +1648,192 @@ const handleStudentSuccess = () => {
     gap: 12px;
   }
 }
+.section-manage-button {
+  height: 42px;
+  min-width: 132px;
+  border-radius: 10px;
+  font-size: 0.86rem;
+}
+
+.student-section-badges {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.student-section-badges b,
+.detail-section-badges b {
+  display: inline-flex;
+  max-width: 125px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #d8d5f0;
+  border-radius: 999px;
+  background: #f4f2ff;
+  color: #5d4b9a;
+  padding: 2px 6px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-modal-backdrop {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.34);
+  padding: 20px;
+}
+
+.section-modal-card {
+  width: min(460px, 94vw);
+  max-height: min(620px, 90vh);
+  overflow: hidden;
+  border: 1px solid #e3eaf2;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
+}
+
+.section-modal-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #edf2f7;
+  padding: 16px 18px 12px;
+}
+
+.section-modal-card header span {
+  color: #6d7890;
+  font-size: 0.65rem;
+  font-weight: 720;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.section-modal-card header h3 {
+  margin: 4px 0 0;
+  color: #26354f;
+  font-size: 1rem;
+  font-weight: 760;
+}
+
+.plain-icon-button {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #66728a;
+}
+
+.plain-icon-button:hover {
+  background: #f1f5f9;
+  color: #26354f;
+}
+
+.section-create-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 14px 18px;
+}
+
+.section-create-row input {
+  min-width: 0;
+  border: 1px solid #dfe6ef;
+  border-radius: 10px;
+  background: #fbfcfd;
+  color: #172841;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.section-empty-state {
+  margin: 0 18px 18px;
+  border: 1px dashed #d7e1ed;
+  border-radius: 12px;
+  color: #7b879a;
+  padding: 18px;
+  text-align: center;
+  font-size: 0.78rem;
+}
+
+.section-option-list {
+  display: flex;
+  max-height: 360px;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 0 18px 18px;
+}
+
+.section-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e6ecf3;
+  border-radius: 12px;
+  background: #fbfcfd;
+  padding: 10px 12px;
+}
+
+.section-option span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.section-option strong {
+  overflow: hidden;
+  color: #26354f;
+  font-size: 0.8rem;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-option em {
+  color: #8995a8;
+  font-size: 0.66rem;
+  font-style: normal;
+}
+
+.section-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.section-delete {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #c95b4d;
+}
+
+.section-delete:hover {
+  background: #fff0ed;
+}
+
 </style>

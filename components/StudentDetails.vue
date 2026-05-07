@@ -43,6 +43,9 @@
               </template>
               <em v-if="student.estatus !== 'Activo'">(Motivo: {{ student.estatus }})</em>
             </p>
+            <div v-if="student.customSections?.length" class="detail-section-badges">
+              <b v-for="section in student.customSections" :key="`detail-section-${student.matricula}-${section.id}`">{{ section.name }}</b>
+            </div>
           </div>
         </div>
 
@@ -73,6 +76,9 @@
         <span class="action-divider"></span>
         <button class="btn btn-ghost btn-sm" @click="$emit('edit', student)">
           <LucideSettings :size="15"/> Editar
+        </button>
+        <button class="btn btn-ghost btn-sm" @click="$emit('manage-sections', student)">
+          <LucideTags :size="15"/> Secciones
         </button>
         <button class="btn btn-ghost btn-sm" @click="printBeca">
           <LucideAward :size="15"/> Carta beca
@@ -214,7 +220,7 @@ const studentPhotoRequests = new Map()
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -226,7 +232,7 @@ import InvoiceModal from './InvoiceModal.vue'
 import ConceptChangeModal from './ConceptChangeModal.vue'
 
 const props = defineProps({ student: Object, isEnrolled: { type: Boolean, default: true } })
-const emit = defineEmits(['refresh', 'edit', 'close', 'switch-student', 'baja', 'photo-loaded'])
+const emit = defineEmits(['refresh', 'edit', 'close', 'switch-student', 'baja', 'photo-loaded', 'manage-sections'])
 const { show } = useToast()
 const { openMenu } = useContextMenu()
 const { executeOptimistic } = useOptimisticSync()
@@ -1279,4 +1285,29 @@ const handleSuccess = () => {
     height: 24px;
   }
 }
+
+.detail-section-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.detail-section-badges b {
+  display: inline-flex;
+  max-width: 150px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #d8d5f0;
+  border-radius: 999px;
+  background: #f4f2ff;
+  color: #5d4b9a;
+  padding: 3px 7px;
+  font-size: 0.6rem;
+  font-weight: 720;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 </style>

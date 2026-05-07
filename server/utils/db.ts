@@ -381,6 +381,49 @@ export const ensureSchema = async () => {
       `)
 
       await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS student_custom_sections (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(120) NOT NULL,
+          plantel VARCHAR(255) NOT NULL DEFAULT 'global',
+          description VARCHAR(255) DEFAULT NULL,
+          color VARCHAR(32) DEFAULT NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          is_active TINYINT(1) NOT NULL DEFAULT 1,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_student_custom_section_scope_name (plantel(64), name),
+          INDEX idx_student_custom_sections_scope (plantel(64), is_active, sort_order)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS student_custom_section_memberships (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          section_id INT NOT NULL,
+          matricula VARCHAR(255) NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_by VARCHAR(255) DEFAULT NULL,
+          UNIQUE KEY uniq_student_custom_section_member (section_id, matricula),
+          INDEX idx_student_custom_section_member_matricula (matricula(64)),
+          CONSTRAINT fk_student_custom_section_member_section
+            FOREIGN KEY (section_id) REFERENCES student_custom_sections(id)
+            ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS student_family_links (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          family_key VARCHAR(255) NOT NULL,
+          matricula VARCHAR(255) NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_student_family_member (matricula),
+          INDEX idx_student_family_key (family_key(64))
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS documento_concepto_periodos (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
           documento INT NOT NULL,
@@ -415,8 +458,19 @@ export const ensureSchema = async () => {
 
         if (tables.length > 0) {
           await checkAndAddColumn('base', 'interno', "TINYINT(1) NOT NULL DEFAULT 1")
-          await checkAndAddColumn('base', 'familiaId', "INT DEFAULT NULL")
           await checkAndAddColumn('base', 'genero', "VARCHAR(255) DEFAULT '1'")
+
+          const familiaIdCols = await rawQuery<any[]>(`SHOW COLUMNS FROM base LIKE 'familiaId'`)
+          if (familiaIdCols.length > 0) {
+            await runSafeQuery(`
+              INSERT IGNORE INTO student_family_links (family_key, matricula)
+              SELECT CONCAT('legacy:', familiaId), matricula
+              FROM base
+              WHERE familiaId IS NOT NULL AND CAST(familiaId AS CHAR) <> ''
+            `)
+            await runSafeQuery(`ALTER TABLE base DROP COLUMN familiaId`)
+          }
+
           await runSafeQuery(`ALTER TABLE base ADD INDEX idx_base_matricula_estatus (matricula(64), estatus(20))`)
           await runSafeQuery(`ALTER TABLE base ADD INDEX idx_base_plantel_estatus (plantel(20), estatus(20))`)
         }

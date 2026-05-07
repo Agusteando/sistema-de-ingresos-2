@@ -1,6 +1,7 @@
 import { query } from '../../utils/db'
 import { calculatePromotedGrado, displayGrado, nivelFromPlantel, normalizeGradoForPlantel } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 
 export default defineEventHandler(async (event) => {
   const method = event.node.req.method
@@ -86,7 +87,7 @@ export default defineEventHandler(async (event) => {
     if (grado) mapped = mapped.filter(r => String(r.grado).toLowerCase() === String(grado).toLowerCase())
     if (grupo) mapped = mapped.filter(r => r.grupo === grupo)
 
-    return mapped
+    return await attachCustomSectionsToStudents(mapped, user)
   }
 
   if (method === 'POST') {
