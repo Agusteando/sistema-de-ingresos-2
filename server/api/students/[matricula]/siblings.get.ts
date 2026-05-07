@@ -4,31 +4,37 @@ import { isOutOfScopeForPlantelCiclo } from '../../../../shared/utils/grado'
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
 const isReliableEmail = (value: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value))
+const isScopedToActivePlantel = (user: any) => user?.role !== 'global' || (user?.role === 'global' && user?.active_plantel !== 'GLOBAL')
 
 export default defineEventHandler(async (event) => {
   const matricula = event.context.params?.matricula
   const { ciclo = '2025' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
-  const [student] = await query<any[]>(`SELECT familiaId, correo FROM base WHERE matricula = ?`, [matricula])
-  
-  if (!student) return { siblings: [], source: 'none', familiaId: null }
-  
-  let siblings = []
+
+  const [student] = await query<any[]>(`
+    SELECT B.correo, F.family_key AS familyKey
+    FROM base B
+    LEFT JOIN student_family_links F ON F.matricula = B.matricula
+    WHERE B.matricula = ?
+    LIMIT 1
+  `, [matricula])
+
+  if (!student) return { siblings: [], source: 'none', familyKey: null }
+
+  let siblings: any[] = []
   let source = 'none'
 
-  if (student.familiaId) {
+  if (student.familyKey) {
     siblings = await query<any[]>(`
-      SELECT matricula, nombreCompleto, plantel, grado, grupo, ciclo
-      FROM base 
-      WHERE familiaId = ? AND matricula != ? AND estatus = 'Activo'
-    `, [student.familiaId, matricula])
+      SELECT B.matricula, B.nombreCompleto, B.plantel, B.grado, B.grupo, B.ciclo
+      FROM student_family_links F
+      JOIN base B ON B.matricula = F.matricula
+      WHERE F.family_key = ? AND B.matricula != ? AND B.estatus = 'Activo'
+    `, [student.familyKey, matricula])
 
     siblings = siblings.filter((sibling) => {
-      if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
-        if (String(sibling.plantel || '') !== String(user.active_plantel || '')) return false
-      }
-
+      if (isScopedToActivePlantel(user) && String(sibling.plantel || '') !== String(user.active_plantel || '')) return false
       return !isOutOfScopeForPlantelCiclo(sibling.grado, sibling.plantel, sibling.ciclo, cicloKey)
     })
 
@@ -43,21 +49,18 @@ export default defineEventHandler(async (event) => {
     `, [correo, matricula])
 
     siblings = siblings.filter((sibling) => {
-      if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
-        if (String(sibling.plantel || '') !== String(user.active_plantel || '')) return false
-      }
-
+      if (isScopedToActivePlantel(user) && String(sibling.plantel || '') !== String(user.active_plantel || '')) return false
       return !isOutOfScopeForPlantelCiclo(sibling.grado, sibling.plantel, sibling.ciclo, cicloKey)
     })
 
     source = siblings.length ? 'email' : 'none'
   }
-  
-  // Actionable sibling links come from familiaId; email fallback is exact and validated.
+
+  // Actionable sibling links come from student_family_links; email fallback is exact and validated.
   // Parent/tutor names and display names are never used to infer siblings.
   return {
     siblings,
     source,
-    familiaId: student.familiaId || null
+    familyKey: student.familyKey || null
   }
 })

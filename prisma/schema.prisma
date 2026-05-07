@@ -55,7 +55,6 @@ model Base {
   contingencia    Boolean? @default(false)
   ciclo           String?  @db.VarChar(255)
   interno         Boolean? @default(true)
-  familiaId       Int?
 
   @@map("base")
 }
@@ -69,6 +68,45 @@ model AlumnoMatriculaLinks {
 
   @@index([previous_matricula, successor_matricula], map: "idx_matricula_link_pair")
   @@map("alumno_matricula_links")
+}
+
+model StudentCustomSections {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(120)
+  plantel     String   @default("global") @db.VarChar(255)
+  description String?  @db.VarChar(255)
+  color       String?  @db.VarChar(32)
+  sort_order  Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.DateTime(0)
+  updated_at  DateTime @updatedAt @db.DateTime(0)
+
+  @@unique([plantel, name], map: "uniq_student_custom_section_scope_name")
+  @@index([plantel, is_active, sort_order], map: "idx_student_custom_sections_scope")
+  @@map("student_custom_sections")
+}
+
+model StudentCustomSectionMemberships {
+  id         Int      @id @default(autoincrement())
+  section_id Int
+  matricula  String   @db.VarChar(255)
+  created_at DateTime @default(now()) @db.DateTime(0)
+  created_by String?  @db.VarChar(255)
+
+  @@unique([section_id, matricula], map: "uniq_student_custom_section_member")
+  @@index([matricula], map: "idx_student_custom_section_member_matricula")
+  @@map("student_custom_section_memberships")
+}
+
+model StudentFamilyLinks {
+  id         Int      @id @default(autoincrement())
+  family_key String   @db.VarChar(255)
+  matricula  String   @unique(map: "uniq_student_family_member") @db.VarChar(255)
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_at DateTime @updatedAt @db.DateTime(0)
+
+  @@index([family_key], map: "idx_student_family_key")
+  @@map("student_family_links")
 }
 
 model Becas {
