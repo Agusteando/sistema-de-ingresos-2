@@ -249,6 +249,7 @@
                 <span class="student-grade-mark" :style="gradeAccentStyle(s)" :title="gradeVisualTitle(s)">
                   <span class="student-grade-number">{{ gradeVisualNumber(s) }}</span>
                   <span class="student-grade-label">grado</span>
+                  <span v-if="studentGroupLabel(s)" class="student-grade-group">{{ studentGroupLabel(s) }}</span>
                 </span>
                 <span class="student-copy">
                   <strong
@@ -259,7 +260,6 @@
                   </strong>
                   <em class="student-meta">
                     <span>{{ s.matricula }}</span>
-                    <small v-if="studentGroupLabel(s)" class="group-chip" :aria-label="'Grupo '+ studentGroupLabel(s)">{{ studentGroupLabel(s) }}</small>
                   </em>
                   <span v-if="s.customSections?.length" class="student-section-badges" :title="sectionBadgeTitle(s)">
                     <b v-for="section in visibleStudentSections(s)" :key="`row-section-${s.matricula}-${section.id}`">{{ section.name }}</b>
@@ -671,8 +671,8 @@ const accountWorkspaceMode = computed(() => {
   return 'none'
 })
 
-const WORKSPACE_LIST_DESIGN_WIDTH = 760
-const WORKSPACE_DETAIL_DESIGN_WIDTH = 1180
+const WORKSPACE_LIST_DESIGN_WIDTH = 900
+const WORKSPACE_DETAIL_DESIGN_WIDTH = 1500
 const WORKSPACE_DESIGN_HEIGHT = 640
 const WORKSPACE_MIN_SCALE = 0.54
 const baseWorkspaceDesignWidth = computed(() => hasAccountWorkspace.value ? WORKSPACE_DETAIL_DESIGN_WIDTH : WORKSPACE_LIST_DESIGN_WIDTH)
@@ -7896,6 +7896,476 @@ const handleStudentSuccess = () => {
 .students-workspace.has-detail .student-detail-panel > * {
   width: 100% !important;
   max-width: none !important;
+}
+
+
+/* v21 target-resolution scale: the list/detail pair should read larger as a pair.
+   The target is fewer visible rows by scaling the full component language, not by
+   hiding records or applying hard row-count caps. */
+.students-workspace.has-detail .student-list-panel,
+.students-workspace.has-detail .student-list-panel.is-compact {
+  width: 470px !important;
+  max-width: 470px !important;
+  flex-basis: 470px !important;
+}
+
+.students-workspace.has-detail .student-list-card {
+  border-radius: 24px !important;
+}
+
+.students-workspace.has-detail .list-titlebar {
+  min-height: 54px !important;
+  padding: 0 16px !important;
+}
+
+.students-workspace.has-detail .list-heading h2 {
+  font-size: 1rem !important;
+  letter-spacing: 0.035em !important;
+}
+
+.students-workspace.has-detail .list-titlebar h2 span {
+  padding: 5px 11px !important;
+  font-size: 0.82rem !important;
+}
+
+.students-workspace.has-detail .list-title-actions {
+  gap: 8px !important;
+}
+
+.students-workspace.has-detail .list-title-actions > button:not(.title-action-pill) {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 11px !important;
+}
+
+.students-workspace.has-detail .title-action-pill {
+  height: 34px !important;
+  padding: 0 13px !important;
+  font-size: 0.76rem !important;
+}
+
+.students-workspace.has-detail .selection-control-row {
+  min-height: 48px !important;
+  padding: 9px 16px !important;
+}
+
+.students-workspace.has-detail .select-visible-row-control {
+  gap: 11px !important;
+  font-size: 0.82rem !important;
+}
+
+.students-workspace.has-detail .select-visible-row-control .select-box {
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 8px !important;
+}
+
+.students-workspace.has-detail .list-columns,
+.students-workspace.has-detail .list-columns.full,
+.students-workspace.has-detail .list-columns.compact {
+  grid-template-columns: minmax(0, 1fr) 124px 42px !important;
+  height: 28px !important;
+  padding: 0 15px 0 60px !important;
+  font-size: 0.62rem !important;
+  letter-spacing: 0.035em !important;
+}
+
+.students-workspace.has-detail .student-list-scroll {
+  padding: 12px 12px 14px !important;
+}
+
+.students-workspace.has-detail .student-row,
+.students-workspace.has-detail .student-row.full,
+.students-workspace.has-detail .student-row.compact {
+  grid-template-columns: minmax(0, 1fr) 124px 42px !important;
+  min-height: 118px !important;
+  gap: 13px !important;
+  margin-bottom: 12px !important;
+  border-radius: 24px !important;
+  padding: 16px 14px 16px 58px !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.052) !important;
+}
+
+.students-workspace.has-detail .row-select-toggle {
+  left: 16px !important;
+  width: 31px !important;
+  height: 31px !important;
+  min-width: 31px !important;
+  border-width: 2.25px !important;
+  box-shadow: 0 0 0 5px rgba(255,255,255,0.96), 0 10px 18px rgba(15, 23, 42, 0.09) !important;
+}
+
+.students-workspace.has-detail .row-select-toggle svg {
+  width: 19px !important;
+  height: 19px !important;
+}
+
+.students-workspace.has-detail .student-identity {
+  gap: 13px !important;
+}
+
+.students-workspace.has-detail .student-grade-mark {
+  width: 68px !important;
+  height: 68px !important;
+  flex-basis: 68px !important;
+  border-radius: 19px !important;
+}
+
+.students-workspace.has-detail .student-grade-number {
+  font-size: 2.2rem !important;
+}
+
+.students-workspace.has-detail .student-grade-label {
+  margin-top: 4px !important;
+  font-size: 0.58rem !important;
+  letter-spacing: 0.18em !important;
+}
+
+.students-workspace.has-detail .student-copy {
+  gap: 7px !important;
+}
+
+.students-workspace.has-detail .student-copy strong {
+  font-size: 1.08rem !important;
+  line-height: 1.15 !important;
+}
+
+.students-workspace.has-detail .student-meta {
+  gap: 8px !important;
+}
+
+.students-workspace.has-detail .student-meta > span,
+.students-workspace.has-detail .student-meta small {
+  height: 24px !important;
+  max-width: 132px !important;
+  padding: 0 10px !important;
+  font-size: 0.68rem !important;
+}
+
+.students-workspace.has-detail .financial-cell {
+  height: 56px !important;
+  min-height: 56px !important;
+  gap: 6px !important;
+  padding-left: 10px !important;
+}
+
+.students-workspace.has-detail .financial-label {
+  font-size: 0.63rem !important;
+}
+
+.students-workspace.has-detail .financial-balance,
+.students-workspace.has-detail .financial-balance.danger {
+  font-size: 1.08rem !important;
+}
+
+.students-workspace.has-detail .row-actions button {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 14px !important;
+}
+
+.students-workspace.has-detail .list-footer {
+  min-height: 44px !important;
+  padding: 0 18px 14px !important;
+  font-size: 0.76rem !important;
+}
+
+
+/* v22 stable two-panel distribution + no-reflow list artboard.
+   The student list keeps one layout at every resolution; the canvas scales, not the row internals. */
+.students-workspace,
+.students-workspace.has-detail,
+.students-design-canvas > .students-workspace {
+  gap: 18px !important;
+  overflow: hidden !important;
+}
+
+.students-workspace:not(.has-detail) {
+  grid-template-columns: 900px !important;
+  justify-content: start !important;
+}
+
+.students-workspace.has-detail {
+  grid-template-columns: 800px minmax(0, 1fr) !important;
+  justify-content: stretch !important;
+}
+
+.student-list-panel.is-full {
+  width: 900px !important;
+  max-width: 900px !important;
+  flex: 0 0 900px !important;
+}
+
+.student-list-panel.is-compact,
+.students-workspace.has-detail .student-list-panel,
+.students-workspace.has-detail .student-list-panel.is-compact {
+  display: flex !important;
+  width: 800px !important;
+  max-width: 800px !important;
+  flex: 0 0 800px !important;
+}
+
+.student-detail-panel {
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+.student-list-card,
+.students-workspace.has-detail .student-list-card {
+  border-radius: 24px !important;
+}
+
+.list-titlebar,
+.students-workspace.has-detail .list-titlebar {
+  min-height: 54px !important;
+  padding: 0 18px !important;
+}
+
+.selection-control-row,
+.students-workspace.has-detail .selection-control-row {
+  min-height: 48px !important;
+  padding: 9px 18px !important;
+}
+
+.list-columns,
+.list-columns.full,
+.list-columns.compact,
+.students-workspace.has-detail .list-columns,
+.students-workspace.has-detail .list-columns.full,
+.students-workspace.has-detail .list-columns.compact {
+  grid-template-columns: minmax(0, 1fr) 144px 48px !important;
+  height: 28px !important;
+  padding: 0 18px 0 64px !important;
+  font-size: 0.62rem !important;
+  letter-spacing: 0.035em !important;
+}
+
+.student-list-scroll,
+.students-workspace.has-detail .student-list-scroll {
+  padding: 12px 14px 14px !important;
+}
+
+.student-row,
+.student-row.full,
+.student-row.compact,
+.students-workspace.has-detail .student-row,
+.students-workspace.has-detail .student-row.full,
+.students-workspace.has-detail .student-row.compact {
+  grid-template-columns: minmax(0, 1fr) 144px 48px !important;
+  min-height: 118px !important;
+  gap: 14px !important;
+  margin-bottom: 12px !important;
+  overflow: hidden !important;
+  border-radius: 24px !important;
+  padding: 16px 16px 16px 60px !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.052) !important;
+}
+
+.row-select-toggle,
+.students-workspace.has-detail .row-select-toggle {
+  left: 17px !important;
+  top: 50% !important;
+  width: 31px !important;
+  height: 31px !important;
+  min-width: 31px !important;
+  border-width: 2.25px !important;
+  border-radius: 999px !important;
+  transform: translateY(-50%) !important;
+}
+
+.row-select-toggle svg,
+.students-workspace.has-detail .row-select-toggle svg {
+  width: 19px !important;
+  height: 19px !important;
+  stroke-width: 4.4 !important;
+}
+
+.student-identity,
+.students-workspace.has-detail .student-identity {
+  min-width: 0 !important;
+  gap: 14px !important;
+  overflow: hidden !important;
+}
+
+.student-grade-mark,
+.student-row.compact .student-grade-mark,
+.students-workspace.has-detail .student-grade-mark,
+.students-workspace.has-detail .student-row.compact .student-grade-mark {
+  width: 72px !important;
+  height: 72px !important;
+  flex: 0 0 72px !important;
+  border-radius: 20px !important;
+  gap: 2px !important;
+}
+
+.student-grade-number,
+.student-row.compact .student-grade-number,
+.students-workspace.has-detail .student-grade-number,
+.students-workspace.has-detail .student-row.compact .student-grade-number {
+  font-size: 2.12rem !important;
+  line-height: 0.88 !important;
+}
+
+.student-grade-label,
+.student-row.compact .student-grade-label,
+.students-workspace.has-detail .student-grade-label,
+.students-workspace.has-detail .student-row.compact .student-grade-label {
+  margin-top: 2px !important;
+  font-size: 0.48rem !important;
+  letter-spacing: 0.14em !important;
+}
+
+.student-grade-group {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 24px !important;
+  max-width: 46px !important;
+  height: 18px !important;
+  margin-top: 1px !important;
+  overflow: hidden !important;
+  border: 1px solid color-mix(in srgb, var(--grade-border) 84%, #ffffff 16%) !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--grade-soft) 70%, #ffffff 30%) !important;
+  color: var(--grade-accent) !important;
+  padding: 0 7px !important;
+  font-size: 0.56rem !important;
+  font-weight: 840 !important;
+  line-height: 1 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.student-copy,
+.students-workspace.has-detail .student-copy {
+  min-width: 0 !important;
+  gap: 7px !important;
+  overflow: hidden !important;
+}
+
+.student-copy strong,
+.student-list-panel.is-compact .student-copy strong,
+.students-workspace.has-detail .student-copy strong,
+.students-workspace.has-detail .student-list-panel.is-compact .student-copy strong {
+  display: block !important;
+  overflow: hidden !important;
+  color: #122033 !important;
+  font-size: 1.08rem !important;
+  font-weight: 760 !important;
+  line-height: 1.16 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  -webkit-line-clamp: unset !important;
+  line-clamp: unset !important;
+}
+
+.student-meta,
+.students-workspace.has-detail .student-meta {
+  display: flex !important;
+  min-width: 0 !important;
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+  overflow: hidden !important;
+}
+
+.student-meta > span,
+.student-meta small,
+.students-workspace.has-detail .student-meta > span,
+.students-workspace.has-detail .student-meta small {
+  height: 24px !important;
+  max-width: 160px !important;
+  min-width: 0 !important;
+  flex: 0 1 auto !important;
+  overflow: hidden !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  font-size: 0.68rem !important;
+  font-weight: 760 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.student-section-badges,
+.students-workspace.has-detail .student-section-badges {
+  flex-wrap: nowrap !important;
+  overflow: hidden !important;
+}
+
+.financial-cell,
+.students-workspace.has-detail .financial-cell {
+  width: 144px !important;
+  min-width: 144px !important;
+  height: 56px !important;
+  min-height: 56px !important;
+  gap: 6px !important;
+  padding-left: 10px !important;
+  overflow: hidden !important;
+}
+
+.financial-label,
+.students-workspace.has-detail .financial-label {
+  font-size: 0.63rem !important;
+  white-space: nowrap !important;
+}
+
+.financial-balance,
+.financial-balance.danger,
+.students-workspace.has-detail .financial-balance,
+.students-workspace.has-detail .financial-balance.danger {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  font-size: 1.08rem !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.row-actions button,
+.students-workspace.has-detail .row-actions button {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 14px !important;
+}
+
+.list-footer,
+.students-workspace.has-detail .list-footer {
+  min-height: 44px !important;
+  padding: 0 18px 14px !important;
+  font-size: 0.76rem !important;
+}
+
+@media (max-width: 1280px), (max-width: 1080px), (max-width: 980px), (max-width: 820px) {
+  .students-workspace.has-detail {
+    grid-template-columns: 800px minmax(0, 1fr) !important;
+  }
+
+  .students-workspace:not(.has-detail) {
+    grid-template-columns: 900px !important;
+  }
+
+  .student-list-panel.is-compact,
+  .students-workspace.has-detail .student-list-panel,
+  .students-workspace.has-detail .student-list-panel.is-compact {
+    display: flex !important;
+    width: 800px !important;
+    max-width: 800px !important;
+    flex: 0 0 800px !important;
+  }
+
+  .student-list-panel.is-full {
+    width: 900px !important;
+    max-width: 900px !important;
+    flex: 0 0 900px !important;
+  }
+
+  .student-row,
+  .student-row.full,
+  .student-row.compact {
+    grid-template-columns: minmax(0, 1fr) 144px 48px !important;
+    min-height: 118px !important;
+    gap: 14px !important;
+    padding: 16px 16px 16px 60px !important;
+  }
 }
 
 </style>

@@ -2081,4 +2081,249 @@ const handleSuccess = () => {
   align-self: stretch !important;
 }
 
+
+/* v21 target-resolution scale: Estado de Cuenta should read as a larger
+   component at the same resolution, reducing visible account rows naturally. */
+.student-details-shell {
+  gap: 9px !important;
+}
+
+.student-profile-card {
+  border-radius: 16px !important;
+  padding: 12px 16px !important;
+}
+
+.profile-main {
+  gap: 14px !important;
+}
+
+.profile-identity {
+  gap: 14px !important;
+}
+
+.profile-avatar {
+  width: 56px !important;
+  height: 56px !important;
+  font-size: 1.36rem !important;
+}
+
+.profile-copy h2 {
+  gap: 9px !important;
+  font-size: 1.18rem !important;
+  line-height: 1.2 !important;
+}
+
+.profile-copy p {
+  gap: 8px !important;
+  margin-top: 5px !important;
+  font-size: 0.78rem !important;
+  line-height: 1.3 !important;
+}
+
+.student-code {
+  border-radius: 8px !important;
+  padding: 3px 9px !important;
+}
+
+.state-badge {
+  border-radius: 8px !important;
+  padding: 4px 8px !important;
+  font-size: 0.62rem !important;
+}
+
+.profile-top-actions {
+  gap: 8px !important;
+}
+
+.plain-icon-button,
+.danger-icon-button {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 12px !important;
+}
+
+.profile-actions {
+  gap: 8px !important;
+  padding-top: 11px !important;
+}
+
+.profile-actions .btn {
+  height: 38px !important;
+  padding-inline: 14px !important;
+  font-size: 0.78rem !important;
+}
+
+.profile-actions .btn svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.action-pay {
+  min-width: 118px !important;
+}
+
+.action-divider {
+  height: 24px !important;
+}
+
+.siblings-card {
+  border-radius: 15px !important;
+  padding: 10px 14px !important;
+}
+
+.siblings-header h4 {
+  font-size: 0.82rem !important;
+}
+
+.siblings-list button {
+  min-height: 30px !important;
+  padding: 0 10px !important;
+  font-size: 0.72rem !important;
+}
+
+.account-card {
+  border-radius: 18px !important;
+}
+
+.account-header {
+  min-height: 58px !important;
+  padding: 12px 16px !important;
+}
+
+.account-header h3 {
+  font-size: 1.08rem !important;
+}
+
+.account-totals > span {
+  padding: 8px 13px !important;
+  font-size: 0.82rem !important;
+}
+
+.account-table-wrap {
+  padding: 12px 12px 12px !important;
+}
+
+.account-table-wrap col.col-check { width: 38px !important; }
+.account-table-wrap col.col-progress { width: 118px !important; }
+.account-table-wrap col.col-money { width: 98px !important; }
+.account-table-wrap col.col-actions { width: 72px !important; }
+
+.account-table-wrap thead th {
+  height: 40px !important;
+  padding: 0 10px !important;
+  font-size: 0.62rem !important;
+  letter-spacing: 0.03em !important;
+}
+
+.account-table-wrap tbody tr.debt-row {
+  min-height: 76px !important;
+}
+
+.account-table-wrap td,
+.account-table-wrap th {
+  padding: 14px 10px !important;
+}
+
+.account-table-wrap td {
+  font-size: 0.82rem !important;
+  line-height: 1.25 !important;
+}
+
+.check-cell {
+  width: 38px !important;
+  padding-left: 9px !important;
+  padding-right: 6px !important;
+}
+
+.debt-check {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+.progress-cell {
+  width: 118px !important;
+}
+
+.progress-track {
+  height: 7px !important;
+}
+
+.progress-cell em {
+  margin-top: 6px !important;
+  font-size: 0.64rem !important;
+}
+
+.concept-cell {
+  padding-left: 12px !important;
+}
+
+.account-table-wrap td.concept-cell strong {
+  font-size: 0.9rem !important;
+  line-height: 1.18 !important;
+}
+
+.account-table-wrap td.concept-cell small {
+  margin-top: 6px !important;
+  gap: 6px !important;
+  font-size: 0.68rem !important;
+}
+
+.recargo-badge {
+  max-width: 72px !important;
+  padding: 2px 6px !important;
+}
+
+.money-cell {
+  font-size: 0.78rem !important;
+}
+
+.menu-cell {
+  width: 72px !important;
+  padding-left: 6px !important;
+  padding-right: 8px !important;
+}
+
+.account-table-wrap td.menu-cell {
+  gap: 5px !important;
+}
+
+.menu-cell button {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 10px !important;
+}
+
+.menu-cell button svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.history-row > td {
+  padding: 8px !important;
+}
+
+.history-table th,
+.history-table td {
+  font-size: 0.72rem !important;
+}
+
+.account-footer {
+  height: 34px !important;
+  padding: 0 16px !important;
+  font-size: 0.76rem !important;
+}
+
+@container (max-width: 720px) {
+  .account-table-wrap col.col-progress { width: 104px !important; }
+  .account-table-wrap col.col-money { width: 88px !important; }
+  .account-table-wrap col.col-actions { width: 64px !important; }
+
+  .account-table-wrap thead th,
+  .account-table-wrap td,
+  .account-table-wrap th {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+}
+
 </style>
