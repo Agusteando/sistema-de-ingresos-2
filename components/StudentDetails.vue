@@ -2071,4 +2071,14 @@ const handleSuccess = () => {
   background: linear-gradient(180deg, #6ead4f, #2d8277) padding-box !important;
 }
 
+
+/* v18: Estado de Cuenta width is controlled by the workspace split.
+   Keep this card stretched inside the detail panel so the student list gains
+   space from the parent grid instead of from an internal centered shrink. */
+.account-card {
+  width: 100% !important;
+  max-width: 100% !important;
+  align-self: stretch !important;
+}
+
 </style>

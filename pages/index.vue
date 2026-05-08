@@ -6976,4 +6976,38 @@ const handleStudentSuccess = () => {
   }
 }
 
+
+/* v18: give the student list ~20% more horizontal room when account details are open. */
+.students-workspace.has-detail {
+  grid-template-columns: minmax(440px, 470px) minmax(0, 1fr) !important;
+}
+
+.students-workspace.has-detail .student-list-panel,
+.students-workspace.has-detail .student-list-panel.is-compact {
+  max-width: 470px !important;
+}
+
+@media (max-width: 1180px) {
+  .students-workspace.has-detail {
+    grid-template-columns: minmax(390px, 430px) minmax(0, 1fr) !important;
+  }
+
+  .students-workspace.has-detail .student-list-panel,
+  .students-workspace.has-detail .student-list-panel.is-compact {
+    max-width: 430px !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .students-workspace.has-detail {
+    grid-template-columns: 1fr !important;
+    overflow-y: auto !important;
+  }
+
+  .students-workspace.has-detail .student-list-panel,
+  .students-workspace.has-detail .student-list-panel.is-compact {
+    max-width: none !important;
+  }
+}
+
 </style>
