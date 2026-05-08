@@ -115,6 +115,15 @@
       <Transition name="account-flow" mode="out-in">
       <div class="account-table-wrap" :key="student.matricula">
         <table>
+          <colgroup>
+            <col class="col-check" />
+            <col class="col-progress" />
+            <col class="col-concept" />
+            <col class="col-money" />
+            <col class="col-money" />
+            <col class="col-money" />
+            <col class="col-actions" />
+          </colgroup>
           <thead>
             <tr>
               <th class="check-cell"><input type="checkbox" @change="toggleAll" :checked="selectedDebts.length === validDebts.length && validDebts.length > 0" class="debt-check"></th>
@@ -148,7 +157,7 @@
                   </div>
                   <em :class="{ complete: debt.saldo <= 0 }">{{ progressStatusLabel(debt) }}</em>
                 </td>
-                <td>
+                <td class="concept-cell">
                   <strong>{{ debt.conceptoNombre }}</strong>
                   <small>
                     {{ debt.mesLabel }}
@@ -1308,6 +1317,758 @@ const handleSuccess = () => {
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+
+
+/* v12 detail scaling: account view remains complete without squeezing */
+.student-details-shell {
+  container-type: inline-size;
+  width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  gap: clamp(8px, 1vw, 12px) !important;
+  padding: clamp(8px, 1vw, 12px) !important;
+}
+
+.student-profile-card,
+.siblings-card,
+.account-card {
+  border-radius: 18px !important;
+  border-color: #e2ebf5 !important;
+  background: rgba(255,255,255,0.98) !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.045) !important;
+}
+
+.student-profile-card {
+  padding: clamp(10px, 1.1vw, 16px) clamp(12px, 1.3vw, 18px) !important;
+}
+
+.profile-main {
+  gap: 14px !important;
+}
+
+.profile-identity {
+  gap: 12px !important;
+}
+
+.profile-avatar {
+  width: clamp(42px, 4vw, 58px) !important;
+  height: clamp(42px, 4vw, 58px) !important;
+}
+
+.profile-copy h2 {
+  font-size: clamp(0.95rem, 1.18vw, 1.18rem) !important;
+  color: #172b55 !important;
+}
+
+.profile-copy p {
+  gap: 8px !important;
+  font-size: clamp(0.64rem, 0.75vw, 0.74rem) !important;
+}
+
+.profile-actions {
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  padding-top: 10px !important;
+  padding-bottom: 2px !important;
+}
+
+.profile-actions .btn {
+  height: 32px !important;
+  flex: 0 0 auto !important;
+  border-radius: 999px !important;
+}
+
+.siblings-card {
+  padding: 10px 14px !important;
+}
+
+.account-card {
+  min-height: 0 !important;
+  border-color: #dce8f4 !important;
+  overflow: hidden !important;
+}
+
+.account-header {
+  height: auto !important;
+  min-height: 52px !important;
+  padding: 10px 16px !important;
+  border-bottom: 1px solid #e7eef6 !important;
+  background: linear-gradient(180deg, #ffffff, #f8fbff) !important;
+}
+
+.account-header h3 {
+  color: #172b55 !important;
+  font-size: clamp(0.84rem, 1vw, 1rem) !important;
+  letter-spacing: 0.01em !important;
+  text-transform: none !important;
+}
+
+.account-totals > span {
+  border: 1px solid #f2d6d8 !important;
+  border-radius: 999px !important;
+  background: #fff5f5 !important;
+  padding: 6px 12px !important;
+  font-size: clamp(0.72rem, 0.82vw, 0.82rem) !important;
+}
+
+.account-table-wrap {
+  min-width: 0 !important;
+  overflow: auto !important;
+  padding: 10px 12px 12px !important;
+}
+
+.account-table-wrap table {
+  width: 100% !important;
+  min-width: min(760px, 100%) !important;
+  border-collapse: separate !important;
+  border-spacing: 0 6px !important;
+}
+
+.account-table-wrap thead th {
+  top: 0 !important;
+  height: 34px !important;
+  border-bottom: 0 !important;
+  background: #f5f8fc !important;
+  color: #66758b !important;
+  font-size: 0.58rem !important;
+}
+
+.account-table-wrap td,
+.account-table-wrap th {
+  padding: 8px 9px !important;
+}
+
+.account-table-wrap tbody tr.debt-row {
+  background: #ffffff !important;
+  box-shadow: 0 1px 0 #e9eef5 !important;
+}
+
+.account-table-wrap tbody tr.debt-row:hover,
+.account-table-wrap tbody tr.debt-row.selected {
+  background: #f7fbff !important;
+}
+
+.account-table-wrap td {
+  border-bottom: 1px solid #eef3f8 !important;
+  font-size: clamp(0.68rem, 0.76vw, 0.76rem) !important;
+}
+
+.account-table-wrap td strong {
+  max-width: clamp(180px, 26vw, 360px) !important;
+  color: #1f314f !important;
+  font-size: clamp(0.72rem, 0.8vw, 0.82rem) !important;
+}
+
+.money-cell {
+  font-size: clamp(0.64rem, 0.72vw, 0.74rem) !important;
+}
+
+.progress-cell {
+  width: clamp(88px, 10vw, 120px) !important;
+}
+
+.menu-cell {
+  width: 70px !important;
+}
+
+.account-footer {
+  height: 34px !important;
+  padding: 0 16px !important;
+  border-top: 1px solid #edf2f7 !important;
+  background: #fbfdff !important;
+}
+
+@container (max-width: 700px) {
+  .profile-main {
+    align-items: flex-start !important;
+  }
+
+  .profile-actions {
+    flex-wrap: nowrap !important;
+  }
+
+  .account-table-wrap table {
+    min-width: 680px !important;
+  }
+}
+
+@media (max-width: 820px) {
+  .student-details-shell {
+    padding: 8px !important;
+  }
+
+  .student-profile-card,
+  .account-card,
+  .siblings-card {
+    border-radius: 16px !important;
+  }
+
+  .profile-actions {
+    overflow-x: auto !important;
+  }
+
+  .account-table-wrap table {
+    min-width: 680px !important;
+  }
+}
+
+
+
+/* Premium SaaS polish: calmer, more trustworthy Estado de Cuenta table. */
+.account-card {
+  border: 1px solid rgba(220, 232, 244, 0.96) !important;
+  border-radius: 18px !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(250,252,255,0.98)) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255,255,255,0.78) !important;
+}
+
+.account-header {
+  min-height: 58px !important;
+  padding: 13px 18px 12px !important;
+  border-bottom: 1px solid rgba(226, 235, 245, 0.92) !important;
+  background: linear-gradient(180deg, #ffffff, #f9fbfe) !important;
+}
+
+.account-header h3 {
+  color: #132747 !important;
+  font-size: clamp(0.86rem, 0.98vw, 1rem) !important;
+  font-weight: 820 !important;
+  letter-spacing: 0.002em !important;
+  text-transform: none !important;
+}
+
+.account-totals {
+  align-items: center !important;
+}
+
+.account-totals > span {
+  border: 1px solid rgba(241, 194, 198, 0.92) !important;
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, #fff8f8, #fff1f2) !important;
+  color: #bd3e48 !important;
+  padding: 7px 13px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.86) !important;
+  font-size: clamp(0.72rem, 0.8vw, 0.82rem) !important;
+  font-weight: 820 !important;
+  line-height: 1 !important;
+}
+
+.account-table-wrap {
+  padding: 12px 14px 10px !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.64), rgba(248,251,255,0.7)) !important;
+}
+
+.account-table-wrap table {
+  width: 100% !important;
+  min-width: min(790px, 100%) !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  table-layout: fixed !important;
+}
+
+.account-table-wrap col.col-check { width: 36px !important; }
+.account-table-wrap col.col-progress { width: 124px !important; }
+.account-table-wrap col.col-concept { width: auto !important; }
+.account-table-wrap col.col-money { width: 112px !important; }
+.account-table-wrap col.col-actions { width: 72px !important; }
+
+.account-table-wrap thead th {
+  height: 38px !important;
+  border-top: 1px solid #edf2f8 !important;
+  border-bottom: 1px solid #e2eaf3 !important;
+  background: linear-gradient(180deg, #f8fbff, #f3f7fc) !important;
+  color: #65748a !important;
+  padding: 0 12px !important;
+  font-size: 0.58rem !important;
+  font-weight: 820 !important;
+  letter-spacing: 0.052em !important;
+  text-align: left !important;
+  text-transform: uppercase !important;
+}
+
+.account-table-wrap thead th:first-child {
+  border-left: 1px solid #edf2f8 !important;
+  border-top-left-radius: 12px !important;
+}
+
+.account-table-wrap thead th:last-child {
+  border-right: 1px solid #edf2f8 !important;
+  border-top-right-radius: 12px !important;
+}
+
+.account-table-wrap thead th.money-cell {
+  text-align: right !important;
+}
+
+.account-table-wrap tbody tr.debt-row {
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: none !important;
+}
+
+.account-table-wrap tbody tr.debt-row:hover,
+.account-table-wrap tbody tr.debt-row.selected {
+  background: linear-gradient(90deg, rgba(249,252,255,0.99), rgba(246,251,246,0.96)) !important;
+}
+
+.account-table-wrap td,
+.account-table-wrap th {
+  padding: 10px 12px !important;
+}
+
+.account-table-wrap td {
+  border-bottom: 1px solid rgba(230, 237, 246, 0.98) !important;
+  color: #30405b !important;
+  font-size: clamp(0.7rem, 0.76vw, 0.78rem) !important;
+  vertical-align: middle !important;
+}
+
+.account-table-wrap tbody tr.debt-row:first-of-type td {
+  border-top: 0 !important;
+}
+
+.check-cell {
+  width: 36px !important;
+  padding-left: 10px !important;
+  padding-right: 6px !important;
+  text-align: center !important;
+}
+
+.debt-check {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 5px !important;
+  accent-color: #5da043 !important;
+}
+
+.progress-cell {
+  width: 124px !important;
+}
+
+.progress-track {
+  height: 6px !important;
+  border-radius: 999px !important;
+  background: #e8edf3 !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+.progress-cell em {
+  margin-top: 5px !important;
+  color: #708096 !important;
+  font-size: 0.58rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  line-height: 1 !important;
+  text-align: right !important;
+}
+
+.progress-cell em.complete {
+  color: #257a68 !important;
+}
+
+.concept-cell {
+  min-width: 0 !important;
+  padding-left: 14px !important;
+}
+
+.account-table-wrap td.concept-cell strong {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  color: #172a49 !important;
+  font-size: clamp(0.72rem, 0.82vw, 0.86rem) !important;
+  font-weight: 820 !important;
+  letter-spacing: 0.002em !important;
+  line-height: 1.18 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.account-table-wrap td.concept-cell small {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-top: 5px !important;
+  color: #7c8798 !important;
+  font-size: 0.62rem !important;
+  font-weight: 680 !important;
+  letter-spacing: 0.035em !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+}
+
+.money-cell {
+  color: #283953 !important;
+  font-variant-numeric: tabular-nums !important;
+  font-size: clamp(0.68rem, 0.74vw, 0.78rem) !important;
+  font-weight: 820 !important;
+  letter-spacing: -0.01em !important;
+  text-align: right !important;
+}
+
+.money-cell.paid {
+  color: #2f7742 !important;
+}
+
+.money-cell.danger {
+  color: #c83f47 !important;
+}
+
+.menu-cell {
+  width: 72px !important;
+  padding-left: 8px !important;
+  padding-right: 10px !important;
+  text-align: right !important;
+}
+
+.account-table-wrap td.menu-cell {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+}
+
+.menu-cell button {
+  width: 26px !important;
+  height: 26px !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: #7e8b9e !important;
+  opacity: 0.68 !important;
+}
+
+.menu-cell button:hover {
+  border-color: #dfe9f5 !important;
+  background: #ffffff !important;
+  color: #2f7254 !important;
+  opacity: 1 !important;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06) !important;
+}
+
+.account-footer {
+  height: 30px !important;
+  border-top: 1px solid rgba(231, 238, 247, 0.96) !important;
+  background: rgba(251,253,255,0.9) !important;
+  color: #768295 !important;
+  padding: 0 18px !important;
+}
+
+@container (max-width: 700px) {
+  .account-table-wrap table {
+    min-width: 720px !important;
+  }
+}
+
+@media (max-height: 900px) and (min-width: 1081px) {
+  .account-header {
+    min-height: 48px !important;
+    padding-top: 9px !important;
+    padding-bottom: 9px !important;
+  }
+
+  .account-table-wrap {
+    padding-top: 8px !important;
+  }
+
+  .account-table-wrap td,
+  .account-table-wrap th {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  .account-footer {
+    height: 26px !important;
+  }
+}
+
+/* Master-detail account panel: compact hierarchy and a no-overflow financial table. */
+.student-details-shell,
+.student-details-shell * {
+  letter-spacing: 0 !important;
+}
+
+.student-details-shell {
+  gap: 8px !important;
+  padding: 8px !important;
+}
+
+.student-profile-card {
+  border-radius: 14px !important;
+  padding: 10px 12px !important;
+  box-shadow: none !important;
+}
+
+.profile-main {
+  align-items: flex-start !important;
+  gap: 10px !important;
+}
+
+.profile-identity {
+  min-width: 0 !important;
+  gap: 10px !important;
+}
+
+.profile-avatar {
+  width: 42px !important;
+  height: 42px !important;
+  font-size: 0.92rem !important;
+}
+
+.profile-copy {
+  min-width: 0 !important;
+}
+
+.profile-copy h2 {
+  max-width: 100% !important;
+  color: #14243d !important;
+  font-size: 0.98rem !important;
+  font-weight: 840 !important;
+  line-height: 1.18 !important;
+}
+
+.profile-copy p {
+  gap: 6px !important;
+  margin-top: 3px !important;
+  font-size: 0.62rem !important;
+  line-height: 1.25 !important;
+}
+
+.profile-top-actions {
+  gap: 5px !important;
+}
+
+.plain-icon-button,
+.danger-icon-button {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 9px !important;
+}
+
+.detail-section-badges {
+  display: none !important;
+}
+
+.profile-actions {
+  gap: 6px !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  padding-top: 8px !important;
+  padding-bottom: 0 !important;
+}
+
+.profile-actions .btn {
+  height: 29px !important;
+  min-width: auto !important;
+  flex: 0 0 auto !important;
+  border-radius: 999px !important;
+  padding-inline: 10px !important;
+  font-size: 0.64rem !important;
+}
+
+.profile-actions .btn svg {
+  width: 13px !important;
+  height: 13px !important;
+}
+
+.action-pay {
+  min-width: 92px !important;
+}
+
+.action-divider {
+  height: 18px !important;
+}
+
+.siblings-card {
+  border-radius: 12px !important;
+  padding: 7px 10px !important;
+  box-shadow: none !important;
+}
+
+.account-card {
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}
+
+.account-header {
+  min-height: 42px !important;
+  padding: 8px 12px !important;
+}
+
+.account-header h3 {
+  font-size: 0.84rem !important;
+}
+
+.account-totals > span {
+  padding: 6px 10px !important;
+  font-size: 0.68rem !important;
+}
+
+.account-table-wrap {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: 8px 10px 8px !important;
+  background: #fff !important;
+}
+
+.account-table-wrap table {
+  min-width: 0 !important;
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+
+.account-table-wrap col.col-check { width: 28px !important; }
+.account-table-wrap col.col-progress { width: 86px !important; }
+.account-table-wrap col.col-concept { width: auto !important; }
+.account-table-wrap col.col-money { width: 74px !important; }
+.account-table-wrap col.col-actions { width: 54px !important; }
+
+.account-table-wrap thead th {
+  height: 30px !important;
+  padding: 0 7px !important;
+  font-size: 0.5rem !important;
+  letter-spacing: 0 !important;
+}
+
+.account-table-wrap td,
+.account-table-wrap th {
+  padding: 7px 7px !important;
+}
+
+.account-table-wrap td {
+  font-size: 0.66rem !important;
+}
+
+.check-cell {
+  width: 28px !important;
+  padding-left: 6px !important;
+  padding-right: 4px !important;
+}
+
+.debt-check {
+  width: 13px !important;
+  height: 13px !important;
+}
+
+.progress-cell {
+  width: 86px !important;
+}
+
+.progress-track {
+  height: 5px !important;
+}
+
+.progress-cell em {
+  margin-top: 4px !important;
+  font-size: 0.52rem !important;
+}
+
+.concept-cell {
+  padding-left: 8px !important;
+}
+
+.account-table-wrap td.concept-cell strong {
+  max-width: 100% !important;
+  font-size: 0.7rem !important;
+  line-height: 1.15 !important;
+}
+
+.account-table-wrap td.concept-cell small {
+  margin-top: 4px !important;
+  gap: 4px !important;
+  font-size: 0.54rem !important;
+}
+
+.recargo-badge {
+  max-width: 54px !important;
+  overflow: hidden !important;
+  padding: 1px 4px !important;
+  text-overflow: ellipsis !important;
+}
+
+.money-cell {
+  font-size: 0.62rem !important;
+  letter-spacing: 0 !important;
+}
+
+.menu-cell {
+  width: 54px !important;
+  padding-left: 4px !important;
+  padding-right: 6px !important;
+}
+
+.account-table-wrap td.menu-cell {
+  gap: 3px !important;
+}
+
+.menu-cell button {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+.menu-cell button svg {
+  width: 13px !important;
+  height: 13px !important;
+}
+
+.history-row > td {
+  padding: 5px !important;
+}
+
+.history-table th,
+.history-table td {
+  font-size: 0.58rem !important;
+}
+
+.account-footer {
+  height: 24px !important;
+  padding: 0 12px !important;
+  font-size: 0.62rem !important;
+}
+
+@container (max-width: 640px) {
+  .account-table-wrap col.col-progress { width: 72px !important; }
+  .account-table-wrap col.col-money { width: 66px !important; }
+  .account-table-wrap col.col-actions { width: 48px !important; }
+
+  .account-table-wrap thead th,
+  .account-table-wrap td,
+  .account-table-wrap th {
+    padding-left: 5px !important;
+    padding-right: 5px !important;
+  }
+
+  .progress-cell em {
+    text-align: left !important;
+  }
+}
+
+.student-details-shell :is(.account-table-wrap, .profile-actions, .siblings-list) {
+  scrollbar-color: color-mix(in srgb, #65a744 74%, #397fe8 26%) rgba(231, 239, 233, 0.96) !important;
+  scrollbar-width: auto !important;
+}
+
+.student-details-shell :is(.account-table-wrap, .profile-actions, .siblings-list)::-webkit-scrollbar {
+  width: 14px !important;
+  height: 12px !important;
+}
+
+.student-details-shell :is(.account-table-wrap, .profile-actions, .siblings-list)::-webkit-scrollbar-track {
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, #eef6ec, #edf2f8) !important;
+}
+
+.student-details-shell :is(.account-table-wrap, .profile-actions, .siblings-list)::-webkit-scrollbar-thumb {
+  border: 3px solid transparent !important;
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, #86c85b, #3e9b8c) padding-box !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.42) !important;
+}
+
+.student-details-shell :is(.account-table-wrap, .profile-actions, .siblings-list)::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #6ead4f, #2d8277) padding-box !important;
 }
 
 </style>

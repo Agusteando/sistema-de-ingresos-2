@@ -1,5 +1,8 @@
 <template>
-  <div class="collections-workspace">
+  <div class="debt-page-shell">
+    <div ref="debtScaleShell" class="debt-scale-shell" :style="debtScaleShellStyle">
+      <div ref="debtDesignCanvas" class="debt-design-canvas" :style="debtDesignCanvasStyle">
+        <div class="collections-workspace">
     <section class="command-panel" aria-labelledby="debt-title">
       <div class="command-main">
         <div class="command-topline">
@@ -294,6 +297,10 @@
       </main>
     </section>
 
+        </div>
+      </div>
+    </div>
+
     <Teleport to="body">
       <div v-if="showExceptionModal" class="dialog-overlay" @click.self="closeException">
         <div class="dialog">
@@ -450,7 +457,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   LucideAlertTriangle,
   LucideCalendarClock,
@@ -492,6 +499,42 @@ const showExceptionModal = ref(false)
 const savingException = ref(false)
 const showWhatsappSetup = ref(false)
 const exceptionForm = ref({ fecha: '', motivo: '' })
+
+const DEBT_DESIGN_WIDTH = 1540
+const DEBT_MIN_DESIGN_HEIGHT = 760
+const debtScaleShell = ref(null)
+const debtDesignCanvas = ref(null)
+const debtWorkspaceScale = ref(1)
+const debtCanvasHeight = ref(DEBT_MIN_DESIGN_HEIGHT)
+const debtScaleShellStyle = computed(() => ({
+  height: `${Math.ceil(debtCanvasHeight.value * debtWorkspaceScale.value)}px`
+}))
+const debtDesignCanvasStyle = computed(() => ({
+  width: `${DEBT_DESIGN_WIDTH}px`,
+  height: `${Math.ceil(debtCanvasHeight.value)}px`,
+  transform: `scale(${debtWorkspaceScale.value})`
+}))
+
+let debtShellObserver = null
+let debtContentObserver = null
+let debtFrame = null
+const updateDebtWorkspaceScale = () => {
+  if (typeof window === 'undefined') return
+  const shell = debtScaleShell.value
+  const availableWidth = Math.max(260, shell?.clientWidth || window.innerWidth || DEBT_DESIGN_WIDTH)
+  const nextScale = Math.min(1, Math.max(0.28, availableWidth / DEBT_DESIGN_WIDTH))
+  debtWorkspaceScale.value = Number(nextScale.toFixed(4))
+
+  nextTick(() => {
+    const measuredHeight = debtDesignCanvas.value?.scrollHeight || DEBT_MIN_DESIGN_HEIGHT
+    debtCanvasHeight.value = Math.max(DEBT_MIN_DESIGN_HEIGHT, Math.ceil(measuredHeight))
+  })
+}
+const scheduleDebtWorkspaceScaleUpdate = () => nextTick(() => {
+  if (typeof window === 'undefined') return
+  if (debtFrame) window.cancelAnimationFrame(debtFrame)
+  debtFrame = window.requestAnimationFrame(updateDebtWorkspaceScale)
+})
 
 const actionCatalog = [
   {
@@ -730,6 +773,15 @@ watch(hasBlockingOverlay, (val) => {
   if (typeof document !== 'undefined') document.body.style.overflow = val ? 'hidden' : ''
 })
 
+watch([
+  loading,
+  search,
+  segmentFilter,
+  selectedMassAction,
+  () => filteredDeudores.value.length,
+  () => selectedRows.value.length
+], scheduleDebtWorkspaceScaleUpdate)
+
 watch(() => normalizeCicloKey(state.value.ciclo), () => loadData())
 watch(estatusFiltro, () => loadData())
 
@@ -745,10 +797,30 @@ watch(deudores, () => {
 
 onMounted(() => {
   if (typeof document !== 'undefined') document.body.classList.add('deudores-page-active')
+  scheduleDebtWorkspaceScaleUpdate()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', scheduleDebtWorkspaceScaleUpdate, { passive: true })
+    if (typeof ResizeObserver !== 'undefined') {
+      if (debtScaleShell.value) {
+        debtShellObserver = new ResizeObserver(scheduleDebtWorkspaceScaleUpdate)
+        debtShellObserver.observe(debtScaleShell.value)
+      }
+      if (debtDesignCanvas.value) {
+        debtContentObserver = new ResizeObserver(scheduleDebtWorkspaceScaleUpdate)
+        debtContentObserver.observe(debtDesignCanvas.value)
+      }
+    }
+  }
   loadData()
 })
 
 onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', scheduleDebtWorkspaceScaleUpdate)
+    if (debtFrame) window.cancelAnimationFrame(debtFrame)
+  }
+  debtShellObserver?.disconnect?.()
+  debtContentObserver?.disconnect?.()
   if (typeof document !== 'undefined') {
     document.body.style.overflow = ''
     document.body.classList.remove('deudores-page-active')
@@ -2455,4 +2527,206 @@ input[type="checkbox"] {
     border-radius: 0;
   }
 }
+/* fixed-artboard scaling for cobranza/deudores
+   Keeps the deudores workspace visually consistent under OS/browser scaling instead of reflowing into cramped breakpoints. */
+.debt-page-shell {
+  width: 100%;
+  min-width: 0;
+}
+
+.debt-scale-shell {
+  position: relative;
+  width: 100%;
+  min-height: 360px;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.debt-design-canvas {
+  position: relative;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.debt-design-canvas > .collections-workspace,
+.collections-workspace {
+  width: 1540px !important;
+  max-width: none !important;
+  min-width: 1540px !important;
+  margin: 0 auto !important;
+  gap: 14px !important;
+}
+
+:global(body.deudores-page-active .income-shell) {
+  display: flex !important;
+  height: 100vh !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+:global(body.deudores-page-active .income-main) {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+
+:global(body.deudores-page-active .income-sidebar) {
+  min-height: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 34px 34px 0 !important;
+}
+
+:global(body.deudores-page-active .sidebar-sheen),
+:global(body.deudores-page-active .sidebar-rings),
+:global(body.deudores-page-active .sidebar-arc),
+:global(body.deudores-page-active .sidebar-leaves) {
+  display: block !important;
+}
+
+:global(body.deudores-page-active .income-content) {
+  display: block !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  padding: 18px 30px 40px !important;
+}
+
+:global(body.deudores-page-active .app-header) {
+  height: 64px !important;
+  min-height: 64px !important;
+  padding: 0 30px !important;
+}
+
+:global(body.deudores-page-active .app-header h1) {
+  font-size: 1.32rem !important;
+}
+
+:global(body.deudores-page-active .header-actions) {
+  flex-wrap: nowrap !important;
+  justify-content: flex-end !important;
+}
+
+.debt-design-canvas .command-panel {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 330px) !important;
+}
+
+.debt-design-canvas .metric-stack {
+  grid-template-columns: none !important;
+}
+
+.debt-design-canvas .workflow-shell {
+  grid-template-columns: minmax(250px, 292px) minmax(0, 1fr) !important;
+}
+
+.debt-design-canvas .workflow-panel {
+  position: sticky !important;
+  top: 82px !important;
+  max-height: calc(100vh - 106px) !important;
+  grid-template-columns: none !important;
+}
+
+.debt-design-canvas .list-head {
+  display: grid !important;
+}
+
+.debt-design-canvas .list-head,
+.debt-design-canvas .debtor-row {
+  grid-template-columns: 30px minmax(170px, 1.35fr) minmax(92px, 0.5fr) minmax(112px, 0.55fr) minmax(134px, 0.65fr) minmax(128px, 0.55fr) !important;
+  align-items: center !important;
+}
+
+.debt-design-canvas .list-head span:first-child {
+  grid-column: 2 !important;
+}
+
+.debt-design-canvas .debtor-row {
+  border-radius: 0 !important;
+  padding: 12px 14px !important;
+}
+
+.debt-design-canvas .student-cell,
+.debt-design-canvas .amount-cell,
+.debt-design-canvas .contact-cell,
+.debt-design-canvas .next-cell,
+.debt-design-canvas .row-actions {
+  grid-column: auto !important;
+}
+
+.debt-design-canvas .amount-cell {
+  text-align: left !important;
+}
+
+.debt-design-canvas .contact-cell {
+  display: flex !important;
+}
+
+.debt-design-canvas .row-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+}
+
+.debt-design-canvas .row-primary,
+.debt-design-canvas .row-secondary {
+  width: auto !important;
+}
+
+.debt-design-canvas .headline-grid,
+.debt-design-canvas .today-action-card,
+.debt-design-canvas .stage-strip,
+.debt-design-canvas .selection-bar {
+  align-items: center !important;
+  flex-direction: row !important;
+}
+
+.debt-design-canvas .today-action-card {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto !important;
+}
+
+.debt-design-canvas .today-action-card .primary-action {
+  grid-column: auto !important;
+  width: auto !important;
+}
+
+.debt-design-canvas .primary-total {
+  border-top: 0 !important;
+  border-left: 1px solid var(--debt-soft-line) !important;
+  padding-top: 0 !important;
+  padding-left: 18px !important;
+  text-align: right !important;
+}
+
+.debt-design-canvas .stage-steps {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  width: auto !important;
+}
+
+.debt-design-canvas .view-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  width: auto !important;
+}
+
+.debt-design-canvas .board-toolbar {
+  grid-template-columns: minmax(150px, 220px) minmax(260px, 1fr) minmax(140px, 176px) !important;
+  align-items: end !important;
+}
+
+.debt-design-canvas .drawer-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.debt-design-canvas .drawer-contact {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.debt-design-canvas .drawer-actions-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.debt-design-canvas .student-copy strong,
+.debt-design-canvas .student-copy small,
+.debt-design-canvas .student-copy em,
+.debt-design-canvas .next-cell small {
+  white-space: nowrap !important;
+}
+
+
 </style>
