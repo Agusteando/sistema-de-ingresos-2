@@ -1,6 +1,8 @@
 <template>
   <div class="income-shell font-sans">
-    <aside class="income-sidebar">
+    <aside class="income-sidebar" :style="sidebarRootStyle">
+      <div ref="sidebarScaleShell" class="sidebar-scale-shell">
+        <div class="sidebar-design-canvas" :style="sidebarDesignCanvasStyle">
       <div class="sidebar-sheen"></div>
       <div class="sidebar-rings sidebar-rings-top"></div>
       <div class="sidebar-rings sidebar-rings-mid"></div>
@@ -93,6 +95,8 @@
           </button>
         </div>
       </div>
+        </div>
+      </div>
     </aside>
 
     <main class="income-main">
@@ -140,7 +144,7 @@
     </div>
 
     <div
-      v-if="syncState !== 'idle'"
+      v-if="syncState !== 'idle' && syncMessage"
       class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border flex items-center gap-2.5 z-[9999] text-xs font-bold uppercase tracking-widest transition-all duration-300"
       :class="{
         'border-gray-200 text-gray-600': syncState === 'pending',
@@ -157,7 +161,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
 import {
@@ -188,6 +192,36 @@ const { toasts } = useToast()
 const { syncState, syncMessage } = useOptimisticSync()
 const route = useRoute()
 
+const SIDEBAR_DESIGN_WIDTH = 232
+const SIDEBAR_DESIGN_HEIGHT = 800
+const sidebarScaleShell = ref(null)
+const sidebarScale = ref(1)
+const sidebarRootStyle = computed(() => ({
+  width: `${Math.ceil(SIDEBAR_DESIGN_WIDTH * sidebarScale.value)}px`,
+  flexBasis: `${Math.ceil(SIDEBAR_DESIGN_WIDTH * sidebarScale.value)}px`
+}))
+const sidebarDesignCanvasStyle = computed(() => ({
+  width: `${SIDEBAR_DESIGN_WIDTH}px`,
+  height: `${SIDEBAR_DESIGN_HEIGHT}px`,
+  transform: `scale(${sidebarScale.value})`
+}))
+
+let sidebarResizeObserver = null
+let sidebarFrame = null
+const updateSidebarScale = () => {
+  if (typeof window === 'undefined') return
+  const availableHeight = Math.max(360, window.innerHeight || SIDEBAR_DESIGN_HEIGHT)
+  const availableWidth = Math.max(260, window.innerWidth || SIDEBAR_DESIGN_WIDTH)
+  const widthGuard = availableWidth <= 720 ? Math.max(0.58, availableWidth / 1040) : 0
+  const nextScale = Math.min(1, Math.max(0.56, availableHeight / SIDEBAR_DESIGN_HEIGHT, widthGuard))
+  sidebarScale.value = Number(nextScale.toFixed(4))
+}
+const scheduleSidebarScaleUpdate = () => nextTick(() => {
+  if (typeof window === 'undefined') return
+  if (sidebarFrame) window.cancelAnimationFrame(sidebarFrame)
+  sidebarFrame = window.requestAnimationFrame(updateSidebarScale)
+})
+
 const cicloCookie = useCookie('active_ciclo', { maxAge: 31536000 })
 
 const state = useState('globalState', () => ({
@@ -212,10 +246,27 @@ const userPlanteles = computed(() => {
 })
 
 onMounted(async () => {
+  scheduleSidebarScaleUpdate()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', scheduleSidebarScaleUpdate, { passive: true })
+    if (typeof ResizeObserver !== 'undefined' && sidebarScaleShell.value) {
+      sidebarResizeObserver = new ResizeObserver(scheduleSidebarScaleUpdate)
+      sidebarResizeObserver.observe(sidebarScaleShell.value)
+    }
+  }
+
   try {
     const res = await $fetch('/api/admin/profile')
     if (res.photoUrl) adminPhoto.value = res.photoUrl
   } catch (e) {}
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', scheduleSidebarScaleUpdate)
+    if (sidebarFrame) window.cancelAnimationFrame(sidebarFrame)
+  }
+  sidebarResizeObserver?.disconnect?.()
 })
 
 const currentRouteName = computed(() => {
@@ -273,6 +324,25 @@ const logout = async () => {
     inset 0 0 0 1px rgba(255, 255, 255, 0.82),
     inset -26px 0 48px rgba(201, 238, 191, 0.28);
   color: #1b2a45;
+}
+
+.sidebar-scale-shell {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar-design-canvas {
+  position: relative;
+  display: flex;
+  height: 900px;
+  flex-direction: column;
+  overflow: hidden;
+  transform-origin: top left;
+  will-change: transform;
 }
 
 .income-sidebar::before {
@@ -783,6 +853,10 @@ const logout = async () => {
   padding: 18px 30px 16px;
 }
 
+.income-sidebar {
+  flex: 0 0 auto;
+}
+
 @media (max-height: 920px) and (min-width: 1081px) {
   .app-header {
     height: 60px;
@@ -845,4 +919,162 @@ const logout = async () => {
     min-width: 150px;
   }
 }
+
+
+/* fixed-artboard sidebar scaling: preserve the same sidebar composition under OS/browser scaling. */
+.sidebar-design-canvas .sidebar-brand {
+  padding: 38px 24px 31px !important;
+  text-align: center !important;
+}
+
+.sidebar-design-canvas .sidebar-logo {
+  max-height: 48px !important;
+  max-width: 106px !important;
+  margin: 0 auto 14px !important;
+}
+
+.sidebar-design-canvas .sidebar-nav {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  grid-template-columns: none !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  overflow-y: auto !important;
+  padding: 2px 18px 14px !important;
+}
+
+.sidebar-design-canvas .nav-item {
+  min-height: 43px !important;
+  gap: 13px !important;
+  border-radius: 12px !important;
+  padding: 0 17px !important;
+  font-size: 0.9rem !important;
+}
+
+.sidebar-design-canvas .sidebar-footer {
+  gap: 15px !important;
+  padding: 0 20px 23px !important;
+}
+
+.sidebar-design-canvas .plantel-select {
+  height: 42px !important;
+}
+
+.sidebar-design-canvas .admin-card {
+  min-height: 66px !important;
+}
+
+.sidebar-design-canvas .sidebar-sheen,
+.sidebar-design-canvas .sidebar-rings,
+.sidebar-design-canvas .sidebar-arc,
+.sidebar-design-canvas .sidebar-leaves {
+  display: block !important;
+}
+
+/* Premium desktop shell: lighter navigation for a 1280x800 effective viewport. */
+.income-shell,
+.income-shell * {
+  letter-spacing: 0 !important;
+}
+
+.income-shell {
+  background: linear-gradient(180deg, #fbfcfe 0%, #f5f8fb 100%) !important;
+}
+
+.income-sidebar {
+  border-width: 0 1px 0 0 !important;
+  border-color: rgba(215, 226, 220, 0.9) !important;
+  border-radius: 0 24px 24px 0 !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.97), rgba(248,252,248,0.94)),
+    radial-gradient(circle at 75% 10%, rgba(142, 193, 83, 0.12), transparent 160px) !important;
+  box-shadow: 10px 0 32px rgba(15, 23, 42, 0.045) !important;
+}
+
+.income-sidebar::before,
+.income-sidebar::after,
+.sidebar-sheen,
+.sidebar-rings,
+.sidebar-arc,
+.sidebar-leaves {
+  opacity: 0.18 !important;
+}
+
+.sidebar-design-canvas .sidebar-brand {
+  padding: 24px 18px 20px !important;
+}
+
+.sidebar-design-canvas .sidebar-logo {
+  max-height: 42px !important;
+  max-width: 96px !important;
+  margin-bottom: 10px !important;
+}
+
+.sidebar-design-canvas .sidebar-brand h2 {
+  color: #2e6f3d !important;
+  font-size: 0.66rem !important;
+  letter-spacing: 0 !important;
+}
+
+.sidebar-design-canvas .sidebar-nav {
+  gap: 5px !important;
+  padding: 2px 12px 10px !important;
+}
+
+.sidebar-design-canvas .nav-item {
+  min-height: 38px !important;
+  gap: 10px !important;
+  border-radius: 11px !important;
+  padding: 0 12px !important;
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+}
+
+.sidebar-design-canvas .nav-item svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.sidebar-design-canvas .sidebar-footer {
+  gap: 10px !important;
+  padding: 0 14px 16px !important;
+}
+
+.sidebar-design-canvas .plantel-select {
+  height: 36px !important;
+  border-radius: 11px !important;
+}
+
+.sidebar-design-canvas .admin-card {
+  min-height: 56px !important;
+  border-radius: 12px !important;
+  padding: 8px 9px !important;
+}
+
+.app-header {
+  height: 54px !important;
+  padding: 0 20px !important;
+  border-bottom-color: #e6edf5 !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+}
+
+.app-header h1 {
+  font-size: 1.08rem !important;
+}
+
+.income-main::before {
+  opacity: 0.16 !important;
+}
+
+.income-content {
+  padding: 12px 18px 14px !important;
+}
+
+@media (max-height: 840px) and (min-width: 1081px) {
+  .income-content {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+}
+
 </style>
