@@ -137,7 +137,10 @@
 
       <div class="grade-filter">
         <div class="grade-tabs" aria-label="Filtrar por grado">
-          <button @click="activeGrado = ''; activeGrupo = ''" class="chip" :class="{'active': activeGrado === ''}">Todos</button>
+          <button @click="activeGrado = ''; activeGrupo = ''; activeSaldoFilter = 'all'" class="chip" :class="{'active': activeGrado === '' && activeSaldoFilter === 'all'}">Todos</button>
+          <button type="button" class="chip chip-debt" :class="{ active: activeSaldoFilter === 'debt' }" @click="toggleSaldoDebtFilter">
+            <span>Con adeudo</span><i aria-hidden="true"></i>
+          </button>
           <button v-for="g in availableGrados" :key="g" @click="activeGrado = g; activeGrupo = ''" class="chip" :class="{'active': activeGrado === g}">{{ g }}</button>
         </div>
 
@@ -154,6 +157,7 @@
       </button>
     </div>
 
+
     <div v-if="selectedFilterTags.length" class="active-filter-strip">
       <span v-for="tag in selectedFilterTags" :key="tag" class="filter-token">{{ tag }}</span>
     </div>
@@ -165,16 +169,9 @@
         <div class="student-list-card">
           <div class="list-titlebar">
             <div class="list-heading">
-              <button
-                type="button"
-                :class="['select-visible-toggle', { active: allDisplayedSelected, partial: someDisplayedSelected && !allDisplayedSelected }]"
-                :disabled="!displayedStudents.length"
-                :title="allDisplayedSelected ? 'Quitar visibles' : 'Seleccionar visibles'"
-                @click="toggleDisplayedSelection"
-              >
-                <span></span>
-              </button>
-              <h2>Lista de alumnos <span>{{ displayedStudents.length }}</span></h2>
+              <div class="list-heading-copy">
+                <h2>Alumnos <span>{{ displayedStudents.length }}</span></h2>
+              </div>
             </div>
             <div class="list-title-actions">
               <button v-if="selectedCount > 0" type="button" class="title-action-pill" title="Asignar sección" @click="openSectionModalForSelection">
@@ -191,6 +188,24 @@
             <span>Alumno</span>
             <span>Saldo</span>
             <span></span>
+          </div>
+
+          <div v-if="displayedStudents.length" class="selection-control-row">
+            <button
+              type="button"
+              :class="['select-visible-row-control', { active: allDisplayedSelected, partial: someDisplayedSelected && !allDisplayedSelected }]"
+              :title="allDisplayedSelected ? 'Quitar visibles' : 'Seleccionar todos los visibles'"
+              @click="toggleDisplayedSelection"
+            >
+              <span class="select-box" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path class="check-mark" d="M5 12.5l4.2 4.2L19 7" />
+                  <path class="partial-mark" d="M6 12h12" />
+                </svg>
+              </span>
+              <span>Seleccionar todos los visibles ({{ displayedStudents.length }})</span>
+            </button>
+            <strong v-if="selectedCount > 0">{{ selectedCount }} {{ selectedCount === 1 ? 'seleccionado' : 'seleccionados' }}</strong>
           </div>
 
           <div class="student-list-scroll">
@@ -224,9 +239,13 @@
                   type="button"
                   :class="['row-select-toggle', { active: isStudentSelected(s) }]"
                   :aria-pressed="isStudentSelected(s)"
-                  title="Seleccionar"
+                  :title="isStudentSelected(s) ? 'Quitar de la selección' : 'Agregar a la selección'"
                   @click.stop="toggleStudentSelection(s, $event)"
-                ><span></span></button>
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M5 12.5l4.2 4.2L19 7" />
+                  </svg>
+                </button>
                 <span class="student-grade-mark" :style="gradeAccentStyle(s)" :title="gradeVisualTitle(s)">
                   <span class="student-grade-number">{{ gradeVisualNumber(s) }}</span>
                   <span class="student-grade-label">grado</span>
@@ -263,35 +282,12 @@
 
           <div :class="['list-footer', { 'selection-footer': selectedCount > 0 }]">
             <template v-if="selectedCount > 0">
-              <div class="selection-summary-shell">
-                <div class="selection-summary-main">
-                  <button type="button" class="selection-avatar" @click="clearSelectedStudents" :title="selectedCount > 1 ? 'Limpiar selección' : 'Alumno seleccionado'">
-                    <LucideUserRound :size="24" />
-                    <span class="selection-avatar-count">{{ selectedCount }}</span>
-                  </button>
-                  <div class="selection-summary-copy">
-                    <small>{{ selectedCount }} {{ selectedCount === 1 ? 'alumno seleccionado' : 'alumnos seleccionados' }}</small>
-                    <strong>{{ selectionPrimaryName }}</strong>
-                    <em>{{ selectionSecondaryMeta }}</em>
-                  </div>
+              <div class="selection-inline-summary">
+                <div class="selection-inline-copy">
+                  <strong>{{ selectedCount }} {{ selectedCount === 1 ? 'seleccionado' : 'seleccionados' }}</strong>
                 </div>
-                <div class="selection-summary-total">
-                  <small>Total seleccionado</small>
-                  <strong>${{ format(selectedBalanceTotal) }}</strong>
-                </div>
-                <div class="selection-actions hero">
-                  <button type="button" class="footer-action soft" title="Asignar secciones" @click="openSectionModalForSelection">
-                    <LucideTags :size="15" />
-                    <span>Secciones</span>
-                  </button>
-                  <button type="button" class="footer-action soft" title="Preparar pago" @click="openBulkPaymentFlow">
-                    <LucideCreditCard :size="15" />
-                    <span>Pagar</span>
-                  </button>
-                  <button type="button" class="footer-action primary big" @click="openSelectionDetails">
-                    <span>Ver cuenta</span>
-                    <LucideArrowRight :size="17" />
-                  </button>
+                <div class="selection-inline-totals">
+                  <span>Total: ${{ format(selectedBalanceTotal) }}</span>
                 </div>
               </div>
             </template>
@@ -462,6 +458,35 @@
       </div>
     </div>
 
+    <Teleport to="body">
+      <Transition name="selection-dock">
+        <div v-if="selectedCount > 0" class="selection-action-dock">
+          <div class="selection-action-dock__summary">
+            <div class="selection-action-dock__count">{{ selectedCount }}</div>
+            <div class="selection-action-dock__copy">
+              <strong>{{ selectedCount }} {{ selectedCount === 1 ? 'seleccionado' : 'seleccionados' }}</strong>
+              <span>${{ format(selectedBalanceTotal) }} total</span>
+            </div>
+          </div>
+          <div class="selection-action-dock__actions">
+            <button type="button" class="dock-action secondary" @click="openSelectionDetails">
+              <span>Estado de cuenta</span>
+              <LucideArrowRight :size="16" />
+            </button>
+            <button type="button" class="dock-action secondary" @click="openSectionModalForSelection">
+              <LucideTags :size="16" />
+              <span>Secciones</span>
+            </button>
+            <button type="button" class="dock-action primary" @click="openBulkPaymentFlow">
+              <LucideCreditCard :size="16" />
+              <span>Aplicar pago</span>
+            </button>
+            <button type="button" class="dock-action ghost" @click="clearSelectedStudents">Limpiar</button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <StudentFormModal v-if="showStudentModal" :student="editingStudent" @close="closeStudentModal" @success="handleStudentSuccess" />
     <BajaReasonModal v-if="pendingBajaStudent" :student="pendingBajaStudent" @close="pendingBajaStudent = null" @confirm="confirmBaja" />
 
@@ -541,7 +566,6 @@ import {
   LucidePlus,
   LucideTrash2,
   LucideCreditCard,
-  LucideUserRound,
   LucideArrowRight
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
@@ -565,6 +589,7 @@ const filters = ref({ q: '' })
 const activeFilter = ref('inscritos')
 const activeGrado = ref('')
 const activeGrupo = ref('')
+const activeSaldoFilter = ref('all')
 
 const externalConcepts = ref(['inscripcion', 'inscripción', 'reinscripción', 'reinscripcion'])
 
@@ -617,19 +642,6 @@ const selectedStudents = computed(() => {
 })
 const selectedBalanceTotal = computed(() => selectedStudents.value.reduce((sum, student) => sum + Number(student?.saldoNeto || 0), 0))
 const selectionPrimaryStudent = computed(() => selectedStudents.value[0] || null)
-const selectionPrimaryName = computed(() => {
-  if (!selectionPrimaryStudent.value) return ''
-  if (selectedCount.value === 1) return selectionPrimaryStudent.value.nombreCompleto
-  return `${selectionPrimaryStudent.value.nombreCompleto} +${selectedCount.value - 1}`
-})
-const selectionSecondaryMeta = computed(() => {
-  const student = selectionPrimaryStudent.value
-  if (!student) return ''
-  const parts = [student.matricula]
-  const group = studentGroupLabel(student)
-  if (group) parts.push(`Gpo ${group}`)
-  return parts.join(' · ')
-})
 const selectedAverageBalance = computed(() => selectedCount.value ? selectedBalanceTotal.value / selectedCount.value : 0)
 const selectedGradeSummary = computed(() => {
   const grades = new Set(selectedStudents.value.map(student => gradeVisualTitle(student)).filter(Boolean))
@@ -800,6 +812,7 @@ const hasActiveFilters = computed(() => Boolean(
   activeFilter.value ||
   activeGrado.value ||
   activeGrupo.value ||
+  activeSaldoFilter.value !== 'all' ||
   filters.value.q
 ))
 
@@ -833,20 +846,25 @@ const setActiveFilter = (filter) => {
   activeGrupo.value = ''
 }
 
+const toggleSaldoDebtFilter = () => {
+  activeSaldoFilter.value = activeSaldoFilter.value === 'debt' ? 'all' : 'debt'
+}
+
 const clearFilters = () => {
   filters.value.q = ''
   activeFilter.value = ''
   activeGrado.value = ''
   activeGrupo.value = ''
+  activeSaldoFilter.value = 'all'
   performSearch()
 }
 
 const listRangeLabel = computed(() => {
   const total = displayedStudents.value.length
-  if (!total) return 'Sin alumnos para mostrar'
-  if (total > 7) return `${total} alumnos; desplaza la lista para ver mas`
-  return `${total} alumnos visibles`
+  if (!total) return 'Sin alumnos'
+  return `${total} alumnos`
 })
+
 
 const parseEnrollmentConfig = (obj) => {
   let concepts = []
@@ -949,6 +967,11 @@ const studentMatchesActiveFilter = (student) => {
   return true
 }
 
+const studentMatchesSaldoFilter = (student) => {
+  if (activeSaldoFilter.value === 'debt') return Number(student?.saldoNeto || 0) > 0
+  return true
+}
+
 const displayedStudents = computed(() => {
   let list = students.value
 
@@ -961,12 +984,12 @@ const displayedStudents = computed(() => {
   if (activeGrupo.value) list = list.filter(s => s.grupo === activeGrupo.value)
 
   if (activeFilter.value) list = list.filter(studentMatchesActiveFilter)
+  if (activeSaldoFilter.value !== 'all') list = list.filter(studentMatchesSaldoFilter)
 
   return list
 })
 
 watch(displayedStudents, (list) => {
-  if (bulkWorkspaceMode.value !== 'none' || selectedCount.value > 1) return
   if (!list.length) {
     selectedStudent.value = null
     return
@@ -974,7 +997,7 @@ watch(displayedStudents, (list) => {
 
   const selectedKey = normalizeStudentMatricula(selectedStudent.value?.matricula)
   const selectedStillVisible = selectedKey && list.some(student => normalizeStudentMatricula(student.matricula) === selectedKey)
-  if (!selectedStillVisible) selectedStudent.value = list[0]
+  if (selectedStudent.value && !selectedStillVisible) selectedStudent.value = null
 }, { flush: 'post' })
 
 const displayedMatriculas = computed(() => displayedStudents.value.map(student => normalizeStudentMatricula(student.matricula)).filter(Boolean))
@@ -983,7 +1006,7 @@ const someDisplayedSelected = computed(() => displayedMatriculas.value.some(matr
 
 const availableGrados = computed(() => {
   const set = new Set()
-  const subset = students.value.filter(studentMatchesActiveFilter)
+  const subset = students.value.filter(student => studentMatchesActiveFilter(student) && studentMatchesSaldoFilter(student))
   subset.forEach(s => { if (s.grado && s.grado !== 'null') set.add(s.grado) })
   return Array.from(set).sort((a, b) => (GRADOS_ORDEN[a] || 99) - (GRADOS_ORDEN[b] || 99))
 })
@@ -992,7 +1015,7 @@ const availableGrupos = computed(() => {
   if (!activeGrado.value) return []
   const set = new Set()
   students.value.forEach(s => {
-    if (s.grado === activeGrado.value && s.grupo && s.grupo !== 'null') set.add(s.grupo)
+    if (s.grado === activeGrado.value && studentMatchesActiveFilter(s) && studentMatchesSaldoFilter(s) && s.grupo && s.grupo !== 'null') set.add(s.grupo)
   })
   return Array.from(set).sort()
 })
@@ -1195,6 +1218,10 @@ const toggleDisplayedSelection = () => {
 const handleStudentRowClick = (student, event) => {
   if (event?.target?.closest?.('button, a, input, label')) return
   if (event?.metaKey || event?.ctrlKey || event?.shiftKey) {
+    toggleStudentSelection(student, event)
+    return
+  }
+  if (selectedCount.value > 0) {
     toggleStudentSelection(student, event)
     return
   }
@@ -7007,6 +7034,553 @@ const handleStudentSuccess = () => {
   .students-workspace.has-detail .student-list-panel,
   .students-workspace.has-detail .student-list-panel.is-compact {
     max-width: none !important;
+  }
+}
+
+.secondary-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 10px;
+}
+
+.balance-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.balance-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dfe6ef;
+  border-radius: 999px;
+  background: #fff;
+  color: #536278;
+  padding: 8px 12px;
+  font-size: 0.77rem;
+  font-weight: 720;
+  line-height: 1;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.balance-chip b {
+  display: inline-flex;
+  min-width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #f4f7fb;
+  color: inherit;
+  padding: 0 7px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.balance-chip:hover,
+.balance-chip.active {
+  border-color: #acd29a;
+  background: #f5fbf2;
+  color: #2f6d2f;
+  box-shadow: 0 10px 18px rgba(64, 112, 64, 0.06);
+}
+
+.balance-chip.active b {
+  background: #e0f0d9;
+}
+
+.selection-mode-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d6e4f8;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f8fbff, #ffffff);
+  color: #476488;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+}
+
+.selection-mode-banner strong {
+  color: #1e4579;
+}
+
+.selection-clear-link {
+  border: 0;
+  background: transparent;
+  color: #2f78ff;
+  font-weight: 760;
+}
+
+.list-heading-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.list-heading-copy h2 {
+  margin: 0;
+}
+
+.list-heading-copy small {
+  color: #7d879b;
+  font-size: 0.68rem;
+  font-weight: 640;
+  line-height: 1;
+}
+
+.selection-helper-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #edf2f7;
+  background: #fafcff;
+  padding: 10px 18px;
+}
+
+.selection-helper-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.selection-helper-copy strong {
+  color: #1a355f;
+  font-size: 0.82rem;
+  font-weight: 760;
+  line-height: 1;
+}
+
+.selection-helper-copy small {
+  color: #7a869a;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.selection-helper-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.helper-action {
+  border: 1px solid #d9e2ee;
+  border-radius: 999px;
+  background: #fff;
+  color: #44607f;
+  padding: 7px 11px;
+  font-size: 0.72rem;
+  font-weight: 740;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.helper-action.muted {
+  color: #6b7b91;
+}
+
+.helper-action:hover:not(:disabled) {
+  border-color: #c9d6e6;
+  background: #f7fbff;
+}
+
+.row-select-toggle {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border-color: #d5dce8;
+  background: linear-gradient(180deg, #ffffff, #f9fbfd);
+}
+
+.row-select-toggle span {
+  width: 12px;
+  height: 7px;
+  border-width: 2.5px;
+  transform: rotate(-45deg) translate(0.5px, -0.5px);
+}
+
+.row-select-toggle.active {
+  border-color: #2f9e44;
+  background: linear-gradient(180deg, #68bb53, #4e9d3d);
+  box-shadow: 0 10px 22px rgba(80, 158, 61, 0.22);
+}
+
+.student-row.multi-selected:not(.selected) {
+  border-color: color-mix(in srgb, var(--grade-accent) 28%, #d7e1ed 72%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--grade-soft) 42%, #ffffff 58%), rgba(255,255,255,0.98));
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.055);
+}
+
+.student-row.multi-selected::before,
+.student-row.selected::before {
+  content: '';
+  position: absolute;
+  inset: 12px auto 12px 0;
+  width: 5px;
+  border-radius: 0 999px 999px 0;
+  background: var(--grade-accent);
+  opacity: 0.95;
+}
+
+.student-selection-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--grade-soft) 80%, #ffffff 20%);
+  color: var(--grade-accent);
+  padding: 6px 10px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.selection-inline-summary {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.selection-inline-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.selection-inline-copy strong {
+  color: #17335d;
+  font-size: 0.84rem;
+  font-weight: 780;
+}
+
+.selection-inline-copy small,
+.selection-inline-totals span {
+  color: #6d7a90;
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.list-footer.selection-footer {
+  position: relative;
+  margin-top: 10px;
+  border-top: 1px solid #e5edf7;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: #fbfdff;
+  box-shadow: none;
+  padding: 12px 17px 14px;
+}
+
+.selection-action-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 70;
+  display: flex;
+  width: min(1040px, calc(100vw - 24px));
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  transform: translateX(-50%);
+  border: 1px solid #dce8f7;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 14px 16px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(14px);
+}
+
+.selection-action-dock__summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.selection-action-dock__count {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #68bb53, #4e9d3d);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  box-shadow: 0 14px 26px rgba(80, 158, 61, 0.24);
+}
+
+.selection-action-dock__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.selection-action-dock__copy strong {
+  color: #17335d;
+  font-size: 0.95rem;
+  font-weight: 780;
+}
+
+.selection-action-dock__copy span {
+  color: #6f7d93;
+  font-size: 0.8rem;
+  font-weight: 640;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selection-action-dock__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.dock-action {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #d8e3f0;
+  border-radius: 14px;
+  background: #fff;
+  color: #4e6078;
+  padding: 0 14px;
+  font-size: 0.82rem;
+  font-weight: 760;
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.dock-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.dock-action.primary {
+  border-color: transparent;
+  background: linear-gradient(180deg, #68bb53, #4e9d3d);
+  color: #fff;
+  box-shadow: 0 14px 26px rgba(80, 158, 61, 0.2);
+}
+
+.dock-action.secondary {
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.dock-action.ghost {
+  background: transparent;
+}
+
+.selection-dock-enter-active,
+.selection-dock-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.selection-dock-enter-from,
+.selection-dock-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 14px);
+}
+
+@media (max-width: 920px) {
+  .secondary-filter-bar,
+  .selection-helper-strip,
+  .selection-action-dock {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .selection-action-dock {
+    bottom: 10px;
+    width: calc(100vw - 16px);
+  }
+
+  .selection-action-dock__actions {
+    justify-content: stretch;
+  }
+
+  .dock-action {
+    flex: 1 1 auto;
+  }
+}
+
+
+/* Compact filter and selection refinements */
+.grade-tabs .chip-debt {
+  gap: 7px;
+}
+
+.chip-debt i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #ef6d76;
+  box-shadow: 0 0 0 3px rgba(239, 109, 118, 0.13);
+}
+
+.chip-debt.active i {
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
+}
+
+.list-heading-copy small {
+  display: none;
+}
+
+.selection-control-row {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #edf2f7;
+  background: #fbfdff;
+  padding: 9px 18px;
+}
+
+.select-visible-row-control {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  border: 0;
+  background: transparent;
+  color: #6f7d93;
+  padding: 0;
+  font-size: 0.78rem;
+  font-weight: 720;
+  text-align: left;
+}
+
+.select-visible-row-control:hover {
+  color: #2f7c3b;
+}
+
+.selection-control-row > strong {
+  flex: 0 0 auto;
+  color: #3b8d32;
+  font-size: 0.78rem;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.select-box {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #c9d3df;
+  border-radius: 7px;
+  background: #fff;
+  color: #fff;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.select-box svg,
+.row-select-toggle svg {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.select-box svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 3.2;
+}
+
+.select-box .check-mark,
+.select-box .partial-mark {
+  opacity: 0;
+}
+
+.select-visible-row-control.active .select-box,
+.select-visible-row-control.partial .select-box {
+  border-color: #4fa33e;
+  background: linear-gradient(180deg, #68bb53, #4e9d3d);
+  box-shadow: 0 8px 18px rgba(80, 158, 61, 0.18);
+}
+
+.select-visible-row-control.active .select-box .check-mark,
+.select-visible-row-control.partial .select-box .partial-mark {
+  opacity: 1;
+}
+
+.row-select-toggle {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1.7px solid #cfd8e5;
+  background: linear-gradient(180deg, #ffffff, #f9fbfd);
+  color: #ffffff;
+}
+
+.row-select-toggle svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 3.4;
+  opacity: 0;
+  transform: scale(0.86);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.row-select-toggle.active {
+  border-color: #4fa33e;
+  background: linear-gradient(180deg, #68bb53, #4e9d3d);
+  box-shadow: 0 10px 22px rgba(80, 158, 61, 0.22);
+}
+
+.row-select-toggle.active svg {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.student-row.compact .row-select-toggle {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-radius: 999px;
+}
+
+.student-row.compact .row-select-toggle svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 3.5;
+}
+
+.student-row.compact .student-identity {
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .selection-control-row {
+    padding: 9px 12px;
+  }
+
+  .select-visible-row-control {
+    font-size: 0.74rem;
   }
 }
 
