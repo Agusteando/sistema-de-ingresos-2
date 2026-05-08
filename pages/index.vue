@@ -259,7 +259,7 @@
                   </strong>
                   <em class="student-meta">
                     <span>{{ s.matricula }}</span>
-                    <small v-if="studentGroupLabel(s)" class="group-chip">Gpo {{ studentGroupLabel(s) }}</small>
+                    <small v-if="studentGroupLabel(s)" class="group-chip" :aria-label="'Grupo '+ studentGroupLabel(s)">{{ studentGroupLabel(s) }}</small>
                   </em>
                   <span v-if="s.customSections?.length" class="student-section-badges" :title="sectionBadgeTitle(s)">
                     <b v-for="section in visibleStudentSections(s)" :key="`row-section-${s.matricula}-${section.id}`">{{ section.name }}</b>
@@ -359,7 +359,7 @@
               <span class="bulk-grade">{{ gradeVisualNumber(student) }}</span>
               <div>
                 <strong>{{ student.nombreCompleto }}</strong>
-                <small>{{ student.matricula }}<template v-if="studentGroupLabel(student)"> · Gpo {{ studentGroupLabel(student) }}</template></small>
+                <small>{{ student.matricula }}<template v-if="studentGroupLabel(student)"> · {{ studentGroupLabel(student) }}</template></small>
               </div>
               <b>${{ format(student.saldoNeto) }}</b>
             </article>
@@ -599,6 +599,7 @@ const selectedStudent = ref(null)
 const studentsScaleShell = ref(null)
 const workspaceScale = ref(1)
 const workspaceCanvasHeight = ref(640)
+const workspaceCanvasWidth = ref(760)
 const selectedMatriculas = ref(new Set())
 const lastSelectedMatricula = ref(null)
 const photoCache = ref({})
@@ -653,7 +654,7 @@ const selectedGroupSummary = computed(() => {
   const groups = new Set(selectedStudents.value.map(studentGroupLabel).filter(Boolean))
   if (!groups.size) return ''
   const values = Array.from(groups)
-  return values.length > 3 ? `Gpos ${values.slice(0, 3).join(', ')} +${values.length - 3}` : `Gpos ${values.join(', ')}`
+  return values.length > 3 ? `Grupos ${values.slice(0, 3).join(', ')} +${values.length - 3}` : `Grupos ${values.join(', ')}`
 })
 const selectedSectionSummary = computed(() => {
   const names = new Set()
@@ -670,32 +671,43 @@ const accountWorkspaceMode = computed(() => {
   return 'none'
 })
 
-const WORKSPACE_LIST_DESIGN_WIDTH = 860
-const WORKSPACE_DETAIL_DESIGN_WIDTH = 1040
-const WORKSPACE_MIN_DESIGN_HEIGHT = 460
-const workspaceDesignWidth = computed(() => hasAccountWorkspace.value ? WORKSPACE_DETAIL_DESIGN_WIDTH : WORKSPACE_LIST_DESIGN_WIDTH)
+const WORKSPACE_LIST_DESIGN_WIDTH = 760
+const WORKSPACE_DETAIL_DESIGN_WIDTH = 1180
+const WORKSPACE_DESIGN_HEIGHT = 640
+const WORKSPACE_MIN_SCALE = 0.54
+const baseWorkspaceDesignWidth = computed(() => hasAccountWorkspace.value ? WORKSPACE_DETAIL_DESIGN_WIDTH : WORKSPACE_LIST_DESIGN_WIDTH)
+const workspaceDesignWidth = computed(() => Math.max(baseWorkspaceDesignWidth.value, workspaceCanvasWidth.value))
 const studentsScaleShellStyle = computed(() => ({
-  height: `${Math.ceil(workspaceCanvasHeight.value)}px`
+  height: `${Math.ceil(WORKSPACE_DESIGN_HEIGHT * workspaceScale.value)}px`,
+  '--workspace-shell-height': `${Math.ceil(WORKSPACE_DESIGN_HEIGHT * workspaceScale.value)}px`
 }))
 const studentsDesignCanvasStyle = computed(() => ({
-  width: '100%',
-  height: `${Math.ceil(workspaceCanvasHeight.value)}px`,
-  transform: 'none'
+  '--workspace-design-width': `${workspaceDesignWidth.value}px`,
+  '--workspace-design-height': `${WORKSPACE_DESIGN_HEIGHT}px`,
+  '--workspace-scale': workspaceScale.value,
+  width: `${workspaceDesignWidth.value}px`,
+  height: `${WORKSPACE_DESIGN_HEIGHT}px`,
+  transform: `scale(${workspaceScale.value})`
 }))
 
 let workspaceResizeObserver = null
+let workspaceFrame = null
 const updateWorkspaceScale = () => {
   if (typeof window === 'undefined') return
   const shell = studentsScaleShell.value
   const shellTop = shell?.getBoundingClientRect?.().top || 0
-  const availableHeight = Math.max(420, window.innerHeight - shellTop - 10)
-  workspaceScale.value = 1
-  workspaceCanvasHeight.value = Math.max(WORKSPACE_MIN_DESIGN_HEIGHT, availableHeight)
+  const shellWidth = Math.max(320, shell?.clientWidth || baseWorkspaceDesignWidth.value)
+  const availableHeight = Math.max(360, window.innerHeight - shellTop - 10)
+  const nextScale = Math.min(1, availableHeight / WORKSPACE_DESIGN_HEIGHT)
+  workspaceScale.value = Number(Math.max(WORKSPACE_MIN_SCALE, nextScale).toFixed(4))
+  workspaceCanvasWidth.value = Math.max(baseWorkspaceDesignWidth.value, Math.ceil(shellWidth / workspaceScale.value))
+  workspaceCanvasHeight.value = WORKSPACE_DESIGN_HEIGHT
 }
 
 const scheduleWorkspaceScaleUpdate = () => nextTick(() => {
   if (typeof window === 'undefined') return
-  window.requestAnimationFrame(updateWorkspaceScale)
+  if (workspaceFrame) window.cancelAnimationFrame(workspaceFrame)
+  workspaceFrame = window.requestAnimationFrame(updateWorkspaceScale)
 })
 const sectionModalStudents = computed(() => {
   const selected = new Set(sectionModalMatriculas.value.map(normalizeStudentMatricula))
@@ -782,7 +794,7 @@ const statusSecondaryLine = (student) => {
   const parts = []
   if (student?.nivel && String(student.nivel).toLowerCase() !== 'null') parts.push(student.nivel)
   const group = studentGroupLabel(student)
-  if (group) parts.push(`Gpo ${group}`)
+  if (group) parts.push(group)
   if (student?.estatus !== 'Activo') return parts[0] || 'Alumno'
   if (!isEnrolled(student)) return parts.length ? `${parts.join(' · ')} · pendiente` : 'Pendiente de inscripción'
   return parts.join(' · ') || 'Alumno activo'
@@ -1454,7 +1466,10 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  if (typeof window !== 'undefined') window.removeEventListener('resize', scheduleWorkspaceScaleUpdate)
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', scheduleWorkspaceScaleUpdate)
+    if (workspaceFrame) window.cancelAnimationFrame(workspaceFrame)
+  }
   workspaceResizeObserver?.disconnect?.()
 })
 
@@ -7582,6 +7597,305 @@ const handleStudentSuccess = () => {
   .select-visible-row-control {
     font-size: 0.74rem;
   }
+}
+
+
+/* v19 fixed student-list artboard + compact row polish.
+   The list now scales as one canvas, like the sidebar, instead of letting row internals collapse independently. */
+.students-scale-shell {
+  height: var(--workspace-shell-height) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  contain: layout paint !important;
+}
+
+.students-design-canvas {
+  width: var(--workspace-design-width) !important;
+  height: var(--workspace-design-height) !important;
+  min-width: var(--workspace-design-width) !important;
+  max-width: none !important;
+  transform: scale(var(--workspace-scale)) !important;
+  transform-origin: top left !important;
+  will-change: transform !important;
+}
+
+.students-design-canvas > .students-workspace,
+.students-workspace,
+.students-workspace.has-detail {
+  width: var(--workspace-design-width) !important;
+  height: var(--workspace-design-height) !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.students-workspace:not(.has-detail) {
+  grid-template-columns: 760px !important;
+  justify-content: start !important;
+}
+
+.students-workspace.has-detail {
+  grid-template-columns: 470px minmax(0, 1fr) !important;
+}
+
+.students-workspace.has-detail .student-list-panel,
+.students-workspace.has-detail .student-list-panel.is-compact {
+  width: 470px !important;
+  max-width: 470px !important;
+  flex-basis: 470px !important;
+}
+
+.student-list-card {
+  border-radius: 18px !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(249,251,254,0.96)) !important;
+}
+
+.list-titlebar {
+  min-height: 42px !important;
+}
+
+.selection-control-row {
+  min-height: 38px !important;
+  padding: 7px 14px !important;
+}
+
+.select-visible-row-control {
+  gap: 9px !important;
+  font-size: 0.72rem !important;
+}
+
+.select-visible-row-control span:last-child {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.list-columns,
+.list-columns.full,
+.list-columns.compact {
+  grid-template-columns: minmax(0, 1fr) 104px 30px !important;
+  height: 20px !important;
+  padding: 0 12px 0 50px !important;
+}
+
+.student-list-scroll {
+  padding: 8px 10px 12px !important;
+}
+
+.student-row,
+.student-row.full,
+.student-row.compact,
+.students-workspace.has-detail .student-row,
+.students-workspace.has-detail .student-row.full,
+.students-workspace.has-detail .student-row.compact {
+  grid-template-columns: minmax(0, 1fr) 104px 30px !important;
+  min-height: 74px !important;
+  gap: 9px !important;
+  margin-bottom: 8px !important;
+  overflow: visible !important;
+  border-radius: 16px !important;
+  padding: 9px 9px 9px 44px !important;
+  box-shadow: 0 7px 18px rgba(15, 23, 42, 0.038) !important;
+}
+
+.student-row:hover {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06) !important;
+}
+
+.row-select-toggle,
+.students-workspace.has-detail .row-select-toggle {
+  left: 12px !important;
+  top: 50% !important;
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  border-width: 2px !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 4px rgba(255,255,255,0.96), 0 7px 14px rgba(15, 23, 42, 0.075) !important;
+  transform: translateY(-50%) !important;
+}
+
+.row-select-toggle svg,
+.students-workspace.has-detail .row-select-toggle svg {
+  display: block !important;
+  width: 16px !important;
+  height: 16px !important;
+  opacity: 0 !important;
+  fill: none !important;
+  stroke: #ffffff !important;
+  stroke-width: 4.2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  transform: none !important;
+  transition: opacity 120ms ease !important;
+  pointer-events: none !important;
+}
+
+.row-select-toggle.active,
+.students-workspace.has-detail .row-select-toggle.active {
+  border-color: var(--grade-accent) !important;
+  background: var(--grade-accent) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--grade-accent) 18%, transparent), 0 10px 20px color-mix(in srgb, var(--grade-accent) 28%, transparent) !important;
+}
+
+.row-select-toggle.active svg,
+.students-workspace.has-detail .row-select-toggle.active svg {
+  opacity: 1 !important;
+}
+
+.student-identity,
+.students-workspace.has-detail .student-identity {
+  gap: 9px !important;
+}
+
+.student-grade-mark,
+.students-workspace.has-detail .student-grade-mark {
+  width: 46px !important;
+  height: 46px !important;
+  flex: 0 0 46px !important;
+  border-radius: 14px !important;
+}
+
+.student-grade-number,
+.students-workspace.has-detail .student-grade-number {
+  font-size: 1.52rem !important;
+}
+
+.student-grade-label,
+.students-workspace.has-detail .student-grade-label {
+  margin-top: 2px !important;
+  font-size: 0.43rem !important;
+  letter-spacing: 0.13em !important;
+}
+
+.student-copy,
+.students-workspace.has-detail .student-copy {
+  gap: 4px !important;
+}
+
+.student-copy strong,
+.students-workspace.has-detail .student-copy strong {
+  display: -webkit-box !important;
+  overflow: hidden !important;
+  color: #122033 !important;
+  font-size: 0.82rem !important;
+  line-height: 1.17 !important;
+  text-overflow: ellipsis !important;
+  white-space: normal !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
+  line-clamp: 2 !important;
+}
+
+.student-meta,
+.students-workspace.has-detail .student-meta {
+  gap: 6px !important;
+}
+
+.student-meta > span,
+.student-meta small,
+.students-workspace.has-detail .student-meta > span,
+.students-workspace.has-detail .student-meta small {
+  height: 19px !important;
+  max-width: 112px !important;
+  padding: 0 8px !important;
+  border-radius: 999px !important;
+  font-size: 0.56rem !important;
+  font-weight: 760 !important;
+}
+
+.student-meta .group-chip {
+  min-width: 24px !important;
+  justify-content: center !important;
+  border: 1px solid color-mix(in srgb, var(--grade-border) 82%, #ffffff 18%) !important;
+  background: color-mix(in srgb, var(--grade-soft) 74%, #ffffff 26%) !important;
+  color: var(--grade-accent) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45) !important;
+}
+
+.financial-cell,
+.students-workspace.has-detail .financial-cell {
+  height: 38px !important;
+  min-height: 38px !important;
+  gap: 4px !important;
+  padding-left: 8px !important;
+}
+
+.financial-label,
+.students-workspace.has-detail .financial-label {
+  font-size: 0.5rem !important;
+}
+
+.financial-balance,
+.financial-balance.danger,
+.students-workspace.has-detail .financial-balance,
+.students-workspace.has-detail .financial-balance.danger {
+  font-size: 0.84rem !important;
+}
+
+.row-actions button,
+.students-workspace.has-detail .row-actions button {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 10px !important;
+}
+
+.student-row.multi-selected::after {
+  content: none !important;
+}
+
+.student-row.multi-selected,
+.student-row.selected.multi-selected,
+.students-workspace.has-detail .student-row.multi-selected {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--grade-soft) 62%, #ffffff 38%), #ffffff 74%),
+    radial-gradient(circle at 96% 18%, color-mix(in srgb, var(--grade-accent) 12%, transparent), transparent 96px) !important;
+}
+
+@media (max-width: 980px) {
+  .students-workspace.has-detail {
+    grid-template-columns: 760px !important;
+  }
+
+  .students-workspace.has-detail .student-list-panel,
+  .students-workspace.has-detail .student-list-panel.is-compact {
+    width: 760px !important;
+    max-width: none !important;
+    flex-basis: auto !important;
+  }
+}
+
+
+/* v20 full-width workspace split.
+   Keep the student list as a fixed visual unit, but let Estado de Cuenta take all
+   remaining horizontal room instead of capping the combined canvas width. */
+.students-scale-shell {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.students-design-canvas,
+.students-design-canvas > .students-workspace,
+.students-workspace,
+.students-workspace.has-detail {
+  max-width: none !important;
+}
+
+.students-workspace.has-detail {
+  grid-template-columns: 470px minmax(0, 1fr) !important;
+  justify-content: stretch !important;
+}
+
+.students-workspace.has-detail .student-detail-panel {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+.students-workspace.has-detail .student-detail-panel > * {
+  width: 100% !important;
+  max-width: none !important;
 }
 
 </style>
