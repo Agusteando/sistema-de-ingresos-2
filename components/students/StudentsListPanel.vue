@@ -54,7 +54,7 @@
             :key="student.matricula"
             role="button"
             tabindex="0"
-            :style="gradeAccentStyle(student)"
+            :style="studentPresentationStyle(student)"
             @click="$emit('student-row-click', student, $event)"
             @keydown.enter.prevent="$emit('student-row-click', student, $event)"
             @keydown.space.prevent="$emit('toggle-student-selection', student, $event)"
@@ -80,7 +80,7 @@
                   <path d="M5 12.5l4.2 4.2L19 7" />
                 </svg>
               </button>
-              <span class="student-grade-mark" :style="gradeAccentStyle(student)" :title="gradeVisualTitle(student)">
+              <span class="student-grade-mark" :style="studentPresentationStyle(student)" :title="gradeVisualTitle(student)">
                 <span class="student-grade-number">{{ gradeVisualNumber(student) }}</span>
                 <span class="student-grade-label">grado</span>
                 <span v-if="studentGroupLabel(student)" class="student-grade-group">{{ studentGroupLabel(student) }}</span>
@@ -134,7 +134,6 @@ import { LucideChevronRight, LucideRotateCcw, LucideTags } from 'lucide-vue-next
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 import {
   formatMoney,
-  gradeAccentStyle,
   gradeVisualNumber,
   gradeVisualTitle,
   hiddenStudentSectionsCount,
@@ -142,6 +141,7 @@ import {
   normalizeStudentMatricula,
   sectionBadgeTitle,
   studentGroupLabel,
+  studentPresentationStyle,
   visibleStudentSections
 } from '~/shared/utils/studentPresentation'
 

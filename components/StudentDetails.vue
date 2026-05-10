@@ -1,6 +1,6 @@
 <template>
   <div class="student-details-shell">
-    <section class="student-profile-card" :style="gradeAccentStyle(student)" :class="{ inactive: student.estatus !== 'Activo', unenrolled: !isEnrolled }">
+    <section class="student-profile-card" :style="studentPresentationStyle(student)" :class="{ inactive: student.estatus !== 'Activo', unenrolled: !isEnrolled }">
       <div class="profile-main">
         <div class="profile-identity">
           <div v-if="photoLoading" class="profile-avatar loading" aria-label="Cargando foto del alumno">
@@ -245,7 +245,7 @@ import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
-import { gradeAccentStyle, gradeVisualTitle, studentGroupLabel } from '~/shared/utils/studentPresentation'
+import { gradeVisualTitle, studentGroupLabel, studentPresentationStyle } from '~/shared/utils/studentPresentation'
 import PaymentModal from './PaymentModal.vue'
 import DocumentModal from './DocumentModal.vue'
 import InvoiceModal from './InvoiceModal.vue'
