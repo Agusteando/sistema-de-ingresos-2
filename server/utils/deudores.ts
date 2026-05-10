@@ -1,4 +1,5 @@
 import { query } from './db'
+import { resolveProjectedAmount } from './monto-final'
 
 const parsePlazos = (plazoRaw: unknown, mesesRaw: unknown) => {
   const raw = String(plazoRaw || mesesRaw || '1').trim()
@@ -273,7 +274,7 @@ export const getDeudoresGlobal = async ({
 
     const alumno = alumnosActivos[0]
     const docs = await query<any[]>(`
-      SELECT documento, matricula, costo, meses, plazo, beca, conceptoNombre, eventual
+      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, conceptoNombre, eventual
       FROM documentos
       WHERE ciclo = ? AND estatus = 'Activo' AND matricula = ?
     `, [ciclo, matriculaFiltro])
@@ -291,7 +292,7 @@ export const getDeudoresGlobal = async ({
     const alumnosByMatricula = new Map<string, any>(alumnosActivos.map(alumno => [String(alumno.matricula), alumno]))
     const matriculasPlantel = [...alumnosByMatricula.keys()]
     const docs = await query<any[]>(`
-      SELECT documento, matricula, costo, meses, plazo, beca, conceptoNombre, eventual
+      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, conceptoNombre, eventual
       FROM documentos
       WHERE ciclo = ? AND estatus = 'Activo' AND matricula IN (${matriculasPlantel.map(() => '?').join(',')})
     `, [ciclo, ...matriculasPlantel])
@@ -301,7 +302,7 @@ export const getDeudoresGlobal = async ({
       .filter(doc => doc.nombreCompleto)
   } else {
     const docs = await query<any[]>(`
-      SELECT documento, matricula, costo, meses, plazo, beca, conceptoNombre, eventual
+      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, conceptoNombre, eventual
       FROM documentos
       WHERE ciclo = ? AND estatus = 'Activo'
     `, [ciclo])
@@ -341,7 +342,7 @@ export const getDeudoresGlobal = async ({
 
   const [periodRows, pagosRows, excepciones, observaciones, eventos] = await Promise.all([
     query<any[]>(`
-      SELECT documento, start_mes, end_mes, costo, accion, estatus
+      SELECT documento, start_mes, end_mes, costo, montoFinal, accion, estatus
       FROM documento_concepto_periodos
       WHERE documento IN (${docIds.map(() => '?').join(',')}) AND estatus = 'Activo'
       ORDER BY documento ASC, start_mes ASC, id ASC
@@ -428,8 +429,9 @@ export const getDeudoresGlobal = async ({
       })
       if (activePeriod?.accion === 'cancelacion') continue
 
-      const costoBase = activePeriod?.costo != null ? Number.parseFloat(activePeriod.costo) : Number.parseFloat(doc.costo || 0)
-      const subtotal = ((100 - beca) * costoBase) / 100
+      const projected = resolveProjectedAmount(doc, activePeriod)
+      const costoBase = projected.baseCost
+      const subtotal = projected.amount
 
       const pagos = periodo.paymentKeys.flatMap((mesKey) => pagosByKey.get(`${doc.matricula}-${doc.documento}-${mesKey}`) || [])
       const pagosVigentes = pagos.filter(p => String(p.estatus) === 'Vigente')

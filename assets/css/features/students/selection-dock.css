@@ -1,0 +1,113 @@
+.selection-action-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  z-index: 60;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 58px;
+  max-width: calc(100vw - 360px);
+  padding: 8px 10px 8px 12px;
+  border: 1px solid var(--students-border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 18px 46px rgba(21, 35, 60, .16);
+  backdrop-filter: blur(14px);
+}
+
+.selection-action-dock__summary,
+.selection-action-dock__actions,
+.selection-action-dock__copy {
+  display: flex;
+  align-items: center;
+}
+
+.selection-action-dock__summary {
+  flex: 0 0 auto;
+  gap: 10px;
+  min-width: 178px;
+}
+
+.selection-action-dock__copy {
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.16;
+}
+
+.selection-action-dock__count {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #eff8eb;
+  color: #3f9138;
+  font-size: 18px;
+  font-weight: 880;
+}
+
+.selection-action-dock__copy strong {
+  color: #15233c;
+  font-size: 12.5px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.selection-action-dock__copy span {
+  color: #6f7b95;
+  font-size: 11.5px;
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+.selection-action-dock__actions {
+  gap: 8px;
+}
+
+.dock-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  min-width: 118px;
+  border: 1px solid var(--students-border);
+  border-radius: 11px;
+  background: #fff;
+  color: #2f7f32;
+  padding: 0 13px;
+  font-size: 12px;
+  font-weight: 790;
+  white-space: nowrap;
+}
+
+.dock-action span {
+  white-space: nowrap;
+}
+
+.dock-action.primary {
+  min-width: 124px;
+  border-color: transparent;
+  background: linear-gradient(180deg, #58a94b, #328632);
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(63, 145, 56, .2);
+}
+
+.dock-action.ghost {
+  min-width: 78px;
+  color: #6f7b95;
+}
+
+@media (max-width: 1280px) {
+  .selection-action-dock {
+    max-width: calc(100vw - 32px);
+  }
+
+  .dock-action {
+    min-width: 0;
+  }
+}

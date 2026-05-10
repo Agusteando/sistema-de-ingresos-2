@@ -94,7 +94,7 @@
         <button
           type="button"
           @click="loadStatus"
-          class="btn btn-outline flex-1 text-xs !h-8"
+          class="btn btn-outline flex-1 text-xs h-8"
           :disabled="requestingStatus || starting || batching || cancelling"
         >
           <LucideSearch :size="12" :class="{ 'animate-spin': requestingStatus }" />
@@ -105,7 +105,7 @@
           v-if="isProcessing || starting || batching"
           type="button"
           @click="cancelSync"
-          class="btn btn-ghost flex-1 text-xs !h-8 !text-accent-coral hover:!bg-accent-coral/10"
+          class="btn btn-ghost flex-1 text-xs h-8 text-accent-coral hover:bg-accent-coral/10"
           :disabled="cancelling"
         >
           {{ cancelling ? 'Cancelando...' : 'Cancelar' }}
@@ -115,7 +115,7 @@
           v-else
           type="button"
           @click="startSync"
-          class="btn btn-secondary flex-1 text-xs !h-8"
+          class="btn btn-secondary flex-1 text-xs h-8"
           :disabled="requestingStatus || starting || batching || cancelling"
         >
           <LucideRefreshCcw :size="12" :class="{ 'animate-spin': starting }" />

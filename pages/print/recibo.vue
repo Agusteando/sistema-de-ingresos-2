@@ -250,6 +250,6 @@ const handleInvoiceSuccess = () => {
 <style scoped>
 @media print {
   @page { margin: 0.5cm; size: letter portrait; }
-  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: white !important; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: white; }
 }
 </style>

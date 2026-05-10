@@ -68,13 +68,13 @@
           <div class="card p-5">
             <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
               <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wide m-0">Desglose</h3>
-              <button class="btn btn-ghost text-xs !py-1 !px-2" @click.prevent="conceptos.push({conceptoNombre: 'Concepto Extraordinario', monto: 0})">+ Fila</button>
+              <button class="btn btn-ghost text-xs py-1 px-2" @click.prevent="conceptos.push({conceptoNombre: 'Concepto Extraordinario', monto: 0})">+ Fila</button>
             </div>
             <div class="space-y-2">
               <div v-for="(c, i) in conceptos" :key="i" class="flex gap-3 items-center">
                 <input type="text" v-model="c.conceptoNombre" class="input-field flex-1" placeholder="Concepto">
                 <input type="number" step="0.01" v-model="c.monto" class="input-field w-32 text-right font-mono font-semibold text-brand-campus" placeholder="Monto">
-                <button class="btn btn-ghost text-accent-coral !px-2" @click.prevent="conceptos.splice(i, 1)"><LucideTrash2 :size="14"/></button>
+                <button class="btn btn-ghost text-accent-coral px-2" @click.prevent="conceptos.splice(i, 1)"><LucideTrash2 :size="14"/></button>
               </div>
             </div>
             <div class="flex justify-end mt-4 pt-3 border-t border-gray-100">

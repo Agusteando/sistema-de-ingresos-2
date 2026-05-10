@@ -30,6 +30,16 @@
               </option>
             </select>
 
+            <div v-if="selectedConceptId" class="final-amount-panel">
+              <label class="form-label">Monto final</label>
+              <p>Este debe ser el monto final de tu proyección, sin decimales.</p>
+              <input v-model.number="montoFinalInput" type="number" min="0" step="1" class="input-field">
+              <label class="final-confirm">
+                <input v-model="montoFinalConfirmed" type="checkbox">
+                <span>Confirmo el monto final.</span>
+              </label>
+            </div>
+
             <button class="btn btn-primary operation-button" type="button" :disabled="busy || !selectedConceptId" @click="submitChange">
               <LucideLoader2 v-if="busyAction === 'change'" class="animate-spin" :size="15" />
               <LucideCheckCircle v-else :size="15" />
@@ -70,7 +80,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useState } from '#app'
 import { LucideBan, LucideCalendarX, LucideCheckCircle, LucideLoader2, LucideReplace, LucideX } from 'lucide-vue-next'
 import { useScrollLock } from '~/composables/useScrollLock'
@@ -88,6 +98,8 @@ const conceptos = ref([])
 const selectedConceptId = ref('')
 const loadingConcepts = ref(false)
 const busyAction = ref('')
+const montoFinalInput = ref(0)
+const montoFinalConfirmed = ref(false)
 
 const busy = computed(() => Boolean(busyAction.value))
 
@@ -128,9 +140,20 @@ const runOperation = async (action, extraBody = {}) => {
   }
 }
 
+watch(selectedConceptId, (id) => {
+  const concept = conceptos.value.find(item => String(item.id) === String(id))
+  montoFinalInput.value = Math.round(Number(concept?.costo || 0))
+  montoFinalConfirmed.value = false
+})
+
 const submitChange = () => {
   if (!selectedConceptId.value) return
-  runOperation('change', { conceptoId: selectedConceptId.value })
+  const montoFinal = Number(montoFinalInput.value)
+  if (!Number.isFinite(montoFinal) || montoFinal < 0 || Math.floor(montoFinal) !== montoFinal) {
+    return show('Ingresa un monto final sin decimales', 'danger')
+  }
+  if (!montoFinalConfirmed.value) return show('Confirma el monto final', 'danger')
+  runOperation('change', { conceptoId: selectedConceptId.value, montoFinal })
 }
 
 const cancelFromMonth = () => {
@@ -147,6 +170,31 @@ onMounted(loadConcepts)
 </script>
 
 <style scoped>
+.final-amount-panel {
+  margin-top: 12px;
+  border: 1px solid #ead9a6;
+  border-radius: 12px;
+  background: #fffaf0;
+  padding: 12px;
+}
+
+.final-amount-panel p {
+  margin: -4px 0 10px;
+  color: #8a6616;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.final-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: #6d5b38;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .concept-modal {
   max-width: 620px;
 }

@@ -1,0 +1,158 @@
+body.students-route-active {
+  overflow: hidden;
+  background: #fbfcfd;
+}
+
+body.students-route-active .income-shell {
+  font-family: var(--students-font);
+  color: var(--students-ink);
+}
+
+body.students-route-active .income-main {
+  min-width: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 42% -3%, rgba(142, 193, 83, 0.08), transparent 13rem),
+    linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+}
+
+body.students-route-active .income-content {
+  padding: 8px 12px 10px;
+}
+
+.students-screen {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.students-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  min-height: 40px;
+  margin-bottom: 8px;
+  gap: 14px;
+}
+
+.hero-copy h1 {
+  margin: 0 0 3px;
+  color: #10203a;
+  font-size: 20px;
+  font-weight: 850;
+  letter-spacing: -0.028em;
+  line-height: 1.05;
+}
+
+.hero-copy p {
+  margin: 0;
+  color: var(--students-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+  padding-top: 0;
+}
+
+.section-manage-button { min-width: 116px; }
+.new-student-button { min-width: 146px; }
+
+.students-scale-shell {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.students-design-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--workspace-design-width);
+  height: var(--workspace-design-height);
+  transform: scale(var(--workspace-scale));
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.students-workspace {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.students-workspace.has-detail {
+  grid-template-columns: minmax(620px, 0.98fr) minmax(640px, 1fr);
+}
+
+.student-list-panel,
+.student-detail-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.student-list-card,
+.student-detail-panel,
+.bulk-workspace-card {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid var(--students-border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(21, 35, 60, 0.04);
+  overflow: hidden;
+}
+
+.empty-state {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--students-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+@media (min-width: 1500px) and (min-height: 900px) {
+  body.students-route-active .income-content {
+    padding: 12px 18px 14px;
+  }
+
+  .students-hero {
+    min-height: 48px;
+    margin-bottom: 12px;
+  }
+
+  .hero-copy h1 { font-size: 23px; }
+  .hero-copy p { font-size: 12.5px; }
+  .hero-actions { gap: 12px; }
+  .section-manage-button { min-width: 136px; }
+  .new-student-button { min-width: 170px; }
+  .students-workspace { gap: 20px; }
+  .students-workspace.has-detail { grid-template-columns: minmax(690px, 0.98fr) minmax(720px, 1fr); }
+}
+
+.student-detail-panel > .student-details-shell,
+.student-detail-panel > .bulk-workspace-card {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+}

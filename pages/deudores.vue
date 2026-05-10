@@ -2550,96 +2550,96 @@ input[type="checkbox"] {
 
 .debt-design-canvas > .collections-workspace,
 .collections-workspace {
-  width: 1540px !important;
-  max-width: none !important;
-  min-width: 1540px !important;
-  margin: 0 auto !important;
-  gap: 14px !important;
+  width: 1540px;
+  max-width: none;
+  min-width: 1540px;
+  margin: 0 auto;
+  gap: 14px;
 }
 
 :global(body.deudores-page-active .income-shell) {
-  display: flex !important;
-  height: 100vh !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
+  display: flex;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
 }
 
 :global(body.deudores-page-active .income-main) {
-  min-height: 0 !important;
-  overflow-y: auto !important;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 :global(body.deudores-page-active .income-sidebar) {
-  min-height: 0 !important;
-  margin: 0 !important;
-  border-radius: 0 34px 34px 0 !important;
+  min-height: 0;
+  margin: 0;
+  border-radius: 0 34px 34px 0;
 }
 
 :global(body.deudores-page-active .sidebar-sheen),
 :global(body.deudores-page-active .sidebar-rings),
 :global(body.deudores-page-active .sidebar-arc),
 :global(body.deudores-page-active .sidebar-leaves) {
-  display: block !important;
+  display: block;
 }
 
 :global(body.deudores-page-active .income-content) {
-  display: block !important;
-  min-height: 0 !important;
-  overflow: visible !important;
-  padding: 18px 30px 40px !important;
+  display: block;
+  min-height: 0;
+  overflow: visible;
+  padding: 18px 30px 40px;
 }
 
 :global(body.deudores-page-active .app-header) {
-  height: 64px !important;
-  min-height: 64px !important;
-  padding: 0 30px !important;
+  height: 64px;
+  min-height: 64px;
+  padding: 0 30px;
 }
 
 :global(body.deudores-page-active .app-header h1) {
-  font-size: 1.32rem !important;
+  font-size: 1.32rem;
 }
 
 :global(body.deudores-page-active .header-actions) {
-  flex-wrap: nowrap !important;
-  justify-content: flex-end !important;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
 }
 
 .debt-design-canvas .command-panel {
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 330px) !important;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 330px);
 }
 
 .debt-design-canvas .metric-stack {
-  grid-template-columns: none !important;
+  grid-template-columns: none;
 }
 
 .debt-design-canvas .workflow-shell {
-  grid-template-columns: minmax(250px, 292px) minmax(0, 1fr) !important;
+  grid-template-columns: minmax(250px, 292px) minmax(0, 1fr);
 }
 
 .debt-design-canvas .workflow-panel {
-  position: sticky !important;
-  top: 82px !important;
-  max-height: calc(100vh - 106px) !important;
-  grid-template-columns: none !important;
+  position: sticky;
+  top: 82px;
+  max-height: calc(100vh - 106px);
+  grid-template-columns: none;
 }
 
 .debt-design-canvas .list-head {
-  display: grid !important;
+  display: grid;
 }
 
 .debt-design-canvas .list-head,
 .debt-design-canvas .debtor-row {
-  grid-template-columns: 30px minmax(170px, 1.35fr) minmax(92px, 0.5fr) minmax(112px, 0.55fr) minmax(134px, 0.65fr) minmax(128px, 0.55fr) !important;
-  align-items: center !important;
+  grid-template-columns: 30px minmax(170px, 1.35fr) minmax(92px, 0.5fr) minmax(112px, 0.55fr) minmax(134px, 0.65fr) minmax(128px, 0.55fr);
+  align-items: center;
 }
 
 .debt-design-canvas .list-head span:first-child {
-  grid-column: 2 !important;
+  grid-column: 2;
 }
 
 .debt-design-canvas .debtor-row {
-  border-radius: 0 !important;
-  padding: 12px 14px !important;
+  border-radius: 0;
+  padding: 12px 14px;
 }
 
 .debt-design-canvas .student-cell,
@@ -2647,85 +2647,85 @@ input[type="checkbox"] {
 .debt-design-canvas .contact-cell,
 .debt-design-canvas .next-cell,
 .debt-design-canvas .row-actions {
-  grid-column: auto !important;
+  grid-column: auto;
 }
 
 .debt-design-canvas .amount-cell {
-  text-align: left !important;
+  text-align: left;
 }
 
 .debt-design-canvas .contact-cell {
-  display: flex !important;
+  display: flex;
 }
 
 .debt-design-canvas .row-actions {
-  display: flex !important;
-  justify-content: flex-end !important;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .debt-design-canvas .row-primary,
 .debt-design-canvas .row-secondary {
-  width: auto !important;
+  width: auto;
 }
 
 .debt-design-canvas .headline-grid,
 .debt-design-canvas .today-action-card,
 .debt-design-canvas .stage-strip,
 .debt-design-canvas .selection-bar {
-  align-items: center !important;
-  flex-direction: row !important;
+  align-items: center;
+  flex-direction: row;
 }
 
 .debt-design-canvas .today-action-card {
-  display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr) auto !important;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .debt-design-canvas .today-action-card .primary-action {
-  grid-column: auto !important;
-  width: auto !important;
+  grid-column: auto;
+  width: auto;
 }
 
 .debt-design-canvas .primary-total {
-  border-top: 0 !important;
-  border-left: 1px solid var(--debt-soft-line) !important;
-  padding-top: 0 !important;
-  padding-left: 18px !important;
-  text-align: right !important;
+  border-top: 0;
+  border-left: 1px solid var(--debt-soft-line);
+  padding-top: 0;
+  padding-left: 18px;
+  text-align: right;
 }
 
 .debt-design-canvas .stage-steps {
-  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-  width: auto !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  width: auto;
 }
 
 .debt-design-canvas .view-tabs {
-  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  width: auto !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: auto;
 }
 
 .debt-design-canvas .board-toolbar {
-  grid-template-columns: minmax(150px, 220px) minmax(260px, 1fr) minmax(140px, 176px) !important;
-  align-items: end !important;
+  grid-template-columns: minmax(150px, 220px) minmax(260px, 1fr) minmax(140px, 176px);
+  align-items: end;
 }
 
 .debt-design-canvas .drawer-summary {
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .debt-design-canvas .drawer-contact {
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .debt-design-canvas .drawer-actions-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .debt-design-canvas .student-copy strong,
 .debt-design-canvas .student-copy small,
 .debt-design-canvas .student-copy em,
 .debt-design-canvas .next-cell small {
-  white-space: nowrap !important;
+  white-space: nowrap;
 }
 
 

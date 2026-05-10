@@ -23,13 +23,16 @@
             </div>
           </div>
 
+          <p v-if="hasPendingFinalAmounts" class="mb-3 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Este debe ser el monto final de tu proyección, sin decimales.</p>
+
           <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
             <table class="w-full">
               <thead class="bg-gray-50/80">
                 <tr>
-                  <th class="text-left w-1/2">Concepto</th>
-                  <th class="text-left w-1/4">Ref/Mes</th>
-                  <th class="text-right w-1/4">Monto ($)</th>
+                  <th class="text-left">Concepto</th>
+                  <th class="text-left">Ref/Mes</th>
+                  <th class="text-right">Monto final</th>
+                  <th class="text-right">Monto ($)</th>
                 </tr>
               </thead>
               <tbody>
@@ -37,7 +40,18 @@
                   <td class="font-semibold text-sm py-2 px-4 text-gray-800">{{ debt.conceptoNombre }}</td>
                   <td class="text-xs text-gray-500 py-2 px-4">{{ debt.mesLabel }}</td>
                   <td class="py-2 px-4 text-right">
-                    <input type="number" class="input-field text-right font-mono font-semibold py-1 px-2 h-auto text-brand-campus" v-model.number="debt.montoPagado" :max="debt.saldoFinal" min="0" step="0.01">
+                    <input
+                      v-if="debt.montoFinalPendiente"
+                      type="number"
+                      class="input-field text-right font-mono font-semibold py-1 px-2 h-auto text-brand-campus"
+                      v-model.number="debt.montoFinalInput"
+                      min="0"
+                      step="1"
+                    >
+                    <span v-else class="font-mono text-xs font-semibold text-gray-500">${{ Number(debt.subtotal || 0).toFixed(2) }}</span>
+                  </td>
+                  <td class="py-2 px-4 text-right">
+                    <input type="number" class="input-field text-right font-mono font-semibold py-1 px-2 h-auto text-brand-campus" v-model.number="debt.montoPagado" :max="effectiveSaldoFinal(debt)" min="0" step="0.01">
                   </td>
                 </tr>
               </tbody>
@@ -83,13 +97,51 @@ watch(() => [props.debts, formaDePago.value], () => {
   processedDebts.value = props.debts.map(d => {
     const final = d.saldo
     const resuelto = d.resuelto ?? d.pagos
-    return { ...d, saldoFinal: final, montoPagado: final, pagosPrevios: resuelto, saldoAntes: d.subtotal - resuelto }
+    return {
+      ...d,
+      saldoFinal: final,
+      montoPagado: final,
+      pagosPrevios: resuelto,
+      saldoAntes: d.subtotal - resuelto,
+      montoFinalInput: Math.round(Number(d.subtotal || d.costoOriginal || d.saldo || 0))
+    }
   })
 }, { immediate: true })
 
+const hasPendingFinalAmounts = computed(() => processedDebts.value.some(debt => debt.montoFinalPendiente))
+const effectiveSubtotal = (debt) => debt.montoFinalPendiente ? Number(debt.montoFinalInput || 0) : Number(debt.subtotal || 0)
+const effectiveSaldoFinal = (debt) => Math.max(0, effectiveSubtotal(debt) - Number(debt.pagosPrevios || 0))
 const totalCobrar = computed(() => processedDebts.value.reduce((a, b) => a + (b.montoPagado || 0), 0))
 
+const paymentRows = () => processedDebts.value.filter(d => Number(d.montoPagado || 0) > 0).map((d) => {
+  const subtotal = effectiveSubtotal(d)
+  const saldoAntes = effectiveSaldoFinal(d)
+  return {
+    ...d,
+    subtotal,
+    saldoFinal: saldoAntes,
+    saldoAntes,
+    montoFinal: d.montoFinalPendiente ? subtotal : d.montoFinal
+  }
+})
+
+const validateFinalAmounts = () => {
+  let requiresConfirmation = false
+  for (const debt of processedDebts.value) {
+    if (!debt.montoFinalPendiente || Number(debt.montoPagado || 0) <= 0) continue
+    requiresConfirmation = true
+    const monto = Number(debt.montoFinalInput)
+    if (!Number.isFinite(monto) || monto < 0 || Math.floor(monto) !== monto) {
+      window.alert('Este debe ser el monto final de tu proyección, sin decimales.')
+      return false
+    }
+  }
+  if (requiresConfirmation && !window.confirm('Confirmar monto final sin decimales antes de registrar.')) return false
+  return true
+}
+
 const previewReceipt = () => {
+  if (!validateFinalAmounts()) return
   const previewData = {
     folios: 'PREVIO',
     fecha: new Date().toISOString(),
@@ -100,7 +152,7 @@ const previewReceipt = () => {
     grupo: props.student.grupo,
     ciclo: normalizeCicloKey(state.value.ciclo),
     instituto: props.student.plantel === 'PT' || props.student.plantel === 'PM' || props.student.plantel === 'SM' ? 1 : 0,
-    items: processedDebts.value.filter(d => d.montoPagado > 0).map((d, i) => ({
+    items: paymentRows().map((d, i) => ({
       folio: 'PREV-' + (i+1),
       folio_plantel: 'PREV-' + (i+1),
       documento: d.documento,
@@ -122,7 +174,14 @@ const previewReceipt = () => {
 }
 
 const submit = async () => {
-  const payload = { matricula: props.student.matricula, formaDePago: formaDePago.value, ciclo: normalizeCicloKey(state.value.ciclo), pagos: processedDebts.value }
+  if (!validateFinalAmounts()) return
+  const payload = {
+    matricula: props.student.matricula,
+    formaDePago: formaDePago.value,
+    ciclo: normalizeCicloKey(state.value.ciclo),
+    lateFeeActive: state.value.lateFeeActive,
+    pagos: paymentRows()
+  }
   processing.value = true
   
   await executeOptimistic(

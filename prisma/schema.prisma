@@ -145,6 +145,7 @@ model Documentos {
   conceptoNombre String   @db.VarChar(255)
   matricula      String   @db.VarChar(255)
   costo          Int
+  montoFinal     Decimal? @db.Decimal(65, 2)
   plazo          String   @db.Text
   meses          String?  @default("1") @db.VarChar(11)
   anual          Int?
@@ -285,6 +286,7 @@ model DocumentoConceptoPeriodos {
   concepto_id    Int?
   conceptoNombre String?   @db.VarChar(255)
   costo          Decimal?  @db.Decimal(65, 2)
+  montoFinal     Decimal?  @db.Decimal(65, 2)
   accion         String    @default("cambio") @db.VarChar(30)
   estatus        String    @default("Activo") @db.VarChar(30)
   created_at     DateTime  @default(now()) @db.DateTime(0)

@@ -1,0 +1,22 @@
+body.students-route-active {
+  --students-ink: #15233c;
+  --students-muted: #6f7b95;
+  --students-soft: #f7faf8;
+  --students-surface: #ffffff;
+  --students-border: #dfe7f0;
+  --students-border-soft: #edf2f7;
+  --students-green: #3f9138;
+  --students-green-strong: #2f7f32;
+  --students-green-soft: #eef8eb;
+  --students-teal: #159f96;
+  --students-blue: #3478d8;
+  --students-red: #c8423b;
+  --students-gray: #6b7280;
+  --students-radius-sm: 10px;
+  --students-radius-md: 14px;
+  --students-radius-lg: 18px;
+  --students-shadow-card: 0 12px 34px rgba(21, 35, 60, 0.06);
+  --students-shadow-soft: 0 7px 18px rgba(21, 35, 60, 0.055);
+  --students-focus: 0 0 0 3px rgba(63, 145, 56, 0.16);
+  --students-font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}

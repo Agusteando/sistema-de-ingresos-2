@@ -923,72 +923,72 @@ const logout = async () => {
 
 /* fixed-artboard sidebar scaling: preserve the same sidebar composition under OS/browser scaling. */
 .sidebar-design-canvas .sidebar-brand {
-  padding: 38px 24px 31px !important;
-  text-align: center !important;
+  padding: 38px 24px 31px;
+  text-align: center;
 }
 
 .sidebar-design-canvas .sidebar-logo {
-  max-height: 48px !important;
-  max-width: 106px !important;
-  margin: 0 auto 14px !important;
+  max-height: 48px;
+  max-width: 106px;
+  margin: 0 auto 14px;
 }
 
 .sidebar-design-canvas .sidebar-nav {
-  display: flex !important;
-  flex: 1 1 auto !important;
-  grid-template-columns: none !important;
-  flex-direction: column !important;
-  gap: 8px !important;
-  overflow-y: auto !important;
-  padding: 2px 18px 14px !important;
+  display: flex;
+  flex: 1 1 auto;
+  grid-template-columns: none;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 2px 18px 14px;
 }
 
 .sidebar-design-canvas .nav-item {
-  min-height: 43px !important;
-  gap: 13px !important;
-  border-radius: 12px !important;
-  padding: 0 17px !important;
-  font-size: 0.9rem !important;
+  min-height: 43px;
+  gap: 13px;
+  border-radius: 12px;
+  padding: 0 17px;
+  font-size: 0.9rem;
 }
 
 .sidebar-design-canvas .sidebar-footer {
-  gap: 15px !important;
-  padding: 0 20px 23px !important;
+  gap: 15px;
+  padding: 0 20px 23px;
 }
 
 .sidebar-design-canvas .plantel-select {
-  height: 42px !important;
+  height: 42px;
 }
 
 .sidebar-design-canvas .admin-card {
-  min-height: 66px !important;
+  min-height: 66px;
 }
 
 .sidebar-design-canvas .sidebar-sheen,
 .sidebar-design-canvas .sidebar-rings,
 .sidebar-design-canvas .sidebar-arc,
 .sidebar-design-canvas .sidebar-leaves {
-  display: block !important;
+  display: block;
 }
 
 /* Premium desktop shell: lighter navigation for a 1280x800 effective viewport. */
 .income-shell,
 .income-shell * {
-  letter-spacing: 0 !important;
+  letter-spacing: 0;
 }
 
 .income-shell {
-  background: linear-gradient(180deg, #fbfcfe 0%, #f5f8fb 100%) !important;
+  background: linear-gradient(180deg, #fbfcfe 0%, #f5f8fb 100%);
 }
 
 .income-sidebar {
-  border-width: 0 1px 0 0 !important;
-  border-color: rgba(215, 226, 220, 0.9) !important;
-  border-radius: 0 24px 24px 0 !important;
+  border-width: 0 1px 0 0;
+  border-color: rgba(215, 226, 220, 0.9);
+  border-radius: 0 24px 24px 0;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.97), rgba(248,252,248,0.94)),
-    radial-gradient(circle at 75% 10%, rgba(142, 193, 83, 0.12), transparent 160px) !important;
-  box-shadow: 10px 0 32px rgba(15, 23, 42, 0.045) !important;
+    radial-gradient(circle at 75% 10%, rgba(142, 193, 83, 0.12), transparent 160px);
+  box-shadow: 10px 0 32px rgba(15, 23, 42, 0.045);
 }
 
 .income-sidebar::before,
@@ -997,83 +997,83 @@ const logout = async () => {
 .sidebar-rings,
 .sidebar-arc,
 .sidebar-leaves {
-  opacity: 0.18 !important;
+  opacity: 0.18;
 }
 
 .sidebar-design-canvas .sidebar-brand {
-  padding: 24px 18px 20px !important;
+  padding: 24px 18px 20px;
 }
 
 .sidebar-design-canvas .sidebar-logo {
-  max-height: 42px !important;
-  max-width: 96px !important;
-  margin-bottom: 10px !important;
+  max-height: 42px;
+  max-width: 96px;
+  margin-bottom: 10px;
 }
 
 .sidebar-design-canvas .sidebar-brand h2 {
-  color: #2e6f3d !important;
-  font-size: 0.66rem !important;
-  letter-spacing: 0 !important;
+  color: #2e6f3d;
+  font-size: 0.66rem;
+  letter-spacing: 0;
 }
 
 .sidebar-design-canvas .sidebar-nav {
-  gap: 5px !important;
-  padding: 2px 12px 10px !important;
+  gap: 5px;
+  padding: 2px 12px 10px;
 }
 
 .sidebar-design-canvas .nav-item {
-  min-height: 38px !important;
-  gap: 10px !important;
-  border-radius: 11px !important;
-  padding: 0 12px !important;
-  font-size: 0.8rem !important;
-  font-weight: 700 !important;
+  min-height: 38px;
+  gap: 10px;
+  border-radius: 11px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .sidebar-design-canvas .nav-item svg {
-  width: 18px !important;
-  height: 18px !important;
+  width: 18px;
+  height: 18px;
 }
 
 .sidebar-design-canvas .sidebar-footer {
-  gap: 10px !important;
-  padding: 0 14px 16px !important;
+  gap: 10px;
+  padding: 0 14px 16px;
 }
 
 .sidebar-design-canvas .plantel-select {
-  height: 36px !important;
-  border-radius: 11px !important;
+  height: 36px;
+  border-radius: 11px;
 }
 
 .sidebar-design-canvas .admin-card {
-  min-height: 56px !important;
-  border-radius: 12px !important;
-  padding: 8px 9px !important;
+  min-height: 56px;
+  border-radius: 12px;
+  padding: 8px 9px;
 }
 
 .app-header {
-  height: 54px !important;
-  padding: 0 20px !important;
-  border-bottom-color: #e6edf5 !important;
-  background: rgba(255, 255, 255, 0.94) !important;
+  height: 54px;
+  padding: 0 20px;
+  border-bottom-color: #e6edf5;
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .app-header h1 {
-  font-size: 1.08rem !important;
+  font-size: 1.08rem;
 }
 
 .income-main::before {
-  opacity: 0.16 !important;
+  opacity: 0.16;
 }
 
 .income-content {
-  padding: 12px 18px 14px !important;
+  padding: 12px 18px 14px;
 }
 
 @media (max-height: 840px) and (min-width: 1081px) {
   .income-content {
-    padding-top: 10px !important;
-    padding-bottom: 10px !important;
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
 }
 

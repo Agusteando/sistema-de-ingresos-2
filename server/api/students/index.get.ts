@@ -49,7 +49,10 @@ export default defineEventHandler(async (event) => {
       FROM (
         SELECT
           D.matricula,
-          ((100 - IFNULL(D.beca, 0)) * IFNULL(P.costo, D.costo) / 100) AS monto,
+          CASE
+            WHEN P.accion = 'cambio' THEN COALESCE(P.montoFinal, ((100 - IFNULL(D.beca, 0)) * IFNULL(P.costo, D.costo) / 100))
+            ELSE COALESCE(D.montoFinal, ((100 - IFNULL(D.beca, 0)) * IFNULL(P.costo, D.costo) / 100))
+          END AS monto,
           IFNULL(P.conceptoNombre, D.conceptoNombre) AS conceptoNombre
         FROM documentos D
         JOIN (

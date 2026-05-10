@@ -1,0 +1,226 @@
+.bulk-workspace-panel {
+  height: 100%;
+}
+
+.bulk-workspace-card {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  padding: 18px;
+  gap: 16px;
+}
+
+.bulk-workspace-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.bulk-workspace-header span,
+.bulk-workspace-header small,
+.bulk-metric-grid small {
+  color: #6f7b95;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.bulk-workspace-header h2 {
+  margin: 3px 0;
+  color: #15233c;
+  font-size: 25px;
+  font-weight: 880;
+  letter-spacing: -.04em;
+}
+
+.bulk-workspace-header p {
+  margin: 0;
+  color: #6f7b95;
+  font-size: 13px;
+}
+
+.bulk-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.bulk-metric-grid article {
+  min-height: 80px;
+  padding: 14px;
+  border: 1px solid var(--students-border);
+  border-radius: 13px;
+  background: #fbfcfd;
+}
+
+.bulk-metric-grid strong {
+  display: block;
+  margin-top: 7px;
+  color: #15233c;
+  font-size: 22px;
+  font-weight: 860;
+}
+
+.bulk-command-row {
+  display: flex;
+  gap: 10px;
+}
+
+.bulk-command {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--students-border);
+  border-radius: 11px;
+  background: #fff;
+  color: #2f7f32;
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.bulk-command.primary {
+  border-color: transparent;
+  background: linear-gradient(180deg, #58a94b, #328632);
+  color: #fff;
+}
+
+.bulk-selected-list {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bulk-selected-list article {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  min-height: 60px;
+  padding: 8px 12px;
+  border: 1px solid var(--students-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.bulk-grade {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--grade-soft, #eff8eb);
+  color: var(--grade-accent, #3f9138);
+  font-size: 20px;
+  font-weight: 880;
+}
+
+.bulk-selected-list strong,
+.bulk-selected-list b {
+  color: #15233c;
+  font-size: 13px;
+  font-weight: 840;
+}
+
+.bulk-selected-list small {
+  display: block;
+  color: #6f7b95;
+  font-size: 11px;
+}
+
+.bulk-payment-panel .bulk-workspace-card {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+}
+
+.bulk-payment-controls,
+.bulk-payment-summary,
+.bulk-payment-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bulk-payment-controls label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #6f7b95;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.bulk-payment-controls select,
+.bulk-payment-table input {
+  height: 34px;
+  border: 1px solid var(--students-border);
+  border-radius: 9px;
+  background: #fff;
+  padding: 0 10px;
+  outline: 0;
+}
+
+.bulk-payment-summary article {
+  flex: 1;
+  min-height: 66px;
+  padding: 12px;
+  border: 1px solid var(--students-border);
+  border-radius: 12px;
+  background: #fbfcfd;
+}
+
+.bulk-payment-summary small {
+  display: block;
+  color: #6f7b95;
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.bulk-payment-summary strong {
+  display: block;
+  margin-top: 4px;
+  color: #15233c;
+  font-size: 19px;
+  font-weight: 860;
+}
+
+.bulk-payment-table-wrap {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--students-border);
+  border-radius: 12px;
+}
+
+.bulk-payment-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.bulk-payment-table th,
+.bulk-payment-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--students-border-soft);
+  font-size: 12px;
+}
+
+.bulk-payment-table th {
+  color: #6e7890;
+  font-weight: 850;
+  text-transform: uppercase;
+  background: #fbfcfd;
+}
+
+.bulk-empty {
+  height: 140px;
+  text-align: center;
+  color: #6f7b95;
+}
+
+.bulk-payment-actions {
+  justify-content: flex-end;
+}

@@ -2,6 +2,7 @@ import { query } from '../../../utils/db'
 import dayjs from 'dayjs'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { isOutOfScopeForPlantelCiclo } from '../../../../shared/utils/grado'
+import { resolveProjectedAmount } from '../../../utils/monto-final'
 
 const normalizePaymentMethod = (value: unknown) => String(value || '')
   .normalize('NFD')
@@ -37,7 +38,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const documentos = await query<any[]>(`
-    SELECT d.documento, d.matricula, d.costo, d.meses, d.plazo, d.beca, d.ciclo, d.conceptoNombre, d.eventual
+    SELECT d.documento, d.matricula, d.costo, d.montoFinal, d.meses, d.plazo, d.beca, d.ciclo, d.conceptoNombre, d.eventual
     FROM documentos d
     WHERE d.matricula = ? AND d.ciclo = ? AND d.estatus = 'Activo'
   `, [matricula.trim(), cicloKey])
@@ -50,7 +51,7 @@ export default defineEventHandler(async (event) => {
 
   const periodRows = documentos.length
     ? await query<any[]>(`
-        SELECT id, documento, start_mes, end_mes, concepto_id, conceptoNombre, costo, accion, estatus
+        SELECT id, documento, start_mes, end_mes, concepto_id, conceptoNombre, costo, montoFinal, accion, estatus
         FROM documento_concepto_periodos
         WHERE documento IN (${documentos.map(() => '?').join(',')}) AND estatus = 'Activo'
         ORDER BY documento ASC, start_mes ASC, id ASC
@@ -103,8 +104,9 @@ export default defineEventHandler(async (event) => {
       if (activePeriod?.accion === 'cancelacion') continue
 
       const conceptoNombre = activePeriod?.conceptoNombre || doc.conceptoNombre
-      const costoBase = activePeriod?.costo != null ? parseFloat(activePeriod.costo) : (parseFloat(doc.costo) || 0)
-      const totalOriginal = ((100 - beca) * costoBase) / 100
+      const projected = resolveProjectedAmount(doc, activePeriod)
+      const costoBase = projected.baseCost
+      const totalOriginal = projected.amount
       
       // Support matching mes by strict string, or fallback to the numeric representation
       const pagosDelMes = pagosRows.filter(p => 
@@ -137,10 +139,15 @@ export default defineEventHandler(async (event) => {
 
       debts.push({
         documento: doc.documento,
+        periodoId: activePeriod?.id || null,
         conceptoNombre,
         mes: mesStr, // Pass the parsed mes value ('ev' or numeric string) for reliable future binding
         mesLabel,
         costoOriginal: totalOriginal,
+        costoBase,
+        montoFinal: projected.source === 'period' ? activePeriod?.montoFinal : doc.montoFinal,
+        montoFinalPendiente: projected.pending,
+        montoFinalSource: projected.source,
         subtotal,
         pagos: pagosTotalMes,
         pagosRegistrados: pagosTotalMes,
