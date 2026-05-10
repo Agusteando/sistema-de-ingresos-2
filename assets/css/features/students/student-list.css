@@ -205,8 +205,7 @@
 }
 
 .student-grade-number,
-.student-grade-label,
-.student-grade-group {
+.student-grade-label {
   position: relative;
   z-index: 1;
 }
@@ -223,18 +222,6 @@
   margin-top: clamp(4px, .35vw, 5px);
   font-size: clamp(7px, .55vw, 8px);
   font-weight: 870;
-}
-
-.student-grade-group {
-  max-width: clamp(60px, 4.8vw, 68px);
-  margin-top: 3px;
-  overflow: hidden;
-  color: var(--grade-accent, #4fa346);
-  font-size: clamp(8px, .62vw, 9px);
-  font-style: normal;
-  font-weight: 870;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .student-copy {

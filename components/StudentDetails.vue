@@ -3,24 +3,12 @@
     <section class="student-profile-card" :style="studentPresentationStyle(student)" :class="{ inactive: student.estatus !== 'Activo', unenrolled: !isEnrolled }">
       <div class="profile-main">
         <div class="profile-identity">
-          <div v-if="photoLoading" class="profile-avatar loading" aria-label="Cargando foto del alumno">
-            <LucideLoader2 class="animate-spin" :size="20" />
-          </div>
-          <div
-            v-else-if="photoUrl && photoUrl !== 'none'"
-            class="profile-avatar photo"
-            :class="{ inactive: student.estatus !== 'Activo', unenrolled: !isEnrolled }"
-          >
-            <img :src="photoUrl" :alt="`Foto de ${student.nombreCompleto}`" />
-          </div>
-          <div
-            v-else
-            class="profile-avatar initials"
-            :class="{ inactive: student.estatus !== 'Activo', unenrolled: !isEnrolled }"
-            aria-label="Iniciales del alumno"
-          >
-            {{ initials(student.nombreCompleto) }}
-          </div>
+          <StudentGradePhotoCard
+            :student="student"
+            :photo-url="photoUrl || ''"
+            :photo-loading="photoLoading"
+            :is-enrolled="isEnrolled"
+          />
 
           <div class="profile-copy">
             <h2 :title="student.nombreCompleto">
@@ -48,11 +36,6 @@
               <b v-for="section in student.customSections" :key="`detail-section-${student.matricula}-${section.id}`">{{ section.name }}</b>
             </div>
           </div>
-        </div>
-
-        <div v-if="studentGroupLabel(student)" class="profile-group-sigil" :title="studentGroupLabel(student)">
-          <UiGroupIcon :label="studentGroupLabel(student)" />
-          <span>{{ studentGroupLabel(student) }}</span>
         </div>
 
         <div class="profile-top-actions">
@@ -250,7 +233,7 @@ import PaymentModal from './PaymentModal.vue'
 import DocumentModal from './DocumentModal.vue'
 import InvoiceModal from './InvoiceModal.vue'
 import ConceptChangeModal from './ConceptChangeModal.vue'
-import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
+import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
 
 const props = defineProps({ student: Object, isEnrolled: { type: Boolean, default: true } })
 const emit = defineEmits(['refresh', 'edit', 'close', 'switch-student', 'baja', 'photo-loaded', 'manage-sections'])
@@ -279,7 +262,6 @@ const showConceptModal = ref(false)
 const selectedConceptDebt = ref(null)
 
 const format = (val) => Number(val || 0).toFixed(2)
-const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') || 'AL'
 const normalizePhotoMatricula = (value) => String(value || '').trim().toUpperCase()
 const photoStorageKey = (matricula) => `foto_${normalizePhotoMatricula(matricula)}`
 const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))

@@ -83,7 +83,6 @@
               <span class="student-grade-mark" :style="studentPresentationStyle(student)" :title="gradeVisualTitle(student)">
                 <span class="student-grade-number">{{ gradeVisualNumber(student) }}</span>
                 <span class="student-grade-label">grado</span>
-                <span v-if="studentGroupLabel(student)" class="student-grade-group">{{ studentGroupLabel(student) }}</span>
               </span>
               <span v-if="studentGroupLabel(student)" class="student-group-sigil" :title="studentGroupLabel(student)">
                 <UiGroupIcon :label="studentGroupLabel(student)" />
