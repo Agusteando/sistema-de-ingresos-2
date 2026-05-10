@@ -69,9 +69,9 @@
       <div v-if="pages > 1" class="flex justify-between items-center p-3 bg-gray-50 border-t border-gray-200">
         <span class="text-xs text-gray-500 font-semibold">Mostrando {{ invoices.length }} de {{ total }}</span>
         <div class="flex gap-2">
-          <button class="btn btn-ghost !px-3 py-1 text-xs" :disabled="filters.page <= 1" @click="filters.page--; performSearch()">Anterior</button>
+          <button class="btn btn-ghost btn-sm py-1 text-xs" :disabled="filters.page <= 1" @click="filters.page--; performSearch()">Anterior</button>
           <span class="px-3 py-1 font-semibold text-xs text-gray-700 bg-white border border-gray-200 rounded-md shadow-sm">{{ filters.page }} / {{ pages }}</span>
-          <button class="btn btn-ghost !px-3 py-1 text-xs" :disabled="filters.page >= pages" @click="filters.page++; performSearch()">Siguiente</button>
+          <button class="btn btn-ghost btn-sm py-1 text-xs" :disabled="filters.page >= pages" @click="filters.page++; performSearch()">Siguiente</button>
         </div>
       </div>
     </div>

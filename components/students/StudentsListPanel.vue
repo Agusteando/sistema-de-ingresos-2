@@ -85,6 +85,9 @@
                 <span class="student-grade-label">grado</span>
                 <span v-if="studentGroupLabel(student)" class="student-grade-group">{{ studentGroupLabel(student) }}</span>
               </span>
+              <span v-if="studentGroupLabel(student)" class="student-group-sigil" :title="studentGroupLabel(student)">
+                <UiGroupIcon :label="studentGroupLabel(student)" />
+              </span>
               <span class="student-copy">
                 <strong
                   :title="student.nombreCompleto"
@@ -128,6 +131,7 @@
 
 <script setup>
 import { LucideChevronRight, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
+import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 import {
   formatMoney,
   gradeAccentStyle,

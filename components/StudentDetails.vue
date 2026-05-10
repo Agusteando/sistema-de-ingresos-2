@@ -1,6 +1,6 @@
 <template>
   <div class="student-details-shell">
-    <section class="student-profile-card" :class="{ inactive: student.estatus !== 'Activo', unenrolled: !isEnrolled }">
+    <section class="student-profile-card" :style="gradeAccentStyle(student)" :class="{ inactive: student.estatus !== 'Activo', unenrolled: !isEnrolled }">
       <div class="profile-main">
         <div class="profile-identity">
           <div v-if="photoLoading" class="profile-avatar loading" aria-label="Cargando foto del alumno">
@@ -48,6 +48,11 @@
               <b v-for="section in student.customSections" :key="`detail-section-${student.matricula}-${section.id}`">{{ section.name }}</b>
             </div>
           </div>
+        </div>
+
+        <div v-if="studentGroupLabel(student)" class="profile-group-sigil" :title="studentGroupLabel(student)">
+          <UiGroupIcon :label="studentGroupLabel(student)" />
+          <span>{{ studentGroupLabel(student) }}</span>
         </div>
 
         <div class="profile-top-actions">
@@ -240,11 +245,12 @@ import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
-import { gradeVisualTitle, studentGroupLabel } from '~/shared/utils/studentPresentation'
+import { gradeAccentStyle, gradeVisualTitle, studentGroupLabel } from '~/shared/utils/studentPresentation'
 import PaymentModal from './PaymentModal.vue'
 import DocumentModal from './DocumentModal.vue'
 import InvoiceModal from './InvoiceModal.vue'
 import ConceptChangeModal from './ConceptChangeModal.vue'
+import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 
 const props = defineProps({ student: Object, isEnrolled: { type: Boolean, default: true } })
 const emit = defineEmits(['refresh', 'edit', 'close', 'switch-student', 'baja', 'photo-loaded', 'manage-sections'])
