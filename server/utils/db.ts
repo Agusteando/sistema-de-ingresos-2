@@ -432,6 +432,7 @@ export const ensureSchema = async () => {
           concepto_id INT DEFAULT NULL,
           conceptoNombre VARCHAR(255) DEFAULT NULL,
           costo DECIMAL(65,2) DEFAULT NULL,
+          montoFinal DECIMAL(65,2) DEFAULT NULL,
           accion VARCHAR(30) NOT NULL DEFAULT 'cambio',
           estatus VARCHAR(30) NOT NULL DEFAULT 'Activo',
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -491,7 +492,16 @@ export const ensureSchema = async () => {
         const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'documentos'`)
 
         if (tables.length > 0) {
+          await checkAndAddColumn('documentos', 'montoFinal', "DECIMAL(65,2) DEFAULT NULL")
           await runSafeQuery(`ALTER TABLE documentos ADD INDEX idx_documentos_ciclo_estatus_matricula (ciclo(20), estatus(20), matricula(64))`)
+        }
+      } catch (e) {}
+
+      try {
+        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'documento_concepto_periodos'`)
+
+        if (tables.length > 0) {
+          await checkAndAddColumn('documento_concepto_periodos', 'montoFinal', "DECIMAL(65,2) DEFAULT NULL")
         }
       } catch (e) {}
 

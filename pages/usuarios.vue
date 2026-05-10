@@ -37,7 +37,7 @@
               </span>
             </td>
             <td class="text-center">
-              <button class="btn btn-ghost !px-2 !py-1 text-xs text-brand-teal" @click="openModal(u)"><LucideSettings :size="14"/></button>
+              <button class="btn btn-ghost px-2 py-1 text-xs text-brand-teal" @click="openModal(u)"><LucideSettings :size="14"/></button>
             </td>
           </tr>
         </tbody>

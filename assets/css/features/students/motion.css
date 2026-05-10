@@ -1,0 +1,17 @@
+.detail-flow-enter-active,
+.detail-flow-leave-active,
+.selection-dock-enter-active,
+.selection-dock-leave-active,
+.filter-groups-enter-active,
+.filter-groups-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.detail-flow-enter-from,
+.detail-flow-leave-to,
+.selection-dock-enter-from,
+.selection-dock-leave-to,
+.filter-groups-enter-from,
+.filter-groups-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}

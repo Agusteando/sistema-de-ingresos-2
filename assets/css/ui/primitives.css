@@ -1,0 +1,108 @@
+body.students-route-active .ui-button,
+body.students-route-active .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  border-radius: 10px;
+  padding: 0 12px;
+  border: 1px solid rgba(63, 145, 56, 0.18);
+  background: #fff;
+  color: var(--students-green-strong);
+  font-family: var(--students-font);
+  font-size: 11.5px;
+  font-weight: 760;
+  letter-spacing: -0.01em;
+  box-shadow: var(--students-shadow-soft);
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+body.students-route-active .ui-button svg,
+body.students-route-active .btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+body.students-route-active .ui-button:hover,
+body.students-route-active .btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(63, 145, 56, 0.3);
+}
+
+body.students-route-active .btn-primary,
+body.students-route-active .ui-button--primary,
+body.students-route-active .new-student-button {
+  border-color: transparent;
+  background: linear-gradient(180deg, #57a94b 0%, #2f842f 100%);
+  color: #fff;
+  box-shadow: 0 10px 20px rgba(48, 132, 47, 0.22);
+}
+
+body.students-route-active .btn-secondary,
+body.students-route-active .ui-button--secondary {
+  background: #fff;
+  color: #2f7f32;
+}
+
+body.students-route-active .btn-sm {
+  min-height: 31px;
+  border-radius: 9px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+body.students-route-active .plain-icon-button,
+body.students-route-active .ui-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 31px;
+  height: 31px;
+  border: 1px solid var(--students-border);
+  border-radius: 9px;
+  background: #fff;
+  color: #66728a;
+}
+
+body.students-route-active .chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 15px;
+  border: 1px solid var(--students-border);
+  border-radius: 9px;
+  background: #fff;
+  color: #42506a;
+  font-size: 10.5px;
+  font-weight: 760;
+  box-shadow: 0 6px 13px rgba(21, 35, 60, 0.04);
+}
+
+body.students-route-active .chip.active {
+  border-color: transparent;
+  background: linear-gradient(180deg, #58a94b 0%, #348b36 100%);
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(48, 132, 47, 0.19);
+}
+
+@media (min-width: 1500px) and (min-height: 900px) {
+  body.students-route-active .ui-button,
+  body.students-route-active .btn {
+    gap: 9px;
+    min-height: 38px;
+    padding-inline: 15px;
+    font-size: 12.5px;
+  }
+  body.students-route-active .ui-button svg,
+  body.students-route-active .btn svg {
+    width: 17px;
+    height: 17px;
+  }
+  body.students-route-active .chip {
+    min-height: 36px;
+    padding-inline: 19px;
+    font-size: 11.5px;
+  }
+}

@@ -1,6 +1,7 @@
 import { executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
+import { isWholeMoney } from '../../utils/monto-final'
 
 const toMesNumber = (value: unknown) => {
   const raw = String(value || '').trim().toLowerCase()
@@ -175,13 +176,18 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Concepto no encontrado para el ciclo activo.' })
     }
 
+    const montoFinal = Number(body.montoFinal)
+    if (!isWholeMoney(montoFinal)) {
+      throw createError({ statusCode: 400, message: 'El monto final debe ser un numero entero, sin decimales.' })
+    }
+
     await executeStatementTransaction([
       ...periodBoundaryStatements(documento, normalizedFromMes),
       {
         sql: `
           INSERT INTO documento_concepto_periodos (
-            documento, start_mes, end_mes, concepto_id, conceptoNombre, costo, accion, estatus, created_by
-          ) VALUES (?, ?, NULL, ?, ?, ?, 'cambio', 'Activo', ?)
+            documento, start_mes, end_mes, concepto_id, conceptoNombre, costo, montoFinal, accion, estatus, created_by
+          ) VALUES (?, ?, NULL, ?, ?, ?, ?, 'cambio', 'Activo', ?)
         `,
         params: [
           documento,
@@ -189,6 +195,7 @@ export default defineEventHandler(async (event) => {
           concepto.id,
           concepto.concepto,
           Number(concepto.costo || 0),
+          montoFinal,
           user?.name || 'Sistema'
         ]
       }
