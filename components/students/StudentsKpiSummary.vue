@@ -2,63 +2,18 @@
   <section :class="['kpi-summary-system', { 'without-income': userRole !== 'global' }]" aria-label="Resumen de matrícula y finanzas">
     <div class="kpi-strip" aria-label="Matrícula y finanzas">
       <button
-        @click="$emit('set-filter', 'inscritos')"
-        :class="['kpi-card kpi-green', { active: activeFilter === 'inscritos' }]"
+        v-for="item in enrollmentKpis"
+        :key="item.key"
+        type="button"
+        @click="$emit('set-filter', item.filter)"
+        :class="['kpi-card', item.toneClass, { active: activeFilter === item.filter }]"
       >
-        <span class="kpi-icon"><LucideUsers :size="24" /></span>
+        <span class="kpi-icon"><component :is="item.icon" :size="24" /></span>
         <span class="kpi-text">
-          <span>Inscritos</span>
-          <strong>{{ kpiCounts.inscritos }}</strong>
-          <em>Total de alumnos</em>
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
         </span>
-      </button>
-
-      <button
-        @click="$emit('set-filter', 'internos')"
-        :class="['kpi-card kpi-teal', { active: activeFilter === 'internos' }]"
-      >
-        <span class="kpi-icon"><LucideUserCheck :size="24" /></span>
-        <span class="kpi-text">
-          <span>Internos</span>
-          <strong>{{ kpiCounts.internos }}</strong>
-          <em>{{ percentage(kpiCounts.internos) }}% del total</em>
-        </span>
-      </button>
-
-      <button
-        @click="$emit('set-filter', 'externos')"
-        :class="['kpi-card kpi-blue', { active: activeFilter === 'externos' }]"
-      >
-        <span class="kpi-icon"><LucideGlobe2 :size="24" /></span>
-        <span class="kpi-text">
-          <span>Externos</span>
-          <strong>{{ kpiCounts.externos }}</strong>
-          <em>{{ percentage(kpiCounts.externos) }}% del total</em>
-        </span>
-      </button>
-
-      <button
-        @click="$emit('set-filter', 'no_inscritos')"
-        :class="['kpi-card kpi-red', { active: activeFilter === 'no_inscritos' }]"
-      >
-        <span class="kpi-icon"><LucideUserX :size="24" /></span>
-        <span class="kpi-text">
-          <span>No inscritos</span>
-          <strong>{{ kpiCounts.no_inscritos }}</strong>
-          <em>{{ percentage(kpiCounts.no_inscritos) }}% del total</em>
-        </span>
-      </button>
-
-      <button
-        @click="$emit('set-filter', 'bajas')"
-        :class="['kpi-card kpi-gray', { active: activeFilter === 'bajas' }]"
-      >
-        <span class="kpi-icon"><LucideUserX :size="24" /></span>
-        <span class="kpi-text">
-          <span>Bajas</span>
-          <strong>{{ kpiCounts.bajas }}</strong>
-          <em>{{ percentage(kpiCounts.bajas) }}% del total</em>
-        </span>
+        <UiKpiSparkline :values="item.sparkline" />
       </button>
 
       <div v-if="userRole === 'global'" class="kpi-card kpi-income-card" aria-label="Ingresos del mes">
@@ -66,8 +21,8 @@
         <span class="kpi-text">
           <span>Ingresos del mes</span>
           <strong>${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', { minimumFractionDigits: 2 }) }}</strong>
-          <em>Total recaudado</em>
         </span>
+        <UiKpiSparkline :values="kpiSparklines.ingresos" />
       </div>
     </div>
 
@@ -89,6 +44,7 @@
 <script setup>
 import { computed } from 'vue'
 import { LucideCircleDollarSign, LucideGlobe2, LucideTag, LucideUserCheck, LucideUsers, LucideUserX } from 'lucide-vue-next'
+import UiKpiSparkline from '~/components/ui/UiKpiSparkline.vue'
 
 const props = defineProps({
   userRole: { type: String, default: 'plantel' },
@@ -96,12 +52,59 @@ const props = defineProps({
   activeFilter: { type: String, default: '' },
   customSections: { type: Array, default: () => [] },
   customSectionCounts: { type: Object, default: () => ({}) },
-  globalKpis: { type: Object, default: () => ({ ingresosMes: 0 }) }
+  globalKpis: { type: Object, default: () => ({ ingresosMes: 0 }) },
+  kpiSparklines: { type: Object, default: () => ({}) }
 })
 
 defineEmits(['set-filter'])
 
-const totalStudents = computed(() => Math.max(1, Number(props.kpiCounts.inscritos || 0)))
-const percentage = (value) => (Number(value || 0) * 100 / totalStudents.value).toFixed(1)
+const enrollmentKpis = computed(() => [
+  {
+    key: 'inscritos',
+    filter: 'inscritos',
+    label: 'Inscritos',
+    value: props.kpiCounts.inscritos,
+    icon: LucideUsers,
+    toneClass: 'kpi-green',
+    sparkline: props.kpiSparklines.inscritos
+  },
+  {
+    key: 'internos',
+    filter: 'internos',
+    label: 'Internos',
+    value: props.kpiCounts.internos,
+    icon: LucideUserCheck,
+    toneClass: 'kpi-teal',
+    sparkline: props.kpiSparklines.internos
+  },
+  {
+    key: 'externos',
+    filter: 'externos',
+    label: 'Externos',
+    value: props.kpiCounts.externos,
+    icon: LucideGlobe2,
+    toneClass: 'kpi-blue',
+    sparkline: props.kpiSparklines.externos
+  },
+  {
+    key: 'no_inscritos',
+    filter: 'no_inscritos',
+    label: 'No inscritos',
+    value: props.kpiCounts.no_inscritos,
+    icon: LucideUserX,
+    toneClass: 'kpi-red',
+    sparkline: props.kpiSparklines.no_inscritos
+  },
+  {
+    key: 'bajas',
+    filter: 'bajas',
+    label: 'Bajas',
+    value: props.kpiCounts.bajas,
+    icon: LucideUserX,
+    toneClass: 'kpi-gray',
+    sparkline: props.kpiSparklines.bajas
+  }
+])
+
 const sectionFilterKey = (id) => `section:${Number(id)}`
 </script>

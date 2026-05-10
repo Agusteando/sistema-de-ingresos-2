@@ -170,7 +170,45 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 7px;
+  margin-left: 0;
+}
+
+.profile-group-sigil {
+  display: inline-flex;
+  height: 33px;
+  max-width: 154px;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   margin-left: auto;
+  padding: 0 12px 0 10px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--grade-accent, #4fa346) 25%, #dce8d8);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, .98), rgba(255, 255, 255, .34) 48%, transparent 49%),
+    linear-gradient(135deg, color-mix(in srgb, var(--grade-soft, #f2f8ef) 82%, #fff), #fff);
+  color: color-mix(in srgb, var(--grade-accent, #3f9138) 90%, #16243c);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, .052), inset 0 0 0 1px rgba(255, 255, 255, .72);
+}
+
+.profile-group-sigil .ui-group-icon {
+  --group-icon-size: 18px;
+}
+
+.profile-group-sigil span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--grade-accent, #3f9138) 86%, #17243c);
+  font-size: 9px;
+  font-weight: 880;
+  letter-spacing: .04em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .danger-icon-button {

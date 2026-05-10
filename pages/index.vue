@@ -12,6 +12,7 @@
       :custom-sections="customSections"
       :custom-section-counts="customSectionCounts"
       :global-kpis="globalKpis"
+      :kpi-sparklines="kpiSparklines"
       @set-filter="setActiveFilter"
     />
 
@@ -189,6 +190,7 @@ const selectedStudent = ref(null)
 const photoCache = ref({})
 
 const globalKpis = ref({ ingresosMes: 0 })
+const paymentKpiSparklines = ref({ inscritos: [], internos: [], externos: [], ingresos: [] })
 const showStudentModal = ref(false)
 const editingStudent = ref(null)
 const pendingBajaStudent = ref(null)
@@ -309,6 +311,65 @@ const cacheStudentPhoto = ({ matricula, photoUrl }) => {
   if (photoUrl && photoUrl !== 'none') {
     photoCache.value = { ...photoCache.value, [normalized]: photoUrl }
     if (process.client) sessionStorage.setItem(photoStorageKey(normalized), photoUrl)
+  }
+}
+
+
+const gradeNumberForSparkline = (student) => {
+  const value = String(student?.grado || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  const direct = value.match(/\d+/)?.[0]
+  if (direct) return Number(direct)
+  if (value.includes('prim')) return 1
+  if (value.includes('seg')) return 2
+  if (value.includes('ter')) return 3
+  if (value.includes('cuar')) return 4
+  if (value.includes('quin')) return 5
+  if (value.includes('sext')) return 6
+  return 0
+}
+
+const distributionSeries = (list) => {
+  const buckets = [0, 0, 0, 0, 0, 0]
+  list.forEach((student) => {
+    const grade = gradeNumberForSparkline(student)
+    const index = grade >= 1 && grade <= 6 ? grade - 1 : 5
+    buckets[index] += 1
+  })
+  return buckets.some(Boolean) ? buckets : []
+}
+
+const kpiSparklines = computed(() => ({
+  inscritos: paymentKpiSparklines.value.inscritos || [],
+  internos: paymentKpiSparklines.value.internos || [],
+  externos: paymentKpiSparklines.value.externos || [],
+  ingresos: paymentKpiSparklines.value.ingresos || [],
+  no_inscritos: distributionSeries(students.value.filter(student => student.estatus === 'Activo' && !isEnrolled(student))),
+  bajas: distributionSeries(students.value.filter(student => student.estatus !== 'Activo'))
+}))
+
+let kpiSparklineRequestId = 0
+const loadKpiSparklines = async () => {
+  const requestId = ++kpiSparklineRequestId
+  try {
+    const cicloKey = normalizeCicloKey(state.value.ciclo)
+    const res = await $fetch('/api/students/kpi-trends', {
+      params: {
+        ciclo: cicloKey,
+        concepts: externalConcepts.value.join(',')
+      }
+    })
+    if (requestId !== kpiSparklineRequestId) return
+    paymentKpiSparklines.value = {
+      inscritos: Array.isArray(res?.inscritos) ? res.inscritos : [],
+      internos: Array.isArray(res?.internos) ? res.internos : [],
+      externos: Array.isArray(res?.externos) ? res.externos : [],
+      ingresos: Array.isArray(res?.ingresos) ? res.ingresos : []
+    }
+  } catch (e) {
+    if (requestId === kpiSparklineRequestId) paymentKpiSparklines.value = { inscritos: [], internos: [], externos: [], ingresos: [] }
   }
 }
 
@@ -609,6 +670,7 @@ onMounted(async () => {
   loadCustomSections()
   performSearch()
   loadGlobalKpis()
+  loadKpiSparklines()
 })
 
 
@@ -633,6 +695,7 @@ watch(bulkWorkspaceMode, scheduleWorkspaceScaleUpdate)
 watch(() => state.value.ciclo, () => {
   performSearch()
   loadGlobalKpis()
+  loadKpiSparklines()
 })
 
 const openAlta = () => { editingStudent.value = null; showStudentModal.value = true }
@@ -643,5 +706,6 @@ const handleStudentSuccess = () => {
   closeStudentModal()
   performSearch()
   loadGlobalKpis()
+  loadKpiSparklines()
 }
 </script>
