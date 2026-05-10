@@ -4,6 +4,7 @@
       v-if="displaySrc"
       :src="displaySrc"
       :alt="alt"
+      :style="{ objectFit: fit }"
       decoding="async"
       loading="eager"
       @load="emit('ready')"
@@ -20,7 +21,8 @@ import { useVisionFaceImage } from '~/composables/useVisionFaceImage'
 
 const props = defineProps({
   imageUrl: { type: String, default: '' },
-  alt: { type: String, default: '' }
+  alt: { type: String, default: '' },
+  fit: { type: String, default: 'cover' }
 })
 
 const emit = defineEmits(['ready'])
