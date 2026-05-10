@@ -161,22 +161,10 @@
   z-index: 1;
 }
 
-.student-grade-mark {
-  display: flex;
-  width: var(--student-list-grade-size);
-  height: var(--student-list-grade-height);
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--grade-accent, #4fa346) 24%, #dce8d8);
-  border-radius: clamp(12px, .9vw, 13px);
-  position: relative;
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--grade-soft, #f2f8ef) 82%, #fff), #fff 118%);
-  color: var(--grade-accent, #4fa346);
-  text-transform: uppercase;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .58);
+.student-row-grade-card {
+  --student-grade-photo-width: var(--student-list-grade-size);
+  --student-grade-photo-height: var(--student-list-grade-height);
+  --student-grade-photo-radius: clamp(12px, .9vw, 13px);
 }
 
 .student-group-sigil {
@@ -202,26 +190,6 @@
 .student-row.multi-selected .student-group-sigil {
   border-color: color-mix(in srgb, var(--grade-accent, #4fa346) 44%, #dfe8d9);
   box-shadow: 0 9px 18px rgba(63, 145, 56, .12), inset 0 0 0 1px rgba(255, 255, 255, .8);
-}
-
-.student-grade-number,
-.student-grade-label {
-  position: relative;
-  z-index: 1;
-}
-
-.student-grade-number {
-  font-size: clamp(27px, 2.1vw, 30px);
-  font-weight: 880;
-  letter-spacing: -.04em;
-  line-height: .86;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, .86);
-}
-
-.student-grade-label {
-  margin-top: clamp(4px, .35vw, 5px);
-  font-size: clamp(7px, .55vw, 8px);
-  font-weight: 870;
 }
 
 .student-copy {

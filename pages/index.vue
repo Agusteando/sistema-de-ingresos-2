@@ -51,6 +51,7 @@
             :selected-student="selectedStudent"
             :selected-matriculas="selectedMatriculas"
             :external-concepts="externalConcepts"
+            :photo-cache="photoCache"
             @open-section-selection="openSectionModalForSelection"
             @clear-filters="clearFilters"
             @toggle-displayed-selection="toggleDisplayedSelection"

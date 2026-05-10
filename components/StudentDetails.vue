@@ -3,11 +3,10 @@
     <section class="student-profile-card" :style="studentPresentationStyle(student)" :class="{ inactive: student.estatus !== 'Activo', unenrolled: !isEnrolled }">
       <div class="profile-main">
         <div class="profile-identity">
-          <StudentGradePhotoCard
+          <StudentAccountPhotoCard
             :student="student"
             :photo-url="photoUrl || ''"
             :photo-loading="photoLoading"
-            :is-enrolled="isEnrolled"
           />
 
           <div class="profile-copy">
@@ -233,7 +232,7 @@ import PaymentModal from './PaymentModal.vue'
 import DocumentModal from './DocumentModal.vue'
 import InvoiceModal from './InvoiceModal.vue'
 import ConceptChangeModal from './ConceptChangeModal.vue'
-import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
+import StudentAccountPhotoCard from '~/components/students/StudentAccountPhotoCard.vue'
 
 const props = defineProps({ student: Object, isEnrolled: { type: Boolean, default: true } })
 const emit = defineEmits(['refresh', 'edit', 'close', 'switch-student', 'baja', 'photo-loaded', 'manage-sections'])

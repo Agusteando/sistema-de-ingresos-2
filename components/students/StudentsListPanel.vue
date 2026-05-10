@@ -80,10 +80,13 @@
                   <path d="M5 12.5l4.2 4.2L19 7" />
                 </svg>
               </button>
-              <span class="student-grade-mark" :style="studentPresentationStyle(student)" :title="gradeVisualTitle(student)">
-                <span class="student-grade-number">{{ gradeVisualNumber(student) }}</span>
-                <span class="student-grade-label">grado</span>
-              </span>
+              <StudentGradePhotoCard
+                class="student-row-grade-card"
+                :student="student"
+                :photo-url="activeStudentPhotoUrl(student)"
+                :photo-loading="false"
+                :is-enrolled="isStudentEnrolled(student, externalConcepts)"
+              />
               <span v-if="studentGroupLabel(student)" class="student-group-sigil" :title="studentGroupLabel(student)">
                 <UiGroupIcon :label="studentGroupLabel(student)" />
               </span>
@@ -131,6 +134,7 @@
 <script setup>
 import { LucideChevronRight, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
+import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
 import {
   formatMoney,
   gradeVisualNumber,
@@ -138,6 +142,7 @@ import {
   hiddenStudentSectionsCount,
   isStudentEnrolled,
   normalizeStudentMatricula,
+  photoStorageKey,
   sectionBadgeTitle,
   studentGroupLabel,
   studentPresentationStyle,
@@ -154,10 +159,24 @@ const props = defineProps({
   someDisplayedSelected: { type: Boolean, default: false },
   hasActiveFilters: { type: Boolean, default: false },
   selectedStudent: { type: Object, default: null },
-  externalConcepts: { type: Array, default: () => [] }
+  externalConcepts: { type: Array, default: () => [] },
+  photoCache: { type: Object, default: () => ({}) }
 })
 
 const isSelected = (student) => props.selectedMatriculas.has(normalizeStudentMatricula(student?.matricula))
+
+const activeStudentPhotoUrl = (student) => {
+  const matricula = normalizeStudentMatricula(student?.matricula)
+  const selectedMatricula = normalizeStudentMatricula(props.selectedStudent?.matricula)
+  if (!matricula || matricula !== selectedMatricula) return ''
+  const cached = props.photoCache?.[matricula]
+  if (cached && cached !== 'none') return cached
+  if (process.client) {
+    const stored = sessionStorage.getItem(photoStorageKey(matricula))
+    if (stored && stored !== 'none') return stored
+  }
+  return ''
+}
 
 defineEmits([
   'open-section-selection',

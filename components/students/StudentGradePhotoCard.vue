@@ -16,7 +16,7 @@
     </div>
 
     <div v-if="hasPhoto" class="student-grade-photo-card__slide student-grade-photo-card__photo">
-      <UiVisionFaceImage :image-url="photoUrl" :alt="`Foto de ${student?.nombreCompleto || 'alumno'}`" />
+      <UiVisionFaceImage :image-url="photoUrl" :alt="`Foto de ${student?.nombreCompleto || 'alumno'}`" fit="contain" />
     </div>
   </div>
 </template>
@@ -39,12 +39,12 @@ const hasPhoto = computed(() => Boolean(props.photoUrl && props.photoUrl !== 'no
 <style scoped>
 .student-grade-photo-card {
   position: relative;
-  width: 60px;
-  height: 68px;
-  flex: 0 0 60px;
+  width: var(--student-grade-photo-width, 60px);
+  height: var(--student-grade-photo-height, 68px);
+  flex: 0 0 var(--student-grade-photo-width, 60px);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--grade-accent, #4fa346) 24%, #dce8d8);
-  border-radius: 15px;
+  border-radius: var(--student-grade-photo-radius, 15px);
   background:
     radial-gradient(circle at 22% 18%, rgba(255, 255, 255, .96), transparent 42%),
     linear-gradient(180deg, color-mix(in srgb, var(--grade-soft, #f2f8ef) 88%, #fff), #fff 118%);
@@ -86,7 +86,9 @@ const hasPhoto = computed(() => Boolean(props.photoUrl && props.photoUrl !== 'no
 .student-grade-photo-card__photo {
   z-index: 3;
   border-radius: inherit;
-  background: #fff;
+  background:
+    radial-gradient(circle at 50% 78%, color-mix(in srgb, var(--grade-accent, #4fa346) 18%, transparent), transparent 52%),
+    linear-gradient(180deg, rgba(255, 255, 255, .9), color-mix(in srgb, var(--grade-soft, #f2f8ef) 72%, #fff));
   opacity: 0;
   transform: translateX(18%);
 }
