@@ -26,11 +26,31 @@
   min-height: 0;
   flex-direction: column;
   gap: 10px;
+  overflow: hidden;
+  isolation: isolate;
   padding: 12px 14px;
   container-type: inline-size;
 }
 
+.student-profile-card::before {
+  position: absolute;
+  z-index: 0;
+  inset-block: -22px -26px;
+  inset-inline-end: clamp(96px, 16%, 150px);
+  width: clamp(168px, 27%, 230px);
+  content: "";
+  pointer-events: none;
+  opacity: .13;
+  background: color-mix(in srgb, var(--grade-accent, #4fa346) 26%, #a9a697);
+  -webkit-mask: var(--student-group-icon-mask, none) center / contain no-repeat;
+  mask: var(--student-group-icon-mask, none) center / contain no-repeat;
+  transform: rotate(-5deg);
+  transform-origin: center;
+}
+
 .profile-main {
+  position: relative;
+  z-index: 1;
   display: flex;
   min-width: 0;
   align-items: center;
@@ -175,8 +195,8 @@
 
 .profile-group-sigil {
   display: inline-flex;
-  height: 33px;
-  max-width: 154px;
+  height: 32px;
+  max-width: 144px;
   flex: 0 1 auto;
   align-items: center;
   justify-content: center;
@@ -184,15 +204,13 @@
   margin-left: auto;
   padding: 0 12px 0 10px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--grade-accent, #4fa346) 25%, #dce8d8);
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, .98), rgba(255, 255, 255, .34) 48%, transparent 49%),
-    linear-gradient(135deg, color-mix(in srgb, var(--grade-soft, #f2f8ef) 82%, #fff), #fff);
-  color: color-mix(in srgb, var(--grade-accent, #3f9138) 90%, #16243c);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, .052), inset 0 0 0 1px rgba(255, 255, 255, .72);
+  border: 1px solid color-mix(in srgb, var(--grade-accent, #4fa346) 22%, #e1eadb);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .83);
+  color: color-mix(in srgb, var(--grade-accent, #3f9138) 84%, #16243c);
+  box-shadow: 0 9px 19px rgba(21, 35, 60, .055), inset 0 0 0 1px rgba(255, 255, 255, .76);
+  backdrop-filter: blur(2px);
 }
-
 .profile-group-sigil .ui-group-icon {
   --group-icon-size: 18px;
 }
@@ -224,6 +242,8 @@
 }
 
 .profile-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -361,14 +381,34 @@
 }
 
 .account-card {
+  position: relative;
   display: grid;
   grid-template-rows: 44px minmax(0, 1fr) 46px;
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
+  isolation: isolate;
+}
+
+.account-card::before {
+  position: absolute;
+  z-index: 0;
+  inset-block: 48px 38px;
+  inset-inline-start: 25%;
+  width: min(280px, 42%);
+  content: "";
+  pointer-events: none;
+  opacity: .055;
+  background: color-mix(in srgb, var(--grade-accent, #4fa346) 24%, #8e8e82);
+  -webkit-mask: var(--student-group-icon-mask, none) center / contain no-repeat;
+  mask: var(--student-group-icon-mask, none) center / contain no-repeat;
+  transform: rotate(-6deg) scale(1.08);
+  transform-origin: center;
 }
 
 .account-header {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -399,6 +439,8 @@
 }
 
 .account-table-wrap {
+  position: relative;
+  z-index: 1;
   min-height: 0;
   overflow: auto;
 }
@@ -582,6 +624,8 @@
 }
 
 .account-footer {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -4,7 +4,7 @@
   --student-list-row-height: clamp(92px, 6.25vw, 103px);
   --student-list-grade-size: clamp(70px, 5vw, 82px);
   --student-list-grade-height: clamp(62px, 4.6vw, 70px);
-  --student-list-crest-size: clamp(31px, 2.35vw, 38px);
+  --student-list-crest-size: clamp(36px, 2.7vw, 43px);
   display: grid;
   grid-template-rows: clamp(34px, 2.45vw, 38px) clamp(50px, 3.65vw, 58px) minmax(0, 1fr);
 }
@@ -112,8 +112,27 @@
   border: 1px solid var(--students-border);
   border-radius: 14px;
   background: #fff;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   box-shadow: 0 5px 14px rgba(21, 35, 60, .035);
   cursor: pointer;
+}
+
+.student-row::before {
+  position: absolute;
+  z-index: 0;
+  inset-block: -20%;
+  inset-inline-start: clamp(190px, 35%, 260px);
+  width: clamp(132px, 24%, 180px);
+  content: "";
+  pointer-events: none;
+  opacity: .105;
+  background: color-mix(in srgb, var(--grade-accent, #4fa346) 38%, #6d705f);
+  -webkit-mask: var(--student-group-icon-mask, none) center / contain no-repeat;
+  mask: var(--student-group-icon-mask, none) center / contain no-repeat;
+  transform: rotate(-4deg) scale(1.08);
+  transform-origin: center;
 }
 
 .student-row.selected,
@@ -123,12 +142,23 @@
   box-shadow: 0 8px 22px rgba(63, 145, 56, .105);
 }
 
+.student-row.selected::before,
+.student-row.multi-selected::before {
+  inset-inline-start: clamp(170px, 31%, 240px);
+  width: clamp(148px, 28%, 208px);
+  opacity: .16;
+  background: color-mix(in srgb, var(--grade-accent, #4fa346) 48%, #69735a);
+  transform: rotate(-3deg) scale(1.14);
+}
+
 .student-identity {
   display: grid;
   grid-template-columns: clamp(30px, 2.35vw, 34px) var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
   align-items: center;
   gap: clamp(10px, .95vw, 14px);
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .student-grade-mark {
@@ -155,17 +185,17 @@
   height: var(--student-list-crest-size);
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--grade-accent, #4fa346) 28%, #dfe8d9);
-  border-radius: 11px;
+  border: 1px solid color-mix(in srgb, var(--grade-accent, #4fa346) 24%, #dfe8d9);
+  border-radius: 999px;
   background:
-    radial-gradient(circle at 28% 18%, rgba(255, 255, 255, .94), rgba(255, 255, 255, .48) 46%, transparent 47%),
-    linear-gradient(145deg, color-mix(in srgb, var(--grade-soft, #f2f8ef) 86%, #fff), #fff);
-  color: color-mix(in srgb, var(--grade-accent, #4fa346) 90%, #17243c);
-  box-shadow: 0 8px 16px rgba(21, 35, 60, .055), inset 0 0 0 1px rgba(255, 255, 255, .75);
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, .98), rgba(255, 255, 255, .48) 48%, transparent 49%),
+    linear-gradient(145deg, #fff, color-mix(in srgb, var(--grade-soft, #f2f8ef) 82%, #fff));
+  color: color-mix(in srgb, var(--grade-accent, #4fa346) 82%, #46513f);
+  box-shadow: 0 10px 18px rgba(21, 35, 60, .085), inset 0 0 0 1px rgba(255, 255, 255, .84);
 }
-
 .student-group-sigil .ui-group-icon {
-  --group-icon-size: calc(var(--student-list-crest-size) * .62);
+  --group-icon-size: calc(var(--student-list-crest-size) * .63);
+  opacity: .92;
 }
 
 .student-row.selected .student-group-sigil,
@@ -244,6 +274,8 @@
 .student-section-badges { display: none; }
 
 .financial-cell {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -266,6 +298,8 @@
 }
 
 .row-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: center;
 }

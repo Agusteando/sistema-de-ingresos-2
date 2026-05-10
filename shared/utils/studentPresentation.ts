@@ -1,3 +1,5 @@
+import { studentGroupIconUrl } from './studentGroupIcons'
+
 export const formatMoney = (value: unknown) => Number(value || 0).toFixed(2)
 
 export const normalizeStudentMatricula = (value: unknown) => String(value || '').trim().toUpperCase()
@@ -87,6 +89,17 @@ export const studentGroupLabel = (student: any) => {
   if (!value || value.toLowerCase() === 'null') return ''
   return value
 }
+
+
+export const studentGroupIconStyle = (student: any) => {
+  const url = studentGroupIconUrl(studentGroupLabel(student))
+  return url ? { '--student-group-icon-mask': `url("${url}")` } : {}
+}
+
+export const studentPresentationStyle = (student: any) => ({
+  ...gradeAccentStyle(student),
+  ...studentGroupIconStyle(student)
+})
 
 export const isStudentEnrolled = (student: any, enrollmentConcepts: string[] = []) => {
   if (student?.estatus !== 'Activo') return false
