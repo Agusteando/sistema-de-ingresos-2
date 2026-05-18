@@ -1,14 +1,15 @@
-Refine KPI background-sync affordance
+Refine student KPI refresh visibility
 
-- Keep the cache-first student loading and subtle sidebar sync indicator intact.
-- Make the KPI updating state more perceptible while background sync is active by combining a soft text-color pulse on KPI labels/values with a gentle moving gradient wash inside the KPI cards.
-- Preserve visible KPI values, card dimensions, filters, selection, workspace state, scroll, and interaction while fresh data is fetched and applied.
-- Avoid skeletons, blocking loaders, flashing, alert-like styling, layout shift, or route reload behavior.
-- Respect reduced-motion preferences by disabling KPI animations and keeping a static low-signal pending-data tint.
+- Keep the existing cache-first students flow and low-signal sync indicator intact.
+- Make the KPI refresh state reliably perceptible by holding the visual updating state for a short minimum window when a background sync starts with usable student data already on screen.
+- Increase the KPI updating affordance without changing layout: KPI labels and values now use a restrained color pulse, and each card gets a gentle moving gradient wash above the card background.
+- Preserve visible KPI values, filters, selection, open workspaces, scroll, pagination, and interaction while fresh data is fetched and applied.
+- Avoid skeletons, blocking loaders, flashing, alert styling, layout shift, route reload behavior, hardcoded resolution fixes, override layers, and `!important`.
+- Respect reduced-motion preferences by disabling the animations and leaving a static low-signal pending-data tint.
 
 Validation:
-- Ran `npm ci --ignore-scripts` to install dependencies in the sandbox.
 - Ran `npm run build` successfully.
 
 Notes:
-- `npm ci` reported the existing dependency audit status: 3 vulnerabilities from the current lockfile dependency tree.
+- The earlier KPI effect was easy to miss because the `/api/students` background request can resolve too quickly for the `syncing` class to remain visible, and the previous overlay/text opacity was too close to the normal KPI styling.
+- The sandbox `npm ci --ignore-scripts` command exceeded the tool timeout after installing dependencies, but the resulting dependency install was sufficient for `npm run build` to complete successfully.

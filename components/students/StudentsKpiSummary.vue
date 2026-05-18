@@ -2,6 +2,7 @@
   <section
     :class="['kpi-summary-system', { 'without-income': userRole !== 'global', 'is-updating': isUpdating }]"
     aria-label="Resumen de matrícula y finanzas"
+    :aria-busy="isUpdating ? 'true' : 'false'"
   >
     <div class="kpi-strip" aria-label="Matrícula y finanzas">
       <button
