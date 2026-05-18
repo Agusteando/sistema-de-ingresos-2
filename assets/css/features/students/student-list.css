@@ -197,7 +197,7 @@
   min-width: 0;
   flex-direction: column;
   align-items: flex-start;
-  gap: clamp(7px, .62vw, 9px);
+  gap: clamp(5px, .48vw, 7px);
 }
 
 .student-copy strong {
@@ -225,6 +225,13 @@
   font-size: clamp(10px, .78vw, 11px);
   font-style: normal;
   font-weight: 800;
+}
+
+.student-type-line {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  line-height: 1;
 }
 
 .student-section-badges { display: none; }
@@ -292,13 +299,17 @@
 .student-tipo-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-height: 20px;
-  padding: 0 7px;
+  gap: 5px;
+  min-height: 22px;
+  padding: 0 8px 0 6px;
+  border: 1px solid rgba(211, 222, 235, .95);
   border-radius: 999px;
-  font-size: 10px;
+  background: rgba(255, 255, 255, .84);
+  color: #4f5f78;
+  box-shadow: 0 6px 14px rgba(21, 35, 60, .045), inset 0 1px 0 rgba(255,255,255,.92);
+  font-size: 10.5px;
   font-style: normal;
-  font-weight: 780;
+  font-weight: 820;
   letter-spacing: 0;
   line-height: 1;
   text-transform: none;
@@ -306,17 +317,30 @@
 
 .student-tipo-chip svg {
   flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  padding: 2.5px;
+  border-radius: 999px;
+  background: rgba(245, 248, 252, .98);
 }
 
 .student-tipo-chip.interno {
-  border: 1px solid rgba(47, 127, 50, .18);
-  background: rgba(47, 127, 50, .075);
+  border-color: rgba(47, 127, 50, .24);
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(239, 248, 235, .92));
   color: #2f7f32;
 }
 
+.student-tipo-chip.interno svg {
+  background: rgba(47, 127, 50, .105);
+}
+
 .student-tipo-chip.externo {
-  border: 1px solid rgba(65, 112, 205, .18);
-  background: rgba(65, 112, 205, .075);
+  border-color: rgba(65, 112, 205, .25);
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(239, 246, 255, .94));
   color: #2f62b8;
+}
+
+.student-tipo-chip.externo svg {
+  background: rgba(65, 112, 205, .11);
 }
 
