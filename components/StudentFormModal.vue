@@ -43,17 +43,17 @@
                 <div class="field-stack">
                   <label class="polished-field">
                     <span>A. paterno</span>
-                    <input v-model="form.apellidoPaterno" type="text" placeholder="Ingresa el apellido paterno" required @blur="normalizeNameField('apellidoPaterno')" />
+                    <input :value="form.apellidoPaterno" type="text" placeholder="Ingresa el apellido paterno" required @input="handleNameInput('apellidoPaterno', $event)" @blur="normalizeNameField('apellidoPaterno')" />
                   </label>
 
                   <label class="polished-field">
                     <span>A. materno</span>
-                    <input v-model="form.apellidoMaterno" type="text" placeholder="Ingresa el apellido materno" required @blur="normalizeNameField('apellidoMaterno')" />
+                    <input :value="form.apellidoMaterno" type="text" placeholder="Ingresa el apellido materno" required @input="handleNameInput('apellidoMaterno', $event)" @blur="normalizeNameField('apellidoMaterno')" />
                   </label>
 
                   <label class="polished-field">
                     <span>Nombre(s)</span>
-                    <input v-model="form.nombres" type="text" placeholder="Ingresa el o los nombres" required @blur="normalizeNameField('nombres')" />
+                    <input :value="form.nombres" type="text" placeholder="Ingresa el o los nombres" required @input="handleNameInput('nombres', $event)" @blur="normalizeNameField('nombres')" />
                   </label>
 
                   <label class="polished-field curp-field">
@@ -113,7 +113,7 @@
                 <div class="field-stack compact">
                   <label class="polished-field">
                     <span>Padre/Tutor</span>
-                    <input v-model="form.padre" type="text" placeholder="Ingresa el nombre completo" required @blur="normalizeNameField('padre')" />
+                    <input :value="form.padre" type="text" placeholder="Ingresa el nombre completo" required @input="handleNameInput('padre', $event)" @blur="normalizeNameField('padre')" />
                   </label>
                   <div class="two-field-grid">
                     <label class="polished-field">
@@ -297,7 +297,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, nextTick, ref, onMounted, watch } from 'vue'
 import {
   LucideCalendarDays,
   LucideCheck,
@@ -518,6 +518,38 @@ const toNameCase = (value) => {
     .split(' ')
     .map((word, index, words) => titleWord(word, index, words))
     .join(' ')
+}
+
+const toLiveNameCase = (value) => {
+  const source = String(value || '')
+  const parts = source.split(/(\s+)/)
+  const words = parts.filter(part => part && !/^\s+$/.test(part))
+  let wordIndex = 0
+
+  return parts.map((part) => {
+    if (!part || /^\s+$/.test(part)) return part
+    const normalized = titleWord(part, wordIndex, words)
+    wordIndex += 1
+    return normalized
+  }).join('')
+}
+
+const handleNameInput = (field, event) => {
+  const input = event?.target
+  const rawValue = String(input?.value || '')
+  const caret = typeof input?.selectionStart === 'number' ? input.selectionStart : rawValue.length
+  const rawBeforeCaret = rawValue.slice(0, caret)
+  const normalizedValue = toLiveNameCase(rawValue)
+  const normalizedBeforeCaret = toLiveNameCase(rawBeforeCaret)
+
+  form.value[field] = normalizedValue
+
+  if (input && input.value !== normalizedValue) {
+    nextTick(() => {
+      const nextCaret = normalizedBeforeCaret.length
+      input.setSelectionRange(nextCaret, nextCaret)
+    })
+  }
 }
 
 const normalizeNameField = (field) => {
