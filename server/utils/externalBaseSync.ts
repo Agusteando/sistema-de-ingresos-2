@@ -884,6 +884,7 @@ export const processExternalRowsBatch = async (
             grupo = COALESCE(NULLIF(?, ''), grupo),
             correo = COALESCE(NULLIF(?, ''), correo),
             telefono = COALESCE(NULLIF(?, ''), telefono),
+            curp = COALESCE(NULLIF(?, ''), curp),
             \`Nombre del padre o tutor\` = COALESCE(NULLIF(?, ''), \`Nombre del padre o tutor\`),
             \`Fecha de nacimiento\` = COALESCE(NULLIF(?, ''), \`Fecha de nacimiento\`),
             genero = COALESCE(NULLIF(?, ''), genero),
@@ -900,6 +901,7 @@ export const processExternalRowsBatch = async (
           entry.mapped.grupo,
           entry.mapped.correo,
           entry.mapped.telefono,
+          entry.mapped.curp,
           entry.mapped.padre,
           entry.mapped.birth,
           entry.mapped.genero,
@@ -922,13 +924,14 @@ export const processExternalRowsBatch = async (
             grupo,
             correo,
             telefono,
+            curp,
             \`Nombre del padre o tutor\`,
             estatus,
             \`Fecha de nacimiento\`,
             genero,
             ciclo,
             usuario
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Sistema Sync')
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Sistema Sync')
         `,
         params: [
           entry.matricula,
@@ -942,6 +945,7 @@ export const processExternalRowsBatch = async (
           entry.mapped.grupo,
           entry.mapped.correo,
           entry.mapped.telefono,
+          entry.mapped.curp,
           entry.mapped.padre,
           finalEstatus,
           entry.mapped.birth,

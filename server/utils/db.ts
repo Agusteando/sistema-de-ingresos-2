@@ -459,6 +459,7 @@ export const ensureSchema = async () => {
 
         if (tables.length > 0) {
           await checkAndAddColumn('base', 'genero', "VARCHAR(255) DEFAULT '1'")
+          await checkAndAddColumn('base', 'curp', "VARCHAR(18) DEFAULT NULL")
 
           const familiaIdCols = await rawQuery<any[]>(`SHOW COLUMNS FROM base LIKE 'familiaId'`)
           if (familiaIdCols.length > 0) {
