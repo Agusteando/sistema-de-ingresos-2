@@ -1,5 +1,8 @@
 <template>
-  <section :class="['kpi-summary-system', { 'without-income': userRole !== 'global' }]" aria-label="Resumen de matrícula y finanzas">
+  <section
+    :class="['kpi-summary-system', { 'without-income': userRole !== 'global', 'is-updating': isUpdating }]"
+    aria-label="Resumen de matrícula y finanzas"
+  >
     <div class="kpi-strip" aria-label="Matrícula y finanzas">
       <button
         v-for="item in enrollmentKpis"
@@ -53,7 +56,8 @@ const props = defineProps({
   customSections: { type: Array, default: () => [] },
   customSectionCounts: { type: Object, default: () => ({}) },
   globalKpis: { type: Object, default: () => ({ ingresosMes: 0 }) },
-  kpiSparklines: { type: Object, default: () => ({}) }
+  kpiSparklines: { type: Object, default: () => ({}) },
+  isUpdating: { type: Boolean, default: false }
 })
 
 defineEmits(['set-filter'])
