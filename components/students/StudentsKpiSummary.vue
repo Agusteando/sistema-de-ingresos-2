@@ -15,7 +15,7 @@
         <span class="kpi-icon"><component :is="item.icon" :size="24" /></span>
         <span class="kpi-text">
           <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
+          <strong><UiKpiOdometer :value="item.value" /></strong>
         </span>
         <UiKpiSparkline :values="item.sparkline" />
       </button>
@@ -24,7 +24,7 @@
         <span class="kpi-icon"><LucideCircleDollarSign :size="24" /></span>
         <span class="kpi-text">
           <span>Ingresos del mes</span>
-          <strong>${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', { minimumFractionDigits: 2 }) }}</strong>
+          <strong><UiKpiOdometer :value="globalKpis.ingresosMes" format="currency" :minimum-fraction-digits="2" :maximum-fraction-digits="2" /></strong>
         </span>
         <UiKpiSparkline :values="kpiSparklines.ingresos" />
       </div>
@@ -49,6 +49,7 @@
 import { computed } from 'vue'
 import { LucideCircleDollarSign, LucideGlobe2, LucideTag, LucideUserCheck, LucideUsers, LucideUserX } from 'lucide-vue-next'
 import UiKpiSparkline from '~/components/ui/UiKpiSparkline.vue'
+import UiKpiOdometer from '~/components/ui/UiKpiOdometer.vue'
 
 const props = defineProps({
   userRole: { type: String, default: 'plantel' },

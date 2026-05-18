@@ -52,86 +52,90 @@
 .section-kpi-card::after {
   content: '';
   position: absolute;
+  inset: 0;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 420ms ease, transform 420ms ease;
+  transition: opacity 620ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .kpi-card::before,
 .section-kpi-card::before {
-  inset: -42% -34%;
   z-index: 0;
   background:
-    radial-gradient(circle at 16% 42%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 32%, transparent) 0 14%, transparent 39%),
-    radial-gradient(circle at 78% 58%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 26%, transparent) 0 16%, transparent 43%),
-    linear-gradient(106deg, transparent 7%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 18%, transparent) 38%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 10%, transparent) 56%, transparent 86%);
-  filter: blur(0.4px);
-  transform: translate3d(-8%, -1%, 0) scale(1.02);
+    radial-gradient(circle at 12% 46%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 30%, transparent) 0 13%, transparent 34%),
+    radial-gradient(circle at 82% 54%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 22%, transparent) 0 15%, transparent 38%),
+    linear-gradient(108deg, transparent 0%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 15%, transparent) 36%, color-mix(in srgb, #ffffff 42%, transparent) 50%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 13%, transparent) 64%, transparent 100%);
+  background-size: 170% 145%, 165% 145%, 230% 100%;
+  background-position: 0% 48%, 100% 52%, 0% 50%;
+  animation: kpi-fluid-pending-background 4.6s ease-in-out infinite alternate;
+  animation-play-state: paused;
 }
 
 .kpi-card::after,
 .section-kpi-card::after {
-  inset: 0;
   z-index: 1;
-  background: linear-gradient(112deg, transparent 12%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 18%, transparent) 39%, color-mix(in srgb, #ffffff 36%, transparent) 50%, transparent 68%);
-  transform: translateX(-62%);
+  background: linear-gradient(112deg, transparent 14%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 16%, transparent) 40%, color-mix(in srgb, #ffffff 46%, transparent) 50%, transparent 68%);
+  background-size: 240% 100%;
+  background-position: 120% 50%;
+  animation: kpi-soft-pending-sweep 3.5s ease-in-out infinite;
+  animation-play-state: paused;
 }
 
 .kpi-summary-system.is-updating .kpi-card::before,
 .kpi-summary-system.is-updating .section-kpi-card::before {
-  opacity: 0.34;
-  animation: kpi-fluid-pending-background 3.7s ease-in-out infinite alternate;
+  opacity: 0.36;
+  animation-play-state: running;
 }
 
 .kpi-summary-system.is-updating .kpi-card::after,
 .kpi-summary-system.is-updating .section-kpi-card::after {
-  opacity: 0.22;
-  animation: kpi-soft-pending-sweep 3.1s ease-in-out infinite;
+  opacity: 0.24;
+  animation-play-state: running;
 }
 
 .kpi-summary-system.is-updating .kpi-card .ui-kpi-sparkline {
-  opacity: 0.56;
+  opacity: 0.58;
 }
 
 .kpi-summary-system.is-updating .kpi-text span,
 .kpi-summary-system.is-updating .section-kpi-name {
-  animation: kpi-label-refresh-pulse 2.15s ease-in-out infinite;
+  animation: kpi-label-refresh-pulse 2.3s ease-in-out infinite;
 }
 
 .kpi-summary-system.is-updating .kpi-text strong,
 .kpi-summary-system.is-updating .section-kpi-card strong {
-  animation: kpi-value-refresh-pulse 2.15s ease-in-out infinite;
+  animation: kpi-value-refresh-pulse 2.3s ease-in-out infinite;
 }
 
 @keyframes kpi-fluid-pending-background {
   0% {
-    transform: translate3d(-8%, -1%, 0) scale(1.02);
-    opacity: 0.24;
+    background-position: 0% 48%, 100% 52%, 0% 50%;
+    opacity: 0.28;
   }
-  48% {
-    transform: translate3d(3%, 1%, 0) scale(1.04);
-    opacity: 0.38;
+  45% {
+    background-position: 42% 44%, 58% 56%, 52% 50%;
+    opacity: 0.42;
   }
   100% {
-    transform: translate3d(9%, 0%, 0) scale(1.025);
-    opacity: 0.3;
+    background-position: 92% 50%, 8% 50%, 100% 50%;
+    opacity: 0.32;
   }
 }
 
 @keyframes kpi-soft-pending-sweep {
-  0% { transform: translateX(-66%); }
-  52% { transform: translateX(42%); }
-  100% { transform: translateX(66%); }
+  0% { background-position: 120% 50%; }
+  50% { background-position: 44% 50%; }
+  100% { background-position: -18% 50%; }
 }
 
 @keyframes kpi-label-refresh-pulse {
   0%, 100% { color: #657088; }
-  50% { color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 62%, #4e5b72); }
+  50% { color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 64%, #4e5b72); }
 }
 
 @keyframes kpi-value-refresh-pulse {
   0%, 100% { color: #16243d; }
-  50% { color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 48%, #16243d); }
+  50% { color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 50%, #16243d); }
 }
 
 .kpi-icon {
@@ -185,6 +189,99 @@
   letter-spacing: -0.045em;
   line-height: 1;
   transition: color 360ms ease;
+}
+
+.ui-kpi-odometer {
+  position: relative;
+  display: inline-grid;
+  min-width: var(--ui-kpi-odometer-ch, 1ch);
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+  vertical-align: baseline;
+}
+
+.ui-kpi-odometer__viewport {
+  display: grid;
+  align-items: center;
+  overflow: hidden;
+  line-height: 1;
+}
+
+.ui-kpi-odometer__value {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.ui-kpi-odometer.is-animating.is-up .ui-kpi-odometer__value--previous {
+  animation: kpi-odometer-previous-up 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ui-kpi-odometer.is-animating.is-up .ui-kpi-odometer__value--current {
+  animation: kpi-odometer-current-up 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ui-kpi-odometer.is-animating.is-down .ui-kpi-odometer__value--previous {
+  animation: kpi-odometer-previous-down 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ui-kpi-odometer.is-animating.is-down .ui-kpi-odometer__value--current {
+  animation: kpi-odometer-current-down 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ui-kpi-odometer__delta {
+  position: absolute;
+  top: -0.22em;
+  left: calc(100% + 5px);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  height: 1.25em;
+  padding: 0 0.36em;
+  border: 1px solid color-mix(in srgb, var(--kpi-color, #3f9138) 15%, #dfe7f0);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--kpi-color, #3f9138) 8%, #ffffff);
+  box-shadow: 0 4px 10px rgba(21, 35, 60, 0.06);
+  color: color-mix(in srgb, var(--kpi-color, #3f9138) 54%, #4c5a70);
+  font-size: 0.43em;
+  font-weight: 820;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: kpi-odometer-delta 1.7s ease both;
+}
+
+.ui-kpi-odometer.is-down .ui-kpi-odometer__delta {
+  color: color-mix(in srgb, var(--kpi-color, #3f9138) 38%, #5f6b7e);
+}
+
+@keyframes kpi-odometer-current-up {
+  from { opacity: 0.42; transform: translateY(72%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes kpi-odometer-previous-up {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-72%); }
+}
+
+@keyframes kpi-odometer-current-down {
+  from { opacity: 0.42; transform: translateY(-72%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes kpi-odometer-previous-down {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(72%); }
+}
+
+@keyframes kpi-odometer-delta {
+  0% { opacity: 0; transform: translateY(2px); }
+  18% { opacity: 0.92; transform: translateY(0); }
+  72% { opacity: 0.78; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-2px); }
 }
 
 
@@ -257,7 +354,9 @@
   .kpi-summary-system.is-updating .kpi-text span,
   .kpi-summary-system.is-updating .kpi-text strong,
   .kpi-summary-system.is-updating .section-kpi-name,
-  .kpi-summary-system.is-updating .section-kpi-card strong {
+  .kpi-summary-system.is-updating .section-kpi-card strong,
+  .ui-kpi-odometer.is-animating .ui-kpi-odometer__value,
+  .ui-kpi-odometer__delta {
     animation: none;
   }
 
@@ -269,13 +368,11 @@
 
   .kpi-summary-system.is-updating .kpi-card::before,
   .kpi-summary-system.is-updating .section-kpi-card::before {
-    transform: none;
     opacity: 0.26;
   }
 
   .kpi-summary-system.is-updating .kpi-card::after,
   .kpi-summary-system.is-updating .section-kpi-card::after {
-    transform: none;
     opacity: 0.14;
   }
 
@@ -288,7 +385,17 @@
   .kpi-summary-system.is-updating .section-kpi-card strong {
     color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 34%, #16243d);
   }
+
+  .ui-kpi-odometer__value,
+  .ui-kpi-odometer__delta {
+    transform: none;
+  }
+
+  .ui-kpi-odometer__delta {
+    opacity: 0.78;
+  }
 }
+
 
 .kpi-green { --kpi-color: #4aa642; }
 .kpi-teal { --kpi-color: #14a29a; }
