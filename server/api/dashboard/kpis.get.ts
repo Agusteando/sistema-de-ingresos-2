@@ -27,7 +27,6 @@ export default defineEventHandler(async (event) => {
       A.ciclo as cicloBase,
       A.ciclo,
       A.plantel,
-      A.interno as internoBase,
       B.conceptosPagados,
       C.conceptosCargados,
       BPrev.conceptosPagadosPrevios,

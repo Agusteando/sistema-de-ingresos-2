@@ -593,7 +593,6 @@ export function mapExternalRow(row: any, plantel: string) {
     nivel: nivelFromPlantel(plantel),
     grado: normalizeGradoForPlantel(firstPayloadValue(row, ['grado', 'grado_actual', 'gradoActual']) || 'Primero', plantel),
     grupo: firstPayloadValue(row, ['grupo', 'grupo_actual', 'grupoActual']) || 'A',
-    interno: normalizeInscritoBoolean(firstPayloadValue(row, ['interno', 'tipo_ingreso', 'tipoIngreso'])) ? 1 : 0,
     correo: firstPayloadValue(row, [
       'email_tutor',
       'correo_tutor',
@@ -883,7 +882,6 @@ export const processExternalRowsBatch = async (
             nivel = ?,
             grado = ?,
             grupo = COALESCE(NULLIF(?, ''), grupo),
-            interno = ?,
             correo = COALESCE(NULLIF(?, ''), correo),
             telefono = COALESCE(NULLIF(?, ''), telefono),
             \`Nombre del padre o tutor\` = COALESCE(NULLIF(?, ''), \`Nombre del padre o tutor\`),
@@ -900,7 +898,6 @@ export const processExternalRowsBatch = async (
           entry.mapped.nivel,
           entry.mapped.grado,
           entry.mapped.grupo,
-          entry.mapped.interno,
           entry.mapped.correo,
           entry.mapped.telefono,
           entry.mapped.padre,
@@ -923,7 +920,6 @@ export const processExternalRowsBatch = async (
             nivel,
             grado,
             grupo,
-            interno,
             correo,
             telefono,
             \`Nombre del padre o tutor\`,
@@ -932,7 +928,7 @@ export const processExternalRowsBatch = async (
             genero,
             ciclo,
             usuario
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Sistema Sync')
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Sistema Sync')
         `,
         params: [
           entry.matricula,
@@ -944,7 +940,6 @@ export const processExternalRowsBatch = async (
           entry.mapped.nivel,
           entry.mapped.grado,
           entry.mapped.grupo,
-          entry.mapped.interno,
           entry.mapped.correo,
           entry.mapped.telefono,
           entry.mapped.padre,

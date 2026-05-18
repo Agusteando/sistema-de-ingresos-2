@@ -1,8 +1,7 @@
-Refine ciclo de ingreso UX
+Refine ciclo de ingreso modal and remove base.interno coupling
 
-- Redesign the ciclo de ingreso modal as a polished full-screen overlay with a centered, unclipped dialog.
-- Add a functional 12-cycle ingreso picker with current, registered, nearby, and selected cycle cues.
-- Keep ciclo de ingreso saving behavior intact: selected ingreso cycle persists to base.ciclo and mirrors base.interno=0 through the existing API.
-- Replace the cluttered Interno/Externo chip treatment with cleaner standalone pills in student list and details.
-- Move the list Interno/Externo label out of the matrícula pill so matrícula and resolved tipo de ingreso read as separate data.
-- Preserve the ciclo-scoped resolver, cache-first flows, Estado de Cuenta behavior, KPIs, filters, tables, and exports.
+- Rework the ciclo de ingreso modal to match the supplied wide Figma reference more closely: centered overlay, large student header, two-column picker/result layout, refined footer, and responsive behavior.
+- Replace the compact 12-cycle grid with a focused picker: four nearby cycle cards plus an expandable previous-cycle range covering up to 12 cycles.
+- Rename the visible result section to "Resultado" and add animated result feedback, timeline entry motion, selected-cycle checks, and reduced-motion safeguards.
+- Keep the modal fully functional: selecting and saving a ciclo updates base.ciclo, recomputes the ciclo-scoped Interno/Externo result, and updates the current UI without a page reload.
+- Remove base.interno from the active ciclo resolver, ingreso-cycle save flow, Nuxt student APIs, student edit form, and external-base sync writes. The active system now resolves Interno/Externo from base.ciclo and ciclo-scoped evidence, not from base.interno.

@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
       SELECT 
         A.matricula, A.nombreCompleto, A.apellidoPaterno, A.apellidoMaterno, A.nombres, A.genero,
         A.grado as gradoBase, A.grupo, A.ciclo as cicloBase, A.ciclo, A.plantel, A.estatus,
-        A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno as internoBase,
+        A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth,
         Prev.previous_matricula AS matriculaAnterior,
         Next.successor_matricula AS matriculaSiguiente,
         IFNULL(B.pagosTotal, 0) AS pagosTotal,
@@ -110,7 +110,6 @@ export default defineEventHandler(async (event) => {
         ...r,
         grado: displayGrado(p.grado),
         nivel: p.nivel,
-        internoLegacy: r.internoBase,
         interno: tipoIngresoToInternoValue(tipoIngreso),
         tipoIngreso
       }
@@ -134,14 +133,14 @@ export default defineEventHandler(async (event) => {
         matricula, apellidoPaterno, apellidoMaterno, nombres, 
         nombreCompleto,
         \`Fecha de nacimiento\`, genero, plantel, nivel, grado, grupo, 
-        \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo, interno, estatus
-      ) VALUES (?, ?, ?, ?, CONCAT(?, ' ', ?, ' ', ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo, estatus
+      ) VALUES (?, ?, ?, ?, CONCAT(?, ' ', ?, ' ', ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       '', 
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
       body.birth, body.genero, assignedPlantel, assignedNivel, normalizeGradoForPlantel(body.grado, assignedPlantel), body.grupo,
-      body.padre, body.telefono, body.correo, user.name, cicloKey, body.interno, body.estatus || 'Activo'
+      body.padre, body.telefono, body.correo, user.name, cicloKey, body.estatus || 'Activo'
     ])
     return { success: true }
   }

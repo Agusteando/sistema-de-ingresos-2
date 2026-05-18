@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
 
   const user = event.context.user
   const [student] = await query<any[]>(`
-    SELECT matricula, plantel, grado AS gradoBase, ciclo AS cicloBase, ciclo, interno AS internoBase
+    SELECT matricula, plantel, grado AS gradoBase, ciclo AS cicloBase, ciclo
     FROM base
     WHERE matricula = ?
     LIMIT 1
@@ -25,14 +25,13 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  await query(`UPDATE base SET ciclo = ?, interno = 0 WHERE matricula = ?`, [ingresoCiclo, matricula])
+  await query(`UPDATE base SET ciclo = ? WHERE matricula = ?`, [ingresoCiclo, matricula])
 
   const targetCiclo = normalizeCicloForTipoIngreso(body?.targetCiclo) || ingresoCiclo
   const tipoIngreso = resolveTipoIngreso({
     ...student,
     ciclo: ingresoCiclo,
-    cicloBase: ingresoCiclo,
-    internoBase: 0
+    cicloBase: ingresoCiclo
   }, targetCiclo)
 
   return {
@@ -41,8 +40,6 @@ export default defineEventHandler(async (event) => {
       matricula,
       ciclo: ingresoCiclo,
       cicloBase: ingresoCiclo,
-      internoBase: 0,
-      internoLegacy: 0,
       interno: tipoIngresoToInternoValue(tipoIngreso),
       tipoIngreso
     }
