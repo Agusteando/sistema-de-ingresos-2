@@ -18,7 +18,7 @@
             <p>
               <span class="student-code">{{ student.matricula }}</span>
               <i></i>
-              {{ student.nivel }} · {{ gradeVisualTitle(student) }}<template v-if="studentGroupLabel(student)"> · {{ studentGroupLabel(student) }}</template>
+              {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }}<template v-if="studentGroupLabel(student)"> · {{ studentGroupLabel(student) }}</template>
               <template v-if="student.matriculaAnterior">
                 <i></i>
                 Ant. {{ student.matriculaAnterior }}
@@ -261,7 +261,7 @@ import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { useAccountStateCacheSync } from '~/composables/useAccountStateCacheSync'
 import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
-import { gradeVisualTitle, studentGroupLabel, studentPresentationStyle } from '~/shared/utils/studentPresentation'
+import { gradeVisualTitle, studentGroupLabel, studentNivelLabel, studentPresentationStyle } from '~/shared/utils/studentPresentation'
 import PaymentModal from './PaymentModal.vue'
 import DocumentModal from './DocumentModal.vue'
 import InvoiceModal from './InvoiceModal.vue'
@@ -326,6 +326,7 @@ const accountFooterLabel = computed(() => {
 })
 const selectedCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const selectedCicloLabel = computed(() => formatCicloLabel(selectedCicloKey.value))
+const resolvedNivelLabel = computed(() => studentNivelLabel(props.student))
 const accountCacheOptions = computed(() => ({
   matricula: props.student?.matricula || '',
   ciclo: selectedCicloKey.value,

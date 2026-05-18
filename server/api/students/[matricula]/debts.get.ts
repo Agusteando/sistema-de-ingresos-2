@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   if (!matricula) throw createError({ statusCode: 400, message: 'Matrícula requerida' })
 
   const [studentRef] = await query<any[]>(
-    `SELECT matricula, plantel, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
+    `SELECT matricula, plantel, nivel as nivelBase, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
     [matricula.trim()]
   )
 
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
     if (String(studentRef.plantel || '') !== String(user.active_plantel || '')) return []
   }
 
-  if (isOutOfScopeForPlantelCiclo(studentRef.gradoBase, studentRef.plantel, studentRef.cicloBase, cicloKey)) {
+  if (isOutOfScopeForPlantelCiclo(studentRef.gradoBase, studentRef.plantel, studentRef.cicloBase, cicloKey, studentRef.nivelBase)) {
     return []
   }
 

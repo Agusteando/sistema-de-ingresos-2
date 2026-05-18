@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (isOutOfScopeForPlantelCiclo(studentRef.grado, plantel, studentRef.ciclo, cicloKey)) {
+  if (isOutOfScopeForPlantelCiclo(studentRef.grado, plantel, studentRef.ciclo, cicloKey, studentRef.nivel)) {
     throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 

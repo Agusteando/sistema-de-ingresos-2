@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
 
   if (student.familyKey) {
     siblings = await query<any[]>(`
-      SELECT B.matricula, B.nombreCompleto, B.plantel, B.grado, B.grupo, B.ciclo
+      SELECT B.matricula, B.nombreCompleto, B.plantel, B.nivel, B.grado, B.grupo, B.ciclo
       FROM student_family_links F
       JOIN base B ON B.matricula = F.matricula
       WHERE F.family_key = ? AND B.matricula != ? AND B.estatus = 'Activo'
@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
 
     siblings = siblings.filter((sibling) => {
       if (isScopedToActivePlantel(user) && String(sibling.plantel || '') !== String(user.active_plantel || '')) return false
-      return !isOutOfScopeForPlantelCiclo(sibling.grado, sibling.plantel, sibling.ciclo, cicloKey)
+      return !isOutOfScopeForPlantelCiclo(sibling.grado, sibling.plantel, sibling.ciclo, cicloKey, sibling.nivel)
     })
 
     source = 'local'
@@ -43,14 +43,14 @@ export default defineEventHandler(async (event) => {
     const correo = normalizeEmail(student.correo)
 
     siblings = await query<any[]>(`
-      SELECT matricula, nombreCompleto, plantel, grado, grupo, ciclo
+      SELECT matricula, nombreCompleto, plantel, nivel, grado, grupo, ciclo
       FROM base
       WHERE LOWER(TRIM(correo)) = ? AND matricula != ? AND estatus = 'Activo'
     `, [correo, matricula])
 
     siblings = siblings.filter((sibling) => {
       if (isScopedToActivePlantel(user) && String(sibling.plantel || '') !== String(user.active_plantel || '')) return false
-      return !isOutOfScopeForPlantelCiclo(sibling.grado, sibling.plantel, sibling.ciclo, cicloKey)
+      return !isOutOfScopeForPlantelCiclo(sibling.grado, sibling.plantel, sibling.ciclo, cicloKey, sibling.nivel)
     })
 
     source = siblings.length ? 'email' : 'none'

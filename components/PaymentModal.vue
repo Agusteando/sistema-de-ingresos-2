@@ -81,6 +81,7 @@ import { useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import { studentNivelLabel } from '~/shared/utils/studentPresentation'
 
 const props = defineProps({ debts: Array, student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -147,7 +148,7 @@ const previewReceipt = () => {
     fecha: new Date().toISOString(),
     nombreCompleto: props.student.nombreCompleto,
     matricula: props.student.matricula,
-    nivel: props.student.nivel,
+    nivel: studentNivelLabel(props.student),
     grado: props.student.grado,
     grupo: props.student.grupo,
     ciclo: normalizeCicloKey(state.value.ciclo),

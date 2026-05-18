@@ -104,6 +104,7 @@ import { ref, onMounted } from 'vue'
 import { LucideLoader2, LucideTrash2, LucideShieldCheck } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
+import { studentNivelLabel } from '~/shared/utils/studentPresentation'
 
 const props = defineProps({ debts: Array, student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -114,14 +115,14 @@ useScrollLock()
 const loading = ref(false)
 const sanitizeNivel = (value) => {
   const allowed = ['Preescolar', 'Primaria', 'Secundaria']
-  return allowed.includes(value) ? value : (allowed.includes(props.student.nivel) ? props.student.nivel : 'Preescolar')
+  return allowed.includes(value) ? value : studentNivelLabel(props.student)
 }
 
 const form = ref({
   legal_name: '', tax_id: '', email: props.student.correo || '', zip: '',
   tax_system: '616', use: 'D10', invoiceDate: new Date().toISOString().slice(0, 16),
   facturaCon: 'IECS', series: '', productKeyGlobal: '86121503',
-  nombreCompleto: props.student.nombreCompleto || '', CURP: '', nivelEducativo: sanitizeNivel(props.student.nivel), autRVOE: ''
+  nombreCompleto: props.student.nombreCompleto || '', CURP: '', nivelEducativo: sanitizeNivel(studentNivelLabel(props.student)), autRVOE: ''
 })
 
 const conceptos = ref([])

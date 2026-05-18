@@ -1,5 +1,5 @@
 import { query } from '../../utils/db'
-import { calculatePromotedGrado, displayGrado, nivelFromPlantel, normalizeGradoForPlantel } from '../../../shared/utils/grado'
+import { calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, resolveNivelEscolar } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
     const sql = `
       SELECT 
         A.matricula, A.nombreCompleto, A.apellidoPaterno, A.apellidoMaterno, A.nombres, A.genero,
-        A.grado as gradoBase, A.grupo, A.ciclo as cicloBase, A.ciclo, A.plantel, A.estatus,
+        A.grado as gradoBase, A.grupo, A.ciclo as cicloBase, A.ciclo, A.plantel, A.nivel as nivelBase, A.estatus,
         A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth,
         Prev.previous_matricula AS matriculaAnterior,
         Next.successor_matricula AS matriculaSiguiente,
@@ -93,7 +93,7 @@ export default defineEventHandler(async (event) => {
     `
     const rows = await query<any[]>(sql, [cicloKey, cicloKey, previousCiclo, previousCiclo, ...params])
     let mapped = rows.flatMap(r => {
-      const p = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey)
+      const p = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey, r.nivelBase)
       if (p.outOfScope) return []
 
       const tipoIngreso = resolveTipoIngreso({
@@ -124,8 +124,15 @@ export default defineEventHandler(async (event) => {
   if (method === 'POST') {
     const body = await readBody(event)
     const cicloKey = normalizeCicloKey(body.ciclo)
-    const assignedPlantel = user.role === 'global' ? body.plantel : user.active_plantel
-    const assignedNivel = nivelFromPlantel(assignedPlantel)
+    const assignedPlantel = user.active_plantel && user.active_plantel !== 'GLOBAL'
+      ? user.active_plantel
+      : String(body.plantel || '').trim()
+
+    if (!assignedPlantel || assignedPlantel === 'GLOBAL') {
+      throw createError({ statusCode: 400, message: 'Selecciona un plantel activo para dar de alta alumnos.' })
+    }
+
+    const assignedNivel = resolveNivelEscolar({ plantel: assignedPlantel, nivel: body.nivel })
 
     await query(`
       INSERT INTO base (
@@ -138,7 +145,7 @@ export default defineEventHandler(async (event) => {
       '', 
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      body.birth, body.genero, assignedPlantel, assignedNivel, normalizeGradoForPlantel(body.grado, assignedPlantel), body.grupo,
+      body.birth, body.genero, assignedPlantel, assignedNivel, normalizeGradoForPlantel(body.grado, assignedPlantel, assignedNivel), body.grupo || '',
       body.padre, body.telefono, body.correo, user.name, cicloKey, body.estatus || 'Activo'
     ])
     return { success: true }

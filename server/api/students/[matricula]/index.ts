@@ -1,18 +1,17 @@
 import { executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
-import { nivelFromPlantel, normalizeGradoForPlantel } from '../../../../shared/utils/grado'
+import { normalizeGradoForPlantel, resolveNivelEscolar } from '../../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => {
   const matricula = event.context.params?.matricula
   const method = event.node.req.method
+  const user = event.context.user
 
   if (method === 'PUT') {
     const body = await readBody(event)
     const cicloKey = normalizeCicloKey(body.ciclo)
-    const plantel = String(body.plantel || '').trim()
-    const normalizedGrado = normalizeGradoForPlantel(body.grado, plantel)
     const [currentStudent] = await query<any[]>(
-      `SELECT plantel, grado, ciclo FROM base WHERE matricula = ? LIMIT 1`,
+      `SELECT plantel, nivel, grado, ciclo FROM base WHERE matricula = ? LIMIT 1`,
       [matricula]
     )
 
@@ -20,10 +19,21 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Alumno no encontrado' })
     }
 
-    const normalizedCurrentGrado = normalizeGradoForPlantel(currentStudent.grado, currentStudent.plantel || plantel)
+    const plantel = String(currentStudent.plantel || user?.active_plantel || body.plantel || '').trim()
+    if (!plantel || plantel === 'GLOBAL') {
+      throw createError({ statusCode: 400, message: 'El alumno no tiene un plantel válido.' })
+    }
+
+    const resolvedNivel = resolveNivelEscolar({
+      plantel,
+      nivel: body.nivelOverride ?? body.nivel ?? currentStudent.nivel
+    })
+    const normalizedGrado = normalizeGradoForPlantel(body.grado, plantel, resolvedNivel)
+    const normalizedCurrentGrado = normalizeGradoForPlantel(currentStudent.grado, plantel, currentStudent.nivel)
     const normalizedCurrentCiclo = currentStudent.ciclo ? normalizeCicloKey(currentStudent.ciclo) : ''
+    const normalizedCurrentNivel = resolveNivelEscolar({ plantel, nivel: currentStudent.nivel })
     const academicChangedByValue =
-      String(currentStudent.plantel || '').trim() !== plantel ||
+      normalizedCurrentNivel !== resolvedNivel ||
       normalizedCurrentGrado !== normalizedGrado ||
       normalizedCurrentCiclo !== cicloKey
     const hasAcademicChangedFlag = Object.prototype.hasOwnProperty.call(body, 'academicChanged')
@@ -55,9 +65,9 @@ export default defineEventHandler(async (event) => {
       body.birth,
       body.padre,
       plantel,
-      nivelFromPlantel(plantel),
+      resolvedNivel,
       normalizedGrado,
-      body.grupo,
+      body.grupo || '',
       body.telefono,
       body.correo
     ]

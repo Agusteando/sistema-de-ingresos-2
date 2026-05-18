@@ -103,20 +103,21 @@
                   <h3 id="academic-title">2. Información académica</h3>
                 </div>
 
-                <div class="field-stack compact">
-                  <label class="polished-field select-field">
-                    <span>Plantel</span>
-                    <select v-model="form.plantel" required>
-                      <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
-                    </select>
-                    <LucideChevronDown :size="18" aria-hidden="true" />
-                  </label>
+                <section class="academic-context-card" aria-label="Plantel activo y nivel calculado">
+                  <div>
+                    <span aria-hidden="true"><LucideBuilding2 :size="19" /></span>
+                    <p>Plantel activo</p>
+                    <strong>Plantel {{ form.plantel }}</strong>
+                  </div>
+                  <div>
+                    <span aria-hidden="true"><LucideSchool :size="19" /></span>
+                    <p>Nivel</p>
+                    <strong>{{ academicNivel }}</strong>
+                  </div>
+                </section>
 
+                <div class="field-stack compact">
                   <div class="two-field-grid">
-                    <label class="polished-field readonly-field">
-                      <span>Nivel</span>
-                      <input type="text" :value="derivedNivel" disabled />
-                    </label>
                     <label class="polished-field select-field">
                       <span>Grado</span>
                       <select v-model="form.grado" required>
@@ -124,17 +125,16 @@
                       </select>
                       <LucideChevronDown :size="18" aria-hidden="true" />
                     </label>
+                    <label class="polished-field select-field">
+                      <span>Grupo</span>
+                      <select v-model="form.grupo" required>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                      </select>
+                      <LucideChevronDown :size="18" aria-hidden="true" />
+                    </label>
                   </div>
-
-                  <label class="polished-field select-field">
-                    <span>Grupo</span>
-                    <select v-model="form.grupo" required>
-                      <option value="A">A</option>
-                      <option value="B">B</option>
-                      <option value="C">C</option>
-                    </select>
-                    <LucideChevronDown :size="18" aria-hidden="true" />
-                  </label>
                 </div>
 
                 <Transition name="result-card" mode="out-in">
@@ -225,6 +225,14 @@
                     <span>Estatus</span>
                     <input v-model="form.estatus" type="text" required placeholder="Activo o motivo de baja" />
                   </label>
+                  <label class="polished-field select-field">
+                    <span>Nivel manual</span>
+                    <select v-model="form.nivel">
+                      <option value="">Calculado por plantel ({{ inferredNivel }})</option>
+                      <option v-for="nivel in nivelOptions" :key="nivel" :value="nivel">{{ nivel }}</option>
+                    </select>
+                    <LucideChevronDown :size="18" aria-hidden="true" />
+                  </label>
                   <div class="two-field-grid">
                     <label class="polished-field">
                       <span>Matrícula anterior</span>
@@ -243,7 +251,7 @@
           <footer class="student-form-footer">
             <div class="footer-note">
               <span aria-hidden="true"><LucideShieldCheck :size="23" /></span>
-              <p>El alta usa el ciclo seleccionado como ciclo de ingreso del alumno.</p>
+              <p>El alta usa el plantel activo y el ciclo seleccionado como datos base del alumno.</p>
             </div>
             <div class="footer-actions">
               <button class="student-form-cancel" type="button" :disabled="loading" @click="$emit('close')">Cancelar</button>
@@ -263,6 +271,7 @@
 <script setup>
 import { computed, ref, onMounted, watch } from 'vue'
 import {
+  LucideBuilding2,
   LucideCalendarDays,
   LucideCheck,
   LucideChevronDown,
@@ -272,18 +281,18 @@ import {
   LucideList,
   LucideLoader2,
   LucideSave,
+  LucideSchool,
   LucideShieldCheck,
   LucideUserPlus,
   LucideUserRound,
   LucideUsersRound,
   LucideX
 } from 'lucide-vue-next'
-import { PLANTELES_LIST } from '~/utils/constants'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
-import { displayGrado, gradeOptionsForPlantel, nivelFromPlantel } from '~/shared/utils/grado'
+import { NIVELES_ESCOLARES, displayGrado, gradeOptionsForPlantel, nivelFromPlantel, normalizeNivelEscolar, resolveNivelEscolar } from '~/shared/utils/grado'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 
 const props = defineProps({ student: Object })
@@ -293,8 +302,9 @@ const { show } = useToast()
 
 useScrollLock()
 
-const activePlantel = useCookie('auth_active_plantel').value || 'PT'
-const defaultPlantel = activePlantel === 'GLOBAL' ? 'PT' : activePlantel
+const activePlantel = String(useCookie('auth_active_plantel').value || 'PT').trim().toUpperCase()
+const userPlanteles = String(useCookie('auth_planteles').value || '').split(',').map(p => p.trim().toUpperCase()).filter(Boolean)
+const defaultPlantel = activePlantel && activePlantel !== 'GLOBAL' ? activePlantel : (userPlanteles[0] || 'PT')
 const isEdit = !!props.student
 const loading = ref(false)
 const showCyclePicker = ref(false)
@@ -307,19 +317,22 @@ const currentCicloLabel = computed(() => formatCicloLabel(currentCicloKey.value)
 
 const form = ref({
   matricula: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
-  birth: '', genero: '1', plantel: defaultPlantel, nivel: nivelFromPlantel(defaultPlantel), grado: 'Primero', grupo: 'A',
+  birth: '', genero: '1', plantel: defaultPlantel, nivel: '', grado: 'Primero', grupo: 'A',
   padre: '', telefono: '', correo: '', ciclo: currentCicloKey.value, estatus: 'Activo',
   matriculaAnterior: '', matriculaSiguiente: ''
 })
 
 const originalAcademic = ref({
   plantel: defaultPlantel,
+  nivel: nivelFromPlantel(defaultPlantel),
   grado: 'Primero',
   ciclo: currentCicloKey.value
 })
 
-const derivedNivel = computed(() => nivelFromPlantel(form.value.plantel))
-const availableGrades = computed(() => gradeOptionsForPlantel(form.value.plantel))
+const nivelOptions = NIVELES_ESCOLARES
+const inferredNivel = computed(() => nivelFromPlantel(form.value.plantel))
+const academicNivel = computed(() => resolveNivelEscolar({ plantel: form.value.plantel, nivel: form.value.nivel }))
+const availableGrades = computed(() => gradeOptionsForPlantel(form.value.plantel, academicNivel.value))
 const ingresoCicloLabel = computed(() => formatCicloLabel(form.value.ciclo))
 
 const visibleTipoIngreso = computed(() => resolveTipoIngreso({ ciclo: form.value.ciclo, cicloBase: form.value.ciclo }, currentCicloKey.value))
@@ -351,11 +364,13 @@ const academicChanged = computed(() => {
 
   const current = {
     plantel: String(form.value.plantel || '').trim(),
+    nivel: academicNivel.value,
     grado: displayGrado(form.value.grado || 'Primero').toLowerCase(),
     ciclo: normalizeCicloKey(form.value.ciclo)
   }
 
   return current.plantel !== originalAcademic.value.plantel ||
+    current.nivel !== originalAcademic.value.nivel ||
     current.grado !== originalAcademic.value.grado.toLowerCase() ||
     current.ciclo !== originalAcademic.value.ciclo
 })
@@ -393,8 +408,7 @@ const selectIngresoCiclo = (value) => {
   cycleChangedByUser.value = true
 }
 
-watch(() => form.value.plantel, () => {
-  form.value.nivel = derivedNivel.value
+watch([() => form.value.plantel, () => form.value.nivel], () => {
   const selected = availableGrades.value.find(g => g.toLowerCase() === String(form.value.grado || '').toLowerCase())
   form.value.grado = selected || availableGrades.value[0]
 }, { immediate: true })
@@ -420,7 +434,7 @@ onMounted(() => {
       birth: s.birth ? s.birth.split('T')[0] : '',
       genero: s.genero || '1',
       plantel: s.plantel || defaultPlantel,
-      nivel: nivelFromPlantel(s.plantel || defaultPlantel),
+      nivel: normalizeNivelEscolar(s.nivel) && normalizeNivelEscolar(s.nivel) !== nivelFromPlantel(s.plantel || defaultPlantel) ? normalizeNivelEscolar(s.nivel) : '',
       grado: displayGrado(s.gradoBase || s.grado || 'Primero'),
       grupo: s.grupo || 'A',
       padre: s.padre || '',
@@ -433,6 +447,7 @@ onMounted(() => {
     }
     originalAcademic.value = {
       plantel: String(form.value.plantel || '').trim(),
+      nivel: academicNivel.value,
       grado: displayGrado(form.value.grado || 'Primero'),
       ciclo: normalizeCicloKey(form.value.ciclo)
     }
@@ -487,7 +502,8 @@ const submit = async () => {
       method,
       body: {
         ...form.value,
-        nivel: derivedNivel.value,
+        nivel: form.value.nivel,
+        resolvedNivel: academicNivel.value,
         ciclo: cicloKey,
         academicChanged: academicChanged.value
       }
@@ -868,6 +884,71 @@ const submit = async () => {
   height: 1px;
   margin: 32px 0 24px;
   background: linear-gradient(90deg, rgba(203, 213, 225, 0), rgba(203, 213, 225, 0.88), rgba(203, 213, 225, 0));
+}
+
+
+.academic-context-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 17px;
+}
+
+.academic-context-card > div {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  grid-template-areas:
+    "icon label"
+    "icon value";
+  align-items: center;
+  column-gap: 12px;
+  min-height: 62px;
+  padding: 12px 14px;
+  border: 1px solid #d7e0ef;
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.9)),
+    #fff;
+}
+
+.academic-context-card span {
+  grid-area: icon;
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #edf4ff;
+  color: #256ee4;
+}
+
+.academic-context-card > div:nth-child(2) span {
+  background: #eaf8ed;
+  color: #2f9339;
+}
+
+.academic-context-card p {
+  grid-area: label;
+  margin: 0;
+  color: #6a7893;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.academic-context-card strong {
+  grid-area: value;
+  min-width: 0;
+  overflow: hidden;
+  color: #142340;
+  font-size: 16px;
+  font-weight: 920;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .alta-ingreso-card {
@@ -1448,7 +1529,8 @@ const submit = async () => {
     height: 50px;
   }
 
-  .alta-ingreso-card {
+  
+.alta-ingreso-card {
     margin-top: 16px;
     padding: 18px 20px;
   }
@@ -1508,6 +1590,7 @@ const submit = async () => {
     padding: 24px 22px;
   }
 
+  .academic-context-card,
   .two-field-grid,
   .cycle-tile-grid,
   .older-cycle-grid {

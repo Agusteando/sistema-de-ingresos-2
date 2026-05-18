@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const user = event.context.user
 
   const [studentRef] = await query<any[]>(
-    `SELECT matricula, plantel, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
+    `SELECT matricula, plantel, nivel as nivelBase, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
     [body.matricula]
   )
 
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (isOutOfScopeForPlantelCiclo(studentRef.gradoBase, studentRef.plantel, studentRef.cicloBase, cicloKey)) {
+  if (isOutOfScopeForPlantelCiclo(studentRef.gradoBase, studentRef.plantel, studentRef.cicloBase, cicloKey, studentRef.nivelBase)) {
     throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
   

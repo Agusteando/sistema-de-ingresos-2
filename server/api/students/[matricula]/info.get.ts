@@ -1,5 +1,5 @@
 import { query } from '../../../utils/db'
-import { nivelFromPlantel } from '../../../../shared/utils/grado'
+import { resolveNivelEscolar } from '../../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => {
   const matricula = event.context.params?.matricula
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
   if (rows[0]) {
     return {
       ...rows[0],
-      nivel: nivelFromPlantel(rows[0].plantel),
+      nivel: resolveNivelEscolar(rows[0]),
       padre: rows[0]['Nombre del padre o tutor'] || '',
       birth: rows[0]['Fecha de nacimiento'] || ''
     }

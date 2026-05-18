@@ -35,6 +35,7 @@ export default defineEventHandler(async (event) => {
       r.folio,
       r.monto,
       A.grado as gradoBase,
+      A.nivel as nivelBase,
       A.ciclo as cicloBase,
       COALESCE(A.plantel, r.plantel) as plantel
     FROM referenciasdepago r
@@ -46,7 +47,7 @@ export default defineEventHandler(async (event) => {
   const grouped = new Map<string, any>()
 
   rows
-    .filter(row => !isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey))
+    .filter(row => !isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase))
     .forEach((row) => {
       const fecha = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : String(row.fecha).slice(0, 10)
       const key = `${fecha}|${row.formaDePago}|${row.categoria}`

@@ -2,6 +2,8 @@ import { normalizeCicloKey } from './ciclo'
 
 export const GRADOS_NORMALIZADOS = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto']
 export const GRADOS_DISPLAY = ['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto']
+export const NIVELES_ESCOLARES = ['Preescolar', 'Primaria', 'Secundaria'] as const
+export type NivelEscolar = typeof NIVELES_ESCOLARES[number]
 
 const PRIMARIA_PLANTELES = new Set(['PM', 'PT'])
 const SECUNDARIA_PLANTELES = new Set(['SM', 'ST'])
@@ -29,18 +31,54 @@ const GRADO_NUMERICO: Record<string, string> = {
   sexto: 'sexto'
 }
 
+const NIVEL_NORMALIZADO: Record<string, NivelEscolar> = {
+  preescolar: 'Preescolar',
+  kinder: 'Preescolar',
+  jardin: 'Preescolar',
+  primaria: 'Primaria',
+  prim: 'Primaria',
+  secundaria: 'Secundaria',
+  sec: 'Secundaria'
+}
+
+const normalizeText = (value: unknown) => String(value || '')
+  .toLowerCase()
+  .trim()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+
 export const normalizePlantel = (plantel: unknown) => String(plantel || '').trim().toUpperCase()
 
-export const nivelFromPlantel = (plantel: unknown) => {
+export const normalizeNivelEscolar = (nivel: unknown): NivelEscolar | '' => {
+  const normalized = normalizeText(nivel)
+  if (!normalized || normalized === 'null' || normalized === 'undefined') return ''
+  return NIVEL_NORMALIZADO[normalized] || ''
+}
+
+export const nivelFromPlantel = (plantel: unknown): NivelEscolar => {
   const normalized = normalizePlantel(plantel)
   if (PRIMARIA_PLANTELES.has(normalized)) return 'Primaria'
   if (SECUNDARIA_PLANTELES.has(normalized)) return 'Secundaria'
   return 'Preescolar'
 }
 
-export const maxGradoForPlantel = (plantel: unknown) => {
-  const normalized = normalizePlantel(plantel)
-  return PRIMARIA_PLANTELES.has(normalized) ? 6 : 3
+export const resolveNivelEscolar = (input: unknown, nivelOverride?: unknown): NivelEscolar => {
+  if (typeof input === 'object' && input !== null) {
+    const source = input as Record<string, unknown>
+    const explicit = normalizeNivelEscolar(nivelOverride ?? source.nivelOverride ?? source.nivelBase ?? source.nivel)
+    if (explicit) return explicit
+    return nivelFromPlantel(source.plantel)
+  }
+
+  const explicit = normalizeNivelEscolar(nivelOverride)
+  if (explicit) return explicit
+  return nivelFromPlantel(input)
+}
+
+export const maxGradoForNivel = (nivel: unknown) => normalizeNivelEscolar(nivel) === 'Primaria' ? 6 : 3
+
+export const maxGradoForPlantel = (plantel: unknown, nivelOverride?: unknown) => {
+  return maxGradoForNivel(resolveNivelEscolar(plantel, nivelOverride))
 }
 
 export const normalizeGrado = (grado: unknown) => {
@@ -54,9 +92,9 @@ export const normalizeGrado = (grado: unknown) => {
   return GRADO_NUMERICO[key] || 'primero'
 }
 
-export const normalizeGradoForPlantel = (grado: unknown, plantel: unknown) => {
+export const normalizeGradoForPlantel = (grado: unknown, plantel: unknown, nivelOverride?: unknown) => {
   const normalized = normalizeGrado(grado)
-  const max = maxGradoForPlantel(plantel)
+  const max = maxGradoForPlantel(plantel, nivelOverride)
   const index = GRADOS_NORMALIZADOS.indexOf(normalized)
   return GRADOS_NORMALIZADOS[Math.min(Math.max(index, 0), max - 1)]
 }
@@ -67,19 +105,24 @@ export const displayGrado = (grado: unknown) => {
   return g.charAt(0).toUpperCase() + g.slice(1)
 }
 
-export const gradeOptionsForPlantel = (plantel: unknown) => {
-  return GRADOS_DISPLAY.slice(0, maxGradoForPlantel(plantel))
+export const gradeOptionsForNivel = (nivel: unknown) => {
+  return GRADOS_DISPLAY.slice(0, maxGradoForNivel(nivel))
+}
+
+export const gradeOptionsForPlantel = (plantel: unknown, nivelOverride?: unknown) => {
+  return gradeOptionsForNivel(resolveNivelEscolar(plantel, nivelOverride))
 }
 
 export const calculatePromotedGrado = (
   gradoBase: unknown,
   plantel: unknown,
   cicloBase: unknown,
-  selectedCiclo: unknown
+  selectedCiclo: unknown,
+  nivelOverride?: unknown
 ) => {
-  const normalizedGrado = normalizeGradoForPlantel(gradoBase, plantel)
-  const nivel = nivelFromPlantel(plantel)
-  const max = maxGradoForPlantel(plantel)
+  const nivel = resolveNivelEscolar(plantel, nivelOverride)
+  const normalizedGrado = normalizeGradoForPlantel(gradoBase, plantel, nivel)
+  const max = maxGradoForNivel(nivel)
   const baseIndex = GRADOS_NORMALIZADOS.indexOf(normalizedGrado)
 
   if (!cicloBase || !selectedCiclo) {
@@ -113,12 +156,14 @@ export const isOutOfScopeForPlantelCiclo = (
   gradoBase: unknown,
   plantel: unknown,
   cicloBase: unknown,
-  selectedCiclo: unknown
-) => calculatePromotedGrado(gradoBase, plantel, cicloBase, selectedCiclo).outOfScope
+  selectedCiclo: unknown,
+  nivelOverride?: unknown
+) => calculatePromotedGrado(gradoBase, plantel, cicloBase, selectedCiclo, nivelOverride).outOfScope
 
 export const isInScopeForPlantelCiclo = (
   gradoBase: unknown,
   plantel: unknown,
   cicloBase: unknown,
-  selectedCiclo: unknown
-) => !isOutOfScopeForPlantelCiclo(gradoBase, plantel, cicloBase, selectedCiclo)
+  selectedCiclo: unknown,
+  nivelOverride?: unknown
+) => !isOutOfScopeForPlantelCiclo(gradoBase, plantel, cicloBase, selectedCiclo, nivelOverride)
