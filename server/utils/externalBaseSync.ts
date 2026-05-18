@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import { executeStatementTransaction, query, type SqlStatement } from './db'
-import { nivelFromPlantel, normalizeGradoForPlantel } from '../../shared/utils/grado'
+import { normalizeGradoForPlantel, resolveNivelEscolar } from '../../shared/utils/grado'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
 
 export type SyncCounters = {
@@ -590,8 +590,8 @@ export function mapExternalRow(row: any, plantel: string) {
     apellidoPaterno: firstPayloadValue(row, ['apellido_paterno', 'apellidoPaterno', 'primer_apellido']),
     apellidoMaterno: firstPayloadValue(row, ['apellido_materno', 'apellidoMaterno', 'segundo_apellido']),
     nombres: firstPayloadValue(row, ['nombres', 'nombre', 'nombre_alumno', 'nombreAlumno']),
-    nivel: nivelFromPlantel(plantel),
-    grado: normalizeGradoForPlantel(firstPayloadValue(row, ['grado', 'grado_actual', 'gradoActual']) || 'Primero', plantel),
+    nivel: resolveNivelEscolar({ plantel, nivel: firstPayloadValue(row, ['nivel', 'nivel_actual', 'nivelActual']) }),
+    grado: normalizeGradoForPlantel(firstPayloadValue(row, ['grado', 'grado_actual', 'gradoActual']) || 'Primero', plantel, firstPayloadValue(row, ['nivel', 'nivel_actual', 'nivelActual'])),
     grupo: firstPayloadValue(row, ['grupo', 'grupo_actual', 'grupoActual']) || 'A',
     correo: firstPayloadValue(row, [
       'email_tutor',

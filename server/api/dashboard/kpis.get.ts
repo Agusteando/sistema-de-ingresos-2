@@ -27,6 +27,7 @@ export default defineEventHandler(async (event) => {
       A.ciclo as cicloBase,
       A.ciclo,
       A.plantel,
+      A.nivel as nivelBase,
       B.conceptosPagados,
       C.conceptosCargados,
       BPrev.conceptosPagadosPrevios,
@@ -62,17 +63,17 @@ export default defineEventHandler(async (event) => {
   `, alumnosParams)
 
   const alumnosInScope = alumnosRows.filter(row => (
-    !isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey)
+    !isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase)
   ))
   
   const ingresosRows = await query<any[]>(`
-    SELECT r.monto, A.grado as gradoBase, A.ciclo as cicloBase, COALESCE(A.plantel, r.plantel) as plantel
+    SELECT r.monto, A.grado as gradoBase, A.ciclo as cicloBase, A.nivel as nivelBase, COALESCE(A.plantel, r.plantel) as plantel
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${ingresosWhere}
   `, paramArr)
   const ingresosMes = ingresosRows
-    .filter(row => !isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey))
+    .filter(row => !isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase))
     .reduce((sum, row) => sum + Number(row.monto || 0), 0)
 
   const [conceptosData] = await query<any[]>(`SELECT COUNT(*) as total FROM conceptos WHERE ciclo = ?`, [cicloKey])

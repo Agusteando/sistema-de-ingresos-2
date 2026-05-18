@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   const [doc] = await query<any[]>(`
     SELECT
       D.documento, D.matricula, D.ciclo, D.estatus, D.montoFinal,
-      B.plantel, B.grado as gradoBase, B.ciclo as cicloBase
+      B.plantel, B.nivel as nivelBase, B.grado as gradoBase, B.ciclo as cicloBase
     FROM documentos D
     LEFT JOIN base B ON B.matricula = D.matricula
     WHERE D.documento = ? AND D.ciclo = ?
@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (isOutOfScopeForPlantelCiclo(doc.gradoBase, doc.plantel, doc.cicloBase, cicloKey)) {
+  if (isOutOfScopeForPlantelCiclo(doc.gradoBase, doc.plantel, doc.cicloBase, cicloKey, doc.nivelBase)) {
     throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 

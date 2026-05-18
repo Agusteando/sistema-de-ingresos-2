@@ -265,7 +265,7 @@ export const getDeudoresGlobal = async ({
 
   if (matriculaFiltro) {
     const alumnosActivos = await query<any[]>(`
-      SELECT matricula, nombreCompleto, grado, grupo, plantel, correo, telefono, \`Nombre del padre o tutor\` as padre
+      SELECT matricula, nombreCompleto, nivel, grado, grupo, plantel, ciclo, correo, telefono, \`Nombre del padre o tutor\` as padre
       FROM base
       WHERE estatus = 'Activo' AND matricula = ? ${plantel ? 'AND plantel = ?' : ''}
     `, plantel ? [matriculaFiltro, plantel] : [matriculaFiltro])
@@ -282,7 +282,7 @@ export const getDeudoresGlobal = async ({
     documentos = docs.map(doc => ({ ...doc, ...alumno }))
   } else if (plantel) {
     const alumnosActivos = await query<any[]>(`
-      SELECT matricula, nombreCompleto, grado, grupo, plantel, correo, telefono, \`Nombre del padre o tutor\` as padre
+      SELECT matricula, nombreCompleto, nivel, grado, grupo, plantel, ciclo, correo, telefono, \`Nombre del padre o tutor\` as padre
       FROM base
       WHERE estatus = 'Activo' AND plantel = ?
     `, [plantel])
@@ -311,7 +311,7 @@ export const getDeudoresGlobal = async ({
 
     const matriculasDocs = [...new Set(docs.map(doc => String(doc.matricula)))]
     const alumnosActivos = await query<any[]>(`
-      SELECT matricula, nombreCompleto, grado, grupo, plantel, correo, telefono, \`Nombre del padre o tutor\` as padre
+      SELECT matricula, nombreCompleto, nivel, grado, grupo, plantel, ciclo, correo, telefono, \`Nombre del padre o tutor\` as padre
       FROM base
       WHERE estatus = 'Activo' AND matricula IN (${matriculasDocs.map(() => '?').join(',')})
     `, matriculasDocs)

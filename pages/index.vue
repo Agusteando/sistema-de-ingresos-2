@@ -161,7 +161,8 @@ import {
   photoStorageKey,
   sectionIdFromFilter,
   studentGroupLabel,
-  studentHasSection
+  studentHasSection,
+  studentNivelLabel
 } from '~/shared/utils/studentPresentation'
 import StudentsHero from '~/components/students/StudentsHero.vue'
 import StudentsKpiSummary from '~/components/students/StudentsKpiSummary.vue'
@@ -664,7 +665,7 @@ const exportData = () => {
       Ciclo_Ingreso: s.cicloBase || s.ciclo || '',
       Tipo_Fuente: tipoIngreso.source,
       Tipo_Razon: tipoIngreso.reason,
-      Nivel: s.nivel,
+      Nivel: studentNivelLabel(s),
       Grado: s.grado,
       Grupo: s.grupo,
       Plantel: s.plantel || '',

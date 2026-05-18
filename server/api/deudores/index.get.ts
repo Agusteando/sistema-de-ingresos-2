@@ -1,6 +1,6 @@
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { getDeudoresGlobal } from '../../utils/deudores'
-import { calculatePromotedGrado, displayGrado, nivelFromPlantel } from '../../../shared/utils/grado'
+import { calculatePromotedGrado, displayGrado, resolveNivelEscolar } from '../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => {
   const { ciclo = '2025', estatus = 'deudores', detalles = '0' } = getQuery(event)
@@ -20,11 +20,11 @@ export default defineEventHandler(async (event) => {
   })
 
   const enriched = rows.map((row) => {
-    const promoted = calculatePromotedGrado(row.grado, row.plantel, cicloKey, cicloKey)
+    const promoted = calculatePromotedGrado(row.grado, row.plantel, row.ciclo || cicloKey, cicloKey, row.nivel)
     return {
       ...row,
       grado: displayGrado(promoted.grado),
-      nivel: nivelFromPlantel(row.plantel)
+      nivel: resolveNivelEscolar(row)
     }
   })
 

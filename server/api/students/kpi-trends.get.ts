@@ -77,6 +77,7 @@ export default defineEventHandler(async (event) => {
       A.ciclo AS cicloBase,
       A.ciclo,
       A.plantel,
+      A.nivel AS nivelBase,
       BPrev.conceptosPagadosPrevios,
       CPrev.conceptosCargadosPrevios,
       CONCAT_WS('|', BPrev.conceptosPagadosPrevios, CPrev.conceptosCargadosPrevios) AS conceptosCicloPrevio
@@ -114,6 +115,7 @@ export default defineEventHandler(async (event) => {
       r.monto,
       A.grado AS gradoBase,
       A.ciclo AS cicloBase,
+      A.nivel AS nivelBase,
       COALESCE(A.plantel, r.plantel) AS plantel
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
@@ -129,7 +131,7 @@ export default defineEventHandler(async (event) => {
   const buckets = new Set<string>()
 
   enrollmentRows.forEach((row) => {
-    if (isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey)) return
+    if (isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase)) return
     const bucket = dateBucket(row.firstEnrollmentAt)
     if (!bucket) return
     buckets.add(bucket)
@@ -149,7 +151,7 @@ export default defineEventHandler(async (event) => {
   })
 
   incomeRows.forEach((row) => {
-    if (isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey)) return
+    if (isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase)) return
     const bucket = dateBucket(row.fecha)
     if (!bucket) return
     buckets.add(bucket)

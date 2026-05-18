@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     `
       SELECT
         D.documento, D.ciclo, D.matricula,
-        B.plantel, B.grado as gradoBase, B.ciclo as cicloBase
+        B.plantel, B.nivel as nivelBase, B.grado as gradoBase, B.ciclo as cicloBase
       FROM documentos D
       LEFT JOIN base B ON B.matricula = D.matricula
       WHERE D.documento = ?
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (isOutOfScopeForPlantelCiclo(doc.gradoBase, doc.plantel, doc.cicloBase, normalizeCicloKey(doc.ciclo))) {
+  if (isOutOfScopeForPlantelCiclo(doc.gradoBase, doc.plantel, doc.cicloBase, normalizeCicloKey(doc.ciclo), doc.nivelBase)) {
     throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 

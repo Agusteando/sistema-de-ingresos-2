@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
   const sql = `
     SELECT 
       A.matricula, A.nombreCompleto, A.apellidoPaterno, A.apellidoMaterno, A.nombres, A.genero,
-      A.grado as gradoBase, A.grupo, A.ciclo as cicloBase, A.ciclo, A.plantel, A.estatus,
+      A.grado as gradoBase, A.grupo, A.ciclo as cicloBase, A.ciclo, A.plantel, A.nivel as nivelBase, A.estatus,
       A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth,
       Prev.previous_matricula AS matriculaAnterior,
       Next.successor_matricula AS matriculaSiguiente,
@@ -97,7 +97,7 @@ export default defineEventHandler(async (event) => {
   const rows = await query<any[]>(sql, queryParams)
   
   const mapped = rows.flatMap(r => {
-    const promoted = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey)
+    const promoted = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey, r.nivelBase)
     if (promoted.outOfScope) return []
 
     const tipoIngreso = resolveTipoIngreso({

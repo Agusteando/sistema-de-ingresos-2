@@ -1,3 +1,4 @@
+import { resolveNivelEscolar } from './grado'
 import { studentGroupIconUrl } from './studentGroupIcons'
 
 export const formatMoney = (value: unknown) => Number(value || 0).toFixed(2)
@@ -78,6 +79,12 @@ export const gradeAccentStyle = (student: any) => {
   }
 }
 
+
+export const studentNivelLabel = (student: any) => {
+  const nivel = resolveNivelEscolar(student)
+  return nivel || 'Preescolar'
+}
+
 export const gradeVisualTitle = (student: any) => {
   const number = gradeNumberValue(student?.grado)
   const grado = String(student?.grado || '').trim()
@@ -109,7 +116,7 @@ export const isStudentEnrolled = (student: any, enrollmentConcepts: string[] = [
 
 export const statusSecondaryLine = (student: any, enrollmentConcepts: string[] = []) => {
   const parts = []
-  if (student?.nivel && String(student.nivel).toLowerCase() !== 'null') parts.push(student.nivel)
+  parts.push(studentNivelLabel(student))
   const group = studentGroupLabel(student)
   if (group) parts.push(group)
   if (student?.estatus !== 'Activo') return parts[0] || 'Alumno'

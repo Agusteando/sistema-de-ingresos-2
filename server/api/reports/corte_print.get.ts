@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
       r.folio, r.fecha, r.matricula, r.documento, r.mes, r.nombreCompleto,
       r.conceptoNombre, r.monto, r.formaDePago, r.plantel, r.instituto,
       A.grado as gradoBase,
+      A.nivel as nivelBase,
       A.ciclo as cicloBase,
       COALESCE(A.plantel, r.plantel) as scopePlantel
     FROM referenciasdepago r
@@ -41,7 +42,7 @@ export default defineEventHandler(async (event) => {
   `, params)
 
   const rows = rawRows.filter(row => (
-    !isOutOfScopeForPlantelCiclo(row.gradoBase, row.scopePlantel, row.cicloBase, cicloKey)
+    !isOutOfScopeForPlantelCiclo(row.gradoBase, row.scopePlantel, row.cicloBase, cicloKey, row.nivelBase)
   ))
 
   const totalsMap = new Map<string, number>()
