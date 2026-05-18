@@ -1,20 +1,18 @@
-Implement ciclo-scoped tipo de ingreso resolution
+Refine ciclo de ingreso UI without changing core behavior
 
-Treat base.ciclo as the student's ciclo de ingreso and resolve Interno/Externo per selected ciclo through one shared resolver. The ingreso cycle is Externo, later selected cycles resolve as Interno from the ingreso anchor and can be confirmed by inscripción/reinscripción concepts in both the target and immediately previous ciclo. Missing prior-cycle migrated concepts are not used to infer Externo.
+Keep the ciclo-scoped Interno/Externo resolver and data flow intact while reducing UI clutter around the resolved tipo de ingreso labels and ingreso-cycle correction modal.
 
 Changes:
-- Added shared tipo de ingreso resolver in shared/utils/tipoIngreso.ts and server/utils/resolveTipoIngreso.ts.
-- Updated student list/detail data, filters, KPI counts, KPI trends, table chips, and CSV exports to use the resolver instead of raw base.interno.
-- Preserved base.interno as a legacy compatibility field and fallback only when base.ciclo is missing or invalid.
-- Added an Estado de Cuenta badge that clearly shows the resolved Interno/Externo value for the selected ciclo.
-- Added the "¿Cuándo ingresó?" correction action and modal with student context, selected ciclo, resolved status, current ingreso cycle, ingreso-cycle selector, timeline simulation, and grade progression preview.
-- Saving the modal updates base.ciclo and mirrors base.interno = 0, then recomputes the selected student's resolved tipo de ingreso without a full page reload.
-- Updated exports to be ciclo-aware and include the resolved tipo de ingreso metadata plus available contact/synced fields.
-- Adjusted external base sync so existing user-corrected base.ciclo values are not overwritten by the current sync cycle.
+- Simplified the Estado de Cuenta Interno/Externo badge to show only the resolved value for the selected ciclo, with resolver details kept in the hover title instead of visible helper text.
+- Matched the student-list tipo de ingreso chips to the cleaner pill treatment: icon plus Interno/Externo label, no uppercase/source/ciclo clutter.
+- Removed the duplicate "¿Cuándo ingresó?" toolbar button so the correction action remains available through the top icon next to the existing header actions without crowding the action row.
+- Teleported the ingreso-cycle modal to document body so it opens over the main screen instead of being constrained by the scaled secondary panel.
+- Removed the user-facing "Simulación" framing and replaced the modal explanation with shorter final-user copy.
+- Kept the timeline/progression preview, but presented it as a quieter cycle view.
 
 Validation:
 - npm ci --ignore-scripts passed.
-- npm run build passed.
+- npm run build completed the client build, but the server build step exceeded the execution timeout while transforming and did not return a final success/failure signal in this environment.
 
 Note:
 - npm ci reported the existing dependency audit status: 5 vulnerabilities (4 moderate, 1 high).

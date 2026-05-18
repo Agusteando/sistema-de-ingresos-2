@@ -292,20 +292,26 @@
 .student-tipo-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 17px;
-  padding: 0 6px;
+  gap: 4px;
+  min-height: 20px;
+  padding: 0 7px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 10px;
   font-style: normal;
-  font-weight: 850;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: none;
+}
+
+.student-tipo-chip svg {
+  flex: 0 0 auto;
 }
 
 .student-tipo-chip.interno {
-  border: 1px solid rgba(22, 159, 150, .18);
-  background: rgba(22, 159, 150, .08);
-  color: #16877f;
+  border: 1px solid rgba(47, 127, 50, .18);
+  background: rgba(47, 127, 50, .075);
+  color: #2f7f32;
 }
 
 .student-tipo-chip.externo {
@@ -313,3 +319,4 @@
   background: rgba(65, 112, 205, .075);
   color: #2f62b8;
 }
+

@@ -1,84 +1,82 @@
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal-container ingreso-cycle-modal">
-      <div class="modal-header ingreso-cycle-header">
-        <div class="ingreso-student-context">
-          <span class="ingreso-avatar" aria-hidden="true">
-            <img v-if="photoUrl" :src="photoUrl" alt="" />
-            <span v-else>{{ initials }}</span>
-          </span>
-          <span>
-            <h2 class="modal-title">¿Cuándo ingresó este alumno?</h2>
-            <p class="modal-subtitle">{{ student?.nombreCompleto }}</p>
-          </span>
+  <Teleport to="body">
+    <div class="modal-overlay ingreso-cycle-overlay" @click.self="$emit('close')">
+      <div class="modal-container ingreso-cycle-modal">
+        <div class="modal-header ingreso-cycle-header">
+          <div class="ingreso-student-context">
+            <span class="ingreso-avatar" aria-hidden="true">
+              <img v-if="photoUrl" :src="photoUrl" alt="" />
+              <span v-else>{{ initials }}</span>
+            </span>
+            <span class="ingreso-title-copy">
+              <h2 class="modal-title">¿Cuándo ingresó este alumno?</h2>
+              <p class="modal-subtitle">{{ student?.nombreCompleto }}</p>
+            </span>
+          </div>
+          <button class="modal-icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+            <LucideX :size="18" />
+          </button>
         </div>
-        <button class="modal-icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
-          <LucideX :size="18" />
-        </button>
-      </div>
 
-      <div class="modal-content ingreso-cycle-content">
-        <section class="ingreso-current-state">
-          <div>
-            <span>Ciclo seleccionado</span>
-            <strong>{{ formatCicloLabel(targetCicloKey) }}</strong>
-          </div>
-          <div>
-            <span>Estado resuelto ahora</span>
-            <strong :class="['ingreso-status-pill', currentTipoIngreso.value]">{{ currentTipoIngresoLabel }}</strong>
-          </div>
-          <div>
-            <span>Ingreso registrado</span>
-            <strong>{{ formatCicloLabel(currentIngresoCicloKey) }}</strong>
-          </div>
-        </section>
-
-        <label class="ingreso-cycle-field">
-          <span>Ciclo de ingreso</span>
-          <select v-model="selectedIngresoCiclo" class="input-field">
-            <option v-for="option in cicloOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
-
-        <p class="ingreso-explanation">
-          El ciclo de ingreso es el ciclo donde este alumno se considera <strong>Externo</strong>. En ciclos posteriores se resolverá como <strong>Interno</strong> para el ciclo seleccionado, usando el mismo criterio en detalles, KPIs, filtros, tablas y exportaciones.
-        </p>
-
-        <section class="ingreso-simulation" aria-label="Simulación de ciclos">
-          <header>
-            <LucideGitBranch :size="15" />
-            <span>Simulación</span>
-          </header>
-          <div class="ingreso-timeline">
-            <div
-              v-for="item in timelineItems"
-              :key="item.ciclo"
-              :class="['ingreso-timeline-item', item.tipo.value, { selected: item.ciclo === targetCicloKey, anchor: item.ciclo === selectedIngresoCiclo }]"
-            >
-              <span class="timeline-cycle">{{ item.label }}</span>
-              <strong>{{ item.tipoLabel }}</strong>
-              <small>{{ item.gradeLabel }}</small>
+        <div class="modal-content ingreso-cycle-content">
+          <section class="ingreso-current-state" aria-label="Estado actual">
+            <div>
+              <span>Ciclo actual</span>
+              <strong>{{ formatCicloLabel(targetCicloKey) }}</strong>
             </div>
-          </div>
-        </section>
-      </div>
+            <div>
+              <span>Tipo en este ciclo</span>
+              <strong :class="['ingreso-status-pill', currentTipoIngreso.value]">{{ currentTipoIngresoLabel }}</strong>
+            </div>
+            <div>
+              <span>Ingreso registrado</span>
+              <strong>{{ formatCicloLabel(currentIngresoCicloKey) }}</strong>
+            </div>
+          </section>
 
-      <div class="modal-footer ingreso-cycle-footer">
-        <button class="btn btn-ghost" type="button" :disabled="saving" @click="$emit('close')">Cancelar</button>
-        <button class="btn btn-primary" type="button" :disabled="saving || selectedIngresoCiclo === currentIngresoCicloKey" @click="confirmSelection">
-          <LucideLoader2 v-if="saving" class="animate-spin" :size="15" />
-          Guardar ciclo de ingreso
-        </button>
+          <label class="ingreso-cycle-field">
+            <span>Ciclo de ingreso</span>
+            <select v-model="selectedIngresoCiclo" class="input-field">
+              <option v-for="option in cicloOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+
+          <p class="ingreso-explanation">
+            Elige el ciclo en que el alumno entró al plantel. Ese ciclo se muestra como <strong>Externo</strong>; los ciclos posteriores se muestran como <strong>Interno</strong> cuando corresponda.
+          </p>
+
+          <section class="ingreso-timeline-panel" aria-label="Vista por ciclo">
+            <div class="ingreso-timeline">
+              <div
+                v-for="item in timelineItems"
+                :key="item.ciclo"
+                :class="['ingreso-timeline-item', item.tipo.value, { selected: item.ciclo === targetCicloKey, anchor: item.ciclo === selectedIngresoCiclo }]"
+              >
+                <span class="timeline-cycle">{{ item.label }}</span>
+                <strong>{{ item.tipoLabel }}</strong>
+                <small>{{ item.gradeLabel }}<template v-if="item.ciclo === targetCicloKey"> · ciclo actual</template></small>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="modal-footer ingreso-cycle-footer">
+          <button class="btn btn-ghost" type="button" :disabled="saving" @click="$emit('close')">Cancelar</button>
+          <button class="btn btn-primary" type="button" :disabled="saving || selectedIngresoCiclo === currentIngresoCicloKey" @click="confirmSelection">
+            <LucideLoader2 v-if="saving" class="animate-spin" :size="15" />
+            Guardar ciclo de ingreso
+          </button>
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { LucideGitBranch, LucideLoader2, LucideX } from 'lucide-vue-next'
+import { LucideLoader2, LucideX } from 'lucide-vue-next'
 import { CICLOS_LIST } from '~/utils/constants'
 import { formatCicloLabel } from '~/shared/utils/ciclo'
 import { calculatePromotedGrado, displayGrado } from '~/shared/utils/grado'
@@ -151,7 +149,7 @@ const timelineItems = computed(() => {
 
       return {
         ciclo,
-        label: ciclo === anchor ? `Ingreso: ${formatCicloLabel(ciclo)}` : formatCicloLabel(ciclo),
+        label: ciclo === anchor ? `Ingreso · ${formatCicloLabel(ciclo)}` : formatCicloLabel(ciclo),
         tipo,
         tipoLabel: formatTipoIngresoValue(tipo),
         gradeLabel: projected.egresado ? 'Egresado' : displayGrado(projected.grado)
@@ -167,12 +165,17 @@ const confirmSelection = () => {
 </script>
 
 <style scoped>
+.ingreso-cycle-overlay {
+  z-index: 80;
+}
+
 .ingreso-cycle-modal {
-  width: min(620px, calc(100vw - 28px));
+  width: min(560px, calc(100vw - 28px));
 }
 
 .ingreso-cycle-header {
   align-items: center;
+  padding: 18px 20px;
 }
 
 .ingreso-student-context {
@@ -180,6 +183,12 @@ const confirmSelection = () => {
   min-width: 0;
   align-items: center;
   gap: 12px;
+}
+
+.ingreso-title-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
 }
 
 .ingreso-avatar {
@@ -191,7 +200,7 @@ const confirmSelection = () => {
   justify-content: center;
   overflow: hidden;
   border: 1px solid #dfe7f0;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #f6faf7;
   color: #2f7f32;
   font-size: 14px;
@@ -206,22 +215,23 @@ const confirmSelection = () => {
 
 .ingreso-cycle-content {
   display: grid;
-  gap: 16px;
+  gap: 14px;
+  padding: 18px 20px;
 }
 
 .ingreso-current-state {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .ingreso-current-state div {
   display: grid;
   gap: 5px;
   min-width: 0;
-  padding: 12px;
-  border: 1px solid #e3eaf2;
-  border-radius: 14px;
+  padding: 10px 11px;
+  border: 1px solid #e6edf4;
+  border-radius: 13px;
   background: #fbfcfd;
 }
 
@@ -230,32 +240,31 @@ const confirmSelection = () => {
   color: #74809a;
   font-size: 10px;
   font-weight: 850;
-  letter-spacing: .055em;
+  letter-spacing: .045em;
   text-transform: uppercase;
 }
 
 .ingreso-current-state strong {
   color: #17243c;
   font-size: 13px;
-  font-weight: 860;
+  font-weight: 850;
 }
 
 .ingreso-status-pill {
   display: inline-flex;
   width: fit-content;
   align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
+  min-height: 22px;
+  padding: 0 9px;
   border-radius: 999px;
   font-size: 11px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  font-weight: 820;
 }
 
 .ingreso-status-pill.interno {
-  border: 1px solid rgba(22, 159, 150, .22);
-  background: rgba(22, 159, 150, .09);
-  color: #16877f;
+  border: 1px solid rgba(47, 127, 50, .2);
+  background: rgba(47, 127, 50, .08);
+  color: #2f7f32;
 }
 
 .ingreso-status-pill.externo {
@@ -271,10 +280,6 @@ const confirmSelection = () => {
 
 .ingreso-explanation {
   margin: 0;
-  padding: 12px 14px;
-  border: 1px solid #e7edf4;
-  border-radius: 14px;
-  background: #fff;
   color: #5f6b83;
   font-size: 12.5px;
   font-weight: 590;
@@ -286,59 +291,49 @@ const confirmSelection = () => {
   font-weight: 850;
 }
 
-.ingreso-simulation {
+.ingreso-timeline-panel {
   display: grid;
-  gap: 10px;
-}
-
-.ingreso-simulation header {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #2f7f32;
-  font-size: 12px;
-  font-weight: 850;
 }
 
 .ingreso-timeline {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-  gap: 9px;
+  gap: 8px;
 }
 
 .ingreso-timeline-item {
   display: grid;
   gap: 4px;
-  min-height: 86px;
-  padding: 12px;
-  border: 1px solid #e3eaf2;
-  border-radius: 14px;
+  min-height: 78px;
+  padding: 11px;
+  border: 1px solid #e6edf4;
+  border-radius: 13px;
   background: #fbfcfd;
 }
 
 .ingreso-timeline-item.anchor {
-  border-color: rgba(65, 112, 205, .28);
+  border-color: rgba(65, 112, 205, .24);
   background: #f7faff;
 }
 
 .ingreso-timeline-item.selected {
-  box-shadow: inset 0 0 0 1px rgba(63, 145, 56, .22);
+  box-shadow: inset 0 0 0 1px rgba(63, 145, 56, .2);
 }
 
 .timeline-cycle {
   color: #6f7b95;
   font-size: 10.5px;
-  font-weight: 820;
+  font-weight: 810;
 }
 
 .ingreso-timeline-item strong {
   color: #17243c;
-  font-size: 15px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 890;
 }
 
 .ingreso-timeline-item.interno strong {
-  color: #16877f;
+  color: #2f7f32;
 }
 
 .ingreso-timeline-item.externo strong {
@@ -348,11 +343,12 @@ const confirmSelection = () => {
 .ingreso-timeline-item small {
   color: #74809a;
   font-size: 11px;
-  font-weight: 720;
+  font-weight: 700;
 }
 
 .ingreso-cycle-footer {
   gap: 10px;
+  padding: 14px 20px;
 }
 
 @media (max-width: 640px) {
