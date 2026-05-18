@@ -694,3 +694,147 @@
   color: #2f62b8;
 }
 
+
+.account-title-area {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-sync-indicator {
+  display: inline-flex;
+  width: 104px;
+  min-height: 22px;
+  align-items: center;
+  gap: 6px;
+  opacity: .82;
+  color: #6d7890;
+  font-size: 10.5px;
+  font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
+  transition: opacity 240ms ease, color 240ms ease;
+}
+
+.account-sync-indicator.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.account-sync-indicator i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #9eabc0;
+  box-shadow: 0 0 0 3px rgba(158, 171, 192, .12);
+}
+
+.account-sync-indicator.cached i {
+  background: #6f9fcb;
+  box-shadow: 0 0 0 3px rgba(111, 159, 203, .12);
+}
+
+.account-sync-indicator.syncing {
+  color: #5072a2;
+}
+
+.account-sync-indicator.syncing i {
+  background: #4f83c2;
+  box-shadow: 0 0 0 3px rgba(79, 131, 194, .14);
+  animation: account-sync-dot-breathe 1.8s ease-in-out infinite;
+}
+
+.account-sync-indicator.updated i {
+  background: #4c9a44;
+  box-shadow: 0 0 0 3px rgba(76, 154, 68, .12);
+}
+
+.account-sync-indicator.failed {
+  color: #9a7350;
+}
+
+.account-sync-indicator.failed i {
+  background: #c18a45;
+  box-shadow: 0 0 0 3px rgba(193, 138, 69, .12);
+}
+
+.account-table-wrap::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(
+      112deg,
+      transparent 0%,
+      rgba(63, 145, 56, .045) 24%,
+      rgba(255, 255, 255, .42) 42%,
+      rgba(47, 127, 50, .06) 60%,
+      transparent 82%
+    );
+  background-size: 230% 100%;
+  background-position: 130% 50%;
+  transition: opacity 420ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.account-card.is-account-refreshing .account-table-wrap::after {
+  opacity: 1;
+  animation: account-refresh-wash 2.8s cubic-bezier(.45, 0, .22, 1) infinite;
+}
+
+.account-card.is-account-refreshing .account-header h3,
+.account-card.is-account-refreshing .account-footer strong,
+.account-card.is-account-refreshing .concept-cell strong,
+.account-card.is-account-refreshing .money-cell {
+  animation: account-refresh-text-breathe 2.55s ease-in-out infinite;
+}
+
+.account-card.is-account-stale .account-header {
+  background: linear-gradient(180deg, #fff, #fffdf9);
+}
+
+@keyframes account-refresh-wash {
+  0% { background-position: 132% 50%; }
+  46% { background-position: 52% 50%; }
+  100% { background-position: -42% 50%; }
+}
+
+@keyframes account-refresh-text-breathe {
+  0%, 100% {
+    filter: saturate(1);
+  }
+  48% {
+    filter: saturate(1.16);
+  }
+}
+
+@keyframes account-sync-dot-breathe {
+  0%, 100% {
+    opacity: .72;
+    box-shadow: 0 0 0 3px rgba(79, 131, 194, .12);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 5px rgba(79, 131, 194, .08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-sync-indicator.syncing i,
+  .account-card.is-account-refreshing .account-table-wrap::after,
+  .account-card.is-account-refreshing .account-header h3,
+  .account-card.is-account-refreshing .account-footer strong,
+  .account-card.is-account-refreshing .concept-cell strong,
+  .account-card.is-account-refreshing .money-cell {
+    animation: none;
+  }
+
+  .account-card.is-account-refreshing .account-table-wrap::after {
+    opacity: .56;
+    background-position: 50% 50%;
+  }
+}
