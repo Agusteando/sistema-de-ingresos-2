@@ -51,7 +51,7 @@
 
       <div class="sidebar-footer">
         <div class="plantel-block" v-if="userPlanteles.length > 1 || userRole === 'global'">
-          <label>Plantel activo</label>
+          <label>Plantel</label>
           <div class="plantel-select">
             <LucideBuilding2 :size="21" />
             <select

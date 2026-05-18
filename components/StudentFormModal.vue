@@ -131,50 +131,28 @@
               <section class="form-panel academic-panel" aria-labelledby="academic-title">
                 <div class="section-heading blue">
                   <span aria-hidden="true"><LucideGraduationCap :size="25" /></span>
-                  <h3 id="academic-title">2. Información académica</h3>
+                  <h3 id="academic-title">2. Grado</h3>
                 </div>
 
-                <section class="academic-context-card" aria-label="Plantel activo y nivel calculado">
-                  <div>
-                    <span aria-hidden="true"><LucideBuilding2 :size="19" /></span>
-                    <p>Plantel activo</p>
-                    <strong>Plantel {{ form.plantel }}</strong>
-                  </div>
-                  <div>
-                    <span aria-hidden="true"><LucideSchool :size="19" /></span>
-                    <p>Nivel</p>
-                    <strong>{{ academicNivel }}</strong>
-                  </div>
-                </section>
+                <div class="field-stack compact academic-grade-only">
+                  <label class="polished-field select-field">
+                    <span>Grado</span>
+                    <select v-model="form.grado" required>
+                      <option v-for="g in availableGrades" :key="g" :value="g">{{ g }}</option>
+                    </select>
+                    <LucideChevronDown :size="18" aria-hidden="true" />
+                  </label>
 
-                <section v-if="!isEdit" class="matricula-preview-card" aria-label="Matrícula estimada">
-                  <span class="matricula-preview-icon" aria-hidden="true"><LucideInfo :size="20" /></span>
-                  <div>
-                    <p>Próxima matrícula estimada</p>
-                    <strong>{{ matriculaPreviewLoading ? 'Calculando...' : (matriculaPreview || 'Pendiente') }}</strong>
-                    <small>Solo es una vista previa. La matrícula real se genera automáticamente al guardar.</small>
-                  </div>
-                </section>
-
-                <div class="field-stack compact">
-                  <div class="two-field-grid">
-                    <label class="polished-field select-field">
-                      <span>Grado</span>
-                      <select v-model="form.grado" required>
-                        <option v-for="g in availableGrades" :key="g" :value="g">{{ g }}</option>
-                      </select>
-                      <LucideChevronDown :size="18" aria-hidden="true" />
-                    </label>
-                    <label class="polished-field select-field">
-                      <span>Grupo</span>
-                      <select v-model="form.grupo" required>
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                      </select>
-                      <LucideChevronDown :size="18" aria-hidden="true" />
-                    </label>
-                  </div>
+                  <label v-if="isEdit" class="polished-field select-field">
+                    <span>Grupo</span>
+                    <select v-model="form.grupo">
+                      <option value="">Sin grupo</option>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
+                    </select>
+                    <LucideChevronDown :size="18" aria-hidden="true" />
+                  </label>
                 </div>
 
                 <Transition name="result-card" mode="out-in">
@@ -288,10 +266,20 @@
             </div>
           </div>
 
-          <footer class="student-form-footer">
-            <div class="footer-note">
-              <span aria-hidden="true"><LucideShieldCheck :size="23" /></span>
-              <p>El alta usa el plantel activo y el ciclo seleccionado como datos base del alumno.</p>
+          <footer :class="['student-form-footer', { 'actions-only': isEdit }]">
+            <div v-if="!isEdit" class="footer-matricula-strip" aria-label="Secuencia de matrícula">
+              <div>
+                <span>Plantel</span>
+                <strong>{{ form.plantel }}</strong>
+              </div>
+              <div>
+                <span>Última matrícula</span>
+                <strong>{{ matriculaPreviewLoading ? '…' : (matriculaLast || '—') }}</strong>
+              </div>
+              <div>
+                <span>Nueva matrícula</span>
+                <strong>{{ matriculaPreviewLoading ? '…' : (matriculaNext || '—') }}</strong>
+              </div>
             </div>
             <div class="footer-actions">
               <button class="student-form-cancel" type="button" :disabled="loading" @click="$emit('close')">Cancelar</button>
@@ -311,7 +299,6 @@
 <script setup>
 import { computed, ref, onMounted, watch } from 'vue'
 import {
-  LucideBuilding2,
   LucideCalendarDays,
   LucideCheck,
   LucideChevronDown,
@@ -321,7 +308,6 @@ import {
   LucideList,
   LucideLoader2,
   LucideSave,
-  LucideSchool,
   LucideShieldCheck,
   LucideUserPlus,
   LucideUserRound,
@@ -348,7 +334,8 @@ const userPlanteles = String(useCookie('auth_planteles').value || '').split(',')
 const defaultPlantel = activePlantel && activePlantel !== 'GLOBAL' ? activePlantel : (userPlanteles[0] || 'PT')
 const isEdit = !!props.student
 const loading = ref(false)
-const matriculaPreview = ref('')
+const matriculaLast = ref('')
+const matriculaNext = ref('')
 const matriculaPreviewLoading = ref(false)
 const showCyclePicker = ref(false)
 const showOlderCycles = ref(false)
@@ -360,7 +347,7 @@ const currentCicloLabel = computed(() => formatCicloLabel(currentCicloKey.value)
 
 const form = ref({
   matricula: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
-  curp: '', birth: '', genero: '1', plantel: defaultPlantel, nivel: '', grado: 'Primero', grupo: 'A',
+  curp: '', birth: '', genero: '1', plantel: defaultPlantel, nivel: '', grado: 'Primero', grupo: '',
   padre: '', telefono: '', correo: '', ciclo: currentCicloKey.value, estatus: 'Activo',
   matriculaAnterior: '', matriculaSiguiente: ''
 })
@@ -554,16 +541,19 @@ const loadMatriculaPreview = async () => {
   if (isEdit) return
   const plantel = String(form.value.plantel || '').trim().toUpperCase()
   if (!plantel || plantel === 'GLOBAL') {
-    matriculaPreview.value = ''
+    matriculaLast.value = ''
+    matriculaNext.value = ''
     return
   }
 
   matriculaPreviewLoading.value = true
   try {
     const response = await $fetch('/api/students/matricula-preview', { query: { plantel } })
-    matriculaPreview.value = String(response?.preview || '')
+    matriculaLast.value = String(response?.lastMatricula || '')
+    matriculaNext.value = String(response?.nextMatricula || response?.preview || '')
   } catch (error) {
-    matriculaPreview.value = ''
+    matriculaLast.value = ''
+    matriculaNext.value = ''
   } finally {
     matriculaPreviewLoading.value = false
   }
@@ -594,6 +584,7 @@ const submit = async () => {
       method,
       body: {
         ...form.value,
+        grupo: isEdit ? form.value.grupo : '',
         nivel: form.value.nivel,
         resolvedNivel: academicNivel.value,
         ciclo: cicloKey,
@@ -951,11 +942,6 @@ const submit = async () => {
   box-shadow: 0 0 0 4px rgba(47, 147, 57, 0.12);
 }
 
-.readonly-field input:disabled {
-  background: #f8fafc;
-  color: #8996ac;
-}
-
 .select-field {
   position: relative;
 }
@@ -1112,123 +1098,8 @@ const submit = async () => {
   white-space: nowrap;
 }
 
-.matricula-preview-card {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-  margin-bottom: 17px;
-  padding: 14px 16px;
-  border: 1px solid rgba(37, 110, 228, 0.18);
-  border-radius: 16px;
-  background: linear-gradient(145deg, rgba(245, 250, 255, 0.96), rgba(255, 255, 255, 0.98));
-}
-
-.matricula-preview-icon {
-  display: inline-flex;
-  width: 40px;
-  height: 40px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #edf4ff;
-  color: #256ee4;
-}
-
-.matricula-preview-card p,
-.matricula-preview-card small {
-  margin: 0;
-}
-
-.matricula-preview-card p {
-  color: #50607b;
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.matricula-preview-card strong {
-  display: block;
-  margin-top: 3px;
-  color: #16233e;
-  font-size: 21px;
-  font-weight: 950;
-  letter-spacing: -0.03em;
-}
-
-.matricula-preview-card small {
-  display: block;
-  margin-top: 4px;
-  color: #71809b;
-  font-size: 12.5px;
-  font-weight: 620;
-  line-height: 1.35;
-}
-
-
-.academic-context-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px;
-  margin-bottom: 17px;
-}
-
-.academic-context-card > div {
-  display: grid;
-  grid-template-columns: 36px 1fr;
-  grid-template-areas:
-    "icon label"
-    "icon value";
-  align-items: center;
-  column-gap: 12px;
-  min-height: 62px;
-  padding: 12px 14px;
-  border: 1px solid #d7e0ef;
-  border-radius: 16px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.9)),
-    #fff;
-}
-
-.academic-context-card span {
-  grid-area: icon;
-  display: inline-flex;
-  width: 36px;
-  height: 36px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #edf4ff;
-  color: #256ee4;
-}
-
-.academic-context-card > div:nth-child(2) span {
-  background: #eaf8ed;
-  color: #2f9339;
-}
-
-.academic-context-card p {
-  grid-area: label;
-  margin: 0;
-  color: #6a7893;
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.academic-context-card strong {
-  grid-area: value;
-  min-width: 0;
-  overflow: hidden;
-  color: #142340;
-  font-size: 16px;
-  font-weight: 920;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.academic-grade-only {
+  max-width: 360px;
 }
 
 .alta-ingreso-card {
@@ -1628,30 +1499,49 @@ const submit = async () => {
   background: rgba(255, 255, 255, 0.9);
 }
 
-.footer-note {
+.student-form-footer.actions-only {
+  justify-content: flex-end;
+}
+
+.footer-matricula-strip {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 17px;
-  color: #60708d;
+  gap: 10px;
+  overflow: hidden;
 }
 
-.footer-note > span {
-  display: inline-flex;
-  width: 50px;
-  height: 50px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #eaf8ed;
+.footer-matricula-strip > div {
+  display: grid;
+  min-width: 118px;
+  gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid rgba(215, 224, 239, 0.88);
+  border-radius: 14px;
+  background: rgba(248, 251, 255, 0.72);
+}
+
+.footer-matricula-strip span {
+  color: #6b7892;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.footer-matricula-strip strong {
+  overflow: hidden;
+  color: #12213c;
+  font-size: 15px;
+  font-weight: 920;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footer-matricula-strip > div:last-child strong {
   color: #2f9339;
-}
-
-.footer-note p {
-  margin: 0;
-  font-size: 14.5px;
-  font-weight: 660;
 }
 
 .footer-actions {
@@ -1824,8 +1714,7 @@ const submit = async () => {
     height: 50px;
   }
 
-  
-.alta-ingreso-card {
+  .alta-ingreso-card {
     margin-top: 16px;
     padding: 18px 20px;
   }
@@ -1885,7 +1774,6 @@ const submit = async () => {
     padding: 24px 22px;
   }
 
-  .academic-context-card,
   .curp-data-grid,
   .two-field-grid,
   .cycle-tile-grid,
@@ -1907,6 +1795,15 @@ const submit = async () => {
     flex-direction: column;
     align-items: stretch;
     padding: 20px 22px;
+  }
+
+  .footer-matricula-strip {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .footer-matricula-strip > div {
+    min-width: 0;
   }
 
   .footer-actions {

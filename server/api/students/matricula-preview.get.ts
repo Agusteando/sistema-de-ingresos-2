@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const plantel = userPlantel && userPlantel !== 'GLOBAL' ? userPlantel : requestedPlantel
 
   if (!plantel || plantel === 'GLOBAL') {
-    throw createError({ statusCode: 400, message: 'Selecciona un plantel activo para estimar la matrícula.' })
+    throw createError({ statusCode: 400, message: 'Selecciona un plantel para calcular la matrícula.' })
   }
 
   const regex = `^${escapeRegExp(plantel)}[0-9]+$`
@@ -24,14 +24,18 @@ export default defineEventHandler(async (event) => {
     LIMIT 1
   `, [plantel, regex])
 
-  const last = String(rows[0]?.matricula || '')
-  const lastNumber = Number(last.slice(plantel.length))
+  const lastMatricula = String(rows[0]?.matricula || '')
+  const numericPart = lastMatricula.slice(plantel.length)
+  const lastNumber = Number(numericPart)
   const nextNumber = Number.isFinite(lastNumber) && lastNumber > 0 ? lastNumber + 1 : 1
+  const numericWidth = Math.max(4, numericPart.length || 0)
+  const nextMatricula = `${plantel}${String(nextNumber).padStart(numericWidth, '0')}`
 
   return {
     plantel,
-    preview: `${plantel}${nextNumber}`,
-    source: last ? 'last_existing_matricula' : 'empty_plantel_sequence',
-    note: 'Vista previa. La matrícula real la genera el trigger al guardar.'
+    lastMatricula: lastMatricula || null,
+    nextMatricula,
+    preview: nextMatricula,
+    source: lastMatricula ? 'last_existing_matricula' : 'empty_plantel_sequence'
   }
 })

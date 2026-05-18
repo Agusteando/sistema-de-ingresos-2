@@ -130,7 +130,7 @@ export default defineEventHandler(async (event) => {
       : String(body.plantel || '').trim()
 
     if (!assignedPlantel || assignedPlantel === 'GLOBAL') {
-      throw createError({ statusCode: 400, message: 'Selecciona un plantel activo para dar de alta alumnos.' })
+      throw createError({ statusCode: 400, message: 'Selecciona un plantel para dar de alta alumnos.' })
     }
 
     const curpInfo = parseCurp(body.curp)
@@ -151,7 +151,7 @@ export default defineEventHandler(async (event) => {
       '', 
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
       body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      curpInfo.normalized, curpInfo.birthDate, curpInfo.gender, assignedPlantel, assignedNivel, normalizeGradoForPlantel(body.grado, assignedPlantel, assignedNivel), body.grupo || '',
+      curpInfo.normalized, curpInfo.birthDate, curpInfo.gender, assignedPlantel, assignedNivel, normalizeGradoForPlantel(body.grado, assignedPlantel, assignedNivel), '',
       body.padre, body.telefono, body.correo, user.name, cicloKey, body.estatus || 'Activo'
     ])
     return { success: true }
