@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
 
   const sql = `
     SELECT 
-      A.matricula, A.nombreCompleto, A.apellidoPaterno, A.apellidoMaterno, A.nombres, A.genero,
+      A.matricula, A.nombreCompleto, A.apellidoPaterno, A.apellidoMaterno, A.nombres, A.curp, A.genero,
       A.grado as gradoBase, A.grupo, A.ciclo as cicloBase, A.ciclo, A.plantel, A.nivel as nivelBase, A.estatus,
       A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth,
       Prev.previous_matricula AS matriculaAnterior,

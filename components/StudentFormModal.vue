@@ -56,20 +56,51 @@
                     <input v-model="form.nombres" type="text" placeholder="Ingresa el o los nombres" required @blur="normalizeNameField('nombres')" />
                   </label>
 
-                  <div class="two-field-grid">
-                    <label class="polished-field">
-                      <span>Nacimiento</span>
-                      <input v-model="form.birth" type="date" required />
-                    </label>
-                    <label class="polished-field select-field">
-                      <span>Género</span>
-                      <select v-model="form.genero" required>
-                        <option value="1">Masculino</option>
-                        <option value="0">Femenino</option>
-                      </select>
-                      <LucideChevronDown :size="18" aria-hidden="true" />
-                    </label>
-                  </div>
+                  <label class="polished-field curp-field">
+                    <span>CURP</span>
+                    <input
+                      :value="form.curp"
+                      type="text"
+                      maxlength="18"
+                      autocomplete="off"
+                      spellcheck="false"
+                      placeholder="Ingresa la CURP"
+                      required
+                      @input="normalizeCurpField"
+                      @blur="normalizeCurpField"
+                    />
+                  </label>
+
+                  <Transition name="curp-insights" mode="out-in">
+                    <section v-if="curpHasValue" :key="curpInferenceKey" :class="['curp-insight-card', curpStatusClass]" aria-live="polite">
+                      <span class="curp-card-glow" aria-hidden="true"></span>
+                      <div class="curp-insight-header">
+                        <span class="curp-insight-icon" aria-hidden="true">
+                          <LucideShieldCheck v-if="curpInfo.isValid" :size="22" />
+                          <LucideInfo v-else :size="22" />
+                        </span>
+                        <div>
+                          <strong>{{ curpInsightTitle }}</strong>
+                          <p>{{ curpInfo.message }}</p>
+                        </div>
+                      </div>
+
+                      <div v-if="curpInfo.isValid" class="curp-data-grid">
+                        <div>
+                          <small>Nacimiento</small>
+                          <strong>{{ inferredBirthLabel }}</strong>
+                        </div>
+                        <div>
+                          <small>Edad</small>
+                          <strong>{{ curpInfo.age }} años</strong>
+                        </div>
+                        <div>
+                          <small>Género</small>
+                          <strong>{{ curpInfo.genderLabel }}</strong>
+                        </div>
+                      </div>
+                    </section>
+                  </Transition>
                 </div>
 
                 <div class="section-divider"></div>
@@ -113,6 +144,15 @@
                     <span aria-hidden="true"><LucideSchool :size="19" /></span>
                     <p>Nivel</p>
                     <strong>{{ academicNivel }}</strong>
+                  </div>
+                </section>
+
+                <section v-if="!isEdit" class="matricula-preview-card" aria-label="Matrícula estimada">
+                  <span class="matricula-preview-icon" aria-hidden="true"><LucideInfo :size="20" /></span>
+                  <div>
+                    <p>Próxima matrícula estimada</p>
+                    <strong>{{ matriculaPreviewLoading ? 'Calculando...' : (matriculaPreview || 'Pendiente') }}</strong>
+                    <small>Solo es una vista previa. La matrícula real se genera automáticamente al guardar.</small>
                   </div>
                 </section>
 
@@ -292,6 +332,7 @@ import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
+import { formatBirthDate, normalizeCurp, parseCurp } from '~/shared/utils/curp'
 import { NIVELES_ESCOLARES, displayGrado, gradeOptionsForPlantel, nivelFromPlantel, normalizeNivelEscolar, resolveNivelEscolar } from '~/shared/utils/grado'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 
@@ -307,6 +348,8 @@ const userPlanteles = String(useCookie('auth_planteles').value || '').split(',')
 const defaultPlantel = activePlantel && activePlantel !== 'GLOBAL' ? activePlantel : (userPlanteles[0] || 'PT')
 const isEdit = !!props.student
 const loading = ref(false)
+const matriculaPreview = ref('')
+const matriculaPreviewLoading = ref(false)
 const showCyclePicker = ref(false)
 const showOlderCycles = ref(false)
 const cycleChangedByUser = ref(false)
@@ -317,7 +360,7 @@ const currentCicloLabel = computed(() => formatCicloLabel(currentCicloKey.value)
 
 const form = ref({
   matricula: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
-  birth: '', genero: '1', plantel: defaultPlantel, nivel: '', grado: 'Primero', grupo: 'A',
+  curp: '', birth: '', genero: '1', plantel: defaultPlantel, nivel: '', grado: 'Primero', grupo: 'A',
   padre: '', telefono: '', correo: '', ciclo: currentCicloKey.value, estatus: 'Activo',
   matriculaAnterior: '', matriculaSiguiente: ''
 })
@@ -334,6 +377,16 @@ const inferredNivel = computed(() => nivelFromPlantel(form.value.plantel))
 const academicNivel = computed(() => resolveNivelEscolar({ plantel: form.value.plantel, nivel: form.value.nivel }))
 const availableGrades = computed(() => gradeOptionsForPlantel(form.value.plantel, academicNivel.value))
 const ingresoCicloLabel = computed(() => formatCicloLabel(form.value.ciclo))
+const curpInfo = computed(() => parseCurp(form.value.curp))
+const curpHasValue = computed(() => curpInfo.value.normalized.length > 0)
+const curpStatusClass = computed(() => curpInfo.value.isValid ? 'valid' : curpInfo.value.isComplete ? 'invalid' : 'pending')
+const curpInferenceKey = computed(() => `${curpStatusClass.value}-${curpInfo.value.normalized}`)
+const curpInsightTitle = computed(() => {
+  if (curpInfo.value.isValid) return 'Datos calculados desde la CURP'
+  if (curpInfo.value.isComplete) return 'CURP no válida'
+  return 'Validando CURP'
+})
+const inferredBirthLabel = computed(() => formatBirthDate(curpInfo.value.birthDate))
 
 const visibleTipoIngreso = computed(() => resolveTipoIngreso({ ciclo: form.value.ciclo, cicloBase: form.value.ciclo }, currentCicloKey.value))
 const visibleTipoIngresoLabel = computed(() => formatTipoIngresoValue(visibleTipoIngreso.value))
@@ -413,6 +466,12 @@ watch([() => form.value.plantel, () => form.value.nivel], () => {
   form.value.grado = selected || availableGrades.value[0]
 }, { immediate: true })
 
+watch(curpInfo, (info) => {
+  if (!info.isValid) return
+  form.value.birth = info.birthDate
+  form.value.genero = info.gender
+}, { immediate: true })
+
 watch(currentCicloKey, (value, oldValue) => {
   if (!isEdit && !cycleChangedByUser.value && form.value.ciclo === oldValue) {
     form.value.ciclo = value
@@ -431,6 +490,7 @@ onMounted(() => {
       apellidoPaterno: s.apellidoPaterno || '',
       apellidoMaterno: s.apellidoMaterno || '',
       nombres: s.nombres || '',
+      curp: normalizeCurp(s.curp || s.CURP || ''),
       birth: s.birth ? s.birth.split('T')[0] : '',
       genero: s.genero || '1',
       plantel: s.plantel || defaultPlantel,
@@ -485,16 +545,48 @@ const normalizeEmailField = () => {
   form.value.correo = String(form.value.correo || '').trim().toLowerCase()
 }
 
+const normalizeCurpField = (event) => {
+  const value = event?.target ? event.target.value : form.value.curp
+  form.value.curp = normalizeCurp(value)
+}
+
+const loadMatriculaPreview = async () => {
+  if (isEdit) return
+  const plantel = String(form.value.plantel || '').trim().toUpperCase()
+  if (!plantel || plantel === 'GLOBAL') {
+    matriculaPreview.value = ''
+    return
+  }
+
+  matriculaPreviewLoading.value = true
+  try {
+    const response = await $fetch('/api/students/matricula-preview', { query: { plantel } })
+    matriculaPreview.value = String(response?.preview || '')
+  } catch (error) {
+    matriculaPreview.value = ''
+  } finally {
+    matriculaPreviewLoading.value = false
+  }
+}
+
+watch(() => form.value.plantel, loadMatriculaPreview, { immediate: true })
+
 const normalizeNamesBeforeSubmit = () => {
   ;['apellidoPaterno', 'apellidoMaterno', 'nombres', 'padre'].forEach(normalizeNameField)
+  normalizeCurpField()
   trimField('telefono')
   normalizeEmailField()
 }
 
 const submit = async () => {
+  normalizeNamesBeforeSubmit()
+  if (!curpInfo.value.isValid) {
+    show(curpInfo.value.message || 'Captura una CURP válida antes de guardar.', 'danger')
+    return
+  }
+
   loading.value = true
   try {
-    normalizeNamesBeforeSubmit()
     const cicloKey = normalizeCicloKey(form.value.ciclo || currentCicloKey.value)
     const url = isEdit ? `/api/students/${form.value.matricula}` : '/api/students'
     const method = isEdit ? 'PUT' : 'POST'
@@ -884,6 +976,194 @@ const submit = async () => {
   height: 1px;
   margin: 32px 0 24px;
   background: linear-gradient(90deg, rgba(203, 213, 225, 0), rgba(203, 213, 225, 0.88), rgba(203, 213, 225, 0));
+}
+
+.curp-field input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 17px;
+  font-weight: 820;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.curp-insight-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 16px;
+  padding: 17px;
+  border: 1px solid #d7e0ef;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(248, 251, 255, 0.96), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+}
+
+.curp-insight-card.valid {
+  border-color: rgba(47, 147, 57, 0.34);
+  background: linear-gradient(145deg, rgba(246, 255, 248, 0.96), rgba(255, 255, 255, 0.98));
+}
+
+.curp-insight-card.invalid {
+  border-color: rgba(244, 63, 94, 0.38);
+  background: linear-gradient(145deg, rgba(255, 247, 247, 0.96), rgba(255, 255, 255, 0.98));
+}
+
+.curp-card-glow {
+  position: absolute;
+  inset: -42% -24%;
+  pointer-events: none;
+  background: radial-gradient(circle at 18% 42%, rgba(37, 110, 228, 0.11), transparent 34%);
+  opacity: 0.74;
+  animation: curp-glow-drift 4200ms ease-in-out infinite;
+}
+
+.curp-insight-card.valid .curp-card-glow {
+  background: radial-gradient(circle at 18% 42%, rgba(47, 147, 57, 0.14), transparent 35%);
+}
+
+.curp-insight-card.invalid .curp-card-glow {
+  background: radial-gradient(circle at 18% 42%, rgba(244, 63, 94, 0.11), transparent 35%);
+}
+
+.curp-insight-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 13px;
+  align-items: center;
+}
+
+.curp-insight-icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #edf4ff;
+  color: #256ee4;
+}
+
+.curp-insight-card.valid .curp-insight-icon {
+  background: #eaf8ed;
+  color: #2f9339;
+}
+
+.curp-insight-card.invalid .curp-insight-icon {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.curp-insight-header strong {
+  display: block;
+  color: #142340;
+  font-size: 15.5px;
+  font-weight: 920;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.curp-insight-header p {
+  margin: 5px 0 0;
+  color: #63718d;
+  font-size: 13.5px;
+  font-weight: 640;
+  line-height: 1.35;
+}
+
+.curp-insight-card.invalid .curp-insight-header p {
+  color: #a93c4d;
+}
+
+.curp-data-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.curp-data-grid > div {
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid rgba(203, 213, 225, 0.74);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.curp-data-grid small {
+  display: block;
+  color: #6a7893;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.055em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.curp-data-grid strong {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  color: #15233e;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matricula-preview-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 17px;
+  padding: 14px 16px;
+  border: 1px solid rgba(37, 110, 228, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(245, 250, 255, 0.96), rgba(255, 255, 255, 0.98));
+}
+
+.matricula-preview-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #edf4ff;
+  color: #256ee4;
+}
+
+.matricula-preview-card p,
+.matricula-preview-card small {
+  margin: 0;
+}
+
+.matricula-preview-card p {
+  color: #50607b;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.matricula-preview-card strong {
+  display: block;
+  margin-top: 3px;
+  color: #16233e;
+  font-size: 21px;
+  font-weight: 950;
+  letter-spacing: -0.03em;
+}
+
+.matricula-preview-card small {
+  display: block;
+  margin-top: 4px;
+  color: #71809b;
+  font-size: 12.5px;
+  font-weight: 620;
+  line-height: 1.35;
 }
 
 
@@ -1424,6 +1704,8 @@ const submit = async () => {
   transform: none;
 }
 
+.curp-insights-enter-active,
+.curp-insights-leave-active,
 .result-card-enter-active,
 .result-card-leave-active {
   transition:
@@ -1431,6 +1713,8 @@ const submit = async () => {
     transform 0.22s ease;
 }
 
+.curp-insights-enter-from,
+.curp-insights-leave-to,
 .result-card-enter-from,
 .result-card-leave-to {
   opacity: 0;
@@ -1462,6 +1746,17 @@ const submit = async () => {
 .older-cycles-enter-to,
 .older-cycles-leave-from {
   max-height: 520px;
+}
+
+@keyframes curp-glow-drift {
+  0%, 100% {
+    opacity: 0.48;
+    transform: translateX(-2%);
+  }
+  50% {
+    opacity: 0.82;
+    transform: translateX(2%);
+  }
 }
 
 @keyframes alta-card-sheen {
@@ -1591,6 +1886,7 @@ const submit = async () => {
   }
 
   .academic-context-card,
+  .curp-data-grid,
   .two-field-grid,
   .cycle-tile-grid,
   .older-cycle-grid {
@@ -1625,6 +1921,7 @@ const submit = async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .curp-card-glow,
   .alta-card-shine,
   .alta-result-orb {
     animation: none;
@@ -1634,6 +1931,8 @@ const submit = async () => {
   .cycle-tile,
   .student-form-cancel,
   .student-form-save,
+  .curp-insights-enter-active,
+  .curp-insights-leave-active,
   .change-cycle-button,
   .older-cycle-toggle,
   .result-card-enter-active,

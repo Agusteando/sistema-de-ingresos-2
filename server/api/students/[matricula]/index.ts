@@ -1,6 +1,7 @@
 import { executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
 import { normalizeGradoForPlantel, resolveNivelEscolar } from '../../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
+import { parseCurp } from '../../../../shared/utils/curp'
 
 export default defineEventHandler(async (event) => {
   const matricula = event.context.params?.matricula
@@ -17,6 +18,11 @@ export default defineEventHandler(async (event) => {
 
     if (!currentStudent) {
       throw createError({ statusCode: 404, message: 'Alumno no encontrado' })
+    }
+
+    const curpInfo = parseCurp(body.curp)
+    if (!curpInfo.isValid) {
+      throw createError({ statusCode: 400, message: curpInfo.message || 'CURP inválida.' })
     }
 
     const plantel = String(currentStudent.plantel || user?.active_plantel || body.plantel || '').trim()
@@ -46,7 +52,9 @@ export default defineEventHandler(async (event) => {
       'apellidoMaterno = ?',
       'nombres = ?',
       "nombreCompleto = CONCAT(?, ' ', ?, ' ', ?)",
+      'curp = ?',
       '`Fecha de nacimiento` = ?',
+      'genero = ?',
       '`Nombre del padre o tutor` = ?',
       'plantel = ?',
       'nivel = ?',
@@ -62,7 +70,9 @@ export default defineEventHandler(async (event) => {
       body.apellidoPaterno,
       body.apellidoMaterno,
       body.nombres,
-      body.birth,
+      curpInfo.normalized,
+      curpInfo.birthDate,
+      curpInfo.gender,
       body.padre,
       plantel,
       resolvedNivel,
