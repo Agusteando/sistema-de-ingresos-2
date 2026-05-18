@@ -1,7 +1,15 @@
-Refine ciclo de ingreso modal and remove base.interno coupling
+Refine ciclo de ingreso UX and remove base.interno from active flow
 
-- Rework the ciclo de ingreso modal to match the supplied wide Figma reference more closely: centered overlay, large student header, two-column picker/result layout, refined footer, and responsive behavior.
-- Replace the compact 12-cycle grid with a focused picker: four nearby cycle cards plus an expandable previous-cycle range covering up to 12 cycles.
-- Rename the visible result section to "Resultado" and add animated result feedback, timeline entry motion, selected-cycle checks, and reduced-motion safeguards.
-- Keep the modal fully functional: selecting and saving a ciclo updates base.ciclo, recomputes the ciclo-scoped Interno/Externo result, and updates the current UI without a page reload.
-- Remove base.interno from the active ciclo resolver, ingreso-cycle save flow, Nuxt student APIs, student edit form, and external-base sync writes. The active system now resolves Interno/Externo from base.ciclo and ciclo-scoped evidence, not from base.interno.
+- Rebuilt the alta/edit student modal around the selected ciclo escolar as the default ciclo de ingreso.
+- The alta flow now shows the inferred visible status immediately: a new student defaults to Externo in the currently selected ciclo because base.ciclo is saved to that cycle.
+- Added a restrained "Cambiar ciclo de ingreso" path with a 12-year ciclo picker for cases where the user is registering prior-cycle work.
+- Added clear cycle/status summary rows in the alta modal so users can see which ciclo will be saved and what Interno/Externo status it implies.
+- Added polished result-card transitions, sheen/orb motion, and reduced-motion handling.
+- Added automatic proper-name casing for student and tutor names before saving.
+- Removed active API/UI mirroring of tipo de ingreso into an interno field; the app now uses the ciclo-scoped resolver result instead of base.interno.
+- Kept the existing resolver, cache-first students flow, Estado de Cuenta cache-first flow, KPIs, filters, tables, and exports intact.
+
+Validation:
+- npm ci --ignore-scripts passed.
+- npx nuxi prepare passed.
+- npm run build completed the client production build; the server transform step exceeded the execution timeout in this environment without surfacing a code error.
