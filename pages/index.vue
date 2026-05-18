@@ -52,6 +52,7 @@
             :selected-student="selectedStudent"
             :selected-matriculas="selectedMatriculas"
             :external-concepts="externalConcepts"
+            :target-ciclo="currentCicloKey"
             :photo-cache="photoCache"
             @open-section-selection="openSectionModalForSelection"
             @clear-filters="clearFilters"
@@ -87,6 +88,7 @@
             @photo-loaded="cacheStudentPhoto"
             @baja="bajaAlumno"
             @manage-sections="openSectionModal"
+            @ingreso-cycle-updated="handleIngresoCycleUpdated"
             @close-bulk="closeBulkWorkspace"
             @open-bulk-payment="openBulkPaymentFlow"
             @open-section-selection="openSectionModalForSelection"
@@ -148,6 +150,7 @@ import { useStudentsCacheSync } from '~/composables/useStudentsCacheSync'
 import { exportToCSV } from '~/utils/export'
 import { GRADOS_ORDEN } from '~/utils/constants'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 import {
   formatMoney,
   gradeVisualTitle,
@@ -187,6 +190,7 @@ const activeGrupo = ref('')
 const activeSaldoFilter = ref('all')
 
 const externalConcepts = ref(['inscripcion', 'inscripción', 'reinscripción', 'reinscripcion'])
+const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 
 const students = ref([])
 const loading = ref(false)
@@ -571,6 +575,7 @@ const performSearch = async (options = {}) => {
 const refreshStudentsFromServer = () => performSearch({ useCache: false })
 
 const isEnrolled = (student) => isStudentEnrolled(student, externalConcepts.value)
+const resolveStudentTipoIngreso = (student) => resolveTipoIngreso(student, currentCicloKey.value, { enrollmentConcepts: externalConcepts.value })
 
 const kpiCounts = computed(() => {
   let inscritos = 0, internos = 0, externos = 0, no_inscritos = 0, bajas = 0
@@ -579,7 +584,8 @@ const kpiCounts = computed(() => {
       bajas++
     } else if (isEnrolled(s)) {
       inscritos++
-      if (String(s.interno) === '1') internos++
+      const tipoIngreso = resolveStudentTipoIngreso(s)
+      if (tipoIngreso.value === 'interno') internos++
       else externos++
     } else {
       no_inscritos++
@@ -590,8 +596,8 @@ const kpiCounts = computed(() => {
 
 const studentMatchesActiveFilter = (student) => {
   if (activeFilter.value === 'inscritos') return isEnrolled(student)
-  if (activeFilter.value === 'internos') return isEnrolled(student) && String(student.interno) === '1'
-  if (activeFilter.value === 'externos') return isEnrolled(student) && String(student.interno) === '0'
+  if (activeFilter.value === 'internos') return isEnrolled(student) && resolveStudentTipoIngreso(student).value === 'interno'
+  if (activeFilter.value === 'externos') return isEnrolled(student) && resolveStudentTipoIngreso(student).value === 'externo'
   if (activeFilter.value === 'no_inscritos') return student.estatus === 'Activo' && !isEnrolled(student)
   if (activeFilter.value === 'bajas') return student.estatus !== 'Activo'
   if (isSectionFilter(activeFilter.value)) return studentHasSection(student, sectionIdFromFilter(activeFilter.value))
@@ -646,20 +652,36 @@ const availableGrupos = computed(() => {
 })
 
 const exportData = () => {
-  const exportList = displayedStudents.value.map(s => ({
-    Matrícula: s.matricula,
-    Nombre: s.nombreCompleto,
-    Tipo: String(s.interno) === '1' ? 'Interno' : 'Externo',
-    Nivel: s.nivel,
-    Grado: s.grado,
-    Grupo: s.grupo,
-    Cargos_MXN: Number(s.importeTotal).toFixed(2),
-    Pagos_MXN: Number(s.pagosTotal).toFixed(2),
-    Saldo_MXN: Number(s.saldoNeto).toFixed(2),
-    Estatus: s.estatus,
-    Secciones: (s.customSections || []).map(section => section.name).join(' | ')
-  }))
-  exportToCSV(`Alumnos_${normalizeCicloKey(state.value.ciclo)}.csv`, exportList)
+  const exportCiclo = currentCicloKey.value
+  const exportList = displayedStudents.value.map((s) => {
+    const tipoIngreso = resolveStudentTipoIngreso(s)
+
+    return {
+      Matrícula: s.matricula,
+      Nombre: s.nombreCompleto,
+      Tipo: formatTipoIngresoValue(tipoIngreso),
+      Ciclo_Exportado: exportCiclo,
+      Ciclo_Ingreso: s.cicloBase || s.ciclo || '',
+      Tipo_Fuente: tipoIngreso.source,
+      Tipo_Razon: tipoIngreso.reason,
+      Nivel: s.nivel,
+      Grado: s.grado,
+      Grupo: s.grupo,
+      Plantel: s.plantel || '',
+      Tutor: s.padre || s['Nombre del padre o tutor'] || '',
+      Telefono: s.telefono || '',
+      Correo: s.correo || '',
+      Fecha_Nacimiento: s.birth || s['Fecha de nacimiento'] || '',
+      Matricula_Anterior: s.matriculaAnterior || '',
+      Matricula_Siguiente: s.matriculaSiguiente || '',
+      Cargos_MXN: Number(s.importeTotal).toFixed(2),
+      Pagos_MXN: Number(s.pagosTotal).toFixed(2),
+      Saldo_MXN: Number(s.saldoNeto).toFixed(2),
+      Estatus: s.estatus,
+      Secciones: (s.customSections || []).map(section => section.name).join(' | ')
+    }
+  })
+  exportToCSV(`Alumnos_${exportCiclo}.csv`, exportList)
 }
 
 const selectStudent = (student) => {
@@ -746,6 +768,33 @@ const confirmBaja = async (motivo) => {
     pendingBajaStudent.value = null
     performSearch({ useCache: false })
   } catch (e) {}
+}
+
+
+const handleIngresoCycleUpdated = (payload) => {
+  if (!payload?.matricula) return
+  const matricula = normalizeStudentMatricula(payload.matricula)
+
+  students.value = students.value.map((student) => {
+    if (normalizeStudentMatricula(student.matricula) !== matricula) return student
+    const updated = {
+      ...student,
+      ...payload,
+      ciclo: payload.ciclo || payload.cicloBase || student.ciclo,
+      cicloBase: payload.cicloBase || payload.ciclo || student.cicloBase,
+      internoBase: 0,
+      internoLegacy: 0
+    }
+    return {
+      ...updated,
+      tipoIngreso: resolveStudentTipoIngreso(updated),
+      interno: resolveStudentTipoIngreso(updated).value === 'interno' ? 1 : 0
+    }
+  })
+
+  if (selectedStudent.value && normalizeStudentMatricula(selectedStudent.value.matricula) === matricula) {
+    selectedStudent.value = students.value.find(student => normalizeStudentMatricula(student.matricula) === matricula) || selectedStudent.value
+  }
 }
 
 const showStudentMenu = (event, student) => {

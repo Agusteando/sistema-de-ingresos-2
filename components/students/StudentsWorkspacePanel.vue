@@ -4,6 +4,7 @@
       <StudentDetails
         :student="selectedStudent"
         :is-enrolled="isStudentEnrolled(selectedStudent, externalConcepts)"
+        :external-concepts="externalConcepts"
         @refresh="$emit('refresh')"
         @edit="$emit('edit', $event)"
         @close="$emit('close-detail')"
@@ -11,6 +12,7 @@
         @photo-loaded="$emit('photo-loaded', $event)"
         @baja="$emit('baja', $event)"
         @manage-sections="$emit('manage-sections', $event)"
+        @ingreso-cycle-updated="$emit('ingreso-cycle-updated', $event)"
       />
     </section>
 
@@ -82,6 +84,7 @@ defineEmits([
   'photo-loaded',
   'baja',
   'manage-sections',
+  'ingreso-cycle-updated',
   'close-bulk',
   'open-bulk-payment',
   'open-section-selection',

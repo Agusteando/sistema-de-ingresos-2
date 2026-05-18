@@ -836,7 +836,9 @@ export const processExternalRowsBatch = async (
   for (const entry of validEntries) {
     const localStudent = localByMatricula.get(entry.matriculaKey)
     const existingMeta = metaByMatricula.get(entry.matriculaKey)
-    const localCicloNeedsRefresh = Boolean(localStudent) && String(localStudent?.ciclo || '').trim() !== entry.syncCicloKey
+    // base.ciclo is the alumno ingreso anchor. Existing values may be user-corrected
+    // and must not be overwritten by the current external sync cycle.
+    const localCicloNeedsRefresh = false
     const localMissingMappedField = Boolean(localStudent) && [
       ['apellidoPaterno', entry.mapped.apellidoPaterno],
       ['apellidoMaterno', entry.mapped.apellidoMaterno],
@@ -887,7 +889,6 @@ export const processExternalRowsBatch = async (
             \`Nombre del padre o tutor\` = COALESCE(NULLIF(?, ''), \`Nombre del padre o tutor\`),
             \`Fecha de nacimiento\` = COALESCE(NULLIF(?, ''), \`Fecha de nacimiento\`),
             genero = COALESCE(NULLIF(?, ''), genero),
-            ciclo = ?,
             estatus = ?
           WHERE matricula = ?
         `,
@@ -905,7 +906,6 @@ export const processExternalRowsBatch = async (
           entry.mapped.padre,
           entry.mapped.birth,
           entry.mapped.genero,
-          entry.syncCicloKey,
           finalEstatus,
           entry.matricula
         ]

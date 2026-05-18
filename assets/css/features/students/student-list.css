@@ -215,6 +215,7 @@
 .student-meta {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   height: clamp(20px, 1.5vw, 22px);
   padding: 0 clamp(9px, .8vw, 10px);
   border: 1px solid rgba(79, 163, 70, .2);
@@ -286,4 +287,29 @@
   display: flex;
   justify-content: space-between;
   width: 100%;
+}
+
+.student-tipo-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 17px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.student-tipo-chip.interno {
+  border: 1px solid rgba(22, 159, 150, .18);
+  background: rgba(22, 159, 150, .08);
+  color: #16877f;
+}
+
+.student-tipo-chip.externo {
+  border: 1px solid rgba(65, 112, 205, .18);
+  background: rgba(65, 112, 205, .075);
+  color: #2f62b8;
 }
