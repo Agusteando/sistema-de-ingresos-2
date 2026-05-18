@@ -1,11 +1,12 @@
 <template>
   <Teleport to="body">
-    <div class="modal-overlay" @click.self="$emit('close')">
+    <div class="modal-overlay" @click.self="requestClose">
       <div class="modal-container large">
         <div class="modal-header">
           <h2 class="text-lg font-bold text-gray-800">Recibir Pago</h2>
         </div>
         <div class="modal-content">
+          <p v-if="draftRestored" class="modal-draft-restored" role="status">Se restauró información no guardada.</p>
           <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
             <div class="form-group mb-0">
               <label class="form-label">Forma de Pago</label>
@@ -58,8 +59,15 @@
             </table>
           </div>
         </div>
+        <div v-if="showDiscardConfirmation" class="modal-discard-confirmation" role="alertdialog" aria-live="assertive">
+          <p>Hay información sin guardar. ¿Quieres salir y descartar los cambios?</p>
+          <div>
+            <button class="btn btn-primary" type="button" @click="continueEditing">Continuar editando</button>
+            <button class="btn btn-ghost" type="button" @click="discardAndClose">Descartar cambios</button>
+          </div>
+        </div>
         <div class="modal-footer">
-          <button class="btn btn-ghost" @click="$emit('close')" :disabled="processing">Cancelar</button>
+          <button class="btn btn-ghost" @click="requestClose" :disabled="processing">Cancelar</button>
           <button class="btn btn-outline" type="button" @click="previewReceipt" :disabled="processing || totalCobrar <= 0">
             <LucideEye :size="16"/> Previa
           </button>
@@ -75,11 +83,12 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { LucideCheckCircle, LucideEye, LucideLoader2 } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
+import { useModalDraftPersistence } from '~/composables/useModalDraftPersistence'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
 
@@ -94,20 +103,89 @@ const formaDePago = ref('Efectivo')
 const processing = ref(false)
 const processedDebts = ref([])
 
-watch(() => [props.debts, formaDePago.value], () => {
-  processedDebts.value = props.debts.map(d => {
-    const final = d.saldo
-    const resuelto = d.resuelto ?? d.pagos
+const paymentDebtKey = (debt) => `${debt?.documento || ''}-${debt?.mes || ''}-${debt?.conceptoId || debt?.conceptoNombre || ''}`
+
+const buildProcessedDebts = () => (Array.isArray(props.debts) ? props.debts : []).map(d => {
+  const final = d.saldo
+  const resuelto = d.resuelto ?? d.pagos
+  return {
+    ...d,
+    saldoFinal: final,
+    montoPagado: final,
+    pagosPrevios: resuelto,
+    saldoAntes: d.subtotal - resuelto,
+    montoFinalInput: Math.round(Number(d.subtotal || d.costoOriginal || d.saldo || 0))
+  }
+})
+
+watch(() => props.debts, () => {
+  processedDebts.value = buildProcessedDebts()
+}, { immediate: true })
+
+const paymentDraftCicloScope = normalizeCicloKey(state.value.ciclo)
+const paymentDraftKey = computed(() => {
+  const selectedDebtScope = (Array.isArray(props.debts) ? props.debts : [])
+    .map(paymentDebtKey)
+    .sort()
+    .join('|') || 'none'
+  return `payment:${props.student?.matricula || 'unknown'}:${paymentDraftCicloScope}:${selectedDebtScope}`
+})
+
+const readPaymentDraft = () => ({
+  formaDePago: formaDePago.value,
+  debts: processedDebts.value.map(debt => ({
+    key: paymentDebtKey(debt),
+    montoPagado: debt.montoPagado,
+    montoFinalInput: debt.montoFinalInput
+  }))
+})
+
+const writePaymentDraft = (draft) => {
+  if (!draft || typeof draft !== 'object') return
+
+  if (draft.formaDePago) formaDePago.value = String(draft.formaDePago)
+  const restoredDebts = new Map((Array.isArray(draft.debts) ? draft.debts : []).map(debt => [debt.key, debt]))
+
+  processedDebts.value = processedDebts.value.map((debt) => {
+    const restored = restoredDebts.get(paymentDebtKey(debt))
+    if (!restored) return debt
+
+    const montoPagado = Number(restored.montoPagado)
+    const montoFinalInput = Number(restored.montoFinalInput)
     return {
-      ...d,
-      saldoFinal: final,
-      montoPagado: final,
-      pagosPrevios: resuelto,
-      saldoAntes: d.subtotal - resuelto,
-      montoFinalInput: Math.round(Number(d.subtotal || d.costoOriginal || d.saldo || 0))
+      ...debt,
+      montoPagado: Number.isFinite(montoPagado) ? montoPagado : debt.montoPagado,
+      montoFinalInput: Number.isFinite(montoFinalInput) ? montoFinalInput : debt.montoFinalInput
     }
   })
-}, { immediate: true })
+}
+
+const paymentDraftHasContent = (draft) => {
+  if (!draft || typeof draft !== 'object') return false
+  if (String(draft.formaDePago || 'Efectivo') !== 'Efectivo') return true
+  return Array.isArray(draft.debts) && draft.debts.length > 0
+}
+
+const {
+  draftRestored,
+  showDiscardConfirmation,
+  initializeDraft,
+  markSaved,
+  requestClose,
+  continueEditing,
+  discardAndClose
+} = useModalDraftPersistence({
+  key: paymentDraftKey,
+  read: readPaymentDraft,
+  write: writePaymentDraft,
+  onClose: () => emit('close'),
+  canRequestClose: () => !processing.value,
+  isDraftMeaningful: paymentDraftHasContent
+})
+
+onMounted(() => {
+  initializeDraft()
+})
 
 const hasPendingFinalAmounts = computed(() => processedDebts.value.some(debt => debt.montoFinalPendiente))
 const effectiveSubtotal = (debt) => debt.montoFinalPendiente ? Number(debt.montoFinalInput || 0) : Number(debt.subtotal || 0)
@@ -191,6 +269,7 @@ const submit = async () => {
     () => emit('success'),
     { pending: 'Registrando pago...', success: 'Pago exitoso', error: 'Error al registrar' }
   ).then((res) => {
+    markSaved()
     if (res && res.folios) {
       window.open(`/print/recibo?folios=${res.folios.join(',')}`, '_blank', 'width=850,height=800')
     }

@@ -1,8 +1,8 @@
 <template>
   <Teleport to="body">
-    <div class="student-form-overlay" @click.self="$emit('close')">
+    <div class="student-form-overlay" @click.self="requestClose">
       <section class="student-form-modal" role="dialog" aria-modal="true" :aria-labelledby="formTitleId">
-        <button class="student-form-close" type="button" aria-label="Cerrar" @click="$emit('close')">
+        <button class="student-form-close" type="button" aria-label="Cerrar" @click="requestClose">
           <LucideX :size="27" />
         </button>
 
@@ -23,6 +23,7 @@
 
         <form @submit.prevent="submit">
           <div class="student-form-content">
+            <p v-if="draftRestored" class="modal-draft-restored" role="status">Se restauró información no guardada.</p>
             <section v-if="isEdit" class="student-edit-strip">
               <div>
                 <small>Matrícula</small>
@@ -266,6 +267,14 @@
             </div>
           </div>
 
+          <div v-if="showDiscardConfirmation" class="modal-discard-confirmation" role="alertdialog" aria-live="assertive">
+            <p>Hay información sin guardar. ¿Quieres salir y descartar los cambios?</p>
+            <div>
+              <button class="student-form-save" type="button" @click="continueEditing">Continuar editando</button>
+              <button class="student-form-cancel" type="button" @click="discardAndClose">Descartar cambios</button>
+            </div>
+          </div>
+
           <footer :class="['student-form-footer', { 'actions-only': isEdit }]">
             <div v-if="!isEdit" class="footer-matricula-strip" aria-label="Secuencia de matrícula">
               <div>
@@ -282,7 +291,7 @@
               </div>
             </div>
             <div class="footer-actions">
-              <button class="student-form-cancel" type="button" :disabled="loading" @click="$emit('close')">Cancelar</button>
+              <button class="student-form-cancel" type="button" :disabled="loading" @click="requestClose">Cancelar</button>
               <button class="student-form-save" type="submit" :disabled="loading">
                 <LucideLoader2 v-if="loading" class="animate-spin" :size="18" />
                 <LucideSave v-else :size="18" />
@@ -317,6 +326,7 @@ import {
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
+import { useModalDraftPersistence } from '~/composables/useModalDraftPersistence'
 import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
 import { formatBirthDate, normalizeCurp, parseCurp } from '~/shared/utils/curp'
 import { NIVELES_ESCOLARES, displayGrado, gradeOptionsForPlantel, nivelFromPlantel, normalizeNivelEscolar, resolveNivelEscolar } from '~/shared/utils/grado'
@@ -363,6 +373,82 @@ const nivelOptions = NIVELES_ESCOLARES
 const inferredNivel = computed(() => nivelFromPlantel(form.value.plantel))
 const academicNivel = computed(() => resolveNivelEscolar({ plantel: form.value.plantel, nivel: form.value.nivel }))
 const availableGrades = computed(() => gradeOptionsForPlantel(form.value.plantel, academicNivel.value))
+
+const studentDraftFields = [
+  'matricula',
+  'apellidoPaterno',
+  'apellidoMaterno',
+  'nombres',
+  'curp',
+  'birth',
+  'genero',
+  'plantel',
+  'nivel',
+  'grado',
+  'grupo',
+  'padre',
+  'telefono',
+  'correo',
+  'ciclo',
+  'estatus',
+  'matriculaAnterior',
+  'matriculaSiguiente'
+]
+
+const readStudentDraft = () => studentDraftFields.reduce((draft, field) => {
+  draft[field] = form.value[field] ?? ''
+  return draft
+}, {})
+
+const writeStudentDraft = (draft) => {
+  if (!draft || typeof draft !== 'object') return
+
+  const restored = { ...form.value }
+  for (const field of studentDraftFields) {
+    if (Object.prototype.hasOwnProperty.call(draft, field)) restored[field] = draft[field] ?? ''
+  }
+
+  restored.curp = normalizeCurp(restored.curp)
+  restored.ciclo = normalizeCicloKey(restored.ciclo || currentCicloKey.value)
+  restored.grado = displayGrado(restored.grado || availableGrades.value[0] || 'Primero')
+  form.value = restored
+  cycleChangedByUser.value = true
+}
+
+const studentDraftCicloScope = currentCicloKey.value
+const studentDraftKey = computed(() => {
+  const mode = isEdit ? `edit:${props.student?.matricula || form.value.matricula || 'unknown'}` : `alta:${defaultPlantel}:${studentDraftCicloScope}`
+  return `student-form:${mode}`
+})
+
+const studentDraftHasContent = (draft) => {
+  if (!draft || typeof draft !== 'object') return false
+  const relevantFields = ['apellidoPaterno', 'apellidoMaterno', 'nombres', 'curp', 'padre', 'telefono', 'correo', 'matriculaAnterior', 'matriculaSiguiente']
+  if (relevantFields.some(field => String(draft[field] || '').trim().length > 0)) return true
+  if (String(draft.plantel || defaultPlantel) !== defaultPlantel) return true
+  if (String(draft.nivel || '').trim().length > 0) return true
+  if (String(draft.grado || 'Primero') !== 'Primero') return true
+  if (normalizeCicloKey(draft.ciclo || currentCicloKey.value) !== currentCicloKey.value) return true
+  if (isEdit && String(draft.estatus || 'Activo') !== 'Activo') return true
+  return false
+}
+
+const {
+  draftRestored,
+  showDiscardConfirmation,
+  initializeDraft,
+  markSaved,
+  requestClose,
+  continueEditing,
+  discardAndClose
+} = useModalDraftPersistence({
+  key: studentDraftKey,
+  read: readStudentDraft,
+  write: writeStudentDraft,
+  onClose: () => emit('close'),
+  canRequestClose: () => !loading.value,
+  isDraftMeaningful: studentDraftHasContent
+})
 const ingresoCicloLabel = computed(() => formatCicloLabel(form.value.ciclo))
 const curpInfo = computed(() => parseCurp(form.value.curp))
 const curpHasValue = computed(() => curpInfo.value.normalized.length > 0)
@@ -499,6 +585,8 @@ onMounted(() => {
       ciclo: normalizeCicloKey(form.value.ciclo)
     }
   }
+
+  initializeDraft()
 })
 
 const NAME_PARTICLES = new Set(['de', 'del', 'de la', 'de las', 'de los', 'la', 'las', 'los', 'y'])
@@ -624,6 +712,7 @@ const submit = async () => {
       }
     })
     show(isEdit ? 'Alumno actualizado correctamente' : 'Alumno registrado exitosamente', 'success')
+    markSaved()
     emit('success')
   } catch (e) {
     show('Error guardando la información', 'danger')
