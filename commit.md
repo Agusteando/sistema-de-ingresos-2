@@ -1,18 +1,21 @@
-Refine ciclo de ingreso UI without changing core behavior
+Implement cache-first Estado de Cuenta sync
 
-Keep the ciclo-scoped Interno/Externo resolver and data flow intact while reducing UI clutter around the resolved tipo de ingreso labels and ingreso-cycle correction modal.
+Add a cache-first loading flow for Estado de Cuenta that mirrors the students cache/sync pattern without redesigning the account UI.
 
 Changes:
-- Simplified the Estado de Cuenta Interno/Externo badge to show only the resolved value for the selected ciclo, with resolver details kept in the hover title instead of visible helper text.
-- Matched the student-list tipo de ingreso chips to the cleaner pill treatment: icon plus Interno/Externo label, no uppercase/source/ciclo clutter.
-- Removed the duplicate "¿Cuándo ingresó?" toolbar button so the correction action remains available through the top icon next to the existing header actions without crowding the action row.
-- Teleported the ingreso-cycle modal to document body so it opens over the main screen instead of being constrained by the scaled secondary panel.
-- Removed the user-facing "Simulación" framing and replaced the modal explanation with shorter final-user copy.
-- Kept the timeline/progression preview, but presented it as a quieter cycle view.
+- Added `composables/useAccountStateCacheSync.ts` for ciclo-, plantel-, recargo-, and matrícula-scoped Estado de Cuenta caching.
+- Estado de Cuenta now renders cached account rows immediately when available, then fetches fresh debts in the background.
+- Background sync no longer clears visible account rows while refreshing.
+- Same-context refreshes preserve scroll position, expanded payment history, selected debts, and the current concept/action context where the refreshed row still exists.
+- Added a restrained inline sync indicator in the Estado de Cuenta header for local data, updating, updated, and stale/sync-failed states.
+- Added a quiet updating treatment over the account table while background sync is running, using a soft moving wash and subtle text breathing without skeletons, flashing, layout movement, or blocking interaction.
+- Added reduced-motion handling for the account sync indicator and account updating treatment.
+- Mutation-driven refreshes after payments, enrollment, depuración, monto-final changes, and payment cancellation bypass stale cache and fetch fresh account data while keeping the current panel stable.
 
 Validation:
 - npm ci --ignore-scripts passed.
-- npm run build completed the client build, but the server build step exceeded the execution timeout while transforming and did not return a final success/failure signal in this environment.
+- npx nuxi prepare passed.
+- npm run build completed the client build; the server build transform step exceeded the execution timeout in this environment and did not return a final success/failure signal.
 
 Note:
 - npm ci reported the existing dependency audit status: 5 vulnerabilities (4 moderate, 1 high).
