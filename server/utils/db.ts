@@ -458,7 +458,6 @@ export const ensureSchema = async () => {
         const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'base'`)
 
         if (tables.length > 0) {
-          await checkAndAddColumn('base', 'interno', "TINYINT(1) NOT NULL DEFAULT 1")
           await checkAndAddColumn('base', 'genero', "VARCHAR(255) DEFAULT '1'")
 
           const familiaIdCols = await rawQuery<any[]>(`SHOW COLUMNS FROM base LIKE 'familiaId'`)

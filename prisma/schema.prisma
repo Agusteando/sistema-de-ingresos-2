@@ -54,7 +54,6 @@ model Base {
   estatus         String   @default("Activo") @db.VarChar(255)
   contingencia    Boolean? @default(false)
   ciclo           String?  @db.VarChar(255)
-  interno         Boolean? @default(true)
 
   @@map("base")
 }
@@ -348,7 +347,6 @@ model base2 {
   estatus                  String   @default("Activo") @db.VarChar(255)
   contingencia             Boolean? @default(false)
   ciclo                    String?  @db.VarChar(255)
-  interno                  Boolean? @default(true)
 
   @@ignore
 }
