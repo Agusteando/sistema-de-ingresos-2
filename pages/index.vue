@@ -13,6 +13,7 @@
       :custom-section-counts="customSectionCounts"
       :global-kpis="globalKpis"
       :kpi-sparklines="kpiSparklines"
+      :is-updating="isKpiDataUpdating"
       @set-filter="setActiveFilter"
     />
 
@@ -175,7 +176,7 @@ const { openMenu } = useContextMenu()
 const { executeOptimistic } = useOptimisticSync()
 const route = useRoute()
 useHead({ bodyAttrs: { class: 'students-route-active' } })
-const { readCachedStudents, writeCachedStudents, setStudentsSyncState } = useStudentsCacheSync()
+const { studentsSyncState, readCachedStudents, writeCachedStudents, setStudentsSyncState } = useStudentsCacheSync()
 const state = useState('globalState')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 
@@ -191,6 +192,7 @@ const students = ref([])
 const loading = ref(false)
 const selectedStudent = ref(null)
 const photoCache = ref({})
+const isKpiDataUpdating = computed(() => studentsSyncState.value.status === 'syncing' && !loading.value && students.value.length > 0)
 
 const globalKpis = ref({ ingresosMes: 0 })
 const paymentKpiSparklines = ref({ inscritos: [], internos: [], externos: [], ingresos: [] })

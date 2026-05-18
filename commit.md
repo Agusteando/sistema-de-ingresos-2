@@ -1,11 +1,14 @@
-Implement cache-first student loading flow
+Refine student background sync affordances
 
-- Add reusable student cache/sync state backed by localStorage per plantel, role, ciclo, and search query.
-- Load cached students immediately when available, then fetch fresh students in the background.
-- Apply fresh student data without blocking the current workspace and keep filters, search, selection, open panels, and active workflow state intact.
-- Keep cached/current student data usable when background sync fails and surface the stale/failed state through a subtle sidebar indicator.
-- Refresh from the server after student mutations and bulk payment refreshes so local cache is updated without reverting to stale cached data.
+- Keep the cache-first student loading flow intact while making the sidebar sync indicator lower-signal and less visually prominent.
+- Reduce the indicator to a compact muted status line that communicates cached, updating, updated, and failed/stale states without a card, banner, toast, modal, or alert treatment.
+- Add a restrained pending-data treatment to the student KPI cards while background sync is active and existing student data remains visible.
+- Preserve current KPI values, card sizing, filters, selection, workspace state, and interaction during sync; fresh values apply through the existing student data update path.
+- Respect reduced-motion preferences by disabling the KPI sweep and sync-dot animation while keeping a static low-signal state.
 
 Validation:
 - Ran `npm ci --ignore-scripts` to install dependencies in the sandbox.
 - Ran `npm run build` successfully.
+
+Notes:
+- `npm ci` reported the existing dependency audit status: 3 vulnerabilities from the current lockfile dependency tree.

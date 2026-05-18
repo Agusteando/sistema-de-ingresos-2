@@ -29,7 +29,9 @@
   color: var(--students-ink);
   text-align: left;
   cursor: pointer;
+  --kpi-pending-color: var(--kpi-color, #3f9138);
   isolation: isolate;
+  overflow: hidden;
 }
 
 
@@ -44,9 +46,37 @@
   box-shadow: inset var(--students-focus);
 }
 
+.kpi-card::after,
+.section-kpi-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(105deg, transparent 28%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 14%, transparent) 48%, transparent 68%);
+  transform: translateX(-60%);
+  transition: opacity 260ms ease;
+}
+
+.kpi-summary-system.is-updating .kpi-card::after,
+.kpi-summary-system.is-updating .section-kpi-card::after {
+  opacity: 0.105;
+  animation: kpi-soft-pending-sweep 3.8s ease-in-out infinite;
+}
+
+.kpi-summary-system.is-updating .kpi-card .ui-kpi-sparkline {
+  opacity: 0.42;
+}
+
+@keyframes kpi-soft-pending-sweep {
+  0% { transform: translateX(-70%); }
+  55%, 100% { transform: translateX(70%); }
+}
+
 .kpi-icon {
   position: relative;
   z-index: 1;
+  --kpi-pending-color: var(--section-color, #3f9138);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -156,10 +186,22 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ui-kpi-sparkline__line,
-  .ui-kpi-sparkline__point {
+  .ui-kpi-sparkline__point,
+  .kpi-summary-system.is-updating .kpi-card::after,
+  .kpi-summary-system.is-updating .section-kpi-card::after {
     animation: none;
+  }
+
+  .ui-kpi-sparkline__line,
+  .ui-kpi-sparkline__point {
     opacity: 0.46;
     stroke-dashoffset: 0;
+  }
+
+  .kpi-summary-system.is-updating .kpi-card::after,
+  .kpi-summary-system.is-updating .section-kpi-card::after {
+    transform: none;
+    opacity: 0.07;
   }
 }
 
@@ -188,6 +230,7 @@
 
 .section-kpi-card {
   --section-color: #3f9138;
+  --kpi-pending-color: var(--section-color, #3f9138);
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -200,7 +243,15 @@
   color: var(--section-color);
   font-size: 11px;
   font-weight: 790;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   box-shadow: 0 6px 13px rgba(21, 35, 60, 0.04);
+}
+
+.section-kpi-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .section-kpi-card svg {
