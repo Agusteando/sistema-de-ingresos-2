@@ -1,14 +1,10 @@
-Refine alta modal academic fields and matrícula sequence
+Add live proper-case formatting to student name fields
 
-- Remove Grupo from the new-student alta form and save new students without grupo.
-- Keep Grupo editable only when updating an existing student.
-- Reduce the academic section to the required Grado control; plantel and nivel remain derived from the active session context and plantel resolver.
-- Remove the invasive matrícula estimate card and move matrícula context into a compact footer strip.
-- Compute the next matrícula display from the current highest matrícula for the active plantel, preserving the numeric padding format such as PM0053.
-- Show last matrícula and next matrícula in the alta footer without reserving or creating the matrícula before save.
-- Remove user-facing “estimada” wording from the alta matrícula UI and remove the alta footer explanation text.
-- Rename the sidebar plantel label from “Plantel activo” to “Plantel”.
-- Preserve CURP-first validation, inferred birth date/age/gender, active plantel, selected ciclo de ingreso, proper-name casing, and existing edit behavior.
+- Apply automatic proper-case formatting while typing in name-related alta/edit fields.
+- Covered A. paterno, A. materno, Nombre(s), and Padre/Tutor.
+- Preserve in-progress spacing while typing so users can continue entering multi-word names naturally.
+- Preserve final submit-time normalization for trimmed, single-spaced persisted names.
+- Keep existing CURP validation, matrícula preview, plantel/ciclo behavior, and edit behavior unchanged.
 
 Validation:
 - npm ci --ignore-scripts passed.
