@@ -99,11 +99,13 @@
                 </strong>
                 <em class="student-meta">
                   <span>{{ student.matricula }}</span>
+                </em>
+                <span class="student-type-line">
                   <span :class="['student-tipo-chip', resolvedTipoIngreso(student).value]" :title="resolvedTipoIngreso(student).reason">
                     <component :is="tipoIngresoIcon(student)" :size="11" :stroke-width="2.4" />
                     {{ resolvedTipoIngresoLabel(student) }}
                   </span>
-                </em>
+                </span>
                 <span v-if="student.customSections?.length" class="student-section-badges" :title="sectionBadgeTitle(student)">
                   <b v-for="section in visibleStudentSections(student)" :key="`row-section-${student.matricula}-${section.id}`">{{ section.name }}</b>
                   <b v-if="hiddenStudentSectionsCount(student)" class="badge-more">+{{ hiddenStudentSectionsCount(student) }}</b>

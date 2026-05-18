@@ -654,13 +654,16 @@
 
 .tipo-ingreso-badge {
   display: inline-flex;
-  min-height: 22px;
+  min-height: 24px;
   align-items: center;
-  gap: 4px;
-  padding: 0 8px;
+  gap: 5px;
+  padding: 0 9px 0 6px;
+  border: 1px solid rgba(211, 222, 235, .95);
   border-radius: 999px;
+  background: rgba(255,255,255,.86);
+  box-shadow: 0 7px 16px rgba(21, 35, 60, .05), inset 0 1px 0 rgba(255,255,255,.92);
   font-size: 11px;
-  font-weight: 820;
+  font-weight: 850;
   letter-spacing: 0;
   line-height: 1;
   white-space: nowrap;
@@ -668,18 +671,30 @@
 
 .tipo-ingreso-badge svg {
   flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  padding: 2.5px;
+  border-radius: 999px;
 }
 
 .tipo-ingreso-badge.interno {
-  border: 1px solid rgba(47, 127, 50, .18);
-  background: rgba(47, 127, 50, .075);
+  border-color: rgba(47, 127, 50, .26);
+  background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(239, 248, 235, .94));
   color: #2f7f32;
 }
 
+.tipo-ingreso-badge.interno svg {
+  background: rgba(47, 127, 50, .105);
+}
+
 .tipo-ingreso-badge.externo {
-  border: 1px solid rgba(65, 112, 205, .18);
-  background: rgba(65, 112, 205, .075);
+  border-color: rgba(65, 112, 205, .26);
+  background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(239, 246, 255, .94));
   color: #2f62b8;
+}
+
+.tipo-ingreso-badge.externo svg {
+  background: rgba(65, 112, 205, .11);
 }
 
 .ingreso-icon-button {
