@@ -13,7 +13,6 @@
       :custom-section-counts="customSectionCounts"
       :global-kpis="globalKpis"
       :kpi-sparklines="kpiSparklines"
-      :is-updating="isKpiDataUpdating"
       @set-filter="setActiveFilter"
     />
 
@@ -132,7 +131,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
 import { useHead } from '#imports'
@@ -192,55 +191,6 @@ const students = ref([])
 const loading = ref(false)
 const selectedStudent = ref(null)
 const photoCache = ref({})
-const KPI_REFRESH_MIN_VISIBLE_MS = 1500
-const isKpiDataUpdating = ref(false)
-let kpiRefreshStartedAt = 0
-let kpiRefreshHideTimer = null
-
-const clearKpiRefreshHideTimer = () => {
-  if (!kpiRefreshHideTimer) return
-  clearTimeout(kpiRefreshHideTimer)
-  kpiRefreshHideTimer = null
-}
-
-const nowForKpiRefresh = () => {
-  if (process.client && typeof performance !== 'undefined') return performance.now()
-  return Date.now()
-}
-
-watch(
-  () => ({
-    status: studentsSyncState.value.status,
-    hasUsableStudents: students.value.length > 0 && !loading.value
-  }),
-  ({ status, hasUsableStudents }) => {
-    const shouldShowRefreshing = status === 'syncing' && hasUsableStudents
-
-    if (shouldShowRefreshing) {
-      clearKpiRefreshHideTimer()
-      kpiRefreshStartedAt = nowForKpiRefresh()
-      isKpiDataUpdating.value = true
-      return
-    }
-
-    if (!isKpiDataUpdating.value) return
-
-    const elapsed = nowForKpiRefresh() - kpiRefreshStartedAt
-    const remaining = Math.max(0, KPI_REFRESH_MIN_VISIBLE_MS - elapsed)
-
-    clearKpiRefreshHideTimer()
-    kpiRefreshHideTimer = setTimeout(() => {
-      isKpiDataUpdating.value = false
-      kpiRefreshHideTimer = null
-    }, remaining)
-  },
-  { immediate: true }
-)
-
-onBeforeUnmount(() => {
-  clearKpiRefreshHideTimer()
-})
-
 const globalKpis = ref({ ingresosMes: 0 })
 const paymentKpiSparklines = ref({ inscritos: [], internos: [], externos: [], ingresos: [] })
 const showStudentModal = ref(false)
