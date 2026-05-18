@@ -54,87 +54,89 @@
   position: absolute;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 340ms ease, transform 340ms ease;
-  z-index: 0;
+  transition: opacity 420ms ease, transform 420ms ease;
 }
 
 .kpi-card::before,
 .section-kpi-card::before {
-  inset: -38% -24%;
+  inset: -42% -34%;
+  z-index: 0;
   background:
-    radial-gradient(circle at 18% 44%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 22%, transparent) 0 16%, transparent 42%),
-    radial-gradient(circle at 82% 56%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 18%, transparent) 0 18%, transparent 46%),
-    linear-gradient(100deg, transparent 12%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 12%, transparent) 48%, transparent 84%);
-  filter: blur(0.2px);
-  transform: translate3d(-4%, -1%, 0) scale(1.02);
+    radial-gradient(circle at 16% 42%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 32%, transparent) 0 14%, transparent 39%),
+    radial-gradient(circle at 78% 58%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 26%, transparent) 0 16%, transparent 43%),
+    linear-gradient(106deg, transparent 7%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 18%, transparent) 38%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 10%, transparent) 56%, transparent 86%);
+  filter: blur(0.4px);
+  transform: translate3d(-8%, -1%, 0) scale(1.02);
 }
 
 .kpi-card::after,
 .section-kpi-card::after {
   inset: 0;
-  background: linear-gradient(110deg, transparent 18%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 20%, transparent) 48%, transparent 76%);
-  transform: translateX(-58%);
+  z-index: 1;
+  background: linear-gradient(112deg, transparent 12%, color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 18%, transparent) 39%, color-mix(in srgb, #ffffff 36%, transparent) 50%, transparent 68%);
+  transform: translateX(-62%);
 }
 
 .kpi-summary-system.is-updating .kpi-card::before,
 .kpi-summary-system.is-updating .section-kpi-card::before {
-  opacity: 0.2;
-  animation: kpi-fluid-pending-background 5.2s ease-in-out infinite;
+  opacity: 0.34;
+  animation: kpi-fluid-pending-background 3.7s ease-in-out infinite alternate;
 }
 
 .kpi-summary-system.is-updating .kpi-card::after,
 .kpi-summary-system.is-updating .section-kpi-card::after {
-  opacity: 0.16;
-  animation: kpi-soft-pending-sweep 4.4s ease-in-out infinite;
+  opacity: 0.22;
+  animation: kpi-soft-pending-sweep 3.1s ease-in-out infinite;
 }
 
 .kpi-summary-system.is-updating .kpi-card .ui-kpi-sparkline {
-  opacity: 0.46;
+  opacity: 0.56;
 }
 
 .kpi-summary-system.is-updating .kpi-text span,
 .kpi-summary-system.is-updating .section-kpi-name {
-  animation: kpi-label-refresh-pulse 2.9s ease-in-out infinite;
+  animation: kpi-label-refresh-pulse 2.15s ease-in-out infinite;
 }
 
 .kpi-summary-system.is-updating .kpi-text strong,
 .kpi-summary-system.is-updating .section-kpi-card strong {
-  animation: kpi-value-refresh-pulse 2.9s ease-in-out infinite;
+  animation: kpi-value-refresh-pulse 2.15s ease-in-out infinite;
 }
 
 @keyframes kpi-fluid-pending-background {
-  0%, 100% {
-    transform: translate3d(-5%, -1%, 0) scale(1.02);
-    opacity: 0.16;
+  0% {
+    transform: translate3d(-8%, -1%, 0) scale(1.02);
+    opacity: 0.24;
   }
-  45% {
-    transform: translate3d(4%, 1%, 0) scale(1.035);
-    opacity: 0.25;
+  48% {
+    transform: translate3d(3%, 1%, 0) scale(1.04);
+    opacity: 0.38;
   }
-  68% {
-    transform: translate3d(7%, 0%, 0) scale(1.025);
-    opacity: 0.21;
+  100% {
+    transform: translate3d(9%, 0%, 0) scale(1.025);
+    opacity: 0.3;
   }
 }
 
 @keyframes kpi-soft-pending-sweep {
-  0% { transform: translateX(-68%); }
-  55%, 100% { transform: translateX(68%); }
+  0% { transform: translateX(-66%); }
+  52% { transform: translateX(42%); }
+  100% { transform: translateX(66%); }
 }
 
 @keyframes kpi-label-refresh-pulse {
   0%, 100% { color: #657088; }
-  50% { color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 38%, #657088); }
+  50% { color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 62%, #4e5b72); }
 }
 
 @keyframes kpi-value-refresh-pulse {
   0%, 100% { color: #16243d; }
-  50% { color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 34%, #16243d); }
+  50% { color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 48%, #16243d); }
 }
 
 .kpi-icon {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   --kpi-pending-color: var(--section-color, #3f9138);
   display: inline-flex;
   align-items: center;
@@ -155,7 +157,7 @@
 
 .kpi-text {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -196,7 +198,7 @@
   color: var(--kpi-color, #3f9138);
   opacity: 0.36;
   pointer-events: none;
-  z-index: 0;
+  z-index: 1;
   transform: translateY(2px);
 }
 
@@ -268,23 +270,23 @@
   .kpi-summary-system.is-updating .kpi-card::before,
   .kpi-summary-system.is-updating .section-kpi-card::before {
     transform: none;
-    opacity: 0.16;
+    opacity: 0.26;
   }
 
   .kpi-summary-system.is-updating .kpi-card::after,
   .kpi-summary-system.is-updating .section-kpi-card::after {
     transform: none;
-    opacity: 0.09;
+    opacity: 0.14;
   }
 
   .kpi-summary-system.is-updating .kpi-text span,
   .kpi-summary-system.is-updating .section-kpi-name {
-    color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 28%, #657088);
+    color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 44%, #657088);
   }
 
   .kpi-summary-system.is-updating .kpi-text strong,
   .kpi-summary-system.is-updating .section-kpi-card strong {
-    color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 24%, #16243d);
+    color: color-mix(in srgb, var(--kpi-pending-color, var(--kpi-color, #3f9138)) 34%, #16243d);
   }
 }
 
@@ -334,7 +336,7 @@
 
 .section-kpi-card > * {
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .section-kpi-card svg {
