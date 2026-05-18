@@ -1,10 +1,10 @@
-Refine student background sync affordances
+Refine KPI background-sync affordance
 
-- Keep the cache-first student loading flow intact while making the sidebar sync indicator lower-signal and less visually prominent.
-- Reduce the indicator to a compact muted status line that communicates cached, updating, updated, and failed/stale states without a card, banner, toast, modal, or alert treatment.
-- Add a restrained pending-data treatment to the student KPI cards while background sync is active and existing student data remains visible.
-- Preserve current KPI values, card sizing, filters, selection, workspace state, and interaction during sync; fresh values apply through the existing student data update path.
-- Respect reduced-motion preferences by disabling the KPI sweep and sync-dot animation while keeping a static low-signal state.
+- Keep the cache-first student loading and subtle sidebar sync indicator intact.
+- Make the KPI updating state more perceptible while background sync is active by combining a soft text-color pulse on KPI labels/values with a gentle moving gradient wash inside the KPI cards.
+- Preserve visible KPI values, card dimensions, filters, selection, workspace state, scroll, and interaction while fresh data is fetched and applied.
+- Avoid skeletons, blocking loaders, flashing, alert-like styling, layout shift, or route reload behavior.
+- Respect reduced-motion preferences by disabling KPI animations and keeping a static low-signal pending-data tint.
 
 Validation:
 - Ran `npm ci --ignore-scripts` to install dependencies in the sandbox.
