@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
     SELECT 
       A.matricula, A.nombreCompleto, A.apellidoPaterno, A.apellidoMaterno, A.nombres, A.genero,
       A.grado as gradoBase, A.grupo, A.ciclo as cicloBase, A.ciclo, A.plantel, A.estatus,
-      A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth, A.interno as internoBase,
+      A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth,
       Prev.previous_matricula AS matriculaAnterior,
       Next.successor_matricula AS matriculaSiguiente,
       IFNULL(B.pagosTotal, 0) AS pagosTotal,
@@ -114,7 +114,6 @@ export default defineEventHandler(async (event) => {
       ...r,
       grado: displayGrado(promoted.grado),
       nivel: promoted.nivel,
-      internoLegacy: r.internoBase,
       interno: tipoIngresoToInternoValue(tipoIngreso),
       tipoIngreso
     }

@@ -73,7 +73,6 @@ export default defineEventHandler(async (event) => {
       E.matricula,
       E.firstEnrollmentAt,
       E.conceptosTarget,
-      A.interno AS internoBase,
       A.grado AS gradoBase,
       A.ciclo AS cicloBase,
       A.ciclo,

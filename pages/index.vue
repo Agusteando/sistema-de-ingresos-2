@@ -781,9 +781,7 @@ const handleIngresoCycleUpdated = (payload) => {
       ...student,
       ...payload,
       ciclo: payload.ciclo || payload.cicloBase || student.ciclo,
-      cicloBase: payload.cicloBase || payload.ciclo || student.cicloBase,
-      internoBase: 0,
-      internoLegacy: 0
+      cicloBase: payload.cicloBase || payload.ciclo || student.cicloBase
     }
     return {
       ...updated,

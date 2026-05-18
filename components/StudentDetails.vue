@@ -877,8 +877,6 @@ const saveIngresoCycle = async (ingresoCiclo) => {
       matricula: props.student.matricula,
       ciclo: ingresoCiclo,
       cicloBase: ingresoCiclo,
-      internoBase: 0,
-      internoLegacy: 0
     })
     emit('refresh')
   } catch (e) {

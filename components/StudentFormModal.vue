@@ -65,11 +65,8 @@
                       <option value="A">A</option><option value="B">B</option><option value="C">C</option>
                     </select>
                   </div>
-                  <div class="form-group mb-0"><label class="form-label">Tipo Ingreso</label>
-                    <select v-model="form.interno" class="input-field" required>
-                      <option :value="1">Interno</option>
-                      <option :value="0">Externo</option>
-                    </select>
+                  <div class="form-group mb-0"><label class="form-label">Ciclo de ingreso</label>
+                    <input type="text" :value="normalizeCicloKey(form.ciclo)" class="input-field bg-gray-50 font-semibold text-gray-500" disabled>
                   </div>
                 </div>
               </div>
@@ -141,7 +138,7 @@ const loading = ref(false)
 
 const form = ref({
   matricula: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
-  birth: '', genero: '1', plantel: defaultPlantel, interno: 0, nivel: nivelFromPlantel(defaultPlantel), grado: 'Primero', grupo: 'A',
+  birth: '', genero: '1', plantel: defaultPlantel, nivel: nivelFromPlantel(defaultPlantel), grado: 'Primero', grupo: 'A',
   padre: '', telefono: '', correo: '', ciclo: normalizeCicloKey(state.value.ciclo), estatus: 'Activo',
   matriculaAnterior: '', matriculaSiguiente: ''
 })
@@ -185,8 +182,7 @@ onMounted(() => {
       birth: s.birth ? s.birth.split('T')[0] : '', 
       genero: s.genero || '1', 
       plantel: s.plantel || defaultPlantel, 
-      interno: s.internoLegacy !== undefined ? Number(s.internoLegacy) : (s.internoBase !== undefined ? Number(s.internoBase) : (s.interno !== undefined ? Number(s.interno) : 0)), 
-      nivel: nivelFromPlantel(s.plantel || defaultPlantel), 
+nivel: nivelFromPlantel(s.plantel || defaultPlantel), 
       grado: displayGrado(s.gradoBase || s.grado || 'Primero'), 
       grupo: s.grupo || 'A',
       padre: s.padre || '', 

@@ -67,8 +67,8 @@ export default defineEventHandler(async (event) => {
       updateParams.push(cicloKey)
     }
 
-    setClauses.push('interno = ?', 'estatus = ?')
-    updateParams.push(body.interno, body.estatus || 'Activo', matricula)
+    setClauses.push('estatus = ?')
+    updateParams.push(body.estatus || 'Activo', matricula)
 
     const statements: SqlStatement[] = [{
       sql: `
