@@ -141,7 +141,7 @@ const loading = ref(false)
 
 const form = ref({
   matricula: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
-  birth: '', genero: '1', plantel: defaultPlantel, interno: 1, nivel: nivelFromPlantel(defaultPlantel), grado: 'Primero', grupo: 'A',
+  birth: '', genero: '1', plantel: defaultPlantel, interno: 0, nivel: nivelFromPlantel(defaultPlantel), grado: 'Primero', grupo: 'A',
   padre: '', telefono: '', correo: '', ciclo: normalizeCicloKey(state.value.ciclo), estatus: 'Activo',
   matriculaAnterior: '', matriculaSiguiente: ''
 })
@@ -185,7 +185,7 @@ onMounted(() => {
       birth: s.birth ? s.birth.split('T')[0] : '', 
       genero: s.genero || '1', 
       plantel: s.plantel || defaultPlantel, 
-      interno: s.interno !== undefined ? Number(s.interno) : 1, 
+      interno: s.internoLegacy !== undefined ? Number(s.internoLegacy) : (s.internoBase !== undefined ? Number(s.internoBase) : (s.interno !== undefined ? Number(s.interno) : 0)), 
       nivel: nivelFromPlantel(s.plantel || defaultPlantel), 
       grado: displayGrado(s.gradoBase || s.grado || 'Primero'), 
       grupo: s.grupo || 'A',

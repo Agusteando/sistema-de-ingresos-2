@@ -99,6 +99,7 @@
                 </strong>
                 <em class="student-meta">
                   <span>{{ student.matricula }}</span>
+                  <span :class="['student-tipo-chip', resolvedTipoIngreso(student).value]">{{ resolvedTipoIngresoLabel(student) }}</span>
                 </em>
                 <span v-if="student.customSections?.length" class="student-section-badges" :title="sectionBadgeTitle(student)">
                   <b v-for="section in visibleStudentSections(student)" :key="`row-section-${student.matricula}-${section.id}`">{{ section.name }}</b>
@@ -133,6 +134,7 @@
 
 <script setup>
 import { LucideChevronRight, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
+import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
 import {
@@ -160,10 +162,13 @@ const props = defineProps({
   hasActiveFilters: { type: Boolean, default: false },
   selectedStudent: { type: Object, default: null },
   externalConcepts: { type: Array, default: () => [] },
+  targetCiclo: { type: [String, Number], default: '2025' },
   photoCache: { type: Object, default: () => ({}) }
 })
 
 const isSelected = (student) => props.selectedMatriculas.has(normalizeStudentMatricula(student?.matricula))
+const resolvedTipoIngreso = (student) => resolveTipoIngreso(student, props.targetCiclo, { enrollmentConcepts: props.externalConcepts })
+const resolvedTipoIngresoLabel = (student) => formatTipoIngresoValue(resolvedTipoIngreso(student))
 
 const activeStudentPhotoUrl = (student) => {
   const matricula = normalizeStudentMatricula(student?.matricula)

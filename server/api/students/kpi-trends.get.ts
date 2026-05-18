@@ -1,5 +1,6 @@
 import { query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -53,6 +54,7 @@ export default defineEventHandler(async (event) => {
   const user = event.context.user
   const { ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
+  const previousCiclo = previousCicloKey(cicloKey)
   const enrollmentConcepts = sanitizeConcepts(concepts)
   const plantelScope = user.active_plantel || 'GLOBAL'
   const cacheKey = [user.role, plantelScope, cicloKey, enrollmentConcepts.join('|')].join('::')
@@ -70,12 +72,20 @@ export default defineEventHandler(async (event) => {
     SELECT
       E.matricula,
       E.firstEnrollmentAt,
-      A.interno,
+      E.conceptosTarget,
+      A.interno AS internoBase,
       A.grado AS gradoBase,
       A.ciclo AS cicloBase,
-      A.plantel
+      A.ciclo,
+      A.plantel,
+      BPrev.conceptosPagadosPrevios,
+      CPrev.conceptosCargadosPrevios,
+      CONCAT_WS('|', BPrev.conceptosPagadosPrevios, CPrev.conceptosCargadosPrevios) AS conceptosCicloPrevio
     FROM (
-      SELECT r.matricula, MIN(r.fecha) AS firstEnrollmentAt
+      SELECT
+        r.matricula,
+        MIN(r.fecha) AS firstEnrollmentAt,
+        GROUP_CONCAT(DISTINCT r.conceptoNombre SEPARATOR '|') AS conceptosTarget
       FROM referenciasdepago r
       WHERE r.ciclo = ?
         AND r.estatus = 'Vigente'
@@ -83,8 +93,20 @@ export default defineEventHandler(async (event) => {
       GROUP BY r.matricula
     ) E
     JOIN base A ON A.matricula = E.matricula
+    LEFT JOIN (
+      SELECT matricula, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosPagadosPrevios
+      FROM referenciasdepago
+      WHERE ciclo = ? AND estatus = 'Vigente'
+      GROUP BY matricula
+    ) BPrev ON A.matricula = BPrev.matricula
+    LEFT JOIN (
+      SELECT matricula, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosCargadosPrevios
+      FROM documentos
+      WHERE ciclo = ? AND estatus = 'Activo'
+      GROUP BY matricula
+    ) CPrev ON A.matricula = CPrev.matricula
     WHERE 1 = 1 ${plantelWhere}
-  `, [cicloKey, ...conceptParams, ...plantelParams])
+  `, [cicloKey, ...conceptParams, previousCiclo, previousCiclo, ...plantelParams])
 
   const incomeWhere = plantelScope !== 'GLOBAL' ? 'AND COALESCE(A.plantel, r.plantel) = ?' : ''
   const incomeRows = await query<any[]>(`
@@ -113,7 +135,17 @@ export default defineEventHandler(async (event) => {
     if (!bucket) return
     buckets.add(bucket)
     increment(inscritos, bucket)
-    if (String(row.interno) === '1') increment(internos, bucket)
+    const tipoIngreso = resolveTipoIngreso({
+      ...row,
+      conceptosCicloActual: row.conceptosTarget,
+      tipoIngresoEvidence: {
+        targetCiclo: cicloKey,
+        previousCiclo,
+        targetConcepts: row.conceptosTarget,
+        previousConcepts: [row.conceptosPagadosPrevios, row.conceptosCargadosPrevios, row.conceptosCicloPrevio]
+      }
+    }, cicloKey, { enrollmentConcepts })
+    if (tipoIngreso.value === 'interno') increment(internos, bucket)
     else increment(externos, bucket)
   })
 

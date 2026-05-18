@@ -19,8 +19,6 @@
               <span class="student-code">{{ student.matricula }}</span>
               <i></i>
               {{ student.nivel }} · {{ gradeVisualTitle(student) }}<template v-if="studentGroupLabel(student)"> · {{ studentGroupLabel(student) }}</template>
-              <i></i>
-              {{ String(student.interno) === '1' ? 'Interno' : 'Externo' }}
               <template v-if="student.matriculaAnterior">
                 <i></i>
                 Ant. {{ student.matriculaAnterior }}
@@ -31,6 +29,12 @@
               </template>
               <em v-if="student.estatus !== 'Activo'">(Motivo: {{ student.estatus }})</em>
             </p>
+            <div class="tipo-ingreso-row">
+              <span :class="['tipo-ingreso-badge', resolvedTipoIngreso.value]">
+                {{ resolvedTipoIngresoLabel }} · {{ selectedCicloLabel }}
+              </span>
+              <small :title="resolvedTipoIngreso.reason">{{ resolvedTipoIngresoSourceLabel }}</small>
+            </div>
             <div v-if="student.customSections?.length" class="detail-section-badges">
               <b v-for="section in student.customSections" :key="`detail-section-${student.matricula}-${section.id}`">{{ section.name }}</b>
             </div>
@@ -38,6 +42,9 @@
         </div>
 
         <div class="profile-top-actions">
+          <button class="ingreso-icon-button" title="Corregir ciclo de ingreso" @click="showIngresoCycleModal = true">
+            <LucideCalendarClock :size="18"/>
+          </button>
           <button v-if="student.estatus === 'Activo'" class="danger-icon-button" title="Dar de baja" @click="$emit('baja', student)">
             <LucideUserX :size="19"/>
           </button>
@@ -62,6 +69,9 @@
           <LucideFilePlus v-else :size="15"/> Inscribir
         </button>
         <span class="action-divider"></span>
+        <button class="btn btn-ghost btn-sm action-ingreso" @click="showIngresoCycleModal = true">
+          <LucideCalendarClock :size="15"/> ¿Cuándo ingresó?
+        </button>
         <button class="btn btn-ghost btn-sm action-edit" @click="$emit('edit', student)">
           <LucideSettings :size="15"/> Editar
         </button>
@@ -210,6 +220,17 @@
     <DocumentModal v-if="showDocModal" :student="student" @close="showDocModal = false" @success="handleSuccess" />
     <InvoiceModal v-if="showInvoiceModal" :debts="selectedDebts" :student="student" @close="showInvoiceModal = false" @success="handleSuccess" />
     <ConceptChangeModal v-if="showConceptModal" :debt="selectedConceptDebt" @close="closeConceptModal" @success="handleSuccess" />
+    <IngresoCycleModal
+      v-if="showIngresoCycleModal"
+      :student="student"
+      :target-ciclo="selectedCicloKey"
+      :current-tipo-ingreso="resolvedTipoIngreso"
+      :photo-url="photoUrl || ''"
+      :saving="savingIngresoCycle"
+      :enrollment-concepts="externalConcepts"
+      @close="showIngresoCycleModal = false"
+      @confirm="saveIngresoCycle"
+    />
   </div>
 </template>
 
@@ -221,21 +242,27 @@ const studentPhotoRequests = new Map()
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
-import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
+import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 import { gradeVisualTitle, studentGroupLabel, studentPresentationStyle } from '~/shared/utils/studentPresentation'
 import PaymentModal from './PaymentModal.vue'
 import DocumentModal from './DocumentModal.vue'
 import InvoiceModal from './InvoiceModal.vue'
 import ConceptChangeModal from './ConceptChangeModal.vue'
+import IngresoCycleModal from './IngresoCycleModal.vue'
 import StudentAccountPhotoCard from '~/components/students/StudentAccountPhotoCard.vue'
 
-const props = defineProps({ student: Object, isEnrolled: { type: Boolean, default: true } })
-const emit = defineEmits(['refresh', 'edit', 'close', 'switch-student', 'baja', 'photo-loaded', 'manage-sections'])
+const props = defineProps({
+  student: Object,
+  isEnrolled: { type: Boolean, default: true },
+  externalConcepts: { type: Array, default: () => [] }
+})
+const emit = defineEmits(['refresh', 'edit', 'close', 'switch-student', 'baja', 'photo-loaded', 'manage-sections', 'ingreso-cycle-updated'])
 const { show } = useToast()
 const { openMenu } = useContextMenu()
 const { executeOptimistic } = useOptimisticSync()
@@ -258,6 +285,8 @@ const showPaymentModal = ref(false)
 const showDocModal = ref(false)
 const showInvoiceModal = ref(false)
 const showConceptModal = ref(false)
+const showIngresoCycleModal = ref(false)
+const savingIngresoCycle = ref(false)
 const selectedConceptDebt = ref(null)
 
 const format = (val) => Number(val || 0).toFixed(2)
@@ -268,6 +297,16 @@ const accountFooterLabel = computed(() => {
   if (!debts.value.length) return 'Sin conceptos en este ciclo'
   return `Mostrando ${debts.value.length} de ${debts.value.length} conceptos`
 })
+const selectedCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
+const selectedCicloLabel = computed(() => formatCicloLabel(selectedCicloKey.value))
+const resolvedTipoIngreso = computed(() => resolveTipoIngreso(props.student, selectedCicloKey.value, { enrollmentConcepts: props.externalConcepts }))
+const resolvedTipoIngresoLabel = computed(() => formatTipoIngresoValue(resolvedTipoIngreso.value))
+const resolvedTipoIngresoSourceLabel = computed(() => ({
+  ingreso_anchor: 'Por ciclo de ingreso',
+  confirmed_conceptos: 'Confirmado por conceptos',
+  legacy_fallback: 'Compatibilidad legacy',
+  legacy_interno: 'Compatibilidad legacy'
+}[resolvedTipoIngreso.value.source] || 'Resuelto'))
 
 const progressPaidWidth = (debt) => `${Math.min(100, Number(debt.porcentajePagoReal ?? debt.porcentajePagado) || 0)}%`
 const progressCleanupWidth = (debt) => `${Math.min(100, Number(debt.porcentajeDepurado) || 0)}%`
@@ -616,6 +655,37 @@ const showDebtContextMenu = (event, debt) => {
 
   menuItems.push({ label: 'Ajustar concepto', icon: LucideSettings, action: () => openConceptChange(debt) })
   openMenu(event, menuItems)
+}
+
+
+const saveIngresoCycle = async (ingresoCiclo) => {
+  if (!props.student?.matricula || savingIngresoCycle.value) return
+  savingIngresoCycle.value = true
+
+  try {
+    const res = await $fetch(`/api/students/${props.student.matricula}/ingreso-cycle`, {
+      method: 'PUT',
+      body: {
+        ciclo: ingresoCiclo,
+        targetCiclo: selectedCicloKey.value
+      }
+    })
+
+    showIngresoCycleModal.value = false
+    show('Ciclo de ingreso actualizado', 'success')
+    emit('ingreso-cycle-updated', res?.student || {
+      matricula: props.student.matricula,
+      ciclo: ingresoCiclo,
+      cicloBase: ingresoCiclo,
+      internoBase: 0,
+      internoLegacy: 0
+    })
+    emit('refresh')
+  } catch (e) {
+    show(e?.data?.message || 'No se pudo actualizar el ciclo de ingreso', 'danger')
+  } finally {
+    savingIngresoCycle.value = false
+  }
 }
 
 const handleSuccess = () => {

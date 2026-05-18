@@ -1,6 +1,7 @@
 import { query } from '../../utils/db'
 import { calculatePromotedGrado, displayGrado, nivelFromPlantel, normalizeGradoForPlantel } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { previousCicloKey, resolveTipoIngreso, tipoIngresoToInternoValue } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 
 export default defineEventHandler(async (event) => {
@@ -10,6 +11,7 @@ export default defineEventHandler(async (event) => {
   if (method === 'GET') {
     const { q = '', ciclo = '2025', nivel = '', grado = '', grupo = '' } = getQuery(event)
     const cicloKey = normalizeCicloKey(ciclo)
+    const previousCiclo = previousCicloKey(cicloKey)
     
     let whereClause = "1=1"
     const params: any[] = []
@@ -38,6 +40,10 @@ export default defineEventHandler(async (event) => {
         B.conceptosPagados,
         IFNULL(C.saldo, 0) AS importeTotal,
         C.conceptosCargados,
+        BPrev.conceptosPagadosPrevios,
+        CPrev.conceptosCargadosPrevios,
+        CONCAT_WS('|', B.conceptosPagados, C.conceptosCargados) AS conceptosCicloActual,
+        CONCAT_WS('|', BPrev.conceptosPagadosPrevios, CPrev.conceptosCargadosPrevios) AS conceptosCicloPrevio,
         (IFNULL(C.saldo, 0) - IFNULL(B.pagosTotal, 0)) AS saldoNeto
       FROM base A
       LEFT JOIN (
@@ -68,21 +74,45 @@ export default defineEventHandler(async (event) => {
         ) cargos
         GROUP BY cargos.matricula
       ) C ON A.matricula = C.matricula
+      LEFT JOIN (
+        SELECT matricula, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosPagadosPrevios
+        FROM referenciasdepago
+        WHERE ciclo = ? AND estatus = 'Vigente'
+        GROUP BY matricula
+      ) BPrev ON A.matricula = BPrev.matricula
+      LEFT JOIN (
+        SELECT matricula, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosCargadosPrevios
+        FROM documentos
+        WHERE ciclo = ? AND estatus = 'Activo'
+        GROUP BY matricula
+      ) CPrev ON A.matricula = CPrev.matricula
       LEFT JOIN alumno_matricula_links Prev ON Prev.successor_matricula = A.matricula
       LEFT JOIN alumno_matricula_links Next ON Next.previous_matricula = A.matricula
       WHERE ${whereClause}
       ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC LIMIT 5000;
     `
-    const rows = await query<any[]>(sql, [cicloKey, cicloKey, ...params])
+    const rows = await query<any[]>(sql, [cicloKey, cicloKey, previousCiclo, previousCiclo, ...params])
     let mapped = rows.flatMap(r => {
       const p = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey)
       if (p.outOfScope) return []
+
+      const tipoIngreso = resolveTipoIngreso({
+        ...r,
+        tipoIngresoEvidence: {
+          targetCiclo: cicloKey,
+          previousCiclo,
+          targetConcepts: [r.conceptosPagados, r.conceptosCargados, r.conceptosCicloActual],
+          previousConcepts: [r.conceptosPagadosPrevios, r.conceptosCargadosPrevios, r.conceptosCicloPrevio]
+        }
+      }, cicloKey)
 
       return {
         ...r,
         grado: displayGrado(p.grado),
         nivel: p.nivel,
-        interno: r.internoBase
+        internoLegacy: r.internoBase,
+        interno: tipoIngresoToInternoValue(tipoIngreso),
+        tipoIngreso
       }
     })
 
