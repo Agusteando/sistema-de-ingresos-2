@@ -233,14 +233,6 @@ export const resolveTipoIngreso = (
   };
 };
 
-export const tipoIngresoToInternoValue = (
-  tipoIngreso: TipoIngresoResult | TipoIngresoValue,
-): 0 | 1 =>
-  (typeof tipoIngreso === "string" ? tipoIngreso : tipoIngreso.value) ===
-  "interno"
-    ? 1
-    : 0;
-
 export const formatTipoIngresoValue = (
   tipoIngreso: TipoIngresoResult | TipoIngresoValue | null | undefined,
 ): string => {

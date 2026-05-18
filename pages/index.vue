@@ -785,8 +785,7 @@ const handleIngresoCycleUpdated = (payload) => {
     }
     return {
       ...updated,
-      tipoIngreso: resolveStudentTipoIngreso(updated),
-      interno: resolveStudentTipoIngreso(updated).value === 'interno' ? 1 : 0
+      tipoIngreso: resolveStudentTipoIngreso(updated)
     }
   })
 

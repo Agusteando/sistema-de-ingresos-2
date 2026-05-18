@@ -1,5 +1,5 @@
 import { query } from '../../../utils/db'
-import { normalizeCicloForTipoIngreso, resolveTipoIngreso, tipoIngresoToInternoValue } from '../../../../shared/utils/tipoIngreso'
+import { normalizeCicloForTipoIngreso, resolveTipoIngreso } from '../../../../shared/utils/tipoIngreso'
 
 export default defineEventHandler(async (event) => {
   const matricula = String(event.context.params?.matricula || '').trim()
@@ -40,7 +40,6 @@ export default defineEventHandler(async (event) => {
       matricula,
       ciclo: ingresoCiclo,
       cicloBase: ingresoCiclo,
-      interno: tipoIngresoToInternoValue(tipoIngreso),
       tipoIngreso
     }
   }

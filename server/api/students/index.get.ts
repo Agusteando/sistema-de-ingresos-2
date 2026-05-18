@@ -1,7 +1,7 @@
 import { query } from '../../utils/db'
 import { calculatePromotedGrado, displayGrado } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { previousCicloKey, resolveTipoIngreso, tipoIngresoToInternoValue } from '../../../shared/utils/tipoIngreso'
+import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 
 export default defineEventHandler(async (event) => {
@@ -114,7 +114,6 @@ export default defineEventHandler(async (event) => {
       ...r,
       grado: displayGrado(promoted.grado),
       nivel: promoted.nivel,
-      interno: tipoIngresoToInternoValue(tipoIngreso),
       tipoIngreso
     }
   })
