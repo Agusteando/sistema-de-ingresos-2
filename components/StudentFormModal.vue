@@ -510,63 +510,79 @@ const submit = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(18px, 3.4vh, 42px);
+  overflow: auto;
+  padding: clamp(18px, 3.2vh, 40px);
   background: rgba(15, 23, 42, 0.34);
   backdrop-filter: blur(14px) saturate(1.04);
-  overflow: auto;
 }
 
 .student-form-modal {
   position: relative;
-  width: min(1600px, calc(100vw - 48px));
-  max-height: min(980px, calc(100vh - 44px));
   display: flex;
   flex-direction: column;
+  width: min(1320px, calc(100vw - 56px));
+  max-height: min(940px, calc(100dvh - 48px));
   overflow: hidden;
   border: 1px solid rgba(203, 213, 225, 0.92);
   border-radius: 34px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 251, 255, 0.96)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.97)),
     #fff;
-  box-shadow: 0 36px 96px rgba(15, 23, 42, 0.26), 0 12px 28px rgba(15, 23, 42, 0.12);
-  font-family: var(--students-font, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  box-shadow:
+    0 36px 96px rgba(15, 23, 42, 0.26),
+    0 12px 28px rgba(15, 23, 42, 0.12);
   color: #12213c;
+  font-family: var(--students-font, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+}
+
+.student-form-modal > form {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
 }
 
 .student-form-close {
   position: absolute;
-  top: 46px;
-  right: 54px;
-  z-index: 4;
-  width: 64px;
-  height: 64px;
+  top: 38px;
+  right: 44px;
+  z-index: 5;
   display: inline-flex;
+  width: 58px;
+  height: 58px;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(203, 213, 225, 0.82);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.86);
   color: #0f1d35;
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.13);
-  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .student-form-close:hover {
   transform: translateY(-1px);
+  border-color: rgba(184, 201, 222, 1);
   background: #fff;
   box-shadow: 0 22px 48px rgba(15, 23, 42, 0.18);
 }
 
 .student-form-hero {
   position: relative;
-  min-height: 154px;
   display: flex;
+  min-height: 132px;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 28px;
-  padding: 34px 112px 32px 54px;
-  border-bottom: 1px solid rgba(203, 213, 225, 0.72);
+  gap: 26px;
   overflow: hidden;
-  background: linear-gradient(112deg, rgba(255, 255, 255, 0.98), rgba(241, 247, 255, 0.9) 55%, rgba(228, 246, 233, 0.92));
+  padding: 30px 104px 28px 48px;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.72);
+  background:
+    linear-gradient(110deg, rgba(255, 255, 255, 0.99), rgba(247, 251, 255, 0.94) 58%, rgba(235, 249, 238, 0.92));
 }
 
 .student-form-hero-veil,
@@ -578,43 +594,47 @@ const submit = async () => {
 .student-form-hero-veil {
   inset: 0;
   background:
-    radial-gradient(circle at 28% -50%, rgba(59, 130, 246, 0.12), transparent 44%),
-    radial-gradient(circle at 78% -24%, rgba(47, 147, 57, 0.16), transparent 45%);
+    radial-gradient(circle at 28% -50%, rgba(59, 130, 246, 0.1), transparent 44%),
+    radial-gradient(circle at 82% -26%, rgba(47, 147, 57, 0.18), transparent 42%);
 }
 
 .student-form-hero-curve {
-  left: 44%;
-  right: -4%;
-  height: 124px;
-  border-radius: 0 0 100% 100%;
-  transform: rotate(-5deg);
-  opacity: 0.92;
+  right: -7%;
+  left: 58%;
+  border-radius: 999px;
+  opacity: 0.78;
 }
 
 .student-form-hero-curve.blue {
   top: -76px;
-  background: linear-gradient(90deg, rgba(58, 139, 226, 0.13), rgba(255, 255, 255, 0));
+  height: 154px;
+  background: linear-gradient(98deg, rgba(66, 141, 226, 0.11), rgba(255, 255, 255, 0));
+  transform: rotate(-4deg);
 }
 
 .student-form-hero-curve.green {
-  top: 22px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(87, 180, 103, 0.24));
+  top: -34px;
+  height: 178px;
+  background: linear-gradient(104deg, rgba(255, 255, 255, 0), rgba(87, 180, 103, 0.22));
+  transform: rotate(5deg);
 }
 
 .student-form-avatar {
   position: relative;
   z-index: 1;
-  width: 88px;
-  height: 88px;
-  flex: 0 0 auto;
   display: inline-flex;
+  width: 82px;
+  height: 82px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   border: 4px solid rgba(255, 255, 255, 0.94);
   border-radius: 999px;
   background: linear-gradient(145deg, #f7fff8, #ffffff);
   color: #2f9339;
-  box-shadow: 0 18px 44px rgba(47, 147, 57, 0.14), inset 0 0 0 1px rgba(47, 147, 57, 0.16);
+  box-shadow:
+    0 18px 44px rgba(47, 147, 57, 0.14),
+    inset 0 0 0 1px rgba(47, 147, 57, 0.16);
   font-size: 24px;
   font-weight: 900;
 }
@@ -622,15 +642,16 @@ const submit = async () => {
 .student-form-title-copy {
   position: relative;
   z-index: 1;
+  min-width: 0;
 }
 
 .student-form-title-copy h2 {
   margin: 0;
   color: #12213c;
-  font-size: clamp(30px, 3.4vw, 42px);
-  line-height: 1.02;
-  letter-spacing: -0.055em;
+  font-size: clamp(30px, 3.1vw, 42px);
   font-weight: 930;
+  letter-spacing: -0.055em;
+  line-height: 1.02;
 }
 
 .student-form-title-copy p {
@@ -638,17 +659,21 @@ const submit = async () => {
   color: #60708d;
   font-size: 15.5px;
   font-weight: 650;
+  line-height: 1.35;
 }
 
 .student-form-content {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-  padding: 34px 46px 34px;
+  padding: 32px 44px;
+  scrollbar-gutter: stable;
 }
 
 .student-edit-strip {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
   padding: 15px 18px;
@@ -662,8 +687,8 @@ const submit = async () => {
   color: #6b7892;
   font-size: 11px;
   font-weight: 850;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: .06em;
 }
 
 .student-edit-strip strong {
@@ -675,8 +700,8 @@ const submit = async () => {
 
 .student-status-chip {
   display: inline-flex;
-  align-items: center;
   min-height: 28px;
+  align-items: center;
   padding: 5px 12px;
   border-radius: 999px;
   font-size: 11px;
@@ -685,21 +710,21 @@ const submit = async () => {
 }
 
 .student-status-chip.active {
-  color: #24772d;
-  background: #eaf8ed;
   border: 1px solid #bde7c4;
+  background: #eaf8ed;
+  color: #24772d;
 }
 
 .student-status-chip.inactive {
-  color: #be123c;
-  background: #fff1f2;
   border: 1px solid #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
 }
 
 .student-form-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr);
-  gap: 56px;
+  grid-template-columns: minmax(0, 1fr) minmax(410px, 1fr);
+  gap: clamp(34px, 4.2vw, 56px);
 }
 
 .form-panel {
@@ -710,13 +735,13 @@ const submit = async () => {
   display: flex;
   align-items: center;
   gap: 15px;
-  margin-bottom: 22px;
+  margin-bottom: 21px;
 }
 
 .section-heading > span {
-  width: 48px;
-  height: 48px;
   display: inline-flex;
+  width: 46px;
+  height: 46px;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
@@ -724,32 +749,52 @@ const submit = async () => {
 
 .section-heading h3 {
   margin: 0;
-  font-size: 20px;
-  line-height: 1;
+  font-size: 19px;
   font-weight: 900;
   letter-spacing: -0.02em;
+  line-height: 1;
 }
 
-.section-heading.green { color: #24822f; }
-.section-heading.green > span { background: #eaf8ed; box-shadow: inset 0 0 0 1px rgba(47, 147, 57, .12); }
-.section-heading.blue { color: #256ee4; }
-.section-heading.blue > span { background: #edf4ff; box-shadow: inset 0 0 0 1px rgba(37, 110, 228, .12); }
-.section-heading.amber { color: #e27d00; }
-.section-heading.amber > span { background: #fff7ed; box-shadow: inset 0 0 0 1px rgba(226, 125, 0, .12); }
+.section-heading.green {
+  color: #24822f;
+}
+
+.section-heading.green > span {
+  background: #eaf8ed;
+  box-shadow: inset 0 0 0 1px rgba(47, 147, 57, 0.12);
+}
+
+.section-heading.blue {
+  color: #256ee4;
+}
+
+.section-heading.blue > span {
+  background: #edf4ff;
+  box-shadow: inset 0 0 0 1px rgba(37, 110, 228, 0.12);
+}
+
+.section-heading.amber {
+  color: #e27d00;
+}
+
+.section-heading.amber > span {
+  background: #fff7ed;
+  box-shadow: inset 0 0 0 1px rgba(226, 125, 0, 0.12);
+}
 
 .field-stack {
   display: grid;
-  gap: 24px;
+  gap: 22px;
 }
 
 .field-stack.compact {
-  gap: 18px;
+  gap: 17px;
 }
 
 .two-field-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 28px;
+  gap: 24px;
 }
 
 .polished-field {
@@ -767,19 +812,24 @@ const submit = async () => {
 .polished-field input,
 .polished-field select {
   width: 100%;
-  height: 56px;
+  height: 54px;
   appearance: none;
   border: 1px solid #d7e0ef;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.93);
   color: #15233e;
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, .025), 0 1px 0 rgba(255, 255, 255, .9);
+  box-shadow:
+    inset 0 1px 2px rgba(15, 23, 42, 0.025),
+    0 1px 0 rgba(255, 255, 255, 0.9);
   font: inherit;
   font-size: 16px;
   font-weight: 650;
   outline: none;
   padding: 0 18px;
-  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
 }
 
 .polished-field input::placeholder {
@@ -788,14 +838,14 @@ const submit = async () => {
 
 .polished-field input:focus,
 .polished-field select:focus {
-  border-color: rgba(47, 147, 57, .62);
-  box-shadow: 0 0 0 4px rgba(47, 147, 57, .12);
+  border-color: rgba(47, 147, 57, 0.62);
   background: #fff;
+  box-shadow: 0 0 0 4px rgba(47, 147, 57, 0.12);
 }
 
 .readonly-field input:disabled {
-  color: #8996ac;
   background: #f8fafc;
+  color: #8996ac;
 }
 
 .select-field {
@@ -816,99 +866,106 @@ const submit = async () => {
 
 .section-divider {
   height: 1px;
-  margin: 34px 0 24px;
-  background: linear-gradient(90deg, rgba(203, 213, 225, 0), rgba(203, 213, 225, .88), rgba(203, 213, 225, 0));
+  margin: 32px 0 24px;
+  background: linear-gradient(90deg, rgba(203, 213, 225, 0), rgba(203, 213, 225, 0.88), rgba(203, 213, 225, 0));
 }
 
 .alta-ingreso-card {
   position: relative;
   overflow: hidden;
-  margin-top: 22px;
-  padding: 22px 24px 21px;
+  margin-top: 20px;
+  padding: 21px 23px 20px;
+  border: 1px solid rgba(95, 177, 109, 0.48);
   border-radius: 16px;
-  border: 1px solid rgba(95, 177, 109, .48);
   background:
-    linear-gradient(145deg, rgba(247, 255, 248, .94), rgba(255, 255, 255, .96)),
+    linear-gradient(145deg, rgba(247, 255, 248, 0.94), rgba(255, 255, 255, 0.96)),
     #fff;
-  box-shadow: 0 16px 44px rgba(47, 147, 57, .09);
+  box-shadow: 0 16px 44px rgba(47, 147, 57, 0.09);
 }
 
 .alta-ingreso-card.externo {
-  border-color: rgba(74, 144, 226, .36);
-  background: linear-gradient(145deg, rgba(245, 250, 255, .96), rgba(255, 255, 255, .97));
-  box-shadow: 0 16px 44px rgba(74, 144, 226, .08);
+  border-color: rgba(74, 144, 226, 0.36);
+  background: linear-gradient(145deg, rgba(245, 250, 255, 0.96), rgba(255, 255, 255, 0.97));
+  box-shadow: 0 16px 44px rgba(74, 144, 226, 0.08);
 }
 
 .alta-card-shine {
   position: absolute;
   inset: -35% -45%;
-  background: linear-gradient(112deg, transparent 28%, rgba(255,255,255,.72) 46%, transparent 62%);
+  background: linear-gradient(112deg, transparent 28%, rgba(255, 255, 255, 0.72) 46%, transparent 62%);
+  opacity: 0.68;
   transform: translateX(-34%);
-  opacity: .68;
-  animation: alta-card-sheen 2700ms cubic-bezier(.22, .61, .36, 1) infinite;
+  animation: alta-card-sheen 2700ms cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
 }
 
 .alta-card-kicker {
   position: relative;
+  margin-bottom: 11px;
   color: #24772d;
   font-size: 16px;
   font-weight: 900;
-  margin-bottom: 12px;
 }
 
-.alta-ingreso-card.externo .alta-card-kicker { color: #256ee4; }
+.alta-ingreso-card.externo .alta-card-kicker {
+  color: #256ee4;
+}
 
 .alta-result-main {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 18px;
 }
 
 .alta-result-orb {
-  width: 58px;
-  height: 58px;
-  flex: 0 0 auto;
   display: inline-flex;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: #fff;
   background: linear-gradient(145deg, #46b052, #2f9339);
-  box-shadow: 0 17px 32px rgba(47, 147, 57, .25), inset 0 0 0 4px rgba(255,255,255,.2);
+  color: #fff;
+  box-shadow:
+    0 17px 32px rgba(47, 147, 57, 0.25),
+    inset 0 0 0 4px rgba(255, 255, 255, 0.2);
   animation: alta-orb-breathe 2400ms ease-in-out infinite;
 }
 
 .alta-ingreso-card.externo .alta-result-orb {
   background: linear-gradient(145deg, #5a9cf0, #256ee4);
-  box-shadow: 0 17px 32px rgba(37, 110, 228, .22), inset 0 0 0 4px rgba(255,255,255,.22);
+  box-shadow:
+    0 17px 32px rgba(37, 110, 228, 0.22),
+    inset 0 0 0 4px rgba(255, 255, 255, 0.22);
 }
 
 .alta-result-main strong {
   display: inline-flex;
+  min-height: 46px;
   align-items: center;
-  min-height: 48px;
-  padding: 0 24px;
+  padding: 0 22px;
   border-radius: 999px;
+  background: linear-gradient(90deg, rgba(47, 147, 57, 0.13), rgba(47, 147, 57, 0.04));
   color: #2f9339;
-  background: linear-gradient(90deg, rgba(47, 147, 57, .13), rgba(47, 147, 57, .04));
-  font-size: clamp(21px, 2.1vw, 26px);
+  font-size: clamp(21px, 2vw, 26px);
   font-weight: 940;
   letter-spacing: -0.04em;
+  line-height: 1;
 }
 
 .alta-ingreso-card.externo .alta-result-main strong {
+  background: linear-gradient(90deg, rgba(37, 110, 228, 0.13), rgba(37, 110, 228, 0.04));
   color: #256ee4;
-  background: linear-gradient(90deg, rgba(37, 110, 228, .13), rgba(37, 110, 228, .04));
 }
 
 .alta-ingreso-card p {
   position: relative;
-  margin: 18px 0 10px;
+  margin: 17px 0 10px;
   color: #53627d;
-  font-size: 15.5px;
-  line-height: 1.5;
+  font-size: 15px;
   font-weight: 590;
+  line-height: 1.5;
 }
 
 .alta-ingreso-card p :deep(strong) {
@@ -916,7 +973,9 @@ const submit = async () => {
   font-weight: 900;
 }
 
-.alta-ingreso-card.externo p :deep(strong) { color: #256ee4; }
+.alta-ingreso-card.externo p :deep(strong) {
+  color: #256ee4;
+}
 
 .alta-ingreso-card small {
   position: relative;
@@ -925,18 +984,18 @@ const submit = async () => {
   gap: 10px;
   color: #63718d;
   font-size: 14px;
-  line-height: 1.3;
   font-weight: 650;
+  line-height: 1.3;
 }
 
 .cycle-summary-card {
   display: grid;
   gap: 0;
-  margin-top: 18px;
+  margin-top: 17px;
+  overflow: hidden;
   border: 1px solid #d7e0ef;
   border-radius: 16px;
-  background: rgba(255,255,255,.92);
-  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .cycle-summary-card > div {
@@ -944,28 +1003,28 @@ const submit = async () => {
   grid-template-columns: 34px 1fr auto;
   align-items: center;
   gap: 14px;
-  min-height: 57px;
-  padding: 12px 20px;
+  min-height: 55px;
+  padding: 11px 20px;
 }
 
 .cycle-summary-card > div + div {
-  border-top: 1px solid rgba(215, 224, 239, .76);
+  border-top: 1px solid rgba(215, 224, 239, 0.76);
 }
 
 .cycle-summary-card span {
+  display: inline-flex;
   width: 32px;
   height: 32px;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: #256ee4;
   background: #edf4ff;
+  color: #256ee4;
 }
 
 .cycle-summary-card > div:nth-child(2) span {
-  color: #2f9339;
   background: #eaf8ed;
+  color: #2f9339;
 }
 
 .cycle-summary-card p {
@@ -982,56 +1041,70 @@ const submit = async () => {
   text-align: right;
 }
 
-.cycle-summary-card > div:nth-child(2) strong { color: #24822f; }
+.cycle-summary-card > div:nth-child(2) strong {
+  color: #24822f;
+}
 
 .change-cycle-button,
 .older-cycle-toggle {
-  width: 100%;
-  min-height: 52px;
   display: flex;
+  width: 100%;
+  min-height: 50px;
   align-items: center;
   gap: 13px;
-  margin-top: 16px;
+  margin-top: 15px;
   padding: 0 18px;
   border: 1px solid #d7e0ef;
   border-radius: 14px;
-  background: rgba(255,255,255,.82);
+  background: rgba(255, 255, 255, 0.84);
   color: #4d5b77;
   font-size: 14px;
   font-weight: 850;
-  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .change-cycle-button:hover,
 .older-cycle-toggle:hover {
-  border-color: rgba(47, 147, 57, .38);
+  border-color: rgba(47, 147, 57, 0.38);
   background: #fff;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
 }
 
 .change-cycle-button > span {
+  display: inline-flex;
   width: 34px;
   height: 34px;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: #256ee4;
   background: #edf4ff;
+  color: #256ee4;
 }
 
-.change-cycle-button strong { flex: 1; text-align: left; }
+.change-cycle-button strong {
+  flex: 1;
+  text-align: left;
+}
+
 .change-cycle-button svg:last-child,
-.older-cycle-toggle svg:last-child { transition: transform 180ms ease; }
+.older-cycle-toggle svg:last-child {
+  transition: transform 0.18s ease;
+}
+
 .change-cycle-button svg.open,
-.older-cycle-toggle svg.open { transform: rotate(180deg); }
+.older-cycle-toggle svg.open {
+  transform: rotate(180deg);
+}
 
 .inline-cycle-picker {
   margin-top: 14px;
   padding: 16px;
-  border: 1px solid rgba(215, 224, 239, .92);
+  border: 1px solid rgba(215, 224, 239, 0.92);
   border-radius: 18px;
-  background: rgba(248, 251, 255, .84);
+  background: rgba(248, 251, 255, 0.84);
 }
 
 .cycle-tile-grid {
@@ -1042,38 +1115,45 @@ const submit = async () => {
 
 .cycle-tile {
   position: relative;
-  min-height: 112px;
   display: grid;
-  justify-items: center;
+  min-height: 104px;
   align-content: center;
+  justify-items: center;
   gap: 7px;
   border: 1px solid #d7e0ef;
   border-radius: 16px;
-  background: rgba(255,255,255,.9);
+  background: rgba(255, 255, 255, 0.9);
   color: #16233e;
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
 }
 
 .cycle-tile:hover {
   transform: translateY(-1px);
-  border-color: rgba(37, 110, 228, .38);
-  box-shadow: 0 14px 30px rgba(37, 110, 228, .08);
+  border-color: rgba(37, 110, 228, 0.38);
+  box-shadow: 0 14px 30px rgba(37, 110, 228, 0.08);
 }
 
 .cycle-tile.selected {
   border-color: #256ee4;
-  box-shadow: inset 0 0 0 1px rgba(37, 110, 228, .5), 0 14px 32px rgba(37, 110, 228, .12);
+  box-shadow:
+    inset 0 0 0 1px rgba(37, 110, 228, 0.5),
+    0 14px 32px rgba(37, 110, 228, 0.12);
 }
 
 .cycle-tile.current:not(.selected) {
-  border-color: rgba(47, 147, 57, .3);
+  border-color: rgba(47, 147, 57, 0.3);
   background: linear-gradient(180deg, #f7fff8, #fff);
 }
 
 .cycle-tile strong {
-  font-size: 15.5px;
+  font-size: 15px;
   font-weight: 920;
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .cycle-tile small {
@@ -1082,52 +1162,57 @@ const submit = async () => {
   font-weight: 800;
 }
 
-.cycle-tile.current small { color: #24822f; }
+.cycle-tile.current small {
+  color: #24822f;
+}
 
 .cycle-tile i {
+  display: inline-flex;
   width: 36px;
   height: 36px;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: #63718d;
   background: #f1f5f9;
+  color: #63718d;
   font-style: normal;
 }
 
 .cycle-tile.selected i {
-  color: #256ee4;
   background: #edf4ff;
+  color: #256ee4;
 }
 
 .cycle-tile.current:not(.selected) i {
-  color: #2f9339;
   background: #eaf8ed;
+  color: #2f9339;
 }
 
 .cycle-check {
   position: absolute;
   top: -10px;
   right: -10px;
+  display: inline-flex;
   width: 30px;
   height: 30px;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: #fff;
   background: #256ee4;
-  box-shadow: 0 12px 22px rgba(37, 110, 228, .24);
+  color: #fff;
+  box-shadow: 0 12px 22px rgba(37, 110, 228, 0.24);
 }
 
 .older-cycle-toggle {
-  margin-top: 12px;
   min-height: 46px;
   justify-content: flex-start;
+  margin-top: 12px;
 }
 
-.older-cycle-toggle span { flex: 1; text-align: left; }
+.older-cycle-toggle span {
+  flex: 1;
+  text-align: left;
+}
 
 .older-cycle-grid {
   display: grid;
@@ -1137,13 +1222,13 @@ const submit = async () => {
 }
 
 .older-cycle-option {
-  min-height: 46px;
   display: grid;
+  min-height: 46px;
   align-content: center;
   gap: 2px;
   border: 1px solid #d7e0ef;
   border-radius: 12px;
-  background: rgba(255,255,255,.86);
+  background: rgba(255, 255, 255, 0.86);
   color: #16233e;
   font-weight: 850;
 }
@@ -1156,8 +1241,8 @@ const submit = async () => {
 
 .older-cycle-option.selected {
   border-color: #256ee4;
-  color: #256ee4;
   background: #f4f8ff;
+  color: #256ee4;
 }
 
 .edit-admin-card {
@@ -1165,40 +1250,41 @@ const submit = async () => {
   gap: 16px;
   margin-top: 18px;
   padding: 16px;
-  border: 1px solid rgba(215, 224, 239, .9);
+  border: 1px solid rgba(215, 224, 239, 0.9);
   border-radius: 18px;
-  background: rgba(248, 250, 252, .76);
+  background: rgba(248, 250, 252, 0.76);
 }
 
 .student-form-footer {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 28px;
-  min-height: 112px;
-  padding: 24px 54px;
-  border-top: 1px solid rgba(203, 213, 225, .72);
-  background: rgba(255,255,255,.88);
+  min-height: 98px;
+  padding: 22px 48px;
+  border-top: 1px solid rgba(203, 213, 225, 0.72);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .footer-note {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 17px;
   color: #60708d;
-  min-width: 0;
 }
 
 .footer-note > span {
-  width: 54px;
-  height: 54px;
-  flex: 0 0 auto;
   display: inline-flex;
+  width: 50px;
+  height: 50px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: #2f9339;
   background: #eaf8ed;
+  color: #2f9339;
 }
 
 .footer-note p {
@@ -1209,22 +1295,27 @@ const submit = async () => {
 
 .footer-actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 18px;
 }
 
 .student-form-cancel,
 .student-form-save {
-  min-width: 168px;
-  height: 58px;
   display: inline-flex;
+  min-width: 168px;
+  height: 56px;
   align-items: center;
   justify-content: center;
   gap: 10px;
   border-radius: 14px;
   font-size: 15px;
   font-weight: 900;
-  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .student-form-cancel {
@@ -1234,10 +1325,10 @@ const submit = async () => {
 }
 
 .student-form-save {
-  border: 1px solid rgba(47, 147, 57, .62);
-  color: #fff;
+  border: 1px solid rgba(47, 147, 57, 0.62);
   background: linear-gradient(180deg, #3caf47, #2f9339);
-  box-shadow: 0 18px 34px rgba(47, 147, 57, .24);
+  color: #fff;
+  box-shadow: 0 18px 34px rgba(47, 147, 57, 0.24);
 }
 
 .student-form-cancel:hover,
@@ -1247,14 +1338,16 @@ const submit = async () => {
 
 .student-form-save:disabled,
 .student-form-cancel:disabled {
-  opacity: .62;
   cursor: not-allowed;
+  opacity: 0.62;
   transform: none;
 }
 
 .result-card-enter-active,
 .result-card-leave-active {
-  transition: opacity 220ms ease, transform 220ms ease;
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
 }
 
 .result-card-enter-from,
@@ -1267,17 +1360,20 @@ const submit = async () => {
 .cycle-picker-leave-active,
 .older-cycles-enter-active,
 .older-cycles-leave-active {
-  transition: opacity 200ms ease, transform 200ms ease, max-height 220ms ease;
   overflow: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    max-height 0.22s ease;
 }
 
 .cycle-picker-enter-from,
 .cycle-picker-leave-to,
 .older-cycles-enter-from,
 .older-cycles-leave-to {
+  max-height: 0;
   opacity: 0;
   transform: translateY(-4px);
-  max-height: 0;
 }
 
 .cycle-picker-enter-to,
@@ -1288,14 +1384,79 @@ const submit = async () => {
 }
 
 @keyframes alta-card-sheen {
-  0% { transform: translateX(-34%); opacity: .2; }
-  38% { opacity: .72; }
-  100% { transform: translateX(34%); opacity: .12; }
+  0% {
+    opacity: 0.2;
+    transform: translateX(-34%);
+  }
+  38% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0.12;
+    transform: translateX(34%);
+  }
 }
 
 @keyframes alta-orb-breathe {
-  0%, 100% { transform: translateY(0); filter: saturate(1); }
-  50% { transform: translateY(-1px); filter: saturate(1.08); }
+  0%, 100% {
+    filter: saturate(1);
+    transform: translateY(0);
+  }
+  50% {
+    filter: saturate(1.08);
+    transform: translateY(-1px);
+  }
+}
+
+@media (max-height: 820px) and (min-width: 900px) {
+  .student-form-overlay {
+    padding-block: 16px;
+  }
+
+  .student-form-modal {
+    max-height: calc(100dvh - 32px);
+  }
+
+  .student-form-hero {
+    min-height: 112px;
+    padding-block: 22px;
+  }
+
+  .student-form-avatar {
+    width: 70px;
+    height: 70px;
+  }
+
+  .student-form-title-copy h2 {
+    font-size: 34px;
+  }
+
+  .student-form-content {
+    padding-block: 26px;
+  }
+
+  .field-stack {
+    gap: 18px;
+  }
+
+  .field-stack.compact {
+    gap: 14px;
+  }
+
+  .polished-field input,
+  .polished-field select {
+    height: 50px;
+  }
+
+  .alta-ingreso-card {
+    margin-top: 16px;
+    padding: 18px 20px;
+  }
+
+  .student-form-footer {
+    min-height: 84px;
+    padding-block: 16px;
+  }
 }
 
 @media (max-width: 1180px) {
@@ -1311,20 +1472,20 @@ const submit = async () => {
 
 @media (max-width: 760px) {
   .student-form-overlay {
-    padding: 10px;
     align-items: flex-start;
+    padding: 10px;
   }
 
   .student-form-modal {
     width: 100%;
-    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
     border-radius: 24px;
   }
 
   .student-form-hero {
     min-height: auto;
-    padding: 28px 80px 26px 24px;
     gap: 18px;
+    padding: 28px 80px 26px 24px;
   }
 
   .student-form-close {
@@ -1351,6 +1512,16 @@ const submit = async () => {
   .cycle-tile-grid,
   .older-cycle-grid {
     grid-template-columns: 1fr;
+  }
+
+  .cycle-summary-card > div {
+    grid-template-columns: 34px 1fr;
+  }
+
+  .cycle-summary-card strong {
+    grid-column: 2;
+    justify-self: start;
+    text-align: left;
   }
 
   .student-form-footer {
@@ -1381,7 +1552,13 @@ const submit = async () => {
   .student-form-cancel,
   .student-form-save,
   .change-cycle-button,
-  .older-cycle-toggle {
+  .older-cycle-toggle,
+  .result-card-enter-active,
+  .result-card-leave-active,
+  .cycle-picker-enter-active,
+  .cycle-picker-leave-active,
+  .older-cycles-enter-active,
+  .older-cycles-leave-active {
     transition: none;
   }
 }

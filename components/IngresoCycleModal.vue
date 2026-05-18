@@ -462,56 +462,56 @@ const confirmSelection = () => {
 
 <style scoped>
 .ingreso-cycle-overlay {
-  z-index: 90;
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 30px;
-  background: rgba(18, 28, 44, 0.35);
-  backdrop-filter: blur(12px) saturate(1.08);
+  padding: clamp(18px, 3.4vh, 38px);
+  overflow: auto;
+  background: rgba(18, 28, 44, 0.36);
+  backdrop-filter: blur(13px) saturate(1.05);
 }
 
 .ingreso-cycle-modal {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(1120px, calc(100vw - 64px));
-  max-height: min(91vh, calc(100dvh - 56px));
+  width: min(1120px, calc(100vw - 72px));
+  max-height: min(760px, calc(100dvh - 56px));
   overflow: hidden;
-  border: 1px solid rgba(214, 225, 236, 0.98);
-  border-radius: 33px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.99),
-    #fff 52%,
-    #fbfcfe 100%
-  );
+  border: 1px solid rgba(214, 225, 236, 0.96);
+  border-radius: 32px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), #fff 52%, #fbfcfe 100%);
   box-shadow:
-    0 34px 92px rgba(18, 29, 49, 0.27),
-    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+    0 34px 90px rgba(18, 29, 49, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
   color: #14233c;
-  animation: ingresoModalIn 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: ingresoModalIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ingreso-close-button {
   position: absolute;
-  top: 36px;
-  right: 34px;
+  top: 28px;
+  right: 30px;
   z-index: 8;
   display: inline-flex;
   width: 56px;
   height: 56px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(213, 224, 237, 0.98);
+  border: 1px solid rgba(213, 224, 237, 0.96);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.9);
   color: #142139;
   box-shadow: 0 16px 34px rgba(21, 35, 60, 0.1);
   transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .ingreso-close-button:hover {
@@ -523,51 +523,46 @@ const confirmSelection = () => {
 
 .ingreso-hero {
   position: relative;
-  min-height: 126px;
-  padding: 32px 96px 22px 38px;
+  min-height: 120px;
   overflow: hidden;
-  border-bottom: 1px solid rgba(218, 227, 238, 0.88);
+  padding: 26px 106px 24px 38px;
+  border-bottom: 1px solid rgba(218, 227, 238, 0.9);
+  background:
+    linear-gradient(110deg, rgba(255, 255, 255, 0.99), rgba(247, 251, 255, 0.94) 58%, rgba(235, 249, 238, 0.9));
 }
 
 .ingreso-hero-veil {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 87% 0%, rgba(64, 165, 82, 0.18), transparent 24%),
-    radial-gradient(
-      circle at 70% -30%,
-      rgba(92, 128, 178, 0.1),
-      transparent 34%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.36),
-      rgba(255, 255, 255, 0.82)
-    );
+    radial-gradient(circle at 86% -18%, rgba(69, 173, 89, 0.18), transparent 34%),
+    radial-gradient(circle at 68% -44%, rgba(63, 130, 220, 0.1), transparent 36%);
   pointer-events: none;
 }
 
 .ingreso-hero-curve {
   position: absolute;
-  left: -8%;
-  right: -8%;
-  bottom: -35px;
-  height: 94px;
-  border-radius: 50%;
   pointer-events: none;
+  border-radius: 999px;
+  opacity: 0.72;
 }
 
 .ingreso-hero-curve-blue {
-  border-top: 4px solid rgba(50, 119, 217, 0.62);
-  transform: rotate(-2.8deg);
-  box-shadow: 0 -16px 30px rgba(50, 119, 217, 0.12);
+  top: -88px;
+  left: 48%;
+  right: -9%;
+  height: 150px;
+  background: linear-gradient(98deg, rgba(66, 141, 226, 0.11), rgba(255, 255, 255, 0));
+  transform: rotate(-4deg);
 }
 
 .ingreso-hero-curve-green {
-  bottom: -24px;
-  border-top: 3px solid rgba(75, 188, 100, 0.62);
-  transform: rotate(3.1deg);
-  box-shadow: 0 -16px 30px rgba(75, 188, 100, 0.11);
+  top: -48px;
+  left: 64%;
+  right: -6%;
+  height: 178px;
+  background: linear-gradient(104deg, rgba(255, 255, 255, 0), rgba(76, 184, 99, 0.22));
+  transform: rotate(5deg);
 }
 
 .ingreso-student-context {
@@ -576,18 +571,18 @@ const confirmSelection = () => {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 18px;
+  gap: 20px;
 }
 
 .ingreso-avatar {
   display: inline-flex;
-  width: 76px;
-  height: 76px;
+  width: 72px;
+  height: 72px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid rgba(210, 225, 214, 0.98);
+  border: 1px solid rgba(210, 225, 214, 0.96);
   border-radius: 999px;
   background: radial-gradient(circle at 34% 24%, #fff, #edf8ef 72%);
   color: #2f8a3d;
@@ -613,16 +608,17 @@ const confirmSelection = () => {
 .ingreso-title-copy strong {
   overflow: hidden;
   color: #13223b;
-  font-size: 22px;
+  font-size: clamp(21px, 2vw, 25px);
   font-weight: 940;
   letter-spacing: -0.045em;
-  line-height: 1.02;
+  line-height: 1.06;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ingreso-title-copy small {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 9px;
   color: #60708c;
@@ -639,10 +635,12 @@ const confirmSelection = () => {
 
 .ingreso-body {
   display: grid;
-  gap: 22px;
+  flex: 1 1 auto;
   min-height: 0;
-  padding: 30px 40px 26px;
+  gap: 22px;
   overflow-y: auto;
+  padding: 28px 40px 22px;
+  scrollbar-gutter: stable;
 }
 
 .ingreso-heading-row {
@@ -667,27 +665,27 @@ const confirmSelection = () => {
 .ingreso-heading-row h2 {
   margin: 0;
   color: #13223b;
-  font-size: clamp(24px, 2.2vw, 31px);
+  font-size: clamp(26px, 2.25vw, 32px);
   font-weight: 950;
   letter-spacing: -0.055em;
-  line-height: 1.02;
+  line-height: 1.05;
 }
 
 .ingreso-heading-row p {
-  margin: 8px 0 0;
+  margin: 7px 0 0;
   color: #64738e;
   font-size: 15px;
   font-weight: 630;
-  line-height: 1.28;
+  line-height: 1.32;
 }
 
 .ingreso-heading-row p + p {
-  margin-top: 4px;
+  margin-top: 3px;
 }
 
 .ingreso-main-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(390px, 0.92fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(372px, 0.92fr);
   gap: 12px;
 }
 
@@ -695,26 +693,26 @@ const confirmSelection = () => {
   min-width: 0;
   border: 1px solid rgba(218, 227, 238, 0.98);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.9);
   box-shadow:
-    0 16px 40px rgba(21, 35, 60, 0.055),
+    0 16px 38px rgba(21, 35, 60, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.94);
 }
 
 .ingreso-panel h3 {
   margin: 0;
   color: #13223b;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 930;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.03em;
 }
 
 .ingreso-picker-panel,
 .ingreso-result-panel {
   display: grid;
   align-content: start;
-  gap: 22px;
-  padding: 28px 24px 24px;
+  gap: 20px;
+  padding: 26px 24px 24px;
 }
 
 .ingreso-primary-cycles {
@@ -726,74 +724,64 @@ const confirmSelection = () => {
 .ingreso-cycle-tile {
   position: relative;
   display: grid;
-  min-height: 128px;
+  min-height: 124px;
   align-content: center;
   justify-items: center;
   gap: 8px;
-  padding: 18px 12px 14px;
+  padding: 17px 10px 14px;
   border: 1px solid rgba(218, 227, 238, 0.98);
   border-radius: 15px;
   background: linear-gradient(180deg, #fff, #fbfcfd);
   color: #14233c;
-  box-shadow: 0 12px 28px rgba(21, 35, 60, 0.045);
+  box-shadow: 0 12px 26px rgba(21, 35, 60, 0.04);
   transition:
-    border-color 0.22s ease,
-    box-shadow 0.22s ease,
-    background 0.22s ease,
-    transform 0.2s ease;
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    transform 0.18s ease;
 }
 
 .ingreso-cycle-tile:hover {
   border-color: rgba(47, 114, 217, 0.32);
-  box-shadow: 0 15px 34px rgba(47, 114, 217, 0.09);
+  box-shadow: 0 15px 32px rgba(47, 114, 217, 0.08);
   transform: translateY(-1px);
 }
 
 .ingreso-cycle-tile.current {
-  border-color: rgba(51, 151, 62, 0.2);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.98),
-    rgba(249, 254, 250, 0.98)
-  );
+  border-color: rgba(51, 151, 62, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 254, 250, 0.98));
 }
 
 .ingreso-cycle-tile.selected {
-  border-color: rgba(47, 114, 217, 0.78);
+  border-color: rgba(47, 114, 217, 0.72);
   background:
-    radial-gradient(
-      circle at 50% 105%,
-      rgba(47, 114, 217, 0.1),
-      transparent 42%
-    ),
+    radial-gradient(circle at 50% 106%, rgba(47, 114, 217, 0.1), transparent 42%),
     linear-gradient(180deg, #fff, #f7faff);
   box-shadow:
-    0 16px 36px rgba(47, 114, 217, 0.13),
-    inset 0 0 0 1px rgba(47, 114, 217, 0.06);
+    0 16px 34px rgba(47, 114, 217, 0.12),
+    inset 0 0 0 1px rgba(47, 114, 217, 0.05);
 }
 
 .ingreso-cycle-tile.current.selected {
-  border-color: rgba(51, 151, 62, 0.44);
+  border-color: rgba(51, 151, 62, 0.48);
   background:
-    radial-gradient(
-      circle at 50% 105%,
-      rgba(51, 151, 62, 0.1),
-      transparent 42%
-    ),
+    radial-gradient(circle at 50% 106%, rgba(51, 151, 62, 0.1), transparent 42%),
     linear-gradient(180deg, #fff, #f8fff9);
 }
 
 .ingreso-cycle-tile strong {
   color: #13223b;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 900;
   letter-spacing: -0.025em;
+  white-space: nowrap;
 }
 
 .ingreso-cycle-tile small {
   color: #62718c;
   font-size: 13px;
   font-weight: 770;
+  white-space: nowrap;
 }
 
 .ingreso-cycle-tile.current small {
@@ -806,8 +794,8 @@ const confirmSelection = () => {
 
 .ingreso-cycle-tile-icon {
   display: inline-flex;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
@@ -841,7 +829,7 @@ const confirmSelection = () => {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 18px;
-  min-height: 58px;
+  min-height: 56px;
   padding: 0 20px;
   border: 1px solid rgba(218, 227, 238, 0.98);
   border-radius: 15px;
@@ -850,17 +838,17 @@ const confirmSelection = () => {
   font-size: 14px;
   font-weight: 770;
   text-align: left;
-  box-shadow: 0 10px 24px rgba(21, 35, 60, 0.035);
+  box-shadow: 0 10px 24px rgba(21, 35, 60, 0.032);
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    color 0.2s ease;
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease;
 }
 
 .ingreso-older-toggle:hover {
   border-color: rgba(47, 114, 217, 0.26);
   color: #2f4a75;
-  box-shadow: 0 13px 28px rgba(21, 35, 60, 0.055);
+  box-shadow: 0 13px 28px rgba(21, 35, 60, 0.052);
 }
 
 .ingreso-older-toggle-icon {
@@ -869,7 +857,7 @@ const confirmSelection = () => {
 }
 
 .ingreso-chevron {
-  transition: transform 0.22s ease;
+  transition: transform 0.2s ease;
 }
 
 .ingreso-chevron.open {
@@ -886,8 +874,8 @@ const confirmSelection = () => {
 .ingreso-older-option {
   display: grid;
   gap: 4px;
-  min-height: 58px;
-  padding: 10px 12px;
+  min-height: 56px;
+  padding: 9px 12px;
   border: 1px solid rgba(224, 232, 241, 0.96);
   border-radius: 13px;
   background: #fff;
@@ -940,15 +928,11 @@ const confirmSelection = () => {
   align-items: center;
   gap: 16px;
   overflow: hidden;
-  padding: 16px 20px;
-  border: 1px solid rgba(60, 153, 70, 0.3);
+  padding: 15px 19px;
+  border: 1px solid rgba(60, 153, 70, 0.31);
   border-radius: 13px;
   background:
-    linear-gradient(
-      90deg,
-      rgba(246, 255, 248, 0.96),
-      rgba(255, 255, 255, 0.96)
-    ),
+    linear-gradient(90deg, rgba(246, 255, 248, 0.96), rgba(255, 255, 255, 0.96)),
     radial-gradient(circle at 0% 50%, rgba(51, 151, 62, 0.14), transparent 40%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.68);
   animation:
@@ -960,14 +944,7 @@ const confirmSelection = () => {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    110deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0) 34%,
-    rgba(255, 255, 255, 0.72) 50%,
-    rgba(255, 255, 255, 0) 66%,
-    transparent 100%
-  );
+  background: linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0) 34%, rgba(255, 255, 255, 0.72) 50%, rgba(255, 255, 255, 0) 66%, transparent 100%);
   transform: translateX(-110%);
   animation: resultSheen 1.45s cubic-bezier(0.4, 0, 0.2, 1) 0.18s 1;
   pointer-events: none;
@@ -976,11 +953,7 @@ const confirmSelection = () => {
 .ingreso-result-banner.externo {
   border-color: rgba(47, 114, 217, 0.3);
   background:
-    linear-gradient(
-      90deg,
-      rgba(247, 251, 255, 0.96),
-      rgba(255, 255, 255, 0.96)
-    ),
+    linear-gradient(90deg, rgba(247, 251, 255, 0.96), rgba(255, 255, 255, 0.96)),
     radial-gradient(circle at 0% 50%, rgba(47, 114, 217, 0.13), transparent 40%);
 }
 
@@ -1018,7 +991,7 @@ const confirmSelection = () => {
 
 .ingreso-result-banner strong {
   color: #2e8a39;
-  font-size: 24px;
+  font-size: clamp(21px, 2.1vw, 25px);
   font-weight: 950;
   letter-spacing: -0.045em;
   line-height: 1.06;
@@ -1033,7 +1006,7 @@ const confirmSelection = () => {
   color: #64738e;
   font-size: 15px;
   font-weight: 630;
-  line-height: 1.55;
+  line-height: 1.52;
 }
 
 .ingreso-result-copy :deep(strong) {
@@ -1050,7 +1023,7 @@ const confirmSelection = () => {
 
 .ingreso-interpretation-card h4 {
   margin: 0;
-  padding: 12px 16px;
+  padding: 11px 16px;
   border-bottom: 1px solid rgba(226, 233, 242, 0.96);
   color: #2f405f;
   font-size: 13px;
@@ -1061,23 +1034,18 @@ const confirmSelection = () => {
   position: relative;
   display: grid;
   gap: 0;
-  padding: 10px 16px 14px;
+  padding: 9px 16px 12px;
 }
 
 .ingreso-timeline::before {
   content: "";
   position: absolute;
-  top: 26px;
-  bottom: 26px;
+  top: 25px;
+  bottom: 25px;
   left: 27px;
   width: 2px;
   border-radius: 99px;
-  background: linear-gradient(
-    180deg,
-    rgba(47, 114, 217, 0.2),
-    rgba(51, 151, 62, 0.4),
-    rgba(51, 151, 62, 0.18)
-  );
+  background: linear-gradient(180deg, rgba(47, 114, 217, 0.2), rgba(51, 151, 62, 0.4), rgba(51, 151, 62, 0.18));
   transform-origin: top;
   animation: timelineDraw 0.52s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
 }
@@ -1085,16 +1053,12 @@ const confirmSelection = () => {
 .ingreso-timeline-item {
   position: relative;
   display: grid;
-  grid-template-columns: 28px minmax(108px, 0.72fr) minmax(86px, 0.5fr) minmax(
-      104px,
-      0.78fr
-    );
+  grid-template-columns: 28px minmax(94px, 0.72fr) minmax(80px, 0.5fr) minmax(94px, 0.78fr);
   align-items: center;
-  gap: 10px;
-  min-height: 38px;
+  gap: 8px;
+  min-height: 36px;
   opacity: 0;
-  animation: timelineItemIn 0.38s cubic-bezier(0.16, 1, 0.3, 1)
-    calc(0.12s + (var(--step-index) * 0.07s)) both;
+  animation: timelineItemIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) calc(0.12s + (var(--step-index) * 0.07s)) both;
 }
 
 .ingreso-timeline-dot {
@@ -1118,29 +1082,31 @@ const confirmSelection = () => {
 
 .ingreso-timeline-cycle {
   display: inline-flex;
-  min-height: 27px;
+  min-height: 26px;
   align-items: center;
   justify-content: center;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid rgba(226, 233, 242, 0.96);
   border-radius: 999px;
   background: #fbfcfe;
   color: #24334f;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 840;
+  white-space: nowrap;
 }
 
 .ingreso-timeline-item strong {
   display: inline-flex;
-  min-height: 27px;
+  min-height: 26px;
   align-items: center;
   justify-content: center;
-  padding: 0 12px;
+  padding: 0 11px;
   border-radius: 999px;
   background: #eaf3ff;
   color: #2f6fd2;
   font-size: 12px;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .ingreso-timeline-item.interno strong {
@@ -1152,20 +1118,23 @@ const confirmSelection = () => {
   color: #63728e;
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .ingreso-cycle-footer {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 22px 40px 24px;
+  padding: 20px 40px 22px;
   border-top: 1px solid rgba(220, 229, 240, 0.92);
   background: rgba(252, 253, 255, 0.94);
 }
 
 .ingreso-footer-note {
   display: inline-flex;
+  min-width: 0;
   align-items: center;
   gap: 13px;
   color: #63728e;
@@ -1175,8 +1144,8 @@ const confirmSelection = () => {
 
 .ingreso-footer-note span {
   display: inline-flex;
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -1187,6 +1156,7 @@ const confirmSelection = () => {
 
 .ingreso-footer-actions {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 12px;
 }
@@ -1260,7 +1230,7 @@ const confirmSelection = () => {
 @keyframes resultBannerIn {
   from {
     opacity: 0;
-    transform: translateY(7px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -1269,14 +1239,13 @@ const confirmSelection = () => {
 }
 
 @keyframes resultBreath {
-  0%,
-  100% {
+  0%, 100% {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.68);
   }
   50% {
     box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.68),
-      0 0 0 4px rgba(51, 151, 62, 0.07);
+      inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+      0 0 0 4px rgba(51, 151, 62, 0.06);
   }
 }
 
@@ -1287,24 +1256,22 @@ const confirmSelection = () => {
 }
 
 @keyframes resultRing {
-  0% {
+  from {
     opacity: 0.8;
     transform: scale(0.82);
   }
-  100% {
+  to {
     opacity: 0;
-    transform: scale(1.2);
+    transform: scale(1.35);
   }
 }
 
 @keyframes timelineDraw {
   from {
     transform: scaleY(0);
-    opacity: 0;
   }
   to {
     transform: scaleY(1);
-    opacity: 1;
   }
 }
 
@@ -1319,88 +1286,156 @@ const confirmSelection = () => {
   }
 }
 
-@media (max-width: 1040px) {
-  .ingreso-main-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .ingreso-result-panel {
-    min-width: 0;
-  }
-}
-
-@media (max-width: 760px) {
+@media (max-height: 820px) and (min-width: 900px) {
   .ingreso-cycle-overlay {
-    padding: 12px;
+    padding-block: 18px;
   }
 
   .ingreso-cycle-modal {
-    width: calc(100vw - 24px);
-    border-radius: 26px;
+    max-height: calc(100dvh - 36px);
   }
 
   .ingreso-hero {
-    min-height: 112px;
-    padding: 26px 78px 20px 22px;
-  }
-
-  .ingreso-close-button {
-    top: 25px;
-    right: 22px;
-    width: 46px;
-    height: 46px;
+    min-height: 104px;
+    padding-block: 20px;
   }
 
   .ingreso-avatar {
-    width: 62px;
-    height: 62px;
-  }
-
-  .ingreso-title-copy strong {
-    font-size: 18px;
-  }
-
-  .ingreso-title-copy small {
-    flex-wrap: wrap;
-    font-size: 12px;
+    width: 64px;
+    height: 64px;
   }
 
   .ingreso-body {
-    padding: 24px 18px 20px;
+    gap: 18px;
+    padding-block: 22px 18px;
   }
 
-  .ingreso-heading-row {
-    gap: 12px;
+  .ingreso-heading-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .ingreso-heading-row h2 {
+    font-size: 28px;
+  }
+
+  .ingreso-heading-row p {
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .ingreso-picker-panel,
+  .ingreso-result-panel {
+    gap: 16px;
+    padding: 22px 22px 20px;
+  }
+
+  .ingreso-cycle-tile {
+    min-height: 108px;
+  }
+
+  .ingreso-result-banner {
+    min-height: 66px;
+  }
+
+  .ingreso-cycle-footer {
+    padding-block: 16px;
+  }
+}
+
+@media (max-width: 980px) {
+  .ingreso-cycle-modal {
+    width: min(720px, calc(100vw - 28px));
+  }
+
+  .ingreso-main-grid {
+    grid-template-columns: 1fr;
   }
 
   .ingreso-primary-cycles,
   .ingreso-older-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
-  .ingreso-cycle-footer {
-    align-items: stretch;
-    flex-direction: column;
-    padding: 18px;
+@media (max-width: 680px) {
+  .ingreso-cycle-overlay {
+    align-items: flex-start;
+    padding: 10px;
   }
 
-  .ingreso-footer-actions {
+  .ingreso-cycle-modal {
     width: 100%;
+    max-height: calc(100dvh - 20px);
+    border-radius: 24px;
   }
 
-  .ingreso-footer-actions .btn {
-    flex: 1;
-    min-width: 0;
-    padding-inline: 14px;
+  .ingreso-close-button {
+    top: 20px;
+    right: 20px;
+    width: 48px;
+    height: 48px;
+  }
+
+  .ingreso-hero {
+    min-height: auto;
+    padding: 24px 78px 22px 22px;
+  }
+
+  .ingreso-avatar {
+    width: 60px;
+    height: 60px;
+  }
+
+  .ingreso-body {
+    padding: 24px 20px 20px;
+  }
+
+  .ingreso-heading-row {
+    gap: 14px;
+  }
+
+  .ingreso-heading-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .ingreso-title-copy strong,
+  .ingreso-heading-row h2 {
+    white-space: normal;
+  }
+
+  .ingreso-primary-cycles,
+  .ingreso-older-grid {
+    grid-template-columns: 1fr;
   }
 
   .ingreso-timeline-item {
-    grid-template-columns: 24px 1fr auto;
+    grid-template-columns: 24px 1fr;
+    gap: 7px 9px;
   }
 
+  .ingreso-timeline-item strong,
   .ingreso-timeline-item small {
-    grid-column: 2 / -1;
-    padding-left: 0;
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .ingreso-cycle-footer {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 18px 20px;
+  }
+
+  .ingreso-footer-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .ingreso-footer-actions .btn,
+  .ingreso-footer-actions .btn-primary {
+    width: 100%;
+    min-width: 0;
   }
 }
 
@@ -1412,15 +1447,21 @@ const confirmSelection = () => {
   .ingreso-result-orb::before,
   .ingreso-timeline::before,
   .ingreso-timeline-item {
-    animation: none !important;
+    animation: none;
   }
 
   .ingreso-close-button,
   .ingreso-cycle-tile,
   .ingreso-older-toggle,
   .ingreso-older-option,
-  .ingreso-chevron {
-    transition: none !important;
+  .ingreso-chevron,
+  .result-swap-enter-active,
+  .result-swap-leave-active,
+  .result-copy-enter-active,
+  .result-copy-leave-active,
+  .older-cycles-enter-active,
+  .older-cycles-leave-active {
+    transition: none;
   }
 
   .ingreso-timeline-item {
