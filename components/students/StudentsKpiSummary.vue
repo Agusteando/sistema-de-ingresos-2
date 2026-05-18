@@ -1,9 +1,5 @@
 <template>
-  <section
-    :class="['kpi-summary-system', { 'without-income': userRole !== 'global', 'is-updating': isUpdating }]"
-    aria-label="Resumen de matrícula y finanzas"
-    :aria-busy="isUpdating ? 'true' : 'false'"
-  >
+  <section :class="['kpi-summary-system', { 'without-income': userRole !== 'global' }]" aria-label="Resumen de matrícula y finanzas">
     <div class="kpi-strip" aria-label="Matrícula y finanzas">
       <button
         v-for="item in enrollmentKpis"
@@ -15,7 +11,7 @@
         <span class="kpi-icon"><component :is="item.icon" :size="24" /></span>
         <span class="kpi-text">
           <span>{{ item.label }}</span>
-          <strong><UiKpiOdometer :value="item.value" /></strong>
+          <strong>{{ item.value }}</strong>
         </span>
         <UiKpiSparkline :values="item.sparkline" />
       </button>
@@ -24,7 +20,7 @@
         <span class="kpi-icon"><LucideCircleDollarSign :size="24" /></span>
         <span class="kpi-text">
           <span>Ingresos del mes</span>
-          <strong><UiKpiOdometer :value="globalKpis.ingresosMes" format="currency" :minimum-fraction-digits="2" :maximum-fraction-digits="2" /></strong>
+          <strong>${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', { minimumFractionDigits: 2 }) }}</strong>
         </span>
         <UiKpiSparkline :values="kpiSparklines.ingresos" />
       </div>
@@ -49,7 +45,6 @@
 import { computed } from 'vue'
 import { LucideCircleDollarSign, LucideGlobe2, LucideTag, LucideUserCheck, LucideUsers, LucideUserX } from 'lucide-vue-next'
 import UiKpiSparkline from '~/components/ui/UiKpiSparkline.vue'
-import UiKpiOdometer from '~/components/ui/UiKpiOdometer.vue'
 
 const props = defineProps({
   userRole: { type: String, default: 'plantel' },
@@ -58,8 +53,7 @@ const props = defineProps({
   customSections: { type: Array, default: () => [] },
   customSectionCounts: { type: Object, default: () => ({}) },
   globalKpis: { type: Object, default: () => ({ ingresosMes: 0 }) },
-  kpiSparklines: { type: Object, default: () => ({}) },
-  isUpdating: { type: Boolean, default: false }
+  kpiSparklines: { type: Object, default: () => ({}) }
 })
 
 defineEmits(['set-filter'])
