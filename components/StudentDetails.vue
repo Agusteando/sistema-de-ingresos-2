@@ -30,10 +30,14 @@
               <em v-if="student.estatus !== 'Activo'">(Motivo: {{ student.estatus }})</em>
             </p>
             <div class="tipo-ingreso-row">
-              <span :class="['tipo-ingreso-badge', resolvedTipoIngreso.value]">
-                {{ resolvedTipoIngresoLabel }} · {{ selectedCicloLabel }}
+              <span
+                :class="['tipo-ingreso-badge', resolvedTipoIngreso.value]"
+                :title="`${resolvedTipoIngresoLabel} en ${selectedCicloLabel}. ${resolvedTipoIngreso.reason}`"
+              >
+                <LucideBuilding2 v-if="resolvedTipoIngreso.value === 'interno'" :size="12" :stroke-width="2.4" />
+                <LucideGlobe2 v-else :size="12" :stroke-width="2.4" />
+                {{ resolvedTipoIngresoLabel }}
               </span>
-              <small :title="resolvedTipoIngreso.reason">{{ resolvedTipoIngresoSourceLabel }}</small>
             </div>
             <div v-if="student.customSections?.length" class="detail-section-badges">
               <b v-for="section in student.customSections" :key="`detail-section-${student.matricula}-${section.id}`">{{ section.name }}</b>
@@ -42,7 +46,7 @@
         </div>
 
         <div class="profile-top-actions">
-          <button class="ingreso-icon-button" title="Corregir ciclo de ingreso" @click="showIngresoCycleModal = true">
+          <button class="ingreso-icon-button" type="button" aria-label="Corregir ciclo de ingreso" title="Ciclo de ingreso" @click="showIngresoCycleModal = true">
             <LucideCalendarClock :size="18"/>
           </button>
           <button v-if="student.estatus === 'Activo'" class="danger-icon-button" title="Dar de baja" @click="$emit('baja', student)">
@@ -67,10 +71,6 @@
         <button v-if="student.estatus === 'Activo' && !isEnrolled" class="btn btn-secondary btn-sm" :disabled="enrolling" @click="quickEnroll">
           <LucideLoader2 v-if="enrolling" class="animate-spin" :size="15"/>
           <LucideFilePlus v-else :size="15"/> Inscribir
-        </button>
-        <span class="action-divider"></span>
-        <button class="btn btn-ghost btn-sm action-ingreso" @click="showIngresoCycleModal = true">
-          <LucideCalendarClock :size="15"/> ¿Cuándo ingresó?
         </button>
         <button class="btn btn-ghost btn-sm action-edit" @click="$emit('edit', student)">
           <LucideSettings :size="15"/> Editar
@@ -242,7 +242,7 @@ const studentPhotoRequests = new Map()
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2 } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -301,13 +301,6 @@ const selectedCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const selectedCicloLabel = computed(() => formatCicloLabel(selectedCicloKey.value))
 const resolvedTipoIngreso = computed(() => resolveTipoIngreso(props.student, selectedCicloKey.value, { enrollmentConcepts: props.externalConcepts }))
 const resolvedTipoIngresoLabel = computed(() => formatTipoIngresoValue(resolvedTipoIngreso.value))
-const resolvedTipoIngresoSourceLabel = computed(() => ({
-  ingreso_anchor: 'Por ciclo de ingreso',
-  confirmed_conceptos: 'Confirmado por conceptos',
-  legacy_fallback: 'Compatibilidad legacy',
-  legacy_interno: 'Compatibilidad legacy'
-}[resolvedTipoIngreso.value.source] || 'Resuelto'))
-
 const progressPaidWidth = (debt) => `${Math.min(100, Number(debt.porcentajePagoReal ?? debt.porcentajePagado) || 0)}%`
 const progressCleanupWidth = (debt) => `${Math.min(100, Number(debt.porcentajeDepurado) || 0)}%`
 const progressColor = (debt) => Number(debt.porcentajePagado) >= 100 && Number(debt.pagosDepurados) <= 0 ? '#70b34f' : '#d8b449'

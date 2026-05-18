@@ -647,44 +647,39 @@
 .tipo-ingreso-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
   margin-top: 7px;
 }
 
 .tipo-ingreso-badge {
   display: inline-flex;
-  min-height: 25px;
+  min-height: 22px;
   align-items: center;
-  padding: 0 10px;
+  gap: 4px;
+  padding: 0 8px;
   border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 900;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0;
+  line-height: 1;
   white-space: nowrap;
+}
+
+.tipo-ingreso-badge svg {
+  flex: 0 0 auto;
 }
 
 .tipo-ingreso-badge.interno {
-  border: 1px solid rgba(22, 159, 150, .24);
-  background: rgba(22, 159, 150, .1);
-  color: #16877f;
+  border: 1px solid rgba(47, 127, 50, .18);
+  background: rgba(47, 127, 50, .075);
+  color: #2f7f32;
 }
 
 .tipo-ingreso-badge.externo {
-  border: 1px solid rgba(65, 112, 205, .24);
-  background: rgba(65, 112, 205, .09);
+  border: 1px solid rgba(65, 112, 205, .18);
+  background: rgba(65, 112, 205, .075);
   color: #2f62b8;
-}
-
-.tipo-ingreso-row small {
-  min-width: 0;
-  overflow: hidden;
-  color: #7d879d;
-  font-size: 10.5px;
-  font-weight: 720;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .ingreso-icon-button {
@@ -699,8 +694,3 @@
   color: #2f62b8;
 }
 
-.profile-actions .action-ingreso {
-  border-color: rgba(65, 112, 205, .2);
-  background: linear-gradient(180deg, #fff, #fbfdff);
-  color: #2f62b8;
-}
