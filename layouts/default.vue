@@ -94,6 +94,8 @@
             <LucideLogOut :size="18" />
           </button>
         </div>
+
+        <StudentsCacheSyncIndicator />
       </div>
         </div>
       </div>
@@ -186,6 +188,7 @@ import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import ContextMenu from '~/components/ContextMenu.vue'
 import SyncBadge from '~/components/SyncBadge.vue'
+import StudentsCacheSyncIndicator from '~/components/students/StudentsCacheSyncIndicator.vue'
 import { CICLOS_LIST, normalizeCicloOption } from '~/utils/constants'
 
 const { toasts } = useToast()

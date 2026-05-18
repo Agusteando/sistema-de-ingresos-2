@@ -79,7 +79,7 @@
             :bulk-payment-loading="bulkPaymentLoading"
             :bulk-payment-processing="bulkPaymentProcessing"
             :external-concepts="externalConcepts"
-            @refresh="performSearch"
+            @refresh="refreshStudentsFromServer"
             @edit="openEdit"
             @close-detail="selectedStudent = null"
             @switch-student="selectStudentByMatricula"
@@ -143,6 +143,7 @@ import { useStudentsWorkspaceScale } from '~/composables/useStudentsWorkspaceSca
 import { useStudentSelection } from '~/composables/useStudentSelection'
 import { useStudentSections } from '~/composables/useStudentSections'
 import { useStudentBulkPayments } from '~/composables/useStudentBulkPayments'
+import { useStudentsCacheSync } from '~/composables/useStudentsCacheSync'
 import { exportToCSV } from '~/utils/export'
 import { GRADOS_ORDEN } from '~/utils/constants'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
@@ -174,6 +175,7 @@ const { openMenu } = useContextMenu()
 const { executeOptimistic } = useOptimisticSync()
 const route = useRoute()
 useHead({ bodyAttrs: { class: 'students-route-active' } })
+const { readCachedStudents, writeCachedStudents, setStudentsSyncState } = useStudentsCacheSync()
 const state = useState('globalState')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 
@@ -229,7 +231,7 @@ const {
   selectedStudents,
   state,
   notify: show,
-  refreshStudents: () => performSearch(),
+  refreshStudents: () => performSearch({ useCache: false }),
   clearSelection: () => {
     clearStudentSelection()
     bulkWorkspaceMode.value = 'none'
@@ -439,29 +441,103 @@ const loadGlobalKpis = async () => {
   } catch(e) {}
 }
 
-const performSearch = async () => {
-  loading.value = true
-  try {
-    const cicloKey = normalizeCicloKey(state.value.ciclo)
-    if (filters.value.q && activeFilter.value === 'inscritos') activeFilter.value = ''
-    const res = await $fetch('/api/students', { params: { ciclo: cicloKey, q: filters.value.q } })
-    students.value = res || []
-    const knownMatriculas = new Set(students.value.map(student => normalizeStudentMatricula(student.matricula)))
-    setSelectedMatriculas(Array.from(selectedMatriculas.value).filter(matricula => knownMatriculas.has(matricula)))
-    readCachedStudentPhotos()
+let studentsRequestId = 0
 
-    if (selectedStudent.value) {
-      selectedStudent.value = students.value.find(s => normalizeStudentMatricula(s.matricula) === normalizeStudentMatricula(selectedStudent.value.matricula)) || null
-    } else if (route.query.q) {
-      const match = students.value.find(s => normalizeStudentMatricula(s.matricula) === normalizeStudentMatricula(route.query.q))
-      if (match) selectStudent(match)
-    }
-  } catch (e) {
-    show('Error al cargar la base de datos', 'danger')
-  } finally {
-    loading.value = false
+const applyStudentsList = (nextStudents, { selectRouteStudent = true } = {}) => {
+  students.value = Array.isArray(nextStudents) ? nextStudents : []
+
+  const knownMatriculas = new Set(students.value.map(student => normalizeStudentMatricula(student.matricula)))
+  setSelectedMatriculas(Array.from(selectedMatriculas.value).filter(matricula => knownMatriculas.has(matricula)))
+  readCachedStudentPhotos()
+
+  if (selectedStudent.value) {
+    const selectedKey = normalizeStudentMatricula(selectedStudent.value.matricula)
+    selectedStudent.value = students.value.find(s => normalizeStudentMatricula(s.matricula) === selectedKey) || selectedStudent.value
+  } else if (selectRouteStudent && route.query.q) {
+    const match = students.value.find(s => normalizeStudentMatricula(s.matricula) === normalizeStudentMatricula(route.query.q))
+    if (match) selectStudent(match)
   }
 }
+
+const performSearch = async (options = {}) => {
+  const { useCache = true } = options || {}
+  const requestId = ++studentsRequestId
+  const cicloKey = normalizeCicloKey(state.value.ciclo)
+  const query = filters.value.q || ''
+
+  if (query && activeFilter.value === 'inscritos') activeFilter.value = ''
+
+  const cached = useCache ? readCachedStudents({ ciclo: cicloKey, q: query }) : null
+  const hasCachedStudents = Boolean(cached?.students?.length)
+  const hadStudents = students.value.length > 0
+
+  if (hasCachedStudents) {
+    applyStudentsList(cached.students)
+    loading.value = false
+    setStudentsSyncState({
+      status: 'cached',
+      message: 'Mostrando alumnos desde caché local.',
+      lastUpdatedAt: cached.savedAt,
+      recordCount: cached.count,
+      hasCache: true,
+      error: null
+    })
+  } else if (!hadStudents) {
+    loading.value = true
+  } else {
+    loading.value = false
+  }
+
+  setStudentsSyncState({
+    status: 'syncing',
+    message: hasCachedStudents
+      ? 'Mostrando caché local mientras se actualizan los alumnos.'
+      : 'Actualizando alumnos en segundo plano.',
+    recordCount: hasCachedStudents ? cached.count : students.value.length,
+    hasCache: hasCachedStudents || hadStudents,
+    error: null
+  })
+
+  try {
+    const res = await $fetch('/api/students', { params: { ciclo: cicloKey, q: query } })
+    if (requestId !== studentsRequestId) return
+
+    const freshStudents = Array.isArray(res) ? res : []
+    applyStudentsList(freshStudents)
+    const cacheWritten = writeCachedStudents({ ciclo: cicloKey, q: query }, freshStudents)
+    const updatedAt = new Date().toISOString()
+
+    setStudentsSyncState({
+      status: 'updated',
+      message: cacheWritten
+        ? 'Alumnos actualizados y guardados en caché local.'
+        : 'Alumnos actualizados. No se pudo guardar la caché local.',
+      lastUpdatedAt: updatedAt,
+      recordCount: freshStudents.length,
+      hasCache: cacheWritten || hasCachedStudents,
+      error: cacheWritten ? null : 'cache-write-failed'
+    })
+  } catch (e) {
+    if (requestId !== studentsRequestId) return
+
+    const canKeepWorking = hasCachedStudents || hadStudents
+    setStudentsSyncState({
+      status: 'failed',
+      message: canKeepWorking
+        ? 'No se pudo actualizar. Se conservan los alumnos disponibles.'
+        : 'No se pudo cargar la base de datos.',
+      recordCount: students.value.length,
+      hasCache: canKeepWorking,
+      error: e?.data?.message || e?.message || 'students-sync-failed'
+    })
+
+    if (!canKeepWorking) show('Error al cargar la base de datos', 'danger')
+  } finally {
+    if (requestId === studentsRequestId) loading.value = false
+  }
+}
+
+const refreshStudentsFromServer = () => performSearch({ useCache: false })
 
 const isEnrolled = (student) => isStudentEnrolled(student, externalConcepts.value)
 
@@ -513,15 +589,12 @@ const displayedStudents = computed(() => {
   return list
 })
 
-watch(displayedStudents, (list) => {
-  if (!list.length) {
-    selectedStudent.value = null
-    return
-  }
-
+watch(displayedStudents, () => {
   const selectedKey = normalizeStudentMatricula(selectedStudent.value?.matricula)
-  const selectedStillVisible = selectedKey && list.some(student => normalizeStudentMatricula(student.matricula) === selectedKey)
-  if (selectedStudent.value && !selectedStillVisible) selectedStudent.value = null
+  if (!selectedKey) return
+
+  const selectedStillLoaded = students.value.some(student => normalizeStudentMatricula(student.matricula) === selectedKey)
+  if (selectedStudent.value && !selectedStillLoaded) selectedStudent.value = null
 }, { flush: 'post' })
 
 
@@ -635,11 +708,12 @@ const confirmBaja = async (motivo) => {
       () => {
         const s = students.value.find(x => x.matricula === student.matricula)
         if (s) s.estatus = previousEstatus
-        performSearch()
+        performSearch({ useCache: false })
       },
       { pending: 'Procesando baja...', success: 'Alumno dado de baja exitosamente', error: 'Fallo al procesar baja' }
     )
     pendingBajaStudent.value = null
+    performSearch({ useCache: false })
   } catch (e) {}
 }
 
@@ -669,7 +743,7 @@ onMounted(async () => {
 
   if (route.query.q) filters.value.q = String(route.query.q)
   loadCustomSections()
-  performSearch()
+  performSearch({ useCache: true })
   loadGlobalKpis()
   loadKpiSparklines()
 })
@@ -694,7 +768,7 @@ watch(() => selectedStudents.value.map(student => student.matricula).join('|'), 
 watch(bulkWorkspaceMode, scheduleWorkspaceScaleUpdate)
 
 watch(() => state.value.ciclo, () => {
-  performSearch()
+  performSearch({ useCache: true })
   loadGlobalKpis()
   loadKpiSparklines()
 })
@@ -705,7 +779,7 @@ const closeStudentModal = () => { showStudentModal.value = false; editingStudent
 
 const handleStudentSuccess = () => {
   closeStudentModal()
-  performSearch()
+  performSearch({ useCache: false })
   loadGlobalKpis()
   loadKpiSparklines()
 }
