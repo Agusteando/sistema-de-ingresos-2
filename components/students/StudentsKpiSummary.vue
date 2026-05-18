@@ -1,5 +1,5 @@
 <template>
-  <section :class="['kpi-summary-system', { 'without-income': userRole !== 'global' }]" aria-label="Resumen de matrícula y finanzas">
+  <section :class="['kpi-summary-system', { 'without-income': userRole !== 'global', 'is-refreshing': isRefreshing }]" aria-label="Resumen de matrícula y finanzas">
     <div class="kpi-strip" aria-label="Matrícula y finanzas">
       <button
         v-for="item in enrollmentKpis"
@@ -11,7 +11,7 @@
         <span class="kpi-icon"><component :is="item.icon" :size="24" /></span>
         <span class="kpi-text">
           <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
+          <StudentsKpiValue :value="item.value" />
         </span>
         <UiKpiSparkline :values="item.sparkline" />
       </button>
@@ -20,7 +20,7 @@
         <span class="kpi-icon"><LucideCircleDollarSign :size="24" /></span>
         <span class="kpi-text">
           <span>Ingresos del mes</span>
-          <strong>${{ Number(globalKpis.ingresosMes).toLocaleString('es-MX', { minimumFractionDigits: 2 }) }}</strong>
+          <StudentsKpiValue :value="formattedIncome" />
         </span>
         <UiKpiSparkline :values="kpiSparklines.ingresos" />
       </div>
@@ -43,6 +43,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import StudentsKpiValue from '~/components/students/StudentsKpiValue.vue'
 import { LucideCircleDollarSign, LucideGlobe2, LucideTag, LucideUserCheck, LucideUsers, LucideUserX } from 'lucide-vue-next'
 import UiKpiSparkline from '~/components/ui/UiKpiSparkline.vue'
 
@@ -53,10 +54,13 @@ const props = defineProps({
   customSections: { type: Array, default: () => [] },
   customSectionCounts: { type: Object, default: () => ({}) },
   globalKpis: { type: Object, default: () => ({ ingresosMes: 0 }) },
-  kpiSparklines: { type: Object, default: () => ({}) }
+  kpiSparklines: { type: Object, default: () => ({}) },
+  isRefreshing: { type: Boolean, default: false }
 })
 
 defineEmits(['set-filter'])
+
+const formattedIncome = computed(() => `$${Number(props.globalKpis.ingresosMes).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`)
 
 const enrollmentKpis = computed(() => [
   {

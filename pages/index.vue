@@ -13,6 +13,7 @@
       :custom-section-counts="customSectionCounts"
       :global-kpis="globalKpis"
       :kpi-sparklines="kpiSparklines"
+      :is-refreshing="isKpiRefreshing"
       @set-filter="setActiveFilter"
     />
 
@@ -131,7 +132,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
 import { useHead } from '#imports'
@@ -193,6 +194,10 @@ const selectedStudent = ref(null)
 const photoCache = ref({})
 const globalKpis = ref({ ingresosMes: 0 })
 const paymentKpiSparklines = ref({ inscritos: [], internos: [], externos: [], ingresos: [] })
+const isKpiRefreshing = ref(false)
+const KPI_REFRESH_MIN_VISIBLE_MS = 1400
+let kpiRefreshStartedAt = 0
+let kpiRefreshTimer = null
 const showStudentModal = ref(false)
 const editingStudent = ref(null)
 const pendingBajaStudent = ref(null)
@@ -314,6 +319,33 @@ const cacheStudentPhoto = ({ matricula, photoUrl }) => {
     photoCache.value = { ...photoCache.value, [normalized]: photoUrl }
     if (process.client) sessionStorage.setItem(photoStorageKey(normalized), photoUrl)
   }
+}
+
+const clearKpiRefreshTimer = () => {
+  if (!kpiRefreshTimer) return
+  clearTimeout(kpiRefreshTimer)
+  kpiRefreshTimer = null
+}
+
+const startKpiRefresh = () => {
+  clearKpiRefreshTimer()
+  kpiRefreshStartedAt = Date.now()
+  if (!isKpiRefreshing.value) {
+    isKpiRefreshing.value = true
+  }
+}
+
+const stopKpiRefresh = () => {
+  if (!isKpiRefreshing.value) return
+
+  clearKpiRefreshTimer()
+  const elapsed = Date.now() - kpiRefreshStartedAt
+  const remaining = Math.max(KPI_REFRESH_MIN_VISIBLE_MS - elapsed, 0)
+
+  kpiRefreshTimer = setTimeout(() => {
+    isKpiRefreshing.value = false
+    kpiRefreshTimer = null
+  }, remaining)
 }
 
 
@@ -765,6 +797,26 @@ watch(() => selectedStudents.value.map(student => student.matricula).join('|'), 
 })
 
 watch(bulkWorkspaceMode, scheduleWorkspaceScaleUpdate)
+
+watch(
+  () => ({
+    status: studentsSyncState.value.status,
+    hasCache: studentsSyncState.value.hasCache,
+    count: students.value.length
+  }),
+  ({ status, hasCache, count }) => {
+    if (status === 'syncing' && hasCache && count > 0) {
+      startKpiRefresh()
+    } else {
+      stopKpiRefresh()
+    }
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  clearKpiRefreshTimer()
+})
 
 watch(() => state.value.ciclo, () => {
   performSearch({ useCache: true })
