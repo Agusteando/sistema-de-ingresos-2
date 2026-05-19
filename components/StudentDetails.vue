@@ -159,16 +159,42 @@
                 {{ accountSyncLabel }}
               </span>
             </div>
-            <p v-if="detailsExpanded" class="account-expanded-meta">{{ student.nombreCompleto }} · {{ student.matricula }}</p>
           </div>
         </div>
-        <label class="account-search-control">
-          <LucideSearch :size="15" aria-hidden="true" />
-          <input v-model="accountSearchQuery" type="search" placeholder="Buscar concepto o mes..." />
-        </label>
-        <div class="account-totals">
-          <span>Deuda: ${{ format(accountDebtTotal) }}</span>
+
+        <div v-if="detailsExpanded" class="account-expanded-student">
+          <StudentAccountPhotoCard
+            :student="student"
+            :photo-url="photoUrl || ''"
+            :photo-loading="photoLoading"
+          />
+          <div class="account-expanded-student-copy">
+            <strong>{{ student.nombreCompleto }}</strong>
+            <p>
+              <span class="student-code">{{ student.matricula }}</span>
+              <i></i>
+              {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }}<template v-if="studentGroupLabel(student)"> · {{ studentGroupLabel(student) }}</template>
+            </p>
+          </div>
+          <span
+            :class="['tipo-ingreso-badge', resolvedTipoIngreso.value]"
+            :title="`${resolvedTipoIngresoLabel} en ${selectedCicloLabel}. ${resolvedTipoIngreso.reason}`"
+          >
+            <LucideBuilding2 v-if="resolvedTipoIngreso.value === 'interno'" :size="12" :stroke-width="2.4" />
+            <LucideGlobe2 v-else :size="12" :stroke-width="2.4" />
+            {{ resolvedTipoIngresoLabel }}
+          </span>
         </div>
+
+        <template v-else>
+          <label class="account-search-control">
+            <LucideSearch :size="15" aria-hidden="true" />
+            <input v-model="accountSearchQuery" type="search" placeholder="Buscar concepto o mes..." />
+          </label>
+          <div class="account-totals">
+            <span>Deuda: ${{ format(accountDebtTotal) }}</span>
+          </div>
+        </template>
       </div>
 
       <div v-if="detailsExpanded" class="account-summary-grid" aria-label="Resumen del estado de cuenta">
@@ -176,6 +202,20 @@
           <span>{{ metric.label }}</span>
           <strong>{{ metric.value }}</strong>
         </article>
+      </div>
+
+      <div v-if="detailsExpanded" class="account-expanded-controls">
+        <label class="account-search-control account-search-control--expanded">
+          <LucideSearch :size="15" aria-hidden="true" />
+          <input v-model="accountSearchQuery" type="search" placeholder="Buscar concepto o mes..." />
+        </label>
+        <div class="account-totals">
+          <span>Deuda: ${{ format(accountDebtTotal) }}</span>
+        </div>
+        <button class="account-filter-button" type="button" @click="showAccountFilterMenu">
+          <LucideSlidersHorizontal :size="14" />
+          Filtros
+        </button>
       </div>
 
       <div :class="['account-workspace-body', { 'account-workspace-body--expanded': detailsExpanded }]">
@@ -281,46 +321,6 @@
           </table>
         </div>
         </Transition>
-
-        <aside v-if="detailsExpanded" class="account-insight-panel" aria-label="Resumen ampliado del estado de cuenta">
-          <section class="account-insight-card account-insight-card--primary">
-            <span>Selección actual</span>
-            <strong>${{ format(selectedDebtTotal) }}</strong>
-            <small>{{ selectedDebts.length }} concepto{{ selectedDebts.length === 1 ? '' : 's' }} seleccionado{{ selectedDebts.length === 1 ? '' : 's' }}</small>
-          </section>
-
-          <section class="account-insight-card">
-            <h4>Lectura rápida</h4>
-            <dl class="account-insight-list">
-              <div v-for="item in accountInsightItems" :key="item.label">
-                <dt>{{ item.label }}</dt>
-                <dd>{{ item.value }}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section v-if="largestBalanceDebt" class="account-insight-card">
-            <h4>Mayor saldo</h4>
-            <p class="account-insight-concept">{{ largestBalanceDebt.conceptoNombre }}</p>
-            <p class="account-insight-muted">{{ largestBalanceDebt.mesLabel }} · ${{ format(largestBalanceDebt.saldo) }}</p>
-          </section>
-
-          <section class="account-insight-card account-insight-card--action">
-            <h4>Siguiente acción</h4>
-            <p>{{ accountNextAction }}</p>
-          </section>
-
-          <section v-if="latestPaymentRows.length" class="account-insight-card">
-            <h4>Pagos recientes</h4>
-            <ul class="account-recent-payments">
-              <li v-for="payment in latestPaymentRows" :key="`payment-${payment.folio}`">
-                <span>{{ payment.conceptoNombre }}</span>
-                <strong>${{ format(payment.monto) }}</strong>
-                <small>{{ payment.fechaLabel }}</small>
-              </li>
-            </ul>
-          </section>
-        </aside>
       </div>
 
       <div class="account-footer">
@@ -356,7 +356,7 @@ const studentPhotoRequests = new Map()
 
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2, LucideMoreVertical, LucideSearch, LucideChevronDown, LucideMaximize2, LucideMinimize2 } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2, LucideMoreVertical, LucideSearch, LucideChevronDown, LucideMaximize2, LucideMinimize2, LucideSlidersHorizontal } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -400,6 +400,7 @@ const selectedDebts = ref([])
 const expandedHistory = ref(null)
 const depurandoDebt = ref(null)
 const accountSearchQuery = ref('')
+const accountFilter = ref('all')
 const detailsExpanded = ref(false)
 const detailTransitioning = ref(false)
 
@@ -430,21 +431,29 @@ const photoStorageKey = (matricula) => `foto_${normalizePhotoMatricula(matricula
 const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
 const accountDebtTotal = computed(() => validDebts.value.reduce((acc, debt) => acc + Number(debt?.saldo || 0), 0))
 const accountPaidTotal = computed(() => debts.value.reduce((acc, debt) => acc + Number(debt?.pagos || 0), 0))
-const selectedDebtTotal = computed(() => selectedDebts.value.reduce((acc, debt) => acc + Number(debt?.saldo || 0), 0))
+const accountOverdueTotal = computed(() => debts.value.reduce((acc, debt) => (debt?.isLate && Number(debt?.saldo || 0) > 0 ? acc + Number(debt.saldo || 0) : acc), 0))
+const accountUpcomingTotal = computed(() => Math.max(accountDebtTotal.value - accountOverdueTotal.value, 0))
 const normalizeSearchText = (value) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .toLowerCase()
 const filteredDebts = computed(() => {
   const query = normalizeSearchText(accountSearchQuery.value).trim()
-  if (!query) return debts.value
+  return debts.value.filter((debt) => {
+    const matchesQuery = !query || [
+      debt?.conceptoNombre,
+      debt?.mesLabel,
+      debt?.mes,
+      debt?.documento
+    ].some(value => normalizeSearchText(value).includes(query))
 
-  return debts.value.filter((debt) => [
-    debt?.conceptoNombre,
-    debt?.mesLabel,
-    debt?.mes,
-    debt?.documento
-  ].some(value => normalizeSearchText(value).includes(query)))
+    if (!matchesQuery) return false
+    if (accountFilter.value === 'pending') return Number(debt?.saldo || 0) > 0
+    if (accountFilter.value === 'paid') return Number(debt?.saldo || 0) <= 0
+    if (accountFilter.value === 'overdue') return Boolean(debt?.isLate) && Number(debt?.saldo || 0) > 0
+    if (accountFilter.value === 'recargo') return Boolean(debt?.hasRecargo)
+    return true
+  })
 })
 const visibleValidDebts = computed(() => filteredDebts.value.filter(debt => Number(debt.saldo || 0) > 0))
 const allVisibleDebtsSelected = computed(() => {
@@ -457,38 +466,11 @@ const accountFooterLabel = computed(() => {
   return `Mostrando ${filteredDebts.value.length} de ${debts.value.length} conceptos`
 })
 const accountSummaryMetrics = computed(() => [
-  { label: 'Saldo actual', value: `$${format(accountDebtTotal.value)}`, tone: 'danger' },
+  { label: 'Saldo actual', value: `$${format(accountDebtTotal.value)}`, tone: 'success' },
   { label: 'Pagos', value: `$${format(accountPaidTotal.value)}`, tone: 'success' },
-  { label: 'Seleccionado', value: `$${format(selectedDebtTotal.value)}`, tone: selectedDebtTotal.value > 0 ? 'warning' : 'neutral' },
-  { label: 'Conceptos', value: String(filteredDebts.value.length), tone: 'info' }
+  { label: 'Saldo vencido', value: `$${format(accountOverdueTotal.value)}`, tone: 'danger' },
+  { label: 'Saldo por vencer', value: `$${format(accountUpcomingTotal.value)}`, tone: 'info' }
 ])
-const lateDebtCount = computed(() => debts.value.filter(debt => debt?.isLate && Number(debt?.saldo || 0) > 0).length)
-const recargoDebtCount = computed(() => debts.value.filter(debt => debt?.hasRecargo && Number(debt?.saldo || 0) > 0).length)
-const cleanupDebtCount = computed(() => debts.value.filter(debt => Number(debt?.pagosDepurados || 0) > 0).length)
-const largestBalanceDebt = computed(() => validDebts.value.reduce((largest, debt) => (
-  !largest || Number(debt?.saldo || 0) > Number(largest?.saldo || 0) ? debt : largest
-), null))
-const accountInsightItems = computed(() => [
-  { label: 'Pendientes', value: String(validDebts.value.length) },
-  { label: 'Vencidos', value: String(lateDebtCount.value) },
-  { label: 'Con recargo', value: String(recargoDebtCount.value) },
-  { label: 'Depurados', value: String(cleanupDebtCount.value) }
-])
-const accountNextAction = computed(() => {
-  if (selectedDebts.value.length) return 'Registrar pago o facturar los conceptos seleccionados.'
-  if (validDebts.value.length) return 'Selecciona los conceptos pendientes para preparar pago, factura o aviso.'
-  if (debts.value.length) return 'El estado de cuenta no tiene saldo pendiente.'
-  return 'Carga el estado de cuenta para revisar cargos y pagos.'
-})
-const latestPaymentRows = computed(() => debts.value
-  .flatMap(debt => (debt?.historialPagos || []).map(payment => ({
-    ...payment,
-    conceptoNombre: payment.conceptoNombre || debt.conceptoNombre,
-    fechaLabel: payment.fecha ? new Date(payment.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : 'Sin fecha'
-  })))
-  .sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime())
-  .slice(0, 3)
-)
 const selectedCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const selectedCicloLabel = computed(() => formatCicloLabel(selectedCicloKey.value))
 const resolvedNivelLabel = computed(() => studentNivelLabel(props.student))
@@ -853,6 +835,7 @@ onBeforeUnmount(() => {
 
 watch(() => props.student?.matricula, () => {
   accountSearchQuery.value = ''
+  accountFilter.value = 'all'
   photoUrl.value = null
   photoLoading.value = false
   if (props.student) loadPhoto()
@@ -882,6 +865,16 @@ const reprintPayment = (pago) => {
 
 const printBeca = () => {
   window.open(`/print/beca?matricula=${props.student.matricula}`, '_blank', 'width=850,height=800')
+}
+
+const showAccountFilterMenu = (event) => {
+  openMenu(event, [
+    { label: 'Todos', icon: LucideSlidersHorizontal, action: () => { accountFilter.value = 'all' } },
+    { label: 'Pendientes', icon: LucideCreditCard, action: () => { accountFilter.value = 'pending' } },
+    { label: 'Pagados', icon: LucideShieldCheck, action: () => { accountFilter.value = 'paid' } },
+    { label: 'Vencidos', icon: LucideBell, action: () => { accountFilter.value = 'overdue' } },
+    { label: 'Con recargo', icon: LucideFilePlus, action: () => { accountFilter.value = 'recargo' } }
+  ])
 }
 
 const showStudentActionsMenu = (event) => {
