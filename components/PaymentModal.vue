@@ -2,11 +2,11 @@
   <Teleport to="body">
     <div class="modal-overlay" @click.self="requestClose">
       <div class="modal-container large">
-        <div class="modal-header">
+        <div class="modal-header modal-header-with-status">
           <h2 class="text-lg font-bold text-gray-800">Recibir Pago</h2>
+          <ModalDraftStatus :restored="draftRestored" :status="draftSaveState" :dirty="hasUnsavedChanges" />
         </div>
         <div class="modal-content">
-          <p v-if="draftRestored" class="modal-draft-restored" role="status">Se restauró información no guardada.</p>
           <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
             <div class="form-group mb-0">
               <label class="form-label">Forma de Pago</label>
@@ -59,13 +59,11 @@
             </table>
           </div>
         </div>
-        <div v-if="showDiscardConfirmation" class="modal-discard-confirmation" role="alertdialog" aria-live="assertive">
-          <p>Hay información sin guardar. ¿Quieres salir y descartar los cambios?</p>
-          <div>
-            <button class="btn btn-primary" type="button" @click="continueEditing">Continuar editando</button>
-            <button class="btn btn-ghost" type="button" @click="discardAndClose">Descartar cambios</button>
-          </div>
-        </div>
+        <ModalDiscardDialog
+          :show="showDiscardConfirmation"
+          @continue="continueEditing"
+          @discard="discardAndClose"
+        />
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="requestClose" :disabled="processing">Cancelar</button>
           <button class="btn btn-outline" type="button" @click="previewReceipt" :disabled="processing || totalCobrar <= 0">
@@ -168,6 +166,8 @@ const paymentDraftHasContent = (draft) => {
 
 const {
   draftRestored,
+  draftSaveState,
+  hasUnsavedChanges,
   showDiscardConfirmation,
   initializeDraft,
   markSaved,

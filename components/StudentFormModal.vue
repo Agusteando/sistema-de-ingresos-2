@@ -23,7 +23,7 @@
 
         <form @submit.prevent="submit">
           <div class="student-form-content">
-            <p v-if="draftRestored" class="modal-draft-restored" role="status">Se restauró información no guardada.</p>
+            <ModalDraftStatus :restored="draftRestored" :status="draftSaveState" :dirty="hasUnsavedChanges" />
             <section v-if="isEdit" class="student-edit-strip">
               <div>
                 <small>Matrícula</small>
@@ -267,13 +267,11 @@
             </div>
           </div>
 
-          <div v-if="showDiscardConfirmation" class="modal-discard-confirmation" role="alertdialog" aria-live="assertive">
-            <p>Hay información sin guardar. ¿Quieres salir y descartar los cambios?</p>
-            <div>
-              <button class="student-form-save" type="button" @click="continueEditing">Continuar editando</button>
-              <button class="student-form-cancel" type="button" @click="discardAndClose">Descartar cambios</button>
-            </div>
-          </div>
+          <ModalDiscardDialog
+            :show="showDiscardConfirmation"
+            @continue="continueEditing"
+            @discard="discardAndClose"
+          />
 
           <footer :class="['student-form-footer', { 'actions-only': isEdit }]">
             <div v-if="!isEdit" class="footer-matricula-strip" aria-label="Secuencia de matrícula">
@@ -435,6 +433,8 @@ const studentDraftHasContent = (draft) => {
 
 const {
   draftRestored,
+  draftSaveState,
+  hasUnsavedChanges,
   showDiscardConfirmation,
   initializeDraft,
   markSaved,

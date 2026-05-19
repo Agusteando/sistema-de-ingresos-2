@@ -7,6 +7,8 @@ type ModalDraftPayload<TDraft> = {
   value: TDraft
 }
 
+type DraftSaveState = 'idle' | 'saving' | 'saved' | 'error'
+
 type ModalDraftPersistenceOptions<TDraft> = {
   key: MaybeRefOrGetter<string>
   read: () => TDraft
@@ -45,6 +47,8 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
   const hasInitialized = ref(false)
   const draftRestored = ref(false)
   const showDiscardConfirmation = ref(false)
+  const draftSaveState = ref<DraftSaveState>('idle')
+  const lastDraftSavedAt = ref<number | null>(null)
   const cleanSnapshot = ref('')
   let persistTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -61,25 +65,37 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
     persistTimer = null
   }
 
-  const clearDraft = () => {
-    clearPendingPersist()
-    if (!canUseLocalStorage()) return
-    window.localStorage.removeItem(storageKey.value)
-  }
-
   const hasUnsavedChanges = computed(() => {
     if (!hasInitialized.value || !isEnabled()) return false
     if (currentSnapshot() === cleanSnapshot.value) return false
     return draftHasContent(options.read())
   })
 
+  const setIdleState = () => {
+    draftSaveState.value = 'idle'
+    lastDraftSavedAt.value = null
+  }
+
+  const clearDraft = () => {
+    clearPendingPersist()
+    setIdleState()
+    if (!canUseLocalStorage()) return
+    window.localStorage.removeItem(storageKey.value)
+  }
+
   const persistDraftNow = () => {
     clearPendingPersist()
-    if (!hasInitialized.value || !isEnabled() || !canUseLocalStorage()) return
+    if (!hasInitialized.value || !isEnabled()) return
 
     const draft = options.read()
     if (currentSnapshot() === cleanSnapshot.value || !draftHasContent(draft)) {
-      window.localStorage.removeItem(storageKey.value)
+      if (canUseLocalStorage()) window.localStorage.removeItem(storageKey.value)
+      setIdleState()
+      return
+    }
+
+    if (!canUseLocalStorage()) {
+      draftSaveState.value = 'error'
       return
     }
 
@@ -91,7 +107,10 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
 
     try {
       window.localStorage.setItem(storageKey.value, JSON.stringify(payload))
+      draftSaveState.value = 'saved'
+      lastDraftSavedAt.value = payload.updatedAt
     } catch (error) {
+      draftSaveState.value = 'error'
       // Storage can be unavailable or full. Closing protection still prevents accidental discard in the live modal.
     }
   }
@@ -99,6 +118,13 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
   const schedulePersist = () => {
     if (!hasInitialized.value || !isEnabled()) return
     clearPendingPersist()
+
+    if (!hasUnsavedChanges.value) {
+      persistDraftNow()
+      return
+    }
+
+    draftSaveState.value = 'saving'
     persistTimer = setTimeout(persistDraftNow, debounceMs)
   }
 
@@ -134,6 +160,7 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
     hasInitialized.value = true
     showDiscardConfirmation.value = false
     draftRestored.value = false
+    setIdleState()
 
     const savedDraft = readStoredDraft()
     if (!savedDraft) return
@@ -145,6 +172,7 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
 
     options.write(savedDraft)
     draftRestored.value = true
+    draftSaveState.value = 'saved'
   }
 
   const markSaved = () => {
@@ -210,6 +238,8 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
 
   return {
     draftRestored,
+    draftSaveState,
+    lastDraftSavedAt,
     hasUnsavedChanges,
     showDiscardConfirmation,
     initializeDraft,
