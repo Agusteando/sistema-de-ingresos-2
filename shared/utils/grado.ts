@@ -137,7 +137,12 @@ export const calculatePromotedGrado = (
   }
 
   const diff = selectedYear - baseYear
-  const promotedIndex = Math.max(0, baseIndex + diff)
+
+  if (diff < 0) {
+    return { grado: normalizedGrado, nivel, egresado: false, outOfScope: true, maxGrado: max }
+  }
+
+  const promotedIndex = baseIndex + diff
 
   if (promotedIndex >= max) {
     return { grado: 'egresado', nivel: 'Egresado', egresado: true, outOfScope: true, maxGrado: max }
