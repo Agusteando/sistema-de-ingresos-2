@@ -166,92 +166,85 @@
 .profile-actions {
   position: relative;
   z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: grid;
   width: 100%;
   min-width: 0;
+  grid-template-columns: minmax(118px, 1.08fr) minmax(108px, .92fr) minmax(118px, .96fr) minmax(92px, .62fr);
+  align-items: center;
+  gap: 10px;
 }
 
-.profile-actions .btn {
-  flex: 1 1 0;
+.profile-action-button {
+  display: inline-flex;
+  width: 100%;
   min-width: 0;
-  height: 32px;
-  min-height: 32px;
+  height: 34px;
+  align-items: center;
   justify-content: center;
-  padding: 0 9px;
+  gap: 7px;
+  border: 1px solid rgba(63, 145, 56, .18);
   border-radius: 10px;
-  font-size: 10.5px;
-  font-weight: 800;
+  background: linear-gradient(180deg, #fff, #fbfef9);
+  color: #2f7f32;
+  font-family: var(--students-font, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-size: 10.8px;
+  font-weight: 820;
+  letter-spacing: -.01em;
+  line-height: 1;
   white-space: nowrap;
   box-shadow: 0 7px 17px rgba(21, 35, 60, .045);
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
-.profile-actions .btn svg,
-.profile-overflow-button svg {
+.profile-action-button svg {
   flex: 0 0 auto;
 }
 
-.profile-actions .action-pay {
+.profile-action-button:hover {
+  border-color: rgba(63, 145, 56, .3);
+  box-shadow: 0 10px 22px rgba(21, 35, 60, .07);
+  transform: translateY(-1px);
+}
+
+.profile-action-button--primary {
   border-color: rgba(63, 145, 56, .34);
   background: linear-gradient(135deg, #69b852 0%, #3f9138 100%);
   color: #fff;
   box-shadow: 0 10px 22px rgba(63, 145, 56, .18);
 }
 
-.profile-actions .action-invoice {
-  border-color: rgba(65, 112, 205, .18);
-  background: linear-gradient(180deg, #fff, #fbfdff);
-  color: #2f62b8;
-}
-
-.profile-actions .action-extra {
-  border-color: rgba(63, 145, 56, .16);
-  background: linear-gradient(180deg, #fff, #fbfef9);
-  color: #327d37;
-}
-
-.profile-actions .action-enroll,
-.profile-actions .action-edit {
-  border-color: rgba(63, 145, 56, .16);
-  background: #fff;
-  color: #2f7f32;
-}
-
-.profile-overflow-button {
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  align-items: center;
+.profile-action-button--menu {
   justify-content: center;
-  border: 1px solid var(--students-border, #dfe7f0);
-  border-radius: 10px;
+  padding-inline: 10px;
   background: #fff;
-  color: #3f7f38;
-  box-shadow: 0 7px 17px rgba(21, 35, 60, .045);
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  color: #25324a;
 }
 
-.profile-overflow-button:hover {
-  border-color: rgba(63, 145, 56, .28);
-  box-shadow: 0 10px 22px rgba(21, 35, 60, .07);
-  transform: translateY(-1px);
+.profile-action-caret {
+  opacity: .72;
 }
 
-.profile-actions .btn:disabled {
+.profile-action-button:disabled {
   opacity: .58;
   cursor: not-allowed;
   transform: none;
 }
 
-@container (max-width: 720px) {
-  .profile-actions {
-    flex-wrap: wrap;
-  }
+.profile-action-button:disabled:hover {
+  border-color: rgba(63, 145, 56, .18);
+  box-shadow: 0 7px 17px rgba(21, 35, 60, .045);
+  transform: none;
+}
 
-  .profile-actions .btn {
-    flex: 1 1 calc(50% - 8px);
+.profile-action-button--primary:disabled:hover {
+  border-color: rgba(63, 145, 56, .34);
+  box-shadow: 0 10px 22px rgba(63, 145, 56, .18);
+}
+
+@container (max-width: 460px) {
+  .profile-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

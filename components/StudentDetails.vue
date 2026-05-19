@@ -59,24 +59,19 @@
       </div>
 
       <div class="profile-actions profile-toolbar" role="toolbar" aria-label="Acciones del alumno">
-        <button class="btn btn-primary btn-sm action-pay" :disabled="!selectedDebts.length" @click="showPaymentModal = true">
+        <button class="profile-action-button profile-action-button--primary" :disabled="!selectedDebts.length" @click="showPaymentModal = true">
           <LucideCreditCard :size="15"/> Pagar ({{ selectedDebts.length }})
         </button>
-        <button class="btn btn-secondary btn-sm action-invoice" :disabled="!selectedDebts.length" @click="showInvoiceModal = true">
+        <button class="profile-action-button" :disabled="!selectedDebts.length" @click="showInvoiceModal = true">
           <LucideFileText :size="15"/> Facturar
         </button>
-        <button class="btn btn-outline btn-sm action-extra" @click="showDocModal = true">
+        <button class="profile-action-button" @click="showDocModal = true">
           <LucideFilePlus :size="15"/> Cargo extra
         </button>
-        <button v-if="student.estatus === 'Activo' && !isEnrolled" class="btn btn-secondary btn-sm action-enroll" :disabled="enrolling" @click="quickEnroll">
-          <LucideLoader2 v-if="enrolling" class="animate-spin" :size="15"/>
-          <LucideFilePlus v-else :size="15"/> Inscribir
-        </button>
-        <button class="btn btn-ghost btn-sm action-edit" @click="$emit('edit', student)">
-          <LucideSettings :size="15"/> Editar
-        </button>
-        <button class="profile-overflow-button" type="button" aria-label="Más acciones" title="Más acciones" @click="showStudentActionsMenu">
-          <LucideMoreVertical :size="17" />
+        <button class="profile-action-button profile-action-button--menu" type="button" aria-label="Más acciones" title="Más acciones" @click="showStudentActionsMenu">
+          <LucideMoreVertical :size="15" />
+          <span>Más</span>
+          <LucideChevronDown class="profile-action-caret" :size="14" />
         </button>
       </div>
     </section>
@@ -251,7 +246,7 @@ const studentPhotoRequests = new Map()
 
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2, LucideMoreVertical, LucideSearch } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2, LucideMoreVertical, LucideSearch, LucideChevronDown } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -688,7 +683,21 @@ const printBeca = () => {
 }
 
 const showStudentActionsMenu = (event) => {
-  openMenu(event, [
+  const menuItems = [
+    { label: 'Editar', icon: LucideSettings, action: () => emit('edit', props.student) }
+  ]
+
+  if (props.student?.estatus === 'Activo' && !props.isEnrolled) {
+    menuItems.push({
+      label: enrolling.value ? 'Inscribiendo...' : 'Inscribir',
+      icon: enrolling.value ? LucideLoader2 : LucideFilePlus,
+      disabled: enrolling.value,
+      action: quickEnroll
+    })
+  }
+
+  menuItems.push(
+    { label: '-' },
     { label: 'Secciones', icon: LucideTags, action: () => emit('manage-sections', props.student) },
     { label: 'Carta beca', icon: LucideAward, action: printBeca },
     {
@@ -697,7 +706,9 @@ const showStudentActionsMenu = (event) => {
       disabled: reminding.value || !validDebts.value.length || !props.student?.correo,
       action: sendReminder
     }
-  ])
+  )
+
+  openMenu(event, menuItems)
 }
 
 const cancelPayment = async (pago) => {
