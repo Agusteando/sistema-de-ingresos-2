@@ -5,6 +5,7 @@
   --student-list-grade-size: clamp(70px, 5vw, 82px);
   --student-list-grade-height: clamp(62px, 4.6vw, 70px);
   --student-list-crest-size: clamp(36px, 2.7vw, 43px);
+  --student-list-group-watermark-size: clamp(118px, 9.4vw, 144px);
   display: grid;
   grid-template-rows: clamp(34px, 2.45vw, 38px) clamp(50px, 3.65vw, 58px) minmax(0, 1fr);
 }
@@ -122,16 +123,17 @@
 .student-row::before {
   position: absolute;
   z-index: 0;
-  inset-block: -20%;
+  inset-block-start: 50%;
   inset-inline-start: clamp(190px, 35%, 260px);
-  width: clamp(132px, 24%, 180px);
+  inline-size: var(--student-list-group-watermark-size);
+  block-size: var(--student-list-group-watermark-size);
   content: "";
   pointer-events: none;
   opacity: .105;
   background: color-mix(in srgb, var(--grade-accent, #4fa346) 38%, #6d705f);
   -webkit-mask: var(--student-group-icon-mask, none) center / contain no-repeat;
   mask: var(--student-group-icon-mask, none) center / contain no-repeat;
-  transform: rotate(-4deg) scale(1.08);
+  transform: translateY(-50%) rotate(-4deg);
   transform-origin: center;
 }
 
@@ -144,11 +146,8 @@
 
 .student-row.selected::before,
 .student-row.multi-selected::before {
-  inset-inline-start: clamp(170px, 31%, 240px);
-  width: clamp(148px, 28%, 208px);
   opacity: .16;
   background: color-mix(in srgb, var(--grade-accent, #4fa346) 48%, #69735a);
-  transform: rotate(-3deg) scale(1.14);
 }
 
 .student-identity {
@@ -169,6 +168,7 @@
 
 .student-group-sigil {
   display: inline-flex;
+  box-sizing: border-box;
   width: var(--student-list-crest-size);
   height: var(--student-list-crest-size);
   align-items: center;
