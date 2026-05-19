@@ -1,6 +1,6 @@
 import { executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
 
-const isScopedToActivePlantel = (user: any) => user?.role !== 'global' || (user?.role === 'global' && user?.active_plantel !== 'GLOBAL')
+const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 const normalizeMatricula = (value: unknown) => String(value || '').trim()
 const normalizeIds = (value: unknown) => Array.from(new Set(
   (Array.isArray(value) ? value : [])

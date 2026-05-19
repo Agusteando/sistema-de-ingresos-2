@@ -7,7 +7,7 @@
         <p>Genera consultas puntuales sin mezclar el Corte de Caja con los reportes de conceptos.</p>
       </div>
 
-      <div class="report-switcher" v-if="userRole === 'global'">
+      <div class="report-switcher" v-if="isSuperAdmin">
         <button type="button" :class="{ active: activeReport === 'concepto' }" @click="activeReport = 'concepto'">
           <LucideFileText :size="16" />
           Concepto
@@ -246,8 +246,9 @@ const { show } = useToast()
 
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 const activePlantel = ref(useCookie('auth_active_plantel').value || '')
-const canFilterPlantel = computed(() => userRole.value === 'global' && activePlantel.value === 'GLOBAL')
-const activeReport = ref(route.query.tipo === 'corte' && userRole.value === 'global' ? 'corte' : 'concepto')
+const isSuperAdmin = computed(() => ['global', 'superadmin'].includes(String(userRole.value || '').toLowerCase()))
+const canFilterPlantel = computed(() => isSuperAdmin.value && activePlantel.value === 'GLOBAL')
+const activeReport = ref(route.query.tipo === 'corte' && isSuperAdmin.value ? 'corte' : 'concepto')
 
 const conceptos = ref([])
 const loadingConceptos = ref(false)

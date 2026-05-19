@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const method = event.node.req.method
   const user = event.context.user
 
-  if (user.role !== 'global') {
+  if (!user.isSuperAdmin) {
     throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
   }
 

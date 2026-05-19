@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
     let whereClause = "1=1"
     const params: any[] = []
 
-    if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
+    if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
       whereClause += " AND A.plantel = ?"
       params.push(user.active_plantel)
     }

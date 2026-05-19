@@ -1,6 +1,6 @@
 import { query } from '../../utils/db'
 
-const isScopedToActivePlantel = (user: any) => user?.role !== 'global' || (user?.role === 'global' && user?.active_plantel !== 'GLOBAL')
+const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 const cleanName = (value: unknown) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 120)
 const cleanOptional = (value: unknown, limit: number) => {
   const next = String(value || '').replace(/\s+/g, ' ').trim()

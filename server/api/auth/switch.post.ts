@@ -1,21 +1,24 @@
+import { PLANTELES_LIST } from '../../../utils/constants'
+import { getTrustedAuthUser, isValidPlantelScope, normalizePlantel } from '../../utils/auth-session'
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const email = getCookie(event, 'auth_email')
-  const role = getCookie(event, 'auth_role')
-  const planteles = getCookie(event, 'auth_planteles') || ''
-
-  if (!email) {
-    throw createError({ statusCode: 401, message: 'Sesión expirada o no válida.' })
-  }
-
-  const allowed = planteles.split(',').map(p => p.trim()).filter(Boolean)
-  const requested = String(body.plantel || '').trim()
+  const user = await getTrustedAuthUser(event)
+  const requested = normalizePlantel(body?.plantel)
 
   if (!requested) {
     throw createError({ statusCode: 400, message: 'Plantel requerido.' })
   }
 
-  if (role !== 'global' && !allowed.includes(requested) && requested !== 'GLOBAL') {
+  if (!isValidPlantelScope(requested)) {
+    throw createError({ statusCode: 400, message: 'Plantel inválido.' })
+  }
+
+  if (requested === 'GLOBAL' && !user.isSuperAdmin) {
+    throw createError({ statusCode: 403, message: 'No tiene permisos para vista consolidada.' })
+  }
+
+  if (requested !== 'GLOBAL' && !user.isSuperAdmin && !user.plantelesList.includes(requested)) {
     throw createError({ statusCode: 403, message: 'No tiene permisos para acceder a este plantel.' })
   }
 
@@ -25,11 +28,14 @@ export default defineEventHandler(async (event) => {
     maxAge: 86400 * 7
   }
 
+  setCookie(event, 'auth_role', user.role || 'plantel', cookieOpts)
+  setCookie(event, 'auth_planteles', user.isSuperAdmin ? PLANTELES_LIST.join(',') : user.planteles, cookieOpts)
   setCookie(event, 'auth_active_plantel', requested, cookieOpts)
+  setCookie(event, 'auth_home_plantel', user.auth_home_plantel, cookieOpts)
 
   if (requested !== 'GLOBAL') {
     setCookie(event, 'db_bridge_agent_id', requested, cookieOpts)
   }
 
-  return { success: true }
+  return { success: true, activePlantel: requested }
 })

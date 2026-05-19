@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   if (!studentRef) return []
 
   const user = event.context.user
-  if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
+  if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
     if (String(studentRef.plantel || '') !== String(user.active_plantel || '')) return []
   }
 

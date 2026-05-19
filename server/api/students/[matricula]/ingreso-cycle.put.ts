@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
 
   if (!student) throw createError({ statusCode: 404, message: 'Alumno no encontrado' })
 
-  if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
+  if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
     if (String(student.plantel || '') !== String(user.active_plantel || '')) {
       throw createError({ statusCode: 403, message: 'No tienes acceso a este alumno' })
     }

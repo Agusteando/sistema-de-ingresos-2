@@ -44,13 +44,13 @@
         <a href="http://localhost/Sistema%20de%20ingresos/login.php" class="nav-item group" target="_blank" rel="noopener">
           <LucideExternalLink :size="22" stroke-width="2" /> Sistema de Contingencia
         </a>
-        <NuxtLink to="/usuarios" class="nav-item group" v-if="userRole === 'global'">
+        <NuxtLink to="/usuarios" class="nav-item group" v-if="isSuperAdmin">
           <LucideShield :size="22" stroke-width="2" /> Usuarios
         </NuxtLink>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="plantel-block" v-if="userPlanteles.length > 1 || userRole === 'global'">
+        <div class="plantel-block" v-if="userPlanteles.length > 1 || isSuperAdmin">
           <label>Plantel</label>
           <div class="plantel-select">
             <LucideBuilding2 :size="21" />
@@ -58,7 +58,7 @@
               v-model="activePlantel"
               @change="switchPlantel"
             >
-              <option v-if="userRole === 'global'" value="GLOBAL">CONSOLIDADO</option>
+              <option v-if="isSuperAdmin" value="GLOBAL">CONSOLIDADO</option>
               <option v-for="p in userPlanteles" :key="p" :value="p">PLANTEL {{ p }}</option>
             </select>
             <LucideChevronDown :size="16" />
@@ -87,7 +87,7 @@
             </div>
             <div class="admin-meta">
               <span>{{ adminName }}</span>
-              <strong>{{ userRole === 'global' ? 'ADMIN' : 'USUARIO' }}</strong>
+              <strong>{{ isSuperAdmin ? 'ADMIN' : 'USUARIO' }}</strong>
             </div>
           </div>
           <button @click="logout" title="Cerrar Sesión" class="logout-button">
@@ -189,7 +189,7 @@ import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import ContextMenu from '~/components/ContextMenu.vue'
 import SyncBadge from '~/components/SyncBadge.vue'
 import StudentsCacheSyncIndicator from '~/components/students/StudentsCacheSyncIndicator.vue'
-import { CICLOS_LIST, normalizeCicloOption } from '~/utils/constants'
+import { CICLOS_LIST, PLANTELES_LIST, normalizeCicloOption } from '~/utils/constants'
 
 const { toasts } = useToast()
 const { syncState, syncMessage } = useOptimisticSync()
@@ -242,10 +242,15 @@ const adminPhoto = ref(null)
 const adminName = ref(useCookie('auth_name').value || 'Usuario')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 const activePlantel = ref(useCookie('auth_active_plantel').value || 'PT')
+const isSuperAdmin = computed(() => ['global', 'superadmin'].includes(String(userRole.value || '').toLowerCase()))
 
 const userPlanteles = computed(() => {
+  if (isSuperAdmin.value) return [...PLANTELES_LIST]
+
   const val = useCookie('auth_planteles').value
-  return val ? val.split(',') : []
+  return val
+    ? val.split(',').map(p => String(p || '').trim().toUpperCase()).filter(Boolean)
+    : []
 })
 
 onMounted(async () => {

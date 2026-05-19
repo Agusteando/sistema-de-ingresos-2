@@ -1,4 +1,5 @@
 import { enterBridgeAgentId, ensureSchema } from '../utils/db'
+import { getTrustedAuthUser, resolveDataBridgeAgentId } from '../utils/auth-session'
 
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
@@ -15,22 +16,10 @@ export default defineEventHandler(async (event) => {
     return
   }
 
-  const email = getCookie(event, 'auth_email')
+  const user = await getTrustedAuthUser(event)
+  const bridgeAgentId = resolveDataBridgeAgentId(event, user)
 
-  if (!email) {
-    throw createError({ statusCode: 401, message: 'Acceso no autorizado.' })
-  }
-
-  const activePlantel = getCookie(event, 'auth_active_plantel') || ''
-  const bridgeAgentId = getCookie(event, 'db_bridge_agent_id') || activePlantel
-
-  event.context.user = {
-    email,
-    name: getCookie(event, 'auth_name') || 'Usuario',
-    role: getCookie(event, 'auth_role') || 'plantel',
-    planteles: getCookie(event, 'auth_planteles') || '',
-    active_plantel: activePlantel
-  }
+  event.context.user = user
 
   if (bridgeAgentId && bridgeAgentId !== 'GLOBAL') {
     event.context.dbBridgeAgentId = bridgeAgentId

@@ -2,6 +2,7 @@ export default defineNuxtRouteMiddleware((to) => {
   const email = useCookie('auth_email')
   const planteles = useCookie('auth_planteles')
   const role = useCookie('auth_role')
+  const isSuperAdmin = ['global', 'superadmin'].includes(String(role.value || '').toLowerCase())
   
   if (!email.value && to.path !== '/login' && !to.path.startsWith('/print')) {
     return navigateTo('/login')
@@ -11,7 +12,7 @@ export default defineNuxtRouteMiddleware((to) => {
     return navigateTo('/')
   }
 
-  if (email.value && role.value !== 'global' && !planteles.value && to.path !== '/onboarding' && !to.path.startsWith('/print')) {
+  if (email.value && !isSuperAdmin && !planteles.value && to.path !== '/onboarding' && !to.path.startsWith('/print')) {
     return navigateTo('/onboarding')
   }
 
