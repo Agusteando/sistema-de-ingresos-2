@@ -25,13 +25,14 @@
 }
 
 .student-details-shell--expanded {
+  --detail-expanded-top-offset: 64px;
   position: fixed;
-  top: 0;
+  top: var(--detail-expanded-top-offset);
   right: 0;
   bottom: 0;
   z-index: 17;
-  width: clamp(548px, 34vw, 620px);
-  height: 100vh;
+  width: min(clamp(620px, 40vw, 720px), calc(100vw - 252px));
+  height: calc(100vh - var(--detail-expanded-top-offset));
   gap: 0;
   overflow: hidden;
   padding: 0;
@@ -57,10 +58,10 @@
 }
 
 .detail-expand-rail--expanded {
-  min-height: 74px;
+  min-height: 54px;
   justify-content: space-between;
   margin: 0;
-  padding: 0 22px;
+  padding: 0 18px;
   border-bottom: 1px solid rgba(223, 231, 240, .96);
   background: rgba(255, 255, 255, .97);
 }
@@ -157,14 +158,14 @@
 
 .detail-expand-rail--expanded .detail-expand-zone {
   width: auto;
-  min-width: 112px;
-  height: 38px;
+  min-width: 106px;
+  height: 34px;
   justify-content: flex-start;
-  padding: 0 13px 0 9px;
+  padding: 0 12px 0 8px;
   border: 1px solid rgba(63, 145, 56, .22);
-  border-radius: 12px;
+  border-radius: 11px;
   background: linear-gradient(180deg, #fff, #f6fbf4);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, .045);
+  box-shadow: 0 7px 15px rgba(21, 35, 60, .04);
   cursor: pointer;
 }
 
@@ -184,8 +185,8 @@
 
 .detail-shell-close {
   display: inline-flex;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -504,7 +505,7 @@
 }
 
 .account-card--workspace {
-  grid-template-rows: 136px 86px 56px minmax(0, 1fr) 74px;
+  grid-template-rows: 94px 58px 40px minmax(0, 1fr) 48px;
   flex: 1 1 auto;
   border: 0;
   border-radius: 0;
@@ -550,10 +551,10 @@
 
 .account-card--workspace .account-header {
   display: grid;
-  grid-template-rows: auto 66px;
+  grid-template-rows: 22px 50px;
   align-content: center;
-  gap: 14px;
-  padding: 18px 26px 12px;
+  gap: 7px;
+  padding: 8px 18px 7px;
   border-bottom: 0;
   background: #fff;
 }
@@ -563,34 +564,43 @@
 }
 
 .account-expanded-student {
+  --account-expanded-photo-size: 42px;
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr) auto;
+  grid-template-columns: var(--account-expanded-photo-size) minmax(0, 1fr) auto;
   align-items: center;
-  gap: 13px;
+  gap: 10px;
   min-width: 0;
 }
 
-.account-expanded-student .student-account-photo-card {
-  width: 58px;
-  height: 58px;
-  flex-basis: 58px;
-  border-radius: 18px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .78), 0 10px 20px rgba(21, 35, 60, .08);
+.account-card--workspace .account-expanded-student .student-account-photo-card {
+  --student-account-photo-size: var(--account-expanded-photo-size);
+  --student-account-photo-radius: 13px;
+  --student-account-photo-inner-inset: 5px;
+  --student-account-photo-inner-radius: 11px;
+  --student-account-photo-orb-inline: 6px;
+  --student-account-photo-orb-bottom: 4px;
+  --student-account-photo-orb-height: 18px;
+  --student-account-photo-image-padding: 3px 3px 0;
+  --student-account-photo-fallback-size: 30px;
+  --student-account-photo-fallback-font-size: 12px;
+  justify-self: start;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .78), 0 8px 16px rgba(21, 35, 60, .07);
 }
 
 .account-expanded-student-copy {
   display: grid;
   min-width: 0;
-  gap: 6px;
+  gap: 4px;
+  align-content: center;
 }
 
 .account-expanded-student-copy strong {
   overflow: hidden;
   color: #14233c;
-  font-size: 15.5px;
+  font-size: 13.5px;
   font-weight: 890;
-  letter-spacing: -.035em;
-  line-height: 1.1;
+  letter-spacing: -.03em;
+  line-height: 1.08;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -599,11 +609,11 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   margin: 0;
   overflow: hidden;
   color: #6f7b95;
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 640;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -623,15 +633,15 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 14px;
-  padding: 8px 26px 10px;
+  gap: 10px;
+  padding: 4px 18px 6px;
   background: #fff;
 }
 
 .account-filter-button {
   display: inline-flex;
-  min-width: 82px;
-  height: 38px;
+  min-width: 78px;
+  height: 32px;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -680,8 +690,8 @@
 }
 
 .account-card--workspace .account-header h3 {
-  font-size: 21px;
-  letter-spacing: -.04em;
+  font-size: 18px;
+  letter-spacing: -.035em;
   line-height: 1;
 }
 
@@ -705,8 +715,8 @@
 .account-card--workspace .account-search-control {
   width: 100%;
   min-width: 0;
-  height: 38px;
-  border-radius: 12px;
+  height: 32px;
+  border-radius: 11px;
 }
 
 .account-search-control input {
@@ -721,7 +731,7 @@
 }
 
 .account-card--workspace .account-search-control input {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .account-search-control input::placeholder {
@@ -745,10 +755,10 @@
 }
 
 .account-card--workspace .account-totals span {
-  min-height: 36px;
-  padding-inline: 16px;
-  border-radius: 11px;
-  font-size: 11.5px;
+  min-height: 32px;
+  padding-inline: 14px;
+  border-radius: 10px;
+  font-size: 10.5px;
 }
 
 .account-summary-grid {
@@ -756,9 +766,9 @@
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   align-items: stretch;
-  padding: 8px 26px 10px;
+  padding: 5px 18px 7px;
   border-bottom: 0;
   background: #fff;
 }
@@ -767,8 +777,8 @@
   display: grid;
   min-width: 0;
   align-content: center;
-  gap: 7px;
-  padding: 13px 14px;
+  gap: 4px;
+  padding: 8px 10px;
   border: 1px solid var(--students-border-soft, #edf2f7);
   border-radius: 12px;
   background: linear-gradient(180deg, #fff, #fbfcfd);
@@ -777,13 +787,13 @@
 
 .account-summary-card span {
   color: #6f7b95;
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 760;
 }
 
 .account-summary-card strong {
   overflow: hidden;
-  font-size: 18px;
+  font-size: 15.5px;
   font-weight: 900;
   letter-spacing: -.045em;
   line-height: 1;
@@ -831,7 +841,7 @@
 .account-workspace-body--expanded {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
-  padding: 0 26px;
+  padding: 0 18px;
   background: #fff;
 }
 
@@ -880,16 +890,16 @@
 }
 
 .account-card--workspace .account-table-wrap thead th {
-  height: 34px;
-  padding-inline: 8px;
-  font-size: 9px;
-  letter-spacing: .06em;
+  height: 28px;
+  padding-inline: 7px;
+  font-size: 8.5px;
+  letter-spacing: .055em;
 }
 
 .account-card--workspace .account-table-wrap tbody td {
-  height: 54px;
-  padding-inline: 8px;
-  font-size: 10.5px;
+  height: 38px;
+  padding-inline: 7px;
+  font-size: 10px;
 }
 
 .account-table-wrap tbody tr:hover {
@@ -902,10 +912,10 @@
 .account-table-wrap .col-money { width: 104px; }
 .account-table-wrap .col-actions { width: 44px; }
 
-.account-card--workspace .account-table-wrap .col-check { width: 36px; }
-.account-card--workspace .account-table-wrap .col-progress { width: 78px; }
-.account-card--workspace .account-table-wrap .col-money { width: 76px; }
-.account-card--workspace .account-table-wrap .col-actions { width: 56px; }
+.account-card--workspace .account-table-wrap .col-check { width: 32px; }
+.account-card--workspace .account-table-wrap .col-progress { width: 66px; }
+.account-card--workspace .account-table-wrap .col-money { width: 74px; }
+.account-card--workspace .account-table-wrap .col-actions { width: 52px; }
 
 .check-cell {
   text-align: center;
@@ -992,26 +1002,28 @@
 }
 
 .account-card--workspace .concept-cell strong {
-  margin-bottom: 4px;
-  font-size: 10.5px;
+  margin-bottom: 2px;
+  font-size: 10px;
+  line-height: 1.08;
 }
 
 .account-card--workspace .concept-cell small {
-  font-size: 9.5px;
+  font-size: 8.8px;
+  line-height: 1.1;
 }
 
 .account-card--workspace .progress-cell em {
-  width: 48px;
-  height: 22px;
-  border-width: 1.5px;
-  font-size: 9.5px;
+  width: 43px;
+  height: 19px;
+  border-width: 1.4px;
+  font-size: 8.8px;
 }
 
 .account-card--workspace .menu-cell button {
-  width: 25px;
-  height: 25px;
+  width: 22px;
+  height: 22px;
   margin-left: 2px;
-  border-radius: 8px;
+  border-radius: 7px;
 }
 
 .recargo-badge {
@@ -1109,17 +1121,17 @@
 }
 
 .account-card--workspace .account-footer {
-  min-height: 74px;
-  margin: 0 26px;
+  min-height: 50px;
+  margin: 0 18px;
   padding-inline: 0;
   border-top: 0;
-  border-radius: 12px 12px 0 0;
-  font-size: 12.5px;
+  border-radius: 10px 10px 0 0;
+  font-size: 11px;
 }
 
 .account-card--workspace .account-footer b {
   color: #328333;
-  font-size: 18px;
+  font-size: 15.5px;
 }
 
 .debt-row.selected {
@@ -1258,13 +1270,13 @@
 
 .account-sync-indicator {
   display: inline-flex;
-  width: 104px;
-  min-height: 22px;
+  width: 96px;
+  min-height: 20px;
   align-items: center;
   gap: 6px;
   opacity: .82;
   color: #6d7890;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 760;
   line-height: 1;
   white-space: nowrap;
@@ -1402,4 +1414,41 @@
     opacity: .56;
     background-position: 50% 50%;
   }
+}
+
+
+@media (max-width: 980px) {
+  .student-details-shell--expanded {
+    --detail-expanded-top-offset: 0px;
+    z-index: 20;
+    width: 100vw;
+    max-width: 100vw;
+  }
+}
+
+.account-card--workspace .tipo-ingreso-badge {
+  min-height: 22px;
+  padding-inline: 7px;
+  font-size: 10px;
+}
+
+.account-card--workspace .student-code {
+  height: 17px;
+  padding-inline: 7px;
+  font-size: 9.5px;
+}
+
+.account-card--workspace .debt-check {
+  width: 14px;
+  height: 14px;
+}
+
+.account-card--workspace .final-amount-link {
+  margin-left: 3px;
+  font-size: 8.8px;
+}
+
+.account-card--workspace .account-footer strong {
+  gap: 9px;
+  font-size: 11px;
 }

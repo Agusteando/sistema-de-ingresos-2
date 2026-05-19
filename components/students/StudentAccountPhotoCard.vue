@@ -44,13 +44,13 @@ const initials = (name = '') => String(name || '')
 .student-account-photo-card {
   position: relative;
   display: grid;
-  width: 70px;
-  height: 70px;
-  flex: 0 0 70px;
+  width: var(--student-account-photo-size, 70px);
+  height: var(--student-account-photo-size, 70px);
+  flex: 0 0 var(--student-account-photo-size, 70px);
   place-items: center;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--grade-accent, #4fa346) 28%, #dfe7f0);
-  border-radius: 22px;
+  border-radius: var(--student-account-photo-radius, 22px);
   background:
     radial-gradient(circle at 50% 86%, color-mix(in srgb, var(--grade-accent, #4fa346) 24%, transparent), transparent 50%),
     radial-gradient(circle at 26% 18%, rgba(255, 255, 255, .96), transparent 38%),
@@ -63,8 +63,8 @@ const initials = (name = '') => String(name || '')
 
 .student-account-photo-card::before {
   position: absolute;
-  inset: 7px;
-  border-radius: 18px;
+  inset: var(--student-account-photo-inner-inset, 7px);
+  border-radius: var(--student-account-photo-inner-radius, 18px);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .38), rgba(255, 255, 255, 0)),
     radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--grade-accent, #4fa346) 16%, transparent), transparent 52%);
@@ -76,9 +76,9 @@ const initials = (name = '') => String(name || '')
 
 .student-account-photo-card__orb {
   position: absolute;
-  inset-inline: 9px;
-  inset-block-end: 7px;
-  height: 28px;
+  inset-inline: var(--student-account-photo-orb-inline, 9px);
+  inset-block-end: var(--student-account-photo-orb-bottom, 7px);
+  height: var(--student-account-photo-orb-height, 28px);
   border-radius: 999px 999px 16px 16px;
   background: color-mix(in srgb, var(--grade-accent, #4fa346) 18%, #fff);
   filter: blur(7px);
@@ -91,7 +91,7 @@ const initials = (name = '') => String(name || '')
   z-index: 1;
   width: 100%;
   height: 100%;
-  padding: 5px 4px 0;
+  padding: var(--student-account-photo-image-padding, 5px 4px 0);
   filter: drop-shadow(0 8px 9px rgba(21, 35, 60, .12));
 }
 
@@ -99,13 +99,13 @@ const initials = (name = '') => String(name || '')
   position: relative;
   z-index: 1;
   display: grid;
-  width: 50px;
-  height: 50px;
+  width: var(--student-account-photo-fallback-size, 50px);
+  height: var(--student-account-photo-fallback-size, 50px);
   place-items: center;
   border-radius: 999px;
   background: rgba(255, 255, 255, .76);
   color: color-mix(in srgb, var(--grade-accent, #4fa346) 86%, #26354d);
-  font-size: 18px;
+  font-size: var(--student-account-photo-fallback-font-size, 18px);
   font-weight: 900;
   letter-spacing: -.04em;
 }
