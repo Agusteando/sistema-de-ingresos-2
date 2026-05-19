@@ -394,7 +394,6 @@ const debts = ref([])
 const siblings = ref([])
 const siblingSource = ref('none')
 const loading = ref(false)
-const enrolling = ref(false)
 const reminding = ref(false)
 const selectedDebts = ref([])
 const expandedHistory = ref(null)
@@ -730,28 +729,6 @@ const clearSiblingLinks = async () => {
   }
 }
 
-const quickEnroll = async () => {
-  enrolling.value = true
-  try {
-    const cicloKey = normalizeCicloKey(state.value.ciclo)
-    const res = await $fetch(`/api/students/${props.student.matricula}/enroll`, {
-      method: 'POST',
-      body: { ciclo: cicloKey }
-    })
-    if (res?.inserted > 0) {
-      show(`Inscripcion agregada (${res.inserted})`, 'success')
-    } else {
-      show('El alumno ya tenia conceptos de inscripcion', 'success')
-    }
-    loadDebts({ useCache: false })
-    emit('refresh')
-  } catch (e) {
-    show(e?.data?.message || 'No se pudo inscribir al alumno', 'danger')
-  } finally {
-    enrolling.value = false
-  }
-}
-
 const loadPhoto = async () => {
   const matricula = normalizePhotoMatricula(props.student?.matricula)
   if (!matricula) return
@@ -881,15 +858,6 @@ const showStudentActionsMenu = (event) => {
   const menuItems = [
     { label: 'Editar', icon: LucideSettings, action: () => emit('edit', props.student) }
   ]
-
-  if (props.student?.estatus === 'Activo' && !props.isEnrolled) {
-    menuItems.push({
-      label: enrolling.value ? 'Inscribiendo...' : 'Inscribir',
-      icon: enrolling.value ? LucideLoader2 : LucideFilePlus,
-      disabled: enrolling.value,
-      action: quickEnroll
-    })
-  }
 
   menuItems.push(
     { label: '-' },

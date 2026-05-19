@@ -19,19 +19,10 @@ export interface TipoIngresoResolverOptions {
 
 const DEFAULT_CICLO = "2025";
 
-const DEFAULT_ENROLLMENT_CONCEPTS = [
-  "inscripcion",
-  "inscripción",
-  "reinscripcion",
-  "reinscripción",
-];
-
-const normalizeText = (value: unknown) =>
-  String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+const normalizeEnrollmentConceptId = (value: unknown): string => {
+  const raw = String(value ?? "").trim();
+  return /^\d+$/.test(raw) ? String(Number(raw)) : "";
+};
 
 export const normalizeCicloForTipoIngreso = (value: unknown): string | null => {
   if (Array.isArray(value)) return normalizeCicloForTipoIngreso(value[0]);
@@ -56,20 +47,23 @@ export const nextCicloKey = (value: unknown): string => {
   return String(Number(key) + 1);
 };
 
-const normalizeConceptList = (values: unknown): string[] => {
+const normalizeConceptIdList = (values: unknown): string[] => {
   if (values === null || values === undefined) return [];
 
   if (Array.isArray(values)) {
-    return values.flatMap(normalizeConceptList);
+    return values.flatMap(normalizeConceptIdList);
   }
 
   if (typeof values === "object") {
     return Object.values(values as Record<string, unknown>).flatMap(
-      normalizeConceptList,
+      normalizeConceptIdList,
     );
   }
 
-  return String(values).split(/[|,;]/).map(normalizeText).filter(Boolean);
+  return String(values)
+    .split(/[|,;]/)
+    .map(normalizeEnrollmentConceptId)
+    .filter(Boolean);
 };
 
 const readEvidenceMapConcepts = (student: any, cicloKey: string): unknown[] => {
@@ -84,38 +78,43 @@ const readEvidenceMapConcepts = (student: any, cicloKey: string): unknown[] => {
   return maps.flatMap((map: any) => {
     if (!map || typeof map !== "object") return [];
     const direct = map[cicloKey] ?? map[formatCicloLabel(cicloKey)];
-    if (direct !== undefined) return normalizeConceptList(direct);
+    if (direct !== undefined) return normalizeConceptIdList(direct);
 
     const matchingEntry = Object.entries(map).find(
       ([key]) => normalizeCicloForTipoIngreso(key) === cicloKey,
     );
-    return matchingEntry ? normalizeConceptList(matchingEntry[1]) : [];
+    return matchingEntry ? normalizeConceptIdList(matchingEntry[1]) : [];
   });
 };
 
 const readTargetConcepts = (student: any, targetCicloKey: string): string[] =>
-  normalizeConceptList([
+  normalizeConceptIdList([
+    student?.tipoIngresoEvidence?.targetConceptIds,
+    student?.tipoIngresoEvidence?.targetConceptosIds,
     student?.tipoIngresoEvidence?.targetConcepts,
     student?.tipoIngresoEvidence?.targetConceptos,
-    student?.tipoIngresoTargetConcepts,
-    student?.tipoIngresoTargetConceptos,
-    student?.conceptosTargetCiclo,
-    student?.conceptosCicloActual,
-    student?.conceptosPagados,
-    student?.conceptosCargados,
+    student?.tipoIngresoTargetConceptIds,
+    student?.tipoIngresoTargetConceptosIds,
+    student?.conceptoIdsTarget,
+    student?.conceptoIdsTargetCiclo,
+    student?.conceptoIdsCicloActual,
+    student?.conceptoIdsPagados,
+    student?.conceptoIdsCargados,
     readEvidenceMapConcepts(student, targetCicloKey),
   ]);
 
 const readPreviousConcepts = (student: any, previousCiclo: string): string[] =>
-  normalizeConceptList([
+  normalizeConceptIdList([
+    student?.tipoIngresoEvidence?.previousConceptIds,
+    student?.tipoIngresoEvidence?.previousConceptosIds,
     student?.tipoIngresoEvidence?.previousConcepts,
     student?.tipoIngresoEvidence?.previousConceptos,
-    student?.tipoIngresoPreviousConcepts,
-    student?.tipoIngresoPreviousConceptos,
-    student?.conceptosPreviousCiclo,
-    student?.conceptosCicloPrevio,
-    student?.conceptosPagadosPrevios,
-    student?.conceptosCargadosPrevios,
+    student?.tipoIngresoPreviousConceptIds,
+    student?.tipoIngresoPreviousConceptosIds,
+    student?.conceptoIdsPreviousCiclo,
+    student?.conceptoIdsCicloPrevio,
+    student?.conceptoIdsPagadosPrevios,
+    student?.conceptoIdsCargadosPrevios,
     readEvidenceMapConcepts(student, previousCiclo),
   ]);
 
@@ -123,19 +122,12 @@ const conceptsContainEnrollment = (
   concepts: unknown[],
   enrollmentConcepts: unknown[],
 ): boolean => {
-  const normalizedConcepts = normalizeConceptList(concepts);
-  if (!normalizedConcepts.length) return false;
+  const normalizedConcepts = normalizeConceptIdList(concepts);
+  const enrollmentConceptIds = normalizeConceptIdList(enrollmentConcepts);
+  if (!normalizedConcepts.length || !enrollmentConceptIds.length) return false;
 
-  const tokens = normalizeConceptList(enrollmentConcepts).filter(
-    (concept) => concept.length >= 3,
-  );
-
-  const effectiveTokens = tokens.length
-    ? tokens
-    : normalizeConceptList(DEFAULT_ENROLLMENT_CONCEPTS);
-  return normalizedConcepts.some((concept) =>
-    effectiveTokens.some((token) => concept.includes(token)),
-  );
+  const conceptSet = new Set(normalizedConcepts);
+  return enrollmentConceptIds.some((conceptId) => conceptSet.has(conceptId));
 };
 
 const fallbackResult = (
@@ -192,11 +184,11 @@ export const resolveTipoIngreso = (
     const previousCiclo = previousCicloKey(targetCicloKey);
     const targetHasEnrollmentConcept = conceptsContainEnrollment(
       readTargetConcepts(student, targetCicloKey),
-      options.enrollmentConcepts || DEFAULT_ENROLLMENT_CONCEPTS,
+      options.enrollmentConcepts || [],
     );
     const previousHasEnrollmentConcept = conceptsContainEnrollment(
       readPreviousConcepts(student, previousCiclo),
-      options.enrollmentConcepts || DEFAULT_ENROLLMENT_CONCEPTS,
+      options.enrollmentConcepts || [],
     );
 
     if (targetHasEnrollmentConcept && previousHasEnrollmentConcept) {

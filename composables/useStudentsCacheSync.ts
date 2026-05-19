@@ -27,7 +27,7 @@ type StudentsSyncState = {
   error: string | null
 }
 
-const CACHE_VERSION = 1
+const CACHE_VERSION = 2
 const CACHE_NAMESPACE = 'students-cache'
 
 const normalizeQuery = (value?: string | null) => String(value || '').trim()

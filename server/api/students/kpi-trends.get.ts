@@ -7,24 +7,18 @@ const CACHE_TTL_MS = 5 * 60 * 1000
 const MAX_POINTS = 8
 const trendCache = new Map<string, { expiresAt: number, value: Record<string, number[]> }>()
 
-const DEFAULT_ENROLLMENT_CONCEPTS = ['inscripcion', 'inscripción', 'reinscripcion', 'reinscripción']
-
-const normalizeConcept = (value: unknown) => String(value || '')
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .trim()
-
-const sanitizeConcepts = (raw: unknown) => {
+const sanitizeConceptIds = (raw: unknown) => {
   const source = Array.isArray(raw) ? raw.join(',') : String(raw || '')
-  const concepts = source
+  const ids = source
     .split(',')
-    .map(normalizeConcept)
-    .filter(Boolean)
-    .filter(concept => concept.length >= 3 && concept.length <= 80)
+    .map(value => String(value || '').trim())
+    .filter(value => /^\d+$/.test(value))
+    .map(value => String(Number(value)))
 
-  return Array.from(new Set(concepts.length ? concepts : DEFAULT_ENROLLMENT_CONCEPTS.map(normalizeConcept)))
+  return Array.from(new Set(ids))
 }
+
+const emptyEnrollmentSeries = () => ({ inscritos: [], internos: [], externos: [] })
 
 const dateBucket = (value: unknown) => {
   if (!value) return ''
@@ -55,58 +49,108 @@ export default defineEventHandler(async (event) => {
   const { ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
-  const enrollmentConcepts = sanitizeConcepts(concepts)
+  const enrollmentConceptIds = sanitizeConceptIds(concepts)
   const plantelScope = user.active_plantel || 'GLOBAL'
-  const cacheKey = [user.role, plantelScope, cicloKey, enrollmentConcepts.join('|')].join('::')
+  const cacheKey = [user.role, plantelScope, cicloKey, enrollmentConceptIds.join('|')].join('::')
   const cached = trendCache.get(cacheKey)
 
   if (cached && cached.expiresAt > Date.now()) return cached.value
 
-  const normalizedConceptSql = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(r.conceptoNombre, 'í', 'i'), 'Í', 'i'), 'ó', 'o'), 'Ó', 'o'))"
-  const conceptPredicate = enrollmentConcepts.map(() => `${normalizedConceptSql} LIKE ?`).join(' OR ')
-  const conceptParams = enrollmentConcepts.map(concept => `%${concept}%`)
   const plantelWhere = plantelScope !== 'GLOBAL' ? 'AND A.plantel = ?' : ''
   const plantelParams = plantelScope !== 'GLOBAL' ? [plantelScope] : []
 
-  const enrollmentRows = await query<any[]>(`
-    SELECT
-      E.matricula,
-      E.firstEnrollmentAt,
-      E.conceptosTarget,
-      A.grado AS gradoBase,
-      A.ciclo AS cicloBase,
-      A.ciclo,
-      A.plantel,
-      A.nivel AS nivelBase,
-      BPrev.conceptosPagadosPrevios,
-      CPrev.conceptosCargadosPrevios,
-      CONCAT_WS('|', BPrev.conceptosPagadosPrevios, CPrev.conceptosCargadosPrevios) AS conceptosCicloPrevio
-    FROM (
+  const inscritos = new Map<string, number>()
+  const internos = new Map<string, number>()
+  const externos = new Map<string, number>()
+  const ingresos = new Map<string, number>()
+  const buckets = new Set<string>()
+
+  if (enrollmentConceptIds.length) {
+    const conceptPredicate = enrollmentConceptIds.map(() => 'CAST(COALESCE(p.concepto_id, d.concepto, r.concepto) AS CHAR) = ?').join(' OR ')
+
+    const enrollmentRows = await query<any[]>(`
       SELECT
-        r.matricula,
-        MIN(r.fecha) AS firstEnrollmentAt,
-        GROUP_CONCAT(DISTINCT r.conceptoNombre SEPARATOR '|') AS conceptosTarget
-      FROM referenciasdepago r
-      WHERE r.ciclo = ?
-        AND r.estatus = 'Vigente'
-        AND (${conceptPredicate})
-      GROUP BY r.matricula
-    ) E
-    JOIN base A ON A.matricula = E.matricula
-    LEFT JOIN (
-      SELECT matricula, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosPagadosPrevios
-      FROM referenciasdepago
-      WHERE ciclo = ? AND estatus = 'Vigente'
-      GROUP BY matricula
-    ) BPrev ON A.matricula = BPrev.matricula
-    LEFT JOIN (
-      SELECT matricula, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosCargadosPrevios
-      FROM documentos
-      WHERE ciclo = ? AND estatus = 'Activo'
-      GROUP BY matricula
-    ) CPrev ON A.matricula = CPrev.matricula
-    WHERE 1 = 1 ${plantelWhere}
-  `, [cicloKey, ...conceptParams, previousCiclo, previousCiclo, ...plantelParams])
+        E.matricula,
+        E.firstEnrollmentAt,
+        E.conceptosTarget,
+        E.conceptoIdsTarget,
+        A.grado AS gradoBase,
+        A.ciclo AS cicloBase,
+        A.ciclo,
+        A.plantel,
+        A.nivel AS nivelBase,
+        BPrev.conceptosPagadosPrevios,
+        BPrev.conceptoIdsPagadosPrevios,
+        CPrev.conceptosCargadosPrevios,
+        CPrev.conceptoIdsCargadosPrevios,
+        CONCAT_WS('|', BPrev.conceptosPagadosPrevios, CPrev.conceptosCargadosPrevios) AS conceptosCicloPrevio,
+        CONCAT_WS('|', BPrev.conceptoIdsPagadosPrevios, CPrev.conceptoIdsCargadosPrevios) AS conceptoIdsCicloPrevio
+      FROM (
+        SELECT
+          r.matricula,
+          MIN(r.fecha) AS firstEnrollmentAt,
+          GROUP_CONCAT(DISTINCT r.conceptoNombre SEPARATOR '|') AS conceptosTarget,
+          GROUP_CONCAT(DISTINCT CAST(COALESCE(p.concepto_id, d.concepto, r.concepto) AS CHAR) SEPARATOR '|') AS conceptoIdsTarget
+        FROM referenciasdepago r
+        LEFT JOIN documentos d ON d.documento = r.documento
+        LEFT JOIN documento_concepto_periodos p
+          ON p.documento = r.documento
+          AND p.estatus = 'Activo'
+          AND CAST(r.mes AS UNSIGNED) >= p.start_mes
+          AND (p.end_mes IS NULL OR CAST(r.mes AS UNSIGNED) <= p.end_mes)
+        WHERE r.ciclo = ?
+          AND r.estatus = 'Vigente'
+          AND (${conceptPredicate})
+        GROUP BY r.matricula
+      ) E
+      JOIN base A ON A.matricula = E.matricula
+      LEFT JOIN (
+        SELECT
+          r.matricula AS matricula,
+          GROUP_CONCAT(DISTINCT r.conceptoNombre SEPARATOR '|') AS conceptosPagadosPrevios,
+          GROUP_CONCAT(DISTINCT CAST(COALESCE(p.concepto_id, d.concepto, r.concepto) AS CHAR) SEPARATOR '|') AS conceptoIdsPagadosPrevios
+        FROM referenciasdepago r
+        LEFT JOIN documentos d ON d.documento = r.documento
+        LEFT JOIN documento_concepto_periodos p
+          ON p.documento = r.documento
+          AND p.estatus = 'Activo'
+          AND CAST(r.mes AS UNSIGNED) >= p.start_mes
+          AND (p.end_mes IS NULL OR CAST(r.mes AS UNSIGNED) <= p.end_mes)
+        WHERE r.ciclo = ? AND r.estatus = 'Vigente'
+        GROUP BY r.matricula
+      ) BPrev ON A.matricula = BPrev.matricula
+      LEFT JOIN (
+        SELECT
+          matricula,
+          GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosCargadosPrevios,
+          GROUP_CONCAT(DISTINCT concepto SEPARATOR '|') AS conceptoIdsCargadosPrevios
+        FROM documentos
+        WHERE ciclo = ? AND estatus = 'Activo'
+        GROUP BY matricula
+      ) CPrev ON A.matricula = CPrev.matricula
+      WHERE 1 = 1 ${plantelWhere}
+    `, [cicloKey, ...enrollmentConceptIds, previousCiclo, previousCiclo, ...plantelParams])
+
+    enrollmentRows.forEach((row) => {
+      if (isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase)) return
+      const bucket = dateBucket(row.firstEnrollmentAt)
+      if (!bucket) return
+      buckets.add(bucket)
+      increment(inscritos, bucket)
+      const tipoIngreso = resolveTipoIngreso({
+        ...row,
+        conceptoIdsCicloActual: row.conceptoIdsTarget,
+        tipoIngresoEvidence: {
+          targetCiclo: cicloKey,
+          previousCiclo,
+          targetConceptIds: row.conceptoIdsTarget,
+          previousConceptIds: [row.conceptoIdsPagadosPrevios, row.conceptoIdsCargadosPrevios, row.conceptoIdsCicloPrevio]
+        }
+      }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
+      if (tipoIngreso.value === 'interno') increment(internos, bucket)
+      else increment(externos, bucket)
+    })
+  }
 
   const incomeWhere = plantelScope !== 'GLOBAL' ? 'AND COALESCE(A.plantel, r.plantel) = ?' : ''
   const incomeRows = await query<any[]>(`
@@ -124,32 +168,6 @@ export default defineEventHandler(async (event) => {
       ${incomeWhere}
   `, [cicloKey, ...plantelParams])
 
-  const inscritos = new Map<string, number>()
-  const internos = new Map<string, number>()
-  const externos = new Map<string, number>()
-  const ingresos = new Map<string, number>()
-  const buckets = new Set<string>()
-
-  enrollmentRows.forEach((row) => {
-    if (isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase)) return
-    const bucket = dateBucket(row.firstEnrollmentAt)
-    if (!bucket) return
-    buckets.add(bucket)
-    increment(inscritos, bucket)
-    const tipoIngreso = resolveTipoIngreso({
-      ...row,
-      conceptosCicloActual: row.conceptosTarget,
-      tipoIngresoEvidence: {
-        targetCiclo: cicloKey,
-        previousCiclo,
-        targetConcepts: row.conceptosTarget,
-        previousConcepts: [row.conceptosPagadosPrevios, row.conceptosCargadosPrevios, row.conceptosCicloPrevio]
-      }
-    }, cicloKey, { enrollmentConcepts })
-    if (tipoIngreso.value === 'interno') increment(internos, bucket)
-    else increment(externos, bucket)
-  })
-
   incomeRows.forEach((row) => {
     if (isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase)) return
     const bucket = dateBucket(row.fecha)
@@ -159,10 +177,16 @@ export default defineEventHandler(async (event) => {
   })
 
   const ordered = orderedBuckets(buckets)
+  const enrollmentSeries = enrollmentConceptIds.length
+    ? {
+        inscritos: seriesFromMap(inscritos, ordered),
+        internos: seriesFromMap(internos, ordered),
+        externos: seriesFromMap(externos, ordered)
+      }
+    : emptyEnrollmentSeries()
+
   const value = {
-    inscritos: seriesFromMap(inscritos, ordered),
-    internos: seriesFromMap(internos, ordered),
-    externos: seriesFromMap(externos, ordered),
+    ...enrollmentSeries,
     ingresos: seriesFromMap(ingresos, ordered)
   }
 

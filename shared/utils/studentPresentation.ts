@@ -108,10 +108,44 @@ export const studentPresentationStyle = (student: any) => ({
   ...studentGroupIconStyle(student)
 })
 
+export const normalizeEnrollmentConceptId = (value: unknown) => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+
+  return /^\d+$/.test(raw) ? String(Number(raw)) : ''
+}
+
+export const normalizeEnrollmentConceptIds = (values: unknown): string[] => {
+  if (values === null || values === undefined) return []
+
+  if (Array.isArray(values)) return values.flatMap(normalizeEnrollmentConceptIds)
+
+  if (typeof values === 'object') {
+    return Object.values(values as Record<string, unknown>).flatMap(normalizeEnrollmentConceptIds)
+  }
+
+  return String(values)
+    .split(/[|,;]/)
+    .map(normalizeEnrollmentConceptId)
+    .filter(Boolean)
+}
+
 export const isStudentEnrolled = (student: any, enrollmentConcepts: string[] = []) => {
   if (student?.estatus !== 'Activo') return false
-  const concepts = ((student?.conceptosCargados || '') + '|' + (student?.conceptosPagados || '')).toLowerCase()
-  return enrollmentConcepts.some(concept => concepts.includes(concept))
+
+  const enrollmentConceptIds = normalizeEnrollmentConceptIds(enrollmentConcepts)
+  if (!enrollmentConceptIds.length) return false
+
+  const studentConceptIds = new Set(normalizeEnrollmentConceptIds([
+    student?.conceptoIdsPagados,
+    student?.conceptoIdsCargados,
+    student?.conceptoIdsCicloActual,
+    student?.conceptoIds,
+    student?.conceptosIds
+  ]))
+
+  if (!studentConceptIds.size) return false
+  return enrollmentConceptIds.some(conceptId => studentConceptIds.has(conceptId))
 }
 
 export const statusSecondaryLine = (student: any, enrollmentConcepts: string[] = []) => {
@@ -125,15 +159,63 @@ export const statusSecondaryLine = (student: any, enrollmentConcepts: string[] =
 }
 
 export const parseEnrollmentConcepts = (source: unknown) => {
-  const concepts: string[] = []
+  const ids: string[] = []
+  const explicitConceptIdKeys = new Set([
+    'conceptoid',
+    'concepto_id',
+    'conceptid',
+    'concept_id',
+    'idconcepto',
+    'id_concepto'
+  ])
+  const conceptNameKeys = new Set([
+    'concepto',
+    'conceptonombre',
+    'concepto_nombre',
+    'conceptname',
+    'concept_name'
+  ])
+
+  const normalizedKey = (key: unknown) => String(key || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+
+  const pushId = (value: unknown) => {
+    const conceptId = normalizeEnrollmentConceptId(value)
+    if (conceptId) ids.push(conceptId)
+  }
+
   const traverse = (value: any) => {
     if (!value) return
-    if (Array.isArray(value)) value.forEach(traverse)
-    else if (typeof value === 'object') {
-      if (value.concepto_nombre) concepts.push(value.concepto_nombre)
-      Object.values(value).forEach(traverse)
+
+    if (Array.isArray(value)) {
+      value.forEach(traverse)
+      return
     }
+
+    if (typeof value !== 'object') return
+
+    const entries = Object.entries(value)
+    const hasConceptName = entries.some(([key]) => conceptNameKeys.has(normalizedKey(key)))
+
+    entries.forEach(([key, entryValue]) => {
+      const keyName = normalizedKey(key)
+      const likelyConceptIdCollection = keyName.includes('concept') || keyName.includes('inscrip')
+
+      if (explicitConceptIdKeys.has(keyName) || (keyName === 'id' && hasConceptName)) {
+        pushId(entryValue)
+      } else if (likelyConceptIdCollection && typeof entryValue !== 'object') {
+        pushId(entryValue)
+      } else if (likelyConceptIdCollection && Array.isArray(entryValue)) {
+        entryValue.forEach(pushId)
+      }
+
+      traverse(entryValue)
+    })
   }
+
   traverse(source)
-  return [...new Set(concepts.map(concept => concept.toLowerCase().trim()).filter(Boolean))]
+  return [...new Set(ids)]
 }
