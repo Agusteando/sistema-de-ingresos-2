@@ -28,14 +28,21 @@ export default defineEventHandler(async (event) => {
     maxAge: 86400 * 7
   }
 
+  const dataBridgeAgentId = requested !== 'GLOBAL'
+    ? requested
+    : user.auth_home_plantel
+
+  if (!dataBridgeAgentId || dataBridgeAgentId === 'GLOBAL') {
+    throw createError({ statusCode: 400, message: 'No se pudo resolver un plantel de datos para bridge mode.' })
+  }
+
   setCookie(event, 'auth_role', user.role || 'plantel', cookieOpts)
   setCookie(event, 'auth_planteles', user.isSuperAdmin ? PLANTELES_LIST.join(',') : user.planteles, cookieOpts)
   setCookie(event, 'auth_active_plantel', requested, cookieOpts)
   setCookie(event, 'auth_home_plantel', user.auth_home_plantel, cookieOpts)
+  setCookie(event, 'db_bridge_agent_id', dataBridgeAgentId, cookieOpts)
 
-  if (requested !== 'GLOBAL') {
-    setCookie(event, 'db_bridge_agent_id', requested, cookieOpts)
-  }
+  event.context.dbBridgeAgentId = dataBridgeAgentId
 
-  return { success: true, activePlantel: requested }
+  return { success: true, activePlantel: requested, dataBridgeAgentId }
 })
