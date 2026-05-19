@@ -1,7 +1,8 @@
-Refine student account actions and expandable account sidebar
+Refine student detail workspace expansion and actions menu
 
-- Fix the Más action menu so click-triggered context menus stay open instead of closing immediately.
-- Add a toggleable expanded Estado de Cuenta panel with a right-sidebar treatment, larger layout, summary metrics, and a dedicated collapse control.
-- Add a subtle hover/magnetic affordance to the account header so users can discover the expanded account view without adding noisy UI.
-- Preserve the existing account table interactions, search, debt selection, concept adjustment, history, and refresh states while expanding/retracting the panel.
-- Keep the action/detail implementation scoped to the student detail area with reusable state and clean CSS rather than overrides or dead styles.
+- Move the expansion affordance to the top edge of the student detail workspace, matching the intended interaction target above the detail card.
+- Make the full right-side student detail workspace morph into a taller sidebar-style panel under the app header, then retract back to its original card position.
+- Add a subtle magnetic hover preview on the expansion rail so the user can see the workspace will pull upward before clicking.
+- Keep the expanded workspace toggleable with an explicit close control and Escape-key support.
+- Replace the unreliable Más context trigger with a fixed-position anchored action menu so the overflow actions open consistently without being clipped by the profile card.
+- Preserve the existing Estado de Cuenta data, search, totals, selection, payment, invoice, extra charge, edit, section, scholarship letter, and reminder behavior.
