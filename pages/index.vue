@@ -186,7 +186,7 @@ const activeGrado = ref('')
 const activeGrupo = ref('')
 const activeSaldoFilter = ref('all')
 
-const externalConcepts = ref(['inscripcion', 'inscripción', 'reinscripción', 'reinscripcion'])
+const externalConcepts = ref([])
 const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 
 const students = ref([])
@@ -390,6 +390,11 @@ const loadKpiSparklines = async () => {
   const requestId = ++kpiSparklineRequestId
   try {
     const cicloKey = normalizeCicloKey(state.value.ciclo)
+    if (!externalConcepts.value.length) {
+      paymentKpiSparklines.value = { inscritos: [], internos: [], externos: [], ingresos: [] }
+      return
+    }
+
     const res = await $fetch('/api/students/kpi-trends', {
       params: {
         ciclo: cicloKey,
@@ -461,14 +466,14 @@ const clearFilters = () => {
 
 
 const parseEnrollmentConfig = (obj) => {
-  const concepts = parseEnrollmentConcepts(obj)
-  if (concepts.length > 0) externalConcepts.value = concepts
+  const conceptIds = parseEnrollmentConcepts(obj)
+  externalConcepts.value = conceptIds
 }
 
 const loadGlobalKpis = async () => {
   try {
     const cicloKey = normalizeCicloKey(state.value.ciclo)
-    const res = await $fetch('/api/dashboard/kpis', { params: { ciclo: cicloKey } })
+    const res = await $fetch('/api/dashboard/kpis', { params: { ciclo: cicloKey, concepts: externalConcepts.value.join(',') } })
     globalKpis.value.ingresosMes = res.ingresosMes || 0
   } catch(e) {}
 }

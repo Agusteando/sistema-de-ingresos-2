@@ -4,10 +4,14 @@ import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 
 export default defineEventHandler(async (event) => {
-  const { ciclo = '2025' } = getQuery(event)
+  const { ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
   const user = event.context.user
+  const enrollmentConceptIds = String(Array.isArray(concepts) ? concepts.join(',') : concepts || '')
+    .split(',')
+    .map(value => String(value || '').trim())
+    .filter(value => /^\d+$/.test(value))
   
   let alumnosWhere = "A.estatus = 'Activo'"
   let ingresosWhere = "r.ciclo = ? AND r.estatus = 'Vigente' AND MONTH(r.fecha) = MONTH(CURRENT_DATE())"
@@ -29,32 +33,62 @@ export default defineEventHandler(async (event) => {
       A.plantel,
       A.nivel as nivelBase,
       B.conceptosPagados,
+      B.conceptoIdsPagados,
       C.conceptosCargados,
+      C.conceptoIdsCargados,
       BPrev.conceptosPagadosPrevios,
+      BPrev.conceptoIdsPagadosPrevios,
       CPrev.conceptosCargadosPrevios,
+      CPrev.conceptoIdsCargadosPrevios,
       CONCAT_WS('|', B.conceptosPagados, C.conceptosCargados) AS conceptosCicloActual,
-      CONCAT_WS('|', BPrev.conceptosPagadosPrevios, CPrev.conceptosCargadosPrevios) AS conceptosCicloPrevio
+      CONCAT_WS('|', B.conceptoIdsPagados, C.conceptoIdsCargados) AS conceptoIdsCicloActual,
+      CONCAT_WS('|', BPrev.conceptosPagadosPrevios, CPrev.conceptosCargadosPrevios) AS conceptosCicloPrevio,
+      CONCAT_WS('|', BPrev.conceptoIdsPagadosPrevios, CPrev.conceptoIdsCargadosPrevios) AS conceptoIdsCicloPrevio
     FROM base A
     LEFT JOIN (
-      SELECT matricula, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosPagados
-      FROM referenciasdepago
-      WHERE ciclo = ? AND estatus = 'Vigente'
-      GROUP BY matricula
+      SELECT
+        R.matricula AS matricula,
+        GROUP_CONCAT(DISTINCT R.conceptoNombre SEPARATOR '|') AS conceptosPagados,
+        GROUP_CONCAT(DISTINCT CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) SEPARATOR '|') AS conceptoIdsPagados
+      FROM referenciasdepago R
+      LEFT JOIN documentos D ON D.documento = R.documento
+      LEFT JOIN documento_concepto_periodos P
+        ON P.documento = R.documento
+        AND P.estatus = 'Activo'
+        AND CAST(R.mes AS UNSIGNED) >= P.start_mes
+        AND (P.end_mes IS NULL OR CAST(R.mes AS UNSIGNED) <= P.end_mes)
+      WHERE R.ciclo = ? AND R.estatus = 'Vigente'
+      GROUP BY R.matricula
     ) B ON A.matricula = B.matricula
     LEFT JOIN (
-      SELECT matricula, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosCargados
+      SELECT
+        matricula,
+        GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosCargados,
+        GROUP_CONCAT(DISTINCT concepto SEPARATOR '|') AS conceptoIdsCargados
       FROM documentos
       WHERE ciclo = ? AND estatus = 'Activo'
       GROUP BY matricula
     ) C ON A.matricula = C.matricula
     LEFT JOIN (
-      SELECT matricula, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosPagadosPrevios
-      FROM referenciasdepago
-      WHERE ciclo = ? AND estatus = 'Vigente'
-      GROUP BY matricula
+      SELECT
+        R.matricula AS matricula,
+        GROUP_CONCAT(DISTINCT R.conceptoNombre SEPARATOR '|') AS conceptosPagadosPrevios,
+        GROUP_CONCAT(DISTINCT CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) SEPARATOR '|') AS conceptoIdsPagadosPrevios
+      FROM referenciasdepago R
+      LEFT JOIN documentos D ON D.documento = R.documento
+      LEFT JOIN documento_concepto_periodos P
+        ON P.documento = R.documento
+        AND P.estatus = 'Activo'
+        AND CAST(R.mes AS UNSIGNED) >= P.start_mes
+        AND (P.end_mes IS NULL OR CAST(R.mes AS UNSIGNED) <= P.end_mes)
+      WHERE R.ciclo = ? AND R.estatus = 'Vigente'
+      GROUP BY R.matricula
     ) BPrev ON A.matricula = BPrev.matricula
     LEFT JOIN (
-      SELECT matricula, GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosCargadosPrevios
+      SELECT
+        matricula,
+        GROUP_CONCAT(DISTINCT conceptoNombre SEPARATOR '|') AS conceptosCargadosPrevios,
+        GROUP_CONCAT(DISTINCT concepto SEPARATOR '|') AS conceptoIdsCargadosPrevios
       FROM documentos
       WHERE ciclo = ? AND estatus = 'Activo'
       GROUP BY matricula
@@ -83,10 +117,10 @@ export default defineEventHandler(async (event) => {
       tipoIngresoEvidence: {
         targetCiclo: cicloKey,
         previousCiclo,
-        targetConcepts: [row.conceptosPagados, row.conceptosCargados, row.conceptosCicloActual],
-        previousConcepts: [row.conceptosPagadosPrevios, row.conceptosCargadosPrevios, row.conceptosCicloPrevio]
+        targetConceptIds: [row.conceptoIdsPagados, row.conceptoIdsCargados, row.conceptoIdsCicloActual],
+        previousConceptIds: [row.conceptoIdsPagadosPrevios, row.conceptoIdsCargadosPrevios, row.conceptoIdsCicloPrevio]
       }
-    }, cicloKey)
+    }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
 
     acc[tipoIngreso.value] += 1
     return acc
