@@ -1,6 +1,6 @@
 .filter-bar {
   display: grid;
-  grid-template-columns: minmax(250px, 340px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(310px, 430px) minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   flex: 0 0 auto;
@@ -22,16 +22,64 @@
   border: 1px solid var(--students-border);
   border-radius: 11px;
   background: #fff;
+  min-width: 0;
   color: #7c88a0;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 6px 13px rgba(21,35,60,.03);
 }
 
-.search-control svg {
-  width: 18px;
-  height: 18px;
+.search-filter-icon,
+.search-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-filter-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  color: #6e7b92;
+  background: #f7fafc;
+}
+
+.search-filter-token {
+  display: inline-flex;
+  max-width: 150px;
+  height: 25px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 10px;
+  border: 1px solid rgba(63, 145, 56, .24);
+  border-radius: 999px;
+  background: var(--students-green-soft);
+  color: #387c35;
+  font-size: 10.5px;
+  font-weight: 820;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.search-filter-token span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-filter-token b {
+  color: #4f8f46;
+  font-size: 13px;
+  font-weight: 860;
+  line-height: 1;
+}
+
+.search-filter-token:hover {
+  border-color: rgba(63, 145, 56, .36);
+  background: #e8f6e4;
 }
 
 .search-control input {
+  min-width: 110px;
   width: 100%;
   border: 0;
   outline: 0;
@@ -70,30 +118,10 @@
   min-width: 112px;
 }
 
-.active-filter-strip {
-  display: flex;
-  gap: 8px;
-  min-height: 24px;
-  margin: -2px 0 7px;
-  overflow-x: auto;
-}
-
-.filter-token {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid rgba(63,145,56,.24);
-  border-radius: 999px;
-  background: var(--students-green-soft);
-  color: #387c35;
-  padding: 3px 9px;
-  font-size: 10.5px;
-  font-weight: 780;
-  white-space: nowrap;
-}
 
 @media (min-width: 1500px) and (min-height: 900px) {
   .filter-bar {
-    grid-template-columns: minmax(360px, 480px) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(420px, 520px) minmax(0, 1fr) auto;
     gap: 24px;
     min-height: 66px;
     margin-bottom: 12px;

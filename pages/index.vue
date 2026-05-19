@@ -19,6 +19,7 @@
 
     <StudentsFilterBar
       :search-query="filters.q"
+      :active-kpi-filter-label="activeInlineFilterLabel"
       :active-grado="activeGrado"
       :active-grupo="activeGrupo"
       :active-saldo-filter="activeSaldoFilter"
@@ -28,14 +29,10 @@
       @update-active-grado="activeGrado = $event"
       @update-active-grupo="activeGrupo = $event"
       @update-active-saldo-filter="activeSaldoFilter = $event"
+      @clear-active-filter="clearActiveFilter"
       @toggle-debt="toggleSaldoDebtFilter"
       @search="performSearch"
       @export="exportData"
-    />
-
-    <StudentsActiveFilterStrip
-      v-if="selectedFilterTags.length"
-      :tags="selectedFilterTags"
     />
 
     <div ref="studentsScaleShell" class="students-scale-shell" :style="studentsScaleShellStyle">
@@ -167,7 +164,6 @@ import {
 import StudentsHero from '~/components/students/StudentsHero.vue'
 import StudentsKpiSummary from '~/components/students/StudentsKpiSummary.vue'
 import StudentsFilterBar from '~/components/students/StudentsFilterBar.vue'
-import StudentsActiveFilterStrip from '~/components/students/StudentsActiveFilterStrip.vue'
 import StudentsListPanel from '~/components/students/StudentsListPanel.vue'
 import StudentsWorkspacePanel from '~/components/students/StudentsWorkspacePanel.vue'
 import StudentsSelectionDock from '~/components/students/StudentsSelectionDock.vue'
@@ -435,13 +431,9 @@ const activeFilterLabel = computed(() => {
   }[activeFilter.value] || 'Todos los estados')
 })
 
-const selectedFilterTags = computed(() => {
-  const tags = []
-  if (activeFilter.value && activeFilter.value !== 'inscritos') tags.push(activeFilterLabel.value)
-  if (activeGrado.value) tags.push(`Grado: ${activeGrado.value}`)
-  if (activeGrupo.value) tags.push(`Grupo: ${activeGrupo.value}`)
-  if (filters.value.q) tags.push(`Busqueda: ${filters.value.q}`)
-  return tags
+const activeInlineFilterLabel = computed(() => {
+  if (!activeFilter.value || activeFilter.value === 'inscritos') return ''
+  return activeFilterLabel.value
 })
 
 const setActiveFilter = (filter) => {
@@ -452,6 +444,10 @@ const setActiveFilter = (filter) => {
 
 const toggleSaldoDebtFilter = () => {
   activeSaldoFilter.value = activeSaldoFilter.value === 'debt' ? 'all' : 'debt'
+}
+
+const clearActiveFilter = () => {
+  activeFilter.value = ''
 }
 
 const clearFilters = () => {

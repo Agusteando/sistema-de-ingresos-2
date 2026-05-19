@@ -168,7 +168,7 @@
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
 }
@@ -179,33 +179,24 @@
   height: 32px;
   min-height: 32px;
   justify-content: center;
-  padding: 0 8px;
+  padding: 0 9px;
   border-radius: 10px;
   font-size: 10.5px;
-  font-weight: 790;
+  font-weight: 800;
   white-space: nowrap;
-}
-
-.profile-actions .btn svg {
-  flex: 0 0 auto;
-}
-
-.profile-actions .action-reminder {
-  flex: 1.12 1 0;
-}
-
-.profile-actions .action-divider {
-  display: none;
-}
-
-.profile-actions .btn {
   box-shadow: 0 7px 17px rgba(21, 35, 60, .045);
 }
 
+.profile-actions .btn svg,
+.profile-overflow-button svg {
+  flex: 0 0 auto;
+}
+
 .profile-actions .action-pay {
-  border-color: rgba(63, 145, 56, .24);
-  background: linear-gradient(180deg, #fff, #fbfef9);
-  color: #2f7f32;
+  border-color: rgba(63, 145, 56, .34);
+  background: linear-gradient(135deg, #69b852 0%, #3f9138 100%);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(63, 145, 56, .18);
 }
 
 .profile-actions .action-invoice {
@@ -215,23 +206,37 @@
 }
 
 .profile-actions .action-extra {
-  border-color: rgba(114, 76, 214, .2);
-  background: linear-gradient(180deg, #fff, #fdfbff);
-  color: #6f4bd2;
+  border-color: rgba(63, 145, 56, .16);
+  background: linear-gradient(180deg, #fff, #fbfef9);
+  color: #327d37;
 }
 
+.profile-actions .action-enroll,
 .profile-actions .action-edit {
-  border-color: rgba(231, 141, 38, .22);
-  background: linear-gradient(180deg, #fff, #fffdf8);
-  color: #c87516;
+  border-color: rgba(63, 145, 56, .16);
+  background: #fff;
+  color: #2f7f32;
 }
 
-.profile-actions .action-sections,
-.profile-actions .action-letter,
-.profile-actions .action-reminder {
-  border-color: rgba(79, 93, 123, .14);
+.profile-overflow-button {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--students-border, #dfe7f0);
+  border-radius: 10px;
   background: #fff;
-  color: #43516c;
+  color: #3f7f38;
+  box-shadow: 0 7px 17px rgba(21, 35, 60, .045);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.profile-overflow-button:hover {
+  border-color: rgba(63, 145, 56, .28);
+  box-shadow: 0 10px 22px rgba(21, 35, 60, .07);
+  transform: translateY(-1px);
 }
 
 .profile-actions .btn:disabled {
@@ -242,23 +247,11 @@
 
 @container (max-width: 720px) {
   .profile-actions {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 7px;
+    flex-wrap: wrap;
   }
 
-  .profile-actions .action-reminder {
-    grid-column: span 2;
-  }
-}
-
-@container (max-width: 560px) {
-  .profile-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .profile-actions .action-reminder {
-    grid-column: auto;
+  .profile-actions .btn {
+    flex: 1 1 calc(50% - 8px);
   }
 }
 
@@ -334,7 +327,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   padding: 0 18px;
   border-bottom: 1px solid var(--students-border-soft, #edf2f7);
   background: #fff;
@@ -348,6 +341,41 @@
   letter-spacing: -.025em;
 }
 
+.account-search-control {
+  display: inline-flex;
+  width: min(252px, 36%);
+  min-width: 190px;
+  height: 32px;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 0 12px;
+  border: 1px solid var(--students-border, #dfe7f0);
+  border-radius: 11px;
+  background: #fff;
+  color: #7d889d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 6px 14px rgba(21, 35, 60, .035);
+}
+
+.account-search-control input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #17243c;
+  font-size: 11.5px;
+  font-weight: 620;
+}
+
+.account-search-control input::placeholder {
+  color: #8893a7;
+}
+
+.account-totals {
+  flex: 0 0 auto;
+}
+
 .account-totals span {
   display: inline-flex;
   align-items: center;
@@ -358,6 +386,25 @@
   color: #c93b44;
   font-size: 11.5px;
   font-weight: 850;
+}
+
+@media (max-width: 1100px) {
+  .account-card {
+    grid-template-rows: 82px minmax(0, 1fr) 46px;
+  }
+
+  .account-header {
+    flex-wrap: wrap;
+    min-height: 82px;
+    padding-block: 8px;
+  }
+
+  .account-search-control {
+    order: 3;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
 }
 
 .account-table-wrap {
