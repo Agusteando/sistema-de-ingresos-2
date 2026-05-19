@@ -325,6 +325,7 @@ import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useModalDraftPersistence } from '~/composables/useModalDraftPersistence'
+import { CICLOS_LIST } from '~/utils/constants'
 import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
 import { formatBirthDate, normalizeCurp, parseCurp } from '~/shared/utils/curp'
 import { NIVELES_ESCOLARES, displayGrado, gradeOptionsForPlantel, nivelFromPlantel, normalizeNivelEscolar, resolveNivelEscolar } from '~/shared/utils/grado'
@@ -466,13 +467,24 @@ const visibleTipoIngresoLabel = computed(() => formatTipoIngresoValue(visibleTip
 const resultAnimationKey = computed(() => `${form.value.ciclo}-${currentCicloKey.value}-${visibleTipoIngreso.value.value}`)
 
 const ingresoCardKicker = computed(() => {
-  if (form.value.ciclo === currentCicloKey.value) return 'Ingreso en ciclo actual'
+  const ingresoYear = Number(normalizeCicloKey(form.value.ciclo))
+  const currentYear = Number(currentCicloKey.value)
+
+  if (ingresoYear === currentYear) return 'Ingreso en ciclo actual'
+  if (ingresoYear > currentYear) return 'Ingreso en ciclo futuro'
   return 'Ingreso en ciclo anterior'
 })
 
 const ingresoCardCopy = computed(() => {
-  if (form.value.ciclo === currentCicloKey.value) {
+  const ingresoYear = Number(normalizeCicloKey(form.value.ciclo))
+  const currentYear = Number(currentCicloKey.value)
+
+  if (ingresoYear === currentYear) {
     return `Al dar de alta a un alumno nuevo, el sistema registra ${currentCicloLabel.value} como su ciclo de ingreso. Por eso se mostrará como <strong>externo</strong> en este ciclo.`
+  }
+
+  if (ingresoYear > currentYear) {
+    return `El ciclo de ingreso elegido es ${ingresoCicloLabel.value}. El alumno quedará anclado a ese ciclo y no debe promocionarse antes de su ingreso.`
   }
 
   return `El ciclo de ingreso elegido es ${ingresoCicloLabel.value}. Para el ciclo seleccionado (${currentCicloLabel.value}) el sistema lo mostrará como <strong>${visibleTipoIngresoLabel.value.toLowerCase()}</strong>.`
@@ -501,21 +513,24 @@ const academicChanged = computed(() => {
     current.ciclo !== originalAcademic.value.ciclo
 })
 
+const configuredCicloKeys = computed(() => CICLOS_LIST
+  .map(option => normalizeCicloKey(option.value))
+  .filter(Boolean))
+
 const cicloOptions = computed(() => {
   const currentYear = Number(currentCicloKey.value)
   const selectedYear = Number(normalizeCicloKey(form.value.ciclo))
-  const range = []
+  const values = new Set(configuredCicloKeys.value)
+
+  if (Number.isFinite(currentYear)) values.add(String(currentYear))
+  if (Number.isFinite(selectedYear)) values.add(String(selectedYear))
 
   for (let year = currentYear; year >= currentYear - 11; year -= 1) {
-    range.push(String(year))
+    values.add(String(year))
   }
 
-  if (Number.isFinite(selectedYear) && !range.includes(String(selectedYear))) {
-    range.splice(range.length - 1, 1, String(selectedYear))
-  }
-
-  return range
-    .filter((value, index, values) => values.indexOf(value) === index)
+  return Array.from(values)
+    .filter(value => /^\d{4}$/.test(value))
     .sort((a, b) => Number(b) - Number(a))
     .map(value => ({ value, label: formatCicloLabel(value) }))
 })
@@ -524,8 +539,9 @@ const primaryCicloOptions = computed(() => cicloOptions.value.slice(0, 4))
 const olderCicloOptions = computed(() => cicloOptions.value.slice(4))
 
 const cycleTileLabel = (value) => {
-  if (value === currentCicloKey.value) return 'Ciclo actual'
   if (value === form.value.ciclo) return 'Seleccionado'
+  if (value === currentCicloKey.value) return 'Ciclo actual'
+  if (Number(value) > Number(currentCicloKey.value)) return 'Futuro'
   return 'Anterior'
 }
 
@@ -708,6 +724,7 @@ const submit = async () => {
         nivel: form.value.nivel,
         resolvedNivel: academicNivel.value,
         ciclo: cicloKey,
+        cicloIngreso: cicloKey,
         academicChanged: academicChanged.value
       }
     })

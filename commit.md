@@ -1,5 +1,8 @@
-fix(students): preserve ingreso anchor when enrolling students
+fix(students): anchor alta grade to ingreso cycle
 
-- Treat cycles before the registered ingreso cycle as out of scope instead of clamping grade promotion back to Primero.
-- Stop quick enrollment from rewriting `base.grado`, `base.nivel`, or `base.ciclo`; enrollment now only creates the missing inscription documents for the selected cycle.
-- Preserve `base.ciclo` and `base.grado` as the academic anchor used to derive the visible grade per cycle, so a Primero registered for a future ingreso cycle stays Primero when viewing that ingreso cycle.
+- Preserve the ciclo selected in the alta form as the student's ingreso cycle when creating the base record.
+- Send the ingreso cycle explicitly from the alta form and use it as the server-side academic anchor.
+- Include configured future cycles in the alta cycle picker so a Primero can be registered for a future ingreso cycle without changing the stored grade anchor.
+- Treat cycles before the ingreso cycle as out of scope instead of clamping promotion back to Primero.
+
+Expected behavior: a student created as Primero for ciclo 2026-2027 remains Primero when the user is positioned in ciclo 2026-2027. The system should only promote the grade when the selected cycle is after the registered ingreso cycle.

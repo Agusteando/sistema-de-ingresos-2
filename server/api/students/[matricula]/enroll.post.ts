@@ -90,12 +90,28 @@ export default defineEventHandler(async (event) => {
 
   const existing = new Set(existingDocs.map(doc => String(doc.concepto)))
   const selectedConceptos = conceptos.filter(concepto => !existing.has(String(concepto.id)))
+  const academicUpdate: SqlStatement = {
+    sql: `
+      UPDATE base
+      SET grado = ?,
+          nivel = ?,
+          ciclo = ?
+      WHERE matricula = ?
+    `,
+    params: [
+      promoted.grado,
+      promoted.nivel,
+      cicloKey,
+      matricula
+    ]
+  }
 
   if (!selectedConceptos.length) {
+    await executeStatementTransaction([academicUpdate])
     return { success: true, inserted: 0, skipped: conceptos.length, conceptos: [] }
   }
 
-  const statements: SqlStatement[] = selectedConceptos.map((concepto) => {
+  const statements: SqlStatement[] = [academicUpdate, ...selectedConceptos.map((concepto) => {
     const meses = parseMeses(concepto)
     const plazoLegacy = Array.from({ length: meses }, (_, i) => i + 1).join(',')
 
@@ -115,7 +131,7 @@ export default defineEventHandler(async (event) => {
         Number(concepto.eventual || 0) === 1 ? 1 : 0
       ]
     }
-  })
+  })]
 
   await executeStatementTransaction(statements)
 

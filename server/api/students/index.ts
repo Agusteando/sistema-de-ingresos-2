@@ -124,7 +124,7 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'POST') {
     const body = await readBody(event)
-    const cicloKey = normalizeCicloKey(body.ciclo)
+    const cicloKey = normalizeCicloKey(body.cicloIngreso ?? body.ciclo)
     const assignedPlantel = user.active_plantel && user.active_plantel !== 'GLOBAL'
       ? user.active_plantel
       : String(body.plantel || '').trim()
