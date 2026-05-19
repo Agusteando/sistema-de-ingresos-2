@@ -28,11 +28,16 @@
   --detail-expanded-top-offset: 64px;
   position: fixed;
   top: var(--detail-expanded-top-offset);
+  left: var(--detail-expanded-left, auto);
   right: 0;
   bottom: 0;
   z-index: 17;
-  width: min(clamp(620px, 40vw, 720px), calc(100vw - 252px));
+  width: var(--detail-expanded-width, min(clamp(620px, 40vw, 720px), calc(100vw - 252px)));
+  max-width: 100vw;
   height: calc(100vh - var(--detail-expanded-top-offset));
+  height: calc(100dvh - var(--detail-expanded-top-offset));
+  max-height: calc(100vh - var(--detail-expanded-top-offset));
+  max-height: calc(100dvh - var(--detail-expanded-top-offset));
   gap: 0;
   overflow: hidden;
   padding: 0;
@@ -1420,6 +1425,7 @@
 @media (max-width: 980px) {
   .student-details-shell--expanded {
     --detail-expanded-top-offset: 0px;
+    left: 0;
     z-index: 20;
     width: 100vw;
     max-width: 100vw;

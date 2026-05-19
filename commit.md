@@ -1,7 +1,7 @@
-fix: bind bridge agent context for API route database access
+fix(students): align expanded account workspace to source column
 
-Preserve the existing cookie-based bridge isolation for regular users while allowing validated superadmins to switch plantel scope.
+Resolve the resolution-dependent gap that appeared when expanding the Estado de Cuenta panel from the students workspace.
 
-Wrap API route handlers in the resolved bridge-agent async context so all query(), ensureSchema(), and transaction calls execute with the request's validated dbBridgeAgentId. This fixes 500 errors such as "No DB bridge agent selected" on routes like /api/students/kpi-trends after switching plantel.
+The expanded panel now measures the source detail column and applies fixed-position bounds from that live geometry instead of relying on hardcoded viewport width clamps. This keeps the expanded Estado de Cuenta flush with the workspace at different browser zoom levels, sidebar scales, viewport widths, and device sizes.
 
-Keep server-side authorization as the source of truth: normal users remain limited to their assigned planteles, while superadmin/global users may switch to any configured plantel. Do not reintroduce any alternate enrollment flow; enrollment remains derived only from specific external concept IDs.
+Also updates the expanded panel height to use dynamic viewport units with a viewport fallback, preserving the existing mobile full-screen behavior.

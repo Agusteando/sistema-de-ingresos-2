@@ -1,5 +1,5 @@
 <template>
-  <div v-if="detailsExpanded" class="student-detail-shell-placeholder" aria-hidden="true"></div>
+  <div v-if="detailsExpanded" ref="detailsPlaceholder" class="student-detail-shell-placeholder" aria-hidden="true"></div>
   <Teleport to="body" :disabled="!detailsExpanded">
     <div
       ref="detailsShell"
@@ -11,6 +11,7 @@
         }
       ]"
       :aria-expanded="detailsExpanded"
+      :style="detailShellStyle"
       @keydown.esc.stop="setDetailsExpanded(false)"
     >
       <div :class="['detail-expand-rail', { 'detail-expand-rail--expanded': detailsExpanded }]">
@@ -355,7 +356,7 @@ const studentPhotoRequests = new Map()
 </script>
 
 <script setup>
-import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2, LucideMoreVertical, LucideSearch, LucideChevronDown, LucideMaximize2, LucideMinimize2, LucideSlidersHorizontal } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
@@ -414,6 +415,8 @@ const showIngresoCycleModal = ref(false)
 const savingIngresoCycle = ref(false)
 const selectedConceptDebt = ref(null)
 const detailsShell = ref(null)
+const detailsPlaceholder = ref(null)
+const expandedShellBounds = ref(null)
 const accountCard = ref(null)
 const accountTableWrap = ref(null)
 const hasRenderedAccountState = ref(false)
@@ -502,6 +505,48 @@ const progressStatusLabel = (debt) => {
 
 const debtKey = (debt) => `${debt?.documento || ''}-${debt?.mes || ''}`
 
+const detailShellStyle = computed(() => {
+  if (!detailsExpanded.value || !expandedShellBounds.value) return {}
+  return {
+    '--detail-expanded-left': `${expandedShellBounds.value.left}px`,
+    '--detail-expanded-width': `${expandedShellBounds.value.width}px`
+  }
+})
+
+const getExpandedBoundsReference = () => {
+  if (detailsExpanded.value && detailsPlaceholder.value) return detailsPlaceholder.value
+  const element = detailsShell.value
+  return element?.closest?.('.student-detail-panel') || element
+}
+
+const updateExpandedShellBounds = () => {
+  if (typeof window === 'undefined') return
+
+  const reference = getExpandedBoundsReference()
+  const rect = reference?.getBoundingClientRect?.()
+  if (!rect) return
+
+  const viewportWidth = Math.max(
+    320,
+    window.innerWidth || document.documentElement?.clientWidth || rect.right || 0
+  )
+  const minimumUsefulWidth = Math.min(360, viewportWidth)
+  const left = Math.max(0, Math.min(Math.round(rect.left), viewportWidth - minimumUsefulWidth))
+  const width = Math.max(minimumUsefulWidth, Math.ceil(viewportWidth - left))
+
+  expandedShellBounds.value = { left, width }
+}
+
+let expandedBoundsFrame = null
+const scheduleExpandedShellBoundsUpdate = () => {
+  if (typeof window === 'undefined' || !detailsExpanded.value) return
+  if (expandedBoundsFrame) window.cancelAnimationFrame(expandedBoundsFrame)
+  expandedBoundsFrame = window.requestAnimationFrame(() => {
+    expandedBoundsFrame = null
+    updateExpandedShellBounds()
+  })
+}
+
 const finishDetailLayoutTransition = (element) => {
   detailTransitioning.value = false
   if (!element) return
@@ -520,11 +565,14 @@ const setDetailsExpanded = async (expanded) => {
     return
   }
 
+  if (expanded) updateExpandedShellBounds()
+
   const first = element.getBoundingClientRect()
   detailTransitioning.value = true
   detailsExpanded.value = expanded
   closeMenu()
   await nextTick()
+  if (expanded) updateExpandedShellBounds()
 
   const last = element.getBoundingClientRect()
   const deltaX = first.left - last.left
@@ -547,6 +595,12 @@ const setDetailsExpanded = async (expanded) => {
 }
 
 const toggleDetailsExpanded = () => setDetailsExpanded(!detailsExpanded.value)
+
+onMounted(() => {
+  if (typeof window === 'undefined') return
+  window.addEventListener('resize', scheduleExpandedShellBoundsUpdate, { passive: true })
+  window.visualViewport?.addEventListener?.('resize', scheduleExpandedShellBoundsUpdate, { passive: true })
+})
 
 const clearAccountRefreshTimer = () => {
   if (!accountRefreshTimer) return
@@ -806,6 +860,11 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', scheduleExpandedShellBoundsUpdate)
+    window.visualViewport?.removeEventListener?.('resize', scheduleExpandedShellBoundsUpdate)
+    if (expandedBoundsFrame) window.cancelAnimationFrame(expandedBoundsFrame)
+  }
   clearAccountRefreshTimer()
   finishDetailLayoutTransition(detailsShell.value)
 })
@@ -817,6 +876,14 @@ watch(() => props.student?.matricula, () => {
   photoLoading.value = false
   if (props.student) loadPhoto()
 }, { immediate: true })
+
+watch(detailsExpanded, (expanded) => {
+  if (expanded) {
+    scheduleExpandedShellBoundsUpdate()
+  } else {
+    expandedShellBounds.value = null
+  }
+})
 
 watch(() => props.student?.matricula, () => {
   closeMenu()
