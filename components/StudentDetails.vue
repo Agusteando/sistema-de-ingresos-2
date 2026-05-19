@@ -11,7 +11,6 @@
         }
       ]"
       :aria-expanded="detailsExpanded"
-      @click="closeProfileActionsMenu"
       @keydown.esc.stop="setDetailsExpanded(false)"
     >
       <div :class="['detail-expand-rail', { 'detail-expand-rail--expanded': detailsExpanded }]">
@@ -108,38 +107,11 @@
         <button class="profile-action-button" @click="showDocModal = true">
           <LucideFilePlus :size="15"/> Cargo extra
         </button>
-        <div class="profile-action-menu-wrap">
-          <button
-            class="profile-action-button profile-action-button--menu"
-            type="button"
-            aria-label="Más acciones"
-            title="Más acciones"
-            ref="profileMoreButton"
-            :aria-expanded="profileActionsMenuOpen"
-            @click.stop="toggleProfileActionsMenu"
-          >
-            <LucideMoreVertical :size="15" />
-            <span>Más</span>
-            <LucideChevronDown class="profile-action-caret" :size="14" />
-          </button>
-          <div v-if="profileActionsMenuOpen" class="profile-action-menu" role="menu" :style="profileActionsMenuStyle" @click.stop>
-            <template v-for="(item, index) in studentActionItems" :key="`student-action-${index}-${item.label}`">
-              <div v-if="item.label === '-'" class="profile-action-menu-separator" aria-hidden="true"></div>
-              <button
-                v-else
-                class="profile-action-menu-item"
-                :class="item.class"
-                type="button"
-                role="menuitem"
-                :disabled="item.disabled"
-                @click="runStudentAction(item)"
-              >
-                <component :is="item.icon" v-if="item.icon" :size="14" />
-                <span>{{ item.label }}</span>
-              </button>
-            </template>
-          </div>
-        </div>
+        <button class="profile-action-button profile-action-button--menu" type="button" aria-label="Más acciones" title="Más acciones" @click="showStudentActionsMenu">
+          <LucideMoreVertical :size="15" />
+          <span>Más</span>
+          <LucideChevronDown class="profile-action-caret" :size="14" />
+        </button>
       </div>
     </section>
 
@@ -206,9 +178,10 @@
         </article>
       </div>
 
-      <Transition name="account-flow" mode="out-in">
-      <div ref="accountTableWrap" class="account-table-wrap" :key="student.matricula">
-        <table>
+      <div :class="['account-workspace-body', { 'account-workspace-body--expanded': detailsExpanded }]">
+        <Transition name="account-flow" mode="out-in">
+        <div ref="accountTableWrap" class="account-table-wrap" :key="student.matricula">
+          <table>
           <colgroup>
             <col class="col-check" />
             <col class="col-progress" />
@@ -256,6 +229,8 @@
                   <strong>{{ debt.conceptoNombre }}</strong>
                   <small>
                     {{ debt.mesLabel }}
+                    <span v-if="detailsExpanded && debt.documento" class="concept-meta">Doc. {{ debt.documento }}</span>
+                    <span v-if="detailsExpanded && Number(debt.beca || 0) > 0" class="concept-meta">Beca {{ Number(debt.beca).toFixed(0) }}%</span>
                     <span v-if="debt.hasRecargo" class="recargo-badge">Recargo</span>
                   </small>
                 </td>
@@ -303,9 +278,50 @@
               </tr>
             </template>
           </tbody>
-        </table>
+          </table>
+        </div>
+        </Transition>
+
+        <aside v-if="detailsExpanded" class="account-insight-panel" aria-label="Resumen ampliado del estado de cuenta">
+          <section class="account-insight-card account-insight-card--primary">
+            <span>Selección actual</span>
+            <strong>${{ format(selectedDebtTotal) }}</strong>
+            <small>{{ selectedDebts.length }} concepto{{ selectedDebts.length === 1 ? '' : 's' }} seleccionado{{ selectedDebts.length === 1 ? '' : 's' }}</small>
+          </section>
+
+          <section class="account-insight-card">
+            <h4>Lectura rápida</h4>
+            <dl class="account-insight-list">
+              <div v-for="item in accountInsightItems" :key="item.label">
+                <dt>{{ item.label }}</dt>
+                <dd>{{ item.value }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section v-if="largestBalanceDebt" class="account-insight-card">
+            <h4>Mayor saldo</h4>
+            <p class="account-insight-concept">{{ largestBalanceDebt.conceptoNombre }}</p>
+            <p class="account-insight-muted">{{ largestBalanceDebt.mesLabel }} · ${{ format(largestBalanceDebt.saldo) }}</p>
+          </section>
+
+          <section class="account-insight-card account-insight-card--action">
+            <h4>Siguiente acción</h4>
+            <p>{{ accountNextAction }}</p>
+          </section>
+
+          <section v-if="latestPaymentRows.length" class="account-insight-card">
+            <h4>Pagos recientes</h4>
+            <ul class="account-recent-payments">
+              <li v-for="payment in latestPaymentRows" :key="`payment-${payment.folio}`">
+                <span>{{ payment.conceptoNombre }}</span>
+                <strong>${{ format(payment.monto) }}</strong>
+                <small>{{ payment.fechaLabel }}</small>
+              </li>
+            </ul>
+          </section>
+        </aside>
       </div>
-      </Transition>
 
       <div class="account-footer">
         <span>{{ accountFooterLabel }}</span>
@@ -339,7 +355,7 @@ const studentPhotoRequests = new Map()
 </script>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2, LucideMoreVertical, LucideSearch, LucideChevronDown, LucideMaximize2, LucideMinimize2 } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
@@ -363,7 +379,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['refresh', 'edit', 'close', 'switch-student', 'baja', 'photo-loaded', 'manage-sections', 'ingreso-cycle-updated'])
 const { show } = useToast()
-const { openMenu } = useContextMenu()
+const { openMenu, closeMenu } = useContextMenu()
 const { executeOptimistic } = useOptimisticSync()
 const {
   accountStateSyncState,
@@ -386,9 +402,6 @@ const depurandoDebt = ref(null)
 const accountSearchQuery = ref('')
 const detailsExpanded = ref(false)
 const detailTransitioning = ref(false)
-const profileActionsMenuOpen = ref(false)
-const profileMoreButton = ref(null)
-const profileActionsMenuStyle = ref({})
 
 const photoUrl = ref(null)
 const photoLoading = ref(false)
@@ -449,6 +462,33 @@ const accountSummaryMetrics = computed(() => [
   { label: 'Seleccionado', value: `$${format(selectedDebtTotal.value)}`, tone: selectedDebtTotal.value > 0 ? 'warning' : 'neutral' },
   { label: 'Conceptos', value: String(filteredDebts.value.length), tone: 'info' }
 ])
+const lateDebtCount = computed(() => debts.value.filter(debt => debt?.isLate && Number(debt?.saldo || 0) > 0).length)
+const recargoDebtCount = computed(() => debts.value.filter(debt => debt?.hasRecargo && Number(debt?.saldo || 0) > 0).length)
+const cleanupDebtCount = computed(() => debts.value.filter(debt => Number(debt?.pagosDepurados || 0) > 0).length)
+const largestBalanceDebt = computed(() => validDebts.value.reduce((largest, debt) => (
+  !largest || Number(debt?.saldo || 0) > Number(largest?.saldo || 0) ? debt : largest
+), null))
+const accountInsightItems = computed(() => [
+  { label: 'Pendientes', value: String(validDebts.value.length) },
+  { label: 'Vencidos', value: String(lateDebtCount.value) },
+  { label: 'Con recargo', value: String(recargoDebtCount.value) },
+  { label: 'Depurados', value: String(cleanupDebtCount.value) }
+])
+const accountNextAction = computed(() => {
+  if (selectedDebts.value.length) return 'Registrar pago o facturar los conceptos seleccionados.'
+  if (validDebts.value.length) return 'Selecciona los conceptos pendientes para preparar pago, factura o aviso.'
+  if (debts.value.length) return 'El estado de cuenta no tiene saldo pendiente.'
+  return 'Carga el estado de cuenta para revisar cargos y pagos.'
+})
+const latestPaymentRows = computed(() => debts.value
+  .flatMap(debt => (debt?.historialPagos || []).map(payment => ({
+    ...payment,
+    conceptoNombre: payment.conceptoNombre || debt.conceptoNombre,
+    fechaLabel: payment.fecha ? new Date(payment.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : 'Sin fecha'
+  })))
+  .sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime())
+  .slice(0, 3)
+)
 const selectedCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const selectedCicloLabel = computed(() => formatCicloLabel(selectedCicloKey.value))
 const resolvedNivelLabel = computed(() => studentNivelLabel(props.student))
@@ -502,7 +542,7 @@ const setDetailsExpanded = async (expanded) => {
   const first = element.getBoundingClientRect()
   detailTransitioning.value = true
   detailsExpanded.value = expanded
-  closeProfileActionsMenu()
+  closeMenu()
   await nextTick()
 
   const last = element.getBoundingClientRect()
@@ -806,14 +846,7 @@ watch(
   { immediate: true }
 )
 
-onMounted(() => {
-  window.addEventListener('click', closeProfileActionsMenu)
-  window.addEventListener('scroll', closeProfileActionsMenu, true)
-})
-
 onBeforeUnmount(() => {
-  window.removeEventListener('click', closeProfileActionsMenu)
-  window.removeEventListener('scroll', closeProfileActionsMenu, true)
   clearAccountRefreshTimer()
   finishDetailLayoutTransition(detailsShell.value)
 })
@@ -826,7 +859,7 @@ watch(() => props.student?.matricula, () => {
 }, { immediate: true })
 
 watch(() => props.student?.matricula, () => {
-  profileActionsMenuOpen.value = false
+  closeMenu()
   if (detailsExpanded.value) setDetailsExpanded(false)
 })
 
@@ -851,43 +884,7 @@ const printBeca = () => {
   window.open(`/print/beca?matricula=${props.student.matricula}`, '_blank', 'width=850,height=800')
 }
 
-const closeProfileActionsMenu = () => {
-  profileActionsMenuOpen.value = false
-}
-
-const toggleProfileActionsMenu = async () => {
-  if (profileActionsMenuOpen.value) {
-    closeProfileActionsMenu()
-    return
-  }
-
-  await nextTick()
-  const rect = profileMoreButton.value?.getBoundingClientRect?.()
-  const menuWidth = 184
-  const menuHeight = 184
-  const viewportWidth = typeof window === 'undefined' ? 0 : window.innerWidth
-  const viewportHeight = typeof window === 'undefined' ? 0 : window.innerHeight
-
-  if (!rect || !viewportWidth || !viewportHeight) {
-    profileActionsMenuStyle.value = {}
-    profileActionsMenuOpen.value = true
-    return
-  }
-
-  const left = Math.max(8, Math.min(rect.right - menuWidth, viewportWidth - menuWidth - 8))
-  const shouldOpenUp = rect.bottom + menuHeight + 8 > viewportHeight
-  const top = shouldOpenUp
-    ? Math.max(8, rect.top - menuHeight - 8)
-    : Math.min(rect.bottom + 8, viewportHeight - menuHeight - 8)
-
-  profileActionsMenuStyle.value = {
-    top: `${top}px`,
-    left: `${left}px`
-  }
-  profileActionsMenuOpen.value = true
-}
-
-const studentActionItems = computed(() => {
+const showStudentActionsMenu = (event) => {
   const menuItems = [
     { label: 'Editar', icon: LucideSettings, action: () => emit('edit', props.student) }
   ]
@@ -913,13 +910,7 @@ const studentActionItems = computed(() => {
     }
   )
 
-  return menuItems
-})
-
-const runStudentAction = (item) => {
-  if (!item || item.disabled || item.label === '-') return
-  closeProfileActionsMenu()
-  item.action?.()
+  openMenu(event, menuItems)
 }
 
 const cancelPayment = async (pago) => {
