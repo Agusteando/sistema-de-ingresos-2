@@ -68,22 +68,15 @@
         <button class="btn btn-outline btn-sm action-extra" @click="showDocModal = true">
           <LucideFilePlus :size="15"/> Cargo extra
         </button>
-        <button v-if="student.estatus === 'Activo' && !isEnrolled" class="btn btn-secondary btn-sm" :disabled="enrolling" @click="quickEnroll">
+        <button v-if="student.estatus === 'Activo' && !isEnrolled" class="btn btn-secondary btn-sm action-enroll" :disabled="enrolling" @click="quickEnroll">
           <LucideLoader2 v-if="enrolling" class="animate-spin" :size="15"/>
           <LucideFilePlus v-else :size="15"/> Inscribir
         </button>
         <button class="btn btn-ghost btn-sm action-edit" @click="$emit('edit', student)">
           <LucideSettings :size="15"/> Editar
         </button>
-        <button class="btn btn-ghost btn-sm action-sections" @click="$emit('manage-sections', student)">
-          <LucideTags :size="15"/> Secciones
-        </button>
-        <button class="btn btn-ghost btn-sm action-letter" @click="printBeca">
-          <LucideAward :size="15"/> Carta beca
-        </button>
-        <button class="btn btn-ghost btn-sm action-reminder" :disabled="reminding || !validDebts.length || !student.correo" @click="sendReminder">
-          <LucideLoader2 v-if="reminding" class="animate-spin" :size="15"/>
-          <LucideBell v-else :size="15"/> Enviar aviso
+        <button class="profile-overflow-button" type="button" aria-label="Más acciones" title="Más acciones" @click="showStudentActionsMenu">
+          <LucideMoreVertical :size="17" />
         </button>
       </div>
     </section>
@@ -116,6 +109,10 @@
             {{ accountSyncLabel }}
           </span>
         </div>
+        <label class="account-search-control">
+          <LucideSearch :size="15" aria-hidden="true" />
+          <input v-model="accountSearchQuery" type="search" placeholder="Buscar concepto o mes..." />
+        </label>
         <div class="account-totals">
           <span>Deuda: ${{ format(validDebts.reduce((acc,d) => acc + d.saldo, 0)) }}</span>
         </div>
@@ -135,7 +132,7 @@
           </colgroup>
           <thead>
             <tr>
-              <th class="check-cell"><input type="checkbox" @change="toggleAll" :checked="selectedDebts.length === validDebts.length && validDebts.length > 0" class="debt-check"></th>
+              <th class="check-cell"><input type="checkbox" @change="toggleAll" :checked="allVisibleDebtsSelected" class="debt-check"></th>
               <th class="progress-cell">Progreso</th>
               <th>Concepto / Mes</th>
               <th class="money-cell">Importe</th>
@@ -152,7 +149,8 @@
               </td>
             </tr>
             <tr v-else-if="!debts.length"><td colspan="7" class="account-empty muted">Sin adeudos o documentos registrados en este ciclo escolar.</td></tr>
-            <template v-else v-for="debt in debts" :key="`${debt.documento}-${debt.mes}`">
+            <tr v-else-if="!filteredDebts.length"><td colspan="7" class="account-empty muted">Sin resultados para la búsqueda actual.</td></tr>
+            <template v-else v-for="debt in filteredDebts" :key="`${debt.documento}-${debt.mes}`">
               <tr
                 :class="{ selected: selectedDebts.includes(debt), cleared: Number(debt.pagosDepurados) > 0 && debt.saldo <= 0 }"
                 class="debt-row"
@@ -253,7 +251,7 @@ const studentPhotoRequests = new Map()
 
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2 } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2, LucideMoreVertical, LucideSearch } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -296,6 +294,7 @@ const reminding = ref(false)
 const selectedDebts = ref([])
 const expandedHistory = ref(null)
 const depurandoDebt = ref(null)
+const accountSearchQuery = ref('')
 
 const photoUrl = ref(null)
 const photoLoading = ref(false)
@@ -320,9 +319,30 @@ const format = (val) => Number(val || 0).toFixed(2)
 const normalizePhotoMatricula = (value) => String(value || '').trim().toUpperCase()
 const photoStorageKey = (matricula) => `foto_${normalizePhotoMatricula(matricula)}`
 const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
+const normalizeSearchText = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+const filteredDebts = computed(() => {
+  const query = normalizeSearchText(accountSearchQuery.value).trim()
+  if (!query) return debts.value
+
+  return debts.value.filter((debt) => [
+    debt?.conceptoNombre,
+    debt?.mesLabel,
+    debt?.mes,
+    debt?.documento
+  ].some(value => normalizeSearchText(value).includes(query)))
+})
+const visibleValidDebts = computed(() => filteredDebts.value.filter(debt => Number(debt.saldo || 0) > 0))
+const allVisibleDebtsSelected = computed(() => {
+  if (!visibleValidDebts.value.length) return false
+  const selectedKeys = new Set(selectedDebts.value.map(debtKey))
+  return visibleValidDebts.value.every(debt => selectedKeys.has(debtKey(debt)))
+})
 const accountFooterLabel = computed(() => {
   if (!debts.value.length) return 'Sin conceptos en este ciclo'
-  return `Mostrando ${debts.value.length} de ${debts.value.length} conceptos`
+  return `Mostrando ${filteredDebts.value.length} de ${debts.value.length} conceptos`
 })
 const selectedCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const selectedCicloLabel = computed(() => formatCicloLabel(selectedCicloKey.value))
@@ -640,12 +660,23 @@ onBeforeUnmount(() => {
 })
 
 watch(() => props.student?.matricula, () => {
+  accountSearchQuery.value = ''
   photoUrl.value = null
   photoLoading.value = false
   if (props.student) loadPhoto()
 }, { immediate: true })
 
-const toggleAll = (e) => { selectedDebts.value = e.target.checked ? [...validDebts.value] : [] }
+const toggleAll = (e) => {
+  const visibleKeys = new Set(visibleValidDebts.value.map(debtKey))
+
+  if (e.target.checked) {
+    const hiddenSelectedDebts = selectedDebts.value.filter(debt => !visibleKeys.has(debtKey(debt)))
+    selectedDebts.value = [...hiddenSelectedDebts, ...visibleValidDebts.value]
+    return
+  }
+
+  selectedDebts.value = selectedDebts.value.filter(debt => !visibleKeys.has(debtKey(debt)))
+}
 const toggleHistory = (debt) => { const id = `${debt.documento}-${debt.mes}`; expandedHistory.value = expandedHistory.value === id ? null : id }
 
 const reprintPayment = (pago) => {
@@ -654,6 +685,19 @@ const reprintPayment = (pago) => {
 
 const printBeca = () => {
   window.open(`/print/beca?matricula=${props.student.matricula}`, '_blank', 'width=850,height=800')
+}
+
+const showStudentActionsMenu = (event) => {
+  openMenu(event, [
+    { label: 'Secciones', icon: LucideTags, action: () => emit('manage-sections', props.student) },
+    { label: 'Carta beca', icon: LucideAward, action: printBeca },
+    {
+      label: reminding.value ? 'Enviando aviso...' : 'Enviar aviso',
+      icon: reminding.value ? LucideLoader2 : LucideBell,
+      disabled: reminding.value || !validDebts.value.length || !props.student?.correo,
+      action: sendReminder
+    }
+  ])
 }
 
 const cancelPayment = async (pago) => {

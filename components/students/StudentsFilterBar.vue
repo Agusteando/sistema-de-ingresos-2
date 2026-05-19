@@ -1,7 +1,20 @@
 <template>
   <div class="filter-bar">
-    <div class="search-control">
-      <LucideSearch :size="19" />
+    <div class="search-control" :class="{ 'has-filter-token': activeKpiFilterLabel }">
+      <span class="search-filter-icon" aria-hidden="true">
+        <LucideFilter :size="15" />
+      </span>
+      <button
+        v-if="activeKpiFilterLabel"
+        type="button"
+        class="search-filter-token"
+        :aria-label="`Quitar filtro ${activeKpiFilterLabel}`"
+        @click="$emit('clear-active-filter')"
+      >
+        <span>{{ activeKpiFilterLabel }}</span>
+        <b aria-hidden="true">×</b>
+      </button>
+      <LucideSearch class="search-icon" :size="18" />
       <input
         :value="searchQuery"
         @input="$emit('update-search-query', $event.target.value)"
@@ -34,7 +47,7 @@
 </template>
 
 <script setup>
-import { LucideDownload, LucideSearch } from 'lucide-vue-next'
+import { LucideDownload, LucideFilter, LucideSearch } from 'lucide-vue-next'
 import UiButton from '~/components/ui/UiButton.vue'
 import UiChip from '~/components/ui/UiChip.vue'
 
@@ -43,6 +56,7 @@ const emit = defineEmits([
   'update-active-grado',
   'update-active-grupo',
   'update-active-saldo-filter',
+  'clear-active-filter',
   'toggle-debt',
   'search',
   'export'
@@ -50,6 +64,7 @@ const emit = defineEmits([
 
 defineProps({
   searchQuery: { type: String, default: '' },
+  activeKpiFilterLabel: { type: String, default: '' },
   activeGrado: { type: String, default: '' },
   activeGrupo: { type: String, default: '' },
   activeSaldoFilter: { type: String, default: 'all' },
