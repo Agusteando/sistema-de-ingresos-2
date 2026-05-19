@@ -1,6 +1,7 @@
-Refine expanded account workspace density
+Improve expanded account workspace density and top-bar safety
 
-- Rework the expanded Estado de Cuenta panel to behave like a true right-side account workspace instead of a scaled compact detail card.
-- Match the reference density with a full-height sidebar shell, compact student/account header, four financial summary cards, search/debt controls, and a larger table area with more visible rows.
-- Keep the compact student detail state intact while hiding compact-only student actions in expanded account mode.
-- Add account-level filters inside the expanded workspace without changing the default view.
+- Keep the expanded Estado de Cuenta workspace below the sticky top bar so the collapse/close controls stay accessible.
+- Widen the expanded account workspace while respecting the left navigation and available viewport.
+- Rebalance the expanded layout spacing so the extra size shows more account rows instead of enlarging the compact card.
+- Compress the expanded header, summary cards, search controls, account table rows, and footer for higher data density.
+- Preserve the default compact student detail/account layout outside the expanded state.
