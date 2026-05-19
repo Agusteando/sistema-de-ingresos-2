@@ -32,9 +32,6 @@
         <NuxtLink to="/deudores" class="nav-item group">
           <LucideAlertTriangle :size="22" stroke-width="2" /> Deudores
         </NuxtLink>
-        <NuxtLink to="/control-escolar" class="nav-item group">
-          <LucideGraduationCap :size="22" stroke-width="2" /> Control Escolar
-        </NuxtLink>
         <NuxtLink to="/reportes" class="nav-item group">
           <LucidePieChart :size="22" stroke-width="2" /> Reportes
         </NuxtLink>
@@ -185,8 +182,7 @@ import {
   LucideSchool,
   LucideBuilding2,
   LucideChevronDown,
-  LucideExternalLink,
-  LucideGraduationCap
+  LucideExternalLink
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -279,7 +275,6 @@ onBeforeUnmount(() => {
 const currentRouteName = computed(() => {
   if (route.path === '/') return 'Alumnos'
   if (route.path === '/deudores') return 'Deudores'
-  if (route.path === '/control-escolar') return 'Control Escolar'
   if (route.path === '/reportes') return 'Centro de reportes'
   if (route.path === '/conceptos') return 'Conceptos'
   if (route.path === '/facturas') return 'Facturas CFDI'
