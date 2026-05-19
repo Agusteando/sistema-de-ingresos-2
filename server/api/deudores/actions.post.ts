@@ -21,7 +21,7 @@ const normalizeItems = (body: any) => {
 }
 
 const getScopedPlantel = (user: any) => {
-  return user?.role !== 'global' || (user?.role === 'global' && user?.active_plantel !== 'GLOBAL')
+  return !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
     ? user?.active_plantel
     : undefined
 }

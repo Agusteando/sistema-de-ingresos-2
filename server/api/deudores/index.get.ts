@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   const user = event.context.user
   const includeDesglose = detalles === '1' || detalles === 'true'
 
-  const scopedPlantel = (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL'))
+  const scopedPlantel = (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL'))
     ? user.active_plantel
     : undefined
 

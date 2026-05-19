@@ -1,18 +1,20 @@
 import { OAuth2Client } from 'google-auth-library'
 import { query, runWithBridgeAgentId } from '../../utils/db'
+import { PLANTELES_LIST } from '../../../utils/constants'
+import { isSuperAdminRole, normalizePlantel } from '../../utils/auth-session'
 
 const getRequestedPlantel = (event: any, body: any) => {
-  const fromBody = String(body?.plantel || body?.agentId || '').trim()
+  const fromBody = normalizePlantel(body?.plantel || body?.agentId)
   if (fromBody) return fromBody
 
-  const fromHeader = String(getHeader(event, 'x-db-agent-id') || '').trim()
+  const fromHeader = normalizePlantel(getHeader(event, 'x-db-agent-id'))
   if (fromHeader) return fromHeader
 
-  const fromBridgeCookie = String(getCookie(event, 'db_bridge_agent_id') || '').trim()
+  const fromBridgeCookie = normalizePlantel(getCookie(event, 'db_bridge_agent_id'))
   if (fromBridgeCookie) return fromBridgeCookie
 
-  const fromAuthCookie = String(getCookie(event, 'auth_active_plantel') || '').trim()
-  if (fromAuthCookie) return fromAuthCookie
+  const fromAuthCookie = normalizePlantel(getCookie(event, 'auth_active_plantel'))
+  if (fromAuthCookie && fromAuthCookie !== 'GLOBAL') return fromAuthCookie
 
   return ''
 }
@@ -23,6 +25,10 @@ export default defineEventHandler(async (event) => {
   const requestedPlantel = getRequestedPlantel(event, body)
 
   console.info(`[Auth Login] requestedPlantel=${requestedPlantel || 'none'}`)
+
+  if (requestedPlantel && !PLANTELES_LIST.includes(requestedPlantel)) {
+    throw createError({ statusCode: 400, message: 'Plantel inválido.' })
+  }
 
   if (requestedPlantel) {
     event.context.dbBridgeAgentId = requestedPlantel
@@ -101,13 +107,16 @@ export default defineEventHandler(async (event) => {
         }
       }
 
-      const plantelesArr = user.planteles
-        ? String(user.planteles).split(',').map((p: string) => p.trim()).filter(Boolean)
-        : []
+      const isSuperAdmin = isSuperAdminRole(user.role)
+      const plantelesArr = isSuperAdmin
+        ? [...PLANTELES_LIST]
+        : (user.planteles
+            ? String(user.planteles).split(',').map((p: string) => p.trim().toUpperCase()).filter(Boolean)
+            : [])
 
       let activePlantel = ''
 
-      if (requestedPlantel && (user.role === 'global' || plantelesArr.includes(requestedPlantel) || plantelesArr.length === 0)) {
+      if (requestedPlantel && (isSuperAdmin || plantelesArr.includes(requestedPlantel) || plantelesArr.length === 0)) {
         activePlantel = requestedPlantel
       } else if (plantelesArr.length > 0) {
         activePlantel = plantelesArr[0]
@@ -124,8 +133,9 @@ export default defineEventHandler(async (event) => {
       setCookie(event, 'auth_email', user.email || payload.email, cookieOpts)
       setCookie(event, 'auth_name', user.username || payload.name || payload.email, cookieOpts)
       setCookie(event, 'auth_role', user.role || 'plantel', cookieOpts)
-      setCookie(event, 'auth_planteles', user.planteles || '', cookieOpts)
+      setCookie(event, 'auth_planteles', isSuperAdmin ? PLANTELES_LIST.join(',') : (user.planteles || ''), cookieOpts)
       setCookie(event, 'auth_active_plantel', activePlantel, cookieOpts)
+      setCookie(event, 'auth_home_plantel', requestedPlantel || activePlantel, cookieOpts)
 
       if (activePlantel && activePlantel !== 'GLOBAL') {
         setCookie(event, 'db_bridge_agent_id', activePlantel, cookieOpts)

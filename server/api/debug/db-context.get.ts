@@ -15,6 +15,7 @@ export default defineEventHandler((event) => {
     auth_role: getCookie(event, 'auth_role') || null,
     auth_planteles: getCookie(event, 'auth_planteles') || null,
     auth_active_plantel: getCookie(event, 'auth_active_plantel') || null,
+    auth_home_plantel: getCookie(event, 'auth_home_plantel') || null,
     db_bridge_agent_id: getCookie(event, 'db_bridge_agent_id') || null
   }
 

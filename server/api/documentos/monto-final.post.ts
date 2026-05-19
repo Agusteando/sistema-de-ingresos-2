@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, message: 'El documento no esta activo.' })
   }
 
-  if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
+  if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
     if (String(doc.plantel || '') !== String(user.active_plantel || '')) {
       throw createError({ statusCode: 403, message: 'Alumno fuera del plantel activo.' })
     }

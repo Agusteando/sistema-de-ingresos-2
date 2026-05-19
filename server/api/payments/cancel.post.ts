@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Pago no encontrado en el sistema.' })
   }
 
-  if (user.role === 'global' || body.force_direct) {
+  if (user.isSuperAdmin || body.force_direct) {
     await query(
       `UPDATE referenciasdepago SET estatus = 'Cancelada', cancelada_por = ? WHERE folio = ?`,
       [user.name, pago.folio]

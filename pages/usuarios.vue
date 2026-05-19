@@ -32,8 +32,8 @@
               </div>
             </td>
             <td>
-              <span :class="['badge', u.role === 'global' ? 'badge-warning' : 'badge-info']">
-                {{ u.role === 'global' ? 'ADMIN' : 'USUARIO' }}
+              <span :class="['badge', ['global', 'superadmin'].includes(String(u.role || '').toLowerCase()) ? 'badge-warning' : 'badge-info']">
+                {{ ['global', 'superadmin'].includes(String(u.role || '').toLowerCase()) ? 'ADMIN' : 'USUARIO' }}
               </span>
             </td>
             <td class="text-center">

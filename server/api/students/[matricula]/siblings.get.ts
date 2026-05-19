@@ -4,7 +4,7 @@ import { isOutOfScopeForPlantelCiclo } from '../../../../shared/utils/grado'
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
 const isReliableEmail = (value: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value))
-const isScopedToActivePlantel = (user: any) => user?.role !== 'global' || (user?.role === 'global' && user?.active_plantel !== 'GLOBAL')
+const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 
 export default defineEventHandler(async (event) => {
   const matricula = event.context.params?.matricula

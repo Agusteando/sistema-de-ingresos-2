@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
     params.push(finValue)
   }
 
-  if (user.role !== 'global' || user.active_plantel !== 'GLOBAL') {
+  if (!user.isSuperAdmin || user.active_plantel !== 'GLOBAL') {
     where += ' AND r.plantel = ?'
     params.push(user.active_plantel)
   } else if (plantelValue) {

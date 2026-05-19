@@ -1,6 +1,6 @@
 import { query } from './db'
 
-export const isScopedToActivePlantel = (user: any) => user?.role !== 'global' || (user?.role === 'global' && user?.active_plantel !== 'GLOBAL')
+export const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 
 export const attachCustomSectionsToStudents = async <T extends Record<string, any>>(students: T[], user: any): Promise<Array<T & { customSections: any[] }>> => {
   if (!students.length) return students.map((student) => ({ ...student, customSections: [] }))

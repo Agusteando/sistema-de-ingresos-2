@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
   
-  if (user.role !== 'global') {
+  if (!user.isSuperAdmin) {
      throw createError({ statusCode: 403, message: 'No tiene permisos para acceder a este reporte.' })
   }
   
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     params.push(inicio, fin)
   }
 
-  if (user.role !== 'global' || user.active_plantel !== 'GLOBAL') {
+  if (!user.isSuperAdmin || user.active_plantel !== 'GLOBAL') {
     where += " AND r.plantel = ?"
     params.push(user.active_plantel)
   } else if (plantel) {

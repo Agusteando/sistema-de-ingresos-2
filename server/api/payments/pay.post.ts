@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
   const nombreCompleto = studentRef.nombreCompleto
   const plantel = studentRef.plantel || 'PT'
 
-  if (user.role !== 'global' || (user.role === 'global' && user.active_plantel !== 'GLOBAL')) {
+  if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
     if (String(plantel || '') !== String(user.active_plantel || '')) {
       throw createError({ statusCode: 403, message: 'Alumno fuera del plantel activo.' })
     }

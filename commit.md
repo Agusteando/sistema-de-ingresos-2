@@ -1,13 +1,13 @@
-fix(students): remove alternate enrollment action and preserve ingreso anchor
+fix(auth): allow superadmins to switch bridge plantel safely
 
-- Preserve the ciclo selected in the alta form as the student's ingreso cycle when creating the base record.
-- Send the ingreso cycle explicitly from the alta form and use it as the server-side academic anchor.
-- Include configured future cycles in the alta cycle picker so a Primero can be registered for a future ingreso cycle without changing the stored grade anchor.
-- Treat cycles before the ingreso cycle as out of scope instead of clamping promotion back to Primero.
-- Remove the generated quick-enroll action from the student detail menu.
-- Remove the `/api/students/:matricula/enroll` endpoint so the app cannot create enrollment through an alternate flow.
-- Resolve enrolled status only from configured external enrollment concept IDs matched against paid/loaded concept IDs from the selected cycle.
-- Stop using enrollment concept names or `inscrip` text matching as fallback enrollment evidence.
-- Bump the students cache version so stale cached rows without concept IDs are not reused.
+Separate the authentication plantel from the active data plantel for DB bridge sessions.
 
-Expected behavior: a student created as Primero for ciclo 2026-2027 remains Primero when the user is positioned in ciclo 2026-2027. A student is considered inscrito only when the current cycle has a loaded or paid concept whose ID is present in the external enrollment configuration.
+Superadmins now authenticate against their home plantel but can switch the active bridge agent to any configured plantel from the sidebar. Regular users remain restricted to their assigned planteles, and the server validates the trusted role/plantel scope from the authentication plantel before accepting a plantel switch.
+
+Key changes:
+- Add trusted auth-session resolution for bridge mode using `auth_home_plantel`.
+- Keep normal users scoped to their allowed planteles.
+- Allow `global`/`superadmin` users to select any configured plantel.
+- Prevent regular users from switching to `GLOBAL` or arbitrary bridge agents.
+- Populate the sidebar plantel selector with all configured planteles for superadmins.
+- Preserve the active bridge agent cookie for plantel-specific data fetching.

@@ -29,6 +29,7 @@ export default defineEventHandler(async (event) => {
 
   setCookie(event, 'auth_planteles', plantelesStr, cookieOpts)
   setCookie(event, 'auth_active_plantel', activePlantel, cookieOpts)
+  setCookie(event, 'auth_home_plantel', bridgeAgentId || activePlantel, cookieOpts)
 
   if (activePlantel && activePlantel !== 'GLOBAL') {
     setCookie(event, 'db_bridge_agent_id', activePlantel, cookieOpts)

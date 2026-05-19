@@ -1,6 +1,6 @@
 import { executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
 
-const isScopedToActivePlantel = (user: any) => user?.role !== 'global' || (user?.role === 'global' && user?.active_plantel !== 'GLOBAL')
+const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
