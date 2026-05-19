@@ -193,24 +193,178 @@
   .modal-footer {
     @apply px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-2xl shrink-0;
   }
-  .modal-draft-restored {
-    @apply mb-4 inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold;
+  .modal-header-with-status {
+    @apply gap-3;
+  }
+
+  .modal-header-with-status .modal-draft-status {
+    @apply mb-0 ml-auto justify-end;
+  }
+
+  .modal-draft-status {
+    @apply mb-4 flex flex-wrap items-center gap-2;
+  }
+
+  .modal-draft-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold leading-none;
+    box-shadow: 0 7px 18px rgba(22, 38, 65, 0.05);
+  }
+
+  .modal-draft-pill.restored {
+    color: #27587f;
+    border-color: rgba(57, 127, 232, 0.24);
+    background: linear-gradient(135deg, rgba(237, 246, 255, 0.96), rgba(255, 255, 255, 0.9));
+  }
+
+  .modal-draft-pill.saving,
+  .modal-draft-pill.pending {
+    color: #72520b;
+    border-color: rgba(245, 158, 11, 0.26);
+    background: linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(255, 255, 255, 0.9));
+  }
+
+  .modal-draft-pill.saved {
     color: #2f6f39;
     border-color: rgba(101, 167, 68, 0.28);
-    background: rgba(234, 248, 231, 0.72);
+    background: linear-gradient(135deg, rgba(234, 248, 231, 0.96), rgba(255, 255, 255, 0.9));
   }
-  .modal-discard-confirmation {
-    @apply mx-6 mb-0 mt-0 rounded-2xl border px-4 py-3;
-    border-color: rgba(245, 158, 11, 0.34);
-    background: linear-gradient(135deg, rgba(255, 251, 235, 0.96), rgba(255, 255, 255, 0.98));
-    box-shadow: 0 10px 28px rgba(146, 64, 14, 0.08);
+
+  .modal-draft-pill.error {
+    color: #a23a2b;
+    border-color: rgba(255, 77, 56, 0.26);
+    background: linear-gradient(135deg, rgba(255, 241, 240, 0.98), rgba(255, 255, 255, 0.9));
   }
-  .modal-discard-confirmation p {
-    @apply m-0 text-sm font-semibold;
-    color: #7c4a03;
+
+  .modal-safety-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(22, 38, 65, 0.18);
+    backdrop-filter: blur(2px);
   }
-  .modal-discard-confirmation > div {
-    @apply mt-3 flex flex-wrap justify-end gap-2;
+
+  .modal-container,
+  .student-form-modal {
+    position: relative;
+  }
+
+  .modal-safety-card {
+    width: min(100%, 390px);
+    border: 1px solid rgba(223, 230, 239, 0.92);
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 24px 65px rgba(22, 38, 65, 0.22);
+    padding: 1.55rem;
+    text-align: center;
+  }
+
+  .modal-safety-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    margin-bottom: 0.9rem;
+    border-radius: 999px;
+    color: #d97706;
+    background: radial-gradient(circle at 50% 30%, rgba(255, 248, 237, 1), rgba(255, 237, 213, 0.78));
+    box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.12);
+  }
+
+  .modal-safety-copy h3 {
+    margin: 0;
+    color: var(--ink);
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+
+  .modal-safety-copy p {
+    margin: 0.18rem 0 0;
+    color: var(--ink);
+    font-size: 0.98rem;
+    font-weight: 800;
+    line-height: 1.35;
+  }
+
+  .modal-safety-copy small {
+    display: block;
+    margin-top: 0.7rem;
+    color: var(--muted);
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.45;
+  }
+
+  .modal-safety-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.65rem;
+    margin-top: 1.35rem;
+  }
+
+  .modal-safety-primary,
+  .modal-safety-discard {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    border-radius: 12px;
+    padding: 0.65rem 1rem;
+    font-size: 0.86rem;
+    font-weight: 800;
+    line-height: 1;
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+  }
+
+  .modal-safety-primary {
+    border: 1px solid rgba(37, 99, 235, 0.3);
+    color: #fff;
+    background: linear-gradient(135deg, #2f7af2 0%, #1f5fd0 100%);
+    box-shadow: 0 14px 28px rgba(31, 95, 208, 0.26);
+  }
+
+  .modal-safety-discard {
+    border: 1px solid rgba(255, 77, 56, 0.42);
+    color: #d93625;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(217, 54, 37, 0.08);
+  }
+
+  .modal-safety-primary:hover,
+  .modal-safety-discard:hover {
+    transform: translateY(-1px);
+  }
+
+  .modal-safety-primary:focus-visible,
+  .modal-safety-discard:focus-visible {
+    outline: 3px solid rgba(57, 127, 232, 0.24);
+    outline-offset: 2px;
+  }
+
+  .modal-safety-dialog-enter-active,
+  .modal-safety-dialog-leave-active {
+    transition: opacity 180ms ease;
+  }
+
+  .modal-safety-dialog-enter-active .modal-safety-card,
+  .modal-safety-dialog-leave-active .modal-safety-card {
+    transition: transform 180ms ease, opacity 180ms ease;
+  }
+
+  .modal-safety-dialog-enter-from,
+  .modal-safety-dialog-leave-to {
+    opacity: 0;
+  }
+
+  .modal-safety-dialog-enter-from .modal-safety-card,
+  .modal-safety-dialog-leave-to .modal-safety-card {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
   }
 
   .liquid-loader {
