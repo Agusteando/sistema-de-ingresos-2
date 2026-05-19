@@ -32,6 +32,10 @@ export default defineEventHandler(async (event) => {
     active_plantel: activePlantel
   }
 
+  if (url.pathname.startsWith('/api/control-escolar/')) {
+    return
+  }
+
   if (bridgeAgentId && bridgeAgentId !== 'GLOBAL') {
     event.context.dbBridgeAgentId = bridgeAgentId
     enterBridgeAgentId(bridgeAgentId)
