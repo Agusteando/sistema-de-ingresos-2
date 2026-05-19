@@ -1,5 +1,45 @@
 <template>
-  <div class="student-details-shell">
+  <div v-if="detailsExpanded" class="student-detail-shell-placeholder" aria-hidden="true"></div>
+  <Teleport to="body" :disabled="!detailsExpanded">
+    <div
+      ref="detailsShell"
+      :class="[
+        'student-details-shell',
+        {
+          'student-details-shell--expanded': detailsExpanded,
+          'is-detail-transitioning': detailTransitioning
+        }
+      ]"
+      :aria-expanded="detailsExpanded"
+      @click="closeProfileActionsMenu"
+      @keydown.esc.stop="setDetailsExpanded(false)"
+    >
+      <div :class="['detail-expand-rail', { 'detail-expand-rail--expanded': detailsExpanded }]">
+        <button
+          class="detail-expand-zone"
+          type="button"
+          :aria-label="detailsExpanded ? 'Contraer panel del estado de cuenta' : 'Ampliar panel del estado de cuenta'"
+          :aria-expanded="detailsExpanded"
+          :title="detailsExpanded ? 'Contraer panel' : 'Ampliar estado de cuenta'"
+          @click.stop="toggleDetailsExpanded"
+        >
+          <span class="detail-expand-preview" aria-hidden="true">
+            <LucideMinimize2 v-if="detailsExpanded" :size="14" />
+            <LucideMaximize2 v-else :size="14" />
+          </span>
+          <span class="detail-expand-copy">{{ detailsExpanded ? 'Contraer vista' : 'Ampliar estado de cuenta' }}</span>
+        </button>
+        <button
+          v-if="detailsExpanded"
+          class="detail-shell-close"
+          type="button"
+          aria-label="Cerrar vista ampliada"
+          title="Cerrar vista ampliada"
+          @click.stop="setDetailsExpanded(false)"
+        >
+          <LucideX :size="18" />
+        </button>
+      </div>
     <section class="student-profile-card" :style="studentPresentationStyle(student)" :class="{ inactive: student.estatus !== 'Activo', unenrolled: !isEnrolled }">
       <div class="profile-main">
         <div class="profile-identity">
@@ -68,11 +108,38 @@
         <button class="profile-action-button" @click="showDocModal = true">
           <LucideFilePlus :size="15"/> Cargo extra
         </button>
-        <button class="profile-action-button profile-action-button--menu" type="button" aria-label="Más acciones" title="Más acciones" @click="showStudentActionsMenu">
-          <LucideMoreVertical :size="15" />
-          <span>Más</span>
-          <LucideChevronDown class="profile-action-caret" :size="14" />
-        </button>
+        <div class="profile-action-menu-wrap">
+          <button
+            class="profile-action-button profile-action-button--menu"
+            type="button"
+            aria-label="Más acciones"
+            title="Más acciones"
+            ref="profileMoreButton"
+            :aria-expanded="profileActionsMenuOpen"
+            @click.stop="toggleProfileActionsMenu"
+          >
+            <LucideMoreVertical :size="15" />
+            <span>Más</span>
+            <LucideChevronDown class="profile-action-caret" :size="14" />
+          </button>
+          <div v-if="profileActionsMenuOpen" class="profile-action-menu" role="menu" :style="profileActionsMenuStyle" @click.stop>
+            <template v-for="(item, index) in studentActionItems" :key="`student-action-${index}-${item.label}`">
+              <div v-if="item.label === '-'" class="profile-action-menu-separator" aria-hidden="true"></div>
+              <button
+                v-else
+                class="profile-action-menu-item"
+                :class="item.class"
+                type="button"
+                role="menuitem"
+                :disabled="item.disabled"
+                @click="runStudentAction(item)"
+              >
+                <component :is="item.icon" v-if="item.icon" :size="14" />
+                <span>{{ item.label }}</span>
+              </button>
+            </template>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -95,32 +162,18 @@
       :class="[
         'account-card',
         {
-          'account-card--expanded': accountExpanded,
-          'is-account-transitioning': accountTransitioning,
+          'account-card--workspace': detailsExpanded,
+          'is-account-transitioning': detailTransitioning,
           'is-account-refreshing': isAccountRefreshing,
           'is-account-stale': accountStateSyncState.status === 'failed' && accountStateSyncState.hasCache
         }
       ]"
       role="region"
       aria-label="Estado de cuenta"
-      :aria-expanded="accountExpanded"
-      :tabindex="accountExpanded ? 0 : undefined"
-      @keydown.esc.stop="setAccountExpanded(false)"
+      :aria-expanded="detailsExpanded"
     >
       <div class="account-header">
         <div class="account-title-area">
-          <button
-            class="account-expand-handle"
-            type="button"
-            :aria-label="accountExpanded ? 'Contraer estado de cuenta' : 'Ampliar estado de cuenta'"
-            :aria-expanded="accountExpanded"
-            :title="accountExpanded ? 'Contraer estado de cuenta' : 'Ampliar estado de cuenta'"
-            @click.stop="toggleAccountExpanded"
-          >
-            <LucideMinimize2 v-if="accountExpanded" :size="17" aria-hidden="true" />
-            <LucideMaximize2 v-else :size="17" aria-hidden="true" />
-            <span>{{ accountExpanded ? 'Contraer' : 'Ampliar' }}</span>
-          </button>
           <div class="account-title-copy">
             <div class="account-title-row">
               <h3>Estado de Cuenta</h3>
@@ -134,7 +187,7 @@
                 {{ accountSyncLabel }}
               </span>
             </div>
-            <p v-if="accountExpanded" class="account-expanded-meta">{{ student.nombreCompleto }} · {{ student.matricula }}</p>
+            <p v-if="detailsExpanded" class="account-expanded-meta">{{ student.nombreCompleto }} · {{ student.matricula }}</p>
           </div>
         </div>
         <label class="account-search-control">
@@ -144,19 +197,9 @@
         <div class="account-totals">
           <span>Deuda: ${{ format(accountDebtTotal) }}</span>
         </div>
-        <button
-          v-if="accountExpanded"
-          class="account-collapse-button"
-          type="button"
-          aria-label="Cerrar vista ampliada del estado de cuenta"
-          title="Cerrar vista ampliada"
-          @click.stop="setAccountExpanded(false)"
-        >
-          <LucideX :size="18" aria-hidden="true" />
-        </button>
       </div>
 
-      <div v-if="accountExpanded" class="account-summary-grid" aria-label="Resumen del estado de cuenta">
+      <div v-if="detailsExpanded" class="account-summary-grid" aria-label="Resumen del estado de cuenta">
         <article v-for="metric in accountSummaryMetrics" :key="metric.label" :class="['account-summary-card', `account-summary-card--${metric.tone}`]">
           <span>{{ metric.label }}</span>
           <strong>{{ metric.value }}</strong>
@@ -285,7 +328,8 @@
       @close="showIngresoCycleModal = false"
       @confirm="saveIngresoCycle"
     />
-  </div>
+    </div>
+  </Teleport>
 </template>
 
 <script>
@@ -295,7 +339,7 @@ const studentPhotoRequests = new Map()
 </script>
 
 <script setup>
-import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2, LucideMoreVertical, LucideSearch, LucideChevronDown, LucideMaximize2, LucideMinimize2 } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
@@ -340,8 +384,11 @@ const selectedDebts = ref([])
 const expandedHistory = ref(null)
 const depurandoDebt = ref(null)
 const accountSearchQuery = ref('')
-const accountExpanded = ref(false)
-const accountTransitioning = ref(false)
+const detailsExpanded = ref(false)
+const detailTransitioning = ref(false)
+const profileActionsMenuOpen = ref(false)
+const profileMoreButton = ref(null)
+const profileActionsMenuStyle = ref({})
 
 const photoUrl = ref(null)
 const photoLoading = ref(false)
@@ -353,6 +400,7 @@ const showConceptModal = ref(false)
 const showIngresoCycleModal = ref(false)
 const savingIngresoCycle = ref(false)
 const selectedConceptDebt = ref(null)
+const detailsShell = ref(null)
 const accountCard = ref(null)
 const accountTableWrap = ref(null)
 const hasRenderedAccountState = ref(false)
@@ -433,8 +481,8 @@ const progressStatusLabel = (debt) => {
 
 const debtKey = (debt) => `${debt?.documento || ''}-${debt?.mes || ''}`
 
-const finishAccountLayoutTransition = (element) => {
-  accountTransitioning.value = false
+const finishDetailLayoutTransition = (element) => {
+  detailTransitioning.value = false
   if (!element) return
 
   element.style.transition = ''
@@ -442,18 +490,19 @@ const finishAccountLayoutTransition = (element) => {
   element.style.transform = ''
 }
 
-const setAccountExpanded = async (expanded) => {
-  if (accountExpanded.value === expanded || accountTransitioning.value) return
+const setDetailsExpanded = async (expanded) => {
+  if (detailsExpanded.value === expanded || detailTransitioning.value) return
 
-  const element = accountCard.value
+  const element = detailsShell.value
   if (!element || typeof window === 'undefined') {
-    accountExpanded.value = expanded
+    detailsExpanded.value = expanded
     return
   }
 
   const first = element.getBoundingClientRect()
-  accountTransitioning.value = true
-  accountExpanded.value = expanded
+  detailTransitioning.value = true
+  detailsExpanded.value = expanded
+  closeProfileActionsMenu()
   await nextTick()
 
   const last = element.getBoundingClientRect()
@@ -462,22 +511,21 @@ const setAccountExpanded = async (expanded) => {
   const scaleX = first.width / Math.max(last.width, 1)
   const scaleY = first.height / Math.max(last.height, 1)
 
-  element.style.transformOrigin = 'top left'
+  element.style.transformOrigin = 'top right'
   element.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`
   element.style.transition = 'none'
 
-  // Force the browser to commit the inverted state before animating to the final layout.
   element.getBoundingClientRect()
 
   window.requestAnimationFrame(() => {
-    element.style.transition = 'transform 520ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms ease, box-shadow 220ms ease'
+    element.style.transition = 'transform 620ms cubic-bezier(0.16, 1, 0.3, 1), border-color 240ms ease, box-shadow 240ms ease'
     element.style.transform = ''
 
-    window.setTimeout(() => finishAccountLayoutTransition(element), 560)
+    window.setTimeout(() => finishDetailLayoutTransition(element), 660)
   })
 }
 
-const toggleAccountExpanded = () => setAccountExpanded(!accountExpanded.value)
+const toggleDetailsExpanded = () => setDetailsExpanded(!detailsExpanded.value)
 
 const clearAccountRefreshTimer = () => {
   if (!accountRefreshTimer) return
@@ -758,9 +806,16 @@ watch(
   { immediate: true }
 )
 
+onMounted(() => {
+  window.addEventListener('click', closeProfileActionsMenu)
+  window.addEventListener('scroll', closeProfileActionsMenu, true)
+})
+
 onBeforeUnmount(() => {
+  window.removeEventListener('click', closeProfileActionsMenu)
+  window.removeEventListener('scroll', closeProfileActionsMenu, true)
   clearAccountRefreshTimer()
-  finishAccountLayoutTransition(accountCard.value)
+  finishDetailLayoutTransition(detailsShell.value)
 })
 
 watch(() => props.student?.matricula, () => {
@@ -769,6 +824,11 @@ watch(() => props.student?.matricula, () => {
   photoLoading.value = false
   if (props.student) loadPhoto()
 }, { immediate: true })
+
+watch(() => props.student?.matricula, () => {
+  profileActionsMenuOpen.value = false
+  if (detailsExpanded.value) setDetailsExpanded(false)
+})
 
 const toggleAll = (e) => {
   const visibleKeys = new Set(visibleValidDebts.value.map(debtKey))
@@ -791,7 +851,43 @@ const printBeca = () => {
   window.open(`/print/beca?matricula=${props.student.matricula}`, '_blank', 'width=850,height=800')
 }
 
-const showStudentActionsMenu = (event) => {
+const closeProfileActionsMenu = () => {
+  profileActionsMenuOpen.value = false
+}
+
+const toggleProfileActionsMenu = async () => {
+  if (profileActionsMenuOpen.value) {
+    closeProfileActionsMenu()
+    return
+  }
+
+  await nextTick()
+  const rect = profileMoreButton.value?.getBoundingClientRect?.()
+  const menuWidth = 184
+  const menuHeight = 184
+  const viewportWidth = typeof window === 'undefined' ? 0 : window.innerWidth
+  const viewportHeight = typeof window === 'undefined' ? 0 : window.innerHeight
+
+  if (!rect || !viewportWidth || !viewportHeight) {
+    profileActionsMenuStyle.value = {}
+    profileActionsMenuOpen.value = true
+    return
+  }
+
+  const left = Math.max(8, Math.min(rect.right - menuWidth, viewportWidth - menuWidth - 8))
+  const shouldOpenUp = rect.bottom + menuHeight + 8 > viewportHeight
+  const top = shouldOpenUp
+    ? Math.max(8, rect.top - menuHeight - 8)
+    : Math.min(rect.bottom + 8, viewportHeight - menuHeight - 8)
+
+  profileActionsMenuStyle.value = {
+    top: `${top}px`,
+    left: `${left}px`
+  }
+  profileActionsMenuOpen.value = true
+}
+
+const studentActionItems = computed(() => {
   const menuItems = [
     { label: 'Editar', icon: LucideSettings, action: () => emit('edit', props.student) }
   ]
@@ -817,7 +913,13 @@ const showStudentActionsMenu = (event) => {
     }
   )
 
-  openMenu(event, menuItems)
+  return menuItems
+})
+
+const runStudentAction = (item) => {
+  if (!item || item.disabled || item.label === '-') return
+  closeProfileActionsMenu()
+  item.action?.()
 }
 
 const cancelPayment = async (pago) => {
