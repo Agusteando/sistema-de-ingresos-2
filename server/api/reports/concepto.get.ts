@@ -1,4 +1,4 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 
@@ -7,7 +7,7 @@ const firstQueryValue = (value: unknown) => {
   return value === null || value === undefined ? '' : String(value).trim()
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { conceptoId, inicio, fin, plantel, ciclo = '2025' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const id = Number(firstQueryValue(conceptoId))
@@ -130,4 +130,4 @@ export default defineEventHandler(async (event) => {
       planteles
     }
   }
-})
+}))

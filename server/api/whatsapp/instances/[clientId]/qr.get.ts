@@ -1,4 +1,4 @@
-import { query } from '../../../../utils/db'
+import { runWithBridgeAgentId, query } from '../../../../utils/db'
 import { whatsappApi } from '../../../../utils/whatsapp'
 
 const getQrBody = (payload: any) => payload?.qr || payload || {}
@@ -24,7 +24,7 @@ const persistQrState = async (clientId: string, payload: any) => {
   )
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const clientId = event.context.params?.clientId
   if (!clientId) throw createError({ statusCode: 400, statusMessage: 'clientId requerido' })
 
@@ -59,4 +59,4 @@ export default defineEventHandler(async (event) => {
 
     throw error
   }
-})
+}))

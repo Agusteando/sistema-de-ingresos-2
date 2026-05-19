@@ -1,4 +1,4 @@
-import { executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
+import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
 
 const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 const normalizeMatricula = (value: unknown) => String(value || '').trim()
@@ -8,7 +8,7 @@ const normalizeIds = (value: unknown) => Array.from(new Set(
     .filter((id) => Number.isFinite(id) && id > 0)
 ))
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
   const matricula = normalizeMatricula(event.context.params?.matricula)
   const body = await readBody(event)
@@ -85,4 +85,4 @@ export default defineEventHandler(async (event) => {
         color: section.color
       }))
   }
-})
+}))

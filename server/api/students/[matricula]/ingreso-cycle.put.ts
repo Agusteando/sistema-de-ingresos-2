@@ -1,7 +1,7 @@
-import { query } from '../../../utils/db'
+import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { normalizeCicloForTipoIngreso, resolveTipoIngreso } from '../../../../shared/utils/tipoIngreso'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const matricula = String(event.context.params?.matricula || '').trim()
   if (!matricula) throw createError({ statusCode: 400, message: 'Matrícula requerida' })
 
@@ -43,4 +43,4 @@ export default defineEventHandler(async (event) => {
       tipoIngreso
     }
   }
-})
+}))

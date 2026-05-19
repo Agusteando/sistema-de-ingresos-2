@@ -1,9 +1,9 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 
 const normalizePlantel = (value: unknown) => String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
   const queryParams = getQuery(event)
   const requestedPlantel = normalizePlantel(queryParams.plantel)
@@ -38,4 +38,4 @@ export default defineEventHandler(async (event) => {
     preview: nextMatricula,
     source: lastMatricula ? 'last_existing_matricula' : 'empty_plantel_sequence'
   }
-})
+}))

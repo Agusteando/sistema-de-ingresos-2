@@ -1,4 +1,4 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 
 const isValidDateKey = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
@@ -6,7 +6,7 @@ const isValidDateKey = (value: string) => {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { matricula, ciclo, mes, fechaLimiteEspecial, motivo } = await readBody(event)
   const user = event.context.user
 
@@ -36,4 +36,4 @@ export default defineEventHandler(async (event) => {
   )
 
   return { success: true }
-})
+}))

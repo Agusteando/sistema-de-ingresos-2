@@ -1,7 +1,7 @@
 import { sendEmail } from '../../utils/mailer'
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const { folios, email } = body
 
@@ -63,4 +63,4 @@ export default defineEventHandler(async (event) => {
   await sendEmail(email, 'Comprobante de Pago Institucional', htmlContent)
 
   return { success: true }
-})
+}))

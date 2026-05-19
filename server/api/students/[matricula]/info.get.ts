@@ -1,7 +1,7 @@
-import { query } from '../../../utils/db'
+import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { resolveNivelEscolar } from '../../../../shared/utils/grado'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const matricula = event.context.params?.matricula
   const rows = await query<any[]>(`
     SELECT
@@ -25,4 +25,4 @@ export default defineEventHandler(async (event) => {
   }
   
   return null
-})
+}))

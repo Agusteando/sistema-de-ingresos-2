@@ -1,16 +1,7 @@
-fix(auth): preserve bridge agent selection when switching plantel
+fix: bind bridge agent context for API route database access
 
-Restore stable bridge-mode database selection after adding superadmin plantel switching.
+Preserve the existing cookie-based bridge isolation for regular users while allowing validated superadmins to switch plantel scope.
 
-The failure was caused by protected API handlers reaching query()/ensureSchema() without a resolved DB bridge agent after a plantel switch, producing 500 errors such as "No DB bridge agent selected". This was especially visible on /api/student-sections.
+Wrap API route handlers in the resolved bridge-agent async context so all query(), ensureSchema(), and transaction calls execute with the request's validated dbBridgeAgentId. This fixes 500 errors such as "No DB bridge agent selected" on routes like /api/students/kpi-trends after switching plantel.
 
-Changes:
-- Keep regular users scoped to their assigned planteles through server-side validation.
-- Allow superadmins to switch into any configured plantel while preserving the authenticated home plantel.
-- Resolve the active DB bridge agent from the validated request context inside db.ts, so route handlers do not rely only on cookie state or AsyncLocalStorage propagation.
-- When switching to GLOBAL/CONSOLIDADO, keep a concrete data bridge agent using the authenticated home plantel so bridge-mode endpoints never run without an agent.
-- Return a controlled auth error if bridge mode has no resolvable plantel instead of allowing an unhandled 500.
-
-Also preserves the earlier fixes:
-- Student alta uses cicloIngreso/ciclo as the academic anchor for future-cycle first-grade students.
-- Removed the alternate manual inscription flow; enrolled status remains derived from configured external concept IDs.
+Keep server-side authorization as the source of truth: normal users remain limited to their assigned planteles, while superadmin/global users may switch to any configured plantel. Do not reintroduce any alternate enrollment flow; enrollment remains derived only from specific external concept IDs.

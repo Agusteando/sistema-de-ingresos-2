@@ -1,5 +1,5 @@
 import dayjs from 'dayjs'
-import { executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
+import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
@@ -18,7 +18,7 @@ const toMesNumber = (value: unknown) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const { matricula, pagos, formaDePago, ciclo = '2025', lateFeeActive = true } = body
   const cicloKey = normalizeCicloKey(ciclo)
@@ -214,4 +214,4 @@ export default defineEventHandler(async (event) => {
   const resultFolios = results.map(result => Number(result.insertId)).filter(Boolean)
 
   return { success: true, folios: resultFolios }
-})
+}))

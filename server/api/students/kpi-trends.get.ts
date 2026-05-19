@@ -1,4 +1,4 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
@@ -44,7 +44,7 @@ const increment = (map: Map<string, number>, bucket: string, amount = 1) => {
   map.set(bucket, Number(map.get(bucket) || 0) + amount)
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
   const { ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
@@ -192,4 +192,4 @@ export default defineEventHandler(async (event) => {
 
   trendCache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, value })
   return value
-})
+}))

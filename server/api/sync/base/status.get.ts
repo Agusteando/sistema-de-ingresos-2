@@ -1,4 +1,4 @@
-import { query } from '../../../utils/db'
+import { runWithBridgeAgentId, query } from '../../../utils/db'
 
 const ACTIVE_STATUSES = ['running', 'fetching', 'processing']
 
@@ -34,7 +34,7 @@ const toStatusPayload = (run: any) => {
   }
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   setResponseHeader(event, 'Cache-Control', 'no-store, max-age=0, must-revalidate')
 
   const user = event.context.user
@@ -98,4 +98,4 @@ export default defineEventHandler(async (event) => {
   })
 
   return payload
-})
+}))

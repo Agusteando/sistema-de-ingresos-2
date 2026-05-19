@@ -1,7 +1,7 @@
-import { query } from '../../../utils/db'
+import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { whatsappApi } from '../../../utils/whatsapp'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { remote = '0', mine = '1' } = getQuery(event)
   const user = event.context.user
 
@@ -14,4 +14,4 @@ export default defineEventHandler(async (event) => {
   }
 
   return { local }
-})
+}))

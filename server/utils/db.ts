@@ -73,7 +73,8 @@ export const runWithBridgeAgentId = async <T>(
   agentId: string | undefined | null,
   callback: () => Promise<T>
 ): Promise<T> => {
-  return await bridgeAgentContext.run({ agentId: String(agentId || '').trim() }, callback)
+  const normalized = String(agentId || bridgeAgentContext.getStore()?.agentId || '').trim()
+  return await bridgeAgentContext.run({ agentId: normalized }, callback)
 }
 
 const getRuntimeDbConfig = () => useRuntimeConfig() as unknown as RuntimeDbConfig

@@ -1,4 +1,5 @@
-export default defineEventHandler(async (event) => {
+import { runWithBridgeAgentId } from '../../utils/db'
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const path = event.context.params?.path
   const query = getQuery(event)
   const method = event.node.req.method
@@ -19,4 +20,4 @@ export default defineEventHandler(async (event) => {
       message: err?.data?.error || err.message || 'Error en comunicación con proveedor CFDI'
     })
   }
-})
+}))

@@ -1,6 +1,6 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
 
   await query(`
@@ -19,4 +19,4 @@ export default defineEventHandler(async (event) => {
   ])
 
   return { success: true }
-})
+}))

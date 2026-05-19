@@ -1,9 +1,9 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
@@ -133,4 +133,4 @@ export default defineEventHandler(async (event) => {
     ingresosMes,
     conceptosActivos: conceptosData?.total || 0
   }
-})
+}))

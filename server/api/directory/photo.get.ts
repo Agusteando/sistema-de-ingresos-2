@@ -1,6 +1,7 @@
+import { runWithBridgeAgentId } from '../../utils/db'
 import { google } from 'googleapis';
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { email, name } = getQuery(event);
   
   const fallbackUrl = `https://ui-avatars.com/api/?name=${name || email || 'User'}&background=eef2ff&color=4f46e5&bold=true&rounded=true&size=128`;
@@ -40,4 +41,4 @@ export default defineEventHandler(async (event) => {
   }
 
   return sendRedirect(event, fallbackUrl);
-});
+}));

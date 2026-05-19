@@ -18,7 +18,7 @@ import {
   toStatusPayload
 } from '../../../utils/externalBaseSync'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   setResponseHeader(event, 'Cache-Control', 'no-store, max-age=0, must-revalidate')
 
   const user = event.context.user
@@ -165,4 +165,4 @@ export default defineEventHandler(async (event) => {
       })
     }
   })
-})
+}))

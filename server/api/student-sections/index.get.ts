@@ -1,8 +1,8 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 
 const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
   const where: string[] = ['S.is_active = 1']
   const params: any[] = []
@@ -33,4 +33,4 @@ export default defineEventHandler(async (event) => {
     id: Number(row.id),
     studentCount: Number(row.studentCount || 0)
   }))
-})
+}))
