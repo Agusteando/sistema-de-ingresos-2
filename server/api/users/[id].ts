@@ -1,7 +1,7 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import bcrypt from 'bcryptjs'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const id = event.context.params?.id
   const method = event.node.req.method
   const user = event.context.user
@@ -27,4 +27,4 @@ export default defineEventHandler(async (event) => {
     await query('DELETE FROM users WHERE id=?', [id])
     return { success: true }
   }
-})
+}))

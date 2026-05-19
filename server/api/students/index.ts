@@ -1,11 +1,11 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, resolveNivelEscolar } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { parseCurp } from '../../../shared/utils/curp'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const method = event.node.req.method
   const user = event.context.user
 
@@ -190,4 +190,4 @@ export default defineEventHandler(async (event) => {
     ])
     return { success: true }
   }
-})
+}))

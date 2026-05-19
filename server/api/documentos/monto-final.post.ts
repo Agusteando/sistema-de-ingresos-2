@@ -1,4 +1,4 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney } from '../../utils/monto-final'
@@ -10,7 +10,7 @@ const toMesNumber = (value: unknown) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const user = event.context.user
   const documento = Number(body.documento)
@@ -89,4 +89,4 @@ export default defineEventHandler(async (event) => {
   if (!result?.affectedRows) throw createError({ statusCode: 409, message: 'Este monto final ya fue definido.' })
 
   return { success: true, target: 'documento', montoFinal }
-})
+}))

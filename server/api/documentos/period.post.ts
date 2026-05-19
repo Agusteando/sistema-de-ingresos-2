@@ -1,4 +1,4 @@
-import { executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
+import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney } from '../../utils/monto-final'
@@ -75,7 +75,7 @@ const periodBoundaryStatements = (documento: number, fromMes: number): SqlStatem
   }
 ])
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const user = event.context.user
   const documento = Number(body.documento)
@@ -205,4 +205,4 @@ export default defineEventHandler(async (event) => {
   }
 
   throw createError({ statusCode: 400, message: 'Accion no soportada.' })
-})
+}))

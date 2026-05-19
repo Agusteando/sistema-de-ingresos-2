@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto'
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
@@ -54,7 +54,7 @@ const sendTgBotMessage = async (message: string) => {
   }
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   cleanExpiredRequests()
 
   const body = await readBody(event)
@@ -281,4 +281,4 @@ export default defineEventHandler(async (event) => {
   }
 
   throw createError({ statusCode: 400, message: 'Acción de depuración inválida.' })
-})
+}))

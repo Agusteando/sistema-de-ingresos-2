@@ -1,3 +1,4 @@
+import { runWithBridgeAgentId } from '../../../utils/db'
 import crypto from 'node:crypto'
 import { buildExternalHeaders, getExternalSyncConfig } from '../../../utils/externalBaseSync'
 
@@ -225,7 +226,7 @@ const resolveEntry = async (matricula: string, refresh: boolean) => {
   return await lookup
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const requestQuery = getQuery(event)
   const matricula = normalizeMatricula(event.context.params?.matricula)
   const wantsJson = String(requestQuery.format || '').toLowerCase() === 'json'
@@ -282,4 +283,4 @@ export default defineEventHandler(async (event) => {
       }
     )
   }
-})
+}))

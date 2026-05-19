@@ -1,8 +1,8 @@
-import { executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
+import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
 
 const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
   const id = Number(event.context.params?.id)
 
@@ -34,4 +34,4 @@ export default defineEventHandler(async (event) => {
 
   await executeStatementTransaction(statements)
   return { success: true }
-})
+}))

@@ -1,7 +1,7 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const method = event.node.req.method
   
   if (method === 'GET') {
@@ -32,4 +32,4 @@ export default defineEventHandler(async (event) => {
   }
 
   throw createError({ statusCode: 405, message: 'Metodo no permitido.' })
-})
+}))

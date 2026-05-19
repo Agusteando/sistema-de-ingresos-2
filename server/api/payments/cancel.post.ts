@@ -1,4 +1,4 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 
 const getCancellationRequestsTable = async () => {
   const candidates = ['solicitudescancelaciones', 'solicitudesCancelaciones']
@@ -14,7 +14,7 @@ const getCancellationRequestsTable = async () => {
   return 'solicitudescancelaciones'
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const user = event.context.user
 
@@ -57,4 +57,4 @@ export default defineEventHandler(async (event) => {
   )
 
   return { success: true, status: 'pending' }
-})
+}))

@@ -1,6 +1,7 @@
+import { runWithBridgeAgentId } from '../../utils/db'
 import { sendEmail } from '../../utils/mailer'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const htmlTemplate = `
     <div style="font-family: sans-serif; color: #1F2937; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E7EB; border-radius: 8px;">
@@ -12,4 +13,4 @@ export default defineEventHandler(async (event) => {
   `
   await sendEmail(body.correo, body.asunto, htmlTemplate)
   return { success: true }
-})
+}))

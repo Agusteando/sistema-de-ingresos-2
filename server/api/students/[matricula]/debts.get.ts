@@ -1,4 +1,4 @@
-import { query } from '../../../utils/db'
+import { runWithBridgeAgentId, query } from '../../../utils/db'
 import dayjs from 'dayjs'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { isOutOfScopeForPlantelCiclo } from '../../../../shared/utils/grado'
@@ -15,7 +15,7 @@ const isDepuracionPayment = (payment: any) => (
   (String(payment.depurado) === '1' || payment.depurado === true)
 )
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const matricula = event.context.params?.matricula
   const { ciclo = '2025', lateFeeActive = 'true' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
@@ -179,4 +179,4 @@ export default defineEventHandler(async (event) => {
   })
 
   return debts
-})
+}))

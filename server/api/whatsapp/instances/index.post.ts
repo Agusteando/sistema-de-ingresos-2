@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { query } from '../../../utils/db'
+import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { whatsappApi } from '../../../utils/whatsapp'
 
 const normalizeClientIdPart = (value: string) => String(value || 'usuario')
@@ -17,7 +17,7 @@ const makeStableClientId = (user: any, provided?: unknown) => {
   return `sdi-${normalizeClientIdPart(user?.email || user?.name || 'usuario')}-${hash}`
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
   const body = await readBody(event)
   const clientId = makeStableClientId(user, body?.clientId)
@@ -57,4 +57,4 @@ export default defineEventHandler(async (event) => {
       displayName
     }
   }
-})
+}))

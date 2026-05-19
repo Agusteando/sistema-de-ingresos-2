@@ -1,8 +1,9 @@
+import { runWithBridgeAgentId } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { getDeudoresGlobal } from '../../utils/deudores'
 import { calculatePromotedGrado, displayGrado, resolveNivelEscolar } from '../../../shared/utils/grado'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { ciclo = '2025', estatus = 'deudores', detalles = '0' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
@@ -31,4 +32,4 @@ export default defineEventHandler(async (event) => {
   if (estatus === 'todos') return enriched
   if (estatus === 'no_deudores') return enriched.filter(r => !r.isDeudor)
   return enriched.filter(r => r.isDeudor)
-})
+}))

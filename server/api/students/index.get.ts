@@ -1,10 +1,10 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { calculatePromotedGrado, displayGrado } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { q = '', ciclo = '2025' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
@@ -152,4 +152,4 @@ export default defineEventHandler(async (event) => {
   })
 
   return await attachCustomSectionsToStudents(mapped, user)
-})
+}))

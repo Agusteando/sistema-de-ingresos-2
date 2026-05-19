@@ -1,7 +1,8 @@
+import { runWithBridgeAgentId } from '../../../../utils/db'
 import crypto from 'node:crypto'
 import { whatsappApi } from '../../../../utils/whatsapp'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const clientId = event.context.params?.clientId
   const body = await readBody(event)
   if (!clientId) throw createError({ statusCode: 400, statusMessage: 'clientId requerido' })
@@ -11,4 +12,4 @@ export default defineEventHandler(async (event) => {
   delete payload.idempotencyKey
 
   return await whatsappApi.sendMessage(String(clientId), payload, idem)
-})
+}))

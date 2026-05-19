@@ -1,7 +1,7 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { resolveNivelEscolar } from '../../../shared/utils/grado'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { folios } = getQuery(event)
 
   if (!folios) return []
@@ -47,4 +47,4 @@ export default defineEventHandler(async (event) => {
     grupo: studentData?.grupo || '',
     nivel: studentData ? resolveNivelEscolar(studentData) : ''
   }))
-})
+}))

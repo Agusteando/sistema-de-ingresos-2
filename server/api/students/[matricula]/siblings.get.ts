@@ -1,4 +1,4 @@
-import { query } from '../../../utils/db'
+import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { isOutOfScopeForPlantelCiclo } from '../../../../shared/utils/grado'
 
@@ -6,7 +6,7 @@ const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCas
 const isReliableEmail = (value: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value))
 const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const matricula = event.context.params?.matricula
   const { ciclo = '2025' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
@@ -63,4 +63,4 @@ export default defineEventHandler(async (event) => {
     source,
     familyKey: student.familyKey || null
   }
-})
+}))

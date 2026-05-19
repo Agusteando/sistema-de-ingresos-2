@@ -1,6 +1,7 @@
+import { runWithBridgeAgentId } from '../../utils/db'
 import { sendEmail } from '../../utils/mailer'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { template, asunto, destinatarios } = await readBody(event)
   const user = event.context.user
 
@@ -49,4 +50,4 @@ export default defineEventHandler(async (event) => {
   }
 
   return { success: true, results }
-})
+}))

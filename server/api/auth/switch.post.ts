@@ -1,7 +1,8 @@
+import { runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { getTrustedAuthUser, isValidPlantelScope, normalizePlantel } from '../../utils/auth-session'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const user = await getTrustedAuthUser(event)
   const requested = normalizePlantel(body?.plantel)
@@ -45,4 +46,4 @@ export default defineEventHandler(async (event) => {
   event.context.dbBridgeAgentId = dataBridgeAgentId
 
   return { success: true, activePlantel: requested, dataBridgeAgentId }
-})
+}))

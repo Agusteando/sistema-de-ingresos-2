@@ -1,9 +1,9 @@
-import { executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
+import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlStatement } from '../../../utils/db'
 import { normalizeGradoForPlantel, resolveNivelEscolar } from '../../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { parseCurp } from '../../../../shared/utils/curp'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const matricula = event.context.params?.matricula
   const method = event.node.req.method
   const user = event.context.user
@@ -161,4 +161,4 @@ export default defineEventHandler(async (event) => {
     await query(`UPDATE base SET estatus = ? WHERE matricula = ?`, [body.motivo || 'Baja', matricula])
     return { success: true }
   }
-})
+}))

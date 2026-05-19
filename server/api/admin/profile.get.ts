@@ -1,7 +1,7 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { getAdminProfilePhoto } from '../../utils/googleAdmin'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const email = getCookie(event, 'auth_email')
   
   if (!email) {
@@ -31,4 +31,4 @@ export default defineEventHandler(async (event) => {
     email: user?.email || '', 
     name: user?.name || 'Administrador' 
   }
-})
+}))

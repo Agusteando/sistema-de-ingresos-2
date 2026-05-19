@@ -1,6 +1,6 @@
-import { enterBridgeAgentId, query } from '../../utils/db'
+import { runWithBridgeAgentId, enterBridgeAgentId, query } from '../../utils/db'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const email = getCookie(event, 'auth_email')
 
@@ -36,4 +36,4 @@ export default defineEventHandler(async (event) => {
   }
 
   return { success: true }
-})
+}))

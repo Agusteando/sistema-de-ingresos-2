@@ -1,4 +1,4 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 
 const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 const cleanName = (value: unknown) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 120)
@@ -7,7 +7,7 @@ const cleanOptional = (value: unknown, limit: number) => {
   return next ? next.slice(0, limit) : null
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
   const body = await readBody(event)
   const name = cleanName(body.name)
@@ -52,4 +52,4 @@ export default defineEventHandler(async (event) => {
     id: Number(section.id),
     studentCount: 0
   }
-})
+}))

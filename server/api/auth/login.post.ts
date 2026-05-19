@@ -19,7 +19,7 @@ const getRequestedPlantel = (event: any, body: any) => {
   return ''
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const config = useRuntimeConfig()
   const requestedPlantel = getRequestedPlantel(event, body)
@@ -151,4 +151,4 @@ export default defineEventHandler(async (event) => {
       })
     }
   })
-})
+}))

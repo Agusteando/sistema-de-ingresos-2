@@ -1,8 +1,8 @@
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const id = Number(event.context.params?.id)
   const user = event.context.user
 
@@ -57,4 +57,4 @@ export default defineEventHandler(async (event) => {
   )
 
   return { success: true }
-})
+}))

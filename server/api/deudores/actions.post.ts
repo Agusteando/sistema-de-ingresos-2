@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { query } from '../../utils/db'
+import { runWithBridgeAgentId, query } from '../../utils/db'
 import { sendEmail } from '../../utils/mailer'
 import { whatsappApi } from '../../utils/whatsapp'
 import { getDeudoresGlobal } from '../../utils/deudores'
@@ -149,7 +149,7 @@ const processAction = async ({
   return { matricula, mes, success: true, duplicated: false, saldo, desglose }
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const user = event.context.user
 
@@ -203,4 +203,4 @@ export default defineEventHandler(async (event) => {
     failed,
     results
   }
-})
+}))

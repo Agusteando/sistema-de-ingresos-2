@@ -1,6 +1,6 @@
-import { query } from '../../../utils/db'
+import { runWithBridgeAgentId, query } from '../../../utils/db'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const matricula = event.context.params?.matricula
   const user = event.context.user
 
@@ -31,4 +31,4 @@ export default defineEventHandler(async (event) => {
     success: true,
     cleared: Number(result?.affectedRows || 0)
   }
-})
+}))
