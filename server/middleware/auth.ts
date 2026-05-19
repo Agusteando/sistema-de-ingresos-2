@@ -1,4 +1,4 @@
-import { enterBridgeAgentId, ensureSchema } from '../utils/db'
+import { enterBridgeAgentId, ensureSchema, getDbTransport } from '../utils/db'
 import { getTrustedAuthUser, resolveDataBridgeAgentId } from '../utils/auth-session'
 
 export default defineEventHandler(async (event) => {
@@ -24,6 +24,8 @@ export default defineEventHandler(async (event) => {
   if (bridgeAgentId && bridgeAgentId !== 'GLOBAL') {
     event.context.dbBridgeAgentId = bridgeAgentId
     enterBridgeAgentId(bridgeAgentId)
+  } else if (getDbTransport() === 'bridge') {
+    throw createError({ statusCode: 401, message: 'Sesión sin plantel de datos para bridge mode.' })
   }
 
   await ensureSchema()

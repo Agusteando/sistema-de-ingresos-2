@@ -1,13 +1,16 @@
-fix(auth): allow superadmins to switch bridge plantel safely
+fix(auth): preserve bridge agent selection when switching plantel
 
-Separate the authentication plantel from the active data plantel for DB bridge sessions.
+Restore stable bridge-mode database selection after adding superadmin plantel switching.
 
-Superadmins now authenticate against their home plantel but can switch the active bridge agent to any configured plantel from the sidebar. Regular users remain restricted to their assigned planteles, and the server validates the trusted role/plantel scope from the authentication plantel before accepting a plantel switch.
+The failure was caused by protected API handlers reaching query()/ensureSchema() without a resolved DB bridge agent after a plantel switch, producing 500 errors such as "No DB bridge agent selected". This was especially visible on /api/student-sections.
 
-Key changes:
-- Add trusted auth-session resolution for bridge mode using `auth_home_plantel`.
-- Keep normal users scoped to their allowed planteles.
-- Allow `global`/`superadmin` users to select any configured plantel.
-- Prevent regular users from switching to `GLOBAL` or arbitrary bridge agents.
-- Populate the sidebar plantel selector with all configured planteles for superadmins.
-- Preserve the active bridge agent cookie for plantel-specific data fetching.
+Changes:
+- Keep regular users scoped to their assigned planteles through server-side validation.
+- Allow superadmins to switch into any configured plantel while preserving the authenticated home plantel.
+- Resolve the active DB bridge agent from the validated request context inside db.ts, so route handlers do not rely only on cookie state or AsyncLocalStorage propagation.
+- When switching to GLOBAL/CONSOLIDADO, keep a concrete data bridge agent using the authenticated home plantel so bridge-mode endpoints never run without an agent.
+- Return a controlled auth error if bridge mode has no resolvable plantel instead of allowing an unhandled 500.
+
+Also preserves the earlier fixes:
+- Student alta uses cicloIngreso/ciclo as the academic anchor for future-cycle first-grade students.
+- Removed the alternate manual inscription flow; enrolled status remains derived from configured external concept IDs.

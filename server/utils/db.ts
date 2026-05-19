@@ -99,12 +99,32 @@ const getConfiguredBridgeAgentId = () => {
   return String(config.dbBridgeAgentId || '').trim()
 }
 
+const getRequestContextBridgeAgentId = () => {
+  try {
+    const event = useRequestEvent()
+    const contextAgentId = String(event?.context?.dbBridgeAgentId || '').trim()
+
+    if (contextAgentId && contextAgentId !== 'GLOBAL') {
+      return contextAgentId
+    }
+  } catch (e) {}
+
+  return ''
+}
+
 export const getBridgeAgentId = () => {
   const configuredAgentId = getConfiguredBridgeAgentId()
 
   if (configuredAgentId) {
     debugBridge('agent resolved from DB_BRIDGE_AGENT_ID', { agentId: configuredAgentId })
     return configuredAgentId
+  }
+
+  const requestContextAgentId = getRequestContextBridgeAgentId()
+
+  if (requestContextAgentId) {
+    debugBridge('agent resolved from request context', { agentId: requestContextAgentId })
+    return requestContextAgentId
   }
 
   const asyncContextAgentId = String(bridgeAgentContext.getStore()?.agentId || '').trim()
