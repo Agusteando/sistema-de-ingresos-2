@@ -1,9 +1,7 @@
-feat(control-escolar): add plantel-targeted student control view
+Refine student account actions and expandable account sidebar
 
-Add a new Control Escolar module that preserves the existing app plantel/session behavior while allowing the page to query a selected bridge agent directly through dedicated server routes.
-
-- Add `/control-escolar` page with plantel tabs, student KPIs, search, filters, pagination, export, and limited student-data editing.
-- Add `/api/control-escolar/*` routes that resolve and validate the requested `agentId` server-side instead of relying on the active plantel cookie.
-- Use the existing bridge `runWithBridgeAgentId` primitive; no agent or relay changes are required.
-- Keep the module student-focused and exclude financial fields from its queries and UI.
-- Skip global schema binding middleware for Control Escolar API requests so global/session plantel cookies do not select the target DB for this module.
+- Fix the Más action menu so click-triggered context menus stay open instead of closing immediately.
+- Add a toggleable expanded Estado de Cuenta panel with a right-sidebar treatment, larger layout, summary metrics, and a dedicated collapse control.
+- Add a subtle hover/magnetic affordance to the account header so users can discover the expanded account view without adding noisy UI.
+- Preserve the existing account table interactions, search, debt selection, concept adjustment, history, and refresh states while expanding/retracting the panel.
+- Keep the action/detail implementation scoped to the student detail area with reusable state and clean CSS rather than overrides or dead styles.

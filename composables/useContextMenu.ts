@@ -16,6 +16,7 @@ const items = ref<ContextMenuItem[]>([])
 export const useContextMenu = () => {
   const openMenu = (event: MouseEvent, newItems: ContextMenuItem[]) => {
     event.preventDefault()
+    event.stopPropagation()
     isVisible.value = true
     items.value = newItems
 

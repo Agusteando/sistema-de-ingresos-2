@@ -90,27 +90,77 @@
       </div>
     </section>
 
-    <section :class="['account-card', { 'is-account-refreshing': isAccountRefreshing, 'is-account-stale': accountStateSyncState.status === 'failed' && accountStateSyncState.hasCache }]">
+    <section
+      ref="accountCard"
+      :class="[
+        'account-card',
+        {
+          'account-card--expanded': accountExpanded,
+          'is-account-transitioning': accountTransitioning,
+          'is-account-refreshing': isAccountRefreshing,
+          'is-account-stale': accountStateSyncState.status === 'failed' && accountStateSyncState.hasCache
+        }
+      ]"
+      role="region"
+      aria-label="Estado de cuenta"
+      :aria-expanded="accountExpanded"
+      :tabindex="accountExpanded ? 0 : undefined"
+      @keydown.esc.stop="setAccountExpanded(false)"
+    >
       <div class="account-header">
         <div class="account-title-area">
-          <h3>Estado de Cuenta</h3>
-          <span
-            :class="['account-sync-indicator', accountStateSyncState.status, { 'is-hidden': !accountSyncVisible }]"
-            :title="accountStateSyncState.message"
-            :aria-hidden="!accountSyncVisible"
-            aria-live="polite"
+          <button
+            class="account-expand-handle"
+            type="button"
+            :aria-label="accountExpanded ? 'Contraer estado de cuenta' : 'Ampliar estado de cuenta'"
+            :aria-expanded="accountExpanded"
+            :title="accountExpanded ? 'Contraer estado de cuenta' : 'Ampliar estado de cuenta'"
+            @click.stop="toggleAccountExpanded"
           >
-            <i aria-hidden="true"></i>
-            {{ accountSyncLabel }}
-          </span>
+            <LucideMinimize2 v-if="accountExpanded" :size="17" aria-hidden="true" />
+            <LucideMaximize2 v-else :size="17" aria-hidden="true" />
+            <span>{{ accountExpanded ? 'Contraer' : 'Ampliar' }}</span>
+          </button>
+          <div class="account-title-copy">
+            <div class="account-title-row">
+              <h3>Estado de Cuenta</h3>
+              <span
+                :class="['account-sync-indicator', accountStateSyncState.status, { 'is-hidden': !accountSyncVisible }]"
+                :title="accountStateSyncState.message"
+                :aria-hidden="!accountSyncVisible"
+                aria-live="polite"
+              >
+                <i aria-hidden="true"></i>
+                {{ accountSyncLabel }}
+              </span>
+            </div>
+            <p v-if="accountExpanded" class="account-expanded-meta">{{ student.nombreCompleto }} · {{ student.matricula }}</p>
+          </div>
         </div>
         <label class="account-search-control">
           <LucideSearch :size="15" aria-hidden="true" />
           <input v-model="accountSearchQuery" type="search" placeholder="Buscar concepto o mes..." />
         </label>
         <div class="account-totals">
-          <span>Deuda: ${{ format(validDebts.reduce((acc,d) => acc + d.saldo, 0)) }}</span>
+          <span>Deuda: ${{ format(accountDebtTotal) }}</span>
         </div>
+        <button
+          v-if="accountExpanded"
+          class="account-collapse-button"
+          type="button"
+          aria-label="Cerrar vista ampliada del estado de cuenta"
+          title="Cerrar vista ampliada"
+          @click.stop="setAccountExpanded(false)"
+        >
+          <LucideX :size="18" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div v-if="accountExpanded" class="account-summary-grid" aria-label="Resumen del estado de cuenta">
+        <article v-for="metric in accountSummaryMetrics" :key="metric.label" :class="['account-summary-card', `account-summary-card--${metric.tone}`]">
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+        </article>
       </div>
 
       <Transition name="account-flow" mode="out-in">
@@ -216,7 +266,7 @@
 
       <div class="account-footer">
         <span>{{ accountFooterLabel }}</span>
-        <strong>Saldo actual <b>${{ format(validDebts.reduce((acc, d) => acc + d.saldo, 0)) }}</b></strong>
+        <strong>Saldo actual <b>${{ format(accountDebtTotal) }}</b></strong>
       </div>
     </section>
 
@@ -246,7 +296,7 @@ const studentPhotoRequests = new Map()
 
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
-import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2, LucideMoreVertical, LucideSearch, LucideChevronDown } from 'lucide-vue-next'
+import { LucideCreditCard, LucideFileText, LucideFilePlus, LucideHistory, LucideSettings, LucideBell, LucidePrinter, LucideUndo, LucideAward, LucideUsers, LucideX, LucideUserX, LucideLoader2, LucideShieldCheck, LucideTags, LucideCalendarClock, LucideBuilding2, LucideGlobe2, LucideMoreVertical, LucideSearch, LucideChevronDown, LucideMaximize2, LucideMinimize2 } from 'lucide-vue-next'
 import { useState, useCookie } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -290,6 +340,8 @@ const selectedDebts = ref([])
 const expandedHistory = ref(null)
 const depurandoDebt = ref(null)
 const accountSearchQuery = ref('')
+const accountExpanded = ref(false)
+const accountTransitioning = ref(false)
 
 const photoUrl = ref(null)
 const photoLoading = ref(false)
@@ -301,6 +353,7 @@ const showConceptModal = ref(false)
 const showIngresoCycleModal = ref(false)
 const savingIngresoCycle = ref(false)
 const selectedConceptDebt = ref(null)
+const accountCard = ref(null)
 const accountTableWrap = ref(null)
 const hasRenderedAccountState = ref(false)
 const visibleAccountContextKey = ref('')
@@ -314,6 +367,9 @@ const format = (val) => Number(val || 0).toFixed(2)
 const normalizePhotoMatricula = (value) => String(value || '').trim().toUpperCase()
 const photoStorageKey = (matricula) => `foto_${normalizePhotoMatricula(matricula)}`
 const validDebts = computed(() => debts.value.filter(d => d.saldo > 0))
+const accountDebtTotal = computed(() => validDebts.value.reduce((acc, debt) => acc + Number(debt?.saldo || 0), 0))
+const accountPaidTotal = computed(() => debts.value.reduce((acc, debt) => acc + Number(debt?.pagos || 0), 0))
+const selectedDebtTotal = computed(() => selectedDebts.value.reduce((acc, debt) => acc + Number(debt?.saldo || 0), 0))
 const normalizeSearchText = (value) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -339,6 +395,12 @@ const accountFooterLabel = computed(() => {
   if (!debts.value.length) return 'Sin conceptos en este ciclo'
   return `Mostrando ${filteredDebts.value.length} de ${debts.value.length} conceptos`
 })
+const accountSummaryMetrics = computed(() => [
+  { label: 'Saldo actual', value: `$${format(accountDebtTotal.value)}`, tone: 'danger' },
+  { label: 'Pagos', value: `$${format(accountPaidTotal.value)}`, tone: 'success' },
+  { label: 'Seleccionado', value: `$${format(selectedDebtTotal.value)}`, tone: selectedDebtTotal.value > 0 ? 'warning' : 'neutral' },
+  { label: 'Conceptos', value: String(filteredDebts.value.length), tone: 'info' }
+])
 const selectedCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const selectedCicloLabel = computed(() => formatCicloLabel(selectedCicloKey.value))
 const resolvedNivelLabel = computed(() => studentNivelLabel(props.student))
@@ -370,6 +432,52 @@ const progressStatusLabel = (debt) => {
 }
 
 const debtKey = (debt) => `${debt?.documento || ''}-${debt?.mes || ''}`
+
+const finishAccountLayoutTransition = (element) => {
+  accountTransitioning.value = false
+  if (!element) return
+
+  element.style.transition = ''
+  element.style.transformOrigin = ''
+  element.style.transform = ''
+}
+
+const setAccountExpanded = async (expanded) => {
+  if (accountExpanded.value === expanded || accountTransitioning.value) return
+
+  const element = accountCard.value
+  if (!element || typeof window === 'undefined') {
+    accountExpanded.value = expanded
+    return
+  }
+
+  const first = element.getBoundingClientRect()
+  accountTransitioning.value = true
+  accountExpanded.value = expanded
+  await nextTick()
+
+  const last = element.getBoundingClientRect()
+  const deltaX = first.left - last.left
+  const deltaY = first.top - last.top
+  const scaleX = first.width / Math.max(last.width, 1)
+  const scaleY = first.height / Math.max(last.height, 1)
+
+  element.style.transformOrigin = 'top left'
+  element.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`
+  element.style.transition = 'none'
+
+  // Force the browser to commit the inverted state before animating to the final layout.
+  element.getBoundingClientRect()
+
+  window.requestAnimationFrame(() => {
+    element.style.transition = 'transform 520ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms ease, box-shadow 220ms ease'
+    element.style.transform = ''
+
+    window.setTimeout(() => finishAccountLayoutTransition(element), 560)
+  })
+}
+
+const toggleAccountExpanded = () => setAccountExpanded(!accountExpanded.value)
 
 const clearAccountRefreshTimer = () => {
   if (!accountRefreshTimer) return
@@ -652,6 +760,7 @@ watch(
 
 onBeforeUnmount(() => {
   clearAccountRefreshTimer()
+  finishAccountLayoutTransition(accountCard.value)
 })
 
 watch(() => props.student?.matricula, () => {
