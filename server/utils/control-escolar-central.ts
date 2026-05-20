@@ -1,6 +1,6 @@
 import mysql from 'mysql2/promise'
 
-type RuntimeControlEscolarDbConfig = {
+type RuntimeCentralDbConfig = {
   controlEscolarMysqlHost?: string
   controlEscolarMysqlPort?: string | number
   controlEscolarMysqlUser?: string
@@ -11,20 +11,33 @@ type RuntimeControlEscolarDbConfig = {
 
 type SqlParams = any[] | Record<string, any>
 
-let controlEscolarPool: mysql.Pool | null = null
+type TableColumn = {
+  Field: string
+  Type?: string
+  Null?: string
+  Key?: string
+  Default?: any
+  Extra?: string
+}
 
-const getConfig = () => useRuntimeConfig() as unknown as RuntimeControlEscolarDbConfig
+let controlEscolarPool: mysql.Pool | null = null
+const centralColumnCache = new Map<string, { columns: Set<string>; loadedAt: number }>()
+const CENTRAL_SCHEMA_CACHE_MS = 1000 * 60 * 5
+
+const getConfig = () => useRuntimeConfig() as unknown as RuntimeCentralDbConfig
 
 const requiredValue = (value: unknown, name: string) => {
   const normalized = String(value || '').trim()
   if (!normalized) {
     throw createError({
       statusCode: 500,
-      message: `Falta configurar ${name}. Control Escolar necesita una conexión MySQL centralizada para la tabla matricula.`
+      message: `Falta configurar ${name}. La app necesita la base MySQL centralizada para usuarios y para la tabla matricula.`
     })
   }
   return normalized
 }
+
+const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 
 export const getControlEscolarCentralDb = () => {
   if (!controlEscolarPool) {
@@ -49,4 +62,22 @@ export const controlEscolarCentralQuery = async <T>(sql: string, params?: SqlPar
   const db = getControlEscolarCentralDb()
   const [rows] = await db.query(sql, params as never)
   return rows as T
+}
+
+export const getCentralTableColumns = async (tableName: string) => {
+  const normalized = String(tableName || '').trim()
+  if (!normalized) return new Set<string>()
+
+  const cached = centralColumnCache.get(normalized)
+  if (cached && Date.now() - cached.loadedAt < CENTRAL_SCHEMA_CACHE_MS) return cached.columns
+
+  const rows = await controlEscolarCentralQuery<TableColumn[]>(`SHOW COLUMNS FROM ${escapeIdentifier(normalized)}`)
+  const columns = new Set(rows.map((row) => row.Field))
+  centralColumnCache.set(normalized, { columns, loadedAt: Date.now() })
+  return columns
+}
+
+export const centralTableHasColumn = async (tableName: string, column: string) => {
+  const columns = await getCentralTableColumns(tableName)
+  return columns.has(column)
 }

@@ -1,8 +1,18 @@
 <template>
   <Teleport to="body">
     <div class="student-form-overlay" @click.self="requestClose">
-      <section class="student-form-modal" role="dialog" aria-modal="true" :aria-labelledby="formTitleId">
-        <button class="student-form-close" type="button" aria-label="Cerrar" @click="requestClose">
+      <section
+        class="student-form-modal"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="formTitleId"
+      >
+        <button
+          class="student-form-close"
+          type="button"
+          aria-label="Cerrar"
+          @click="requestClose"
+        >
           <LucideX :size="27" />
         </button>
 
@@ -16,26 +26,31 @@
             <span v-else>{{ editInitials }}</span>
           </span>
           <div class="student-form-title-copy">
-            <h2 :id="formTitleId">{{ isEdit ? 'Editar alumno' : 'Nuevo alumno' }}</h2>
-            <p>{{ isEdit ? 'Actualiza sus datos personales y académicos.' : 'Captura sus datos personales y académicos para registrarlo en el sistema.' }}</p>
+            <h2 :id="formTitleId">
+              {{ isEdit ? "Editar alumno" : "Nuevo alumno" }}
+            </h2>
+            <p>
+              {{
+                isEdit
+                  ? "Actualiza sus datos personales y de contacto."
+                  : "Captura sus datos personales y académicos para registrarlo en el sistema."
+              }}
+            </p>
           </div>
         </header>
 
         <form @submit.prevent="submit">
           <div class="student-form-content">
-            <ModalDraftStatus :restored="draftRestored" :status="draftSaveState" :dirty="hasUnsavedChanges" />
-            <section v-if="isEdit" class="student-edit-strip">
-              <div>
-                <small>Matrícula</small>
-                <strong>{{ form.matricula }}</strong>
-              </div>
-              <span :class="['student-status-chip', props.student?.estatus === 'Activo' ? 'active' : 'inactive']">
-                {{ props.student?.estatus || 'Activo' }}
-              </span>
-            </section>
-
+            <ModalDraftStatus
+              :restored="draftRestored"
+              :status="draftSaveState"
+              :dirty="hasUnsavedChanges"
+            />
             <div class="student-form-grid">
-              <section class="form-panel personal-panel" aria-labelledby="personal-title">
+              <section
+                class="form-panel personal-panel"
+                aria-labelledby="personal-title"
+              >
                 <div class="section-heading green">
                   <span aria-hidden="true"><LucideUserRound :size="24" /></span>
                   <h3 id="personal-title">1. Datos personales</h3>
@@ -44,17 +59,38 @@
                 <div class="field-stack">
                   <label class="polished-field">
                     <span>A. paterno</span>
-                    <input :value="form.apellidoPaterno" type="text" placeholder="Ingresa el apellido paterno" required @input="handleNameInput('apellidoPaterno', $event)" @blur="normalizeNameField('apellidoPaterno')" />
+                    <input
+                      :value="form.apellidoPaterno"
+                      type="text"
+                      placeholder="Ingresa el apellido paterno"
+                      required
+                      @input="handleNameInput('apellidoPaterno', $event)"
+                      @blur="normalizeNameField('apellidoPaterno')"
+                    />
                   </label>
 
                   <label class="polished-field">
                     <span>A. materno</span>
-                    <input :value="form.apellidoMaterno" type="text" placeholder="Ingresa el apellido materno" required @input="handleNameInput('apellidoMaterno', $event)" @blur="normalizeNameField('apellidoMaterno')" />
+                    <input
+                      :value="form.apellidoMaterno"
+                      type="text"
+                      placeholder="Ingresa el apellido materno"
+                      required
+                      @input="handleNameInput('apellidoMaterno', $event)"
+                      @blur="normalizeNameField('apellidoMaterno')"
+                    />
                   </label>
 
                   <label class="polished-field">
                     <span>Nombre(s)</span>
-                    <input :value="form.nombres" type="text" placeholder="Ingresa el o los nombres" required @input="handleNameInput('nombres', $event)" @blur="normalizeNameField('nombres')" />
+                    <input
+                      :value="form.nombres"
+                      type="text"
+                      placeholder="Ingresa el o los nombres"
+                      required
+                      @input="handleNameInput('nombres', $event)"
+                      @blur="normalizeNameField('nombres')"
+                    />
                   </label>
 
                   <label class="polished-field curp-field">
@@ -73,11 +109,19 @@
                   </label>
 
                   <Transition name="curp-insights" mode="out-in">
-                    <section v-if="curpHasValue" :key="curpInferenceKey" :class="['curp-insight-card', curpStatusClass]" aria-live="polite">
+                    <section
+                      v-if="curpHasValue"
+                      :key="curpInferenceKey"
+                      :class="['curp-insight-card', curpStatusClass]"
+                      aria-live="polite"
+                    >
                       <span class="curp-card-glow" aria-hidden="true"></span>
                       <div class="curp-insight-header">
                         <span class="curp-insight-icon" aria-hidden="true">
-                          <LucideShieldCheck v-if="curpInfo.isValid" :size="22" />
+                          <LucideShieldCheck
+                            v-if="curpInfo.isValid"
+                            :size="22"
+                          />
                           <LucideInfo v-else :size="22" />
                         </span>
                         <div>
@@ -107,31 +151,58 @@
                 <div class="section-divider"></div>
 
                 <div class="section-heading amber">
-                  <span aria-hidden="true"><LucideUsersRound :size="24" /></span>
+                  <span aria-hidden="true"
+                    ><LucideUsersRound :size="24"
+                  /></span>
                   <h3>3. Contacto familiar</h3>
                 </div>
 
                 <div class="field-stack compact">
                   <label class="polished-field">
                     <span>Padre/Tutor</span>
-                    <input :value="form.padre" type="text" placeholder="Ingresa el nombre completo" required @input="handleNameInput('padre', $event)" @blur="normalizeNameField('padre')" />
+                    <input
+                      :value="form.padre"
+                      type="text"
+                      placeholder="Ingresa el nombre completo"
+                      required
+                      @input="handleNameInput('padre', $event)"
+                      @blur="normalizeNameField('padre')"
+                    />
                   </label>
                   <div class="two-field-grid">
                     <label class="polished-field">
                       <span>Teléfono</span>
-                      <input v-model="form.telefono" type="text" inputmode="tel" placeholder="Ingresa el teléfono" @blur="trimField('telefono')" />
+                      <input
+                        v-model="form.telefono"
+                        type="text"
+                        inputmode="tel"
+                        placeholder="Ingresa el teléfono"
+                        @blur="trimField('telefono')"
+                      />
                     </label>
                     <label class="polished-field">
                       <span>Correo electrónico</span>
-                      <input v-model="form.correo" type="email" placeholder="Ingresa el correo electrónico" required @blur="normalizeEmailField" />
+                      <input
+                        v-model="form.correo"
+                        type="email"
+                        placeholder="Ingresa el correo electrónico"
+                        required
+                        @blur="normalizeEmailField"
+                      />
                     </label>
                   </div>
                 </div>
               </section>
 
-              <section class="form-panel academic-panel" aria-labelledby="academic-title">
+              <section
+                v-if="!isEdit"
+                class="form-panel academic-panel"
+                aria-labelledby="academic-title"
+              >
                 <div class="section-heading blue">
-                  <span aria-hidden="true"><LucideGraduationCap :size="25" /></span>
+                  <span aria-hidden="true"
+                    ><LucideGraduationCap :size="25"
+                  /></span>
                   <h3 id="academic-title">2. Grado</h3>
                 </div>
 
@@ -139,43 +210,48 @@
                   <label class="polished-field select-field">
                     <span>Grado</span>
                     <select v-model="form.grado" required>
-                      <option v-for="g in availableGrades" :key="g" :value="g">{{ g }}</option>
-                    </select>
-                    <LucideChevronDown :size="18" aria-hidden="true" />
-                  </label>
-
-                  <label v-if="isEdit" class="polished-field select-field">
-                    <span>Grupo</span>
-                    <select v-model="form.grupo">
-                      <option value="">Sin grupo</option>
-                      <option value="A">A</option>
-                      <option value="B">B</option>
-                      <option value="C">C</option>
+                      <option v-for="g in availableGrades" :key="g" :value="g">
+                        {{ g }}
+                      </option>
                     </select>
                     <LucideChevronDown :size="18" aria-hidden="true" />
                   </label>
                 </div>
 
                 <Transition name="result-card" mode="out-in">
-                  <section :key="resultAnimationKey" :class="['alta-ingreso-card', visibleTipoIngreso.value]" aria-live="polite">
+                  <section
+                    :key="resultAnimationKey"
+                    :class="['alta-ingreso-card', visibleTipoIngreso.value]"
+                    aria-live="polite"
+                  >
                     <span class="alta-card-shine" aria-hidden="true"></span>
                     <div class="alta-card-kicker">{{ ingresoCardKicker }}</div>
                     <div class="alta-result-main">
                       <span class="alta-result-orb" aria-hidden="true">
-                        <LucideShieldCheck v-if="visibleTipoIngreso.value === 'interno'" :size="32" />
+                        <LucideShieldCheck
+                          v-if="visibleTipoIngreso.value === 'interno'"
+                          :size="32"
+                        />
                         <LucideGlobe2 v-else :size="32" />
                       </span>
-                      <strong>{{ visibleTipoIngresoLabel }} en {{ currentCicloLabel }}</strong>
+                      <strong
+                        >{{ visibleTipoIngresoLabel }} en
+                        {{ currentCicloLabel }}</strong
+                      >
                     </div>
                     <p v-html="ingresoCardCopy"></p>
                     <small>
                       <LucideInfo :size="17" />
-                      El ciclo de ingreso quedará registrado como {{ ingresoCicloLabel }}.
+                      El ciclo de ingreso quedará registrado como
+                      {{ ingresoCicloLabel }}.
                     </small>
                   </section>
                 </Transition>
 
-                <section class="cycle-summary-card" aria-label="Ciclo de ingreso y estado visible">
+                <section
+                  class="cycle-summary-card"
+                  aria-label="Ciclo de ingreso y estado visible"
+                >
                   <div>
                     <span><LucideCalendarDays :size="19" /></span>
                     <p>Ciclo de ingreso</p>
@@ -184,7 +260,10 @@
                   <div>
                     <span><LucideUserRound :size="19" /></span>
                     <p>Estado visible</p>
-                    <strong>{{ visibleTipoIngresoLabel }} en {{ currentCicloLabel }}</strong>
+                    <strong
+                      >{{ visibleTipoIngresoLabel }} en
+                      {{ currentCicloLabel }}</strong
+                    >
                   </div>
                 </section>
 
@@ -195,31 +274,67 @@
                   @click="showCyclePicker = !showCyclePicker"
                 >
                   <span><LucideCalendarDays :size="19" /></span>
-                  <strong>{{ showCyclePicker ? 'Ocultar cambio de ciclo' : 'Cambiar ciclo de ingreso' }}</strong>
-                  <LucideChevronDown :class="{ open: showCyclePicker }" :size="18" />
+                  <strong>{{
+                    showCyclePicker
+                      ? "Ocultar cambio de ciclo"
+                      : "Cambiar ciclo de ingreso"
+                  }}</strong>
+                  <LucideChevronDown
+                    :class="{ open: showCyclePicker }"
+                    :size="18"
+                  />
                 </button>
 
                 <Transition name="cycle-picker">
-                  <section v-if="showCyclePicker" class="inline-cycle-picker" aria-label="Seleccionar ciclo de ingreso">
+                  <section
+                    v-if="showCyclePicker"
+                    class="inline-cycle-picker"
+                    aria-label="Seleccionar ciclo de ingreso"
+                  >
                     <div class="cycle-tile-grid">
                       <button
                         v-for="option in primaryCicloOptions"
                         :key="option.value"
                         type="button"
-                        :class="['cycle-tile', { selected: option.value === form.ciclo, current: option.value === currentCicloKey }]"
+                        :class="[
+                          'cycle-tile',
+                          {
+                            selected: option.value === form.ciclo,
+                            current: option.value === currentCicloKey,
+                          },
+                        ]"
                         @click="selectIngresoCiclo(option.value)"
                       >
-                        <span v-if="option.value === form.ciclo" class="cycle-check" aria-hidden="true"><LucideCheck :size="16" /></span>
+                        <span
+                          v-if="option.value === form.ciclo"
+                          class="cycle-check"
+                          aria-hidden="true"
+                          ><LucideCheck :size="16"
+                        /></span>
                         <strong>{{ option.label }}</strong>
                         <small>{{ cycleTileLabel(option.value) }}</small>
-                        <i aria-hidden="true"><LucideCalendarDays :size="18" /></i>
+                        <i aria-hidden="true"
+                          ><LucideCalendarDays :size="18"
+                        /></i>
                       </button>
                     </div>
 
-                    <button class="older-cycle-toggle" type="button" :aria-expanded="showOlderCycles" @click="showOlderCycles = !showOlderCycles">
+                    <button
+                      class="older-cycle-toggle"
+                      type="button"
+                      :aria-expanded="showOlderCycles"
+                      @click="showOlderCycles = !showOlderCycles"
+                    >
                       <LucideList :size="18" />
-                      <span>{{ showOlderCycles ? 'Ocultar ciclos anteriores' : 'Ver ciclos anteriores' }}</span>
-                      <LucideChevronDown :class="{ open: showOlderCycles }" :size="17" />
+                      <span>{{
+                        showOlderCycles
+                          ? "Ocultar ciclos anteriores"
+                          : "Ver ciclos anteriores"
+                      }}</span>
+                      <LucideChevronDown
+                        :class="{ open: showOlderCycles }"
+                        :size="17"
+                      />
                     </button>
 
                     <Transition name="older-cycles">
@@ -228,7 +343,10 @@
                           v-for="option in olderCicloOptions"
                           :key="option.value"
                           type="button"
-                          :class="['older-cycle-option', { selected: option.value === form.ciclo }]"
+                          :class="[
+                            'older-cycle-option',
+                            { selected: option.value === form.ciclo },
+                          ]"
                           @click="selectIngresoCiclo(option.value)"
                         >
                           <span>{{ option.label }}</span>
@@ -238,31 +356,46 @@
                     </Transition>
                   </section>
                 </Transition>
+              </section>
 
-                <section v-if="isEdit" class="edit-admin-card">
+              <section
+                v-if="isEdit"
+                class="form-panel admin-panel"
+                aria-labelledby="admin-title"
+              >
+                <div class="section-heading blue">
+                  <span aria-hidden="true"
+                    ><LucideGraduationCap :size="25"
+                  /></span>
+                  <h3 id="admin-title">2. Administración</h3>
+                </div>
+
+                <div class="field-stack compact">
                   <label class="polished-field">
                     <span>Estatus</span>
-                    <input v-model="form.estatus" type="text" required placeholder="Activo o motivo de baja" />
+                    <input
+                      v-model="form.estatus"
+                      type="text"
+                      required
+                      placeholder="Activo o motivo de baja"
+                    />
                   </label>
-                  <label class="polished-field select-field">
-                    <span>Nivel manual</span>
-                    <select v-model="form.nivel">
-                      <option value="">Calculado por plantel ({{ inferredNivel }})</option>
-                      <option v-for="nivel in nivelOptions" :key="nivel" :value="nivel">{{ nivel }}</option>
-                    </select>
-                    <LucideChevronDown :size="18" aria-hidden="true" />
-                  </label>
-                  <div class="two-field-grid">
-                    <label class="polished-field">
-                      <span>Matrícula anterior</span>
-                      <input v-model="form.matriculaAnterior" type="text" />
-                    </label>
-                    <label class="polished-field">
-                      <span>Matrícula sucesora</span>
-                      <input v-model="form.matriculaSiguiente" type="text" />
-                    </label>
-                  </div>
-                </section>
+
+                  <section
+                    class="edit-position-note"
+                    aria-label="Cambio de posición académica"
+                  >
+                    <strong
+                      >Grado, nivel y ciclo se ajustan desde Ciclo de
+                      ingreso.</strong
+                    >
+                    <p>
+                      Usa el botón de calendario en el detalle del alumno para
+                      cambiar la posición académica con nivel y grado
+                      vinculados.
+                    </p>
+                  </section>
+                </div>
               </section>
             </div>
           </div>
@@ -273,27 +406,30 @@
             @discard="discardAndClose"
           />
 
-          <footer :class="['student-form-footer', { 'actions-only': isEdit }]">
-            <div v-if="!isEdit" class="footer-matricula-strip" aria-label="Secuencia de matrícula">
-              <div>
-                <span>Plantel</span>
-                <strong>{{ form.plantel }}</strong>
-              </div>
-              <div>
-                <span>Última matrícula</span>
-                <strong>{{ matriculaPreviewLoading ? '…' : (matriculaLast || '—') }}</strong>
-              </div>
-              <div>
-                <span>Nueva matrícula</span>
-                <strong>{{ matriculaPreviewLoading ? '…' : (matriculaNext || '—') }}</strong>
-              </div>
-            </div>
+          <footer class="student-form-footer actions-only">
             <div class="footer-actions">
-              <button class="student-form-cancel" type="button" :disabled="loading" @click="requestClose">Cancelar</button>
-              <button class="student-form-save" type="submit" :disabled="loading">
+              <button
+                class="student-form-cancel"
+                type="button"
+                :disabled="loading"
+                @click="requestClose"
+              >
+                Cancelar
+              </button>
+              <button
+                class="student-form-save"
+                type="submit"
+                :disabled="loading"
+              >
                 <LucideLoader2 v-if="loading" class="animate-spin" :size="18" />
                 <LucideSave v-else :size="18" />
-                {{ loading ? 'Guardando...' : (isEdit ? 'Guardar cambios' : 'Guardar alumno') }}
+                {{
+                  loading
+                    ? "Guardando..."
+                    : isEdit
+                      ? "Guardar cambios"
+                      : "Guardar alumno"
+                }}
               </button>
             </div>
           </footer>
@@ -304,7 +440,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, onMounted, watch } from 'vue'
+import { computed, nextTick, ref, onMounted, watch } from "vue";
 import {
   LucideCalendarDays,
   LucideCheck,
@@ -319,118 +455,178 @@ import {
   LucideUserPlus,
   LucideUserRound,
   LucideUsersRound,
-  LucideX
-} from 'lucide-vue-next'
-import { useState, useCookie } from '#app'
-import { useToast } from '~/composables/useToast'
-import { useScrollLock } from '~/composables/useScrollLock'
-import { useModalDraftPersistence } from '~/composables/useModalDraftPersistence'
-import { CICLOS_LIST } from '~/utils/constants'
-import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
-import { formatBirthDate, normalizeCurp, parseCurp } from '~/shared/utils/curp'
-import { NIVELES_ESCOLARES, displayGrado, gradeOptionsForPlantel, nivelFromPlantel, normalizeNivelEscolar, resolveNivelEscolar } from '~/shared/utils/grado'
-import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
+  LucideX,
+} from "lucide-vue-next";
+import { useState, useCookie } from "#app";
+import { useToast } from "~/composables/useToast";
+import { useScrollLock } from "~/composables/useScrollLock";
+import { useModalDraftPersistence } from "~/composables/useModalDraftPersistence";
+import { CICLOS_LIST } from "~/utils/constants";
+import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
+import { formatBirthDate, normalizeCurp, parseCurp } from "~/shared/utils/curp";
+import {
+  displayGrado,
+  gradeOptionsForPlantel,
+  nivelFromPlantel,
+  normalizeNivelEscolar,
+  resolveNivelEscolar,
+} from "~/shared/utils/grado";
+import {
+  formatTipoIngresoValue,
+  resolveTipoIngreso,
+} from "~/shared/utils/tipoIngreso";
 
-const props = defineProps({ student: Object })
-const emit = defineEmits(['close', 'success'])
-const state = useState('globalState')
-const { show } = useToast()
+const props = defineProps({ student: Object });
+const emit = defineEmits(["close", "success"]);
+const state = useState("globalState");
+const { show } = useToast();
 
-useScrollLock()
+useScrollLock();
 
-const activePlantel = String(useCookie('auth_active_plantel').value || 'PT').trim().toUpperCase()
-const userPlanteles = String(useCookie('auth_planteles').value || '').split(',').map(p => p.trim().toUpperCase()).filter(Boolean)
-const defaultPlantel = activePlantel && activePlantel !== 'GLOBAL' ? activePlantel : (userPlanteles[0] || 'PT')
-const isEdit = !!props.student
-const loading = ref(false)
-const matriculaLast = ref('')
-const matriculaNext = ref('')
-const matriculaPreviewLoading = ref(false)
-const showCyclePicker = ref(false)
-const showOlderCycles = ref(false)
-const cycleChangedByUser = ref(false)
-const formTitleId = `student-form-title-${Math.random().toString(36).slice(2, 8)}`
+const activePlantel = String(useCookie("auth_active_plantel").value || "PT")
+  .trim()
+  .toUpperCase();
+const userPlanteles = String(useCookie("auth_planteles").value || "")
+  .split(",")
+  .map((p) => p.trim().toUpperCase())
+  .filter(Boolean);
+const defaultPlantel =
+  activePlantel && activePlantel !== "GLOBAL"
+    ? activePlantel
+    : userPlanteles[0] || "PT";
+const isEdit = !!props.student;
+const loading = ref(false);
+const showCyclePicker = ref(false);
+const showOlderCycles = ref(false);
+const cycleChangedByUser = ref(false);
+const formTitleId = `student-form-title-${Math.random().toString(36).slice(2, 8)}`;
 
-const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
-const currentCicloLabel = computed(() => formatCicloLabel(currentCicloKey.value))
+const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo));
+const currentCicloLabel = computed(() =>
+  formatCicloLabel(currentCicloKey.value),
+);
 
 const form = ref({
-  matricula: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
-  curp: '', birth: '', genero: '1', plantel: defaultPlantel, nivel: '', grado: 'Primero', grupo: '',
-  padre: '', telefono: '', correo: '', ciclo: currentCicloKey.value, estatus: 'Activo',
-  matriculaAnterior: '', matriculaSiguiente: ''
-})
+  matricula: "",
+  apellidoPaterno: "",
+  apellidoMaterno: "",
+  nombres: "",
+  curp: "",
+  birth: "",
+  genero: "1",
+  plantel: defaultPlantel,
+  nivel: "",
+  grado: "Primero",
+  padre: "",
+  telefono: "",
+  correo: "",
+  ciclo: currentCicloKey.value,
+  estatus: "Activo",
+});
 
 const originalAcademic = ref({
   plantel: defaultPlantel,
   nivel: nivelFromPlantel(defaultPlantel),
-  grado: 'Primero',
-  ciclo: currentCicloKey.value
-})
+  grado: "Primero",
+  ciclo: currentCicloKey.value,
+});
 
-const nivelOptions = NIVELES_ESCOLARES
-const inferredNivel = computed(() => nivelFromPlantel(form.value.plantel))
-const academicNivel = computed(() => resolveNivelEscolar({ plantel: form.value.plantel, nivel: form.value.nivel }))
-const availableGrades = computed(() => gradeOptionsForPlantel(form.value.plantel, academicNivel.value))
+const academicNivel = computed(() =>
+  resolveNivelEscolar({ plantel: form.value.plantel, nivel: form.value.nivel }),
+);
+const availableGrades = computed(() =>
+  gradeOptionsForPlantel(form.value.plantel, academicNivel.value),
+);
 
-const studentDraftFields = [
-  'matricula',
-  'apellidoPaterno',
-  'apellidoMaterno',
-  'nombres',
-  'curp',
-  'birth',
-  'genero',
-  'plantel',
-  'nivel',
-  'grado',
-  'grupo',
-  'padre',
-  'telefono',
-  'correo',
-  'ciclo',
-  'estatus',
-  'matriculaAnterior',
-  'matriculaSiguiente'
-]
-
-const readStudentDraft = () => studentDraftFields.reduce((draft, field) => {
-  draft[field] = form.value[field] ?? ''
-  return draft
-}, {})
+const studentDraftFields = isEdit
+  ? [
+      "apellidoPaterno",
+      "apellidoMaterno",
+      "nombres",
+      "curp",
+      "birth",
+      "genero",
+      "padre",
+      "telefono",
+      "correo",
+      "estatus",
+    ]
+  : [
+      "apellidoPaterno",
+      "apellidoMaterno",
+      "nombres",
+      "curp",
+      "birth",
+      "genero",
+      "plantel",
+      "nivel",
+      "grado",
+      "padre",
+      "telefono",
+      "correo",
+      "ciclo",
+      "estatus",
+    ];
+const readStudentDraft = () =>
+  studentDraftFields.reduce((draft, field) => {
+    draft[field] = form.value[field] ?? "";
+    return draft;
+  }, {});
 
 const writeStudentDraft = (draft) => {
-  if (!draft || typeof draft !== 'object') return
+  if (!draft || typeof draft !== "object") return;
 
-  const restored = { ...form.value }
+  const restored = { ...form.value };
   for (const field of studentDraftFields) {
-    if (Object.prototype.hasOwnProperty.call(draft, field)) restored[field] = draft[field] ?? ''
+    if (Object.prototype.hasOwnProperty.call(draft, field))
+      restored[field] = draft[field] ?? "";
   }
 
-  restored.curp = normalizeCurp(restored.curp)
-  restored.ciclo = normalizeCicloKey(restored.ciclo || currentCicloKey.value)
-  restored.grado = displayGrado(restored.grado || availableGrades.value[0] || 'Primero')
-  form.value = restored
-  cycleChangedByUser.value = true
-}
+  restored.curp = normalizeCurp(restored.curp);
+  restored.ciclo = normalizeCicloKey(restored.ciclo || currentCicloKey.value);
+  restored.grado = displayGrado(
+    restored.grado || availableGrades.value[0] || "Primero",
+  );
+  form.value = restored;
+  cycleChangedByUser.value = true;
+};
 
-const studentDraftCicloScope = currentCicloKey.value
+const studentDraftCicloScope = currentCicloKey.value;
 const studentDraftKey = computed(() => {
-  const mode = isEdit ? `edit:${props.student?.matricula || form.value.matricula || 'unknown'}` : `alta:${defaultPlantel}:${studentDraftCicloScope}`
-  return `student-form:${mode}`
-})
+  const mode = isEdit
+    ? `edit:${props.student?.matricula || form.value.matricula || "unknown"}`
+    : `alta:${defaultPlantel}:${studentDraftCicloScope}`;
+  return `student-form:${mode}`;
+});
 
 const studentDraftHasContent = (draft) => {
-  if (!draft || typeof draft !== 'object') return false
-  const relevantFields = ['apellidoPaterno', 'apellidoMaterno', 'nombres', 'curp', 'padre', 'telefono', 'correo', 'matriculaAnterior', 'matriculaSiguiente']
-  if (relevantFields.some(field => String(draft[field] || '').trim().length > 0)) return true
-  if (String(draft.plantel || defaultPlantel) !== defaultPlantel) return true
-  if (String(draft.nivel || '').trim().length > 0) return true
-  if (String(draft.grado || 'Primero') !== 'Primero') return true
-  if (normalizeCicloKey(draft.ciclo || currentCicloKey.value) !== currentCicloKey.value) return true
-  if (isEdit && String(draft.estatus || 'Activo') !== 'Activo') return true
-  return false
-}
+  if (!draft || typeof draft !== "object") return false;
+  const relevantFields = [
+    "apellidoPaterno",
+    "apellidoMaterno",
+    "nombres",
+    "curp",
+    "padre",
+    "telefono",
+    "correo",
+  ];
+  if (
+    relevantFields.some((field) => String(draft[field] || "").trim().length > 0)
+  )
+    return true;
+  if (!isEdit && String(draft.plantel || defaultPlantel) !== defaultPlantel)
+    return true;
+  if (!isEdit && String(draft.nivel || "").trim().length > 0) return true;
+  if (!isEdit && String(draft.grado || "Primero") !== "Primero") return true;
+  if (
+    !isEdit &&
+    normalizeCicloKey(draft.ciclo || currentCicloKey.value) !==
+      currentCicloKey.value
+  )
+    return true;
+  if (isEdit && String(draft.estatus || "Activo") !== "Activo") return true;
+  return false;
+};
 
 const {
   draftRestored,
@@ -441,302 +637,365 @@ const {
   markSaved,
   requestClose,
   continueEditing,
-  discardAndClose
+  discardAndClose,
 } = useModalDraftPersistence({
   key: studentDraftKey,
   read: readStudentDraft,
   write: writeStudentDraft,
-  onClose: () => emit('close'),
+  onClose: () => emit("close"),
   canRequestClose: () => !loading.value,
-  isDraftMeaningful: studentDraftHasContent
-})
-const ingresoCicloLabel = computed(() => formatCicloLabel(form.value.ciclo))
-const curpInfo = computed(() => parseCurp(form.value.curp))
-const curpHasValue = computed(() => curpInfo.value.normalized.length > 0)
-const curpStatusClass = computed(() => curpInfo.value.isValid ? 'valid' : curpInfo.value.isComplete ? 'invalid' : 'pending')
-const curpInferenceKey = computed(() => `${curpStatusClass.value}-${curpInfo.value.normalized}`)
+  isDraftMeaningful: studentDraftHasContent,
+});
+const ingresoCicloLabel = computed(() => formatCicloLabel(form.value.ciclo));
+const curpInfo = computed(() => parseCurp(form.value.curp));
+const curpHasValue = computed(() => curpInfo.value.normalized.length > 0);
+const curpStatusClass = computed(() =>
+  curpInfo.value.isValid
+    ? "valid"
+    : curpInfo.value.isComplete
+      ? "invalid"
+      : "pending",
+);
+const curpInferenceKey = computed(
+  () => `${curpStatusClass.value}-${curpInfo.value.normalized}`,
+);
 const curpInsightTitle = computed(() => {
-  if (curpInfo.value.isValid) return 'Datos calculados desde la CURP'
-  if (curpInfo.value.isComplete) return 'CURP no válida'
-  return 'Validando CURP'
-})
-const inferredBirthLabel = computed(() => formatBirthDate(curpInfo.value.birthDate))
+  if (curpInfo.value.isValid) return "Datos calculados desde la CURP";
+  if (curpInfo.value.isComplete) return "CURP no válida";
+  return "Validando CURP";
+});
+const inferredBirthLabel = computed(() =>
+  formatBirthDate(curpInfo.value.birthDate),
+);
 
-const visibleTipoIngreso = computed(() => resolveTipoIngreso({ ciclo: form.value.ciclo, cicloBase: form.value.ciclo }, currentCicloKey.value))
-const visibleTipoIngresoLabel = computed(() => formatTipoIngresoValue(visibleTipoIngreso.value))
-const resultAnimationKey = computed(() => `${form.value.ciclo}-${currentCicloKey.value}-${visibleTipoIngreso.value.value}`)
+const visibleTipoIngreso = computed(() =>
+  resolveTipoIngreso(
+    { ciclo: form.value.ciclo, cicloBase: form.value.ciclo },
+    currentCicloKey.value,
+  ),
+);
+const visibleTipoIngresoLabel = computed(() =>
+  formatTipoIngresoValue(visibleTipoIngreso.value),
+);
+const resultAnimationKey = computed(
+  () =>
+    `${form.value.ciclo}-${currentCicloKey.value}-${visibleTipoIngreso.value.value}`,
+);
 
 const ingresoCardKicker = computed(() => {
-  const ingresoYear = Number(normalizeCicloKey(form.value.ciclo))
-  const currentYear = Number(currentCicloKey.value)
+  const ingresoYear = Number(normalizeCicloKey(form.value.ciclo));
+  const currentYear = Number(currentCicloKey.value);
 
-  if (ingresoYear === currentYear) return 'Ingreso en ciclo actual'
-  if (ingresoYear > currentYear) return 'Ingreso en ciclo futuro'
-  return 'Ingreso en ciclo anterior'
-})
+  if (ingresoYear === currentYear) return "Ingreso en ciclo actual";
+  if (ingresoYear > currentYear) return "Ingreso en ciclo futuro";
+  return "Ingreso en ciclo anterior";
+});
 
 const ingresoCardCopy = computed(() => {
-  const ingresoYear = Number(normalizeCicloKey(form.value.ciclo))
-  const currentYear = Number(currentCicloKey.value)
+  const ingresoYear = Number(normalizeCicloKey(form.value.ciclo));
+  const currentYear = Number(currentCicloKey.value);
 
   if (ingresoYear === currentYear) {
-    return `Al dar de alta a un alumno nuevo, el sistema registra ${currentCicloLabel.value} como su ciclo de ingreso. Por eso se mostrará como <strong>externo</strong> en este ciclo.`
+    return `Al dar de alta a un alumno nuevo, el sistema registra ${currentCicloLabel.value} como su ciclo de ingreso. Por eso se mostrará como <strong>externo</strong> en este ciclo.`;
   }
 
   if (ingresoYear > currentYear) {
-    return `El ciclo de ingreso elegido es ${ingresoCicloLabel.value}. El alumno quedará anclado a ese ciclo y no debe promocionarse antes de su ingreso.`
+    return `El ciclo de ingreso elegido es ${ingresoCicloLabel.value}. El alumno quedará anclado a ese ciclo y no debe promocionarse antes de su ingreso.`;
   }
 
-  return `El ciclo de ingreso elegido es ${ingresoCicloLabel.value}. Para el ciclo seleccionado (${currentCicloLabel.value}) el sistema lo mostrará como <strong>${visibleTipoIngresoLabel.value.toLowerCase()}</strong>.`
-})
+  return `El ciclo de ingreso elegido es ${ingresoCicloLabel.value}. Para el ciclo seleccionado (${currentCicloLabel.value}) el sistema lo mostrará como <strong>${visibleTipoIngresoLabel.value.toLowerCase()}</strong>.`;
+});
 
-const editInitials = computed(() => String(props.student?.nombreCompleto || 'A')
-  .split(/\s+/)
-  .filter(Boolean)
-  .slice(0, 2)
-  .map(part => part.charAt(0).toUpperCase())
-  .join('') || 'A')
+const editInitials = computed(
+  () =>
+    String(props.student?.nombreCompleto || "A")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("") || "A",
+);
 
 const academicChanged = computed(() => {
-  if (!isEdit) return true
+  if (!isEdit) return true;
 
   const current = {
-    plantel: String(form.value.plantel || '').trim(),
+    plantel: String(form.value.plantel || "").trim(),
     nivel: academicNivel.value,
-    grado: displayGrado(form.value.grado || 'Primero').toLowerCase(),
-    ciclo: normalizeCicloKey(form.value.ciclo)
-  }
+    grado: displayGrado(form.value.grado || "Primero").toLowerCase(),
+    ciclo: normalizeCicloKey(form.value.ciclo),
+  };
 
-  return current.plantel !== originalAcademic.value.plantel ||
+  return (
+    current.plantel !== originalAcademic.value.plantel ||
     current.nivel !== originalAcademic.value.nivel ||
     current.grado !== originalAcademic.value.grado.toLowerCase() ||
     current.ciclo !== originalAcademic.value.ciclo
-})
+  );
+});
 
-const configuredCicloKeys = computed(() => CICLOS_LIST
-  .map(option => normalizeCicloKey(option.value))
-  .filter(Boolean))
+const configuredCicloKeys = computed(() =>
+  CICLOS_LIST.map((option) => normalizeCicloKey(option.value)).filter(Boolean),
+);
 
 const cicloOptions = computed(() => {
-  const currentYear = Number(currentCicloKey.value)
-  const selectedYear = Number(normalizeCicloKey(form.value.ciclo))
-  const values = new Set(configuredCicloKeys.value)
+  const currentYear = Number(currentCicloKey.value);
+  const selectedYear = Number(normalizeCicloKey(form.value.ciclo));
+  const values = new Set(configuredCicloKeys.value);
 
-  if (Number.isFinite(currentYear)) values.add(String(currentYear))
-  if (Number.isFinite(selectedYear)) values.add(String(selectedYear))
+  if (Number.isFinite(currentYear)) values.add(String(currentYear));
+  if (Number.isFinite(selectedYear)) values.add(String(selectedYear));
 
   for (let year = currentYear; year >= currentYear - 11; year -= 1) {
-    values.add(String(year))
+    values.add(String(year));
   }
 
   return Array.from(values)
-    .filter(value => /^\d{4}$/.test(value))
+    .filter((value) => /^\d{4}$/.test(value))
     .sort((a, b) => Number(b) - Number(a))
-    .map(value => ({ value, label: formatCicloLabel(value) }))
-})
+    .map((value) => ({ value, label: formatCicloLabel(value) }));
+});
 
-const primaryCicloOptions = computed(() => cicloOptions.value.slice(0, 4))
-const olderCicloOptions = computed(() => cicloOptions.value.slice(4))
+const primaryCicloOptions = computed(() => cicloOptions.value.slice(0, 4));
+const olderCicloOptions = computed(() => cicloOptions.value.slice(4));
 
 const cycleTileLabel = (value) => {
-  if (value === form.value.ciclo) return 'Seleccionado'
-  if (value === currentCicloKey.value) return 'Ciclo actual'
-  if (Number(value) > Number(currentCicloKey.value)) return 'Futuro'
-  return 'Anterior'
-}
+  if (value === form.value.ciclo) return "Seleccionado";
+  if (value === currentCicloKey.value) return "Ciclo actual";
+  if (Number(value) > Number(currentCicloKey.value)) return "Futuro";
+  return "Anterior";
+};
 
 const selectIngresoCiclo = (value) => {
-  form.value.ciclo = normalizeCicloKey(value)
-  cycleChangedByUser.value = true
-}
+  form.value.ciclo = normalizeCicloKey(value);
+  cycleChangedByUser.value = true;
+};
 
-watch([() => form.value.plantel, () => form.value.nivel], () => {
-  const selected = availableGrades.value.find(g => g.toLowerCase() === String(form.value.grado || '').toLowerCase())
-  form.value.grado = selected || availableGrades.value[0]
-}, { immediate: true })
+watch(
+  [() => form.value.plantel, () => form.value.nivel],
+  () => {
+    const selected = availableGrades.value.find(
+      (g) => g.toLowerCase() === String(form.value.grado || "").toLowerCase(),
+    );
+    form.value.grado = selected || availableGrades.value[0];
+  },
+  { immediate: true },
+);
 
-watch(curpInfo, (info) => {
-  if (!info.isValid) return
-  form.value.birth = info.birthDate
-  form.value.genero = info.gender
-}, { immediate: true })
+watch(
+  curpInfo,
+  (info) => {
+    if (!info.isValid) return;
+    form.value.birth = info.birthDate;
+    form.value.genero = info.gender;
+  },
+  { immediate: true },
+);
 
 watch(currentCicloKey, (value, oldValue) => {
   if (!isEdit && !cycleChangedByUser.value && form.value.ciclo === oldValue) {
-    form.value.ciclo = value
+    form.value.ciclo = value;
   }
-})
+});
 
-watch(() => form.value.ciclo, (value) => {
-  if (olderCicloOptions.value.some(option => option.value === value)) showOlderCycles.value = true
-})
+watch(
+  () => form.value.ciclo,
+  (value) => {
+    if (olderCicloOptions.value.some((option) => option.value === value))
+      showOlderCycles.value = true;
+  },
+);
 
 onMounted(() => {
   if (isEdit) {
-    const s = props.student
+    const s = props.student;
     form.value = {
       matricula: s.matricula,
-      apellidoPaterno: s.apellidoPaterno || '',
-      apellidoMaterno: s.apellidoMaterno || '',
-      nombres: s.nombres || '',
-      curp: normalizeCurp(s.curp || s.CURP || ''),
-      birth: s.birth ? s.birth.split('T')[0] : '',
-      genero: s.genero || '1',
-      plantel: s.plantel || defaultPlantel,
-      nivel: normalizeNivelEscolar(s.nivel) && normalizeNivelEscolar(s.nivel) !== nivelFromPlantel(s.plantel || defaultPlantel) ? normalizeNivelEscolar(s.nivel) : '',
-      grado: displayGrado(s.gradoBase || s.grado || 'Primero'),
-      grupo: s.grupo || 'A',
-      padre: s.padre || '',
-      telefono: s.telefono || '',
-      correo: s.correo || '',
+      apellidoPaterno: s.apellidoPaterno || "",
+      apellidoMaterno: s.apellidoMaterno || "",
+      nombres: s.nombres || "",
+      curp: normalizeCurp(s.curp || s.CURP || ""),
+      birth: s.birth ? s.birth.split("T")[0] : "",
+      genero: s.genero || "1",
+      plantel: s.plantelBase || s.plantel || defaultPlantel,
+      nivel:
+        normalizeNivelEscolar(s.nivelBase || s.nivel) &&
+        normalizeNivelEscolar(s.nivelBase || s.nivel) !==
+          nivelFromPlantel(s.plantelBase || s.plantel || defaultPlantel)
+          ? normalizeNivelEscolar(s.nivelBase || s.nivel)
+          : "",
+      grado: displayGrado(s.gradoBase || s.grado || "Primero"),
+      padre: s.padre || "",
+      telefono: s.telefono || "",
+      correo: s.correo || "",
       ciclo: normalizeCicloKey(s.cicloBase || s.ciclo || currentCicloKey.value),
-      estatus: s.estatus || 'Activo',
-      matriculaAnterior: s.matriculaAnterior || '',
-      matriculaSiguiente: s.matriculaSiguiente || ''
-    }
+      estatus: s.estatus || "Activo",
+    };
     originalAcademic.value = {
-      plantel: String(form.value.plantel || '').trim(),
+      plantel: String(form.value.plantel || "").trim(),
       nivel: academicNivel.value,
-      grado: displayGrado(form.value.grado || 'Primero'),
-      ciclo: normalizeCicloKey(form.value.ciclo)
-    }
+      grado: displayGrado(form.value.grado || "Primero"),
+      ciclo: normalizeCicloKey(form.value.ciclo),
+    };
   }
 
-  initializeDraft()
-})
+  initializeDraft();
+});
 
-const NAME_PARTICLES = new Set(['de', 'del', 'de la', 'de las', 'de los', 'la', 'las', 'los', 'y'])
+const NAME_PARTICLES = new Set([
+  "de",
+  "del",
+  "de la",
+  "de las",
+  "de los",
+  "la",
+  "las",
+  "los",
+  "y",
+]);
 
 const titleWord = (word, index, words) => {
-  const lower = word.toLocaleLowerCase('es-MX')
-  const nextTwo = `${lower} ${words[index + 1]?.toLocaleLowerCase('es-MX') || ''}`.trim()
-  if (index > 0 && NAME_PARTICLES.has(lower)) return lower
-  if (index > 0 && NAME_PARTICLES.has(nextTwo)) return lower
-  return lower.replace(/^([\p{L}ÑñÁÉÍÓÚÜáéíóúü])|([-'’][\p{L}ÑñÁÉÍÓÚÜáéíóúü])/gu, match => match.toLocaleUpperCase('es-MX'))
-}
+  const lower = word.toLocaleLowerCase("es-MX");
+  const nextTwo =
+    `${lower} ${words[index + 1]?.toLocaleLowerCase("es-MX") || ""}`.trim();
+  if (index > 0 && NAME_PARTICLES.has(lower)) return lower;
+  if (index > 0 && NAME_PARTICLES.has(nextTwo)) return lower;
+  return lower.replace(
+    /^([\p{L}ÑñÁÉÍÓÚÜáéíóúü])|([-'’][\p{L}ÑñÁÉÍÓÚÜáéíóúü])/gu,
+    (match) => match.toLocaleUpperCase("es-MX"),
+  );
+};
 
 const toNameCase = (value) => {
-  return String(value || '')
+  return String(value || "")
     .trim()
-    .replace(/\s+/g, ' ')
-    .split(' ')
+    .replace(/\s+/g, " ")
+    .split(" ")
     .map((word, index, words) => titleWord(word, index, words))
-    .join(' ')
-}
+    .join(" ");
+};
 
 const toLiveNameCase = (value) => {
-  const source = String(value || '')
-  const parts = source.split(/(\s+)/)
-  const words = parts.filter(part => part && !/^\s+$/.test(part))
-  let wordIndex = 0
+  const source = String(value || "");
+  const parts = source.split(/(\s+)/);
+  const words = parts.filter((part) => part && !/^\s+$/.test(part));
+  let wordIndex = 0;
 
-  return parts.map((part) => {
-    if (!part || /^\s+$/.test(part)) return part
-    const normalized = titleWord(part, wordIndex, words)
-    wordIndex += 1
-    return normalized
-  }).join('')
-}
+  return parts
+    .map((part) => {
+      if (!part || /^\s+$/.test(part)) return part;
+      const normalized = titleWord(part, wordIndex, words);
+      wordIndex += 1;
+      return normalized;
+    })
+    .join("");
+};
 
 const handleNameInput = (field, event) => {
-  const input = event?.target
-  const rawValue = String(input?.value || '')
-  const caret = typeof input?.selectionStart === 'number' ? input.selectionStart : rawValue.length
-  const rawBeforeCaret = rawValue.slice(0, caret)
-  const normalizedValue = toLiveNameCase(rawValue)
-  const normalizedBeforeCaret = toLiveNameCase(rawBeforeCaret)
+  const input = event?.target;
+  const rawValue = String(input?.value || "");
+  const caret =
+    typeof input?.selectionStart === "number"
+      ? input.selectionStart
+      : rawValue.length;
+  const rawBeforeCaret = rawValue.slice(0, caret);
+  const normalizedValue = toLiveNameCase(rawValue);
+  const normalizedBeforeCaret = toLiveNameCase(rawBeforeCaret);
 
-  form.value[field] = normalizedValue
+  form.value[field] = normalizedValue;
 
   if (input && input.value !== normalizedValue) {
     nextTick(() => {
-      const nextCaret = normalizedBeforeCaret.length
-      input.setSelectionRange(nextCaret, nextCaret)
-    })
+      const nextCaret = normalizedBeforeCaret.length;
+      input.setSelectionRange(nextCaret, nextCaret);
+    });
   }
-}
+};
 
 const normalizeNameField = (field) => {
-  form.value[field] = toNameCase(form.value[field])
-}
+  form.value[field] = toNameCase(form.value[field]);
+};
 
 const trimField = (field) => {
-  form.value[field] = String(form.value[field] || '').trim()
-}
+  form.value[field] = String(form.value[field] || "").trim();
+};
 
 const normalizeEmailField = () => {
-  form.value.correo = String(form.value.correo || '').trim().toLowerCase()
-}
+  form.value.correo = String(form.value.correo || "")
+    .trim()
+    .toLowerCase();
+};
 
 const normalizeCurpField = (event) => {
-  const value = event?.target ? event.target.value : form.value.curp
-  form.value.curp = normalizeCurp(value)
-}
-
-const loadMatriculaPreview = async () => {
-  if (isEdit) return
-  const plantel = String(form.value.plantel || '').trim().toUpperCase()
-  if (!plantel || plantel === 'GLOBAL') {
-    matriculaLast.value = ''
-    matriculaNext.value = ''
-    return
-  }
-
-  matriculaPreviewLoading.value = true
-  try {
-    const response = await $fetch('/api/students/matricula-preview', { query: { plantel } })
-    matriculaLast.value = String(response?.lastMatricula || '')
-    matriculaNext.value = String(response?.nextMatricula || response?.preview || '')
-  } catch (error) {
-    matriculaLast.value = ''
-    matriculaNext.value = ''
-  } finally {
-    matriculaPreviewLoading.value = false
-  }
-}
-
-watch(() => form.value.plantel, loadMatriculaPreview, { immediate: true })
+  const value = event?.target ? event.target.value : form.value.curp;
+  form.value.curp = normalizeCurp(value);
+};
 
 const normalizeNamesBeforeSubmit = () => {
-  ;['apellidoPaterno', 'apellidoMaterno', 'nombres', 'padre'].forEach(normalizeNameField)
-  normalizeCurpField()
-  trimField('telefono')
-  normalizeEmailField()
-}
+  ["apellidoPaterno", "apellidoMaterno", "nombres", "padre"].forEach(
+    normalizeNameField,
+  );
+  normalizeCurpField();
+  trimField("telefono");
+  normalizeEmailField();
+};
 
 const submit = async () => {
-  normalizeNamesBeforeSubmit()
+  normalizeNamesBeforeSubmit();
   if (!curpInfo.value.isValid) {
-    show(curpInfo.value.message || 'Captura una CURP válida antes de guardar.', 'danger')
-    return
+    show(
+      curpInfo.value.message || "Captura una CURP válida antes de guardar.",
+      "danger",
+    );
+    return;
   }
 
-  loading.value = true
+  loading.value = true;
   try {
-    const cicloKey = normalizeCicloKey(form.value.ciclo || currentCicloKey.value)
-    const url = isEdit ? `/api/students/${form.value.matricula}` : '/api/students'
-    const method = isEdit ? 'PUT' : 'POST'
+    const cicloKey = normalizeCicloKey(
+      form.value.ciclo || currentCicloKey.value,
+    );
+    const studentMatricula = props.student?.matricula || form.value.matricula;
+    const url = isEdit
+      ? `/api/students/${encodeURIComponent(studentMatricula)}`
+      : "/api/students";
+    const method = isEdit ? "PUT" : "POST";
     await $fetch(url, {
       method,
       body: {
-        ...form.value,
-        grupo: isEdit ? form.value.grupo : '',
+        apellidoPaterno: form.value.apellidoPaterno,
+        apellidoMaterno: form.value.apellidoMaterno,
+        nombres: form.value.nombres,
+        curp: form.value.curp,
+        birth: form.value.birth,
+        genero: form.value.genero,
+        plantel: form.value.plantel,
         nivel: form.value.nivel,
         resolvedNivel: academicNivel.value,
+        grado: form.value.grado,
+        padre: form.value.padre,
+        telefono: form.value.telefono,
+        correo: form.value.correo,
         ciclo: cicloKey,
         cicloIngreso: cicloKey,
-        academicChanged: academicChanged.value
-      }
-    })
-    show(isEdit ? 'Alumno actualizado correctamente' : 'Alumno registrado exitosamente', 'success')
-    markSaved()
-    emit('success')
+        estatus: form.value.estatus,
+        academicChanged: academicChanged.value,
+      },
+    });
+    show(
+      isEdit
+        ? "Alumno actualizado correctamente"
+        : "Alumno registrado exitosamente",
+      "success",
+    );
+    markSaved();
+    emit("success");
   } catch (e) {
-    show('Error guardando la información', 'danger')
+    show("Error guardando la información", "danger");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 </script>
 
 <style scoped>
@@ -763,13 +1022,26 @@ const submit = async () => {
   border: 1px solid rgba(203, 213, 225, 0.92);
   border-radius: 34px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.97)),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(248, 251, 255, 0.97)
+    ),
     #fff;
   box-shadow:
     0 36px 96px rgba(15, 23, 42, 0.26),
     0 12px 28px rgba(15, 23, 42, 0.12);
   color: #12213c;
-  font-family: var(--students-font, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(
+    --students-font,
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif
+  );
 }
 
 .student-form-modal > form {
@@ -818,8 +1090,12 @@ const submit = async () => {
   overflow: hidden;
   padding: 30px 104px 28px 48px;
   border-bottom: 1px solid rgba(203, 213, 225, 0.72);
-  background:
-    linear-gradient(110deg, rgba(255, 255, 255, 0.99), rgba(247, 251, 255, 0.94) 58%, rgba(235, 249, 238, 0.92));
+  background: linear-gradient(
+    110deg,
+    rgba(255, 255, 255, 0.99),
+    rgba(247, 251, 255, 0.94) 58%,
+    rgba(235, 249, 238, 0.92)
+  );
 }
 
 .student-form-hero-veil,
@@ -831,8 +1107,16 @@ const submit = async () => {
 .student-form-hero-veil {
   inset: 0;
   background:
-    radial-gradient(circle at 28% -50%, rgba(59, 130, 246, 0.1), transparent 44%),
-    radial-gradient(circle at 82% -26%, rgba(47, 147, 57, 0.18), transparent 42%);
+    radial-gradient(
+      circle at 28% -50%,
+      rgba(59, 130, 246, 0.1),
+      transparent 44%
+    ),
+    radial-gradient(
+      circle at 82% -26%,
+      rgba(47, 147, 57, 0.18),
+      transparent 42%
+    );
 }
 
 .student-form-hero-curve {
@@ -845,14 +1129,22 @@ const submit = async () => {
 .student-form-hero-curve.blue {
   top: -76px;
   height: 154px;
-  background: linear-gradient(98deg, rgba(66, 141, 226, 0.11), rgba(255, 255, 255, 0));
+  background: linear-gradient(
+    98deg,
+    rgba(66, 141, 226, 0.11),
+    rgba(255, 255, 255, 0)
+  );
   transform: rotate(-4deg);
 }
 
 .student-form-hero-curve.green {
   top: -34px;
   height: 178px;
-  background: linear-gradient(104deg, rgba(255, 255, 255, 0), rgba(87, 180, 103, 0.22));
+  background: linear-gradient(
+    104deg,
+    rgba(255, 255, 255, 0),
+    rgba(87, 180, 103, 0.22)
+  );
   transform: rotate(5deg);
 }
 
@@ -905,34 +1197,6 @@ const submit = async () => {
   overflow: auto;
   padding: 32px 44px;
   scrollbar-gutter: stable;
-}
-
-.student-edit-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-  padding: 15px 18px;
-  border: 1px solid rgba(203, 213, 225, 0.86);
-  border-radius: 18px;
-  background: rgba(248, 250, 252, 0.84);
-}
-
-.student-edit-strip small {
-  display: block;
-  color: #6b7892;
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.student-edit-strip strong {
-  display: block;
-  color: #2f9339;
-  font-size: 18px;
-  font-weight: 900;
 }
 
 .student-status-chip {
@@ -1099,11 +1363,18 @@ const submit = async () => {
 .section-divider {
   height: 1px;
   margin: 32px 0 24px;
-  background: linear-gradient(90deg, rgba(203, 213, 225, 0), rgba(203, 213, 225, 0.88), rgba(203, 213, 225, 0));
+  background: linear-gradient(
+    90deg,
+    rgba(203, 213, 225, 0),
+    rgba(203, 213, 225, 0.88),
+    rgba(203, 213, 225, 0)
+  );
 }
 
 .curp-field input {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
   font-size: 17px;
   font-weight: 820;
   letter-spacing: 0.075em;
@@ -1118,35 +1389,59 @@ const submit = async () => {
   padding: 17px;
   border: 1px solid #d7e0ef;
   border-radius: 18px;
-  background: linear-gradient(145deg, rgba(248, 251, 255, 0.96), rgba(255, 255, 255, 0.98));
+  background: linear-gradient(
+    145deg,
+    rgba(248, 251, 255, 0.96),
+    rgba(255, 255, 255, 0.98)
+  );
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
 }
 
 .curp-insight-card.valid {
   border-color: rgba(47, 147, 57, 0.34);
-  background: linear-gradient(145deg, rgba(246, 255, 248, 0.96), rgba(255, 255, 255, 0.98));
+  background: linear-gradient(
+    145deg,
+    rgba(246, 255, 248, 0.96),
+    rgba(255, 255, 255, 0.98)
+  );
 }
 
 .curp-insight-card.invalid {
   border-color: rgba(244, 63, 94, 0.38);
-  background: linear-gradient(145deg, rgba(255, 247, 247, 0.96), rgba(255, 255, 255, 0.98));
+  background: linear-gradient(
+    145deg,
+    rgba(255, 247, 247, 0.96),
+    rgba(255, 255, 255, 0.98)
+  );
 }
 
 .curp-card-glow {
   position: absolute;
   inset: -42% -24%;
   pointer-events: none;
-  background: radial-gradient(circle at 18% 42%, rgba(37, 110, 228, 0.11), transparent 34%);
+  background: radial-gradient(
+    circle at 18% 42%,
+    rgba(37, 110, 228, 0.11),
+    transparent 34%
+  );
   opacity: 0.74;
   animation: curp-glow-drift 4200ms ease-in-out infinite;
 }
 
 .curp-insight-card.valid .curp-card-glow {
-  background: radial-gradient(circle at 18% 42%, rgba(47, 147, 57, 0.14), transparent 35%);
+  background: radial-gradient(
+    circle at 18% 42%,
+    rgba(47, 147, 57, 0.14),
+    transparent 35%
+  );
 }
 
 .curp-insight-card.invalid .curp-card-glow {
-  background: radial-gradient(circle at 18% 42%, rgba(244, 63, 94, 0.11), transparent 35%);
+  background: radial-gradient(
+    circle at 18% 42%,
+    rgba(244, 63, 94, 0.11),
+    transparent 35%
+  );
 }
 
 .curp-insight-header {
@@ -1248,21 +1543,34 @@ const submit = async () => {
   border: 1px solid rgba(95, 177, 109, 0.48);
   border-radius: 16px;
   background:
-    linear-gradient(145deg, rgba(247, 255, 248, 0.94), rgba(255, 255, 255, 0.96)),
+    linear-gradient(
+      145deg,
+      rgba(247, 255, 248, 0.94),
+      rgba(255, 255, 255, 0.96)
+    ),
     #fff;
   box-shadow: 0 16px 44px rgba(47, 147, 57, 0.09);
 }
 
 .alta-ingreso-card.externo {
   border-color: rgba(74, 144, 226, 0.36);
-  background: linear-gradient(145deg, rgba(245, 250, 255, 0.96), rgba(255, 255, 255, 0.97));
+  background: linear-gradient(
+    145deg,
+    rgba(245, 250, 255, 0.96),
+    rgba(255, 255, 255, 0.97)
+  );
   box-shadow: 0 16px 44px rgba(74, 144, 226, 0.08);
 }
 
 .alta-card-shine {
   position: absolute;
   inset: -35% -45%;
-  background: linear-gradient(112deg, transparent 28%, rgba(255, 255, 255, 0.72) 46%, transparent 62%);
+  background: linear-gradient(
+    112deg,
+    transparent 28%,
+    rgba(255, 255, 255, 0.72) 46%,
+    transparent 62%
+  );
   opacity: 0.68;
   transform: translateX(-34%);
   animation: alta-card-sheen 2700ms cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
@@ -1316,7 +1624,11 @@ const submit = async () => {
   align-items: center;
   padding: 0 22px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(47, 147, 57, 0.13), rgba(47, 147, 57, 0.04));
+  background: linear-gradient(
+    90deg,
+    rgba(47, 147, 57, 0.13),
+    rgba(47, 147, 57, 0.04)
+  );
   color: #2f9339;
   font-size: clamp(21px, 2vw, 26px);
   font-weight: 940;
@@ -1325,7 +1637,11 @@ const submit = async () => {
 }
 
 .alta-ingreso-card.externo .alta-result-main strong {
-  background: linear-gradient(90deg, rgba(37, 110, 228, 0.13), rgba(37, 110, 228, 0.04));
+  background: linear-gradient(
+    90deg,
+    rgba(37, 110, 228, 0.13),
+    rgba(37, 110, 228, 0.04)
+  );
   color: #256ee4;
 }
 
@@ -1641,47 +1957,6 @@ const submit = async () => {
   justify-content: flex-end;
 }
 
-.footer-matricula-strip {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 10px;
-  overflow: hidden;
-}
-
-.footer-matricula-strip > div {
-  display: grid;
-  min-width: 118px;
-  gap: 4px;
-  padding: 10px 14px;
-  border: 1px solid rgba(215, 224, 239, 0.88);
-  border-radius: 14px;
-  background: rgba(248, 251, 255, 0.72);
-}
-
-.footer-matricula-strip span {
-  color: #6b7892;
-  font-size: 10.5px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.footer-matricula-strip strong {
-  overflow: hidden;
-  color: #12213c;
-  font-size: 15px;
-  font-weight: 920;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.footer-matricula-strip > div:last-child strong {
-  color: #2f9339;
-}
-
 .footer-actions {
   display: flex;
   flex: 0 0 auto;
@@ -1777,7 +2052,8 @@ const submit = async () => {
 }
 
 @keyframes curp-glow-drift {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.48;
     transform: translateX(-2%);
   }
@@ -1802,7 +2078,8 @@ const submit = async () => {
 }
 
 @keyframes alta-orb-breathe {
-  0%, 100% {
+  0%,
+  100% {
     filter: saturate(1);
     transform: translateY(0);
   }
@@ -1933,15 +2210,6 @@ const submit = async () => {
     flex-direction: column;
     align-items: stretch;
     padding: 20px 22px;
-  }
-
-  .footer-matricula-strip {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .footer-matricula-strip > div {
-    min-width: 0;
   }
 
   .footer-actions {

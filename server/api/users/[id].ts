@@ -1,7 +1,7 @@
-import { runWithBridgeAgentId, query } from '../../utils/db'
 import bcrypt from 'bcryptjs'
+import { query } from '../../utils/db'
 
-export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
+export default defineEventHandler(async (event) => {
   const id = event.context.params?.id
   const method = event.node.req.method
   const user = event.context.user
@@ -11,20 +11,31 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   if (method === 'PUT') {
-    const { username, password, email, planteles, role } = await readBody(event)
-    const plantelesStr = Array.isArray(planteles) ? planteles.join(',') : planteles
+    const body = await readBody(event)
+    const plantelesStr = Array.isArray(body.planteles) ? body.planteles.join(',') : String(body.planteles || '')
+    const updates = ['username = ?', 'email = ?', 'planteles = ?', 'role = ?', 'plantel = ?']
+    const params: any[] = [
+      body.username,
+      body.email,
+      plantelesStr,
+      body.role || 'plantel',
+      Array.isArray(body.planteles) && body.planteles.length > 0 ? body.planteles[0] : ''
+    ]
 
-    if (password && password.trim() !== '') {
-      const hash = bcrypt.hashSync(password, 10)
-      await query('UPDATE users SET username=?, password=?, email=?, planteles=?, role=? WHERE id=?', [username, hash, email, plantelesStr, role, id])
-    } else {
-      await query('UPDATE users SET username=?, email=?, planteles=?, role=? WHERE id=?', [username, email, plantelesStr, role, id])
+    if (body.password && String(body.password).trim()) {
+      updates.push('password = ?')
+      params.push(bcrypt.hashSync(body.password, 10))
     }
+
+    params.push(id)
+    await query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params)
     return { success: true }
   }
-  
+
   if (method === 'DELETE') {
-    await query('DELETE FROM users WHERE id=?', [id])
+    await query('DELETE FROM users WHERE id = ?', [id])
     return { success: true }
   }
-}))
+
+  throw createError({ statusCode: 405, message: 'Metodo no permitido.' })
+})

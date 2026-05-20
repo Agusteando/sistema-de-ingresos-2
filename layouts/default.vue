@@ -26,24 +26,27 @@
       </div>
 
       <nav class="sidebar-nav">
-        <NuxtLink to="/" class="nav-item group">
+        <NuxtLink v-if="showFinancialNav" to="/" class="nav-item group">
           <LucideUsers :size="22" stroke-width="2.2" /> Alumnos
         </NuxtLink>
-        <NuxtLink to="/deudores" class="nav-item group">
+        <NuxtLink v-if="showFinancialNav" to="/deudores" class="nav-item group">
           <LucideAlertTriangle :size="22" stroke-width="2" /> Deudores
         </NuxtLink>
-        <NuxtLink to="/reportes" class="nav-item group">
+        <NuxtLink v-if="showFinancialNav" to="/reportes" class="nav-item group">
           <LucidePieChart :size="22" stroke-width="2" /> Reportes
         </NuxtLink>
-        <NuxtLink to="/conceptos" class="nav-item group">
+        <NuxtLink v-if="showFinancialNav" to="/conceptos" class="nav-item group">
           <LucideSettings :size="22" stroke-width="2" /> Conceptos
         </NuxtLink>
-        <NuxtLink to="/facturas" class="nav-item group">
+        <NuxtLink v-if="showFinancialNav" to="/facturas" class="nav-item group">
           <LucideFileText :size="22" stroke-width="2" /> Facturas CFDI
         </NuxtLink>
-        <a href="http://localhost/Sistema%20de%20ingresos/login.php" class="nav-item group" target="_blank" rel="noopener">
+        <a v-if="showFinancialNav" href="http://localhost/Sistema%20de%20ingresos/login.php" class="nav-item group" target="_blank" rel="noopener">
           <LucideExternalLink :size="22" stroke-width="2" /> Sistema de Contingencia
         </a>
+        <NuxtLink v-if="showControlEscolarNav" to="/control-escolar" class="nav-item group">
+          <LucideSchool :size="22" stroke-width="2" /> Control Escolar
+        </NuxtLink>
         <NuxtLink to="/usuarios" class="nav-item group" v-if="isSuperAdmin">
           <LucideShield :size="22" stroke-width="2" /> Usuarios
         </NuxtLink>
@@ -65,7 +68,7 @@
           </div>
         </div>
 
-        <label class="late-fee-toggle group">
+        <label v-if="showFinancialNav" class="late-fee-toggle group">
           <span>Recargos Automáticos</span>
           <div
             class="toggle-track"
@@ -95,7 +98,7 @@
           </button>
         </div>
 
-        <StudentsCacheSyncIndicator />
+        <StudentsCacheSyncIndicator v-if="showFinancialNav" />
       </div>
         </div>
       </div>
@@ -106,8 +109,8 @@
         <h1>{{ currentRouteName }}</h1>
 
         <div class="header-actions">
-          <SyncBadge />
-          <div class="ciclo-picker">
+          <SyncBadge v-if="showFinancialNav" />
+          <div v-if="showFinancialNav" class="ciclo-picker">
             <LucideCalendarDays :size="18" />
             <select
               v-model="state.ciclo"
@@ -117,7 +120,7 @@
             </select>
             <LucideChevronDown :size="16" />
           </div>
-          <NuxtLink to="/" class="header-home-button" title="Inicio" aria-label="Inicio">
+          <NuxtLink v-if="showFinancialNav" to="/" class="header-home-button" title="Inicio" aria-label="Inicio">
             <LucideSchool :size="23" />
           </NuxtLink>
         </div>
@@ -241,17 +244,14 @@ watch(() => state.value.ciclo, (newVal) => {
 const adminPhoto = ref(null)
 const adminName = ref(useCookie('auth_name').value || 'Usuario')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
+const isSuperAdminCookie = useCookie('auth_is_super_admin')
 const activePlantel = ref(useCookie('auth_active_plantel').value || 'PT')
-const isSuperAdmin = computed(() => ['global', 'superadmin'].includes(String(userRole.value || '').toLowerCase()))
-
-const userPlanteles = computed(() => {
-  if (isSuperAdmin.value) return [...PLANTELES_LIST]
-
-  const val = useCookie('auth_planteles').value
-  return val
-    ? val.split(',').map(p => String(p || '').trim().toUpperCase()).filter(Boolean)
-    : []
-})
+const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
+const hasSuperAdminRole = computed(() => roleTokens.value.some(role => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
+const isSuperAdmin = computed(() => isSuperAdminCookie.value === 'true' || hasSuperAdminRole.value)
+const showControlEscolarNav = computed(() => isSuperAdmin.value)
+const userPlanteles = computed(() => [...PLANTELES_LIST])
+const showFinancialNav = computed(() => true)
 
 onMounted(async () => {
   scheduleSidebarScaleUpdate()
@@ -284,6 +284,7 @@ const currentRouteName = computed(() => {
   if (route.path === '/conceptos') return 'Conceptos'
   if (route.path === '/facturas') return 'Facturas CFDI'
   if (route.path === '/usuarios') return 'Usuarios'
+  if (route.path === '/control-escolar') return 'Control Escolar'
   return 'SISTEMA DE INGRESOS'
 })
 

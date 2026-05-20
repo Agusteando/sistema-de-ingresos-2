@@ -2,7 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto'
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
+import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 
 type PendingDepuracion = {
   code: string
@@ -103,14 +103,17 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       throw createError({ statusCode: 404, message: 'Alumno no encontrado.' })
     }
 
-    if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
-      if (String(studentRef.plantel || '') !== String(user.active_plantel || '')) {
-        throw createError({ statusCode: 403, message: 'Alumno fuera del plantel activo.' })
-      }
-    }
+    const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
 
-    if (isOutOfScopeForPlantelCiclo(studentRef.gradoBase, studentRef.plantel, studentRef.cicloBase, ciclo, studentRef.nivelBase)) {
-      throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
+    if (!isInProjectedPlantelScopeForCiclo(
+      studentRef.gradoBase,
+      studentRef.plantel,
+      studentRef.cicloBase,
+      ciclo,
+      studentRef.nivelBase,
+      isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
+    )) {
+      throw createError({ statusCode: isScopedToActivePlantel ? 403 : 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
     }
 
     const [documentRef] = await query<any[]>(

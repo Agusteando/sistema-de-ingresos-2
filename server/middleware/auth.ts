@@ -4,26 +4,23 @@ import { getTrustedAuthUser, resolveDataBridgeAgentId } from '../utils/auth-sess
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
 
-  if (!url.pathname.startsWith('/api/')) {
-    return
-  }
+  if (!url.pathname.startsWith('/api/')) return
+  if (url.pathname.startsWith('/api/auth/')) return
+  if (url.pathname.startsWith('/api/debug/')) return
 
-  if (url.pathname.startsWith('/api/auth/')) {
-    return
-  }
-
-  if (url.pathname.startsWith('/api/debug/')) {
-    return
-  }
+  const user = await getTrustedAuthUser(event)
+  event.context.user = user
 
   if (url.pathname.startsWith('/api/control-escolar/')) {
     return
   }
 
-  const user = await getTrustedAuthUser(event)
-  const bridgeAgentId = resolveDataBridgeAgentId(event, user)
+  if (url.pathname === '/api/admin/profile') {
+    return
+  }
 
-  event.context.user = user
+
+  const bridgeAgentId = resolveDataBridgeAgentId(event, user)
 
   if (bridgeAgentId && bridgeAgentId !== 'GLOBAL') {
     event.context.dbBridgeAgentId = bridgeAgentId

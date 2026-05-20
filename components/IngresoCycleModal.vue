@@ -37,10 +37,7 @@
             </span>
             <span class="ingreso-title-copy">
               <strong>{{ student?.nombreCompleto }}</strong>
-              <small
-                >{{ student?.matricula }} <i></i> {{ student?.nivel }} <i></i>
-                {{ currentGradeLabel }}</small
-              >
+              <small>{{ currentContextLabel }}</small>
             </span>
           </div>
         </header>
@@ -153,6 +150,87 @@
                 </div>
               </Transition>
 
+              <section
+                class="ingreso-position-card"
+                aria-label="Posición académica actual"
+              >
+                <div class="ingreso-position-header">
+                  <div>
+                    <h4>
+                      2. Posición en {{ formatCicloLabel(targetCicloKey) }}
+                    </h4>
+                    <p>
+                      Nivel y grado se mueven juntos; no se guarda un grado
+                      aislado.
+                    </p>
+                  </div>
+                  <strong>{{ targetPositionLabel }}</strong>
+                </div>
+
+                <div
+                  class="ingreso-position-stepper"
+                  role="group"
+                  aria-label="Ajustar posición académica"
+                >
+                  <button
+                    type="button"
+                    :disabled="!canMovePrevious"
+                    @click="shiftPosition(-1)"
+                  >
+                    <span aria-hidden="true">‹</span>
+                    Anterior
+                  </button>
+                  <div>
+                    <small>Posición actual del alumno</small>
+                    <strong>{{ targetPositionLabel }}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    :disabled="!canMoveNext"
+                    @click="shiftPosition(1)"
+                  >
+                    Siguiente
+                    <span aria-hidden="true">›</span>
+                  </button>
+                </div>
+
+                <div class="ingreso-position-fields">
+                  <label>
+                    <span>Nivel</span>
+                    <select v-model="selectedNivel">
+                      <option
+                        v-for="nivel in positionNivelOptions"
+                        :key="nivel"
+                        :value="nivel"
+                      >
+                        {{ nivel }}
+                      </option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Grado</span>
+                    <select v-model="selectedGrado">
+                      <option
+                        v-for="grado in availablePositionGrades"
+                        :key="grado"
+                        :value="grado"
+                      >
+                        {{ grado }}
+                      </option>
+                    </select>
+                  </label>
+                </div>
+
+                <p
+                  :class="[
+                    'ingreso-base-preview',
+                    { invalid: placementInvalid },
+                  ]"
+                >
+                  {{ basePlacementCopy }}
+                </p>
+              </section>
+
               <p class="ingreso-picker-note">
                 <LucideInfo :size="18" />
                 Puedes elegir un ciclo anterior si estás actualizando un alumno
@@ -164,7 +242,7 @@
               class="ingreso-panel ingreso-result-panel"
               aria-labelledby="ingreso-result-title"
             >
-              <h3 id="ingreso-result-title">2. Resultado</h3>
+              <h3 id="ingreso-result-title">3. Resultado</h3>
 
               <Transition name="result-swap" mode="out-in">
                 <div
@@ -229,8 +307,8 @@
         <footer class="ingreso-cycle-footer">
           <span class="ingreso-footer-note">
             <span aria-hidden="true"><LucideShieldCheck :size="22" /></span>
-            Este cambio solo actualiza el ciclo de ingreso y el estado derivado
-            por ciclo.
+            Este cambio actualiza el ciclo de ingreso y la posición académica
+            base derivada.
           </span>
           <div class="ingreso-footer-actions">
             <button
@@ -244,13 +322,11 @@
             <button
               class="btn btn-primary"
               type="button"
-              :disabled="
-                saving || selectedIngresoCiclo === currentIngresoCicloKey
-              "
+              :disabled="!canSave"
               @click="confirmSelection"
             >
               <LucideLoader2 v-if="saving" class="animate-spin" :size="16" />
-              Guardar ciclo de ingreso
+              Guardar ciclo y posición
             </button>
           </div>
         </footer>
@@ -274,7 +350,15 @@ import {
 } from "lucide-vue-next";
 import { CICLOS_LIST } from "~/utils/constants";
 import { formatCicloLabel } from "~/shared/utils/ciclo";
-import { displayGrado } from "~/shared/utils/grado";
+import {
+  NIVEL_SEQUENCE,
+  academicPositionIndex,
+  academicPositionSequence,
+  calculateBasePlacementForTargetPosition,
+  calculatePromotedGrado,
+  displayGrado,
+  gradeOptionsForNivel,
+} from "~/shared/utils/grado";
 import {
   normalizeCicloForTipoIngreso,
   nextCicloKey,
@@ -326,9 +410,112 @@ const initials = computed(
       .join("") || "A",
 );
 
-const currentGradeLabel = computed(() =>
-  displayGrado(props.student?.gradoBase || props.student?.grado),
+const projectedCurrentPosition = computed(() =>
+  calculatePromotedGrado(
+    props.student?.gradoBase ?? props.student?.grado,
+    props.student?.plantelBase ?? props.student?.plantel,
+    props.student?.cicloBase ?? props.student?.ciclo,
+    targetCicloKey.value,
+    props.student?.nivelBase ?? props.student?.nivel,
+  ),
 );
+
+const currentPositionIndex = computed(() => {
+  const index = academicPositionIndex(
+    projectedCurrentPosition.value.nivel,
+    projectedCurrentPosition.value.grado,
+  );
+  return index >= 0 ? index : 0;
+});
+
+const selectedPositionIndex = ref(currentPositionIndex.value);
+watch(currentPositionIndex, (value) => {
+  selectedPositionIndex.value = value;
+});
+
+const positionOptions = computed(() => academicPositionSequence());
+const selectedPosition = computed(
+  () =>
+    positionOptions.value[selectedPositionIndex.value] ||
+    positionOptions.value[0],
+);
+const currentContextLabel = computed(
+  () =>
+    `${projectedCurrentPosition.value.nivel} · ${displayGrado(projectedCurrentPosition.value.grado)}`,
+);
+const targetPositionLabel = computed(
+  () =>
+    `${selectedPosition.value.nivel} · ${displayGrado(selectedPosition.value.grado)}`,
+);
+const positionNivelOptions = NIVEL_SEQUENCE;
+const availablePositionGrades = computed(() =>
+  gradeOptionsForNivel(selectedPosition.value.nivel),
+);
+const canMovePrevious = computed(() => selectedPositionIndex.value > 0);
+const canMoveNext = computed(
+  () => selectedPositionIndex.value < positionOptions.value.length - 1,
+);
+const placementInvalid = computed(() => basePlacement.value.outOfScope);
+const positionChanged = computed(
+  () => selectedPositionIndex.value !== currentPositionIndex.value,
+);
+const canSave = computed(
+  () =>
+    !props.saving &&
+    !placementInvalid.value &&
+    (selectedIngresoCiclo.value !== currentIngresoCicloKey.value ||
+      positionChanged.value),
+);
+
+const selectedNivel = computed({
+  get: () => selectedPosition.value.nivel,
+  set: (nivel) => {
+    const currentGrade = selectedPosition.value.grado;
+    const sameGradeIndex = academicPositionIndex(nivel, currentGrade);
+    if (sameGradeIndex >= 0) {
+      selectedPositionIndex.value = sameGradeIndex;
+      return;
+    }
+
+    const firstForNivel = positionOptions.value.find(
+      (position) => position.nivel === nivel,
+    );
+    if (firstForNivel) selectedPositionIndex.value = firstForNivel.index;
+  },
+});
+
+const selectedGrado = computed({
+  get: () => displayGrado(selectedPosition.value.grado),
+  set: (grado) => {
+    const index = academicPositionIndex(selectedPosition.value.nivel, grado);
+    if (index >= 0) selectedPositionIndex.value = index;
+  },
+});
+
+const shiftPosition = (direction) => {
+  const nextIndex = selectedPositionIndex.value + Number(direction || 0);
+  if (nextIndex >= 0 && nextIndex < positionOptions.value.length) {
+    selectedPositionIndex.value = nextIndex;
+  }
+};
+
+const basePlacement = computed(() =>
+  calculateBasePlacementForTargetPosition(
+    selectedPosition.value.nivel,
+    selectedPosition.value.grado,
+    selectedIngresoCiclo.value,
+    targetCicloKey.value,
+    projectedCurrentPosition.value.plantel || props.student?.plantel,
+  ),
+);
+
+const basePlacementCopy = computed(() => {
+  if (placementInvalid.value) {
+    return "La combinación de ciclo y posición no es válida para la progresión escolar.";
+  }
+
+  return `Se guardará como ${basePlacement.value.nivel} · ${displayGrado(basePlacement.value.grado)} en ${formatCicloLabel(selectedIngresoCiclo.value)}.`;
+});
 
 const cicloOptions = computed(() => {
   const targetYear = Number(targetCicloKey.value);
@@ -357,6 +544,20 @@ const olderCicloOptions = computed(() => cicloOptions.value.slice(4));
 
 const simulatedStudent = computed(() => ({
   ...props.student,
+  plantel: placementInvalid.value
+    ? props.student?.plantel
+    : basePlacement.value.plantel,
+  plantelBase: placementInvalid.value
+    ? props.student?.plantelBase
+    : basePlacement.value.plantel,
+  nivel: selectedPosition.value.nivel,
+  nivelBase: placementInvalid.value
+    ? props.student?.nivelBase
+    : basePlacement.value.nivel,
+  grado: selectedPosition.value.grado,
+  gradoBase: placementInvalid.value
+    ? props.student?.gradoBase
+    : basePlacement.value.grado,
   ciclo: selectedIngresoCiclo.value,
   cicloBase: selectedIngresoCiclo.value,
 }));
@@ -371,7 +572,7 @@ const previewTargetLabel = computed(() =>
 );
 const resultAnimationKey = computed(
   () =>
-    `${selectedIngresoCiclo.value}-${targetCicloKey.value}-${previewTargetTipo.value.value}`,
+    `${selectedIngresoCiclo.value}-${targetCicloKey.value}-${selectedPositionIndex.value}-${previewTargetTipo.value.value}`,
 );
 
 const resultExplanation = computed(() => {
@@ -379,12 +580,16 @@ const resultExplanation = computed(() => {
   const target = Number(targetCicloKey.value);
   const targetLabel = formatCicloLabel(targetCicloKey.value);
 
+  if (placementInvalid.value) {
+    return `La posición elegida no puede derivarse desde ${formatCicloLabel(selectedIngresoCiclo.value)} hasta ${targetLabel}.`;
+  }
+
   if (selected === target) {
-    return `Como ingresó en el ciclo actual, este alumno se mostrará como <strong>externo</strong> en ${targetLabel}.`;
+    return `Como ingresó en el ciclo actual, este alumno se mostrará como <strong>externo</strong> en ${targetLabel}, ubicado en <strong>${targetPositionLabel.value}</strong>.`;
   }
 
   if (selected < target) {
-    return `Como ingresó antes del ciclo actual, este alumno se mostrará como <strong>interno</strong> en ${targetLabel}.`;
+    return `Como ingresó antes del ciclo actual, este alumno se mostrará como <strong>interno</strong> en ${targetLabel}, ubicado en <strong>${targetPositionLabel.value}</strong>.`;
   }
 
   return `El ciclo elegido queda después del ciclo seleccionado; revisa que corresponda al primer ciclo en el plantel.`;
@@ -455,8 +660,13 @@ const selectCiclo = (value) => {
 
 const confirmSelection = () => {
   const normalized = normalizeCicloForTipoIngreso(selectedIngresoCiclo.value);
-  if (!normalized) return;
-  emit("confirm", normalized);
+  if (!normalized || placementInvalid.value) return;
+  emit("confirm", {
+    ciclo: normalized,
+    targetCiclo: targetCicloKey.value,
+    targetNivel: selectedPosition.value.nivel,
+    targetGrado: selectedPosition.value.grado,
+  });
 };
 </script>
 
@@ -483,8 +693,12 @@ const confirmSelection = () => {
   overflow: hidden;
   border: 1px solid rgba(214, 225, 236, 0.96);
   border-radius: 32px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), #fff 52%, #fbfcfe 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    #fff 52%,
+    #fbfcfe 100%
+  );
   box-shadow:
     0 34px 90px rgba(18, 29, 49, 0.26),
     inset 0 1px 0 rgba(255, 255, 255, 0.96);
@@ -527,16 +741,28 @@ const confirmSelection = () => {
   overflow: hidden;
   padding: 26px 106px 24px 38px;
   border-bottom: 1px solid rgba(218, 227, 238, 0.9);
-  background:
-    linear-gradient(110deg, rgba(255, 255, 255, 0.99), rgba(247, 251, 255, 0.94) 58%, rgba(235, 249, 238, 0.9));
+  background: linear-gradient(
+    110deg,
+    rgba(255, 255, 255, 0.99),
+    rgba(247, 251, 255, 0.94) 58%,
+    rgba(235, 249, 238, 0.9)
+  );
 }
 
 .ingreso-hero-veil {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 86% -18%, rgba(69, 173, 89, 0.18), transparent 34%),
-    radial-gradient(circle at 68% -44%, rgba(63, 130, 220, 0.1), transparent 36%);
+    radial-gradient(
+      circle at 86% -18%,
+      rgba(69, 173, 89, 0.18),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 68% -44%,
+      rgba(63, 130, 220, 0.1),
+      transparent 36%
+    );
   pointer-events: none;
 }
 
@@ -552,7 +778,11 @@ const confirmSelection = () => {
   left: 48%;
   right: -9%;
   height: 150px;
-  background: linear-gradient(98deg, rgba(66, 141, 226, 0.11), rgba(255, 255, 255, 0));
+  background: linear-gradient(
+    98deg,
+    rgba(66, 141, 226, 0.11),
+    rgba(255, 255, 255, 0)
+  );
   transform: rotate(-4deg);
 }
 
@@ -561,7 +791,11 @@ const confirmSelection = () => {
   left: 64%;
   right: -6%;
   height: 178px;
-  background: linear-gradient(104deg, rgba(255, 255, 255, 0), rgba(76, 184, 99, 0.22));
+  background: linear-gradient(
+    104deg,
+    rgba(255, 255, 255, 0),
+    rgba(76, 184, 99, 0.22)
+  );
   transform: rotate(5deg);
 }
 
@@ -749,13 +983,21 @@ const confirmSelection = () => {
 
 .ingreso-cycle-tile.current {
   border-color: rgba(51, 151, 62, 0.22);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 254, 250, 0.98));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(249, 254, 250, 0.98)
+  );
 }
 
 .ingreso-cycle-tile.selected {
   border-color: rgba(47, 114, 217, 0.72);
   background:
-    radial-gradient(circle at 50% 106%, rgba(47, 114, 217, 0.1), transparent 42%),
+    radial-gradient(
+      circle at 50% 106%,
+      rgba(47, 114, 217, 0.1),
+      transparent 42%
+    ),
     linear-gradient(180deg, #fff, #f7faff);
   box-shadow:
     0 16px 34px rgba(47, 114, 217, 0.12),
@@ -765,7 +1007,11 @@ const confirmSelection = () => {
 .ingreso-cycle-tile.current.selected {
   border-color: rgba(51, 151, 62, 0.48);
   background:
-    radial-gradient(circle at 50% 106%, rgba(51, 151, 62, 0.1), transparent 42%),
+    radial-gradient(
+      circle at 50% 106%,
+      rgba(51, 151, 62, 0.1),
+      transparent 42%
+    ),
     linear-gradient(180deg, #fff, #f8fff9);
 }
 
@@ -905,6 +1151,179 @@ const confirmSelection = () => {
   font-weight: 720;
 }
 
+.ingreso-position-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(218, 227, 238, 0.98);
+  border-radius: 15px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(247, 251, 255, 0.98),
+      rgba(255, 255, 255, 0.98)
+    ),
+    #fff;
+}
+
+.ingreso-position-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ingreso-position-header h4 {
+  margin: 0;
+  color: #13223b;
+  font-size: 14px;
+  font-weight: 920;
+  letter-spacing: -0.02em;
+}
+
+.ingreso-position-header p {
+  margin: 4px 0 0;
+  color: #63728e;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.ingreso-position-header > strong {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eaf3ff;
+  color: #2f6fd2;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.ingreso-position-stepper {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.42fr) minmax(150px, 1fr) minmax(
+      96px,
+      0.42fr
+    );
+  align-items: stretch;
+  gap: 10px;
+}
+
+.ingreso-position-stepper button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 54px;
+  border: 1px solid rgba(218, 227, 238, 0.98);
+  border-radius: 13px;
+  background: #fff;
+  color: #2f405f;
+  font-size: 13px;
+  font-weight: 840;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.ingreso-position-stepper button:not(:disabled):hover {
+  border-color: rgba(47, 114, 217, 0.34);
+  background: #f7faff;
+  color: #2f6fd2;
+}
+
+.ingreso-position-stepper button:disabled {
+  cursor: not-allowed;
+  color: #a6b1c3;
+  opacity: 0.64;
+}
+
+.ingreso-position-stepper button span {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.ingreso-position-stepper > div {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  min-height: 54px;
+  padding: 8px 12px;
+  border: 1px solid rgba(47, 114, 217, 0.16);
+  border-radius: 13px;
+  background: #f7faff;
+  text-align: center;
+}
+
+.ingreso-position-stepper small {
+  color: #6c7b96;
+  font-size: 11px;
+  font-weight: 780;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ingreso-position-stepper strong {
+  color: #15233c;
+  font-size: 15px;
+  font-weight: 930;
+}
+
+.ingreso-position-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.ingreso-position-fields label {
+  display: grid;
+  gap: 6px;
+}
+
+.ingreso-position-fields span {
+  color: #60708c;
+  font-size: 11px;
+  font-weight: 860;
+  text-transform: uppercase;
+  letter-spacing: 0.055em;
+}
+
+.ingreso-position-fields select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(218, 227, 238, 0.98);
+  border-radius: 12px;
+  background: #fff;
+  color: #14233c;
+  font-size: 14px;
+  font-weight: 760;
+  outline: none;
+  padding: 0 12px;
+}
+
+.ingreso-position-fields select:focus {
+  border-color: rgba(47, 114, 217, 0.52);
+  box-shadow: 0 0 0 3px rgba(47, 114, 217, 0.1);
+}
+
+.ingreso-base-preview {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #eef8f0;
+  color: #2f7f39;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.ingreso-base-preview.invalid {
+  background: #fff3ed;
+  color: #bd4b18;
+}
+
 .ingreso-picker-note {
   display: inline-flex;
   align-items: flex-start;
@@ -932,7 +1351,11 @@ const confirmSelection = () => {
   border: 1px solid rgba(60, 153, 70, 0.31);
   border-radius: 13px;
   background:
-    linear-gradient(90deg, rgba(246, 255, 248, 0.96), rgba(255, 255, 255, 0.96)),
+    linear-gradient(
+      90deg,
+      rgba(246, 255, 248, 0.96),
+      rgba(255, 255, 255, 0.96)
+    ),
     radial-gradient(circle at 0% 50%, rgba(51, 151, 62, 0.14), transparent 40%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.68);
   animation:
@@ -944,7 +1367,14 @@ const confirmSelection = () => {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0) 34%, rgba(255, 255, 255, 0.72) 50%, rgba(255, 255, 255, 0) 66%, transparent 100%);
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0) 34%,
+    rgba(255, 255, 255, 0.72) 50%,
+    rgba(255, 255, 255, 0) 66%,
+    transparent 100%
+  );
   transform: translateX(-110%);
   animation: resultSheen 1.45s cubic-bezier(0.4, 0, 0.2, 1) 0.18s 1;
   pointer-events: none;
@@ -953,7 +1383,11 @@ const confirmSelection = () => {
 .ingreso-result-banner.externo {
   border-color: rgba(47, 114, 217, 0.3);
   background:
-    linear-gradient(90deg, rgba(247, 251, 255, 0.96), rgba(255, 255, 255, 0.96)),
+    linear-gradient(
+      90deg,
+      rgba(247, 251, 255, 0.96),
+      rgba(255, 255, 255, 0.96)
+    ),
     radial-gradient(circle at 0% 50%, rgba(47, 114, 217, 0.13), transparent 40%);
 }
 
@@ -1045,7 +1479,12 @@ const confirmSelection = () => {
   left: 27px;
   width: 2px;
   border-radius: 99px;
-  background: linear-gradient(180deg, rgba(47, 114, 217, 0.2), rgba(51, 151, 62, 0.4), rgba(51, 151, 62, 0.18));
+  background: linear-gradient(
+    180deg,
+    rgba(47, 114, 217, 0.2),
+    rgba(51, 151, 62, 0.4),
+    rgba(51, 151, 62, 0.18)
+  );
   transform-origin: top;
   animation: timelineDraw 0.52s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
 }
@@ -1053,12 +1492,16 @@ const confirmSelection = () => {
 .ingreso-timeline-item {
   position: relative;
   display: grid;
-  grid-template-columns: 28px minmax(94px, 0.72fr) minmax(80px, 0.5fr) minmax(94px, 0.78fr);
+  grid-template-columns: 28px minmax(94px, 0.72fr) minmax(80px, 0.5fr) minmax(
+      94px,
+      0.78fr
+    );
   align-items: center;
   gap: 8px;
   min-height: 36px;
   opacity: 0;
-  animation: timelineItemIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) calc(0.12s + (var(--step-index) * 0.07s)) both;
+  animation: timelineItemIn 0.38s cubic-bezier(0.16, 1, 0.3, 1)
+    calc(0.12s + (var(--step-index) * 0.07s)) both;
 }
 
 .ingreso-timeline-dot {
@@ -1239,7 +1682,8 @@ const confirmSelection = () => {
 }
 
 @keyframes resultBreath {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.68);
   }
   50% {
@@ -1406,8 +1850,14 @@ const confirmSelection = () => {
   }
 
   .ingreso-primary-cycles,
-  .ingreso-older-grid {
+  .ingreso-older-grid,
+  .ingreso-position-stepper,
+  .ingreso-position-fields {
     grid-template-columns: 1fr;
+  }
+
+  .ingreso-position-header {
+    flex-direction: column;
   }
 
   .ingreso-timeline-item {

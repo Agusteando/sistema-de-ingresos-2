@@ -1,7 +1,6 @@
-feat(control-escolar): use centralized matricula overlay connection
+fix: restore bounded student loading while preserving enrollment priority
 
-- Adds an explicit centralized MySQL connection for Control Escolar matricula data.
-- Keeps plantel-local rows driven by base/ingresos through the selected bridge agent.
-- Overlays centralized matricula data by matricula, including matricula.foto.
-- Upserts edits into the centralized matricula table instead of writing into bridged plantel-local tables.
-- Documents required CONTROL_ESCOLAR_MYSQL_* variables in .env.copy.
+- Remove unbounded all-cycle concept aggregation from student and KPI fetches.
+- Add bounded historical enrollment evidence lookup filtered by visible students and configured enrollment conceptos.
+- Pass configured enrollment conceptos to the student fetch so the interno priority rule can still resolve when both enrollment conceptos exist across any ciclo escolar.
+- Restore plantel login default to the first concrete plantel instead of GLOBAL to match the working student-fetch behavior in bridge mode.

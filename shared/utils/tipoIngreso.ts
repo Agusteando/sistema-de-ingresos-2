@@ -118,16 +118,61 @@ const readPreviousConcepts = (student: any, previousCiclo: string): string[] =>
     readEvidenceMapConcepts(student, previousCiclo),
   ]);
 
+const readAllConcepts = (
+  student: any,
+  targetCicloKey: string,
+  previousCiclo: string,
+): string[] =>
+  normalizeConceptIdList([
+    student?.tipoIngresoEvidence?.allConceptIds,
+    student?.tipoIngresoEvidence?.allConceptosIds,
+    student?.tipoIngresoEvidence?.globalConceptIds,
+    student?.tipoIngresoEvidence?.globalConceptosIds,
+    student?.tipoIngresoEvidence?.historicalConceptIds,
+    student?.tipoIngresoEvidence?.historicalConceptosIds,
+    student?.tipoIngresoAllConceptIds,
+    student?.tipoIngresoAllConceptosIds,
+    student?.conceptoIdsTodos,
+    student?.conceptoIdsAll,
+    student?.conceptoIdsHistoricos,
+    student?.conceptoIdsPagadosTodos,
+    student?.conceptoIdsCargadosTodos,
+    student?.conceptoIds,
+    student?.conceptosIds,
+    readTargetConcepts(student, targetCicloKey),
+    readPreviousConcepts(student, previousCiclo),
+  ]);
+
+const matchingEnrollmentConcepts = (
+  concepts: unknown[],
+  enrollmentConcepts: unknown[],
+): string[] => {
+  const normalizedConcepts = normalizeConceptIdList(concepts);
+  const enrollmentConceptIds = normalizeConceptIdList(enrollmentConcepts);
+  if (!normalizedConcepts.length || !enrollmentConceptIds.length) return [];
+
+  const conceptSet = new Set(normalizedConcepts);
+  return Array.from(new Set(enrollmentConceptIds.filter((conceptId) => conceptSet.has(conceptId))));
+};
+
 const conceptsContainEnrollment = (
   concepts: unknown[],
   enrollmentConcepts: unknown[],
-): boolean => {
-  const normalizedConcepts = normalizeConceptIdList(concepts);
-  const enrollmentConceptIds = normalizeConceptIdList(enrollmentConcepts);
-  if (!normalizedConcepts.length || !enrollmentConceptIds.length) return false;
+): boolean => matchingEnrollmentConcepts(concepts, enrollmentConcepts).length > 0;
 
-  const conceptSet = new Set(normalizedConcepts);
-  return enrollmentConceptIds.some((conceptId) => conceptSet.has(conceptId));
+const hasConfirmedEnrollmentPair = (
+  student: any,
+  targetCicloKey: string,
+  previousCiclo: string,
+  enrollmentConcepts: unknown[],
+): boolean => {
+  const enrollmentConceptIds = Array.from(new Set(normalizeConceptIdList(enrollmentConcepts)));
+  if (enrollmentConceptIds.length < 2) return false;
+
+  return matchingEnrollmentConcepts(
+    readAllConcepts(student, targetCicloKey, previousCiclo),
+    enrollmentConceptIds,
+  ).length >= 2;
 };
 
 const fallbackResult = (
@@ -152,6 +197,23 @@ export const resolveTipoIngreso = (
       DEFAULT_CICLO,
       "El ciclo seleccionado no se pudo normalizar.",
     );
+  }
+
+  const previousCiclo = previousCicloKey(targetCicloKey);
+  if (
+    hasConfirmedEnrollmentPair(
+      student,
+      targetCicloKey,
+      previousCiclo,
+      options.enrollmentConcepts || [],
+    )
+  ) {
+    return {
+      value: "interno",
+      ciclo: targetCicloKey,
+      source: "confirmed_conceptos",
+      reason: `Tiene los dos conceptos configurados de inscripción/reinscripción. Esta condición tiene prioridad y no depende del ciclo escolar seleccionado.`,
+    };
   }
 
   const ingresoCicloKey = normalizeCicloForTipoIngreso(
@@ -181,7 +243,6 @@ export const resolveTipoIngreso = (
   }
 
   if (targetYear > ingresoYear) {
-    const previousCiclo = previousCicloKey(targetCicloKey);
     const targetHasEnrollmentConcept = conceptsContainEnrollment(
       readTargetConcepts(student, targetCicloKey),
       options.enrollmentConcepts || [],

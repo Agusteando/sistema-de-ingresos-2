@@ -1,5 +1,6 @@
 import { query } from './db'
 import { resolveProjectedAmount } from './monto-final'
+import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../shared/utils/grado'
 
 const parsePlazos = (plazoRaw: unknown, mesesRaw: unknown) => {
   const raw = String(plazoRaw || mesesRaw || '1').trim()
@@ -262,13 +263,15 @@ export const getDeudoresGlobal = async ({
 }) => {
   let documentos: any[] = []
   const matriculaFiltro = String(matricula || '').trim()
+  const plantelCandidates = plantel ? plantelCandidatesForProjectedScope(plantel) : []
+  const plantelWhere = plantelCandidates.length ? `AND plantel IN (${plantelCandidates.map(() => '?').join(',')})` : ''
 
   if (matriculaFiltro) {
     const alumnosActivos = await query<any[]>(`
       SELECT matricula, nombreCompleto, nivel, grado, grupo, plantel, ciclo, correo, telefono, \`Nombre del padre o tutor\` as padre
       FROM base
-      WHERE estatus = 'Activo' AND matricula = ? ${plantel ? 'AND plantel = ?' : ''}
-    `, plantel ? [matriculaFiltro, plantel] : [matriculaFiltro])
+      WHERE estatus = 'Activo' AND matricula = ? ${plantelWhere}
+    `, plantelCandidates.length ? [matriculaFiltro, ...plantelCandidates] : [matriculaFiltro])
 
     if (!alumnosActivos.length) return []
 
@@ -284,8 +287,8 @@ export const getDeudoresGlobal = async ({
     const alumnosActivos = await query<any[]>(`
       SELECT matricula, nombreCompleto, nivel, grado, grupo, plantel, ciclo, correo, telefono, \`Nombre del padre o tutor\` as padre
       FROM base
-      WHERE estatus = 'Activo' AND plantel = ?
-    `, [plantel])
+      WHERE estatus = 'Activo' ${plantelWhere}
+    `, plantelCandidates)
 
     if (!alumnosActivos.length) return []
 
@@ -320,6 +323,17 @@ export const getDeudoresGlobal = async ({
     documentos = docs
       .map(doc => ({ ...doc, ...alumnosByMatricula.get(String(doc.matricula)) }))
       .filter(doc => doc.nombreCompleto)
+  }
+
+  if (plantel) {
+    documentos = documentos.filter(doc => isInProjectedPlantelScopeForCiclo(
+      doc.grado,
+      doc.plantel,
+      doc.ciclo || ciclo,
+      ciclo,
+      doc.nivel,
+      plantel
+    ))
   }
 
   if (!documentos.length) return []

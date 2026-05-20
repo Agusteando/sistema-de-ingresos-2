@@ -1,25 +1,30 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
-import { calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, resolveNivelEscolar } from '../../../shared/utils/grado'
+import { calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, normalizePlantel, plantelCandidatesForProjectedScope, resolveNivelEscolar } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { parseCurp } from '../../../shared/utils/curp'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
+import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const method = event.node.req.method
   const user = event.context.user
 
   if (method === 'GET') {
-    const { q = '', ciclo = '2025', nivel = '', grado = '', grupo = '' } = getQuery(event)
+    const { q = '', ciclo = '2025', nivel = '', grado = '', grupo = '', concepts = '' } = getQuery(event)
     const cicloKey = normalizeCicloKey(ciclo)
     const previousCiclo = previousCicloKey(cicloKey)
+    const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
     
     let whereClause = "1=1"
     const params: any[] = []
 
-    if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
-      whereClause += " AND A.plantel = ?"
-      params.push(user.active_plantel)
+    const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
+
+    if (isScopedToActivePlantel) {
+      const plantelCandidates = plantelCandidatesForProjectedScope(user.active_plantel)
+      whereClause += ` AND A.plantel IN (${plantelCandidates.map(() => '?').join(',')})`
+      params.push(...plantelCandidates)
     }
 
     if (q) {
@@ -127,9 +132,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC LIMIT 5000;
     `
     const rows = await query<any[]>(sql, [cicloKey, cicloKey, previousCiclo, previousCiclo, ...params])
+    const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(rows.map(r => r.matricula), enrollmentConceptIds)
     let mapped = rows.flatMap(r => {
       const p = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey, r.nivelBase)
       if (p.outOfScope) return []
+      const historicalConceptIds = historicalEnrollmentEvidence.get(String(r.matricula || '').trim()) || ''
+      if (isScopedToActivePlantel && normalizePlantel(p.plantel) !== normalizePlantel(user.active_plantel)) return []
 
       const tipoIngreso = resolveTipoIngreso({
         ...r,
@@ -137,12 +145,17 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           targetCiclo: cicloKey,
           previousCiclo,
           targetConceptIds: [r.conceptoIdsPagados, r.conceptoIdsCargados, r.conceptoIdsCicloActual],
-          previousConceptIds: [r.conceptoIdsPagadosPrevios, r.conceptoIdsCargadosPrevios, r.conceptoIdsCicloPrevio]
+          previousConceptIds: [r.conceptoIdsPagadosPrevios, r.conceptoIdsCargadosPrevios, r.conceptoIdsCicloPrevio],
+          allConceptIds: [historicalConceptIds]
         }
-      }, cicloKey)
+      }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
 
       return {
         ...r,
+        conceptoIdsTodos: historicalConceptIds,
+        conceptoIdsHistoricos: historicalConceptIds,
+        plantelBase: r.plantel,
+        plantel: p.plantel,
         grado: displayGrado(p.grado),
         nivel: p.nivel,
         tipoIngreso
