@@ -18,6 +18,7 @@ export type AuthSessionUser = {
 }
 
 const SUPERADMIN_ROLES = new Set(['global', 'superadmin', 'role_super_admin', 'role_superadmin'])
+const CONTROL_ESCOLAR_ROLE = 'role_ctrl'
 const VALID_PLANTELES = new Set(PLANTELES_LIST)
 
 export const normalizePlantel = (value: unknown) => String(value || '').trim().toUpperCase()
@@ -36,9 +37,12 @@ export const hasRole = (roleValue: unknown, roleName: string) => {
 
 export const isSuperAdminRole = (role: unknown) => parseRoles(role).some((entry) => SUPERADMIN_ROLES.has(normalizeRole(entry)))
 
-export const hasControlEscolarRole = (_role: unknown) => false
+export const hasControlEscolarRole = (role: unknown) => hasRole(role, CONTROL_ESCOLAR_ROLE)
 
-export const isControlEscolarOnlyRole = (_role: unknown) => false
+export const isControlEscolarOnlyRole = (role: unknown) => {
+  const roles = parseRoles(role).map(normalizeRole)
+  return roles.length === 1 && roles[0] === CONTROL_ESCOLAR_ROLE
+}
 
 export const parsePlanteles = (value: unknown) => String(value || '')
   .split(',')
@@ -101,6 +105,8 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
   const role = String(getCookie(event, 'auth_role') || 'plantel').trim() || 'plantel'
   const roles = parseRoles(role)
   const superAdmin = isSuperAdminRole(role) || String(getCookie(event, 'auth_is_super_admin') || '') === 'true'
+  const controlEscolar = hasControlEscolarRole(role)
+  const controlEscolarOnly = !superAdmin && isControlEscolarOnlyRole(role)
   const allowedPlanteles = resolveAllowedPlanteles(event)
   const activePlantel = resolveActivePlantel(event, allowedPlanteles, superAdmin)
   const homePlantel = resolveAuthHomePlantel(event, allowedPlanteles)
@@ -123,9 +129,9 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
     active_plantel: activePlantel,
     auth_home_plantel: homePlantel,
     isSuperAdmin: superAdmin,
-    hasControlEscolarRole: false,
-    isControlEscolarOnly: false,
-    hasFinancialAccess: true
+    hasControlEscolarRole: controlEscolar,
+    isControlEscolarOnly: controlEscolarOnly,
+    hasFinancialAccess: superAdmin || !controlEscolarOnly
   }
 }
 

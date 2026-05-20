@@ -1,6 +1,7 @@
-fix: restore bounded student loading while preserving enrollment priority
+feat: restore safe Control Escolar role mode
 
-- Remove unbounded all-cycle concept aggregation from student and KPI fetches.
-- Add bounded historical enrollment evidence lookup filtered by visible students and configured enrollment conceptos.
-- Pass configured enrollment conceptos to the student fetch so the interno priority rule can still resolve when both enrollment conceptos exist across any ciclo escolar.
-- Restore plantel login default to the first concrete plantel instead of GLOBAL to match the working student-fetch behavior in bridge mode.
+- Reintroduce ROLE_CTRL as a UI/navigation mode without using it to gate regular student loading.
+- Route exact non-superadmin ROLE_CTRL users to Control Escolar and hide financial sidebar/ciclo controls only for that role.
+- Preserve default financial access for superadmin, plantel users, and mixed-role users.
+- Load role metadata from the local users table at login, without centralized-user validation in /api/students or shared API middleware.
+- Gate Control Escolar endpoints to superadmin or ROLE_CTRL while leaving student APIs unchanged.

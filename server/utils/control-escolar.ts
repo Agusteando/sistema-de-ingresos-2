@@ -117,8 +117,15 @@ export const assertControlEscolarDynamicBridge = (agentId: string) => {
   }
 }
 
+const assertControlEscolarAccess = (user: Awaited<ReturnType<typeof getTrustedAuthUser>>) => {
+  if (!user.isSuperAdmin && !user.hasControlEscolarRole) {
+    throw createError({ statusCode: 403, message: 'Control Escolar requiere ROLE_CTRL.' })
+  }
+}
+
 export const resolveControlEscolarAuth = async (event: any, requestedAgentId?: unknown) => {
   const user = await getTrustedAuthUser(event)
+  assertControlEscolarAccess(user)
 
   const requested = normalizePlantel(requestedAgentId)
   const active = normalizePlantel(user.active_plantel)
@@ -138,8 +145,9 @@ export const resolveControlEscolarAuth = async (event: any, requestedAgentId?: u
 
 export const listControlEscolarPlanteles = async (event: any) => {
   const user = await getTrustedAuthUser(event)
+  assertControlEscolarAccess(user)
 
-  const allowedPlanteles = [...PLANTELES_LIST]
+  const allowedPlanteles = user.isSuperAdmin ? [...PLANTELES_LIST] : user.plantelesList
 
   const activePlantel = normalizePlantel(user.active_plantel)
   const selectedPlantel = activePlantel && activePlantel !== 'GLOBAL' && allowedPlanteles.includes(activePlantel)

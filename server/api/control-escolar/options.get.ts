@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
     planteles,
     access: {
       controlEscolar: true,
-      financial: true,
+      financial: user.hasFinancialAccess,
       superAdmin: user.isSuperAdmin
     }
   }

@@ -245,13 +245,25 @@ const adminPhoto = ref(null)
 const adminName = ref(useCookie('auth_name').value || 'Usuario')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 const isSuperAdminCookie = useCookie('auth_is_super_admin')
+const hasControlEscolarCookie = useCookie('auth_has_control_escolar')
 const activePlantel = ref(useCookie('auth_active_plantel').value || 'PT')
 const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
 const hasSuperAdminRole = computed(() => roleTokens.value.some(role => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
 const isSuperAdmin = computed(() => isSuperAdminCookie.value === 'true' || hasSuperAdminRole.value)
-const showControlEscolarNav = computed(() => isSuperAdmin.value)
-const userPlanteles = computed(() => [...PLANTELES_LIST])
-const showFinancialNav = computed(() => true)
+const hasControlEscolarRole = computed(() => hasControlEscolarCookie.value === 'true' || roleTokens.value.includes('role_ctrl'))
+const isControlEscolarOnly = computed(() => !isSuperAdmin.value && roleTokens.value.length === 1 && roleTokens.value[0] === 'role_ctrl')
+const showControlEscolarNav = computed(() => isSuperAdmin.value || hasControlEscolarRole.value)
+const userPlanteles = computed(() => {
+  if (isSuperAdmin.value) return [...PLANTELES_LIST]
+
+  const planteles = String(useCookie('auth_planteles').value || '')
+    .split(',')
+    .map(p => p.trim().toUpperCase())
+    .filter(p => PLANTELES_LIST.includes(p))
+
+  return planteles.length ? planteles : [...PLANTELES_LIST]
+})
+const showFinancialNav = computed(() => !isControlEscolarOnly.value)
 
 onMounted(async () => {
   scheduleSidebarScaleUpdate()

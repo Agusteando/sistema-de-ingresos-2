@@ -1,11 +1,24 @@
 import { OAuth2Client } from 'google-auth-library'
+import { query, runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
-import { isSuperAdminRole, normalizePlantel } from '../../utils/auth-session'
+import { hasControlEscolarRole, isControlEscolarOnlyRole, isSuperAdminRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
 
 const SUPERADMIN_EMAILS = new Set([
   'desarrollo.tecnologico@casitaiedis.edu.mx',
   'coord.admon@casitaiedis.edu.mx'
 ])
+
+const ALL_PLANTELES = PLANTELES_LIST.join(',')
+
+type DbUser = {
+  id?: number
+  username?: string | null
+  email?: string | null
+  role?: string | null
+  planteles?: string | null
+  avatar?: string | null
+  plantel?: string | null
+}
 
 const getRequestedPlantel = (event: any, body: any) => {
   const fromBody = normalizePlantel(body?.plantel || body?.agentId)
@@ -30,10 +43,75 @@ const cookieOptions = () => ({
   sameSite: 'lax' as const
 })
 
+const resolveAllowedPlanteles = (user: DbUser, isSuperAdmin: boolean, requestedPlantel: string) => {
+  if (isSuperAdmin) return [...PLANTELES_LIST]
+
+  const fromPlanteles = parsePlanteles(user.planteles).filter((plantel) => PLANTELES_LIST.includes(plantel))
+  if (fromPlanteles.length) return fromPlanteles
+
+  const legacyPlantel = normalizePlantel(user.plantel)
+  if (legacyPlantel && PLANTELES_LIST.includes(legacyPlantel)) return [legacyPlantel]
+
+  if (requestedPlantel && PLANTELES_LIST.includes(requestedPlantel)) return [requestedPlantel]
+
+  return [PLANTELES_LIST[0]]
+}
+
+const ensureLocalUser = async (payload: any, requestedPlantel: string): Promise<DbUser> => {
+  const email = String(payload.email || '').trim()
+  const emailKey = email.toLowerCase()
+  const seedAdmin = SUPERADMIN_EMAILS.has(emailKey)
+
+  let [user] = await query<DbUser[]>('SELECT * FROM users WHERE email = ? LIMIT 1', [email])
+
+  if (!user) {
+    const allUsers = await query<any[]>('SELECT id FROM users LIMIT 1')
+    const firstUser = allUsers.length === 0
+    const defaultRole = seedAdmin || firstUser ? 'global' : 'plantel'
+    const defaultPlanteles = seedAdmin || firstUser ? ALL_PLANTELES : (requestedPlantel || PLANTELES_LIST[0])
+    const defaultPlantel = requestedPlantel || PLANTELES_LIST[0]
+
+    const result: any = await query(
+      'INSERT INTO users (username, password, email, planteles, role, avatar, plantel) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        payload.name || email,
+        'GOOGLE_AUTH',
+        email,
+        defaultPlanteles,
+        defaultRole,
+        payload.picture || null,
+        defaultPlantel
+      ]
+    )
+
+    user = {
+      id: result.insertId,
+      username: payload.name || email,
+      email,
+      role: defaultRole,
+      planteles: defaultPlanteles,
+      avatar: payload.picture || null,
+      plantel: defaultPlantel
+    }
+  } else {
+    if (seedAdmin && !isSuperAdminRole(user.role)) {
+      user.role = 'global'
+      await query('UPDATE users SET role = ? WHERE id = ?', ['global', user.id])
+    }
+
+    if (payload.picture && user.avatar !== payload.picture) {
+      user.avatar = payload.picture
+      await query('UPDATE users SET avatar = ? WHERE id = ?', [payload.picture, user.id])
+    }
+  }
+
+  return user
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const config = useRuntimeConfig()
-  const requestedPlantel = getRequestedPlantel(event, body)
+  const requestedPlantel = getRequestedPlantel(event, body) || PLANTELES_LIST[0]
 
   if (requestedPlantel && !PLANTELES_LIST.includes(requestedPlantel)) {
     throw createError({ statusCode: 400, message: 'Plantel inválido.' })
@@ -61,36 +139,35 @@ export default defineEventHandler(async (event) => {
       throw new Error('Token inválido')
     }
 
-    const email = String(payload.email || '').trim()
-    const emailKey = email.toLowerCase()
-    const requestedRole = SUPERADMIN_EMAILS.has(emailKey) ? 'global' : 'plantel'
-    const superAdmin = isSuperAdminRole(requestedRole)
-    const allowedPlanteles = [...PLANTELES_LIST]
-    const activePlantel = requestedPlantel || allowedPlanteles[0]
-    const homePlantel = requestedPlantel || allowedPlanteles[0]
+    const user = await runWithBridgeAgentId(requestedPlantel, async () => ensureLocalUser(payload, requestedPlantel))
+    const role = String(user.role || 'plantel').trim() || 'plantel'
+    const superAdmin = isSuperAdminRole(role)
+    const controlEscolar = hasControlEscolarRole(role)
+    const controlEscolarOnly = !superAdmin && isControlEscolarOnlyRole(role)
+    const allowedPlanteles = resolveAllowedPlanteles(user, superAdmin, requestedPlantel)
+    const requestedAllowed = allowedPlanteles.includes(requestedPlantel)
+    const activePlantel = superAdmin
+      ? (requestedPlantel || allowedPlanteles[0])
+      : (requestedAllowed ? requestedPlantel : allowedPlanteles[0])
+    const homePlantel = activePlantel && activePlantel !== 'GLOBAL' ? activePlantel : allowedPlanteles[0]
     const opts = cookieOptions()
 
-    setCookie(event, 'auth_email', email, opts)
-    setCookie(event, 'auth_name', payload.name || email, opts)
-    setCookie(event, 'auth_role', requestedRole, opts)
-    setCookie(event, 'auth_planteles', allowedPlanteles.join(','), opts)
+    setCookie(event, 'auth_email', user.email || payload.email, opts)
+    setCookie(event, 'auth_name', user.username || payload.name || payload.email, opts)
+    setCookie(event, 'auth_role', role, opts)
+    setCookie(event, 'auth_planteles', superAdmin ? ALL_PLANTELES : allowedPlanteles.join(','), opts)
     setCookie(event, 'auth_active_plantel', activePlantel, opts)
     setCookie(event, 'auth_home_plantel', homePlantel, opts)
-    setCookie(event, 'auth_has_control_escolar', 'false', opts)
-    setCookie(event, 'auth_has_financial_access', 'true', opts)
+    setCookie(event, 'auth_nav_mode', controlEscolarOnly ? 'control-escolar' : 'financial', opts)
+    setCookie(event, 'auth_has_control_escolar', controlEscolar || superAdmin ? 'true' : 'false', opts)
+    setCookie(event, 'auth_has_financial_access', superAdmin || !controlEscolarOnly ? 'true' : 'false', opts)
     setCookie(event, 'auth_is_super_admin', superAdmin ? 'true' : 'false', opts)
-    deleteCookie(event, 'auth_nav_mode', { path: '/' })
-
-    if (activePlantel && activePlantel !== 'GLOBAL') {
-      setCookie(event, 'db_bridge_agent_id', activePlantel, opts)
-    } else {
-      setCookie(event, 'db_bridge_agent_id', homePlantel, opts)
-    }
+    setCookie(event, 'db_bridge_agent_id', homePlantel || PLANTELES_LIST[0], opts)
 
     return {
       success: true,
       activePlantel,
-      redirectTo: '/'
+      redirectTo: controlEscolarOnly ? '/control-escolar' : '/'
     }
   } catch (error: any) {
     console.error('[Auth Login Error]', error)
