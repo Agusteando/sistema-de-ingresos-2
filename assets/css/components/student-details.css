@@ -236,19 +236,15 @@
   transition: transform 240ms cubic-bezier(.22, 1, .36, 1), border-color 220ms ease, box-shadow 220ms ease;
 }
 
-.student-profile-card::before {
+.student-profile-watermark {
+  --group-icon-size: clamp(168px, 27cqi, 230px);
   position: absolute;
   z-index: 0;
   inset-block-start: 50%;
   inset-inline-end: clamp(96px, 16%, 150px);
-  inline-size: clamp(168px, 27%, 230px);
-  aspect-ratio: 1;
-  content: "";
   pointer-events: none;
   opacity: .13;
-  background: color-mix(in srgb, var(--grade-accent, #4fa346) 26%, #a9a697);
-  -webkit-mask: var(--student-group-icon-mask, none) center / contain no-repeat;
-  mask: var(--student-group-icon-mask, none) center / contain no-repeat;
+  color: color-mix(in srgb, var(--grade-accent, #4fa346) 26%, #a9a697);
   transform: translateY(-50%) rotate(-5deg);
   transform-origin: center;
 }
@@ -523,25 +519,17 @@
   pointer-events: none;
 }
 
-.account-card::before {
+.account-card-watermark {
+  --group-icon-size: min(280px, 42%);
   position: absolute;
   z-index: 0;
   inset-block-start: 50%;
   inset-inline-start: 25%;
-  inline-size: min(280px, 42%);
-  aspect-ratio: 1;
-  content: "";
   pointer-events: none;
   opacity: .055;
-  background: color-mix(in srgb, var(--grade-accent, #4fa346) 24%, #8e8e82);
-  -webkit-mask: var(--student-group-icon-mask, none) center / contain no-repeat;
-  mask: var(--student-group-icon-mask, none) center / contain no-repeat;
+  color: color-mix(in srgb, var(--grade-accent, #4fa346) 24%, #8e8e82);
   transform: translateY(-50%) rotate(-6deg);
   transform-origin: center;
-}
-
-.student-details-shell--expanded .account-card::before {
-  display: none;
 }
 
 .account-header {

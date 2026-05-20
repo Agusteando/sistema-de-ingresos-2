@@ -68,6 +68,11 @@
               student.estatus !== 'Activo' ? 'inactive' : (!isStudentEnrolled(student, externalConcepts) ? 'unenrolled' : '')
             ]"
           >
+            <UiGroupIcon
+              v-if="studentGroupLabel(student)"
+              class="student-group-watermark"
+              :label="studentGroupLabel(student)"
+            />
             <span class="student-identity">
               <button
                 type="button"

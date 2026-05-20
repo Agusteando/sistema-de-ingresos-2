@@ -41,6 +41,11 @@
         </button>
       </div>
     <section class="student-profile-card" :style="studentPresentationStyle(student)" :class="{ inactive: student.estatus !== 'Activo', unenrolled: !isEnrolled }">
+      <UiGroupIcon
+        v-if="studentGroupLabel(student)"
+        class="student-profile-watermark"
+        :label="studentGroupLabel(student)"
+      />
       <div class="profile-main">
         <div class="profile-identity">
           <StudentAccountPhotoCard
@@ -145,6 +150,11 @@
       aria-label="Estado de cuenta"
       :aria-expanded="detailsExpanded"
     >
+      <UiGroupIcon
+        v-if="studentGroupLabel(student) && !detailsExpanded"
+        class="account-card-watermark"
+        :label="studentGroupLabel(student)"
+      />
       <div class="account-header">
         <div class="account-title-area">
           <div class="account-title-copy">
@@ -372,6 +382,7 @@ import InvoiceModal from './InvoiceModal.vue'
 import ConceptChangeModal from './ConceptChangeModal.vue'
 import IngresoCycleModal from './IngresoCycleModal.vue'
 import StudentAccountPhotoCard from '~/components/students/StudentAccountPhotoCard.vue'
+import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 
 const props = defineProps({
   student: Object,
