@@ -1,14 +1,20 @@
-import { patchControlEscolarStudent, runControlEscolarQuery } from '../../../utils/control-escolar'
+import { resolveControlEscolarAuth, runControlEscolar, updateControlEscolarStudent } from '../../../utils/control-escolar'
 
 export default defineEventHandler(async (event) => {
-  const params = getQuery(event)
-  const id = String(event.context.params?.id || '')
+  const { agentId } = getQuery(event)
+  const auth = await resolveControlEscolarAuth(event, agentId)
+  const matricula = String(event.context.params?.id || '').trim()
   const body = await readBody(event)
 
-  return await runControlEscolarQuery(event, body?.agentId || params.agentId, async ({ agentId, user }) => {
-    return {
-      success: true,
-      student: await patchControlEscolarStudent(agentId, id, body?.fields || body || {}, user)
+  return await runControlEscolar(event, auth.agentId, async () => {
+    try {
+      return await updateControlEscolarStudent(auth.agentId, matricula, body, auth.user)
+    } catch (error: any) {
+      if (error?.statusCode) throw error
+      throw createError({
+        statusCode: error?.name === 'AbortError' ? 504 : 502,
+        message: error?.message || 'No se pudo guardar la ficha de Control Escolar.'
+      })
     }
   })
 })

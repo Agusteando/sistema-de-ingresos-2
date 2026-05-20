@@ -286,10 +286,6 @@ const rawQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
   return await directQuery<T>(sql, params)
 }
 
-export const queryWithoutSchema = async <T>(sql: string, params?: SqlParams): Promise<T> => {
-  return await rawQuery<T>(sql, params)
-}
-
 const runSafeQuery = async (sql: string) => {
   try {
     await rawQuery(sql)
