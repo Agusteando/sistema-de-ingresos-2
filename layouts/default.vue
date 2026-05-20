@@ -29,6 +29,9 @@
         <NuxtLink to="/" class="nav-item group">
           <LucideUsers :size="22" stroke-width="2.2" /> Alumnos
         </NuxtLink>
+        <NuxtLink to="/control-escolar" class="nav-item group">
+          <LucideClipboardList :size="22" stroke-width="2.1" /> Control Escolar
+        </NuxtLink>
         <NuxtLink to="/deudores" class="nav-item group">
           <LucideAlertTriangle :size="22" stroke-width="2" /> Deudores
         </NuxtLink>
@@ -168,6 +171,7 @@ import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
 import {
   LucideUsers,
+  LucideClipboardList,
   LucidePieChart,
   LucideSettings,
   LucideFileText,
@@ -279,6 +283,7 @@ onBeforeUnmount(() => {
 
 const currentRouteName = computed(() => {
   if (route.path === '/') return 'Alumnos'
+  if (route.path === '/control-escolar') return 'Control Escolar'
   if (route.path === '/deudores') return 'Deudores'
   if (route.path === '/reportes') return 'Centro de reportes'
   if (route.path === '/conceptos') return 'Conceptos'
