@@ -1,7 +1,9 @@
-fix(students): normalize group marker rendering
+feat: add isolated Control Escolar module
 
-- Rework UiGroupIcon to render every group marker through a stable centered box.
-- Render single-letter groups with a deterministic CSS sigil instead of relying on uneven image whitespace.
-- Normalize masked icon art size and offset through shared metadata for non-letter group icons.
-- Preserve the same group marker primitive for row watermarks, row sigils, profile cards, and account cards.
-- Keep original PNG assets unchanged.
+- Added `/control-escolar` with a non-financial, student-focused workspace that matches the main student view scale, spacing, KPI treatment, toolbar density, row styling, detail panel, loading/empty/error states, and responsive behavior.
+- Added isolated `/api/control-escolar/*` routes for options, KPIs, paginated students, and limited student updates using explicit `agentId` selection through bridge utilities.
+- Enforced per-user plantel access, dynamic bridge-agent validation, server-side pagination, normalized student responses, filtered export, and restricted editable fields.
+- Avoided financial tables, balances, payments, invoices, `/api/auth/switch`, `auth_active_plantel`, and `db_bridge_agent_id` mutation.
+- Added Control Escolar navigation and route-level styling without changing existing plantel switching behavior.
+
+Validation: `npm run build` passed.

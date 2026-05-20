@@ -16,6 +16,10 @@ export default defineEventHandler(async (event) => {
     return
   }
 
+  if (url.pathname.startsWith('/api/control-escolar/')) {
+    return
+  }
+
   const user = await getTrustedAuthUser(event)
   const bridgeAgentId = resolveDataBridgeAgentId(event, user)
 
