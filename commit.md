@@ -1,8 +1,7 @@
-feat(control-escolar): add matricula overlay workspace
+feat(control-escolar): use centralized matricula overlay connection
 
-- Add an isolated `/control-escolar` module with explicit plantel/agent selection, student KPIs, filtered pagination, detail editing, and CSV export.
-- Match the existing student workspace density, scaling, card language, toolbar behavior, loading/empty/error states, and responsive layout while removing financial concepts.
-- Add Control Escolar API routes that validate the requested `agentId`, bypass the normal plantel-switch/session bridge mutation flow, and run selected-agent queries through bridge utilities.
-- Drive visible rows from local `base`/active enrollment data and layer centralized `matricula` values over those rows using `matricula` as the join key.
-- Save edits only to allowed `matricula` fields, creating the overlay row on first edit when it does not already exist.
-- Keep agent service, relay service, existing app routes, existing plantel switching behavior, and financial data untouched.
+- Adds an explicit centralized MySQL connection for Control Escolar matricula data.
+- Keeps plantel-local rows driven by base/ingresos through the selected bridge agent.
+- Overlays centralized matricula data by matricula, including matricula.foto.
+- Upserts edits into the centralized matricula table instead of writing into bridged plantel-local tables.
+- Documents required CONTROL_ESCOLAR_MYSQL_* variables in .env.copy.

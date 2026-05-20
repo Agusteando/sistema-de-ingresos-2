@@ -30,6 +30,13 @@ export default defineNuxtConfig({
     mysqlPassword: process.env.MYSQL_PASSWORD || '',
     mysqlDatabase: process.env.MYSQL_DATABASE || 'sistema_ingresos',
 
+    controlEscolarMysqlHost: process.env.CONTROL_ESCOLAR_MYSQL_HOST || '',
+    controlEscolarMysqlPort: process.env.CONTROL_ESCOLAR_MYSQL_PORT || '3306',
+    controlEscolarMysqlUser: process.env.CONTROL_ESCOLAR_MYSQL_USER || '',
+    controlEscolarMysqlPassword: process.env.CONTROL_ESCOLAR_MYSQL_PASSWORD || '',
+    controlEscolarMysqlDatabase: process.env.CONTROL_ESCOLAR_MYSQL_DATABASE || '',
+    controlEscolarMysqlConnectionLimit: process.env.CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT || '10',
+
     googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     googlePrivateKey: process.env.GOOGLE_PRIVATE_KEY,
     adminEmailToImpersonate: process.env.GOOGLE_ADMIN_EMAIL || 'desarrollo.tecnologico@casitaiedis.edu.mx',
