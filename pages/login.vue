@@ -131,7 +131,7 @@ onMounted(() => {
         persistSelectedPlantel()
 
         try {
-          await $fetch('/api/auth/login', {
+          const result = await $fetch('/api/auth/login', {
             method: 'POST',
             headers: {
               'x-db-agent-id': selectedPlantel.value
@@ -142,7 +142,7 @@ onMounted(() => {
             }
           })
 
-          window.location.href = '/'
+          window.location.href = result?.redirectTo || '/'
         } catch (e) {
           errorMsg.value = 'Credenciales no autorizadas o plantel no disponible.'
         }

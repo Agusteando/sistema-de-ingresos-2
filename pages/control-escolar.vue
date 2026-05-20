@@ -3,7 +3,7 @@
     <header class="students-hero ce-hero">
       <div class="hero-copy">
         <h1>Control Escolar</h1>
-        <p>Consulta y actualización ligera de datos escolares. La lista nace de <strong>base</strong> y los datos editables se guardan en <strong>matricula</strong>.</p>
+        <p>Consulta y actualización ligera de datos escolares del plantel activo. La lista nace de <strong>base</strong> y los datos editables se guardan en <strong>matricula</strong>.</p>
       </div>
       <div class="hero-actions ce-hero-actions">
         <div class="ce-selected-plantel" :class="{ empty: !selectedAgentId }">
@@ -19,20 +19,6 @@
       </div>
     </header>
 
-    <section class="ce-plantel-rail" aria-label="Selector de plantel">
-      <button
-        v-for="plantel in planteles"
-        :key="plantel.agentId"
-        type="button"
-        :class="['ce-plantel-chip', { active: selectedAgentId === plantel.agentId }]"
-        @click="selectPlantel(plantel.agentId)"
-      >
-        <span>{{ plantel.label }}</span>
-        <small>{{ selectedAgentId === plantel.agentId ? 'En vista' : 'Cambiar' }}</small>
-      </button>
-      <span v-if="optionsLoading" class="ce-rail-hint">Cargando planteles…</span>
-      <span v-else-if="!planteles.length" class="ce-rail-hint">No hay planteles disponibles para esta sesión.</span>
-    </section>
 
     <section :class="['kpi-summary-system ce-kpi-system', { 'is-refreshing': kpisLoading }]" aria-label="Indicadores de Control Escolar">
       <div class="kpi-strip ce-kpi-strip">
@@ -105,7 +91,7 @@
               <div class="list-titlebar ce-list-titlebar">
                 <div class="list-heading-copy">
                   <h2>Alumnos <span>{{ pagination.total }}</span></h2>
-                  <p>{{ selectedAgentId ? `Plantel ${selectedAgentId}` : 'Sin plantel seleccionado' }}</p>
+                  <p>{{ selectedAgentId ? `Plantel ${selectedAgentId}` : 'Sin plantel activo' }}</p>
                 </div>
                 <div class="ce-pagination-mini">
                   <button type="button" :disabled="pagination.page <= 1 || studentsLoading" @click="goToPage(pagination.page - 1)"><LucideChevronLeft :size="16" /></button>
@@ -123,7 +109,7 @@
 
               <div class="student-list-scroll ce-list-scroll">
                 <div v-if="!selectedAgentId" class="empty-state ce-state-card">
-                  <LucideBuilding2 :size="24" /> Selecciona un plantel para iniciar Control Escolar.
+                  <LucideBuilding2 :size="24" /> Selecciona un plantel específico en la barra lateral para iniciar Control Escolar.
                 </div>
                 <div v-else-if="studentsLoading" class="ce-skeleton-stack" aria-live="polite">
                   <span v-for="i in 6" :key="i" class="ce-skeleton-row"></span>
@@ -309,7 +295,6 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useHead } from '#imports'
 import {
   LucideAlertTriangle,
-  LucideBuilding2,
   LucideChevronLeft,
   LucideChevronRight,
   LucideDatabase,
@@ -341,7 +326,6 @@ import { studentPresentationStyle } from '~/shared/utils/studentPresentation'
 useHead({ bodyAttrs: { class: 'students-route-active' } })
 
 const { show } = useToast()
-const planteles = ref([])
 const selectedAgentId = ref('')
 const optionsLoading = ref(false)
 const kpisLoading = ref(false)
@@ -399,7 +383,6 @@ const compactAcademic = (student) => [student.grado, student.group ? `Grupo ${st
 const statusTone = (student) => String(student?.status || '').toLowerCase() === 'baja' ? 'danger' : String(student?.status || '').toLowerCase() === 'activo' ? 'success' : 'neutral'
 
 const buildQuery = (extra = {}) => ({
-  agentId: selectedAgentId.value,
   search: filters.search || undefined,
   status: filters.status || undefined,
   missing: filters.missing || undefined,
@@ -416,10 +399,11 @@ const loadOptions = async () => {
   optionsLoading.value = true
   try {
     const response = await $fetch('/api/control-escolar/options')
-    planteles.value = response.planteles || []
-    selectedAgentId.value = planteles.value.find((p) => p.selected)?.agentId || planteles.value[0]?.agentId || ''
+    loadError.value = ''
+    selectedAgentId.value = response.activePlantel || ''
   } catch (error) {
-    loadError.value = error?.data?.message || error?.message || 'No se pudieron cargar los planteles.'
+    selectedAgentId.value = ''
+    loadError.value = error?.data?.message || error?.message || 'No se pudo resolver el plantel activo.'
   } finally {
     optionsLoading.value = false
   }
@@ -429,7 +413,7 @@ const loadKpis = async () => {
   if (!selectedAgentId.value) return
   kpisLoading.value = true
   try {
-    const response = await $fetch('/api/control-escolar/kpis', { query: { agentId: selectedAgentId.value } })
+    const response = await $fetch('/api/control-escolar/kpis')
     kpis.value = response.kpis
   } catch (error) {
     loadError.value = error?.data?.message || error?.message || 'No se pudieron cargar los indicadores.'
@@ -462,14 +446,6 @@ const loadStudents = async () => {
 
 const refreshAll = async () => {
   await Promise.all([loadKpis(), loadStudents()])
-}
-
-const selectPlantel = async (agentId) => {
-  if (selectedAgentId.value === agentId) return
-  selectedAgentId.value = agentId
-  selectedStudent.value = null
-  pagination.page = 1
-  await refreshAll()
 }
 
 const clearQuickFilters = () => {
@@ -550,7 +526,6 @@ const saveStudent = async () => {
     const payload = { ...editForm }
     const response = await $fetch(`/api/control-escolar/students/${encodeURIComponent(selectedStudent.value.matricula)}`, {
       method: 'PATCH',
-      query: { agentId: selectedAgentId.value },
       body: payload
     })
     if (response.student) {
@@ -611,43 +586,6 @@ onMounted(async () => {
 .ce-selected-plantel.empty strong { color: #7a849a; font-size: 13px; }
 .spinning { animation: ce-spin 900ms linear infinite; }
 @keyframes ce-spin { to { transform: rotate(360deg); } }
-
-.ce-plantel-rail {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 42px;
-  margin-bottom: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.ce-plantel-rail::-webkit-scrollbar { display: none; }
-.ce-plantel-chip {
-  display: inline-flex;
-  min-width: 76px;
-  height: 36px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid var(--students-border);
-  border-radius: 10px;
-  background: #fff;
-  color: #42506a;
-  box-shadow: 0 6px 14px rgba(21,35,60,.04);
-  cursor: pointer;
-}
-.ce-plantel-chip span { font-size: 12px; font-weight: 870; }
-.ce-plantel-chip small { color: #7c879d; font-size: 9.5px; font-weight: 760; }
-.ce-plantel-chip.active {
-  border-color: transparent;
-  background: linear-gradient(180deg, #58a94b 0%, #348b36 100%);
-  color: #fff;
-  box-shadow: 0 8px 16px rgba(48,132,47,.19);
-}
-.ce-plantel-chip.active small { color: rgba(255,255,255,.78); }
-.ce-rail-hint { color: #6f7b95; font-size: 12px; font-weight: 650; }
 
 .ce-kpi-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .ce-program-rail .section-kpi-card.active { border-color: rgba(63,145,56,.4); background: #eef8eb; }

@@ -536,7 +536,7 @@ const performSearch = async (options = {}) => {
   })
 
   try {
-    const res = await $fetch('/api/students', { params: { ciclo: cicloKey, q: query } })
+    const res = await $fetch('/api/students', { params: { ciclo: cicloKey, q: query, concepts: externalConcepts.value.join(',') } })
     if (requestId !== studentsRequestId) return
 
     const freshStudents = Array.isArray(res) ? res : []

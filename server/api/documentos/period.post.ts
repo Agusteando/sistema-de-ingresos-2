@@ -1,6 +1,6 @@
 import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
+import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney } from '../../utils/monto-final'
 
 const toMesNumber = (value: unknown) => {
@@ -108,14 +108,17 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 409, message: 'El documento no esta activo.' })
   }
 
-  if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
-    if (String(doc.plantel || '') !== String(user.active_plantel || '')) {
-      throw createError({ statusCode: 403, message: 'Alumno fuera del plantel activo.' })
-    }
-  }
+  const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
 
-  if (isOutOfScopeForPlantelCiclo(doc.gradoBase, doc.plantel, doc.cicloBase, cicloKey, doc.nivelBase)) {
-    throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
+  if (!isInProjectedPlantelScopeForCiclo(
+    doc.gradoBase,
+    doc.plantel,
+    doc.cicloBase,
+    cicloKey,
+    doc.nivelBase,
+    isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
+  )) {
+    throw createError({ statusCode: isScopedToActivePlantel ? 403 : 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 
   const maxMes = countPlazos(doc)

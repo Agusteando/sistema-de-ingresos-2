@@ -2,7 +2,7 @@ import dayjs from 'dayjs'
 import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
+import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney, parseNullableMoney } from '../../utils/monto-final'
 
 const normalizePaymentMethod = (value: unknown) => String(value || '')
@@ -44,14 +44,18 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const nombreCompleto = studentRef.nombreCompleto
   const plantel = studentRef.plantel || 'PT'
 
-  if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
-    if (String(plantel || '') !== String(user.active_plantel || '')) {
-      throw createError({ statusCode: 403, message: 'Alumno fuera del plantel activo.' })
-    }
-  }
+  const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
+  const isProjectedInScope = isInProjectedPlantelScopeForCiclo(
+    studentRef.grado,
+    plantel,
+    studentRef.ciclo,
+    cicloKey,
+    studentRef.nivel,
+    isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
+  )
 
-  if (isOutOfScopeForPlantelCiclo(studentRef.grado, plantel, studentRef.ciclo, cicloKey, studentRef.nivel)) {
-    throw createError({ statusCode: 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
+  if (!isProjectedInScope) {
+    throw createError({ statusCode: isScopedToActivePlantel ? 403 : 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 
   const instituto = (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0

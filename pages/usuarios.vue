@@ -32,8 +32,8 @@
               </div>
             </td>
             <td>
-              <span :class="['badge', ['global', 'superadmin'].includes(String(u.role || '').toLowerCase()) ? 'badge-warning' : 'badge-info']">
-                {{ ['global', 'superadmin'].includes(String(u.role || '').toLowerCase()) ? 'ADMIN' : 'USUARIO' }}
+              <span :class="['badge', isSuperAdminRole(u.role) ? 'badge-warning' : 'badge-info']">
+                {{ isSuperAdminRole(u.role) ? 'ADMIN' : 'USUARIO' }}
               </span>
             </td>
             <td class="text-center">
@@ -106,6 +106,11 @@ const loadingTable = ref(false)
 const showModal = ref(false)
 const saving = ref(false)
 const editingId = ref(null)
+const SUPERADMIN_ROLES = new Set(['global', 'superadmin', 'role_super_admin', 'role_superadmin'])
+const isSuperAdminRole = (role) => String(role || '')
+  .split(',')
+  .map(entry => entry.trim().toLowerCase())
+  .some(entry => SUPERADMIN_ROLES.has(entry))
 
 const form = ref({ username: '', password: '', email: '', planteles: [], role: 'plantel' })
 

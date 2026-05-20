@@ -1,6 +1,6 @@
 import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
-import { isOutOfScopeForPlantelCiclo } from '../../../../shared/utils/grado'
+import { isInProjectedPlantelScopeForCiclo } from '../../../../shared/utils/grado'
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
 const isReliableEmail = (value: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value))
@@ -34,8 +34,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     `, [student.familyKey, matricula])
 
     siblings = siblings.filter((sibling) => {
-      if (isScopedToActivePlantel(user) && String(sibling.plantel || '') !== String(user.active_plantel || '')) return false
-      return !isOutOfScopeForPlantelCiclo(sibling.grado, sibling.plantel, sibling.ciclo, cicloKey, sibling.nivel)
+      return isInProjectedPlantelScopeForCiclo(
+        sibling.grado,
+        sibling.plantel,
+        sibling.ciclo,
+        cicloKey,
+        sibling.nivel,
+        isScopedToActivePlantel(user) ? user.active_plantel : 'GLOBAL'
+      )
     })
 
     source = 'local'
@@ -49,8 +55,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     `, [correo, matricula])
 
     siblings = siblings.filter((sibling) => {
-      if (isScopedToActivePlantel(user) && String(sibling.plantel || '') !== String(user.active_plantel || '')) return false
-      return !isOutOfScopeForPlantelCiclo(sibling.grado, sibling.plantel, sibling.ciclo, cicloKey, sibling.nivel)
+      return isInProjectedPlantelScopeForCiclo(
+        sibling.grado,
+        sibling.plantel,
+        sibling.ciclo,
+        cicloKey,
+        sibling.nivel,
+        isScopedToActivePlantel(user) ? user.active_plantel : 'GLOBAL'
+      )
     })
 
     source = siblings.length ? 'email' : 'none'

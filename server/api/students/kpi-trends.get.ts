@@ -1,7 +1,8 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
-import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
+import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
+import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 
 const CACHE_TTL_MS = 5 * 60 * 1000
 const MAX_POINTS = 8
@@ -49,15 +50,17 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const { ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
-  const enrollmentConceptIds = sanitizeConceptIds(concepts)
+  const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
   const plantelScope = user.active_plantel || 'GLOBAL'
   const cacheKey = [user.role, plantelScope, cicloKey, enrollmentConceptIds.join('|')].join('::')
   const cached = trendCache.get(cacheKey)
 
   if (cached && cached.expiresAt > Date.now()) return cached.value
 
-  const plantelWhere = plantelScope !== 'GLOBAL' ? 'AND A.plantel = ?' : ''
-  const plantelParams = plantelScope !== 'GLOBAL' ? [plantelScope] : []
+  const isScopedToActivePlantel = plantelScope !== 'GLOBAL'
+  const plantelParams = isScopedToActivePlantel ? plantelCandidatesForProjectedScope(plantelScope) : []
+  const plantelPlaceholders = plantelParams.map(() => '?').join(',')
+  const plantelWhere = isScopedToActivePlantel ? `AND A.plantel IN (${plantelPlaceholders})` : ''
 
   const inscritos = new Map<string, number>()
   const internos = new Map<string, number>()
@@ -131,12 +134,15 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       WHERE 1 = 1 ${plantelWhere}
     `, [cicloKey, ...enrollmentConceptIds, previousCiclo, previousCiclo, ...plantelParams])
 
+    const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(enrollmentRows.map(row => row.matricula), enrollmentConceptIds)
+
     enrollmentRows.forEach((row) => {
-      if (isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase)) return
+      if (!isInProjectedPlantelScopeForCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase, isScopedToActivePlantel ? plantelScope : 'GLOBAL')) return
       const bucket = dateBucket(row.firstEnrollmentAt)
       if (!bucket) return
       buckets.add(bucket)
       increment(inscritos, bucket)
+      const historicalConceptIds = historicalEnrollmentEvidence.get(String(row.matricula || '').trim()) || ''
       const tipoIngreso = resolveTipoIngreso({
         ...row,
         conceptoIdsCicloActual: row.conceptoIdsTarget,
@@ -144,7 +150,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           targetCiclo: cicloKey,
           previousCiclo,
           targetConceptIds: row.conceptoIdsTarget,
-          previousConceptIds: [row.conceptoIdsPagadosPrevios, row.conceptoIdsCargadosPrevios, row.conceptoIdsCicloPrevio]
+          previousConceptIds: [row.conceptoIdsPagadosPrevios, row.conceptoIdsCargadosPrevios, row.conceptoIdsCicloPrevio],
+          allConceptIds: [historicalConceptIds]
         }
       }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
       if (tipoIngreso.value === 'interno') increment(internos, bucket)
@@ -152,7 +159,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     })
   }
 
-  const incomeWhere = plantelScope !== 'GLOBAL' ? 'AND COALESCE(A.plantel, r.plantel) = ?' : ''
+  const incomeWhere = isScopedToActivePlantel ? `AND COALESCE(A.plantel, r.plantel) IN (${plantelPlaceholders})` : ''
   const incomeRows = await query<any[]>(`
     SELECT
       r.fecha,
@@ -169,7 +176,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   `, [cicloKey, ...plantelParams])
 
   incomeRows.forEach((row) => {
-    if (isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase)) return
+    if (!isInProjectedPlantelScopeForCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase, isScopedToActivePlantel ? plantelScope : 'GLOBAL')) return
     const bucket = dateBucket(row.fecha)
     if (!bucket) return
     buckets.add(bucket)

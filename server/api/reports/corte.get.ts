@@ -1,6 +1,6 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
+import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { inicio, fin, plantel, ciclo = '2025' } = getQuery(event)
@@ -19,12 +19,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     params.push(inicio, fin)
   }
 
-  if (!user.isSuperAdmin || user.active_plantel !== 'GLOBAL') {
-    where += " AND r.plantel = ?"
-    params.push(user.active_plantel)
-  } else if (plantel) {
-    where += " AND r.plantel = ?"
-    params.push(plantel)
+  const scopePlantel = (!user.isSuperAdmin || user.active_plantel !== 'GLOBAL')
+    ? user.active_plantel
+    : plantel
+
+  if (scopePlantel) {
+    const plantelCandidates = plantelCandidatesForProjectedScope(scopePlantel)
+    where += ` AND COALESCE(A.plantel, r.plantel) IN (${plantelCandidates.map(() => '?').join(',')})`
+    params.push(...plantelCandidates)
   }
 
   const rows = await query<any[]>(`
@@ -47,7 +49,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const grouped = new Map<string, any>()
 
   rows
-    .filter(row => !isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase))
+    .filter(row => isInProjectedPlantelScopeForCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase, scopePlantel || 'GLOBAL'))
     .forEach((row) => {
       const fecha = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : String(row.fecha).slice(0, 10)
       const key = `${fecha}|${row.formaDePago}|${row.categoria}`

@@ -1,32 +1,35 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { isOutOfScopeForPlantelCiclo } from '../../../shared/utils/grado'
+import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
+import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
   const user = event.context.user
-  const enrollmentConceptIds = String(Array.isArray(concepts) ? concepts.join(',') : concepts || '')
-    .split(',')
-    .map(value => String(value || '').trim())
-    .filter(value => /^\d+$/.test(value))
+  const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
   
   let alumnosWhere = "A.estatus = 'Activo'"
   let ingresosWhere = "r.ciclo = ? AND r.estatus = 'Vigente' AND MONTH(r.fecha) = MONTH(CURRENT_DATE())"
   const paramArr: any[] = [cicloKey]
   const alumnosParams: any[] = [cicloKey, cicloKey, previousCiclo, previousCiclo]
 
-  if (user.active_plantel !== 'GLOBAL') {
-    alumnosWhere += " AND A.plantel = ?"
-    ingresosWhere += " AND r.plantel = ?"
-    paramArr.push(user.active_plantel)
-    alumnosParams.push(user.active_plantel)
+  const isScopedToActivePlantel = user.active_plantel !== 'GLOBAL'
+
+  if (isScopedToActivePlantel) {
+    const plantelCandidates = plantelCandidatesForProjectedScope(user.active_plantel)
+    const placeholders = plantelCandidates.map(() => '?').join(',')
+    alumnosWhere += ` AND A.plantel IN (${placeholders})`
+    ingresosWhere += ` AND COALESCE(A.plantel, r.plantel) IN (${placeholders})`
+    paramArr.push(...plantelCandidates)
+    alumnosParams.push(...plantelCandidates)
   }
 
   const alumnosRows = await query<any[]>(`
     SELECT
+      A.matricula,
       A.grado as gradoBase,
       A.ciclo as cicloBase,
       A.ciclo,
@@ -97,8 +100,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   `, alumnosParams)
 
   const alumnosInScope = alumnosRows.filter(row => (
-    !isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase)
+    isInProjectedPlantelScopeForCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase, isScopedToActivePlantel ? user.active_plantel : 'GLOBAL')
   ))
+  const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(alumnosInScope.map(row => row.matricula), enrollmentConceptIds)
   
   const ingresosRows = await query<any[]>(`
     SELECT r.monto, A.grado as gradoBase, A.ciclo as cicloBase, A.nivel as nivelBase, COALESCE(A.plantel, r.plantel) as plantel
@@ -107,18 +111,20 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     WHERE ${ingresosWhere}
   `, paramArr)
   const ingresosMes = ingresosRows
-    .filter(row => !isOutOfScopeForPlantelCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase))
+    .filter(row => isInProjectedPlantelScopeForCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase, isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'))
     .reduce((sum, row) => sum + Number(row.monto || 0), 0)
 
   const [conceptosData] = await query<any[]>(`SELECT COUNT(*) as total FROM conceptos WHERE ciclo = ?`, [cicloKey])
   const tipoIngresoCounts = alumnosInScope.reduce((acc, row) => {
+    const historicalConceptIds = historicalEnrollmentEvidence.get(String(row.matricula || '').trim()) || ''
     const tipoIngreso = resolveTipoIngreso({
       ...row,
       tipoIngresoEvidence: {
         targetCiclo: cicloKey,
         previousCiclo,
         targetConceptIds: [row.conceptoIdsPagados, row.conceptoIdsCargados, row.conceptoIdsCicloActual],
-        previousConceptIds: [row.conceptoIdsPagadosPrevios, row.conceptoIdsCargadosPrevios, row.conceptoIdsCicloPrevio]
+        previousConceptIds: [row.conceptoIdsPagadosPrevios, row.conceptoIdsCargadosPrevios, row.conceptoIdsCicloPrevio],
+        allConceptIds: [historicalConceptIds]
       }
     }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
 

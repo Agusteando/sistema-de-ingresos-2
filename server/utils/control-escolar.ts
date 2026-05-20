@@ -119,18 +119,16 @@ export const assertControlEscolarDynamicBridge = (agentId: string) => {
 
 export const resolveControlEscolarAuth = async (event: any, requestedAgentId?: unknown) => {
   const user = await getTrustedAuthUser(event)
-  const agentId = normalizePlantel(requestedAgentId)
 
-  if (!agentId || !PLANTEL_SET.has(agentId)) {
-    throw createError({ statusCode: 400, message: 'Selecciona un plantel válido para Control Escolar.' })
-  }
+  const requested = normalizePlantel(requestedAgentId)
+  const active = normalizePlantel(user.active_plantel)
+  const agentId = requested || active
 
-  const allowedPlanteles = Array.isArray(user.plantelesList)
-    ? user.plantelesList.map(normalizePlantel).filter(Boolean)
-    : []
-
-  if (!user.isSuperAdmin && !allowedPlanteles.includes(agentId)) {
-    throw createError({ statusCode: 403, message: 'No tienes permisos para consultar este plantel en Control Escolar.' })
+  if (!agentId || agentId === 'GLOBAL' || !PLANTEL_SET.has(agentId)) {
+    throw createError({
+      statusCode: 400,
+      message: 'Selecciona un plantel específico en el selector lateral para usar Control Escolar.'
+    })
   }
 
   assertControlEscolarDynamicBridge(agentId)
@@ -140,17 +138,22 @@ export const resolveControlEscolarAuth = async (event: any, requestedAgentId?: u
 
 export const listControlEscolarPlanteles = async (event: any) => {
   const user = await getTrustedAuthUser(event)
-  const allowedPlanteles = user.isSuperAdmin
-    ? [...PLANTELES_LIST]
-    : (user.plantelesList || []).map(normalizePlantel).filter((plantel) => PLANTEL_SET.has(plantel))
+
+  const allowedPlanteles = [...PLANTELES_LIST]
+
+  const activePlantel = normalizePlantel(user.active_plantel)
+  const selectedPlantel = activePlantel && activePlantel !== 'GLOBAL' && allowedPlanteles.includes(activePlantel)
+    ? activePlantel
+    : ''
 
   return {
     user,
+    activePlantel: selectedPlantel,
     planteles: allowedPlanteles.map((plantel) => ({
       agentId: plantel,
       plantel,
       label: plantel,
-      selected: normalizePlantel(user.active_plantel) === plantel
+      selected: selectedPlantel === plantel
     }))
   }
 }

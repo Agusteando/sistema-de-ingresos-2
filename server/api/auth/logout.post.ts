@@ -5,6 +5,10 @@ export default defineEventHandler((event) => {
   deleteCookie(event, 'auth_planteles', { path: '/' })
   deleteCookie(event, 'auth_active_plantel', { path: '/' })
   deleteCookie(event, 'auth_home_plantel', { path: '/' })
+  deleteCookie(event, 'auth_nav_mode', { path: '/' })
+  deleteCookie(event, 'auth_has_control_escolar', { path: '/' })
+  deleteCookie(event, 'auth_has_financial_access', { path: '/' })
+  deleteCookie(event, 'auth_is_super_admin', { path: '/' })
   deleteCookie(event, 'db_bridge_agent_id', { path: '/' })
 
   return { success: true }

@@ -1,6 +1,7 @@
-import { runWithBridgeAgentId, enterBridgeAgentId, query } from '../../utils/db'
+import { PLANTELES_LIST } from '../../../utils/constants'
+import { normalizePlantel } from '../../utils/auth-session'
 
-export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
+export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const email = getCookie(event, 'auth_email')
 
@@ -8,18 +9,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 401, message: 'Sesión expirada o no válida.' })
   }
 
-  const bridgeAgentId = getCookie(event, 'db_bridge_agent_id') || getCookie(event, 'auth_active_plantel') || ''
-
-  if (bridgeAgentId && bridgeAgentId !== 'GLOBAL') {
-    event.context.dbBridgeAgentId = bridgeAgentId
-    enterBridgeAgentId(bridgeAgentId)
-  }
-
-  const plantelesArr = Array.isArray(body.planteles) ? body.planteles : []
-  const plantelesStr = plantelesArr.join(',')
-  const activePlantel = plantelesArr.length > 0 ? plantelesArr[0] : ''
-
-  await query('UPDATE users SET planteles = ? WHERE email = ?', [plantelesStr, email])
+  const plantelesArr = Array.isArray(body.planteles)
+    ? body.planteles.map(normalizePlantel).filter((plantel: string) => PLANTELES_LIST.includes(plantel))
+    : []
+  const allowed = plantelesArr.length ? plantelesArr : [...PLANTELES_LIST]
+  const plantelesStr = allowed.join(',')
+  const activePlantel = allowed[0] || PLANTELES_LIST[0]
 
   const cookieOpts = {
     secure: process.env.NODE_ENV === 'production',
@@ -29,11 +24,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   setCookie(event, 'auth_planteles', plantelesStr, cookieOpts)
   setCookie(event, 'auth_active_plantel', activePlantel, cookieOpts)
-  setCookie(event, 'auth_home_plantel', bridgeAgentId || activePlantel, cookieOpts)
+  setCookie(event, 'auth_home_plantel', activePlantel, cookieOpts)
+  setCookie(event, 'auth_has_financial_access', 'true', cookieOpts)
+  setCookie(event, 'auth_has_control_escolar', 'false', cookieOpts)
+  deleteCookie(event, 'auth_nav_mode', { path: '/' })
 
   if (activePlantel && activePlantel !== 'GLOBAL') {
     setCookie(event, 'db_bridge_agent_id', activePlantel, cookieOpts)
   }
 
   return { success: true }
-}))
+})

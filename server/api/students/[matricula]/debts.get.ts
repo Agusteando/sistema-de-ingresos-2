@@ -1,7 +1,7 @@
 import { runWithBridgeAgentId, query } from '../../../utils/db'
 import dayjs from 'dayjs'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
-import { isOutOfScopeForPlantelCiclo } from '../../../../shared/utils/grado'
+import { isInProjectedPlantelScopeForCiclo } from '../../../../shared/utils/grado'
 import { resolveProjectedAmount } from '../../../utils/monto-final'
 
 const normalizePaymentMethod = (value: unknown) => String(value || '')
@@ -29,11 +29,16 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   if (!studentRef) return []
 
   const user = event.context.user
-  if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
-    if (String(studentRef.plantel || '') !== String(user.active_plantel || '')) return []
-  }
+  const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
 
-  if (isOutOfScopeForPlantelCiclo(studentRef.gradoBase, studentRef.plantel, studentRef.cicloBase, cicloKey, studentRef.nivelBase)) {
+  if (!isInProjectedPlantelScopeForCiclo(
+    studentRef.gradoBase,
+    studentRef.plantel,
+    studentRef.cicloBase,
+    cicloKey,
+    studentRef.nivelBase,
+    isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
+  )) {
     return []
   }
 

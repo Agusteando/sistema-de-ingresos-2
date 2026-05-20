@@ -1,34 +1,20 @@
-import { runWithBridgeAgentId, query } from '../../utils/db'
 import { getAdminProfilePhoto } from '../../utils/googleAdmin'
 
-export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-  const email = getCookie(event, 'auth_email')
-  
+export default defineEventHandler(async (event) => {
+  const email = String(getCookie(event, 'auth_email') || '')
+  const name = String(getCookie(event, 'auth_name') || email || 'Administrador')
+
   if (!email) {
     throw createError({ statusCode: 401, message: 'Acceso no autorizado.' })
   }
-  
-  const [user] = await query<any[]>('SELECT avatar, username as name, email FROM users WHERE email = ?', [email])
-  
-  let photoUrl = user?.avatar || null
-  
+
+  let photoUrl: string | null = null
+
   try {
-    const workspacePhoto = await getAdminProfilePhoto(email)
-    
-    if (workspacePhoto) {
-      photoUrl = workspacePhoto
-      
-      if (workspacePhoto !== user?.avatar) {
-        await query('UPDATE users SET avatar = ? WHERE email = ?', [workspacePhoto, email])
-      }
-    }
+    photoUrl = await getAdminProfilePhoto(email)
   } catch (err) {
     console.error('[API Perfil] Fallo la resolución de la foto de Google Workspace:', err)
   }
-  
-  return { 
-    photoUrl, 
-    email: user?.email || '', 
-    name: user?.name || 'Administrador' 
-  }
-}))
+
+  return { photoUrl, email, name }
+})

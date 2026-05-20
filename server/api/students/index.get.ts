@@ -1,21 +1,26 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
-import { calculatePromotedGrado, displayGrado } from '../../../shared/utils/grado'
+import { calculatePromotedGrado, displayGrado, normalizePlantel, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
+import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-  const { q = '', ciclo = '2025' } = getQuery(event)
+  const { q = '', ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
+  const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
   const user = event.context.user
   
   let whereClause = "1=1"
   const params: any[] = []
 
-  if (!user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')) {
-    whereClause += " AND A.plantel = ?"
-    params.push(user.active_plantel)
+  const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
+
+  if (isScopedToActivePlantel) {
+    const plantelCandidates = plantelCandidatesForProjectedScope(user.active_plantel)
+    whereClause += ` AND A.plantel IN (${plantelCandidates.map(() => '?').join(',')})`
+    params.push(...plantelCandidates)
   }
 
   if (q) {
@@ -128,10 +133,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   
   const queryParams = [cicloKey, cicloKey, previousCiclo, previousCiclo, ...params]
   const rows = await query<any[]>(sql, queryParams)
+  const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(rows.map(r => r.matricula), enrollmentConceptIds)
   
   const mapped = rows.flatMap(r => {
     const promoted = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey, r.nivelBase)
     if (promoted.outOfScope) return []
+    const historicalConceptIds = historicalEnrollmentEvidence.get(String(r.matricula || '').trim()) || ''
+    if (isScopedToActivePlantel && normalizePlantel(promoted.plantel) !== normalizePlantel(user.active_plantel)) return []
 
     const tipoIngreso = resolveTipoIngreso({
       ...r,
@@ -139,12 +147,17 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         targetCiclo: cicloKey,
         previousCiclo,
         targetConceptIds: [r.conceptoIdsPagados, r.conceptoIdsCargados, r.conceptoIdsCicloActual],
-        previousConceptIds: [r.conceptoIdsPagadosPrevios, r.conceptoIdsCargadosPrevios, r.conceptoIdsCicloPrevio]
+        previousConceptIds: [r.conceptoIdsPagadosPrevios, r.conceptoIdsCargadosPrevios, r.conceptoIdsCicloPrevio],
+        allConceptIds: [historicalConceptIds]
       }
-    }, cicloKey)
+    }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
 
     return {
       ...r,
+      conceptoIdsTodos: historicalConceptIds,
+      conceptoIdsHistoricos: historicalConceptIds,
+      plantelBase: r.plantel,
+      plantel: promoted.plantel,
       grado: displayGrado(promoted.grado),
       nivel: promoted.nivel,
       tipoIngreso
