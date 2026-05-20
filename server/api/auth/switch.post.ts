@@ -23,6 +23,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 403, message: 'No tiene permisos para acceder a este plantel.' })
   }
 
+  if (requested !== 'GLOBAL' && user.isControlEscolarOnly && !user.plantelesList.includes(requested)) {
+    throw createError({ statusCode: 403, message: 'No tiene permisos para acceder a este plantel.' })
+  }
+
   const cookieOpts = {
     secure: process.env.NODE_ENV === 'production',
     path: '/',
@@ -38,13 +42,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   setCookie(event, 'auth_role', user.role || 'plantel', cookieOpts)
-  setCookie(event, 'auth_planteles', PLANTELES_LIST.join(','), cookieOpts)
+  setCookie(event, 'auth_planteles', user.isSuperAdmin ? PLANTELES_LIST.join(',') : user.planteles, cookieOpts)
   setCookie(event, 'auth_active_plantel', requested, cookieOpts)
   setCookie(event, 'auth_home_plantel', user.auth_home_plantel || dataBridgeAgentId, cookieOpts)
-  setCookie(event, 'auth_has_control_escolar', 'false', cookieOpts)
-  setCookie(event, 'auth_has_financial_access', 'true', cookieOpts)
+  setCookie(event, 'auth_nav_mode', user.isControlEscolarOnly ? 'control-escolar' : 'financial', cookieOpts)
+  setCookie(event, 'auth_has_control_escolar', user.hasControlEscolarRole || user.isSuperAdmin ? 'true' : 'false', cookieOpts)
+  setCookie(event, 'auth_has_financial_access', user.hasFinancialAccess ? 'true' : 'false', cookieOpts)
   setCookie(event, 'auth_is_super_admin', user.isSuperAdmin ? 'true' : 'false', cookieOpts)
-  deleteCookie(event, 'auth_nav_mode', { path: '/' })
   setCookie(event, 'db_bridge_agent_id', dataBridgeAgentId, cookieOpts)
 
   event.context.dbBridgeAgentId = dataBridgeAgentId

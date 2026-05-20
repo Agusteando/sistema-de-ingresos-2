@@ -1,7 +1,7 @@
 # Control Escolar access
 
-Authentication and the normal financial/student screens use the existing application session cookies and local plantel context. The centralized `users` table and `ROLE_CTRL` routing gates are intentionally not used for access decisions.
+The regular financial/student APIs keep the default authenticated-session behavior. They do not depend on the centralized Control Escolar data source and they do not use `ROLE_CTRL` to allow or deny student loading.
 
-Financial/student APIs keep the default behavior: any authenticated user with an active plantel can load the regular system, and superadmin users can use the consolidated selector.
+`ROLE_CTRL` is only used to choose the Control Escolar UI mode. An exact non-superadmin `ROLE_CTRL` user is routed to Control Escolar and the financial sidebar/ciclo controls are hidden. Superadmin, plantel users, and mixed-role users keep the default financial behavior.
 
-The Control Escolar module still reads the selected plantel-local `base` table. Its matricula overlay remains separate from financial access and does not control whether regular students load.
+The Control Escolar module still reads the selected plantel-local `base` table and the centralized `matricula` overlay. That overlay remains separate from regular financial access.

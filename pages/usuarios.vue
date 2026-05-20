@@ -32,8 +32,8 @@
               </div>
             </td>
             <td>
-              <span :class="['badge', isSuperAdminRole(u.role) ? 'badge-warning' : 'badge-info']">
-                {{ isSuperAdminRole(u.role) ? 'ADMIN' : 'USUARIO' }}
+              <span :class="['badge', isSuperAdminRole(u.role) ? 'badge-warning' : isControlEscolarRole(u.role) ? 'badge-info' : 'badge-neutral']">
+                {{ roleLabel(u.role) }}
               </span>
             </td>
             <td class="text-center">
@@ -61,8 +61,9 @@
               <div class="form-group mb-0 col-span-2 md:col-span-1">
                 <label class="form-label">Rol</label>
                 <select v-model="form.role" class="input-field" required>
-                  <option value="plantel">Usuario (Planteles selectos)</option>
+                  <option value="plantel">Usuario (Acceso normal)</option>
                   <option value="global">Super Admin (Acceso total)</option>
+                  <option value="ROLE_CTRL">Control Escolar</option>
                 </select>
               </div>
               
@@ -107,10 +108,17 @@ const showModal = ref(false)
 const saving = ref(false)
 const editingId = ref(null)
 const SUPERADMIN_ROLES = new Set(['global', 'superadmin', 'role_super_admin', 'role_superadmin'])
-const isSuperAdminRole = (role) => String(role || '')
+const roleTokens = (role) => String(role || '')
   .split(',')
   .map(entry => entry.trim().toLowerCase())
-  .some(entry => SUPERADMIN_ROLES.has(entry))
+  .filter(Boolean)
+const isSuperAdminRole = (role) => roleTokens(role).some(entry => SUPERADMIN_ROLES.has(entry))
+const isControlEscolarRole = (role) => roleTokens(role).includes('role_ctrl')
+const roleLabel = (role) => {
+  if (isSuperAdminRole(role)) return 'ADMIN'
+  if (isControlEscolarRole(role)) return 'CONTROL ESCOLAR'
+  return 'USUARIO'
+}
 
 const form = ref({ username: '', password: '', email: '', planteles: [], role: 'plantel' })
 
