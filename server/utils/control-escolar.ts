@@ -1,6 +1,7 @@
 import { query, runWithBridgeAgentId } from './db'
 import { getTrustedAuthUser, normalizePlantel, type AuthSessionUser } from './auth-session'
 import { PLANTELES_LIST } from '../../utils/constants'
+import { controlEscolarCentralQuery } from './control-escolar-central'
 
 export type ControlEscolarStudentRow = {
   agentId: string
@@ -29,6 +30,12 @@ export type ControlEscolarStudentRow = {
   guardianName: string
   fatherName: string
   motherName: string
+  nombrePadre: string
+  apellidoPaternoPadre: string
+  apellidoMaternoPadre: string
+  nombreMadre: string
+  apellidoPaternoMadre: string
+  apellidoMaternoMadre: string
   telefonoPadre: string
   telefonoMadre: string
   emailPadre: string
@@ -53,31 +60,19 @@ type TableColumn = {
 
 type MatriculaPatch = Record<string, any>
 
-export const CONTROL_ESCOLAR_ALLOWED_BASE_COLUMNS = new Set([
-  'matricula',
-  'plantel',
-  'grado',
-  'grupo',
-  'nivel',
-  'nombres',
-  'apellidoPaterno',
-  'apellidoMaterno',
-  'nombreCompleto',
-  'curp',
-  'correo',
-  'telefono',
-  'interno',
-  'estatus',
-  'Nombre del padre o tutor',
-  'Fecha de nacimiento',
-  'updated_at',
-  'updatedAt',
-  'fecha_actualizacion'
-])
+type ControlEscolarSchema = {
+  base: Set<string>
+  matricula: Set<string>
+  ingresos: boolean
+  loadedAt: number
+}
 
 const PLANTEL_SET = new Set(PLANTELES_LIST.map(normalizePlantel))
-const controlEscolarSchemaCache = new Map<string, { base: Set<string>; matricula: Set<string>; ingresos: boolean; loadedAt: number }>()
+const schemaCache = new Map<string, ControlEscolarSchema>()
+const centralSchemaCache = new Map<string, { columns: Set<string>; loadedAt: number }>()
 const SCHEMA_CACHE_MS = 1000 * 60 * 5
+const MAX_LOCAL_ROWS = 25000
+const CENTRAL_CHUNK_SIZE = 600
 
 const normalizeKey = (value: unknown) => String(value || '').trim()
 const normalizeText = (value: unknown, max = 255) => normalizeKey(value).slice(0, max)
@@ -89,16 +84,18 @@ const normalizeNullable = (value: unknown, max = 255) => {
   return text || null
 }
 
+const sqlLiteral = (value: string) => `'${String(value).replace(/'/g, "''")}'`
 const safeAlias = (value: string) => value.replace(/[^A-Za-z0-9_]/g, '')
 const col = (alias: string, column: string) => `${alias}.\`${column.replace(/`/g, '``')}\``
 const has = (columns: Set<string>, column: string) => columns.has(column)
 const expr = (columns: Set<string>, alias: string, column: string, fallback = 'NULL') => has(columns, column) ? col(alias, column) : fallback
+const selectAs = (sql: string, alias: string) => `${sql} AS ${safeAlias(alias)}`
+const nullIfTrim = (sql: string) => `NULLIF(TRIM(CAST(${sql} AS CHAR)), '')`
 const coalesceExpr = (...parts: Array<string | false | null | undefined>) => {
   const clean = parts.filter(Boolean) as string[]
   return clean.length ? `COALESCE(${clean.join(', ')})` : 'NULL'
 }
-const nullIfTrim = (sql: string) => `NULLIF(TRIM(CAST(${sql} AS CHAR)), '')`
-const selectAs = (sql: string, alias: string) => `${sql} AS ${safeAlias(alias)}`
+const escapeColumn = (column: string) => `\`${column.replace(/`/g, '``')}\``
 
 const getConfiguredBridgeAgentId = () => {
   const config = useRuntimeConfig() as any
@@ -158,162 +155,198 @@ export const listControlEscolarPlanteles = async (event: any) => {
   }
 }
 
-const getColumns = async (tableName: string) => {
-  const rows = await query<TableColumn[]>(`SHOW COLUMNS FROM \`${tableName.replace(/`/g, '``')}\``)
-  return new Set(rows.map((row) => row.Field))
-}
-
-const tableExists = async (tableName: string) => {
+const localTableExists = async (tableName: string) => {
   const rows = await query<any[]>(`SHOW TABLES LIKE ?`, [tableName])
   return rows.length > 0
 }
 
-export const getControlEscolarSchema = async (agentId: string) => {
+const localColumns = async (tableName: string) => {
+  const rows = await query<TableColumn[]>(`SHOW COLUMNS FROM ${escapeColumn(tableName)}`)
+  return new Set(rows.map((row) => row.Field))
+}
+
+const getCentralMatriculaColumns = async () => {
+  const cached = centralSchemaCache.get('matricula')
+  if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS) return cached.columns
+
+  const tableRows = await controlEscolarCentralQuery<any[]>(`SHOW TABLES LIKE 'matricula'`)
+  if (!tableRows.length) {
+    throw createError({
+      statusCode: 500,
+      message: 'La tabla matricula no existe en la base MySQL centralizada de Control Escolar.'
+    })
+  }
+
+  const rows = await controlEscolarCentralQuery<TableColumn[]>(`SHOW COLUMNS FROM \`matricula\``)
+  const columns = new Set(rows.map((row) => row.Field))
+  if (!columns.has('matricula')) {
+    throw createError({
+      statusCode: 500,
+      message: 'La tabla centralizada matricula no tiene columna matricula para unir contra base.'
+    })
+  }
+
+  centralSchemaCache.set('matricula', { columns, loadedAt: Date.now() })
+  return columns
+}
+
+export const getControlEscolarSchema = async (agentId: string): Promise<ControlEscolarSchema> => {
   const cacheKey = normalizePlantel(agentId)
-  const cached = controlEscolarSchemaCache.get(cacheKey)
+  const cached = schemaCache.get(cacheKey)
   if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS) return cached
 
-  const baseExists = await tableExists('base')
+  const baseExists = await localTableExists('base')
   if (!baseExists) {
     throw createError({ statusCode: 500, message: 'La tabla base no existe en el plantel seleccionado.' })
   }
 
-  const matriculaExists = await tableExists('matricula')
   const [baseColumns, matriculaColumns, ingresosExists] = await Promise.all([
-    getColumns('base'),
-    matriculaExists ? getColumns('matricula') : Promise.resolve(new Set<string>()),
-    tableExists('ingresos')
+    localColumns('base'),
+    getCentralMatriculaColumns(),
+    localTableExists('ingresos')
   ])
 
-  if (!matriculaExists) {
-    throw createError({ statusCode: 500, message: 'La tabla matricula no existe para el plantel seleccionado. Control Escolar necesita esa capa centralizada para edición.' })
-  }
-
-  if (!baseColumns.has('matricula') || !matriculaColumns.has('matricula')) {
-    throw createError({ statusCode: 500, message: 'No se puede unir base y matricula porque falta la columna matricula.' })
+  if (!baseColumns.has('matricula')) {
+    throw createError({ statusCode: 500, message: 'La tabla base no tiene columna matricula.' })
   }
 
   const schema = { base: baseColumns, matricula: matriculaColumns, ingresos: ingresosExists, loadedAt: Date.now() }
-  controlEscolarSchemaCache.set(cacheKey, schema)
+  schemaCache.set(cacheKey, schema)
   return schema
 }
 
-export const buildControlEscolarSelect = (agentId: string, schema: Awaited<ReturnType<typeof getControlEscolarSchema>>) => {
-  const b = schema.base
-  const m = schema.matricula
-
-  const baseNombreCompleto = has(b, 'nombreCompleto')
+const buildLocalBaseSelect = (agentId: string, baseColumns: Set<string>) => {
+  const baseNombreCompleto = has(baseColumns, 'nombreCompleto')
     ? nullIfTrim(col('b', 'nombreCompleto'))
-    : `NULLIF(TRIM(CONCAT_WS(' ', ${expr(b, 'b', 'apellidoPaterno')}, ${expr(b, 'b', 'apellidoMaterno')}, ${expr(b, 'b', 'nombres')})), '')`
-
-  const nombres = coalesceExpr(nullIfTrim(expr(m, 'm', 'nombres')), nullIfTrim(expr(b, 'b', 'nombres')))
-  const apellidoPaterno = coalesceExpr(nullIfTrim(expr(m, 'm', 'apellido_paterno')), nullIfTrim(expr(b, 'b', 'apellidoPaterno')))
-  const apellidoMaterno = coalesceExpr(nullIfTrim(expr(m, 'm', 'apellido_materno')), nullIfTrim(expr(b, 'b', 'apellidoMaterno')))
-  const fullName = coalesceExpr(
-    `NULLIF(TRIM(CONCAT_WS(' ', ${apellidoPaterno}, ${apellidoMaterno}, ${nombres})), '')`,
-    baseNombreCompleto
-  )
-  const grado = `TRIM(LOWER(${coalesceExpr(nullIfTrim(expr(m, 'm', 'grado')), nullIfTrim(expr(b, 'b', 'grado')))}))`
-  const nivel = `LOWER(${coalesceExpr(nullIfTrim(expr(m, 'm', 'nivel')), nullIfTrim(expr(b, 'b', 'nivel')))} )`
-  const grupo = coalesceExpr(nullIfTrim(expr(m, 'm', 'grupo')), nullIfTrim(expr(b, 'b', 'grupo')))
-  const curp = coalesceExpr(nullIfTrim(expr(m, 'm', 'curp')), nullIfTrim(expr(b, 'b', 'curp')))
-  const emailPadre = coalesceExpr(nullIfTrim(expr(m, 'm', 'email_padre')), nullIfTrim(expr(b, 'b', 'correo')))
-  const emailMadre = coalesceExpr(nullIfTrim(expr(m, 'm', 'email_madre')), nullIfTrim(expr(b, 'b', 'correo')))
-  const telefonoPadre = coalesceExpr(nullIfTrim(expr(m, 'm', 'telefono_padre')), nullIfTrim(expr(b, 'b', 'telefono')))
-  const telefonoMadre = coalesceExpr(nullIfTrim(expr(m, 'm', 'telefono_madre')), nullIfTrim(expr(b, 'b', 'telefono')))
-  const interno = coalesceExpr(nullIfTrim(expr(m, 'm', 'interno')), nullIfTrim(expr(b, 'b', 'interno')))
-  const padreFullName = `NULLIF(TRIM(CONCAT_WS(' ', ${expr(m, 'm', 'nombre_padre')}, ${expr(m, 'm', 'apellido_paterno_padre')}, ${expr(m, 'm', 'apellido_materno_padre')})), '')`
-  const madreFullName = `NULLIF(TRIM(CONCAT_WS(' ', ${expr(m, 'm', 'nombre_madre')}, ${expr(m, 'm', 'apellido_paterno_madre')}, ${expr(m, 'm', 'apellido_materno_madre')})), '')`
-  const guardian = coalesceExpr(padreFullName, madreFullName, nullIfTrim(expr(b, 'b', 'Nombre del padre o tutor')))
+    : `NULLIF(TRIM(CONCAT_WS(' ', ${expr(baseColumns, 'b', 'apellidoPaterno')}, ${expr(baseColumns, 'b', 'apellidoMaterno')}, ${expr(baseColumns, 'b', 'nombres')})), '')`
   const updatedAt = coalesceExpr(
-    expr(m, 'm', 'updated_at'),
-    expr(m, 'm', 'updatedAt'),
-    expr(m, 'm', 'fecha_actualizacion'),
-    expr(m, 'm', 'created_at'),
-    expr(b, 'b', 'updated_at'),
-    expr(b, 'b', 'updatedAt'),
-    expr(b, 'b', 'fecha_actualizacion')
-  )
-  const address = coalesceExpr(
-    nullIfTrim(expr(m, 'm', 'direccion')),
-    nullIfTrim(expr(m, 'm', 'domicilio')),
-    nullIfTrim(expr(m, 'm', 'calle')),
-    nullIfTrim(expr(b, 'b', 'direccion')),
-    nullIfTrim(expr(b, 'b', 'domicilio'))
+    expr(baseColumns, 'b', 'updated_at'),
+    expr(baseColumns, 'b', 'updatedAt'),
+    expr(baseColumns, 'b', 'fecha_actualizacion')
   )
 
-  const plantel = coalesceExpr(nullIfTrim(expr(m, 'm', 'plantel')), nullIfTrim(expr(b, 'b', 'plantel')), `'${agentId}'`)
-  const status = `CASE WHEN ${expr(m, 'm', 'baja')} IN (1, '1', 'SI', 'Si', 'si', 'TRUE', 'true', 'Baja', 'BAJA') THEN 'Baja' ELSE ${coalesceExpr(nullIfTrim(expr(b, 'b', 'estatus')), `'Activo'`)} END`
+  return [
+    selectAs(sqlLiteral(agentId), 'agentId'),
+    selectAs(col('b', 'matricula'), 'matricula'),
+    selectAs(col('b', 'matricula'), 'studentId'),
+    selectAs(coalesceExpr(nullIfTrim(expr(baseColumns, 'b', 'plantel')), sqlLiteral(agentId)), 'basePlantel'),
+    selectAs(expr(baseColumns, 'b', 'nombres'), 'baseNombres'),
+    selectAs(expr(baseColumns, 'b', 'apellidoPaterno'), 'baseApellidoPaterno'),
+    selectAs(expr(baseColumns, 'b', 'apellidoMaterno'), 'baseApellidoMaterno'),
+    selectAs(baseNombreCompleto, 'baseNombreCompleto'),
+    selectAs(expr(baseColumns, 'b', 'curp'), 'baseCurp'),
+    selectAs(expr(baseColumns, 'b', 'correo'), 'baseCorreo'),
+    selectAs(expr(baseColumns, 'b', 'telefono'), 'baseTelefono'),
+    selectAs(expr(baseColumns, 'b', 'grado'), 'baseGrado'),
+    selectAs(expr(baseColumns, 'b', 'grupo'), 'baseGrupo'),
+    selectAs(expr(baseColumns, 'b', 'nivel'), 'baseNivel'),
+    selectAs(expr(baseColumns, 'b', 'interno'), 'baseInterno'),
+    selectAs(expr(baseColumns, 'b', 'estatus', sqlLiteral('Activo')), 'baseEstatus'),
+    selectAs(expr(baseColumns, 'b', 'Nombre del padre o tutor'), 'baseGuardian'),
+    selectAs(expr(baseColumns, 'b', 'direccion'), 'baseDireccion'),
+    selectAs(expr(baseColumns, 'b', 'domicilio'), 'baseDomicilio'),
+    selectAs(updatedAt, 'baseUpdatedAt')
+  ]
+}
 
-  return {
-    selectFields: [
-      selectAs(`'${agentId}'`, 'agentId'),
-      selectAs(plantel, 'plantel'),
-      selectAs(coalesceExpr(nullIfTrim(expr(b, 'b', 'plantel')), `'${agentId}'`), 'basePlantel'),
-      selectAs(col('b', 'matricula'), 'studentId'),
-      selectAs(col('b', 'matricula'), 'matricula'),
-      selectAs(fullName, 'fullName'),
-      selectAs(fullName, 'nombreCompleto'),
-      selectAs(nombres, 'nombres'),
-      selectAs(apellidoPaterno, 'apellidoPaterno'),
-      selectAs(apellidoMaterno, 'apellidoMaterno'),
-      selectAs(curp, 'curp'),
-      selectAs(telefonoPadre, 'phone'),
-      selectAs(emailPadre, 'email'),
-      selectAs(status, 'status'),
-      selectAs(`CASE WHEN m.matricula IS NULL THEN 'base' ELSE 'matricula' END`, 'statusSource'),
-      selectAs(expr(m, 'm', 'baja'), 'baja'),
-      selectAs(expr(m, 'm', 'motivo_baja'), 'motivoBaja'),
-      selectAs(expr(m, 'm', 'categoria_baja'), 'categoriaBaja'),
-      selectAs(expr(m, 'm', 'seguimiento_baja'), 'seguimientoBaja'),
-      selectAs(coalesceExpr(nullIfTrim(expr(m, 'm', 'servicio')), nivel), 'program'),
-      selectAs(nivel, 'nivel'),
-      selectAs(grado, 'grado'),
-      selectAs(grupo, 'group'),
-      selectAs(guardian, 'guardianName'),
-      selectAs(padreFullName, 'fatherName'),
-      selectAs(madreFullName, 'motherName'),
-      selectAs(expr(m, 'm', 'nombre_padre'), 'nombrePadre'),
-      selectAs(expr(m, 'm', 'apellido_paterno_padre'), 'apellidoPaternoPadre'),
-      selectAs(expr(m, 'm', 'apellido_materno_padre'), 'apellidoMaternoPadre'),
-      selectAs(expr(m, 'm', 'nombre_madre'), 'nombreMadre'),
-      selectAs(expr(m, 'm', 'apellido_paterno_madre'), 'apellidoPaternoMadre'),
-      selectAs(expr(m, 'm', 'apellido_materno_madre'), 'apellidoMaternoMadre'),
-      selectAs(telefonoPadre, 'telefonoPadre'),
-      selectAs(telefonoMadre, 'telefonoMadre'),
-      selectAs(emailPadre, 'emailPadre'),
-      selectAs(emailMadre, 'emailMadre'),
-      selectAs(interno, 'interno'),
-      selectAs(expr(m, 'm', 'servicio'), 'servicio'),
-      selectAs(address, 'address'),
-      selectAs(expr(m, 'm', 'foto'), 'foto'),
-      selectAs(`m.matricula IS NOT NULL`, 'overlayExists'),
-      selectAs(updatedAt, 'updatedAt')
-    ],
-    expressions: {
-      fullName,
-      curp,
-      phone: telefonoPadre,
-      email: emailPadre,
-      status,
-      nivel,
-      grado,
-      grupo,
-      guardian,
-      updatedAt
-    }
+const buildLocalBaseWhere = (schema: ControlEscolarSchema) => {
+  const where: string[] = []
+  if (schema.ingresos) {
+    where.push(`EXISTS (SELECT 1 FROM ingresos i WHERE i.matricula = b.matricula AND i.estatus = 'Activo')`)
   }
+  where.push(`${expr(schema.base, 'b', 'estatus', sqlLiteral('Activo'))} = 'Activo'`)
+  return where.join(' AND ')
 }
 
-const buildMissingFields = (row: any) => {
-  const missing: string[] = []
-  if (!normalizeKey(row.curp)) missing.push('curp')
-  if (!normalizeKey(row.phone) && !normalizeKey(row.telefonoPadre) && !normalizeKey(row.telefonoMadre)) missing.push('teléfono')
-  if (!normalizeKey(row.email) && !normalizeKey(row.emailPadre) && !normalizeKey(row.emailMadre)) missing.push('email')
-  if (!normalizeKey(row.guardianName) && !normalizeKey(row.fatherName) && !normalizeKey(row.motherName)) missing.push('tutor')
-  if (!normalizeKey(row.group)) missing.push('grupo')
-  return missing
+const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema) => {
+  const fields = buildLocalBaseSelect(agentId, schema.base)
+  const whereSql = buildLocalBaseWhere(schema)
+  return await query<any[]>(`
+    SELECT ${fields.join(',\n      ')}
+    FROM base b
+    WHERE ${whereSql}
+    ORDER BY b.matricula ASC
+    LIMIT ${MAX_LOCAL_ROWS + 1}
+  `)
 }
+
+const centralSelectColumns = (schema: ControlEscolarSchema) => {
+  const wanted = [
+    'matricula',
+    'plantel',
+    'grado',
+    'grupo',
+    'nivel',
+    'nombres',
+    'apellido_paterno',
+    'apellido_materno',
+    'curp',
+    'email_padre',
+    'email_madre',
+    'telefono_padre',
+    'telefono_madre',
+    'interno',
+    'baja',
+    'motivo_baja',
+    'categoria_baja',
+    'seguimiento_baja',
+    'nombre_padre',
+    'apellido_paterno_padre',
+    'apellido_materno_padre',
+    'nombre_madre',
+    'apellido_paterno_madre',
+    'apellido_materno_madre',
+    'servicio',
+    'direccion',
+    'domicilio',
+    'calle',
+    'foto',
+    'updated_at',
+    'updatedAt',
+    'fecha_actualizacion',
+    'created_at'
+  ]
+
+  return wanted.filter((column) => schema.matricula.has(column))
+}
+
+const fetchMatriculaOverlayMap = async (matriculas: string[], schema: ControlEscolarSchema) => {
+  const unique = Array.from(new Set(matriculas.map((matricula) => normalizeText(matricula, 64)).filter(Boolean)))
+  const result = new Map<string, any>()
+  if (!unique.length) return result
+
+  const columns = centralSelectColumns(schema)
+  if (!columns.includes('matricula')) columns.unshift('matricula')
+  const selectSql = columns.map(escapeColumn).join(', ')
+
+  for (let index = 0; index < unique.length; index += CENTRAL_CHUNK_SIZE) {
+    const chunk = unique.slice(index, index + CENTRAL_CHUNK_SIZE)
+    const placeholders = chunk.map(() => '?').join(', ')
+    const rows = await controlEscolarCentralQuery<any[]>(
+      `SELECT ${selectSql} FROM \`matricula\` WHERE \`matricula\` IN (${placeholders})`,
+      chunk
+    )
+    rows.forEach((row) => result.set(normalizeText(row.matricula, 64), row))
+  }
+
+  return result
+}
+
+const truthyBaja = (value: unknown) => {
+  const normalized = normalizeText(value).toLowerCase()
+  return value === true || value === 1 || ['1', 'si', 'sí', 'true', 'baja'].includes(normalized)
+}
+
+const firstText = (...values: unknown[]) => {
+  for (const value of values) {
+    const text = normalizeText(value)
+    if (text) return text
+  }
+  return ''
+}
+
+const firstLower = (...values: unknown[]) => firstText(...values).toLowerCase()
+const firstUpper = (...values: unknown[]) => firstText(...values).toUpperCase()
 
 const resolvePhotoUrl = (value: unknown) => {
   const raw = normalizeKey(value)
@@ -328,187 +361,185 @@ const resolvePhotoUrl = (value: unknown) => {
   return `${baseUrl}${path}`
 }
 
-export const normalizeControlEscolarRow = (row: any): ControlEscolarStudentRow => {
-  const normalized = {
-    ...row,
-    agentId: normalizePlantel(row.agentId),
-    plantel: normalizeText(row.plantel || row.basePlantel),
-    basePlantel: normalizeText(row.basePlantel),
-    studentId: normalizeText(row.studentId || row.matricula),
-    matricula: normalizeText(row.matricula),
-    fullName: normalizeText(row.fullName || row.nombreCompleto),
-    nombreCompleto: normalizeText(row.nombreCompleto || row.fullName),
-    nombres: normalizeText(row.nombres),
-    apellidoPaterno: normalizeText(row.apellidoPaterno),
-    apellidoMaterno: normalizeText(row.apellidoMaterno),
-    curp: normalizeUpper(row.curp, 18),
-    phone: normalizeText(row.phone),
-    email: normalizeEmail(row.email),
-    status: normalizeText(row.status || 'Activo'),
-    statusSource: normalizeText(row.statusSource),
-    baja: row.baja == null ? null : Number(row.baja) || 0,
-    motivoBaja: normalizeText(row.motivoBaja, 500),
-    categoriaBaja: normalizeText(row.categoriaBaja),
-    seguimientoBaja: normalizeText(row.seguimientoBaja, 500),
-    program: normalizeText(row.program),
-    nivel: normalizeText(row.nivel),
-    grado: normalizeText(row.grado),
-    group: normalizeText(row.group),
-    guardianName: normalizeText(row.guardianName),
-    fatherName: normalizeText(row.fatherName),
-    motherName: normalizeText(row.motherName),
-    telefonoPadre: normalizeText(row.telefonoPadre),
-    telefonoMadre: normalizeText(row.telefonoMadre),
-    emailPadre: normalizeEmail(row.emailPadre),
-    emailMadre: normalizeEmail(row.emailMadre),
-    interno: normalizeText(row.interno),
-    servicio: normalizeText(row.servicio),
-    address: normalizeText(row.address, 700),
-    photoUrl: resolvePhotoUrl(row.foto),
-    overlayExists: Boolean(row.overlayExists),
-    missingFields: [] as string[],
-    updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString?.() || String(row.updatedAt) : null
+const buildMissingFields = (row: any) => {
+  const missing: string[] = []
+  if (!normalizeKey(row.curp)) missing.push('curp')
+  if (!normalizeKey(row.phone) && !normalizeKey(row.telefonoPadre) && !normalizeKey(row.telefonoMadre)) missing.push('teléfono')
+  if (!normalizeKey(row.email) && !normalizeKey(row.emailPadre) && !normalizeKey(row.emailMadre)) missing.push('email')
+  if (!normalizeKey(row.guardianName) && !normalizeKey(row.fatherName) && !normalizeKey(row.motherName)) missing.push('tutor')
+  if (!normalizeKey(row.group)) missing.push('grupo')
+  return missing
+}
+
+const overlayStudentRow = (agentId: string, base: any, overlay?: any): ControlEscolarStudentRow => {
+  const hasOverlay = Boolean(overlay?.matricula)
+  const nombres = firstText(overlay?.nombres, base.baseNombres)
+  const apellidoPaterno = firstText(overlay?.apellido_paterno, base.baseApellidoPaterno)
+  const apellidoMaterno = firstText(overlay?.apellido_materno, base.baseApellidoMaterno)
+  const fullName = firstText([apellidoPaterno, apellidoMaterno, nombres].filter(Boolean).join(' '), base.baseNombreCompleto)
+  const fatherName = firstText([overlay?.nombre_padre, overlay?.apellido_paterno_padre, overlay?.apellido_materno_padre].map(normalizeText).filter(Boolean).join(' '))
+  const motherName = firstText([overlay?.nombre_madre, overlay?.apellido_paterno_madre, overlay?.apellido_materno_madre].map(normalizeText).filter(Boolean).join(' '))
+  const updatedAt = firstText(overlay?.updated_at, overlay?.updatedAt, overlay?.fecha_actualizacion, overlay?.created_at, base.baseUpdatedAt)
+  const baja = hasOverlay && truthyBaja(overlay?.baja) ? 1 : 0
+  const status = baja ? 'Baja' : firstText(base.baseEstatus, 'Activo')
+
+  const normalized: ControlEscolarStudentRow = {
+    agentId: normalizePlantel(agentId),
+    plantel: firstText(overlay?.plantel, base.basePlantel, agentId),
+    basePlantel: firstText(base.basePlantel, agentId),
+    studentId: normalizeText(base.studentId || base.matricula),
+    matricula: normalizeText(base.matricula),
+    fullName,
+    nombreCompleto: fullName,
+    nombres,
+    apellidoPaterno,
+    apellidoMaterno,
+    curp: firstUpper(overlay?.curp, base.baseCurp).slice(0, 18),
+    phone: firstText(overlay?.telefono_padre, base.baseTelefono),
+    email: firstLower(overlay?.email_padre, base.baseCorreo),
+    status,
+    statusSource: hasOverlay ? 'matricula' : 'base',
+    baja,
+    motivoBaja: normalizeText(overlay?.motivo_baja, 500),
+    categoriaBaja: normalizeText(overlay?.categoria_baja),
+    seguimientoBaja: normalizeText(overlay?.seguimiento_baja, 500),
+    program: firstText(overlay?.servicio, overlay?.nivel, base.baseNivel),
+    nivel: firstLower(overlay?.nivel, base.baseNivel),
+    grado: firstLower(overlay?.grado, base.baseGrado),
+    group: firstText(overlay?.grupo, base.baseGrupo),
+    guardianName: firstText(fatherName, motherName, base.baseGuardian),
+    fatherName,
+    motherName,
+    nombrePadre: normalizeText(overlay?.nombre_padre),
+    apellidoPaternoPadre: normalizeText(overlay?.apellido_paterno_padre),
+    apellidoMaternoPadre: normalizeText(overlay?.apellido_materno_padre),
+    nombreMadre: normalizeText(overlay?.nombre_madre),
+    apellidoPaternoMadre: normalizeText(overlay?.apellido_paterno_madre),
+    apellidoMaternoMadre: normalizeText(overlay?.apellido_materno_madre),
+    telefonoPadre: firstText(overlay?.telefono_padre, base.baseTelefono),
+    telefonoMadre: normalizeText(overlay?.telefono_madre),
+    emailPadre: firstLower(overlay?.email_padre, base.baseCorreo),
+    emailMadre: firstLower(overlay?.email_madre, base.baseCorreo),
+    interno: firstText(overlay?.interno, base.baseInterno),
+    servicio: normalizeText(overlay?.servicio),
+    address: firstText(overlay?.direccion, overlay?.domicilio, overlay?.calle, base.baseDireccion, base.baseDomicilio),
+    photoUrl: resolvePhotoUrl(overlay?.foto),
+    overlayExists: hasOverlay,
+    missingFields: [],
+    updatedAt: updatedAt ? new Date(updatedAt).toISOString?.() || String(updatedAt) : null
   }
 
   normalized.missingFields = buildMissingFields(normalized)
   return normalized
 }
 
-export const buildControlEscolarWhere = (schema: Awaited<ReturnType<typeof getControlEscolarSchema>>, fields: ReturnType<typeof buildControlEscolarSelect>, filters: any) => {
-  const where: string[] = []
-  const params: any[] = []
+const compareStudents = (a: ControlEscolarStudentRow, b: ControlEscolarStudentRow) => {
+  const statusA = a.status === 'Activo' ? 0 : 1
+  const statusB = b.status === 'Activo' ? 0 : 1
+  if (statusA !== statusB) return statusA - statusB
+  return `${a.grado}|${a.group}|${a.fullName}|${a.matricula}`.localeCompare(`${b.grado}|${b.group}|${b.fullName}|${b.matricula}`, 'es')
+}
 
-  if (schema.ingresos) {
-    where.push(`EXISTS (SELECT 1 FROM ingresos i WHERE i.matricula = b.matricula AND i.estatus = 'Activo')`)
+const fetchAllNormalizedStudents = async (agentId: string) => {
+  const schema = await getControlEscolarSchema(agentId)
+  const localRows = await fetchLocalBaseRows(agentId, schema)
+
+  if (localRows.length > MAX_LOCAL_ROWS) {
+    throw createError({
+      statusCode: 413,
+      message: `El plantel excede el límite temporal de ${MAX_LOCAL_ROWS} alumnos activos para Control Escolar. Ajusta la consulta antes de editar.`
+    })
   }
 
-  where.push(`${expr(schema.base, 'b', 'estatus', `'Activo'`)} = 'Activo'`)
+  const overlayMap = await fetchMatriculaOverlayMap(localRows.map((row) => row.matricula), schema)
+  return localRows.map((row) => overlayStudentRow(agentId, row, overlayMap.get(normalizeText(row.matricula, 64)))).sort(compareStudents)
+}
 
-  const search = normalizeText(filters.search || filters.q || '', 80)
+const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
+  let result = students
+  const search = normalizeText(filters.search || filters.q || '', 80).toLowerCase()
   if (search) {
-    where.push(`(${fields.expressions.fullName} LIKE ? OR b.matricula LIKE ? OR ${fields.expressions.curp} LIKE ? OR ${fields.expressions.email} LIKE ? OR ${fields.expressions.phone} LIKE ?)`)
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`)
+    result = result.filter((student) => [
+      student.matricula,
+      student.fullName,
+      student.curp,
+      student.email,
+      student.phone,
+      student.emailPadre,
+      student.emailMadre,
+      student.telefonoPadre,
+      student.telefonoMadre,
+      student.guardianName,
+      student.nivel,
+      student.grado,
+      student.group
+    ].some((value) => normalizeText(value).toLowerCase().includes(search)))
   }
 
   const status = normalizeText(filters.status || '')
   if (status && status !== 'all') {
-    if (status === 'active') where.push(`${fields.expressions.status} = 'Activo'`)
-    if (status === 'inactive') where.push(`${fields.expressions.status} <> 'Activo'`)
-    if (status === 'baja') where.push(`${fields.expressions.status} = 'Baja'`)
+    if (status === 'active') result = result.filter((student) => student.status === 'Activo')
+    if (status === 'inactive') result = result.filter((student) => student.status !== 'Activo')
+    if (status === 'baja') result = result.filter((student) => student.status === 'Baja')
   }
 
-  const nivel = normalizeText(filters.nivel || filters.program || '')
-  if (nivel && nivel !== 'all') {
-    where.push(`${fields.expressions.nivel} = ?`)
-    params.push(nivel.toLowerCase())
-  }
+  const nivel = normalizeText(filters.nivel || filters.program || '').toLowerCase()
+  if (nivel && nivel !== 'all') result = result.filter((student) => student.nivel.toLowerCase() === nivel)
 
-  const grado = normalizeText(filters.grado || '')
-  if (grado && grado !== 'all') {
-    where.push(`${fields.expressions.grado} = ?`)
-    params.push(grado.toLowerCase())
-  }
+  const grado = normalizeText(filters.grado || '').toLowerCase()
+  if (grado && grado !== 'all') result = result.filter((student) => student.grado.toLowerCase() === grado)
 
   const grupo = normalizeText(filters.group || filters.grupo || '')
-  if (grupo && grupo !== 'all') {
-    where.push(`${fields.expressions.grupo} = ?`)
-    params.push(grupo)
-  }
+  if (grupo && grupo !== 'all') result = result.filter((student) => student.group === grupo)
 
   const missing = normalizeText(filters.missing || '')
   if (missing && missing !== 'all') {
-    if (missing === 'curp') where.push(`(${fields.expressions.curp} IS NULL OR ${fields.expressions.curp} = '')`)
-    if (missing === 'phone') where.push(`(${fields.expressions.phone} IS NULL OR ${fields.expressions.phone} = '')`)
-    if (missing === 'email') where.push(`(${fields.expressions.email} IS NULL OR ${fields.expressions.email} = '')`)
-    if (missing === 'guardian') where.push(`(${fields.expressions.guardian} IS NULL OR ${fields.expressions.guardian} = '')`)
-    if (missing === 'overlay') where.push(`m.matricula IS NULL`)
+    if (missing === 'curp') result = result.filter((student) => student.missingFields.includes('curp'))
+    if (missing === 'phone') result = result.filter((student) => student.missingFields.includes('teléfono'))
+    if (missing === 'email') result = result.filter((student) => student.missingFields.includes('email'))
+    if (missing === 'guardian') result = result.filter((student) => student.missingFields.includes('tutor'))
+    if (missing === 'overlay') result = result.filter((student) => !student.overlayExists)
   }
 
   const recent = normalizeText(filters.recent || '')
   if (recent && recent !== 'all') {
     const days = recent === '7d' ? 7 : recent === '30d' ? 30 : recent === '90d' ? 90 : 0
-    if (days > 0) where.push(`${fields.expressions.updatedAt} >= DATE_SUB(NOW(), INTERVAL ${days} DAY)`)
+    if (days > 0) {
+      const threshold = Date.now() - days * 24 * 60 * 60 * 1000
+      result = result.filter((student) => student.updatedAt && new Date(student.updatedAt).getTime() >= threshold)
+    }
   }
 
-  return { whereSql: where.length ? where.join(' AND ') : '1=1', params }
+  return result
 }
 
-export const getControlEscolarCatalogs = async (agentId: string) => {
-  const schema = await getControlEscolarSchema(agentId)
-  const fields = buildControlEscolarSelect(agentId, schema)
-  const { whereSql, params } = buildControlEscolarWhere(schema, fields, {})
-  const rows = await query<any[]>(`
-    SELECT
-      ${fields.expressions.nivel} AS nivel,
-      ${fields.expressions.grado} AS grado,
-      ${fields.expressions.grupo} AS grupo,
-      COUNT(*) AS total
-    FROM base b
-    LEFT JOIN matricula m ON m.matricula = b.matricula
-    WHERE ${whereSql}
-    GROUP BY nivel, grado, grupo
-    ORDER BY nivel ASC, grado ASC, grupo ASC
-  `, params)
-
-  return {
-    niveles: Array.from(new Set(rows.map((row) => normalizeText(row.nivel)).filter(Boolean))),
-    grados: Array.from(new Set(rows.map((row) => normalizeText(row.grado)).filter(Boolean))),
-    grupos: Array.from(new Set(rows.map((row) => normalizeText(row.grupo)).filter(Boolean)))
-  }
-}
+const buildCatalogs = (students: ControlEscolarStudentRow[]) => ({
+  niveles: Array.from(new Set(students.map((student) => student.nivel).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
+  grados: Array.from(new Set(students.map((student) => student.grado).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
+  grupos: Array.from(new Set(students.map((student) => student.group).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es'))
+})
 
 export const fetchControlEscolarStudents = async (agentId: string, filters: any) => {
   const page = Math.max(1, Number(filters.page || 1) || 1)
   const limit = Math.min(100, Math.max(10, Number(filters.limit || 25) || 25))
+  const allStudents = await fetchAllNormalizedStudents(agentId)
+  const filtered = applyFilters(allStudents, filters)
   const offset = (page - 1) * limit
-  const schema = await getControlEscolarSchema(agentId)
-  const fields = buildControlEscolarSelect(agentId, schema)
-  const { whereSql, params } = buildControlEscolarWhere(schema, fields, filters)
-
-  const countRows = await query<any[]>(`
-    SELECT COUNT(*) AS total
-    FROM base b
-    LEFT JOIN matricula m ON m.matricula = b.matricula
-    WHERE ${whereSql}
-  `, params)
-
-  const rows = await query<any[]>(`
-    SELECT ${fields.selectFields.join(',\n      ')}
-    FROM base b
-    LEFT JOIN matricula m ON m.matricula = b.matricula
-    WHERE ${whereSql}
-    ORDER BY ${fields.expressions.status} = 'Activo' DESC, ${fields.expressions.grado} ASC, ${fields.expressions.grupo} ASC, ${fields.expressions.fullName} ASC, b.matricula ASC
-    LIMIT ? OFFSET ?
-  `, [...params, limit, offset])
-
-  const data = rows.map(normalizeControlEscolarRow)
-  const catalogs = await getControlEscolarCatalogs(agentId)
 
   return {
-    data,
+    data: filtered.slice(offset, offset + limit),
     pagination: {
       page,
       limit,
-      total: Number(countRows[0]?.total || 0),
-      pages: Math.max(1, Math.ceil(Number(countRows[0]?.total || 0) / limit))
+      total: filtered.length,
+      pages: Math.max(1, Math.ceil(filtered.length / limit))
     },
-    catalogs
+    catalogs: buildCatalogs(allStudents)
   }
 }
 
 export const fetchControlEscolarKpis = async (agentId: string) => {
-  const schema = await getControlEscolarSchema(agentId)
-  const fields = buildControlEscolarSelect(agentId, schema)
-  const { whereSql, params } = buildControlEscolarWhere(schema, fields, {})
-  const rows = await query<any[]>(`
-    SELECT ${fields.selectFields.join(',\n      ')}
-    FROM base b
-    LEFT JOIN matricula m ON m.matricula = b.matricula
-    WHERE ${whereSql}
-    LIMIT 10000
-  `, params)
-
-  const students = rows.map(normalizeControlEscolarRow)
+  const students = await fetchAllNormalizedStudents(agentId)
   const byNivel = new Map<string, number>()
   const byGrupo = new Map<string, number>()
 
@@ -519,16 +550,14 @@ export const fetchControlEscolarKpis = async (agentId: string) => {
   })
 
   const active = students.filter((student) => student.status === 'Activo').length
-  const inactive = students.length - active
-  const overlayMissing = students.filter((student) => !student.overlayExists).length
   const missing = (field: string) => students.filter((student) => student.missingFields.includes(field)).length
 
   return {
     totalInscritos: students.length,
     activos: active,
-    inactivos: inactive,
+    inactivos: students.length - active,
     bajas: students.filter((student) => student.status === 'Baja').length,
-    nuevosOverlay: overlayMissing,
+    nuevosOverlay: students.filter((student) => !student.overlayExists).length,
     expedientesIncompletos: students.filter((student) => student.missingFields.length > 0).length,
     sinCurp: missing('curp'),
     sinTelefono: missing('teléfono'),
@@ -585,15 +614,10 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
   }
 
   const schema = await getControlEscolarSchema(agentId)
-  const [baseRow] = await query<any[]>(`SELECT matricula, plantel FROM base WHERE matricula = ? AND estatus = 'Activo' LIMIT 1`, [normalizedMatricula])
+  const [baseRow] = await query<any[]>(`SELECT matricula, ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel FROM base b WHERE b.matricula = ? AND ${expr(schema.base, 'b', 'estatus', sqlLiteral('Activo'))} = 'Activo' LIMIT 1`, [normalizedMatricula])
   if (!baseRow) {
     throw createError({ statusCode: 404, message: 'El alumno no existe como fila activa en base. Control Escolar no crea alumnos locales.' })
   }
-
-  const editableEntries = Object.entries(body || {})
-    .filter(([field]) => Object.prototype.hasOwnProperty.call(PATCH_FIELD_COLUMN_MAP, field))
-    .map(([field, value]) => ({ field, column: PATCH_FIELD_COLUMN_MAP[field], value: normalizePatchValue(field, value) }))
-    .filter((entry) => schema.matricula.has(entry.column))
 
   const requestedFields = Object.keys(body || {})
   const rejected = requestedFields.filter((field) => !Object.prototype.hasOwnProperty.call(PATCH_FIELD_COLUMN_MAP, field))
@@ -601,15 +625,19 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
     throw createError({ statusCode: 400, message: `Campos no permitidos para Control Escolar: ${rejected.join(', ')}` })
   }
 
+  const editableEntries = Object.entries(body || {})
+    .map(([field, value]) => ({ field, column: PATCH_FIELD_COLUMN_MAP[field], value: normalizePatchValue(field, value) }))
+    .filter((entry) => entry.column && schema.matricula.has(entry.column))
+
   if (!editableEntries.length) {
-    throw createError({ statusCode: 400, message: 'No hay campos editables disponibles en la tabla matricula para guardar.' })
+    throw createError({ statusCode: 400, message: 'No hay campos editables disponibles en la tabla centralizada matricula para guardar.' })
   }
 
   if (editableEntries.some((entry) => entry.field === 'curp' && entry.value && !/^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(String(entry.value)))) {
     throw createError({ statusCode: 400, message: 'CURP inválida. Debe tener 18 caracteres con formato oficial.' })
   }
 
-  const [existing] = await query<any[]>(`SELECT matricula FROM matricula WHERE matricula = ? LIMIT 1`, [normalizedMatricula])
+  const [existing] = await controlEscolarCentralQuery<any[]>(`SELECT matricula FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`, [normalizedMatricula])
   const auditContext = {
     user: user.email,
     agentId,
@@ -618,7 +646,7 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
   }
 
   if (existing) {
-    const assignments = editableEntries.map((entry) => `\`${entry.column}\` = ?`)
+    const assignments = editableEntries.map((entry) => `${escapeColumn(entry.column)} = ?`)
     const params = [...editableEntries.map((entry) => entry.value)]
     if (schema.matricula.has('updated_at')) assignments.push('`updated_at` = CURRENT_TIMESTAMP')
     if (schema.matricula.has('updated_by')) {
@@ -626,7 +654,7 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
       params.push(user.email)
     }
     params.push(normalizedMatricula)
-    await query(`UPDATE matricula SET ${assignments.join(', ')} WHERE matricula = ?`, params)
+    await controlEscolarCentralQuery(`UPDATE \`matricula\` SET ${assignments.join(', ')} WHERE \`matricula\` = ?`, params)
   } else {
     const columns = ['matricula']
     const values: any[] = [normalizedMatricula]
@@ -653,17 +681,17 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
       }
     })
 
-    await query(
-      `INSERT INTO matricula (${columns.map((column) => `\`${column}\``).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+    await controlEscolarCentralQuery(
+      `INSERT INTO \`matricula\` (${columns.map(escapeColumn).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
       values
     )
   }
 
   // TODO: Wire this into the project audit log if a Control Escolar audit table/pattern is introduced.
-  console.info('[Control Escolar] matricula overlay updated', auditContext)
+  console.info('[Control Escolar] centralized matricula overlay updated', auditContext)
 
-  const result = await fetchControlEscolarStudents(agentId, { search: normalizedMatricula, page: 1, limit: 1 })
-  return { success: true, student: result.data[0] || null }
+  const result = await fetchControlEscolarStudents(agentId, { search: normalizedMatricula, page: 1, limit: 10 })
+  return { success: true, student: result.data.find((student) => student.matricula === normalizedMatricula) || result.data[0] || null }
 }
 
 export const runControlEscolar = async <T>(event: any, agentId: string, callback: () => Promise<T>) => {
@@ -672,17 +700,6 @@ export const runControlEscolar = async <T>(event: any, agentId: string, callback
 }
 
 export const fetchControlEscolarExportRows = async (agentId: string, filters: any) => {
-  const schema = await getControlEscolarSchema(agentId)
-  const fields = buildControlEscolarSelect(agentId, schema)
-  const { whereSql, params } = buildControlEscolarWhere(schema, fields, filters)
-  const rows = await query<any[]>(`
-    SELECT ${fields.selectFields.join(',\n      ')}
-    FROM base b
-    LEFT JOIN matricula m ON m.matricula = b.matricula
-    WHERE ${whereSql}
-    ORDER BY ${fields.expressions.status} = 'Activo' DESC, ${fields.expressions.grado} ASC, ${fields.expressions.grupo} ASC, ${fields.expressions.fullName} ASC, b.matricula ASC
-    LIMIT 5000
-  `, params)
-
-  return rows.map(normalizeControlEscolarRow)
+  const allStudents = await fetchAllNormalizedStudents(agentId)
+  return applyFilters(allStudents, filters).slice(0, 5000)
 }
