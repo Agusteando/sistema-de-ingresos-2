@@ -108,12 +108,51 @@ body.students-route-active .chip.active {
 }
 
 .ui-group-icon {
-  display: inline-block;
+  position: relative;
+  display: inline-grid;
   width: var(--group-icon-size, 1.35em);
   height: var(--group-icon-size, 1.35em);
   flex: 0 0 auto;
-  line-height: 0;
+  place-items: center;
+  box-sizing: border-box;
+  overflow: visible;
+  color: currentColor;
+  font-size: var(--group-icon-size, 1.35em);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.ui-group-icon__letter,
+.ui-group-icon__mask {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.ui-group-icon__letter {
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: var(--group-icon-stroke-width, .055em) solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: currentColor;
+  font-size: var(--group-icon-letter-font-size, .49em);
+  font-weight: 850;
+  letter-spacing: -.012em;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.ui-group-icon__mask {
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  width: var(--group-icon-art-size, 100%);
+  height: var(--group-icon-art-size, 100%);
   background: currentColor;
-  -webkit-mask: var(--group-icon-mask) center / var(--group-icon-mask-size, contain) no-repeat;
-  mask: var(--group-icon-mask) center / var(--group-icon-mask-size, contain) no-repeat;
+  transform: translate(-50%, -50%) translate(var(--group-icon-art-offset-x, 0%), var(--group-icon-art-offset-y, 0%));
+  transform-origin: center;
+  -webkit-mask: var(--group-icon-mask) center / contain no-repeat;
+  mask: var(--group-icon-mask) center / contain no-repeat;
 }

@@ -120,19 +120,15 @@
   cursor: pointer;
 }
 
-.student-row::before {
+.student-group-watermark {
+  --group-icon-size: var(--student-list-group-watermark-size);
   position: absolute;
   z-index: 0;
   inset-block-start: 50%;
   inset-inline-start: clamp(190px, 35%, 260px);
-  inline-size: var(--student-list-group-watermark-size);
-  block-size: var(--student-list-group-watermark-size);
-  content: "";
   pointer-events: none;
   opacity: .105;
-  background: color-mix(in srgb, var(--grade-accent, #4fa346) 38%, #6d705f);
-  -webkit-mask: var(--student-group-icon-mask, none) center / contain no-repeat;
-  mask: var(--student-group-icon-mask, none) center / contain no-repeat;
+  color: color-mix(in srgb, var(--grade-accent, #4fa346) 38%, #6d705f);
   transform: translateY(-50%) rotate(-4deg);
   transform-origin: center;
 }
@@ -144,10 +140,10 @@
   box-shadow: 0 8px 22px rgba(63, 145, 56, .105);
 }
 
-.student-row.selected::before,
-.student-row.multi-selected::before {
+.student-row.selected .student-group-watermark,
+.student-row.multi-selected .student-group-watermark {
   opacity: .16;
-  background: color-mix(in srgb, var(--grade-accent, #4fa346) 48%, #69735a);
+  color: color-mix(in srgb, var(--grade-accent, #4fa346) 48%, #69735a);
 }
 
 .student-identity {
@@ -180,6 +176,7 @@
     linear-gradient(145deg, #fff, color-mix(in srgb, var(--grade-soft, #f2f8ef) 82%, #fff));
   color: color-mix(in srgb, var(--grade-accent, #4fa346) 82%, #46513f);
   box-shadow: 0 10px 18px rgba(21, 35, 60, .085), inset 0 0 0 1px rgba(255, 255, 255, .84);
+  line-height: 0;
 }
 .student-group-sigil .ui-group-icon {
   --group-icon-size: calc(var(--student-list-crest-size) * .63);
