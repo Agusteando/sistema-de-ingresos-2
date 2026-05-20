@@ -1,5 +1,7 @@
-import { getControlEscolarOptions } from '../../utils/control-escolar'
+import { listControlEscolarPlanteles } from '../../utils/control-escolar'
 
 export default defineEventHandler(async (event) => {
-  return await getControlEscolarOptions(event)
+  const { planteles } = await listControlEscolarPlanteles(event)
+  setResponseHeader(event, 'Cache-Control', 'private, max-age=60')
+  return { planteles }
 })

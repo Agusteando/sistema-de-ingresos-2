@@ -1,18 +1,19 @@
-import { getControlEscolarStudents, runControlEscolarQuery } from '../../../utils/control-escolar'
+import { fetchControlEscolarStudents, resolveControlEscolarAuth, runControlEscolar } from '../../../utils/control-escolar'
 
 export default defineEventHandler(async (event) => {
-  const params = getQuery(event)
-  return await runControlEscolarQuery(event, params.agentId, async ({ agentId }) => {
-    return await getControlEscolarStudents(agentId, {
-      search: String(params.search || ''),
-      status: String(params.status || 'all'),
-      missing: String(params.missing || 'all'),
-      program: String(params.program || ''),
-      nivel: String(params.nivel || ''),
-      grado: String(params.grado || ''),
-      group: String(params.group || ''),
-      recentlyUpdated: String(params.recentlyUpdated || ''),
-      ciclo: String(params.ciclo || '')
-    }, Number(params.page || 1), Number(params.limit || 30))
+  const queryParams = getQuery(event)
+  const auth = await resolveControlEscolarAuth(event, queryParams.agentId)
+
+  return await runControlEscolar(event, auth.agentId, async () => {
+    try {
+      const result = await fetchControlEscolarStudents(auth.agentId, queryParams)
+      return { agentId: auth.agentId, ...result }
+    } catch (error: any) {
+      if (error?.statusCode) throw error
+      throw createError({
+        statusCode: error?.name === 'AbortError' ? 504 : 502,
+        message: error?.message || 'No se pudieron cargar alumnos de Control Escolar para este plantel.'
+      })
+    }
   })
 })
