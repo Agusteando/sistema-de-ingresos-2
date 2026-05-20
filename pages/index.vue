@@ -89,6 +89,7 @@
             @close-bulk="closeBulkWorkspace"
             @open-bulk-payment="openBulkPaymentFlow"
             @open-section-selection="openSectionModalForSelection"
+            @open-bulk-ingreso-cycle="openBulkIngresoCycleFlow"
             @clear-selected="clearSelectedStudents"
             @change-bulk-payment-method="bulkPaymentMethod = $event"
             @back-to-bulk="bulkWorkspaceMode = 'bulk'"
@@ -103,11 +104,22 @@
       :selected-balance-total="selectedBalanceTotal"
       @open-selection-details="openSelectionDetails"
       @open-section-selection="openSectionModalForSelection"
+      @open-bulk-ingreso-cycle="openBulkIngresoCycleFlow"
       @open-bulk-payment="openBulkPaymentFlow"
       @clear-selected="clearSelectedStudents"
     />
 
     <StudentFormModal v-if="showStudentModal" :student="editingStudent" @close="closeStudentModal" @success="handleStudentSuccess" />
+    <BulkIngresoCycleModal
+      v-if="showBulkIngresoCycleModal"
+      :selected-students="selectedStudents"
+      :target-ciclo="currentCicloKey"
+      :saving="bulkIngresoSaving"
+      :result="bulkIngresoResult"
+      @close="closeBulkIngresoCycleModal"
+      @confirm="submitBulkIngresoCycle"
+      @remove-student="removeStudentFromSelection"
+    />
     <BajaReasonModal v-if="pendingBajaStudent" :student="pendingBajaStudent" @close="pendingBajaStudent = null" @confirm="confirmBaja" />
 
     <StudentSectionModal
@@ -168,6 +180,7 @@ import StudentsListPanel from '~/components/students/StudentsListPanel.vue'
 import StudentsWorkspacePanel from '~/components/students/StudentsWorkspacePanel.vue'
 import StudentsSelectionDock from '~/components/students/StudentsSelectionDock.vue'
 import StudentSectionModal from '~/components/students/StudentSectionModal.vue'
+import BulkIngresoCycleModal from '~/components/BulkIngresoCycleModal.vue'
 import StudentFormModal from '~/components/StudentFormModal.vue'
 import BajaReasonModal from '~/components/BajaReasonModal.vue'
 
@@ -203,6 +216,9 @@ const showStudentModal = ref(false)
 const editingStudent = ref(null)
 const pendingBajaStudent = ref(null)
 const bulkWorkspaceMode = ref('none')
+const showBulkIngresoCycleModal = ref(false)
+const bulkIngresoSaving = ref(false)
+const bulkIngresoResult = ref(null)
 const format = formatMoney
 const {
   selectedMatriculas,
@@ -483,8 +499,6 @@ let studentsRequestId = 0
 const applyStudentsList = (nextStudents, { selectRouteStudent = true } = {}) => {
   students.value = Array.isArray(nextStudents) ? nextStudents : []
 
-  const knownMatriculas = new Set(students.value.map(student => normalizeStudentMatricula(student.matricula)))
-  setSelectedMatriculas(Array.from(selectedMatriculas.value).filter(matricula => knownMatriculas.has(matricula)))
   readCachedStudentPhotos()
 
   if (selectedStudent.value) {
@@ -713,6 +727,88 @@ const openBulkPaymentFlow = async () => {
   bulkWorkspaceMode.value = 'bulk-payment'
   await loadBulkPaymentDebts()
   scheduleWorkspaceScaleUpdate()
+}
+
+const openBulkIngresoCycleFlow = () => {
+  if (!selectedCount.value) return
+  selectedStudent.value = null
+  bulkIngresoResult.value = null
+  showBulkIngresoCycleModal.value = true
+}
+
+const closeBulkIngresoCycleModal = () => {
+  if (bulkIngresoSaving.value) return
+  showBulkIngresoCycleModal.value = false
+  bulkIngresoResult.value = null
+}
+
+const removeStudentFromSelection = (matricula) => {
+  const normalized = normalizeStudentMatricula(matricula)
+  if (!normalized) return
+  setSelectedMatriculas(Array.from(selectedMatriculas.value).filter(value => value !== normalized))
+  if (!selectedCount.value) closeBulkIngresoCycleModal()
+}
+
+const applyBulkIngresoCycleResult = (results = []) => {
+  const updates = new Map()
+  results.forEach((row) => {
+    if (row?.status !== 'updated' || !row.student?.matricula) return
+    updates.set(normalizeStudentMatricula(row.student.matricula), row.student)
+  })
+  if (!updates.size) return
+
+  students.value = students.value.map((student) => {
+    const key = normalizeStudentMatricula(student.matricula)
+    const update = updates.get(key)
+    if (!update) return student
+    const merged = {
+      ...student,
+      ...update,
+      ciclo: update.ciclo || update.cicloBase || student.ciclo,
+      cicloBase: update.cicloBase || update.ciclo || student.cicloBase
+    }
+    return {
+      ...merged,
+      tipoIngreso: resolveStudentTipoIngreso(merged)
+    }
+  })
+}
+
+const submitBulkIngresoCycle = async (payload) => {
+  if (bulkIngresoSaving.value || !selectedCount.value) return
+  bulkIngresoSaving.value = true
+
+  try {
+    const res = await $fetch('/api/students/bulk-ingreso-cycle', {
+      method: 'PUT',
+      body: {
+        ...payload,
+        matriculas: Array.from(selectedMatriculas.value)
+      }
+    })
+
+    bulkIngresoResult.value = res
+    applyBulkIngresoCycleResult(res?.results || [])
+    const failedMatriculas = (res?.results || [])
+      .filter(row => row?.status === 'failed')
+      .map(row => normalizeStudentMatricula(row?.matricula))
+      .filter(Boolean)
+
+    if (failedMatriculas.length) setSelectedMatriculas(failedMatriculas)
+    else {
+      clearStudentSelection()
+      bulkWorkspaceMode.value = 'none'
+    }
+
+    await refreshStudentsFromServer()
+    loadGlobalKpis()
+    loadKpiSparklines()
+    show(`${res?.updated || 0} alumnos actualizados`, (res?.failed || 0) ? 'warning' : 'success')
+  } catch (e) {
+    show(e?.data?.message || e?.message || 'No se pudo actualizar la selección', 'danger')
+  } finally {
+    bulkIngresoSaving.value = false
+  }
 }
 
 const closeBulkWorkspace = () => {
