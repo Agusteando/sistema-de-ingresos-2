@@ -8,11 +8,12 @@ El flujo de `Cargo extra` permite registrar una o varias becas asociadas a un co
 
 Las opciones son cerradas; no hay captura abierta de tipo de beca:
 
-- `coaborador`
-- `dres`
-- `hermanos`
-- `promoción`
-- `SEP mercadotecnia`
+- `Colaborador`
+- `DRES`
+- `Hermanos`
+- `Promoción`
+- `SEP`
+- `Mercadotecnia`
 
 Cuando se selecciona más de una, el sistema las guarda como texto separado por comas para que pueda leerse posteriormente sin depender de una tabla secundaria.
 

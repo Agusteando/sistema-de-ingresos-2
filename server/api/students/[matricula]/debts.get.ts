@@ -3,6 +3,7 @@ import dayjs from 'dayjs'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../../shared/utils/grado'
 import { resolveProjectedAmount } from '../../../utils/monto-final'
+import { normalizeBecaTypes } from '../../../utils/becaTypes'
 
 const normalizePaymentMethod = (value: unknown) => String(value || '')
   .normalize('NFD')
@@ -163,8 +164,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         pagosDepurados: depuradoTotalMes,
         saldo: saldoAntes,
         beca,
-        becaNombre: doc.becaNombre || doc.becaTipos || '',
-        becaTipos: doc.becaTipos || doc.becaNombre || '',
+        becaNombre: normalizeBecaTypes(doc.becaNombre || doc.becaTipos).selected.join(', ') || doc.becaNombre || doc.becaTipos || '',
+        becaTipos: normalizeBecaTypes(doc.becaTipos || doc.becaNombre).selected.join(', ') || doc.becaTipos || doc.becaNombre || '',
         becaMotivo: doc.becaMotivo || '',
         becaMonto: Number(doc.becaMonto || 0),
         becaPorcentaje: Number(doc.becaPorcentaje || beca || 0),

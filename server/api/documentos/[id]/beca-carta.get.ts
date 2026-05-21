@@ -2,11 +2,7 @@ import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../../shared/utils/grado'
 import { generateBecaCartaPdf } from '../../../utils/becaCartaPdf'
-
-const parseBecaTypes = (value: unknown) => String(value || '')
-  .split(',')
-  .map((item) => item.trim())
-  .filter(Boolean)
+import { normalizeBecaTypes } from '../../../utils/becaTypes'
 
 const safeFilePart = (value: unknown) => String(value || '')
   .normalize('NFD')
@@ -57,7 +53,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: isScopedToActivePlantel ? 403 : 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 
-  const becaTipos = parseBecaTypes(doc.becaTipos || doc.becaNombre)
+  const { selected: becaTipos } = normalizeBecaTypes(doc.becaTipos || doc.becaNombre)
   if (!becaTipos.length) {
     throw createError({ statusCode: 409, message: 'Este documento no tiene tipo de beca registrado.' })
   }
