@@ -3,7 +3,7 @@ import { getTrustedAuthUser, normalizePlantel, type AuthSessionUser } from './au
 import { PLANTELES_LIST } from '../../utils/constants'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import { calculatePromotedGrado, displayGrado, plantelCandidatesForProjectedScope } from '../../shared/utils/grado'
-import { previousCicloKey } from '../../shared/utils/tipoIngreso'
+import { previousCicloKey, resolveTipoIngreso } from '../../shared/utils/tipoIngreso'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from './enrollment-evidence'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 
@@ -57,6 +57,7 @@ export type ControlEscolarStudentRow = {
   currentEnrollmentConceptMatch: boolean
   inscritoCicloActual: boolean
   tipoIngreso: string
+  tipoIngresoValue: string
 }
 
 type TableColumn = {
@@ -432,6 +433,19 @@ const applyOperatorProjection = async (agentId: string, rows: any[], scope: Cont
     if (!hasCurrentEnrollmentEvidence && projectedPlantel !== normalizePlantel(agentId)) return []
 
     const historicalConceptIds = historicalEnrollmentEvidence.get(String(row.matricula || '').trim()) || ''
+    const tipoIngreso = resolveTipoIngreso({
+      ...row,
+      cicloBase: row.baseCiclo,
+      ciclo: row.baseCiclo,
+      tipoIngresoEvidence: {
+        targetCiclo: scope.cicloKey,
+        previousCiclo: scope.previousCiclo,
+        targetConceptIds: [row.conceptoIdsPagados, row.conceptoIdsCargados, row.conceptoIdsCicloActual],
+        previousConceptIds: [row.conceptoIdsPagadosPrevios, row.conceptoIdsCargadosPrevios, row.conceptoIdsCicloPrevio],
+        allConceptIds: [historicalConceptIds]
+      }
+    }, scope.cicloKey, { enrollmentConcepts: scope.enrollmentConceptIds })
+
     return [{
       ...row,
       plantelBaseOriginal: row.basePlantel,
@@ -441,7 +455,9 @@ const applyOperatorProjection = async (agentId: string, rows: any[], scope: Cont
       conceptoIdsHistoricos: historicalConceptIds,
       currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,
       inscritoCicloActual: hasCurrentEnrollmentEvidence,
-      operatorEnrollmentState: resolveOperatorEnrollmentState(row, scope, historicalConceptIds)
+      operatorEnrollmentState: resolveOperatorEnrollmentState(row, scope, historicalConceptIds),
+      operatorTipoIngreso: tipoIngreso.value,
+      operatorTipoIngresoSource: tipoIngreso.source
     }]
   })
 }
@@ -466,7 +482,8 @@ const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema,
     whereParts.push(`${col('b', 'plantel')} IN (${plantelCandidates.map(() => '?').join(',')})`)
     params.push(...plantelCandidates)
   }
-  addCurrentEnrollmentScope(whereParts, params, schema, scope)
+  const search = normalizeText(filters.search || filters.q || '', 80)
+  if (!search) addCurrentEnrollmentScope(whereParts, params, schema, scope)
 
   const sqlParams = [scope.cicloKey, scope.cicloKey, scope.previousCiclo, scope.previousCiclo, ...params]
   const rows = await query<any[]>(`
@@ -702,7 +719,8 @@ const overlayStudentRow = (agentId: string, base: any, overlay?: any): ControlEs
     enrollmentState: normalizeText(base.operatorEnrollmentState || 'inscrito'),
     currentEnrollmentConceptMatch: Boolean(base.currentEnrollmentConceptMatch),
     inscritoCicloActual: Boolean(base.inscritoCicloActual),
-    tipoIngreso: normalizeText(base.operatorEnrollmentState || 'inscrito') === 'no_inscrito' ? 'No inscrito' : 'Inscrito'
+    tipoIngresoValue: normalizeText(base.operatorTipoIngreso || '').toLowerCase() === 'interno' ? 'interno' : 'externo',
+    tipoIngreso: normalizeText(base.operatorTipoIngreso || '').toLowerCase() === 'interno' ? 'Interno' : 'Externo'
   }
 
   normalized.missingFields = buildMissingFields(normalized)
@@ -838,31 +856,19 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
     result = result.filter((student) => [
       student.matricula,
       student.fullName,
-      student.curp,
-      student.email,
-      student.phone,
-      student.emailPadre,
-      student.emailMadre,
-      student.telefonoPadre,
-      student.telefonoMadre,
-      student.guardianName,
-      student.nivel,
-      student.grado,
-      student.group
+      student.nombreCompleto
     ].some((value) => normalizeText(value).toLowerCase().includes(search)))
   }
 
   const status = normalizeText(filters.status || '')
   if (status && status !== 'all') {
-    if (status === 'inscritos') result = result.filter((student) => ['inscrito', 'baja_inscrita'].includes(student.enrollmentState))
+    if (status === 'inscritos') result = result.filter((student) => student.enrollmentState === 'inscrito')
+    if (status === 'internos') result = result.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue === 'interno')
+    if (status === 'externos') result = result.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue !== 'interno')
     if (status === 'no_inscritos') result = result.filter((student) => student.enrollmentState === 'no_inscrito')
-    if (status === 'active') result = result.filter((student) => student.status === 'Activo')
-    if (status === 'inactive') result = result.filter((student) => student.status !== 'Activo')
-    if (status === 'baja') result = result.filter((student) => student.status === 'Baja' || student.enrollmentState === 'baja_inscrita')
+    if (status === 'bajas' || status === 'baja') result = result.filter((student) => student.enrollmentState === 'baja_inscrita')
   }
 
-  const nivel = normalizeText(filters.nivel || filters.program || '').toLowerCase()
-  if (nivel && nivel !== 'all') result = result.filter((student) => student.nivel.toLowerCase() === nivel)
 
   const grado = normalizeText(filters.grado || '').toLowerCase()
   if (grado && grado !== 'all') result = result.filter((student) => student.grado.toLowerCase() === grado)
@@ -893,11 +899,25 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
   return result
 }
 
-const buildCatalogs = (students: ControlEscolarStudentRow[]) => ({
-  niveles: Array.from(new Set(students.map((student) => student.nivel).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
-  grados: Array.from(new Set(students.map((student) => student.grado).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
-  grupos: Array.from(new Set(students.map((student) => student.group).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es'))
-})
+const buildCatalogs = (students: ControlEscolarStudentRow[]) => {
+  const gruposPorGrado = students.reduce<Record<string, string[]>>((acc, student) => {
+    if (!student.grado || !student.group) return acc
+    if (!acc[student.grado]) acc[student.grado] = []
+    if (!acc[student.grado].includes(student.group)) acc[student.grado].push(student.group)
+    return acc
+  }, {})
+
+  Object.keys(gruposPorGrado).forEach((grado) => {
+    gruposPorGrado[grado].sort((a, b) => a.localeCompare(b, 'es'))
+  })
+
+  return {
+    niveles: Array.from(new Set(students.map((student) => student.nivel).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
+    grados: Array.from(new Set(students.map((student) => student.grado).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
+    grupos: Array.from(new Set(students.map((student) => student.group).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
+    gruposPorGrado
+  }
+}
 
 export const fetchControlEscolarStudents = async (agentId: string, filters: any) => {
   const page = Math.max(1, Number(filters.page || 1) || 1)
@@ -933,15 +953,19 @@ export const fetchControlEscolarKpis = async (agentId: string, filters: any = {}
   })
 
   const active = students.filter((student) => student.status === 'Activo').length
-  const inscritos = students.filter((student) => ['inscrito', 'baja_inscrita'].includes(student.enrollmentState)).length
+  const inscritos = students.filter((student) => student.enrollmentState === 'inscrito').length
+  const internos = students.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue === 'interno').length
+  const externos = students.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue !== 'interno').length
   const noInscritos = students.filter((student) => student.enrollmentState === 'no_inscrito').length
-  const bajas = students.filter((student) => student.status === 'Baja' || student.enrollmentState === 'baja_inscrita').length
+  const bajas = students.filter((student) => student.enrollmentState === 'baja_inscrita').length
   const missing = (field: string) => students.filter((student) => student.missingFields.includes(field)).length
 
   return {
     totalInscritos: inscritos,
     totalVisible: students.length,
     inscritos,
+    internos,
+    externos,
     noInscritos,
     activos: active,
     inactivos: students.length - active,

@@ -1,1 +1,1 @@
-Corrige textos formales de tipos de beca
+fix(control-escolar): alinear filtros y conteos con alumnos
