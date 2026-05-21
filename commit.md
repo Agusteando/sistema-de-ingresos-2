@@ -1,1 +1,1 @@
-fix(students): generar matrícula en alta de alumnos
+Fix no-inscritos visibility for new students

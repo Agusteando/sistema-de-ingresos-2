@@ -682,21 +682,9 @@ const hasCurrentEnrollmentConcept = (student) => {
 ])
 }
 
-const hasPreviousEnrollmentConcept = (student) => hasMatchingEnrollmentConcept([
-  student?.tipoIngresoEvidence?.previousConceptIds,
-  student?.tipoIngresoEvidence?.previousConceptosIds,
-  student?.tipoIngresoEvidence?.previousConcepts,
-  student?.tipoIngresoEvidence?.previousConceptos,
-  student?.conceptoIdsPreviousCiclo,
-  student?.conceptoIdsCicloPrevio,
-  student?.conceptoIdsPagadosPrevios,
-  student?.conceptoIdsCargadosPrevios
-])
-
 const isEnrolled = (student) => student?.estatus === 'Activo' && hasCurrentEnrollmentConcept(student)
 const isNoInscritoForSelectedCiclo = (student) => (
   student?.estatus === 'Activo'
-  && hasPreviousEnrollmentConcept(student)
   && !hasCurrentEnrollmentConcept(student)
 )
 const isBajaInscritaCurrent = (student) => student?.estatus !== 'Activo' && hasCurrentEnrollmentConcept(student)

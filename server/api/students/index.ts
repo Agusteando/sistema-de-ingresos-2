@@ -6,11 +6,20 @@ import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipo
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 
-type SqlWriteError = Error & { code?: string; errno?: number }
+type SqlWriteError = Error & {
+  code?: string
+  errno?: number
+  sqlState?: string
+  httpStatus?: number
+  status?: number
+  statusCode?: number
+  bridgePayload?: any
+}
+
+type InsertResult = { insertId?: number }
 
 const normalizeTextValue = (value: unknown) => String(value || '').trim()
 const normalizeMatricula = (value: unknown) => normalizeTextValue(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 const isDuplicateKeyError = (error: unknown) => {
   const err = error as SqlWriteError
@@ -18,36 +27,55 @@ const isDuplicateKeyError = (error: unknown) => {
   return err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062 || message.includes('duplicate entry')
 }
 
-const getNextMatriculaForPlantel = async (plantel: string) => {
-  const normalizedPlantel = normalizeMatricula(plantel)
-
-  if (!normalizedPlantel) {
-    throw createError({ statusCode: 400, message: 'Selecciona un plantel válido para generar la matrícula.' })
-  }
-
-  const regex = `^${escapeRegExp(normalizedPlantel)}[0-9]+$`
-  const startAt = normalizedPlantel.length + 1
-  const rows = await query<any[]>(`
-    SELECT matricula
-    FROM base
-    WHERE plantel = ? AND matricula REGEXP ?
-    ORDER BY CAST(SUBSTRING(matricula, ${startAt}) AS UNSIGNED) DESC
-    LIMIT 1
-  `, [plantel, regex])
-
-  const lastMatricula = String(rows[0]?.matricula || '').trim().toUpperCase()
-  const numericPart = lastMatricula.slice(normalizedPlantel.length)
-  const lastNumber = Number(numericPart)
-  const nextNumber = Number.isFinite(lastNumber) && lastNumber > 0 ? lastNumber + 1 : 1
-  const numericWidth = Math.max(4, numericPart.length || 0)
-
-  return `${normalizedPlantel}${String(nextNumber).padStart(numericWidth, '0')}`
+const isHandledHttpError = (error: unknown) => {
+  const err = error as SqlWriteError
+  const statusCode = Number(err?.statusCode || err?.status || 0)
+  return Number.isFinite(statusCode) && statusCode >= 400 && statusCode < 500
 }
 
-const insertStudent = async (body: Record<string, any>, user: any, assignedPlantel: string, assignedNivel: string, cicloKey: string, matricula: string) => {
+const bridgeHttpStatus = (error: unknown) => {
+  const err = error as SqlWriteError
+  const status = Number(err?.httpStatus || 0)
+  return Number.isFinite(status) && status > 0 ? status : 0
+}
+
+const createStudentPersistenceError = (error: unknown, explicitMatricula: string) => {
+  const err = error as SqlWriteError
+  const httpStatus = bridgeHttpStatus(err)
+  const code = err?.code || (httpStatus ? `DB_BRIDGE_HTTP_${httpStatus}` : undefined)
+  const detail = String(err?.bridgePayload?.error?.message || err?.bridgePayload?.message || err?.message || '').trim()
+
+  if (isDuplicateKeyError(err)) {
+    return createError({
+      statusCode: 409,
+      message: explicitMatricula
+        ? `La matrícula ${explicitMatricula} ya existe.`
+        : 'La matrícula generada por la base de datos ya existe. Intenta guardar nuevamente.',
+      data: { code: err?.code || 'ER_DUP_ENTRY', errno: err?.errno || 1062 }
+    })
+  }
+
+  if (httpStatus) {
+    return createError({
+      statusCode: httpStatus >= 500 ? 502 : httpStatus,
+      message: `No se pudo registrar el alumno: el servicio de base de datos respondió con HTTP ${httpStatus}. La matrícula debe generarla el trigger de la tabla base y el alta no fue confirmada. Revisa que el DB bridge/agente del plantel esté disponible y vuelve a intentar.`,
+      data: { code, httpStatus, detail: detail || null },
+      cause: err
+    })
+  }
+
+  return createError({
+    statusCode: 500,
+    message: 'No se pudo registrar el alumno por un error de base de datos. El alta no fue confirmada; revisa el detalle técnico y vuelve a intentar.',
+    data: { code: code || null, errno: err?.errno || null, sqlState: err?.sqlState || null, detail: detail || null },
+    cause: err
+  })
+}
+
+const insertStudent = async (body: Record<string, any>, user: any, assignedPlantel: string, assignedNivel: string, cicloKey: string, explicitMatricula = '') => {
   const curpInfo = parseCurp(body.curp)
 
-  await query(`
+  const result = await query<InsertResult>(`
     INSERT INTO base (
       matricula, apellidoPaterno, apellidoMaterno, nombres,
       nombreCompleto,
@@ -55,12 +83,31 @@ const insertStudent = async (body: Record<string, any>, user: any, assignedPlant
       \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo, estatus
     ) VALUES (?, ?, ?, ?, CONCAT(?, ' ', ?, ' ', ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
-    matricula,
+    explicitMatricula,
     normalizeTextValue(body.apellidoPaterno), normalizeTextValue(body.apellidoMaterno), normalizeTextValue(body.nombres),
     normalizeTextValue(body.apellidoPaterno), normalizeTextValue(body.apellidoMaterno), normalizeTextValue(body.nombres),
     curpInfo.normalized, curpInfo.birthDate, curpInfo.gender, assignedPlantel, assignedNivel, normalizeGradoForPlantel(body.grado, assignedPlantel, assignedNivel), normalizeTextValue(body.grupo),
     normalizeTextValue(body.padre), normalizeTextValue(body.telefono), normalizeTextValue(body.correo), normalizeTextValue(user?.name), cicloKey, body.estatus || 'Activo'
   ])
+
+  const insertId = Number(result?.insertId || 0)
+
+  if (!insertId) {
+    return explicitMatricula
+  }
+
+  try {
+    const rows = await query<any[]>(`SELECT matricula FROM base WHERE id = ? LIMIT 1`, [insertId])
+    return normalizeMatricula(rows[0]?.matricula) || explicitMatricula
+  } catch (error) {
+    console.warn('[Students POST] Alumno registrado, pero no se pudo leer la matrícula generada por trigger.', {
+      insertId,
+      code: (error as SqlWriteError)?.code,
+      httpStatus: (error as SqlWriteError)?.httpStatus,
+      message: (error as Error)?.message
+    })
+    return explicitMatricula
+  }
 }
 
 
@@ -260,9 +307,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           allConceptIds: [historicalConceptIds]
         }
       }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
+      const enrollmentState = r.estatus === 'Activo'
+        ? (hasCurrentEnrollmentEvidence ? 'inscrito' : 'no_inscrito')
+        : (hasCurrentEnrollmentEvidence ? 'baja_inscrita' : 'baja')
 
       return {
         ...r,
+        enrollmentState,
         conceptoIdsTodos: historicalConceptIds,
         conceptoIdsHistoricos: historicalConceptIds,
         currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,
@@ -301,37 +352,21 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     const assignedNivel = resolveNivelEscolar({ plantel: assignedPlantel, nivel: body.nivel })
     const explicitMatricula = normalizeMatricula(body.matricula)
 
-    if (explicitMatricula) {
-      try {
-        await insertStudent(body, user, assignedPlantel, assignedNivel, cicloKey, explicitMatricula)
-        return { success: true, matricula: explicitMatricula }
-      } catch (error) {
-        if (isDuplicateKeyError(error)) {
-          throw createError({ statusCode: 409, message: `La matrícula ${explicitMatricula} ya existe.` })
-        }
+    try {
+      const matricula = await insertStudent(body, user, assignedPlantel, assignedNivel, cicloKey, explicitMatricula)
+      return { success: true, matricula: matricula || undefined }
+    } catch (error) {
+      if (isHandledHttpError(error)) throw error
 
-        throw error
-      }
+      console.error('[Students POST] Error registrando alumno', {
+        code: (error as SqlWriteError)?.code,
+        errno: (error as SqlWriteError)?.errno,
+        sqlState: (error as SqlWriteError)?.sqlState,
+        httpStatus: (error as SqlWriteError)?.httpStatus,
+        message: (error as Error)?.message
+      })
+
+      throw createStudentPersistenceError(error, explicitMatricula)
     }
-
-    let lastError: unknown = null
-
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const matricula = await getNextMatriculaForPlantel(assignedPlantel)
-
-      try {
-        await insertStudent(body, user, assignedPlantel, assignedNivel, cicloKey, matricula)
-        return { success: true, matricula }
-      } catch (error) {
-        if (!isDuplicateKeyError(error)) throw error
-        lastError = error
-      }
-    }
-
-    throw createError({
-      statusCode: 409,
-      message: 'No se pudo generar una matrícula disponible. Intenta guardar nuevamente.',
-      cause: lastError
-    })
   }
 }))

@@ -202,9 +202,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         allConceptIds: [historicalConceptIds]
       }
     }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
+    const enrollmentState = r.estatus === 'Activo'
+      ? (hasCurrentEnrollmentEvidence ? 'inscrito' : 'no_inscrito')
+      : (hasCurrentEnrollmentEvidence ? 'baja_inscrita' : 'baja')
 
     return {
       ...r,
+      enrollmentState,
       conceptoIdsTodos: historicalConceptIds,
       conceptoIdsHistoricos: historicalConceptIds,
       currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,

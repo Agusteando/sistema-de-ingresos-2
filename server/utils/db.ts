@@ -176,10 +176,11 @@ const makeBridgeError = (payload: BridgeErrorResponse, fallbackStatus?: number) 
 
 const makeBridgeHttpError = (status: number, payload: any) => {
   const bridgeMessage = payload?.error?.message || payload?.message || ''
-  const suffix = bridgeMessage ? `: ${bridgeMessage}` : ''
-  const err: any = new Error(`DB bridge respondio con HTTP ${status}${suffix}.`)
+  const suffix = bridgeMessage ? `: ${bridgeMessage}` : ' sin detalle del servicio'
+  const err: any = new Error(`DB bridge respondió con HTTP ${status}${suffix}. La operación no fue confirmada; revisa que el bridge y el agente de base estén disponibles.`)
   err.code = `DB_BRIDGE_HTTP_${status}`
   err.httpStatus = status
+  err.statusCode = status >= 400 && status < 600 ? status : 500
   err.bridgePayload = payload
   return err
 }
