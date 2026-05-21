@@ -37,7 +37,6 @@
           <span class="ce-kpi-mass" :aria-label="item.volumeAria">
             <i v-for="unit in item.massUnits" :key="`${item.key}-mass-${unit.index}`" :class="{ active: unit.active }"></i>
           </span>
-          <small class="ce-kpi-volume-label">{{ item.volumeLabel }}</small>
         </button>
       </div>
     </section>
@@ -627,7 +626,6 @@ const withVolume = (card, total) => {
   return {
     ...card,
     massUnits: buildMassUnits(card.key === 'inscritos' ? total : card.value, total),
-    volumeLabel: card.key === 'inscritos' ? 'Total base' : `${percent}% de inscritos`,
     volumeAria: `${card.label}: ${formatNumber(card.value)}; ${card.key === 'inscritos' ? 'total de inscritos' : `${percent}% del total de inscritos`}`
   }
 }
@@ -1264,23 +1262,6 @@ onMounted(async () => {
 .ce-kpi-mass i:nth-child(2n) { height: 18px; }
 .ce-kpi-mass i:nth-child(3n) { height: 11px; }
 
-.ce-kpi-volume-label {
-  position: absolute;
-  right: 12px;
-  top: 9px;
-  z-index: 1;
-  max-width: 96px;
-  overflow: hidden;
-  color: color-mix(in srgb, var(--kpi-color, #3f9138) 72%, #657088);
-  font-size: 9px;
-  font-weight: 900;
-  line-height: 1;
-  text-align: right;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-  pointer-events: none;
-}
 
 .ce-program-rail {
   display: none;

@@ -1,1 +1,1 @@
-fix: stabilize student group fallbacks and Control Escolar layout
+fix: remove Control Escolar KPI sublabels
