@@ -526,6 +526,14 @@ export const ensureSchema = async () => {
 
         if (tables.length > 0) {
           await checkAndAddColumn('documentos', 'montoFinal', "DECIMAL(65,2) DEFAULT NULL")
+          await checkAndAddColumn('documentos', 'beca', "VARCHAR(255) DEFAULT '0'")
+          await checkAndAddColumn('documentos', 'becaNombre', "VARCHAR(255) DEFAULT NULL")
+          await checkAndAddColumn('documentos', 'becaTipos', "TEXT DEFAULT NULL")
+          await checkAndAddColumn('documentos', 'becaMotivo', "TEXT DEFAULT NULL")
+          await checkAndAddColumn('documentos', 'becaMonto', "DECIMAL(65,2) NOT NULL DEFAULT 0")
+          await checkAndAddColumn('documentos', 'becaPorcentaje', "DECIMAL(8,2) NOT NULL DEFAULT 0")
+          await checkAndAddColumn('documentos', 'becaCartaGenerada', "TINYINT(1) NOT NULL DEFAULT 0")
+          await checkAndAddColumn('documentos', 'becaCartaFecha', "DATETIME DEFAULT NULL")
           await runSafeQuery(`ALTER TABLE documentos ADD INDEX idx_documentos_ciclo_estatus_matricula (ciclo(20), estatus(20), matricula(64))`)
         }
       } catch (e) {}

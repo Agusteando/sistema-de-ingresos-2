@@ -43,7 +43,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   const documentos = await query<any[]>(`
-    SELECT d.documento, d.matricula, d.costo, d.montoFinal, d.meses, d.plazo, d.beca, d.ciclo, d.conceptoNombre, d.eventual
+    SELECT
+      d.documento, d.matricula, d.costo, d.montoFinal, d.meses, d.plazo,
+      d.beca, d.becaNombre, d.becaTipos, d.becaMotivo, d.becaMonto, d.becaPorcentaje,
+      d.becaCartaGenerada, d.ciclo, d.conceptoNombre, d.eventual
     FROM documentos d
     WHERE d.matricula = ? AND d.ciclo = ? AND d.estatus = 'Activo'
   `, [matricula.trim(), cicloKey])
@@ -160,6 +163,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         pagosDepurados: depuradoTotalMes,
         saldo: saldoAntes,
         beca,
+        becaNombre: doc.becaNombre || doc.becaTipos || '',
+        becaTipos: doc.becaTipos || doc.becaNombre || '',
+        becaMotivo: doc.becaMotivo || '',
+        becaMonto: Number(doc.becaMonto || 0),
+        becaPorcentaje: Number(doc.becaPorcentaje || beca || 0),
+        becaCartaGenerada: String(doc.becaCartaGenerada || '') === '1',
         porcentajePagado: subtotal > 0 ? Math.min(100, (resueltoTotalMes * 100) / subtotal).toFixed(1) : 100,
         porcentajePagoReal: subtotal > 0 ? Math.min(100, (pagosTotalMes * 100) / subtotal).toFixed(1) : 100,
         porcentajeDepurado: subtotal > 0 ? Math.min(100, (depuradoTotalMes * 100) / subtotal).toFixed(1) : 0,

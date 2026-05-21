@@ -1,11 +1,17 @@
 <template>
   <Teleport to="body">
     <div class="modal-overlay" @click.self="$emit('close')">
-      <div class="modal-container">
-        <div class="modal-header">
-          <h2 class="text-lg font-bold text-gray-800">Agregar documento</h2>
+      <div class="modal-container document-modal-container">
+        <div class="modal-header document-modal-header">
+          <div>
+            <p class="document-eyebrow">Cargo extra</p>
+            <h2 class="text-lg font-bold text-gray-800">Agregar documento</h2>
+          </div>
+          <button class="document-close-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+            <LucideX :size="18" />
+          </button>
         </div>
-        <div class="modal-content">
+        <div class="modal-content document-modal-content">
           <form @submit.prevent="submit" class="grid grid-cols-2 gap-4">
             <div class="form-group col-span-2 mb-0">
               <div class="concept-label-row">
@@ -107,6 +113,7 @@
                 Fuente: tabla <code>conceptos</code> del bridge del plantel activo, filtrada por ciclo {{ activeCicloLabel }}. “Actualizar” vuelve a consultar esa fuente.
               </p>
             </div>
+
             <div class="form-group mb-0">
               <label class="form-label">Costo (MXN)</label>
               <input type="number" v-model="form.costo" class="input-field font-semibold text-gray-500 bg-gray-50" step="0.01" disabled>
@@ -115,10 +122,45 @@
               <label class="form-label">Meses</label>
               <input type="number" v-model="form.meses" class="input-field" min="1" max="12" required>
             </div>
+
+            <div class="form-group col-span-2 mb-0 scholarship-card">
+              <div class="scholarship-card-header">
+                <div>
+                  <label class="form-label">Tipo de beca</label>
+                  <p>Opciones cerradas. Puedes seleccionar varias; se guardan separadas por coma para lectura posterior.</p>
+                </div>
+                <span v-if="selectedBecaTypes.length">{{ becaTypesCsv }}</span>
+              </div>
+
+              <div class="scholarship-options" role="group" aria-label="Tipos de beca">
+                <button
+                  v-for="option in becaOptions"
+                  :key="option"
+                  type="button"
+                  :class="['scholarship-option', { selected: selectedBecaTypes.includes(option) }]"
+                  :disabled="loading"
+                  @click="toggleBecaType(option)"
+                >
+                  <LucideBadgePercent :size="14" />
+                  {{ option }}
+                </button>
+              </div>
+
+              <label class="scholarship-motivo">
+                <span>Motivo de beca <em>opcional</em></span>
+                <textarea
+                  v-model="becaMotivo"
+                  :disabled="loading"
+                  maxlength="1200"
+                  rows="2"
+                  placeholder="Notas internas sobre la autorización, convenio o contexto de la beca..."
+                ></textarea>
+              </label>
+            </div>
             
-            <div class="form-group col-span-2 mt-2 p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <div class="form-group col-span-2 mt-1 p-5 bg-gray-50 rounded-lg border border-gray-200">
               <label class="form-label mb-1 text-brand-campus">Monto final</label>
-              <p class="text-xs text-gray-500 mb-3">Este debe ser el monto final de tu proyección, sin decimales.</p>
+              <p class="text-xs text-gray-500 mb-3">Este es el monto final autorizado para cobrar, sin decimales. La beca se calcula contra el costo del concepto.</p>
               <div class="relative">
                 <div class="absolute inset-y-0 left-3 flex items-center text-brand-campus text-sm font-bold">$</div>
                 <input
@@ -136,6 +178,10 @@
                   <span class="text-gray-500 font-medium">Costo del concepto:</span>
                   <span class="font-mono text-gray-500">${{ Number(form.costo).toFixed(2) }}</span>
                 </div>
+                <div class="flex justify-between items-center text-xs mb-3">
+                  <span class="text-gray-500 font-medium">Beca / apoyo aplicado:</span>
+                  <span class="font-mono text-emerald-700 font-bold">-${{ scholarshipDiscount.toFixed(2) }} · {{ scholarshipPercent.toFixed(2) }}%</span>
+                </div>
                 <div class="flex justify-between items-center mt-2 bg-white p-3 rounded-md border border-gray-100 shadow-sm">
                   <span class="text-xs font-bold text-gray-700 uppercase">Se cobrará:</span>
                   <span class="font-mono text-lg font-bold text-brand-campus">${{ Number(montoFinalInput || 0).toFixed(2) }}</span>
@@ -145,6 +191,20 @@
                   <span>Confirmo que este monto final es correcto.</span>
                 </label>
               </div>
+            </div>
+
+            <div class="form-group col-span-2 mb-0 carta-beca-card" :class="{ disabled: !selectedBecaTypes.length }">
+              <label class="carta-beca-toggle">
+                <input
+                  v-model="generarCartaBeca"
+                  type="checkbox"
+                  :disabled="!selectedBecaTypes.length || loading"
+                >
+                <span>
+                  <strong><LucideFileCheck2 :size="15" /> Generar carta de beca PDF</strong>
+                  <small>Se abrirá una carta oficial con logos, datos del alumno, tipo(s) de beca, motivo y monto final.</small>
+                </span>
+              </label>
             </div>
           </form>
         </div>
@@ -162,7 +222,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { LucideCheckCircle, LucideLoader2, LucideRefreshCcw, LucideSearch, LucideX } from 'lucide-vue-next'
+import { LucideBadgePercent, LucideCheckCircle, LucideFileCheck2, LucideLoader2, LucideRefreshCcw, LucideSearch, LucideX } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
@@ -175,6 +235,7 @@ const state = useState('globalState')
 
 useScrollLock()
 
+const becaOptions = ['coaborador', 'dres', 'hermanos', 'promoción', 'SEP mercadotecnia']
 const conceptos = ref([])
 const selectedDocumentoId = ref('')
 const conceptSearch = ref('')
@@ -184,6 +245,9 @@ const loading = ref(false)
 const loadingConcepts = ref(false)
 const conceptLoadError = ref('')
 const form = ref({ costo: 0, meses: 1, eventual: false })
+const selectedBecaTypes = ref([])
+const becaMotivo = ref('')
+const generarCartaBeca = ref(false)
 
 const montoFinalInput = ref(0)
 const montoFinalConfirmed = ref(false)
@@ -193,6 +257,13 @@ const activeCicloLabel = computed(() => String(activeCicloKey.value || state.val
 
 const selectedConcept = computed(() => {
   return conceptos.value.find((item) => String(item.id) === String(selectedDocumentoId.value)) || null
+})
+
+const becaTypesCsv = computed(() => selectedBecaTypes.value.join(','))
+const scholarshipDiscount = computed(() => Math.max(0, Number(form.value.costo || 0) - Number(montoFinalInput.value || 0)))
+const scholarshipPercent = computed(() => {
+  const costo = Number(form.value.costo || 0)
+  return costo > 0 ? (scholarshipDiscount.value * 100) / costo : 0
 })
 
 const filteredConceptos = computed(() => {
@@ -265,6 +336,15 @@ const clearConceptSelection = () => {
   conceptDropdownOpen.value = true
 }
 
+const toggleBecaType = (option) => {
+  if (selectedBecaTypes.value.includes(option)) {
+    selectedBecaTypes.value = selectedBecaTypes.value.filter((item) => item !== option)
+  } else {
+    selectedBecaTypes.value = [...selectedBecaTypes.value, option]
+  }
+  if (!selectedBecaTypes.value.length) generarCartaBeca.value = false
+}
+
 const loadConcepts = async ({ manual = false } = {}) => {
   loadingConcepts.value = true
   conceptLoadError.value = ''
@@ -298,40 +378,100 @@ const loadConcepts = async ({ manual = false } = {}) => {
 
 const refreshConcepts = () => loadConcepts({ manual: true })
 
+const openCartaWindow = () => {
+  if (!generarCartaBeca.value || !selectedBecaTypes.value.length || typeof window === 'undefined') return null
+  const win = window.open('', '_blank', 'noopener')
+  if (win) {
+    win.document.write('<p style="font-family: system-ui; padding: 24px; color: #27411f;">Generando carta de beca...</p>')
+  }
+  return win
+}
+
 const submit = async () => {
   if (!selectedDocumentoId.value) return show('Seleccione un concepto', 'danger')
   const montoFinal = Number(montoFinalInput.value)
   if (!Number.isFinite(montoFinal) || montoFinal < 0 || Math.floor(montoFinal) !== montoFinal) {
     return show('Ingresa un monto final sin decimales', 'danger')
   }
+  if (selectedBecaTypes.value.length && montoFinal > Number(form.value.costo || 0)) {
+    return show('El monto final no puede ser mayor al costo cuando hay beca.', 'danger')
+  }
+  if (generarCartaBeca.value && !selectedBecaTypes.value.length) return show('Selecciona al menos un tipo de beca para generar la carta.', 'danger')
   if (!montoFinalConfirmed.value) return show('Confirma el monto final', 'danger')
 
+  const cartaWindow = openCartaWindow()
   loading.value = true
 
   try {
-    await $fetch('/api/documentos', {
+    const result = await $fetch('/api/documentos', {
       method: 'POST',
       body: { 
         matricula: props.student.matricula, 
         conceptoId: selectedDocumentoId.value, 
         costo: form.value.costo, 
         montoFinal,
-        meses: form.value.meses, 
-        beca: 0, 
+        meses: form.value.meses,
+        becaTipos: selectedBecaTypes.value,
+        becaMotivo: becaMotivo.value,
+        generarCartaBeca: generarCartaBeca.value,
         ciclo: activeCicloKey.value, 
         eventual: form.value.eventual 
       }
     })
-    show('Documento agregado.')
+
+    if (generarCartaBeca.value && result?.becaCartaUrl) {
+      if (cartaWindow) cartaWindow.location.href = result.becaCartaUrl
+      else window.open(result.becaCartaUrl, '_blank', 'noopener')
+      show('Documento agregado y carta de beca generada.')
+    } else {
+      cartaWindow?.close?.()
+      show('Documento agregado.')
+    }
     emit('success')
-  } catch (e) { show('Error al agregar', 'danger') } 
-  finally { loading.value = false }
+  } catch (e) {
+    cartaWindow?.close?.()
+    show(e?.data?.message || 'Error al agregar', 'danger')
+  } finally { loading.value = false }
 }
 
 onMounted(() => loadConcepts())
 </script>
 
 <style scoped>
+.document-modal-container {
+  max-width: 760px;
+}
+
+.document-modal-header {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.document-eyebrow {
+  color: #4f8b47;
+  font-size: 0.66rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.document-close-button {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e1e8ef;
+  border-radius: 999px;
+  background: #fff;
+  color: #617087;
+}
+
+.document-modal-content {
+  max-height: min(72vh, 720px);
+  overflow: auto;
+}
+
 .concept-label-row {
   display: flex;
   align-items: center;
@@ -563,5 +703,131 @@ onMounted(() => loadConcepts())
   background: #f0f4f8;
   color: #45566f;
   padding: 1px 4px;
+}
+
+.scholarship-card,
+.carta-beca-card {
+  border: 1px solid #dce8d9;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfefb 0%, #f5fbf3 100%);
+  padding: 14px;
+}
+
+.scholarship-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.scholarship-card-header p {
+  color: #738196;
+  font-size: 0.72rem;
+  font-weight: 620;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+.scholarship-card-header span {
+  align-self: start;
+  border-radius: 999px;
+  background: #fff;
+  color: #35713c;
+  font-size: 0.68rem;
+  font-weight: 760;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.scholarship-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scholarship-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #d9e6d6;
+  border-radius: 999px;
+  background: #fff;
+  color: #4f5f73;
+  font-size: 0.74rem;
+  font-weight: 760;
+  padding: 7px 10px;
+}
+
+.scholarship-option.selected {
+  border-color: #76b26e;
+  background: #eaf7e7;
+  color: #327036;
+  box-shadow: 0 7px 18px rgba(73, 137, 67, 0.12);
+}
+
+.scholarship-motivo {
+  display: block;
+  margin-top: 12px;
+}
+
+.scholarship-motivo span {
+  display: flex;
+  gap: 6px;
+  color: #4f5f73;
+  font-size: 0.74rem;
+  font-weight: 770;
+  margin-bottom: 5px;
+}
+
+.scholarship-motivo em {
+  color: #8b97aa;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.scholarship-motivo textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 66px;
+  border: 1px solid #d8e0ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #263752;
+  font-size: 0.82rem;
+  font-weight: 620;
+  outline: none;
+  padding: 10px 12px;
+}
+
+.carta-beca-card.disabled {
+  opacity: 0.72;
+}
+
+.carta-beca-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.carta-beca-toggle input {
+  margin-top: 4px;
+}
+
+.carta-beca-toggle strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #284c2a;
+  font-size: 0.82rem;
+}
+
+.carta-beca-toggle small {
+  display: block;
+  color: #758399;
+  font-size: 0.72rem;
+  font-weight: 620;
+  line-height: 1.35;
+  margin-top: 2px;
 }
 </style>
