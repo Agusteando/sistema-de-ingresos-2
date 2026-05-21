@@ -6,6 +6,64 @@ import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipo
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 
+type SqlWriteError = Error & { code?: string; errno?: number }
+
+const normalizeTextValue = (value: unknown) => String(value || '').trim()
+const normalizeMatricula = (value: unknown) => normalizeTextValue(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const isDuplicateKeyError = (error: unknown) => {
+  const err = error as SqlWriteError
+  const message = String(err?.message || '').toLowerCase()
+  return err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062 || message.includes('duplicate entry')
+}
+
+const getNextMatriculaForPlantel = async (plantel: string) => {
+  const normalizedPlantel = normalizeMatricula(plantel)
+
+  if (!normalizedPlantel) {
+    throw createError({ statusCode: 400, message: 'Selecciona un plantel válido para generar la matrícula.' })
+  }
+
+  const regex = `^${escapeRegExp(normalizedPlantel)}[0-9]+$`
+  const startAt = normalizedPlantel.length + 1
+  const rows = await query<any[]>(`
+    SELECT matricula
+    FROM base
+    WHERE plantel = ? AND matricula REGEXP ?
+    ORDER BY CAST(SUBSTRING(matricula, ${startAt}) AS UNSIGNED) DESC
+    LIMIT 1
+  `, [plantel, regex])
+
+  const lastMatricula = String(rows[0]?.matricula || '').trim().toUpperCase()
+  const numericPart = lastMatricula.slice(normalizedPlantel.length)
+  const lastNumber = Number(numericPart)
+  const nextNumber = Number.isFinite(lastNumber) && lastNumber > 0 ? lastNumber + 1 : 1
+  const numericWidth = Math.max(4, numericPart.length || 0)
+
+  return `${normalizedPlantel}${String(nextNumber).padStart(numericWidth, '0')}`
+}
+
+const insertStudent = async (body: Record<string, any>, user: any, assignedPlantel: string, assignedNivel: string, cicloKey: string, matricula: string) => {
+  const curpInfo = parseCurp(body.curp)
+
+  await query(`
+    INSERT INTO base (
+      matricula, apellidoPaterno, apellidoMaterno, nombres,
+      nombreCompleto,
+      curp, \`Fecha de nacimiento\`, genero, plantel, nivel, grado, grupo,
+      \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo, estatus
+    ) VALUES (?, ?, ?, ?, CONCAT(?, ' ', ?, ' ', ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    matricula,
+    normalizeTextValue(body.apellidoPaterno), normalizeTextValue(body.apellidoMaterno), normalizeTextValue(body.nombres),
+    normalizeTextValue(body.apellidoPaterno), normalizeTextValue(body.apellidoMaterno), normalizeTextValue(body.nombres),
+    curpInfo.normalized, curpInfo.birthDate, curpInfo.gender, assignedPlantel, assignedNivel, normalizeGradoForPlantel(body.grado, assignedPlantel, assignedNivel), normalizeTextValue(body.grupo),
+    normalizeTextValue(body.padre), normalizeTextValue(body.telefono), normalizeTextValue(body.correo), normalizeTextValue(user?.name), cicloKey, body.estatus || 'Activo'
+  ])
+}
+
+
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const method = event.node.req.method
   const user = event.context.user
@@ -229,7 +287,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     const cicloKey = normalizeCicloKey(body.cicloIngreso ?? body.ciclo)
     const assignedPlantel = user.active_plantel && user.active_plantel !== 'GLOBAL'
       ? user.active_plantel
-      : String(body.plantel || '').trim()
+      : normalizeTextValue(body.plantel)
 
     if (!assignedPlantel || assignedPlantel === 'GLOBAL') {
       throw createError({ statusCode: 400, message: 'Selecciona un plantel para dar de alta alumnos.' })
@@ -241,21 +299,39 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     }
 
     const assignedNivel = resolveNivelEscolar({ plantel: assignedPlantel, nivel: body.nivel })
+    const explicitMatricula = normalizeMatricula(body.matricula)
 
-    await query(`
-      INSERT INTO base (
-        matricula, apellidoPaterno, apellidoMaterno, nombres, 
-        nombreCompleto,
-        curp, \`Fecha de nacimiento\`, genero, plantel, nivel, grado, grupo, 
-        \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo, estatus
-      ) VALUES (?, ?, ?, ?, CONCAT(?, ' ', ?, ' ', ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      '', 
-      body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      body.apellidoPaterno, body.apellidoMaterno, body.nombres,
-      curpInfo.normalized, curpInfo.birthDate, curpInfo.gender, assignedPlantel, assignedNivel, normalizeGradoForPlantel(body.grado, assignedPlantel, assignedNivel), '',
-      body.padre, body.telefono, body.correo, user.name, cicloKey, body.estatus || 'Activo'
-    ])
-    return { success: true }
+    if (explicitMatricula) {
+      try {
+        await insertStudent(body, user, assignedPlantel, assignedNivel, cicloKey, explicitMatricula)
+        return { success: true, matricula: explicitMatricula }
+      } catch (error) {
+        if (isDuplicateKeyError(error)) {
+          throw createError({ statusCode: 409, message: `La matrícula ${explicitMatricula} ya existe.` })
+        }
+
+        throw error
+      }
+    }
+
+    let lastError: unknown = null
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const matricula = await getNextMatriculaForPlantel(assignedPlantel)
+
+      try {
+        await insertStudent(body, user, assignedPlantel, assignedNivel, cicloKey, matricula)
+        return { success: true, matricula }
+      } catch (error) {
+        if (!isDuplicateKeyError(error)) throw error
+        lastError = error
+      }
+    }
+
+    throw createError({
+      statusCode: 409,
+      message: 'No se pudo generar una matrícula disponible. Intenta guardar nuevamente.',
+      cause: lastError
+    })
   }
 }))

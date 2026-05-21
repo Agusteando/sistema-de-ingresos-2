@@ -1,1 +1,1 @@
-fix(control-escolar): alinear filtros y conteos con alumnos
+fix(students): generar matrícula en alta de alumnos
