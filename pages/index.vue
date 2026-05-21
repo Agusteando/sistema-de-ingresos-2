@@ -78,7 +78,7 @@
             :bulk-payment-loading="bulkPaymentLoading"
             :bulk-payment-processing="bulkPaymentProcessing"
             :external-concepts="externalConcepts"
-            @refresh="refreshStudentsFromServer"
+            @refresh="refreshStudentsAndKpis"
             @edit="openEdit"
             @close-detail="selectedStudent = null"
             @switch-student="selectStudentByMatricula"
@@ -571,10 +571,10 @@ const applyStudentsList = (nextStudents, { selectRouteStudent = true } = {}) => 
 }
 
 const performSearch = async (options = {}) => {
-  const { useCache = true } = options || {}
+  const { useCache = true, serverQuery } = options || {}
   const requestId = ++studentsRequestId
   const cicloKey = normalizeCicloKey(state.value.ciclo)
-  const query = filters.value.q || ''
+  const query = serverQuery === undefined ? (filters.value.q || '') : String(serverQuery || '')
 
   const cached = useCache ? readCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }) : null
   const cachedConcepts = normalizeEnrollmentConceptIds(cached?.enrollmentConcepts)
@@ -653,7 +653,12 @@ const performSearch = async (options = {}) => {
   }
 }
 
-const refreshStudentsFromServer = () => performSearch({ useCache: false })
+const refreshStudentsFromServer = () => performSearch({ useCache: false, serverQuery: '' })
+const refreshStudentsAndKpis = () => {
+  refreshStudentsFromServer()
+  loadGlobalKpis()
+  loadKpiSparklines()
+}
 
 const enrollmentConceptIds = computed(() => normalizeEnrollmentConceptIds(externalConcepts.value))
 const enrollmentConceptIdSet = computed(() => new Set(enrollmentConceptIds.value))
@@ -1143,7 +1148,7 @@ const closeStudentModal = () => { showStudentModal.value = false; editingStudent
 
 const handleStudentSuccess = () => {
   closeStudentModal()
-  performSearch({ useCache: false })
+  refreshStudentsFromServer()
   loadGlobalKpis()
   loadKpiSparklines()
 }
