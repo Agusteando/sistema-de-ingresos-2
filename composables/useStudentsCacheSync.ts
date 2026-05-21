@@ -1,12 +1,14 @@
 import { computed } from 'vue'
 import { useCookie, useState } from '#app'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import { normalizeEnrollmentConceptIds } from '~/shared/utils/studentPresentation'
 
-type StudentsCacheSyncStatus = 'idle' | 'cached' | 'syncing' | 'updated' | 'failed'
+type StudentsCacheSyncStatus = 'idle' | 'cached' | 'syncing' | 'updated' | 'failed' | 'unavailable'
 
 type StudentsCacheOptions = {
   ciclo?: string | number | null
   q?: string | null
+  enrollmentConcepts?: unknown
 }
 
 type StudentsCacheRecord = {
@@ -16,6 +18,7 @@ type StudentsCacheRecord = {
   query: string
   savedAt: string
   students: unknown[]
+  enrollmentConceptSignature?: string
 }
 
 type StudentsSyncState = {
@@ -35,6 +38,11 @@ const normalizeQuery = (value?: string | null) => String(value || '').trim()
 
 const encodeKeySegment = (value: string) => encodeURIComponent(value || 'default')
 
+const enrollmentConceptSignature = (values: unknown) => normalizeEnrollmentConceptIds(values)
+  .map(String)
+  .sort((a, b) => Number(a) - Number(b))
+  .join('|')
+
 const safeParseRecord = (raw: string | null): StudentsCacheRecord | null => {
   if (!raw) return null
 
@@ -48,6 +56,18 @@ const safeParseRecord = (raw: string | null): StudentsCacheRecord | null => {
     console.warn('[Students cache] Could not parse cached students.', error)
     return null
   }
+}
+
+const isCacheRecordConceptCompatible = (record: StudentsCacheRecord, options: StudentsCacheOptions = {}) => {
+  const requestedSignature = enrollmentConceptSignature(options.enrollmentConcepts)
+  if (!requestedSignature) return true
+
+  const recordSignature = typeof record.enrollmentConceptSignature === 'string'
+    ? record.enrollmentConceptSignature
+    : null
+
+  if (recordSignature === null) return true
+  return recordSignature === requestedSignature
 }
 
 export const useStudentsCacheSync = () => {
@@ -101,14 +121,15 @@ export const useStudentsCacheSync = () => {
 
     for (const key of getStudentsCacheReadKeys(options)) {
       const record = safeParseRecord(localStorage.getItem(key))
-      if (!record) continue
+      if (!record || !isCacheRecordConceptCompatible(record, options)) continue
 
       return {
         key,
         students: record.students,
         savedAt: record.savedAt,
         count: record.students.length,
-        isLegacy: Number(record.version) !== CACHE_VERSION
+        isLegacy: Number(record.version) !== CACHE_VERSION,
+        enrollmentConceptSignature: record.enrollmentConceptSignature || ''
       }
     }
 
@@ -125,7 +146,8 @@ export const useStudentsCacheSync = () => {
       ciclo: normalizeCicloKey(options.ciclo || ''),
       query: normalizeQuery(options.q),
       savedAt: new Date().toISOString(),
-      students
+      students,
+      enrollmentConceptSignature: enrollmentConceptSignature(options.enrollmentConcepts)
     }
 
     try {
