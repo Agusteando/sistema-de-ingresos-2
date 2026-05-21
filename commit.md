@@ -1,1 +1,1 @@
-fix: make Control Escolar filtering instant and allow optional CURP
+fix: keep control escolar actions visible and load student photos quietly
