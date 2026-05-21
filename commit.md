@@ -1,7 +1,3 @@
-fix: compact sql console and surface offline bridge agents
+fix: correct enrollment KPI filters and preserve cache-first sync
 
-- Move SQL execution controls above the editor so the run button is visible without scrolling.
-- Compact the SQL console layout, target card, upload zone, toolbar, textarea, and result panels.
-- Add an explicit SQL execution target selector for superadmin plantel agents.
-- Skip automatic schema migration during SQL console execution so offline bridge agents do not block structured feedback.
-- Return per-statement bridge metadata and clear offline-agent hints when the selected agent returns HTTP 503.
+Align student KPI counts and active filters with enrollment rules: inscritos/internos/externos require current-cycle enrollment, no inscritos require previous-cycle enrollment without current-cycle enrollment, and bajas require current-cycle enrollment with non-active status. Cache enrollment concept IDs locally so cache-first student loads can classify rows before the remote config request completes.

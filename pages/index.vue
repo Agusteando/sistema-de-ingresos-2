@@ -164,8 +164,8 @@ import {
   formatMoney,
   gradeVisualTitle,
   isSectionFilter,
-  isStudentEnrolled,
   normalizeStudentMatricula,
+  normalizeEnrollmentConceptIds,
   parseEnrollmentConcepts,
   photoStorageKey,
   sectionIdFromFilter,
@@ -200,6 +200,7 @@ const activeGrupo = ref('')
 const activeSaldoFilter = ref('all')
 
 const externalConcepts = ref([])
+const ENROLLMENT_CONCEPTS_CACHE_KEY = 'students-enrollment-concepts:v1'
 const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 
 const students = ref([])
@@ -397,8 +398,8 @@ const kpiSparklines = computed(() => ({
   internos: paymentKpiSparklines.value.internos || [],
   externos: paymentKpiSparklines.value.externos || [],
   ingresos: paymentKpiSparklines.value.ingresos || [],
-  no_inscritos: distributionSeries(students.value.filter(student => student.estatus === 'Activo' && !isEnrolled(student))),
-  bajas: distributionSeries(students.value.filter(student => student.estatus !== 'Activo'))
+  no_inscritos: distributionSeries(students.value.filter(isNoInscritoForSelectedCiclo)),
+  bajas: distributionSeries(students.value.filter(isBajaInscritaCurrent))
 }))
 
 let kpiSparklineRequestId = 0
@@ -481,9 +482,33 @@ const clearFilters = () => {
 }
 
 
+const cacheEnrollmentConcepts = (conceptIds) => {
+  if (!process.client || !Array.isArray(conceptIds) || !conceptIds.length) return
+  try {
+    localStorage.setItem(ENROLLMENT_CONCEPTS_CACHE_KEY, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      concepts: conceptIds
+    }))
+  } catch (error) {
+    console.warn('[Enrollment concepts cache] Could not persist enrollment concepts.', error)
+  }
+}
+
+const hydrateCachedEnrollmentConcepts = () => {
+  if (!process.client || externalConcepts.value.length) return
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ENROLLMENT_CONCEPTS_CACHE_KEY) || 'null')
+    const conceptIds = normalizeEnrollmentConceptIds(parsed?.concepts)
+    if (conceptIds.length) externalConcepts.value = conceptIds
+  } catch (error) {
+    console.warn('[Enrollment concepts cache] Could not read enrollment concepts.', error)
+  }
+}
+
 const parseEnrollmentConfig = (obj) => {
   const conceptIds = parseEnrollmentConcepts(obj)
   externalConcepts.value = conceptIds
+  cacheEnrollmentConcepts(conceptIds)
 }
 
 const loadGlobalKpis = async () => {
@@ -590,21 +615,62 @@ const performSearch = async (options = {}) => {
 
 const refreshStudentsFromServer = () => performSearch({ useCache: false })
 
-const isEnrolled = (student) => isStudentEnrolled(student, externalConcepts.value)
+const enrollmentConceptIds = computed(() => normalizeEnrollmentConceptIds(externalConcepts.value))
+const enrollmentConceptIdSet = computed(() => new Set(enrollmentConceptIds.value))
+const hasEnrollmentConceptConfig = computed(() => enrollmentConceptIds.value.length > 0)
+
+const hasMatchingEnrollmentConcept = (values) => {
+  if (!hasEnrollmentConceptConfig.value) return false
+  const target = enrollmentConceptIdSet.value
+  return normalizeEnrollmentConceptIds(values).some(conceptId => target.has(conceptId))
+}
+
+const hasCurrentEnrollmentConcept = (student) => hasMatchingEnrollmentConcept([
+  student?.tipoIngresoEvidence?.targetConceptIds,
+  student?.tipoIngresoEvidence?.targetConceptosIds,
+  student?.tipoIngresoEvidence?.targetConcepts,
+  student?.tipoIngresoEvidence?.targetConceptos,
+  student?.conceptoIdsTarget,
+  student?.conceptoIdsTargetCiclo,
+  student?.conceptoIdsCicloActual,
+  student?.conceptoIdsPagados,
+  student?.conceptoIdsCargados,
+  student?.conceptoIds,
+  student?.conceptosIds
+])
+
+const hasPreviousEnrollmentConcept = (student) => hasMatchingEnrollmentConcept([
+  student?.tipoIngresoEvidence?.previousConceptIds,
+  student?.tipoIngresoEvidence?.previousConceptosIds,
+  student?.tipoIngresoEvidence?.previousConcepts,
+  student?.tipoIngresoEvidence?.previousConceptos,
+  student?.conceptoIdsPreviousCiclo,
+  student?.conceptoIdsCicloPrevio,
+  student?.conceptoIdsPagadosPrevios,
+  student?.conceptoIdsCargadosPrevios
+])
+
+const isEnrolled = (student) => student?.estatus === 'Activo' && hasCurrentEnrollmentConcept(student)
+const isNoInscritoForSelectedCiclo = (student) => (
+  student?.estatus === 'Activo'
+  && hasPreviousEnrollmentConcept(student)
+  && !hasCurrentEnrollmentConcept(student)
+)
+const isBajaInscritaCurrent = (student) => student?.estatus !== 'Activo' && hasCurrentEnrollmentConcept(student)
 const resolveStudentTipoIngreso = (student) => resolveTipoIngreso(student, currentCicloKey.value, { enrollmentConcepts: externalConcepts.value })
 
 const kpiCounts = computed(() => {
   let inscritos = 0, internos = 0, externos = 0, no_inscritos = 0, bajas = 0
   students.value.forEach(s => {
-    if (s.estatus !== 'Activo') {
-      bajas++
-    } else if (isEnrolled(s)) {
+    if (isEnrolled(s)) {
       inscritos++
       const tipoIngreso = resolveStudentTipoIngreso(s)
       if (tipoIngreso.value === 'interno') internos++
       else externos++
-    } else {
+    } else if (isNoInscritoForSelectedCiclo(s)) {
       no_inscritos++
+    } else if (isBajaInscritaCurrent(s)) {
+      bajas++
     }
   })
   return { inscritos, internos, externos, no_inscritos, bajas }
@@ -614,8 +680,8 @@ const studentMatchesActiveFilter = (student) => {
   if (activeFilter.value === 'inscritos') return isEnrolled(student)
   if (activeFilter.value === 'internos') return isEnrolled(student) && resolveStudentTipoIngreso(student).value === 'interno'
   if (activeFilter.value === 'externos') return isEnrolled(student) && resolveStudentTipoIngreso(student).value === 'externo'
-  if (activeFilter.value === 'no_inscritos') return student.estatus === 'Activo' && !isEnrolled(student)
-  if (activeFilter.value === 'bajas') return student.estatus !== 'Activo'
+  if (activeFilter.value === 'no_inscritos') return isNoInscritoForSelectedCiclo(student)
+  if (activeFilter.value === 'bajas') return isBajaInscritaCurrent(student)
   if (isSectionFilter(activeFilter.value)) return studentHasSection(student, sectionIdFromFilter(activeFilter.value))
   return true
 }
@@ -929,6 +995,7 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
 
 onMounted(() => {
   if (route.query.q) filters.value.q = String(route.query.q)
+  hydrateCachedEnrollmentConcepts()
   loadCustomSections()
   performSearch({ useCache: true })
   loadEnrollmentConfig({ refreshStudents: true })
