@@ -1,6 +1,7 @@
-Add searchable cargo extra concept picker
+Fix Control Escolar student fetch data flow
 
-- Replace the cargo extra concept select with a searchable dropdown.
-- Add manual concept refresh from the cargo extra modal.
-- Mark /api/conceptos responses as no-store for fresh manual reloads.
-- Document where concepts are sourced from and how to refresh them.
+- Make Control Escolar student listing local base-first and overlay external matricula data only for returned matriculas.
+- Remove local ingresos as a hard gate because it can hide valid base students.
+- Let read-only Control Escolar lists return base rows even if the external matricula overlay is temporarily unavailable.
+- Keep Control Escolar writes dependent on the centralized matricula table.
+- Document the base-to-external-overlay data flow.
