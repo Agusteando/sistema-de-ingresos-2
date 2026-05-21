@@ -1,6 +1,8 @@
-Refine operator student information modal to match supplied viewport design
+feat(users): assign ROLE_CTRL from Google Workspace directory
 
-- Rebuilt the operator-only "Ver información de alumno" modal as a compact read-only expediente view.
-- Matched the supplied design structure: header actions, hero identity card, academic summary, identity, family/tutors, and sync panels.
-- Kept the modal constrained to the main viewport on desktop so the primary content is visible without scrolling.
-- Preserved the existing operator-info endpoint and read-only access boundary.
+- Add superadmin-only Google Workspace Directory search for @casitaiedis.edu.mx users.
+- Show directory profile images/fallback avatars when assigning workspace access.
+- Store workspace role assignments only in the external Control Escolar users table.
+- Keep new assignments unrestricted by default with explicit ROLE_CTRL selection.
+- Skip schema/bridge work for directory endpoints and keep normal student loading ungated by external users.
+- Document Google Workspace, external users, and ROLE_CTRL data boundaries.

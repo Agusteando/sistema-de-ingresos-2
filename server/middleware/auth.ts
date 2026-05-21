@@ -15,6 +15,10 @@ export default defineEventHandler(async (event) => {
     return
   }
 
+  if (url.pathname.startsWith('/api/directory/')) {
+    return
+  }
+
   if (url.pathname === '/api/admin/profile') {
     return
   }
