@@ -1,7 +1,7 @@
-fix(admin): compact SQL console and surface bridge execution errors
+fix: compact sql console and surface offline bridge agents
 
-- Reduced SQL Console spacing and textarea height so the page fits inside the main app viewport with internal scrolling.
-- Added visible running feedback while SQL is executing.
-- Improved client-side error banners for failed execution requests.
-- Preserved per-statement feedback for bridge failures and added HTTP/code metadata plus a 503-specific hint.
-- Normalized DB bridge HTTP errors so bridge 503 responses are exposed to the SQL console instead of appearing only in logs.
+- Move SQL execution controls above the editor so the run button is visible without scrolling.
+- Compact the SQL console layout, target card, upload zone, toolbar, textarea, and result panels.
+- Add an explicit SQL execution target selector for superadmin plantel agents.
+- Skip automatic schema migration during SQL console execution so offline bridge agents do not block structured feedback.
+- Return per-statement bridge metadata and clear offline-agent hints when the selected agent returns HTTP 503.

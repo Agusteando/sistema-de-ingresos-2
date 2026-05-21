@@ -10,9 +10,11 @@
         </p>
       </div>
       <div class="target-card">
-        <span>Destino activo</span>
-        <strong>{{ activePlantelLabel }}</strong>
-        <small>La ejecución usa el contexto de datos actual de la sesión.</small>
+        <label for="sql-target-plantel">Destino</label>
+        <select id="sql-target-plantel" v-model="targetPlantel" :disabled="isRunning">
+          <option v-for="plantel in targetPlantelOptions" :key="plantel" :value="plantel">{{ plantel }}</option>
+        </select>
+        <small>Activo: {{ activePlantelLabel }}</small>
       </div>
     </div>
 
@@ -25,16 +27,31 @@
     </div>
 
     <template v-else>
+      <div v-if="executionErrorSummary" class="result-banner result-banner-error result-banner-compact">
+        <LucideAlertTriangle :size="18" />
+        <div>
+          <strong>{{ executionErrorSummary.message }}</strong>
+          <small v-if="executionErrorSummary.hint">{{ executionErrorSummary.hint }}</small>
+        </div>
+      </div>
+
       <div class="sql-grid">
         <div class="editor-panel">
           <div class="panel-head">
             <div>
               <h3>Consulta</h3>
-              <p>Pega SQL o carga un archivo. Cada sentencia se ejecuta en orden.</p>
+              <p>Pega SQL o carga un archivo. Se ejecuta en orden.</p>
             </div>
-            <button class="ghost-button" type="button" @click="clearEditor" :disabled="isRunning || !sqlText">
-              Limpiar
-            </button>
+            <div class="panel-actions">
+              <button class="ghost-button" type="button" @click="clearEditor" :disabled="isRunning || !sqlText">
+                Limpiar
+              </button>
+              <button class="run-button" type="button" :disabled="isRunning || !sqlText.trim()" @click="executeSql">
+                <LucidePlay v-if="!isRunning" :size="18" />
+                <LucideLoader2 v-else :size="18" class="spin" />
+                {{ isRunning ? 'Ejecutando…' : runButtonLabel }}
+              </button>
+            </div>
           </div>
 
           <label
@@ -50,13 +67,6 @@
             <small v-if="fileMeta">{{ fileMeta }}</small>
           </label>
 
-          <textarea
-            v-model="sqlText"
-            class="sql-textarea"
-            spellcheck="false"
-            placeholder="-- Ejemplo\nSELECT COUNT(*) AS total FROM base;\n\nUPDATE base SET ciclo = '2025-2026' WHERE matricula = '...';"
-          />
-
           <div class="editor-toolbar">
             <div class="statement-chip">
               <LucideListChecks :size="16" />
@@ -64,14 +74,16 @@
             </div>
             <label class="continue-toggle">
               <input v-model="continueOnError" type="checkbox" :disabled="isRunning" />
-              Continuar si una sentencia falla
+              Continuar si falla
             </label>
-            <button class="run-button" type="button" :disabled="isRunning || !sqlText.trim()" @click="executeSql">
-              <LucidePlay v-if="!isRunning" :size="18" />
-              <LucideLoader2 v-else :size="18" class="spin" />
-              {{ isRunning ? 'Ejecutando…' : runButtonLabel }}
-            </button>
           </div>
+
+          <textarea
+            v-model="sqlText"
+            class="sql-textarea"
+            spellcheck="false"
+            placeholder="-- Ejemplo\nSELECT COUNT(*) AS total FROM base;\n\nUPDATE base SET ciclo = '2025-2026' WHERE matricula = '...';"
+          />
         </div>
 
         <aside class="safety-panel">
@@ -94,7 +106,7 @@
 
       <div v-if="isRunning" class="result-banner result-banner-running">
         <LucideLoader2 :size="18" class="spin" />
-        <span>Ejecutando SQL en {{ activePlantelLabel }}. El resultado o cualquier error del bridge aparecerá aquí.</span>
+        <span>Ejecutando SQL en {{ targetPlantelLabel }}. El resultado o cualquier error del bridge aparecerá aquí.</span>
       </div>
 
       <div v-if="execution" class="results-panel">
@@ -106,7 +118,7 @@
             </strong>
             <small>
               {{ execution.executedStatements }} de {{ execution.totalStatements }} sentencias ejecutadas ·
-              {{ execution.transport }} · destino {{ execution.dataPlantel || execution.activePlantel }}
+              {{ execution.transport }} · destino {{ execution.targetPlantel || execution.dataPlantel || execution.activePlantel }}
             </small>
           </div>
           <button class="ghost-button" type="button" @click="copySummary">Copiar resumen</button>
@@ -191,6 +203,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { useCookie, useRouter } from '#app'
+import { PLANTELES_LIST } from '~/utils/constants'
 import {
   LucideAlertTriangle,
   LucideFileUp,
@@ -205,6 +218,8 @@ const router = useRouter()
 const roleCookie = useCookie('auth_role')
 const superAdminCookie = useCookie('auth_is_super_admin')
 const activePlantelCookie = useCookie('auth_active_plantel')
+const homePlantelCookie = useCookie('auth_home_plantel')
+const bridgeAgentCookie = useCookie('db_bridge_agent_id')
 
 const sqlText = ref('')
 const fileName = ref('')
@@ -212,6 +227,7 @@ const fileMeta = ref('')
 const isDragging = ref(false)
 const isRunning = ref(false)
 const continueOnError = ref(false)
+const targetPlantel = ref('')
 const execution = ref(null)
 const errorMessage = ref('')
 const fileInput = ref(null)
@@ -222,6 +238,8 @@ const roleTokens = computed(() => String(roleCookie.value || '')
   .filter(Boolean))
 const isSuperAdmin = computed(() => superAdminCookie.value === 'true' || roleTokens.value.some(role => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
 const activePlantelLabel = computed(() => activePlantelCookie.value === 'GLOBAL' ? 'CONSOLIDADO' : `PLANTEL ${activePlantelCookie.value || 'ACTIVO'}`)
+const targetPlantelOptions = computed(() => PLANTELES_LIST)
+const targetPlantelLabel = computed(() => targetPlantel.value ? `PLANTEL ${targetPlantel.value}` : activePlantelLabel.value)
 const estimatedStatements = computed(() => {
   const matches = sqlText.value
     .split(/;\s*(?:\n|$)/)
@@ -231,8 +249,24 @@ const estimatedStatements = computed(() => {
 })
 const estimatedStatementsLabel = computed(() => estimatedStatements.value === 1 ? '1 sentencia estimada' : `${estimatedStatements.value} sentencias estimadas`)
 const runButtonLabel = computed(() => estimatedStatements.value > 1 ? `Ejecutar ${estimatedStatements.value} sentencias` : 'Ejecutar SQL')
+const executionErrorSummary = computed(() => {
+  if (!execution.value || execution.value.success) return null
+  const firstError = execution.value.results?.find(item => item.status === 'error')?.error
+  if (!firstError) return null
+
+  return {
+    message: firstError.message || 'La ejecución terminó con errores.',
+    hint: firstError.hint || ''
+  }
+})
 
 onMounted(() => {
+  const initialTarget = String(activePlantelCookie.value || '').trim().toUpperCase()
+  const bridgeTarget = String(bridgeAgentCookie.value || homePlantelCookie.value || '').trim().toUpperCase()
+  targetPlantel.value = PLANTELES_LIST.includes(initialTarget)
+    ? initialTarget
+    : (PLANTELES_LIST.includes(bridgeTarget) ? bridgeTarget : PLANTELES_LIST[0])
+
   if (!isSuperAdmin.value) {
     router.replace('/')
   }
@@ -284,7 +318,8 @@ const executeSql = async () => {
       method: 'POST',
       body: {
         sql: sqlText.value,
-        continueOnError: continueOnError.value
+        continueOnError: continueOnError.value,
+        targetPlantel: targetPlantel.value
       }
     })
   } catch (error) {
@@ -301,6 +336,7 @@ const formatErrorMeta = (error) => {
   const parts = []
   if (error.code) parts.push(error.code)
   if (error.httpStatus) parts.push(`HTTP ${error.httpStatus}`)
+  if (error.targetAgent) parts.push(`agente ${error.targetAgent}`)
   if (error.sqlState) parts.push(`SQLSTATE ${error.sqlState}`)
   if (error.errno) parts.push(`errno ${error.errno}`)
   return parts.join(' · ')
@@ -320,7 +356,7 @@ const copySummary = async () => {
     `Success: ${execution.value.successfulStatements}`,
     `Failed: ${execution.value.failedStatements}`,
     `Duration: ${execution.value.durationMs}ms`,
-    `Target: ${execution.value.dataPlantel || execution.value.activePlantel}`
+    `Target: ${execution.value.targetPlantel || execution.value.dataPlantel || execution.value.activePlantel}`
   ].join('\n')
 
   await navigator.clipboard?.writeText(summary)
@@ -333,7 +369,7 @@ const copySummary = async () => {
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
   overflow: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
@@ -344,9 +380,9 @@ const copySummary = async () => {
   align-items: stretch;
   justify-content: space-between;
   gap: 0.85rem;
-  padding: 0.9rem 1rem;
+  padding: 0.62rem 0.72rem;
   border: 1px solid rgba(200, 219, 204, 0.86);
-  border-radius: 22px;
+  border-radius: 18px;
   background:
     radial-gradient(circle at 10% 0%, rgba(142, 193, 83, 0.16), transparent 18rem),
     linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 253, 245, 0.92));
@@ -356,7 +392,7 @@ const copySummary = async () => {
 .sql-hero h2 {
   margin: 0.12rem 0 0.22rem;
   color: #15223a;
-  font-size: clamp(1.35rem, 2.2vw, 1.85rem);
+  font-size: clamp(1.12rem, 1.8vw, 1.48rem);
   font-weight: 900;
   letter-spacing: -0.045em;
 }
@@ -365,8 +401,8 @@ const copySummary = async () => {
   max-width: 760px;
   margin: 0;
   color: #667085;
-  line-height: 1.38;
-  font-size: 0.86rem;
+  line-height: 1.25;
+  font-size: 0.78rem;
 }
 
 .sql-hero code {
@@ -379,7 +415,7 @@ const copySummary = async () => {
 
 .eyebrow {
   color: #197658 !important;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 900;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -387,11 +423,11 @@ const copySummary = async () => {
 
 .target-card {
   display: flex;
-  min-width: 205px;
+  min-width: 180px;
   flex-direction: column;
   justify-content: center;
-  gap: 0.35rem;
-  padding: 0.75rem 0.85rem;
+  gap: 0.22rem;
+  padding: 0.5rem 0.58rem;
   border: 1px solid rgba(25, 118, 88, 0.14);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.76);
@@ -408,14 +444,14 @@ const copySummary = async () => {
 
 .target-card strong {
   color: #15223a;
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 950;
 }
 
 .sql-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) 238px;
+  gap: 0.5rem;
   align-items: start;
 }
 
@@ -424,7 +460,7 @@ const copySummary = async () => {
 .results-panel,
 .access-denied {
   border: 1px solid rgba(221, 228, 224, 0.95);
-  border-radius: 22px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 16px 38px rgba(31, 56, 43, 0.065);
 }
@@ -433,22 +469,22 @@ const copySummary = async () => {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  padding: 0.8rem;
+  padding: 0.58rem;
 }
 
 .panel-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.55rem;
+  gap: 0.5rem;
+  margin-bottom: 0.38rem;
 }
 
 .panel-head h3,
 .safety-panel h3 {
   margin: 0;
   color: #15223a;
-  font-size: 1.04rem;
+  font-size: 0.96rem;
   font-weight: 950;
 }
 
@@ -457,17 +493,46 @@ const copySummary = async () => {
 .safety-panel li {
   margin: 0.25rem 0 0;
   color: #667085;
-  font-size: 0.88rem;
-  line-height: 1.45;
+  font-size: 0.78rem;
+  line-height: 1.32;
+}
+
+
+.panel-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.target-card label {
+  color: #667085;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.target-card select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(25, 118, 88, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #15223a;
+  font-size: 0.9rem;
+  font-weight: 950;
+  padding: 0.25rem 0.45rem;
 }
 
 .upload-zone {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 0.75rem;
+  gap: 0.5rem;
+  padding: 0.42rem 0.55rem;
   border: 1.5px dashed rgba(25, 118, 88, 0.32);
-  border-radius: 22px;
+  border-radius: 18px;
   background: rgba(245, 251, 244, 0.82);
   color: #197658;
   cursor: pointer;
@@ -481,7 +546,7 @@ const copySummary = async () => {
 .upload-zone span {
   flex: 1;
   color: #15223a;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 900;
 }
 
@@ -499,18 +564,18 @@ const copySummary = async () => {
 
 .sql-textarea {
   width: 100%;
-  height: clamp(230px, calc(100vh - 382px), 360px);
-  min-height: 230px;
-  margin-top: 0.65rem;
-  padding: 0.8rem;
+  height: clamp(176px, calc(100vh - 304px), 315px);
+  min-height: 176px;
+  margin-top: 0.42rem;
+  padding: 0.58rem;
   border: 1px solid rgba(210, 218, 214, 0.92);
-  border-radius: 22px;
+  border-radius: 18px;
   outline: none;
   background: #101828;
   color: #e6edf3;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.88rem;
-  line-height: 1.6;
+  font-size: 0.8rem;
+  line-height: 1.42;
   resize: none;
 }
 
@@ -522,10 +587,10 @@ const copySummary = async () => {
 .editor-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-top: 0.65rem;
+  gap: 0.42rem;
+  margin-top: 0.42rem;
 }
 
 .statement-chip,
@@ -534,13 +599,13 @@ const copySummary = async () => {
   align-items: center;
   gap: 0.45rem;
   color: #475467;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 850;
 }
 
 .statement-chip {
   margin-right: auto;
-  padding: 0.55rem 0.75rem;
+  padding: 0.36rem 0.55rem;
   border-radius: 999px;
   background: rgba(245, 247, 250, 0.95);
 }
@@ -566,14 +631,14 @@ const copySummary = async () => {
 }
 
 .run-button {
-  padding: 0.78rem 1.1rem;
+  padding: 0.58rem 0.82rem;
   background: linear-gradient(135deg, #197658, #8ec153);
   color: #fff;
   box-shadow: 0 14px 26px rgba(25, 118, 88, 0.2);
 }
 
 .ghost-button {
-  padding: 0.62rem 0.9rem;
+  padding: 0.48rem 0.7rem;
   background: rgba(245, 247, 250, 0.95);
   color: #344054;
 }
@@ -596,14 +661,14 @@ const copySummary = async () => {
 .safety-panel {
   position: sticky;
   top: 0;
-  padding: 0.85rem;
+  padding: 0.62rem;
 }
 
 .safety-icon {
   display: grid;
-  width: 38px;
-  height: 38px;
-  margin-bottom: 0.55rem;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 0.35rem;
   place-items: center;
   border-radius: 16px;
   background: rgba(25, 118, 88, 0.1);
@@ -613,8 +678,8 @@ const copySummary = async () => {
 .safety-panel ul {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  margin: 0.65rem 0 0;
+  gap: 0.22rem;
+  margin: 0.45rem 0 0;
   padding-left: 1.1rem;
 }
 
@@ -622,7 +687,7 @@ const copySummary = async () => {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.9rem 1rem;
+  padding: 0.62rem 0.72rem;
   border-radius: 20px;
   font-size: 0.88rem;
   font-weight: 850;
@@ -634,6 +699,29 @@ const copySummary = async () => {
   color: #b42318;
 }
 
+.result-banner-compact {
+  padding: 0.52rem 0.72rem;
+}
+
+.result-banner-compact div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.result-banner-compact strong,
+.result-banner-compact small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-banner-compact small {
+  color: #7a271a;
+  font-size: 0.76rem;
+}
+
 .result-banner-running {
   border: 1px solid rgba(25, 118, 88, 0.18);
   background: rgba(240, 253, 244, 0.96);
@@ -642,7 +730,7 @@ const copySummary = async () => {
 
 .results-panel {
   min-height: 0;
-  padding: 0.8rem;
+  padding: 0.58rem;
 }
 
 .results-summary {
@@ -651,7 +739,7 @@ const copySummary = async () => {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.75rem;
-  padding: 0.8rem;
+  padding: 0.58rem;
   border-radius: 18px;
 }
 
@@ -701,7 +789,7 @@ const copySummary = async () => {
 .statement-card {
   overflow: hidden;
   border: 1px solid rgba(221, 228, 224, 0.95);
-  border-radius: 22px;
+  border-radius: 18px;
   background: #fff;
 }
 
@@ -710,7 +798,7 @@ const copySummary = async () => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.9rem 1rem;
+  padding: 0.62rem 0.72rem;
   border-bottom: 1px solid rgba(234, 239, 236, 0.95);
 }
 
@@ -745,7 +833,7 @@ const copySummary = async () => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  padding: 0.85rem;
+  padding: 0.62rem;
   border-radius: 16px;
   background: rgba(254, 242, 242, 0.95);
   color: #b42318;
@@ -760,7 +848,7 @@ const copySummary = async () => {
 .table-meta,
 .empty-result {
   color: #667085;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 850;
 }
 
@@ -810,7 +898,7 @@ const copySummary = async () => {
 }
 
 .write-result-grid div {
-  padding: 0.85rem;
+  padding: 0.62rem;
   border-radius: 16px;
   background: #f8fafc;
 }
@@ -818,7 +906,7 @@ const copySummary = async () => {
 .write-result-grid span {
   display: block;
   color: #667085;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -869,13 +957,24 @@ const copySummary = async () => {
   }
 
   .sql-textarea {
-    height: 260px;
+    height: 220px;
   }
 
   .sql-hero,
-  .results-summary,
-  .panel-head {
+  .results-summary {
     flex-direction: column;
+  }
+
+  .panel-head {
+    align-items: stretch;
+  }
+
+  .panel-actions {
+    width: 100%;
+  }
+
+  .panel-actions .run-button {
+    flex: 1;
   }
 
   .target-card {
