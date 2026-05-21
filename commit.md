@@ -1,9 +1,7 @@
-Fix student detail and isolate ROLE_CTRL user management
+Separate operator student info from financial details
 
-- Add read-only Control Escolar detail panel to the student detail view.
-- Load consolidated base + centralized matricula data without exposing editable fields.
-- Include parent contact emails, grupo, academic profile, baja follow-up, and available raw fields.
-- Add a bounded student detail endpoint that does not affect the main students fetch.
-- Move user management reads/writes to the external users table when available.
-- Keep external ROLE_CTRL lookup isolated to login cookies and Control Escolar navigation only.
-- Avoid centralized users as a required gate for normal student APIs.
+- Remove the Control Escolar read-only panel from the normal Ver detalles flow.
+- Add a separate operator-only Ver información de alumno modal.
+- Add a bounded read-only operator info endpoint backed by plantel base plus centralized matricula data.
+- Hide and block the operator info view for exact ROLE_CTRL Control Escolar-only users.
+- Document the data sources and access boundary between base, matricula, and external users.

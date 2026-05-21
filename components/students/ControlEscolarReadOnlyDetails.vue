@@ -1,10 +1,10 @@
 <template>
-  <section class="ce-readonly-card" aria-label="Detalle de Control Escolar">
+  <section class="ce-readonly-card" aria-label="Información de alumno">
     <header class="ce-readonly-header">
       <div>
-        <span>Detalle de alumno</span>
-        <h3>Expediente Control Escolar</h3>
-        <p>Lectura consolidada desde base + matrícula centralizada.</p>
+        <span>{{ eyebrow }}</span>
+        <h3>{{ title }}</h3>
+        <p>{{ description }}</p>
       </div>
       <button type="button" class="ce-readonly-refresh" :disabled="loading" @click="loadDetail">
         <LucideRefreshCw :size="14" :class="{ spinning: loading }" />
@@ -73,7 +73,11 @@ import {
 
 const props = defineProps({
   matricula: { type: String, default: '' },
-  fallbackStudent: { type: Object, default: null }
+  fallbackStudent: { type: Object, default: null },
+  endpointSuffix: { type: String, default: 'operator-info' },
+  eyebrow: { type: String, default: 'Información de alumno' },
+  title: { type: String, default: 'Expediente Control Escolar' },
+  description: { type: String, default: 'Lectura consolidada desde base + matrícula centralizada.' }
 })
 
 const detail = ref(null)
@@ -98,7 +102,8 @@ const loadDetail = async () => {
   error.value = ''
 
   try {
-    const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/control-escolar-detail`)
+    const suffix = String(props.endpointSuffix || 'operator-info').replace(/^\/+|\/+$/g, '')
+    const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/${suffix}`)
     if (currentId !== requestId) return
     detail.value = response || null
   } catch (err) {

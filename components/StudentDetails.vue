@@ -209,11 +209,6 @@
       </section>
 
 
-      <ControlEscolarReadOnlyDetails
-        :matricula="student?.matricula || ''"
-        :fallback-student="student"
-      />
-
       <section v-if="siblings.length" class="siblings-card">
         <div class="siblings-header">
           <h4>Familia / Hermanos</h4>
@@ -696,7 +691,6 @@ import InvoiceModal from "./InvoiceModal.vue";
 import ConceptChangeModal from "./ConceptChangeModal.vue";
 import IngresoCycleModal from "./IngresoCycleModal.vue";
 import StudentAccountPhotoCard from "~/components/students/StudentAccountPhotoCard.vue";
-import ControlEscolarReadOnlyDetails from "~/components/students/ControlEscolarReadOnlyDetails.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 
 const props = defineProps({
