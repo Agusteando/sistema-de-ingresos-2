@@ -16,6 +16,13 @@
         <UiButton variant="secondary" :disabled="loadingAny || !selectedAgentId" @click="refreshAll">
           <LucideRefreshCw :size="18" :class="{ spinning: loadingAny }" /> Actualizar
         </UiButton>
+        <UiButton variant="secondary" :disabled="!selectedAgentId || !students.length" @click="exportMatriculaDb">
+          <LucideFileSpreadsheet :size="18" /> Exportar DB
+        </UiButton>
+        <UiButton variant="secondary" :disabled="!selectedAgentId || massImporting" @click="massImportInput?.click()">
+          <LucideUpload :size="18" /> {{ massImporting ? 'Importando...' : 'Importar DB' }}
+        </UiButton>
+        <input ref="massImportInput" class="ce-hidden-file" type="file" accept=".csv,text/csv" @change="importMatriculaDb" />
         <UiButton variant="primary" :disabled="!selectedAgentId || !students.length" @click="exportCurrentView">
           <LucideDownload :size="18" /> Exportar
         </UiButton>
@@ -75,8 +82,7 @@
         </button>
       </div>
 
-      <Transition name="filter-groups">
-        <div v-if="showAdvancedFilters || advancedFilterCount" class="ce-secondary-filter-row">
+      <div class="ce-secondary-filter-row">
           <div class="ce-chip-cluster" aria-label="Calidad del expediente">
             <span class="ce-chip-label">Calidad del expediente</span>
             <UiChip
@@ -85,23 +91,22 @@
               :active="filters.quality === filter.key"
               @click="toggleQualityFilter(filter.key)"
             >
-              {{ filter.label }}
+              <span>{{ filter.label }}</span><b class="ce-chip-count">{{ formatNumber(filter.count) }}</b>
             </UiChip>
           </div>
 
-          <div v-if="catalogs.grados.length" class="ce-chip-cluster" aria-label="Filtrar por grado">
+          <div v-if="(showAdvancedFilters || filters.grado || filters.group) && catalogs.grados.length" class="ce-chip-cluster" aria-label="Filtrar por grado">
             <span class="ce-chip-label">Grado</span>
             <UiChip :active="!filters.grado && !filters.group" @click="clearAcademicFilters">Todos</UiChip>
             <UiChip v-for="grado in catalogs.grados" :key="`grado-${grado}`" :active="filters.grado === grado" @click="selectGrade(grado)">{{ grado }}</UiChip>
           </div>
 
-          <div v-if="filters.grado && availableGroups.length" class="ce-chip-cluster" aria-label="Filtrar por grupo">
+          <div v-if="(showAdvancedFilters || filters.group) && filters.grado && availableGroups.length" class="ce-chip-cluster" aria-label="Filtrar por grupo">
             <span class="ce-chip-label">Grupo</span>
             <UiChip :active-group="filters.group === ''" @click="filters.group = ''">Todos</UiChip>
             <UiChip v-for="grupo in availableGroups" :key="`grupo-${grupo}`" :active-group="filters.group === grupo" @click="toggleFilter('group', grupo)">{{ grupo }}</UiChip>
           </div>
-        </div>
-      </Transition>
+      </div>
     </div>
 
     <div ref="studentsScaleShell" class="students-scale-shell" :style="studentsScaleShellStyle">
@@ -261,6 +266,27 @@
                   </div>
                 </section>
 
+                <section class="ce-husky-card">
+                  <div class="ce-section-heading">
+                    <span><LucideKeyRound :size="18" /></span>
+                    <div>
+                      <h3>Husky Pass accesos</h3>
+                      <p>Usuario y contraseña desde users.username/users.plaintext.</p>
+                    </div>
+                  </div>
+                  <div v-if="selectedStudent.huskyPassAvailable" class="ce-husky-credentials">
+                    <span><small>Usuario</small><strong>{{ selectedStudent.huskyPassUsername }}</strong></span>
+                    <span><small>Contraseña</small><strong>{{ selectedStudent.huskyPassPlaintext }}</strong></span>
+                  </div>
+                  <div v-else class="ce-husky-empty">Sin Husky Pass registrado para esta matrícula.</div>
+                  <div class="ce-husky-actions">
+                    <small>{{ huskyPassEmailTarget || 'Sin correo de padre/tutor' }}</small>
+                    <UiButton variant="secondary" type="button" :disabled="sendingHuskyPass || !selectedStudent.huskyPassAvailable || !huskyPassEmailTarget" @click="sendHuskyPassEmail">
+                      <LucideSend :size="16" /> {{ sendingHuskyPass ? 'Enviando...' : 'Enviar acceso' }}
+                    </UiButton>
+                  </div>
+                </section>
+
                 <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
                   <span class="active"><LucideUserRound :size="15" /> Identidad</span>
                   <span><LucideGraduationCap :size="15" /> Escolar</span>
@@ -354,8 +380,10 @@ import {
   LucideDatabase,
   LucideDownload,
   LucideFilter,
+  LucideFileSpreadsheet,
   LucideGlobe2,
   LucideGraduationCap,
+  LucideKeyRound,
   LucideMail,
   LucidePhone,
   LucideRefreshCw,
@@ -363,10 +391,12 @@ import {
   LucideSave,
   LucideSearch,
   LucideSearchX,
+  LucideSend,
   LucideShieldCheck,
   LucideUserCheck,
   LucideUserRound,
   LucideUsersRound,
+  LucideUpload,
   LucideUserX,
   LucideWifiOff,
   LucideX
@@ -394,13 +424,16 @@ const optionsLoading = ref(false)
 const kpisLoading = ref(false)
 const studentsLoading = ref(false)
 const savingStudent = ref(false)
+const massImporting = ref(false)
+const sendingHuskyPass = ref(false)
 const loadError = ref('')
 const saveError = ref('')
 const students = ref([])
 const selectedStudent = ref(null)
+const massImportInput = ref(null)
 const kpis = ref(null)
 const catalogs = reactive({ niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
-const DEFAULT_QUICK_FILTER = 'all'
+const DEFAULT_QUICK_FILTER = 'inscritos'
 const activeQuickFilter = ref(DEFAULT_QUICK_FILTER)
 const showAdvancedFilters = ref(false)
 const pagination = reactive({ page: 1, limit: 25, total: 0, pages: 1 })
@@ -438,32 +471,36 @@ const advancedFilterCount = computed(() => [filters.quality, filters.grado, filt
 
 const primaryFilters = [
   { key: 'all', label: 'Todos' },
-  { key: 'activos', label: 'Activos' },
-  { key: 'bajas', label: 'Bajas' },
-  { key: 'sin_ficha', label: 'Sin ficha matrícula' },
-  { key: 'sin_contacto', label: 'Sin contacto' }
+  { key: 'inscritos', label: 'Inscritos' },
+  { key: 'internos', label: 'Internos' },
+  { key: 'externos', label: 'Externos' },
+  { key: 'no_inscritos', label: 'No inscritos' },
+  { key: 'bajas', label: 'Bajas' }
 ]
 
-const qualityFilters = [
-  { key: 'incomplete', label: 'Expediente incompleto' },
-  { key: 'complete', label: 'Completo' },
-  { key: 'curp', label: 'Sin CURP' },
-  { key: 'phone', label: 'Sin teléfono' },
-  { key: 'email', label: 'Sin email' },
-  { key: 'guardian', label: 'Sin tutor' }
-]
+const qualityFilters = computed(() => {
+  const data = kpis.value || {}
+  return [
+    { key: 'incomplete', label: 'Expediente incompleto', count: data.expedientesIncompletos || 0 },
+    { key: 'curp', label: 'Sin CURP', count: data.sinCurp || 0 },
+    { key: 'phone', label: 'Sin teléfono', count: data.sinTelefono || 0 },
+    { key: 'email', label: 'Sin email', count: data.sinEmail || 0 },
+    { key: 'guardian', label: 'Sin tutor', count: data.sinTutor || 0 },
+    { key: 'contact', label: 'Sin contacto', count: data.sinContacto || 0 }
+  ]
+})
 
 const kpiCards = computed(() => {
   const data = kpis.value || {}
   return [
-    { key: 'inscritos', label: 'Total inscritos', value: data.inscritos || data.totalInscritos || 0, tone: 'kpi-green', icon: LucideUsersRound, sparkline: [0, data.inscritos || data.totalInscritos || 0, data.totalVisible || data.totalInscritos || 0] },
-    { key: 'activos', label: 'Activos', value: data.activos || 0, tone: 'kpi-teal', icon: LucideUserCheck, sparkline: [0, data.activos || 0, data.totalVisible || 0] },
-    { key: 'bajas', label: 'Bajas', value: data.bajas || 0, tone: 'kpi-red', icon: LucideAlertTriangle, sparkline: [0, data.bajas || 0, data.bajas || 0] },
-    { key: 'sin_ficha', label: 'Sin ficha matrícula', value: data.sinFichaMatricula || data.nuevosOverlay || 0, tone: 'kpi-blue', icon: LucideDatabase, sparkline: [0, data.sinFichaMatricula || data.nuevosOverlay || 0, data.totalVisible || 0] },
-    { key: 'incomplete', label: 'Expedientes incompletos', value: data.expedientesIncompletos || 0, tone: 'kpi-gray', icon: LucideShieldCheck, sparkline: [0, data.expedientesIncompletos || 0, data.totalVisible || 0] },
-    { key: 'sin_contacto', label: 'Sin contacto', value: data.sinContacto || 0, tone: 'kpi-red', icon: LucidePhone, sparkline: [0, data.sinContacto || 0, data.totalVisible || 0] }
+    { key: 'inscritos', label: 'Inscritos', value: data.inscritos || data.totalInscritos || 0, tone: 'kpi-green', icon: LucideUsersRound, sparkline: data.sparklineInscritos || [0, data.inscritos || data.totalInscritos || 0] },
+    { key: 'internos', label: 'Internos', value: data.internos || 0, tone: 'kpi-teal', icon: LucideUserCheck, sparkline: data.sparklineInternos || [0, data.internos || 0] },
+    { key: 'externos', label: 'Externos', value: data.externos || 0, tone: 'kpi-blue', icon: LucideGlobe2, sparkline: data.sparklineExternos || [0, data.externos || 0] },
+    { key: 'no_inscritos', label: 'No inscritos', value: data.noInscritos || 0, tone: 'kpi-red', icon: LucideUserX, sparkline: data.sparklineNoInscritos || [0, data.noInscritos || 0] },
+    { key: 'bajas', label: 'Bajas', value: data.bajas || 0, tone: 'kpi-gray', icon: LucideUserX, sparkline: data.sparklineBajas || [0, data.bajas || 0] }
   ]
 })
+
 
 const requiredDataFields = [
   { key: 'curp', label: 'CURP', icon: LucideShieldCheck },
@@ -473,8 +510,8 @@ const requiredDataFields = [
 ]
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('es-MX')
-const statusLabel = (value) => ({ all: 'Todos', inscritos: 'Inscritos', activos: 'Activos', active: 'Activos', internos: 'Internos', externos: 'Externos', no_inscritos: 'No inscritos', bajas: 'Bajas', baja: 'Bajas', sin_ficha: 'Sin ficha matrícula', sin_contacto: 'Sin contacto' }[value] || value)
-const qualityLabel = (value) => ({ complete: 'Completo', incomplete: 'Expediente incompleto', curp: 'Sin CURP', phone: 'Sin teléfono', email: 'Sin email', guardian: 'Sin tutor', contact: 'Sin contacto', overlay: 'Sin ficha matrícula' }[value] || value)
+const statusLabel = (value) => ({ all: 'Todos', inscritos: 'Inscritos', activos: 'Activos', active: 'Activos', internos: 'Internos', externos: 'Externos', no_inscritos: 'No inscritos', bajas: 'Bajas', baja: 'Bajas', sin_contacto: 'Sin contacto' }[value] || value)
+const qualityLabel = (value) => ({ complete: 'Completo', incomplete: 'Expediente incompleto', curp: 'Sin CURP', phone: 'Sin teléfono', email: 'Sin email', guardian: 'Sin tutor', contact: 'Sin contacto' }[value] || value)
 const compactAcademic = (student) => [student.grado, student.group ? `Grupo ${student.group}` : '', student.nivel].filter(Boolean).join(' · ') || 'Sin datos académicos'
 const statusTone = (student) => String(student?.status || '').toLowerCase() === 'baja' ? 'danger' : String(student?.status || '').toLowerCase() === 'activo' ? 'success' : 'neutral'
 const completionFor = (student) => {
@@ -484,6 +521,7 @@ const completionFor = (student) => {
 }
 const selectedProfileCompletion = computed(() => completionFor(selectedStudent.value))
 const selectedMissingCount = computed(() => requiredDataFields.filter((field) => selectedStudent.value?.missingFields?.includes(field.key) || selectedStudent.value?.missingFields?.includes(field.label.toLowerCase())).length)
+const huskyPassEmailTarget = computed(() => selectedStudent.value?.emailPadre || selectedStudent.value?.emailMadre || selectedStudent.value?.email || selectedStudent.value?.huskyPassEmail || '')
 
 const buildScopeQuery = () => ({
   agentId: selectedAgentId.value || undefined,
@@ -689,6 +727,57 @@ const exportCurrentView = () => {
   window.open(`/api/control-escolar/export?${params.toString()}`, '_blank')
 }
 
+const exportMatriculaDb = () => {
+  if (!selectedAgentId.value) return
+  const params = new URLSearchParams()
+  Object.entries(buildQuery({ page: undefined, limit: undefined })).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') params.set(key, value)
+  })
+  window.open(`/api/control-escolar/matricula-db/export?${params.toString()}`, '_blank')
+}
+
+const importMatriculaDb = async (event) => {
+  const file = event?.target?.files?.[0]
+  if (!file || !selectedAgentId.value) return
+  massImporting.value = true
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    const response = await $fetch('/api/control-escolar/matricula-db/import', {
+      method: 'POST',
+      query: buildScopeQuery(),
+      body: form
+    })
+    const summary = response?.summary || {}
+    const skipped = Number(summary.skipped || 0)
+    show(`Importación aplicada: ${summary.updated || 0} actualizados${skipped ? `, ${skipped} omitidos` : ''}.`, skipped ? 'warning' : 'success')
+    if (summary.errors?.length) console.warn('[Control Escolar] Errores de importación masiva', summary.errors)
+    await refreshAll()
+  } catch (error) {
+    show(error?.data?.message || error?.message || 'No se pudo importar el archivo.', 'danger')
+  } finally {
+    massImporting.value = false
+    if (event?.target) event.target.value = ''
+  }
+}
+
+const sendHuskyPassEmail = async () => {
+  if (!selectedStudent.value || !selectedAgentId.value) return
+  sendingHuskyPass.value = true
+  try {
+    const response = await $fetch(`/api/control-escolar/students/${encodeURIComponent(selectedStudent.value.matricula)}/husky-pass-email`, {
+      method: 'POST',
+      query: buildScopeQuery(),
+      body: { to: huskyPassEmailTarget.value }
+    })
+    show(`Husky Pass enviado a ${response.sentTo}.`, 'success')
+  } catch (error) {
+    show(error?.data?.message || error?.message || 'No se pudo enviar Husky Pass.', 'danger')
+  } finally {
+    sendingHuskyPass.value = false
+  }
+}
+
 const cacheEnrollmentConcepts = (conceptIds) => {
   if (!process.client || !Array.isArray(conceptIds) || !conceptIds.length) return
   try {
@@ -819,6 +908,8 @@ onMounted(async () => {
 
 .ce-hero-actions {
   align-items: stretch;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .ce-selected-plantel {
@@ -855,6 +946,7 @@ onMounted(async () => {
 }
 
 .spinning { animation: ce-spin 900ms linear infinite; }
+.ce-hidden-file { display: none; }
 @keyframes ce-spin { to { transform: rotate(360deg); } }
 
 .ce-kpi-system {
@@ -862,16 +954,16 @@ onMounted(async () => {
 }
 
 .ce-kpi-strip {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  min-height: 78px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-height: 70px;
   border-radius: 0;
   border-inline: 0;
   box-shadow: none;
 }
 
 .ce-kpi-strip .kpi-card {
-  height: 66px;
-  min-height: 66px;
+  height: 64px;
+  min-height: 64px;
 }
 
 .ce-kpi-strip .kpi-icon {
@@ -908,7 +1000,7 @@ onMounted(async () => {
 
 .ce-primary-filter-row {
   display: grid;
-  grid-template-columns: minmax(360px, max-content) minmax(320px, 1fr) auto auto;
+  grid-template-columns: minmax(530px, max-content) minmax(320px, 1fr) auto auto;
   align-items: center;
   gap: 9px;
   min-width: 0;
@@ -1037,6 +1129,20 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+.ce-chip-count {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: rgba(32, 136, 45, .12);
+  color: #20882d;
+  font-size: 9px;
+  font-weight: 900;
+}
+
 .ce-workspace.has-detail {
   grid-template-columns: minmax(430px, .52fr) minmax(820px, 1.48fr);
   gap: 12px;
@@ -1111,6 +1217,8 @@ onMounted(async () => {
 }
 
 .ce-student-row {
+  width: calc(100% - 7px);
+  box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-quality-col) var(--student-list-action-col);
   min-height: var(--student-list-row-height);
   margin: 0 7px 7px 0;
@@ -1564,6 +1672,78 @@ onMounted(async () => {
   color: #21882e;
 }
 
+.ce-husky-card {
+  display: grid;
+  grid-template-columns: minmax(240px, .55fr) minmax(260px, .7fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(42, 126, 191, .16);
+  border-radius: 14px;
+  background: linear-gradient(90deg, #f7fbff, #fff);
+  box-shadow: 0 7px 18px rgba(21,35,60,.035);
+}
+
+.ce-husky-credentials {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ce-husky-credentials span {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--students-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.ce-husky-credentials small,
+.ce-husky-actions small {
+  display: block;
+  color: #6f7b95;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.ce-husky-credentials strong {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #15233c;
+  font-size: 12px;
+  font-weight: 860;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-husky-empty {
+  padding: 10px 12px;
+  border: 1px dashed #ccd8e5;
+  border-radius: 12px;
+  color: #6f7b95;
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.ce-husky-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ce-husky-actions small {
+  max-width: 190px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ce-detail-tabs {
   display: flex;
   min-height: 42px;
@@ -1706,7 +1886,7 @@ onMounted(async () => {
 }
 
 @media (max-width: 1320px) {
-  .ce-kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ce-kpi-strip { grid-template-columns: repeat(5, minmax(148px, 1fr)); overflow-x: auto; }
   .ce-primary-filter-row { grid-template-columns: 1fr minmax(300px, .9fr) auto; }
   .ce-clear-link { display: none; }
   .ce-status-tabs { overflow-x: auto; }
@@ -1728,6 +1908,7 @@ onMounted(async () => {
   .ce-progress-cluster { display: none; }
   .ce-profile-card,
   .ce-data-section,
+  .ce-husky-card,
   .ce-edit-form { grid-template-columns: 1fr; }
   .ce-missing-grid,
   .ce-form-grid.three,
