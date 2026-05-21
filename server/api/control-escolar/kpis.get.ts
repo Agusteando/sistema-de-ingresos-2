@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
 
   return await runControlEscolar(event, auth.agentId, async () => {
     try {
-      const kpis = await fetchControlEscolarKpis(auth.agentId)
+      const kpis = await fetchControlEscolarKpis(auth.agentId, getQuery(event))
       return { agentId: auth.agentId, kpis }
     } catch (error: any) {
       if (error?.statusCode) throw error
