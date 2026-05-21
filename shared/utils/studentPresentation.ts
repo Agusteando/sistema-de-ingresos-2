@@ -130,22 +130,31 @@ export const normalizeEnrollmentConceptIds = (values: unknown): string[] => {
     .filter(Boolean)
 }
 
-export const isStudentEnrolled = (student: any, enrollmentConcepts: string[] = []) => {
-  if (student?.estatus !== 'Activo') return false
-
+export const studentHasCurrentEnrollmentConcept = (student: any, enrollmentConcepts: string[] = []) => {
   const enrollmentConceptIds = normalizeEnrollmentConceptIds(enrollmentConcepts)
   if (!enrollmentConceptIds.length) return false
 
   const studentConceptIds = new Set(normalizeEnrollmentConceptIds([
+    student?.tipoIngresoEvidence?.targetConceptIds,
+    student?.tipoIngresoEvidence?.targetConceptosIds,
+    student?.tipoIngresoEvidence?.targetConcepts,
+    student?.tipoIngresoEvidence?.targetConceptos,
+    student?.conceptoIdsTarget,
+    student?.conceptoIdsTargetCiclo,
+    student?.conceptoIdsCicloActual,
     student?.conceptoIdsPagados,
     student?.conceptoIdsCargados,
-    student?.conceptoIdsCicloActual,
     student?.conceptoIds,
     student?.conceptosIds
   ]))
 
   if (!studentConceptIds.size) return false
   return enrollmentConceptIds.some(conceptId => studentConceptIds.has(conceptId))
+}
+
+export const isStudentEnrolled = (student: any, enrollmentConcepts: string[] = []) => {
+  if (student?.estatus !== 'Activo') return false
+  return studentHasCurrentEnrollmentConcept(student, enrollmentConcepts)
 }
 
 export const statusSecondaryLine = (student: any, enrollmentConcepts: string[] = []) => {
