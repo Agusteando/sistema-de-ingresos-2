@@ -50,6 +50,9 @@
         <NuxtLink to="/usuarios" class="nav-item group" v-if="isSuperAdmin">
           <LucideShield :size="22" stroke-width="2" /> Usuarios
         </NuxtLink>
+        <NuxtLink to="/sql-console" class="nav-item group" v-if="isSuperAdmin">
+          <LucideDatabase :size="22" stroke-width="2" /> SQL Console
+        </NuxtLink>
       </nav>
 
       <div class="sidebar-footer">
@@ -185,7 +188,8 @@ import {
   LucideSchool,
   LucideBuilding2,
   LucideChevronDown,
-  LucideExternalLink
+  LucideExternalLink,
+  LucideDatabase
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -296,6 +300,7 @@ const currentRouteName = computed(() => {
   if (route.path === '/conceptos') return 'Conceptos'
   if (route.path === '/facturas') return 'Facturas CFDI'
   if (route.path === '/usuarios') return 'Usuarios'
+  if (route.path === '/sql-console') return 'SQL Console'
   if (route.path === '/control-escolar') return 'Control Escolar'
   return 'SISTEMA DE INGRESOS'
 })

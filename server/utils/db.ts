@@ -640,6 +640,10 @@ export const ensureSchema = async () => {
   await schemaPromises.get(schemaKey)
 }
 
+export const runRawSqlStatement = async <T>(sql: string, params?: SqlParams): Promise<T> => {
+  return await rawQuery<T>(sql, params)
+}
+
 export const query = async <T>(sql: string, params?: SqlParams, isRetry = false): Promise<T> => {
   await ensureSchema()
 
