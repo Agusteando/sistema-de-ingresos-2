@@ -148,9 +148,15 @@ model Documentos {
   plazo          String   @db.Text
   meses          String?  @default("1") @db.VarChar(11)
   anual          Int?
-  beca           String?  @db.VarChar(255)
-  becaNombre     String?  @db.VarChar(255)
-  fecha          DateTime @default(now()) @db.DateTime(0)
+  beca              String?   @db.VarChar(255)
+  becaNombre        String?   @db.VarChar(255)
+  becaTipos         String?   @db.Text
+  becaMotivo        String?   @db.Text
+  becaMonto         Decimal?  @default(0) @db.Decimal(65, 2)
+  becaPorcentaje    Decimal?  @default(0) @db.Decimal(8, 2)
+  becaCartaGenerada Boolean?  @default(false)
+  becaCartaFecha    DateTime? @db.DateTime(0)
+  fecha             DateTime  @default(now()) @db.DateTime(0)
   ciclo          String   @default("2025") @db.VarChar(255)
   eventual       Boolean  @default(false)
   responsable    String   @db.VarChar(255)
