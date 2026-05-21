@@ -257,6 +257,8 @@ export default defineEventHandler(async (event) => {
       })
     } catch (error: any) {
       failed += 1
+      const httpStatus = error?.httpStatus || error?.statusCode || error?.status || null
+
       results.push({
         index: index + 1,
         sql: statement,
@@ -264,9 +266,13 @@ export default defineEventHandler(async (event) => {
         durationMs: Date.now() - statementStartedAt,
         error: {
           message: error?.message || 'Error ejecutando sentencia.',
-          code: error?.code || null,
+          code: error?.code || (httpStatus ? `DB_BRIDGE_HTTP_${httpStatus}` : null),
           errno: error?.errno || null,
-          sqlState: error?.sqlState || null
+          sqlState: error?.sqlState || null,
+          httpStatus,
+          hint: httpStatus === 503
+            ? 'El DB bridge devolvió 503. La sentencia no se confirmó; revisa que el agente/bridge esté disponible y reintenta cuando responda.'
+            : null
         }
       })
 
