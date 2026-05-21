@@ -89,7 +89,12 @@
 
       <div v-if="errorMessage" class="result-banner result-banner-error">
         <LucideAlertTriangle :size="18" />
-        {{ errorMessage }}
+        <span>{{ errorMessage }}</span>
+      </div>
+
+      <div v-if="isRunning" class="result-banner result-banner-running">
+        <LucideLoader2 :size="18" class="spin" />
+        <span>Ejecutando SQL en {{ activePlantelLabel }}. El resultado o cualquier error del bridge aparecerá aquí.</span>
       </div>
 
       <div v-if="execution" class="results-panel">
@@ -126,7 +131,8 @@
 
             <div v-if="item.status === 'error'" class="statement-error-box">
               <strong>{{ item.error?.message }}</strong>
-              <span v-if="item.error?.code">{{ item.error.code }} · {{ item.error.sqlState || 'sin SQLSTATE' }}</span>
+              <span v-if="formatErrorMeta(item.error)">{{ formatErrorMeta(item.error) }}</span>
+              <small v-if="item.error?.hint">{{ item.error.hint }}</small>
             </div>
 
             <template v-else-if="item.result?.kind === 'rows'">
@@ -282,10 +288,22 @@ const executeSql = async () => {
       }
     })
   } catch (error) {
-    errorMessage.value = error?.data?.message || error?.message || 'No se pudo ejecutar el SQL.'
+    const statusCode = error?.statusCode || error?.status || error?.response?.status || error?.data?.statusCode
+    const message = error?.data?.message || error?.data?.statusMessage || error?.message || 'No se pudo ejecutar el SQL.'
+    errorMessage.value = statusCode ? `${message} (HTTP ${statusCode})` : message
   } finally {
     isRunning.value = false
   }
+}
+
+const formatErrorMeta = (error) => {
+  if (!error) return ''
+  const parts = []
+  if (error.code) parts.push(error.code)
+  if (error.httpStatus) parts.push(`HTTP ${error.httpStatus}`)
+  if (error.sqlState) parts.push(`SQLSTATE ${error.sqlState}`)
+  if (error.errno) parts.push(`errno ${error.errno}`)
+  return parts.join(' · ')
 }
 
 const formatCell = (value) => {
@@ -312,19 +330,23 @@ const copySummary = async () => {
 <style scoped>
 .sql-console-page {
   display: flex;
+  height: 100%;
+  min-height: 0;
   flex-direction: column;
-  gap: 1.25rem;
-  min-height: 100%;
+  gap: 0.75rem;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
 }
 
 .sql-hero {
   display: flex;
   align-items: stretch;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1.25rem;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
   border: 1px solid rgba(200, 219, 204, 0.86);
-  border-radius: 28px;
+  border-radius: 22px;
   background:
     radial-gradient(circle at 10% 0%, rgba(142, 193, 83, 0.16), transparent 18rem),
     linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 253, 245, 0.92));
@@ -332,9 +354,9 @@ const copySummary = async () => {
 }
 
 .sql-hero h2 {
-  margin: 0.2rem 0 0.35rem;
+  margin: 0.12rem 0 0.22rem;
   color: #15223a;
-  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  font-size: clamp(1.35rem, 2.2vw, 1.85rem);
   font-weight: 900;
   letter-spacing: -0.045em;
 }
@@ -343,7 +365,8 @@ const copySummary = async () => {
   max-width: 760px;
   margin: 0;
   color: #667085;
-  line-height: 1.6;
+  line-height: 1.38;
+  font-size: 0.86rem;
 }
 
 .sql-hero code {
@@ -364,13 +387,13 @@ const copySummary = async () => {
 
 .target-card {
   display: flex;
-  min-width: 230px;
+  min-width: 205px;
   flex-direction: column;
   justify-content: center;
   gap: 0.35rem;
-  padding: 1rem;
+  padding: 0.75rem 0.85rem;
   border: 1px solid rgba(25, 118, 88, 0.14);
-  border-radius: 22px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.76);
 }
 
@@ -391,8 +414,8 @@ const copySummary = async () => {
 
 .sql-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 0.75rem;
   align-items: start;
 }
 
@@ -401,13 +424,16 @@ const copySummary = async () => {
 .results-panel,
 .access-denied {
   border: 1px solid rgba(221, 228, 224, 0.95);
-  border-radius: 28px;
+  border-radius: 22px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 16px 38px rgba(31, 56, 43, 0.065);
 }
 
 .editor-panel {
-  padding: 1rem;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 0.8rem;
 }
 
 .panel-head {
@@ -415,7 +441,7 @@ const copySummary = async () => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.55rem;
 }
 
 .panel-head h3,
@@ -439,7 +465,7 @@ const copySummary = async () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.95rem 1rem;
+  padding: 0.65rem 0.75rem;
   border: 1.5px dashed rgba(25, 118, 88, 0.32);
   border-radius: 22px;
   background: rgba(245, 251, 244, 0.82);
@@ -473,9 +499,10 @@ const copySummary = async () => {
 
 .sql-textarea {
   width: 100%;
-  min-height: 420px;
-  margin-top: 0.9rem;
-  padding: 1rem;
+  height: clamp(230px, calc(100vh - 382px), 360px);
+  min-height: 230px;
+  margin-top: 0.65rem;
+  padding: 0.8rem;
   border: 1px solid rgba(210, 218, 214, 0.92);
   border-radius: 22px;
   outline: none;
@@ -484,7 +511,7 @@ const copySummary = async () => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.88rem;
   line-height: 1.6;
-  resize: vertical;
+  resize: none;
 }
 
 .sql-textarea:focus {
@@ -497,8 +524,8 @@ const copySummary = async () => {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 0.9rem;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
 }
 
 .statement-chip,
@@ -568,15 +595,15 @@ const copySummary = async () => {
 
 .safety-panel {
   position: sticky;
-  top: 1rem;
-  padding: 1.1rem;
+  top: 0;
+  padding: 0.85rem;
 }
 
 .safety-icon {
   display: grid;
-  width: 48px;
-  height: 48px;
-  margin-bottom: 0.8rem;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 0.55rem;
   place-items: center;
   border-radius: 16px;
   background: rgba(25, 118, 88, 0.1);
@@ -586,8 +613,8 @@ const copySummary = async () => {
 .safety-panel ul {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  margin: 0.9rem 0 0;
+  gap: 0.35rem;
+  margin: 0.65rem 0 0;
   padding-left: 1.1rem;
 }
 
@@ -607,8 +634,15 @@ const copySummary = async () => {
   color: #b42318;
 }
 
+.result-banner-running {
+  border: 1px solid rgba(25, 118, 88, 0.18);
+  background: rgba(240, 253, 244, 0.96);
+  color: #126146;
+}
+
 .results-panel {
-  padding: 1rem;
+  min-height: 0;
+  padding: 0.8rem;
 }
 
 .results-summary {
@@ -616,9 +650,9 @@ const copySummary = async () => {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
-  padding: 1rem;
-  border-radius: 22px;
+  margin-bottom: 0.75rem;
+  padding: 0.8rem;
+  border-radius: 18px;
 }
 
 .summary-success {
@@ -716,6 +750,11 @@ const copySummary = async () => {
   background: rgba(254, 242, 242, 0.95);
   color: #b42318;
   font-size: 0.84rem;
+}
+
+.statement-error-box small {
+  color: #7a271a;
+  line-height: 1.35;
 }
 
 .table-meta,
@@ -825,6 +864,14 @@ const copySummary = async () => {
 }
 
 @media (max-width: 760px) {
+  .sql-console-page {
+    gap: 0.65rem;
+  }
+
+  .sql-textarea {
+    height: 260px;
+  }
+
   .sql-hero,
   .results-summary,
   .panel-head {

@@ -166,9 +166,21 @@ const getBridgeTimeoutMs = () => {
 
 const makeBridgeError = (payload: BridgeErrorResponse, fallbackStatus?: number) => {
   const err: any = new Error(payload.error?.message || `DB bridge error${fallbackStatus ? ` (${fallbackStatus})` : ''}`)
-  err.code = payload.error?.code
+  err.code = payload.error?.code || (fallbackStatus ? `DB_BRIDGE_HTTP_${fallbackStatus}` : undefined)
   err.errno = payload.error?.errno
   err.sqlState = payload.error?.sqlState
+  err.httpStatus = fallbackStatus
+  err.bridgePayload = payload
+  return err
+}
+
+const makeBridgeHttpError = (status: number, payload: any) => {
+  const bridgeMessage = payload?.error?.message || payload?.message || ''
+  const suffix = bridgeMessage ? `: ${bridgeMessage}` : ''
+  const err: any = new Error(`DB bridge respondio con HTTP ${status}${suffix}.`)
+  err.code = `DB_BRIDGE_HTTP_${status}`
+  err.httpStatus = status
+  err.bridgePayload = payload
   return err
 }
 
@@ -226,7 +238,7 @@ const bridgeFetch = async <T>(path: string, body?: unknown): Promise<T> => {
     })
 
     if (!response.ok || !payload) {
-      throw new Error(`DB bridge respondio con HTTP ${response.status}.`)
+      throw makeBridgeHttpError(response.status, payload)
     }
 
     if (payload.ok === false) {
