@@ -403,7 +403,7 @@ const resolveOperatorEnrollmentState = (
   return 'baja'
 }
 
-const applyOperatorProjection = async (agentId: string, rows: any[], scope: ControlEscolarOperatorScope) => {
+const applyOperatorProjection = async (agentId: string, rows: any[], scope: ControlEscolarOperatorScope, options: { searchActive?: boolean } = {}) => {
   const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(
     rows.map((row) => row.matricula),
     scope.enrollmentConceptIds
@@ -413,6 +413,10 @@ const applyOperatorProjection = async (agentId: string, rows: any[], scope: Cont
     const sourcePlantel = firstText(row.plantelBase, row.basePlantel, agentId)
     const promoted = calculatePromotedGrado(row.baseGrado, sourcePlantel, row.baseCiclo, scope.cicloKey, row.baseNivel)
     const hasCurrentEnrollmentEvidence = rowHasCurrentEnrollmentEvidence(row, scope.enrollmentConceptIds)
+    const baseCiclo = normalizeText(row.baseCiclo) ? normalizeCicloKey(row.baseCiclo) : ''
+    const includedByOperatorScope = firstText(row.baseEstatus, 'Activo') === 'Activo' || baseCiclo === scope.cicloKey || hasCurrentEnrollmentEvidence
+
+    if (!options.searchActive && !includedByOperatorScope) return []
     if (promoted.outOfScope && !hasCurrentEnrollmentEvidence) return []
 
     const projectedPlantel = promoted.outOfScope && hasCurrentEnrollmentEvidence
@@ -454,18 +458,100 @@ const applyOperatorProjection = async (agentId: string, rows: any[], scope: Cont
   })
 }
 
+type CycleConceptEvidence = {
+  paid: Map<string, string>
+  charged: Map<string, string>
+}
+
+const EVIDENCE_CHUNK_SIZE = 450
+
+const appendConceptIds = (target: Map<string, Set<string>>, matricula: unknown, rawConceptIds: unknown) => {
+  const normalizedMatricula = normalizeText(matricula, 64)
+  if (!normalizedMatricula) return
+
+  const conceptIds = parseEnrollmentConceptIds(rawConceptIds)
+  if (!conceptIds.length) return
+
+  const current = target.get(normalizedMatricula) || new Set<string>()
+  conceptIds.forEach((conceptId) => current.add(conceptId))
+  target.set(normalizedMatricula, current)
+}
+
+const toPipeMap = (source: Map<string, Set<string>>) => {
+  const result = new Map<string, string>()
+  source.forEach((ids, matricula) => result.set(matricula, Array.from(ids).join('|')))
+  return result
+}
+
+const joinPipeIds = (...values: unknown[]) => {
+  return parseEnrollmentConceptIds(values).join('|')
+}
+
+const fetchCycleConceptEvidence = async (
+  matriculas: unknown[],
+  cicloKey: string,
+  enrollmentConceptIds: string[]
+): Promise<CycleConceptEvidence> => {
+  const uniqueMatriculas = Array.from(new Set(matriculas.map((matricula) => normalizeText(matricula, 64)).filter(Boolean)))
+  const conceptIds = parseEnrollmentConceptIds(enrollmentConceptIds)
+  const paid = new Map<string, Set<string>>()
+  const charged = new Map<string, Set<string>>()
+
+  if (!uniqueMatriculas.length || !conceptIds.length) {
+    return { paid: new Map(), charged: new Map() }
+  }
+
+  for (let index = 0; index < uniqueMatriculas.length; index += EVIDENCE_CHUNK_SIZE) {
+    const chunk = uniqueMatriculas.slice(index, index + EVIDENCE_CHUNK_SIZE)
+    const matriculaPlaceholders = chunk.map(() => '?').join(',')
+    const conceptPlaceholders = conceptIds.map(() => '?').join(',')
+
+    const paymentRows = await query<Array<{ matricula: string; conceptIds: string }>>(`
+      SELECT
+        R.matricula,
+        GROUP_CONCAT(DISTINCT CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) SEPARATOR '|') AS conceptIds
+      FROM referenciasdepago R
+      LEFT JOIN documentos D ON D.documento = R.documento
+      LEFT JOIN documento_concepto_periodos P
+        ON P.documento = R.documento
+        AND P.estatus = 'Activo'
+        AND CAST(R.mes AS UNSIGNED) >= P.start_mes
+        AND (P.end_mes IS NULL OR CAST(R.mes AS UNSIGNED) <= P.end_mes)
+      WHERE R.ciclo = ?
+        AND R.estatus = 'Vigente'
+        AND R.matricula IN (${matriculaPlaceholders})
+        AND CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) IN (${conceptPlaceholders})
+      GROUP BY R.matricula
+    `, [cicloKey, ...chunk, ...conceptIds])
+
+    paymentRows.forEach((row) => appendConceptIds(paid, row.matricula, row.conceptIds))
+
+    const documentRows = await query<Array<{ matricula: string; conceptIds: string }>>(`
+      SELECT
+        D.matricula,
+        GROUP_CONCAT(DISTINCT CAST(COALESCE(P.concepto_id, D.concepto) AS CHAR) SEPARATOR '|') AS conceptIds
+      FROM documentos D
+      LEFT JOIN documento_concepto_periodos P
+        ON P.documento = D.documento
+        AND P.estatus = 'Activo'
+      WHERE D.ciclo = ?
+        AND D.estatus = 'Activo'
+        AND (P.accion IS NULL OR P.accion <> 'cancelacion')
+        AND D.matricula IN (${matriculaPlaceholders})
+        AND CAST(COALESCE(P.concepto_id, D.concepto) AS CHAR) IN (${conceptPlaceholders})
+      GROUP BY D.matricula
+    `, [cicloKey, ...chunk, ...conceptIds])
+
+    documentRows.forEach((row) => appendConceptIds(charged, row.matricula, row.conceptIds))
+  }
+
+  return { paid: toPipeMap(paid), charged: toPipeMap(charged) }
+}
+
 const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema, filters: any = {}) => {
   const scope = resolveOperatorScope(filters)
   const fields = buildLocalBaseSelect(agentId, schema.base)
-  fields.push(
-    selectAs(expr(schema.base, 'b', 'ciclo', 'NULL'), 'baseCiclo'),
-    selectAs('B.conceptoIdsPagados', 'conceptoIdsPagados'),
-    selectAs('C.conceptoIdsCargados', 'conceptoIdsCargados'),
-    selectAs('BPrev.conceptoIdsPagadosPrevios', 'conceptoIdsPagadosPrevios'),
-    selectAs('CPrev.conceptoIdsCargadosPrevios', 'conceptoIdsCargadosPrevios'),
-    selectAs("CONCAT_WS('|', B.conceptoIdsPagados, C.conceptoIdsCargados)", 'conceptoIdsCicloActual'),
-    selectAs("CONCAT_WS('|', BPrev.conceptoIdsPagadosPrevios, CPrev.conceptoIdsCargadosPrevios)", 'conceptoIdsCicloPrevio')
-  )
+  fields.push(selectAs(expr(schema.base, 'b', 'ciclo', 'NULL'), 'baseCiclo'))
 
   const params: any[] = []
   const whereParts = ['1=1']
@@ -474,6 +560,7 @@ const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema,
     whereParts.push(`${col('b', 'plantel')} IN (${plantelCandidates.map(() => '?').join(',')})`)
     params.push(...plantelCandidates)
   }
+
   const search = normalizeText(filters.search || filters.q || '', 80)
   if (search) {
     const baseNameSearch = schema.base.has('nombreCompleto')
@@ -481,78 +568,47 @@ const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema,
       : `CONCAT_WS(' ', ${expr(schema.base, 'b', 'apellidoPaterno')}, ${expr(schema.base, 'b', 'apellidoMaterno')}, ${expr(schema.base, 'b', 'nombres')})`
     whereParts.push(`(${baseNameSearch} LIKE ? OR ${col('b', 'matricula')} = ?)`)
     params.push(`%${search}%`, search)
-  } else {
-    addCurrentEnrollmentScope(whereParts, params, schema, scope)
   }
 
-  const sqlParams = [scope.cicloKey, scope.cicloKey, scope.previousCiclo, scope.previousCiclo, ...params]
   const rows = await query<any[]>(`
     SELECT ${fields.join(',\n      ')}
     FROM base b
-    LEFT JOIN (
-      SELECT
-        R.matricula AS matricula,
-        GROUP_CONCAT(DISTINCT CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) SEPARATOR '|') AS conceptoIdsPagados
-      FROM referenciasdepago R
-      LEFT JOIN documentos D ON D.documento = R.documento
-      LEFT JOIN documento_concepto_periodos P
-        ON P.documento = R.documento
-        AND P.estatus = 'Activo'
-        AND CAST(R.mes AS UNSIGNED) >= P.start_mes
-        AND (P.end_mes IS NULL OR CAST(R.mes AS UNSIGNED) <= P.end_mes)
-      WHERE R.ciclo = ? AND R.estatus = 'Vigente'
-      GROUP BY R.matricula
-    ) B ON b.matricula = B.matricula
-    LEFT JOIN (
-      SELECT
-        cargos.matricula,
-        GROUP_CONCAT(DISTINCT cargos.conceptoId SEPARATOR '|') AS conceptoIdsCargados
-      FROM (
-        SELECT
-          D.matricula,
-          CAST(COALESCE(P.concepto_id, D.concepto) AS CHAR) AS conceptoId
-        FROM documentos D
-        JOIN (
-          SELECT 1 AS mes UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6
-          UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12
-        ) M ON M.mes <= GREATEST(1, CAST(IFNULL(NULLIF(D.meses, ''), '1') AS UNSIGNED))
-        LEFT JOIN documento_concepto_periodos P
-          ON P.documento = D.documento
-          AND P.estatus = 'Activo'
-          AND M.mes >= P.start_mes
-          AND (P.end_mes IS NULL OR M.mes <= P.end_mes)
-        WHERE D.ciclo = ? AND D.estatus = 'Activo' AND (P.accion IS NULL OR P.accion <> 'cancelacion')
-      ) cargos
-      GROUP BY cargos.matricula
-    ) C ON b.matricula = C.matricula
-    LEFT JOIN (
-      SELECT
-        R.matricula AS matricula,
-        GROUP_CONCAT(DISTINCT CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) SEPARATOR '|') AS conceptoIdsPagadosPrevios
-      FROM referenciasdepago R
-      LEFT JOIN documentos D ON D.documento = R.documento
-      LEFT JOIN documento_concepto_periodos P
-        ON P.documento = R.documento
-        AND P.estatus = 'Activo'
-        AND CAST(R.mes AS UNSIGNED) >= P.start_mes
-        AND (P.end_mes IS NULL OR CAST(R.mes AS UNSIGNED) <= P.end_mes)
-      WHERE R.ciclo = ? AND R.estatus = 'Vigente'
-      GROUP BY R.matricula
-    ) BPrev ON b.matricula = BPrev.matricula
-    LEFT JOIN (
-      SELECT
-        matricula,
-        GROUP_CONCAT(DISTINCT concepto SEPARATOR '|') AS conceptoIdsCargadosPrevios
-      FROM documentos
-      WHERE ciclo = ? AND estatus = 'Activo'
-      GROUP BY matricula
-    ) CPrev ON b.matricula = CPrev.matricula
     WHERE ${whereParts.join(' AND ')}
     ORDER BY baseEstatus = 'Activo' DESC, baseNombreCompleto ASC, b.matricula ASC
     LIMIT ${MAX_LOCAL_ROWS + 1}
-  `, sqlParams)
+  `, params)
 
-  return await applyOperatorProjection(agentId, rows, scope)
+  if (rows.length > MAX_LOCAL_ROWS) {
+    throw createError({
+      statusCode: 413,
+      message: `El plantel excede el límite temporal de ${MAX_LOCAL_ROWS} alumnos en base para Control Escolar. Usa búsqueda por nombre o matrícula.`
+    })
+  }
+
+  const [currentEvidence, previousEvidence] = await Promise.all([
+    fetchCycleConceptEvidence(rows.map((row) => row.matricula), scope.cicloKey, scope.enrollmentConceptIds),
+    fetchCycleConceptEvidence(rows.map((row) => row.matricula), scope.previousCiclo, scope.enrollmentConceptIds)
+  ])
+
+  const rowsWithEvidence = rows.map((row) => {
+    const matricula = normalizeText(row.matricula, 64)
+    const conceptoIdsPagados = currentEvidence.paid.get(matricula) || ''
+    const conceptoIdsCargados = currentEvidence.charged.get(matricula) || ''
+    const conceptoIdsPagadosPrevios = previousEvidence.paid.get(matricula) || ''
+    const conceptoIdsCargadosPrevios = previousEvidence.charged.get(matricula) || ''
+
+    return {
+      ...row,
+      conceptoIdsPagados,
+      conceptoIdsCargados,
+      conceptoIdsPagadosPrevios,
+      conceptoIdsCargadosPrevios,
+      conceptoIdsCicloActual: joinPipeIds(conceptoIdsPagados, conceptoIdsCargados),
+      conceptoIdsCicloPrevio: joinPipeIds(conceptoIdsPagadosPrevios, conceptoIdsCargadosPrevios)
+    }
+  })
+
+  return await applyOperatorProjection(agentId, rowsWithEvidence, scope, { searchActive: Boolean(search) })
 }
 
 const centralSelectColumns = (schema: ControlEscolarSchema) => {
