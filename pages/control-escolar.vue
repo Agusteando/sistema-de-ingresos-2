@@ -1,14 +1,8 @@
 <template>
   <div class="students-screen control-escolar-screen">
     <header class="students-hero ce-hero">
-      <div class="hero-copy ce-hero-title">
-        <h1>Control Escolar</h1>
-      </div>
+      <div class="ce-hero-spacer" aria-hidden="true"></div>
       <div class="hero-actions ce-hero-actions">
-        <div class="ce-route-context" aria-label="Estado de Control Escolar">
-          <span class="ce-sync-pill">Base al día</span>
-          <span class="ce-cycle-pill">{{ currentCicloLabel }}</span>
-        </div>
         <div class="ce-selected-plantel" :class="{ empty: !selectedAgentId }">
           <span>Plantel activo</span>
           <strong>{{ selectedAgentId || 'Selecciona' }}</strong>
@@ -19,12 +13,8 @@
         <UiButton variant="secondary" :disabled="!selectedAgentId || !students.length" @click="exportMatriculaDb">
           <LucideFileSpreadsheet :size="18" /> Exportar DB
         </UiButton>
-        <UiButton variant="secondary" :disabled="!selectedAgentId || massImporting" @click="massImportInput?.click()">
-          <LucideUpload :size="18" /> {{ massImporting ? 'Importando...' : 'Importar DB' }}
-        </UiButton>
-        <input ref="massImportInput" class="ce-hidden-file" type="file" accept=".csv,text/csv" @change="importMatriculaDb" />
-        <UiButton variant="primary" :disabled="!selectedAgentId || !students.length" @click="exportCurrentView">
-          <LucideDownload :size="18" /> Exportar
+        <UiButton variant="secondary" :disabled="!selectedAgentId || massImporting" @click="openMassImportModal">
+          <LucideUpload :size="18" /> Importar DB
         </UiButton>
       </div>
     </header>
@@ -159,7 +149,7 @@
                   >
                     <UiGroupIcon v-if="student.group" class="student-group-watermark" :label="student.group" />
                     <span :class="['student-identity', 'ce-student-identity', student.group ? 'has-group-icon' : 'no-group-icon']">
-                      <span class="ce-row-check" aria-hidden="true">✓</span>
+                      <span :class="['ce-row-check', { active: selectedStudent?.matricula === student.matricula }]" aria-hidden="true">{{ selectedStudent?.matricula === student.matricula ? '✓' : '' }}</span>
                       <StudentGradePhotoCard
                         class="student-row-grade-card"
                         :student="student"
@@ -217,8 +207,9 @@
                   <small>{{ selectedMissingCount ? `Faltan ${selectedMissingCount} datos principales` : 'Datos principales completos' }}</small>
                 </div>
                 <div class="ce-detail-actions">
-                  <UiButton variant="secondary" type="button" :disabled="savingStudent" @click="resetEditForm">Restaurar</UiButton>
-                  <UiButton variant="primary" type="button" :disabled="savingStudent" @click="saveStudent">
+                  <span :class="['ce-save-state', saveStateTone]">{{ saveStatusText }}</span>
+                  <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
+                  <UiButton variant="primary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="saveStudent">
                     <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar ficha' }}
                   </UiButton>
                 </div>
@@ -266,94 +257,148 @@
                   </div>
                 </section>
 
-                <section class="ce-husky-card">
-                  <div class="ce-section-heading">
-                    <span><LucideKeyRound :size="18" /></span>
-                    <div>
-                      <h3>Husky Pass accesos</h3>
-                      <p>Usuario y contraseña desde users.username/users.plaintext.</p>
-                    </div>
-                  </div>
-                  <div v-if="selectedStudent.huskyPassAvailable" class="ce-husky-credentials">
-                    <span><small>Usuario</small><strong>{{ selectedStudent.huskyPassUsername }}</strong></span>
-                    <span><small>Contraseña</small><strong>{{ selectedStudent.huskyPassPlaintext }}</strong></span>
-                  </div>
-                  <div v-else class="ce-husky-empty">Sin Husky Pass registrado para esta matrícula.</div>
-                  <div class="ce-husky-actions">
-                    <small>{{ huskyPassEmailTarget || 'Sin correo de padre/tutor' }}</small>
-                    <UiButton variant="secondary" type="button" :disabled="sendingHuskyPass || !selectedStudent.huskyPassAvailable || !huskyPassEmailTarget" @click="sendHuskyPassEmail">
-                      <LucideSend :size="16" /> {{ sendingHuskyPass ? 'Enviando...' : 'Enviar acceso' }}
-                    </UiButton>
-                  </div>
-                </section>
 
                 <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
-                  <span class="active"><LucideUserRound :size="15" /> Identidad</span>
-                  <span><LucideGraduationCap :size="15" /> Escolar</span>
-                  <span><LucideUsersRound :size="15" /> Contacto familiar</span>
-                  <span>⚙ Sistema</span>
-                  <span>□ Observaciones</span>
+                  <button
+                    v-for="tab in detailTabs"
+                    :key="tab.key"
+                    type="button"
+                    :class="{ active: activeDetailTab === tab.key }"
+                    @click="activeDetailTab = tab.key"
+                  >
+                    <component :is="tab.icon" :size="15" /> {{ tab.label }}
+                  </button>
                 </nav>
 
                 <form class="ce-edit-form" @submit.prevent="saveStudent">
-                  <section class="ce-form-card">
+                  <section v-show="activeDetailTab === 'identity'" class="ce-form-card ce-tab-panel">
                     <div class="ce-section-heading compact">
                       <span><LucideUserRound :size="18" /></span>
                       <h3>Identidad</h3>
                     </div>
-                    <div class="ce-form-grid three">
-                      <label><span>A. paterno</span><input v-model="editForm.apellidoPaterno" /></label>
-                      <label><span>A. materno</span><input v-model="editForm.apellidoMaterno" /></label>
-                      <label><span>Nombre(s)</span><input v-model="editForm.nombres" /></label>
-                      <label><span>CURP</span><input v-model="editForm.curp" maxlength="18" /></label>
-                      <label><span>Interno</span><input v-model="editForm.interno" /></label>
-                      <label><span>Servicio</span><input v-model="editForm.servicio" /></label>
+                    <div class="ce-form-grid two">
+                      <label><span>A. paterno</span><input v-model="editForm.apellidoPaterno" autocomplete="off" /></label>
+                      <label><span>A. materno</span><input v-model="editForm.apellidoMaterno" autocomplete="off" /></label>
+                      <label><span>Nombre(s)</span><input v-model="editForm.nombres" autocomplete="off" /></label>
+                      <label><span>CURP</span><input v-model="editForm.curp" maxlength="18" autocomplete="off" /></label>
                     </div>
                   </section>
 
-                  <section class="ce-form-card">
+                  <section v-show="activeDetailTab === 'school'" class="ce-form-card ce-tab-panel">
                     <div class="ce-section-heading compact">
                       <span><LucideGraduationCap :size="18" /></span>
                       <h3>Escolar</h3>
                     </div>
                     <div class="ce-form-grid three">
-                      <label><span>Nivel</span><input v-model="editForm.nivel" /></label>
-                      <label><span>Grado</span><input v-model="editForm.grado" /></label>
-                      <label><span>Grupo</span><input v-model="editForm.grupo" /></label>
+                      <label>
+                        <span>Nivel</span>
+                        <select v-model="editForm.nivel">
+                          <option value="">Selecciona nivel</option>
+                          <option v-for="nivel in nivelOptions" :key="`nivel-${nivel}`" :value="nivel">{{ labelize(nivel) }}</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Grado</span>
+                        <select v-model="editForm.grado">
+                          <option value="">Selecciona grado</option>
+                          <option v-for="grado in gradoOptions" :key="`grado-${grado}`" :value="grado">{{ labelize(grado) }}</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Grupo</span>
+                        <select v-model="editForm.grupo">
+                          <option value="">Sin grupo</option>
+                          <option v-for="grupo in groupOptions" :key="`grupo-${grupo}`" :value="grupo">{{ grupo }}</option>
+                        </select>
+                      </label>
+                      <label><span>Interno</span><input v-model="editForm.interno" autocomplete="off" /></label>
+                      <label><span>Servicio</span><input v-model="editForm.servicio" autocomplete="off" /></label>
                       <label><span>Baja</span><select v-model="editForm.baja"><option :value="0">No</option><option :value="1">Sí</option></select></label>
-                      <label><span>Motivo baja</span><input v-model="editForm.motivoBaja" /></label>
-                      <label><span>Categoría baja</span><input v-model="editForm.categoriaBaja" /></label>
+                      <label><span>Motivo baja</span><input v-model="editForm.motivoBaja" autocomplete="off" /></label>
+                      <label><span>Categoría baja</span><input v-model="editForm.categoriaBaja" autocomplete="off" /></label>
                     </div>
-                    <label class="ce-wide-field"><span>Seguimiento baja</span><textarea v-model="editForm.seguimientoBaja" rows="2"></textarea></label>
                   </section>
 
-                  <section class="ce-form-card ce-contact-card">
+                  <section v-show="activeDetailTab === 'family'" class="ce-form-card ce-contact-card ce-tab-panel">
                     <div class="ce-section-heading compact">
                       <span><LucideUsersRound :size="18" /></span>
                       <h3>Contacto familiar</h3>
                     </div>
                     <div class="ce-form-grid three">
-                      <label><span>Nombre padre</span><input v-model="editForm.nombrePadre" /></label>
-                      <label><span>A. paterno padre</span><input v-model="editForm.apellidoPaternoPadre" /></label>
-                      <label><span>A. materno padre</span><input v-model="editForm.apellidoMaternoPadre" /></label>
-                      <label><span>Nombre madre</span><input v-model="editForm.nombreMadre" /></label>
-                      <label><span>A. paterno madre</span><input v-model="editForm.apellidoPaternoMadre" /></label>
-                      <label><span>A. materno madre</span><input v-model="editForm.apellidoMaternoMadre" /></label>
-                      <label><span>Teléfono padre</span><input v-model="editForm.telefonoPadre" /></label>
-                      <label><span>Teléfono madre</span><input v-model="editForm.telefonoMadre" /></label>
-                      <label><span>Email padre</span><input v-model="editForm.emailPadre" type="email" /></label>
-                      <label><span>Email madre</span><input v-model="editForm.emailMadre" type="email" /></label>
+                      <label><span>Nombre padre</span><input v-model="editForm.nombrePadre" autocomplete="off" /></label>
+                      <label><span>A. paterno padre</span><input v-model="editForm.apellidoPaternoPadre" autocomplete="off" /></label>
+                      <label><span>A. materno padre</span><input v-model="editForm.apellidoMaternoPadre" autocomplete="off" /></label>
+                      <label><span>Nombre madre</span><input v-model="editForm.nombreMadre" autocomplete="off" /></label>
+                      <label><span>A. paterno madre</span><input v-model="editForm.apellidoPaternoMadre" autocomplete="off" /></label>
+                      <label><span>A. materno madre</span><input v-model="editForm.apellidoMaternoMadre" autocomplete="off" /></label>
+                      <label><span>Teléfono padre</span><input v-model="editForm.telefonoPadre" autocomplete="off" /></label>
+                      <label><span>Teléfono madre</span><input v-model="editForm.telefonoMadre" autocomplete="off" /></label>
+                      <label><span>Email padre</span><input v-model="editForm.emailPadre" type="email" autocomplete="off" /></label>
+                      <label><span>Email madre</span><input v-model="editForm.emailMadre" type="email" autocomplete="off" /></label>
                     </div>
                     <label class="ce-wide-field"><span>Dirección</span><textarea v-model="editForm.direccion" rows="2"></textarea></label>
+                  </section>
+
+                  <section v-show="activeDetailTab === 'system'" class="ce-form-card ce-system-panel ce-tab-panel">
+                    <div class="ce-section-heading compact">
+                      <span><LucideKeyRound :size="18" /></span>
+                      <h3>Sistema</h3>
+                    </div>
+                    <div class="ce-system-grid">
+                      <article>
+                        <span>Registro de matrícula</span>
+                        <strong>{{ selectedStudent.overlayExists ? 'Creado' : 'Pendiente' }}</strong>
+                      </article>
+                      <article>
+                        <span>Tipo de ingreso</span>
+                        <strong>{{ selectedStudent.tipoIngreso || 'Sin clasificar' }}</strong>
+                      </article>
+                      <article>
+                        <span>Ciclo base</span>
+                        <strong>{{ selectedStudent.cicloBase || currentCicloKey }}</strong>
+                      </article>
+                      <article>
+                        <span>Plantel origen</span>
+                        <strong>{{ selectedStudent.plantelBaseOriginal || selectedStudent.basePlantel || selectedAgentId }}</strong>
+                      </article>
+                    </div>
+                    <section class="ce-husky-card compact">
+                      <div class="ce-section-heading">
+                        <span><LucideKeyRound :size="18" /></span>
+                        <div>
+                          <h3>Husky Pass accesos</h3>
+                          <p>Accesos del portal del alumno listos para compartir con el padre o tutor.</p>
+                        </div>
+                      </div>
+                      <div v-if="selectedStudent.huskyPassAvailable" class="ce-husky-credentials">
+                        <span><small>Usuario</small><strong>{{ selectedStudent.huskyPassUsername }}</strong></span>
+                        <span><small>Contraseña</small><strong>{{ selectedStudent.huskyPassPlaintext }}</strong></span>
+                      </div>
+                      <div v-else class="ce-husky-empty">Sin Husky Pass registrado para esta matrícula.</div>
+                      <div class="ce-husky-actions">
+                        <small>{{ huskyPassEmailTarget || 'Sin correo de padre/tutor' }}</small>
+                        <UiButton variant="secondary" type="button" :disabled="sendingHuskyPass || !selectedStudent.huskyPassAvailable || !huskyPassEmailTarget" @click="sendHuskyPassEmail">
+                          <LucideSend :size="16" /> {{ sendingHuskyPass ? 'Enviando...' : 'Enviar acceso' }}
+                        </UiButton>
+                      </div>
+                    </section>
+                  </section>
+
+                  <section v-show="activeDetailTab === 'notes'" class="ce-form-card ce-tab-panel">
+                    <div class="ce-section-heading compact">
+                      <span><LucideAlertTriangle :size="18" /></span>
+                      <h3>Observaciones</h3>
+                    </div>
+                    <label class="ce-wide-field standalone"><span>Seguimiento de baja o nota interna</span><textarea v-model="editForm.seguimientoBaja" rows="6"></textarea></label>
                   </section>
 
                   <div v-if="saveError" class="ce-save-error"><LucideAlertTriangle :size="16" /> {{ saveError }}</div>
 
                   <footer class="ce-detail-footer">
-                    <span>{{ selectedStudent.overlayExists ? 'Guardar actualiza matricula.' : 'Guardar crea matricula y aplica los cambios.' }}</span>
+                    <span>{{ saveStatusText }}</span>
                     <div>
-                      <UiButton variant="secondary" type="button" @click="resetEditForm">Restaurar</UiButton>
-                      <UiButton variant="primary" type="submit" :disabled="savingStudent">
+                      <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
+                      <UiButton variant="primary" type="submit" :disabled="savingStudent || !hasUnsavedChanges">
                         <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar ficha' }}
                       </UiButton>
                     </div>
@@ -364,6 +409,48 @@
           </section>
         </div>
       </div>
+    </div>
+
+    <div v-if="showMassImportModal" class="ce-modal-backdrop" @click.self="closeMassImportModal">
+      <section class="ce-import-modal" role="dialog" aria-modal="true" aria-labelledby="ce-import-title">
+        <header>
+          <div>
+            <small>Actualización masiva</small>
+            <h2 id="ce-import-title">Importar DB de matrícula</h2>
+          </div>
+          <button type="button" class="detail-shell-close" @click="closeMassImportModal"><LucideX :size="20" /></button>
+        </header>
+        <div class="ce-import-body">
+          <p>Sube el CSV exportado desde Control Escolar. La importación actualiza o crea registros del expediente por matrícula y no elimina alumnos.</p>
+          <ul>
+            <li>La columna Matrícula es obligatoria.</li>
+            <li>Las filas fuera del plantel o ciclo visible se omiten.</li>
+            <li>Los campos vacíos no reemplazan información existente.</li>
+          </ul>
+          <label class="ce-file-drop">
+            <LucideUpload :size="20" />
+            <span>{{ massImportFile?.name || 'Seleccionar archivo CSV' }}</span>
+            <input type="file" accept=".csv,text/csv" @change="onMassImportFileChange" />
+          </label>
+          <div v-if="massImportResult" class="ce-import-result" :class="{ warning: massImportResult.errors?.length }">
+            <strong>{{ massImportResult.updated || 0 }} actualizados · {{ massImportResult.skipped || 0 }} omitidos</strong>
+            <span>{{ massImportResult.processed || 0 }} filas procesadas.</span>
+            <div v-if="massImportResult.errors?.length" class="ce-import-errors">
+              <b>Revisar filas</b>
+              <p v-for="error in massImportResult.errors.slice(0, 8)" :key="`${error.row}-${error.matricula || 'fila'}`">
+                Fila {{ error.row }}<span v-if="error.matricula"> · {{ error.matricula }}</span>: {{ error.message }}
+              </p>
+            </div>
+          </div>
+          <div v-if="massImportError" class="ce-save-error"><LucideAlertTriangle :size="16" /> {{ massImportError }}</div>
+        </div>
+        <footer>
+          <UiButton variant="secondary" type="button" :disabled="massImporting" @click="closeMassImportModal">Cerrar</UiButton>
+          <UiButton variant="primary" type="button" :disabled="!massImportFile || massImporting" @click="importMatriculaDb">
+            <LucideUpload :size="17" /> {{ massImporting ? 'Importando...' : 'Importar archivo' }}
+          </UiButton>
+        </footer>
+      </section>
     </div>
   </div>
 </template>
@@ -410,6 +497,7 @@ import { useStudentsWorkspaceScale } from '~/composables/useStudentsWorkspaceSca
 import { useToast } from '~/composables/useToast'
 import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
 import { normalizeEnrollmentConceptIds, parseEnrollmentConcepts, studentPresentationStyle } from '~/shared/utils/studentPresentation'
+import { GRADOS_DISPLAY, NIVELES_ESCOLARES } from '~/shared/utils/grado'
 
 useHead({ bodyAttrs: { class: 'students-route-active' } })
 
@@ -430,12 +518,19 @@ const loadError = ref('')
 const saveError = ref('')
 const students = ref([])
 const selectedStudent = ref(null)
-const massImportInput = ref(null)
 const kpis = ref(null)
 const catalogs = reactive({ niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
 const DEFAULT_QUICK_FILTER = 'inscritos'
 const activeQuickFilter = ref(DEFAULT_QUICK_FILTER)
 const showAdvancedFilters = ref(false)
+const showMassImportModal = ref(false)
+const massImportFile = ref(null)
+const massImportResult = ref(null)
+const massImportError = ref('')
+const activeDetailTab = ref('identity')
+const editSnapshot = ref('')
+const draftRestored = ref(false)
+const draftSavedAt = ref('')
 const pagination = reactive({ page: 1, limit: 25, total: 0, pages: 1 })
 const filters = reactive({ search: '', status: DEFAULT_QUICK_FILTER, quality: '', grado: '', group: '', recent: '' })
 const editForm = reactive({})
@@ -467,6 +562,19 @@ const availableGroups = computed(() => {
   return Array.isArray(byGrade[filters.grado]) ? byGrade[filters.grado] : catalogs.grupos
 })
 
+const mergeOptions = (...groups) => Array.from(new Set(groups.flat().map((value) => String(value || '').trim()).filter(Boolean)))
+const labelize = (value) => {
+  const text = String(value || '').trim()
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : ''
+}
+const nivelOptions = computed(() => mergeOptions(NIVELES_ESCOLARES, catalogs.niveles, [editForm.nivel]))
+const gradoOptions = computed(() => mergeOptions(GRADOS_DISPLAY.map((grado) => grado.toLowerCase()), catalogs.grados, [editForm.grado]))
+const groupOptions = computed(() => {
+  const byGrade = catalogs.gruposPorGrado || {}
+  const scopedGroups = editForm.grado && Array.isArray(byGrade[editForm.grado]) ? byGrade[editForm.grado] : []
+  return mergeOptions(scopedGroups, catalogs.grupos, [editForm.grupo])
+})
+
 const advancedFilterCount = computed(() => [filters.quality, filters.grado, filters.group, filters.recent].filter(Boolean).length)
 
 const primaryFilters = [
@@ -476,6 +584,14 @@ const primaryFilters = [
   { key: 'externos', label: 'Externos' },
   { key: 'no_inscritos', label: 'No inscritos' },
   { key: 'bajas', label: 'Bajas' }
+]
+
+const detailTabs = [
+  { key: 'identity', label: 'Identidad', icon: LucideUserRound },
+  { key: 'school', label: 'Escolar', icon: LucideGraduationCap },
+  { key: 'family', label: 'Contacto familiar', icon: LucideUsersRound },
+  { key: 'system', label: 'Sistema', icon: LucideKeyRound },
+  { key: 'notes', label: 'Observaciones', icon: LucideAlertTriangle }
 ]
 
 const qualityFilters = computed(() => {
@@ -522,6 +638,26 @@ const completionFor = (student) => {
 const selectedProfileCompletion = computed(() => completionFor(selectedStudent.value))
 const selectedMissingCount = computed(() => requiredDataFields.filter((field) => selectedStudent.value?.missingFields?.includes(field.key) || selectedStudent.value?.missingFields?.includes(field.label.toLowerCase())).length)
 const huskyPassEmailTarget = computed(() => selectedStudent.value?.emailPadre || selectedStudent.value?.emailMadre || selectedStudent.value?.email || selectedStudent.value?.huskyPassEmail || '')
+const EDIT_FORM_FIELDS = [
+  'nombres', 'apellidoPaterno', 'apellidoMaterno', 'curp', 'interno', 'servicio', 'nivel', 'grado', 'grupo', 'baja',
+  'motivoBaja', 'categoriaBaja', 'seguimientoBaja', 'nombrePadre', 'apellidoPaternoPadre', 'apellidoMaternoPadre',
+  'nombreMadre', 'apellidoPaternoMadre', 'apellidoMaternoMadre', 'telefonoPadre', 'telefonoMadre', 'emailPadre',
+  'emailMadre', 'direccion'
+]
+const readEditForm = () => EDIT_FORM_FIELDS.reduce((draft, field) => {
+  draft[field] = editForm[field] ?? ''
+  return draft
+}, {})
+const formSnapshot = () => JSON.stringify(readEditForm())
+const hasUnsavedChanges = computed(() => Boolean(selectedStudent.value && editSnapshot.value && formSnapshot() !== editSnapshot.value))
+const saveStateTone = computed(() => savingStudent.value ? 'saving' : hasUnsavedChanges.value ? 'dirty' : 'clean')
+const saveStatusText = computed(() => {
+  if (savingStudent.value) return 'Guardando cambios...'
+  if (hasUnsavedChanges.value) return draftRestored.value ? 'Borrador local con cambios sin guardar' : 'Cambios sin guardar'
+  if (draftSavedAt.value) return `Borrador guardado ${draftSavedAt.value}`
+  return selectedStudent.value?.overlayExists ? 'Registro de matrícula al día' : 'Guardar creará el registro de matrícula'
+})
+const draftKey = computed(() => selectedStudent.value?.matricula ? `control-escolar:draft:${selectedAgentId.value}:${selectedStudent.value.matricula}` : '')
 
 const buildScopeQuery = () => ({
   agentId: selectedAgentId.value || undefined,
@@ -656,13 +792,54 @@ const goToPage = (page) => {
   pagination.page = Math.min(Math.max(1, page), pagination.pages || 1)
 }
 
+const readStoredDraft = () => {
+  if (!process.client || !draftKey.value) return null
+  try {
+    return JSON.parse(localStorage.getItem(draftKey.value) || 'null')
+  } catch (error) {
+    console.warn('[Control Escolar] No se pudo leer el borrador local.', error)
+    return null
+  }
+}
+
+const clearEditDraft = () => {
+  if (!process.client || !draftKey.value) return
+  try {
+    localStorage.removeItem(draftKey.value)
+  } catch (error) {
+    console.warn('[Control Escolar] No se pudo limpiar el borrador local.', error)
+  }
+  draftRestored.value = false
+  draftSavedAt.value = ''
+}
+
+const persistEditDraft = () => {
+  if (!process.client || !draftKey.value || !hasUnsavedChanges.value) return
+  const savedAt = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+  try {
+    localStorage.setItem(draftKey.value, JSON.stringify({ savedAt, values: readEditForm() }))
+    draftSavedAt.value = savedAt
+  } catch (error) {
+    console.warn('[Control Escolar] No se pudo guardar el borrador local.', error)
+  }
+}
+
+const restoreEditDraft = () => {
+  const stored = readStoredDraft()
+  if (!stored?.values || typeof stored.values !== 'object') return
+  Object.assign(editForm, stored.values)
+  draftRestored.value = true
+  draftSavedAt.value = stored.savedAt || ''
+}
+
 const selectStudent = (student, copy = true) => {
   selectedStudent.value = student
-  if (copy) resetEditForm(student)
+  activeDetailTab.value = 'identity'
+  if (copy) resetEditForm(student, { restoreDraft: true })
   nextTick(scheduleWorkspaceScaleUpdate)
 }
 
-const resetEditForm = (student = selectedStudent.value) => {
+const resetEditForm = (student = selectedStudent.value, options = {}) => {
   if (!student) return
   Object.assign(editForm, {
     nombres: student.nombres || '',
@@ -691,14 +868,23 @@ const resetEditForm = (student = selectedStudent.value) => {
     direccion: student.address || ''
   })
   saveError.value = ''
+  draftRestored.value = false
+  draftSavedAt.value = ''
+  editSnapshot.value = formSnapshot()
+  if (options.restoreDraft) restoreEditDraft()
+}
+
+const discardChanges = () => {
+  clearEditDraft()
+  resetEditForm(selectedStudent.value, { restoreDraft: false })
 }
 
 const saveStudent = async () => {
-  if (!selectedStudent.value || !selectedAgentId.value) return
+  if (!selectedStudent.value || !selectedAgentId.value || savingStudent.value) return
   savingStudent.value = true
   saveError.value = ''
   try {
-    const payload = { ...editForm }
+    const payload = readEditForm()
     const response = await $fetch(`/api/control-escolar/students/${encodeURIComponent(selectedStudent.value.matricula)}`, {
       method: 'PATCH',
       query: buildScopeQuery(),
@@ -707,9 +893,11 @@ const saveStudent = async () => {
     if (response.student) {
       const index = students.value.findIndex((student) => student.matricula === response.student.matricula)
       if (index >= 0) students.value[index] = response.student
-      selectStudent(response.student)
+      selectedStudent.value = response.student
+      clearEditDraft()
+      resetEditForm(response.student, { restoreDraft: false })
     }
-    show('Ficha de Control Escolar guardada en matricula.', 'success')
+    show('Ficha de Control Escolar guardada.', 'success')
     await loadKpis()
   } catch (error) {
     saveError.value = error?.data?.message || error?.message || 'No se pudo guardar la ficha.'
@@ -736,10 +924,30 @@ const exportMatriculaDb = () => {
   window.open(`/api/control-escolar/matricula-db/export?${params.toString()}`, '_blank')
 }
 
-const importMatriculaDb = async (event) => {
-  const file = event?.target?.files?.[0]
+const openMassImportModal = () => {
+  massImportError.value = ''
+  massImportResult.value = null
+  showMassImportModal.value = true
+}
+
+const closeMassImportModal = () => {
+  if (massImporting.value) return
+  showMassImportModal.value = false
+  massImportFile.value = null
+  massImportError.value = ''
+}
+
+const onMassImportFileChange = (event) => {
+  massImportFile.value = event?.target?.files?.[0] || null
+  massImportResult.value = null
+  massImportError.value = ''
+}
+
+const importMatriculaDb = async () => {
+  const file = massImportFile.value
   if (!file || !selectedAgentId.value) return
   massImporting.value = true
+  massImportError.value = ''
   try {
     const form = new FormData()
     form.append('file', file)
@@ -749,15 +957,15 @@ const importMatriculaDb = async (event) => {
       body: form
     })
     const summary = response?.summary || {}
+    massImportResult.value = summary
     const skipped = Number(summary.skipped || 0)
     show(`Importación aplicada: ${summary.updated || 0} actualizados${skipped ? `, ${skipped} omitidos` : ''}.`, skipped ? 'warning' : 'success')
-    if (summary.errors?.length) console.warn('[Control Escolar] Errores de importación masiva', summary.errors)
     await refreshAll()
   } catch (error) {
-    show(error?.data?.message || error?.message || 'No se pudo importar el archivo.', 'danger')
+    massImportError.value = error?.data?.message || error?.message || 'No se pudo importar el archivo.'
+    show(massImportError.value, 'danger')
   } finally {
     massImporting.value = false
-    if (event?.target) event.target.value = ''
   }
 }
 
@@ -822,6 +1030,12 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
   }
 }
 
+watch(editForm, () => {
+  if (!selectedStudent.value || !editSnapshot.value) return
+  if (hasUnsavedChanges.value) persistEditDraft()
+  else clearEditDraft()
+}, { deep: true })
+
 watch(() => ({ ...filters }), () => {
   pagination.page = 1
   window.clearTimeout(searchTimer)
@@ -849,9 +1063,14 @@ onMounted(async () => {
 }
 
 .ce-hero {
-  min-height: 38px;
-  margin-bottom: 7px;
+  min-height: 34px;
+  margin-bottom: 6px;
   align-items: center;
+  justify-content: flex-end;
+}
+
+.ce-hero-spacer {
+  flex: 1 1 auto;
 }
 
 .ce-hero-title h1 {
@@ -908,7 +1127,7 @@ onMounted(async () => {
 
 .ce-hero-actions {
   align-items: stretch;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
 }
 
@@ -1000,7 +1219,7 @@ onMounted(async () => {
 
 .ce-primary-filter-row {
   display: grid;
-  grid-template-columns: minmax(530px, max-content) minmax(320px, 1fr) auto auto;
+  grid-template-columns: minmax(500px, max-content) minmax(320px, 1fr) auto auto;
   align-items: center;
   gap: 9px;
   min-width: 0;
@@ -1267,11 +1486,19 @@ onMounted(async () => {
   height: 24px;
   align-items: center;
   justify-content: center;
+  border: 1px solid #cfdbea;
   border-radius: 7px;
-  background: #67af5a;
-  color: #fff;
+  background: #fff;
+  color: transparent;
   font-size: 14px;
   font-weight: 900;
+  box-shadow: none;
+}
+
+.ce-row-check.active {
+  border-color: transparent;
+  background: #67af5a;
+  color: #fff;
   box-shadow: 0 8px 16px rgba(63, 145, 56, .18);
 }
 
@@ -1794,7 +2021,7 @@ onMounted(async () => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.ce-form-card:not(.ce-contact-card) .ce-form-grid.three {
+.ce-form-card:not(.ce-contact-card):not(.ce-tab-panel) .ce-form-grid.three {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -1820,9 +2047,9 @@ onMounted(async () => {
 .ce-wide-field textarea {
   width: 100%;
   min-height: 36px;
-  border: 1px solid var(--students-border);
+  border: 1px solid #cfdbea;
   border-radius: 10px;
-  background: #fff;
+  background: #fbfdff;
   color: #15233c;
   font-size: 12px;
   font-weight: 650;
@@ -1883,6 +2110,239 @@ onMounted(async () => {
 .ce-detail-footer div {
   display: flex;
   gap: 8px;
+}
+
+.ce-save-state {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 860;
+  white-space: nowrap;
+}
+
+.ce-save-state.clean {
+  background: #eef8eb;
+  color: #21882e;
+}
+
+.ce-save-state.dirty {
+  background: #fff8e6;
+  color: #9a640f;
+}
+
+.ce-save-state.saving {
+  background: #eef5ff;
+  color: #2b67a6;
+}
+
+.ce-detail-tabs button {
+  display: inline-flex;
+  height: 42px;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ce-detail-tabs button.active {
+  border-bottom-color: #279233;
+  color: #20882d;
+}
+
+.ce-tab-panel,
+.ce-system-panel,
+.ce-contact-card,
+.ce-save-error,
+.ce-detail-footer {
+  grid-column: 1 / -1;
+}
+
+.ce-form-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ce-tab-panel .ce-form-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ce-system-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ce-system-grid article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #dce6f0;
+  border-radius: 12px;
+  background: #fbfdff;
+}
+
+.ce-system-grid article span {
+  display: block;
+  color: #61708a;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.ce-system-grid article strong {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  color: #15233c;
+  font-size: 12px;
+  font-weight: 880;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-husky-card.compact {
+  grid-template-columns: minmax(230px, .55fr) minmax(260px, .7fr) auto;
+  box-shadow: none;
+}
+
+.ce-wide-field.standalone {
+  margin-top: 0;
+}
+
+.ce-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, .32);
+  backdrop-filter: blur(6px);
+}
+
+.ce-import-modal {
+  width: min(620px, 100%);
+  overflow: hidden;
+  border: 1px solid #dce6f0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, .22);
+}
+
+.ce-import-modal > header,
+.ce-import-modal > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.ce-import-modal > header {
+  border-bottom: 1px solid #e5edf5;
+  background: linear-gradient(180deg, #fff, #fbfdfb);
+}
+
+.ce-import-modal > header small {
+  color: #2f9138;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.ce-import-modal > header h2 {
+  margin: 2px 0 0;
+  color: #10203a;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -.03em;
+}
+
+.ce-import-modal > footer {
+  border-top: 1px solid #e5edf5;
+  background: #f8fbf7;
+}
+
+.ce-import-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.ce-import-body p,
+.ce-import-body li {
+  color: #5d6b83;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.ce-import-body ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.ce-file-drop {
+  position: relative;
+  display: flex;
+  min-height: 82px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px dashed #b9cbe0;
+  border-radius: 14px;
+  background: #fbfdff;
+  color: #15233c;
+  font-size: 13px;
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.ce-file-drop input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ce-import-result {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(63, 145, 56, .24);
+  border-radius: 13px;
+  background: #f3fbf1;
+  color: #1f7b2b;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.ce-import-result.warning {
+  border-color: rgba(196, 126, 23, .28);
+  background: #fffaf0;
+  color: #9a640f;
+}
+
+.ce-import-errors {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  color: #6b4b12;
+}
+
+.ce-import-errors p {
+  margin: 0;
+  color: inherit;
+  font-size: 11px;
 }
 
 @media (max-width: 1320px) {

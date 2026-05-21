@@ -1,6 +1,9 @@
 <template>
-  <div class="income-shell font-sans">
+  <div class="income-shell font-sans" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <aside class="income-sidebar" :style="sidebarRootStyle">
+      <button type="button" class="sidebar-collapse-button" :aria-label="sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'" @click="toggleSidebar">
+        <component :is="sidebarCollapsed ? LucidePanelLeftOpen : LucidePanelLeftClose" :size="18" />
+      </button>
       <div ref="sidebarScaleShell" class="sidebar-scale-shell">
         <div class="sidebar-design-canvas" :style="sidebarDesignCanvasStyle">
       <div class="sidebar-sheen"></div>
@@ -27,31 +30,31 @@
 
       <nav class="sidebar-nav">
         <NuxtLink v-if="showFinancialNav" to="/" class="nav-item group">
-          <LucideUsers :size="22" stroke-width="2.2" /> Alumnos
+          <LucideUsers :size="22" stroke-width="2.2" /> <span class="nav-label">Alumnos</span>
         </NuxtLink>
         <NuxtLink v-if="showFinancialNav" to="/deudores" class="nav-item group">
-          <LucideAlertTriangle :size="22" stroke-width="2" /> Deudores
+          <LucideAlertTriangle :size="22" stroke-width="2" /> <span class="nav-label">Deudores</span>
         </NuxtLink>
         <NuxtLink v-if="showFinancialNav" to="/reportes" class="nav-item group">
-          <LucidePieChart :size="22" stroke-width="2" /> Reportes
+          <LucidePieChart :size="22" stroke-width="2" /> <span class="nav-label">Reportes</span>
         </NuxtLink>
         <NuxtLink v-if="showFinancialNav" to="/conceptos" class="nav-item group">
-          <LucideSettings :size="22" stroke-width="2" /> Conceptos
+          <LucideSettings :size="22" stroke-width="2" /> <span class="nav-label">Conceptos</span>
         </NuxtLink>
         <NuxtLink v-if="showFinancialNav" to="/facturas" class="nav-item group">
-          <LucideFileText :size="22" stroke-width="2" /> Facturas CFDI
+          <LucideFileText :size="22" stroke-width="2" /> <span class="nav-label">Facturas CFDI</span>
         </NuxtLink>
         <a v-if="showFinancialNav" href="http://localhost/Sistema%20de%20ingresos/login.php" class="nav-item group" target="_blank" rel="noopener">
-          <LucideExternalLink :size="22" stroke-width="2" /> Sistema de Contingencia
+          <LucideExternalLink :size="22" stroke-width="2" /> <span class="nav-label">Sistema de Contingencia</span>
         </a>
         <NuxtLink v-if="showControlEscolarNav" to="/control-escolar" class="nav-item group">
-          <LucideSchool :size="22" stroke-width="2" /> Control Escolar
+          <LucideSchool :size="22" stroke-width="2" /> <span class="nav-label">Control Escolar</span>
         </NuxtLink>
         <NuxtLink to="/usuarios" class="nav-item group" v-if="isSuperAdmin">
-          <LucideShield :size="22" stroke-width="2" /> Usuarios
+          <LucideShield :size="22" stroke-width="2" /> <span class="nav-label">Usuarios</span>
         </NuxtLink>
         <NuxtLink to="/sql-console" class="nav-item group" v-if="isSuperAdmin">
-          <LucideDatabase :size="22" stroke-width="2" /> SQL Console
+          <LucideDatabase :size="22" stroke-width="2" /> <span class="nav-label">SQL Console</span>
         </NuxtLink>
       </nav>
 
@@ -189,7 +192,9 @@ import {
   LucideBuilding2,
   LucideChevronDown,
   LucideExternalLink,
-  LucideDatabase
+  LucideDatabase,
+  LucidePanelLeftClose,
+  LucidePanelLeftOpen
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -206,10 +211,14 @@ const SIDEBAR_DESIGN_WIDTH = 232
 const SIDEBAR_DESIGN_HEIGHT = 800
 const sidebarScaleShell = ref(null)
 const sidebarScale = ref(1)
-const sidebarRootStyle = computed(() => ({
-  width: `${Math.ceil(SIDEBAR_DESIGN_WIDTH * sidebarScale.value)}px`,
-  flexBasis: `${Math.ceil(SIDEBAR_DESIGN_WIDTH * sidebarScale.value)}px`
-}))
+const sidebarCollapsed = ref(false)
+const sidebarRootStyle = computed(() => {
+  if (sidebarCollapsed.value) return { width: '72px', flexBasis: '72px' }
+  return {
+    width: `${Math.ceil(SIDEBAR_DESIGN_WIDTH * sidebarScale.value)}px`,
+    flexBasis: `${Math.ceil(SIDEBAR_DESIGN_WIDTH * sidebarScale.value)}px`
+  }
+})
 const sidebarDesignCanvasStyle = computed(() => ({
   width: `${SIDEBAR_DESIGN_WIDTH}px`,
   height: `${SIDEBAR_DESIGN_HEIGHT}px`,
@@ -269,7 +278,18 @@ const userPlanteles = computed(() => {
 })
 const showFinancialNav = computed(() => !isControlEscolarOnly.value)
 
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('income-sidebar-collapsed', sidebarCollapsed.value ? '1' : '0')
+  }
+  scheduleSidebarScaleUpdate()
+}
+
 onMounted(async () => {
+  if (typeof window !== 'undefined') {
+    sidebarCollapsed.value = localStorage.getItem('income-sidebar-collapsed') === '1'
+  }
   scheduleSidebarScaleUpdate()
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', scheduleSidebarScaleUpdate, { passive: true })
@@ -350,6 +370,73 @@ const logout = async () => {
     inset 0 0 0 1px rgba(255, 255, 255, 0.82),
     inset -26px 0 48px rgba(201, 238, 191, 0.28);
   color: #1b2a45;
+}
+
+.sidebar-collapse-button {
+  position: absolute;
+  top: 18px;
+  right: -14px;
+  z-index: 40;
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(210, 225, 213, 0.95);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #2d7132;
+  box-shadow: 0 10px 22px rgba(22, 38, 65, 0.12);
+  cursor: pointer;
+}
+
+.sidebar-collapse-button:hover {
+  background: #f3fbf1;
+}
+
+.income-shell.sidebar-collapsed .income-sidebar {
+  border-radius: 0 18px 18px 0;
+}
+
+.income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-brand {
+  padding: 22px 8px 16px;
+}
+
+.income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-logo {
+  max-width: 42px;
+  max-height: 34px;
+  margin-bottom: 0;
+}
+
+.income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-brand h2,
+.income-shell.sidebar-collapsed .nav-label,
+.income-shell.sidebar-collapsed .sidebar-footer,
+.income-shell.sidebar-collapsed .sidebar-rings,
+.income-shell.sidebar-collapsed .sidebar-arc,
+.income-shell.sidebar-collapsed .sidebar-leaves {
+  display: none;
+}
+
+.income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-nav {
+  align-items: center;
+  padding: 4px 10px 10px;
+}
+
+.income-shell.sidebar-collapsed .sidebar-design-canvas .nav-item {
+  width: 48px;
+  min-height: 42px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.income-shell.sidebar-collapsed .sidebar-design-canvas .nav-item svg {
+  width: 20px;
+  height: 20px;
+}
+
+.income-shell.sidebar-collapsed .sidebar-design-canvas .nav-item:hover {
+  transform: none;
 }
 
 .sidebar-scale-shell {
