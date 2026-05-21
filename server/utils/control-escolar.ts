@@ -410,7 +410,8 @@ const applyOperatorProjection = async (agentId: string, rows: any[], scope: Cont
   )
 
   return rows.flatMap((row) => {
-    const promoted = calculatePromotedGrado(row.baseGrado, row.plantelBase, row.baseCiclo, scope.cicloKey, row.baseNivel)
+    const sourcePlantel = firstText(row.plantelBase, row.basePlantel, agentId)
+    const promoted = calculatePromotedGrado(row.baseGrado, sourcePlantel, row.baseCiclo, scope.cicloKey, row.baseNivel)
     const hasCurrentEnrollmentEvidence = rowHasCurrentEnrollmentEvidence(row, scope.enrollmentConceptIds)
     if (promoted.outOfScope && !hasCurrentEnrollmentEvidence) return []
 
@@ -423,6 +424,8 @@ const applyOperatorProjection = async (agentId: string, rows: any[], scope: Cont
     const historicalConceptIds = historicalEnrollmentEvidence.get(String(row.matricula || '').trim()) || ''
     const tipoIngreso = resolveTipoIngreso({
       ...row,
+      plantel: sourcePlantel,
+      plantelBase: sourcePlantel,
       cicloBase: row.baseCiclo,
       ciclo: row.baseCiclo,
       tipoIngresoEvidence: {
@@ -436,8 +439,9 @@ const applyOperatorProjection = async (agentId: string, rows: any[], scope: Cont
 
     return [{
       ...row,
-      plantelBaseOriginal: row.basePlantel,
-      basePlantel: projectedPlantel || row.basePlantel,
+      plantelBaseOriginal: sourcePlantel,
+      plantelBase: sourcePlantel,
+      basePlantel: projectedPlantel || sourcePlantel,
       baseGrado: displayGrado(promoted.grado),
       baseNivel: promoted.nivel,
       conceptoIdsHistoricos: historicalConceptIds,
@@ -471,7 +475,15 @@ const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema,
     params.push(...plantelCandidates)
   }
   const search = normalizeText(filters.search || filters.q || '', 80)
-  if (!search) addCurrentEnrollmentScope(whereParts, params, schema, scope)
+  if (search) {
+    const baseNameSearch = schema.base.has('nombreCompleto')
+      ? col('b', 'nombreCompleto')
+      : `CONCAT_WS(' ', ${expr(schema.base, 'b', 'apellidoPaterno')}, ${expr(schema.base, 'b', 'apellidoMaterno')}, ${expr(schema.base, 'b', 'nombres')})`
+    whereParts.push(`(${baseNameSearch} LIKE ? OR ${col('b', 'matricula')} = ?)`)
+    params.push(`%${search}%`, search)
+  } else {
+    addCurrentEnrollmentScope(whereParts, params, schema, scope)
+  }
 
   const sqlParams = [scope.cicloKey, scope.cicloKey, scope.previousCiclo, scope.previousCiclo, ...params]
   const rows = await query<any[]>(`
@@ -839,14 +851,6 @@ const fetchAllNormalizedStudents = async (agentId: string, filters: any = {}): P
 
 const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
   let result = students
-  const search = normalizeText(filters.search || filters.q || '', 80).toLowerCase()
-  if (search) {
-    result = result.filter((student) => [
-      student.matricula,
-      student.fullName,
-      student.nombreCompleto
-    ].some((value) => normalizeText(value).toLowerCase().includes(search)))
-  }
 
   const status = normalizeText(filters.status || '')
   if (status && status !== 'all') {
