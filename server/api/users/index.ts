@@ -4,7 +4,7 @@ const assertExternalUsersAvailable = async () => {
   if (await isExternalUsersAvailable()) return
   throw createError({
     statusCode: 503,
-    message: 'La tabla externa users no esta disponible. La asignacion ROLE_CTRL se guarda exclusivamente en la base externa de Control Escolar.'
+    message: 'No se pudo cargar el directorio de usuarios.'
   })
 }
 
@@ -19,7 +19,8 @@ export default defineEventHandler(async (event) => {
   await assertExternalUsersAvailable()
 
   if (method === 'GET') {
-    return await listExternalUsers()
+    const query = getQuery(event)
+    return await listExternalUsers(query.q || query.search || '')
   }
 
   if (method === 'POST') {
