@@ -1,1 +1,1 @@
-fix: align Control Escolar grade sync and expose grade filters
+fix: make Control Escolar filtering instant and allow optional CURP

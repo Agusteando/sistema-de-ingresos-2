@@ -1112,19 +1112,23 @@ const buildCatalogs = (students: ControlEscolarStudentRow[]) => {
 
 export const fetchControlEscolarStudents = async (agentId: string, filters: any) => {
   const page = Math.max(1, Number(filters.page || 1) || 1)
-  const limit = Math.min(100, Math.max(10, Number(filters.limit || 25) || 25))
+  const wantsAll = ['1', 'true', 'all', 'snapshot', 'index'].includes(String(filters.all || filters.mode || '').toLowerCase())
+  const limit = wantsAll
+    ? Math.min(MAX_LOCAL_ROWS, Math.max(1, Number(filters.limit || MAX_LOCAL_ROWS) || MAX_LOCAL_ROWS))
+    : Math.min(100, Math.max(8, Number(filters.limit || 25) || 25))
   const loaded = await fetchAllNormalizedStudents(agentId, filters)
   const allStudents = loaded.students
-  const filtered = applyFilters(allStudents, filters)
+  const filtered = applyFilters(allStudents, wantsAll ? { ...filters, search: '', status: '', quality: '', grado: '', group: '', grupo: '', recent: '' } : filters)
   const offset = (page - 1) * limit
+  const data = wantsAll ? filtered : filtered.slice(offset, offset + limit)
 
   return {
-    data: filtered.slice(offset, offset + limit),
+    data,
     pagination: {
-      page,
-      limit,
+      page: wantsAll ? 1 : page,
+      limit: wantsAll ? Math.max(data.length, 1) : limit,
       total: filtered.length,
-      pages: Math.max(1, Math.ceil(filtered.length / limit))
+      pages: wantsAll ? 1 : Math.max(1, Math.ceil(filtered.length / limit))
     },
     catalogs: buildCatalogs(allStudents),
     source: loaded.source
