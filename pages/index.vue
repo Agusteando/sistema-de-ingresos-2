@@ -431,7 +431,7 @@ const loadKpiSparklines = async () => {
 }
 
 const hasActiveFilters = computed(() => Boolean(
-  activeFilter.value ||
+  (activeFilter.value && activeFilter.value !== 'inscritos') ||
   activeGrado.value ||
   activeGrupo.value ||
   activeSaldoFilter.value !== 'all' ||
@@ -458,8 +458,14 @@ const activeInlineFilterLabel = computed(() => {
   return activeFilterLabel.value
 })
 
+const DEFAULT_KPI_FILTER = 'inscritos'
+const normalizeDashboardFilter = (filter) => String(filter || DEFAULT_KPI_FILTER)
+
 const setActiveFilter = (filter) => {
-  activeFilter.value = activeFilter.value === filter ? '' : filter
+  const nextFilter = normalizeDashboardFilter(filter)
+  activeFilter.value = activeFilter.value === nextFilter && nextFilter !== DEFAULT_KPI_FILTER
+    ? DEFAULT_KPI_FILTER
+    : nextFilter
   activeGrado.value = ''
   activeGrupo.value = ''
 }
@@ -469,12 +475,12 @@ const toggleSaldoDebtFilter = () => {
 }
 
 const clearActiveFilter = () => {
-  activeFilter.value = ''
+  activeFilter.value = DEFAULT_KPI_FILTER
 }
 
 const clearFilters = () => {
   filters.value.q = ''
-  activeFilter.value = ''
+  activeFilter.value = DEFAULT_KPI_FILTER
   activeGrado.value = ''
   activeGrupo.value = ''
   activeSaldoFilter.value = 'all'
@@ -541,9 +547,7 @@ const performSearch = async (options = {}) => {
   const cicloKey = normalizeCicloKey(state.value.ciclo)
   const query = filters.value.q || ''
 
-  if (query && activeFilter.value === 'inscritos') activeFilter.value = ''
-
-  const cached = useCache ? readCachedStudents({ ciclo: cicloKey, q: query }) : null
+  const cached = useCache ? readCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }) : null
   const hasCachedStudents = Boolean(cached?.students?.length)
   const hadStudents = students.value.length > 0
 
@@ -580,7 +584,7 @@ const performSearch = async (options = {}) => {
 
     const freshStudents = Array.isArray(res) ? res : []
     applyStudentsList(freshStudents)
-    const cacheWritten = writeCachedStudents({ ciclo: cicloKey, q: query }, freshStudents)
+    const cacheWritten = writeCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }, freshStudents)
     const updatedAt = new Date().toISOString()
 
     setStudentsSyncState({
@@ -598,7 +602,7 @@ const performSearch = async (options = {}) => {
 
     const canKeepWorking = hasCachedStudents || hadStudents
     setStudentsSyncState({
-      status: 'failed',
+      status: canKeepWorking ? 'failed' : 'unavailable',
       message: canKeepWorking
         ? 'No se pudo actualizar. Se conservan los alumnos disponibles.'
         : 'No se pudo cargar la base de datos.',
@@ -1019,6 +1023,19 @@ watch(() => selectedStudents.value.map(student => student.matricula).join('|'), 
 })
 
 watch(bulkWorkspaceMode, scheduleWorkspaceScaleUpdate)
+
+
+watch(activeFilter, (nextFilter) => {
+  if (!nextFilter) activeFilter.value = DEFAULT_KPI_FILTER
+})
+
+watch(
+  () => [currentCicloKey.value, externalConcepts.value.join('|'), students.value.length],
+  () => {
+    if (!activeFilter.value) activeFilter.value = DEFAULT_KPI_FILTER
+  },
+  { flush: 'post' }
+)
 
 watch(
   () => ({
