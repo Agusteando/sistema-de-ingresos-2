@@ -1,1 +1,1 @@
-fix(students): prevent newly added student names from wrapping by letters
+Refina filtros y layout de Control Escolar

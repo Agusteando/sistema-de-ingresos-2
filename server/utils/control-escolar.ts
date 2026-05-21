@@ -566,9 +566,19 @@ const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema,
     const baseNameSearch = schema.base.has('nombreCompleto')
       ? col('b', 'nombreCompleto')
       : `CONCAT_WS(' ', ${expr(schema.base, 'b', 'apellidoPaterno')}, ${expr(schema.base, 'b', 'apellidoMaterno')}, ${expr(schema.base, 'b', 'nombres')})`
-    whereParts.push(`(${baseNameSearch} LIKE ? OR ${col('b', 'matricula')} = ?)`)
-    params.push(`%${search}%`, search)
+    const like = `%${search}%`
+    const searchParts = [`${baseNameSearch} LIKE ?`, `${col('b', 'matricula')} LIKE ?`]
+    params.push(like, like)
+
+    ;['curp', 'correo', 'telefono'].forEach((column) => {
+      if (!schema.base.has(column)) return
+      searchParts.push(`${col('b', column)} LIKE ?`)
+      params.push(like)
+    })
+
+    whereParts.push(`(${searchParts.join(' OR ')})`)
   }
+
 
   const rows = await query<any[]>(`
     SELECT ${fields.join(',\n      ')}
@@ -704,14 +714,21 @@ const resolvePhotoUrl = (value: unknown) => {
   return `${baseUrl}${path}`
 }
 
+const hasPhoneContact = (student: any) => Boolean(firstText(student.phone, student.telefonoPadre, student.telefonoMadre))
+const hasEmailContact = (student: any) => Boolean(firstText(student.email, student.emailPadre, student.emailMadre))
+const hasTutorContact = (student: any) => Boolean(firstText(student.guardianName, student.fatherName, student.motherName, student.nombrePadre, student.nombreMadre))
+
 const buildMissingFields = (row: any) => {
   const missing: string[] = []
   if (!normalizeKey(row.curp)) missing.push('curp')
-  if (!normalizeKey(row.phone) && !normalizeKey(row.telefonoPadre) && !normalizeKey(row.telefonoMadre)) missing.push('teléfono')
-  if (!normalizeKey(row.email) && !normalizeKey(row.emailPadre) && !normalizeKey(row.emailMadre)) missing.push('email')
-  if (!normalizeKey(row.guardianName) && !normalizeKey(row.fatherName) && !normalizeKey(row.motherName)) missing.push('tutor')
-  if (!normalizeKey(row.group)) missing.push('grupo')
+  if (!hasPhoneContact(row)) missing.push('teléfono')
+  if (!hasEmailContact(row)) missing.push('email')
+  if (!hasTutorContact(row)) missing.push('tutor')
   return missing
+}
+
+const hasNoPrimaryContact = (student: any) => {
+  return !hasPhoneContact(student) && !hasEmailContact(student) && !hasTutorContact(student)
 }
 
 const overlayStudentRow = (agentId: string, base: any, overlay?: any): ControlEscolarStudentRow => {
@@ -909,14 +926,16 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
   let result = students
 
   const status = normalizeText(filters.status || '')
-  if (status && status !== 'all') {
+  if (status && status !== 'all' && status !== 'todos') {
+    if (status === 'activos' || status === 'active') result = result.filter((student) => student.status === 'Activo')
     if (status === 'inscritos') result = result.filter((student) => student.enrollmentState === 'inscrito')
     if (status === 'internos') result = result.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue === 'interno')
     if (status === 'externos') result = result.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue !== 'interno')
     if (status === 'no_inscritos') result = result.filter((student) => student.enrollmentState === 'no_inscrito')
-    if (status === 'bajas' || status === 'baja') result = result.filter((student) => student.enrollmentState === 'baja_inscrita')
+    if (status === 'bajas' || status === 'baja') result = result.filter((student) => student.status === 'Baja' || student.enrollmentState === 'baja_inscrita' || student.enrollmentState === 'baja')
+    if (status === 'sin_ficha' || status === 'sin_ficha_matricula') result = result.filter((student) => !student.overlayExists)
+    if (status === 'sin_contacto') result = result.filter(hasNoPrimaryContact)
   }
-
 
   const grado = normalizeText(filters.grado || '').toLowerCase()
   if (grado && grado !== 'all') result = result.filter((student) => student.grado.toLowerCase() === grado)
@@ -924,15 +943,16 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
   const grupo = normalizeText(filters.group || filters.grupo || '')
   if (grupo && grupo !== 'all') result = result.filter((student) => student.group === grupo)
 
-  const missing = normalizeText(filters.missing || '')
-  if (missing && missing !== 'all') {
-    if (missing === 'curp') result = result.filter((student) => student.missingFields.includes('curp'))
-    if (missing === 'phone') result = result.filter((student) => student.missingFields.includes('teléfono'))
-    if (missing === 'email') result = result.filter((student) => student.missingFields.includes('email'))
-    if (missing === 'guardian') result = result.filter((student) => student.missingFields.includes('tutor'))
-    if (missing === 'contact') result = result.filter((student) => student.missingFields.includes('teléfono') || student.missingFields.includes('email') || student.missingFields.includes('tutor'))
-    if (missing === 'incomplete') result = result.filter((student) => student.missingFields.length > 0)
-    if (missing === 'overlay') result = result.filter((student) => !student.overlayExists)
+  const quality = normalizeText(filters.quality || filters.calidad || filters.missing || '')
+  if (quality && quality !== 'all') {
+    if (quality === 'complete' || quality === 'completo') result = result.filter((student) => student.missingFields.length === 0)
+    if (quality === 'incomplete' || quality === 'incompleto') result = result.filter((student) => student.missingFields.length > 0)
+    if (quality === 'curp') result = result.filter((student) => student.missingFields.includes('curp'))
+    if (quality === 'phone' || quality === 'telefono' || quality === 'teléfono') result = result.filter((student) => student.missingFields.includes('teléfono'))
+    if (quality === 'email') result = result.filter((student) => student.missingFields.includes('email'))
+    if (quality === 'guardian' || quality === 'tutor') result = result.filter((student) => student.missingFields.includes('tutor'))
+    if (quality === 'contact' || quality === 'contacto') result = result.filter(hasNoPrimaryContact)
+    if (quality === 'overlay' || quality === 'sin_ficha' || quality === 'sin_ficha_matricula') result = result.filter((student) => !student.overlayExists)
   }
 
   const recent = normalizeText(filters.recent || '')
@@ -1005,7 +1025,10 @@ export const fetchControlEscolarKpis = async (agentId: string, filters: any = {}
   const internos = students.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue === 'interno').length
   const externos = students.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue !== 'interno').length
   const noInscritos = students.filter((student) => student.enrollmentState === 'no_inscrito').length
-  const bajas = students.filter((student) => student.enrollmentState === 'baja_inscrita').length
+  const bajas = students.filter((student) => student.status === 'Baja' || student.enrollmentState === 'baja_inscrita' || student.enrollmentState === 'baja').length
+  const sinFichaMatricula = students.filter((student) => !student.overlayExists).length
+  const expedientesIncompletos = students.filter((student) => student.missingFields.length > 0).length
+  const sinContacto = students.filter(hasNoPrimaryContact).length
   const missing = (field: string) => students.filter((student) => student.missingFields.includes(field)).length
 
   return {
@@ -1018,8 +1041,10 @@ export const fetchControlEscolarKpis = async (agentId: string, filters: any = {}
     activos: active,
     inactivos: students.length - active,
     bajas,
-    nuevosOverlay: students.filter((student) => !student.overlayExists).length,
-    expedientesIncompletos: students.filter((student) => student.missingFields.length > 0).length,
+    sinFichaMatricula,
+    nuevosOverlay: sinFichaMatricula,
+    expedientesIncompletos,
+    sinContacto,
     sinCurp: missing('curp'),
     sinTelefono: missing('teléfono'),
     sinTutor: missing('tutor'),
