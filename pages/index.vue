@@ -654,7 +654,9 @@ const hasMatchingEnrollmentConcept = (values) => {
   return normalizeEnrollmentConceptIds(values).some(conceptId => target.has(conceptId))
 }
 
-const hasCurrentEnrollmentConcept = (student) => hasMatchingEnrollmentConcept([
+const hasCurrentEnrollmentConcept = (student) => {
+  if (student?.currentEnrollmentConceptMatch === true || student?.inscritoCicloActual === true) return true
+  return hasMatchingEnrollmentConcept([
   student?.tipoIngresoEvidence?.targetConceptIds,
   student?.tipoIngresoEvidence?.targetConceptosIds,
   student?.tipoIngresoEvidence?.targetConcepts,
@@ -667,6 +669,7 @@ const hasCurrentEnrollmentConcept = (student) => hasMatchingEnrollmentConcept([
   student?.conceptoIds,
   student?.conceptosIds
 ])
+}
 
 const hasPreviousEnrollmentConcept = (student) => hasMatchingEnrollmentConcept([
   student?.tipoIngresoEvidence?.previousConceptIds,

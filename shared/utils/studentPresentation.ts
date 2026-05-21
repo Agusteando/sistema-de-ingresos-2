@@ -131,6 +131,8 @@ export const normalizeEnrollmentConceptIds = (values: unknown): string[] => {
 }
 
 export const studentHasCurrentEnrollmentConcept = (student: any, enrollmentConcepts: string[] = []) => {
+  if (student?.currentEnrollmentConceptMatch === true || student?.inscritoCicloActual === true) return true
+
   const enrollmentConceptIds = normalizeEnrollmentConceptIds(enrollmentConcepts)
   if (!enrollmentConceptIds.length) return false
 

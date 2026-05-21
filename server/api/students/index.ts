@@ -69,6 +69,17 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       params.push(...plantelCandidates)
     }
 
+
+    const enrollmentConceptSet = new Set(enrollmentConceptIds)
+    const rowHasCurrentEnrollmentEvidence = (row: any) => {
+      if (!enrollmentConceptSet.size) return false
+      return parseEnrollmentConceptIds([
+        row.conceptoIdsPagados,
+        row.conceptoIdsCargados,
+        row.conceptoIdsCicloActual
+      ]).some(conceptId => enrollmentConceptSet.has(conceptId))
+    }
+
     if (q) {
       whereClause += " AND (A.nombreCompleto LIKE ? OR A.matricula = ?)"
       params.push(`%${q}%`, q)
@@ -176,9 +187,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(rows.map(r => r.matricula), enrollmentConceptIds)
     let mapped = rows.flatMap(r => {
       const p = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey, r.nivelBase)
-      if (p.outOfScope) return []
+      const hasCurrentEnrollmentEvidence = rowHasCurrentEnrollmentEvidence(r)
+      if (p.outOfScope && !hasCurrentEnrollmentEvidence) return []
       const historicalConceptIds = historicalEnrollmentEvidence.get(String(r.matricula || '').trim()) || ''
-      if (isScopedToActivePlantel && normalizePlantel(p.plantel) !== normalizePlantel(user.active_plantel)) return []
+      if (isScopedToActivePlantel && !hasCurrentEnrollmentEvidence && normalizePlantel(p.plantel) !== normalizePlantel(user.active_plantel)) return []
 
       const tipoIngreso = resolveTipoIngreso({
         ...r,
@@ -195,8 +207,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         ...r,
         conceptoIdsTodos: historicalConceptIds,
         conceptoIdsHistoricos: historicalConceptIds,
+        currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,
+        inscritoCicloActual: hasCurrentEnrollmentEvidence,
         plantelBase: r.plantel,
-        plantel: p.plantel,
+        plantel: p.outOfScope && hasCurrentEnrollmentEvidence && isScopedToActivePlantel ? normalizePlantel(user.active_plantel) : p.plantel,
         grado: displayGrado(p.grado),
         nivel: p.nivel,
         tipoIngreso
