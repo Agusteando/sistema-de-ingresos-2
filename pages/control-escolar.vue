@@ -1,11 +1,14 @@
 <template>
   <div class="students-screen control-escolar-screen">
     <header class="students-hero ce-hero">
-      <div class="ce-route-context" aria-label="Estado de Control Escolar">
-        <span class="ce-sync-pill">Base al día</span>
-        <span class="ce-cycle-pill">{{ currentCicloLabel }}</span>
+      <div class="hero-copy ce-hero-title">
+        <h1>Control Escolar</h1>
       </div>
       <div class="hero-actions ce-hero-actions">
+        <div class="ce-route-context" aria-label="Estado de Control Escolar">
+          <span class="ce-sync-pill">Base al día</span>
+          <span class="ce-cycle-pill">{{ currentCicloLabel }}</span>
+        </div>
         <div class="ce-selected-plantel" :class="{ empty: !selectedAgentId }">
           <span>Plantel activo</span>
           <strong>{{ selectedAgentId || 'Selecciona' }}</strong>
@@ -40,32 +43,65 @@
     </section>
 
     <div class="filter-bar ce-filter-bar">
-      <div class="grade-filter ce-filter-stack">
-        <div class="grade-tabs" aria-label="Filtrar por grado">
-          <UiChip :active="!filters.grado && !filters.group" @click="clearAcademicFilters">Todos</UiChip>
-          <UiChip v-for="grado in catalogs.grados" :key="`grado-${grado}`" :active="filters.grado === grado" @click="selectGrade(grado)">{{ grado }}</UiChip>
+      <div class="ce-primary-filter-row">
+        <div class="ce-status-tabs" aria-label="Filtros principales">
+          <button
+            v-for="filter in primaryFilters"
+            :key="filter.key"
+            type="button"
+            :class="['ce-status-tab', { active: filters.status === filter.key && !filters.quality }]"
+            @click="applyPrimaryFilter(filter.key)"
+          >
+            {{ filter.label }}
+          </button>
         </div>
 
-        <Transition name="filter-groups">
-          <div v-if="filters.grado && availableGroups.length" class="group-tabs" aria-label="Filtrar por grupo">
-            <UiChip :active-group="filters.group === ''" @click="filters.group = ''">Todos los grupos</UiChip>
-            <UiChip v-for="grupo in availableGroups" :key="`grupo-${grupo}`" :active-group="filters.group === grupo" @click="toggleFilter('group', grupo)">Grupo {{ grupo }}</UiChip>
-          </div>
-        </Transition>
-      </div>
+        <div class="search-control" :class="{ 'has-filter-token': activeFilterLabel }">
+          <span class="search-filter-icon" aria-hidden="true"><LucideFilter :size="15" /></span>
+          <button v-if="activeFilterLabel" type="button" class="search-filter-token" @click="clearFilters">
+            <span>{{ activeFilterLabel }}</span><b aria-hidden="true">×</b>
+          </button>
+          <LucideSearch class="search-icon" :size="18" />
+          <input v-model="filters.search" placeholder="Matrícula, nombre, CURP, teléfono o correo..." @keyup.enter="loadStudents" />
+        </div>
 
-      <div class="search-control" :class="{ 'has-filter-token': activeFilterLabel }">
-        <span class="search-filter-icon" aria-hidden="true"><LucideFilter :size="15" /></span>
-        <button v-if="activeFilterLabel" type="button" class="search-filter-token" @click="clearFilters">
-          <span>{{ activeFilterLabel }}</span><b aria-hidden="true">×</b>
+        <button type="button" :class="['ce-filter-button', { active: showAdvancedFilters || advancedFilterCount }]" @click="showAdvancedFilters = !showAdvancedFilters">
+          <LucideFilter :size="16" /> Filtros
+          <b v-if="advancedFilterCount">{{ advancedFilterCount }}</b>
         </button>
-        <LucideSearch class="search-icon" :size="18" />
-        <input v-model="filters.search" placeholder="Matrícula o nombre del alumno..." @keyup.enter="loadStudents" />
+
+        <button type="button" class="ce-clear-link" :disabled="!hasActiveFilters" @click="clearFilters">
+          <LucideRotateCcw :size="15" /> Limpiar filtros
+        </button>
       </div>
 
-      <UiButton variant="secondary" class="export-button ce-filter-button" :disabled="!hasActiveFilters" @click="clearFilters">
-        <LucideRotateCcw :size="18" /> Limpiar filtros
-      </UiButton>
+      <Transition name="filter-groups">
+        <div v-if="showAdvancedFilters || advancedFilterCount" class="ce-secondary-filter-row">
+          <div class="ce-chip-cluster" aria-label="Calidad del expediente">
+            <span class="ce-chip-label">Calidad del expediente</span>
+            <UiChip
+              v-for="filter in qualityFilters"
+              :key="`quality-${filter.key}`"
+              :active="filters.quality === filter.key"
+              @click="toggleQualityFilter(filter.key)"
+            >
+              {{ filter.label }}
+            </UiChip>
+          </div>
+
+          <div v-if="catalogs.grados.length" class="ce-chip-cluster" aria-label="Filtrar por grado">
+            <span class="ce-chip-label">Grado</span>
+            <UiChip :active="!filters.grado && !filters.group" @click="clearAcademicFilters">Todos</UiChip>
+            <UiChip v-for="grado in catalogs.grados" :key="`grado-${grado}`" :active="filters.grado === grado" @click="selectGrade(grado)">{{ grado }}</UiChip>
+          </div>
+
+          <div v-if="filters.grado && availableGroups.length" class="ce-chip-cluster" aria-label="Filtrar por grupo">
+            <span class="ce-chip-label">Grupo</span>
+            <UiChip :active-group="filters.group === ''" @click="filters.group = ''">Todos</UiChip>
+            <UiChip v-for="grupo in availableGroups" :key="`grupo-${grupo}`" :active-group="filters.group === grupo" @click="toggleFilter('group', grupo)">{{ grupo }}</UiChip>
+          </div>
+        </div>
+      </Transition>
     </div>
 
     <div ref="studentsScaleShell" class="students-scale-shell" :style="studentsScaleShellStyle">
@@ -312,6 +348,7 @@ import { useState } from '#app'
 import { useHead } from '#imports'
 import {
   LucideAlertTriangle,
+  LucideBuilding2,
   LucideChevronLeft,
   LucideChevronRight,
   LucideDatabase,
@@ -363,10 +400,11 @@ const students = ref([])
 const selectedStudent = ref(null)
 const kpis = ref(null)
 const catalogs = reactive({ niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
-const DEFAULT_QUICK_FILTER = 'inscritos'
+const DEFAULT_QUICK_FILTER = 'all'
 const activeQuickFilter = ref(DEFAULT_QUICK_FILTER)
+const showAdvancedFilters = ref(false)
 const pagination = reactive({ page: 1, limit: 25, total: 0, pages: 1 })
-const filters = reactive({ search: '', status: DEFAULT_QUICK_FILTER, missing: '', grado: '', group: '', recent: '' })
+const filters = reactive({ search: '', status: DEFAULT_QUICK_FILTER, quality: '', grado: '', group: '', recent: '' })
 const editForm = reactive({})
 let searchTimer = null
 
@@ -375,7 +413,7 @@ const { studentsScaleShell, studentsScaleShellStyle, studentsDesignCanvasStyle, 
 const loadingAny = computed(() => optionsLoading.value || kpisLoading.value || studentsLoading.value || savingStudent.value)
 const hasActiveFilters = computed(() => Boolean(
   filters.search ||
-  filters.missing ||
+  filters.quality ||
   filters.grado ||
   filters.group ||
   filters.recent ||
@@ -384,7 +422,7 @@ const hasActiveFilters = computed(() => Boolean(
 const activeFilterLabel = computed(() => {
   const active = []
   if (filters.status && filters.status !== DEFAULT_QUICK_FILTER) active.push(statusLabel(filters.status))
-  if (filters.missing) active.push(missingLabel(filters.missing))
+  if (filters.quality) active.push(qualityLabel(filters.quality))
   if (filters.grado) active.push(filters.grado)
   if (filters.group) active.push(`Grupo ${filters.group}`)
   if (filters.search) active.push('Búsqueda')
@@ -396,14 +434,34 @@ const availableGroups = computed(() => {
   return Array.isArray(byGrade[filters.grado]) ? byGrade[filters.grado] : catalogs.grupos
 })
 
+const advancedFilterCount = computed(() => [filters.quality, filters.grado, filters.group, filters.recent].filter(Boolean).length)
+
+const primaryFilters = [
+  { key: 'all', label: 'Todos' },
+  { key: 'activos', label: 'Activos' },
+  { key: 'bajas', label: 'Bajas' },
+  { key: 'sin_ficha', label: 'Sin ficha matrícula' },
+  { key: 'sin_contacto', label: 'Sin contacto' }
+]
+
+const qualityFilters = [
+  { key: 'incomplete', label: 'Expediente incompleto' },
+  { key: 'complete', label: 'Completo' },
+  { key: 'curp', label: 'Sin CURP' },
+  { key: 'phone', label: 'Sin teléfono' },
+  { key: 'email', label: 'Sin email' },
+  { key: 'guardian', label: 'Sin tutor' }
+]
+
 const kpiCards = computed(() => {
   const data = kpis.value || {}
   return [
-    { key: 'inscritos', label: 'Inscritos', value: data.inscritos || data.totalInscritos || 0, tone: 'kpi-green', icon: LucideUsersRound, sparkline: [0, data.inscritos || data.totalInscritos || 0, data.totalVisible || data.totalInscritos || 0] },
-    { key: 'internos', label: 'Internos', value: data.internos || 0, tone: 'kpi-teal', icon: LucideUserCheck, sparkline: [0, data.internos || 0, data.inscritos || 0] },
-    { key: 'externos', label: 'Externos', value: data.externos || 0, tone: 'kpi-blue', icon: LucideGlobe2, sparkline: [0, data.externos || 0, data.inscritos || 0] },
-    { key: 'no_inscritos', label: 'No inscritos', value: data.noInscritos || 0, tone: 'kpi-red', icon: LucideUserX, sparkline: [0, data.noInscritos || 0, data.noInscritos || 0] },
-    { key: 'bajas', label: 'Bajas', value: data.bajas || 0, tone: 'kpi-gray', icon: LucideAlertTriangle, sparkline: [0, data.bajas || 0, data.bajas || 0] }
+    { key: 'inscritos', label: 'Total inscritos', value: data.inscritos || data.totalInscritos || 0, tone: 'kpi-green', icon: LucideUsersRound, sparkline: [0, data.inscritos || data.totalInscritos || 0, data.totalVisible || data.totalInscritos || 0] },
+    { key: 'activos', label: 'Activos', value: data.activos || 0, tone: 'kpi-teal', icon: LucideUserCheck, sparkline: [0, data.activos || 0, data.totalVisible || 0] },
+    { key: 'bajas', label: 'Bajas', value: data.bajas || 0, tone: 'kpi-red', icon: LucideAlertTriangle, sparkline: [0, data.bajas || 0, data.bajas || 0] },
+    { key: 'sin_ficha', label: 'Sin ficha matrícula', value: data.sinFichaMatricula || data.nuevosOverlay || 0, tone: 'kpi-blue', icon: LucideDatabase, sparkline: [0, data.sinFichaMatricula || data.nuevosOverlay || 0, data.totalVisible || 0] },
+    { key: 'incomplete', label: 'Expedientes incompletos', value: data.expedientesIncompletos || 0, tone: 'kpi-gray', icon: LucideShieldCheck, sparkline: [0, data.expedientesIncompletos || 0, data.totalVisible || 0] },
+    { key: 'sin_contacto', label: 'Sin contacto', value: data.sinContacto || 0, tone: 'kpi-red', icon: LucidePhone, sparkline: [0, data.sinContacto || 0, data.totalVisible || 0] }
   ]
 })
 
@@ -415,8 +473,8 @@ const requiredDataFields = [
 ]
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('es-MX')
-const statusLabel = (value) => ({ inscritos: 'Inscritos', internos: 'Internos', externos: 'Externos', no_inscritos: 'No inscritos', bajas: 'Bajas', baja: 'Bajas' }[value] || value)
-const missingLabel = (value) => ({ curp: 'Sin CURP', phone: 'Sin teléfono', email: 'Sin email', guardian: 'Sin tutor', contact: 'Sin contacto', overlay: 'Sin ficha matrícula', incomplete: 'Expediente incompleto' }[value] || value)
+const statusLabel = (value) => ({ all: 'Todos', inscritos: 'Inscritos', activos: 'Activos', active: 'Activos', internos: 'Internos', externos: 'Externos', no_inscritos: 'No inscritos', bajas: 'Bajas', baja: 'Bajas', sin_ficha: 'Sin ficha matrícula', sin_contacto: 'Sin contacto' }[value] || value)
+const qualityLabel = (value) => ({ complete: 'Completo', incomplete: 'Expediente incompleto', curp: 'Sin CURP', phone: 'Sin teléfono', email: 'Sin email', guardian: 'Sin tutor', contact: 'Sin contacto', overlay: 'Sin ficha matrícula' }[value] || value)
 const compactAcademic = (student) => [student.grado, student.group ? `Grupo ${student.group}` : '', student.nivel].filter(Boolean).join(' · ') || 'Sin datos académicos'
 const statusTone = (student) => String(student?.status || '').toLowerCase() === 'baja' ? 'danger' : String(student?.status || '').toLowerCase() === 'activo' ? 'success' : 'neutral'
 const completionFor = (student) => {
@@ -437,7 +495,7 @@ const buildQuery = (extra = {}) => ({
   ...buildScopeQuery(),
   search: filters.search || undefined,
   status: filters.status || undefined,
-  missing: filters.missing || undefined,
+  quality: filters.quality || undefined,
   grado: filters.grado || undefined,
   group: filters.group || undefined,
   recent: filters.recent || undefined,
@@ -501,7 +559,7 @@ const refreshAll = async () => {
 
 const clearQuickFilters = () => {
   filters.status = DEFAULT_QUICK_FILTER
-  filters.missing = ''
+  filters.quality = ''
   activeQuickFilter.value = DEFAULT_QUICK_FILTER
 }
 
@@ -523,15 +581,36 @@ const selectGrade = (grado) => {
 }
 
 const clearFilters = () => {
-  Object.assign(filters, { search: '', status: DEFAULT_QUICK_FILTER, missing: '', grado: '', group: '', recent: '' })
+  Object.assign(filters, { search: '', status: DEFAULT_QUICK_FILTER, quality: '', grado: '', group: '', recent: '' })
   activeQuickFilter.value = DEFAULT_QUICK_FILTER
   pagination.page = 1
 }
 
+const applyPrimaryFilter = (key) => {
+  filters.status = key
+  filters.quality = ''
+  activeQuickFilter.value = key
+  pagination.page = 1
+}
+
+const toggleQualityFilter = (key) => {
+  filters.quality = filters.quality === key ? '' : key
+  if (filters.quality) activeQuickFilter.value = 'quality'
+  else activeQuickFilter.value = filters.status || DEFAULT_QUICK_FILTER
+  pagination.page = 1
+}
+
 const applyKpiFilter = (key) => {
-  activeQuickFilter.value = activeQuickFilter.value === key && key !== DEFAULT_QUICK_FILTER ? DEFAULT_QUICK_FILTER : key
-  filters.status = activeQuickFilter.value
-  filters.missing = ''
+  if (key === 'incomplete') {
+    filters.status = DEFAULT_QUICK_FILTER
+    filters.quality = filters.quality === 'incomplete' ? '' : 'incomplete'
+    activeQuickFilter.value = filters.quality ? key : DEFAULT_QUICK_FILTER
+  } else {
+    const next = activeQuickFilter.value === key && key !== DEFAULT_QUICK_FILTER ? DEFAULT_QUICK_FILTER : key
+    filters.status = next
+    filters.quality = ''
+    activeQuickFilter.value = next
+  }
   pagination.page = 1
 }
 
@@ -681,9 +760,17 @@ onMounted(async () => {
 }
 
 .ce-hero {
-  min-height: 40px;
+  min-height: 38px;
   margin-bottom: 7px;
   align-items: center;
+}
+
+.ce-hero-title h1 {
+  margin: 0;
+  color: #10203a;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -.035em;
 }
 
 .ce-route-context {
@@ -771,19 +858,29 @@ onMounted(async () => {
 @keyframes ce-spin { to { transform: rotate(360deg); } }
 
 .ce-kpi-system {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .ce-kpi-strip {
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  min-height: 92px;
+  min-height: 78px;
   border-radius: 0;
   border-inline: 0;
   box-shadow: none;
 }
 
 .ce-kpi-strip .kpi-card {
-  height: 78px;
+  height: 66px;
+  min-height: 66px;
+}
+
+.ce-kpi-strip .kpi-icon {
+  width: 38px;
+  height: 38px;
+}
+
+.ce-kpi-strip .kpi-text strong {
+  font-size: clamp(20px, 1.7vw, 28px);
 }
 
 .ce-kpi-strip .kpi-card.active {
@@ -795,10 +892,12 @@ onMounted(async () => {
 }
 
 .ce-filter-bar {
-  grid-template-columns: minmax(430px, 1fr) minmax(380px, 520px) auto;
-  min-height: 62px;
-  margin-bottom: 14px;
-  padding: 8px 0;
+  display: flex;
+  min-height: 52px;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 9px;
+  padding: 7px 0;
   border: 0;
   border-top: 1px solid var(--students-border-soft);
   border-bottom: 1px solid var(--students-border-soft);
@@ -807,40 +906,151 @@ onMounted(async () => {
   box-shadow: none;
 }
 
-.ce-filter-stack {
-  gap: 7px;
+.ce-primary-filter-row {
+  display: grid;
+  grid-template-columns: minmax(360px, max-content) minmax(320px, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
 }
 
-.ce-filter-bar .grade-tabs,
-.ce-filter-bar .group-tabs {
-  gap: 7px;
+.ce-status-tabs {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.ce-status-tab {
+  display: inline-flex;
+  min-height: 35px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid #d9e3ee;
+  border-radius: 10px;
+  background: #fff;
+  color: #15233c;
+  font-size: 11px;
+  font-weight: 850;
+  box-shadow: 0 5px 12px rgba(21, 35, 60, .035);
+  cursor: pointer;
+}
+
+.ce-status-tab.active {
+  border-color: #3f9138;
+  background: linear-gradient(180deg, #5bbd55, #278c31);
+  color: #fff;
+  box-shadow: 0 10px 20px rgba(63, 145, 56, .22);
 }
 
 .ce-filter-bar .search-control {
-  height: 40px;
+  height: 39px;
+  min-width: 0;
   border-radius: 13px;
   background: #fff;
 }
 
+.ce-filter-button,
+.ce-clear-link {
+  display: inline-flex;
+  min-height: 37px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .ce-filter-button {
-  align-self: center;
-  min-width: 118px;
+  min-width: 92px;
+  border: 1px solid #d9e3ee;
+  background: #fff;
+  color: #15233c;
+}
+
+.ce-filter-button.active {
+  border-color: rgba(63, 145, 56, .28);
+  background: #f4fbf2;
+  color: #21882e;
+}
+
+.ce-filter-button b {
+  display: inline-flex;
+  min-width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #2f9138;
+  color: #fff;
+  font-size: 9px;
+}
+
+.ce-clear-link {
+  border: 0;
+  background: transparent;
+  color: #21882e;
+}
+
+.ce-clear-link:disabled {
+  color: #a8b2c2;
+  cursor: not-allowed;
+}
+
+.ce-secondary-filter-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 1px;
+}
+
+.ce-chip-cluster {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ce-chip-label {
+  color: #6f7b95;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ce-secondary-filter-row :deep(.ui-chip),
+.ce-secondary-filter-row :deep(button) {
+  min-height: 26px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  white-space: nowrap;
 }
 
 .ce-workspace.has-detail {
-  grid-template-columns: minmax(500px, .62fr) minmax(760px, 1.38fr);
-  gap: 14px;
+  grid-template-columns: minmax(430px, .52fr) minmax(820px, 1.48fr);
+  gap: 12px;
 }
 
 .ce-list-card {
-  --student-list-balance-col: clamp(132px, 9.5vw, 160px);
-  --student-list-quality-col: clamp(118px, 8.5vw, 145px);
-  --student-list-action-col: clamp(42px, 3vw, 48px);
-  --student-list-row-height: clamp(78px, 5.7vw, 92px);
-  --student-list-grade-size: clamp(58px, 4.2vw, 70px);
-  --student-list-grade-height: clamp(56px, 4vw, 66px);
-  --student-list-crest-size: clamp(32px, 2.4vw, 38px);
-  grid-template-rows: 50px minmax(0, 1fr);
+  --student-list-balance-col: clamp(124px, 8.5vw, 150px);
+  --student-list-quality-col: clamp(108px, 7.5vw, 134px);
+  --student-list-action-col: clamp(38px, 2.8vw, 46px);
+  --student-list-row-height: clamp(70px, 5vw, 82px);
+  --student-list-grade-size: clamp(52px, 3.8vw, 64px);
+  --student-list-grade-height: clamp(50px, 3.6vw, 60px);
+  --student-list-crest-size: clamp(28px, 2.1vw, 34px);
+  grid-template-rows: 44px minmax(0, 1fr);
   border-radius: 14px;
   background: #fff;
 }
@@ -895,26 +1105,37 @@ onMounted(async () => {
 }
 
 .ce-list-scroll {
-  padding: 10px 7px 0 11px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 7px 0 11px;
 }
 
 .ce-student-row {
   grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-quality-col) var(--student-list-action-col);
   min-height: var(--student-list-row-height);
-  margin: 0 7px 9px 0;
-  padding-left: 14px;
+  margin: 0 7px 7px 0;
+  padding-left: 12px;
   border-radius: 14px;
+}
+
+.ce-workspace.has-detail .ce-student-row {
+  grid-template-columns: minmax(0, 1fr) var(--student-list-action-col);
+}
+
+.ce-workspace.has-detail .ce-profile-cell,
+.ce-workspace.has-detail .ce-quality-cell {
+  display: none;
 }
 
 .ce-student-row.missing-overlay { border-style: dashed; }
 
 .ce-student-identity {
-  grid-template-columns: 28px var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 26px var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
+  gap: 8px;
 }
 
 .ce-student-identity.no-group-icon {
-  grid-template-columns: 28px var(--student-list-grade-size) minmax(0, 1fr);
+  grid-template-columns: 26px var(--student-list-grade-size) minmax(0, 1fr);
 }
 
 .ce-student-row .student-copy {
@@ -1486,8 +1707,10 @@ onMounted(async () => {
 
 @media (max-width: 1320px) {
   .ce-kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .ce-filter-bar { grid-template-columns: 1fr; }
-  .ce-workspace.has-detail { grid-template-columns: minmax(420px, .72fr) minmax(640px, 1.28fr); }
+  .ce-primary-filter-row { grid-template-columns: 1fr minmax(300px, .9fr) auto; }
+  .ce-clear-link { display: none; }
+  .ce-status-tabs { overflow-x: auto; }
+  .ce-workspace.has-detail { grid-template-columns: minmax(400px, .62fr) minmax(650px, 1.38fr); }
   .ce-detail-header { grid-template-columns: minmax(0, 1fr) 220px 34px; }
   .ce-detail-actions { display: none; }
 }
