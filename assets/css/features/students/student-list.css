@@ -199,14 +199,15 @@
 
 .student-copy strong {
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
   color: #15233c;
   font-size: clamp(13.5px, 1vw, 15px);
   font-weight: 840;
   letter-spacing: -.018em;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.16;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .student-meta {

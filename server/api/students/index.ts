@@ -1,5 +1,5 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
-import { calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, normalizePlantel, plantelCandidatesForProjectedScope, resolveNivelEscolar } from '../../../shared/utils/grado'
+import { calculateBasePlacementForTargetPosition, calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, normalizePlantel, plantelCandidatesForProjectedScope, resolveNivelEscolar } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { parseCurp } from '../../../shared/utils/curp'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
@@ -72,8 +72,44 @@ const createStudentPersistenceError = (error: unknown, explicitMatricula: string
   })
 }
 
+const buildNombreCompleto = (body: Record<string, any>) => [
+  normalizeTextValue(body.apellidoPaterno),
+  normalizeTextValue(body.apellidoMaterno),
+  normalizeTextValue(body.nombres)
+].filter(Boolean).join(' ')
+
+const resolveAltaBasePlacement = (body: Record<string, any>, assignedPlantel: string, assignedNivel: string, cicloKey: string) => {
+  const targetCiclo = normalizeCicloKey(body.targetCiclo || cicloKey)
+  const targetNivel = resolveNivelEscolar({ plantel: assignedPlantel, nivel: body.targetNivel || body.resolvedNivel || assignedNivel })
+  const targetGrado = normalizeGradoForPlantel(body.targetGrado || body.grado, assignedPlantel, targetNivel)
+  const placement = calculateBasePlacementForTargetPosition(
+    targetNivel,
+    targetGrado,
+    cicloKey,
+    targetCiclo,
+    assignedPlantel
+  )
+
+  if (placement.outOfScope || !placement.nivel || !placement.grado || !placement.plantel) {
+    throw createError({
+      statusCode: 400,
+      message: 'La combinación de grado y ciclo de ingreso no corresponde con la progresión escolar. Selecciona el grado actual del alumno y el ciclo real de ingreso.'
+    })
+  }
+
+  return {
+    targetCiclo,
+    plantel: placement.plantel || assignedPlantel,
+    nivel: placement.nivel || assignedNivel,
+    grado: placement.grado || normalizeGradoForPlantel(body.grado, assignedPlantel, assignedNivel)
+  }
+}
+
 const insertStudent = async (body: Record<string, any>, user: any, assignedPlantel: string, assignedNivel: string, cicloKey: string, explicitMatricula = '') => {
   const curpInfo = parseCurp(body.curp)
+  const basePlacement = resolveAltaBasePlacement(body, assignedPlantel, assignedNivel, cicloKey)
+  const nombreCompleto = buildNombreCompleto(body)
+  const matriculaValue = explicitMatricula || null
 
   const result = await query<InsertResult>(`
     INSERT INTO base (
@@ -81,12 +117,12 @@ const insertStudent = async (body: Record<string, any>, user: any, assignedPlant
       nombreCompleto,
       curp, \`Fecha de nacimiento\`, genero, plantel, nivel, grado, grupo,
       \`Nombre del padre o tutor\`, telefono, correo, usuario, ciclo, estatus
-    ) VALUES (?, ?, ?, ?, CONCAT(?, ' ', ?, ' ', ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
-    explicitMatricula,
+    matriculaValue,
     normalizeTextValue(body.apellidoPaterno), normalizeTextValue(body.apellidoMaterno), normalizeTextValue(body.nombres),
-    normalizeTextValue(body.apellidoPaterno), normalizeTextValue(body.apellidoMaterno), normalizeTextValue(body.nombres),
-    curpInfo.normalized, curpInfo.birthDate, curpInfo.gender, assignedPlantel, assignedNivel, normalizeGradoForPlantel(body.grado, assignedPlantel, assignedNivel), normalizeTextValue(body.grupo),
+    nombreCompleto,
+    curpInfo.normalized, curpInfo.birthDate, curpInfo.gender, basePlacement.plantel, basePlacement.nivel, basePlacement.grado, normalizeTextValue(body.grupo),
     normalizeTextValue(body.padre), normalizeTextValue(body.telefono), normalizeTextValue(body.correo), normalizeTextValue(user?.name), cicloKey, body.estatus || 'Activo'
   ])
 
@@ -109,6 +145,7 @@ const insertStudent = async (body: Record<string, any>, user: any, assignedPlant
     return explicitMatricula
   }
 }
+
 
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
