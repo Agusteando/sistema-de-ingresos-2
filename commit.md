@@ -1,1 +1,1 @@
-fix: keep control escolar actions visible and load student photos quietly
+fix: feature Husky Pass access header and simplify Control Escolar fields
