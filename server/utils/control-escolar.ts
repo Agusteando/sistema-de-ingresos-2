@@ -1,6 +1,10 @@
 import { query, runWithBridgeAgentId } from './db'
 import { getTrustedAuthUser, normalizePlantel, type AuthSessionUser } from './auth-session'
 import { PLANTELES_LIST } from '../../utils/constants'
+import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { calculatePromotedGrado, displayGrado, plantelCandidatesForProjectedScope } from '../../shared/utils/grado'
+import { previousCicloKey } from '../../shared/utils/tipoIngreso'
+import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from './enrollment-evidence'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 
 export type ControlEscolarStudentRow = {
@@ -47,6 +51,12 @@ export type ControlEscolarStudentRow = {
   overlayExists: boolean
   missingFields: string[]
   updatedAt: string | null
+  cicloBase: string
+  plantelBaseOriginal: string
+  enrollmentState: string
+  currentEnrollmentConceptMatch: boolean
+  inscritoCicloActual: boolean
+  tipoIngreso: string
 }
 
 type TableColumn = {
@@ -131,12 +141,20 @@ export const resolveControlEscolarAuth = async (event: any, requestedAgentId?: u
 
   const requested = normalizePlantel(requestedAgentId)
   const active = normalizePlantel(user.active_plantel)
+  const allowedPlanteles = user.isSuperAdmin ? [...PLANTELES_LIST] : user.plantelesList.map(normalizePlantel)
   const agentId = requested || active
 
   if (!agentId || agentId === 'GLOBAL' || !PLANTEL_SET.has(agentId)) {
     throw createError({
       statusCode: 400,
       message: 'Selecciona un plantel específico en el selector lateral para usar Control Escolar.'
+    })
+  }
+
+  if (!allowedPlanteles.includes(agentId)) {
+    throw createError({
+      statusCode: 403,
+      message: 'El plantel solicitado no está dentro del alcance del usuario.'
     })
   }
 
@@ -293,24 +311,231 @@ const buildLocalBaseSelect = (agentId: string, baseColumns: Set<string>) => {
   ]
 }
 
-const buildLocalBaseWhere = (schema: ControlEscolarSchema) => {
-  // Control Escolar must start from the same plantel-local source used by operators: base.
-  // Do not gate this list with the local ingresos table; some planteles do not keep that table
-  // aligned with the operator student list and it can make Control Escolar appear empty.
-  const estatusExpr = expr(schema.base, 'b', 'estatus', sqlLiteral('Activo'))
-  return `(${estatusExpr} = 'Activo' OR ${estatusExpr} IS NULL OR TRIM(CAST(${estatusExpr} AS CHAR)) = '')`
+type ControlEscolarOperatorScope = {
+  cicloKey: string
+  previousCiclo: string
+  enrollmentConceptIds: string[]
 }
 
-const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema) => {
+const resolveOperatorScope = (filters: any = {}): ControlEscolarOperatorScope => {
+  const cicloKey = normalizeCicloKey(filters.ciclo || filters.cicloKey || filters.targetCiclo || '2025')
+  return {
+    cicloKey,
+    previousCiclo: previousCicloKey(cicloKey),
+    enrollmentConceptIds: parseEnrollmentConceptIds(filters.concepts || filters.enrollmentConcepts || '')
+  }
+}
+
+const addCurrentEnrollmentScope = (
+  whereParts: string[],
+  params: any[],
+  schema: ControlEscolarSchema,
+  scope: ControlEscolarOperatorScope
+) => {
+  const estatusExpr = expr(schema.base, 'b', 'estatus', sqlLiteral('Activo'))
+  const cicloExpr = expr(schema.base, 'b', 'ciclo', 'NULL')
+
+  if (!scope.enrollmentConceptIds.length) {
+    whereParts.push(`(${estatusExpr} = 'Activo' OR ${cicloExpr} = ?)`)
+    params.push(scope.cicloKey)
+    return
+  }
+
+  const conceptPlaceholders = scope.enrollmentConceptIds.map(() => '?').join(',')
+  whereParts.push(`(
+    ${estatusExpr} = 'Activo'
+    OR ${cicloExpr} = ?
+    OR EXISTS (
+      SELECT 1
+      FROM documentos DScope
+      LEFT JOIN documento_concepto_periodos PScope
+        ON PScope.documento = DScope.documento
+        AND PScope.estatus = 'Activo'
+      WHERE DScope.matricula = b.matricula
+        AND DScope.ciclo = ?
+        AND DScope.estatus = 'Activo'
+        AND (PScope.accion IS NULL OR PScope.accion <> 'cancelacion')
+        AND CAST(COALESCE(PScope.concepto_id, DScope.concepto) AS CHAR) IN (${conceptPlaceholders})
+      LIMIT 1
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM referenciasdepago RScope
+      LEFT JOIN documentos DScopePaid ON DScopePaid.documento = RScope.documento
+      LEFT JOIN documento_concepto_periodos PScopePaid
+        ON PScopePaid.documento = RScope.documento
+        AND PScopePaid.estatus = 'Activo'
+        AND CAST(RScope.mes AS UNSIGNED) >= PScopePaid.start_mes
+        AND (PScopePaid.end_mes IS NULL OR CAST(RScope.mes AS UNSIGNED) <= PScopePaid.end_mes)
+      WHERE RScope.matricula = b.matricula
+        AND RScope.ciclo = ?
+        AND RScope.estatus = 'Vigente'
+        AND CAST(COALESCE(PScopePaid.concepto_id, DScopePaid.concepto, RScope.concepto) AS CHAR) IN (${conceptPlaceholders})
+      LIMIT 1
+    )
+  )`)
+  params.push(scope.cicloKey, scope.cicloKey, ...scope.enrollmentConceptIds, scope.cicloKey, ...scope.enrollmentConceptIds)
+}
+
+const rowHasCurrentEnrollmentEvidence = (row: any, enrollmentConceptIds: string[]) => {
+  const target = new Set(enrollmentConceptIds)
+  if (!target.size) return false
+  return parseEnrollmentConceptIds([
+    row.conceptoIdsPagados,
+    row.conceptoIdsCargados,
+    row.conceptoIdsCicloActual
+  ]).some((conceptId) => target.has(conceptId))
+}
+
+const rowHasPreviousEnrollmentEvidence = (row: any, enrollmentConceptIds: string[], historicalConceptIds = '') => {
+  const target = new Set(enrollmentConceptIds)
+  if (!target.size) return false
+  return parseEnrollmentConceptIds([
+    row.conceptoIdsPagadosPrevios,
+    row.conceptoIdsCargadosPrevios,
+    row.conceptoIdsCicloPrevio,
+    historicalConceptIds
+  ]).some((conceptId) => target.has(conceptId))
+}
+
+const resolveOperatorEnrollmentState = (
+  row: any,
+  scope: ControlEscolarOperatorScope,
+  historicalConceptIds = ''
+) => {
+  const activeInBase = firstText(row.baseEstatus, 'Activo') === 'Activo'
+  if (!scope.enrollmentConceptIds.length) return activeInBase ? 'inscrito' : 'baja'
+
+  const hasCurrent = rowHasCurrentEnrollmentEvidence(row, scope.enrollmentConceptIds)
+  const hasPrevious = rowHasPreviousEnrollmentEvidence(row, scope.enrollmentConceptIds, historicalConceptIds)
+  if (activeInBase && hasCurrent) return 'inscrito'
+  if (!activeInBase && hasCurrent) return 'baja_inscrita'
+  if (activeInBase && hasPrevious) return 'no_inscrito'
+  return activeInBase ? 'activo_sin_evidencia' : 'baja'
+}
+
+const applyOperatorProjection = async (agentId: string, rows: any[], scope: ControlEscolarOperatorScope) => {
+  const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(
+    rows.map((row) => row.matricula),
+    scope.enrollmentConceptIds
+  )
+
+  return rows.flatMap((row) => {
+    const promoted = calculatePromotedGrado(row.baseGrado, row.plantelBase, row.baseCiclo, scope.cicloKey, row.baseNivel)
+    const hasCurrentEnrollmentEvidence = rowHasCurrentEnrollmentEvidence(row, scope.enrollmentConceptIds)
+    if (promoted.outOfScope && !hasCurrentEnrollmentEvidence) return []
+
+    const projectedPlantel = promoted.outOfScope && hasCurrentEnrollmentEvidence
+      ? normalizePlantel(agentId)
+      : normalizePlantel(promoted.plantel)
+
+    if (!hasCurrentEnrollmentEvidence && projectedPlantel !== normalizePlantel(agentId)) return []
+
+    const historicalConceptIds = historicalEnrollmentEvidence.get(String(row.matricula || '').trim()) || ''
+    return [{
+      ...row,
+      plantelBaseOriginal: row.basePlantel,
+      basePlantel: projectedPlantel || row.basePlantel,
+      baseGrado: displayGrado(promoted.grado),
+      baseNivel: promoted.nivel,
+      conceptoIdsHistoricos: historicalConceptIds,
+      currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,
+      inscritoCicloActual: hasCurrentEnrollmentEvidence,
+      operatorEnrollmentState: resolveOperatorEnrollmentState(row, scope, historicalConceptIds)
+    }]
+  })
+}
+
+const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema, filters: any = {}) => {
+  const scope = resolveOperatorScope(filters)
   const fields = buildLocalBaseSelect(agentId, schema.base)
-  const whereSql = buildLocalBaseWhere(schema)
-  return await query<any[]>(`
+  fields.push(
+    selectAs(expr(schema.base, 'b', 'ciclo', 'NULL'), 'baseCiclo'),
+    selectAs('B.conceptoIdsPagados', 'conceptoIdsPagados'),
+    selectAs('C.conceptoIdsCargados', 'conceptoIdsCargados'),
+    selectAs('BPrev.conceptoIdsPagadosPrevios', 'conceptoIdsPagadosPrevios'),
+    selectAs('CPrev.conceptoIdsCargadosPrevios', 'conceptoIdsCargadosPrevios'),
+    selectAs("CONCAT_WS('|', B.conceptoIdsPagados, C.conceptoIdsCargados)", 'conceptoIdsCicloActual'),
+    selectAs("CONCAT_WS('|', BPrev.conceptoIdsPagadosPrevios, CPrev.conceptoIdsCargadosPrevios)", 'conceptoIdsCicloPrevio')
+  )
+
+  const params: any[] = []
+  const whereParts = ['1=1']
+  const plantelCandidates = plantelCandidatesForProjectedScope(agentId)
+  if (plantelCandidates.length && schema.base.has('plantel')) {
+    whereParts.push(`${col('b', 'plantel')} IN (${plantelCandidates.map(() => '?').join(',')})`)
+    params.push(...plantelCandidates)
+  }
+  addCurrentEnrollmentScope(whereParts, params, schema, scope)
+
+  const sqlParams = [scope.cicloKey, scope.cicloKey, scope.previousCiclo, scope.previousCiclo, ...params]
+  const rows = await query<any[]>(`
     SELECT ${fields.join(',\n      ')}
     FROM base b
-    WHERE ${whereSql}
-    ORDER BY b.matricula ASC
+    LEFT JOIN (
+      SELECT
+        R.matricula AS matricula,
+        GROUP_CONCAT(DISTINCT CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) SEPARATOR '|') AS conceptoIdsPagados
+      FROM referenciasdepago R
+      LEFT JOIN documentos D ON D.documento = R.documento
+      LEFT JOIN documento_concepto_periodos P
+        ON P.documento = R.documento
+        AND P.estatus = 'Activo'
+        AND CAST(R.mes AS UNSIGNED) >= P.start_mes
+        AND (P.end_mes IS NULL OR CAST(R.mes AS UNSIGNED) <= P.end_mes)
+      WHERE R.ciclo = ? AND R.estatus = 'Vigente'
+      GROUP BY R.matricula
+    ) B ON b.matricula = B.matricula
+    LEFT JOIN (
+      SELECT
+        cargos.matricula,
+        GROUP_CONCAT(DISTINCT cargos.conceptoId SEPARATOR '|') AS conceptoIdsCargados
+      FROM (
+        SELECT
+          D.matricula,
+          CAST(COALESCE(P.concepto_id, D.concepto) AS CHAR) AS conceptoId
+        FROM documentos D
+        JOIN (
+          SELECT 1 AS mes UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6
+          UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12
+        ) M ON M.mes <= GREATEST(1, CAST(IFNULL(NULLIF(D.meses, ''), '1') AS UNSIGNED))
+        LEFT JOIN documento_concepto_periodos P
+          ON P.documento = D.documento
+          AND P.estatus = 'Activo'
+          AND M.mes >= P.start_mes
+          AND (P.end_mes IS NULL OR M.mes <= P.end_mes)
+        WHERE D.ciclo = ? AND D.estatus = 'Activo' AND (P.accion IS NULL OR P.accion <> 'cancelacion')
+      ) cargos
+      GROUP BY cargos.matricula
+    ) C ON b.matricula = C.matricula
+    LEFT JOIN (
+      SELECT
+        R.matricula AS matricula,
+        GROUP_CONCAT(DISTINCT CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) SEPARATOR '|') AS conceptoIdsPagadosPrevios
+      FROM referenciasdepago R
+      LEFT JOIN documentos D ON D.documento = R.documento
+      LEFT JOIN documento_concepto_periodos P
+        ON P.documento = R.documento
+        AND P.estatus = 'Activo'
+        AND CAST(R.mes AS UNSIGNED) >= P.start_mes
+        AND (P.end_mes IS NULL OR CAST(R.mes AS UNSIGNED) <= P.end_mes)
+      WHERE R.ciclo = ? AND R.estatus = 'Vigente'
+      GROUP BY R.matricula
+    ) BPrev ON b.matricula = BPrev.matricula
+    LEFT JOIN (
+      SELECT
+        matricula,
+        GROUP_CONCAT(DISTINCT concepto SEPARATOR '|') AS conceptoIdsCargadosPrevios
+      FROM documentos
+      WHERE ciclo = ? AND estatus = 'Activo'
+      GROUP BY matricula
+    ) CPrev ON b.matricula = CPrev.matricula
+    WHERE ${whereParts.join(' AND ')}
+    ORDER BY baseEstatus = 'Activo' DESC, baseNombreCompleto ASC, b.matricula ASC
     LIMIT ${MAX_LOCAL_ROWS + 1}
-  `)
+  `, sqlParams)
+
+  return await applyOperatorProjection(agentId, rows, scope)
 }
 
 const centralSelectColumns = (schema: ControlEscolarSchema) => {
@@ -471,7 +696,13 @@ const overlayStudentRow = (agentId: string, base: any, overlay?: any): ControlEs
     photoUrl: resolvePhotoUrl(overlay?.foto),
     overlayExists: hasOverlay,
     missingFields: [],
-    updatedAt: updatedAt ? new Date(updatedAt).toISOString?.() || String(updatedAt) : null
+    updatedAt: updatedAt ? new Date(updatedAt).toISOString?.() || String(updatedAt) : null,
+    cicloBase: normalizeText(base.baseCiclo),
+    plantelBaseOriginal: normalizeText(base.plantelBaseOriginal || base.basePlantel),
+    enrollmentState: normalizeText(base.operatorEnrollmentState || 'inscrito'),
+    currentEnrollmentConceptMatch: Boolean(base.currentEnrollmentConceptMatch),
+    inscritoCicloActual: Boolean(base.inscritoCicloActual),
+    tipoIngreso: normalizeText(base.operatorEnrollmentState || 'inscrito') === 'no_inscrito' ? 'No inscrito' : 'Inscrito'
   }
 
   normalized.missingFields = buildMissingFields(normalized)
@@ -556,9 +787,9 @@ type ControlEscolarLoadedStudents = {
   }
 }
 
-const fetchAllNormalizedStudents = async (agentId: string): Promise<ControlEscolarLoadedStudents> => {
+const fetchAllNormalizedStudents = async (agentId: string, filters: any = {}): Promise<ControlEscolarLoadedStudents> => {
   const schema = await getControlEscolarSchema(agentId, { requireCentral: false })
-  const localRows = await fetchLocalBaseRows(agentId, schema)
+  const localRows = await fetchLocalBaseRows(agentId, schema, filters)
 
   if (localRows.length > MAX_LOCAL_ROWS) {
     throw createError({
@@ -623,9 +854,11 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
 
   const status = normalizeText(filters.status || '')
   if (status && status !== 'all') {
+    if (status === 'inscritos') result = result.filter((student) => ['inscrito', 'baja_inscrita'].includes(student.enrollmentState))
+    if (status === 'no_inscritos') result = result.filter((student) => student.enrollmentState === 'no_inscrito')
     if (status === 'active') result = result.filter((student) => student.status === 'Activo')
     if (status === 'inactive') result = result.filter((student) => student.status !== 'Activo')
-    if (status === 'baja') result = result.filter((student) => student.status === 'Baja')
+    if (status === 'baja') result = result.filter((student) => student.status === 'Baja' || student.enrollmentState === 'baja_inscrita')
   }
 
   const nivel = normalizeText(filters.nivel || filters.program || '').toLowerCase()
@@ -643,6 +876,8 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
     if (missing === 'phone') result = result.filter((student) => student.missingFields.includes('teléfono'))
     if (missing === 'email') result = result.filter((student) => student.missingFields.includes('email'))
     if (missing === 'guardian') result = result.filter((student) => student.missingFields.includes('tutor'))
+    if (missing === 'contact') result = result.filter((student) => student.missingFields.includes('teléfono') || student.missingFields.includes('email') || student.missingFields.includes('tutor'))
+    if (missing === 'incomplete') result = result.filter((student) => student.missingFields.length > 0)
     if (missing === 'overlay') result = result.filter((student) => !student.overlayExists)
   }
 
@@ -667,7 +902,7 @@ const buildCatalogs = (students: ControlEscolarStudentRow[]) => ({
 export const fetchControlEscolarStudents = async (agentId: string, filters: any) => {
   const page = Math.max(1, Number(filters.page || 1) || 1)
   const limit = Math.min(100, Math.max(10, Number(filters.limit || 25) || 25))
-  const loaded = await fetchAllNormalizedStudents(agentId)
+  const loaded = await fetchAllNormalizedStudents(agentId, filters)
   const allStudents = loaded.students
   const filtered = applyFilters(allStudents, filters)
   const offset = (page - 1) * limit
@@ -685,8 +920,8 @@ export const fetchControlEscolarStudents = async (agentId: string, filters: any)
   }
 }
 
-export const fetchControlEscolarKpis = async (agentId: string) => {
-  const loaded = await fetchAllNormalizedStudents(agentId)
+export const fetchControlEscolarKpis = async (agentId: string, filters: any = {}) => {
+  const loaded = await fetchAllNormalizedStudents(agentId, filters)
   const students = loaded.students
   const byNivel = new Map<string, number>()
   const byGrupo = new Map<string, number>()
@@ -698,13 +933,19 @@ export const fetchControlEscolarKpis = async (agentId: string) => {
   })
 
   const active = students.filter((student) => student.status === 'Activo').length
+  const inscritos = students.filter((student) => ['inscrito', 'baja_inscrita'].includes(student.enrollmentState)).length
+  const noInscritos = students.filter((student) => student.enrollmentState === 'no_inscrito').length
+  const bajas = students.filter((student) => student.status === 'Baja' || student.enrollmentState === 'baja_inscrita').length
   const missing = (field: string) => students.filter((student) => student.missingFields.includes(field)).length
 
   return {
-    totalInscritos: students.length,
+    totalInscritos: inscritos,
+    totalVisible: students.length,
+    inscritos,
+    noInscritos,
     activos: active,
     inactivos: students.length - active,
-    bajas: students.filter((student) => student.status === 'Baja').length,
+    bajas,
     nuevosOverlay: students.filter((student) => !student.overlayExists).length,
     expedientesIncompletos: students.filter((student) => student.missingFields.length > 0).length,
     sinCurp: missing('curp'),
@@ -755,7 +996,7 @@ const normalizePatchValue = (field: string, value: unknown) => {
   return normalizeNullable(value, 255)
 }
 
-export const updateControlEscolarStudent = async (agentId: string, matricula: string, body: MatriculaPatch, user: AuthSessionUser) => {
+export const updateControlEscolarStudent = async (agentId: string, matricula: string, body: MatriculaPatch, user: AuthSessionUser, filters: any = {}) => {
   const normalizedMatricula = normalizeText(matricula, 64)
   if (!normalizedMatricula) {
     throw createError({ statusCode: 400, message: 'Matrícula inválida.' })
@@ -765,6 +1006,19 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
   const [baseRow] = await query<any[]>(`SELECT matricula, ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel FROM base b WHERE b.matricula = ? LIMIT 1`, [normalizedMatricula])
   if (!baseRow) {
     throw createError({ statusCode: 404, message: 'El alumno no existe en base. Control Escolar no crea alumnos locales.' })
+  }
+
+  const scopeFilters = {
+    ciclo: filters.ciclo,
+    cicloKey: filters.cicloKey,
+    targetCiclo: filters.targetCiclo,
+    concepts: filters.concepts,
+    enrollmentConcepts: filters.enrollmentConcepts
+  }
+  const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters)
+  const canSeeStudent = visibleScope.students.some((student) => student.matricula === normalizedMatricula)
+  if (!canSeeStudent) {
+    throw createError({ statusCode: 403, message: 'El alumno no está dentro del alcance visible de Control Escolar para este ciclo y plantel.' })
   }
 
   const requestedFields = Object.keys(body || {})
@@ -838,7 +1092,7 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
   // TODO: Wire this into the project audit log if a Control Escolar audit table/pattern is introduced.
   console.info('[Control Escolar] centralized matricula overlay updated', auditContext)
 
-  const result = await fetchControlEscolarStudents(agentId, { search: normalizedMatricula, page: 1, limit: 10 })
+  const result = await fetchControlEscolarStudents(agentId, { ...scopeFilters, search: normalizedMatricula, page: 1, limit: 10 })
   return { success: true, student: result.data.find((student) => student.matricula === normalizedMatricula) || result.data[0] || null }
 }
 
@@ -848,6 +1102,6 @@ export const runControlEscolar = async <T>(event: any, agentId: string, callback
 }
 
 export const fetchControlEscolarExportRows = async (agentId: string, filters: any) => {
-  const loaded = await fetchAllNormalizedStudents(agentId)
+  const loaded = await fetchAllNormalizedStudents(agentId, filters)
   return applyFilters(loaded.students, filters).slice(0, 5000)
 }
