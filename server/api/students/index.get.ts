@@ -65,6 +65,16 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     params.push(...plantelCandidates)
   }
 
+  const enrollmentConceptSet = new Set(enrollmentConceptIds)
+  const rowHasCurrentEnrollmentEvidence = (row: any) => {
+    if (!enrollmentConceptSet.size) return false
+    return parseEnrollmentConceptIds([
+      row.conceptoIdsPagados,
+      row.conceptoIdsCargados,
+      row.conceptoIdsCicloActual
+    ]).some(conceptId => enrollmentConceptSet.has(conceptId))
+  }
+
   if (q) {
     whereClause += " AND (A.nombreCompleto LIKE ? OR A.matricula = ?)"
     params.push(`%${q}%`, q)
@@ -177,9 +187,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   
   const mapped = rows.flatMap(r => {
     const promoted = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey, r.nivelBase)
-    if (promoted.outOfScope) return []
+    const hasCurrentEnrollmentEvidence = rowHasCurrentEnrollmentEvidence(r)
+    if (promoted.outOfScope && !hasCurrentEnrollmentEvidence) return []
     const historicalConceptIds = historicalEnrollmentEvidence.get(String(r.matricula || '').trim()) || ''
-    if (isScopedToActivePlantel && normalizePlantel(promoted.plantel) !== normalizePlantel(user.active_plantel)) return []
+    if (isScopedToActivePlantel && !hasCurrentEnrollmentEvidence && normalizePlantel(promoted.plantel) !== normalizePlantel(user.active_plantel)) return []
 
     const tipoIngreso = resolveTipoIngreso({
       ...r,
@@ -196,8 +207,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       ...r,
       conceptoIdsTodos: historicalConceptIds,
       conceptoIdsHistoricos: historicalConceptIds,
+      currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,
+      inscritoCicloActual: hasCurrentEnrollmentEvidence,
       plantelBase: r.plantel,
-      plantel: promoted.plantel,
+      plantel: promoted.outOfScope && hasCurrentEnrollmentEvidence && isScopedToActivePlantel ? normalizePlantel(user.active_plantel) : promoted.plantel,
       grado: displayGrado(promoted.grado),
       nivel: promoted.nivel,
       tipoIngreso

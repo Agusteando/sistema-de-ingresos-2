@@ -1,6 +1,5 @@
-fix(students): stabilize KPI filters and baja refresh state
+fix: keep baja-with-motive students in current-cycle bajas filter
 
-- Keep dashboard filters in valid canonical states and reset stranded grade/group filters after data changes.
-- Preserve enrollment concept IDs from cached data and avoid clearing them when remote config returns no usable IDs.
-- Include inactive students with current-cycle enrollment evidence in the students reload scope so baja updates remain countable.
-- Refresh students and KPI trend data after baja updates without dropping the dashboard into empty stale state.
+- Preserve baja rows with current-cycle enrollment evidence even when their academic projection is out of scope.
+- Expose server-side current enrollment evidence to KPI/list predicates so motive-based baja statuses still count under Bajas.
+- Keep existing cache, KPI, Control Escolar, SQL console, and bulk ciclo behavior unchanged.
