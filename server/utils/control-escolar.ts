@@ -444,6 +444,56 @@ const overlayStudentRow = (agentId: string, base: any, overlay?: any): ControlEs
   return normalized
 }
 
+
+const compactRawRecord = (row: any) => {
+  const result: Record<string, any> = {}
+  Object.entries(row || {}).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === '') return
+    if (typeof value === 'string' && value.trim() === '') return
+    result[key] = value
+  })
+  return result
+}
+
+const fetchFullCentralMatriculaRow = async (matricula: string) => {
+  const rows = await controlEscolarCentralQuery<any[]>(`SELECT * FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`, [matricula])
+  return rows[0] || null
+}
+
+export const fetchControlEscolarStudentDetail = async (agentId: string, matricula: string) => {
+  const normalizedMatricula = normalizeText(matricula, 64)
+  if (!normalizedMatricula) {
+    throw createError({ statusCode: 400, message: 'Matrícula inválida.' })
+  }
+
+  const schema = await getControlEscolarSchema(agentId)
+  const fields = buildLocalBaseSelect(agentId, schema.base)
+  const [baseRow] = await query<any[]>(`
+    SELECT ${fields.join(',\n      ')}
+    FROM base b
+    WHERE b.matricula = ?
+    LIMIT 1
+  `, [normalizedMatricula])
+
+  if (!baseRow) {
+    throw createError({ statusCode: 404, message: 'Alumno no encontrado en base para el plantel activo.' })
+  }
+
+  const [rawBaseRows, rawMatricula] = await Promise.all([
+    query<any[]>(`SELECT * FROM base WHERE matricula = ? LIMIT 1`, [normalizedMatricula]),
+    fetchFullCentralMatriculaRow(normalizedMatricula)
+  ])
+
+  const normalized = overlayStudentRow(agentId, baseRow, rawMatricula)
+  return {
+    ...normalized,
+    readOnly: true,
+    detailSource: rawMatricula ? 'base+matricula' : 'base',
+    rawBase: compactRawRecord(rawBaseRows[0] || {}),
+    rawMatricula: compactRawRecord(rawMatricula || {})
+  }
+}
+
 const compareStudents = (a: ControlEscolarStudentRow, b: ControlEscolarStudentRow) => {
   const statusA = a.status === 'Activo' ? 0 : 1
   const statusB = b.status === 'Activo' ? 0 : 1

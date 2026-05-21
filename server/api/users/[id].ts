@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { query } from '../../utils/db'
+import { deleteExternalUser, isExternalUsersAvailable, updateExternalUser } from '../../utils/external-users'
 
 export default defineEventHandler(async (event) => {
   const id = event.context.params?.id
@@ -12,6 +13,10 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'PUT') {
     const body = await readBody(event)
+    if (await isExternalUsersAvailable()) {
+      return await updateExternalUser(id, body)
+    }
+
     const plantelesStr = Array.isArray(body.planteles) ? body.planteles.join(',') : String(body.planteles || '')
     const updates = ['username = ?', 'email = ?', 'planteles = ?', 'role = ?', 'plantel = ?']
     const params: any[] = [
@@ -33,6 +38,10 @@ export default defineEventHandler(async (event) => {
   }
 
   if (method === 'DELETE') {
+    if (await isExternalUsersAvailable()) {
+      return await deleteExternalUser(id)
+    }
+
     await query('DELETE FROM users WHERE id = ?', [id])
     return { success: true }
   }

@@ -1,5 +1,9 @@
-fix: keep baja-with-motive students in current-cycle bajas filter
+Fix student detail and isolate ROLE_CTRL user management
 
-- Preserve baja rows with current-cycle enrollment evidence even when their academic projection is out of scope.
-- Expose server-side current enrollment evidence to KPI/list predicates so motive-based baja statuses still count under Bajas.
-- Keep existing cache, KPI, Control Escolar, SQL console, and bulk ciclo behavior unchanged.
+- Add read-only Control Escolar detail panel to the student detail view.
+- Load consolidated base + centralized matricula data without exposing editable fields.
+- Include parent contact emails, grupo, academic profile, baja follow-up, and available raw fields.
+- Add a bounded student detail endpoint that does not affect the main students fetch.
+- Move user management reads/writes to the external users table when available.
+- Keep external ROLE_CTRL lookup isolated to login cookies and Control Escolar navigation only.
+- Avoid centralized users as a required gate for normal student APIs.

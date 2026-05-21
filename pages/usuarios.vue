@@ -1,8 +1,8 @@
 <template>
   <div class="max-w-6xl mx-auto">
     <div class="flex justify-between items-center mb-6">
-      <h2 class="text-xl font-bold text-gray-800 tracking-tight">Usuarios</h2>
-      <button class="btn btn-primary" @click="openModal()"><LucideUserPlus :size="16"/> Crear usuario</button>
+      <h2 class="text-xl font-bold text-gray-800 tracking-tight">Usuarios / ROLE_CTRL</h2>
+      <button class="btn btn-primary" @click="openModal()"><LucideUserPlus :size="16"/> Registrar usuario</button>
     </div>
 
     <div class="card table-wrapper">
@@ -13,7 +13,7 @@
             <th>Nombre</th>
             <th>Correo</th>
             <th>Planteles</th>
-            <th>Rol</th>
+            <th>Acceso</th>
             <th class="text-center w-24">Acciones</th>
           </tr>
         </thead>
@@ -48,7 +48,7 @@
       <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
         <div class="modal-container large">
           <div class="modal-header">
-            <h2 class="text-lg font-bold text-gray-800">{{ editingId ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
+            <h2 class="text-lg font-bold text-gray-800">{{ editingId ? 'Editar acceso' : 'Registrar acceso' }}</h2>
           </div>
           <form @submit.prevent="saveUser">
             <div class="modal-content grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -59,16 +59,16 @@
               </div>
               <div class="form-group mb-0 col-span-2 md:col-span-1"><label class="form-label">Correo (Google Auth)</label><input type="email" v-model="form.email" class="input-field"></div>
               <div class="form-group mb-0 col-span-2 md:col-span-1">
-                <label class="form-label">Rol</label>
+                <label class="form-label">Acceso de workspace</label>
                 <select v-model="form.role" class="input-field" required>
-                  <option value="plantel">Usuario (Acceso normal)</option>
-                  <option value="global">Super Admin (Acceso total)</option>
-                  <option value="ROLE_CTRL">Control Escolar</option>
+                  <option value="plantel">Acceso normal</option>
+                  <option value="global">Super Admin</option>
+                  <option value="ROLE_CTRL">ROLE_CTRL · Control Escolar</option>
                 </select>
               </div>
               
               <div class="form-group mb-0 col-span-2 mt-2 p-4 bg-white border border-gray-200 rounded-lg">
-                <label class="form-label mb-2">Planteles permitidos</label>
+                <label class="form-label mb-2">Planteles donde puede operar</label>
                 <div class="grid grid-cols-4 md:grid-cols-6 gap-2">
                   <label v-for="p in PLANTELES_LIST" :key="p" class="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-gray-700 bg-gray-50 px-2 py-1.5 rounded-md border border-gray-200 hover:border-brand-leaf transition-colors" :class="{'bg-brand-leaf/5 border-brand-leaf': form.planteles.includes(p)}">
                     <input type="checkbox" :value="p" v-model="form.planteles" class="w-3.5 h-3.5 text-brand-leaf rounded border-gray-300">
@@ -175,7 +175,7 @@ const saveUser = async () => {
     const url = editingId.value ? `/api/users/${editingId.value}` : '/api/users'
     const method = editingId.value ? 'PUT' : 'POST'
     await $fetch(url, { method, body: { ...form.value } })
-    show('Usuario guardado.')
+    show('Acceso guardado en usuarios externos.')
     showModal.value = false
     loadUsers()
   } catch (e) { show('Error al guardar', 'danger') }

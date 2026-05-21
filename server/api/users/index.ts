@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { query } from '../../utils/db'
+import { createExternalUser, isExternalUsersAvailable, listExternalUsers } from '../../utils/external-users'
 
 export default defineEventHandler(async (event) => {
   const method = event.node.req.method
@@ -10,8 +11,12 @@ export default defineEventHandler(async (event) => {
   }
 
   if (method === 'GET') {
+    if (await isExternalUsersAvailable()) {
+      return await listExternalUsers()
+    }
+
     return await query(`
-      SELECT id, username, username AS displayName, email, planteles, role, created_at, avatar
+      SELECT id, username, username AS displayName, email, planteles, role, created_at, avatar, plantel
       FROM users
       ORDER BY username ASC
     `)
@@ -19,6 +24,10 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'POST') {
     const body = await readBody(event)
+    if (await isExternalUsersAvailable()) {
+      return await createExternalUser(body)
+    }
+
     const plantelesStr = Array.isArray(body.planteles) ? body.planteles.join(',') : String(body.planteles || '')
 
     await query(

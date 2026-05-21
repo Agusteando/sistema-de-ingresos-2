@@ -2,6 +2,7 @@ import { OAuth2Client } from 'google-auth-library'
 import { query, runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { hasControlEscolarRole, isControlEscolarOnlyRole, isSuperAdminRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
+import { findExternalUserByEmail, isExternalUsersAvailable } from '../../utils/external-users'
 
 const SUPERADMIN_EMAILS = new Set([
   'desarrollo.tecnologico@casitaiedis.edu.mx',
@@ -139,7 +140,28 @@ export default defineEventHandler(async (event) => {
       throw new Error('Token inválido')
     }
 
-    const user = await runWithBridgeAgentId(requestedPlantel, async () => ensureLocalUser(payload, requestedPlantel))
+    const localUser = await runWithBridgeAgentId(requestedPlantel, async () => ensureLocalUser(payload, requestedPlantel))
+    const externalUsersAvailable = await isExternalUsersAvailable().catch((error: any) => {
+      console.warn('[Auth Login] External users table unavailable; using local auth defaults', error?.message || error)
+      return false
+    })
+    const externalUser = externalUsersAvailable
+      ? await findExternalUserByEmail(payload.email).catch((error: any) => {
+          console.warn('[Auth Login] External users lookup skipped', error?.message || error)
+          return null
+        })
+      : null
+    const user = externalUsersAvailable && !isSuperAdminRole(localUser.role)
+      ? {
+          ...localUser,
+          username: externalUser?.username || localUser.username,
+          email: externalUser?.email || localUser.email,
+          role: externalUser?.role || 'plantel',
+          planteles: externalUser?.planteles || localUser.planteles,
+          plantel: externalUser?.plantel || localUser.plantel,
+          avatar: externalUser?.avatar || localUser.avatar
+        }
+      : localUser
     const role = String(user.role || 'plantel').trim() || 'plantel'
     const superAdmin = isSuperAdminRole(role)
     const controlEscolar = hasControlEscolarRole(role)
