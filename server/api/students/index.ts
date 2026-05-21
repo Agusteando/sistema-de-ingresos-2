@@ -122,7 +122,7 @@ const insertStudent = async (body: Record<string, any>, user: any, assignedPlant
     matriculaValue,
     normalizeTextValue(body.apellidoPaterno), normalizeTextValue(body.apellidoMaterno), normalizeTextValue(body.nombres),
     nombreCompleto,
-    curpInfo.normalized, curpInfo.birthDate, curpInfo.gender, basePlacement.plantel, basePlacement.nivel, basePlacement.grado, normalizeTextValue(body.grupo),
+    curpInfo.normalized, curpInfo.isEmpty ? null : curpInfo.birthDate, curpInfo.isEmpty ? null : curpInfo.gender, basePlacement.plantel, basePlacement.nivel, basePlacement.grado, normalizeTextValue(body.grupo),
     normalizeTextValue(body.padre), normalizeTextValue(body.telefono), normalizeTextValue(body.correo), normalizeTextValue(user?.name), cicloKey, body.estatus || 'Activo'
   ])
 
@@ -382,7 +382,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     }
 
     const curpInfo = parseCurp(body.curp)
-    if (!curpInfo.isValid) {
+    if (!curpInfo.isEmpty && !curpInfo.isValid) {
       throw createError({ statusCode: 400, message: curpInfo.message || 'CURP inválida.' })
     }
 

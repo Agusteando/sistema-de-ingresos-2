@@ -61,7 +61,7 @@
             <span>{{ activeFilterLabel }}</span><b aria-hidden="true">×</b>
           </button>
           <LucideSearch class="search-icon" :size="18" />
-          <input v-model="filters.search" placeholder="Matrícula, nombre, CURP, teléfono o correo..." @keyup.enter="loadStudents" />
+          <input v-model="filters.search" placeholder="Matrícula, nombre, CURP, teléfono o correo..." />
         </div>
 
         <button type="button" :class="['ce-filter-button', { active: showAdvancedFilters || advancedFilterCount }]" @click="showAdvancedFilters = !showAdvancedFilters">
@@ -600,6 +600,7 @@ const sendingHuskyPass = ref(false)
 const loadError = ref('')
 const saveError = ref('')
 const students = ref([])
+const controlStudentsIndex = ref([])
 const selectedStudent = ref(null)
 const kpis = ref(null)
 const catalogs = reactive({ niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
@@ -615,7 +616,7 @@ const editSnapshot = ref('')
 const draftRestored = ref(false)
 const draftSavedAt = ref('')
 const pendingSelectedStudentRefresh = ref(null)
-const pagination = reactive({ page: 1, limit: 25, total: 0, pages: 1 })
+const pagination = reactive({ page: 1, limit: 8, total: 0, pages: 1 })
 const filters = reactive({ search: '', status: DEFAULT_QUICK_FILTER, quality: '', grado: '', group: '', recent: '' })
 const editForm = reactive({})
 let searchTimer = null
@@ -835,6 +836,13 @@ const buildQuery = (extra = {}) => ({
   ...extra
 })
 
+const buildIndexQuery = () => ({
+  ...buildScopeQuery(),
+  page: 1,
+  limit: 500,
+  all: '1'
+})
+
 const loadOptions = async () => {
   optionsLoading.value = true
   try {
@@ -950,16 +958,134 @@ const reconcileSelectedStudentAfterSync = (nextStudents = []) => {
   applySelectedStudentRefresh(refreshed)
 }
 
-const applyControlStudentsPayload = (response = {}, { reconcileSelection = true } = {}) => {
-  students.value = Array.isArray(response?.data) ? response.data : []
-  Object.assign(pagination, response?.pagination || { page: pagination.page, limit: pagination.limit, total: students.value.length, pages: 1 })
-  Object.assign(catalogs, response?.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
-  if (reconcileSelection) reconcileSelectedStudentAfterSync(students.value)
+const normalizeClientText = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim()
+
+const controlStudentSearchHaystack = (student = {}) => normalizeClientText([
+  student.matricula,
+  student.fullName,
+  student.nombres,
+  student.apellidoPaterno,
+  student.apellidoMaterno,
+  student.curp,
+  student.phone,
+  student.telefono,
+  student.telefonoPadre,
+  student.telefonoMadre,
+  student.email,
+  student.emailPadre,
+  student.emailMadre,
+  student.guardianName,
+  student.nombrePadre,
+  student.nombreMadre,
+  student.nivel,
+  student.grado,
+  student.group,
+  student.grupo
+].filter(Boolean).join(' '))
+
+const hasNoPrimaryContactClient = (student = {}) => ![
+  student.phone,
+  student.telefono,
+  student.telefonoPadre,
+  student.telefonoMadre,
+  student.email,
+  student.emailPadre,
+  student.emailMadre,
+  student.guardianName,
+  student.nombrePadre,
+  student.nombreMadre
+].some((value) => String(value || '').trim())
+
+const localStudentMatchesStatus = (student, status) => {
+  const normalized = normalizeClientText(status)
+  if (!normalized || normalized === 'all' || normalized === 'todos') return true
+  if (normalized === 'activos' || normalized === 'active') return student.status === 'Activo'
+  if (normalized === 'inscritos') return student.enrollmentState === 'inscrito'
+  if (normalized === 'internos') return student.enrollmentState === 'inscrito' && student.tipoIngresoValue === 'interno'
+  if (normalized === 'externos') return student.enrollmentState === 'inscrito' && student.tipoIngresoValue !== 'interno'
+  if (normalized === 'no_inscritos') return student.enrollmentState === 'no_inscrito'
+  if (normalized === 'bajas' || normalized === 'baja') return student.status === 'Baja' || student.enrollmentState === 'baja_inscrita' || student.enrollmentState === 'baja'
+  if (normalized === 'sin_ficha' || normalized === 'sin_ficha_matricula') return !student.overlayExists
+  if (normalized === 'sin_contacto') return hasNoPrimaryContactClient(student)
+  return true
 }
 
-const persistCurrentControlStudentsCache = () => writeCachedControlStudents(buildQuery(), {
-  data: students.value,
-  pagination: { ...pagination },
+const localStudentMatchesQuality = (student, quality) => {
+  const normalized = normalizeClientText(quality)
+  if (!normalized || normalized === 'all') return true
+  const missing = normalizedMissingFields(student)
+  if (normalized === 'complete' || normalized === 'completo') return missing.length === 0
+  if (normalized === 'incomplete' || normalized === 'incompleto') return missing.length > 0
+  if (normalized === 'curp') return missing.includes('curp')
+  if (normalized === 'phone' || normalized === 'telefono') return missing.includes('teléfono') || missing.includes('telefono')
+  if (normalized === 'email') return missing.includes('email')
+  if (normalized === 'guardian' || normalized === 'tutor') return missing.includes('tutor')
+  if (normalized === 'contact' || normalized === 'contacto') return hasNoPrimaryContactClient(student)
+  if (normalized === 'overlay' || normalized === 'sin_ficha' || normalized === 'sin_ficha_matricula') return !student.overlayExists
+  return true
+}
+
+const localStudentMatchesRecent = (student, recent) => {
+  const normalized = normalizeClientText(recent)
+  if (!normalized || normalized === 'all') return true
+  const days = normalized === '7d' ? 7 : normalized === '30d' ? 30 : normalized === '90d' ? 90 : 0
+  if (!days) return true
+  const time = student.updatedAt ? new Date(student.updatedAt).getTime() : 0
+  return Number.isFinite(time) && time >= Date.now() - days * 24 * 60 * 60 * 1000
+}
+
+const filteredControlStudents = () => {
+  const search = normalizeClientText(filters.search)
+  const grado = normalizeClientText(filters.grado)
+  const grupo = String(filters.group || '').trim()
+
+  return controlStudentsIndex.value.filter((student) => {
+    if (search && !controlStudentSearchHaystack(student).includes(search)) return false
+    if (!localStudentMatchesStatus(student, filters.status)) return false
+    if (grado && normalizeClientText(student.grado) !== grado) return false
+    if (grupo && grupo !== 'all' && String(student.group || student.grupo || '').trim() !== grupo) return false
+    if (!localStudentMatchesQuality(student, filters.quality)) return false
+    if (!localStudentMatchesRecent(student, filters.recent)) return false
+    return true
+  })
+}
+
+const applyInstantStudentFilters = ({ reconcileSelection = false } = {}) => {
+  const filtered = filteredControlStudents()
+  const safeLimit = Math.max(1, Number(pagination.limit || 8))
+  const pages = Math.max(1, Math.ceil(filtered.length / safeLimit))
+  const safePage = Math.min(Math.max(1, Number(pagination.page || 1)), pages)
+  if (pagination.page !== safePage) pagination.page = safePage
+
+  const offset = (safePage - 1) * safeLimit
+  students.value = filtered.slice(offset, offset + safeLimit)
+  Object.assign(pagination, { page: safePage, limit: safeLimit, total: filtered.length, pages })
+  if (reconcileSelection) reconcileSelectedStudentAfterSync(filtered)
+  nextTick(scheduleWorkspaceScaleUpdate)
+}
+
+const applyControlStudentsPayload = (response = {}, { reconcileSelection = true } = {}) => {
+  controlStudentsIndex.value = Array.isArray(response?.data) ? response.data : []
+  Object.assign(catalogs, response?.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
+  applyInstantStudentFilters({ reconcileSelection })
+}
+
+const replaceControlStudentInIndex = (student) => {
+  if (!student?.matricula) return
+  const selectedKey = normalizeMatriculaKey(student.matricula)
+  const index = controlStudentsIndex.value.findIndex((candidate) => normalizeMatriculaKey(candidate.matricula) === selectedKey)
+  if (index >= 0) controlStudentsIndex.value.splice(index, 1, student)
+  else controlStudentsIndex.value.unshift(student)
+  applyInstantStudentFilters({ reconcileSelection: false })
+}
+
+const persistCurrentControlStudentsCache = () => writeCachedControlStudents(buildIndexQuery(), {
+  data: controlStudentsIndex.value,
+  pagination: { page: 1, limit: Math.max(controlStudentsIndex.value.length, 1), total: controlStudentsIndex.value.length, pages: 1 },
   catalogs: { ...catalogs, gruposPorGrado: { ...(catalogs.gruposPorGrado || {}) } }
 })
 
@@ -968,15 +1094,14 @@ const loadStudents = async (options = {}) => {
 
   const { useCache = true } = options
   const requestId = ++controlStudentsRequestId
-  const query = buildQuery()
+  const query = buildIndexQuery()
   const cached = useCache ? readCachedControlStudents(query) : null
-  const hadStudents = students.value.length > 0
+  const hadStudents = controlStudentsIndex.value.length > 0 || students.value.length > 0
 
   if (cached) {
     applyControlStudentsPayload(cached)
     loadError.value = ''
     studentsLoading.value = false
-    nextTick(scheduleWorkspaceScaleUpdate)
   } else if (!hadStudents) {
     studentsLoading.value = true
   } else {
@@ -994,10 +1119,13 @@ const loadStudents = async (options = {}) => {
     if (requestId !== controlStudentsRequestId) return
 
     if (!cached && !hadStudents) {
+      controlStudentsIndex.value = []
       students.value = []
+      Object.assign(pagination, { page: 1, total: 0, pages: 1 })
       loadError.value = error?.data?.message || error?.message || 'Plantel fuera de línea o sin respuesta.'
     } else {
       loadError.value = ''
+      applyInstantStudentFilters()
     }
   } finally {
     if (requestId === controlStudentsRequestId) {
@@ -1008,8 +1136,9 @@ const loadStudents = async (options = {}) => {
 }
 
 
+
 const refreshAll = async () => {
-  await Promise.all([loadKpis(), loadStudents()])
+  await Promise.all([loadKpis(), loadStudents({ useCache: false })])
 }
 
 const clearQuickFilters = () => {
@@ -1172,8 +1301,7 @@ const saveStudent = async () => {
       body: payload
     })
     if (response.student) {
-      const index = students.value.findIndex((student) => student.matricula === response.student.matricula)
-      if (index >= 0) students.value[index] = response.student
+      replaceControlStudentInIndex(response.student)
       selectedStudent.value = response.student
       pendingSelectedStudentRefresh.value = null
       clearEditDraft()
@@ -1325,11 +1453,11 @@ watch(hasUnsavedChanges, (isDirty) => {
 
 watch(() => ({ ...filters }), () => {
   pagination.page = 1
-  window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(loadStudents, 320)
+  if (process.client) window.clearTimeout(searchTimer)
+  applyInstantStudentFilters()
 }, { deep: true })
 
-watch(() => pagination.page, () => loadStudents())
+watch(() => pagination.page, () => applyInstantStudentFilters())
 watch(() => [currentCicloKey.value, externalConcepts.value.join('|')], () => {
   pagination.page = 1
   refreshAll()
@@ -1815,10 +1943,10 @@ onMounted(async () => {
   --student-list-balance-col: 58px;
   --student-list-quality-col: 236px;
   --student-list-action-col: 42px;
-  --student-list-row-height: 77px;
-  --student-list-grade-size: 54px;
-  --student-list-grade-height: 58px;
-  --student-list-crest-size: 34px;
+  --student-list-row-height: 88px;
+  --student-list-grade-size: 58px;
+  --student-list-grade-height: 62px;
+  --student-list-crest-size: 36px;
 }
 
 .ce-workspace.has-empty-detail .ce-student-row {
@@ -1828,6 +1956,10 @@ onMounted(async () => {
 }
 
 .ce-workspace.has-detail .ce-student-row {
+  --student-list-row-height: 84px;
+  --student-list-grade-size: 56px;
+  --student-list-grade-height: 60px;
+  --student-list-crest-size: 35px;
   grid-template-columns: minmax(0, 1fr) var(--student-list-action-col);
 }
 
