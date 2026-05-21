@@ -1,1 +1,1 @@
-fix: polish Control Escolar workflow, layout, imports and sidebar
+fix: stabilize student group fallbacks and Control Escolar layout

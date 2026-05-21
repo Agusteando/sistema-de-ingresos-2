@@ -34,7 +34,10 @@
             <span>{{ item.label }}</span>
             <strong>{{ formatNumber(item.value) }}</strong>
           </span>
-          <UiKpiSparkline :values="item.sparkline" />
+          <span class="ce-kpi-mass" :aria-label="item.volumeAria">
+            <i v-for="unit in item.massUnits" :key="`${item.key}-mass-${unit.index}`" :class="{ active: unit.active }"></i>
+          </span>
+          <small class="ce-kpi-volume-label">{{ item.volumeLabel }}</small>
         </button>
       </div>
     </section>
@@ -147,8 +150,8 @@
                     :style="studentPresentationStyle(student)"
                     @click="selectStudent(student)"
                   >
-                    <UiGroupIcon v-if="student.group" class="student-group-watermark" :label="student.group" />
-                    <span :class="['student-identity', 'ce-student-identity', student.group ? 'has-group-icon' : 'no-group-icon']">
+                    <UiGroupIcon class="student-group-watermark" :class="{ 'is-missing-group': controlMissingGroup(student) }" :label="controlGroupLabel(student)" :missing="controlMissingGroup(student)" />
+                    <span class="student-identity ce-student-identity has-group-icon">
                       <span :class="['ce-row-check', { active: selectedStudent?.matricula === student.matricula }]" aria-hidden="true">{{ selectedStudent?.matricula === student.matricula ? '✓' : '' }}</span>
                       <StudentGradePhotoCard
                         class="student-row-grade-card"
@@ -157,8 +160,8 @@
                         :photo-loading="false"
                         :is-enrolled="student.status === 'Activo'"
                       />
-                      <span v-if="student.group" class="student-group-sigil" :title="student.group">
-                        <UiGroupIcon :label="student.group" />
+                      <span :class="['student-group-sigil', { 'is-missing': controlMissingGroup(student) }]" :title="controlGroupTitle(student)">
+                        <UiGroupIcon :label="controlGroupLabel(student)" :missing="controlMissingGroup(student)" />
                       </span>
                       <span class="student-copy">
                         <strong :title="student.fullName">{{ student.fullName || 'Alumno sin nombre' }}</strong>
@@ -229,7 +232,7 @@
                     <strong>{{ selectedStudent.fullName }}</strong>
                     <div class="ce-profile-pills">
                       <span>{{ selectedStudent.grado || 'Sin grado' }}</span>
-                      <span v-if="selectedStudent.group">Grupo {{ selectedStudent.group }}</span>
+                      <span :class="{ warning: controlMissingGroup(selectedStudent) }">{{ controlMissingGroup(selectedStudent) ? 'Sin grupo' : `Grupo ${controlGroupLabel(selectedStudent)}` }}</span>
                       <span>{{ selectedStudent.nivel || 'Sin nivel' }}</span>
                     </div>
                     <p>Plantel {{ selectedStudent.plantel || selectedAgentId }}</p>
@@ -239,7 +242,7 @@
                     <strong>{{ selectedStudent.guardianName || 'Sin tutor capturado' }}</strong>
                     <span>{{ selectedStudent.phone || selectedStudent.telefonoPadre || selectedStudent.telefonoMadre || 'Sin teléfono' }}</span>
                   </div>
-                  <UiGroupIcon v-if="selectedStudent.group" class="ce-profile-watermark" :label="selectedStudent.group" />
+                  <UiGroupIcon class="ce-profile-watermark" :class="{ 'is-missing-group': controlMissingGroup(selectedStudent) }" :label="controlGroupLabel(selectedStudent)" :missing="controlMissingGroup(selectedStudent)" />
                 </section>
 
                 <section class="ce-data-section">
@@ -491,7 +494,6 @@ import {
 import UiButton from '~/components/ui/UiButton.vue'
 import UiChip from '~/components/ui/UiChip.vue'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
-import UiKpiSparkline from '~/components/ui/UiKpiSparkline.vue'
 import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
 import { useStudentsWorkspaceScale } from '~/composables/useStudentsWorkspaceScale'
 import { useToast } from '~/composables/useToast'
@@ -606,15 +608,39 @@ const qualityFilters = computed(() => {
   ]
 })
 
+const MASS_UNIT_COUNT = 10
+const buildMassUnits = (value, total) => {
+  const safeValue = Math.max(0, Number(value || 0))
+  const safeTotal = Math.max(0, Number(total || 0))
+  const ratio = safeTotal > 0 ? Math.min(1, safeValue / safeTotal) : 0
+  const activeUnits = safeValue > 0 ? Math.max(1, Math.ceil(ratio * MASS_UNIT_COUNT)) : 0
+  return Array.from({ length: MASS_UNIT_COUNT }, (_, index) => ({ index, active: index < activeUnits }))
+}
+const volumePercent = (value, total) => {
+  const safeValue = Math.max(0, Number(value || 0))
+  const safeTotal = Math.max(0, Number(total || 0))
+  if (!safeTotal) return 0
+  return Math.min(100, Math.round((safeValue / safeTotal) * 100))
+}
+const withVolume = (card, total) => {
+  const percent = card.key === 'inscritos' && Number(card.value || 0) > 0 ? 100 : volumePercent(card.value, total)
+  return {
+    ...card,
+    massUnits: buildMassUnits(card.key === 'inscritos' ? total : card.value, total),
+    volumeLabel: card.key === 'inscritos' ? 'Total base' : `${percent}% de inscritos`,
+    volumeAria: `${card.label}: ${formatNumber(card.value)}; ${card.key === 'inscritos' ? 'total de inscritos' : `${percent}% del total de inscritos`}`
+  }
+}
 const kpiCards = computed(() => {
   const data = kpis.value || {}
+  const total = Number(data.inscritos || data.totalInscritos || 0)
   return [
-    { key: 'inscritos', label: 'Inscritos', value: data.inscritos || data.totalInscritos || 0, tone: 'kpi-green', icon: LucideUsersRound, sparkline: data.sparklineInscritos || [0, data.inscritos || data.totalInscritos || 0] },
-    { key: 'internos', label: 'Internos', value: data.internos || 0, tone: 'kpi-teal', icon: LucideUserCheck, sparkline: data.sparklineInternos || [0, data.internos || 0] },
-    { key: 'externos', label: 'Externos', value: data.externos || 0, tone: 'kpi-blue', icon: LucideGlobe2, sparkline: data.sparklineExternos || [0, data.externos || 0] },
-    { key: 'no_inscritos', label: 'No inscritos', value: data.noInscritos || 0, tone: 'kpi-red', icon: LucideUserX, sparkline: data.sparklineNoInscritos || [0, data.noInscritos || 0] },
-    { key: 'bajas', label: 'Bajas', value: data.bajas || 0, tone: 'kpi-gray', icon: LucideUserX, sparkline: data.sparklineBajas || [0, data.bajas || 0] }
-  ]
+    { key: 'inscritos', label: 'Inscritos', value: total, tone: 'kpi-green', icon: LucideUsersRound },
+    { key: 'internos', label: 'Internos', value: data.internos || 0, tone: 'kpi-teal', icon: LucideUserCheck },
+    { key: 'externos', label: 'Externos', value: data.externos || 0, tone: 'kpi-blue', icon: LucideGlobe2 },
+    { key: 'no_inscritos', label: 'No inscritos', value: data.noInscritos || 0, tone: 'kpi-red', icon: LucideUserX },
+    { key: 'bajas', label: 'Bajas', value: data.bajas || 0, tone: 'kpi-gray', icon: LucideUserX }
+  ].map(card => withVolume(card, total))
 })
 
 
@@ -628,7 +654,16 @@ const requiredDataFields = [
 const formatNumber = (value) => Number(value || 0).toLocaleString('es-MX')
 const statusLabel = (value) => ({ all: 'Todos', inscritos: 'Inscritos', activos: 'Activos', active: 'Activos', internos: 'Internos', externos: 'Externos', no_inscritos: 'No inscritos', bajas: 'Bajas', baja: 'Bajas', sin_contacto: 'Sin contacto' }[value] || value)
 const qualityLabel = (value) => ({ complete: 'Completo', incomplete: 'Expediente incompleto', curp: 'Sin CURP', phone: 'Sin teléfono', email: 'Sin email', guardian: 'Sin tutor', contact: 'Sin contacto' }[value] || value)
-const compactAcademic = (student) => [student.grado, student.group ? `Grupo ${student.group}` : '', student.nivel].filter(Boolean).join(' · ') || 'Sin datos académicos'
+const controlGroupLabel = (student) => {
+  const value = String(student?.group ?? student?.grupo ?? '').replaceAll('"', '').trim()
+  return value && value.toLowerCase() !== 'null' ? value : ''
+}
+const controlMissingGroup = (student) => !controlGroupLabel(student)
+const controlGroupTitle = (student) => {
+  const group = controlGroupLabel(student)
+  return group ? `Grupo ${group}` : 'Sin grupo'
+}
+const compactAcademic = (student) => [student.grado, controlGroupLabel(student) ? `Grupo ${controlGroupLabel(student)}` : 'Sin grupo', student.nivel].filter(Boolean).join(' · ') || 'Sin datos académicos'
 const statusTone = (student) => String(student?.status || '').toLowerCase() === 'baja' ? 'danger' : String(student?.status || '').toLowerCase() === 'activo' ? 'success' : 'neutral'
 const completionFor = (student) => {
   const total = requiredDataFields.length
@@ -1183,6 +1218,7 @@ onMounted(async () => {
 .ce-kpi-strip .kpi-card {
   height: 64px;
   min-height: 64px;
+  padding-right: 14px;
 }
 
 .ce-kpi-strip .kpi-icon {
@@ -1196,6 +1232,54 @@ onMounted(async () => {
 
 .ce-kpi-strip .kpi-card.active {
   background: linear-gradient(90deg, rgba(86, 171, 73, .13), rgba(255,255,255,0));
+}
+
+.ce-kpi-mass {
+  position: absolute;
+  right: 12px;
+  bottom: 9px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(10, 4px);
+  gap: 3px;
+  align-items: end;
+  color: var(--kpi-color, #3f9138);
+  pointer-events: none;
+}
+
+.ce-kpi-mass i {
+  display: block;
+  width: 4px;
+  height: 14px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: .14;
+  transform-origin: bottom;
+}
+
+.ce-kpi-mass i.active {
+  opacity: .72;
+}
+
+.ce-kpi-mass i:nth-child(2n) { height: 18px; }
+.ce-kpi-mass i:nth-child(3n) { height: 11px; }
+
+.ce-kpi-volume-label {
+  position: absolute;
+  right: 12px;
+  top: 9px;
+  z-index: 1;
+  max-width: 96px;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--kpi-color, #3f9138) 72%, #657088);
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: right;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .ce-program-rail {
@@ -1707,9 +1791,10 @@ onMounted(async () => {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   overflow-y: auto;
-  padding: 12px 14px 14px;
+  overscroll-behavior: contain;
+  padding: 10px 14px 0;
   background: #fff;
 }
 
@@ -1725,19 +1810,19 @@ onMounted(async () => {
 .ce-profile-card {
   position: relative;
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) minmax(220px, .5fr);
+  grid-template-columns: 82px minmax(0, 1fr) minmax(200px, .45fr);
   align-items: center;
-  gap: 16px;
-  min-height: 104px;
+  gap: 14px;
+  min-height: 88px;
   overflow: hidden;
-  padding: 13px 18px;
+  padding: 10px 16px;
   background: linear-gradient(110deg, #fff 0%, #fff 68%, #f4fbf2 100%);
 }
 
 .ce-detail-photo {
-  --student-grade-photo-width: 86px;
-  --student-grade-photo-height: 80px;
-  --student-grade-photo-radius: 14px;
+  --student-grade-photo-width: 76px;
+  --student-grade-photo-height: 70px;
+  --student-grade-photo-radius: 13px;
 }
 
 .ce-profile-copy,
@@ -1774,6 +1859,11 @@ onMounted(async () => {
   color: #20882d;
   font-size: 10px;
   font-weight: 850;
+}
+
+.ce-profile-pills span.warning {
+  background: #fff6e7;
+  color: #b36a16;
 }
 
 .ce-profile-copy p {
@@ -1818,12 +1908,17 @@ onMounted(async () => {
   transform: translateY(-50%) rotate(-7deg);
 }
 
+.ce-profile-watermark.is-missing-group {
+  color: #b36a16;
+  opacity: .11;
+}
+
 .ce-data-section {
   display: grid;
-  grid-template-columns: minmax(240px, .45fr) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, .42fr) minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 10px 12px;
   border-color: rgba(63,145,56,.18);
   background: linear-gradient(90deg, #f7fcf5, #fff);
 }
@@ -1973,10 +2068,12 @@ onMounted(async () => {
 
 .ce-detail-tabs {
   display: flex;
-  min-height: 42px;
+  min-height: 38px;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 28px;
-  padding: 0 18px;
+  gap: 22px;
+  overflow-x: auto;
+  padding: 0 14px;
   border-bottom: 1px solid var(--students-border-soft);
   color: #60708a;
   font-size: 11px;
@@ -2090,15 +2187,17 @@ onMounted(async () => {
 
 .ce-detail-footer {
   position: sticky;
-  bottom: -14px;
+  bottom: 0;
+  z-index: 8;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 -14px -14px;
-  padding: 11px 24px;
+  margin: 0 -14px;
+  padding: 10px 18px;
   border-top: 1px solid rgba(63,145,56,.12);
-  background: linear-gradient(90deg, #f2faee, #fff);
+  background: linear-gradient(90deg, rgba(242, 250, 238, .98), rgba(255, 255, 255, .98));
+  box-shadow: 0 -10px 24px rgba(21,35,60,.055);
 }
 
 .ce-detail-footer span {
@@ -2140,7 +2239,8 @@ onMounted(async () => {
 
 .ce-detail-tabs button {
   display: inline-flex;
-  height: 42px;
+  height: 38px;
+  flex: 0 0 auto;
   align-items: center;
   gap: 7px;
   border: 0;
@@ -2351,8 +2451,9 @@ onMounted(async () => {
   .ce-clear-link { display: none; }
   .ce-status-tabs { overflow-x: auto; }
   .ce-workspace.has-detail { grid-template-columns: minmax(400px, .62fr) minmax(650px, 1.38fr); }
-  .ce-detail-header { grid-template-columns: minmax(0, 1fr) 220px 34px; }
-  .ce-detail-actions { display: none; }
+  .ce-detail-header { grid-template-columns: minmax(0, 1fr) 220px auto 34px; gap: 10px; }
+  .ce-detail-actions .ce-save-state { display: none; }
+  .ce-detail-actions :deep(.ui-button) { min-height: 32px; padding-inline: 10px; font-size: 10px; }
 }
 
 @media (max-width: 980px) {

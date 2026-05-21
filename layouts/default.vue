@@ -358,7 +358,7 @@ const logout = async () => {
   width: 260px;
   flex-shrink: 0;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid rgba(200, 219, 204, 0.86);
   border-radius: 34px;
   background:
@@ -374,17 +374,17 @@ const logout = async () => {
 
 .sidebar-collapse-button {
   position: absolute;
-  top: 18px;
-  right: -14px;
-  z-index: 40;
+  top: 16px;
+  right: -13px;
+  z-index: 60;
   display: inline-flex;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(210, 225, 213, 0.95);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.98);
   color: #2d7132;
   box-shadow: 0 10px 22px rgba(22, 38, 65, 0.12);
   cursor: pointer;

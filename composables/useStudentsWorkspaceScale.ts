@@ -2,8 +2,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } 
 
 const WORKSPACE_LIST_DESIGN_WIDTH = 920
 const WORKSPACE_DETAIL_DESIGN_WIDTH = 1380
-const WORKSPACE_MIN_SCALE = 0.72
+const WORKSPACE_LIST_MIN_SCALE = 0.72
+const WORKSPACE_DETAIL_MIN_SCALE = 0.64
 const WORKSPACE_MIN_DESIGN_HEIGHT = 420
+const WORKSPACE_DETAIL_DESIGN_HEIGHT = 720
 
 export const useStudentsWorkspaceScale = (hasAccountWorkspace: Ref<boolean>) => {
   const studentsScaleShell = ref<HTMLElement | null>(null)
@@ -12,6 +14,8 @@ export const useStudentsWorkspaceScale = (hasAccountWorkspace: Ref<boolean>) => 
   const workspaceCanvasHeight = ref(WORKSPACE_MIN_DESIGN_HEIGHT)
 
   const baseWorkspaceDesignWidth = computed(() => hasAccountWorkspace.value ? WORKSPACE_DETAIL_DESIGN_WIDTH : WORKSPACE_LIST_DESIGN_WIDTH)
+  const targetWorkspaceDesignHeight = computed(() => hasAccountWorkspace.value ? WORKSPACE_DETAIL_DESIGN_HEIGHT : WORKSPACE_MIN_DESIGN_HEIGHT)
+  const minWorkspaceScale = computed(() => hasAccountWorkspace.value ? WORKSPACE_DETAIL_MIN_SCALE : WORKSPACE_LIST_MIN_SCALE)
   const workspaceDesignWidth = computed(() => Math.max(baseWorkspaceDesignWidth.value, workspaceCanvasWidth.value))
 
   const studentsScaleShellStyle = computed(() => ({
@@ -40,7 +44,8 @@ export const useStudentsWorkspaceScale = (hasAccountWorkspace: Ref<boolean>) => 
     )
 
     const widthScale = shellWidth / baseWorkspaceDesignWidth.value
-    const nextScale = Math.min(1, Math.max(WORKSPACE_MIN_SCALE, widthScale))
+    const heightScale = shellHeight / targetWorkspaceDesignHeight.value
+    const nextScale = Math.min(1, Math.max(minWorkspaceScale.value, Math.min(widthScale, heightScale)))
 
     workspaceScale.value = Number(nextScale.toFixed(4))
     workspaceCanvasWidth.value = Math.max(baseWorkspaceDesignWidth.value, Math.ceil(shellWidth / workspaceScale.value))
