@@ -121,6 +121,11 @@
       @remove-student="removeStudentFromSelection"
     />
     <BajaReasonModal v-if="pendingBajaStudent" :student="pendingBajaStudent" @close="pendingBajaStudent = null" @confirm="confirmBaja" />
+    <StudentOperatorInfoModal
+      v-if="operatorInfoStudent"
+      :student="operatorInfoStudent"
+      @close="operatorInfoStudent = null"
+    />
 
     <StudentSectionModal
       :show="showSectionModal"
@@ -147,7 +152,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
 import { useHead } from '#imports'
-import { LucideEye, LucideSettings, LucideTag, LucideTags, LucideUserX } from 'lucide-vue-next'
+import { LucideBookOpen, LucideEye, LucideSettings, LucideTag, LucideTags, LucideUserX } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -183,6 +188,7 @@ import StudentSectionModal from '~/components/students/StudentSectionModal.vue'
 import BulkIngresoCycleModal from '~/components/BulkIngresoCycleModal.vue'
 import StudentFormModal from '~/components/StudentFormModal.vue'
 import BajaReasonModal from '~/components/BajaReasonModal.vue'
+import StudentOperatorInfoModal from '~/components/students/StudentOperatorInfoModal.vue'
 
 const { show } = useToast()
 const { openMenu } = useContextMenu()
@@ -192,6 +198,10 @@ useHead({ bodyAttrs: { class: 'students-route-active' } })
 const { studentsSyncState, readCachedStudents, writeCachedStudents, setStudentsSyncState } = useStudentsCacheSync()
 const state = useState('globalState')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
+const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
+const isSuperAdminRole = computed(() => roleTokens.value.some(role => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
+const isControlEscolarOnly = computed(() => !isSuperAdminRole.value && roleTokens.value.length === 1 && roleTokens.value[0] === 'role_ctrl')
+const canOpenStudentOperatorInfo = computed(() => !isControlEscolarOnly.value)
 
 const filters = ref({ q: '' })
 const activeFilter = ref('inscritos')
@@ -216,6 +226,7 @@ let kpiRefreshTimer = null
 const showStudentModal = ref(false)
 const editingStudent = ref(null)
 const pendingBajaStudent = ref(null)
+const operatorInfoStudent = ref(null)
 const bulkWorkspaceMode = ref('none')
 const showBulkIngresoCycleModal = ref(false)
 const bulkIngresoSaving = ref(false)
@@ -1022,20 +1033,34 @@ const handleIngresoCycleUpdated = (payload) => {
   }
 }
 
+const openStudentOperatorInfo = (student) => {
+  if (!canOpenStudentOperatorInfo.value) return
+  operatorInfoStudent.value = student
+}
+
 const showStudentMenu = (event, student) => {
   const selectedActionLabel = selectedCount.value > 1 && isStudentSelected(student)
     ? `Asignar sección a ${selectedCount.value}`
     : 'Asignar seccion'
 
-  openMenu(event, [
-    { label: 'Ver detalles', icon: LucideEye, action: () => selectStudent(student) },
+  const actions = [
+    { label: 'Ver detalles', icon: LucideEye, action: () => selectStudent(student) }
+  ]
+
+  if (canOpenStudentOperatorInfo.value) {
+    actions.push({ label: 'Ver información de alumno', icon: LucideBookOpen, action: () => openStudentOperatorInfo(student) })
+  }
+
+  actions.push(
     { label: '-' },
     { label: 'Editar alumno', icon: LucideSettings, action: () => openEdit(student) },
     { label: selectedActionLabel, icon: LucideTags, action: () => (selectedCount.value > 1 && isStudentSelected(student) ? openSectionModalForSelection() : openSectionModal(student)) },
     { label: isStudentSelected(student) ? 'Quitar de selección' : 'Seleccionar', icon: LucideTag, action: () => toggleStudentSelection(student) },
     { label: '-' },
     { label: 'Dar de baja', icon: LucideUserX, class: 'text-accent-coral font-bold', disabled: student.estatus !== 'Activo', action: () => bajaAlumno(student) }
-  ])
+  )
+
+  openMenu(event, actions)
 }
 
 const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
