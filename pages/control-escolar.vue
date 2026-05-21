@@ -459,7 +459,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { useState } from '#app'
+import { useCookie, useState } from '#app'
 import { useHead } from '#imports'
 import {
   LucideAlertTriangle,
@@ -504,11 +504,15 @@ useHead({ bodyAttrs: { class: 'students-route-active' } })
 
 const { show } = useToast()
 const state = useState('globalState', () => ({ ciclo: '2025' }))
+const activePlantelCookie = useCookie('auth_active_plantel')
+const initialControlPlantel = String(activePlantelCookie.value || '').trim()
 const externalConcepts = ref([])
 const ENROLLMENT_CONCEPTS_CACHE_KEY = 'students-enrollment-concepts:v1'
+const CONTROL_STUDENTS_CACHE_VERSION = 1
+const CONTROL_STUDENTS_CACHE_NAMESPACE = 'control-escolar:students-cache'
 const currentCicloKey = computed(() => normalizeCicloKey(state.value?.ciclo || '2025'))
 const currentCicloLabel = computed(() => formatCicloLabel(currentCicloKey.value))
-const selectedAgentId = ref('')
+const selectedAgentId = ref(initialControlPlantel && initialControlPlantel !== 'GLOBAL' ? initialControlPlantel : '')
 const optionsLoading = ref(false)
 const kpisLoading = ref(false)
 const studentsLoading = ref(false)
@@ -532,10 +536,12 @@ const activeDetailTab = ref('identity')
 const editSnapshot = ref('')
 const draftRestored = ref(false)
 const draftSavedAt = ref('')
+const pendingSelectedStudentRefresh = ref(null)
 const pagination = reactive({ page: 1, limit: 25, total: 0, pages: 1 })
 const filters = reactive({ search: '', status: DEFAULT_QUICK_FILTER, quality: '', grado: '', group: '', recent: '' })
 const editForm = reactive({})
 let searchTimer = null
+let controlStudentsRequestId = 0
 
 const hasDetail = computed(() => Boolean(selectedStudent.value))
 const { studentsScaleShell, studentsScaleShellStyle, studentsDesignCanvasStyle, scheduleWorkspaceScaleUpdate } = useStudentsWorkspaceScale(hasDetail)
@@ -738,27 +744,151 @@ const loadKpis = async () => {
   }
 }
 
-const loadStudents = async () => {
-  if (!selectedAgentId.value) return
-  studentsLoading.value = true
-  loadError.value = ''
+const normalizeControlCacheParams = (query = buildQuery()) => Object.keys(query || {})
+  .sort()
+  .reduce((normalized, key) => {
+    const value = query[key]
+    if (value === undefined || value === null || value === '') return normalized
+    normalized[key] = String(value)
+    return normalized
+  }, {})
+
+const controlStudentsCacheKey = (query = buildQuery()) => {
+  const signature = encodeURIComponent(JSON.stringify(normalizeControlCacheParams(query)))
+  return `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${CONTROL_STUDENTS_CACHE_VERSION}:${signature}`
+}
+
+const readCachedControlStudents = (query = buildQuery()) => {
+  if (!process.client) return null
+
   try {
-    const response = await $fetch('/api/control-escolar/students', { query: buildQuery() })
-    students.value = response.data || []
-    Object.assign(pagination, response.pagination || {})
-    Object.assign(catalogs, response.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
-    if (selectedStudent.value) {
-      const refreshed = students.value.find((student) => student.matricula === selectedStudent.value.matricula)
-      if (refreshed) selectStudent(refreshed, false)
-    }
+    const cached = JSON.parse(localStorage.getItem(controlStudentsCacheKey(query)) || 'null')
+    if (Number(cached?.version) !== CONTROL_STUDENTS_CACHE_VERSION) return null
+    if (!Array.isArray(cached?.data)) return null
+    return cached
   } catch (error) {
-    students.value = []
-    loadError.value = error?.data?.message || error?.message || 'Plantel fuera de línea o sin respuesta.'
-  } finally {
-    studentsLoading.value = false
-    nextTick(scheduleWorkspaceScaleUpdate)
+    console.warn('[Control Escolar] No se pudo leer la caché local de alumnos.', error)
+    return null
   }
 }
+
+const writeCachedControlStudents = (query = buildQuery(), response = {}) => {
+  if (!process.client || !Array.isArray(response?.data)) return false
+
+  const record = {
+    version: CONTROL_STUDENTS_CACHE_VERSION,
+    savedAt: new Date().toISOString(),
+    query: normalizeControlCacheParams(query),
+    data: response.data,
+    pagination: response.pagination || { page: pagination.page, limit: pagination.limit, total: response.data.length, pages: 1 },
+    catalogs: response.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} }
+  }
+
+  try {
+    localStorage.setItem(controlStudentsCacheKey(query), JSON.stringify(record))
+    return true
+  } catch (error) {
+    console.warn('[Control Escolar] No se pudo guardar la caché local de alumnos.', error)
+    return false
+  }
+}
+
+const normalizeMatriculaKey = (value) => String(value || '').trim().toLowerCase()
+
+const isDetailFieldFocused = () => {
+  if (!process.client) return false
+  const activeElement = document.activeElement
+  if (!activeElement?.closest?.('.ce-detail-panel')) return false
+  return ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeElement.tagName)
+}
+
+const applySelectedStudentRefresh = (student) => {
+  if (!student) return
+  const currentTab = activeDetailTab.value
+  selectedStudent.value = student
+  pendingSelectedStudentRefresh.value = null
+  resetEditForm(student, { restoreDraft: false })
+  activeDetailTab.value = currentTab
+}
+
+const applyPendingSelectedStudentRefresh = () => {
+  if (!pendingSelectedStudentRefresh.value || hasUnsavedChanges.value || isDetailFieldFocused()) return
+  applySelectedStudentRefresh(pendingSelectedStudentRefresh.value)
+}
+
+const reconcileSelectedStudentAfterSync = (nextStudents = []) => {
+  if (!selectedStudent.value) return
+
+  const selectedKey = normalizeMatriculaKey(selectedStudent.value.matricula)
+  const refreshed = nextStudents.find((student) => normalizeMatriculaKey(student.matricula) === selectedKey)
+  if (!refreshed) return
+
+  if (hasUnsavedChanges.value || isDetailFieldFocused()) {
+    pendingSelectedStudentRefresh.value = refreshed
+    if (process.client) window.setTimeout(applyPendingSelectedStudentRefresh, 900)
+    return
+  }
+
+  applySelectedStudentRefresh(refreshed)
+}
+
+const applyControlStudentsPayload = (response = {}, { reconcileSelection = true } = {}) => {
+  students.value = Array.isArray(response?.data) ? response.data : []
+  Object.assign(pagination, response?.pagination || { page: pagination.page, limit: pagination.limit, total: students.value.length, pages: 1 })
+  Object.assign(catalogs, response?.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
+  if (reconcileSelection) reconcileSelectedStudentAfterSync(students.value)
+}
+
+const persistCurrentControlStudentsCache = () => writeCachedControlStudents(buildQuery(), {
+  data: students.value,
+  pagination: { ...pagination },
+  catalogs: { ...catalogs, gruposPorGrado: { ...(catalogs.gruposPorGrado || {}) } }
+})
+
+const loadStudents = async (options = {}) => {
+  if (!selectedAgentId.value) return
+
+  const { useCache = true } = options
+  const requestId = ++controlStudentsRequestId
+  const query = buildQuery()
+  const cached = useCache ? readCachedControlStudents(query) : null
+  const hadStudents = students.value.length > 0
+
+  if (cached) {
+    applyControlStudentsPayload(cached)
+    loadError.value = ''
+    studentsLoading.value = false
+    nextTick(scheduleWorkspaceScaleUpdate)
+  } else if (!hadStudents) {
+    studentsLoading.value = true
+  } else {
+    studentsLoading.value = false
+  }
+
+  try {
+    const response = await $fetch('/api/control-escolar/students', { query })
+    if (requestId !== controlStudentsRequestId) return
+
+    applyControlStudentsPayload(response)
+    writeCachedControlStudents(query, response)
+    loadError.value = ''
+  } catch (error) {
+    if (requestId !== controlStudentsRequestId) return
+
+    if (!cached && !hadStudents) {
+      students.value = []
+      loadError.value = error?.data?.message || error?.message || 'Plantel fuera de línea o sin respuesta.'
+    } else {
+      loadError.value = ''
+    }
+  } finally {
+    if (requestId === controlStudentsRequestId) {
+      studentsLoading.value = false
+      nextTick(scheduleWorkspaceScaleUpdate)
+    }
+  }
+}
+
 
 const refreshAll = async () => {
   await Promise.all([loadKpis(), loadStudents()])
@@ -927,8 +1057,10 @@ const saveStudent = async () => {
       const index = students.value.findIndex((student) => student.matricula === response.student.matricula)
       if (index >= 0) students.value[index] = response.student
       selectedStudent.value = response.student
+      pendingSelectedStudentRefresh.value = null
       clearEditDraft()
       resetEditForm(response.student, { restoreDraft: false })
+      persistCurrentControlStudentsCache()
     }
     show('Ficha de Control Escolar guardada.', 'success')
     await loadKpis()
@@ -1069,6 +1201,10 @@ watch(editForm, () => {
   else clearEditDraft()
 }, { deep: true })
 
+watch(hasUnsavedChanges, (isDirty) => {
+  if (!isDirty) nextTick(applyPendingSelectedStudentRefresh)
+})
+
 watch(() => ({ ...filters }), () => {
   pagination.page = 1
   window.clearTimeout(searchTimer)
@@ -1084,8 +1220,16 @@ watch(selectedAgentId, () => nextTick(scheduleWorkspaceScaleUpdate))
 
 onMounted(async () => {
   hydrateCachedEnrollmentConcepts()
+  const initialAgentId = selectedAgentId.value
+  if (initialAgentId) loadStudents()
+
   await loadOptions()
-  if (selectedAgentId.value) await refreshAll()
+
+  if (selectedAgentId.value) {
+    if (selectedAgentId.value !== initialAgentId) await refreshAll()
+    else await loadKpis()
+  }
+
   await loadEnrollmentConfig({ refreshStudents: true })
 })
 </script>
