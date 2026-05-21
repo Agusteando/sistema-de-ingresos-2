@@ -19,6 +19,7 @@ type StudentsCacheRecord = {
   savedAt: string
   students: unknown[]
   enrollmentConceptSignature?: string
+  enrollmentConcepts?: string[]
 }
 
 type StudentsSyncState = {
@@ -129,7 +130,10 @@ export const useStudentsCacheSync = () => {
         savedAt: record.savedAt,
         count: record.students.length,
         isLegacy: Number(record.version) !== CACHE_VERSION,
-        enrollmentConceptSignature: record.enrollmentConceptSignature || ''
+        enrollmentConceptSignature: record.enrollmentConceptSignature || '',
+        enrollmentConcepts: Array.isArray(record.enrollmentConcepts)
+          ? normalizeEnrollmentConceptIds(record.enrollmentConcepts)
+          : normalizeEnrollmentConceptIds(record.enrollmentConceptSignature || '')
       }
     }
 
@@ -147,7 +151,8 @@ export const useStudentsCacheSync = () => {
       query: normalizeQuery(options.q),
       savedAt: new Date().toISOString(),
       students,
-      enrollmentConceptSignature: enrollmentConceptSignature(options.enrollmentConcepts)
+      enrollmentConceptSignature: enrollmentConceptSignature(options.enrollmentConcepts),
+      enrollmentConcepts: normalizeEnrollmentConceptIds(options.enrollmentConcepts)
     }
 
     try {
