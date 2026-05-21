@@ -1,8 +1,6 @@
-fix: stabilize KPI filters and restore sync feedback
+fix(students): stabilize KPI filters and baja refresh state
 
-- Keep the dashboard default filter locked to inscritos instead of falling back to an unfiltered mixed cohort.
-- Preserve current-ciclo enrollment predicates for inscritos, internos, externos, no inscritos, and bajas across KPI counts and filtered lists.
-- Prevent student search and clear actions from dropping the inscritos filter unintentionally.
-- Add enrollment-concept signatures to cached student records so stale concept-specific cache entries are not reused when concepts change.
-- Add an unavailable sync state for cold-load failures without local cache.
-- Redesign the sidebar student sync indicator with compact packet/spiral/check states for cached, syncing, synced, failed, and unavailable.
+- Keep dashboard filters in valid canonical states and reset stranded grade/group filters after data changes.
+- Preserve enrollment concept IDs from cached data and avoid clearing them when remote config returns no usable IDs.
+- Include inactive students with current-cycle enrollment evidence in the students reload scope so baja updates remain countable.
+- Refresh students and KPI trend data after baja updates without dropping the dashboard into empty stale state.

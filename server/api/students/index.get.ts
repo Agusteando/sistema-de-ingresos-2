@@ -14,6 +14,48 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   
   let whereClause = "1=1"
   const params: any[] = []
+  const addCurrentEnrollmentScope = () => {
+    if (!enrollmentConceptIds.length) {
+      whereClause += " AND (A.estatus = 'Activo' OR A.ciclo = ?)"
+      params.push(cicloKey)
+      return
+    }
+
+    const conceptPlaceholders = enrollmentConceptIds.map(() => '?').join(',')
+    whereClause += ` AND (
+      A.estatus = 'Activo'
+      OR A.ciclo = ?
+      OR EXISTS (
+        SELECT 1
+        FROM documentos DScope
+        LEFT JOIN documento_concepto_periodos PScope
+          ON PScope.documento = DScope.documento
+          AND PScope.estatus = 'Activo'
+        WHERE DScope.matricula = A.matricula
+          AND DScope.ciclo = ?
+          AND DScope.estatus = 'Activo'
+          AND (PScope.accion IS NULL OR PScope.accion <> 'cancelacion')
+          AND CAST(COALESCE(PScope.concepto_id, DScope.concepto) AS CHAR) IN (${conceptPlaceholders})
+        LIMIT 1
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM referenciasdepago RScope
+        LEFT JOIN documentos DScopePaid ON DScopePaid.documento = RScope.documento
+        LEFT JOIN documento_concepto_periodos PScopePaid
+          ON PScopePaid.documento = RScope.documento
+          AND PScopePaid.estatus = 'Activo'
+          AND CAST(RScope.mes AS UNSIGNED) >= PScopePaid.start_mes
+          AND (PScopePaid.end_mes IS NULL OR CAST(RScope.mes AS UNSIGNED) <= PScopePaid.end_mes)
+        WHERE RScope.matricula = A.matricula
+          AND RScope.ciclo = ?
+          AND RScope.estatus = 'Vigente'
+          AND CAST(COALESCE(PScopePaid.concepto_id, DScopePaid.concepto, RScope.concepto) AS CHAR) IN (${conceptPlaceholders})
+        LIMIT 1
+      )
+    )`
+    params.push(cicloKey, cicloKey, ...enrollmentConceptIds, cicloKey, ...enrollmentConceptIds)
+  }
 
   const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
 
@@ -27,9 +69,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     whereClause += " AND (A.nombreCompleto LIKE ? OR A.matricula = ?)"
     params.push(`%${q}%`, q)
   } else {
-    // If no search query, optimize by only loading active students OR inactive students touched in this cycle
-    whereClause += " AND (A.estatus = 'Activo' OR A.ciclo = ?)"
-    params.push(cicloKey)
+    addCurrentEnrollmentScope()
   }
 
   const sql = `

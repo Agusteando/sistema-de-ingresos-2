@@ -459,7 +459,20 @@ const activeInlineFilterLabel = computed(() => {
 })
 
 const DEFAULT_KPI_FILTER = 'inscritos'
-const normalizeDashboardFilter = (filter) => String(filter || DEFAULT_KPI_FILTER)
+const CORE_KPI_FILTERS = new Set(['inscritos', 'internos', 'externos', 'no_inscritos', 'bajas'])
+
+const isKnownDashboardFilter = (filter) => {
+  const raw = String(filter || '').trim()
+  if (CORE_KPI_FILTERS.has(raw)) return true
+  if (!isSectionFilter(raw)) return false
+  const sectionId = sectionIdFromFilter(raw)
+  return customSections.value.some(section => Number(section.id) === sectionId)
+}
+
+const normalizeDashboardFilter = (filter) => {
+  const raw = String(filter || DEFAULT_KPI_FILTER).trim()
+  return isKnownDashboardFilter(raw) ? raw : DEFAULT_KPI_FILTER
+}
 
 const setActiveFilter = (filter) => {
   const nextFilter = normalizeDashboardFilter(filter)
@@ -513,6 +526,11 @@ const hydrateCachedEnrollmentConcepts = () => {
 
 const parseEnrollmentConfig = (obj) => {
   const conceptIds = parseEnrollmentConcepts(obj)
+  if (!conceptIds.length) {
+    console.warn('[Enrollment concepts] Remote config did not include enrollment concept ids; preserving the current local concepts.')
+    return
+  }
+
   externalConcepts.value = conceptIds
   cacheEnrollmentConcepts(conceptIds)
 }
@@ -548,6 +566,13 @@ const performSearch = async (options = {}) => {
   const query = filters.value.q || ''
 
   const cached = useCache ? readCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }) : null
+  const cachedConcepts = normalizeEnrollmentConceptIds(cached?.enrollmentConcepts)
+
+  if (!externalConcepts.value.length && cachedConcepts.length) {
+    externalConcepts.value = cachedConcepts
+    cacheEnrollmentConcepts(cachedConcepts)
+  }
+
   const hasCachedStudents = Boolean(cached?.students?.length)
   const hadStudents = students.value.length > 0
 
@@ -720,6 +745,22 @@ watch(displayedStudents, () => {
   if (selectedStudent.value && !selectedStillLoaded) selectedStudent.value = null
 }, { flush: 'post' })
 
+const resetInvalidDashboardFilters = () => {
+  if (loading.value) return
+
+  const normalizedFilter = normalizeDashboardFilter(activeFilter.value)
+  if (activeFilter.value !== normalizedFilter) activeFilter.value = normalizedFilter
+
+  if (activeGrado.value && !availableGrados.value.includes(activeGrado.value)) {
+    activeGrado.value = ''
+    activeGrupo.value = ''
+  }
+
+  if (activeGrupo.value && !availableGrupos.value.includes(activeGrupo.value)) {
+    activeGrupo.value = ''
+  }
+}
+
 
 const availableGrados = computed(() => {
   const set = new Set()
@@ -736,6 +777,20 @@ const availableGrupos = computed(() => {
   })
   return Array.from(set).sort()
 })
+
+watch(
+  () => [
+    activeFilter.value,
+    customSections.value.map(section => section.id).join('|'),
+    activeGrado.value,
+    activeGrupo.value,
+    loading.value,
+    availableGrados.value.join('|'),
+    availableGrupos.value.join('|')
+  ],
+  resetInvalidDashboardFilters,
+  { flush: 'post' }
+)
 
 const exportData = () => {
   const exportCiclo = currentCicloKey.value
@@ -934,7 +989,9 @@ const confirmBaja = async (motivo) => {
       { pending: 'Procesando baja...', success: 'Alumno dado de baja exitosamente', error: 'Fallo al procesar baja' }
     )
     pendingBajaStudent.value = null
-    performSearch({ useCache: false })
+    await performSearch({ useCache: false })
+    loadGlobalKpis()
+    loadKpiSparklines()
   } catch (e) {}
 }
 
@@ -1026,7 +1083,8 @@ watch(bulkWorkspaceMode, scheduleWorkspaceScaleUpdate)
 
 
 watch(activeFilter, (nextFilter) => {
-  if (!nextFilter) activeFilter.value = DEFAULT_KPI_FILTER
+  const normalizedFilter = normalizeDashboardFilter(nextFilter)
+  if (nextFilter !== normalizedFilter) activeFilter.value = normalizedFilter
 })
 
 watch(
