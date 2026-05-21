@@ -1,1 +1,1 @@
-fix: remove Control Escolar KPI sublabels
+fix: add quiet Control Escolar student cache sync
