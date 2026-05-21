@@ -991,7 +991,9 @@ const submit = async () => {
     markSaved();
     emit("success");
   } catch (e) {
-    show("Error guardando la información", "danger");
+    const message =
+      e?.data?.message || e?.statusMessage || e?.message || "Error guardando la información";
+    show(message, "danger");
   } finally {
     loading.value = false;
   }

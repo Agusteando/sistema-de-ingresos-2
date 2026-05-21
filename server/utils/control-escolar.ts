@@ -388,17 +388,6 @@ const rowHasCurrentEnrollmentEvidence = (row: any, enrollmentConceptIds: string[
   ]).some((conceptId) => target.has(conceptId))
 }
 
-const rowHasPreviousEnrollmentEvidence = (row: any, enrollmentConceptIds: string[], historicalConceptIds = '') => {
-  const target = new Set(enrollmentConceptIds)
-  if (!target.size) return false
-  return parseEnrollmentConceptIds([
-    row.conceptoIdsPagadosPrevios,
-    row.conceptoIdsCargadosPrevios,
-    row.conceptoIdsCicloPrevio,
-    historicalConceptIds
-  ]).some((conceptId) => target.has(conceptId))
-}
-
 const resolveOperatorEnrollmentState = (
   row: any,
   scope: ControlEscolarOperatorScope,
@@ -408,11 +397,10 @@ const resolveOperatorEnrollmentState = (
   if (!scope.enrollmentConceptIds.length) return activeInBase ? 'inscrito' : 'baja'
 
   const hasCurrent = rowHasCurrentEnrollmentEvidence(row, scope.enrollmentConceptIds)
-  const hasPrevious = rowHasPreviousEnrollmentEvidence(row, scope.enrollmentConceptIds, historicalConceptIds)
   if (activeInBase && hasCurrent) return 'inscrito'
   if (!activeInBase && hasCurrent) return 'baja_inscrita'
-  if (activeInBase && hasPrevious) return 'no_inscrito'
-  return activeInBase ? 'activo_sin_evidencia' : 'baja'
+  if (activeInBase) return 'no_inscrito'
+  return 'baja'
 }
 
 const applyOperatorProjection = async (agentId: string, rows: any[], scope: ControlEscolarOperatorScope) => {
