@@ -37,35 +37,21 @@
           <UiKpiSparkline :values="item.sparkline" />
         </button>
       </div>
-      <div v-if="kpis?.porNivel?.length" class="section-kpi-rail ce-program-rail" aria-label="Niveles">
-        <button
-          v-for="nivel in kpis.porNivel"
-          :key="nivel.label"
-          type="button"
-          :class="['section-kpi-card', { active: filters.nivel === nivel.label }]"
-          @click="filters.nivel = filters.nivel === nivel.label ? '' : nivel.label"
-        >
-          <span class="section-kpi-name">{{ nivel.label }}</span>
-          <strong>{{ nivel.total }}</strong>
-        </button>
-      </div>
     </section>
 
     <div class="filter-bar ce-filter-bar">
       <div class="grade-filter ce-filter-stack">
-        <div class="grade-tabs" aria-label="Filtros principales">
-          <UiChip :active="!filters.status && !filters.missing" @click="clearQuickFilters">Todos</UiChip>
-          <UiChip :active="filters.status === 'inscritos'" @click="toggleFilter('status', 'inscritos')">Inscritos</UiChip>
-          <UiChip :active="filters.status === 'active'" @click="toggleFilter('status', 'active')">Activos</UiChip>
-          <UiChip :active="filters.status === 'baja'" @click="toggleFilter('status', 'baja')">Bajas</UiChip>
-          <UiChip :active="filters.missing === 'overlay'" @click="toggleFilter('missing', 'overlay')">Sin ficha matrícula</UiChip>
-          <UiChip :active="filters.missing === 'contact'" @click="toggleFilter('missing', 'contact')">Sin contacto</UiChip>
+        <div class="grade-tabs" aria-label="Filtrar por grado">
+          <UiChip :active="!filters.grado && !filters.group" @click="clearAcademicFilters">Todos</UiChip>
+          <UiChip v-for="grado in catalogs.grados" :key="`grado-${grado}`" :active="filters.grado === grado" @click="selectGrade(grado)">{{ grado }}</UiChip>
         </div>
-        <div class="group-tabs" aria-label="Filtros académicos">
-          <UiChip v-for="nivel in catalogs.niveles" :key="`nivel-${nivel}`" :active-group="filters.nivel === nivel" @click="toggleFilter('nivel', nivel)">{{ nivel }}</UiChip>
-          <UiChip v-for="grado in catalogs.grados" :key="`grado-${grado}`" :active-group="filters.grado === grado" @click="toggleFilter('grado', grado)">{{ grado }}</UiChip>
-          <UiChip v-for="grupo in catalogs.grupos" :key="`grupo-${grupo}`" :active-group="filters.group === grupo" @click="toggleFilter('group', grupo)">Grupo {{ grupo }}</UiChip>
-        </div>
+
+        <Transition name="filter-groups">
+          <div v-if="filters.grado && availableGroups.length" class="group-tabs" aria-label="Filtrar por grupo">
+            <UiChip :active-group="filters.group === ''" @click="filters.group = ''">Todos los grupos</UiChip>
+            <UiChip v-for="grupo in availableGroups" :key="`grupo-${grupo}`" :active-group="filters.group === grupo" @click="toggleFilter('group', grupo)">Grupo {{ grupo }}</UiChip>
+          </div>
+        </Transition>
       </div>
 
       <div class="search-control" :class="{ 'has-filter-token': activeFilterLabel }">
@@ -74,7 +60,7 @@
           <span>{{ activeFilterLabel }}</span><b aria-hidden="true">×</b>
         </button>
         <LucideSearch class="search-icon" :size="18" />
-        <input v-model="filters.search" placeholder="Matrícula, nombre, CURP, teléfono o correo..." @keyup.enter="loadStudents" />
+        <input v-model="filters.search" placeholder="Matrícula o nombre del alumno..." @keyup.enter="loadStudents" />
       </div>
 
       <UiButton variant="secondary" class="export-button ce-filter-button" :disabled="!hasActiveFilters" @click="clearFilters">
@@ -331,6 +317,7 @@ import {
   LucideDatabase,
   LucideDownload,
   LucideFilter,
+  LucideGlobe2,
   LucideGraduationCap,
   LucideMail,
   LucidePhone,
@@ -340,8 +327,10 @@ import {
   LucideSearch,
   LucideSearchX,
   LucideShieldCheck,
+  LucideUserCheck,
   LucideUserRound,
   LucideUsersRound,
+  LucideUserX,
   LucideWifiOff,
   LucideX
 } from 'lucide-vue-next'
@@ -373,37 +362,48 @@ const saveError = ref('')
 const students = ref([])
 const selectedStudent = ref(null)
 const kpis = ref(null)
-const catalogs = reactive({ niveles: [], grados: [], grupos: [] })
-const activeQuickFilter = ref('')
+const catalogs = reactive({ niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
+const DEFAULT_QUICK_FILTER = 'inscritos'
+const activeQuickFilter = ref(DEFAULT_QUICK_FILTER)
 const pagination = reactive({ page: 1, limit: 25, total: 0, pages: 1 })
-const filters = reactive({ search: '', status: '', missing: '', nivel: '', grado: '', group: '', recent: '' })
+const filters = reactive({ search: '', status: DEFAULT_QUICK_FILTER, missing: '', grado: '', group: '', recent: '' })
 const editForm = reactive({})
 let searchTimer = null
 
 const hasDetail = computed(() => Boolean(selectedStudent.value))
 const { studentsScaleShell, studentsScaleShellStyle, studentsDesignCanvasStyle, scheduleWorkspaceScaleUpdate } = useStudentsWorkspaceScale(hasDetail)
 const loadingAny = computed(() => optionsLoading.value || kpisLoading.value || studentsLoading.value || savingStudent.value)
-const hasActiveFilters = computed(() => Object.values(filters).some(Boolean))
+const hasActiveFilters = computed(() => Boolean(
+  filters.search ||
+  filters.missing ||
+  filters.grado ||
+  filters.group ||
+  filters.recent ||
+  (filters.status && filters.status !== DEFAULT_QUICK_FILTER)
+))
 const activeFilterLabel = computed(() => {
   const active = []
-  if (filters.status) active.push(statusLabel(filters.status))
+  if (filters.status && filters.status !== DEFAULT_QUICK_FILTER) active.push(statusLabel(filters.status))
   if (filters.missing) active.push(missingLabel(filters.missing))
-  if (filters.nivel) active.push(filters.nivel)
   if (filters.grado) active.push(filters.grado)
   if (filters.group) active.push(`Grupo ${filters.group}`)
   if (filters.search) active.push('Búsqueda')
   return active.slice(0, 2).join(' · ')
 })
+const availableGroups = computed(() => {
+  if (!filters.grado) return []
+  const byGrade = catalogs.gruposPorGrado || {}
+  return Array.isArray(byGrade[filters.grado]) ? byGrade[filters.grado] : catalogs.grupos
+})
 
 const kpiCards = computed(() => {
   const data = kpis.value || {}
   return [
-    { key: 'inscritos', label: 'Total inscritos', value: data.totalInscritos || 0, tone: 'kpi-green', icon: LucideUsersRound, sparkline: [0, data.totalInscritos || 0, data.totalVisible || data.totalInscritos || 0] },
-    { key: 'active', label: 'Activos', value: data.activos || 0, tone: 'kpi-teal', icon: LucideShieldCheck, sparkline: [0, data.activos || 0, data.activos || 0] },
-    { key: 'baja', label: 'Bajas', value: data.bajas || data.inactivos || 0, tone: 'kpi-red', icon: LucideAlertTriangle, sparkline: [0, data.bajas || 0, data.inactivos || 0] },
-    { key: 'overlay', label: 'Sin ficha matrícula', value: data.nuevosOverlay || 0, tone: 'kpi-blue', icon: LucideDatabase, sparkline: [0, data.nuevosOverlay || 0, data.nuevosOverlay || 0] },
-    { key: 'incomplete', label: 'Expedientes incompletos', value: data.expedientesIncompletos || 0, tone: 'kpi-gray', icon: LucideSearchX, sparkline: [0, data.expedientesIncompletos || 0, data.expedientesIncompletos || 0] },
-    { key: 'contact', label: 'Sin contacto', value: (data.sinTelefono || 0) + (data.sinEmail || 0) + (data.sinTutor || 0), tone: 'kpi-red', icon: LucidePhone, sparkline: [0, data.sinTelefono || 0, data.sinTutor || 0] }
+    { key: 'inscritos', label: 'Inscritos', value: data.inscritos || data.totalInscritos || 0, tone: 'kpi-green', icon: LucideUsersRound, sparkline: [0, data.inscritos || data.totalInscritos || 0, data.totalVisible || data.totalInscritos || 0] },
+    { key: 'internos', label: 'Internos', value: data.internos || 0, tone: 'kpi-teal', icon: LucideUserCheck, sparkline: [0, data.internos || 0, data.inscritos || 0] },
+    { key: 'externos', label: 'Externos', value: data.externos || 0, tone: 'kpi-blue', icon: LucideGlobe2, sparkline: [0, data.externos || 0, data.inscritos || 0] },
+    { key: 'no_inscritos', label: 'No inscritos', value: data.noInscritos || 0, tone: 'kpi-red', icon: LucideUserX, sparkline: [0, data.noInscritos || 0, data.noInscritos || 0] },
+    { key: 'bajas', label: 'Bajas', value: data.bajas || 0, tone: 'kpi-gray', icon: LucideAlertTriangle, sparkline: [0, data.bajas || 0, data.bajas || 0] }
   ]
 })
 
@@ -415,7 +415,7 @@ const requiredDataFields = [
 ]
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('es-MX')
-const statusLabel = (value) => ({ inscritos: 'Inscritos', active: 'Activos', inactive: 'Inactivos', baja: 'Bajas', no_inscritos: 'No inscritos' }[value] || value)
+const statusLabel = (value) => ({ inscritos: 'Inscritos', internos: 'Internos', externos: 'Externos', no_inscritos: 'No inscritos', bajas: 'Bajas', baja: 'Bajas' }[value] || value)
 const missingLabel = (value) => ({ curp: 'Sin CURP', phone: 'Sin teléfono', email: 'Sin email', guardian: 'Sin tutor', contact: 'Sin contacto', overlay: 'Sin ficha matrícula', incomplete: 'Expediente incompleto' }[value] || value)
 const compactAcademic = (student) => [student.grado, student.group ? `Grupo ${student.group}` : '', student.nivel].filter(Boolean).join(' · ') || 'Sin datos académicos'
 const statusTone = (student) => String(student?.status || '').toLowerCase() === 'baja' ? 'danger' : String(student?.status || '').toLowerCase() === 'activo' ? 'success' : 'neutral'
@@ -438,7 +438,6 @@ const buildQuery = (extra = {}) => ({
   search: filters.search || undefined,
   status: filters.status || undefined,
   missing: filters.missing || undefined,
-  nivel: filters.nivel || undefined,
   grado: filters.grado || undefined,
   group: filters.group || undefined,
   recent: filters.recent || undefined,
@@ -482,7 +481,7 @@ const loadStudents = async () => {
     const response = await $fetch('/api/control-escolar/students', { query: buildQuery() })
     students.value = response.data || []
     Object.assign(pagination, response.pagination || {})
-    Object.assign(catalogs, response.catalogs || { niveles: [], grados: [], grupos: [] })
+    Object.assign(catalogs, response.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
     if (selectedStudent.value) {
       const refreshed = students.value.find((student) => student.matricula === selectedStudent.value.matricula)
       if (refreshed) selectStudent(refreshed, false)
@@ -501,9 +500,9 @@ const refreshAll = async () => {
 }
 
 const clearQuickFilters = () => {
-  filters.status = ''
+  filters.status = DEFAULT_QUICK_FILTER
   filters.missing = ''
-  activeQuickFilter.value = ''
+  activeQuickFilter.value = DEFAULT_QUICK_FILTER
 }
 
 const toggleFilter = (key, value) => {
@@ -511,22 +510,28 @@ const toggleFilter = (key, value) => {
   pagination.page = 1
 }
 
+const clearAcademicFilters = () => {
+  filters.grado = ''
+  filters.group = ''
+  pagination.page = 1
+}
+
+const selectGrade = (grado) => {
+  filters.grado = filters.grado === grado ? '' : grado
+  filters.group = ''
+  pagination.page = 1
+}
+
 const clearFilters = () => {
-  Object.assign(filters, { search: '', status: '', missing: '', nivel: '', grado: '', group: '', recent: '' })
-  activeQuickFilter.value = ''
+  Object.assign(filters, { search: '', status: DEFAULT_QUICK_FILTER, missing: '', grado: '', group: '', recent: '' })
+  activeQuickFilter.value = DEFAULT_QUICK_FILTER
   pagination.page = 1
 }
 
 const applyKpiFilter = (key) => {
-  activeQuickFilter.value = activeQuickFilter.value === key ? '' : key
-  filters.status = ''
+  activeQuickFilter.value = activeQuickFilter.value === key && key !== DEFAULT_QUICK_FILTER ? DEFAULT_QUICK_FILTER : key
+  filters.status = activeQuickFilter.value
   filters.missing = ''
-  if (activeQuickFilter.value === 'inscritos') filters.status = 'inscritos'
-  if (activeQuickFilter.value === 'active') filters.status = 'active'
-  if (activeQuickFilter.value === 'baja') filters.status = 'baja'
-  if (activeQuickFilter.value === 'overlay') filters.missing = 'overlay'
-  if (activeQuickFilter.value === 'incomplete') filters.missing = 'incomplete'
-  if (activeQuickFilter.value === 'contact') filters.missing = 'contact'
   pagination.page = 1
 }
 
