@@ -187,6 +187,21 @@
   opacity: .92;
 }
 
+.student-group-sigil.is-missing {
+  border-color: rgba(213, 139, 33, .3);
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, .98), rgba(255, 255, 255, .48) 48%, transparent 49%),
+    linear-gradient(145deg, #fff, #fff7e8);
+  color: #b36a16;
+  box-shadow: 0 10px 18px rgba(155, 96, 16, .075), inset 0 0 0 1px rgba(255, 255, 255, .84);
+}
+
+.student-group-watermark.is-missing-group {
+  opacity: .075;
+  color: #b36a16;
+  transform: translateY(-50%) rotate(-8deg);
+}
+
 .student-row.selected .student-group-sigil,
 .student-row.multi-selected .student-group-sigil {
   border-color: color-mix(in srgb, var(--grade-accent, #4fa346) 44%, #dfe8d9);
