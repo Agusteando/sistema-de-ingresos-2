@@ -1,10 +1,36 @@
-import { getBridgeAgentId, getDbTransport, runRawSqlStatement } from '../../../utils/db'
+import { getBridgeAgentId, getDbTransport, runRawSqlStatement, runWithBridgeAgentId } from '../../../utils/db'
+import { PLANTELES_LIST } from '../../../../utils/constants'
 
 const MAX_SQL_BYTES = 2 * 1024 * 1024
 const MAX_STATEMENTS = 300
 const MAX_PREVIEW_ROWS = 200
 
 const byteLength = (value: string) => Buffer.byteLength(value, 'utf8')
+const VALID_SQL_TARGETS = new Set(PLANTELES_LIST)
+const normalizeSqlTarget = (value: unknown) => String(value || '').trim().toUpperCase()
+
+const resolveBridgeTargetPlantel = (event: any, user: any, body: any) => {
+  const requested = normalizeSqlTarget(body?.targetPlantel || body?.targetAgentId)
+
+  if (requested) {
+    if (!VALID_SQL_TARGETS.has(requested)) {
+      throw createError({ statusCode: 400, message: 'Destino SQL inválido.' })
+    }
+
+    return requested
+  }
+
+  const contextAgent = normalizeSqlTarget(event.context.dbBridgeAgentId)
+  if (VALID_SQL_TARGETS.has(contextAgent)) return contextAgent
+
+  const active = normalizeSqlTarget(user?.active_plantel)
+  if (VALID_SQL_TARGETS.has(active)) return active
+
+  const home = normalizeSqlTarget(user?.auth_home_plantel)
+  if (VALID_SQL_TARGETS.has(home)) return home
+
+  return PLANTELES_LIST[0]
+}
 
 const isIgnorableSql = (value: string) => {
   const stripped = value
@@ -219,6 +245,12 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const sql = String(body?.sql || '').trim()
   const continueOnError = Boolean(body?.continueOnError)
+  const transport = getDbTransport()
+  const targetBridgeAgentId = transport === 'bridge' ? resolveBridgeTargetPlantel(event, user, body) : null
+
+  if (targetBridgeAgentId) {
+    event.context.dbBridgeAgentId = targetBridgeAgentId
+  }
 
   if (!sql) {
     throw createError({ statusCode: 400, message: 'Escribe o carga una consulta SQL.' })
@@ -238,68 +270,81 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: `Demasiadas sentencias. Máximo permitido: ${MAX_STATEMENTS}.` })
   }
 
-  const startedAt = Date.now()
-  const results: any[] = []
-  let failed = 0
+  const executeBatch = async () => {
+    const startedAt = Date.now()
+    const results: any[] = []
+    let failed = 0
 
-  for (let index = 0; index < statements.length; index += 1) {
-    const statement = statements[index]
-    const statementStartedAt = Date.now()
+    for (let index = 0; index < statements.length; index += 1) {
+      const statement = statements[index]
+      const statementStartedAt = Date.now()
 
-    try {
-      const result = await runRawSqlStatement<any>(statement)
-      results.push({
-        index: index + 1,
-        sql: statement,
-        status: 'success',
-        durationMs: Date.now() - statementStartedAt,
-        result: normalizeResult(result)
-      })
-    } catch (error: any) {
-      failed += 1
-      const httpStatus = error?.httpStatus || error?.statusCode || error?.status || null
+      try {
+        const result = await runRawSqlStatement<any>(statement)
+        results.push({
+          index: index + 1,
+          sql: statement,
+          status: 'success',
+          durationMs: Date.now() - statementStartedAt,
+          result: normalizeResult(result)
+        })
+      } catch (error: any) {
+        failed += 1
+        const httpStatus = error?.httpStatus || error?.statusCode || error?.status || null
+        const message = error?.message || 'Error ejecutando sentencia.'
+        const isOfflineAgent = httpStatus === 503 && /agent\s+'?[^']+'?\s+is\s+offline/i.test(message)
 
-      results.push({
-        index: index + 1,
-        sql: statement,
-        status: 'error',
-        durationMs: Date.now() - statementStartedAt,
-        error: {
-          message: error?.message || 'Error ejecutando sentencia.',
-          code: error?.code || (httpStatus ? `DB_BRIDGE_HTTP_${httpStatus}` : null),
-          errno: error?.errno || null,
-          sqlState: error?.sqlState || null,
-          httpStatus,
-          hint: httpStatus === 503
-            ? 'El DB bridge devolvió 503. La sentencia no se confirmó; revisa que el agente/bridge esté disponible y reintenta cuando responda.'
-            : null
-        }
-      })
+        results.push({
+          index: index + 1,
+          sql: statement,
+          status: 'error',
+          durationMs: Date.now() - statementStartedAt,
+          error: {
+            message,
+            code: error?.code || (httpStatus ? `DB_BRIDGE_HTTP_${httpStatus}` : null),
+            errno: error?.errno || null,
+            sqlState: error?.sqlState || null,
+            httpStatus,
+            targetAgent: targetBridgeAgentId,
+            hint: isOfflineAgent
+              ? `El agente ${targetBridgeAgentId || 'seleccionado'} está offline. Cambia el destino en la consola o levanta ese agente antes de reintentar; la sentencia no se confirmó.`
+              : (httpStatus === 503
+                ? 'El DB bridge devolvió 503. La sentencia no se confirmó; revisa que el agente/bridge esté disponible y reintenta cuando responda.'
+                : null)
+          }
+        })
 
-      if (!continueOnError) break
+        if (!continueOnError) break
+      }
+    }
+
+    let bridgeAgentId: string | null = null
+
+    if (transport === 'bridge') {
+      try {
+        bridgeAgentId = getBridgeAgentId()
+      } catch (e) {}
+    }
+
+    return {
+      success: failed === 0,
+      stopped: failed > 0 && results.length < statements.length,
+      totalStatements: statements.length,
+      executedStatements: results.length,
+      successfulStatements: results.filter((entry) => entry.status === 'success').length,
+      failedStatements: failed,
+      durationMs: Date.now() - startedAt,
+      activePlantel: user.active_plantel,
+      targetPlantel: targetBridgeAgentId || user.active_plantel,
+      dataPlantel: bridgeAgentId || targetBridgeAgentId || user.auth_home_plantel || user.active_plantel,
+      transport,
+      results
     }
   }
 
-  const transport = getDbTransport()
-  let bridgeAgentId: string | null = null
-
-  if (transport === 'bridge') {
-    try {
-      bridgeAgentId = getBridgeAgentId()
-    } catch (e) {}
+  if (targetBridgeAgentId) {
+    return await runWithBridgeAgentId(targetBridgeAgentId, executeBatch)
   }
 
-  return {
-    success: failed === 0,
-    stopped: failed > 0 && results.length < statements.length,
-    totalStatements: statements.length,
-    executedStatements: results.length,
-    successfulStatements: results.filter((entry) => entry.status === 'success').length,
-    failedStatements: failed,
-    durationMs: Date.now() - startedAt,
-    activePlantel: user.active_plantel,
-    dataPlantel: bridgeAgentId || user.auth_home_plantel || user.active_plantel,
-    transport,
-    results
-  }
+  return await executeBatch()
 })

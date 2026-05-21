@@ -29,5 +29,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Sesión sin plantel de datos para bridge mode.' })
   }
 
+  if (url.pathname.startsWith('/api/admin/sql-console/')) {
+    return
+  }
+
   await ensureSchema()
 })
