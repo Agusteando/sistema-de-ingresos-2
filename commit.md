@@ -1,1 +1,1 @@
-Fix no-inscritos visibility for new students
+fix(control-escolar): derive visible students from bridge base before matricula enrichment
