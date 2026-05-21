@@ -1,1 +1,1 @@
-Refina filtros y layout de Control Escolar
+fix: align control escolar filters and add safe matricula bulk updates

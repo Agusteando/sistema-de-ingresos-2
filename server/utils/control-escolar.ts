@@ -58,6 +58,10 @@ export type ControlEscolarStudentRow = {
   inscritoCicloActual: boolean
   tipoIngreso: string
   tipoIngresoValue: string
+  huskyPassUsername: string
+  huskyPassPlaintext: string
+  huskyPassAvailable: boolean
+  huskyPassEmail: string
 }
 
 type TableColumn = {
@@ -74,10 +78,13 @@ type MatriculaPatch = Record<string, any>
 type ControlEscolarSchema = {
   base: Set<string>
   matricula: Set<string>
+  users: Set<string>
   ingresos: boolean
   loadedAt: number
   centralAvailable: boolean
   centralError: string
+  usersAvailable: boolean
+  usersError: string
 }
 
 const PLANTEL_SET = new Set(PLANTELES_LIST.map(normalizePlantel))
@@ -222,6 +229,23 @@ const getCentralMatriculaColumns = async () => {
   return columns
 }
 
+
+const getCentralOptionalTableColumns = async (tableName: string) => {
+  const normalized = normalizeText(tableName, 80)
+  if (!normalized) return new Set<string>()
+
+  const cached = centralSchemaCache.get(normalized)
+  if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS) return cached.columns
+
+  const tableRows = await controlEscolarCentralQuery<any[]>(`SHOW TABLES LIKE ${sqlLiteral(normalized)}`)
+  if (!tableRows.length) return new Set<string>()
+
+  const rows = await controlEscolarCentralQuery<TableColumn[]>(`SHOW COLUMNS FROM ${escapeColumn(normalized)}`)
+  const columns = new Set(rows.map((row) => row.Field))
+  centralSchemaCache.set(normalized, { columns, loadedAt: Date.now() })
+  return columns
+}
+
 type ControlEscolarSchemaOptions = {
   requireCentral?: boolean
 }
@@ -255,8 +279,11 @@ export const getControlEscolarSchema = async (agentId: string, options: ControlE
   }
 
   let matriculaColumns = new Set<string>()
+  let usersColumns = new Set<string>()
   let centralAvailable = true
   let centralError = ''
+  let usersAvailable = false
+  let usersError = ''
 
   try {
     matriculaColumns = await getCentralMatriculaColumns()
@@ -266,13 +293,26 @@ export const getControlEscolarSchema = async (agentId: string, options: ControlE
     if (requireCentral) throw error
   }
 
+  if (centralAvailable) {
+    try {
+      usersColumns = await getCentralOptionalTableColumns('users')
+      usersAvailable = usersColumns.has('username') && usersColumns.has('plaintext')
+    } catch (error: any) {
+      usersAvailable = false
+      usersError = toErrorMessage(error)
+    }
+  }
+
   const schema = {
     base: baseColumns,
     matricula: matriculaColumns,
+    users: usersColumns,
     ingresos: ingresosExists,
     loadedAt: Date.now(),
     centralAvailable,
-    centralError
+    centralError,
+    usersAvailable,
+    usersError
   }
   schemaCache.set(cacheKey, schema)
   return schema
@@ -685,6 +725,40 @@ const fetchMatriculaOverlayMap = async (matriculas: string[], schema: ControlEsc
   return result
 }
 
+
+const fetchHuskyPassMap = async (matriculas: string[], schema: ControlEscolarSchema) => {
+  const unique = Array.from(new Set(matriculas.map((matricula) => normalizeText(matricula, 64)).filter(Boolean)))
+  const result = new Map<string, any>()
+  if (!unique.length || !schema.usersAvailable) return result
+
+  const optionalColumns = ['email', 'correo', 'updated_at', 'updatedAt'].filter((column) => schema.users.has(column))
+  const selectColumns = ['username', 'plaintext', ...optionalColumns]
+  const selectSql = selectColumns.map(escapeColumn).join(', ')
+
+  for (let index = 0; index < unique.length; index += CENTRAL_CHUNK_SIZE) {
+    const chunk = unique.slice(index, index + CENTRAL_CHUNK_SIZE)
+    const placeholders = chunk.map(() => '?').join(', ')
+    const rows = await controlEscolarCentralQuery<any[]>(
+      `SELECT ${selectSql} FROM \`users\` WHERE \`username\` IN (${placeholders})`,
+      chunk
+    )
+    rows.forEach((row) => result.set(normalizeText(row.username, 64), row))
+  }
+
+  return result
+}
+
+const fetchHuskyPassRow = async (matricula: string, schema: ControlEscolarSchema) => {
+  if (!schema.usersAvailable) return null
+  const optionalColumns = ['email', 'correo', 'updated_at', 'updatedAt'].filter((column) => schema.users.has(column))
+  const selectColumns = ['username', 'plaintext', ...optionalColumns]
+  const rows = await controlEscolarCentralQuery<any[]>(
+    `SELECT ${selectColumns.map(escapeColumn).join(', ')} FROM \`users\` WHERE \`username\` = ? LIMIT 1`,
+    [matricula]
+  )
+  return rows[0] || null
+}
+
 const truthyBaja = (value: unknown) => {
   const normalized = normalizeText(value).toLowerCase()
   return value === true || value === 1 || ['1', 'si', 'sí', 'true', 'baja'].includes(normalized)
@@ -731,7 +805,7 @@ const hasNoPrimaryContact = (student: any) => {
   return !hasPhoneContact(student) && !hasEmailContact(student) && !hasTutorContact(student)
 }
 
-const overlayStudentRow = (agentId: string, base: any, overlay?: any): ControlEscolarStudentRow => {
+const overlayStudentRow = (agentId: string, base: any, overlay?: any, huskyPass?: any): ControlEscolarStudentRow => {
   const hasOverlay = Boolean(overlay?.matricula)
   const nombres = firstText(overlay?.nombres, base.baseNombres)
   const apellidoPaterno = firstText(overlay?.apellido_paterno, base.baseApellidoPaterno)
@@ -742,6 +816,9 @@ const overlayStudentRow = (agentId: string, base: any, overlay?: any): ControlEs
   const updatedAt = firstText(overlay?.updated_at, overlay?.updatedAt, overlay?.fecha_actualizacion, overlay?.created_at, base.baseUpdatedAt)
   const baja = hasOverlay && truthyBaja(overlay?.baja) ? 1 : 0
   const status = baja ? 'Baja' : firstText(base.baseEstatus, 'Activo')
+  const huskyPassUsername = normalizeText(huskyPass?.username, 64)
+  const huskyPassPlaintext = normalizeText(huskyPass?.plaintext, 255)
+  const huskyPassEmail = firstLower(huskyPass?.email, huskyPass?.correo)
 
   const normalized: ControlEscolarStudentRow = {
     agentId: normalizePlantel(agentId),
@@ -793,7 +870,11 @@ const overlayStudentRow = (agentId: string, base: any, overlay?: any): ControlEs
     currentEnrollmentConceptMatch: Boolean(base.currentEnrollmentConceptMatch),
     inscritoCicloActual: Boolean(base.inscritoCicloActual),
     tipoIngresoValue: normalizeText(base.operatorTipoIngreso || '').toLowerCase() === 'interno' ? 'interno' : 'externo',
-    tipoIngreso: normalizeText(base.operatorTipoIngreso || '').toLowerCase() === 'interno' ? 'Interno' : 'Externo'
+    tipoIngreso: normalizeText(base.operatorTipoIngreso || '').toLowerCase() === 'interno' ? 'Interno' : 'Externo',
+    huskyPassUsername,
+    huskyPassPlaintext,
+    huskyPassAvailable: Boolean(huskyPassUsername && huskyPassPlaintext),
+    huskyPassEmail
   }
 
   normalized.missingFields = buildMissingFields(normalized)
@@ -837,6 +918,7 @@ export const fetchControlEscolarStudentDetail = async (agentId: string, matricul
 
   const rawBaseRows = await query<any[]>(`SELECT * FROM base WHERE matricula = ? LIMIT 1`, [normalizedMatricula])
   let rawMatricula: any = null
+  let huskyPass: any = null
   if (schema.centralAvailable) {
     try {
       rawMatricula = await fetchFullCentralMatriculaRow(normalizedMatricula)
@@ -847,15 +929,26 @@ export const fetchControlEscolarStudentDetail = async (agentId: string, matricul
         error: toErrorMessage(error)
       })
     }
+
+    try {
+      huskyPass = await fetchHuskyPassRow(normalizedMatricula, schema)
+    } catch (error: any) {
+      console.warn('[Control Escolar] husky pass detail lookup unavailable', {
+        agentId,
+        matricula: normalizedMatricula,
+        error: toErrorMessage(error)
+      })
+    }
   }
 
-  const normalized = overlayStudentRow(agentId, baseRow, rawMatricula)
+  const normalized = overlayStudentRow(agentId, baseRow, rawMatricula, huskyPass)
   return {
     ...normalized,
     readOnly: true,
     detailSource: rawMatricula ? 'base+matricula' : 'base',
     rawBase: compactRawRecord(rawBaseRows[0] || {}),
-    rawMatricula: compactRawRecord(rawMatricula || {})
+    rawMatricula: compactRawRecord(rawMatricula || {}),
+    rawUsers: compactRawRecord(huskyPass || {})
   }
 }
 
@@ -875,6 +968,7 @@ type ControlEscolarLoadedStudents = {
     overlayError: string
     localRows: number
     overlayRows: number
+    usersRows: number
   }
 }
 
@@ -890,6 +984,7 @@ const fetchAllNormalizedStudents = async (agentId: string, filters: any = {}): P
   }
 
   let overlayMap = new Map<string, any>()
+  let huskyPassMap = new Map<string, any>()
   let overlayAvailable = schema.centralAvailable
   let overlayError = schema.centralError
 
@@ -905,11 +1000,24 @@ const fetchAllNormalizedStudents = async (agentId: string, filters: any = {}): P
         error: overlayError
       })
     }
+
+    try {
+      huskyPassMap = await fetchHuskyPassMap(localRows.map((row) => row.matricula), schema)
+    } catch (error: any) {
+      console.warn('[Control Escolar] husky pass lookup unavailable', {
+        agentId,
+        localRows: localRows.length,
+        error: toErrorMessage(error)
+      })
+    }
   }
 
   return {
     students: localRows
-      .map((row) => overlayStudentRow(agentId, row, overlayMap.get(normalizeText(row.matricula, 64))))
+      .map((row) => {
+        const matricula = normalizeText(row.matricula, 64)
+        return overlayStudentRow(agentId, row, overlayMap.get(matricula), huskyPassMap.get(matricula))
+      })
       .sort(compareStudents),
     source: {
       base: `bridge:${normalizePlantel(agentId)}.base`,
@@ -917,7 +1025,8 @@ const fetchAllNormalizedStudents = async (agentId: string, filters: any = {}): P
       overlayAvailable,
       overlayError: overlayError || '',
       localRows: Math.min(localRows.length, MAX_LOCAL_ROWS),
-      overlayRows: overlayMap.size
+      overlayRows: overlayMap.size,
+      usersRows: huskyPassMap.size
     }
   }
 }
@@ -1093,49 +1202,41 @@ const normalizePatchValue = (field: string, value: unknown) => {
   return normalizeNullable(value, 255)
 }
 
-export const updateControlEscolarStudent = async (agentId: string, matricula: string, body: MatriculaPatch, user: AuthSessionUser, filters: any = {}) => {
-  const normalizedMatricula = normalizeText(matricula, 64)
-  if (!normalizedMatricula) {
-    throw createError({ statusCode: 400, message: 'Matrícula inválida.' })
-  }
+type EditableMatriculaEntry = {
+  field: string
+  column: string
+  value: any
+}
 
-  const schema = await getControlEscolarSchema(agentId, { requireCentral: true })
-  const [baseRow] = await query<any[]>(`SELECT matricula, ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel FROM base b WHERE b.matricula = ? LIMIT 1`, [normalizedMatricula])
-  if (!baseRow) {
-    throw createError({ statusCode: 404, message: 'El alumno no existe en base. Control Escolar no crea alumnos locales.' })
-  }
-
-  const scopeFilters = {
-    ciclo: filters.ciclo,
-    cicloKey: filters.cicloKey,
-    targetCiclo: filters.targetCiclo,
-    concepts: filters.concepts,
-    enrollmentConcepts: filters.enrollmentConcepts
-  }
-  const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters)
-  const canSeeStudent = visibleScope.students.some((student) => student.matricula === normalizedMatricula)
-  if (!canSeeStudent) {
-    throw createError({ statusCode: 403, message: 'El alumno no está dentro del alcance visible de Control Escolar para este ciclo y plantel.' })
-  }
-
+const buildEditableMatriculaEntries = (body: MatriculaPatch, schema: ControlEscolarSchema, options: { rejectUnknown?: boolean; skipEmpty?: boolean } = {}) => {
+  const rejectUnknown = options.rejectUnknown !== false
+  const skipEmpty = options.skipEmpty === true
   const requestedFields = Object.keys(body || {})
   const rejected = requestedFields.filter((field) => !Object.prototype.hasOwnProperty.call(PATCH_FIELD_COLUMN_MAP, field))
-  if (rejected.length) {
+  if (rejectUnknown && rejected.length) {
     throw createError({ statusCode: 400, message: `Campos no permitidos para Control Escolar: ${rejected.join(', ')}` })
   }
 
   const editableEntries = Object.entries(body || {})
+    .filter(([field, value]) => Object.prototype.hasOwnProperty.call(PATCH_FIELD_COLUMN_MAP, field) && (!skipEmpty || normalizeText(value, 1000) !== ''))
     .map(([field, value]) => ({ field, column: PATCH_FIELD_COLUMN_MAP[field], value: normalizePatchValue(field, value) }))
     .filter((entry) => entry.column && schema.matricula.has(entry.column))
-
-  if (!editableEntries.length) {
-    throw createError({ statusCode: 400, message: 'No hay campos editables disponibles en la tabla centralizada matricula para guardar.' })
-  }
 
   if (editableEntries.some((entry) => entry.field === 'curp' && entry.value && !/^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(String(entry.value)))) {
     throw createError({ statusCode: 400, message: 'CURP inválida. Debe tener 18 caracteres con formato oficial.' })
   }
 
+  return editableEntries
+}
+
+const upsertMatriculaOverlay = async (
+  agentId: string,
+  normalizedMatricula: string,
+  editableEntries: EditableMatriculaEntry[],
+  user: AuthSessionUser,
+  basePlantel: unknown,
+  schema: ControlEscolarSchema
+) => {
   const [existing] = await controlEscolarCentralQuery<any[]>(`SELECT matricula FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`, [normalizedMatricula])
   const auditContext = {
     user: user.email,
@@ -1160,7 +1261,7 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
 
     if (schema.matricula.has('plantel')) {
       columns.push('plantel')
-      values.push(normalizePlantel(baseRow.plantel || agentId))
+      values.push(normalizePlantel(basePlantel || agentId))
     }
 
     if (schema.matricula.has('created_by')) {
@@ -1186,8 +1287,150 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
     )
   }
 
-  // TODO: Wire this into the project audit log if a Control Escolar audit table/pattern is introduced.
   console.info('[Control Escolar] centralized matricula overlay updated', auditContext)
+}
+
+export const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS = [
+  'matricula',
+  'apellidoPaterno',
+  'apellidoMaterno',
+  'nombres',
+  'curp',
+  'nivel',
+  'grado',
+  'grupo',
+  'interno',
+  'servicio',
+  'telefonoPadre',
+  'telefonoMadre',
+  'emailPadre',
+  'emailMadre',
+  'nombrePadre',
+  'apellidoPaternoPadre',
+  'apellidoMaternoPadre',
+  'nombreMadre',
+  'apellidoPaternoMadre',
+  'apellidoMaternoMadre',
+  'direccion',
+  'baja',
+  'motivoBaja',
+  'categoriaBaja',
+  'seguimientoBaja'
+]
+
+export const CONTROL_ESCOLAR_MATRICULA_IMPORT_LABELS: Record<string, string> = {
+  matricula: 'Matrícula',
+  apellidoPaterno: 'Apellido paterno',
+  apellidoMaterno: 'Apellido materno',
+  nombres: 'Nombre(s)',
+  curp: 'CURP',
+  nivel: 'Nivel',
+  grado: 'Grado',
+  grupo: 'Grupo',
+  interno: 'Interno',
+  servicio: 'Servicio',
+  telefonoPadre: 'Teléfono padre',
+  telefonoMadre: 'Teléfono madre',
+  emailPadre: 'Email padre',
+  emailMadre: 'Email madre',
+  nombrePadre: 'Nombre padre',
+  apellidoPaternoPadre: 'Apellido paterno padre',
+  apellidoMaternoPadre: 'Apellido materno padre',
+  nombreMadre: 'Nombre madre',
+  apellidoPaternoMadre: 'Apellido paterno madre',
+  apellidoMaternoMadre: 'Apellido materno madre',
+  direccion: 'Dirección',
+  baja: 'Baja',
+  motivoBaja: 'Motivo baja',
+  categoriaBaja: 'Categoría baja',
+  seguimientoBaja: 'Seguimiento baja'
+}
+
+export const importControlEscolarMatriculaUpdates = async (agentId: string, rows: MatriculaPatch[], user: AuthSessionUser, filters: any = {}) => {
+  const schema = await getControlEscolarSchema(agentId, { requireCentral: true })
+  const scopeFilters = {
+    ciclo: filters.ciclo,
+    cicloKey: filters.cicloKey,
+    targetCiclo: filters.targetCiclo,
+    concepts: filters.concepts,
+    enrollmentConcepts: filters.enrollmentConcepts
+  }
+  const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters)
+  const visibleByMatricula = new Map(visibleScope.students.map((student) => [student.matricula, student]))
+  const summary = { processed: rows.length, updated: 0, skipped: 0, errors: [] as Array<{ row: number; matricula?: string; message: string }> }
+
+  for (const [index, row] of rows.entries()) {
+    const normalizedMatricula = normalizeText(row.matricula || row.Matricula || row['Matrícula'], 64)
+    if (!normalizedMatricula) {
+      summary.skipped++
+      if (summary.errors.length < 50) summary.errors.push({ row: index + 2, message: 'Falta matrícula.' })
+      continue
+    }
+
+    const visibleStudent = visibleByMatricula.get(normalizedMatricula)
+    if (!visibleStudent) {
+      summary.skipped++
+      if (summary.errors.length < 50) summary.errors.push({ row: index + 2, matricula: normalizedMatricula, message: 'Alumno fuera del alcance visible del plantel/ciclo.' })
+      continue
+    }
+
+    try {
+      const patch: MatriculaPatch = {}
+      CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS.forEach((field) => {
+        if (field === 'matricula') return
+        if (Object.prototype.hasOwnProperty.call(row, field)) patch[field] = row[field]
+      })
+      const editableEntries = buildEditableMatriculaEntries(patch, schema, { rejectUnknown: false, skipEmpty: true })
+      if (!editableEntries.length) {
+        summary.skipped++
+        if (summary.errors.length < 50) summary.errors.push({ row: index + 2, matricula: normalizedMatricula, message: 'Sin campos editables con valor.' })
+        continue
+      }
+      await upsertMatriculaOverlay(agentId, normalizedMatricula, editableEntries, user, visibleStudent.plantel || visibleStudent.basePlantel || agentId, schema)
+      summary.updated++
+    } catch (error: any) {
+      summary.skipped++
+      if (summary.errors.length < 50) summary.errors.push({ row: index + 2, matricula: normalizedMatricula, message: toErrorMessage(error) })
+    }
+  }
+
+  return summary
+}
+
+
+export const updateControlEscolarStudent = async (agentId: string, matricula: string, body: MatriculaPatch, user: AuthSessionUser, filters: any = {}) => {
+  const normalizedMatricula = normalizeText(matricula, 64)
+  if (!normalizedMatricula) {
+    throw createError({ statusCode: 400, message: 'Matrícula inválida.' })
+  }
+
+  const schema = await getControlEscolarSchema(agentId, { requireCentral: true })
+  const [baseRow] = await query<any[]>(`SELECT matricula, ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel FROM base b WHERE b.matricula = ? LIMIT 1`, [normalizedMatricula])
+  if (!baseRow) {
+    throw createError({ statusCode: 404, message: 'El alumno no existe en base. Control Escolar no crea alumnos locales.' })
+  }
+
+  const scopeFilters = {
+    ciclo: filters.ciclo,
+    cicloKey: filters.cicloKey,
+    targetCiclo: filters.targetCiclo,
+    concepts: filters.concepts,
+    enrollmentConcepts: filters.enrollmentConcepts
+  }
+  const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters)
+  const canSeeStudent = visibleScope.students.some((student) => student.matricula === normalizedMatricula)
+  if (!canSeeStudent) {
+    throw createError({ statusCode: 403, message: 'El alumno no está dentro del alcance visible de Control Escolar para este ciclo y plantel.' })
+  }
+
+  const editableEntries = buildEditableMatriculaEntries(body, schema, { rejectUnknown: true })
+
+  if (!editableEntries.length) {
+    throw createError({ statusCode: 400, message: 'No hay campos editables disponibles en la tabla centralizada matricula para guardar.' })
+  }
+
+  await upsertMatriculaOverlay(agentId, normalizedMatricula, editableEntries, user, baseRow.plantel || agentId, schema)
+
 
   const result = await fetchControlEscolarStudents(agentId, { ...scopeFilters, search: normalizedMatricula, page: 1, limit: 10 })
   return { success: true, student: result.data.find((student) => student.matricula === normalizedMatricula) || result.data[0] || null }
