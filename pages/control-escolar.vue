@@ -155,8 +155,8 @@
                       <StudentGradePhotoCard
                         class="student-row-grade-card"
                         :student="student"
-                        :photo-url="student.photoUrl"
-                        :photo-loading="false"
+                        :photo-url="controlStudentPhotoUrl(student)"
+                        :photo-loading="isControlStudentPhotoLoading(student)"
                         :is-enrolled="student.status === 'Activo'"
                       />
                       <span :class="['student-group-sigil', { 'is-missing': controlMissingGroup(student) }]" :title="controlGroupTitle(student)">
@@ -254,8 +254,8 @@
                   <StudentGradePhotoCard
                     class="ce-detail-photo"
                     :student="selectedStudent"
-                    :photo-url="selectedStudent.photoUrl"
-                    :photo-loading="false"
+                    :photo-url="controlStudentPhotoUrl(selectedStudent)"
+                    :photo-loading="isControlStudentPhotoLoading(selectedStudent)"
                     :is-enrolled="selectedStudent.status === 'Activo'"
                   />
                   <div class="ce-profile-copy">
@@ -427,17 +427,18 @@
 
                   <div v-if="saveError" class="ce-save-error"><LucideAlertTriangle :size="16" /> {{ saveError }}</div>
 
-                  <footer class="ce-detail-footer">
-                    <span>{{ saveStatusText }}</span>
-                    <div>
-                      <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
-                      <UiButton variant="primary" type="submit" :disabled="savingStudent || !hasUnsavedChanges">
-                        <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar ficha' }}
-                      </UiButton>
-                    </div>
-                  </footer>
                 </form>
               </div>
+
+              <footer class="ce-detail-footer">
+                <span :class="['ce-save-state', saveStateTone]">{{ saveStatusText }}</span>
+                <div>
+                  <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
+                  <UiButton variant="primary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="saveStudent">
+                    <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar ficha' }}
+                  </UiButton>
+                </div>
+              </footer>
             </div>
           </section>
 
@@ -575,7 +576,7 @@ import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.v
 import { useStudentsWorkspaceScale } from '~/composables/useStudentsWorkspaceScale'
 import { useToast } from '~/composables/useToast'
 import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
-import { normalizeEnrollmentConceptIds, parseEnrollmentConcepts, studentPresentationStyle } from '~/shared/utils/studentPresentation'
+import { normalizeEnrollmentConceptIds, normalizeStudentMatricula, parseEnrollmentConcepts, photoStorageKey, studentPresentationStyle } from '~/shared/utils/studentPresentation'
 import { NIVELES_ESCOLARES, gradeOptionsForNivel } from '~/shared/utils/grado'
 
 useHead({ bodyAttrs: { class: 'students-route-active' } })
@@ -619,11 +620,23 @@ const pendingSelectedStudentRefresh = ref(null)
 const pagination = reactive({ page: 1, limit: 8, total: 0, pages: 1 })
 const filters = reactive({ search: '', status: DEFAULT_QUICK_FILTER, quality: '', grado: '', group: '', recent: '' })
 const editForm = reactive({})
+const photoCache = ref({})
+const photoLoadingKeys = ref(new Set())
 let searchTimer = null
 let controlStudentsRequestId = 0
+const controlStudentPhotoRequests = new Map()
+const controlPhotoQueue = []
+const controlPhotoQueuedKeys = new Set()
+const controlPhotoActiveKeys = new Set()
+let activeControlPhotoLoads = 0
 
 const hasDetail = computed(() => true)
-const { studentsScaleShell, studentsScaleShellStyle, studentsDesignCanvasStyle, scheduleWorkspaceScaleUpdate } = useStudentsWorkspaceScale(hasDetail)
+const { studentsScaleShell, studentsScaleShellStyle, studentsDesignCanvasStyle, scheduleWorkspaceScaleUpdate } = useStudentsWorkspaceScale(hasDetail, {
+  detailDesignWidth: 1360,
+  detailDesignHeight: 660,
+  detailMinScale: 0.58,
+  fitPadding: 6
+})
 const loadingAny = computed(() => optionsLoading.value || kpisLoading.value || studentsLoading.value || savingStudent.value)
 const hasActiveFilters = computed(() => Boolean(
   filters.search ||
@@ -810,10 +823,10 @@ const formSnapshot = () => JSON.stringify(readEditForm())
 const hasUnsavedChanges = computed(() => Boolean(selectedStudent.value && editSnapshot.value && formSnapshot() !== editSnapshot.value))
 const saveStateTone = computed(() => savingStudent.value ? 'saving' : hasUnsavedChanges.value ? 'dirty' : 'clean')
 const saveStatusText = computed(() => {
-  if (savingStudent.value) return 'Guardando cambios...'
-  if (hasUnsavedChanges.value) return draftRestored.value ? 'Borrador local con cambios sin guardar' : 'Cambios sin guardar'
-  if (draftSavedAt.value) return `Borrador guardado ${draftSavedAt.value}`
-  return selectedStudent.value?.overlayExists ? 'Registro de matrícula al día' : 'Guardar creará el registro de matrícula'
+  if (savingStudent.value) return 'Guardando...'
+  if (hasUnsavedChanges.value) return draftSavedAt.value ? `Borrador local ${draftSavedAt.value}` : 'Cambios sin guardar'
+  if (draftSavedAt.value) return `Borrador local ${draftSavedAt.value}`
+  return selectedStudent.value?.overlayExists ? 'Al día' : 'Guardar'
 })
 const draftKey = computed(() => selectedStudent.value?.matricula ? `control-escolar:draft:${selectedAgentId.value}:${selectedStudent.value.matricula}` : '')
 
@@ -1038,6 +1051,135 @@ const localStudentMatchesRecent = (student, recent) => {
   return Number.isFinite(time) && time >= Date.now() - days * 24 * 60 * 60 * 1000
 }
 
+
+const CONTROL_PHOTO_CONCURRENCY = 3
+const normalizePhotoKey = (studentOrMatricula) => normalizeStudentMatricula(
+  typeof studentOrMatricula === 'object' ? studentOrMatricula?.matricula : studentOrMatricula
+)
+
+const setControlPhotoLoading = (matricula, loading) => {
+  const key = normalizePhotoKey(matricula)
+  if (!key) return
+  const next = new Set(photoLoadingKeys.value)
+  if (loading) next.add(key)
+  else next.delete(key)
+  photoLoadingKeys.value = next
+}
+
+const readStoredControlPhoto = (matricula) => {
+  if (!process.client) return ''
+  const key = normalizePhotoKey(matricula)
+  if (!key) return ''
+  try {
+    return sessionStorage.getItem(photoStorageKey(key)) || ''
+  } catch (error) {
+    return ''
+  }
+}
+
+const writeStoredControlPhoto = (matricula, photoUrl) => {
+  if (!process.client) return
+  const key = normalizePhotoKey(matricula)
+  if (!key) return
+  try {
+    sessionStorage.setItem(photoStorageKey(key), photoUrl || 'none')
+  } catch (error) {
+    console.warn('[Control Escolar] No se pudo guardar la foto del alumno en sesión.', error)
+  }
+}
+
+const cacheControlPhoto = (matricula, photoUrl) => {
+  const key = normalizePhotoKey(matricula)
+  if (!key || !photoUrl || photoUrl === 'none') return
+  photoCache.value = { ...photoCache.value, [key]: photoUrl }
+}
+
+const hydrateControlPhotoFromSession = (matricula) => {
+  const key = normalizePhotoKey(matricula)
+  if (!key || photoCache.value[key]) return Boolean(photoCache.value[key])
+  const stored = readStoredControlPhoto(key)
+  if (stored && stored !== 'none') {
+    cacheControlPhoto(key, stored)
+    return true
+  }
+  return Boolean(stored === 'none')
+}
+
+const controlStudentPhotoUrl = (student) => {
+  const key = normalizePhotoKey(student)
+  if (!key) return student?.photoUrl || ''
+  const cached = photoCache.value[key]
+  if (cached && cached !== 'none') return cached
+  if (student?.photoUrl && student.photoUrl !== 'none') return student.photoUrl
+  return ''
+}
+
+const isControlStudentPhotoLoading = (student) => photoLoadingKeys.value.has(normalizePhotoKey(student))
+
+const loadControlStudentPhoto = async (matricula) => {
+  const key = normalizePhotoKey(matricula)
+  if (!key || !process.client) return
+  if (hydrateControlPhotoFromSession(key)) return
+
+  setControlPhotoLoading(key, true)
+  try {
+    let request = controlStudentPhotoRequests.get(key)
+    if (!request) {
+      request = $fetch(`/api/students/${encodeURIComponent(key)}/photo`, {
+        params: { format: 'json' }
+      }).finally(() => controlStudentPhotoRequests.delete(key))
+      controlStudentPhotoRequests.set(key, request)
+    }
+
+    const response = await request
+    const photoUrl = response?.photoUrl || ''
+    if (photoUrl) {
+      cacheControlPhoto(key, photoUrl)
+      writeStoredControlPhoto(key, photoUrl)
+    } else {
+      writeStoredControlPhoto(key, 'none')
+    }
+  } catch (error) {
+    if (error?.statusCode === 404 || error?.response?.status === 404) writeStoredControlPhoto(key, 'none')
+  } finally {
+    setControlPhotoLoading(key, false)
+  }
+}
+
+const pumpControlPhotoQueue = () => {
+  if (!process.client) return
+  while (activeControlPhotoLoads < CONTROL_PHOTO_CONCURRENCY && controlPhotoQueue.length) {
+    const key = controlPhotoQueue.shift()
+    controlPhotoQueuedKeys.delete(key)
+    if (!key || controlPhotoActiveKeys.has(key) || hydrateControlPhotoFromSession(key)) continue
+
+    activeControlPhotoLoads += 1
+    controlPhotoActiveKeys.add(key)
+    loadControlStudentPhoto(key)
+      .finally(() => {
+        activeControlPhotoLoads = Math.max(0, activeControlPhotoLoads - 1)
+        controlPhotoActiveKeys.delete(key)
+        pumpControlPhotoQueue()
+      })
+  }
+}
+
+const queueControlStudentPhotos = (sourceStudents = [], options = {}) => {
+  if (!process.client) return
+  const entries = Array.isArray(sourceStudents) ? sourceStudents : [sourceStudents]
+  const keys = entries.map(normalizePhotoKey).filter(Boolean)
+
+  keys.forEach((key) => {
+    if (photoCache.value[key] || controlPhotoQueuedKeys.has(key) || controlPhotoActiveKeys.has(key)) return
+    if (hydrateControlPhotoFromSession(key)) return
+    controlPhotoQueuedKeys.add(key)
+    if (options.priority) controlPhotoQueue.unshift(key)
+    else controlPhotoQueue.push(key)
+  })
+
+  pumpControlPhotoQueue()
+}
+
 const filteredControlStudents = () => {
   const search = normalizeClientText(filters.search)
   const grado = normalizeClientText(filters.grado)
@@ -1065,6 +1207,7 @@ const applyInstantStudentFilters = ({ reconcileSelection = false } = {}) => {
   students.value = filtered.slice(offset, offset + safeLimit)
   Object.assign(pagination, { page: safePage, limit: safeLimit, total: filtered.length, pages })
   if (reconcileSelection) reconcileSelectedStudentAfterSync(filtered)
+  queueControlStudentPhotos(students.value)
   nextTick(scheduleWorkspaceScaleUpdate)
 }
 
@@ -1246,6 +1389,7 @@ const selectStudent = (student, copy = true) => {
   selectedStudent.value = student
   activeDetailTab.value = 'identity'
   if (copy) resetEditForm(student, { restoreDraft: true })
+  queueControlStudentPhotos([student], { priority: true })
   nextTick(scheduleWorkspaceScaleUpdate)
 }
 
@@ -1463,6 +1607,8 @@ watch(() => [currentCicloKey.value, externalConcepts.value.join('|')], () => {
   refreshAll()
 })
 watch(selectedAgentId, () => nextTick(scheduleWorkspaceScaleUpdate))
+watch(students, (visibleStudents) => queueControlStudentPhotos(visibleStudents), { deep: false })
+watch(selectedStudent, (student) => queueControlStudentPhotos(student ? [student] : [], { priority: true }))
 
 onMounted(async () => {
   hydrateCachedEnrollmentConcepts()
@@ -1860,9 +2006,9 @@ onMounted(async () => {
   --student-list-balance-col: clamp(124px, 8.5vw, 150px);
   --student-list-quality-col: clamp(108px, 7.5vw, 134px);
   --student-list-action-col: clamp(38px, 2.8vw, 46px);
-  --student-list-row-height: clamp(70px, 5vw, 82px);
-  --student-list-grade-size: clamp(52px, 3.8vw, 64px);
-  --student-list-grade-height: clamp(50px, 3.6vw, 60px);
+  --student-list-row-height: clamp(76px, 5.35vw, 90px);
+  --student-list-grade-size: clamp(56px, 4vw, 68px);
+  --student-list-grade-height: clamp(54px, 3.85vw, 64px);
   --student-list-crest-size: clamp(28px, 2.1vw, 34px);
   grid-template-rows: 44px minmax(0, 1fr) 38px;
   border-radius: 14px;
@@ -1956,9 +2102,9 @@ onMounted(async () => {
 }
 
 .ce-workspace.has-detail .ce-student-row {
-  --student-list-row-height: 84px;
-  --student-list-grade-size: 56px;
-  --student-list-grade-height: 60px;
+  --student-list-row-height: 88px;
+  --student-list-grade-size: 60px;
+  --student-list-grade-height: 64px;
   --student-list-crest-size: 35px;
   grid-template-columns: minmax(0, 1fr) var(--student-list-action-col);
 }
@@ -2275,6 +2421,7 @@ onMounted(async () => {
   display: flex;
   width: 100%;
   min-height: 0;
+  max-height: 100%;
   flex-direction: column;
   border: 1px solid var(--students-border);
   border-radius: 14px;
@@ -2388,7 +2535,7 @@ onMounted(async () => {
   gap: 10px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 10px 14px 0;
+  padding: 10px 14px 14px;
   background: #fff;
 }
 
@@ -2470,8 +2617,8 @@ onMounted(async () => {
 .ce-tutor-card small {
   display: block;
   color: #6d7890;
-  font-size: 10px;
-  font-weight: 860;
+  font-size: 11px;
+  font-weight: 880;
   letter-spacing: .04em;
 }
 
@@ -2780,14 +2927,13 @@ onMounted(async () => {
 }
 
 .ce-detail-footer {
-  position: sticky;
-  bottom: 0;
   z-index: 8;
   display: flex;
+  flex: 0 0 auto;
+  min-height: 62px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 -14px;
   padding: 10px 18px;
   border-top: 1px solid rgba(63,145,56,.12);
   background: linear-gradient(90deg, rgba(242, 250, 238, .98), rgba(255, 255, 255, .98));
@@ -2829,6 +2975,15 @@ onMounted(async () => {
 .ce-save-state.saving {
   background: #eef5ff;
   color: #2b67a6;
+}
+
+.ce-detail-footer .ce-save-state {
+  min-height: 32px;
+  padding-inline: 13px;
+}
+
+.ce-detail-footer :deep(.ui-button) {
+  min-height: 42px;
 }
 
 .ce-detail-tabs button {
