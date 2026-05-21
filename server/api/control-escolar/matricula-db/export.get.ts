@@ -26,8 +26,8 @@ export default defineEventHandler(async (event) => {
     const rows = await fetchControlEscolarExportRows(auth.agentId, queryParams)
     const columns = CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS
     const meta = [
-      `Control Escolar matricula DB - ${auth.agentId}`,
-      'Importación segura: esta plantilla sólo actualiza/upserta campos de la tabla externa matricula por matrícula. No elimina alumnos.',
+      `Control Escolar DB de matrícula - ${auth.agentId}`,
+      'Actualización segura: esta plantilla sólo modifica campos del expediente por matrícula. No elimina alumnos.',
       `Exportado: ${new Date().toISOString()}`,
       ''
     ]

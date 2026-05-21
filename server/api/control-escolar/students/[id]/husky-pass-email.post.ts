@@ -21,12 +21,12 @@ export default defineEventHandler(async (event) => {
   return await runControlEscolar(event, auth.agentId, async () => {
     const student = await fetchControlEscolarStudentDetail(auth.agentId, matricula)
     if (!student.huskyPassAvailable) {
-      throw createError({ statusCode: 404, message: 'Este alumno no tiene Husky Pass registrado en users.' })
+      throw createError({ statusCode: 404, message: 'Este alumno no tiene Husky Pass activo.' })
     }
 
     const to = firstEmail(body?.to, student.emailPadre, student.emailMadre, student.email, student.huskyPassEmail)
     if (!to) {
-      throw createError({ statusCode: 400, message: 'El alumno no tiene correo de padre/tutor registrado para enviar Husky Pass.' })
+      throw createError({ statusCode: 400, message: 'El alumno no tiene correo de padre/tutor para enviar Husky Pass.' })
     }
 
     const subject = `Accesos Husky Pass - ${student.fullName || student.matricula}`

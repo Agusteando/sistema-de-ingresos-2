@@ -1,1 +1,1 @@
-fix: align control escolar filters and add safe matricula bulk updates
+fix: polish Control Escolar workflow, layout, imports and sidebar
