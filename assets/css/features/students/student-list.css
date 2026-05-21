@@ -156,6 +156,10 @@
   z-index: 1;
 }
 
+.student-identity.no-group-icon {
+  grid-template-columns: clamp(30px, 2.35vw, 34px) var(--student-list-grade-size) minmax(0, 1fr);
+}
+
 .student-row-grade-card {
   --student-grade-photo-width: var(--student-list-grade-size);
   --student-grade-photo-height: var(--student-list-grade-height);
@@ -191,23 +195,28 @@
 
 .student-copy {
   display: flex;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  overflow: hidden;
   flex-direction: column;
   align-items: flex-start;
   gap: clamp(5px, .48vw, 7px);
 }
 
 .student-copy strong {
+  display: block;
   max-width: 100%;
-  overflow: visible;
+  overflow: hidden;
   color: #15233c;
   font-size: clamp(13.5px, 1vw, 15px);
   font-weight: 840;
   letter-spacing: -.018em;
   line-height: 1.16;
-  text-overflow: clip;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .student-meta {

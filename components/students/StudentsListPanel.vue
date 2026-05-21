@@ -73,7 +73,7 @@
               class="student-group-watermark"
               :label="studentGroupLabel(student)"
             />
-            <span class="student-identity">
+            <span :class="['student-identity', studentGroupLabel(student) ? 'has-group-icon' : 'no-group-icon']">
               <button
                 type="button"
                 :class="['row-select-toggle', { active: isSelected(student) }]"
