@@ -234,6 +234,14 @@
                     <span :class="['ce-status-pill large', statusTone(selectedStudent)]">{{ selectedStudent.status || 'Activo' }}</span>
                   </div>
                 </div>
+                <div class="ce-husky-header-card" :class="{ unavailable: !selectedStudent.huskyPassAvailable }">
+                  <img src="/brand/ID-HUSKY-PASS-GREY.png" alt="Husky Pass" />
+                  <div>
+                    <strong>{{ selectedStudent.huskyPassAvailable ? 'Accesos activos' : 'Sin Husky Pass' }}</strong>
+                    <span v-if="selectedStudent.huskyPassAvailable">{{ selectedStudent.huskyPassUsername }} · {{ selectedStudent.huskyPassPlaintext }}</span>
+                    <span v-else>{{ huskyPassEmailTarget || 'Sin correo de padre/tutor' }}</span>
+                  </div>
+                </div>
                 <div class="ce-progress-cluster">
                   <strong>Perfil {{ selectedProfileCompletion }}% completo</strong>
                   <span class="ce-progress-track"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
@@ -243,7 +251,7 @@
                   <span :class="['ce-save-state', saveStateTone]">{{ saveStatusText }}</span>
                   <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
                   <UiButton variant="primary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="saveStudent">
-                    <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar ficha' }}
+                    <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar' }}
                   </UiButton>
                 </div>
                 <button type="button" class="detail-shell-close" @click="selectedStudent = null"><LucideX :size="20" /></button>
@@ -344,8 +352,6 @@
                           <option v-for="grupo in groupOptions" :key="`grupo-${grupo}`" :value="grupo">{{ grupo }}</option>
                         </select>
                       </label>
-                      <label><span>Interno</span><input v-model="editForm.interno" autocomplete="off" /></label>
-                      <label><span>Servicio</span><input v-model="editForm.servicio" autocomplete="off" /></label>
                       <label><span>Baja</span><select v-model="editForm.baja"><option :value="0">No</option><option :value="1">Sí</option></select></label>
                       <label><span>Motivo baja</span><input v-model="editForm.motivoBaja" autocomplete="off" /></label>
                       <label><span>Categoría baja</span><input v-model="editForm.categoriaBaja" autocomplete="off" /></label>
@@ -396,8 +402,8 @@
                       </article>
                     </div>
                     <section class="ce-husky-card compact">
-                      <div class="ce-section-heading">
-                        <span><LucideKeyRound :size="18" /></span>
+                      <div class="ce-section-heading ce-husky-heading">
+                        <img src="/brand/ID-HUSKY-PASS-GREY.png" alt="Husky Pass" />
                         <div>
                           <h3>Husky Pass accesos</h3>
                           <p>Accesos del portal del alumno listos para compartir con el padre o tutor.</p>
@@ -435,7 +441,7 @@
                 <div>
                   <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
                   <UiButton variant="primary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="saveStudent">
-                    <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar ficha' }}
+                    <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar' }}
                   </UiButton>
                 </div>
               </footer>
@@ -810,7 +816,7 @@ const selectedProfileCompletion = computed(() => completionFor(selectedStudent.v
 const selectedMissingCount = computed(() => studentMissingCount(selectedStudent.value))
 const huskyPassEmailTarget = computed(() => selectedStudent.value?.emailPadre || selectedStudent.value?.emailMadre || selectedStudent.value?.email || selectedStudent.value?.huskyPassEmail || '')
 const EDIT_FORM_FIELDS = [
-  'nombres', 'apellidoPaterno', 'apellidoMaterno', 'curp', 'interno', 'servicio', 'nivel', 'grado', 'grupo', 'baja',
+  'nombres', 'apellidoPaterno', 'apellidoMaterno', 'curp', 'nivel', 'grado', 'grupo', 'baja',
   'motivoBaja', 'categoriaBaja', 'seguimientoBaja', 'nombrePadre', 'apellidoPaternoPadre', 'apellidoMaternoPadre',
   'nombreMadre', 'apellidoPaternoMadre', 'apellidoMaternoMadre', 'telefonoPadre', 'telefonoMadre', 'emailPadre',
   'emailMadre', 'direccion'
@@ -1400,8 +1406,6 @@ const resetEditForm = (student = selectedStudent.value, options = {}) => {
     apellidoPaterno: student.apellidoPaterno || '',
     apellidoMaterno: student.apellidoMaterno || '',
     curp: student.curp || '',
-    interno: student.interno || '',
-    servicio: student.servicio || '',
     nivel: student.nivel || '',
     grado: student.grado || '',
     grupo: student.group || '',
@@ -2432,10 +2436,10 @@ onMounted(async () => {
 
 .ce-detail-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px auto 34px;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, .7fr) 230px auto 34px;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--students-border-soft);
   background: linear-gradient(180deg, #fff, #fbfdfb);
 }
@@ -2469,6 +2473,60 @@ onMounted(async () => {
   letter-spacing: -.035em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ce-husky-header-card {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(63, 145, 56, .14);
+  border-radius: 14px;
+  background: linear-gradient(110deg, #ffffff 0%, #f5fbf2 100%);
+  box-shadow: 0 8px 18px rgba(21,35,60,.045);
+}
+
+.ce-husky-header-card.unavailable {
+  border-color: rgba(129, 142, 162, .18);
+  background: #fbfcfd;
+}
+
+.ce-husky-header-card img {
+  display: block;
+  width: 72px;
+  max-height: 42px;
+  object-fit: contain;
+}
+
+.ce-husky-header-card div {
+  min-width: 0;
+}
+
+.ce-husky-header-card strong,
+.ce-husky-header-card span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-husky-header-card strong {
+  color: #1f7b2b;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ce-husky-header-card.unavailable strong {
+  color: #677389;
+}
+
+.ce-husky-header-card span {
+  margin-top: 3px;
+  color: #59687f;
+  font-size: 10px;
+  font-weight: 760;
 }
 
 .ce-progress-cluster {
@@ -2737,7 +2795,7 @@ onMounted(async () => {
 
 .ce-husky-card {
   display: grid;
-  grid-template-columns: minmax(240px, .55fr) minmax(260px, .7fr) auto;
+  grid-template-columns: minmax(260px, .55fr) minmax(260px, .7fr) auto;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
@@ -2745,6 +2803,17 @@ onMounted(async () => {
   border-radius: 14px;
   background: linear-gradient(90deg, #f7fbff, #fff);
   box-shadow: 0 7px 18px rgba(21,35,60,.035);
+}
+
+.ce-husky-heading {
+  align-items: center;
+}
+
+.ce-husky-heading > img {
+  display: block;
+  width: 98px;
+  max-height: 58px;
+  object-fit: contain;
 }
 
 .ce-husky-credentials {
@@ -3473,7 +3542,9 @@ onMounted(async () => {
   .ce-quality-fields { grid-template-columns: repeat(2, minmax(0, max-content)); }
   .ce-empty-flow ol { gap: 18px; }
   .ce-empty-flow li:not(:last-child)::after { right: -18px; }
-  .ce-detail-header { grid-template-columns: minmax(0, 1fr) 220px auto 34px; gap: 10px; }
+  .ce-detail-header { grid-template-columns: minmax(0, 1fr) minmax(200px, .72fr) 210px auto 34px; gap: 9px; }
+  .ce-husky-header-card { grid-template-columns: 62px minmax(0, 1fr); padding: 7px 8px; }
+  .ce-husky-header-card img { width: 62px; max-height: 36px; }
   .ce-detail-actions .ce-save-state { display: none; }
   .ce-detail-actions :deep(.ui-button) { min-height: 32px; padding-inline: 10px; font-size: 10px; }
 }
@@ -3492,7 +3563,9 @@ onMounted(async () => {
   .ce-empty-flow ol { grid-template-columns: 1fr; }
   .ce-empty-flow li:not(:last-child)::after { display: none; }
   .ce-detail-header { grid-template-columns: minmax(0, 1fr) 34px; }
-  .ce-progress-cluster { display: none; }
+  .ce-husky-header-card,
+  .ce-progress-cluster,
+  .ce-detail-actions { grid-column: 1 / -1; }
   .ce-profile-card,
   .ce-data-section,
   .ce-husky-card,
