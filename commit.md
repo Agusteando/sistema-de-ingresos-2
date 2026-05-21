@@ -1,7 +1,6 @@
-Separate operator student info from financial details
+Add searchable cargo extra concept picker
 
-- Remove the Control Escolar read-only panel from the normal Ver detalles flow.
-- Add a separate operator-only Ver información de alumno modal.
-- Add a bounded read-only operator info endpoint backed by plantel base plus centralized matricula data.
-- Hide and block the operator info view for exact ROLE_CTRL Control Escolar-only users.
-- Document the data sources and access boundary between base, matricula, and external users.
+- Replace the cargo extra concept select with a searchable dropdown.
+- Add manual concept refresh from the cargo extra modal.
+- Mark /api/conceptos responses as no-store for fresh manual reloads.
+- Document where concepts are sourced from and how to refresh them.

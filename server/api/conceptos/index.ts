@@ -2,6 +2,8 @@ import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
+  setResponseHeader(event, 'Cache-Control', 'no-store, max-age=0, must-revalidate')
+
   const method = event.node.req.method
   
   if (method === 'GET') {

@@ -8,11 +8,104 @@
         <div class="modal-content">
           <form @submit.prevent="submit" class="grid grid-cols-2 gap-4">
             <div class="form-group col-span-2 mb-0">
-              <label class="form-label">Concepto</label>
-              <select v-model="selectedDocumentoId" class="input-field" required @change="onDocumentoChange" :disabled="loadingConcepts">
-                <option disabled value="">{{ loadingConcepts ? 'Cargando conceptos...' : 'Seleccione un concepto...' }}</option>
-                <option v-for="c in conceptos" :key="c.id" :value="c.id">{{ c.concepto }} - ${{ Number(c.costo).toFixed(2) }}</option>
-              </select>
+              <div class="concept-label-row">
+                <label class="form-label">Concepto</label>
+                <button
+                  class="concept-refresh-button"
+                  type="button"
+                  :disabled="loadingConcepts || loading"
+                  title="Volver a consultar conceptos del ciclo activo"
+                  @click="refreshConcepts"
+                >
+                  <LucideRefreshCcw :class="{ 'animate-spin': loadingConcepts }" :size="13" />
+                  Actualizar
+                </button>
+              </div>
+
+              <div class="concept-combobox" :class="{ 'is-open': conceptDropdownOpen }">
+                <div class="concept-search-shell">
+                  <LucideSearch class="concept-search-icon" :size="15" />
+                  <input
+                    v-model="conceptSearch"
+                    class="concept-search-input"
+                    type="search"
+                    autocomplete="off"
+                    placeholder="Buscar por concepto, ID, descripción o plantel..."
+                    :disabled="loadingConcepts || loading"
+                    @focus="conceptDropdownOpen = true"
+                    @input="conceptDropdownOpen = true"
+                    @keydown.down.prevent="focusFirstConceptOption"
+                    @keydown.esc.prevent="conceptDropdownOpen = false"
+                    @blur="deferCloseDropdown"
+                  >
+                  <button
+                    v-if="selectedDocumentoId || conceptSearch"
+                    class="concept-clear-button"
+                    type="button"
+                    title="Limpiar concepto"
+                    :disabled="loadingConcepts || loading"
+                    @mousedown.prevent
+                    @click="clearConceptSelection"
+                  >
+                    <LucideX :size="14" />
+                  </button>
+                </div>
+
+                <div v-if="selectedConcept" class="concept-selected-pill">
+                  <LucideCheckCircle :size="13" />
+                  <span>{{ selectedConcept.concepto }}</span>
+                  <strong>${{ formatMoney(selectedConcept.costo) }}</strong>
+                </div>
+
+                <div
+                  v-if="conceptDropdownOpen"
+                  class="concept-dropdown"
+                  role="listbox"
+                  aria-label="Conceptos disponibles"
+                >
+                  <div v-if="loadingConcepts" class="concept-dropdown-state">
+                    <LucideLoader2 class="animate-spin" :size="15" />
+                    Cargando conceptos...
+                  </div>
+                  <div v-else-if="conceptLoadError" class="concept-dropdown-state concept-dropdown-state--error">
+                    {{ conceptLoadError }}
+                  </div>
+                  <div v-else-if="!filteredConceptos.length" class="concept-dropdown-state">
+                    No hay conceptos que coincidan con la búsqueda.
+                  </div>
+                  <template v-else>
+                    <button
+                      v-for="(c, index) in visibleConceptos"
+                      :key="c.id"
+                      :ref="index === 0 ? setFirstConceptOptionRef : undefined"
+                      class="concept-option"
+                      type="button"
+                      role="option"
+                      :aria-selected="String(c.id) === String(selectedDocumentoId)"
+                      @mousedown.prevent
+                      @click="selectConcept(c)"
+                    >
+                      <span class="concept-option-main">
+                        <strong>{{ c.concepto }}</strong>
+                        <small>
+                          ID {{ c.id }}<template v-if="c.description"> · {{ c.description }}</template>
+                        </small>
+                      </span>
+                      <span class="concept-option-meta">
+                        <b>${{ formatMoney(c.costo) }}</b>
+                        <em>{{ conceptMeta(c) }}</em>
+                      </span>
+                    </button>
+                    <div v-if="filteredConceptos.length > visibleConceptos.length" class="concept-dropdown-hint">
+                      Mostrando {{ visibleConceptos.length }} de {{ filteredConceptos.length }} resultados. Refina la búsqueda para ver menos opciones.
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <p class="concept-source-note">
+                Fuente: tabla <code>conceptos</code> del bridge del plantel activo, filtrada por ciclo {{ activeCicloLabel }}. “Actualizar” vuelve a consultar esa fuente.
+              </p>
             </div>
             <div class="form-group mb-0">
               <label class="form-label">Costo (MXN)</label>
@@ -68,8 +161,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { LucideLoader2 } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { LucideCheckCircle, LucideLoader2, LucideRefreshCcw, LucideSearch, LucideX } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
@@ -84,34 +177,126 @@ useScrollLock()
 
 const conceptos = ref([])
 const selectedDocumentoId = ref('')
+const conceptSearch = ref('')
+const conceptDropdownOpen = ref(false)
+const firstConceptOptionRef = ref(null)
 const loading = ref(false)
 const loadingConcepts = ref(false)
+const conceptLoadError = ref('')
 const form = ref({ costo: 0, meses: 1, eventual: false })
 
 const montoFinalInput = ref(0)
 const montoFinalConfirmed = ref(false)
 
-onMounted(async () => {
+const activeCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
+const activeCicloLabel = computed(() => String(activeCicloKey.value || state.value.ciclo || '').trim() || 'activo')
+
+const selectedConcept = computed(() => {
+  return conceptos.value.find((item) => String(item.id) === String(selectedDocumentoId.value)) || null
+})
+
+const filteredConceptos = computed(() => {
+  const term = conceptSearch.value.trim().toLowerCase()
+  if (!term) return conceptos.value
+
+  return conceptos.value.filter((concepto) => {
+    return [
+      concepto.id,
+      concepto.concepto,
+      concepto.description,
+      concepto.plantel,
+      concepto.ciclo,
+      concepto.costo
+    ].some((value) => String(value || '').toLowerCase().includes(term))
+  })
+})
+
+const visibleConceptos = computed(() => filteredConceptos.value.slice(0, 80))
+
+const formatMoney = (value) => Number(value || 0).toFixed(2)
+
+const isTruthyFlag = (value) => ['1', 'true', 'si', 'sí', 'yes'].includes(String(value || '').trim().toLowerCase())
+
+const conceptMeta = (concepto) => {
+  const parts = []
+  if (isTruthyFlag(concepto?.eventual)) parts.push('eventual')
+  else parts.push('recurrente')
+  if (concepto?.plazo) parts.push(`${concepto.plazo} meses`)
+  if (concepto?.plantel) parts.push(concepto.plantel)
+  return parts.filter(Boolean).join(' · ')
+}
+
+const setFirstConceptOptionRef = (el) => {
+  firstConceptOptionRef.value = el
+}
+
+const focusFirstConceptOption = () => {
+  conceptDropdownOpen.value = true
+  requestAnimationFrame(() => firstConceptOptionRef.value?.focus?.())
+}
+
+const deferCloseDropdown = () => {
+  window.setTimeout(() => {
+    conceptDropdownOpen.value = false
+  }, 140)
+}
+
+const applyConceptToForm = (concepto) => {
+  form.value.costo = Number(concepto?.costo || 0)
+  form.value.meses = Number(concepto?.plazo || 1) || 1
+  form.value.eventual = isTruthyFlag(concepto?.eventual)
+  montoFinalInput.value = Math.round(Number(concepto?.costo || 0))
+  montoFinalConfirmed.value = false
+}
+
+const selectConcept = (concepto) => {
+  selectedDocumentoId.value = String(concepto.id)
+  conceptSearch.value = concepto.concepto || String(concepto.id)
+  conceptDropdownOpen.value = false
+  applyConceptToForm(concepto)
+}
+
+const clearConceptSelection = () => {
+  selectedDocumentoId.value = ''
+  conceptSearch.value = ''
+  form.value = { costo: 0, meses: 1, eventual: false }
+  montoFinalInput.value = 0
+  montoFinalConfirmed.value = false
+  conceptDropdownOpen.value = true
+}
+
+const loadConcepts = async ({ manual = false } = {}) => {
   loadingConcepts.value = true
+  conceptLoadError.value = ''
   try {
-    conceptos.value = await $fetch('/api/conceptos', { params: { ciclo: normalizeCicloKey(state.value.ciclo) } })
+    const rows = await $fetch('/api/conceptos', {
+      params: {
+        ciclo: activeCicloKey.value,
+        refresh: manual ? Date.now() : undefined
+      }
+    })
+    conceptos.value = Array.isArray(rows) ? rows : []
+
+    if (selectedDocumentoId.value) {
+      const updatedSelection = conceptos.value.find((item) => String(item.id) === String(selectedDocumentoId.value))
+      if (updatedSelection) {
+        conceptSearch.value = updatedSelection.concepto || String(updatedSelection.id)
+        applyConceptToForm(updatedSelection)
+      } else {
+        clearConceptSelection()
+      }
+    }
+
+    if (manual) show(`Conceptos actualizados (${conceptos.value.length})`, 'success')
   } catch (e) {
-    show('Error al cargar conceptos', 'danger')
+    conceptLoadError.value = e?.data?.message || 'No se pudieron cargar los conceptos.'
+    show(conceptLoadError.value, 'danger')
   } finally {
     loadingConcepts.value = false
   }
-})
-
-const onDocumentoChange = () => {
-  const c = conceptos.value.find(x => x.id === selectedDocumentoId.value)
-  if (c) { 
-    form.value.costo = Number(c.costo)
-    form.value.meses = c.plazo || 1
-    form.value.eventual = c.eventual 
-    montoFinalInput.value = Math.round(Number(c.costo || 0))
-    montoFinalConfirmed.value = false
-  }
 }
+
+const refreshConcepts = () => loadConcepts({ manual: true })
 
 const submit = async () => {
   if (!selectedDocumentoId.value) return show('Seleccione un concepto', 'danger')
@@ -133,7 +318,7 @@ const submit = async () => {
         montoFinal,
         meses: form.value.meses, 
         beca: 0, 
-        ciclo: normalizeCicloKey(state.value.ciclo), 
+        ciclo: activeCicloKey.value, 
         eventual: form.value.eventual 
       }
     })
@@ -142,4 +327,241 @@ const submit = async () => {
   } catch (e) { show('Error al agregar', 'danger') } 
   finally { loading.value = false }
 }
+
+onMounted(() => loadConcepts())
 </script>
+
+<style scoped>
+.concept-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.concept-refresh-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #d7e2d6;
+  border-radius: 999px;
+  background: #f8fbf7;
+  color: #44723d;
+  font-size: 0.7rem;
+  font-weight: 760;
+  padding: 6px 10px;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.concept-refresh-button:hover:not(:disabled) {
+  background: #eef8ec;
+  border-color: #bdd9b7;
+  transform: translateY(-1px);
+}
+
+.concept-refresh-button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.concept-combobox {
+  position: relative;
+}
+
+.concept-search-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.concept-search-icon {
+  position: absolute;
+  left: 12px;
+  color: #738196;
+  pointer-events: none;
+}
+
+.concept-search-input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #d8e0ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #263752;
+  font-size: 0.86rem;
+  font-weight: 650;
+  outline: none;
+  padding: 0 42px 0 36px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.concept-search-input:focus {
+  border-color: #84b97d;
+  box-shadow: 0 0 0 3px rgba(79, 139, 71, 0.12);
+}
+
+.concept-clear-button {
+  position: absolute;
+  right: 9px;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #657287;
+}
+
+.concept-selected-pill {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  border: 1px solid #d8ebd5;
+  border-radius: 999px;
+  background: #f6fbf4;
+  color: #44723d;
+  font-size: 0.74rem;
+  font-weight: 750;
+  padding: 5px 9px;
+}
+
+.concept-selected-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.concept-selected-pill strong {
+  color: #2f5f2d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.concept-dropdown {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  max-height: min(340px, 44vh);
+  overflow: auto;
+  border: 1px solid #d7e0ea;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 22px 60px rgba(24, 39, 66, 0.18);
+  padding: 6px;
+}
+
+.concept-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #263752;
+  padding: 9px 10px;
+  text-align: left;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.concept-option:hover,
+.concept-option:focus,
+.concept-option[aria-selected="true"] {
+  background: #f1f7ef;
+  outline: none;
+}
+
+.concept-option-main {
+  min-width: 0;
+}
+
+.concept-option-main strong,
+.concept-option-main small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.concept-option-main strong {
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.concept-option-main small {
+  margin-top: 2px;
+  color: #788397;
+  font-size: 0.69rem;
+  font-weight: 620;
+}
+
+.concept-option-meta {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  color: #657287;
+}
+
+.concept-option-meta b {
+  color: #2f5f2d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.concept-option-meta em {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.concept-dropdown-state,
+.concept-dropdown-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #718096;
+  font-size: 0.76rem;
+  font-weight: 680;
+  padding: 18px 12px;
+  text-align: center;
+}
+
+.concept-dropdown-state--error {
+  color: #b03a2f;
+}
+
+.concept-dropdown-hint {
+  justify-content: flex-start;
+  border-top: 1px solid #edf2f7;
+  padding: 9px 10px 6px;
+}
+
+.concept-source-note {
+  margin: 7px 0 0;
+  color: #768398;
+  font-size: 0.68rem;
+  font-weight: 620;
+  line-height: 1.35;
+}
+
+.concept-source-note code {
+  border-radius: 5px;
+  background: #f0f4f8;
+  color: #45566f;
+  padding: 1px 4px;
+}
+</style>
