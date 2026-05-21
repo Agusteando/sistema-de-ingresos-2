@@ -28,6 +28,7 @@ type StudentsSyncState = {
 }
 
 const CACHE_VERSION = 3
+const LEGACY_CACHE_VERSIONS = [2]
 const CACHE_NAMESPACE = 'students-cache'
 
 const normalizeQuery = (value?: string | null) => String(value || '').trim()
@@ -39,7 +40,9 @@ const safeParseRecord = (raw: string | null): StudentsCacheRecord | null => {
 
   try {
     const parsed = JSON.parse(raw)
-    if (parsed?.version !== CACHE_VERSION || !Array.isArray(parsed?.students)) return null
+    if (!Array.isArray(parsed?.students)) return null
+    const version = Number(parsed?.version)
+    if (![CACHE_VERSION, ...LEGACY_CACHE_VERSIONS].includes(version)) return null
     return parsed as StudentsCacheRecord
   } catch (error) {
     console.warn('[Students cache] Could not parse cached students.', error)
@@ -65,19 +68,26 @@ export const useStudentsCacheSync = () => {
     plantel: String(activePlantel.value || 'default')
   }))
 
-  const getStudentsCacheKey = (options: StudentsCacheOptions = {}) => {
+  const getStudentsCacheKeyForVersion = (version: number, options: StudentsCacheOptions = {}) => {
     const ciclo = normalizeCicloKey(options.ciclo || '')
     const query = normalizeQuery(options.q).toLowerCase()
 
     return [
       CACHE_NAMESPACE,
-      `v${CACHE_VERSION}`,
+      `v${version}`,
       encodeKeySegment(cacheScope.value.role),
       encodeKeySegment(cacheScope.value.plantel),
       encodeKeySegment(ciclo || 'default'),
       encodeKeySegment(query || 'all')
     ].join(':')
   }
+
+  const getStudentsCacheKey = (options: StudentsCacheOptions = {}) => getStudentsCacheKeyForVersion(CACHE_VERSION, options)
+
+  const getStudentsCacheReadKeys = (options: StudentsCacheOptions = {}) => [
+    getStudentsCacheKeyForVersion(CACHE_VERSION, options),
+    ...LEGACY_CACHE_VERSIONS.map(version => getStudentsCacheKeyForVersion(version, options))
+  ]
 
   const setStudentsSyncState = (patch: Partial<StudentsSyncState>) => {
     studentsSyncState.value = {
@@ -89,16 +99,20 @@ export const useStudentsCacheSync = () => {
   const readCachedStudents = (options: StudentsCacheOptions = {}) => {
     if (!process.client) return null
 
-    const key = getStudentsCacheKey(options)
-    const record = safeParseRecord(localStorage.getItem(key))
-    if (!record) return null
+    for (const key of getStudentsCacheReadKeys(options)) {
+      const record = safeParseRecord(localStorage.getItem(key))
+      if (!record) continue
 
-    return {
-      key,
-      students: record.students,
-      savedAt: record.savedAt,
-      count: record.students.length
+      return {
+        key,
+        students: record.students,
+        savedAt: record.savedAt,
+        count: record.students.length,
+        isLegacy: Number(record.version) !== CACHE_VERSION
+      }
     }
+
+    return null
   }
 
   const writeCachedStudents = (options: StudentsCacheOptions = {}, students: unknown[] = []) => {

@@ -908,7 +908,9 @@ const showStudentMenu = (event, student) => {
   ])
 }
 
-onMounted(async () => {
+const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
+  const previousConcepts = externalConcepts.value.join('|')
+
   try {
     const configData = await $fetch('https://matricula.casitaapps.com/api/enrollment-config/all')
     parseEnrollmentConfig(configData)
@@ -916,11 +918,20 @@ onMounted(async () => {
     console.warn('Fallback al carecer de configuración externa.')
   }
 
+  const nextConcepts = externalConcepts.value.join('|')
+  loadGlobalKpis()
+  loadKpiSparklines()
+
+  if (refreshStudents && nextConcepts && nextConcepts !== previousConcepts) {
+    performSearch({ useCache: false })
+  }
+}
+
+onMounted(() => {
   if (route.query.q) filters.value.q = String(route.query.q)
   loadCustomSections()
   performSearch({ useCache: true })
-  loadGlobalKpis()
-  loadKpiSparklines()
+  loadEnrollmentConfig({ refreshStudents: true })
 })
 
 

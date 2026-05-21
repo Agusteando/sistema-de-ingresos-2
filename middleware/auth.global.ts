@@ -34,6 +34,10 @@ export default defineNuxtRouteMiddleware((to) => {
     return navigateTo('/')
   }
 
+  if (email.value && to.path === '/sql-console' && !isSuperAdmin) {
+    return navigateTo('/')
+  }
+
   if (email.value && !isSuperAdmin && !isControlEscolarOnly && !planteles.value && to.path !== '/onboarding' && !to.path.startsWith('/print')) {
     return navigateTo('/onboarding')
   }
