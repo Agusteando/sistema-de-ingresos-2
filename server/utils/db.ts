@@ -309,6 +309,15 @@ const runSafeQuery = async (sql: string) => {
   }
 }
 
+const runOptionalIndexQuery = async (sql: string) => {
+  if (getTransport() === 'bridge') {
+    debugBridge('skip optional index migration through bridge', { sql: sql.replace(/\s+/g, ' ').trim() })
+    return
+  }
+
+  await runSafeQuery(sql)
+}
+
 const checkAndAddColumn = async (table: string, column: string, definition: string, defaultAction?: string) => {
   try {
     const cols = await rawQuery<any[]>(`SHOW COLUMNS FROM ${table} LIKE '${column}'`)
@@ -506,8 +515,8 @@ export const ensureSchema = async () => {
             await runSafeQuery(`ALTER TABLE base DROP COLUMN familiaId`)
           }
 
-          await runSafeQuery(`ALTER TABLE base ADD INDEX idx_base_matricula_estatus (matricula(64), estatus(20))`)
-          await runSafeQuery(`ALTER TABLE base ADD INDEX idx_base_plantel_estatus (plantel(20), estatus(20))`)
+          await runOptionalIndexQuery(`ALTER TABLE base ADD INDEX idx_base_matricula_estatus (matricula(64), estatus(20))`)
+          await runOptionalIndexQuery(`ALTER TABLE base ADD INDEX idx_base_plantel_estatus (plantel(20), estatus(20))`)
         }
       } catch (e) {}
 
@@ -518,7 +527,7 @@ export const ensureSchema = async () => {
           await checkAndAddColumn('referenciasdepago', 'depurado', "TINYINT(1) NOT NULL DEFAULT 0")
           await checkAndAddColumn('referenciasdepago', 'depurado_por', "VARCHAR(255) DEFAULT NULL")
           await checkAndAddColumn('referenciasdepago', 'depurado_fecha', "DATETIME DEFAULT NULL")
-          await runSafeQuery(`ALTER TABLE referenciasdepago ADD INDEX idx_ref_ciclo_matricula_documento_mes_estatus (ciclo(20), matricula(64), documento, mes(20), estatus(30))`)
+          await runOptionalIndexQuery(`ALTER TABLE referenciasdepago ADD INDEX idx_ref_ciclo_matricula_documento_mes_estatus (ciclo(20), matricula(64), documento, mes(20), estatus(30))`)
         }
       } catch (e) {}
 
@@ -535,7 +544,7 @@ export const ensureSchema = async () => {
           await checkAndAddColumn('documentos', 'becaPorcentaje', "DECIMAL(8,2) NOT NULL DEFAULT 0")
           await checkAndAddColumn('documentos', 'becaCartaGenerada', "TINYINT(1) NOT NULL DEFAULT 0")
           await checkAndAddColumn('documentos', 'becaCartaFecha', "DATETIME DEFAULT NULL")
-          await runSafeQuery(`ALTER TABLE documentos ADD INDEX idx_documentos_ciclo_estatus_matricula (ciclo(20), estatus(20), matricula(64))`)
+          await runOptionalIndexQuery(`ALTER TABLE documentos ADD INDEX idx_documentos_ciclo_estatus_matricula (ciclo(20), estatus(20), matricula(64))`)
         }
       } catch (e) {}
 
