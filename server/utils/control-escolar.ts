@@ -65,6 +65,8 @@ type ControlEscolarSchema = {
   matricula: Set<string>
   ingresos: boolean
   loadedAt: number
+  centralAvailable: boolean
+  centralError: string
 }
 
 const PLANTEL_SET = new Set(PLANTELES_LIST.map(normalizePlantel))
@@ -201,19 +203,31 @@ const getCentralMatriculaColumns = async () => {
   return columns
 }
 
-export const getControlEscolarSchema = async (agentId: string): Promise<ControlEscolarSchema> => {
+type ControlEscolarSchemaOptions = {
+  requireCentral?: boolean
+}
+
+const toErrorMessage = (error: any) => error?.data?.message || error?.statusMessage || error?.message || 'No se pudo consultar la base centralizada de Control Escolar.'
+
+export const getControlEscolarSchema = async (agentId: string, options: ControlEscolarSchemaOptions = {}): Promise<ControlEscolarSchema> => {
+  const requireCentral = options.requireCentral !== false
   const cacheKey = normalizePlantel(agentId)
   const cached = schemaCache.get(cacheKey)
-  if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS) return cached
+  if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS) {
+    if (requireCentral && !cached.centralAvailable) {
+      schemaCache.delete(cacheKey)
+    } else {
+      return cached
+    }
+  }
 
   const baseExists = await localTableExists('base')
   if (!baseExists) {
     throw createError({ statusCode: 500, message: 'La tabla base no existe en el plantel seleccionado.' })
   }
 
-  const [baseColumns, matriculaColumns, ingresosExists] = await Promise.all([
+  const [baseColumns, ingresosExists] = await Promise.all([
     localColumns('base'),
-    getCentralMatriculaColumns(),
     localTableExists('ingresos')
   ])
 
@@ -221,7 +235,26 @@ export const getControlEscolarSchema = async (agentId: string): Promise<ControlE
     throw createError({ statusCode: 500, message: 'La tabla base no tiene columna matricula.' })
   }
 
-  const schema = { base: baseColumns, matricula: matriculaColumns, ingresos: ingresosExists, loadedAt: Date.now() }
+  let matriculaColumns = new Set<string>()
+  let centralAvailable = true
+  let centralError = ''
+
+  try {
+    matriculaColumns = await getCentralMatriculaColumns()
+  } catch (error: any) {
+    centralAvailable = false
+    centralError = toErrorMessage(error)
+    if (requireCentral) throw error
+  }
+
+  const schema = {
+    base: baseColumns,
+    matricula: matriculaColumns,
+    ingresos: ingresosExists,
+    loadedAt: Date.now(),
+    centralAvailable,
+    centralError
+  }
   schemaCache.set(cacheKey, schema)
   return schema
 }
@@ -261,12 +294,11 @@ const buildLocalBaseSelect = (agentId: string, baseColumns: Set<string>) => {
 }
 
 const buildLocalBaseWhere = (schema: ControlEscolarSchema) => {
-  const where: string[] = []
-  if (schema.ingresos) {
-    where.push(`EXISTS (SELECT 1 FROM ingresos i WHERE i.matricula = b.matricula AND i.estatus = 'Activo')`)
-  }
-  where.push(`${expr(schema.base, 'b', 'estatus', sqlLiteral('Activo'))} = 'Activo'`)
-  return where.join(' AND ')
+  // Control Escolar must start from the same plantel-local source used by operators: base.
+  // Do not gate this list with the local ingresos table; some planteles do not keep that table
+  // aligned with the operator student list and it can make Control Escolar appear empty.
+  const estatusExpr = expr(schema.base, 'b', 'estatus', sqlLiteral('Activo'))
+  return `(${estatusExpr} = 'Activo' OR ${estatusExpr} IS NULL OR TRIM(CAST(${estatusExpr} AS CHAR)) = '')`
 }
 
 const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema) => {
@@ -325,6 +357,8 @@ const fetchMatriculaOverlayMap = async (matriculas: string[], schema: ControlEsc
   const unique = Array.from(new Set(matriculas.map((matricula) => normalizeText(matricula, 64)).filter(Boolean)))
   const result = new Map<string, any>()
   if (!unique.length) return result
+
+  if (!schema.centralAvailable || !schema.matricula.has('matricula')) return result
 
   const columns = centralSelectColumns(schema)
   if (!columns.includes('matricula')) columns.unshift('matricula')
@@ -466,7 +500,7 @@ export const fetchControlEscolarStudentDetail = async (agentId: string, matricul
     throw createError({ statusCode: 400, message: 'Matrícula inválida.' })
   }
 
-  const schema = await getControlEscolarSchema(agentId)
+  const schema = await getControlEscolarSchema(agentId, { requireCentral: false })
   const fields = buildLocalBaseSelect(agentId, schema.base)
   const [baseRow] = await query<any[]>(`
     SELECT ${fields.join(',\n      ')}
@@ -479,10 +513,19 @@ export const fetchControlEscolarStudentDetail = async (agentId: string, matricul
     throw createError({ statusCode: 404, message: 'Alumno no encontrado en base para el plantel activo.' })
   }
 
-  const [rawBaseRows, rawMatricula] = await Promise.all([
-    query<any[]>(`SELECT * FROM base WHERE matricula = ? LIMIT 1`, [normalizedMatricula]),
-    fetchFullCentralMatriculaRow(normalizedMatricula)
-  ])
+  const rawBaseRows = await query<any[]>(`SELECT * FROM base WHERE matricula = ? LIMIT 1`, [normalizedMatricula])
+  let rawMatricula: any = null
+  if (schema.centralAvailable) {
+    try {
+      rawMatricula = await fetchFullCentralMatriculaRow(normalizedMatricula)
+    } catch (error: any) {
+      console.warn('[Control Escolar] centralized matricula detail overlay unavailable', {
+        agentId,
+        matricula: normalizedMatricula,
+        error: toErrorMessage(error)
+      })
+    }
+  }
 
   const normalized = overlayStudentRow(agentId, baseRow, rawMatricula)
   return {
@@ -501,8 +544,20 @@ const compareStudents = (a: ControlEscolarStudentRow, b: ControlEscolarStudentRo
   return `${a.grado}|${a.group}|${a.fullName}|${a.matricula}`.localeCompare(`${b.grado}|${b.group}|${b.fullName}|${b.matricula}`, 'es')
 }
 
-const fetchAllNormalizedStudents = async (agentId: string) => {
-  const schema = await getControlEscolarSchema(agentId)
+type ControlEscolarLoadedStudents = {
+  students: ControlEscolarStudentRow[]
+  source: {
+    base: string
+    overlay: string
+    overlayAvailable: boolean
+    overlayError: string
+    localRows: number
+    overlayRows: number
+  }
+}
+
+const fetchAllNormalizedStudents = async (agentId: string): Promise<ControlEscolarLoadedStudents> => {
+  const schema = await getControlEscolarSchema(agentId, { requireCentral: false })
   const localRows = await fetchLocalBaseRows(agentId, schema)
 
   if (localRows.length > MAX_LOCAL_ROWS) {
@@ -512,8 +567,37 @@ const fetchAllNormalizedStudents = async (agentId: string) => {
     })
   }
 
-  const overlayMap = await fetchMatriculaOverlayMap(localRows.map((row) => row.matricula), schema)
-  return localRows.map((row) => overlayStudentRow(agentId, row, overlayMap.get(normalizeText(row.matricula, 64)))).sort(compareStudents)
+  let overlayMap = new Map<string, any>()
+  let overlayAvailable = schema.centralAvailable
+  let overlayError = schema.centralError
+
+  if (schema.centralAvailable) {
+    try {
+      overlayMap = await fetchMatriculaOverlayMap(localRows.map((row) => row.matricula), schema)
+    } catch (error: any) {
+      overlayAvailable = false
+      overlayError = toErrorMessage(error)
+      console.warn('[Control Escolar] centralized matricula overlay lookup unavailable', {
+        agentId,
+        localRows: localRows.length,
+        error: overlayError
+      })
+    }
+  }
+
+  return {
+    students: localRows
+      .map((row) => overlayStudentRow(agentId, row, overlayMap.get(normalizeText(row.matricula, 64))))
+      .sort(compareStudents),
+    source: {
+      base: `bridge:${normalizePlantel(agentId)}.base`,
+      overlay: 'CONTROL_ESCOLAR_MYSQL.matricula',
+      overlayAvailable,
+      overlayError: overlayError || '',
+      localRows: Math.min(localRows.length, MAX_LOCAL_ROWS),
+      overlayRows: overlayMap.size
+    }
+  }
 }
 
 const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
@@ -583,7 +667,8 @@ const buildCatalogs = (students: ControlEscolarStudentRow[]) => ({
 export const fetchControlEscolarStudents = async (agentId: string, filters: any) => {
   const page = Math.max(1, Number(filters.page || 1) || 1)
   const limit = Math.min(100, Math.max(10, Number(filters.limit || 25) || 25))
-  const allStudents = await fetchAllNormalizedStudents(agentId)
+  const loaded = await fetchAllNormalizedStudents(agentId)
+  const allStudents = loaded.students
   const filtered = applyFilters(allStudents, filters)
   const offset = (page - 1) * limit
 
@@ -595,12 +680,14 @@ export const fetchControlEscolarStudents = async (agentId: string, filters: any)
       total: filtered.length,
       pages: Math.max(1, Math.ceil(filtered.length / limit))
     },
-    catalogs: buildCatalogs(allStudents)
+    catalogs: buildCatalogs(allStudents),
+    source: loaded.source
   }
 }
 
 export const fetchControlEscolarKpis = async (agentId: string) => {
-  const students = await fetchAllNormalizedStudents(agentId)
+  const loaded = await fetchAllNormalizedStudents(agentId)
+  const students = loaded.students
   const byNivel = new Map<string, number>()
   const byGrupo = new Map<string, number>()
 
@@ -674,10 +761,10 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
     throw createError({ statusCode: 400, message: 'Matrícula inválida.' })
   }
 
-  const schema = await getControlEscolarSchema(agentId)
-  const [baseRow] = await query<any[]>(`SELECT matricula, ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel FROM base b WHERE b.matricula = ? AND ${expr(schema.base, 'b', 'estatus', sqlLiteral('Activo'))} = 'Activo' LIMIT 1`, [normalizedMatricula])
+  const schema = await getControlEscolarSchema(agentId, { requireCentral: true })
+  const [baseRow] = await query<any[]>(`SELECT matricula, ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel FROM base b WHERE b.matricula = ? LIMIT 1`, [normalizedMatricula])
   if (!baseRow) {
-    throw createError({ statusCode: 404, message: 'El alumno no existe como fila activa en base. Control Escolar no crea alumnos locales.' })
+    throw createError({ statusCode: 404, message: 'El alumno no existe en base. Control Escolar no crea alumnos locales.' })
   }
 
   const requestedFields = Object.keys(body || {})
@@ -761,6 +848,6 @@ export const runControlEscolar = async <T>(event: any, agentId: string, callback
 }
 
 export const fetchControlEscolarExportRows = async (agentId: string, filters: any) => {
-  const allStudents = await fetchAllNormalizedStudents(agentId)
-  return applyFilters(allStudents, filters).slice(0, 5000)
+  const loaded = await fetchAllNormalizedStudents(agentId)
+  return applyFilters(loaded.students, filters).slice(0, 5000)
 }
