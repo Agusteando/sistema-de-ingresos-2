@@ -117,7 +117,7 @@
                     @click="selectStudent(student)"
                   >
                     <UiGroupIcon v-if="student.group" class="student-group-watermark" :label="student.group" />
-                    <span class="student-identity ce-student-identity">
+                    <span :class="['student-identity', 'ce-student-identity', student.group ? 'has-group-icon' : 'no-group-icon']">
                       <span class="ce-row-check" aria-hidden="true">✓</span>
                       <StudentGradePhotoCard
                         class="student-row-grade-card"
@@ -911,6 +911,25 @@ onMounted(async () => {
 .ce-student-identity {
   grid-template-columns: 28px var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
   gap: 10px;
+}
+
+.ce-student-identity.no-group-icon {
+  grid-template-columns: 28px var(--student-list-grade-size) minmax(0, 1fr);
+}
+
+.ce-student-row .student-copy {
+  width: 100%;
+  max-width: 100%;
+}
+
+.ce-student-row .student-copy strong {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .ce-row-check {

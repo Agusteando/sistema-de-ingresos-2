@@ -1,1 +1,1 @@
-fix(control-escolar): load base students before overlays and stop bridge index DDL
+fix(students): prevent newly added student names from wrapping by letters
