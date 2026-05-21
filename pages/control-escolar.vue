@@ -103,7 +103,7 @@
 
     <div ref="studentsScaleShell" class="students-scale-shell" :style="studentsScaleShellStyle">
       <div class="students-design-canvas" :style="studentsDesignCanvasStyle">
-        <div :class="['students-workspace ce-workspace', { 'has-detail': Boolean(selectedStudent) }]">
+        <div :class="['students-workspace ce-workspace', { 'has-detail': Boolean(selectedStudent), 'has-empty-detail': !selectedStudent }]">
           <section :class="['student-list-panel', selectedStudent ? 'is-compact' : 'is-full']">
             <div class="student-list-card ce-list-card">
               <div class="list-titlebar ce-list-titlebar">
@@ -164,24 +164,38 @@
                       </span>
                       <span class="student-copy">
                         <strong :title="student.fullName">{{ student.fullName || 'Alumno sin nombre' }}</strong>
-                        <em class="student-meta"><span>{{ compactAcademic(student) }}</span></em>
                         <span class="student-type-line">
                           <span :class="['student-tipo-chip', student.overlayExists ? 'interno' : 'externo']">
                             {{ student.matricula }}
                           </span>
                         </span>
+                        <span class="ce-academic-pills" :aria-label="compactAcademic(student)">
+                          <span>{{ student.grado || 'Sin grado' }}</span>
+                          <span :class="{ warning: controlMissingGroup(student) }">{{ controlMissingGroup(student) ? 'Sin grupo' : `Grupo ${controlGroupLabel(student)}` }}</span>
+                          <span>{{ student.nivel || 'Sin nivel' }}</span>
+                        </span>
                       </span>
                     </span>
 
-                    <span class="ce-profile-cell">
-                      <strong>{{ compactAcademic(student) }}</strong>
-                      <small>{{ student.program || student.nivel || 'Sin programa' }}</small>
-                      <span :class="['ce-status-pill', statusTone(student)]">{{ student.status || 'Activo' }}</span>
+                    <span
+                      :class="['ce-quality-score', qualityScoreTone(student)]"
+                      :style="{ '--quality-score': `${completionFor(student)}%` }"
+                      :aria-label="`Expediente ${completionFor(student)}% completo`"
+                    >
+                      <b>{{ completionFor(student) }}%</b>
                     </span>
 
                     <span class="ce-quality-cell">
-                      <strong>{{ student.missingFields.length ? `${student.missingFields.length} pendientes` : 'Completo' }}</strong>
-                      <small>{{ student.missingFields.length ? student.missingFields.join(', ') : 'Sin faltantes principales' }}</small>
+                      <strong>{{ qualitySummary(student) }}</strong>
+                      <span class="ce-quality-fields">
+                        <small
+                          v-for="field in requiredDataFields"
+                          :key="`${student.matricula}-${field.key}`"
+                          :class="{ missing: studentMissingField(student, field) }"
+                        >
+                          <component :is="field.icon" :size="12" /> {{ field.label }}
+                        </small>
+                      </span>
                     </span>
 
                     <span class="row-actions">
@@ -190,6 +204,23 @@
                   </button>
                 </template>
               </div>
+
+              <footer v-if="!selectedStudent && selectedAgentId && students.length" class="ce-list-footer">
+                <span>Mostrando {{ paginationRangeLabel }} de {{ formatNumber(pagination.total) }} alumnos</span>
+                <div class="ce-list-pages" aria-label="Paginación de alumnos">
+                  <button
+                    v-for="(pageItem, pageIndex) in visiblePaginationPages"
+                    :key="`ce-page-${pageIndex}-${pageItem}`"
+                    type="button"
+                    :disabled="pageItem === 'ellipsis' || studentsLoading"
+                    :class="{ active: pageItem === pagination.page, ellipsis: pageItem === 'ellipsis' }"
+                    @click="pageItem !== 'ellipsis' && goToPage(pageItem)"
+                  >
+                    {{ pageItem === 'ellipsis' ? '...' : pageItem }}
+                  </button>
+                  <button type="button" :disabled="pagination.page >= pagination.pages || studentsLoading" @click="goToPage(pagination.page + 1)"><LucideChevronRight :size="14" /></button>
+                </div>
+              </footer>
             </div>
           </section>
 
@@ -409,6 +440,53 @@
               </div>
             </div>
           </section>
+
+          <section v-else class="student-detail-panel ce-detail-panel ce-empty-detail-panel" aria-label="Guía para editar ficha de alumno">
+            <div class="ce-empty-shell">
+              <div class="ce-empty-hero" aria-hidden="true">
+                <span class="ce-empty-sparkle one">✦</span>
+                <span class="ce-empty-sparkle two">✦</span>
+                <LucideUserRound :size="42" />
+                <span class="ce-empty-lines"><i></i><i></i></span>
+                <span class="ce-empty-cursor"></span>
+              </div>
+
+              <div class="ce-empty-copy">
+                <h2>Selecciona un alumno para editar su ficha</h2>
+                <p>Elige un alumno de la lista para revisar y actualizar su información.</p>
+                <p>Podrás editar identidad, datos escolares, contacto familiar, sistema y observaciones.</p>
+              </div>
+
+              <section class="ce-empty-card ce-empty-review">
+                <h3>Qué revisar primero</h3>
+                <div>
+                  <span><LucideShieldCheck :size="15" /> CURP del alumno</span>
+                  <span><LucideUsersRound :size="15" /> Tutor / Responsable</span>
+                  <span><LucidePhone :size="15" /> Teléfono de contacto</span>
+                  <span><LucideGraduationCap :size="15" /> Grupo y servicio asignado</span>
+                  <span><LucideMail :size="15" /> Email del contacto</span>
+                  <span><LucideShieldCheck :size="15" /> Expediente completo</span>
+                </div>
+              </section>
+
+              <section class="ce-empty-card ce-empty-flow">
+                <h3>Así se verá tu flujo al seleccionar un alumno</h3>
+                <ol>
+                  <li><span><LucideUserRound :size="21" /></span><b>1 Identidad</b></li>
+                  <li><span><LucideGraduationCap :size="21" /></span><b>2 Escolar</b></li>
+                  <li><span><LucideUsersRound :size="21" /></span><b>3 Contacto familiar</b></li>
+                  <li><span><LucideKeyRound :size="21" /></span><b>4 Sistema</b></li>
+                  <li><span><LucideAlertTriangle :size="21" /></span><b>5 Observaciones</b></li>
+                </ol>
+              </section>
+
+              <aside class="ce-empty-tip">
+                <span><LucideShieldCheck :size="23" /></span>
+                <p><strong>Tip:</strong> usa los indicadores de calidad para priorizar los expedientes con pendientes.</p>
+                <i aria-hidden="true"><LucideShieldCheck :size="23" /></i>
+              </aside>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -543,7 +621,7 @@ const editForm = reactive({})
 let searchTimer = null
 let controlStudentsRequestId = 0
 
-const hasDetail = computed(() => Boolean(selectedStudent.value))
+const hasDetail = computed(() => true)
 const { studentsScaleShell, studentsScaleShellStyle, studentsDesignCanvasStyle, scheduleWorkspaceScaleUpdate } = useStudentsWorkspaceScale(hasDetail)
 const loadingAny = computed(() => optionsLoading.value || kpisLoading.value || studentsLoading.value || savingStudent.value)
 const hasActiveFilters = computed(() => Boolean(
@@ -583,6 +661,21 @@ const groupOptions = computed(() => {
 })
 
 const advancedFilterCount = computed(() => [filters.quality, filters.grado, filters.group, filters.recent].filter(Boolean).length)
+
+const paginationRangeLabel = computed(() => {
+  const total = Number(pagination.total || 0)
+  if (!total) return '0 a 0'
+  const start = ((Number(pagination.page || 1) - 1) * Number(pagination.limit || students.value.length || 1)) + 1
+  const end = Math.min(start + Math.max(students.value.length, 1) - 1, total)
+  return `${formatNumber(start)} a ${formatNumber(end)}`
+})
+const visiblePaginationPages = computed(() => {
+  const totalPages = Math.max(1, Number(pagination.pages || 1))
+  if (totalPages <= 4) return Array.from({ length: totalPages }, (_, index) => index + 1)
+  if (pagination.page <= 3) return [1, 2, 3, 'ellipsis', totalPages]
+  if (pagination.page >= totalPages - 2) return [1, 'ellipsis', totalPages - 2, totalPages - 1, totalPages]
+  return [1, 'ellipsis', pagination.page, 'ellipsis', totalPages]
+})
 
 const primaryFilters = [
   { key: 'all', label: 'Todos' },
@@ -669,13 +762,32 @@ const controlGroupTitle = (student) => {
 }
 const compactAcademic = (student) => [student.grado, controlGroupLabel(student) ? `Grupo ${controlGroupLabel(student)}` : 'Sin grupo', student.nivel].filter(Boolean).join(' · ') || 'Sin datos académicos'
 const statusTone = (student) => String(student?.status || '').toLowerCase() === 'baja' ? 'danger' : String(student?.status || '').toLowerCase() === 'activo' ? 'success' : 'neutral'
+const normalizedMissingFields = (student) => Array.isArray(student?.missingFields)
+  ? student.missingFields.map((field) => String(field || '').trim().toLowerCase()).filter(Boolean)
+  : []
+const studentMissingField = (student, field) => {
+  const missing = normalizedMissingFields(student)
+  return missing.includes(String(field?.key || '').toLowerCase()) || missing.includes(String(field?.label || '').toLowerCase())
+}
+const studentMissingCount = (student) => requiredDataFields.filter((field) => studentMissingField(student, field)).length
 const completionFor = (student) => {
-  const total = requiredDataFields.length
-  const missing = requiredDataFields.filter((field) => student?.missingFields?.includes(field.key) || student?.missingFields?.includes(field.label.toLowerCase())).length
+  const total = requiredDataFields.length || 1
+  const missing = studentMissingCount(student)
   return Math.max(0, Math.round(((total - missing) / total) * 100))
 }
+const qualitySummary = (student) => {
+  const missing = studentMissingCount(student)
+  if (!missing) return 'Completo'
+  return missing === 1 ? '1 pendiente' : `${missing} faltantes`
+}
+const qualityScoreTone = (student) => {
+  const score = completionFor(student)
+  if (score >= 100) return 'complete'
+  if (score >= 75) return 'warning'
+  return 'danger'
+}
 const selectedProfileCompletion = computed(() => completionFor(selectedStudent.value))
-const selectedMissingCount = computed(() => requiredDataFields.filter((field) => selectedStudent.value?.missingFields?.includes(field.key) || selectedStudent.value?.missingFields?.includes(field.label.toLowerCase())).length)
+const selectedMissingCount = computed(() => studentMissingCount(selectedStudent.value))
 const huskyPassEmailTarget = computed(() => selectedStudent.value?.emailPadre || selectedStudent.value?.emailMadre || selectedStudent.value?.email || selectedStudent.value?.huskyPassEmail || '')
 const EDIT_FORM_FIELDS = [
   'nombres', 'apellidoPaterno', 'apellidoMaterno', 'curp', 'interno', 'servicio', 'nivel', 'grado', 'grupo', 'baja',
@@ -1428,7 +1540,7 @@ onMounted(async () => {
 
 .ce-primary-filter-row {
   display: grid;
-  grid-template-columns: minmax(500px, max-content) minmax(320px, 1fr) auto auto;
+  grid-template-columns: minmax(500px, max-content) minmax(320px, 1fr) auto;
   align-items: center;
   gap: 9px;
   min-width: 0;
@@ -1513,6 +1625,7 @@ onMounted(async () => {
 }
 
 .ce-clear-link {
+  display: none;
   border: 0;
   background: transparent;
   color: #21882e;
@@ -1576,6 +1689,11 @@ onMounted(async () => {
   gap: 12px;
 }
 
+.ce-workspace.has-empty-detail {
+  grid-template-columns: minmax(760px, 1.18fr) minmax(520px, .82fr);
+  gap: 12px;
+}
+
 .ce-list-card {
   --student-list-balance-col: clamp(124px, 8.5vw, 150px);
   --student-list-quality-col: clamp(108px, 7.5vw, 134px);
@@ -1584,7 +1702,7 @@ onMounted(async () => {
   --student-list-grade-size: clamp(52px, 3.8vw, 64px);
   --student-list-grade-height: clamp(50px, 3.6vw, 60px);
   --student-list-crest-size: clamp(28px, 2.1vw, 34px);
-  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-rows: 44px minmax(0, 1fr) 38px;
   border-radius: 14px;
   background: #fff;
 }
@@ -1654,11 +1772,32 @@ onMounted(async () => {
   border-radius: 14px;
 }
 
+
+.ce-workspace.has-detail .ce-list-card {
+  grid-template-rows: 44px minmax(0, 1fr);
+}
+
+.ce-workspace.has-empty-detail .ce-list-card {
+  --student-list-balance-col: 58px;
+  --student-list-quality-col: 236px;
+  --student-list-action-col: 42px;
+  --student-list-row-height: 77px;
+  --student-list-grade-size: 54px;
+  --student-list-grade-height: 58px;
+  --student-list-crest-size: 34px;
+}
+
+.ce-workspace.has-empty-detail .ce-student-row {
+  grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-quality-col) var(--student-list-action-col);
+  align-items: center;
+  padding-right: 7px;
+}
+
 .ce-workspace.has-detail .ce-student-row {
   grid-template-columns: minmax(0, 1fr) var(--student-list-action-col);
 }
 
-.ce-workspace.has-detail .ce-profile-cell,
+.ce-workspace.has-detail .ce-quality-score,
 .ce-workspace.has-detail .ce-quality-cell {
   display: none;
 }
@@ -1711,6 +1850,71 @@ onMounted(async () => {
   box-shadow: 0 8px 16px rgba(63, 145, 56, .18);
 }
 
+.ce-academic-pills {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.ce-academic-pills span {
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid rgba(63, 145, 56, .18);
+  border-radius: 999px;
+  background: #eaf7e7;
+  color: #20882d;
+  font-size: 9.5px;
+  font-weight: 860;
+  white-space: nowrap;
+}
+
+.ce-academic-pills span.warning {
+  border-color: rgba(180, 107, 18, .26);
+  background: #fff6e7;
+  color: #b36a16;
+}
+
+.ce-quality-score {
+  --score-color: #2f9c3b;
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  border-radius: 999px;
+  background: conic-gradient(var(--score-color) var(--quality-score), #edf1f5 0deg);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, .08), inset 0 0 0 1px rgba(255, 255, 255, .72);
+}
+
+.ce-quality-score::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: inherit;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(215, 225, 235, .7);
+}
+
+.ce-quality-score b {
+  position: relative;
+  z-index: 1;
+  color: #15233c;
+  font-size: 11px;
+  font-weight: 920;
+  letter-spacing: -.025em;
+}
+
+.ce-quality-score.warning { --score-color: #f39a18; }
+.ce-quality-score.danger { --score-color: #e34a43; }
+
 .ce-profile-cell,
 .ce-quality-cell {
   position: relative;
@@ -1743,6 +1947,51 @@ onMounted(async () => {
   font-weight: 680;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ce-quality-cell strong {
+  color: #1f8a2c;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ce-quality-score.warning + .ce-quality-cell strong {
+  color: #e28a11;
+}
+
+.ce-quality-score.danger + .ce-quality-cell strong {
+  color: #d7423b;
+}
+
+.ce-quality-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, max-content));
+  gap: 5px 9px;
+  max-width: 100%;
+}
+
+.ce-quality-fields small {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow: visible;
+  color: #2b8740;
+  font-size: 9px;
+  font-weight: 760;
+  line-height: 1;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.ce-quality-fields small svg {
+  flex: 0 0 auto;
+  color: currentColor;
+  stroke-width: 2.8;
+}
+
+.ce-quality-fields small.missing {
+  color: #e24740;
 }
 
 .ce-status-pill {
@@ -1780,6 +2029,60 @@ onMounted(async () => {
 
 .ce-state-card.error { color: #c8423b; }
 .ce-inline-action { border: 0; background: transparent; color: #2f7f32; font-weight: 840; }
+
+.ce-list-footer {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 19px;
+  border-top: 1px solid var(--students-border-soft);
+  color: #66758e;
+  font-size: 10.5px;
+  font-weight: 680;
+}
+
+.ce-list-pages {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ce-list-pages button {
+  display: inline-flex;
+  min-width: 25px;
+  height: 25px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dce6f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #60708a;
+  font-size: 10px;
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.ce-list-pages button.active {
+  border-color: #2f9138;
+  background: linear-gradient(180deg, #58b951, #2f9239);
+  color: #fff;
+  box-shadow: 0 8px 14px rgba(63, 145, 56, .2);
+}
+
+.ce-list-pages button.ellipsis {
+  min-width: 18px;
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+
+.ce-list-pages button:disabled:not(.ellipsis) {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
 
 .ce-skeleton-stack {
   display: grid;
@@ -2453,6 +2756,274 @@ onMounted(async () => {
   backdrop-filter: blur(6px);
 }
 
+
+.ce-empty-detail-panel {
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ce-empty-shell {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 14px;
+  overflow: hidden;
+  padding: 28px 16px 18px;
+  border: 1px solid var(--students-border);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 48% 12%, rgba(142, 193, 83, .13), transparent 170px),
+    linear-gradient(180deg, #fff 0%, #fff 58%, #fbfcfd 100%);
+  box-shadow: 0 8px 20px rgba(21, 35, 60, .04);
+}
+
+.ce-empty-hero {
+  position: relative;
+  display: flex;
+  width: 118px;
+  height: 94px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  margin-top: 4px;
+  color: #8bc884;
+}
+
+.ce-empty-hero::before {
+  content: '';
+  position: absolute;
+  inset: 10px 17px 5px 17px;
+  border: 2px solid rgba(63, 145, 56, .16);
+  border-radius: 28px;
+  background: linear-gradient(145deg, rgba(244, 252, 241, .94), rgba(255, 255, 255, .92));
+  box-shadow: 0 18px 40px rgba(63, 145, 56, .1), inset 0 1px 0 rgba(255, 255, 255, .86);
+}
+
+.ce-empty-hero > svg {
+  position: relative;
+  z-index: 1;
+  margin-right: 31px;
+  stroke-width: 1.8;
+}
+
+.ce-empty-lines {
+  position: absolute;
+  z-index: 1;
+  right: 28px;
+  top: 39px;
+  display: grid;
+  gap: 12px;
+  width: 34px;
+}
+
+.ce-empty-lines i {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(118, 190, 104, .38);
+}
+
+.ce-empty-cursor {
+  position: absolute;
+  right: 14px;
+  bottom: 15px;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  border-top: 24px solid #5caf52;
+  border-right: 18px solid transparent;
+  filter: drop-shadow(0 8px 9px rgba(63, 145, 56, .2));
+  transform: rotate(-13deg);
+}
+
+.ce-empty-sparkle {
+  position: absolute;
+  z-index: 2;
+  color: #8ed17d;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.ce-empty-sparkle.one { left: 13px; top: 18px; }
+.ce-empty-sparkle.two { left: 40px; top: 5px; font-size: 12px; }
+
+.ce-empty-copy {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.ce-empty-copy h2 {
+  margin: 0;
+  color: #10203a;
+  font-size: 18px;
+  font-weight: 920;
+  letter-spacing: -.035em;
+}
+
+.ce-empty-copy p {
+  margin: 0;
+  color: #66758e;
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.ce-empty-card {
+  border: 1px solid #dbe5f0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .86);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, .035);
+}
+
+.ce-empty-card h3 {
+  margin: 0 0 12px;
+  color: #15233c;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ce-empty-review {
+  margin-top: 2px;
+  padding: 14px 18px;
+}
+
+.ce-empty-review div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 34px;
+}
+
+.ce-empty-review span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  color: #61708a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ce-empty-review svg {
+  flex: 0 0 auto;
+  color: #2d9440;
+  stroke-width: 2.7;
+}
+
+.ce-empty-flow {
+  padding: 14px 18px 15px;
+}
+
+.ce-empty-flow ol {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ce-empty-flow li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.ce-empty-flow li:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  top: 13px;
+  right: -21px;
+  color: rgba(63, 145, 56, .48);
+  font-size: 23px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.ce-empty-flow li span {
+  display: inline-flex;
+  width: 45px;
+  height: 45px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(63, 145, 56, .18);
+  border-radius: 11px;
+  background: linear-gradient(180deg, #f7fcf5, #fff);
+  color: #2e9038;
+  box-shadow: 0 8px 14px rgba(63, 145, 56, .08);
+}
+
+.ce-empty-flow li b {
+  max-width: 86px;
+  overflow: hidden;
+  color: #61708a;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1.18;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-empty-tip {
+  position: relative;
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  overflow: hidden;
+  padding: 0 92px 0 18px;
+  border: 1px solid rgba(63, 145, 56, .22);
+  border-radius: 14px;
+  background: linear-gradient(90deg, #f4fbf1, #fff);
+  color: #56677f;
+  box-shadow: 0 8px 18px rgba(63, 145, 56, .06);
+}
+
+.ce-empty-tip > span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: #2f9138;
+}
+
+.ce-empty-tip p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 660;
+  line-height: 1.35;
+}
+
+.ce-empty-tip strong {
+  color: #15233c;
+  font-weight: 900;
+}
+
+.ce-empty-tip i {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(63, 145, 56, .09);
+  color: #3f9138;
+  transform: translateY(-50%);
+}
+
 .ce-import-modal {
   width: min(620px, 100%);
   overflow: hidden;
@@ -2576,6 +3147,11 @@ onMounted(async () => {
   .ce-clear-link { display: none; }
   .ce-status-tabs { overflow-x: auto; }
   .ce-workspace.has-detail { grid-template-columns: minmax(400px, .62fr) minmax(650px, 1.38fr); }
+  .ce-workspace.has-empty-detail { grid-template-columns: minmax(690px, 1.12fr) minmax(500px, .88fr); }
+  .ce-workspace.has-empty-detail .ce-list-card { --student-list-quality-col: 210px; }
+  .ce-quality-fields { grid-template-columns: repeat(2, minmax(0, max-content)); }
+  .ce-empty-flow ol { gap: 18px; }
+  .ce-empty-flow li:not(:last-child)::after { right: -18px; }
   .ce-detail-header { grid-template-columns: minmax(0, 1fr) 220px auto 34px; gap: 10px; }
   .ce-detail-actions .ce-save-state { display: none; }
   .ce-detail-actions :deep(.ui-button) { min-height: 32px; padding-inline: 10px; font-size: 10px; }
@@ -2583,13 +3159,17 @@ onMounted(async () => {
 
 @media (max-width: 980px) {
   .ce-workspace,
-  .ce-workspace.has-detail {
+  .ce-workspace.has-detail,
+  .ce-workspace.has-empty-detail {
     display: flex;
     flex-direction: column;
     height: auto;
   }
   .ce-list-card,
   .ce-detail-panel { height: 660px; }
+  .ce-empty-review div,
+  .ce-empty-flow ol { grid-template-columns: 1fr; }
+  .ce-empty-flow li:not(:last-child)::after { display: none; }
   .ce-detail-header { grid-template-columns: minmax(0, 1fr) 34px; }
   .ce-progress-cluster { display: none; }
   .ce-profile-card,

@@ -1,1 +1,1 @@
-fix: add quiet Control Escolar student cache sync
+fix: match Control Escolar empty selection layout
