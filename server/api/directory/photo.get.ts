@@ -1,44 +1,37 @@
-import { runWithBridgeAgentId } from '../../utils/db'
-import { google } from 'googleapis';
+import { getWorkspaceDirectoryPhoto, isCasitaWorkspaceEmail } from '../../utils/google-workspace-directory'
 
-export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-  const { email, name } = getQuery(event);
-  
-  const fallbackUrl = `https://ui-avatars.com/api/?name=${name || email || 'User'}&background=eef2ff&color=4f46e5&bold=true&rounded=true&size=128`;
+const avatarFallback = (email: unknown, name: unknown) => {
+  const label = String(name || email || 'User').trim() || 'User'
+  const params = new URLSearchParams({
+    name: label,
+    background: 'eef2ff',
+    color: '4f46e5',
+    bold: 'true',
+    rounded: 'true',
+    size: '128'
+  })
+  return `https://ui-avatars.com/api/?${params.toString()}`
+}
 
-  if (!email || email === 'undefined') {
-    return sendRedirect(event, fallbackUrl);
+export default defineEventHandler(async (event) => {
+  const { email, name } = getQuery(event)
+  const fallbackUrl = avatarFallback(email, name)
+  const normalizedEmail = String(email || '').trim().toLowerCase()
+
+  if (!normalizedEmail || !isCasitaWorkspaceEmail(normalizedEmail)) {
+    return sendRedirect(event, fallbackUrl)
   }
 
   try {
-    const config = useRuntimeConfig();
-    
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: config.gcpClientEmail,
-        private_key: config.gcpPrivateKey?.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/admin.directory.user.readonly'],
-      clientOptions: {
-        subject: config.gcpAdminSubject,
-      }
-    });
-
-    const service = google.admin({ version: 'directory_v1', auth });
-
-    const res = await service.users.photos.get({
-      userKey: email as string,
-    });
-
-    if (res.data.photoData) {
-      const buffer = Buffer.from(res.data.photoData, 'base64');
-      setResponseHeader(event, 'Content-Type', 'image/jpeg');
-      setResponseHeader(event, 'Cache-Control', 'public, max-age=86400');
-      return buffer;
+    const buffer = await getWorkspaceDirectoryPhoto(normalizedEmail)
+    if (buffer) {
+      setResponseHeader(event, 'Content-Type', 'image/jpeg')
+      setResponseHeader(event, 'Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800')
+      return buffer
     }
-  } catch (error) {
-    console.warn(`[Photo API] No photo found or error for ${email}`);
+  } catch (error: any) {
+    console.warn(`[Directory Photo] Falling back for ${normalizedEmail}:`, error?.message || error)
   }
 
-  return sendRedirect(event, fallbackUrl);
-}));
+  return sendRedirect(event, fallbackUrl)
+})

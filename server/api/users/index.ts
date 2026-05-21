@@ -1,6 +1,12 @@
-import bcrypt from 'bcryptjs'
-import { query } from '../../utils/db'
 import { createExternalUser, isExternalUsersAvailable, listExternalUsers } from '../../utils/external-users'
+
+const assertExternalUsersAvailable = async () => {
+  if (await isExternalUsersAvailable()) return
+  throw createError({
+    statusCode: 503,
+    message: 'La tabla externa users no esta disponible. La asignacion ROLE_CTRL se guarda exclusivamente en la base externa de Control Escolar.'
+  })
+}
 
 export default defineEventHandler(async (event) => {
   const method = event.node.req.method
@@ -10,38 +16,15 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
   }
 
-  if (method === 'GET') {
-    if (await isExternalUsersAvailable()) {
-      return await listExternalUsers()
-    }
+  await assertExternalUsersAvailable()
 
-    return await query(`
-      SELECT id, username, username AS displayName, email, planteles, role, created_at, avatar, plantel
-      FROM users
-      ORDER BY username ASC
-    `)
+  if (method === 'GET') {
+    return await listExternalUsers()
   }
 
   if (method === 'POST') {
     const body = await readBody(event)
-    if (await isExternalUsersAvailable()) {
-      return await createExternalUser(body)
-    }
-
-    const plantelesStr = Array.isArray(body.planteles) ? body.planteles.join(',') : String(body.planteles || '')
-
-    await query(
-      `INSERT INTO users (username, password, email, planteles, role, plantel) VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        body.username,
-        body.password ? bcrypt.hashSync(body.password, 10) : '',
-        body.email,
-        plantelesStr,
-        body.role || 'plantel',
-        Array.isArray(body.planteles) && body.planteles.length > 0 ? body.planteles[0] : ''
-      ]
-    )
-    return { success: true }
+    return await createExternalUser(body)
   }
 
   throw createError({ statusCode: 405, message: 'Metodo no permitido.' })

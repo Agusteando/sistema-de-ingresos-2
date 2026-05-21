@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { PLANTELES_LIST } from '../../utils/constants'
 import { controlEscolarCentralQuery } from './control-escolar-central'
+import { buildWorkspacePhotoUrl, isCasitaWorkspaceEmail, WORKSPACE_DOMAIN } from './google-workspace-directory'
 import { normalizePlantel, parsePlanteles } from './auth-session'
 
 type TableColumn = { Field: string }
@@ -18,7 +19,20 @@ const TABLE = 'users'
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
 const normalizeText = (value: unknown, max = 255) => String(value || '').trim().slice(0, max)
-const roleValue = (value: unknown) => normalizeText(value || 'plantel', 80) || 'plantel'
+const ALLOWED_WORKSPACE_ROLES = new Set(['plantel', 'global', 'ROLE_CTRL'])
+
+const roleValue = (value: unknown) => {
+  const raw = normalizeText(value || 'plantel', 80) || 'plantel'
+  return ALLOWED_WORKSPACE_ROLES.has(raw) ? raw : 'plantel'
+}
+
+const assertWorkspaceEmail = (email: unknown) => {
+  const normalized = normalizeEmail(email)
+  if (!normalized || !isCasitaWorkspaceEmail(normalized)) {
+    throw createError({ statusCode: 400, message: `Solo se pueden asignar usuarios @${WORKSPACE_DOMAIN}.` })
+  }
+  return normalized
+}
 const plantelesValue = (value: unknown) => {
   const raw = Array.isArray(value) ? value : String(value || '').split(',')
   const planteles = raw
@@ -91,7 +105,7 @@ const normalizeUserRow = (row: any) => {
     planteles,
     role: row.role || 'plantel',
     created_at: row.created_at || null,
-    avatar: row.avatar || null,
+    avatar: row.avatar || (row.email ? buildWorkspacePhotoUrl(row.email, row.username || row.displayName || row.email) : null),
     plantel: normalizePlantel(row.plantel) || (planteles ? planteles.split(',')[0] : ''),
     source: 'external'
   }
@@ -130,11 +144,11 @@ const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean)
   const firstPlantel = planteles ? planteles.split(',')[0] : ''
   const values: Record<string, any> = {
     username: normalizeText(body.username || body.email || 'Usuario'),
-    email: normalizeEmail(body.email),
+    email: assertWorkspaceEmail(body.email),
     planteles,
     role: roleValue(body.role),
     plantel: firstPlantel,
-    avatar: body.avatar || null
+    avatar: body.avatar || buildWorkspacePhotoUrl(assertWorkspaceEmail(body.email), body.username || body.email || 'Usuario')
   }
 
   if (includePassword && columns.has('password')) {

@@ -19,6 +19,8 @@ The endpoint rejects exact Control Escolar-only users (`ROLE_CTRL`) with `403`. 
 
 The centralized external `users` table is separate. It is used for workspace/user role assignment such as `ROLE_CTRL`; it must not become a required gate for regular `/api/students` loading or other financial APIs.
 
+Workspace user selection is handled from Google Workspace Directory and is limited to `@casitaiedis.edu.mx` accounts. New assignments default to normal `plantel` access; `ROLE_CTRL` is only applied when explicitly selected. See `docs/workspace-role-ctrl-users.md`.
+
 ## Control Escolar student fetch data flow
 
 Control Escolar student fetching is intentionally local-first.
