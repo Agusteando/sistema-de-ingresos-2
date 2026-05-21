@@ -235,7 +235,7 @@ const state = useState('globalState')
 
 useScrollLock()
 
-const becaOptions = ['coaborador', 'dres', 'hermanos', 'promoción', 'SEP mercadotecnia']
+const becaOptions = ['Colaborador', 'DRES', 'Hermanos', 'Promoción', 'SEP', 'Mercadotecnia']
 const conceptos = ref([])
 const selectedDocumentoId = ref('')
 const conceptSearch = ref('')
@@ -259,7 +259,7 @@ const selectedConcept = computed(() => {
   return conceptos.value.find((item) => String(item.id) === String(selectedDocumentoId.value)) || null
 })
 
-const becaTypesCsv = computed(() => selectedBecaTypes.value.join(','))
+const becaTypesCsv = computed(() => selectedBecaTypes.value.join(', '))
 const scholarshipDiscount = computed(() => Math.max(0, Number(form.value.costo || 0) - Number(montoFinalInput.value || 0)))
 const scholarshipPercent = computed(() => {
   const costo = Number(form.value.costo || 0)

@@ -2,31 +2,7 @@ import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney } from '../../utils/monto-final'
-
-const BECA_TYPE_OPTIONS = new Set([
-  'coaborador',
-  'dres',
-  'hermanos',
-  'promoción',
-  'SEP mercadotecnia'
-])
-
-const normalizeBecaTypes = (value: unknown) => {
-  const raw = Array.isArray(value)
-    ? value
-    : String(value || '').split(',')
-
-  const selected = raw
-    .map((item) => String(item || '').trim())
-    .filter(Boolean)
-
-  const invalid = selected.filter((item) => !BECA_TYPE_OPTIONS.has(item))
-  if (invalid.length) {
-    throw createError({ statusCode: 400, message: `Tipo de beca inválido: ${invalid.join(', ')}` })
-  }
-
-  return [...new Set(selected)]
-}
+import { normalizeBecaTypes } from '../../utils/becaTypes'
 
 const clampMotivo = (value: unknown) => {
   const text = String(value || '').trim()
@@ -67,8 +43,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const plazoLegacy = Array.from({ length: meses }, (_, i) => i + 1).join(',')
   const costo = Number(body.costo || 0)
   const montoFinal = Number(body.montoFinal)
-  const becaTipos = normalizeBecaTypes(body.becaTipos)
-  const becaTiposCsv = becaTipos.join(',') || null
+  const { selected: becaTipos, invalid: invalidBecaTipos } = normalizeBecaTypes(body.becaTipos)
+  if (invalidBecaTipos.length) {
+    throw createError({ statusCode: 400, message: `Tipo de beca inválido: ${invalidBecaTipos.join(', ')}` })
+  }
+  const becaTiposCsv = becaTipos.join(', ') || null
   const becaMotivo = clampMotivo(body.becaMotivo)
   const becaMonto = Math.max(0, costo - montoFinal)
   const becaPorcentaje = costo > 0 ? Number(((becaMonto * 100) / costo).toFixed(2)) : 0
