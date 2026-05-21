@@ -87,13 +87,13 @@
             </UiChip>
           </div>
 
-          <div v-if="(showAdvancedFilters || filters.grado || filters.group) && catalogs.grados.length" class="ce-chip-cluster" aria-label="Filtrar por grado">
+          <div v-if="catalogs.grados.length" class="ce-chip-cluster ce-chip-cluster--grade" aria-label="Filtrar por grado">
             <span class="ce-chip-label">Grado</span>
             <UiChip :active="!filters.grado && !filters.group" @click="clearAcademicFilters">Todos</UiChip>
             <UiChip v-for="grado in catalogs.grados" :key="`grado-${grado}`" :active="filters.grado === grado" @click="selectGrade(grado)">{{ grado }}</UiChip>
           </div>
 
-          <div v-if="(showAdvancedFilters || filters.group) && filters.grado && availableGroups.length" class="ce-chip-cluster" aria-label="Filtrar por grupo">
+          <div v-if="filters.grado && availableGroups.length" class="ce-chip-cluster ce-chip-cluster--group" aria-label="Filtrar por grupo">
             <span class="ce-chip-label">Grupo</span>
             <UiChip :active-group="filters.group === ''" @click="filters.group = ''">Todos</UiChip>
             <UiChip v-for="grupo in availableGroups" :key="`grupo-${grupo}`" :active-group="filters.group === grupo" @click="toggleFilter('group', grupo)">{{ grupo }}</UiChip>
@@ -576,7 +576,7 @@ import { useStudentsWorkspaceScale } from '~/composables/useStudentsWorkspaceSca
 import { useToast } from '~/composables/useToast'
 import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
 import { normalizeEnrollmentConceptIds, parseEnrollmentConcepts, studentPresentationStyle } from '~/shared/utils/studentPresentation'
-import { GRADOS_DISPLAY, NIVELES_ESCOLARES } from '~/shared/utils/grado'
+import { NIVELES_ESCOLARES, gradeOptionsForNivel } from '~/shared/utils/grado'
 
 useHead({ bodyAttrs: { class: 'students-route-active' } })
 
@@ -653,11 +653,17 @@ const labelize = (value) => {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : ''
 }
 const nivelOptions = computed(() => mergeOptions(NIVELES_ESCOLARES, catalogs.niveles, [editForm.nivel]))
-const gradoOptions = computed(() => mergeOptions(GRADOS_DISPLAY.map((grado) => grado.toLowerCase()), catalogs.grados, [editForm.grado]))
+const gradoOptions = computed(() => mergeOptions(gradeOptionsForNivel(editForm.nivel || selectedStudent.value?.nivel).map((grado) => grado.toLowerCase()), [editForm.grado]))
 const groupOptions = computed(() => {
   const byGrade = catalogs.gruposPorGrado || {}
   const scopedGroups = editForm.grado && Array.isArray(byGrade[editForm.grado]) ? byGrade[editForm.grado] : []
   return mergeOptions(scopedGroups, catalogs.grupos, [editForm.grupo])
+})
+
+watch(() => editForm.nivel, () => {
+  const available = gradoOptions.value
+  if (editForm.grado && !available.includes(editForm.grado)) editForm.grado = available[0] || ''
+  editForm.grupo = ''
 })
 
 const advancedFilterCount = computed(() => [filters.quality, filters.grado, filters.group, filters.recent].filter(Boolean).length)
@@ -1529,29 +1535,32 @@ onMounted(async () => {
   flex-direction: column;
   gap: 7px;
   margin-bottom: 9px;
-  padding: 7px 0;
+  padding: 7px 0 9px;
   border: 0;
   border-top: 1px solid var(--students-border-soft);
   border-bottom: 1px solid var(--students-border-soft);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
 }
 
 .ce-primary-filter-row {
   display: grid;
-  grid-template-columns: minmax(500px, max-content) minmax(320px, 1fr) auto;
+  grid-template-columns: max-content minmax(360px, 1fr) auto auto;
   align-items: center;
   gap: 9px;
-  min-width: 0;
+  min-width: max(100%, 1120px);
 }
 
 .ce-status-tabs {
   display: inline-flex;
-  min-width: 0;
+  min-width: max-content;
   align-items: center;
   gap: 6px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .ce-status-tab {
@@ -1625,7 +1634,7 @@ onMounted(async () => {
 }
 
 .ce-clear-link {
-  display: none;
+  display: inline-flex;
   border: 0;
   background: transparent;
   color: #21882e;
@@ -1638,19 +1647,44 @@ onMounted(async () => {
 
 .ce-secondary-filter-row {
   display: flex;
-  min-width: 0;
-  align-items: center;
+  min-width: max(100%, 1120px);
+  align-items: stretch;
   gap: 8px;
-  overflow-x: auto;
+  overflow: visible;
   padding-bottom: 1px;
 }
 
 .ce-chip-cluster {
+  position: relative;
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid rgba(217, 227, 238, .9);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .74);
+  box-shadow: 0 6px 14px rgba(21, 35, 60, .035);
+}
+
+.ce-chip-cluster + .ce-chip-cluster::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 7px;
+  bottom: 7px;
+  width: 1px;
+  background: #d9e3ee;
+}
+
+.ce-chip-cluster--grade {
+  border-color: rgba(63, 145, 56, .2);
+  background: linear-gradient(180deg, rgba(246, 252, 245, .92), rgba(255, 255, 255, .78));
+}
+
+.ce-chip-cluster--group {
+  border-color: rgba(40, 116, 240, .18);
 }
 
 .ce-chip-label {
@@ -3143,7 +3177,7 @@ onMounted(async () => {
 
 @media (max-width: 1320px) {
   .ce-kpi-strip { grid-template-columns: repeat(5, minmax(148px, 1fr)); overflow-x: auto; }
-  .ce-primary-filter-row { grid-template-columns: 1fr minmax(300px, .9fr) auto; }
+  .ce-primary-filter-row { grid-template-columns: max-content minmax(300px, 1fr) auto auto; }
   .ce-clear-link { display: none; }
   .ce-status-tabs { overflow-x: auto; }
   .ce-workspace.has-detail { grid-template-columns: minmax(400px, .62fr) minmax(650px, 1.38fr); }

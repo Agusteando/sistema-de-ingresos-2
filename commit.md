@@ -1,1 +1,1 @@
-fix: match Control Escolar empty selection layout
+fix: align Control Escolar grade sync and expose grade filters
