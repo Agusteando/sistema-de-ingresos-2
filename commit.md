@@ -1,1 +1,1 @@
-feat: refine usuarios access console and diagnostics
+feat: improve login feedback and visual states
