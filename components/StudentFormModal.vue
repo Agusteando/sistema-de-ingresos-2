@@ -102,6 +102,7 @@
                       autocomplete="off"
                       spellcheck="false"
                       placeholder="Ingresa la CURP"
+                      required
                       @input="normalizeCurpField"
                       @blur="normalizeCurpField"
                     />
@@ -941,7 +942,7 @@ const normalizeNamesBeforeSubmit = () => {
 
 const submit = async () => {
   normalizeNamesBeforeSubmit();
-  if (curpHasValue.value && !curpInfo.value.isValid) {
+  if (!curpInfo.value.isValid) {
     show(
       curpInfo.value.message || "Captura una CURP válida antes de guardar.",
       "danger",

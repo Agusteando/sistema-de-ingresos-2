@@ -1,1 +1,1 @@
-fix: manage institutional users from external workspace table
+fix: polish Control Escolar workflow, layout, imports and sidebar

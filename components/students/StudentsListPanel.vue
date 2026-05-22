@@ -69,12 +69,11 @@
             ]"
           >
             <UiGroupIcon
+              v-if="studentGroupLabel(student)"
               class="student-group-watermark"
-              :class="{ 'is-missing-group': studentMissingGroup(student) }"
               :label="studentGroupLabel(student)"
-              :missing="studentMissingGroup(student)"
             />
-            <span class="student-identity has-group-icon">
+            <span :class="['student-identity', studentGroupLabel(student) ? 'has-group-icon' : 'no-group-icon']">
               <button
                 type="button"
                 :class="['row-select-toggle', { active: isSelected(student) }]"
@@ -93,8 +92,8 @@
                 :photo-loading="false"
                 :is-enrolled="isStudentEnrolled(student, externalConcepts)"
               />
-              <span :class="['student-group-sigil', { 'is-missing': studentMissingGroup(student) }]" :title="studentGroupTitle(student)">
-                <UiGroupIcon :label="studentGroupLabel(student)" :missing="studentMissingGroup(student)" />
+              <span v-if="studentGroupLabel(student)" class="student-group-sigil" :title="studentGroupLabel(student)">
+                <UiGroupIcon :label="studentGroupLabel(student)" />
               </span>
               <span class="student-copy">
                 <strong
@@ -181,11 +180,6 @@ const isSelected = (student) => props.selectedMatriculas.has(normalizeStudentMat
 const resolvedTipoIngreso = (student) => resolveTipoIngreso(student, props.targetCiclo, { enrollmentConcepts: props.externalConcepts })
 const resolvedTipoIngresoLabel = (student) => formatTipoIngresoValue(resolvedTipoIngreso(student))
 const tipoIngresoIcon = (student) => resolvedTipoIngreso(student).value === 'interno' ? LucideBuilding2 : LucideGlobe2
-const studentMissingGroup = (student) => !studentGroupLabel(student)
-const studentGroupTitle = (student) => {
-  const group = studentGroupLabel(student)
-  return group ? `Grupo ${group}` : 'Sin grupo'
-}
 
 const activeStudentPhotoUrl = (student) => {
   const matricula = normalizeStudentMatricula(student?.matricula)

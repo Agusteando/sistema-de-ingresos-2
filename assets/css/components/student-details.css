@@ -249,12 +249,6 @@
   transform-origin: center;
 }
 
-.student-profile-watermark.is-missing-group,
-.account-card-watermark.is-missing-group {
-  color: #b36a16;
-  opacity: .08;
-}
-
 .profile-main {
   position: relative;
   z-index: 1;

@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) =>
       }
 
       const curpInfo = parseCurp(body.curp);
-      if (!curpInfo.isEmpty && !curpInfo.isValid) {
+      if (!curpInfo.isValid) {
         throw createError({
           statusCode: 400,
           message: curpInfo.message || "CURP inválida.",
@@ -105,8 +105,8 @@ export default defineEventHandler(async (event) =>
         body.apellidoMaterno,
         body.nombres,
         curpInfo.normalized,
-        curpInfo.isEmpty ? null : curpInfo.birthDate,
-        curpInfo.isEmpty ? null : curpInfo.gender,
+        curpInfo.birthDate,
+        curpInfo.gender,
         body.padre,
         plantel,
         resolvedNivel,
