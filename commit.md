@@ -1,1 +1,1 @@
-chore: replace Aurora system logo
+chore: replace Aurora logo with true transparent asset
