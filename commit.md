@@ -1,1 +1,1 @@
-feat: improve login feedback and visual states
+fix: sync login users and clean usuarios identity header

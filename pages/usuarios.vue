@@ -1140,10 +1140,12 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid #d7e5f2;
   border-radius: 12px;
-  color: #fff;
-  background: linear-gradient(135deg, #4285f4, #34a853 50%, #fbbc05 75%, #ea4335);
-  font-size: 24px;
+  color: #24324b;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(22, 37, 67, .08);
+  font-size: 22px;
   font-weight: 950;
 }
 

@@ -2,7 +2,7 @@ import { OAuth2Client } from 'google-auth-library'
 import { query, runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { hasControlEscolarRole, isControlEscolarOnlyRole, isSuperAdminRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
-import { isExternalUsersAvailable, touchExternalUserLogin } from '../../utils/external-users'
+import { touchExternalUserLogin } from '../../utils/external-users'
 import { isCasitaWorkspaceEmail, WORKSPACE_DOMAIN } from '../../utils/google-workspace-directory'
 
 const SUPERADMIN_EMAILS = new Set([
@@ -147,36 +147,30 @@ export default defineEventHandler(async (event) => {
     }
 
     const seedAdmin = SUPERADMIN_EMAILS.has(normalizedEmail)
-    const externalUsersAvailable = await isExternalUsersAvailable().catch((error: any) => {
-      console.warn('[Auth Login] External users table unavailable; using local auth defaults', error?.message || error)
-      return false
+    const externalUser = await touchExternalUserLogin({
+      email: normalizedEmail,
+      name: payload.name,
+      picture: payload.picture,
+      requestedPlantel
+    }).catch((error: any) => {
+      console.warn('[Auth Login] External users login sync skipped; login continues', error?.message || error)
+      return null
     })
-    const externalUser = externalUsersAvailable
-      ? await touchExternalUserLogin({
-          email: normalizedEmail,
-          name: payload.name,
-          picture: payload.picture,
-          requestedPlantel
-        }).catch((error: any) => {
-          console.warn('[Auth Login] External users login update skipped', error?.message || error)
-          return null
-        })
-      : null
 
     if (!seedAdmin && externalUser?.ingresosBlocked) {
       throw createError({ statusCode: 403, message: 'Tu acceso a Sistema de Ingresos esta bloqueado.' })
     }
 
     const localUser = await runWithBridgeAgentId(requestedPlantel, async () => ensureLocalUser(payload, requestedPlantel))
-    const user = externalUsersAvailable && !isSuperAdminRole(localUser.role)
+    const user = externalUser && !isSuperAdminRole(localUser.role)
       ? {
           ...localUser,
-          username: externalUser?.username || localUser.username,
-          email: externalUser?.email || localUser.email,
-          role: externalUser?.role || 'plantel',
-          planteles: externalUser?.planteles || localUser.planteles,
-          plantel: externalUser?.plantel || localUser.plantel,
-          avatar: externalUser?.avatar || localUser.avatar
+          username: externalUser.username || localUser.username,
+          email: externalUser.email || localUser.email,
+          role: externalUser.role || 'plantel',
+          planteles: externalUser.planteles || localUser.planteles,
+          plantel: externalUser.plantel || localUser.plantel,
+          avatar: externalUser.avatar || localUser.avatar
         }
       : localUser
     const role = String(user.role || 'plantel').trim() || 'plantel'
