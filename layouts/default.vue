@@ -116,7 +116,7 @@
 
         <div class="header-actions">
           <SyncBadge v-if="showFinancialNav" />
-          <div v-if="showFinancialNav" class="ciclo-picker">
+          <div v-if="showCicloPicker" class="ciclo-picker">
             <LucideCalendarDays :size="18" />
             <select
               v-model="state.ciclo"
@@ -277,6 +277,7 @@ const userPlanteles = computed(() => {
   return planteles.length ? planteles : [...PLANTELES_LIST]
 })
 const showFinancialNav = computed(() => !isControlEscolarOnly.value)
+const showCicloPicker = computed(() => isSuperAdmin.value || hasControlEscolarRole.value || showFinancialNav.value)
 
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
