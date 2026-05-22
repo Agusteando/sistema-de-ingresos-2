@@ -30,7 +30,6 @@
           alt="Aurora"
           class="sidebar-system-logo"
         />
-        <h2>Aurora</h2>
       </div>
 
       <nav class="sidebar-nav">
