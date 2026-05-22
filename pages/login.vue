@@ -1,96 +1,109 @@
 <template>
   <main class="login-page">
-    <div class="login-orb login-orb-one" />
-    <div class="login-orb login-orb-two" />
-    <div class="login-grid">
-      <section class="login-hero" aria-label="Sistema de Ingresos">
-        <div class="hero-badge">
-          <span class="hero-badge-icon">↗</span>
-          Acceso institucional seguro
-        </div>
+    <section class="login-shell" aria-label="Inicio de sesión Sistema de Ingresos">
+      <aside class="brand-panel" aria-label="Sistema de Ingresos">
+        <div class="brand-content">
+          <img
+            src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp"
+            alt="IECS IEDIS"
+            class="brand-logo"
+          />
 
-        <img
-          src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp"
-          alt="IECS IEDIS"
-          class="hero-logo"
-        />
-
-        <div>
-          <p class="hero-kicker">Sistema de Ingresos</p>
-          <h1 class="hero-title">Entra con tu cuenta Google Workspace.</h1>
-          <p class="hero-copy">
-            El acceso usa tu correo institucional. El sistema valida tu identidad, resuelve tu plantel y prepara tu sesión antes de abrir el panel.
-          </p>
-        </div>
-
-        <div class="state-card" aria-live="polite">
-          <div class="state-card-header">
-            <span class="state-dot" :class="{ active: isBusy, error: authPhase === 'error' }" />
-            <div>
-              <p class="state-title">{{ currentPhase.title }}</p>
-              <p class="state-description">{{ currentPhase.description }}</p>
-            </div>
+          <div class="brand-copy">
+            <p class="brand-kicker">Sistema de Ingresos</p>
+            <h1>Entra con tu cuenta institucional</h1>
+            <p>Accede con tu correo institucional de Google Workspace.</p>
           </div>
 
-          <ol class="login-steps">
-            <li
-              v-for="step in loginSteps"
-              :key="step.id"
-              class="login-step"
-              :class="step.state"
+          <div class="secure-card">
+            <span class="secure-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 3.5 5.5 6.2v5.3c0 4.1 2.7 7.8 6.5 9 3.8-1.2 6.5-4.9 6.5-9V6.2L12 3.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                <path d="m9.2 12 1.8 1.8 3.9-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+            <span>
+              <strong>Acceso seguro</strong>
+              <small>Tus credenciales están protegidas.</small>
+            </span>
+          </div>
+        </div>
+      </aside>
+
+      <section class="auth-panel" :aria-busy="isBusy ? 'true' : 'false'">
+        <div class="auth-content">
+          <div class="auth-kicker">
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M7 10V8a5 5 0 0 1 10 0v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                <rect x="5" y="10" width="14" height="10" rx="2.5" stroke="currentColor" stroke-width="2" />
+                <path d="M12 14v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </span>
+            Inicio de sesión
+          </div>
+
+          <h2>Bienvenido</h2>
+          <p class="auth-subtitle">Selecciona el plantel y continúa con tu cuenta institucional.</p>
+
+          <label class="plantel-field" for="plantel-login">
+            <span>Plantel</span>
+            <select
+              id="plantel-login"
+              v-model="selectedPlantel"
+              :disabled="isBusy"
+              @change="persistSelectedPlantel"
             >
-              <span class="step-marker">
-                <span v-if="step.state === 'done'">✓</span>
-                <span v-else-if="step.state === 'active'" class="step-spinner" />
-                <span v-else>{{ step.index }}</span>
+              <option v-for="plantel in PLANTELES_LIST" :key="plantel" :value="plantel">
+                {{ plantel }}
+              </option>
+            </select>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </label>
+
+          <div class="google-card">
+            <button
+              type="button"
+              class="google-visual-button"
+              :class="{ busy: isBusy || authPhase === 'loadingGoogle' }"
+              :disabled="authPhase === 'loadingGoogle' || authPhase === 'error'"
+              tabindex="-1"
+              aria-hidden="true"
+            >
+              <span v-if="authPhase === 'loadingGoogle' || isBusy" class="button-spinner" />
+              <span v-else class="google-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06L5.84 9.9C6.71 7.3 9.14 5.38 12 5.38z" />
+                </svg>
               </span>
-              <span>{{ step.label }}</span>
-            </li>
-          </ol>
-        </div>
-      </section>
+              <span>{{ primaryButtonText }}</span>
+              <svg v-if="!isBusy && authPhase !== 'loadingGoogle'" class="button-arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
 
-      <section class="login-card" :aria-busy="isBusy ? 'true' : 'false'">
-        <div class="card-topline">
-          <span class="card-icon">▣</span>
-          <span>Inicio de sesión</span>
-        </div>
-
-        <h2>Bienvenido</h2>
-        <p class="login-subtitle">Selecciona el plantel local y continúa con tu cuenta institucional.</p>
-
-        <div class="plantel-box">
-          <div class="plantel-header">
-            <label for="plantel-login">Plantel</label>
-            <span>Base local</span>
+            <div
+              class="google-button-target"
+              :class="{ hidden: authPhase === 'loadingGoogle' || authPhase === 'error' || isBusy }"
+              @pointerdown.capture="markGoogleIntent"
+            >
+              <div id="google-btn" />
+            </div>
           </div>
 
-          <select
-            id="plantel-login"
-            v-model="selectedPlantel"
-            class="plantel-select"
-            :disabled="isBusy"
-            @change="persistSelectedPlantel"
-          >
-            <option v-for="plantel in PLANTELES_LIST" :key="plantel" :value="plantel">
-              {{ plantel }}
-            </option>
-          </select>
+          <p v-if="statusText" class="status-line" aria-live="polite">
+            <span class="status-dot" />
+            {{ statusText }}
+          </p>
 
-          <p>Este plantel define la base local que se usará al crear y preparar tu sesión.</p>
-        </div>
-
-        <div class="google-area">
-          <div
-            class="google-button-shell"
-            :class="{ busy: isBusy }"
-            @pointerdown.capture="markGoogleIntent"
-          >
-            <div id="google-btn" class="google-button-target" />
-            <div v-if="isBusy" class="google-busy-layer">
-              <span class="inline-spinner" />
-              <span>{{ currentPhase.short }}</span>
-            </div>
+          <div v-if="errorMsg" class="login-alert" role="alert">
+            <strong>No se pudo iniciar sesión.</strong>
+            <span>{{ errorMsg }}</span>
           </div>
 
           <button
@@ -101,19 +114,19 @@
           >
             Intentar de nuevo
           </button>
-        </div>
 
-        <div v-if="errorMsg" class="login-alert" role="alert">
-          <strong>No se pudo iniciar sesión.</strong>
-          <span>{{ errorMsg }}</span>
-        </div>
-
-        <div class="session-detail">
-          <span>Dominio permitido</span>
-          <strong>@casitaiedis.edu.mx</strong>
+          <p class="domain-note">
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 3.5 5.5 6.2v5.3c0 4.1 2.7 7.8 6.5 9 3.8-1.2 6.5-4.9 6.5-9V6.2L12 3.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                <path d="m9.4 12.1 1.7 1.7 3.5-3.7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+            Usa tu correo <strong>@casitaiedis.edu.mx</strong>
+          </p>
         </div>
       </section>
-    </div>
+    </section>
   </main>
 </template>
 
@@ -126,43 +139,34 @@ definePageMeta({ layout: false })
 
 const PHASES = {
   loadingGoogle: {
-    title: 'Preparando Google Workspace',
-    short: 'Cargando Google',
-    description: 'Estamos cargando el botón oficial de Google para iniciar sesión.'
+    button: 'Cargando Google',
+    status: 'Preparando acceso con Google.'
   },
   ready: {
-    title: 'Listo para iniciar sesión',
-    short: 'Listo',
-    description: 'Elige tu plantel y usa tu cuenta institucional para continuar.'
+    button: 'Continuar con Google',
+    status: ''
   },
   google: {
-    title: 'Esperando confirmación de Google',
-    short: 'Esperando Google',
-    description: 'Completa la selección de cuenta en Google. No cierres esta ventana.'
+    button: 'Continúa en Google',
+    status: 'Selecciona tu cuenta institucional.'
   },
   server: {
-    title: 'Validando identidad y acceso',
-    short: 'Validando acceso',
-    description: 'El servidor está verificando tu cuenta, tu dominio y tu configuración de acceso.'
+    button: 'Validando cuenta',
+    status: 'Estamos validando tu acceso.'
   },
   session: {
-    title: 'Preparando sesión',
-    short: 'Preparando sesión',
-    description: 'Estamos resolviendo plantel, permisos y destino inicial.'
+    button: 'Preparando acceso',
+    status: 'Estamos preparando tu sesión.'
   },
   redirecting: {
-    title: 'Abriendo el sistema',
-    short: 'Entrando',
-    description: 'Tu sesión quedó lista. Te estamos redirigiendo al panel correspondiente.'
+    button: 'Entrando',
+    status: 'Abriendo el sistema.'
   },
   error: {
-    title: 'Inicio detenido',
-    short: 'Error',
-    description: 'Revisa el mensaje de error y vuelve a intentarlo.'
+    button: 'Continuar con Google',
+    status: ''
   }
 }
-
-const PHASE_ORDER = ['loadingGoogle', 'google', 'server', 'session', 'redirecting']
 
 const errorMsg = ref('')
 const authPhase = ref('loadingGoogle')
@@ -189,20 +193,8 @@ const selectedPlantel = ref(
 )
 
 const isBusy = computed(() => ['google', 'server', 'session', 'redirecting'].includes(authPhase.value))
-const currentPhase = computed(() => PHASES[authPhase.value] || PHASES.ready)
-const loginSteps = computed(() => [
-  { id: 'google', index: 1, label: 'Google Workspace', state: stepState(1) },
-  { id: 'identity', index: 2, label: 'Identidad y dominio', state: stepState(2) },
-  { id: 'access', index: 3, label: 'Permisos y plantel', state: stepState(3) },
-  { id: 'dashboard', index: 4, label: 'Entrada al sistema', state: stepState(4) }
-])
-
-const stepState = (step) => {
-  if (authPhase.value === 'error') return 'pending'
-  if (step < currentStepIndex.value) return 'done'
-  if (step === currentStepIndex.value) return 'active'
-  return 'pending'
-}
+const primaryButtonText = computed(() => (PHASES[authPhase.value] || PHASES.ready).button)
+const statusText = computed(() => (PHASES[authPhase.value] || PHASES.ready).status)
 
 const setPhase = (phase, stepIndex = currentStepIndex.value) => {
   authPhase.value = phase
@@ -213,7 +205,7 @@ const getErrorMessage = (error) => {
   const message = error?.data?.message || error?.statusMessage || error?.message || ''
 
   if (message) return message
-  return 'Credenciales no autorizadas, cuenta no institucional o plantel no disponible.'
+  return 'No pudimos validar tu cuenta. Inténtalo de nuevo.'
 }
 
 const clearGoogleIntentTimer = () => {
@@ -282,7 +274,7 @@ const resetLoginState = () => {
 
 const initializeGoogle = () => {
   if (!window.google?.accounts?.id) {
-    errorMsg.value = 'No se pudo cargar Google Workspace. Recarga la página.'
+    errorMsg.value = 'No se pudo cargar Google. Recarga la página.'
     setPhase('error', 0)
     return
   }
@@ -326,9 +318,9 @@ const initializeGoogle = () => {
     {
       theme: 'outline',
       size: 'large',
-      shape: 'pill',
-      text: 'signin_with',
-      width: Math.min(360, buttonTarget.offsetWidth || 360)
+      shape: 'rectangular',
+      text: 'continue_with',
+      width: Math.min(520, buttonTarget.offsetWidth || 420)
     }
   )
 
@@ -358,7 +350,7 @@ onMounted(() => {
   script.defer = true
   script.onload = initializeGoogle
   script.onerror = () => {
-    errorMsg.value = 'No se pudo cargar Google Workspace. Verifica conexión y recarga la página.'
+    errorMsg.value = 'No se pudo cargar Google. Verifica tu conexión y recarga la página.'
     setPhase('error', 0)
   }
 
@@ -369,427 +361,426 @@ onBeforeUnmount(() => {
   clearGoogleIntentTimer()
 })
 </script>
-
 <style scoped>
 .login-page {
-  position: relative;
   min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 3rem;
+  color: #12213d;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(147, 196, 125, 0.18), transparent 28rem),
+    radial-gradient(circle at 84% 82%, rgba(36, 127, 68, 0.08), transparent 24rem),
+    #fbfdff;
+}
+
+.login-shell {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: min(100%, 1675px);
+  min-height: 948px;
+  overflow: hidden;
+  border: 1px solid #dbe3ec;
+  border-radius: 38px;
+  background: #ffffff;
+  box-shadow: 0 28px 80px rgba(15, 32, 62, 0.12);
+}
+
+.brand-panel {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  padding: 2rem;
-  color: #162641;
+  border-right: 1px solid #dbe3ec;
   background:
-    radial-gradient(circle at 20% 10%, rgba(142, 193, 83, 0.18), transparent 26rem),
-    radial-gradient(circle at 82% 74%, rgba(28, 169, 158, 0.13), transparent 28rem),
-    linear-gradient(135deg, #fbfdfc 0%, #f5f8fb 52%, #ffffff 100%);
+    radial-gradient(circle at 93% 34%, rgba(255, 255, 255, 0.52) 0 9.5rem, transparent 9.65rem),
+    radial-gradient(circle at 92% 34%, rgba(255, 255, 255, 0.28) 0 19rem, transparent 19.2rem),
+    linear-gradient(145deg, #eef9eb 0%, #f7fbf4 54%, #edf7e8 100%);
 }
 
-.login-orb {
+.brand-panel::before,
+.brand-panel::after {
+  content: '';
   position: absolute;
   border-radius: 999px;
-  filter: blur(22px);
-  opacity: 0.8;
   pointer-events: none;
 }
 
-.login-orb-one {
-  top: -7rem;
-  left: -6rem;
+.brand-panel::before {
+  width: 44rem;
+  height: 44rem;
+  right: -20rem;
+  bottom: -18rem;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.brand-panel::after {
   width: 22rem;
   height: 22rem;
-  background: rgba(142, 193, 83, 0.22);
+  right: -6rem;
+  top: 10rem;
+  border: 3rem solid rgba(255, 255, 255, 0.18);
 }
 
-.login-orb-two {
-  right: -8rem;
-  bottom: -8rem;
-  width: 28rem;
-  height: 28rem;
-  background: rgba(57, 127, 232, 0.11);
-}
-
-.login-grid {
+.brand-content {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(380px, 0.95fr);
-  width: min(100%, 1040px);
-  min-height: 640px;
-  overflow: hidden;
-  border: 1px solid rgba(223, 230, 239, 0.92);
-  border-radius: 34px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 28px 75px rgba(22, 38, 65, 0.13);
-  backdrop-filter: blur(20px);
-}
-
-.login-hero {
+  width: min(100%, 475px);
   display: flex;
+  min-height: 620px;
   flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 2rem;
-  padding: 3rem;
-  background:
-    linear-gradient(145deg, rgba(234, 248, 231, 0.96), rgba(255, 255, 255, 0.62)),
-    radial-gradient(circle at 20% 30%, rgba(101, 167, 68, 0.16), transparent 18rem);
 }
 
-.hero-badge,
-.card-topline {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  gap: 0.55rem;
-  border: 1px solid rgba(101, 167, 68, 0.22);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
-  padding: 0.45rem 0.75rem;
-  color: #326c32;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.hero-badge-icon,
-.card-icon {
-  display: inline-flex;
-  width: 1.35rem;
-  height: 1.35rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: rgba(101, 167, 68, 0.14);
-  color: #2f8132;
-}
-
-.hero-logo {
-  width: 154px;
+.brand-logo {
+  display: block;
+  width: 207px;
   height: auto;
-  object-fit: contain;
+  align-self: center;
+  margin-top: 0.5rem;
 }
 
-.hero-kicker {
-  margin: 0 0 0.75rem;
-  color: #19823a;
-  font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
+.brand-copy {
+  margin-top: 5rem;
+}
+
+.brand-kicker {
+  margin: 0 0 2rem;
+  color: #1c7b2f;
+  font-size: 1.05rem;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.hero-title {
+.brand-copy h1 {
   margin: 0;
-  max-width: 520px;
-  color: #11213c;
-  font-size: clamp(2.4rem, 5vw, 4.6rem);
+  max-width: 460px;
+  color: #12213d;
+  font-size: clamp(3.35rem, 4.15vw, 4.65rem);
   font-weight: 950;
-  line-height: 0.95;
+  line-height: 1.12;
   letter-spacing: -0.055em;
 }
 
-.hero-copy {
-  margin: 1.25rem 0 0;
-  max-width: 520px;
-  color: #607089;
-  font-size: 0.98rem;
+.brand-copy p:not(.brand-kicker) {
+  margin: 2rem 0 0;
+  max-width: 430px;
+  color: #66758f;
+  font-size: 1.25rem;
   font-weight: 600;
   line-height: 1.65;
 }
 
-.state-card {
-  border: 1px solid rgba(223, 230, 239, 0.88);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.82);
-  padding: 1.1rem;
-  box-shadow: 0 16px 38px rgba(22, 38, 65, 0.07);
-}
-
-.state-card-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.8rem;
-}
-
-.state-dot {
-  margin-top: 0.35rem;
-  width: 0.75rem;
-  height: 0.75rem;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: #65a744;
-  box-shadow: 0 0 0 6px rgba(101, 167, 68, 0.12);
-}
-
-.state-dot.active {
-  animation: pulseDot 1.2s ease-in-out infinite;
-}
-
-.state-dot.error {
-  background: #ff4d38;
-  box-shadow: 0 0 0 6px rgba(255, 77, 56, 0.12);
-}
-
-.state-title {
-  margin: 0;
-  color: #182a47;
-  font-size: 0.92rem;
-  font-weight: 900;
-}
-
-.state-description {
-  margin: 0.25rem 0 0;
-  color: #66728a;
-  font-size: 0.78rem;
-  font-weight: 650;
-  line-height: 1.45;
-}
-
-.login-steps {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.65rem;
-  margin: 1rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.login-step {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.45rem;
-  border: 1px solid rgba(223, 230, 239, 0.82);
-  border-radius: 14px;
-  background: #ffffff;
-  padding: 0.55rem;
-  color: #7a879b;
-  font-size: 0.68rem;
-  font-weight: 800;
-}
-
-.login-step.done {
-  border-color: rgba(101, 167, 68, 0.24);
-  color: #39743b;
-  background: rgba(234, 248, 231, 0.72);
-}
-
-.login-step.active {
-  border-color: rgba(57, 127, 232, 0.28);
-  color: #245fac;
-  background: rgba(237, 246, 255, 0.88);
-}
-
-.step-marker {
+.secure-card {
   display: inline-flex;
-  width: 1.25rem;
-  height: 1.25rem;
-  flex: 0 0 auto;
   align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #f1f5f9;
-  font-size: 0.62rem;
-  font-weight: 950;
-}
-
-.login-step.done .step-marker {
-  background: #65a744;
-  color: #ffffff;
-}
-
-.login-step.active .step-marker {
-  background: #397fe8;
-  color: #ffffff;
-}
-
-.step-spinner,
-.inline-spinner {
-  display: inline-block;
-  width: 0.8rem;
-  height: 0.8rem;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 999px;
-  animation: spin 0.75s linear infinite;
-}
-
-.login-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 3rem;
-  border-left: 1px solid rgba(223, 230, 239, 0.78);
-  background: rgba(255, 255, 255, 0.96);
-}
-
-.login-card h2 {
-  margin: 1.15rem 0 0.35rem;
-  color: #11213c;
-  font-size: 2.35rem;
-  font-weight: 950;
-  letter-spacing: -0.045em;
-}
-
-.login-subtitle {
-  margin: 0 0 1.6rem;
-  color: #66728a;
-  font-size: 0.92rem;
-  font-weight: 650;
-  line-height: 1.55;
-}
-
-.plantel-box {
-  border: 1px solid rgba(223, 230, 239, 0.95);
+  gap: 1.15rem;
+  min-width: 410px;
+  border: 1px solid #dbe3ec;
   border-radius: 22px;
-  background: linear-gradient(180deg, #ffffff, #fbfdfc);
-  padding: 1rem;
-  box-shadow: 0 12px 28px rgba(22, 38, 65, 0.05);
+  background: rgba(255, 255, 255, 0.86);
+  padding: 1.35rem 1.55rem;
+  box-shadow: 0 15px 32px rgba(15, 32, 62, 0.06);
 }
 
-.plantel-header {
+.secure-icon {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #23843f;
+}
+
+.secure-icon svg,
+.auth-kicker svg,
+.domain-note svg {
+  width: 100%;
+  height: 100%;
+}
+
+.secure-card strong {
+  display: block;
+  color: #12213d;
+  font-size: 1.03rem;
+  font-weight: 950;
+}
+
+.secure-card small {
+  display: block;
+  margin-top: 0.25rem;
+  color: #66758f;
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.auth-panel {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.55rem;
+  justify-content: center;
+  background: #ffffff;
 }
 
-.plantel-header label {
-  color: #182a47;
-  font-size: 0.76rem;
+.auth-content {
+  width: min(100%, 615px);
+}
+
+.auth-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 3.75rem;
+  color: #1f7f31;
+  font-size: 1.08rem;
   font-weight: 950;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-.plantel-header span {
-  color: #6b7b92;
-  font-size: 0.72rem;
-  font-weight: 800;
+.auth-kicker span {
+  display: inline-grid;
+  width: 51px;
+  height: 51px;
+  place-items: center;
+  border-radius: 999px;
+  background: #e9f4e7;
+  color: #23843f;
 }
 
-.plantel-select {
-  width: 100%;
-  height: 46px;
-  border: 1px solid #dfe6ef;
-  border-radius: 16px;
-  background: #ffffff;
-  padding: 0 0.85rem;
-  color: #2d6b31;
-  font-size: 0.92rem;
-  font-weight: 900;
-  outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+.auth-kicker svg {
+  width: 22px;
+  height: 22px;
 }
 
-.plantel-select:focus {
-  border-color: rgba(101, 167, 68, 0.78);
-  box-shadow: 0 0 0 4px rgba(101, 167, 68, 0.13);
+.auth-content h2 {
+  margin: 0;
+  color: #12213d;
+  font-size: 2.95rem;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.055em;
 }
 
-.plantel-select:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.plantel-box p {
-  margin: 0.65rem 0 0;
-  color: #7a879b;
-  font-size: 0.73rem;
-  font-weight: 700;
+.auth-subtitle {
+  margin: 1.55rem 0 3.05rem;
+  color: #65748b;
+  font-size: 1.19rem;
+  font-weight: 650;
   line-height: 1.45;
 }
 
-.google-area {
-  margin-top: 1rem;
-}
-
-.google-button-shell {
+.plantel-field {
   position: relative;
-  display: flex;
-  min-height: 54px;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px solid rgba(223, 230, 239, 0.95);
-  border-radius: 999px;
+  display: block;
+  min-height: 116px;
+  border: 1px solid #dbe3ec;
+  border-radius: 22px;
   background: #ffffff;
-  box-shadow: 0 14px 30px rgba(22, 38, 65, 0.08);
+  padding: 1.42rem 4.3rem 1.3rem 1.95rem;
+  box-shadow: 0 12px 28px rgba(15, 32, 62, 0.04);
 }
 
-.google-button-shell.busy {
-  border-color: rgba(57, 127, 232, 0.24);
+.plantel-field span {
+  display: block;
+  margin-bottom: 1.12rem;
+  color: #4d586b;
+  font-size: 0.92rem;
+  font-weight: 950;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.plantel-field select {
+  display: block;
+  width: 100%;
+  border: 0;
+  appearance: none;
+  background: transparent;
+  color: #20762f;
+  font: inherit;
+  font-size: 1.53rem;
+  font-weight: 950;
+  line-height: 1.1;
+  outline: none;
+}
+
+.plantel-field svg {
+  position: absolute;
+  right: 2rem;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  color: #217832;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.plantel-field:focus-within {
+  border-color: rgba(35, 132, 63, 0.55);
+  box-shadow: 0 0 0 4px rgba(35, 132, 63, 0.09);
+}
+
+.google-card {
+  position: relative;
+  margin-top: 2.65rem;
+  border: 1px solid #dbe3ec;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 32, 62, 0.04);
+}
+
+.google-visual-button {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 42px 1fr 28px;
+  width: 100%;
+  min-height: 84px;
+  align-items: center;
+  gap: 1.15rem;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  padding: 0 1.85rem;
+  color: #1a2334;
+  font: inherit;
+  font-size: 1.12rem;
+  font-weight: 850;
+  text-align: left;
+}
+
+.google-visual-button.busy {
+  grid-template-columns: 28px 1fr;
+  color: #236aad;
+}
+
+.google-icon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+}
+
+.google-icon svg {
+  width: 34px;
+  height: 34px;
+}
+
+.button-arrow {
+  width: 22px;
+  height: 22px;
+  justify-self: end;
+  color: #17243a;
 }
 
 .google-button-target {
-  display: flex;
-  width: 100%;
-  justify-content: center;
-}
-
-.google-busy-layer {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.65rem;
-  background: rgba(255, 255, 255, 0.94);
-  color: #245fac;
-  font-size: 0.84rem;
-  font-weight: 900;
-  backdrop-filter: blur(4px);
+  z-index: 3;
+  opacity: 0.01;
 }
 
-.retry-button {
+.google-button-target.hidden {
+  pointer-events: none;
+}
+
+.google-button-target :deep(div),
+.google-button-target :deep(iframe) {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+}
+
+#google-btn {
   width: 100%;
-  height: 42px;
-  margin-top: 0.75rem;
-  border: 1px solid rgba(101, 167, 68, 0.32);
+  height: 100%;
+}
+
+.button-spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid currentColor;
+  border-top-color: transparent;
   border-radius: 999px;
-  background: rgba(234, 248, 231, 0.72);
-  color: #2f6f39;
-  font-size: 0.82rem;
-  font-weight: 900;
+  animation: spin 0.8s linear infinite;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 1.45rem;
+  margin: 1.05rem 0 0;
+  color: #517088;
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #23843f;
+  box-shadow: 0 0 0 5px rgba(35, 132, 63, 0.12);
 }
 
 .login-alert {
   display: grid;
-  gap: 0.25rem;
-  margin-top: 1rem;
-  border: 1px solid rgba(255, 77, 56, 0.2);
+  gap: 0.28rem;
+  margin-top: 1.15rem;
+  border: 1px solid rgba(218, 62, 48, 0.2);
   border-radius: 18px;
-  background: rgba(255, 241, 240, 0.95);
-  padding: 0.85rem 1rem;
-  color: #a23a2b;
-  font-size: 0.8rem;
-  font-weight: 750;
+  background: #fff4f1;
+  padding: 1rem 1.1rem;
+  color: #a83c2f;
+  font-size: 0.88rem;
+  font-weight: 700;
   line-height: 1.45;
 }
 
 .login-alert strong {
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 950;
 }
 
-.session-detail {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+.retry-button {
+  width: 100%;
+  height: 52px;
   margin-top: 1rem;
-  border-top: 1px solid rgba(223, 230, 239, 0.9);
-  padding-top: 1rem;
-  color: #6b7b92;
-  font-size: 0.75rem;
-  font-weight: 800;
+  border: 1px solid rgba(35, 132, 63, 0.28);
+  border-radius: 16px;
+  background: #edf8eb;
+  color: #1f7f31;
+  font-size: 0.96rem;
+  font-weight: 950;
 }
 
-.session-detail strong {
-  color: #2f6f39;
+.domain-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 2.35rem 0 0;
+  color: #66758f;
+  font-size: 1.02rem;
+  font-weight: 750;
+}
+
+.domain-note span {
+  display: inline-grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  color: #24843f;
+}
+
+.domain-note strong {
+  color: #1f7f31;
   font-weight: 950;
 }
 
@@ -797,34 +788,62 @@ onBeforeUnmount(() => {
   to { transform: rotate(360deg); }
 }
 
-@keyframes pulseDot {
-  0%, 100% { transform: scale(1); opacity: 0.92; }
-  50% { transform: scale(1.25); opacity: 0.65; }
+@media (max-width: 1180px) {
+  .login-page {
+    padding: 1.5rem;
+  }
+
+  .login-shell {
+    min-height: 760px;
+  }
+
+  .brand-content,
+  .auth-content {
+    width: min(100%, 470px);
+  }
+
+  .brand-copy h1 {
+    font-size: 3.25rem;
+  }
+
+  .auth-content h2 {
+    font-size: 2.6rem;
+  }
 }
 
 @media (max-width: 900px) {
   .login-page {
     padding: 1rem;
-    align-items: flex-start;
+    place-items: start center;
   }
 
-  .login-grid {
+  .login-shell {
     grid-template-columns: 1fr;
     min-height: auto;
   }
 
-  .login-hero,
-  .login-card {
-    padding: 2rem;
+  .brand-panel {
+    min-height: 430px;
+    border-right: 0;
+    border-bottom: 1px solid #dbe3ec;
   }
 
-  .login-card {
-    border-left: 0;
-    border-top: 1px solid rgba(223, 230, 239, 0.78);
+  .brand-content {
+    min-height: 320px;
+    padding: 3rem 2rem;
   }
 
-  .login-steps {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .brand-copy {
+    margin-top: 2rem;
+  }
+
+  .secure-card {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .auth-panel {
+    padding: 3rem 2rem;
   }
 }
 
@@ -833,22 +852,53 @@ onBeforeUnmount(() => {
     padding: 0;
   }
 
-  .login-grid {
-    min-height: 100vh;
+  .login-shell {
     border-radius: 0;
+    border-left: 0;
+    border-right: 0;
   }
 
-  .login-hero,
-  .login-card {
-    padding: 1.5rem;
+  .brand-panel {
+    min-height: auto;
   }
 
-  .hero-title {
-    font-size: 2.45rem;
+  .brand-content {
+    padding: 2.25rem 1.25rem;
   }
 
-  .login-steps {
-    grid-template-columns: 1fr;
+  .brand-logo {
+    width: 160px;
+  }
+
+  .brand-kicker,
+  .auth-kicker {
+    font-size: 0.82rem;
+  }
+
+  .brand-copy h1 {
+    font-size: 2.55rem;
+  }
+
+  .brand-copy p:not(.brand-kicker),
+  .auth-subtitle {
+    font-size: 1rem;
+  }
+
+  .auth-panel {
+    padding: 2.25rem 1.25rem;
+  }
+
+  .auth-kicker {
+    margin-bottom: 2.4rem;
+  }
+
+  .auth-content h2 {
+    font-size: 2.25rem;
+  }
+
+  .plantel-field,
+  .google-visual-button {
+    min-height: 76px;
   }
 }
 </style>
