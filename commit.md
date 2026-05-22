@@ -1,1 +1,1 @@
-fix: reload Control Escolar students on ciclo change
+fix: reload control escolar students when cycle changes
