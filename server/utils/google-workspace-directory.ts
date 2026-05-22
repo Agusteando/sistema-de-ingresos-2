@@ -136,6 +136,33 @@ export const searchWorkspaceDirectoryUsers = async (search: string, maxResults =
   }
 }
 
+
+export const getWorkspaceDirectoryUsersByEmails = async (emails: string[]) => {
+  const admin = getWorkspaceDirectoryService()
+  const uniqueEmails = Array.from(new Set((emails || [])
+    .map(normalizeEmail)
+    .filter((email) => isCasitaWorkspaceEmail(email))))
+    .slice(0, 250)
+  const users = []
+  const errors: Array<{ email: string; message: string }> = []
+
+  for (const email of uniqueEmails) {
+    try {
+      const response = await admin.users.get({
+        userKey: email,
+        projection: 'full',
+        viewType: 'domain_public',
+        fields: 'id,primaryEmail,name,thumbnailPhotoUrl,suspended,archived,orgUnitPath'
+      })
+      users.push(normalizeDirectoryUser(response.data as DirectoryUser))
+    } catch (error: any) {
+      errors.push({ email, message: error?.message || 'No se pudo leer usuario de Workspace.' })
+    }
+  }
+
+  return { users, errors }
+}
+
 export const getWorkspaceDirectoryPhoto = async (email: string) => {
   const normalizedEmail = normalizeEmail(email)
   if (!isCasitaWorkspaceEmail(normalizedEmail)) return null
