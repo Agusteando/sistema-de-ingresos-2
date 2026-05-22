@@ -109,44 +109,68 @@ const plantelesValue = (value: unknown) => {
 let externalUsersReady: { ok: boolean; columns: Set<string>; loadedAt: number; error?: string } | null = null
 const CACHE_MS = 1000 * 60 * 5
 
-export const ensureExternalUsersTable = async () => {
-  await controlEscolarCentralQuery(`
-    CREATE TABLE IF NOT EXISTS ${escapeIdentifier(TABLE)} (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      displayName VARCHAR(255) DEFAULT NULL,
-      username VARCHAR(255) NOT NULL,
-      email VARCHAR(255) DEFAULT NULL,
-      password VARCHAR(255) DEFAULT '',
-      plaintext VARCHAR(255) DEFAULT NULL,
-      picture TEXT,
-      role VARCHAR(255) NOT NULL DEFAULT '${DEFAULT_EXTERNAL_ROLE}',
-      planteles TEXT,
-      plantel VARCHAR(255) DEFAULT NULL,
-      campus VARCHAR(255) DEFAULT NULL,
-      empresa VARCHAR(255) DEFAULT NULL,
-      facebook VARCHAR(255) DEFAULT NULL,
-      unidad VARCHAR(255) DEFAULT NULL,
-      sala VARCHAR(255) DEFAULT NULL,
-      nombre_nino VARCHAR(255) DEFAULT NULL,
-      last_login_at DATETIME DEFAULT NULL,
-      ingresos_blocked TINYINT(1) NOT NULL DEFAULT 0,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      KEY users_email_idx (email)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  `)
-}
-
 export const getExternalUsersColumns = async (force = false) => {
   if (!force && externalUsersReady && externalUsersReady.ok && Date.now() - externalUsersReady.loadedAt < CACHE_MS) {
     return externalUsersReady.columns
   }
 
-  await ensureExternalUsersTable()
-  const rows = await controlEscolarCentralQuery<TableColumn[]>(`SHOW COLUMNS FROM ${escapeIdentifier(TABLE)}`)
-  const columns = new Set(rows.map((row) => row.Field))
-  externalUsersReady = { ok: true, columns, loadedAt: Date.now() }
-  return columns
+  try {
+    const rows = await controlEscolarCentralQuery<TableColumn[]>(`SHOW COLUMNS FROM ${escapeIdentifier(TABLE)}`)
+    const columns = new Set(rows.map((row) => row.Field))
+    externalUsersReady = { ok: true, columns, loadedAt: Date.now() }
+    return columns
+  } catch (error: any) {
+    externalUsersReady = {
+      ok: false,
+      columns: new Set(),
+      loadedAt: Date.now(),
+      error: error?.message || String(error || 'External users unavailable')
+    }
+    throw error
+  }
+}
+
+export const getExternalUsersDiagnostics = async () => {
+  const config = useRuntimeConfig() as any
+  const requiredColumns = ['email', 'role', 'last_login_at', 'ingresos_blocked']
+  const safeRuntime = {
+    target: 'CONTROL_ESCOLAR_MYSQL_DATABASE.users',
+    table: TABLE,
+    domain: WORKSPACE_DOMAIN,
+    hostConfigured: Boolean(String(config.controlEscolarMysqlHost || '').trim()),
+    databaseConfigured: Boolean(String(config.controlEscolarMysqlDatabase || '').trim()),
+    userConfigured: Boolean(String(config.controlEscolarMysqlUser || '').trim()),
+    port: Number(config.controlEscolarMysqlPort || 3306)
+  }
+
+  try {
+    const columns = await getExternalUsersColumns(true)
+    const columnList = Array.from(columns).sort()
+    return {
+      ok: true,
+      ...safeRuntime,
+      columns: columnList,
+      requiredColumns,
+      missingColumns: requiredColumns.filter((column) => !columns.has(column)),
+      lastCachedError: externalUsersReady?.error || null
+    }
+  } catch (error: any) {
+    return {
+      ok: false,
+      ...safeRuntime,
+      requiredColumns,
+      columns: [],
+      missingColumns: requiredColumns,
+      errorName: error?.name || 'ExternalUsersError',
+      errorCode: error?.code || error?.errno || null,
+      errorMessage: error?.message || String(error || 'No se pudo leer la tabla users'),
+      lastCachedError: externalUsersReady?.error || null
+    }
+  }
+}
+
+export const ensureExternalUsersTable = async () => {
+  return await getExternalUsersColumns(true)
 }
 
 export const isExternalUsersAvailable = async () => {

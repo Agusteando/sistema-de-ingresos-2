@@ -1,10 +1,12 @@
-import { bulkUpdateExternalUsers, isExternalUsersAvailable } from '../../utils/external-users'
+import { bulkUpdateExternalUsers, getExternalUsersDiagnostics, isExternalUsersAvailable } from '../../utils/external-users'
 
 const assertExternalUsersAvailable = async () => {
   if (await isExternalUsersAvailable()) return
+  const debug = await getExternalUsersDiagnostics()
   throw createError({
     statusCode: 503,
-    message: 'No se pudo cargar el directorio de usuarios.'
+    message: 'No se pudo cargar el directorio de usuarios.',
+    data: { debug }
   })
 }
 

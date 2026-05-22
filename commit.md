@@ -1,1 +1,1 @@
-feat: add usuarios access controls and login tracking
+feat: refine usuarios access console and diagnostics
