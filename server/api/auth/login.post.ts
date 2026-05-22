@@ -2,7 +2,8 @@ import { OAuth2Client } from 'google-auth-library'
 import { query, runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { hasControlEscolarRole, isControlEscolarOnlyRole, isSuperAdminRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
-import { findExternalUserByEmail, isExternalUsersAvailable } from '../../utils/external-users'
+import { isExternalUsersAvailable, touchExternalUserLogin } from '../../utils/external-users'
+import { isCasitaWorkspaceEmail, WORKSPACE_DOMAIN } from '../../utils/google-workspace-directory'
 
 const SUPERADMIN_EMAILS = new Set([
   'desarrollo.tecnologico@casitaiedis.edu.mx',
@@ -140,17 +141,33 @@ export default defineEventHandler(async (event) => {
       throw new Error('Token inválido')
     }
 
-    const localUser = await runWithBridgeAgentId(requestedPlantel, async () => ensureLocalUser(payload, requestedPlantel))
+    const normalizedEmail = String(payload.email).trim().toLowerCase()
+    if (!isCasitaWorkspaceEmail(normalizedEmail)) {
+      throw createError({ statusCode: 403, message: `Solo se permite acceso con cuentas @${WORKSPACE_DOMAIN}.` })
+    }
+
+    const seedAdmin = SUPERADMIN_EMAILS.has(normalizedEmail)
     const externalUsersAvailable = await isExternalUsersAvailable().catch((error: any) => {
       console.warn('[Auth Login] External users table unavailable; using local auth defaults', error?.message || error)
       return false
     })
     const externalUser = externalUsersAvailable
-      ? await findExternalUserByEmail(payload.email).catch((error: any) => {
-          console.warn('[Auth Login] External users lookup skipped', error?.message || error)
+      ? await touchExternalUserLogin({
+          email: normalizedEmail,
+          name: payload.name,
+          picture: payload.picture,
+          requestedPlantel
+        }).catch((error: any) => {
+          console.warn('[Auth Login] External users login update skipped', error?.message || error)
           return null
         })
       : null
+
+    if (!seedAdmin && externalUser?.ingresosBlocked) {
+      throw createError({ statusCode: 403, message: 'Tu acceso a Sistema de Ingresos esta bloqueado.' })
+    }
+
+    const localUser = await runWithBridgeAgentId(requestedPlantel, async () => ensureLocalUser(payload, requestedPlantel))
     const user = externalUsersAvailable && !isSuperAdminRole(localUser.role)
       ? {
           ...localUser,

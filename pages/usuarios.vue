@@ -4,7 +4,7 @@
       <div>
         <p class="workspace-eyebrow">Usuarios institucionales</p>
         <h2 class="workspace-title">Usuarios</h2>
-        <p class="workspace-subtitle">Gestiona el equipo interno y sus accesos operativos.</p>
+        <p class="workspace-subtitle">Control rápido de accesos, bloqueos y último ingreso.</p>
       </div>
       <div class="workspace-header-actions">
         <button class="btn btn-ghost" :disabled="loadingTable" @click="loadUsers">
@@ -25,7 +25,7 @@
           v-model="searchQuery"
           type="search"
           class="workspace-search-input"
-          placeholder="Buscar por nombre, correo, plantel o acceso..."
+          placeholder="Buscar por nombre, correo, rol, estado o acceso..."
           autocomplete="off"
         >
         <button v-if="searchQuery" type="button" class="workspace-search-clear" @click="searchQuery = ''">
@@ -35,8 +35,27 @@
 
       <div class="workspace-stats">
         <span class="workspace-stat-pill neutral"><LucideUsers :size="15" /> {{ usuarios.length }} usuarios</span>
-        <span class="workspace-stat-pill control"><LucideGraduationCap :size="15" /> {{ controlCount }} Control Escolar</span>
-        <span class="workspace-stat-pill admin"><LucideShieldCheck :size="15" /> {{ adminCount }} Administración</span>
+        <span class="workspace-stat-pill admin"><LucideShieldCheck :size="15" /> {{ defaultCount }} default</span>
+        <span class="workspace-stat-pill control"><LucideGraduationCap :size="15" /> {{ controlCount }} ROLE_CTRL</span>
+        <span class="workspace-stat-pill blocked"><LucideBan :size="15" /> {{ blockedCount }} bloqueados</span>
+      </div>
+    </section>
+
+    <section v-if="selectedEmails.length" class="workspace-bulk-bar card">
+      <span class="workspace-bulk-count">{{ selectedEmails.length }} seleccionados</span>
+      <div class="workspace-bulk-actions">
+        <button type="button" class="btn btn-ghost" :disabled="bulkSaving" @click="bulkUpdate({ accessMode: 'control' }, 'Asignar ROLE_CTRL a los seleccionados?')">
+          <LucideGraduationCap :size="15" /> ROLE_CTRL
+        </button>
+        <button type="button" class="btn btn-ghost" :disabled="bulkSaving" @click="bulkUpdate({ accessMode: 'admin' }, 'Quitar ROLE_CTRL a los seleccionados?')">
+          <LucideShieldCheck :size="15" /> Default
+        </button>
+        <button type="button" class="btn btn-ghost text-accent-coral hover:bg-accent-coral/10" :disabled="bulkSaving" @click="bulkUpdate({ ingresosBlocked: true }, 'Bloquear acceso a los seleccionados?')">
+          <LucideBan :size="15" /> Bloquear
+        </button>
+        <button type="button" class="btn btn-ghost" :disabled="bulkSaving" @click="bulkUpdate({ ingresosBlocked: false }, 'Reactivar acceso a los seleccionados?')">
+          <LucideUnlock :size="15" /> Reactivar
+        </button>
       </div>
     </section>
 
@@ -44,53 +63,77 @@
       <table class="w-full workspace-users-table">
         <thead>
           <tr>
+            <th class="w-10 text-center">
+              <input type="checkbox" :checked="allVisibleSelected" :indeterminate.prop="someVisibleSelected" @change="toggleAllVisible">
+            </th>
             <th>Usuario</th>
             <th>Correo</th>
-            <th>Planteles</th>
             <th>Acceso</th>
-            <th class="text-center w-24">Acciones</th>
+            <th>Estado</th>
+            <th>Último ingreso</th>
+            <th class="text-center w-28">Acciones</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="loadingTable">
-            <td colspan="5" class="text-center py-12 text-gray-500 font-medium">Cargando...</td>
+            <td colspan="7" class="text-center py-12 text-gray-500 font-medium">Cargando...</td>
           </tr>
           <tr v-else-if="!filteredUsuarios.length">
-            <td colspan="5" class="text-center py-12 text-gray-500">No hay usuarios para mostrar.</td>
+            <td colspan="7" class="text-center py-12 text-gray-500">No hay usuarios para mostrar.</td>
           </tr>
           <tr
             v-else
             v-for="u in filteredUsuarios"
-            :key="u.id"
+            :key="u.email || u.id"
             class="workspace-user-row cursor-context-menu"
+            :class="{ blocked: isBlocked(u) }"
             @contextmenu.prevent="showContextMenu($event, u)"
           >
+            <td class="text-center">
+              <input type="checkbox" :checked="isSelected(u)" :disabled="isProtectedUser(u)" @change="toggleSelection(u)">
+            </td>
             <td>
               <div class="workspace-user-cell">
                 <img :src="avatarFor(u)" class="workspace-user-avatar" :alt="displayNameFor(u)">
                 <div class="min-w-0">
                   <div class="workspace-user-name">{{ displayNameFor(u) }}</div>
-                  <div class="workspace-user-source">Workspace</div>
+                  <div class="workspace-user-source">{{ u.duplicateCount > 1 ? `Workspace · ${u.duplicateCount} registros` : 'Workspace' }}</div>
                 </div>
               </div>
             </td>
             <td class="workspace-email-cell">{{ u.email || '—' }}</td>
             <td>
-              <div class="workspace-planteles">
-                <span v-for="p in plantelesFor(u)" :key="p" class="workspace-plantel-chip">{{ p }}</span>
-                <span v-if="!plantelesFor(u).length" class="workspace-plantel-chip muted">Sin plantel</span>
-              </div>
-            </td>
-            <td>
               <span :class="['workspace-access-badge', accessBadgeClass(u)]">
                 <component :is="accessIcon(u)" :size="14" />
                 {{ accessLabel(u) }}
               </span>
+              <div class="workspace-role-raw">{{ u.role || '—' }}</div>
+            </td>
+            <td>
+              <span :class="['workspace-status-badge', isBlocked(u) ? 'blocked' : 'active']">
+                <component :is="isBlocked(u) ? LucideBan : LucideCheckCircle2" :size="14" />
+                {{ isBlocked(u) ? 'Bloqueado' : 'Activo' }}
+              </span>
+            </td>
+            <td class="workspace-last-login">
+              <LucideClock :size="14" />
+              <span>{{ formatLastLogin(u.last_login_at || u.lastLoginAt) }}</span>
             </td>
             <td class="text-center">
-              <button class="workspace-row-action" @click="openModal(u)" aria-label="Editar usuario">
-                <LucideSettings :size="15" />
-              </button>
+              <div class="workspace-row-actions">
+                <button class="workspace-row-action" @click="openModal(u)" aria-label="Editar usuario">
+                  <LucideSettings :size="15" />
+                </button>
+                <button
+                  class="workspace-row-action"
+                  :class="{ danger: !isBlocked(u) }"
+                  :disabled="isProtectedUser(u)"
+                  @click="toggleBlocked(u)"
+                  :aria-label="isBlocked(u) ? 'Reactivar usuario' : 'Bloquear usuario'"
+                >
+                  <component :is="isBlocked(u) ? LucideUnlock : LucideBan" :size="15" />
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -190,6 +233,14 @@
                 </div>
 
                 <div class="form-group mb-0 mt-4 p-4 bg-white border border-gray-200 rounded-lg">
+                  <label class="form-label mb-2">Estado en Sistema de Ingresos</label>
+                  <label class="workspace-block-toggle" :class="{ active: form.ingresosBlocked }">
+                    <input type="checkbox" v-model="form.ingresosBlocked" :disabled="isProtectedEmail(form.email)">
+                    <span>{{ form.ingresosBlocked ? 'Bloqueado' : 'Activo' }}</span>
+                  </label>
+                </div>
+
+                <div class="form-group mb-0 mt-4 p-4 bg-white border border-gray-200 rounded-lg">
                   <label class="form-label mb-2">Planteles</label>
                   <div class="grid grid-cols-4 md:grid-cols-6 gap-2">
                     <label
@@ -209,16 +260,15 @@
                     <component :is="previewAccessIcon" :size="14" />
                     {{ previewAccessLabel }}
                   </span>
-                  <span class="workspace-selected-domain">{{ form.email || 'Pendiente' }}</span>
+                  <span :class="['workspace-status-badge', form.ingresosBlocked ? 'blocked' : 'active']">
+                    {{ form.ingresosBlocked ? 'Bloqueado' : 'Activo' }}
+                  </span>
                 </div>
               </section>
             </div>
 
             <div class="modal-footer flex justify-between">
-              <button type="button" class="btn btn-ghost text-accent-coral hover:bg-accent-coral/10 hover:text-accent-coral" v-if="editingId" @click="deleteUser">
-                <LucideTrash2 :size="16" /> Eliminar
-              </button>
-              <div v-else></div>
+              <div class="workspace-selected-domain">{{ form.email || 'Pendiente' }}</div>
               <div class="flex gap-2">
                 <button type="button" class="btn btn-ghost" @click="closeModal">Cancelar</button>
                 <button type="submit" class="btn btn-primary" :disabled="saving || !canSave">
@@ -237,15 +287,17 @@
 <script setup>
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import {
+  LucideBan,
   LucideBriefcase,
   LucideCheckCircle2,
+  LucideClock,
   LucideGraduationCap,
   LucideLoader2,
   LucideRefreshCw,
   LucideSearch,
   LucideSettings,
   LucideShieldCheck,
-  LucideTrash2,
+  LucideUnlock,
   LucideUserPlus,
   LucideUsers,
   LucideX
@@ -258,8 +310,14 @@ const { show } = useToast()
 const { openMenu } = useContextMenu()
 
 const WORKSPACE_DOMAIN = 'casitaiedis.edu.mx'
+const PROTECTED_EMAILS = new Set([
+  `desarrollo.tecnologico@${WORKSPACE_DOMAIN}`,
+  `coord.admon@${WORKSPACE_DOMAIN}`
+])
 const usuarios = ref([])
 const loadingTable = ref(false)
+const bulkSaving = ref(false)
+const selectedEmails = ref([])
 const showModal = ref(false)
 const saving = ref(false)
 const editingId = ref(null)
@@ -271,11 +329,12 @@ const directoryError = ref('')
 let directoryTimer = null
 
 const accessOptions = [
-  { value: 'admin', label: 'Administración', icon: LucideShieldCheck },
-  { value: 'control', label: 'Control Escolar', icon: LucideGraduationCap },
-  { value: 'admin_control', label: 'Administración + Control', icon: LucideBriefcase }
+  { value: 'admin', label: 'Default', icon: LucideShieldCheck },
+  { value: 'control', label: 'Control Escolar only', icon: LucideGraduationCap },
+  { value: 'admin_control', label: 'Default + Control Escolar', icon: LucideBriefcase }
 ]
 
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase()
 const roleTokens = (role) => String(role || '')
   .split(',')
   .map(entry => entry.trim().toLowerCase())
@@ -296,9 +355,9 @@ const accessModeForRole = (role) => {
 }
 
 const accessLabelForMode = (mode) => {
-  if (mode === 'control') return 'Control Escolar'
-  if (mode === 'admin_control') return 'Administración + Control'
-  return 'Administración'
+  if (mode === 'control') return 'Control Escolar only'
+  if (mode === 'admin_control') return 'Default + Control Escolar'
+  return 'Default'
 }
 const accessIconForMode = (mode) => {
   if (mode === 'control') return LucideGraduationCap
@@ -318,11 +377,15 @@ const emptyForm = () => ({
   avatar: '',
   picture: '',
   planteles: ['PT'],
-  accessMode: 'admin'
+  accessMode: 'admin',
+  ingresosBlocked: false
 })
 const form = ref(emptyForm())
 
-const isWorkspaceEmail = (email) => String(email || '').trim().toLowerCase().endsWith(`@${WORKSPACE_DOMAIN}`)
+const isWorkspaceEmail = (email) => normalizeEmail(email).endsWith(`@${WORKSPACE_DOMAIN}`)
+const isProtectedEmail = (email) => PROTECTED_EMAILS.has(normalizeEmail(email))
+const isProtectedUser = (u) => Boolean(u?.protected) || isProtectedEmail(u?.email)
+const isBlocked = (u) => u?.ingresosBlocked === true || u?.ingresos_blocked === 1 || u?.ingresos_blocked === '1'
 const selectedAvatar = computed(() => form.value.avatar || form.value.picture || avatarFor(form.value))
 const canSave = computed(() => isWorkspaceEmail(form.value.email) && form.value.planteles.length > 0 && accessOptions.some(option => option.value === form.value.accessMode))
 
@@ -345,17 +408,38 @@ const previewAccessBadgeClass = computed(() => accessClassForMode(form.value.acc
 
 const filteredUsuarios = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
-  if (!query) return usuarios.value
-  return usuarios.value.filter((u) => [
+  const rows = [...usuarios.value].sort((a, b) => lastLoginMs(b) - lastLoginMs(a) || displayNameFor(a).localeCompare(displayNameFor(b)))
+  if (!query) return rows
+  return rows.filter((u) => [
     displayNameFor(u),
     u.email,
+    u.role,
     u.planteles,
     u.plantel,
-    accessLabel(u)
+    accessLabel(u),
+    isBlocked(u) ? 'bloqueado' : 'activo'
   ].some(value => String(value || '').toLowerCase().includes(query)))
 })
 const controlCount = computed(() => usuarios.value.filter(u => hasControlEscolarRole(u.role)).length)
-const adminCount = computed(() => usuarios.value.filter(u => hasAdminRole(u.role)).length)
+const defaultCount = computed(() => usuarios.value.filter(u => !hasControlEscolarRole(u.role)).length)
+const blockedCount = computed(() => usuarios.value.filter(isBlocked).length)
+const visibleSelectableEmails = computed(() => filteredUsuarios.value.filter(u => !isProtectedUser(u)).map(u => normalizeEmail(u.email)).filter(Boolean))
+const allVisibleSelected = computed(() => visibleSelectableEmails.value.length > 0 && visibleSelectableEmails.value.every(email => selectedEmails.value.includes(email)))
+const someVisibleSelected = computed(() => visibleSelectableEmails.value.some(email => selectedEmails.value.includes(email)) && !allVisibleSelected.value)
+
+const lastLoginMs = (u) => {
+  const parsed = new Date(u?.last_login_at || u?.lastLoginAt || 0).getTime()
+  return Number.isFinite(parsed) ? parsed : 0
+}
+const formatLastLogin = (value) => {
+  if (!value) return 'Nunca'
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return 'Nunca'
+  return new Intl.DateTimeFormat('es-MX', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(date)
+}
 
 watch(showModal, (val) => {
   if (typeof document !== 'undefined') {
@@ -381,6 +465,7 @@ const loadUsers = async () => {
   try {
     const rows = await $fetch('/api/users')
     usuarios.value = Array.isArray(rows) ? rows.filter(u => isWorkspaceEmail(u.email)) : []
+    selectedEmails.value = selectedEmails.value.filter(email => usuarios.value.some(u => normalizeEmail(u.email) === email))
   } catch (e) {
     show(e?.data?.message || 'Error cargando usuarios', 'danger')
   } finally {
@@ -389,6 +474,23 @@ const loadUsers = async () => {
 }
 
 onMounted(loadUsers)
+
+const isSelected = (u) => selectedEmails.value.includes(normalizeEmail(u?.email))
+const toggleSelection = (u) => {
+  const email = normalizeEmail(u?.email)
+  if (!email || isProtectedUser(u)) return
+  selectedEmails.value = selectedEmails.value.includes(email)
+    ? selectedEmails.value.filter(item => item !== email)
+    : [...selectedEmails.value, email]
+}
+const toggleAllVisible = () => {
+  const visible = visibleSelectableEmails.value
+  if (allVisibleSelected.value) {
+    selectedEmails.value = selectedEmails.value.filter(email => !visible.includes(email))
+  } else {
+    selectedEmails.value = Array.from(new Set([...selectedEmails.value, ...visible]))
+  }
+}
 
 const searchDirectory = async () => {
   directoryLoading.value = true
@@ -421,11 +523,42 @@ const selectWorkspaceUser = (person) => {
   form.value.picture = person.avatar || avatarFor(person)
 }
 
+const bulkUpdate = async (patch, confirmation) => {
+  const emails = selectedEmails.value.filter(email => !isProtectedEmail(email))
+  if (!emails.length) return
+  if (confirmation && !confirm(confirmation)) return
+  bulkSaving.value = true
+  try {
+    await $fetch('/api/users/bulk', {
+      method: 'PATCH',
+      body: { emails, ...patch }
+    })
+    show('Usuarios actualizados.')
+    selectedEmails.value = []
+    await loadUsers()
+  } catch (e) {
+    show(e?.data?.message || 'Error al actualizar usuarios', 'danger')
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
+const toggleBlocked = async (u) => {
+  if (!u || isProtectedUser(u)) return
+  const blocked = !isBlocked(u)
+  if (!confirm(blocked ? `Bloquear acceso a ${u.email}?` : `Reactivar acceso a ${u.email}?`)) return
+  selectedEmails.value = [normalizeEmail(u.email)]
+  await bulkUpdate({ ingresosBlocked: blocked }, '')
+}
+
 const showContextMenu = (event, u) => {
   openMenu(event, [
     { label: 'Opciones', disabled: true },
     { label: '-' },
-    { label: 'Editar usuario', icon: LucideSettings, action: () => openModal(u) }
+    { label: 'Editar usuario', icon: LucideSettings, action: () => openModal(u) },
+    { label: 'Asignar ROLE_CTRL', icon: LucideGraduationCap, action: async () => { selectedEmails.value = [normalizeEmail(u.email)]; await bulkUpdate({ accessMode: 'control' }, '') } },
+    { label: 'Quitar ROLE_CTRL', icon: LucideShieldCheck, action: async () => { selectedEmails.value = [normalizeEmail(u.email)]; await bulkUpdate({ accessMode: 'admin' }, '') } },
+    { label: isBlocked(u) ? 'Reactivar acceso' : 'Bloquear acceso', icon: isBlocked(u) ? LucideUnlock : LucideBan, disabled: isProtectedUser(u), action: () => toggleBlocked(u) }
   ])
 }
 
@@ -439,7 +572,8 @@ const openModal = (u = null) => {
       avatar: avatarFor(u),
       picture: avatarFor(u),
       planteles: plantelesFor(u).length ? plantelesFor(u) : ['PT'],
-      accessMode: accessModeForRole(u.role)
+      accessMode: accessModeForRole(u.role),
+      ingresosBlocked: isBlocked(u)
     }
     directoryQuery.value = u.email || displayNameFor(u)
   } else {
@@ -475,7 +609,8 @@ const saveUser = async () => {
         avatar: form.value.avatar,
         picture: form.value.picture || form.value.avatar,
         planteles: form.value.planteles,
-        accessMode: form.value.accessMode
+        accessMode: form.value.accessMode,
+        ingresosBlocked: form.value.ingresosBlocked
       }
     })
     show('Usuario guardado.')
@@ -485,18 +620,6 @@ const saveUser = async () => {
     show(e?.data?.message || 'Error al guardar', 'danger')
   } finally {
     saving.value = false
-  }
-}
-
-const deleteUser = async () => {
-  if (!confirm('¿Eliminar este usuario?')) return
-  try {
-    await $fetch(`/api/users/${editingId.value}`, { method: 'DELETE' })
-    show('Usuario eliminado.')
-    closeModal()
-    await loadUsers()
-  } catch (e) {
-    show(e?.data?.message || 'Error al eliminar', 'danger')
   }
 }
 </script>
@@ -956,6 +1079,121 @@ const deleteUser = async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+
+.workspace-stat-pill.blocked {
+  color: rgb(190 18 60);
+  background: rgb(255 241 242);
+  border-color: rgb(254 205 211);
+}
+
+.workspace-bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.workspace-bulk-count {
+  color: rgb(15 23 42);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.workspace-bulk-actions,
+.workspace-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workspace-user-row.blocked {
+  background: rgba(255, 241, 242, .42);
+}
+
+.workspace-role-raw {
+  margin-top: 5px;
+  color: rgb(148 163 184);
+  font-size: 10px;
+  font-weight: 850;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.workspace-status-badge.active {
+  color: rgb(21 128 61);
+  background: rgb(240 253 244);
+  border-color: rgb(187 247 208);
+}
+
+.workspace-status-badge.blocked {
+  color: rgb(190 18 60);
+  background: rgb(255 241 242);
+  border-color: rgb(254 205 211);
+}
+
+.workspace-last-login {
+  color: rgb(71 85 105);
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.workspace-row-action.danger {
+  color: rgb(190 18 60);
+}
+
+.workspace-row-action:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.workspace-block-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgb(226 232 240);
+  background: rgb(248 250 252);
+  color: rgb(51 65 85);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.workspace-block-toggle.active {
+  color: rgb(190 18 60);
+  background: rgb(255 241 242);
+  border-color: rgb(254 205 211);
+}
+
+.workspace-block-toggle input:disabled + span {
+  opacity: .55;
 }
 
 @media (max-width: 900px) {
