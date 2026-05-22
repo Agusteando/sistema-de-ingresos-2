@@ -67,10 +67,9 @@
         }"
       >
         <UiGroupIcon
+          v-if="studentGroupLabel(student)"
           class="student-profile-watermark"
-          :class="{ 'is-missing-group': studentMissingGroup(student) }"
           :label="studentGroupLabel(student)"
-          :missing="studentMissingGroup(student)"
         />
         <div class="profile-main">
           <div class="profile-identity">
@@ -102,7 +101,10 @@
               <p>
                 <span class="student-code">{{ student.matricula }}</span>
                 <i></i>
-                {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} · {{ studentGroupInlineLabel(student) }}
+                {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student)
+                }}<template v-if="studentGroupLabel(student)">
+                  · {{ studentGroupLabel(student) }}</template
+                >
                 <template v-if="student.matriculaAnterior">
                   <i></i>
                   Ant. {{ student.matriculaAnterior }}
@@ -249,11 +251,9 @@
         :aria-expanded="detailsExpanded"
       >
         <UiGroupIcon
-          v-if="!detailsExpanded"
+          v-if="studentGroupLabel(student) && !detailsExpanded"
           class="account-card-watermark"
-          :class="{ 'is-missing-group': studentMissingGroup(student) }"
           :label="studentGroupLabel(student)"
-          :missing="studentMissingGroup(student)"
         />
         <div class="account-header">
           <div class="account-title-area">
@@ -288,7 +288,10 @@
               <p>
                 <span class="student-code">{{ student.matricula }}</span>
                 <i></i>
-                {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} · {{ studentGroupInlineLabel(student) }}
+                {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student)
+                }}<template v-if="studentGroupLabel(student)">
+                  · {{ studentGroupLabel(student) }}</template
+                >
               </p>
             </div>
             <span
@@ -843,11 +846,6 @@ const selectedCicloLabel = computed(() =>
   formatCicloLabel(selectedCicloKey.value),
 );
 const resolvedNivelLabel = computed(() => studentNivelLabel(props.student));
-const studentMissingGroup = (student) => !studentGroupLabel(student);
-const studentGroupInlineLabel = (student) => {
-  const group = studentGroupLabel(student);
-  return group ? group : 'Sin grupo';
-};
 const accountCacheOptions = computed(() => ({
   matricula: props.student?.matricula || "",
   ciclo: selectedCicloKey.value,

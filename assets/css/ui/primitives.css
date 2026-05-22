@@ -123,8 +123,7 @@ body.students-route-active .chip.active {
 }
 
 .ui-group-icon__letter,
-.ui-group-icon__mask,
-.ui-group-icon__warning {
+.ui-group-icon__mask {
   position: absolute;
   box-sizing: border-box;
   pointer-events: none;
@@ -144,20 +143,6 @@ body.students-route-active .chip.active {
   line-height: 1;
   text-align: center;
   text-transform: uppercase;
-}
-
-
-.ui-group-icon__warning {
-  inset: 0;
-  display: grid;
-  place-items: center;
-  border: var(--group-icon-stroke-width, .055em) solid currentColor;
-  border-radius: 999px;
-  background: color-mix(in srgb, currentColor 10%, transparent);
-  color: currentColor;
-  font-size: var(--group-icon-warning-font-size, .54em);
-  font-weight: 950;
-  line-height: 1;
 }
 
 .ui-group-icon__mask {

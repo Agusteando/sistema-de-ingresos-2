@@ -2,74 +2,37 @@ import bcrypt from 'bcryptjs'
 import { PLANTELES_LIST } from '../../utils/constants'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 import { buildWorkspacePhotoUrl, isCasitaWorkspaceEmail, WORKSPACE_DOMAIN } from './google-workspace-directory'
-import { normalizePlantel } from './auth-session'
+import { normalizePlantel, parsePlanteles } from './auth-session'
 
 type TableColumn = { Field: string }
 
 type ExternalUserInput = {
   username?: string
-  displayName?: string
   password?: string
   email?: string
   planteles?: string[] | string
   role?: string
-  accessMode?: 'admin' | 'control' | 'admin_control' | string
   avatar?: string | null
-  picture?: string | null
 }
 
 const TABLE = 'users'
-const CONTROL_ESCOLAR_ROLE = 'ROLE_CTRL'
-const DEFAULT_ADMIN_ROLE = 'ROLE_ADMIN'
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
 const normalizeText = (value: unknown, max = 255) => String(value || '').trim().slice(0, max)
+const ALLOWED_WORKSPACE_ROLES = new Set(['plantel', 'global', 'ROLE_CTRL'])
 
-const normalizedRole = (value: unknown) => String(value || '').trim().toLowerCase()
-const splitRoleTokens = (value: unknown) => Array.from(new Set(String(value || '')
-  .split(',')
-  .map((role) => role.trim())
-  .filter(Boolean)
-  .map((role) => role.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 80))
-  .filter(Boolean)))
-
-const hasRole = (roles: string[], target: string) => roles.some((role) => normalizedRole(role) === normalizedRole(target))
-const withoutControlRole = (roles: string[]) => roles.filter((role) => normalizedRole(role) !== normalizedRole(CONTROL_ESCOLAR_ROLE))
-
-const ensureAdminBase = (roles: string[]) => {
-  const cleaned = roles.filter((role) => normalizedRole(role) !== 'plantel')
-  return cleaned.length ? cleaned : [DEFAULT_ADMIN_ROLE]
-}
-
-const resolveRoleForWrite = (body: ExternalUserInput, currentRole?: string | null) => {
-  const accessMode = normalizeText(body.accessMode, 40)
-  const sourceRoles = splitRoleTokens(currentRole || body.role || DEFAULT_ADMIN_ROLE)
-
-  if (accessMode === 'control') {
-    return CONTROL_ESCOLAR_ROLE
-  }
-
-  if (accessMode === 'admin_control') {
-    const roles = ensureAdminBase(withoutControlRole(sourceRoles))
-    if (!hasRole(roles, CONTROL_ESCOLAR_ROLE)) roles.push(CONTROL_ESCOLAR_ROLE)
-    return roles.join(',')
-  }
-
-  if (accessMode === 'admin') {
-    return ensureAdminBase(withoutControlRole(sourceRoles)).join(',')
-  }
-
-  return (splitRoleTokens(body.role || currentRole).join(',') || DEFAULT_ADMIN_ROLE).slice(0, 255)
+const roleValue = (value: unknown) => {
+  const raw = normalizeText(value || 'plantel', 80) || 'plantel'
+  return ALLOWED_WORKSPACE_ROLES.has(raw) ? raw : 'plantel'
 }
 
 const assertWorkspaceEmail = (email: unknown) => {
   const normalized = normalizeEmail(email)
   if (!normalized || !isCasitaWorkspaceEmail(normalized)) {
-    throw createError({ statusCode: 400, message: `Solo se pueden guardar cuentas @${WORKSPACE_DOMAIN}.` })
+    throw createError({ statusCode: 400, message: `Solo se pueden asignar usuarios @${WORKSPACE_DOMAIN}.` })
   }
   return normalized
 }
-
 const plantelesValue = (value: unknown) => {
   const raw = Array.isArray(value) ? value : String(value || '').split(',')
   const planteles = raw
@@ -85,22 +48,14 @@ export const ensureExternalUsersTable = async () => {
   await controlEscolarCentralQuery(`
     CREATE TABLE IF NOT EXISTS ${escapeIdentifier(TABLE)} (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      displayName VARCHAR(255) DEFAULT NULL,
       username VARCHAR(255) NOT NULL,
-      email VARCHAR(255) DEFAULT NULL,
       password VARCHAR(255) DEFAULT '',
-      plaintext VARCHAR(255) DEFAULT NULL,
-      picture TEXT,
-      role VARCHAR(255) NOT NULL DEFAULT '${DEFAULT_ADMIN_ROLE}',
+      email VARCHAR(255) DEFAULT NULL,
       planteles TEXT,
-      plantel VARCHAR(255) DEFAULT NULL,
-      campus VARCHAR(255) DEFAULT NULL,
-      empresa VARCHAR(255) DEFAULT NULL,
-      facebook VARCHAR(255) DEFAULT NULL,
-      unidad VARCHAR(255) DEFAULT NULL,
-      sala VARCHAR(255) DEFAULT NULL,
-      nombre_nino VARCHAR(255) DEFAULT NULL,
+      role VARCHAR(80) NOT NULL DEFAULT 'plantel',
+      avatar VARCHAR(512) DEFAULT NULL,
+      plantel VARCHAR(20) DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       UNIQUE KEY users_email_unique (email)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -136,77 +91,39 @@ export const isExternalUsersAvailable = async () => {
 
 const selectColumns = async () => {
   const columns = await getExternalUsersColumns()
-  return [
-    'id',
-    'created_at',
-    'displayName',
-    'username',
-    'email',
-    'planteles',
-    'plantel',
-    'campus',
-    'empresa',
-    'role',
-    'picture',
-    'avatar'
-  ].filter((column) => columns.has(column))
+  return ['id', 'username', 'email', 'planteles', 'role', 'created_at', 'avatar', 'plantel']
+    .filter((column) => columns.has(column))
 }
 
 const normalizeUserRow = (row: any) => {
-  const email = normalizeEmail(row.email)
-  const fullName = normalizeText(row.displayName || row.username || email || 'Usuario')
   const planteles = plantelesValue(row.planteles || row.plantel)
-  const avatar = row.picture || row.avatar || (email ? buildWorkspacePhotoUrl(email, fullName) : null)
-
   return {
     id: row.id,
-    username: fullName,
-    displayName: fullName,
-    workspaceName: fullName,
-    email,
+    username: row.username || row.displayName || row.email || 'Usuario',
+    displayName: row.displayName || row.username || row.email || 'Usuario',
+    email: row.email || '',
     planteles,
-    role: row.role || DEFAULT_ADMIN_ROLE,
+    role: row.role || 'plantel',
     created_at: row.created_at || null,
-    avatar,
-    picture: avatar,
+    avatar: row.avatar || (row.email ? buildWorkspacePhotoUrl(row.email, row.username || row.displayName || row.email) : null),
     plantel: normalizePlantel(row.plantel) || (planteles ? planteles.split(',')[0] : ''),
-    campus: row.campus || '',
-    empresa: row.empresa || '',
     source: 'external'
   }
 }
 
-const workspaceDomainWhere = () => `LOWER(TRIM(COALESCE(${escapeIdentifier('email')}, ''))) LIKE ?`
-const workspaceDomainParam = () => `%@${WORKSPACE_DOMAIN}`
-
-export const listExternalUsers = async (searchValue: unknown = '') => {
+export const listExternalUsers = async () => {
   const columns = await selectColumns()
-  const search = normalizeText(searchValue, 120).toLowerCase()
-  const where = [workspaceDomainWhere()]
-  const params: any[] = [workspaceDomainParam()]
-
-  if (search) {
-    const searchable = ['displayName', 'username', 'email', 'planteles', 'plantel', 'campus', 'empresa']
-      .filter((column) => columns.includes(column))
-    if (searchable.length) {
-      where.push(`(${searchable.map((column) => `LOWER(COALESCE(${escapeIdentifier(column)}, '')) LIKE ?`).join(' OR ')})`)
-      params.push(...searchable.map(() => `%${search}%`))
-    }
-  }
-
-  const sortColumn = columns.includes('displayName') ? 'displayName' : (columns.includes('username') ? 'username' : 'email')
   const rows = await controlEscolarCentralQuery<any[]>(`
     SELECT ${columns.map(escapeIdentifier).join(', ')}
     FROM ${escapeIdentifier(TABLE)}
-    WHERE ${where.join(' AND ')}
-    ORDER BY ${escapeIdentifier(sortColumn)} ASC
-  `, params)
-  return rows.map(normalizeUserRow).filter((row) => isCasitaWorkspaceEmail(row.email))
+    ORDER BY ${columns.includes('username') ? '`username`' : '`email`'} ASC
+  `)
+  return rows.map(normalizeUserRow)
 }
 
 export const findExternalUserByEmail = async (email: string) => {
   const normalizedEmail = normalizeEmail(email)
-  if (!normalizedEmail || !isCasitaWorkspaceEmail(normalizedEmail)) return null
+  if (!normalizedEmail) return null
 
   const columns = await selectColumns()
   if (!columns.includes('email')) return null
@@ -214,40 +131,24 @@ export const findExternalUserByEmail = async (email: string) => {
   const rows = await controlEscolarCentralQuery<any[]>(`
     SELECT ${columns.map(escapeIdentifier).join(', ')}
     FROM ${escapeIdentifier(TABLE)}
-    WHERE ${escapeIdentifier('email')} = ? AND ${workspaceDomainWhere()}
+    WHERE ${escapeIdentifier('email')} = ?
     LIMIT 1
-  `, [normalizedEmail, workspaceDomainParam()])
+  `, [normalizedEmail])
 
   return rows[0] ? normalizeUserRow(rows[0]) : null
 }
 
-const loadRawUserById = async (id: unknown) => {
-  const columns = await selectColumns()
-  const rows = await controlEscolarCentralQuery<any[]>(`
-    SELECT ${columns.map(escapeIdentifier).join(', ')}
-    FROM ${escapeIdentifier(TABLE)}
-    WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}
-    LIMIT 1
-  `, [id, workspaceDomainParam()])
-  return rows[0] || null
-}
-
-const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean, currentRole?: string | null) => {
+const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean) => {
   const columns = await getExternalUsersColumns()
-  const email = assertWorkspaceEmail(body.email)
   const planteles = plantelesValue(body.planteles)
   const firstPlantel = planteles ? planteles.split(',')[0] : ''
-  const displayName = normalizeText(body.displayName || body.username || email || 'Usuario')
-  const picture = body.picture || body.avatar || buildWorkspacePhotoUrl(email, displayName)
   const values: Record<string, any> = {
-    displayName,
-    username: normalizeText(body.username || email || displayName),
-    email,
+    username: normalizeText(body.username || body.email || 'Usuario'),
+    email: assertWorkspaceEmail(body.email),
     planteles,
-    role: resolveRoleForWrite(body, currentRole),
+    role: roleValue(body.role),
     plantel: firstPlantel,
-    avatar: picture,
-    picture
+    avatar: body.avatar || buildWorkspacePhotoUrl(assertWorkspaceEmail(body.email), body.username || body.email || 'Usuario')
   }
 
   if (includePassword && columns.has('password')) {
@@ -258,13 +159,9 @@ const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean,
 }
 
 export const createExternalUser = async (body: ExternalUserInput) => {
-  const email = assertWorkspaceEmail(body.email)
-  const existing = await findExternalUserByEmail(email)
-  if (existing?.id) return updateExternalUser(existing.id, body)
-
   const entries = await buildUserWrite(body, true)
   if (!entries.some(([column]) => column === 'email')) {
-    throw createError({ statusCode: 400, message: 'Correo requerido.' })
+    throw createError({ statusCode: 400, message: 'Correo requerido para usuario externo.' })
   }
 
   const columns = entries.map(([column]) => column)
@@ -277,16 +174,11 @@ export const createExternalUser = async (body: ExternalUserInput) => {
 }
 
 export const updateExternalUser = async (id: unknown, body: ExternalUserInput) => {
-  const current = await loadRawUserById(id)
-  if (!current) {
-    throw createError({ statusCode: 404, message: 'Usuario no encontrado.' })
-  }
-
-  const entries = (await buildUserWrite(body, Boolean(body.password && String(body.password).trim()), current.role))
+  const entries = (await buildUserWrite(body, Boolean(body.password && String(body.password).trim())))
     .filter(([column]) => column !== 'password' || Boolean(body.password && String(body.password).trim()))
 
   if (!entries.length) {
-    throw createError({ statusCode: 400, message: 'No hay cambios para guardar.' })
+    throw createError({ statusCode: 400, message: 'No hay campos para actualizar.' })
   }
 
   const assignments = entries.map(([column]) => `${escapeIdentifier(column)} = ?`)
@@ -294,16 +186,13 @@ export const updateExternalUser = async (id: unknown, body: ExternalUserInput) =
   values.push(id)
 
   await controlEscolarCentralQuery(
-    `UPDATE ${escapeIdentifier(TABLE)} SET ${assignments.join(', ')} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
-    [...values, workspaceDomainParam()]
+    `UPDATE ${escapeIdentifier(TABLE)} SET ${assignments.join(', ')} WHERE ${escapeIdentifier('id')} = ?`,
+    values
   )
   return { success: true }
 }
 
 export const deleteExternalUser = async (id: unknown) => {
-  await controlEscolarCentralQuery(
-    `DELETE FROM ${escapeIdentifier(TABLE)} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
-    [id, workspaceDomainParam()]
-  )
+  await controlEscolarCentralQuery(`DELETE FROM ${escapeIdentifier(TABLE)} WHERE ${escapeIdentifier('id')} = ?`, [id])
   return { success: true }
 }

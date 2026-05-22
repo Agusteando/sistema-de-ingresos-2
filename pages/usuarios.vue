@@ -1,47 +1,18 @@
 <template>
-  <div class="max-w-7xl mx-auto workspace-users-page">
-    <div class="workspace-users-header">
+  <div class="max-w-6xl mx-auto workspace-users-page">
+    <div class="flex flex-col md:flex-row md:justify-between md:items-end gap-4 mb-6">
       <div>
-        <p class="workspace-eyebrow">Usuarios institucionales</p>
-        <h2 class="workspace-title">Usuarios</h2>
-        <p class="workspace-subtitle">Gestiona el equipo interno y sus accesos operativos.</p>
+        <p class="text-[11px] font-black uppercase tracking-[.22em] text-brand-leaf">Google Workspace · @casitaiedis.edu.mx</p>
+        <h2 class="text-xl font-bold text-gray-800 tracking-tight">Usuarios / ROLE_CTRL</h2>
+        <p class="text-sm text-gray-500 mt-1 max-w-2xl">
+          Asigna roles de workspace desde el directorio institucional. El acceso normal no queda restringido; ROLE_CTRL se aplica solo cuando se selecciona explícitamente.
+        </p>
       </div>
-      <div class="workspace-header-actions">
-        <button class="btn btn-ghost" :disabled="loadingTable" @click="loadUsers">
-          <LucideRefreshCw :size="16" :class="{ 'animate-spin': loadingTable }" />
-          Actualizar
-        </button>
-        <button class="btn btn-primary" @click="openModal()">
-          <LucideUserPlus :size="16" />
-          Nuevo usuario
-        </button>
-      </div>
+      <button class="btn btn-primary" @click="openModal()"><LucideUserPlus :size="16"/> Asignar usuario</button>
     </div>
 
-    <section class="workspace-users-toolbar card">
-      <div class="workspace-search-wrap">
-        <LucideSearch :size="17" class="workspace-search-icon" />
-        <input
-          v-model="searchQuery"
-          type="search"
-          class="workspace-search-input"
-          placeholder="Buscar por nombre, correo, plantel o acceso..."
-          autocomplete="off"
-        >
-        <button v-if="searchQuery" type="button" class="workspace-search-clear" @click="searchQuery = ''">
-          <LucideX :size="15" />
-        </button>
-      </div>
-
-      <div class="workspace-stats">
-        <span class="workspace-stat-pill neutral"><LucideUsers :size="15" /> {{ usuarios.length }} usuarios</span>
-        <span class="workspace-stat-pill control"><LucideGraduationCap :size="15" /> {{ controlCount }} Control Escolar</span>
-        <span class="workspace-stat-pill admin"><LucideShieldCheck :size="15" /> {{ adminCount }} Administración</span>
-      </div>
-    </section>
-
-    <div class="card table-wrapper workspace-users-table-card">
-      <table class="w-full workspace-users-table">
+    <div class="card table-wrapper">
+      <table class="w-full">
         <thead>
           <tr>
             <th>Usuario</th>
@@ -52,45 +23,33 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loadingTable">
-            <td colspan="5" class="text-center py-12 text-gray-500 font-medium">Cargando...</td>
-          </tr>
-          <tr v-else-if="!filteredUsuarios.length">
-            <td colspan="5" class="text-center py-12 text-gray-500">No hay usuarios para mostrar.</td>
-          </tr>
-          <tr
-            v-else
-            v-for="u in filteredUsuarios"
-            :key="u.id"
-            class="workspace-user-row cursor-context-menu"
-            @contextmenu.prevent="showContextMenu($event, u)"
-          >
+          <tr v-if="loadingTable"><td colspan="5" class="text-center py-12 text-gray-500 font-medium">Cargando...</td></tr>
+          <tr v-else-if="!usuarios.length"><td colspan="5" class="text-center py-12 text-gray-500">No hay usuarios registrados.</td></tr>
+          <tr v-else v-for="u in usuarios" :key="u.id" 
+              class="cursor-context-menu"
+              @contextmenu.prevent="showContextMenu($event, u)">
             <td>
-              <div class="workspace-user-cell">
-                <img :src="avatarFor(u)" class="workspace-user-avatar" :alt="displayNameFor(u)">
+              <div class="flex items-center gap-3 min-w-0">
+                <img :src="avatarFor(u)" class="w-9 h-9 rounded-full border border-gray-200 bg-white object-cover" :alt="u.username || u.email">
                 <div class="min-w-0">
-                  <div class="workspace-user-name">{{ displayNameFor(u) }}</div>
-                  <div class="workspace-user-source">Workspace</div>
+                  <div class="font-semibold text-gray-800 truncate">{{ u.username || u.displayName || u.email }}</div>
+                  <div class="text-[11px] text-gray-400 uppercase font-bold tracking-wide">{{ u.source === 'external' ? 'External users' : 'Local fallback' }}</div>
                 </div>
               </div>
             </td>
-            <td class="workspace-email-cell">{{ u.email || '—' }}</td>
+            <td class="text-gray-600 text-sm">{{ u.email || '—' }}</td>
             <td>
-              <div class="workspace-planteles">
-                <span v-for="p in plantelesFor(u)" :key="p" class="workspace-plantel-chip">{{ p }}</span>
-                <span v-if="!plantelesFor(u).length" class="workspace-plantel-chip muted">Sin plantel</span>
+              <div class="flex flex-wrap gap-1 max-w-[220px]">
+                <span v-for="p in (u.planteles ? u.planteles.split(',') : [])" :key="p" class="badge badge-neutral text-[10px]">{{ p }}</span>
               </div>
             </td>
             <td>
-              <span :class="['workspace-access-badge', accessBadgeClass(u)]">
-                <component :is="accessIcon(u)" :size="14" />
-                {{ accessLabel(u) }}
+              <span :class="['badge', isSuperAdminRole(u.role) ? 'badge-warning' : isControlEscolarOnlyRole(u.role) ? 'badge-info' : 'badge-neutral']">
+                {{ roleLabel(u.role) }}
               </span>
             </td>
             <td class="text-center">
-              <button class="workspace-row-action" @click="openModal(u)" aria-label="Editar usuario">
-                <LucideSettings :size="15" />
-              </button>
+              <button class="btn btn-ghost px-2 py-1 text-xs text-brand-teal" @click="openModal(u)"><LucideSettings :size="14"/></button>
             </td>
           </tr>
         </tbody>
@@ -102,38 +61,38 @@
         <div class="modal-container large workspace-user-modal">
           <div class="modal-header">
             <div>
-              <p class="workspace-modal-eyebrow">Workspace</p>
-              <h2 class="workspace-modal-title">{{ editingId ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
-              <p class="workspace-modal-copy">Selecciona la cuenta institucional y define su acceso.</p>
+              <p class="text-[10px] font-black uppercase tracking-[.22em] text-brand-leaf">Directorio institucional</p>
+              <h2 class="text-lg font-bold text-gray-800">{{ editingId ? 'Editar acceso de workspace' : 'Asignar usuario de workspace' }}</h2>
+              <p class="text-xs text-gray-500 mt-1">Solo se permiten cuentas @casitaiedis.edu.mx. El rol predeterminado es acceso normal.</p>
             </div>
-            <button type="button" class="btn btn-ghost px-2" @click="closeModal"><LucideX :size="18" /></button>
+            <button type="button" class="btn btn-ghost px-2" @click="closeModal"><LucideX :size="18"/></button>
           </div>
 
           <form @submit.prevent="saveUser">
-            <div class="modal-content grid grid-cols-1 lg:grid-cols-[1.06fr_.94fr] gap-5">
+            <div class="modal-content grid grid-cols-1 lg:grid-cols-[1.05fr_.95fr] gap-5">
               <section class="workspace-picker-card">
-                <div class="workspace-card-heading">
-                  <label class="form-label mb-0">Buscar usuario</label>
-                  <span>@casitaiedis.edu.mx</span>
+                <div class="flex items-center justify-between gap-3 mb-3">
+                  <label class="form-label mb-0">Buscar en Google Workspace</label>
+                  <span class="text-[10px] font-bold uppercase text-gray-400">@casitaiedis.edu.mx</span>
                 </div>
                 <div class="relative">
-                  <LucideSearch :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <LucideSearch :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
                   <input
                     v-model="directoryQuery"
                     type="search"
                     class="input-field pl-9"
-                    placeholder="Nombre o correo institucional..."
+                    placeholder="Buscar por nombre o correo institucional..."
                     autocomplete="off"
                     @focus="ensureDirectoryResults"
                   >
                   <button v-if="directoryQuery" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700" @click="directoryQuery = ''">
-                    <LucideX :size="15" />
+                    <LucideX :size="15"/>
                   </button>
                 </div>
 
                 <div class="directory-results mt-3">
                   <div v-if="directoryLoading" class="directory-empty">
-                    <LucideLoader2 :size="18" class="animate-spin" /> Buscando usuarios...
+                    <LucideLoader2 :size="18" class="animate-spin"/> Buscando usuarios...
                   </div>
                   <div v-else-if="directoryError" class="directory-error">
                     {{ directoryError }}
@@ -154,10 +113,10 @@
                       <span class="block text-xs text-gray-500 truncate">{{ person.email }}</span>
                     </span>
                     <span v-if="person.suspended || person.archived" class="badge badge-neutral text-[10px]">Inactivo</span>
-                    <LucideCheckCircle2 v-else-if="form.email === person.email" :size="17" class="text-brand-leaf" />
+                    <LucideCheckCircle2 v-else-if="form.email === person.email" :size="17" class="text-brand-leaf"/>
                   </button>
                   <div v-if="!directoryLoading && !directoryError && !directoryResults.length" class="directory-empty">
-                    No hay resultados para esta búsqueda.
+                    No hay resultados del directorio para esta búsqueda.
                   </div>
                 </div>
               </section>
@@ -167,63 +126,50 @@
                   <img :src="selectedAvatar" class="w-14 h-14 rounded-full border border-gray-200 object-cover bg-white" alt="Usuario seleccionado">
                   <div class="min-w-0">
                     <p class="text-xs font-bold text-gray-400 uppercase tracking-wide">Usuario seleccionado</p>
-                    <h3 class="font-black text-gray-900 truncate">{{ form.displayName || 'Seleccione un usuario' }}</h3>
+                    <h3 class="font-black text-gray-900 truncate">{{ form.username || 'Seleccione un usuario' }}</h3>
                     <p class="text-sm text-gray-500 truncate">{{ form.email || 'Sin correo asignado' }}</p>
                   </div>
                 </div>
 
                 <div class="form-group mb-0 mt-4">
-                  <label class="form-label">Acceso</label>
-                  <div class="workspace-access-options">
-                    <button
-                      v-for="option in accessOptions"
-                      :key="option.value"
-                      type="button"
-                      class="workspace-access-option"
-                      :class="[{ active: form.accessMode === option.value }, option.value]"
-                      @click="form.accessMode = option.value"
-                    >
-                      <component :is="option.icon" :size="17" />
-                      <span>{{ option.label }}</span>
-                    </button>
-                  </div>
+                  <label class="form-label">Rol de workspace</label>
+                  <select v-model="form.role" class="input-field" required>
+                    <option value="plantel">Acceso normal · no restringido</option>
+                    <option value="ROLE_CTRL">ROLE_CTRL · solo Control Escolar</option>
+                    <option value="global">Super Admin</option>
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">
+                    ROLE_CTRL restringe la sesión al workspace de Control Escolar. No se asigna por defecto.
+                  </p>
                 </div>
 
                 <div class="form-group mb-0 mt-4 p-4 bg-white border border-gray-200 rounded-lg">
-                  <label class="form-label mb-2">Planteles</label>
+                  <label class="form-label mb-2">Planteles donde puede operar</label>
                   <div class="grid grid-cols-4 md:grid-cols-6 gap-2">
-                    <label
-                      v-for="p in PLANTELES_LIST"
-                      :key="p"
-                      class="workspace-plantel-check"
-                      :class="{ active: form.planteles.includes(p) }"
-                    >
+                    <label v-for="p in PLANTELES_LIST" :key="p" class="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-gray-700 bg-gray-50 px-2 py-1.5 rounded-md border border-gray-200 hover:border-brand-leaf transition-colors" :class="{'bg-brand-leaf/5 border-brand-leaf': form.planteles.includes(p)}">
                       <input type="checkbox" :value="p" v-model="form.planteles" class="w-3.5 h-3.5 text-brand-leaf rounded border-gray-300">
                       {{ p }}
                     </label>
                   </div>
                 </div>
 
-                <div class="workspace-selected-summary mt-4">
-                  <span :class="['workspace-access-badge', previewAccessBadgeClass]">
-                    <component :is="previewAccessIcon" :size="14" />
-                    {{ previewAccessLabel }}
-                  </span>
-                  <span class="workspace-selected-domain">{{ form.email || 'Pendiente' }}</span>
+                <div class="workspace-note mt-4">
+                  <LucideShieldCheck :size="16"/>
+                  <p>
+                    La lista de usuarios se busca en Google Workspace. La asignación de rol se guarda en la tabla externa <code>users</code> del módulo centralizado, sin bloquear la carga normal de alumnos.
+                  </p>
                 </div>
               </section>
             </div>
 
             <div class="modal-footer flex justify-between">
-              <button type="button" class="btn btn-ghost text-accent-coral hover:bg-accent-coral/10 hover:text-accent-coral" v-if="editingId" @click="deleteUser">
-                <LucideTrash2 :size="16" /> Eliminar
-              </button>
+              <button type="button" class="btn btn-ghost text-accent-coral hover:bg-accent-coral/10 hover:text-accent-coral" v-if="editingId" @click="deleteUser"><LucideTrash2 :size="16"/> Eliminar</button>
               <div v-else></div>
               <div class="flex gap-2">
                 <button type="button" class="btn btn-ghost" @click="closeModal">Cancelar</button>
                 <button type="submit" class="btn btn-primary" :disabled="saving || !canSave">
-                  <LucideLoader2 v-if="saving" :size="16" class="animate-spin" />
-                  Guardar
+                  <LucideLoader2 v-if="saving" :size="16" class="animate-spin"/>
+                  Guardar acceso
                 </button>
               </div>
             </div>
@@ -237,17 +183,13 @@
 <script setup>
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import {
-  LucideBriefcase,
   LucideCheckCircle2,
-  LucideGraduationCap,
   LucideLoader2,
-  LucideRefreshCw,
   LucideSearch,
   LucideSettings,
   LucideShieldCheck,
   LucideTrash2,
   LucideUserPlus,
-  LucideUsers,
   LucideX
 } from 'lucide-vue-next'
 import { PLANTELES_LIST } from '~/utils/constants'
@@ -263,99 +205,41 @@ const loadingTable = ref(false)
 const showModal = ref(false)
 const saving = ref(false)
 const editingId = ref(null)
-const searchQuery = ref('')
 const directoryQuery = ref('')
 const directoryResults = ref([])
 const directoryLoading = ref(false)
 const directoryError = ref('')
 let directoryTimer = null
 
-const accessOptions = [
-  { value: 'admin', label: 'Administración', icon: LucideShieldCheck },
-  { value: 'control', label: 'Control Escolar', icon: LucideGraduationCap },
-  { value: 'admin_control', label: 'Administración + Control', icon: LucideBriefcase }
-]
-
+const SUPERADMIN_ROLES = new Set(['global', 'superadmin', 'role_super_admin', 'role_superadmin'])
 const roleTokens = (role) => String(role || '')
   .split(',')
   .map(entry => entry.trim().toLowerCase())
   .filter(Boolean)
-const hasControlEscolarRole = (role) => roleTokens(role).includes('role_ctrl')
-const hasAdminRole = (role) => {
-  const tokens = roleTokens(role)
-  if (!tokens.length) return true
-  if (tokens.length === 1 && tokens[0] === 'role_ctrl') return false
-  return true
+const isSuperAdminRole = (role) => roleTokens(role).some(entry => SUPERADMIN_ROLES.has(entry))
+const isControlEscolarRole = (role) => roleTokens(role).includes('role_ctrl')
+const isControlEscolarOnlyRole = (role) => {
+  const roles = roleTokens(role)
+  return roles.length === 1 && roles[0] === 'role_ctrl'
 }
-const accessModeForRole = (role) => {
-  const control = hasControlEscolarRole(role)
-  const admin = hasAdminRole(role)
-  if (control && admin) return 'admin_control'
-  if (control) return 'control'
-  return 'admin'
+const roleLabel = (role) => {
+  if (isSuperAdminRole(role)) return 'ADMIN'
+  if (isControlEscolarRole(role)) return 'CONTROL ESCOLAR'
+  return 'USUARIO NORMAL'
 }
 
-const accessLabelForMode = (mode) => {
-  if (mode === 'control') return 'Control Escolar'
-  if (mode === 'admin_control') return 'Administración + Control'
-  return 'Administración'
-}
-const accessIconForMode = (mode) => {
-  if (mode === 'control') return LucideGraduationCap
-  if (mode === 'admin_control') return LucideBriefcase
-  return LucideShieldCheck
-}
-const accessClassForMode = (mode) => {
-  if (mode === 'control') return 'control'
-  if (mode === 'admin_control') return 'admin-control'
-  return 'admin'
-}
-
-const emptyForm = () => ({
-  username: '',
-  displayName: '',
-  email: '',
-  avatar: '',
-  picture: '',
-  planteles: ['PT'],
-  accessMode: 'admin'
-})
+const emptyForm = () => ({ username: '', password: '', email: '', avatar: '', planteles: ['PT'], role: 'plantel' })
 const form = ref(emptyForm())
 
 const isWorkspaceEmail = (email) => String(email || '').trim().toLowerCase().endsWith(`@${WORKSPACE_DOMAIN}`)
-const selectedAvatar = computed(() => form.value.avatar || form.value.picture || avatarFor(form.value))
-const canSave = computed(() => isWorkspaceEmail(form.value.email) && form.value.planteles.length > 0 && accessOptions.some(option => option.value === form.value.accessMode))
+const selectedAvatar = computed(() => form.value.avatar || avatarFor(form.value))
+const canSave = computed(() => isWorkspaceEmail(form.value.email) && form.value.planteles.length > 0 && ['plantel', 'ROLE_CTRL', 'global'].includes(form.value.role))
 
-const displayNameFor = (u) => u?.displayName || u?.workspaceName || u?.username || u?.email || 'Usuario'
 const avatarFor = (u) => {
-  if (u?.avatar || u?.picture) return u.avatar || u.picture
-  const params = new URLSearchParams({ email: u?.email || '', name: displayNameFor(u) })
+  if (u?.avatar) return u.avatar
+  const params = new URLSearchParams({ email: u?.email || '', name: u?.username || u?.displayName || u?.email || 'Usuario' })
   return `/api/directory/photo?${params.toString()}`
 }
-const plantelesFor = (u) => String(u?.planteles || u?.plantel || '')
-  .split(',')
-  .map(p => p.trim())
-  .filter(Boolean)
-const accessLabel = (u) => accessLabelForMode(accessModeForRole(u?.role))
-const accessIcon = (u) => accessIconForMode(accessModeForRole(u?.role))
-const accessBadgeClass = (u) => accessClassForMode(accessModeForRole(u?.role))
-const previewAccessLabel = computed(() => accessLabelForMode(form.value.accessMode))
-const previewAccessIcon = computed(() => accessIconForMode(form.value.accessMode))
-const previewAccessBadgeClass = computed(() => accessClassForMode(form.value.accessMode))
-
-const filteredUsuarios = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
-  if (!query) return usuarios.value
-  return usuarios.value.filter((u) => [
-    displayNameFor(u),
-    u.email,
-    u.planteles,
-    u.plantel,
-    accessLabel(u)
-  ].some(value => String(value || '').toLowerCase().includes(query)))
-})
-const controlCount = computed(() => usuarios.value.filter(u => hasControlEscolarRole(u.role)).length)
-const adminCount = computed(() => usuarios.value.filter(u => hasAdminRole(u.role)).length)
 
 watch(showModal, (val) => {
   if (typeof document !== 'undefined') {
@@ -366,7 +250,7 @@ watch(showModal, (val) => {
 watch(directoryQuery, () => {
   if (!showModal.value) return
   if (directoryTimer) clearTimeout(directoryTimer)
-  directoryTimer = setTimeout(searchDirectory, 220)
+  directoryTimer = setTimeout(searchDirectory, 280)
 })
 
 onUnmounted(() => {
@@ -379,8 +263,7 @@ onUnmounted(() => {
 const loadUsers = async () => {
   loadingTable.value = true
   try {
-    const rows = await $fetch('/api/users')
-    usuarios.value = Array.isArray(rows) ? rows.filter(u => isWorkspaceEmail(u.email)) : []
+    usuarios.value = await $fetch('/api/users')
   } catch (e) {
     show(e?.data?.message || 'Error cargando usuarios', 'danger')
   } finally {
@@ -397,12 +280,10 @@ const searchDirectory = async () => {
     const response = await $fetch('/api/directory/users', {
       query: { q: directoryQuery.value, limit: 12 }
     })
-    directoryResults.value = Array.isArray(response?.users)
-      ? response.users.filter(person => isWorkspaceEmail(person.email))
-      : []
+    directoryResults.value = Array.isArray(response?.users) ? response.users : []
   } catch (e) {
     directoryResults.value = []
-    directoryError.value = e?.data?.message || 'No se pudo consultar Workspace.'
+    directoryError.value = e?.data?.message || 'No se pudo consultar Google Workspace Directory.'
   } finally {
     directoryLoading.value = false
   }
@@ -414,18 +295,16 @@ const ensureDirectoryResults = () => {
 
 const selectWorkspaceUser = (person) => {
   if (!person || !isWorkspaceEmail(person.email) || person.suspended || person.archived) return
-  form.value.displayName = person.name || person.displayName || person.email
-  form.value.username = person.email
+  form.value.username = person.name || person.displayName || person.email
   form.value.email = person.email
   form.value.avatar = person.avatar || avatarFor(person)
-  form.value.picture = person.avatar || avatarFor(person)
 }
 
 const showContextMenu = (event, u) => {
   openMenu(event, [
     { label: 'Opciones', disabled: true },
     { label: '-' },
-    { label: 'Editar usuario', icon: LucideSettings, action: () => openModal(u) }
+    { label: 'Editar acceso', icon: LucideSettings, action: () => openModal(u) }
   ])
 }
 
@@ -433,15 +312,14 @@ const openModal = (u = null) => {
   if (u) {
     editingId.value = u.id
     form.value = {
-      username: u.email || u.username || '',
-      displayName: displayNameFor(u),
+      username: u.username || u.displayName || u.email,
+      password: '',
       email: u.email,
       avatar: avatarFor(u),
-      picture: avatarFor(u),
-      planteles: plantelesFor(u).length ? plantelesFor(u) : ['PT'],
-      accessMode: accessModeForRole(u.role)
+      planteles: u.planteles ? u.planteles.split(',').filter(Boolean) : ['PT'],
+      role: u.role || 'plantel'
     }
-    directoryQuery.value = u.email || displayNameFor(u)
+    directoryQuery.value = u.email || ''
   } else {
     editingId.value = null
     form.value = emptyForm()
@@ -459,28 +337,17 @@ const closeModal = () => {
 
 const saveUser = async () => {
   if (!canSave.value) {
-    show(`Seleccione una cuenta @${WORKSPACE_DOMAIN} y al menos un plantel.`, 'danger')
+    show(`Seleccione un usuario @${WORKSPACE_DOMAIN} y al menos un plantel.`, 'danger')
     return
   }
   saving.value = true
   try {
     const url = editingId.value ? `/api/users/${editingId.value}` : '/api/users'
     const method = editingId.value ? 'PUT' : 'POST'
-    await $fetch(url, {
-      method,
-      body: {
-        username: form.value.username || form.value.email,
-        displayName: form.value.displayName,
-        email: form.value.email,
-        avatar: form.value.avatar,
-        picture: form.value.picture || form.value.avatar,
-        planteles: form.value.planteles,
-        accessMode: form.value.accessMode
-      }
-    })
-    show('Usuario guardado.')
+    await $fetch(url, { method, body: { ...form.value, password: '' } })
+    show('Acceso guardado en usuarios externos.')
     closeModal()
-    await loadUsers()
+    loadUsers()
   } catch (e) {
     show(e?.data?.message || 'Error al guardar', 'danger')
   } finally {
@@ -489,12 +356,12 @@ const saveUser = async () => {
 }
 
 const deleteUser = async () => {
-  if (!confirm('¿Eliminar este usuario?')) return
+  if (!confirm('¿Confirma la eliminación de esta asignación de workspace?')) return
   try {
     await $fetch(`/api/users/${editingId.value}`, { method: 'DELETE' })
-    show('Usuario eliminado.')
+    show('Asignación eliminada.')
     closeModal()
-    await loadUsers()
+    loadUsers()
   } catch (e) {
     show(e?.data?.message || 'Error al eliminar', 'danger')
   }
@@ -502,287 +369,8 @@ const deleteUser = async () => {
 </script>
 
 <style scoped>
-.workspace-users-page {
-  padding-bottom: 32px;
-}
-
-.workspace-users-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 18px;
-}
-
-.workspace-eyebrow,
-.workspace-modal-eyebrow {
-  color: rgb(22 163 74);
-  font-size: 11px;
-  line-height: 1;
-  font-weight: 900;
-  letter-spacing: .22em;
-  text-transform: uppercase;
-}
-
-.workspace-title {
-  margin-top: 6px;
-  color: rgb(15 23 42);
-  font-size: 28px;
-  line-height: 1.08;
-  font-weight: 950;
-  letter-spacing: -.04em;
-}
-
-.workspace-subtitle,
-.workspace-modal-copy {
-  margin-top: 6px;
-  color: rgb(100 116 139);
-  font-size: 14px;
-  line-height: 1.45;
-}
-
-.workspace-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.workspace-users-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px;
-  margin-bottom: 14px;
-}
-
-.workspace-search-wrap {
-  position: relative;
-  flex: 1;
-  min-width: min(520px, 100%);
-}
-
-.workspace-search-icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: rgb(100 116 139);
-}
-
-.workspace-search-input {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid rgb(226 232 240);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, .92);
-  padding: 0 42px 0 42px;
-  color: rgb(15 23 42);
-  font-size: 14px;
-  font-weight: 750;
-  outline: none;
-  transition: border-color .16s ease, box-shadow .16s ease;
-}
-
-.workspace-search-input:focus {
-  border-color: rgba(34, 197, 94, .52);
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, .10);
-}
-
-.workspace-search-clear {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: rgb(100 116 139);
-}
-
-.workspace-stats {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.workspace-stat-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 36px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  padding: 0 12px;
-  font-size: 12px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.workspace-stat-pill.neutral {
-  color: rgb(51 65 85);
-  background: rgb(248 250 252);
-  border-color: rgb(226 232 240);
-}
-
-.workspace-stat-pill.control {
-  color: rgb(29 78 216);
-  background: rgb(239 246 255);
-  border-color: rgb(191 219 254);
-}
-
-.workspace-stat-pill.admin {
-  color: rgb(21 128 61);
-  background: rgb(240 253 244);
-  border-color: rgb(187 247 208);
-}
-
-.workspace-users-table-card {
-  overflow: hidden;
-}
-
-.workspace-users-table th {
-  color: rgb(71 85 105);
-  font-size: 11px;
-  font-weight: 950;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-}
-
-.workspace-user-row {
-  transition: background-color .14s ease, box-shadow .14s ease;
-}
-
-.workspace-user-row:hover {
-  background: rgba(240, 253, 244, .48);
-}
-
-.workspace-user-cell {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.workspace-user-avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  border: 1px solid rgb(226 232 240);
-  background: white;
-  object-fit: cover;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, .07);
-}
-
-.workspace-user-name {
-  color: rgb(15 23 42);
-  font-size: 14px;
-  font-weight: 950;
-  max-width: 310px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workspace-user-source {
-  color: rgb(34 197 94);
-  font-size: 10px;
-  font-weight: 950;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-
-.workspace-email-cell {
-  color: rgb(71 85 105);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.workspace-planteles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  max-width: 280px;
-}
-
-.workspace-plantel-chip,
-.workspace-plantel-check {
-  border-radius: 999px;
-  border: 1px solid rgba(34, 197, 94, .18);
-  background: rgba(34, 197, 94, .08);
-  color: rgb(21 128 61);
-  padding: 4px 8px;
-  font-size: 10px;
-  line-height: 1;
-  font-weight: 950;
-}
-
-.workspace-plantel-chip.muted {
-  color: rgb(100 116 139);
-  background: rgb(248 250 252);
-  border-color: rgb(226 232 240);
-}
-
-.workspace-access-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 32px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  padding: 0 11px;
-  font-size: 11px;
-  font-weight: 950;
-  white-space: nowrap;
-}
-
-.workspace-access-badge.admin {
-  color: rgb(21 128 61);
-  background: rgb(240 253 244);
-  border-color: rgb(187 247 208);
-}
-
-.workspace-access-badge.control {
-  color: rgb(29 78 216);
-  background: rgb(239 246 255);
-  border-color: rgb(191 219 254);
-}
-
-.workspace-access-badge.admin-control {
-  color: rgb(126 34 206);
-  background: rgb(250 245 255);
-  border-color: rgb(221 214 254);
-}
-
-.workspace-row-action {
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  border: 1px solid rgb(226 232 240);
-  background: white;
-  color: rgb(15 23 42);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, .06);
-  transition: transform .16s ease, border-color .16s ease, color .16s ease;
-}
-
-.workspace-row-action:hover {
-  transform: translateY(-1px);
-  border-color: rgba(34, 197, 94, .45);
-  color: rgb(22 163 74);
-}
-
 .workspace-user-modal {
   max-width: min(980px, calc(100vw - 32px));
-}
-
-.workspace-modal-title {
-  color: rgb(15 23 42);
-  font-size: 20px;
-  line-height: 1.14;
-  font-weight: 950;
-  letter-spacing: -.03em;
 }
 
 .workspace-picker-card,
@@ -791,22 +379,6 @@ const deleteUser = async () => {
   background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,252,.86));
   border-radius: 18px;
   padding: 16px;
-}
-
-.workspace-card-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.workspace-card-heading span {
-  color: rgb(148 163 184);
-  font-size: 10px;
-  font-weight: 950;
-  text-transform: uppercase;
-  letter-spacing: .14em;
 }
 
 .directory-results {
@@ -874,103 +446,27 @@ const deleteUser = async () => {
   padding: 14px;
 }
 
-.workspace-access-options {
-  display: grid;
-  gap: 10px;
-}
-
-.workspace-access-option {
+.workspace-note {
   display: flex;
-  align-items: center;
   gap: 10px;
-  min-height: 48px;
-  border-radius: 15px;
-  border: 1px solid rgb(226 232 240);
-  background: white;
-  color: rgb(71 85 105);
-  padding: 0 13px;
-  font-size: 13px;
-  font-weight: 950;
-  text-align: left;
-  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, color .16s ease, background .16s ease;
-}
-
-.workspace-access-option:hover,
-.workspace-access-option.active {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 25px rgba(15, 23, 42, .07);
-}
-
-.workspace-access-option.admin.active {
-  color: rgb(21 128 61);
-  background: rgb(240 253 244);
-  border-color: rgb(187 247 208);
-}
-
-.workspace-access-option.control.active {
-  color: rgb(29 78 216);
-  background: rgb(239 246 255);
-  border-color: rgb(191 219 254);
-}
-
-.workspace-access-option.admin_control.active {
-  color: rgb(126 34 206);
-  background: rgb(250 245 255);
-  border-color: rgb(221 214 254);
-}
-
-.workspace-plantel-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  border-radius: 10px;
-  background: rgb(248 250 252);
-  border-color: rgb(226 232 240);
-  color: rgb(51 65 85);
-  padding: 7px 8px;
-}
-
-.workspace-plantel-check.active {
-  color: rgb(21 128 61);
-  background: rgb(240 253 244);
-  border-color: rgb(187 247 208);
-}
-
-.workspace-selected-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  border: 1px solid rgb(226 232 240);
-  background: white;
-  border-radius: 15px;
+  align-items: flex-start;
+  border: 1px solid rgba(77, 159, 101, .22);
+  background: rgba(77, 159, 101, .06);
+  border-radius: 14px;
   padding: 12px;
-}
-
-.workspace-selected-domain {
-  min-width: 0;
-  color: rgb(100 116 139);
+  color: rgb(51 65 85);
   font-size: 12px;
-  font-weight: 800;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
 }
 
-@media (max-width: 900px) {
-  .workspace-users-header,
-  .workspace-users-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
+.workspace-note svg {
+  color: rgb(59 130 76);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
 
-  .workspace-header-actions {
-    justify-content: flex-start;
-  }
-
-  .workspace-search-wrap {
-    min-width: 0;
-  }
+.workspace-note code {
+  font-weight: 800;
+  color: rgb(15 23 42);
 }
 </style>
