@@ -121,6 +121,7 @@
             <select
               v-model="state.ciclo"
               aria-label="Ciclo escolar"
+              @change="handleCicloChange"
             >
               <option v-for="c in CICLOS_LIST" :key="c.value" :value="c.value">{{ c.label }}</option>
             </select>
@@ -250,9 +251,19 @@ const state = useState('globalState', () => ({
 
 watch(() => state.value.ciclo, (newVal) => {
   const cicloKey = normalizeCicloOption(newVal)
-  state.value.ciclo = cicloKey
+  if (state.value.ciclo !== cicloKey) state.value.ciclo = cicloKey
   cicloCookie.value = cicloKey
 })
+
+const handleCicloChange = () => {
+  const cicloKey = normalizeCicloOption(state.value.ciclo)
+  state.value.ciclo = cicloKey
+  cicloCookie.value = cicloKey
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('ingresos:ciclo-changed', { detail: { ciclo: cicloKey } }))
+  }
+}
 
 const adminPhoto = ref(null)
 const adminName = ref(useCookie('auth_name').value || 'Usuario')

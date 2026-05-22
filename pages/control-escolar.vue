@@ -601,18 +601,20 @@ import { useToast } from '~/composables/useToast'
 import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
 import { normalizeEnrollmentConceptIds, normalizeStudentMatricula, parseEnrollmentConcepts, photoStorageKey, studentPresentationStyle } from '~/shared/utils/studentPresentation'
 import { NIVELES_ESCOLARES, gradeOptionsForNivel } from '~/shared/utils/grado'
+import { normalizeCicloOption } from '~/utils/constants'
 
 useHead({ bodyAttrs: { class: 'students-route-active' } })
 
 const { show } = useToast()
-const state = useState('globalState', () => ({ ciclo: '2025' }))
+const cicloCookie = useCookie('active_ciclo', { maxAge: 31536000 })
+const state = useState('globalState', () => ({ ciclo: normalizeCicloOption(cicloCookie.value) }))
 const activePlantelCookie = useCookie('auth_active_plantel')
 const initialControlPlantel = String(activePlantelCookie.value || '').trim()
 const externalConcepts = ref([])
 const ENROLLMENT_CONCEPTS_CACHE_KEY = 'students-enrollment-concepts:v1'
 const CONTROL_STUDENTS_CACHE_VERSION = 1
 const CONTROL_STUDENTS_CACHE_NAMESPACE = 'control-escolar:students-cache'
-const currentCicloKey = computed(() => normalizeCicloKey(state.value?.ciclo || '2025'))
+const currentCicloKey = computed(() => normalizeCicloKey(normalizeCicloOption(state.value?.ciclo || cicloCookie.value)))
 const currentCicloLabel = computed(() => formatCicloLabel(currentCicloKey.value))
 const selectedAgentId = ref(initialControlPlantel && initialControlPlantel !== 'GLOBAL' ? initialControlPlantel : '')
 const optionsLoading = ref(false)
@@ -1650,15 +1652,21 @@ const parseEnrollmentConfig = (obj) => {
 
 const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
   const previousConcepts = externalConcepts.value.join('|')
+
   try {
-    const configData = await $fetch('https://matricula.casitaapps.com/api/enrollment-config/all')
+    const configData = await $fetch('/api/control-escolar/enrollment-config')
     parseEnrollmentConfig(configData)
-  } catch (error) {
-    console.warn('[Control Escolar] Usando configuración de inscripción local o por defecto.', error)
+  } catch (serverError) {
+    try {
+      const configData = await $fetch('https://matricula.casitaapps.com/api/enrollment-config/all')
+      parseEnrollmentConfig(configData)
+    } catch (externalError) {
+      console.warn('[Control Escolar] Usando configuración de inscripción local o por defecto.', externalError || serverError)
+    }
   }
 
   if (refreshStudents && externalConcepts.value.join('|') !== previousConcepts) {
-    await refreshAll()
+    await refreshAll({ clearExisting: true, forceLoading: true })
   }
 }
 
@@ -1679,14 +1687,12 @@ watch(() => ({ ...filters }), () => {
 }, { deep: true })
 
 watch(() => pagination.page, () => applyInstantStudentFilters())
-watch(() => [currentCicloKey.value, externalConcepts.value.join('|')], () => {
+watch(() => [selectedAgentId.value, currentCicloKey.value, externalConcepts.value.join('|')], ([nextAgent], [previousAgent]) => {
+  if (!nextAgent) return
+  if (!previousAgent && controlStudentsIndex.value.length === 0 && studentsLoading.value) return
   reloadControlStudentsForCurrentScope()
 }, { flush: 'post' })
-watch(selectedAgentId, (nextValue, previousValue) => {
-  nextTick(scheduleWorkspaceScaleUpdate)
-  if (!previousValue || nextValue === previousValue) return
-  reloadControlStudentsForCurrentScope()
-})
+watch(selectedAgentId, () => nextTick(scheduleWorkspaceScaleUpdate))
 watch(students, (visibleStudents) => queueControlStudentPhotos(visibleStudents), { deep: false })
 watch(selectedStudent, (student) => queueControlStudentPhotos(student ? [student] : [], { priority: true }))
 watch(showControlFirstSyncNotice, (visible) => {
@@ -1694,7 +1700,17 @@ watch(showControlFirstSyncNotice, (visible) => {
   else stopFirstSyncMessages()
 })
 
+const handleCicloChanged = (event) => {
+  const cicloKey = normalizeCicloOption(event?.detail?.ciclo || cicloCookie.value || state.value?.ciclo)
+  if (state.value.ciclo !== cicloKey) state.value.ciclo = cicloKey
+  cicloCookie.value = cicloKey
+  reloadControlStudentsForCurrentScope()
+}
+
 onMounted(async () => {
+  if (process.client) window.addEventListener('ingresos:ciclo-changed', handleCicloChanged)
+
+  state.value.ciclo = normalizeCicloOption(state.value?.ciclo || cicloCookie.value)
   hydrateCachedEnrollmentConcepts()
   const initialAgentId = selectedAgentId.value
   if (initialAgentId) loadStudents()
@@ -1710,6 +1726,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (process.client) window.removeEventListener('ingresos:ciclo-changed', handleCicloChanged)
   stopFirstSyncMessages()
 })
 </script>
