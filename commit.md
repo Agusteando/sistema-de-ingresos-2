@@ -1,1 +1,1 @@
-chore: replace Aurora logo with true transparent asset
+chore: replace Aurora logo asset and remove sidebar wordmark
