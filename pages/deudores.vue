@@ -12,10 +12,6 @@
               <LucideRefreshCw :size="16" :class="{ 'animate-spin': loading }" />
               Actualizar
             </button>
-            <button class="quiet-button" @click="openEmailTemplateModal">
-              <LucideMail :size="16" />
-              Plantilla correo
-            </button>
             <button class="quiet-button strong" @click="exportData" :disabled="loading || filteredDeudores.length === 0">
               <LucideDownload :size="16" />
               Exportar Excel
@@ -345,70 +341,6 @@
     </Teleport>
 
     <Teleport to="body">
-      <div v-if="showEmailTemplateModal" class="dialog-overlay" @click.self="closeEmailTemplateModal">
-        <div class="dialog email-template-dialog">
-          <header class="dialog-header">
-            <div>
-              <span class="kicker">Correo de cobranza</span>
-              <h3>Plantilla y vista previa</h3>
-            </div>
-            <button class="icon-button" @click="closeEmailTemplateModal"><LucideX :size="16" /></button>
-          </header>
-
-          <div class="dialog-body email-template-body">
-            <section class="template-editor-panel">
-              <p class="template-help">Edita el correo que se envía en los recordatorios. Los datos del alumno, tutor, deuda y desglose se completan automáticamente al enviarlo.</p>
-              <label class="form-row">
-                <span>Asunto</span>
-                <input v-model="emailTemplateForm.subject" type="text" :placeholder="'Recordatorio de pago - {{nombre_alumno}}'">
-              </label>
-              <label class="form-row">
-                <span>Mensaje del correo</span>
-                <textarea
-                  v-model="emailTemplateForm.htmlTemplate"
-                  class="template-textarea"
-                  :placeholder="'Escribe el contenido del correo. Puedes usar {{nombre_alumno}}, {{tutor}}, {{deuda}} y {{desglose}}.'"
-                ></textarea>
-              </label>
-              <div class="placeholder-cloud" aria-label="Variables disponibles">
-                <span v-for="token in emailTemplatePlaceholders" :key="token">{{ formatTemplateToken(token) }}</span>
-              </div>
-            </section>
-
-            <section class="template-preview-panel">
-              <div class="preview-toolbar">
-                <div>
-                  <span class="kicker">Vista previa</span>
-                  <strong>{{ emailTemplatePreview.subject || 'Sin asunto' }}</strong>
-                </div>
-                <button class="quiet-button" @click="previewEmailTemplate" :disabled="previewingEmailTemplate || loadingEmailTemplate">
-                  <LucideEye :size="16" />
-                  {{ previewingEmailTemplate ? 'Generando' : 'Actualizar' }}
-                </button>
-              </div>
-              <div class="preview-context" v-if="templateSampleTarget">
-                <span>Ejemplo con</span>
-                <strong>{{ templateSampleTarget.nombreCompleto }}</strong>
-                <small>{{ templateSampleTarget.matricula }} · {{ templateSampleTarget.correo || 'sin correo' }}</small>
-              </div>
-              <div v-if="loadingEmailTemplate" class="template-loading">Cargando plantilla...</div>
-              <div v-else class="email-preview-frame" v-html="emailTemplatePreview.html"></div>
-            </section>
-          </div>
-
-          <footer class="dialog-footer">
-            <button class="quiet-button" @click="resetEmailTemplate" :disabled="savingEmailTemplate || loadingEmailTemplate">Restaurar base</button>
-            <button class="quiet-button" @click="closeEmailTemplateModal" :disabled="savingEmailTemplate">Cerrar</button>
-            <button class="primary-action" @click="saveEmailTemplate" :disabled="savingEmailTemplate || !emailTemplateForm.subject.trim() || !emailTemplateForm.htmlTemplate.trim()">
-              <LucideCheckCircle :size="16" />
-              {{ savingEmailTemplate ? 'Guardando' : 'Guardar plantilla' }}
-            </button>
-          </footer>
-        </div>
-      </div>
-    </Teleport>
-
-    <Teleport to="body">
       <div v-if="showWhatsappSetup" class="dialog-overlay" @click.self="closeWhatsappSetup">
         <div class="dialog wide">
           <header class="dialog-header">
@@ -566,14 +498,6 @@ const exceptionTarget = ref(null)
 const showExceptionModal = ref(false)
 const savingException = ref(false)
 const showWhatsappSetup = ref(false)
-const showEmailTemplateModal = ref(false)
-const loadingEmailTemplate = ref(false)
-const savingEmailTemplate = ref(false)
-const previewingEmailTemplate = ref(false)
-const emailTemplatePlaceholders = ref([])
-const emailTemplateDefaults = ref({ subject: '', htmlTemplate: '' })
-const emailTemplateForm = ref({ subject: '', htmlTemplate: '' })
-const emailTemplatePreview = ref({ subject: '', html: '' })
 const exceptionForm = ref({ fecha: '', motivo: '' })
 
 const DEBT_DESIGN_WIDTH = 1540
@@ -705,8 +629,6 @@ const formatMoney = (value) => Number(value || 0).toLocaleString('es-MX', {
   currency: 'MXN',
   minimumFractionDigits: 2
 })
-
-const formatTemplateToken = (token) => `{{${token}}}`
 
 const formatDate = (value) => {
   if (!value) return 'Sin fecha'
@@ -845,11 +767,7 @@ const selectedActionCopy = computed(() => {
 
 const actionReadyCount = (action) => filteredDeudores.value.filter(d => canRunAction(d, action)).length
 
-const templateSampleTarget = computed(() => {
-  return selectedRows.value[0] || filteredDeudores.value.find(d => d.correo) || filteredDeudores.value[0] || deudores.value[0] || null
-})
-
-const hasBlockingOverlay = computed(() => showExceptionModal.value || showWhatsappSetup.value || showEmailTemplateModal.value || Boolean(detailsTarget.value))
+const hasBlockingOverlay = computed(() => showExceptionModal.value || showWhatsappSetup.value || Boolean(detailsTarget.value))
 
 watch(hasBlockingOverlay, (val) => {
   if (typeof document !== 'undefined') document.body.style.overflow = val ? 'hidden' : ''
@@ -1273,82 +1191,6 @@ const openDetails = (d) => {
 
 const closeDetails = () => {
   detailsTarget.value = null
-}
-
-const openEmailTemplateModal = async () => {
-  showEmailTemplateModal.value = true
-  await loadEmailTemplate()
-}
-
-const closeEmailTemplateModal = () => {
-  showEmailTemplateModal.value = false
-}
-
-const loadEmailTemplate = async () => {
-  loadingEmailTemplate.value = true
-  try {
-    const template = await $fetch('/api/deudores/template')
-    const subject = String(template?.subject || '')
-    const htmlTemplate = String(template?.html_template || '')
-    emailTemplateForm.value = { subject, htmlTemplate }
-    emailTemplateDefaults.value = { subject, htmlTemplate }
-    emailTemplatePlaceholders.value = Array.isArray(template?.placeholders) ? template.placeholders : []
-    await previewEmailTemplate()
-  } catch (e) {
-    show(e?.statusMessage || 'No se pudo cargar la plantilla de correo.', 'danger')
-  } finally {
-    loadingEmailTemplate.value = false
-  }
-}
-
-const previewEmailTemplate = async () => {
-  previewingEmailTemplate.value = true
-  try {
-    const sample = templateSampleTarget.value
-    const preview = await $fetch('/api/deudores/template-preview', {
-      method: 'POST',
-      body: {
-        ciclo: normalizeCicloKey(state.value.ciclo),
-        matricula: sample?.matricula || '',
-        mes: sample?.mes || 0,
-        subject: emailTemplateForm.value.subject,
-        htmlTemplate: emailTemplateForm.value.htmlTemplate
-      }
-    })
-    emailTemplatePreview.value = {
-      subject: String(preview?.subject || ''),
-      html: String(preview?.html || '')
-    }
-  } catch (e) {
-    show(e?.statusMessage || 'No se pudo generar la vista previa del correo.', 'danger')
-  } finally {
-    previewingEmailTemplate.value = false
-  }
-}
-
-const saveEmailTemplate = async () => {
-  savingEmailTemplate.value = true
-  try {
-    await $fetch('/api/deudores/template', {
-      method: 'POST',
-      body: {
-        subject: emailTemplateForm.value.subject,
-        htmlTemplate: emailTemplateForm.value.htmlTemplate
-      }
-    })
-    emailTemplateDefaults.value = { ...emailTemplateForm.value }
-    await previewEmailTemplate()
-    show('Plantilla de correo guardada.')
-  } catch (e) {
-    show(e?.statusMessage || 'No se pudo guardar la plantilla.', 'danger')
-  } finally {
-    savingEmailTemplate.value = false
-  }
-}
-
-const resetEmailTemplate = async () => {
-  emailTemplateForm.value = { ...emailTemplateDefaults.value }
-  await previewEmailTemplate()
 }
 
 const openWhatsappSetup = () => {
@@ -2886,125 +2728,5 @@ input[type="checkbox"] {
   white-space: nowrap;
 }
 
-
-
-.email-template-dialog {
-  width: min(1180px, calc(100vw - 40px));
-  max-height: min(860px, calc(100vh - 34px));
-}
-
-.email-template-body {
-  display: grid;
-  grid-template-columns: minmax(360px, 0.82fr) minmax(430px, 1fr);
-  gap: 18px;
-  min-height: 540px;
-}
-
-.template-editor-panel,
-.template-preview-panel {
-  border: 1px solid var(--debt-soft-line);
-  border-radius: 22px;
-  background: #ffffff;
-  padding: 18px;
-  min-width: 0;
-}
-
-.template-help {
-  margin: 0 0 14px;
-  color: var(--debt-muted);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.template-textarea {
-  min-height: 300px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.placeholder-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.placeholder-cloud span {
-  border: 1px solid #dbe7de;
-  border-radius: 999px;
-  background: #f5fbf4;
-  color: #2f7d3f;
-  padding: 7px 10px;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.preview-toolbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.preview-toolbar strong {
-  display: block;
-  color: var(--debt-ink);
-  font-size: 15px;
-  line-height: 1.3;
-}
-
-.preview-context {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border: 1px solid #e3ebf2;
-  border-radius: 14px;
-  background: #f8fafc;
-  color: var(--debt-muted);
-  font-size: 12px;
-}
-
-.preview-context strong {
-  color: var(--debt-ink);
-}
-
-.preview-context small {
-  margin-left: auto;
-  color: var(--debt-faint);
-  font-weight: 800;
-}
-
-.email-preview-frame {
-  height: 430px;
-  overflow: auto;
-  border: 1px solid #e5e7eb;
-  border-radius: 18px;
-  background: #f8fafc;
-  padding: 18px;
-}
-
-.template-loading {
-  display: grid;
-  place-items: center;
-  height: 430px;
-  border: 1px dashed #d8e5dc;
-  border-radius: 18px;
-  color: var(--debt-muted);
-  font-weight: 800;
-}
-
-@media (max-width: 980px) {
-  .email-template-body {
-    grid-template-columns: 1fr;
-  }
-
-  .email-template-dialog {
-    width: calc(100vw - 18px);
-  }
-}
 
 </style>

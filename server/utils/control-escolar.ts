@@ -2,7 +2,7 @@ import { query, runWithBridgeAgentId } from './db'
 import { getTrustedAuthUser, normalizePlantel, type AuthSessionUser } from './auth-session'
 import { PLANTELES_LIST } from '../../utils/constants'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
-import { calculatePromotedGrado, displayGrado, plantelCandidatesForProjectedScope } from '../../shared/utils/grado'
+import { calculateBasePlacementForTargetPosition, calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, normalizeNivelEscolar, plantelCandidatesForProjectedScope } from '../../shared/utils/grado'
 import { previousCicloKey, resolveTipoIngreso } from '../../shared/utils/tipoIngreso'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from './enrollment-evidence'
 import { controlEscolarCentralQuery } from './control-escolar-central'
@@ -841,8 +841,8 @@ const overlayStudentRow = (agentId: string, base: any, overlay?: any, huskyPass?
     categoriaBaja: normalizeText(overlay?.categoria_baja),
     seguimientoBaja: normalizeText(overlay?.seguimiento_baja, 500),
     program: firstText(overlay?.servicio, overlay?.nivel, base.baseNivel),
-    nivel: firstLower(overlay?.nivel, base.baseNivel),
-    grado: firstLower(overlay?.grado, base.baseGrado),
+    nivel: firstLower(base.baseNivel, overlay?.nivel),
+    grado: firstLower(base.baseGrado, overlay?.grado),
     group: firstText(overlay?.grupo, base.baseGrupo),
     guardianName: firstText(fatherName, motherName, base.baseGuardian),
     fatherName,
@@ -1031,6 +1031,20 @@ const fetchAllNormalizedStudents = async (agentId: string, filters: any = {}): P
   }
 }
 
+const gradeOrderIndex = (value: unknown) => {
+  const normalized = displayGrado(value).toLowerCase()
+  const order = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto', 'egresado']
+  const index = order.indexOf(normalized)
+  return index >= 0 ? index : order.length
+}
+
+const compareAcademicGrade = (left: unknown, right: unknown) => {
+  const leftIndex = gradeOrderIndex(left)
+  const rightIndex = gradeOrderIndex(right)
+  if (leftIndex !== rightIndex) return leftIndex - rightIndex
+  return String(left || '').localeCompare(String(right || ''), 'es')
+}
+
 const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
   let result = students
 
@@ -1090,7 +1104,7 @@ const buildCatalogs = (students: ControlEscolarStudentRow[]) => {
 
   return {
     niveles: Array.from(new Set(students.map((student) => student.nivel).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
-    grados: Array.from(new Set(students.map((student) => student.grado).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
+    grados: Array.from(new Set(students.map((student) => student.grado).filter(Boolean))).sort(compareAcademicGrade),
     grupos: Array.from(new Set(students.map((student) => student.group).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
     gruposPorGrado
   }
@@ -1098,19 +1112,23 @@ const buildCatalogs = (students: ControlEscolarStudentRow[]) => {
 
 export const fetchControlEscolarStudents = async (agentId: string, filters: any) => {
   const page = Math.max(1, Number(filters.page || 1) || 1)
-  const limit = Math.min(100, Math.max(10, Number(filters.limit || 25) || 25))
+  const wantsAll = ['1', 'true', 'all', 'snapshot', 'index'].includes(String(filters.all || filters.mode || '').toLowerCase())
+  const limit = wantsAll
+    ? Math.min(MAX_LOCAL_ROWS, Math.max(1, Number(filters.limit || MAX_LOCAL_ROWS) || MAX_LOCAL_ROWS))
+    : Math.min(100, Math.max(8, Number(filters.limit || 25) || 25))
   const loaded = await fetchAllNormalizedStudents(agentId, filters)
   const allStudents = loaded.students
-  const filtered = applyFilters(allStudents, filters)
+  const filtered = applyFilters(allStudents, wantsAll ? { ...filters, search: '', status: '', quality: '', grado: '', group: '', grupo: '', recent: '' } : filters)
   const offset = (page - 1) * limit
+  const data = wantsAll ? filtered : filtered.slice(offset, offset + limit)
 
   return {
-    data: filtered.slice(offset, offset + limit),
+    data,
     pagination: {
-      page,
-      limit,
+      page: wantsAll ? 1 : page,
+      limit: wantsAll ? Math.max(data.length, 1) : limit,
       total: filtered.length,
-      pages: Math.max(1, Math.ceil(filtered.length / limit))
+      pages: wantsAll ? 1 : Math.max(1, Math.ceil(filtered.length / limit))
     },
     catalogs: buildCatalogs(allStudents),
     source: loaded.source
@@ -1196,7 +1214,8 @@ const normalizePatchValue = (field: string, value: unknown) => {
   if (field.toLowerCase().includes('email')) return normalizeEmail(value) || null
   if (field.toLowerCase().includes('telefono')) return normalizePhone(value) || null
   if (field === 'baja') return value === true || value === 1 || String(value).toLowerCase() === 'true' || String(value) === '1' ? 1 : 0
-  if (field === 'grado' || field === 'nivel') return normalizeText(value, 80).toLowerCase() || null
+  if (field === 'grado') return normalizeText(value, 80) ? displayGrado(value).toLowerCase() : null
+  if (field === 'nivel') return normalizeNivelEscolar(value) || null
   if (field === 'grupo') return normalizeText(value, 40) || null
   if (field === 'direccion' || field === 'domicilio' || field === 'seguimientoBaja' || field === 'motivoBaja') return normalizeNullable(value, 700)
   return normalizeNullable(value, 255)
@@ -1206,6 +1225,105 @@ type EditableMatriculaEntry = {
   field: string
   column: string
   value: any
+}
+
+
+const hasOwnPatchField = (body: MatriculaPatch, field: string) => Object.prototype.hasOwnProperty.call(body || {}, field)
+const sameAcademicNivel = (left: unknown, right: unknown) => normalizeNivelEscolar(left) === normalizeNivelEscolar(right)
+const sameAcademicGrado = (left: unknown, right: unknown) => {
+  const leftText = normalizeText(left, 80)
+  const rightText = normalizeText(right, 80)
+  if (!leftText || !rightText) return leftText === rightText
+  return displayGrado(left).toLowerCase() === displayGrado(right).toLowerCase()
+}
+
+const resolveCurrentControlAcademic = (agentId: string, baseRow: any, visibleStudent: any, filters: any, body: MatriculaPatch) => {
+  const scope = resolveOperatorScope(filters)
+  const requestedNivel = normalizeNivelEscolar(
+    body?.nivel ||
+    body?.targetNivel ||
+    visibleStudent?.nivel ||
+    baseRow?.nivelBase ||
+    baseRow?.baseNivel
+  )
+  const requestedGrado = normalizeGradoForPlantel(
+    body?.grado ||
+    body?.targetGrado ||
+    visibleStudent?.grado ||
+    baseRow?.gradoBase ||
+    baseRow?.baseGrado,
+    agentId,
+    requestedNivel
+  )
+  const existingIngresoCiclo = normalizeCicloKey(baseRow?.cicloBase || baseRow?.baseCiclo || scope.cicloKey)
+  const targetCiclo = scope.cicloKey
+  const targetPlantel = normalizePlantel(agentId)
+
+  const resolvePlacement = (ingresoCiclo: string) => calculateBasePlacementForTargetPosition(
+    requestedNivel,
+    requestedGrado,
+    ingresoCiclo,
+    targetCiclo,
+    targetPlantel
+  )
+
+  let ingresoCiclo = existingIngresoCiclo
+  let placement = resolvePlacement(ingresoCiclo)
+
+  if (placement.outOfScope || !placement.nivel || !placement.grado || !placement.plantel) {
+    ingresoCiclo = targetCiclo
+    placement = resolvePlacement(ingresoCiclo)
+  }
+
+  if (placement.outOfScope || !placement.nivel || !placement.grado || !placement.plantel) {
+    throw createError({ statusCode: 400, message: 'La combinación de nivel y grado no corresponde con la progresión escolar del ciclo activo.' })
+  }
+
+  const projected = calculatePromotedGrado(placement.grado, placement.plantel, ingresoCiclo, targetCiclo, placement.nivel)
+
+  return {
+    targetCiclo,
+    ingresoCiclo,
+    requestedNivel,
+    requestedGrado,
+    placement,
+    projected
+  }
+}
+
+const shouldSyncBaseAcademic = (body: MatriculaPatch, visibleStudent: any, academic: ReturnType<typeof resolveCurrentControlAcademic>) => {
+  if (!hasOwnPatchField(body, 'grado') && !hasOwnPatchField(body, 'nivel')) return false
+
+  return !sameAcademicNivel(visibleStudent?.nivel, academic.projected.nivel) ||
+    !sameAcademicGrado(visibleStudent?.grado, academic.projected.grado)
+}
+
+const syncBaseAcademicPlacement = async (
+  agentId: string,
+  normalizedMatricula: string,
+  body: MatriculaPatch,
+  baseRow: any,
+  visibleStudent: any,
+  filters: any = {}
+) => {
+  const academic = resolveCurrentControlAcademic(agentId, baseRow, visibleStudent, filters, body)
+  if (!shouldSyncBaseAcademic(body, visibleStudent, academic)) return null
+
+  const currentCiclo = normalizeCicloKey(baseRow?.cicloBase || baseRow?.baseCiclo || academic.ingresoCiclo)
+  const currentPlantel = normalizePlantel(baseRow?.plantel || baseRow?.basePlantel || agentId)
+  const unchanged = currentCiclo === academic.ingresoCiclo &&
+    sameAcademicNivel(baseRow?.nivelBase || baseRow?.baseNivel, academic.placement.nivel) &&
+    sameAcademicGrado(baseRow?.gradoBase || baseRow?.baseGrado, academic.placement.grado) &&
+    currentPlantel === normalizePlantel(academic.placement.plantel)
+
+  if (!unchanged) {
+    await query(
+      `UPDATE base SET ciclo = ?, nivel = ?, grado = ?, plantel = ? WHERE matricula = ?`,
+      [academic.ingresoCiclo, academic.placement.nivel, academic.placement.grado, academic.placement.plantel, normalizedMatricula]
+    )
+  }
+
+  return academic
 }
 
 const buildEditableMatriculaEntries = (body: MatriculaPatch, schema: ControlEscolarSchema, options: { rejectUnknown?: boolean; skipEmpty?: boolean } = {}) => {
@@ -1381,12 +1499,26 @@ export const importControlEscolarMatriculaUpdates = async (agentId: string, rows
         if (Object.prototype.hasOwnProperty.call(row, field)) patch[field] = row[field]
       })
       const editableEntries = buildEditableMatriculaEntries(patch, schema, { rejectUnknown: false, skipEmpty: true })
-      if (!editableEntries.length) {
+      const [baseRow] = await query<any[]>(`
+        SELECT
+          b.matricula,
+          ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel,
+          ${expr(schema.base, 'b', 'nivel', 'NULL')} AS nivelBase,
+          ${expr(schema.base, 'b', 'grado', 'NULL')} AS gradoBase,
+          ${expr(schema.base, 'b', 'ciclo', 'NULL')} AS cicloBase
+        FROM base b
+        WHERE b.matricula = ?
+        LIMIT 1
+      `, [normalizedMatricula])
+      const academicSynced = baseRow ? await syncBaseAcademicPlacement(agentId, normalizedMatricula, patch, baseRow, visibleStudent, scopeFilters) : null
+      if (!editableEntries.length && !academicSynced) {
         summary.skipped++
         if (summary.errors.length < 50) summary.errors.push({ row: index + 2, matricula: normalizedMatricula, message: 'Sin campos editables con valor.' })
         continue
       }
-      await upsertMatriculaOverlay(agentId, normalizedMatricula, editableEntries, user, visibleStudent.plantel || visibleStudent.basePlantel || agentId, schema)
+      if (editableEntries.length) {
+        await upsertMatriculaOverlay(agentId, normalizedMatricula, editableEntries, user, academicSynced?.placement?.plantel || visibleStudent.plantel || visibleStudent.basePlantel || agentId, schema)
+      }
       summary.updated++
     } catch (error: any) {
       summary.skipped++
@@ -1405,7 +1537,17 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
   }
 
   const schema = await getControlEscolarSchema(agentId, { requireCentral: true })
-  const [baseRow] = await query<any[]>(`SELECT matricula, ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel FROM base b WHERE b.matricula = ? LIMIT 1`, [normalizedMatricula])
+  const [baseRow] = await query<any[]>(`
+    SELECT
+      b.matricula,
+      ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel,
+      ${expr(schema.base, 'b', 'nivel', 'NULL')} AS nivelBase,
+      ${expr(schema.base, 'b', 'grado', 'NULL')} AS gradoBase,
+      ${expr(schema.base, 'b', 'ciclo', 'NULL')} AS cicloBase
+    FROM base b
+    WHERE b.matricula = ?
+    LIMIT 1
+  `, [normalizedMatricula])
   if (!baseRow) {
     throw createError({ statusCode: 404, message: 'El alumno no existe en base. Control Escolar no crea alumnos locales.' })
   }
@@ -1418,19 +1560,21 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
     enrollmentConcepts: filters.enrollmentConcepts
   }
   const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters)
-  const canSeeStudent = visibleScope.students.some((student) => student.matricula === normalizedMatricula)
-  if (!canSeeStudent) {
+  const visibleStudent = visibleScope.students.find((student) => student.matricula === normalizedMatricula)
+  if (!visibleStudent) {
     throw createError({ statusCode: 403, message: 'El alumno no está dentro del alcance visible de Control Escolar para este ciclo y plantel.' })
   }
 
   const editableEntries = buildEditableMatriculaEntries(body, schema, { rejectUnknown: true })
+  const academicSynced = await syncBaseAcademicPlacement(agentId, normalizedMatricula, body, baseRow, visibleStudent, scopeFilters)
 
-  if (!editableEntries.length) {
+  if (!editableEntries.length && !academicSynced) {
     throw createError({ statusCode: 400, message: 'No hay campos editables disponibles en la tabla centralizada matricula para guardar.' })
   }
 
-  await upsertMatriculaOverlay(agentId, normalizedMatricula, editableEntries, user, baseRow.plantel || agentId, schema)
-
+  if (editableEntries.length) {
+    await upsertMatriculaOverlay(agentId, normalizedMatricula, editableEntries, user, academicSynced?.placement?.plantel || baseRow.plantel || agentId, schema)
+  }
 
   const result = await fetchControlEscolarStudents(agentId, { ...scopeFilters, search: normalizedMatricula, page: 1, limit: 10 })
   return { success: true, student: result.data.find((student) => student.matricula === normalizedMatricula) || result.data[0] || null }

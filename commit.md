@@ -1,1 +1,1 @@
-Refactor Usuarios into Workspace-backed Control Escolar access management
+fix: manage institutional users from external workspace table

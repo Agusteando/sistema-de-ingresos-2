@@ -132,8 +132,6 @@ const sections = computed(() => [
       { label: 'Nivel', value: source.value.nivel },
       { label: 'Grado', value: source.value.grado },
       { label: 'Grupo', value: firstValue(source.value.group, source.value.grupo) },
-      { label: 'Servicio', value: source.value.servicio || source.value.program },
-      { label: 'Interno', value: source.value.interno },
       { label: 'Estatus', value: source.value.status || source.value.estatus },
       { label: 'Fuente', value: source.value.detailSource }
     ]

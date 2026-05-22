@@ -3,7 +3,6 @@ import { runWithBridgeAgentId, query } from '../../utils/db'
 import { sendEmail } from '../../utils/mailer'
 import { whatsappApi } from '../../utils/whatsapp'
 import { getDeudoresGlobal } from '../../utils/deudores'
-import { COBRANZA_TEMPLATE_CODE, renderCobranzaEmail } from '../../utils/cobranza-email'
 
 const ACTIONS = new Set(['correo_recordatorio', 'whatsapp_contacto', 'carta_suspension', 'llamada_telefonica', 'reporte_deudores'])
 
@@ -38,14 +37,26 @@ const getDeudorContext = async (matricula: string, ciclo: string, mes: number, u
   return rows.find(row => row.matricula === matricula && Number(row.mes) === mes)
 }
 
+const escapeHtml = (value: unknown) => String(value || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;')
+
+const buildHtmlBreakdown = (deudor: any) => {
+  return (deudor?.desglose || [])
+    .filter((item: any) => Number(item.saldo || 0) > 0)
+    .map((item: any) => `${escapeHtml(item.conceptoNombre)} (${escapeHtml(item.mesLabel || item.mesCargo)}): $${Number(item.saldo || 0).toFixed(2)}`)
+    .join('<br>')
+}
+
 const buildPlainBreakdown = (deudor: any) => {
   return (deudor?.desglose || [])
     .filter((item: any) => Number(item.saldo || 0) > 0)
     .map((item: any) => ({
       concepto: String(item.conceptoNombre || 'Concepto'),
-      conceptoNombre: String(item.conceptoNombre || 'Concepto'),
       periodo: String(item.mesLabel || item.mesCargo || ''),
-      mesLabel: String(item.mesLabel || item.mesCargo || ''),
       saldo: Number(item.saldo || 0)
     }))
 }
@@ -81,32 +92,21 @@ const processAction = async ({
   const desglose = buildPlainBreakdown(deudor)
 
   if (accion === 'correo_recordatorio') {
-    const [student] = await query<any[]>(`SELECT nombreCompleto, correo, \`Nombre del padre o tutor\` AS padre, plantel FROM base WHERE matricula = ? LIMIT 1`, [matricula])
+    const [student] = await query<any[]>(`SELECT nombreCompleto, correo, \`Nombre del padre o tutor\` AS padre FROM base WHERE matricula = ? LIMIT 1`, [matricula])
     if (!student?.correo) throw createError({ statusCode: 400, statusMessage: 'El alumno no tiene correo registrado.' })
 
-    let tpl: any = null
-    try {
-      const [templateRow] = await query<any[]>(`SELECT subject, html_template FROM cobranza_email_templates WHERE code = ? LIMIT 1`, [COBRANZA_TEMPLATE_CODE])
-      tpl = templateRow || null
-    } catch (error: any) {
-      console.warn('[Cobranza] No se pudo leer plantilla de correo; se usará el contenido base.', error?.message || error)
-    }
-    const rendered = renderCobranzaEmail({
-      subject: tpl?.subject,
-      htmlTemplate: tpl?.html_template,
-      context: {
-        nombreAlumno: student.nombreCompleto,
-        tutor: student.padre,
-        matricula,
-        mes,
-        ciclo,
-        deuda: saldo,
-        plantel: student.plantel,
-        desglose
-      }
-    })
+    const desgloseHtml = buildHtmlBreakdown(deudor)
+    const [tpl] = await query<any[]>(`SELECT subject, html_template FROM cobranza_email_templates WHERE code = 'deudores_recordatorio' LIMIT 1`)
+    const html = String(tpl?.html_template || '')
+      .replace(/{{nombre_alumno}}/g, escapeHtml(student.nombreCompleto || ''))
+      .replace(/{{tutor}}/g, escapeHtml(student.padre || 'Padre, madre o tutor'))
+      .replace(/{{matricula}}/g, escapeHtml(matricula))
+      .replace(/{{mes}}/g, escapeHtml(String(mes)))
+      .replace(/{{ciclo}}/g, escapeHtml(ciclo))
+      .replace(/{{deuda}}/g, saldo.toFixed(2))
+      .replace(/{{desglose}}/g, desgloseHtml || 'Estado de cuenta pendiente de regularizar')
 
-    await sendEmail(student.correo, rendered.subject, rendered.html, user?.email)
+    await sendEmail(student.correo, tpl?.subject || 'Recordatorio de pago - Estado de cuenta', html, user?.email)
   }
 
   if (accion === 'whatsapp_contacto') {

@@ -34,7 +34,9 @@
             <span>{{ item.label }}</span>
             <strong>{{ formatNumber(item.value) }}</strong>
           </span>
-          <UiKpiSparkline :values="item.sparkline" />
+          <span class="ce-kpi-mass" :aria-label="item.volumeAria">
+            <i v-for="unit in item.massUnits" :key="`${item.key}-mass-${unit.index}`" :class="{ active: unit.active }"></i>
+          </span>
         </button>
       </div>
     </section>
@@ -59,7 +61,7 @@
             <span>{{ activeFilterLabel }}</span><b aria-hidden="true">×</b>
           </button>
           <LucideSearch class="search-icon" :size="18" />
-          <input v-model="filters.search" placeholder="Matrícula, nombre, CURP, teléfono o correo..." @keyup.enter="loadStudents" />
+          <input v-model="filters.search" placeholder="Matrícula, nombre, CURP, teléfono o correo..." />
         </div>
 
         <button type="button" :class="['ce-filter-button', { active: showAdvancedFilters || advancedFilterCount }]" @click="showAdvancedFilters = !showAdvancedFilters">
@@ -85,13 +87,13 @@
             </UiChip>
           </div>
 
-          <div v-if="(showAdvancedFilters || filters.grado || filters.group) && catalogs.grados.length" class="ce-chip-cluster" aria-label="Filtrar por grado">
+          <div v-if="catalogs.grados.length" class="ce-chip-cluster ce-chip-cluster--grade" aria-label="Filtrar por grado">
             <span class="ce-chip-label">Grado</span>
             <UiChip :active="!filters.grado && !filters.group" @click="clearAcademicFilters">Todos</UiChip>
             <UiChip v-for="grado in catalogs.grados" :key="`grado-${grado}`" :active="filters.grado === grado" @click="selectGrade(grado)">{{ grado }}</UiChip>
           </div>
 
-          <div v-if="(showAdvancedFilters || filters.group) && filters.grado && availableGroups.length" class="ce-chip-cluster" aria-label="Filtrar por grupo">
+          <div v-if="filters.grado && availableGroups.length" class="ce-chip-cluster ce-chip-cluster--group" aria-label="Filtrar por grupo">
             <span class="ce-chip-label">Grupo</span>
             <UiChip :active-group="filters.group === ''" @click="filters.group = ''">Todos</UiChip>
             <UiChip v-for="grupo in availableGroups" :key="`grupo-${grupo}`" :active-group="filters.group === grupo" @click="toggleFilter('group', grupo)">{{ grupo }}</UiChip>
@@ -101,7 +103,7 @@
 
     <div ref="studentsScaleShell" class="students-scale-shell" :style="studentsScaleShellStyle">
       <div class="students-design-canvas" :style="studentsDesignCanvasStyle">
-        <div :class="['students-workspace ce-workspace', { 'has-detail': Boolean(selectedStudent) }]">
+        <div :class="['students-workspace ce-workspace', { 'has-detail': Boolean(selectedStudent), 'has-empty-detail': !selectedStudent }]">
           <section :class="['student-list-panel', selectedStudent ? 'is-compact' : 'is-full']">
             <div class="student-list-card ce-list-card">
               <div class="list-titlebar ce-list-titlebar">
@@ -147,39 +149,53 @@
                     :style="studentPresentationStyle(student)"
                     @click="selectStudent(student)"
                   >
-                    <UiGroupIcon v-if="student.group" class="student-group-watermark" :label="student.group" />
-                    <span :class="['student-identity', 'ce-student-identity', student.group ? 'has-group-icon' : 'no-group-icon']">
+                    <UiGroupIcon class="student-group-watermark" :class="{ 'is-missing-group': controlMissingGroup(student) }" :label="controlGroupLabel(student)" :missing="controlMissingGroup(student)" />
+                    <span class="student-identity ce-student-identity has-group-icon">
                       <span :class="['ce-row-check', { active: selectedStudent?.matricula === student.matricula }]" aria-hidden="true">{{ selectedStudent?.matricula === student.matricula ? '✓' : '' }}</span>
                       <StudentGradePhotoCard
                         class="student-row-grade-card"
                         :student="student"
-                        :photo-url="student.photoUrl"
-                        :photo-loading="false"
+                        :photo-url="controlStudentPhotoUrl(student)"
+                        :photo-loading="isControlStudentPhotoLoading(student)"
                         :is-enrolled="student.status === 'Activo'"
                       />
-                      <span v-if="student.group" class="student-group-sigil" :title="student.group">
-                        <UiGroupIcon :label="student.group" />
+                      <span :class="['student-group-sigil', { 'is-missing': controlMissingGroup(student) }]" :title="controlGroupTitle(student)">
+                        <UiGroupIcon :label="controlGroupLabel(student)" :missing="controlMissingGroup(student)" />
                       </span>
                       <span class="student-copy">
                         <strong :title="student.fullName">{{ student.fullName || 'Alumno sin nombre' }}</strong>
-                        <em class="student-meta"><span>{{ compactAcademic(student) }}</span></em>
                         <span class="student-type-line">
                           <span :class="['student-tipo-chip', student.overlayExists ? 'interno' : 'externo']">
                             {{ student.matricula }}
                           </span>
                         </span>
+                        <span class="ce-academic-pills" :aria-label="compactAcademic(student)">
+                          <span>{{ student.grado || 'Sin grado' }}</span>
+                          <span :class="{ warning: controlMissingGroup(student) }">{{ controlMissingGroup(student) ? 'Sin grupo' : `Grupo ${controlGroupLabel(student)}` }}</span>
+                          <span>{{ student.nivel || 'Sin nivel' }}</span>
+                        </span>
                       </span>
                     </span>
 
-                    <span class="ce-profile-cell">
-                      <strong>{{ compactAcademic(student) }}</strong>
-                      <small>{{ student.program || student.nivel || 'Sin programa' }}</small>
-                      <span :class="['ce-status-pill', statusTone(student)]">{{ student.status || 'Activo' }}</span>
+                    <span
+                      :class="['ce-quality-score', qualityScoreTone(student)]"
+                      :style="{ '--quality-score': `${completionFor(student)}%` }"
+                      :aria-label="`Expediente ${completionFor(student)}% completo`"
+                    >
+                      <b>{{ completionFor(student) }}%</b>
                     </span>
 
                     <span class="ce-quality-cell">
-                      <strong>{{ student.missingFields.length ? `${student.missingFields.length} pendientes` : 'Completo' }}</strong>
-                      <small>{{ student.missingFields.length ? student.missingFields.join(', ') : 'Sin faltantes principales' }}</small>
+                      <strong>{{ qualitySummary(student) }}</strong>
+                      <span class="ce-quality-fields">
+                        <small
+                          v-for="field in requiredDataFields"
+                          :key="`${student.matricula}-${field.key}`"
+                          :class="{ missing: studentMissingField(student, field) }"
+                        >
+                          <component :is="field.icon" :size="12" /> {{ field.label }}
+                        </small>
+                      </span>
                     </span>
 
                     <span class="row-actions">
@@ -188,6 +204,23 @@
                   </button>
                 </template>
               </div>
+
+              <footer v-if="!selectedStudent && selectedAgentId && students.length" class="ce-list-footer">
+                <span>Mostrando {{ paginationRangeLabel }} de {{ formatNumber(pagination.total) }} alumnos</span>
+                <div class="ce-list-pages" aria-label="Paginación de alumnos">
+                  <button
+                    v-for="(pageItem, pageIndex) in visiblePaginationPages"
+                    :key="`ce-page-${pageIndex}-${pageItem}`"
+                    type="button"
+                    :disabled="pageItem === 'ellipsis' || studentsLoading"
+                    :class="{ active: pageItem === pagination.page, ellipsis: pageItem === 'ellipsis' }"
+                    @click="pageItem !== 'ellipsis' && goToPage(pageItem)"
+                  >
+                    {{ pageItem === 'ellipsis' ? '...' : pageItem }}
+                  </button>
+                  <button type="button" :disabled="pagination.page >= pagination.pages || studentsLoading" @click="goToPage(pagination.page + 1)"><LucideChevronRight :size="14" /></button>
+                </div>
+              </footer>
             </div>
           </section>
 
@@ -201,6 +234,14 @@
                     <span :class="['ce-status-pill large', statusTone(selectedStudent)]">{{ selectedStudent.status || 'Activo' }}</span>
                   </div>
                 </div>
+                <div class="ce-husky-header-card" :class="{ unavailable: !selectedStudent.huskyPassAvailable }">
+                  <img src="/brand/ID-HUSKY-PASS-GREY.png" alt="Husky Pass" />
+                  <div>
+                    <strong>{{ selectedStudent.huskyPassAvailable ? 'Accesos activos' : 'Sin Husky Pass' }}</strong>
+                    <span v-if="selectedStudent.huskyPassAvailable">{{ selectedStudent.huskyPassUsername }} · {{ selectedStudent.huskyPassPlaintext }}</span>
+                    <span v-else>{{ huskyPassEmailTarget || 'Sin correo de padre/tutor' }}</span>
+                  </div>
+                </div>
                 <div class="ce-progress-cluster">
                   <strong>Perfil {{ selectedProfileCompletion }}% completo</strong>
                   <span class="ce-progress-track"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
@@ -210,7 +251,7 @@
                   <span :class="['ce-save-state', saveStateTone]">{{ saveStatusText }}</span>
                   <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
                   <UiButton variant="primary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="saveStudent">
-                    <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar ficha' }}
+                    <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar' }}
                   </UiButton>
                 </div>
                 <button type="button" class="detail-shell-close" @click="selectedStudent = null"><LucideX :size="20" /></button>
@@ -221,15 +262,15 @@
                   <StudentGradePhotoCard
                     class="ce-detail-photo"
                     :student="selectedStudent"
-                    :photo-url="selectedStudent.photoUrl"
-                    :photo-loading="false"
+                    :photo-url="controlStudentPhotoUrl(selectedStudent)"
+                    :photo-loading="isControlStudentPhotoLoading(selectedStudent)"
                     :is-enrolled="selectedStudent.status === 'Activo'"
                   />
                   <div class="ce-profile-copy">
                     <strong>{{ selectedStudent.fullName }}</strong>
                     <div class="ce-profile-pills">
                       <span>{{ selectedStudent.grado || 'Sin grado' }}</span>
-                      <span v-if="selectedStudent.group">Grupo {{ selectedStudent.group }}</span>
+                      <span :class="{ warning: controlMissingGroup(selectedStudent) }">{{ controlMissingGroup(selectedStudent) ? 'Sin grupo' : `Grupo ${controlGroupLabel(selectedStudent)}` }}</span>
                       <span>{{ selectedStudent.nivel || 'Sin nivel' }}</span>
                     </div>
                     <p>Plantel {{ selectedStudent.plantel || selectedAgentId }}</p>
@@ -239,7 +280,7 @@
                     <strong>{{ selectedStudent.guardianName || 'Sin tutor capturado' }}</strong>
                     <span>{{ selectedStudent.phone || selectedStudent.telefonoPadre || selectedStudent.telefonoMadre || 'Sin teléfono' }}</span>
                   </div>
-                  <UiGroupIcon v-if="selectedStudent.group" class="ce-profile-watermark" :label="selectedStudent.group" />
+                  <UiGroupIcon class="ce-profile-watermark" :class="{ 'is-missing-group': controlMissingGroup(selectedStudent) }" :label="controlGroupLabel(selectedStudent)" :missing="controlMissingGroup(selectedStudent)" />
                 </section>
 
                 <section class="ce-data-section">
@@ -311,8 +352,6 @@
                           <option v-for="grupo in groupOptions" :key="`grupo-${grupo}`" :value="grupo">{{ grupo }}</option>
                         </select>
                       </label>
-                      <label><span>Interno</span><input v-model="editForm.interno" autocomplete="off" /></label>
-                      <label><span>Servicio</span><input v-model="editForm.servicio" autocomplete="off" /></label>
                       <label><span>Baja</span><select v-model="editForm.baja"><option :value="0">No</option><option :value="1">Sí</option></select></label>
                       <label><span>Motivo baja</span><input v-model="editForm.motivoBaja" autocomplete="off" /></label>
                       <label><span>Categoría baja</span><input v-model="editForm.categoriaBaja" autocomplete="off" /></label>
@@ -363,8 +402,8 @@
                       </article>
                     </div>
                     <section class="ce-husky-card compact">
-                      <div class="ce-section-heading">
-                        <span><LucideKeyRound :size="18" /></span>
+                      <div class="ce-section-heading ce-husky-heading">
+                        <img src="/brand/ID-HUSKY-PASS-GREY.png" alt="Husky Pass" />
                         <div>
                           <h3>Husky Pass accesos</h3>
                           <p>Accesos del portal del alumno listos para compartir con el padre o tutor.</p>
@@ -394,17 +433,65 @@
 
                   <div v-if="saveError" class="ce-save-error"><LucideAlertTriangle :size="16" /> {{ saveError }}</div>
 
-                  <footer class="ce-detail-footer">
-                    <span>{{ saveStatusText }}</span>
-                    <div>
-                      <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
-                      <UiButton variant="primary" type="submit" :disabled="savingStudent || !hasUnsavedChanges">
-                        <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar ficha' }}
-                      </UiButton>
-                    </div>
-                  </footer>
                 </form>
               </div>
+
+              <footer class="ce-detail-footer">
+                <span :class="['ce-save-state', saveStateTone]">{{ saveStatusText }}</span>
+                <div>
+                  <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
+                  <UiButton variant="primary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="saveStudent">
+                    <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar' }}
+                  </UiButton>
+                </div>
+              </footer>
+            </div>
+          </section>
+
+          <section v-else class="student-detail-panel ce-detail-panel ce-empty-detail-panel" aria-label="Guía para editar ficha de alumno">
+            <div class="ce-empty-shell">
+              <div class="ce-empty-hero" aria-hidden="true">
+                <span class="ce-empty-sparkle one">✦</span>
+                <span class="ce-empty-sparkle two">✦</span>
+                <LucideUserRound :size="42" />
+                <span class="ce-empty-lines"><i></i><i></i></span>
+                <span class="ce-empty-cursor"></span>
+              </div>
+
+              <div class="ce-empty-copy">
+                <h2>Selecciona un alumno para editar su ficha</h2>
+                <p>Elige un alumno de la lista para revisar y actualizar su información.</p>
+                <p>Podrás editar identidad, datos escolares, contacto familiar, sistema y observaciones.</p>
+              </div>
+
+              <section class="ce-empty-card ce-empty-review">
+                <h3>Qué revisar primero</h3>
+                <div>
+                  <span><LucideShieldCheck :size="15" /> CURP del alumno</span>
+                  <span><LucideUsersRound :size="15" /> Tutor / Responsable</span>
+                  <span><LucidePhone :size="15" /> Teléfono de contacto</span>
+                  <span><LucideGraduationCap :size="15" /> Grupo y servicio asignado</span>
+                  <span><LucideMail :size="15" /> Email del contacto</span>
+                  <span><LucideShieldCheck :size="15" /> Expediente completo</span>
+                </div>
+              </section>
+
+              <section class="ce-empty-card ce-empty-flow">
+                <h3>Así se verá tu flujo al seleccionar un alumno</h3>
+                <ol>
+                  <li><span><LucideUserRound :size="21" /></span><b>1 Identidad</b></li>
+                  <li><span><LucideGraduationCap :size="21" /></span><b>2 Escolar</b></li>
+                  <li><span><LucideUsersRound :size="21" /></span><b>3 Contacto familiar</b></li>
+                  <li><span><LucideKeyRound :size="21" /></span><b>4 Sistema</b></li>
+                  <li><span><LucideAlertTriangle :size="21" /></span><b>5 Observaciones</b></li>
+                </ol>
+              </section>
+
+              <aside class="ce-empty-tip">
+                <span><LucideShieldCheck :size="23" /></span>
+                <p><strong>Tip:</strong> usa los indicadores de calidad para priorizar los expedientes con pendientes.</p>
+                <i aria-hidden="true"><LucideShieldCheck :size="23" /></i>
+              </aside>
             </div>
           </section>
         </div>
@@ -457,7 +544,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { useState } from '#app'
+import { useCookie, useState } from '#app'
 import { useHead } from '#imports'
 import {
   LucideAlertTriangle,
@@ -491,23 +578,26 @@ import {
 import UiButton from '~/components/ui/UiButton.vue'
 import UiChip from '~/components/ui/UiChip.vue'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
-import UiKpiSparkline from '~/components/ui/UiKpiSparkline.vue'
 import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
 import { useStudentsWorkspaceScale } from '~/composables/useStudentsWorkspaceScale'
 import { useToast } from '~/composables/useToast'
 import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
-import { normalizeEnrollmentConceptIds, parseEnrollmentConcepts, studentPresentationStyle } from '~/shared/utils/studentPresentation'
-import { GRADOS_DISPLAY, NIVELES_ESCOLARES } from '~/shared/utils/grado'
+import { normalizeEnrollmentConceptIds, normalizeStudentMatricula, parseEnrollmentConcepts, photoStorageKey, studentPresentationStyle } from '~/shared/utils/studentPresentation'
+import { NIVELES_ESCOLARES, gradeOptionsForNivel } from '~/shared/utils/grado'
 
 useHead({ bodyAttrs: { class: 'students-route-active' } })
 
 const { show } = useToast()
 const state = useState('globalState', () => ({ ciclo: '2025' }))
+const activePlantelCookie = useCookie('auth_active_plantel')
+const initialControlPlantel = String(activePlantelCookie.value || '').trim()
 const externalConcepts = ref([])
 const ENROLLMENT_CONCEPTS_CACHE_KEY = 'students-enrollment-concepts:v1'
+const CONTROL_STUDENTS_CACHE_VERSION = 1
+const CONTROL_STUDENTS_CACHE_NAMESPACE = 'control-escolar:students-cache'
 const currentCicloKey = computed(() => normalizeCicloKey(state.value?.ciclo || '2025'))
 const currentCicloLabel = computed(() => formatCicloLabel(currentCicloKey.value))
-const selectedAgentId = ref('')
+const selectedAgentId = ref(initialControlPlantel && initialControlPlantel !== 'GLOBAL' ? initialControlPlantel : '')
 const optionsLoading = ref(false)
 const kpisLoading = ref(false)
 const studentsLoading = ref(false)
@@ -517,6 +607,7 @@ const sendingHuskyPass = ref(false)
 const loadError = ref('')
 const saveError = ref('')
 const students = ref([])
+const controlStudentsIndex = ref([])
 const selectedStudent = ref(null)
 const kpis = ref(null)
 const catalogs = reactive({ niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
@@ -531,13 +622,27 @@ const activeDetailTab = ref('identity')
 const editSnapshot = ref('')
 const draftRestored = ref(false)
 const draftSavedAt = ref('')
-const pagination = reactive({ page: 1, limit: 25, total: 0, pages: 1 })
+const pendingSelectedStudentRefresh = ref(null)
+const pagination = reactive({ page: 1, limit: 8, total: 0, pages: 1 })
 const filters = reactive({ search: '', status: DEFAULT_QUICK_FILTER, quality: '', grado: '', group: '', recent: '' })
 const editForm = reactive({})
+const photoCache = ref({})
+const photoLoadingKeys = ref(new Set())
 let searchTimer = null
+let controlStudentsRequestId = 0
+const controlStudentPhotoRequests = new Map()
+const controlPhotoQueue = []
+const controlPhotoQueuedKeys = new Set()
+const controlPhotoActiveKeys = new Set()
+let activeControlPhotoLoads = 0
 
-const hasDetail = computed(() => Boolean(selectedStudent.value))
-const { studentsScaleShell, studentsScaleShellStyle, studentsDesignCanvasStyle, scheduleWorkspaceScaleUpdate } = useStudentsWorkspaceScale(hasDetail)
+const hasDetail = computed(() => true)
+const { studentsScaleShell, studentsScaleShellStyle, studentsDesignCanvasStyle, scheduleWorkspaceScaleUpdate } = useStudentsWorkspaceScale(hasDetail, {
+  detailDesignWidth: 1360,
+  detailDesignHeight: 660,
+  detailMinScale: 0.58,
+  fitPadding: 6
+})
 const loadingAny = computed(() => optionsLoading.value || kpisLoading.value || studentsLoading.value || savingStudent.value)
 const hasActiveFilters = computed(() => Boolean(
   filters.search ||
@@ -568,14 +673,35 @@ const labelize = (value) => {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : ''
 }
 const nivelOptions = computed(() => mergeOptions(NIVELES_ESCOLARES, catalogs.niveles, [editForm.nivel]))
-const gradoOptions = computed(() => mergeOptions(GRADOS_DISPLAY.map((grado) => grado.toLowerCase()), catalogs.grados, [editForm.grado]))
+const gradoOptions = computed(() => mergeOptions(gradeOptionsForNivel(editForm.nivel || selectedStudent.value?.nivel).map((grado) => grado.toLowerCase()), [editForm.grado]))
 const groupOptions = computed(() => {
   const byGrade = catalogs.gruposPorGrado || {}
   const scopedGroups = editForm.grado && Array.isArray(byGrade[editForm.grado]) ? byGrade[editForm.grado] : []
   return mergeOptions(scopedGroups, catalogs.grupos, [editForm.grupo])
 })
 
+watch(() => editForm.nivel, () => {
+  const available = gradoOptions.value
+  if (editForm.grado && !available.includes(editForm.grado)) editForm.grado = available[0] || ''
+  editForm.grupo = ''
+})
+
 const advancedFilterCount = computed(() => [filters.quality, filters.grado, filters.group, filters.recent].filter(Boolean).length)
+
+const paginationRangeLabel = computed(() => {
+  const total = Number(pagination.total || 0)
+  if (!total) return '0 a 0'
+  const start = ((Number(pagination.page || 1) - 1) * Number(pagination.limit || students.value.length || 1)) + 1
+  const end = Math.min(start + Math.max(students.value.length, 1) - 1, total)
+  return `${formatNumber(start)} a ${formatNumber(end)}`
+})
+const visiblePaginationPages = computed(() => {
+  const totalPages = Math.max(1, Number(pagination.pages || 1))
+  if (totalPages <= 4) return Array.from({ length: totalPages }, (_, index) => index + 1)
+  if (pagination.page <= 3) return [1, 2, 3, 'ellipsis', totalPages]
+  if (pagination.page >= totalPages - 2) return [1, 'ellipsis', totalPages - 2, totalPages - 1, totalPages]
+  return [1, 'ellipsis', pagination.page, 'ellipsis', totalPages]
+})
 
 const primaryFilters = [
   { key: 'all', label: 'Todos' },
@@ -606,15 +732,38 @@ const qualityFilters = computed(() => {
   ]
 })
 
+const MASS_UNIT_COUNT = 10
+const buildMassUnits = (value, total) => {
+  const safeValue = Math.max(0, Number(value || 0))
+  const safeTotal = Math.max(0, Number(total || 0))
+  const ratio = safeTotal > 0 ? Math.min(1, safeValue / safeTotal) : 0
+  const activeUnits = safeValue > 0 ? Math.max(1, Math.ceil(ratio * MASS_UNIT_COUNT)) : 0
+  return Array.from({ length: MASS_UNIT_COUNT }, (_, index) => ({ index, active: index < activeUnits }))
+}
+const volumePercent = (value, total) => {
+  const safeValue = Math.max(0, Number(value || 0))
+  const safeTotal = Math.max(0, Number(total || 0))
+  if (!safeTotal) return 0
+  return Math.min(100, Math.round((safeValue / safeTotal) * 100))
+}
+const withVolume = (card, total) => {
+  const percent = card.key === 'inscritos' && Number(card.value || 0) > 0 ? 100 : volumePercent(card.value, total)
+  return {
+    ...card,
+    massUnits: buildMassUnits(card.key === 'inscritos' ? total : card.value, total),
+    volumeAria: `${card.label}: ${formatNumber(card.value)}; ${card.key === 'inscritos' ? 'total de inscritos' : `${percent}% del total de inscritos`}`
+  }
+}
 const kpiCards = computed(() => {
   const data = kpis.value || {}
+  const total = Number(data.inscritos || data.totalInscritos || 0)
   return [
-    { key: 'inscritos', label: 'Inscritos', value: data.inscritos || data.totalInscritos || 0, tone: 'kpi-green', icon: LucideUsersRound, sparkline: data.sparklineInscritos || [0, data.inscritos || data.totalInscritos || 0] },
-    { key: 'internos', label: 'Internos', value: data.internos || 0, tone: 'kpi-teal', icon: LucideUserCheck, sparkline: data.sparklineInternos || [0, data.internos || 0] },
-    { key: 'externos', label: 'Externos', value: data.externos || 0, tone: 'kpi-blue', icon: LucideGlobe2, sparkline: data.sparklineExternos || [0, data.externos || 0] },
-    { key: 'no_inscritos', label: 'No inscritos', value: data.noInscritos || 0, tone: 'kpi-red', icon: LucideUserX, sparkline: data.sparklineNoInscritos || [0, data.noInscritos || 0] },
-    { key: 'bajas', label: 'Bajas', value: data.bajas || 0, tone: 'kpi-gray', icon: LucideUserX, sparkline: data.sparklineBajas || [0, data.bajas || 0] }
-  ]
+    { key: 'inscritos', label: 'Inscritos', value: total, tone: 'kpi-green', icon: LucideUsersRound },
+    { key: 'internos', label: 'Internos', value: data.internos || 0, tone: 'kpi-teal', icon: LucideUserCheck },
+    { key: 'externos', label: 'Externos', value: data.externos || 0, tone: 'kpi-blue', icon: LucideGlobe2 },
+    { key: 'no_inscritos', label: 'No inscritos', value: data.noInscritos || 0, tone: 'kpi-red', icon: LucideUserX },
+    { key: 'bajas', label: 'Bajas', value: data.bajas || 0, tone: 'kpi-gray', icon: LucideUserX }
+  ].map(card => withVolume(card, total))
 })
 
 
@@ -628,18 +777,46 @@ const requiredDataFields = [
 const formatNumber = (value) => Number(value || 0).toLocaleString('es-MX')
 const statusLabel = (value) => ({ all: 'Todos', inscritos: 'Inscritos', activos: 'Activos', active: 'Activos', internos: 'Internos', externos: 'Externos', no_inscritos: 'No inscritos', bajas: 'Bajas', baja: 'Bajas', sin_contacto: 'Sin contacto' }[value] || value)
 const qualityLabel = (value) => ({ complete: 'Completo', incomplete: 'Expediente incompleto', curp: 'Sin CURP', phone: 'Sin teléfono', email: 'Sin email', guardian: 'Sin tutor', contact: 'Sin contacto' }[value] || value)
-const compactAcademic = (student) => [student.grado, student.group ? `Grupo ${student.group}` : '', student.nivel].filter(Boolean).join(' · ') || 'Sin datos académicos'
+const controlGroupLabel = (student) => {
+  const value = String(student?.group ?? student?.grupo ?? '').replaceAll('"', '').trim()
+  return value && value.toLowerCase() !== 'null' ? value : ''
+}
+const controlMissingGroup = (student) => !controlGroupLabel(student)
+const controlGroupTitle = (student) => {
+  const group = controlGroupLabel(student)
+  return group ? `Grupo ${group}` : 'Sin grupo'
+}
+const compactAcademic = (student) => [student.grado, controlGroupLabel(student) ? `Grupo ${controlGroupLabel(student)}` : 'Sin grupo', student.nivel].filter(Boolean).join(' · ') || 'Sin datos académicos'
 const statusTone = (student) => String(student?.status || '').toLowerCase() === 'baja' ? 'danger' : String(student?.status || '').toLowerCase() === 'activo' ? 'success' : 'neutral'
+const normalizedMissingFields = (student) => Array.isArray(student?.missingFields)
+  ? student.missingFields.map((field) => String(field || '').trim().toLowerCase()).filter(Boolean)
+  : []
+const studentMissingField = (student, field) => {
+  const missing = normalizedMissingFields(student)
+  return missing.includes(String(field?.key || '').toLowerCase()) || missing.includes(String(field?.label || '').toLowerCase())
+}
+const studentMissingCount = (student) => requiredDataFields.filter((field) => studentMissingField(student, field)).length
 const completionFor = (student) => {
-  const total = requiredDataFields.length
-  const missing = requiredDataFields.filter((field) => student?.missingFields?.includes(field.key) || student?.missingFields?.includes(field.label.toLowerCase())).length
+  const total = requiredDataFields.length || 1
+  const missing = studentMissingCount(student)
   return Math.max(0, Math.round(((total - missing) / total) * 100))
 }
+const qualitySummary = (student) => {
+  const missing = studentMissingCount(student)
+  if (!missing) return 'Completo'
+  return missing === 1 ? '1 pendiente' : `${missing} faltantes`
+}
+const qualityScoreTone = (student) => {
+  const score = completionFor(student)
+  if (score >= 100) return 'complete'
+  if (score >= 75) return 'warning'
+  return 'danger'
+}
 const selectedProfileCompletion = computed(() => completionFor(selectedStudent.value))
-const selectedMissingCount = computed(() => requiredDataFields.filter((field) => selectedStudent.value?.missingFields?.includes(field.key) || selectedStudent.value?.missingFields?.includes(field.label.toLowerCase())).length)
+const selectedMissingCount = computed(() => studentMissingCount(selectedStudent.value))
 const huskyPassEmailTarget = computed(() => selectedStudent.value?.emailPadre || selectedStudent.value?.emailMadre || selectedStudent.value?.email || selectedStudent.value?.huskyPassEmail || '')
 const EDIT_FORM_FIELDS = [
-  'nombres', 'apellidoPaterno', 'apellidoMaterno', 'curp', 'interno', 'servicio', 'nivel', 'grado', 'grupo', 'baja',
+  'nombres', 'apellidoPaterno', 'apellidoMaterno', 'curp', 'nivel', 'grado', 'grupo', 'baja',
   'motivoBaja', 'categoriaBaja', 'seguimientoBaja', 'nombrePadre', 'apellidoPaternoPadre', 'apellidoMaternoPadre',
   'nombreMadre', 'apellidoPaternoMadre', 'apellidoMaternoMadre', 'telefonoPadre', 'telefonoMadre', 'emailPadre',
   'emailMadre', 'direccion'
@@ -652,10 +829,10 @@ const formSnapshot = () => JSON.stringify(readEditForm())
 const hasUnsavedChanges = computed(() => Boolean(selectedStudent.value && editSnapshot.value && formSnapshot() !== editSnapshot.value))
 const saveStateTone = computed(() => savingStudent.value ? 'saving' : hasUnsavedChanges.value ? 'dirty' : 'clean')
 const saveStatusText = computed(() => {
-  if (savingStudent.value) return 'Guardando cambios...'
-  if (hasUnsavedChanges.value) return draftRestored.value ? 'Borrador local con cambios sin guardar' : 'Cambios sin guardar'
-  if (draftSavedAt.value) return `Borrador guardado ${draftSavedAt.value}`
-  return selectedStudent.value?.overlayExists ? 'Registro de matrícula al día' : 'Guardar creará el registro de matrícula'
+  if (savingStudent.value) return 'Guardando...'
+  if (hasUnsavedChanges.value) return draftSavedAt.value ? `Borrador local ${draftSavedAt.value}` : 'Cambios sin guardar'
+  if (draftSavedAt.value) return `Borrador local ${draftSavedAt.value}`
+  return selectedStudent.value?.overlayExists ? 'Al día' : 'Guardar'
 })
 const draftKey = computed(() => selectedStudent.value?.matricula ? `control-escolar:draft:${selectedAgentId.value}:${selectedStudent.value.matricula}` : '')
 
@@ -676,6 +853,13 @@ const buildQuery = (extra = {}) => ({
   page: pagination.page,
   limit: pagination.limit,
   ...extra
+})
+
+const buildIndexQuery = () => ({
+  ...buildScopeQuery(),
+  page: 1,
+  limit: 500,
+  all: '1'
 })
 
 const loadOptions = async () => {
@@ -705,30 +889,405 @@ const loadKpis = async () => {
   }
 }
 
-const loadStudents = async () => {
-  if (!selectedAgentId.value) return
-  studentsLoading.value = true
-  loadError.value = ''
+const normalizeControlCacheParams = (query = buildQuery()) => Object.keys(query || {})
+  .sort()
+  .reduce((normalized, key) => {
+    const value = query[key]
+    if (value === undefined || value === null || value === '') return normalized
+    normalized[key] = String(value)
+    return normalized
+  }, {})
+
+const controlStudentsCacheKey = (query = buildQuery()) => {
+  const signature = encodeURIComponent(JSON.stringify(normalizeControlCacheParams(query)))
+  return `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${CONTROL_STUDENTS_CACHE_VERSION}:${signature}`
+}
+
+const readCachedControlStudents = (query = buildQuery()) => {
+  if (!process.client) return null
+
   try {
-    const response = await $fetch('/api/control-escolar/students', { query: buildQuery() })
-    students.value = response.data || []
-    Object.assign(pagination, response.pagination || {})
-    Object.assign(catalogs, response.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
-    if (selectedStudent.value) {
-      const refreshed = students.value.find((student) => student.matricula === selectedStudent.value.matricula)
-      if (refreshed) selectStudent(refreshed, false)
-    }
+    const cached = JSON.parse(localStorage.getItem(controlStudentsCacheKey(query)) || 'null')
+    if (Number(cached?.version) !== CONTROL_STUDENTS_CACHE_VERSION) return null
+    if (!Array.isArray(cached?.data)) return null
+    return cached
   } catch (error) {
-    students.value = []
-    loadError.value = error?.data?.message || error?.message || 'Plantel fuera de línea o sin respuesta.'
-  } finally {
-    studentsLoading.value = false
-    nextTick(scheduleWorkspaceScaleUpdate)
+    console.warn('[Control Escolar] No se pudo leer la caché local de alumnos.', error)
+    return null
   }
 }
 
+const writeCachedControlStudents = (query = buildQuery(), response = {}) => {
+  if (!process.client || !Array.isArray(response?.data)) return false
+
+  const record = {
+    version: CONTROL_STUDENTS_CACHE_VERSION,
+    savedAt: new Date().toISOString(),
+    query: normalizeControlCacheParams(query),
+    data: response.data,
+    pagination: response.pagination || { page: pagination.page, limit: pagination.limit, total: response.data.length, pages: 1 },
+    catalogs: response.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} }
+  }
+
+  try {
+    localStorage.setItem(controlStudentsCacheKey(query), JSON.stringify(record))
+    return true
+  } catch (error) {
+    console.warn('[Control Escolar] No se pudo guardar la caché local de alumnos.', error)
+    return false
+  }
+}
+
+const normalizeMatriculaKey = (value) => String(value || '').trim().toLowerCase()
+
+const isDetailFieldFocused = () => {
+  if (!process.client) return false
+  const activeElement = document.activeElement
+  if (!activeElement?.closest?.('.ce-detail-panel')) return false
+  return ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeElement.tagName)
+}
+
+const applySelectedStudentRefresh = (student) => {
+  if (!student) return
+  const currentTab = activeDetailTab.value
+  selectedStudent.value = student
+  pendingSelectedStudentRefresh.value = null
+  resetEditForm(student, { restoreDraft: false })
+  activeDetailTab.value = currentTab
+}
+
+const applyPendingSelectedStudentRefresh = () => {
+  if (!pendingSelectedStudentRefresh.value || hasUnsavedChanges.value || isDetailFieldFocused()) return
+  applySelectedStudentRefresh(pendingSelectedStudentRefresh.value)
+}
+
+const reconcileSelectedStudentAfterSync = (nextStudents = []) => {
+  if (!selectedStudent.value) return
+
+  const selectedKey = normalizeMatriculaKey(selectedStudent.value.matricula)
+  const refreshed = nextStudents.find((student) => normalizeMatriculaKey(student.matricula) === selectedKey)
+  if (!refreshed) return
+
+  if (hasUnsavedChanges.value || isDetailFieldFocused()) {
+    pendingSelectedStudentRefresh.value = refreshed
+    if (process.client) window.setTimeout(applyPendingSelectedStudentRefresh, 900)
+    return
+  }
+
+  applySelectedStudentRefresh(refreshed)
+}
+
+const normalizeClientText = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim()
+
+const controlStudentSearchHaystack = (student = {}) => normalizeClientText([
+  student.matricula,
+  student.fullName,
+  student.nombres,
+  student.apellidoPaterno,
+  student.apellidoMaterno,
+  student.curp,
+  student.phone,
+  student.telefono,
+  student.telefonoPadre,
+  student.telefonoMadre,
+  student.email,
+  student.emailPadre,
+  student.emailMadre,
+  student.guardianName,
+  student.nombrePadre,
+  student.nombreMadre,
+  student.nivel,
+  student.grado,
+  student.group,
+  student.grupo
+].filter(Boolean).join(' '))
+
+const hasNoPrimaryContactClient = (student = {}) => ![
+  student.phone,
+  student.telefono,
+  student.telefonoPadre,
+  student.telefonoMadre,
+  student.email,
+  student.emailPadre,
+  student.emailMadre,
+  student.guardianName,
+  student.nombrePadre,
+  student.nombreMadre
+].some((value) => String(value || '').trim())
+
+const localStudentMatchesStatus = (student, status) => {
+  const normalized = normalizeClientText(status)
+  if (!normalized || normalized === 'all' || normalized === 'todos') return true
+  if (normalized === 'activos' || normalized === 'active') return student.status === 'Activo'
+  if (normalized === 'inscritos') return student.enrollmentState === 'inscrito'
+  if (normalized === 'internos') return student.enrollmentState === 'inscrito' && student.tipoIngresoValue === 'interno'
+  if (normalized === 'externos') return student.enrollmentState === 'inscrito' && student.tipoIngresoValue !== 'interno'
+  if (normalized === 'no_inscritos') return student.enrollmentState === 'no_inscrito'
+  if (normalized === 'bajas' || normalized === 'baja') return student.status === 'Baja' || student.enrollmentState === 'baja_inscrita' || student.enrollmentState === 'baja'
+  if (normalized === 'sin_ficha' || normalized === 'sin_ficha_matricula') return !student.overlayExists
+  if (normalized === 'sin_contacto') return hasNoPrimaryContactClient(student)
+  return true
+}
+
+const localStudentMatchesQuality = (student, quality) => {
+  const normalized = normalizeClientText(quality)
+  if (!normalized || normalized === 'all') return true
+  const missing = normalizedMissingFields(student)
+  if (normalized === 'complete' || normalized === 'completo') return missing.length === 0
+  if (normalized === 'incomplete' || normalized === 'incompleto') return missing.length > 0
+  if (normalized === 'curp') return missing.includes('curp')
+  if (normalized === 'phone' || normalized === 'telefono') return missing.includes('teléfono') || missing.includes('telefono')
+  if (normalized === 'email') return missing.includes('email')
+  if (normalized === 'guardian' || normalized === 'tutor') return missing.includes('tutor')
+  if (normalized === 'contact' || normalized === 'contacto') return hasNoPrimaryContactClient(student)
+  if (normalized === 'overlay' || normalized === 'sin_ficha' || normalized === 'sin_ficha_matricula') return !student.overlayExists
+  return true
+}
+
+const localStudentMatchesRecent = (student, recent) => {
+  const normalized = normalizeClientText(recent)
+  if (!normalized || normalized === 'all') return true
+  const days = normalized === '7d' ? 7 : normalized === '30d' ? 30 : normalized === '90d' ? 90 : 0
+  if (!days) return true
+  const time = student.updatedAt ? new Date(student.updatedAt).getTime() : 0
+  return Number.isFinite(time) && time >= Date.now() - days * 24 * 60 * 60 * 1000
+}
+
+
+const CONTROL_PHOTO_CONCURRENCY = 3
+const normalizePhotoKey = (studentOrMatricula) => normalizeStudentMatricula(
+  typeof studentOrMatricula === 'object' ? studentOrMatricula?.matricula : studentOrMatricula
+)
+
+const setControlPhotoLoading = (matricula, loading) => {
+  const key = normalizePhotoKey(matricula)
+  if (!key) return
+  const next = new Set(photoLoadingKeys.value)
+  if (loading) next.add(key)
+  else next.delete(key)
+  photoLoadingKeys.value = next
+}
+
+const readStoredControlPhoto = (matricula) => {
+  if (!process.client) return ''
+  const key = normalizePhotoKey(matricula)
+  if (!key) return ''
+  try {
+    return sessionStorage.getItem(photoStorageKey(key)) || ''
+  } catch (error) {
+    return ''
+  }
+}
+
+const writeStoredControlPhoto = (matricula, photoUrl) => {
+  if (!process.client) return
+  const key = normalizePhotoKey(matricula)
+  if (!key) return
+  try {
+    sessionStorage.setItem(photoStorageKey(key), photoUrl || 'none')
+  } catch (error) {
+    console.warn('[Control Escolar] No se pudo guardar la foto del alumno en sesión.', error)
+  }
+}
+
+const cacheControlPhoto = (matricula, photoUrl) => {
+  const key = normalizePhotoKey(matricula)
+  if (!key || !photoUrl || photoUrl === 'none') return
+  photoCache.value = { ...photoCache.value, [key]: photoUrl }
+}
+
+const hydrateControlPhotoFromSession = (matricula) => {
+  const key = normalizePhotoKey(matricula)
+  if (!key || photoCache.value[key]) return Boolean(photoCache.value[key])
+  const stored = readStoredControlPhoto(key)
+  if (stored && stored !== 'none') {
+    cacheControlPhoto(key, stored)
+    return true
+  }
+  return Boolean(stored === 'none')
+}
+
+const controlStudentPhotoUrl = (student) => {
+  const key = normalizePhotoKey(student)
+  if (!key) return student?.photoUrl || ''
+  const cached = photoCache.value[key]
+  if (cached && cached !== 'none') return cached
+  if (student?.photoUrl && student.photoUrl !== 'none') return student.photoUrl
+  return ''
+}
+
+const isControlStudentPhotoLoading = (student) => photoLoadingKeys.value.has(normalizePhotoKey(student))
+
+const loadControlStudentPhoto = async (matricula) => {
+  const key = normalizePhotoKey(matricula)
+  if (!key || !process.client) return
+  if (hydrateControlPhotoFromSession(key)) return
+
+  setControlPhotoLoading(key, true)
+  try {
+    let request = controlStudentPhotoRequests.get(key)
+    if (!request) {
+      request = $fetch(`/api/students/${encodeURIComponent(key)}/photo`, {
+        params: { format: 'json' }
+      }).finally(() => controlStudentPhotoRequests.delete(key))
+      controlStudentPhotoRequests.set(key, request)
+    }
+
+    const response = await request
+    const photoUrl = response?.photoUrl || ''
+    if (photoUrl) {
+      cacheControlPhoto(key, photoUrl)
+      writeStoredControlPhoto(key, photoUrl)
+    } else {
+      writeStoredControlPhoto(key, 'none')
+    }
+  } catch (error) {
+    if (error?.statusCode === 404 || error?.response?.status === 404) writeStoredControlPhoto(key, 'none')
+  } finally {
+    setControlPhotoLoading(key, false)
+  }
+}
+
+const pumpControlPhotoQueue = () => {
+  if (!process.client) return
+  while (activeControlPhotoLoads < CONTROL_PHOTO_CONCURRENCY && controlPhotoQueue.length) {
+    const key = controlPhotoQueue.shift()
+    controlPhotoQueuedKeys.delete(key)
+    if (!key || controlPhotoActiveKeys.has(key) || hydrateControlPhotoFromSession(key)) continue
+
+    activeControlPhotoLoads += 1
+    controlPhotoActiveKeys.add(key)
+    loadControlStudentPhoto(key)
+      .finally(() => {
+        activeControlPhotoLoads = Math.max(0, activeControlPhotoLoads - 1)
+        controlPhotoActiveKeys.delete(key)
+        pumpControlPhotoQueue()
+      })
+  }
+}
+
+const queueControlStudentPhotos = (sourceStudents = [], options = {}) => {
+  if (!process.client) return
+  const entries = Array.isArray(sourceStudents) ? sourceStudents : [sourceStudents]
+  const keys = entries.map(normalizePhotoKey).filter(Boolean)
+
+  keys.forEach((key) => {
+    if (photoCache.value[key] || controlPhotoQueuedKeys.has(key) || controlPhotoActiveKeys.has(key)) return
+    if (hydrateControlPhotoFromSession(key)) return
+    controlPhotoQueuedKeys.add(key)
+    if (options.priority) controlPhotoQueue.unshift(key)
+    else controlPhotoQueue.push(key)
+  })
+
+  pumpControlPhotoQueue()
+}
+
+const filteredControlStudents = () => {
+  const search = normalizeClientText(filters.search)
+  const grado = normalizeClientText(filters.grado)
+  const grupo = String(filters.group || '').trim()
+
+  return controlStudentsIndex.value.filter((student) => {
+    if (search && !controlStudentSearchHaystack(student).includes(search)) return false
+    if (!localStudentMatchesStatus(student, filters.status)) return false
+    if (grado && normalizeClientText(student.grado) !== grado) return false
+    if (grupo && grupo !== 'all' && String(student.group || student.grupo || '').trim() !== grupo) return false
+    if (!localStudentMatchesQuality(student, filters.quality)) return false
+    if (!localStudentMatchesRecent(student, filters.recent)) return false
+    return true
+  })
+}
+
+const applyInstantStudentFilters = ({ reconcileSelection = false } = {}) => {
+  const filtered = filteredControlStudents()
+  const safeLimit = Math.max(1, Number(pagination.limit || 8))
+  const pages = Math.max(1, Math.ceil(filtered.length / safeLimit))
+  const safePage = Math.min(Math.max(1, Number(pagination.page || 1)), pages)
+  if (pagination.page !== safePage) pagination.page = safePage
+
+  const offset = (safePage - 1) * safeLimit
+  students.value = filtered.slice(offset, offset + safeLimit)
+  Object.assign(pagination, { page: safePage, limit: safeLimit, total: filtered.length, pages })
+  if (reconcileSelection) reconcileSelectedStudentAfterSync(filtered)
+  queueControlStudentPhotos(students.value)
+  nextTick(scheduleWorkspaceScaleUpdate)
+}
+
+const applyControlStudentsPayload = (response = {}, { reconcileSelection = true } = {}) => {
+  controlStudentsIndex.value = Array.isArray(response?.data) ? response.data : []
+  Object.assign(catalogs, response?.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
+  applyInstantStudentFilters({ reconcileSelection })
+}
+
+const replaceControlStudentInIndex = (student) => {
+  if (!student?.matricula) return
+  const selectedKey = normalizeMatriculaKey(student.matricula)
+  const index = controlStudentsIndex.value.findIndex((candidate) => normalizeMatriculaKey(candidate.matricula) === selectedKey)
+  if (index >= 0) controlStudentsIndex.value.splice(index, 1, student)
+  else controlStudentsIndex.value.unshift(student)
+  applyInstantStudentFilters({ reconcileSelection: false })
+}
+
+const persistCurrentControlStudentsCache = () => writeCachedControlStudents(buildIndexQuery(), {
+  data: controlStudentsIndex.value,
+  pagination: { page: 1, limit: Math.max(controlStudentsIndex.value.length, 1), total: controlStudentsIndex.value.length, pages: 1 },
+  catalogs: { ...catalogs, gruposPorGrado: { ...(catalogs.gruposPorGrado || {}) } }
+})
+
+const loadStudents = async (options = {}) => {
+  if (!selectedAgentId.value) return
+
+  const { useCache = true } = options
+  const requestId = ++controlStudentsRequestId
+  const query = buildIndexQuery()
+  const cached = useCache ? readCachedControlStudents(query) : null
+  const hadStudents = controlStudentsIndex.value.length > 0 || students.value.length > 0
+
+  if (cached) {
+    applyControlStudentsPayload(cached)
+    loadError.value = ''
+    studentsLoading.value = false
+  } else if (!hadStudents) {
+    studentsLoading.value = true
+  } else {
+    studentsLoading.value = false
+  }
+
+  try {
+    const response = await $fetch('/api/control-escolar/students', { query })
+    if (requestId !== controlStudentsRequestId) return
+
+    applyControlStudentsPayload(response)
+    writeCachedControlStudents(query, response)
+    loadError.value = ''
+  } catch (error) {
+    if (requestId !== controlStudentsRequestId) return
+
+    if (!cached && !hadStudents) {
+      controlStudentsIndex.value = []
+      students.value = []
+      Object.assign(pagination, { page: 1, total: 0, pages: 1 })
+      loadError.value = error?.data?.message || error?.message || 'Plantel fuera de línea o sin respuesta.'
+    } else {
+      loadError.value = ''
+      applyInstantStudentFilters()
+    }
+  } finally {
+    if (requestId === controlStudentsRequestId) {
+      studentsLoading.value = false
+      nextTick(scheduleWorkspaceScaleUpdate)
+    }
+  }
+}
+
+
+
 const refreshAll = async () => {
-  await Promise.all([loadKpis(), loadStudents()])
+  await Promise.all([loadKpis(), loadStudents({ useCache: false })])
 }
 
 const clearQuickFilters = () => {
@@ -836,6 +1395,7 @@ const selectStudent = (student, copy = true) => {
   selectedStudent.value = student
   activeDetailTab.value = 'identity'
   if (copy) resetEditForm(student, { restoreDraft: true })
+  queueControlStudentPhotos([student], { priority: true })
   nextTick(scheduleWorkspaceScaleUpdate)
 }
 
@@ -846,8 +1406,6 @@ const resetEditForm = (student = selectedStudent.value, options = {}) => {
     apellidoPaterno: student.apellidoPaterno || '',
     apellidoMaterno: student.apellidoMaterno || '',
     curp: student.curp || '',
-    interno: student.interno || '',
-    servicio: student.servicio || '',
     nivel: student.nivel || '',
     grado: student.grado || '',
     grupo: student.group || '',
@@ -891,11 +1449,12 @@ const saveStudent = async () => {
       body: payload
     })
     if (response.student) {
-      const index = students.value.findIndex((student) => student.matricula === response.student.matricula)
-      if (index >= 0) students.value[index] = response.student
+      replaceControlStudentInIndex(response.student)
       selectedStudent.value = response.student
+      pendingSelectedStudentRefresh.value = null
       clearEditDraft()
       resetEditForm(response.student, { restoreDraft: false })
+      persistCurrentControlStudentsCache()
     }
     show('Ficha de Control Escolar guardada.', 'success')
     await loadKpis()
@@ -1036,23 +1595,37 @@ watch(editForm, () => {
   else clearEditDraft()
 }, { deep: true })
 
+watch(hasUnsavedChanges, (isDirty) => {
+  if (!isDirty) nextTick(applyPendingSelectedStudentRefresh)
+})
+
 watch(() => ({ ...filters }), () => {
   pagination.page = 1
-  window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(loadStudents, 320)
+  if (process.client) window.clearTimeout(searchTimer)
+  applyInstantStudentFilters()
 }, { deep: true })
 
-watch(() => pagination.page, () => loadStudents())
+watch(() => pagination.page, () => applyInstantStudentFilters())
 watch(() => [currentCicloKey.value, externalConcepts.value.join('|')], () => {
   pagination.page = 1
   refreshAll()
 })
 watch(selectedAgentId, () => nextTick(scheduleWorkspaceScaleUpdate))
+watch(students, (visibleStudents) => queueControlStudentPhotos(visibleStudents), { deep: false })
+watch(selectedStudent, (student) => queueControlStudentPhotos(student ? [student] : [], { priority: true }))
 
 onMounted(async () => {
   hydrateCachedEnrollmentConcepts()
+  const initialAgentId = selectedAgentId.value
+  if (initialAgentId) loadStudents()
+
   await loadOptions()
-  if (selectedAgentId.value) await refreshAll()
+
+  if (selectedAgentId.value) {
+    if (selectedAgentId.value !== initialAgentId) await refreshAll()
+    else await loadKpis()
+  }
+
   await loadEnrollmentConfig({ refreshStudents: true })
 })
 </script>
@@ -1183,6 +1756,7 @@ onMounted(async () => {
 .ce-kpi-strip .kpi-card {
   height: 64px;
   min-height: 64px;
+  padding-right: 14px;
 }
 
 .ce-kpi-strip .kpi-icon {
@@ -1198,6 +1772,37 @@ onMounted(async () => {
   background: linear-gradient(90deg, rgba(86, 171, 73, .13), rgba(255,255,255,0));
 }
 
+.ce-kpi-mass {
+  position: absolute;
+  right: 12px;
+  bottom: 9px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(10, 4px);
+  gap: 3px;
+  align-items: end;
+  color: var(--kpi-color, #3f9138);
+  pointer-events: none;
+}
+
+.ce-kpi-mass i {
+  display: block;
+  width: 4px;
+  height: 14px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: .14;
+  transform-origin: bottom;
+}
+
+.ce-kpi-mass i.active {
+  opacity: .72;
+}
+
+.ce-kpi-mass i:nth-child(2n) { height: 18px; }
+.ce-kpi-mass i:nth-child(3n) { height: 11px; }
+
+
 .ce-program-rail {
   display: none;
 }
@@ -1208,29 +1813,32 @@ onMounted(async () => {
   flex-direction: column;
   gap: 7px;
   margin-bottom: 9px;
-  padding: 7px 0;
+  padding: 7px 0 9px;
   border: 0;
   border-top: 1px solid var(--students-border-soft);
   border-bottom: 1px solid var(--students-border-soft);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
 }
 
 .ce-primary-filter-row {
   display: grid;
-  grid-template-columns: minmax(500px, max-content) minmax(320px, 1fr) auto auto;
+  grid-template-columns: max-content minmax(360px, 1fr) auto auto;
   align-items: center;
   gap: 9px;
-  min-width: 0;
+  min-width: max(100%, 1120px);
 }
 
 .ce-status-tabs {
   display: inline-flex;
-  min-width: 0;
+  min-width: max-content;
   align-items: center;
   gap: 6px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .ce-status-tab {
@@ -1304,6 +1912,7 @@ onMounted(async () => {
 }
 
 .ce-clear-link {
+  display: inline-flex;
   border: 0;
   background: transparent;
   color: #21882e;
@@ -1316,19 +1925,44 @@ onMounted(async () => {
 
 .ce-secondary-filter-row {
   display: flex;
-  min-width: 0;
-  align-items: center;
+  min-width: max(100%, 1120px);
+  align-items: stretch;
   gap: 8px;
-  overflow-x: auto;
+  overflow: visible;
   padding-bottom: 1px;
 }
 
 .ce-chip-cluster {
+  position: relative;
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid rgba(217, 227, 238, .9);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .74);
+  box-shadow: 0 6px 14px rgba(21, 35, 60, .035);
+}
+
+.ce-chip-cluster + .ce-chip-cluster::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 7px;
+  bottom: 7px;
+  width: 1px;
+  background: #d9e3ee;
+}
+
+.ce-chip-cluster--grade {
+  border-color: rgba(63, 145, 56, .2);
+  background: linear-gradient(180deg, rgba(246, 252, 245, .92), rgba(255, 255, 255, .78));
+}
+
+.ce-chip-cluster--group {
+  border-color: rgba(40, 116, 240, .18);
 }
 
 .ce-chip-label {
@@ -1367,15 +2001,20 @@ onMounted(async () => {
   gap: 12px;
 }
 
+.ce-workspace.has-empty-detail {
+  grid-template-columns: minmax(760px, 1.18fr) minmax(520px, .82fr);
+  gap: 12px;
+}
+
 .ce-list-card {
   --student-list-balance-col: clamp(124px, 8.5vw, 150px);
   --student-list-quality-col: clamp(108px, 7.5vw, 134px);
   --student-list-action-col: clamp(38px, 2.8vw, 46px);
-  --student-list-row-height: clamp(70px, 5vw, 82px);
-  --student-list-grade-size: clamp(52px, 3.8vw, 64px);
-  --student-list-grade-height: clamp(50px, 3.6vw, 60px);
+  --student-list-row-height: clamp(76px, 5.35vw, 90px);
+  --student-list-grade-size: clamp(56px, 4vw, 68px);
+  --student-list-grade-height: clamp(54px, 3.85vw, 64px);
   --student-list-crest-size: clamp(28px, 2.1vw, 34px);
-  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-rows: 44px minmax(0, 1fr) 38px;
   border-radius: 14px;
   background: #fff;
 }
@@ -1445,11 +2084,36 @@ onMounted(async () => {
   border-radius: 14px;
 }
 
+
+.ce-workspace.has-detail .ce-list-card {
+  grid-template-rows: 44px minmax(0, 1fr);
+}
+
+.ce-workspace.has-empty-detail .ce-list-card {
+  --student-list-balance-col: 58px;
+  --student-list-quality-col: 236px;
+  --student-list-action-col: 42px;
+  --student-list-row-height: 88px;
+  --student-list-grade-size: 58px;
+  --student-list-grade-height: 62px;
+  --student-list-crest-size: 36px;
+}
+
+.ce-workspace.has-empty-detail .ce-student-row {
+  grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-quality-col) var(--student-list-action-col);
+  align-items: center;
+  padding-right: 7px;
+}
+
 .ce-workspace.has-detail .ce-student-row {
+  --student-list-row-height: 88px;
+  --student-list-grade-size: 60px;
+  --student-list-grade-height: 64px;
+  --student-list-crest-size: 35px;
   grid-template-columns: minmax(0, 1fr) var(--student-list-action-col);
 }
 
-.ce-workspace.has-detail .ce-profile-cell,
+.ce-workspace.has-detail .ce-quality-score,
 .ce-workspace.has-detail .ce-quality-cell {
   display: none;
 }
@@ -1502,6 +2166,71 @@ onMounted(async () => {
   box-shadow: 0 8px 16px rgba(63, 145, 56, .18);
 }
 
+.ce-academic-pills {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.ce-academic-pills span {
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid rgba(63, 145, 56, .18);
+  border-radius: 999px;
+  background: #eaf7e7;
+  color: #20882d;
+  font-size: 9.5px;
+  font-weight: 860;
+  white-space: nowrap;
+}
+
+.ce-academic-pills span.warning {
+  border-color: rgba(180, 107, 18, .26);
+  background: #fff6e7;
+  color: #b36a16;
+}
+
+.ce-quality-score {
+  --score-color: #2f9c3b;
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  border-radius: 999px;
+  background: conic-gradient(var(--score-color) var(--quality-score), #edf1f5 0deg);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, .08), inset 0 0 0 1px rgba(255, 255, 255, .72);
+}
+
+.ce-quality-score::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: inherit;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(215, 225, 235, .7);
+}
+
+.ce-quality-score b {
+  position: relative;
+  z-index: 1;
+  color: #15233c;
+  font-size: 11px;
+  font-weight: 920;
+  letter-spacing: -.025em;
+}
+
+.ce-quality-score.warning { --score-color: #f39a18; }
+.ce-quality-score.danger { --score-color: #e34a43; }
+
 .ce-profile-cell,
 .ce-quality-cell {
   position: relative;
@@ -1534,6 +2263,51 @@ onMounted(async () => {
   font-weight: 680;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ce-quality-cell strong {
+  color: #1f8a2c;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ce-quality-score.warning + .ce-quality-cell strong {
+  color: #e28a11;
+}
+
+.ce-quality-score.danger + .ce-quality-cell strong {
+  color: #d7423b;
+}
+
+.ce-quality-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, max-content));
+  gap: 5px 9px;
+  max-width: 100%;
+}
+
+.ce-quality-fields small {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow: visible;
+  color: #2b8740;
+  font-size: 9px;
+  font-weight: 760;
+  line-height: 1;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.ce-quality-fields small svg {
+  flex: 0 0 auto;
+  color: currentColor;
+  stroke-width: 2.8;
+}
+
+.ce-quality-fields small.missing {
+  color: #e24740;
 }
 
 .ce-status-pill {
@@ -1572,6 +2346,60 @@ onMounted(async () => {
 .ce-state-card.error { color: #c8423b; }
 .ce-inline-action { border: 0; background: transparent; color: #2f7f32; font-weight: 840; }
 
+.ce-list-footer {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 19px;
+  border-top: 1px solid var(--students-border-soft);
+  color: #66758e;
+  font-size: 10.5px;
+  font-weight: 680;
+}
+
+.ce-list-pages {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ce-list-pages button {
+  display: inline-flex;
+  min-width: 25px;
+  height: 25px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dce6f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #60708a;
+  font-size: 10px;
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.ce-list-pages button.active {
+  border-color: #2f9138;
+  background: linear-gradient(180deg, #58b951, #2f9239);
+  color: #fff;
+  box-shadow: 0 8px 14px rgba(63, 145, 56, .2);
+}
+
+.ce-list-pages button.ellipsis {
+  min-width: 18px;
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+
+.ce-list-pages button:disabled:not(.ellipsis) {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+
 .ce-skeleton-stack {
   display: grid;
   gap: 8px;
@@ -1597,6 +2425,7 @@ onMounted(async () => {
   display: flex;
   width: 100%;
   min-height: 0;
+  max-height: 100%;
   flex-direction: column;
   border: 1px solid var(--students-border);
   border-radius: 14px;
@@ -1607,10 +2436,10 @@ onMounted(async () => {
 
 .ce-detail-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px auto 34px;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, .7fr) 230px auto 34px;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--students-border-soft);
   background: linear-gradient(180deg, #fff, #fbfdfb);
 }
@@ -1644,6 +2473,60 @@ onMounted(async () => {
   letter-spacing: -.035em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ce-husky-header-card {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(63, 145, 56, .14);
+  border-radius: 14px;
+  background: linear-gradient(110deg, #ffffff 0%, #f5fbf2 100%);
+  box-shadow: 0 8px 18px rgba(21,35,60,.045);
+}
+
+.ce-husky-header-card.unavailable {
+  border-color: rgba(129, 142, 162, .18);
+  background: #fbfcfd;
+}
+
+.ce-husky-header-card img {
+  display: block;
+  width: 72px;
+  max-height: 42px;
+  object-fit: contain;
+}
+
+.ce-husky-header-card div {
+  min-width: 0;
+}
+
+.ce-husky-header-card strong,
+.ce-husky-header-card span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-husky-header-card strong {
+  color: #1f7b2b;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ce-husky-header-card.unavailable strong {
+  color: #677389;
+}
+
+.ce-husky-header-card span {
+  margin-top: 3px;
+  color: #59687f;
+  font-size: 10px;
+  font-weight: 760;
 }
 
 .ce-progress-cluster {
@@ -1707,9 +2590,10 @@ onMounted(async () => {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   overflow-y: auto;
-  padding: 12px 14px 14px;
+  overscroll-behavior: contain;
+  padding: 10px 14px 14px;
   background: #fff;
 }
 
@@ -1725,19 +2609,19 @@ onMounted(async () => {
 .ce-profile-card {
   position: relative;
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) minmax(220px, .5fr);
+  grid-template-columns: 82px minmax(0, 1fr) minmax(200px, .45fr);
   align-items: center;
-  gap: 16px;
-  min-height: 104px;
+  gap: 14px;
+  min-height: 88px;
   overflow: hidden;
-  padding: 13px 18px;
+  padding: 10px 16px;
   background: linear-gradient(110deg, #fff 0%, #fff 68%, #f4fbf2 100%);
 }
 
 .ce-detail-photo {
-  --student-grade-photo-width: 86px;
-  --student-grade-photo-height: 80px;
-  --student-grade-photo-radius: 14px;
+  --student-grade-photo-width: 76px;
+  --student-grade-photo-height: 70px;
+  --student-grade-photo-radius: 13px;
 }
 
 .ce-profile-copy,
@@ -1776,6 +2660,11 @@ onMounted(async () => {
   font-weight: 850;
 }
 
+.ce-profile-pills span.warning {
+  background: #fff6e7;
+  color: #b36a16;
+}
+
 .ce-profile-copy p {
   margin: 7px 0 0;
   color: #66758e;
@@ -1786,8 +2675,8 @@ onMounted(async () => {
 .ce-tutor-card small {
   display: block;
   color: #6d7890;
-  font-size: 10px;
-  font-weight: 860;
+  font-size: 11px;
+  font-weight: 880;
   letter-spacing: .04em;
 }
 
@@ -1818,12 +2707,17 @@ onMounted(async () => {
   transform: translateY(-50%) rotate(-7deg);
 }
 
+.ce-profile-watermark.is-missing-group {
+  color: #b36a16;
+  opacity: .11;
+}
+
 .ce-data-section {
   display: grid;
-  grid-template-columns: minmax(240px, .45fr) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, .42fr) minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 10px 12px;
   border-color: rgba(63,145,56,.18);
   background: linear-gradient(90deg, #f7fcf5, #fff);
 }
@@ -1901,7 +2795,7 @@ onMounted(async () => {
 
 .ce-husky-card {
   display: grid;
-  grid-template-columns: minmax(240px, .55fr) minmax(260px, .7fr) auto;
+  grid-template-columns: minmax(260px, .55fr) minmax(260px, .7fr) auto;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
@@ -1909,6 +2803,17 @@ onMounted(async () => {
   border-radius: 14px;
   background: linear-gradient(90deg, #f7fbff, #fff);
   box-shadow: 0 7px 18px rgba(21,35,60,.035);
+}
+
+.ce-husky-heading {
+  align-items: center;
+}
+
+.ce-husky-heading > img {
+  display: block;
+  width: 98px;
+  max-height: 58px;
+  object-fit: contain;
 }
 
 .ce-husky-credentials {
@@ -1973,10 +2878,12 @@ onMounted(async () => {
 
 .ce-detail-tabs {
   display: flex;
-  min-height: 42px;
+  min-height: 38px;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 28px;
-  padding: 0 18px;
+  gap: 22px;
+  overflow-x: auto;
+  padding: 0 14px;
   border-bottom: 1px solid var(--students-border-soft);
   color: #60708a;
   font-size: 11px;
@@ -2089,16 +2996,17 @@ onMounted(async () => {
 }
 
 .ce-detail-footer {
-  position: sticky;
-  bottom: -14px;
+  z-index: 8;
   display: flex;
+  flex: 0 0 auto;
+  min-height: 62px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 -14px -14px;
-  padding: 11px 24px;
+  padding: 10px 18px;
   border-top: 1px solid rgba(63,145,56,.12);
-  background: linear-gradient(90deg, #f2faee, #fff);
+  background: linear-gradient(90deg, rgba(242, 250, 238, .98), rgba(255, 255, 255, .98));
+  box-shadow: 0 -10px 24px rgba(21,35,60,.055);
 }
 
 .ce-detail-footer span {
@@ -2138,9 +3046,19 @@ onMounted(async () => {
   color: #2b67a6;
 }
 
+.ce-detail-footer .ce-save-state {
+  min-height: 32px;
+  padding-inline: 13px;
+}
+
+.ce-detail-footer :deep(.ui-button) {
+  min-height: 42px;
+}
+
 .ce-detail-tabs button {
   display: inline-flex;
-  height: 42px;
+  height: 38px;
+  flex: 0 0 auto;
   align-items: center;
   gap: 7px;
   border: 0;
@@ -2226,6 +3144,274 @@ onMounted(async () => {
   padding: 24px;
   background: rgba(15, 23, 42, .32);
   backdrop-filter: blur(6px);
+}
+
+
+.ce-empty-detail-panel {
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ce-empty-shell {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 14px;
+  overflow: hidden;
+  padding: 28px 16px 18px;
+  border: 1px solid var(--students-border);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 48% 12%, rgba(142, 193, 83, .13), transparent 170px),
+    linear-gradient(180deg, #fff 0%, #fff 58%, #fbfcfd 100%);
+  box-shadow: 0 8px 20px rgba(21, 35, 60, .04);
+}
+
+.ce-empty-hero {
+  position: relative;
+  display: flex;
+  width: 118px;
+  height: 94px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  margin-top: 4px;
+  color: #8bc884;
+}
+
+.ce-empty-hero::before {
+  content: '';
+  position: absolute;
+  inset: 10px 17px 5px 17px;
+  border: 2px solid rgba(63, 145, 56, .16);
+  border-radius: 28px;
+  background: linear-gradient(145deg, rgba(244, 252, 241, .94), rgba(255, 255, 255, .92));
+  box-shadow: 0 18px 40px rgba(63, 145, 56, .1), inset 0 1px 0 rgba(255, 255, 255, .86);
+}
+
+.ce-empty-hero > svg {
+  position: relative;
+  z-index: 1;
+  margin-right: 31px;
+  stroke-width: 1.8;
+}
+
+.ce-empty-lines {
+  position: absolute;
+  z-index: 1;
+  right: 28px;
+  top: 39px;
+  display: grid;
+  gap: 12px;
+  width: 34px;
+}
+
+.ce-empty-lines i {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(118, 190, 104, .38);
+}
+
+.ce-empty-cursor {
+  position: absolute;
+  right: 14px;
+  bottom: 15px;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  border-top: 24px solid #5caf52;
+  border-right: 18px solid transparent;
+  filter: drop-shadow(0 8px 9px rgba(63, 145, 56, .2));
+  transform: rotate(-13deg);
+}
+
+.ce-empty-sparkle {
+  position: absolute;
+  z-index: 2;
+  color: #8ed17d;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.ce-empty-sparkle.one { left: 13px; top: 18px; }
+.ce-empty-sparkle.two { left: 40px; top: 5px; font-size: 12px; }
+
+.ce-empty-copy {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.ce-empty-copy h2 {
+  margin: 0;
+  color: #10203a;
+  font-size: 18px;
+  font-weight: 920;
+  letter-spacing: -.035em;
+}
+
+.ce-empty-copy p {
+  margin: 0;
+  color: #66758e;
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.ce-empty-card {
+  border: 1px solid #dbe5f0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .86);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, .035);
+}
+
+.ce-empty-card h3 {
+  margin: 0 0 12px;
+  color: #15233c;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ce-empty-review {
+  margin-top: 2px;
+  padding: 14px 18px;
+}
+
+.ce-empty-review div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 34px;
+}
+
+.ce-empty-review span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  color: #61708a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ce-empty-review svg {
+  flex: 0 0 auto;
+  color: #2d9440;
+  stroke-width: 2.7;
+}
+
+.ce-empty-flow {
+  padding: 14px 18px 15px;
+}
+
+.ce-empty-flow ol {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ce-empty-flow li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.ce-empty-flow li:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  top: 13px;
+  right: -21px;
+  color: rgba(63, 145, 56, .48);
+  font-size: 23px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.ce-empty-flow li span {
+  display: inline-flex;
+  width: 45px;
+  height: 45px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(63, 145, 56, .18);
+  border-radius: 11px;
+  background: linear-gradient(180deg, #f7fcf5, #fff);
+  color: #2e9038;
+  box-shadow: 0 8px 14px rgba(63, 145, 56, .08);
+}
+
+.ce-empty-flow li b {
+  max-width: 86px;
+  overflow: hidden;
+  color: #61708a;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1.18;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-empty-tip {
+  position: relative;
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  overflow: hidden;
+  padding: 0 92px 0 18px;
+  border: 1px solid rgba(63, 145, 56, .22);
+  border-radius: 14px;
+  background: linear-gradient(90deg, #f4fbf1, #fff);
+  color: #56677f;
+  box-shadow: 0 8px 18px rgba(63, 145, 56, .06);
+}
+
+.ce-empty-tip > span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: #2f9138;
+}
+
+.ce-empty-tip p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 660;
+  line-height: 1.35;
+}
+
+.ce-empty-tip strong {
+  color: #15233c;
+  font-weight: 900;
+}
+
+.ce-empty-tip i {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(63, 145, 56, .09);
+  color: #3f9138;
+  transform: translateY(-50%);
 }
 
 .ce-import-modal {
@@ -2347,25 +3533,39 @@ onMounted(async () => {
 
 @media (max-width: 1320px) {
   .ce-kpi-strip { grid-template-columns: repeat(5, minmax(148px, 1fr)); overflow-x: auto; }
-  .ce-primary-filter-row { grid-template-columns: 1fr minmax(300px, .9fr) auto; }
+  .ce-primary-filter-row { grid-template-columns: max-content minmax(300px, 1fr) auto auto; }
   .ce-clear-link { display: none; }
   .ce-status-tabs { overflow-x: auto; }
   .ce-workspace.has-detail { grid-template-columns: minmax(400px, .62fr) minmax(650px, 1.38fr); }
-  .ce-detail-header { grid-template-columns: minmax(0, 1fr) 220px 34px; }
-  .ce-detail-actions { display: none; }
+  .ce-workspace.has-empty-detail { grid-template-columns: minmax(690px, 1.12fr) minmax(500px, .88fr); }
+  .ce-workspace.has-empty-detail .ce-list-card { --student-list-quality-col: 210px; }
+  .ce-quality-fields { grid-template-columns: repeat(2, minmax(0, max-content)); }
+  .ce-empty-flow ol { gap: 18px; }
+  .ce-empty-flow li:not(:last-child)::after { right: -18px; }
+  .ce-detail-header { grid-template-columns: minmax(0, 1fr) minmax(200px, .72fr) 210px auto 34px; gap: 9px; }
+  .ce-husky-header-card { grid-template-columns: 62px minmax(0, 1fr); padding: 7px 8px; }
+  .ce-husky-header-card img { width: 62px; max-height: 36px; }
+  .ce-detail-actions .ce-save-state { display: none; }
+  .ce-detail-actions :deep(.ui-button) { min-height: 32px; padding-inline: 10px; font-size: 10px; }
 }
 
 @media (max-width: 980px) {
   .ce-workspace,
-  .ce-workspace.has-detail {
+  .ce-workspace.has-detail,
+  .ce-workspace.has-empty-detail {
     display: flex;
     flex-direction: column;
     height: auto;
   }
   .ce-list-card,
   .ce-detail-panel { height: 660px; }
+  .ce-empty-review div,
+  .ce-empty-flow ol { grid-template-columns: 1fr; }
+  .ce-empty-flow li:not(:last-child)::after { display: none; }
   .ce-detail-header { grid-template-columns: minmax(0, 1fr) 34px; }
-  .ce-progress-cluster { display: none; }
+  .ce-husky-header-card,
+  .ce-progress-cluster,
+  .ce-detail-actions { grid-column: 1 / -1; }
   .ce-profile-card,
   .ce-data-section,
   .ce-husky-card,
