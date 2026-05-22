@@ -1,1 +1,1 @@
-fix: allow control escolar login without bridge dependency
+feat: add control escolar initial sync guidance
