@@ -1,1 +1,1 @@
-feat: rebrand login and sidebar to Aurora
+chore: replace Aurora system logo
