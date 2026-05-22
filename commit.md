@@ -1,1 +1,1 @@
-style: polish usuarios access console UI
+fix: cache control escolar students before background sync
