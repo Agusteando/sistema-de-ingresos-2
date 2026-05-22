@@ -19,6 +19,23 @@
       </div>
     </header>
 
+    <Transition name="ce-first-sync-fade">
+      <section v-if="showControlFirstSyncNotice" class="ce-first-sync-tip" aria-live="polite" aria-label="Sincronización inicial de alumnos">
+        <span class="ce-first-sync-orb" aria-hidden="true">
+          <LucideDatabase :size="22" />
+          <i></i>
+        </span>
+        <div class="ce-first-sync-copy">
+          <strong>Preparando tus alumnos</strong>
+          <Transition name="ce-sync-message-fade" mode="out-in">
+            <p :key="activeFirstSyncMessage">{{ activeFirstSyncMessage }}</p>
+          </Transition>
+        </div>
+        <span class="ce-first-sync-loader" aria-hidden="true">
+          <b></b><b></b><b></b>
+        </span>
+      </section>
+    </Transition>
 
     <section :class="['kpi-summary-system ce-kpi-system', { 'is-refreshing': kpisLoading }]" aria-label="Indicadores de Control Escolar">
       <div class="kpi-strip ce-kpi-strip">
@@ -543,7 +560,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useCookie, useState } from '#app'
 import { useHead } from '#imports'
 import {
@@ -644,6 +661,42 @@ const { studentsScaleShell, studentsScaleShellStyle, studentsDesignCanvasStyle, 
   fitPadding: 6
 })
 const loadingAny = computed(() => optionsLoading.value || kpisLoading.value || studentsLoading.value || savingStudent.value)
+
+const firstSyncMessages = [
+  'Estamos cargando los alumnos en este dispositivo por primera vez. Después de esta sincronización, las cargas serán más rápidas.',
+  'Estamos sincronizando la base de datos de Control Escolar.',
+  'Estamos preparando la información para que puedas trabajar aunque la conexión sea lenta.',
+  'Esto puede tardar un poco la primera vez. Mantén esta ventana abierta.',
+  'Seguimos sincronizando los registros. En cuanto termine, verás la lista de alumnos.'
+]
+const firstSyncMessageIndex = ref(0)
+let firstSyncMessageTimer = null
+
+const showControlFirstSyncNotice = computed(() => Boolean(
+  selectedAgentId.value &&
+  studentsLoading.value &&
+  !controlStudentsIndex.value.length &&
+  !students.value.length &&
+  !loadError.value
+))
+const activeFirstSyncMessage = computed(() => firstSyncMessages[firstSyncMessageIndex.value] || firstSyncMessages[0])
+
+const stopFirstSyncMessages = () => {
+  if (!process.client) return
+  if (firstSyncMessageTimer) {
+    window.clearInterval(firstSyncMessageTimer)
+    firstSyncMessageTimer = null
+  }
+}
+
+const startFirstSyncMessages = () => {
+  if (!process.client) return
+  stopFirstSyncMessages()
+  firstSyncMessageIndex.value = 0
+  firstSyncMessageTimer = window.setInterval(() => {
+    firstSyncMessageIndex.value = (firstSyncMessageIndex.value + 1) % firstSyncMessages.length
+  }, 5400)
+}
 const hasActiveFilters = computed(() => Boolean(
   filters.search ||
   filters.quality ||
@@ -1613,6 +1666,10 @@ watch(() => [currentCicloKey.value, externalConcepts.value.join('|')], () => {
 watch(selectedAgentId, () => nextTick(scheduleWorkspaceScaleUpdate))
 watch(students, (visibleStudents) => queueControlStudentPhotos(visibleStudents), { deep: false })
 watch(selectedStudent, (student) => queueControlStudentPhotos(student ? [student] : [], { priority: true }))
+watch(showControlFirstSyncNotice, (visible) => {
+  if (visible) startFirstSyncMessages()
+  else stopFirstSyncMessages()
+})
 
 onMounted(async () => {
   hydrateCachedEnrollmentConcepts()
@@ -1627,6 +1684,10 @@ onMounted(async () => {
   }
 
   await loadEnrollmentConfig({ refreshStudents: true })
+})
+
+onBeforeUnmount(() => {
+  stopFirstSyncMessages()
 })
 </script>
 
@@ -1652,6 +1713,119 @@ onMounted(async () => {
   font-size: 22px;
   font-weight: 900;
   letter-spacing: -.035em;
+}
+
+.ce-first-sync-tip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(46, 125, 50, 0.16);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 8% 18%, rgba(76, 175, 80, 0.12), transparent 26%),
+    linear-gradient(135deg, rgba(246, 252, 246, 0.96), rgba(255, 255, 255, 0.96));
+  box-shadow: 0 16px 34px rgba(17, 45, 30, 0.07);
+  color: #10203a;
+}
+
+.ce-first-sync-orb {
+  position: relative;
+  display: inline-grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 18px;
+  background: #e8f6e8;
+  color: #23843f;
+  box-shadow: inset 0 0 0 1px rgba(35, 132, 63, 0.12);
+}
+
+.ce-first-sync-orb i {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid rgba(35, 132, 63, 0.13);
+  border-top-color: rgba(35, 132, 63, 0.58);
+  border-radius: 20px;
+  animation: ceSyncSpin 1.9s linear infinite;
+}
+
+.ce-first-sync-copy {
+  min-width: 0;
+}
+
+.ce-first-sync-copy strong {
+  display: block;
+  margin: 0 0 4px;
+  color: #14361c;
+  font-size: 14px;
+  font-weight: 950;
+  letter-spacing: -0.01em;
+}
+
+.ce-first-sync-copy p {
+  margin: 0;
+  min-height: 20px;
+  color: #52627a;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.ce-first-sync-loader {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.ce-first-sync-loader b {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #2e8b45;
+  opacity: 0.28;
+  animation: ceSyncPulse 1.55s ease-in-out infinite;
+}
+
+.ce-first-sync-loader b:nth-child(2) { animation-delay: 0.18s; }
+.ce-first-sync-loader b:nth-child(3) { animation-delay: 0.36s; }
+
+.ce-first-sync-fade-enter-active,
+.ce-first-sync-fade-leave-active {
+  transition: opacity 0.34s ease, transform 0.34s ease;
+}
+
+.ce-first-sync-fade-enter-from,
+.ce-first-sync-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.ce-sync-message-fade-enter-active,
+.ce-sync-message-fade-leave-active {
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+
+.ce-sync-message-fade-enter-from {
+  opacity: 0;
+  transform: translateY(5px);
+}
+
+.ce-sync-message-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
+@keyframes ceSyncSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ceSyncPulse {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  45% { opacity: 1; transform: translateY(-3px); }
 }
 
 .ce-route-context {
