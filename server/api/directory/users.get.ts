@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event)
   const search = String(query.q || query.search || '').trim()
-  const limit = Number(query.limit || 12)
+  const limit = Math.max(1, Math.min(Number(query.limit || 25) || 25, 200))
 
   const users = await searchWorkspaceDirectoryUsers(search, limit)
   return {
