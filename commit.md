@@ -1,1 +1,1 @@
-feat: add control escolar initial sync guidance
+fix: enforce control escolar access and remove auth logic copy

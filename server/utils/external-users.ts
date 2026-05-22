@@ -86,7 +86,7 @@ const resolveRoleForWrite = (body: ExternalUserInput, currentRole?: string | nul
 const assertWorkspaceEmail = (email: unknown) => {
   const normalized = normalizeEmail(email)
   if (!normalized || !isCasitaWorkspaceEmail(normalized)) {
-    throw createError({ statusCode: 400, message: `Solo se pueden guardar cuentas @${WORKSPACE_DOMAIN}.` })
+    throw createError({ statusCode: 400, message: 'No se pudo guardar el usuario.' })
   }
   return normalized
 }
@@ -509,13 +509,19 @@ export const touchExternalUserLogin = async ({ email, name, picture, requestedPl
 
   const entries = Object.entries(updates).filter(([column]) => columns.has(column))
   if (entries.length) {
-    await controlEscolarCentralQuery(
-      `UPDATE ${escapeIdentifier(TABLE)} SET ${entries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE LOWER(TRIM(${escapeIdentifier('email')})) = ? AND ${workspaceDomainWhere()}`,
-      [...entries.map(([, value]) => value), normalizedEmail, workspaceDomainParam()]
-    )
+    try {
+      await controlEscolarCentralQuery(
+        `UPDATE ${escapeIdentifier(TABLE)} SET ${entries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE LOWER(TRIM(${escapeIdentifier('email')})) = ? AND ${workspaceDomainWhere()}`,
+        [...entries.map(([, value]) => value), normalizedEmail, workspaceDomainParam()]
+      )
+      return await findExternalUserByEmail(normalizedEmail)
+    } catch (error: any) {
+      console.warn('[Auth Login] External users login touch skipped after role read', error?.message || error)
+      return merged
+    }
   }
 
-  return await findExternalUserByEmail(normalizedEmail)
+  return merged
 }
 
 export const deleteExternalUser = async (id: unknown) => {

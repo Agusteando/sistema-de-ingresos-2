@@ -264,7 +264,7 @@ const roleTokens = computed(() => String(userRole.value || '').split(',').map(ro
 const hasSuperAdminRole = computed(() => roleTokens.value.some(role => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
 const isSuperAdmin = computed(() => isSuperAdminCookie.value === 'true' || hasSuperAdminRole.value)
 const hasControlEscolarRole = computed(() => hasControlEscolarCookie.value === 'true' || roleTokens.value.includes('role_ctrl'))
-const isControlEscolarOnly = computed(() => !isSuperAdmin.value && roleTokens.value.length === 1 && roleTokens.value[0] === 'role_ctrl')
+const isControlEscolarOnly = computed(() => !isSuperAdmin.value && roleTokens.value.includes('role_ctrl'))
 const showControlEscolarNav = computed(() => isSuperAdmin.value || hasControlEscolarRole.value)
 const userPlanteles = computed(() => {
   if (isSuperAdmin.value) return [...PLANTELES_LIST]

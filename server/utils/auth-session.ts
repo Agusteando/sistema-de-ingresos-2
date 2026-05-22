@@ -39,10 +39,7 @@ export const isSuperAdminRole = (role: unknown) => parseRoles(role).some((entry)
 
 export const hasControlEscolarRole = (role: unknown) => hasRole(role, CONTROL_ESCOLAR_ROLE)
 
-export const isControlEscolarOnlyRole = (role: unknown) => {
-  const roles = parseRoles(role).map(normalizeRole)
-  return roles.length === 1 && roles[0] === CONTROL_ESCOLAR_ROLE
-}
+export const isControlEscolarOnlyRole = (role: unknown) => hasControlEscolarRole(role)
 
 export const parsePlanteles = (value: unknown) => String(value || '')
   .split(',')

@@ -11,18 +11,17 @@ export default defineEventHandler(async (event) => {
   const user = await getTrustedAuthUser(event)
   event.context.user = user
 
-  if (url.pathname.startsWith('/api/control-escolar/')) {
+  const isControlEscolarEndpoint = url.pathname.startsWith('/api/control-escolar/')
+  const isDirectoryEndpoint = url.pathname.startsWith('/api/directory/')
+  const isProfileEndpoint = url.pathname === '/api/admin/profile'
+
+  if (isControlEscolarEndpoint || isDirectoryEndpoint || isProfileEndpoint) {
     return
   }
 
-  if (url.pathname.startsWith('/api/directory/')) {
-    return
+  if (user.isControlEscolarOnly) {
+    throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
   }
-
-  if (url.pathname === '/api/admin/profile') {
-    return
-  }
-
 
   const bridgeAgentId = resolveDataBridgeAgentId(event, user)
 

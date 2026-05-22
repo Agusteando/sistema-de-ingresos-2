@@ -139,7 +139,7 @@ export const assertControlEscolarDynamicBridge = (agentId: string) => {
 
 const assertControlEscolarAccess = (user: Awaited<ReturnType<typeof getTrustedAuthUser>>) => {
   if (!user.isSuperAdmin && !user.hasControlEscolarRole) {
-    throw createError({ statusCode: 403, message: 'Control Escolar requiere ROLE_CTRL.' })
+    throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
   }
 }
 
