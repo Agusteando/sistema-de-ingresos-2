@@ -1,1 +1,1 @@
-fix: polish receipt format and cobranza email templates
+Refactor Usuarios into Workspace-backed Control Escolar access management
