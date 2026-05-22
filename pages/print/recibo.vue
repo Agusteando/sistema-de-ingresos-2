@@ -20,7 +20,7 @@
       </div>
     </div>
 
-    <div class="max-w-[850px] mx-auto border border-gray-200 p-8 rounded-2xl print:border-none print:p-5 relative z-10 bg-white shadow-lg print:shadow-none print:max-w-none w-full min-h-[900px] flex flex-col justify-between">
+    <div class="receipt-sheet mx-auto border border-gray-200 p-8 rounded-2xl relative z-10 bg-white shadow-lg w-full flex flex-col justify-between">
       
       <div>
         <div class="flex justify-between items-start border-b border-gray-300 pb-5 mb-6">
@@ -35,7 +35,7 @@
           <div class="w-1/3 text-right flex flex-col justify-center">
             <div class="bg-gray-50 border border-gray-200 rounded p-2 text-left w-full text-[11px]">
               <p class="m-0 mb-1 flex justify-between"><strong class="text-gray-600 uppercase">Emisión:</strong> <span class="font-mono text-gray-800">{{ fecha }}</span></p>
-              <p class="m-0 flex justify-between"><strong class="text-gray-600 uppercase">Cajero:</strong> <span class="text-gray-800 truncate max-w-[120px]">{{ receiptData.usuario || activeUserName }}</span></p>
+              <p class="m-0 flex justify-between"><strong class="text-gray-600 uppercase">Administrador:</strong> <span class="text-gray-800 truncate max-w-[120px]">{{ receiptData.usuario || activeUserName }}</span></p>
             </div>
           </div>
         </div>
@@ -119,21 +119,8 @@
 
       </div>
 
-      <div class="mt-auto">
-        <div class="grid grid-cols-2 gap-16 px-10 mt-10 pt-8 border-t border-dashed border-gray-300 text-center">
-          <div>
-            <div class="border-b border-gray-400 h-8 mb-2"></div>
-            <div class="text-[10px] font-semibold text-gray-700 uppercase">Firma del Cajero</div>
-            <div class="text-[9px] text-gray-500 mt-1">SISTEMA DE INGRESOS</div>
-          </div>
-          <div>
-            <div class="border-b border-gray-400 h-8 mb-2"></div>
-            <div class="text-[10px] font-semibold text-gray-700 uppercase">Firma de Conformidad</div>
-            <div class="text-[9px] text-gray-500 mt-1">Titular de la cuenta</div>
-          </div>
-        </div>
-
-        <div class="text-center mt-8 mb-2">
+      <div class="mt-auto receipt-footer">
+        <div class="text-center mt-6 mb-2 pt-4 border-t border-dashed border-gray-300">
           <p class="italic text-gray-400 text-[10px]">“Compartimos contigo la formación integral de tus hijos”</p>
         </div>
       </div>
@@ -248,8 +235,34 @@ const handleInvoiceSuccess = () => {
 </script>
 
 <style scoped>
+.receipt-sheet {
+  max-width: 850px;
+  min-height: 8.5in;
+}
+
 @media print {
-  @page { margin: 0.5cm; size: letter portrait; }
-  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: white; }
+  @page { size: 5.5in 8.5in portrait; margin: 0; }
+
+  html,
+  body {
+    width: 5.5in;
+    min-height: 8.5in;
+    background-color: white;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .receipt-sheet {
+    width: 5.5in;
+    min-height: 8.5in;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0.32in;
+  }
 }
 </style>
