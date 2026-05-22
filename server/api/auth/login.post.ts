@@ -3,7 +3,7 @@ import { query, runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { hasControlEscolarRole, isControlEscolarOnlyRole, isSuperAdminRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
 import { touchExternalUserLogin } from '../../utils/external-users'
-import { isCasitaWorkspaceEmail, WORKSPACE_DOMAIN } from '../../utils/google-workspace-directory'
+import { isCasitaWorkspaceEmail } from '../../utils/google-workspace-directory'
 
 const SUPERADMIN_EMAILS = new Set([
   'desarrollo.tecnologico@casitaiedis.edu.mx',
@@ -143,7 +143,7 @@ export default defineEventHandler(async (event) => {
 
     const normalizedEmail = String(payload.email).trim().toLowerCase()
     if (!isCasitaWorkspaceEmail(normalizedEmail)) {
-      throw createError({ statusCode: 403, message: `Solo se permite acceso con cuentas @${WORKSPACE_DOMAIN}.` })
+      throw createError({ statusCode: 403, message: 'No se pudo completar el acceso.' })
     }
 
     const seedAdmin = SUPERADMIN_EMAILS.has(normalizedEmail)
@@ -158,7 +158,7 @@ export default defineEventHandler(async (event) => {
     })
 
     if (!seedAdmin && externalUser?.ingresosBlocked) {
-      throw createError({ statusCode: 403, message: 'Tu acceso a Sistema de Ingresos esta bloqueado.' })
+      throw createError({ statusCode: 403, message: 'Tu cuenta no tiene acceso al sistema.' })
     }
 
     const externalControlOnly = !seedAdmin && externalUser && isControlEscolarOnlyRole(externalUser.role)

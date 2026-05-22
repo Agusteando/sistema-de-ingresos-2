@@ -44,7 +44,7 @@
           </div>
 
           <h2>Bienvenido</h2>
-          <p class="auth-subtitle">Selecciona el plantel y continúa con tu cuenta institucional.</p>
+          <p class="auth-subtitle">Continúa con tu cuenta institucional.</p>
 
           <label class="plantel-field" for="plantel-login">
             <span>Plantel</span>
@@ -100,16 +100,6 @@
           >
             Intentar de nuevo
           </button>
-
-          <p class="domain-note">
-            <span aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 3.5 5.5 6.2v5.3c0 4.1 2.7 7.8 6.5 9 3.8-1.2 6.5-4.9 6.5-9V6.2L12 3.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
-                <path d="m9.4 12.1 1.7 1.7 3.5-3.7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </span>
-            Usa tu correo <strong>@casitaiedis.edu.mx</strong>
-          </p>
         </div>
       </section>
     </section>
@@ -486,8 +476,7 @@ onBeforeUnmount(() => {
 }
 
 .secure-icon svg,
-.auth-kicker svg,
-.domain-note svg {
+.auth-kicker svg {
   width: 100%;
   height: 100%;
 }
@@ -721,28 +710,6 @@ onBeforeUnmount(() => {
   font-weight: 950;
 }
 
-.domain-note {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.65rem;
-  margin: 1.65rem 0 0;
-  color: #66758f;
-  font-size: 0.92rem;
-  font-weight: 750;
-}
-
-.domain-note span {
-  display: inline-grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  color: #24843f;
-}
-
-.domain-note strong {
-  color: #1f7f31;
-  font-weight: 950;
-}
 
 @keyframes spin {
   to { transform: rotate(360deg); }

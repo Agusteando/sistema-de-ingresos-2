@@ -15,7 +15,7 @@ export default defineNuxtRouteMiddleware((to) => {
   const roleTokens = roleTokensFrom(role.value)
   const isSuperAdmin = isSuperAdminCookie.value === 'true' || roleTokens.some((entry) => SUPERADMIN_ROLES.has(entry))
   const hasControlEscolarRole = hasControlEscolarCookie.value === 'true' || roleTokens.includes(CONTROL_ESCOLAR_ROLE)
-  const isControlEscolarOnly = !isSuperAdmin && roleTokens.length === 1 && roleTokens[0] === CONTROL_ESCOLAR_ROLE
+  const isControlEscolarOnly = !isSuperAdmin && roleTokens.includes(CONTROL_ESCOLAR_ROLE)
   const isPublicPath = to.path === '/login' || to.path.startsWith('/print')
 
   if (!email.value && !isPublicPath) {

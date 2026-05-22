@@ -29,7 +29,7 @@
           <div>
             <p>Total usuarios</p>
             <strong>{{ usuarios.length }}</strong>
-            <small>Registros institucionales</small>
+            <small>Registrados</small>
           </div>
         </article>
         <article class="metric-card">
@@ -37,7 +37,7 @@
           <div>
             <p>Acceso general</p>
             <strong>{{ defaultCount }}</strong>
-            <small>Vista normal del sistema</small>
+            <small>Usuarios activos</small>
           </div>
         </article>
         <article class="metric-card">
@@ -45,7 +45,7 @@
           <div>
             <p>Solo Control Escolar</p>
             <strong>{{ controlCount }}</strong>
-            <small>Acceso limitado</small>
+            <small>Usuarios activos</small>
           </div>
         </article>
         <article class="metric-card">
@@ -53,7 +53,7 @@
           <div>
             <p>Bloqueados</p>
             <strong>{{ blockedCount }}</strong>
-            <small>Sin acceso a Ingresos</small>
+            <small>Usuarios restringidos</small>
           </div>
         </article>
         <article class="metric-card">
@@ -61,7 +61,7 @@
           <div>
             <p>Protegidos</p>
             <strong>{{ protectedCount }}</strong>
-            <small>Cuentas superadmin</small>
+            <small>Cuentas protegidas</small>
           </div>
         </article>
         <article class="metric-card">
@@ -74,52 +74,13 @@
         </article>
       </section>
 
-      <section v-if="!hideTruthCard" class="truth-card">
-        <span class="google-mark">G</span>
-        <div>
-          <strong>Google Workspace es la identidad.</strong>
-          <p>Cualquier cuenta @casitaiedis.edu.mx entra por defecto con acceso general.</p>
-        </div>
-        <div>
-          <strong>Solo Control Escolar</strong>
-          <p>Limita el acceso a Control Escolar.</p>
-        </div>
-        <div>
-          <strong>Bloquear desactiva este sistema.</strong>
-          <p>No elimina la cuenta de Google ni afecta otras aplicaciones.</p>
-        </div>
-        <button type="button" class="truth-close" aria-label="Ocultar nota" @click="hideTruthCard = true" v-if="!hideTruthCard">
-          <LucideX :size="17" />
-        </button>
-      </section>
-
-      <section v-if="debugEntries.length" class="debug-card" :class="{ danger: Boolean(fetchError) }">
-        <div class="debug-head">
-          <div>
-            <strong>Diagnóstico de Usuarios</strong>
-            <p>{{ debugSummary }}</p>
-          </div>
-          <button type="button" class="debug-toggle" @click="debugOpen = !debugOpen">
-            {{ debugOpen ? 'Ocultar detalles' : 'Ver detalles' }}
-          </button>
-        </div>
-        <div v-if="debugOpen" class="debug-body">
-          <div v-for="entry in debugEntries" :key="entry.id" class="debug-row">
-            <span>{{ entry.time }}</span>
-            <strong>{{ entry.label }}</strong>
-            <p>{{ entry.message }}</p>
-          </div>
-          <pre v-if="latestDebugPayload">{{ latestDebugPayload }}</pre>
-        </div>
-      </section>
-
       <section class="filters-card">
         <div class="search-control">
           <LucideSearch :size="18" />
           <input
             v-model="searchQuery"
             type="search"
-            placeholder="Buscar por nombre, correo o Google ID..."
+            placeholder="Buscar por nombre o correo..."
             autocomplete="off"
           >
           <button v-if="searchQuery" type="button" @click="searchQuery = ''"><LucideX :size="15" /></button>
@@ -141,7 +102,6 @@
             <option value="all">Todos</option>
             <option value="admin">Acceso general</option>
             <option value="control">Solo Control Escolar</option>
-            <option value="admin_control">General + Control Escolar</option>
           </select>
         </label>
 
@@ -169,16 +129,16 @@
       <section v-if="selectedEmails.length" class="bulk-card">
         <strong>{{ selectedEmails.length }} seleccionados</strong>
         <div class="bulk-actions">
-          <button type="button" class="bulk-button blue" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'control' }, 'Asignar acceso Control Escolar', 'Los usuarios seleccionados quedarán limitados a Control Escolar.')">
+          <button type="button" class="bulk-button blue" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'control' }, 'Asignar acceso Control Escolar', 'Se actualizará el acceso de los usuarios seleccionados.')">
             <LucideGraduationCap :size="15" /> Asignar acceso Control Escolar
           </button>
-          <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'admin' }, 'Restaurar acceso general', 'Los usuarios seleccionados volverán a la vista normal del sistema.')">
+          <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'admin' }, 'Restaurar acceso general', 'Se actualizará el acceso de los usuarios seleccionados.')">
             <LucideShieldCheck :size="15" /> Restaurar acceso general
           </button>
-          <button type="button" class="bulk-button red" :disabled="bulkSaving" @click="requestBulkUpdate({ ingresosBlocked: true }, `¿Bloquear ${selectedEmails.length} usuarios?`, 'Se desactivará su acceso al Sistema de Ingresos. No se elimina la cuenta de Google.', 'danger')">
+          <button type="button" class="bulk-button red" :disabled="bulkSaving" @click="requestBulkUpdate({ ingresosBlocked: true }, `¿Bloquear ${selectedEmails.length} usuarios?`, 'Se actualizará el estado de los usuarios seleccionados.', 'danger')">
             <LucideBan :size="15" /> Bloquear seleccionados
           </button>
-          <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkUpdate({ ingresosBlocked: false }, 'Reactivar usuarios', 'Los usuarios seleccionados podrán entrar nuevamente al Sistema de Ingresos.')">
+          <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkUpdate({ ingresosBlocked: false }, 'Reactivar usuarios', 'Se actualizará el estado de los usuarios seleccionados.')">
             <LucideUnlock :size="15" /> Reactivar seleccionados
           </button>
         </div>
@@ -222,7 +182,6 @@
                   <div>
                     <strong>{{ displayNameFor(u) }}</strong>
                     <span>{{ u.email }}</span>
-                    <small v-if="u.duplicateCount > 1">{{ u.duplicateCount }} registros externos</small>
                   </div>
                 </div>
               </td>
@@ -231,7 +190,6 @@
                   <component :is="accessIcon(u)" :size="14" />
                   {{ accessLabel(u) }}
                 </span>
-                <p class="access-copy">{{ accessDescription(u) }}</p>
               </td>
               <td>
                 <span :class="['status-badge', statusClass(u)]">
@@ -302,7 +260,6 @@
           <component :is="accessIcon(activeUser)" :size="14" />
           {{ accessLabel(activeUser) }}
         </span>
-        <p>{{ accessDescription(activeUser) }}</p>
         <button type="button" class="drawer-link" @click="openModal(activeUser)">Editar acceso</button>
         <button v-if="!isBlocked(activeUser) && !isProtectedUser(activeUser)" type="button" class="drawer-link danger" @click="requestToggleBlocked(activeUser)">Bloquear acceso</button>
         <button v-else-if="isBlocked(activeUser) && !isProtectedUser(activeUser)" type="button" class="drawer-link" @click="requestToggleBlocked(activeUser)">Reactivar acceso</button>
@@ -322,11 +279,8 @@
       <div class="drawer-section">
         <h4>Información general</h4>
         <dl class="drawer-list">
-          <div><dt>Google ID</dt><dd>{{ activeUser.email }}</dd></div>
+          <div><dt>Correo</dt><dd>{{ activeUser.email }}</dd></div>
           <div><dt>Nombre completo</dt><dd>{{ displayNameFor(activeUser) }}</dd></div>
-          <div><dt>Primera vez</dt><dd>{{ formatDateOnly(activeUser.created_at) }}</dd></div>
-          <div><dt>Acceso técnico</dt><dd>{{ technicalAccessLabel(activeUser) }}</dd></div>
-          <div><dt>Protegido por</dt><dd>{{ isProtectedUser(activeUser) ? 'Sistema' : '—' }}</dd></div>
         </dl>
       </div>
     </aside>
@@ -336,9 +290,9 @@
         <div class="user-modal">
           <header class="modal-top">
             <div>
-              <p class="eyebrow">Workspace</p>
+              <p class="eyebrow">Directorio</p>
               <h3>{{ editingId ? 'Editar usuario' : 'Nuevo usuario' }}</h3>
-              <span>Selecciona la cuenta institucional y define su acceso.</span>
+              <span>Selecciona una cuenta y guarda los cambios.</span>
             </div>
             <button type="button" class="icon-button" @click="closeModal"><LucideX :size="18" /></button>
           </header>
@@ -441,13 +395,6 @@
             <component :is="pendingAction.tone === 'danger' ? LucideBan : LucideShieldCheck" :size="34" />
           </span>
           <h3>{{ pendingAction.title }}</h3>
-          <div v-if="pendingAction.tone === 'danger'" class="confirm-warning">
-            <ul>
-              <li>Esto no elimina la cuenta de Google.</li>
-              <li>El usuario seguirá existiendo en tu organización.</li>
-              <li>El bloqueo no afecta el acceso a otras aplicaciones.</li>
-            </ul>
-          </div>
           <p>{{ pendingAction.body }}</p>
           <div class="confirm-actions">
             <button type="button" class="soft-button" @click="pendingAction = null">Cancelar</button>
@@ -467,7 +414,6 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import {
   LucideActivity,
   LucideBan,
-  LucideBriefcase,
   LucideCalendarDays,
   LucideCheckCircle2,
   LucideChevronLeft,
@@ -521,17 +467,12 @@ const directoryResults = ref([])
 const directoryLoading = ref(false)
 const directoryError = ref('')
 const pendingAction = ref(null)
-const debugEntries = ref([])
-const debugOpen = ref(false)
 const fetchError = ref(null)
-const hideTruthCard = ref(false)
 let directoryTimer = null
-let debugId = 0
 
 const accessOptions = [
-  { value: 'admin', label: 'Acceso general', description: 'Vista normal del sistema.', icon: LucideShieldCheck },
-  { value: 'control', label: 'Solo Control Escolar', description: 'Acceso limitado a Control Escolar.', icon: LucideGraduationCap },
-  { value: 'admin_control', label: 'General + Control Escolar', description: 'Vista normal con entrada a Control Escolar.', icon: LucideBriefcase }
+  { value: 'admin', label: 'Acceso general', description: 'Configuración estándar.', icon: LucideShieldCheck },
+  { value: 'control', label: 'Solo Control Escolar', description: 'Configuración especializada.', icon: LucideGraduationCap }
 ]
 
 const emptyForm = () => ({
@@ -549,10 +490,6 @@ const form = ref(emptyForm())
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase()
 const roleTokens = (role) => String(role || '').split(',').map(entry => entry.trim().toLowerCase()).filter(Boolean)
 const hasControlEscolarRole = (role) => roleTokens(role).includes(CONTROL_ROLE.toLowerCase())
-const hasOnlyControlRole = (role) => {
-  const tokens = roleTokens(role)
-  return tokens.length === 1 && tokens[0] === CONTROL_ROLE.toLowerCase()
-}
 const isWorkspaceEmail = (email) => normalizeEmail(email).endsWith(`@${WORKSPACE_DOMAIN}`)
 const isProtectedEmail = (email) => PROTECTED_EMAILS.has(normalizeEmail(email))
 const isProtectedUser = (u) => Boolean(u?.protected) || isProtectedEmail(u?.email)
@@ -568,36 +505,25 @@ const avatarFor = (u) => {
 const plantelesFor = (u) => String(u?.planteles || u?.plantel || '').split(',').map(p => p.trim()).filter(Boolean)
 
 const accessModeForRole = (role) => {
-  if (hasOnlyControlRole(role)) return 'control'
-  if (hasControlEscolarRole(role)) return 'admin_control'
+  if (hasControlEscolarRole(role)) return 'control'
   return 'admin'
 }
 const accessLabelForMode = (mode) => {
   if (mode === 'control') return 'Solo Control Escolar'
-  if (mode === 'admin_control') return 'General + Control Escolar'
   return 'Acceso general'
-}
-const accessDescriptionForMode = (mode) => {
-  if (mode === 'control') return 'Acceso limitado a Control Escolar.'
-  if (mode === 'admin_control') return 'Acceso completo + Control Escolar.'
-  return 'Acceso completo.'
 }
 const accessIconForMode = (mode) => {
   if (mode === 'control') return LucideGraduationCap
-  if (mode === 'admin_control') return LucideBriefcase
   return LucideShieldCheck
 }
 const accessClassForMode = (mode) => {
   if (mode === 'control') return 'control'
-  if (mode === 'admin_control') return 'mixed'
   return 'general'
 }
 const accessMode = (u) => accessModeForRole(u?.role)
 const accessLabel = (u) => accessLabelForMode(accessMode(u))
-const accessDescription = (u) => accessDescriptionForMode(accessMode(u))
 const accessIcon = (u) => accessIconForMode(accessMode(u))
 const accessBadgeClass = (u) => accessClassForMode(accessMode(u))
-const technicalAccessLabel = (u) => accessLabel(u)
 
 const statusLabel = (u) => {
   if (isProtectedUser(u)) return 'Protegido'
@@ -676,11 +602,6 @@ const todayCount = computed(() => usuarios.value.filter(u => isWithinDays(u, 1))
 const visibleSelectableEmails = computed(() => pagedUsuarios.value.filter(u => !isProtectedUser(u)).map(u => normalizeEmail(u.email)).filter(Boolean))
 const allVisibleSelected = computed(() => visibleSelectableEmails.value.length > 0 && visibleSelectableEmails.value.every(email => selectedEmails.value.includes(email)))
 const someVisibleSelected = computed(() => visibleSelectableEmails.value.some(email => selectedEmails.value.includes(email)) && !allVisibleSelected.value)
-const debugSummary = computed(() => fetchError.value ? `Error ${fetchError.value.status || ''}: ${fetchError.value.message}` : `${usuarios.value.length} usuarios cargados desde la base externa.`)
-const latestDebugPayload = computed(() => {
-  const payload = debugEntries.value.find(entry => entry.payload)?.payload
-  return payload ? JSON.stringify(payload, null, 2) : ''
-})
 
 watch([searchQuery, statusFilter, accessFilter, activityFilter, sortBy, pageSize], () => { page.value = 1 })
 watch(totalPages, (total) => { if (page.value > total) page.value = total })
@@ -699,31 +620,19 @@ onUnmounted(() => {
   if (typeof document !== 'undefined') document.body.style.overflow = ''
 })
 
-const addDebug = (label, message, payload = null) => {
-  debugEntries.value = [{
-    id: ++debugId,
-    time: new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date()),
-    label,
-    message,
-    payload
-  }, ...debugEntries.value].slice(0, 12)
-}
 const extractStatus = (e) => e?.statusCode || e?.response?.status || e?.data?.statusCode || e?.response?._data?.statusCode || null
 const extractMessage = (e) => e?.data?.message || e?.response?._data?.message || e?.message || 'Error cargando usuarios'
-const extractDebug = (e) => e?.data?.data?.debug || e?.data?.debug || e?.response?._data?.data?.debug || e?.response?._data?.debug || null
 
 const hydrateWorkspaceProfiles = async (rows) => {
   const emails = rows.map(row => normalizeEmail(row.email)).filter(Boolean).slice(0, 250)
   if (!emails.length) return rows
 
   try {
-    addDebug('POST /api/directory/users', 'Enriqueciendo nombre e imagen desde Google Workspace.')
     const response = await $fetch('/api/directory/users', {
       method: 'POST',
       body: { emails }
     })
     const profiles = new Map((response?.users || []).map(profile => [normalizeEmail(profile.email || profile.primaryEmail), profile]))
-    addDebug('200 /api/directory/users', `${profiles.size} perfiles de Workspace aplicados.`, { requested: emails.length, applied: profiles.size, errors: response?.errors?.length || 0 })
     return rows.map((row) => {
       const profile = profiles.get(normalizeEmail(row.email))
       if (!profile) return row
@@ -737,7 +646,6 @@ const hydrateWorkspaceProfiles = async (rows) => {
       }
     })
   } catch (e) {
-    addDebug('WARN /api/directory/users', extractMessage(e) || 'No se pudo enriquecer desde Google Workspace.', extractDebug(e) || e?.data || e?.response?._data || null)
     return rows
   }
 }
@@ -745,21 +653,16 @@ const hydrateWorkspaceProfiles = async (rows) => {
 async function loadUsers () {
   loadingTable.value = true
   fetchError.value = null
-  addDebug('GET /api/users', 'Solicitando usuarios desde la base externa central.')
   try {
     const rows = await $fetch('/api/users')
     const visibleRows = Array.isArray(rows) ? rows.filter(u => isWorkspaceEmail(u.email)) : []
     usuarios.value = await hydrateWorkspaceProfiles(visibleRows)
     selectedEmails.value = selectedEmails.value.filter(email => usuarios.value.some(u => normalizeEmail(u.email) === email))
     if (!usuarios.value.some(u => userKey(u) === activeUserKey.value)) activeUserKey.value = usuarios.value.length ? userKey(usuarios.value[0]) : ''
-    addDebug('200 /api/users', `${usuarios.value.length} usuarios visibles después del filtro institucional.`, { receivedRows: Array.isArray(rows) ? rows.length : 0, visibleRows: usuarios.value.length })
   } catch (e) {
     const status = extractStatus(e)
     const message = extractMessage(e)
-    const serverDebug = extractDebug(e)
-    fetchError.value = { status, message, debug: serverDebug }
-    debugOpen.value = true
-    addDebug(`${status || 'ERR'} /api/users`, message, serverDebug || e?.data || e?.response?._data || null)
+    fetchError.value = { status, message }
     show(message, 'danger')
   } finally {
     loadingTable.value = false
@@ -818,7 +721,7 @@ const requestToggleBlocked = (u) => {
   requestBulkUpdate(
     { ingresosBlocked: blocked },
     blocked ? `¿Bloquear a ${displayNameFor(u)}?` : `¿Reactivar a ${displayNameFor(u)}?`,
-    blocked ? 'Se desactivará su acceso al Sistema de Ingresos.' : 'El usuario podrá entrar nuevamente al Sistema de Ingresos.',
+    blocked ? 'Se actualizará el estado del usuario.' : 'Se actualizará el estado del usuario.',
     blocked ? 'danger' : 'safe',
     [u.email]
   )
@@ -837,8 +740,6 @@ const runPendingAction = async () => {
     await loadUsers()
   } catch (e) {
     const message = extractMessage(e) || 'Error al actualizar usuarios'
-    const serverDebug = extractDebug(e)
-    if (serverDebug) addDebug('PATCH /api/users/bulk', message, serverDebug)
     show(message, 'danger')
   } finally {
     bulkSaving.value = false
@@ -849,8 +750,8 @@ const showContextMenu = (event, u) => {
   openMenu(event, [
     { label: 'Opciones', disabled: true, action: () => {} },
     { label: 'Editar usuario', icon: LucidePencil, action: () => openModal(u) },
-    { label: 'Asignar acceso Control Escolar', icon: LucideGraduationCap, disabled: isProtectedUser(u), action: () => requestBulkUpdate({ accessMode: 'control' }, 'Asignar acceso Control Escolar', 'El usuario quedará limitado a Control Escolar.', 'safe', [u.email]) },
-    { label: 'Restaurar acceso general', icon: LucideShieldCheck, disabled: isProtectedUser(u), action: () => requestBulkUpdate({ accessMode: 'admin' }, 'Restaurar acceso general', 'El usuario volverá a la vista normal del sistema.', 'safe', [u.email]) },
+    { label: 'Asignar acceso Control Escolar', icon: LucideGraduationCap, disabled: isProtectedUser(u), action: () => requestBulkUpdate({ accessMode: 'control' }, 'Asignar acceso Control Escolar', 'Se actualizará el acceso del usuario.', 'safe', [u.email]) },
+    { label: 'Restaurar acceso general', icon: LucideShieldCheck, disabled: isProtectedUser(u), action: () => requestBulkUpdate({ accessMode: 'admin' }, 'Restaurar acceso general', 'Se actualizará el acceso del usuario.', 'safe', [u.email]) },
     { label: isBlocked(u) ? 'Reactivar acceso' : 'Bloquear acceso', icon: isBlocked(u) ? LucideUnlock : LucideBan, disabled: isProtectedUser(u), action: () => requestToggleBlocked(u) }
   ])
 }
@@ -883,7 +784,7 @@ const closeModal = () => { showModal.value = false }
 
 const saveUser = async () => {
   if (!canSave.value) {
-    show(`Seleccione una cuenta @${WORKSPACE_DOMAIN} y al menos un plantel.`, 'danger')
+    show('Seleccione una cuenta válida y al menos un plantel.', 'danger')
     return
   }
   saving.value = true
@@ -908,8 +809,6 @@ const saveUser = async () => {
     await loadUsers()
   } catch (e) {
     const message = extractMessage(e) || 'Error al guardar'
-    const serverDebug = extractDebug(e)
-    if (serverDebug) addDebug(`${method} ${url}`, message, serverDebug)
     show(message, 'danger')
   } finally {
     saving.value = false
@@ -1016,15 +915,7 @@ const exportUsers = () => {
 .soft-button,
 .primary-button,
 .icon-button,
-.bulk-button,
-.debug-toggle {
-  border: 0;
-  font-weight: 900;
-  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
-}
-
-.soft-button,
-.primary-button {
+.bulk-button {
   min-height: 42px;
   display: inline-flex;
   align-items: center;
@@ -1120,153 +1011,23 @@ button:disabled {
   font-weight: 800;
 }
 
-.truth-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto repeat(3, minmax(0, 1fr));
-  gap: 22px;
-  align-items: center;
-  margin-bottom: 18px;
-  padding: 17px 44px 17px 22px;
-  border: 1px solid #cce9d4;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(244, 253, 246, .97), rgba(255, 255, 255, .96));
-  color: #1d2b46;
-}
 
-.google-mark {
-  width: 40px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #d7e5f2;
-  border-radius: 12px;
-  color: #24324b;
-  background: #ffffff;
-  box-shadow: 0 10px 24px rgba(22, 37, 67, .08);
-  font-size: 22px;
-  font-weight: 950;
-}
 
-.truth-card strong {
-  font-size: 12px;
-  font-weight: 950;
-}
 
-.truth-card p {
-  margin-top: 5px;
-  color: #55637a;
-  font-size: 12px;
-  line-height: 1.45;
-  font-weight: 700;
-}
 
-.truth-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  color: #45546c;
-  background: transparent;
-  border: 0;
-}
 
-.debug-card,
-.filters-card,
-.bulk-card,
-.users-table-card,
-.user-drawer,
-.user-modal,
-.confirm-modal {
-  border: 1px solid #dce5ef;
-  background: rgba(255, 255, 255, .96);
-  box-shadow: 0 18px 45px rgba(20, 33, 61, .06);
-}
 
-.debug-card {
-  margin-bottom: 16px;
-  border-radius: 16px;
-  padding: 14px;
-}
 
-.debug-card.danger {
-  border-color: #fecdd3;
-  background: #fff7f8;
-}
 
-.debug-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
 
-.debug-head strong {
-  color: #14213d;
-  font-size: 13px;
-  font-weight: 950;
-}
 
-.debug-head p {
-  margin-top: 4px;
-  color: #65728a;
-  font-size: 12px;
-  font-weight: 700;
-}
 
-.debug-toggle {
-  color: #2563eb;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 11px;
-}
 
-.debug-body {
-  margin-top: 12px;
-  display: grid;
-  gap: 8px;
-}
 
-.debug-row {
-  display: grid;
-  grid-template-columns: 80px 150px minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-  padding: 10px;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid #e7edf5;
-  font-size: 12px;
-}
 
-.debug-row span {
-  color: #7a879a;
-  font-weight: 850;
-}
 
-.debug-row strong {
-  color: #14213d;
-  font-weight: 950;
-}
 
-.debug-row p {
-  color: #48566e;
-  font-weight: 700;
-}
 
-.debug-body pre {
-  max-height: 260px;
-  overflow: auto;
-  white-space: pre-wrap;
-  padding: 12px;
-  border-radius: 12px;
-  background: #0f172a;
-  color: #dbeafe;
-  font-size: 11px;
-  line-height: 1.5;
-}
 
 .filters-card {
   display: grid;
@@ -1968,21 +1729,6 @@ button:disabled {
 
 .access-option.active.admin { color: #15803d; background: #effcf3; border-color: #bbf7d0; }
 .access-option.active.control { color: #2563eb; background: #eff6ff; border-color: #bfdbfe; }
-.access-option.active.admin_control { color: #7c3aed; background: #f5f0ff; border-color: #ddd6fe; }
-
-.block-toggle {
-  min-height: 42px;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  border: 1px solid #dce5ef;
-  border-radius: 13px;
-  background: #fff;
-  padding: 0 13px;
-  color: #263653;
-  font-size: 12px;
-  font-weight: 950;
-}
 
 .block-toggle.active {
   color: #dc2626;
@@ -2085,22 +1831,6 @@ button:disabled {
   font-weight: 750;
 }
 
-.confirm-warning {
-  margin-top: 16px;
-  padding: 13px 16px;
-  border: 1px solid #fed7aa;
-  border-radius: 13px;
-  background: #fffbeb;
-  color: #9a3412;
-  text-align: left;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.confirm-warning ul {
-  list-style: disc;
-  padding-left: 18px;
-}
 
 .confirm-actions {
   justify-content: center;
@@ -2124,7 +1854,6 @@ button:disabled {
 
 @media (max-width: 960px) {
   .usuarios-hero,
-  .truth-card,
   .bulk-card,
   .table-footer {
     display: flex;
