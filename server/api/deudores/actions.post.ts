@@ -3,6 +3,7 @@ import { runWithBridgeAgentId, query } from '../../utils/db'
 import { sendEmail } from '../../utils/mailer'
 import { whatsappApi } from '../../utils/whatsapp'
 import { getDeudoresGlobal } from '../../utils/deudores'
+import { normalizeTemplateInput, renderCobranzaEmail } from '../../utils/cobranzaEmail'
 
 const ACTIONS = new Set(['correo_recordatorio', 'whatsapp_contacto', 'carta_suspension', 'llamada_telefonica', 'reporte_deudores'])
 
@@ -37,20 +38,6 @@ const getDeudorContext = async (matricula: string, ciclo: string, mes: number, u
   return rows.find(row => row.matricula === matricula && Number(row.mes) === mes)
 }
 
-const escapeHtml = (value: unknown) => String(value || '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#039;')
-
-const buildHtmlBreakdown = (deudor: any) => {
-  return (deudor?.desglose || [])
-    .filter((item: any) => Number(item.saldo || 0) > 0)
-    .map((item: any) => `${escapeHtml(item.conceptoNombre)} (${escapeHtml(item.mesLabel || item.mesCargo)}): $${Number(item.saldo || 0).toFixed(2)}`)
-    .join('<br>')
-}
-
 const buildPlainBreakdown = (deudor: any) => {
   return (deudor?.desglose || [])
     .filter((item: any) => Number(item.saldo || 0) > 0)
@@ -61,18 +48,36 @@ const buildPlainBreakdown = (deudor: any) => {
     }))
 }
 
+type EmailOptions = {
+  subject?: string
+  htmlTemplate?: string
+  includeDesglose?: boolean
+}
+
+const getCobranzaTemplate = async (emailOptions?: EmailOptions | null) => {
+  const [tpl] = await query<any[]>(`SELECT subject, html_template, include_desglose FROM cobranza_email_templates WHERE code = 'deudores_recordatorio' LIMIT 1`)
+  const saved = normalizeTemplateInput(tpl)
+  return normalizeTemplateInput({
+    subject: emailOptions?.subject || saved.subject,
+    htmlTemplate: emailOptions?.htmlTemplate || saved.htmlTemplate,
+    includeDesglose: emailOptions?.includeDesglose ?? saved.includeDesglose
+  })
+}
+
 const processAction = async ({
   matricula,
   ciclo,
   mes,
   accion,
-  user
+  user,
+  emailOptions
 }: {
   matricula: string,
   ciclo: string,
   mes: number,
   accion: string,
-  user: any
+  user: any,
+  emailOptions?: EmailOptions | null
 }) => {
   if (!matricula || !mes) {
     throw createError({ statusCode: 400, statusMessage: 'Alumno o periodo inválido.' })
@@ -90,23 +95,34 @@ const processAction = async ({
   const deudor = await getDeudorContext(matricula, ciclo, mes, user)
   const saldo = Number(deudor?.saldoPendiente || deudor?.saldoColegiatura || 0)
   const desglose = buildPlainBreakdown(deudor)
+  let emailMetadata: Record<string, any> | null = null
 
   if (accion === 'correo_recordatorio') {
-    const [student] = await query<any[]>(`SELECT nombreCompleto, correo, \`Nombre del padre o tutor\` AS padre FROM base WHERE matricula = ? LIMIT 1`, [matricula])
+    const [student] = await query<any[]>(
+      `SELECT nombreCompleto, correo, telefono, nivel, grado, grupo, plantel, \`Nombre del padre o tutor\` AS padre FROM base WHERE matricula = ? LIMIT 1`,
+      [matricula]
+    )
     if (!student?.correo) throw createError({ statusCode: 400, statusMessage: 'El alumno no tiene correo registrado.' })
 
-    const desgloseHtml = buildHtmlBreakdown(deudor)
-    const [tpl] = await query<any[]>(`SELECT subject, html_template FROM cobranza_email_templates WHERE code = 'deudores_recordatorio' LIMIT 1`)
-    const html = String(tpl?.html_template || '')
-      .replace(/{{nombre_alumno}}/g, escapeHtml(student.nombreCompleto || ''))
-      .replace(/{{tutor}}/g, escapeHtml(student.padre || 'Padre, madre o tutor'))
-      .replace(/{{matricula}}/g, escapeHtml(matricula))
-      .replace(/{{mes}}/g, escapeHtml(String(mes)))
-      .replace(/{{ciclo}}/g, escapeHtml(ciclo))
-      .replace(/{{deuda}}/g, saldo.toFixed(2))
-      .replace(/{{desglose}}/g, desgloseHtml || 'Estado de cuenta pendiente de regularizar')
+    const template = await getCobranzaTemplate(emailOptions)
+    const rendered = renderCobranzaEmail({
+      student,
+      deudor,
+      matricula,
+      ciclo,
+      mes,
+      subject: template.subject,
+      htmlTemplate: template.htmlTemplate,
+      includeDesglose: template.includeDesglose
+    })
 
-    await sendEmail(student.correo, tpl?.subject || 'Recordatorio de pago - Estado de cuenta', html, user?.email)
+    await sendEmail(student.correo, rendered.subject, rendered.html, user?.email)
+    emailMetadata = {
+      destinatario: student.correo,
+      subject: rendered.subject,
+      includeDesglose: template.includeDesglose,
+      conceptosEnviados: rendered.desglose.length
+    }
   }
 
   if (accion === 'whatsapp_contacto') {
@@ -141,7 +157,8 @@ const processAction = async ({
         origen: 'manual',
         iniciadoPorHumano: true,
         saldo,
-        desglose
+        desglose,
+        email: emailMetadata
       })
     ]
   )
@@ -157,6 +174,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const accion = String(body?.accion || '').trim()
   const isBatch = Array.isArray(body?.items)
   const items = normalizeItems(body)
+  const emailOptions = body?.emailOptions || null
 
   if (!ciclo || !ACTIONS.has(accion) || !items.length) {
     throw createError({ statusCode: 400, statusMessage: 'Parámetros inválidos para registrar acción de cobranza.' })
@@ -174,7 +192,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         ciclo,
         mes: item.mes,
         accion,
-        user
+        user,
+        emailOptions
       })
       results.push(result)
       if (result.duplicated) duplicated++

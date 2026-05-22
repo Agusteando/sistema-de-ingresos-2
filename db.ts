@@ -1,1 +1,3 @@
-No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID, x-db-agent-id header...
+// Placeholder retained for compatibility with prior workspace exports.
+// Database access lives in server/utils/db.ts.
+export {}

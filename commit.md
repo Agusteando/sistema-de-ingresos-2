@@ -1,1 +1,1 @@
-fix: manage institutional users from external workspace table
+feat: update payment receipts and cobranza email flow

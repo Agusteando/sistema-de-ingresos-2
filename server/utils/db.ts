@@ -606,6 +606,7 @@ export const ensureSchema = async () => {
           code VARCHAR(100) NOT NULL,
           subject VARCHAR(255) NOT NULL,
           html_template LONGTEXT NOT NULL,
+          include_desglose TINYINT(1) NOT NULL DEFAULT 1,
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           updated_by VARCHAR(255) NULL,
           UNIQUE KEY uniq_cobranza_email_template_code (code)
@@ -631,15 +632,18 @@ export const ensureSchema = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
+      await checkAndAddColumn('cobranza_email_templates', 'include_desglose', "TINYINT(1) NOT NULL DEFAULT 1")
+
       await runSafeQuery(`
-        INSERT INTO cobranza_email_templates (code, subject, html_template, updated_by)
+        INSERT INTO cobranza_email_templates (code, subject, html_template, include_desglose, updated_by)
         VALUES (
           'deudores_recordatorio',
-          'Recordatorio de pago - Estado de cuenta',
-          '<div style="font-family: Inter, Arial, sans-serif; color: #1f2937; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;"><div style="background:#0f766e;color:#fff;padding:18px 24px;"><h2 style="margin:0;font-size:18px;">Recordatorio de pago</h2></div><div style="padding:24px;"><p style="margin-top:0;">Estimado(a) <strong>{{tutor}}</strong>,</p><p>Le recordamos que el estado de cuenta del alumno <strong>{{nombre_alumno}}</strong> (Matricula: <strong>{{matricula}}</strong>) correspondiente al periodo <strong>{{mes}}/{{ciclo}}</strong> presenta saldo pendiente por <strong>\${{deuda}} MXN</strong>.</p><p style="margin:16px 0 6px;"><strong>Desglose:</strong></p><p style="margin-top:0;">{{desglose}}</p><p>Si ya realizo el pago y se encuentra en proceso de conciliacion, por favor haga caso omiso a este mensaje.</p><p>Quedamos atentos para apoyarle en cualquier duda.</p><p style="margin-bottom:0;">Atentamente,<br><strong>Administracion y Cobranza</strong></p></div></div>',
+          'Recordatorio de pago - {{nombre_alumno}}',
+          '<div style="font-family: Inter, Arial, sans-serif; color: #1f2937; max-width: 680px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden; background: #ffffff;"><div style="background:#0f766e;color:#fff;padding:18px 24px;"><h2 style="margin:0;font-size:18px;">Recordatorio de pago</h2><p style="margin:4px 0 0;font-size:13px;opacity:.9;">Estado de cuenta escolar</p></div><div style="padding:24px;"><p style="margin-top:0;">Estimado(a) <strong>{{tutor}}</strong>,</p><p>Le informamos que el estado de cuenta del alumno <strong>{{nombre_alumno}}</strong> presenta un saldo pendiente por <strong>{{saldo_total_formateado}}</strong>.</p><table style="width:100%;border-collapse:collapse;margin:18px 0;font-size:13px;"><tbody><tr><td style="padding:8px 0;color:#64748b;">Matricula</td><td style="padding:8px 0;text-align:right;font-weight:700;">{{matricula}}</td></tr><tr><td style="padding:8px 0;color:#64748b;">Ciclo</td><td style="padding:8px 0;text-align:right;font-weight:700;">{{ciclo}}</td></tr><tr><td style="padding:8px 0;color:#64748b;">Periodo de cobranza</td><td style="padding:8px 0;text-align:right;font-weight:700;">{{periodo_cobranza}}</td></tr><tr><td style="padding:8px 0;color:#64748b;">Fecha limite</td><td style="padding:8px 0;text-align:right;font-weight:700;">{{fecha_limite_pago}}</td></tr></tbody></table>{{desglose_table}}<p>Le solicitamos regularizar el pago o comunicarse con Administracion si ya cuenta con un comprobante en proceso de conciliacion.</p><p style="margin-bottom:0;">Atentamente,<br><strong>Administracion y Cobranza</strong></p></div></div>',
+          1,
           'system'
         )
-        ON DUPLICATE KEY UPDATE code = code;
+        ON DUPLICATE KEY UPDATE subject = IF(updated_by = 'system', VALUES(subject), subject), html_template = IF(updated_by = 'system', VALUES(html_template), html_template), include_desglose = IF(updated_by = 'system', VALUES(include_desglose), include_desglose);
       `)
       try {
         const superAdminEmail = 'desarrollo.tecnologico@casitaiedis.edu.mx'

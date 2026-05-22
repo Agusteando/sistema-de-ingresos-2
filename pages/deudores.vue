@@ -358,6 +358,89 @@
     </Teleport>
 
     <Teleport to="body">
+      <div v-if="emailComposer.open" class="dialog-overlay" @click.self="closeEmailComposer">
+        <div class="dialog wide email-dialog">
+          <header class="dialog-header">
+            <div>
+              <span class="kicker">Correo de cobranza</span>
+              <h3>Previsualizar antes de enviar</h3>
+            </div>
+            <button class="icon-button" @click="closeEmailComposer"><LucideX :size="16" /></button>
+          </header>
+          <div class="dialog-body email-dialog-body">
+            <div class="email-composer-grid">
+              <section class="email-editor-panel">
+                <div class="email-target-summary">
+                  <strong>{{ emailComposer.targets.length }} destinatarios seleccionados</strong>
+                  <span>{{ emailPreviewReadyCount }} listos · {{ emailPreviewFailedCount }} con observación</span>
+                </div>
+
+                <label class="form-row">
+                  <span>Asunto</span>
+                  <input v-model="emailComposer.subject" type="text" @input="markEmailPreviewDirty">
+                </label>
+
+                <label class="checkbox-row">
+                  <input v-model="emailComposer.includeDesglose" type="checkbox" @change="refreshEmailPreview">
+                  <span>Incluir desglose en tabla cuando existan conceptos pendientes</span>
+                </label>
+
+                <label class="form-row">
+                  <span>Plantilla HTML</span>
+                  <textarea v-model="emailComposer.htmlTemplate" class="email-template-input" @input="markEmailPreviewDirty"></textarea>
+                </label>
+
+                <div class="template-helper" v-pre>
+                  Variables: {{tutor}}, {{nombre_alumno}}, {{matricula}}, {{periodo_cobranza}}, {{saldo_total_formateado}}, {{fecha_limite_pago}}, {{desglose_table}}.
+                </div>
+              </section>
+
+              <section class="email-preview-panel">
+                <div class="preview-toolbar">
+                  <div>
+                    <span>Vista previa</span>
+                    <strong>{{ activeEmailPreview?.alumno || 'Sin destinatario' }}</strong>
+                  </div>
+                  <select v-if="emailComposer.previews.length > 1" v-model.number="emailComposer.previewIndex">
+                    <option v-for="(preview, index) in emailComposer.previews" :key="`${preview.matricula}-${preview.mes}`" :value="index">
+                      {{ preview.alumno || preview.matricula }}
+                    </option>
+                  </select>
+                </div>
+
+                <div v-if="activeEmailPreview?.success" class="email-preview-meta">
+                  <span>Para: {{ activeEmailPreview.to }}</span>
+                  <span>Asunto: {{ activeEmailPreview.subject }}</span>
+                  <span>{{ activeEmailPreview.conceptos }} conceptos en desglose</span>
+                </div>
+                <div v-else class="email-preview-error">
+                  {{ activeEmailPreview?.message || emailComposer.error || 'Genera una previsualización para continuar.' }}
+                </div>
+
+                <iframe class="email-preview-frame" title="Vista previa del correo" :srcdoc="activeEmailPreviewHtml"></iframe>
+              </section>
+            </div>
+          </div>
+          <footer class="dialog-footer">
+            <button class="quiet-button" @click="closeEmailComposer" :disabled="emailComposer.sending">Cancelar</button>
+            <button class="quiet-button" @click="saveEmailTemplate" :disabled="emailComposer.saving || emailComposer.sending || !emailComposer.subject.trim() || !emailComposer.htmlTemplate.trim()">
+              <LucideCheckCircle :size="16" />
+              {{ emailComposer.saving ? 'Guardando' : 'Guardar plantilla' }}
+            </button>
+            <button class="quiet-button" @click="refreshEmailPreview" :disabled="emailComposer.loading || emailComposer.sending || !emailComposer.subject.trim() || !emailComposer.htmlTemplate.trim()">
+              <LucideRefreshCw :size="16" :class="{ 'animate-spin': emailComposer.loading }" />
+              Actualizar vista
+            </button>
+            <button class="primary-action" @click="sendEmailComposer" :disabled="emailComposer.sending || emailComposer.loading || emailPreviewReadyCount === 0 || emailComposer.previewDirty">
+              <LucideMail :size="16" />
+              {{ emailComposer.sending ? 'Enviando' : `Enviar ${emailPreviewReadyCount}` }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
       <div v-if="detailsTarget" class="drawer-overlay" @click.self="closeDetails">
         <aside class="detail-drawer">
           <header class="drawer-header">
@@ -499,6 +582,21 @@ const showExceptionModal = ref(false)
 const savingException = ref(false)
 const showWhatsappSetup = ref(false)
 const exceptionForm = ref({ fecha: '', motivo: '' })
+const emailComposer = ref({
+  open: false,
+  loading: false,
+  saving: false,
+  sending: false,
+  previewDirty: false,
+  clearSelection: false,
+  targets: [],
+  subject: '',
+  htmlTemplate: '',
+  includeDesglose: true,
+  previews: [],
+  previewIndex: 0,
+  error: ''
+})
 
 const DEBT_DESIGN_WIDTH = 1540
 const DEBT_MIN_DESIGN_HEIGHT = 760
@@ -758,16 +856,24 @@ const eligibleSelectedRows = computed(() => selectedRows.value.filter(d => canRu
 const blockedSelectedCount = computed(() => Math.max(0, selectedRows.value.length - eligibleSelectedRows.value.length))
 
 const selectedActionCopy = computed(() => {
-  if (selectedMassAction.value === 'correo_recordatorio') return 'Selecciona alumnos con correo y saldo vencido para enviar el primer aviso.'
+  if (selectedMassAction.value === 'correo_recordatorio') return 'Selecciona alumnos con correo y saldo vencido para revisar el mensaje antes de enviarlo.'
   if (selectedMassAction.value === 'reporte_deudores') return 'Registra el corte y descarga un Excel con el desglose que necesita administracion.'
   if (selectedMassAction.value === 'whatsapp_contacto') return 'Usa WhatsApp solo con telefono registrado; la vinculacion aparece como paso guiado cuando haga falta.'
   if (selectedMassAction.value === 'carta_suspension') return 'Genera cartas para casos avanzados sin perder el historial.'
   return 'Registra llamadas para cerrar el periodo con trazabilidad.'
 })
 
+const emailPreviewReadyCount = computed(() => emailComposer.value.previews.filter(item => item.success).length)
+const emailPreviewFailedCount = computed(() => emailComposer.value.previews.filter(item => !item.success).length)
+const activeEmailPreview = computed(() => emailComposer.value.previews[emailComposer.value.previewIndex] || null)
+const activeEmailPreviewHtml = computed(() => activeEmailPreview.value?.success
+  ? activeEmailPreview.value.html
+  : '<div style="font-family:Inter,Arial,sans-serif;padding:24px;color:#64748b;">Sin vista previa disponible.</div>'
+)
+
 const actionReadyCount = (action) => filteredDeudores.value.filter(d => canRunAction(d, action)).length
 
-const hasBlockingOverlay = computed(() => showExceptionModal.value || showWhatsappSetup.value || Boolean(detailsTarget.value))
+const hasBlockingOverlay = computed(() => showExceptionModal.value || showWhatsappSetup.value || emailComposer.value.open || Boolean(detailsTarget.value))
 
 watch(hasBlockingOverlay, (val) => {
   if (typeof document !== 'undefined') document.body.style.overflow = val ? 'hidden' : ''
@@ -924,6 +1030,136 @@ const selectEligibleForAction = (action) => {
     .map(rowKey)
 }
 
+const emailTargetsPayload = (targets) => targets.map(d => ({ matricula: d.matricula, mes: d.mes }))
+
+const loadEmailTemplate = async () => {
+  const template = await $fetch('/api/deudores/template')
+  emailComposer.value.subject = template?.subject || 'Recordatorio de pago - {{nombre_alumno}}'
+  emailComposer.value.htmlTemplate = template?.htmlTemplate || template?.html_template || ''
+  emailComposer.value.includeDesglose = template?.includeDesglose !== undefined
+    ? Boolean(template.includeDesglose)
+    : Boolean(Number(template?.include_desglose ?? 1))
+}
+
+const markEmailPreviewDirty = () => {
+  emailComposer.value.previewDirty = true
+}
+
+const refreshEmailPreview = async () => {
+  if (!emailComposer.value.targets.length) return
+  emailComposer.value.loading = true
+  emailComposer.value.error = ''
+  try {
+    const response = await $fetch('/api/deudores/email-preview', {
+      method: 'POST',
+      body: {
+        ciclo: normalizeCicloKey(state.value.ciclo),
+        items: emailTargetsPayload(emailComposer.value.targets),
+        subject: emailComposer.value.subject,
+        htmlTemplate: emailComposer.value.htmlTemplate,
+        includeDesglose: emailComposer.value.includeDesglose
+      }
+    })
+
+    emailComposer.value.previews = response?.previews || []
+    emailComposer.value.previewIndex = 0
+    emailComposer.value.previewDirty = false
+    if (response?.failed) {
+      show(`${response.failed} correos no tienen vista previa disponible.`, 'danger')
+    }
+  } catch (e) {
+    emailComposer.value.previews = []
+    emailComposer.value.error = e?.statusMessage || 'No se pudo generar la vista previa del correo.'
+    show(emailComposer.value.error, 'danger')
+  } finally {
+    emailComposer.value.loading = false
+  }
+}
+
+const openEmailComposer = async (targets, options = {}) => {
+  const runnableTargets = targets.filter(d => canRunAction(d, 'correo_recordatorio'))
+  if (!runnableTargets.length) {
+    show('No hay alumnos listos para correo de cobranza.', 'danger')
+    return
+  }
+
+  detailsTarget.value = null
+  emailComposer.value.open = true
+  emailComposer.value.loading = true
+  emailComposer.value.saving = false
+  emailComposer.value.sending = false
+  emailComposer.value.previewDirty = false
+  emailComposer.value.clearSelection = Boolean(options.clearSelection)
+  emailComposer.value.targets = runnableTargets
+  emailComposer.value.previews = []
+  emailComposer.value.previewIndex = 0
+  emailComposer.value.error = ''
+
+  try {
+    await loadEmailTemplate()
+    await refreshEmailPreview()
+  } catch (e) {
+    emailComposer.value.error = e?.statusMessage || 'No se pudo cargar la plantilla de correo.'
+    show(emailComposer.value.error, 'danger')
+  } finally {
+    emailComposer.value.loading = false
+  }
+}
+
+const closeEmailComposer = (force = false) => {
+  if (emailComposer.value.sending && !force) return
+  emailComposer.value.open = false
+  emailComposer.value.targets = []
+  emailComposer.value.previews = []
+  emailComposer.value.previewIndex = 0
+  emailComposer.value.error = ''
+}
+
+const saveEmailTemplate = async () => {
+  emailComposer.value.saving = true
+  try {
+    await $fetch('/api/deudores/template', {
+      method: 'POST',
+      body: {
+        subject: emailComposer.value.subject,
+        htmlTemplate: emailComposer.value.htmlTemplate,
+        includeDesglose: emailComposer.value.includeDesglose
+      }
+    })
+    emailComposer.value.previewDirty = true
+    show('Plantilla de cobranza guardada.')
+  } catch (e) {
+    show(e?.statusMessage || 'No se pudo guardar la plantilla.', 'danger')
+  } finally {
+    emailComposer.value.saving = false
+  }
+}
+
+const sendEmailComposer = async () => {
+  if (emailComposer.value.previewDirty) {
+    show('Actualiza la vista previa antes de enviar.', 'danger')
+    return
+  }
+
+  const readyKeys = new Set(emailComposer.value.previews
+    .filter(item => item.success)
+    .map(item => `${item.matricula}-${item.mes}`))
+  const targets = emailComposer.value.targets.filter(item => readyKeys.has(rowKey(item)))
+  if (!targets.length) return
+
+  emailComposer.value.sending = true
+  await executeManualAction(targets, 'correo_recordatorio', {
+    confirmed: true,
+    clearSelection: emailComposer.value.clearSelection,
+    emailOptions: {
+      subject: emailComposer.value.subject,
+      htmlTemplate: emailComposer.value.htmlTemplate,
+      includeDesglose: emailComposer.value.includeDesglose
+    }
+  })
+  emailComposer.value.sending = false
+}
+
 const runSingleAction = async (d, action) => {
   await executeManualAction([d], action, { clearSelection: false })
 }
@@ -935,6 +1171,11 @@ const executeMassAction = async () => {
 const executeManualAction = async (targets, action, options = {}) => {
   if (!targets.length || !action) return
 
+  if (action === 'correo_recordatorio' && !options.confirmed) {
+    await openEmailComposer(targets, options)
+    return
+  }
+
   runningAction.value = action
   try {
     const response = await $fetch('/api/deudores/actions', {
@@ -942,7 +1183,8 @@ const executeManualAction = async (targets, action, options = {}) => {
       body: {
         ciclo: normalizeCicloKey(state.value.ciclo),
         accion: action,
-        items: targets.map(d => ({ matricula: d.matricula, mes: d.mes }))
+        items: targets.map(d => ({ matricula: d.matricula, mes: d.mes })),
+        emailOptions: options.emailOptions
       }
     })
 
@@ -962,6 +1204,7 @@ const executeManualAction = async (targets, action, options = {}) => {
     if (whatsappBlocked) openWhatsappSetup()
 
     if (options.clearSelection) selectedKeys.value = []
+    if (action === 'correo_recordatorio' && options.confirmed) closeEmailComposer(true)
     await loadData()
   } catch (e) {
     show(e?.statusMessage || 'No se pudo ejecutar la accion.', 'danger')
@@ -970,6 +1213,7 @@ const executeManualAction = async (targets, action, options = {}) => {
     }
   } finally {
     runningAction.value = ''
+    if (action === 'correo_recordatorio' && options.confirmed) emailComposer.value.sending = false
   }
 }
 
@@ -2095,6 +2339,115 @@ input[type="checkbox"] {
 .whatsapp-dialog-body :deep(.whatsapp-onboarding) {
   border-radius: 8px;
   box-shadow: none;
+}
+
+.email-dialog {
+  width: min(100%, 1120px);
+}
+
+.email-dialog-body {
+  background: #f9fbfa;
+}
+
+.email-composer-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.85fr) minmax(360px, 1.15fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.email-editor-panel,
+.email-preview-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.email-target-summary,
+.email-preview-meta,
+.email-preview-error,
+.template-helper {
+  border: 1px solid var(--debt-soft-line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.email-target-summary {
+  display: grid;
+  gap: 3px;
+}
+
+.email-target-summary strong,
+.preview-toolbar strong {
+  color: var(--debt-ink);
+}
+
+.email-target-summary span,
+.template-helper,
+.preview-toolbar span,
+.email-preview-meta span,
+.email-preview-error {
+  color: var(--debt-muted);
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--debt-soft-line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+  color: var(--debt-ink);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.email-template-input {
+  min-height: 260px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preview-toolbar > div,
+.preview-toolbar select {
+  min-width: 0;
+}
+
+.preview-toolbar select {
+  max-width: 260px;
+  border: 1px solid var(--debt-line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 9px 10px;
+  color: var(--debt-ink);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.email-preview-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.email-preview-frame {
+  width: 100%;
+  min-height: 430px;
+  border: 1px solid var(--debt-line);
+  border-radius: 10px;
+  background: #fff;
 }
 
 .dialog-footer {
