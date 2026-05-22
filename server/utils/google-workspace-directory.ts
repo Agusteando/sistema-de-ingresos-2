@@ -105,36 +105,25 @@ const textMatches = (user: ReturnType<typeof normalizeDirectoryUser>, search: st
     .includes(value)
 }
 
-export const searchWorkspaceDirectoryUsers = async (search: string, maxResults = 25) => {
+export const searchWorkspaceDirectoryUsers = async (search: string, maxResults = 12) => {
   const admin = getWorkspaceDirectoryService()
   const normalizedSearch = normalizeText(search).slice(0, 80)
-  const limit = Math.max(1, Math.min(Number(maxResults) || 25, 200))
+  const limit = Math.max(1, Math.min(Number(maxResults) || 12, 25))
 
   const makeRequest = async (query?: string) => {
-    const collected: ReturnType<typeof normalizeDirectoryUser>[] = []
-    let pageToken: string | undefined
+    const response = await admin.users.list({
+      domain: WORKSPACE_DOMAIN,
+      maxResults: limit,
+      orderBy: 'email',
+      projection: 'full',
+      viewType: 'domain_public',
+      query,
+      fields: 'users(id,primaryEmail,name,thumbnailPhotoUrl,suspended,archived,orgUnitPath)'
+    })
 
-    do {
-      const response = await admin.users.list({
-        domain: WORKSPACE_DOMAIN,
-        maxResults: Math.min(100, limit - collected.length),
-        orderBy: 'email',
-        projection: 'full',
-        viewType: 'domain_public',
-        query,
-        pageToken,
-        fields: 'nextPageToken,users(id,primaryEmail,name,thumbnailPhotoUrl,suspended,archived,orgUnitPath)'
-      })
-
-      const users = (response.data.users || [])
-        .map((user) => normalizeDirectoryUser(user as DirectoryUser))
-        .filter((user) => isCasitaWorkspaceEmail(user.email))
-
-      collected.push(...users)
-      pageToken = response.data.nextPageToken || undefined
-    } while (pageToken && collected.length < limit)
-
-    return collected.slice(0, limit)
+    return (response.data.users || [])
+      .map((user) => normalizeDirectoryUser(user as DirectoryUser))
+      .filter((user) => isCasitaWorkspaceEmail(user.email))
   }
 
   try {

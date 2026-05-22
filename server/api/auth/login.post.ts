@@ -154,12 +154,12 @@ export default defineEventHandler(async (event) => {
     const user = externalUsersAvailable && !isSuperAdminRole(localUser.role)
       ? {
           ...localUser,
-          username: payload.name || localUser.username,
-          email: localUser.email || payload.email,
+          username: externalUser?.username || localUser.username,
+          email: externalUser?.email || localUser.email,
           role: externalUser?.role || 'plantel',
           planteles: externalUser?.planteles || localUser.planteles,
           plantel: externalUser?.plantel || localUser.plantel,
-          avatar: payload.picture || localUser.avatar
+          avatar: externalUser?.avatar || localUser.avatar
         }
       : localUser
     const role = String(user.role || 'plantel').trim() || 'plantel'

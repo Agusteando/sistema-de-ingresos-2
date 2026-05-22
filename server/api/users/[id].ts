@@ -1,10 +1,10 @@
-import { isExternalUsersAvailable, updateExternalControlEscolarAccess, updateExternalUser } from '../../utils/external-users'
+import { deleteExternalUser, isExternalUsersAvailable, updateExternalUser } from '../../utils/external-users'
 
 const assertExternalUsersAvailable = async () => {
   if (await isExternalUsersAvailable()) return
   throw createError({
     statusCode: 503,
-    message: 'No se pudo consultar la configuración de accesos de Control Escolar. Intente de nuevo o revise la conexión con la base central.'
+    message: 'No se pudo cargar el directorio de usuarios.'
   })
 }
 
@@ -21,12 +21,11 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'PUT') {
     const body = await readBody(event)
-    if (typeof body?.enabled === 'boolean') return await updateExternalControlEscolarAccess(body)
     return await updateExternalUser(id, body)
   }
 
   if (method === 'DELETE') {
-    throw createError({ statusCode: 405, message: 'No se eliminan usuarios desde esta pantalla. Para retirar permisos, revoque el acceso a Control Escolar.' })
+    return await deleteExternalUser(id)
   }
 
   throw createError({ statusCode: 405, message: 'Metodo no permitido.' })
