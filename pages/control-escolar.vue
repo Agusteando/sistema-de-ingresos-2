@@ -1306,26 +1306,30 @@ const persistCurrentControlStudentsCache = () => writeCachedControlStudents(buil
   catalogs: { ...catalogs, gruposPorGrado: { ...(catalogs.gruposPorGrado || {}) } }
 })
 
+const isDomEventPayload = (value) => Boolean(
+  value &&
+  typeof value === 'object' &&
+  ('isTrusted' in value || 'target' in value || 'currentTarget' in value)
+)
+
 const loadStudents = async (options = {}) => {
   if (!selectedAgentId.value) return
 
-  const { useCache = true, clearExisting = false, forceLoading = false } = options
+  const safeOptions = isDomEventPayload(options) ? {} : (options || {})
+  const { useCache = true, clearExisting = false, forceLoading = false } = safeOptions
   const requestId = ++controlStudentsRequestId
   const query = buildIndexQuery()
-
-  if (clearExisting) resetControlStudentsView()
-
   const cached = useCache ? readCachedControlStudents(query) : null
-  const hadStudents = !clearExisting && (controlStudentsIndex.value.length > 0 || students.value.length > 0)
+  const hadStudents = controlStudentsIndex.value.length > 0 || students.value.length > 0
 
   if (cached) {
+    pagination.page = 1
     applyControlStudentsPayload(cached)
     loadError.value = ''
-    studentsLoading.value = forceLoading
-  } else if (forceLoading || !hadStudents) {
-    studentsLoading.value = true
-  } else {
     studentsLoading.value = false
+  } else {
+    if (clearExisting) resetControlStudentsView()
+    studentsLoading.value = forceLoading || !hadStudents || clearExisting
   }
 
   try {
@@ -1338,7 +1342,8 @@ const loadStudents = async (options = {}) => {
   } catch (error) {
     if (requestId !== controlStudentsRequestId) return
 
-    if (clearExisting || (!cached && !hadStudents)) {
+    const canKeepWorking = Boolean(cached) || (!clearExisting && hadStudents)
+    if (!canKeepWorking) {
       resetControlStudentsView()
       loadError.value = error?.data?.message || error?.message || 'Plantel fuera de línea o sin respuesta.'
     } else {
@@ -1356,7 +1361,9 @@ const loadStudents = async (options = {}) => {
 
 
 const refreshAll = async (options = {}) => {
-  await Promise.all([loadKpis(), loadStudents({ useCache: false, ...options })])
+  const safeOptions = isDomEventPayload(options) ? {} : (options || {})
+  const { forceNetwork = false, ...studentOptions } = safeOptions
+  await Promise.all([loadKpis(), loadStudents({ useCache: !forceNetwork, ...studentOptions })])
 }
 
 const reloadControlStudentsForCurrentScope = async () => {
@@ -1666,7 +1673,7 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
   }
 
   if (refreshStudents && externalConcepts.value.join('|') !== previousConcepts) {
-    await refreshAll({ clearExisting: true, forceLoading: true })
+    await refreshAll({ clearExisting: false, forceLoading: !controlStudentsIndex.value.length })
   }
 }
 
@@ -1701,10 +1708,11 @@ watch(showControlFirstSyncNotice, (visible) => {
 })
 
 const handleCicloChanged = (event) => {
+  const previousCiclo = currentCicloKey.value
   const cicloKey = normalizeCicloOption(event?.detail?.ciclo || cicloCookie.value || state.value?.ciclo)
   if (state.value.ciclo !== cicloKey) state.value.ciclo = cicloKey
   cicloCookie.value = cicloKey
-  reloadControlStudentsForCurrentScope()
+  if (normalizeCicloKey(cicloKey) === previousCiclo) reloadControlStudentsForCurrentScope()
 }
 
 onMounted(async () => {
