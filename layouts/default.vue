@@ -25,7 +25,12 @@
           alt="IECS IEDIS"
           class="sidebar-logo"
         />
-        <h2>Sistema de Ingresos</h2>
+        <img
+          src="/aurora-logo.png"
+          alt="Aurora"
+          class="sidebar-system-logo"
+        />
+        <h2>Aurora</h2>
       </div>
 
       <nav class="sidebar-nav">
@@ -420,6 +425,7 @@ const logout = async () => {
   margin-bottom: 0;
 }
 
+.income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-system-logo,
 .income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-brand h2,
 .income-shell.sidebar-collapsed .nav-label,
 .income-shell.sidebar-collapsed .sidebar-footer,
@@ -503,16 +509,24 @@ const logout = async () => {
   display: block;
   max-height: 48px;
   max-width: 106px;
-  margin: 0 auto 14px;
+  margin: 0 auto 12px;
+  object-fit: contain;
+}
+
+.sidebar-system-logo {
+  display: block;
+  width: min(100%, 182px);
+  height: auto;
+  margin: 0 auto 10px;
   object-fit: contain;
 }
 
 .sidebar-brand h2 {
   margin: 0;
   color: #267447;
-  font-size: 0.73rem;
-  font-weight: 800;
-  letter-spacing: 0.17em;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -1133,6 +1147,11 @@ const logout = async () => {
   max-height: 42px;
   max-width: 96px;
   margin-bottom: 10px;
+}
+
+.sidebar-design-canvas .sidebar-system-logo {
+  width: min(100%, 172px);
+  margin-bottom: 8px;
 }
 
 .sidebar-design-canvas .sidebar-brand h2 {
