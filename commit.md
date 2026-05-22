@@ -1,1 +1,1 @@
-fix: sync login users and clean usuarios identity header
+fix: allow control escolar login without bridge dependency

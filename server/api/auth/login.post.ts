@@ -161,23 +161,37 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 403, message: 'Tu acceso a Sistema de Ingresos esta bloqueado.' })
     }
 
-    const localUser = await runWithBridgeAgentId(requestedPlantel, async () => ensureLocalUser(payload, requestedPlantel))
-    const user = externalUser && !isSuperAdminRole(localUser.role)
+    const externalControlOnly = !seedAdmin && externalUser && isControlEscolarOnlyRole(externalUser.role)
+    const user = externalControlOnly
       ? {
-          ...localUser,
-          username: externalUser.username || localUser.username,
-          email: externalUser.email || localUser.email,
-          role: externalUser.role || 'plantel',
-          planteles: externalUser.planteles || localUser.planteles,
-          plantel: externalUser.plantel || localUser.plantel,
-          avatar: externalUser.avatar || localUser.avatar
+          username: externalUser.username || externalUser.displayName || payload.name || normalizedEmail,
+          email: externalUser.email || normalizedEmail,
+          role: externalUser.role || 'ROLE_CTRL',
+          planteles: externalUser.planteles || requestedPlantel || PLANTELES_LIST[0],
+          plantel: externalUser.plantel || requestedPlantel || PLANTELES_LIST[0],
+          avatar: externalUser.avatar || externalUser.picture || payload.picture || null
         }
-      : localUser
-    const role = String(user.role || 'plantel').trim() || 'plantel'
+      : (() => null)()
+
+    const resolvedUser = user || await runWithBridgeAgentId(requestedPlantel, async () => {
+      const localUser = await ensureLocalUser(payload, requestedPlantel)
+      return externalUser && !isSuperAdminRole(localUser.role)
+        ? {
+            ...localUser,
+            username: externalUser.username || localUser.username,
+            email: externalUser.email || localUser.email,
+            role: externalUser.role || 'plantel',
+            planteles: externalUser.planteles || localUser.planteles,
+            plantel: externalUser.plantel || localUser.plantel,
+            avatar: externalUser.avatar || localUser.avatar
+          }
+        : localUser
+    })
+    const role = String(resolvedUser.role || 'plantel').trim() || 'plantel'
     const superAdmin = isSuperAdminRole(role)
     const controlEscolar = hasControlEscolarRole(role)
     const controlEscolarOnly = !superAdmin && isControlEscolarOnlyRole(role)
-    const allowedPlanteles = resolveAllowedPlanteles(user, superAdmin, requestedPlantel)
+    const allowedPlanteles = resolveAllowedPlanteles(resolvedUser, superAdmin, requestedPlantel)
     const requestedAllowed = allowedPlanteles.includes(requestedPlantel)
     const activePlantel = superAdmin
       ? (requestedPlantel || allowedPlanteles[0])
@@ -185,8 +199,8 @@ export default defineEventHandler(async (event) => {
     const homePlantel = activePlantel && activePlantel !== 'GLOBAL' ? activePlantel : allowedPlanteles[0]
     const opts = cookieOptions()
 
-    setCookie(event, 'auth_email', user.email || payload.email, opts)
-    setCookie(event, 'auth_name', user.username || payload.name || payload.email, opts)
+    setCookie(event, 'auth_email', resolvedUser.email || payload.email, opts)
+    setCookie(event, 'auth_name', resolvedUser.username || payload.name || payload.email, opts)
     setCookie(event, 'auth_role', role, opts)
     setCookie(event, 'auth_planteles', superAdmin ? ALL_PLANTELES : allowedPlanteles.join(','), opts)
     setCookie(event, 'auth_active_plantel', activePlantel, opts)
