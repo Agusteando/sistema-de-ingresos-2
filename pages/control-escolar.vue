@@ -1270,7 +1270,20 @@ const applyInstantStudentFilters = ({ reconcileSelection = false } = {}) => {
   nextTick(scheduleWorkspaceScaleUpdate)
 }
 
+const resetControlStudentsView = () => {
+  controlStudentsIndex.value = []
+  students.value = []
+  selectedStudent.value = null
+  pendingSelectedStudentRefresh.value = null
+  Object.assign(catalogs, { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
+  Object.assign(pagination, { page: 1, total: 0, pages: 1 })
+}
+
 const applyControlStudentsPayload = (response = {}, { reconcileSelection = true } = {}) => {
+  if (response?.error) {
+    throw new Error(response?.message || response?.statusMessage || 'No se pudieron cargar alumnos de Control Escolar.')
+  }
+
   controlStudentsIndex.value = Array.isArray(response?.data) ? response.data : []
   Object.assign(catalogs, response?.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
   applyInstantStudentFilters({ reconcileSelection })
@@ -1294,17 +1307,20 @@ const persistCurrentControlStudentsCache = () => writeCachedControlStudents(buil
 const loadStudents = async (options = {}) => {
   if (!selectedAgentId.value) return
 
-  const { useCache = true } = options
+  const { useCache = true, clearExisting = false, forceLoading = false } = options
   const requestId = ++controlStudentsRequestId
   const query = buildIndexQuery()
+
+  if (clearExisting) resetControlStudentsView()
+
   const cached = useCache ? readCachedControlStudents(query) : null
-  const hadStudents = controlStudentsIndex.value.length > 0 || students.value.length > 0
+  const hadStudents = !clearExisting && (controlStudentsIndex.value.length > 0 || students.value.length > 0)
 
   if (cached) {
     applyControlStudentsPayload(cached)
     loadError.value = ''
-    studentsLoading.value = false
-  } else if (!hadStudents) {
+    studentsLoading.value = forceLoading
+  } else if (forceLoading || !hadStudents) {
     studentsLoading.value = true
   } else {
     studentsLoading.value = false
@@ -1320,10 +1336,8 @@ const loadStudents = async (options = {}) => {
   } catch (error) {
     if (requestId !== controlStudentsRequestId) return
 
-    if (!cached && !hadStudents) {
-      controlStudentsIndex.value = []
-      students.value = []
-      Object.assign(pagination, { page: 1, total: 0, pages: 1 })
+    if (clearExisting || (!cached && !hadStudents)) {
+      resetControlStudentsView()
       loadError.value = error?.data?.message || error?.message || 'Plantel fuera de línea o sin respuesta.'
     } else {
       loadError.value = ''
@@ -1339,8 +1353,14 @@ const loadStudents = async (options = {}) => {
 
 
 
-const refreshAll = async () => {
-  await Promise.all([loadKpis(), loadStudents({ useCache: false })])
+const refreshAll = async (options = {}) => {
+  await Promise.all([loadKpis(), loadStudents({ useCache: false, ...options })])
+}
+
+const reloadControlStudentsForCurrentScope = async () => {
+  if (!selectedAgentId.value) return
+  pagination.page = 1
+  await refreshAll({ clearExisting: true, forceLoading: true })
 }
 
 const clearQuickFilters = () => {
@@ -1660,10 +1680,13 @@ watch(() => ({ ...filters }), () => {
 
 watch(() => pagination.page, () => applyInstantStudentFilters())
 watch(() => [currentCicloKey.value, externalConcepts.value.join('|')], () => {
-  pagination.page = 1
-  refreshAll()
+  reloadControlStudentsForCurrentScope()
+}, { flush: 'post' })
+watch(selectedAgentId, (nextValue, previousValue) => {
+  nextTick(scheduleWorkspaceScaleUpdate)
+  if (!previousValue || nextValue === previousValue) return
+  reloadControlStudentsForCurrentScope()
 })
-watch(selectedAgentId, () => nextTick(scheduleWorkspaceScaleUpdate))
 watch(students, (visibleStudents) => queueControlStudentPhotos(visibleStudents), { deep: false })
 watch(selectedStudent, (student) => queueControlStudentPhotos(student ? [student] : [], { priority: true }))
 watch(showControlFirstSyncNotice, (visible) => {

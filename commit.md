@@ -1,1 +1,1 @@
-fix: show ciclo selector for control escolar users
+fix: reload Control Escolar students on ciclo change
