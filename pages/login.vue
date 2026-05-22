@@ -1,7 +1,7 @@
 <template>
   <main class="login-page">
-    <section class="login-shell" aria-label="Inicio de sesión Sistema de Ingresos">
-      <aside class="brand-panel" aria-label="Sistema de Ingresos">
+    <section class="login-shell" aria-label="Inicio de sesión Aurora">
+      <aside class="brand-panel" aria-label="Aurora">
         <div class="brand-content">
           <img
             src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp"
@@ -9,8 +9,14 @@
             class="brand-logo"
           />
 
+          <img
+            src="/aurora-logo.png"
+            alt="Aurora"
+            class="brand-system-logo"
+          />
+
           <div class="brand-copy">
-            <p class="brand-kicker">Sistema de Ingresos</p>
+            <p class="brand-kicker">Aurora</p>
             <h1>Entra con tu cuenta institucional</h1>
             <p>Accede con tu correo institucional de Google Workspace.</p>
           </div>
@@ -419,6 +425,15 @@ onBeforeUnmount(() => {
   width: 165px;
   height: auto;
   align-self: center;
+}
+
+.brand-system-logo {
+  display: block;
+  width: min(100%, 420px);
+  height: auto;
+  margin: 1.1rem auto 0;
+  align-self: center;
+  object-fit: contain;
 }
 
 .brand-copy {

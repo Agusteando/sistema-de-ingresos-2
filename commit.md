@@ -1,1 +1,1 @@
-fix: cache control escolar students before background sync
+feat: rebrand login and sidebar to Aurora
