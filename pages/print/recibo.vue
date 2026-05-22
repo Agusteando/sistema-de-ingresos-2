@@ -1,11 +1,11 @@
 <template>
-  <div class="bg-white min-h-screen p-10 font-sans text-neutral-ink print:p-0 relative overflow-hidden">
+  <div class="receipt-page bg-white min-h-screen font-sans text-neutral-ink print:p-0 relative overflow-hidden">
     
     <div v-if="isPreview" class="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
       <div class="text-[100px] font-bold text-gray-100 uppercase rotate-[-45deg] tracking-widest opacity-60">Vista Previa</div>
     </div>
 
-    <div class="max-w-[850px] mx-auto mb-6 print:hidden flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm relative z-20">
+    <div class="receipt-toolbar max-w-[850px] mx-auto mb-4 print:hidden flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm relative z-20">
       <button class="btn btn-ghost" @click="closeWindow">Volver</button>
       <div class="flex gap-2">
         <button class="btn btn-outline" @click="emailReceipt" :disabled="emailing || isPreview">
@@ -20,7 +20,8 @@
       </div>
     </div>
 
-    <div class="max-w-[850px] mx-auto border border-gray-200 p-8 rounded-2xl print:border-none print:p-5 relative z-10 bg-white shadow-lg print:shadow-none print:max-w-none w-full min-h-[900px] flex flex-col justify-between">
+    <div ref="receiptCard" class="receipt-card mx-auto border border-gray-200 rounded-2xl print:border-none relative z-10 bg-white shadow-lg print:shadow-none">
+      <div ref="receiptContent" class="receipt-content" :style="receiptContentStyle">
       
       <div>
         <div class="flex justify-between items-start border-b border-gray-300 pb-5 mb-6">
@@ -35,7 +36,7 @@
           <div class="w-1/3 text-right flex flex-col justify-center">
             <div class="bg-gray-50 border border-gray-200 rounded p-2 text-left w-full text-[11px]">
               <p class="m-0 mb-1 flex justify-between"><strong class="text-gray-600 uppercase">Emisión:</strong> <span class="font-mono text-gray-800">{{ fecha }}</span></p>
-              <p class="m-0 flex justify-between"><strong class="text-gray-600 uppercase">Cajero:</strong> <span class="text-gray-800 truncate max-w-[120px]">{{ receiptData.usuario || activeUserName }}</span></p>
+              <p class="m-0 flex justify-between"><strong class="text-gray-600 uppercase">Administrador:</strong> <span class="text-gray-800 truncate max-w-[120px]">{{ receiptData.usuario || activeUserName }}</span></p>
             </div>
           </div>
         </div>
@@ -119,22 +120,8 @@
 
       </div>
 
-      <div class="mt-auto">
-        <div class="grid grid-cols-2 gap-16 px-10 mt-10 pt-8 border-t border-dashed border-gray-300 text-center">
-          <div>
-            <div class="border-b border-gray-400 h-8 mb-2"></div>
-            <div class="text-[10px] font-semibold text-gray-700 uppercase">Firma del Cajero</div>
-            <div class="text-[9px] text-gray-500 mt-1">SISTEMA DE INGRESOS</div>
-          </div>
-          <div>
-            <div class="border-b border-gray-400 h-8 mb-2"></div>
-            <div class="text-[10px] font-semibold text-gray-700 uppercase">Firma de Conformidad</div>
-            <div class="text-[9px] text-gray-500 mt-1">Titular de la cuenta</div>
-          </div>
-        </div>
-
-        <div class="text-center mt-8 mb-2">
-          <p class="italic text-gray-400 text-[10px]">“Compartimos contigo la formación integral de tus hijos”</p>
+        <div class="receipt-footer text-center mt-4 pt-2 border-t border-dashed border-gray-200">
+          <p class="italic text-gray-400 text-[9px] m-0">“Compartimos contigo la formación integral de tus hijos”</p>
         </div>
       </div>
     </div>
@@ -144,7 +131,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie } from '#app'
 import { LucidePrinter, LucideMail, LucideFileText } from 'lucide-vue-next'
@@ -162,6 +149,9 @@ const fecha = dayjs().format('DD/MM/YYYY HH:mm')
 const isPreview = computed(() => route.query.preview === 'true')
 const activeUserName = useCookie('auth_name').value || 'Administrador'
 const emailing = ref(false)
+const receiptCard = ref(null)
+const receiptContent = ref(null)
+const receiptScale = ref(1)
 
 const showInvoiceModal = ref(false)
 const invoiceDebts = ref([])
@@ -176,6 +166,7 @@ onMounted(async () => {
         montoLetra: r.montoLetra || numeroALetras(Number(r.monto || 0))
       }))
       receiptData.value = { ...data, usuario: activeUserName }
+      fitReceiptToHalfLetter()
     } catch (e) {}
     return
   }
@@ -190,6 +181,7 @@ onMounted(async () => {
         montoLetra: r.montoLetra || numeroALetras(Number(r.monto || 0))
       }))
       receiptData.value = res[0]
+      fitReceiptToHalfLetter()
       setTimeout(() => window.print(), 800)
     }
   } catch(e) {}
@@ -197,6 +189,11 @@ onMounted(async () => {
 
 const total = computed(() => items.value.reduce((a,b) => a + Number(b.monto || 0), 0))
 const letrasGeneradas = computed(() => numeroALetras(total.value))
+const receiptContentStyle = computed(() => ({
+  transform: `scale(${receiptScale.value})`,
+  transformOrigin: 'top left',
+  width: `${100 / receiptScale.value}%`
+}))
 const logoSrc = computed(() => receiptData.value.instituto === 1 ? 'https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp' : 'https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp')
 
 const institutoNombre = computed(() => {
@@ -204,6 +201,22 @@ const institutoNombre = computed(() => {
     ? 'INSTITUTO EDUCATIVO PARA EL DESARROLLO INTEGRAL DEL SABER SC' 
     : 'INSTITUTO EDUCATIVO LA CASITA DEL SABER SC'
 })
+
+
+const fitReceiptToHalfLetter = () => nextTick(() => {
+  if (typeof window === 'undefined') return
+  receiptScale.value = 1
+  window.requestAnimationFrame(() => {
+    const card = receiptCard.value
+    const content = receiptContent.value
+    if (!card || !content) return
+    const heightScale = card.clientHeight / Math.max(content.scrollHeight, 1)
+    const widthScale = card.clientWidth / Math.max(content.scrollWidth, 1)
+    receiptScale.value = Number(Math.min(1, heightScale, widthScale).toFixed(4))
+  })
+})
+
+watch(items, fitReceiptToHalfLetter, { deep: true })
 
 const closeWindow = () => window.close()
 const triggerPrint = () => window.print()
@@ -248,8 +261,50 @@ const handleInvoiceSuccess = () => {
 </script>
 
 <style scoped>
+
+.receipt-page {
+  padding: 1rem;
+}
+
+.receipt-card {
+  width: 8.5in;
+  height: 5.5in;
+  max-width: min(8.5in, calc(100vw - 2rem));
+  padding: 0.28in;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.receipt-content {
+  will-change: transform;
+}
+
+.receipt-card table {
+  page-break-inside: avoid;
+}
+
+@media screen {
+  .receipt-card {
+    aspect-ratio: 17 / 11;
+  }
+}
+
 @media print {
-  @page { margin: 0.5cm; size: letter portrait; }
-  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: white; }
+  @page { margin: 0; size: letter portrait; }
+  :global(html), :global(body) { width: 8.5in; min-height: 11in; background-color: white; }
+  :global(body) { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .receipt-page { padding: 0; min-height: 11in; }
+  .receipt-toolbar { display: none !important; }
+  .receipt-card {
+    width: 8.5in !important;
+    height: 5.5in !important;
+    max-width: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0.24in !important;
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
 }
 </style>

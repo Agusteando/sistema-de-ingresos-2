@@ -1,1 +1,1 @@
-fix: polish Control Escolar workflow, layout, imports and sidebar
+fix: polish receipt format and cobranza email templates
