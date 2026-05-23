@@ -1,1 +1,1 @@
-refactor: match Control Escolar redesign layout
+refactor: split Control Escolar loading into base and enrichment phases

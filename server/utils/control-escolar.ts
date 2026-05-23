@@ -1,186 +1,240 @@
-import { query, runWithBridgeAgentId } from './db'
-import { getTrustedAuthUser, normalizePlantel, type AuthSessionUser } from './auth-session'
-import { PLANTELES_LIST } from '../../utils/constants'
-import { normalizeCicloKey } from '../../shared/utils/ciclo'
-import { calculateBasePlacementForTargetPosition, calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, normalizeNivelEscolar, plantelCandidatesForProjectedScope } from '../../shared/utils/grado'
-import { previousCicloKey, resolveTipoIngreso } from '../../shared/utils/tipoIngreso'
-import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from './enrollment-evidence'
-import { controlEscolarCentralQuery } from './control-escolar-central'
+import { query, runWithBridgeAgentId } from "./db";
+import {
+  getTrustedAuthUser,
+  normalizePlantel,
+  type AuthSessionUser,
+} from "./auth-session";
+import { PLANTELES_LIST } from "../../utils/constants";
+import { normalizeCicloKey } from "../../shared/utils/ciclo";
+import {
+  calculateBasePlacementForTargetPosition,
+  calculatePromotedGrado,
+  displayGrado,
+  normalizeGradoForPlantel,
+  normalizeNivelEscolar,
+  plantelCandidatesForProjectedScope,
+} from "../../shared/utils/grado";
+import {
+  previousCicloKey,
+  resolveTipoIngreso,
+} from "../../shared/utils/tipoIngreso";
+import {
+  getHistoricalEnrollmentConceptEvidence,
+  parseEnrollmentConceptIds,
+} from "./enrollment-evidence";
+import { controlEscolarCentralQuery } from "./control-escolar-central";
 
 export type ControlEscolarStudentRow = {
-  agentId: string
-  plantel: string
-  basePlantel: string
-  studentId: string
-  matricula: string
-  fullName: string
-  nombreCompleto: string
-  nombres: string
-  apellidoPaterno: string
-  apellidoMaterno: string
-  curp: string
-  phone: string
-  email: string
-  status: string
-  statusSource: string
-  baja: number | null
-  motivoBaja: string
-  categoriaBaja: string
-  seguimientoBaja: string
-  program: string
-  nivel: string
-  grado: string
-  group: string
-  guardianName: string
-  fatherName: string
-  motherName: string
-  nombrePadre: string
-  apellidoPaternoPadre: string
-  apellidoMaternoPadre: string
-  nombreMadre: string
-  apellidoPaternoMadre: string
-  apellidoMaternoMadre: string
-  telefonoPadre: string
-  telefonoMadre: string
-  emailPadre: string
-  emailMadre: string
-  interno: string
-  servicio: string
-  address: string
-  photoUrl: string
-  overlayExists: boolean
-  missingFields: string[]
-  updatedAt: string | null
-  cicloBase: string
-  plantelBaseOriginal: string
-  enrollmentState: string
-  currentEnrollmentConceptMatch: boolean
-  inscritoCicloActual: boolean
-  tipoIngreso: string
-  tipoIngresoValue: string
-  huskyPassUsername: string
-  huskyPassPlaintext: string
-  huskyPassAvailable: boolean
-  huskyPassEmail: string
-}
+  agentId: string;
+  plantel: string;
+  basePlantel: string;
+  studentId: string;
+  matricula: string;
+  fullName: string;
+  nombreCompleto: string;
+  nombres: string;
+  apellidoPaterno: string;
+  apellidoMaterno: string;
+  curp: string;
+  phone: string;
+  email: string;
+  status: string;
+  statusSource: string;
+  baja: number | null;
+  motivoBaja: string;
+  categoriaBaja: string;
+  seguimientoBaja: string;
+  program: string;
+  nivel: string;
+  grado: string;
+  group: string;
+  guardianName: string;
+  fatherName: string;
+  motherName: string;
+  nombrePadre: string;
+  apellidoPaternoPadre: string;
+  apellidoMaternoPadre: string;
+  nombreMadre: string;
+  apellidoPaternoMadre: string;
+  apellidoMaternoMadre: string;
+  telefonoPadre: string;
+  telefonoMadre: string;
+  emailPadre: string;
+  emailMadre: string;
+  interno: string;
+  servicio: string;
+  address: string;
+  photoUrl: string;
+  overlayExists: boolean;
+  missingFields: string[];
+  updatedAt: string | null;
+  cicloBase: string;
+  plantelBaseOriginal: string;
+  enrollmentState: string;
+  currentEnrollmentConceptMatch: boolean;
+  inscritoCicloActual: boolean;
+  tipoIngreso: string;
+  tipoIngresoValue: string;
+  huskyPassUsername: string;
+  huskyPassPlaintext: string;
+  huskyPassAvailable: boolean;
+  huskyPassEmail: string;
+};
 
 type TableColumn = {
-  Field: string
-  Type?: string
-  Null?: string
-  Key?: string
-  Default?: any
-  Extra?: string
-}
+  Field: string;
+  Type?: string;
+  Null?: string;
+  Key?: string;
+  Default?: any;
+  Extra?: string;
+};
 
-type MatriculaPatch = Record<string, any>
+type MatriculaPatch = Record<string, any>;
 
 type ControlEscolarSchema = {
-  base: Set<string>
-  matricula: Set<string>
-  users: Set<string>
-  ingresos: boolean
-  loadedAt: number
-  centralAvailable: boolean
-  centralError: string
-  usersAvailable: boolean
-  usersError: string
-}
+  base: Set<string>;
+  matricula: Set<string>;
+  users: Set<string>;
+  ingresos: boolean;
+  loadedAt: number;
+  centralAvailable: boolean;
+  centralError: string;
+  usersAvailable: boolean;
+  usersError: string;
+};
 
-const PLANTEL_SET = new Set(PLANTELES_LIST.map(normalizePlantel))
-const schemaCache = new Map<string, ControlEscolarSchema>()
-const centralSchemaCache = new Map<string, { columns: Set<string>; loadedAt: number }>()
-const SCHEMA_CACHE_MS = 1000 * 60 * 5
-const MAX_LOCAL_ROWS = 25000
-const CENTRAL_CHUNK_SIZE = 600
+const PLANTEL_SET = new Set(PLANTELES_LIST.map(normalizePlantel));
+const schemaCache = new Map<string, ControlEscolarSchema>();
+const centralSchemaCache = new Map<
+  string,
+  { columns: Set<string>; loadedAt: number }
+>();
+const SCHEMA_CACHE_MS = 1000 * 60 * 5;
+const MAX_LOCAL_ROWS = 25000;
+const CENTRAL_CHUNK_SIZE = 600;
 
-const normalizeKey = (value: unknown) => String(value || '').trim()
-const normalizeText = (value: unknown, max = 255) => normalizeKey(value).slice(0, max)
-const normalizeUpper = (value: unknown, max = 255) => normalizeText(value, max).toUpperCase()
-const normalizeEmail = (value: unknown) => normalizeText(value, 255).toLowerCase()
-const normalizePhone = (value: unknown) => normalizeText(value, 40).replace(/[^0-9+()\-\s.]/g, '').slice(0, 40)
+const normalizeKey = (value: unknown) => String(value || "").trim();
+const normalizeText = (value: unknown, max = 255) =>
+  normalizeKey(value).slice(0, max);
+const normalizeUpper = (value: unknown, max = 255) =>
+  normalizeText(value, max).toUpperCase();
+const normalizeEmail = (value: unknown) =>
+  normalizeText(value, 255).toLowerCase();
+const normalizePhone = (value: unknown) =>
+  normalizeText(value, 40)
+    .replace(/[^0-9+()\-\s.]/g, "")
+    .slice(0, 40);
 const normalizeNullable = (value: unknown, max = 255) => {
-  const text = normalizeText(value, max)
-  return text || null
-}
+  const text = normalizeText(value, max);
+  return text || null;
+};
 
-const sqlLiteral = (value: string) => `'${String(value).replace(/'/g, "''")}'`
-const safeAlias = (value: string) => value.replace(/[^A-Za-z0-9_]/g, '')
-const col = (alias: string, column: string) => `${alias}.\`${column.replace(/`/g, '``')}\``
-const has = (columns: Set<string>, column: string) => columns.has(column)
-const expr = (columns: Set<string>, alias: string, column: string, fallback = 'NULL') => has(columns, column) ? col(alias, column) : fallback
-const selectAs = (sql: string, alias: string) => `${sql} AS ${safeAlias(alias)}`
-const nullIfTrim = (sql: string) => `NULLIF(TRIM(CAST(${sql} AS CHAR)), '')`
+const sqlLiteral = (value: string) => `'${String(value).replace(/'/g, "''")}'`;
+const safeAlias = (value: string) => value.replace(/[^A-Za-z0-9_]/g, "");
+const col = (alias: string, column: string) =>
+  `${alias}.\`${column.replace(/`/g, "``")}\``;
+const has = (columns: Set<string>, column: string) => columns.has(column);
+const expr = (
+  columns: Set<string>,
+  alias: string,
+  column: string,
+  fallback = "NULL",
+) => (has(columns, column) ? col(alias, column) : fallback);
+const selectAs = (sql: string, alias: string) =>
+  `${sql} AS ${safeAlias(alias)}`;
+const nullIfTrim = (sql: string) => `NULLIF(TRIM(CAST(${sql} AS CHAR)), '')`;
 const coalesceExpr = (...parts: Array<string | false | null | undefined>) => {
-  const clean = parts.filter(Boolean) as string[]
-  return clean.length ? `COALESCE(${clean.join(', ')})` : 'NULL'
-}
-const escapeColumn = (column: string) => `\`${column.replace(/`/g, '``')}\``
+  const clean = parts.filter(Boolean) as string[];
+  return clean.length ? `COALESCE(${clean.join(", ")})` : "NULL";
+};
+const escapeColumn = (column: string) => `\`${column.replace(/`/g, "``")}\``;
 
 const getConfiguredBridgeAgentId = () => {
-  const config = useRuntimeConfig() as any
-  return String(config.dbBridgeAgentId || '').trim()
-}
+  const config = useRuntimeConfig() as any;
+  return String(config.dbBridgeAgentId || "").trim();
+};
 
 const getTransport = () => {
-  const config = useRuntimeConfig() as any
-  return String(config.dbTransport || 'direct').toLowerCase()
-}
+  const config = useRuntimeConfig() as any;
+  return String(config.dbTransport || "direct").toLowerCase();
+};
 
 export const assertControlEscolarDynamicBridge = (agentId: string) => {
-  const configuredAgentId = getConfiguredBridgeAgentId()
-  if (getTransport() === 'bridge' && configuredAgentId && normalizePlantel(configuredAgentId) !== normalizePlantel(agentId)) {
+  const configuredAgentId = getConfiguredBridgeAgentId();
+  if (
+    getTransport() === "bridge" &&
+    configuredAgentId &&
+    normalizePlantel(configuredAgentId) !== normalizePlantel(agentId)
+  ) {
     throw createError({
       statusCode: 409,
-      message: 'Control Escolar requiere selección dinámica de agentId. DB_BRIDGE_AGENT_ID está fijado y bloquearía el plantel solicitado.'
-    })
+      message:
+        "Control Escolar requiere selección dinámica de agentId. DB_BRIDGE_AGENT_ID está fijado y bloquearía el plantel solicitado.",
+    });
   }
-}
+};
 
-const assertControlEscolarAccess = (user: Awaited<ReturnType<typeof getTrustedAuthUser>>) => {
+const assertControlEscolarAccess = (
+  user: Awaited<ReturnType<typeof getTrustedAuthUser>>,
+) => {
   if (!user.isSuperAdmin && !user.hasControlEscolarRole) {
-    throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
+    throw createError({
+      statusCode: 403,
+      message: "No tiene los permisos necesarios.",
+    });
   }
-}
+};
 
-export const resolveControlEscolarAuth = async (event: any, requestedAgentId?: unknown) => {
-  const user = await getTrustedAuthUser(event)
-  assertControlEscolarAccess(user)
+export const resolveControlEscolarAuth = async (
+  event: any,
+  requestedAgentId?: unknown,
+) => {
+  const user = await getTrustedAuthUser(event);
+  assertControlEscolarAccess(user);
 
-  const requested = normalizePlantel(requestedAgentId)
-  const active = normalizePlantel(user.active_plantel)
-  const allowedPlanteles = user.isSuperAdmin ? [...PLANTELES_LIST] : user.plantelesList.map(normalizePlantel)
-  const agentId = requested || active
+  const requested = normalizePlantel(requestedAgentId);
+  const active = normalizePlantel(user.active_plantel);
+  const allowedPlanteles = user.isSuperAdmin
+    ? [...PLANTELES_LIST]
+    : user.plantelesList.map(normalizePlantel);
+  const agentId = requested || active;
 
-  if (!agentId || agentId === 'GLOBAL' || !PLANTEL_SET.has(agentId)) {
+  if (!agentId || agentId === "GLOBAL" || !PLANTEL_SET.has(agentId)) {
     throw createError({
       statusCode: 400,
-      message: 'Selecciona un plantel específico en el selector lateral para usar Control Escolar.'
-    })
+      message:
+        "Selecciona un plantel específico en el selector lateral para usar Control Escolar.",
+    });
   }
 
   if (!allowedPlanteles.includes(agentId)) {
     throw createError({
       statusCode: 403,
-      message: 'El plantel solicitado no está dentro del alcance del usuario.'
-    })
+      message: "El plantel solicitado no está dentro del alcance del usuario.",
+    });
   }
 
-  assertControlEscolarDynamicBridge(agentId)
+  assertControlEscolarDynamicBridge(agentId);
 
-  return { user, agentId }
-}
+  return { user, agentId };
+};
 
 export const listControlEscolarPlanteles = async (event: any) => {
-  const user = await getTrustedAuthUser(event)
-  assertControlEscolarAccess(user)
+  const user = await getTrustedAuthUser(event);
+  assertControlEscolarAccess(user);
 
-  const allowedPlanteles = user.isSuperAdmin ? [...PLANTELES_LIST] : user.plantelesList
+  const allowedPlanteles = user.isSuperAdmin
+    ? [...PLANTELES_LIST]
+    : user.plantelesList;
 
-  const activePlantel = normalizePlantel(user.active_plantel)
-  const selectedPlantel = activePlantel && activePlantel !== 'GLOBAL' && allowedPlanteles.includes(activePlantel)
-    ? activePlantel
-    : ''
+  const activePlantel = normalizePlantel(user.active_plantel);
+  const selectedPlantel =
+    activePlantel &&
+    activePlantel !== "GLOBAL" &&
+    allowedPlanteles.includes(activePlantel)
+      ? activePlantel
+      : "";
 
   return {
     user,
@@ -189,117 +243,151 @@ export const listControlEscolarPlanteles = async (event: any) => {
       agentId: plantel,
       plantel,
       label: plantel,
-      selected: selectedPlantel === plantel
-    }))
-  }
-}
+      selected: selectedPlantel === plantel,
+    })),
+  };
+};
 
 const localTableExists = async (tableName: string) => {
-  const rows = await query<any[]>(`SHOW TABLES LIKE ?`, [tableName])
-  return rows.length > 0
-}
+  const rows = await query<any[]>(`SHOW TABLES LIKE ?`, [tableName]);
+  return rows.length > 0;
+};
 
 const localColumns = async (tableName: string) => {
-  const rows = await query<TableColumn[]>(`SHOW COLUMNS FROM ${escapeColumn(tableName)}`)
-  return new Set(rows.map((row) => row.Field))
-}
+  const rows = await query<TableColumn[]>(
+    `SHOW COLUMNS FROM ${escapeColumn(tableName)}`,
+  );
+  return new Set(rows.map((row) => row.Field));
+};
 
 const getCentralMatriculaColumns = async () => {
-  const cached = centralSchemaCache.get('matricula')
-  if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS) return cached.columns
+  const cached = centralSchemaCache.get("matricula");
+  if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS)
+    return cached.columns;
 
-  const tableRows = await controlEscolarCentralQuery<any[]>(`SHOW TABLES LIKE 'matricula'`)
+  const tableRows = await controlEscolarCentralQuery<any[]>(
+    `SHOW TABLES LIKE 'matricula'`,
+  );
   if (!tableRows.length) {
     throw createError({
       statusCode: 500,
-      message: 'La tabla matricula no existe en la base MySQL centralizada de Control Escolar.'
-    })
+      message:
+        "La tabla matricula no existe en la base MySQL centralizada de Control Escolar.",
+    });
   }
 
-  const rows = await controlEscolarCentralQuery<TableColumn[]>(`SHOW COLUMNS FROM \`matricula\``)
-  const columns = new Set(rows.map((row) => row.Field))
-  if (!columns.has('matricula')) {
+  const rows = await controlEscolarCentralQuery<TableColumn[]>(
+    `SHOW COLUMNS FROM \`matricula\``,
+  );
+  const columns = new Set(rows.map((row) => row.Field));
+  if (!columns.has("matricula")) {
     throw createError({
       statusCode: 500,
-      message: 'La tabla centralizada matricula no tiene columna matricula para unir contra base.'
-    })
+      message:
+        "La tabla centralizada matricula no tiene columna matricula para unir contra base.",
+    });
   }
 
-  centralSchemaCache.set('matricula', { columns, loadedAt: Date.now() })
-  return columns
-}
-
+  centralSchemaCache.set("matricula", { columns, loadedAt: Date.now() });
+  return columns;
+};
 
 const getCentralOptionalTableColumns = async (tableName: string) => {
-  const normalized = normalizeText(tableName, 80)
-  if (!normalized) return new Set<string>()
+  const normalized = normalizeText(tableName, 80);
+  if (!normalized) return new Set<string>();
 
-  const cached = centralSchemaCache.get(normalized)
-  if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS) return cached.columns
+  const cached = centralSchemaCache.get(normalized);
+  if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS)
+    return cached.columns;
 
-  const tableRows = await controlEscolarCentralQuery<any[]>(`SHOW TABLES LIKE ${sqlLiteral(normalized)}`)
-  if (!tableRows.length) return new Set<string>()
+  const tableRows = await controlEscolarCentralQuery<any[]>(
+    `SHOW TABLES LIKE ${sqlLiteral(normalized)}`,
+  );
+  if (!tableRows.length) return new Set<string>();
 
-  const rows = await controlEscolarCentralQuery<TableColumn[]>(`SHOW COLUMNS FROM ${escapeColumn(normalized)}`)
-  const columns = new Set(rows.map((row) => row.Field))
-  centralSchemaCache.set(normalized, { columns, loadedAt: Date.now() })
-  return columns
-}
+  const rows = await controlEscolarCentralQuery<TableColumn[]>(
+    `SHOW COLUMNS FROM ${escapeColumn(normalized)}`,
+  );
+  const columns = new Set(rows.map((row) => row.Field));
+  centralSchemaCache.set(normalized, { columns, loadedAt: Date.now() });
+  return columns;
+};
 
 type ControlEscolarSchemaOptions = {
-  requireCentral?: boolean
-}
+  requireCentral?: boolean;
+  skipCentral?: boolean;
+};
 
-const toErrorMessage = (error: any) => error?.data?.message || error?.statusMessage || error?.message || 'No se pudo consultar la base centralizada de Control Escolar.'
+const toErrorMessage = (error: any) =>
+  error?.data?.message ||
+  error?.statusMessage ||
+  error?.message ||
+  "No se pudo consultar la base centralizada de Control Escolar.";
 
-export const getControlEscolarSchema = async (agentId: string, options: ControlEscolarSchemaOptions = {}): Promise<ControlEscolarSchema> => {
-  const requireCentral = options.requireCentral !== false
-  const cacheKey = normalizePlantel(agentId)
-  const cached = schemaCache.get(cacheKey)
+export const getControlEscolarSchema = async (
+  agentId: string,
+  options: ControlEscolarSchemaOptions = {},
+): Promise<ControlEscolarSchema> => {
+  const requireCentral = options.requireCentral !== false;
+  const skipCentral = options.skipCentral === true;
+  const cacheKey = `${normalizePlantel(agentId)}:${skipCentral ? "local" : "full"}`;
+  const cached = schemaCache.get(cacheKey);
   if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS) {
     if (requireCentral && !cached.centralAvailable) {
-      schemaCache.delete(cacheKey)
+      schemaCache.delete(cacheKey);
     } else {
-      return cached
+      return cached;
     }
   }
 
-  const baseExists = await localTableExists('base')
+  const baseExists = await localTableExists("base");
   if (!baseExists) {
-    throw createError({ statusCode: 500, message: 'La tabla base no existe en el plantel seleccionado.' })
+    throw createError({
+      statusCode: 500,
+      message: "La tabla base no existe en el plantel seleccionado.",
+    });
   }
 
   const [baseColumns, ingresosExists] = await Promise.all([
-    localColumns('base'),
-    localTableExists('ingresos')
-  ])
+    localColumns("base"),
+    localTableExists("ingresos"),
+  ]);
 
-  if (!baseColumns.has('matricula')) {
-    throw createError({ statusCode: 500, message: 'La tabla base no tiene columna matricula.' })
+  if (!baseColumns.has("matricula")) {
+    throw createError({
+      statusCode: 500,
+      message: "La tabla base no tiene columna matricula.",
+    });
   }
 
-  let matriculaColumns = new Set<string>()
-  let usersColumns = new Set<string>()
-  let centralAvailable = true
-  let centralError = ''
-  let usersAvailable = false
-  let usersError = ''
+  let matriculaColumns = new Set<string>();
+  let usersColumns = new Set<string>();
+  let centralAvailable = true;
+  let centralError = "";
+  let usersAvailable = false;
+  let usersError = "";
 
-  try {
-    matriculaColumns = await getCentralMatriculaColumns()
-  } catch (error: any) {
-    centralAvailable = false
-    centralError = toErrorMessage(error)
-    if (requireCentral) throw error
-  }
-
-  if (centralAvailable) {
+  if (skipCentral) {
+    centralAvailable = false;
+    centralError = "";
+  } else {
     try {
-      usersColumns = await getCentralOptionalTableColumns('users')
-      usersAvailable = usersColumns.has('username') && usersColumns.has('plaintext')
+      matriculaColumns = await getCentralMatriculaColumns();
     } catch (error: any) {
-      usersAvailable = false
-      usersError = toErrorMessage(error)
+      centralAvailable = false;
+      centralError = toErrorMessage(error);
+      if (requireCentral) throw error;
+    }
+
+    if (centralAvailable) {
+      try {
+        usersColumns = await getCentralOptionalTableColumns("users");
+        usersAvailable =
+          usersColumns.has("username") && usersColumns.has("plaintext");
+      } catch (error: any) {
+        usersAvailable = false;
+        usersError = toErrorMessage(error);
+      }
     }
   }
 
@@ -312,77 +400,97 @@ export const getControlEscolarSchema = async (agentId: string, options: ControlE
     centralAvailable,
     centralError,
     usersAvailable,
-    usersError
-  }
-  schemaCache.set(cacheKey, schema)
-  return schema
-}
+    usersError,
+  };
+  schemaCache.set(cacheKey, schema);
+  return schema;
+};
 
 const buildLocalBaseSelect = (agentId: string, baseColumns: Set<string>) => {
-  const baseNombreCompleto = has(baseColumns, 'nombreCompleto')
-    ? nullIfTrim(col('b', 'nombreCompleto'))
-    : `NULLIF(TRIM(CONCAT_WS(' ', ${expr(baseColumns, 'b', 'apellidoPaterno')}, ${expr(baseColumns, 'b', 'apellidoMaterno')}, ${expr(baseColumns, 'b', 'nombres')})), '')`
+  const baseNombreCompleto = has(baseColumns, "nombreCompleto")
+    ? nullIfTrim(col("b", "nombreCompleto"))
+    : `NULLIF(TRIM(CONCAT_WS(' ', ${expr(baseColumns, "b", "apellidoPaterno")}, ${expr(baseColumns, "b", "apellidoMaterno")}, ${expr(baseColumns, "b", "nombres")})), '')`;
   const updatedAt = coalesceExpr(
-    expr(baseColumns, 'b', 'updated_at'),
-    expr(baseColumns, 'b', 'updatedAt'),
-    expr(baseColumns, 'b', 'fecha_actualizacion')
-  )
+    expr(baseColumns, "b", "updated_at"),
+    expr(baseColumns, "b", "updatedAt"),
+    expr(baseColumns, "b", "fecha_actualizacion"),
+  );
 
   return [
-    selectAs(sqlLiteral(agentId), 'agentId'),
-    selectAs(col('b', 'matricula'), 'matricula'),
-    selectAs(col('b', 'matricula'), 'studentId'),
-    selectAs(coalesceExpr(nullIfTrim(expr(baseColumns, 'b', 'plantel')), sqlLiteral(agentId)), 'basePlantel'),
-    selectAs(expr(baseColumns, 'b', 'nombres'), 'baseNombres'),
-    selectAs(expr(baseColumns, 'b', 'apellidoPaterno'), 'baseApellidoPaterno'),
-    selectAs(expr(baseColumns, 'b', 'apellidoMaterno'), 'baseApellidoMaterno'),
-    selectAs(baseNombreCompleto, 'baseNombreCompleto'),
-    selectAs(expr(baseColumns, 'b', 'curp'), 'baseCurp'),
-    selectAs(expr(baseColumns, 'b', 'correo'), 'baseCorreo'),
-    selectAs(expr(baseColumns, 'b', 'telefono'), 'baseTelefono'),
-    selectAs(expr(baseColumns, 'b', 'grado'), 'baseGrado'),
-    selectAs(expr(baseColumns, 'b', 'grupo'), 'baseGrupo'),
-    selectAs(expr(baseColumns, 'b', 'nivel'), 'baseNivel'),
-    selectAs(expr(baseColumns, 'b', 'interno'), 'baseInterno'),
-    selectAs(expr(baseColumns, 'b', 'estatus', sqlLiteral('Activo')), 'baseEstatus'),
-    selectAs(expr(baseColumns, 'b', 'Nombre del padre o tutor'), 'baseGuardian'),
-    selectAs(expr(baseColumns, 'b', 'direccion'), 'baseDireccion'),
-    selectAs(expr(baseColumns, 'b', 'domicilio'), 'baseDomicilio'),
-    selectAs(updatedAt, 'baseUpdatedAt')
-  ]
-}
+    selectAs(sqlLiteral(agentId), "agentId"),
+    selectAs(col("b", "matricula"), "matricula"),
+    selectAs(col("b", "matricula"), "studentId"),
+    selectAs(
+      coalesceExpr(
+        nullIfTrim(expr(baseColumns, "b", "plantel")),
+        sqlLiteral(agentId),
+      ),
+      "basePlantel",
+    ),
+    selectAs(expr(baseColumns, "b", "nombres"), "baseNombres"),
+    selectAs(expr(baseColumns, "b", "apellidoPaterno"), "baseApellidoPaterno"),
+    selectAs(expr(baseColumns, "b", "apellidoMaterno"), "baseApellidoMaterno"),
+    selectAs(baseNombreCompleto, "baseNombreCompleto"),
+    selectAs(expr(baseColumns, "b", "curp"), "baseCurp"),
+    selectAs(expr(baseColumns, "b", "correo"), "baseCorreo"),
+    selectAs(expr(baseColumns, "b", "telefono"), "baseTelefono"),
+    selectAs(expr(baseColumns, "b", "grado"), "baseGrado"),
+    selectAs(expr(baseColumns, "b", "grupo"), "baseGrupo"),
+    selectAs(expr(baseColumns, "b", "nivel"), "baseNivel"),
+    selectAs(expr(baseColumns, "b", "interno"), "baseInterno"),
+    selectAs(
+      expr(baseColumns, "b", "estatus", sqlLiteral("Activo")),
+      "baseEstatus",
+    ),
+    selectAs(
+      expr(baseColumns, "b", "Nombre del padre o tutor"),
+      "baseGuardian",
+    ),
+    selectAs(expr(baseColumns, "b", "direccion"), "baseDireccion"),
+    selectAs(expr(baseColumns, "b", "domicilio"), "baseDomicilio"),
+    selectAs(updatedAt, "baseUpdatedAt"),
+  ];
+};
 
 type ControlEscolarOperatorScope = {
-  cicloKey: string
-  previousCiclo: string
-  enrollmentConceptIds: string[]
-}
+  cicloKey: string;
+  previousCiclo: string;
+  enrollmentConceptIds: string[];
+};
 
-const resolveOperatorScope = (filters: any = {}): ControlEscolarOperatorScope => {
-  const cicloKey = normalizeCicloKey(filters.ciclo || filters.cicloKey || filters.targetCiclo || '2025')
+const resolveOperatorScope = (
+  filters: any = {},
+): ControlEscolarOperatorScope => {
+  const cicloKey = normalizeCicloKey(
+    filters.ciclo || filters.cicloKey || filters.targetCiclo || "2025",
+  );
   return {
     cicloKey,
     previousCiclo: previousCicloKey(cicloKey),
-    enrollmentConceptIds: parseEnrollmentConceptIds(filters.concepts || filters.enrollmentConcepts || '')
-  }
-}
+    enrollmentConceptIds: parseEnrollmentConceptIds(
+      filters.concepts || filters.enrollmentConcepts || "",
+    ),
+  };
+};
 
 const addCurrentEnrollmentScope = (
   whereParts: string[],
   params: any[],
   schema: ControlEscolarSchema,
-  scope: ControlEscolarOperatorScope
+  scope: ControlEscolarOperatorScope,
 ) => {
-  const estatusExpr = expr(schema.base, 'b', 'estatus', sqlLiteral('Activo'))
-  const cicloExpr = expr(schema.base, 'b', 'ciclo', 'NULL')
+  const estatusExpr = expr(schema.base, "b", "estatus", sqlLiteral("Activo"));
+  const cicloExpr = expr(schema.base, "b", "ciclo", "NULL");
 
   if (!scope.enrollmentConceptIds.length) {
-    whereParts.push(`(${estatusExpr} = 'Activo' OR ${cicloExpr} = ?)`)
-    params.push(scope.cicloKey)
-    return
+    whereParts.push(`(${estatusExpr} = 'Activo' OR ${cicloExpr} = ?)`);
+    params.push(scope.cicloKey);
+    return;
   }
 
-  const conceptPlaceholders = scope.enrollmentConceptIds.map(() => '?').join(',')
+  const conceptPlaceholders = scope.enrollmentConceptIds
+    .map(() => "?")
+    .join(",");
   whereParts.push(`(
     ${estatusExpr} = 'Activo'
     OR ${cicloExpr} = ?
@@ -414,139 +522,216 @@ const addCurrentEnrollmentScope = (
         AND CAST(COALESCE(PScopePaid.concepto_id, DScopePaid.concepto, RScope.concepto) AS CHAR) IN (${conceptPlaceholders})
       LIMIT 1
     )
-  )`)
-  params.push(scope.cicloKey, scope.cicloKey, ...scope.enrollmentConceptIds, scope.cicloKey, ...scope.enrollmentConceptIds)
-}
+  )`);
+  params.push(
+    scope.cicloKey,
+    scope.cicloKey,
+    ...scope.enrollmentConceptIds,
+    scope.cicloKey,
+    ...scope.enrollmentConceptIds,
+  );
+};
 
-const rowHasCurrentEnrollmentEvidence = (row: any, enrollmentConceptIds: string[]) => {
-  const target = new Set(enrollmentConceptIds)
-  if (!target.size) return false
+const rowHasCurrentEnrollmentEvidence = (
+  row: any,
+  enrollmentConceptIds: string[],
+) => {
+  const target = new Set(enrollmentConceptIds);
+  if (!target.size) return false;
   return parseEnrollmentConceptIds([
     row.conceptoIdsPagados,
     row.conceptoIdsCargados,
-    row.conceptoIdsCicloActual
-  ]).some((conceptId) => target.has(conceptId))
-}
+    row.conceptoIdsCicloActual,
+  ]).some((conceptId) => target.has(conceptId));
+};
 
 const resolveOperatorEnrollmentState = (
   row: any,
   scope: ControlEscolarOperatorScope,
-  historicalConceptIds = ''
+  historicalConceptIds = "",
 ) => {
-  const activeInBase = firstText(row.baseEstatus, 'Activo') === 'Activo'
-  if (!scope.enrollmentConceptIds.length) return activeInBase ? 'inscrito' : 'baja'
+  const activeInBase = firstText(row.baseEstatus, "Activo") === "Activo";
+  if (!scope.enrollmentConceptIds.length)
+    return activeInBase ? "inscrito" : "baja";
 
-  const hasCurrent = rowHasCurrentEnrollmentEvidence(row, scope.enrollmentConceptIds)
-  if (activeInBase && hasCurrent) return 'inscrito'
-  if (!activeInBase && hasCurrent) return 'baja_inscrita'
-  if (activeInBase) return 'no_inscrito'
-  return 'baja'
-}
+  const hasCurrent = rowHasCurrentEnrollmentEvidence(
+    row,
+    scope.enrollmentConceptIds,
+  );
+  if (activeInBase && hasCurrent) return "inscrito";
+  if (!activeInBase && hasCurrent) return "baja_inscrita";
+  if (activeInBase) return "no_inscrito";
+  return "baja";
+};
 
-const applyOperatorProjection = async (agentId: string, rows: any[], scope: ControlEscolarOperatorScope, options: { searchActive?: boolean } = {}) => {
-  const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(
-    rows.map((row) => row.matricula),
-    scope.enrollmentConceptIds
-  )
+const applyOperatorProjection = async (
+  agentId: string,
+  rows: any[],
+  scope: ControlEscolarOperatorScope,
+  options: { searchActive?: boolean } = {},
+) => {
+  const historicalEnrollmentEvidence =
+    await getHistoricalEnrollmentConceptEvidence(
+      rows.map((row) => row.matricula),
+      scope.enrollmentConceptIds,
+    );
 
   return rows.flatMap((row) => {
-    const sourcePlantel = firstText(row.plantelBase, row.basePlantel, agentId)
-    const promoted = calculatePromotedGrado(row.baseGrado, sourcePlantel, row.baseCiclo, scope.cicloKey, row.baseNivel)
-    const hasCurrentEnrollmentEvidence = rowHasCurrentEnrollmentEvidence(row, scope.enrollmentConceptIds)
-    const baseCiclo = normalizeText(row.baseCiclo) ? normalizeCicloKey(row.baseCiclo) : ''
-    const includedByOperatorScope = firstText(row.baseEstatus, 'Activo') === 'Activo' || baseCiclo === scope.cicloKey || hasCurrentEnrollmentEvidence
+    const sourcePlantel = firstText(row.plantelBase, row.basePlantel, agentId);
+    const promoted = calculatePromotedGrado(
+      row.baseGrado,
+      sourcePlantel,
+      row.baseCiclo,
+      scope.cicloKey,
+      row.baseNivel,
+    );
+    const hasCurrentEnrollmentEvidence = rowHasCurrentEnrollmentEvidence(
+      row,
+      scope.enrollmentConceptIds,
+    );
+    const baseCiclo = normalizeText(row.baseCiclo)
+      ? normalizeCicloKey(row.baseCiclo)
+      : "";
+    const includedByOperatorScope =
+      firstText(row.baseEstatus, "Activo") === "Activo" ||
+      baseCiclo === scope.cicloKey ||
+      hasCurrentEnrollmentEvidence;
 
-    if (!options.searchActive && !includedByOperatorScope) return []
-    if (promoted.outOfScope && !hasCurrentEnrollmentEvidence) return []
+    if (!options.searchActive && !includedByOperatorScope) return [];
+    if (promoted.outOfScope && !hasCurrentEnrollmentEvidence) return [];
 
-    const projectedPlantel = promoted.outOfScope && hasCurrentEnrollmentEvidence
-      ? normalizePlantel(agentId)
-      : normalizePlantel(promoted.plantel)
+    const projectedPlantel =
+      promoted.outOfScope && hasCurrentEnrollmentEvidence
+        ? normalizePlantel(agentId)
+        : normalizePlantel(promoted.plantel);
 
-    if (!hasCurrentEnrollmentEvidence && projectedPlantel !== normalizePlantel(agentId)) return []
+    if (
+      !hasCurrentEnrollmentEvidence &&
+      projectedPlantel !== normalizePlantel(agentId)
+    )
+      return [];
 
-    const historicalConceptIds = historicalEnrollmentEvidence.get(String(row.matricula || '').trim()) || ''
-    const tipoIngreso = resolveTipoIngreso({
-      ...row,
-      plantel: sourcePlantel,
-      plantelBase: sourcePlantel,
-      cicloBase: row.baseCiclo,
-      ciclo: row.baseCiclo,
-      tipoIngresoEvidence: {
-        targetCiclo: scope.cicloKey,
-        previousCiclo: scope.previousCiclo,
-        targetConceptIds: [row.conceptoIdsPagados, row.conceptoIdsCargados, row.conceptoIdsCicloActual],
-        previousConceptIds: [row.conceptoIdsPagadosPrevios, row.conceptoIdsCargadosPrevios, row.conceptoIdsCicloPrevio],
-        allConceptIds: [historicalConceptIds]
-      }
-    }, scope.cicloKey, { enrollmentConcepts: scope.enrollmentConceptIds })
+    const historicalConceptIds =
+      historicalEnrollmentEvidence.get(String(row.matricula || "").trim()) ||
+      "";
+    const tipoIngreso = resolveTipoIngreso(
+      {
+        ...row,
+        plantel: sourcePlantel,
+        plantelBase: sourcePlantel,
+        cicloBase: row.baseCiclo,
+        ciclo: row.baseCiclo,
+        tipoIngresoEvidence: {
+          targetCiclo: scope.cicloKey,
+          previousCiclo: scope.previousCiclo,
+          targetConceptIds: [
+            row.conceptoIdsPagados,
+            row.conceptoIdsCargados,
+            row.conceptoIdsCicloActual,
+          ],
+          previousConceptIds: [
+            row.conceptoIdsPagadosPrevios,
+            row.conceptoIdsCargadosPrevios,
+            row.conceptoIdsCicloPrevio,
+          ],
+          allConceptIds: [historicalConceptIds],
+        },
+      },
+      scope.cicloKey,
+      { enrollmentConcepts: scope.enrollmentConceptIds },
+    );
 
-    return [{
-      ...row,
-      plantelBaseOriginal: sourcePlantel,
-      plantelBase: sourcePlantel,
-      basePlantel: projectedPlantel || sourcePlantel,
-      baseGrado: displayGrado(promoted.grado),
-      baseNivel: promoted.nivel,
-      conceptoIdsHistoricos: historicalConceptIds,
-      currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,
-      inscritoCicloActual: hasCurrentEnrollmentEvidence,
-      operatorEnrollmentState: resolveOperatorEnrollmentState(row, scope, historicalConceptIds),
-      operatorTipoIngreso: tipoIngreso.value,
-      operatorTipoIngresoSource: tipoIngreso.source
-    }]
-  })
-}
+    return [
+      {
+        ...row,
+        plantelBaseOriginal: sourcePlantel,
+        plantelBase: sourcePlantel,
+        basePlantel: projectedPlantel || sourcePlantel,
+        baseGrado: displayGrado(promoted.grado),
+        baseNivel: promoted.nivel,
+        conceptoIdsHistoricos: historicalConceptIds,
+        currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,
+        inscritoCicloActual: hasCurrentEnrollmentEvidence,
+        operatorEnrollmentState: resolveOperatorEnrollmentState(
+          row,
+          scope,
+          historicalConceptIds,
+        ),
+        operatorTipoIngreso: tipoIngreso.value,
+        operatorTipoIngresoSource: tipoIngreso.source,
+      },
+    ];
+  });
+};
 
 type CycleConceptEvidence = {
-  paid: Map<string, string>
-  charged: Map<string, string>
-}
+  paid: Map<string, string>;
+  charged: Map<string, string>;
+};
 
-const EVIDENCE_CHUNK_SIZE = 450
+const EVIDENCE_CHUNK_SIZE = 450;
 
-const appendConceptIds = (target: Map<string, Set<string>>, matricula: unknown, rawConceptIds: unknown) => {
-  const normalizedMatricula = normalizeText(matricula, 64)
-  if (!normalizedMatricula) return
+const appendConceptIds = (
+  target: Map<string, Set<string>>,
+  matricula: unknown,
+  rawConceptIds: unknown,
+) => {
+  const normalizedMatricula = normalizeText(matricula, 64);
+  if (!normalizedMatricula) return;
 
-  const conceptIds = parseEnrollmentConceptIds(rawConceptIds)
-  if (!conceptIds.length) return
+  const conceptIds = parseEnrollmentConceptIds(rawConceptIds);
+  if (!conceptIds.length) return;
 
-  const current = target.get(normalizedMatricula) || new Set<string>()
-  conceptIds.forEach((conceptId) => current.add(conceptId))
-  target.set(normalizedMatricula, current)
-}
+  const current = target.get(normalizedMatricula) || new Set<string>();
+  conceptIds.forEach((conceptId) => current.add(conceptId));
+  target.set(normalizedMatricula, current);
+};
 
 const toPipeMap = (source: Map<string, Set<string>>) => {
-  const result = new Map<string, string>()
-  source.forEach((ids, matricula) => result.set(matricula, Array.from(ids).join('|')))
-  return result
-}
+  const result = new Map<string, string>();
+  source.forEach((ids, matricula) =>
+    result.set(matricula, Array.from(ids).join("|")),
+  );
+  return result;
+};
 
 const joinPipeIds = (...values: unknown[]) => {
-  return parseEnrollmentConceptIds(values).join('|')
-}
+  return parseEnrollmentConceptIds(values).join("|");
+};
 
 const fetchCycleConceptEvidence = async (
   matriculas: unknown[],
   cicloKey: string,
-  enrollmentConceptIds: string[]
+  enrollmentConceptIds: string[],
 ): Promise<CycleConceptEvidence> => {
-  const uniqueMatriculas = Array.from(new Set(matriculas.map((matricula) => normalizeText(matricula, 64)).filter(Boolean)))
-  const conceptIds = parseEnrollmentConceptIds(enrollmentConceptIds)
-  const paid = new Map<string, Set<string>>()
-  const charged = new Map<string, Set<string>>()
+  const uniqueMatriculas = Array.from(
+    new Set(
+      matriculas
+        .map((matricula) => normalizeText(matricula, 64))
+        .filter(Boolean),
+    ),
+  );
+  const conceptIds = parseEnrollmentConceptIds(enrollmentConceptIds);
+  const paid = new Map<string, Set<string>>();
+  const charged = new Map<string, Set<string>>();
 
   if (!uniqueMatriculas.length || !conceptIds.length) {
-    return { paid: new Map(), charged: new Map() }
+    return { paid: new Map(), charged: new Map() };
   }
 
-  for (let index = 0; index < uniqueMatriculas.length; index += EVIDENCE_CHUNK_SIZE) {
-    const chunk = uniqueMatriculas.slice(index, index + EVIDENCE_CHUNK_SIZE)
-    const matriculaPlaceholders = chunk.map(() => '?').join(',')
-    const conceptPlaceholders = conceptIds.map(() => '?').join(',')
+  for (
+    let index = 0;
+    index < uniqueMatriculas.length;
+    index += EVIDENCE_CHUNK_SIZE
+  ) {
+    const chunk = uniqueMatriculas.slice(index, index + EVIDENCE_CHUNK_SIZE);
+    const matriculaPlaceholders = chunk.map(() => "?").join(",");
+    const conceptPlaceholders = conceptIds.map(() => "?").join(",");
 
-    const paymentRows = await query<Array<{ matricula: string; conceptIds: string }>>(`
+    const paymentRows = await query<
+      Array<{ matricula: string; conceptIds: string }>
+    >(
+      `
       SELECT
         R.matricula,
         GROUP_CONCAT(DISTINCT CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) SEPARATOR '|') AS conceptIds
@@ -562,11 +747,18 @@ const fetchCycleConceptEvidence = async (
         AND R.matricula IN (${matriculaPlaceholders})
         AND CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) IN (${conceptPlaceholders})
       GROUP BY R.matricula
-    `, [cicloKey, ...chunk, ...conceptIds])
+    `,
+      [cicloKey, ...chunk, ...conceptIds],
+    );
 
-    paymentRows.forEach((row) => appendConceptIds(paid, row.matricula, row.conceptIds))
+    paymentRows.forEach((row) =>
+      appendConceptIds(paid, row.matricula, row.conceptIds),
+    );
 
-    const documentRows = await query<Array<{ matricula: string; conceptIds: string }>>(`
+    const documentRows = await query<
+      Array<{ matricula: string; conceptIds: string }>
+    >(
+      `
       SELECT
         D.matricula,
         GROUP_CONCAT(DISTINCT CAST(COALESCE(P.concepto_id, D.concepto) AS CHAR) SEPARATOR '|') AS conceptIds
@@ -580,72 +772,96 @@ const fetchCycleConceptEvidence = async (
         AND D.matricula IN (${matriculaPlaceholders})
         AND CAST(COALESCE(P.concepto_id, D.concepto) AS CHAR) IN (${conceptPlaceholders})
       GROUP BY D.matricula
-    `, [cicloKey, ...chunk, ...conceptIds])
+    `,
+      [cicloKey, ...chunk, ...conceptIds],
+    );
 
-    documentRows.forEach((row) => appendConceptIds(charged, row.matricula, row.conceptIds))
+    documentRows.forEach((row) =>
+      appendConceptIds(charged, row.matricula, row.conceptIds),
+    );
   }
 
-  return { paid: toPipeMap(paid), charged: toPipeMap(charged) }
-}
+  return { paid: toPipeMap(paid), charged: toPipeMap(charged) };
+};
 
-const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema, filters: any = {}) => {
-  const scope = resolveOperatorScope(filters)
-  const fields = buildLocalBaseSelect(agentId, schema.base)
-  fields.push(selectAs(expr(schema.base, 'b', 'ciclo', 'NULL'), 'baseCiclo'))
+const fetchLocalBaseRows = async (
+  agentId: string,
+  schema: ControlEscolarSchema,
+  filters: any = {},
+) => {
+  const scope = resolveOperatorScope(filters);
+  const fields = buildLocalBaseSelect(agentId, schema.base);
+  fields.push(selectAs(expr(schema.base, "b", "ciclo", "NULL"), "baseCiclo"));
 
-  const params: any[] = []
-  const whereParts = ['1=1']
-  const plantelCandidates = plantelCandidatesForProjectedScope(agentId)
-  if (plantelCandidates.length && schema.base.has('plantel')) {
-    whereParts.push(`${col('b', 'plantel')} IN (${plantelCandidates.map(() => '?').join(',')})`)
-    params.push(...plantelCandidates)
+  const params: any[] = [];
+  const whereParts = ["1=1"];
+  const plantelCandidates = plantelCandidatesForProjectedScope(agentId);
+  if (plantelCandidates.length && schema.base.has("plantel")) {
+    whereParts.push(
+      `${col("b", "plantel")} IN (${plantelCandidates.map(() => "?").join(",")})`,
+    );
+    params.push(...plantelCandidates);
   }
 
-  const search = normalizeText(filters.search || filters.q || '', 80)
+  const search = normalizeText(filters.search || filters.q || "", 80);
   if (search) {
-    const baseNameSearch = schema.base.has('nombreCompleto')
-      ? col('b', 'nombreCompleto')
-      : `CONCAT_WS(' ', ${expr(schema.base, 'b', 'apellidoPaterno')}, ${expr(schema.base, 'b', 'apellidoMaterno')}, ${expr(schema.base, 'b', 'nombres')})`
-    const like = `%${search}%`
-    const searchParts = [`${baseNameSearch} LIKE ?`, `${col('b', 'matricula')} LIKE ?`]
-    params.push(like, like)
+    const baseNameSearch = schema.base.has("nombreCompleto")
+      ? col("b", "nombreCompleto")
+      : `CONCAT_WS(' ', ${expr(schema.base, "b", "apellidoPaterno")}, ${expr(schema.base, "b", "apellidoMaterno")}, ${expr(schema.base, "b", "nombres")})`;
+    const like = `%${search}%`;
+    const searchParts = [
+      `${baseNameSearch} LIKE ?`,
+      `${col("b", "matricula")} LIKE ?`,
+    ];
+    params.push(like, like);
+    ["curp", "correo", "telefono"].forEach((column) => {
+      if (!schema.base.has(column)) return;
+      searchParts.push(`${col("b", column)} LIKE ?`);
+      params.push(like);
+    });
 
-    ;['curp', 'correo', 'telefono'].forEach((column) => {
-      if (!schema.base.has(column)) return
-      searchParts.push(`${col('b', column)} LIKE ?`)
-      params.push(like)
-    })
-
-    whereParts.push(`(${searchParts.join(' OR ')})`)
+    whereParts.push(`(${searchParts.join(" OR ")})`);
   }
 
-
-  const rows = await query<any[]>(`
-    SELECT ${fields.join(',\n      ')}
+  const rows = await query<any[]>(
+    `
+    SELECT ${fields.join(",\n      ")}
     FROM base b
-    WHERE ${whereParts.join(' AND ')}
+    WHERE ${whereParts.join(" AND ")}
     ORDER BY baseEstatus = 'Activo' DESC, baseNombreCompleto ASC, b.matricula ASC
     LIMIT ${MAX_LOCAL_ROWS + 1}
-  `, params)
+  `,
+    params,
+  );
 
   if (rows.length > MAX_LOCAL_ROWS) {
     throw createError({
       statusCode: 413,
-      message: `El plantel excede el límite temporal de ${MAX_LOCAL_ROWS} alumnos en base para Control Escolar. Usa búsqueda por nombre o matrícula.`
-    })
+      message: `El plantel excede el límite temporal de ${MAX_LOCAL_ROWS} alumnos en base para Control Escolar. Usa búsqueda por nombre o matrícula.`,
+    });
   }
 
   const [currentEvidence, previousEvidence] = await Promise.all([
-    fetchCycleConceptEvidence(rows.map((row) => row.matricula), scope.cicloKey, scope.enrollmentConceptIds),
-    fetchCycleConceptEvidence(rows.map((row) => row.matricula), scope.previousCiclo, scope.enrollmentConceptIds)
-  ])
+    fetchCycleConceptEvidence(
+      rows.map((row) => row.matricula),
+      scope.cicloKey,
+      scope.enrollmentConceptIds,
+    ),
+    fetchCycleConceptEvidence(
+      rows.map((row) => row.matricula),
+      scope.previousCiclo,
+      scope.enrollmentConceptIds,
+    ),
+  ]);
 
   const rowsWithEvidence = rows.map((row) => {
-    const matricula = normalizeText(row.matricula, 64)
-    const conceptoIdsPagados = currentEvidence.paid.get(matricula) || ''
-    const conceptoIdsCargados = currentEvidence.charged.get(matricula) || ''
-    const conceptoIdsPagadosPrevios = previousEvidence.paid.get(matricula) || ''
-    const conceptoIdsCargadosPrevios = previousEvidence.charged.get(matricula) || ''
+    const matricula = normalizeText(row.matricula, 64);
+    const conceptoIdsPagados = currentEvidence.paid.get(matricula) || "";
+    const conceptoIdsCargados = currentEvidence.charged.get(matricula) || "";
+    const conceptoIdsPagadosPrevios =
+      previousEvidence.paid.get(matricula) || "";
+    const conceptoIdsCargadosPrevios =
+      previousEvidence.charged.get(matricula) || "";
 
     return {
       ...row,
@@ -653,172 +869,272 @@ const fetchLocalBaseRows = async (agentId: string, schema: ControlEscolarSchema,
       conceptoIdsCargados,
       conceptoIdsPagadosPrevios,
       conceptoIdsCargadosPrevios,
-      conceptoIdsCicloActual: joinPipeIds(conceptoIdsPagados, conceptoIdsCargados),
-      conceptoIdsCicloPrevio: joinPipeIds(conceptoIdsPagadosPrevios, conceptoIdsCargadosPrevios)
-    }
-  })
+      conceptoIdsCicloActual: joinPipeIds(
+        conceptoIdsPagados,
+        conceptoIdsCargados,
+      ),
+      conceptoIdsCicloPrevio: joinPipeIds(
+        conceptoIdsPagadosPrevios,
+        conceptoIdsCargadosPrevios,
+      ),
+    };
+  });
 
-  return await applyOperatorProjection(agentId, rowsWithEvidence, scope, { searchActive: Boolean(search) })
-}
+  return await applyOperatorProjection(agentId, rowsWithEvidence, scope, {
+    searchActive: Boolean(search),
+  });
+};
 
 const centralSelectColumns = (schema: ControlEscolarSchema) => {
   const wanted = [
-    'matricula',
-    'plantel',
-    'grado',
-    'grupo',
-    'nivel',
-    'nombres',
-    'apellido_paterno',
-    'apellido_materno',
-    'curp',
-    'email_padre',
-    'email_madre',
-    'telefono_padre',
-    'telefono_madre',
-    'interno',
-    'baja',
-    'motivo_baja',
-    'categoria_baja',
-    'seguimiento_baja',
-    'nombre_padre',
-    'apellido_paterno_padre',
-    'apellido_materno_padre',
-    'nombre_madre',
-    'apellido_paterno_madre',
-    'apellido_materno_madre',
-    'servicio',
-    'direccion',
-    'domicilio',
-    'calle',
-    'foto',
-    'updated_at',
-    'updatedAt',
-    'fecha_actualizacion',
-    'created_at'
-  ]
+    "matricula",
+    "plantel",
+    "grado",
+    "grupo",
+    "nivel",
+    "nombres",
+    "apellido_paterno",
+    "apellido_materno",
+    "curp",
+    "email_padre",
+    "email_madre",
+    "telefono_padre",
+    "telefono_madre",
+    "interno",
+    "baja",
+    "motivo_baja",
+    "categoria_baja",
+    "seguimiento_baja",
+    "nombre_padre",
+    "apellido_paterno_padre",
+    "apellido_materno_padre",
+    "nombre_madre",
+    "apellido_paterno_madre",
+    "apellido_materno_madre",
+    "servicio",
+    "direccion",
+    "domicilio",
+    "calle",
+    "foto",
+    "updated_at",
+    "updatedAt",
+    "fecha_actualizacion",
+    "created_at",
+  ];
 
-  return wanted.filter((column) => schema.matricula.has(column))
-}
+  return wanted.filter((column) => schema.matricula.has(column));
+};
 
-const fetchMatriculaOverlayMap = async (matriculas: string[], schema: ControlEscolarSchema) => {
-  const unique = Array.from(new Set(matriculas.map((matricula) => normalizeText(matricula, 64)).filter(Boolean)))
-  const result = new Map<string, any>()
-  if (!unique.length) return result
+const fetchMatriculaOverlayMap = async (
+  matriculas: string[],
+  schema: ControlEscolarSchema,
+) => {
+  const unique = Array.from(
+    new Set(
+      matriculas
+        .map((matricula) => normalizeText(matricula, 64))
+        .filter(Boolean),
+    ),
+  );
+  const result = new Map<string, any>();
+  if (!unique.length) return result;
 
-  if (!schema.centralAvailable || !schema.matricula.has('matricula')) return result
+  if (!schema.centralAvailable || !schema.matricula.has("matricula"))
+    return result;
 
-  const columns = centralSelectColumns(schema)
-  if (!columns.includes('matricula')) columns.unshift('matricula')
-  const selectSql = columns.map(escapeColumn).join(', ')
+  const columns = centralSelectColumns(schema);
+  if (!columns.includes("matricula")) columns.unshift("matricula");
+  const selectSql = columns.map(escapeColumn).join(", ");
 
   for (let index = 0; index < unique.length; index += CENTRAL_CHUNK_SIZE) {
-    const chunk = unique.slice(index, index + CENTRAL_CHUNK_SIZE)
-    const placeholders = chunk.map(() => '?').join(', ')
+    const chunk = unique.slice(index, index + CENTRAL_CHUNK_SIZE);
+    const placeholders = chunk.map(() => "?").join(", ");
     const rows = await controlEscolarCentralQuery<any[]>(
       `SELECT ${selectSql} FROM \`matricula\` WHERE \`matricula\` IN (${placeholders})`,
-      chunk
-    )
-    rows.forEach((row) => result.set(normalizeText(row.matricula, 64), row))
+      chunk,
+    );
+    rows.forEach((row) => result.set(normalizeText(row.matricula, 64), row));
   }
 
-  return result
-}
+  return result;
+};
 
+const fetchHuskyPassMap = async (
+  matriculas: string[],
+  schema: ControlEscolarSchema,
+) => {
+  const unique = Array.from(
+    new Set(
+      matriculas
+        .map((matricula) => normalizeText(matricula, 64))
+        .filter(Boolean),
+    ),
+  );
+  const result = new Map<string, any>();
+  if (!unique.length || !schema.usersAvailable) return result;
 
-const fetchHuskyPassMap = async (matriculas: string[], schema: ControlEscolarSchema) => {
-  const unique = Array.from(new Set(matriculas.map((matricula) => normalizeText(matricula, 64)).filter(Boolean)))
-  const result = new Map<string, any>()
-  if (!unique.length || !schema.usersAvailable) return result
-
-  const optionalColumns = ['email', 'correo', 'updated_at', 'updatedAt'].filter((column) => schema.users.has(column))
-  const selectColumns = ['username', 'plaintext', ...optionalColumns]
-  const selectSql = selectColumns.map(escapeColumn).join(', ')
+  const optionalColumns = ["email", "correo", "updated_at", "updatedAt"].filter(
+    (column) => schema.users.has(column),
+  );
+  const selectColumns = ["username", "plaintext", ...optionalColumns];
+  const selectSql = selectColumns.map(escapeColumn).join(", ");
 
   for (let index = 0; index < unique.length; index += CENTRAL_CHUNK_SIZE) {
-    const chunk = unique.slice(index, index + CENTRAL_CHUNK_SIZE)
-    const placeholders = chunk.map(() => '?').join(', ')
+    const chunk = unique.slice(index, index + CENTRAL_CHUNK_SIZE);
+    const placeholders = chunk.map(() => "?").join(", ");
     const rows = await controlEscolarCentralQuery<any[]>(
       `SELECT ${selectSql} FROM \`users\` WHERE \`username\` IN (${placeholders})`,
-      chunk
-    )
-    rows.forEach((row) => result.set(normalizeText(row.username, 64), row))
+      chunk,
+    );
+    rows.forEach((row) => result.set(normalizeText(row.username, 64), row));
   }
 
-  return result
-}
+  return result;
+};
 
-const fetchHuskyPassRow = async (matricula: string, schema: ControlEscolarSchema) => {
-  if (!schema.usersAvailable) return null
-  const optionalColumns = ['email', 'correo', 'updated_at', 'updatedAt'].filter((column) => schema.users.has(column))
-  const selectColumns = ['username', 'plaintext', ...optionalColumns]
+const fetchHuskyPassRow = async (
+  matricula: string,
+  schema: ControlEscolarSchema,
+) => {
+  if (!schema.usersAvailable) return null;
+  const optionalColumns = ["email", "correo", "updated_at", "updatedAt"].filter(
+    (column) => schema.users.has(column),
+  );
+  const selectColumns = ["username", "plaintext", ...optionalColumns];
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT ${selectColumns.map(escapeColumn).join(', ')} FROM \`users\` WHERE \`username\` = ? LIMIT 1`,
-    [matricula]
-  )
-  return rows[0] || null
-}
+    `SELECT ${selectColumns.map(escapeColumn).join(", ")} FROM \`users\` WHERE \`username\` = ? LIMIT 1`,
+    [matricula],
+  );
+  return rows[0] || null;
+};
 
 const truthyBaja = (value: unknown) => {
-  const normalized = normalizeText(value).toLowerCase()
-  return value === true || value === 1 || ['1', 'si', 'sí', 'true', 'baja'].includes(normalized)
-}
+  const normalized = normalizeText(value).toLowerCase();
+  return (
+    value === true ||
+    value === 1 ||
+    ["1", "si", "sí", "true", "baja"].includes(normalized)
+  );
+};
 
 const firstText = (...values: unknown[]) => {
   for (const value of values) {
-    const text = normalizeText(value)
-    if (text) return text
+    const text = normalizeText(value);
+    if (text) return text;
   }
-  return ''
-}
+  return "";
+};
 
-const firstLower = (...values: unknown[]) => firstText(...values).toLowerCase()
-const firstUpper = (...values: unknown[]) => firstText(...values).toUpperCase()
+const firstLower = (...values: unknown[]) => firstText(...values).toLowerCase();
+const firstUpper = (...values: unknown[]) => firstText(...values).toUpperCase();
 
 const resolvePhotoUrl = (value: unknown) => {
-  const raw = normalizeKey(value)
-  if (!raw) return ''
-  if (/^https?:\/\//i.test(raw)) return raw
-  if (raw.startsWith('//')) return `https:${raw}`
+  const raw = normalizeKey(value);
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("//")) return `https:${raw}`;
 
-  const config = useRuntimeConfig() as any
-  const baseUrl = String(config.studentPhotoBaseUrl || 'https://matricula.casitaapps.com').trim().replace(/\/+$/, '')
-  const normalized = raw.replace(/\\/g, '/').replace(/^\.\//, '')
-  const path = normalized.startsWith('/') ? normalized : (normalized.includes('/') ? `/${normalized}` : `/uploads/${normalized}`)
-  return `${baseUrl}${path}`
-}
+  const config = useRuntimeConfig() as any;
+  const baseUrl = String(
+    config.studentPhotoBaseUrl || "https://matricula.casitaapps.com",
+  )
+    .trim()
+    .replace(/\/+$/, "");
+  const normalized = raw.replace(/\\/g, "/").replace(/^\.\//, "");
+  const path = normalized.startsWith("/")
+    ? normalized
+    : normalized.includes("/")
+      ? `/${normalized}`
+      : `/uploads/${normalized}`;
+  return `${baseUrl}${path}`;
+};
 
-const hasPhoneContact = (student: any) => Boolean(firstText(student.phone, student.telefonoPadre, student.telefonoMadre))
-const hasEmailContact = (student: any) => Boolean(firstText(student.email, student.emailPadre, student.emailMadre))
-const hasTutorContact = (student: any) => Boolean(firstText(student.guardianName, student.fatherName, student.motherName, student.nombrePadre, student.nombreMadre))
+const hasPhoneContact = (student: any) =>
+  Boolean(
+    firstText(student.phone, student.telefonoPadre, student.telefonoMadre),
+  );
+const hasEmailContact = (student: any) =>
+  Boolean(firstText(student.email, student.emailPadre, student.emailMadre));
+const hasTutorContact = (student: any) =>
+  Boolean(
+    firstText(
+      student.guardianName,
+      student.fatherName,
+      student.motherName,
+      student.nombrePadre,
+      student.nombreMadre,
+    ),
+  );
 
 const buildMissingFields = (row: any) => {
-  const missing: string[] = []
-  if (!normalizeKey(row.curp)) missing.push('curp')
-  if (!hasPhoneContact(row)) missing.push('teléfono')
-  if (!hasEmailContact(row)) missing.push('email')
-  if (!hasTutorContact(row)) missing.push('tutor')
-  return missing
-}
+  const missing: string[] = [];
+  if (!normalizeKey(row.curp)) missing.push("curp");
+  if (!hasPhoneContact(row)) missing.push("teléfono");
+  if (!hasEmailContact(row)) missing.push("email");
+  if (!hasTutorContact(row)) missing.push("tutor");
+  return missing;
+};
 
 const hasNoPrimaryContact = (student: any) => {
-  return !hasPhoneContact(student) && !hasEmailContact(student) && !hasTutorContact(student)
-}
+  return (
+    !hasPhoneContact(student) &&
+    !hasEmailContact(student) &&
+    !hasTutorContact(student)
+  );
+};
 
-const overlayStudentRow = (agentId: string, base: any, overlay?: any, huskyPass?: any): ControlEscolarStudentRow => {
-  const hasOverlay = Boolean(overlay?.matricula)
-  const nombres = firstText(overlay?.nombres, base.baseNombres)
-  const apellidoPaterno = firstText(overlay?.apellido_paterno, base.baseApellidoPaterno)
-  const apellidoMaterno = firstText(overlay?.apellido_materno, base.baseApellidoMaterno)
-  const fullName = firstText([apellidoPaterno, apellidoMaterno, nombres].filter(Boolean).join(' '), base.baseNombreCompleto)
-  const fatherName = firstText([overlay?.nombre_padre, overlay?.apellido_paterno_padre, overlay?.apellido_materno_padre].map(normalizeText).filter(Boolean).join(' '))
-  const motherName = firstText([overlay?.nombre_madre, overlay?.apellido_paterno_madre, overlay?.apellido_materno_madre].map(normalizeText).filter(Boolean).join(' '))
-  const updatedAt = firstText(overlay?.updated_at, overlay?.updatedAt, overlay?.fecha_actualizacion, overlay?.created_at, base.baseUpdatedAt)
-  const baja = hasOverlay && truthyBaja(overlay?.baja) ? 1 : 0
-  const status = baja ? 'Baja' : firstText(base.baseEstatus, 'Activo')
-  const huskyPassUsername = normalizeText(huskyPass?.username, 64)
-  const huskyPassPlaintext = normalizeText(huskyPass?.plaintext, 255)
-  const huskyPassEmail = firstLower(huskyPass?.email, huskyPass?.correo)
+const overlayStudentRow = (
+  agentId: string,
+  base: any,
+  overlay?: any,
+  huskyPass?: any,
+): ControlEscolarStudentRow => {
+  const hasOverlay = Boolean(overlay?.matricula);
+  const nombres = firstText(overlay?.nombres, base.baseNombres);
+  const apellidoPaterno = firstText(
+    overlay?.apellido_paterno,
+    base.baseApellidoPaterno,
+  );
+  const apellidoMaterno = firstText(
+    overlay?.apellido_materno,
+    base.baseApellidoMaterno,
+  );
+  const fullName = firstText(
+    [apellidoPaterno, apellidoMaterno, nombres].filter(Boolean).join(" "),
+    base.baseNombreCompleto,
+  );
+  const fatherName = firstText(
+    [
+      overlay?.nombre_padre,
+      overlay?.apellido_paterno_padre,
+      overlay?.apellido_materno_padre,
+    ]
+      .map(normalizeText)
+      .filter(Boolean)
+      .join(" "),
+  );
+  const motherName = firstText(
+    [
+      overlay?.nombre_madre,
+      overlay?.apellido_paterno_madre,
+      overlay?.apellido_materno_madre,
+    ]
+      .map(normalizeText)
+      .filter(Boolean)
+      .join(" "),
+  );
+  const updatedAt = firstText(
+    overlay?.updated_at,
+    overlay?.updatedAt,
+    overlay?.fecha_actualizacion,
+    overlay?.created_at,
+    base.baseUpdatedAt,
+  );
+  const baja = hasOverlay && truthyBaja(overlay?.baja) ? 1 : 0;
+  const status = baja ? "Baja" : firstText(base.baseEstatus, "Activo");
+  const huskyPassUsername = normalizeText(huskyPass?.username, 64);
+  const huskyPassPlaintext = normalizeText(huskyPass?.plaintext, 255);
+  const huskyPassEmail = firstLower(huskyPass?.email, huskyPass?.correo);
 
   const normalized: ControlEscolarStudentRow = {
     agentId: normalizePlantel(agentId),
@@ -835,7 +1151,7 @@ const overlayStudentRow = (agentId: string, base: any, overlay?: any, huskyPass?
     phone: firstText(overlay?.telefono_padre, base.baseTelefono),
     email: firstLower(overlay?.email_padre, base.baseCorreo),
     status,
-    statusSource: hasOverlay ? 'matricula' : 'base',
+    statusSource: hasOverlay ? "matricula" : "base",
     baja,
     motivoBaja: normalizeText(overlay?.motivo_baja, 500),
     categoriaBaja: normalizeText(overlay?.categoria_baja),
@@ -859,268 +1175,463 @@ const overlayStudentRow = (agentId: string, base: any, overlay?: any, huskyPass?
     emailMadre: firstLower(overlay?.email_madre, base.baseCorreo),
     interno: firstText(overlay?.interno, base.baseInterno),
     servicio: normalizeText(overlay?.servicio),
-    address: firstText(overlay?.direccion, overlay?.domicilio, overlay?.calle, base.baseDireccion, base.baseDomicilio),
+    address: firstText(
+      overlay?.direccion,
+      overlay?.domicilio,
+      overlay?.calle,
+      base.baseDireccion,
+      base.baseDomicilio,
+    ),
     photoUrl: resolvePhotoUrl(overlay?.foto),
     overlayExists: hasOverlay,
     missingFields: [],
-    updatedAt: updatedAt ? new Date(updatedAt).toISOString?.() || String(updatedAt) : null,
+    updatedAt: updatedAt
+      ? new Date(updatedAt).toISOString?.() || String(updatedAt)
+      : null,
     cicloBase: normalizeText(base.baseCiclo),
-    plantelBaseOriginal: normalizeText(base.plantelBaseOriginal || base.basePlantel),
-    enrollmentState: normalizeText(base.operatorEnrollmentState || 'inscrito'),
+    plantelBaseOriginal: normalizeText(
+      base.plantelBaseOriginal || base.basePlantel,
+    ),
+    enrollmentState: normalizeText(base.operatorEnrollmentState || "inscrito"),
     currentEnrollmentConceptMatch: Boolean(base.currentEnrollmentConceptMatch),
     inscritoCicloActual: Boolean(base.inscritoCicloActual),
-    tipoIngresoValue: normalizeText(base.operatorTipoIngreso || '').toLowerCase() === 'interno' ? 'interno' : 'externo',
-    tipoIngreso: normalizeText(base.operatorTipoIngreso || '').toLowerCase() === 'interno' ? 'Interno' : 'Externo',
+    tipoIngresoValue:
+      normalizeText(base.operatorTipoIngreso || "").toLowerCase() === "interno"
+        ? "interno"
+        : "externo",
+    tipoIngreso:
+      normalizeText(base.operatorTipoIngreso || "").toLowerCase() === "interno"
+        ? "Interno"
+        : "Externo",
     huskyPassUsername,
     huskyPassPlaintext,
     huskyPassAvailable: Boolean(huskyPassUsername && huskyPassPlaintext),
-    huskyPassEmail
-  }
+    huskyPassEmail,
+  };
 
-  normalized.missingFields = buildMissingFields(normalized)
-  return normalized
-}
-
+  normalized.missingFields = buildMissingFields(normalized);
+  return normalized;
+};
 
 const compactRawRecord = (row: any) => {
-  const result: Record<string, any> = {}
+  const result: Record<string, any> = {};
   Object.entries(row || {}).forEach(([key, value]) => {
-    if (value === null || value === undefined || value === '') return
-    if (typeof value === 'string' && value.trim() === '') return
-    result[key] = value
-  })
-  return result
-}
+    if (value === null || value === undefined || value === "") return;
+    if (typeof value === "string" && value.trim() === "") return;
+    result[key] = value;
+  });
+  return result;
+};
 
 const fetchFullCentralMatriculaRow = async (matricula: string) => {
-  const rows = await controlEscolarCentralQuery<any[]>(`SELECT * FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`, [matricula])
-  return rows[0] || null
-}
+  const rows = await controlEscolarCentralQuery<any[]>(
+    `SELECT * FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`,
+    [matricula],
+  );
+  return rows[0] || null;
+};
 
-export const fetchControlEscolarStudentDetail = async (agentId: string, matricula: string) => {
-  const normalizedMatricula = normalizeText(matricula, 64)
+export const fetchControlEscolarStudentDetail = async (
+  agentId: string,
+  matricula: string,
+) => {
+  const normalizedMatricula = normalizeText(matricula, 64);
   if (!normalizedMatricula) {
-    throw createError({ statusCode: 400, message: 'Matrícula inválida.' })
+    throw createError({ statusCode: 400, message: "Matrícula inválida." });
   }
 
-  const schema = await getControlEscolarSchema(agentId, { requireCentral: false })
-  const fields = buildLocalBaseSelect(agentId, schema.base)
-  const [baseRow] = await query<any[]>(`
-    SELECT ${fields.join(',\n      ')}
+  const schema = await getControlEscolarSchema(agentId, {
+    requireCentral: false,
+  });
+  const fields = buildLocalBaseSelect(agentId, schema.base);
+  const [baseRow] = await query<any[]>(
+    `
+    SELECT ${fields.join(",\n      ")}
     FROM base b
     WHERE b.matricula = ?
     LIMIT 1
-  `, [normalizedMatricula])
+  `,
+    [normalizedMatricula],
+  );
 
   if (!baseRow) {
-    throw createError({ statusCode: 404, message: 'Alumno no encontrado en base para el plantel activo.' })
+    throw createError({
+      statusCode: 404,
+      message: "Alumno no encontrado en base para el plantel activo.",
+    });
   }
 
-  const rawBaseRows = await query<any[]>(`SELECT * FROM base WHERE matricula = ? LIMIT 1`, [normalizedMatricula])
-  let rawMatricula: any = null
-  let huskyPass: any = null
+  const rawBaseRows = await query<any[]>(
+    `SELECT * FROM base WHERE matricula = ? LIMIT 1`,
+    [normalizedMatricula],
+  );
+  let rawMatricula: any = null;
+  let huskyPass: any = null;
   if (schema.centralAvailable) {
     try {
-      rawMatricula = await fetchFullCentralMatriculaRow(normalizedMatricula)
+      rawMatricula = await fetchFullCentralMatriculaRow(normalizedMatricula);
     } catch (error: any) {
-      console.warn('[Control Escolar] centralized matricula detail overlay unavailable', {
-        agentId,
-        matricula: normalizedMatricula,
-        error: toErrorMessage(error)
-      })
+      console.warn(
+        "[Control Escolar] centralized matricula detail overlay unavailable",
+        {
+          agentId,
+          matricula: normalizedMatricula,
+          error: toErrorMessage(error),
+        },
+      );
     }
 
     try {
-      huskyPass = await fetchHuskyPassRow(normalizedMatricula, schema)
+      huskyPass = await fetchHuskyPassRow(normalizedMatricula, schema);
     } catch (error: any) {
-      console.warn('[Control Escolar] husky pass detail lookup unavailable', {
+      console.warn("[Control Escolar] husky pass detail lookup unavailable", {
         agentId,
         matricula: normalizedMatricula,
-        error: toErrorMessage(error)
-      })
+        error: toErrorMessage(error),
+      });
     }
   }
 
-  const normalized = overlayStudentRow(agentId, baseRow, rawMatricula, huskyPass)
+  const normalized = overlayStudentRow(
+    agentId,
+    baseRow,
+    rawMatricula,
+    huskyPass,
+  );
   return {
     ...normalized,
     readOnly: true,
-    detailSource: rawMatricula ? 'base+matricula' : 'base',
+    detailSource: rawMatricula ? "base+matricula" : "base",
     rawBase: compactRawRecord(rawBaseRows[0] || {}),
     rawMatricula: compactRawRecord(rawMatricula || {}),
-    rawUsers: compactRawRecord(huskyPass || {})
-  }
-}
+    rawUsers: compactRawRecord(huskyPass || {}),
+  };
+};
 
-const compareStudents = (a: ControlEscolarStudentRow, b: ControlEscolarStudentRow) => {
-  const statusA = a.status === 'Activo' ? 0 : 1
-  const statusB = b.status === 'Activo' ? 0 : 1
-  if (statusA !== statusB) return statusA - statusB
-  return `${a.grado}|${a.group}|${a.fullName}|${a.matricula}`.localeCompare(`${b.grado}|${b.group}|${b.fullName}|${b.matricula}`, 'es')
-}
+const compareStudents = (
+  a: ControlEscolarStudentRow,
+  b: ControlEscolarStudentRow,
+) => {
+  const statusA = a.status === "Activo" ? 0 : 1;
+  const statusB = b.status === "Activo" ? 0 : 1;
+  if (statusA !== statusB) return statusA - statusB;
+  return `${a.grado}|${a.group}|${a.fullName}|${a.matricula}`.localeCompare(
+    `${b.grado}|${b.group}|${b.fullName}|${b.matricula}`,
+    "es",
+  );
+};
+
+type ControlEscolarLoadPhase = "base" | "enriched";
 
 type ControlEscolarLoadedStudents = {
-  students: ControlEscolarStudentRow[]
+  students: ControlEscolarStudentRow[];
   source: {
-    base: string
-    overlay: string
-    overlayAvailable: boolean
-    overlayError: string
-    localRows: number
-    overlayRows: number
-    usersRows: number
-  }
-}
+    base: string;
+    overlay: string;
+    overlayAvailable: boolean;
+    overlayError: string;
+    localRows: number;
+    overlayRows: number;
+    usersRows: number;
+    phase: ControlEscolarLoadPhase;
+  };
+};
 
-const fetchAllNormalizedStudents = async (agentId: string, filters: any = {}): Promise<ControlEscolarLoadedStudents> => {
-  const schema = await getControlEscolarSchema(agentId, { requireCentral: false })
-  const localRows = await fetchLocalBaseRows(agentId, schema, filters)
+const resolveControlEscolarLoadPhase = (
+  filters: any = {},
+): ControlEscolarLoadPhase => {
+  const phase = normalizeText(
+    filters.phase || filters.stage || filters.mode,
+    40,
+  ).toLowerCase();
+  return ["base", "local", "administrator", "admin"].includes(phase)
+    ? "base"
+    : "enriched";
+};
+
+const fetchAllNormalizedStudents = async (
+  agentId: string,
+  filters: any = {},
+): Promise<ControlEscolarLoadedStudents> => {
+  const phase = resolveControlEscolarLoadPhase(filters);
+  const localOnly = phase === "base";
+  const schema = await getControlEscolarSchema(agentId, {
+    requireCentral: false,
+    skipCentral: localOnly,
+  });
+  const localRows = await fetchLocalBaseRows(agentId, schema, filters);
 
   if (localRows.length > MAX_LOCAL_ROWS) {
     throw createError({
       statusCode: 413,
-      message: `El plantel excede el límite temporal de ${MAX_LOCAL_ROWS} alumnos activos para Control Escolar. Ajusta la consulta antes de editar.`
-    })
+      message: `El plantel excede el límite temporal de ${MAX_LOCAL_ROWS} alumnos activos para Control Escolar. Ajusta la consulta antes de editar.`,
+    });
   }
 
-  let overlayMap = new Map<string, any>()
-  let huskyPassMap = new Map<string, any>()
-  let overlayAvailable = schema.centralAvailable
-  let overlayError = schema.centralError
+  let overlayMap = new Map<string, any>();
+  let huskyPassMap = new Map<string, any>();
+  let overlayAvailable = schema.centralAvailable;
+  let overlayError = schema.centralError;
+
+  if (localOnly) {
+    return {
+      students: localRows
+        .map((row) => overlayStudentRow(agentId, row))
+        .sort(compareStudents),
+      source: {
+        base: `bridge:${normalizePlantel(agentId)}.base`,
+        overlay: "CONTROL_ESCOLAR_MYSQL.matricula",
+        overlayAvailable: false,
+        overlayError: "",
+        localRows: Math.min(localRows.length, MAX_LOCAL_ROWS),
+        overlayRows: 0,
+        usersRows: 0,
+        phase: "base",
+      },
+    };
+  }
 
   if (schema.centralAvailable) {
     try {
-      overlayMap = await fetchMatriculaOverlayMap(localRows.map((row) => row.matricula), schema)
+      overlayMap = await fetchMatriculaOverlayMap(
+        localRows.map((row) => row.matricula),
+        schema,
+      );
     } catch (error: any) {
-      overlayAvailable = false
-      overlayError = toErrorMessage(error)
-      console.warn('[Control Escolar] centralized matricula overlay lookup unavailable', {
-        agentId,
-        localRows: localRows.length,
-        error: overlayError
-      })
+      overlayAvailable = false;
+      overlayError = toErrorMessage(error);
+      console.warn(
+        "[Control Escolar] centralized matricula overlay lookup unavailable",
+        {
+          agentId,
+          localRows: localRows.length,
+          error: overlayError,
+        },
+      );
     }
 
     try {
-      huskyPassMap = await fetchHuskyPassMap(localRows.map((row) => row.matricula), schema)
+      huskyPassMap = await fetchHuskyPassMap(
+        localRows.map((row) => row.matricula),
+        schema,
+      );
     } catch (error: any) {
-      console.warn('[Control Escolar] husky pass lookup unavailable', {
+      console.warn("[Control Escolar] husky pass lookup unavailable", {
         agentId,
         localRows: localRows.length,
-        error: toErrorMessage(error)
-      })
+        error: toErrorMessage(error),
+      });
     }
   }
 
   return {
     students: localRows
       .map((row) => {
-        const matricula = normalizeText(row.matricula, 64)
-        return overlayStudentRow(agentId, row, overlayMap.get(matricula), huskyPassMap.get(matricula))
+        const matricula = normalizeText(row.matricula, 64);
+        return overlayStudentRow(
+          agentId,
+          row,
+          overlayMap.get(matricula),
+          huskyPassMap.get(matricula),
+        );
       })
       .sort(compareStudents),
     source: {
       base: `bridge:${normalizePlantel(agentId)}.base`,
-      overlay: 'CONTROL_ESCOLAR_MYSQL.matricula',
+      overlay: "CONTROL_ESCOLAR_MYSQL.matricula",
       overlayAvailable,
-      overlayError: overlayError || '',
+      overlayError: overlayError || "",
       localRows: Math.min(localRows.length, MAX_LOCAL_ROWS),
       overlayRows: overlayMap.size,
-      usersRows: huskyPassMap.size
-    }
-  }
-}
+      usersRows: huskyPassMap.size,
+      phase: "enriched",
+    },
+  };
+};
 
 const gradeOrderIndex = (value: unknown) => {
-  const normalized = displayGrado(value).toLowerCase()
-  const order = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto', 'egresado']
-  const index = order.indexOf(normalized)
-  return index >= 0 ? index : order.length
-}
+  const normalized = displayGrado(value).toLowerCase();
+  const order = [
+    "primero",
+    "segundo",
+    "tercero",
+    "cuarto",
+    "quinto",
+    "sexto",
+    "egresado",
+  ];
+  const index = order.indexOf(normalized);
+  return index >= 0 ? index : order.length;
+};
 
 const compareAcademicGrade = (left: unknown, right: unknown) => {
-  const leftIndex = gradeOrderIndex(left)
-  const rightIndex = gradeOrderIndex(right)
-  if (leftIndex !== rightIndex) return leftIndex - rightIndex
-  return String(left || '').localeCompare(String(right || ''), 'es')
-}
+  const leftIndex = gradeOrderIndex(left);
+  const rightIndex = gradeOrderIndex(right);
+  if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+  return String(left || "").localeCompare(String(right || ""), "es");
+};
 
 const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
-  let result = students
+  let result = students;
 
-  const status = normalizeText(filters.status || '')
-  if (status && status !== 'all' && status !== 'todos') {
-    if (status === 'activos' || status === 'active') result = result.filter((student) => student.status === 'Activo')
-    if (status === 'inscritos') result = result.filter((student) => student.enrollmentState === 'inscrito')
-    if (status === 'internos') result = result.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue === 'interno')
-    if (status === 'externos') result = result.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue !== 'interno')
-    if (status === 'no_inscritos') result = result.filter((student) => student.enrollmentState === 'no_inscrito')
-    if (status === 'bajas' || status === 'baja') result = result.filter((student) => student.status === 'Baja' || student.enrollmentState === 'baja_inscrita' || student.enrollmentState === 'baja')
-    if (status === 'sin_ficha' || status === 'sin_ficha_matricula') result = result.filter((student) => !student.overlayExists)
-    if (status === 'sin_contacto') result = result.filter(hasNoPrimaryContact)
+  const status = normalizeText(filters.status || "");
+  if (status && status !== "all" && status !== "todos") {
+    if (status === "activos" || status === "active")
+      result = result.filter((student) => student.status === "Activo");
+    if (status === "inscritos")
+      result = result.filter(
+        (student) => student.enrollmentState === "inscrito",
+      );
+    if (status === "internos")
+      result = result.filter(
+        (student) =>
+          student.enrollmentState === "inscrito" &&
+          student.tipoIngresoValue === "interno",
+      );
+    if (status === "externos")
+      result = result.filter(
+        (student) =>
+          student.enrollmentState === "inscrito" &&
+          student.tipoIngresoValue !== "interno",
+      );
+    if (status === "no_inscritos")
+      result = result.filter(
+        (student) => student.enrollmentState === "no_inscrito",
+      );
+    if (status === "bajas" || status === "baja")
+      result = result.filter(
+        (student) =>
+          student.status === "Baja" ||
+          student.enrollmentState === "baja_inscrita" ||
+          student.enrollmentState === "baja",
+      );
+    if (status === "sin_ficha" || status === "sin_ficha_matricula")
+      result = result.filter((student) => !student.overlayExists);
+    if (status === "sin_contacto") result = result.filter(hasNoPrimaryContact);
   }
 
-  const grado = normalizeText(filters.grado || '').toLowerCase()
-  if (grado && grado !== 'all') result = result.filter((student) => student.grado.toLowerCase() === grado)
+  const grado = normalizeText(filters.grado || "").toLowerCase();
+  if (grado && grado !== "all")
+    result = result.filter((student) => student.grado.toLowerCase() === grado);
 
-  const grupo = normalizeText(filters.group || filters.grupo || '')
-  if (grupo && grupo !== 'all') result = result.filter((student) => student.group === grupo)
+  const grupo = normalizeText(filters.group || filters.grupo || "");
+  if (grupo && grupo !== "all")
+    result = result.filter((student) => student.group === grupo);
 
-  const quality = normalizeText(filters.quality || filters.calidad || filters.missing || '')
-  if (quality && quality !== 'all') {
-    if (quality === 'complete' || quality === 'completo') result = result.filter((student) => student.missingFields.length === 0)
-    if (quality === 'incomplete' || quality === 'incompleto') result = result.filter((student) => student.missingFields.length > 0)
-    if (quality === 'curp') result = result.filter((student) => student.missingFields.includes('curp'))
-    if (quality === 'phone' || quality === 'telefono' || quality === 'teléfono') result = result.filter((student) => student.missingFields.includes('teléfono'))
-    if (quality === 'email') result = result.filter((student) => student.missingFields.includes('email'))
-    if (quality === 'guardian' || quality === 'tutor') result = result.filter((student) => student.missingFields.includes('tutor'))
-    if (quality === 'contact' || quality === 'contacto') result = result.filter(hasNoPrimaryContact)
-    if (quality === 'overlay' || quality === 'sin_ficha' || quality === 'sin_ficha_matricula') result = result.filter((student) => !student.overlayExists)
+  const quality = normalizeText(
+    filters.quality || filters.calidad || filters.missing || "",
+  );
+  if (quality && quality !== "all") {
+    if (quality === "complete" || quality === "completo")
+      result = result.filter((student) => student.missingFields.length === 0);
+    if (quality === "incomplete" || quality === "incompleto")
+      result = result.filter((student) => student.missingFields.length > 0);
+    if (quality === "curp")
+      result = result.filter((student) =>
+        student.missingFields.includes("curp"),
+      );
+    if (quality === "phone" || quality === "telefono" || quality === "teléfono")
+      result = result.filter((student) =>
+        student.missingFields.includes("teléfono"),
+      );
+    if (quality === "email")
+      result = result.filter((student) =>
+        student.missingFields.includes("email"),
+      );
+    if (quality === "guardian" || quality === "tutor")
+      result = result.filter((student) =>
+        student.missingFields.includes("tutor"),
+      );
+    if (quality === "contact" || quality === "contacto")
+      result = result.filter(hasNoPrimaryContact);
+    if (
+      quality === "overlay" ||
+      quality === "sin_ficha" ||
+      quality === "sin_ficha_matricula"
+    )
+      result = result.filter((student) => !student.overlayExists);
   }
 
-  const recent = normalizeText(filters.recent || '')
-  if (recent && recent !== 'all') {
-    const days = recent === '7d' ? 7 : recent === '30d' ? 30 : recent === '90d' ? 90 : 0
+  const recent = normalizeText(filters.recent || "");
+  if (recent && recent !== "all") {
+    const days =
+      recent === "7d" ? 7 : recent === "30d" ? 30 : recent === "90d" ? 90 : 0;
     if (days > 0) {
-      const threshold = Date.now() - days * 24 * 60 * 60 * 1000
-      result = result.filter((student) => student.updatedAt && new Date(student.updatedAt).getTime() >= threshold)
+      const threshold = Date.now() - days * 24 * 60 * 60 * 1000;
+      result = result.filter(
+        (student) =>
+          student.updatedAt &&
+          new Date(student.updatedAt).getTime() >= threshold,
+      );
     }
   }
 
-  return result
-}
+  return result;
+};
 
 const buildCatalogs = (students: ControlEscolarStudentRow[]) => {
-  const gruposPorGrado = students.reduce<Record<string, string[]>>((acc, student) => {
-    if (!student.grado || !student.group) return acc
-    if (!acc[student.grado]) acc[student.grado] = []
-    if (!acc[student.grado].includes(student.group)) acc[student.grado].push(student.group)
-    return acc
-  }, {})
+  const gruposPorGrado = students.reduce<Record<string, string[]>>(
+    (acc, student) => {
+      if (!student.grado || !student.group) return acc;
+      if (!acc[student.grado]) acc[student.grado] = [];
+      if (!acc[student.grado].includes(student.group))
+        acc[student.grado].push(student.group);
+      return acc;
+    },
+    {},
+  );
 
   Object.keys(gruposPorGrado).forEach((grado) => {
-    gruposPorGrado[grado].sort((a, b) => a.localeCompare(b, 'es'))
-  })
+    gruposPorGrado[grado].sort((a, b) => a.localeCompare(b, "es"));
+  });
 
   return {
-    niveles: Array.from(new Set(students.map((student) => student.nivel).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
-    grados: Array.from(new Set(students.map((student) => student.grado).filter(Boolean))).sort(compareAcademicGrade),
-    grupos: Array.from(new Set(students.map((student) => student.group).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')),
-    gruposPorGrado
-  }
-}
+    niveles: Array.from(
+      new Set(students.map((student) => student.nivel).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b, "es")),
+    grados: Array.from(
+      new Set(students.map((student) => student.grado).filter(Boolean)),
+    ).sort(compareAcademicGrade),
+    grupos: Array.from(
+      new Set(students.map((student) => student.group).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b, "es")),
+    gruposPorGrado,
+  };
+};
 
-export const fetchControlEscolarStudents = async (agentId: string, filters: any) => {
-  const page = Math.max(1, Number(filters.page || 1) || 1)
-  const wantsAll = ['1', 'true', 'all', 'snapshot', 'index'].includes(String(filters.all || filters.mode || '').toLowerCase())
+export const fetchControlEscolarStudents = async (
+  agentId: string,
+  filters: any,
+) => {
+  const page = Math.max(1, Number(filters.page || 1) || 1);
+  const wantsAll = ["1", "true", "all", "snapshot", "index"].includes(
+    String(filters.all || filters.mode || "").toLowerCase(),
+  );
   const limit = wantsAll
-    ? Math.min(MAX_LOCAL_ROWS, Math.max(1, Number(filters.limit || MAX_LOCAL_ROWS) || MAX_LOCAL_ROWS))
-    : Math.min(100, Math.max(8, Number(filters.limit || 25) || 25))
-  const loaded = await fetchAllNormalizedStudents(agentId, filters)
-  const allStudents = loaded.students
-  const filtered = applyFilters(allStudents, wantsAll ? { ...filters, search: '', status: '', quality: '', grado: '', group: '', grupo: '', recent: '' } : filters)
-  const offset = (page - 1) * limit
-  const data = wantsAll ? filtered : filtered.slice(offset, offset + limit)
+    ? Math.min(
+        MAX_LOCAL_ROWS,
+        Math.max(1, Number(filters.limit || MAX_LOCAL_ROWS) || MAX_LOCAL_ROWS),
+      )
+    : Math.min(100, Math.max(8, Number(filters.limit || 25) || 25));
+  const loaded = await fetchAllNormalizedStudents(agentId, filters);
+  const allStudents = loaded.students;
+  const filtered = applyFilters(
+    allStudents,
+    wantsAll
+      ? {
+          ...filters,
+          search: "",
+          status: "",
+          quality: "",
+          grado: "",
+          group: "",
+          grupo: "",
+          recent: "",
+        }
+      : filters,
+  );
+  const offset = (page - 1) * limit;
+  const data = wantsAll ? filtered : filtered.slice(offset, offset + limit);
 
   return {
     data,
@@ -1128,35 +1639,64 @@ export const fetchControlEscolarStudents = async (agentId: string, filters: any)
       page: wantsAll ? 1 : page,
       limit: wantsAll ? Math.max(data.length, 1) : limit,
       total: filtered.length,
-      pages: wantsAll ? 1 : Math.max(1, Math.ceil(filtered.length / limit))
+      pages: wantsAll ? 1 : Math.max(1, Math.ceil(filtered.length / limit)),
     },
     catalogs: buildCatalogs(allStudents),
-    source: loaded.source
-  }
-}
+    source: loaded.source,
+  };
+};
 
-export const fetchControlEscolarKpis = async (agentId: string, filters: any = {}) => {
-  const loaded = await fetchAllNormalizedStudents(agentId, filters)
-  const students = loaded.students
-  const byNivel = new Map<string, number>()
-  const byGrupo = new Map<string, number>()
+export const fetchControlEscolarKpis = async (
+  agentId: string,
+  filters: any = {},
+) => {
+  const loaded = await fetchAllNormalizedStudents(agentId, filters);
+  const students = loaded.students;
+  const byNivel = new Map<string, number>();
+  const byGrupo = new Map<string, number>();
 
   students.forEach((student) => {
-    if (student.nivel) byNivel.set(student.nivel, (byNivel.get(student.nivel) || 0) + 1)
-    const groupKey = [student.grado, student.group].filter(Boolean).join(' ') || student.group
-    if (groupKey) byGrupo.set(groupKey, (byGrupo.get(groupKey) || 0) + 1)
-  })
+    if (student.nivel)
+      byNivel.set(student.nivel, (byNivel.get(student.nivel) || 0) + 1);
+    const groupKey =
+      [student.grado, student.group].filter(Boolean).join(" ") || student.group;
+    if (groupKey) byGrupo.set(groupKey, (byGrupo.get(groupKey) || 0) + 1);
+  });
 
-  const active = students.filter((student) => student.status === 'Activo').length
-  const inscritos = students.filter((student) => student.enrollmentState === 'inscrito').length
-  const internos = students.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue === 'interno').length
-  const externos = students.filter((student) => student.enrollmentState === 'inscrito' && student.tipoIngresoValue !== 'interno').length
-  const noInscritos = students.filter((student) => student.enrollmentState === 'no_inscrito').length
-  const bajas = students.filter((student) => student.status === 'Baja' || student.enrollmentState === 'baja_inscrita' || student.enrollmentState === 'baja').length
-  const sinFichaMatricula = students.filter((student) => !student.overlayExists).length
-  const expedientesIncompletos = students.filter((student) => student.missingFields.length > 0).length
-  const sinContacto = students.filter(hasNoPrimaryContact).length
-  const missing = (field: string) => students.filter((student) => student.missingFields.includes(field)).length
+  const active = students.filter(
+    (student) => student.status === "Activo",
+  ).length;
+  const inscritos = students.filter(
+    (student) => student.enrollmentState === "inscrito",
+  ).length;
+  const internos = students.filter(
+    (student) =>
+      student.enrollmentState === "inscrito" &&
+      student.tipoIngresoValue === "interno",
+  ).length;
+  const externos = students.filter(
+    (student) =>
+      student.enrollmentState === "inscrito" &&
+      student.tipoIngresoValue !== "interno",
+  ).length;
+  const noInscritos = students.filter(
+    (student) => student.enrollmentState === "no_inscrito",
+  ).length;
+  const bajas = students.filter(
+    (student) =>
+      student.status === "Baja" ||
+      student.enrollmentState === "baja_inscrita" ||
+      student.enrollmentState === "baja",
+  ).length;
+  const sinFichaMatricula = students.filter(
+    (student) => !student.overlayExists,
+  ).length;
+  const expedientesIncompletos = students.filter(
+    (student) => student.missingFields.length > 0,
+  ).length;
+  const sinContacto = students.filter(hasNoPrimaryContact).length;
+  const missing = (field: string) =>
+    students.filter((student) => student.missingFields.includes(field)).length;
 
   return {
     totalInscritos: inscritos,
@@ -1172,114 +1712,164 @@ export const fetchControlEscolarKpis = async (agentId: string, filters: any = {}
     nuevosOverlay: sinFichaMatricula,
     expedientesIncompletos,
     sinContacto,
-    sinCurp: missing('curp'),
-    sinTelefono: missing('teléfono'),
-    sinTutor: missing('tutor'),
-    sinEmail: missing('email'),
-    porNivel: Array.from(byNivel.entries()).map(([label, total]) => ({ label, total })),
-    porGrupo: Array.from(byGrupo.entries()).map(([label, total]) => ({ label, total })).slice(0, 18)
-  }
-}
+    sinCurp: missing("curp"),
+    sinTelefono: missing("teléfono"),
+    sinTutor: missing("tutor"),
+    sinEmail: missing("email"),
+    porNivel: Array.from(byNivel.entries()).map(([label, total]) => ({
+      label,
+      total,
+    })),
+    porGrupo: Array.from(byGrupo.entries())
+      .map(([label, total]) => ({ label, total }))
+      .slice(0, 18),
+  };
+};
 
 const PATCH_FIELD_COLUMN_MAP: Record<string, string> = {
-  nombres: 'nombres',
-  apellidoPaterno: 'apellido_paterno',
-  apellidoMaterno: 'apellido_materno',
-  curp: 'curp',
-  emailPadre: 'email_padre',
-  emailMadre: 'email_madre',
-  telefonoPadre: 'telefono_padre',
-  telefonoMadre: 'telefono_madre',
-  interno: 'interno',
-  baja: 'baja',
-  motivoBaja: 'motivo_baja',
-  categoriaBaja: 'categoria_baja',
-  seguimientoBaja: 'seguimiento_baja',
-  nombrePadre: 'nombre_padre',
-  apellidoPaternoPadre: 'apellido_paterno_padre',
-  apellidoMaternoPadre: 'apellido_materno_padre',
-  nombreMadre: 'nombre_madre',
-  apellidoPaternoMadre: 'apellido_paterno_madre',
-  apellidoMaternoMadre: 'apellido_materno_madre',
-  servicio: 'servicio',
-  grado: 'grado',
-  grupo: 'grupo',
-  nivel: 'nivel',
-  direccion: 'direccion',
-  domicilio: 'domicilio'
-}
+  nombres: "nombres",
+  apellidoPaterno: "apellido_paterno",
+  apellidoMaterno: "apellido_materno",
+  curp: "curp",
+  emailPadre: "email_padre",
+  emailMadre: "email_madre",
+  telefonoPadre: "telefono_padre",
+  telefonoMadre: "telefono_madre",
+  interno: "interno",
+  baja: "baja",
+  motivoBaja: "motivo_baja",
+  categoriaBaja: "categoria_baja",
+  seguimientoBaja: "seguimiento_baja",
+  nombrePadre: "nombre_padre",
+  apellidoPaternoPadre: "apellido_paterno_padre",
+  apellidoMaternoPadre: "apellido_materno_padre",
+  nombreMadre: "nombre_madre",
+  apellidoPaternoMadre: "apellido_paterno_madre",
+  apellidoMaternoMadre: "apellido_materno_madre",
+  servicio: "servicio",
+  grado: "grado",
+  grupo: "grupo",
+  nivel: "nivel",
+  direccion: "direccion",
+  domicilio: "domicilio",
+};
 
 const normalizePatchValue = (field: string, value: unknown) => {
-  if (field === 'curp') return normalizeUpper(value, 18) || null
-  if (field.toLowerCase().includes('email')) return normalizeEmail(value) || null
-  if (field.toLowerCase().includes('telefono')) return normalizePhone(value) || null
-  if (field === 'baja') return value === true || value === 1 || String(value).toLowerCase() === 'true' || String(value) === '1' ? 1 : 0
-  if (field === 'grado') return normalizeText(value, 80) ? displayGrado(value).toLowerCase() : null
-  if (field === 'nivel') return normalizeNivelEscolar(value) || null
-  if (field === 'grupo') return normalizeText(value, 40) || null
-  if (field === 'direccion' || field === 'domicilio' || field === 'seguimientoBaja' || field === 'motivoBaja') return normalizeNullable(value, 700)
-  return normalizeNullable(value, 255)
-}
+  if (field === "curp") return normalizeUpper(value, 18) || null;
+  if (field.toLowerCase().includes("email"))
+    return normalizeEmail(value) || null;
+  if (field.toLowerCase().includes("telefono"))
+    return normalizePhone(value) || null;
+  if (field === "baja")
+    return value === true ||
+      value === 1 ||
+      String(value).toLowerCase() === "true" ||
+      String(value) === "1"
+      ? 1
+      : 0;
+  if (field === "grado")
+    return normalizeText(value, 80) ? displayGrado(value).toLowerCase() : null;
+  if (field === "nivel") return normalizeNivelEscolar(value) || null;
+  if (field === "grupo") return normalizeText(value, 40) || null;
+  if (
+    field === "direccion" ||
+    field === "domicilio" ||
+    field === "seguimientoBaja" ||
+    field === "motivoBaja"
+  )
+    return normalizeNullable(value, 700);
+  return normalizeNullable(value, 255);
+};
 
 type EditableMatriculaEntry = {
-  field: string
-  column: string
-  value: any
-}
+  field: string;
+  column: string;
+  value: any;
+};
 
-
-const hasOwnPatchField = (body: MatriculaPatch, field: string) => Object.prototype.hasOwnProperty.call(body || {}, field)
-const sameAcademicNivel = (left: unknown, right: unknown) => normalizeNivelEscolar(left) === normalizeNivelEscolar(right)
+const hasOwnPatchField = (body: MatriculaPatch, field: string) =>
+  Object.prototype.hasOwnProperty.call(body || {}, field);
+const sameAcademicNivel = (left: unknown, right: unknown) =>
+  normalizeNivelEscolar(left) === normalizeNivelEscolar(right);
 const sameAcademicGrado = (left: unknown, right: unknown) => {
-  const leftText = normalizeText(left, 80)
-  const rightText = normalizeText(right, 80)
-  if (!leftText || !rightText) return leftText === rightText
-  return displayGrado(left).toLowerCase() === displayGrado(right).toLowerCase()
-}
+  const leftText = normalizeText(left, 80);
+  const rightText = normalizeText(right, 80);
+  if (!leftText || !rightText) return leftText === rightText;
+  return displayGrado(left).toLowerCase() === displayGrado(right).toLowerCase();
+};
 
-const resolveCurrentControlAcademic = (agentId: string, baseRow: any, visibleStudent: any, filters: any, body: MatriculaPatch) => {
-  const scope = resolveOperatorScope(filters)
+const resolveCurrentControlAcademic = (
+  agentId: string,
+  baseRow: any,
+  visibleStudent: any,
+  filters: any,
+  body: MatriculaPatch,
+) => {
+  const scope = resolveOperatorScope(filters);
   const requestedNivel = normalizeNivelEscolar(
     body?.nivel ||
-    body?.targetNivel ||
-    visibleStudent?.nivel ||
-    baseRow?.nivelBase ||
-    baseRow?.baseNivel
-  )
+      body?.targetNivel ||
+      visibleStudent?.nivel ||
+      baseRow?.nivelBase ||
+      baseRow?.baseNivel,
+  );
   const requestedGrado = normalizeGradoForPlantel(
     body?.grado ||
-    body?.targetGrado ||
-    visibleStudent?.grado ||
-    baseRow?.gradoBase ||
-    baseRow?.baseGrado,
+      body?.targetGrado ||
+      visibleStudent?.grado ||
+      baseRow?.gradoBase ||
+      baseRow?.baseGrado,
     agentId,
-    requestedNivel
-  )
-  const existingIngresoCiclo = normalizeCicloKey(baseRow?.cicloBase || baseRow?.baseCiclo || scope.cicloKey)
-  const targetCiclo = scope.cicloKey
-  const targetPlantel = normalizePlantel(agentId)
-
-  const resolvePlacement = (ingresoCiclo: string) => calculateBasePlacementForTargetPosition(
     requestedNivel,
-    requestedGrado,
+  );
+  const existingIngresoCiclo = normalizeCicloKey(
+    baseRow?.cicloBase || baseRow?.baseCiclo || scope.cicloKey,
+  );
+  const targetCiclo = scope.cicloKey;
+  const targetPlantel = normalizePlantel(agentId);
+
+  const resolvePlacement = (ingresoCiclo: string) =>
+    calculateBasePlacementForTargetPosition(
+      requestedNivel,
+      requestedGrado,
+      ingresoCiclo,
+      targetCiclo,
+      targetPlantel,
+    );
+
+  let ingresoCiclo = existingIngresoCiclo;
+  let placement = resolvePlacement(ingresoCiclo);
+
+  if (
+    placement.outOfScope ||
+    !placement.nivel ||
+    !placement.grado ||
+    !placement.plantel
+  ) {
+    ingresoCiclo = targetCiclo;
+    placement = resolvePlacement(ingresoCiclo);
+  }
+
+  if (
+    placement.outOfScope ||
+    !placement.nivel ||
+    !placement.grado ||
+    !placement.plantel
+  ) {
+    throw createError({
+      statusCode: 400,
+      message:
+        "La combinación de nivel y grado no corresponde con la progresión escolar del ciclo activo.",
+    });
+  }
+
+  const projected = calculatePromotedGrado(
+    placement.grado,
+    placement.plantel,
     ingresoCiclo,
     targetCiclo,
-    targetPlantel
-  )
-
-  let ingresoCiclo = existingIngresoCiclo
-  let placement = resolvePlacement(ingresoCiclo)
-
-  if (placement.outOfScope || !placement.nivel || !placement.grado || !placement.plantel) {
-    ingresoCiclo = targetCiclo
-    placement = resolvePlacement(ingresoCiclo)
-  }
-
-  if (placement.outOfScope || !placement.nivel || !placement.grado || !placement.plantel) {
-    throw createError({ statusCode: 400, message: 'La combinación de nivel y grado no corresponde con la progresión escolar del ciclo activo.' })
-  }
-
-  const projected = calculatePromotedGrado(placement.grado, placement.plantel, ingresoCiclo, targetCiclo, placement.nivel)
+    placement.nivel,
+  );
 
   return {
     targetCiclo,
@@ -1287,16 +1877,23 @@ const resolveCurrentControlAcademic = (agentId: string, baseRow: any, visibleStu
     requestedNivel,
     requestedGrado,
     placement,
-    projected
-  }
-}
+    projected,
+  };
+};
 
-const shouldSyncBaseAcademic = (body: MatriculaPatch, visibleStudent: any, academic: ReturnType<typeof resolveCurrentControlAcademic>) => {
-  if (!hasOwnPatchField(body, 'grado') && !hasOwnPatchField(body, 'nivel')) return false
+const shouldSyncBaseAcademic = (
+  body: MatriculaPatch,
+  visibleStudent: any,
+  academic: ReturnType<typeof resolveCurrentControlAcademic>,
+) => {
+  if (!hasOwnPatchField(body, "grado") && !hasOwnPatchField(body, "nivel"))
+    return false;
 
-  return !sameAcademicNivel(visibleStudent?.nivel, academic.projected.nivel) ||
+  return (
+    !sameAcademicNivel(visibleStudent?.nivel, academic.projected.nivel) ||
     !sameAcademicGrado(visibleStudent?.grado, academic.projected.grado)
-}
+  );
+};
 
 const syncBaseAcademicPlacement = async (
   agentId: string,
@@ -1304,48 +1901,99 @@ const syncBaseAcademicPlacement = async (
   body: MatriculaPatch,
   baseRow: any,
   visibleStudent: any,
-  filters: any = {}
+  filters: any = {},
 ) => {
-  const academic = resolveCurrentControlAcademic(agentId, baseRow, visibleStudent, filters, body)
-  if (!shouldSyncBaseAcademic(body, visibleStudent, academic)) return null
+  const academic = resolveCurrentControlAcademic(
+    agentId,
+    baseRow,
+    visibleStudent,
+    filters,
+    body,
+  );
+  if (!shouldSyncBaseAcademic(body, visibleStudent, academic)) return null;
 
-  const currentCiclo = normalizeCicloKey(baseRow?.cicloBase || baseRow?.baseCiclo || academic.ingresoCiclo)
-  const currentPlantel = normalizePlantel(baseRow?.plantel || baseRow?.basePlantel || agentId)
-  const unchanged = currentCiclo === academic.ingresoCiclo &&
-    sameAcademicNivel(baseRow?.nivelBase || baseRow?.baseNivel, academic.placement.nivel) &&
-    sameAcademicGrado(baseRow?.gradoBase || baseRow?.baseGrado, academic.placement.grado) &&
-    currentPlantel === normalizePlantel(academic.placement.plantel)
+  const currentCiclo = normalizeCicloKey(
+    baseRow?.cicloBase || baseRow?.baseCiclo || academic.ingresoCiclo,
+  );
+  const currentPlantel = normalizePlantel(
+    baseRow?.plantel || baseRow?.basePlantel || agentId,
+  );
+  const unchanged =
+    currentCiclo === academic.ingresoCiclo &&
+    sameAcademicNivel(
+      baseRow?.nivelBase || baseRow?.baseNivel,
+      academic.placement.nivel,
+    ) &&
+    sameAcademicGrado(
+      baseRow?.gradoBase || baseRow?.baseGrado,
+      academic.placement.grado,
+    ) &&
+    currentPlantel === normalizePlantel(academic.placement.plantel);
 
   if (!unchanged) {
     await query(
       `UPDATE base SET ciclo = ?, nivel = ?, grado = ?, plantel = ? WHERE matricula = ?`,
-      [academic.ingresoCiclo, academic.placement.nivel, academic.placement.grado, academic.placement.plantel, normalizedMatricula]
-    )
+      [
+        academic.ingresoCiclo,
+        academic.placement.nivel,
+        academic.placement.grado,
+        academic.placement.plantel,
+        normalizedMatricula,
+      ],
+    );
   }
 
-  return academic
-}
+  return academic;
+};
 
-const buildEditableMatriculaEntries = (body: MatriculaPatch, schema: ControlEscolarSchema, options: { rejectUnknown?: boolean; skipEmpty?: boolean } = {}) => {
-  const rejectUnknown = options.rejectUnknown !== false
-  const skipEmpty = options.skipEmpty === true
-  const requestedFields = Object.keys(body || {})
-  const rejected = requestedFields.filter((field) => !Object.prototype.hasOwnProperty.call(PATCH_FIELD_COLUMN_MAP, field))
+const buildEditableMatriculaEntries = (
+  body: MatriculaPatch,
+  schema: ControlEscolarSchema,
+  options: { rejectUnknown?: boolean; skipEmpty?: boolean } = {},
+) => {
+  const rejectUnknown = options.rejectUnknown !== false;
+  const skipEmpty = options.skipEmpty === true;
+  const requestedFields = Object.keys(body || {});
+  const rejected = requestedFields.filter(
+    (field) =>
+      !Object.prototype.hasOwnProperty.call(PATCH_FIELD_COLUMN_MAP, field),
+  );
   if (rejectUnknown && rejected.length) {
-    throw createError({ statusCode: 400, message: `Campos no permitidos para Control Escolar: ${rejected.join(', ')}` })
+    throw createError({
+      statusCode: 400,
+      message: `Campos no permitidos para Control Escolar: ${rejected.join(", ")}`,
+    });
   }
 
   const editableEntries = Object.entries(body || {})
-    .filter(([field, value]) => Object.prototype.hasOwnProperty.call(PATCH_FIELD_COLUMN_MAP, field) && (!skipEmpty || normalizeText(value, 1000) !== ''))
-    .map(([field, value]) => ({ field, column: PATCH_FIELD_COLUMN_MAP[field], value: normalizePatchValue(field, value) }))
-    .filter((entry) => entry.column && schema.matricula.has(entry.column))
+    .filter(
+      ([field, value]) =>
+        Object.prototype.hasOwnProperty.call(PATCH_FIELD_COLUMN_MAP, field) &&
+        (!skipEmpty || normalizeText(value, 1000) !== ""),
+    )
+    .map(([field, value]) => ({
+      field,
+      column: PATCH_FIELD_COLUMN_MAP[field],
+      value: normalizePatchValue(field, value),
+    }))
+    .filter((entry) => entry.column && schema.matricula.has(entry.column));
 
-  if (editableEntries.some((entry) => entry.field === 'curp' && entry.value && !/^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(String(entry.value)))) {
-    throw createError({ statusCode: 400, message: 'CURP inválida. Debe tener 18 caracteres con formato oficial.' })
+  if (
+    editableEntries.some(
+      (entry) =>
+        entry.field === "curp" &&
+        entry.value &&
+        !/^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(String(entry.value)),
+    )
+  ) {
+    throw createError({
+      statusCode: 400,
+      message: "CURP inválida. Debe tener 18 caracteres con formato oficial.",
+    });
   }
 
-  return editableEntries
-}
+  return editableEntries;
+};
 
 const upsertMatriculaOverlay = async (
   agentId: string,
@@ -1353,203 +2001,288 @@ const upsertMatriculaOverlay = async (
   editableEntries: EditableMatriculaEntry[],
   user: AuthSessionUser,
   basePlantel: unknown,
-  schema: ControlEscolarSchema
+  schema: ControlEscolarSchema,
 ) => {
-  const [existing] = await controlEscolarCentralQuery<any[]>(`SELECT matricula FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`, [normalizedMatricula])
+  const [existing] = await controlEscolarCentralQuery<any[]>(
+    `SELECT matricula FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`,
+    [normalizedMatricula],
+  );
   const auditContext = {
     user: user.email,
     agentId,
     matricula: normalizedMatricula,
-    fields: editableEntries.map((entry) => entry.field)
-  }
+    fields: editableEntries.map((entry) => entry.field),
+  };
 
   if (existing) {
-    const assignments = editableEntries.map((entry) => `${escapeColumn(entry.column)} = ?`)
-    const params = [...editableEntries.map((entry) => entry.value)]
-    if (schema.matricula.has('updated_at')) assignments.push('`updated_at` = CURRENT_TIMESTAMP')
-    if (schema.matricula.has('updated_by')) {
-      assignments.push('`updated_by` = ?')
-      params.push(user.email)
+    const assignments = editableEntries.map(
+      (entry) => `${escapeColumn(entry.column)} = ?`,
+    );
+    const params = [...editableEntries.map((entry) => entry.value)];
+    if (schema.matricula.has("updated_at"))
+      assignments.push("`updated_at` = CURRENT_TIMESTAMP");
+    if (schema.matricula.has("updated_by")) {
+      assignments.push("`updated_by` = ?");
+      params.push(user.email);
     }
-    params.push(normalizedMatricula)
-    await controlEscolarCentralQuery(`UPDATE \`matricula\` SET ${assignments.join(', ')} WHERE \`matricula\` = ?`, params)
+    params.push(normalizedMatricula);
+    await controlEscolarCentralQuery(
+      `UPDATE \`matricula\` SET ${assignments.join(", ")} WHERE \`matricula\` = ?`,
+      params,
+    );
   } else {
-    const columns = ['matricula']
-    const values: any[] = [normalizedMatricula]
+    const columns = ["matricula"];
+    const values: any[] = [normalizedMatricula];
 
-    if (schema.matricula.has('plantel')) {
-      columns.push('plantel')
-      values.push(normalizePlantel(basePlantel || agentId))
+    if (schema.matricula.has("plantel")) {
+      columns.push("plantel");
+      values.push(normalizePlantel(basePlantel || agentId));
     }
 
-    if (schema.matricula.has('created_by')) {
-      columns.push('created_by')
-      values.push(user.email)
+    if (schema.matricula.has("created_by")) {
+      columns.push("created_by");
+      values.push(user.email);
     }
 
-    if (schema.matricula.has('updated_by')) {
-      columns.push('updated_by')
-      values.push(user.email)
+    if (schema.matricula.has("updated_by")) {
+      columns.push("updated_by");
+      values.push(user.email);
     }
 
     editableEntries.forEach((entry) => {
       if (!columns.includes(entry.column)) {
-        columns.push(entry.column)
-        values.push(entry.value)
+        columns.push(entry.column);
+        values.push(entry.value);
       }
-    })
+    });
 
     await controlEscolarCentralQuery(
-      `INSERT INTO \`matricula\` (${columns.map(escapeColumn).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
-      values
-    )
+      `INSERT INTO \`matricula\` (${columns.map(escapeColumn).join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
+      values,
+    );
   }
 
-  console.info('[Control Escolar] centralized matricula overlay updated', auditContext)
-}
+  console.info(
+    "[Control Escolar] centralized matricula overlay updated",
+    auditContext,
+  );
+};
 
 export const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS = [
-  'matricula',
-  'apellidoPaterno',
-  'apellidoMaterno',
-  'nombres',
-  'curp',
-  'nivel',
-  'grado',
-  'grupo',
-  'interno',
-  'servicio',
-  'telefonoPadre',
-  'telefonoMadre',
-  'emailPadre',
-  'emailMadre',
-  'nombrePadre',
-  'apellidoPaternoPadre',
-  'apellidoMaternoPadre',
-  'nombreMadre',
-  'apellidoPaternoMadre',
-  'apellidoMaternoMadre',
-  'direccion',
-  'baja',
-  'motivoBaja',
-  'categoriaBaja',
-  'seguimientoBaja'
-]
+  "matricula",
+  "apellidoPaterno",
+  "apellidoMaterno",
+  "nombres",
+  "curp",
+  "nivel",
+  "grado",
+  "grupo",
+  "interno",
+  "servicio",
+  "telefonoPadre",
+  "telefonoMadre",
+  "emailPadre",
+  "emailMadre",
+  "nombrePadre",
+  "apellidoPaternoPadre",
+  "apellidoMaternoPadre",
+  "nombreMadre",
+  "apellidoPaternoMadre",
+  "apellidoMaternoMadre",
+  "direccion",
+  "baja",
+  "motivoBaja",
+  "categoriaBaja",
+  "seguimientoBaja",
+];
 
 export const CONTROL_ESCOLAR_MATRICULA_IMPORT_LABELS: Record<string, string> = {
-  matricula: 'Matrícula',
-  apellidoPaterno: 'Apellido paterno',
-  apellidoMaterno: 'Apellido materno',
-  nombres: 'Nombre(s)',
-  curp: 'CURP',
-  nivel: 'Nivel',
-  grado: 'Grado',
-  grupo: 'Grupo',
-  interno: 'Interno',
-  servicio: 'Servicio',
-  telefonoPadre: 'Teléfono padre',
-  telefonoMadre: 'Teléfono madre',
-  emailPadre: 'Email padre',
-  emailMadre: 'Email madre',
-  nombrePadre: 'Nombre padre',
-  apellidoPaternoPadre: 'Apellido paterno padre',
-  apellidoMaternoPadre: 'Apellido materno padre',
-  nombreMadre: 'Nombre madre',
-  apellidoPaternoMadre: 'Apellido paterno madre',
-  apellidoMaternoMadre: 'Apellido materno madre',
-  direccion: 'Dirección',
-  baja: 'Baja',
-  motivoBaja: 'Motivo baja',
-  categoriaBaja: 'Categoría baja',
-  seguimientoBaja: 'Seguimiento baja'
-}
+  matricula: "Matrícula",
+  apellidoPaterno: "Apellido paterno",
+  apellidoMaterno: "Apellido materno",
+  nombres: "Nombre(s)",
+  curp: "CURP",
+  nivel: "Nivel",
+  grado: "Grado",
+  grupo: "Grupo",
+  interno: "Interno",
+  servicio: "Servicio",
+  telefonoPadre: "Teléfono padre",
+  telefonoMadre: "Teléfono madre",
+  emailPadre: "Email padre",
+  emailMadre: "Email madre",
+  nombrePadre: "Nombre padre",
+  apellidoPaternoPadre: "Apellido paterno padre",
+  apellidoMaternoPadre: "Apellido materno padre",
+  nombreMadre: "Nombre madre",
+  apellidoPaternoMadre: "Apellido paterno madre",
+  apellidoMaternoMadre: "Apellido materno madre",
+  direccion: "Dirección",
+  baja: "Baja",
+  motivoBaja: "Motivo baja",
+  categoriaBaja: "Categoría baja",
+  seguimientoBaja: "Seguimiento baja",
+};
 
-export const importControlEscolarMatriculaUpdates = async (agentId: string, rows: MatriculaPatch[], user: AuthSessionUser, filters: any = {}) => {
-  const schema = await getControlEscolarSchema(agentId, { requireCentral: true })
+export const importControlEscolarMatriculaUpdates = async (
+  agentId: string,
+  rows: MatriculaPatch[],
+  user: AuthSessionUser,
+  filters: any = {},
+) => {
+  const schema = await getControlEscolarSchema(agentId, {
+    requireCentral: true,
+  });
   const scopeFilters = {
     ciclo: filters.ciclo,
     cicloKey: filters.cicloKey,
     targetCiclo: filters.targetCiclo,
     concepts: filters.concepts,
-    enrollmentConcepts: filters.enrollmentConcepts
-  }
-  const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters)
-  const visibleByMatricula = new Map(visibleScope.students.map((student) => [student.matricula, student]))
-  const summary = { processed: rows.length, updated: 0, skipped: 0, errors: [] as Array<{ row: number; matricula?: string; message: string }> }
+    enrollmentConcepts: filters.enrollmentConcepts,
+  };
+  const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters);
+  const visibleByMatricula = new Map(
+    visibleScope.students.map((student) => [student.matricula, student]),
+  );
+  const summary = {
+    processed: rows.length,
+    updated: 0,
+    skipped: 0,
+    errors: [] as Array<{ row: number; matricula?: string; message: string }>,
+  };
 
   for (const [index, row] of rows.entries()) {
-    const normalizedMatricula = normalizeText(row.matricula || row.Matricula || row['Matrícula'], 64)
+    const normalizedMatricula = normalizeText(
+      row.matricula || row.Matricula || row["Matrícula"],
+      64,
+    );
     if (!normalizedMatricula) {
-      summary.skipped++
-      if (summary.errors.length < 50) summary.errors.push({ row: index + 2, message: 'Falta matrícula.' })
-      continue
+      summary.skipped++;
+      if (summary.errors.length < 50)
+        summary.errors.push({ row: index + 2, message: "Falta matrícula." });
+      continue;
     }
 
-    const visibleStudent = visibleByMatricula.get(normalizedMatricula)
+    const visibleStudent = visibleByMatricula.get(normalizedMatricula);
     if (!visibleStudent) {
-      summary.skipped++
-      if (summary.errors.length < 50) summary.errors.push({ row: index + 2, matricula: normalizedMatricula, message: 'Alumno fuera del alcance visible del plantel/ciclo.' })
-      continue
+      summary.skipped++;
+      if (summary.errors.length < 50)
+        summary.errors.push({
+          row: index + 2,
+          matricula: normalizedMatricula,
+          message: "Alumno fuera del alcance visible del plantel/ciclo.",
+        });
+      continue;
     }
 
     try {
-      const patch: MatriculaPatch = {}
+      const patch: MatriculaPatch = {};
       CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS.forEach((field) => {
-        if (field === 'matricula') return
-        if (Object.prototype.hasOwnProperty.call(row, field)) patch[field] = row[field]
-      })
-      const editableEntries = buildEditableMatriculaEntries(patch, schema, { rejectUnknown: false, skipEmpty: true })
-      const [baseRow] = await query<any[]>(`
+        if (field === "matricula") return;
+        if (Object.prototype.hasOwnProperty.call(row, field))
+          patch[field] = row[field];
+      });
+      const editableEntries = buildEditableMatriculaEntries(patch, schema, {
+        rejectUnknown: false,
+        skipEmpty: true,
+      });
+      const [baseRow] = await query<any[]>(
+        `
         SELECT
           b.matricula,
-          ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel,
-          ${expr(schema.base, 'b', 'nivel', 'NULL')} AS nivelBase,
-          ${expr(schema.base, 'b', 'grado', 'NULL')} AS gradoBase,
-          ${expr(schema.base, 'b', 'ciclo', 'NULL')} AS cicloBase
+          ${expr(schema.base, "b", "plantel", sqlLiteral(agentId))} AS plantel,
+          ${expr(schema.base, "b", "nivel", "NULL")} AS nivelBase,
+          ${expr(schema.base, "b", "grado", "NULL")} AS gradoBase,
+          ${expr(schema.base, "b", "ciclo", "NULL")} AS cicloBase
         FROM base b
         WHERE b.matricula = ?
         LIMIT 1
-      `, [normalizedMatricula])
-      const academicSynced = baseRow ? await syncBaseAcademicPlacement(agentId, normalizedMatricula, patch, baseRow, visibleStudent, scopeFilters) : null
+      `,
+        [normalizedMatricula],
+      );
+      const academicSynced = baseRow
+        ? await syncBaseAcademicPlacement(
+            agentId,
+            normalizedMatricula,
+            patch,
+            baseRow,
+            visibleStudent,
+            scopeFilters,
+          )
+        : null;
       if (!editableEntries.length && !academicSynced) {
-        summary.skipped++
-        if (summary.errors.length < 50) summary.errors.push({ row: index + 2, matricula: normalizedMatricula, message: 'Sin campos editables con valor.' })
-        continue
+        summary.skipped++;
+        if (summary.errors.length < 50)
+          summary.errors.push({
+            row: index + 2,
+            matricula: normalizedMatricula,
+            message: "Sin campos editables con valor.",
+          });
+        continue;
       }
       if (editableEntries.length) {
-        await upsertMatriculaOverlay(agentId, normalizedMatricula, editableEntries, user, academicSynced?.placement?.plantel || visibleStudent.plantel || visibleStudent.basePlantel || agentId, schema)
+        await upsertMatriculaOverlay(
+          agentId,
+          normalizedMatricula,
+          editableEntries,
+          user,
+          academicSynced?.placement?.plantel ||
+            visibleStudent.plantel ||
+            visibleStudent.basePlantel ||
+            agentId,
+          schema,
+        );
       }
-      summary.updated++
+      summary.updated++;
     } catch (error: any) {
-      summary.skipped++
-      if (summary.errors.length < 50) summary.errors.push({ row: index + 2, matricula: normalizedMatricula, message: toErrorMessage(error) })
+      summary.skipped++;
+      if (summary.errors.length < 50)
+        summary.errors.push({
+          row: index + 2,
+          matricula: normalizedMatricula,
+          message: toErrorMessage(error),
+        });
     }
   }
 
-  return summary
-}
+  return summary;
+};
 
-
-export const updateControlEscolarStudent = async (agentId: string, matricula: string, body: MatriculaPatch, user: AuthSessionUser, filters: any = {}) => {
-  const normalizedMatricula = normalizeText(matricula, 64)
+export const updateControlEscolarStudent = async (
+  agentId: string,
+  matricula: string,
+  body: MatriculaPatch,
+  user: AuthSessionUser,
+  filters: any = {},
+) => {
+  const normalizedMatricula = normalizeText(matricula, 64);
   if (!normalizedMatricula) {
-    throw createError({ statusCode: 400, message: 'Matrícula inválida.' })
+    throw createError({ statusCode: 400, message: "Matrícula inválida." });
   }
 
-  const schema = await getControlEscolarSchema(agentId, { requireCentral: true })
-  const [baseRow] = await query<any[]>(`
+  const schema = await getControlEscolarSchema(agentId, {
+    requireCentral: true,
+  });
+  const [baseRow] = await query<any[]>(
+    `
     SELECT
       b.matricula,
-      ${expr(schema.base, 'b', 'plantel', sqlLiteral(agentId))} AS plantel,
-      ${expr(schema.base, 'b', 'nivel', 'NULL')} AS nivelBase,
-      ${expr(schema.base, 'b', 'grado', 'NULL')} AS gradoBase,
-      ${expr(schema.base, 'b', 'ciclo', 'NULL')} AS cicloBase
+      ${expr(schema.base, "b", "plantel", sqlLiteral(agentId))} AS plantel,
+      ${expr(schema.base, "b", "nivel", "NULL")} AS nivelBase,
+      ${expr(schema.base, "b", "grado", "NULL")} AS gradoBase,
+      ${expr(schema.base, "b", "ciclo", "NULL")} AS cicloBase
     FROM base b
     WHERE b.matricula = ?
     LIMIT 1
-  `, [normalizedMatricula])
+  `,
+    [normalizedMatricula],
+  );
   if (!baseRow) {
-    throw createError({ statusCode: 404, message: 'El alumno no existe en base. Control Escolar no crea alumnos locales.' })
+    throw createError({
+      statusCode: 404,
+      message:
+        "El alumno no existe en base. Control Escolar no crea alumnos locales.",
+    });
   }
 
   const scopeFilters = {
@@ -1557,35 +2290,81 @@ export const updateControlEscolarStudent = async (agentId: string, matricula: st
     cicloKey: filters.cicloKey,
     targetCiclo: filters.targetCiclo,
     concepts: filters.concepts,
-    enrollmentConcepts: filters.enrollmentConcepts
-  }
-  const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters)
-  const visibleStudent = visibleScope.students.find((student) => student.matricula === normalizedMatricula)
+    enrollmentConcepts: filters.enrollmentConcepts,
+  };
+  const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters);
+  const visibleStudent = visibleScope.students.find(
+    (student) => student.matricula === normalizedMatricula,
+  );
   if (!visibleStudent) {
-    throw createError({ statusCode: 403, message: 'El alumno no está dentro del alcance visible de Control Escolar para este ciclo y plantel.' })
+    throw createError({
+      statusCode: 403,
+      message:
+        "El alumno no está dentro del alcance visible de Control Escolar para este ciclo y plantel.",
+    });
   }
 
-  const editableEntries = buildEditableMatriculaEntries(body, schema, { rejectUnknown: true })
-  const academicSynced = await syncBaseAcademicPlacement(agentId, normalizedMatricula, body, baseRow, visibleStudent, scopeFilters)
+  const editableEntries = buildEditableMatriculaEntries(body, schema, {
+    rejectUnknown: true,
+  });
+  const academicSynced = await syncBaseAcademicPlacement(
+    agentId,
+    normalizedMatricula,
+    body,
+    baseRow,
+    visibleStudent,
+    scopeFilters,
+  );
 
   if (!editableEntries.length && !academicSynced) {
-    throw createError({ statusCode: 400, message: 'No hay campos editables disponibles en la tabla centralizada matricula para guardar.' })
+    throw createError({
+      statusCode: 400,
+      message:
+        "No hay campos editables disponibles en la tabla centralizada matricula para guardar.",
+    });
   }
 
   if (editableEntries.length) {
-    await upsertMatriculaOverlay(agentId, normalizedMatricula, editableEntries, user, academicSynced?.placement?.plantel || baseRow.plantel || agentId, schema)
+    await upsertMatriculaOverlay(
+      agentId,
+      normalizedMatricula,
+      editableEntries,
+      user,
+      academicSynced?.placement?.plantel || baseRow.plantel || agentId,
+      schema,
+    );
   }
 
-  const result = await fetchControlEscolarStudents(agentId, { ...scopeFilters, search: normalizedMatricula, page: 1, limit: 10 })
-  return { success: true, student: result.data.find((student) => student.matricula === normalizedMatricula) || result.data[0] || null }
-}
+  const result = await fetchControlEscolarStudents(agentId, {
+    ...scopeFilters,
+    search: normalizedMatricula,
+    page: 1,
+    limit: 10,
+  });
+  return {
+    success: true,
+    student:
+      result.data.find(
+        (student) => student.matricula === normalizedMatricula,
+      ) ||
+      result.data[0] ||
+      null,
+  };
+};
 
-export const runControlEscolar = async <T>(event: any, agentId: string, callback: () => Promise<T>) => {
-  event.context.controlEscolarAgentId = agentId
-  return await runWithBridgeAgentId(agentId, callback)
-}
+export const runControlEscolar = async <T>(
+  event: any,
+  agentId: string,
+  callback: () => Promise<T>,
+) => {
+  event.context.controlEscolarAgentId = agentId;
+  return await runWithBridgeAgentId(agentId, callback);
+};
 
-export const fetchControlEscolarExportRows = async (agentId: string, filters: any) => {
-  const loaded = await fetchAllNormalizedStudents(agentId, filters)
-  return applyFilters(loaded.students, filters).slice(0, 5000)
-}
+export const fetchControlEscolarExportRows = async (
+  agentId: string,
+  filters: any,
+) => {
+  const loaded = await fetchAllNormalizedStudents(agentId, filters);
+  return applyFilters(loaded.students, filters).slice(0, 5000);
+};

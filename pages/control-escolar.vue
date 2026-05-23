@@ -5,31 +5,60 @@
       <div class="hero-actions ce-hero-actions">
         <div class="ce-selected-plantel" :class="{ empty: !selectedAgentId }">
           <span>Plantel activo</span>
-          <strong>{{ selectedAgentId || 'Selecciona' }}</strong>
+          <strong>{{ selectedAgentId || "Selecciona" }}</strong>
         </div>
-        <UiButton variant="secondary" :disabled="loadingAny || !selectedAgentId" @click="refreshAll">
-          <LucideRefreshCw :size="18" :class="{ spinning: loadingAny }" /> Actualizar
+        <UiButton
+          variant="secondary"
+          :disabled="loadingAny || !selectedAgentId"
+          @click="refreshAll"
+        >
+          <LucideRefreshCw :size="18" :class="{ spinning: loadingAny }" />
+          Actualizar
         </UiButton>
-        <UiButton variant="secondary" :disabled="!selectedAgentId || !students.length" @click="exportMatriculaDb">
+        <UiButton
+          variant="secondary"
+          :disabled="!selectedAgentId || !students.length"
+          @click="exportMatriculaDb"
+        >
           <LucideFileSpreadsheet :size="18" /> Exportar DB
         </UiButton>
-        <UiButton variant="secondary" :disabled="!selectedAgentId || massImporting" @click="openMassImportModal">
+        <UiButton
+          variant="secondary"
+          :disabled="!selectedAgentId || massImporting"
+          @click="openMassImportModal"
+        >
           <LucideUpload :size="18" /> Importar DB
         </UiButton>
       </div>
     </header>
 
     <Transition name="ce-first-sync-fade">
-      <section v-if="showControlFirstSyncNotice" class="ce-first-sync-tip" aria-live="polite" aria-label="Sincronización inicial de alumnos">
+      <section
+        v-if="showControlFirstSyncNotice"
+        class="ce-first-sync-tip"
+        aria-live="polite"
+        aria-label="Sincronización inicial de alumnos"
+      >
         <span class="ce-first-sync-orb" aria-hidden="true">
           <LucideDatabase :size="22" />
           <i></i>
         </span>
         <div class="ce-first-sync-copy">
-          <strong>Preparando tus alumnos</strong>
+          <strong>{{ controlSyncHeadline }}</strong>
           <Transition name="ce-sync-message-fade" mode="out-in">
             <p :key="activeFirstSyncMessage">{{ activeFirstSyncMessage }}</p>
           </Transition>
+          <div
+            class="ce-first-sync-steps"
+            aria-label="Proceso de carga de Control Escolar"
+          >
+            <span :class="controlBaseStepClass"
+              >A · Base del administrador</span
+            >
+            <span :class="controlEnrichmentStepClass"
+              >B · Enriqueciendo datos</span
+            >
+          </div>
         </div>
         <span class="ce-first-sync-loader" aria-hidden="true">
           <b></b><b></b><b></b>
@@ -37,13 +66,43 @@
       </section>
     </Transition>
 
-    <section :class="['kpi-summary-system ce-kpi-system', { 'is-refreshing': kpisLoading }]" aria-label="Indicadores de Control Escolar">
+    <Transition name="ce-load-status-fade">
+      <section
+        v-if="showControlDataStatus"
+        :class="['ce-data-status', controlSyncStatusClass]"
+        aria-live="polite"
+        aria-label="Estado de datos de Control Escolar"
+      >
+        <span class="ce-data-status-icon" aria-hidden="true"
+          ><LucideDatabase :size="17"
+        /></span>
+        <span class="ce-data-status-copy">
+          <strong>{{ controlSyncHeadline }}</strong>
+          <small>{{ controlSyncMessage }}</small>
+        </span>
+        <span class="ce-data-status-freshness">{{
+          controlDataFreshnessLabel
+        }}</span>
+      </section>
+    </Transition>
+
+    <section
+      :class="[
+        'kpi-summary-system ce-kpi-system',
+        { 'is-refreshing': kpisLoading },
+      ]"
+      aria-label="Indicadores de Control Escolar"
+    >
       <div class="kpi-strip ce-kpi-strip">
         <button
           v-for="item in kpiCards"
           :key="item.key"
           type="button"
-          :class="['kpi-card', item.tone, { active: activeQuickFilter === item.key }]"
+          :class="[
+            'kpi-card',
+            item.tone,
+            { active: activeQuickFilter === item.key },
+          ]"
           @click="applyKpiFilter(item.key)"
         >
           <span class="kpi-icon"><component :is="item.icon" :size="24" /></span>
@@ -52,7 +111,11 @@
             <strong>{{ formatNumber(item.value) }}</strong>
           </span>
           <span class="ce-kpi-mass" :aria-label="item.volumeAria">
-            <i v-for="unit in item.massUnits" :key="`${item.key}-mass-${unit.index}`" :class="{ active: unit.active }"></i>
+            <i
+              v-for="unit in item.massUnits"
+              :key="`${item.key}-mass-${unit.index}`"
+              :class="{ active: unit.active }"
+            ></i>
           </span>
         </button>
       </div>
@@ -60,32 +123,62 @@
 
     <div class="filter-bar ce-filter-bar">
       <div class="ce-primary-filter-row">
-        <div class="search-control" :class="{ 'has-filter-token': activeFilterLabel }">
-          <span class="search-filter-icon" aria-hidden="true"><LucideFilter :size="15" /></span>
-          <button v-if="activeFilterLabel" type="button" class="search-filter-token" @click="clearFilters">
-            <span>{{ activeFilterLabel }}</span><b aria-hidden="true">×</b>
+        <div
+          class="search-control"
+          :class="{ 'has-filter-token': activeFilterLabel }"
+        >
+          <span class="search-filter-icon" aria-hidden="true"
+            ><LucideFilter :size="15"
+          /></span>
+          <button
+            v-if="activeFilterLabel"
+            type="button"
+            class="search-filter-token"
+            @click="clearFilters"
+          >
+            <span>{{ activeFilterLabel }}</span
+            ><b aria-hidden="true">×</b>
           </button>
           <LucideSearch class="search-icon" :size="18" />
-          <input v-model="filters.search" placeholder="Matrícula, nombre, CURP, teléfono o correo..." />
+          <input
+            v-model="filters.search"
+            placeholder="Matrícula, nombre, CURP, teléfono o correo..."
+          />
         </div>
 
-        <button type="button" :class="['ce-filter-button', { active: showAdvancedFilters || advancedFilterCount }]" @click="showAdvancedFilters = !showAdvancedFilters">
+        <button
+          type="button"
+          :class="[
+            'ce-filter-button',
+            { active: showAdvancedFilters || advancedFilterCount },
+          ]"
+          @click="showAdvancedFilters = !showAdvancedFilters"
+        >
           <LucideFilter :size="16" /> Filtros
           <b v-if="advancedFilterCount">{{ advancedFilterCount }}</b>
         </button>
 
-        <div class="ce-chip-cluster ce-chip-cluster--quality" aria-label="Calidad del expediente">
+        <div
+          class="ce-chip-cluster ce-chip-cluster--quality"
+          aria-label="Calidad del expediente"
+        >
           <UiChip
             v-for="filter in qualityFilters"
             :key="`quality-${filter.key}`"
             :active="filters.quality === filter.key"
             @click="toggleQualityFilter(filter.key)"
           >
-            <span>{{ filter.label }}</span><b class="ce-chip-count">{{ formatNumber(filter.count) }}</b>
+            <span>{{ filter.label }}</span
+            ><b class="ce-chip-count">{{ formatNumber(filter.count) }}</b>
           </UiChip>
         </div>
 
-        <button type="button" class="ce-clear-link" :disabled="!hasActiveFilters" @click="clearFilters">
+        <button
+          type="button"
+          class="ce-clear-link"
+          :disabled="!hasActiveFilters"
+          @click="clearFilters"
+        >
           <LucideRotateCcw :size="15" /> Limpiar filtros
         </button>
       </div>
@@ -96,59 +189,148 @@
             v-for="filter in primaryFilters"
             :key="filter.key"
             type="button"
-            :class="['ce-status-tab', { active: filters.status === filter.key && !filters.quality }]"
+            :class="[
+              'ce-status-tab',
+              { active: filters.status === filter.key && !filters.quality },
+            ]"
             @click="applyPrimaryFilter(filter.key)"
           >
             {{ filter.label }}
           </button>
         </div>
 
-        <div v-if="catalogs.grados.length" class="ce-chip-cluster ce-chip-cluster--grade" aria-label="Filtrar por grado">
+        <div
+          v-if="catalogs.grados.length"
+          class="ce-chip-cluster ce-chip-cluster--grade"
+          aria-label="Filtrar por grado"
+        >
           <span class="ce-chip-label">Grado</span>
-          <UiChip :active="!filters.grado && !filters.group" @click="clearAcademicFilters">Todos</UiChip>
-          <UiChip v-for="grado in catalogs.grados" :key="`grado-${grado}`" :active="filters.grado === grado" @click="selectGrade(grado)">{{ grado }}</UiChip>
+          <UiChip
+            :active="!filters.grado && !filters.group"
+            @click="clearAcademicFilters"
+            >Todos</UiChip
+          >
+          <UiChip
+            v-for="grado in catalogs.grados"
+            :key="`grado-${grado}`"
+            :active="filters.grado === grado"
+            @click="selectGrade(grado)"
+            >{{ grado }}</UiChip
+          >
         </div>
 
-        <div v-if="filters.grado && availableGroups.length" class="ce-chip-cluster ce-chip-cluster--group" aria-label="Filtrar por grupo">
+        <div
+          v-if="filters.grado && availableGroups.length"
+          class="ce-chip-cluster ce-chip-cluster--group"
+          aria-label="Filtrar por grupo"
+        >
           <span class="ce-chip-label">Grupo</span>
-          <UiChip :active-group="filters.group === ''" @click="filters.group = ''">Todos</UiChip>
-          <UiChip v-for="grupo in availableGroups" :key="`grupo-${grupo}`" :active-group="filters.group === grupo" @click="toggleFilter('group', grupo)">{{ grupo }}</UiChip>
+          <UiChip
+            :active-group="filters.group === ''"
+            @click="filters.group = ''"
+            >Todos</UiChip
+          >
+          <UiChip
+            v-for="grupo in availableGroups"
+            :key="`grupo-${grupo}`"
+            :active-group="filters.group === grupo"
+            @click="toggleFilter('group', grupo)"
+            >{{ grupo }}</UiChip
+          >
         </div>
       </div>
     </div>
 
-    <div ref="studentsScaleShell" class="students-scale-shell" :style="studentsScaleShellStyle">
+    <div
+      ref="studentsScaleShell"
+      class="students-scale-shell"
+      :style="studentsScaleShellStyle"
+    >
       <div class="students-design-canvas" :style="studentsDesignCanvasStyle">
-        <div :class="['students-workspace ce-workspace', { 'has-detail': Boolean(selectedStudent), 'has-empty-detail': !selectedStudent }]">
-          <section :class="['student-list-panel', selectedStudent ? 'is-compact' : 'is-full']">
+        <div
+          :class="[
+            'students-workspace ce-workspace',
+            {
+              'has-detail': Boolean(selectedStudent),
+              'has-empty-detail': !selectedStudent,
+            },
+          ]"
+        >
+          <section
+            :class="[
+              'student-list-panel',
+              selectedStudent ? 'is-compact' : 'is-full',
+            ]"
+          >
             <div class="student-list-card ce-list-card">
               <div class="list-titlebar ce-list-titlebar">
                 <div class="list-heading-copy">
-                  <h2>Alumnos <span>{{ pagination.total }}</span></h2>
-                  <p>{{ selectedAgentId ? `Plantel ${selectedAgentId}` : 'Sin plantel activo' }}</p>
+                  <h2>
+                    Alumnos <span>{{ pagination.total }}</span>
+                  </h2>
+                  <p>
+                    {{
+                      selectedAgentId
+                        ? `Plantel ${selectedAgentId}`
+                        : "Sin plantel activo"
+                    }}
+                  </p>
                 </div>
                 <div class="ce-pagination-mini">
-                  <button type="button" :disabled="pagination.page <= 1 || studentsLoading" @click="goToPage(pagination.page - 1)"><LucideChevronLeft :size="16" /></button>
+                  <button
+                    type="button"
+                    :disabled="pagination.page <= 1 || studentsLoading"
+                    @click="goToPage(pagination.page - 1)"
+                  >
+                    <LucideChevronLeft :size="16" />
+                  </button>
                   <span>{{ pagination.page }} / {{ pagination.pages }}</span>
-                  <button type="button" :disabled="pagination.page >= pagination.pages || studentsLoading" @click="goToPage(pagination.page + 1)"><LucideChevronRight :size="16" /></button>
+                  <button
+                    type="button"
+                    :disabled="
+                      pagination.page >= pagination.pages || studentsLoading
+                    "
+                    @click="goToPage(pagination.page + 1)"
+                  >
+                    <LucideChevronRight :size="16" />
+                  </button>
                 </div>
               </div>
 
-              <div :class="['list-columns ce-list-columns', selectedStudent ? 'compact' : 'full']">
+              <div
+                :class="[
+                  'list-columns ce-list-columns',
+                  selectedStudent ? 'compact' : 'full',
+                ]"
+              >
                 <span>Alumno</span>
                 <span>Perfil escolar</span>
                 <span>Calidad de datos</span>
                 <span></span>
               </div>
 
-              <div :class="['student-list-scroll ce-list-scroll', { 'is-source-unavailable': studentsSourceUnavailable }]">
+              <div
+                :class="[
+                  'student-list-scroll ce-list-scroll',
+                  { 'is-source-unavailable': studentsSourceUnavailable },
+                ]"
+              >
                 <div v-if="!selectedAgentId" class="empty-state ce-state-card">
-                  <LucideBuilding2 :size="24" /> Selecciona un plantel específico en la barra lateral para iniciar Control Escolar.
+                  <LucideBuilding2 :size="24" /> Selecciona un plantel
+                  específico en la barra lateral para iniciar Control Escolar.
                 </div>
-                <div v-else-if="studentsLoading" class="ce-skeleton-stack" aria-live="polite">
+                <div
+                  v-else-if="studentsLoading"
+                  class="ce-skeleton-stack"
+                  aria-live="polite"
+                >
                   <span v-for="i in 6" :key="i" class="ce-skeleton-row"></span>
                 </div>
-                <section v-else-if="studentsSourceUnavailable" class="ce-source-unavailable" aria-live="polite">
+                <section
+                  v-else-if="studentsSourceUnavailable"
+                  class="ce-source-unavailable"
+                  aria-live="polite"
+                >
                   <figure class="ce-source-visual" aria-hidden="true">
                     <img src="/brand/plantel-offline-visual.png" alt="" />
                   </figure>
@@ -156,17 +338,43 @@
                   <h3>{{ sourceUnavailableTitle }}</h3>
                   <p>{{ sourceUnavailableMessage }}</p>
                   <div class="ce-source-hints">
-                    <span><LucideComputer :size="15" /> Equipo del plantel</span>
-                    <span><LucideClock3 :size="15" /> {{ sourceUnavailableHint }}</span>
+                    <span
+                      ><LucideComputer :size="15" /> Equipo del plantel</span
+                    >
+                    <span
+                      ><LucideClock3 :size="15" />
+                      {{ sourceUnavailableHint }}</span
+                    >
                   </div>
-                  <button type="button" class="ce-source-retry" @click="refreshAll({ forceNetwork: true, clearExisting: true, forceLoading: true })">
+                  <button
+                    type="button"
+                    class="ce-source-retry"
+                    @click="
+                      refreshAll({
+                        forceNetwork: true,
+                        clearExisting: true,
+                        forceLoading: true,
+                      })
+                    "
+                  >
                     <LucideRefreshCw :size="16" />
                     Intentar de nuevo
                   </button>
                 </section>
-                <div v-else-if="!students.length" class="empty-state ce-state-card">
-                  <LucideSearchX :size="24" /> No hay alumnos con los filtros actuales.
-                  <button v-if="hasActiveFilters" type="button" class="ce-inline-action" @click="clearFilters">Limpiar filtros</button>
+                <div
+                  v-else-if="!students.length"
+                  class="empty-state ce-state-card"
+                >
+                  <LucideSearchX :size="24" /> No hay alumnos con los filtros
+                  actuales.
+                  <button
+                    v-if="hasActiveFilters"
+                    type="button"
+                    class="ce-inline-action"
+                    @click="clearFilters"
+                  >
+                    Limpiar filtros
+                  </button>
                 </div>
 
                 <template v-else>
@@ -174,13 +382,43 @@
                     v-for="student in students"
                     :key="student.matricula"
                     type="button"
-                    :class="['student-row ce-student-row', { selected: selectedStudent?.matricula === student.matricula, 'missing-overlay': !student.overlayExists }]"
+                    :class="[
+                      'student-row ce-student-row',
+                      {
+                        selected:
+                          selectedStudent?.matricula === student.matricula,
+                        'missing-overlay': !student.overlayExists,
+                      },
+                    ]"
                     :style="studentPresentationStyle(student)"
                     @click="selectStudent(student)"
                   >
-                    <UiGroupIcon class="student-group-watermark" :class="{ 'is-missing-group': controlMissingGroup(student) }" :label="controlGroupLabel(student)" :missing="controlMissingGroup(student)" />
-                    <span class="student-identity ce-student-identity has-group-icon">
-                      <span :class="['ce-row-check', { active: selectedStudent?.matricula === student.matricula }]" aria-hidden="true">{{ selectedStudent?.matricula === student.matricula ? '✓' : '' }}</span>
+                    <UiGroupIcon
+                      class="student-group-watermark"
+                      :class="{
+                        'is-missing-group': controlMissingGroup(student),
+                      }"
+                      :label="controlGroupLabel(student)"
+                      :missing="controlMissingGroup(student)"
+                    />
+                    <span
+                      class="student-identity ce-student-identity has-group-icon"
+                    >
+                      <span
+                        :class="[
+                          'ce-row-check',
+                          {
+                            active:
+                              selectedStudent?.matricula === student.matricula,
+                          },
+                        ]"
+                        aria-hidden="true"
+                        >{{
+                          selectedStudent?.matricula === student.matricula
+                            ? "✓"
+                            : ""
+                        }}</span
+                      >
                       <StudentGradePhotoCard
                         class="student-row-grade-card"
                         :student="student"
@@ -188,27 +426,55 @@
                         :photo-loading="isControlStudentPhotoLoading(student)"
                         :is-enrolled="student.status === 'Activo'"
                       />
-                      <span :class="['student-group-sigil', { 'is-missing': controlMissingGroup(student) }]" :title="controlGroupTitle(student)">
-                        <UiGroupIcon :label="controlGroupLabel(student)" :missing="controlMissingGroup(student)" />
+                      <span
+                        :class="[
+                          'student-group-sigil',
+                          { 'is-missing': controlMissingGroup(student) },
+                        ]"
+                        :title="controlGroupTitle(student)"
+                      >
+                        <UiGroupIcon
+                          :label="controlGroupLabel(student)"
+                          :missing="controlMissingGroup(student)"
+                        />
                       </span>
                       <span class="student-copy">
-                        <strong :title="student.fullName">{{ student.fullName || 'Alumno sin nombre' }}</strong>
+                        <strong :title="student.fullName">{{
+                          student.fullName || "Alumno sin nombre"
+                        }}</strong>
                         <span class="student-type-line">
-                          <span :class="['student-tipo-chip', student.overlayExists ? 'interno' : 'externo']">
+                          <span
+                            :class="[
+                              'student-tipo-chip',
+                              student.overlayExists ? 'interno' : 'externo',
+                            ]"
+                          >
                             {{ student.matricula }}
                           </span>
                         </span>
-                        <span class="ce-academic-pills" :aria-label="compactAcademic(student)">
-                          <span>{{ student.grado || 'Sin grado' }}</span>
-                          <span :class="{ warning: controlMissingGroup(student) }">{{ controlMissingGroup(student) ? 'Sin grupo' : `Grupo ${controlGroupLabel(student)}` }}</span>
-                          <span>{{ student.nivel || 'Sin nivel' }}</span>
+                        <span
+                          class="ce-academic-pills"
+                          :aria-label="compactAcademic(student)"
+                        >
+                          <span>{{ student.grado || "Sin grado" }}</span>
+                          <span
+                            :class="{ warning: controlMissingGroup(student) }"
+                            >{{
+                              controlMissingGroup(student)
+                                ? "Sin grupo"
+                                : `Grupo ${controlGroupLabel(student)}`
+                            }}</span
+                          >
+                          <span>{{ student.nivel || "Sin nivel" }}</span>
                         </span>
                       </span>
                     </span>
 
                     <span
                       :class="['ce-quality-score', qualityScoreTone(student)]"
-                      :style="{ '--quality-score': `${completionFor(student)}%` }"
+                      :style="{
+                        '--quality-score': `${completionFor(student)}%`,
+                      }"
                       :aria-label="`Expediente ${completionFor(student)}% completo`"
                     >
                       <b>{{ completionFor(student) }}%</b>
@@ -220,70 +486,148 @@
                         <small
                           v-for="field in requiredDataFields"
                           :key="`${student.matricula}-${field.key}`"
-                          :class="{ missing: studentMissingField(student, field) }"
+                          :class="{
+                            missing: studentMissingField(student, field),
+                          }"
                         >
-                          <component :is="field.icon" :size="12" /> {{ field.label }}
+                          <component :is="field.icon" :size="12" />
+                          {{ field.label }}
                         </small>
                       </span>
                     </span>
 
                     <span class="row-actions">
-                      <span class="ce-row-action"><LucideChevronRight :size="18" /></span>
+                      <span class="ce-row-action"
+                        ><LucideChevronRight :size="18"
+                      /></span>
                     </span>
                   </button>
                 </template>
               </div>
 
-              <footer v-if="selectedAgentId && students.length && !studentsSourceUnavailable" class="ce-list-footer">
-                <span>Mostrando {{ paginationRangeLabel }} de {{ formatNumber(pagination.total) }} alumnos</span>
+              <footer
+                v-if="
+                  selectedAgentId &&
+                  students.length &&
+                  !studentsSourceUnavailable
+                "
+                class="ce-list-footer"
+              >
+                <span
+                  >Mostrando {{ paginationRangeLabel }} de
+                  {{ formatNumber(pagination.total) }} alumnos</span
+                >
                 <div class="ce-list-pages" aria-label="Paginación de alumnos">
                   <button
                     v-for="(pageItem, pageIndex) in visiblePaginationPages"
                     :key="`ce-page-${pageIndex}-${pageItem}`"
                     type="button"
                     :disabled="pageItem === 'ellipsis' || studentsLoading"
-                    :class="{ active: pageItem === pagination.page, ellipsis: pageItem === 'ellipsis' }"
+                    :class="{
+                      active: pageItem === pagination.page,
+                      ellipsis: pageItem === 'ellipsis',
+                    }"
                     @click="pageItem !== 'ellipsis' && goToPage(pageItem)"
                   >
-                    {{ pageItem === 'ellipsis' ? '...' : pageItem }}
+                    {{ pageItem === "ellipsis" ? "..." : pageItem }}
                   </button>
-                  <button type="button" :disabled="pagination.page >= pagination.pages || studentsLoading" @click="goToPage(pagination.page + 1)"><LucideChevronRight :size="14" /></button>
+                  <button
+                    type="button"
+                    :disabled="
+                      pagination.page >= pagination.pages || studentsLoading
+                    "
+                    @click="goToPage(pagination.page + 1)"
+                  >
+                    <LucideChevronRight :size="14" />
+                  </button>
                 </div>
               </footer>
             </div>
           </section>
 
-          <section v-if="selectedStudent" class="student-detail-panel ce-detail-panel">
+          <section
+            v-if="selectedStudent"
+            class="student-detail-panel ce-detail-panel"
+          >
             <div class="ce-detail-shell">
               <header class="ce-detail-header">
                 <div class="ce-detail-title">
                   <small>{{ selectedStudent.matricula }} · Matrícula</small>
                   <div class="ce-title-row">
-                    <h2>{{ selectedStudent.fullName || 'Ficha de alumno' }}</h2>
-                    <span :class="['ce-status-pill large', statusTone(selectedStudent)]">{{ selectedStudent.status || 'Activo' }}</span>
+                    <h2>{{ selectedStudent.fullName || "Ficha de alumno" }}</h2>
+                    <span
+                      :class="[
+                        'ce-status-pill large',
+                        statusTone(selectedStudent),
+                      ]"
+                      >{{ selectedStudent.status || "Activo" }}</span
+                    >
                   </div>
                 </div>
-                <div class="ce-access-header-card" :class="{ unavailable: !selectedStudent.huskyPassAvailable }">
-                  <span aria-hidden="true"><LucideShieldCheck :size="21" /></span>
+                <div
+                  class="ce-access-header-card"
+                  :class="{ unavailable: !selectedStudent.huskyPassAvailable }"
+                >
+                  <span aria-hidden="true"
+                    ><LucideShieldCheck :size="21"
+                  /></span>
                   <div>
-                    <strong>{{ selectedStudent.huskyPassAvailable ? 'Acceso activo' : 'Acceso pendiente' }}</strong>
-                    <small v-if="selectedStudent.huskyPassAvailable">{{ selectedStudent.huskyPassUsername }} · {{ selectedStudent.huskyPassPlaintext }}</small>
-                    <small v-else>{{ huskyPassEmailTarget || 'Sin correo de padre/tutor' }}</small>
+                    <strong>{{
+                      selectedStudent.huskyPassAvailable
+                        ? "Acceso activo"
+                        : "Acceso pendiente"
+                    }}</strong>
+                    <small v-if="selectedStudent.huskyPassAvailable"
+                      >{{ selectedStudent.huskyPassUsername }} ·
+                      {{ selectedStudent.huskyPassPlaintext }}</small
+                    >
+                    <small v-else>{{
+                      huskyPassEmailTarget || "Sin correo de padre/tutor"
+                    }}</small>
                   </div>
                 </div>
                 <div class="ce-progress-cluster">
-                  <strong>Perfil {{ selectedProfileCompletion }}% completo</strong>
-                  <span class="ce-progress-track"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
-                  <small>{{ selectedMissingCount ? `Faltan ${selectedMissingCount} datos principales` : 'Datos principales completos' }}</small>
+                  <strong
+                    >Perfil {{ selectedProfileCompletion }}% completo</strong
+                  >
+                  <span class="ce-progress-track"
+                    ><i :style="{ width: `${selectedProfileCompletion}%` }"></i
+                  ></span>
+                  <small>{{
+                    selectedMissingCount
+                      ? `Faltan ${selectedMissingCount} datos principales`
+                      : "Datos principales completos"
+                  }}</small>
                 </div>
                 <div class="ce-detail-actions">
-                  <span :class="['ce-save-state', saveStateTone]">{{ saveStatusText }}</span>
-                  <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
-                  <UiButton variant="primary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="saveStudent">
-                    <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar' }}
+                  <span :class="['ce-save-state', saveStateTone]">{{
+                    saveStatusText
+                  }}</span>
+                  <UiButton
+                    variant="secondary"
+                    type="button"
+                    :disabled="savingStudent || !hasUnsavedChanges"
+                    @click="discardChanges"
+                    >Restaurar</UiButton
+                  >
+                  <UiButton
+                    variant="primary"
+                    type="button"
+                    :disabled="savingStudent || !hasUnsavedChanges"
+                    @click="saveStudent"
+                  >
+                    <LucideSave :size="17" />
+                    {{ savingStudent ? "Guardando..." : "Guardar" }}
                   </UiButton>
                 </div>
-                <button type="button" class="detail-shell-close ce-detail-menu-button" aria-label="Cerrar detalle" @click="selectedStudent = null"><LucideMoreVertical :size="20" /></button>
+                <button
+                  type="button"
+                  class="detail-shell-close ce-detail-menu-button"
+                  aria-label="Cerrar detalle"
+                  @click="selectedStudent = null"
+                >
+                  <LucideMoreVertical :size="20" />
+                </button>
               </header>
 
               <div class="ce-detail-body">
@@ -292,24 +636,51 @@
                     class="ce-detail-photo"
                     :student="selectedStudent"
                     :photo-url="controlStudentPhotoUrl(selectedStudent)"
-                    :photo-loading="isControlStudentPhotoLoading(selectedStudent)"
+                    :photo-loading="
+                      isControlStudentPhotoLoading(selectedStudent)
+                    "
                     :is-enrolled="selectedStudent.status === 'Activo'"
                   />
                   <div class="ce-profile-copy">
                     <strong>{{ selectedStudent.fullName }}</strong>
                     <div class="ce-profile-pills">
-                      <span>{{ selectedStudent.grado || 'Sin grado' }}</span>
-                      <span :class="{ warning: controlMissingGroup(selectedStudent) }">{{ controlMissingGroup(selectedStudent) ? 'Sin grupo' : `Grupo ${controlGroupLabel(selectedStudent)}` }}</span>
-                      <span>{{ selectedStudent.nivel || 'Sin nivel' }}</span>
+                      <span>{{ selectedStudent.grado || "Sin grado" }}</span>
+                      <span
+                        :class="{
+                          warning: controlMissingGroup(selectedStudent),
+                        }"
+                        >{{
+                          controlMissingGroup(selectedStudent)
+                            ? "Sin grupo"
+                            : `Grupo ${controlGroupLabel(selectedStudent)}`
+                        }}</span
+                      >
+                      <span>{{ selectedStudent.nivel || "Sin nivel" }}</span>
                     </div>
-                    <p>Plantel {{ selectedStudent.plantel || selectedAgentId }}</p>
+                    <p>
+                      Plantel {{ selectedStudent.plantel || selectedAgentId }}
+                    </p>
                   </div>
                   <div class="ce-tutor-card">
                     <small>Tutor / Responsable</small>
-                    <strong>{{ selectedStudent.guardianName || 'Sin tutor capturado' }}</strong>
-                    <span>{{ selectedStudent.phone || selectedStudent.telefonoPadre || selectedStudent.telefonoMadre || 'Sin teléfono' }}</span>
+                    <strong>{{
+                      selectedStudent.guardianName || "Sin tutor capturado"
+                    }}</strong>
+                    <span>{{
+                      selectedStudent.phone ||
+                      selectedStudent.telefonoPadre ||
+                      selectedStudent.telefonoMadre ||
+                      "Sin teléfono"
+                    }}</span>
                   </div>
-                  <UiGroupIcon class="ce-profile-watermark" :class="{ 'is-missing-group': controlMissingGroup(selectedStudent) }" :label="controlGroupLabel(selectedStudent)" :missing="controlMissingGroup(selectedStudent)" />
+                  <UiGroupIcon
+                    class="ce-profile-watermark"
+                    :class="{
+                      'is-missing-group': controlMissingGroup(selectedStudent),
+                    }"
+                    :label="controlGroupLabel(selectedStudent)"
+                    :missing="controlMissingGroup(selectedStudent)"
+                  />
                 </section>
 
                 <section class="ce-data-section">
@@ -317,16 +688,45 @@
                     <span><LucideShieldCheck :size="18" /></span>
                     <div>
                       <h3>Calidad del expediente</h3>
-                      <p>{{ selectedStudent.missingFields.length ? 'Completa estos datos para dejar el expediente listo para matrícula.' : 'Expediente listo para matrícula.' }}</p>
+                      <p>
+                        {{
+                          selectedStudent.missingFields.length
+                            ? "Completa estos datos para dejar el expediente listo para matrícula."
+                            : "Expediente listo para matrícula."
+                        }}
+                      </p>
                     </div>
                   </div>
                   <div class="ce-missing-grid">
-                    <span v-for="field in requiredDataFields" :key="field.key" :class="['ce-missing-chip', { ok: !selectedStudent.missingFields.includes(field.key) && !selectedStudent.missingFields.includes(field.label.toLowerCase()) }]">
-                      <component :is="field.icon" :size="14" /> {{ field.label }} <b>{{ selectedStudent.missingFields.includes(field.key) || selectedStudent.missingFields.includes(field.label.toLowerCase()) ? 'Falta' : 'Listo' }}</b>
+                    <span
+                      v-for="field in requiredDataFields"
+                      :key="field.key"
+                      :class="[
+                        'ce-missing-chip',
+                        {
+                          ok:
+                            !selectedStudent.missingFields.includes(
+                              field.key,
+                            ) &&
+                            !selectedStudent.missingFields.includes(
+                              field.label.toLowerCase(),
+                            ),
+                        },
+                      ]"
+                    >
+                      <component :is="field.icon" :size="14" />
+                      {{ field.label }}
+                      <b>{{
+                        selectedStudent.missingFields.includes(field.key) ||
+                        selectedStudent.missingFields.includes(
+                          field.label.toLowerCase(),
+                        )
+                          ? "Falta"
+                          : "Listo"
+                      }}</b>
                     </span>
                   </div>
                 </section>
-
 
                 <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
                   <button
@@ -341,20 +741,45 @@
                 </nav>
 
                 <form class="ce-edit-form" @submit.prevent="saveStudent">
-                  <section v-show="activeDetailTab === 'identity'" class="ce-form-card ce-tab-panel">
+                  <section
+                    v-show="activeDetailTab === 'identity'"
+                    class="ce-form-card ce-tab-panel"
+                  >
                     <div class="ce-section-heading compact">
                       <span><LucideUserRound :size="18" /></span>
                       <h3>Identidad</h3>
                     </div>
                     <div class="ce-form-grid two">
-                      <label><span>A. paterno</span><input v-model="editForm.apellidoPaterno" autocomplete="off" /></label>
-                      <label><span>A. materno</span><input v-model="editForm.apellidoMaterno" autocomplete="off" /></label>
-                      <label><span>Nombre(s)</span><input v-model="editForm.nombres" autocomplete="off" /></label>
-                      <label><span>CURP</span><input v-model="editForm.curp" maxlength="18" autocomplete="off" /></label>
+                      <label
+                        ><span>A. paterno</span
+                        ><input
+                          v-model="editForm.apellidoPaterno"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>A. materno</span
+                        ><input
+                          v-model="editForm.apellidoMaterno"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>Nombre(s)</span
+                        ><input v-model="editForm.nombres" autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>CURP</span
+                        ><input
+                          v-model="editForm.curp"
+                          maxlength="18"
+                          autocomplete="off"
+                      /></label>
                     </div>
                   </section>
 
-                  <section v-show="activeDetailTab === 'school'" class="ce-form-card ce-tab-panel">
+                  <section
+                    v-show="activeDetailTab === 'school'"
+                    class="ce-form-card ce-tab-panel"
+                  >
                     <div class="ce-section-heading compact">
                       <span><LucideGraduationCap :size="18" /></span>
                       <h3>Escolar</h3>
@@ -364,50 +789,148 @@
                         <span>Nivel</span>
                         <select v-model="editForm.nivel">
                           <option value="">Selecciona nivel</option>
-                          <option v-for="nivel in nivelOptions" :key="`nivel-${nivel}`" :value="nivel">{{ labelize(nivel) }}</option>
+                          <option
+                            v-for="nivel in nivelOptions"
+                            :key="`nivel-${nivel}`"
+                            :value="nivel"
+                          >
+                            {{ labelize(nivel) }}
+                          </option>
                         </select>
                       </label>
                       <label>
                         <span>Grado</span>
                         <select v-model="editForm.grado">
                           <option value="">Selecciona grado</option>
-                          <option v-for="grado in gradoOptions" :key="`grado-${grado}`" :value="grado">{{ labelize(grado) }}</option>
+                          <option
+                            v-for="grado in gradoOptions"
+                            :key="`grado-${grado}`"
+                            :value="grado"
+                          >
+                            {{ labelize(grado) }}
+                          </option>
                         </select>
                       </label>
                       <label>
                         <span>Grupo</span>
                         <select v-model="editForm.grupo">
                           <option value="">Sin grupo</option>
-                          <option v-for="grupo in groupOptions" :key="`grupo-${grupo}`" :value="grupo">{{ grupo }}</option>
+                          <option
+                            v-for="grupo in groupOptions"
+                            :key="`grupo-${grupo}`"
+                            :value="grupo"
+                          >
+                            {{ grupo }}
+                          </option>
                         </select>
                       </label>
-                      <label><span>Baja</span><select v-model="editForm.baja"><option :value="0">No</option><option :value="1">Sí</option></select></label>
-                      <label><span>Motivo baja</span><input v-model="editForm.motivoBaja" autocomplete="off" /></label>
-                      <label><span>Categoría baja</span><input v-model="editForm.categoriaBaja" autocomplete="off" /></label>
+                      <label
+                        ><span>Baja</span
+                        ><select v-model="editForm.baja">
+                          <option :value="0">No</option>
+                          <option :value="1">Sí</option>
+                        </select></label
+                      >
+                      <label
+                        ><span>Motivo baja</span
+                        ><input
+                          v-model="editForm.motivoBaja"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>Categoría baja</span
+                        ><input
+                          v-model="editForm.categoriaBaja"
+                          autocomplete="off"
+                      /></label>
                     </div>
                   </section>
 
-                  <section v-show="activeDetailTab === 'family'" class="ce-form-card ce-contact-card ce-tab-panel">
+                  <section
+                    v-show="activeDetailTab === 'family'"
+                    class="ce-form-card ce-contact-card ce-tab-panel"
+                  >
                     <div class="ce-section-heading compact">
                       <span><LucideUsersRound :size="18" /></span>
                       <h3>Contacto familiar</h3>
                     </div>
                     <div class="ce-form-grid three">
-                      <label><span>Nombre padre</span><input v-model="editForm.nombrePadre" autocomplete="off" /></label>
-                      <label><span>A. paterno padre</span><input v-model="editForm.apellidoPaternoPadre" autocomplete="off" /></label>
-                      <label><span>A. materno padre</span><input v-model="editForm.apellidoMaternoPadre" autocomplete="off" /></label>
-                      <label><span>Nombre madre</span><input v-model="editForm.nombreMadre" autocomplete="off" /></label>
-                      <label><span>A. paterno madre</span><input v-model="editForm.apellidoPaternoMadre" autocomplete="off" /></label>
-                      <label><span>A. materno madre</span><input v-model="editForm.apellidoMaternoMadre" autocomplete="off" /></label>
-                      <label><span>Teléfono padre</span><input v-model="editForm.telefonoPadre" autocomplete="off" /></label>
-                      <label><span>Teléfono madre</span><input v-model="editForm.telefonoMadre" autocomplete="off" /></label>
-                      <label><span>Email padre</span><input v-model="editForm.emailPadre" type="email" autocomplete="off" /></label>
-                      <label><span>Email madre</span><input v-model="editForm.emailMadre" type="email" autocomplete="off" /></label>
+                      <label
+                        ><span>Nombre padre</span
+                        ><input
+                          v-model="editForm.nombrePadre"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>A. paterno padre</span
+                        ><input
+                          v-model="editForm.apellidoPaternoPadre"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>A. materno padre</span
+                        ><input
+                          v-model="editForm.apellidoMaternoPadre"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>Nombre madre</span
+                        ><input
+                          v-model="editForm.nombreMadre"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>A. paterno madre</span
+                        ><input
+                          v-model="editForm.apellidoPaternoMadre"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>A. materno madre</span
+                        ><input
+                          v-model="editForm.apellidoMaternoMadre"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>Teléfono padre</span
+                        ><input
+                          v-model="editForm.telefonoPadre"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>Teléfono madre</span
+                        ><input
+                          v-model="editForm.telefonoMadre"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>Email padre</span
+                        ><input
+                          v-model="editForm.emailPadre"
+                          type="email"
+                          autocomplete="off"
+                      /></label>
+                      <label
+                        ><span>Email madre</span
+                        ><input
+                          v-model="editForm.emailMadre"
+                          type="email"
+                          autocomplete="off"
+                      /></label>
                     </div>
-                    <label class="ce-wide-field"><span>Dirección</span><textarea v-model="editForm.direccion" rows="2"></textarea></label>
+                    <label class="ce-wide-field"
+                      ><span>Dirección</span
+                      ><textarea
+                        v-model="editForm.direccion"
+                        rows="2"
+                      ></textarea>
+                    </label>
                   </section>
 
-                  <section v-show="activeDetailTab === 'system'" class="ce-form-card ce-system-panel ce-tab-panel">
+                  <section
+                    v-show="activeDetailTab === 'system'"
+                    class="ce-form-card ce-system-panel ce-tab-panel"
+                  >
                     <div class="ce-section-heading compact">
                       <span><LucideKeyRound :size="18" /></span>
                       <h3>Sistema</h3>
@@ -415,69 +938,142 @@
                     <div class="ce-system-grid">
                       <article>
                         <span>Registro de matrícula</span>
-                        <strong>{{ selectedStudent.overlayExists ? 'Creado' : 'Pendiente' }}</strong>
+                        <strong>{{
+                          selectedStudent.overlayExists ? "Creado" : "Pendiente"
+                        }}</strong>
                       </article>
                       <article>
                         <span>Tipo de ingreso</span>
-                        <strong>{{ selectedStudent.tipoIngreso || 'Sin clasificar' }}</strong>
+                        <strong>{{
+                          selectedStudent.tipoIngreso || "Sin clasificar"
+                        }}</strong>
                       </article>
                       <article>
                         <span>Ciclo base</span>
-                        <strong>{{ selectedStudent.cicloBase || currentCicloKey }}</strong>
+                        <strong>{{
+                          selectedStudent.cicloBase || currentCicloKey
+                        }}</strong>
                       </article>
                       <article>
                         <span>Plantel origen</span>
-                        <strong>{{ selectedStudent.plantelBaseOriginal || selectedStudent.basePlantel || selectedAgentId }}</strong>
+                        <strong>{{
+                          selectedStudent.plantelBaseOriginal ||
+                          selectedStudent.basePlantel ||
+                          selectedAgentId
+                        }}</strong>
                       </article>
                     </div>
                     <section class="ce-husky-card compact">
                       <div class="ce-section-heading ce-husky-heading">
-                        <img src="/brand/ID-HUSKY-PASS-GREY.png" alt="Husky Pass" />
+                        <img
+                          src="/brand/ID-HUSKY-PASS-GREY.png"
+                          alt="Husky Pass"
+                        />
                         <div>
                           <h3>Husky Pass accesos</h3>
-                          <p>Accesos del portal del alumno listos para compartir con el padre o tutor.</p>
+                          <p>
+                            Accesos del portal del alumno listos para compartir
+                            con el padre o tutor.
+                          </p>
                         </div>
                       </div>
-                      <div v-if="selectedStudent.huskyPassAvailable" class="ce-husky-credentials">
-                        <span><small>Usuario</small><strong>{{ selectedStudent.huskyPassUsername }}</strong></span>
-                        <span><small>Contraseña</small><strong>{{ selectedStudent.huskyPassPlaintext }}</strong></span>
+                      <div
+                        v-if="selectedStudent.huskyPassAvailable"
+                        class="ce-husky-credentials"
+                      >
+                        <span
+                          ><small>Usuario</small
+                          ><strong>{{
+                            selectedStudent.huskyPassUsername
+                          }}</strong></span
+                        >
+                        <span
+                          ><small>Contraseña</small
+                          ><strong>{{
+                            selectedStudent.huskyPassPlaintext
+                          }}</strong></span
+                        >
                       </div>
-                      <div v-else class="ce-husky-empty">Sin Husky Pass registrado para esta matrícula.</div>
+                      <div v-else class="ce-husky-empty">
+                        Sin Husky Pass registrado para esta matrícula.
+                      </div>
                       <div class="ce-husky-actions">
-                        <small>{{ huskyPassEmailTarget || 'Sin correo de padre/tutor' }}</small>
-                        <UiButton variant="secondary" type="button" :disabled="sendingHuskyPass || !selectedStudent.huskyPassAvailable || !huskyPassEmailTarget" @click="sendHuskyPassEmail">
-                          <LucideSend :size="16" /> {{ sendingHuskyPass ? 'Enviando...' : 'Enviar acceso' }}
+                        <small>{{
+                          huskyPassEmailTarget || "Sin correo de padre/tutor"
+                        }}</small>
+                        <UiButton
+                          variant="secondary"
+                          type="button"
+                          :disabled="
+                            sendingHuskyPass ||
+                            !selectedStudent.huskyPassAvailable ||
+                            !huskyPassEmailTarget
+                          "
+                          @click="sendHuskyPassEmail"
+                        >
+                          <LucideSend :size="16" />
+                          {{
+                            sendingHuskyPass ? "Enviando..." : "Enviar acceso"
+                          }}
                         </UiButton>
                       </div>
                     </section>
                   </section>
 
-                  <section v-show="activeDetailTab === 'notes'" class="ce-form-card ce-tab-panel">
+                  <section
+                    v-show="activeDetailTab === 'notes'"
+                    class="ce-form-card ce-tab-panel"
+                  >
                     <div class="ce-section-heading compact">
                       <span><LucideAlertTriangle :size="18" /></span>
                       <h3>Observaciones</h3>
                     </div>
-                    <label class="ce-wide-field standalone"><span>Seguimiento de baja o nota interna</span><textarea v-model="editForm.seguimientoBaja" rows="6"></textarea></label>
+                    <label class="ce-wide-field standalone"
+                      ><span>Seguimiento de baja o nota interna</span
+                      ><textarea
+                        v-model="editForm.seguimientoBaja"
+                        rows="6"
+                      ></textarea>
+                    </label>
                   </section>
 
-                  <div v-if="saveError" class="ce-save-error"><LucideAlertTriangle :size="16" /> {{ saveError }}</div>
-
+                  <div v-if="saveError" class="ce-save-error">
+                    <LucideAlertTriangle :size="16" /> {{ saveError }}
+                  </div>
                 </form>
               </div>
 
               <footer class="ce-detail-footer">
-                <span :class="['ce-save-state', saveStateTone]">{{ saveStatusText }}</span>
+                <span :class="['ce-save-state', saveStateTone]">{{
+                  saveStatusText
+                }}</span>
                 <div>
-                  <UiButton variant="secondary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="discardChanges">Restaurar</UiButton>
-                  <UiButton variant="primary" type="button" :disabled="savingStudent || !hasUnsavedChanges" @click="saveStudent">
-                    <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar' }}
+                  <UiButton
+                    variant="secondary"
+                    type="button"
+                    :disabled="savingStudent || !hasUnsavedChanges"
+                    @click="discardChanges"
+                    >Restaurar</UiButton
+                  >
+                  <UiButton
+                    variant="primary"
+                    type="button"
+                    :disabled="savingStudent || !hasUnsavedChanges"
+                    @click="saveStudent"
+                  >
+                    <LucideSave :size="17" />
+                    {{ savingStudent ? "Guardando..." : "Guardar" }}
                   </UiButton>
                 </div>
               </footer>
             </div>
           </section>
 
-          <section v-else class="student-detail-panel ce-detail-panel ce-empty-detail-panel" aria-label="Guía para editar ficha de alumno">
+          <section
+            v-else
+            class="student-detail-panel ce-detail-panel ce-empty-detail-panel"
+            aria-label="Guía para editar ficha de alumno"
+          >
             <div class="ce-empty-shell">
               <div class="ce-empty-hero" aria-hidden="true">
                 <span class="ce-empty-sparkle one">✦</span>
@@ -489,36 +1085,66 @@
 
               <div class="ce-empty-copy">
                 <h2>Selecciona un alumno para editar su ficha</h2>
-                <p>Elige un alumno de la lista para revisar y actualizar su información.</p>
-                <p>Podrás editar identidad, datos escolares, contacto familiar, sistema y observaciones.</p>
+                <p>
+                  Elige un alumno de la lista para revisar y actualizar su
+                  información.
+                </p>
+                <p>
+                  Podrás editar identidad, datos escolares, contacto familiar,
+                  sistema y observaciones.
+                </p>
               </div>
 
               <section class="ce-empty-card ce-empty-review">
                 <h3>Qué revisar primero</h3>
                 <div>
                   <span><LucideShieldCheck :size="15" /> CURP del alumno</span>
-                  <span><LucideUsersRound :size="15" /> Tutor / Responsable</span>
+                  <span
+                    ><LucideUsersRound :size="15" /> Tutor / Responsable</span
+                  >
                   <span><LucidePhone :size="15" /> Teléfono de contacto</span>
-                  <span><LucideGraduationCap :size="15" /> Grupo y servicio asignado</span>
+                  <span
+                    ><LucideGraduationCap :size="15" /> Grupo y servicio
+                    asignado</span
+                  >
                   <span><LucideMail :size="15" /> Email del contacto</span>
-                  <span><LucideShieldCheck :size="15" /> Expediente completo</span>
+                  <span
+                    ><LucideShieldCheck :size="15" /> Expediente completo</span
+                  >
                 </div>
               </section>
 
               <section class="ce-empty-card ce-empty-flow">
                 <h3>Así se verá tu flujo al seleccionar un alumno</h3>
                 <ol>
-                  <li><span><LucideUserRound :size="21" /></span><b>1 Identidad</b></li>
-                  <li><span><LucideGraduationCap :size="21" /></span><b>2 Escolar</b></li>
-                  <li><span><LucideUsersRound :size="21" /></span><b>3 Contacto familiar</b></li>
-                  <li><span><LucideKeyRound :size="21" /></span><b>4 Sistema</b></li>
-                  <li><span><LucideAlertTriangle :size="21" /></span><b>5 Observaciones</b></li>
+                  <li>
+                    <span><LucideUserRound :size="21" /></span
+                    ><b>1 Identidad</b>
+                  </li>
+                  <li>
+                    <span><LucideGraduationCap :size="21" /></span
+                    ><b>2 Escolar</b>
+                  </li>
+                  <li>
+                    <span><LucideUsersRound :size="21" /></span
+                    ><b>3 Contacto familiar</b>
+                  </li>
+                  <li>
+                    <span><LucideKeyRound :size="21" /></span><b>4 Sistema</b>
+                  </li>
+                  <li>
+                    <span><LucideAlertTriangle :size="21" /></span
+                    ><b>5 Observaciones</b>
+                  </li>
                 </ol>
               </section>
 
               <aside class="ce-empty-tip">
                 <span><LucideShieldCheck :size="23" /></span>
-                <p><strong>Tip:</strong> usa los indicadores de calidad para priorizar los expedientes con pendientes.</p>
+                <p>
+                  <strong>Tip:</strong> usa los indicadores de calidad para
+                  priorizar los expedientes con pendientes.
+                </p>
                 <i aria-hidden="true"><LucideShieldCheck :size="23" /></i>
               </aside>
             </div>
@@ -527,17 +1153,36 @@
       </div>
     </div>
 
-    <div v-if="showMassImportModal" class="ce-modal-backdrop" @click.self="closeMassImportModal">
-      <section class="ce-import-modal" role="dialog" aria-modal="true" aria-labelledby="ce-import-title">
+    <div
+      v-if="showMassImportModal"
+      class="ce-modal-backdrop"
+      @click.self="closeMassImportModal"
+    >
+      <section
+        class="ce-import-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ce-import-title"
+      >
         <header>
           <div>
             <small>Actualización masiva</small>
             <h2 id="ce-import-title">Importar DB de matrícula</h2>
           </div>
-          <button type="button" class="detail-shell-close" @click="closeMassImportModal"><LucideX :size="20" /></button>
+          <button
+            type="button"
+            class="detail-shell-close"
+            @click="closeMassImportModal"
+          >
+            <LucideX :size="20" />
+          </button>
         </header>
         <div class="ce-import-body">
-          <p>Sube el CSV exportado desde Control Escolar. La importación actualiza o crea registros del expediente por matrícula y no elimina alumnos.</p>
+          <p>
+            Sube el CSV exportado desde Control Escolar. La importación
+            actualiza o crea registros del expediente por matrícula y no elimina
+            alumnos.
+          </p>
           <ul>
             <li>La columna Matrícula es obligatoria.</li>
             <li>Las filas fuera del plantel o ciclo visible se omiten.</li>
@@ -545,25 +1190,58 @@
           </ul>
           <label class="ce-file-drop">
             <LucideUpload :size="20" />
-            <span>{{ massImportFile?.name || 'Seleccionar archivo CSV' }}</span>
-            <input type="file" accept=".csv,text/csv" @change="onMassImportFileChange" />
+            <span>{{ massImportFile?.name || "Seleccionar archivo CSV" }}</span>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              @change="onMassImportFileChange"
+            />
           </label>
-          <div v-if="massImportResult" class="ce-import-result" :class="{ warning: massImportResult.errors?.length }">
-            <strong>{{ massImportResult.updated || 0 }} actualizados · {{ massImportResult.skipped || 0 }} omitidos</strong>
+          <div
+            v-if="massImportResult"
+            class="ce-import-result"
+            :class="{ warning: massImportResult.errors?.length }"
+          >
+            <strong
+              >{{ massImportResult.updated || 0 }} actualizados ·
+              {{ massImportResult.skipped || 0 }} omitidos</strong
+            >
             <span>{{ massImportResult.processed || 0 }} filas procesadas.</span>
-            <div v-if="massImportResult.errors?.length" class="ce-import-errors">
+            <div
+              v-if="massImportResult.errors?.length"
+              class="ce-import-errors"
+            >
               <b>Revisar filas</b>
-              <p v-for="error in massImportResult.errors.slice(0, 8)" :key="`${error.row}-${error.matricula || 'fila'}`">
-                Fila {{ error.row }}<span v-if="error.matricula"> · {{ error.matricula }}</span>: {{ error.message }}
+              <p
+                v-for="error in massImportResult.errors.slice(0, 8)"
+                :key="`${error.row}-${error.matricula || 'fila'}`"
+              >
+                Fila {{ error.row
+                }}<span v-if="error.matricula"> · {{ error.matricula }}</span
+                >: {{ error.message }}
               </p>
             </div>
           </div>
-          <div v-if="massImportError" class="ce-save-error"><LucideAlertTriangle :size="16" /> {{ massImportError }}</div>
+          <div v-if="massImportError" class="ce-save-error">
+            <LucideAlertTriangle :size="16" /> {{ massImportError }}
+          </div>
         </div>
         <footer>
-          <UiButton variant="secondary" type="button" :disabled="massImporting" @click="closeMassImportModal">Cerrar</UiButton>
-          <UiButton variant="primary" type="button" :disabled="!massImportFile || massImporting" @click="importMatriculaDb">
-            <LucideUpload :size="17" /> {{ massImporting ? 'Importando...' : 'Importar archivo' }}
+          <UiButton
+            variant="secondary"
+            type="button"
+            :disabled="massImporting"
+            @click="closeMassImportModal"
+            >Cerrar</UiButton
+          >
+          <UiButton
+            variant="primary"
+            type="button"
+            :disabled="!massImportFile || massImporting"
+            @click="importMatriculaDb"
+          >
+            <LucideUpload :size="17" />
+            {{ massImporting ? "Importando..." : "Importar archivo" }}
           </UiButton>
         </footer>
       </section>
@@ -572,9 +1250,17 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { useCookie, useState } from '#app'
-import { useHead } from '#imports'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
+import { useCookie, useState } from "#app";
+import { useHead } from "#imports";
 import {
   LucideAlertTriangle,
   LucideBuilding2,
@@ -606,322 +1292,670 @@ import {
   LucideUpload,
   LucideUserX,
   LucideWifiOff,
-  LucideX
-} from 'lucide-vue-next'
-import UiButton from '~/components/ui/UiButton.vue'
-import UiChip from '~/components/ui/UiChip.vue'
-import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
-import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
-import { useStudentsWorkspaceScale } from '~/composables/useStudentsWorkspaceScale'
-import { useToast } from '~/composables/useToast'
-import { normalizeCicloKey, formatCicloLabel } from '~/shared/utils/ciclo'
-import { normalizeEnrollmentConceptIds, normalizeStudentMatricula, parseEnrollmentConcepts, photoStorageKey, studentPresentationStyle } from '~/shared/utils/studentPresentation'
-import { NIVELES_ESCOLARES, gradeOptionsForNivel } from '~/shared/utils/grado'
-import { normalizeCicloOption } from '~/utils/constants'
+  LucideX,
+} from "lucide-vue-next";
+import UiButton from "~/components/ui/UiButton.vue";
+import UiChip from "~/components/ui/UiChip.vue";
+import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
+import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.vue";
+import { useStudentsWorkspaceScale } from "~/composables/useStudentsWorkspaceScale";
+import { useToast } from "~/composables/useToast";
+import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
+import {
+  normalizeEnrollmentConceptIds,
+  normalizeStudentMatricula,
+  parseEnrollmentConcepts,
+  photoStorageKey,
+  studentPresentationStyle,
+} from "~/shared/utils/studentPresentation";
+import { NIVELES_ESCOLARES, gradeOptionsForNivel } from "~/shared/utils/grado";
+import { normalizeCicloOption } from "~/utils/constants";
 
-useHead({ bodyAttrs: { class: 'students-route-active' } })
+useHead({ bodyAttrs: { class: "students-route-active" } });
 
-const { show } = useToast()
-const cicloCookie = useCookie('active_ciclo', { maxAge: 31536000 })
-const state = useState('globalState', () => ({ ciclo: normalizeCicloOption(cicloCookie.value) }))
-const activePlantelCookie = useCookie('auth_active_plantel')
-const initialControlPlantel = String(activePlantelCookie.value || '').trim()
-const externalConcepts = ref([])
-const ENROLLMENT_CONCEPTS_CACHE_KEY = 'students-enrollment-concepts:v1'
-const CONTROL_STUDENTS_CACHE_VERSION = 1
-const CONTROL_STUDENTS_CACHE_NAMESPACE = 'control-escolar:students-cache'
-const currentCicloKey = computed(() => normalizeCicloKey(normalizeCicloOption(state.value?.ciclo || cicloCookie.value)))
-const currentCicloLabel = computed(() => formatCicloLabel(currentCicloKey.value))
-const selectedAgentId = ref(initialControlPlantel && initialControlPlantel !== 'GLOBAL' ? initialControlPlantel : '')
-const optionsLoading = ref(false)
-const kpisLoading = ref(false)
-const studentsLoading = ref(false)
-const savingStudent = ref(false)
-const massImporting = ref(false)
-const sendingHuskyPass = ref(false)
-const loadError = ref('')
-const saveError = ref('')
-const students = ref([])
-const controlStudentsIndex = ref([])
-const selectedStudent = ref(null)
-const kpis = ref(null)
-const catalogs = reactive({ niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
-const DEFAULT_QUICK_FILTER = 'inscritos'
-const activeQuickFilter = ref(DEFAULT_QUICK_FILTER)
-const showAdvancedFilters = ref(false)
-const showMassImportModal = ref(false)
-const massImportFile = ref(null)
-const massImportResult = ref(null)
-const massImportError = ref('')
-const activeDetailTab = ref('identity')
-const editSnapshot = ref('')
-const draftRestored = ref(false)
-const draftSavedAt = ref('')
-const pendingSelectedStudentRefresh = ref(null)
-const pagination = reactive({ page: 1, limit: 8, total: 0, pages: 1 })
-const filters = reactive({ search: '', status: DEFAULT_QUICK_FILTER, quality: '', grado: '', group: '', recent: '' })
-const editForm = reactive({})
-const photoCache = ref({})
-const photoLoadingKeys = ref(new Set())
-let searchTimer = null
-let controlStudentsRequestId = 0
-const controlStudentPhotoRequests = new Map()
-const controlPhotoQueue = []
-const controlPhotoQueuedKeys = new Set()
-const controlPhotoActiveKeys = new Set()
-let activeControlPhotoLoads = 0
+const { show } = useToast();
+const cicloCookie = useCookie("active_ciclo", { maxAge: 31536000 });
+const state = useState("globalState", () => ({
+  ciclo: normalizeCicloOption(cicloCookie.value),
+}));
+const activePlantelCookie = useCookie("auth_active_plantel");
+const initialControlPlantel = String(activePlantelCookie.value || "").trim();
+const externalConcepts = ref([]);
+const ENROLLMENT_CONCEPTS_CACHE_KEY = "students-enrollment-concepts:v1";
+const CONTROL_STUDENTS_CACHE_VERSION = 1;
+const CONTROL_STUDENTS_CACHE_NAMESPACE = "control-escolar:students-cache";
+const currentCicloKey = computed(() =>
+  normalizeCicloKey(
+    normalizeCicloOption(state.value?.ciclo || cicloCookie.value),
+  ),
+);
+const currentCicloLabel = computed(() =>
+  formatCicloLabel(currentCicloKey.value),
+);
+const selectedAgentId = ref(
+  initialControlPlantel && initialControlPlantel !== "GLOBAL"
+    ? initialControlPlantel
+    : "",
+);
+const optionsLoading = ref(false);
+const kpisLoading = ref(false);
+const studentsLoading = ref(false);
+const savingStudent = ref(false);
+const massImporting = ref(false);
+const sendingHuskyPass = ref(false);
+const loadError = ref("");
+const saveError = ref("");
+const students = ref([]);
+const controlStudentsIndex = ref([]);
+const selectedStudent = ref(null);
+const kpis = ref(null);
+const catalogs = reactive({
+  niveles: [],
+  grados: [],
+  grupos: [],
+  gruposPorGrado: {},
+});
+const DEFAULT_QUICK_FILTER = "inscritos";
+const activeQuickFilter = ref(DEFAULT_QUICK_FILTER);
+const showAdvancedFilters = ref(false);
+const showMassImportModal = ref(false);
+const massImportFile = ref(null);
+const massImportResult = ref(null);
+const massImportError = ref("");
+const activeDetailTab = ref("identity");
+const editSnapshot = ref("");
+const draftRestored = ref(false);
+const draftSavedAt = ref("");
+const pendingSelectedStudentRefresh = ref(null);
+const pagination = reactive({ page: 1, limit: 8, total: 0, pages: 1 });
+const filters = reactive({
+  search: "",
+  status: DEFAULT_QUICK_FILTER,
+  quality: "",
+  grado: "",
+  group: "",
+  recent: "",
+});
+const editForm = reactive({});
+const photoCache = ref({});
+const photoLoadingKeys = ref(new Set());
+let searchTimer = null;
+let controlStudentsRequestId = 0;
+const controlStudentPhotoRequests = new Map();
+const controlPhotoQueue = [];
+const controlPhotoQueuedKeys = new Set();
+const controlPhotoActiveKeys = new Set();
+let activeControlPhotoLoads = 0;
+const controlBaseStage = ref("idle");
+const controlEnrichmentStage = ref("idle");
+const controlDataFreshness = ref("empty");
+const controlDataSavedAt = ref("");
+const controlDataSource = ref(null);
 
-const hasDetail = computed(() => true)
-const { studentsScaleShell, studentsScaleShellStyle, studentsDesignCanvasStyle, scheduleWorkspaceScaleUpdate } = useStudentsWorkspaceScale(hasDetail, {
+const hasDetail = computed(() => true);
+const {
+  studentsScaleShell,
+  studentsScaleShellStyle,
+  studentsDesignCanvasStyle,
+  scheduleWorkspaceScaleUpdate,
+} = useStudentsWorkspaceScale(hasDetail, {
   detailDesignWidth: 1360,
   detailDesignHeight: 660,
   detailMinScale: 0.58,
-  fitPadding: 6
-})
-const loadingAny = computed(() => optionsLoading.value || kpisLoading.value || studentsLoading.value || savingStudent.value)
+  fitPadding: 6,
+});
+const controlSyncBusy = computed(
+  () =>
+    controlBaseStage.value === "loading" ||
+    controlEnrichmentStage.value === "loading",
+);
+const loadingAny = computed(
+  () =>
+    optionsLoading.value ||
+    kpisLoading.value ||
+    studentsLoading.value ||
+    savingStudent.value ||
+    controlSyncBusy.value,
+);
 
 const firstSyncMessages = [
-  'Estamos cargando los alumnos en este dispositivo por primera vez. Después de esta sincronización, las cargas serán más rápidas.',
-  'Estamos sincronizando la base de datos de Control Escolar.',
-  'Estamos preparando la información para que puedas trabajar aunque la conexión sea lenta.',
-  'Esto puede tardar un poco la primera vez. Mantén esta ventana abierta.',
-  'Seguimos sincronizando los registros. En cuanto termine, verás la lista de alumnos.'
-]
-const firstSyncMessageIndex = ref(0)
-let firstSyncMessageTimer = null
+  "A) Conectando con la base del administrador para traer la lista, conteos y filtros base.",
+  "B) Enriqueciendo datos del expediente desde la base externa de matrícula.",
+  "Mostramos primero lo disponible para que puedas trabajar mientras se completa la sincronización.",
+  "Si existe caché local, se conserva visible hasta que llegue información actualizada.",
+  "Al terminar, verás si la vista está sincronizada o trabajando con caché.",
+];
+const firstSyncMessageIndex = ref(0);
+let firstSyncMessageTimer = null;
+const showControlFirstSyncNotice = computed(() =>
+  Boolean(
+    selectedAgentId.value &&
+    (studentsLoading.value ||
+      controlBaseStage.value === "loading" ||
+      controlEnrichmentStage.value === "loading") &&
+    !controlStudentsIndex.value.length &&
+    !students.value.length &&
+    !loadError.value,
+  ),
+);
+const activeFirstSyncMessage = computed(
+  () =>
+    controlSyncMessage.value ||
+    firstSyncMessages[firstSyncMessageIndex.value] ||
+    firstSyncMessages[0],
+);
+const localHour = ref(12);
+const isAfterOfficeHours = computed(() => localHour.value >= 17);
+const studentsSourceUnavailable = computed(() =>
+  Boolean(
+    selectedAgentId.value &&
+    loadError.value &&
+    !studentsLoading.value &&
+    !students.value.length,
+  ),
+);
+const sourceUnavailableTitle = computed(() =>
+  isAfterOfficeHours.value
+    ? "El equipo del plantel ya cerró por hoy"
+    : "La base del plantel no está disponible en este momento",
+);
+const sourceUnavailableMessage = computed(() =>
+  isAfterOfficeHours.value
+    ? "La información se consulta desde el equipo local del plantel. Si el administrador ya terminó su jornada, la lista volverá a estar disponible cuando ese equipo se encienda de nuevo."
+    : "La lista se activa cuando el equipo del administrador del plantel está encendido y conectado. Solicita que lo mantengan disponible y vuelve a intentarlo.",
+);
+const sourceUnavailableHint = computed(() =>
+  isAfterOfficeHours.value ? "Fuera de horario" : "Esperando conexión",
+);
 
-const showControlFirstSyncNotice = computed(() => Boolean(
-  selectedAgentId.value &&
-  studentsLoading.value &&
-  !controlStudentsIndex.value.length &&
-  !students.value.length &&
-  !loadError.value
-))
-const activeFirstSyncMessage = computed(() => firstSyncMessages[firstSyncMessageIndex.value] || firstSyncMessages[0])
-const localHour = ref(12)
-const isAfterOfficeHours = computed(() => localHour.value >= 17)
-const studentsSourceUnavailable = computed(() => Boolean(selectedAgentId.value && loadError.value && !studentsLoading.value && !students.value.length))
-const sourceUnavailableTitle = computed(() => isAfterOfficeHours.value
-  ? 'El equipo del plantel ya cerró por hoy'
-  : 'La base del plantel no está disponible en este momento')
-const sourceUnavailableMessage = computed(() => isAfterOfficeHours.value
-  ? 'La información se consulta desde el equipo local del plantel. Si el administrador ya terminó su jornada, la lista volverá a estar disponible cuando ese equipo se encienda de nuevo.'
-  : 'La lista se activa cuando el equipo del administrador del plantel está encendido y conectado. Solicita que lo mantengan disponible y vuelve a intentarlo.')
-const sourceUnavailableHint = computed(() => isAfterOfficeHours.value ? 'Fuera de horario' : 'Esperando conexión')
+const formatControlSyncTime = (value) => {
+  if (!value) return "";
+  try {
+    return new Intl.DateTimeFormat("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch (_) {
+    return "";
+  }
+};
+
+const stepClass = (stage) => ({
+  active: stage === "loading",
+  done: stage === "ready",
+  failed: stage === "failed",
+});
+const controlBaseStepClass = computed(() => stepClass(controlBaseStage.value));
+const controlEnrichmentStepClass = computed(() =>
+  stepClass(controlEnrichmentStage.value),
+);
+const showControlDataStatus = computed(() =>
+  Boolean(
+    selectedAgentId.value &&
+    (controlDataFreshness.value !== "empty" ||
+      controlBaseStage.value !== "idle" ||
+      controlEnrichmentStage.value !== "idle"),
+  ),
+);
+const controlSyncStatusClass = computed(() => ({
+  "is-cache": controlDataFreshness.value === "cache",
+  "is-base": controlDataFreshness.value === "base",
+  "is-synced": controlDataFreshness.value === "synced",
+  "is-loading":
+    controlBaseStage.value === "loading" ||
+    controlEnrichmentStage.value === "loading",
+  "is-failed":
+    controlBaseStage.value === "failed" ||
+    controlEnrichmentStage.value === "failed",
+}));
+const controlDataFreshnessLabel = computed(() => {
+  const time = formatControlSyncTime(controlDataSavedAt.value);
+  if (controlDataFreshness.value === "cache")
+    return time ? `Caché · ${time}` : "Caché local";
+  if (controlDataFreshness.value === "base") return "Base del administrador";
+  if (controlDataFreshness.value === "synced")
+    return time ? `Sync · ${time}` : "Sincronizado";
+  if (controlBaseStage.value === "loading") return "Conectando";
+  if (controlEnrichmentStage.value === "loading") return "Enriqueciendo";
+  return "Sin datos";
+});
+const controlSyncHeadline = computed(() => {
+  if (studentsSourceUnavailable.value) return sourceUnavailableTitle.value;
+  if (controlDataFreshness.value === "cache" && controlSyncBusy.value)
+    return "Mostrando caché local";
+  if (controlBaseStage.value === "loading")
+    return "Conectando con base del administrador";
+  if (controlEnrichmentStage.value === "loading") return "Enriqueciendo datos";
+  if (
+    controlEnrichmentStage.value === "failed" &&
+    controlDataFreshness.value === "base"
+  )
+    return "Base cargada; enriquecimiento pendiente";
+  if (controlDataFreshness.value === "base")
+    return "Base del administrador cargada";
+  if (controlDataFreshness.value === "synced") return "Datos sincronizados";
+  if (controlDataFreshness.value === "cache") return "Caché local disponible";
+  return "Preparando Control Escolar";
+});
+const controlSyncMessage = computed(() => {
+  if (studentsSourceUnavailable.value) return sourceUnavailableMessage.value;
+  if (controlDataFreshness.value === "cache" && controlSyncBusy.value) {
+    return "La lista visible viene de caché mientras actualizamos la base del administrador y enriquecemos en segundo plano.";
+  }
+  if (controlBaseStage.value === "loading") {
+    return "Paso A: obteniendo alumnos, conteos y filtros desde la base del administrador.";
+  }
+  if (controlEnrichmentStage.value === "loading") {
+    return "Paso B: completando CURP, contacto familiar y expediente desde la base externa de matrícula.";
+  }
+  if (
+    controlEnrichmentStage.value === "failed" &&
+    controlDataFreshness.value === "base"
+  ) {
+    return "Puedes trabajar con la base del administrador; los datos enriquecidos se intentarán actualizar de nuevo.";
+  }
+  if (controlDataFreshness.value === "base") {
+    return "La lista ya está disponible con la base del administrador; el enriquecimiento puede continuar en segundo plano.";
+  }
+  if (controlDataFreshness.value === "synced") {
+    return "Vista actualizada con la base del administrador y la información enriquecida de matrícula.";
+  }
+  if (controlDataFreshness.value === "cache") {
+    return "Estás viendo datos guardados localmente mientras se verifica la conexión.";
+  }
+  return "Se cargará primero la base del administrador y después la información enriquecida.";
+});
 
 const stopFirstSyncMessages = () => {
-  if (!process.client) return
+  if (!process.client) return;
   if (firstSyncMessageTimer) {
-    window.clearInterval(firstSyncMessageTimer)
-    firstSyncMessageTimer = null
+    window.clearInterval(firstSyncMessageTimer);
+    firstSyncMessageTimer = null;
   }
-}
+};
 
 const startFirstSyncMessages = () => {
-  if (!process.client) return
-  stopFirstSyncMessages()
-  firstSyncMessageIndex.value = 0
+  if (!process.client) return;
+  stopFirstSyncMessages();
+  firstSyncMessageIndex.value = 0;
   firstSyncMessageTimer = window.setInterval(() => {
-    firstSyncMessageIndex.value = (firstSyncMessageIndex.value + 1) % firstSyncMessages.length
-  }, 5400)
-}
-const hasActiveFilters = computed(() => Boolean(
-  filters.search ||
-  filters.quality ||
-  filters.grado ||
-  filters.group ||
-  filters.recent ||
-  (filters.status && filters.status !== DEFAULT_QUICK_FILTER)
-))
+    firstSyncMessageIndex.value =
+      (firstSyncMessageIndex.value + 1) % firstSyncMessages.length;
+  }, 5400);
+};
+const hasActiveFilters = computed(() =>
+  Boolean(
+    filters.search ||
+    filters.quality ||
+    filters.grado ||
+    filters.group ||
+    filters.recent ||
+    (filters.status && filters.status !== DEFAULT_QUICK_FILTER),
+  ),
+);
 const activeFilterLabel = computed(() => {
-  const active = []
-  if (filters.status && filters.status !== DEFAULT_QUICK_FILTER) active.push(statusLabel(filters.status))
-  if (filters.quality) active.push(qualityLabel(filters.quality))
-  if (filters.grado) active.push(filters.grado)
-  if (filters.group) active.push(`Grupo ${filters.group}`)
-  if (filters.search) active.push('Búsqueda')
-  return active.slice(0, 2).join(' · ')
-})
+  const active = [];
+  if (filters.status && filters.status !== DEFAULT_QUICK_FILTER)
+    active.push(statusLabel(filters.status));
+  if (filters.quality) active.push(qualityLabel(filters.quality));
+  if (filters.grado) active.push(filters.grado);
+  if (filters.group) active.push(`Grupo ${filters.group}`);
+  if (filters.search) active.push("Búsqueda");
+  return active.slice(0, 2).join(" · ");
+});
 const availableGroups = computed(() => {
-  if (!filters.grado) return []
-  const byGrade = catalogs.gruposPorGrado || {}
-  return Array.isArray(byGrade[filters.grado]) ? byGrade[filters.grado] : catalogs.grupos
-})
+  if (!filters.grado) return [];
+  const byGrade = catalogs.gruposPorGrado || {};
+  return Array.isArray(byGrade[filters.grado])
+    ? byGrade[filters.grado]
+    : catalogs.grupos;
+});
 
-const mergeOptions = (...groups) => Array.from(new Set(groups.flat().map((value) => String(value || '').trim()).filter(Boolean)))
+const mergeOptions = (...groups) =>
+  Array.from(
+    new Set(
+      groups
+        .flat()
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  );
 const labelize = (value) => {
-  const text = String(value || '').trim()
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : ''
-}
-const nivelOptions = computed(() => mergeOptions(NIVELES_ESCOLARES, catalogs.niveles, [editForm.nivel]))
-const gradoOptions = computed(() => mergeOptions(gradeOptionsForNivel(editForm.nivel || selectedStudent.value?.nivel).map((grado) => grado.toLowerCase()), [editForm.grado]))
+  const text = String(value || "").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+};
+const nivelOptions = computed(() =>
+  mergeOptions(NIVELES_ESCOLARES, catalogs.niveles, [editForm.nivel]),
+);
+const gradoOptions = computed(() =>
+  mergeOptions(
+    gradeOptionsForNivel(editForm.nivel || selectedStudent.value?.nivel).map(
+      (grado) => grado.toLowerCase(),
+    ),
+    [editForm.grado],
+  ),
+);
 const groupOptions = computed(() => {
-  const byGrade = catalogs.gruposPorGrado || {}
-  const scopedGroups = editForm.grado && Array.isArray(byGrade[editForm.grado]) ? byGrade[editForm.grado] : []
-  return mergeOptions(scopedGroups, catalogs.grupos, [editForm.grupo])
-})
+  const byGrade = catalogs.gruposPorGrado || {};
+  const scopedGroups =
+    editForm.grado && Array.isArray(byGrade[editForm.grado])
+      ? byGrade[editForm.grado]
+      : [];
+  return mergeOptions(scopedGroups, catalogs.grupos, [editForm.grupo]);
+});
 
-watch(() => editForm.nivel, () => {
-  const available = gradoOptions.value
-  if (editForm.grado && !available.includes(editForm.grado)) editForm.grado = available[0] || ''
-  editForm.grupo = ''
-})
+watch(
+  () => editForm.nivel,
+  () => {
+    const available = gradoOptions.value;
+    if (editForm.grado && !available.includes(editForm.grado))
+      editForm.grado = available[0] || "";
+    editForm.grupo = "";
+  },
+);
 
-const advancedFilterCount = computed(() => [filters.quality, filters.grado, filters.group, filters.recent].filter(Boolean).length)
+const advancedFilterCount = computed(
+  () =>
+    [filters.quality, filters.grado, filters.group, filters.recent].filter(
+      Boolean,
+    ).length,
+);
 
 const paginationRangeLabel = computed(() => {
-  const total = Number(pagination.total || 0)
-  if (!total) return '0 a 0'
-  const start = ((Number(pagination.page || 1) - 1) * Number(pagination.limit || students.value.length || 1)) + 1
-  const end = Math.min(start + Math.max(students.value.length, 1) - 1, total)
-  return `${formatNumber(start)} a ${formatNumber(end)}`
-})
+  const total = Number(pagination.total || 0);
+  if (!total) return "0 a 0";
+  const start =
+    (Number(pagination.page || 1) - 1) *
+      Number(pagination.limit || students.value.length || 1) +
+    1;
+  const end = Math.min(start + Math.max(students.value.length, 1) - 1, total);
+  return `${formatNumber(start)} a ${formatNumber(end)}`;
+});
 const visiblePaginationPages = computed(() => {
-  const totalPages = Math.max(1, Number(pagination.pages || 1))
-  if (totalPages <= 4) return Array.from({ length: totalPages }, (_, index) => index + 1)
-  if (pagination.page <= 3) return [1, 2, 3, 'ellipsis', totalPages]
-  if (pagination.page >= totalPages - 2) return [1, 'ellipsis', totalPages - 2, totalPages - 1, totalPages]
-  return [1, 'ellipsis', pagination.page, 'ellipsis', totalPages]
-})
+  const totalPages = Math.max(1, Number(pagination.pages || 1));
+  if (totalPages <= 4)
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  if (pagination.page <= 3) return [1, 2, 3, "ellipsis", totalPages];
+  if (pagination.page >= totalPages - 2)
+    return [1, "ellipsis", totalPages - 2, totalPages - 1, totalPages];
+  return [1, "ellipsis", pagination.page, "ellipsis", totalPages];
+});
 
 const primaryFilters = [
-  { key: 'all', label: 'Todos' },
-  { key: 'inscritos', label: 'Inscritos' },
-  { key: 'internos', label: 'Internos' },
-  { key: 'externos', label: 'Externos' },
-  { key: 'no_inscritos', label: 'No inscritos' },
-  { key: 'bajas', label: 'Bajas' }
-]
+  { key: "all", label: "Todos" },
+  { key: "inscritos", label: "Inscritos" },
+  { key: "internos", label: "Internos" },
+  { key: "externos", label: "Externos" },
+  { key: "no_inscritos", label: "No inscritos" },
+  { key: "bajas", label: "Bajas" },
+];
 
 const detailTabs = [
-  { key: 'identity', label: 'Identidad', icon: LucideUserRound },
-  { key: 'school', label: 'Escolar', icon: LucideGraduationCap },
-  { key: 'family', label: 'Contacto familiar', icon: LucideUsersRound },
-  { key: 'system', label: 'Sistema', icon: LucideKeyRound },
-  { key: 'notes', label: 'Observaciones', icon: LucideAlertTriangle }
-]
+  { key: "identity", label: "Identidad", icon: LucideUserRound },
+  { key: "school", label: "Escolar", icon: LucideGraduationCap },
+  { key: "family", label: "Contacto familiar", icon: LucideUsersRound },
+  { key: "system", label: "Sistema", icon: LucideKeyRound },
+  { key: "notes", label: "Observaciones", icon: LucideAlertTriangle },
+];
 
 const qualityFilters = computed(() => {
-  const data = kpis.value || {}
+  const data = kpis.value || {};
   return [
-    { key: 'incomplete', label: 'Expediente incompleto', count: data.expedientesIncompletos || 0 },
-    { key: 'curp', label: 'Sin CURP', count: data.sinCurp || 0 },
-    { key: 'phone', label: 'Sin teléfono', count: data.sinTelefono || 0 },
-    { key: 'email', label: 'Sin email', count: data.sinEmail || 0 },
-    { key: 'guardian', label: 'Sin tutor', count: data.sinTutor || 0 },
-    { key: 'contact', label: 'Sin contacto', count: data.sinContacto || 0 }
-  ]
-})
+    {
+      key: "incomplete",
+      label: "Expediente incompleto",
+      count: data.expedientesIncompletos || 0,
+    },
+    { key: "curp", label: "Sin CURP", count: data.sinCurp || 0 },
+    { key: "phone", label: "Sin teléfono", count: data.sinTelefono || 0 },
+    { key: "email", label: "Sin email", count: data.sinEmail || 0 },
+    { key: "guardian", label: "Sin tutor", count: data.sinTutor || 0 },
+    { key: "contact", label: "Sin contacto", count: data.sinContacto || 0 },
+  ];
+});
 
-const MASS_UNIT_COUNT = 10
+const MASS_UNIT_COUNT = 10;
 const buildMassUnits = (value, total) => {
-  const safeValue = Math.max(0, Number(value || 0))
-  const safeTotal = Math.max(0, Number(total || 0))
-  const ratio = safeTotal > 0 ? Math.min(1, safeValue / safeTotal) : 0
-  const activeUnits = safeValue > 0 ? Math.max(1, Math.ceil(ratio * MASS_UNIT_COUNT)) : 0
-  return Array.from({ length: MASS_UNIT_COUNT }, (_, index) => ({ index, active: index < activeUnits }))
-}
+  const safeValue = Math.max(0, Number(value || 0));
+  const safeTotal = Math.max(0, Number(total || 0));
+  const ratio = safeTotal > 0 ? Math.min(1, safeValue / safeTotal) : 0;
+  const activeUnits =
+    safeValue > 0 ? Math.max(1, Math.ceil(ratio * MASS_UNIT_COUNT)) : 0;
+  return Array.from({ length: MASS_UNIT_COUNT }, (_, index) => ({
+    index,
+    active: index < activeUnits,
+  }));
+};
 const volumePercent = (value, total) => {
-  const safeValue = Math.max(0, Number(value || 0))
-  const safeTotal = Math.max(0, Number(total || 0))
-  if (!safeTotal) return 0
-  return Math.min(100, Math.round((safeValue / safeTotal) * 100))
-}
+  const safeValue = Math.max(0, Number(value || 0));
+  const safeTotal = Math.max(0, Number(total || 0));
+  if (!safeTotal) return 0;
+  return Math.min(100, Math.round((safeValue / safeTotal) * 100));
+};
 const withVolume = (card, total) => {
-  const percent = card.key === 'inscritos' && Number(card.value || 0) > 0 ? 100 : volumePercent(card.value, total)
+  const percent =
+    card.key === "inscritos" && Number(card.value || 0) > 0
+      ? 100
+      : volumePercent(card.value, total);
   return {
     ...card,
-    massUnits: buildMassUnits(card.key === 'inscritos' ? total : card.value, total),
-    volumeAria: `${card.label}: ${formatNumber(card.value)}; ${card.key === 'inscritos' ? 'total de inscritos' : `${percent}% del total de inscritos`}`
-  }
-}
+    massUnits: buildMassUnits(
+      card.key === "inscritos" ? total : card.value,
+      total,
+    ),
+    volumeAria: `${card.label}: ${formatNumber(card.value)}; ${card.key === "inscritos" ? "total de inscritos" : `${percent}% del total de inscritos`}`,
+  };
+};
 const kpiCards = computed(() => {
-  const data = kpis.value || {}
-  const total = Number(data.inscritos || data.totalInscritos || 0)
+  const data = kpis.value || {};
+  const total = Number(data.inscritos || data.totalInscritos || 0);
   return [
-    { key: 'inscritos', label: 'Inscritos', value: total, tone: 'kpi-green', icon: LucideUsersRound },
-    { key: 'internos', label: 'Internos', value: data.internos || 0, tone: 'kpi-teal', icon: LucideUserCheck },
-    { key: 'externos', label: 'Externos', value: data.externos || 0, tone: 'kpi-blue', icon: LucideGlobe2 },
-    { key: 'no_inscritos', label: 'No inscritos', value: data.noInscritos || 0, tone: 'kpi-red', icon: LucideUserX },
-    { key: 'bajas', label: 'Bajas', value: data.bajas || 0, tone: 'kpi-gray', icon: LucideUserX }
-  ].map(card => withVolume(card, total))
-})
-
+    {
+      key: "inscritos",
+      label: "Inscritos",
+      value: total,
+      tone: "kpi-green",
+      icon: LucideUsersRound,
+    },
+    {
+      key: "internos",
+      label: "Internos",
+      value: data.internos || 0,
+      tone: "kpi-teal",
+      icon: LucideUserCheck,
+    },
+    {
+      key: "externos",
+      label: "Externos",
+      value: data.externos || 0,
+      tone: "kpi-blue",
+      icon: LucideGlobe2,
+    },
+    {
+      key: "no_inscritos",
+      label: "No inscritos",
+      value: data.noInscritos || 0,
+      tone: "kpi-red",
+      icon: LucideUserX,
+    },
+    {
+      key: "bajas",
+      label: "Bajas",
+      value: data.bajas || 0,
+      tone: "kpi-gray",
+      icon: LucideUserX,
+    },
+  ].map((card) => withVolume(card, total));
+});
 
 const requiredDataFields = [
-  { key: 'curp', label: 'CURP', icon: LucideShieldCheck },
-  { key: 'teléfono', label: 'Teléfono', icon: LucidePhone },
-  { key: 'email', label: 'Email', icon: LucideMail },
-  { key: 'tutor', label: 'Tutor', icon: LucideUsersRound }
-]
+  { key: "curp", label: "CURP", icon: LucideShieldCheck },
+  { key: "teléfono", label: "Teléfono", icon: LucidePhone },
+  { key: "email", label: "Email", icon: LucideMail },
+  { key: "tutor", label: "Tutor", icon: LucideUsersRound },
+];
 
-const formatNumber = (value) => Number(value || 0).toLocaleString('es-MX')
-const statusLabel = (value) => ({ all: 'Todos', inscritos: 'Inscritos', activos: 'Activos', active: 'Activos', internos: 'Internos', externos: 'Externos', no_inscritos: 'No inscritos', bajas: 'Bajas', baja: 'Bajas', sin_contacto: 'Sin contacto' }[value] || value)
-const qualityLabel = (value) => ({ complete: 'Completo', incomplete: 'Expediente incompleto', curp: 'Sin CURP', phone: 'Sin teléfono', email: 'Sin email', guardian: 'Sin tutor', contact: 'Sin contacto' }[value] || value)
+const formatNumber = (value) => Number(value || 0).toLocaleString("es-MX");
+const statusLabel = (value) =>
+  ({
+    all: "Todos",
+    inscritos: "Inscritos",
+    activos: "Activos",
+    active: "Activos",
+    internos: "Internos",
+    externos: "Externos",
+    no_inscritos: "No inscritos",
+    bajas: "Bajas",
+    baja: "Bajas",
+    sin_contacto: "Sin contacto",
+  })[value] || value;
+const qualityLabel = (value) =>
+  ({
+    complete: "Completo",
+    incomplete: "Expediente incompleto",
+    curp: "Sin CURP",
+    phone: "Sin teléfono",
+    email: "Sin email",
+    guardian: "Sin tutor",
+    contact: "Sin contacto",
+  })[value] || value;
 const controlGroupLabel = (student) => {
-  const value = String(student?.group ?? student?.grupo ?? '').replaceAll('"', '').trim()
-  return value && value.toLowerCase() !== 'null' ? value : ''
-}
-const controlMissingGroup = (student) => !controlGroupLabel(student)
+  const value = String(student?.group ?? student?.grupo ?? "")
+    .replaceAll('"', "")
+    .trim();
+  return value && value.toLowerCase() !== "null" ? value : "";
+};
+const controlMissingGroup = (student) => !controlGroupLabel(student);
 const controlGroupTitle = (student) => {
-  const group = controlGroupLabel(student)
-  return group ? `Grupo ${group}` : 'Sin grupo'
-}
-const compactAcademic = (student) => [student.grado, controlGroupLabel(student) ? `Grupo ${controlGroupLabel(student)}` : 'Sin grupo', student.nivel].filter(Boolean).join(' · ') || 'Sin datos académicos'
-const statusTone = (student) => String(student?.status || '').toLowerCase() === 'baja' ? 'danger' : String(student?.status || '').toLowerCase() === 'activo' ? 'success' : 'neutral'
-const normalizedMissingFields = (student) => Array.isArray(student?.missingFields)
-  ? student.missingFields.map((field) => String(field || '').trim().toLowerCase()).filter(Boolean)
-  : []
+  const group = controlGroupLabel(student);
+  return group ? `Grupo ${group}` : "Sin grupo";
+};
+const compactAcademic = (student) =>
+  [
+    student.grado,
+    controlGroupLabel(student)
+      ? `Grupo ${controlGroupLabel(student)}`
+      : "Sin grupo",
+    student.nivel,
+  ]
+    .filter(Boolean)
+    .join(" · ") || "Sin datos académicos";
+const statusTone = (student) =>
+  String(student?.status || "").toLowerCase() === "baja"
+    ? "danger"
+    : String(student?.status || "").toLowerCase() === "activo"
+      ? "success"
+      : "neutral";
+const normalizedMissingFields = (student) =>
+  Array.isArray(student?.missingFields)
+    ? student.missingFields
+        .map((field) =>
+          String(field || "")
+            .trim()
+            .toLowerCase(),
+        )
+        .filter(Boolean)
+    : [];
 const studentMissingField = (student, field) => {
-  const missing = normalizedMissingFields(student)
-  return missing.includes(String(field?.key || '').toLowerCase()) || missing.includes(String(field?.label || '').toLowerCase())
-}
-const studentMissingCount = (student) => requiredDataFields.filter((field) => studentMissingField(student, field)).length
+  const missing = normalizedMissingFields(student);
+  return (
+    missing.includes(String(field?.key || "").toLowerCase()) ||
+    missing.includes(String(field?.label || "").toLowerCase())
+  );
+};
+const studentMissingCount = (student) =>
+  requiredDataFields.filter((field) => studentMissingField(student, field))
+    .length;
 const completionFor = (student) => {
-  const total = requiredDataFields.length || 1
-  const missing = studentMissingCount(student)
-  return Math.max(0, Math.round(((total - missing) / total) * 100))
-}
+  const total = requiredDataFields.length || 1;
+  const missing = studentMissingCount(student);
+  return Math.max(0, Math.round(((total - missing) / total) * 100));
+};
 const qualitySummary = (student) => {
-  const missing = studentMissingCount(student)
-  if (!missing) return 'Completo'
-  return missing === 1 ? '1 pendiente' : `${missing} faltantes`
-}
+  const missing = studentMissingCount(student);
+  if (!missing) return "Completo";
+  return missing === 1 ? "1 pendiente" : `${missing} faltantes`;
+};
 const qualityScoreTone = (student) => {
-  const score = completionFor(student)
-  if (score >= 100) return 'complete'
-  if (score >= 75) return 'warning'
-  return 'danger'
-}
-const selectedProfileCompletion = computed(() => completionFor(selectedStudent.value))
-const selectedMissingCount = computed(() => studentMissingCount(selectedStudent.value))
-const huskyPassEmailTarget = computed(() => selectedStudent.value?.emailPadre || selectedStudent.value?.emailMadre || selectedStudent.value?.email || selectedStudent.value?.huskyPassEmail || '')
+  const score = completionFor(student);
+  if (score >= 100) return "complete";
+  if (score >= 75) return "warning";
+  return "danger";
+};
+const selectedProfileCompletion = computed(() =>
+  completionFor(selectedStudent.value),
+);
+const selectedMissingCount = computed(() =>
+  studentMissingCount(selectedStudent.value),
+);
+const huskyPassEmailTarget = computed(
+  () =>
+    selectedStudent.value?.emailPadre ||
+    selectedStudent.value?.emailMadre ||
+    selectedStudent.value?.email ||
+    selectedStudent.value?.huskyPassEmail ||
+    "",
+);
 const EDIT_FORM_FIELDS = [
-  'nombres', 'apellidoPaterno', 'apellidoMaterno', 'curp', 'nivel', 'grado', 'grupo', 'baja',
-  'motivoBaja', 'categoriaBaja', 'seguimientoBaja', 'nombrePadre', 'apellidoPaternoPadre', 'apellidoMaternoPadre',
-  'nombreMadre', 'apellidoPaternoMadre', 'apellidoMaternoMadre', 'telefonoPadre', 'telefonoMadre', 'emailPadre',
-  'emailMadre', 'direccion'
-]
-const readEditForm = () => EDIT_FORM_FIELDS.reduce((draft, field) => {
-  draft[field] = editForm[field] ?? ''
-  return draft
-}, {})
-const formSnapshot = () => JSON.stringify(readEditForm())
-const hasUnsavedChanges = computed(() => Boolean(selectedStudent.value && editSnapshot.value && formSnapshot() !== editSnapshot.value))
-const saveStateTone = computed(() => savingStudent.value ? 'saving' : hasUnsavedChanges.value ? 'dirty' : 'clean')
+  "nombres",
+  "apellidoPaterno",
+  "apellidoMaterno",
+  "curp",
+  "nivel",
+  "grado",
+  "grupo",
+  "baja",
+  "motivoBaja",
+  "categoriaBaja",
+  "seguimientoBaja",
+  "nombrePadre",
+  "apellidoPaternoPadre",
+  "apellidoMaternoPadre",
+  "nombreMadre",
+  "apellidoPaternoMadre",
+  "apellidoMaternoMadre",
+  "telefonoPadre",
+  "telefonoMadre",
+  "emailPadre",
+  "emailMadre",
+  "direccion",
+];
+const readEditForm = () =>
+  EDIT_FORM_FIELDS.reduce((draft, field) => {
+    draft[field] = editForm[field] ?? "";
+    return draft;
+  }, {});
+const formSnapshot = () => JSON.stringify(readEditForm());
+const hasUnsavedChanges = computed(() =>
+  Boolean(
+    selectedStudent.value &&
+    editSnapshot.value &&
+    formSnapshot() !== editSnapshot.value,
+  ),
+);
+const saveStateTone = computed(() =>
+  savingStudent.value ? "saving" : hasUnsavedChanges.value ? "dirty" : "clean",
+);
 const saveStatusText = computed(() => {
-  if (savingStudent.value) return 'Guardando...'
-  if (hasUnsavedChanges.value) return draftSavedAt.value ? `Borrador local ${draftSavedAt.value}` : 'Cambios sin guardar'
-  if (draftSavedAt.value) return `Borrador local ${draftSavedAt.value}`
-  return selectedStudent.value?.overlayExists ? 'Al día' : 'Guardar'
-})
-const draftKey = computed(() => selectedStudent.value?.matricula ? `control-escolar:draft:${selectedAgentId.value}:${selectedStudent.value.matricula}` : '')
+  if (savingStudent.value) return "Guardando...";
+  if (hasUnsavedChanges.value)
+    return draftSavedAt.value
+      ? `Borrador local ${draftSavedAt.value}`
+      : "Cambios sin guardar";
+  if (draftSavedAt.value) return `Borrador local ${draftSavedAt.value}`;
+  return selectedStudent.value?.overlayExists ? "Al día" : "Guardar";
+});
+const draftKey = computed(() =>
+  selectedStudent.value?.matricula
+    ? `control-escolar:draft:${selectedAgentId.value}:${selectedStudent.value.matricula}`
+    : "",
+);
 
 const buildScopeQuery = () => ({
   agentId: selectedAgentId.value || undefined,
   ciclo: currentCicloKey.value,
-  concepts: externalConcepts.value.join(',') || undefined
-})
+  concepts: externalConcepts.value.join(",") || undefined,
+});
 
 const buildQuery = (extra = {}) => ({
   ...buildScopeQuery(),
@@ -933,839 +1967,1230 @@ const buildQuery = (extra = {}) => ({
   recent: filters.recent || undefined,
   page: pagination.page,
   limit: pagination.limit,
-  ...extra
-})
+  ...extra,
+});
 
 const buildIndexQuery = () => ({
   ...buildScopeQuery(),
   page: 1,
   limit: 500,
-  all: '1'
-})
+  all: "1",
+});
 
 const loadOptions = async () => {
-  optionsLoading.value = true
+  optionsLoading.value = true;
   try {
-    const response = await $fetch('/api/control-escolar/options')
-    loadError.value = ''
-    selectedAgentId.value = response.activePlantel || ''
+    const response = await $fetch("/api/control-escolar/options");
+    loadError.value = "";
+    selectedAgentId.value = response.activePlantel || "";
   } catch (error) {
-    selectedAgentId.value = ''
-    loadError.value = error?.data?.message || error?.message || 'No se pudo resolver el plantel activo.'
+    selectedAgentId.value = "";
+    loadError.value =
+      error?.data?.message ||
+      error?.message ||
+      "No se pudo resolver el plantel activo.";
   } finally {
-    optionsLoading.value = false
+    optionsLoading.value = false;
   }
-}
+};
 
 const loadKpis = async () => {
-  if (!selectedAgentId.value) return
-  kpisLoading.value = true
+  if (!selectedAgentId.value) return;
+  kpisLoading.value = true;
   try {
-    const response = await $fetch('/api/control-escolar/kpis', { query: buildScopeQuery() })
-    kpis.value = response.kpis
+    const response = await $fetch("/api/control-escolar/kpis", {
+      query: buildScopeQuery(),
+    });
+    kpis.value = response.kpis;
   } catch (error) {
-    loadError.value = error?.data?.message || error?.message || 'No se pudieron cargar los indicadores.'
+    loadError.value =
+      error?.data?.message ||
+      error?.message ||
+      "No se pudieron cargar los indicadores.";
   } finally {
-    kpisLoading.value = false
+    kpisLoading.value = false;
   }
-}
+};
 
-const normalizeControlCacheParams = (query = buildQuery()) => Object.keys(query || {})
-  .sort()
-  .reduce((normalized, key) => {
-    const value = query[key]
-    if (value === undefined || value === null || value === '') return normalized
-    normalized[key] = String(value)
-    return normalized
-  }, {})
+const normalizeControlCacheParams = (query = buildQuery()) =>
+  Object.keys(query || {})
+    .sort()
+    .reduce((normalized, key) => {
+      const value = query[key];
+      if (value === undefined || value === null || value === "")
+        return normalized;
+      normalized[key] = String(value);
+      return normalized;
+    }, {});
 
 const controlStudentsCacheKey = (query = buildQuery()) => {
-  const signature = encodeURIComponent(JSON.stringify(normalizeControlCacheParams(query)))
-  return `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${CONTROL_STUDENTS_CACHE_VERSION}:${signature}`
-}
+  const signature = encodeURIComponent(
+    JSON.stringify(normalizeControlCacheParams(query)),
+  );
+  return `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${CONTROL_STUDENTS_CACHE_VERSION}:${signature}`;
+};
 
 const readCachedControlStudents = (query = buildQuery()) => {
-  if (!process.client) return null
+  if (!process.client) return null;
 
   try {
-    const cached = JSON.parse(localStorage.getItem(controlStudentsCacheKey(query)) || 'null')
-    if (Number(cached?.version) !== CONTROL_STUDENTS_CACHE_VERSION) return null
-    if (!Array.isArray(cached?.data)) return null
-    return cached
+    const cached = JSON.parse(
+      localStorage.getItem(controlStudentsCacheKey(query)) || "null",
+    );
+    if (Number(cached?.version) !== CONTROL_STUDENTS_CACHE_VERSION) return null;
+    if (!Array.isArray(cached?.data)) return null;
+    return cached;
   } catch (error) {
-    console.warn('[Control Escolar] No se pudo leer la caché local de alumnos.', error)
-    return null
+    console.warn(
+      "[Control Escolar] No se pudo leer la caché local de alumnos.",
+      error,
+    );
+    return null;
   }
-}
+};
 
 const writeCachedControlStudents = (query = buildQuery(), response = {}) => {
-  if (!process.client || !Array.isArray(response?.data)) return false
+  if (!process.client || !Array.isArray(response?.data)) return false;
 
   const record = {
     version: CONTROL_STUDENTS_CACHE_VERSION,
     savedAt: new Date().toISOString(),
     query: normalizeControlCacheParams(query),
     data: response.data,
-    pagination: response.pagination || { page: pagination.page, limit: pagination.limit, total: response.data.length, pages: 1 },
-    catalogs: response.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} }
-  }
+    pagination: response.pagination || {
+      page: pagination.page,
+      limit: pagination.limit,
+      total: response.data.length,
+      pages: 1,
+    },
+    catalogs: response.catalogs || {
+      niveles: [],
+      grados: [],
+      grupos: [],
+      gruposPorGrado: {},
+    },
+    source: response.source || null,
+  };
 
   try {
-    localStorage.setItem(controlStudentsCacheKey(query), JSON.stringify(record))
-    return true
+    localStorage.setItem(
+      controlStudentsCacheKey(query),
+      JSON.stringify(record),
+    );
+    return true;
   } catch (error) {
-    console.warn('[Control Escolar] No se pudo guardar la caché local de alumnos.', error)
-    return false
+    console.warn(
+      "[Control Escolar] No se pudo guardar la caché local de alumnos.",
+      error,
+    );
+    return false;
   }
-}
+};
 
-const normalizeMatriculaKey = (value) => String(value || '').trim().toLowerCase()
+const normalizeMatriculaKey = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
 
 const isDetailFieldFocused = () => {
-  if (!process.client) return false
-  const activeElement = document.activeElement
-  if (!activeElement?.closest?.('.ce-detail-panel')) return false
-  return ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeElement.tagName)
-}
+  if (!process.client) return false;
+  const activeElement = document.activeElement;
+  if (!activeElement?.closest?.(".ce-detail-panel")) return false;
+  return ["INPUT", "SELECT", "TEXTAREA"].includes(activeElement.tagName);
+};
 
 const applySelectedStudentRefresh = (student) => {
-  if (!student) return
-  const currentTab = activeDetailTab.value
-  selectedStudent.value = student
-  pendingSelectedStudentRefresh.value = null
-  resetEditForm(student, { restoreDraft: false })
-  activeDetailTab.value = currentTab
-}
+  if (!student) return;
+  const currentTab = activeDetailTab.value;
+  selectedStudent.value = student;
+  pendingSelectedStudentRefresh.value = null;
+  resetEditForm(student, { restoreDraft: false });
+  activeDetailTab.value = currentTab;
+};
 
 const applyPendingSelectedStudentRefresh = () => {
-  if (!pendingSelectedStudentRefresh.value || hasUnsavedChanges.value || isDetailFieldFocused()) return
-  applySelectedStudentRefresh(pendingSelectedStudentRefresh.value)
-}
+  if (
+    !pendingSelectedStudentRefresh.value ||
+    hasUnsavedChanges.value ||
+    isDetailFieldFocused()
+  )
+    return;
+  applySelectedStudentRefresh(pendingSelectedStudentRefresh.value);
+};
 
 const reconcileSelectedStudentAfterSync = (nextStudents = []) => {
-  if (!selectedStudent.value) return
+  if (!selectedStudent.value) return;
 
-  const selectedKey = normalizeMatriculaKey(selectedStudent.value.matricula)
-  const refreshed = nextStudents.find((student) => normalizeMatriculaKey(student.matricula) === selectedKey)
-  if (!refreshed) return
+  const selectedKey = normalizeMatriculaKey(selectedStudent.value.matricula);
+  const refreshed = nextStudents.find(
+    (student) => normalizeMatriculaKey(student.matricula) === selectedKey,
+  );
+  if (!refreshed) return;
 
   if (hasUnsavedChanges.value || isDetailFieldFocused()) {
-    pendingSelectedStudentRefresh.value = refreshed
-    if (process.client) window.setTimeout(applyPendingSelectedStudentRefresh, 900)
-    return
+    pendingSelectedStudentRefresh.value = refreshed;
+    if (process.client)
+      window.setTimeout(applyPendingSelectedStudentRefresh, 900);
+    return;
   }
 
-  applySelectedStudentRefresh(refreshed)
-}
+  applySelectedStudentRefresh(refreshed);
+};
 
-const normalizeClientText = (value) => String(value || '')
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .trim()
+const normalizeClientText = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 
-const controlStudentSearchHaystack = (student = {}) => normalizeClientText([
-  student.matricula,
-  student.fullName,
-  student.nombres,
-  student.apellidoPaterno,
-  student.apellidoMaterno,
-  student.curp,
-  student.phone,
-  student.telefono,
-  student.telefonoPadre,
-  student.telefonoMadre,
-  student.email,
-  student.emailPadre,
-  student.emailMadre,
-  student.guardianName,
-  student.nombrePadre,
-  student.nombreMadre,
-  student.nivel,
-  student.grado,
-  student.group,
-  student.grupo
-].filter(Boolean).join(' '))
+const controlStudentSearchHaystack = (student = {}) =>
+  normalizeClientText(
+    [
+      student.matricula,
+      student.fullName,
+      student.nombres,
+      student.apellidoPaterno,
+      student.apellidoMaterno,
+      student.curp,
+      student.phone,
+      student.telefono,
+      student.telefonoPadre,
+      student.telefonoMadre,
+      student.email,
+      student.emailPadre,
+      student.emailMadre,
+      student.guardianName,
+      student.nombrePadre,
+      student.nombreMadre,
+      student.nivel,
+      student.grado,
+      student.group,
+      student.grupo,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
 
-const hasNoPrimaryContactClient = (student = {}) => ![
-  student.phone,
-  student.telefono,
-  student.telefonoPadre,
-  student.telefonoMadre,
-  student.email,
-  student.emailPadre,
-  student.emailMadre,
-  student.guardianName,
-  student.nombrePadre,
-  student.nombreMadre
-].some((value) => String(value || '').trim())
+const hasNoPrimaryContactClient = (student = {}) =>
+  ![
+    student.phone,
+    student.telefono,
+    student.telefonoPadre,
+    student.telefonoMadre,
+    student.email,
+    student.emailPadre,
+    student.emailMadre,
+    student.guardianName,
+    student.nombrePadre,
+    student.nombreMadre,
+  ].some((value) => String(value || "").trim());
 
 const localStudentMatchesStatus = (student, status) => {
-  const normalized = normalizeClientText(status)
-  if (!normalized || normalized === 'all' || normalized === 'todos') return true
-  if (normalized === 'activos' || normalized === 'active') return student.status === 'Activo'
-  if (normalized === 'inscritos') return student.enrollmentState === 'inscrito'
-  if (normalized === 'internos') return student.enrollmentState === 'inscrito' && student.tipoIngresoValue === 'interno'
-  if (normalized === 'externos') return student.enrollmentState === 'inscrito' && student.tipoIngresoValue !== 'interno'
-  if (normalized === 'no_inscritos') return student.enrollmentState === 'no_inscrito'
-  if (normalized === 'bajas' || normalized === 'baja') return student.status === 'Baja' || student.enrollmentState === 'baja_inscrita' || student.enrollmentState === 'baja'
-  if (normalized === 'sin_ficha' || normalized === 'sin_ficha_matricula') return !student.overlayExists
-  if (normalized === 'sin_contacto') return hasNoPrimaryContactClient(student)
-  return true
-}
+  const normalized = normalizeClientText(status);
+  if (!normalized || normalized === "all" || normalized === "todos")
+    return true;
+  if (normalized === "activos" || normalized === "active")
+    return student.status === "Activo";
+  if (normalized === "inscritos") return student.enrollmentState === "inscrito";
+  if (normalized === "internos")
+    return (
+      student.enrollmentState === "inscrito" &&
+      student.tipoIngresoValue === "interno"
+    );
+  if (normalized === "externos")
+    return (
+      student.enrollmentState === "inscrito" &&
+      student.tipoIngresoValue !== "interno"
+    );
+  if (normalized === "no_inscritos")
+    return student.enrollmentState === "no_inscrito";
+  if (normalized === "bajas" || normalized === "baja")
+    return (
+      student.status === "Baja" ||
+      student.enrollmentState === "baja_inscrita" ||
+      student.enrollmentState === "baja"
+    );
+  if (normalized === "sin_ficha" || normalized === "sin_ficha_matricula")
+    return !student.overlayExists;
+  if (normalized === "sin_contacto") return hasNoPrimaryContactClient(student);
+  return true;
+};
 
 const localStudentMatchesQuality = (student, quality) => {
-  const normalized = normalizeClientText(quality)
-  if (!normalized || normalized === 'all') return true
-  const missing = normalizedMissingFields(student)
-  if (normalized === 'complete' || normalized === 'completo') return missing.length === 0
-  if (normalized === 'incomplete' || normalized === 'incompleto') return missing.length > 0
-  if (normalized === 'curp') return missing.includes('curp')
-  if (normalized === 'phone' || normalized === 'telefono') return missing.includes('teléfono') || missing.includes('telefono')
-  if (normalized === 'email') return missing.includes('email')
-  if (normalized === 'guardian' || normalized === 'tutor') return missing.includes('tutor')
-  if (normalized === 'contact' || normalized === 'contacto') return hasNoPrimaryContactClient(student)
-  if (normalized === 'overlay' || normalized === 'sin_ficha' || normalized === 'sin_ficha_matricula') return !student.overlayExists
-  return true
-}
+  const normalized = normalizeClientText(quality);
+  if (!normalized || normalized === "all") return true;
+  const missing = normalizedMissingFields(student);
+  if (normalized === "complete" || normalized === "completo")
+    return missing.length === 0;
+  if (normalized === "incomplete" || normalized === "incompleto")
+    return missing.length > 0;
+  if (normalized === "curp") return missing.includes("curp");
+  if (normalized === "phone" || normalized === "telefono")
+    return missing.includes("teléfono") || missing.includes("telefono");
+  if (normalized === "email") return missing.includes("email");
+  if (normalized === "guardian" || normalized === "tutor")
+    return missing.includes("tutor");
+  if (normalized === "contact" || normalized === "contacto")
+    return hasNoPrimaryContactClient(student);
+  if (
+    normalized === "overlay" ||
+    normalized === "sin_ficha" ||
+    normalized === "sin_ficha_matricula"
+  )
+    return !student.overlayExists;
+  return true;
+};
 
 const localStudentMatchesRecent = (student, recent) => {
-  const normalized = normalizeClientText(recent)
-  if (!normalized || normalized === 'all') return true
-  const days = normalized === '7d' ? 7 : normalized === '30d' ? 30 : normalized === '90d' ? 90 : 0
-  if (!days) return true
-  const time = student.updatedAt ? new Date(student.updatedAt).getTime() : 0
-  return Number.isFinite(time) && time >= Date.now() - days * 24 * 60 * 60 * 1000
-}
+  const normalized = normalizeClientText(recent);
+  if (!normalized || normalized === "all") return true;
+  const days =
+    normalized === "7d"
+      ? 7
+      : normalized === "30d"
+        ? 30
+        : normalized === "90d"
+          ? 90
+          : 0;
+  if (!days) return true;
+  const time = student.updatedAt ? new Date(student.updatedAt).getTime() : 0;
+  return (
+    Number.isFinite(time) && time >= Date.now() - days * 24 * 60 * 60 * 1000
+  );
+};
 
-
-const CONTROL_PHOTO_CONCURRENCY = 3
-const normalizePhotoKey = (studentOrMatricula) => normalizeStudentMatricula(
-  typeof studentOrMatricula === 'object' ? studentOrMatricula?.matricula : studentOrMatricula
-)
+const CONTROL_PHOTO_CONCURRENCY = 3;
+const normalizePhotoKey = (studentOrMatricula) =>
+  normalizeStudentMatricula(
+    typeof studentOrMatricula === "object"
+      ? studentOrMatricula?.matricula
+      : studentOrMatricula,
+  );
 
 const setControlPhotoLoading = (matricula, loading) => {
-  const key = normalizePhotoKey(matricula)
-  if (!key) return
-  const next = new Set(photoLoadingKeys.value)
-  if (loading) next.add(key)
-  else next.delete(key)
-  photoLoadingKeys.value = next
-}
+  const key = normalizePhotoKey(matricula);
+  if (!key) return;
+  const next = new Set(photoLoadingKeys.value);
+  if (loading) next.add(key);
+  else next.delete(key);
+  photoLoadingKeys.value = next;
+};
 
 const readStoredControlPhoto = (matricula) => {
-  if (!process.client) return ''
-  const key = normalizePhotoKey(matricula)
-  if (!key) return ''
+  if (!process.client) return "";
+  const key = normalizePhotoKey(matricula);
+  if (!key) return "";
   try {
-    return sessionStorage.getItem(photoStorageKey(key)) || ''
+    return sessionStorage.getItem(photoStorageKey(key)) || "";
   } catch (error) {
-    return ''
+    return "";
   }
-}
+};
 
 const writeStoredControlPhoto = (matricula, photoUrl) => {
-  if (!process.client) return
-  const key = normalizePhotoKey(matricula)
-  if (!key) return
+  if (!process.client) return;
+  const key = normalizePhotoKey(matricula);
+  if (!key) return;
   try {
-    sessionStorage.setItem(photoStorageKey(key), photoUrl || 'none')
+    sessionStorage.setItem(photoStorageKey(key), photoUrl || "none");
   } catch (error) {
-    console.warn('[Control Escolar] No se pudo guardar la foto del alumno en sesión.', error)
+    console.warn(
+      "[Control Escolar] No se pudo guardar la foto del alumno en sesión.",
+      error,
+    );
   }
-}
+};
 
 const cacheControlPhoto = (matricula, photoUrl) => {
-  const key = normalizePhotoKey(matricula)
-  if (!key || !photoUrl || photoUrl === 'none') return
-  photoCache.value = { ...photoCache.value, [key]: photoUrl }
-}
+  const key = normalizePhotoKey(matricula);
+  if (!key || !photoUrl || photoUrl === "none") return;
+  photoCache.value = { ...photoCache.value, [key]: photoUrl };
+};
 
 const hydrateControlPhotoFromSession = (matricula) => {
-  const key = normalizePhotoKey(matricula)
-  if (!key || photoCache.value[key]) return Boolean(photoCache.value[key])
-  const stored = readStoredControlPhoto(key)
-  if (stored && stored !== 'none') {
-    cacheControlPhoto(key, stored)
-    return true
+  const key = normalizePhotoKey(matricula);
+  if (!key || photoCache.value[key]) return Boolean(photoCache.value[key]);
+  const stored = readStoredControlPhoto(key);
+  if (stored && stored !== "none") {
+    cacheControlPhoto(key, stored);
+    return true;
   }
-  return Boolean(stored === 'none')
-}
+  return Boolean(stored === "none");
+};
 
 const controlStudentPhotoUrl = (student) => {
-  const key = normalizePhotoKey(student)
-  if (!key) return student?.photoUrl || ''
-  const cached = photoCache.value[key]
-  if (cached && cached !== 'none') return cached
-  if (student?.photoUrl && student.photoUrl !== 'none') return student.photoUrl
-  return ''
-}
+  const key = normalizePhotoKey(student);
+  if (!key) return student?.photoUrl || "";
+  const cached = photoCache.value[key];
+  if (cached && cached !== "none") return cached;
+  if (student?.photoUrl && student.photoUrl !== "none") return student.photoUrl;
+  return "";
+};
 
-const isControlStudentPhotoLoading = (student) => photoLoadingKeys.value.has(normalizePhotoKey(student))
+const isControlStudentPhotoLoading = (student) =>
+  photoLoadingKeys.value.has(normalizePhotoKey(student));
 
 const loadControlStudentPhoto = async (matricula) => {
-  const key = normalizePhotoKey(matricula)
-  if (!key || !process.client) return
-  if (hydrateControlPhotoFromSession(key)) return
+  const key = normalizePhotoKey(matricula);
+  if (!key || !process.client) return;
+  if (hydrateControlPhotoFromSession(key)) return;
 
-  setControlPhotoLoading(key, true)
+  setControlPhotoLoading(key, true);
   try {
-    let request = controlStudentPhotoRequests.get(key)
+    let request = controlStudentPhotoRequests.get(key);
     if (!request) {
       request = $fetch(`/api/students/${encodeURIComponent(key)}/photo`, {
-        params: { format: 'json' }
-      }).finally(() => controlStudentPhotoRequests.delete(key))
-      controlStudentPhotoRequests.set(key, request)
+        params: { format: "json" },
+      }).finally(() => controlStudentPhotoRequests.delete(key));
+      controlStudentPhotoRequests.set(key, request);
     }
 
-    const response = await request
-    const photoUrl = response?.photoUrl || ''
+    const response = await request;
+    const photoUrl = response?.photoUrl || "";
     if (photoUrl) {
-      cacheControlPhoto(key, photoUrl)
-      writeStoredControlPhoto(key, photoUrl)
+      cacheControlPhoto(key, photoUrl);
+      writeStoredControlPhoto(key, photoUrl);
     } else {
-      writeStoredControlPhoto(key, 'none')
+      writeStoredControlPhoto(key, "none");
     }
   } catch (error) {
-    if (error?.statusCode === 404 || error?.response?.status === 404) writeStoredControlPhoto(key, 'none')
+    if (error?.statusCode === 404 || error?.response?.status === 404)
+      writeStoredControlPhoto(key, "none");
   } finally {
-    setControlPhotoLoading(key, false)
+    setControlPhotoLoading(key, false);
   }
-}
+};
 
 const pumpControlPhotoQueue = () => {
-  if (!process.client) return
-  while (activeControlPhotoLoads < CONTROL_PHOTO_CONCURRENCY && controlPhotoQueue.length) {
-    const key = controlPhotoQueue.shift()
-    controlPhotoQueuedKeys.delete(key)
-    if (!key || controlPhotoActiveKeys.has(key) || hydrateControlPhotoFromSession(key)) continue
+  if (!process.client) return;
+  while (
+    activeControlPhotoLoads < CONTROL_PHOTO_CONCURRENCY &&
+    controlPhotoQueue.length
+  ) {
+    const key = controlPhotoQueue.shift();
+    controlPhotoQueuedKeys.delete(key);
+    if (
+      !key ||
+      controlPhotoActiveKeys.has(key) ||
+      hydrateControlPhotoFromSession(key)
+    )
+      continue;
 
-    activeControlPhotoLoads += 1
-    controlPhotoActiveKeys.add(key)
-    loadControlStudentPhoto(key)
-      .finally(() => {
-        activeControlPhotoLoads = Math.max(0, activeControlPhotoLoads - 1)
-        controlPhotoActiveKeys.delete(key)
-        pumpControlPhotoQueue()
-      })
+    activeControlPhotoLoads += 1;
+    controlPhotoActiveKeys.add(key);
+    loadControlStudentPhoto(key).finally(() => {
+      activeControlPhotoLoads = Math.max(0, activeControlPhotoLoads - 1);
+      controlPhotoActiveKeys.delete(key);
+      pumpControlPhotoQueue();
+    });
   }
-}
+};
 
 const queueControlStudentPhotos = (sourceStudents = [], options = {}) => {
-  if (!process.client) return
-  const entries = Array.isArray(sourceStudents) ? sourceStudents : [sourceStudents]
-  const keys = entries.map(normalizePhotoKey).filter(Boolean)
+  if (!process.client) return;
+  const entries = Array.isArray(sourceStudents)
+    ? sourceStudents
+    : [sourceStudents];
+  const keys = entries.map(normalizePhotoKey).filter(Boolean);
 
   keys.forEach((key) => {
-    if (photoCache.value[key] || controlPhotoQueuedKeys.has(key) || controlPhotoActiveKeys.has(key)) return
-    if (hydrateControlPhotoFromSession(key)) return
-    controlPhotoQueuedKeys.add(key)
-    if (options.priority) controlPhotoQueue.unshift(key)
-    else controlPhotoQueue.push(key)
-  })
+    if (
+      photoCache.value[key] ||
+      controlPhotoQueuedKeys.has(key) ||
+      controlPhotoActiveKeys.has(key)
+    )
+      return;
+    if (hydrateControlPhotoFromSession(key)) return;
+    controlPhotoQueuedKeys.add(key);
+    if (options.priority) controlPhotoQueue.unshift(key);
+    else controlPhotoQueue.push(key);
+  });
 
-  pumpControlPhotoQueue()
-}
+  pumpControlPhotoQueue();
+};
 
 const filteredControlStudents = () => {
-  const search = normalizeClientText(filters.search)
-  const grado = normalizeClientText(filters.grado)
-  const grupo = String(filters.group || '').trim()
+  const search = normalizeClientText(filters.search);
+  const grado = normalizeClientText(filters.grado);
+  const grupo = String(filters.group || "").trim();
 
   return controlStudentsIndex.value.filter((student) => {
-    if (search && !controlStudentSearchHaystack(student).includes(search)) return false
-    if (!localStudentMatchesStatus(student, filters.status)) return false
-    if (grado && normalizeClientText(student.grado) !== grado) return false
-    if (grupo && grupo !== 'all' && String(student.group || student.grupo || '').trim() !== grupo) return false
-    if (!localStudentMatchesQuality(student, filters.quality)) return false
-    if (!localStudentMatchesRecent(student, filters.recent)) return false
-    return true
-  })
-}
+    if (search && !controlStudentSearchHaystack(student).includes(search))
+      return false;
+    if (!localStudentMatchesStatus(student, filters.status)) return false;
+    if (grado && normalizeClientText(student.grado) !== grado) return false;
+    if (
+      grupo &&
+      grupo !== "all" &&
+      String(student.group || student.grupo || "").trim() !== grupo
+    )
+      return false;
+    if (!localStudentMatchesQuality(student, filters.quality)) return false;
+    if (!localStudentMatchesRecent(student, filters.recent)) return false;
+    return true;
+  });
+};
 
 const applyInstantStudentFilters = ({ reconcileSelection = false } = {}) => {
-  const filtered = filteredControlStudents()
-  const safeLimit = Math.max(1, Number(pagination.limit || 8))
-  const pages = Math.max(1, Math.ceil(filtered.length / safeLimit))
-  const safePage = Math.min(Math.max(1, Number(pagination.page || 1)), pages)
-  if (pagination.page !== safePage) pagination.page = safePage
+  const filtered = filteredControlStudents();
+  const safeLimit = Math.max(1, Number(pagination.limit || 8));
+  const pages = Math.max(1, Math.ceil(filtered.length / safeLimit));
+  const safePage = Math.min(Math.max(1, Number(pagination.page || 1)), pages);
+  if (pagination.page !== safePage) pagination.page = safePage;
 
-  const offset = (safePage - 1) * safeLimit
-  students.value = filtered.slice(offset, offset + safeLimit)
-  Object.assign(pagination, { page: safePage, limit: safeLimit, total: filtered.length, pages })
-  if (reconcileSelection) reconcileSelectedStudentAfterSync(filtered)
-  queueControlStudentPhotos(students.value)
-  nextTick(scheduleWorkspaceScaleUpdate)
-}
+  const offset = (safePage - 1) * safeLimit;
+  students.value = filtered.slice(offset, offset + safeLimit);
+  Object.assign(pagination, {
+    page: safePage,
+    limit: safeLimit,
+    total: filtered.length,
+    pages,
+  });
+  if (reconcileSelection) reconcileSelectedStudentAfterSync(filtered);
+  queueControlStudentPhotos(students.value);
+  nextTick(scheduleWorkspaceScaleUpdate);
+};
 
 const resetControlStudentsView = () => {
-  controlStudentsIndex.value = []
-  students.value = []
-  selectedStudent.value = null
-  pendingSelectedStudentRefresh.value = null
-  Object.assign(catalogs, { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
-  Object.assign(pagination, { page: 1, total: 0, pages: 1 })
-}
+  controlStudentsIndex.value = [];
+  students.value = [];
+  selectedStudent.value = null;
+  pendingSelectedStudentRefresh.value = null;
+  kpis.value = null;
+  controlDataFreshness.value = "empty";
+  controlDataSavedAt.value = "";
+  controlDataSource.value = null;
+  Object.assign(catalogs, {
+    niveles: [],
+    grados: [],
+    grupos: [],
+    gruposPorGrado: {},
+  });
+  Object.assign(pagination, { page: 1, total: 0, pages: 1 });
+};
 
-const applyControlStudentsPayload = (response = {}, { reconcileSelection = true } = {}) => {
+const buildClientKpisFromStudents = (sourceStudents = []) => {
+  const rows = Array.isArray(sourceStudents) ? sourceStudents : [];
+  const missing = (field) =>
+    rows.filter((student) => normalizedMissingFields(student).includes(field))
+      .length;
+  const inscritos = rows.filter(
+    (student) => student.enrollmentState === "inscrito",
+  ).length;
+  const internos = rows.filter(
+    (student) =>
+      student.enrollmentState === "inscrito" &&
+      student.tipoIngresoValue === "interno",
+  ).length;
+  const externos = rows.filter(
+    (student) =>
+      student.enrollmentState === "inscrito" &&
+      student.tipoIngresoValue !== "interno",
+  ).length;
+  const noInscritos = rows.filter(
+    (student) => student.enrollmentState === "no_inscrito",
+  ).length;
+  const bajas = rows.filter(
+    (student) =>
+      student.status === "Baja" ||
+      student.enrollmentState === "baja_inscrita" ||
+      student.enrollmentState === "baja",
+  ).length;
+  const sinContacto = rows.filter(hasNoPrimaryContactClient).length;
+
+  return {
+    totalInscritos: inscritos,
+    totalVisible: rows.length,
+    inscritos,
+    internos,
+    externos,
+    noInscritos,
+    activos: rows.filter((student) => student.status === "Activo").length,
+    bajas,
+    sinFichaMatricula: rows.filter((student) => !student.overlayExists).length,
+    expedientesIncompletos: rows.filter(
+      (student) => normalizedMissingFields(student).length > 0,
+    ).length,
+    sinContacto,
+    sinCurp: missing("curp"),
+    sinTelefono: missing("teléfono") || missing("telefono"),
+    sinTutor: missing("tutor"),
+    sinEmail: missing("email"),
+  };
+};
+
+const applyControlStudentsPayload = (
+  response = {},
+  { reconcileSelection = true } = {},
+) => {
   if (response?.error) {
-    throw new Error(response?.message || response?.statusMessage || 'No se pudieron cargar alumnos de Control Escolar.')
+    throw new Error(
+      response?.message ||
+        response?.statusMessage ||
+        "No se pudieron cargar alumnos de Control Escolar.",
+    );
   }
 
-  controlStudentsIndex.value = Array.isArray(response?.data) ? response.data : []
-  Object.assign(catalogs, response?.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} })
-  applyInstantStudentFilters({ reconcileSelection })
-}
+  controlStudentsIndex.value = Array.isArray(response?.data)
+    ? response.data
+    : [];
+  controlDataSource.value = response?.source || controlDataSource.value;
+  Object.assign(
+    catalogs,
+    response?.catalogs || {
+      niveles: [],
+      grados: [],
+      grupos: [],
+      gruposPorGrado: {},
+    },
+  );
+  kpis.value =
+    response?.kpis || buildClientKpisFromStudents(controlStudentsIndex.value);
+  applyInstantStudentFilters({ reconcileSelection });
+};
 
 const replaceControlStudentInIndex = (student) => {
-  if (!student?.matricula) return
-  const selectedKey = normalizeMatriculaKey(student.matricula)
-  const index = controlStudentsIndex.value.findIndex((candidate) => normalizeMatriculaKey(candidate.matricula) === selectedKey)
-  if (index >= 0) controlStudentsIndex.value.splice(index, 1, student)
-  else controlStudentsIndex.value.unshift(student)
-  applyInstantStudentFilters({ reconcileSelection: false })
-}
+  if (!student?.matricula) return;
+  const selectedKey = normalizeMatriculaKey(student.matricula);
+  const index = controlStudentsIndex.value.findIndex(
+    (candidate) => normalizeMatriculaKey(candidate.matricula) === selectedKey,
+  );
+  if (index >= 0) controlStudentsIndex.value.splice(index, 1, student);
+  else controlStudentsIndex.value.unshift(student);
+  applyInstantStudentFilters({ reconcileSelection: false });
+};
 
-const persistCurrentControlStudentsCache = () => writeCachedControlStudents(buildIndexQuery(), {
-  data: controlStudentsIndex.value,
-  pagination: { page: 1, limit: Math.max(controlStudentsIndex.value.length, 1), total: controlStudentsIndex.value.length, pages: 1 },
-  catalogs: { ...catalogs, gruposPorGrado: { ...(catalogs.gruposPorGrado || {}) } }
-})
+const persistCurrentControlStudentsCache = () =>
+  writeCachedControlStudents(buildIndexQuery(), {
+    data: controlStudentsIndex.value,
+    pagination: {
+      page: 1,
+      limit: Math.max(controlStudentsIndex.value.length, 1),
+      total: controlStudentsIndex.value.length,
+      pages: 1,
+    },
+    catalogs: {
+      ...catalogs,
+      gruposPorGrado: { ...(catalogs.gruposPorGrado || {}) },
+    },
+    source: controlDataSource.value,
+  });
 
-const isDomEventPayload = (value) => Boolean(
-  value &&
-  typeof value === 'object' &&
-  ('isTrusted' in value || 'target' in value || 'currentTarget' in value)
-)
+const isDomEventPayload = (value) =>
+  Boolean(
+    value &&
+    typeof value === "object" &&
+    ("isTrusted" in value || "target" in value || "currentTarget" in value),
+  );
 
 const loadStudents = async (options = {}) => {
-  if (!selectedAgentId.value) return
+  if (!selectedAgentId.value) return;
 
-  const safeOptions = isDomEventPayload(options) ? {} : (options || {})
-  const { useCache = true, clearExisting = false, forceLoading = false } = safeOptions
-  const requestId = ++controlStudentsRequestId
-  const query = buildIndexQuery()
-  const cached = useCache ? readCachedControlStudents(query) : null
-  const hadStudents = controlStudentsIndex.value.length > 0 || students.value.length > 0
+  const safeOptions = isDomEventPayload(options) ? {} : options || {};
+  const {
+    useCache = true,
+    clearExisting = false,
+    forceLoading = false,
+  } = safeOptions;
+  const requestId = ++controlStudentsRequestId;
+  const query = buildIndexQuery();
+  const cached = useCache ? readCachedControlStudents(query) : null;
+  const hadStudents =
+    controlStudentsIndex.value.length > 0 || students.value.length > 0;
+
+  controlBaseStage.value = "idle";
+  controlEnrichmentStage.value = "idle";
 
   if (cached) {
-    pagination.page = 1
-    applyControlStudentsPayload(cached)
-    loadError.value = ''
-    studentsLoading.value = false
+    pagination.page = 1;
+    applyControlStudentsPayload(cached);
+    loadError.value = "";
+    studentsLoading.value = false;
+    controlDataFreshness.value = "cache";
+    controlDataSavedAt.value = cached.savedAt || "";
+    controlDataSource.value = cached.source || null;
   } else {
-    if (clearExisting) resetControlStudentsView()
-    studentsLoading.value = forceLoading || !hadStudents || clearExisting
+    if (clearExisting) resetControlStudentsView();
+    studentsLoading.value = forceLoading || !hadStudents || clearExisting;
+    controlDataFreshness.value =
+      hadStudents && !clearExisting ? controlDataFreshness.value : "empty";
+    controlDataSavedAt.value = "";
+  }
+
+  const canKeepVisibleData = () =>
+    Boolean(cached) ||
+    (!clearExisting && hadStudents) ||
+    controlStudentsIndex.value.length > 0 ||
+    students.value.length > 0;
+
+  try {
+    controlBaseStage.value = "loading";
+    const baseResponse = await $fetch("/api/control-escolar/students", {
+      query: { ...query, phase: "base" },
+    });
+    if (requestId !== controlStudentsRequestId) return;
+
+    pagination.page = 1;
+    applyControlStudentsPayload(baseResponse);
+    loadError.value = "";
+    controlBaseStage.value = "ready";
+    controlDataFreshness.value = "base";
+    controlDataSavedAt.value = "";
+    controlDataSource.value = baseResponse?.source || controlDataSource.value;
+    if (!cached) writeCachedControlStudents(query, baseResponse);
+  } catch (error) {
+    if (requestId !== controlStudentsRequestId) return;
+    controlBaseStage.value = "failed";
+
+    if (!canKeepVisibleData()) {
+      resetControlStudentsView();
+      loadError.value =
+        error?.data?.message ||
+        error?.message ||
+        "Plantel fuera de línea o sin respuesta.";
+      studentsLoading.value = false;
+      nextTick(scheduleWorkspaceScaleUpdate);
+      return;
+    }
+
+    loadError.value = "";
+    applyInstantStudentFilters();
+  } finally {
+    if (requestId === controlStudentsRequestId) {
+      studentsLoading.value = false;
+      nextTick(scheduleWorkspaceScaleUpdate);
+    }
   }
 
   try {
-    const response = await $fetch('/api/control-escolar/students', { query })
-    if (requestId !== controlStudentsRequestId) return
+    controlEnrichmentStage.value = "loading";
+    const response = await $fetch("/api/control-escolar/students", {
+      query: { ...query, phase: "enriched" },
+    });
+    if (requestId !== controlStudentsRequestId) return;
 
-    applyControlStudentsPayload(response)
-    writeCachedControlStudents(query, response)
-    loadError.value = ''
+    pagination.page = 1;
+    applyControlStudentsPayload(response);
+    writeCachedControlStudents(query, response);
+    loadError.value = "";
+    controlEnrichmentStage.value = "ready";
+    controlDataFreshness.value = "synced";
+    controlDataSavedAt.value = new Date().toISOString();
+    controlDataSource.value = response?.source || controlDataSource.value;
   } catch (error) {
-    if (requestId !== controlStudentsRequestId) return
+    if (requestId !== controlStudentsRequestId) return;
+    controlEnrichmentStage.value = "failed";
 
-    const canKeepWorking = Boolean(cached) || (!clearExisting && hadStudents)
-    if (!canKeepWorking) {
-      resetControlStudentsView()
-      loadError.value = error?.data?.message || error?.message || 'Plantel fuera de línea o sin respuesta.'
+    if (!canKeepVisibleData()) {
+      resetControlStudentsView();
+      loadError.value =
+        error?.data?.message ||
+        error?.message ||
+        "Plantel fuera de línea o sin respuesta.";
     } else {
-      loadError.value = ''
-      applyInstantStudentFilters()
+      loadError.value = "";
+      applyInstantStudentFilters();
     }
   } finally {
     if (requestId === controlStudentsRequestId) {
-      studentsLoading.value = false
-      nextTick(scheduleWorkspaceScaleUpdate)
+      studentsLoading.value = false;
+      nextTick(scheduleWorkspaceScaleUpdate);
     }
   }
-}
-
-
+};
 
 const refreshAll = async (options = {}) => {
-  const safeOptions = isDomEventPayload(options) ? {} : (options || {})
-  const { forceNetwork = false, ...studentOptions } = safeOptions
-  await Promise.all([loadKpis(), loadStudents({ useCache: !forceNetwork, ...studentOptions })])
-}
+  const safeOptions = isDomEventPayload(options) ? {} : options || {};
+  const { forceNetwork = false, ...studentOptions } = safeOptions;
+  kpisLoading.value = true;
+  try {
+    await loadStudents({ useCache: !forceNetwork, ...studentOptions });
+  } finally {
+    kpisLoading.value = false;
+  }
+};
 
 const reloadControlStudentsForCurrentScope = async () => {
-  if (!selectedAgentId.value) return
-  pagination.page = 1
-  await refreshAll({ clearExisting: true, forceLoading: true })
-}
+  if (!selectedAgentId.value) return;
+  pagination.page = 1;
+  await refreshAll({ clearExisting: true, forceLoading: true });
+};
 
 const clearQuickFilters = () => {
-  filters.status = DEFAULT_QUICK_FILTER
-  filters.quality = ''
-  activeQuickFilter.value = DEFAULT_QUICK_FILTER
-}
+  filters.status = DEFAULT_QUICK_FILTER;
+  filters.quality = "";
+  activeQuickFilter.value = DEFAULT_QUICK_FILTER;
+};
 
 const toggleFilter = (key, value) => {
-  filters[key] = filters[key] === value ? '' : value
-  pagination.page = 1
-}
+  filters[key] = filters[key] === value ? "" : value;
+  pagination.page = 1;
+};
 
 const clearAcademicFilters = () => {
-  filters.grado = ''
-  filters.group = ''
-  pagination.page = 1
-}
+  filters.grado = "";
+  filters.group = "";
+  pagination.page = 1;
+};
 
 const selectGrade = (grado) => {
-  filters.grado = filters.grado === grado ? '' : grado
-  filters.group = ''
-  pagination.page = 1
-}
+  filters.grado = filters.grado === grado ? "" : grado;
+  filters.group = "";
+  pagination.page = 1;
+};
 
 const clearFilters = () => {
-  Object.assign(filters, { search: '', status: DEFAULT_QUICK_FILTER, quality: '', grado: '', group: '', recent: '' })
-  activeQuickFilter.value = DEFAULT_QUICK_FILTER
-  pagination.page = 1
-}
+  Object.assign(filters, {
+    search: "",
+    status: DEFAULT_QUICK_FILTER,
+    quality: "",
+    grado: "",
+    group: "",
+    recent: "",
+  });
+  activeQuickFilter.value = DEFAULT_QUICK_FILTER;
+  pagination.page = 1;
+};
 
 const applyPrimaryFilter = (key) => {
-  filters.status = key
-  filters.quality = ''
-  activeQuickFilter.value = key
-  pagination.page = 1
-}
+  filters.status = key;
+  filters.quality = "";
+  activeQuickFilter.value = key;
+  pagination.page = 1;
+};
 
 const toggleQualityFilter = (key) => {
-  filters.quality = filters.quality === key ? '' : key
-  if (filters.quality) activeQuickFilter.value = 'quality'
-  else activeQuickFilter.value = filters.status || DEFAULT_QUICK_FILTER
-  pagination.page = 1
-}
+  filters.quality = filters.quality === key ? "" : key;
+  if (filters.quality) activeQuickFilter.value = "quality";
+  else activeQuickFilter.value = filters.status || DEFAULT_QUICK_FILTER;
+  pagination.page = 1;
+};
 
 const applyKpiFilter = (key) => {
-  if (key === 'incomplete') {
-    filters.status = DEFAULT_QUICK_FILTER
-    filters.quality = filters.quality === 'incomplete' ? '' : 'incomplete'
-    activeQuickFilter.value = filters.quality ? key : DEFAULT_QUICK_FILTER
+  if (key === "incomplete") {
+    filters.status = DEFAULT_QUICK_FILTER;
+    filters.quality = filters.quality === "incomplete" ? "" : "incomplete";
+    activeQuickFilter.value = filters.quality ? key : DEFAULT_QUICK_FILTER;
   } else {
-    const next = activeQuickFilter.value === key && key !== DEFAULT_QUICK_FILTER ? DEFAULT_QUICK_FILTER : key
-    filters.status = next
-    filters.quality = ''
-    activeQuickFilter.value = next
+    const next =
+      activeQuickFilter.value === key && key !== DEFAULT_QUICK_FILTER
+        ? DEFAULT_QUICK_FILTER
+        : key;
+    filters.status = next;
+    filters.quality = "";
+    activeQuickFilter.value = next;
   }
-  pagination.page = 1
-}
+  pagination.page = 1;
+};
 
 const goToPage = (page) => {
-  pagination.page = Math.min(Math.max(1, page), pagination.pages || 1)
-}
+  pagination.page = Math.min(Math.max(1, page), pagination.pages || 1);
+};
 
 const readStoredDraft = () => {
-  if (!process.client || !draftKey.value) return null
+  if (!process.client || !draftKey.value) return null;
   try {
-    return JSON.parse(localStorage.getItem(draftKey.value) || 'null')
+    return JSON.parse(localStorage.getItem(draftKey.value) || "null");
   } catch (error) {
-    console.warn('[Control Escolar] No se pudo leer el borrador local.', error)
-    return null
+    console.warn("[Control Escolar] No se pudo leer el borrador local.", error);
+    return null;
   }
-}
+};
 
 const clearEditDraft = () => {
-  if (!process.client || !draftKey.value) return
+  if (!process.client || !draftKey.value) return;
   try {
-    localStorage.removeItem(draftKey.value)
+    localStorage.removeItem(draftKey.value);
   } catch (error) {
-    console.warn('[Control Escolar] No se pudo limpiar el borrador local.', error)
+    console.warn(
+      "[Control Escolar] No se pudo limpiar el borrador local.",
+      error,
+    );
   }
-  draftRestored.value = false
-  draftSavedAt.value = ''
-}
+  draftRestored.value = false;
+  draftSavedAt.value = "";
+};
 
 const persistEditDraft = () => {
-  if (!process.client || !draftKey.value || !hasUnsavedChanges.value) return
-  const savedAt = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+  if (!process.client || !draftKey.value || !hasUnsavedChanges.value) return;
+  const savedAt = new Date().toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   try {
-    localStorage.setItem(draftKey.value, JSON.stringify({ savedAt, values: readEditForm() }))
-    draftSavedAt.value = savedAt
+    localStorage.setItem(
+      draftKey.value,
+      JSON.stringify({ savedAt, values: readEditForm() }),
+    );
+    draftSavedAt.value = savedAt;
   } catch (error) {
-    console.warn('[Control Escolar] No se pudo guardar el borrador local.', error)
+    console.warn(
+      "[Control Escolar] No se pudo guardar el borrador local.",
+      error,
+    );
   }
-}
+};
 
 const restoreEditDraft = () => {
-  const stored = readStoredDraft()
-  if (!stored?.values || typeof stored.values !== 'object') return
-  Object.assign(editForm, stored.values)
-  draftRestored.value = true
-  draftSavedAt.value = stored.savedAt || ''
-}
+  const stored = readStoredDraft();
+  if (!stored?.values || typeof stored.values !== "object") return;
+  Object.assign(editForm, stored.values);
+  draftRestored.value = true;
+  draftSavedAt.value = stored.savedAt || "";
+};
 
 const selectStudent = (student, copy = true) => {
-  selectedStudent.value = student
-  activeDetailTab.value = 'identity'
-  if (copy) resetEditForm(student, { restoreDraft: true })
-  queueControlStudentPhotos([student], { priority: true })
-  nextTick(scheduleWorkspaceScaleUpdate)
-}
+  selectedStudent.value = student;
+  activeDetailTab.value = "identity";
+  if (copy) resetEditForm(student, { restoreDraft: true });
+  queueControlStudentPhotos([student], { priority: true });
+  nextTick(scheduleWorkspaceScaleUpdate);
+};
 
 const resetEditForm = (student = selectedStudent.value, options = {}) => {
-  if (!student) return
+  if (!student) return;
   Object.assign(editForm, {
-    nombres: student.nombres || '',
-    apellidoPaterno: student.apellidoPaterno || '',
-    apellidoMaterno: student.apellidoMaterno || '',
-    curp: student.curp || '',
-    nivel: student.nivel || '',
-    grado: student.grado || '',
-    grupo: student.group || '',
+    nombres: student.nombres || "",
+    apellidoPaterno: student.apellidoPaterno || "",
+    apellidoMaterno: student.apellidoMaterno || "",
+    curp: student.curp || "",
+    nivel: student.nivel || "",
+    grado: student.grado || "",
+    grupo: student.group || "",
     baja: Number(student.baja || 0),
-    motivoBaja: student.motivoBaja || '',
-    categoriaBaja: student.categoriaBaja || '',
-    seguimientoBaja: student.seguimientoBaja || '',
-    nombrePadre: student.nombrePadre || '',
-    apellidoPaternoPadre: student.apellidoPaternoPadre || '',
-    apellidoMaternoPadre: student.apellidoMaternoPadre || '',
-    nombreMadre: student.nombreMadre || '',
-    apellidoPaternoMadre: student.apellidoPaternoMadre || '',
-    apellidoMaternoMadre: student.apellidoMaternoMadre || '',
-    telefonoPadre: student.telefonoPadre || '',
-    telefonoMadre: student.telefonoMadre || '',
-    emailPadre: student.emailPadre || '',
-    emailMadre: student.emailMadre || '',
-    direccion: student.address || ''
-  })
-  saveError.value = ''
-  draftRestored.value = false
-  draftSavedAt.value = ''
-  editSnapshot.value = formSnapshot()
-  if (options.restoreDraft) restoreEditDraft()
-}
+    motivoBaja: student.motivoBaja || "",
+    categoriaBaja: student.categoriaBaja || "",
+    seguimientoBaja: student.seguimientoBaja || "",
+    nombrePadre: student.nombrePadre || "",
+    apellidoPaternoPadre: student.apellidoPaternoPadre || "",
+    apellidoMaternoPadre: student.apellidoMaternoPadre || "",
+    nombreMadre: student.nombreMadre || "",
+    apellidoPaternoMadre: student.apellidoPaternoMadre || "",
+    apellidoMaternoMadre: student.apellidoMaternoMadre || "",
+    telefonoPadre: student.telefonoPadre || "",
+    telefonoMadre: student.telefonoMadre || "",
+    emailPadre: student.emailPadre || "",
+    emailMadre: student.emailMadre || "",
+    direccion: student.address || "",
+  });
+  saveError.value = "";
+  draftRestored.value = false;
+  draftSavedAt.value = "";
+  editSnapshot.value = formSnapshot();
+  if (options.restoreDraft) restoreEditDraft();
+};
 
 const discardChanges = () => {
-  clearEditDraft()
-  resetEditForm(selectedStudent.value, { restoreDraft: false })
-}
+  clearEditDraft();
+  resetEditForm(selectedStudent.value, { restoreDraft: false });
+};
 
 const saveStudent = async () => {
-  if (!selectedStudent.value || !selectedAgentId.value || savingStudent.value) return
-  savingStudent.value = true
-  saveError.value = ''
+  if (!selectedStudent.value || !selectedAgentId.value || savingStudent.value)
+    return;
+  savingStudent.value = true;
+  saveError.value = "";
   try {
-    const payload = readEditForm()
-    const response = await $fetch(`/api/control-escolar/students/${encodeURIComponent(selectedStudent.value.matricula)}`, {
-      method: 'PATCH',
-      query: buildScopeQuery(),
-      body: payload
-    })
+    const payload = readEditForm();
+    const response = await $fetch(
+      `/api/control-escolar/students/${encodeURIComponent(selectedStudent.value.matricula)}`,
+      {
+        method: "PATCH",
+        query: buildScopeQuery(),
+        body: payload,
+      },
+    );
     if (response.student) {
-      replaceControlStudentInIndex(response.student)
-      selectedStudent.value = response.student
-      pendingSelectedStudentRefresh.value = null
-      clearEditDraft()
-      resetEditForm(response.student, { restoreDraft: false })
-      persistCurrentControlStudentsCache()
+      replaceControlStudentInIndex(response.student);
+      selectedStudent.value = response.student;
+      pendingSelectedStudentRefresh.value = null;
+      clearEditDraft();
+      resetEditForm(response.student, { restoreDraft: false });
+      persistCurrentControlStudentsCache();
     }
-    show('Ficha de Control Escolar guardada.', 'success')
-    await loadKpis()
+    show("Ficha de Control Escolar guardada.", "success");
+    await loadKpis();
   } catch (error) {
-    saveError.value = error?.data?.message || error?.message || 'No se pudo guardar la ficha.'
+    saveError.value =
+      error?.data?.message || error?.message || "No se pudo guardar la ficha.";
   } finally {
-    savingStudent.value = false
+    savingStudent.value = false;
   }
-}
+};
 
 const exportCurrentView = () => {
-  if (!selectedAgentId.value) return
-  const params = new URLSearchParams()
-  Object.entries(buildQuery({ page: undefined, limit: undefined })).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') params.set(key, value)
-  })
-  window.open(`/api/control-escolar/export?${params.toString()}`, '_blank')
-}
+  if (!selectedAgentId.value) return;
+  const params = new URLSearchParams();
+  Object.entries(buildQuery({ page: undefined, limit: undefined })).forEach(
+    ([key, value]) => {
+      if (value !== undefined && value !== "") params.set(key, value);
+    },
+  );
+  window.open(`/api/control-escolar/export?${params.toString()}`, "_blank");
+};
 
 const exportMatriculaDb = () => {
-  if (!selectedAgentId.value) return
-  const params = new URLSearchParams()
-  Object.entries(buildQuery({ page: undefined, limit: undefined })).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') params.set(key, value)
-  })
-  window.open(`/api/control-escolar/matricula-db/export?${params.toString()}`, '_blank')
-}
+  if (!selectedAgentId.value) return;
+  const params = new URLSearchParams();
+  Object.entries(buildQuery({ page: undefined, limit: undefined })).forEach(
+    ([key, value]) => {
+      if (value !== undefined && value !== "") params.set(key, value);
+    },
+  );
+  window.open(
+    `/api/control-escolar/matricula-db/export?${params.toString()}`,
+    "_blank",
+  );
+};
 
 const openMassImportModal = () => {
-  massImportError.value = ''
-  massImportResult.value = null
-  showMassImportModal.value = true
-}
+  massImportError.value = "";
+  massImportResult.value = null;
+  showMassImportModal.value = true;
+};
 
 const closeMassImportModal = () => {
-  if (massImporting.value) return
-  showMassImportModal.value = false
-  massImportFile.value = null
-  massImportError.value = ''
-}
+  if (massImporting.value) return;
+  showMassImportModal.value = false;
+  massImportFile.value = null;
+  massImportError.value = "";
+};
 
 const onMassImportFileChange = (event) => {
-  massImportFile.value = event?.target?.files?.[0] || null
-  massImportResult.value = null
-  massImportError.value = ''
-}
+  massImportFile.value = event?.target?.files?.[0] || null;
+  massImportResult.value = null;
+  massImportError.value = "";
+};
 
 const importMatriculaDb = async () => {
-  const file = massImportFile.value
-  if (!file || !selectedAgentId.value) return
-  massImporting.value = true
-  massImportError.value = ''
+  const file = massImportFile.value;
+  if (!file || !selectedAgentId.value) return;
+  massImporting.value = true;
+  massImportError.value = "";
   try {
-    const form = new FormData()
-    form.append('file', file)
-    const response = await $fetch('/api/control-escolar/matricula-db/import', {
-      method: 'POST',
+    const form = new FormData();
+    form.append("file", file);
+    const response = await $fetch("/api/control-escolar/matricula-db/import", {
+      method: "POST",
       query: buildScopeQuery(),
-      body: form
-    })
-    const summary = response?.summary || {}
-    massImportResult.value = summary
-    const skipped = Number(summary.skipped || 0)
-    show(`Importación aplicada: ${summary.updated || 0} actualizados${skipped ? `, ${skipped} omitidos` : ''}.`, skipped ? 'warning' : 'success')
-    await refreshAll()
+      body: form,
+    });
+    const summary = response?.summary || {};
+    massImportResult.value = summary;
+    const skipped = Number(summary.skipped || 0);
+    show(
+      `Importación aplicada: ${summary.updated || 0} actualizados${skipped ? `, ${skipped} omitidos` : ""}.`,
+      skipped ? "warning" : "success",
+    );
+    await refreshAll();
   } catch (error) {
-    massImportError.value = error?.data?.message || error?.message || 'No se pudo importar el archivo.'
-    show(massImportError.value, 'danger')
+    massImportError.value =
+      error?.data?.message ||
+      error?.message ||
+      "No se pudo importar el archivo.";
+    show(massImportError.value, "danger");
   } finally {
-    massImporting.value = false
+    massImporting.value = false;
   }
-}
+};
 
 const sendHuskyPassEmail = async () => {
-  if (!selectedStudent.value || !selectedAgentId.value) return
-  sendingHuskyPass.value = true
+  if (!selectedStudent.value || !selectedAgentId.value) return;
+  sendingHuskyPass.value = true;
   try {
-    const response = await $fetch(`/api/control-escolar/students/${encodeURIComponent(selectedStudent.value.matricula)}/husky-pass-email`, {
-      method: 'POST',
-      query: buildScopeQuery(),
-      body: { to: huskyPassEmailTarget.value }
-    })
-    show(`Husky Pass enviado a ${response.sentTo}.`, 'success')
+    const response = await $fetch(
+      `/api/control-escolar/students/${encodeURIComponent(selectedStudent.value.matricula)}/husky-pass-email`,
+      {
+        method: "POST",
+        query: buildScopeQuery(),
+        body: { to: huskyPassEmailTarget.value },
+      },
+    );
+    show(`Husky Pass enviado a ${response.sentTo}.`, "success");
   } catch (error) {
-    show(error?.data?.message || error?.message || 'No se pudo enviar Husky Pass.', 'danger')
+    show(
+      error?.data?.message || error?.message || "No se pudo enviar Husky Pass.",
+      "danger",
+    );
   } finally {
-    sendingHuskyPass.value = false
+    sendingHuskyPass.value = false;
   }
-}
+};
 
 const cacheEnrollmentConcepts = (conceptIds) => {
-  if (!process.client || !Array.isArray(conceptIds) || !conceptIds.length) return
+  if (!process.client || !Array.isArray(conceptIds) || !conceptIds.length)
+    return;
   try {
-    localStorage.setItem(ENROLLMENT_CONCEPTS_CACHE_KEY, JSON.stringify({
-      savedAt: new Date().toISOString(),
-      concepts: conceptIds
-    }))
+    localStorage.setItem(
+      ENROLLMENT_CONCEPTS_CACHE_KEY,
+      JSON.stringify({
+        savedAt: new Date().toISOString(),
+        concepts: conceptIds,
+      }),
+    );
   } catch (error) {
-    console.warn('[Control Escolar] No se pudo guardar la configuración de inscripción.', error)
+    console.warn(
+      "[Control Escolar] No se pudo guardar la configuración de inscripción.",
+      error,
+    );
   }
-}
+};
 
 const hydrateCachedEnrollmentConcepts = () => {
-  if (!process.client || externalConcepts.value.length) return
+  if (!process.client || externalConcepts.value.length) return;
   try {
-    const parsed = JSON.parse(localStorage.getItem(ENROLLMENT_CONCEPTS_CACHE_KEY) || 'null')
-    const conceptIds = normalizeEnrollmentConceptIds(parsed?.concepts)
-    if (conceptIds.length) externalConcepts.value = conceptIds
+    const parsed = JSON.parse(
+      localStorage.getItem(ENROLLMENT_CONCEPTS_CACHE_KEY) || "null",
+    );
+    const conceptIds = normalizeEnrollmentConceptIds(parsed?.concepts);
+    if (conceptIds.length) externalConcepts.value = conceptIds;
   } catch (error) {
-    console.warn('[Control Escolar] No se pudo leer la configuración de inscripción.', error)
+    console.warn(
+      "[Control Escolar] No se pudo leer la configuración de inscripción.",
+      error,
+    );
   }
-}
+};
 
 const parseEnrollmentConfig = (obj) => {
-  const conceptIds = parseEnrollmentConcepts(obj)
-  if (!conceptIds.length) return
-  externalConcepts.value = conceptIds
-  cacheEnrollmentConcepts(conceptIds)
-}
+  const conceptIds = parseEnrollmentConcepts(obj);
+  if (!conceptIds.length) return;
+  externalConcepts.value = conceptIds;
+  cacheEnrollmentConcepts(conceptIds);
+};
 
 const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
-  const previousConcepts = externalConcepts.value.join('|')
+  const previousConcepts = externalConcepts.value.join("|");
 
   try {
-    const configData = await $fetch('/api/control-escolar/enrollment-config')
-    parseEnrollmentConfig(configData)
+    const configData = await $fetch("/api/control-escolar/enrollment-config");
+    parseEnrollmentConfig(configData);
   } catch (serverError) {
     try {
-      const configData = await $fetch('https://matricula.casitaapps.com/api/enrollment-config/all')
-      parseEnrollmentConfig(configData)
+      const configData = await $fetch(
+        "https://matricula.casitaapps.com/api/enrollment-config/all",
+      );
+      parseEnrollmentConfig(configData);
     } catch (externalError) {
-      console.warn('[Control Escolar] Usando configuración de inscripción local o por defecto.', externalError || serverError)
+      console.warn(
+        "[Control Escolar] Usando configuración de inscripción local o por defecto.",
+        externalError || serverError,
+      );
     }
   }
 
-  if (refreshStudents && externalConcepts.value.join('|') !== previousConcepts) {
-    await refreshAll({ clearExisting: false, forceLoading: !controlStudentsIndex.value.length })
+  if (
+    refreshStudents &&
+    externalConcepts.value.join("|") !== previousConcepts
+  ) {
+    await refreshAll({
+      clearExisting: false,
+      forceLoading: !controlStudentsIndex.value.length,
+    });
   }
-}
+};
 
-watch(editForm, () => {
-  if (!selectedStudent.value || !editSnapshot.value) return
-  if (hasUnsavedChanges.value) persistEditDraft()
-  else clearEditDraft()
-}, { deep: true })
+watch(
+  editForm,
+  () => {
+    if (!selectedStudent.value || !editSnapshot.value) return;
+    if (hasUnsavedChanges.value) persistEditDraft();
+    else clearEditDraft();
+  },
+  { deep: true },
+);
 
 watch(hasUnsavedChanges, (isDirty) => {
-  if (!isDirty) nextTick(applyPendingSelectedStudentRefresh)
-})
+  if (!isDirty) nextTick(applyPendingSelectedStudentRefresh);
+});
 
-watch(() => ({ ...filters }), () => {
-  pagination.page = 1
-  if (process.client) window.clearTimeout(searchTimer)
-  applyInstantStudentFilters()
-}, { deep: true })
+watch(
+  () => ({ ...filters }),
+  () => {
+    pagination.page = 1;
+    if (process.client) window.clearTimeout(searchTimer);
+    applyInstantStudentFilters();
+  },
+  { deep: true },
+);
 
-watch(() => pagination.page, () => applyInstantStudentFilters())
-watch(() => [selectedAgentId.value, currentCicloKey.value, externalConcepts.value.join('|')], ([nextAgent], [previousAgent]) => {
-  if (!nextAgent) return
-  if (!previousAgent && controlStudentsIndex.value.length === 0 && studentsLoading.value) return
-  reloadControlStudentsForCurrentScope()
-}, { flush: 'post' })
-watch(selectedAgentId, () => nextTick(scheduleWorkspaceScaleUpdate))
-watch(students, (visibleStudents) => queueControlStudentPhotos(visibleStudents), { deep: false })
-watch(selectedStudent, (student) => queueControlStudentPhotos(student ? [student] : [], { priority: true }))
+watch(
+  () => pagination.page,
+  () => applyInstantStudentFilters(),
+);
+watch(
+  () => [
+    selectedAgentId.value,
+    currentCicloKey.value,
+    externalConcepts.value.join("|"),
+  ],
+  ([nextAgent], [previousAgent]) => {
+    if (!nextAgent) return;
+    if (
+      !previousAgent &&
+      controlStudentsIndex.value.length === 0 &&
+      studentsLoading.value
+    )
+      return;
+    reloadControlStudentsForCurrentScope();
+  },
+  { flush: "post" },
+);
+watch(selectedAgentId, () => nextTick(scheduleWorkspaceScaleUpdate));
+watch(
+  students,
+  (visibleStudents) => queueControlStudentPhotos(visibleStudents),
+  { deep: false },
+);
+watch(selectedStudent, (student) =>
+  queueControlStudentPhotos(student ? [student] : [], { priority: true }),
+);
 watch(showControlFirstSyncNotice, (visible) => {
-  if (visible) startFirstSyncMessages()
-  else stopFirstSyncMessages()
-})
+  if (visible) startFirstSyncMessages();
+  else stopFirstSyncMessages();
+});
 
 const handleCicloChanged = (event) => {
-  const previousCiclo = currentCicloKey.value
-  const cicloKey = normalizeCicloOption(event?.detail?.ciclo || cicloCookie.value || state.value?.ciclo)
-  if (state.value.ciclo !== cicloKey) state.value.ciclo = cicloKey
-  cicloCookie.value = cicloKey
-  if (normalizeCicloKey(cicloKey) === previousCiclo) reloadControlStudentsForCurrentScope()
-}
+  const previousCiclo = currentCicloKey.value;
+  const cicloKey = normalizeCicloOption(
+    event?.detail?.ciclo || cicloCookie.value || state.value?.ciclo,
+  );
+  if (state.value.ciclo !== cicloKey) state.value.ciclo = cicloKey;
+  cicloCookie.value = cicloKey;
+  if (normalizeCicloKey(cicloKey) === previousCiclo)
+    reloadControlStudentsForCurrentScope();
+};
 
 onMounted(async () => {
   if (process.client) {
-    localHour.value = new Date().getHours()
-    window.addEventListener('ingresos:ciclo-changed', handleCicloChanged)
+    localHour.value = new Date().getHours();
+    window.addEventListener("ingresos:ciclo-changed", handleCicloChanged);
   }
 
-  state.value.ciclo = normalizeCicloOption(state.value?.ciclo || cicloCookie.value)
-  hydrateCachedEnrollmentConcepts()
-  const initialAgentId = selectedAgentId.value
-  if (initialAgentId) loadStudents()
+  state.value.ciclo = normalizeCicloOption(
+    state.value?.ciclo || cicloCookie.value,
+  );
+  hydrateCachedEnrollmentConcepts();
+  const initialAgentId = selectedAgentId.value;
+  const initialStudentsLoad = initialAgentId ? loadStudents() : null;
 
-  await loadOptions()
+  await loadOptions();
 
   if (selectedAgentId.value) {
-    if (selectedAgentId.value !== initialAgentId) await refreshAll()
-    else await loadKpis()
+    if (selectedAgentId.value !== initialAgentId) await refreshAll();
+    else if (initialStudentsLoad) await initialStudentsLoad;
+    else await refreshAll();
   }
 
-  await loadEnrollmentConfig({ refreshStudents: true })
-})
+  await loadEnrollmentConfig({ refreshStudents: true });
+});
 
 onBeforeUnmount(() => {
-  if (process.client) window.removeEventListener('ingresos:ciclo-changed', handleCicloChanged)
-  stopFirstSyncMessages()
-})
+  if (process.client)
+    window.removeEventListener("ingresos:ciclo-changed", handleCicloChanged);
+  stopFirstSyncMessages();
+});
 </script>
 
 <style scoped>
@@ -1789,7 +3214,7 @@ onBeforeUnmount(() => {
   color: #10203a;
   font-size: 22px;
   font-weight: 900;
-  letter-spacing: -.035em;
+  letter-spacing: -0.035em;
 }
 
 .ce-first-sync-tip {
@@ -1803,7 +3228,11 @@ onBeforeUnmount(() => {
   border-radius: 22px;
   background:
     radial-gradient(circle at 8% 18%, rgba(76, 175, 80, 0.12), transparent 26%),
-    linear-gradient(135deg, rgba(246, 252, 246, 0.96), rgba(255, 255, 255, 0.96));
+    linear-gradient(
+      135deg,
+      rgba(246, 252, 246, 0.96),
+      rgba(255, 255, 255, 0.96)
+    );
   box-shadow: 0 16px 34px rgba(17, 45, 30, 0.07);
   color: #10203a;
 }
@@ -1851,6 +3280,150 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 
+.ce-first-sync-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.ce-first-sync-steps span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(147, 159, 177, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #607087;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.ce-first-sync-steps span.active {
+  border-color: rgba(41, 132, 61, 0.34);
+  background: #edf8ee;
+  color: #267238;
+}
+
+.ce-first-sync-steps span.done {
+  border-color: rgba(41, 132, 61, 0.22);
+  background: rgba(236, 248, 237, 0.78);
+  color: #357342;
+}
+
+.ce-first-sync-steps span.failed {
+  border-color: rgba(188, 116, 83, 0.28);
+  background: rgba(255, 247, 241, 0.82);
+  color: #9a5b37;
+}
+
+.ce-data-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  margin: -2px 0 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(207, 217, 229, 0.82);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 14px 32px rgba(21, 35, 60, 0.055);
+  color: #10203a;
+}
+
+.ce-data-status-icon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 13px;
+  background: rgba(239, 244, 248, 0.95);
+  color: #607087;
+}
+
+.ce-data-status-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.ce-data-status-copy strong {
+  color: #14233b;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: -0.01em;
+}
+
+.ce-data-status-copy small {
+  min-width: 0;
+  overflow: hidden;
+  color: #657388;
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-data-status-freshness {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #f5f8fb;
+  color: #627087;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ce-data-status.is-cache .ce-data-status-icon,
+.ce-data-status.is-cache .ce-data-status-freshness {
+  background: #f2f6fb;
+  color: #526b93;
+}
+
+.ce-data-status.is-base .ce-data-status-icon,
+.ce-data-status.is-loading .ce-data-status-icon {
+  background: #eef8ef;
+  color: #297d3c;
+}
+
+.ce-data-status.is-synced {
+  border-color: rgba(41, 132, 61, 0.19);
+}
+
+.ce-data-status.is-synced .ce-data-status-icon,
+.ce-data-status.is-synced .ce-data-status-freshness {
+  background: #eaf7ec;
+  color: #28773a;
+}
+
+.ce-data-status.is-failed .ce-data-status-icon,
+.ce-data-status.is-failed .ce-data-status-freshness {
+  background: #fff6ef;
+  color: #9a5b37;
+}
+
+.ce-load-status-fade-enter-active,
+.ce-load-status-fade-leave-active {
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.ce-load-status-fade-enter-from,
+.ce-load-status-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
 .ce-first-sync-loader {
   display: inline-flex;
   align-items: center;
@@ -1867,12 +3440,18 @@ onBeforeUnmount(() => {
   animation: ceSyncPulse 1.55s ease-in-out infinite;
 }
 
-.ce-first-sync-loader b:nth-child(2) { animation-delay: 0.18s; }
-.ce-first-sync-loader b:nth-child(3) { animation-delay: 0.36s; }
+.ce-first-sync-loader b:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.ce-first-sync-loader b:nth-child(3) {
+  animation-delay: 0.36s;
+}
 
 .ce-first-sync-fade-enter-active,
 .ce-first-sync-fade-leave-active {
-  transition: opacity 0.34s ease, transform 0.34s ease;
+  transition:
+    opacity 0.34s ease,
+    transform 0.34s ease;
 }
 
 .ce-first-sync-fade-enter-from,
@@ -1883,7 +3462,9 @@ onBeforeUnmount(() => {
 
 .ce-sync-message-fade-enter-active,
 .ce-sync-message-fade-leave-active {
-  transition: opacity 0.7s ease, transform 0.7s ease;
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s ease;
 }
 
 .ce-sync-message-fade-enter-from {
@@ -1897,12 +3478,21 @@ onBeforeUnmount(() => {
 }
 
 @keyframes ceSyncSpin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes ceSyncPulse {
-  0%, 100% { opacity: 0.25; transform: translateY(0); }
-  45% { opacity: 1; transform: translateY(-3px); }
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  45% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
 }
 
 .ce-route-context {
@@ -1919,17 +3509,17 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 0 16px;
-  border: 1px solid rgba(207, 217, 229, .85);
+  border: 1px solid rgba(207, 217, 229, 0.85);
   border-radius: 13px;
   background: #fff;
   color: #10203a;
-  box-shadow: 0 8px 18px rgba(21, 35, 60, .04);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.04);
   font-size: 12px;
   font-weight: 850;
 }
 
 .ce-sync-pill::before {
-  content: '✓';
+  content: "✓";
   display: inline-flex;
   width: 18px;
   height: 18px;
@@ -1943,7 +3533,7 @@ onBeforeUnmount(() => {
 }
 
 .ce-cycle-pill::before {
-  content: '▦';
+  content: "▦";
   color: #2f8f37;
   font-size: 16px;
   line-height: 1;
@@ -1961,17 +3551,17 @@ onBeforeUnmount(() => {
   flex-direction: column;
   justify-content: center;
   padding: 6px 14px;
-  border: 1px solid rgba(63, 145, 56, .18);
+  border: 1px solid rgba(63, 145, 56, 0.18);
   border-radius: 13px;
   background: linear-gradient(180deg, #fff, #f7fbf5);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, .04);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.04);
 }
 
 .ce-selected-plantel span {
   color: #6b758f;
   font-size: 9.5px;
   font-weight: 880;
-  letter-spacing: .045em;
+  letter-spacing: 0.045em;
   line-height: 1.1;
   text-transform: uppercase;
 }
@@ -1988,9 +3578,17 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
-.spinning { animation: ce-spin 900ms linear infinite; }
-.ce-hidden-file { display: none; }
-@keyframes ce-spin { to { transform: rotate(360deg); } }
+.spinning {
+  animation: ce-spin 900ms linear infinite;
+}
+.ce-hidden-file {
+  display: none;
+}
+@keyframes ce-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 .ce-kpi-system {
   margin-bottom: 6px;
@@ -2020,7 +3618,11 @@ onBeforeUnmount(() => {
 }
 
 .ce-kpi-strip .kpi-card.active {
-  background: linear-gradient(90deg, rgba(86, 171, 73, .13), rgba(255,255,255,0));
+  background: linear-gradient(
+    90deg,
+    rgba(86, 171, 73, 0.13),
+    rgba(255, 255, 255, 0)
+  );
 }
 
 .ce-kpi-mass {
@@ -2042,17 +3644,20 @@ onBeforeUnmount(() => {
   height: 14px;
   border-radius: 999px;
   background: currentColor;
-  opacity: .14;
+  opacity: 0.14;
   transform-origin: bottom;
 }
 
 .ce-kpi-mass i.active {
-  opacity: .72;
+  opacity: 0.72;
 }
 
-.ce-kpi-mass i:nth-child(2n) { height: 18px; }
-.ce-kpi-mass i:nth-child(3n) { height: 11px; }
-
+.ce-kpi-mass i:nth-child(2n) {
+  height: 18px;
+}
+.ce-kpi-mass i:nth-child(3n) {
+  height: 11px;
+}
 
 .ce-program-rail {
   display: none;
@@ -2105,7 +3710,7 @@ onBeforeUnmount(() => {
   color: #15233c;
   font-size: 11px;
   font-weight: 850;
-  box-shadow: 0 5px 12px rgba(21, 35, 60, .035);
+  box-shadow: 0 5px 12px rgba(21, 35, 60, 0.035);
   cursor: pointer;
 }
 
@@ -2113,7 +3718,7 @@ onBeforeUnmount(() => {
   border-color: #3f9138;
   background: linear-gradient(180deg, #5bbd55, #278c31);
   color: #fff;
-  box-shadow: 0 10px 20px rgba(63, 145, 56, .22);
+  box-shadow: 0 10px 20px rgba(63, 145, 56, 0.22);
 }
 
 .ce-filter-bar .search-control {
@@ -2145,7 +3750,7 @@ onBeforeUnmount(() => {
 }
 
 .ce-filter-button.active {
-  border-color: rgba(63, 145, 56, .28);
+  border-color: rgba(63, 145, 56, 0.28);
   background: #f4fbf2;
   color: #21882e;
 }
@@ -2191,14 +3796,14 @@ onBeforeUnmount(() => {
   gap: 6px;
   min-width: 0;
   padding: 5px 10px;
-  border: 1px solid rgba(217, 227, 238, .9);
+  border: 1px solid rgba(217, 227, 238, 0.9);
   border-radius: 14px;
-  background: rgba(255, 255, 255, .74);
-  box-shadow: 0 6px 14px rgba(21, 35, 60, .035);
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 6px 14px rgba(21, 35, 60, 0.035);
 }
 
 .ce-chip-cluster + .ce-chip-cluster::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -5px;
   top: 7px;
@@ -2208,19 +3813,23 @@ onBeforeUnmount(() => {
 }
 
 .ce-chip-cluster--grade {
-  border-color: rgba(63, 145, 56, .2);
-  background: linear-gradient(180deg, rgba(246, 252, 245, .92), rgba(255, 255, 255, .78));
+  border-color: rgba(63, 145, 56, 0.2);
+  background: linear-gradient(
+    180deg,
+    rgba(246, 252, 245, 0.92),
+    rgba(255, 255, 255, 0.78)
+  );
 }
 
 .ce-chip-cluster--group {
-  border-color: rgba(40, 116, 240, .18);
+  border-color: rgba(40, 116, 240, 0.18);
 }
 
 .ce-chip-label {
   color: #6f7b95;
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: .045em;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -2241,19 +3850,19 @@ onBeforeUnmount(() => {
   justify-content: center;
   margin-left: 4px;
   border-radius: 999px;
-  background: rgba(32, 136, 45, .12);
+  background: rgba(32, 136, 45, 0.12);
   color: #20882d;
   font-size: 9px;
   font-weight: 900;
 }
 
 .ce-workspace.has-detail {
-  grid-template-columns: minmax(430px, .52fr) minmax(820px, 1.48fr);
+  grid-template-columns: minmax(430px, 0.52fr) minmax(820px, 1.48fr);
   gap: 12px;
 }
 
 .ce-workspace.has-empty-detail {
-  grid-template-columns: minmax(760px, 1.18fr) minmax(520px, .82fr);
+  grid-template-columns: minmax(760px, 1.18fr) minmax(520px, 0.82fr);
   gap: 12px;
 }
 
@@ -2283,11 +3892,15 @@ onBeforeUnmount(() => {
   color: #15233c;
   font-size: 15px;
   font-weight: 880;
-  letter-spacing: -.025em;
+  letter-spacing: -0.025em;
 }
 
-.ce-list-titlebar h2 span { color: #20922d; }
-.ce-list-titlebar p { display: none; }
+.ce-list-titlebar h2 span {
+  color: #20922d;
+}
+.ce-list-titlebar p {
+  display: none;
+}
 
 .ce-pagination-mini {
   display: inline-flex;
@@ -2311,14 +3924,13 @@ onBeforeUnmount(() => {
 }
 
 .ce-pagination-mini button:disabled {
-  opacity: .42;
+  opacity: 0.42;
   cursor: not-allowed;
 }
 
 .ce-list-columns {
   display: none;
 }
-
 
 .ce-list-scroll.is-source-unavailable {
   position: relative;
@@ -2344,13 +3956,16 @@ onBeforeUnmount(() => {
 .ce-student-row {
   width: calc(100% - 7px);
   box-sizing: border-box;
-  grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-quality-col) var(--student-list-action-col);
+  grid-template-columns:
+    minmax(0, 1fr) var(--student-list-balance-col) var(
+      --student-list-quality-col
+    )
+    var(--student-list-action-col);
   min-height: var(--student-list-row-height);
   margin: 0 7px 7px 0;
   padding-left: 12px;
   border-radius: 14px;
 }
-
 
 .ce-workspace.has-detail .ce-list-card {
   grid-template-rows: 44px minmax(0, 1fr);
@@ -2367,7 +3982,11 @@ onBeforeUnmount(() => {
 }
 
 .ce-workspace.has-empty-detail .ce-student-row {
-  grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-quality-col) var(--student-list-action-col);
+  grid-template-columns:
+    minmax(0, 1fr) var(--student-list-balance-col) var(
+      --student-list-quality-col
+    )
+    var(--student-list-action-col);
   align-items: center;
   padding-right: 7px;
 }
@@ -2385,10 +4004,14 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-.ce-student-row.missing-overlay { border-style: dashed; }
+.ce-student-row.missing-overlay {
+  border-style: dashed;
+}
 
 .ce-student-identity {
-  grid-template-columns: 26px var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
+  grid-template-columns:
+    26px var(--student-list-grade-size) var(--student-list-crest-size)
+    minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -2430,7 +4053,7 @@ onBeforeUnmount(() => {
   border-color: transparent;
   background: #67af5a;
   color: #fff;
-  box-shadow: 0 8px 16px rgba(63, 145, 56, .18);
+  box-shadow: 0 8px 16px rgba(63, 145, 56, 0.18);
 }
 
 .ce-academic-pills {
@@ -2447,7 +4070,7 @@ onBeforeUnmount(() => {
   min-height: 18px;
   align-items: center;
   padding: 0 8px;
-  border: 1px solid rgba(63, 145, 56, .18);
+  border: 1px solid rgba(63, 145, 56, 0.18);
   border-radius: 999px;
   background: #eaf7e7;
   color: #20882d;
@@ -2457,7 +4080,7 @@ onBeforeUnmount(() => {
 }
 
 .ce-academic-pills span.warning {
-  border-color: rgba(180, 107, 18, .26);
+  border-color: rgba(180, 107, 18, 0.26);
   background: #fff6e7;
   color: #b36a16;
 }
@@ -2473,17 +4096,22 @@ onBeforeUnmount(() => {
   justify-content: center;
   justify-self: center;
   border-radius: 999px;
-  background: conic-gradient(var(--score-color) var(--quality-score), #edf1f5 0deg);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, .08), inset 0 0 0 1px rgba(255, 255, 255, .72);
+  background: conic-gradient(
+    var(--score-color) var(--quality-score),
+    #edf1f5 0deg
+  );
+  box-shadow:
+    0 8px 18px rgba(21, 35, 60, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72);
 }
 
 .ce-quality-score::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 6px;
   border-radius: inherit;
   background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(215, 225, 235, .7);
+  box-shadow: inset 0 0 0 1px rgba(215, 225, 235, 0.7);
 }
 
 .ce-quality-score b {
@@ -2492,11 +4120,15 @@ onBeforeUnmount(() => {
   color: #15233c;
   font-size: 11px;
   font-weight: 920;
-  letter-spacing: -.025em;
+  letter-spacing: -0.025em;
 }
 
-.ce-quality-score.warning { --score-color: #f39a18; }
-.ce-quality-score.danger { --score-color: #e34a43; }
+.ce-quality-score.warning {
+  --score-color: #f39a18;
+}
+.ce-quality-score.danger {
+  --score-color: #e34a43;
+}
 
 .ce-profile-cell,
 .ce-quality-cell {
@@ -2587,10 +4219,22 @@ onBeforeUnmount(() => {
   font-weight: 880;
 }
 
-.ce-status-pill.success { background: #eef8eb; color: #21882e; }
-.ce-status-pill.danger { background: #fff0ee; color: #c8423b; }
-.ce-status-pill.neutral { background: #f2f5f8; color: #657083; }
-.ce-status-pill.large { min-height: 28px; padding-inline: 12px; }
+.ce-status-pill.success {
+  background: #eef8eb;
+  color: #21882e;
+}
+.ce-status-pill.danger {
+  background: #fff0ee;
+  color: #c8423b;
+}
+.ce-status-pill.neutral {
+  background: #f2f5f8;
+  color: #657083;
+}
+.ce-status-pill.large {
+  min-height: 28px;
+  padding-inline: 12px;
+}
 
 .ce-row-action {
   display: inline-flex;
@@ -2602,7 +4246,7 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   background: #fff;
   color: #71809a;
-  box-shadow: 0 8px 16px rgba(21, 35, 60, .06);
+  box-shadow: 0 8px 16px rgba(21, 35, 60, 0.06);
 }
 
 .ce-state-card {
@@ -2610,8 +4254,15 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
-.ce-state-card.error { color: #c8423b; }
-.ce-inline-action { border: 0; background: transparent; color: #2f7f32; font-weight: 840; }
+.ce-state-card.error {
+  color: #c8423b;
+}
+.ce-inline-action {
+  border: 0;
+  background: transparent;
+  color: #2f7f32;
+  font-weight: 840;
+}
 
 .ce-list-footer {
   display: flex;
@@ -2651,7 +4302,7 @@ onBeforeUnmount(() => {
   border-color: #2f9138;
   background: linear-gradient(180deg, #58b951, #2f9239);
   color: #fff;
-  box-shadow: 0 8px 14px rgba(63, 145, 56, .2);
+  box-shadow: 0 8px 14px rgba(63, 145, 56, 0.2);
 }
 
 .ce-list-pages button.ellipsis {
@@ -2662,10 +4313,9 @@ onBeforeUnmount(() => {
 }
 
 .ce-list-pages button:disabled:not(.ellipsis) {
-  opacity: .5;
+  opacity: 0.5;
   cursor: not-allowed;
 }
-
 
 .ce-skeleton-stack {
   display: grid;
@@ -2681,7 +4331,11 @@ onBeforeUnmount(() => {
   animation: ce-loading 1.4s linear infinite;
 }
 
-@keyframes ce-loading { to { background-position: -220% 0; } }
+@keyframes ce-loading {
+  to {
+    background-position: -220% 0;
+  }
+}
 
 .ce-detail-panel {
   display: flex;
@@ -2697,13 +4351,13 @@ onBeforeUnmount(() => {
   border: 1px solid var(--students-border);
   border-radius: 14px;
   background: #fff;
-  box-shadow: 0 8px 20px rgba(21,35,60,.04);
+  box-shadow: 0 8px 20px rgba(21, 35, 60, 0.04);
   overflow: hidden;
 }
 
 .ce-detail-header {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(220px, .7fr) 230px auto 34px;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 0.7fr) 230px auto 34px;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
@@ -2719,7 +4373,7 @@ onBeforeUnmount(() => {
   color: #6f7b95;
   font-size: 10.5px;
   font-weight: 850;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -2737,7 +4391,7 @@ onBeforeUnmount(() => {
   color: #10203a;
   font-size: 19px;
   font-weight: 900;
-  letter-spacing: -.035em;
+  letter-spacing: -0.035em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2749,14 +4403,14 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border: 1px solid rgba(63, 145, 56, .14);
+  border: 1px solid rgba(63, 145, 56, 0.14);
   border-radius: 14px;
   background: linear-gradient(110deg, #ffffff 0%, #f5fbf2 100%);
-  box-shadow: 0 8px 18px rgba(21,35,60,.045);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.045);
 }
 
 .ce-husky-header-card.unavailable {
-  border-color: rgba(129, 142, 162, .18);
+  border-color: rgba(129, 142, 162, 0.18);
   background: #fbfcfd;
 }
 
@@ -2870,13 +4524,13 @@ onBeforeUnmount(() => {
   border: 1px solid var(--students-border);
   border-radius: 14px;
   background: #fff;
-  box-shadow: 0 7px 18px rgba(21,35,60,.035);
+  box-shadow: 0 7px 18px rgba(21, 35, 60, 0.035);
 }
 
 .ce-profile-card {
   position: relative;
   display: grid;
-  grid-template-columns: 82px minmax(0, 1fr) minmax(200px, .45fr);
+  grid-template-columns: 82px minmax(0, 1fr) minmax(200px, 0.45fr);
   align-items: center;
   gap: 14px;
   min-height: 88px;
@@ -2944,7 +4598,7 @@ onBeforeUnmount(() => {
   color: #6d7890;
   font-size: 11px;
   font-weight: 880;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 .ce-tutor-card strong {
@@ -2970,22 +4624,22 @@ onBeforeUnmount(() => {
   top: 50%;
   z-index: 0;
   color: #3f9138;
-  opacity: .12;
+  opacity: 0.12;
   transform: translateY(-50%) rotate(-7deg);
 }
 
 .ce-profile-watermark.is-missing-group {
   color: #b36a16;
-  opacity: .11;
+  opacity: 0.11;
 }
 
 .ce-data-section {
   display: grid;
-  grid-template-columns: minmax(220px, .42fr) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 0.42fr) minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-color: rgba(63,145,56,.18);
+  border-color: rgba(63, 145, 56, 0.18);
   background: linear-gradient(90deg, #f7fcf5, #fff);
 }
 
@@ -3040,7 +4694,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 7px;
   padding: 0 10px;
-  border: 1px solid rgba(200,66,59,.2);
+  border: 1px solid rgba(200, 66, 59, 0.2);
   border-radius: 13px;
   background: #fff5f3;
   color: #c8423b;
@@ -3051,25 +4705,25 @@ onBeforeUnmount(() => {
 .ce-missing-chip b {
   font-size: 9px;
   font-weight: 900;
-  opacity: .82;
+  opacity: 0.82;
 }
 
 .ce-missing-chip.ok {
-  border-color: rgba(63,145,56,.2);
+  border-color: rgba(63, 145, 56, 0.2);
   background: #eff8eb;
   color: #21882e;
 }
 
 .ce-husky-card {
   display: grid;
-  grid-template-columns: minmax(260px, .55fr) minmax(260px, .7fr) auto;
+  grid-template-columns: minmax(260px, 0.55fr) minmax(260px, 0.7fr) auto;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid rgba(42, 126, 191, .16);
+  border: 1px solid rgba(42, 126, 191, 0.16);
   border-radius: 14px;
   background: linear-gradient(90deg, #f7fbff, #fff);
-  box-shadow: 0 7px 18px rgba(21,35,60,.035);
+  box-shadow: 0 7px 18px rgba(21, 35, 60, 0.035);
 }
 
 .ce-husky-heading {
@@ -3103,7 +4757,7 @@ onBeforeUnmount(() => {
   color: #6f7b95;
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: .045em;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
 
@@ -3212,7 +4866,7 @@ onBeforeUnmount(() => {
   color: #60708a;
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: .045em;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
 
@@ -3229,14 +4883,14 @@ onBeforeUnmount(() => {
   font-weight: 650;
   outline: 0;
   padding: 0 11px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .ce-form-grid input:focus,
 .ce-form-grid select:focus,
 .ce-wide-field textarea:focus {
-  border-color: rgba(63,145,56,.42);
-  box-shadow: 0 0 0 3px rgba(63,145,56,.1);
+  border-color: rgba(63, 145, 56, 0.42);
+  box-shadow: 0 0 0 3px rgba(63, 145, 56, 0.1);
 }
 
 .ce-wide-field {
@@ -3254,7 +4908,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid rgba(200,66,59,.2);
+  border: 1px solid rgba(200, 66, 59, 0.2);
   border-radius: 12px;
   background: #fff5f3;
   color: #c8423b;
@@ -3271,9 +4925,13 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 18px;
-  border-top: 1px solid rgba(63,145,56,.12);
-  background: linear-gradient(90deg, rgba(242, 250, 238, .98), rgba(255, 255, 255, .98));
-  box-shadow: 0 -10px 24px rgba(21,35,60,.055);
+  border-top: 1px solid rgba(63, 145, 56, 0.12);
+  background: linear-gradient(
+    90deg,
+    rgba(242, 250, 238, 0.98),
+    rgba(255, 255, 255, 0.98)
+  );
+  box-shadow: 0 -10px 24px rgba(21, 35, 60, 0.055);
 }
 
 .ce-detail-footer span {
@@ -3377,7 +5035,7 @@ onBeforeUnmount(() => {
   color: #61708a;
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: .045em;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
 
@@ -3393,7 +5051,7 @@ onBeforeUnmount(() => {
 }
 
 .ce-husky-card.compact {
-  grid-template-columns: minmax(230px, .55fr) minmax(260px, .7fr) auto;
+  grid-template-columns: minmax(230px, 0.55fr) minmax(260px, 0.7fr) auto;
   box-shadow: none;
 }
 
@@ -3409,10 +5067,9 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(15, 23, 42, .32);
+  background: rgba(15, 23, 42, 0.32);
   backdrop-filter: blur(6px);
 }
-
 
 .ce-empty-detail-panel {
   min-height: 0;
@@ -3434,9 +5091,13 @@ onBeforeUnmount(() => {
   border: 1px solid var(--students-border);
   border-radius: 14px;
   background:
-    radial-gradient(circle at 48% 12%, rgba(142, 193, 83, .13), transparent 170px),
+    radial-gradient(
+      circle at 48% 12%,
+      rgba(142, 193, 83, 0.13),
+      transparent 170px
+    ),
     linear-gradient(180deg, #fff 0%, #fff 58%, #fbfcfd 100%);
-  box-shadow: 0 8px 20px rgba(21, 35, 60, .04);
+  box-shadow: 0 8px 20px rgba(21, 35, 60, 0.04);
 }
 
 .ce-empty-hero {
@@ -3453,13 +5114,19 @@ onBeforeUnmount(() => {
 }
 
 .ce-empty-hero::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 10px 17px 5px 17px;
-  border: 2px solid rgba(63, 145, 56, .16);
+  border: 2px solid rgba(63, 145, 56, 0.16);
   border-radius: 28px;
-  background: linear-gradient(145deg, rgba(244, 252, 241, .94), rgba(255, 255, 255, .92));
-  box-shadow: 0 18px 40px rgba(63, 145, 56, .1), inset 0 1px 0 rgba(255, 255, 255, .86);
+  background: linear-gradient(
+    145deg,
+    rgba(244, 252, 241, 0.94),
+    rgba(255, 255, 255, 0.92)
+  );
+  box-shadow:
+    0 18px 40px rgba(63, 145, 56, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
 .ce-empty-hero > svg {
@@ -3483,7 +5150,7 @@ onBeforeUnmount(() => {
   display: block;
   height: 4px;
   border-radius: 999px;
-  background: rgba(118, 190, 104, .38);
+  background: rgba(118, 190, 104, 0.38);
 }
 
 .ce-empty-cursor {
@@ -3495,7 +5162,7 @@ onBeforeUnmount(() => {
   height: 0;
   border-top: 24px solid #5caf52;
   border-right: 18px solid transparent;
-  filter: drop-shadow(0 8px 9px rgba(63, 145, 56, .2));
+  filter: drop-shadow(0 8px 9px rgba(63, 145, 56, 0.2));
   transform: rotate(-13deg);
 }
 
@@ -3507,8 +5174,15 @@ onBeforeUnmount(() => {
   line-height: 1;
 }
 
-.ce-empty-sparkle.one { left: 13px; top: 18px; }
-.ce-empty-sparkle.two { left: 40px; top: 5px; font-size: 12px; }
+.ce-empty-sparkle.one {
+  left: 13px;
+  top: 18px;
+}
+.ce-empty-sparkle.two {
+  left: 40px;
+  top: 5px;
+  font-size: 12px;
+}
 
 .ce-empty-copy {
   display: grid;
@@ -3521,7 +5195,7 @@ onBeforeUnmount(() => {
   color: #10203a;
   font-size: 18px;
   font-weight: 920;
-  letter-spacing: -.035em;
+  letter-spacing: -0.035em;
 }
 
 .ce-empty-copy p {
@@ -3535,8 +5209,8 @@ onBeforeUnmount(() => {
 .ce-empty-card {
   border: 1px solid #dbe5f0;
   border-radius: 14px;
-  background: rgba(255, 255, 255, .86);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, .035);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.035);
 }
 
 .ce-empty-card h3 {
@@ -3595,11 +5269,11 @@ onBeforeUnmount(() => {
 }
 
 .ce-empty-flow li:not(:last-child)::after {
-  content: '→';
+  content: "→";
   position: absolute;
   top: 13px;
   right: -21px;
-  color: rgba(63, 145, 56, .48);
+  color: rgba(63, 145, 56, 0.48);
   font-size: 23px;
   font-weight: 400;
   line-height: 1;
@@ -3611,11 +5285,11 @@ onBeforeUnmount(() => {
   height: 45px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(63, 145, 56, .18);
+  border: 1px solid rgba(63, 145, 56, 0.18);
   border-radius: 11px;
   background: linear-gradient(180deg, #f7fcf5, #fff);
   color: #2e9038;
-  box-shadow: 0 8px 14px rgba(63, 145, 56, .08);
+  box-shadow: 0 8px 14px rgba(63, 145, 56, 0.08);
 }
 
 .ce-empty-flow li b {
@@ -3639,11 +5313,11 @@ onBeforeUnmount(() => {
   margin-top: auto;
   overflow: hidden;
   padding: 0 92px 0 18px;
-  border: 1px solid rgba(63, 145, 56, .22);
+  border: 1px solid rgba(63, 145, 56, 0.22);
   border-radius: 14px;
   background: linear-gradient(90deg, #f4fbf1, #fff);
   color: #56677f;
-  box-shadow: 0 8px 18px rgba(63, 145, 56, .06);
+  box-shadow: 0 8px 18px rgba(63, 145, 56, 0.06);
 }
 
 .ce-empty-tip > span {
@@ -3676,7 +5350,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: rgba(63, 145, 56, .09);
+  background: rgba(63, 145, 56, 0.09);
   color: #3f9138;
   transform: translateY(-50%);
 }
@@ -3687,7 +5361,7 @@ onBeforeUnmount(() => {
   border: 1px solid #dce6f0;
   border-radius: 18px;
   background: #fff;
-  box-shadow: 0 28px 70px rgba(15, 23, 42, .22);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22);
 }
 
 .ce-import-modal > header,
@@ -3708,7 +5382,7 @@ onBeforeUnmount(() => {
   color: #2f9138;
   font-size: 10px;
   font-weight: 900;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -3717,7 +5391,7 @@ onBeforeUnmount(() => {
   color: #10203a;
   font-size: 18px;
   font-weight: 900;
-  letter-spacing: -.03em;
+  letter-spacing: -0.03em;
 }
 
 .ce-import-modal > footer {
@@ -3771,7 +5445,7 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 4px;
   padding: 12px;
-  border: 1px solid rgba(63, 145, 56, .24);
+  border: 1px solid rgba(63, 145, 56, 0.24);
   border-radius: 13px;
   background: #f3fbf1;
   color: #1f7b2b;
@@ -3780,7 +5454,7 @@ onBeforeUnmount(() => {
 }
 
 .ce-import-result.warning {
-  border-color: rgba(196, 126, 23, .28);
+  border-color: rgba(196, 126, 23, 0.28);
   background: #fffaf0;
   color: #9a640f;
 }
@@ -3797,7 +5471,6 @@ onBeforeUnmount(() => {
   color: inherit;
   font-size: 11px;
 }
-
 
 /* Control Escolar 1:1 redesign alignment */
 .ce-filter-bar {
@@ -3822,7 +5495,7 @@ onBeforeUnmount(() => {
   border: 1px solid #dfe7ef;
   border-radius: 13px;
   background: #fff;
-  box-shadow: 0 8px 20px rgba(21, 35, 60, .035);
+  box-shadow: 0 8px 20px rgba(21, 35, 60, 0.035);
 }
 
 .ce-secondary-filter-row {
@@ -3836,7 +5509,7 @@ onBeforeUnmount(() => {
   border: 1px solid #dfe7ef;
   border-radius: 13px;
   background: #fff;
-  box-shadow: 0 8px 20px rgba(21, 35, 60, .03);
+  box-shadow: 0 8px 20px rgba(21, 35, 60, 0.03);
 }
 
 .ce-filter-bar .search-control {
@@ -3908,7 +5581,7 @@ onBeforeUnmount(() => {
   border-color: #2f9138;
   background: linear-gradient(180deg, #58b951, #2f9239);
   color: #fff;
-  box-shadow: 0 8px 16px rgba(63, 145, 56, .18);
+  box-shadow: 0 8px 16px rgba(63, 145, 56, 0.18);
 }
 
 .ce-chip-label {
@@ -3916,7 +5589,7 @@ onBeforeUnmount(() => {
   color: #66758e;
   font-size: 10px;
   font-weight: 900;
-  letter-spacing: .045em;
+  letter-spacing: 0.045em;
 }
 
 .ce-status-tabs {
@@ -3937,16 +5610,16 @@ onBeforeUnmount(() => {
 .ce-status-tab.active {
   border-color: #2f9138;
   background: linear-gradient(180deg, #55b84f, #2d9137);
-  box-shadow: 0 9px 18px rgba(63, 145, 56, .2);
+  box-shadow: 0 9px 18px rgba(63, 145, 56, 0.2);
 }
 
 .ce-workspace.has-detail {
-  grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr);
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
   gap: 10px;
 }
 
 .ce-workspace.has-empty-detail {
-  grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr);
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
   gap: 10px;
 }
 
@@ -3954,7 +5627,7 @@ onBeforeUnmount(() => {
   grid-template-rows: 44px minmax(0, 1fr) 38px;
   border-color: #dfe7ef;
   border-radius: 12px;
-  box-shadow: 0 9px 20px rgba(21, 35, 60, .035);
+  box-shadow: 0 9px 20px rgba(21, 35, 60, 0.035);
 }
 
 .ce-workspace.has-detail .ce-list-card {
@@ -3969,7 +5642,11 @@ onBeforeUnmount(() => {
 }
 
 .ce-workspace.has-detail .ce-student-row {
-  grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-quality-col) var(--student-list-action-col);
+  grid-template-columns:
+    minmax(0, 1fr) var(--student-list-balance-col) var(
+      --student-list-quality-col
+    )
+    var(--student-list-action-col);
   min-height: var(--student-list-row-height);
   padding-right: 6px;
 }
@@ -4001,14 +5678,14 @@ onBeforeUnmount(() => {
   width: calc(100% - 5px);
   margin: 0 5px 7px 0;
   border-color: #dfe7ef;
-  box-shadow: 0 5px 12px rgba(21, 35, 60, .035);
+  box-shadow: 0 5px 12px rgba(21, 35, 60, 0.035);
 }
 
 .ce-student-row.selected,
 .ce-student-row.multi-selected {
-  border-color: rgba(63, 145, 56, .34);
-  background: linear-gradient(90deg, rgba(235, 249, 232, .96) 0%, #fff 76%);
-  box-shadow: 0 8px 20px rgba(63, 145, 56, .105);
+  border-color: rgba(63, 145, 56, 0.34);
+  background: linear-gradient(90deg, rgba(235, 249, 232, 0.96) 0%, #fff 76%);
+  box-shadow: 0 8px 20px rgba(63, 145, 56, 0.105);
 }
 
 .ce-row-check {
@@ -4018,7 +5695,9 @@ onBeforeUnmount(() => {
 }
 
 .ce-student-identity {
-  grid-template-columns: 24px var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
+  grid-template-columns:
+    24px var(--student-list-grade-size) var(--student-list-crest-size)
+    minmax(0, 1fr);
   gap: 7px;
 }
 
@@ -4040,11 +5719,13 @@ onBeforeUnmount(() => {
 .ce-detail-shell {
   border-color: #dfe7ef;
   border-radius: 12px;
-  box-shadow: 0 9px 20px rgba(21, 35, 60, .035);
+  box-shadow: 0 9px 20px rgba(21, 35, 60, 0.035);
 }
 
 .ce-detail-header {
-  grid-template-columns: minmax(250px, 1fr) minmax(180px, 220px) minmax(190px, 245px) 34px;
+  grid-template-columns:
+    minmax(250px, 1fr) minmax(180px, 220px) minmax(190px, 245px)
+    34px;
   min-height: 78px;
   gap: 12px;
   padding: 12px 14px 12px 18px;
@@ -4067,10 +5748,10 @@ onBeforeUnmount(() => {
   gap: 10px;
   min-height: 58px;
   padding: 9px 12px;
-  border: 1px solid rgba(63, 145, 56, .22);
+  border: 1px solid rgba(63, 145, 56, 0.22);
   border-radius: 12px;
   background: linear-gradient(180deg, #f8fcf6, #fff);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, .04);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.04);
 }
 
 .ce-access-header-card > span {
@@ -4130,7 +5811,7 @@ onBeforeUnmount(() => {
 .ce-detail-menu-button {
   border: 1px solid #dfe7ef;
   background: #fff;
-  box-shadow: 0 6px 14px rgba(21, 35, 60, .04);
+  box-shadow: 0 6px 14px rgba(21, 35, 60, 0.04);
 }
 
 .ce-detail-body {
@@ -4139,7 +5820,7 @@ onBeforeUnmount(() => {
 }
 
 .ce-profile-card {
-  grid-template-columns: 78px minmax(0, 1fr) minmax(190px, .42fr);
+  grid-template-columns: 78px minmax(0, 1fr) minmax(190px, 0.42fr);
   min-height: 88px;
   padding: 10px 14px;
   border-color: #dfe7ef;
@@ -4148,10 +5829,10 @@ onBeforeUnmount(() => {
 }
 
 .ce-data-section {
-  grid-template-columns: minmax(220px, .36fr) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 0.36fr) minmax(0, 1fr);
   min-height: 48px;
   padding: 8px 12px;
-  border-color: rgba(63, 145, 56, .16);
+  border-color: rgba(63, 145, 56, 0.16);
   border-radius: 12px;
   background: linear-gradient(90deg, #f8fcf6, #fff);
 }
@@ -4219,7 +5900,11 @@ onBeforeUnmount(() => {
 .ce-detail-footer {
   min-height: 58px;
   padding: 8px 16px;
-  background: linear-gradient(90deg, rgba(255, 248, 238, .94), rgba(255, 255, 255, .98));
+  background: linear-gradient(
+    90deg,
+    rgba(255, 248, 238, 0.94),
+    rgba(255, 255, 255, 0.98)
+  );
 }
 
 .ce-detail-footer .ce-save-state {
@@ -4229,21 +5914,51 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1320px) {
-  .ce-kpi-strip { grid-template-columns: repeat(5, minmax(148px, 1fr)); overflow-x: auto; }
-  .ce-primary-filter-row { grid-template-columns: max-content minmax(300px, 1fr) auto auto; }
-  .ce-clear-link { display: none; }
-  .ce-status-tabs { overflow-x: auto; }
-  .ce-workspace.has-detail { grid-template-columns: minmax(400px, .62fr) minmax(650px, 1.38fr); }
-  .ce-workspace.has-empty-detail { grid-template-columns: minmax(690px, 1.12fr) minmax(500px, .88fr); }
-  .ce-workspace.has-empty-detail .ce-list-card { --student-list-quality-col: 210px; }
-  .ce-quality-fields { grid-template-columns: repeat(2, minmax(0, max-content)); }
-  .ce-empty-flow ol { gap: 18px; }
-  .ce-empty-flow li:not(:last-child)::after { right: -18px; }
-  .ce-detail-header { grid-template-columns: minmax(0, 1fr) minmax(180px, 220px) minmax(180px, 220px) 34px; gap: 9px; }
-  .ce-access-header-card { grid-template-columns: 30px minmax(0, 1fr); padding: 7px 8px; }
-  .ce-detail-actions { display: none; }
+  .ce-kpi-strip {
+    grid-template-columns: repeat(5, minmax(148px, 1fr));
+    overflow-x: auto;
+  }
+  .ce-primary-filter-row {
+    grid-template-columns: max-content minmax(300px, 1fr) auto auto;
+  }
+  .ce-clear-link {
+    display: none;
+  }
+  .ce-status-tabs {
+    overflow-x: auto;
+  }
+  .ce-workspace.has-detail {
+    grid-template-columns: minmax(400px, 0.62fr) minmax(650px, 1.38fr);
+  }
+  .ce-workspace.has-empty-detail {
+    grid-template-columns: minmax(690px, 1.12fr) minmax(500px, 0.88fr);
+  }
+  .ce-workspace.has-empty-detail .ce-list-card {
+    --student-list-quality-col: 210px;
+  }
+  .ce-quality-fields {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+  }
+  .ce-empty-flow ol {
+    gap: 18px;
+  }
+  .ce-empty-flow li:not(:last-child)::after {
+    right: -18px;
+  }
+  .ce-detail-header {
+    grid-template-columns:
+      minmax(0, 1fr) minmax(180px, 220px) minmax(180px, 220px)
+      34px;
+    gap: 9px;
+  }
+  .ce-access-header-card {
+    grid-template-columns: 30px minmax(0, 1fr);
+    padding: 7px 8px;
+  }
+  .ce-detail-actions {
+    display: none;
+  }
 }
-
 
 .ce-source-unavailable {
   position: relative;
@@ -4260,17 +5975,31 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(198, 221, 204, 0.92);
   border-radius: 30px;
   background:
-    radial-gradient(circle at 17% 18%, rgba(112, 180, 73, 0.17), transparent 13rem),
-    radial-gradient(circle at 86% 12%, rgba(0, 126, 148, 0.12), transparent 13rem),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 248, 0.96));
+    radial-gradient(
+      circle at 17% 18%,
+      rgba(112, 180, 73, 0.17),
+      transparent 13rem
+    ),
+    radial-gradient(
+      circle at 86% 12%,
+      rgba(0, 126, 148, 0.12),
+      transparent 13rem
+    ),
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(247, 252, 248, 0.96)
+    );
   margin: 0;
   padding: 38px 30px;
   text-align: center;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 22px 55px rgba(22, 64, 46, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 22px 55px rgba(22, 64, 46, 0.08);
 }
 
 .ce-source-unavailable::before {
-  content: '';
+  content: "";
   position: absolute;
   z-index: 0;
   width: 292px;
@@ -4377,7 +6106,9 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.ce-source-retry:hover { transform: translateY(-1px); }
+.ce-source-retry:hover {
+  transform: translateY(-1px);
+}
 
 @media (max-width: 980px) {
   .ce-workspace,
@@ -4388,20 +6119,51 @@ onBeforeUnmount(() => {
     height: auto;
   }
   .ce-list-card,
-  .ce-detail-panel { height: 660px; }
+  .ce-detail-panel {
+    height: 660px;
+  }
   .ce-empty-review div,
-  .ce-empty-flow ol { grid-template-columns: 1fr; }
-  .ce-empty-flow li:not(:last-child)::after { display: none; }
-  .ce-detail-header { grid-template-columns: minmax(0, 1fr) 34px; }
+  .ce-empty-flow ol {
+    grid-template-columns: 1fr;
+  }
+  .ce-empty-flow li:not(:last-child)::after {
+    display: none;
+  }
+  .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 34px;
+  }
   .ce-access-header-card,
-  .ce-progress-cluster { grid-column: 1 / -1; }
+  .ce-progress-cluster {
+    grid-column: 1 / -1;
+  }
   .ce-profile-card,
   .ce-data-section,
   .ce-husky-card,
-  .ce-edit-form { grid-template-columns: 1fr; }
+  .ce-edit-form {
+    grid-template-columns: 1fr;
+  }
   .ce-missing-grid,
   .ce-form-grid.three,
-  .ce-form-card:not(.ce-contact-card) .ce-form-grid.three { grid-template-columns: 1fr; }
-  .ce-detail-tabs { gap: 14px; overflow-x: auto; }
+  .ce-form-card:not(.ce-contact-card) .ce-form-grid.three {
+    grid-template-columns: 1fr;
+  }
+  .ce-detail-tabs {
+    gap: 14px;
+    overflow-x: auto;
+  }
+}
+@media (max-width: 900px) {
+  .ce-data-status {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ce-data-status-freshness {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .ce-data-status-copy small {
+    white-space: normal;
+  }
 }
 </style>
