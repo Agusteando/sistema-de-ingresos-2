@@ -1268,7 +1268,11 @@ const activePlantelCookie = useCookie("auth_active_plantel");
 const initialControlPlantel = String(activePlantelCookie.value || "").trim();
 const externalConcepts = ref([]);
 const ENROLLMENT_CONCEPTS_CACHE_KEY = "students-enrollment-concepts:v1";
-const CONTROL_STUDENTS_CACHE_VERSION = 1;
+const CONTROL_STUDENTS_CACHE_VERSION = 2;
+const CONTROL_STUDENTS_CACHE_READ_VERSIONS = [
+  CONTROL_STUDENTS_CACHE_VERSION,
+  1,
+];
 const CONTROL_STUDENTS_CACHE_NAMESPACE = "control-escolar:students-cache";
 const currentCicloKey = computed(() =>
   normalizeCicloKey(
@@ -1926,13 +1930,25 @@ const controlCacheScopeFromQuery = (query = buildQuery()) => ({
 const controlStudentsCacheSignature = (query = buildQuery()) =>
   encodeURIComponent(JSON.stringify(normalizeControlCacheParams(query)));
 
-const controlStudentsLegacyCacheKey = (query = buildQuery()) =>
-  `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${CONTROL_STUDENTS_CACHE_VERSION}:${controlStudentsCacheSignature(query)}`;
+const controlStudentsLegacyCacheKey = (
+  query = buildQuery(),
+  version = CONTROL_STUDENTS_CACHE_VERSION,
+) =>
+  `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${version}:${controlStudentsCacheSignature(query)}`;
 
-const controlStudentsCacheKey = (query = buildQuery()) => {
+const controlStudentsCacheKey = (
+  query = buildQuery(),
+  version = CONTROL_STUDENTS_CACHE_VERSION,
+) => {
   const scope = controlCacheScopeFromQuery(query);
-  return `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${CONTROL_STUDENTS_CACHE_VERSION}:${encodeURIComponent(scope.agentId)}:${encodeURIComponent(scope.ciclo)}:${controlStudentsCacheSignature(query)}`;
+  return `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${version}:${encodeURIComponent(scope.agentId)}:${encodeURIComponent(scope.ciclo)}:${controlStudentsCacheSignature(query)}`;
 };
+
+const controlStudentsCacheLookupKeys = (query = buildQuery()) =>
+  CONTROL_STUDENTS_CACHE_READ_VERSIONS.flatMap((version) => [
+    controlStudentsCacheKey(query, version),
+    controlStudentsLegacyCacheKey(query, version),
+  ]);
 
 const isCachedControlStudentsForScope = (cached, query = buildQuery()) => {
   const scope = controlCacheScopeFromQuery(query);
@@ -1943,18 +1959,58 @@ const isCachedControlStudentsForScope = (cached, query = buildQuery()) => {
   );
 };
 
+const isControlPhotoCacheKey = (key = "") => {
+  const normalized = String(key).toLowerCase();
+  return (
+    normalized === "foto" ||
+    normalized.includes("photo") ||
+    normalized.includes("foto") ||
+    normalized.includes("image") ||
+    normalized.includes("avatar") ||
+    normalized.includes("picture") ||
+    normalized.includes("thumbnail") ||
+    normalized.includes("portrait")
+  );
+};
+
+const sanitizeControlStudentForCache = (student = {}) => {
+  if (!student || typeof student !== "object") return student;
+
+  return Object.entries(student).reduce((sanitized, [key, value]) => {
+    if (isControlPhotoCacheKey(key)) return sanitized;
+    sanitized[key] = value;
+    return sanitized;
+  }, {});
+};
+
+const sanitizeControlStudentsForCache = (data = []) =>
+  Array.isArray(data) ? data.map(sanitizeControlStudentForCache) : [];
+
+const normalizeCachedControlStudentsRecord = (cached = {}, query = buildQuery()) => {
+  const sanitizedData = sanitizeControlStudentsForCache(cached.data);
+
+  return {
+    ...cached,
+    version: CONTROL_STUDENTS_CACHE_VERSION,
+    scope: cached.scope || controlCacheScopeFromQuery(query),
+    query: cached.query || normalizeControlCacheParams(query),
+    data: sanitizedData,
+  };
+};
+
 const readCachedControlStudents = (query = buildQuery()) => {
   if (!process.client) return null;
 
   try {
-    const keys = [controlStudentsCacheKey(query), controlStudentsLegacyCacheKey(query)];
+    const keys = controlStudentsCacheLookupKeys(query);
     for (const key of keys) {
       const cached = JSON.parse(localStorage.getItem(key) || "null");
       if (!cached) continue;
-      if (Number(cached?.version) !== CONTROL_STUDENTS_CACHE_VERSION) continue;
+      if (!CONTROL_STUDENTS_CACHE_READ_VERSIONS.includes(Number(cached?.version)))
+        continue;
       if (!Array.isArray(cached?.data)) continue;
       if (!isCachedControlStudentsForScope(cached, query)) continue;
-      return cached;
+      return normalizeCachedControlStudentsRecord(cached, query);
     }
     return null;
   } catch (error) {
@@ -1966,15 +2022,42 @@ const readCachedControlStudents = (query = buildQuery()) => {
   }
 };
 
-const writeCachedControlStudents = (query = buildQuery(), response = {}) => {
+const buildControlCacheMetadata = (metadata = {}, response = {}) => {
+  const savedAt = metadata.savedAt || new Date().toISOString();
+  const source = response?.source || {};
+  return {
+    savedAt,
+    stage: metadata.stage || source.phase || "unknown",
+    freshness: metadata.freshness || "base",
+    steps: {
+      cache: metadata.cacheStage || controlCacheStage.value,
+      base: metadata.baseStage || controlBaseStage.value,
+      external: metadata.externalStage || controlExternalDbStage.value,
+      complete: metadata.completeStage || controlCompleteStage.value,
+    },
+    externalRows: Number(
+      metadata.externalRows ??
+        getControlExternalDbRowCount(source) ??
+        controlExternalDbRows.value ??
+        0,
+    ),
+  };
+};
+
+const writeCachedControlStudents = (
+  query = buildQuery(),
+  response = {},
+  metadata = {},
+) => {
   if (!process.client || !Array.isArray(response?.data)) return false;
 
+  const cache = buildControlCacheMetadata(metadata, response);
   const record = {
     version: CONTROL_STUDENTS_CACHE_VERSION,
-    savedAt: new Date().toISOString(),
+    savedAt: cache.savedAt,
     scope: controlCacheScopeFromQuery(query),
     query: normalizeControlCacheParams(query),
-    data: response.data,
+    data: sanitizeControlStudentsForCache(response.data),
     pagination: response.pagination || {
       page: pagination.page,
       limit: pagination.limit,
@@ -1987,14 +2070,19 @@ const writeCachedControlStudents = (query = buildQuery(), response = {}) => {
       grupos: [],
       gruposPorGrado: {},
     },
-    source: response.source || null,
+    source: {
+      ...(response.source || {}),
+      cache,
+      cacheSavedAt: cache.savedAt,
+      cacheFreshness: cache.freshness,
+      cacheStage: cache.stage,
+      cacheExternalRows: cache.externalRows,
+    },
+    cache,
   };
 
   try {
-    localStorage.setItem(
-      controlStudentsCacheKey(query),
-      JSON.stringify(record),
-    );
+    localStorage.setItem(controlStudentsCacheKey(query), JSON.stringify(record));
     return true;
   } catch (error) {
     console.warn(
@@ -2488,21 +2576,25 @@ const replaceControlStudentInIndex = (student) => {
   applyInstantStudentFilters({ reconcileSelection: false });
 };
 
-const persistCurrentControlStudentsCache = () =>
-  writeCachedControlStudents(buildIndexQuery(), {
-    data: controlStudentsIndex.value,
-    pagination: {
-      page: 1,
-      limit: Math.max(controlStudentsIndex.value.length, 1),
-      total: controlStudentsIndex.value.length,
-      pages: 1,
+const persistCurrentControlStudentsCache = (metadata = {}) =>
+  writeCachedControlStudents(
+    buildIndexQuery(),
+    {
+      data: controlStudentsIndex.value,
+      pagination: {
+        page: 1,
+        limit: Math.max(controlStudentsIndex.value.length, 1),
+        total: controlStudentsIndex.value.length,
+        pages: 1,
+      },
+      catalogs: {
+        ...catalogs,
+        gruposPorGrado: { ...(catalogs.gruposPorGrado || {}) },
+      },
+      source: controlDataSource.value,
     },
-    catalogs: {
-      ...catalogs,
-      gruposPorGrado: { ...(catalogs.gruposPorGrado || {}) },
-    },
-    source: controlDataSource.value,
-  });
+    metadata,
+  );
 
 const isDomEventPayload = (value) =>
   Boolean(
@@ -2575,7 +2667,15 @@ const loadStudents = async (options = {}) => {
     controlDataSavedAt.value = "";
     controlDataSource.value = baseResponse?.source || controlDataSource.value;
     controlExternalDbRows.value = 0;
-    if (!cached) writeCachedControlStudents(query, baseResponse);
+    writeCachedControlStudents(query, baseResponse, {
+      stage: "base",
+      freshness: "base",
+      cacheStage: controlCacheStage.value,
+      baseStage: "ready",
+      externalStage: "idle",
+      completeStage: "idle",
+      externalRows: 0,
+    });
   } catch (error) {
     if (requestId !== controlStudentsRequestId) return;
     controlBaseStage.value = "failed";
@@ -2618,16 +2718,35 @@ const loadStudents = async (options = {}) => {
 
     pagination.page = 1;
     applyControlStudentsPayload(response);
-    writeCachedControlStudents(query, response);
     loadError.value = "";
     const responseSource = response?.source || {};
     const externalDbRows = getControlExternalDbRowCount(responseSource);
     controlExternalDbRows.value = externalDbRows;
     controlExternalDbStage.value = externalDbRows > 0 ? "ready" : "empty";
-    controlCompleteStage.value = "ready";
     controlDataFreshness.value = externalDbRows > 0 ? "synced" : "base";
-    controlDataSavedAt.value = externalDbRows > 0 ? new Date().toISOString() : "";
+    controlDataSavedAt.value = new Date().toISOString();
     controlDataSource.value = response?.source || controlDataSource.value;
+    writeCachedControlStudents(query, response, {
+      stage: "external",
+      freshness: controlDataFreshness.value,
+      cacheStage: controlCacheStage.value,
+      baseStage: "ready",
+      externalStage: controlExternalDbStage.value,
+      completeStage: "idle",
+      externalRows: externalDbRows,
+      savedAt: controlDataSavedAt.value,
+    });
+    controlCompleteStage.value = "ready";
+    persistCurrentControlStudentsCache({
+      stage: "complete",
+      freshness: controlDataFreshness.value,
+      cacheStage: controlCacheStage.value,
+      baseStage: "ready",
+      externalStage: controlExternalDbStage.value,
+      completeStage: "ready",
+      externalRows: externalDbRows,
+      savedAt: controlDataSavedAt.value,
+    });
   } catch (error) {
     if (requestId !== controlStudentsRequestId) return;
     controlExternalDbStage.value = "failed";
