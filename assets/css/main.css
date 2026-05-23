@@ -21,17 +21,36 @@
 
   html {
     @apply h-full;
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+    font-kerning: normal;
   }
 
   body {
     @apply bg-app text-gray-800 font-sans antialiased leading-relaxed m-0 h-full;
     color: var(--ink);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-synthesis-weight: none;
     background:
       radial-gradient(circle at 32% -12%, rgba(142, 193, 83, 0.12), transparent 32rem),
       linear-gradient(135deg, #fbfdfc 0%, #f7fafc 55%, #fbfdfb 100%);
   }
 
+  body,
+  button,
+  input,
+  select,
+  textarea {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-kerning: normal;
+  }
+
   * {
+    box-sizing: border-box;
     scrollbar-width: auto;
     scrollbar-color: rgba(101, 167, 68, 0.72) rgba(226, 237, 227, 0.72);
   }
