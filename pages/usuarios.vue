@@ -720,7 +720,7 @@ const serializeFetchError = (e, context = {}) => ({
 const loadUserDiagnostics = async () => {
   diagnosticsLoading.value = true
   try {
-    const diagnostics = await $fetch('/api/users/debug')
+    const diagnostics = await $fetch('/api/debug/users-external')
     lastFetchDebug.value = {
       ...(lastFetchDebug.value || {}),
       diagnostics,
@@ -729,7 +729,7 @@ const loadUserDiagnostics = async () => {
   } catch (e) {
     lastFetchDebug.value = {
       ...(lastFetchDebug.value || {}),
-      diagnosticsError: serializeFetchError(e, { endpoint: '/api/users/debug' })
+      diagnosticsError: serializeFetchError(e, { endpoint: '/api/debug/users-external' })
     }
   } finally {
     diagnosticsLoading.value = false

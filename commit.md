@@ -1,1 +1,1 @@
-fix: add Usuarios diagnostics and align access console layout
+fix: decouple Usuarios APIs from plantel database middleware

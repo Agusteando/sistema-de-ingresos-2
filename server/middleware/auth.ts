@@ -13,9 +13,10 @@ export default defineEventHandler(async (event) => {
 
   const isControlEscolarEndpoint = url.pathname.startsWith('/api/control-escolar/')
   const isDirectoryEndpoint = url.pathname.startsWith('/api/directory/')
+  const isExternalUsersEndpoint = url.pathname === '/api/users' || url.pathname.startsWith('/api/users/')
   const isProfileEndpoint = url.pathname === '/api/admin/profile'
 
-  if (isControlEscolarEndpoint || isDirectoryEndpoint || isProfileEndpoint) {
+  if (isControlEscolarEndpoint || isDirectoryEndpoint || isExternalUsersEndpoint || isProfileEndpoint) {
     return
   }
 
