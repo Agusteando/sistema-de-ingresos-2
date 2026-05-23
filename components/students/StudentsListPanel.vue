@@ -47,6 +47,25 @@
           <span class="liquid-loader" aria-hidden="true"><i></i><i></i><i></i></span>
           Cargando estudiantes...
         </div>
+        <section v-else-if="sourceUnavailable" class="student-source-unavailable" aria-live="polite">
+          <div class="source-orb" aria-hidden="true">
+            <LucideCloudOff :size="30" />
+            <span><LucideComputer :size="18" /></span>
+          </div>
+          <div class="source-copy">
+            <span class="source-eyebrow">Conexión local en pausa</span>
+            <h3>{{ sourceUnavailableTitle }}</h3>
+            <p>{{ sourceUnavailableMessage }}</p>
+          </div>
+          <div class="source-hints">
+            <span><LucideComputer :size="15" /> Equipo del plantel</span>
+            <span><LucideClock3 :size="15" /> {{ sourceUnavailableHint }}</span>
+          </div>
+          <button type="button" class="source-retry" @click="$emit('refresh-source')">
+            <LucideRotateCcw :size="16" />
+            Intentar de nuevo
+          </button>
+        </section>
         <div v-else-if="!displayedStudents.length" class="empty-state muted">No hay registros bajo los filtros actuales.</div>
         <template v-else>
           <div
@@ -144,7 +163,8 @@
 </template>
 
 <script setup>
-import { LucideBuilding2, LucideChevronRight, LucideGlobe2, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { LucideBuilding2, LucideChevronRight, LucideClock3, LucideCloudOff, LucideComputer, LucideGlobe2, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
@@ -174,8 +194,22 @@ const props = defineProps({
   selectedStudent: { type: Object, default: null },
   externalConcepts: { type: Array, default: () => [] },
   targetCiclo: { type: [String, Number], default: '2025' },
-  photoCache: { type: Object, default: () => ({}) }
+  photoCache: { type: Object, default: () => ({}) },
+  sourceUnavailable: { type: Boolean, default: false }
 })
+
+const localHour = ref(12)
+onMounted(() => {
+  localHour.value = new Date().getHours()
+})
+const isAfterOfficeHours = computed(() => localHour.value >= 17)
+const sourceUnavailableTitle = computed(() => isAfterOfficeHours.value
+  ? 'El equipo del plantel parece estar descansando por hoy'
+  : 'No pudimos conectar con la base local del plantel')
+const sourceUnavailableMessage = computed(() => isAfterOfficeHours.value
+  ? 'La información de alumnos vive en el equipo del Administrador de plantel. Es posible que ya haya terminado su jornada; cuando ese equipo vuelva a estar encendido, la lista cargará automáticamente.'
+  : 'Para mostrar alumnos, necesitamos conectar con el equipo local del Administrador de plantel. Pídele que lo mantenga encendido y vuelve a intentar la carga.')
+const sourceUnavailableHint = computed(() => isAfterOfficeHours.value ? 'Fuera de horario' : 'Esperando conexión')
 
 const isSelected = (student) => props.selectedMatriculas.has(normalizeStudentMatricula(student?.matricula))
 const resolvedTipoIngreso = (student) => resolveTipoIngreso(student, props.targetCiclo, { enrollmentConcepts: props.externalConcepts })
@@ -207,6 +241,148 @@ defineEmits([
   'toggle-student-selection',
   'student-row-click',
   'select-student',
-  'show-student-menu'
+  'show-student-menu',
+  'refresh-source'
 ])
 </script>
+
+<style scoped>
+.student-source-unavailable {
+  position: relative;
+  display: grid;
+  min-height: 360px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(198, 221, 204, 0.9);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 20% 18%, rgba(112, 180, 73, 0.16), transparent 12rem),
+    radial-gradient(circle at 84% 12%, rgba(0, 126, 148, 0.12), transparent 13rem),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 248, 0.96));
+  padding: 34px 28px;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 22px 55px rgba(22, 64, 46, 0.08);
+}
+
+.student-source-unavailable::before {
+  content: '';
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  right: -118px;
+  bottom: -126px;
+  border: 34px solid rgba(47, 125, 56, 0.06);
+  border-radius: 999px;
+}
+
+.source-orb {
+  position: relative;
+  display: grid;
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 22px;
+  place-items: center;
+  border: 1px solid rgba(56, 139, 67, 0.22);
+  border-radius: 28px;
+  background: linear-gradient(145deg, #ffffff, #ebf8ec);
+  color: #2f7d38;
+  box-shadow: 0 20px 38px rgba(36, 116, 66, 0.14);
+}
+
+.source-orb span {
+  position: absolute;
+  right: -8px;
+  bottom: -6px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 14px;
+  background: #0b7891;
+  color: white;
+  box-shadow: 0 12px 24px rgba(0, 104, 130, 0.22);
+}
+
+.source-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 570px;
+}
+
+.source-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(47, 125, 56, 0.14);
+  border-radius: 999px;
+  background: rgba(235, 248, 236, 0.82);
+  padding: 7px 12px;
+  color: #2f7d38;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.source-copy h3 {
+  margin: 16px 0 10px;
+  color: #16213b;
+  font-size: clamp(1.25rem, 2.1vw, 1.75rem);
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.source-copy p {
+  margin: 0 auto;
+  color: #64748b;
+  font-size: 0.98rem;
+  font-weight: 650;
+  line-height: 1.65;
+}
+
+.source-hints {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.source-hints span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(204, 216, 226, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 8px 12px;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.source-retry {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 24px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2f8f46, #52b343);
+  padding: 12px 18px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 900;
+  box-shadow: 0 18px 30px rgba(45, 142, 66, 0.22);
+  cursor: pointer;
+}
+
+.source-retry:hover {
+  transform: translateY(-1px);
+}
+</style>

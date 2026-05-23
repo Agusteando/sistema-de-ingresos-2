@@ -16,7 +16,6 @@
           />
 
           <div class="brand-copy">
-            <p class="brand-kicker">Aurora</p>
             <h1>Entra con tu cuenta institucional</h1>
             <p>Accede con tu correo institucional de Google Workspace.</p>
           </div>

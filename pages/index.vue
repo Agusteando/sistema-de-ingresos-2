@@ -51,6 +51,7 @@
             :external-concepts="externalConcepts"
             :target-ciclo="currentCicloKey"
             :photo-cache="photoCache"
+            :source-unavailable="studentsSourceUnavailable"
             @open-section-selection="openSectionModalForSelection"
             @clear-filters="clearFilters"
             @toggle-displayed-selection="toggleDisplayedSelection"
@@ -58,6 +59,7 @@
             @student-row-click="handleStudentRowClick"
             @select-student="selectStudent"
             @show-student-menu="showStudentMenu"
+            @refresh-source="refreshStudentsFromServer"
           />
 
           <StudentsWorkspacePanel
@@ -215,6 +217,7 @@ const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 
 const students = ref([])
 const loading = ref(false)
+const studentsSourceUnavailable = computed(() => studentsSyncState.value.status === 'unavailable' && !students.value.length && !loading.value)
 const selectedStudent = ref(null)
 const photoCache = ref({})
 const globalKpis = ref({ ingresosMes: 0 })
