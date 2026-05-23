@@ -1,1 +1,1 @@
-fix: improve control escolar filters and empty detail fit
+Scale Control Escolar desktop layout proportionally
