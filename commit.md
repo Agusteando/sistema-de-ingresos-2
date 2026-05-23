@@ -1,1 +1,1 @@
-fix: remove academic pills from control escolar student rows
+fix: persist control escolar phased cache without student photos
