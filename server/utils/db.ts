@@ -51,6 +51,20 @@ type BridgeAgentContext = {
   agentId?: string
 }
 
+type BridgeFetchOptions = {
+  timeoutMs?: number
+}
+
+export type BridgeAgentAvailability = {
+  agentId: string
+  online: boolean
+  status: 'online' | 'offline' | 'unknown'
+  code?: string | null
+  httpStatus?: number | null
+  message: string
+  action?: string
+}
+
 export type SqlStatement = {
   sql: string
   params?: SqlParams
@@ -164,6 +178,31 @@ const getBridgeTimeoutMs = () => {
   return Number.isFinite(raw) && raw > 0 ? raw : 45000
 }
 
+export const BRIDGE_AGENT_UNAVAILABLE_MESSAGE = 'La base del plantel no está disponible en este momento. Solicita al Administrador verificar la conectividad del equipo del plantel e inténtalo nuevamente.'
+
+const getBridgeErrorText = (error: any) => [
+  error?.bridgePayload?.error?.message,
+  error?.bridgePayload?.message,
+  error?.data?.message,
+  error?.statusMessage,
+  error?.message,
+  error?.code,
+  error?.name
+].filter(Boolean).join(' ')
+
+export const isBridgeAgentUnavailableError = (error: any) => {
+  const httpStatus = Number(error?.httpStatus || error?.statusCode || error?.status || error?.response?.status || 0)
+  const code = String(error?.code || '').toUpperCase()
+  const text = getBridgeErrorText(error)
+  const bridgeScoped = code.startsWith('DB_BRIDGE_') || /bridge|agent|base|plantel|conectividad/i.test(text)
+
+  if (code === 'DB_BRIDGE_TIMEOUT' || code === 'DB_BRIDGE_NETWORK') return true
+  if (code.startsWith('DB_BRIDGE_HTTP_') && [502, 503, 504].includes(httpStatus)) return true
+  if ([502, 503, 504].includes(httpStatus) && bridgeScoped) return true
+
+  return bridgeScoped && /agent\s+'?[^']+'?\s+is\s+offline|agent.*offline|offline|not\s+online|unavailable|fuera\s+de\s+l[ií]nea|no\s+est[aá]\s+disponible|ECONNREFUSED|fetch\s+failed|AbortError|aborted|timed?\s*out/i.test(text)
+}
+
 const makeBridgeError = (payload: BridgeErrorResponse, fallbackStatus?: number) => {
   const err: any = new Error(payload.error?.message || `DB bridge error${fallbackStatus ? ` (${fallbackStatus})` : ''}`)
   err.code = payload.error?.code || (fallbackStatus ? `DB_BRIDGE_HTTP_${fallbackStatus}` : undefined)
@@ -205,11 +244,12 @@ const normalizeBridgeQueryResult = <T>(payload: BridgeQueryResponse): T => {
   return rows as T
 }
 
-const bridgeFetch = async <T>(path: string, body?: unknown): Promise<T> => {
+const bridgeFetch = async <T>(path: string, body?: unknown, options: BridgeFetchOptions = {}): Promise<T> => {
   const config = getRuntimeDbConfig()
   const url = `${getBridgeBaseUrl()}${path}`
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), getBridgeTimeoutMs())
+  const timeoutMs = Number(options.timeoutMs || getBridgeTimeoutMs())
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const headers: Record<string, string> = {
@@ -222,12 +262,25 @@ const bridgeFetch = async <T>(path: string, body?: unknown): Promise<T> => {
 
     debugBridge('fetch bridge request', { url })
 
-    const response = await fetch(url, {
-      method: body ? 'POST' : 'GET',
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal
-    })
+    let response
+
+    try {
+      response = await fetch(url, {
+        method: body ? 'POST' : 'GET',
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal
+      })
+    } catch (error: any) {
+      const isTimeout = error?.name === 'AbortError'
+      const err: any = new Error(isTimeout
+        ? `DB bridge no respondió antes de ${timeoutMs}ms. Revisa que el bridge y el agente del plantel estén disponibles.`
+        : `DB bridge no pudo conectarse con el agente del plantel: ${error?.message || 'conexión no disponible'}.`)
+      err.code = isTimeout ? 'DB_BRIDGE_TIMEOUT' : 'DB_BRIDGE_NETWORK'
+      err.httpStatus = isTimeout ? 504 : 503
+      err.statusCode = err.httpStatus
+      throw err
+    }
 
     const payload = await response.json().catch(() => null)
 
@@ -249,6 +302,67 @@ const bridgeFetch = async <T>(path: string, body?: unknown): Promise<T> => {
     return payload as T
   } finally {
     clearTimeout(timeout)
+  }
+}
+
+
+export const checkBridgeAgentAvailability = async (
+  agentId: string,
+  options: { timeoutMs?: number } = {}
+): Promise<BridgeAgentAvailability> => {
+  const normalizedAgentId = String(agentId || '').trim().toUpperCase()
+
+  if (!normalizedAgentId) {
+    return {
+      agentId: '',
+      online: false,
+      status: 'unknown',
+      code: 'MISSING_AGENT_ID',
+      httpStatus: null,
+      message: 'No se pudo identificar el plantel.'
+    }
+  }
+
+  if (getTransport() !== 'bridge') {
+    return {
+      agentId: normalizedAgentId,
+      online: true,
+      status: 'online',
+      code: null,
+      httpStatus: null,
+      message: 'Este equipo está en línea.'
+    }
+  }
+
+  try {
+    await bridgeFetch<BridgeQueryResponse>(`/agents/${encodeURIComponent(normalizedAgentId)}/query`, {
+      sql: 'SELECT 1 AS online',
+      params: []
+    }, {
+      timeoutMs: options.timeoutMs || 1800
+    })
+
+    return {
+      agentId: normalizedAgentId,
+      online: true,
+      status: 'online',
+      code: null,
+      httpStatus: null,
+      message: 'Este equipo está en línea.'
+    }
+  } catch (error: any) {
+    const unavailable = isBridgeAgentUnavailableError(error)
+    const httpStatus = Number(error?.httpStatus || error?.statusCode || error?.status || error?.response?.status || 0) || null
+
+    return {
+      agentId: normalizedAgentId,
+      online: false,
+      status: unavailable ? 'offline' : 'unknown',
+      code: error?.code || null,
+      httpStatus,
+      message: unavailable ? 'Este equipo está fuera de línea.' : 'No se pudo verificar la conectividad en este momento.',
+      action: unavailable ? 'Solicita al Administrador verificar la conectividad.' : 'Intenta verificar nuevamente en unos segundos.'
+    }
   }
 }
 
