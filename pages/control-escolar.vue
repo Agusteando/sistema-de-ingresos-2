@@ -1,7 +1,21 @@
 <template>
   <div class="students-screen control-escolar-screen">
     <header class="students-hero ce-hero">
-      <div class="ce-hero-spacer" aria-hidden="true"></div>
+      <div class="ce-hero-spacer">
+        <Transition name="ce-sync-trace-fade">
+          <ControlSyncTrace
+            v-if="showControlSyncVisual"
+            :base-stage="controlBaseStage"
+            :enrichment-stage="controlEnrichmentStage"
+            :freshness="controlDataFreshness"
+            :base-title="controlBaseStepTitle"
+            :enrichment-title="controlEnrichmentStepTitle"
+            :freshness-title="controlDataFreshnessLabel"
+            :enrichment-rows="controlEnrichmentRows"
+            :aria-label="controlSyncAriaLabel"
+          />
+        </Transition>
+      </div>
       <div class="hero-actions ce-hero-actions">
         <div class="ce-selected-plantel" :class="{ empty: !selectedAgentId }">
           <span>Plantel activo</span>
@@ -32,33 +46,6 @@
       </div>
     </header>
 
-    <Transition name="ce-sync-visual-fade">
-      <section
-        v-if="showControlSyncVisual"
-        :class="['ce-sync-visual', controlSyncStatusClass]"
-        aria-live="polite"
-        :aria-label="controlSyncAriaLabel"
-      >
-        <span
-          class="ce-sync-node"
-          :class="controlBaseStepClass"
-          :title="controlBaseStepTitle"
-          aria-hidden="true"
-        >A</span>
-        <span class="ce-sync-rail" aria-hidden="true"></span>
-        <span
-          class="ce-sync-node"
-          :class="controlEnrichmentStepClass"
-          :title="controlEnrichmentStepTitle"
-          aria-hidden="true"
-        >B</span>
-        <span
-          class="ce-sync-cache-dot"
-          :title="controlDataFreshnessLabel"
-          aria-hidden="true"
-        ></span>
-      </section>
-    </Transition>
 
     <section
       :class="[
@@ -1362,6 +1349,7 @@ const controlEnrichmentStage = ref("idle");
 const controlDataFreshness = ref("empty");
 const controlDataSavedAt = ref("");
 const controlDataSource = ref(null);
+const controlEnrichmentRows = ref(0);
 
 const hasDetail = computed(() => true);
 const {
@@ -1425,15 +1413,15 @@ const formatControlSyncTime = (value) => {
   }
 };
 
-const stepClass = (stage) => ({
-  active: stage === "loading",
-  done: stage === "ready",
-  failed: stage === "failed",
-});
-const controlBaseStepClass = computed(() => stepClass(controlBaseStage.value));
-const controlEnrichmentStepClass = computed(() =>
-  stepClass(controlEnrichmentStage.value),
-);
+const getControlEnrichmentRowCount = (source = {}) =>
+  Number(
+    source.enrichedRows ??
+      source.centralRows ??
+      source.overlayRows ??
+      source.matriculaRows ??
+      0,
+  ) || 0;
+
 const showControlSyncVisual = computed(() =>
   Boolean(
     selectedAgentId.value &&
@@ -1443,17 +1431,6 @@ const showControlSyncVisual = computed(() =>
       controlEnrichmentStage.value !== "idle"),
   ),
 );
-const controlSyncStatusClass = computed(() => ({
-  "is-cache": controlDataFreshness.value === "cache",
-  "is-base": controlDataFreshness.value === "base",
-  "is-synced": controlDataFreshness.value === "synced",
-  "is-loading":
-    controlBaseStage.value === "loading" ||
-    controlEnrichmentStage.value === "loading",
-  "is-failed":
-    controlBaseStage.value === "failed" ||
-    controlEnrichmentStage.value === "failed",
-}));
 const controlDataFreshnessLabel = computed(() => {
   const time = formatControlSyncTime(controlDataSavedAt.value);
   if (controlDataFreshness.value === "cache")
@@ -2375,6 +2352,7 @@ const resetControlStudentsView = () => {
   controlDataFreshness.value = "empty";
   controlDataSavedAt.value = "";
   controlDataSource.value = null;
+  controlEnrichmentRows.value = 0;
   Object.assign(catalogs, {
     niveles: [],
     grados: [],
@@ -2518,6 +2496,7 @@ const loadStudents = async (options = {}) => {
 
   controlBaseStage.value = "idle";
   controlEnrichmentStage.value = "idle";
+  controlEnrichmentRows.value = 0;
 
   if (cached) {
     pagination.page = 1;
@@ -2527,12 +2506,14 @@ const loadStudents = async (options = {}) => {
     controlDataFreshness.value = "cache";
     controlDataSavedAt.value = cached.savedAt || "";
     controlDataSource.value = cached.source || null;
+    controlEnrichmentRows.value = getControlEnrichmentRowCount(cached.source);
   } else {
     if (clearExisting) resetControlStudentsView();
     studentsLoading.value = forceLoading || !hadStudents || clearExisting;
     controlDataFreshness.value =
       hadStudents && !clearExisting ? controlDataFreshness.value : "empty";
     controlDataSavedAt.value = "";
+    if (!hadStudents || clearExisting) controlEnrichmentRows.value = 0;
   }
 
   const canKeepVisibleData = () =>
@@ -2555,6 +2536,7 @@ const loadStudents = async (options = {}) => {
     controlDataFreshness.value = "base";
     controlDataSavedAt.value = "";
     controlDataSource.value = baseResponse?.source || controlDataSource.value;
+    controlEnrichmentRows.value = 0;
     if (!cached) writeCachedControlStudents(query, baseResponse);
   } catch (error) {
     if (requestId !== controlStudentsRequestId) return;
@@ -2592,13 +2574,8 @@ const loadStudents = async (options = {}) => {
     writeCachedControlStudents(query, response);
     loadError.value = "";
     const responseSource = response?.source || {};
-    const enrichmentRows = Number(
-      responseSource.enrichedRows ??
-        responseSource.centralRows ??
-        responseSource.overlayRows ??
-        responseSource.matriculaRows ??
-        0,
-    );
+    const enrichmentRows = getControlEnrichmentRowCount(responseSource);
+    controlEnrichmentRows.value = enrichmentRows;
     controlEnrichmentStage.value = enrichmentRows > 0 ? "ready" : "idle";
     controlDataFreshness.value = enrichmentRows > 0 ? "synced" : "base";
     controlDataSavedAt.value = enrichmentRows > 0 ? new Date().toISOString() : "";
@@ -3126,7 +3103,10 @@ onBeforeUnmount(() => {
 }
 
 .ce-hero-spacer {
+  display: flex;
   flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
 }
 
 .ce-hero-title h1 {
@@ -3138,436 +3118,6 @@ onBeforeUnmount(() => {
 }
 
 
-.ce-sync-visual {
-  display: inline-flex;
-  width: max-content;
-  align-items: center;
-  gap: 7px;
-  min-height: 34px;
-  margin: 0 0 8px;
-  padding: 5px 9px;
-  border: 1px solid rgba(212, 222, 232, 0.9);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.05);
-}
-
-.ce-sync-node {
-  display: inline-grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border: 1px solid rgba(203, 213, 225, 0.9);
-  border-radius: 999px;
-  background: #f8fafc;
-  color: #94a3b8;
-  font-size: 10px;
-  font-weight: 920;
-  line-height: 1;
-}
-
-.ce-sync-node.active {
-  border-color: rgba(56, 147, 62, 0.36);
-  background: #eaf8e7;
-  color: #1f8531;
-  box-shadow: 0 0 0 5px rgba(63, 145, 56, 0.08);
-  animation: ce-sync-pulse 1.35s ease-in-out infinite;
-}
-
-.ce-sync-node.done {
-  border-color: rgba(48, 141, 58, 0.45);
-  background: #278b3a;
-  color: #fff;
-}
-
-.ce-sync-node.failed {
-  border-color: rgba(225, 80, 72, 0.35);
-  background: #fff1f0;
-  color: #d4423b;
-}
-
-.ce-sync-rail {
-  width: 28px;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(39, 139, 58, 0.82), rgba(203, 213, 225, 0.9));
-}
-
-.ce-sync-visual.is-synced .ce-sync-rail {
-  background: #278b3a;
-}
-
-.ce-sync-visual.is-failed .ce-sync-rail {
-  background: linear-gradient(90deg, rgba(39, 139, 58, 0.6), rgba(225, 80, 72, 0.72));
-}
-
-.ce-sync-cache-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #cbd5e1;
-}
-
-.ce-sync-visual.is-cache .ce-sync-cache-dot {
-  background: #f0a529;
-}
-
-.ce-sync-visual.is-base .ce-sync-cache-dot,
-.ce-sync-visual.is-loading .ce-sync-cache-dot {
-  background: #3f91df;
-}
-
-.ce-sync-visual.is-synced .ce-sync-cache-dot {
-  background: #278b3a;
-}
-
-.ce-sync-visual.is-failed .ce-sync-cache-dot {
-  background: #d4423b;
-}
-
-.ce-sync-visual-fade-enter-active,
-.ce-sync-visual-fade-leave-active {
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
-}
-
-.ce-sync-visual-fade-enter-from,
-.ce-sync-visual-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-@keyframes ce-sync-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 4px rgba(63, 145, 56, 0.08);
-  }
-  50% {
-    box-shadow: 0 0 0 7px rgba(63, 145, 56, 0.15);
-  }
-}
-
-.ce-first-sync-tip {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  margin: 0 0 12px;
-  padding: 14px 16px;
-  border: 1px solid rgba(46, 125, 50, 0.16);
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at 8% 18%, rgba(76, 175, 80, 0.12), transparent 26%),
-    linear-gradient(
-      135deg,
-      rgba(246, 252, 246, 0.96),
-      rgba(255, 255, 255, 0.96)
-    );
-  box-shadow: 0 16px 34px rgba(17, 45, 30, 0.07);
-  color: #10203a;
-}
-
-.ce-first-sync-orb {
-  position: relative;
-  display: inline-grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border-radius: 18px;
-  background: #e8f6e8;
-  color: #23843f;
-  box-shadow: inset 0 0 0 1px rgba(35, 132, 63, 0.12);
-}
-
-.ce-first-sync-orb i {
-  position: absolute;
-  inset: -4px;
-  border: 2px solid rgba(35, 132, 63, 0.13);
-  border-top-color: rgba(35, 132, 63, 0.58);
-  border-radius: 20px;
-  animation: ceSyncSpin 1.9s linear infinite;
-}
-
-.ce-first-sync-copy {
-  min-width: 0;
-}
-
-.ce-first-sync-copy strong {
-  display: block;
-  margin: 0 0 4px;
-  color: #14361c;
-  font-size: 14px;
-  font-weight: 950;
-  letter-spacing: -0.01em;
-}
-
-.ce-first-sync-copy p {
-  margin: 0;
-  min-height: 20px;
-  color: #52627a;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-.ce-first-sync-steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 10px;
-}
-
-.ce-first-sync-steps span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border: 1px solid rgba(147, 159, 177, 0.22);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
-  color: #607087;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.01em;
-}
-
-.ce-first-sync-steps span.active {
-  border-color: rgba(41, 132, 61, 0.34);
-  background: #edf8ee;
-  color: #267238;
-}
-
-.ce-first-sync-steps span.done {
-  border-color: rgba(41, 132, 61, 0.22);
-  background: rgba(236, 248, 237, 0.78);
-  color: #357342;
-}
-
-.ce-first-sync-steps span.failed {
-  border-color: rgba(188, 116, 83, 0.28);
-  background: rgba(255, 247, 241, 0.82);
-  color: #9a5b37;
-}
-
-.ce-data-status {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 11px;
-  margin: -2px 0 12px;
-  padding: 10px 14px;
-  border: 1px solid rgba(207, 217, 229, 0.82);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 14px 32px rgba(21, 35, 60, 0.055);
-  color: #10203a;
-}
-
-.ce-data-status-icon {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 13px;
-  background: rgba(239, 244, 248, 0.95);
-  color: #607087;
-}
-
-.ce-data-status-copy {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.ce-data-status-copy strong {
-  color: #14233b;
-  font-size: 12px;
-  font-weight: 950;
-  letter-spacing: -0.01em;
-}
-
-.ce-data-status-copy small {
-  min-width: 0;
-  overflow: hidden;
-  color: #657388;
-  font-size: 11px;
-  font-weight: 720;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ce-data-status-freshness {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: #f5f8fb;
-  color: #627087;
-  font-size: 10px;
-  font-weight: 950;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.ce-data-status.is-cache .ce-data-status-icon,
-.ce-data-status.is-cache .ce-data-status-freshness {
-  background: #f2f6fb;
-  color: #526b93;
-}
-
-.ce-data-status.is-base .ce-data-status-icon,
-.ce-data-status.is-loading .ce-data-status-icon {
-  background: #eef8ef;
-  color: #297d3c;
-}
-
-.ce-data-status.is-synced {
-  border-color: rgba(41, 132, 61, 0.19);
-}
-
-.ce-data-status.is-synced .ce-data-status-icon,
-.ce-data-status.is-synced .ce-data-status-freshness {
-  background: #eaf7ec;
-  color: #28773a;
-}
-
-.ce-data-status.is-failed .ce-data-status-icon,
-.ce-data-status.is-failed .ce-data-status-freshness {
-  background: #fff6ef;
-  color: #9a5b37;
-}
-
-.ce-load-status-fade-enter-active,
-.ce-load-status-fade-leave-active {
-  transition:
-    opacity 0.24s ease,
-    transform 0.24s ease;
-}
-
-.ce-load-status-fade-enter-from,
-.ce-load-status-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
-}
-
-.ce-first-sync-loader {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 4px;
-}
-
-.ce-first-sync-loader b {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #2e8b45;
-  opacity: 0.28;
-  animation: ceSyncPulse 1.55s ease-in-out infinite;
-}
-
-.ce-first-sync-loader b:nth-child(2) {
-  animation-delay: 0.18s;
-}
-.ce-first-sync-loader b:nth-child(3) {
-  animation-delay: 0.36s;
-}
-
-.ce-first-sync-fade-enter-active,
-.ce-first-sync-fade-leave-active {
-  transition:
-    opacity 0.34s ease,
-    transform 0.34s ease;
-}
-
-.ce-first-sync-fade-enter-from,
-.ce-first-sync-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
-.ce-sync-message-fade-enter-active,
-.ce-sync-message-fade-leave-active {
-  transition:
-    opacity 0.7s ease,
-    transform 0.7s ease;
-}
-
-.ce-sync-message-fade-enter-from {
-  opacity: 0;
-  transform: translateY(5px);
-}
-
-.ce-sync-message-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-5px);
-}
-
-@keyframes ceSyncSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes ceSyncPulse {
-  0%,
-  100% {
-    opacity: 0.25;
-    transform: translateY(0);
-  }
-  45% {
-    opacity: 1;
-    transform: translateY(-3px);
-  }
-}
-
-.ce-route-context {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.ce-sync-pill,
-.ce-cycle-pill {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  border: 1px solid rgba(207, 217, 229, 0.85);
-  border-radius: 13px;
-  background: #fff;
-  color: #10203a;
-  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.04);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.ce-sync-pill::before {
-  content: "✓";
-  display: inline-flex;
-  width: 18px;
-  height: 18px;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid #3f9138;
-  border-radius: 999px;
-  color: #3f9138;
-  font-size: 11px;
-  line-height: 1;
-}
-
-.ce-cycle-pill::before {
-  content: "▦";
-  color: #2f8f37;
-  font-size: 16px;
-  line-height: 1;
-}
 
 .ce-hero-actions {
   align-items: stretch;
@@ -3613,6 +3163,19 @@ onBeforeUnmount(() => {
 }
 .ce-hidden-file {
   display: none;
+}
+
+.ce-sync-trace-fade-enter-active,
+.ce-sync-trace-fade-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.ce-sync-trace-fade-enter-from,
+.ce-sync-trace-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-3px);
 }
 @keyframes ce-spin {
   to {
@@ -5502,7 +5065,6 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
-/* Control Escolar 1:1 redesign alignment */
 .ce-filter-bar {
   min-height: 0;
   gap: 9px;
@@ -6180,20 +5742,6 @@ onBeforeUnmount(() => {
   .ce-detail-tabs {
     gap: 14px;
     overflow-x: auto;
-  }
-}
-@media (max-width: 900px) {
-  .ce-data-status {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .ce-data-status-freshness {
-    grid-column: 1 / -1;
-    justify-self: start;
-  }
-
-  .ce-data-status-copy small {
-    white-space: normal;
   }
 }
 </style>

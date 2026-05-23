@@ -1,1 +1,1 @@
-fix: restore control escolar layout styles
+fix: refine control escolar sync trace and preserve redesign layout
