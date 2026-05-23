@@ -211,6 +211,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useCookie, useRoute, useRuntimeConfig } from '#app'
 import { PLANTELES_LIST } from '~/utils/constants'
+import { usePlantelAgentStatuses } from '~/composables/usePlantelAgentStatuses'
 
 definePageMeta({ layout: false })
 
@@ -271,85 +272,7 @@ const selectedPlantel = ref(
 
 const plantelSelectRef = ref(null)
 const plantelMenuOpen = ref(false)
-const plantelStatusRequestCount = ref(0)
-const plantelStatusLoading = computed(() => plantelStatusRequestCount.value > 0)
-const plantelStatusError = ref('')
-const lastPlantelStatusLoad = ref(0)
-const plantelStatusChecks = ref({})
-const plantelStatuses = ref({})
-
-const AGENT_UNAVAILABLE_MESSAGE = 'La base del plantel no está disponible en este momento. Solicita al Administrador verificar la conectividad del equipo del plantel e inténtalo nuevamente.'
-
-const STATUS_TEXT = {
-  online: {
-    status: 'online',
-    online: true,
-    label: 'En línea',
-    message: 'Este equipo está en línea.',
-    action: ''
-  },
-  offline: {
-    status: 'offline',
-    online: false,
-    label: 'Fuera de línea',
-    message: 'Este equipo está fuera de línea.',
-    action: 'Solicita al Administrador verificar la conectividad.'
-  },
-  checking: {
-    status: 'unknown',
-    online: false,
-    label: 'Verificando',
-    message: 'Verificando conectividad...',
-    action: ''
-  },
-  unknown: {
-    status: 'unknown',
-    online: false,
-    label: 'Sin verificar',
-    message: 'No se pudo verificar la conectividad.',
-    action: 'Intenta verificar nuevamente en unos segundos.'
-  }
-}
-
-const normalizePlantelStatus = (entry = {}) => {
-  if (entry.status === 'online' || entry.online === true) {
-    return {
-      ...STATUS_TEXT.online,
-      checkedAt: entry.checkedAt || ''
-    }
-  }
-
-  if (entry.status === 'offline') {
-    return {
-      ...STATUS_TEXT.offline,
-      message: entry.message || STATUS_TEXT.offline.message,
-      action: entry.action || STATUS_TEXT.offline.action,
-      checkedAt: entry.checkedAt || ''
-    }
-  }
-
-  return {
-    ...STATUS_TEXT.unknown,
-    message: entry.message || STATUS_TEXT.unknown.message,
-    action: entry.action || STATUS_TEXT.unknown.action,
-    checkedAt: entry.checkedAt || ''
-  }
-}
-
-const getFallbackPlantelStatus = () => {
-  if (plantelStatusLoading.value) return STATUS_TEXT.checking
-
-  if (plantelStatusError.value) {
-    return {
-      ...STATUS_TEXT.unknown,
-      message: 'No se pudo verificar la conectividad.'
-    }
-  }
-
-  return STATUS_TEXT.unknown
-}
-
-const getPlantelStatus = (plantel) => plantelStatuses.value[plantel] || getFallbackPlantelStatus()
+const { getPlantelStatus, loadPlantelStatuses } = usePlantelAgentStatuses()
 
 const selectedPlantelStatus = computed(() => getPlantelStatus(selectedPlantel.value))
 const isSelectedPlantelOffline = computed(() => selectedPlantelStatus.value.status === 'offline')
@@ -386,46 +309,6 @@ const persistSelectedPlantel = () => {
 
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('db_bridge_agent_id', selectedPlantel.value)
-  }
-}
-
-const loadPlantelStatuses = async ({ force = false, plantel = '' } = {}) => {
-  const normalizedPlantel = String(plantel || '').trim().toUpperCase()
-  const lastCheck = normalizedPlantel ? plantelStatusChecks.value[normalizedPlantel] : lastPlantelStatusLoad.value
-  const statusAge = Date.now() - Number(lastCheck || 0)
-
-  if (!force && lastCheck && statusAge < 15000) return
-
-  plantelStatusRequestCount.value += 1
-  plantelStatusError.value = ''
-
-  try {
-    const path = normalizedPlantel
-      ? `/api/auth/planteles-status?plantel=${encodeURIComponent(normalizedPlantel)}`
-      : '/api/auth/planteles-status'
-    const result = await $fetch(path)
-    const nextStatuses = { ...plantelStatuses.value }
-
-    for (const status of result?.statuses || []) {
-      if (PLANTELES_LIST.includes(status.plantel)) {
-        nextStatuses[status.plantel] = normalizePlantelStatus(status)
-      }
-    }
-
-    plantelStatuses.value = nextStatuses
-
-    if (normalizedPlantel) {
-      plantelStatusChecks.value = {
-        ...plantelStatusChecks.value,
-        [normalizedPlantel]: Date.now()
-      }
-    } else {
-      lastPlantelStatusLoad.value = Date.now()
-    }
-  } catch {
-    plantelStatusError.value = 'No se pudo verificar la conectividad de los planteles en este momento.'
-  } finally {
-    plantelStatusRequestCount.value = Math.max(0, plantelStatusRequestCount.value - 1)
   }
 }
 

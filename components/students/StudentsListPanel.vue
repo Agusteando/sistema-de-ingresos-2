@@ -2,10 +2,9 @@
   <section :class="['student-list-panel', hasAccountWorkspace ? 'is-compact' : 'is-full']">
     <div v-if="sourceUnavailable && !loading" class="student-list-card source-unavailable-card">
       <section class="student-source-unavailable" aria-live="polite">
-        <div class="source-orb" aria-hidden="true">
-          <LucideCloudOff :size="30" />
-          <span><LucideComputer :size="18" /></span>
-        </div>
+        <figure class="source-visual" aria-hidden="true">
+          <img src="/brand/plantel-offline-visual.png" alt="" />
+        </figure>
         <div class="source-copy">
           <span class="source-eyebrow">Conexión local en pausa</span>
           <h3>{{ sourceUnavailableTitle }}</h3>
@@ -70,10 +69,9 @@
           Cargando estudiantes...
         </div>
         <section v-else-if="sourceUnavailable" class="student-source-unavailable" aria-live="polite">
-          <div class="source-orb" aria-hidden="true">
-            <LucideCloudOff :size="30" />
-            <span><LucideComputer :size="18" /></span>
-          </div>
+          <figure class="source-visual" aria-hidden="true">
+            <img src="/brand/plantel-offline-visual.png" alt="" />
+          </figure>
           <div class="source-copy">
             <span class="source-eyebrow">Conexión local en pausa</span>
             <h3>{{ sourceUnavailableTitle }}</h3>
@@ -333,33 +331,19 @@ defineEmits([
   border-radius: 999px;
 }
 
-.source-orb {
+.source-visual {
   position: relative;
   z-index: 1;
-  display: grid;
-  width: 84px;
-  height: 84px;
-  margin: 0 auto 22px;
-  place-items: center;
-  border: 1px solid rgba(56, 139, 67, 0.22);
-  border-radius: 28px;
-  background: linear-gradient(145deg, #ffffff, #ebf8ec);
-  color: #2f7d38;
-  box-shadow: 0 20px 38px rgba(36, 116, 66, 0.14);
+  width: min(88%, 360px);
+  margin: -10px auto 4px;
 }
 
-.source-orb span {
-  position: absolute;
-  right: -8px;
-  bottom: -6px;
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 14px;
-  background: #0b7891;
-  color: white;
-  box-shadow: 0 12px 24px rgba(0, 104, 130, 0.22);
+.source-visual img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 22px 32px rgba(27, 99, 85, 0.12));
 }
 
 .source-copy {

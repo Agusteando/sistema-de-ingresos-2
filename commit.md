@@ -1,1 +1,1 @@
-feat: surface bridge agent availability on login
+feat: show plantel connectivity in authenticated selector
