@@ -72,19 +72,21 @@ const statusClass = computed(() => ({
 .students-cache-sync {
   --sync-accent: rgba(96, 143, 67, 0.72);
   --sync-soft: rgba(96, 143, 67, 0.12);
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  align-self: flex-start;
-  gap: 7px;
-  min-height: 24px;
+  align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
+  gap: 8px;
+  min-height: 34px;
   max-width: 100%;
-  margin: 1px 0 0 2px;
-  padding: 4px 8px 4px 6px;
+  margin: 1px 0 0;
+  padding: 6px 10px 6px 8px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.44);
   color: rgba(74, 88, 107, 0.76);
-  font-size: 0.58rem;
+  font-size: 0.62rem;
   font-weight: 780;
   letter-spacing: 0.035em;
   line-height: 1;
@@ -152,7 +154,7 @@ const statusClass = computed(() => ({
   border-radius: 999px;
   background: rgba(96, 143, 67, 0.16);
   color: rgba(75, 132, 65, 0.92);
-  font-size: 0.58rem;
+  font-size: 0.62rem;
   font-weight: 900;
   opacity: 0;
   transform: scale(0.72);

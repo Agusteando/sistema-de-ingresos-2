@@ -42,7 +42,7 @@
         <strong v-if="selectedCount > 0">{{ selectedCount }} {{ selectedCount === 1 ? 'seleccionado' : 'seleccionados' }}</strong>
       </div>
 
-      <div class="student-list-scroll">
+      <div :class="['student-list-scroll', { 'is-source-unavailable': sourceUnavailable }]">
         <div v-if="loading" class="empty-state loading-state">
           <span class="liquid-loader" aria-hidden="true"><i></i><i></i><i></i></span>
           Cargando estudiantes...
@@ -204,11 +204,11 @@ onMounted(() => {
 })
 const isAfterOfficeHours = computed(() => localHour.value >= 17)
 const sourceUnavailableTitle = computed(() => isAfterOfficeHours.value
-  ? 'El equipo del plantel parece estar descansando por hoy'
-  : 'No pudimos conectar con la base local del plantel')
+  ? 'El equipo del plantel ya cerró por hoy'
+  : 'La base del plantel no está disponible en este momento')
 const sourceUnavailableMessage = computed(() => isAfterOfficeHours.value
-  ? 'La información de alumnos vive en el equipo del Administrador de plantel. Es posible que ya haya terminado su jornada; cuando ese equipo vuelva a estar encendido, la lista cargará automáticamente.'
-  : 'Para mostrar alumnos, necesitamos conectar con el equipo local del Administrador de plantel. Pídele que lo mantenga encendido y vuelve a intentar la carga.')
+  ? 'La información se consulta desde el equipo local del plantel. Si el administrador ya terminó su jornada, la lista volverá a estar disponible cuando ese equipo se encienda de nuevo.'
+  : 'La lista se activa cuando el equipo del administrador del plantel está encendido y conectado. Solicita que lo mantengan disponible y vuelve a intentarlo.')
 const sourceUnavailableHint = computed(() => isAfterOfficeHours.value ? 'Fuera de horario' : 'Esperando conexión')
 
 const isSelected = (student) => props.selectedMatriculas.has(normalizeStudentMatricula(student?.matricula))
@@ -247,11 +247,30 @@ defineEmits([
 </script>
 
 <style scoped>
+
+.student-list-scroll.is-source-unavailable {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  padding: clamp(10px, 1vw, 14px);
+  background: #fff;
+  isolation: isolate;
+}
+
+.student-list-scroll.is-source-unavailable::before,
+.student-list-scroll.is-source-unavailable::after {
+  display: none;
+}
+
 .student-source-unavailable {
   position: relative;
-  display: grid;
-  min-height: 360px;
-  place-items: center;
+  display: flex;
+  min-height: clamp(360px, 50vh, 540px);
+  height: 100%;
+  z-index: 5;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
   border: 1px solid rgba(198, 221, 204, 0.9);
   border-radius: 28px;
@@ -267,6 +286,7 @@ defineEmits([
 .student-source-unavailable::before {
   content: '';
   position: absolute;
+  z-index: 0;
   width: 280px;
   height: 280px;
   right: -118px;
@@ -277,6 +297,7 @@ defineEmits([
 
 .source-orb {
   position: relative;
+  z-index: 1;
   display: grid;
   width: 84px;
   height: 84px;

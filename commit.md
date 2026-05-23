@@ -1,1 +1,1 @@
-feat: add friendly student source unavailable state
+fix: improve student source unavailable state and sidebar sync pill

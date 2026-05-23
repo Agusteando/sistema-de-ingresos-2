@@ -1,7 +1,7 @@
 <template>
   <main class="login-page">
-    <section class="login-shell" aria-label="Inicio de sesión Aurora">
-      <aside class="brand-panel" aria-label="Aurora">
+    <section class="login-shell" aria-label="Inicio de sesión">
+      <aside class="brand-panel" aria-label="Acceso institucional">
         <div class="brand-content">
           <img
             src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp"
@@ -11,7 +11,7 @@
 
           <img
             src="/aurora-logo.png"
-            alt="Aurora"
+            alt="Logo del sistema"
             class="brand-system-logo"
           />
 

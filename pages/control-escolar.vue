@@ -142,7 +142,7 @@
                 <span></span>
               </div>
 
-              <div class="student-list-scroll ce-list-scroll">
+              <div :class="['student-list-scroll ce-list-scroll', { 'is-source-unavailable': studentsSourceUnavailable }]">
                 <div v-if="!selectedAgentId" class="empty-state ce-state-card">
                   <LucideBuilding2 :size="24" /> Selecciona un plantel específico en la barra lateral para iniciar Control Escolar.
                 </div>
@@ -703,11 +703,11 @@ const localHour = ref(12)
 const isAfterOfficeHours = computed(() => localHour.value >= 17)
 const studentsSourceUnavailable = computed(() => Boolean(selectedAgentId.value && loadError.value && !studentsLoading.value && !students.value.length))
 const sourceUnavailableTitle = computed(() => isAfterOfficeHours.value
-  ? 'El equipo del plantel parece estar descansando por hoy'
-  : 'No pudimos conectar con la base local del plantel')
+  ? 'El equipo del plantel ya cerró por hoy'
+  : 'La base del plantel no está disponible en este momento')
 const sourceUnavailableMessage = computed(() => isAfterOfficeHours.value
-  ? 'La información de alumnos se consulta desde el equipo del Administrador de plantel. Es posible que ya haya terminado su jornada; cuando el equipo vuelva a estar disponible, Aurora cargará la lista.'
-  : 'Para mostrar alumnos, necesitamos que el equipo local del Administrador de plantel esté encendido y conectado. Pídele que lo active y vuelve a intentar la carga.')
+  ? 'La información se consulta desde el equipo local del plantel. Si el administrador ya terminó su jornada, la lista volverá a estar disponible cuando ese equipo se encienda de nuevo.'
+  : 'La lista se activa cuando el equipo del administrador del plantel está encendido y conectado. Solicita que lo mantengan disponible y vuelve a intentarlo.')
 const sourceUnavailableHint = computed(() => isAfterOfficeHours.value ? 'Fuera de horario' : 'Esperando conexión')
 
 const stopFirstSyncMessages = () => {
@@ -2320,6 +2320,21 @@ onBeforeUnmount(() => {
   display: none;
 }
 
+
+.ce-list-scroll.is-source-unavailable {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  padding: clamp(10px, 1vw, 14px);
+  background: #fff;
+  isolation: isolate;
+}
+
+.ce-list-scroll.is-source-unavailable::before,
+.ce-list-scroll.is-source-unavailable::after {
+  display: none;
+}
+
 .ce-list-scroll {
   min-height: 0;
   overflow-y: auto;
@@ -3804,9 +3819,14 @@ onBeforeUnmount(() => {
 
 .ce-source-unavailable {
   position: relative;
-  display: grid;
-  min-height: 390px;
-  place-items: center;
+  z-index: 5;
+  display: flex;
+  min-height: clamp(390px, 52vh, 560px);
+  height: 100%;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
   border: 1px solid rgba(198, 221, 204, 0.92);
   border-radius: 30px;
@@ -3823,6 +3843,7 @@ onBeforeUnmount(() => {
 .ce-source-unavailable::before {
   content: '';
   position: absolute;
+  z-index: 0;
   width: 292px;
   height: 292px;
   right: -124px;
@@ -3833,6 +3854,7 @@ onBeforeUnmount(() => {
 
 .ce-source-orb {
   position: relative;
+  z-index: 1;
   display: grid;
   width: 86px;
   height: 86px;
