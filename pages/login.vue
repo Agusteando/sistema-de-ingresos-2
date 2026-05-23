@@ -1,23 +1,26 @@
 <template>
   <main class="login-page">
-    <section class="login-shell" aria-label="Inicio de sesión">
+    <section class="login-shell" aria-label="Inicio de sesión institucional">
       <aside class="brand-panel" aria-label="Acceso institucional">
         <div class="brand-content">
           <img
-            src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp"
+            src="/brand/iecs-iedis-logo.png"
             alt="IECS IEDIS"
             class="brand-logo"
           />
 
           <img
             src="/aurora-logo.png"
-            alt="Logo del sistema"
+            alt="AURORA - Administración Unificada de Recursos, Operación y Registro Académico"
             class="brand-system-logo"
           />
 
           <div class="brand-copy">
-            <h1>Entra con tu cuenta institucional</h1>
-            <p>Accede con tu correo institucional de Google Workspace.</p>
+            <h1>
+              Inicia sesión con tu<br>
+              <span>cuenta</span> institucional
+            </h1>
+            <p>Accede a AURORA de forma segura con tu cuenta institucional de Google Workspace.</p>
           </div>
 
           <div class="secure-card">
@@ -27,9 +30,12 @@
                 <path d="m9.2 12 1.8 1.8 3.9-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </span>
-            <span>
+            <span class="secure-copy">
               <strong>Acceso seguro</strong>
-              <small>Tus credenciales están protegidas.</small>
+              <small>
+                Tus credenciales están protegidas.<br>
+                Usamos Google para mantener tu información segura.
+              </small>
             </span>
           </div>
         </div>
@@ -40,9 +46,8 @@
           <div class="auth-kicker">
             <span aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M7 10V8a5 5 0 0 1 10 0v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                <rect x="5" y="10" width="14" height="10" rx="2.5" stroke="currentColor" stroke-width="2" />
-                <path d="M12 14v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" stroke-width="2" />
+                <path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
               </svg>
             </span>
             Inicio de sesión
@@ -52,20 +57,22 @@
           <p class="auth-subtitle">Continúa con tu cuenta institucional.</p>
 
           <label class="plantel-field" for="plantel-login">
-            <span>Plantel</span>
-            <select
-              id="plantel-login"
-              v-model="selectedPlantel"
-              :disabled="isBusy"
-              @change="persistSelectedPlantel"
-            >
-              <option v-for="plantel in PLANTELES_LIST" :key="plantel" :value="plantel">
-                {{ plantel }}
-              </option>
-            </select>
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
+            <span class="plantel-label">Plantel</span>
+            <span class="plantel-select-shell">
+              <select
+                id="plantel-login"
+                v-model="selectedPlantel"
+                :disabled="isBusy"
+                @change="persistSelectedPlantel"
+              >
+                <option v-for="plantel in PLANTELES_LIST" :key="plantel" :value="plantel">
+                  {{ plantel }}
+                </option>
+              </select>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
           </label>
 
           <div class="google-card">
@@ -75,6 +82,22 @@
               aria-live="polite"
             >
               <span class="button-spinner" />
+              <span>{{ primaryButtonText }}</span>
+            </div>
+
+            <div
+              v-show="authPhase !== 'loadingGoogle' && !isBusy"
+              class="google-design-button"
+              aria-hidden="true"
+            >
+              <span class="google-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09Z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z" />
+                  <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84Z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A10.54 10.54 0 0 0 12 1 11 11 0 0 0 2.18 7.06L5.84 9.9C6.71 7.31 9.14 5.38 12 5.38Z" />
+                </svg>
+              </span>
               <span>{{ primaryButtonText }}</span>
             </div>
 
@@ -105,6 +128,17 @@
           >
             Intentar de nuevo
           </button>
+
+          <p class="policy-line">
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 3.5 5.5 6.2v5.3c0 4.1 2.7 7.8 6.5 9 3.8-1.2 6.5-4.9 6.5-9V6.2L12 3.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                <path d="m9.5 12.1 1.6 1.6 3.5-3.7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+            Al continuar, aceptas las <strong>políticas de seguridad</strong><br class="policy-break">
+            de tu institución.
+          </p>
         </div>
       </section>
     </section>
@@ -120,15 +154,15 @@ definePageMeta({ layout: false })
 
 const PHASES = {
   loadingGoogle: {
-    button: 'Cargando Google',
+    button: 'Cargando Google Workspace',
     status: 'Preparando acceso con Google.'
   },
   ready: {
-    button: 'Continuar con Google',
+    button: 'Continuar con Google Workspace',
     status: ''
   },
   google: {
-    button: 'Continúa en Google',
+    button: 'Continúa en Google Workspace',
     status: 'Selecciona tu cuenta institucional.'
   },
   server: {
@@ -144,7 +178,7 @@ const PHASES = {
     status: 'Abriendo el sistema.'
   },
   error: {
-    button: 'Continuar con Google',
+    button: 'Continuar con Google Workspace',
     status: ''
   }
 }
@@ -173,7 +207,7 @@ const selectedPlantel = ref(
         : defaultPlantel)
 )
 
-const isBusy = computed(() => ['google', 'server', 'session', 'redirecting'].includes(authPhase.value))
+const isBusy = computed(() => ['server', 'session', 'redirecting'].includes(authPhase.value))
 const primaryButtonText = computed(() => (PHASES[authPhase.value] || PHASES.ready).button)
 const statusText = computed(() => (PHASES[authPhase.value] || PHASES.ready).status)
 
@@ -297,6 +331,8 @@ const initializeGoogle = () => {
   }
 
   buttonTarget.innerHTML = ''
+  const buttonWidth = Math.round(buttonTarget.getBoundingClientRect().width || 456)
+
   window.google.accounts.id.renderButton(
     buttonTarget,
     {
@@ -305,7 +341,7 @@ const initializeGoogle = () => {
       shape: 'rectangular',
       text: 'continue_with',
       logo_alignment: 'left',
-      width: Math.max(320, Math.min(420, Math.round(buttonTarget.getBoundingClientRect().width || 420)))
+      width: Math.max(240, Math.min(520, buttonWidth))
     }
   )
 
@@ -346,168 +382,177 @@ onBeforeUnmount(() => {
   clearGoogleIntentTimer()
 })
 </script>
+
 <style scoped>
 .login-page {
-  min-height: 100vh;
+  min-height: 100svh;
   display: grid;
   place-items: center;
-  padding: 2rem;
-  color: #12213d;
+  padding: clamp(24px, 8.5vh, 80px) clamp(24px, 10.85vw, 182px);
+  color: #14223d;
   background:
-    radial-gradient(circle at 10% 12%, rgba(147, 196, 125, 0.14), transparent 24rem),
-    radial-gradient(circle at 88% 82%, rgba(36, 127, 68, 0.07), transparent 20rem),
-    #fbfdff;
+    radial-gradient(circle at 11% 9%, rgba(33, 62, 116, 0.035), transparent 19rem),
+    linear-gradient(135deg, #fbfdff 0%, #f7fafc 50%, #fbfdfb 100%);
 }
 
 .login-shell {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  width: min(100%, 1260px);
-  min-height: 720px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: min(100%, 1308px);
+  height: min(780px, calc(100svh - 48px));
+  min-height: 680px;
   overflow: hidden;
-  border: 1px solid #dbe3ec;
-  border-radius: 30px;
+  border: 1px solid #dbe4ec;
+  border-radius: 28px;
   background: #ffffff;
-  box-shadow: 0 24px 60px rgba(15, 32, 62, 0.11);
+  box-shadow: 0 24px 68px rgba(15, 32, 62, 0.1);
 }
 
 .brand-panel {
   position: relative;
   display: flex;
-  align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-right: 1px solid #dbe3ec;
+  border-right: 1px solid rgba(219, 228, 236, 0.78);
   background:
-    radial-gradient(circle at 95% 34%, rgba(255, 255, 255, 0.52) 0 7.4rem, transparent 7.55rem),
-    radial-gradient(circle at 94% 34%, rgba(255, 255, 255, 0.26) 0 15rem, transparent 15.15rem),
-    linear-gradient(145deg, #eef9eb 0%, #f7fbf4 56%, #edf7e8 100%);
+    radial-gradient(circle at 105% 53%, transparent 0 7.5rem, rgba(226, 241, 219, 0.5) 7.6rem 10.9rem, transparent 11rem),
+    radial-gradient(circle at 108% 53%, transparent 0 18.5rem, rgba(213, 236, 203, 0.42) 18.6rem 22.2rem, transparent 22.3rem),
+    linear-gradient(145deg, #f3fbf1 0%, #f8fcf6 58%, #edf8e9 100%);
 }
 
 .brand-panel::before,
 .brand-panel::after {
   content: '';
   position: absolute;
-  border-radius: 999px;
   pointer-events: none;
 }
 
 .brand-panel::before {
-  width: 32rem;
-  height: 32rem;
-  right: -15rem;
-  bottom: -14rem;
-  background: rgba(255, 255, 255, 0.28);
+  left: -3px;
+  bottom: -8px;
+  width: 190px;
+  height: 150px;
+  opacity: 0.34;
+  background-image: radial-gradient(circle, rgba(111, 166, 86, 0.34) 0 3px, transparent 3.6px);
+  background-size: 27px 27px;
 }
 
 .brand-panel::after {
-  width: 17rem;
-  height: 17rem;
-  right: -5rem;
-  top: 8rem;
-  border: 2.4rem solid rgba(255, 255, 255, 0.16);
+  top: 138px;
+  right: 146px;
+  width: 20px;
+  height: 20px;
+  opacity: 0.42;
+  background:
+    linear-gradient(90deg, transparent 45%, rgba(121, 171, 98, 0.48) 45% 55%, transparent 55%),
+    linear-gradient(0deg, transparent 45%, rgba(121, 171, 98, 0.48) 45% 55%, transparent 55%);
+  transform: rotate(45deg);
 }
 
 .brand-content {
   position: relative;
   z-index: 1;
-  width: min(100%, 390px);
   display: flex;
-  min-height: 500px;
+  width: min(100%, 454px);
+  height: 100%;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
+  padding: 66px 0 83px;
 }
 
 .brand-logo {
   display: block;
-  width: 165px;
+  width: 177px;
   height: auto;
-  align-self: center;
-}
-
-.brand-system-logo {
-  display: block;
-  width: min(100%, 420px);
-  height: auto;
-  margin: 1.1rem auto 0;
   align-self: center;
   object-fit: contain;
 }
 
-.brand-copy {
-  margin-top: 3.8rem;
+.brand-system-logo {
+  display: block;
+  width: 385px;
+  max-width: 100%;
+  height: auto;
+  margin: 44px auto 0;
+  object-fit: contain;
 }
 
-.brand-kicker {
-  margin: 0 0 1.55rem;
-  color: #1c7b2f;
-  font-size: 0.9rem;
-  font-weight: 950;
-  line-height: 1;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+.brand-copy {
+  width: 100%;
+  margin-top: auto;
+  margin-bottom: 38px;
 }
 
 .brand-copy h1 {
   margin: 0;
-  max-width: 390px;
-  color: #12213d;
-  font-size: clamp(2.65rem, 3.2vw, 3.45rem);
-  font-weight: 950;
-  line-height: 1.12;
-  letter-spacing: -0.055em;
+  color: #14223d;
+  font-size: clamp(2rem, 2.08vw, 2.16rem);
+  font-weight: 850;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
 }
 
-.brand-copy p:not(.brand-kicker) {
-  margin: 1.45rem 0 0;
-  max-width: 360px;
-  color: #66758f;
-  font-size: 1.04rem;
-  font-weight: 600;
+.brand-copy h1 span {
+  color: #218138;
+}
+
+.brand-copy p {
+  max-width: 416px;
+  margin: 22px 0 0;
+  color: #546076;
+  font-size: 15.8px;
+  font-weight: 650;
   line-height: 1.62;
+  letter-spacing: 0.004em;
 }
 
 .secure-card {
   display: inline-flex;
   align-items: center;
-  gap: 0.95rem;
-  min-width: 335px;
-  border: 1px solid #dbe3ec;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.86);
-  padding: 1rem 1.15rem;
-  box-shadow: 0 12px 26px rgba(15, 32, 62, 0.055);
+  gap: 18px;
+  width: 376px;
+  min-height: 104px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 20px 28px;
+  box-shadow: 0 18px 42px rgba(29, 57, 95, 0.055);
 }
 
 .secure-icon {
   display: inline-grid;
-  width: 32px;
-  height: 32px;
+  width: 58px;
+  height: 58px;
   place-items: center;
   flex: 0 0 auto;
-  color: #23843f;
+  border-radius: 999px;
+  background: #e4f4df;
+  color: #21843a;
 }
 
-.secure-icon svg,
-.auth-kicker svg {
-  width: 100%;
-  height: 100%;
+.secure-icon svg {
+  width: 29px;
+  height: 29px;
+}
+
+.secure-copy {
+  display: block;
 }
 
 .secure-card strong {
   display: block;
-  color: #12213d;
-  font-size: 0.94rem;
-  font-weight: 950;
+  color: #16243f;
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.35;
 }
 
 .secure-card small {
   display: block;
-  margin-top: 0.18rem;
-  color: #66758f;
-  font-size: 0.88rem;
-  font-weight: 650;
+  margin-top: 7px;
+  color: #4f5b70;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.48;
 }
 
 .auth-panel {
@@ -515,152 +560,202 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   background: #ffffff;
-  padding: 2rem;
+  padding: 40px;
 }
 
 .auth-content {
-  width: min(100%, 430px);
+  width: min(100%, 456px);
+  transform: translateY(8px);
 }
 
 .auth-kicker {
   display: inline-flex;
   align-items: center;
-  gap: 0.8rem;
-  margin-bottom: 2.85rem;
-  color: #1f7f31;
-  font-size: 0.9rem;
-  font-weight: 950;
-  letter-spacing: 0.14em;
+  gap: 24px;
+  margin-bottom: 31px;
+  color: #218239;
+  font-size: 13.5px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
 }
 
 .auth-kicker span {
   display: inline-grid;
-  width: 42px;
-  height: 42px;
+  width: 45px;
+  height: 45px;
   place-items: center;
+  flex: 0 0 auto;
   border-radius: 999px;
-  background: #e9f4e7;
-  color: #23843f;
+  background: #e8f5e4;
+  color: #21843a;
 }
 
 .auth-kicker svg {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
 }
 
 .auth-content h2 {
   margin: 0;
-  color: #12213d;
-  font-size: 2.45rem;
-  font-weight: 950;
-  line-height: 1;
-  letter-spacing: -0.055em;
+  color: #14223d;
+  font-size: clamp(2.5rem, 2.9vw, 3rem);
+  font-weight: 850;
+  line-height: 1.04;
+  letter-spacing: -0.045em;
 }
 
 .auth-subtitle {
-  margin: 1.15rem 0 2.2rem;
-  color: #65748b;
-  font-size: 1rem;
-  font-weight: 650;
-  line-height: 1.45;
+  margin: 15px 0 52px;
+  color: #667185;
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .plantel-field {
+  display: block;
+}
+
+.plantel-label {
+  display: block;
+  margin-bottom: 12px;
+  color: #16243f;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.plantel-select-shell {
   position: relative;
-  display: block;
-  min-height: 86px;
-  border: 1px solid #dbe3ec;
-  border-radius: 18px;
+  display: flex;
+  width: 100%;
+  height: 68px;
+  align-items: center;
+  border: 1px solid #d8e0ea;
+  border-radius: 13px;
   background: #ffffff;
-  padding: 1.05rem 3.5rem 1rem 1.35rem;
-  box-shadow: 0 10px 24px rgba(15, 32, 62, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 8px 22px rgba(15, 32, 62, 0.035);
 }
 
-.plantel-field span {
-  display: block;
-  margin-bottom: 0.72rem;
-  color: #4d586b;
-  font-size: 0.78rem;
-  font-weight: 950;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
-}
-
-.plantel-field select {
+.plantel-select-shell select {
   display: block;
   width: 100%;
+  height: 100%;
   border: 0;
   appearance: none;
   background: transparent;
-  color: #20762f;
+  color: #218239;
   font: inherit;
-  font-size: 1.28rem;
-  font-weight: 950;
-  line-height: 1.1;
+  font-size: 17px;
+  font-weight: 850;
+  line-height: 1;
   outline: none;
+  padding: 0 58px 0 21px;
 }
 
-.plantel-field svg {
+.plantel-select-shell svg {
   position: absolute;
-  right: 1.45rem;
+  right: 27px;
   top: 50%;
   width: 18px;
   height: 18px;
-  color: #217832;
+  color: #14223d;
   transform: translateY(-50%);
   pointer-events: none;
 }
 
-.plantel-field:focus-within {
-  border-color: rgba(35, 132, 63, 0.55);
-  box-shadow: 0 0 0 4px rgba(35, 132, 63, 0.09);
+.plantel-select-shell:focus-within {
+  border-color: rgba(33, 130, 57, 0.56);
+  box-shadow: 0 0 0 4px rgba(33, 130, 57, 0.08), 0 8px 22px rgba(15, 32, 62, 0.04);
 }
 
 .google-card {
   position: relative;
-  margin-top: 1.7rem;
-  min-height: 48px;
+  width: 100%;
+  height: 69px;
+  margin-top: 44px;
+}
+
+.google-design-button,
+.google-busy-row {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  border: 1px solid #d8e0ea;
+  border-radius: 13px;
+  background: #ffffff;
+  color: #17263f;
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1;
+  box-shadow: 0 8px 22px rgba(15, 32, 62, 0.035);
+}
+
+.google-design-button {
+  justify-content: center;
+  gap: 55px;
+  padding: 0 28px;
+}
+
+.google-mark {
+  display: inline-grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  flex: 0 0 auto;
+  margin-left: -34px;
+}
+
+.google-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .google-native-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: flex;
-  width: 100%;
-  min-height: 44px;
   align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 13px;
+  opacity: 0.01;
+  cursor: pointer;
 }
 
 .google-native-shell.inactive {
-  position: absolute;
-  inset: 0;
   opacity: 0;
   pointer-events: none;
 }
 
 #google-btn {
+  display: flex;
   width: 100%;
-  min-height: 44px;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
 }
 
 #google-btn :deep(div),
 #google-btn :deep(iframe) {
-  width: 100% !important;
-  max-width: 100% !important;
+  max-width: 100%;
+}
+
+#google-btn :deep(iframe) {
+  transform: scaleY(1.58);
+  transform-origin: center;
 }
 
 .google-busy-row {
-  display: flex;
-  min-height: 54px;
-  align-items: center;
-  gap: 0.85rem;
-  border: 1px solid #dbe3ec;
-  border-radius: 15px;
-  background: #ffffff;
-  padding: 0 1.15rem;
-  color: #236aad;
-  font-size: 0.98rem;
-  font-weight: 850;
-  box-shadow: 0 10px 24px rgba(15, 32, 62, 0.04);
+  gap: 15px;
+  justify-content: center;
+  padding: 0 24px;
+  color: #2869a8;
 }
 
 .button-spinner {
@@ -676,54 +771,85 @@ onBeforeUnmount(() => {
 .status-line {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  min-height: 1.35rem;
-  margin: 0.85rem 0 0;
-  color: #517088;
-  font-size: 0.86rem;
+  gap: 10px;
+  min-height: 20px;
+  margin: 14px 0 0;
+  color: #526b82;
+  font-size: 13px;
   font-weight: 750;
 }
 
 .status-dot {
   display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
-  background: #23843f;
-  box-shadow: 0 0 0 5px rgba(35, 132, 63, 0.12);
+  background: #21843a;
+  box-shadow: 0 0 0 5px rgba(33, 132, 58, 0.12);
 }
 
 .login-alert {
   display: grid;
-  gap: 0.28rem;
-  margin-top: 1rem;
+  gap: 5px;
+  margin-top: 16px;
   border: 1px solid rgba(218, 62, 48, 0.2);
-  border-radius: 16px;
+  border-radius: 14px;
   background: #fff4f1;
-  padding: 0.95rem 1rem;
+  padding: 15px 16px;
   color: #a83c2f;
-  font-size: 0.86rem;
+  font-size: 13.5px;
   font-weight: 700;
   line-height: 1.45;
 }
 
 .login-alert strong {
-  font-size: 0.88rem;
-  font-weight: 950;
+  font-size: 14px;
+  font-weight: 850;
 }
 
 .retry-button {
   width: 100%;
-  height: 48px;
-  margin-top: 0.9rem;
-  border: 1px solid rgba(35, 132, 63, 0.28);
-  border-radius: 15px;
+  height: 52px;
+  margin-top: 14px;
+  border: 1px solid rgba(33, 132, 58, 0.28);
+  border-radius: 13px;
   background: #edf8eb;
-  color: #1f7f31;
-  font-size: 0.92rem;
-  font-weight: 950;
+  color: #218239;
+  font-size: 14.5px;
+  font-weight: 850;
+  cursor: pointer;
 }
 
+.policy-line {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 19px;
+  align-items: start;
+  margin: 45px 0 0 26px;
+  color: #667185;
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.6;
+}
+
+.policy-line span {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  color: #21843a;
+  transform: translateY(3px);
+}
+
+.policy-line svg {
+  width: 100%;
+  height: 100%;
+}
+
+.policy-line strong {
+  color: #218239;
+  font-weight: 850;
+}
 
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -731,55 +857,75 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1180px) {
   .login-page {
-    padding: 1.25rem;
+    padding: 32px;
   }
 
   .login-shell {
-    min-height: 650px;
+    height: min(720px, calc(100svh - 48px));
   }
 
   .brand-content {
-    width: min(100%, 350px);
+    width: min(100%, 400px);
+    padding: 54px 0 64px;
   }
 
-  .brand-copy h1 {
-    font-size: 2.8rem;
+  .brand-system-logo {
+    width: 350px;
+  }
+
+  .secure-card {
+    width: 100%;
+  }
+
+  .auth-content {
+    transform: none;
   }
 }
 
 @media (max-width: 900px) {
   .login-page {
-    padding: 1rem;
+    min-height: 100dvh;
+    padding: 18px;
     place-items: start center;
   }
 
   .login-shell {
     grid-template-columns: 1fr;
-    min-height: auto;
+    width: min(100%, 680px);
+    height: auto;
+    min-height: 0;
   }
 
   .brand-panel {
-    min-height: 370px;
     border-right: 0;
-    border-bottom: 1px solid #dbe3ec;
+    border-bottom: 1px solid rgba(219, 228, 236, 0.78);
   }
 
   .brand-content {
-    min-height: 275px;
-    padding: 2.4rem 1.75rem;
+    width: min(100%, 480px);
+    min-height: auto;
+    padding: 38px 28px 42px;
+  }
+
+  .brand-logo {
+    width: 154px;
+  }
+
+  .brand-system-logo {
+    width: min(100%, 350px);
+    margin-top: 32px;
   }
 
   .brand-copy {
-    margin-top: 1.7rem;
-  }
-
-  .secure-card {
-    min-width: 0;
-    width: 100%;
+    margin: 42px 0 28px;
   }
 
   .auth-panel {
-    padding: 2.5rem 1.75rem;
+    padding: 44px 28px 48px;
+  }
+
+  .auth-content {
+    width: min(100%, 456px);
   }
 }
 
@@ -789,51 +935,69 @@ onBeforeUnmount(() => {
   }
 
   .login-shell {
-    border-radius: 0;
-    border-left: 0;
     border-right: 0;
+    border-left: 0;
+    border-radius: 0;
   }
 
-  .brand-panel {
-    min-height: auto;
-  }
-
-  .brand-content {
-    padding: 2rem 1.25rem;
-  }
-
-  .brand-logo {
-    width: 148px;
-  }
-
-  .brand-kicker,
-  .auth-kicker {
-    font-size: 0.78rem;
+  .brand-content,
+  .auth-panel {
+    padding-right: 20px;
+    padding-left: 20px;
   }
 
   .brand-copy h1 {
-    font-size: 2.35rem;
+    font-size: 1.9rem;
   }
 
-  .brand-copy p:not(.brand-kicker),
-  .auth-subtitle {
-    font-size: 0.96rem;
+  .brand-copy p,
+  .secure-card small,
+  .policy-line {
+    font-size: 14px;
   }
 
-  .auth-panel {
-    padding: 2rem 1.25rem;
+  .secure-card {
+    gap: 14px;
+    padding: 18px;
+  }
+
+  .secure-icon {
+    width: 52px;
+    height: 52px;
   }
 
   .auth-kicker {
-    margin-bottom: 2.1rem;
+    gap: 16px;
+    font-size: 12px;
+    letter-spacing: 0.24em;
   }
 
   .auth-content h2 {
-    font-size: 2.1rem;
+    font-size: 2.25rem;
   }
 
-  .plantel-field {
-    min-height: 78px;
+  .auth-subtitle {
+    margin-bottom: 38px;
+  }
+
+  .plantel-select-shell,
+  .google-card {
+    height: 62px;
+  }
+
+  .google-design-button {
+    gap: 24px;
+    justify-content: flex-start;
+    font-size: 15px;
+    padding: 0 24px;
+  }
+
+  .google-mark {
+    margin-left: 0;
+  }
+
+  .policy-line {
+    margin-left: 0;
   }
 }
 </style>
