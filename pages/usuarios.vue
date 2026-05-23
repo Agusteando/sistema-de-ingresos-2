@@ -159,10 +159,33 @@
           </thead>
           <tbody>
             <tr v-if="loadingTable">
-              <td colspan="6" class="table-empty"><div class="empty-state compact"><LucideLoader2 :size="22" class="animate-spin" /><strong>Cargando usuarios</strong><span>Preparando el directorio institucional.</span></div></td>
+              <td colspan="6" class="table-empty"><div class="empty-state compact"><LucideLoader2 :size="22" class="animate-spin" /><strong>Cargando usuarios</strong><span>Consultando el directorio.</span></div></td>
+            </tr>
+            <tr v-else-if="fetchError">
+              <td colspan="6" class="table-empty">
+                <div class="empty-state error-state">
+                  <LucideBan :size="30" />
+                  <strong>No se pudo cargar Usuarios</strong>
+                  <span>{{ fetchError.message }}</span>
+                  <div class="empty-actions">
+                    <button type="button" class="soft-button action-button" @click="loadUsers">Reintentar</button>
+                    <button type="button" class="primary-button action-button" @click="openDebugDialog">Ver error exacto</button>
+                  </div>
+                </div>
+              </td>
             </tr>
             <tr v-else-if="!pagedUsuarios.length">
-              <td colspan="6" class="table-empty"><div class="empty-state"><LucideUsers :size="28" /><strong>No hay usuarios para mostrar</strong><span>Ajusta los filtros o actualiza el listado.</span></div></td>
+              <td colspan="6" class="table-empty">
+                <div class="empty-state">
+                  <LucideUsers :size="28" />
+                  <strong>Sin registros visibles</strong>
+                  <span>El servidor respondió sin usuarios para los filtros actuales.</span>
+                  <div class="empty-actions">
+                    <button type="button" class="soft-button action-button" @click="clearFiltersAndReload">Limpiar filtros</button>
+                    <button type="button" class="primary-button action-button" @click="openDebugDialog">Ver diagnóstico</button>
+                  </div>
+                </div>
+              </td>
             </tr>
             <tr
               v-else
@@ -405,6 +428,41 @@
           </div>
         </div>
       </div>
+
+      <div v-if="showDebug" class="modal-overlay debug-overlay" @click.self="showDebug = false">
+        <div class="debug-modal">
+          <header>
+            <div>
+              <p class="eyebrow">Diagnóstico</p>
+              <h3>Error de carga de Usuarios</h3>
+              <span>Respuesta exacta recibida por la pantalla.</span>
+            </div>
+            <button type="button" class="icon-button" @click="showDebug = false"><LucideX :size="18" /></button>
+          </header>
+
+          <section class="debug-summary">
+            <div>
+              <small>Estado</small>
+              <strong>{{ debugStatusLabel }}</strong>
+            </div>
+            <div>
+              <small>Ruta</small>
+              <strong>/api/users</strong>
+            </div>
+            <div>
+              <small>Filas cargadas</small>
+              <strong>{{ usuarios.length }}</strong>
+            </div>
+          </section>
+
+          <pre class="debug-pre">{{ debugPayloadText }}</pre>
+
+          <footer>
+            <button type="button" class="soft-button action-button" :disabled="diagnosticsLoading" @click="loadUserDiagnostics">Actualizar diagnóstico</button>
+            <button type="button" class="primary-button action-button" @click="loadUsers">Reintentar carga</button>
+          </footer>
+        </div>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -468,6 +526,9 @@ const directoryLoading = ref(false)
 const directoryError = ref('')
 const pendingAction = ref(null)
 const fetchError = ref(null)
+const lastFetchDebug = ref(null)
+const showDebug = ref(false)
+const diagnosticsLoading = ref(false)
 let directoryTimer = null
 
 const accessOptions = [
@@ -541,6 +602,28 @@ const statusIcon = (u) => {
 const selectedAvatar = computed(() => form.value.avatar || form.value.picture || avatarFor(form.value))
 const canSave = computed(() => isWorkspaceEmail(form.value.email) && form.value.planteles.length > 0 && accessOptions.some(option => option.value === form.value.accessMode))
 const activeUser = computed(() => activeUserKey.value ? (usuarios.value.find(u => userKey(u) === activeUserKey.value) || null) : null)
+
+const debugStatusLabel = computed(() => {
+  const status = fetchError.value?.status || lastFetchDebug.value?.status || lastFetchDebug.value?.diagnostics?.statusCode
+  return status ? String(status) : 'Sin código HTTP'
+})
+const debugPayloadText = computed(() => JSON.stringify({
+  fetchError: fetchError.value,
+  lastFetchDebug: lastFetchDebug.value,
+  clientState: {
+    loadedRows: usuarios.value.length,
+    visibleRows: filteredUsuarios.value.length,
+    filters: {
+      search: searchQuery.value,
+      status: statusFilter.value,
+      access: accessFilter.value,
+      activity: activityFilter.value,
+      sortBy: sortBy.value,
+      page: page.value,
+      pageSize: pageSize.value
+    }
+  }
+}, null, 2))
 
 const lastLoginMs = (u) => {
   const parsed = new Date(u?.last_login_at || u?.lastLoginAt || 0).getTime()
@@ -622,6 +705,51 @@ onUnmounted(() => {
 
 const extractStatus = (e) => e?.statusCode || e?.response?.status || e?.data?.statusCode || e?.response?._data?.statusCode || null
 const extractMessage = (e) => e?.data?.message || e?.response?._data?.message || e?.message || 'Error cargando usuarios'
+const serializeFetchError = (e, context = {}) => ({
+  ...context,
+  status: extractStatus(e),
+  message: extractMessage(e),
+  name: e?.name || null,
+  statusMessage: e?.statusMessage || e?.response?.statusText || null,
+  url: e?.request || e?.response?.url || '/api/users',
+  data: e?.data || e?.response?._data || null,
+  stack: e?.stack || null,
+  timestamp: new Date().toISOString()
+})
+
+const loadUserDiagnostics = async () => {
+  diagnosticsLoading.value = true
+  try {
+    const diagnostics = await $fetch('/api/users/debug')
+    lastFetchDebug.value = {
+      ...(lastFetchDebug.value || {}),
+      diagnostics,
+      diagnosticsFetchedAt: new Date().toISOString()
+    }
+  } catch (e) {
+    lastFetchDebug.value = {
+      ...(lastFetchDebug.value || {}),
+      diagnosticsError: serializeFetchError(e, { endpoint: '/api/users/debug' })
+    }
+  } finally {
+    diagnosticsLoading.value = false
+  }
+}
+
+const openDebugDialog = async () => {
+  showDebug.value = true
+  await loadUserDiagnostics()
+}
+
+const clearFiltersAndReload = async () => {
+  searchQuery.value = ''
+  statusFilter.value = 'all'
+  accessFilter.value = 'all'
+  activityFilter.value = 'all'
+  sortBy.value = 'last_login_desc'
+  page.value = 1
+  await loadUsers()
+}
 
 const hydrateWorkspaceProfiles = async (rows) => {
   const emails = rows.map(row => normalizeEmail(row.email)).filter(Boolean).slice(0, 250)
@@ -653,17 +781,101 @@ const hydrateWorkspaceProfiles = async (rows) => {
 async function loadUsers () {
   loadingTable.value = true
   fetchError.value = null
+  lastFetchDebug.value = null
   try {
     const rows = await $fetch('/api/users')
-    const visibleRows = Array.isArray(rows) ? rows.filter(u => isWorkspaceEmail(u.email)) : []
+    const rawRows = Array.isArray(rows) ? rows : []
+    const visibleRows = rawRows.filter(u => isWorkspaceEmail(u.email))
+
+    if (!Array.isArray(rows)) {
+      fetchError.value = {
+        status: 200,
+        message: 'La respuesta de /api/users no fue una lista.',
+        receivedType: typeof rows
+      }
+      lastFetchDebug.value = {
+        endpoint: '/api/users',
+        responseType: typeof rows,
+        response: rows,
+        timestamp: new Date().toISOString()
+      }
+      usuarios.value = []
+      selectedEmails.value = []
+      activeUserKey.value = ''
+      showDebug.value = true
+      await loadUserDiagnostics()
+      return
+    }
+
+    if (!rawRows.length) {
+      fetchError.value = {
+        status: 200,
+        message: 'El servidor respondió correctamente, pero no devolvió usuarios.',
+        rawRows: 0,
+        visibleRows: 0
+      }
+      lastFetchDebug.value = {
+        endpoint: '/api/users',
+        responseType: 'array',
+        rawRows: 0,
+        visibleRows: 0,
+        timestamp: new Date().toISOString()
+      }
+      usuarios.value = []
+      selectedEmails.value = []
+      activeUserKey.value = ''
+      showDebug.value = true
+      await loadUserDiagnostics()
+      return
+    }
+
+    if (!visibleRows.length) {
+      fetchError.value = {
+        status: 200,
+        message: 'El servidor devolvió usuarios, pero ninguno coincide con el dominio institucional esperado.',
+        rawRows: rawRows.length,
+        visibleRows: 0
+      }
+      lastFetchDebug.value = {
+        endpoint: '/api/users',
+        responseType: 'array',
+        rawRows: rawRows.length,
+        visibleRows: 0,
+        sample: rawRows.slice(0, 5).map(row => ({ id: row?.id, email: row?.email, role: row?.role })),
+        timestamp: new Date().toISOString()
+      }
+      usuarios.value = []
+      selectedEmails.value = []
+      activeUserKey.value = ''
+      showDebug.value = true
+      await loadUserDiagnostics()
+      return
+    }
+
     usuarios.value = await hydrateWorkspaceProfiles(visibleRows)
+    lastFetchDebug.value = {
+      endpoint: '/api/users',
+      status: 200,
+      rawRows: rawRows.length,
+      visibleRows: visibleRows.length,
+      hydratedRows: usuarios.value.length,
+      timestamp: new Date().toISOString()
+    }
     selectedEmails.value = selectedEmails.value.filter(email => usuarios.value.some(u => normalizeEmail(u.email) === email))
     if (!usuarios.value.some(u => userKey(u) === activeUserKey.value)) activeUserKey.value = usuarios.value.length ? userKey(usuarios.value[0]) : ''
   } catch (e) {
-    const status = extractStatus(e)
-    const message = extractMessage(e)
-    fetchError.value = { status, message }
-    show(message, 'danger')
+    const debug = serializeFetchError(e, { endpoint: '/api/users' })
+    fetchError.value = {
+      status: debug.status,
+      message: debug.message,
+      data: debug.data,
+      statusMessage: debug.statusMessage,
+      name: debug.name
+    }
+    lastFetchDebug.value = debug
+    showDebug.value = true
+    show(debug.message, 'danger')
+    await loadUserDiagnostics()
   } finally {
     loadingTable.value = false
   }
@@ -850,7 +1062,7 @@ const exportUsers = () => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `usuarios-aurora-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `usuarios-sistema-ingresos-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -858,7 +1070,7 @@ const exportUsers = () => {
 
 <style scoped>
 .usuarios-page {
-  --ink: #13213a;
+  --ink: #102044;
   --muted: #64748b;
   --soft: #f8fafc;
   --line: #e3eaf3;
@@ -874,14 +1086,14 @@ const exportUsers = () => {
   --cyan: #0891b2;
   --cyan-soft: #ecfeff;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(318px, 22vw, 356px);
-  gap: 22px;
+  grid-template-columns: minmax(0, 1fr) 352px;
+  gap: 24px;
   width: 100%;
   max-width: none;
   height: 100%;
   min-height: 0;
   margin: 0;
-  padding: 0;
+  padding: 6px 0 32px;
   overflow: hidden;
   color: var(--ink);
 }
@@ -890,16 +1102,16 @@ const exportUsers = () => {
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 8px 2px 28px 0;
+  padding-right: 2px;
   scrollbar-width: thin;
 }
 
 .usuarios-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 18px;
-  margin-bottom: 14px;
+  align-items: end;
+  gap: 20px;
+  margin-bottom: 18px;
 }
 
 .eyebrow {
@@ -915,16 +1127,16 @@ const exportUsers = () => {
 .usuarios-hero h2 {
   margin: 8px 0 0;
   color: var(--ink);
-  font-size: clamp(27px, 2.1vw, 34px);
-  line-height: 1;
+  font-size: clamp(28px, 3vw, 38px);
+  line-height: .98;
   font-weight: 950;
   letter-spacing: -.055em;
 }
 
 .usuarios-hero p:not(.eyebrow) {
-  margin: 8px 0 0;
+  margin: 9px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.35;
   font-weight: 700;
 }
@@ -1013,41 +1225,44 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 18px;
 }
 
 .metric-card {
   position: relative;
-  min-height: 104px;
+  min-height: 118px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 11px;
-  padding: 15px 15px 14px;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
   overflow: hidden;
-  border: 1px solid rgba(226, 232, 240, .92);
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.94));
-  box-shadow: 0 18px 45px rgba(15, 23, 42, .07);
+  border: 1px solid rgba(220, 230, 242, .98);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 18% 50%, color-mix(in srgb, var(--accent, #22c55e) 12%, transparent), transparent 54%),
+    linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 18px 40px rgba(16, 32, 68, .055);
 }
 
 .metric-card::before {
   content: '';
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 5px;
-  background: var(--accent, #22c55e);
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+  pointer-events: none;
 }
 
 .metric-card::after {
   content: '';
   position: absolute;
-  right: -28px;
-  bottom: -36px;
-  width: 102px;
-  height: 102px;
+  right: -34px;
+  bottom: -42px;
+  width: 96px;
+  height: 96px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent, #22c55e) 13%, transparent);
+  background: color-mix(in srgb, var(--accent, #22c55e) 10%, transparent);
 }
 
 .metric-card.total-card { --accent: #16a34a; }
@@ -1061,9 +1276,9 @@ button:disabled {
   min-width: 0;
   position: relative;
   z-index: 1;
-  grid-column: 1;
+  grid-column: 2;
   grid-row: 1;
-  align-self: stretch;
+  align-self: center;
   display: flex;
   flex-direction: column;
 }
@@ -1071,14 +1286,14 @@ button:disabled {
 .metric-icon {
   position: relative;
   z-index: 1;
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
-  width: 40px;
-  height: 40px;
+  width: 50px;
+  height: 50px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 15px;
+  border-radius: 999px;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.72), 0 10px 24px rgba(15, 23, 42, .08);
 }
 
@@ -1100,9 +1315,9 @@ button:disabled {
 
 .metric-card strong {
   display: block;
-  margin-top: 11px;
+  margin-top: 8px;
   color: var(--ink);
-  font-size: 29px;
+  font-size: 30px;
   line-height: .95;
   font-weight: 950;
   letter-spacing: -.055em;
@@ -1120,15 +1335,15 @@ button:disabled {
 
 .filters-card {
   display: grid;
-  grid-template-columns: minmax(280px, 1.35fr) repeat(4, minmax(136px, .62fr));
-  gap: 10px;
+  grid-template-columns: minmax(320px, 1.3fr) repeat(4, minmax(142px, .62fr));
+  gap: 12px;
   align-items: center;
-  margin-bottom: 16px;
-  padding: 12px;
-  border: 1px solid rgba(226, 232, 240, .92);
-  border-radius: 22px;
-  background: rgba(255,255,255,.9);
-  box-shadow: 0 16px 42px rgba(15, 23, 42, .055);
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(220, 230, 242, .98);
+  border-radius: 18px;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 18px 44px rgba(16, 32, 68, .05);
 }
 
 .search-control,
@@ -1242,10 +1457,10 @@ button:disabled {
 
 .users-table-card {
   overflow: hidden;
-  border: 1px solid rgba(226, 232, 240, .94);
-  border-radius: 24px;
+  border: 1px solid rgba(220, 230, 242, .98);
+  border-radius: 18px;
   background: #fff;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, .075);
+  box-shadow: 0 20px 54px rgba(16, 32, 68, .06);
 }
 
 .users-table {
@@ -1255,7 +1470,7 @@ button:disabled {
 }
 
 .users-table th {
-  height: 46px;
+  height: 52px;
   color: #5e6b81;
   background: linear-gradient(180deg, #fbfcfe, #f6f9fc);
   border-bottom: 1px solid #e5edf5;
@@ -1268,8 +1483,8 @@ button:disabled {
 }
 
 .users-table td {
-  height: 64px;
-  padding: 10px 16px;
+  height: 72px;
+  padding: 11px 16px;
   border-bottom: 1px solid #edf2f7;
   vertical-align: middle;
 }
@@ -1301,8 +1516,8 @@ button:disabled {
 }
 
 .user-avatar {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   flex: 0 0 auto;
   border-radius: 999px;
   object-fit: cover;
@@ -1457,16 +1672,16 @@ button:disabled {
 
 .user-drawer {
   position: sticky;
-  top: 8px;
+  top: 0;
   align-self: start;
-  min-height: 0;
+  min-height: calc(100vh - 96px);
   max-height: calc(100vh - 96px);
   overflow: auto;
-  padding: 24px;
-  border: 1px solid rgba(226, 232, 240, .94);
-  border-radius: 26px;
-  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.92));
-  box-shadow: 0 24px 60px rgba(15, 23, 42, .075);
+  padding: 28px;
+  border: 1px solid rgba(220, 230, 242, .98);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.99), rgba(249,251,254,.96));
+  box-shadow: 0 20px 54px rgba(16, 32, 68, .06);
 }
 
 .drawer-close {
@@ -1624,6 +1839,118 @@ button:disabled {
 
 .animate-spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+
+.empty-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.error-state {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(220, 38, 38, .08), transparent 34%),
+    linear-gradient(180deg, #fff, #fffafa);
+}
+
+.error-state svg { color: #dc2626; }
+
+.debug-modal {
+  width: min(920px, calc(100vw - 42px));
+  max-height: calc(100vh - 42px);
+  display: grid;
+  grid-template-rows: auto auto minmax(260px, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, .95);
+  border-radius: 26px;
+  background: #fff;
+  box-shadow: 0 30px 90px rgba(15, 23, 42, .28);
+}
+
+.debug-modal header,
+.debug-modal footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  border-bottom: 1px solid #e5edf5;
+  background: linear-gradient(180deg, #fff, #fbfcfe);
+}
+
+.debug-modal footer {
+  border-top: 1px solid #e5edf5;
+  border-bottom: 0;
+  justify-content: flex-end;
+}
+
+.debug-modal h3 {
+  margin: 7px 0 0;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -.035em;
+}
+
+.debug-modal header span {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.debug-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px 22px;
+  border-bottom: 1px solid #e5edf5;
+  background: #fbfdff;
+}
+
+.debug-summary div {
+  border: 1px solid #e5edf5;
+  border-radius: 16px;
+  background: #fff;
+  padding: 12px 14px;
+}
+
+.debug-summary small,
+.debug-summary strong {
+  display: block;
+}
+
+.debug-summary small {
+  color: #7a879b;
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.debug-summary strong {
+  margin-top: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 950;
+  word-break: break-word;
+}
+
+.debug-pre {
+  margin: 0;
+  overflow: auto;
+  padding: 18px 22px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.55;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+}
 
 @media (max-width: 1320px) {
   .usuarios-page { grid-template-columns: minmax(0, 1fr); }
