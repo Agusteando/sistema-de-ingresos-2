@@ -1,1 +1,1 @@
-fix: persist control escolar phased cache without student photos
+fix: improve control escolar filters and empty detail fit

@@ -3448,7 +3448,7 @@ onBeforeUnmount(() => {
 
 .ce-primary-filter-row {
   display: grid;
-  grid-template-columns: max-content minmax(360px, 1fr) auto auto;
+  grid-template-columns: minmax(430px, 1fr) max-content minmax(0, 0.95fr) auto;
   align-items: center;
   gap: 9px;
   min-width: max(100%, 1120px);
@@ -3508,7 +3508,10 @@ onBeforeUnmount(() => {
 }
 
 .ce-filter-button {
-  min-width: 92px;
+  width: max-content;
+  min-width: 0;
+  justify-self: start;
+  padding: 0 14px;
   border: 1px solid #d9e3ee;
   background: #fff;
   color: #15233c;
@@ -4812,18 +4815,22 @@ onBeforeUnmount(() => {
   border: 0;
   background: transparent;
   box-shadow: none;
+  overflow: hidden;
 }
 
 .ce-empty-shell {
   display: flex;
   width: 100%;
+  height: 100%;
   min-height: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  gap: 14px;
-  overflow: hidden;
-  padding: 28px 16px 18px;
+  gap: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 22px 16px 16px;
   border: 1px solid var(--students-border);
   border-radius: 14px;
   background:
@@ -5221,7 +5228,7 @@ onBeforeUnmount(() => {
 
 .ce-primary-filter-row {
   display: grid;
-  grid-template-columns: minmax(330px, 430px) auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(430px, 1fr) max-content minmax(0, 0.95fr) auto;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -5255,8 +5262,11 @@ onBeforeUnmount(() => {
 }
 
 .ce-filter-button {
-  min-width: 105px;
+  width: max-content;
+  min-width: 0;
   min-height: 38px;
+  justify-self: start;
+  padding: 0 14px;
   border-radius: 11px;
   background: #fff;
   box-shadow: none;
@@ -5286,7 +5296,13 @@ onBeforeUnmount(() => {
 .ce-chip-cluster--quality {
   display: flex;
   min-width: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.ce-chip-cluster--quality::-webkit-scrollbar {
+  display: none;
 }
 
 .ce-chip-cluster--grade {
@@ -5642,13 +5658,128 @@ onBeforeUnmount(() => {
   padding-inline: 0;
 }
 
+@media (max-height: 800px) {
+  .ce-empty-shell {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    grid-auto-rows: auto;
+    align-content: start;
+    gap: 10px 12px;
+    padding: 14px;
+  }
+
+  .ce-empty-hero {
+    grid-column: 1;
+    grid-row: 1;
+    width: 82px;
+    height: 64px;
+    align-self: center;
+    margin-top: 0;
+  }
+
+  .ce-empty-hero::before {
+    inset: 8px 12px 4px;
+    border-radius: 22px;
+  }
+
+  .ce-empty-hero > svg {
+    margin-right: 22px;
+  }
+
+  .ce-empty-lines {
+    right: 21px;
+    top: 27px;
+    gap: 8px;
+    width: 26px;
+  }
+
+  .ce-empty-lines i {
+    height: 3px;
+  }
+
+  .ce-empty-cursor {
+    right: 9px;
+    bottom: 10px;
+    border-top-width: 18px;
+    border-right-width: 14px;
+  }
+
+  .ce-empty-sparkle.one {
+    left: 8px;
+    top: 11px;
+  }
+
+  .ce-empty-sparkle.two {
+    left: 27px;
+    top: 3px;
+  }
+
+  .ce-empty-copy {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    text-align: left;
+  }
+
+  .ce-empty-copy h2 {
+    font-size: 16px;
+    line-height: 1.08;
+  }
+
+  .ce-empty-copy p {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .ce-empty-copy p + p {
+    display: none;
+  }
+
+  .ce-empty-review {
+    grid-column: 1 / -1;
+    margin-top: 0;
+    padding: 11px 14px;
+  }
+
+  .ce-empty-card h3 {
+    margin-bottom: 9px;
+  }
+
+  .ce-empty-review div {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 12px;
+  }
+
+  .ce-empty-review span {
+    gap: 7px;
+    font-size: 10.5px;
+  }
+
+  .ce-empty-flow {
+    display: none;
+  }
+
+  .ce-empty-tip {
+    grid-column: 1 / -1;
+    min-height: 46px;
+    margin-top: 0;
+    padding: 0 64px 0 14px;
+  }
+
+  .ce-empty-tip i {
+    right: 14px;
+    width: 42px;
+    height: 42px;
+  }
+}
+
 @media (max-width: 1320px) {
   .ce-kpi-strip {
     grid-template-columns: repeat(5, minmax(148px, 1fr));
     overflow-x: auto;
   }
   .ce-primary-filter-row {
-    grid-template-columns: max-content minmax(300px, 1fr) auto auto;
+    grid-template-columns: minmax(420px, 1fr) max-content minmax(0, 0.85fr);
   }
   .ce-clear-link {
     display: none;
