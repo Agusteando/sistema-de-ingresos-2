@@ -1,5 +1,5 @@
 <template>
-  <div class="students-screen control-escolar-screen">
+  <div ref="controlScreenRef" class="students-screen control-escolar-screen" :style="controlScreenStyle">
     <header class="students-hero ce-hero">
       <div class="ce-hero-spacer">
         <Transition name="ce-sync-trace-fade">
@@ -1244,7 +1244,6 @@ import UiButton from "~/components/ui/UiButton.vue";
 import UiChip from "~/components/ui/UiChip.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.vue";
-import { useStudentsWorkspaceScale } from "~/composables/useStudentsWorkspaceScale";
 import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
 import {
@@ -1345,18 +1344,42 @@ const controlDataSavedAt = ref("");
 const controlDataSource = ref(null);
 const controlExternalDbRows = ref(0);
 
-const hasDetail = computed(() => true);
-const {
-  studentsScaleShell,
-  studentsScaleShellStyle,
-  studentsDesignCanvasStyle,
-  scheduleWorkspaceScaleUpdate,
-} = useStudentsWorkspaceScale(hasDetail, {
-  detailDesignWidth: 1360,
-  detailDesignHeight: 660,
-  detailMinScale: 0.58,
-  fitPadding: 6,
-});
+const CONTROL_SCREEN_DESIGN_WIDTH = 1520;
+const CONTROL_SCREEN_DESIGN_HEIGHT = 820;
+const CONTROL_SCREEN_MIN_SCALE = 0.72;
+
+const controlScreenRef = ref(null);
+const controlScreenScale = ref(1);
+const studentsScaleShell = ref(null);
+let controlScreenResizeObserver = null;
+let controlScreenFrame = null;
+
+const controlScreenStyle = computed(() => ({
+  "--ce-screen-scale": controlScreenScale.value,
+}));
+const studentsScaleShellStyle = computed(() => ({}));
+const studentsDesignCanvasStyle = computed(() => ({}));
+
+const updateControlScreenScale = () => {
+  if (!process.client) return;
+  const host = controlScreenRef.value?.parentElement;
+  const rect = host?.getBoundingClientRect?.();
+  const availableWidth = Math.max(900, rect?.width || window.innerWidth || CONTROL_SCREEN_DESIGN_WIDTH);
+  const availableHeight = Math.max(560, rect?.height || window.innerHeight || CONTROL_SCREEN_DESIGN_HEIGHT);
+  const widthScale = availableWidth / CONTROL_SCREEN_DESIGN_WIDTH;
+  const heightScale = availableHeight / CONTROL_SCREEN_DESIGN_HEIGHT;
+  const nextScale = Math.min(1, Math.max(CONTROL_SCREEN_MIN_SCALE, Math.min(widthScale, heightScale)));
+  controlScreenScale.value = Number(nextScale.toFixed(4));
+};
+
+const scheduleControlScreenScaleUpdate = () =>
+  nextTick(() => {
+    if (!process.client) return;
+    if (controlScreenFrame) window.cancelAnimationFrame(controlScreenFrame);
+    controlScreenFrame = window.requestAnimationFrame(updateControlScreenScale);
+  });
+
+const scheduleWorkspaceScaleUpdate = scheduleControlScreenScaleUpdate;
 const controlSyncBusy = computed(
   () =>
     controlBaseStage.value === "loading" ||
@@ -3233,9 +3256,16 @@ const handleCicloChanged = (event) => {
 };
 
 onMounted(async () => {
+  scheduleControlScreenScaleUpdate();
   if (process.client) {
     localHour.value = new Date().getHours();
     window.addEventListener("ingresos:ciclo-changed", handleCicloChanged);
+    window.addEventListener("resize", scheduleControlScreenScaleUpdate, { passive: true });
+    const controlScreenHost = controlScreenRef.value?.parentElement;
+    if (typeof ResizeObserver !== "undefined" && controlScreenHost) {
+      controlScreenResizeObserver = new ResizeObserver(scheduleControlScreenScaleUpdate);
+      controlScreenResizeObserver.observe(controlScreenHost);
+    }
   }
 
   state.value.ciclo = normalizeCicloOption(
@@ -3257,14 +3287,37 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  if (process.client)
+  if (process.client) {
     window.removeEventListener("ingresos:ciclo-changed", handleCicloChanged);
+    window.removeEventListener("resize", scheduleControlScreenScaleUpdate);
+    if (controlScreenFrame) window.cancelAnimationFrame(controlScreenFrame);
+  }
+  controlScreenResizeObserver?.disconnect?.();
 });
 </script>
 
 <style scoped>
 .control-escolar-screen {
+  --ce-screen-scale: 1;
+  width: calc(100% / var(--ce-screen-scale));
+  height: calc(100% / var(--ce-screen-scale));
+  min-width: 0;
+  min-height: 0;
+  flex: 0 0 auto;
   gap: 0;
+  transform: scale(var(--ce-screen-scale));
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.control-escolar-screen .students-design-canvas {
+  width: 100%;
+  height: 100%;
+  transform: none;
+}
+
+.control-escolar-screen .students-scale-shell {
+  min-height: 0;
 }
 
 .ce-hero {
@@ -5775,23 +5828,21 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1320px) {
   .ce-kpi-strip {
-    grid-template-columns: repeat(5, minmax(148px, 1fr));
-    overflow-x: auto;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    overflow: visible;
   }
   .ce-primary-filter-row {
-    grid-template-columns: minmax(420px, 1fr) max-content minmax(0, 0.85fr);
+    grid-template-columns: minmax(430px, 1fr) max-content minmax(0, 0.95fr) auto;
   }
   .ce-clear-link {
-    display: none;
+    display: inline-flex;
   }
   .ce-status-tabs {
-    overflow-x: auto;
+    overflow: visible;
   }
-  .ce-workspace.has-detail {
-    grid-template-columns: minmax(400px, 0.62fr) minmax(650px, 1.38fr);
-  }
+  .ce-workspace.has-detail,
   .ce-workspace.has-empty-detail {
-    grid-template-columns: minmax(690px, 1.12fr) minmax(500px, 0.88fr);
+    grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
   }
   .ce-workspace.has-empty-detail .ce-list-card {
     --student-list-quality-col: 210px;
@@ -5968,6 +6019,52 @@ onBeforeUnmount(() => {
 
 .ce-source-retry:hover {
   transform: translateY(-1px);
+}
+
+
+.ce-progress-cluster small {
+  display: block;
+}
+
+.ce-student-row .student-copy,
+.ce-student-row .student-copy strong,
+.ce-title-row h2,
+.ce-profile-copy strong,
+.ce-tutor-card strong,
+.ce-tutor-card span,
+.ce-empty-flow li b {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.ce-title-row h2,
+.ce-profile-copy strong,
+.ce-tutor-card strong {
+  line-height: 1.1;
+}
+
+.ce-filter-button,
+.ce-clear-link,
+.ce-status-tab,
+.ce-chip-label,
+.ce-secondary-filter-row :deep(.ui-chip),
+.ce-primary-filter-row :deep(.ui-chip),
+.ce-primary-filter-row :deep(button.ui-chip) {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+@media (max-height: 800px) {
+  .ce-empty-copy p + p {
+    display: block;
+  }
+
+  .ce-empty-flow {
+    display: block;
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 980px) {
