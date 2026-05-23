@@ -1,1 +1,1 @@
-fix: decouple Usuarios APIs from plantel database middleware
+refactor: match login screen to institutional Figma design
