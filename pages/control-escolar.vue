@@ -60,18 +60,6 @@
 
     <div class="filter-bar ce-filter-bar">
       <div class="ce-primary-filter-row">
-        <div class="ce-status-tabs" aria-label="Filtros principales">
-          <button
-            v-for="filter in primaryFilters"
-            :key="filter.key"
-            type="button"
-            :class="['ce-status-tab', { active: filters.status === filter.key && !filters.quality }]"
-            @click="applyPrimaryFilter(filter.key)"
-          >
-            {{ filter.label }}
-          </button>
-        </div>
-
         <div class="search-control" :class="{ 'has-filter-token': activeFilterLabel }">
           <span class="search-filter-icon" aria-hidden="true"><LucideFilter :size="15" /></span>
           <button v-if="activeFilterLabel" type="button" class="search-filter-token" @click="clearFilters">
@@ -86,35 +74,46 @@
           <b v-if="advancedFilterCount">{{ advancedFilterCount }}</b>
         </button>
 
+        <div class="ce-chip-cluster ce-chip-cluster--quality" aria-label="Calidad del expediente">
+          <UiChip
+            v-for="filter in qualityFilters"
+            :key="`quality-${filter.key}`"
+            :active="filters.quality === filter.key"
+            @click="toggleQualityFilter(filter.key)"
+          >
+            <span>{{ filter.label }}</span><b class="ce-chip-count">{{ formatNumber(filter.count) }}</b>
+          </UiChip>
+        </div>
+
         <button type="button" class="ce-clear-link" :disabled="!hasActiveFilters" @click="clearFilters">
           <LucideRotateCcw :size="15" /> Limpiar filtros
         </button>
       </div>
 
       <div class="ce-secondary-filter-row">
-          <div class="ce-chip-cluster" aria-label="Calidad del expediente">
-            <span class="ce-chip-label">Calidad del expediente</span>
-            <UiChip
-              v-for="filter in qualityFilters"
-              :key="`quality-${filter.key}`"
-              :active="filters.quality === filter.key"
-              @click="toggleQualityFilter(filter.key)"
-            >
-              <span>{{ filter.label }}</span><b class="ce-chip-count">{{ formatNumber(filter.count) }}</b>
-            </UiChip>
-          </div>
+        <div class="ce-status-tabs" aria-label="Filtros principales">
+          <button
+            v-for="filter in primaryFilters"
+            :key="filter.key"
+            type="button"
+            :class="['ce-status-tab', { active: filters.status === filter.key && !filters.quality }]"
+            @click="applyPrimaryFilter(filter.key)"
+          >
+            {{ filter.label }}
+          </button>
+        </div>
 
-          <div v-if="catalogs.grados.length" class="ce-chip-cluster ce-chip-cluster--grade" aria-label="Filtrar por grado">
-            <span class="ce-chip-label">Grado</span>
-            <UiChip :active="!filters.grado && !filters.group" @click="clearAcademicFilters">Todos</UiChip>
-            <UiChip v-for="grado in catalogs.grados" :key="`grado-${grado}`" :active="filters.grado === grado" @click="selectGrade(grado)">{{ grado }}</UiChip>
-          </div>
+        <div v-if="catalogs.grados.length" class="ce-chip-cluster ce-chip-cluster--grade" aria-label="Filtrar por grado">
+          <span class="ce-chip-label">Grado</span>
+          <UiChip :active="!filters.grado && !filters.group" @click="clearAcademicFilters">Todos</UiChip>
+          <UiChip v-for="grado in catalogs.grados" :key="`grado-${grado}`" :active="filters.grado === grado" @click="selectGrade(grado)">{{ grado }}</UiChip>
+        </div>
 
-          <div v-if="filters.grado && availableGroups.length" class="ce-chip-cluster ce-chip-cluster--group" aria-label="Filtrar por grupo">
-            <span class="ce-chip-label">Grupo</span>
-            <UiChip :active-group="filters.group === ''" @click="filters.group = ''">Todos</UiChip>
-            <UiChip v-for="grupo in availableGroups" :key="`grupo-${grupo}`" :active-group="filters.group === grupo" @click="toggleFilter('group', grupo)">{{ grupo }}</UiChip>
-          </div>
+        <div v-if="filters.grado && availableGroups.length" class="ce-chip-cluster ce-chip-cluster--group" aria-label="Filtrar por grupo">
+          <span class="ce-chip-label">Grupo</span>
+          <UiChip :active-group="filters.group === ''" @click="filters.group = ''">Todos</UiChip>
+          <UiChip v-for="grupo in availableGroups" :key="`grupo-${grupo}`" :active-group="filters.group === grupo" @click="toggleFilter('group', grupo)">{{ grupo }}</UiChip>
+        </div>
       </div>
     </div>
 
@@ -235,7 +234,7 @@
                 </template>
               </div>
 
-              <footer v-if="!selectedStudent && selectedAgentId && students.length" class="ce-list-footer">
+              <footer v-if="selectedAgentId && students.length && !studentsSourceUnavailable" class="ce-list-footer">
                 <span>Mostrando {{ paginationRangeLabel }} de {{ formatNumber(pagination.total) }} alumnos</span>
                 <div class="ce-list-pages" aria-label="Paginación de alumnos">
                   <button
@@ -264,12 +263,12 @@
                     <span :class="['ce-status-pill large', statusTone(selectedStudent)]">{{ selectedStudent.status || 'Activo' }}</span>
                   </div>
                 </div>
-                <div class="ce-husky-header-card" :class="{ unavailable: !selectedStudent.huskyPassAvailable }">
-                  <img src="/brand/ID-HUSKY-PASS-GREY.png" alt="Husky Pass" />
+                <div class="ce-access-header-card" :class="{ unavailable: !selectedStudent.huskyPassAvailable }">
+                  <span aria-hidden="true"><LucideShieldCheck :size="21" /></span>
                   <div>
-                    <strong>{{ selectedStudent.huskyPassAvailable ? 'Accesos activos' : 'Sin Husky Pass' }}</strong>
-                    <span v-if="selectedStudent.huskyPassAvailable">{{ selectedStudent.huskyPassUsername }} · {{ selectedStudent.huskyPassPlaintext }}</span>
-                    <span v-else>{{ huskyPassEmailTarget || 'Sin correo de padre/tutor' }}</span>
+                    <strong>{{ selectedStudent.huskyPassAvailable ? 'Acceso activo' : 'Acceso pendiente' }}</strong>
+                    <small v-if="selectedStudent.huskyPassAvailable">{{ selectedStudent.huskyPassUsername }} · {{ selectedStudent.huskyPassPlaintext }}</small>
+                    <small v-else>{{ huskyPassEmailTarget || 'Sin correo de padre/tutor' }}</small>
                   </div>
                 </div>
                 <div class="ce-progress-cluster">
@@ -284,7 +283,7 @@
                     <LucideSave :size="17" /> {{ savingStudent ? 'Guardando...' : 'Guardar' }}
                   </UiButton>
                 </div>
-                <button type="button" class="detail-shell-close" @click="selectedStudent = null"><LucideX :size="20" /></button>
+                <button type="button" class="detail-shell-close ce-detail-menu-button" aria-label="Cerrar detalle" @click="selectedStudent = null"><LucideMoreVertical :size="20" /></button>
               </header>
 
               <div class="ce-detail-body">
@@ -592,6 +591,7 @@ import {
   LucideGraduationCap,
   LucideKeyRound,
   LucideMail,
+  LucideMoreVertical,
   LucidePhone,
   LucideRefreshCw,
   LucideRotateCcw,
@@ -3798,6 +3798,436 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
+
+/* Control Escolar 1:1 redesign alignment */
+.ce-filter-bar {
+  min-height: 0;
+  gap: 9px;
+  margin: 6px 0 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.ce-primary-filter-row {
+  display: grid;
+  grid-template-columns: minmax(330px, 430px) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 9px 14px;
+  border: 1px solid #dfe7ef;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(21, 35, 60, .035);
+}
+
+.ce-secondary-filter-row {
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 14px;
+  border: 1px solid #dfe7ef;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(21, 35, 60, .03);
+}
+
+.ce-filter-bar .search-control {
+  height: 39px;
+  border-color: #d9e3ee;
+  border-radius: 11px;
+  box-shadow: none;
+}
+
+.ce-filter-button {
+  min-width: 105px;
+  min-height: 38px;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.ce-clear-link {
+  min-width: 122px;
+  justify-content: flex-end;
+  color: #66758e;
+}
+
+.ce-clear-link:not(:disabled) {
+  color: #647087;
+}
+
+.ce-chip-cluster {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.ce-chip-cluster + .ce-chip-cluster::before {
+  display: none;
+}
+
+.ce-chip-cluster--quality {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ce-chip-cluster--grade {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.ce-chip-cluster--group {
+  flex: 0 0 auto;
+}
+
+.ce-secondary-filter-row :deep(.ui-chip),
+.ce-secondary-filter-row :deep(button),
+.ce-primary-filter-row :deep(.ui-chip),
+.ce-primary-filter-row :deep(button.ui-chip) {
+  min-height: 30px;
+  border-color: #dbe5ef;
+  background: #fff;
+  box-shadow: none;
+  color: #15233c;
+  font-size: 10.5px;
+  font-weight: 860;
+}
+
+.ce-secondary-filter-row :deep(.ui-chip.active),
+.ce-primary-filter-row :deep(.ui-chip.active) {
+  border-color: #2f9138;
+  background: linear-gradient(180deg, #58b951, #2f9239);
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(63, 145, 56, .18);
+}
+
+.ce-chip-label {
+  margin-right: 4px;
+  color: #66758e;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .045em;
+}
+
+.ce-status-tabs {
+  flex: 0 1 auto;
+  gap: 6px;
+}
+
+.ce-status-tab {
+  min-height: 34px;
+  min-width: 72px;
+  border-color: #dce6f0;
+  border-radius: 9px;
+  box-shadow: none;
+  font-size: 10.5px;
+  font-weight: 880;
+}
+
+.ce-status-tab.active {
+  border-color: #2f9138;
+  background: linear-gradient(180deg, #55b84f, #2d9137);
+  box-shadow: 0 9px 18px rgba(63, 145, 56, .2);
+}
+
+.ce-workspace.has-detail {
+  grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr);
+  gap: 10px;
+}
+
+.ce-workspace.has-empty-detail {
+  grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr);
+  gap: 10px;
+}
+
+.ce-list-card {
+  grid-template-rows: 44px minmax(0, 1fr) 38px;
+  border-color: #dfe7ef;
+  border-radius: 12px;
+  box-shadow: 0 9px 20px rgba(21, 35, 60, .035);
+}
+
+.ce-workspace.has-detail .ce-list-card {
+  --student-list-balance-col: 56px;
+  --student-list-quality-col: 128px;
+  --student-list-action-col: 38px;
+  --student-list-row-height: 72px;
+  --student-list-grade-size: 54px;
+  --student-list-grade-height: 58px;
+  --student-list-crest-size: 32px;
+  grid-template-rows: 44px minmax(0, 1fr) 38px;
+}
+
+.ce-workspace.has-detail .ce-student-row {
+  grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-quality-col) var(--student-list-action-col);
+  min-height: var(--student-list-row-height);
+  padding-right: 6px;
+}
+
+.ce-workspace.has-detail .ce-quality-score,
+.ce-workspace.has-detail .ce-quality-cell {
+  display: flex;
+}
+
+.ce-workspace.has-detail .ce-quality-score {
+  width: 43px;
+  height: 43px;
+}
+
+.ce-workspace.has-detail .ce-quality-score::after {
+  inset: 5px;
+}
+
+.ce-workspace.has-detail .ce-quality-fields {
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  gap: 4px 7px;
+}
+
+.ce-list-scroll {
+  padding: 8px 7px 0 8px;
+}
+
+.ce-student-row {
+  width: calc(100% - 5px);
+  margin: 0 5px 7px 0;
+  border-color: #dfe7ef;
+  box-shadow: 0 5px 12px rgba(21, 35, 60, .035);
+}
+
+.ce-student-row.selected,
+.ce-student-row.multi-selected {
+  border-color: rgba(63, 145, 56, .34);
+  background: linear-gradient(90deg, rgba(235, 249, 232, .96) 0%, #fff 76%);
+  box-shadow: 0 8px 20px rgba(63, 145, 56, .105);
+}
+
+.ce-row-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+}
+
+.ce-student-identity {
+  grid-template-columns: 24px var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
+  gap: 7px;
+}
+
+.ce-academic-pills span {
+  min-height: 18px;
+  padding-inline: 7px;
+  font-size: 9px;
+}
+
+.ce-list-titlebar {
+  padding-inline: 15px 12px;
+}
+
+.ce-list-footer {
+  min-height: 38px;
+  padding: 0 16px;
+}
+
+.ce-detail-shell {
+  border-color: #dfe7ef;
+  border-radius: 12px;
+  box-shadow: 0 9px 20px rgba(21, 35, 60, .035);
+}
+
+.ce-detail-header {
+  grid-template-columns: minmax(250px, 1fr) minmax(180px, 220px) minmax(190px, 245px) 34px;
+  min-height: 78px;
+  gap: 12px;
+  padding: 12px 14px 12px 18px;
+  background: #fff;
+}
+
+.ce-detail-actions {
+  display: none;
+}
+
+.ce-title-row h2 {
+  font-size: 18px;
+}
+
+.ce-access-header-card {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 9px 12px;
+  border: 1px solid rgba(63, 145, 56, .22);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fcf6, #fff);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, .04);
+}
+
+.ce-access-header-card > span {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 9px;
+  background: #eff8eb;
+  color: #21882e;
+}
+
+.ce-access-header-card strong,
+.ce-access-header-card small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-access-header-card strong {
+  color: #21882e;
+  font-size: 11px;
+  font-weight: 920;
+}
+
+.ce-access-header-card small {
+  margin-top: 3px;
+  color: #53627b;
+  font-size: 10px;
+  font-weight: 760;
+}
+
+.ce-access-header-card.unavailable {
+  border-color: #dce6f0;
+  background: #fbfcfd;
+}
+
+.ce-access-header-card.unavailable > span,
+.ce-access-header-card.unavailable strong {
+  color: #7a8498;
+}
+
+.ce-progress-cluster strong {
+  color: #4f5f78;
+  font-size: 10.5px;
+}
+
+.ce-progress-track {
+  height: 7px;
+}
+
+.ce-progress-cluster small {
+  display: none;
+}
+
+.ce-detail-menu-button {
+  border: 1px solid #dfe7ef;
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(21, 35, 60, .04);
+}
+
+.ce-detail-body {
+  gap: 9px;
+  padding: 9px 12px 12px;
+}
+
+.ce-profile-card {
+  grid-template-columns: 78px minmax(0, 1fr) minmax(190px, .42fr);
+  min-height: 88px;
+  padding: 10px 14px;
+  border-color: #dfe7ef;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #fff 0%, #fff 75%, #f7fbf5 100%);
+}
+
+.ce-data-section {
+  grid-template-columns: minmax(220px, .36fr) minmax(0, 1fr);
+  min-height: 48px;
+  padding: 8px 12px;
+  border-color: rgba(63, 145, 56, .16);
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f8fcf6, #fff);
+}
+
+.ce-section-heading > span {
+  width: 29px;
+  height: 29px;
+}
+
+.ce-section-heading h3 {
+  font-size: 12px;
+}
+
+.ce-section-heading p {
+  font-size: 10px;
+}
+
+.ce-missing-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ce-missing-chip {
+  min-height: 34px;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 10px;
+}
+
+.ce-detail-tabs {
+  min-height: 39px;
+  gap: 24px;
+  padding: 0 14px;
+  border-bottom: 1px solid #dfe7ef;
+}
+
+.ce-detail-tabs button {
+  height: 39px;
+}
+
+.ce-tab-panel {
+  border: 0;
+  box-shadow: none;
+  padding: 13px 14px 8px;
+}
+
+.ce-tab-panel .ce-section-heading.compact {
+  display: none;
+}
+
+.ce-form-grid {
+  gap: 12px 16px;
+}
+
+.ce-form-grid input,
+.ce-form-grid select,
+.ce-wide-field textarea {
+  min-height: 39px;
+  border-color: #d7e1ec;
+  border-radius: 9px;
+  background: #fbfdff;
+  font-size: 12px;
+}
+
+.ce-detail-footer {
+  min-height: 58px;
+  padding: 8px 16px;
+  background: linear-gradient(90deg, rgba(255, 248, 238, .94), rgba(255, 255, 255, .98));
+}
+
+.ce-detail-footer .ce-save-state {
+  background: transparent;
+  color: #b05f0b;
+  padding-inline: 0;
+}
+
 @media (max-width: 1320px) {
   .ce-kpi-strip { grid-template-columns: repeat(5, minmax(148px, 1fr)); overflow-x: auto; }
   .ce-primary-filter-row { grid-template-columns: max-content minmax(300px, 1fr) auto auto; }
@@ -3809,11 +4239,9 @@ onBeforeUnmount(() => {
   .ce-quality-fields { grid-template-columns: repeat(2, minmax(0, max-content)); }
   .ce-empty-flow ol { gap: 18px; }
   .ce-empty-flow li:not(:last-child)::after { right: -18px; }
-  .ce-detail-header { grid-template-columns: minmax(0, 1fr) minmax(200px, .72fr) 210px auto 34px; gap: 9px; }
-  .ce-husky-header-card { grid-template-columns: 62px minmax(0, 1fr); padding: 7px 8px; }
-  .ce-husky-header-card img { width: 62px; max-height: 36px; }
-  .ce-detail-actions .ce-save-state { display: none; }
-  .ce-detail-actions :deep(.ui-button) { min-height: 32px; padding-inline: 10px; font-size: 10px; }
+  .ce-detail-header { grid-template-columns: minmax(0, 1fr) minmax(180px, 220px) minmax(180px, 220px) 34px; gap: 9px; }
+  .ce-access-header-card { grid-template-columns: 30px minmax(0, 1fr); padding: 7px 8px; }
+  .ce-detail-actions { display: none; }
 }
 
 
@@ -3965,9 +4393,8 @@ onBeforeUnmount(() => {
   .ce-empty-flow ol { grid-template-columns: 1fr; }
   .ce-empty-flow li:not(:last-child)::after { display: none; }
   .ce-detail-header { grid-template-columns: minmax(0, 1fr) 34px; }
-  .ce-husky-header-card,
-  .ce-progress-cluster,
-  .ce-detail-actions { grid-column: 1 / -1; }
+  .ce-access-header-card,
+  .ce-progress-cluster { grid-column: 1 / -1; }
   .ce-profile-card,
   .ce-data-section,
   .ce-husky-card,
