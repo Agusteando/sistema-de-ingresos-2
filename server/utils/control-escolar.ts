@@ -1083,6 +1083,9 @@ const hasNoPrimaryContact = (student: any) => {
   );
 };
 
+const isInscritoForControlProgress = (student: any) =>
+  normalizeText(student?.enrollmentState || "").toLowerCase() === "inscrito";
+
 const overlayStudentRow = (
   agentId: string,
   base: any,
@@ -1332,6 +1335,7 @@ type ControlEscolarLoadedStudents = {
     overlayError: string;
     localRows: number;
     overlayRows: number;
+    enrichedRows: number;
     usersRows: number;
     phase: ControlEscolarLoadPhase;
   };
@@ -1385,6 +1389,7 @@ const fetchAllNormalizedStudents = async (
         overlayError: "",
         localRows: Math.min(localRows.length, MAX_LOCAL_ROWS),
         overlayRows: 0,
+        enrichedRows: 0,
         usersRows: 0,
         phase: "base",
       },
@@ -1443,6 +1448,7 @@ const fetchAllNormalizedStudents = async (
       overlayError: overlayError || "",
       localRows: Math.min(localRows.length, MAX_LOCAL_ROWS),
       overlayRows: overlayMap.size,
+      enrichedRows: overlayMap.size,
       usersRows: huskyPassMap.size,
       phase: "enriched",
     },
@@ -1522,6 +1528,7 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
     filters.quality || filters.calidad || filters.missing || "",
   );
   if (quality && quality !== "all") {
+    result = result.filter(isInscritoForControlProgress);
     if (quality === "complete" || quality === "completo")
       result = result.filter((student) => student.missingFields.length === 0);
     if (quality === "incomplete" || quality === "incompleto")
@@ -1691,16 +1698,22 @@ export const fetchControlEscolarKpis = async (
   const sinFichaMatricula = students.filter(
     (student) => !student.overlayExists,
   ).length;
-  const expedientesIncompletos = students.filter(
+  const progressStudents = students.filter(isInscritoForControlProgress);
+  const expedientesIncompletos = progressStudents.filter(
     (student) => student.missingFields.length > 0,
   ).length;
-  const sinContacto = students.filter(hasNoPrimaryContact).length;
+  const expedientesCompletos = progressStudents.filter(
+    (student) => student.missingFields.length === 0,
+  ).length;
+  const sinContacto = progressStudents.filter(hasNoPrimaryContact).length;
   const missing = (field: string) =>
-    students.filter((student) => student.missingFields.includes(field)).length;
+    progressStudents.filter((student) => student.missingFields.includes(field)).length;
 
   return {
     totalInscritos: inscritos,
     totalVisible: students.length,
+    totalExpedientesEvaluados: progressStudents.length,
+    expedientesCompletos,
     inscritos,
     internos,
     externos,

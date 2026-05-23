@@ -1,1 +1,1 @@
-fix: refine Husky Pass header card and improve platform font rendering
+fix: simplify control escolar sync status and scope completeness to inscritos
