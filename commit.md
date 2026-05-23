@@ -1,1 +1,1 @@
-feat: show plantel connectivity in authenticated selector
+refactor: match Control Escolar redesign layout
