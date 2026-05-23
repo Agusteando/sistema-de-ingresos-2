@@ -35,11 +35,13 @@ const props = defineProps({
   ariaLabel: { type: String, default: '' }
 })
 
+const isTerminalStage = (stage) => ['ready', 'empty', 'failed', 'partial'].includes(stage)
+
 const stepClass = (stage) => ({
   active: stage === 'loading',
   done: stage === 'ready',
   empty: stage === 'empty',
-  failed: stage === 'failed'
+  partial: stage === 'failed' || stage === 'partial'
 })
 
 const formattedExternalRows = computed(() =>
@@ -59,19 +61,27 @@ const steps = computed(() => [
   { key: 'complete', stage: props.completeStage, title: props.completeTitle || 'Proceso completo' }
 ])
 
-const isRailDone = (index) => steps.value.slice(0, index + 1).every((step) => step.stage === 'ready')
+const isRailDone = (index) =>
+  steps.value
+    .slice(0, index + 2)
+    .every((step) => isTerminalStage(step.stage))
 
-const railClass = (index) => ({
-  done: isRailDone(index),
-  active: steps.value[index + 1]?.stage === 'loading'
-})
+const railClass = (index) => {
+  const current = steps.value[index]
+  const next = steps.value[index + 1]
+
+  return {
+    done: isRailDone(index),
+    active: isTerminalStage(current?.stage) && next?.stage === 'loading'
+  }
+}
 
 const statusClass = computed(() => ({
   'is-cache': props.freshness === 'cache',
   'is-base': props.freshness === 'base',
   'is-synced': props.freshness === 'synced',
   'is-loading': steps.value.some((step) => step.stage === 'loading'),
-  'is-failed': steps.value.some((step) => step.stage === 'failed')
+  'is-partial': steps.value.some((step) => step.stage === 'failed' || step.stage === 'partial')
 }))
 </script>
 
@@ -110,13 +120,14 @@ const statusClass = computed(() => ({
 }
 
 .sync-step.empty {
-  border-color: rgba(236, 165, 42, 0.36);
-  background: #eeb04a;
+  border-color: rgba(132, 170, 94, 0.35);
+  background: #c7d7b4;
 }
 
-.sync-step.failed {
-  border-color: rgba(210, 65, 59, 0.35);
-  background: #d44a43;
+.sync-step.partial {
+  border-color: rgba(98, 150, 76, 0.38);
+  background: #86a96f;
+  box-shadow: 0 0 0 3px rgba(98, 150, 76, 0.055);
 }
 
 .sync-rail {
@@ -127,7 +138,7 @@ const statusClass = computed(() => ({
 }
 
 .sync-rail.done {
-  background: rgba(47, 145, 56, 0.82);
+  background: rgba(80, 143, 62, 0.58);
 }
 
 .sync-rail.active {

@@ -1,1 +1,1 @@
-fix: add four-step control sync trace and compact payment receipt printing
+fix: enforce ordered control escolar sync trace with scoped cache

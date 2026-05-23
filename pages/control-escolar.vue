@@ -1457,7 +1457,7 @@ const controlCacheStepTitle = computed(() =>
     ? controlDataSavedAt.value
       ? `Caché local cargada · ${formatControlSyncTime(controlDataSavedAt.value)}`
       : "Caché local cargada"
-    : "Sin caché local para este plantel y ciclo",
+    : "Caché local pendiente para este plantel y ciclo",
 );
 const controlBaseStepTitle = computed(() =>
   controlBaseStage.value === "loading"
@@ -1465,7 +1465,7 @@ const controlBaseStepTitle = computed(() =>
     : controlBaseStage.value === "ready"
       ? "Base del administrador lista"
       : controlBaseStage.value === "failed"
-        ? "Base del administrador no disponible"
+        ? "Base del administrador pendiente"
         : "Base del administrador pendiente",
 );
 const controlExternalDbStepTitle = computed(() =>
@@ -1943,23 +1943,45 @@ const normalizeControlCacheParams = (query = buildQuery()) =>
       return normalized;
     }, {});
 
+const controlCacheScopeFromQuery = (query = buildQuery()) => ({
+  agentId: String(query?.agentId || selectedAgentId.value || "").trim(),
+  ciclo: normalizeCicloKey(query?.ciclo || currentCicloKey.value || ""),
+});
+
+const controlStudentsCacheSignature = (query = buildQuery()) =>
+  encodeURIComponent(JSON.stringify(normalizeControlCacheParams(query)));
+
+const controlStudentsLegacyCacheKey = (query = buildQuery()) =>
+  `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${CONTROL_STUDENTS_CACHE_VERSION}:${controlStudentsCacheSignature(query)}`;
+
 const controlStudentsCacheKey = (query = buildQuery()) => {
-  const signature = encodeURIComponent(
-    JSON.stringify(normalizeControlCacheParams(query)),
+  const scope = controlCacheScopeFromQuery(query);
+  return `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${CONTROL_STUDENTS_CACHE_VERSION}:${encodeURIComponent(scope.agentId)}:${encodeURIComponent(scope.ciclo)}:${controlStudentsCacheSignature(query)}`;
+};
+
+const isCachedControlStudentsForScope = (cached, query = buildQuery()) => {
+  const scope = controlCacheScopeFromQuery(query);
+  const cachedScope = cached?.scope || cached?.query || {};
+  return (
+    String(cachedScope.agentId || "").trim() === scope.agentId &&
+    normalizeCicloKey(cachedScope.ciclo || "") === scope.ciclo
   );
-  return `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${CONTROL_STUDENTS_CACHE_VERSION}:${signature}`;
 };
 
 const readCachedControlStudents = (query = buildQuery()) => {
   if (!process.client) return null;
 
   try {
-    const cached = JSON.parse(
-      localStorage.getItem(controlStudentsCacheKey(query)) || "null",
-    );
-    if (Number(cached?.version) !== CONTROL_STUDENTS_CACHE_VERSION) return null;
-    if (!Array.isArray(cached?.data)) return null;
-    return cached;
+    const keys = [controlStudentsCacheKey(query), controlStudentsLegacyCacheKey(query)];
+    for (const key of keys) {
+      const cached = JSON.parse(localStorage.getItem(key) || "null");
+      if (!cached) continue;
+      if (Number(cached?.version) !== CONTROL_STUDENTS_CACHE_VERSION) continue;
+      if (!Array.isArray(cached?.data)) continue;
+      if (!isCachedControlStudentsForScope(cached, query)) continue;
+      return cached;
+    }
+    return null;
   } catch (error) {
     console.warn(
       "[Control Escolar] No se pudo leer la caché local de alumnos.",
@@ -1975,6 +1997,7 @@ const writeCachedControlStudents = (query = buildQuery(), response = {}) => {
   const record = {
     version: CONTROL_STUDENTS_CACHE_VERSION,
     savedAt: new Date().toISOString(),
+    scope: controlCacheScopeFromQuery(query),
     query: normalizeControlCacheParams(query),
     data: response.data,
     pagination: response.pagination || {
@@ -2524,15 +2547,16 @@ const loadStudents = async (options = {}) => {
   } = safeOptions;
   const requestId = ++controlStudentsRequestId;
   const query = buildIndexQuery();
-  const cached = useCache ? readCachedControlStudents(query) : null;
   const hadStudents =
     controlStudentsIndex.value.length > 0 || students.value.length > 0;
 
-  controlCacheStage.value = "idle";
+  controlCacheStage.value = useCache ? "loading" : "empty";
   controlBaseStage.value = "idle";
   controlExternalDbStage.value = "idle";
   controlCompleteStage.value = "idle";
   controlExternalDbRows.value = 0;
+
+  const cached = useCache ? readCachedControlStudents(query) : null;
 
   if (cached) {
     pagination.page = 1;
@@ -2543,9 +2567,11 @@ const loadStudents = async (options = {}) => {
     controlDataSavedAt.value = cached.savedAt || "";
     controlDataSource.value = cached.source || null;
     controlCacheStage.value = "ready";
-    controlExternalDbRows.value = getControlExternalDbRowCount(cached.source);
+    controlExternalDbRows.value = 0;
   } else {
+    controlCacheStage.value = "empty";
     if (clearExisting) resetControlStudentsView();
+    controlCacheStage.value = "empty";
     studentsLoading.value = forceLoading || !hadStudents || clearExisting;
     controlDataFreshness.value =
       hadStudents && !clearExisting ? controlDataFreshness.value : "empty";
@@ -2560,7 +2586,6 @@ const loadStudents = async (options = {}) => {
     students.value.length > 0;
 
   try {
-    controlCompleteStage.value = "loading";
     controlBaseStage.value = "loading";
     const baseResponse = await $fetch("/api/control-escolar/students", {
       query: { ...query, phase: "base" },
@@ -2579,21 +2604,29 @@ const loadStudents = async (options = {}) => {
   } catch (error) {
     if (requestId !== controlStudentsRequestId) return;
     controlBaseStage.value = "failed";
+    controlExternalDbStage.value = "failed";
+    controlCompleteStage.value = "failed";
 
     if (!canKeepVisibleData()) {
       resetControlStudentsView();
+      controlCacheStage.value = cached ? "ready" : "empty";
+      controlBaseStage.value = "failed";
+      controlExternalDbStage.value = "failed";
+      controlCompleteStage.value = "failed";
       loadError.value =
         error?.data?.message ||
         error?.message ||
         "Plantel fuera de línea o sin respuesta.";
       studentsLoading.value = false;
-      controlCompleteStage.value = "failed";
       nextTick(scheduleWorkspaceScaleUpdate);
       return;
     }
 
     loadError.value = "";
     applyInstantStudentFilters();
+    studentsLoading.value = false;
+    nextTick(scheduleWorkspaceScaleUpdate);
+    return;
   } finally {
     if (requestId === controlStudentsRequestId) {
       studentsLoading.value = false;
@@ -2627,6 +2660,10 @@ const loadStudents = async (options = {}) => {
 
     if (!canKeepVisibleData()) {
       resetControlStudentsView();
+      controlCacheStage.value = cached ? "ready" : "empty";
+      controlBaseStage.value = "ready";
+      controlExternalDbStage.value = "failed";
+      controlCompleteStage.value = "failed";
       loadError.value =
         error?.data?.message ||
         error?.message ||
