@@ -108,7 +108,7 @@
           </button>
         </div>
 
-        <StudentsCacheSyncIndicator v-if="showFinancialNav" />
+        <StudentsCacheSyncIndicator v-if="showStudentSourceStatus" />
       </div>
         </div>
       </div>
@@ -119,7 +119,7 @@
         <h1>{{ currentRouteName }}</h1>
 
         <div class="header-actions">
-          <SyncBadge v-if="showFinancialNav" />
+          <SyncBadge v-if="showStudentSourceStatus" />
           <div v-if="showCicloPicker" class="ciclo-picker">
             <LucideCalendarDays :size="18" />
             <select
@@ -292,6 +292,8 @@ const userPlanteles = computed(() => {
   return planteles.length ? planteles : [...PLANTELES_LIST]
 })
 const showFinancialNav = computed(() => !isControlEscolarOnly.value)
+const studentSourceRoutes = new Set(['/', '/deudores', '/reportes', '/conceptos', '/facturas'])
+const showStudentSourceStatus = computed(() => showFinancialNav.value && studentSourceRoutes.has(route.path))
 const showCicloPicker = computed(() => isSuperAdmin.value || hasControlEscolarRole.value || showFinancialNav.value)
 
 const toggleSidebar = () => {

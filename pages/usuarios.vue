@@ -850,7 +850,7 @@ const exportUsers = () => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `usuarios-sistema-ingresos-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `usuarios-aurora-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -874,22 +874,32 @@ const exportUsers = () => {
   --cyan: #0891b2;
   --cyan-soft: #ecfeff;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 376px;
+  grid-template-columns: minmax(0, 1fr) clamp(318px, 22vw, 356px);
   gap: 22px;
-  max-width: 1580px;
-  margin: 0 auto;
-  padding: 6px 0 32px;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   color: var(--ink);
 }
 
-.usuarios-main { min-width: 0; }
+.usuarios-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 2px 28px 0;
+  scrollbar-width: thin;
+}
 
 .usuarios-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 20px;
-  margin-bottom: 18px;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 14px;
 }
 
 .eyebrow {
@@ -905,16 +915,16 @@ const exportUsers = () => {
 .usuarios-hero h2 {
   margin: 8px 0 0;
   color: var(--ink);
-  font-size: clamp(28px, 3vw, 38px);
-  line-height: .98;
+  font-size: clamp(27px, 2.1vw, 34px);
+  line-height: 1;
   font-weight: 950;
   letter-spacing: -.055em;
 }
 
 .usuarios-hero p:not(.eyebrow) {
-  margin: 9px 0 0;
+  margin: 8px 0 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.35;
   font-weight: 700;
 }
@@ -1002,18 +1012,18 @@ button:disabled {
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .metric-card {
   position: relative;
-  min-height: 116px;
+  min-height: 104px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: 12px;
-  padding: 17px 16px 15px;
+  gap: 11px;
+  padding: 15px 15px 14px;
   overflow: hidden;
   border: 1px solid rgba(226, 232, 240, .92);
   border-radius: 22px;
@@ -1063,8 +1073,8 @@ button:disabled {
   z-index: 1;
   grid-column: 2;
   grid-row: 1;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1090,9 +1100,9 @@ button:disabled {
 
 .metric-card strong {
   display: block;
-  margin-top: 13px;
+  margin-top: 11px;
   color: var(--ink);
-  font-size: 31px;
+  font-size: 29px;
   line-height: .95;
   font-weight: 950;
   letter-spacing: -.055em;
@@ -1245,7 +1255,7 @@ button:disabled {
 }
 
 .users-table th {
-  height: 50px;
+  height: 46px;
   color: #5e6b81;
   background: linear-gradient(180deg, #fbfcfe, #f6f9fc);
   border-bottom: 1px solid #e5edf5;
@@ -1258,8 +1268,8 @@ button:disabled {
 }
 
 .users-table td {
-  height: 68px;
-  padding: 11px 16px;
+  height: 64px;
+  padding: 10px 16px;
   border-bottom: 1px solid #edf2f7;
   vertical-align: middle;
 }
@@ -1291,8 +1301,8 @@ button:disabled {
 }
 
 .user-avatar {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
   border-radius: 999px;
   object-fit: cover;
@@ -1447,9 +1457,11 @@ button:disabled {
 
 .user-drawer {
   position: sticky;
-  top: 18px;
+  top: 8px;
   align-self: start;
-  min-height: calc(100vh - 118px);
+  min-height: 0;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
   padding: 24px;
   border: 1px solid rgba(226, 232, 240, .94);
   border-radius: 26px;

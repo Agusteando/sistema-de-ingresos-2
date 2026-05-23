@@ -1,1 +1,1 @@
-fix: render student source unavailable state without clipping
+fix: keep usuarios independent from student source status and tune layout sizing
