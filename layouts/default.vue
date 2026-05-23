@@ -63,19 +63,85 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="plantel-block" v-if="userPlanteles.length > 1 || isSuperAdmin">
-          <label>Plantel</label>
-          <div class="plantel-select">
-            <LucideBuilding2 :size="21" />
-            <select
-              v-model="activePlantel"
-              @change="switchPlantel"
+        <div ref="plantelSelectRef" class="plantel-block" v-if="userPlanteles.length > 1 || isSuperAdmin">
+          <label id="sidebar-plantel-label">Plantel</label>
+          <div class="plantel-picker" :class="{ open: plantelMenuOpen }">
+            <button
+              type="button"
+              class="plantel-select plantel-select-button"
+              aria-haspopup="listbox"
+              :aria-expanded="plantelMenuOpen ? 'true' : 'false'"
+              aria-labelledby="sidebar-plantel-label sidebar-plantel-value"
+              @click="togglePlantelMenu"
+              @keydown.down.prevent="openPlantelMenu"
+              @keydown.enter.prevent="togglePlantelMenu"
+              @keydown.space.prevent="togglePlantelMenu"
+              @keydown.esc.prevent="closePlantelMenu"
             >
-              <option v-if="isSuperAdmin" value="GLOBAL">CONSOLIDADO</option>
-              <option v-for="p in userPlanteles" :key="p" :value="p">PLANTEL {{ p }}</option>
-            </select>
-            <LucideChevronDown :size="16" />
+              <LucideBuilding2 :size="21" />
+              <span class="plantel-current">
+                <strong id="sidebar-plantel-value">{{ activePlantelLabel }}</strong>
+                <small v-if="activePlantel !== 'GLOBAL'" :class="`status-${activePlantelStatus.status}`">
+                  <span class="plantel-status-dot" aria-hidden="true" />
+                  {{ activePlantelStatus.message }}
+                </small>
+                <small v-else class="status-global">Vista consolidada</small>
+              </span>
+              <LucideChevronDown :size="16" />
+            </button>
+
+            <div
+              v-if="plantelMenuOpen"
+              class="plantel-options"
+              role="listbox"
+              aria-labelledby="sidebar-plantel-label"
+            >
+              <button
+                v-if="isSuperAdmin"
+                type="button"
+                class="plantel-option global"
+                :class="{ selected: activePlantel === 'GLOBAL' }"
+                role="option"
+                :aria-selected="activePlantel === 'GLOBAL' ? 'true' : 'false'"
+                @click="selectPlantel('GLOBAL')"
+              >
+                <span class="plantel-option-main">
+                  <span class="plantel-option-code">CONSOLIDADO</span>
+                  <span class="plantel-option-message status-global">Vista global de administración</span>
+                </span>
+                <span class="plantel-option-chip status-global">Global</span>
+              </button>
+
+              <button
+                v-for="p in userPlanteles"
+                :key="p"
+                type="button"
+                class="plantel-option"
+                :class="{
+                  selected: p === activePlantel,
+                  offline: getPlantelStatus(p).status === 'offline'
+                }"
+                role="option"
+                :aria-selected="p === activePlantel ? 'true' : 'false'"
+                @click="selectPlantel(p)"
+              >
+                <span class="plantel-option-main">
+                  <span class="plantel-option-code">PLANTEL {{ p }}</span>
+                  <span class="plantel-option-message" :class="`status-${getPlantelStatus(p).status}`">
+                    <span class="plantel-status-dot" aria-hidden="true" />
+                    {{ getPlantelStatus(p).message }}
+                  </span>
+                </span>
+                <span class="plantel-option-chip" :class="`status-${getPlantelStatus(p).status}`">
+                  {{ getPlantelStatus(p).label }}
+                </span>
+              </button>
+            </div>
           </div>
+
+          <p v-if="activePlantel !== 'GLOBAL' && activePlantelStatus.status === 'offline'" class="plantel-status-note">
+            {{ activePlantelStatus.action }}
+          </p>
         </div>
 
         <label v-if="showFinancialNav" class="late-fee-toggle group">
@@ -206,6 +272,7 @@ import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import ContextMenu from '~/components/ContextMenu.vue'
 import SyncBadge from '~/components/SyncBadge.vue'
 import StudentsCacheSyncIndicator from '~/components/students/StudentsCacheSyncIndicator.vue'
+import { usePlantelAgentStatuses } from '~/composables/usePlantelAgentStatuses'
 import { CICLOS_LIST, PLANTELES_LIST, normalizeCicloOption } from '~/utils/constants'
 
 const { toasts } = useToast()
@@ -275,6 +342,9 @@ const userRole = ref(useCookie('auth_role').value || 'plantel')
 const isSuperAdminCookie = useCookie('auth_is_super_admin')
 const hasControlEscolarCookie = useCookie('auth_has_control_escolar')
 const activePlantel = ref(useCookie('auth_active_plantel').value || 'PT')
+const plantelSelectRef = ref(null)
+const plantelMenuOpen = ref(false)
+const { getPlantelStatus, loadPlantelStatuses } = usePlantelAgentStatuses()
 const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
 const hasSuperAdminRole = computed(() => roleTokens.value.some(role => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
 const isSuperAdmin = computed(() => isSuperAdminCookie.value === 'true' || hasSuperAdminRole.value)
@@ -293,6 +363,50 @@ const userPlanteles = computed(() => {
 })
 const showFinancialNav = computed(() => !isControlEscolarOnly.value)
 const showCicloPicker = computed(() => isSuperAdmin.value || hasControlEscolarRole.value || showFinancialNav.value)
+const activePlantelLabel = computed(() => activePlantel.value === 'GLOBAL' ? 'CONSOLIDADO' : `PLANTEL ${activePlantel.value || 'PT'}`)
+const activePlantelStatus = computed(() => activePlantel.value === 'GLOBAL'
+  ? { status: 'unknown', online: true, label: 'Global', message: 'Vista consolidada', action: '' }
+  : getPlantelStatus(activePlantel.value))
+
+const openPlantelMenu = () => {
+  plantelMenuOpen.value = true
+  loadPlantelStatuses({ force: true })
+}
+
+const closePlantelMenu = () => {
+  plantelMenuOpen.value = false
+}
+
+const togglePlantelMenu = () => {
+  if (plantelMenuOpen.value) {
+    closePlantelMenu()
+    return
+  }
+
+  openPlantelMenu()
+}
+
+const handlePlantelDocumentPointerDown = (event) => {
+  if (!plantelMenuOpen.value || !plantelSelectRef.value) return
+  if (plantelSelectRef.value.contains(event.target)) return
+
+  closePlantelMenu()
+}
+
+const selectPlantel = async (plantel) => {
+  const normalizedPlantel = String(plantel || '').trim().toUpperCase()
+  if (normalizedPlantel !== 'GLOBAL' && !PLANTELES_LIST.includes(normalizedPlantel)) return
+
+  if (normalizedPlantel === activePlantel.value) {
+    closePlantelMenu()
+    if (normalizedPlantel !== 'GLOBAL') loadPlantelStatuses({ force: true, plantel: normalizedPlantel })
+    return
+  }
+
+  activePlantel.value = normalizedPlantel
+  closePlantelMenu()
+  await switchPlantel(normalizedPlantel)
+}
 
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
@@ -309,10 +423,15 @@ onMounted(async () => {
   scheduleSidebarScaleUpdate()
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', scheduleSidebarScaleUpdate, { passive: true })
+    document.addEventListener('pointerdown', handlePlantelDocumentPointerDown)
     if (typeof ResizeObserver !== 'undefined' && sidebarScaleShell.value) {
       sidebarResizeObserver = new ResizeObserver(scheduleSidebarScaleUpdate)
       sidebarResizeObserver.observe(sidebarScaleShell.value)
     }
+  }
+
+  if (activePlantel.value !== 'GLOBAL') {
+    loadPlantelStatuses({ force: true, plantel: activePlantel.value })
   }
 
   try {
@@ -324,6 +443,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', scheduleSidebarScaleUpdate)
+    document.removeEventListener('pointerdown', handlePlantelDocumentPointerDown)
     if (sidebarFrame) window.cancelAnimationFrame(sidebarFrame)
   }
   sidebarResizeObserver?.disconnect?.()
@@ -341,11 +461,14 @@ const currentRouteName = computed(() => {
   return 'SISTEMA DE INGRESOS'
 })
 
-const switchPlantel = async () => {
+const switchPlantel = async (plantel = activePlantel.value) => {
+  const previousPlantel = useCookie('auth_active_plantel').value || 'PT'
+
   try {
-    await $fetch('/api/auth/switch', { method: 'POST', body: { plantel: activePlantel.value } })
+    await $fetch('/api/auth/switch', { method: 'POST', body: { plantel } })
     window.location.reload()
   } catch (e) {
+    activePlantel.value = previousPlantel
     alert('No autorizado para ver este plantel.')
   }
 }
@@ -618,16 +741,175 @@ const logout = async () => {
   color: #286d2b;
 }
 
-.plantel-select select {
+.plantel-block {
+  position: relative;
+}
+
+.plantel-picker {
+  position: relative;
+}
+
+.plantel-select-button {
+  width: 100%;
+  min-height: 42px;
+  height: auto;
+  border: 1px solid rgba(210, 225, 213, 0.9);
+  cursor: pointer;
+  text-align: left;
+}
+
+.plantel-select-button svg:last-child {
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+
+.plantel-picker.open .plantel-select-button svg:last-child {
+  transform: rotate(180deg);
+}
+
+.plantel-current,
+.plantel-option-main {
+  display: grid;
   min-width: 0;
   flex: 1;
-  appearance: none;
-  border: 0;
-  background: transparent;
+  gap: 3px;
+}
+
+.plantel-current strong,
+.plantel-option-code {
+  overflow: hidden;
   color: #1e2d49;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plantel-current small,
+.plantel-option-message {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  color: #667185;
+  font-size: 0.58rem;
+  font-weight: 850;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plantel-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.12);
+}
+
+.status-online {
+  color: #207b37 !important;
+}
+
+.status-online .plantel-status-dot,
+.plantel-option-message.status-online .plantel-status-dot {
+  background: #22a947;
+  box-shadow: 0 0 0 3px rgba(34, 169, 71, 0.13);
+}
+
+.status-offline {
+  color: #b42318 !important;
+}
+
+.status-offline .plantel-status-dot,
+.plantel-option-message.status-offline .plantel-status-dot {
+  background: #e5483e;
+  box-shadow: 0 0 0 3px rgba(229, 72, 62, 0.13);
+}
+
+.status-global {
+  color: #286d2b !important;
+}
+
+.plantel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  display: grid;
+  gap: 5px;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid rgba(205, 222, 211, 0.96);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 7px;
+  box-shadow: 0 22px 46px rgba(25, 45, 72, 0.16);
+}
+
+.plantel-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  padding: 9px 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.plantel-option:hover,
+.plantel-option.selected {
+  background: #f0faee;
+}
+
+.plantel-option.offline:hover,
+.plantel-option.offline.selected {
+  background: #fff3f0;
+}
+
+.plantel-option-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 6px;
+  color: #607086;
+  background: #f2f5f8;
+  font-size: 0.52rem;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.plantel-option-chip.status-online {
+  color: #207b37;
+  background: #eaf8ec;
+}
+
+.plantel-option-chip.status-offline {
+  color: #b42318;
+  background: #fff0ed;
+}
+
+.plantel-option-chip.status-global {
+  color: #286d2b;
+  background: #e9f7e7;
+}
+
+.plantel-status-note {
+  margin: 7px 2px 0;
+  color: #9f2f27;
+  font-size: 0.61rem;
   font-weight: 800;
-  outline: none;
+  line-height: 1.35;
 }
 
 .late-fee-toggle {
@@ -1095,7 +1377,8 @@ const logout = async () => {
 }
 
 .sidebar-design-canvas .plantel-select {
-  height: 42px;
+  height: auto;
+  min-height: 42px;
 }
 
 .sidebar-design-canvas .admin-card {
@@ -1184,7 +1467,8 @@ const logout = async () => {
 }
 
 .sidebar-design-canvas .plantel-select {
-  height: 36px;
+  height: auto;
+  min-height: 40px;
   border-radius: 11px;
 }
 
