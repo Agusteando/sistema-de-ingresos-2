@@ -1,1 +1,1 @@
-fix: improve student source unavailable state and sidebar sync pill
+fix: render student source unavailable state without clipping

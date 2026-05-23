@@ -1,6 +1,28 @@
 <template>
   <section :class="['student-list-panel', hasAccountWorkspace ? 'is-compact' : 'is-full']">
-    <div class="student-list-card">
+    <div v-if="sourceUnavailable && !loading" class="student-list-card source-unavailable-card">
+      <section class="student-source-unavailable" aria-live="polite">
+        <div class="source-orb" aria-hidden="true">
+          <LucideCloudOff :size="30" />
+          <span><LucideComputer :size="18" /></span>
+        </div>
+        <div class="source-copy">
+          <span class="source-eyebrow">Conexión local en pausa</span>
+          <h3>{{ sourceUnavailableTitle }}</h3>
+          <p>{{ sourceUnavailableMessage }}</p>
+        </div>
+        <div class="source-hints">
+          <span><LucideComputer :size="15" /> Equipo del plantel</span>
+          <span><LucideClock3 :size="15" /> {{ sourceUnavailableHint }}</span>
+        </div>
+        <button type="button" class="source-retry" @click="$emit('refresh-source')">
+          <LucideRotateCcw :size="16" />
+          Intentar de nuevo
+        </button>
+      </section>
+    </div>
+
+    <div v-else class="student-list-card">
       <div class="list-titlebar">
         <div class="list-heading">
           <div class="list-heading-copy">
@@ -248,6 +270,21 @@ defineEmits([
 
 <style scoped>
 
+.source-unavailable-card {
+  display: flex;
+  min-height: 0;
+  overflow: visible;
+  padding: clamp(12px, 1.2vw, 18px);
+  background: linear-gradient(180deg, #ffffff, #fbfdfb);
+}
+
+.source-unavailable-card .student-source-unavailable {
+  width: 100%;
+  min-height: 100%;
+  height: auto;
+  flex: 1 1 auto;
+}
+
 .student-list-scroll.is-source-unavailable {
   position: relative;
   display: flex;
@@ -265,8 +302,9 @@ defineEmits([
 .student-source-unavailable {
   position: relative;
   display: flex;
+  width: 100%;
   min-height: clamp(360px, 50vh, 540px);
-  height: 100%;
+  height: auto;
   z-index: 5;
   flex-direction: column;
   align-items: center;
