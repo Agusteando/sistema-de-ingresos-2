@@ -39,8 +39,8 @@ export const useStudentsWorkspaceScale = (hasAccountWorkspace: Ref<boolean>, opt
   }))
 
   const studentsDesignCanvasStyle = computed(() => ({
-    '--workspace-design-width': `${workspaceDesignWidth.value}px`,
-    '--workspace-design-height': `${workspaceCanvasHeight.value}px`,
+    '--workspace-design-width': `${Math.round(workspaceDesignWidth.value * workspaceScale.value)}px`,
+    '--workspace-design-height': `${Math.round(workspaceCanvasHeight.value * workspaceScale.value)}px`,
     '--workspace-scale': workspaceScale.value
   }))
 

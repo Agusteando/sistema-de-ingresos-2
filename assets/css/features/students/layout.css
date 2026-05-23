@@ -82,9 +82,8 @@ body.students-route-active .income-content {
   left: 0;
   width: var(--workspace-design-width);
   height: var(--workspace-design-height);
-  transform: scale(var(--workspace-scale));
+  transform: none;
   transform-origin: top left;
-  will-change: transform;
 }
 
 .students-workspace {

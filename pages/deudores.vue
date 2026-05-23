@@ -610,7 +610,7 @@ const debtScaleShellStyle = computed(() => ({
 const debtDesignCanvasStyle = computed(() => ({
   width: `${DEBT_DESIGN_WIDTH}px`,
   height: `${Math.ceil(debtCanvasHeight.value)}px`,
-  transform: `scale(${debtWorkspaceScale.value})`
+  zoom: debtWorkspaceScale.value
 }))
 
 let debtShellObserver = null
@@ -2898,7 +2898,6 @@ input[type="checkbox"] {
 .debt-design-canvas {
   position: relative;
   transform-origin: top left;
-  will-change: transform;
 }
 
 .debt-design-canvas > .collections-workspace,

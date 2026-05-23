@@ -568,22 +568,19 @@
                   class="ce-access-header-card"
                   :class="{ unavailable: !selectedStudent.huskyPassAvailable }"
                 >
-                  <span aria-hidden="true"
-                    ><LucideShieldCheck :size="21"
-                  /></span>
+                  <span class="ce-access-icon" aria-hidden="true">
+                    <img src="/brand/husky-pass-header-gray.png" alt="" />
+                  </span>
                   <div>
-                    <strong>{{
-                      selectedStudent.huskyPassAvailable
-                        ? "Acceso activo"
-                        : "Acceso pendiente"
-                    }}</strong>
+                    <strong>Husky Pass</strong>
                     <small v-if="selectedStudent.huskyPassAvailable"
-                      >{{ selectedStudent.huskyPassUsername }} ·
+                      >Acceso activo · {{ selectedStudent.huskyPassUsername }} ·
                       {{ selectedStudent.huskyPassPlaintext }}</small
                     >
-                    <small v-else>{{
-                      huskyPassEmailTarget || "Sin correo de padre/tutor"
-                    }}</small>
+                    <small v-else
+                      >Acceso pendiente ·
+                      {{ huskyPassEmailTarget || "Sin correo de padre/tutor" }}</small
+                    >
                   </div>
                 </div>
                 <div class="ce-progress-cluster">
@@ -5760,8 +5757,15 @@ onBeforeUnmount(() => {
   height: 30px;
   place-items: center;
   border-radius: 9px;
-  background: #eff8eb;
-  color: #21882e;
+  background: linear-gradient(180deg, #f4f6f8, #eceff3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.ce-access-icon img {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }
 
 .ce-access-header-card strong,
@@ -5773,7 +5777,7 @@ onBeforeUnmount(() => {
 }
 
 .ce-access-header-card strong {
-  color: #21882e;
+  color: #18263f;
   font-size: 11px;
   font-weight: 920;
 }
@@ -5790,9 +5794,12 @@ onBeforeUnmount(() => {
   background: #fbfcfd;
 }
 
-.ce-access-header-card.unavailable > span,
 .ce-access-header-card.unavailable strong {
-  color: #7a8498;
+  color: #556277;
+}
+
+.ce-access-header-card.unavailable .ce-access-icon {
+  background: linear-gradient(180deg, #f5f6f8, #eceff3);
 }
 
 .ce-progress-cluster strong {

@@ -1,1 +1,1 @@
-refactor: split Control Escolar loading into base and enrichment phases
+fix: refine Husky Pass header card and improve platform font rendering
