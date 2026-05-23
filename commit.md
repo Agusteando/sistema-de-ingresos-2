@@ -1,1 +1,1 @@
-refactor: match login screen to institutional Figma design
+fix: correct login policy notice layout to match the Figma design
