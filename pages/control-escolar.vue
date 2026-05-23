@@ -149,9 +149,23 @@
                 <div v-else-if="studentsLoading" class="ce-skeleton-stack" aria-live="polite">
                   <span v-for="i in 6" :key="i" class="ce-skeleton-row"></span>
                 </div>
-                <div v-else-if="loadError" class="empty-state ce-state-card error">
-                  <LucideWifiOff :size="24" /> {{ loadError }}
-                </div>
+                <section v-else-if="studentsSourceUnavailable" class="ce-source-unavailable" aria-live="polite">
+                  <div class="ce-source-orb" aria-hidden="true">
+                    <LucideCloudOff :size="30" />
+                    <span><LucideComputer :size="18" /></span>
+                  </div>
+                  <span class="ce-source-eyebrow">Conexión local en pausa</span>
+                  <h3>{{ sourceUnavailableTitle }}</h3>
+                  <p>{{ sourceUnavailableMessage }}</p>
+                  <div class="ce-source-hints">
+                    <span><LucideComputer :size="15" /> Equipo del plantel</span>
+                    <span><LucideClock3 :size="15" /> {{ sourceUnavailableHint }}</span>
+                  </div>
+                  <button type="button" class="ce-source-retry" @click="refreshAll({ forceNetwork: true, clearExisting: true, forceLoading: true })">
+                    <LucideRefreshCw :size="16" />
+                    Intentar de nuevo
+                  </button>
+                </section>
                 <div v-else-if="!students.length" class="empty-state ce-state-card">
                   <LucideSearchX :size="24" /> No hay alumnos con los filtros actuales.
                   <button v-if="hasActiveFilters" type="button" class="ce-inline-action" @click="clearFilters">Limpiar filtros</button>
@@ -567,6 +581,9 @@ import {
   LucideAlertTriangle,
   LucideBuilding2,
   LucideChevronLeft,
+  LucideClock3,
+  LucideCloudOff,
+  LucideComputer,
   LucideChevronRight,
   LucideDatabase,
   LucideDownload,
@@ -682,6 +699,16 @@ const showControlFirstSyncNotice = computed(() => Boolean(
   !loadError.value
 ))
 const activeFirstSyncMessage = computed(() => firstSyncMessages[firstSyncMessageIndex.value] || firstSyncMessages[0])
+const localHour = ref(12)
+const isAfterOfficeHours = computed(() => localHour.value >= 17)
+const studentsSourceUnavailable = computed(() => Boolean(selectedAgentId.value && loadError.value && !studentsLoading.value && !students.value.length))
+const sourceUnavailableTitle = computed(() => isAfterOfficeHours.value
+  ? 'El equipo del plantel parece estar descansando por hoy'
+  : 'No pudimos conectar con la base local del plantel')
+const sourceUnavailableMessage = computed(() => isAfterOfficeHours.value
+  ? 'La información de alumnos se consulta desde el equipo del Administrador de plantel. Es posible que ya haya terminado su jornada; cuando el equipo vuelva a estar disponible, Aurora cargará la lista.'
+  : 'Para mostrar alumnos, necesitamos que el equipo local del Administrador de plantel esté encendido y conectado. Pídele que lo active y vuelve a intentar la carga.')
+const sourceUnavailableHint = computed(() => isAfterOfficeHours.value ? 'Fuera de horario' : 'Esperando conexión')
 
 const stopFirstSyncMessages = () => {
   if (!process.client) return
@@ -1716,7 +1743,10 @@ const handleCicloChanged = (event) => {
 }
 
 onMounted(async () => {
-  if (process.client) window.addEventListener('ingresos:ciclo-changed', handleCicloChanged)
+  if (process.client) {
+    localHour.value = new Date().getHours()
+    window.addEventListener('ingresos:ciclo-changed', handleCicloChanged)
+  }
 
   state.value.ciclo = normalizeCicloOption(state.value?.ciclo || cicloCookie.value)
   hydrateCachedEnrollmentConcepts()
@@ -3770,6 +3800,147 @@ onBeforeUnmount(() => {
   .ce-detail-actions .ce-save-state { display: none; }
   .ce-detail-actions :deep(.ui-button) { min-height: 32px; padding-inline: 10px; font-size: 10px; }
 }
+
+
+.ce-source-unavailable {
+  position: relative;
+  display: grid;
+  min-height: 390px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(198, 221, 204, 0.92);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 17% 18%, rgba(112, 180, 73, 0.17), transparent 13rem),
+    radial-gradient(circle at 86% 12%, rgba(0, 126, 148, 0.12), transparent 13rem),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 248, 0.96));
+  margin: 10px;
+  padding: 38px 30px;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 22px 55px rgba(22, 64, 46, 0.08);
+}
+
+.ce-source-unavailable::before {
+  content: '';
+  position: absolute;
+  width: 292px;
+  height: 292px;
+  right: -124px;
+  bottom: -130px;
+  border: 36px solid rgba(47, 125, 56, 0.06);
+  border-radius: 999px;
+}
+
+.ce-source-orb {
+  position: relative;
+  display: grid;
+  width: 86px;
+  height: 86px;
+  margin: 0 auto 22px;
+  place-items: center;
+  border: 1px solid rgba(56, 139, 67, 0.22);
+  border-radius: 28px;
+  background: linear-gradient(145deg, #ffffff, #ebf8ec);
+  color: #2f7d38;
+  box-shadow: 0 20px 38px rgba(36, 116, 66, 0.14);
+}
+
+.ce-source-orb span {
+  position: absolute;
+  right: -8px;
+  bottom: -6px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 14px;
+  background: #0b7891;
+  color: white;
+  box-shadow: 0 12px 24px rgba(0, 104, 130, 0.22);
+}
+
+.ce-source-eyebrow {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(47, 125, 56, 0.14);
+  border-radius: 999px;
+  background: rgba(235, 248, 236, 0.82);
+  padding: 7px 12px;
+  color: #2f7d38;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ce-source-unavailable h3 {
+  position: relative;
+  z-index: 1;
+  max-width: 610px;
+  margin: 16px auto 10px;
+  color: #16213b;
+  font-size: clamp(1.3rem, 2.1vw, 1.82rem);
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.ce-source-unavailable p {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+  margin: 0 auto;
+  color: #64748b;
+  font-size: 0.99rem;
+  font-weight: 650;
+  line-height: 1.65;
+}
+
+.ce-source-hints {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.ce-source-hints span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(204, 216, 226, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 8px 12px;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.ce-source-retry {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 24px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2f8f46, #52b343);
+  padding: 12px 18px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 900;
+  box-shadow: 0 18px 30px rgba(45, 142, 66, 0.22);
+  cursor: pointer;
+}
+
+.ce-source-retry:hover { transform: translateY(-1px); }
 
 @media (max-width: 980px) {
   .ce-workspace,

@@ -1,1 +1,1 @@
-chore: replace Aurora logo asset and remove sidebar wordmark
+feat: add friendly student source unavailable state
