@@ -1,5 +1,5 @@
 import { OAuth2Client } from 'google-auth-library'
-import { query, runWithBridgeAgentId } from '../../utils/db'
+import { BRIDGE_AGENT_UNAVAILABLE_MESSAGE, isBridgeAgentUnavailableError, query, runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { hasControlEscolarRole, isControlEscolarOnlyRole, isSuperAdminRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
 import { touchExternalUserLogin } from '../../utils/external-users'
@@ -218,9 +218,11 @@ export default defineEventHandler(async (event) => {
     }
   } catch (error: any) {
     console.error('[Auth Login Error]', error)
+    const agentUnavailable = isBridgeAgentUnavailableError(error)
+
     throw createError({
-      statusCode: error?.statusCode || 401,
-      message: error?.message || 'Error de autenticación con Google.'
+      statusCode: agentUnavailable ? 503 : (error?.statusCode || 401),
+      message: agentUnavailable ? BRIDGE_AGENT_UNAVAILABLE_MESSAGE : (error?.message || 'Error de autenticación con Google.')
     })
   }
 })

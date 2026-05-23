@@ -56,26 +56,81 @@
           <h2>Bienvenido</h2>
           <p class="auth-subtitle">Continúa con tu cuenta institucional.</p>
 
-          <label class="plantel-field" for="plantel-login">
-            <span class="plantel-label">Plantel</span>
-            <span class="plantel-select-shell">
-              <select
+          <div ref="plantelSelectRef" class="plantel-field">
+            <span id="plantel-login-label" class="plantel-label">Plantel</span>
+            <div class="plantel-picker" :class="{ open: plantelMenuOpen }">
+              <button
                 id="plantel-login"
-                v-model="selectedPlantel"
+                type="button"
+                class="plantel-select-shell plantel-select-button"
                 :disabled="isBusy"
-                @change="persistSelectedPlantel"
+                aria-haspopup="listbox"
+                :aria-expanded="plantelMenuOpen ? 'true' : 'false'"
+                aria-labelledby="plantel-login-label plantel-login-value"
+                @click="togglePlantelMenu"
+                @keydown.down.prevent="openPlantelMenu"
+                @keydown.enter.prevent="togglePlantelMenu"
+                @keydown.space.prevent="togglePlantelMenu"
+                @keydown.esc.prevent="closePlantelMenu"
               >
-                <option v-for="plantel in PLANTELES_LIST" :key="plantel" :value="plantel">
-                  {{ plantel }}
-                </option>
-              </select>
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </span>
-          </label>
+                <span class="plantel-current">
+                  <span id="plantel-login-value" class="plantel-current-code">{{ selectedPlantel }}</span>
+                  <span class="plantel-current-status" :class="`status-${selectedPlantelStatus.status}`">
+                    <span class="plantel-status-dot" aria-hidden="true" />
+                    {{ selectedPlantelStatus.message }}
+                  </span>
+                </span>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
 
-          <div class="google-card">
+              <div
+                v-if="plantelMenuOpen"
+                class="plantel-options"
+                role="listbox"
+                aria-labelledby="plantel-login-label"
+              >
+                <button
+                  v-for="plantel in PLANTELES_LIST"
+                  :key="plantel"
+                  type="button"
+                  class="plantel-option"
+                  :class="{
+                    selected: plantel === selectedPlantel,
+                    offline: getPlantelStatus(plantel).status === 'offline'
+                  }"
+                  role="option"
+                  :aria-selected="plantel === selectedPlantel ? 'true' : 'false'"
+                  @click="selectPlantel(plantel)"
+                >
+                  <span class="plantel-option-main">
+                    <span class="plantel-option-code">{{ plantel }}</span>
+                    <span class="plantel-option-message" :class="`status-${getPlantelStatus(plantel).status}`">
+                      <span class="plantel-status-dot" aria-hidden="true" />
+                      {{ getPlantelStatus(plantel).message }}
+                    </span>
+                  </span>
+                  <span class="plantel-option-chip" :class="`status-${getPlantelStatus(plantel).status}`">
+                    {{ getPlantelStatus(plantel).label }}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <p v-if="selectedPlantelStatus.status === 'offline'" class="plantel-status-note">
+              <span aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 9v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  <path d="M12 17h.01" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
+                  <path d="M10.3 4.2 2.8 17.1A2 2 0 0 0 4.5 20h15a2 2 0 0 0 1.7-2.9L13.7 4.2a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                </svg>
+              </span>
+              <span>{{ selectedPlantelStatus.action }}</span>
+            </p>
+          </div>
+
+          <div class="google-card" @click="handleOfflinePlantelIntent">
             <div
               v-show="authPhase === 'loadingGoogle' || isBusy"
               class="google-busy-row"
@@ -103,7 +158,7 @@
 
             <div
               class="google-native-shell"
-              :class="{ inactive: authPhase === 'loadingGoogle' || isBusy }"
+              :class="{ inactive: authPhase === 'loadingGoogle' || isBusy || isSelectedPlantelOffline }"
               @pointerdown.capture="markGoogleIntent"
             >
               <div id="google-btn" />
@@ -115,8 +170,13 @@
             {{ statusText }}
           </p>
 
-          <div v-if="errorMsg" class="login-alert" role="alert">
-            <strong>No se pudo iniciar sesión.</strong>
+          <div
+            v-if="errorMsg"
+            class="login-alert"
+            :class="{ 'agent-unavailable': agentUnavailableError }"
+            role="alert"
+          >
+            <strong>{{ loginErrorTitle }}</strong>
             <span>{{ errorMsg }}</span>
           </div>
 
@@ -209,6 +269,95 @@ const selectedPlantel = ref(
         : defaultPlantel)
 )
 
+const plantelSelectRef = ref(null)
+const plantelMenuOpen = ref(false)
+const plantelStatusRequestCount = ref(0)
+const plantelStatusLoading = computed(() => plantelStatusRequestCount.value > 0)
+const plantelStatusError = ref('')
+const lastPlantelStatusLoad = ref(0)
+const plantelStatusChecks = ref({})
+const plantelStatuses = ref({})
+
+const AGENT_UNAVAILABLE_MESSAGE = 'La base del plantel no está disponible en este momento. Solicita al Administrador verificar la conectividad del equipo del plantel e inténtalo nuevamente.'
+
+const STATUS_TEXT = {
+  online: {
+    status: 'online',
+    online: true,
+    label: 'En línea',
+    message: 'Este equipo está en línea.',
+    action: ''
+  },
+  offline: {
+    status: 'offline',
+    online: false,
+    label: 'Fuera de línea',
+    message: 'Este equipo está fuera de línea.',
+    action: 'Solicita al Administrador verificar la conectividad.'
+  },
+  checking: {
+    status: 'unknown',
+    online: false,
+    label: 'Verificando',
+    message: 'Verificando conectividad...',
+    action: ''
+  },
+  unknown: {
+    status: 'unknown',
+    online: false,
+    label: 'Sin verificar',
+    message: 'No se pudo verificar la conectividad.',
+    action: 'Intenta verificar nuevamente en unos segundos.'
+  }
+}
+
+const normalizePlantelStatus = (entry = {}) => {
+  if (entry.status === 'online' || entry.online === true) {
+    return {
+      ...STATUS_TEXT.online,
+      checkedAt: entry.checkedAt || ''
+    }
+  }
+
+  if (entry.status === 'offline') {
+    return {
+      ...STATUS_TEXT.offline,
+      message: entry.message || STATUS_TEXT.offline.message,
+      action: entry.action || STATUS_TEXT.offline.action,
+      checkedAt: entry.checkedAt || ''
+    }
+  }
+
+  return {
+    ...STATUS_TEXT.unknown,
+    message: entry.message || STATUS_TEXT.unknown.message,
+    action: entry.action || STATUS_TEXT.unknown.action,
+    checkedAt: entry.checkedAt || ''
+  }
+}
+
+const getFallbackPlantelStatus = () => {
+  if (plantelStatusLoading.value) return STATUS_TEXT.checking
+
+  if (plantelStatusError.value) {
+    return {
+      ...STATUS_TEXT.unknown,
+      message: 'No se pudo verificar la conectividad.'
+    }
+  }
+
+  return STATUS_TEXT.unknown
+}
+
+const getPlantelStatus = (plantel) => plantelStatuses.value[plantel] || getFallbackPlantelStatus()
+
+const selectedPlantelStatus = computed(() => getPlantelStatus(selectedPlantel.value))
+const isSelectedPlantelOffline = computed(() => selectedPlantelStatus.value.status === 'offline')
+const agentUnavailableError = computed(() => /La base del plantel no est[aá] disponible|fuera de l[ií]nea|conectividad del equipo/i.test(errorMsg.value))
+const loginErrorTitle = computed(() => (
+  agentUnavailableError.value ? 'El plantel seleccionado está fuera de línea.' : 'No se pudo iniciar sesión.'
+))
+
 const isBusy = computed(() => ['server', 'session', 'redirecting'].includes(authPhase.value))
 const primaryButtonText = computed(() => (PHASES[authPhase.value] || PHASES.ready).button)
 const statusText = computed(() => (PHASES[authPhase.value] || PHASES.ready).status)
@@ -238,6 +387,83 @@ const persistSelectedPlantel = () => {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('db_bridge_agent_id', selectedPlantel.value)
   }
+}
+
+const loadPlantelStatuses = async ({ force = false, plantel = '' } = {}) => {
+  const normalizedPlantel = String(plantel || '').trim().toUpperCase()
+  const lastCheck = normalizedPlantel ? plantelStatusChecks.value[normalizedPlantel] : lastPlantelStatusLoad.value
+  const statusAge = Date.now() - Number(lastCheck || 0)
+
+  if (!force && lastCheck && statusAge < 15000) return
+
+  plantelStatusRequestCount.value += 1
+  plantelStatusError.value = ''
+
+  try {
+    const path = normalizedPlantel
+      ? `/api/auth/planteles-status?plantel=${encodeURIComponent(normalizedPlantel)}`
+      : '/api/auth/planteles-status'
+    const result = await $fetch(path)
+    const nextStatuses = { ...plantelStatuses.value }
+
+    for (const status of result?.statuses || []) {
+      if (PLANTELES_LIST.includes(status.plantel)) {
+        nextStatuses[status.plantel] = normalizePlantelStatus(status)
+      }
+    }
+
+    plantelStatuses.value = nextStatuses
+
+    if (normalizedPlantel) {
+      plantelStatusChecks.value = {
+        ...plantelStatusChecks.value,
+        [normalizedPlantel]: Date.now()
+      }
+    } else {
+      lastPlantelStatusLoad.value = Date.now()
+    }
+  } catch {
+    plantelStatusError.value = 'No se pudo verificar la conectividad de los planteles en este momento.'
+  } finally {
+    plantelStatusRequestCount.value = Math.max(0, plantelStatusRequestCount.value - 1)
+  }
+}
+
+const openPlantelMenu = () => {
+  if (isBusy.value) return
+
+  plantelMenuOpen.value = true
+  loadPlantelStatuses({ force: true })
+}
+
+const closePlantelMenu = () => {
+  plantelMenuOpen.value = false
+}
+
+const togglePlantelMenu = () => {
+  if (plantelMenuOpen.value) {
+    closePlantelMenu()
+    return
+  }
+
+  openPlantelMenu()
+}
+
+const selectPlantel = (plantel) => {
+  if (!PLANTELES_LIST.includes(plantel)) return
+
+  selectedPlantel.value = plantel
+  errorMsg.value = ''
+  persistSelectedPlantel()
+  closePlantelMenu()
+  loadPlantelStatuses({ force: true, plantel })
+}
+
+const handleDocumentPointerDown = (event) => {
+  if (!plantelMenuOpen.value || !plantelSelectRef.value) return
+  if (plantelSelectRef.value.contains(event.target)) return
+
+  closePlantelMenu()
 }
 
 const loadPersistedPlantel = () => {
@@ -270,7 +496,22 @@ const loadPersistedPlantel = () => {
   persistSelectedPlantel()
 }
 
-const markGoogleIntent = () => {
+const handleOfflinePlantelIntent = () => {
+  if (!isSelectedPlantelOffline.value || isBusy.value) return
+
+  errorMsg.value = AGENT_UNAVAILABLE_MESSAGE
+  setPhase('error', 0)
+}
+
+const markGoogleIntent = (event) => {
+  if (isSelectedPlantelOffline.value) {
+    event?.preventDefault()
+    event?.stopPropagation()
+    errorMsg.value = AGENT_UNAVAILABLE_MESSAGE
+    setPhase('error', 0)
+    return
+  }
+
   if (authPhase.value !== 'ready' && authPhase.value !== 'error') return
 
   errorMsg.value = ''
@@ -351,7 +592,9 @@ const initializeGoogle = () => {
 }
 
 onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   loadPersistedPlantel()
+  loadPlantelStatuses({ force: true, plantel: selectedPlantel.value })
 
   if (!config.public.googleClientId) {
     errorMsg.value = 'Credenciales de Google no configuradas.'
@@ -381,6 +624,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
   clearGoogleIntentTimer()
 })
 </script>
@@ -617,6 +861,7 @@ onBeforeUnmount(() => {
 }
 
 .plantel-field {
+  position: relative;
   display: block;
 }
 
@@ -627,6 +872,10 @@ onBeforeUnmount(() => {
   font-size: 15px;
   font-weight: 850;
   line-height: 1.25;
+}
+
+.plantel-picker {
+  position: relative;
 }
 
 .plantel-select-shell {
@@ -641,36 +890,215 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 8px 22px rgba(15, 32, 62, 0.035);
 }
 
-.plantel-select-shell select {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  appearance: none;
-  background: transparent;
-  color: #218239;
+.plantel-select-button {
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 24px 0 21px;
+  color: inherit;
   font: inherit;
-  font-size: 17px;
-  font-weight: 850;
-  line-height: 1;
-  outline: none;
-  padding: 0 58px 0 21px;
+  text-align: left;
+  cursor: pointer;
 }
 
-.plantel-select-shell svg {
-  position: absolute;
-  right: 27px;
-  top: 50%;
+.plantel-select-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.plantel-select-button svg {
   width: 18px;
   height: 18px;
   color: #14223d;
-  transform: translateY(-50%);
-  pointer-events: none;
+  flex: 0 0 auto;
+  transition: transform 0.18s ease;
 }
 
-.plantel-select-shell:focus-within {
+.plantel-picker.open .plantel-select-button svg {
+  transform: rotate(180deg);
+}
+
+.plantel-select-shell:focus-visible,
+.plantel-picker.open .plantel-select-shell {
   border-color: rgba(33, 130, 57, 0.56);
   box-shadow: 0 0 0 4px rgba(33, 130, 57, 0.08), 0 8px 22px rgba(15, 32, 62, 0.04);
+  outline: none;
+}
+
+.plantel-current {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.plantel-current-code {
+  color: #218239;
+  font-size: 17px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.plantel-current-status,
+.plantel-option-message {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  color: #667185;
+  font-size: 12.5px;
+  font-weight: 730;
+  line-height: 1.25;
+}
+
+.plantel-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #a7b1c0;
+  box-shadow: 0 0 0 4px rgba(167, 177, 192, 0.16);
+  flex: 0 0 auto;
+}
+
+.status-online {
+  color: #218239;
+}
+
+.status-online .plantel-status-dot,
+.plantel-option-message.status-online .plantel-status-dot {
+  background: #21843a;
+  box-shadow: 0 0 0 4px rgba(33, 132, 58, 0.13);
+}
+
+.status-offline {
+  color: #bd3a32;
+}
+
+.status-offline .plantel-status-dot,
+.plantel-option-message.status-offline .plantel-status-dot {
+  background: #c7443c;
+  box-shadow: 0 0 0 4px rgba(199, 68, 60, 0.13);
+}
+
+.status-unknown {
+  color: #788296;
+}
+
+.plantel-options {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  display: grid;
+  max-height: 312px;
+  overflow-y: auto;
+  gap: 4px;
+  border: 1px solid #dbe4ec;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 8px;
+  box-shadow: 0 24px 54px rgba(15, 32, 62, 0.14);
+}
+
+.plantel-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  padding: 12px 13px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plantel-option:hover,
+.plantel-option.selected {
+  background: #f4faf2;
+}
+
+.plantel-option.offline:hover,
+.plantel-option.offline.selected {
+  background: #fff7f6;
+}
+
+.plantel-option-main {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.plantel-option-code {
+  color: #14223d;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.plantel-option-message {
+  white-space: normal;
+}
+
+.plantel-option-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 83px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.plantel-option-chip.status-online {
+  background: #eaf7e6;
+  color: #218239;
+}
+
+.plantel-option-chip.status-offline {
+  background: #fff1ef;
+  color: #bd3a32;
+}
+
+.plantel-option-chip.status-unknown {
+  background: #f1f4f8;
+  color: #657083;
+}
+
+.plantel-status-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 0;
+  border: 1px solid rgba(199, 68, 60, 0.18);
+  border-radius: 13px;
+  background: #fff8f7;
+  padding: 12px 14px;
+  color: #7f4039;
+  font-size: 12.75px;
+  font-weight: 720;
+  line-height: 1.45;
+}
+
+.plantel-status-note span:first-child {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #c7443c;
+  transform: translateY(1px);
+}
+
+.plantel-status-note svg {
+  width: 18px;
+  height: 18px;
 }
 
 .google-card {
@@ -802,6 +1230,12 @@ onBeforeUnmount(() => {
   font-size: 13.5px;
   font-weight: 700;
   line-height: 1.45;
+}
+
+.login-alert.agent-unavailable {
+  border-color: rgba(199, 68, 60, 0.2);
+  background: #fff8f7;
+  color: #863d36;
 }
 
 .login-alert strong {

@@ -1,1 +1,1 @@
-fix: correct login policy notice layout to match the Figma design
+feat: surface bridge agent availability on login
