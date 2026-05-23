@@ -2325,7 +2325,8 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   min-height: 0;
-  padding: clamp(10px, 1vw, 14px);
+  overflow: visible;
+  padding: clamp(12px, 1.1vw, 18px);
   background: #fff;
   isolation: isolate;
 }
@@ -3821,8 +3822,9 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 5;
   display: flex;
+  width: 100%;
   min-height: clamp(390px, 52vh, 560px);
-  height: 100%;
+  height: auto;
   flex: 1 1 auto;
   flex-direction: column;
   align-items: center;
@@ -3834,7 +3836,7 @@ onBeforeUnmount(() => {
     radial-gradient(circle at 17% 18%, rgba(112, 180, 73, 0.17), transparent 13rem),
     radial-gradient(circle at 86% 12%, rgba(0, 126, 148, 0.12), transparent 13rem),
     linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 248, 0.96));
-  margin: 10px;
+  margin: 0;
   padding: 38px 30px;
   text-align: center;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 22px 55px rgba(22, 64, 46, 0.08);

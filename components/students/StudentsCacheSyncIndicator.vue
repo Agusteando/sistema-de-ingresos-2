@@ -75,7 +75,9 @@ const statusClass = computed(() => ({
   display: flex;
   align-items: center;
   align-self: stretch;
+  justify-content: center;
   width: 100%;
+  min-width: 100%;
   box-sizing: border-box;
   gap: 8px;
   min-height: 34px;
@@ -162,9 +164,12 @@ const statusClass = computed(() => ({
 
 .students-cache-sync__text {
   display: inline-flex;
-  flex-direction: column;
-  gap: 2px;
+  flex: 1 1 auto;
   min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
 }
 
 .students-cache-sync__label,
@@ -176,7 +181,7 @@ const statusClass = computed(() => ({
 }
 
 .students-cache-sync__detail {
-  max-width: 120px;
+  max-width: 100%;
   color: rgba(86, 101, 121, 0.52);
   font-size: 0.48rem;
   letter-spacing: 0.02em;
