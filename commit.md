@@ -1,1 +1,1 @@
-fix: enforce ordered control escolar sync trace with scoped cache
+fix: remove academic pills from control escolar student rows

@@ -416,21 +416,6 @@
                             {{ student.matricula }}
                           </span>
                         </span>
-                        <span
-                          class="ce-academic-pills"
-                          :aria-label="compactAcademic(student)"
-                        >
-                          <span>{{ student.grado || "Sin grado" }}</span>
-                          <span
-                            :class="{ warning: controlMissingGroup(student) }"
-                            >{{
-                              controlMissingGroup(student)
-                                ? "Sin grupo"
-                                : `Grupo ${controlGroupLabel(student)}`
-                            }}</span
-                          >
-                          <span>{{ student.nivel || "Sin nivel" }}</span>
-                        </span>
                       </span>
                     </span>
 
@@ -1746,16 +1731,6 @@ const controlGroupTitle = (student) => {
   const group = controlGroupLabel(student);
   return group ? `Grupo ${group}` : "Sin grupo";
 };
-const compactAcademic = (student) =>
-  [
-    student.grado,
-    controlGroupLabel(student)
-      ? `Grupo ${controlGroupLabel(student)}`
-      : "Sin grupo",
-    student.nivel,
-  ]
-    .filter(Boolean)
-    .join(" · ") || "Sin datos académicos";
 const statusTone = (student) =>
   String(student?.status || "").toLowerCase() === "baja"
     ? "danger"
@@ -3727,35 +3702,6 @@ onBeforeUnmount(() => {
   box-shadow: 0 8px 16px rgba(63, 145, 56, 0.18);
 }
 
-.ce-academic-pills {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  line-height: 1;
-}
-
-.ce-academic-pills span {
-  display: inline-flex;
-  min-height: 18px;
-  align-items: center;
-  padding: 0 8px;
-  border: 1px solid rgba(63, 145, 56, 0.18);
-  border-radius: 999px;
-  background: #eaf7e7;
-  color: #20882d;
-  font-size: 9.5px;
-  font-weight: 860;
-  white-space: nowrap;
-}
-
-.ce-academic-pills span.warning {
-  border-color: rgba(180, 107, 18, 0.26);
-  background: #fff6e7;
-  color: #b36a16;
-}
-
 .ce-quality-score {
   --score-color: #2f9c3b;
   position: relative;
@@ -5369,12 +5315,6 @@ onBeforeUnmount(() => {
     24px var(--student-list-grade-size) var(--student-list-crest-size)
     minmax(0, 1fr);
   gap: 7px;
-}
-
-.ce-academic-pills span {
-  min-height: 18px;
-  padding-inline: 7px;
-  font-size: 9px;
 }
 
 .ce-list-titlebar {
