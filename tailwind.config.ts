@@ -20,6 +20,14 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+      },
+      fontWeight: {
+        normal: '400',
+        medium: '450',
+        semibold: '550',
+        bold: '650',
+        extrabold: '720',
+        black: '780'
       }
     }
   }

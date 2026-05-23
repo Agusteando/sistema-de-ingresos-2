@@ -5,59 +5,73 @@
     :title="ariaLabel"
     role="status"
   >
-    <span
-      :class="['sync-step', stepClass(baseStage)]"
-      :title="baseTitle"
-      aria-hidden="true"
-    ></span>
-    <span class="sync-rail" aria-hidden="true"></span>
-    <span
-      :class="['sync-step', stepClass(enrichmentStage)]"
-      :title="enrichmentTooltip"
-      aria-hidden="true"
-    ></span>
-    <span
-      class="sync-freshness"
-      :title="freshnessTitle"
-      aria-hidden="true"
-    ></span>
+    <template v-for="(step, index) in steps" :key="step.key">
+      <span
+        :class="['sync-step', stepClass(step.stage)]"
+        :title="step.title"
+        aria-hidden="true"
+      ></span>
+      <span
+        v-if="index < steps.length - 1"
+        :class="['sync-rail', railClass(index)]"
+        aria-hidden="true"
+      ></span>
+    </template>
   </div>
 </template>
 
 <script setup>
 const props = defineProps({
+  cacheStage: { type: String, default: 'idle' },
   baseStage: { type: String, default: 'idle' },
-  enrichmentStage: { type: String, default: 'idle' },
-  freshness: { type: String, default: 'empty' },
+  externalStage: { type: String, default: 'idle' },
+  completeStage: { type: String, default: 'idle' },
+  cacheTitle: { type: String, default: '' },
   baseTitle: { type: String, default: '' },
-  enrichmentTitle: { type: String, default: '' },
-  freshnessTitle: { type: String, default: '' },
-  enrichmentRows: { type: Number, default: 0 },
+  externalTitle: { type: String, default: '' },
+  completeTitle: { type: String, default: '' },
+  externalRows: { type: Number, default: 0 },
+  freshness: { type: String, default: 'empty' },
   ariaLabel: { type: String, default: '' }
 })
 
 const stepClass = (stage) => ({
   active: stage === 'loading',
   done: stage === 'ready',
+  empty: stage === 'empty',
   failed: stage === 'failed'
 })
 
-const formattedEnrichmentRows = computed(() =>
-  Number(props.enrichmentRows || 0).toLocaleString('es-MX')
+const formattedExternalRows = computed(() =>
+  Number(props.externalRows || 0).toLocaleString('es-MX')
 )
 
-const enrichmentTooltip = computed(() => {
-  const rows = Number(props.enrichmentRows || 0)
+const externalTooltip = computed(() => {
+  const rows = Number(props.externalRows || 0)
   const rowLabel = rows === 1 ? 'fila obtenida' : 'filas obtenidas'
-  return `${props.enrichmentTitle || 'Enriquecimiento de matrícula'} · ${formattedEnrichmentRows.value} ${rowLabel}`
+  return `${props.externalTitle || 'Base externa de matrícula'} · ${formattedExternalRows.value} ${rowLabel}`
+})
+
+const steps = computed(() => [
+  { key: 'cache', stage: props.cacheStage, title: props.cacheTitle || 'Caché local' },
+  { key: 'base', stage: props.baseStage, title: props.baseTitle || 'Base del administrador' },
+  { key: 'external', stage: props.externalStage, title: externalTooltip.value },
+  { key: 'complete', stage: props.completeStage, title: props.completeTitle || 'Proceso completo' }
+])
+
+const isRailDone = (index) => steps.value.slice(0, index + 1).every((step) => step.stage === 'ready')
+
+const railClass = (index) => ({
+  done: isRailDone(index),
+  active: steps.value[index + 1]?.stage === 'loading'
 })
 
 const statusClass = computed(() => ({
   'is-cache': props.freshness === 'cache',
   'is-base': props.freshness === 'base',
   'is-synced': props.freshness === 'synced',
-  'is-loading': props.baseStage === 'loading' || props.enrichmentStage === 'loading',
-  'is-failed': props.baseStage === 'failed' || props.enrichmentStage === 'failed'
+  'is-loading': steps.value.some((step) => step.stage === 'loading'),
+  'is-failed': steps.value.some((step) => step.stage === 'failed')
 }))
 </script>
 
@@ -65,34 +79,39 @@ const statusClass = computed(() => ({
 .control-sync-trace {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 24px;
-  padding: 3px 8px;
-  border: 1px solid rgba(216, 226, 236, 0.88);
+  gap: 5px;
+  min-height: 20px;
+  padding: 3px 7px;
+  border: 1px solid rgba(216, 226, 236, 0.78);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 6px 14px rgba(21, 35, 60, 0.035);
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow: 0 6px 14px rgba(21, 35, 60, 0.032);
 }
 
 .sync-step {
   display: inline-block;
-  width: 8px;
-  height: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.55);
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
   border-radius: 999px;
-  background: #eef3f7;
+  background: #edf2f7;
 }
 
 .sync-step.active {
-  border-color: rgba(52, 143, 59, 0.45);
+  border-color: rgba(52, 143, 59, 0.42);
   background: #3a963e;
-  box-shadow: 0 0 0 5px rgba(57, 150, 62, 0.1);
+  box-shadow: 0 0 0 4px rgba(57, 150, 62, 0.09);
   animation: controlSyncGlow 1.3s ease-in-out infinite;
 }
 
 .sync-step.done {
-  border-color: rgba(52, 143, 59, 0.45);
+  border-color: rgba(52, 143, 59, 0.44);
   background: #2f9138;
+}
+
+.sync-step.empty {
+  border-color: rgba(236, 165, 42, 0.36);
+  background: #eeb04a;
 }
 
 .sync-step.failed {
@@ -101,52 +120,27 @@ const statusClass = computed(() => ({
 }
 
 .sync-rail {
-  width: 22px;
-  height: 2px;
+  width: 14px;
+  height: 1.5px;
   border-radius: 999px;
   background: #d8e2ec;
 }
 
-.control-sync-trace.is-base .sync-rail,
-.control-sync-trace.is-cache .sync-rail {
-  background: linear-gradient(90deg, rgba(47, 145, 56, 0.68), #d8e2ec);
+.sync-rail.done {
+  background: rgba(47, 145, 56, 0.82);
 }
 
-.control-sync-trace.is-synced .sync-rail {
-  background: #2f9138;
-}
-
-.sync-freshness {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: #cbd5e1;
-}
-
-.control-sync-trace.is-cache .sync-freshness {
-  background: #eca52a;
-}
-
-.control-sync-trace.is-base .sync-freshness,
-.control-sync-trace.is-loading .sync-freshness {
-  background: #3f86d8;
-}
-
-.control-sync-trace.is-synced .sync-freshness {
-  background: #2f9138;
-}
-
-.control-sync-trace.is-failed .sync-freshness {
-  background: #d44a43;
+.sync-rail.active {
+  background: linear-gradient(90deg, rgba(47, 145, 56, 0.72), #d8e2ec);
 }
 
 @keyframes controlSyncGlow {
   0%,
   100% {
-    box-shadow: 0 0 0 4px rgba(57, 150, 62, 0.08);
+    box-shadow: 0 0 0 3px rgba(57, 150, 62, 0.07);
   }
   50% {
-    box-shadow: 0 0 0 7px rgba(57, 150, 62, 0.14);
+    box-shadow: 0 0 0 6px rgba(57, 150, 62, 0.12);
   }
 }
 </style>

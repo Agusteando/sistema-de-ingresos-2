@@ -33,6 +33,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-synthesis-weight: none;
+    font-optical-sizing: auto;
     background:
       radial-gradient(circle at 32% -12%, rgba(142, 193, 83, 0.12), transparent 32rem),
       linear-gradient(135deg, #fbfdfc 0%, #f7fafc 55%, #fbfdfb 100%);
@@ -47,6 +48,12 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     font-kerning: normal;
+    font-optical-sizing: auto;
+  }
+
+  strong,
+  b {
+    font-weight: 650;
   }
 
   * {

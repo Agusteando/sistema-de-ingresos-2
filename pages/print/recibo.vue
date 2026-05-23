@@ -241,12 +241,12 @@ const handleInvoiceSuccess = () => {
 }
 
 @media print {
-  @page { size: 5.5in 8.5in portrait; margin: 0; }
+  @page { size: letter portrait; margin: 0; }
 
   html,
   body {
-    width: 5.5in;
-    min-height: 8.5in;
+    width: 8.5in;
+    min-height: 11in;
     background-color: white;
   }
 
@@ -256,13 +256,78 @@ const handleInvoiceSuccess = () => {
   }
 
   .receipt-sheet {
-    width: 5.5in;
-    min-height: 8.5in;
+    width: 8.5in;
+    height: 5.5in;
+    min-height: 0;
     max-width: none;
+    overflow: hidden;
     border: 0;
     border-radius: 0;
     box-shadow: none;
-    padding: 0.32in;
+    padding: 0.22in 0.34in;
+  }
+
+  .receipt-sheet > div:first-child {
+    display: grid;
+    gap: 0.06in;
+  }
+
+  .receipt-sheet header,
+  .receipt-sheet table,
+  .receipt-sheet p {
+    break-inside: avoid;
+  }
+
+  .receipt-sheet .border-b.pb-5.mb-6 {
+    padding-bottom: 0.11in;
+    margin-bottom: 0.1in;
+  }
+
+  .receipt-sheet img {
+    max-height: 0.42in;
+  }
+
+  .receipt-sheet h2 {
+    font-size: 10.5px;
+    line-height: 1.08;
+  }
+
+  .receipt-sheet table {
+    margin-bottom: 0.08in;
+    font-size: 8.4px;
+    line-height: 1.12;
+  }
+
+  .receipt-sheet th,
+  .receipt-sheet td {
+    padding-top: 0.025in;
+    padding-bottom: 0.025in;
+  }
+
+  .receipt-sheet [class*="mb-6"] {
+    margin-bottom: 0.08in;
+  }
+
+  .receipt-sheet [class*="mt-4"] {
+    margin-top: 0.05in;
+  }
+
+  .receipt-sheet [class*="p-5"] {
+    padding: 0.08in;
+  }
+
+  .receipt-sheet .text-xl {
+    font-size: 15px;
+    line-height: 1.05;
+  }
+
+  .receipt-footer {
+    margin-top: 0.05in;
+  }
+
+  .receipt-footer > div {
+    margin-top: 0.05in;
+    padding-top: 0.05in;
   }
 }
 </style>
