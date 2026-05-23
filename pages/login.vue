@@ -136,8 +136,10 @@
                 <path d="m9.5 12.1 1.6 1.6 3.5-3.7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </span>
-            Al continuar, aceptas las <strong>políticas de seguridad</strong><br class="policy-break">
-            de tu institución.
+            <span class="policy-copy">
+              Al continuar, aceptas las <strong>políticas de seguridad</strong><br class="policy-break">
+              de tu institución.
+            </span>
           </p>
         </div>
       </section>
@@ -832,13 +834,22 @@ onBeforeUnmount(() => {
   line-height: 1.6;
 }
 
-.policy-line span {
+.policy-line > span:first-child {
   display: inline-grid;
   width: 22px;
   height: 22px;
   place-items: center;
   color: #21843a;
   transform: translateY(3px);
+}
+
+.policy-copy {
+  display: block;
+  min-width: 0;
+}
+
+.policy-break {
+  display: block;
 }
 
 .policy-line svg {
