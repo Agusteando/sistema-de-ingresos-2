@@ -5,13 +5,16 @@
         <Transition name="ce-sync-trace-fade">
           <ControlSyncTrace
             v-if="showControlSyncVisual"
+            :cache-stage="controlCacheStage"
             :base-stage="controlBaseStage"
-            :enrichment-stage="controlEnrichmentStage"
+            :external-stage="controlExternalDbStage"
+            :complete-stage="controlCompleteStage"
             :freshness="controlDataFreshness"
+            :cache-title="controlCacheStepTitle"
             :base-title="controlBaseStepTitle"
-            :enrichment-title="controlEnrichmentStepTitle"
-            :freshness-title="controlDataFreshnessLabel"
-            :enrichment-rows="controlEnrichmentRows"
+            :external-title="controlExternalDbStepTitle"
+            :complete-title="controlCompleteStepTitle"
+            :external-rows="controlExternalDbRows"
             :aria-label="controlSyncAriaLabel"
           />
         </Transition>
@@ -1344,12 +1347,14 @@ const controlPhotoQueue = [];
 const controlPhotoQueuedKeys = new Set();
 const controlPhotoActiveKeys = new Set();
 let activeControlPhotoLoads = 0;
+const controlCacheStage = ref("idle");
 const controlBaseStage = ref("idle");
-const controlEnrichmentStage = ref("idle");
+const controlExternalDbStage = ref("idle");
+const controlCompleteStage = ref("idle");
 const controlDataFreshness = ref("empty");
 const controlDataSavedAt = ref("");
 const controlDataSource = ref(null);
-const controlEnrichmentRows = ref(0);
+const controlExternalDbRows = ref(0);
 
 const hasDetail = computed(() => true);
 const {
@@ -1366,7 +1371,8 @@ const {
 const controlSyncBusy = computed(
   () =>
     controlBaseStage.value === "loading" ||
-    controlEnrichmentStage.value === "loading",
+    controlExternalDbStage.value === "loading" ||
+    controlCompleteStage.value === "loading",
 );
 const loadingAny = computed(
   () =>
@@ -1413,9 +1419,10 @@ const formatControlSyncTime = (value) => {
   }
 };
 
-const getControlEnrichmentRowCount = (source = {}) =>
+const getControlExternalDbRowCount = (source = {}) =>
   Number(
-    source.enrichedRows ??
+    source.externalRows ??
+      source.enrichedRows ??
       source.centralRows ??
       source.overlayRows ??
       source.matriculaRows ??
@@ -1427,8 +1434,10 @@ const showControlSyncVisual = computed(() =>
     selectedAgentId.value &&
     !studentsSourceUnavailable.value &&
     (controlDataFreshness.value !== "empty" ||
+      controlCacheStage.value !== "idle" ||
       controlBaseStage.value !== "idle" ||
-      controlEnrichmentStage.value !== "idle"),
+      controlExternalDbStage.value !== "idle" ||
+      controlCompleteStage.value !== "idle"),
   ),
 );
 const controlDataFreshnessLabel = computed(() => {
@@ -1438,10 +1447,18 @@ const controlDataFreshnessLabel = computed(() => {
   if (controlDataFreshness.value === "base") return "Base del administrador";
   if (controlDataFreshness.value === "synced")
     return time ? `Sync · ${time}` : "Sincronizado";
+  if (controlCacheStage.value === "ready") return "Caché local";
   if (controlBaseStage.value === "loading") return "Conectando";
-  if (controlEnrichmentStage.value === "loading") return "Enriqueciendo";
+  if (controlExternalDbStage.value === "loading") return "Base externa";
   return "Sin datos";
 });
+const controlCacheStepTitle = computed(() =>
+  controlCacheStage.value === "ready"
+    ? controlDataSavedAt.value
+      ? `Caché local cargada · ${formatControlSyncTime(controlDataSavedAt.value)}`
+      : "Caché local cargada"
+    : "Sin caché local para este plantel y ciclo",
+);
 const controlBaseStepTitle = computed(() =>
   controlBaseStage.value === "loading"
     ? "Conectando con base del administrador"
@@ -1451,19 +1468,32 @@ const controlBaseStepTitle = computed(() =>
         ? "Base del administrador no disponible"
         : "Base del administrador pendiente",
 );
-const controlEnrichmentStepTitle = computed(() =>
-  controlEnrichmentStage.value === "loading"
-    ? "Enriqueciendo datos de matrícula"
-    : controlEnrichmentStage.value === "ready"
-      ? "Datos enriquecidos listos"
-      : controlEnrichmentStage.value === "failed"
-        ? "Enriquecimiento pendiente"
-        : "Enriquecimiento pendiente",
+const controlExternalDbStepTitle = computed(() =>
+  controlExternalDbStage.value === "loading"
+    ? "Consultando base externa de matrícula"
+    : controlExternalDbStage.value === "ready"
+      ? "Base externa de matrícula lista"
+      : controlExternalDbStage.value === "empty"
+        ? "Base externa consultada sin filas"
+        : controlExternalDbStage.value === "failed"
+          ? "Base externa pendiente"
+          : "Base externa pendiente",
+);
+const controlCompleteStepTitle = computed(() =>
+  controlCompleteStage.value === "loading"
+    ? "Sincronización en proceso"
+    : controlCompleteStage.value === "ready"
+      ? "Proceso terminado"
+      : controlCompleteStage.value === "failed"
+        ? "Proceso terminado con pendientes"
+        : "Proceso pendiente",
 );
 const controlSyncAriaLabel = computed(() =>
   [
+    controlCacheStepTitle.value,
     controlBaseStepTitle.value,
-    controlEnrichmentStepTitle.value,
+    controlExternalDbStepTitle.value,
+    controlCompleteStepTitle.value,
     controlDataFreshnessLabel.value,
   ]
     .filter(Boolean)
@@ -2349,10 +2379,14 @@ const resetControlStudentsView = () => {
   selectedStudent.value = null;
   pendingSelectedStudentRefresh.value = null;
   kpis.value = null;
+  controlCacheStage.value = "idle";
+  controlBaseStage.value = "idle";
+  controlExternalDbStage.value = "idle";
+  controlCompleteStage.value = "idle";
   controlDataFreshness.value = "empty";
   controlDataSavedAt.value = "";
   controlDataSource.value = null;
-  controlEnrichmentRows.value = 0;
+  controlExternalDbRows.value = 0;
   Object.assign(catalogs, {
     niveles: [],
     grados: [],
@@ -2494,9 +2528,11 @@ const loadStudents = async (options = {}) => {
   const hadStudents =
     controlStudentsIndex.value.length > 0 || students.value.length > 0;
 
+  controlCacheStage.value = "idle";
   controlBaseStage.value = "idle";
-  controlEnrichmentStage.value = "idle";
-  controlEnrichmentRows.value = 0;
+  controlExternalDbStage.value = "idle";
+  controlCompleteStage.value = "idle";
+  controlExternalDbRows.value = 0;
 
   if (cached) {
     pagination.page = 1;
@@ -2506,14 +2542,15 @@ const loadStudents = async (options = {}) => {
     controlDataFreshness.value = "cache";
     controlDataSavedAt.value = cached.savedAt || "";
     controlDataSource.value = cached.source || null;
-    controlEnrichmentRows.value = getControlEnrichmentRowCount(cached.source);
+    controlCacheStage.value = "ready";
+    controlExternalDbRows.value = getControlExternalDbRowCount(cached.source);
   } else {
     if (clearExisting) resetControlStudentsView();
     studentsLoading.value = forceLoading || !hadStudents || clearExisting;
     controlDataFreshness.value =
       hadStudents && !clearExisting ? controlDataFreshness.value : "empty";
     controlDataSavedAt.value = "";
-    if (!hadStudents || clearExisting) controlEnrichmentRows.value = 0;
+    if (!hadStudents || clearExisting) controlExternalDbRows.value = 0;
   }
 
   const canKeepVisibleData = () =>
@@ -2523,6 +2560,7 @@ const loadStudents = async (options = {}) => {
     students.value.length > 0;
 
   try {
+    controlCompleteStage.value = "loading";
     controlBaseStage.value = "loading";
     const baseResponse = await $fetch("/api/control-escolar/students", {
       query: { ...query, phase: "base" },
@@ -2536,7 +2574,7 @@ const loadStudents = async (options = {}) => {
     controlDataFreshness.value = "base";
     controlDataSavedAt.value = "";
     controlDataSource.value = baseResponse?.source || controlDataSource.value;
-    controlEnrichmentRows.value = 0;
+    controlExternalDbRows.value = 0;
     if (!cached) writeCachedControlStudents(query, baseResponse);
   } catch (error) {
     if (requestId !== controlStudentsRequestId) return;
@@ -2549,6 +2587,7 @@ const loadStudents = async (options = {}) => {
         error?.message ||
         "Plantel fuera de línea o sin respuesta.";
       studentsLoading.value = false;
+      controlCompleteStage.value = "failed";
       nextTick(scheduleWorkspaceScaleUpdate);
       return;
     }
@@ -2563,7 +2602,7 @@ const loadStudents = async (options = {}) => {
   }
 
   try {
-    controlEnrichmentStage.value = "loading";
+    controlExternalDbStage.value = "loading";
     const response = await $fetch("/api/control-escolar/students", {
       query: { ...query, phase: "enriched" },
     });
@@ -2574,15 +2613,17 @@ const loadStudents = async (options = {}) => {
     writeCachedControlStudents(query, response);
     loadError.value = "";
     const responseSource = response?.source || {};
-    const enrichmentRows = getControlEnrichmentRowCount(responseSource);
-    controlEnrichmentRows.value = enrichmentRows;
-    controlEnrichmentStage.value = enrichmentRows > 0 ? "ready" : "idle";
-    controlDataFreshness.value = enrichmentRows > 0 ? "synced" : "base";
-    controlDataSavedAt.value = enrichmentRows > 0 ? new Date().toISOString() : "";
+    const externalDbRows = getControlExternalDbRowCount(responseSource);
+    controlExternalDbRows.value = externalDbRows;
+    controlExternalDbStage.value = externalDbRows > 0 ? "ready" : "empty";
+    controlCompleteStage.value = "ready";
+    controlDataFreshness.value = externalDbRows > 0 ? "synced" : "base";
+    controlDataSavedAt.value = externalDbRows > 0 ? new Date().toISOString() : "";
     controlDataSource.value = response?.source || controlDataSource.value;
   } catch (error) {
     if (requestId !== controlStudentsRequestId) return;
-    controlEnrichmentStage.value = "failed";
+    controlExternalDbStage.value = "failed";
+    controlCompleteStage.value = "failed";
 
     if (!canKeepVisibleData()) {
       resetControlStudentsView();

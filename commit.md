@@ -1,1 +1,1 @@
-fix: refine control escolar sync trace and preserve redesign layout
+fix: add four-step control sync trace and compact payment receipt printing
