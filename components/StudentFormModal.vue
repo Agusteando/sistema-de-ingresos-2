@@ -275,14 +275,6 @@
                     <p>Ciclo de ingreso</p>
                     <strong>{{ ingresoCicloLabel }}</strong>
                   </div>
-                  <div>
-                    <span><LucideUserRound :size="19" /></span>
-                    <p>Estado visible</p>
-                    <strong
-                      >{{ visibleTipoIngresoLabel }} en
-                      {{ currentCicloLabel }}</strong
-                    >
-                  </div>
                 </section>
 
                 <button

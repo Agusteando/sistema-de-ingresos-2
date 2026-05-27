@@ -290,10 +290,10 @@
                 <i></i>
                 {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} · {{ studentGroupInlineLabel(student) }}
               </p>
-              <div class="account-student-meta" aria-label="Datos complementarios del alumno">
-                <span><small>CURP</small>{{ accountCurpLabel }}</span>
-                <span><small>Padre</small>{{ accountFatherLabel }}</span>
-                <span><small>Madre</small>{{ accountMotherLabel }}</span>
+              <div v-if="accountMetaItems.length" class="account-student-meta" aria-label="Datos complementarios del alumno">
+                <span v-for="item in accountMetaItems" :key="item.label">
+                  <small>{{ item.label }}</small>{{ item.value }}
+                </span>
               </div>
             </div>
             <span
@@ -760,20 +760,24 @@ let debtsRequestId = 0;
 
 const format = (val) => Number(val || 0).toFixed(2);
 const compactAccountText = (value) => String(value || '').trim();
-const accountFallback = (value) => compactAccountText(value) || 'No disponible';
 const accountJoinedName = (...values) => values.map(compactAccountText).filter(Boolean).join(' ');
 const accountOverlaySource = computed(() => ({ ...(props.student || {}), ...(props.student?.centralMatricula || {}) }));
-const accountCurpLabel = computed(() => accountFallback(accountOverlaySource.value.curp));
-const accountFatherLabel = computed(() => accountFallback(
+const accountCurpLabel = computed(() => compactAccountText(accountOverlaySource.value.curp));
+const accountFatherLabel = computed(() => compactAccountText(
   accountJoinedName(accountOverlaySource.value.nombrePadre, accountOverlaySource.value.apellidoPaternoPadre, accountOverlaySource.value.apellidoMaternoPadre) ||
   accountOverlaySource.value.nombrePadreCompleto ||
   accountOverlaySource.value.padre
 ));
-const accountMotherLabel = computed(() => accountFallback(
+const accountMotherLabel = computed(() => compactAccountText(
   accountJoinedName(accountOverlaySource.value.nombreMadre, accountOverlaySource.value.apellidoPaternoMadre, accountOverlaySource.value.apellidoMaternoMadre) ||
   accountOverlaySource.value.nombreMadreCompleto ||
   accountOverlaySource.value.madre
 ));
+const accountMetaItems = computed(() => [
+  { label: 'CURP', value: accountCurpLabel.value },
+  { label: 'Padre', value: accountFatherLabel.value },
+  { label: 'Madre', value: accountMotherLabel.value },
+].filter((item) => item.value));
 const normalizePhotoMatricula = (value) =>
   String(value || "")
     .trim()

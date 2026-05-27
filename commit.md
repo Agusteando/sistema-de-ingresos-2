@@ -1,1 +1,1 @@
-Refine admin matrícula enrichment, expediente progress, login updates modal, and account header family data
+Refina enriquecimiento financiero externo y corrige presentación de datos del alumno
