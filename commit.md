@@ -1,1 +1,1 @@
-fix: allow public login updates endpoint
+fix: load login updates from repository commit history
