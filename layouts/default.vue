@@ -175,16 +175,7 @@
         </div>
 
         <StudentsCacheSyncIndicator v-if="showFinancialNav" />
-        <button
-          v-if="showControlEscolarNav && route.path.startsWith('/control-escolar')"
-          type="button"
-          class="control-sync-diagnostics-button"
-          title="Diagnóstico de carga Control Escolar"
-          @click="openControlEscolarDiagnostics"
-        >
-          <LucideRefreshCw :size="15" />
-          <span>Sync Control</span>
-        </button>
+        <ControlEscolarSyncIndicator v-if="showControlEscolarNav" />
       </div>
         </div>
       </div>
@@ -282,6 +273,7 @@ import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import ContextMenu from '~/components/ContextMenu.vue'
 import SyncBadge from '~/components/SyncBadge.vue'
 import StudentsCacheSyncIndicator from '~/components/students/StudentsCacheSyncIndicator.vue'
+import ControlEscolarSyncIndicator from '~/components/students/ControlEscolarSyncIndicator.vue'
 import { usePlantelAgentStatuses } from '~/composables/usePlantelAgentStatuses'
 import { CICLOS_LIST, PLANTELES_LIST, normalizeCicloOption } from '~/utils/constants'
 
@@ -416,11 +408,6 @@ const selectPlantel = async (plantel) => {
   activePlantel.value = normalizedPlantel
   closePlantelMenu()
   await switchPlantel(normalizedPlantel)
-}
-
-const openControlEscolarDiagnostics = () => {
-  if (typeof window === 'undefined') return
-  window.dispatchEvent(new CustomEvent('control-escolar:open-sync-diagnostics'))
 }
 
 const toggleSidebar = () => {
@@ -1520,28 +1507,5 @@ const logout = async () => {
 }
 
 
-
-.control-sync-diagnostics-button {
-  width: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  margin-top: 8px;
-  padding: 9px 10px;
-  border: 1px solid rgba(218, 229, 240, 0.55);
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.42);
-  color: rgba(32, 55, 78, 0.78);
-  font-size: 0.72rem;
-  font-weight: 850;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.control-sync-diagnostics-button:hover {
-  background: rgba(255, 255, 255, 0.62);
-  color: #20374e;
-}
 
 </style>

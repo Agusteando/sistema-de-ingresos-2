@@ -241,7 +241,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const waitUntil = (event as any).waitUntil
     if (typeof waitUntil === 'function') waitUntil.call(event, refreshPromise)
-    else await refreshPromise
+    else void refreshPromise
   }
 
   return await attachCustomSectionsToStudents(mapped, user)

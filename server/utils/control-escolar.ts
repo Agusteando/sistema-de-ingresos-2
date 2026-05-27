@@ -1532,15 +1532,16 @@ const fetchAllNormalizedStudents = async (
       filters,
       scope,
     );
-    markStep("central-cache", "Leer cache central de base", cacheStartedAt, cachedBase.meta.freshness === "fresh" ? "ready" : "expired", {
+    const hasCentralCacheRows = cachedBase.rows.length > 0;
+    markStep("central-cache", "Leer cache central de base", cacheStartedAt, hasCentralCacheRows ? "ready" : cachedBase.meta.freshness === "empty" ? "empty" : "expired", {
       rows: cachedBase.rows.length,
       freshness: cachedBase.meta.freshness,
       refreshedAt: cachedBase.meta.cacheRefreshedAt,
       expiresAt: cachedBase.meta.cacheExpiresAt,
+      refreshDue: cachedBase.meta.freshness !== "fresh",
     });
-    const hasFreshCentralCache = cachedBase.meta.freshness === "fresh";
 
-    if (hasFreshCentralCache) {
+    if (hasCentralCacheRows) {
       const projectionStartedAt = Date.now();
       const localRows = await applyOperatorProjection(
         agentId,
@@ -1576,7 +1577,7 @@ const fetchAllNormalizedStudents = async (
             enrichedRows: 0,
             usersRows: 0,
             phase: "base",
-            diagnostics: diagnosticsPayload("central-cache-base", {
+            diagnostics: diagnosticsPayload(cachedBase.meta.freshness === "fresh" ? "central-cache-base" : "central-cache-stale-base", {
               localRows: localRows.length,
               overlayRows: 0,
               usersRows: 0,
@@ -1651,7 +1652,7 @@ const fetchAllNormalizedStudents = async (
           enrichedRows: overlayMap.size,
           usersRows: huskyPassMap.size,
           phase: "enriched",
-          diagnostics: diagnosticsPayload("central-cache-enriched", {
+          diagnostics: diagnosticsPayload(cachedBase.meta.freshness === "fresh" ? "central-cache-enriched" : "central-cache-stale-enriched", {
             localRows: localRows.length,
             overlayRows: overlayMap.size,
             usersRows: huskyPassMap.size,
