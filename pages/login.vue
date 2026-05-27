@@ -189,6 +189,76 @@
             Intentar de nuevo
           </button>
 
+
+          <section class="updates-panel" :class="{ open: updatesOpen }" aria-label="Actualizaciones del sistema">
+            <button
+              type="button"
+              class="updates-toggle"
+              :aria-expanded="updatesOpen ? 'true' : 'false'"
+              aria-controls="login-updates-body"
+              @click="toggleUpdatesPanel"
+            >
+              <span class="updates-title-group">
+                <span class="updates-label">Actualizaciones</span>
+                <span class="updates-meta">
+                  Última actualización {{ updatesLatestLabel }}
+                </span>
+              </span>
+              <span class="updates-count-group">
+                <span v-if="updatesPending" class="updates-loading-dot" aria-hidden="true" />
+                <strong>{{ updatesTotalLabel }}</strong>
+                <span class="updates-chevron" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </span>
+              </span>
+            </button>
+
+            <div v-if="updatesOpen" id="login-updates-body" class="updates-body">
+              <label class="updates-search" for="login-updates-search">
+                <span aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="m21 21-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" />
+                  </svg>
+                </span>
+                <input
+                  id="login-updates-search"
+                  v-model="updatesSearch"
+                  type="search"
+                  placeholder="Buscar actualización"
+                  autocomplete="off"
+                >
+              </label>
+
+              <div v-if="updatesError" class="updates-empty">{{ updatesError }}</div>
+              <div v-else-if="updatesPending && !filteredUpdates.length" class="updates-empty">Cargando actualizaciones…</div>
+              <div v-else-if="!filteredUpdates.length" class="updates-empty">No hay actualizaciones que coincidan.</div>
+
+              <div v-else class="updates-list">
+                <a
+                  v-for="commit in filteredUpdates"
+                  :key="commit.sha || `${commit.repo}-${commit.date}-${commit.title}`"
+                  class="update-item"
+                  :href="commit.url || commit.repoUrl || undefined"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <span class="update-topline">
+                    <span class="update-repo">{{ commit.repo }}</span>
+                    <span v-if="commit.isNew" class="update-new">NEW</span>
+                  </span>
+                  <strong>{{ commit.title }}</strong>
+                  <small>
+                    {{ commit.relativeDateLabel }}
+                    <span v-if="commit.shortSha"> · {{ commit.shortSha }}</span>
+                  </small>
+                </a>
+              </div>
+            </div>
+          </section>
+
           <p class="policy-line">
             <span aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
@@ -286,6 +356,63 @@ const loginErrorTitle = computed(() => (
 const isBusy = computed(() => ['server', 'session', 'redirecting'].includes(authPhase.value))
 const primaryButtonText = computed(() => (PHASES[authPhase.value] || PHASES.ready).button)
 const statusText = computed(() => (PHASES[authPhase.value] || PHASES.ready).status)
+
+const updatesOpen = ref(false)
+const updatesPending = ref(false)
+const updatesError = ref('')
+const updatesSearch = ref('')
+const loginUpdates = ref({
+  ok: false,
+  configured: false,
+  totalCount: 0,
+  lastUpdatedLabel: 'sin datos',
+  commits: []
+})
+const updatesNumberFormatter = new Intl.NumberFormat('es-MX')
+
+const updatesTotalLabel = computed(() => (
+  updatesPending.value && !loginUpdates.value.totalCount
+    ? 'Cargando'
+    : `${updatesNumberFormatter.format(Number(loginUpdates.value.totalCount || 0))} commits`
+))
+const updatesLatestLabel = computed(() => loginUpdates.value.lastUpdatedLabel || 'sin datos')
+const filteredUpdates = computed(() => {
+  const query = updatesSearch.value.trim().toLowerCase()
+  const commits = Array.isArray(loginUpdates.value.commits) ? loginUpdates.value.commits : []
+
+  if (!query) return commits
+
+  return commits.filter((commit) => {
+    const haystack = [commit.title, commit.description, commit.repo, commit.shortSha]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+
+    return haystack.includes(query)
+  })
+})
+
+const toggleUpdatesPanel = () => {
+  updatesOpen.value = !updatesOpen.value
+}
+
+const loadLoginUpdates = async () => {
+  updatesPending.value = true
+  updatesError.value = ''
+
+  try {
+    const result = await $fetch('/api/login/updates')
+    loginUpdates.value = result || loginUpdates.value
+
+    if (result?.error) {
+      updatesError.value = result.error
+    }
+  } catch (error) {
+    updatesError.value = error?.data?.message || error?.message || 'No se pudieron cargar las actualizaciones.'
+  } finally {
+    updatesPending.value = false
+  }
+}
 
 const setPhase = (phase, stepIndex = currentStepIndex.value) => {
   authPhase.value = phase
@@ -465,6 +592,7 @@ onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   loadPersistedPlantel()
   loadPlantelStatuses({ force: true, plantel: selectedPlantel.value })
+  loadLoginUpdates()
 
   if (!config.public.googleClientId) {
     errorMsg.value = 'Credenciales de Google no configuradas.'
@@ -1126,6 +1254,224 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+
+.updates-panel {
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(33, 130, 57, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(241, 250, 238, 0.96), rgba(247, 252, 255, 0.96));
+  box-shadow: 0 14px 30px rgba(22, 36, 63, 0.055);
+}
+
+.updates-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 0;
+  background: transparent;
+  padding: 15px 16px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.updates-title-group {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.updates-label {
+  color: #1f7836;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.updates-meta {
+  overflow: hidden;
+  color: #5f6b80;
+  font-size: 12.5px;
+  font-weight: 720;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.updates-count-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+  color: #14223d;
+}
+
+.updates-count-group strong {
+  border-radius: 999px;
+  background: #21843a;
+  padding: 7px 10px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(33, 132, 58, 0.22);
+}
+
+.updates-loading-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #21843a;
+  box-shadow: 0 0 0 0 rgba(33, 132, 58, 0.3);
+  animation: pulseDot 1.1s ease-in-out infinite;
+}
+
+.updates-chevron {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: #21843a;
+  transition: transform 0.18s ease;
+}
+
+.updates-chevron svg {
+  width: 18px;
+  height: 18px;
+}
+
+.updates-panel.open .updates-chevron {
+  transform: rotate(180deg);
+}
+
+.updates-body {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid rgba(33, 130, 57, 0.13);
+  padding: 0 14px 14px;
+}
+
+.updates-search {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  height: 40px;
+  margin-top: 12px;
+  border: 1px solid rgba(33, 130, 57, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 0 12px;
+  color: #21843a;
+}
+
+.updates-search svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+
+.updates-search input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #17263f;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 720;
+  outline: none;
+}
+
+.updates-search input::placeholder {
+  color: #8a95a8;
+}
+
+.updates-list {
+  display: grid;
+  max-height: 216px;
+  overflow-y: auto;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.update-item {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(216, 224, 234, 0.9);
+  border-radius: 13px;
+  background: #ffffff;
+  padding: 12px;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.update-item:hover {
+  border-color: rgba(33, 132, 58, 0.34);
+  box-shadow: 0 12px 24px rgba(22, 36, 63, 0.08);
+  transform: translateY(-1px);
+}
+
+.update-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.update-repo {
+  overflow: hidden;
+  color: #21843a;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-new {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #1f8f45, #73bd45);
+  padding: 4px 7px;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.update-item strong {
+  color: #17263f;
+  font-size: 13.5px;
+  font-weight: 850;
+  line-height: 1.3;
+}
+
+.update-item small {
+  color: #687489;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.updates-empty {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 13px;
+  color: #667185;
+  font-size: 12.5px;
+  font-weight: 720;
+  line-height: 1.4;
+}
+
 .policy-line {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
@@ -1164,6 +1510,17 @@ onBeforeUnmount(() => {
 .policy-line strong {
   color: #218239;
   font-weight: 850;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    opacity: 0.58;
+    box-shadow: 0 0 0 0 rgba(33, 132, 58, 0.3);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 7px rgba(33, 132, 58, 0);
+  }
 }
 
 @keyframes spin {
