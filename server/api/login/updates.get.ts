@@ -5,6 +5,12 @@ type GithubRequestOptions = {
   token: string
 }
 
+type GithubResponse<T> = {
+  data: T
+  headers: Record<string, string>
+  statusCode: number
+}
+
 type GithubUpdateItem = {
   sha: string
   shortSha: string
@@ -35,23 +41,47 @@ type LoginUpdatesPayload = {
   error?: string
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000
+type GithubRepo = {
+  full_name?: string
+  html_url?: string
+  fork?: boolean
+  archived?: boolean
+  pushed_at?: string
+  updated_at?: string
+  permissions?: Record<string, boolean>
+}
+
+type GithubCommit = {
+  sha?: string
+  html_url?: string
+  commit?: {
+    message?: string
+    author?: {
+      name?: string
+      date?: string
+    }
+    committer?: {
+      name?: string
+      date?: string
+    }
+  }
+  author?: {
+    login?: string
+  }
+  committer?: {
+    login?: string
+  }
+}
+
+const CACHE_TTL_MS = 10 * 60 * 1000
 const PER_PAGE = 100
-const MAX_EVENT_PAGES = 10
-const MAX_DISPLAY_UPDATES = 50
+const MAX_REPO_PAGES = 10
+const MAX_DISPLAY_UPDATES = 80
 const RECENT_DAYS = 7
-const EVENT_LOOKBACK_DAYS = 90
 
 let cachedPayload: { cacheKey: string; expiresAt: number; data: LoginUpdatesPayload } | null = null
 
 const nowIso = () => new Date().toISOString()
-
-const startOfLocalDay = (date = new Date()) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
-const subtractDays = (date: Date, days: number) => {
-  const copy = new Date(date)
-  copy.setDate(copy.getDate() - days)
-  return copy
-}
 
 const daysAgoFromDate = (value?: string | null) => {
   if (!value) return null
@@ -78,13 +108,11 @@ const splitMessage = (message?: string) => {
   }
 }
 
-const isAllZeroSha = (sha?: string | null) => typeof sha === 'string' && /^0+$/.test(sha)
-
 const emptyPayload = (username = '', error = '', warning = ''): LoginUpdatesPayload => {
   const payload: LoginUpdatesPayload = {
     ok: !error,
     configured: Boolean(username),
-    source: 'github-push-events',
+    source: 'github-repository-history',
     username,
     totalCount: 0,
     lastUpdatedAt: null,
@@ -100,7 +128,16 @@ const emptyPayload = (username = '', error = '', warning = ''): LoginUpdatesPayl
   return payload
 }
 
-const requestJson = <T>(reqPath: string, options: GithubRequestOptions): Promise<T> => {
+const toHeaderRecord = (headers: Record<string, string | string[] | undefined>) => {
+  const record: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) record[key.toLowerCase()] = value.join(', ')
+    else if (value) record[key.toLowerCase()] = value
+  }
+  return record
+}
+
+const requestGithub = <T>(reqPath: string, options: GithubRequestOptions): Promise<GithubResponse<T>> => {
   return new Promise((resolve, reject) => {
     const req = https.request(
       {
@@ -135,7 +172,11 @@ const requestJson = <T>(reqPath: string, options: GithubRequestOptions): Promise
             return
           }
 
-          resolve(data as T)
+          resolve({
+            data: data as T,
+            headers: toHeaderRecord(res.headers),
+            statusCode: res.statusCode || 200
+          })
         })
       }
     )
@@ -143,6 +184,11 @@ const requestJson = <T>(reqPath: string, options: GithubRequestOptions): Promise
     req.on('error', reject)
     req.end()
   })
+}
+
+const requestJson = async <T>(reqPath: string, options: GithubRequestOptions) => {
+  const response = await requestGithub<T>(reqPath, options)
+  return response.data
 }
 
 const getAuthenticatedLogin = async (options: GithubRequestOptions) => {
@@ -156,125 +202,135 @@ const getAuthenticatedLogin = async (options: GithubRequestOptions) => {
   }
 }
 
-const fetchPushEventsForRecentWindow = async (options: GithubRequestOptions) => {
-  const events: any[] = []
-  const start = startOfLocalDay(subtractDays(new Date(), EVENT_LOOKBACK_DAYS))
-  const endpoint = options.token
-    ? `/users/${encodeURIComponent(options.username)}/events`
-    : `/users/${encodeURIComponent(options.username)}/events/public`
-
-  for (let page = 1; page <= MAX_EVENT_PAGES; page += 1) {
-    const batch = await requestJson<any[]>(`${endpoint}?per_page=${PER_PAGE}&page=${page}`, options)
-
-    if (!Array.isArray(batch) || batch.length === 0) break
-
-    let sawOlderThanTarget = false
-
-    for (const event of batch) {
-      const createdAt = new Date(event?.created_at || '')
-
-      if (Number.isFinite(createdAt.getTime()) && createdAt < start) {
-        sawOlderThanTarget = true
-        continue
-      }
-
-      if (event?.type === 'PushEvent') {
-        events.push(event)
-      }
-    }
-
-    if (sawOlderThanTarget || batch.length < PER_PAGE) break
-  }
-
-  return events
+const parseLastPage = (linkHeader?: string) => {
+  if (!linkHeader) return null
+  const match = linkHeader.match(/[?&]page=(\d+)[^>]*>;\s*rel="last"/)
+  return match ? Number(match[1]) : null
 }
 
-const fetchCompareUpdates = async (repoFullName: string, before: string, head: string, options: GithubRequestOptions) => {
-  if (!repoFullName || !before || !head || before === head || isAllZeroSha(before)) {
-    return []
+const fetchRepoPage = async (page: number, options: GithubRequestOptions) => {
+  const path = options.token
+    ? `/user/repos?affiliation=owner,collaborator,organization_member&visibility=all&sort=pushed&direction=desc&per_page=${PER_PAGE}&page=${page}`
+    : `/users/${encodeURIComponent(options.username)}/repos?type=all&sort=pushed&direction=desc&per_page=${PER_PAGE}&page=${page}`
+
+  return requestGithub<GithubRepo[]>(path, options)
+}
+
+const fetchRepositories = async (options: GithubRequestOptions) => {
+  const repos: GithubRepo[] = []
+
+  for (let page = 1; page <= MAX_REPO_PAGES; page += 1) {
+    const response = await fetchRepoPage(page, options)
+    const batch = Array.isArray(response.data) ? response.data : []
+
+    repos.push(...batch)
+
+    const lastPage = parseLastPage(response.headers.link)
+    if (!lastPage || page >= lastPage || batch.length < PER_PAGE) break
   }
+
+  const seen = new Set<string>()
+
+  return repos
+    .filter((repo) => repo?.full_name && !repo.archived)
+    .filter((repo) => {
+      const name = String(repo.full_name || '')
+      if (seen.has(name)) return false
+      seen.add(name)
+      return true
+    })
+    .sort((a, b) => Date.parse(String(b.pushed_at || b.updated_at || '')) - Date.parse(String(a.pushed_at || a.updated_at || '')))
+}
+
+const commitDate = (commit: GithubCommit) => (
+  commit?.commit?.committer?.date
+  || commit?.commit?.author?.date
+  || null
+)
+
+const commitAuthor = (commit: GithubCommit, fallback: string) => (
+  commit?.author?.login
+  || commit?.committer?.login
+  || commit?.commit?.author?.name
+  || commit?.commit?.committer?.name
+  || fallback
+)
+
+const fetchAuthorCommitsForRepo = async (repo: GithubRepo, options: GithubRequestOptions) => {
+  const fullName = String(repo.full_name || '')
+  if (!fullName) return { total: 0, updates: [] as GithubUpdateItem[] }
+
+  const basePath = `/repos/${fullName}/commits?author=${encodeURIComponent(options.username)}&per_page=${PER_PAGE}`
 
   try {
-    const data = await requestJson<any>(
-      `/repos/${repoFullName}/compare/${encodeURIComponent(before)}...${encodeURIComponent(head)}`,
-      options
-    )
+    const firstPage = await requestGithub<GithubCommit[]>(`${basePath}&page=1`, options)
+    const firstCommits = Array.isArray(firstPage.data) ? firstPage.data : []
+    const lastPage = parseLastPage(firstPage.headers.link) || (firstCommits.length === PER_PAGE ? 1 : null)
+    let total = firstCommits.length
 
-    const items = Array.isArray(data?.commits) ? data.commits : []
-    return items
-      .filter((item: any) => item?.sha)
-      .map((item: any) => ({
-        sha: String(item?.sha || ''),
-        message: String(item?.commit?.message || ''),
-        author: String(item?.author?.login || item?.commit?.author?.name || ''),
-        url: String(item?.html_url || '')
-      }))
+    if (lastPage && lastPage > 1) {
+      const lastPageResponse = await requestGithub<GithubCommit[]>(`${basePath}&page=${lastPage}`, options)
+      const lastCommits = Array.isArray(lastPageResponse.data) ? lastPageResponse.data : []
+      total = ((lastPage - 1) * PER_PAGE) + lastCommits.length
+    }
+
+    const repoUrl = String(repo.html_url || `https://github.com/${fullName}`)
+    const updates = firstCommits
+      .filter((commit) => commit?.sha)
+      .map((commit) => {
+        const sha = String(commit.sha || '')
+        const date = commitDate(commit) || String(repo.pushed_at || '')
+        const daysAgo = daysAgoFromDate(date)
+        const message = splitMessage(commit?.commit?.message)
+
+        return {
+          sha,
+          shortSha: sha.slice(0, 7),
+          title: message.title,
+          description: message.description,
+          repo: fullName,
+          repoUrl,
+          url: String(commit.html_url || `${repoUrl}/commit/${sha}`),
+          author: commitAuthor(commit, options.username),
+          date,
+          daysAgo,
+          relativeDateLabel: formatRelativeDays(daysAgo),
+          isNew: daysAgo !== null && daysAgo <= RECENT_DAYS
+        }
+      })
+
+    return { total, updates }
   } catch {
-    return []
+    return { total: 0, updates: [] as GithubUpdateItem[] }
   }
 }
 
-const updatesFromPayload = (event: any) => {
-  const items = Array.isArray(event?.payload?.commits) ? event.payload.commits : []
-
-  return items
-    .filter((item: any) => item?.sha)
-    .map((item: any) => ({
-      sha: String(item.sha || ''),
-      message: String(item.message || ''),
-      author: String(item?.author?.name || item?.author?.email || ''),
-      url: ''
-    }))
-}
-
-const collectUpdates = async (events: any[], options: GithubRequestOptions) => {
-  const seen = new Set<string>()
+const collectRepositoryCommitHistory = async (options: GithubRequestOptions) => {
+  const repos = await fetchRepositories(options)
+  const seenUpdates = new Set<string>()
+  let totalCount = 0
   const updates: GithubUpdateItem[] = []
 
-  for (const event of events) {
-    const repo = String(event?.repo?.name || '')
-    if (!repo) continue
+  // Sequential requests are intentional here. They avoid bursty rate-limit failures on the login page.
+  for (const repo of repos) {
+    const result = await fetchAuthorCommitsForRepo(repo, options)
+    totalCount += result.total
 
-    let items = await fetchCompareUpdates(repo, event?.payload?.before, event?.payload?.head, options)
-
-    if (items.length === 0) {
-      items = updatesFromPayload(event)
-    }
-
-    if (items.length === 0) continue
-
-    for (const item of items) {
-      const sha = String(item.sha || '')
-      if (!sha) continue
-
-      const key = `${repo}:${sha}`
-      if (seen.has(key)) continue
-      seen.add(key)
-
-      const date = String(event?.created_at || '')
-      const daysAgo = daysAgoFromDate(date)
-      const message = splitMessage(item.message)
-      const repoUrl = `https://github.com/${repo}`
-      const url = item.url || `${repoUrl}/commit/${sha}`
-
-      updates.push({
-        sha,
-        shortSha: sha.slice(0, 7),
-        title: message.title,
-        description: message.description,
-        repo,
-        repoUrl,
-        url,
-        author: item.author || options.username,
-        date,
-        daysAgo,
-        relativeDateLabel: formatRelativeDays(daysAgo),
-        isNew: daysAgo !== null && daysAgo <= RECENT_DAYS
-      })
+    for (const update of result.updates) {
+      const key = `${update.repo}:${update.sha}`
+      if (seenUpdates.has(key)) continue
+      seenUpdates.add(key)
+      updates.push(update)
     }
   }
 
-  return updates.sort((a, b) => Date.parse(b.date || '') - Date.parse(a.date || ''))
+  updates.sort((a, b) => Date.parse(b.date || '') - Date.parse(a.date || ''))
+
+  return {
+    repoCount: repos.length,
+    totalCount,
+    updates: updates.slice(0, MAX_DISPLAY_UPDATES)
+  }
 }
 
 export default defineEventHandler(async (event): Promise<LoginUpdatesPayload> => {
@@ -283,7 +339,7 @@ export default defineEventHandler(async (event): Promise<LoginUpdatesPayload> =>
   const config = useRuntimeConfig()
   const username = String(process.env.GITHUB_USERNAME || config.githubUsername || '').trim()
   const token = String(process.env.GITHUB_TOKEN || config.githubToken || '').trim()
-  const cacheKey = `${username}:${token ? 'auth' : 'public'}`
+  const cacheKey = `${username}:${token ? 'auth' : 'public'}:repository-history`
 
   if (!username) {
     return emptyPayload('', 'GITHUB_USERNAME no está configurado.')
@@ -301,23 +357,21 @@ export default defineEventHandler(async (event): Promise<LoginUpdatesPayload> =>
       ? `El token pertenece a ${authLogin}; las actualizaciones privadas pueden no coincidir con ${username}.`
       : ''
 
-    const events = await fetchPushEventsForRecentWindow(options)
-    const updates = await collectUpdates(events, options)
-    const displayUpdates = updates.slice(0, MAX_DISPLAY_UPDATES)
-    const latest = updates[0] || null
+    const result = await collectRepositoryCommitHistory(options)
+    const latest = result.updates[0] || null
     const lastUpdatedDaysAgo = latest ? latest.daysAgo : null
 
     const payload: LoginUpdatesPayload = {
       ok: true,
       configured: true,
-      source: 'github-push-events',
+      source: 'github-repository-history',
       username,
-      totalCount: updates.length,
+      totalCount: result.totalCount,
       lastUpdatedAt: latest?.date || null,
       lastUpdatedDaysAgo,
       lastUpdatedLabel: formatRelativeDays(lastUpdatedDaysAgo),
       fetchedAt: nowIso(),
-      updates: displayUpdates,
+      updates: result.updates,
       ...(warning ? { warning } : {})
     }
 
