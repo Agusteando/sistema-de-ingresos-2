@@ -1,7 +1,21 @@
 import { controlEscolarCentralQuery, getCentralTableColumns } from './control-escolar-central'
 
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
-const normalizeText = (value: unknown, maxLength = 500) => String(value ?? '').trim().slice(0, maxLength)
+const stringifyScalar = (value: unknown): string => {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) return value.map(stringifyScalar).filter(Boolean).join(' / ')
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    for (const key of ['label', 'nombre', 'name', 'value', 'servicio', 'descripcion', 'description', 'text', 'title']) {
+      const text = stringifyScalar(record[key])
+      if (text) return text
+    }
+    return ''
+  }
+  return ''
+}
+const normalizeText = (value: unknown, maxLength = 500) => stringifyScalar(value).trim().slice(0, maxLength)
 const normalizeUpper = (value: unknown, maxLength = 500) => normalizeText(value, maxLength).toUpperCase()
 const normalizeLower = (value: unknown, maxLength = 500) => normalizeText(value, maxLength).toLowerCase()
 const firstText = (...values: unknown[]) => {
@@ -32,8 +46,12 @@ const MATRICULA_COLUMNS = [
   'curp',
   'email_padre',
   'email_madre',
+  'correo_padre',
+  'correo_madre',
   'telefono_padre',
   'telefono_madre',
+  'celular_padre',
+  'celular_madre',
   'interno',
   'baja',
   'motivo_baja',
@@ -42,9 +60,18 @@ const MATRICULA_COLUMNS = [
   'nombre_padre',
   'apellido_paterno_padre',
   'apellido_materno_padre',
+  'nombre_padre_completo',
+  'padre',
+  'tutor',
+  'padre_tutor',
+  'ocupacion_padre',
+  'ocupacion_tutor',
   'nombre_madre',
   'apellido_paterno_madre',
   'apellido_materno_madre',
+  'nombre_madre_completo',
+  'madre',
+  'ocupacion_madre',
   'servicio',
   'direccion',
   'domicilio',
@@ -78,10 +105,16 @@ export const fetchCentralMatriculaOverlay = async (matricula: string) => {
   if (!raw) return null
 
   const padre = firstText(
-    [raw.nombre_padre, raw.apellido_paterno_padre, raw.apellido_materno_padre].map((value) => normalizeText(value)).filter(Boolean).join(' ')
+    [raw.nombre_padre, raw.apellido_paterno_padre, raw.apellido_materno_padre].map((value) => normalizeText(value)).filter(Boolean).join(' '),
+    raw.nombre_padre_completo,
+    raw.padre,
+    raw.tutor,
+    raw.padre_tutor
   )
   const madre = firstText(
-    [raw.nombre_madre, raw.apellido_paterno_madre, raw.apellido_materno_madre].map((value) => normalizeText(value)).filter(Boolean).join(' ')
+    [raw.nombre_madre, raw.apellido_paterno_madre, raw.apellido_materno_madre].map((value) => normalizeText(value)).filter(Boolean).join(' '),
+    raw.nombre_madre_completo,
+    raw.madre
   )
   const apellidoPaterno = normalizeText(raw.apellido_paterno)
   const apellidoMaterno = normalizeText(raw.apellido_materno)
@@ -104,19 +137,23 @@ export const fetchCentralMatriculaOverlay = async (matricula: string) => {
       nombreCompleto: fullName,
       fullName,
       curp: normalizeUpper(raw.curp, 18),
-      telefono: firstText(raw.telefono_padre, raw.telefono_madre),
-      correo: firstLower(raw.email_padre, raw.email_madre),
+      telefono: firstText(raw.telefono_padre, raw.celular_padre, raw.telefono_madre, raw.celular_madre),
+      correo: firstLower(raw.email_padre, raw.correo_padre, raw.email_madre, raw.correo_madre),
       padre,
-      telefonoPadre: normalizeText(raw.telefono_padre),
-      telefonoMadre: normalizeText(raw.telefono_madre),
-      emailPadre: normalizeLower(raw.email_padre),
-      emailMadre: normalizeLower(raw.email_madre),
+      telefonoPadre: firstText(raw.telefono_padre, raw.celular_padre),
+      telefonoMadre: firstText(raw.telefono_madre, raw.celular_madre),
+      emailPadre: firstLower(raw.email_padre, raw.correo_padre),
+      emailMadre: firstLower(raw.email_madre, raw.correo_madre),
       nombrePadre: normalizeText(raw.nombre_padre),
       apellidoPaternoPadre: normalizeText(raw.apellido_paterno_padre),
       apellidoMaternoPadre: normalizeText(raw.apellido_materno_padre),
+      nombrePadreCompleto: normalizeText(raw.nombre_padre_completo),
+      ocupacionPadre: firstText(raw.ocupacion_padre, raw.ocupacion_tutor),
       nombreMadre: normalizeText(raw.nombre_madre),
       apellidoPaternoMadre: normalizeText(raw.apellido_paterno_madre),
       apellidoMaternoMadre: normalizeText(raw.apellido_materno_madre),
+      nombreMadreCompleto: normalizeText(raw.nombre_madre_completo),
+      ocupacionMadre: normalizeText(raw.ocupacion_madre),
       interno: normalizeText(raw.interno),
       servicio: normalizeText(raw.servicio),
       direccion: firstText(raw.direccion, raw.domicilio, raw.calle),

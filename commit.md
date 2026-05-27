@@ -1,1 +1,1 @@
-Enriquece expediente administrativo con matrícula centralizada sin bloquear la vista
+feat: refine admin student enrichment loading and display

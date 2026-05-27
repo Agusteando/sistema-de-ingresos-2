@@ -6,11 +6,11 @@
           <div class="operator-info-heading">
             <span>Vista de operador</span>
             <h2>Expediente del alumno</h2>
-            <p>Consulta de solo lectura del expediente ampliado desde base del plantel y matrícula centralizada.</p>
+            <p>Consulta de solo lectura del expediente completo del alumno.</p>
           </div>
 
           <div class="operator-info-actions">
-            <button type="button" class="operator-action" :disabled="loading" @click="loadDetail">
+            <button type="button" class="operator-action" :disabled="loading" @click="loadDetail({ bypassCache: true })">
               <LucideRefreshCw :size="18" :class="{ spinning: loading }" />
               Actualizar
             </button>
@@ -29,7 +29,7 @@
           <span>{{ error }}</span>
         </div>
 
-        <div class="operator-hero">
+        <div v-if="readyToRender" class="operator-hero">
           <div class="operator-avatar" aria-hidden="true">
             <span>{{ initials }}</span>
           </div>
@@ -38,8 +38,7 @@
             <h3>{{ fullName }}</h3>
             <div class="operator-chips">
               <span class="chip matricula">{{ safeMatricula }}</span>
-              <span class="chip status"><span></span>{{ displayStatus }}</span>
-              <span class="chip source"><LucideDatabase :size="15" /> {{ sourceLabel }}</span>
+              <span class="chip complete"><LucideCheckCircle2 :size="15" /> {{ sourceLabel }}</span>
             </div>
           </div>
 
@@ -67,12 +66,28 @@
           <span class="operator-watermark" aria-hidden="true">{{ initials }}</span>
         </div>
 
-        <div v-if="loading" class="operator-inline-loading">
-          <span class="operator-spinner" aria-hidden="true"></span>
-          Enriqueciendo expediente desde matrícula centralizada…
+        <div v-if="!readyToRender && !error" class="operator-loading-stage" aria-live="polite">
+          <div class="operator-loading-copy">
+            <span class="operator-spinner large" aria-hidden="true"></span>
+            <div>
+              <strong>Preparando expediente completo</strong>
+              <p>Estamos cargando los datos del alumno. La información aparecerá cuando esté lista.</p>
+            </div>
+          </div>
+          <div class="operator-skeleton-hero">
+            <span class="skeleton-avatar"></span>
+            <div class="skeleton-lines">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+          <div class="operator-skeleton-grid">
+            <span v-for="index in 4" :key="index" class="operator-skeleton-panel"></span>
+          </div>
         </div>
 
-        <div class="operator-grid">
+        <div v-if="readyToRender" class="operator-grid">
           <article class="operator-panel summary-panel">
             <h4><LucideGraduationCap :size="21" /> Resumen escolar</h4>
             <div class="summary-grid">
@@ -123,7 +138,7 @@
           </article>
 
           <article class="operator-panel sync-panel">
-            <h4><LucideRefreshCw :size="21" /> Sistema / sincronización</h4>
+            <h4><LucideRefreshCw :size="21" /> Registro del expediente</h4>
             <dl class="info-table sync-table">
               <div v-for="row in syncRows" :key="row.label">
                 <dt>{{ row.label }}</dt>
@@ -178,27 +193,82 @@ const copied = ref(false)
 let requestId = 0
 let copyTimer = null
 
-const hasValue = (value) => value !== null && value !== undefined && String(value).trim() !== ''
-const firstValue = (...values) => values.find(hasValue) || ''
-const fallbackText = (value, fallback = 'Sin registrar') => hasValue(value) ? String(value) : fallback
+const displayText = (value) => {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value).trim()
+  if (Array.isArray(value)) return value.map(displayText).filter(Boolean).join(' / ')
+  if (typeof value === 'object') {
+    for (const key of ['label', 'nombre', 'name', 'value', 'servicio', 'descripcion', 'description', 'text', 'title']) {
+      const text = displayText(value?.[key])
+      if (text) return text
+    }
+    return ''
+  }
+  return ''
+}
+const hasValue = (value) => displayText(value) !== ''
+const firstValue = (...values) => values.map(displayText).find(Boolean) || ''
+const fallbackText = (value, fallback = 'Sin registrar') => hasValue(value) ? displayText(value) : fallback
 const titleCase = (value) => {
-  const text = String(value || '').trim()
+  const text = displayText(value)
   if (!text) return ''
   return text.toLocaleLowerCase('es-MX').replace(/(^|\s|\/|-)(\p{L})/gu, (_, prefix, letter) => `${prefix}${letter.toLocaleUpperCase('es-MX')}`)
 }
 
-const loadDetail = async () => {
+const OPERATOR_DETAIL_CACHE_PREFIX = 'student-operator-detail:v3:'
+const OPERATOR_DETAIL_CACHE_MAX_AGE_MS = 5 * 60 * 1000
+
+const operatorCacheKey = computed(() => `${OPERATOR_DETAIL_CACHE_PREFIX}${safeMatricula.value}`)
+
+const readCachedDetail = () => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage?.getItem(operatorCacheKey.value)
+    if (!raw) return null
+    const payload = JSON.parse(raw)
+    if (!payload || typeof payload.updatedAt !== 'number' || !payload.detail) return null
+    if (Date.now() - payload.updatedAt > OPERATOR_DETAIL_CACHE_MAX_AGE_MS) {
+      window.sessionStorage.removeItem(operatorCacheKey.value)
+      return null
+    }
+    return payload.detail
+  } catch (_) {
+    return null
+  }
+}
+
+const writeCachedDetail = (value) => {
+  if (typeof window === 'undefined' || !value) return
+  try {
+    window.sessionStorage?.setItem(operatorCacheKey.value, JSON.stringify({ updatedAt: Date.now(), detail: value }))
+  } catch (_) {}
+}
+
+const loadDetail = async (options = {}) => {
   const matricula = String(props.student?.matricula || '').trim()
   if (!matricula) return
+
+  const bypassCache = Boolean(options?.bypassCache)
+  if (!bypassCache) {
+    const cached = readCachedDetail()
+    if (cached) {
+      detail.value = cached
+      error.value = ''
+      loading.value = false
+      return
+    }
+  }
 
   const currentId = ++requestId
   loading.value = true
   error.value = ''
+  if (!detail.value) detail.value = null
 
   try {
     const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/operator-info`)
     if (currentId !== requestId) return
     detail.value = response || null
+    writeCachedDetail(detail.value)
   } catch (err) {
     if (currentId !== requestId) return
     detail.value = null
@@ -212,7 +282,6 @@ const source = computed(() => ({ ...(props.student || {}), ...(detail.value || {
 
 const safeMatricula = computed(() => fallbackText(firstValue(source.value.matricula, props.student?.matricula), 'Sin matrícula'))
 const fullName = computed(() => fallbackText(firstValue(source.value.fullName, source.value.nombreCompleto, source.value.nombre, props.student?.nombre), 'Alumno'))
-const displayStatus = computed(() => titleCase(firstValue(source.value.status, source.value.estatus, 'Activo')))
 const displayNivel = computed(() => titleCase(firstValue(source.value.nivel, props.student?.nivel)) || 'Nivel')
 const displayGrado = computed(() => titleCase(firstValue(source.value.grado, props.student?.grado)) || 'Grado')
 const displayGrupo = computed(() => {
@@ -221,7 +290,8 @@ const displayGrupo = computed(() => {
 })
 const displayServicio = computed(() => titleCase(firstValue(source.value.servicio, source.value.program, source.value.nivel, props.student?.servicio)))
 const displayServiceBadge = computed(() => titleCase(firstValue(source.value.tipoIngreso, source.value.tipo_ingreso, source.value.ingreso, props.student?.tipoIngreso, 'Externo')))
-const sourceLabel = computed(() => detail.value?.detailSource === 'base+matricula' ? 'Base + matrícula' : loading.value ? 'Base local + enriqueciendo' : 'Base local')
+const sourceLabel = computed(() => 'Expediente completo')
+const readyToRender = computed(() => Boolean(detail.value) && !error.value)
 
 const initials = computed(() => {
   const paternal = firstValue(source.value.apellidoPaterno, source.value.apellido_paterno)
@@ -247,15 +317,14 @@ const schoolSummary = computed(() => [
   { label: 'Grupo', value: fallbackText(firstValue(source.value.group, source.value.grupo)), icon: LucideUsersRound },
   { label: 'Servicio', value: fallbackText(displayServicio.value), icon: LucideBadgeCheck },
   { label: 'Interno', value: fallbackText(source.value.interno), icon: LucideDatabase },
-  { label: 'Estatus', value: fallbackText(displayStatus.value), icon: LucideShieldCheck },
-  { label: 'Fuente', value: detail.value?.detailSource === 'base+matricula' ? 'base + matrícula' : 'base', icon: LucideDatabase }
+
 ])
 
 const parentPhone = computed(() => fallbackText(firstValue(source.value.telefonoPadre, source.value.phone, source.value.telefono)))
 const parentEmail = computed(() => fallbackText(firstValue(source.value.emailPadre, source.value.email, source.value.correo)))
 const parentOccupation = computed(() => fallbackText(firstValue(source.value.ocupacionPadre, source.value.ocupacionTutor)))
-const motherEmail = computed(() => fallbackText(source.value.emailMadre))
-const motherPhone = computed(() => fallbackText(source.value.telefonoMadre))
+const motherEmail = computed(() => fallbackText(firstValue(source.value.emailMadre, source.value.correoMadre)))
+const motherPhone = computed(() => fallbackText(firstValue(source.value.telefonoMadre, source.value.celularMadre)))
 const motherOccupation = computed(() => fallbackText(source.value.ocupacionMadre))
 
 const formatDate = (value) => {
@@ -272,11 +341,10 @@ const formatDate = (value) => {
 }
 
 const syncRows = computed(() => [
-  { label: 'Fuente de datos', value: detail.value?.detailSource === 'base+matricula' ? 'Base local + matrícula centralizada' : 'Base local (plantel)' },
-  { label: 'Estado de sincronización', value: detail.value?.detailSource === 'base+matricula' ? 'Sincronizado' : 'Base local', kind: 'status' },
+  { label: 'Estado del expediente', value: 'Listo', kind: 'status' },
   { label: 'Última actualización', value: formatDate(source.value.updatedAt) },
-  { label: 'Referencia centralizada', value: detail.value?.rawMatricula && Object.keys(detail.value.rawMatricula).length ? 'Expediente en matrícula centralizada' : 'Sin overlay centralizado' },
-  { label: 'Notas', value: 'Consulta de solo lectura. Datos consolidados.' }
+  { label: 'Modo', value: 'Solo lectura' },
+  { label: 'Notas', value: 'Información consolidada para consulta operativa.' }
 ])
 
 const copyMatricula = async () => {
@@ -520,10 +588,10 @@ watch(() => props.student?.matricula, () => {
   box-shadow: 0 0 0 4px rgba(34, 145, 35, .08);
 }
 
-.chip.source {
-  color: #3162c5;
-  background: rgba(247, 250, 255, .96);
-  border-color: rgba(198, 216, 247, .8);
+.chip.complete {
+  color: #245f36;
+  background: rgba(239, 251, 242, .96);
+  border-color: rgba(186, 226, 195, .86);
 }
 
 .operator-academic-strip {
@@ -793,6 +861,87 @@ watch(() => props.student?.matricula, () => {
   font-weight: 900;
 }
 
+
+.operator-loading-stage {
+  margin: 0 2rem 2rem;
+  display: grid;
+  gap: .95rem;
+}
+.operator-loading-copy {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  padding: .9rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(189, 218, 198, .86);
+  background: linear-gradient(135deg, rgba(246, 253, 248, .96), rgba(255,255,255,.94));
+  color: #214d30;
+  box-shadow: 0 14px 28px rgba(24, 64, 38, .05);
+}
+.operator-loading-copy strong {
+  display: block;
+  font-size: .9rem;
+  font-weight: 950;
+}
+.operator-loading-copy p {
+  margin: .18rem 0 0;
+  color: #6f7d73;
+  font-size: .76rem;
+  font-weight: 720;
+}
+.operator-spinner.large {
+  width: 1.45rem;
+  height: 1.45rem;
+  border-width: 3px;
+}
+.operator-skeleton-hero,
+.operator-skeleton-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(219, 228, 223, .92);
+  background: rgba(255,255,255,.88);
+  box-shadow: 0 14px 32px rgba(23, 49, 33, .04);
+}
+.operator-skeleton-hero {
+  min-height: 136px;
+  border-radius: 17px;
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1rem 1.25rem;
+}
+.skeleton-avatar,
+.skeleton-lines span,
+.operator-skeleton-panel {
+  background: linear-gradient(90deg, rgba(232,239,234,.82), rgba(249,252,249,.98), rgba(232,239,234,.82));
+  background-size: 220% 100%;
+  animation: operator-shimmer 1.08s ease-in-out infinite;
+}
+.skeleton-avatar {
+  width: 5.8rem;
+  height: 5.8rem;
+  border-radius: 999px;
+}
+.skeleton-lines { display: grid; gap: .62rem; }
+.skeleton-lines span { display: block; height: .85rem; border-radius: 999px; }
+.skeleton-lines span:first-child { width: 46%; height: 1.15rem; }
+.skeleton-lines span:nth-child(2) { width: 66%; }
+.skeleton-lines span:nth-child(3) { width: 36%; }
+.operator-skeleton-grid {
+  display: grid;
+  grid-template-columns: 1.02fr .98fr;
+  gap: .9rem 1rem;
+}
+.operator-skeleton-panel {
+  min-height: 185px;
+  border-radius: 17px;
+}
+@keyframes operator-shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
 @media (max-height: 840px), (max-width: 1180px) {
   .operator-info-modal {
     width: min(1030px, calc(100vw - 2rem));
@@ -824,7 +973,7 @@ watch(() => props.student?.matricula, () => {
   .operator-info-actions { display: grid; grid-template-columns: 1fr 1fr auto; gap: .5rem; }
   .operator-hero { grid-template-columns: 4.8rem minmax(0, 1fr); grid-template-rows: auto auto auto; }
   .operator-academic-strip, .operator-service-pill { grid-column: 1 / -1; justify-self: stretch; }
-  .operator-grid { grid-template-columns: 1fr; grid-template-rows: none; }
+  .operator-grid, .operator-skeleton-grid { grid-template-columns: 1fr; grid-template-rows: none; }
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .family-grid { grid-template-columns: 1fr; }
 }

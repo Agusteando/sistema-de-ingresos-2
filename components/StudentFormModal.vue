@@ -504,6 +504,7 @@ const centralOverlayLoading = ref(false);
 const centralOverlayApplied = ref(false);
 const centralOverlayAvailable = ref(false);
 const centralOverlayError = ref('');
+const userTouchedForm = ref(false);
 const showCyclePicker = ref(false);
 const showOlderCycles = ref(false);
 const cycleChangedByUser = ref(false);
@@ -693,22 +694,55 @@ const resultAnimationKey = computed(
 const centralOverlayStatusClass = computed(() => {
   if (centralOverlayLoading.value) return 'loading';
   if (centralOverlayApplied.value) return 'ready';
-  if (centralOverlayAvailable.value && hasUnsavedChanges.value) return 'pending';
+  if (centralOverlayAvailable.value && userTouchedForm.value) return 'pending';
   if (centralOverlayError.value) return 'muted';
   return 'muted';
 });
 
 const centralOverlayStatusLabel = computed(() => {
-  if (centralOverlayLoading.value) return 'Consultando matrícula centralizada…';
-  if (centralOverlayApplied.value) return 'Datos enriquecidos desde matrícula centralizada.';
-  if (centralOverlayAvailable.value && hasUnsavedChanges.value) return 'Matrícula centralizada disponible; no se aplicó para no sobrescribir cambios.';
-  if (centralOverlayError.value) return 'Matrícula centralizada no disponible; se muestran datos de base local.';
-  return 'Mostrando base local mientras se consulta matrícula centralizada.';
+  if (centralOverlayLoading.value) return 'Preparando datos completos…';
+  if (centralOverlayApplied.value) return 'Datos completos listos.';
+  if (centralOverlayAvailable.value && userTouchedForm.value) return 'Datos completos disponibles; no se aplicaron para proteger cambios en edición.';
+  if (centralOverlayError.value) return 'No se pudieron cargar datos completos; puedes continuar con la información visible.';
+  return 'Preparando datos completos…';
 });
+
+const firstFilled = (...values) => values.find((value) => String(value || '').trim()) || '';
+const CENTRAL_OVERLAY_CACHE_PREFIX = 'student-central-overlay:v3:';
+const CENTRAL_OVERLAY_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+
+const centralOverlayCacheKey = computed(() => {
+  const matricula = String(props.student?.matricula || form.value.matricula || '').trim();
+  return `${CENTRAL_OVERLAY_CACHE_PREFIX}${matricula}`;
+});
+
+const readCentralOverlayCache = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage?.getItem(centralOverlayCacheKey.value);
+    if (!raw) return null;
+    const payload = JSON.parse(raw);
+    if (!payload || typeof payload.updatedAt !== 'number' || !payload.overlayStudent) return null;
+    if (Date.now() - payload.updatedAt > CENTRAL_OVERLAY_CACHE_MAX_AGE_MS) {
+      window.sessionStorage.removeItem(centralOverlayCacheKey.value);
+      return null;
+    }
+    return payload.overlayStudent;
+  } catch (_) {
+    return null;
+  }
+};
+
+const writeCentralOverlayCache = (overlayStudent) => {
+  if (typeof window === 'undefined' || !overlayStudent) return;
+  try {
+    window.sessionStorage?.setItem(centralOverlayCacheKey.value, JSON.stringify({ updatedAt: Date.now(), overlayStudent }));
+  } catch (_) {}
+};
 
 const applyCentralOverlayToForm = (overlayStudent) => {
   if (!overlayStudent || typeof overlayStudent !== 'object') return false;
-  if (hasUnsavedChanges.value || loading.value) {
+  if (userTouchedForm.value || loading.value) {
     centralOverlayAvailable.value = true;
     return false;
   }
@@ -716,13 +750,13 @@ const applyCentralOverlayToForm = (overlayStudent) => {
   const current = { ...form.value };
   const next = {
     ...current,
-    apellidoPaterno: overlayStudent.apellidoPaterno || current.apellidoPaterno,
-    apellidoMaterno: overlayStudent.apellidoMaterno || current.apellidoMaterno,
-    nombres: overlayStudent.nombres || current.nombres,
-    curp: normalizeCurp(overlayStudent.curp || current.curp),
-    padre: overlayStudent.padre || current.padre,
-    telefono: overlayStudent.telefonoPadre || overlayStudent.telefono || current.telefono,
-    correo: overlayStudent.emailPadre || overlayStudent.correo || current.correo,
+    apellidoPaterno: firstFilled(overlayStudent.apellidoPaterno, current.apellidoPaterno),
+    apellidoMaterno: firstFilled(overlayStudent.apellidoMaterno, current.apellidoMaterno),
+    nombres: firstFilled(overlayStudent.nombres, current.nombres),
+    curp: normalizeCurp(firstFilled(overlayStudent.curp, current.curp)),
+    padre: firstFilled(overlayStudent.padre, overlayStudent.nombrePadreCompleto, [overlayStudent.nombrePadre, overlayStudent.apellidoPaternoPadre, overlayStudent.apellidoMaternoPadre].filter(Boolean).join(' '), current.padre),
+    telefono: firstFilled(overlayStudent.telefonoPadre, overlayStudent.telefono, current.telefono),
+    correo: firstFilled(overlayStudent.emailPadre, overlayStudent.correo, current.correo),
     estatus: current.estatus || 'Activo'
   };
 
@@ -736,6 +770,7 @@ const applyCentralOverlayToForm = (overlayStudent) => {
   form.value = next;
   centralOverlayAvailable.value = true;
   centralOverlayApplied.value = true;
+  nextTick(() => markSaved());
   return true;
 };
 
@@ -744,12 +779,19 @@ const loadCentralMatriculaOverlay = async () => {
   const matricula = String(props.student?.matricula || form.value.matricula || '').trim();
   if (!matricula) return;
 
+  const cachedOverlay = readCentralOverlayCache();
+  if (cachedOverlay) {
+    applyCentralOverlayToForm(cachedOverlay);
+    return;
+  }
+
   centralOverlayLoading.value = true;
   centralOverlayError.value = '';
   try {
     const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/matricula-overlay`);
     const overlayStudent = response?.overlay?.student;
     if (response?.found && overlayStudent) {
+      writeCentralOverlayCache(overlayStudent);
       applyCentralOverlayToForm(overlayStudent);
     } else {
       centralOverlayError.value = 'not-found';
@@ -760,6 +802,7 @@ const loadCentralMatriculaOverlay = async () => {
     centralOverlayLoading.value = false;
   }
 };
+
 
 
 const ingresoCardKicker = computed(() => {
@@ -920,6 +963,7 @@ onMounted(() => {
   }
 
   initializeDraft();
+  userTouchedForm.value = false;
   void loadCentralMatriculaOverlay();
 });
 
@@ -973,6 +1017,7 @@ const toLiveNameCase = (value) => {
 };
 
 const handleNameInput = (field, event) => {
+  userTouchedForm.value = true;
   const input = event?.target;
   const rawValue = String(input?.value || "");
   const caret =
@@ -994,20 +1039,24 @@ const handleNameInput = (field, event) => {
 };
 
 const normalizeNameField = (field) => {
+  userTouchedForm.value = true;
   form.value[field] = toNameCase(form.value[field]);
 };
 
 const trimField = (field) => {
+  userTouchedForm.value = true;
   form.value[field] = String(form.value[field] || "").trim();
 };
 
 const normalizeEmailField = () => {
+  userTouchedForm.value = true;
   form.value.correo = String(form.value.correo || "")
     .trim()
     .toLowerCase();
 };
 
 const normalizeCurpField = (event) => {
+  userTouchedForm.value = true;
   const value = event?.target ? event.target.value : form.value.curp;
   form.value.curp = normalizeCurp(value);
 };
