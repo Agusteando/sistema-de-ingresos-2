@@ -1,1 +1,1 @@
-Document financial and Control Escolar data flow contracts
+Ajusta login institucional a la referencia Figma

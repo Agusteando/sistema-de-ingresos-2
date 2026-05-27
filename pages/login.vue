@@ -216,7 +216,7 @@
                 >
                   <span class="update-topline">
                     <span class="update-repo">{{ update.relativeDateLabel }}</span>
-                    <span v-if="update.isNew" class="update-new">NEW</span>
+                    <span v-if="update.isNew" class="update-new">NUEVO</span>
                   </span>
                   <strong>{{ update.title }}</strong>
                 </a>
@@ -229,20 +229,37 @@
               class="updates-more-button"
               @click="updatesModalOpen = true"
             >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M14 4h6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M20 4 10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M11 5H7a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h9a3 3 0 0 0 3-3v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
               Ver más actualizaciones
             </button>
           </section>
 
           <p class="policy-line">
-            <span aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 3.5 5.5 6.2v5.3c0 4.1 2.7 7.8 6.5 9 3.8-1.2 6.5-4.9 6.5-9V6.2L12 3.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
-                <path d="m9.5 12.1 1.6 1.6 3.5-3.7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
+            <span class="policy-secure">
+              <span class="policy-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3.5 5.5 6.2v5.3c0 4.1 2.7 7.8 6.5 9 3.8-1.2 6.5-4.9 6.5-9V6.2L12 3.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                  <path d="m9.5 12.1 1.6 1.6 3.5-3.7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+              Plataforma segura, estable y siempre disponible para ti.
             </span>
-            <span class="policy-copy">
-              Al continuar, aceptas las <strong>políticas de seguridad</strong><br class="policy-break">
-              de tu institución.
+
+            <span class="policy-support">
+              <span>¿Necesitas ayuda?</span>
+              <a href="mailto:soporte@casitaiedis.edu.mx">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 13a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  <path d="M4 13v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                  <path d="M20 13v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                  <path d="M14 20h2a4 4 0 0 0 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+                Contactar soporte
+              </a>
             </span>
           </p>
         </div>
@@ -289,7 +306,7 @@
         >
           <span class="update-topline">
             <span class="update-repo">{{ update.relativeDateLabel }}</span>
-            <span v-if="update.isNew" class="update-new">NEW</span>
+            <span v-if="update.isNew" class="update-new">NUEVO</span>
           </span>
           <strong>{{ update.title }}</strong>
           <small>
@@ -660,24 +677,24 @@ onBeforeUnmount(() => {
   min-height: 100svh;
   display: grid;
   place-items: center;
-  padding: clamp(24px, 8.5vh, 80px) clamp(24px, 10.85vw, 182px);
+  padding: clamp(18px, 2.75vh, 28px) clamp(16px, 1.8vw, 29px);
   color: #14223d;
   background:
-    radial-gradient(circle at 11% 9%, rgba(33, 62, 116, 0.035), transparent 19rem),
-    linear-gradient(135deg, #fbfdff 0%, #f7fafc 50%, #fbfdfb 100%);
+    radial-gradient(circle at 50% 0%, rgba(33, 62, 116, 0.05), transparent 25rem),
+    linear-gradient(135deg, #f8fbfc 0%, #f5f8fa 52%, #fbfdfb 100%);
 }
 
 .login-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  width: min(100%, 1308px);
-  height: min(780px, calc(100svh - 48px));
-  min-height: 680px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 1530px);
+  height: min(910px, calc(100svh - 54px));
+  min-height: 720px;
   overflow: hidden;
   border: 1px solid #dbe4ec;
-  border-radius: 28px;
+  border-radius: 13px;
   background: #ffffff;
-  box-shadow: 0 24px 68px rgba(15, 32, 62, 0.1);
+  box-shadow: 0 26px 78px rgba(15, 32, 62, 0.12);
 }
 
 .brand-panel {
@@ -687,9 +704,10 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border-right: 1px solid rgba(219, 228, 236, 0.78);
   background:
-    radial-gradient(circle at 105% 53%, transparent 0 7.5rem, rgba(226, 241, 219, 0.5) 7.6rem 10.9rem, transparent 11rem),
-    radial-gradient(circle at 108% 53%, transparent 0 18.5rem, rgba(213, 236, 203, 0.42) 18.6rem 22.2rem, transparent 22.3rem),
-    linear-gradient(145deg, #f3fbf1 0%, #f8fcf6 58%, #edf8e9 100%);
+    radial-gradient(circle at 99% 50%, transparent 0 8.5rem, rgba(226, 241, 219, 0.58) 8.6rem 12.1rem, transparent 12.2rem),
+    radial-gradient(circle at 100% 51%, transparent 0 21.2rem, rgba(213, 236, 203, 0.45) 21.3rem 25.6rem, transparent 25.7rem),
+    radial-gradient(circle at 10% 108%, rgba(151, 194, 129, 0.28), transparent 13rem),
+    linear-gradient(145deg, #f5fbf3 0%, #f8fcf6 56%, #edf8e9 100%);
 }
 
 .brand-panel::before,
@@ -700,41 +718,42 @@ onBeforeUnmount(() => {
 }
 
 .brand-panel::before {
-  left: -3px;
-  bottom: -8px;
-  width: 190px;
-  height: 150px;
-  opacity: 0.34;
-  background-image: radial-gradient(circle, rgba(111, 166, 86, 0.34) 0 3px, transparent 3.6px);
+  left: -8px;
+  bottom: -10px;
+  width: 240px;
+  height: 178px;
+  opacity: 0.38;
+  background-image: radial-gradient(circle, rgba(111, 166, 86, 0.32) 0 3px, transparent 3.8px);
   background-size: 27px 27px;
 }
 
 .brand-panel::after {
-  top: 138px;
-  right: 146px;
-  width: 20px;
-  height: 20px;
-  opacity: 0.42;
-  background:
-    linear-gradient(90deg, transparent 45%, rgba(121, 171, 98, 0.48) 45% 55%, transparent 55%),
-    linear-gradient(0deg, transparent 45%, rgba(121, 171, 98, 0.48) 45% 55%, transparent 55%);
-  transform: rotate(45deg);
+  top: 199px;
+  right: 83px;
+  width: 116px;
+  height: 64px;
+  opacity: 0.4;
+  background-image:
+    radial-gradient(circle, rgba(72, 132, 74, 0.36) 0 3px, transparent 3.7px),
+    radial-gradient(circle, rgba(72, 132, 74, 0.28) 0 2px, transparent 2.8px);
+  background-position: 0 0, 52px 28px;
+  background-size: 72px 42px, 62px 40px;
 }
 
 .brand-content {
   position: relative;
   z-index: 1;
   display: flex;
-  width: min(100%, 454px);
+  width: min(100%, 480px);
   height: 100%;
   flex-direction: column;
   align-items: flex-start;
-  padding: 66px 0 83px;
+  padding: 88px 0 91px;
 }
 
 .brand-logo {
   display: block;
-  width: 177px;
+  width: 194px;
   height: auto;
   align-self: center;
   object-fit: contain;
@@ -742,7 +761,7 @@ onBeforeUnmount(() => {
 
 .brand-system-logo {
   display: block;
-  width: 385px;
+  width: 480px;
   max-width: 100%;
   height: auto;
   margin: 44px auto 0;
@@ -758,10 +777,10 @@ onBeforeUnmount(() => {
 .brand-copy h1 {
   margin: 0;
   color: #14223d;
-  font-size: clamp(2rem, 2.08vw, 2.16rem);
+  font-size: clamp(2.25rem, 2.55vw, 2.55rem);
   font-weight: 850;
-  line-height: 1.25;
-  letter-spacing: -0.03em;
+  line-height: 1.22;
+  letter-spacing: -0.035em;
 }
 
 .brand-copy h1 span {
@@ -769,31 +788,33 @@ onBeforeUnmount(() => {
 }
 
 .brand-copy p {
-  max-width: 416px;
-  margin: 22px 0 0;
+  max-width: 426px;
+  margin: 24px 0 0;
   color: #546076;
-  font-size: 15.8px;
+  font-size: 16.5px;
   font-weight: 650;
-  line-height: 1.62;
+  line-height: 1.6;
   letter-spacing: 0.004em;
 }
 
 .secure-card {
   display: inline-flex;
   align-items: center;
-  gap: 18px;
-  width: 376px;
-  min-height: 104px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.82);
-  padding: 20px 28px;
+  gap: 20px;
+  width: 424px;
+  min-height: 135px;
+  border: 1px solid rgba(219, 228, 236, 0.8);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 24px 28px;
   box-shadow: 0 18px 42px rgba(29, 57, 95, 0.055);
+  backdrop-filter: blur(6px);
 }
 
 .secure-icon {
   display: inline-grid;
-  width: 58px;
-  height: 58px;
+  width: 70px;
+  height: 70px;
   place-items: center;
   flex: 0 0 auto;
   border-radius: 999px;
@@ -802,8 +823,8 @@ onBeforeUnmount(() => {
 }
 
 .secure-icon svg {
-  width: 29px;
-  height: 29px;
+  width: 34px;
+  height: 34px;
 }
 
 .secure-copy {
@@ -813,38 +834,41 @@ onBeforeUnmount(() => {
 .secure-card strong {
   display: block;
   color: #16243f;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 850;
   line-height: 1.35;
 }
 
 .secure-card small {
   display: block;
-  margin-top: 7px;
+  margin-top: 9px;
   color: #4f5b70;
-  font-size: 14.5px;
+  font-size: 14.8px;
   font-weight: 600;
   line-height: 1.48;
 }
 
 .auth-panel {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: #ffffff;
-  padding: 40px;
+  padding: 30px 40px 28px;
 }
 
 .auth-content {
-  width: min(100%, 456px);
-  transform: translateY(8px);
+  display: flex;
+  width: min(100%, 616px);
+  height: 100%;
+  flex-direction: column;
+  transform: none;
 }
 
 .auth-kicker {
   display: inline-flex;
   align-items: center;
   gap: 24px;
-  margin-bottom: 31px;
+  margin-bottom: 36px;
   color: #218239;
   font-size: 13.5px;
   font-weight: 850;
@@ -855,8 +879,8 @@ onBeforeUnmount(() => {
 
 .auth-kicker span {
   display: inline-grid;
-  width: 45px;
-  height: 45px;
+  width: 50px;
+  height: 50px;
   place-items: center;
   flex: 0 0 auto;
   border-radius: 999px;
@@ -872,16 +896,16 @@ onBeforeUnmount(() => {
 .auth-content h2 {
   margin: 0;
   color: #14223d;
-  font-size: clamp(2.5rem, 2.9vw, 3rem);
+  font-size: clamp(2.85rem, 3.45vw, 3.45rem);
   font-weight: 850;
-  line-height: 1.04;
+  line-height: 1.02;
   letter-spacing: -0.045em;
 }
 
 .auth-subtitle {
-  margin: 15px 0 52px;
+  margin: 15px 0 42px;
   color: #667185;
-  font-size: 16.5px;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1.4;
 }
@@ -893,7 +917,7 @@ onBeforeUnmount(() => {
 
 .plantel-label {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   color: #16243f;
   font-size: 15px;
   font-weight: 850;
@@ -908,10 +932,10 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   width: 100%;
-  height: 68px;
+  height: 77px;
   align-items: center;
   border: 1px solid #d8e0ea;
-  border-radius: 13px;
+  border-radius: 12px;
   background: #ffffff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 8px 22px rgba(15, 32, 62, 0.035);
 }
@@ -919,7 +943,7 @@ onBeforeUnmount(() => {
 .plantel-select-button {
   justify-content: space-between;
   gap: 16px;
-  padding: 0 24px 0 21px;
+  padding: 0 24px 0 22px;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -953,7 +977,7 @@ onBeforeUnmount(() => {
 .plantel-current {
   display: grid;
   min-width: 0;
-  gap: 6px;
+  gap: 8px;
 }
 
 .plantel-current-code {
@@ -970,7 +994,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   gap: 8px;
   color: #667185;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 730;
   line-height: 1.25;
 }
@@ -1130,8 +1154,8 @@ onBeforeUnmount(() => {
 .google-card {
   position: relative;
   width: 100%;
-  height: 69px;
-  margin-top: 44px;
+  height: 75px;
+  margin-top: 28px;
 }
 
 .google-design-button,
@@ -1141,7 +1165,7 @@ onBeforeUnmount(() => {
   height: 100%;
   align-items: center;
   border: 1px solid #d8e0ea;
-  border-radius: 13px;
+  border-radius: 12px;
   background: #ffffff;
   color: #17263f;
   font-size: 17px;
@@ -1152,17 +1176,17 @@ onBeforeUnmount(() => {
 
 .google-design-button {
   justify-content: center;
-  gap: 55px;
-  padding: 0 28px;
+  gap: 76px;
+  padding: 0 30px;
 }
 
 .google-mark {
   display: inline-grid;
-  width: 25px;
-  height: 25px;
+  width: 26px;
+  height: 26px;
   place-items: center;
   flex: 0 0 auto;
-  margin-left: -34px;
+  margin-left: -48px;
 }
 
 .google-mark svg {
@@ -1284,10 +1308,10 @@ onBeforeUnmount(() => {
 
 
 .updates-panel {
-  margin-top: 18px;
+  margin-top: 32px;
   overflow: hidden;
   border: 1px solid rgba(33, 130, 57, 0.16);
-  border-radius: 16px;
+  border-radius: 13px;
   background: linear-gradient(135deg, rgba(241, 250, 238, 0.96), rgba(247, 252, 255, 0.96));
   box-shadow: 0 14px 30px rgba(22, 36, 63, 0.055);
 }
@@ -1298,7 +1322,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 13px 14px 7px;
+  padding: 21px 21px 12px;
 }
 
 .updates-title-group {
@@ -1309,7 +1333,7 @@ onBeforeUnmount(() => {
 
 .updates-label {
   color: #1f7836;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
   letter-spacing: 0.18em;
   line-height: 1;
@@ -1337,7 +1361,7 @@ onBeforeUnmount(() => {
 .updates-count-group strong {
   border-radius: 999px;
   background: #21843a;
-  padding: 7px 10px;
+  padding: 8px 12px;
   color: #ffffff;
   font-size: 12px;
   font-weight: 900;
@@ -1375,20 +1399,34 @@ onBeforeUnmount(() => {
 
 .updates-preview {
   display: grid;
-  gap: 6px;
-  padding: 0 12px 10px;
+  gap: 9px;
+  padding: 0 17px 18px;
 }
 
 .update-item.compact {
-  gap: 3px;
-  padding: 8px 10px;
-  border-radius: 11px;
+  position: relative;
+  gap: 4px;
+  min-height: 55px;
+  padding: 10px 14px 10px 39px;
+  border-radius: 10px;
+}
+
+.update-item.compact::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 17px;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: #21843a;
+  transform: translateY(-50%);
 }
 
 .update-item.compact strong {
   overflow: hidden;
-  font-size: 11.5px;
-  line-height: 1.2;
+  font-size: 12.2px;
+  line-height: 1.24;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1449,16 +1487,27 @@ onBeforeUnmount(() => {
 }
 
 .updates-more-button {
-  width: 100%;
-  border: 1px solid rgba(33, 132, 58, 0.22);
-  border-radius: 13px;
+  display: inline-flex;
+  width: calc(100% - 28px);
+  min-height: 43px;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 0 14px 13px;
+  border: 1px solid rgba(33, 132, 58, 0.18);
+  border-radius: 9px;
   background: linear-gradient(135deg, rgba(238, 249, 235, 0.94), rgba(255, 255, 255, 0.94));
-  padding: 11px 12px;
+  padding: 12px;
   color: #21843a;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   letter-spacing: 0.02em;
   cursor: pointer;
+}
+
+.updates-more-button svg {
+  width: 20px;
+  height: 20px;
 }
 
 .updates-more-button:hover {
@@ -1619,43 +1668,62 @@ onBeforeUnmount(() => {
 }
 
 .policy-line {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  column-gap: 19px;
-  align-items: start;
-  margin: 45px 0 0 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: auto 0 0;
   color: #667185;
-  font-size: 14.5px;
+  font-size: 12.8px;
   font-weight: 650;
-  line-height: 1.6;
+  line-height: 1.4;
 }
 
-.policy-line > span:first-child {
-  display: inline-grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  color: #21843a;
-  transform: translateY(3px);
+.policy-secure,
+.policy-support,
+.policy-support a {
+  display: inline-flex;
+  align-items: center;
 }
 
-.policy-copy {
-  display: block;
+.policy-secure {
   min-width: 0;
+  gap: 13px;
 }
 
-.policy-break {
-  display: block;
+.policy-icon {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #21843a;
 }
 
-.policy-line svg {
-  width: 100%;
-  height: 100%;
+.policy-support {
+  gap: 18px;
+  flex: 0 0 auto;
 }
 
-.policy-line strong {
+.policy-support a {
+  gap: 8px;
   color: #218239;
   font-weight: 850;
+  text-decoration: none;
+}
+
+.policy-support a:hover {
+  text-decoration: underline;
+}
+
+.policy-support svg {
+  width: 19px;
+  height: 19px;
+}
+
+.policy-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 @keyframes pulseDot {
@@ -1744,6 +1812,19 @@ onBeforeUnmount(() => {
 
   .auth-content {
     width: min(100%, 456px);
+    height: auto;
+  }
+
+  .policy-line {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 34px;
+  }
+
+  .policy-support {
+    flex-wrap: wrap;
+    gap: 10px 16px;
   }
 }
 
