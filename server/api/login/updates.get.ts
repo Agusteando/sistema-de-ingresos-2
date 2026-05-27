@@ -31,6 +31,8 @@ type LoginUpdatesPayload = {
   configured: boolean
   source: string
   username: string
+  repository: string
+  versionLabel: string
   totalCount: number
   lastUpdatedAt: string | null
   lastUpdatedDaysAgo: number | null
@@ -42,13 +44,12 @@ type LoginUpdatesPayload = {
 }
 
 type GithubRepo = {
+  name?: string
   full_name?: string
   html_url?: string
-  fork?: boolean
   archived?: boolean
   pushed_at?: string
   updated_at?: string
-  permissions?: Record<string, boolean>
 }
 
 type GithubCommit = {
@@ -76,8 +77,9 @@ type GithubCommit = {
 const CACHE_TTL_MS = 10 * 60 * 1000
 const PER_PAGE = 100
 const MAX_REPO_PAGES = 10
-const MAX_DISPLAY_UPDATES = 80
+const MAX_DISPLAY_UPDATES = 200
 const RECENT_DAYS = 7
+const TARGET_REPO_NAME = 'sistema-de-ingresos-2'
 
 let cachedPayload: { cacheKey: string; expiresAt: number; data: LoginUpdatesPayload } | null = null
 
@@ -108,12 +110,23 @@ const splitMessage = (message?: string) => {
   }
 }
 
+const toHeaderRecord = (headers: Record<string, string | string[] | undefined>) => {
+  const record: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) record[key.toLowerCase()] = value.join(', ')
+    else if (value) record[key.toLowerCase()] = value
+  }
+  return record
+}
+
 const emptyPayload = (username = '', error = '', warning = ''): LoginUpdatesPayload => {
   const payload: LoginUpdatesPayload = {
     ok: !error,
     configured: Boolean(username),
-    source: 'github-repository-history',
+    source: 'github-repository-commits',
     username,
+    repository: TARGET_REPO_NAME,
+    versionLabel: 'v0.0',
     totalCount: 0,
     lastUpdatedAt: null,
     lastUpdatedDaysAgo: null,
@@ -126,15 +139,6 @@ const emptyPayload = (username = '', error = '', warning = ''): LoginUpdatesPayl
   if (error) payload.error = error
 
   return payload
-}
-
-const toHeaderRecord = (headers: Record<string, string | string[] | undefined>) => {
-  const record: Record<string, string> = {}
-  for (const [key, value] of Object.entries(headers)) {
-    if (Array.isArray(value)) record[key.toLowerCase()] = value.join(', ')
-    else if (value) record[key.toLowerCase()] = value
-  }
-  return record
 }
 
 const requestGithub = <T>(reqPath: string, options: GithubRequestOptions): Promise<GithubResponse<T>> => {
@@ -216,30 +220,30 @@ const fetchRepoPage = async (page: number, options: GithubRequestOptions) => {
   return requestGithub<GithubRepo[]>(path, options)
 }
 
-const fetchRepositories = async (options: GithubRequestOptions) => {
-  const repos: GithubRepo[] = []
+const findTargetRepository = async (options: GithubRequestOptions) => {
+  const directCandidates = [
+    `${options.username}/${TARGET_REPO_NAME}`
+  ]
+
+  for (const fullName of directCandidates) {
+    try {
+      const repo = await requestJson<GithubRepo>(`/repos/${encodeURIComponent(fullName).replace(/%2F/g, '/')}`, options)
+      if (repo?.full_name && !repo.archived) return repo
+    } catch {}
+  }
 
   for (let page = 1; page <= MAX_REPO_PAGES; page += 1) {
     const response = await fetchRepoPage(page, options)
     const batch = Array.isArray(response.data) ? response.data : []
+    const match = batch.find((repo) => String(repo?.name || '').toLowerCase() === TARGET_REPO_NAME.toLowerCase() || String(repo?.full_name || '').toLowerCase().endsWith(`/${TARGET_REPO_NAME.toLowerCase()}`))
 
-    repos.push(...batch)
+    if (match?.full_name && !match.archived) return match
 
     const lastPage = parseLastPage(response.headers.link)
     if (!lastPage || page >= lastPage || batch.length < PER_PAGE) break
   }
 
-  const seen = new Set<string>()
-
-  return repos
-    .filter((repo) => repo?.full_name && !repo.archived)
-    .filter((repo) => {
-      const name = String(repo.full_name || '')
-      if (seen.has(name)) return false
-      seen.add(name)
-      return true
-    })
-    .sort((a, b) => Date.parse(String(b.pushed_at || b.updated_at || '')) - Date.parse(String(a.pushed_at || a.updated_at || '')))
+  return null
 }
 
 const commitDate = (commit: GithubCommit) => (
@@ -256,78 +260,63 @@ const commitAuthor = (commit: GithubCommit, fallback: string) => (
   || fallback
 )
 
-const fetchAuthorCommitsForRepo = async (repo: GithubRepo, options: GithubRequestOptions) => {
-  const fullName = String(repo.full_name || '')
-  if (!fullName) return { total: 0, updates: [] as GithubUpdateItem[] }
+const fetchTargetRepoUpdates = async (options: GithubRequestOptions) => {
+  const repo = await findTargetRepository(options)
 
-  const basePath = `/repos/${fullName}/commits?author=${encodeURIComponent(options.username)}&per_page=${PER_PAGE}`
-
-  try {
-    const firstPage = await requestGithub<GithubCommit[]>(`${basePath}&page=1`, options)
-    const firstCommits = Array.isArray(firstPage.data) ? firstPage.data : []
-    const lastPage = parseLastPage(firstPage.headers.link) || (firstCommits.length === PER_PAGE ? 1 : null)
-    let total = firstCommits.length
-
-    if (lastPage && lastPage > 1) {
-      const lastPageResponse = await requestGithub<GithubCommit[]>(`${basePath}&page=${lastPage}`, options)
-      const lastCommits = Array.isArray(lastPageResponse.data) ? lastPageResponse.data : []
-      total = ((lastPage - 1) * PER_PAGE) + lastCommits.length
-    }
-
-    const repoUrl = String(repo.html_url || `https://github.com/${fullName}`)
-    const updates = firstCommits
-      .filter((commit) => commit?.sha)
-      .map((commit) => {
-        const sha = String(commit.sha || '')
-        const date = commitDate(commit) || String(repo.pushed_at || '')
-        const daysAgo = daysAgoFromDate(date)
-        const message = splitMessage(commit?.commit?.message)
-
-        return {
-          sha,
-          shortSha: sha.slice(0, 7),
-          title: message.title,
-          description: message.description,
-          repo: fullName,
-          repoUrl,
-          url: String(commit.html_url || `${repoUrl}/commit/${sha}`),
-          author: commitAuthor(commit, options.username),
-          date,
-          daysAgo,
-          relativeDateLabel: formatRelativeDays(daysAgo),
-          isNew: daysAgo !== null && daysAgo <= RECENT_DAYS
-        }
-      })
-
-    return { total, updates }
-  } catch {
-    return { total: 0, updates: [] as GithubUpdateItem[] }
+  if (!repo?.full_name) {
+    throw new Error(`No se encontró el repositorio ${TARGET_REPO_NAME}.`)
   }
-}
 
-const collectRepositoryCommitHistory = async (options: GithubRequestOptions) => {
-  const repos = await fetchRepositories(options)
-  const seenUpdates = new Set<string>()
-  let totalCount = 0
+  const fullName = String(repo.full_name)
+  const repoUrl = String(repo.html_url || `https://github.com/${fullName}`)
+  const basePath = `/repos/${fullName}/commits?author=${encodeURIComponent(options.username)}`
+
+  const countPage = await requestGithub<GithubCommit[]>(`${basePath}&per_page=1&page=1`, options)
+  const countItems = Array.isArray(countPage.data) ? countPage.data : []
+  const lastPage = parseLastPage(countPage.headers.link)
+  const totalCount = lastPage || countItems.length
+
   const updates: GithubUpdateItem[] = []
+  const seen = new Set<string>()
+  const maxPages = Math.min(Math.ceil(MAX_DISPLAY_UPDATES / PER_PAGE), Math.max(1, Math.ceil(totalCount / PER_PAGE)))
 
-  // Sequential requests are intentional here. They avoid bursty rate-limit failures on the login page.
-  for (const repo of repos) {
-    const result = await fetchAuthorCommitsForRepo(repo, options)
-    totalCount += result.total
+  for (let page = 1; page <= maxPages; page += 1) {
+    const response = await requestGithub<GithubCommit[]>(`${basePath}&per_page=${PER_PAGE}&page=${page}`, options)
+    const commits = Array.isArray(response.data) ? response.data : []
 
-    for (const update of result.updates) {
-      const key = `${update.repo}:${update.sha}`
-      if (seenUpdates.has(key)) continue
-      seenUpdates.add(key)
-      updates.push(update)
+    for (const commit of commits) {
+      const sha = String(commit.sha || '')
+      if (!sha || seen.has(sha)) continue
+      seen.add(sha)
+
+      const date = commitDate(commit) || String(repo.pushed_at || '')
+      const daysAgo = daysAgoFromDate(date)
+      const message = splitMessage(commit?.commit?.message)
+
+      updates.push({
+        sha,
+        shortSha: sha.slice(0, 7),
+        title: message.title,
+        description: message.description,
+        repo: fullName,
+        repoUrl,
+        url: String(commit.html_url || `${repoUrl}/commit/${sha}`),
+        author: commitAuthor(commit, options.username),
+        date,
+        daysAgo,
+        relativeDateLabel: formatRelativeDays(daysAgo),
+        isNew: daysAgo !== null && daysAgo <= RECENT_DAYS
+      })
     }
+
+    if (commits.length < PER_PAGE || updates.length >= MAX_DISPLAY_UPDATES) break
   }
 
   updates.sort((a, b) => Date.parse(b.date || '') - Date.parse(a.date || ''))
 
   return {
-    repoCount: repos.length,
+    repoFullName: fullName,
+    repoUrl,
     totalCount,
     updates: updates.slice(0, MAX_DISPLAY_UPDATES)
   }
@@ -339,7 +328,7 @@ export default defineEventHandler(async (event): Promise<LoginUpdatesPayload> =>
   const config = useRuntimeConfig()
   const username = String(process.env.GITHUB_USERNAME || config.githubUsername || '').trim()
   const token = String(process.env.GITHUB_TOKEN || config.githubToken || '').trim()
-  const cacheKey = `${username}:${token ? 'auth' : 'public'}:repository-history`
+  const cacheKey = `${username}:${token ? 'auth' : 'public'}:${TARGET_REPO_NAME}`
 
   if (!username) {
     return emptyPayload('', 'GITHUB_USERNAME no está configurado.')
@@ -357,15 +346,18 @@ export default defineEventHandler(async (event): Promise<LoginUpdatesPayload> =>
       ? `El token pertenece a ${authLogin}; las actualizaciones privadas pueden no coincidir con ${username}.`
       : ''
 
-    const result = await collectRepositoryCommitHistory(options)
+    const result = await fetchTargetRepoUpdates(options)
     const latest = result.updates[0] || null
     const lastUpdatedDaysAgo = latest ? latest.daysAgo : null
+    const versionLabel = `v0.${result.totalCount}`
 
     const payload: LoginUpdatesPayload = {
       ok: true,
       configured: true,
-      source: 'github-repository-history',
+      source: 'github-repository-commits',
       username,
+      repository: result.repoFullName,
+      versionLabel,
       totalCount: result.totalCount,
       lastUpdatedAt: latest?.date || null,
       lastUpdatedDaysAgo,

@@ -240,7 +240,7 @@
 
                 <div v-else class="updates-list">
                   <a
-                    v-for="update in filteredUpdates"
+                    v-for="update in filteredUpdatesPreview"
                     :key="update.sha || `${update.repo}-${update.date}-${update.title}`"
                     class="update-item"
                     :href="update.url || update.repoUrl || undefined"
@@ -248,15 +248,23 @@
                     rel="noopener noreferrer"
                   >
                     <span class="update-topline">
-                      <span class="update-repo">{{ update.repo }}</span>
+                      <span class="update-repo">{{ update.relativeDateLabel }}</span>
                       <span v-if="update.isNew" class="update-new">NEW</span>
                     </span>
                     <strong>{{ update.title }}</strong>
                     <small>
-                      {{ update.relativeDateLabel }}
-                      <span v-if="update.shortSha"> · {{ update.shortSha }}</span>
+                      {{ update.shortSha }}
                     </small>
                   </a>
+
+                  <button
+                    v-if="filteredUpdates.length > 3"
+                    type="button"
+                    class="updates-more-button"
+                    @click="updatesModalOpen = true"
+                  >
+                    Ver más actualizaciones
+                  </button>
                 </div>
               </div>
             </div>
@@ -277,6 +285,57 @@
         </div>
       </section>
     </section>
+
+  <div v-if="updatesModalOpen" class="updates-modal-backdrop" @click.self="updatesModalOpen = false">
+    <section class="updates-modal" role="dialog" aria-modal="true" aria-label="Historial de actualizaciones">
+      <header class="updates-modal-header">
+        <div>
+          <span class="updates-modal-kicker">Actualizaciones</span>
+          <h2>{{ updatesTotalLabel }}</h2>
+          <p>Última actualización {{ updatesLatestLabel }}</p>
+        </div>
+        <button type="button" class="updates-modal-close" aria-label="Cerrar" @click="updatesModalOpen = false">
+          ×
+        </button>
+      </header>
+
+      <label class="updates-search updates-modal-search" for="login-updates-modal-search">
+        <span aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="m21 21-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" />
+          </svg>
+        </span>
+        <input
+          id="login-updates-modal-search"
+          v-model="updatesSearch"
+          type="search"
+          placeholder="Buscar actualización"
+          autocomplete="off"
+        >
+      </label>
+
+      <div class="updates-modal-list">
+        <a
+          v-for="update in filteredUpdates"
+          :key="`modal-${update.sha || `${update.repo}-${update.date}-${update.title}`}`"
+          class="update-item"
+          :href="update.url || update.repoUrl || undefined"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span class="update-topline">
+            <span class="update-repo">{{ update.relativeDateLabel }}</span>
+            <span v-if="update.isNew" class="update-new">NEW</span>
+          </span>
+          <strong>{{ update.title }}</strong>
+          <small>
+            {{ update.shortSha }}
+          </small>
+        </a>
+      </div>
+    </section>
+  </div>
   </main>
 </template>
 
@@ -364,6 +423,7 @@ const updatesOpen = ref(false)
 const updatesPending = ref(false)
 const updatesError = ref('')
 const updatesSearch = ref('')
+const updatesModalOpen = ref(false)
 const loginUpdates = ref({
   ok: false,
   configured: false,
@@ -394,6 +454,7 @@ const filteredUpdates = computed(() => {
     return haystack.includes(query)
   })
 })
+const filteredUpdatesPreview = computed(() => filteredUpdates.value.slice(0, 3))
 
 const toggleUpdatesPanel = () => {
   updatesOpen.value = !updatesOpen.value
@@ -1403,6 +1464,105 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding-right: 2px;
 }
+
+.updates-more-button {
+  width: 100%;
+  border: 1px solid rgba(33, 132, 58, 0.22);
+  border-radius: 13px;
+  background: linear-gradient(135deg, rgba(238, 249, 235, 0.94), rgba(255, 255, 255, 0.94));
+  padding: 11px 12px;
+  color: #21843a;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.updates-more-button:hover {
+  border-color: rgba(33, 132, 58, 0.42);
+  box-shadow: 0 12px 24px rgba(22, 36, 63, 0.08);
+}
+
+.updates-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(13, 24, 42, 0.48);
+  padding: 24px;
+  backdrop-filter: blur(10px);
+}
+
+.updates-modal {
+  width: min(560px, 100%);
+  max-height: min(720px, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid rgba(216, 224, 234, 0.96);
+  border-radius: 24px;
+  background: linear-gradient(180deg, #ffffff, #f7fbf6);
+  box-shadow: 0 28px 72px rgba(16, 30, 52, 0.28);
+  color: #17263f;
+}
+
+.updates-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid rgba(216, 224, 234, 0.74);
+  padding: 20px 20px 16px;
+}
+
+.updates-modal-kicker {
+  color: #21843a;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.updates-modal-header h2 {
+  margin: 2px 0 2px;
+  color: #17263f;
+  font-size: 26px;
+  font-weight: 950;
+}
+
+.updates-modal-header p {
+  margin: 0;
+  color: #687489;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.updates-modal-close {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(216, 224, 234, 0.92);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #42526a;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.updates-modal-search {
+  margin: 14px 20px 0;
+}
+
+.updates-modal-list {
+  display: grid;
+  max-height: 480px;
+  overflow-y: auto;
+  gap: 8px;
+  padding: 14px 20px 20px;
+}
+
 
 .update-item {
   display: grid;
