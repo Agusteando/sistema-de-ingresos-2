@@ -7,10 +7,8 @@ import {
 import { PLANTELES_LIST } from "../../utils/constants";
 import { normalizeCicloKey } from "../../shared/utils/ciclo";
 import {
-  calculateBasePlacementForTargetPosition,
   calculatePromotedGrado,
   displayGrado,
-  normalizeGradoForPlantel,
   normalizeNivelEscolar,
   plantelCandidatesForProjectedScope,
 } from "../../shared/utils/grado";
@@ -23,6 +21,12 @@ import {
   parseEnrollmentConceptIds,
 } from "./enrollment-evidence";
 import { controlEscolarCentralQuery } from "./control-escolar-central";
+import {
+  fetchCachedControlEscolarBaseRows,
+  fetchCachedControlEscolarBaseContext,
+  maybeRefreshControlEscolarCacheFromLoadedRows,
+  readControlCacheSourceMeta,
+} from "./control-escolar-cache";
 
 export type ControlEscolarStudentRow = {
   agentId: string;
@@ -215,8 +219,6 @@ export const resolveControlEscolarAuth = async (
     });
   }
 
-  assertControlEscolarDynamicBridge(agentId);
-
   return { user, agentId };
 };
 
@@ -406,6 +408,60 @@ export const getControlEscolarSchema = async (
   return schema;
 };
 
+const getControlEscolarCentralOnlySchema = async (
+  agentId: string,
+  options: { requireCentral?: boolean } = {},
+): Promise<ControlEscolarSchema> => {
+  const requireCentral = options.requireCentral !== false;
+  const cacheKey = `${normalizePlantel(agentId)}:central-only`;
+  const cached = schemaCache.get(cacheKey);
+  if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS) {
+    if (requireCentral && !cached.centralAvailable)
+      schemaCache.delete(cacheKey);
+    else return cached;
+  }
+
+  let matriculaColumns = new Set<string>();
+  let usersColumns = new Set<string>();
+  let centralAvailable = true;
+  let centralError = "";
+  let usersAvailable = false;
+  let usersError = "";
+
+  try {
+    matriculaColumns = await getCentralMatriculaColumns();
+  } catch (error: any) {
+    centralAvailable = false;
+    centralError = toErrorMessage(error);
+    if (requireCentral) throw error;
+  }
+
+  if (centralAvailable) {
+    try {
+      usersColumns = await getCentralOptionalTableColumns("users");
+      usersAvailable =
+        usersColumns.has("username") && usersColumns.has("plaintext");
+    } catch (error: any) {
+      usersAvailable = false;
+      usersError = toErrorMessage(error);
+    }
+  }
+
+  const schema = {
+    base: new Set<string>(),
+    matricula: matriculaColumns,
+    users: usersColumns,
+    ingresos: false,
+    loadedAt: Date.now(),
+    centralAvailable,
+    centralError,
+    usersAvailable,
+    usersError,
+  };
+  schemaCache.set(cacheKey, schema);
+  return schema;
+};
+
 const buildLocalBaseSelect = (agentId: string, baseColumns: Set<string>) => {
   const baseNombreCompleto = has(baseColumns, "nombreCompleto")
     ? nullIfTrim(col("b", "nombreCompleto"))
@@ -570,11 +626,15 @@ const applyOperatorProjection = async (
   scope: ControlEscolarOperatorScope,
   options: { searchActive?: boolean } = {},
 ) => {
-  const historicalEnrollmentEvidence =
-    await getHistoricalEnrollmentConceptEvidence(
-      rows.map((row) => row.matricula),
-      scope.enrollmentConceptIds,
-    );
+  const missingHistoricalFromRows = rows.some(
+    (row) => typeof row.conceptoIdsHistoricos !== "string",
+  );
+  const historicalEnrollmentEvidence = missingHistoricalFromRows
+    ? await getHistoricalEnrollmentConceptEvidence(
+        rows.map((row) => row.matricula),
+        scope.enrollmentConceptIds,
+      )
+    : new Map<string, string>();
 
   return rows.flatMap((row) => {
     const sourcePlantel = firstText(row.plantelBase, row.basePlantel, agentId);
@@ -612,8 +672,11 @@ const applyOperatorProjection = async (
       return [];
 
     const historicalConceptIds =
-      historicalEnrollmentEvidence.get(String(row.matricula || "").trim()) ||
-      "";
+      typeof row.conceptoIdsHistoricos === "string"
+        ? row.conceptoIdsHistoricos
+        : historicalEnrollmentEvidence.get(
+            String(row.matricula || "").trim(),
+          ) || "";
     const tipoIngreso = resolveTipoIngreso(
       {
         ...row,
@@ -1160,8 +1223,8 @@ const overlayStudentRow = (
     categoriaBaja: normalizeText(overlay?.categoria_baja),
     seguimientoBaja: normalizeText(overlay?.seguimiento_baja, 500),
     program: firstText(overlay?.servicio, overlay?.nivel, base.baseNivel),
-    nivel: firstLower(base.baseNivel, overlay?.nivel),
-    grado: firstLower(base.baseGrado, overlay?.grado),
+    nivel: firstLower(overlay?.nivel, base.baseNivel),
+    grado: firstLower(overlay?.grado, base.baseGrado),
     group: firstText(overlay?.grupo, base.baseGrupo),
     guardianName: firstText(fatherName, motherName, base.baseGuardian),
     fatherName,
@@ -1243,6 +1306,73 @@ export const fetchControlEscolarStudentDetail = async (
     throw createError({ statusCode: 400, message: "Matrícula inválida." });
   }
 
+  try {
+    const cachedContext = await fetchCachedControlEscolarBaseContext(
+      agentId,
+      normalizedMatricula,
+    );
+    if (cachedContext) {
+      const cacheSchema = await getControlEscolarCentralOnlySchema(agentId, {
+        requireCentral: false,
+      });
+      let rawMatricula: any = null;
+      let huskyPass: any = null;
+      if (cacheSchema.centralAvailable) {
+        try {
+          rawMatricula =
+            await fetchFullCentralMatriculaRow(normalizedMatricula);
+        } catch (error: any) {
+          console.warn(
+            "[Control Escolar] centralized matricula detail overlay unavailable for cache read",
+            {
+              agentId,
+              matricula: normalizedMatricula,
+              error: toErrorMessage(error),
+            },
+          );
+        }
+
+        try {
+          huskyPass = await fetchHuskyPassRow(normalizedMatricula, cacheSchema);
+        } catch (error: any) {
+          console.warn(
+            "[Control Escolar] husky pass detail lookup unavailable",
+            {
+              agentId,
+              matricula: normalizedMatricula,
+              error: toErrorMessage(error),
+            },
+          );
+        }
+      }
+
+      const normalized = overlayStudentRow(
+        agentId,
+        cachedContext.rawBase,
+        rawMatricula,
+        huskyPass,
+      );
+      return {
+        ...normalized,
+        readOnly: true,
+        detailSource: rawMatricula ? "cache+matricula" : "cache",
+        rawBase: compactRawRecord(cachedContext.rawBase || {}),
+        rawMatricula: compactRawRecord(rawMatricula || {}),
+        rawUsers: compactRawRecord(huskyPass || {}),
+      };
+    }
+  } catch (error: any) {
+    console.warn(
+      "[Control Escolar] cache detail unavailable, falling back to bridge",
+      {
+        agentId,
+        matricula: normalizedMatricula,
+        error: toErrorMessage(error),
+      },
+    );
+  }
+
+  assertControlEscolarDynamicBridge(agentId);
   const schema = await getControlEscolarSchema(agentId, {
     requireCentral: false,
   });
@@ -1338,6 +1468,7 @@ type ControlEscolarLoadedStudents = {
     enrichedRows: number;
     usersRows: number;
     phase: ControlEscolarLoadPhase;
+    [key: string]: any;
   };
 };
 
@@ -1359,6 +1490,131 @@ const fetchAllNormalizedStudents = async (
 ): Promise<ControlEscolarLoadedStudents> => {
   const phase = resolveControlEscolarLoadPhase(filters);
   const localOnly = phase === "base";
+  const scope = resolveOperatorScope(filters);
+
+  try {
+    const cacheSchema = await getControlEscolarCentralOnlySchema(agentId, {
+      requireCentral: false,
+    });
+    const cachedBase = await fetchCachedControlEscolarBaseRows(
+      agentId,
+      filters,
+      scope,
+    );
+    const hasFreshCentralCache = cachedBase.meta.freshness === "fresh";
+
+    if (hasFreshCentralCache) {
+      const localRows = await applyOperatorProjection(
+        agentId,
+        cachedBase.rows,
+        scope,
+        {
+          searchActive: Boolean(
+            normalizeText(filters.search || filters.q || "", 80),
+          ),
+        },
+      );
+
+      if (localRows.length > MAX_LOCAL_ROWS) {
+        throw createError({
+          statusCode: 413,
+          message: `El plantel excede el límite temporal de ${MAX_LOCAL_ROWS} alumnos activos para Control Escolar. Ajusta la consulta antes de editar.`,
+        });
+      }
+
+      if (localOnly) {
+        return {
+          students: localRows
+            .map((row) => overlayStudentRow(agentId, row))
+            .sort(compareStudents),
+          source: {
+            ...cachedBase.source,
+            overlay: "CONTROL_ESCOLAR_MYSQL.matricula",
+            overlayAvailable: false,
+            overlayError: "",
+            localRows: Math.min(localRows.length, MAX_LOCAL_ROWS),
+            overlayRows: 0,
+            enrichedRows: 0,
+            usersRows: 0,
+            phase: "base",
+          },
+        };
+      }
+
+      let overlayMap = new Map<string, any>();
+      let huskyPassMap = new Map<string, any>();
+      let overlayAvailable = cacheSchema.centralAvailable;
+      let overlayError = cacheSchema.centralError;
+
+      if (cacheSchema.centralAvailable) {
+        try {
+          overlayMap = await fetchMatriculaOverlayMap(
+            localRows.map((row) => row.matricula),
+            cacheSchema,
+          );
+        } catch (error: any) {
+          overlayAvailable = false;
+          overlayError = toErrorMessage(error);
+          console.warn(
+            "[Control Escolar] centralized matricula overlay lookup unavailable for cache read",
+            {
+              agentId,
+              localRows: localRows.length,
+              error: overlayError,
+            },
+          );
+        }
+
+        try {
+          huskyPassMap = await fetchHuskyPassMap(
+            localRows.map((row) => row.matricula),
+            cacheSchema,
+          );
+        } catch (error: any) {
+          console.warn("[Control Escolar] husky pass lookup unavailable", {
+            agentId,
+            localRows: localRows.length,
+            error: toErrorMessage(error),
+          });
+        }
+      }
+
+      return {
+        students: localRows
+          .map((row) => {
+            const matricula = normalizeText(row.matricula, 64);
+            return overlayStudentRow(
+              agentId,
+              row,
+              overlayMap.get(matricula),
+              huskyPassMap.get(matricula),
+            );
+          })
+          .sort(compareStudents),
+        source: {
+          ...cachedBase.source,
+          overlay: "CONTROL_ESCOLAR_MYSQL.matricula",
+          overlayAvailable,
+          overlayError: overlayError || "",
+          localRows: Math.min(localRows.length, MAX_LOCAL_ROWS),
+          overlayRows: overlayMap.size,
+          enrichedRows: overlayMap.size,
+          usersRows: huskyPassMap.size,
+          phase: "enriched",
+        },
+      };
+    }
+  } catch (error: any) {
+    console.warn(
+      "[Control Escolar] central cache read unavailable, falling back to bridge",
+      {
+        agentId,
+        error: toErrorMessage(error),
+      },
+    );
+  }
+
+  assertControlEscolarDynamicBridge(agentId);
   const schema = await getControlEscolarSchema(agentId, {
     requireCentral: false,
     skipCentral: localOnly,
@@ -1372,10 +1628,30 @@ const fetchAllNormalizedStudents = async (
     });
   }
 
+  try {
+    await maybeRefreshControlEscolarCacheFromLoadedRows(agentId, localRows, {
+      triggerName: "auto-control-escolar-live-read",
+      minAgeMinutes: 15,
+      cicloKey: scope.cicloKey,
+      previousCiclo: scope.previousCiclo,
+    });
+  } catch (error: any) {
+    console.warn("[Control Escolar] live bridge read succeeded but central cache refresh failed", {
+      agentId,
+      error: toErrorMessage(error),
+    });
+  }
+
   let overlayMap = new Map<string, any>();
   let huskyPassMap = new Map<string, any>();
   let overlayAvailable = schema.centralAvailable;
   let overlayError = schema.centralError;
+  let cacheMeta: any = null;
+  try {
+    cacheMeta = await readControlCacheSourceMeta(agentId);
+  } catch (error) {
+    cacheMeta = null;
+  }
 
   if (localOnly) {
     return {
@@ -1392,6 +1668,9 @@ const fetchAllNormalizedStudents = async (
         enrichedRows: 0,
         usersRows: 0,
         phase: "base",
+        cacheFreshness: cacheMeta?.freshness || "empty",
+        cacheRefreshedAt: cacheMeta?.cacheRefreshedAt || null,
+        cacheExpiresAt: cacheMeta?.cacheExpiresAt || null,
       },
     };
   }
@@ -1451,6 +1730,9 @@ const fetchAllNormalizedStudents = async (
       enrichedRows: overlayMap.size,
       usersRows: huskyPassMap.size,
       phase: "enriched",
+      cacheFreshness: cacheMeta?.freshness || "empty",
+      cacheRefreshedAt: cacheMeta?.cacheRefreshedAt || null,
+      cacheExpiresAt: cacheMeta?.cacheExpiresAt || null,
     },
   };
 };
@@ -1707,7 +1989,8 @@ export const fetchControlEscolarKpis = async (
   ).length;
   const sinContacto = progressStudents.filter(hasNoPrimaryContact).length;
   const missing = (field: string) =>
-    progressStudents.filter((student) => student.missingFields.includes(field)).length;
+    progressStudents.filter((student) => student.missingFields.includes(field))
+      .length;
 
   return {
     totalInscritos: inscritos,
@@ -1798,165 +2081,6 @@ type EditableMatriculaEntry = {
   field: string;
   column: string;
   value: any;
-};
-
-const hasOwnPatchField = (body: MatriculaPatch, field: string) =>
-  Object.prototype.hasOwnProperty.call(body || {}, field);
-const sameAcademicNivel = (left: unknown, right: unknown) =>
-  normalizeNivelEscolar(left) === normalizeNivelEscolar(right);
-const sameAcademicGrado = (left: unknown, right: unknown) => {
-  const leftText = normalizeText(left, 80);
-  const rightText = normalizeText(right, 80);
-  if (!leftText || !rightText) return leftText === rightText;
-  return displayGrado(left).toLowerCase() === displayGrado(right).toLowerCase();
-};
-
-const resolveCurrentControlAcademic = (
-  agentId: string,
-  baseRow: any,
-  visibleStudent: any,
-  filters: any,
-  body: MatriculaPatch,
-) => {
-  const scope = resolveOperatorScope(filters);
-  const requestedNivel = normalizeNivelEscolar(
-    body?.nivel ||
-      body?.targetNivel ||
-      visibleStudent?.nivel ||
-      baseRow?.nivelBase ||
-      baseRow?.baseNivel,
-  );
-  const requestedGrado = normalizeGradoForPlantel(
-    body?.grado ||
-      body?.targetGrado ||
-      visibleStudent?.grado ||
-      baseRow?.gradoBase ||
-      baseRow?.baseGrado,
-    agentId,
-    requestedNivel,
-  );
-  const existingIngresoCiclo = normalizeCicloKey(
-    baseRow?.cicloBase || baseRow?.baseCiclo || scope.cicloKey,
-  );
-  const targetCiclo = scope.cicloKey;
-  const targetPlantel = normalizePlantel(agentId);
-
-  const resolvePlacement = (ingresoCiclo: string) =>
-    calculateBasePlacementForTargetPosition(
-      requestedNivel,
-      requestedGrado,
-      ingresoCiclo,
-      targetCiclo,
-      targetPlantel,
-    );
-
-  let ingresoCiclo = existingIngresoCiclo;
-  let placement = resolvePlacement(ingresoCiclo);
-
-  if (
-    placement.outOfScope ||
-    !placement.nivel ||
-    !placement.grado ||
-    !placement.plantel
-  ) {
-    ingresoCiclo = targetCiclo;
-    placement = resolvePlacement(ingresoCiclo);
-  }
-
-  if (
-    placement.outOfScope ||
-    !placement.nivel ||
-    !placement.grado ||
-    !placement.plantel
-  ) {
-    throw createError({
-      statusCode: 400,
-      message:
-        "La combinación de nivel y grado no corresponde con la progresión escolar del ciclo activo.",
-    });
-  }
-
-  const projected = calculatePromotedGrado(
-    placement.grado,
-    placement.plantel,
-    ingresoCiclo,
-    targetCiclo,
-    placement.nivel,
-  );
-
-  return {
-    targetCiclo,
-    ingresoCiclo,
-    requestedNivel,
-    requestedGrado,
-    placement,
-    projected,
-  };
-};
-
-const shouldSyncBaseAcademic = (
-  body: MatriculaPatch,
-  visibleStudent: any,
-  academic: ReturnType<typeof resolveCurrentControlAcademic>,
-) => {
-  if (!hasOwnPatchField(body, "grado") && !hasOwnPatchField(body, "nivel"))
-    return false;
-
-  return (
-    !sameAcademicNivel(visibleStudent?.nivel, academic.projected.nivel) ||
-    !sameAcademicGrado(visibleStudent?.grado, academic.projected.grado)
-  );
-};
-
-const syncBaseAcademicPlacement = async (
-  agentId: string,
-  normalizedMatricula: string,
-  body: MatriculaPatch,
-  baseRow: any,
-  visibleStudent: any,
-  filters: any = {},
-) => {
-  const academic = resolveCurrentControlAcademic(
-    agentId,
-    baseRow,
-    visibleStudent,
-    filters,
-    body,
-  );
-  if (!shouldSyncBaseAcademic(body, visibleStudent, academic)) return null;
-
-  const currentCiclo = normalizeCicloKey(
-    baseRow?.cicloBase || baseRow?.baseCiclo || academic.ingresoCiclo,
-  );
-  const currentPlantel = normalizePlantel(
-    baseRow?.plantel || baseRow?.basePlantel || agentId,
-  );
-  const unchanged =
-    currentCiclo === academic.ingresoCiclo &&
-    sameAcademicNivel(
-      baseRow?.nivelBase || baseRow?.baseNivel,
-      academic.placement.nivel,
-    ) &&
-    sameAcademicGrado(
-      baseRow?.gradoBase || baseRow?.baseGrado,
-      academic.placement.grado,
-    ) &&
-    currentPlantel === normalizePlantel(academic.placement.plantel);
-
-  if (!unchanged) {
-    await query(
-      `UPDATE base SET ciclo = ?, nivel = ?, grado = ?, plantel = ? WHERE matricula = ?`,
-      [
-        academic.ingresoCiclo,
-        academic.placement.nivel,
-        academic.placement.grado,
-        academic.placement.plantel,
-        normalizedMatricula,
-      ],
-    );
-  }
-
-  return academic;
 };
 
 const buildEditableMatriculaEntries = (
@@ -2143,7 +2267,7 @@ export const importControlEscolarMatriculaUpdates = async (
   user: AuthSessionUser,
   filters: any = {},
 ) => {
-  const schema = await getControlEscolarSchema(agentId, {
+  const schema = await getControlEscolarCentralOnlySchema(agentId, {
     requireCentral: true,
   });
   const scopeFilters = {
@@ -2199,53 +2323,24 @@ export const importControlEscolarMatriculaUpdates = async (
         rejectUnknown: false,
         skipEmpty: true,
       });
-      const [baseRow] = await query<any[]>(
-        `
-        SELECT
-          b.matricula,
-          ${expr(schema.base, "b", "plantel", sqlLiteral(agentId))} AS plantel,
-          ${expr(schema.base, "b", "nivel", "NULL")} AS nivelBase,
-          ${expr(schema.base, "b", "grado", "NULL")} AS gradoBase,
-          ${expr(schema.base, "b", "ciclo", "NULL")} AS cicloBase
-        FROM base b
-        WHERE b.matricula = ?
-        LIMIT 1
-      `,
-        [normalizedMatricula],
-      );
-      const academicSynced = baseRow
-        ? await syncBaseAcademicPlacement(
-            agentId,
-            normalizedMatricula,
-            patch,
-            baseRow,
-            visibleStudent,
-            scopeFilters,
-          )
-        : null;
-      if (!editableEntries.length && !academicSynced) {
+      if (!editableEntries.length) {
         summary.skipped++;
         if (summary.errors.length < 50)
           summary.errors.push({
             row: index + 2,
             matricula: normalizedMatricula,
-            message: "Sin campos editables con valor.",
+            message: "Sin campos editables con valor para matricula central.",
           });
         continue;
       }
-      if (editableEntries.length) {
-        await upsertMatriculaOverlay(
-          agentId,
-          normalizedMatricula,
-          editableEntries,
-          user,
-          academicSynced?.placement?.plantel ||
-            visibleStudent.plantel ||
-            visibleStudent.basePlantel ||
-            agentId,
-          schema,
-        );
-      }
+      await upsertMatriculaOverlay(
+        agentId,
+        normalizedMatricula,
+        editableEntries,
+        user,
+        visibleStudent.plantel || visibleStudent.basePlantel || agentId,
+        schema,
+      );
       summary.updated++;
     } catch (error: any) {
       summary.skipped++;
@@ -2273,31 +2368,9 @@ export const updateControlEscolarStudent = async (
     throw createError({ statusCode: 400, message: "Matrícula inválida." });
   }
 
-  const schema = await getControlEscolarSchema(agentId, {
+  const schema = await getControlEscolarCentralOnlySchema(agentId, {
     requireCentral: true,
   });
-  const [baseRow] = await query<any[]>(
-    `
-    SELECT
-      b.matricula,
-      ${expr(schema.base, "b", "plantel", sqlLiteral(agentId))} AS plantel,
-      ${expr(schema.base, "b", "nivel", "NULL")} AS nivelBase,
-      ${expr(schema.base, "b", "grado", "NULL")} AS gradoBase,
-      ${expr(schema.base, "b", "ciclo", "NULL")} AS cicloBase
-    FROM base b
-    WHERE b.matricula = ?
-    LIMIT 1
-  `,
-    [normalizedMatricula],
-  );
-  if (!baseRow) {
-    throw createError({
-      statusCode: 404,
-      message:
-        "El alumno no existe en base. Control Escolar no crea alumnos locales.",
-    });
-  }
-
   const scopeFilters = {
     ciclo: filters.ciclo,
     cicloKey: filters.cicloKey,
@@ -2320,16 +2393,8 @@ export const updateControlEscolarStudent = async (
   const editableEntries = buildEditableMatriculaEntries(body, schema, {
     rejectUnknown: true,
   });
-  const academicSynced = await syncBaseAcademicPlacement(
-    agentId,
-    normalizedMatricula,
-    body,
-    baseRow,
-    visibleStudent,
-    scopeFilters,
-  );
 
-  if (!editableEntries.length && !academicSynced) {
+  if (!editableEntries.length) {
     throw createError({
       statusCode: 400,
       message:
@@ -2337,16 +2402,14 @@ export const updateControlEscolarStudent = async (
     });
   }
 
-  if (editableEntries.length) {
-    await upsertMatriculaOverlay(
-      agentId,
-      normalizedMatricula,
-      editableEntries,
-      user,
-      academicSynced?.placement?.plantel || baseRow.plantel || agentId,
-      schema,
-    );
-  }
+  await upsertMatriculaOverlay(
+    agentId,
+    normalizedMatricula,
+    editableEntries,
+    user,
+    visibleStudent.plantel || visibleStudent.basePlantel || agentId,
+    schema,
+  );
 
   const result = await fetchControlEscolarStudents(agentId, {
     ...scopeFilters,

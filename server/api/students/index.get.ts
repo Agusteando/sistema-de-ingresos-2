@@ -4,6 +4,7 @@ import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
+import { maybeRefreshControlEscolarCacheFromLoadedRows } from '../../utils/control-escolar-cache'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { q = '', ciclo = '2025', concepts = '' } = getQuery(event)
@@ -220,6 +221,28 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       tipoIngreso
     }
   })
+
+  if (!q && user?.active_plantel && user.active_plantel !== 'GLOBAL') {
+    const refreshPromise = maybeRefreshControlEscolarCacheFromLoadedRows(
+      String(event.context.dbBridgeAgentId || user.active_plantel),
+      mapped,
+      {
+        triggerName: 'auto-students-load',
+        minAgeMinutes: 15,
+        cicloKey,
+        previousCiclo
+      }
+    ).catch((error: any) => {
+      console.warn('[Control Escolar Cache] Auto refresh after students load failed.', {
+        plantel: user.active_plantel,
+        message: error?.message || error
+      })
+    })
+
+    const waitUntil = (event as any).waitUntil
+    if (typeof waitUntil === 'function') waitUntil.call(event, refreshPromise)
+    else await refreshPromise
+  }
 
   return await attachCustomSectionsToStudents(mapped, user)
 }))
