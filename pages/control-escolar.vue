@@ -1192,6 +1192,64 @@
         </footer>
       </section>
     </div>
+
+    <div
+      v-if="showControlDiagnosticsModal"
+      class="ce-modal-backdrop ce-diagnostics-backdrop"
+      @click.self="closeControlDiagnosticsModal"
+    >
+      <section
+        class="ce-diagnostics-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ce-diagnostics-title"
+      >
+        <header>
+          <div>
+            <small>Diagnóstico oculto</small>
+            <h2 id="ce-diagnostics-title">Flujo de carga Control Escolar</h2>
+          </div>
+          <button type="button" class="detail-shell-close" @click="closeControlDiagnosticsModal">
+            <LucideX :size="20" />
+          </button>
+        </header>
+        <div v-if="lastControlLoadDiagnostics" class="ce-diagnostics-body">
+          <div class="ce-diagnostics-summary">
+            <span><b>Estado</b>{{ lastControlLoadDiagnostics.status }}</span>
+            <span><b>Total cliente</b>{{ formatControlDuration(lastControlLoadDiagnostics.totalMs) }}</span>
+            <span><b>Flujo servidor</b>{{ lastControlLoadDiagnostics.server.flow }}</span>
+            <span><b>Cache</b>{{ lastControlLoadDiagnostics.source.cacheFreshness || 'n/a' }}</span>
+          </div>
+          <section>
+            <h3>Cliente</h3>
+            <dl>
+              <div v-for="step in lastControlLoadDiagnostics.clientSteps" :key="`client-${step.key}`">
+                <dt>{{ step.label }}</dt>
+                <dd>{{ step.status }} · {{ formatControlDuration(step.ms) }}<span v-if="step.rows != null"> · {{ step.rows }} filas</span></dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <h3>Servidor</h3>
+            <dl>
+              <div v-for="step in lastControlLoadDiagnostics.server.steps" :key="`server-${step.key}`">
+                <dt>{{ step.label }}</dt>
+                <dd>{{ step.status }} · {{ formatControlDuration(step.ms) }}<span v-if="step.rows != null"> · {{ step.rows }} filas</span><span v-if="step.freshness"> · {{ step.freshness }}</span></dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <h3>Fuente</h3>
+            <p>Base: {{ lastControlLoadDiagnostics.source.base || 'n/a' }}</p>
+            <p>Overlay: {{ lastControlLoadDiagnostics.source.overlay || 'n/a' }}</p>
+            <p>Rows: base {{ lastControlLoadDiagnostics.source.localRows }}, matricula {{ lastControlLoadDiagnostics.source.overlayRows }}, usuarios {{ lastControlLoadDiagnostics.source.usersRows }}</p>
+          </section>
+        </div>
+        <div v-else class="ce-diagnostics-empty">
+          Aún no hay una carga registrada para este plantel.
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -1343,6 +1401,8 @@ const controlDataFreshness = ref("empty");
 const controlDataSavedAt = ref("");
 const controlDataSource = ref(null);
 const controlExternalDbRows = ref(0);
+const showControlDiagnosticsModal = ref(false);
+const lastControlLoadDiagnostics = ref(null);
 
 const CONTROL_SCREEN_DESIGN_WIDTH = 1520;
 const CONTROL_SCREEN_DESIGN_HEIGHT = 820;
@@ -1440,6 +1500,67 @@ const getControlExternalDbRowCount = (source = {}) =>
       source.matriculaRows ??
       0,
   ) || 0;
+
+const controlNow = () =>
+  typeof performance !== "undefined" && performance?.now
+    ? performance.now()
+    : Date.now();
+
+const formatControlDuration = (ms) => {
+  const value = Number(ms || 0);
+  if (!Number.isFinite(value)) return "0 ms";
+  if (value < 1000) return `${Math.round(value)} ms`;
+  return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} s`;
+};
+
+const normalizeControlDiagnostics = ({
+  query = {},
+  cached = null,
+  response = null,
+  clientSteps = [],
+  startedAt = Date.now(),
+  totalMs = 0,
+  status = "ready",
+} = {}) => {
+  const source = response?.source || {};
+  const server = source.diagnostics || {};
+  const serverSteps = Array.isArray(server.steps) ? server.steps : [];
+  return {
+    capturedAt: new Date().toISOString(),
+    status,
+    agentId: selectedAgentId.value,
+    ciclo: currentCicloKey.value,
+    query: { ...query },
+    localCacheUsed: Boolean(cached),
+    localCacheRows: Array.isArray(cached?.data) ? cached.data.length : 0,
+    totalMs: Math.max(0, Math.round(Number(totalMs || 0))),
+    clientSteps,
+    server: {
+      flow: server.flow || source.phase || "unknown",
+      phase: server.phase || source.phase || "enriched",
+      totalMs: Number(server.totalMs || 0),
+      steps: serverSteps,
+    },
+    source: {
+      base: source.base || "",
+      overlay: source.overlay || "",
+      cacheFreshness: source.cacheFreshness || "",
+      cacheRefreshedAt: source.cacheRefreshedAt || "",
+      cacheExpiresAt: source.cacheExpiresAt || "",
+      localRows: Number(source.localRows || 0),
+      overlayRows: Number(source.overlayRows || 0),
+      enrichedRows: Number(source.enrichedRows || 0),
+      usersRows: Number(source.usersRows || 0),
+    },
+  };
+};
+
+const openControlDiagnosticsModal = () => {
+  showControlDiagnosticsModal.value = true;
+};
+const closeControlDiagnosticsModal = () => {
+  showControlDiagnosticsModal.value = false;
+};
 
 const showControlSyncVisual = computed(() =>
   Boolean(
@@ -2639,6 +2760,17 @@ const loadStudents = async (options = {}) => {
   const query = buildIndexQuery();
   const hadStudents =
     controlStudentsIndex.value.length > 0 || students.value.length > 0;
+  const startedAt = controlNow();
+  const clientSteps = [];
+  const markClientStep = (key, label, stepStartedAt, status = "ready", details = {}) => {
+    clientSteps.push({
+      key,
+      label,
+      status,
+      ms: Math.max(0, Math.round(controlNow() - stepStartedAt)),
+      ...details,
+    });
+  };
 
   controlCacheStage.value = useCache ? "loading" : "empty";
   controlBaseStage.value = "idle";
@@ -2646,7 +2778,15 @@ const loadStudents = async (options = {}) => {
   controlCompleteStage.value = "idle";
   controlExternalDbRows.value = 0;
 
+  const cacheStartedAt = controlNow();
   const cached = useCache ? readCachedControlStudents(query) : null;
+  markClientStep(
+    "browser-cache",
+    "Leer cache del navegador",
+    cacheStartedAt,
+    cached ? "ready" : "empty",
+    { rows: Array.isArray(cached?.data) ? cached.data.length : 0 },
+  );
 
   if (cached) {
     pagination.page = 1;
@@ -2657,16 +2797,15 @@ const loadStudents = async (options = {}) => {
     controlDataSavedAt.value = cached.savedAt || "";
     controlDataSource.value = cached.source || null;
     controlCacheStage.value = "ready";
-    controlExternalDbRows.value = 0;
+    controlExternalDbRows.value = getControlExternalDbRowCount(cached.source || {});
   } else {
     controlCacheStage.value = "empty";
-    if (clearExisting) resetControlStudentsView();
-    controlCacheStage.value = "empty";
-    studentsLoading.value = forceLoading || !hadStudents || clearExisting;
+    if (clearExisting && !hadStudents) resetControlStudentsView();
+    studentsLoading.value = forceLoading || !hadStudents;
     controlDataFreshness.value =
-      hadStudents && !clearExisting ? controlDataFreshness.value : "empty";
+      hadStudents ? controlDataFreshness.value : "empty";
     controlDataSavedAt.value = "";
-    if (!hadStudents || clearExisting) controlExternalDbRows.value = 0;
+    if (!hadStudents) controlExternalDbRows.value = 0;
   }
 
   const canKeepVisibleData = () =>
@@ -2677,88 +2816,32 @@ const loadStudents = async (options = {}) => {
 
   try {
     controlBaseStage.value = "loading";
-    const baseResponse = await $fetch("/api/control-escolar/students", {
-      query: { ...query, phase: "base" },
-    });
-    if (requestId !== controlStudentsRequestId) return;
-
-    pagination.page = 1;
-    applyControlStudentsPayload(baseResponse);
-    loadError.value = "";
-    controlBaseStage.value = "ready";
-    controlDataFreshness.value = "base";
-    controlDataSavedAt.value = "";
-    controlDataSource.value = baseResponse?.source || controlDataSource.value;
-    controlExternalDbRows.value = 0;
-    writeCachedControlStudents(query, baseResponse, {
-      stage: "base",
-      freshness: "base",
-      cacheStage: controlCacheStage.value,
-      baseStage: "ready",
-      externalStage: "idle",
-      completeStage: "idle",
-      externalRows: 0,
-    });
-  } catch (error) {
-    if (requestId !== controlStudentsRequestId) return;
-    controlBaseStage.value = "failed";
-    controlExternalDbStage.value = "failed";
-    controlCompleteStage.value = "failed";
-
-    if (!canKeepVisibleData()) {
-      resetControlStudentsView();
-      controlCacheStage.value = cached ? "ready" : "empty";
-      controlBaseStage.value = "failed";
-      controlExternalDbStage.value = "failed";
-      controlCompleteStage.value = "failed";
-      loadError.value =
-        error?.data?.message ||
-        error?.message ||
-        "Plantel fuera de línea o sin respuesta.";
-      studentsLoading.value = false;
-      nextTick(scheduleWorkspaceScaleUpdate);
-      return;
-    }
-
-    loadError.value = "";
-    applyInstantStudentFilters();
-    studentsLoading.value = false;
-    nextTick(scheduleWorkspaceScaleUpdate);
-    return;
-  } finally {
-    if (requestId === controlStudentsRequestId) {
-      studentsLoading.value = false;
-      nextTick(scheduleWorkspaceScaleUpdate);
-    }
-  }
-
-  try {
     controlExternalDbStage.value = "loading";
+    controlCompleteStage.value = "loading";
+    const requestStartedAt = controlNow();
     const response = await $fetch("/api/control-escolar/students", {
       query: { ...query, phase: "enriched" },
     });
+    markClientStep(
+      "server-enriched",
+      "Base como selector + matricula enriquecida",
+      requestStartedAt,
+      "ready",
+      { rows: Array.isArray(response?.data) ? response.data.length : 0 },
+    );
     if (requestId !== controlStudentsRequestId) return;
 
     pagination.page = 1;
     applyControlStudentsPayload(response);
     loadError.value = "";
+    controlBaseStage.value = "ready";
     const responseSource = response?.source || {};
     const externalDbRows = getControlExternalDbRowCount(responseSource);
     controlExternalDbRows.value = externalDbRows;
     controlExternalDbStage.value = externalDbRows > 0 ? "ready" : "empty";
     controlDataFreshness.value = externalDbRows > 0 ? "synced" : "base";
     controlDataSavedAt.value = new Date().toISOString();
-    controlDataSource.value = response?.source || controlDataSource.value;
-    writeCachedControlStudents(query, response, {
-      stage: "external",
-      freshness: controlDataFreshness.value,
-      cacheStage: controlCacheStage.value,
-      baseStage: "ready",
-      externalStage: controlExternalDbStage.value,
-      completeStage: "idle",
-      externalRows: externalDbRows,
-      savedAt: controlDataSavedAt.value,
-    });
+    controlDataSource.value = responseSource || controlDataSource.value;
     controlCompleteStage.value = "ready";
     persistCurrentControlStudentsCache({
       stage: "complete",
@@ -2770,17 +2853,40 @@ const loadStudents = async (options = {}) => {
       externalRows: externalDbRows,
       savedAt: controlDataSavedAt.value,
     });
+    lastControlLoadDiagnostics.value = normalizeControlDiagnostics({
+      query,
+      cached,
+      response,
+      clientSteps,
+      startedAt,
+      totalMs: controlNow() - startedAt,
+      status: "ready",
+    });
   } catch (error) {
+    markClientStep(
+      "server-enriched",
+      "Base como selector + matricula enriquecida",
+      startedAt,
+      "failed",
+      { error: error?.data?.message || error?.message || String(error || "") },
+    );
     if (requestId !== controlStudentsRequestId) return;
+    controlBaseStage.value = canKeepVisibleData() ? "partial" : "failed";
     controlExternalDbStage.value = "failed";
     controlCompleteStage.value = "failed";
+    lastControlLoadDiagnostics.value = normalizeControlDiagnostics({
+      query,
+      cached,
+      response: null,
+      clientSteps,
+      startedAt,
+      totalMs: controlNow() - startedAt,
+      status: "failed",
+    });
 
     if (!canKeepVisibleData()) {
       resetControlStudentsView();
       controlCacheStage.value = cached ? "ready" : "empty";
-      controlBaseStage.value = "ready";
-      controlExternalDbStage.value = "failed";
-      controlCompleteStage.value = "failed";
       loadError.value =
         error?.data?.message ||
         error?.message ||
@@ -2811,7 +2917,7 @@ const refreshAll = async (options = {}) => {
 const reloadControlStudentsForCurrentScope = async () => {
   if (!selectedAgentId.value) return;
   pagination.page = 1;
-  await refreshAll({ clearExisting: true, forceLoading: true });
+  await refreshAll({ clearExisting: false, forceLoading: !students.value.length });
 };
 
 const clearQuickFilters = () => {
@@ -3260,6 +3366,7 @@ onMounted(async () => {
   if (process.client) {
     localHour.value = new Date().getHours();
     window.addEventListener("ingresos:ciclo-changed", handleCicloChanged);
+    window.addEventListener("control-escolar:open-sync-diagnostics", openControlDiagnosticsModal);
     window.addEventListener("resize", scheduleControlScreenScaleUpdate, { passive: true });
     const controlScreenHost = controlScreenRef.value?.parentElement;
     if (typeof ResizeObserver !== "undefined" && controlScreenHost) {
@@ -3289,6 +3396,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (process.client) {
     window.removeEventListener("ingresos:ciclo-changed", handleCicloChanged);
+    window.removeEventListener("control-escolar:open-sync-diagnostics", openControlDiagnosticsModal);
     window.removeEventListener("resize", scheduleControlScreenScaleUpdate);
     if (controlScreenFrame) window.cancelAnimationFrame(controlScreenFrame);
   }
@@ -6109,4 +6217,112 @@ onBeforeUnmount(() => {
     overflow-x: auto;
   }
 }
+
+
+.ce-diagnostics-modal {
+  width: min(720px, calc(100vw - 36px));
+  max-height: min(760px, calc(100vh - 40px));
+  overflow: hidden;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 26px 80px rgba(18, 30, 52, 0.22);
+  border: 1px solid rgba(213, 224, 236, 0.9);
+}
+
+.ce-diagnostics-modal > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  border-bottom: 1px solid rgba(219, 229, 240, 0.92);
+}
+
+.ce-diagnostics-modal header small {
+  display: block;
+  color: #718096;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ce-diagnostics-modal header h2 {
+  margin: 4px 0 0;
+  color: #172033;
+  font-size: 1.06rem;
+  font-weight: 850;
+}
+
+.ce-diagnostics-body {
+  display: grid;
+  gap: 16px;
+  max-height: calc(100vh - 160px);
+  overflow: auto;
+  padding: 18px 22px 22px;
+}
+
+.ce-diagnostics-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ce-diagnostics-summary span {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f7fafc;
+  border: 1px solid rgba(220, 230, 241, 0.88);
+  color: #25324a;
+  font-size: 0.78rem;
+}
+
+.ce-diagnostics-summary b {
+  color: #718096;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ce-diagnostics-body section {
+  border: 1px solid rgba(220, 230, 241, 0.88);
+  border-radius: 16px;
+  padding: 13px 14px;
+  background: rgba(250, 252, 254, 0.82);
+}
+
+.ce-diagnostics-body h3 {
+  margin: 0 0 10px;
+  color: #1c2a3f;
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.ce-diagnostics-body dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.ce-diagnostics-body dl div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(224, 233, 244, 0.75);
+}
+
+.ce-diagnostics-body dl div:last-child { border-bottom: 0; }
+.ce-diagnostics-body dt { color: #34435c; font-weight: 720; }
+.ce-diagnostics-body dd { margin: 0; color: #607087; text-align: right; }
+.ce-diagnostics-body p { margin: 4px 0; color: #526175; font-size: 0.82rem; }
+.ce-diagnostics-empty { padding: 24px; color: #526175; }
+
+@media (max-width: 860px) {
+  .ce-diagnostics-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 </style>
