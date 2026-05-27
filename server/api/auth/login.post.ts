@@ -161,19 +161,27 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 403, message: 'Tu cuenta no tiene acceso al sistema.' })
     }
 
-    const externalControlOnly = !seedAdmin && externalUser && isControlEscolarOnlyRole(externalUser.role)
-    const user = externalControlOnly
+    const centralAuthUser = seedAdmin
       ? {
-          username: externalUser.username || externalUser.displayName || payload.name || normalizedEmail,
-          email: externalUser.email || normalizedEmail,
-          role: externalUser.role || 'ROLE_CTRL',
-          planteles: externalUser.planteles || requestedPlantel || PLANTELES_LIST[0],
-          plantel: externalUser.plantel || requestedPlantel || PLANTELES_LIST[0],
-          avatar: externalUser.avatar || externalUser.picture || payload.picture || null
+          username: payload.name || normalizedEmail,
+          email: normalizedEmail,
+          role: 'global',
+          planteles: ALL_PLANTELES,
+          plantel: requestedPlantel || PLANTELES_LIST[0],
+          avatar: payload.picture || null
         }
-      : (() => null)()
+      : (externalUser && hasControlEscolarRole(externalUser.role)
+          ? {
+              username: externalUser.username || externalUser.displayName || payload.name || normalizedEmail,
+              email: externalUser.email || normalizedEmail,
+              role: externalUser.role || 'ROLE_CTRL',
+              planteles: externalUser.planteles || requestedPlantel || PLANTELES_LIST[0],
+              plantel: externalUser.plantel || requestedPlantel || PLANTELES_LIST[0],
+              avatar: externalUser.avatar || externalUser.picture || payload.picture || null
+            }
+          : null)
 
-    const resolvedUser = user || await runWithBridgeAgentId(requestedPlantel, async () => {
+    const resolvedUser = centralAuthUser || await runWithBridgeAgentId(requestedPlantel, async () => {
       const localUser = await ensureLocalUser(payload, requestedPlantel)
       return externalUser && !isSuperAdminRole(localUser.role)
         ? {
