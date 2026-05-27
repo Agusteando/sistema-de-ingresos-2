@@ -158,6 +158,12 @@
           </div>
         </label>
 
+        <div class="system-version-card" v-if="systemVersionLabel">
+          <span>Versión</span>
+          <strong>{{ systemVersionLabel }}</strong>
+          <small v-if="systemVersionUpdatedLabel">{{ systemVersionUpdatedLabel }}</small>
+        </div>
+
         <div class="admin-card">
           <div class="admin-profile">
             <div class="admin-avatar">
@@ -370,6 +376,17 @@ const activePlantelStatus = computed(() => activePlantel.value === 'GLOBAL'
   ? { status: 'unknown', online: true, label: 'Global', message: 'Vista consolidada', action: '' }
   : getPlantelStatus(activePlantel.value))
 
+const systemVersionLabel = ref('')
+const systemVersionUpdatedLabel = ref('')
+
+const loadSystemVersion = async () => {
+  try {
+    const result = await $fetch('/api/login/updates')
+    systemVersionLabel.value = String(result?.versionLabel || '')
+    systemVersionUpdatedLabel.value = result?.lastUpdatedLabel ? `Actualizado ${result.lastUpdatedLabel}` : ''
+  } catch {}
+}
+
 const openPlantelMenu = () => {
   plantelMenuOpen.value = true
   loadPlantelStatuses({ force: true })
@@ -435,6 +452,8 @@ onMounted(async () => {
   if (activePlantel.value !== 'GLOBAL') {
     loadPlantelStatuses({ force: true, plantel: activePlantel.value })
   }
+
+  loadSystemVersion()
 
   try {
     const res = await $fetch('/api/admin/profile')
@@ -725,6 +744,7 @@ const logout = async () => {
 }
 
 .plantel-select,
+.system-version-card,
 .admin-card {
   display: flex;
   align-items: center;
@@ -953,6 +973,39 @@ const logout = async () => {
 
 .toggle-thumb-on {
   transform: translateX(18px);
+}
+
+.system-version-card {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  color: #244736;
+}
+
+.system-version-card span {
+  color: #2a5d4a;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.system-version-card strong {
+  color: #17351f;
+  font-size: 0.93rem;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.system-version-card small {
+  overflow: hidden;
+  color: #658070;
+  font-size: 0.68rem;
+  font-weight: 760;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-card {
