@@ -1,1 +1,1 @@
-Scale Control Escolar desktop layout proportionally
+Refine login actualizaciones feed using GitHub push events

@@ -233,28 +233,31 @@
               </label>
 
               <div v-if="updatesError" class="updates-empty">{{ updatesError }}</div>
-              <div v-else-if="updatesPending && !filteredUpdates.length" class="updates-empty">Cargando actualizaciones…</div>
-              <div v-else-if="!filteredUpdates.length" class="updates-empty">No hay actualizaciones que coincidan.</div>
+              <div v-else>
+                <div v-if="loginUpdates.warning" class="updates-warning">{{ loginUpdates.warning }}</div>
+                <div v-if="updatesPending && !filteredUpdates.length" class="updates-empty">Cargando actualizaciones…</div>
+                <div v-else-if="!filteredUpdates.length" class="updates-empty">No hay actualizaciones que coincidan.</div>
 
-              <div v-else class="updates-list">
-                <a
-                  v-for="commit in filteredUpdates"
-                  :key="commit.sha || `${commit.repo}-${commit.date}-${commit.title}`"
-                  class="update-item"
-                  :href="commit.url || commit.repoUrl || undefined"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <span class="update-topline">
-                    <span class="update-repo">{{ commit.repo }}</span>
-                    <span v-if="commit.isNew" class="update-new">NEW</span>
-                  </span>
-                  <strong>{{ commit.title }}</strong>
-                  <small>
-                    {{ commit.relativeDateLabel }}
-                    <span v-if="commit.shortSha"> · {{ commit.shortSha }}</span>
-                  </small>
-                </a>
+                <div v-else class="updates-list">
+                  <a
+                    v-for="update in filteredUpdates"
+                    :key="update.sha || `${update.repo}-${update.date}-${update.title}`"
+                    class="update-item"
+                    :href="update.url || update.repoUrl || undefined"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span class="update-topline">
+                      <span class="update-repo">{{ update.repo }}</span>
+                      <span v-if="update.isNew" class="update-new">NEW</span>
+                    </span>
+                    <strong>{{ update.title }}</strong>
+                    <small>
+                      {{ update.relativeDateLabel }}
+                      <span v-if="update.shortSha"> · {{ update.shortSha }}</span>
+                    </small>
+                  </a>
+                </div>
               </div>
             </div>
           </section>
@@ -366,24 +369,24 @@ const loginUpdates = ref({
   configured: false,
   totalCount: 0,
   lastUpdatedLabel: 'sin datos',
-  commits: []
+  updates: []
 })
 const updatesNumberFormatter = new Intl.NumberFormat('es-MX')
 
 const updatesTotalLabel = computed(() => (
   updatesPending.value && !loginUpdates.value.totalCount
     ? 'Cargando'
-    : `${updatesNumberFormatter.format(Number(loginUpdates.value.totalCount || 0))} commits`
+    : updatesNumberFormatter.format(Number(loginUpdates.value.totalCount || 0))
 ))
 const updatesLatestLabel = computed(() => loginUpdates.value.lastUpdatedLabel || 'sin datos')
 const filteredUpdates = computed(() => {
   const query = updatesSearch.value.trim().toLowerCase()
-  const commits = Array.isArray(loginUpdates.value.commits) ? loginUpdates.value.commits : []
+  const updates = Array.isArray(loginUpdates.value.updates) ? loginUpdates.value.updates : []
 
-  if (!query) return commits
+  if (!query) return updates
 
-  return commits.filter((commit) => {
-    const haystack = [commit.title, commit.description, commit.repo, commit.shortSha]
+  return updates.filter((update) => {
+    const haystack = [update.title, update.description, update.repo, update.shortSha]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
