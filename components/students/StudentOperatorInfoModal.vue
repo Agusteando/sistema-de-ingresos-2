@@ -38,7 +38,11 @@
             <h3>{{ fullName }}</h3>
             <div class="operator-chips">
               <span class="chip matricula">{{ safeMatricula }}</span>
-              <span class="chip complete"><LucideCheckCircle2 :size="15" /> {{ sourceLabel }}</span>
+              <span :class="['chip', expedienteComplete ? 'complete' : 'pending']"><LucideCheckCircle2 :size="15" /> {{ sourceLabel }}</span>
+            </div>
+            <div class="operator-progress-mini" :aria-label="`Expediente ${expedienteProgress}% completo`">
+              <span><b>{{ expedienteProgress }}%</b> completo</span>
+              <i><em :style="{ width: `${expedienteProgress}%` }"></em></i>
             </div>
           </div>
 
@@ -292,7 +296,7 @@ const displayGrupo = computed(() => {
 })
 const displayServicio = computed(() => titleCase(firstValue(source.value.servicio, source.value.program, source.value.nivel, props.student?.servicio)))
 const displayServiceBadge = computed(() => titleCase(firstValue(source.value.tipoIngreso, source.value.tipo_ingreso, source.value.ingreso, props.student?.tipoIngreso, 'Externo')))
-const sourceLabel = computed(() => 'Expediente completo')
+const sourceLabel = computed(() => expedienteComplete.value ? 'Expediente completo' : `Expediente ${expedienteProgress.value}% completo`)
 const readyToRender = computed(() => Boolean(detail.value) && !error.value)
 
 const initials = computed(() => {
@@ -359,6 +363,23 @@ const fatherEmail = computed(() => fatherEmailInvalid.value ? `${displayText(fat
 const motherEmail = computed(() => motherEmailInvalid.value ? `${displayText(motherEmailRaw.value)} · no válido` : fallbackText(motherEmailRaw.value))
 const fatherComplete = computed(() => Boolean(fatherNameRaw.value && validPhone(fatherPhoneRaw.value) && validFamilyEmail(fatherEmailRaw.value)))
 const motherComplete = computed(() => Boolean(motherNameRaw.value && validPhone(motherPhoneRaw.value) && validFamilyEmail(motherEmailRaw.value)))
+const expedienteChecks = computed(() => [
+  Boolean(safeMatricula.value && safeMatricula.value !== 'Sin matrícula'),
+  hasValue(fullName.value) && fullName.value !== 'Alumno',
+  hasValue(firstValue(source.value.curp, source.value.CURP)),
+  fatherComplete.value,
+  motherComplete.value,
+  hasValue(firstValue(source.value.plantel, source.value.basePlantel)),
+  hasValue(firstValue(source.value.nivel, props.student?.nivel)),
+  hasValue(firstValue(source.value.grado, props.student?.grado)),
+  hasValue(firstValue(source.value.group, source.value.grupo, props.student?.grupo))
+])
+const expedienteProgress = computed(() => {
+  const checks = expedienteChecks.value
+  if (!checks.length) return 0
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100)
+})
+const expedienteComplete = computed(() => expedienteProgress.value >= 100)
 const parentOccupation = computed(() => fallbackText(firstValue(source.value.ocupacionPadre, source.value.ocupacionTutor)))
 const motherOccupation = computed(() => fallbackText(source.value.ocupacionMadre))
 
@@ -376,10 +397,10 @@ const formatDate = (value) => {
 }
 
 const syncRows = computed(() => [
-  { label: 'Estado del expediente', value: 'Listo', kind: 'status' },
+  { label: 'Avance del expediente', value: sourceLabel.value, kind: 'status' },
   { label: 'Última actualización', value: formatDate(source.value.updatedAt) },
   { label: 'Modo', value: 'Solo lectura' },
-  { label: 'Notas', value: 'Información consolidada para consulta operativa.' }
+  { label: 'Notas', value: expedienteComplete.value ? 'Información completa para consulta operativa.' : 'Faltan datos familiares o de identidad por completar.' }
 ])
 
 const copyMatricula = async () => {
@@ -1017,4 +1038,41 @@ watch(() => props.student?.matricula, () => {
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .family-grid { grid-template-columns: 1fr; }
 }
+
+.operator-progress-mini {
+  display: grid;
+  gap: .36rem;
+  width: min(300px, 100%);
+  margin-top: .65rem;
+}
+
+.operator-progress-mini span {
+  color: #65756c;
+  font-size: .72rem;
+  font-weight: 900;
+}
+
+.operator-progress-mini span b { color: #223d2e; }
+
+.operator-progress-mini i {
+  display: block;
+  height: .42rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(33, 71, 48, .11);
+}
+
+.operator-progress-mini em {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7aa985, #2f7a4c);
+}
+
+.chip.pending {
+  background: rgba(245, 158, 11, .12);
+  color: #92400e;
+  border-color: rgba(245, 158, 11, .25);
+}
+
 </style>

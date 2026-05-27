@@ -559,6 +559,80 @@ const loadGlobalKpis = async () => {
 
 let studentsRequestId = 0
 
+let matriculaOverlayRequestId = 0
+
+const compactText = (value) => String(value || '').trim()
+
+const mergeMatriculaOverlayIntoStudent = (student, overlayStudent) => {
+  if (!student || !overlayStudent) return student
+  const central = { ...(student.centralMatricula || {}), ...overlayStudent }
+  return {
+    ...student,
+    centralMatricula: central,
+    curp: compactText(overlayStudent.curp) || student.curp,
+    padre: compactText(overlayStudent.padre) || student.padre,
+    madre: compactText(overlayStudent.madre) || student.madre,
+    telefonoPadre: compactText(overlayStudent.telefonoPadre) || student.telefonoPadre,
+    telefonoMadre: compactText(overlayStudent.telefonoMadre) || student.telefonoMadre,
+    emailPadre: compactText(overlayStudent.emailPadre) || student.emailPadre,
+    emailMadre: compactText(overlayStudent.emailMadre) || student.emailMadre,
+    nombrePadre: compactText(overlayStudent.nombrePadre) || student.nombrePadre,
+    apellidoPaternoPadre: compactText(overlayStudent.apellidoPaternoPadre) || student.apellidoPaternoPadre,
+    apellidoMaternoPadre: compactText(overlayStudent.apellidoMaternoPadre) || student.apellidoMaternoPadre,
+    nombrePadreCompleto: compactText(overlayStudent.nombrePadreCompleto) || student.nombrePadreCompleto,
+    ocupacionPadre: compactText(overlayStudent.ocupacionPadre) || student.ocupacionPadre,
+    nombreMadre: compactText(overlayStudent.nombreMadre) || student.nombreMadre,
+    apellidoPaternoMadre: compactText(overlayStudent.apellidoPaternoMadre) || student.apellidoPaternoMadre,
+    apellidoMaternoMadre: compactText(overlayStudent.apellidoMaternoMadre) || student.apellidoMaternoMadre,
+    nombreMadreCompleto: compactText(overlayStudent.nombreMadreCompleto) || student.nombreMadreCompleto,
+    ocupacionMadre: compactText(overlayStudent.ocupacionMadre) || student.ocupacionMadre,
+  }
+}
+
+const loadVisibleMatriculaOverlays = async () => {
+  const matriculas = students.value
+    .map((student) => normalizeStudentMatricula(student.matricula))
+    .filter(Boolean)
+  if (!matriculas.length) return
+
+  const requestId = ++matriculaOverlayRequestId
+  try {
+    const response = await $fetch('/api/students/matricula-overlays', {
+      method: 'POST',
+      body: { matriculas }
+    })
+    if (requestId !== matriculaOverlayRequestId || !response?.ok) return
+
+    const overlays = new Map()
+    for (const overlay of response.overlays || []) {
+      const overlayStudent = overlay?.student
+      const key = normalizeStudentMatricula(overlayStudent?.matricula)
+      if (key) overlays.set(key, overlayStudent)
+    }
+    if (!overlays.size) return
+
+    students.value = students.value.map((student) => {
+      const key = normalizeStudentMatricula(student.matricula)
+      return overlays.has(key) ? mergeMatriculaOverlayIntoStudent(student, overlays.get(key)) : student
+    })
+
+    if (selectedStudent.value) {
+      const selectedKey = normalizeStudentMatricula(selectedStudent.value.matricula)
+      selectedStudent.value = students.value.find(student => normalizeStudentMatricula(student.matricula) === selectedKey) || selectedStudent.value
+    }
+    if (editingStudent.value) {
+      const editingKey = normalizeStudentMatricula(editingStudent.value.matricula)
+      editingStudent.value = students.value.find(student => normalizeStudentMatricula(student.matricula) === editingKey) || editingStudent.value
+    }
+    if (operatorInfoStudent.value) {
+      const operatorKey = normalizeStudentMatricula(operatorInfoStudent.value.matricula)
+      operatorInfoStudent.value = students.value.find(student => normalizeStudentMatricula(student.matricula) === operatorKey) || operatorInfoStudent.value
+    }
+  } catch (error) {
+    console.warn('[Students] central matricula overlay unavailable', error?.message || error)
+  }
+}
+
 const applyStudentsList = (nextStudents, { selectRouteStudent = true } = {}) => {
   students.value = Array.isArray(nextStudents) ? nextStudents : []
 
@@ -571,6 +645,8 @@ const applyStudentsList = (nextStudents, { selectRouteStudent = true } = {}) => 
     const match = students.value.find(s => normalizeStudentMatricula(s.matricula) === normalizeStudentMatricula(route.query.q))
     if (match) selectStudent(match)
   }
+
+  loadVisibleMatriculaOverlays()
 }
 
 const performSearch = async (options = {}) => {

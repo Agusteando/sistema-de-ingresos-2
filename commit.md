@@ -1,1 +1,1 @@
-fix: validate parent records and show separated family data
+Refine admin matrícula enrichment, expediente progress, login updates modal, and account header family data

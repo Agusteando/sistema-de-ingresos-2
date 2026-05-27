@@ -162,7 +162,7 @@
 
                 <div class="field-stack compact">
                   <label class="polished-field">
-                    <span>Padre/Tutor</span>
+                    <span>Padre</span>
                     <input
                       :value="form.padre"
                       type="text"
@@ -194,7 +194,8 @@
                       />
                     </label>
                   </div>
-                  <div v-if="isEdit && centralOverlayStudent" class="family-consult-panel">
+                  <div v-if="isEdit && centralOverlayStudent" class="family-consult-panel" aria-label="Consulta de datos familiares">
+                    <p class="family-consult-title">Datos familiares registrados</p>
                     <section :class="['family-consult-card', { complete: centralFatherComplete }]">
                       <small>Padre</small>
                       <strong>{{ centralFatherName || 'Sin registrar' }}</strong>
@@ -388,16 +389,6 @@
                 </div>
 
                 <div class="field-stack compact">
-                  <label class="polished-field">
-                    <span>Estatus</span>
-                    <input
-                      v-model="form.estatus"
-                      type="text"
-                      required
-                      placeholder="Activo o motivo de baja"
-                    />
-                  </label>
-
                   <section
                     class="edit-position-note"
                     aria-label="Cambio de posición académica"
@@ -573,7 +564,6 @@ const studentDraftFields = isEdit
       "padre",
       "telefono",
       "correo",
-      "estatus",
     ]
   : [
       "apellidoPaterno",
@@ -648,7 +638,6 @@ const studentDraftHasContent = (draft) => {
       currentCicloKey.value
   )
     return true;
-  if (isEdit && String(draft.estatus || "Activo") !== "Activo") return true;
   return false;
 };
 
@@ -809,8 +798,7 @@ const applyCentralOverlayToForm = (overlayStudent) => {
     curp: normalizeCurp(firstFilled(overlayStudent.curp, current.curp)),
     padre: firstFilled(overlayStudent.padre, overlayStudent.nombrePadreCompleto, [overlayStudent.nombrePadre, overlayStudent.apellidoPaternoPadre, overlayStudent.apellidoMaternoPadre].filter(Boolean).join(' '), current.padre),
     telefono: firstFilled(overlayStudent.telefonoPadre, overlayStudent.telefono, current.telefono),
-    correo: firstFilled(overlayStudent.emailPadre, overlayStudent.correo, current.correo),
-    estatus: current.estatus || 'Activo'
+    correo: firstFilled(overlayStudent.emailPadre, overlayStudent.correo, current.correo)
   };
 
   const overlayPlantel = String(overlayStudent.plantel || '').trim();
@@ -831,6 +819,13 @@ const loadCentralMatriculaOverlay = async () => {
   if (!isEdit) return;
   const matricula = String(props.student?.matricula || form.value.matricula || '').trim();
   if (!matricula) return;
+
+  const propOverlay = props.student?.centralMatricula;
+  if (propOverlay && typeof propOverlay === 'object') {
+    applyCentralOverlayToForm(propOverlay);
+    writeCentralOverlayCache(propOverlay);
+    return;
+  }
 
   const cachedOverlay = readCentralOverlayCache();
   if (cachedOverlay) {
