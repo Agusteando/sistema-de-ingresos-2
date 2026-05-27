@@ -628,6 +628,43 @@
   background: #b9c2d0;
 }
 
+.account-student-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 1px;
+  max-width: min(560px, 100%);
+  overflow: hidden;
+}
+
+.account-student-meta span {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: baseline;
+  gap: 4px;
+  overflow: hidden;
+  color: #475569;
+  font-size: 10.25px;
+  font-weight: 720;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-student-meta small {
+  flex: 0 0 auto;
+  color: #8b97aa;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.account-card--workspace .account-student-meta {
+  margin-top: 2px;
+}
+
 .account-expanded-controls {
   position: relative;
   z-index: 2;
