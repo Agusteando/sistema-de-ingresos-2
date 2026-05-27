@@ -1335,6 +1335,7 @@ const CONTROL_STUDENTS_CACHE_NAMESPACE = "control-escolar:students-cache";
 const CONTROL_STUDENTS_SCOPE_CACHE_NAMESPACE = "control-escolar:students-scope-cache";
 const CONTROL_STUDENTS_SCOPE_CACHE_INDEX_KEY = `${CONTROL_STUDENTS_SCOPE_CACHE_NAMESPACE}:index:v1`;
 const CONTROL_STUDENTS_SCOPE_CACHE_MAX_SCOPES = 8;
+const CONTROL_STUDENTS_BROWSER_CACHE_ENABLED = false;
 const currentCicloKey = computed(() =>
   normalizeCicloKey(
     normalizeCicloOption(state.value?.ciclo || cicloCookie.value),
@@ -2147,6 +2148,25 @@ const controlStudentsCacheLookupKeys = (query = buildQuery()) => [
   ]),
 ];
 
+const clearControlStudentsBrowserCache = () => {
+  if (!process.client) return;
+  try {
+    const keysToRemove = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index) || "";
+      if (
+        key.startsWith(CONTROL_STUDENTS_CACHE_NAMESPACE) ||
+        key.startsWith(CONTROL_STUDENTS_SCOPE_CACHE_NAMESPACE)
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  } catch (error) {
+    console.warn("[Control Escolar] No se pudo limpiar la caché local de alumnos.", error);
+  }
+};
+
 const readControlScopeCacheIndex = () => {
   if (!process.client) return [];
   try {
@@ -2257,29 +2277,9 @@ const isReadableCachedControlStudentsVersion = (value) => {
   );
 };
 
-const readCachedControlStudents = (query = buildQuery()) => {
-  if (!process.client) return null;
-
-  try {
-    const keys = controlStudentsCacheLookupKeys(query);
-    for (const key of keys) {
-      const cached = JSON.parse(localStorage.getItem(key) || "null");
-      if (!cached) continue;
-      if (!isReadableCachedControlStudentsVersion(cached?.version)) continue;
-      if (!Array.isArray(cached?.data)) continue;
-      if (!isCachedControlStudentsForScope(cached, query)) continue;
-      if (key.startsWith(CONTROL_STUDENTS_SCOPE_CACHE_NAMESPACE))
-        touchControlScopeCacheKey(key);
-      return normalizeCachedControlStudentsRecord(cached, query);
-    }
-    return null;
-  } catch (error) {
-    console.warn(
-      "[Control Escolar] No se pudo leer la caché local de alumnos.",
-      error,
-    );
-    return null;
-  }
+const readCachedControlStudents = (_query = buildQuery()) => {
+  clearControlStudentsBrowserCache();
+  return null;
 };
 
 const buildControlCacheMetadata = (metadata = {}, response = {}) => {
@@ -2304,56 +2304,9 @@ const buildControlCacheMetadata = (metadata = {}, response = {}) => {
   };
 };
 
-const writeCachedControlStudents = (
-  query = buildQuery(),
-  response = {},
-  metadata = {},
-) => {
-  if (!process.client || !Array.isArray(response?.data)) return false;
-
-  const cache = buildControlCacheMetadata(metadata, response);
-  const record = {
-    version: CONTROL_STUDENTS_SCOPE_CACHE_VERSION,
-    savedAt: cache.savedAt,
-    scope: controlCacheScopeFromQuery(query),
-    query: normalizeControlCacheParams(query),
-    data: sanitizeControlStudentsForCache(response.data),
-    pagination: response.pagination || {
-      page: pagination.page,
-      limit: pagination.limit,
-      total: response.data.length,
-      pages: 1,
-    },
-    catalogs: response.catalogs || {
-      niveles: [],
-      grados: [],
-      grupos: [],
-      gruposPorGrado: {},
-    },
-    source: {
-      ...(response.source || {}),
-      cache,
-      cacheSavedAt: cache.savedAt,
-      cacheFreshness: cache.freshness,
-      cacheStage: cache.stage,
-      cacheExternalRows: cache.externalRows,
-    },
-    cache,
-  };
-
-  try {
-    const cacheKey = controlStudentsScopeCacheKey(query);
-    localStorage.setItem(cacheKey, JSON.stringify(record));
-    touchControlScopeCacheKey(cacheKey);
-    removeLegacyControlStudentsCacheForScope(query);
-    return true;
-  } catch (error) {
-    console.warn(
-      "[Control Escolar] No se pudo guardar la caché local de alumnos.",
-      error,
-    );
-    return false;
-  }
+const writeCachedControlStudents = () => {
+  clearControlStudentsBrowserCache();
+  return false;
 };
 
 const normalizeMatriculaKey = (value) =>
@@ -2871,7 +2824,7 @@ const loadStudents = async (options = {}) => {
 
   const safeOptions = isDomEventPayload(options) ? {} : options || {};
   const {
-    useCache = true,
+    useCache = false,
     clearExisting = false,
     forceLoading = false,
   } = safeOptions;
@@ -2891,7 +2844,7 @@ const loadStudents = async (options = {}) => {
     });
   };
 
-  controlCacheStage.value = useCache ? "loading" : "empty";
+  controlCacheStage.value = "empty";
   controlBaseStage.value = "idle";
   controlExternalDbStage.value = "idle";
   controlCompleteStage.value = "idle";
@@ -2899,12 +2852,13 @@ const loadStudents = async (options = {}) => {
   publishControlSyncIndicatorState({ status: "syncing", message: "Cargando Control Escolar" });
 
   const cacheStartedAt = controlNow();
-  const cached = useCache ? readCachedControlStudents(query) : null;
+  const cached = null;
+  if (useCache || CONTROL_STUDENTS_BROWSER_CACHE_ENABLED) clearControlStudentsBrowserCache();
   markClientStep(
     "browser-cache",
-    "Leer cache local del plantel/ciclo",
+    "Cache local del navegador",
     cacheStartedAt,
-    cached ? "ready" : "empty",
+    "disabled",
     { rows: Array.isArray(cached?.data) ? cached.data.length : 0 },
   );
 
@@ -3502,6 +3456,7 @@ const handleCicloChanged = (event) => {
 onMounted(async () => {
   scheduleControlScreenScaleUpdate();
   if (process.client) {
+    clearControlStudentsBrowserCache();
     localHour.value = new Date().getHours();
     window.addEventListener("ingresos:ciclo-changed", handleCicloChanged);
     window.addEventListener("control-escolar:open-sync-diagnostics", openControlDiagnosticsModal);
