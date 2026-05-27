@@ -607,17 +607,17 @@
                       Plantel {{ selectedStudent.plantel || selectedAgentId }}
                     </p>
                   </div>
-                  <div class="ce-tutor-card">
-                    <small>Tutor / Responsable</small>
-                    <strong>{{
-                      selectedStudent.guardianName || "Sin tutor capturado"
-                    }}</strong>
-                    <span>{{
-                      selectedStudent.phone ||
-                      selectedStudent.telefonoPadre ||
-                      selectedStudent.telefonoMadre ||
-                      "Sin teléfono"
-                    }}</span>
+                  <div class="ce-family-mini-card">
+                    <section :class="['ce-parent-mini', { complete: isParentComplete(selectedStudent, 'padre') }]">
+                      <small>Padre</small>
+                      <strong>{{ parentDisplayName(selectedStudent, 'padre') || "Sin registrar" }}</strong>
+                      <span>{{ parentContactLine(selectedStudent, 'padre') }}</span>
+                    </section>
+                    <section :class="['ce-parent-mini', { complete: isParentComplete(selectedStudent, 'madre') }]">
+                      <small>Madre</small>
+                      <strong>{{ parentDisplayName(selectedStudent, 'madre') || "Sin registrar" }}</strong>
+                      <span>{{ parentContactLine(selectedStudent, 'madre') }}</span>
+                    </section>
                   </div>
                   <UiGroupIcon
                     class="ce-profile-watermark"
@@ -1800,10 +1800,9 @@ const qualityFilters = computed(() => {
       count: data.expedientesIncompletos || 0,
     },
     { key: "curp", label: "Sin CURP", count: data.sinCurp || 0 },
-    { key: "phone", label: "Sin teléfono", count: data.sinTelefono || 0 },
-    { key: "email", label: "Sin email", count: data.sinEmail || 0 },
-    { key: "guardian", label: "Sin tutor", count: data.sinTutor || 0 },
-    { key: "contact", label: "Sin contacto", count: data.sinContacto || 0 },
+    { key: "padre", label: "Sin datos de padre", count: data.sinPadre || 0 },
+    { key: "madre", label: "Sin datos de madre", count: data.sinMadre || 0 },
+    { key: "contact", label: "Sin contacto válido", count: data.sinContacto || 0 },
   ];
 });
 
@@ -1883,9 +1882,8 @@ const kpiCards = computed(() => {
 
 const requiredDataFields = [
   { key: "curp", label: "CURP", icon: LucideShieldCheck },
-  { key: "teléfono", label: "Teléfono", icon: LucidePhone },
-  { key: "email", label: "Email", icon: LucideMail },
-  { key: "tutor", label: "Tutor", icon: LucideUsersRound },
+  { key: "padre", label: "Padre", icon: LucideUsersRound },
+  { key: "madre", label: "Madre", icon: LucideUsersRound },
 ];
 
 const formatNumber = (value) => Number(value || 0).toLocaleString("es-MX");
@@ -1907,10 +1905,13 @@ const qualityLabel = (value) =>
     complete: "Completo",
     incomplete: "Expediente incompleto",
     curp: "Sin CURP",
-    phone: "Sin teléfono",
-    email: "Sin email",
-    guardian: "Sin tutor",
-    contact: "Sin contacto",
+    phone: "Sin datos familiares",
+    email: "Sin datos familiares",
+    guardian: "Sin datos familiares",
+    tutor: "Sin datos familiares",
+    padre: "Sin datos de padre",
+    madre: "Sin datos de madre",
+    contact: "Sin contacto válido",
   })[value] || value;
 const controlGroupLabel = (student) => {
   const value = String(student?.group ?? student?.grupo ?? "")
@@ -2394,19 +2395,42 @@ const controlStudentSearchHaystack = (student = {}) =>
       .join(" "),
   );
 
+const phoneDigits = (value) => String(value || "").replace(/\D/g, "");
+const isValidPhone = (value) => phoneDigits(value).length >= 10;
+const normalizeEmailValue = (value) => String(value || "").trim().toLowerCase();
+const isValidFamilyEmail = (value) => {
+  const email = normalizeEmailValue(value);
+  if (!email || email.includes("@casita")) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+const parentDisplayName = (student = {}, type = "padre") => {
+  if (type === "madre") {
+    return [student.nombreMadre, student.apellidoPaternoMadre, student.apellidoMaternoMadre]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .join(" ") || String(student.motherName || student.nombreMadreCompleto || "").trim();
+  }
+  return [student.nombrePadre, student.apellidoPaternoPadre, student.apellidoMaternoPadre]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" ") || String(student.fatherName || student.nombrePadreCompleto || "").trim();
+};
+const isParentComplete = (student = {}, type = "padre") => {
+  const name = parentDisplayName(student, type);
+  const phone = type === "madre" ? student.telefonoMadre : (student.telefonoPadre || student.phone || student.telefono);
+  const email = type === "madre" ? student.emailMadre : (student.emailPadre || student.email || student.correo);
+  return Boolean(name && isValidPhone(phone) && isValidFamilyEmail(email));
+};
+const parentContactLine = (student = {}, type = "padre") => {
+  const phone = type === "madre" ? student.telefonoMadre : (student.telefonoPadre || student.phone || student.telefono);
+  const email = type === "madre" ? student.emailMadre : (student.emailPadre || student.email || student.correo);
+  const parts = [];
+  if (phone) parts.push(isValidPhone(phone) ? String(phone) : `${phone} · teléfono no válido`);
+  if (email) parts.push(isValidFamilyEmail(email) ? String(email) : `${email} · email no válido`);
+  return parts.length ? parts.join(" · ") : "Sin contacto válido";
+};
 const hasNoPrimaryContactClient = (student = {}) =>
-  ![
-    student.phone,
-    student.telefono,
-    student.telefonoPadre,
-    student.telefonoMadre,
-    student.email,
-    student.emailPadre,
-    student.emailMadre,
-    student.guardianName,
-    student.nombrePadre,
-    student.nombreMadre,
-  ].some((value) => String(value || "").trim());
+  !isParentComplete(student, "padre") && !isParentComplete(student, "madre");
 
 const localStudentMatchesStatus = (student, status) => {
   const normalized = normalizeClientText(status);
@@ -2449,11 +2473,10 @@ const localStudentMatchesQuality = (student, quality) => {
   if (normalized === "incomplete" || normalized === "incompleto")
     return missing.length > 0;
   if (normalized === "curp") return missing.includes("curp");
-  if (normalized === "phone" || normalized === "telefono")
-    return missing.includes("teléfono") || missing.includes("telefono");
-  if (normalized === "email") return missing.includes("email");
-  if (normalized === "guardian" || normalized === "tutor")
-    return missing.includes("tutor");
+  if (normalized === "padre" || normalized === "father") return missing.includes("padre");
+  if (normalized === "madre" || normalized === "mother") return missing.includes("madre");
+  if (normalized === "phone" || normalized === "telefono" || normalized === "email" || normalized === "guardian" || normalized === "tutor")
+    return missing.includes("padre") || missing.includes("madre");
   if (normalized === "contact" || normalized === "contacto")
     return hasNoPrimaryContactClient(student);
   if (
@@ -2745,9 +2768,11 @@ const buildClientKpisFromStudents = (sourceStudents = []) => {
     ).length,
     sinContacto,
     sinCurp: missing("curp"),
-    sinTelefono: missing("teléfono") || missing("telefono"),
-    sinTutor: missing("tutor"),
-    sinEmail: missing("email"),
+    sinPadre: missing("padre"),
+    sinMadre: missing("madre"),
+    sinTelefono: missing("padre") + missing("madre"),
+    sinTutor: missing("padre") + missing("madre"),
+    sinEmail: missing("padre") + missing("madre"),
   };
 };
 
@@ -4540,7 +4565,7 @@ onBeforeUnmount(() => {
 }
 
 .ce-profile-copy,
-.ce-tutor-card {
+.ce-family-mini-card {
   position: relative;
   z-index: 1;
   min-width: 0;
@@ -4587,28 +4612,54 @@ onBeforeUnmount(() => {
   font-weight: 720;
 }
 
-.ce-tutor-card small {
-  display: block;
-  color: #6d7890;
-  font-size: 11px;
-  font-weight: 880;
-  letter-spacing: 0.04em;
+.ce-family-mini-card {
+  display: grid;
+  gap: 8px;
 }
 
-.ce-tutor-card strong {
+.ce-parent-mini {
+  min-width: 0;
+  border: 1px solid #e0e9e2;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 8px 10px;
+  box-shadow: 0 7px 16px rgba(36, 70, 44, 0.045);
+}
+
+.ce-parent-mini.complete {
+  border-color: #bfe8ca;
+  background: #f3fbf4;
+}
+
+.ce-parent-mini small {
   display: block;
-  margin-top: 5px;
+  color: #2f7b3a;
+  font-size: 10px;
+  font-weight: 920;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ce-parent-mini strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
   color: #16243d;
   font-size: 12px;
-  font-weight: 860;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.ce-tutor-card span {
+.ce-parent-mini span {
   display: block;
-  margin-top: 4px;
+  overflow: hidden;
+  margin-top: 3px;
   color: #5e6c84;
-  font-size: 12px;
-  font-weight: 680;
+  font-size: 11px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ce-profile-watermark {
@@ -6232,8 +6283,8 @@ onBeforeUnmount(() => {
 .ce-student-row .student-copy strong,
 .ce-title-row h2,
 .ce-profile-copy strong,
-.ce-tutor-card strong,
-.ce-tutor-card span,
+.ce-parent-mini strong,
+.ce-parent-mini span,
 .ce-empty-flow li b {
   overflow: visible;
   text-overflow: clip;
@@ -6242,7 +6293,7 @@ onBeforeUnmount(() => {
 
 .ce-title-row h2,
 .ce-profile-copy strong,
-.ce-tutor-card strong {
+.ce-parent-mini strong {
   line-height: 1.1;
 }
 
