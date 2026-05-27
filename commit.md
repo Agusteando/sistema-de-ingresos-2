@@ -1,1 +1,1 @@
-Ajusta login institucional a la referencia Figma
+Corrige escala del login institucional para ajustarse al viewport inicial

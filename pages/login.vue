@@ -674,10 +674,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .login-page {
-  min-height: 100svh;
+  --login-page-y: clamp(10px, 1.65dvh, 18px);
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: clamp(18px, 2.75vh, 28px) clamp(16px, 1.8vw, 29px);
+  padding: var(--login-page-y) clamp(12px, 1.6vw, 26px);
   color: #14223d;
   background:
     radial-gradient(circle at 50% 0%, rgba(33, 62, 116, 0.05), transparent 25rem),
@@ -688,8 +689,8 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   width: min(100%, 1530px);
-  height: min(910px, calc(100svh - 54px));
-  min-height: 720px;
+  height: min(860px, calc(100dvh - var(--login-page-y) - var(--login-page-y)));
+  min-height: 0;
   overflow: hidden;
   border: 1px solid #dbe4ec;
   border-radius: 13px;
@@ -744,16 +745,16 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 1;
   display: flex;
-  width: min(100%, 480px);
+  width: min(100%, clamp(400px, 31.5vw, 480px));
   height: 100%;
   flex-direction: column;
   align-items: flex-start;
-  padding: 88px 0 91px;
+  padding: clamp(44px, 7.6dvh, 88px) 0 clamp(42px, 7dvh, 91px);
 }
 
 .brand-logo {
   display: block;
-  width: 194px;
+  width: clamp(150px, 12.7vw, 194px);
   height: auto;
   align-self: center;
   object-fit: contain;
@@ -761,23 +762,23 @@ onBeforeUnmount(() => {
 
 .brand-system-logo {
   display: block;
-  width: 480px;
+  width: clamp(330px, 31.4vw, 480px);
   max-width: 100%;
   height: auto;
-  margin: 44px auto 0;
+  margin: clamp(24px, 4.3dvh, 44px) auto 0;
   object-fit: contain;
 }
 
 .brand-copy {
   width: 100%;
   margin-top: auto;
-  margin-bottom: 38px;
+  margin-bottom: clamp(20px, 3.5dvh, 38px);
 }
 
 .brand-copy h1 {
   margin: 0;
   color: #14223d;
-  font-size: clamp(2.25rem, 2.55vw, 2.55rem);
+  font-size: clamp(2rem, 4.6dvh, 2.55rem);
   font-weight: 850;
   line-height: 1.22;
   letter-spacing: -0.035em;
@@ -789,9 +790,9 @@ onBeforeUnmount(() => {
 
 .brand-copy p {
   max-width: 426px;
-  margin: 24px 0 0;
+  margin: clamp(14px, 2.35dvh, 24px) 0 0;
   color: #546076;
-  font-size: 16.5px;
+  font-size: clamp(14.5px, 1.08vw, 16.5px);
   font-weight: 650;
   line-height: 1.6;
   letter-spacing: 0.004em;
@@ -800,21 +801,21 @@ onBeforeUnmount(() => {
 .secure-card {
   display: inline-flex;
   align-items: center;
-  gap: 20px;
-  width: 424px;
-  min-height: 135px;
+  gap: clamp(14px, 1.35vw, 20px);
+  width: min(424px, 100%);
+  min-height: clamp(94px, 14.2dvh, 135px);
   border: 1px solid rgba(219, 228, 236, 0.8);
   border-radius: 15px;
   background: rgba(255, 255, 255, 0.86);
-  padding: 24px 28px;
+  padding: clamp(17px, 2.35dvh, 24px) clamp(20px, 1.85vw, 28px);
   box-shadow: 0 18px 42px rgba(29, 57, 95, 0.055);
   backdrop-filter: blur(6px);
 }
 
 .secure-icon {
   display: inline-grid;
-  width: 70px;
-  height: 70px;
+  width: clamp(50px, 6.9dvh, 70px);
+  height: clamp(50px, 6.9dvh, 70px);
   place-items: center;
   flex: 0 0 auto;
   border-radius: 999px;
@@ -823,8 +824,8 @@ onBeforeUnmount(() => {
 }
 
 .secure-icon svg {
-  width: 34px;
-  height: 34px;
+  width: clamp(26px, 3.5dvh, 34px);
+  height: clamp(26px, 3.5dvh, 34px);
 }
 
 .secure-copy {
@@ -834,16 +835,16 @@ onBeforeUnmount(() => {
 .secure-card strong {
   display: block;
   color: #16243f;
-  font-size: 17px;
+  font-size: clamp(15.5px, 1.1vw, 17px);
   font-weight: 850;
   line-height: 1.35;
 }
 
 .secure-card small {
   display: block;
-  margin-top: 9px;
+  margin-top: clamp(6px, 1.1dvh, 9px);
   color: #4f5b70;
-  font-size: 14.8px;
+  font-size: clamp(13.2px, 0.96vw, 14.8px);
   font-weight: 600;
   line-height: 1.48;
 }
@@ -852,8 +853,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   justify-content: center;
+  overflow: hidden;
   background: #ffffff;
-  padding: 30px 40px 28px;
+  padding: clamp(20px, 3.4dvh, 30px) clamp(28px, 2.7vw, 40px) clamp(18px, 3dvh, 28px);
 }
 
 .auth-content {
@@ -867,10 +869,10 @@ onBeforeUnmount(() => {
 .auth-kicker {
   display: inline-flex;
   align-items: center;
-  gap: 24px;
-  margin-bottom: 36px;
+  gap: clamp(16px, 1.55vw, 24px);
+  margin-bottom: clamp(16px, 3.9dvh, 36px);
   color: #218239;
-  font-size: 13.5px;
+  font-size: clamp(12px, 0.9vw, 13.5px);
   font-weight: 850;
   line-height: 1;
   letter-spacing: 0.32em;
@@ -879,8 +881,8 @@ onBeforeUnmount(() => {
 
 .auth-kicker span {
   display: inline-grid;
-  width: 50px;
-  height: 50px;
+  width: clamp(36px, 5.4dvh, 50px);
+  height: clamp(36px, 5.4dvh, 50px);
   place-items: center;
   flex: 0 0 auto;
   border-radius: 999px;
@@ -889,23 +891,23 @@ onBeforeUnmount(() => {
 }
 
 .auth-kicker svg {
-  width: 22px;
-  height: 22px;
+  width: clamp(17px, 2.35dvh, 22px);
+  height: clamp(17px, 2.35dvh, 22px);
 }
 
 .auth-content h2 {
   margin: 0;
   color: #14223d;
-  font-size: clamp(2.85rem, 3.45vw, 3.45rem);
+  font-size: clamp(2.25rem, 6dvh, 3.45rem);
   font-weight: 850;
   line-height: 1.02;
   letter-spacing: -0.045em;
 }
 
 .auth-subtitle {
-  margin: 15px 0 42px;
+  margin: clamp(10px, 1.65dvh, 15px) 0 clamp(20px, 4.25dvh, 42px);
   color: #667185;
-  font-size: 17px;
+  font-size: clamp(15px, 1.1vw, 17px);
   font-weight: 700;
   line-height: 1.4;
 }
@@ -917,9 +919,9 @@ onBeforeUnmount(() => {
 
 .plantel-label {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: clamp(7px, 1.2dvh, 10px);
   color: #16243f;
-  font-size: 15px;
+  font-size: clamp(14px, 0.98vw, 15px);
   font-weight: 850;
   line-height: 1.25;
 }
@@ -932,7 +934,7 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   width: 100%;
-  height: 77px;
+  height: clamp(58px, 8.15dvh, 77px);
   align-items: center;
   border: 1px solid #d8e0ea;
   border-radius: 12px;
@@ -943,7 +945,7 @@ onBeforeUnmount(() => {
 .plantel-select-button {
   justify-content: space-between;
   gap: 16px;
-  padding: 0 24px 0 22px;
+  padding: 0 clamp(18px, 1.55vw, 24px) 0 clamp(18px, 1.45vw, 22px);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -977,12 +979,12 @@ onBeforeUnmount(() => {
 .plantel-current {
   display: grid;
   min-width: 0;
-  gap: 8px;
+  gap: clamp(5px, 0.85dvh, 8px);
 }
 
 .plantel-current-code {
   color: #218239;
-  font-size: 17px;
+  font-size: clamp(15.5px, 1.08vw, 17px);
   font-weight: 850;
   line-height: 1;
 }
@@ -994,7 +996,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   gap: 8px;
   color: #667185;
-  font-size: 13px;
+  font-size: clamp(12px, 0.86vw, 13px);
   font-weight: 730;
   line-height: 1.25;
 }
@@ -1125,15 +1127,15 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin: 12px 0 0;
+  margin: clamp(8px, 1.3dvh, 12px) 0 0;
   border: 1px solid rgba(199, 68, 60, 0.18);
   border-radius: 13px;
   background: #fff8f7;
-  padding: 12px 14px;
+  padding: clamp(9px, 1.45dvh, 12px) 14px;
   color: #7f4039;
-  font-size: 12.75px;
+  font-size: clamp(11.6px, 0.83vw, 12.75px);
   font-weight: 720;
-  line-height: 1.45;
+  line-height: 1.36;
 }
 
 .plantel-status-note span:first-child {
@@ -1154,8 +1156,8 @@ onBeforeUnmount(() => {
 .google-card {
   position: relative;
   width: 100%;
-  height: 75px;
-  margin-top: 28px;
+  height: clamp(58px, 8dvh, 75px);
+  margin-top: clamp(16px, 2.85dvh, 28px);
 }
 
 .google-design-button,
@@ -1168,7 +1170,7 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   background: #ffffff;
   color: #17263f;
-  font-size: 17px;
+  font-size: clamp(15.5px, 1.1vw, 17px);
   font-weight: 750;
   line-height: 1;
   box-shadow: 0 8px 22px rgba(15, 32, 62, 0.035);
@@ -1176,14 +1178,14 @@ onBeforeUnmount(() => {
 
 .google-design-button {
   justify-content: center;
-  gap: 76px;
-  padding: 0 30px;
+  gap: clamp(32px, 5vw, 76px);
+  padding: 0 clamp(22px, 2vw, 30px);
 }
 
 .google-mark {
   display: inline-grid;
-  width: 26px;
-  height: 26px;
+  width: clamp(22px, 2.75dvh, 26px);
+  height: clamp(22px, 2.75dvh, 26px);
   place-items: center;
   flex: 0 0 auto;
   margin-left: -48px;
@@ -1253,7 +1255,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   min-height: 20px;
-  margin: 14px 0 0;
+  margin: clamp(8px, 1.55dvh, 14px) 0 0;
   color: #526b82;
   font-size: 13px;
   font-weight: 750;
@@ -1308,7 +1310,7 @@ onBeforeUnmount(() => {
 
 
 .updates-panel {
-  margin-top: 32px;
+  margin-top: clamp(16px, 3.15dvh, 32px);
   overflow: hidden;
   border: 1px solid rgba(33, 130, 57, 0.16);
   border-radius: 13px;
@@ -1322,18 +1324,18 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 21px 21px 12px;
+  padding: clamp(14px, 2.25dvh, 21px) 21px clamp(8px, 1.35dvh, 12px);
 }
 
 .updates-title-group {
   display: grid;
   min-width: 0;
-  gap: 5px;
+  gap: clamp(3px, 0.65dvh, 5px);
 }
 
 .updates-label {
   color: #1f7836;
-  font-size: 14px;
+  font-size: clamp(12.5px, 0.95vw, 14px);
   font-weight: 900;
   letter-spacing: 0.18em;
   line-height: 1;
@@ -1343,7 +1345,7 @@ onBeforeUnmount(() => {
 .updates-meta {
   overflow: hidden;
   color: #5f6b80;
-  font-size: 12.5px;
+  font-size: clamp(11.5px, 0.82vw, 12.5px);
   font-weight: 720;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -1361,7 +1363,7 @@ onBeforeUnmount(() => {
 .updates-count-group strong {
   border-radius: 999px;
   background: #21843a;
-  padding: 8px 12px;
+  padding: clamp(6px, 1.05dvh, 8px) 12px;
   color: #ffffff;
   font-size: 12px;
   font-weight: 900;
@@ -1399,15 +1401,15 @@ onBeforeUnmount(() => {
 
 .updates-preview {
   display: grid;
-  gap: 9px;
-  padding: 0 17px 18px;
+  gap: clamp(6px, 1.05dvh, 9px);
+  padding: 0 17px clamp(12px, 1.9dvh, 18px);
 }
 
 .update-item.compact {
   position: relative;
-  gap: 4px;
-  min-height: 55px;
-  padding: 10px 14px 10px 39px;
+  gap: 3px;
+  min-height: clamp(42px, 5.9dvh, 55px);
+  padding: clamp(8px, 1.25dvh, 10px) 14px clamp(8px, 1.25dvh, 10px) 39px;
   border-radius: 10px;
 }
 
@@ -1416,8 +1418,8 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 50%;
   left: 17px;
-  width: 11px;
-  height: 11px;
+  width: clamp(8px, 1.2dvh, 11px);
+  height: clamp(8px, 1.2dvh, 11px);
   border-radius: 999px;
   background: #21843a;
   transform: translateY(-50%);
@@ -1425,8 +1427,8 @@ onBeforeUnmount(() => {
 
 .update-item.compact strong {
   overflow: hidden;
-  font-size: 12.2px;
-  line-height: 1.24;
+  font-size: clamp(11.4px, 0.82vw, 12.2px);
+  line-height: 1.22;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1489,25 +1491,25 @@ onBeforeUnmount(() => {
 .updates-more-button {
   display: inline-flex;
   width: calc(100% - 28px);
-  min-height: 43px;
+  min-height: clamp(34px, 4.85dvh, 43px);
   align-items: center;
   justify-content: center;
   gap: 14px;
-  margin: 0 14px 13px;
+  margin: 0 14px clamp(10px, 1.5dvh, 13px);
   border: 1px solid rgba(33, 132, 58, 0.18);
   border-radius: 9px;
   background: linear-gradient(135deg, rgba(238, 249, 235, 0.94), rgba(255, 255, 255, 0.94));
-  padding: 12px;
+  padding: clamp(8px, 1.4dvh, 12px);
   color: #21843a;
-  font-size: 13px;
+  font-size: clamp(12px, 0.88vw, 13px);
   font-weight: 900;
   letter-spacing: 0.02em;
   cursor: pointer;
 }
 
 .updates-more-button svg {
-  width: 20px;
-  height: 20px;
+  width: clamp(17px, 2.2dvh, 20px);
+  height: clamp(17px, 2.2dvh, 20px);
 }
 
 .updates-more-button:hover {
@@ -1671,10 +1673,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: clamp(14px, 1.65vw, 24px);
   margin: auto 0 0;
   color: #667185;
-  font-size: 12.8px;
+  font-size: clamp(11.5px, 0.84vw, 12.8px);
   font-weight: 650;
   line-height: 1.4;
 }
@@ -1693,15 +1695,15 @@ onBeforeUnmount(() => {
 
 .policy-icon {
   display: inline-grid;
-  width: 24px;
-  height: 24px;
+  width: clamp(20px, 2.35dvh, 24px);
+  height: clamp(20px, 2.35dvh, 24px);
   place-items: center;
   flex: 0 0 auto;
   color: #21843a;
 }
 
 .policy-support {
-  gap: 18px;
+  gap: clamp(12px, 1.2vw, 18px);
   flex: 0 0 auto;
 }
 
@@ -1741,22 +1743,26 @@ onBeforeUnmount(() => {
   to { transform: rotate(360deg); }
 }
 
+
 @media (max-width: 1180px) {
   .login-page {
-    padding: 32px;
+    --login-page-y: clamp(10px, 1.5dvh, 16px);
+    padding-right: clamp(12px, 1.8vw, 20px);
+    padding-left: clamp(12px, 1.8vw, 20px);
   }
 
   .login-shell {
-    height: min(720px, calc(100svh - 48px));
+    height: min(760px, calc(100dvh - var(--login-page-y) - var(--login-page-y)));
+    min-height: 0;
   }
 
   .brand-content {
     width: min(100%, 400px);
-    padding: 54px 0 64px;
+    padding: clamp(34px, 6.2dvh, 54px) 0 clamp(34px, 6.6dvh, 64px);
   }
 
   .brand-system-logo {
-    width: 350px;
+    width: clamp(300px, 30vw, 350px);
   }
 
   .secure-card {
@@ -1767,6 +1773,151 @@ onBeforeUnmount(() => {
     transform: none;
   }
 }
+
+@media (min-width: 901px) and (max-height: 820px) {
+  .login-page {
+    --login-page-y: 10px;
+  }
+
+  .login-shell {
+    height: calc(100dvh - 20px);
+  }
+
+  .brand-content {
+    padding-top: clamp(30px, 5.4dvh, 44px);
+    padding-bottom: clamp(28px, 4.9dvh, 42px);
+  }
+
+  .brand-logo {
+    width: clamp(128px, 10.4vw, 150px);
+  }
+
+  .brand-system-logo {
+    width: clamp(282px, 26vw, 330px);
+    margin-top: clamp(16px, 3dvh, 24px);
+  }
+
+  .brand-copy {
+    margin-bottom: clamp(14px, 2.5dvh, 20px);
+  }
+
+  .brand-copy h1 {
+    font-size: clamp(1.8rem, 4.4dvh, 2rem);
+  }
+
+  .brand-copy p {
+    margin-top: clamp(9px, 1.7dvh, 14px);
+    font-size: clamp(13.2px, 0.95vw, 14.5px);
+    line-height: 1.48;
+  }
+
+  .secure-card {
+    min-height: clamp(78px, 12.5dvh, 94px);
+    padding: clamp(12px, 2.1dvh, 17px) clamp(16px, 1.45vw, 20px);
+  }
+
+  .secure-icon {
+    width: clamp(42px, 6.2dvh, 50px);
+    height: clamp(42px, 6.2dvh, 50px);
+  }
+
+  .secure-card strong {
+    font-size: clamp(14px, 1vw, 15.5px);
+  }
+
+  .secure-card small {
+    margin-top: clamp(4px, 0.8dvh, 6px);
+    font-size: clamp(12.4px, 0.9vw, 13.2px);
+    line-height: 1.36;
+  }
+
+  .auth-panel {
+    padding-top: clamp(16px, 2.5dvh, 20px);
+    padding-bottom: clamp(14px, 2.3dvh, 18px);
+  }
+
+  .auth-kicker {
+    margin-bottom: clamp(12px, 2dvh, 16px);
+  }
+
+  .auth-content h2 {
+    font-size: clamp(2.05rem, 5.8dvh, 2.25rem);
+  }
+
+  .auth-subtitle {
+    margin-bottom: clamp(16px, 2.6dvh, 20px);
+  }
+
+  .plantel-select-shell,
+  .google-card {
+    height: clamp(52px, 7.25dvh, 58px);
+  }
+
+  .plantel-status-note {
+    margin-top: 8px;
+    padding-top: clamp(7px, 1.25dvh, 9px);
+    padding-bottom: clamp(7px, 1.25dvh, 9px);
+    line-height: 1.3;
+  }
+
+  .google-card {
+    margin-top: clamp(12px, 2.15dvh, 16px);
+  }
+
+  .updates-panel {
+    margin-top: clamp(10px, 1.85dvh, 16px);
+  }
+
+  .updates-summary {
+    padding: clamp(10px, 1.7dvh, 14px) 18px clamp(6px, 1dvh, 8px);
+  }
+
+  .updates-preview {
+    gap: clamp(5px, 0.75dvh, 6px);
+    padding: 0 14px clamp(8px, 1.4dvh, 12px);
+  }
+
+  .update-item.compact {
+    min-height: clamp(34px, 5.05dvh, 42px);
+    padding: clamp(6px, 1dvh, 8px) 12px clamp(6px, 1dvh, 8px) 34px;
+  }
+
+  .update-item.compact::before {
+    left: 15px;
+    width: clamp(7px, 1.05dvh, 8px);
+    height: clamp(7px, 1.05dvh, 8px);
+  }
+
+  .update-topline {
+    gap: 8px;
+  }
+
+  .update-new {
+    padding: 3px 6px;
+    font-size: 8.8px;
+  }
+
+  .updates-more-button {
+    min-height: clamp(29px, 4.1dvh, 34px);
+    margin-bottom: clamp(7px, 1.2dvh, 10px);
+    padding: clamp(6px, 1dvh, 8px);
+  }
+
+  .updates-more-button svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .policy-line {
+    line-height: 1.25;
+  }
+
+  .policy-icon {
+    width: 18px;
+    height: 18px;
+  }
+}
+
 
 @media (max-width: 900px) {
   .login-page {
@@ -1780,6 +1931,7 @@ onBeforeUnmount(() => {
     width: min(100%, 680px);
     height: auto;
     min-height: 0;
+    max-height: none;
   }
 
   .brand-panel {
