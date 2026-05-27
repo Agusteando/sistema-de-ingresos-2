@@ -1,1 +1,1 @@
-Refine login actualizaciones feed using GitHub push events
+fix(login): fetch actualizaciones from GitHub push events using tracker-compatible flow
