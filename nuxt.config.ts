@@ -44,6 +44,9 @@ export default defineNuxtConfig({
     gcpPrivateKey: process.env.GCP_PRIVATE_KEY,
     gcpAdminSubject: process.env.GCP_ADMIN_SUBJECT,
 
+    githubUsername: process.env.GITHUB_USERNAME || '',
+    githubToken: process.env.GITHUB_TOKEN || '',
+
     externalSyncApiKey: process.env.EXTERNAL_SYNC_API_KEY || '',
     studentPhotoBaseUrl: process.env.STUDENT_PHOTO_BASE_URL || 'https://matricula.casitaapps.com',
     studentPhotoApiKey: process.env.STUDENT_PHOTO_API_KEY || process.env.EXTERNAL_SYNC_API_KEY || '',
