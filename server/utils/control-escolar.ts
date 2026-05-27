@@ -21,12 +21,6 @@ import {
   parseEnrollmentConceptIds,
 } from "./enrollment-evidence";
 import { controlEscolarCentralQuery } from "./control-escolar-central";
-import {
-  fetchCachedControlEscolarBaseRows,
-  fetchCachedControlEscolarBaseContext,
-  maybeRefreshControlEscolarCacheFromLoadedRows,
-  readControlCacheSourceMeta,
-} from "./control-escolar-cache";
 
 export type ControlEscolarStudentRow = {
   agentId: string;
@@ -1306,71 +1300,8 @@ export const fetchControlEscolarStudentDetail = async (
     throw createError({ statusCode: 400, message: "Matrícula inválida." });
   }
 
-  try {
-    const cachedContext = await fetchCachedControlEscolarBaseContext(
-      agentId,
-      normalizedMatricula,
-    );
-    if (cachedContext) {
-      const cacheSchema = await getControlEscolarCentralOnlySchema(agentId, {
-        requireCentral: false,
-      });
-      let rawMatricula: any = null;
-      let huskyPass: any = null;
-      if (cacheSchema.centralAvailable) {
-        try {
-          rawMatricula =
-            await fetchFullCentralMatriculaRow(normalizedMatricula);
-        } catch (error: any) {
-          console.warn(
-            "[Control Escolar] centralized matricula detail overlay unavailable for cache read",
-            {
-              agentId,
-              matricula: normalizedMatricula,
-              error: toErrorMessage(error),
-            },
-          );
-        }
-
-        try {
-          huskyPass = await fetchHuskyPassRow(normalizedMatricula, cacheSchema);
-        } catch (error: any) {
-          console.warn(
-            "[Control Escolar] husky pass detail lookup unavailable",
-            {
-              agentId,
-              matricula: normalizedMatricula,
-              error: toErrorMessage(error),
-            },
-          );
-        }
-      }
-
-      const normalized = overlayStudentRow(
-        agentId,
-        cachedContext.rawBase,
-        rawMatricula,
-        huskyPass,
-      );
-      return {
-        ...normalized,
-        readOnly: true,
-        detailSource: rawMatricula ? "cache+matricula" : "cache",
-        rawBase: compactRawRecord(cachedContext.rawBase || {}),
-        rawMatricula: compactRawRecord(rawMatricula || {}),
-        rawUsers: compactRawRecord(huskyPass || {}),
-      };
-    }
-  } catch (error: any) {
-    console.warn(
-      "[Control Escolar] cache detail unavailable, falling back to bridge",
-      {
-        agentId,
-        matricula: normalizedMatricula,
-        error: toErrorMessage(error),
-      },
-    );
-  }
+  // Emergency consistency mode: detail scope must come from the live bridge/base,
+  // not from central cache, so Control Escolar matches the plantel bridge data.
 
   assertControlEscolarDynamicBridge(agentId);
   const schema = await getControlEscolarSchema(agentId, {
@@ -1516,160 +1447,13 @@ const fetchAllNormalizedStudents = async (
     steps: diagnosticsSteps,
     ...details,
   });
-  try {
-    const schemaStartedAt = Date.now();
-    const cacheSchema = await getControlEscolarCentralOnlySchema(agentId, {
-      requireCentral: false,
-    });
-    markStep("central-schema", "Validar conexión central", schemaStartedAt, cacheSchema.centralAvailable ? "ready" : "partial", {
-      centralAvailable: cacheSchema.centralAvailable,
-      error: cacheSchema.centralError || "",
-    });
-
-    const cacheStartedAt = Date.now();
-    const cachedBase = await fetchCachedControlEscolarBaseRows(
-      agentId,
-      filters,
-      scope,
-    );
-    const hasCentralCacheRows = cachedBase.rows.length > 0;
-    markStep("central-cache", "Leer cache central de base", cacheStartedAt, hasCentralCacheRows ? "ready" : cachedBase.meta.freshness === "empty" ? "empty" : "expired", {
-      rows: cachedBase.rows.length,
-      freshness: cachedBase.meta.freshness,
-      refreshedAt: cachedBase.meta.cacheRefreshedAt,
-      expiresAt: cachedBase.meta.cacheExpiresAt,
-      refreshDue: cachedBase.meta.freshness !== "fresh",
-    });
-
-    if (hasCentralCacheRows) {
-      const projectionStartedAt = Date.now();
-      const localRows = await applyOperatorProjection(
-        agentId,
-        cachedBase.rows,
-        scope,
-        {
-          searchActive: Boolean(
-            normalizeText(filters.search || filters.q || "", 80),
-          ),
-        },
-      );
-      markStep("base-selector", "Aplicar alcance de base", projectionStartedAt, "ready", { rows: localRows.length });
-
-      if (localRows.length > MAX_LOCAL_ROWS) {
-        throw createError({
-          statusCode: 413,
-          message: `El plantel excede el límite temporal de ${MAX_LOCAL_ROWS} alumnos activos para Control Escolar. Ajusta la consulta antes de editar.`,
-        });
-      }
-
-      if (localOnly) {
-        return {
-          students: localRows
-            .map((row) => overlayStudentRow(agentId, row))
-            .sort(compareStudents),
-          source: {
-            ...cachedBase.source,
-            overlay: "CONTROL_ESCOLAR_MYSQL.matricula",
-            overlayAvailable: false,
-            overlayError: "",
-            localRows: Math.min(localRows.length, MAX_LOCAL_ROWS),
-            overlayRows: 0,
-            enrichedRows: 0,
-            usersRows: 0,
-            phase: "base",
-            diagnostics: diagnosticsPayload(cachedBase.meta.freshness === "fresh" ? "central-cache-base" : "central-cache-stale-base", {
-              localRows: localRows.length,
-              overlayRows: 0,
-              usersRows: 0,
-            }),
-          },
-        };
-      }
-
-      let overlayMap = new Map<string, any>();
-      let huskyPassMap = new Map<string, any>();
-      let overlayAvailable = cacheSchema.centralAvailable;
-      let overlayError = cacheSchema.centralError;
-
-      if (cacheSchema.centralAvailable) {
-        const overlayStartedAt = Date.now();
-        try {
-          overlayMap = await fetchMatriculaOverlayMap(
-            localRows.map((row) => row.matricula),
-            cacheSchema,
-          );
-          markStep("matricula-overlay", "Enriquecer con matricula", overlayStartedAt, "ready", { rows: overlayMap.size });
-        } catch (error: any) {
-          overlayAvailable = false;
-          overlayError = toErrorMessage(error);
-          markStep("matricula-overlay", "Enriquecer con matricula", overlayStartedAt, "failed", { error: overlayError });
-          console.warn(
-            "[Control Escolar] centralized matricula overlay lookup unavailable for cache read",
-            {
-              agentId,
-              localRows: localRows.length,
-              error: overlayError,
-            },
-          );
-        }
-
-        const usersStartedAt = Date.now();
-        try {
-          huskyPassMap = await fetchHuskyPassMap(
-            localRows.map((row) => row.matricula),
-            cacheSchema,
-          );
-          markStep("husky-pass", "Consultar Husky Pass", usersStartedAt, "ready", { rows: huskyPassMap.size });
-        } catch (error: any) {
-          markStep("husky-pass", "Consultar Husky Pass", usersStartedAt, "failed", { error: toErrorMessage(error) });
-          console.warn("[Control Escolar] husky pass lookup unavailable", {
-            agentId,
-            localRows: localRows.length,
-            error: toErrorMessage(error),
-          });
-        }
-      }
-
-      return {
-        students: localRows
-          .map((row) => {
-            const matricula = normalizeText(row.matricula, 64);
-            return overlayStudentRow(
-              agentId,
-              row,
-              overlayMap.get(matricula),
-              huskyPassMap.get(matricula),
-            );
-          })
-          .sort(compareStudents),
-        source: {
-          ...cachedBase.source,
-          overlay: "CONTROL_ESCOLAR_MYSQL.matricula",
-          overlayAvailable,
-          overlayError: overlayError || "",
-          localRows: Math.min(localRows.length, MAX_LOCAL_ROWS),
-          overlayRows: overlayMap.size,
-          enrichedRows: overlayMap.size,
-          usersRows: huskyPassMap.size,
-          phase: "enriched",
-          diagnostics: diagnosticsPayload(cachedBase.meta.freshness === "fresh" ? "central-cache-enriched" : "central-cache-stale-enriched", {
-            localRows: localRows.length,
-            overlayRows: overlayMap.size,
-            usersRows: huskyPassMap.size,
-          }),
-        },
-      };
-    }
-  } catch (error: any) {
-    markStep("central-cache", "Leer cache central de base", requestStartedAt, "failed", { error: toErrorMessage(error) });
-    console.warn(
-      "[Control Escolar] central cache read unavailable, falling back to bridge",
-      {
-        agentId,
-        error: toErrorMessage(error),
-      },
-    );
-  }
+  markStep(
+    "central-cache",
+    "Cache central de base deshabilitado temporalmente",
+    requestStartedAt,
+    "skipped",
+    { reason: "emergency-live-bridge-only" },
+  );
 
   assertControlEscolarDynamicBridge(agentId);
   const liveSchemaStartedAt = Date.now();
@@ -1693,36 +1477,21 @@ const fetchAllNormalizedStudents = async (
   }
 
   const cacheRefreshStartedAt = Date.now();
-  try {
-    const refreshResult = await maybeRefreshControlEscolarCacheFromLoadedRows(agentId, localRows, {
-      triggerName: "auto-control-escolar-live-read",
-      minAgeMinutes: 15,
-      cicloKey: scope.cicloKey,
-      previousCiclo: scope.previousCiclo,
-    });
-    markStep("cache-refresh", "Actualizar cache central", cacheRefreshStartedAt, refreshResult?.skipped ? "skipped" : "ready", {
-      skipped: Boolean(refreshResult?.skipped),
-      reason: refreshResult?.reason || "",
-      rows: refreshResult?.updatedRows || localRows.length,
-    });
-  } catch (error: any) {
-    markStep("cache-refresh", "Actualizar cache central", cacheRefreshStartedAt, "failed", { error: toErrorMessage(error) });
-    console.warn("[Control Escolar] live bridge read succeeded but central cache refresh failed", {
-      agentId,
-      error: toErrorMessage(error),
-    });
-  }
+  markStep("cache-refresh", "Actualizar cache central", cacheRefreshStartedAt, "skipped", {
+    skipped: true,
+    reason: "emergency-live-bridge-only",
+    rows: localRows.length,
+  });
 
   let overlayMap = new Map<string, any>();
   let huskyPassMap = new Map<string, any>();
   let overlayAvailable = schema.centralAvailable;
   let overlayError = schema.centralError;
-  let cacheMeta: any = null;
-  try {
-    cacheMeta = await readControlCacheSourceMeta(agentId);
-  } catch (error) {
-    cacheMeta = null;
-  }
+  const cacheMeta: any = {
+    freshness: "disabled",
+    cacheRefreshedAt: null,
+    cacheExpiresAt: null,
+  };
 
   if (localOnly) {
     return {
