@@ -973,8 +973,12 @@ const centralSelectColumns = (schema: ControlEscolarSchema) => {
     "curp",
     "email_padre",
     "email_madre",
+    "correo_padre",
+    "correo_madre",
     "telefono_padre",
     "telefono_madre",
+    "celular_padre",
+    "celular_madre",
     "interno",
     "baja",
     "motivo_baja",
@@ -983,9 +987,18 @@ const centralSelectColumns = (schema: ControlEscolarSchema) => {
     "nombre_padre",
     "apellido_paterno_padre",
     "apellido_materno_padre",
+    "nombre_padre_completo",
+    "padre",
+    "tutor",
+    "padre_tutor",
+    "ocupacion_padre",
+    "ocupacion_tutor",
     "nombre_madre",
     "apellido_paterno_madre",
     "apellido_materno_madre",
+    "nombre_madre_completo",
+    "madre",
+    "ocupacion_madre",
     "servicio",
     "direccion",
     "domicilio",
@@ -1103,6 +1116,28 @@ const firstText = (...values: unknown[]) => {
 const firstLower = (...values: unknown[]) => firstText(...values).toLowerCase();
 const firstUpper = (...values: unknown[]) => firstText(...values).toUpperCase();
 
+const normalizeEmailCandidate = (value: unknown) => firstLower(value).replace(/\s+/g, '');
+const isUsableFamilyEmail = (value: unknown) => {
+  const email = normalizeEmailCandidate(value);
+  if (!email) return false;
+  if (email.includes('@casita')) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+const firstUsableEmail = (...values: unknown[]) => {
+  for (const value of values) {
+    const email = normalizeEmailCandidate(value);
+    if (email && isUsableFamilyEmail(email)) return email;
+  }
+  return '';
+};
+const firstDisplayEmail = (...values: unknown[]) => {
+  for (const value of values) {
+    const email = normalizeEmailCandidate(value);
+    if (email) return email;
+  }
+  return '';
+};
+
 const resolvePhotoUrl = (value: unknown) => {
   const raw = normalizeKey(value);
   if (!raw) return "";
@@ -1124,29 +1159,59 @@ const resolvePhotoUrl = (value: unknown) => {
   return `${baseUrl}${path}`;
 };
 
+const normalizedPhoneDigits = (value: unknown) => normalizeText(value).replace(/\D/g, "");
+const hasValidPhoneContact = (value: unknown) => normalizedPhoneDigits(value).length >= 10;
 const hasPhoneContact = (student: any) =>
   Boolean(
-    firstText(student.phone, student.telefonoPadre, student.telefonoMadre),
+    hasValidPhoneContact(student.phone) ||
+    hasValidPhoneContact(student.telefono) ||
+    hasValidPhoneContact(student.telefonoPadre) ||
+    hasValidPhoneContact(student.telefonoMadre),
   );
 const hasEmailContact = (student: any) =>
-  Boolean(firstText(student.email, student.emailPadre, student.emailMadre));
-const hasTutorContact = (student: any) =>
   Boolean(
-    firstText(
-      student.guardianName,
-      student.fatherName,
-      student.motherName,
-      student.nombrePadre,
-      student.nombreMadre,
-    ),
+    isUsableFamilyEmail(student.email) ||
+    isUsableFamilyEmail(student.emailPadre) ||
+    isUsableFamilyEmail(student.emailMadre),
   );
+const fatherFullName = (student: any) =>
+  firstText(
+    student.fatherName,
+    [student.nombrePadre, student.apellidoPaternoPadre, student.apellidoMaternoPadre]
+      .map(normalizeText)
+      .filter(Boolean)
+      .join(' '),
+    student.nombrePadreCompleto,
+  );
+const motherFullName = (student: any) =>
+  firstText(
+    student.motherName,
+    [student.nombreMadre, student.apellidoPaternoMadre, student.apellidoMaternoMadre]
+      .map(normalizeText)
+      .filter(Boolean)
+      .join(' '),
+    student.nombreMadreCompleto,
+  );
+const hasFatherComplete = (student: any) =>
+  Boolean(
+    fatherFullName(student) &&
+    hasValidPhoneContact(firstText(student.telefonoPadre, student.phone, student.telefono)) &&
+    isUsableFamilyEmail(firstText(student.emailPadre, student.email)),
+  );
+const hasMotherComplete = (student: any) =>
+  Boolean(
+    motherFullName(student) &&
+    hasValidPhoneContact(student.telefonoMadre) &&
+    isUsableFamilyEmail(student.emailMadre),
+  );
+const hasTutorContact = (student: any) =>
+  Boolean(hasFatherComplete(student) || hasMotherComplete(student));
 
 const buildMissingFields = (row: any) => {
   const missing: string[] = [];
   if (!normalizeKey(row.curp)) missing.push("curp");
-  if (!hasPhoneContact(row)) missing.push("teléfono");
-  if (!hasEmailContact(row)) missing.push("email");
-  if (!hasTutorContact(row)) missing.push("tutor");
+  if (!hasFatherComplete(row)) missing.push("padre");
+  if (!hasMotherComplete(row)) missing.push("madre");
   return missing;
 };
 
@@ -1190,6 +1255,10 @@ const overlayStudentRow = (
       .map(normalizeText)
       .filter(Boolean)
       .join(" "),
+    overlay?.nombre_padre_completo,
+    overlay?.padre,
+    overlay?.tutor,
+    overlay?.padre_tutor,
   );
   const motherName = firstText(
     [
@@ -1200,6 +1269,8 @@ const overlayStudentRow = (
       .map(normalizeText)
       .filter(Boolean)
       .join(" "),
+    overlay?.nombre_madre_completo,
+    overlay?.madre,
   );
   const updatedAt = firstText(
     overlay?.updated_at,
@@ -1226,8 +1297,8 @@ const overlayStudentRow = (
     apellidoPaterno,
     apellidoMaterno,
     curp: firstUpper(overlay?.curp, base.baseCurp).slice(0, 18),
-    phone: firstText(overlay?.telefono_padre, base.baseTelefono),
-    email: firstLower(overlay?.email_padre, base.baseCorreo),
+    phone: firstText(overlay?.telefono_padre, overlay?.celular_padre, base.baseTelefono),
+    email: firstDisplayEmail(overlay?.email_padre, overlay?.correo_padre, base.baseCorreo),
     status,
     statusSource: hasOverlay ? "matricula" : "base",
     baja,
@@ -1241,16 +1312,16 @@ const overlayStudentRow = (
     guardianName: firstText(fatherName, motherName, base.baseGuardian),
     fatherName,
     motherName,
-    nombrePadre: normalizeText(overlay?.nombre_padre),
+    nombrePadre: firstText(overlay?.nombre_padre, overlay?.nombre_padre_completo, overlay?.padre, overlay?.tutor, overlay?.padre_tutor),
     apellidoPaternoPadre: normalizeText(overlay?.apellido_paterno_padre),
     apellidoMaternoPadre: normalizeText(overlay?.apellido_materno_padre),
-    nombreMadre: normalizeText(overlay?.nombre_madre),
+    nombreMadre: firstText(overlay?.nombre_madre, overlay?.nombre_madre_completo, overlay?.madre),
     apellidoPaternoMadre: normalizeText(overlay?.apellido_paterno_madre),
     apellidoMaternoMadre: normalizeText(overlay?.apellido_materno_madre),
-    telefonoPadre: firstText(overlay?.telefono_padre, base.baseTelefono),
-    telefonoMadre: normalizeText(overlay?.telefono_madre),
-    emailPadre: firstLower(overlay?.email_padre, base.baseCorreo),
-    emailMadre: firstLower(overlay?.email_madre, base.baseCorreo),
+    telefonoPadre: firstText(overlay?.telefono_padre, overlay?.celular_padre, base.baseTelefono),
+    telefonoMadre: firstText(overlay?.telefono_madre, overlay?.celular_madre),
+    emailPadre: firstDisplayEmail(overlay?.email_padre, overlay?.correo_padre, base.baseCorreo),
+    emailMadre: firstDisplayEmail(overlay?.email_madre, overlay?.correo_madre),
     interno: firstText(overlay?.interno, base.baseInterno),
     servicio: normalizeText(overlay?.servicio),
     address: firstText(
@@ -1792,17 +1863,25 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
       result = result.filter((student) =>
         student.missingFields.includes("curp"),
       );
+    if (quality === "padre" || quality === "father")
+      result = result.filter((student) =>
+        student.missingFields.includes("padre"),
+      );
+    if (quality === "madre" || quality === "mother")
+      result = result.filter((student) =>
+        student.missingFields.includes("madre"),
+      );
     if (quality === "phone" || quality === "telefono" || quality === "teléfono")
       result = result.filter((student) =>
-        student.missingFields.includes("teléfono"),
+        student.missingFields.includes("padre") || student.missingFields.includes("madre"),
       );
     if (quality === "email")
       result = result.filter((student) =>
-        student.missingFields.includes("email"),
+        student.missingFields.includes("padre") || student.missingFields.includes("madre"),
       );
     if (quality === "guardian" || quality === "tutor")
       result = result.filter((student) =>
-        student.missingFields.includes("tutor"),
+        student.missingFields.includes("padre") || student.missingFields.includes("madre"),
       );
     if (quality === "contact" || quality === "contacto")
       result = result.filter(hasNoPrimaryContact);
@@ -2003,9 +2082,11 @@ export const fetchControlEscolarKpis = async (
     expedientesIncompletos,
     sinContacto,
     sinCurp: missing("curp"),
-    sinTelefono: missing("teléfono"),
-    sinTutor: missing("tutor"),
-    sinEmail: missing("email"),
+    sinPadre: missing("padre"),
+    sinMadre: missing("madre"),
+    sinTelefono: missing("padre") + missing("madre"),
+    sinTutor: missing("padre") + missing("madre"),
+    sinEmail: missing("padre") + missing("madre"),
     porNivel: Array.from(byNivel.entries()).map(([label, total]) => ({
       label,
       total,

@@ -194,6 +194,20 @@
                       />
                     </label>
                   </div>
+                  <div v-if="isEdit && centralOverlayStudent" class="family-consult-panel">
+                    <section :class="['family-consult-card', { complete: centralFatherComplete }]">
+                      <small>Padre</small>
+                      <strong>{{ centralFatherName || 'Sin registrar' }}</strong>
+                      <span :class="{ invalid: centralFatherPhoneInvalid }">{{ centralFatherPhone }}</span>
+                      <span :class="{ invalid: centralFatherEmailInvalid }">{{ centralFatherEmail }}</span>
+                    </section>
+                    <section :class="['family-consult-card', { complete: centralMotherComplete }]">
+                      <small>Madre</small>
+                      <strong>{{ centralMotherName || 'Sin registrar' }}</strong>
+                      <span :class="{ invalid: centralMotherPhoneInvalid }">{{ centralMotherPhone }}</span>
+                      <span :class="{ invalid: centralMotherEmailInvalid }">{{ centralMotherEmail }}</span>
+                    </section>
+                  </div>
                 </div>
               </section>
 
@@ -504,6 +518,7 @@ const centralOverlayLoading = ref(false);
 const centralOverlayApplied = ref(false);
 const centralOverlayAvailable = ref(false);
 const centralOverlayError = ref('');
+const centralOverlayStudent = ref(null);
 const userTouchedForm = ref(false);
 const showCyclePicker = ref(false);
 const showOlderCycles = ref(false);
@@ -691,6 +706,43 @@ const resultAnimationKey = computed(
     `${form.value.ciclo}-${currentCicloKey.value}-${visibleTipoIngreso.value.value}`,
 );
 
+const overlayText = (value) => String(value || '').trim();
+const overlayJoinedName = (...values) => values.map(overlayText).filter(Boolean).join(' ');
+const overlayDigits = (value) => overlayText(value).replace(/\D/g, '');
+const overlayValidPhone = (value) => overlayDigits(value).length >= 10;
+const overlayEmail = (value) => overlayText(value).toLowerCase();
+const overlayValidEmail = (value) => {
+  const email = overlayEmail(value);
+  if (!email || email.includes('@casita')) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+const centralFatherNameRaw = computed(() => overlayJoinedName(
+  centralOverlayStudent.value?.nombrePadre,
+  centralOverlayStudent.value?.apellidoPaternoPadre,
+  centralOverlayStudent.value?.apellidoMaternoPadre,
+) || overlayText(centralOverlayStudent.value?.fatherName || centralOverlayStudent.value?.nombrePadreCompleto || centralOverlayStudent.value?.padre));
+const centralMotherNameRaw = computed(() => overlayJoinedName(
+  centralOverlayStudent.value?.nombreMadre,
+  centralOverlayStudent.value?.apellidoPaternoMadre,
+  centralOverlayStudent.value?.apellidoMaternoMadre,
+) || overlayText(centralOverlayStudent.value?.motherName || centralOverlayStudent.value?.nombreMadreCompleto || centralOverlayStudent.value?.madre));
+const centralFatherPhoneRaw = computed(() => overlayText(centralOverlayStudent.value?.telefonoPadre || centralOverlayStudent.value?.telefono));
+const centralMotherPhoneRaw = computed(() => overlayText(centralOverlayStudent.value?.telefonoMadre));
+const centralFatherEmailRaw = computed(() => overlayText(centralOverlayStudent.value?.emailPadre || centralOverlayStudent.value?.correo));
+const centralMotherEmailRaw = computed(() => overlayText(centralOverlayStudent.value?.emailMadre));
+const centralFatherName = computed(() => centralFatherNameRaw.value);
+const centralMotherName = computed(() => centralMotherNameRaw.value);
+const centralFatherPhoneInvalid = computed(() => Boolean(centralFatherPhoneRaw.value && !overlayValidPhone(centralFatherPhoneRaw.value)));
+const centralMotherPhoneInvalid = computed(() => Boolean(centralMotherPhoneRaw.value && !overlayValidPhone(centralMotherPhoneRaw.value)));
+const centralFatherEmailInvalid = computed(() => Boolean(centralFatherEmailRaw.value && !overlayValidEmail(centralFatherEmailRaw.value)));
+const centralMotherEmailInvalid = computed(() => Boolean(centralMotherEmailRaw.value && !overlayValidEmail(centralMotherEmailRaw.value)));
+const centralFatherPhone = computed(() => centralFatherPhoneInvalid.value ? `${centralFatherPhoneRaw.value} · no válido` : (centralFatherPhoneRaw.value || 'Sin teléfono'));
+const centralMotherPhone = computed(() => centralMotherPhoneInvalid.value ? `${centralMotherPhoneRaw.value} · no válido` : (centralMotherPhoneRaw.value || 'Sin teléfono'));
+const centralFatherEmail = computed(() => centralFatherEmailInvalid.value ? `${centralFatherEmailRaw.value} · no válido` : (centralFatherEmailRaw.value || 'Sin email'));
+const centralMotherEmail = computed(() => centralMotherEmailInvalid.value ? `${centralMotherEmailRaw.value} · no válido` : (centralMotherEmailRaw.value || 'Sin email'));
+const centralFatherComplete = computed(() => Boolean(centralFatherNameRaw.value && overlayValidPhone(centralFatherPhoneRaw.value) && overlayValidEmail(centralFatherEmailRaw.value)));
+const centralMotherComplete = computed(() => Boolean(centralMotherNameRaw.value && overlayValidPhone(centralMotherPhoneRaw.value) && overlayValidEmail(centralMotherEmailRaw.value)));
+
 const centralOverlayStatusClass = computed(() => {
   if (centralOverlayLoading.value) return 'loading';
   if (centralOverlayApplied.value) return 'ready';
@@ -742,6 +794,7 @@ const writeCentralOverlayCache = (overlayStudent) => {
 
 const applyCentralOverlayToForm = (overlayStudent) => {
   if (!overlayStudent || typeof overlayStudent !== 'object') return false;
+  centralOverlayStudent.value = overlayStudent;
   if (userTouchedForm.value || loading.value) {
     centralOverlayAvailable.value = true;
     return false;
@@ -791,6 +844,7 @@ const loadCentralMatriculaOverlay = async () => {
     const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/matricula-overlay`);
     const overlayStudent = response?.overlay?.student;
     if (response?.found && overlayStudent) {
+      centralOverlayStudent.value = overlayStudent;
       writeCentralOverlayCache(overlayStudent);
       applyCentralOverlayToForm(overlayStudent);
     } else {
@@ -1538,6 +1592,64 @@ const submit = async () => {
   background: rgba(255, 251, 235, .94);
   color: #92400e;
 }
+
+.family-consult-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .7rem;
+  margin-top: .15rem;
+}
+
+.family-consult-card {
+  min-width: 0;
+  border: 1px solid rgba(220, 228, 223, .96);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,252,.92));
+  padding: .85rem .9rem;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, .045);
+}
+
+.family-consult-card.complete {
+  border-color: rgba(105, 196, 130, .58);
+  background: linear-gradient(180deg, rgba(244, 253, 247, .98), rgba(255,255,255,.95));
+}
+
+.family-consult-card small {
+  display: block;
+  color: #2f7b3a;
+  font-size: .68rem;
+  font-weight: 950;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.family-consult-card strong {
+  display: block;
+  overflow: hidden;
+  margin-top: .35rem;
+  color: #14233b;
+  font-size: .86rem;
+  font-weight: 930;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.family-consult-card span {
+  display: block;
+  overflow: hidden;
+  margin-top: .24rem;
+  color: #64748b;
+  font-size: .76rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.family-consult-card span.invalid {
+  color: #b24040;
+  font-weight: 900;
+}
+
 .curp-field input {
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",

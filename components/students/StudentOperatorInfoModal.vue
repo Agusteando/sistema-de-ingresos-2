@@ -112,28 +112,30 @@
           </article>
 
           <article class="operator-panel family-panel">
-            <h4><LucideUsersRound :size="21" /> Familia / tutores</h4>
+            <h4><LucideUsersRound :size="21" /> Familia</h4>
             <div class="family-grid">
-              <section class="family-card">
-                <h5><LucideUsersRound :size="19" /> Padre / tutor</h5>
+              <section :class="['family-card', { complete: fatherComplete }]">
+                <h5><LucideUsersRound :size="19" /> Padre</h5>
                 <dl>
-                  <div><dt>Teléfono</dt><dd>{{ parentPhone }}</dd></div>
-                  <div><dt>Email</dt><dd>{{ parentEmail }}</dd></div>
+                  <div><dt>Nombre</dt><dd>{{ fatherName }}</dd></div>
+                  <div><dt>Teléfono</dt><dd :class="{ invalid: fatherPhoneInvalid }">{{ fatherPhone }}</dd></div>
+                  <div><dt>Email</dt><dd :class="{ invalid: fatherEmailInvalid }">{{ fatherEmail }}</dd></div>
                   <div><dt>Ocupación</dt><dd>{{ parentOccupation }}</dd></div>
                 </dl>
               </section>
-              <section class="family-card">
-                <h5><LucideMail :size="19" /> Madre</h5>
+              <section :class="['family-card', { complete: motherComplete }]">
+                <h5><LucideUsersRound :size="19" /> Madre</h5>
                 <dl>
-                  <div><dt>Email</dt><dd>{{ motherEmail }}</dd></div>
-                  <div><dt>Teléfono</dt><dd>{{ motherPhone }}</dd></div>
+                  <div><dt>Nombre</dt><dd>{{ motherName }}</dd></div>
+                  <div><dt>Teléfono</dt><dd :class="{ invalid: motherPhoneInvalid }">{{ motherPhone }}</dd></div>
+                  <div><dt>Email</dt><dd :class="{ invalid: motherEmailInvalid }">{{ motherEmail }}</dd></div>
                   <div><dt>Ocupación</dt><dd>{{ motherOccupation }}</dd></div>
                 </dl>
               </section>
             </div>
             <div class="soft-note">
               <LucideInfo :size="16" />
-              La información de tutores se muestra solo cuando está registrada en el sistema.
+              Un contacto familiar se considera completo solo con nombre, teléfono de 10 dígitos y email válido.
             </div>
           </article>
 
@@ -320,11 +322,44 @@ const schoolSummary = computed(() => [
 
 ])
 
-const parentPhone = computed(() => fallbackText(firstValue(source.value.telefonoPadre, source.value.phone, source.value.telefono)))
-const parentEmail = computed(() => fallbackText(firstValue(source.value.emailPadre, source.value.email, source.value.correo)))
+const phoneDigits = (value) => displayText(value).replace(/\D/g, '')
+const validPhone = (value) => phoneDigits(value).length >= 10
+const normalizedEmail = (value) => displayText(value).toLowerCase()
+const validFamilyEmail = (value) => {
+  const email = normalizedEmail(value)
+  if (!email || email.includes('@casita')) return false
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+const joinedName = (...values) => values.map(displayText).filter(Boolean).join(' ')
+const fatherNameRaw = computed(() => firstValue(
+  joinedName(source.value.nombrePadre, source.value.apellidoPaternoPadre, source.value.apellidoMaternoPadre),
+  source.value.fatherName,
+  source.value.nombrePadreCompleto,
+  source.value.padre
+))
+const motherNameRaw = computed(() => firstValue(
+  joinedName(source.value.nombreMadre, source.value.apellidoPaternoMadre, source.value.apellidoMaternoMadre),
+  source.value.motherName,
+  source.value.nombreMadreCompleto,
+  source.value.madre
+))
+const fatherPhoneRaw = computed(() => firstValue(source.value.telefonoPadre, source.value.phone, source.value.telefono))
+const motherPhoneRaw = computed(() => firstValue(source.value.telefonoMadre, source.value.celularMadre))
+const fatherEmailRaw = computed(() => firstValue(source.value.emailPadre, source.value.email, source.value.correo))
+const motherEmailRaw = computed(() => firstValue(source.value.emailMadre, source.value.correoMadre))
+const fatherName = computed(() => fallbackText(fatherNameRaw.value))
+const motherName = computed(() => fallbackText(motherNameRaw.value))
+const fatherPhoneInvalid = computed(() => hasValue(fatherPhoneRaw.value) && !validPhone(fatherPhoneRaw.value))
+const motherPhoneInvalid = computed(() => hasValue(motherPhoneRaw.value) && !validPhone(motherPhoneRaw.value))
+const fatherEmailInvalid = computed(() => hasValue(fatherEmailRaw.value) && !validFamilyEmail(fatherEmailRaw.value))
+const motherEmailInvalid = computed(() => hasValue(motherEmailRaw.value) && !validFamilyEmail(motherEmailRaw.value))
+const fatherPhone = computed(() => fatherPhoneInvalid.value ? `${displayText(fatherPhoneRaw.value)} · no válido` : fallbackText(fatherPhoneRaw.value))
+const motherPhone = computed(() => motherPhoneInvalid.value ? `${displayText(motherPhoneRaw.value)} · no válido` : fallbackText(motherPhoneRaw.value))
+const fatherEmail = computed(() => fatherEmailInvalid.value ? `${displayText(fatherEmailRaw.value)} · no válido` : fallbackText(fatherEmailRaw.value))
+const motherEmail = computed(() => motherEmailInvalid.value ? `${displayText(motherEmailRaw.value)} · no válido` : fallbackText(motherEmailRaw.value))
+const fatherComplete = computed(() => Boolean(fatherNameRaw.value && validPhone(fatherPhoneRaw.value) && validFamilyEmail(fatherEmailRaw.value)))
+const motherComplete = computed(() => Boolean(motherNameRaw.value && validPhone(motherPhoneRaw.value) && validFamilyEmail(motherEmailRaw.value)))
 const parentOccupation = computed(() => fallbackText(firstValue(source.value.ocupacionPadre, source.value.ocupacionTutor)))
-const motherEmail = computed(() => fallbackText(firstValue(source.value.emailMadre, source.value.correoMadre)))
-const motherPhone = computed(() => fallbackText(firstValue(source.value.telefonoMadre, source.value.celularMadre)))
 const motherOccupation = computed(() => fallbackText(source.value.ocupacionMadre))
 
 const formatDate = (value) => {
@@ -810,6 +845,10 @@ watch(() => props.student?.matricula, () => {
   background: rgba(255,255,255,.86);
   padding: .8rem .72rem;
 }
+.family-card.complete {
+  border-color: rgba(120, 201, 141, .68);
+  background: linear-gradient(180deg, rgba(246, 253, 248, .96), rgba(255,255,255,.9));
+}
 .family-card h5 {
   display: flex;
   align-items: center;
@@ -824,6 +863,7 @@ watch(() => props.student?.matricula, () => {
 .family-card dt, .family-card dd { margin: 0; }
 .family-card dt { color: #667384; font-size: .66rem; font-weight: 900; }
 .family-card dd { color: #8c97a3; font-size: .68rem; font-weight: 760; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.family-card dd.invalid { color: #b24040; font-weight: 900; }
 
 .soft-note,
 .readonly-note {
