@@ -1,1 +1,1 @@
-Refina enriquecimiento financiero externo y corrige presentación de datos del alumno
+Document financial and Control Escolar data flow contracts
