@@ -1,4 +1,11 @@
-type LoginUpdateItem = {
+import https from 'node:https'
+
+type GithubRequestOptions = {
+  username: string
+  token: string
+}
+
+type GithubUpdateItem = {
   sha: string
   shortSha: string
   title: string
@@ -23,20 +30,28 @@ type LoginUpdatesPayload = {
   lastUpdatedDaysAgo: number | null
   lastUpdatedLabel: string
   fetchedAt: string
-  updates: LoginUpdateItem[]
+  updates: GithubUpdateItem[]
   warning?: string
   error?: string
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000
-const RECENT_DAYS = 7
 const PER_PAGE = 100
 const MAX_EVENT_PAGES = 10
-const MAX_DISPLAY_UPDATES = 40
+const MAX_DISPLAY_UPDATES = 50
+const RECENT_DAYS = 7
+const EVENT_LOOKBACK_DAYS = 90
 
-let cachedPayload: { expiresAt: number; data: LoginUpdatesPayload } | null = null
+let cachedPayload: { cacheKey: string; expiresAt: number; data: LoginUpdatesPayload } | null = null
 
 const nowIso = () => new Date().toISOString()
+
+const startOfLocalDay = (date = new Date()) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
+const subtractDays = (date: Date, days: number) => {
+  const copy = new Date(date)
+  copy.setDate(copy.getDate() - days)
+  return copy
+}
 
 const daysAgoFromDate = (value?: string | null) => {
   if (!value) return null
@@ -85,73 +100,108 @@ const emptyPayload = (username = '', error = '', warning = ''): LoginUpdatesPayl
   return payload
 }
 
-const githubFetch = async <T>(path: string, token: string, userAgent = 'aurora-login-updates'): Promise<T> => {
-  const response = await fetch(`https://api.github.com${path}`, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': userAgent,
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    }
+const requestJson = <T>(reqPath: string, options: GithubRequestOptions): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: 'api.github.com',
+        path: reqPath,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'aurora-login-updates',
+          Accept: 'application/vnd.github+json',
+          ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
+        }
+      },
+      (res) => {
+        let body = ''
+
+        res.on('data', (chunk) => {
+          body += chunk
+        })
+
+        res.on('end', () => {
+          let data: any = null
+
+          try {
+            data = body ? JSON.parse(body) : null
+          } catch {
+            reject(new Error(`Respuesta inválida de GitHub para ${reqPath}.`))
+            return
+          }
+
+          if ((res.statusCode || 500) < 200 || (res.statusCode || 500) >= 300) {
+            reject(new Error(data?.message || `GitHub API ${res.statusCode} ${res.statusMessage}`))
+            return
+          }
+
+          resolve(data as T)
+        })
+      }
+    )
+
+    req.on('error', reject)
+    req.end()
   })
-
-  const data = await response.json().catch(() => null)
-
-  if (!response.ok) {
-    const message = data?.message || `GitHub respondió con estado ${response.status}.`
-    throw new Error(message)
-  }
-
-  return data as T
 }
 
-const getAuthenticatedLogin = async (token: string) => {
-  if (!token) return null
+const getAuthenticatedLogin = async (options: GithubRequestOptions) => {
+  if (!options.token) return null
 
   try {
-    const me = await githubFetch<{ login?: string }>('/user', token)
+    const me = await requestJson<{ login?: string }>('/user', options)
     return me?.login || null
   } catch {
     return null
   }
 }
 
-const fetchPushEvents = async (username: string, token: string) => {
+const fetchPushEventsForRecentWindow = async (options: GithubRequestOptions) => {
   const events: any[] = []
-  const endpoint = token
-    ? `/users/${encodeURIComponent(username)}/events`
-    : `/users/${encodeURIComponent(username)}/events/public`
+  const start = startOfLocalDay(subtractDays(new Date(), EVENT_LOOKBACK_DAYS))
+  const endpoint = options.token
+    ? `/users/${encodeURIComponent(options.username)}/events`
+    : `/users/${encodeURIComponent(options.username)}/events/public`
 
   for (let page = 1; page <= MAX_EVENT_PAGES; page += 1) {
-    const batch = await githubFetch<any[]>(`${endpoint}?per_page=${PER_PAGE}&page=${page}`, token)
+    const batch = await requestJson<any[]>(`${endpoint}?per_page=${PER_PAGE}&page=${page}`, options)
 
     if (!Array.isArray(batch) || batch.length === 0) break
 
+    let sawOlderThanTarget = false
+
     for (const event of batch) {
+      const createdAt = new Date(event?.created_at || '')
+
+      if (Number.isFinite(createdAt.getTime()) && createdAt < start) {
+        sawOlderThanTarget = true
+        continue
+      }
+
       if (event?.type === 'PushEvent') {
         events.push(event)
       }
     }
 
-    if (batch.length < PER_PAGE) break
+    if (sawOlderThanTarget || batch.length < PER_PAGE) break
   }
 
   return events
 }
 
-const fetchCompareItems = async (repoFullName: string, before: string, head: string, token: string) => {
+const fetchCompareUpdates = async (repoFullName: string, before: string, head: string, options: GithubRequestOptions) => {
   if (!repoFullName || !before || !head || before === head || isAllZeroSha(before)) {
     return []
   }
 
   try {
-    const data = await githubFetch<any>(
+    const data = await requestJson<any>(
       `/repos/${repoFullName}/compare/${encodeURIComponent(before)}...${encodeURIComponent(head)}`,
-      token
+      options
     )
 
-    const commits = Array.isArray(data?.commits) ? data.commits : []
-    return commits
+    const items = Array.isArray(data?.commits) ? data.commits : []
+    return items
       .filter((item: any) => item?.sha)
       .map((item: any) => ({
         sha: String(item?.sha || ''),
@@ -164,31 +214,31 @@ const fetchCompareItems = async (repoFullName: string, before: string, head: str
   }
 }
 
-const itemsFromPayload = (event: any) => {
-  const commits = Array.isArray(event?.payload?.commits) ? event.payload.commits : []
+const updatesFromPayload = (event: any) => {
+  const items = Array.isArray(event?.payload?.commits) ? event.payload.commits : []
 
-  return commits
+  return items
     .filter((item: any) => item?.sha)
     .map((item: any) => ({
-      sha: String(item?.sha || ''),
-      message: String(item?.message || ''),
+      sha: String(item.sha || ''),
+      message: String(item.message || ''),
       author: String(item?.author?.name || item?.author?.email || ''),
       url: ''
     }))
 }
 
-const collectUpdatesFromEvents = async (events: any[], token: string, fallbackAuthor: string) => {
+const collectUpdates = async (events: any[], options: GithubRequestOptions) => {
   const seen = new Set<string>()
-  const updates: LoginUpdateItem[] = []
+  const updates: GithubUpdateItem[] = []
 
   for (const event of events) {
     const repo = String(event?.repo?.name || '')
     if (!repo) continue
 
-    let items = await fetchCompareItems(repo, event?.payload?.before, event?.payload?.head, token)
+    let items = await fetchCompareUpdates(repo, event?.payload?.before, event?.payload?.head, options)
 
     if (items.length === 0) {
-      items = itemsFromPayload(event)
+      items = updatesFromPayload(event)
     }
 
     if (items.length === 0) continue
@@ -201,9 +251,9 @@ const collectUpdatesFromEvents = async (events: any[], token: string, fallbackAu
       if (seen.has(key)) continue
       seen.add(key)
 
-      const message = splitMessage(item.message)
       const date = String(event?.created_at || '')
       const daysAgo = daysAgoFromDate(date)
+      const message = splitMessage(item.message)
       const repoUrl = `https://github.com/${repo}`
       const url = item.url || `${repoUrl}/commit/${sha}`
 
@@ -215,7 +265,7 @@ const collectUpdatesFromEvents = async (events: any[], token: string, fallbackAu
         repo,
         repoUrl,
         url,
-        author: item.author || fallbackAuthor,
+        author: item.author || options.username,
         date,
         daysAgo,
         relativeDateLabel: formatRelativeDays(daysAgo),
@@ -231,27 +281,30 @@ export default defineEventHandler(async (event): Promise<LoginUpdatesPayload> =>
   setResponseHeader(event, 'Cache-Control', 'no-store')
 
   const config = useRuntimeConfig()
-  const username = String(config.githubUsername || process.env.GITHUB_USERNAME || '').trim()
-  const token = String(config.githubToken || process.env.GITHUB_TOKEN || '').trim()
+  const username = String(process.env.GITHUB_USERNAME || config.githubUsername || '').trim()
+  const token = String(process.env.GITHUB_TOKEN || config.githubToken || '').trim()
+  const cacheKey = `${username}:${token ? 'auth' : 'public'}`
 
   if (!username) {
     return emptyPayload('', 'GITHUB_USERNAME no está configurado.')
   }
 
-  if (cachedPayload && cachedPayload.expiresAt > Date.now() && cachedPayload.data.username === username) {
+  if (cachedPayload && cachedPayload.expiresAt > Date.now() && cachedPayload.cacheKey === cacheKey) {
     return cachedPayload.data
   }
 
+  const options = { username, token }
+
   try {
-    const authLogin = await getAuthenticatedLogin(token)
+    const authLogin = await getAuthenticatedLogin(options)
     const warning = token && authLogin && authLogin.toLowerCase() !== username.toLowerCase()
       ? `El token pertenece a ${authLogin}; las actualizaciones privadas pueden no coincidir con ${username}.`
       : ''
 
-    const events = await fetchPushEvents(username, token)
-    const allUpdates = await collectUpdatesFromEvents(events, token, username)
-    const displayUpdates = allUpdates.slice(0, MAX_DISPLAY_UPDATES)
-    const latest = allUpdates[0] || null
+    const events = await fetchPushEventsForRecentWindow(options)
+    const updates = await collectUpdates(events, options)
+    const displayUpdates = updates.slice(0, MAX_DISPLAY_UPDATES)
+    const latest = updates[0] || null
     const lastUpdatedDaysAgo = latest ? latest.daysAgo : null
 
     const payload: LoginUpdatesPayload = {
@@ -259,7 +312,7 @@ export default defineEventHandler(async (event): Promise<LoginUpdatesPayload> =>
       configured: true,
       source: 'github-push-events',
       username,
-      totalCount: allUpdates.length,
+      totalCount: updates.length,
       lastUpdatedAt: latest?.date || null,
       lastUpdatedDaysAgo,
       lastUpdatedLabel: formatRelativeDays(lastUpdatedDaysAgo),
@@ -269,12 +322,13 @@ export default defineEventHandler(async (event): Promise<LoginUpdatesPayload> =>
     }
 
     cachedPayload = {
+      cacheKey,
       expiresAt: Date.now() + CACHE_TTL_MS,
       data: payload
     }
 
     return payload
   } catch (error: any) {
-    return emptyPayload(username, error?.message || 'No se pudieron cargar las actualizaciones de GitHub.')
+    return emptyPayload(username, error?.message || 'No se pudieron cargar las actualizaciones.')
   }
 })
