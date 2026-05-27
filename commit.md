@@ -1,1 +1,1 @@
-Limit login updates to sistema-de-ingresos-2 and add system version display
+Enriquece expediente administrativo con matrícula centralizada sin bloquear la vista
