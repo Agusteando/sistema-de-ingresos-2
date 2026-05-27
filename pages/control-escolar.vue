@@ -1326,11 +1326,15 @@ const initialControlPlantel = String(activePlantelCookie.value || "").trim();
 const externalConcepts = ref([]);
 const ENROLLMENT_CONCEPTS_CACHE_KEY = "students-enrollment-concepts:v1";
 const CONTROL_STUDENTS_CACHE_VERSION = 2;
+const CONTROL_STUDENTS_SCOPE_CACHE_VERSION = 3;
 const CONTROL_STUDENTS_CACHE_READ_VERSIONS = [
   CONTROL_STUDENTS_CACHE_VERSION,
   1,
 ];
 const CONTROL_STUDENTS_CACHE_NAMESPACE = "control-escolar:students-cache";
+const CONTROL_STUDENTS_SCOPE_CACHE_NAMESPACE = "control-escolar:students-scope-cache";
+const CONTROL_STUDENTS_SCOPE_CACHE_INDEX_KEY = `${CONTROL_STUDENTS_SCOPE_CACHE_NAMESPACE}:index:v1`;
+const CONTROL_STUDENTS_SCOPE_CACHE_MAX_SCOPES = 8;
 const currentCicloKey = computed(() =>
   normalizeCicloKey(
     normalizeCicloOption(state.value?.ciclo || cicloCookie.value),
@@ -2119,6 +2123,14 @@ const controlStudentsLegacyCacheKey = (
 ) =>
   `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${version}:${controlStudentsCacheSignature(query)}`;
 
+const controlStudentsScopeCacheKey = (
+  query = buildQuery(),
+  version = CONTROL_STUDENTS_SCOPE_CACHE_VERSION,
+) => {
+  const scope = controlCacheScopeFromQuery(query);
+  return `${CONTROL_STUDENTS_SCOPE_CACHE_NAMESPACE}:v${version}:${encodeURIComponent(scope.agentId)}:${encodeURIComponent(scope.ciclo)}`;
+};
+
 const controlStudentsCacheKey = (
   query = buildQuery(),
   version = CONTROL_STUDENTS_CACHE_VERSION,
@@ -2127,11 +2139,67 @@ const controlStudentsCacheKey = (
   return `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v${version}:${encodeURIComponent(scope.agentId)}:${encodeURIComponent(scope.ciclo)}:${controlStudentsCacheSignature(query)}`;
 };
 
-const controlStudentsCacheLookupKeys = (query = buildQuery()) =>
-  CONTROL_STUDENTS_CACHE_READ_VERSIONS.flatMap((version) => [
+const controlStudentsCacheLookupKeys = (query = buildQuery()) => [
+  controlStudentsScopeCacheKey(query),
+  ...CONTROL_STUDENTS_CACHE_READ_VERSIONS.flatMap((version) => [
     controlStudentsCacheKey(query, version),
     controlStudentsLegacyCacheKey(query, version),
-  ]);
+  ]),
+];
+
+const readControlScopeCacheIndex = () => {
+  if (!process.client) return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CONTROL_STUDENTS_SCOPE_CACHE_INDEX_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+  } catch (_) {
+    return [];
+  }
+};
+
+const writeControlScopeCacheIndex = (keys = []) => {
+  if (!process.client) return;
+  try {
+    localStorage.setItem(
+      CONTROL_STUDENTS_SCOPE_CACHE_INDEX_KEY,
+      JSON.stringify(keys.slice(0, CONTROL_STUDENTS_SCOPE_CACHE_MAX_SCOPES)),
+    );
+  } catch (_) {}
+};
+
+const touchControlScopeCacheKey = (key) => {
+  if (!process.client || !key) return;
+  const nextKeys = [key, ...readControlScopeCacheIndex().filter((candidate) => candidate !== key)];
+  const staleKeys = nextKeys.slice(CONTROL_STUDENTS_SCOPE_CACHE_MAX_SCOPES);
+  staleKeys.forEach((staleKey) => {
+    try {
+      localStorage.removeItem(staleKey);
+    } catch (_) {}
+  });
+  writeControlScopeCacheIndex(nextKeys);
+};
+
+const removeLegacyControlStudentsCacheForScope = (query = buildQuery()) => {
+  if (!process.client) return;
+  const scope = controlCacheScopeFromQuery(query);
+  const scopePrefix = `${CONTROL_STUDENTS_CACHE_NAMESPACE}:v`;
+  const encodedAgent = encodeURIComponent(scope.agentId);
+  const encodedCiclo = encodeURIComponent(scope.ciclo);
+
+  try {
+    const keysToRemove = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index) || "";
+      if (
+        key.startsWith(scopePrefix) &&
+        key.includes(`:${encodedAgent}:${encodedCiclo}:`)
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  } catch (_) {}
+};
 
 const isCachedControlStudentsForScope = (cached, query = buildQuery()) => {
   const scope = controlCacheScopeFromQuery(query);
@@ -2174,11 +2242,19 @@ const normalizeCachedControlStudentsRecord = (cached = {}, query = buildQuery())
 
   return {
     ...cached,
-    version: CONTROL_STUDENTS_CACHE_VERSION,
+    version: CONTROL_STUDENTS_SCOPE_CACHE_VERSION,
     scope: cached.scope || controlCacheScopeFromQuery(query),
     query: cached.query || normalizeControlCacheParams(query),
     data: sanitizedData,
   };
+};
+
+const isReadableCachedControlStudentsVersion = (value) => {
+  const version = Number(value);
+  return (
+    version === CONTROL_STUDENTS_SCOPE_CACHE_VERSION ||
+    CONTROL_STUDENTS_CACHE_READ_VERSIONS.includes(version)
+  );
 };
 
 const readCachedControlStudents = (query = buildQuery()) => {
@@ -2189,10 +2265,11 @@ const readCachedControlStudents = (query = buildQuery()) => {
     for (const key of keys) {
       const cached = JSON.parse(localStorage.getItem(key) || "null");
       if (!cached) continue;
-      if (!CONTROL_STUDENTS_CACHE_READ_VERSIONS.includes(Number(cached?.version)))
-        continue;
+      if (!isReadableCachedControlStudentsVersion(cached?.version)) continue;
       if (!Array.isArray(cached?.data)) continue;
       if (!isCachedControlStudentsForScope(cached, query)) continue;
+      if (key.startsWith(CONTROL_STUDENTS_SCOPE_CACHE_NAMESPACE))
+        touchControlScopeCacheKey(key);
       return normalizeCachedControlStudentsRecord(cached, query);
     }
     return null;
@@ -2236,7 +2313,7 @@ const writeCachedControlStudents = (
 
   const cache = buildControlCacheMetadata(metadata, response);
   const record = {
-    version: CONTROL_STUDENTS_CACHE_VERSION,
+    version: CONTROL_STUDENTS_SCOPE_CACHE_VERSION,
     savedAt: cache.savedAt,
     scope: controlCacheScopeFromQuery(query),
     query: normalizeControlCacheParams(query),
@@ -2265,7 +2342,10 @@ const writeCachedControlStudents = (
   };
 
   try {
-    localStorage.setItem(controlStudentsCacheKey(query), JSON.stringify(record));
+    const cacheKey = controlStudentsScopeCacheKey(query);
+    localStorage.setItem(cacheKey, JSON.stringify(record));
+    touchControlScopeCacheKey(cacheKey);
+    removeLegacyControlStudentsCacheForScope(query);
     return true;
   } catch (error) {
     console.warn(
@@ -2822,7 +2902,7 @@ const loadStudents = async (options = {}) => {
   const cached = useCache ? readCachedControlStudents(query) : null;
   markClientStep(
     "browser-cache",
-    "Leer cache del navegador",
+    "Leer cache local del plantel/ciclo",
     cacheStartedAt,
     cached ? "ready" : "empty",
     { rows: Array.isArray(cached?.data) ? cached.data.length : 0 },
@@ -2837,7 +2917,7 @@ const loadStudents = async (options = {}) => {
     controlDataSavedAt.value = cached.savedAt || "";
     controlDataSource.value = cached.source || null;
     controlCacheStage.value = "ready";
-    publishControlSyncIndicatorState({ status: "cached", message: "Cache del navegador visible mientras se actualiza." });
+    publishControlSyncIndicatorState({ status: "cached", message: "Cache local del plantel/ciclo visible mientras se actualiza." });
     controlExternalDbRows.value = getControlExternalDbRowCount(cached.source || {});
   } else {
     controlCacheStage.value = "empty";
