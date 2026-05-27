@@ -126,11 +126,11 @@
                   <path d="M10.3 4.2 2.8 17.1A2 2 0 0 0 4.5 20h15a2 2 0 0 0 1.7-2.9L13.7 4.2a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
                 </svg>
               </span>
-              <span>{{ selectedPlantelStatus.action }}</span>
+              <span>{{ offlinePlantelNote }}</span>
             </p>
           </div>
 
-          <div class="google-card" @click="handleOfflinePlantelIntent">
+          <div class="google-card">
             <div
               v-show="authPhase === 'loadingGoogle' || isBusy"
               class="google-busy-row"
@@ -158,7 +158,7 @@
 
             <div
               class="google-native-shell"
-              :class="{ inactive: authPhase === 'loadingGoogle' || isBusy || isSelectedPlantelOffline }"
+              :class="{ inactive: authPhase === 'loadingGoogle' || isBusy }"
               @pointerdown.capture="markGoogleIntent"
             >
               <div id="google-btn" />
@@ -275,7 +275,9 @@ const plantelMenuOpen = ref(false)
 const { getPlantelStatus, loadPlantelStatuses } = usePlantelAgentStatuses()
 
 const selectedPlantelStatus = computed(() => getPlantelStatus(selectedPlantel.value))
-const isSelectedPlantelOffline = computed(() => selectedPlantelStatus.value.status === 'offline')
+const offlinePlantelNote = computed(() => (
+  'Puedes continuar con Google. Solo las funciones financieras que dependen del equipo local requerirán que el plantel esté en línea.'
+))
 const agentUnavailableError = computed(() => /La base del plantel no est[aá] disponible|fuera de l[ií]nea|conectividad del equipo/i.test(errorMsg.value))
 const loginErrorTitle = computed(() => (
   agentUnavailableError.value ? 'El plantel seleccionado está fuera de línea.' : 'No se pudo iniciar sesión.'
@@ -379,22 +381,7 @@ const loadPersistedPlantel = () => {
   persistSelectedPlantel()
 }
 
-const handleOfflinePlantelIntent = () => {
-  if (!isSelectedPlantelOffline.value || isBusy.value) return
-
-  errorMsg.value = AGENT_UNAVAILABLE_MESSAGE
-  setPhase('error', 0)
-}
-
-const markGoogleIntent = (event) => {
-  if (isSelectedPlantelOffline.value) {
-    event?.preventDefault()
-    event?.stopPropagation()
-    errorMsg.value = AGENT_UNAVAILABLE_MESSAGE
-    setPhase('error', 0)
-    return
-  }
-
+const markGoogleIntent = () => {
   if (authPhase.value !== 'ready' && authPhase.value !== 'error') return
 
   errorMsg.value = ''
