@@ -190,84 +190,47 @@
           </button>
 
 
-          <section class="updates-panel" :class="{ open: updatesOpen }" aria-label="Actualizaciones del sistema">
-            <button
-              type="button"
-              class="updates-toggle"
-              :aria-expanded="updatesOpen ? 'true' : 'false'"
-              aria-controls="login-updates-body"
-              @click="toggleUpdatesPanel"
-            >
+          <section class="updates-panel" aria-label="Actualizaciones del sistema">
+            <div class="updates-summary">
               <span class="updates-title-group">
                 <span class="updates-label">Actualizaciones</span>
-                <span class="updates-meta">
-                  Última actualización {{ updatesLatestLabel }}
-                </span>
+                <span class="updates-meta">Última actualización {{ updatesLatestLabel }}</span>
               </span>
               <span class="updates-count-group">
                 <span v-if="updatesPending" class="updates-loading-dot" aria-hidden="true" />
                 <strong>{{ updatesTotalLabel }}</strong>
-                <span class="updates-chevron" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </span>
               </span>
-            </button>
-
-            <div v-if="updatesOpen" id="login-updates-body" class="updates-body">
-              <label class="updates-search" for="login-updates-search">
-                <span aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="m21 21-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                    <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" />
-                  </svg>
-                </span>
-                <input
-                  id="login-updates-search"
-                  v-model="updatesSearch"
-                  type="search"
-                  placeholder="Buscar actualización"
-                  autocomplete="off"
-                >
-              </label>
-
-              <div v-if="updatesError" class="updates-empty">{{ updatesError }}</div>
-              <div v-else>
-                <div v-if="loginUpdates.warning" class="updates-warning">{{ loginUpdates.warning }}</div>
-                <div v-if="updatesPending && !filteredUpdates.length" class="updates-empty">Cargando actualizaciones…</div>
-                <div v-else-if="!filteredUpdates.length" class="updates-empty">No hay actualizaciones que coincidan.</div>
-
-                <div v-else class="updates-list">
-                  <a
-                    v-for="update in filteredUpdatesPreview"
-                    :key="update.sha || `${update.repo}-${update.date}-${update.title}`"
-                    class="update-item"
-                    :href="update.url || update.repoUrl || undefined"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <span class="update-topline">
-                      <span class="update-repo">{{ update.relativeDateLabel }}</span>
-                      <span v-if="update.isNew" class="update-new">NEW</span>
-                    </span>
-                    <strong>{{ update.title }}</strong>
-                    <small>
-                      {{ update.shortSha }}
-                    </small>
-                  </a>
-
-                  <button
-                    v-if="filteredUpdates.length > 3"
-                    type="button"
-                    class="updates-more-button"
-                    @click="updatesModalOpen = true"
-                  >
-                    Ver más actualizaciones
-                  </button>
-                </div>
-              </div>
             </div>
+
+            <div class="updates-preview" aria-label="Últimas actualizaciones">
+              <div v-if="updatesError" class="updates-empty compact">{{ updatesError }}</div>
+              <div v-else-if="updatesPending && !loginUpdates.updates.length" class="updates-empty compact">Cargando actualizaciones…</div>
+              <template v-else>
+                <a
+                  v-for="update in latestThreeUpdates"
+                  :key="`preview-${update.sha || `${update.repo}-${update.date}-${update.title}`}`"
+                  class="update-item compact"
+                  :href="update.url || update.repoUrl || undefined"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <span class="update-topline">
+                    <span class="update-repo">{{ update.relativeDateLabel }}</span>
+                    <span v-if="update.isNew" class="update-new">NEW</span>
+                  </span>
+                  <strong>{{ update.title }}</strong>
+                </a>
+              </template>
+            </div>
+
+            <button
+              v-if="loginUpdates.updates.length > 3"
+              type="button"
+              class="updates-more-button"
+              @click="updatesModalOpen = true"
+            >
+              Ver más actualizaciones
+            </button>
           </section>
 
           <p class="policy-line">
@@ -455,6 +418,7 @@ const filteredUpdates = computed(() => {
   })
 })
 const filteredUpdatesPreview = computed(() => filteredUpdates.value.slice(0, 3))
+const latestThreeUpdates = computed(() => (Array.isArray(loginUpdates.value.updates) ? loginUpdates.value.updates : []).slice(0, 3))
 
 const toggleUpdatesPanel = () => {
   updatesOpen.value = !updatesOpen.value
@@ -1328,19 +1292,13 @@ onBeforeUnmount(() => {
   box-shadow: 0 14px 30px rgba(22, 36, 63, 0.055);
 }
 
-.updates-toggle {
+.updates-summary {
   display: flex;
   width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border: 0;
-  background: transparent;
-  padding: 15px 16px;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+  padding: 13px 14px 7px;
 }
 
 .updates-title-group {
@@ -1413,6 +1371,31 @@ onBeforeUnmount(() => {
 
 .updates-panel.open .updates-chevron {
   transform: rotate(180deg);
+}
+
+.updates-preview {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+
+.update-item.compact {
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 11px;
+}
+
+.update-item.compact strong {
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.updates-empty.compact {
+  padding: 9px 10px;
+  font-size: 11.5px;
 }
 
 .updates-body {

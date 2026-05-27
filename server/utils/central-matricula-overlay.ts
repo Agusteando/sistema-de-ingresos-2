@@ -83,27 +83,7 @@ const MATRICULA_COLUMNS = [
   'created_at'
 ]
 
-export const fetchCentralMatriculaOverlay = async (matricula: string) => {
-  const normalizedMatricula = normalizeText(matricula, 64)
-  if (!normalizedMatricula) {
-    throw createError({ statusCode: 400, message: 'Matrícula requerida.' })
-  }
-
-  const columns = await getCentralTableColumns('matricula')
-  if (!columns.has('matricula')) {
-    throw createError({ statusCode: 500, message: 'La tabla matricula no tiene columna matricula.' })
-  }
-
-  const selected = MATRICULA_COLUMNS.filter((column) => columns.has(column))
-  if (!selected.includes('matricula')) selected.unshift('matricula')
-
-  const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT ${selected.map(escapeIdentifier).join(', ')} FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`,
-    [normalizedMatricula]
-  )
-  const raw = rows[0] || null
-  if (!raw) return null
-
+const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
   const padre = firstText(
     [raw.nombre_padre, raw.apellido_paterno_padre, raw.apellido_materno_padre].map((value) => normalizeText(value)).filter(Boolean).join(' '),
     raw.nombre_padre_completo,
@@ -140,6 +120,7 @@ export const fetchCentralMatriculaOverlay = async (matricula: string) => {
       telefono: firstText(raw.telefono_padre, raw.celular_padre, raw.telefono_madre, raw.celular_madre),
       correo: firstLower(raw.email_padre, raw.correo_padre, raw.email_madre, raw.correo_madre),
       padre,
+      madre,
       telefonoPadre: firstText(raw.telefono_padre, raw.celular_padre),
       telefonoMadre: firstText(raw.telefono_madre, raw.celular_madre),
       emailPadre: firstLower(raw.email_padre, raw.correo_padre),
@@ -160,4 +141,58 @@ export const fetchCentralMatriculaOverlay = async (matricula: string) => {
       updatedAt: firstText(raw.updated_at, raw.updatedAt, raw.fecha_actualizacion, raw.created_at)
     }
   }
+}
+
+const loadCentralMatriculaColumns = async () => {
+  const columns = await getCentralTableColumns('matricula')
+  if (!columns.has('matricula')) {
+    throw createError({ statusCode: 500, message: 'La tabla matricula no tiene columna matricula.' })
+  }
+  const selected = MATRICULA_COLUMNS.filter((column) => columns.has(column))
+  if (!selected.includes('matricula')) selected.unshift('matricula')
+  return selected
+}
+
+export const fetchCentralMatriculaOverlay = async (matricula: string) => {
+  const normalizedMatricula = normalizeText(matricula, 64)
+  if (!normalizedMatricula) {
+    throw createError({ statusCode: 400, message: 'Matrícula requerida.' })
+  }
+
+  const selected = await loadCentralMatriculaColumns()
+  const rows = await controlEscolarCentralQuery<any[]>(
+    `SELECT ${selected.map(escapeIdentifier).join(', ')} FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`,
+    [normalizedMatricula]
+  )
+  const raw = rows[0] || null
+  return raw ? normalizeCentralMatriculaOverlay(raw) : null
+}
+
+export const fetchCentralMatriculaOverlays = async (matriculas: string[]) => {
+  const normalized = Array.from(new Set(
+    matriculas
+      .map((value) => normalizeText(value, 64))
+      .filter(Boolean)
+  ))
+  if (!normalized.length) return new Map<string, any>()
+
+  const selected = await loadCentralMatriculaColumns()
+  const result = new Map<string, any>()
+  const batchSize = 250
+
+  for (let index = 0; index < normalized.length; index += batchSize) {
+    const batch = normalized.slice(index, index + batchSize)
+    const placeholders = batch.map(() => '?').join(', ')
+    const rows = await controlEscolarCentralQuery<any[]>(
+      `SELECT ${selected.map(escapeIdentifier).join(', ')} FROM \`matricula\` WHERE \`matricula\` IN (${placeholders})`,
+      batch
+    )
+    for (const raw of rows) {
+      const overlay = normalizeCentralMatriculaOverlay(raw)
+      const key = normalizeText(overlay.student?.matricula, 64).toUpperCase()
+      if (key) result.set(key, overlay)
+    }
+  }
+
+  return result
 }
