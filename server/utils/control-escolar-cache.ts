@@ -264,6 +264,7 @@ const buildCacheSourcePayload = (
   cacheFreshness: meta.freshness,
   cacheMessage: meta.message,
   cacheRows: rows,
+  cacheRefreshDue: meta.freshness !== "fresh",
   cacheRefreshedAt: meta.cacheRefreshedAt,
   cacheExpiresAt: meta.cacheExpiresAt,
   cacheAgeMs: meta.ageMs,
@@ -318,7 +319,7 @@ export const fetchCachedControlEscolarBaseRows = async (
   await ensureControlEscolarCacheSchema();
   const meta = await readControlCacheSourceMeta(agentId);
 
-  if (meta.freshness !== "fresh") {
+  if (meta.freshness === "empty") {
     return { rows: [], source: buildCacheSourcePayload(meta, 0), meta };
   }
 
@@ -423,7 +424,7 @@ export const fetchCachedControlEscolarBaseContext = async (
 ) => {
   await ensureControlEscolarCacheSchema();
   const meta = await readControlCacheSourceMeta(agentId);
-  if (meta.freshness !== "fresh") return null;
+  if (meta.freshness === "empty") return null;
 
   const rows = await controlEscolarCentralQuery<any[]>(
     `SELECT source_id, matricula, plantel, base_payload, row_hash, refreshed_at
@@ -967,6 +968,48 @@ const cleanupStageRows = async (sourceId: string, refreshToken?: string) => {
   ).catch(() => null);
 };
 
+const completeLockedControlEscolarCacheRefresh = async (
+  sourceId: string,
+  plantel: string,
+  refreshToken: string,
+  rows: any[],
+  options: {
+    triggerName?: string;
+    minAgeMinutes?: number;
+    cicloKey?: string;
+    previousCiclo?: string;
+  } = {},
+) => {
+  const minAgeMinutes = Math.max(
+    1,
+    Number(options.minAgeMinutes || AUTO_REFRESH_MIN_AGE_MINUTES) ||
+      AUTO_REFRESH_MIN_AGE_MINUTES,
+  );
+  await cleanupStageRows(sourceId);
+  const evidenceRows = normalizeEvidenceRowsFromLoadedRows(rows, {
+    cicloKey: options.cicloKey,
+    previousCiclo: options.previousCiclo,
+  });
+  const stagedRows = await insertStageBaseRows(sourceId, plantel, refreshToken, rows);
+  const stagedEvidenceRows = await insertStageEvidenceRows(sourceId, refreshToken, evidenceRows);
+  await promoteStageToActive(
+    sourceId,
+    refreshToken,
+    stagedRows,
+    stagedEvidenceRows,
+    minAgeMinutes,
+  );
+  return {
+    success: true,
+    sourceId,
+    plantel,
+    totalRows: rows.length,
+    updatedRows: stagedRows,
+    evidenceRows: stagedEvidenceRows,
+    triggerName: normalizeText(options.triggerName || "auto-plantel-load", 80),
+  };
+};
+
 export const maybeRefreshControlEscolarCacheFromLoadedRows = async (
   agentId: string,
   rows: any[],
@@ -1012,29 +1055,13 @@ export const maybeRefreshControlEscolarCacheFromLoadedRows = async (
   }
 
   try {
-    await cleanupStageRows(sourceId);
-    const evidenceRows = normalizeEvidenceRowsFromLoadedRows(rows, {
-      cicloKey: options.cicloKey,
-      previousCiclo: options.previousCiclo,
-    });
-    const stagedRows = await insertStageBaseRows(sourceId, plantel, refreshToken, rows);
-    const stagedEvidenceRows = await insertStageEvidenceRows(sourceId, refreshToken, evidenceRows);
-    await promoteStageToActive(
-      sourceId,
-      refreshToken,
-      stagedRows,
-      stagedEvidenceRows,
-      minAgeMinutes,
-    );
-    return {
-      success: true,
+    return await completeLockedControlEscolarCacheRefresh(
       sourceId,
       plantel,
-      totalRows: rows.length,
-      updatedRows: stagedRows,
-      evidenceRows: stagedEvidenceRows,
-      triggerName: normalizeText(options.triggerName || "auto-plantel-load", 80),
-    };
+      refreshToken,
+      rows,
+      options,
+    );
   } catch (error: any) {
     const message = String(
       error?.message || error || "No se pudo actualizar el cache central.",
@@ -1057,29 +1084,67 @@ export const maybePublishControlEscolarSnapshotFromBridge = async (
 ) => {
   const plantel = normalizePlantel(agentId);
   assertBridgeAgentSelectable(plantel);
+  await ensureControlEscolarCacheSchema();
+  const sourceId = await ensureControlBaseSource(plantel);
   const minAgeMinutes = Math.max(
     1,
     Number(options.minAgeMinutes || AUTO_REFRESH_MIN_AGE_MINUTES) ||
       AUTO_REFRESH_MIN_AGE_MINUTES,
   );
-  return await runWithBridgeAgentId(plantel, async () => {
-    const rows = await fetchLocalSnapshotBaseRows(plantel);
-    const evidenceRows = await fetchLocalEvidenceRows();
-    const mergedRows = rows.map((row) => {
-      const matricula = normalizeText(row.matricula, 64);
-      const currentEvidence = evidenceRows.filter((e) => e.matricula === matricula);
-      return {
-        ...row,
-        conceptoIdsHistoricos: mergePipeIds(
-          ...currentEvidence.map((e) => e.allConceptIds),
-        ),
-      };
+  const refreshToken = randomRefreshToken();
+  const lockAcquired = await acquireRefreshLock(sourceId, refreshToken, minAgeMinutes);
+  if (!lockAcquired) {
+    const cache = await readControlCacheSourceMeta(plantel).catch(() => null);
+    return {
+      success: true,
+      skipped: true,
+      reason: cache?.refreshStatus === "running" ? "refresh_already_running" : "cache_recent",
+      sourceId,
+      plantel,
+      cache,
+    };
+  }
+
+  try {
+    return await runWithBridgeAgentId(plantel, async () => {
+      const rows = await fetchLocalSnapshotBaseRows(plantel);
+      const evidenceRows = await fetchLocalEvidenceRows();
+      const mergedRows = rows.map((row) => {
+        const matricula = normalizeText(row.matricula, 64);
+        const currentEvidence = evidenceRows.filter((e) => e.matricula === matricula);
+        return {
+          ...row,
+          conceptoIdsHistoricos: mergePipeIds(
+            ...currentEvidence.map((e) => e.allConceptIds),
+          ),
+        };
+      });
+      return await completeLockedControlEscolarCacheRefresh(
+        sourceId,
+        plantel,
+        refreshToken,
+        mergedRows,
+        {
+          ...options,
+          triggerName: options.triggerName || "auto-bridge-live-read",
+          minAgeMinutes,
+        },
+      );
     });
-    return await maybeRefreshControlEscolarCacheFromLoadedRows(plantel, mergedRows, {
-      triggerName: options.triggerName || "auto-bridge-live-read",
-      minAgeMinutes,
-    });
-  });
+  } catch (error: any) {
+    const message = String(
+      error?.message || error || "No se pudo actualizar el cache central desde bridge.",
+    ).slice(0, 800);
+    await cleanupStageRows(sourceId, refreshToken);
+    await controlEscolarCentralQuery(
+      `UPDATE control_base_sources
+       SET refresh_status = 'idle', refresh_token = NULL, refresh_finished_at = CURRENT_TIMESTAMP,
+           last_error = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE source_id = ? AND refresh_token = ?`,
+      [message, sourceId, refreshToken],
+    ).catch(() => null);
+    throw error;
+  }
 };
 
 export const publishControlEscolarSnapshotFromBridge = maybePublishControlEscolarSnapshotFromBridge;

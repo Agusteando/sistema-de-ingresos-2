@@ -1225,7 +1225,7 @@
             <dl>
               <div v-for="step in lastControlLoadDiagnostics.clientSteps" :key="`client-${step.key}`">
                 <dt>{{ step.label }}</dt>
-                <dd>{{ step.status }} · {{ formatControlDuration(step.ms) }}<span v-if="step.rows != null"> · {{ step.rows }} filas</span></dd>
+                <dd>{{ step.status }} · {{ formatControlDuration(step.ms) }}<span v-if="step.rows != null"> · {{ step.rows }} filas</span><span v-if="step.reason"> · {{ step.reason }}</span><span v-if="step.error"> · {{ step.error }}</span></dd>
               </div>
             </dl>
           </section>
@@ -1234,7 +1234,7 @@
             <dl>
               <div v-for="step in lastControlLoadDiagnostics.server.steps" :key="`server-${step.key}`">
                 <dt>{{ step.label }}</dt>
-                <dd>{{ step.status }} · {{ formatControlDuration(step.ms) }}<span v-if="step.rows != null"> · {{ step.rows }} filas</span><span v-if="step.freshness"> · {{ step.freshness }}</span></dd>
+                <dd>{{ step.status }} · {{ formatControlDuration(step.ms) }}<span v-if="step.rows != null"> · {{ step.rows }} filas</span><span v-if="step.freshness"> · {{ step.freshness }}</span><span v-if="step.refreshDue"> · refresh due</span><span v-if="step.reason"> · {{ step.reason }}</span><span v-if="step.error"> · {{ step.error }}</span></dd>
               </div>
             </dl>
           </section>
@@ -1560,6 +1560,45 @@ const openControlDiagnosticsModal = () => {
 };
 const closeControlDiagnosticsModal = () => {
   showControlDiagnosticsModal.value = false;
+};
+
+const publishControlSyncIndicatorState = (override = {}) => {
+  if (!process.client) return;
+  const rows = controlStudentsIndex.value.length || students.value.length || 0;
+  const source = controlDataSource.value || {};
+  const isLoading = studentsLoading.value || kpisLoading.value || controlBaseStage.value === "loading" || controlExternalDbStage.value === "loading" || controlCompleteStage.value === "loading";
+  const status =
+    override.status ||
+    (isLoading
+      ? "syncing"
+      : loadError.value
+        ? "failed"
+        : source.cacheFreshness === "expired"
+          ? "cached"
+          : controlDataFreshness.value === "synced"
+            ? "updated"
+            : controlDataFreshness.value === "cache"
+              ? "cached"
+              : rows > 0
+                ? "cached"
+                : "empty");
+  const message =
+    override.message ||
+    (source.cacheFreshness === "expired"
+      ? "Mostrando cache activo; actualización automática en segundo plano."
+      : source.cacheFreshness === "fresh"
+        ? "Control Escolar usando cache central vigente."
+        : loadError.value || "Control Escolar");
+  window.dispatchEvent(
+    new CustomEvent("control-escolar:sync-state", {
+      detail: {
+        status,
+        rows,
+        message,
+        freshness: source.cacheFreshness || controlDataFreshness.value || "",
+      },
+    }),
+  );
 };
 
 const showControlSyncVisual = computed(() =>
@@ -2777,6 +2816,7 @@ const loadStudents = async (options = {}) => {
   controlExternalDbStage.value = "idle";
   controlCompleteStage.value = "idle";
   controlExternalDbRows.value = 0;
+  publishControlSyncIndicatorState({ status: "syncing", message: "Cargando Control Escolar" });
 
   const cacheStartedAt = controlNow();
   const cached = useCache ? readCachedControlStudents(query) : null;
@@ -2797,6 +2837,7 @@ const loadStudents = async (options = {}) => {
     controlDataSavedAt.value = cached.savedAt || "";
     controlDataSource.value = cached.source || null;
     controlCacheStage.value = "ready";
+    publishControlSyncIndicatorState({ status: "cached", message: "Cache del navegador visible mientras se actualiza." });
     controlExternalDbRows.value = getControlExternalDbRowCount(cached.source || {});
   } else {
     controlCacheStage.value = "empty";
@@ -2862,6 +2903,7 @@ const loadStudents = async (options = {}) => {
       totalMs: controlNow() - startedAt,
       status: "ready",
     });
+    publishControlSyncIndicatorState();
   } catch (error) {
     markClientStep(
       "server-enriched",
@@ -2895,6 +2937,7 @@ const loadStudents = async (options = {}) => {
       loadError.value = "";
       applyInstantStudentFilters();
     }
+    publishControlSyncIndicatorState({ status: "failed" });
   } finally {
     if (requestId === controlStudentsRequestId) {
       studentsLoading.value = false;
@@ -3342,6 +3385,21 @@ watch(
 );
 watch(selectedAgentId, () => nextTick(scheduleWorkspaceScaleUpdate));
 watch(
+  () => [
+    studentsLoading.value,
+    kpisLoading.value,
+    loadError.value,
+    controlDataFreshness.value,
+    controlExternalDbRows.value,
+    controlStudentsIndex.value.length,
+    students.value.length,
+    controlDataSource.value?.cacheFreshness || "",
+  ],
+  () => publishControlSyncIndicatorState(),
+  { flush: "post" },
+);
+
+watch(
   students,
   (visibleStudents) => queueControlStudentPhotos(visibleStudents),
   { deep: false },
@@ -3368,6 +3426,7 @@ onMounted(async () => {
     window.addEventListener("ingresos:ciclo-changed", handleCicloChanged);
     window.addEventListener("control-escolar:open-sync-diagnostics", openControlDiagnosticsModal);
     window.addEventListener("resize", scheduleControlScreenScaleUpdate, { passive: true });
+    publishControlSyncIndicatorState();
     const controlScreenHost = controlScreenRef.value?.parentElement;
     if (typeof ResizeObserver !== "undefined" && controlScreenHost) {
       controlScreenResizeObserver = new ResizeObserver(scheduleControlScreenScaleUpdate);

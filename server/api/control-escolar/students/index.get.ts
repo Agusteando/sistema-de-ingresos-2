@@ -1,4 +1,5 @@
 import { fetchControlEscolarStudents, resolveControlEscolarAuth, runControlEscolar } from '../../../utils/control-escolar'
+import { maybePublishControlEscolarSnapshotFromBridge } from '../../../utils/control-escolar-cache'
 
 export default defineEventHandler(async (event) => {
   const queryParams = getQuery(event)
@@ -7,6 +8,21 @@ export default defineEventHandler(async (event) => {
   return await runControlEscolar(event, auth.agentId, async () => {
     try {
       const result = await fetchControlEscolarStudents(auth.agentId, queryParams)
+      const source: any = result?.source || {}
+      if (source.cacheRefreshDue && source.cacheRows > 0) {
+        const refreshPromise = maybePublishControlEscolarSnapshotFromBridge(auth.agentId, {
+          triggerName: 'auto-control-escolar-stale-cache-read',
+          minAgeMinutes: 15
+        }).catch((error: any) => {
+          console.warn('[Control Escolar Cache] Background refresh after stale cache read failed.', {
+            plantel: auth.agentId,
+            message: error?.message || error
+          })
+        })
+        const waitUntil = (event as any).waitUntil
+        if (typeof waitUntil === 'function') waitUntil.call(event, refreshPromise)
+        else void refreshPromise
+      }
       return { agentId: auth.agentId, ...result }
     } catch (error: any) {
       const statusCode = error?.statusCode || error?.httpStatus || (error?.name === 'AbortError' ? 504 : 502)
