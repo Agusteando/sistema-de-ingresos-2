@@ -116,7 +116,21 @@ const SCHEMA_CACHE_MS = 1000 * 60 * 5;
 const MAX_LOCAL_ROWS = 25000;
 const CENTRAL_CHUNK_SIZE = 600;
 
-const normalizeKey = (value: unknown) => String(value || "").trim();
+const stringifyScalar = (value: unknown): string => {
+  if (value === null || value === undefined) return "";
+  if (["string", "number", "boolean"].includes(typeof value)) return String(value);
+  if (Array.isArray(value)) return value.map(stringifyScalar).filter(Boolean).join(" / ");
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["label", "nombre", "name", "value", "servicio", "descripcion", "description", "text", "title"]) {
+      const text = stringifyScalar(record[key]).trim();
+      if (text) return text;
+    }
+    return "";
+  }
+  return "";
+};
+const normalizeKey = (value: unknown) => stringifyScalar(value).trim();
 const normalizeText = (value: unknown, max = 255) =>
   normalizeKey(value).slice(0, max);
 const normalizeUpper = (value: unknown, max = 255) =>
