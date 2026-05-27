@@ -46,6 +46,10 @@
               :status="draftSaveState"
               :dirty="hasUnsavedChanges"
             />
+            <div v-if="isEdit" class="central-overlay-status" :class="centralOverlayStatusClass">
+              <LucideDatabase :size="16" />
+              <span>{{ centralOverlayStatusLabel }}</span>
+            </div>
             <div class="student-form-grid">
               <section
                 class="form-panel personal-panel"
@@ -444,6 +448,7 @@ import {
   LucideCalendarDays,
   LucideCheck,
   LucideChevronDown,
+  LucideDatabase,
   LucideGlobe2,
   LucideGraduationCap,
   LucideInfo,
@@ -495,6 +500,10 @@ const defaultPlantel =
     : userPlanteles[0] || "PT";
 const isEdit = !!props.student;
 const loading = ref(false);
+const centralOverlayLoading = ref(false);
+const centralOverlayApplied = ref(false);
+const centralOverlayAvailable = ref(false);
+const centralOverlayError = ref('');
 const showCyclePicker = ref(false);
 const showOlderCycles = ref(false);
 const cycleChangedByUser = ref(false);
@@ -681,6 +690,78 @@ const resultAnimationKey = computed(
     `${form.value.ciclo}-${currentCicloKey.value}-${visibleTipoIngreso.value.value}`,
 );
 
+const centralOverlayStatusClass = computed(() => {
+  if (centralOverlayLoading.value) return 'loading';
+  if (centralOverlayApplied.value) return 'ready';
+  if (centralOverlayAvailable.value && hasUnsavedChanges.value) return 'pending';
+  if (centralOverlayError.value) return 'muted';
+  return 'muted';
+});
+
+const centralOverlayStatusLabel = computed(() => {
+  if (centralOverlayLoading.value) return 'Consultando matrícula centralizada…';
+  if (centralOverlayApplied.value) return 'Datos enriquecidos desde matrícula centralizada.';
+  if (centralOverlayAvailable.value && hasUnsavedChanges.value) return 'Matrícula centralizada disponible; no se aplicó para no sobrescribir cambios.';
+  if (centralOverlayError.value) return 'Matrícula centralizada no disponible; se muestran datos de base local.';
+  return 'Mostrando base local mientras se consulta matrícula centralizada.';
+});
+
+const applyCentralOverlayToForm = (overlayStudent) => {
+  if (!overlayStudent || typeof overlayStudent !== 'object') return false;
+  if (hasUnsavedChanges.value || loading.value) {
+    centralOverlayAvailable.value = true;
+    return false;
+  }
+
+  const current = { ...form.value };
+  const next = {
+    ...current,
+    apellidoPaterno: overlayStudent.apellidoPaterno || current.apellidoPaterno,
+    apellidoMaterno: overlayStudent.apellidoMaterno || current.apellidoMaterno,
+    nombres: overlayStudent.nombres || current.nombres,
+    curp: normalizeCurp(overlayStudent.curp || current.curp),
+    padre: overlayStudent.padre || current.padre,
+    telefono: overlayStudent.telefonoPadre || overlayStudent.telefono || current.telefono,
+    correo: overlayStudent.emailPadre || overlayStudent.correo || current.correo,
+    estatus: current.estatus || 'Activo'
+  };
+
+  const overlayPlantel = String(overlayStudent.plantel || '').trim();
+  if (overlayPlantel) next.plantel = overlayPlantel;
+  const overlayNivel = normalizeNivelEscolar(overlayStudent.nivel || '');
+  if (overlayNivel && overlayNivel !== nivelFromPlantel(next.plantel || defaultPlantel)) next.nivel = overlayNivel;
+  if (overlayStudent.grado) next.grado = displayGrado(overlayStudent.grado);
+  if (overlayStudent.grupo && Object.prototype.hasOwnProperty.call(current, 'grupo')) next.grupo = overlayStudent.grupo;
+
+  form.value = next;
+  centralOverlayAvailable.value = true;
+  centralOverlayApplied.value = true;
+  return true;
+};
+
+const loadCentralMatriculaOverlay = async () => {
+  if (!isEdit) return;
+  const matricula = String(props.student?.matricula || form.value.matricula || '').trim();
+  if (!matricula) return;
+
+  centralOverlayLoading.value = true;
+  centralOverlayError.value = '';
+  try {
+    const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/matricula-overlay`);
+    const overlayStudent = response?.overlay?.student;
+    if (response?.found && overlayStudent) {
+      applyCentralOverlayToForm(overlayStudent);
+    } else {
+      centralOverlayError.value = 'not-found';
+    }
+  } catch (error) {
+    centralOverlayError.value = error?.data?.message || error?.message || 'central-unavailable';
+  } finally {
+    centralOverlayLoading.value = false;
+  }
+};
+
+
 const ingresoCardKicker = computed(() => {
   const ingresoYear = Number(normalizeCicloKey(form.value.ciclo));
   const currentYear = Number(currentCicloKey.value);
@@ -839,6 +920,7 @@ onMounted(() => {
   }
 
   initializeDraft();
+  void loadCentralMatriculaOverlay();
 });
 
 const NAME_PARTICLES = new Set([
@@ -1375,6 +1457,38 @@ const submit = async () => {
   );
 }
 
+
+.central-overlay-status {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: -.15rem 0 .4rem;
+  padding: .48rem .72rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  background: rgba(248, 250, 252, .86);
+  color: #64748b;
+  font-size: .72rem;
+  font-weight: 850;
+  letter-spacing: .01em;
+}
+.central-overlay-status.loading {
+  border-color: rgba(59, 130, 246, .28);
+  background: rgba(239, 246, 255, .94);
+  color: #1d4ed8;
+}
+.central-overlay-status.ready {
+  border-color: rgba(22, 163, 74, .28);
+  background: rgba(240, 253, 244, .94);
+  color: #166534;
+}
+.central-overlay-status.pending {
+  border-color: rgba(245, 158, 11, .32);
+  background: rgba(255, 251, 235, .94);
+  color: #92400e;
+}
 .curp-field input {
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",

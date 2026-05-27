@@ -67,12 +67,12 @@
           <span class="operator-watermark" aria-hidden="true">{{ initials }}</span>
         </div>
 
-        <div v-if="loading && !detail" class="operator-loading">
+        <div v-if="loading" class="operator-inline-loading">
           <span class="operator-spinner" aria-hidden="true"></span>
-          Cargando expediente consolidado…
+          Enriqueciendo expediente desde matrícula centralizada…
         </div>
 
-        <div v-else class="operator-grid">
+        <div class="operator-grid">
           <article class="operator-panel summary-panel">
             <h4><LucideGraduationCap :size="21" /> Resumen escolar</h4>
             <div class="summary-grid">
@@ -221,7 +221,7 @@ const displayGrupo = computed(() => {
 })
 const displayServicio = computed(() => titleCase(firstValue(source.value.servicio, source.value.program, source.value.nivel, props.student?.servicio)))
 const displayServiceBadge = computed(() => titleCase(firstValue(source.value.tipoIngreso, source.value.tipo_ingreso, source.value.ingreso, props.student?.tipoIngreso, 'Externo')))
-const sourceLabel = computed(() => 'Base local')
+const sourceLabel = computed(() => detail.value?.detailSource === 'base+matricula' ? 'Base + matrícula' : loading.value ? 'Base local + enriqueciendo' : 'Base local')
 
 const initials = computed(() => {
   const paternal = firstValue(source.value.apellidoPaterno, source.value.apellido_paterno)
@@ -233,9 +233,10 @@ const initials = computed(() => {
 
 const identityRows = computed(() => [
   { label: 'Matrícula', value: safeMatricula.value },
+  { label: 'CURP', value: fallbackText(firstValue(source.value.curp, source.value.CURP)) },
   { label: 'Nombre completo', value: fullName.value },
-  { label: 'Apellido paterno', value: fallbackText(source.value.apellidoPaterno) },
-  { label: 'Apellido materno', value: fallbackText(source.value.apellidoMaterno) },
+  { label: 'Apellido paterno', value: fallbackText(firstValue(source.value.apellidoPaterno, source.value.apellido_paterno)) },
+  { label: 'Apellido materno', value: fallbackText(firstValue(source.value.apellidoMaterno, source.value.apellido_materno)) },
   { label: 'Nombre(s)', value: fallbackText(source.value.nombres) }
 ])
 
@@ -271,7 +272,7 @@ const formatDate = (value) => {
 }
 
 const syncRows = computed(() => [
-  { label: 'Fuente de datos', value: 'Base local (plantel)' },
+  { label: 'Fuente de datos', value: detail.value?.detailSource === 'base+matricula' ? 'Base local + matrícula centralizada' : 'Base local (plantel)' },
   { label: 'Estado de sincronización', value: detail.value?.detailSource === 'base+matricula' ? 'Sincronizado' : 'Base local', kind: 'status' },
   { label: 'Última actualización', value: formatDate(source.value.updatedAt) },
   { label: 'Referencia centralizada', value: detail.value?.rawMatricula && Object.keys(detail.value.rawMatricula).length ? 'Expediente en matrícula centralizada' : 'Sin overlay centralizado' },
@@ -586,6 +587,21 @@ watch(() => props.student?.matricula, () => {
   pointer-events: none;
 }
 
+
+.operator-inline-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  width: fit-content;
+  margin: 0 2rem .75rem;
+  padding: .5rem .78rem;
+  border-radius: 999px;
+  border: 1px solid rgba(36, 98, 59, .14);
+  background: rgba(239, 252, 244, .86);
+  color: #24623b;
+  font-size: .78rem;
+  font-weight: 850;
+}
 .operator-loading {
   margin: 0 2rem;
   display: flex;
