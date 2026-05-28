@@ -1410,7 +1410,7 @@ const overlayStudentRow = (
     fechaNacimiento: derivedCurpIdentity.fechaNacimiento || normalizeText(overlay?.fecha_nacimiento),
     nombreCompletoAlumno: normalizeText(overlay?.nombre_completo_alumno),
     lugarNacimiento: normalizeText(overlay?.lugar_nacimiento),
-    sexo: derivedCurpIdentity.sexo || normalizeText(overlay?.sexo),
+    sexo: normalizeText(overlay?.sexo),
     talla: normalizeText(overlay?.talla),
     peso: normalizeText(overlay?.peso),
     tipoSangre: normalizeText(overlay?.tipo_sangre),
@@ -1438,8 +1438,9 @@ const overlayStudentRow = (
     ineMadre: normalizeText(overlay?.ine_madre),
     curpMadre: normalizeText(overlay?.curp_madre),
     domicilioCalle: normalizeText(overlay?.domicilio_calle),
-    domicilioNumero: normalizeText(overlay?.domicio_num),
-    domicioNum: normalizeText(overlay?.domicio_num),
+    domicilioNumero: normalizeText(overlay?.domicilio_num || overlay?.domicio_num),
+    domicilioNum: normalizeText(overlay?.domicilio_num || overlay?.domicio_num),
+    domicioNum: normalizeText(overlay?.domicio_num || overlay?.domicilio_num),
     domicilioColonia: normalizeText(overlay?.domicilio_colonia),
     domicilioCp: normalizeText(overlay?.domicilio_cp),
     domicilioMunicipio: normalizeText(overlay?.domicilio_municipio),
@@ -2244,6 +2245,7 @@ const PATCH_FIELD_COLUMN_MAP: Record<string, string> = {
   lastGrade: "last_grade",
   lastCiclo: "last_ciclo",
   lugarNacimiento: "lugar_nacimiento",
+  sexo: "sexo",
   talla: "talla",
   peso: "peso",
   tipoSangre: "tipo_sangre",
@@ -2287,7 +2289,8 @@ const PATCH_FIELD_COLUMN_MAP: Record<string, string> = {
   direccion: "direccion",
   domicilio: "domicilio",
   domicilioCalle: "domicilio_calle",
-  domicilioNumero: "domicio_num",
+  domicilioNumero: "domicilio_num",
+  domicilioNum: "domicilio_num",
   domicioNum: "domicio_num",
   domicilioColonia: "domicilio_colonia",
   domicilioCp: "domicilio_cp",
@@ -2303,12 +2306,37 @@ const PATCH_FIELD_COLUMN_MAP: Record<string, string> = {
   familyId: "family_id",
 };
 
+const ADVANCED_FILE_PATCH_FIELDS = new Set([
+  "certificadoMedicoAdjunto",
+  "certificadoVacunacionCovid19Adjunto",
+  "actaNacimientoAdjunta",
+  "curpAlumnoAdjunto",
+  "certificadoPrimariaAdjunto",
+  "boletaSextoPrimariaAdjunta",
+  "boletaPrimeroSecundariaAdjunta",
+  "boletaSegundoSecundariaAdjunta",
+]);
+
+const CONTROL_ESCOLAR_DIRECT_RESTRICTED_FIELDS = new Set([
+  "nivel",
+  "grado",
+  "grupo",
+  "ciclo",
+  "interno",
+]);
+
 const normalizePatchValue = (field: string, value: unknown) => {
   if (field === "curp" || field === "curpPadre" || field === "curpMadre") return normalizeUpper(value, 18) || null;
   if (field.toLowerCase().includes("email"))
     return normalizeEmail(value) || null;
   if (field.toLowerCase().includes("telefono"))
     return normalizePhone(value) || null;
+  if (field === "sexo") {
+    const normalized = normalizeUpper(value, 20);
+    if (["M", "MUJER", "FEMENINO", "F"].includes(normalized)) return "M";
+    if (["H", "HOMBRE", "MASCULINO"].includes(normalized)) return "H";
+    return normalized || null;
+  }
   if (["baja", "interno", "eventual", "verified"].includes(field))
     return value === true ||
       value === 1 ||
@@ -2323,6 +2351,7 @@ const normalizePatchValue = (field: string, value: unknown) => {
   if (field === "nivel") return normalizeNivelEscolar(value) || null;
   if (field === "grupo") return normalizeText(value, 40) || null;
   if (field === "domicilioCp") return normalizeText(value, 12).replace(/\D/g, "").slice(0, 5) || null;
+  if (ADVANCED_FILE_PATCH_FIELDS.has(field)) return normalizeNullable(value, 2048);
   if (["tipoSangre", "talla", "peso"].includes(field)) return normalizeNullable(value, 40);
   if (["fechaNacimientoPadre", "fechaNacimientoMadre"].includes(field)) return normalizeNullable(value, 40);
   if (
@@ -2341,6 +2370,14 @@ type EditableMatriculaEntry = {
   field: string;
   column: string;
   value: any;
+};
+
+const resolvePatchColumn = (field: string, schema: ControlEscolarSchema) => {
+  if (field === "domicilioNumero" || field === "domicilioNum") {
+    if (schema.matricula.has("domicilio_num")) return "domicilio_num";
+    if (schema.matricula.has("domicio_num")) return "domicio_num";
+  }
+  return PATCH_FIELD_COLUMN_MAP[field];
 };
 
 const buildEditableMatriculaEntries = (
@@ -2370,7 +2407,7 @@ const buildEditableMatriculaEntries = (
     )
     .map(([field, value]) => ({
       field,
-      column: PATCH_FIELD_COLUMN_MAP[field],
+      column: resolvePatchColumn(field, schema),
       value: normalizePatchValue(field, value),
     }))
     .filter((entry) => entry.column && schema.matricula.has(entry.column));
@@ -2800,6 +2837,17 @@ export const updateControlEscolarStudent = async (
       statusCode: 403,
       message:
         "El alumno no está dentro del alcance visible de Control Escolar para este ciclo y plantel.",
+    });
+  }
+
+  const restrictedDirectFields = Object.keys(body || {}).filter((field) =>
+    CONTROL_ESCOLAR_DIRECT_RESTRICTED_FIELDS.has(field),
+  );
+  if (restrictedDirectFields.length) {
+    throw createError({
+      statusCode: 400,
+      message:
+        "Nivel, grado, grupo, ciclo e interno se actualizan desde el flujo de ciclo y posición.",
     });
   }
 

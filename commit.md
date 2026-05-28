@@ -1,1 +1,1 @@
-Depura la ficha de Control Escolar, elimina duplicados y corrige layouts, validaciones y prioridad de grado y grupo
+feat: separa Expediente avanzado y alinea posición académica con ciclo de ingreso

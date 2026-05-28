@@ -607,8 +607,8 @@
                 <section class="ce-health-overview" aria-label="Resumen del expediente seleccionado">
                   <button
                     type="button"
-                    :class="['ce-health-card', 'ce-health-card--basic', selectedRecordHealth.tone, { 'is-active': !showCompleteExpediente }]"
-                    @click="showCompleteExpediente = false"
+                    :class="['ce-health-card', 'ce-health-card--basic', selectedRecordHealth.tone, { 'is-active': activeDetailTab !== 'advanced' }]"
+                    @click="activeDetailTab = 'identity'"
                   >
                     <div
                       :class="['ce-health-ring', selectedRecordHealth.tone]"
@@ -626,24 +626,24 @@
                   </button>
                   <button
                     type="button"
-                    :class="['ce-health-card', 'ce-health-card--complete', { 'is-active': showCompleteExpediente }]"
-                    @click="showCompleteExpediente = true"
+                    :class="['ce-health-card', 'ce-health-card--complete', { 'is-active': activeDetailTab === 'advanced' }]"
+                    @click="activeDetailTab = 'advanced'"
                   >
                     <div
                       class="ce-health-ring is-secondary"
-                      :style="{ '--ring-deg': `${selectedCompleteProfileCompletion * 3.6}deg` }"
+                      :style="{ '--ring-deg': `${selectedAdvancedProfileCompletion * 3.6}deg` }"
                     >
-                      <b>{{ selectedCompleteProfileCompletion }}%</b>
+                      <b>{{ selectedAdvancedProfileCompletion }}%</b>
                     </div>
                     <div class="ce-health-card__copy">
                       <small>Expediente avanzado</small>
-                      <strong>{{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes avanzados` : 'Completo' }}</strong>
+                      <strong>{{ selectedAdvancedMissingCount ? `${selectedAdvancedMissingCount} pendientes avanzados` : 'Completo' }}</strong>
                       
-                      <span class="ce-health-bar is-secondary"><i :style="{ width: `${selectedCompleteProfileCompletion}%` }"></i></span>
-                      <em>{{ selectedCompleteProfileCompletion }}% · {{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes` : `${selectedCompleteCompletedCount}/${completeDataFields.length} completos` }}</em>
+                      <span class="ce-health-bar is-secondary"><i :style="{ width: `${selectedAdvancedProfileCompletion}%` }"></i></span>
+                      <em>{{ selectedAdvancedProfileCompletion }}% · {{ selectedAdvancedMissingCount ? `${selectedAdvancedMissingCount} pendientes` : `${selectedAdvancedCompletedCount}/${selectedAdvancedTotal} completos` }}</em>
                     </div>
                     <span class="ce-health-link">
-                      {{ showCompleteExpediente ? 'Vista avanzada' : 'Abrir avanzado' }}
+                      Abrir avanzado
                       <LucideChevronRight :size="16" />
                     </span>
                   </button>
@@ -773,13 +773,6 @@
                         />
                         <small>{{ fieldValidationMessage('curp') }}</small>
                       </label>
-                      <template v-if="showCompleteExpediente">
-                        <label
-                          class="ce-identity-span-2"
-                          ><span>Lugar nacimiento</span
-                          ><input v-model="editForm.lugarNacimiento" autocomplete="off"
-                        /></label>
-                      </template>
                     </div>
                   </section>
 
@@ -800,23 +793,29 @@
                     <div class="ce-school-priority-panel">
                       <article class="ce-school-current-pill">
                         <small>Asignación actual</small>
-                        <strong>{{ editForm.grado || 'Sin grado' }}<template v-if="editForm.grupo"> · {{ editForm.grupo }}</template></strong>
+                        <strong>{{ editForm.nivel || 'Sin nivel' }} · {{ editForm.grado || 'Sin grado' }}<template v-if="editForm.grupo"> · {{ editForm.grupo }}</template></strong>
                       </article>
-                      <p>Control Escolar puede actualizar grado y grupo. Estos cambios afectan el bridge y la base operativa del plantel.</p>
+                      <UiButton
+                        variant="secondary"
+                        type="button"
+                        :disabled="savingAcademicPosition"
+                        @click="openAcademicPositionModal"
+                      >
+                        <LucideGraduationCap :size="16" /> Ajustar ciclo y posición
+                      </UiButton>
                     </div>
                     <div class="ce-form-grid three ce-school-grid-minimal">
                       <label>
-                        <span>Nivel</span>
-                        <select v-model="editForm.nivel">
-                          <option value="">Selecciona nivel</option>
-                          <option
-                            v-for="nivel in nivelOptions"
-                            :key="`nivel-${nivel}`"
-                            :value="nivel"
-                          >
-                            {{ labelize(nivel) }}
-                          </option>
-                        </select>
+                        <span>Tipo de ingreso</span>
+                        <input :value="selectedStudent.tipoIngreso || 'Sin clasificar'" readonly />
+                      </label>
+                      <label>
+                        <span>Ciclo de ingreso</span>
+                        <input :value="formatCicloLabel(editForm.ciclo || selectedStudent.cicloBase || currentCicloKey)" readonly />
+                      </label>
+                      <label>
+                        <span>Grupo</span>
+                        <input :value="editForm.grupo || 'Sin grupo'" readonly />
                       </label>
                       <label
                         ><span>Baja</span
@@ -837,50 +836,6 @@
                           v-model="editForm.categoriaBaja"
                           autocomplete="off"
                       /></label>
-                      <template v-if="showCompleteExpediente">
-                        <label
-                          ><span>Verificado</span
-                          ><select v-model="editForm.verified"><option :value="0">No</option><option :value="1">Sí</option></select>
-                        </label>
-                      </template>
-                    </div>
-                    <div class="ce-grade-pickers">
-                      <div class="ce-picker-group">
-                        <small>Grado</small>
-                        <div class="ce-grade-picker-grid">
-                          <button
-                            v-for="grado in gradoOptions"
-                            :key="`quick-grado-${grado}`"
-                            type="button"
-                            :class="['ce-grade-picker-chip', { active: editForm.grado === grado }]"
-                            @click="editForm.grado = grado"
-                          >
-                            {{ labelize(grado) }}
-                          </button>
-                        </div>
-                      </div>
-                      <div class="ce-picker-group" v-if="groupOptions.length">
-                        <small>Grupo</small>
-                        <div class="ce-group-picker-grid">
-                          <button
-                            type="button"
-                            :class="['ce-group-picker-chip', { active: !editForm.grupo }]"
-                            @click="editForm.grupo = ''"
-                          >
-                            <span>Sin grupo</span>
-                          </button>
-                          <button
-                            v-for="grupo in groupOptions"
-                            :key="`quick-grupo-${grupo}`"
-                            type="button"
-                            :class="['ce-group-picker-chip', { active: editForm.grupo === grupo }]"
-                            @click="editForm.grupo = grupo"
-                          >
-                            <UiGroupIcon :label="grupo" :missing="false" />
-                            <span>{{ grupo }}</span>
-                          </button>
-                        </div>
-                      </div>
                     </div>
                   </section>
 
@@ -963,32 +918,6 @@
                             <input v-model="editForm.emailPadre" type="email" autocomplete="off" />
                             <small>{{ fieldValidationMessage('emailPadre') }}</small>
                           </label>
-                          <template v-if="showCompleteExpediente">
-                            <label
-                              ><span>Lugar trabajo padre</span
-                              ><input v-model="editForm.lugarTrabajoPadre" autocomplete="off"
-                            /></label>
-                            <label
-                              ><span>Puesto padre</span
-                              ><input v-model="editForm.puestoPadre" autocomplete="off"
-                            /></label>
-                            <label
-                              ><span>Estado civil padre</span
-                              ><input v-model="editForm.estadoCivilPadre" autocomplete="off"
-                            /></label>
-                            <label
-                              ><span>Fecha nacimiento padre</span
-                              ><input v-model="editForm.fechaNacimientoPadre" type="date" autocomplete="off"
-                            /></label>
-                            <label
-                              ><span>INE padre</span
-                              ><input v-model="editForm.inePadre" autocomplete="off"
-                            /></label>
-                            <label
-                              ><span>CURP padre</span
-                              ><input v-model="editForm.curpPadre" maxlength="18" autocomplete="off"
-                            /></label>
-                          </template>
                         </div>
                       </section>
 
@@ -1030,32 +959,6 @@
                             <input v-model="editForm.emailMadre" type="email" autocomplete="off" />
                             <small>{{ fieldValidationMessage('emailMadre') }}</small>
                           </label>
-                          <template v-if="showCompleteExpediente">
-                            <label
-                              ><span>Lugar trabajo madre</span
-                              ><input v-model="editForm.lugarTrabajoMadre" autocomplete="off"
-                            /></label>
-                            <label
-                              ><span>Puesto madre</span
-                              ><input v-model="editForm.puestoMadre" autocomplete="off"
-                            /></label>
-                            <label
-                              ><span>Estado civil madre</span
-                              ><input v-model="editForm.estadoCivilMadre" autocomplete="off"
-                            /></label>
-                            <label
-                              ><span>Fecha nacimiento madre</span
-                              ><input v-model="editForm.fechaNacimientoMadre" type="date" autocomplete="off"
-                            /></label>
-                            <label
-                              ><span>INE madre</span
-                              ><input v-model="editForm.ineMadre" autocomplete="off"
-                            /></label>
-                            <label
-                              ><span>CURP madre</span
-                              ><input v-model="editForm.curpMadre" maxlength="18" autocomplete="off"
-                            /></label>
-                          </template>
                         </div>
                       </section>
                     </div>
@@ -1066,10 +969,69 @@
                         rows="4"
                       ></textarea>
                     </label>
-                    <section v-if="showCompleteExpediente" class="ce-form-card ce-complete-nested">
+                  </section>
+
+                  <section
+                    v-show="activeDetailTab === 'advanced'"
+                    class="ce-form-card ce-tab-panel ce-advanced-expediente-panel"
+                  >
+                    <div class="ce-panel-heading">
+                      <div>
+                        <h3>Expediente avanzado</h3>
+                        <p>Campos complementarios de matrícula del alumno.</p>
+                      </div>
+                      <span :class="['ce-panel-status', advancedExpedienteStatus.tone]">{{ advancedExpedienteStatus.label }}</span>
+                    </div>
+
+                    <section class="ce-advanced-section">
+                      <div class="ce-section-heading compact">
+                        <span><LucideShieldCheck :size="18" /></span>
+                        <h3>Alumno y salud</h3>
+                      </div>
+                      <div class="ce-form-grid three">
+                        <label><span>Lugar nacimiento</span><input v-model="editForm.lugarNacimiento" autocomplete="off" /></label>
+                        <label>
+                          <span>Sexo</span>
+                          <select v-model="editForm.sexo">
+                            <option value="">Selecciona</option>
+                            <option value="M">Mujer</option>
+                            <option value="H">Hombre</option>
+                          </select>
+                        </label>
+                        <label><span>Talla</span><input v-model="editForm.talla" autocomplete="off" /></label>
+                        <label><span>Peso</span><input v-model="editForm.peso" autocomplete="off" /></label>
+                        <label>
+                          <span>Tipo de sangre</span>
+                          <select v-model="editForm.tipoSangre">
+                            <option value="">Selecciona</option>
+                            <option v-for="type in bloodTypeOptions" :key="`blood-${type}`" :value="type">{{ type }}</option>
+                          </select>
+                        </label>
+                        <label class="ce-family-span-2"><span>Alergias</span><input v-model="editForm.alergias" autocomplete="off" /></label>
+                      </div>
+                    </section>
+
+                    <section class="ce-advanced-section">
+                      <div class="ce-section-heading compact">
+                        <span><LucideUsersRound :size="18" /></span>
+                        <h3>Datos familiares</h3>
+                      </div>
+                      <div class="ce-form-grid three">
+                        <label><span>Estado civil padre</span><input v-model="editForm.estadoCivilPadre" autocomplete="off" /></label>
+                        <label><span>Fecha nacimiento padre</span><input v-model="editForm.fechaNacimientoPadre" type="date" autocomplete="off" /></label>
+                        <label><span>INE padre</span><input v-model="editForm.inePadre" autocomplete="off" /></label>
+                        <label><span>CURP padre</span><input v-model="editForm.curpPadre" maxlength="18" autocomplete="off" /></label>
+                        <label><span>Estado civil madre</span><input v-model="editForm.estadoCivilMadre" autocomplete="off" /></label>
+                        <label><span>Fecha nacimiento madre</span><input v-model="editForm.fechaNacimientoMadre" type="date" autocomplete="off" /></label>
+                        <label><span>INE madre</span><input v-model="editForm.ineMadre" autocomplete="off" /></label>
+                        <label><span>CURP madre</span><input v-model="editForm.curpMadre" maxlength="18" autocomplete="off" /></label>
+                      </div>
+                    </section>
+
+                    <section class="ce-advanced-section">
                       <div class="ce-section-heading compact">
                         <span><LucideBuilding2 :size="18" /></span>
-                        <h3>Domicilio detallado</h3>
+                        <h3>Domicilio</h3>
                       </div>
                       <div class="ce-form-grid three">
                         <label><span>Calle</span><input v-model="editForm.domicilioCalle" autocomplete="off" /></label>
@@ -1079,16 +1041,27 @@
                         <label><span>Municipio</span><input v-model="editForm.domicilioMunicipio" autocomplete="off" /></label>
                       </div>
                     </section>
-                    <section v-if="showCompleteExpediente" class="ce-form-card ce-complete-nested">
+
+                    <section class="ce-advanced-section">
                       <div class="ce-section-heading compact">
-                        <span><LucideShieldCheck :size="18" /></span>
-                        <h3>Salud</h3>
+                        <span><LucideFileUp :size="18" /></span>
+                        <h3>Documentos adjuntos</h3>
                       </div>
-                      <div class="ce-form-grid three">
-                        <label><span>Talla</span><input v-model="editForm.talla" autocomplete="off" /></label>
-                        <label><span>Peso</span><input v-model="editForm.peso" autocomplete="off" /></label>
-                        <label><span>Tipo de sangre</span><input v-model="editForm.tipoSangre" autocomplete="off" /></label>
-                        <label class="ce-family-span-2"><span>Alergias</span><input v-model="editForm.alergias" autocomplete="off" /></label>
+                      <div class="ce-advanced-upload-grid">
+                        <label
+                          v-for="field in advancedFileFields"
+                          :key="field.key"
+                          class="ce-advanced-upload-card"
+                          :class="{ 'is-uploading': uploadingAdvancedField === field.key, 'has-value': Boolean(editForm[field.key]) }"
+                        >
+                          <span class="ce-advanced-upload-icon"><LucideFileUp :size="17" /></span>
+                          <span class="ce-advanced-upload-copy">
+                            <strong>{{ field.label }}</strong>
+                            <small>{{ advancedFileValueLabel(field.key) }}</small>
+                            <em v-if="advancedUploadErrors[field.key]">{{ advancedUploadErrors[field.key] }}</em>
+                          </span>
+                          <input type="file" :disabled="uploadingAdvancedField === field.key" @change="uploadAdvancedFile(field, $event)" />
+                        </label>
                       </div>
                     </section>
                   </section>
@@ -1201,23 +1174,6 @@
                         rows="6"
                       ></textarea>
                     </label>
-                    <template v-if="showCompleteExpediente">
-                      <label class="ce-wide-field standalone"
-                        ><span>Notas de servicio</span
-                        ><textarea v-model="editForm.servicioNotas" rows="4"></textarea>
-                      </label>
-                      <div class="ce-form-grid two">
-                        <label><span>Family ID</span><input v-model="editForm.familyId" autocomplete="off" /></label>
-                        <label><span>Certificado médico adjunto</span><input v-model="editForm.certificadoMedicoAdjunto" autocomplete="off" /></label>
-                        <label><span>Certificado vacunación COVID-19</span><input v-model="editForm.certificadoVacunacionCovid19Adjunto" autocomplete="off" /></label>
-                        <label><span>Acta nacimiento adjunta</span><input v-model="editForm.actaNacimientoAdjunta" autocomplete="off" /></label>
-                        <label><span>CURP alumno adjunto</span><input v-model="editForm.curpAlumnoAdjunto" autocomplete="off" /></label>
-                        <label><span>Certificado primaria adjunto</span><input v-model="editForm.certificadoPrimariaAdjunto" autocomplete="off" /></label>
-                        <label><span>Boleta sexto primaria</span><input v-model="editForm.boletaSextoPrimariaAdjunta" autocomplete="off" /></label>
-                        <label><span>Boleta primero secundaria</span><input v-model="editForm.boletaPrimeroSecundariaAdjunta" autocomplete="off" /></label>
-                        <label><span>Boleta segundo secundaria</span><input v-model="editForm.boletaSegundoSecundariaAdjunta" autocomplete="off" /></label>
-                      </div>
-                    </template>
                   </section>
 
                   <div v-if="saveError" class="ce-save-error">
@@ -1365,6 +1321,19 @@
       </section>
     </div>
 
+
+    <IngresoCycleModal
+      v-if="showAcademicPositionModal && selectedStudent"
+      :student="selectedStudent"
+      :target-ciclo="currentCicloKey"
+      :current-tipo-ingreso="selectedStudent.tipoIngresoValue ? { value: selectedStudent.tipoIngresoValue } : { value: 'externo' }"
+      :photo-url="controlStudentPhotoUrl(selectedStudent) || ''"
+      :saving="savingAcademicPosition"
+      :enrollment-concepts="externalConcepts"
+      @close="showAcademicPositionModal = false"
+      @confirm="saveAcademicPosition"
+    />
+
     <div
       v-if="showControlDiagnosticsModal"
       class="ce-modal-backdrop ce-diagnostics-backdrop"
@@ -1378,8 +1347,8 @@
       >
         <header>
           <div>
-            <small>Diagnóstico oculto</small>
-            <h2 id="ce-diagnostics-title">Flujo de carga Control Escolar</h2>
+            <small>Estado de carga</small>
+            <h2 id="ce-diagnostics-title">Detalle de actualización</h2>
           </div>
           <button type="button" class="detail-shell-close" @click="closeControlDiagnosticsModal">
             <LucideX :size="20" />
@@ -1391,8 +1360,7 @@
               <small>Lectura automática</small>
               <h3>Ruta de resolución Control Escolar</h3>
               <p>
-                Este modal enseña el recorrido real de la última carga: navegador,
-                bridge live, snapshot verificado, matrícula central y el resultado final visible.
+                Resumen de la última actualización visible para este plantel y ciclo.
               </p>
             </div>
             <div class="ce-diagnostics-query-pill">
@@ -1415,8 +1383,8 @@
           <section class="ce-diagnostics-section-card">
             <div class="ce-diagnostics-section-card__head">
               <div>
-                <small>Árbol de decisiones</small>
-                <h3>Cómo navegó la resolución</h3>
+                <small>Actualización</small>
+                <h3>Secuencia de carga</h3>
               </div>
               <span class="ce-diagnostics-inline-badge">{{ controlDiagnosticsTree.length }} nodos</span>
             </div>
@@ -1435,7 +1403,7 @@
                       </div>
                       <span class="ce-diagnostics-node__time">{{ formatControlDuration(node.ms) }}</span>
                     </header>
-                    <p class="ce-diagnostics-node__why"><b>Por qué:</b> {{ node.why }}</p>
+                    <p class="ce-diagnostics-node__why"><b>Detalle:</b> {{ node.why }}</p>
                     <ul v-if="node.meta.length" class="ce-diagnostics-node__meta">
                       <li v-for="item in node.meta" :key="`${node.id}-${item.label}`">
                         <span>{{ item.label }}</span>
@@ -1458,28 +1426,28 @@
             </div>
             <dl class="ce-diagnostics-facts-grid">
               <div>
-                <dt>Base</dt>
-                <dd>{{ lastControlLoadDiagnostics.source.base || 'n/a' }}</dd>
+                <dt>Origen</dt>
+                <dd>{{ controlSourceModeLabel(lastControlLoadDiagnostics.source.base) }}</dd>
               </div>
               <div>
-                <dt>Overlay</dt>
-                <dd>{{ lastControlLoadDiagnostics.source.overlay || 'n/a' }}</dd>
+                <dt>Complementarios</dt>
+                <dd>{{ controlSourceModeLabel(lastControlLoadDiagnostics.source.overlay) }}</dd>
               </div>
               <div>
-                <dt>Flujo servidor</dt>
-                <dd>{{ lastControlLoadDiagnostics.server.flow || 'unknown' }}</dd>
+                <dt>Ruta de carga</dt>
+                <dd>{{ controlSourceModeLabel(lastControlLoadDiagnostics.server.flow) }}</dd>
               </div>
               <div>
-                <dt>Fallback snapshot</dt>
-                <dd>{{ lastControlLoadDiagnostics.source.bridgeFallback ? 'sí' : 'no' }}</dd>
+                <dt>Respaldo</dt>
+                <dd>{{ lastControlLoadDiagnostics.source.bridgeFallback ? 'Usado' : 'Disponible' }}</dd>
               </div>
               <div>
-                <dt>Freshness</dt>
-                <dd>{{ lastControlLoadDiagnostics.source.cacheFreshness || 'live-bridge' }}</dd>
+                <dt>Actualización</dt>
+                <dd>{{ controlSourceModeLabel(lastControlLoadDiagnostics.source.cacheFreshness || 'principal') }}</dd>
               </div>
               <div>
                 <dt>Rows</dt>
-                <dd>base {{ lastControlLoadDiagnostics.source.localRows }}, matrícula {{ lastControlLoadDiagnostics.source.overlayRows }}, usuarios {{ lastControlLoadDiagnostics.source.usersRows }}</dd>
+                <dd>principal {{ lastControlLoadDiagnostics.source.localRows }}, matrícula {{ lastControlLoadDiagnostics.source.overlayRows }}, usuarios {{ lastControlLoadDiagnostics.source.usersRows }}</dd>
               </div>
             </dl>
           </section>
@@ -1516,6 +1484,7 @@ import {
   LucideDownload,
   LucideFilter,
   LucideFileSpreadsheet,
+  LucideFileUp,
   LucideGlobe2,
   LucideGraduationCap,
   LucideKeyRound,
@@ -1541,6 +1510,7 @@ import UiButton from "~/components/ui/UiButton.vue";
 import UiChip from "~/components/ui/UiChip.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.vue";
+import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
 import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
 import {
@@ -1619,7 +1589,10 @@ const massImportResult = ref(null);
 const massImportError = ref("");
 const activeDetailTab = ref("identity");
 const editSnapshot = ref("");
-const showCompleteExpediente = ref(false);
+const showAcademicPositionModal = ref(false);
+const savingAcademicPosition = ref(false);
+const uploadingAdvancedField = ref("");
+const advancedUploadErrors = reactive({});
 const draftRestored = ref(false);
 const draftSavedAt = ref("");
 const pendingSelectedStudentRefresh = ref(null);
@@ -1841,40 +1814,74 @@ const describeControlWhy = (step = {}, lane = "client") => {
   const status = String(step.status || "");
   const reason = String(step.reason || "");
   if (key === "browser-cache") {
-    if (status === "disabled") return "El navegador no resuelve alumnos de Control Escolar desde caché local; esa capa se limpió a propósito para no ocultar cambios vivos.";
-    if (status === "ready") return "Se usó la caché local porque estaba habilitada y tenía filas válidas para esta vista.";
-    return "Se inspeccionó la caché local y no aportó una resolución útil para esta carga.";
+    if (status === "disabled") return "La lista se actualiza desde la fuente principal para mostrar cambios recientes.";
+    if (status === "ready") return "Se usaron datos locales válidos para esta vista.";
+    return "Se revisaron datos locales y no aportaron una lista útil para esta carga.";
   }
   if (key === "verified-cache") {
     if (status === "skipped") return reason === "live_bridge_primary_snapshot_only_on_bridge_failure"
-      ? "El snapshot quedó reservado como plan B; con bridge disponible, no debe adelantarse a la base live."
-      : "El snapshot se omitió por la fase actual de carga.";
-    if (status === "ready") return "El snapshot verificado entró porque el bridge falló y había un respaldo estructurado para este alcance.";
-    if (status === "empty") return "Se intentó acudir al snapshot por falla del bridge, pero no había respaldo utilizable para ese scope.";
-    if (status === "failed") return "Además de la falla del bridge, también falló el intento de abrir el snapshot verificado.";
+      ? "El respaldo quedó reservado porque la fuente principal respondió correctamente."
+      : "El respaldo se omitió por la fase actual de carga.";
+    if (status === "ready") return "Se usó un respaldo verificado porque la fuente principal no respondió.";
+    if (status === "empty") return "Se intentó usar un respaldo, pero no había datos utilizables para este alcance.";
+    if (status === "failed") return "La fuente principal no respondió y tampoco se pudo abrir el respaldo verificado.";
   }
   if (key === "bridge-schema") return status === "ready"
-    ? "El servidor pudo validar la base local y, cuando aplica, también la disponibilidad del overlay central."
-    : "El bridge respondió pero con disponibilidad parcial o central degradada.";
+    ? "El servidor validó la fuente principal y los datos complementarios disponibles."
+    : "La fuente principal respondió con disponibilidad parcial.";
   if (key === "live-base-selector") return status === "ready"
-    ? "La lista base salió del bridge local y se convirtió en la raíz real del flujo de Control Escolar."
-    : "La lectura live de la base local falló y el flujo tuvo que degradarse.";
+    ? "La lista base se resolvió desde la fuente principal de Control Escolar."
+    : "La lectura principal falló y se usó una ruta de respaldo.";
   if (key === "cache-refresh") return status === "ready"
-    ? "El snapshot se refrescó usando filas vivas para que el fallback no se oxide."
+    ? "El respaldo se actualizó con datos recientes."
     : status === "skipped"
-      ? "No se refrescó el snapshot porque la consulta no era cacheable o no lo necesitaba."
-      : "El refresh del snapshot falló, pero el resultado live siguió adelante.";
+      ? "No se actualizó el respaldo porque la consulta no lo requería."
+      : "Falló la actualización del respaldo, pero la carga principal continuó.";
   if (key === "matricula-overlay") return status === "ready"
-    ? "Se aplicó matrícula central sobre la base ya resuelta, agregando datos vivos del expediente escolar."
-    : "La base siguió adelante, pero la capa de matrícula central no respondió completamente.";
+    ? "Se agregaron datos complementarios del expediente escolar."
+    : "La carga continuó, aunque algunos datos complementarios no respondieron completamente.";
   if (key === "husky-pass") return status === "ready"
     ? "Se consultó Husky Pass como enriquecimiento adicional de usuarios." 
     : "La consulta de Husky Pass no respondió o no tenía datos para esta carga.";
   if (key === "server-enriched") return status === "ready"
-    ? "El cliente recibió una respuesta final ya enriquecida por el servidor." 
+    ? "La pantalla recibió la respuesta final del servidor." 
     : "La solicitud principal al servidor falló antes de entregar una lista usable.";
   if (lane === "server") return "El servidor reportó esta etapa como parte del recorrido real de resolución.";
   return "La etapa se registró automáticamente durante la última carga para explicar la decisión tomada.";
+};
+
+
+const controlSourceModeLabel = (value = "") => {
+  const raw = String(value || "").trim();
+  const normalized = raw.toLowerCase();
+  if (!normalized) return "n/a";
+  if (normalized.includes("bridge") || normalized.includes("live") || normalized.includes("principal")) {
+    return "Fuente principal";
+  }
+  if (normalized.includes("verified-cache") || normalized.includes("snapshot") || normalized.includes("cache") || normalized === "fresh" || normalized === "expired") {
+    return "Datos guardados";
+  }
+  if (normalized.includes("overlay") || normalized.includes("matricula")) {
+    return "Matrícula";
+  }
+  if (normalized.includes("server")) return "Servidor";
+  return raw.replace(/[-_]/g, " ");
+};
+
+
+const controlStepTitleLabel = (step = {}) => {
+  const key = String(step.key || "");
+  const labels = {
+    "browser-cache": "Datos locales",
+    "verified-cache": "Respaldo verificado",
+    "bridge-schema": "Validación de origen",
+    "live-base-selector": "Fuente principal",
+    "cache-refresh": "Actualización de respaldo",
+    "matricula-overlay": "Matrícula",
+    "husky-pass": "Husky Pass",
+    "server-enriched": "Respuesta final",
+  };
+  return labels[key] || controlSourceModeLabel(step.label || key);
 };
 
 const controlDiagnosticsSummary = computed(() => {
@@ -1892,13 +1899,13 @@ const controlDiagnosticsSummary = computed(() => {
       tone: "neutral",
     },
     {
-      label: "Flujo servidor",
-      value: diagnostics.server.flow || "unknown",
+      label: "Ruta de carga",
+      value: controlSourceModeLabel(diagnostics.server.flow),
       tone: controlStatusTone(diagnostics.status),
     },
     {
-      label: "Cache / overlay",
-      value: `${diagnostics.source.cacheFreshness || "live"} · ${diagnostics.source.overlayRows}/${diagnostics.source.localRows || 0}`,
+      label: "Datos complementarios",
+      value: `${diagnostics.source.overlayRows}/${diagnostics.source.localRows || 0}`,
       tone: "neutral",
     },
   ];
@@ -1912,8 +1919,8 @@ const controlDiagnosticsTree = computed(() => {
       id: `client-${step.key}`,
       lane: "client",
       laneLabel: "Cliente",
-      title: step.label,
-      decision: step.label,
+      title: controlStepTitleLabel(step),
+      decision: controlStepTitleLabel(step),
       why: describeControlWhy(step, "client"),
       tone: controlStatusTone(step.status),
       status: step.status,
@@ -1921,7 +1928,7 @@ const controlDiagnosticsTree = computed(() => {
       ms: Number(step.ms || 0),
       meta: [
         { label: "Filas", value: step.rows },
-        { label: "Motivo", value: step.reason || step.freshness || "" },
+        { label: "Motivo", value: controlSourceModeLabel(step.reason || step.freshness || "") },
         { label: "Error", value: step.error || "" },
       ].filter((item) => item.value !== "" && item.value != null),
     }))),
@@ -1929,8 +1936,8 @@ const controlDiagnosticsTree = computed(() => {
       id: `server-${step.key}`,
       lane: "server",
       laneLabel: "Servidor",
-      title: step.label,
-      decision: step.label,
+      title: controlStepTitleLabel(step),
+      decision: controlStepTitleLabel(step),
       why: describeControlWhy(step, "server"),
       tone: controlStatusTone(step.status),
       status: step.status,
@@ -1938,9 +1945,9 @@ const controlDiagnosticsTree = computed(() => {
       ms: Number(step.ms || 0),
       meta: [
         { label: "Filas", value: step.rows },
-        { label: "Freshness", value: step.freshness || "" },
-        { label: "Scope", value: step.scopeKey || "" },
-        { label: "Motivo", value: step.reason || "" },
+        { label: "Actualización", value: controlSourceModeLabel(step.freshness || "") },
+        { label: "Alcance", value: step.scopeKey || "" },
+        { label: "Motivo", value: controlSourceModeLabel(step.reason || "") },
         { label: "Error", value: step.error || "" },
       ].filter((item) => item.value !== "" && item.value != null),
     }))),
@@ -1952,19 +1959,19 @@ const controlDiagnosticsTree = computed(() => {
     laneLabel: "Resultado",
     title: "Resultado final visible",
     decision: diagnostics.source.bridgeFallback
-      ? "La vista visible terminó sobre snapshot fallback con overlay central encima."
-      : "La vista visible terminó sobre bridge live con overlay central encima.",
+      ? "La vista se resolvió con datos de respaldo y datos complementarios."
+      : "La vista se resolvió con la fuente principal y datos complementarios.",
     why: diagnostics.source.bridgeFallback
-      ? "El bridge no respondió y el snapshot verificado sostuvo la carga para no dejar el plantel ciego."
-      : "La ruta consiguió resolver la base live y solo usó el snapshot como respaldo estratégico.",
+      ? "La fuente principal no respondió y el respaldo verificado sostuvo la carga."
+      : "La ruta resolvió la fuente principal y mantuvo el respaldo disponible.",
     tone: controlStatusTone(diagnostics.status),
     status: diagnostics.status,
     statusLabel: controlStatusLabel(diagnostics.status),
     ms: diagnostics.totalMs,
     meta: [
-      { label: "Base", value: diagnostics.source.base || "n/a" },
-      { label: "Overlay", value: diagnostics.source.overlay || "n/a" },
-      { label: "Rows", value: `${diagnostics.source.localRows}/${diagnostics.source.overlayRows}/${diagnostics.source.usersRows}` },
+      { label: "Origen", value: controlSourceModeLabel(diagnostics.source.base) },
+      { label: "Complementarios", value: controlSourceModeLabel(diagnostics.source.overlay) },
+      { label: "Filas", value: `${diagnostics.source.localRows}/${diagnostics.source.overlayRows}/${diagnostics.source.usersRows}` },
     ],
   });
 
@@ -2003,13 +2010,13 @@ const publishControlSyncIndicatorState = (override = {}) => {
   const message =
     override.message ||
     (isSnapshotFallback
-      ? "Bridge sin conexión; mostrando snapshot verificado de emergencia."
+      ? "Actualización no disponible; mostrando datos guardados."
       : cacheFreshness === "expired"
-        ? "Mostrando cache activo; actualización automática en segundo plano."
+        ? "Mostrando datos guardados; actualización automática en curso."
         : cacheFreshness === "live-bridge"
-          ? "Control Escolar actualizado desde bridge live."
+          ? "Control Escolar actualizado."
           : cacheFreshness === "fresh"
-            ? "Control Escolar usando snapshot verificado vigente."
+            ? "Control Escolar usando datos verificados guardados."
             : loadError.value || "Control Escolar");
   window.dispatchEvent(
     new CustomEvent("control-escolar:sync-state", {
@@ -2061,7 +2068,7 @@ const controlBaseStepTitle = computed(() =>
       : controlBaseStage.value === "failed"
         ? "Base del administrador pendiente"
         : controlBaseStage.value === "partial"
-          ? "Snapshot verificado por bridge sin conexión"
+          ? "Datos verificados guardados disponibles"
           : "Base del administrador pendiente",
 );
 const controlExternalDbStepTitle = computed(() =>
@@ -2214,6 +2221,7 @@ const detailTabs = [
   { key: "identity", label: "Identidad", icon: LucideUserRound },
   { key: "school", label: "Escolar", icon: LucideGraduationCap },
   { key: "family", label: "Contacto familiar", icon: LucideUsersRound },
+  { key: "advanced", label: "Expediente avanzado", icon: LucideFileUp },
   { key: "system", label: "Husky Pass", icon: LucideKeyRound },
   { key: "notes", label: "Observaciones", icon: LucideAlertTriangle },
 ];
@@ -2426,17 +2434,17 @@ const studentCurpIsInvalid = (student = {}) => {
 const selectedProfileCompletion = computed(() =>
   completionFor(selectedHealthStudent.value),
 );
-const selectedCompleteProfileCompletion = computed(() =>
-  completeCompletionFor(selectedHealthStudent.value),
-);
+const selectedAdvancedProfileCompletion = computed(() => {
+  const total = selectedAdvancedTotal.value || 1;
+  return Math.round((selectedAdvancedCompletedCount.value / total) * 100);
+});
 const selectedMissingCount = computed(() =>
   studentMissingCount(selectedHealthStudent.value),
 );
-const selectedCompleteMissingCount = computed(() =>
-  studentCompleteMissingCount(selectedHealthStudent.value),
-);
-const selectedCompleteCompletedCount = computed(() =>
-  Math.max(0, completeDataFields.length - selectedCompleteMissingCount.value),
+const selectedAdvancedMissingCount = computed(() => advancedMissingCount.value);
+const selectedAdvancedTotal = computed(() => advancedExpedienteFields.length);
+const selectedAdvancedCompletedCount = computed(() =>
+  Math.max(0, selectedAdvancedTotal.value - selectedAdvancedMissingCount.value),
 );
 const visibleBasicMissingFieldsFor = (student) =>
   requiredDataFields.filter((field) => studentMissingField(student, field));
@@ -2912,6 +2920,10 @@ const detailTabState = (key) => {
       tone: familyPending ? (familyPending >= 3 ? "danger" : "warning") : "complete",
       count: familyPending,
     },
+    advanced: {
+      tone: advancedExpedienteStatus.value.tone,
+      count: advancedMissingCount.value,
+    },
     system: {
       tone: selectedStudent.value?.huskyPassAvailable ? "complete" : "warning",
       count: selectedStudent.value?.huskyPassAvailable ? 0 : 1,
@@ -2935,6 +2947,63 @@ const huskyPassEmailTarget = computed(
     selectedStudent.value?.huskyPassEmail ||
     "",
 );
+const bloodTypeOptions = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+const advancedTextFields = [
+  { key: "lugarNacimiento", label: "Lugar nacimiento" },
+  { key: "sexo", label: "Sexo" },
+  { key: "talla", label: "Talla" },
+  { key: "peso", label: "Peso" },
+  { key: "tipoSangre", label: "Tipo de sangre" },
+  { key: "alergias", label: "Alergias" },
+  { key: "estadoCivilPadre", label: "Estado civil padre" },
+  { key: "fechaNacimientoPadre", label: "Fecha nacimiento padre" },
+  { key: "inePadre", label: "INE padre" },
+  { key: "curpPadre", label: "CURP padre" },
+  { key: "estadoCivilMadre", label: "Estado civil madre" },
+  { key: "fechaNacimientoMadre", label: "Fecha nacimiento madre" },
+  { key: "ineMadre", label: "INE madre" },
+  { key: "curpMadre", label: "CURP madre" },
+  { key: "domicilioCalle", label: "Calle" },
+  { key: "domicilioNumero", label: "Número" },
+  { key: "domicilioColonia", label: "Colonia" },
+  { key: "domicilioCp", label: "Código postal" },
+  { key: "domicilioMunicipio", label: "Municipio" },
+];
+const advancedFileFields = [
+  { key: "certificadoMedicoAdjunto", label: "Certificado médico" },
+  { key: "certificadoVacunacionCovid19Adjunto", label: "Certificado vacunación COVID-19" },
+  { key: "actaNacimientoAdjunta", label: "Acta nacimiento" },
+  { key: "curpAlumnoAdjunto", label: "CURP alumno" },
+  { key: "certificadoPrimariaAdjunto", label: "Certificado primaria" },
+  { key: "boletaSextoPrimariaAdjunta", label: "Boleta sexto primaria" },
+  { key: "boletaPrimeroSecundariaAdjunta", label: "Boleta primero secundaria" },
+  { key: "boletaSegundoSecundariaAdjunta", label: "Boleta segundo secundaria" },
+];
+const advancedExpedienteFields = [...advancedTextFields, ...advancedFileFields];
+const fieldValueIsPresent = (value) => String(value ?? "").trim().length > 0;
+const advancedMissingCount = computed(() =>
+  advancedExpedienteFields.filter((field) => !fieldValueIsPresent(editForm[field.key])).length,
+);
+const advancedExpedienteStatus = computed(() => {
+  const missing = advancedMissingCount.value;
+  if (!missing) return { tone: "complete", label: "Completo" };
+  return {
+    tone: missing >= 8 ? "danger" : "warning",
+    label: missing === 1 ? "1 pendiente" : `${missing} pendientes`,
+  };
+});
+const advancedFileValueLabel = (fieldKey) => {
+  if (uploadingAdvancedField.value === fieldKey) return "Subiendo archivo...";
+  const value = String(editForm[fieldKey] || "").trim();
+  if (!value) return "Seleccionar archivo";
+  try {
+    const parsed = JSON.parse(value);
+    return parsed?.fileName || parsed?.path || parsed?.url || "Archivo cargado";
+  } catch {
+    return value.split("/").filter(Boolean).pop() || "Archivo cargado";
+  }
+};
+
 const EDIT_FORM_FIELDS = [
   "nombres",
   "apellidoPaterno",
@@ -2942,32 +3011,20 @@ const EDIT_FORM_FIELDS = [
   "curp",
   "nombreVerificado",
   "nombreCompletoAlumno",
-  "lastGrade",
-  "lastCiclo",
   "lugarNacimiento",
+  "sexo",
   "talla",
   "peso",
   "tipoSangre",
   "alergias",
   "foto",
-  "nivel",
-  "grado",
-  "grupo",
-  "ciclo",
-  "servicio",
-  "interno",
-  "eventual",
-  "verified",
   "baja",
   "motivoBaja",
   "categoriaBaja",
   "seguimientoBaja",
-  "servicioNotas",
   "nombrePadre",
   "apellidoPaternoPadre",
   "apellidoMaternoPadre",
-  "lugarTrabajoPadre",
-  "puestoPadre",
   "estadoCivilPadre",
   "fechaNacimientoPadre",
   "inePadre",
@@ -2975,8 +3032,6 @@ const EDIT_FORM_FIELDS = [
   "nombreMadre",
   "apellidoPaternoMadre",
   "apellidoMaternoMadre",
-  "lugarTrabajoMadre",
-  "puestoMadre",
   "estadoCivilMadre",
   "fechaNacimientoMadre",
   "ineMadre",
@@ -2999,7 +3054,6 @@ const EDIT_FORM_FIELDS = [
   "boletaSextoPrimariaAdjunta",
   "boletaPrimeroSecundariaAdjunta",
   "boletaSegundoSecundariaAdjunta",
-  "familyId",
 ];
 const readEditForm = () =>
   EDIT_FORM_FIELDS.reduce((draft, field) => {
@@ -3932,7 +3986,7 @@ const loadStudents = async (options = {}) => {
   if (useCache || CONTROL_STUDENTS_BROWSER_CACHE_ENABLED) clearControlStudentsBrowserCache();
   markClientStep(
     "browser-cache",
-    "Cache local del navegador",
+    "Datos locales",
     cacheStartedAt,
     "disabled",
     { rows: Array.isArray(cached?.data) ? cached.data.length : 0 },
@@ -3947,7 +4001,7 @@ const loadStudents = async (options = {}) => {
     controlDataSavedAt.value = cached.savedAt || "";
     controlDataSource.value = cached.source || null;
     controlCacheStage.value = "ready";
-    publishControlSyncIndicatorState({ status: "cached", message: "Cache local del plantel/ciclo visible mientras se actualiza." });
+    publishControlSyncIndicatorState({ status: "cached", message: "Datos visibles mientras se actualiza." });
     controlExternalDbRows.value = getControlExternalDbRowCount(cached.source || {});
   } else {
     controlCacheStage.value = "empty";
@@ -4218,6 +4272,7 @@ const resetEditForm = (student = selectedStudent.value, options = {}) => {
     lastGrade: student.lastGrade || "",
     lastCiclo: student.lastCiclo || "",
     lugarNacimiento: student.lugarNacimiento || "",
+    sexo: student.sexo || "",
     talla: student.talla || "",
     peso: student.peso || "",
     tipoSangre: student.tipoSangre || "",
@@ -4289,6 +4344,10 @@ const discardChanges = () => {
 const saveStudent = async () => {
   if (!selectedStudent.value || !selectedAgentId.value || savingStudent.value)
     return;
+  if (uploadingAdvancedField.value) {
+    saveError.value = "Espera a que termine la carga del archivo.";
+    return;
+  }
   const invalidFields = editableInvalidFields();
   if (invalidFields.length) {
     saveError.value = "Revisa los campos marcados antes de guardar.";
@@ -4397,6 +4456,71 @@ const importMatriculaDb = async () => {
     show(massImportError.value, "danger");
   } finally {
     massImporting.value = false;
+  }
+};
+
+const openAcademicPositionModal = () => {
+  if (!selectedStudent.value || savingAcademicPosition.value) return;
+  showAcademicPositionModal.value = true;
+};
+
+const saveAcademicPosition = async (payload) => {
+  if (!selectedStudent.value?.matricula || savingAcademicPosition.value) return;
+  savingAcademicPosition.value = true;
+  try {
+    const ciclo = typeof payload === "object" && payload !== null ? payload.ciclo : payload;
+    const response = await $fetch(
+      `/api/students/${encodeURIComponent(selectedStudent.value.matricula)}/ingreso-cycle`,
+      {
+        method: "PUT",
+        body: {
+          ciclo,
+          targetCiclo: payload?.targetCiclo || currentCicloKey.value,
+          targetNivel: payload?.targetNivel,
+          targetGrado: payload?.targetGrado,
+        },
+      },
+    );
+    showAcademicPositionModal.value = false;
+    show("Ciclo y posición actualizados.", "success");
+    await loadStudents({ useCache: false, clearExisting: false, forceLoading: false });
+    const updated = response?.student;
+    const current = selectedStudent.value;
+    if (updated && current && normalizeMatriculaKey(updated.matricula) === normalizeMatriculaKey(current.matricula)) {
+      selectedStudent.value = { ...current, ...updated, group: current.group, grupo: current.grupo };
+      resetEditForm(selectedStudent.value, { restoreDraft: false });
+    }
+    await loadKpis();
+  } catch (error) {
+    show(error?.data?.message || error?.message || "No se pudo actualizar el ciclo y la posición.", "danger");
+  } finally {
+    savingAcademicPosition.value = false;
+  }
+};
+
+const uploadAdvancedFile = async (field, event) => {
+  const file = event?.target?.files?.[0];
+  if (event?.target) event.target.value = "";
+  if (!file || !field?.key || uploadingAdvancedField.value) return;
+  uploadingAdvancedField.value = field.key;
+  advancedUploadErrors[field.key] = "";
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("folder", `control-escolar/${selectedStudent.value?.matricula || "sin-matricula"}/${field.key}`);
+    form.append("includeUrl", "true");
+    const response = await $fetch("https://expediente.casitaapps.com", {
+      method: "POST",
+      body: form,
+    });
+    if (!response?.success) throw new Error("El servicio de carga no confirmó la operación.");
+    editForm[field.key] = response.url || response.path || response.fileName || JSON.stringify(response);
+    show("Archivo cargado. Guarda la ficha para conservar el cambio.", "success");
+  } catch (error) {
+    advancedUploadErrors[field.key] = error?.data?.message || error?.message || "No se pudo cargar el archivo.";
+    show(advancedUploadErrors[field.key], "danger");
+  } finally {
+    uploadingAdvancedField.value = "";
   }
 };
 
@@ -8134,12 +8258,214 @@ onBeforeUnmount(() => {
   min-height: 46px;
 }
 
-.control-escolar-screen .ce-system-grid {
+.control-escolar-screen .ce-advanced-expediente-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.control-escolar-screen .ce-advanced-section {
+  padding: 14px;
+  border: 1px solid rgba(221, 231, 240, .98);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfdff, #fff);
+}
+
+.control-escolar-screen .ce-advanced-upload-grid {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-advanced-upload-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 76px;
+  padding: 13px;
+  overflow: hidden;
+  border: 1px solid #dfe8f1;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(21, 35, 60, .035);
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.control-escolar-screen .ce-advanced-upload-card:hover {
+  border-color: rgba(38, 132, 82, .36);
+  box-shadow: 0 12px 24px rgba(21, 35, 60, .06);
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-advanced-upload-card.has-value {
+  border-color: rgba(79, 163, 70, .32);
+  background: linear-gradient(180deg, rgba(247, 252, 246, .98), #fff);
+}
+
+.control-escolar-screen .ce-advanced-upload-card.is-uploading {
+  pointer-events: none;
+  opacity: .72;
+}
+
+.control-escolar-screen .ce-advanced-upload-card input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.control-escolar-screen .ce-advanced-upload-icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #eef7ed;
+  color: #2f7d3d;
+}
+
+.control-escolar-screen .ce-advanced-upload-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.control-escolar-screen .ce-advanced-upload-copy strong {
+  color: #203147;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.control-escolar-screen .ce-advanced-upload-copy small {
+  overflow: hidden;
+  color: #65758a;
+  font-size: 11px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-advanced-upload-copy em {
+  color: #c24135;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 820;
+}
+
+.control-escolar-screen .ce-system-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.control-escolar-screen .ce-system-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-system-grid article {
+  display: grid;
+  gap: 5px;
+  min-height: 76px;
+  padding: 13px 14px;
+  border: 1px solid #dfe8f1;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(21, 35, 60, .035);
+}
+
+.control-escolar-screen .ce-system-grid span {
+  color: #65758a;
+  font-size: 10.5px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .035em;
+}
+
+.control-escolar-screen .ce-system-grid strong {
+  color: #1f2f45;
+  font-size: 15px;
+  font-weight: 920;
 }
 
 .control-escolar-screen .ce-husky-card.compact {
-  margin-top: 14px;
+  display: grid;
+  gap: 14px;
+  margin-top: 0;
+  padding: 14px;
+  border: 1px solid #dfe8f1;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfdff, #fff);
+  box-shadow: 0 8px 20px rgba(21, 35, 60, .04);
+}
+
+.control-escolar-screen .ce-husky-heading {
+  align-items: center;
+}
+
+.control-escolar-screen .ce-husky-heading img {
+  width: 52px;
+  height: auto;
+  flex: 0 0 auto;
+  border-radius: 12px;
+}
+
+.control-escolar-screen .ce-husky-credentials {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-husky-credentials span,
+.control-escolar-screen .ce-husky-empty {
+  display: grid;
+  gap: 4px;
+  padding: 13px;
+  border: 1px solid #dfe8f1;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.control-escolar-screen .ce-husky-credentials small {
+  color: #65758a;
+  font-size: 10.5px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .035em;
+}
+
+.control-escolar-screen .ce-husky-credentials strong {
+  overflow-wrap: anywhere;
+  color: #1f2f45;
+  font-size: 14px;
+  font-weight: 920;
+}
+
+.control-escolar-screen .ce-husky-empty {
+  color: #65758a;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.control-escolar-screen .ce-husky-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.control-escolar-screen .ce-husky-actions small {
+  min-width: 0;
+  overflow: hidden;
+  color: #65758a;
+  font-size: 11px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1280px) {
@@ -8155,7 +8481,9 @@ onBeforeUnmount(() => {
   }
 
   .control-escolar-screen .ce-school-grid-minimal,
-  .control-escolar-screen .ce-system-grid {
+  .control-escolar-screen .ce-system-grid,
+  .control-escolar-screen .ce-advanced-upload-grid,
+  .control-escolar-screen .ce-husky-credentials {
     grid-template-columns: 1fr;
   }
 }

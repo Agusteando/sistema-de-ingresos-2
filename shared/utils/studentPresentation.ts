@@ -459,7 +459,7 @@ const controlEscolarFieldIsPresent = (student: any = {}, key: string): boolean =
     madreIne: () => Boolean(expedienteValue(student, 'ineMadre')),
     madreCurp: () => Boolean(expedienteValue(student, 'curpMadre')),
     domicilioCalle: () => Boolean(expedienteValue(student, 'domicilioCalle')),
-    domicilioNumero: () => Boolean(expedienteValue(student, 'domicilioNumero', 'domicioNum')),
+    domicilioNumero: () => Boolean(expedienteValue(student, 'domicilioNumero', 'domicilioNum', 'domicioNum')),
     domicilioColonia: () => Boolean(expedienteValue(student, 'domicilioColonia')),
     domicilioCp: () => Boolean(expedienteValue(student, 'domicilioCp')),
     domicilioMunicipio: () => Boolean(expedienteValue(student, 'domicilioMunicipio')),
