@@ -545,15 +545,15 @@
                 </div>
                 <div class="ce-progress-cluster">
                   <strong
-                    >Perfil {{ selectedProfileCompletion }}% completo</strong
+                    >Expediente básico {{ selectedProfileCompletion }}%</strong
                   >
                   <span class="ce-progress-track"
                     ><i :style="{ width: `${selectedProfileCompletion}%` }"></i
                   ></span>
                   <small>{{
                     selectedMissingCount
-                      ? `Faltan ${selectedMissingCount} datos principales`
-                      : "Datos principales completos"
+                      ? `Faltan ${selectedMissingCount} datos básicos`
+                      : "Expediente básico completo"
                   }}</small>
                 </div>
                 <div class="ce-detail-actions">
@@ -630,6 +630,24 @@
                   </div>
                 </section>
 
+                <section class="ce-tier-panel">
+                  <article class="ce-tier-card is-basic">
+                    <small>Visible por defecto</small>
+                    <strong>Expediente básico</strong>
+                    <span class="ce-tier-bar"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
+                    <p>{{ selectedMissingCount ? `${selectedMissingCount} pendientes básicos` : 'Completo para operación diaria' }}</p>
+                  </article>
+                  <article class="ce-tier-card is-complete">
+                    <small>Avanzado</small>
+                    <strong>Expediente completo</strong>
+                    <span class="ce-tier-bar"><i :style="{ width: `${selectedCompleteProfileCompletion}%` }"></i></span>
+                    <p>{{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes completos` : 'Expediente completo cerrado' }}</p>
+                  </article>
+                  <button type="button" class="ce-complete-toggle" @click="showCompleteExpediente = !showCompleteExpediente">
+                    {{ showCompleteExpediente ? 'Ocultar expediente completo' : 'Ver expediente completo' }}
+                  </button>
+                </section>
+
                 <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
                   <button
                     v-for="tab in detailTabs"
@@ -682,6 +700,36 @@
                           maxlength="18"
                           autocomplete="off"
                       /></label>
+                      <template v-if="showCompleteExpediente">
+                        <label
+                          ><span>Nombre verificado</span
+                          ><input v-model="editForm.nombreVerificado" autocomplete="off"
+                        /></label>
+                        <label
+                          ><span>Nombre completo alumno</span
+                          ><input v-model="editForm.nombreCompletoAlumno" autocomplete="off"
+                        /></label>
+                        <label
+                          ><span>Fecha nacimiento</span
+                          ><input v-model="editForm.fechaNacimiento" type="date" autocomplete="off"
+                        /></label>
+                        <label
+                          ><span>Lugar nacimiento</span
+                          ><input v-model="editForm.lugarNacimiento" autocomplete="off"
+                        /></label>
+                        <label>
+                          <span>Sexo</span>
+                          <select v-model="editForm.sexo">
+                            <option value="">Sin definir</option>
+                            <option value="Femenino">Femenino</option>
+                            <option value="Masculino">Masculino</option>
+                          </select>
+                        </label>
+                        <label
+                          ><span>Foto</span
+                          ><input v-model="editForm.foto" autocomplete="off"
+                        /></label>
+                      </template>
                     </div>
                   </section>
 
@@ -752,6 +800,36 @@
                           v-model="editForm.categoriaBaja"
                           autocomplete="off"
                       /></label>
+                      <template v-if="showCompleteExpediente">
+                        <label
+                          ><span>Ciclo matrícula</span
+                          ><input v-model="editForm.ciclo" autocomplete="off"
+                        /></label>
+                        <label
+                          ><span>Último grado</span
+                          ><input v-model="editForm.lastGrade" autocomplete="off"
+                        /></label>
+                        <label
+                          ><span>Último ciclo</span
+                          ><input v-model="editForm.lastCiclo" autocomplete="off"
+                        /></label>
+                        <label
+                          ><span>Servicio</span
+                          ><input v-model="editForm.servicio" autocomplete="off"
+                        /></label>
+                        <label
+                          ><span>Interno</span
+                          ><select v-model="editForm.interno"><option :value="0">No</option><option :value="1">Sí</option></select>
+                        </label>
+                        <label
+                          ><span>Eventual</span
+                          ><select v-model="editForm.eventual"><option :value="0">No</option><option :value="1">Sí</option></select>
+                        </label>
+                        <label
+                          ><span>Verificado</span
+                          ><select v-model="editForm.verified"><option :value="0">No</option><option :value="1">Sí</option></select>
+                        </label>
+                      </template>
                     </div>
                   </section>
 
@@ -776,6 +854,12 @@
                               autocomplete="off"
                           /></label>
                           <label
+                            ><span>Apellido materno padre</span
+                            ><input
+                              v-model="editForm.apellidoMaternoPadre"
+                              autocomplete="off"
+                          /></label>
+                          <label
                             ><span>Teléfono padre</span
                             ><input
                               v-model="editForm.telefonoPadre"
@@ -788,6 +872,32 @@
                               type="email"
                               autocomplete="off"
                           /></label>
+                          <template v-if="showCompleteExpediente">
+                            <label
+                              ><span>Lugar trabajo padre</span
+                              ><input v-model="editForm.lugarTrabajoPadre" autocomplete="off"
+                            /></label>
+                            <label
+                              ><span>Puesto padre</span
+                              ><input v-model="editForm.puestoPadre" autocomplete="off"
+                            /></label>
+                            <label
+                              ><span>Estado civil padre</span
+                              ><input v-model="editForm.estadoCivilPadre" autocomplete="off"
+                            /></label>
+                            <label
+                              ><span>Fecha nacimiento padre</span
+                              ><input v-model="editForm.fechaNacimientoPadre" type="date" autocomplete="off"
+                            /></label>
+                            <label
+                              ><span>INE padre</span
+                              ><input v-model="editForm.inePadre" autocomplete="off"
+                            /></label>
+                            <label
+                              ><span>CURP padre</span
+                              ><input v-model="editForm.curpPadre" maxlength="18" autocomplete="off"
+                            /></label>
+                          </template>
                         </div>
                       </section>
 
@@ -825,6 +935,32 @@
                               type="email"
                               autocomplete="off"
                           /></label>
+                          <template v-if="showCompleteExpediente">
+                            <label
+                              ><span>Lugar trabajo madre</span
+                              ><input v-model="editForm.lugarTrabajoMadre" autocomplete="off"
+                            /></label>
+                            <label
+                              ><span>Puesto madre</span
+                              ><input v-model="editForm.puestoMadre" autocomplete="off"
+                            /></label>
+                            <label
+                              ><span>Estado civil madre</span
+                              ><input v-model="editForm.estadoCivilMadre" autocomplete="off"
+                            /></label>
+                            <label
+                              ><span>Fecha nacimiento madre</span
+                              ><input v-model="editForm.fechaNacimientoMadre" type="date" autocomplete="off"
+                            /></label>
+                            <label
+                              ><span>INE madre</span
+                              ><input v-model="editForm.ineMadre" autocomplete="off"
+                            /></label>
+                            <label
+                              ><span>CURP madre</span
+                              ><input v-model="editForm.curpMadre" maxlength="18" autocomplete="off"
+                            /></label>
+                          </template>
                         </div>
                       </section>
                     </div>
@@ -835,6 +971,31 @@
                         rows="4"
                       ></textarea>
                     </label>
+                    <section v-if="showCompleteExpediente" class="ce-form-card ce-complete-nested">
+                      <div class="ce-section-heading compact">
+                        <span><LucideBuilding2 :size="18" /></span>
+                        <h3>Domicilio detallado</h3>
+                      </div>
+                      <div class="ce-form-grid three">
+                        <label><span>Calle</span><input v-model="editForm.domicilioCalle" autocomplete="off" /></label>
+                        <label><span>Número</span><input v-model="editForm.domicilioNumero" autocomplete="off" /></label>
+                        <label><span>Colonia</span><input v-model="editForm.domicilioColonia" autocomplete="off" /></label>
+                        <label><span>Código postal</span><input v-model="editForm.domicilioCp" maxlength="5" autocomplete="off" /></label>
+                        <label><span>Municipio</span><input v-model="editForm.domicilioMunicipio" autocomplete="off" /></label>
+                      </div>
+                    </section>
+                    <section v-if="showCompleteExpediente" class="ce-form-card ce-complete-nested">
+                      <div class="ce-section-heading compact">
+                        <span><LucideShieldCheck :size="18" /></span>
+                        <h3>Salud</h3>
+                      </div>
+                      <div class="ce-form-grid three">
+                        <label><span>Talla</span><input v-model="editForm.talla" autocomplete="off" /></label>
+                        <label><span>Peso</span><input v-model="editForm.peso" autocomplete="off" /></label>
+                        <label><span>Tipo de sangre</span><input v-model="editForm.tipoSangre" autocomplete="off" /></label>
+                        <label class="ce-family-span-2"><span>Alergias</span><input v-model="editForm.alergias" autocomplete="off" /></label>
+                      </div>
+                    </section>
                   </section>
 
                   <section
@@ -945,6 +1106,23 @@
                         rows="6"
                       ></textarea>
                     </label>
+                    <template v-if="showCompleteExpediente">
+                      <label class="ce-wide-field standalone"
+                        ><span>Notas de servicio</span
+                        ><textarea v-model="editForm.servicioNotas" rows="4"></textarea>
+                      </label>
+                      <div class="ce-form-grid two">
+                        <label><span>Family ID</span><input v-model="editForm.familyId" autocomplete="off" /></label>
+                        <label><span>Certificado médico adjunto</span><input v-model="editForm.certificadoMedicoAdjunto" autocomplete="off" /></label>
+                        <label><span>Certificado vacunación COVID-19</span><input v-model="editForm.certificadoVacunacionCovid19Adjunto" autocomplete="off" /></label>
+                        <label><span>Acta nacimiento adjunta</span><input v-model="editForm.actaNacimientoAdjunta" autocomplete="off" /></label>
+                        <label><span>CURP alumno adjunto</span><input v-model="editForm.curpAlumnoAdjunto" autocomplete="off" /></label>
+                        <label><span>Certificado primaria adjunto</span><input v-model="editForm.certificadoPrimariaAdjunto" autocomplete="off" /></label>
+                        <label><span>Boleta sexto primaria</span><input v-model="editForm.boletaSextoPrimariaAdjunta" autocomplete="off" /></label>
+                        <label><span>Boleta primero secundaria</span><input v-model="editForm.boletaPrimeroSecundariaAdjunta" autocomplete="off" /></label>
+                        <label><span>Boleta segundo secundaria</span><input v-model="editForm.boletaSegundoSecundariaAdjunta" autocomplete="off" /></label>
+                      </div>
+                    </template>
                   </section>
 
                   <div v-if="saveError" class="ce-save-error">
@@ -1341,6 +1519,9 @@ import {
   parseEnrollmentConcepts,
   photoStorageKey,
   studentPresentationStyle,
+  resolveControlEscolarCompleteness,
+  CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS,
+  CONTROL_ESCOLAR_COMPLETE_REQUIRED_FIELDS,
 } from "~/shared/utils/studentPresentation";
 import { NIVELES_ESCOLARES, gradeOptionsForNivel } from "~/shared/utils/grado";
 import { normalizeCicloOption } from "~/utils/constants";
@@ -1407,6 +1588,7 @@ const massImportResult = ref(null);
 const massImportError = ref("");
 const activeDetailTab = ref("identity");
 const editSnapshot = ref("");
+const showCompleteExpediente = ref(false);
 const draftRestored = ref(false);
 const draftSavedAt = ref("");
 const pendingSelectedStudentRefresh = ref(null);
@@ -1923,6 +2105,14 @@ const labelize = (value) => {
   const text = String(value || "").trim();
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
 };
+const normalizeDateInput = (value) => {
+  if (!value) return "";
+  const text = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+  return date.toISOString().slice(0, 10);
+};
 const nivelOptions = computed(() =>
   mergeOptions(NIVELES_ESCOLARES, catalogs.niveles, [editForm.nivel]),
 );
@@ -2102,11 +2292,20 @@ const kpiCards = computed(() => {
   ].map((card) => withVolume(card, total));
 });
 
-const requiredDataFields = [
-  { key: "curp", label: "CURP", icon: LucideShieldCheck },
-  { key: "padre", label: "Padre", icon: LucideUsersRound },
-  { key: "madre", label: "Madre", icon: LucideUsersRound },
-];
+const iconForCompletenessField = (key = "") => {
+  if (key === "curp") return LucideShieldCheck;
+  if (key.toLowerCase().includes("email")) return LucideMail;
+  if (key.toLowerCase().includes("telefono")) return LucidePhone;
+  return LucideUsersRound;
+};
+const requiredDataFields = CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS.map((field) => ({
+  ...field,
+  icon: iconForCompletenessField(field.key),
+}));
+const completeDataFields = CONTROL_ESCOLAR_COMPLETE_REQUIRED_FIELDS.map((field) => ({
+  ...field,
+  icon: iconForCompletenessField(field.key),
+}));
 
 const formatNumber = (value) => Number(value || 0).toLocaleString("es-MX");
 const statusLabel = (value) =>
@@ -2152,9 +2351,18 @@ const statusTone = (student) =>
     : String(student?.status || "").toLowerCase() === "activo"
       ? "success"
       : "neutral";
-const normalizedMissingFields = (student) =>
-  Array.isArray(student?.missingFields)
-    ? student.missingFields
+const controlCompletenessFor = (student) => {
+  if (student?.completenessTiers?.basic && student?.completenessTiers?.complete) {
+    return student.completenessTiers;
+  }
+  return resolveControlEscolarCompleteness(student || {}, { honorEnrollmentState: true });
+};
+const normalizedMissingFields = (student, tier = "basic") => {
+  const fields = tier === "complete"
+    ? controlCompletenessFor(student)?.complete?.missingFields
+    : controlCompletenessFor(student)?.basic?.missingFields || student?.missingFields;
+  return Array.isArray(fields)
+    ? fields
         .map((field) =>
           String(field || "")
             .trim()
@@ -2162,8 +2370,9 @@ const normalizedMissingFields = (student) =>
         )
         .filter(Boolean)
     : [];
-const studentMissingField = (student, field) => {
-  const missing = normalizedMissingFields(student);
+};
+const studentMissingField = (student, field, tier = "basic") => {
+  const missing = normalizedMissingFields(student, tier);
   return (
     missing.includes(String(field?.key || "").toLowerCase()) ||
     missing.includes(String(field?.label || "").toLowerCase())
@@ -2171,20 +2380,23 @@ const studentMissingField = (student, field) => {
 };
 const isInscritoForControlProgress = (student) =>
   String(student?.enrollmentState || "").toLowerCase() === "inscrito";
-const studentMissingCount = (student) =>
-  requiredDataFields.filter((field) => studentMissingField(student, field))
-    .length;
+const studentMissingCount = (student) => controlCompletenessFor(student)?.basic?.pending ??
+  requiredDataFields.filter((field) => studentMissingField(student, field)).length;
+const studentCompleteMissingCount = (student) => controlCompletenessFor(student)?.complete?.pending ??
+  completeDataFields.filter((field) => studentMissingField(student, field, "complete")).length;
 const completionFor = (student) => {
   if (!isInscritoForControlProgress(student)) return 0;
-  const total = requiredDataFields.length || 1;
-  const missing = studentMissingCount(student);
-  return Math.max(0, Math.round(((total - missing) / total) * 100));
+  return controlCompletenessFor(student)?.basic?.progress ?? 0;
+};
+const completeCompletionFor = (student) => {
+  if (!isInscritoForControlProgress(student)) return 0;
+  return controlCompletenessFor(student)?.complete?.progress ?? 0;
 };
 const qualitySummary = (student) => {
   if (!isInscritoForControlProgress(student)) return "Fuera de inscritos";
   const missing = studentMissingCount(student);
-  if (!missing) return "Completo";
-  return missing === 1 ? "1 pendiente" : `${missing} faltantes`;
+  if (!missing) return "Expediente básico completo";
+  return missing === 1 ? "1 pendiente básico" : `${missing} faltantes básicos`;
 };
 const qualityScoreTone = (student) => {
   const score = completionFor(student);
@@ -2195,8 +2407,14 @@ const qualityScoreTone = (student) => {
 const selectedProfileCompletion = computed(() =>
   completionFor(selectedStudent.value),
 );
+const selectedCompleteProfileCompletion = computed(() =>
+  completeCompletionFor(selectedStudent.value),
+);
 const selectedMissingCount = computed(() =>
   studentMissingCount(selectedStudent.value),
+);
+const selectedCompleteMissingCount = computed(() =>
+  studentCompleteMissingCount(selectedStudent.value),
 );
 const huskyPassEmailTarget = computed(
   () =>
@@ -2211,24 +2429,68 @@ const EDIT_FORM_FIELDS = [
   "apellidoPaterno",
   "apellidoMaterno",
   "curp",
+  "nombreVerificado",
+  "nombreCompletoAlumno",
+  "lastGrade",
+  "lastCiclo",
+  "fechaNacimiento",
+  "lugarNacimiento",
+  "sexo",
+  "talla",
+  "peso",
+  "tipoSangre",
+  "alergias",
+  "foto",
   "nivel",
   "grado",
   "grupo",
+  "ciclo",
+  "servicio",
+  "interno",
+  "eventual",
+  "verified",
   "baja",
   "motivoBaja",
   "categoriaBaja",
   "seguimientoBaja",
+  "servicioNotas",
   "nombrePadre",
   "apellidoPaternoPadre",
   "apellidoMaternoPadre",
+  "lugarTrabajoPadre",
+  "puestoPadre",
+  "estadoCivilPadre",
+  "fechaNacimientoPadre",
+  "inePadre",
+  "curpPadre",
   "nombreMadre",
   "apellidoPaternoMadre",
   "apellidoMaternoMadre",
+  "lugarTrabajoMadre",
+  "puestoMadre",
+  "estadoCivilMadre",
+  "fechaNacimientoMadre",
+  "ineMadre",
+  "curpMadre",
   "telefonoPadre",
   "telefonoMadre",
   "emailPadre",
   "emailMadre",
   "direccion",
+  "domicilioCalle",
+  "domicilioNumero",
+  "domicilioColonia",
+  "domicilioCp",
+  "domicilioMunicipio",
+  "certificadoMedicoAdjunto",
+  "certificadoVacunacionCovid19Adjunto",
+  "actaNacimientoAdjunta",
+  "curpAlumnoAdjunto",
+  "certificadoPrimariaAdjunto",
+  "boletaSextoPrimariaAdjunta",
+  "boletaPrimeroSecundariaAdjunta",
+  "boletaSegundoSecundariaAdjunta",
+  "familyId",
 ];
 const readEditForm = () =>
   EDIT_FORM_FIELDS.reduce((draft, field) => {
@@ -2982,11 +3244,11 @@ const buildClientKpisFromStudents = (sourceStudents = []) => {
     ).length,
     sinContacto,
     sinCurp: missing("curp"),
-    sinPadre: missing("padre"),
-    sinMadre: missing("madre"),
-    sinTelefono: missing("padre") + missing("madre"),
-    sinTutor: missing("padre") + missing("madre"),
-    sinEmail: missing("padre") + missing("madre"),
+    sinPadre: progressRows.filter((student) => ["padrenombre", "padreapellidopaterno", "padretelefono", "padreemail"].some((field) => normalizedMissingFields(student).includes(field))).length,
+    sinMadre: progressRows.filter((student) => ["madrenombre", "madreapellidopaterno", "madretelefono", "madreemail"].some((field) => normalizedMissingFields(student).includes(field))).length,
+    sinTelefono: progressRows.filter((student) => ["padretelefono", "madretelefono"].some((field) => normalizedMissingFields(student).includes(field))).length,
+    sinTutor: progressRows.filter((student) => ["padrenombre", "padreapellidopaterno", "madrenombre", "madreapellidopaterno"].some((field) => normalizedMissingFields(student).includes(field))).length,
+    sinEmail: progressRows.filter((student) => ["padreemail", "madreemail"].some((field) => normalizedMissingFields(student).includes(field))).length,
   };
 };
 
@@ -3436,24 +3698,68 @@ const resetEditForm = (student = selectedStudent.value, options = {}) => {
     apellidoPaterno: student.apellidoPaterno || "",
     apellidoMaterno: student.apellidoMaterno || "",
     curp: student.curp || "",
+    nombreVerificado: student.nombreVerificado || "",
+    nombreCompletoAlumno: student.nombreCompletoAlumno || student.fullName || "",
+    lastGrade: student.lastGrade || "",
+    lastCiclo: student.lastCiclo || "",
+    fechaNacimiento: normalizeDateInput(student.fechaNacimiento),
+    lugarNacimiento: student.lugarNacimiento || "",
+    sexo: student.sexo || "",
+    talla: student.talla || "",
+    peso: student.peso || "",
+    tipoSangre: student.tipoSangre || "",
+    alergias: student.alergias || "",
+    foto: student.foto || "",
     nivel: student.nivel || "",
     grado: student.grado || "",
-    grupo: student.group || "",
+    grupo: student.group || student.grupo || "",
+    ciclo: student.ciclo || currentCicloKey.value || "",
+    servicio: student.servicio || "",
+    interno: Number(student.interno || 0),
+    eventual: Number(student.eventual || 0),
+    verified: Number(student.verified || 0),
     baja: Number(student.baja || 0),
     motivoBaja: student.motivoBaja || "",
     categoriaBaja: student.categoriaBaja || "",
     seguimientoBaja: student.seguimientoBaja || "",
+    servicioNotas: student.servicioNotas || "",
     nombrePadre: student.nombrePadre || "",
     apellidoPaternoPadre: student.apellidoPaternoPadre || "",
     apellidoMaternoPadre: student.apellidoMaternoPadre || "",
+    lugarTrabajoPadre: student.lugarTrabajoPadre || "",
+    puestoPadre: student.puestoPadre || "",
+    estadoCivilPadre: student.estadoCivilPadre || "",
+    fechaNacimientoPadre: normalizeDateInput(student.fechaNacimientoPadre),
+    inePadre: student.inePadre || "",
+    curpPadre: student.curpPadre || "",
     nombreMadre: student.nombreMadre || "",
     apellidoPaternoMadre: student.apellidoPaternoMadre || "",
     apellidoMaternoMadre: student.apellidoMaternoMadre || "",
+    lugarTrabajoMadre: student.lugarTrabajoMadre || "",
+    puestoMadre: student.puestoMadre || "",
+    estadoCivilMadre: student.estadoCivilMadre || "",
+    fechaNacimientoMadre: normalizeDateInput(student.fechaNacimientoMadre),
+    ineMadre: student.ineMadre || "",
+    curpMadre: student.curpMadre || "",
     telefonoPadre: student.telefonoPadre || "",
     telefonoMadre: student.telefonoMadre || "",
     emailPadre: student.emailPadre || "",
     emailMadre: student.emailMadre || "",
-    direccion: student.address || "",
+    direccion: student.address || student.direccion || "",
+    domicilioCalle: student.domicilioCalle || "",
+    domicilioNumero: student.domicilioNumero || student.domicioNum || "",
+    domicilioColonia: student.domicilioColonia || "",
+    domicilioCp: student.domicilioCp || "",
+    domicilioMunicipio: student.domicilioMunicipio || "",
+    certificadoMedicoAdjunto: student.certificadoMedicoAdjunto || "",
+    certificadoVacunacionCovid19Adjunto: student.certificadoVacunacionCovid19Adjunto || "",
+    actaNacimientoAdjunta: student.actaNacimientoAdjunta || "",
+    curpAlumnoAdjunto: student.curpAlumnoAdjunto || "",
+    certificadoPrimariaAdjunto: student.certificadoPrimariaAdjunto || "",
+    boletaSextoPrimariaAdjunta: student.boletaSextoPrimariaAdjunta || "",
+    boletaPrimeroSecundariaAdjunta: student.boletaPrimeroSecundariaAdjunta || "",
+    boletaSegundoSecundariaAdjunta: student.boletaSegundoSecundariaAdjunta || "",
+    familyId: student.familyId || "",
   });
   saveError.value = "";
   draftRestored.value = false;
@@ -8162,6 +8468,93 @@ onBeforeUnmount(() => {
   .ce-missing-grid {
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+}
+
+
+.ce-tier-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.ce-tier-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid #dfe9f1;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  box-shadow: 0 10px 24px rgba(21, 35, 60, 0.045);
+}
+
+.ce-tier-card small {
+  color: #6f7f96;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.ce-tier-card strong {
+  color: #17233f;
+  font-size: 13.5px;
+  font-weight: 900;
+}
+
+.ce-tier-card p {
+  margin: 0;
+  color: #60718a;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.ce-tier-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf2f7;
+}
+
+.ce-tier-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #24a33f, #8fdb8b);
+  transition: width .36s ease;
+}
+
+.ce-tier-card.is-complete .ce-tier-bar i {
+  background: linear-gradient(90deg, #2b6cb0, #90cdf4);
+}
+
+.ce-complete-toggle {
+  align-self: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #d8e4ef;
+  border-radius: 14px;
+  background: #fff;
+  color: #22632e;
+  font-size: 12px;
+  font-weight: 850;
+  box-shadow: 0 8px 18px rgba(21, 35, 60, .04);
+}
+
+.ce-complete-toggle:hover {
+  border-color: #b8d8bd;
+  background: #f7fcf7;
+}
+
+.ce-complete-nested {
+  margin-top: 14px;
+}
+
+@media (max-width: 860px) {
+  .ce-tier-panel {
+    grid-template-columns: 1fr;
   }
 }
 

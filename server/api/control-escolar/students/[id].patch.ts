@@ -9,9 +9,11 @@ const editableFieldNames = (body: any) => Object.keys(body || {})
   .slice(0, 40)
 
 const completionFromStudent = (student: any) => {
-  const missing = Array.isArray(student?.missingFields) ? student.missingFields.length : 0
-  const total = 7
   if (String(student?.enrollmentState || '').toLowerCase() !== 'inscrito') return null
+  const basic = student?.completenessTiers?.basic
+  if (basic && Number.isFinite(Number(basic.progress))) return Number(basic.progress)
+  const missing = Array.isArray(student?.missingFields) ? student.missingFields.length : 0
+  const total = Math.max(1, Number(basic?.total || 9))
   return Math.max(0, Math.min(100, Math.round(((total - Math.min(total, missing)) / total) * 100)))
 }
 
@@ -47,6 +49,8 @@ export default defineEventHandler(async (event) => {
         payload: {
           fields,
           missingFields: result?.student?.missingFields || [],
+          missingLabels: result?.student?.missingLabels || [],
+          completenessTiers: result?.student?.completenessTiers || null,
           overlayExists: Boolean(result?.student?.overlayExists),
           enrollmentState: result?.student?.enrollmentState || '',
         },

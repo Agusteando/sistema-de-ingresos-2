@@ -261,55 +261,202 @@ export const validExpedienteFamilyEmail = (value: unknown): boolean => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-export const expedienteParentName = (student: any = {}, type: 'padre' | 'madre' = 'padre'): string => {
-  if (type === 'madre') {
-    return expedienteFirstText(
-      [student.nombreMadre, student.apellidoPaternoMadre, student.apellidoMaternoMadre]
-        .map(expedienteDisplayText)
-        .filter(Boolean)
-        .join(' '),
-      student.motherName,
-      student.nombreMadreCompleto,
-      student.madre
-    )
+const expedienteValue = (student: any = {}, ...keys: string[]) => {
+  for (const key of keys) {
+    const direct = expedienteDisplayText(student?.[key])
+    if (direct) return direct
+    const snake = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+    const snakeValue = expedienteDisplayText(student?.[snake])
+    if (snakeValue) return snakeValue
   }
-
-  return expedienteFirstText(
-    [student.nombrePadre, student.apellidoPaternoPadre, student.apellidoMaternoPadre]
-      .map(expedienteDisplayText)
-      .filter(Boolean)
-      .join(' '),
-    student.fatherName,
-    student.nombrePadreCompleto,
-    student.padre,
-    student.tutor,
-    student.padreTutor,
-    student.padre_tutor
-  )
+  return ''
 }
 
+export const expedienteParentNameParts = (student: any = {}, type: 'padre' | 'madre' = 'padre') => {
+  if (type === 'madre') {
+    return {
+      nombre: expedienteValue(student, 'nombreMadre'),
+      apellidoPaterno: expedienteValue(student, 'apellidoPaternoMadre'),
+      apellidoMaterno: expedienteValue(student, 'apellidoMaternoMadre'),
+      completo: expedienteFirstText(
+        [expedienteValue(student, 'nombreMadre'), expedienteValue(student, 'apellidoPaternoMadre'), expedienteValue(student, 'apellidoMaternoMadre')]
+          .filter(Boolean)
+          .join(' '),
+        expedienteValue(student, 'motherName'),
+        expedienteValue(student, 'nombreMadreCompleto'),
+        expedienteValue(student, 'madre')
+      )
+    }
+  }
+
+  return {
+    nombre: expedienteValue(student, 'nombrePadre'),
+    apellidoPaterno: expedienteValue(student, 'apellidoPaternoPadre'),
+    apellidoMaterno: expedienteValue(student, 'apellidoMaternoPadre'),
+    completo: expedienteFirstText(
+      [expedienteValue(student, 'nombrePadre'), expedienteValue(student, 'apellidoPaternoPadre'), expedienteValue(student, 'apellidoMaternoPadre')]
+        .filter(Boolean)
+        .join(' '),
+      expedienteValue(student, 'fatherName'),
+      expedienteValue(student, 'nombrePadreCompleto'),
+      expedienteValue(student, 'padre'),
+      expedienteValue(student, 'tutor'),
+      expedienteValue(student, 'padreTutor')
+    )
+  }
+}
+
+export const expedienteParentName = (student: any = {}, type: 'padre' | 'madre' = 'padre'): string => expedienteParentNameParts(student, type).completo
+
 export const expedienteParentPhone = (student: any = {}, type: 'padre' | 'madre' = 'padre'): string => {
-  if (type === 'madre') return expedienteFirstText(student.telefonoMadre, student.celularMadre)
-  return expedienteFirstText(student.telefonoPadre, student.celularPadre, student.phone, student.telefono)
+  if (type === 'madre') return expedienteFirstText(expedienteValue(student, 'telefonoMadre'), expedienteValue(student, 'celularMadre'))
+  return expedienteFirstText(expedienteValue(student, 'telefonoPadre'), expedienteValue(student, 'celularPadre'), expedienteValue(student, 'phone'), expedienteValue(student, 'telefono'))
 }
 
 export const expedienteParentEmail = (student: any = {}, type: 'padre' | 'madre' = 'padre'): string => {
-  if (type === 'madre') return expedienteFirstText(student.emailMadre, student.correoMadre)
-  return expedienteFirstText(student.emailPadre, student.correoPadre, student.email, student.correo)
+  if (type === 'madre') return expedienteFirstText(expedienteValue(student, 'emailMadre'), expedienteValue(student, 'correoMadre'))
+  return expedienteFirstText(expedienteValue(student, 'emailPadre'), expedienteValue(student, 'correoPadre'), expedienteValue(student, 'email'), expedienteValue(student, 'correo'))
 }
 
-export const isExpedienteParentComplete = (student: any = {}, type: 'padre' | 'madre' = 'padre'): boolean => Boolean(
-  expedienteParentName(student, type) &&
-  validExpedientePhone(expedienteParentPhone(student, type)) &&
-  validExpedienteFamilyEmail(expedienteParentEmail(student, type))
-)
+export const isExpedienteParentComplete = (student: any = {}, type: 'padre' | 'madre' = 'padre'): boolean => {
+  const parts = expedienteParentNameParts(student, type)
+  return Boolean(
+    parts.nombre &&
+    parts.apellidoPaterno &&
+    validExpedientePhone(expedienteParentPhone(student, type)) &&
+    validExpedienteFamilyEmail(expedienteParentEmail(student, type))
+  )
+}
 
-export const resolveControlEscolarMissingFields = (student: any = {}): string[] => {
-  const missing: string[] = []
-  if (!expedienteDisplayText(student?.curp || student?.CURP)) missing.push('curp')
-  if (!isExpedienteParentComplete(student, 'padre')) missing.push('padre')
-  if (!isExpedienteParentComplete(student, 'madre')) missing.push('madre')
-  return missing
+export const CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS = [
+  { key: 'curp', label: 'CURP' },
+  { key: 'padreNombre', label: 'Nombre padre' },
+  { key: 'padreApellidoPaterno', label: 'Apellido paterno padre' },
+  { key: 'padreTelefono', label: 'Teléfono padre' },
+  { key: 'padreEmail', label: 'Email padre' },
+  { key: 'madreNombre', label: 'Nombre madre' },
+  { key: 'madreApellidoPaterno', label: 'Apellido paterno madre' },
+  { key: 'madreTelefono', label: 'Teléfono madre' },
+  { key: 'madreEmail', label: 'Email madre' },
+]
+
+export const CONTROL_ESCOLAR_COMPLETE_REQUIRED_FIELDS = [
+  ...CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS,
+  { key: 'apellidoPaternoAlumno', label: 'Apellido paterno alumno' },
+  { key: 'apellidoMaternoAlumno', label: 'Apellido materno alumno' },
+  { key: 'nombresAlumno', label: 'Nombre(s) alumno' },
+  { key: 'fechaNacimiento', label: 'Fecha nacimiento alumno' },
+  { key: 'lugarNacimiento', label: 'Lugar nacimiento alumno' },
+  { key: 'sexo', label: 'Sexo' },
+  { key: 'nivel', label: 'Nivel' },
+  { key: 'grado', label: 'Grado' },
+  { key: 'grupo', label: 'Grupo' },
+  { key: 'servicio', label: 'Servicio' },
+  { key: 'padreApellidoMaterno', label: 'Apellido materno padre' },
+  { key: 'padreLugarTrabajo', label: 'Lugar trabajo padre' },
+  { key: 'padrePuesto', label: 'Puesto padre' },
+  { key: 'padreEstadoCivil', label: 'Estado civil padre' },
+  { key: 'padreFechaNacimiento', label: 'Fecha nacimiento padre' },
+  { key: 'padreIne', label: 'INE padre' },
+  { key: 'padreCurp', label: 'CURP padre' },
+  { key: 'madreApellidoMaterno', label: 'Apellido materno madre' },
+  { key: 'madreLugarTrabajo', label: 'Lugar trabajo madre' },
+  { key: 'madrePuesto', label: 'Puesto madre' },
+  { key: 'madreEstadoCivil', label: 'Estado civil madre' },
+  { key: 'madreFechaNacimiento', label: 'Fecha nacimiento madre' },
+  { key: 'madreIne', label: 'INE madre' },
+  { key: 'madreCurp', label: 'CURP madre' },
+  { key: 'domicilioCalle', label: 'Calle' },
+  { key: 'domicilioNumero', label: 'Número' },
+  { key: 'domicilioColonia', label: 'Colonia' },
+  { key: 'domicilioCp', label: 'Código postal' },
+  { key: 'domicilioMunicipio', label: 'Municipio' },
+  { key: 'tipoSangre', label: 'Tipo de sangre' },
+  { key: 'alergias', label: 'Alergias' },
+]
+
+const controlEscolarFieldIsPresent = (student: any = {}, key: string): boolean => {
+  const padre = expedienteParentNameParts(student, 'padre')
+  const madre = expedienteParentNameParts(student, 'madre')
+  const checks: Record<string, () => boolean> = {
+    curp: () => Boolean(expedienteDisplayText(expedienteValue(student, 'curp', 'CURP'))),
+    padreNombre: () => Boolean(padre.nombre),
+    padreApellidoPaterno: () => Boolean(padre.apellidoPaterno),
+    padreApellidoMaterno: () => Boolean(padre.apellidoMaterno),
+    padreTelefono: () => validExpedientePhone(expedienteParentPhone(student, 'padre')),
+    padreEmail: () => validExpedienteFamilyEmail(expedienteParentEmail(student, 'padre')),
+    madreNombre: () => Boolean(madre.nombre),
+    madreApellidoPaterno: () => Boolean(madre.apellidoPaterno),
+    madreApellidoMaterno: () => Boolean(madre.apellidoMaterno),
+    madreTelefono: () => validExpedientePhone(expedienteParentPhone(student, 'madre')),
+    madreEmail: () => validExpedienteFamilyEmail(expedienteParentEmail(student, 'madre')),
+    apellidoPaternoAlumno: () => Boolean(expedienteValue(student, 'apellidoPaterno')),
+    apellidoMaternoAlumno: () => Boolean(expedienteValue(student, 'apellidoMaterno')),
+    nombresAlumno: () => Boolean(expedienteValue(student, 'nombres')),
+    fechaNacimiento: () => Boolean(expedienteValue(student, 'fechaNacimiento')),
+    lugarNacimiento: () => Boolean(expedienteValue(student, 'lugarNacimiento')),
+    sexo: () => Boolean(expedienteValue(student, 'sexo', 'genero')),
+    nivel: () => Boolean(expedienteValue(student, 'nivel')),
+    grado: () => Boolean(expedienteValue(student, 'grado')),
+    grupo: () => Boolean(expedienteValue(student, 'grupo', 'group')),
+    servicio: () => Boolean(expedienteValue(student, 'servicio')),
+    padreLugarTrabajo: () => Boolean(expedienteValue(student, 'lugarTrabajoPadre')),
+    padrePuesto: () => Boolean(expedienteValue(student, 'puestoPadre')),
+    padreEstadoCivil: () => Boolean(expedienteValue(student, 'estadoCivilPadre')),
+    padreFechaNacimiento: () => Boolean(expedienteValue(student, 'fechaNacimientoPadre')),
+    padreIne: () => Boolean(expedienteValue(student, 'inePadre')),
+    padreCurp: () => Boolean(expedienteValue(student, 'curpPadre')),
+    madreLugarTrabajo: () => Boolean(expedienteValue(student, 'lugarTrabajoMadre')),
+    madrePuesto: () => Boolean(expedienteValue(student, 'puestoMadre')),
+    madreEstadoCivil: () => Boolean(expedienteValue(student, 'estadoCivilMadre')),
+    madreFechaNacimiento: () => Boolean(expedienteValue(student, 'fechaNacimientoMadre')),
+    madreIne: () => Boolean(expedienteValue(student, 'ineMadre')),
+    madreCurp: () => Boolean(expedienteValue(student, 'curpMadre')),
+    domicilioCalle: () => Boolean(expedienteValue(student, 'domicilioCalle')),
+    domicilioNumero: () => Boolean(expedienteValue(student, 'domicilioNumero', 'domicioNum')),
+    domicilioColonia: () => Boolean(expedienteValue(student, 'domicilioColonia')),
+    domicilioCp: () => Boolean(expedienteValue(student, 'domicilioCp')),
+    domicilioMunicipio: () => Boolean(expedienteValue(student, 'domicilioMunicipio')),
+    tipoSangre: () => Boolean(expedienteValue(student, 'tipoSangre')),
+    alergias: () => Boolean(expedienteValue(student, 'alergias')),
+  }
+  return Boolean(checks[key]?.())
+}
+
+export const resolveControlEscolarMissingFields = (student: any = {}, tier: 'basic' | 'complete' = 'basic'): string[] => {
+  const fields = tier === 'complete' ? CONTROL_ESCOLAR_COMPLETE_REQUIRED_FIELDS : CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS
+  return fields.filter(field => !controlEscolarFieldIsPresent(student, field.key)).map(field => field.key)
+}
+
+export const resolveControlEscolarCompleteness = (student: any = {}, options: { honorEnrollmentState?: boolean } = {}) => {
+  const honorEnrollmentState = options.honorEnrollmentState !== false
+  const inProgressScope = !honorEnrollmentState || isStudentInscritoForExpedienteProgress(student)
+  const buildTier = (fields: Array<{ key: string; label: string }>, tier: 'basic' | 'complete') => {
+    const missingFields = inProgressScope ? resolveControlEscolarMissingFields(student, tier) : fields.map(field => field.key)
+    const completed = fields.length - missingFields.length
+    const progress = inProgressScope ? Math.max(0, Math.round((completed / Math.max(fields.length, 1)) * 100)) : 0
+    return {
+      tier,
+      label: tier === 'basic' ? 'Expediente básico' : 'Expediente completo',
+      progress,
+      complete: progress >= 100,
+      total: fields.length,
+      completed,
+      pending: missingFields.length,
+      missingFields,
+      missingLabels: fields.filter(field => missingFields.includes(field.key)).map(field => field.label),
+      summary: !inProgressScope
+        ? 'Fuera de inscritos'
+        : progress >= 100
+          ? 'Completo'
+          : missingFields.length === 1
+            ? '1 pendiente'
+            : `${missingFields.length} pendientes`,
+    }
+  }
+  const basic = buildTier(CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS, 'basic')
+  const complete = buildTier(CONTROL_ESCOLAR_COMPLETE_REQUIRED_FIELDS, 'complete')
+  return { basic, complete, inProgressScope }
 }
 
 export const isStudentInscritoForExpedienteProgress = (student: any = {}): boolean => {
@@ -319,24 +466,15 @@ export const isStudentInscritoForExpedienteProgress = (student: any = {}): boole
 }
 
 export const resolveControlEscolarProgress = (student: any = {}, options: { honorEnrollmentState?: boolean } = {}) => {
-  const honorEnrollmentState = options.honorEnrollmentState !== false
-  const inProgressScope = !honorEnrollmentState || isStudentInscritoForExpedienteProgress(student)
-  const fields = ['curp', 'padre', 'madre']
-  const missingFields = inProgressScope ? resolveControlEscolarMissingFields(student) : fields.slice()
-  const completeFields = fields.filter((field) => !missingFields.includes(field)).length
-  const progress = inProgressScope ? Math.max(0, Math.round((completeFields / fields.length) * 100)) : 0
+  const completeness = resolveControlEscolarCompleteness(student, options)
   return {
-    progress,
-    complete: progress >= 100,
-    missingFields,
-    inProgressScope,
-    summary: !inProgressScope
-      ? 'Fuera de inscritos'
-      : progress >= 100
-        ? 'Completo'
-        : missingFields.length === 1
-          ? '1 pendiente'
-          : `${missingFields.length} pendientes`
+    progress: completeness.basic.progress,
+    complete: completeness.basic.complete,
+    missingFields: completeness.basic.missingFields,
+    missingLabels: completeness.basic.missingLabels,
+    completenessTiers: completeness,
+    inProgressScope: completeness.inProgressScope,
+    summary: completeness.basic.summary
   }
 }
 

@@ -25,6 +25,7 @@ import {
   fetchVerifiedControlEscolarScopeRows,
   maybeRefreshVerifiedControlEscolarScopeCache,
 } from "./control-escolar-cache";
+import { resolveControlEscolarCompleteness } from "../../shared/utils/studentPresentation";
 
 export type ControlEscolarStudentRow = {
   agentId: string;
@@ -963,48 +964,89 @@ const fetchLocalBaseRows = async (
 const centralSelectColumns = (schema: ControlEscolarSchema) => {
   const wanted = [
     "matricula",
-    "plantel",
-    "grado",
-    "grupo",
-    "nivel",
-    "nombres",
+    "updated_at",
+    "last_grade",
+    "last_ciclo",
+    "curp",
+    "nombre_verificado",
     "apellido_paterno",
     "apellido_materno",
-    "curp",
+    "nombres",
+    "grado",
+    "grupo",
+    "foto",
+    "fecha_nacimiento",
+    "nombre_padre",
+    "apellido_paterno_padre",
+    "apellido_materno_padre",
+    "lugar_trabajo_padre",
+    "puesto_padre",
     "email_padre",
-    "email_madre",
     "correo_padre",
-    "correo_madre",
     "telefono_padre",
-    "telefono_madre",
     "celular_padre",
+    "nombre_madre",
+    "apellido_paterno_madre",
+    "apellido_materno_madre",
+    "lugar_trabajo_madre",
+    "puesto_madre",
+    "email_madre",
+    "correo_madre",
+    "telefono_madre",
     "celular_madre",
+    "verified",
+    "nivel",
+    "ciclo",
+    "nombre_completo_alumno",
+    "lugar_nacimiento",
+    "sexo",
+    "talla",
+    "peso",
+    "tipo_sangre",
+    "alergias",
+    "certificado_medico_adjunto",
+    "certificado_vacunacion_covid19_adjunto",
+    "acta_nacimiento_adjunta",
+    "curp_alumno_adjunto",
+    "certificado_primaria_adjunto",
+    "boleta_sexto_primaria_adjunta",
+    "boleta_primero_secundaria_adjunta",
+    "boleta_segundo_secundaria_adjunta",
+    "estado_civil_padre",
+    "fecha_nacimiento_padre",
+    "ine_padre",
+    "curp_padre",
+    "estado_civil_madre",
+    "fecha_nacimiento_madre",
+    "ine_madre",
+    "curp_madre",
+    "domicilio_calle",
+    "domicio_num",
+    "domicilio_colonia",
+    "domicilio_cp",
+    "domicilio_municipio",
+    "servicio",
+    "eventual",
     "interno",
     "baja",
     "motivo_baja",
     "categoria_baja",
     "seguimiento_baja",
-    "nombre_padre",
-    "apellido_paterno_padre",
-    "apellido_materno_padre",
+    "servicio_notas",
+    "family_id",
+    "plantel",
     "nombre_padre_completo",
     "padre",
     "tutor",
     "padre_tutor",
     "ocupacion_padre",
     "ocupacion_tutor",
-    "nombre_madre",
-    "apellido_paterno_madre",
-    "apellido_materno_madre",
     "nombre_madre_completo",
     "madre",
     "ocupacion_madre",
-    "servicio",
     "direccion",
     "domicilio",
     "calle",
-    "foto",
-    "updated_at",
     "updatedAt",
     "fecha_actualizacion",
     "created_at",
@@ -1360,7 +1402,58 @@ const overlayStudentRow = (
     huskyPassEmail,
   };
 
-  normalized.missingFields = buildMissingFields(normalized);
+  Object.assign(normalized as any, {
+    lastGrade: normalizeText(overlay?.last_grade),
+    lastCiclo: normalizeText(overlay?.last_ciclo),
+    nombreVerificado: normalizeText(overlay?.nombre_verificado),
+    fechaNacimiento: normalizeText(overlay?.fecha_nacimiento),
+    nombreCompletoAlumno: normalizeText(overlay?.nombre_completo_alumno),
+    lugarNacimiento: normalizeText(overlay?.lugar_nacimiento),
+    sexo: normalizeText(overlay?.sexo),
+    talla: normalizeText(overlay?.talla),
+    peso: normalizeText(overlay?.peso),
+    tipoSangre: normalizeText(overlay?.tipo_sangre),
+    alergias: normalizeText(overlay?.alergias),
+    foto: normalizeText(overlay?.foto),
+    direccion: firstText(overlay?.direccion, overlay?.domicilio, overlay?.calle),
+    certificadoMedicoAdjunto: normalizeText(overlay?.certificado_medico_adjunto),
+    certificadoVacunacionCovid19Adjunto: normalizeText(overlay?.certificado_vacunacion_covid19_adjunto),
+    actaNacimientoAdjunta: normalizeText(overlay?.acta_nacimiento_adjunta),
+    curpAlumnoAdjunto: normalizeText(overlay?.curp_alumno_adjunto),
+    certificadoPrimariaAdjunto: normalizeText(overlay?.certificado_primaria_adjunto),
+    boletaSextoPrimariaAdjunta: normalizeText(overlay?.boleta_sexto_primaria_adjunta),
+    boletaPrimeroSecundariaAdjunta: normalizeText(overlay?.boleta_primero_secundaria_adjunta),
+    boletaSegundoSecundariaAdjunta: normalizeText(overlay?.boleta_segundo_secundaria_adjunta),
+    lugarTrabajoPadre: normalizeText(overlay?.lugar_trabajo_padre),
+    puestoPadre: normalizeText(overlay?.puesto_padre),
+    estadoCivilPadre: normalizeText(overlay?.estado_civil_padre),
+    fechaNacimientoPadre: normalizeText(overlay?.fecha_nacimiento_padre),
+    inePadre: normalizeText(overlay?.ine_padre),
+    curpPadre: normalizeText(overlay?.curp_padre),
+    lugarTrabajoMadre: normalizeText(overlay?.lugar_trabajo_madre),
+    puestoMadre: normalizeText(overlay?.puesto_madre),
+    estadoCivilMadre: normalizeText(overlay?.estado_civil_madre),
+    fechaNacimientoMadre: normalizeText(overlay?.fecha_nacimiento_madre),
+    ineMadre: normalizeText(overlay?.ine_madre),
+    curpMadre: normalizeText(overlay?.curp_madre),
+    domicilioCalle: normalizeText(overlay?.domicilio_calle),
+    domicilioNumero: normalizeText(overlay?.domicio_num),
+    domicioNum: normalizeText(overlay?.domicio_num),
+    domicilioColonia: normalizeText(overlay?.domicilio_colonia),
+    domicilioCp: normalizeText(overlay?.domicilio_cp),
+    domicilioMunicipio: normalizeText(overlay?.domicilio_municipio),
+    servicioNotas: normalizeText(overlay?.servicio_notas, 1000),
+    familyId: normalizeText(overlay?.family_id),
+    eventual: firstText(overlay?.eventual),
+    verified: firstText(overlay?.verified),
+  });
+
+  const completeness = resolveControlEscolarCompleteness(normalized, { honorEnrollmentState: true });
+  normalized.missingFields = completeness.basic.missingFields;
+  (normalized as any).missingLabels = completeness.basic.missingLabels;
+  (normalized as any).completenessTiers = completeness;
+  (normalized as any).completeMissingFields = completeness.complete.missingFields;
+  (normalized as any).completeMissingLabels = completeness.complete.missingLabels;
   return normalized;
 };
 
@@ -1841,6 +1934,16 @@ const compareAcademicGrade = (left: unknown, right: unknown) => {
 const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
   let result = students;
 
+  const search = normalizeText(filters.search || filters.q || "", 80).toLowerCase();
+  if (search) {
+    result = result.filter((student) => {
+      const haystack = [student.matricula, student.fullName, student.nombreCompleto, student.curp]
+        .map((value) => normalizeText(value).toLowerCase())
+        .join(" ");
+      return haystack.includes(search);
+    });
+  }
+
   const status = normalizeText(filters.status || "");
   if (status && status !== "all" && status !== "todos") {
     if (status === "activos" || status === "active")
@@ -1894,30 +1997,28 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
       result = result.filter((student) => student.missingFields.length === 0);
     if (quality === "incomplete" || quality === "incompleto")
       result = result.filter((student) => student.missingFields.length > 0);
+    const hasMissing = (student: any, keys: string[]) =>
+      keys.some((key) => student.missingFields.includes(key));
+    const fatherKeys = ["padreNombre", "padreApellidoPaterno", "padreTelefono", "padreEmail"];
+    const motherKeys = ["madreNombre", "madreApellidoPaterno", "madreTelefono", "madreEmail"];
     if (quality === "curp")
       result = result.filter((student) =>
         student.missingFields.includes("curp"),
       );
     if (quality === "padre" || quality === "father")
-      result = result.filter((student) =>
-        student.missingFields.includes("padre"),
-      );
+      result = result.filter((student) => hasMissing(student, fatherKeys));
     if (quality === "madre" || quality === "mother")
-      result = result.filter((student) =>
-        student.missingFields.includes("madre"),
-      );
+      result = result.filter((student) => hasMissing(student, motherKeys));
     if (quality === "phone" || quality === "telefono" || quality === "teléfono")
       result = result.filter((student) =>
-        student.missingFields.includes("padre") || student.missingFields.includes("madre"),
+        hasMissing(student, ["padreTelefono", "madreTelefono"]),
       );
     if (quality === "email")
       result = result.filter((student) =>
-        student.missingFields.includes("padre") || student.missingFields.includes("madre"),
+        hasMissing(student, ["padreEmail", "madreEmail"]),
       );
     if (quality === "guardian" || quality === "tutor")
-      result = result.filter((student) =>
-        student.missingFields.includes("padre") || student.missingFields.includes("madre"),
-      );
+      result = result.filter((student) => hasMissing(student, [...fatherKeys, ...motherKeys]));
     if (quality === "contact" || quality === "contacto")
       result = result.filter(hasNoPrimaryContact);
     if (
@@ -2117,11 +2218,11 @@ export const fetchControlEscolarKpis = async (
     expedientesIncompletos,
     sinContacto,
     sinCurp: missing("curp"),
-    sinPadre: missing("padre"),
-    sinMadre: missing("madre"),
-    sinTelefono: missing("padre") + missing("madre"),
-    sinTutor: missing("padre") + missing("madre"),
-    sinEmail: missing("padre") + missing("madre"),
+    sinPadre: progressStudents.filter((student) => ["padreNombre", "padreApellidoPaterno", "padreTelefono", "padreEmail"].some((field) => student.missingFields.includes(field))).length,
+    sinMadre: progressStudents.filter((student) => ["madreNombre", "madreApellidoPaterno", "madreTelefono", "madreEmail"].some((field) => student.missingFields.includes(field))).length,
+    sinTelefono: progressStudents.filter((student) => ["padreTelefono", "madreTelefono"].some((field) => student.missingFields.includes(field))).length,
+    sinTutor: progressStudents.filter((student) => ["padreNombre", "padreApellidoPaterno", "madreNombre", "madreApellidoPaterno"].some((field) => student.missingFields.includes(field))).length,
+    sinEmail: progressStudents.filter((student) => ["padreEmail", "madreEmail"].some((field) => student.missingFields.includes(field))).length,
     porNivel: Array.from(byNivel.entries()).map(([label, total]) => ({
       label,
       total,
@@ -2137,11 +2238,25 @@ const PATCH_FIELD_COLUMN_MAP: Record<string, string> = {
   apellidoPaterno: "apellido_paterno",
   apellidoMaterno: "apellido_materno",
   curp: "curp",
+  nombreVerificado: "nombre_verificado",
+  nombreCompletoAlumno: "nombre_completo_alumno",
+  lastGrade: "last_grade",
+  lastCiclo: "last_ciclo",
+  fechaNacimiento: "fecha_nacimiento",
+  lugarNacimiento: "lugar_nacimiento",
+  sexo: "sexo",
+  talla: "talla",
+  peso: "peso",
+  tipoSangre: "tipo_sangre",
+  alergias: "alergias",
+  foto: "foto",
   emailPadre: "email_padre",
   emailMadre: "email_madre",
   telefonoPadre: "telefono_padre",
   telefonoMadre: "telefono_madre",
   interno: "interno",
+  eventual: "eventual",
+  verified: "verified",
   baja: "baja",
   motivoBaja: "motivo_baja",
   categoriaBaja: "categoria_baja",
@@ -2149,41 +2264,77 @@ const PATCH_FIELD_COLUMN_MAP: Record<string, string> = {
   nombrePadre: "nombre_padre",
   apellidoPaternoPadre: "apellido_paterno_padre",
   apellidoMaternoPadre: "apellido_materno_padre",
+  lugarTrabajoPadre: "lugar_trabajo_padre",
+  puestoPadre: "puesto_padre",
+  estadoCivilPadre: "estado_civil_padre",
+  fechaNacimientoPadre: "fecha_nacimiento_padre",
+  inePadre: "ine_padre",
+  curpPadre: "curp_padre",
   nombreMadre: "nombre_madre",
   apellidoPaternoMadre: "apellido_paterno_madre",
   apellidoMaternoMadre: "apellido_materno_madre",
+  lugarTrabajoMadre: "lugar_trabajo_madre",
+  puestoMadre: "puesto_madre",
+  estadoCivilMadre: "estado_civil_madre",
+  fechaNacimientoMadre: "fecha_nacimiento_madre",
+  ineMadre: "ine_madre",
+  curpMadre: "curp_madre",
   servicio: "servicio",
+  servicioNotas: "servicio_notas",
   grado: "grado",
   grupo: "grupo",
   nivel: "nivel",
+  ciclo: "ciclo",
   direccion: "direccion",
   domicilio: "domicilio",
+  domicilioCalle: "domicilio_calle",
+  domicilioNumero: "domicio_num",
+  domicioNum: "domicio_num",
+  domicilioColonia: "domicilio_colonia",
+  domicilioCp: "domicilio_cp",
+  domicilioMunicipio: "domicilio_municipio",
+  certificadoMedicoAdjunto: "certificado_medico_adjunto",
+  certificadoVacunacionCovid19Adjunto: "certificado_vacunacion_covid19_adjunto",
+  actaNacimientoAdjunta: "acta_nacimiento_adjunta",
+  curpAlumnoAdjunto: "curp_alumno_adjunto",
+  certificadoPrimariaAdjunto: "certificado_primaria_adjunto",
+  boletaSextoPrimariaAdjunta: "boleta_sexto_primaria_adjunta",
+  boletaPrimeroSecundariaAdjunta: "boleta_primero_secundaria_adjunta",
+  boletaSegundoSecundariaAdjunta: "boleta_segundo_secundaria_adjunta",
+  familyId: "family_id",
 };
 
 const normalizePatchValue = (field: string, value: unknown) => {
-  if (field === "curp") return normalizeUpper(value, 18) || null;
+  if (field === "curp" || field === "curpPadre" || field === "curpMadre") return normalizeUpper(value, 18) || null;
   if (field.toLowerCase().includes("email"))
     return normalizeEmail(value) || null;
   if (field.toLowerCase().includes("telefono"))
     return normalizePhone(value) || null;
-  if (field === "baja")
+  if (["baja", "interno", "eventual", "verified"].includes(field))
     return value === true ||
       value === 1 ||
       String(value).toLowerCase() === "true" ||
+      String(value).toLowerCase() === "si" ||
+      String(value).toLowerCase() === "sí" ||
       String(value) === "1"
       ? 1
       : 0;
-  if (field === "grado")
+  if (field === "grado" || field === "lastGrade")
     return normalizeText(value, 80) ? displayGrado(value).toLowerCase() : null;
   if (field === "nivel") return normalizeNivelEscolar(value) || null;
   if (field === "grupo") return normalizeText(value, 40) || null;
+  if (field === "domicilioCp") return normalizeText(value, 12).replace(/\D/g, "").slice(0, 5) || null;
+  if (["sexo", "tipoSangre", "talla", "peso"].includes(field)) return normalizeNullable(value, 40);
+  if (["fechaNacimiento", "fechaNacimientoPadre", "fechaNacimientoMadre"].includes(field)) return normalizeNullable(value, 40);
   if (
     field === "direccion" ||
     field === "domicilio" ||
+    field === "servicioNotas" ||
     field === "seguimientoBaja" ||
-    field === "motivoBaja"
+    field === "motivoBaja" ||
+    field === "alergias"
   )
-    return normalizeNullable(value, 700);
+    return normalizeNullable(value, 1000);
   return normalizeNullable(value, 255);
 };
 
@@ -2225,18 +2376,44 @@ const buildEditableMatriculaEntries = (
     }))
     .filter((entry) => entry.column && schema.matricula.has(entry.column));
 
-  if (
-    editableEntries.some(
-      (entry) =>
-        entry.field === "curp" &&
-        entry.value &&
-        !/^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(String(entry.value)),
-    )
-  ) {
+  const invalidCurp = editableEntries.find(
+    (entry) =>
+      ["curp", "curpPadre", "curpMadre"].includes(entry.field) &&
+      entry.value &&
+      !/^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(String(entry.value)),
+  );
+  if (invalidCurp) {
     throw createError({
       statusCode: 400,
-      message: "CURP inválida. Debe tener 18 caracteres con formato oficial.",
+      message: `${invalidCurp.field === "curp" ? "CURP" : "CURP familiar"} inválida. Debe tener 18 caracteres con formato oficial.`,
     });
+  }
+
+  const invalidEmail = editableEntries.find(
+    (entry) =>
+      entry.field.toLowerCase().includes("email") &&
+      entry.value &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(entry.value)),
+  );
+  if (invalidEmail) {
+    throw createError({ statusCode: 400, message: "Correo electrónico inválido." });
+  }
+
+  const invalidPhone = editableEntries.find(
+    (entry) =>
+      entry.field.toLowerCase().includes("telefono") &&
+      entry.value &&
+      String(entry.value).replace(/\D/g, "").length < 10,
+  );
+  if (invalidPhone) {
+    throw createError({ statusCode: 400, message: "Teléfono inválido. Usa al menos 10 dígitos." });
+  }
+
+  const invalidCp = editableEntries.find(
+    (entry) => entry.field === "domicilioCp" && entry.value && String(entry.value).replace(/\D/g, "").length !== 5,
+  );
+  if (invalidCp) {
+    throw createError({ statusCode: 400, message: "Código postal inválido. Usa 5 dígitos." });
   }
 
   return editableEntries;
@@ -2321,10 +2498,24 @@ export const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS = [
   "apellidoMaterno",
   "nombres",
   "curp",
+  "nombreVerificado",
+  "nombreCompletoAlumno",
+  "fechaNacimiento",
+  "lugarNacimiento",
+  "sexo",
+  "talla",
+  "peso",
+  "tipoSangre",
+  "alergias",
   "nivel",
   "grado",
   "grupo",
+  "ciclo",
+  "lastGrade",
+  "lastCiclo",
   "interno",
+  "eventual",
+  "verified",
   "servicio",
   "telefonoPadre",
   "telefonoMadre",
@@ -2333,14 +2524,41 @@ export const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS = [
   "nombrePadre",
   "apellidoPaternoPadre",
   "apellidoMaternoPadre",
+  "lugarTrabajoPadre",
+  "puestoPadre",
+  "estadoCivilPadre",
+  "fechaNacimientoPadre",
+  "inePadre",
+  "curpPadre",
   "nombreMadre",
   "apellidoPaternoMadre",
   "apellidoMaternoMadre",
+  "lugarTrabajoMadre",
+  "puestoMadre",
+  "estadoCivilMadre",
+  "fechaNacimientoMadre",
+  "ineMadre",
+  "curpMadre",
   "direccion",
+  "domicilioCalle",
+  "domicilioNumero",
+  "domicilioColonia",
+  "domicilioCp",
+  "domicilioMunicipio",
   "baja",
   "motivoBaja",
   "categoriaBaja",
   "seguimientoBaja",
+  "servicioNotas",
+  "familyId",
+  "certificadoMedicoAdjunto",
+  "certificadoVacunacionCovid19Adjunto",
+  "actaNacimientoAdjunta",
+  "curpAlumnoAdjunto",
+  "certificadoPrimariaAdjunto",
+  "boletaSextoPrimariaAdjunta",
+  "boletaPrimeroSecundariaAdjunta",
+  "boletaSegundoSecundariaAdjunta",
 ];
 
 export const CONTROL_ESCOLAR_MATRICULA_IMPORT_LABELS: Record<string, string> = {
@@ -2369,6 +2587,48 @@ export const CONTROL_ESCOLAR_MATRICULA_IMPORT_LABELS: Record<string, string> = {
   motivoBaja: "Motivo baja",
   categoriaBaja: "Categoría baja",
   seguimientoBaja: "Seguimiento baja",
+  nombreVerificado: "Nombre verificado",
+  nombreCompletoAlumno: "Nombre completo alumno",
+  fechaNacimiento: "Fecha nacimiento alumno",
+  lugarNacimiento: "Lugar nacimiento alumno",
+  sexo: "Sexo",
+  talla: "Talla",
+  peso: "Peso",
+  tipoSangre: "Tipo de sangre",
+  alergias: "Alergias",
+  ciclo: "Ciclo matrícula",
+  lastGrade: "Último grado",
+  lastCiclo: "Último ciclo",
+  eventual: "Eventual",
+  verified: "Verificado",
+  servicioNotas: "Notas de servicio",
+  familyId: "Family ID",
+  lugarTrabajoPadre: "Lugar trabajo padre",
+  puestoPadre: "Puesto padre",
+  estadoCivilPadre: "Estado civil padre",
+  fechaNacimientoPadre: "Fecha nacimiento padre",
+  inePadre: "INE padre",
+  curpPadre: "CURP padre",
+  lugarTrabajoMadre: "Lugar trabajo madre",
+  puestoMadre: "Puesto madre",
+  estadoCivilMadre: "Estado civil madre",
+  fechaNacimientoMadre: "Fecha nacimiento madre",
+  ineMadre: "INE madre",
+  curpMadre: "CURP madre",
+  domicilioCalle: "Calle domicilio",
+  domicilioNumero: "Número domicilio",
+  domicilioColonia: "Colonia domicilio",
+  domicilioCp: "CP domicilio",
+  domicilioMunicipio: "Municipio domicilio",
+  certificadoMedicoAdjunto: "Certificado médico adjunto",
+  certificadoVacunacionCovid19Adjunto: "Certificado vacunación COVID-19",
+  actaNacimientoAdjunta: "Acta nacimiento adjunta",
+  curpAlumnoAdjunto: "CURP alumno adjunto",
+  certificadoPrimariaAdjunto: "Certificado primaria adjunto",
+  boletaSextoPrimariaAdjunta: "Boleta sexto primaria",
+  boletaPrimeroSecundariaAdjunta: "Boleta primero secundaria",
+  boletaSegundoSecundariaAdjunta: "Boleta segundo secundaria",
+
 };
 
 export const importControlEscolarMatriculaUpdates = async (

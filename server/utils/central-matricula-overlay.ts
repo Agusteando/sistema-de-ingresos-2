@@ -44,6 +44,15 @@ const MATRICULA_COLUMNS = [
   'apellido_paterno',
   'apellido_materno',
   'curp',
+  'nombre_verificado',
+  'nombre_completo_alumno',
+  'fecha_nacimiento',
+  'lugar_nacimiento',
+  'sexo',
+  'talla',
+  'peso',
+  'tipo_sangre',
+  'alergias',
   'email_padre',
   'email_madre',
   'correo_padre',
@@ -60,6 +69,12 @@ const MATRICULA_COLUMNS = [
   'nombre_padre',
   'apellido_paterno_padre',
   'apellido_materno_padre',
+  'lugar_trabajo_padre',
+  'puesto_padre',
+  'estado_civil_padre',
+  'fecha_nacimiento_padre',
+  'ine_padre',
+  'curp_padre',
   'nombre_padre_completo',
   'padre',
   'tutor',
@@ -69,6 +84,12 @@ const MATRICULA_COLUMNS = [
   'nombre_madre',
   'apellido_paterno_madre',
   'apellido_materno_madre',
+  'lugar_trabajo_madre',
+  'puesto_madre',
+  'estado_civil_madre',
+  'fecha_nacimiento_madre',
+  'ine_madre',
+  'curp_madre',
   'nombre_madre_completo',
   'madre',
   'ocupacion_madre',
@@ -76,6 +97,13 @@ const MATRICULA_COLUMNS = [
   'direccion',
   'domicilio',
   'calle',
+  'domicilio_calle',
+  'domicio_num',
+  'domicilio_colonia',
+  'domicilio_cp',
+  'domicilio_municipio',
+  'servicio_notas',
+  'family_id',
   'foto',
   'updated_at',
   'updatedAt',
@@ -117,6 +145,15 @@ const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
       nombreCompleto: fullName,
       fullName,
       curp: normalizeUpper(raw.curp, 18),
+      nombreVerificado: normalizeText(raw.nombre_verificado),
+      nombreCompletoAlumno: normalizeText(raw.nombre_completo_alumno),
+      fechaNacimiento: normalizeText(raw.fecha_nacimiento),
+      lugarNacimiento: normalizeText(raw.lugar_nacimiento),
+      sexo: normalizeText(raw.sexo),
+      talla: normalizeText(raw.talla),
+      peso: normalizeText(raw.peso),
+      tipoSangre: normalizeText(raw.tipo_sangre),
+      alergias: normalizeText(raw.alergias),
       telefono: firstText(raw.telefono_padre, raw.celular_padre, raw.telefono_madre, raw.celular_madre),
       correo: firstLower(raw.email_padre, raw.correo_padre, raw.email_madre, raw.correo_madre),
       padre,
@@ -130,14 +167,34 @@ const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
       apellidoMaternoPadre: normalizeText(raw.apellido_materno_padre),
       nombrePadreCompleto: normalizeText(raw.nombre_padre_completo),
       ocupacionPadre: firstText(raw.ocupacion_padre, raw.ocupacion_tutor),
+      lugarTrabajoPadre: normalizeText(raw.lugar_trabajo_padre),
+      puestoPadre: normalizeText(raw.puesto_padre),
+      estadoCivilPadre: normalizeText(raw.estado_civil_padre),
+      fechaNacimientoPadre: normalizeText(raw.fecha_nacimiento_padre),
+      inePadre: normalizeText(raw.ine_padre),
+      curpPadre: normalizeText(raw.curp_padre),
       nombreMadre: normalizeText(raw.nombre_madre),
       apellidoPaternoMadre: normalizeText(raw.apellido_paterno_madre),
       apellidoMaternoMadre: normalizeText(raw.apellido_materno_madre),
       nombreMadreCompleto: normalizeText(raw.nombre_madre_completo),
       ocupacionMadre: normalizeText(raw.ocupacion_madre),
+      lugarTrabajoMadre: normalizeText(raw.lugar_trabajo_madre),
+      puestoMadre: normalizeText(raw.puesto_madre),
+      estadoCivilMadre: normalizeText(raw.estado_civil_madre),
+      fechaNacimientoMadre: normalizeText(raw.fecha_nacimiento_madre),
+      ineMadre: normalizeText(raw.ine_madre),
+      curpMadre: normalizeText(raw.curp_madre),
       interno: normalizeText(raw.interno),
       servicio: normalizeText(raw.servicio),
       direccion: firstText(raw.direccion, raw.domicilio, raw.calle),
+      domicilioCalle: normalizeText(raw.domicilio_calle),
+      domicilioNumero: normalizeText(raw.domicio_num),
+      domicioNum: normalizeText(raw.domicio_num),
+      domicilioColonia: normalizeText(raw.domicilio_colonia),
+      domicilioCp: normalizeText(raw.domicilio_cp),
+      domicilioMunicipio: normalizeText(raw.domicilio_municipio),
+      servicioNotas: normalizeText(raw.servicio_notas),
+      familyId: normalizeText(raw.family_id),
       updatedAt: firstText(raw.updated_at, raw.updatedAt, raw.fecha_actualizacion, raw.created_at)
     }
   }
@@ -161,8 +218,8 @@ export const fetchCentralMatriculaOverlay = async (matricula: string) => {
 
   const selected = await loadCentralMatriculaColumns()
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT ${selected.map(escapeIdentifier).join(', ')} FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`,
-    [normalizedMatricula]
+    `SELECT ${selected.map(escapeIdentifier).join(', ')} FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) = ? LIMIT 1`,
+    [normalizedMatricula.toUpperCase()]
   )
   const raw = rows[0] || null
   return raw ? normalizeCentralMatriculaOverlay(raw) : null
@@ -184,8 +241,8 @@ export const fetchCentralMatriculaOverlays = async (matriculas: string[]) => {
     const batch = normalized.slice(index, index + batchSize)
     const placeholders = batch.map(() => '?').join(', ')
     const rows = await controlEscolarCentralQuery<any[]>(
-      `SELECT ${selected.map(escapeIdentifier).join(', ')} FROM \`matricula\` WHERE \`matricula\` IN (${placeholders})`,
-      batch
+      `SELECT ${selected.map(escapeIdentifier).join(', ')} FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) IN (${placeholders})`,
+      batch.map((matricula) => String(matricula || '').toUpperCase())
     )
     for (const raw of rows) {
       const overlay = normalizeCentralMatriculaOverlay(raw)
