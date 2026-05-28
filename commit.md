@@ -1,1 +1,1 @@
-Corrige Estado de Cuenta financiero para ajustar escala, usar enriquecimiento de matrícula y mostrar contacto familiar de Control Escolar en solo lectura
+Documenta la falla de sincronización entre Finanzas y Control Escolar para el enriquecimiento de expediente

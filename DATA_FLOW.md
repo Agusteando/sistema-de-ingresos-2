@@ -244,3 +244,13 @@ Expediente progress, parent data, CURP, and read-only Control Escolar details re
 ```
 
 Editar alumno in the financial/admin area uses bridge/local fields for editable financial data. Contacto familiar is displayed from the Control Escolar enrichment overlay as read-only parent cards, so the user can see both Padre and Madre without implying that financial edits write those central fields.
+
+## Diagnóstico adicional: por qué Finanzas muestra `Enriquecidos 0`
+
+Cuando el diagnóstico financiero muestra `Estado: failed`, `Enriquecidos: 0` y `Error: Server Error`, la falla visible pertenece al refresh principal de `/api/students`. La pantalla conserva alumnos desde caché local, pero esos alumnos pueden no tener `centralMatricula` aplicado.
+
+Control Escolar no depende de ese contrato. Control Escolar resuelve scope y enriquecimiento en servidor usando `/api/control-escolar/students`, cache verificado, bridge/base y `matricula` como etapas separadas con diagnóstico propio. Si `matricula` falla, devuelve base y marca el overlay como fallido sin romper la lista.
+
+Finanzas aún mezcla dos estados: base financiera y enriquecimiento de expediente. El contador de enriquecidos se calcula desde los alumnos en memoria, pero el error mostrado corresponde al refresh financiero. Por eso `Server Error` no identifica la etapa real de enriquecimiento.
+
+La solución correcta es separar el diagnóstico en dos fases y reutilizar el contrato normalizado de Control Escolar para el overlay de expediente, en lugar de depender de una llamada client-side aislada que no comparte cache verificado ni diagnóstico de etapas.
