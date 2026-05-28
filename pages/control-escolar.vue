@@ -500,17 +500,28 @@
           >
             <div class="ce-detail-shell">
               <header class="ce-detail-header">
-                <div class="ce-detail-title">
-                  <small>{{ selectedStudent.matricula }} · Matrícula</small>
-                  <div class="ce-title-row">
-                    <h2>{{ selectedStudent.fullName || "Ficha de alumno" }}</h2>
-                    <span
-                      :class="[
-                        'ce-status-pill large',
-                        statusTone(selectedStudent),
-                      ]"
-                      >{{ selectedStudent.status || "Activo" }}</span
-                    >
+                <div class="ce-detail-title ce-detail-title--with-photo">
+                  <StudentGradePhotoCard
+                    class="ce-detail-header-photo"
+                    :student="selectedStudent"
+                    :photo-url="controlStudentPhotoUrl(selectedStudent)"
+                    :photo-loading="
+                      isControlStudentPhotoLoading(selectedStudent)
+                    "
+                    :is-enrolled="selectedStudent.status === 'Activo'"
+                  />
+                  <div class="ce-detail-title-copy">
+                    <small>{{ selectedStudent.matricula }} · Matrícula</small>
+                    <div class="ce-title-row">
+                      <h2>{{ selectedStudent.fullName || "Ficha de alumno" }}</h2>
+                      <span
+                        :class="[
+                          'ce-status-pill large',
+                          statusTone(selectedStudent),
+                        ]"
+                        >{{ selectedStudent.status || "Activo" }}</span
+                      >
+                    </div>
                   </div>
                 </div>
                 <div
@@ -7160,6 +7171,245 @@ onBeforeUnmount(() => {
 
   .ce-detail-footer :deep(.ui-button) {
     flex: 1 1 0;
+  }
+}
+
+
+/* Final reference correction: stable header grid, visible student avatar, no metric overlap. */
+.ce-detail-shell {
+  overflow: hidden;
+}
+
+.ce-detail-header {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(210px, 250px) minmax(180px, 230px) 46px;
+  grid-auto-rows: auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 112px;
+  padding: 16px 18px;
+}
+
+.ce-detail-title--with-photo {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ce-detail-header-photo {
+  --student-grade-photo-width: 58px;
+  --student-grade-photo-height: 58px;
+  --student-grade-photo-radius: 14px;
+  flex: 0 0 auto;
+}
+
+.ce-detail-title-copy {
+  min-width: 0;
+}
+
+.ce-detail-title-copy small {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.ce-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 0;
+}
+
+.ce-title-row h2 {
+  max-width: min(100%, 330px);
+  min-width: 0;
+  color: #10203a;
+  font-size: clamp(18px, 2cqi, 23px);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.06;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.ce-status-pill.large {
+  min-height: 36px;
+  padding-inline: 18px;
+}
+
+.ce-access-header-card {
+  grid-column: auto;
+  grid-row: auto;
+  min-width: 0;
+  min-height: 64px;
+  align-self: center;
+  padding: 10px 12px;
+}
+
+.ce-access-header-card small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-progress-cluster {
+  grid-column: auto;
+  grid-row: auto;
+  min-width: 0;
+  align-self: center;
+  justify-self: stretch;
+}
+
+.ce-progress-track {
+  width: 100%;
+}
+
+.ce-detail-menu-button {
+  grid-column: auto;
+  grid-row: auto;
+  align-self: start;
+  justify-self: end;
+}
+
+.ce-detail-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 18px;
+}
+
+.ce-detail-status-strip {
+  grid-template-columns: minmax(290px, 1fr) auto;
+  min-height: 78px;
+}
+
+.ce-missing-grid {
+  display: flex;
+  min-width: 0;
+}
+
+.ce-missing-chip {
+  min-width: 152px;
+}
+
+.ce-detail-tabs {
+  flex-wrap: nowrap;
+  gap: clamp(14px, 2.2cqi, 30px);
+}
+
+.ce-detail-tabs button {
+  white-space: nowrap;
+}
+
+.ce-inline-note--tab {
+  min-height: 58px;
+}
+
+.ce-family-card {
+  min-height: 0;
+}
+
+.ce-form-grid input,
+.ce-form-grid select,
+.ce-wide-field textarea {
+  min-height: 54px;
+}
+
+.ce-detail-footer {
+  flex: 0 0 auto;
+}
+
+@container (max-width: 900px) {
+  .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 46px;
+    gap: 14px;
+    min-height: 0;
+  }
+
+  .ce-detail-title--with-photo {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .ce-detail-menu-button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .ce-access-header-card {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .ce-progress-cluster {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .ce-detail-status-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .ce-missing-grid {
+    justify-content: flex-start;
+  }
+
+  .ce-missing-chip {
+    min-width: 150px;
+  }
+}
+
+@container (max-width: 640px) {
+  .ce-detail-header,
+  .ce-detail-body,
+  .ce-detail-footer {
+    padding-inline: 12px;
+  }
+
+  .ce-detail-title--with-photo {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .ce-detail-header-photo {
+    --student-grade-photo-width: 52px;
+    --student-grade-photo-height: 52px;
+    --student-grade-photo-radius: 13px;
+  }
+
+  .ce-title-row h2 {
+    max-width: 100%;
+    font-size: 19px;
+  }
+
+  .ce-status-pill.large {
+    min-height: 30px;
+    padding-inline: 13px;
+  }
+
+  .ce-missing-chip {
+    min-width: calc(50% - 6px);
+  }
+}
+
+@container (max-width: 440px) {
+  .ce-detail-title--with-photo {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .ce-detail-header-photo {
+    --student-grade-photo-width: 44px;
+    --student-grade-photo-height: 44px;
+    --student-grade-photo-radius: 12px;
+  }
+
+  .ce-missing-chip {
+    width: 100%;
+    min-width: 0;
   }
 }
 
