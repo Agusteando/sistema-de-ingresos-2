@@ -533,8 +533,8 @@
                   class="ce-access-header-card"
                   :class="{ unavailable: !selectedStudent.huskyPassAvailable }"
                 >
-                  <span class="ce-access-icon" aria-hidden="true">
-                    <img src="/brand/husky-pass-header-gray.png" alt="" />
+                  <span class="ce-access-icon ce-access-logo" aria-hidden="true">
+                    <img src="/brand/ID-HUSKY-PASS-GREY.png" alt="" />
                   </span>
                   <div>
                     <strong>Husky Pass</strong>
@@ -1268,7 +1268,6 @@
               </div>
               <div class="ce-empty-copy">
                 <h2>Selecciona un alumno</h2>
-                <p>La ficha aparecerá aquí con progreso, datos familiares y edición del expediente.</p>
               </div>
             </div>
           </section>
@@ -7245,6 +7244,255 @@ onBeforeUnmount(() => {
   .ce-empty-detail-panel .ce-empty-shell {
     min-height: 360px;
     padding: 28px 18px;
+  }
+}
+
+
+
+/* Control Escolar corrective pass: fix circled layout regressions without adding fake states. */
+.control-escolar-screen .ce-list-titlebar {
+  min-height: 44px;
+  padding-inline: 14px 10px;
+}
+
+.control-escolar-screen .ce-list-titlebar .list-heading-copy {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.control-escolar-screen .ce-list-titlebar h2 {
+  flex: 0 0 auto;
+  font-size: 13.5px;
+  line-height: 1;
+}
+
+.control-escolar-screen .ce-list-titlebar p {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #66758c;
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-empty-detail-panel {
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+}
+
+.control-escolar-screen .ce-empty-detail-panel .ce-empty-shell {
+  min-height: 100%;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(63, 145, 56, 0.12), transparent 170px),
+    linear-gradient(180deg, #ffffff 0%, #fbfdfb 100%);
+}
+
+.control-escolar-screen .ce-empty-detail-panel .ce-empty-copy h2 {
+  font-size: clamp(17px, 1.7vw, 22px);
+}
+
+.control-escolar-screen .ce-empty-detail-panel .ce-empty-copy p,
+.control-escolar-screen .ce-empty-review,
+.control-escolar-screen .ce-empty-flow,
+.control-escolar-screen .ce-empty-tip {
+  display: none;
+}
+
+.control-escolar-screen .ce-access-header-card {
+  grid-template-columns: 62px minmax(0, 1fr);
+  min-height: 64px;
+  padding: 8px 12px;
+}
+
+.control-escolar-screen .ce-access-header-card > .ce-access-logo {
+  width: 58px;
+  height: 42px;
+  border-radius: 13px;
+  background: #f5f7fa;
+  overflow: hidden;
+}
+
+.control-escolar-screen .ce-access-header-card > .ce-access-logo img {
+  display: block;
+  width: 56px;
+  height: 38px;
+  object-fit: contain;
+  object-position: center;
+  opacity: .74;
+}
+
+.control-escolar-screen .ce-access-header-card strong {
+  font-size: 11.5px;
+  line-height: 1.1;
+}
+
+.control-escolar-screen .ce-access-header-card small {
+  margin-top: 3px;
+  font-size: 9.8px;
+  line-height: 1.18;
+}
+
+.control-escolar-screen .ce-detail-body {
+  padding: 10px 14px 12px;
+}
+
+.control-escolar-screen .ce-health-overview,
+.control-escolar-screen .ce-status-signal-grid,
+.control-escolar-screen .ce-family-readiness,
+.control-escolar-screen .ce-family-grid,
+.control-escolar-screen .ce-edit-form,
+.control-escolar-screen .ce-wide-field.ce-family-address {
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-form-card.ce-tab-panel {
+  padding: 14px 15px 12px;
+  border-radius: 15px;
+}
+
+.control-escolar-screen .ce-panel-heading {
+  min-height: 0;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(224, 232, 241, 0.8);
+}
+
+.control-escolar-screen .ce-panel-heading h3 {
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.control-escolar-screen .ce-panel-heading p {
+  margin-top: 3px;
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.control-escolar-screen .ce-form-grid,
+.control-escolar-screen .ce-form-grid.two,
+.control-escolar-screen .ce-form-grid.three,
+.control-escolar-screen .ce-tab-panel .ce-form-grid.three {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+  gap: 12px 14px;
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-form-grid label,
+.control-escolar-screen .ce-wide-field {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-form-grid label > span,
+.control-escolar-screen .ce-wide-field > span {
+  display: block;
+  min-height: 12px;
+  margin: 0;
+  overflow: hidden;
+  color: #5d6b83;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.025em;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-form-grid input,
+.control-escolar-screen .ce-form-grid select,
+.control-escolar-screen .ce-wide-field textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 11px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.control-escolar-screen .ce-form-grid label > small,
+.control-escolar-screen .ce-smart-field small {
+  display: block;
+  min-height: 0;
+  margin: 0;
+  font-size: 9.5px;
+  line-height: 1.15;
+}
+
+.control-escolar-screen .ce-form-grid label > small:empty,
+.control-escolar-screen .ce-smart-field small:empty {
+  display: none;
+}
+
+.control-escolar-screen .ce-derived-card {
+  grid-column: 1 / -1;
+  min-height: 44px;
+  padding: 8px 11px;
+  border-radius: 12px;
+}
+
+.control-escolar-screen .ce-derived-card strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.control-escolar-screen .ce-family-card {
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-family-fields--mother,
+.control-escolar-screen .ce-family-fields {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.control-escolar-screen .ce-family-span-2 {
+  grid-column: auto;
+}
+
+@container (max-width: 920px) {
+  .control-escolar-screen .ce-access-header-card {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .control-escolar-screen .ce-access-header-card > .ce-access-logo {
+    width: 52px;
+  }
+
+  .control-escolar-screen .ce-form-grid,
+  .control-escolar-screen .ce-form-grid.two,
+  .control-escolar-screen .ce-form-grid.three,
+  .control-escolar-screen .ce-tab-panel .ce-form-grid.three {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+}
+
+@container (max-width: 560px) {
+  .control-escolar-screen .ce-list-titlebar .list-heading-copy {
+    display: grid;
+    gap: 3px;
+  }
+
+  .control-escolar-screen .ce-list-titlebar p {
+    font-size: 10px;
+  }
+
+  .control-escolar-screen .ce-form-grid,
+  .control-escolar-screen .ce-form-grid.two,
+  .control-escolar-screen .ce-form-grid.three,
+  .control-escolar-screen .ce-tab-panel .ce-form-grid.three {
+    grid-template-columns: 1fr;
   }
 }
 

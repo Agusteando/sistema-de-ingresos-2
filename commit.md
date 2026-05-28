@@ -1,1 +1,1 @@
-Limpia paneles de Control Escolar y reduce textos redundantes manteniendo progreso y validaciones reales
+Corrige paneles de Control Escolar con ficha vacía limpia, logo Husky Pass y formularios legibles
