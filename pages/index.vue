@@ -96,6 +96,7 @@
             @change-bulk-payment-method="bulkPaymentMethod = $event"
             @back-to-bulk="bulkWorkspaceMode = 'bulk'"
             @submit-bulk-payments="submitBulkPayments"
+            @open-operator-info="openStudentOperatorInfo"
           />
         </div>
       </div>
@@ -128,6 +129,60 @@
       :student="operatorInfoStudent"
       @close="operatorInfoStudent = null"
     />
+
+    <div
+      v-if="showFinancialDiagnosticsModal"
+      class="financial-diagnostics-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="financial-diagnostics-title"
+      @click.self="closeFinancialDiagnosticsModal"
+    >
+      <section class="financial-diagnostics-modal">
+        <header>
+          <div>
+            <small>Diagnóstico de sincronización</small>
+            <h2 id="financial-diagnostics-title">Flujo financiero y enriquecimiento</h2>
+          </div>
+          <button type="button" class="detail-shell-close" @click="closeFinancialDiagnosticsModal">
+            ×
+          </button>
+        </header>
+        <div class="financial-diagnostics-body">
+          <div class="financial-diagnostics-summary">
+            <span><b>Estado</b>{{ studentsSyncState.status }}</span>
+            <span><b>Alumnos visibles</b>{{ students.length }}</span>
+            <span><b>Enriquecidos</b>{{ financialEnrichmentDiagnostics.enriched }}</span>
+            <span><b>Pendientes</b>{{ financialEnrichmentDiagnostics.pending }}</span>
+          </div>
+          <section>
+            <h3>Contrato aplicado</h3>
+            <p>El área financiera carga primero los datos financieros del plantel y después agrega matrícula central como enriquecimiento opcional. Si esa segunda etapa falla, el estado de cuenta sigue operando con la información disponible.</p>
+          </section>
+          <section>
+            <h3>Último estado</h3>
+            <dl>
+              <div>
+                <dt>Mensaje</dt>
+                <dd>{{ studentsSyncState.message || 'Sin mensaje registrado' }}</dd>
+              </div>
+              <div>
+                <dt>Caché local</dt>
+                <dd>{{ studentsSyncState.hasCache ? 'Disponible' : 'Sin caché' }}</dd>
+              </div>
+              <div>
+                <dt>Error</dt>
+                <dd>{{ studentsSyncState.error || 'Sin error' }}</dd>
+              </div>
+              <div>
+                <dt>Última actualización</dt>
+                <dd>{{ studentsSyncState.lastUpdatedAt || 'Sin registro' }}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+      </section>
+    </div>
 
     <StudentSectionModal
       :show="showSectionModal"
@@ -178,7 +233,8 @@ import {
   sectionIdFromFilter,
   studentGroupLabel,
   studentHasSection,
-  studentNivelLabel
+  studentNivelLabel,
+  resolveControlEscolarProgress
 } from '~/shared/utils/studentPresentation'
 import StudentsHero from '~/components/students/StudentsHero.vue'
 import StudentsKpiSummary from '~/components/students/StudentsKpiSummary.vue'
@@ -218,6 +274,11 @@ const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const students = ref([])
 const loading = ref(false)
 const studentsSourceUnavailable = computed(() => studentsSyncState.value.status === 'unavailable' && !students.value.length && !loading.value)
+const financialEnrichmentDiagnostics = computed(() => {
+  const total = students.value.length
+  const enriched = students.value.filter(student => Boolean(student?.centralMatricula) || student?.matriculaEnrichmentStatus === 'ready').length
+  return { total, enriched, pending: Math.max(total - enriched, 0) }
+})
 const selectedStudent = ref(null)
 const photoCache = ref({})
 const globalKpis = ref({ ingresosMes: 0 })
@@ -230,6 +291,7 @@ const showStudentModal = ref(false)
 const editingStudent = ref(null)
 const pendingBajaStudent = ref(null)
 const operatorInfoStudent = ref(null)
+const showFinancialDiagnosticsModal = ref(false)
 const bulkWorkspaceMode = ref('none')
 const showBulkIngresoCycleModal = ref(false)
 const bulkIngresoSaving = ref(false)
@@ -563,12 +625,25 @@ let matriculaOverlayRequestId = 0
 
 const compactText = (value) => String(value || '').trim()
 
-const mergeMatriculaOverlayIntoStudent = (student, overlayStudent) => {
-  if (!student || !overlayStudent) return student
-  const central = { ...(student.centralMatricula || {}), ...overlayStudent }
+const withControlEscolarProgress = (student) => {
+  if (!student) return student
+  const progress = resolveControlEscolarProgress(student)
   return {
     ...student,
+    controlEscolarProgress: progress.progress,
+    controlEscolarMissingFields: progress.missingFields,
+    controlEscolarProgressSummary: progress.summary,
+    controlEscolarProgressComplete: progress.complete
+  }
+}
+
+const mergeMatriculaOverlayIntoStudent = (student, overlayStudent) => {
+  if (!student || !overlayStudent) return withControlEscolarProgress(student)
+  const central = { ...(student.centralMatricula || {}), ...overlayStudent }
+  const merged = {
+    ...student,
     centralMatricula: central,
+    matriculaEnrichmentStatus: 'ready',
     curp: compactText(overlayStudent.curp) || student.curp,
     padre: compactText(overlayStudent.padre) || student.padre,
     madre: compactText(overlayStudent.madre) || student.madre,
@@ -587,9 +662,10 @@ const mergeMatriculaOverlayIntoStudent = (student, overlayStudent) => {
     nombreMadreCompleto: compactText(overlayStudent.nombreMadreCompleto) || student.nombreMadreCompleto,
     ocupacionMadre: compactText(overlayStudent.ocupacionMadre) || student.ocupacionMadre,
   }
+  return withControlEscolarProgress(merged)
 }
 
-const loadVisibleMatriculaOverlays = async () => {
+const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
   const matriculas = students.value
     .map((student) => normalizeStudentMatricula(student.matricula))
     .filter(Boolean)
@@ -628,13 +704,15 @@ const loadVisibleMatriculaOverlays = async () => {
       const operatorKey = normalizeStudentMatricula(operatorInfoStudent.value.matricula)
       operatorInfoStudent.value = students.value.find(student => normalizeStudentMatricula(student.matricula) === operatorKey) || operatorInfoStudent.value
     }
+
+    if (cacheOptions) writeCachedStudents(cacheOptions, students.value)
   } catch (error) {
     console.warn('[Students] central matricula overlay unavailable', error?.message || error)
   }
 }
 
-const applyStudentsList = (nextStudents, { selectRouteStudent = true } = {}) => {
-  students.value = Array.isArray(nextStudents) ? nextStudents : []
+const applyStudentsList = (nextStudents, { selectRouteStudent = true, cacheOptions = null } = {}) => {
+  students.value = (Array.isArray(nextStudents) ? nextStudents : []).map(withControlEscolarProgress)
 
   readCachedStudentPhotos()
 
@@ -646,7 +724,7 @@ const applyStudentsList = (nextStudents, { selectRouteStudent = true } = {}) => 
     if (match) selectStudent(match)
   }
 
-  loadVisibleMatriculaOverlays()
+  loadVisibleMatriculaOverlays(cacheOptions || { ciclo: normalizeCicloKey(state.value.ciclo), q: filters.value.q || '', enrollmentConcepts: externalConcepts.value })
 }
 
 const performSearch = async (options = {}) => {
@@ -667,7 +745,7 @@ const performSearch = async (options = {}) => {
   const hadStudents = students.value.length > 0
 
   if (hasCachedStudents) {
-    applyStudentsList(cached.students)
+    applyStudentsList(cached.students, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value } })
     loading.value = false
     setStudentsSyncState({
       status: 'cached',
@@ -698,7 +776,7 @@ const performSearch = async (options = {}) => {
     if (requestId !== studentsRequestId) return
 
     const freshStudents = Array.isArray(res) ? res : []
-    applyStudentsList(freshStudents)
+    applyStudentsList(freshStudents, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value } })
     const cacheWritten = writeCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }, freshStudents)
     const updatedAt = new Date().toISOString()
 
@@ -1110,6 +1188,14 @@ const openStudentOperatorInfo = (student) => {
   operatorInfoStudent.value = student
 }
 
+const openFinancialDiagnosticsModal = () => {
+  showFinancialDiagnosticsModal.value = true
+}
+
+const closeFinancialDiagnosticsModal = () => {
+  showFinancialDiagnosticsModal.value = false
+}
+
 const showStudentMenu = (event, student) => {
   const selectedActionLabel = selectedCount.value > 1 && isStudentSelected(student)
     ? `Asignar sección a ${selectedCount.value}`
@@ -1155,6 +1241,7 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
 }
 
 onMounted(() => {
+  if (process.client) window.addEventListener('financial:open-sync-diagnostics', openFinancialDiagnosticsModal)
   if (route.query.q) filters.value.q = String(route.query.q)
   hydrateCachedEnrollmentConcepts()
   loadCustomSections()
@@ -1212,6 +1299,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  if (process.client) window.removeEventListener('financial:open-sync-diagnostics', openFinancialDiagnosticsModal)
   clearKpiRefreshTimer()
 })
 

@@ -155,3 +155,126 @@ body.students-route-active .income-content {
   width: 100%;
   min-height: 0;
 }
+
+.financial-diagnostics-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(18, 28, 24, .48);
+  backdrop-filter: blur(8px) saturate(112%);
+}
+
+.financial-diagnostics-modal {
+  width: min(760px, calc(100vw - 2.5rem));
+  max-height: min(720px, calc(100vh - 2.5rem));
+  overflow: auto;
+  border: 1px solid rgba(216, 227, 220, .96);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255,255,255,.99), rgba(250,252,250,.98));
+  box-shadow: 0 32px 84px rgba(21, 32, 28, .28);
+  color: #17263a;
+}
+
+.financial-diagnostics-modal header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.45rem 1.55rem 1rem;
+  border-bottom: 1px solid rgba(220, 230, 222, .86);
+}
+
+.financial-diagnostics-modal header small {
+  color: #2f7f32;
+  font-size: .72rem;
+  font-weight: 860;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.financial-diagnostics-modal header h2 {
+  margin: .2rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: -.04em;
+}
+
+.financial-diagnostics-body {
+  display: grid;
+  gap: 1rem;
+  padding: 1.2rem 1.55rem 1.45rem;
+}
+
+.financial-diagnostics-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .65rem;
+}
+
+.financial-diagnostics-summary span,
+.financial-diagnostics-body dl div {
+  display: grid;
+  gap: .3rem;
+  min-width: 0;
+  padding: .85rem;
+  border: 1px solid rgba(220, 230, 222, .82);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.financial-diagnostics-summary b,
+.financial-diagnostics-body dt {
+  color: #738097;
+  font-size: .68rem;
+  font-weight: 840;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.financial-diagnostics-summary span,
+.financial-diagnostics-body dd {
+  color: #17263a;
+  font-size: .84rem;
+  font-weight: 760;
+}
+
+.financial-diagnostics-body section {
+  display: grid;
+  gap: .65rem;
+}
+
+.financial-diagnostics-body h3 {
+  margin: 0;
+  font-size: .9rem;
+  font-weight: 880;
+}
+
+.financial-diagnostics-body p {
+  margin: 0;
+  color: #55637a;
+  font-size: .9rem;
+  line-height: 1.55;
+}
+
+.financial-diagnostics-body dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+  margin: 0;
+}
+
+.financial-diagnostics-body dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .financial-diagnostics-summary,
+  .financial-diagnostics-body dl {
+    grid-template-columns: 1fr;
+  }
+}

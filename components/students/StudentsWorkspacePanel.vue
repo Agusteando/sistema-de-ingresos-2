@@ -13,6 +13,7 @@
         @baja="$emit('baja', $event)"
         @manage-sections="$emit('manage-sections', $event)"
         @ingreso-cycle-updated="$emit('ingreso-cycle-updated', $event)"
+        @open-operator-info="$emit('open-operator-info', $event)"
       />
     </section>
 
@@ -86,6 +87,7 @@ defineEmits([
   'baja',
   'manage-sections',
   'ingreso-cycle-updated',
+  'open-operator-info',
   'close-bulk',
   'open-bulk-payment',
   'open-section-selection',

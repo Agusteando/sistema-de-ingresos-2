@@ -1,5 +1,16 @@
 <template>
-  <div v-if="isVisible" class="students-cache-sync" :class="statusClass" :title="titleText" aria-live="polite">
+  <div
+    v-if="isVisible"
+    class="students-cache-sync"
+    :class="statusClass"
+    :title="titleText"
+    aria-live="polite"
+    role="button"
+    tabindex="0"
+    @click="openDiagnostics"
+    @keydown.enter.prevent="openDiagnostics"
+    @keydown.space.prevent="openDiagnostics"
+  >
     <span class="students-cache-sync__signal" aria-hidden="true">
       <span class="students-cache-sync__packet packet-a"></span>
       <span class="students-cache-sync__packet packet-b"></span>
@@ -58,6 +69,11 @@ const detailText = computed(() => {
 })
 
 const titleText = computed(() => studentsSyncState.value.message || `${label.value}${detailText.value ? ` · ${detailText.value}` : ''}`)
+
+const openDiagnostics = () => {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('financial:open-sync-diagnostics'))
+}
 
 const statusClass = computed(() => ({
   'is-cached': studentsSyncState.value.status === 'cached',

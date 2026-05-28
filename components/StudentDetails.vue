@@ -269,10 +269,25 @@
                   :title="accountStateSyncState.message"
                   :aria-hidden="!accountSyncVisible"
                   aria-live="polite"
+                  role="button"
+                  :tabindex="accountSyncVisible ? 0 : -1"
+                  @click.stop="openFinancialSyncDiagnostics"
+                  @keydown.enter.prevent="openFinancialSyncDiagnostics"
+                  @keydown.space.prevent="openFinancialSyncDiagnostics"
                 >
                   <i aria-hidden="true"></i>
                   {{ accountSyncLabel }}
                 </span>
+                <button
+                  class="account-expediente-button"
+                  type="button"
+                  :class="{ complete: accountExpedienteProgress.complete }"
+                  :title="accountExpedienteTitle"
+                  @click.stop="emit('open-operator-info', student)"
+                >
+                  <LucideShieldCheck :size="13" />
+                  Expediente {{ accountExpedienteProgress.progress }}%
+                </button>
               </div>
             </div>
           </div>
@@ -686,6 +701,7 @@ import {
   studentGroupLabel,
   studentNivelLabel,
   studentPresentationStyle,
+  resolveControlEscolarProgress,
 } from "~/shared/utils/studentPresentation";
 import PaymentModal from "./PaymentModal.vue";
 import DocumentModal from "./DocumentModal.vue";
@@ -709,6 +725,7 @@ const emit = defineEmits([
   "photo-loaded",
   "manage-sections",
   "ingreso-cycle-updated",
+  "open-operator-info",
 ]);
 const { show } = useToast();
 const { openMenu, closeMenu } = useContextMenu();
@@ -778,6 +795,15 @@ const accountMetaItems = computed(() => [
   { label: 'Padre', value: accountFatherLabel.value },
   { label: 'Madre', value: accountMotherLabel.value },
 ].filter((item) => item.value));
+
+const accountExpedienteProgress = computed(() => resolveControlEscolarProgress(accountOverlaySource.value));
+const accountExpedienteTitle = computed(() => {
+  const summary = accountExpedienteProgress.value.summary || 'Expediente'
+  const missing = (accountExpedienteProgress.value.missingFields || [])
+    .map((field) => ({ curp: 'CURP', padre: 'Padre', madre: 'Madre' })[field] || field)
+    .join(', ')
+  return missing ? `${summary}: ${missing}` : summary
+});
 const normalizePhotoMatricula = (value) =>
   String(value || "")
     .trim()

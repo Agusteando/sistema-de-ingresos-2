@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
     matriculas
       .map((value: any) => String(value || '').trim())
       .filter(Boolean)
-  )).slice(0, 1000)
+  ))
 
   try {
     const overlays = await fetchCentralMatriculaOverlays(normalized)

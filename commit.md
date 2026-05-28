@@ -1,1 +1,1 @@
-Corrige escala del login institucional para ajustarse al viewport inicial
+feat(finanzas): enriquecer expedientes desde matrícula central sin bloquear estado de cuenta

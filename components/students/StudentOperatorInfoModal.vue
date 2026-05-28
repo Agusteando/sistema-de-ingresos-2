@@ -24,7 +24,7 @@
           </div>
         </header>
 
-        <div v-if="error" class="operator-alert error">
+        <div v-if="error" :class="['operator-alert', readyToRender ? 'warning' : 'error']">
           <LucideAlertTriangle :size="16" />
           <span>{{ error }}</span>
         </div>
@@ -221,20 +221,29 @@ const titleCase = (value) => {
   return text.toLocaleLowerCase('es-MX').replace(/(^|\s|\/|-)(\p{L})/gu, (_, prefix, letter) => `${prefix}${letter.toLocaleUpperCase('es-MX')}`)
 }
 
-const OPERATOR_DETAIL_CACHE_PREFIX = 'student-operator-detail:v3:'
-const OPERATOR_DETAIL_CACHE_MAX_AGE_MS = 5 * 60 * 1000
+const OPERATOR_DETAIL_CACHE_PREFIX = 'student-operator-detail:v4:'
+const OPERATOR_DETAIL_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+const localStudentSnapshot = () => {
+  const base = props.student || {}
+  return {
+    ...base,
+    ...(base.centralMatricula || {}),
+    matricula: firstValue(base.matricula, base.centralMatricula?.matricula)
+  }
+}
 
 const operatorCacheKey = computed(() => `${OPERATOR_DETAIL_CACHE_PREFIX}${safeMatricula.value}`)
 
 const readCachedDetail = () => {
   if (typeof window === 'undefined') return null
   try {
-    const raw = window.sessionStorage?.getItem(operatorCacheKey.value)
+    const raw = window.localStorage?.getItem(operatorCacheKey.value) || window.sessionStorage?.getItem(operatorCacheKey.value)
     if (!raw) return null
     const payload = JSON.parse(raw)
     if (!payload || typeof payload.updatedAt !== 'number' || !payload.detail) return null
     if (Date.now() - payload.updatedAt > OPERATOR_DETAIL_CACHE_MAX_AGE_MS) {
-      window.sessionStorage.removeItem(operatorCacheKey.value)
+      window.localStorage?.removeItem(operatorCacheKey.value); window.sessionStorage?.removeItem(operatorCacheKey.value)
       return null
     }
     return payload.detail
@@ -246,19 +255,22 @@ const readCachedDetail = () => {
 const writeCachedDetail = (value) => {
   if (typeof window === 'undefined' || !value) return
   try {
-    window.sessionStorage?.setItem(operatorCacheKey.value, JSON.stringify({ updatedAt: Date.now(), detail: value }))
+    window.localStorage?.setItem(operatorCacheKey.value, JSON.stringify({ updatedAt: Date.now(), detail: value }))
   } catch (_) {}
 }
 
 const loadDetail = async (options = {}) => {
-  const matricula = String(props.student?.matricula || '').trim()
+  const matricula = String(props.student?.matricula || props.student?.centralMatricula?.matricula || '').trim()
   if (!matricula) return
+
+  const fallbackDetail = localStudentSnapshot()
+  if (!detail.value) detail.value = fallbackDetail
 
   const bypassCache = Boolean(options?.bypassCache)
   if (!bypassCache) {
     const cached = readCachedDetail()
     if (cached) {
-      detail.value = cached
+      detail.value = { ...fallbackDetail, ...cached }
       error.value = ''
       loading.value = false
       return
@@ -268,23 +280,23 @@ const loadDetail = async (options = {}) => {
   const currentId = ++requestId
   loading.value = true
   error.value = ''
-  if (!detail.value) detail.value = null
 
   try {
     const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/operator-info`)
     if (currentId !== requestId) return
-    detail.value = response || null
+    detail.value = { ...fallbackDetail, ...(response || {}) }
     writeCachedDetail(detail.value)
   } catch (err) {
     if (currentId !== requestId) return
-    detail.value = null
-    error.value = err?.data?.message || err?.message || 'No se pudo cargar el expediente del alumno.'
+    detail.value = detail.value || fallbackDetail
+    error.value = 'No se pudo actualizar el expediente; se muestran los datos disponibles.'
+    writeCachedDetail(detail.value)
   } finally {
     if (currentId === requestId) loading.value = false
   }
 }
 
-const source = computed(() => ({ ...(props.student || {}), ...(detail.value || {}) }))
+const source = computed(() => ({ ...(props.student || {}), ...(props.student?.centralMatricula || {}), ...(detail.value || {}) }))
 
 const safeMatricula = computed(() => fallbackText(firstValue(source.value.matricula, props.student?.matricula), 'Sin matrícula'))
 const fullName = computed(() => fallbackText(firstValue(source.value.fullName, source.value.nombreCompleto, source.value.nombre, props.student?.nombre), 'Alumno'))
@@ -297,7 +309,7 @@ const displayGrupo = computed(() => {
 const displayServicio = computed(() => titleCase(firstValue(source.value.servicio, source.value.program, source.value.nivel, props.student?.servicio)))
 const displayServiceBadge = computed(() => titleCase(firstValue(source.value.tipoIngreso, source.value.tipo_ingreso, source.value.ingreso, props.student?.tipoIngreso, 'Externo')))
 const sourceLabel = computed(() => expedienteComplete.value ? 'Expediente completo' : `Expediente ${expedienteProgress.value}% completo`)
-const readyToRender = computed(() => Boolean(detail.value) && !error.value)
+const readyToRender = computed(() => Boolean(firstValue(source.value.matricula, props.student?.matricula)))
 
 const initials = computed(() => {
   const paternal = firstValue(source.value.apellidoPaterno, source.value.apellido_paterno)
@@ -364,15 +376,9 @@ const motherEmail = computed(() => motherEmailInvalid.value ? `${displayText(mot
 const fatherComplete = computed(() => Boolean(fatherNameRaw.value && validPhone(fatherPhoneRaw.value) && validFamilyEmail(fatherEmailRaw.value)))
 const motherComplete = computed(() => Boolean(motherNameRaw.value && validPhone(motherPhoneRaw.value) && validFamilyEmail(motherEmailRaw.value)))
 const expedienteChecks = computed(() => [
-  Boolean(safeMatricula.value && safeMatricula.value !== 'Sin matrícula'),
-  hasValue(fullName.value) && fullName.value !== 'Alumno',
   hasValue(firstValue(source.value.curp, source.value.CURP)),
   fatherComplete.value,
-  motherComplete.value,
-  hasValue(firstValue(source.value.plantel, source.value.basePlantel)),
-  hasValue(firstValue(source.value.nivel, props.student?.nivel)),
-  hasValue(firstValue(source.value.grado, props.student?.grado)),
-  hasValue(firstValue(source.value.group, source.value.grupo, props.student?.grupo))
+  motherComplete.value
 ])
 const expedienteProgress = computed(() => {
   const checks = expedienteChecks.value
@@ -538,6 +544,12 @@ watch(() => props.student?.matricula, () => {
   border: 1px solid rgba(214, 92, 92, .22);
   background: rgba(255, 245, 245, .92);
   color: #9a3434;
+}
+
+.operator-alert.warning {
+  border: 1px solid rgba(213, 165, 72, .24);
+  background: rgba(255, 250, 239, .94);
+  color: #8a5a16;
 }
 
 .operator-hero {

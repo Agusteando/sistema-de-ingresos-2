@@ -230,3 +230,113 @@ export const parseEnrollmentConcepts = (source: unknown) => {
   traverse(source)
   return [...new Set(ids)]
 }
+
+export const expedienteDisplayText = (value: unknown): string => {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value).trim()
+  if (Array.isArray(value)) return value.map(expedienteDisplayText).filter(Boolean).join(' / ')
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    for (const key of ['label', 'nombre', 'name', 'value', 'servicio', 'descripcion', 'description', 'text', 'title']) {
+      const text = expedienteDisplayText(record[key])
+      if (text) return text
+    }
+  }
+  return ''
+}
+
+export const expedienteFirstText = (...values: unknown[]): string => {
+  for (const value of values) {
+    const text = expedienteDisplayText(value)
+    if (text) return text
+  }
+  return ''
+}
+
+export const validExpedientePhone = (value: unknown): boolean => expedienteDisplayText(value).replace(/\D/g, '').length >= 10
+
+export const validExpedienteFamilyEmail = (value: unknown): boolean => {
+  const email = expedienteDisplayText(value).toLowerCase()
+  if (!email || email.includes('@casita')) return false
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+export const expedienteParentName = (student: any = {}, type: 'padre' | 'madre' = 'padre'): string => {
+  if (type === 'madre') {
+    return expedienteFirstText(
+      [student.nombreMadre, student.apellidoPaternoMadre, student.apellidoMaternoMadre]
+        .map(expedienteDisplayText)
+        .filter(Boolean)
+        .join(' '),
+      student.motherName,
+      student.nombreMadreCompleto,
+      student.madre
+    )
+  }
+
+  return expedienteFirstText(
+    [student.nombrePadre, student.apellidoPaternoPadre, student.apellidoMaternoPadre]
+      .map(expedienteDisplayText)
+      .filter(Boolean)
+      .join(' '),
+    student.fatherName,
+    student.nombrePadreCompleto,
+    student.padre,
+    student.tutor,
+    student.padreTutor,
+    student.padre_tutor
+  )
+}
+
+export const expedienteParentPhone = (student: any = {}, type: 'padre' | 'madre' = 'padre'): string => {
+  if (type === 'madre') return expedienteFirstText(student.telefonoMadre, student.celularMadre)
+  return expedienteFirstText(student.telefonoPadre, student.celularPadre, student.phone, student.telefono)
+}
+
+export const expedienteParentEmail = (student: any = {}, type: 'padre' | 'madre' = 'padre'): string => {
+  if (type === 'madre') return expedienteFirstText(student.emailMadre, student.correoMadre)
+  return expedienteFirstText(student.emailPadre, student.correoPadre, student.email, student.correo)
+}
+
+export const isExpedienteParentComplete = (student: any = {}, type: 'padre' | 'madre' = 'padre'): boolean => Boolean(
+  expedienteParentName(student, type) &&
+  validExpedientePhone(expedienteParentPhone(student, type)) &&
+  validExpedienteFamilyEmail(expedienteParentEmail(student, type))
+)
+
+export const resolveControlEscolarMissingFields = (student: any = {}): string[] => {
+  const missing: string[] = []
+  if (!expedienteDisplayText(student?.curp || student?.CURP)) missing.push('curp')
+  if (!isExpedienteParentComplete(student, 'padre')) missing.push('padre')
+  if (!isExpedienteParentComplete(student, 'madre')) missing.push('madre')
+  return missing
+}
+
+export const isStudentInscritoForExpedienteProgress = (student: any = {}): boolean => {
+  const state = expedienteDisplayText(student?.enrollmentState || student?.estadoInscripcion || student?.inscripcionEstado).toLowerCase()
+  if (!state) return true
+  return state === 'inscrito'
+}
+
+export const resolveControlEscolarProgress = (student: any = {}, options: { honorEnrollmentState?: boolean } = {}) => {
+  const honorEnrollmentState = options.honorEnrollmentState !== false
+  const inProgressScope = !honorEnrollmentState || isStudentInscritoForExpedienteProgress(student)
+  const fields = ['curp', 'padre', 'madre']
+  const missingFields = inProgressScope ? resolveControlEscolarMissingFields(student) : fields.slice()
+  const completeFields = fields.filter((field) => !missingFields.includes(field)).length
+  const progress = inProgressScope ? Math.max(0, Math.round((completeFields / fields.length) * 100)) : 0
+  return {
+    progress,
+    complete: progress >= 100,
+    missingFields,
+    inProgressScope,
+    summary: !inProgressScope
+      ? 'Fuera de inscritos'
+      : progress >= 100
+        ? 'Completo'
+        : missingFields.length === 1
+          ? '1 pendiente'
+          : `${missingFields.length} pendientes`
+  }
+}
+
