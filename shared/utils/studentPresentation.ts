@@ -6,6 +6,51 @@ export const formatMoney = (value: unknown) => Number(value || 0).toFixed(2)
 export const normalizeStudentMatricula = (value: unknown) => String(value || '').trim().toUpperCase()
 export const photoStorageKey = (matricula: unknown) => `foto_${normalizeStudentMatricula(matricula)}`
 
+export const normalizeCurpValue = (value: unknown): string => String(value || '')
+  .trim()
+  .toUpperCase()
+  .replace(/[^A-Z0-9]/g, '')
+  .slice(0, 18)
+
+export const inferMexicanCurpIdentity = (value: unknown) => {
+  const curp = normalizeCurpValue(value)
+  const match = curp.match(/^[A-Z]{4}(\d{2})(\d{2})(\d{2})([HM])[A-Z]{5}[A-Z0-9]\d$/)
+  if (!match) {
+    return {
+      curp,
+      valid: false,
+      fechaNacimiento: '',
+      sexo: '',
+      sexoCorto: '',
+    }
+  }
+
+  const [, yy, mm, dd, sexoCorto] = match
+  const month = Number(mm)
+  const day = Number(dd)
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return { curp, valid: false, fechaNacimiento: '', sexo: '', sexoCorto: '' }
+  }
+
+  const currentYear = new Date().getFullYear()
+  const currentCentury = Math.floor(currentYear / 100) * 100
+  const currentTwoDigitYear = currentYear % 100
+  const year = Number(yy) <= currentTwoDigitYear ? currentCentury + Number(yy) : currentCentury - 100 + Number(yy)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  const validDate = date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  if (!validDate) {
+    return { curp, valid: false, fechaNacimiento: '', sexo: '', sexoCorto: '' }
+  }
+
+  return {
+    curp,
+    valid: true,
+    fechaNacimiento: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    sexo: sexoCorto === 'H' ? 'Masculino' : 'Femenino',
+    sexoCorto,
+  }
+}
+
 export const sectionFilterKey = (id: unknown) => `section:${Number(id)}`
 export const isSectionFilter = (filter: unknown) => String(filter || '').startsWith('section:')
 export const sectionIdFromFilter = (filter: unknown) => Number(String(filter || '').split(':')[1] || 0)
@@ -378,6 +423,7 @@ export const CONTROL_ESCOLAR_COMPLETE_REQUIRED_FIELDS = [
 const controlEscolarFieldIsPresent = (student: any = {}, key: string): boolean => {
   const padre = expedienteParentNameParts(student, 'padre')
   const madre = expedienteParentNameParts(student, 'madre')
+  const inferredCurp = inferMexicanCurpIdentity(expedienteValue(student, 'curp', 'CURP'))
   const checks: Record<string, () => boolean> = {
     curp: () => Boolean(expedienteDisplayText(expedienteValue(student, 'curp', 'CURP'))),
     padreNombre: () => Boolean(padre.nombre),
@@ -393,9 +439,9 @@ const controlEscolarFieldIsPresent = (student: any = {}, key: string): boolean =
     apellidoPaternoAlumno: () => Boolean(expedienteValue(student, 'apellidoPaterno')),
     apellidoMaternoAlumno: () => Boolean(expedienteValue(student, 'apellidoMaterno')),
     nombresAlumno: () => Boolean(expedienteValue(student, 'nombres')),
-    fechaNacimiento: () => Boolean(expedienteValue(student, 'fechaNacimiento')),
+    fechaNacimiento: () => Boolean(expedienteValue(student, 'fechaNacimiento')) || Boolean(inferredCurp.fechaNacimiento),
     lugarNacimiento: () => Boolean(expedienteValue(student, 'lugarNacimiento')),
-    sexo: () => Boolean(expedienteValue(student, 'sexo', 'genero')),
+    sexo: () => Boolean(expedienteValue(student, 'sexo', 'genero')) || Boolean(inferredCurp.sexo),
     nivel: () => Boolean(expedienteValue(student, 'nivel')),
     grado: () => Boolean(expedienteValue(student, 'grado')),
     grupo: () => Boolean(expedienteValue(student, 'grupo', 'group')),

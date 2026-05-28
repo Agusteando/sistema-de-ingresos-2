@@ -1,1 +1,1 @@
-Amplía edición de matrícula y separa avance de expediente básico y completo en Control Escolar
+Refina expedientes de Control Escolar con CURP derivada y validación visual limpia

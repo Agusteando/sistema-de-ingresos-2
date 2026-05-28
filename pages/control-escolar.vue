@@ -433,14 +433,15 @@
                       <strong>{{ qualitySummary(student) }}</strong>
                       <span class="ce-quality-fields">
                         <small
-                          v-for="field in requiredDataFields"
+                          v-for="field in visibleBasicMissingFieldsFor(student)"
                           :key="`${student.matricula}-${field.key}`"
-                          :class="{
-                            missing: studentMissingField(student, field),
-                          }"
+                          class="missing"
                         >
                           <component :is="field.icon" :size="12" />
                           {{ field.label }}
+                        </small>
+                        <small v-if="!visibleBasicMissingFieldsFor(student).length" class="ok">
+                          <LucideShieldCheck :size="12" /> Básico listo
                         </small>
                       </span>
                     </span>
@@ -592,59 +593,41 @@
                   <div class="ce-inline-note ce-inline-note--quality">
                     <span><LucideShieldCheck :size="18" /></span>
                     <p>
-                      {{
-                        selectedStudent.missingFields.length
-                          ? "Completa los datos faltantes para finalizar el expediente del alumno."
-                          : "Expediente al día y listo para matrícula."
-                      }}
+                      {{ selectedMissingCount ? `${selectedMissingCount} datos básicos pendientes` : "Expediente básico completo" }}
                     </p>
                   </div>
-                  <div class="ce-missing-grid">
+                  <div class="ce-missing-grid" v-if="visibleBasicMissingFields.length">
                     <span
-                      v-for="field in requiredDataFields"
+                      v-for="field in visibleBasicMissingFields"
                       :key="field.key"
-                      :class="[
-                        'ce-missing-chip',
-                        {
-                          ok:
-                            !selectedStudent.missingFields.includes(
-                              field.key,
-                            ) &&
-                            !selectedStudent.missingFields.includes(
-                              field.label.toLowerCase(),
-                            ),
-                        },
-                      ]"
+                      class="ce-missing-chip"
                     >
                       <component :is="field.icon" :size="14" />
                       {{ field.label }}
-                      <b>{{
-                        selectedStudent.missingFields.includes(field.key) ||
-                        selectedStudent.missingFields.includes(
-                          field.label.toLowerCase(),
-                        )
-                          ? "Falta"
-                          : "Listo"
-                      }}</b>
                     </span>
                   </div>
+                  <span v-else class="ce-missing-chip ok"><LucideShieldCheck :size="14" /> Básico listo</span>
                 </section>
 
-                <section class="ce-tier-panel">
+                <section :class="['ce-tier-panel', { 'show-complete': showCompleteExpediente }]">
                   <article class="ce-tier-card is-basic">
-                    <small>Visible por defecto</small>
-                    <strong>Expediente básico</strong>
+                    <div class="ce-tier-card-head">
+                      <strong>Expediente básico</strong>
+                      <b>{{ selectedProfileCompletion }}%</b>
+                    </div>
                     <span class="ce-tier-bar"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
-                    <p>{{ selectedMissingCount ? `${selectedMissingCount} pendientes básicos` : 'Completo para operación diaria' }}</p>
+                    <p>{{ selectedMissingCount ? `${selectedMissingCount} pendientes` : 'Completo para operación diaria' }}</p>
                   </article>
-                  <article class="ce-tier-card is-complete">
-                    <small>Avanzado</small>
-                    <strong>Expediente completo</strong>
+                  <article v-if="showCompleteExpediente" class="ce-tier-card is-complete">
+                    <div class="ce-tier-card-head">
+                      <strong>Expediente completo</strong>
+                      <b>{{ selectedCompleteProfileCompletion }}%</b>
+                    </div>
                     <span class="ce-tier-bar"><i :style="{ width: `${selectedCompleteProfileCompletion}%` }"></i></span>
-                    <p>{{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes completos` : 'Expediente completo cerrado' }}</p>
+                    <p>{{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes` : 'Cerrado' }}</p>
                   </article>
                   <button type="button" class="ce-complete-toggle" @click="showCompleteExpediente = !showCompleteExpediente">
-                    {{ showCompleteExpediente ? 'Ocultar expediente completo' : 'Ver expediente completo' }}
+                    {{ showCompleteExpediente ? 'Ocultar completo' : 'Expediente completo' }}
                   </button>
                 </section>
 
@@ -693,13 +676,20 @@
                         ><span>Nombre(s)</span
                         ><input v-model="editForm.nombres" autocomplete="off"
                       /></label>
-                      <label
-                        ><span>CURP</span
-                        ><input
+                      <label :class="fieldShellClass('curp')">
+                        <span>CURP</span>
+                        <input
                           v-model="editForm.curp"
                           maxlength="18"
                           autocomplete="off"
-                      /></label>
+                          @input="editForm.curp = normalizeCurpInput(editForm.curp)"
+                        />
+                        <small>{{ fieldValidationMessage('curp') }}</small>
+                      </label>
+                      <article v-if="editForm.curp" class="ce-derived-card">
+                        <span>{{ curpDerivedIdentity.valid ? 'Derivado de CURP' : 'CURP pendiente' }}</span>
+                        <strong>{{ curpDerivedIdentity.valid ? `${curpDerivedIdentity.fechaNacimiento} · ${curpDerivedIdentity.sexo}` : 'Completa una CURP válida para inferir nacimiento y sexo' }}</strong>
+                      </article>
                       <template v-if="showCompleteExpediente">
                         <label
                           ><span>Nombre verificado</span
@@ -710,21 +700,9 @@
                           ><input v-model="editForm.nombreCompletoAlumno" autocomplete="off"
                         /></label>
                         <label
-                          ><span>Fecha nacimiento</span
-                          ><input v-model="editForm.fechaNacimiento" type="date" autocomplete="off"
-                        /></label>
-                        <label
                           ><span>Lugar nacimiento</span
                           ><input v-model="editForm.lugarNacimiento" autocomplete="off"
                         /></label>
-                        <label>
-                          <span>Sexo</span>
-                          <select v-model="editForm.sexo">
-                            <option value="">Sin definir</option>
-                            <option value="Femenino">Femenino</option>
-                            <option value="Masculino">Masculino</option>
-                          </select>
-                        </label>
                         <label
                           ><span>Foto</span
                           ><input v-model="editForm.foto" autocomplete="off"
@@ -841,37 +819,32 @@
                       <section class="ce-family-card">
                         <h3>Datos del padre</h3>
                         <div class="ce-form-grid two ce-family-fields">
-                          <label
-                            ><span>Nombre padre</span
-                            ><input
-                              v-model="editForm.nombrePadre"
-                              autocomplete="off"
-                          /></label>
-                          <label
-                            ><span>Apellido paterno padre</span
-                            ><input
-                              v-model="editForm.apellidoPaternoPadre"
-                              autocomplete="off"
-                          /></label>
+                          <label :class="fieldShellClass('nombrePadre')">
+                            <span>Nombre padre</span>
+                            <input v-model="editForm.nombrePadre" autocomplete="off" />
+                            <small>{{ fieldValidationMessage('nombrePadre') }}</small>
+                          </label>
+                          <label :class="fieldShellClass('apellidoPaternoPadre')">
+                            <span>Apellido paterno padre</span>
+                            <input v-model="editForm.apellidoPaternoPadre" autocomplete="off" />
+                            <small>{{ fieldValidationMessage('apellidoPaternoPadre') }}</small>
+                          </label>
                           <label
                             ><span>Apellido materno padre</span
                             ><input
                               v-model="editForm.apellidoMaternoPadre"
                               autocomplete="off"
                           /></label>
-                          <label
-                            ><span>Teléfono padre</span
-                            ><input
-                              v-model="editForm.telefonoPadre"
-                              autocomplete="off"
-                          /></label>
-                          <label
-                            ><span>Email padre</span
-                            ><input
-                              v-model="editForm.emailPadre"
-                              type="email"
-                              autocomplete="off"
-                          /></label>
+                          <label :class="fieldShellClass('telefonoPadre')">
+                            <span>Teléfono padre</span>
+                            <input v-model="editForm.telefonoPadre" autocomplete="off" inputmode="tel" />
+                            <small>{{ fieldValidationMessage('telefonoPadre') }}</small>
+                          </label>
+                          <label :class="fieldShellClass('emailPadre')">
+                            <span>Email padre</span>
+                            <input v-model="editForm.emailPadre" type="email" autocomplete="off" />
+                            <small>{{ fieldValidationMessage('emailPadre') }}</small>
+                          </label>
                           <template v-if="showCompleteExpediente">
                             <label
                               ><span>Lugar trabajo padre</span
@@ -904,37 +877,32 @@
                       <section class="ce-family-card">
                         <h3>Datos de la madre</h3>
                         <div class="ce-form-grid ce-family-fields ce-family-fields--mother">
-                          <label
-                            ><span>Nombre madre</span
-                            ><input
-                              v-model="editForm.nombreMadre"
-                              autocomplete="off"
-                          /></label>
-                          <label
-                            ><span>Apellido paterno madre</span
-                            ><input
-                              v-model="editForm.apellidoPaternoMadre"
-                              autocomplete="off"
-                          /></label>
+                          <label :class="fieldShellClass('nombreMadre')">
+                            <span>Nombre madre</span>
+                            <input v-model="editForm.nombreMadre" autocomplete="off" />
+                            <small>{{ fieldValidationMessage('nombreMadre') }}</small>
+                          </label>
+                          <label :class="fieldShellClass('apellidoPaternoMadre')">
+                            <span>Apellido paterno madre</span>
+                            <input v-model="editForm.apellidoPaternoMadre" autocomplete="off" />
+                            <small>{{ fieldValidationMessage('apellidoPaternoMadre') }}</small>
+                          </label>
                           <label
                             ><span>Apellido materno madre</span
                             ><input
                               v-model="editForm.apellidoMaternoMadre"
                               autocomplete="off"
                           /></label>
-                          <label
-                            ><span>Teléfono madre</span
-                            ><input
-                              v-model="editForm.telefonoMadre"
-                              autocomplete="off"
-                          /></label>
-                          <label class="ce-family-span-2"
-                            ><span>Email madre</span
-                            ><input
-                              v-model="editForm.emailMadre"
-                              type="email"
-                              autocomplete="off"
-                          /></label>
+                          <label :class="fieldShellClass('telefonoMadre')">
+                            <span>Teléfono madre</span>
+                            <input v-model="editForm.telefonoMadre" autocomplete="off" inputmode="tel" />
+                            <small>{{ fieldValidationMessage('telefonoMadre') }}</small>
+                          </label>
+                          <label :class="['ce-family-span-2', ...fieldShellClass('emailMadre')]">
+                            <span>Email madre</span>
+                            <input v-model="editForm.emailMadre" type="email" autocomplete="off" />
+                            <small>{{ fieldValidationMessage('emailMadre') }}</small>
+                          </label>
                           <template v-if="showCompleteExpediente">
                             <label
                               ><span>Lugar trabajo madre</span
@@ -1520,6 +1488,7 @@ import {
   photoStorageKey,
   studentPresentationStyle,
   resolveControlEscolarCompleteness,
+  inferMexicanCurpIdentity,
   CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS,
   CONTROL_ESCOLAR_COMPLETE_REQUIRED_FIELDS,
 } from "~/shared/utils/studentPresentation";
@@ -2416,6 +2385,74 @@ const selectedMissingCount = computed(() =>
 const selectedCompleteMissingCount = computed(() =>
   studentCompleteMissingCount(selectedStudent.value),
 );
+const visibleBasicMissingFieldsFor = (student) =>
+  requiredDataFields.filter((field) => studentMissingField(student, field));
+const visibleBasicMissingFields = computed(() =>
+  visibleBasicMissingFieldsFor(selectedStudent.value),
+);
+const normalizeCurpInput = (value) => String(value || "")
+  .toUpperCase()
+  .replace(/[^A-Z0-9]/g, "")
+  .slice(0, 18);
+const curpDerivedIdentity = computed(() => inferMexicanCurpIdentity(editForm.curp || selectedStudent.value?.curp || ""));
+const emailIsValid = (value) => {
+  const email = String(value || "").trim().toLowerCase();
+  return Boolean(email && !email.includes("@casita") && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+};
+const phoneIsValid = (value) => String(value || "").replace(/\D/g, "").length >= 10;
+const fieldValidationState = (field) => {
+  const value = String(editForm[field] ?? "").trim();
+  const selectedMissing = normalizedMissingFields(selectedStudent.value, "basic");
+  const fieldMap = {
+    curp: "curp",
+    nombrePadre: "padreNombre",
+    apellidoPaternoPadre: "padreApellidoPaterno",
+    telefonoPadre: "padreTelefono",
+    emailPadre: "padreEmail",
+    nombreMadre: "madreNombre",
+    apellidoPaternoMadre: "madreApellidoPaterno",
+    telefonoMadre: "madreTelefono",
+    emailMadre: "madreEmail",
+  };
+  const missingKey = String(fieldMap[field] || field).toLowerCase();
+  const shouldValidate = Object.prototype.hasOwnProperty.call(fieldMap, field);
+  if (!shouldValidate) return "neutral";
+  if (!value) return selectedMissing.includes(missingKey) ? "missing" : "neutral";
+  if (field === "curp") return inferMexicanCurpIdentity(value).valid ? "ok" : "invalid";
+  if (field.toLowerCase().includes("telefono")) return phoneIsValid(value) ? "ok" : "invalid";
+  if (field.toLowerCase().includes("email")) return emailIsValid(value) ? "ok" : "invalid";
+  return value.length >= 2 ? "ok" : "invalid";
+};
+const fieldShellClass = (field) => {
+  const state = fieldValidationState(field);
+  return ["ce-smart-field", `is-${state}`];
+};
+const fieldValidationMessage = (field) => {
+  const state = fieldValidationState(field);
+  if (state === "ok") return "Listo";
+  if (field === "curp") {
+    if (state === "missing") return "Requerida";
+    if (state === "invalid") return "CURP inválida";
+  }
+  if (field.toLowerCase().includes("telefono")) {
+    if (state === "missing") return "Requerido";
+    if (state === "invalid") return "10 dígitos";
+  }
+  if (field.toLowerCase().includes("email")) {
+    if (state === "missing") return "Requerido";
+    if (state === "invalid") return "Correo familiar válido";
+  }
+  if (state === "missing") return "Requerido";
+  if (state === "invalid") return "Revisa el dato";
+  return "";
+};
+const editableInvalidFields = () => [
+  "curp",
+  "telefonoPadre",
+  "telefonoMadre",
+  "emailPadre",
+  "emailMadre",
+].filter((field) => fieldValidationState(field) === "invalid");
 const huskyPassEmailTarget = computed(
   () =>
     selectedStudent.value?.emailPadre ||
@@ -2433,9 +2470,7 @@ const EDIT_FORM_FIELDS = [
   "nombreCompletoAlumno",
   "lastGrade",
   "lastCiclo",
-  "fechaNacimiento",
   "lugarNacimiento",
-  "sexo",
   "talla",
   "peso",
   "tipoSangre",
@@ -3702,9 +3737,7 @@ const resetEditForm = (student = selectedStudent.value, options = {}) => {
     nombreCompletoAlumno: student.nombreCompletoAlumno || student.fullName || "",
     lastGrade: student.lastGrade || "",
     lastCiclo: student.lastCiclo || "",
-    fechaNacimiento: normalizeDateInput(student.fechaNacimiento),
     lugarNacimiento: student.lugarNacimiento || "",
-    sexo: student.sexo || "",
     talla: student.talla || "",
     peso: student.peso || "",
     tipoSangre: student.tipoSangre || "",
@@ -3776,6 +3809,11 @@ const discardChanges = () => {
 const saveStudent = async () => {
   if (!selectedStudent.value || !selectedAgentId.value || savingStudent.value)
     return;
+  const invalidFields = editableInvalidFields();
+  if (invalidFields.length) {
+    saveError.value = "Revisa los campos marcados antes de guardar.";
+    return;
+  }
   savingStudent.value = true;
   saveError.value = "";
   try {
@@ -7904,6 +7942,97 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 3px rgba(60, 151, 65, 0.1);
 }
 
+.ce-smart-field {
+  position: relative;
+}
+
+.ce-smart-field input,
+.ce-smart-field select {
+  padding-right: 42px;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.ce-smart-field::after {
+  position: absolute;
+  right: 14px;
+  bottom: 18px;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.ce-smart-field small {
+  min-height: 15px;
+  margin-top: -2px;
+  color: #7a8799;
+  font-size: 10.5px;
+  font-weight: 760;
+}
+
+.ce-smart-field.is-ok input,
+.ce-smart-field.is-ok select {
+  border-color: rgba(65, 166, 75, .38);
+  background: linear-gradient(180deg, #ffffff, #fbfefb);
+}
+
+.ce-smart-field.is-ok::after {
+  content: "✓";
+  background: #e9f8e9;
+  color: #20882d;
+}
+
+.ce-smart-field.is-missing input,
+.ce-smart-field.is-missing select,
+.ce-smart-field.is-invalid input,
+.ce-smart-field.is-invalid select {
+  border-color: rgba(228, 86, 74, .46);
+  background: linear-gradient(180deg, #fffefe, #fff8f8);
+  box-shadow: 0 0 0 3px rgba(228, 86, 74, .055);
+}
+
+.ce-smart-field.is-missing::after,
+.ce-smart-field.is-invalid::after {
+  content: "!";
+  background: #fff1ef;
+  color: #d83b2f;
+}
+
+.ce-smart-field.is-missing small,
+.ce-smart-field.is-invalid small {
+  color: #c93b31;
+}
+
+.ce-derived-card {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-height: 56px;
+  padding: 11px 14px;
+  border: 1px solid rgba(82, 154, 91, .18);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfefb, #ffffff);
+}
+
+.ce-derived-card span {
+  color: #6b7c92;
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.ce-derived-card strong {
+  color: #20314d;
+  font-size: 12.5px;
+  font-weight: 840;
+  line-height: 1.35;
+}
+
 .ce-family-address {
   margin-top: 0;
 }
@@ -8555,6 +8684,89 @@ onBeforeUnmount(() => {
 @media (max-width: 860px) {
   .ce-tier-panel {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Compact expediente refinement: show only actionable gaps and keep validation subtle. */
+.ce-detail-status-strip {
+  grid-template-columns: minmax(220px, 1fr) auto;
+  min-height: 58px;
+}
+
+.ce-missing-grid {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ce-missing-chip {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.ce-missing-chip.ok {
+  border-color: rgba(68, 165, 78, .24);
+}
+
+.ce-tier-panel {
+  grid-template-columns: minmax(240px, 1fr) auto;
+  gap: 10px;
+}
+
+.ce-tier-panel.show-complete {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.ce-tier-card {
+  padding: 12px 14px;
+}
+
+.ce-tier-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ce-tier-card-head b {
+  color: #1f8f34;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ce-tier-card.is-complete .ce-tier-card-head b {
+  color: #2b6cb0;
+}
+
+.ce-tier-card p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-complete-toggle {
+  min-height: 40px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+@container (max-width: 900px) {
+  .ce-tier-panel,
+  .ce-detail-status-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .ce-complete-toggle {
+    justify-self: start;
+  }
+}
+
+@container (max-width: 560px) {
+  .ce-missing-chip {
+    width: auto;
+    min-width: 0;
   }
 }
 

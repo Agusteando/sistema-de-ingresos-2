@@ -25,7 +25,7 @@ import {
   fetchVerifiedControlEscolarScopeRows,
   maybeRefreshVerifiedControlEscolarScopeCache,
 } from "./control-escolar-cache";
-import { resolveControlEscolarCompleteness } from "../../shared/utils/studentPresentation";
+import { inferMexicanCurpIdentity, resolveControlEscolarCompleteness } from "../../shared/utils/studentPresentation";
 
 export type ControlEscolarStudentRow = {
   agentId: string;
@@ -999,8 +999,7 @@ const centralSelectColumns = (schema: ControlEscolarSchema) => {
     "ciclo",
     "nombre_completo_alumno",
     "lugar_nacimiento",
-    "sexo",
-    "talla",
+      "talla",
     "peso",
     "tipo_sangre",
     "alergias",
@@ -1402,14 +1401,16 @@ const overlayStudentRow = (
     huskyPassEmail,
   };
 
+  const derivedCurpIdentity = inferMexicanCurpIdentity(normalized.curp);
+
   Object.assign(normalized as any, {
     lastGrade: normalizeText(overlay?.last_grade),
     lastCiclo: normalizeText(overlay?.last_ciclo),
     nombreVerificado: normalizeText(overlay?.nombre_verificado),
-    fechaNacimiento: normalizeText(overlay?.fecha_nacimiento),
+    fechaNacimiento: derivedCurpIdentity.fechaNacimiento || normalizeText(overlay?.fecha_nacimiento),
     nombreCompletoAlumno: normalizeText(overlay?.nombre_completo_alumno),
     lugarNacimiento: normalizeText(overlay?.lugar_nacimiento),
-    sexo: normalizeText(overlay?.sexo),
+    sexo: derivedCurpIdentity.sexo || normalizeText(overlay?.sexo),
     talla: normalizeText(overlay?.talla),
     peso: normalizeText(overlay?.peso),
     tipoSangre: normalizeText(overlay?.tipo_sangre),
@@ -2242,9 +2243,7 @@ const PATCH_FIELD_COLUMN_MAP: Record<string, string> = {
   nombreCompletoAlumno: "nombre_completo_alumno",
   lastGrade: "last_grade",
   lastCiclo: "last_ciclo",
-  fechaNacimiento: "fecha_nacimiento",
   lugarNacimiento: "lugar_nacimiento",
-  sexo: "sexo",
   talla: "talla",
   peso: "peso",
   tipoSangre: "tipo_sangre",
@@ -2324,8 +2323,8 @@ const normalizePatchValue = (field: string, value: unknown) => {
   if (field === "nivel") return normalizeNivelEscolar(value) || null;
   if (field === "grupo") return normalizeText(value, 40) || null;
   if (field === "domicilioCp") return normalizeText(value, 12).replace(/\D/g, "").slice(0, 5) || null;
-  if (["sexo", "tipoSangre", "talla", "peso"].includes(field)) return normalizeNullable(value, 40);
-  if (["fechaNacimiento", "fechaNacimientoPadre", "fechaNacimientoMadre"].includes(field)) return normalizeNullable(value, 40);
+  if (["tipoSangre", "talla", "peso"].includes(field)) return normalizeNullable(value, 40);
+  if (["fechaNacimientoPadre", "fechaNacimientoMadre"].includes(field)) return normalizeNullable(value, 40);
   if (
     field === "direccion" ||
     field === "domicilio" ||
@@ -2363,7 +2362,7 @@ const buildEditableMatriculaEntries = (
     });
   }
 
-  const editableEntries = Object.entries(body || {})
+  let editableEntries = Object.entries(body || {})
     .filter(
       ([field, value]) =>
         Object.prototype.hasOwnProperty.call(PATCH_FIELD_COLUMN_MAP, field) &&
@@ -2387,6 +2386,32 @@ const buildEditableMatriculaEntries = (
       statusCode: 400,
       message: `${invalidCurp.field === "curp" ? "CURP" : "CURP familiar"} inválida. Debe tener 18 caracteres con formato oficial.`,
     });
+  }
+
+  const curpEntry = editableEntries.find((entry) => entry.field === "curp" && entry.value);
+  if (curpEntry) {
+    const inferred = inferMexicanCurpIdentity(curpEntry.value);
+    if (inferred.valid) {
+      const derivedEntries: EditableMatriculaEntry[] = [];
+      if (schema.matricula.has("fecha_nacimiento")) {
+        derivedEntries.push({
+          field: "fechaNacimientoDerivadaCurp",
+          column: "fecha_nacimiento",
+          value: inferred.fechaNacimiento,
+        });
+      }
+      if (schema.matricula.has("sexo")) {
+        derivedEntries.push({
+          field: "sexoDerivadoCurp",
+          column: "sexo",
+          value: inferred.sexo,
+        });
+      }
+      editableEntries = [
+        ...editableEntries.filter((entry) => !["fecha_nacimiento", "sexo"].includes(entry.column)),
+        ...derivedEntries,
+      ];
+    }
   }
 
   const invalidEmail = editableEntries.find(
@@ -2500,9 +2525,7 @@ export const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS = [
   "curp",
   "nombreVerificado",
   "nombreCompletoAlumno",
-  "fechaNacimiento",
   "lugarNacimiento",
-  "sexo",
   "talla",
   "peso",
   "tipoSangre",
@@ -2589,9 +2612,7 @@ export const CONTROL_ESCOLAR_MATRICULA_IMPORT_LABELS: Record<string, string> = {
   seguimientoBaja: "Seguimiento baja",
   nombreVerificado: "Nombre verificado",
   nombreCompletoAlumno: "Nombre completo alumno",
-  fechaNacimiento: "Fecha nacimiento alumno",
   lugarNacimiento: "Lugar nacimiento alumno",
-  sexo: "Sexo",
   talla: "Talla",
   peso: "Peso",
   tipoSangre: "Tipo de sangre",
