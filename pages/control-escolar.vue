@@ -609,7 +609,7 @@
                     <div class="ce-health-card__copy">
                       <small>Expediente básico</small>
                       <strong>{{ rowHealthHeadline(selectedHealthStudent) }}</strong>
-                      <p>{{ selectedMissingCount ? selectedNextAction : 'Completo para operación diaria' }}</p>
+                      <p v-if="selectedMissingCount">{{ selectedNextAction }}</p>
                       <span class="ce-health-bar"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
                       <em>{{ selectedBasicCompletedCount }} de {{ requiredDataFields.length }} campos completos</em>
                     </div>
@@ -624,7 +624,7 @@
                     <div class="ce-health-card__copy">
                       <small>Expediente completo</small>
                       <strong>{{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes avanzados` : 'Completo' }}</strong>
-                      <p>Incluye información avanzada del expediente.</p>
+                      
                       <span class="ce-health-bar is-secondary"><i :style="{ width: `${selectedCompleteProfileCompletion}%` }"></i></span>
                       <em>{{ selectedCompleteProfileCompletion }}% · {{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes` : `${selectedCompleteCompletedCount}/${completeDataFields.length} completos` }}</em>
                     </div>
@@ -633,7 +633,7 @@
                       <LucideChevronRight :size="16" />
                     </button>
                   </article>
-                  <article :class="['ce-health-card', 'ce-health-card--action', selectedRecordHealth.tone, { 'is-clear': !selectedRecordIssueCount }]">
+                  <article v-if="selectedRecordIssueCount" :class="['ce-health-card', 'ce-health-card--action', selectedRecordHealth.tone]">
                     <div class="ce-health-card__icon">
                       <component
                         :is="selectedRecordIssueCount ? LucideAlertTriangle : LucideShieldCheck"
@@ -641,9 +641,9 @@
                       />
                     </div>
                     <div class="ce-health-card__copy">
-                      <small>{{ selectedRecordIssueCount ? 'Pendientes por resolver' : 'Sin pendientes básicos' }}</small>
-                      <strong>{{ selectedRecordIssueCount ? `${selectedRecordIssueCount} dato${selectedRecordIssueCount === 1 ? '' : 's'} por revisar` : 'Listo' }}</strong>
-                      <p>{{ selectedRecordIssueCount ? selectedNextAction : 'El expediente básico no requiere acción.' }}</p>
+                      <small>Pendientes</small>
+                      <strong>{{ `${selectedRecordIssueCount} dato${selectedRecordIssueCount === 1 ? '' : 's'} por revisar` }}</strong>
+                      <p>{{ selectedNextAction }}</p>
                       <div v-if="selectedVisibleActionChips.length" class="ce-health-missing-chips">
                         <button
                           v-for="field in selectedVisibleActionChips"
@@ -658,7 +658,6 @@
                       </div>
                     </div>
                     <button
-                      v-if="selectedRecordIssueCount"
                       type="button"
                       class="ce-health-action-button"
                       @click="goToFirstPendingField"
@@ -681,7 +680,7 @@
                     <div>
                       <small>{{ signal.title }}</small>
                       <strong>{{ signal.label }}</strong>
-                      <p>{{ signal.summary }}</p>
+                      <p v-if="signal.summary">{{ signal.summary }}</p>
                     </div>
                     <b>{{ signal.count }}</b>
                   </article>
@@ -763,8 +762,7 @@
                       <article v-if="editForm.curp" class="ce-derived-card" :class="`is-${derivedGenderMeta.tone}`">
                         <span class="ce-derived-card__icon" aria-hidden="true"><b>{{ derivedGenderMeta.symbol }}</b></span>
                         <div>
-                          <span>{{ curpDerivedIdentity.valid ? 'Derivado de CURP' : 'CURP pendiente' }}</span>
-                          <strong>{{ curpDerivedIdentity.valid ? `${curpDerivedIdentity.fechaNacimiento} · ${derivedGenderMeta.label}` : 'Completa una CURP válida para inferir nacimiento y sexo' }}</strong>
+                          <strong>{{ curpDerivedIdentity.valid ? `${curpDerivedIdentity.fechaNacimiento} · ${derivedGenderMeta.label}` : 'CURP inválida' }}</strong>
                         </div>
                       </article>
                       <template v-if="showCompleteExpediente">
@@ -1262,81 +1260,16 @@
           <section
             v-else
             class="student-detail-panel ce-detail-panel ce-empty-detail-panel"
-            aria-label="Guía para editar ficha de alumno"
+            aria-label="Seleccionar alumno"
           >
             <div class="ce-empty-shell">
               <div class="ce-empty-hero" aria-hidden="true">
-                <span class="ce-empty-sparkle one">✦</span>
-                <span class="ce-empty-sparkle two">✦</span>
-                <LucideUserRound :size="42" />
-                <span class="ce-empty-lines"><i></i><i></i></span>
-                <span class="ce-empty-cursor"></span>
+                <LucideUserRound :size="34" />
               </div>
-
               <div class="ce-empty-copy">
-                <h2>Selecciona un alumno para editar su ficha</h2>
-                <p>
-                  Elige un alumno de la lista para revisar y actualizar su
-                  información.
-                </p>
-                <p>
-                  Podrás editar identidad, datos escolares, contacto familiar,
-                  sistema y observaciones.
-                </p>
+                <h2>Selecciona un alumno</h2>
+                <p>La ficha aparecerá aquí con progreso, datos familiares y edición del expediente.</p>
               </div>
-
-              <section class="ce-empty-card ce-empty-review">
-                <h3>Qué revisar primero</h3>
-                <div>
-                  <span><LucideShieldCheck :size="15" /> CURP del alumno</span>
-                  <span
-                    ><LucideUsersRound :size="15" /> Tutor / Responsable</span
-                  >
-                  <span><LucidePhone :size="15" /> Teléfono de contacto</span>
-                  <span
-                    ><LucideGraduationCap :size="15" /> Grupo y servicio
-                    asignado</span
-                  >
-                  <span><LucideMail :size="15" /> Email del contacto</span>
-                  <span
-                    ><LucideShieldCheck :size="15" /> Expediente completo</span
-                  >
-                </div>
-              </section>
-
-              <section class="ce-empty-card ce-empty-flow">
-                <h3>Así se verá tu flujo al seleccionar un alumno</h3>
-                <ol>
-                  <li>
-                    <span><LucideUserRound :size="21" /></span
-                    ><b>1 Identidad</b>
-                  </li>
-                  <li>
-                    <span><LucideGraduationCap :size="21" /></span
-                    ><b>2 Escolar</b>
-                  </li>
-                  <li>
-                    <span><LucideUsersRound :size="21" /></span
-                    ><b>3 Contacto familiar</b>
-                  </li>
-                  <li>
-                    <span><LucideKeyRound :size="21" /></span><b>4 Sistema</b>
-                  </li>
-                  <li>
-                    <span><LucideAlertTriangle :size="21" /></span
-                    ><b>5 Observaciones</b>
-                  </li>
-                </ol>
-              </section>
-
-              <aside class="ce-empty-tip">
-                <span><LucideShieldCheck :size="23" /></span>
-                <p>
-                  <strong>Tip:</strong> usa los indicadores de calidad para
-                  priorizar los expedientes con pendientes.
-                </p>
-                <i aria-hidden="true"><LucideShieldCheck :size="23" /></i>
-              </aside>
             </div>
           </section>
         </div>
@@ -2737,10 +2670,10 @@ const familyPersonState = (type = "padre") => {
     missing,
     progress: Math.round((completed / Math.max(fields.length, 1)) * 100),
     tone: missing.length ? (missing.length >= 2 ? "danger" : "warning") : "complete",
-    status: missing.length ? `${missing.length} pendiente${missing.length === 1 ? "" : "s"}` : "Completo",
+    status: missing.length ? `${missing.length} pendiente${missing.length === 1 ? "" : "s"}` : "Listo",
     summary: missing.length
       ? `Falta ${missing.slice(0, 2).map((field) => labels[field]).join(", ")}`
-      : "Identidad y contacto listos",
+      : "",
   };
 };
 const familyCriticalContactState = computed(() => {
@@ -2759,7 +2692,7 @@ const familyCriticalContactState = computed(() => {
     progress: Math.round(((Number(hasPhone) + Number(hasEmail)) / 2) * 100),
     tone: missing.length ? "danger" : "complete",
     status: missing.length ? "Incompleto" : "Listo",
-    summary: missing.length ? `Falta ${missing.join(" y ")}` : "Hay vía familiar de contacto",
+    summary: missing.length ? `Falta ${missing.join(" y ")}` : "",
   };
 });
 const familySectionState = (type = "padre") => {
@@ -2786,7 +2719,7 @@ const selectedFamilyReadiness = computed(() => {
     label: pending ? `${pending} pendientes` : "Listo",
     summary: pending
       ? [father, mother, contact].filter((item) => item.missing.length).map((item) => item.label).join(" · ")
-      : "Contacto familiar completo",
+      : "",
   };
 });
 const familyReadinessGroups = computed(() => {
@@ -2839,7 +2772,7 @@ const fieldShellClass = (field) => {
 };
 const fieldValidationMessage = (field) => {
   const state = fieldValidationState(field);
-  if (state === "ok") return "Listo";
+  if (state === "ok") return "";
   if (field === "curp") {
     if (state === "missing") return "Requerida";
     if (state === "invalid") return "CURP inválida";
@@ -2869,7 +2802,7 @@ const selectedIdentityStatus = computed(() => {
       label: `${pending} pendiente${pending === 1 ? "" : "s"}`,
       count: pending,
     };
-  return { tone: "complete", label: "Lista", count: 0 };
+  return { tone: "complete", label: "Listo", count: 0 };
 });
 const selectedSchoolStatus = computed(() => {
   const schoolKeys = ["nivel", "grado", "grupo", "servicio"];
@@ -2877,7 +2810,7 @@ const selectedSchoolStatus = computed(() => {
     normalizedMissingFields(selectedHealthStudent.value, "complete").includes(key),
   );
   if (!missing.length)
-    return { tone: "complete", label: "Completo", count: 0, summary: "Nivel, grado y grupo listos." };
+    return { tone: "complete", label: "Listo", count: 0, summary: "" };
   return {
     tone: missing.length >= 3 ? "warning" : "neutral",
     label: `${missing.length} pendiente${missing.length === 1 ? "" : "s"}`,
@@ -2891,7 +2824,7 @@ const selectedStatusSignals = computed(() => {
   const mother = familyPersonState("madre");
   const contact = familyCriticalContactState.value;
   const curpLabel =
-    curpState === "ok" ? "Derivada" : curpState === "invalid" ? "Inválida" : "Pendiente";
+    curpState === "ok" ? "Lista" : curpState === "invalid" ? "Inválida" : "Pendiente";
   const curpSummary =
     curpState === "ok"
       ? `${curpDerivedIdentity.value.fechaNacimiento} · ${derivedGenderMeta.value.label}`
@@ -7188,4 +7121,131 @@ onBeforeUnmount(() => {
   min-width: 126px;
   border-radius: 13px;
 }
+
+
+/* Control Escolar cleanup: remove noisy helper text and restore clean production panels. */
+.ce-empty-detail-panel {
+  display: grid;
+  min-height: 0;
+}
+
+.ce-empty-detail-panel .ce-empty-shell {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 16px;
+  min-height: 100%;
+  padding: clamp(28px, 5vw, 56px);
+  border: 1px solid #dfe8f1;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 32%, rgba(75, 169, 86, 0.1), transparent 210px),
+    linear-gradient(180deg, #ffffff, #fbfdfb);
+  box-shadow: 0 12px 32px rgba(21, 35, 60, 0.055);
+  text-align: center;
+}
+
+.ce-empty-detail-panel .ce-empty-hero {
+  display: inline-grid;
+  width: 74px;
+  height: 74px;
+  place-items: center;
+  border: 1px solid rgba(64, 149, 73, 0.2);
+  border-radius: 24px;
+  background: #f2fbf1;
+  color: #2f9138;
+  box-shadow: 0 16px 36px rgba(63, 145, 56, 0.12);
+}
+
+.ce-empty-detail-panel .ce-empty-copy {
+  display: grid;
+  gap: 6px;
+  max-width: 420px;
+}
+
+.ce-empty-detail-panel .ce-empty-copy h2 {
+  margin: 0;
+  color: #10203a;
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 920;
+  letter-spacing: -0.035em;
+}
+
+.ce-empty-detail-panel .ce-empty-copy p {
+  margin: 0;
+  color: #5f6e86;
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.45;
+}
+
+.ce-panel-heading p,
+.ce-health-card__copy p,
+.ce-status-signal-card p,
+.ce-family-readiness-card p {
+  max-width: 56ch;
+}
+
+.ce-form-grid label > span,
+.ce-wide-field > span {
+  display: block;
+  margin-bottom: 6px;
+  color: #5d6b83;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.ce-smart-field small:empty,
+.ce-form-grid label > small:empty {
+  display: none;
+  min-height: 0;
+  margin: 0;
+}
+
+.ce-smart-field small,
+.ce-form-grid label > small {
+  display: block;
+  margin-top: 6px;
+  line-height: 1.25;
+}
+
+.ce-derived-card {
+  align-items: center;
+  min-height: 50px;
+}
+
+.ce-derived-card strong {
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+.ce-status-signal-card.is-complete p,
+.ce-family-readiness-card.is-complete p {
+  display: none;
+}
+
+.ce-health-overview {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.ce-health-card--action {
+  border-color: rgba(224, 83, 74, 0.28);
+  background: linear-gradient(180deg, #fffafa, #ffffff);
+}
+
+.ce-health-card--complete .ce-health-card__copy > p:empty,
+.ce-health-card__copy > p:empty {
+  display: none;
+}
+
+@container (max-width: 720px) {
+  .ce-empty-detail-panel .ce-empty-shell {
+    min-height: 360px;
+    padding: 28px 18px;
+  }
+}
+
 </style>

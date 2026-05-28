@@ -1,1 +1,1 @@
-Corrige iconografía de género en Control Escolar para evitar importaciones no soportadas por lucide
+Limpia paneles de Control Escolar y reduce textos redundantes manteniendo progreso y validaciones reales
