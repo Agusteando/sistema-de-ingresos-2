@@ -781,8 +781,8 @@ const detailStackSplitPercent = ref(32);
 const detailStackResizing = ref(false);
 const DETAIL_STACK_STORAGE_KEY = "students:detail-stack-split-percent:v1";
 const DETAIL_STACK_DEFAULT = 32;
-const DETAIL_STACK_MIN = 20;
-const DETAIL_STACK_MAX = 56;
+const DETAIL_STACK_MIN = 24;
+const DETAIL_STACK_MAX = 52;
 
 const photoUrl = ref(null);
 const photoLoading = ref(false);
@@ -1074,10 +1074,10 @@ const setDetailStackSplitFromPointer = (clientY) => {
   const rect = shell?.getBoundingClientRect?.();
   if (!rect?.height) return;
 
-  const railAllowance = 42;
+  const railAllowance = 48;
   const availableHeight = Math.max(220, rect.height - railAllowance);
-  const minOverviewPx = Math.min(210, Math.max(96, availableHeight * 0.2));
-  const minAccountPx = Math.min(340, Math.max(190, availableHeight * 0.38));
+  const minOverviewPx = Math.min(260, Math.max(132, availableHeight * 0.24));
+  const minAccountPx = Math.min(360, Math.max(220, availableHeight * 0.42));
   const minPercent = Math.max(DETAIL_STACK_MIN, (minOverviewPx / availableHeight) * 100);
   const maxPercent = Math.min(DETAIL_STACK_MAX, 100 - (minAccountPx / availableHeight) * 100);
   const nextSplit = ((clientY - rect.top) / availableHeight) * 100;

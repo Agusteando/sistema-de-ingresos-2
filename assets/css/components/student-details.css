@@ -1535,10 +1535,62 @@
   }
 }
 
-/* Financial Estado de Cuenta viewport correction: keep the compact account header in-flow and let the table own scrolling. */
+/* Resizable workspace composition for the embedded student account panel. */
+.student-details-shell {
+  container: student-details / size;
+}
+
+.account-card {
+  container: account-card / inline-size;
+}
+
 .student-details-shell:not(.student-details-shell--expanded) {
-  gap: 6px;
+  --detail-rail-row: 18px;
+  --detail-stack-row: 22px;
+  --detail-overview-min: 118px;
+  --detail-account-min: 224px;
+  --account-panel-header-row: minmax(78px, auto);
+  --account-panel-footer-row: minmax(42px, auto);
+  display: grid;
+  grid-template-rows:
+    var(--detail-rail-row)
+    minmax(var(--detail-overview-min), var(--student-overview-panel-size, 32%))
+    var(--detail-stack-row)
+    minmax(var(--detail-account-min), var(--student-account-panel-size, 68%));
+  gap: 0;
+  min-height: 0;
   padding: 6px;
+  overflow: hidden;
+}
+
+.student-overview-pane {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: 6px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 2px 0 0;
+  scrollbar-gutter: stable;
+}
+
+.student-overview-pane .student-profile-card,
+.student-overview-pane .siblings-card {
+  min-height: min-content;
+}
+
+.student-overview-pane:not(:has(.siblings-card)) {
+  grid-template-rows: minmax(min-content, 1fr);
+  align-content: stretch;
+}
+
+.student-overview-pane:not(:has(.siblings-card)) .student-profile-card {
+  height: auto;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .student-profile-card,
+.student-details-shell:not(.student-details-shell--expanded) .account-card {
+  flex: initial;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .student-profile-card {
@@ -1551,238 +1603,13 @@
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
+  grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
   gap: 8px;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .account-card {
-  container-type: inline-size;
-  grid-template-rows: 44px minmax(0, 1fr) 42px;
-  min-height: 0;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-header {
-  min-height: 0;
-  flex-wrap: nowrap;
-  gap: 8px;
-  padding: 0 12px;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-title-area,
-.student-details-shell:not(.student-details-shell--expanded) .account-title-copy,
-.student-details-shell:not(.student-details-shell--expanded) .account-title-row {
-  min-width: 0;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-title-row {
-  gap: 7px;
-  overflow: hidden;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-header h3 {
-  flex: 0 0 auto;
-  font-size: 14px;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-expediente-button {
-  flex: 0 1 auto;
-  max-width: 142px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-search-control {
-  width: clamp(180px, 36%, 250px);
-  min-width: 0;
-  margin-left: auto;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-workspace-body {
-  min-height: 0;
-  overflow: hidden;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap {
-  min-height: 0;
-  overflow: auto;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-footer {
-  min-height: 42px;
-  padding: 0 12px;
-}
-
-@media (max-width: 1100px) {
-  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) {
-    grid-template-rows: 44px minmax(0, 1fr) 42px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) .account-header {
-    min-height: 0;
-    flex-wrap: nowrap;
-    padding-block: 0;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) .account-search-control {
-    order: initial;
-    width: clamp(170px, 34%, 230px);
-    min-width: 0;
-    margin-left: auto;
-  }
-}
-
-@container (max-width: 610px) {
-  .student-details-shell:not(.student-details-shell--expanded) .account-card {
-    grid-template-rows: 76px minmax(0, 1fr) 42px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-header {
-    display: grid;
-    grid-template-columns: 1fr;
-    align-content: center;
-    gap: 7px;
-    padding-block: 7px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-search-control {
-    width: 100%;
-  }
-}
-
-/* Restored Estado de Cuenta composition with safer behavior inside user-resized panels. */
-.account-card {
-  container-type: inline-size;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-card {
-  min-height: 0;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table {
-  min-width: 540px;
-}
-
-@container (max-width: 620px) {
-  .student-details-shell:not(.student-details-shell--expanded) {
-    gap: 7px;
-    padding: 7px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .student-profile-card {
-    padding: 10px 11px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .profile-main {
-    align-items: flex-start;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .profile-identity {
-    grid-template-columns: 62px minmax(0, 1fr);
-    gap: 10px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .student-account-photo-card {
-    --student-account-photo-size: 62px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .profile-copy h2 {
-    font-size: 14px;
-    line-height: 1.08;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .profile-copy p {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button--menu {
-    grid-column: span 2;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) {
-    grid-template-rows: 82px minmax(0, 1fr) 44px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) .account-header {
-    flex-wrap: wrap;
-    min-height: 82px;
-    padding: 8px 12px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) .account-search-control {
-    order: 3;
-    width: 100%;
-    min-width: 0;
-    margin-left: 0;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table {
-    min-width: 500px;
-  }
-}
-
-@container (max-width: 460px) {
-  .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button--menu {
-    grid-column: auto;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table {
-    min-width: 470px;
-  }
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .student-profile-card {
-  flex: 0 1 var(--students-profile-target-size, auto);
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-card {
-  flex: 1 1 var(--students-account-min-size, 0px);
-}
-
-.student-details-shell {
-  container: student-details / size;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) {
-  display: grid;
-  grid-template-rows:
-    18px
-    minmax(112px, var(--student-overview-panel-size, 32%))
-    16px
-    minmax(210px, var(--student-account-panel-size, 68%));
-  gap: 0;
-  padding: 6px;
-  overflow: hidden;
-}
-
-.student-overview-pane {
-  display: grid;
-  min-height: 0;
-  gap: 6px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding: 0 2px 0 0;
-}
-
-.student-overview-pane .student-profile-card,
-.student-overview-pane .siblings-card {
-  min-height: min-content;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .student-profile-card,
-.student-details-shell:not(.student-details-shell--expanded) .account-card {
-  flex: initial;
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button {
+  height: 32px;
+  padding-inline: 9px;
 }
 
 .student-detail-stack-resizer {
@@ -1791,8 +1618,9 @@
   display: flex;
   width: 100%;
   min-width: 0;
-  height: 16px;
-  min-height: 16px;
+  height: calc(var(--detail-stack-row, 22px) - 6px);
+  min-height: 14px;
+  align-self: center;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -1804,12 +1632,16 @@
 
 .student-detail-stack-resizer::before {
   position: absolute;
-  inset: 6px 14px;
+  top: 50%;
+  right: 12px;
+  left: 12px;
+  height: 1px;
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(126, 177, 104, 0), rgba(63, 145, 56, .28), rgba(126, 177, 104, 0));
   content: "";
   opacity: .58;
-  transition: inset 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
+  transform: translateY(-50%);
+  transition: opacity 160ms ease, box-shadow 160ms ease;
 }
 
 .student-detail-stack-resizer > span {
@@ -1841,9 +1673,8 @@
 .student-detail-stack-resizer:hover::before,
 .student-detail-stack-resizer:focus-visible::before,
 .student-details-shell.is-detail-stack-resizing .student-detail-stack-resizer::before {
-  inset-block: 4px;
   opacity: .92;
-  box-shadow: 0 0 0 5px rgba(63, 145, 56, .06);
+  box-shadow: 0 0 0 4px rgba(63, 145, 56, .055);
 }
 
 .student-detail-stack-resizer:hover > span,
@@ -1866,31 +1697,113 @@ body.student-detail-stack-resizing * {
   user-select: none;
 }
 
-.account-card {
-  container: account-card / inline-size;
-}
-
 .student-details-shell:not(.student-details-shell--expanded) .account-card {
   height: 100%;
   min-height: 0;
-  grid-template-rows: minmax(44px, auto) minmax(0, 1fr) minmax(42px, auto);
+  grid-template-rows: var(--account-panel-header-row) minmax(0, 1fr) var(--account-panel-footer-row);
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-header {
-  min-height: 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(188px, 34%) auto;
+  grid-template-areas: "title search total";
+  align-content: center;
+  min-height: 0;
+  gap: 8px 10px;
+  padding: 8px 12px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-title-area {
+  grid-area: title;
+  min-width: 0;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-title-copy,
+.student-details-shell:not(.student-details-shell--expanded) .account-title-row {
+  min-width: 0;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-title-row {
+  gap: 7px;
+  overflow: hidden;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-header h3 {
+  flex: 0 0 auto;
+  font-size: 14.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-sync-indicator {
+  min-width: 0;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-expediente-button {
+  flex: 0 1 auto;
+  max-width: min(160px, 42cqi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-search-control {
+  grid-area: search;
+  width: 100%;
+  min-width: 0;
+  margin-left: 0;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-totals {
+  grid-area: total;
+  min-width: 0;
+  justify-self: end;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-totals span {
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-workspace-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap {
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table {
+  min-width: 560px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-footer {
   min-height: 42px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-footer > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-footer strong {
+  min-width: max-content;
+  white-space: nowrap;
 }
 
 @container student-detail-panel (max-height: 620px) {
   .student-details-shell:not(.student-details-shell--expanded) {
-    grid-template-rows:
-      14px
-      minmax(86px, var(--student-overview-panel-size, 28%))
-      14px
-      minmax(176px, var(--student-account-panel-size, 72%));
+    --detail-rail-row: 14px;
+    --detail-stack-row: 18px;
+    --detail-overview-min: 108px;
+    --detail-account-min: 184px;
+    --account-panel-header-row: minmax(70px, auto);
     padding: 5px;
   }
 
@@ -1911,49 +1824,63 @@ body.student-detail-stack-resizing * {
     gap: 6px;
   }
 
-  .student-detail-stack-resizer {
-    height: 14px;
-    min-height: 14px;
+  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button {
+    height: 30px;
   }
 }
 
-@container student-details (max-width: 660px) {
-  .student-details-shell:not(.student-details-shell--expanded) .account-card {
-    grid-template-rows: minmax(78px, auto) minmax(0, 1fr) minmax(44px, auto);
+@container student-details (max-width: 720px) {
+  .student-details-shell:not(.student-details-shell--expanded) {
+    --account-panel-header-row: minmax(92px, auto);
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-main {
+    align-items: flex-start;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-identity {
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .student-account-photo-card {
+    --student-account-photo-size: 62px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-copy h2 {
+    font-size: 14px;
+    line-height: 1.08;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-copy p {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-content: center;
-    gap: 7px 8px;
-    padding: 8px 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title total"
+      "search search";
   }
 
-  .student-details-shell:not(.student-details-shell--expanded) .account-title-area {
-    grid-column: 1 / -1;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-search-control {
-    grid-column: 1 / 2;
-    order: initial;
-    width: 100%;
-    min-width: 0;
-    margin-left: 0;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-totals {
-    justify-self: end;
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table {
+    min-width: 510px;
   }
 }
 
 @container student-details (max-width: 520px) {
-  .student-details-shell:not(.student-details-shell--expanded) .account-card {
-    grid-template-rows: minmax(100px, auto) minmax(0, 1fr) minmax(46px, auto);
+  .student-details-shell:not(.student-details-shell--expanded) {
+    --account-panel-header-row: minmax(120px, auto);
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-header {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "title"
+      "search"
+      "total";
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-title-row {
@@ -1961,9 +1888,7 @@ body.student-detail-stack-resizing * {
     overflow: visible;
   }
 
-  .student-details-shell:not(.student-details-shell--expanded) .account-search-control,
   .student-details-shell:not(.student-details-shell--expanded) .account-totals {
-    grid-column: 1 / -1;
     justify-self: stretch;
   }
 
@@ -2058,5 +1983,25 @@ body.student-detail-stack-resizing * {
   .student-details-shell:not(.student-details-shell--expanded) .history-row > td {
     display: block;
     padding: 8px;
+  }
+}
+
+@container student-details (max-width: 430px) {
+  .student-details-shell:not(.student-details-shell--expanded) {
+    --detail-overview-min: 126px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-main {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-top-actions {
+    justify-self: start;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
+    grid-template-columns: 1fr;
   }
 }

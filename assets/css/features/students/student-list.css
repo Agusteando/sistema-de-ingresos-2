@@ -377,7 +377,7 @@
   background: rgba(65, 112, 205, .11);
 }
 
-@container student-list (max-width: 680px) {
+@container student-list (max-width: 720px) {
   .student-list-card {
     --student-list-balance-col: minmax(92px, 112px);
     --student-list-action-col: 42px;
