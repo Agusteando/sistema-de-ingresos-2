@@ -1,1 +1,1 @@
-Mejora diagnóstico visual de Admin y Control Escolar con árbol de decisiones y trazas reales
+Agrega animación de versión aplicada con toast de actualizaciones y commits recientes

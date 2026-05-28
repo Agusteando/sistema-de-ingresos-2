@@ -158,10 +158,29 @@
           </div>
         </label>
 
-        <div class="system-version-card" v-if="systemVersionLabel">
+        <div
+          v-if="systemVersionLabel"
+          class="system-version-card"
+          :class="{
+            'version-level-up': versionUpgradeActive,
+            'version-level-up-success': versionUpgradePhase === 'success'
+          }"
+        >
+          <div v-if="versionUpgradeActive" class="version-effect-orb" aria-hidden="true">
+            <LucideRefreshCw v-if="versionUpgradePhase === 'syncing'" :size="14" />
+            <LucideCheckCircle v-else :size="15" />
+          </div>
           <span>Versión</span>
-          <strong>{{ systemVersionLabel }}</strong>
-          <small v-if="systemVersionUpdatedLabel">{{ systemVersionUpdatedLabel }}</small>
+          <strong :class="{ 'version-number-bump': versionUpgradeActive }">
+            <template v-if="versionUpgradeActive">
+              <em>{{ previousSystemVersionLabel }}</em>
+              <i aria-hidden="true">→</i>
+              <em class="new-version">{{ systemVersionLabel }}</em>
+            </template>
+            <template v-else>{{ systemVersionLabel }}</template>
+          </strong>
+          <small v-if="versionUpgradeActive && versionUpgradeSummary" class="version-update-summary">{{ versionUpgradeSummary }}</small>
+          <small v-else-if="systemVersionUpdatedLabel">{{ systemVersionUpdatedLabel }}</small>
         </div>
 
         <div class="admin-card">
@@ -226,9 +245,15 @@
           toast.type === 'success' ? 'bg-neutral-ink border-brand-leaf' : 'bg-neutral-ink border-accent-coral'
         ]"
       >
-        <LucideCheckCircle v-if="toast.type === 'success'" :size="16" class="text-brand-leaf" />
-        <LucideAlertCircle v-else :size="16" class="text-accent-coral" />
-        {{ toast.message }}
+        <span class="toast-status-icon">
+          <LucideCheckCircle v-if="toast.type === 'success'" :size="16" class="text-brand-leaf" />
+          <LucideAlertCircle v-else :size="16" class="text-accent-coral" />
+        </span>
+        <span class="toast-copy">
+          <strong v-if="toast.title">{{ toast.title }}</strong>
+          <span>{{ toast.message }}</span>
+          <small v-for="detail in toast.details" :key="detail">{{ detail }}</small>
+        </span>
       </div>
     </div>
 
@@ -283,7 +308,7 @@ import ControlEscolarSyncIndicator from '~/components/students/ControlEscolarSyn
 import { usePlantelAgentStatuses } from '~/composables/usePlantelAgentStatuses'
 import { CICLOS_LIST, PLANTELES_LIST, normalizeCicloOption } from '~/utils/constants'
 
-const { toasts } = useToast()
+const { toasts, show } = useToast()
 const { syncState, syncMessage } = useOptimisticSync()
 const route = useRoute()
 
@@ -378,12 +403,96 @@ const activePlantelStatus = computed(() => activePlantel.value === 'GLOBAL'
 
 const systemVersionLabel = ref('')
 const systemVersionUpdatedLabel = ref('')
+const previousSystemVersionLabel = ref('')
+const versionUpgradeActive = ref(false)
+const versionUpgradePhase = ref('idle')
+const versionUpgradeSummary = ref('')
+let versionUpgradeSuccessTimer = null
+let versionUpgradeDoneTimer = null
+
+const lastSeenVersionCookie = useCookie('aurora_last_seen_version', { maxAge: 60 * 60 * 24 * 365 })
+const lastSeenVersionCountCookie = useCookie('aurora_last_seen_version_count', { maxAge: 60 * 60 * 24 * 365 })
+
+const normalizeVersionLabel = (value) => String(value || '').trim()
+
+const countFromVersionLabel = (value) => {
+  const match = normalizeVersionLabel(value).match(/(\d+)$/)
+  return match ? Number(match[1]) : 0
+}
+
+const compactCommitTitle = (value) => {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim()
+  return clean.length > 76 ? `${clean.slice(0, 73)}…` : clean
+}
+
+const clearVersionUpgradeTimers = () => {
+  if (versionUpgradeSuccessTimer) window.clearTimeout(versionUpgradeSuccessTimer)
+  if (versionUpgradeDoneTimer) window.clearTimeout(versionUpgradeDoneTimer)
+  versionUpgradeSuccessTimer = null
+  versionUpgradeDoneTimer = null
+}
+
+const startVersionUpgradeEffect = ({ previousLabel, nextLabel, count, updates }) => {
+  if (typeof window === 'undefined') return
+  clearVersionUpgradeTimers()
+  previousSystemVersionLabel.value = previousLabel
+  versionUpgradeActive.value = true
+  versionUpgradePhase.value = 'syncing'
+  versionUpgradeSummary.value = `${count} actualización${count === 1 ? '' : 'es'} aplicada${count === 1 ? '' : 's'}`
+
+  const commitMessages = (Array.isArray(updates) ? updates : [])
+    .slice(0, Math.min(3, Math.max(1, count)))
+    .map(update => compactCommitTitle(update?.title || update?.message || update?.description))
+    .filter(Boolean)
+
+  show(`(${count}) Actualizaciones aplicadas:`, 'success', {
+    title: `${previousLabel} → ${nextLabel}`,
+    details: commitMessages,
+    duration: 6400
+  })
+
+  versionUpgradeSuccessTimer = window.setTimeout(() => {
+    versionUpgradePhase.value = 'success'
+  }, 850)
+
+  versionUpgradeDoneTimer = window.setTimeout(() => {
+    versionUpgradeActive.value = false
+    versionUpgradePhase.value = 'idle'
+    previousSystemVersionLabel.value = ''
+    versionUpgradeSummary.value = ''
+  }, 3600)
+}
 
 const loadSystemVersion = async () => {
   try {
     const result = await $fetch('/api/login/updates')
-    systemVersionLabel.value = String(result?.versionLabel || '')
+    const nextVersionLabel = normalizeVersionLabel(result?.versionLabel || '')
+    const nextVersionCount = Number(result?.totalCount || countFromVersionLabel(nextVersionLabel) || 0)
+    const previousVersionLabel = normalizeVersionLabel(lastSeenVersionCookie.value || '')
+    const previousVersionCount = Number(lastSeenVersionCountCookie.value || countFromVersionLabel(previousVersionLabel) || 0)
+
+    systemVersionLabel.value = nextVersionLabel
     systemVersionUpdatedLabel.value = result?.lastUpdatedLabel ? `Actualizado ${result.lastUpdatedLabel}` : ''
+
+    if (!result?.ok || !nextVersionLabel || !nextVersionCount) return
+
+    if (!previousVersionLabel) {
+      lastSeenVersionCookie.value = nextVersionLabel
+      lastSeenVersionCountCookie.value = String(nextVersionCount || countFromVersionLabel(nextVersionLabel) || 0)
+      return
+    }
+
+    if (previousVersionLabel !== nextVersionLabel) {
+      const appliedCount = Math.max(1, nextVersionCount && previousVersionCount ? nextVersionCount - previousVersionCount : 1)
+      startVersionUpgradeEffect({
+        previousLabel: previousVersionLabel,
+        nextLabel: nextVersionLabel,
+        count: appliedCount,
+        updates: result?.updates || []
+      })
+      lastSeenVersionCookie.value = nextVersionLabel
+      lastSeenVersionCountCookie.value = String(nextVersionCount || countFromVersionLabel(nextVersionLabel) || 0)
+    }
   } catch {}
 }
 
@@ -462,6 +571,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  clearVersionUpgradeTimers()
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', scheduleSidebarScaleUpdate)
     document.removeEventListener('pointerdown', handlePlantelDocumentPointerDown)
@@ -976,10 +1086,37 @@ const logout = async () => {
 }
 
 .system-version-card {
+  position: relative;
   display: grid;
   gap: 3px;
   padding: 10px 12px;
   color: #244736;
+  overflow: hidden;
+  transition: border-color 260ms ease, box-shadow 260ms ease, transform 260ms ease;
+}
+
+.system-version-card::after {
+  position: absolute;
+  inset: -40% auto -40% -65%;
+  width: 58%;
+  content: '';
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.82), transparent);
+  opacity: 0;
+  transform: rotate(16deg) translateX(-20%);
+}
+
+.system-version-card.version-level-up {
+  border-color: rgba(52, 211, 153, 0.68);
+  box-shadow: 0 12px 26px rgba(25, 118, 80, 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.52);
+  transform: translateY(-1px);
+}
+
+.system-version-card.version-level-up::after {
+  animation: versionSheen 1150ms cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
+.system-version-card.version-level-up-success {
+  border-color: rgba(34, 197, 94, 0.8);
 }
 
 .system-version-card span {
@@ -992,10 +1129,56 @@ const logout = async () => {
 }
 
 .system-version-card strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: #17351f;
   font-size: 0.93rem;
   font-weight: 950;
   line-height: 1.1;
+}
+
+.system-version-card strong em,
+.system-version-card strong i {
+  font-style: normal;
+}
+
+.system-version-card strong em:first-child {
+  color: #6d8376;
+  transform: translateY(1px) scale(0.92);
+}
+
+.system-version-card strong i {
+  color: #1a8a51;
+  font-size: 0.82rem;
+  animation: versionArrowPop 950ms cubic-bezier(.2, 1.25, .3, 1) both;
+}
+
+.system-version-card strong .new-version {
+  color: #0f6f3b;
+  animation: versionNumberBump 1250ms cubic-bezier(.2, 1.25, .3, 1) both;
+}
+
+.version-effect-orb {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #dcfce7 52%, #86efac);
+  color: #168747;
+  box-shadow: 0 8px 18px rgba(22, 135, 71, 0.28);
+}
+
+.version-level-up .version-effect-orb svg {
+  animation: versionOrbSpin 850ms linear infinite;
+}
+
+.version-level-up-success .version-effect-orb svg {
+  animation: versionCheckPop 420ms cubic-bezier(.2, 1.35, .32, 1) both;
 }
 
 .system-version-card small {
@@ -1006,6 +1189,72 @@ const logout = async () => {
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.system-version-card .version-update-summary {
+  color: #16723e;
+}
+
+.toast-status-icon {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-top: 1px;
+}
+
+.toast-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.toast-copy strong {
+  color: #f8fafc;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.toast-copy span {
+  line-height: 1.25;
+}
+
+.toast-copy small {
+  max-width: 300px;
+  overflow: hidden;
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.24;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes versionSheen {
+  0% { opacity: 0; transform: rotate(16deg) translateX(-10%); }
+  24% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(16deg) translateX(320%); }
+}
+
+@keyframes versionNumberBump {
+  0% { opacity: 0; transform: translateY(8px) scale(0.82); filter: blur(2px); }
+  56% { opacity: 1; transform: translateY(-2px) scale(1.14); filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@keyframes versionArrowPop {
+  0% { opacity: 0; transform: translateX(-5px) scale(0.7); }
+  60% { opacity: 1; transform: translateX(1px) scale(1.16); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes versionOrbSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes versionCheckPop {
+  0% { opacity: 0; transform: rotate(-25deg) scale(0.55); }
+  72% { opacity: 1; transform: rotate(0deg) scale(1.18); }
+  100% { opacity: 1; transform: rotate(0deg) scale(1); }
 }
 
 .admin-card {
