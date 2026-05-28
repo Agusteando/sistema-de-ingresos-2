@@ -23,3 +23,16 @@
   .student-list-card,
   .student-detail-panel { height: 620px; }
 }
+
+/* Keep the splitter grid authoritative after viewport responsive rules. */
+@media (min-width: 981px) {
+  .students-workspace.has-detail {
+    --students-workspace-resizer-width: 18px;
+    display: grid;
+    grid-template-columns:
+      minmax(320px, var(--students-list-panel-size, 49%))
+      var(--students-workspace-resizer-width)
+      minmax(380px, 1fr);
+    gap: 0;
+  }
+}

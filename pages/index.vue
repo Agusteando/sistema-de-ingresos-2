@@ -37,7 +37,17 @@
 
     <div ref="studentsScaleShell" class="students-scale-shell" :style="studentsScaleShellStyle">
       <div class="students-design-canvas" :style="studentsDesignCanvasStyle">
-        <div :class="['students-workspace', { 'has-detail': hasAccountWorkspace }]">
+        <div
+          ref="studentsWorkspaceEl"
+          :class="[
+            'students-workspace',
+            {
+              'has-detail': hasAccountWorkspace,
+              'is-resizing': workspaceResizing,
+            },
+          ]"
+          :style="studentsWorkspaceStyle"
+        >
           <StudentsListPanel
             :has-account-workspace="hasAccountWorkspace"
             :displayed-students="displayedStudents"
@@ -61,6 +71,27 @@
             @show-student-menu="showStudentMenu"
             @refresh-source="refreshStudentsFromServer"
           />
+
+          <button
+            v-if="hasAccountWorkspace"
+            type="button"
+            class="students-workspace-resizer"
+            aria-label="Redimensionar paneles de alumnos y estado de cuenta"
+            aria-orientation="horizontal"
+            role="separator"
+            :aria-valuenow="Math.round(workspaceSplitPercent)"
+            aria-valuemin="28"
+            aria-valuemax="72"
+            title="Arrastra para redimensionar los paneles. Doble clic para restaurar."
+            @pointerdown.prevent="startWorkspaceResize"
+            @dblclick.prevent="resetWorkspaceSplit"
+            @keydown.left.prevent="nudgeWorkspaceSplit(-2)"
+            @keydown.right.prevent="nudgeWorkspaceSplit(2)"
+          >
+            <span class="students-workspace-resizer-rail" aria-hidden="true">
+              <i></i><i></i><i></i>
+            </span>
+          </button>
 
           <StudentsWorkspacePanel
             :account-workspace-mode="accountWorkspaceMode"
@@ -416,6 +447,74 @@ const selectedSectionSummary = computed(() => {
   return values.length > 2 ? `${values.slice(0, 2).join(', ')} +${values.length - 2}` : values.join(', ')
 })
 const hasAccountWorkspace = computed(() => Boolean(selectedStudent.value) || (selectedCount.value > 1 && bulkWorkspaceMode.value !== 'none'))
+const studentsWorkspaceEl = ref(null)
+const workspaceSplitPercent = ref(49)
+const workspaceResizing = ref(false)
+const WORKSPACE_SPLIT_STORAGE_KEY = 'students:workspace-split-percent:v1'
+const WORKSPACE_SPLIT_DEFAULT = 49
+const WORKSPACE_SPLIT_MIN = 28
+const WORKSPACE_SPLIT_MAX = 72
+const studentsWorkspaceStyle = computed(() => ({
+  '--students-list-panel-size': `${workspaceSplitPercent.value}%`,
+  '--students-detail-panel-size': `${100 - workspaceSplitPercent.value}%`,
+}))
+const clampWorkspaceSplit = (value) => Math.min(WORKSPACE_SPLIT_MAX, Math.max(WORKSPACE_SPLIT_MIN, Number(value) || WORKSPACE_SPLIT_DEFAULT))
+const persistWorkspaceSplit = () => {
+  if (!process.client) return
+  localStorage.setItem(WORKSPACE_SPLIT_STORAGE_KEY, String(Math.round(workspaceSplitPercent.value * 10) / 10))
+}
+const setWorkspaceSplitFromClientX = (clientX) => {
+  const workspace = studentsWorkspaceEl.value
+  if (!workspace) return
+  const rect = workspace.getBoundingClientRect()
+  if (!rect.width) return
+  const minListPx = Math.min(540, Math.max(320, rect.width * 0.32))
+  const minDetailPx = Math.min(620, Math.max(380, rect.width * 0.34))
+  const minPercent = Math.max(WORKSPACE_SPLIT_MIN, (minListPx / rect.width) * 100)
+  const maxPercent = Math.min(WORKSPACE_SPLIT_MAX, 100 - (minDetailPx / rect.width) * 100)
+  const next = ((clientX - rect.left) / rect.width) * 100
+  workspaceSplitPercent.value = Math.min(maxPercent, Math.max(minPercent, next))
+}
+let workspaceResizePointerId = null
+const stopWorkspaceResize = () => {
+  if (!workspaceResizing.value) return
+  workspaceResizing.value = false
+  workspaceResizePointerId = null
+  persistWorkspaceSplit()
+  scheduleWorkspaceScaleUpdate()
+  if (process.client) {
+    document.body.classList.remove('students-workspace-resizing')
+    window.removeEventListener('pointermove', onWorkspaceResizeMove)
+    window.removeEventListener('pointerup', stopWorkspaceResize)
+    window.removeEventListener('pointercancel', stopWorkspaceResize)
+  }
+}
+const onWorkspaceResizeMove = (event) => {
+  if (!workspaceResizing.value) return
+  if (workspaceResizePointerId !== null && event.pointerId !== workspaceResizePointerId) return
+  setWorkspaceSplitFromClientX(event.clientX)
+}
+const startWorkspaceResize = (event) => {
+  if (!process.client || !hasAccountWorkspace.value) return
+  workspaceResizePointerId = event.pointerId ?? null
+  workspaceResizing.value = true
+  document.body.classList.add('students-workspace-resizing')
+  setWorkspaceSplitFromClientX(event.clientX)
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
+  window.addEventListener('pointermove', onWorkspaceResizeMove)
+  window.addEventListener('pointerup', stopWorkspaceResize)
+  window.addEventListener('pointercancel', stopWorkspaceResize)
+}
+const resetWorkspaceSplit = () => {
+  workspaceSplitPercent.value = WORKSPACE_SPLIT_DEFAULT
+  persistWorkspaceSplit()
+  scheduleWorkspaceScaleUpdate()
+}
+const nudgeWorkspaceSplit = (amount) => {
+  workspaceSplitPercent.value = clampWorkspaceSplit(workspaceSplitPercent.value + amount)
+  persistWorkspaceSplit()
+  scheduleWorkspaceScaleUpdate()
+}
 const accountWorkspaceMode = computed(() => {
   if (selectedCount.value > 1 && bulkWorkspaceMode.value === 'bulk-payment') return 'bulk-payment'
   if (selectedCount.value > 1 && bulkWorkspaceMode.value === 'bulk') return 'bulk'
@@ -1329,7 +1428,11 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
 }
 
 onMounted(() => {
-  if (process.client) window.addEventListener('financial:open-sync-diagnostics', openFinancialDiagnosticsModal)
+  if (process.client) {
+    const savedWorkspaceSplit = Number(localStorage.getItem(WORKSPACE_SPLIT_STORAGE_KEY))
+    if (Number.isFinite(savedWorkspaceSplit)) workspaceSplitPercent.value = clampWorkspaceSplit(savedWorkspaceSplit)
+    window.addEventListener('financial:open-sync-diagnostics', openFinancialDiagnosticsModal)
+  }
   if (route.query.q) filters.value.q = String(route.query.q)
   hydrateCachedEnrollmentConcepts()
   loadCustomSections()
@@ -1387,7 +1490,13 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  if (process.client) window.removeEventListener('financial:open-sync-diagnostics', openFinancialDiagnosticsModal)
+  if (process.client) {
+    window.removeEventListener('financial:open-sync-diagnostics', openFinancialDiagnosticsModal)
+    window.removeEventListener('pointermove', onWorkspaceResizeMove)
+    window.removeEventListener('pointerup', stopWorkspaceResize)
+    window.removeEventListener('pointercancel', stopWorkspaceResize)
+    document.body.classList.remove('students-workspace-resizing')
+  }
   clearKpiRefreshTimer()
 })
 
