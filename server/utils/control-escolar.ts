@@ -2904,5 +2904,5 @@ export const fetchControlEscolarExportRows = async (
   filters: any,
 ) => {
   const loaded = await fetchAllNormalizedStudents(agentId, filters);
-  return applyFilters(loaded.students, filters).slice(0, 5000);
+  return applyFilters(loaded.students, filters).slice(0, MAX_LOCAL_ROWS);
 };

@@ -1,1 +1,1 @@
-feat: separa Expediente avanzado y alinea posición académica con ciclo de ingreso
+feat(control-escolar): exportar vista filtrada en Excel con resumen por grado y hojas por grupo

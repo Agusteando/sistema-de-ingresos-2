@@ -233,24 +233,35 @@
                     Alumnos <span>{{ pagination.total }}</span>
                   </h2>
                 </div>
-                <div class="ce-pagination-mini">
+                <div class="ce-list-header-actions">
                   <button
                     type="button"
-                    :disabled="pagination.page <= 1 || studentsLoading"
-                    @click="goToPage(pagination.page - 1)"
+                    class="ce-excel-export-button"
+                    :disabled="!selectedAgentId || studentsLoading || !pagination.total"
+                    @click="exportCurrentView"
                   >
-                    <LucideChevronLeft :size="16" />
+                    <LucideFileSpreadsheet :size="15" />
+                    <span>Exportar Excel</span>
                   </button>
-                  <span>{{ pagination.page }} / {{ pagination.pages }}</span>
-                  <button
-                    type="button"
-                    :disabled="
-                      pagination.page >= pagination.pages || studentsLoading
-                    "
-                    @click="goToPage(pagination.page + 1)"
-                  >
-                    <LucideChevronRight :size="16" />
-                  </button>
+                  <div class="ce-pagination-mini">
+                    <button
+                      type="button"
+                      :disabled="pagination.page <= 1 || studentsLoading"
+                      @click="goToPage(pagination.page - 1)"
+                    >
+                      <LucideChevronLeft :size="16" />
+                    </button>
+                    <span>{{ pagination.page }} / {{ pagination.pages }}</span>
+                    <button
+                      type="button"
+                      :disabled="
+                        pagination.page >= pagination.pages || studentsLoading
+                      "
+                      @click="goToPage(pagination.page + 1)"
+                    >
+                      <LucideChevronRight :size="16" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -5838,6 +5849,46 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-list-titlebar h2 span {
   color: var(--ce-green-strong);
+}
+
+.control-escolar-screen .ce-list-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.control-escolar-screen .ce-excel-export-button {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid rgba(39, 106, 52, 0.18);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 250, 246, 0.96)),
+    radial-gradient(circle at 20% 0%, rgba(117, 184, 93, 0.18), transparent 52%);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.055);
+  color: #1f5c2f;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, color 0.18s ease;
+}
+
+.control-escolar-screen .ce-excel-export-button:hover:not(:disabled) {
+  border-color: rgba(39, 106, 52, 0.32);
+  box-shadow: 0 10px 22px rgba(21, 35, 60, 0.08);
+  color: #173d24;
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-excel-export-button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
 }
 
 .control-escolar-screen .ce-pagination-mini {
