@@ -1,1 +1,1 @@
-Documenta la falla de sincronización entre Finanzas y Control Escolar para el enriquecimiento de expediente
+Corrige el enriquecimiento de matrícula en Finanzas sin depender del bridge local

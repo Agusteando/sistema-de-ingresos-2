@@ -150,17 +150,18 @@
         </header>
         <div class="financial-diagnostics-body">
           <div class="financial-diagnostics-summary">
-            <span><b>Estado</b>{{ studentsSyncState.status }}</span>
+            <span><b>Base financiera</b>{{ studentsSyncState.status }}</span>
+            <span><b>Enriquecimiento</b>{{ financialEnrichmentState.status }}</span>
             <span><b>Alumnos visibles</b>{{ students.length }}</span>
             <span><b>Enriquecidos</b>{{ financialEnrichmentDiagnostics.enriched }}</span>
             <span><b>Pendientes</b>{{ financialEnrichmentDiagnostics.pending }}</span>
           </div>
           <section>
             <h3>Contrato aplicado</h3>
-            <p>El área financiera carga primero los datos financieros del plantel y después agrega matrícula central como enriquecimiento opcional. Si esa segunda etapa falla, el estado de cuenta sigue operando con la información disponible.</p>
+            <p>El área financiera carga primero los datos financieros del plantel y después agrega matrícula central como enriquecimiento opcional. Esta segunda etapa no depende del bridge local y no debe bloquear el estado de cuenta.</p>
           </section>
           <section>
-            <h3>Último estado</h3>
+            <h3>Base financiera / bridge</h3>
             <dl>
               <div>
                 <dt>Mensaje</dt>
@@ -177,6 +178,31 @@
               <div>
                 <dt>Última actualización</dt>
                 <dd>{{ studentsSyncState.lastUpdatedAt || 'Sin registro' }}</dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <h3>Enriquecimiento matrícula</h3>
+            <dl>
+              <div>
+                <dt>Mensaje</dt>
+                <dd>{{ financialEnrichmentState.message || 'Sin mensaje registrado' }}</dd>
+              </div>
+              <div>
+                <dt>Solicitados</dt>
+                <dd>{{ financialEnrichmentState.requested }}</dd>
+              </div>
+              <div>
+                <dt>Encontrados</dt>
+                <dd>{{ financialEnrichmentState.found }}</dd>
+              </div>
+              <div>
+                <dt>Error</dt>
+                <dd>{{ financialEnrichmentState.error || 'Sin error' }}</dd>
+              </div>
+              <div>
+                <dt>Última actualización</dt>
+                <dd>{{ financialEnrichmentState.lastUpdatedAt || 'Sin registro' }}</dd>
               </div>
             </dl>
           </section>
@@ -274,6 +300,14 @@ const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const students = ref([])
 const loading = ref(false)
 const studentsSourceUnavailable = computed(() => studentsSyncState.value.status === 'unavailable' && !students.value.length && !loading.value)
+const financialEnrichmentState = ref({
+  status: 'idle',
+  message: 'Enriquecimiento pendiente.',
+  requested: 0,
+  found: 0,
+  error: null,
+  lastUpdatedAt: null
+})
 const financialEnrichmentDiagnostics = computed(() => {
   const total = students.value.length
   const enriched = students.value.filter(student => Boolean(student?.centralMatricula) || student?.matriculaEnrichmentStatus === 'ready').length
@@ -666,18 +700,50 @@ const mergeMatriculaOverlayIntoStudent = (student, overlayStudent) => {
 }
 
 const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
-  const matriculas = students.value
+  const matriculas = Array.from(new Set(students.value
     .map((student) => normalizeStudentMatricula(student.matricula))
-    .filter(Boolean)
-  if (!matriculas.length) return
+    .filter(Boolean)))
+
+  if (!matriculas.length) {
+    financialEnrichmentState.value = {
+      status: 'idle',
+      message: 'Sin matrículas visibles para enriquecer.',
+      requested: 0,
+      found: 0,
+      error: null,
+      lastUpdatedAt: null
+    }
+    return
+  }
 
   const requestId = ++matriculaOverlayRequestId
+  financialEnrichmentState.value = {
+    status: 'syncing',
+    message: 'Consultando matrícula central como enriquecimiento opcional.',
+    requested: matriculas.length,
+    found: financialEnrichmentDiagnostics.value.enriched,
+    error: null,
+    lastUpdatedAt: financialEnrichmentState.value.lastUpdatedAt
+  }
+
   try {
     const response = await $fetch('/api/students/matricula-overlays', {
       method: 'POST',
       body: { matriculas }
     })
-    if (requestId !== matriculaOverlayRequestId || !response?.ok) return
+    if (requestId !== matriculaOverlayRequestId) return
+
+    if (!response?.ok) {
+      financialEnrichmentState.value = {
+        status: 'failed',
+        message: response?.message || 'No se pudo consultar matrícula central.',
+        requested: Number(response?.requested || matriculas.length),
+        found: Number(response?.found || 0),
+        error: response?.message || 'matricula-enrichment-failed',
+        lastUpdatedAt: new Date().toISOString()
+      }
+      return
+    }
 
     const overlays = new Map()
     for (const overlay of response.overlays || []) {
@@ -685,11 +751,12 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
       const key = normalizeStudentMatricula(overlayStudent?.matricula)
       if (key) overlays.set(key, overlayStudent)
     }
-    if (!overlays.size) return
 
     students.value = students.value.map((student) => {
       const key = normalizeStudentMatricula(student.matricula)
-      return overlays.has(key) ? mergeMatriculaOverlayIntoStudent(student, overlays.get(key)) : student
+      return overlays.has(key)
+        ? mergeMatriculaOverlayIntoStudent(student, overlays.get(key))
+        : { ...student, matriculaEnrichmentStatus: student?.centralMatricula ? 'ready' : 'missing' }
     })
 
     if (selectedStudent.value) {
@@ -705,8 +772,29 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
       operatorInfoStudent.value = students.value.find(student => normalizeStudentMatricula(student.matricula) === operatorKey) || operatorInfoStudent.value
     }
 
+    const found = financialEnrichmentDiagnostics.value.enriched
+    financialEnrichmentState.value = {
+      status: found === matriculas.length ? 'ready' : 'partial',
+      message: found
+        ? 'Matrícula central aplicada como enriquecimiento opcional.'
+        : 'Matrícula central respondió sin fichas para las matrículas visibles.',
+      requested: Number(response.requested || matriculas.length),
+      found: Number(response.found || found),
+      error: null,
+      lastUpdatedAt: new Date().toISOString()
+    }
+
     if (cacheOptions) writeCachedStudents(cacheOptions, students.value)
   } catch (error) {
+    if (requestId !== matriculaOverlayRequestId) return
+    financialEnrichmentState.value = {
+      status: 'failed',
+      message: 'No se pudo consultar matrícula central. El estado de cuenta sigue usando la base financiera disponible.',
+      requested: matriculas.length,
+      found: financialEnrichmentDiagnostics.value.enriched,
+      error: error?.data?.message || error?.message || 'matricula-enrichment-failed',
+      lastUpdatedAt: new Date().toISOString()
+    }
     console.warn('[Students] central matricula overlay unavailable', error?.message || error)
   }
 }

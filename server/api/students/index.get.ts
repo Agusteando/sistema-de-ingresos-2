@@ -5,6 +5,65 @@ import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipo
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 import { maybeRefreshControlEscolarCacheFromLoadedRows } from '../../utils/control-escolar-cache'
+import { fetchCentralMatriculaOverlays } from '../../utils/central-matricula-overlay'
+
+
+const compactText = (value: unknown) => String(value || '').trim()
+const normalizeFinancialMatricula = (value: unknown) => compactText(value).toUpperCase()
+
+const mergeCentralOverlayIntoFinancialStudent = (student: any, overlayStudent: any) => {
+  if (!student || !overlayStudent) return student
+  const centralMatricula = { ...(student.centralMatricula || {}), ...overlayStudent }
+  return {
+    ...student,
+    centralMatricula,
+    matriculaEnrichmentStatus: 'ready',
+    curp: compactText(overlayStudent.curp) || student.curp,
+    padre: compactText(overlayStudent.padre) || student.padre,
+    madre: compactText(overlayStudent.madre) || student.madre,
+    telefonoPadre: compactText(overlayStudent.telefonoPadre) || student.telefonoPadre,
+    telefonoMadre: compactText(overlayStudent.telefonoMadre) || student.telefonoMadre,
+    emailPadre: compactText(overlayStudent.emailPadre) || student.emailPadre,
+    emailMadre: compactText(overlayStudent.emailMadre) || student.emailMadre,
+    nombrePadre: compactText(overlayStudent.nombrePadre) || student.nombrePadre,
+    apellidoPaternoPadre: compactText(overlayStudent.apellidoPaternoPadre) || student.apellidoPaternoPadre,
+    apellidoMaternoPadre: compactText(overlayStudent.apellidoMaternoPadre) || student.apellidoMaternoPadre,
+    nombrePadreCompleto: compactText(overlayStudent.nombrePadreCompleto) || student.nombrePadreCompleto,
+    ocupacionPadre: compactText(overlayStudent.ocupacionPadre) || student.ocupacionPadre,
+    nombreMadre: compactText(overlayStudent.nombreMadre) || student.nombreMadre,
+    apellidoPaternoMadre: compactText(overlayStudent.apellidoPaternoMadre) || student.apellidoPaternoMadre,
+    apellidoMaternoMadre: compactText(overlayStudent.apellidoMaternoMadre) || student.apellidoMaternoMadre,
+    nombreMadreCompleto: compactText(overlayStudent.nombreMadreCompleto) || student.nombreMadreCompleto,
+    ocupacionMadre: compactText(overlayStudent.ocupacionMadre) || student.ocupacionMadre,
+    direccion: compactText(overlayStudent.direccion) || student.direccion,
+  }
+}
+
+const enrichFinancialStudentsWithMatricula = async (students: any[] = []) => {
+  const matriculas = Array.from(new Set(students.map((student) => compactText(student?.matricula)).filter(Boolean)))
+  if (!matriculas.length) return students
+
+  try {
+    const overlays = await fetchCentralMatriculaOverlays(matriculas)
+    if (!overlays.size) {
+      return students.map((student) => ({ ...student, matriculaEnrichmentStatus: 'missing' }))
+    }
+
+    return students.map((student) => {
+      const key = normalizeFinancialMatricula(student?.matricula)
+      const overlayStudent = overlays.get(key)?.student
+      return overlayStudent
+        ? mergeCentralOverlayIntoFinancialStudent(student, overlayStudent)
+        : { ...student, matriculaEnrichmentStatus: 'missing' }
+    })
+  } catch (error: any) {
+    console.warn('[Students] central matricula enrichment unavailable during financial load', {
+      count: matriculas.length,
+      message: error?.message || error
+    })
+    return students.map((student) => ({ ...student, matriculaEnrichmentStatus: 'unavailable' }))
+  }
+}
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { q = '', ciclo = '2025', concepts = '' } = getQuery(event)
@@ -244,5 +303,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     else void refreshPromise
   }
 
-  return await attachCustomSectionsToStudents(mapped, user)
+  const withSections = await attachCustomSectionsToStudents(mapped, user)
+  return await enrichFinancialStudentsWithMatricula(withSections)
 }))

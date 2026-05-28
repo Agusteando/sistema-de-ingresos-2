@@ -16,8 +16,18 @@ export default defineEventHandler(async (event) => {
   const isDirectoryEndpoint = url.pathname.startsWith('/api/directory/')
   const isExternalUsersEndpoint = url.pathname === '/api/users' || url.pathname.startsWith('/api/users/')
   const isProfileEndpoint = url.pathname === '/api/admin/profile'
+  const isCentralMatriculaOverlayEndpoint =
+    url.pathname === '/api/students/matricula-overlays' ||
+    /^\/api\/students\/[^/]+\/matricula-overlay$/.test(url.pathname) ||
+    /^\/api\/students\/[^/]+\/operator-info$/.test(url.pathname)
 
-  if (isControlEscolarEndpoint || isDirectoryEndpoint || isExternalUsersEndpoint || isProfileEndpoint) {
+  if (
+    isControlEscolarEndpoint ||
+    isDirectoryEndpoint ||
+    isExternalUsersEndpoint ||
+    isProfileEndpoint ||
+    isCentralMatriculaOverlayEndpoint
+  ) {
     return
   }
 
