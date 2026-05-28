@@ -184,64 +184,115 @@
             ×
           </button>
         </header>
-        <div class="financial-diagnostics-body">
-          <div class="financial-diagnostics-summary">
-            <span><b>Base financiera</b>{{ studentsSyncState.status }}</span>
-            <span><b>Enriquecimiento</b>{{ financialEnrichmentState.status }}</span>
-            <span><b>Alumnos visibles</b>{{ students.length }}</span>
-            <span><b>Enriquecidos</b>{{ financialEnrichmentDiagnostics.enriched }}</span>
-            <span><b>Pendientes</b>{{ financialEnrichmentDiagnostics.pending }}</span>
+        <div v-if="lastFinancialLoadDiagnostics" class="financial-diagnostics-body">
+          <div class="diagnostics-hero-card">
+            <div>
+              <small>Lectura automática</small>
+              <h3>Ruta de resolución financiera</h3>
+              <p>
+                El modal muestra el recorrido real de la última carga: caché del navegador,
+                bridge/base del servidor, enriquecimiento central y el resultado visible final.
+              </p>
+            </div>
+            <div class="diagnostics-query-pill">
+              <span>{{ lastFinancialLoadDiagnostics.query || 'sin búsqueda' }}</span>
+              <small>Ciclo {{ lastFinancialLoadDiagnostics.ciclo || 'n/a' }}</small>
+            </div>
           </div>
-          <section>
-            <h3>Contrato aplicado</h3>
-            <p>El área financiera carga primero los datos financieros del plantel y después agrega matrícula central como enriquecimiento opcional. Esta segunda etapa no depende del bridge local y no debe bloquear el estado de cuenta.</p>
-          </section>
-          <section>
-            <h3>Base financiera / bridge</h3>
-            <dl>
+
+          <div class="diagnostics-summary-grid">
+            <article
+              v-for="item in financialDiagnosticsSummary"
+              :key="item.label"
+              :class="['diagnostics-summary-card', `is-${item.tone || 'neutral'}`]"
+            >
+              <small>{{ item.label }}</small>
+              <strong>{{ item.value }}</strong>
+            </article>
+          </div>
+
+          <section class="diagnostics-section-card">
+            <div class="diagnostics-section-card__head">
               <div>
-                <dt>Mensaje</dt>
+                <small>Árbol de decisiones</small>
+                <h3>Cómo navegó la resolución</h3>
+              </div>
+              <span class="diagnostics-inline-badge">{{ financialDiagnosticsTree.length }} nodos</span>
+            </div>
+            <div class="diagnostics-tree">
+              <template v-for="(node, index) in financialDiagnosticsTree" :key="node.id">
+                <article :class="['diagnostics-node', `is-${node.tone}`]">
+                  <div class="diagnostics-node__rail">
+                    <span class="diagnostics-node__lane">{{ node.laneLabel }}</span>
+                    <span class="diagnostics-node__status">{{ node.statusLabel }}</span>
+                  </div>
+                  <div class="diagnostics-node__body">
+                    <header>
+                      <div>
+                        <h4>{{ node.title }}</h4>
+                        <p>{{ node.decision }}</p>
+                      </div>
+                      <span class="diagnostics-node__time">{{ formatFinancialDuration(node.ms) }}</span>
+                    </header>
+                    <p class="diagnostics-node__why"><b>Por qué:</b> {{ node.why }}</p>
+                    <ul v-if="node.meta.length" class="diagnostics-node__meta">
+                      <li v-for="item in node.meta" :key="`${node.id}-${item.label}`">
+                        <span>{{ item.label }}</span>
+                        <strong>{{ item.value }}</strong>
+                      </li>
+                    </ul>
+                  </div>
+                </article>
+                <div v-if="index < financialDiagnosticsTree.length - 1" class="diagnostics-tree__arrow">↓</div>
+              </template>
+            </div>
+          </section>
+
+          <section class="diagnostics-section-card diagnostics-section-card--compact">
+            <div class="diagnostics-section-card__head">
+              <div>
+                <small>Estado actual</small>
+                <h3>Resumen operativo</h3>
+              </div>
+            </div>
+            <dl class="diagnostics-facts-grid">
+              <div>
+                <dt>Sync base</dt>
                 <dd>{{ studentsSyncState.message || 'Sin mensaje registrado' }}</dd>
               </div>
               <div>
-                <dt>Caché local</dt>
-                <dd>{{ studentsSyncState.hasCache ? 'Disponible' : 'Sin caché' }}</dd>
-              </div>
-              <div>
-                <dt>Error</dt>
-                <dd>{{ studentsSyncState.error || 'Sin error' }}</dd>
-              </div>
-              <div>
-                <dt>Última actualización</dt>
-                <dd>{{ studentsSyncState.lastUpdatedAt || 'Sin registro' }}</dd>
-              </div>
-            </dl>
-          </section>
-          <section>
-            <h3>Enriquecimiento matrícula</h3>
-            <dl>
-              <div>
-                <dt>Mensaje</dt>
+                <dt>Overlay visible</dt>
                 <dd>{{ financialEnrichmentState.message || 'Sin mensaje registrado' }}</dd>
               </div>
               <div>
-                <dt>Solicitados</dt>
-                <dd>{{ financialEnrichmentState.requested }}</dd>
+                <dt>Bridge</dt>
+                <dd>{{ lastFinancialLoadDiagnostics.source.server.bridgeState || 'unknown' }}</dd>
               </div>
               <div>
-                <dt>Encontrados</dt>
-                <dd>{{ financialEnrichmentState.found }}</dd>
+                <dt>Flujo servidor</dt>
+                <dd>{{ lastFinancialLoadDiagnostics.source.server.flow || 'n/a' }}</dd>
               </div>
               <div>
-                <dt>Error</dt>
-                <dd>{{ financialEnrichmentState.error || 'Sin error' }}</dd>
+                <dt>Base rows</dt>
+                <dd>{{ lastFinancialLoadDiagnostics.source.server.baseRows }}</dd>
               </div>
               <div>
-                <dt>Última actualización</dt>
-                <dd>{{ financialEnrichmentState.lastUpdatedAt || 'Sin registro' }}</dd>
+                <dt>Overlay rows</dt>
+                <dd>{{ lastFinancialLoadDiagnostics.source.server.overlayFound }}/{{ lastFinancialLoadDiagnostics.source.server.overlayRequested }}</dd>
+              </div>
+              <div>
+                <dt>Visibles</dt>
+                <dd>{{ students.length }}</dd>
+              </div>
+              <div>
+                <dt>Pendientes</dt>
+                <dd>{{ financialEnrichmentDiagnostics.pending }}</dd>
               </div>
             </dl>
           </section>
+        </div>
+        <div v-else class="diagnostics-empty-state">
+          Aún no hay una carga registrada para este plantel.
         </div>
       </section>
     </div>
@@ -347,6 +398,180 @@ const financialEnrichmentDiagnostics = computed(() => {
   const total = students.value.length
   const enriched = students.value.filter(student => Boolean(student?.centralMatricula) || student?.matriculaEnrichmentStatus === 'ready').length
   return { total, enriched, pending: Math.max(total - enriched, 0) }
+})
+const lastFinancialLoadDiagnostics = ref(null)
+
+const financialNow = () => (typeof performance !== 'undefined' && performance?.now ? performance.now() : Date.now())
+const cloneFinancialDiagnostics = (payload) => {
+  try {
+    return JSON.parse(JSON.stringify(payload))
+  } catch {
+    return payload ? { ...payload } : null
+  }
+}
+const formatFinancialDuration = (ms) => {
+  const value = Number(ms || 0)
+  if (!Number.isFinite(value)) return '0 ms'
+  if (value < 1000) return `${Math.round(value)} ms`
+  return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} s`
+}
+const financialStatusTone = (status = '') => {
+  const normalized = String(status || '').toLowerCase()
+  if (['ready', 'updated', 'cached', 'complete'].includes(normalized)) return 'success'
+  if (['partial', 'syncing', 'loading'].includes(normalized)) return 'info'
+  if (['skipped', 'disabled', 'idle', 'empty', 'missing'].includes(normalized)) return 'muted'
+  if (['failed', 'unavailable', 'error'].includes(normalized)) return 'danger'
+  return 'neutral'
+}
+const financialStatusLabel = (status = '') => {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized === 'ready') return 'Listo'
+  if (normalized === 'updated') return 'Actualizado'
+  if (normalized === 'cached') return 'En caché'
+  if (normalized === 'syncing') return 'Sincronizando'
+  if (normalized === 'partial') return 'Parcial'
+  if (normalized === 'failed') return 'Falló'
+  if (normalized === 'unavailable') return 'No disponible'
+  if (normalized === 'disabled') return 'Desactivado'
+  if (normalized === 'skipped') return 'Omitido'
+  if (normalized === 'empty') return 'Vacío'
+  if (normalized === 'missing') return 'Sin coincidencias'
+  if (normalized === 'idle') return 'En espera'
+  return normalized || 'Sin estado'
+}
+const publishFinancialDiagnostics = (trace) => {
+  lastFinancialLoadDiagnostics.value = cloneFinancialDiagnostics(trace)
+}
+const upsertFinancialTraceStep = (trace, lane, step) => {
+  if (!trace) return
+  const target = lane === 'server' ? trace.serverSteps : trace.clientSteps
+  const normalizedStep = {
+    tone: financialStatusTone(step.status),
+    statusLabel: financialStatusLabel(step.status),
+    ...step,
+  }
+  const index = target.findIndex((candidate) => candidate.key === normalizedStep.key)
+  if (index >= 0) target.splice(index, 1, normalizedStep)
+  else target.push(normalizedStep)
+  publishFinancialDiagnostics(trace)
+}
+const createFinancialDiagnosticsTrace = ({ requestId, useCache, cicloKey, query, hadStudents }) => ({
+  requestId,
+  capturedAt: new Date().toISOString(),
+  status: 'syncing',
+  statusLabel: financialStatusLabel('syncing'),
+  totalMs: 0,
+  query: query || '',
+  ciclo: cicloKey,
+  options: {
+    useCache: Boolean(useCache),
+    hadStudents: Boolean(hadStudents),
+  },
+  source: {
+    base: '',
+    browserCache: {
+      used: false,
+      available: false,
+      rows: 0,
+      savedAt: '',
+      reason: '',
+    },
+    server: {
+      bridgeState: 'unknown',
+      flow: '',
+      baseRows: 0,
+      sectionsRows: 0,
+      overlayRequested: 0,
+      overlayFound: 0,
+      overlayStatus: 'idle',
+      overlayReason: '',
+      overlayError: '',
+      cacheRefresh: '',
+      scopedPlantel: '',
+      queryMode: query ? 'search' : 'scope',
+      enrollmentConcepts: 0,
+    },
+  },
+  resolution: {
+    finalRows: 0,
+    cacheWritten: false,
+    visibleOverlayStatus: 'idle',
+    visibleOverlayFound: 0,
+    visibleOverlayRequested: 0,
+  },
+  clientSteps: [],
+  serverSteps: [],
+})
+const readFinancialDiagnosticsHeaders = (response) => ({
+  bridgeState: response?.headers?.get('x-financial-students-bridge-state') || 'unknown',
+  flow: response?.headers?.get('x-financial-students-flow') || '',
+  baseRows: Number(response?.headers?.get('x-financial-students-base-rows') || 0),
+  sectionsRows: Number(response?.headers?.get('x-financial-students-sections-rows') || 0),
+  overlayRequested: Number(response?.headers?.get('x-financial-students-overlay-requested') || 0),
+  overlayFound: Number(response?.headers?.get('x-financial-students-overlay-found') || 0),
+  overlayStatus: response?.headers?.get('x-financial-students-overlay-status') || 'idle',
+  overlayReason: response?.headers?.get('x-financial-students-overlay-reason') || '',
+  overlayError: response?.headers?.get('x-financial-students-overlay-error') || '',
+  cacheRefresh: response?.headers?.get('x-financial-students-cache-refresh') || '',
+  scopedPlantel: response?.headers?.get('x-financial-students-scoped-plantel') || '',
+  queryMode: response?.headers?.get('x-financial-students-query-mode') || 'scope',
+  enrollmentConcepts: Number(response?.headers?.get('x-financial-students-enrollment-concepts') || 0),
+})
+const financialDiagnosticsTree = computed(() => {
+  const diagnostics = lastFinancialLoadDiagnostics.value
+  if (!diagnostics) return []
+  const makeNode = (step, lane) => ({
+    id: `${lane}-${step.key}`,
+    lane,
+    laneLabel: lane === 'server' ? 'Servidor' : 'Cliente',
+    title: step.label,
+    decision: step.decision || step.label,
+    why: step.why || 'Sin detalle adicional.',
+    tone: step.tone || financialStatusTone(step.status),
+    status: step.status,
+    statusLabel: step.statusLabel || financialStatusLabel(step.status),
+    ms: Number(step.ms || 0),
+    meta: Array.isArray(step.meta) ? step.meta.filter(item => item && item.value !== '' && item.value != null) : [],
+  })
+
+  const nodes = [
+    ...diagnostics.clientSteps.map((step) => makeNode(step, 'client')),
+    ...diagnostics.serverSteps.map((step) => makeNode(step, 'server')),
+  ]
+
+  nodes.push({
+    id: 'result-final',
+    lane: 'result',
+    laneLabel: 'Resultado',
+    title: 'Resultado final visible',
+    decision: diagnostics.status === 'failed'
+      ? 'La ruta no terminó limpia y se conservó lo disponible.'
+      : 'La ruta terminó y dejó una base visible para trabajar.',
+    why: diagnostics.status === 'failed'
+      ? 'El flujo terminó con error o degradación; el modal refleja el último punto conocido del recorrido.'
+      : 'El modal resume la última resolución completa, incluyendo caché, bridge y enriquecimientos.',
+    tone: financialStatusTone(diagnostics.status),
+    status: diagnostics.status,
+    statusLabel: financialStatusLabel(diagnostics.status),
+    ms: diagnostics.totalMs,
+    meta: [
+      { label: 'Filas visibles', value: diagnostics.resolution?.finalRows ?? 0 },
+      { label: 'Overlay visible', value: `${diagnostics.resolution?.visibleOverlayFound ?? 0}/${diagnostics.resolution?.visibleOverlayRequested ?? 0}` },
+      { label: 'Caché escrita', value: diagnostics.resolution?.cacheWritten ? 'Sí' : 'No' },
+    ],
+  })
+
+  return nodes
+})
+const financialDiagnosticsSummary = computed(() => {
+  const diagnostics = lastFinancialLoadDiagnostics.value
+  if (!diagnostics) return []
+  return [
+    { label: 'Estado final', value: financialStatusLabel(diagnostics.status), tone: financialStatusTone(diagnostics.status) },
+    { label: 'Tiempo cliente', value: formatFinancialDuration(diagnostics.totalMs), tone: 'neutral' },
+    { label: 'Bridge', value: diagnostics.source?.server?.bridgeState || 'unknown', tone: financialStatusTone(diagnostics.source?.server?.bridgeState === 'ready' ? 'ready' : diagnostics.status) },
+    { label: 'Base / overlay', value: `${diagnostics.source?.server?.baseRows || 0} / ${diagnostics.source?.server?.overlayFound || 0}`, tone: 'neutral' },
+  ]
 })
 const selectedStudent = ref(null)
 const photoCache = ref({})
@@ -512,8 +737,8 @@ const setWorkspaceSplitFromPointer = (clientX, clientY) => {
     return
   }
 
-  const minListPx = Math.min(520, Math.max(280, rect.width * 0.23))
-  const minDetailPx = Math.min(560, Math.max(320, rect.width * 0.24))
+  const minListPx = Math.min(560, Math.max(300, rect.width * 0.26))
+  const minDetailPx = Math.min(620, Math.max(340, rect.width * 0.3))
   const minPercent = Math.max(WORKSPACE_SPLIT_MIN, (minListPx / rect.width) * 100)
   const maxPercent = Math.min(WORKSPACE_SPLIT_MAX, 100 - (minDetailPx / rect.width) * 100)
   const nextSplit = ((clientX - rect.left) / rect.width) * 100
@@ -890,10 +1115,12 @@ const mergeMatriculaOverlayIntoStudent = (student, overlayPayload) => {
   return withControlEscolarProgress(applyMatriculaOverlayFields(student, overlayPayload))
 }
 
-const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
+const loadVisibleMatriculaOverlays = async (cacheOptions = null, traceContext = null) => {
   const matriculas = Array.from(new Set(students.value
     .map((student) => normalizeStudentMatricula(student.matricula))
     .filter(Boolean)))
+
+  const overlayStartedAt = financialNow()
 
   if (!matriculas.length) {
     financialEnrichmentState.value = {
@@ -903,6 +1130,20 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
       found: 0,
       error: null,
       lastUpdatedAt: null
+    }
+    if (traceContext) {
+      traceContext.resolution.visibleOverlayStatus = 'skipped'
+      traceContext.resolution.visibleOverlayFound = 0
+      traceContext.resolution.visibleOverlayRequested = 0
+      upsertFinancialTraceStep(traceContext, 'client', {
+        key: 'client-visible-overlay',
+        label: 'Revisión visible de matrícula central',
+        status: 'skipped',
+        ms: financialNow() - overlayStartedAt,
+        decision: 'No se reconsultó overlay visible.',
+        why: 'No había matrículas visibles en pantalla para volver a contrastar.',
+        meta: [{ label: 'Motivo', value: 'Sin matrículas visibles' }],
+      })
     }
     return
   }
@@ -915,6 +1156,17 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
     found: financialEnrichmentDiagnostics.value.enriched,
     error: null,
     lastUpdatedAt: financialEnrichmentState.value.lastUpdatedAt
+  }
+  if (traceContext) {
+    upsertFinancialTraceStep(traceContext, 'client', {
+      key: 'client-visible-overlay',
+      label: 'Revisión visible de matrícula central',
+      status: 'syncing',
+      ms: financialNow() - overlayStartedAt,
+      decision: 'Se abrió una verificación visible adicional.',
+      why: 'Después de pintar la base financiera, el cliente vuelve a revisar matrícula central para que el detalle visible no se quede atrás.',
+      meta: [{ label: 'Matrículas visibles', value: matriculas.length }],
+    })
   }
 
   try {
@@ -932,6 +1184,23 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
         found: Number(response?.found || 0),
         error: response?.message || 'matricula-enrichment-failed',
         lastUpdatedAt: new Date().toISOString()
+      }
+      if (traceContext) {
+        traceContext.resolution.visibleOverlayStatus = 'failed'
+        traceContext.resolution.visibleOverlayFound = Number(response?.found || 0)
+        traceContext.resolution.visibleOverlayRequested = Number(response?.requested || matriculas.length)
+        upsertFinancialTraceStep(traceContext, 'client', {
+          key: 'client-visible-overlay',
+          label: 'Revisión visible de matrícula central',
+          status: 'failed',
+          ms: financialNow() - overlayStartedAt,
+          decision: 'La revalidación visible no pudo completar el contraste.',
+          why: response?.message || 'La API de matrícula central respondió sin confirmar la revisión visible.',
+          meta: [
+            { label: 'Solicitados', value: Number(response?.requested || matriculas.length) },
+            { label: 'Encontrados', value: Number(response?.found || 0) },
+          ],
+        })
       }
       return
     }
@@ -975,6 +1244,28 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
       lastUpdatedAt: new Date().toISOString()
     }
 
+    if (traceContext) {
+      traceContext.resolution.visibleOverlayStatus = found === matriculas.length ? 'ready' : 'partial'
+      traceContext.resolution.visibleOverlayFound = Number(response.found || found)
+      traceContext.resolution.visibleOverlayRequested = Number(response.requested || matriculas.length)
+      upsertFinancialTraceStep(traceContext, 'client', {
+        key: 'client-visible-overlay',
+        label: 'Revisión visible de matrícula central',
+        status: found === matriculas.length ? 'ready' : 'partial',
+        ms: financialNow() - overlayStartedAt,
+        decision: found === matriculas.length
+          ? 'La revisión visible confirmó toda la matrícula central esperada.'
+          : 'La revisión visible encontró solo una parte del overlay esperado.',
+        why: found === matriculas.length
+          ? 'El contraste final no detectó huecos entre lo visible y la respuesta de matrícula.'
+          : 'Hay matrículas visibles sin ficha central o aún pendientes de normalización.',
+        meta: [
+          { label: 'Solicitados', value: Number(response.requested || matriculas.length) },
+          { label: 'Encontrados', value: Number(response.found || found) },
+        ],
+      })
+    }
+
     if (cacheOptions) writeCachedStudents(cacheOptions, students.value)
   } catch (error) {
     if (requestId !== matriculaOverlayRequestId) return
@@ -986,11 +1277,28 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
       error: error?.data?.message || error?.message || 'matricula-enrichment-failed',
       lastUpdatedAt: new Date().toISOString()
     }
+    if (traceContext) {
+      traceContext.resolution.visibleOverlayStatus = 'failed'
+      traceContext.resolution.visibleOverlayFound = financialEnrichmentDiagnostics.value.enriched
+      traceContext.resolution.visibleOverlayRequested = matriculas.length
+      upsertFinancialTraceStep(traceContext, 'client', {
+        key: 'client-visible-overlay',
+        label: 'Revisión visible de matrícula central',
+        status: 'failed',
+        ms: financialNow() - overlayStartedAt,
+        decision: 'La revisión visible terminó degradada.',
+        why: error?.data?.message || error?.message || 'La consulta de matrícula central falló y se conservó la base financiera disponible.',
+        meta: [
+          { label: 'Solicitados', value: matriculas.length },
+          { label: 'Encontrados previos', value: financialEnrichmentDiagnostics.value.enriched },
+        ],
+      })
+    }
     console.warn('[Students] central matricula overlay unavailable', error?.message || error)
   }
 }
 
-const applyStudentsList = (nextStudents, { selectRouteStudent = true, cacheOptions = null } = {}) => {
+const applyStudentsList = (nextStudents, { selectRouteStudent = true, cacheOptions = null, traceContext = null } = {}) => {
   students.value = (Array.isArray(nextStudents) ? nextStudents : []).map(withControlEscolarProgress)
 
   readCachedStudentPhotos()
@@ -1003,7 +1311,10 @@ const applyStudentsList = (nextStudents, { selectRouteStudent = true, cacheOptio
     if (match) selectStudent(match)
   }
 
-  loadVisibleMatriculaOverlays(cacheOptions || { ciclo: normalizeCicloKey(state.value.ciclo), q: filters.value.q || '', enrollmentConcepts: externalConcepts.value })
+  loadVisibleMatriculaOverlays(
+    cacheOptions || { ciclo: normalizeCicloKey(state.value.ciclo), q: filters.value.q || '', enrollmentConcepts: externalConcepts.value },
+    traceContext,
+  )
 }
 
 const performSearch = async (options = {}) => {
@@ -1011,20 +1322,72 @@ const performSearch = async (options = {}) => {
   const requestId = ++studentsRequestId
   const cicloKey = normalizeCicloKey(state.value.ciclo)
   const query = serverQuery === undefined ? (filters.value.q || '') : String(serverQuery || '')
+  const startedAt = financialNow()
 
   const cached = useCache ? readCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }) : null
   const cachedConcepts = normalizeEnrollmentConceptIds(cached?.enrollmentConcepts)
+  const hadStudents = students.value.length > 0
+  const trace = createFinancialDiagnosticsTrace({ requestId, useCache, cicloKey, query, hadStudents })
+
+  upsertFinancialTraceStep(trace, 'client', {
+    key: 'browser-cache',
+    label: 'Resolver caché del navegador',
+    status: useCache ? (cached?.students?.length ? 'ready' : 'empty') : 'skipped',
+    ms: financialNow() - startedAt,
+    decision: useCache
+      ? (cached?.students?.length ? 'Se revisó y reutilizó la caché local.' : 'Se revisó la caché local y no hubo material útil.')
+      : 'Se omitió la caché local y se forzó red.',
+    why: useCache
+      ? (cached?.students?.length
+        ? 'El flujo permite pintar primero la última copia local para no dejar la pantalla vacía mientras llega la red.'
+        : 'La ruta intentó reutilizar caché, pero no había alumnos compatibles con este plantel/ciclo/búsqueda.')
+      : 'La acción fue un refresh manual o una ruta que pidió ignorar el navegador.',
+    meta: [
+      { label: 'Filas caché', value: Number(cached?.count || 0) },
+      { label: 'Guardado', value: cached?.savedAt || 'sin registro' },
+      { label: 'Consulta', value: query || 'sin búsqueda' },
+    ],
+  })
+  trace.source.browserCache = {
+    used: Boolean(cached?.students?.length),
+    available: Boolean(cached?.students?.length),
+    rows: Number(cached?.count || 0),
+    savedAt: cached?.savedAt || '',
+    reason: useCache ? (cached?.students?.length ? 'cache_hit' : 'cache_miss') : 'cache_bypassed',
+  }
 
   if (!externalConcepts.value.length && cachedConcepts.length) {
     externalConcepts.value = cachedConcepts
     cacheEnrollmentConcepts(cachedConcepts)
+    upsertFinancialTraceStep(trace, 'client', {
+      key: 'cached-concepts',
+      label: 'Restaurar conceptos de inscripción',
+      status: 'ready',
+      ms: financialNow() - startedAt,
+      decision: 'Se restauró la configuración de conceptos desde la caché.',
+      why: 'La caché traía firma de conceptos y se reutilizó para que el filtro de inscripción conserve el mismo criterio.',
+      meta: [{ label: 'Conceptos', value: cachedConcepts.join(', ') }],
+    })
+  } else {
+    upsertFinancialTraceStep(trace, 'client', {
+      key: 'cached-concepts',
+      label: 'Restaurar conceptos de inscripción',
+      status: cachedConcepts.length ? 'skipped' : 'empty',
+      ms: financialNow() - startedAt,
+      decision: cachedConcepts.length
+        ? 'No hizo falta restaurar conceptos desde la caché.'
+        : 'No había firma de conceptos guardada para restaurar.',
+      why: cachedConcepts.length
+        ? 'La configuración actual ya tenía conceptos cargados y la caché no necesitó intervenir.'
+        : 'La caché no aportó conceptos o la búsqueda actual no dependía de ellos.',
+      meta: [{ label: 'Conceptos caché', value: cachedConcepts.join(', ') || 'ninguno' }],
+    })
   }
 
   const hasCachedStudents = Boolean(cached?.students?.length)
-  const hadStudents = students.value.length > 0
 
   if (hasCachedStudents) {
-    applyStudentsList(cached.students, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value } })
+    applyStudentsList(cached.students, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }, traceContext: trace })
     loading.value = false
     setStudentsSyncState({
       status: 'cached',
@@ -1051,13 +1414,105 @@ const performSearch = async (options = {}) => {
   })
 
   try {
-    const res = await $fetch('/api/students', { params: { ciclo: cicloKey, q: query, concepts: externalConcepts.value.join(',') } })
+    const serverStartedAt = financialNow()
+    const response = await $fetch.raw('/api/students', { params: { ciclo: cicloKey, q: query, concepts: externalConcepts.value.join(',') } })
     if (requestId !== studentsRequestId) return
+    const headers = readFinancialDiagnosticsHeaders(response)
+    trace.source.base = 'bridge:financial.base'
+    trace.source.server = headers
 
-    const freshStudents = Array.isArray(res) ? res : []
-    applyStudentsList(freshStudents, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value } })
+    upsertFinancialTraceStep(trace, 'server', {
+      key: 'server-financial-base',
+      label: 'Leer base financiera del bridge',
+      status: headers.bridgeState === 'ready' ? 'ready' : 'partial',
+      ms: financialNow() - serverStartedAt,
+      decision: headers.bridgeState === 'ready'
+        ? 'El bridge respondió y devolvió la base financiera activa.'
+        : 'La base financiera respondió en estado no ideal.',
+      why: headers.bridgeState === 'ready'
+        ? 'La consulta principal al bridge local terminó sin fallback visible del lado del cliente.'
+        : 'La respuesta del servidor no marcó bridge listo y debe revisarse junto con el resto de la ruta.',
+      meta: [
+        { label: 'Filas base', value: headers.baseRows },
+        { label: 'Plantel', value: headers.scopedPlantel || 'n/a' },
+        { label: 'Modo', value: headers.queryMode || 'scope' },
+      ],
+    })
+
+    upsertFinancialTraceStep(trace, 'server', {
+      key: 'server-central-overlay',
+      label: 'Enriquecimiento central dentro del servidor',
+      status: headers.overlayStatus || 'idle',
+      ms: financialNow() - serverStartedAt,
+      decision: headers.overlayStatus === 'ready'
+        ? 'El servidor ya devolvió la lista enriquecida con matrícula central.'
+        : headers.overlayStatus === 'partial'
+          ? 'El servidor enriqueció solo una parte de la lista.'
+          : headers.overlayStatus === 'missing'
+            ? 'El servidor no encontró overlays centrales para la lista visible.'
+            : headers.overlayStatus === 'failed'
+              ? 'El enriquecimiento central del servidor falló.'
+              : 'El servidor no necesitó o no pudo enriquecer la lista en esta etapa.',
+      why: headers.overlayStatus === 'ready'
+        ? 'La API principal ya hizo un contraste con matrícula central antes de responder al navegador.'
+        : headers.overlayStatus === 'partial'
+          ? 'Hay matrículas de la lista sin ficha central encontrada, por eso el servidor solo completó parte de los campos.'
+          : headers.overlayStatus === 'missing'
+            ? 'La consulta central respondió sin coincidencias para estas matrículas.'
+            : headers.overlayStatus === 'failed'
+              ? headers.overlayError || 'La capa central no respondió y la base financiera quedó como respaldo visible.'
+              : 'No había matrículas visibles o el servidor marcó la etapa como omitida.',
+      meta: [
+        { label: 'Solicitados', value: headers.overlayRequested },
+        { label: 'Encontrados', value: headers.overlayFound },
+        { label: 'Motivo', value: headers.overlayReason || 'n/a' },
+      ],
+    })
+
+    upsertFinancialTraceStep(trace, 'server', {
+      key: 'server-cache-refresh',
+      label: 'Refresh auxiliar del snapshot Control Escolar',
+      status: String(headers.cacheRefresh || '').startsWith('scheduled') ? 'ready' : 'skipped',
+      ms: financialNow() - serverStartedAt,
+      decision: String(headers.cacheRefresh || '').startsWith('scheduled')
+        ? 'Se programó un refresh auxiliar con filas live.'
+        : 'No se programó refresh auxiliar en esta llamada.',
+      why: String(headers.cacheRefresh || '').startsWith('scheduled')
+        ? 'La carga financiera aprovechó las filas vivas para mantener al día el respaldo de Control Escolar.'
+        : 'La consulta tenía búsqueda o no era elegible para refrescar el snapshot auxiliar.',
+      meta: [
+        { label: 'Estado', value: headers.cacheRefresh || 'n/a' },
+        { label: 'Conceptos', value: headers.enrollmentConcepts },
+      ],
+    })
+
+    const freshStudents = Array.isArray(response?._data) ? response._data : []
+    applyStudentsList(freshStudents, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }, traceContext: trace })
     const cacheWritten = writeCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }, freshStudents)
     const updatedAt = new Date().toISOString()
+    trace.status = 'updated'
+    trace.statusLabel = financialStatusLabel('updated')
+    trace.totalMs = Math.max(0, Math.round(financialNow() - startedAt))
+    trace.resolution.finalRows = freshStudents.length
+    trace.resolution.cacheWritten = cacheWritten
+
+    upsertFinancialTraceStep(trace, 'client', {
+      key: 'cache-write',
+      label: 'Persistir caché local actualizada',
+      status: cacheWritten ? 'ready' : 'failed',
+      ms: financialNow() - startedAt,
+      decision: cacheWritten
+        ? 'La nueva lista quedó guardada localmente.'
+        : 'La lista se actualizó, pero no pudo quedar guardada localmente.',
+      why: cacheWritten
+        ? 'Esto permite abrir primero una copia reciente en la siguiente carga si el navegador la puede reutilizar.'
+        : 'El navegador rechazó la escritura local o no tenía espacio disponible.',
+      meta: [
+        { label: 'Filas', value: freshStudents.length },
+        { label: 'Consulta', value: query || 'sin búsqueda' },
+      ],
+    })
+    publishFinancialDiagnostics(trace)
 
     setStudentsSyncState({
       status: 'updated',
@@ -1071,6 +1526,24 @@ const performSearch = async (options = {}) => {
     })
   } catch (e) {
     if (requestId !== studentsRequestId) return
+    trace.status = hasCachedStudents || hadStudents ? 'failed' : 'unavailable'
+    trace.statusLabel = financialStatusLabel(trace.status)
+    trace.totalMs = Math.max(0, Math.round(financialNow() - startedAt))
+    trace.resolution.finalRows = students.value.length
+    trace.source.server.bridgeState = 'failed'
+    upsertFinancialTraceStep(trace, 'server', {
+      key: 'server-financial-base',
+      label: 'Leer base financiera del bridge',
+      status: 'failed',
+      ms: financialNow() - startedAt,
+      decision: 'La lectura principal de la base financiera falló.',
+      why: e?.data?.message || e?.message || 'La API principal no respondió correctamente.',
+      meta: [
+        { label: 'Conservar visibles', value: hasCachedStudents || hadStudents ? 'sí' : 'no' },
+        { label: 'Consulta', value: query || 'sin búsqueda' },
+      ],
+    })
+    publishFinancialDiagnostics(trace)
 
     const canKeepWorking = hasCachedStudents || hadStudents
     setStudentsSyncState({

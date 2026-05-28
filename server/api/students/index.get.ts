@@ -41,31 +41,77 @@ const mergeCentralOverlayIntoFinancialStudent = (student: any, overlayStudent: a
 
 const enrichFinancialStudentsWithMatricula = async (students: any[] = []) => {
   const matriculas = Array.from(new Set(students.map((student) => compactText(student?.matricula)).filter(Boolean)))
-  if (!matriculas.length) return students
+  if (!matriculas.length) {
+    return {
+      students,
+      diagnostics: {
+        status: 'skipped',
+        requested: 0,
+        found: 0,
+        error: '',
+        reason: 'no_matriculas_visible'
+      }
+    }
+  }
 
   try {
     const overlays = await fetchCentralMatriculaOverlays(matriculas)
     if (!overlays.size) {
-      return students.map((student) => ({ ...student, matriculaEnrichmentStatus: 'missing' }))
+      return {
+        students: students.map((student) => ({ ...student, matriculaEnrichmentStatus: 'missing' })),
+        diagnostics: {
+          status: 'missing',
+          requested: matriculas.length,
+          found: 0,
+          error: '',
+          reason: 'central_returned_no_rows'
+        }
+      }
     }
 
-    return students.map((student) => {
+    const mapped = students.map((student) => {
       const key = normalizeFinancialMatricula(student?.matricula)
       const overlayStudent = overlays.get(key)?.student
       return overlayStudent
         ? mergeCentralOverlayIntoFinancialStudent(student, overlayStudent)
         : { ...student, matriculaEnrichmentStatus: 'missing' }
     })
+
+    const found = mapped.filter((student) => student?.matriculaEnrichmentStatus === 'ready').length
+    return {
+      students: mapped,
+      diagnostics: {
+        status: found === matriculas.length ? 'ready' : found > 0 ? 'partial' : 'missing',
+        requested: matriculas.length,
+        found,
+        error: '',
+        reason: found === matriculas.length
+          ? 'all_visible_students_enriched'
+          : found > 0
+            ? 'central_missing_some_visible_rows'
+            : 'central_missing_all_visible_rows'
+      }
+    }
   } catch (error: any) {
     console.warn('[Students] central matricula enrichment unavailable during financial load', {
       count: matriculas.length,
       message: error?.message || error
     })
-    return students.map((student) => ({ ...student, matriculaEnrichmentStatus: 'unavailable' }))
+    return {
+      students: students.map((student) => ({ ...student, matriculaEnrichmentStatus: 'unavailable' })),
+      diagnostics: {
+        status: 'failed',
+        requested: matriculas.length,
+        found: 0,
+        error: error?.message || String(error || 'matricula_enrichment_failed'),
+        reason: 'central_overlay_lookup_failed'
+      }
+    }
   }
 }
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
+  setResponseHeader(event, 'Cache-Control', 'no-store')
   const { q = '', ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
@@ -304,5 +350,23 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   const withSections = await attachCustomSectionsToStudents(mapped, user)
-  return await enrichFinancialStudentsWithMatricula(withSections)
+  const enriched = await enrichFinancialStudentsWithMatricula(withSections)
+
+  setResponseHeader(event, 'X-Financial-Students-Bridge-State', 'ready')
+  setResponseHeader(event, 'X-Financial-Students-Flow', 'bridge_financial_base_plus_central_overlay')
+  setResponseHeader(event, 'X-Financial-Students-Base-Rows', String(mapped.length))
+  setResponseHeader(event, 'X-Financial-Students-Sections-Rows', String(withSections.length))
+  setResponseHeader(event, 'X-Financial-Students-Overlay-Requested', String(enriched.diagnostics.requested || 0))
+  setResponseHeader(event, 'X-Financial-Students-Overlay-Found', String(enriched.diagnostics.found || 0))
+  setResponseHeader(event, 'X-Financial-Students-Overlay-Status', String(enriched.diagnostics.status || 'unknown'))
+  setResponseHeader(event, 'X-Financial-Students-Overlay-Reason', String(enriched.diagnostics.reason || ''))
+  if (enriched.diagnostics.error) {
+    setResponseHeader(event, 'X-Financial-Students-Overlay-Error', String(enriched.diagnostics.error))
+  }
+  setResponseHeader(event, 'X-Financial-Students-Query-Mode', q ? 'search' : 'scope')
+  setResponseHeader(event, 'X-Financial-Students-Scoped-Plantel', isScopedToActivePlantel ? normalizePlantel(user.active_plantel) : 'GLOBAL')
+  setResponseHeader(event, 'X-Financial-Students-Enrollment-Concepts', String(enrollmentConceptIds.length))
+  setResponseHeader(event, 'X-Financial-Students-Cache-Refresh', q ? 'skipped_search_query' : 'scheduled_from_live_rows')
+
+  return enriched.students
 }))

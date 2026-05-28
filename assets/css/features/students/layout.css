@@ -115,12 +115,6 @@ body.students-route-active .income-content {
   overflow: hidden;
 }
 
-.student-detail-panel--account {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
 .empty-state {
   display: flex;
   min-height: 180px;
@@ -210,25 +204,100 @@ body.students-route-active .income-content {
   padding: 1.2rem 1.55rem 1.45rem;
 }
 
-.financial-diagnostics-summary {
+.diagnostics-hero-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(200px, .7fr);
+  gap: .9rem;
+  align-items: start;
+  padding: 1rem 1.05rem;
+  border: 1px solid rgba(220, 230, 222, .82);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(72, 187, 120, .14), transparent 36%),
+    linear-gradient(180deg, #ffffff, #fbfdfb);
+}
+
+.diagnostics-hero-card small,
+.diagnostics-section-card__head small {
+  color: #2f7f32;
+  font-size: .7rem;
+  font-weight: 860;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.diagnostics-hero-card h3,
+.diagnostics-section-card__head h3 {
+  margin: .18rem 0 0;
+  color: #17263a;
+  font-size: 1.02rem;
+  font-weight: 900;
+  letter-spacing: -.03em;
+}
+
+.diagnostics-hero-card p {
+  margin: .45rem 0 0;
+  color: #5b697f;
+  font-size: .88rem;
+  line-height: 1.6;
+}
+
+.diagnostics-query-pill {
+  display: grid;
+  gap: .22rem;
+  padding: .95rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(185, 215, 196, .9);
+  background: rgba(245, 251, 246, .95);
+}
+
+.diagnostics-query-pill span {
+  color: #1f3d28;
+  font-size: .94rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.diagnostics-query-pill small {
+  color: #567261;
+  font-size: .74rem;
+}
+
+.diagnostics-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: .65rem;
 }
 
-.financial-diagnostics-summary span,
-.financial-diagnostics-body dl div {
+.diagnostics-summary-card,
+.diagnostics-facts-grid div,
+.diagnostics-section-card {
   display: grid;
   gap: .3rem;
-  min-width: 0;
-  padding: .85rem;
   border: 1px solid rgba(220, 230, 222, .82);
-  border-radius: 14px;
   background: #fff;
 }
 
-.financial-diagnostics-summary b,
-.financial-diagnostics-body dt {
+.diagnostics-summary-card {
+  min-width: 0;
+  padding: .85rem;
+  border-radius: 14px;
+}
+
+.diagnostics-summary-card.is-success {
+  background: linear-gradient(180deg, rgba(242, 253, 246, 1), rgba(255, 255, 255, 1));
+}
+
+.diagnostics-summary-card.is-info {
+  background: linear-gradient(180deg, rgba(241, 248, 255, 1), rgba(255, 255, 255, 1));
+}
+
+.diagnostics-summary-card.is-danger {
+  background: linear-gradient(180deg, rgba(255, 244, 244, 1), rgba(255, 255, 255, 1));
+}
+
+.diagnostics-summary-card small,
+.diagnostics-facts-grid dt {
   color: #738097;
   font-size: .68rem;
   font-weight: 840;
@@ -236,54 +305,224 @@ body.students-route-active .income-content {
   text-transform: uppercase;
 }
 
-.financial-diagnostics-summary span,
-.financial-diagnostics-body dd {
+.diagnostics-summary-card strong,
+.diagnostics-facts-grid dd {
   color: #17263a;
-  font-size: .84rem;
-  font-weight: 760;
+  font-size: .9rem;
+  font-weight: 780;
 }
 
-.financial-diagnostics-body section {
+.diagnostics-section-card {
+  gap: .9rem;
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.diagnostics-section-card--compact {
+  gap: .7rem;
+}
+
+.diagnostics-section-card__head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: .8rem;
+}
+
+.diagnostics-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: .45rem .75rem;
+  border-radius: 999px;
+  background: rgba(237, 246, 239, .92);
+  color: #2f7f32;
+  font-size: .75rem;
+  font-weight: 860;
+}
+
+.diagnostics-tree {
   display: grid;
-  gap: .65rem;
+  gap: .6rem;
 }
 
-.financial-diagnostics-body h3 {
-  margin: 0;
-  font-size: .9rem;
-  font-weight: 880;
+.diagnostics-tree__arrow {
+  justify-self: center;
+  color: #8aa08d;
+  font-size: 1.35rem;
+  font-weight: 700;
 }
 
-.financial-diagnostics-body p {
+.diagnostics-node {
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr);
+  gap: .8rem;
+  padding: .9rem;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff, #fbfcfd);
+}
+
+.diagnostics-node.is-success {
+  border-color: rgba(176, 228, 189, .95);
+}
+
+.diagnostics-node.is-info {
+  border-color: rgba(180, 213, 244, .95);
+}
+
+.diagnostics-node.is-danger {
+  border-color: rgba(245, 188, 188, .95);
+}
+
+.diagnostics-node__rail {
+  display: grid;
+  align-content: start;
+  gap: .4rem;
+}
+
+.diagnostics-node__lane,
+.diagnostics-node__status,
+.diagnostics-node__time {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: .35rem .65rem;
+  border-radius: 999px;
+  font-size: .73rem;
+  font-weight: 860;
+}
+
+.diagnostics-node__lane {
+  background: rgba(239, 245, 242, 1);
+  color: #476153;
+}
+
+.diagnostics-node__status {
+  background: rgba(246, 248, 251, 1);
+  color: #44546a;
+}
+
+.diagnostics-node.is-success .diagnostics-node__status {
+  background: rgba(237, 248, 241, 1);
+  color: #2d7a49;
+}
+
+.diagnostics-node.is-info .diagnostics-node__status {
+  background: rgba(237, 245, 253, 1);
+  color: #2b6cb0;
+}
+
+.diagnostics-node.is-danger .diagnostics-node__status {
+  background: rgba(255, 240, 240, 1);
+  color: #c24141;
+}
+
+.diagnostics-node__body {
+  display: grid;
+  gap: .55rem;
+}
+
+.diagnostics-node__body header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: .85rem;
+}
+
+.diagnostics-node__body h4 {
   margin: 0;
+  color: #17263a;
+  font-size: .95rem;
+  font-weight: 860;
+}
+
+.diagnostics-node__body header p,
+.diagnostics-node__why {
+  margin: .2rem 0 0;
   color: #55637a;
-  font-size: .9rem;
+  font-size: .84rem;
   line-height: 1.55;
 }
 
-.financial-diagnostics-body dl {
+.diagnostics-node__why b {
+  color: #314052;
+}
+
+.diagnostics-node__time {
+  background: rgba(246, 248, 251, 1);
+  color: #516175;
+}
+
+.diagnostics-node__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .55rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.diagnostics-node__meta li {
+  display: grid;
+  gap: .18rem;
+  padding: .65rem .75rem;
+  border: 1px solid rgba(226, 233, 229, .85);
+  border-radius: 14px;
+  background: rgba(250, 252, 251, 1);
+}
+
+.diagnostics-node__meta span {
+  color: #7a8798;
+  font-size: .67rem;
+  font-weight: 820;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.diagnostics-node__meta strong {
+  color: #17263a;
+  font-size: .83rem;
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
+.diagnostics-facts-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: .65rem;
   margin: 0;
 }
 
-.financial-diagnostics-body dd {
+.diagnostics-facts-grid dd {
   margin: 0;
   overflow-wrap: anywhere;
 }
 
+.diagnostics-empty-state {
+  padding: 1.4rem 1.55rem 1.55rem;
+  color: #5b697f;
+}
+
 @media (max-width: 720px) {
-  .financial-diagnostics-summary,
-  .financial-diagnostics-body dl {
+  .diagnostics-hero-card,
+  .diagnostics-node,
+  .diagnostics-facts-grid {
     grid-template-columns: 1fr;
+  }
+
+  .diagnostics-section-card__head,
+  .diagnostics-node__body header {
+    flex-direction: column;
   }
 }
 
 .students-workspace.has-detail {
   --students-workspace-resizer-size: 18px;
-  --students-list-min: clamp(280px, 22cqi, 420px);
-  --students-detail-min: clamp(320px, 25cqi, 560px);
+  --students-list-min: clamp(280px, 24cqi, 420px);
+  --students-detail-min: clamp(340px, 30cqi, 620px);
   grid-template-columns:
     minmax(var(--students-list-min), var(--students-list-panel-size, 51%))
     var(--students-workspace-resizer-size)

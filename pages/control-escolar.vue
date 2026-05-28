@@ -1178,35 +1178,102 @@
           </button>
         </header>
         <div v-if="lastControlLoadDiagnostics" class="ce-diagnostics-body">
-          <div class="ce-diagnostics-summary">
-            <span><b>Estado</b>{{ lastControlLoadDiagnostics.status }}</span>
-            <span><b>Total cliente</b>{{ formatControlDuration(lastControlLoadDiagnostics.totalMs) }}</span>
-            <span><b>Flujo servidor</b>{{ lastControlLoadDiagnostics.server.flow }}</span>
-            <span><b>Cache</b>{{ lastControlLoadDiagnostics.source.cacheFreshness || 'n/a' }}</span>
+          <div class="ce-diagnostics-hero-card">
+            <div>
+              <small>Lectura automática</small>
+              <h3>Ruta de resolución Control Escolar</h3>
+              <p>
+                Este modal enseña el recorrido real de la última carga: navegador,
+                bridge live, snapshot verificado, matrícula central y el resultado final visible.
+              </p>
+            </div>
+            <div class="ce-diagnostics-query-pill">
+              <span>{{ lastControlLoadDiagnostics.query.search || lastControlLoadDiagnostics.query.q || 'sin búsqueda' }}</span>
+              <small>Ciclo {{ lastControlLoadDiagnostics.ciclo || 'n/a' }}</small>
+            </div>
           </div>
-          <section>
-            <h3>Cliente</h3>
-            <dl>
-              <div v-for="step in lastControlLoadDiagnostics.clientSteps" :key="`client-${step.key}`">
-                <dt>{{ step.label }}</dt>
-                <dd>{{ step.status }} · {{ formatControlDuration(step.ms) }}<span v-if="step.rows != null"> · {{ step.rows }} filas</span><span v-if="step.reason"> · {{ step.reason }}</span><span v-if="step.error"> · {{ step.error }}</span></dd>
+
+          <div class="ce-diagnostics-summary-grid">
+            <article
+              v-for="item in controlDiagnosticsSummary"
+              :key="item.label"
+              :class="['ce-diagnostics-summary-card', `is-${item.tone || 'neutral'}`]"
+            >
+              <small>{{ item.label }}</small>
+              <strong>{{ item.value }}</strong>
+            </article>
+          </div>
+
+          <section class="ce-diagnostics-section-card">
+            <div class="ce-diagnostics-section-card__head">
+              <div>
+                <small>Árbol de decisiones</small>
+                <h3>Cómo navegó la resolución</h3>
+              </div>
+              <span class="ce-diagnostics-inline-badge">{{ controlDiagnosticsTree.length }} nodos</span>
+            </div>
+            <div class="ce-diagnostics-tree">
+              <template v-for="(node, index) in controlDiagnosticsTree" :key="node.id">
+                <article :class="['ce-diagnostics-node', `is-${node.tone}`]">
+                  <div class="ce-diagnostics-node__rail">
+                    <span class="ce-diagnostics-node__lane">{{ node.laneLabel }}</span>
+                    <span class="ce-diagnostics-node__status">{{ node.statusLabel }}</span>
+                  </div>
+                  <div class="ce-diagnostics-node__body">
+                    <header>
+                      <div>
+                        <h4>{{ node.title }}</h4>
+                        <p>{{ node.decision }}</p>
+                      </div>
+                      <span class="ce-diagnostics-node__time">{{ formatControlDuration(node.ms) }}</span>
+                    </header>
+                    <p class="ce-diagnostics-node__why"><b>Por qué:</b> {{ node.why }}</p>
+                    <ul v-if="node.meta.length" class="ce-diagnostics-node__meta">
+                      <li v-for="item in node.meta" :key="`${node.id}-${item.label}`">
+                        <span>{{ item.label }}</span>
+                        <strong>{{ item.value }}</strong>
+                      </li>
+                    </ul>
+                  </div>
+                </article>
+                <div v-if="index < controlDiagnosticsTree.length - 1" class="ce-diagnostics-tree__arrow">↓</div>
+              </template>
+            </div>
+          </section>
+
+          <section class="ce-diagnostics-section-card ce-diagnostics-section-card--compact">
+            <div class="ce-diagnostics-section-card__head">
+              <div>
+                <small>Estado actual</small>
+                <h3>Resumen operativo</h3>
+              </div>
+            </div>
+            <dl class="ce-diagnostics-facts-grid">
+              <div>
+                <dt>Base</dt>
+                <dd>{{ lastControlLoadDiagnostics.source.base || 'n/a' }}</dd>
+              </div>
+              <div>
+                <dt>Overlay</dt>
+                <dd>{{ lastControlLoadDiagnostics.source.overlay || 'n/a' }}</dd>
+              </div>
+              <div>
+                <dt>Flujo servidor</dt>
+                <dd>{{ lastControlLoadDiagnostics.server.flow || 'unknown' }}</dd>
+              </div>
+              <div>
+                <dt>Fallback snapshot</dt>
+                <dd>{{ lastControlLoadDiagnostics.source.bridgeFallback ? 'sí' : 'no' }}</dd>
+              </div>
+              <div>
+                <dt>Freshness</dt>
+                <dd>{{ lastControlLoadDiagnostics.source.cacheFreshness || 'live-bridge' }}</dd>
+              </div>
+              <div>
+                <dt>Rows</dt>
+                <dd>base {{ lastControlLoadDiagnostics.source.localRows }}, matrícula {{ lastControlLoadDiagnostics.source.overlayRows }}, usuarios {{ lastControlLoadDiagnostics.source.usersRows }}</dd>
               </div>
             </dl>
-          </section>
-          <section>
-            <h3>Servidor</h3>
-            <dl>
-              <div v-for="step in lastControlLoadDiagnostics.server.steps" :key="`server-${step.key}`">
-                <dt>{{ step.label }}</dt>
-                <dd>{{ step.status }} · {{ formatControlDuration(step.ms) }}<span v-if="step.rows != null"> · {{ step.rows }} filas</span><span v-if="step.freshness"> · {{ step.freshness }}</span><span v-if="step.refreshDue"> · refresh due</span><span v-if="step.reason"> · {{ step.reason }}</span><span v-if="step.error"> · {{ step.error }}</span></dd>
-              </div>
-            </dl>
-          </section>
-          <section>
-            <h3>Fuente</h3>
-            <p>Base: {{ lastControlLoadDiagnostics.source.base || 'n/a' }}</p>
-            <p>Overlay: {{ lastControlLoadDiagnostics.source.overlay || 'n/a' }}</p>
-            <p>Rows: base {{ lastControlLoadDiagnostics.source.localRows }}, matricula {{ lastControlLoadDiagnostics.source.overlayRows }}, usuarios {{ lastControlLoadDiagnostics.source.usersRows }}</p>
           </section>
         </div>
         <div v-else class="ce-diagnostics-empty">
@@ -1525,6 +1592,169 @@ const normalizeControlDiagnostics = ({
     },
   };
 };
+
+const controlStatusTone = (status = "") => {
+  const normalized = String(status || "").toLowerCase();
+  if (["ready", "updated", "cached", "complete"].includes(normalized))
+    return "success";
+  if (["partial", "syncing", "loading"].includes(normalized)) return "info";
+  if (["skipped", "disabled", "idle", "empty", "missing"].includes(normalized))
+    return "muted";
+  if (["failed", "unavailable", "error"].includes(normalized)) return "danger";
+  return "neutral";
+};
+
+const controlStatusLabel = (status = "") => {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "ready") return "Listo";
+  if (normalized === "updated") return "Actualizado";
+  if (normalized === "cached") return "En caché";
+  if (normalized === "syncing") return "Sincronizando";
+  if (normalized === "partial") return "Parcial";
+  if (normalized === "failed") return "Falló";
+  if (normalized === "unavailable") return "No disponible";
+  if (normalized === "disabled") return "Desactivado";
+  if (normalized === "skipped") return "Omitido";
+  if (normalized === "empty") return "Vacío";
+  if (normalized === "missing") return "Sin coincidencias";
+  if (normalized === "idle") return "En espera";
+  return normalized || "Sin estado";
+};
+
+const describeControlWhy = (step = {}, lane = "client") => {
+  const key = String(step.key || "");
+  const status = String(step.status || "");
+  const reason = String(step.reason || "");
+  if (key === "browser-cache") {
+    if (status === "disabled") return "El navegador no resuelve alumnos de Control Escolar desde caché local; esa capa se limpió a propósito para no ocultar cambios vivos.";
+    if (status === "ready") return "Se usó la caché local porque estaba habilitada y tenía filas válidas para esta vista.";
+    return "Se inspeccionó la caché local y no aportó una resolución útil para esta carga.";
+  }
+  if (key === "verified-cache") {
+    if (status === "skipped") return reason === "live_bridge_primary_snapshot_only_on_bridge_failure"
+      ? "El snapshot quedó reservado como plan B; con bridge disponible, no debe adelantarse a la base live."
+      : "El snapshot se omitió por la fase actual de carga.";
+    if (status === "ready") return "El snapshot verificado entró porque el bridge falló y había un respaldo estructurado para este alcance.";
+    if (status === "empty") return "Se intentó acudir al snapshot por falla del bridge, pero no había respaldo utilizable para ese scope.";
+    if (status === "failed") return "Además de la falla del bridge, también falló el intento de abrir el snapshot verificado.";
+  }
+  if (key === "bridge-schema") return status === "ready"
+    ? "El servidor pudo validar la base local y, cuando aplica, también la disponibilidad del overlay central."
+    : "El bridge respondió pero con disponibilidad parcial o central degradada.";
+  if (key === "live-base-selector") return status === "ready"
+    ? "La lista base salió del bridge local y se convirtió en la raíz real del flujo de Control Escolar."
+    : "La lectura live de la base local falló y el flujo tuvo que degradarse.";
+  if (key === "cache-refresh") return status === "ready"
+    ? "El snapshot se refrescó usando filas vivas para que el fallback no se oxide."
+    : status === "skipped"
+      ? "No se refrescó el snapshot porque la consulta no era cacheable o no lo necesitaba."
+      : "El refresh del snapshot falló, pero el resultado live siguió adelante.";
+  if (key === "matricula-overlay") return status === "ready"
+    ? "Se aplicó matrícula central sobre la base ya resuelta, agregando datos vivos del expediente escolar."
+    : "La base siguió adelante, pero la capa de matrícula central no respondió completamente.";
+  if (key === "husky-pass") return status === "ready"
+    ? "Se consultó Husky Pass como enriquecimiento adicional de usuarios." 
+    : "La consulta de Husky Pass no respondió o no tenía datos para esta carga.";
+  if (key === "server-enriched") return status === "ready"
+    ? "El cliente recibió una respuesta final ya enriquecida por el servidor." 
+    : "La solicitud principal al servidor falló antes de entregar una lista usable.";
+  if (lane === "server") return "El servidor reportó esta etapa como parte del recorrido real de resolución.";
+  return "La etapa se registró automáticamente durante la última carga para explicar la decisión tomada.";
+};
+
+const controlDiagnosticsSummary = computed(() => {
+  const diagnostics = lastControlLoadDiagnostics.value;
+  if (!diagnostics) return [];
+  return [
+    {
+      label: "Estado final",
+      value: controlStatusLabel(diagnostics.status),
+      tone: controlStatusTone(diagnostics.status),
+    },
+    {
+      label: "Tiempo cliente",
+      value: formatControlDuration(diagnostics.totalMs),
+      tone: "neutral",
+    },
+    {
+      label: "Flujo servidor",
+      value: diagnostics.server.flow || "unknown",
+      tone: controlStatusTone(diagnostics.status),
+    },
+    {
+      label: "Cache / overlay",
+      value: `${diagnostics.source.cacheFreshness || "live"} · ${diagnostics.source.overlayRows}/${diagnostics.source.localRows || 0}`,
+      tone: "neutral",
+    },
+  ];
+});
+
+const controlDiagnosticsTree = computed(() => {
+  const diagnostics = lastControlLoadDiagnostics.value;
+  if (!diagnostics) return [];
+  const nodes = [
+    ...((diagnostics.clientSteps || []).map((step) => ({
+      id: `client-${step.key}`,
+      lane: "client",
+      laneLabel: "Cliente",
+      title: step.label,
+      decision: step.label,
+      why: describeControlWhy(step, "client"),
+      tone: controlStatusTone(step.status),
+      status: step.status,
+      statusLabel: controlStatusLabel(step.status),
+      ms: Number(step.ms || 0),
+      meta: [
+        { label: "Filas", value: step.rows },
+        { label: "Motivo", value: step.reason || step.freshness || "" },
+        { label: "Error", value: step.error || "" },
+      ].filter((item) => item.value !== "" && item.value != null),
+    }))),
+    ...((diagnostics.server.steps || []).map((step) => ({
+      id: `server-${step.key}`,
+      lane: "server",
+      laneLabel: "Servidor",
+      title: step.label,
+      decision: step.label,
+      why: describeControlWhy(step, "server"),
+      tone: controlStatusTone(step.status),
+      status: step.status,
+      statusLabel: controlStatusLabel(step.status),
+      ms: Number(step.ms || 0),
+      meta: [
+        { label: "Filas", value: step.rows },
+        { label: "Freshness", value: step.freshness || "" },
+        { label: "Scope", value: step.scopeKey || "" },
+        { label: "Motivo", value: step.reason || "" },
+        { label: "Error", value: step.error || "" },
+      ].filter((item) => item.value !== "" && item.value != null),
+    }))),
+  ];
+
+  nodes.push({
+    id: "result-final",
+    lane: "result",
+    laneLabel: "Resultado",
+    title: "Resultado final visible",
+    decision: diagnostics.source.bridgeFallback
+      ? "La vista visible terminó sobre snapshot fallback con overlay central encima."
+      : "La vista visible terminó sobre bridge live con overlay central encima.",
+    why: diagnostics.source.bridgeFallback
+      ? "El bridge no respondió y el snapshot verificado sostuvo la carga para no dejar el plantel ciego."
+      : "La ruta consiguió resolver la base live y solo usó el snapshot como respaldo estratégico.",
+    tone: controlStatusTone(diagnostics.status),
+    status: diagnostics.status,
+    statusLabel: controlStatusLabel(diagnostics.status),
+    ms: diagnostics.totalMs,
+    meta: [
+      { label: "Base", value: diagnostics.source.base || "n/a" },
+      { label: "Overlay", value: diagnostics.source.overlay || "n/a" },
+      { label: "Rows", value: `${diagnostics.source.localRows}/${diagnostics.source.overlayRows}/${diagnostics.source.usersRows}` },
+    ],
+  });
+
+  return nodes;
+});
 
 const openControlDiagnosticsModal = () => {
   showControlDiagnosticsModal.value = true;
@@ -6633,8 +6863,8 @@ onBeforeUnmount(() => {
 
 
 .ce-diagnostics-modal {
-  width: min(720px, calc(100vw - 36px));
-  max-height: min(760px, calc(100vh - 40px));
+  width: min(880px, calc(100vw - 36px));
+  max-height: min(780px, calc(100vh - 40px));
   overflow: hidden;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.98);
@@ -6675,67 +6905,306 @@ onBeforeUnmount(() => {
   padding: 18px 22px 22px;
 }
 
-.ce-diagnostics-summary {
+.ce-diagnostics-hero-card {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.5fr) minmax(210px, .7fr);
+  gap: 14px;
+  align-items: start;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(217, 228, 240, 0.92);
+  background:
+    radial-gradient(circle at top right, rgba(87, 163, 255, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(248, 251, 255, 0.98));
+}
+
+.ce-diagnostics-hero-card small,
+.ce-diagnostics-section-card__head small {
+  color: #5b6f8f;
+  font-size: 0.7rem;
+  font-weight: 820;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ce-diagnostics-hero-card h3,
+.ce-diagnostics-section-card__head h3 {
+  margin: 4px 0 0;
+  color: #172033;
+  font-size: 1rem;
+  font-weight: 880;
+}
+
+.ce-diagnostics-hero-card p {
+  margin: 8px 0 0;
+  color: #526175;
+  font-size: 0.88rem;
+  line-height: 1.58;
+}
+
+.ce-diagnostics-query-pill {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(204, 220, 241, 0.96);
+  background: rgba(243, 248, 255, 0.92);
+}
+
+.ce-diagnostics-query-pill span {
+  color: #264061;
+  font-size: 0.92rem;
+  font-weight: 820;
+  overflow-wrap: anywhere;
+}
+
+.ce-diagnostics-query-pill small {
+  color: #667a96;
+  font-size: 0.74rem;
+}
+
+.ce-diagnostics-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
 }
 
-.ce-diagnostics-summary span {
+.ce-diagnostics-summary-card,
+.ce-diagnostics-section-card,
+.ce-diagnostics-facts-grid div {
   display: grid;
-  gap: 3px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: #f7fafc;
+  gap: 4px;
   border: 1px solid rgba(220, 230, 241, 0.88);
-  color: #25324a;
-  font-size: 0.78rem;
+  background: #fff;
 }
 
-.ce-diagnostics-summary b {
+.ce-diagnostics-summary-card {
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 14px;
+}
+
+.ce-diagnostics-summary-card.is-success {
+  background: linear-gradient(180deg, rgba(242, 250, 246, 1), rgba(255, 255, 255, 1));
+}
+
+.ce-diagnostics-summary-card.is-info {
+  background: linear-gradient(180deg, rgba(241, 247, 255, 1), rgba(255, 255, 255, 1));
+}
+
+.ce-diagnostics-summary-card.is-danger {
+  background: linear-gradient(180deg, rgba(255, 243, 243, 1), rgba(255, 255, 255, 1));
+}
+
+.ce-diagnostics-summary-card small,
+.ce-diagnostics-facts-grid dt {
   color: #718096;
   font-size: 0.66rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.ce-diagnostics-body section {
-  border: 1px solid rgba(220, 230, 241, 0.88);
-  border-radius: 16px;
-  padding: 13px 14px;
+.ce-diagnostics-summary-card strong,
+.ce-diagnostics-facts-grid dd {
+  color: #25324a;
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.ce-diagnostics-section-card {
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 18px;
   background: rgba(250, 252, 254, 0.82);
 }
 
-.ce-diagnostics-body h3 {
-  margin: 0 0 10px;
-  color: #1c2a3f;
-  font-size: 0.86rem;
+.ce-diagnostics-section-card--compact {
+  gap: 10px;
+}
+
+.ce-diagnostics-section-card__head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ce-diagnostics-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(236, 244, 255, 0.95);
+  color: #2b5faa;
+  font-size: 0.74rem;
   font-weight: 850;
 }
 
-.ce-diagnostics-body dl {
+.ce-diagnostics-tree {
   display: grid;
-  gap: 7px;
+  gap: 8px;
+}
+
+.ce-diagnostics-tree__arrow {
+  justify-self: center;
+  color: #7f93ad;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.ce-diagnostics-node {
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(220, 230, 241, 0.88);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(250, 252, 255, 0.98));
+}
+
+.ce-diagnostics-node.is-success { border-color: rgba(182, 223, 194, 0.95); }
+.ce-diagnostics-node.is-info { border-color: rgba(180, 210, 245, 0.95); }
+.ce-diagnostics-node.is-danger { border-color: rgba(244, 191, 191, 0.95); }
+
+.ce-diagnostics-node__rail {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.ce-diagnostics-node__lane,
+.ce-diagnostics-node__status,
+.ce-diagnostics-node__time {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.ce-diagnostics-node__lane {
+  background: rgba(240, 245, 252, 1);
+  color: #4f627f;
+}
+
+.ce-diagnostics-node__status,
+.ce-diagnostics-node__time {
+  background: rgba(246, 248, 251, 1);
+  color: #55657c;
+}
+
+.ce-diagnostics-node.is-success .ce-diagnostics-node__status {
+  background: rgba(237, 248, 241, 1);
+  color: #2d7a49;
+}
+
+.ce-diagnostics-node.is-info .ce-diagnostics-node__status {
+  background: rgba(237, 245, 253, 1);
+  color: #2b6cb0;
+}
+
+.ce-diagnostics-node.is-danger .ce-diagnostics-node__status {
+  background: rgba(255, 240, 240, 1);
+  color: #c24141;
+}
+
+.ce-diagnostics-node__body {
+  display: grid;
+  gap: 8px;
+}
+
+.ce-diagnostics-node__body header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ce-diagnostics-node__body h4 {
+  margin: 0;
+  color: #172033;
+  font-size: 0.94rem;
+  font-weight: 850;
+}
+
+.ce-diagnostics-node__body header p,
+.ce-diagnostics-node__why {
+  margin: 4px 0 0;
+  color: #526175;
+  font-size: 0.84rem;
+  line-height: 1.56;
+}
+
+.ce-diagnostics-node__why b {
+  color: #2f3e57;
+}
+
+.ce-diagnostics-node__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ce-diagnostics-node__meta li {
+  display: grid;
+  gap: 3px;
+  padding: 10px 11px;
+  border-radius: 14px;
+  border: 1px solid rgba(224, 233, 244, 0.78);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.ce-diagnostics-node__meta span {
+  color: #7b8aa0;
+  font-size: 0.66rem;
+  font-weight: 820;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ce-diagnostics-node__meta strong {
+  color: #25324a;
+  font-size: 0.82rem;
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
+.ce-diagnostics-facts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   margin: 0;
 }
 
-.ce-diagnostics-body dl div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 7px 0;
-  border-bottom: 1px solid rgba(224, 233, 244, 0.75);
+.ce-diagnostics-facts-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
-.ce-diagnostics-body dl div:last-child { border-bottom: 0; }
-.ce-diagnostics-body dt { color: #34435c; font-weight: 720; }
-.ce-diagnostics-body dd { margin: 0; color: #607087; text-align: right; }
-.ce-diagnostics-body p { margin: 4px 0; color: #526175; font-size: 0.82rem; }
-.ce-diagnostics-empty { padding: 24px; color: #526175; }
+.ce-diagnostics-empty {
+  padding: 24px;
+  color: #526175;
+}
 
 @media (max-width: 860px) {
-  .ce-diagnostics-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ce-diagnostics-hero-card,
+  .ce-diagnostics-node,
+  .ce-diagnostics-facts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ce-diagnostics-section-card__head,
+  .ce-diagnostics-node__body header {
+    flex-direction: column;
+  }
 }
 
 
