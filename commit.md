@@ -1,1 +1,1 @@
-Agrega avance y auditoría de Control Escolar por plantel y ciclo escolar
+Retira creación automática de tabla de auditoría Control Escolar para ejecución manual
