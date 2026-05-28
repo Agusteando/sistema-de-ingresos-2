@@ -694,10 +694,12 @@
                 </section>
 
                 <section class="ce-status-signal-grid" aria-label="Estado operativo del expediente">
-                  <article
+                  <button
                     v-for="signal in selectedStatusSignals"
                     :key="`signal-${signal.key}`"
+                    type="button"
                     :class="['ce-status-signal-card', `is-${signal.tone}`]"
+                    @click="goToStatusSignal(signal)"
                   >
                     <span class="ce-status-signal-icon">
                       <component :is="signal.icon" :size="16" />
@@ -708,7 +710,7 @@
                       <p v-if="signal.summary">{{ signal.summary }}</p>
                     </div>
                     <b>{{ signal.count }}</b>
-                  </article>
+                  </button>
                 </section>
 
                 <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
@@ -861,10 +863,12 @@
                       </div>
                     </div>
                     <section class="ce-family-readiness" aria-label="Estado de contacto familiar">
-                      <article
+                      <button
                         v-for="group in selectedFamilySummaryCards"
                         :key="group.key"
+                        type="button"
                         :class="['ce-family-readiness-card', group.tone]"
+                        @click="goToFamilySummary(group)"
                       >
                         <span><component :is="group.icon" :size="16" /></span>
                         <div>
@@ -876,7 +880,7 @@
                           </i>
                         </div>
                         <b>{{ group.count }}</b>
-                      </article>
+                      </button>
                     </section>
 
                     <section class="ce-family-metrics-strip" aria-label="Métricas de contacto familiar">
@@ -907,7 +911,34 @@
                           </label>
                           <label :class="fieldShellClass('apellidoPaternoPadre')" data-ce-field="apellidoPaternoPadre">
                             <span>Apellido paterno padre</span>
-                            <input v-model="editForm.apellidoPaternoPadre" autocomplete="off" />
+                            <div class="ce-autocomplete-field">
+                              <input
+                                v-model="editForm.apellidoPaternoPadre"
+                                autocomplete="off"
+                                @focus="showParentLastNameSuggestion('apellidoPaternoPadre')"
+                                @click="showParentLastNameSuggestion('apellidoPaternoPadre')"
+                                @blur="hideParentLastNameSuggestion"
+                              />
+                              <div
+                                v-if="parentLastNameSuggestionVisible('apellidoPaternoPadre')"
+                                class="ce-inline-suggestion-menu"
+                              >
+                                <button
+                                  type="button"
+                                  @mousedown.prevent="applyParentLastNameSuggestion('apellidoPaternoPadre')"
+                                >
+                                  Usar “{{ parentLastNameSuggestion('apellidoPaternoPadre') }}”
+                                </button>
+                                <button
+                                  type="button"
+                                  class="ghost"
+                                  aria-label="Ocultar sugerencia"
+                                  @mousedown.prevent="dismissParentLastNameSuggestion('apellidoPaternoPadre')"
+                                >
+                                  <LucideX :size="13" />
+                                </button>
+                              </div>
+                            </div>
                             <small>{{ fieldValidationMessage('apellidoPaternoPadre') }}</small>
                           </label>
                           <label
@@ -948,7 +979,34 @@
                           </label>
                           <label :class="fieldShellClass('apellidoPaternoMadre')" data-ce-field="apellidoPaternoMadre">
                             <span>Apellido paterno madre</span>
-                            <input v-model="editForm.apellidoPaternoMadre" autocomplete="off" />
+                            <div class="ce-autocomplete-field">
+                              <input
+                                v-model="editForm.apellidoPaternoMadre"
+                                autocomplete="off"
+                                @focus="showParentLastNameSuggestion('apellidoPaternoMadre')"
+                                @click="showParentLastNameSuggestion('apellidoPaternoMadre')"
+                                @blur="hideParentLastNameSuggestion"
+                              />
+                              <div
+                                v-if="parentLastNameSuggestionVisible('apellidoPaternoMadre')"
+                                class="ce-inline-suggestion-menu"
+                              >
+                                <button
+                                  type="button"
+                                  @mousedown.prevent="applyParentLastNameSuggestion('apellidoPaternoMadre')"
+                                >
+                                  Usar “{{ parentLastNameSuggestion('apellidoPaternoMadre') }}”
+                                </button>
+                                <button
+                                  type="button"
+                                  class="ghost"
+                                  aria-label="Ocultar sugerencia"
+                                  @mousedown.prevent="dismissParentLastNameSuggestion('apellidoPaternoMadre')"
+                                >
+                                  <LucideX :size="13" />
+                                </button>
+                              </div>
+                            </div>
                             <small>{{ fieldValidationMessage('apellidoPaternoMadre') }}</small>
                           </label>
                           <label
@@ -1001,14 +1059,6 @@
                       </div>
                       <div class="ce-form-grid three">
                         <label><span>Lugar nacimiento</span><input v-model="editForm.lugarNacimiento" autocomplete="off" /></label>
-                        <label>
-                          <span>Sexo</span>
-                          <select v-model="editForm.sexo">
-                            <option value="">Selecciona</option>
-                            <option value="M">Mujer</option>
-                            <option value="H">Hombre</option>
-                          </select>
-                        </label>
                         <label><span>Talla</span><input v-model="editForm.talla" autocomplete="off" /></label>
                         <label><span>Peso</span><input v-model="editForm.peso" autocomplete="off" /></label>
                         <label>
@@ -1579,6 +1629,8 @@ const studentsLoading = ref(false);
 const savingStudent = ref(false);
 const massImporting = ref(false);
 const sendingHuskyPass = ref(false);
+const activeParentLastNameSuggestion = ref("");
+const dismissedParentLastNameSuggestions = ref({});
 const loadError = ref("");
 const saveError = ref("");
 const students = ref([]);
@@ -2511,16 +2563,31 @@ const rowHealthHeadline = (student = {}) => {
   if (!missing) return "Expediente básico completo";
   return missing === 1 ? "1 faltante básico" : `${missing} faltantes básicos`;
 };
-const rowHealthMetrics = (student = {}, limit = 5) => {
+const compactMissingFieldLabels = {
+  curp: "CURP",
+  padreNombre: "Nombre padre",
+  padreApellidoPaterno: "Ap. padre",
+  padreTelefono: "Tel. padre",
+  padreEmail: "Email padre",
+  madreNombre: "Nombre madre",
+  madreApellidoPaterno: "Ap. madre",
+  madreTelefono: "Tel. madre",
+  madreEmail: "Email madre",
+};
+const compactMissingField = (field = {}) => ({
+  ...field,
+  label: compactMissingFieldLabels[field.key] || field.label,
+});
+const rowHealthMetrics = (student = {}, limit = 8) => {
   if (studentCurpIsInvalid(student)) {
     return requiredDataFields
       .filter((field) => field.key === "curp")
-      .map((field) => ({ ...field, label: "CURP inválida", missing: true }));
+      .map((field) => ({ ...compactMissingField(field), label: "CURP inválida", missing: true }));
   }
   const missingKeys = new Set(normalizedMissingFields(student, "basic"));
   const missing = requiredDataFields
     .filter((field) => missingKeys.has(String(field.key || "").toLowerCase()))
-    .map((field) => ({ ...field, missing: true }));
+    .map((field) => ({ ...compactMissingField(field), missing: true }));
   return missing.slice(0, limit);
 };
 const selectedHealthStudent = computed(() => {
@@ -2588,9 +2655,7 @@ const selectedRecordActions = computed(() => {
   });
 });
 const selectedRecordIssueCount = computed(() => selectedRecordActions.value.length);
-const selectedVisibleActionChips = computed(() =>
-  selectedRecordActions.value.slice(0, 3),
-);
+const selectedVisibleActionChips = computed(() => selectedRecordActions.value);
 const selectedHiddenActionCount = computed(() =>
   Math.max(0, selectedRecordActions.value.length - selectedVisibleActionChips.value.length),
 );
@@ -2598,11 +2663,29 @@ const goToMissingField = (field = {}) => {
   if (field.tab) activeDetailTab.value = field.tab;
   nextTick(() => {
     if (!process.client || !field.formField) return;
-    const target = document.querySelector(
-      `[data-ce-field="${field.formField}"] input, [data-ce-field="${field.formField}"] select, [data-ce-field="${field.formField}"] textarea`,
-    );
-    target?.focus?.();
+    const selector = `[data-ce-field="${field.formField}"] input, [data-ce-field="${field.formField}"] select, [data-ce-field="${field.formField}"] textarea`;
+    const target = document.querySelector(selector);
+    target?.scrollIntoView?.({ behavior: "smooth", block: "center", inline: "nearest" });
+    window.requestAnimationFrame(() => target?.focus?.({ preventScroll: true }));
   });
+};
+const familyTargetFields = {
+  padre: ["nombrePadre", "apellidoPaternoPadre", "telefonoPadre", "emailPadre"],
+  madre: ["nombreMadre", "apellidoPaternoMadre", "telefonoMadre", "emailMadre"],
+  contacto: ["telefonoPadre", "telefonoMadre", "emailPadre", "emailMadre"],
+  curp: ["curp"],
+};
+const targetForFamilyArea = (key = "") => {
+  const normalizedKey = String(key || "").toLowerCase();
+  const fields = familyTargetFields[normalizedKey] || familyTargetFields.curp;
+  const formField = fields.find((field) => fieldValidationState(field) !== "ok") || fields[0];
+  return { tab: normalizedKey === "curp" ? "identity" : "family", formField };
+};
+const goToStatusSignal = (signal = {}) => {
+  goToMissingField(targetForFamilyArea(signal.key));
+};
+const goToFamilySummary = (group = {}) => {
+  goToMissingField(targetForFamilyArea(group.key));
 };
 const goToFirstPendingField = () => {
   goToMissingField(selectedRecordActions.value[0] || {});
@@ -2658,6 +2741,47 @@ const derivedGenderMeta = computed(() => {
     : { label: "Femenino", symbol: "♀", tone: "female" };
 });
 const formValue = (field) => String(editForm[field] ?? "").trim();
+const inferredParentLastNameSource = (field) =>
+  field === "apellidoPaternoMadre"
+    ? formValue("apellidoMaterno")
+    : formValue("apellidoPaterno");
+const parentLastNameSuggestion = (field) => inferredParentLastNameSource(field);
+const parentLastNameSuggestionVisible = (field) => {
+  const suggestion = parentLastNameSuggestion(field);
+  if (!suggestion) return false;
+  if (activeParentLastNameSuggestion.value !== field) return false;
+  if (dismissedParentLastNameSuggestions.value[field] === suggestion) return false;
+  const currentValue = formValue(field);
+  return !currentValue || currentValue.toLowerCase() !== suggestion.toLowerCase();
+};
+const showParentLastNameSuggestion = (field) => {
+  activeParentLastNameSuggestion.value = field;
+};
+const hideParentLastNameSuggestion = () => {
+  window.setTimeout(() => {
+    activeParentLastNameSuggestion.value = "";
+  }, 120);
+};
+const dismissParentLastNameSuggestion = (field) => {
+  const suggestion = parentLastNameSuggestion(field);
+  dismissedParentLastNameSuggestions.value = {
+    ...dismissedParentLastNameSuggestions.value,
+    [field]: suggestion,
+  };
+  activeParentLastNameSuggestion.value = "";
+};
+const applyParentLastNameSuggestion = (field) => {
+  const suggestion = parentLastNameSuggestion(field);
+  if (!suggestion) return;
+  editForm[field] = suggestion;
+  activeParentLastNameSuggestion.value = "";
+  nextTick(() => {
+    if (!process.client) return;
+    document
+      .querySelector(`[data-ce-field="${field}"] input`)
+      ?.focus?.();
+  });
+};
 const formFieldIsOk = (field) => fieldValidationState(field) === "ok";
 const familyPersonState = (type = "padre") => {
   const fields = type === "madre"
@@ -2961,7 +3085,6 @@ const huskyPassEmailTarget = computed(
 const bloodTypeOptions = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const advancedTextFields = [
   { key: "lugarNacimiento", label: "Lugar nacimiento" },
-  { key: "sexo", label: "Sexo" },
   { key: "talla", label: "Talla" },
   { key: "peso", label: "Peso" },
   { key: "tipoSangre", label: "Tipo de sangre" },
@@ -4266,6 +4389,8 @@ const restoreEditDraft = () => {
 const selectStudent = (student, copy = true) => {
   selectedStudent.value = student;
   activeDetailTab.value = "identity";
+  activeParentLastNameSuggestion.value = "";
+  dismissedParentLastNameSuggestions.value = {};
   if (copy) resetEditForm(student, { restoreDraft: true });
   queueControlStudentPhotos([student], { priority: true });
   nextTick(scheduleWorkspaceScaleUpdate);
@@ -8546,6 +8671,206 @@ onBeforeUnmount(() => {
 
   .control-escolar-screen .ce-identity-span-2 {
     grid-column: auto;
+  }
+}
+
+
+/* Detail refinement: breathable header, readable pending chips, and controlled suggestions. */
+.control-escolar-screen .ce-detail-header {
+  grid-template-columns: minmax(300px, 1fr) minmax(240px, 0.82fr) 42px;
+  grid-template-rows: auto auto;
+  align-items: stretch;
+  gap: 14px;
+  min-height: 128px;
+  padding: 18px;
+}
+
+.control-escolar-screen .ce-detail-title--with-photo {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.control-escolar-screen .ce-access-header-card {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 64px;
+}
+
+.control-escolar-screen .ce-progress-cluster--health {
+  grid-column: 1 / 3;
+  grid-row: 2;
+  min-height: 52px;
+}
+
+.control-escolar-screen .ce-detail-menu-button {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.control-escolar-screen .ce-detail-body {
+  gap: 14px;
+  padding-top: 16px;
+}
+
+.control-escolar-screen .ce-health-overview {
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-health-card {
+  min-height: 112px;
+  overflow: visible;
+}
+
+.control-escolar-screen .ce-health-card--action {
+  align-items: start;
+}
+
+.control-escolar-screen .ce-health-missing-chips {
+  flex-wrap: wrap;
+  overflow: visible;
+  gap: 6px;
+}
+
+.control-escolar-screen .ce-health-missing-chips button,
+.control-escolar-screen .ce-health-missing-chips span {
+  min-height: 26px;
+  max-width: 100%;
+}
+
+.control-escolar-screen .ce-list-card {
+  --student-list-row-height: 86px;
+  --student-list-balance-col: 260px;
+}
+
+.control-escolar-screen .ce-list-columns,
+.control-escolar-screen .ce-student-row {
+  grid-template-columns: minmax(248px, 1fr) minmax(242px, 268px) 38px;
+}
+
+.control-escolar-screen .ce-row-health {
+  min-height: 70px;
+  align-items: start;
+  padding: 8px 10px;
+}
+
+.control-escolar-screen .ce-quality-cell--expanded {
+  gap: 5px;
+}
+
+.control-escolar-screen .ce-quality-fields--stacked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 42px;
+  overflow: hidden;
+}
+
+.control-escolar-screen .ce-quality-fields--stacked small {
+  flex: 0 0 auto;
+  max-width: none;
+  min-height: 19px;
+  padding: 4px 7px;
+  font-size: 9px;
+  line-height: 1.05;
+}
+
+.control-escolar-screen .ce-status-signal-card,
+.control-escolar-screen .ce-family-readiness-card {
+  appearance: none;
+  width: 100%;
+  border-style: solid;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.control-escolar-screen .ce-status-signal-card:hover,
+.control-escolar-screen .ce-family-readiness-card:hover,
+.control-escolar-screen .ce-status-signal-card:focus-visible,
+.control-escolar-screen .ce-family-readiness-card:focus-visible {
+  border-color: color-mix(in srgb, var(--ce-detail-accent) 28%, #dbe6f0);
+  box-shadow: 0 12px 24px rgba(21, 35, 60, 0.07);
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-autocomplete-field {
+  position: relative;
+}
+
+.control-escolar-screen .ce-autocomplete-field > input {
+  width: 100%;
+}
+
+.control-escolar-screen .ce-inline-suggestion-menu {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  min-width: min(100%, 260px);
+  max-width: 320px;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid #dbe6f1;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .98);
+  box-shadow: 0 16px 34px rgba(21, 35, 60, .13);
+}
+
+.control-escolar-screen .ce-inline-suggestion-menu button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid rgba(79, 163, 70, .2);
+  border-radius: 10px;
+  background: #f4fbf2;
+  color: #286f32;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-inline-suggestion-menu button.ghost {
+  width: 34px;
+  flex: 0 0 auto;
+  padding: 0;
+  border-color: #e0e8f1;
+  background: #fff;
+  color: #6b788e;
+}
+
+.control-escolar-screen .ce-advanced-expediente-panel .ce-form-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1180px) {
+  .control-escolar-screen .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 42px;
+  }
+
+  .control-escolar-screen .ce-access-header-card,
+  .control-escolar-screen .ce-progress-cluster--health {
+    grid-column: 1 / -1;
+  }
+
+  .control-escolar-screen .ce-access-header-card {
+    grid-row: 2;
+  }
+
+  .control-escolar-screen .ce-progress-cluster--health {
+    grid-row: 3;
+  }
+
+  .control-escolar-screen .ce-detail-menu-button {
+    grid-column: 2;
+    grid-row: 1;
   }
 }
 
