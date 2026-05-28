@@ -423,9 +423,25 @@
                       :class="['ce-row-health', recordHealth(student).tone]"
                       :aria-label="recordHealth(student).aria"
                     >
-                      <b>{{ recordHealth(student).percent }}%</b>
-                      <span>{{ recordHealth(student).label }}</span>
-                      <small>{{ recordHealth(student).summary }}</small>
+                      <span
+                        :class="['ce-quality-score', recordHealth(student).tone]"
+                        :style="{ '--quality-score': `${recordHealth(student).percent * 3.6}deg` }"
+                      >
+                        <b>{{ recordHealth(student).percent }}%</b>
+                      </span>
+                      <span class="ce-quality-cell ce-quality-cell--expanded">
+                        <strong>{{ rowHealthHeadline(student) }}</strong>
+                        <div class="ce-quality-fields ce-quality-fields--stacked">
+                          <small
+                            v-for="field in rowHealthMetrics(student)"
+                            :key="`${student.matricula}-${field.key}`"
+                            :class="{ missing: field.missing }"
+                          >
+                            <component :is="field.icon" :size="11" />
+                            {{ field.label }}
+                          </small>
+                        </div>
+                      </span>
                     </span>
 
                     <span class="row-actions">
@@ -528,7 +544,7 @@
                 </div>
                 <div :class="['ce-progress-cluster', 'ce-progress-cluster--health', selectedRecordHealth.tone]">
                   <div>
-                    <strong>{{ selectedRecordHealth.label }}</strong>
+                    <strong>Expediente básico {{ selectedProfileCompletion }}%</strong>
                     <small>{{ selectedRecordHealth.summary }}</small>
                   </div>
                   <span class="ce-progress-track">
@@ -569,36 +585,31 @@
               <div class="ce-detail-body">
                 <section class="ce-health-overview" aria-label="Resumen del expediente seleccionado">
                   <article :class="['ce-health-card', 'is-primary', selectedRecordHealth.tone]">
-                    <div class="ce-health-card__score" :style="{ '--score': selectedProfileCompletion }">
-                      <b>{{ selectedProfileCompletion }}%</b>
+                    <div class="ce-health-card__icon">
+                      <LucideShieldCheck :size="18" />
                     </div>
-                    <div>
+                    <div class="ce-health-card__copy">
                       <small>Expediente básico</small>
-                      <strong>{{ selectedRecordHealth.label }}</strong>
-                      <p>{{ selectedNextAction }}</p>
-                    </div>
-                  </article>
-                  <article :class="['ce-health-card', selectedFamilyReadiness.tone]">
-                    <div class="ce-health-card__score compact">
-                      <b>{{ selectedFamilyReadiness.completed }}</b><span>/{{ selectedFamilyReadiness.total }}</span>
-                    </div>
-                    <div>
-                      <small>Familia y contacto</small>
-                      <strong>{{ selectedFamilyReadiness.label }}</strong>
-                      <p>{{ selectedFamilyReadiness.summary }}</p>
+                      <strong>{{ rowHealthHeadline(selectedStudent) }}</strong>
+                      <p>{{ selectedMissingCount ? selectedNextAction : 'Completo para operación diaria' }}</p>
+                      <span class="ce-health-bar"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
+                      <em>{{ selectedProfileCompletion }}% · {{ selectedRecordHealth.label }}</em>
                     </div>
                   </article>
                   <article class="ce-health-card is-secondary">
-                    <div class="ce-health-card__score compact">
-                      <b>{{ selectedCompleteMissingCount }}</b>
+                    <div class="ce-health-card__icon is-secondary">
+                      <LucideFileSpreadsheet :size="18" />
                     </div>
-                    <div>
+                    <div class="ce-health-card__copy">
                       <small>Expediente completo</small>
-                      <strong>{{ selectedCompleteProfileCompletion }}%</strong>
-                      <p>{{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes avanzados` : 'Completo' }}</p>
+                      <strong>{{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes avanzados` : 'Completo' }}</strong>
+                      <p>Incluye información avanzada del expediente.</p>
+                      <span class="ce-health-bar is-secondary"><i :style="{ width: `${selectedCompleteProfileCompletion}%` }"></i></span>
+                      <em>{{ selectedCompleteProfileCompletion }}% · {{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes` : `${selectedCompleteCompletedCount}/${completeDataFields.length} completos` }}</em>
                     </div>
                     <button type="button" class="ce-health-link" @click="showCompleteExpediente = !showCompleteExpediente">
-                      {{ showCompleteExpediente ? 'Ocultar' : 'Ver' }}
+                      {{ showCompleteExpediente ? 'Ocultar expediente completo' : 'Ver expediente completo' }}
+                      <LucideChevronRight :size="16" />
                     </button>
                   </article>
                 </section>
@@ -627,9 +638,11 @@
                     v-show="activeDetailTab === 'identity'"
                     class="ce-form-card ce-tab-panel"
                   >
-                    <div class="ce-section-heading compact">
-                      <span><LucideUserRound :size="18" /></span>
-                      <h3>Identidad</h3>
+                    <div class="ce-panel-heading">
+                      <div>
+                        <h3>Datos de identidad</h3>
+                        <p>Revisa y actualiza la identidad principal del alumno.</p>
+                      </div>
                     </div>
                     <div class="ce-form-grid two">
                       <label
@@ -658,9 +671,12 @@
                         />
                         <small>{{ fieldValidationMessage('curp') }}</small>
                       </label>
-                      <article v-if="editForm.curp" class="ce-derived-card">
-                        <span>{{ curpDerivedIdentity.valid ? 'Derivado de CURP' : 'CURP pendiente' }}</span>
-                        <strong>{{ curpDerivedIdentity.valid ? `${curpDerivedIdentity.fechaNacimiento} · ${curpDerivedIdentity.sexo}` : 'Completa una CURP válida para inferir nacimiento y sexo' }}</strong>
+                      <article v-if="editForm.curp" class="ce-derived-card" :class="`is-${derivedGenderMeta.tone}`">
+                        <span class="ce-derived-card__icon"><component :is="derivedGenderMeta.icon" :size="16" /></span>
+                        <div>
+                          <span>{{ curpDerivedIdentity.valid ? 'Derivado de CURP' : 'CURP pendiente' }}</span>
+                          <strong>{{ curpDerivedIdentity.valid ? `${curpDerivedIdentity.fechaNacimiento} · ${derivedGenderMeta.label}` : 'Completa una CURP válida para inferir nacimiento y sexo' }}</strong>
+                        </div>
                       </article>
                       <template v-if="showCompleteExpediente">
                         <label
@@ -787,19 +803,37 @@
                     v-show="activeDetailTab === 'family'"
                     class="ce-tab-panel ce-family-panel"
                   >
+                    <div class="ce-panel-heading">
+                      <div>
+                        <h3>Familia y contactos</h3>
+                        <p>Los estados se calculan automáticamente con la información capturada.</p>
+                      </div>
+                    </div>
                     <section class="ce-family-readiness" aria-label="Estado de contacto familiar">
                       <article
-                        v-for="group in familyReadinessGroups"
+                        v-for="group in selectedFamilySummaryCards"
                         :key="group.key"
                         :class="['ce-family-readiness-card', group.tone]"
                       >
                         <span><component :is="group.icon" :size="16" /></span>
                         <div>
-                          <small>{{ group.label }}</small>
-                          <strong>{{ group.status }}</strong>
+                          <small>{{ group.title }}</small>
+                          <strong>{{ group.label }}</strong>
                           <p>{{ group.summary }}</p>
                         </div>
+                        <b>{{ group.count }}</b>
                       </article>
+                    </section>
+
+                    <section class="ce-family-metrics-strip" aria-label="Métricas de contacto familiar">
+                      <span
+                        v-for="field in selectedBasicMetrics.filter((item) => item.key !== 'curp')"
+                        :key="`selected-metric-${field.key}`"
+                        :class="['ce-family-metric-chip', { missing: field.missing }]"
+                      >
+                        <component :is="field.icon" :size="13" />
+                        {{ field.label }}
+                      </span>
                     </section>
 
                     <div class="ce-family-grid">
@@ -1465,6 +1499,8 @@ import {
   LucideUsersRound,
   LucideUpload,
   LucideUserX,
+  LucideVenus,
+  LucideMars,
   LucideWifiOff,
   LucideX,
 } from "lucide-vue-next";
@@ -2378,6 +2414,9 @@ const selectedMissingCount = computed(() =>
 const selectedCompleteMissingCount = computed(() =>
   studentCompleteMissingCount(selectedStudent.value),
 );
+const selectedCompleteCompletedCount = computed(() =>
+  Math.max(0, completeDataFields.length - selectedCompleteMissingCount.value),
+);
 const visibleBasicMissingFieldsFor = (student) =>
   requiredDataFields.filter((field) => studentMissingField(student, field));
 const visibleBasicMissingFields = computed(() =>
@@ -2423,12 +2462,75 @@ const recordHealth = (student = {}) => {
     aria: `Expediente básico ${percent}% completo. ${label}. ${summary}`,
   };
 };
+const rowHealthHeadline = (student = {}) => {
+  const missing = studentMissingCount(student);
+  if (!missing) return "Expediente básico completo";
+  return missing === 1 ? "1 faltante básico" : `${missing} faltantes básicos`;
+};
+const rowHealthMetrics = (student = {}, limit = 5) => {
+  const missingKeys = new Set(normalizedMissingFields(student, "basic"));
+  const missing = requiredDataFields
+    .filter((field) => missingKeys.has(String(field.key || "").toLowerCase()))
+    .map((field) => ({ ...field, missing: true }));
+  const complete = requiredDataFields
+    .filter((field) => !missingKeys.has(String(field.key || "").toLowerCase()))
+    .map((field) => ({ ...field, missing: false }));
+  if (!missing.length) return complete.slice(0, limit);
+  return [...missing, ...complete].slice(0, limit);
+};
 const selectedRecordHealth = computed(() => recordHealth(selectedStudent.value));
 const selectedNextAction = computed(() => {
   const missing = visibleBasicMissingFields.value;
   if (!missing.length) return "Sin pendientes básicos.";
   const first = missing[0]?.label || "el primer dato pendiente";
   return `Siguiente: completar ${first.toLowerCase()}.`;
+});
+const selectedBasicMetrics = computed(() => rowHealthMetrics(selectedStudent.value, 8));
+const selectedFamilySummaryCards = computed(() => {
+  const father = familyPersonState("padre");
+  const mother = familyPersonState("madre");
+  const contact = familyCriticalContactState.value;
+  return [
+    {
+      key: "padre",
+      title: "Padre",
+      tone: `is-${father.tone}`,
+      label: father.status,
+      count: `${father.completed}/${father.total}`,
+      summary: father.summary,
+      icon: LucideUserRound,
+    },
+    {
+      key: "madre",
+      title: "Madre",
+      tone: `is-${mother.tone}`,
+      label: mother.status,
+      count: `${mother.completed}/${mother.total}`,
+      summary: mother.summary,
+      icon: LucideUsersRound,
+    },
+    {
+      key: "contacto",
+      title: "Contacto crítico",
+      tone: `is-${contact.tone}`,
+      label: contact.status,
+      count: `${contact.completed}/${contact.total}`,
+      summary: contact.summary,
+      icon: LucidePhone,
+    },
+  ];
+});
+const derivedGenderMeta = computed(() => {
+  if (!curpDerivedIdentity.value?.valid) {
+    return {
+      label: "Sin inferencia",
+      icon: LucideUserRound,
+      tone: "neutral",
+    };
+  }
+  return curpDerivedIdentity.value?.sexoCorto === "H"
+    ? { label: "Masculino", icon: LucideMars, tone: "male" }
+    : { label: "Femenino", icon: LucideVenus, tone: "female" };
 });
 const formValue = (field) => String(editForm[field] ?? "").trim();
 const formFieldIsOk = (field) => fieldValidationState(field) === "ok";
@@ -9281,6 +9383,384 @@ onBeforeUnmount(() => {
   .row-actions {
     grid-column: 2;
     grid-row: 1;
+  }
+}
+
+
+/* UX recalibration: restore dense visual progress while keeping real logic-driven states. */
+.ce-workspace.has-detail .ce-student-row,
+.ce-workspace.has-empty-detail .ce-student-row,
+.ce-student-row {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 248px) 40px;
+  align-items: center;
+}
+
+.ce-row-health {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #dce6ee;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff, #fbfdfd);
+  text-align: left;
+  justify-items: stretch;
+}
+
+.ce-quality-cell--expanded {
+  gap: 5px;
+  padding-right: 0;
+}
+
+.ce-quality-cell--expanded strong {
+  font-size: 11.25px;
+  line-height: 1.15;
+}
+
+.ce-quality-fields--stacked {
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  gap: 4px 8px;
+}
+
+.ce-quality-fields--stacked small {
+  font-size: 9.5px;
+  font-weight: 830;
+}
+
+.ce-row-health.complete {
+  border-color: rgba(71, 157, 76, 0.25);
+  background: linear-gradient(180deg, #fbfefb, #ffffff);
+}
+
+.ce-row-health.warning {
+  border-color: rgba(223, 152, 47, 0.28);
+  background: linear-gradient(180deg, #fffdf8, #ffffff);
+}
+
+.ce-row-health.danger {
+  border-color: rgba(227, 74, 67, 0.26);
+  background: linear-gradient(180deg, #fffafa, #ffffff);
+}
+
+.ce-progress-cluster--health {
+  gap: 7px;
+}
+
+.ce-health-overview {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.ce-health-card {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 92px;
+  padding: 15px 16px;
+  border-radius: 18px;
+}
+
+.ce-health-card__icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  background: #edf8ea;
+  color: #20882d;
+}
+
+.ce-health-card__icon.is-secondary {
+  background: #eef5ff;
+  color: #2d6dbc;
+}
+
+.ce-health-card__copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ce-health-card__copy small {
+  font-size: 10px;
+  letter-spacing: .07em;
+}
+
+.ce-health-card__copy strong {
+  margin-top: 0;
+  font-size: 14px;
+}
+
+.ce-health-card__copy p {
+  margin: 0;
+  line-height: 1.3;
+}
+
+.ce-health-bar {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e4ece5;
+  margin-top: 3px;
+}
+
+.ce-health-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2a9b3d, #97cf79);
+}
+
+.ce-health-bar.is-secondary {
+  background: #e5edf8;
+}
+
+.ce-health-bar.is-secondary i {
+  background: linear-gradient(90deg, #5796dc, #7fc2f4);
+}
+
+.ce-health-card__copy em {
+  color: #59677e;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 780;
+}
+
+.ce-health-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 14px;
+  white-space: nowrap;
+}
+
+.ce-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ce-panel-heading h3 {
+  margin: 0;
+  color: #15233c;
+  font-size: 13.5px;
+  font-weight: 920;
+}
+
+.ce-panel-heading p {
+  margin: 4px 0 0;
+  color: #69778f;
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.ce-form-card.ce-tab-panel {
+  padding: 16px 16px 12px;
+}
+
+.ce-family-readiness {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ce-family-readiness-card {
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  min-height: 86px;
+  padding: 12px 13px;
+}
+
+.ce-family-readiness-card b {
+  align-self: start;
+  color: #516079;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ce-family-readiness-card.is-complete b {
+  color: #20882d;
+}
+
+.ce-family-readiness-card.is-warning b {
+  color: #b36b12;
+}
+
+.ce-family-readiness-card.is-danger b {
+  color: #ca3d33;
+}
+
+.ce-family-metrics-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ce-family-metric-chip {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid rgba(71, 157, 76, 0.2);
+  border-radius: 999px;
+  background: #f9fdf9;
+  color: #20882d;
+  font-size: 10.5px;
+  font-weight: 860;
+}
+
+.ce-family-metric-chip.missing {
+  border-color: rgba(227, 74, 67, 0.22);
+  background: #fff7f7;
+  color: #cf4036;
+}
+
+.ce-family-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ce-family-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e5edf4;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.ce-family-fields {
+  gap: 12px;
+}
+
+.ce-derived-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  min-height: 58px;
+}
+
+.ce-derived-card__icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #eef4ff;
+  color: #486ec3;
+}
+
+.ce-derived-card.is-female .ce-derived-card__icon {
+  background: #fff0f7;
+  color: #c55385;
+}
+
+.ce-derived-card.is-male .ce-derived-card__icon {
+  background: #eef4ff;
+  color: #486ec3;
+}
+
+.ce-derived-card.is-neutral .ce-derived-card__icon {
+  background: #f3f6f9;
+  color: #72809a;
+}
+
+.ce-derived-card > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ce-wide-field.ce-family-address {
+  margin-top: 12px;
+}
+
+.ce-form-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ce-detail-footer {
+  position: sticky;
+  bottom: 0;
+}
+
+@container (max-width: 1120px) {
+  .ce-workspace.has-detail .ce-student-row,
+  .ce-workspace.has-empty-detail .ce-student-row,
+  .ce-student-row {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 216px) 40px;
+  }
+
+  .ce-quality-fields--stacked {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 920px) {
+  .ce-health-overview,
+  .ce-family-readiness,
+  .ce-family-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 720px) {
+  .ce-workspace.has-detail .ce-student-row,
+  .ce-workspace.has-empty-detail .ce-student-row,
+  .ce-student-row {
+    grid-template-columns: minmax(0, 1fr) 40px;
+  }
+
+  .ce-row-health {
+    grid-column: 1 / -1;
+    margin-top: 8px;
+  }
+
+  .row-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .ce-health-card {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .ce-health-link {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+}
+
+@container (max-width: 560px) {
+  .ce-form-grid.two,
+  .ce-family-fields,
+  .ce-family-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ce-family-readiness-card {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .ce-family-readiness-card b {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 
