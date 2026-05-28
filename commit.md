@@ -1,1 +1,1 @@
-Refina scrollbars y tarjetas del detalle de Control Escolar
+Rediseña el expediente financiero del alumno con datos básicos y avanzados de Control Escolar
