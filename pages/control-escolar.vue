@@ -7413,4 +7413,213 @@ onBeforeUnmount(() => {
   }
 }
 
+
+/* Pixel-reference lock: keep the desktop header in one row and scale inside the panel instead of stacking. */
+@container (min-width: 721px) {
+  .ce-detail-header {
+    display: grid;
+    grid-template-columns: minmax(250px, 1fr) minmax(195px, 0.82fr) minmax(150px, 0.62fr) 44px;
+    grid-auto-flow: column;
+    grid-auto-rows: auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 112px;
+    padding: 16px 18px 18px;
+  }
+
+  .ce-detail-title--with-photo,
+  .ce-access-header-card,
+  .ce-progress-cluster,
+  .ce-detail-menu-button {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .ce-detail-title--with-photo {
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 14px;
+    align-self: center;
+  }
+
+  .ce-detail-header-photo {
+    --student-grade-photo-width: 58px;
+    --student-grade-photo-height: 58px;
+    --student-grade-photo-radius: 14px;
+  }
+
+  .ce-detail-title-copy small {
+    margin-bottom: 7px;
+  }
+
+  .ce-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+
+  .ce-title-row h2 {
+    flex: 0 1 auto;
+    max-width: clamp(185px, 24cqi, 345px);
+    font-size: clamp(18px, 1.75cqi, 23px);
+    line-height: 1.06;
+    white-space: normal;
+  }
+
+  .ce-status-pill.large {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding-inline: clamp(13px, 1.4cqi, 18px);
+    font-size: 12px;
+  }
+
+  .ce-access-header-card {
+    min-height: 68px;
+    padding: 10px 12px;
+    border-radius: 16px;
+  }
+
+  .ce-access-header-card > span {
+    width: 38px;
+    height: 38px;
+  }
+
+  .ce-access-header-card strong {
+    font-size: 12px;
+  }
+
+  .ce-access-header-card small {
+    font-size: 11px;
+  }
+
+  .ce-progress-cluster {
+    gap: 7px;
+    min-width: 0;
+    align-self: center;
+    justify-self: stretch;
+  }
+
+  .ce-progress-cluster strong,
+  .ce-progress-cluster small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ce-progress-track {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ce-detail-menu-button {
+    align-self: start;
+    justify-self: end;
+    width: 44px;
+    height: 44px;
+  }
+
+  .ce-detail-status-strip {
+    grid-template-columns: minmax(300px, 1fr) auto;
+    min-height: 54px;
+    padding: 10px 14px;
+  }
+
+  .ce-inline-note--quality {
+    min-width: 0;
+  }
+
+  .ce-missing-grid {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .ce-missing-chip {
+    min-width: clamp(128px, 13cqi, 162px);
+    min-height: 38px;
+    padding-inline: clamp(11px, 1.3cqi, 16px);
+  }
+
+  .ce-family-grid {
+    grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+    gap: 14px;
+  }
+
+  .ce-family-fields--mother {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ce-family-span-2 {
+    grid-column: span 2;
+  }
+}
+
+@container (min-width: 721px) and (max-width: 980px) {
+  .ce-detail-header {
+    grid-template-columns: minmax(285px, 1fr) minmax(235px, 0.82fr) minmax(185px, 0.62fr) 44px;
+    gap: 10px;
+  }
+
+  .ce-title-row h2 {
+    max-width: 235px;
+    font-size: 20px;
+  }
+
+  .ce-access-header-card {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .ce-progress-cluster strong {
+    font-size: 11.5px;
+  }
+
+  .ce-progress-cluster small {
+    font-size: 10.5px;
+  }
+
+  .ce-detail-status-strip {
+    grid-template-columns: minmax(340px, 1fr) auto;
+  }
+
+  .ce-inline-note p {
+    font-size: 12px;
+  }
+
+  .ce-missing-chip {
+    min-width: 132px;
+    font-size: 11px;
+  }
+}
+
+@container (max-width: 720px) {
+  .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .ce-detail-title--with-photo {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .ce-detail-menu-button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .ce-access-header-card,
+  .ce-progress-cluster {
+    grid-column: 1 / -1;
+  }
+
+  .ce-detail-status-strip,
+  .ce-family-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ce-missing-grid {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
 </style>
