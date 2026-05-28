@@ -115,6 +115,12 @@ body.students-route-active .income-content {
   overflow: hidden;
 }
 
+.student-detail-panel--account {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .empty-state {
   display: flex;
   min-height: 180px;
@@ -276,8 +282,8 @@ body.students-route-active .income-content {
 
 .students-workspace.has-detail {
   --students-workspace-resizer-size: 18px;
-  --students-list-min: clamp(280px, 24cqi, 420px);
-  --students-detail-min: clamp(340px, 30cqi, 620px);
+  --students-list-min: clamp(280px, 22cqi, 420px);
+  --students-detail-min: clamp(320px, 25cqi, 560px);
   grid-template-columns:
     minmax(var(--students-list-min), var(--students-list-panel-size, 51%))
     var(--students-workspace-resizer-size)

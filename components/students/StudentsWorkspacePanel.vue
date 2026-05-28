@@ -1,6 +1,6 @@
 <template>
   <Transition name="detail-flow" mode="out-in">
-    <section v-if="accountWorkspaceMode === 'detail' && selectedStudent" :key="`detail-${selectedStudent.matricula}`" class="student-detail-panel">
+    <section v-if="accountWorkspaceMode === 'detail' && selectedStudent" :key="`detail-${selectedStudent.matricula}`" class="student-detail-panel student-detail-panel--account">
       <StudentDetails
         :student="selectedStudent"
         :is-enrolled="isStudentEnrolled(selectedStudent, externalConcepts)"

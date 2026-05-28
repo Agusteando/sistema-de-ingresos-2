@@ -512,8 +512,8 @@ const setWorkspaceSplitFromPointer = (clientX, clientY) => {
     return
   }
 
-  const minListPx = Math.min(560, Math.max(300, rect.width * 0.26))
-  const minDetailPx = Math.min(620, Math.max(340, rect.width * 0.3))
+  const minListPx = Math.min(520, Math.max(280, rect.width * 0.23))
+  const minDetailPx = Math.min(560, Math.max(320, rect.width * 0.24))
   const minPercent = Math.max(WORKSPACE_SPLIT_MIN, (minListPx / rect.width) * 100)
   const maxPercent = Math.min(WORKSPACE_SPLIT_MAX, 100 - (minDetailPx / rect.width) * 100)
   const nextSplit = ((clientX - rect.left) / rect.width) * 100

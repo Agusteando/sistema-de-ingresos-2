@@ -13,7 +13,6 @@
         {
           'student-details-shell--expanded': detailsExpanded,
           'is-detail-transitioning': detailTransitioning,
-          'is-detail-stack-resizing': detailStackResizing,
         },
       ]"
       :aria-expanded="detailsExpanded"
@@ -59,208 +58,12 @@
           <LucideX :size="18" />
         </button>
       </div>
-      <div v-if="!detailsExpanded" class="student-overview-pane">
-      <section
-        class="student-profile-card"
-        :style="studentPresentationStyle(student)"
-        :class="{
-          inactive: student.estatus !== 'Activo',
-          unenrolled: !isEnrolled,
-        }"
-      >
-        <UiGroupIcon
-          class="student-profile-watermark"
-          :class="{ 'is-missing-group': studentMissingGroup(student) }"
-          :label="studentGroupLabel(student)"
-          :missing="studentMissingGroup(student)"
-        />
-        <div class="profile-main">
-          <div class="profile-identity">
-            <StudentAccountPhotoCard
-              :student="student"
-              :photo-url="photoUrl || ''"
-              :photo-loading="photoLoading"
-            />
-
-            <div class="profile-copy">
-              <h2 :title="student.nombreCompleto">
-                <span
-                  v-if="student.estatus !== 'Activo'"
-                  class="state-badge red"
-                  >BAJA</span
-                >
-                <span v-else-if="!isEnrolled" class="state-badge orange"
-                  >NO INSCRITO</span
-                >
-                <span
-                  :class="
-                    student.estatus !== 'Activo'
-                      ? 'line-through decoration-red-400/50'
-                      : ''
-                  "
-                  >{{ student.nombreCompleto }}</span
-                >
-              </h2>
-              <p>
-                <span class="student-code">{{ student.matricula }}</span>
-                <i></i>
-                {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} · {{ studentGroupInlineLabel(student) }}
-                <template v-if="student.matriculaAnterior">
-                  <i></i>
-                  Ant. {{ student.matriculaAnterior }}
-                </template>
-                <template v-if="student.matriculaSiguiente">
-                  <i></i>
-                  Sig. {{ student.matriculaSiguiente }}
-                </template>
-                <em v-if="student.estatus !== 'Activo'"
-                  >(Motivo: {{ student.estatus }})</em
-                >
-              </p>
-              <div class="tipo-ingreso-row">
-                <span
-                  :class="['tipo-ingreso-badge', resolvedTipoIngreso.value]"
-                  :title="`${resolvedTipoIngresoLabel} en ${selectedCicloLabel}. ${resolvedTipoIngreso.reason}`"
-                >
-                  <LucideBuilding2
-                    v-if="resolvedTipoIngreso.value === 'interno'"
-                    :size="12"
-                    :stroke-width="2.4"
-                  />
-                  <LucideGlobe2 v-else :size="12" :stroke-width="2.4" />
-                  {{ resolvedTipoIngresoLabel }}
-                </span>
-              </div>
-              <div
-                v-if="student.customSections?.length"
-                class="detail-section-badges"
-              >
-                <b
-                  v-for="section in student.customSections"
-                  :key="`detail-section-${student.matricula}-${section.id}`"
-                  >{{ section.name }}</b
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="profile-top-actions">
-            <button
-              class="ingreso-icon-button"
-              type="button"
-              aria-label="Corregir ciclo de ingreso"
-              title="Ciclo de ingreso"
-              @click="showIngresoCycleModal = true"
-            >
-              <LucideCalendarClock :size="18" />
-            </button>
-            <button
-              v-if="student.estatus === 'Activo'"
-              class="danger-icon-button"
-              title="Dar de baja"
-              @click="$emit('baja', student)"
-            >
-              <LucideUserX :size="19" />
-            </button>
-            <button
-              class="plain-icon-button"
-              @click="$emit('close')"
-              title="Cerrar detalles"
-            >
-              <LucideX :size="20" />
-            </button>
-          </div>
-        </div>
-
-        <div
-          class="profile-actions profile-toolbar"
-          role="toolbar"
-          aria-label="Acciones del alumno"
-        >
-          <button
-            class="profile-action-button profile-action-button--primary"
-            :disabled="!selectedDebts.length"
-            @click="showPaymentModal = true"
-          >
-            <LucideCreditCard :size="15" /> Pagar ({{ selectedDebts.length }})
-          </button>
-          <button
-            class="profile-action-button"
-            :disabled="!selectedDebts.length"
-            @click="showInvoiceModal = true"
-          >
-            <LucideFileText :size="15" /> Facturar
-          </button>
-          <button class="profile-action-button" @click="showDocModal = true">
-            <LucideFilePlus :size="15" /> Cargo extra
-          </button>
-          <button
-            class="profile-action-button profile-action-button--menu"
-            type="button"
-            aria-label="Más acciones"
-            title="Más acciones"
-            @click="showStudentActionsMenu"
-          >
-            <LucideMoreVertical :size="15" />
-            <span>Más</span>
-            <LucideChevronDown class="profile-action-caret" :size="14" />
-          </button>
-        </div>
-      </section>
-
-
-      <section v-if="siblings.length" class="siblings-card">
-        <div class="siblings-header">
-          <h4>Familia / Hermanos</h4>
-          <button
-            class="siblings-clear"
-            title="Limpiar vinculos"
-            @click="clearSiblingLinks"
-          >
-            <LucideUndo :size="12" /> Limpiar
-          </button>
-        </div>
-        <div class="siblings-list">
-          <button
-            v-for="sib in siblings"
-            :key="sib.matricula"
-            @click="$emit('switch-student', sib.matricula)"
-          >
-            <LucideUsers :size="13" /> {{ sib.nombreCompleto }} ({{
-              sib.grado
-            }})
-          </button>
-        </div>
-      </section>
-      </div>
-
-      <button
-        v-if="!detailsExpanded"
-        type="button"
-        class="student-detail-stack-resizer"
-        role="separator"
-        aria-label="Redimensionar identidad del alumno y estado de cuenta"
-        aria-orientation="horizontal"
-        :aria-valuenow="Math.round(detailStackSplitPercent)"
-        :aria-valuetext="`Identidad ${Math.round(detailStackSplitPercent)}%, estado de cuenta ${Math.round(100 - detailStackSplitPercent)}%`"
-        :aria-valuemin="DETAIL_STACK_MIN"
-        :aria-valuemax="DETAIL_STACK_MAX"
-        title="Arrastra para ajustar identidad y estado de cuenta. Doble clic para restaurar."
-        @pointerdown.prevent="startDetailStackResize"
-        @dblclick.prevent="resetDetailStackSplit"
-        @keydown.up.prevent="nudgeDetailStackSplit(-2)"
-        @keydown.down.prevent="nudgeDetailStackSplit(2)"
-        @keydown.home.prevent="resetDetailStackSplit"
-        @keydown.end.prevent="resetDetailStackSplit"
-      >
-        <span aria-hidden="true"><i></i><i></i><i></i></span>
-      </button>
-
       <section
         ref="accountCard"
         :class="[
           'account-card',
           {
+            'account-card--embedded': !detailsExpanded,
             'account-card--workspace': detailsExpanded,
             'is-account-transitioning': detailTransitioning,
             'is-account-refreshing': isAccountRefreshing,
@@ -272,6 +75,7 @@
         role="region"
         aria-label="Estado de cuenta"
         :aria-expanded="detailsExpanded"
+        :style="studentPresentationStyle(student)"
       >
         <UiGroupIcon
           v-if="!detailsExpanded"
@@ -280,6 +84,184 @@
           :label="studentGroupLabel(student)"
           :missing="studentMissingGroup(student)"
         />
+
+        <section
+          v-if="!detailsExpanded"
+          class="account-student-composition"
+          :class="{
+            inactive: student.estatus !== 'Activo',
+            unenrolled: !isEnrolled,
+          }"
+          aria-label="Alumno seleccionado"
+        >
+          <UiGroupIcon
+            class="account-student-watermark"
+            :class="{ 'is-missing-group': studentMissingGroup(student) }"
+            :label="studentGroupLabel(student)"
+            :missing="studentMissingGroup(student)"
+          />
+          <div class="profile-main">
+            <div class="profile-identity">
+              <StudentAccountPhotoCard
+                :student="student"
+                :photo-url="photoUrl || ''"
+                :photo-loading="photoLoading"
+              />
+
+              <div class="profile-copy">
+                <h2 :title="student.nombreCompleto">
+                  <span
+                    v-if="student.estatus !== 'Activo'"
+                    class="state-badge red"
+                    >BAJA</span
+                  >
+                  <span v-else-if="!isEnrolled" class="state-badge orange"
+                    >NO INSCRITO</span
+                  >
+                  <span
+                    :class="
+                      student.estatus !== 'Activo'
+                        ? 'line-through decoration-red-400/50'
+                        : ''
+                    "
+                    >{{ student.nombreCompleto }}</span
+                  >
+                </h2>
+                <p>
+                  <span class="student-code">{{ student.matricula }}</span>
+                  <i></i>
+                  {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} · {{ studentGroupInlineLabel(student) }}
+                  <template v-if="student.matriculaAnterior">
+                    <i></i>
+                    Ant. {{ student.matriculaAnterior }}
+                  </template>
+                  <template v-if="student.matriculaSiguiente">
+                    <i></i>
+                    Sig. {{ student.matriculaSiguiente }}
+                  </template>
+                  <em v-if="student.estatus !== 'Activo'"
+                    >(Motivo: {{ student.estatus }})</em
+                  >
+                </p>
+                <div class="tipo-ingreso-row">
+                  <span
+                    :class="['tipo-ingreso-badge', resolvedTipoIngreso.value]"
+                    :title="`${resolvedTipoIngresoLabel} en ${selectedCicloLabel}. ${resolvedTipoIngreso.reason}`"
+                  >
+                    <LucideBuilding2
+                      v-if="resolvedTipoIngreso.value === 'interno'"
+                      :size="12"
+                      :stroke-width="2.4"
+                    />
+                    <LucideGlobe2 v-else :size="12" :stroke-width="2.4" />
+                    {{ resolvedTipoIngresoLabel }}
+                  </span>
+                </div>
+                <div
+                  v-if="student.customSections?.length"
+                  class="detail-section-badges"
+                >
+                  <b
+                    v-for="section in student.customSections"
+                    :key="`detail-section-${student.matricula}-${section.id}`"
+                    >{{ section.name }}</b
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="profile-top-actions">
+              <button
+                class="ingreso-icon-button"
+                type="button"
+                aria-label="Corregir ciclo de ingreso"
+                title="Ciclo de ingreso"
+                @click="showIngresoCycleModal = true"
+              >
+                <LucideCalendarClock :size="18" />
+              </button>
+              <button
+                v-if="student.estatus === 'Activo'"
+                class="danger-icon-button"
+                title="Dar de baja"
+                @click="$emit('baja', student)"
+              >
+                <LucideUserX :size="19" />
+              </button>
+              <button
+                class="plain-icon-button"
+                @click="$emit('close')"
+                title="Cerrar detalles"
+              >
+                <LucideX :size="20" />
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="profile-actions profile-toolbar"
+            role="toolbar"
+            aria-label="Acciones del alumno"
+          >
+            <button
+              class="profile-action-button profile-action-button--primary"
+              :disabled="!selectedDebts.length"
+              @click="showPaymentModal = true"
+            >
+              <LucideCreditCard :size="15" /> Pagar ({{ selectedDebts.length }})
+            </button>
+            <button
+              class="profile-action-button"
+              :disabled="!selectedDebts.length"
+              @click="showInvoiceModal = true"
+            >
+              <LucideFileText :size="15" /> Facturar
+            </button>
+            <button class="profile-action-button" @click="showDocModal = true">
+              <LucideFilePlus :size="15" /> Cargo extra
+            </button>
+            <button
+              class="profile-action-button profile-action-button--menu"
+              type="button"
+              aria-label="Más acciones"
+              title="Más acciones"
+              @click="showStudentActionsMenu"
+            >
+              <LucideMoreVertical :size="15" />
+              <span>Más</span>
+              <LucideChevronDown class="profile-action-caret" :size="14" />
+            </button>
+          </div>
+
+          <section
+            v-if="siblings.length"
+            class="account-family-strip"
+            aria-label="Familia y hermanos"
+          >
+            <div class="account-family-header">
+              <h4>Familia / Hermanos</h4>
+              <button
+                class="account-family-clear"
+                title="Limpiar vinculos"
+                @click="clearSiblingLinks"
+              >
+                <LucideUndo :size="12" /> Limpiar
+              </button>
+            </div>
+            <div class="account-family-list">
+              <button
+                v-for="sib in siblings"
+                :key="sib.matricula"
+                @click="$emit('switch-student', sib.matricula)"
+              >
+                <LucideUsers :size="13" /> {{ sib.nombreCompleto }} ({{
+                  sib.grado
+                }})
+              </button>
+            </div>
+          </section>
+        </section>
+
         <div class="account-header">
           <div class="account-title-area">
             <div class="account-title-copy">
@@ -777,12 +759,6 @@ const accountSearchQuery = ref("");
 const accountFilter = ref("all");
 const detailsExpanded = ref(false);
 const detailTransitioning = ref(false);
-const detailStackSplitPercent = ref(32);
-const detailStackResizing = ref(false);
-const DETAIL_STACK_STORAGE_KEY = "students:detail-stack-split-percent:v1";
-const DETAIL_STACK_DEFAULT = 32;
-const DETAIL_STACK_MIN = 24;
-const DETAIL_STACK_MAX = 52;
 
 const photoUrl = ref(null);
 const photoLoading = ref(false);
@@ -1041,19 +1017,6 @@ const progressStatusLabel = (debt) => {
 
 const debtKey = (debt) => `${debt?.documento || ""}-${debt?.mes || ""}`;
 
-const clampDetailStackSplit = (value) =>
-  Math.min(DETAIL_STACK_MAX, Math.max(DETAIL_STACK_MIN, Number(value) || DETAIL_STACK_DEFAULT));
-const persistDetailStackSplit = () => {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(
-    DETAIL_STACK_STORAGE_KEY,
-    String(Math.round(detailStackSplitPercent.value * 10) / 10),
-  );
-};
-const detailStackStyle = computed(() => ({
-  "--student-overview-panel-size": `${detailStackSplitPercent.value}%`,
-  "--student-account-panel-size": `${100 - detailStackSplitPercent.value}%`,
-}));
 const detailShellStyle = computed(() => {
   if (!detailsExpanded.value || !expandedShellBounds.value) return {};
   return {
@@ -1061,80 +1024,7 @@ const detailShellStyle = computed(() => {
     "--detail-expanded-width": `${expandedShellBounds.value.width}px`,
   };
 });
-const detailShellRootStyle = computed(() => ({
-  ...detailStackStyle.value,
-  ...detailShellStyle.value,
-}));
-
-let detailStackResizePointerId = null;
-let detailStackResizeFrame = null;
-let detailStackPendingPointer = null;
-const setDetailStackSplitFromPointer = (clientY) => {
-  const shell = detailsShell.value;
-  const rect = shell?.getBoundingClientRect?.();
-  if (!rect?.height) return;
-
-  const railAllowance = 48;
-  const availableHeight = Math.max(220, rect.height - railAllowance);
-  const minOverviewPx = Math.min(260, Math.max(132, availableHeight * 0.24));
-  const minAccountPx = Math.min(360, Math.max(220, availableHeight * 0.42));
-  const minPercent = Math.max(DETAIL_STACK_MIN, (minOverviewPx / availableHeight) * 100);
-  const maxPercent = Math.min(DETAIL_STACK_MAX, 100 - (minAccountPx / availableHeight) * 100);
-  const nextSplit = ((clientY - rect.top) / availableHeight) * 100;
-
-  if (minPercent > maxPercent) {
-    detailStackSplitPercent.value = Math.min(DETAIL_STACK_MAX, Math.max(DETAIL_STACK_MIN, (minPercent + maxPercent) / 2));
-    return;
-  }
-  detailStackSplitPercent.value = Math.min(maxPercent, Math.max(minPercent, nextSplit));
-};
-const stopDetailStackResize = () => {
-  if (!detailStackResizing.value) return;
-  detailStackResizing.value = false;
-  detailStackResizePointerId = null;
-  detailStackPendingPointer = null;
-  if (typeof window !== "undefined" && detailStackResizeFrame) {
-    window.cancelAnimationFrame(detailStackResizeFrame);
-    detailStackResizeFrame = null;
-  }
-  persistDetailStackSplit();
-  if (typeof window !== "undefined") {
-    document.body.classList.remove("student-detail-stack-resizing");
-    window.removeEventListener("pointermove", onDetailStackResizeMove);
-    window.removeEventListener("pointerup", stopDetailStackResize);
-    window.removeEventListener("pointercancel", stopDetailStackResize);
-  }
-};
-const onDetailStackResizeMove = (event) => {
-  if (!detailStackResizing.value) return;
-  if (detailStackResizePointerId !== null && event.pointerId !== detailStackResizePointerId) return;
-  detailStackPendingPointer = event.clientY;
-  if (detailStackResizeFrame || typeof window === "undefined") return;
-  detailStackResizeFrame = window.requestAnimationFrame(() => {
-    detailStackResizeFrame = null;
-    if (detailStackPendingPointer === null) return;
-    setDetailStackSplitFromPointer(detailStackPendingPointer);
-  });
-};
-const startDetailStackResize = (event) => {
-  if (typeof window === "undefined" || detailsExpanded.value) return;
-  detailStackResizePointerId = event.pointerId ?? null;
-  detailStackResizing.value = true;
-  document.body.classList.add("student-detail-stack-resizing");
-  setDetailStackSplitFromPointer(event.clientY);
-  event.currentTarget?.setPointerCapture?.(event.pointerId);
-  window.addEventListener("pointermove", onDetailStackResizeMove);
-  window.addEventListener("pointerup", stopDetailStackResize);
-  window.addEventListener("pointercancel", stopDetailStackResize);
-};
-const resetDetailStackSplit = () => {
-  detailStackSplitPercent.value = DETAIL_STACK_DEFAULT;
-  persistDetailStackSplit();
-};
-const nudgeDetailStackSplit = (amount) => {
-  detailStackSplitPercent.value = clampDetailStackSplit(detailStackSplitPercent.value + amount);
-  persistDetailStackSplit();
-};
+const detailShellRootStyle = computed(() => detailShellStyle.value);
 
 const getExpandedBoundsReference = () => {
   if (detailsExpanded.value && detailsPlaceholder.value)
@@ -1229,10 +1119,6 @@ const toggleDetailsExpanded = () => setDetailsExpanded(!detailsExpanded.value);
 
 onMounted(() => {
   if (typeof window === "undefined") return;
-  const savedDetailStack = Number(localStorage.getItem(DETAIL_STACK_STORAGE_KEY));
-  if (Number.isFinite(savedDetailStack)) {
-    detailStackSplitPercent.value = clampDetailStackSplit(savedDetailStack);
-  }
   window.addEventListener("resize", scheduleExpandedShellBoundsUpdate, {
     passive: true,
   });
@@ -1557,11 +1443,6 @@ onBeforeUnmount(() => {
       scheduleExpandedShellBoundsUpdate,
     );
     if (expandedBoundsFrame) window.cancelAnimationFrame(expandedBoundsFrame);
-    if (detailStackResizeFrame) window.cancelAnimationFrame(detailStackResizeFrame);
-    window.removeEventListener("pointermove", onDetailStackResizeMove);
-    window.removeEventListener("pointerup", stopDetailStackResize);
-    window.removeEventListener("pointercancel", stopDetailStackResize);
-    document.body.classList.remove("student-detail-stack-resizing");
   }
   clearAccountRefreshTimer();
   finishDetailLayoutTransition(detailsShell.value);
