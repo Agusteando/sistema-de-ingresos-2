@@ -1013,6 +1013,8 @@ const centralSelectColumns = (schema: ControlEscolarSchema) => {
   return wanted.filter((column) => schema.matricula.has(column));
 };
 
+const canonicalMatriculaKey = (value: unknown) => normalizeUpper(value, 64);
+
 const fetchMatriculaOverlayMap = async (
   matriculas: string[],
   schema: ControlEscolarSchema,
@@ -1020,7 +1022,7 @@ const fetchMatriculaOverlayMap = async (
   const unique = Array.from(
     new Set(
       matriculas
-        .map((matricula) => normalizeText(matricula, 64))
+        .map((matricula) => canonicalMatriculaKey(matricula))
         .filter(Boolean),
     ),
   );
@@ -1038,10 +1040,10 @@ const fetchMatriculaOverlayMap = async (
     const chunk = unique.slice(index, index + CENTRAL_CHUNK_SIZE);
     const placeholders = chunk.map(() => "?").join(", ");
     const rows = await controlEscolarCentralQuery<any[]>(
-      `SELECT ${selectSql} FROM \`matricula\` WHERE \`matricula\` IN (${placeholders})`,
+      `SELECT ${selectSql} FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) IN (${placeholders})`,
       chunk,
     );
-    rows.forEach((row) => result.set(normalizeText(row.matricula, 64), row));
+    rows.forEach((row) => result.set(canonicalMatriculaKey(row.matricula), row));
   }
 
   return result;
@@ -1054,7 +1056,7 @@ const fetchHuskyPassMap = async (
   const unique = Array.from(
     new Set(
       matriculas
-        .map((matricula) => normalizeText(matricula, 64))
+        .map((matricula) => canonicalMatriculaKey(matricula))
         .filter(Boolean),
     ),
   );
@@ -1071,10 +1073,10 @@ const fetchHuskyPassMap = async (
     const chunk = unique.slice(index, index + CENTRAL_CHUNK_SIZE);
     const placeholders = chunk.map(() => "?").join(", ");
     const rows = await controlEscolarCentralQuery<any[]>(
-      `SELECT ${selectSql} FROM \`users\` WHERE \`username\` IN (${placeholders})`,
+      `SELECT ${selectSql} FROM \`users\` WHERE UPPER(TRIM(\`username\`)) IN (${placeholders})`,
       chunk,
     );
-    rows.forEach((row) => result.set(normalizeText(row.username, 64), row));
+    rows.forEach((row) => result.set(canonicalMatriculaKey(row.username), row));
   }
 
   return result;
@@ -1090,8 +1092,8 @@ const fetchHuskyPassRow = async (
   );
   const selectColumns = ["username", "plaintext", ...optionalColumns];
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT ${selectColumns.map(escapeColumn).join(", ")} FROM \`users\` WHERE \`username\` = ? LIMIT 1`,
-    [matricula],
+    `SELECT ${selectColumns.map(escapeColumn).join(", ")} FROM \`users\` WHERE UPPER(TRIM(\`username\`)) = ? LIMIT 1`,
+    [canonicalMatriculaKey(matricula)],
   );
   return rows[0] || null;
 };
@@ -1374,8 +1376,8 @@ const compactRawRecord = (row: any) => {
 
 const fetchFullCentralMatriculaRow = async (matricula: string) => {
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT * FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`,
-    [matricula],
+    `SELECT * FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) = ? LIMIT 1`,
+    [canonicalMatriculaKey(matricula)],
   );
   return rows[0] || null;
 };
@@ -1606,12 +1608,12 @@ const fetchAllNormalizedStudents = async (
     return {
       students: baseRows
         .map((row) => {
-          const matricula = normalizeText(row.matricula, 64);
+          const matriculaKey = canonicalMatriculaKey(row.matricula);
           return overlayStudentRow(
             agentId,
             row,
-            overlayMap.get(matricula),
-            huskyPassMap.get(matricula),
+            overlayMap.get(matriculaKey),
+            huskyPassMap.get(matriculaKey),
           );
         })
         .sort(compareStudents),
@@ -1636,73 +1638,104 @@ const fetchAllNormalizedStudents = async (
     };
   };
 
-  if (!localOnly) {
+  const readVerifiedCacheFallback = async (bridgeError: any): Promise<ControlEscolarLoadedStudents> => {
+    const bridgeErrorMessage = toErrorMessage(bridgeError);
+    if (localOnly) throw bridgeError;
+
     const cacheStartedAt = Date.now();
     try {
       const cached = await fetchVerifiedControlEscolarScopeRows(agentId, scope);
       if (cached.rows.length) {
-        markStep("verified-cache", "Leer cache verificado de base/filtros", cacheStartedAt, "ready", {
+        markStep("verified-cache", "Leer snapshot verificado por falla del bridge", cacheStartedAt, "ready", {
           rows: cached.rows.length,
           freshness: cached.source.cacheFreshness,
           scopeKey: cached.source.scopeKey,
           validation: cached.source.cacheValidation?.validation_status || "pass",
+          bridgeError: bridgeErrorMessage,
         });
         return await enrichRows(
           cached.rows,
           cached.source.base,
           String(cached.source.cacheFreshness || "").includes("stale")
-            ? "verified-cache-stale-enriched"
-            : "verified-cache-enriched",
+            ? "verified-cache-offline-fallback-stale-enriched"
+            : "verified-cache-offline-fallback-enriched",
           {
             ...cached.source,
             cacheRows: cached.rows.length,
+            bridgeFallback: true,
+            bridgeError: bridgeErrorMessage,
           },
         );
       }
-      markStep("verified-cache", "Leer cache verificado de base/filtros", cacheStartedAt, "empty", {
+      markStep("verified-cache", "Leer snapshot verificado por falla del bridge", cacheStartedAt, "empty", {
         rows: 0,
         freshness: cached.source.cacheFreshness,
         reason: cached.source.cacheValidation?.reason || cached.source.cacheValidation?.status || "missing",
         scopeKey: cached.source.scopeKey,
+        bridgeError: bridgeErrorMessage,
       });
-    } catch (error: any) {
-      markStep("verified-cache", "Leer cache verificado de base/filtros", cacheStartedAt, "failed", {
-        error: toErrorMessage(error),
+    } catch (cacheError: any) {
+      markStep("verified-cache", "Leer snapshot verificado por falla del bridge", cacheStartedAt, "failed", {
+        error: toErrorMessage(cacheError),
+        bridgeError: bridgeErrorMessage,
       });
-      console.warn("[Control Escolar Cache] Verified cache read failed; falling back to bridge.", {
+      console.warn("[Control Escolar Cache] Offline snapshot fallback failed after bridge error.", {
         agentId,
-        message: toErrorMessage(error),
+        bridgeError: bridgeErrorMessage,
+        cacheError: toErrorMessage(cacheError),
       });
     }
-  } else {
-    markStep("verified-cache", "Leer cache verificado de base/filtros", requestStartedAt, "skipped", {
-      reason: "base_phase_uses_bridge",
-    });
-  }
 
-  assertControlEscolarDynamicBridge(agentId);
-  const liveSchemaStartedAt = Date.now();
-  const schema = await getControlEscolarSchema(agentId, {
-    requireCentral: false,
-    skipCentral: localOnly,
-  });
-  centralSchema = localOnly ? schema : centralSchema.centralAvailable ? centralSchema : schema;
+    throw bridgeError;
+  };
+
   markStep(
-    "bridge-schema",
-    "Validar bridge/base local",
-    liveSchemaStartedAt,
-    schema.centralAvailable || localOnly ? "ready" : "partial",
+    "verified-cache",
+    "Snapshot verificado reservado como fallback",
+    requestStartedAt,
+    "skipped",
     {
-      centralAvailable: schema.centralAvailable,
-      error: schema.centralError || "",
+      reason: localOnly ? "base_phase_uses_bridge" : "live_bridge_primary_snapshot_only_on_bridge_failure",
     },
   );
 
-  const liveBaseStartedAt = Date.now();
-  const localRows = await fetchLocalBaseRows(agentId, schema, filters);
-  markStep("live-base-selector", "Leer base local por bridge", liveBaseStartedAt, "ready", {
-    rows: localRows.length,
-  });
+  let schema: ControlEscolarSchema | null = null;
+  let localRows: any[] = [];
+
+  try {
+    assertControlEscolarDynamicBridge(agentId);
+    const liveSchemaStartedAt = Date.now();
+    schema = await getControlEscolarSchema(agentId, {
+      requireCentral: false,
+      skipCentral: localOnly,
+    });
+    centralSchema = localOnly ? schema : centralSchema.centralAvailable ? centralSchema : schema;
+    markStep(
+      "bridge-schema",
+      "Validar bridge/base local",
+      liveSchemaStartedAt,
+      schema.centralAvailable || localOnly ? "ready" : "partial",
+      {
+        centralAvailable: schema.centralAvailable,
+        error: schema.centralError || "",
+      },
+    );
+
+    const liveBaseStartedAt = Date.now();
+    localRows = await fetchLocalBaseRows(agentId, schema, filters);
+    markStep("live-base-selector", "Leer base local por bridge", liveBaseStartedAt, "ready", {
+      rows: localRows.length,
+    });
+  } catch (error: any) {
+    markStep("live-base-selector", "Leer base local por bridge", requestStartedAt, "failed", {
+      error: toErrorMessage(error),
+    });
+    console.warn("[Control Escolar] Live bridge read failed; trying verified snapshot fallback.", {
+      agentId,
+      message: toErrorMessage(error),
+    });
+    return await readVerifiedCacheFallback(error);
+  }
 
   if (localRows.length > MAX_LOCAL_ROWS) {
     throw createError({
@@ -1726,9 +1759,11 @@ const fetchAllNormalizedStudents = async (
         enrichedRows: 0,
         usersRows: 0,
         phase: "base",
-        cacheFreshness: "skipped",
+        cacheFreshness: "live-bridge",
         cacheRefreshedAt: null,
         cacheExpiresAt: null,
+        cacheRows: 0,
+        cacheRefreshDue: false,
         diagnostics: diagnosticsPayload("live-bridge-base", {
           localRows: localRows.length,
           overlayRows: 0,
@@ -1747,23 +1782,23 @@ const fetchAllNormalizedStudents = async (
         localRows,
         { triggerName: "live-bridge-control-escolar-read" },
       );
-      markStep("cache-refresh", "Validar y actualizar cache central", cacheRefreshStartedAt, refreshResult?.skipped ? "skipped" : "ready", {
+      markStep("cache-refresh", "Actualizar snapshot desde bridge live", cacheRefreshStartedAt, refreshResult?.skipped ? "skipped" : "ready", {
         rows: localRows.length,
         reason: refreshResult?.reason || "",
         scopeKey: refreshResult?.scopeKey || "",
         counts: refreshResult?.counts || null,
       });
     } catch (error: any) {
-      markStep("cache-refresh", "Validar y actualizar cache central", cacheRefreshStartedAt, "failed", {
+      markStep("cache-refresh", "Actualizar snapshot desde bridge live", cacheRefreshStartedAt, "failed", {
         error: toErrorMessage(error),
       });
-      console.warn("[Control Escolar Cache] Verified cache refresh failed; live bridge result still served.", {
+      console.warn("[Control Escolar Cache] Verified snapshot refresh failed; live bridge result still served.", {
         agentId,
         message: toErrorMessage(error),
       });
     }
   } else {
-    markStep("cache-refresh", "Validar y actualizar cache central", cacheRefreshStartedAt, "skipped", {
+    markStep("cache-refresh", "Actualizar snapshot desde bridge live", cacheRefreshStartedAt, "skipped", {
       reason: "search_result_not_cacheable",
     });
   }
@@ -2216,8 +2251,8 @@ const upsertMatriculaOverlay = async (
   schema: ControlEscolarSchema,
 ) => {
   const [existing] = await controlEscolarCentralQuery<any[]>(
-    `SELECT matricula FROM \`matricula\` WHERE \`matricula\` = ? LIMIT 1`,
-    [normalizedMatricula],
+    `SELECT matricula FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) = ? LIMIT 1`,
+    [canonicalMatriculaKey(normalizedMatricula)],
   );
   const auditContext = {
     user: user.email,
@@ -2237,9 +2272,9 @@ const upsertMatriculaOverlay = async (
       assignments.push("`updated_by` = ?");
       params.push(user.email);
     }
-    params.push(normalizedMatricula);
+    params.push(canonicalMatriculaKey(normalizedMatricula));
     await controlEscolarCentralQuery(
-      `UPDATE \`matricula\` SET ${assignments.join(", ")} WHERE \`matricula\` = ?`,
+      `UPDATE \`matricula\` SET ${assignments.join(", ")} WHERE UPPER(TRIM(\`matricula\`)) = ?`,
       params,
     );
   } else {
@@ -2454,8 +2489,9 @@ export const updateControlEscolarStudent = async (
     enrollmentConcepts: filters.enrollmentConcepts,
   };
   const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters);
+  const normalizedMatriculaKey = canonicalMatriculaKey(normalizedMatricula);
   const visibleStudent = visibleScope.students.find(
-    (student) => student.matricula === normalizedMatricula,
+    (student) => canonicalMatriculaKey(student.matricula) === normalizedMatriculaKey,
   );
   if (!visibleStudent) {
     throw createError({
@@ -2496,7 +2532,7 @@ export const updateControlEscolarStudent = async (
     success: true,
     student:
       result.data.find(
-        (student) => student.matricula === normalizedMatricula,
+        (student) => canonicalMatriculaKey(student.matricula) === normalizedMatriculaKey,
       ) ||
       result.data[0] ||
       null,

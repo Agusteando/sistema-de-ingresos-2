@@ -1,6 +1,7 @@
 import { fetchControlEscolarKpis, resolveControlEscolarAuth, runControlEscolar } from '../../utils/control-escolar'
 
 export default defineEventHandler(async (event) => {
+  setResponseHeader(event, 'Cache-Control', 'no-store')
   const { agentId } = getQuery(event)
   const auth = await resolveControlEscolarAuth(event, agentId)
 

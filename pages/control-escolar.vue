@@ -1520,6 +1520,8 @@ const normalizeControlDiagnostics = ({
       overlayRows: Number(source.overlayRows || 0),
       enrichedRows: Number(source.enrichedRows || 0),
       usersRows: Number(source.usersRows || 0),
+      bridgeFallback: Boolean(source.bridgeFallback),
+      bridgeError: source.bridgeError || "",
     },
   };
 };
@@ -1536,15 +1538,17 @@ const publishControlSyncIndicatorState = (override = {}) => {
   const rows = controlStudentsIndex.value.length || students.value.length || 0;
   const source = controlDataSource.value || {};
   const isLoading = studentsLoading.value || kpisLoading.value || controlBaseStage.value === "loading" || controlExternalDbStage.value === "loading" || controlCompleteStage.value === "loading";
+  const cacheFreshness = String(source.cacheFreshness || "");
+  const isSnapshotFallback = Boolean(source.bridgeFallback) || String(source.base || "").startsWith("verified-cache:");
   const status =
     override.status ||
     (isLoading
       ? "syncing"
       : loadError.value
         ? "failed"
-        : source.cacheFreshness === "expired"
+        : isSnapshotFallback || cacheFreshness === "expired"
           ? "cached"
-          : controlDataFreshness.value === "synced"
+          : controlDataFreshness.value === "synced" || cacheFreshness === "live-bridge"
             ? "updated"
             : controlDataFreshness.value === "cache"
               ? "cached"
@@ -1553,11 +1557,15 @@ const publishControlSyncIndicatorState = (override = {}) => {
                 : "empty");
   const message =
     override.message ||
-    (source.cacheFreshness === "expired"
-      ? "Mostrando cache activo; actualización automática en segundo plano."
-      : source.cacheFreshness === "fresh"
-        ? "Control Escolar usando cache central vigente."
-        : loadError.value || "Control Escolar");
+    (isSnapshotFallback
+      ? "Bridge sin conexión; mostrando snapshot verificado de emergencia."
+      : cacheFreshness === "expired"
+        ? "Mostrando cache activo; actualización automática en segundo plano."
+        : cacheFreshness === "live-bridge"
+          ? "Control Escolar actualizado desde bridge live."
+          : cacheFreshness === "fresh"
+            ? "Control Escolar usando snapshot verificado vigente."
+            : loadError.value || "Control Escolar");
   window.dispatchEvent(
     new CustomEvent("control-escolar:sync-state", {
       detail: {
@@ -1607,7 +1615,9 @@ const controlBaseStepTitle = computed(() =>
       ? "Base del administrador lista"
       : controlBaseStage.value === "failed"
         ? "Base del administrador pendiente"
-        : "Base del administrador pendiente",
+        : controlBaseStage.value === "partial"
+          ? "Snapshot verificado por bridge sin conexión"
+          : "Base del administrador pendiente",
 );
 const controlExternalDbStepTitle = computed(() =>
   controlExternalDbStage.value === "loading"
@@ -2906,12 +2916,13 @@ const loadStudents = async (options = {}) => {
     pagination.page = 1;
     applyControlStudentsPayload(response);
     loadError.value = "";
-    controlBaseStage.value = "ready";
     const responseSource = response?.source || {};
+    const isSnapshotFallback = Boolean(responseSource.bridgeFallback) || String(responseSource.base || "").startsWith("verified-cache:");
+    controlBaseStage.value = isSnapshotFallback ? "partial" : "ready";
     const externalDbRows = getControlExternalDbRowCount(responseSource);
     controlExternalDbRows.value = externalDbRows;
     controlExternalDbStage.value = externalDbRows > 0 ? "ready" : "empty";
-    controlDataFreshness.value = externalDbRows > 0 ? "synced" : "base";
+    controlDataFreshness.value = isSnapshotFallback ? "cache" : externalDbRows > 0 ? "synced" : "base";
     controlDataSavedAt.value = new Date().toISOString();
     controlDataSource.value = responseSource || controlDataSource.value;
     controlCompleteStage.value = "ready";

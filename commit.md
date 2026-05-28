@@ -1,1 +1,1 @@
-Restaura el Estado de Cuenta y mejora el divisor bidireccional del área financiera
+Corrige Control Escolar para leer bridge live antes del snapshot y normalizar matrículas

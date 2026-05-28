@@ -1,6 +1,7 @@
 import { fetchControlEscolarStudents, refreshVerifiedControlEscolarCacheForScope, resolveControlEscolarAuth, runControlEscolar } from '../../../utils/control-escolar'
 
 export default defineEventHandler(async (event) => {
+  setResponseHeader(event, 'Cache-Control', 'no-store')
   const queryParams = getQuery(event)
   const auth = await resolveControlEscolarAuth(event, queryParams.agentId)
 
