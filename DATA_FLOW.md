@@ -206,3 +206,41 @@ The login page should show only a compact preview of recent updates. Larger hist
 7. Missing enrichment should not block financial workflows.
 8. Missing or invalid parent data must not count as progress.
 9. UI should not expose database implementation language to final users.
+
+## Financial expediente / enrichment correction
+
+The financial-area expediente is the same central `matricula` enrichment described above. It must not be loaded as a separate blocking student-detail source.
+
+The incorrect behavior was:
+
+```txt
+Estado de Cuenta / Expediente del alumno
+        |
+        v
+Per-student operator-info request
+        |
+        +-- bridge lookup for local base again
+        +-- separate central lookup for matricula
+        |
+        v
+Modal/detail result
+```
+
+That duplicated the bridge read after the financial screen had already loaded bridge-backed student rows, and it made the expediente view depend on a separate request path. When the device or bridge was unavailable, the UI could show an error even though the student identity and account data were already present from matrícula/base data.
+
+The corrected behavior is:
+
+```txt
+Financial screen loads bridge/local DB data first
+        |
+        v
+UI remains usable
+        |
+        v
+Bulk/single matrícula overlay enrichment uses the same central enrichment path
+        |
+        v
+Expediente progress, parent data, CURP, and read-only Control Escolar details render from that overlay
+```
+
+Editar alumno in the financial/admin area uses bridge/local fields for editable financial data. Contacto familiar is displayed from the Control Escolar enrichment overlay as read-only parent cards, so the user can see both Padre and Madre without implying that financial edits write those central fields.

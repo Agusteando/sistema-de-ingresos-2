@@ -8,14 +8,11 @@ The Control Escolar module reads the selected plantel-local `base` table and the
 
 ## Operator-only student information view
 
-Financial/default operators and superadmin can use the separate `Ver información de alumno` action from the student menu. This action opens a read-only information modal and calls the bounded `/api/students/:matricula/operator-info` endpoint.
+Financial/default operators and superadmin can use the separate `Ver información de alumno` action from the student menu. This action opens a read-only information modal backed by the same matrícula enrichment path used by the financial list: `/api/students/matricula-overlays` with the current matrícula.
 
-This view is not the normal `Ver detalles` financial/account panel. It is a separate read-only operator view that consolidates:
+This view is not the normal `Ver detalles` financial/account panel. It is a separate read-only operator view that starts from the already-loaded bridge/local student snapshot and overlays centralized Control Escolar MySQL `matricula` data when available. It must not perform a second blocking bridge read, because the financial screen has already established the student from bridge/local data.
 
-- selected plantel-local `base` row through the active bridge agent;
-- centralized Control Escolar MySQL `matricula` row through `CONTROL_ESCOLAR_MYSQL_*` runtime configuration.
-
-The endpoint rejects exact Control Escolar-only users (`ROLE_CTRL`) with `403`. Control Escolar users should not see this action, and the Control Escolar workspace should not expose this operator information view.
+Control Escolar-only users (`ROLE_CTRL`) should not see this action, and the Control Escolar workspace should not expose this operator information view.
 
 The centralized external `users` table is separate. It is used for workspace/user role assignment such as `ROLE_CTRL`; it must not become a required gate for regular `/api/students` loading or other financial APIs.
 

@@ -1,1 +1,1 @@
-Ajusta la escala responsiva del panel de detalle de Control Escolar para igualar la referencia visual
+Corrige Estado de Cuenta financiero para ajustar escala, usar enriquecimiento de matrícula y mostrar contacto familiar de Control Escolar en solo lectura

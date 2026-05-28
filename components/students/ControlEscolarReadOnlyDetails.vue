@@ -77,7 +77,7 @@ const props = defineProps({
   endpointSuffix: { type: String, default: 'operator-info' },
   eyebrow: { type: String, default: 'Información de alumno' },
   title: { type: String, default: 'Expediente Control Escolar' },
-  description: { type: String, default: 'Lectura consolidada desde base + matrícula centralizada.' }
+  description: { type: String, default: 'Lectura desde el enriquecimiento de Control Escolar aplicado por matrícula.' }
 })
 
 const detail = ref(null)
@@ -93,23 +93,44 @@ const normalizeLabel = (key) => String(key || '')
   .replace(/\s+/g, ' ')
   .trim()
 
+const fallbackDetail = () => {
+  const base = props.fallbackStudent || {}
+  return {
+    ...base,
+    ...(base.centralMatricula || {}),
+    matricula: firstValue(base.matricula, base.centralMatricula?.matricula, props.matricula)
+  }
+}
+
 const loadDetail = async () => {
   const matricula = String(props.matricula || '').trim()
   if (!matricula) return
 
   const currentId = ++requestId
+  const fallback = fallbackDetail()
+  detail.value = Object.keys(fallback).length ? fallback : detail.value
   loading.value = true
   error.value = ''
 
   try {
-    const suffix = String(props.endpointSuffix || 'operator-info').replace(/^\/+|\/+$/g, '')
-    const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/${suffix}`)
+    const response = await $fetch('/api/students/matricula-overlays', {
+      method: 'POST',
+      body: { matriculas: [matricula] }
+    })
     if (currentId !== requestId) return
-    detail.value = response || null
+    const overlayStudent = (response?.overlays || [])
+      .map((item) => item?.student)
+      .find((item) => String(item?.matricula || '').trim().toUpperCase() === matricula.toUpperCase())
+    detail.value = overlayStudent ? { ...fallback, ...overlayStudent, centralMatricula: overlayStudent } : fallback
+    if (!overlayStudent && !Object.keys(detail.value || {}).length) {
+      error.value = response?.message || 'No se pudo cargar el enriquecimiento de Control Escolar.'
+    }
   } catch (err) {
     if (currentId !== requestId) return
-    detail.value = null
-    error.value = err?.data?.message || err?.message || 'No se pudo cargar el expediente de Control Escolar.'
+    detail.value = detail.value || fallback
+    if (!Object.keys(detail.value || {}).length) {
+      error.value = err?.data?.message || err?.message || 'No se pudo cargar el enriquecimiento de Control Escolar.'
+    }
   } finally {
     if (currentId === requestId) loading.value = false
   }

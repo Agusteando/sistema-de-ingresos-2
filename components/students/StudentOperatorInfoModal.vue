@@ -282,14 +282,26 @@ const loadDetail = async (options = {}) => {
   error.value = ''
 
   try {
-    const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/operator-info`)
+    const response = await $fetch('/api/students/matricula-overlays', {
+      method: 'POST',
+      body: { matriculas: [matricula] }
+    })
     if (currentId !== requestId) return
-    detail.value = { ...fallbackDetail, ...(response || {}) }
-    writeCachedDetail(detail.value)
+    const overlayStudent = (response?.overlays || [])
+      .map((item) => item?.student)
+      .find((item) => String(item?.matricula || '').trim().toUpperCase() === matricula.toUpperCase())
+    const nextDetail = overlayStudent
+      ? { ...fallbackDetail, ...overlayStudent, centralMatricula: overlayStudent }
+      : fallbackDetail
+    detail.value = nextDetail
+    if (overlayStudent) writeCachedDetail(nextDetail)
+    if (!overlayStudent && response?.ok === false) {
+      error.value = 'No se pudo actualizar el enriquecimiento; se muestran los datos disponibles.'
+    }
   } catch (err) {
     if (currentId !== requestId) return
     detail.value = detail.value || fallbackDetail
-    error.value = 'No se pudo actualizar el expediente; se muestran los datos disponibles.'
+    error.value = 'No se pudo actualizar el enriquecimiento; se muestran los datos disponibles.'
     writeCachedDetail(detail.value)
   } finally {
     if (currentId === requestId) loading.value = false

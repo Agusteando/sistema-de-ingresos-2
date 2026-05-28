@@ -1534,3 +1534,118 @@
     text-overflow: ellipsis;
   }
 }
+
+/* Financial Estado de Cuenta viewport correction: keep the compact account header in-flow and let the table own scrolling. */
+.student-details-shell:not(.student-details-shell--expanded) {
+  gap: 6px;
+  padding: 6px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .student-profile-card {
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-main {
+  gap: 10px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-actions {
+  gap: 8px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-card {
+  container-type: inline-size;
+  grid-template-rows: 44px minmax(0, 1fr) 42px;
+  min-height: 0;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-header {
+  min-height: 0;
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-title-area,
+.student-details-shell:not(.student-details-shell--expanded) .account-title-copy,
+.student-details-shell:not(.student-details-shell--expanded) .account-title-row {
+  min-width: 0;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-title-row {
+  gap: 7px;
+  overflow: hidden;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-header h3 {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-expediente-button {
+  flex: 0 1 auto;
+  max-width: 142px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-search-control {
+  width: clamp(180px, 36%, 250px);
+  min-width: 0;
+  margin-left: auto;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-workspace-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap {
+  min-height: 0;
+  overflow: auto;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-footer {
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+@media (max-width: 1100px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) {
+    grid-template-rows: 44px minmax(0, 1fr) 42px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) .account-header {
+    min-height: 0;
+    flex-wrap: nowrap;
+    padding-block: 0;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) .account-search-control {
+    order: initial;
+    width: clamp(170px, 34%, 230px);
+    min-width: 0;
+    margin-left: auto;
+  }
+}
+
+@container (max-width: 610px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-card {
+    grid-template-rows: 76px minmax(0, 1fr) 42px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-header {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-content: center;
+    gap: 7px;
+    padding-block: 7px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-search-control {
+    width: 100%;
+  }
+}

@@ -160,7 +160,34 @@
                   <h3>3. Contacto familiar</h3>
                 </div>
 
-                <div class="field-stack compact">
+                <div v-if="isEdit" class="family-readonly-panel" aria-label="Contacto familiar de Control Escolar">
+                  <div class="family-readonly-source">
+                    <span><LucideShieldCheck :size="16" /></span>
+                    <div>
+                      <strong>Control Escolar</strong>
+                      <p>Datos de enriquecimiento por matrícula. Consulta de solo lectura.</p>
+                    </div>
+                  </div>
+                  <div v-if="centralOverlayLoading && !centralOverlayStudent" class="family-readonly-loading">
+                    Preparando contacto familiar…
+                  </div>
+                  <div v-else class="family-readonly-grid">
+                    <section :class="['family-readonly-card', { complete: centralFatherComplete }]">
+                      <small>Padre</small>
+                      <strong>{{ centralFatherName || 'Sin registrar' }}</strong>
+                      <span :class="{ invalid: centralFatherPhoneInvalid }">{{ centralFatherPhone }}</span>
+                      <span :class="{ invalid: centralFatherEmailInvalid }">{{ centralFatherEmail }}</span>
+                    </section>
+                    <section :class="['family-readonly-card', { complete: centralMotherComplete }]">
+                      <small>Madre</small>
+                      <strong>{{ centralMotherName || 'Sin registrar' }}</strong>
+                      <span :class="{ invalid: centralMotherPhoneInvalid }">{{ centralMotherPhone }}</span>
+                      <span :class="{ invalid: centralMotherEmailInvalid }">{{ centralMotherEmail }}</span>
+                    </section>
+                  </div>
+                </div>
+
+                <div v-else class="field-stack compact">
                   <label class="polished-field">
                     <span>Padre</span>
                     <input
@@ -193,21 +220,6 @@
                         @blur="normalizeEmailField"
                       />
                     </label>
-                  </div>
-                  <div v-if="isEdit && centralOverlayStudent" class="family-consult-panel" aria-label="Consulta de datos familiares">
-                    <p class="family-consult-title">Datos familiares registrados</p>
-                    <section :class="['family-consult-card', { complete: centralFatherComplete }]">
-                      <small>Padre</small>
-                      <strong>{{ centralFatherName || 'Sin registrar' }}</strong>
-                      <span :class="{ invalid: centralFatherPhoneInvalid }">{{ centralFatherPhone }}</span>
-                      <span :class="{ invalid: centralFatherEmailInvalid }">{{ centralFatherEmail }}</span>
-                    </section>
-                    <section :class="['family-consult-card', { complete: centralMotherComplete }]">
-                      <small>Madre</small>
-                      <strong>{{ centralMotherName || 'Sin registrar' }}</strong>
-                      <span :class="{ invalid: centralMotherPhoneInvalid }">{{ centralMotherPhone }}</span>
-                      <span :class="{ invalid: centralMotherEmailInvalid }">{{ centralMotherEmail }}</span>
-                    </section>
                   </div>
                 </div>
               </section>
@@ -733,11 +745,11 @@ const centralOverlayStatusClass = computed(() => {
 });
 
 const centralOverlayStatusLabel = computed(() => {
-  if (centralOverlayLoading.value) return 'Preparando datos completos…';
-  if (centralOverlayApplied.value) return 'Datos completos listos.';
-  if (centralOverlayAvailable.value && userTouchedForm.value) return 'Datos completos disponibles; no se aplicaron para proteger cambios en edición.';
-  if (centralOverlayError.value) return 'No se pudieron cargar datos completos; puedes continuar con la información visible.';
-  return 'Preparando datos completos…';
+  if (centralOverlayLoading.value) return 'Preparando enriquecimiento de Control Escolar…';
+  if (centralOverlayApplied.value) return 'Enriquecimiento de Control Escolar listo.';
+  if (centralOverlayAvailable.value && userTouchedForm.value) return 'Enriquecimiento disponible; no se aplicó a campos editables para proteger cambios.';
+  if (centralOverlayError.value) return 'No se pudo cargar el enriquecimiento; puedes continuar con la información visible.';
+  return 'Preparando enriquecimiento de Control Escolar…';
 });
 
 const firstFilled = (...values) => values.find((value) => String(value || '').trim()) || '';
@@ -788,10 +800,13 @@ const applyCentralOverlayToForm = (overlayStudent) => {
     apellidoMaterno: firstFilled(overlayStudent.apellidoMaterno, current.apellidoMaterno),
     nombres: firstFilled(overlayStudent.nombres, current.nombres),
     curp: normalizeCurp(firstFilled(overlayStudent.curp, current.curp)),
-    padre: firstFilled(overlayStudent.padre, overlayStudent.nombrePadreCompleto, [overlayStudent.nombrePadre, overlayStudent.apellidoPaternoPadre, overlayStudent.apellidoMaternoPadre].filter(Boolean).join(' '), current.padre),
-    telefono: firstFilled(overlayStudent.telefonoPadre, overlayStudent.telefono, current.telefono),
-    correo: firstFilled(overlayStudent.emailPadre, overlayStudent.correo, current.correo)
   };
+
+  if (!isEdit) {
+    next.padre = firstFilled(overlayStudent.padre, overlayStudent.nombrePadreCompleto, [overlayStudent.nombrePadre, overlayStudent.apellidoPaternoPadre, overlayStudent.apellidoMaternoPadre].filter(Boolean).join(' '), current.padre);
+    next.telefono = firstFilled(overlayStudent.telefonoPadre, overlayStudent.telefono, current.telefono);
+    next.correo = firstFilled(overlayStudent.emailPadre, overlayStudent.correo, current.correo);
+  }
 
   const overlayPlantel = String(overlayStudent.plantel || '').trim();
   if (overlayPlantel) next.plantel = overlayPlantel;
@@ -828,9 +843,14 @@ const loadCentralMatriculaOverlay = async () => {
   centralOverlayLoading.value = true;
   centralOverlayError.value = '';
   try {
-    const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/matricula-overlay`);
-    const overlayStudent = response?.overlay?.student;
-    if (response?.found && overlayStudent) {
+    const response = await $fetch('/api/students/matricula-overlays', {
+      method: 'POST',
+      body: { matriculas: [matricula] },
+    });
+    const overlayStudent = (response?.overlays || [])
+      .map((item) => item?.student)
+      .find((item) => String(item?.matricula || '').trim().toUpperCase() === matricula.toUpperCase());
+    if (response?.ok && overlayStudent) {
       centralOverlayStudent.value = overlayStudent;
       writeCentralOverlayCache(overlayStudent);
       applyCentralOverlayToForm(overlayStudent);
@@ -2513,4 +2533,119 @@ const submit = async () => {
     transition: none;
   }
 }
+.family-readonly-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.family-readonly-source {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid rgba(64, 148, 70, .18);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(249, 253, 248, .98), rgba(255, 255, 255, .96));
+  color: #23422b;
+}
+
+.family-readonly-source > span {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #edf8ea;
+  color: #2f8f37;
+}
+
+.family-readonly-source strong {
+  display: block;
+  color: #1f7f2c;
+  font-size: .82rem;
+  font-weight: 950;
+}
+
+.family-readonly-source p {
+  margin: .15rem 0 0;
+  color: #66758e;
+  font-size: .78rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.family-readonly-loading {
+  padding: 16px;
+  border: 1px dashed rgba(148, 163, 184, .38);
+  border-radius: 16px;
+  background: #fbfdff;
+  color: #66758e;
+  font-size: .86rem;
+  font-weight: 760;
+}
+
+.family-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.family-readonly-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(220, 228, 223, .96);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(249,251,253,.94));
+  box-shadow: 0 10px 22px rgba(15, 23, 42, .045);
+}
+
+.family-readonly-card.complete {
+  border-color: rgba(105, 196, 130, .58);
+  background: linear-gradient(180deg, rgba(244, 253, 247, .98), rgba(255,255,255,.96));
+}
+
+.family-readonly-card small {
+  display: block;
+  color: #2f7b3a;
+  font-size: .7rem;
+  font-weight: 950;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.family-readonly-card strong {
+  display: block;
+  overflow: hidden;
+  margin-top: .45rem;
+  color: #14233b;
+  font-size: .92rem;
+  font-weight: 930;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.family-readonly-card span {
+  display: block;
+  overflow: hidden;
+  margin-top: .3rem;
+  color: #64748b;
+  font-size: .8rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.family-readonly-card span.invalid {
+  color: #b24040;
+  font-weight: 900;
+}
+
+@media (max-width: 720px) {
+  .family-readonly-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 </style>

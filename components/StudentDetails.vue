@@ -778,7 +778,37 @@ let debtsRequestId = 0;
 const format = (val) => Number(val || 0).toFixed(2);
 const compactAccountText = (value) => String(value || '').trim();
 const accountJoinedName = (...values) => values.map(compactAccountText).filter(Boolean).join(' ');
-const accountOverlaySource = computed(() => ({ ...(props.student || {}), ...(props.student?.centralMatricula || {}) }));
+const accountCentralOverlay = ref(null);
+let accountOverlayRequestId = 0;
+const normalizeAccountMatricula = (value) => String(value || '').trim().toUpperCase();
+const accountOverlaySource = computed(() => ({
+  ...(props.student || {}),
+  ...(props.student?.centralMatricula || {}),
+  ...(accountCentralOverlay.value || {}),
+}));
+const loadAccountMatriculaOverlay = async ({ force = false } = {}) => {
+  const matricula = normalizeAccountMatricula(props.student?.matricula);
+  if (!matricula) return;
+  if (!force && props.student?.centralMatricula) {
+    accountCentralOverlay.value = props.student.centralMatricula;
+    return;
+  }
+
+  const requestId = ++accountOverlayRequestId;
+  try {
+    const response = await $fetch('/api/students/matricula-overlays', {
+      method: 'POST',
+      body: { matriculas: [matricula] },
+    });
+    if (requestId !== accountOverlayRequestId || !response?.ok) return;
+    const overlay = (response.overlays || [])
+      .map((item) => item?.student)
+      .find((item) => normalizeAccountMatricula(item?.matricula) === matricula);
+    if (overlay) accountCentralOverlay.value = overlay;
+  } catch (error) {
+    // Optional enrichment must never block Estado de Cuenta.
+  }
+};
 const accountCurpLabel = computed(() => compactAccountText(accountOverlaySource.value.curp));
 const accountFatherLabel = computed(() => compactAccountText(
   accountJoinedName(accountOverlaySource.value.nombrePadre, accountOverlaySource.value.apellidoPaternoPadre, accountOverlaySource.value.apellidoMaternoPadre) ||
@@ -804,6 +834,22 @@ const accountExpedienteTitle = computed(() => {
     .join(', ')
   return missing ? `${summary}: ${missing}` : summary
 });
+watch(
+  () => props.student?.matricula,
+  () => {
+    accountCentralOverlay.value = props.student?.centralMatricula || null;
+    void loadAccountMatriculaOverlay();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => props.student?.centralMatricula,
+  (overlay) => {
+    if (overlay) accountCentralOverlay.value = overlay;
+  },
+);
+
 const normalizePhotoMatricula = (value) =>
   String(value || "")
     .trim()
