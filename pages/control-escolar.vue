@@ -431,7 +431,13 @@
                       </span>
                       <span class="ce-quality-cell ce-quality-cell--expanded">
                         <strong>{{ rowHealthHeadline(student) }}</strong>
-                        <div class="ce-quality-fields ce-quality-fields--stacked">
+                        <span class="ce-row-health-summary">{{
+                          recordHealth(student).summary
+                        }}</span>
+                        <div
+                          v-if="rowHealthMetrics(student).length"
+                          class="ce-quality-fields ce-quality-fields--stacked"
+                        >
                           <small
                             v-for="field in rowHealthMetrics(student)"
                             :key="`${student.matricula}-${field.key}`"
@@ -497,7 +503,7 @@
             v-if="selectedStudent"
             class="student-detail-panel ce-detail-panel"
           >
-            <div class="ce-detail-shell">
+            <div :class="['ce-detail-shell', `is-${selectedRecordHealth.tone}`]">
               <header class="ce-detail-header">
                 <div class="ce-detail-title ce-detail-title--with-photo">
                   <StudentGradePhotoCard
@@ -542,10 +548,19 @@
                     >
                   </div>
                 </div>
-                <div :class="['ce-progress-cluster', 'ce-progress-cluster--health', selectedRecordHealth.tone]">
-                  <div>
-                    <strong>Expediente básico {{ selectedProfileCompletion }}%</strong>
-                    <small>{{ selectedRecordHealth.summary }}</small>
+                <div
+                  :class="[
+                    'ce-progress-cluster',
+                    'ce-progress-cluster--health',
+                    selectedRecordHealth.tone,
+                  ]"
+                >
+                  <div class="ce-progress-label-row">
+                    <span>
+                      <strong>Expediente básico</strong>
+                      <small>{{ selectedRecordHealth.summary }}</small>
+                    </span>
+                    <b>{{ selectedProfileCompletion }}%</b>
                   </div>
                   <span class="ce-progress-track">
                     <i :style="{ width: `${selectedProfileCompletion}%` }"></i>
@@ -584,21 +599,27 @@
 
               <div class="ce-detail-body">
                 <section class="ce-health-overview" aria-label="Resumen del expediente seleccionado">
-                  <article :class="['ce-health-card', 'is-primary', selectedRecordHealth.tone]">
-                    <div class="ce-health-card__icon">
-                      <LucideShieldCheck :size="18" />
+                  <article :class="['ce-health-card', 'ce-health-card--basic', selectedRecordHealth.tone]">
+                    <div
+                      :class="['ce-health-ring', selectedRecordHealth.tone]"
+                      :style="{ '--ring-deg': `${selectedProfileCompletion * 3.6}deg` }"
+                    >
+                      <b>{{ selectedProfileCompletion }}%</b>
                     </div>
                     <div class="ce-health-card__copy">
                       <small>Expediente básico</small>
-                      <strong>{{ rowHealthHeadline(selectedStudent) }}</strong>
+                      <strong>{{ rowHealthHeadline(selectedHealthStudent) }}</strong>
                       <p>{{ selectedMissingCount ? selectedNextAction : 'Completo para operación diaria' }}</p>
                       <span class="ce-health-bar"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
-                      <em>{{ selectedProfileCompletion }}% · {{ selectedRecordHealth.label }}</em>
+                      <em>{{ selectedBasicCompletedCount }} de {{ requiredDataFields.length }} campos completos</em>
                     </div>
                   </article>
-                  <article class="ce-health-card is-secondary">
-                    <div class="ce-health-card__icon is-secondary">
-                      <LucideFileSpreadsheet :size="18" />
+                  <article class="ce-health-card ce-health-card--complete">
+                    <div
+                      class="ce-health-ring is-secondary"
+                      :style="{ '--ring-deg': `${selectedCompleteProfileCompletion * 3.6}deg` }"
+                    >
+                      <b>{{ selectedCompleteProfileCompletion }}%</b>
                     </div>
                     <div class="ce-health-card__copy">
                       <small>Expediente completo</small>
@@ -612,6 +633,58 @@
                       <LucideChevronRight :size="16" />
                     </button>
                   </article>
+                  <article :class="['ce-health-card', 'ce-health-card--action', selectedRecordHealth.tone, { 'is-clear': !selectedRecordIssueCount }]">
+                    <div class="ce-health-card__icon">
+                      <component
+                        :is="selectedRecordIssueCount ? LucideAlertTriangle : LucideShieldCheck"
+                        :size="19"
+                      />
+                    </div>
+                    <div class="ce-health-card__copy">
+                      <small>{{ selectedRecordIssueCount ? 'Pendientes por resolver' : 'Sin pendientes básicos' }}</small>
+                      <strong>{{ selectedRecordIssueCount ? `${selectedRecordIssueCount} dato${selectedRecordIssueCount === 1 ? '' : 's'} por revisar` : 'Listo' }}</strong>
+                      <p>{{ selectedRecordIssueCount ? selectedNextAction : 'El expediente básico no requiere acción.' }}</p>
+                      <div v-if="selectedVisibleActionChips.length" class="ce-health-missing-chips">
+                        <button
+                          v-for="field in selectedVisibleActionChips"
+                          :key="`missing-chip-${field.key}`"
+                          type="button"
+                          @click="goToMissingField(field)"
+                        >
+                          <component :is="field.icon" :size="12" />
+                          {{ field.shortLabel }}
+                        </button>
+                        <span v-if="selectedHiddenActionCount">+{{ selectedHiddenActionCount }}</span>
+                      </div>
+                    </div>
+                    <button
+                      v-if="selectedRecordIssueCount"
+                      type="button"
+                      class="ce-health-action-button"
+                      @click="goToFirstPendingField"
+                    >
+                      Resolver
+                      <LucideChevronRight :size="15" />
+                    </button>
+                  </article>
+                </section>
+
+                <section class="ce-status-signal-grid" aria-label="Estado operativo del expediente">
+                  <article
+                    v-for="signal in selectedStatusSignals"
+                    :key="`signal-${signal.key}`"
+                    :class="['ce-status-signal-card', `is-${signal.tone}`]"
+                  >
+                    <span class="ce-status-signal-icon">
+                      <component :is="signal.icon" :size="16" />
+                    </span>
+                    <div>
+                      <small>{{ signal.title }}</small>
+                      <strong>{{ signal.label }}</strong>
+                      <p>{{ signal.summary }}</p>
+                    </div>
+                    <b>{{ signal.count }}</b>
+                  </article>
                 </section>
 
                 <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
@@ -619,19 +692,20 @@
                     v-for="tab in detailTabs"
                     :key="tab.key"
                     type="button"
-                    :class="{ active: activeDetailTab === tab.key }"
+                    :class="[
+                      { active: activeDetailTab === tab.key },
+                      `is-${detailTabState(tab.key).tone}`,
+                    ]"
                     @click="activeDetailTab = tab.key"
                   >
-                    <component :is="tab.icon" :size="15" /> {{ tab.label }}
+                    <span class="ce-tab-main">
+                      <component :is="tab.icon" :size="15" /> {{ tab.label }}
+                    </span>
+                    <b v-if="detailTabState(tab.key).count" class="ce-tab-badge">{{
+                      detailTabState(tab.key).count
+                    }}</b>
                   </button>
                 </nav>
-
-                <div class="ce-inline-note ce-inline-note--tab">
-                  <span>
-                    <component :is="activeDetailTabMeta.icon" :size="16" />
-                  </span>
-                  <p>{{ activeDetailTabDescription }}</p>
-                </div>
 
                 <form class="ce-edit-form" @submit.prevent="saveStudent">
                   <section
@@ -643,25 +717,40 @@
                         <h3>Datos de identidad</h3>
                         <p>Revisa y actualiza la identidad principal del alumno.</p>
                       </div>
+                      <span :class="['ce-panel-status', selectedIdentityStatus.tone]">{{
+                        selectedIdentityStatus.label
+                      }}</span>
                     </div>
                     <div class="ce-form-grid two">
                       <label
+                        :class="fieldShellClass('apellidoPaterno')"
+                        data-ce-field="apellidoPaterno"
                         ><span>A. paterno</span
                         ><input
                           v-model="editForm.apellidoPaterno"
                           autocomplete="off"
-                      /></label>
+                        />
+                        <small>{{ fieldValidationMessage('apellidoPaterno') }}</small>
+                      </label>
                       <label
+                        :class="fieldShellClass('apellidoMaterno')"
+                        data-ce-field="apellidoMaterno"
                         ><span>A. materno</span
                         ><input
                           v-model="editForm.apellidoMaterno"
                           autocomplete="off"
-                      /></label>
+                        />
+                        <small>{{ fieldValidationMessage('apellidoMaterno') }}</small>
+                      </label>
                       <label
+                        :class="fieldShellClass('nombres')"
+                        data-ce-field="nombres"
                         ><span>Nombre(s)</span
                         ><input v-model="editForm.nombres" autocomplete="off"
-                      /></label>
-                      <label :class="fieldShellClass('curp')">
+                        />
+                        <small>{{ fieldValidationMessage('nombres') }}</small>
+                      </label>
+                      <label :class="fieldShellClass('curp')" data-ce-field="curp">
                         <span>CURP</span>
                         <input
                           v-model="editForm.curp"
@@ -705,7 +794,13 @@
                   >
                     <div class="ce-section-heading compact">
                       <span><LucideGraduationCap :size="18" /></span>
-                      <h3>Escolar</h3>
+                      <div>
+                        <h3>Escolar</h3>
+                        <p>{{ selectedSchoolStatus.summary }}</p>
+                      </div>
+                      <b :class="['ce-panel-status', selectedSchoolStatus.tone]">{{
+                        selectedSchoolStatus.label
+                      }}</b>
                     </div>
                     <div class="ce-form-grid three">
                       <label>
@@ -820,6 +915,9 @@
                           <small>{{ group.title }}</small>
                           <strong>{{ group.label }}</strong>
                           <p>{{ group.summary }}</p>
+                          <i class="ce-family-readiness-meter">
+                            <em :style="{ width: `${group.progress}%` }"></em>
+                          </i>
                         </div>
                         <b>{{ group.count }}</b>
                       </article>
@@ -840,15 +938,18 @@
                       <section :class="['ce-family-card', familySectionState('padre').tone]">
                         <header class="ce-family-card-head">
                           <h3>Padre</h3>
-                          <span>{{ familySectionState('padre').label }}</span>
+                          <div class="ce-family-card-status">
+                            <span>{{ familySectionState('padre').label }}</span>
+                            <i><b :style="{ width: `${familySectionState('padre').progress}%` }"></b></i>
+                          </div>
                         </header>
                         <div class="ce-form-grid two ce-family-fields">
-                          <label :class="fieldShellClass('nombrePadre')">
+                          <label :class="fieldShellClass('nombrePadre')" data-ce-field="nombrePadre">
                             <span>Nombre padre</span>
                             <input v-model="editForm.nombrePadre" autocomplete="off" />
                             <small>{{ fieldValidationMessage('nombrePadre') }}</small>
                           </label>
-                          <label :class="fieldShellClass('apellidoPaternoPadre')">
+                          <label :class="fieldShellClass('apellidoPaternoPadre')" data-ce-field="apellidoPaternoPadre">
                             <span>Apellido paterno padre</span>
                             <input v-model="editForm.apellidoPaternoPadre" autocomplete="off" />
                             <small>{{ fieldValidationMessage('apellidoPaternoPadre') }}</small>
@@ -859,12 +960,12 @@
                               v-model="editForm.apellidoMaternoPadre"
                               autocomplete="off"
                           /></label>
-                          <label :class="fieldShellClass('telefonoPadre')">
+                          <label :class="fieldShellClass('telefonoPadre')" data-ce-field="telefonoPadre">
                             <span>Teléfono padre</span>
                             <input v-model="editForm.telefonoPadre" autocomplete="off" inputmode="tel" />
                             <small>{{ fieldValidationMessage('telefonoPadre') }}</small>
                           </label>
-                          <label :class="fieldShellClass('emailPadre')">
+                          <label :class="fieldShellClass('emailPadre')" data-ce-field="emailPadre">
                             <span>Email padre</span>
                             <input v-model="editForm.emailPadre" type="email" autocomplete="off" />
                             <small>{{ fieldValidationMessage('emailPadre') }}</small>
@@ -901,15 +1002,18 @@
                       <section :class="['ce-family-card', familySectionState('madre').tone]">
                         <header class="ce-family-card-head">
                           <h3>Madre</h3>
-                          <span>{{ familySectionState('madre').label }}</span>
+                          <div class="ce-family-card-status">
+                            <span>{{ familySectionState('madre').label }}</span>
+                            <i><b :style="{ width: `${familySectionState('madre').progress}%` }"></b></i>
+                          </div>
                         </header>
                         <div class="ce-form-grid ce-family-fields ce-family-fields--mother">
-                          <label :class="fieldShellClass('nombreMadre')">
+                          <label :class="fieldShellClass('nombreMadre')" data-ce-field="nombreMadre">
                             <span>Nombre madre</span>
                             <input v-model="editForm.nombreMadre" autocomplete="off" />
                             <small>{{ fieldValidationMessage('nombreMadre') }}</small>
                           </label>
-                          <label :class="fieldShellClass('apellidoPaternoMadre')">
+                          <label :class="fieldShellClass('apellidoPaternoMadre')" data-ce-field="apellidoPaternoMadre">
                             <span>Apellido paterno madre</span>
                             <input v-model="editForm.apellidoPaternoMadre" autocomplete="off" />
                             <small>{{ fieldValidationMessage('apellidoPaternoMadre') }}</small>
@@ -920,12 +1024,15 @@
                               v-model="editForm.apellidoMaternoMadre"
                               autocomplete="off"
                           /></label>
-                          <label :class="fieldShellClass('telefonoMadre')">
+                          <label :class="fieldShellClass('telefonoMadre')" data-ce-field="telefonoMadre">
                             <span>Teléfono madre</span>
                             <input v-model="editForm.telefonoMadre" autocomplete="off" inputmode="tel" />
                             <small>{{ fieldValidationMessage('telefonoMadre') }}</small>
                           </label>
-                          <label :class="['ce-family-span-2', ...fieldShellClass('emailMadre')]">
+                          <label
+                            :class="['ce-family-span-2', ...fieldShellClass('emailMadre')]"
+                            data-ce-field="emailMadre"
+                          >
                             <span>Email madre</span>
                             <input v-model="editForm.emailMadre" type="email" autocomplete="off" />
                             <small>{{ fieldValidationMessage('emailMadre') }}</small>
@@ -2183,22 +2290,6 @@ const detailTabs = [
   { key: "notes", label: "Observaciones", icon: LucideAlertTriangle },
 ];
 
-const activeDetailTabMeta = computed(
-  () =>
-    detailTabs.find((tab) => tab.key === activeDetailTab.value) ||
-    detailTabs[0],
-);
-const activeDetailTabDescription = computed(
-  () =>
-    ({
-      identity: "Revisa y actualiza la identidad principal del alumno.",
-      school: "Actualiza la información escolar y los datos base de matrícula.",
-      family: "Ingresa o actualiza los datos de contacto de la familia del alumno.",
-      system: "Consulta el estado del registro y los accesos del sistema.",
-      notes: "Documenta observaciones y seguimiento interno del alumno.",
-    })[activeDetailTab.value] || "",
-);
-
 const qualityFilters = computed(() => {
   const data = kpis.value || {};
   return [
@@ -2400,17 +2491,21 @@ const qualityScoreTone = (student) => {
   if (score >= 75) return "warning";
   return "danger";
 };
+const studentCurpIsInvalid = (student = {}) => {
+  const curp = normalizeCurpInput(student?.curp || student?.CURP || "");
+  return Boolean(curp && !inferMexicanCurpIdentity(curp).valid);
+};
 const selectedProfileCompletion = computed(() =>
-  completionFor(selectedStudent.value),
+  completionFor(selectedHealthStudent.value),
 );
 const selectedCompleteProfileCompletion = computed(() =>
-  completeCompletionFor(selectedStudent.value),
+  completeCompletionFor(selectedHealthStudent.value),
 );
 const selectedMissingCount = computed(() =>
-  studentMissingCount(selectedStudent.value),
+  studentMissingCount(selectedHealthStudent.value),
 );
 const selectedCompleteMissingCount = computed(() =>
-  studentCompleteMissingCount(selectedStudent.value),
+  studentCompleteMissingCount(selectedHealthStudent.value),
 );
 const selectedCompleteCompletedCount = computed(() =>
   Math.max(0, completeDataFields.length - selectedCompleteMissingCount.value),
@@ -2418,7 +2513,7 @@ const selectedCompleteCompletedCount = computed(() =>
 const visibleBasicMissingFieldsFor = (student) =>
   requiredDataFields.filter((field) => studentMissingField(student, field));
 const visibleBasicMissingFields = computed(() =>
-  visibleBasicMissingFieldsFor(selectedStudent.value),
+  visibleBasicMissingFieldsFor(selectedHealthStudent.value),
 );
 const missingFieldLabelsFor = (student, limit = 2) =>
   visibleBasicMissingFieldsFor(student)
@@ -2441,12 +2536,15 @@ const recordHealth = (student = {}) => {
 
   const percent = completionFor(student);
   const missing = studentMissingCount(student);
+  const invalidCurp = studentCurpIsInvalid(student);
   const topMissing = missingFieldLabelsFor(student, 2);
   const missingText = topMissing.join(", ");
-  const blocked = missing >= 4 || hasMissingContactFor(student);
-  const tone = missing === 0 ? "complete" : blocked ? "danger" : "warning";
-  const label = missing === 0 ? "Listo" : blocked ? "Atención" : `Faltan ${missing}`;
-  const summary = missing === 0
+  const blocked = invalidCurp || missing >= 4 || hasMissingContactFor(student);
+  const tone = missing === 0 && !invalidCurp ? "complete" : blocked ? "danger" : "warning";
+  const label = invalidCurp ? "Validación" : missing === 0 ? "Listo" : blocked ? "Atención" : `Faltan ${missing}`;
+  const summary = invalidCurp
+    ? "CURP inválida"
+    : missing === 0
     ? "Básico completo"
     : missingText
       ? missingText
@@ -2461,29 +2559,108 @@ const recordHealth = (student = {}) => {
   };
 };
 const rowHealthHeadline = (student = {}) => {
+  if (studentCurpIsInvalid(student)) return "CURP inválida";
   const missing = studentMissingCount(student);
   if (!missing) return "Expediente básico completo";
   return missing === 1 ? "1 faltante básico" : `${missing} faltantes básicos`;
 };
 const rowHealthMetrics = (student = {}, limit = 5) => {
+  if (studentCurpIsInvalid(student)) {
+    return requiredDataFields
+      .filter((field) => field.key === "curp")
+      .map((field) => ({ ...field, label: "CURP inválida", missing: true }));
+  }
   const missingKeys = new Set(normalizedMissingFields(student, "basic"));
   const missing = requiredDataFields
     .filter((field) => missingKeys.has(String(field.key || "").toLowerCase()))
     .map((field) => ({ ...field, missing: true }));
-  const complete = requiredDataFields
-    .filter((field) => !missingKeys.has(String(field.key || "").toLowerCase()))
-    .map((field) => ({ ...field, missing: false }));
-  if (!missing.length) return complete.slice(0, limit);
-  return [...missing, ...complete].slice(0, limit);
+  return missing.slice(0, limit);
 };
-const selectedRecordHealth = computed(() => recordHealth(selectedStudent.value));
+const selectedHealthStudent = computed(() => {
+  if (!selectedStudent.value) return null;
+  return {
+    ...selectedStudent.value,
+    ...editForm,
+    group: editForm.grupo || selectedStudent.value.group || selectedStudent.value.grupo || "",
+    direccion: editForm.direccion || selectedStudent.value.direccion || selectedStudent.value.address || "",
+  };
+});
+const selectedRecordHealth = computed(() => recordHealth(selectedHealthStudent.value));
 const selectedNextAction = computed(() => {
+  const invalid = selectedInvalidActions.value;
+  if (invalid.length) {
+    const firstInvalid = invalid[0]?.label || "el dato inválido";
+    return `Siguiente: revisar ${firstInvalid.toLowerCase()}.`;
+  }
   const missing = visibleBasicMissingFields.value;
   if (!missing.length) return "Sin pendientes básicos.";
   const first = missing[0]?.label || "el primer dato pendiente";
   return `Siguiente: completar ${first.toLowerCase()}.`;
 });
-const selectedBasicMetrics = computed(() => rowHealthMetrics(selectedStudent.value, 8));
+const selectedBasicCompletedCount = computed(() =>
+  Math.max(0, requiredDataFields.length - selectedMissingCount.value),
+);
+const missingFieldTargets = {
+  curp: { tab: "identity", formField: "curp", shortLabel: "CURP" },
+  padreNombre: { tab: "family", formField: "nombrePadre", shortLabel: "Nombre padre" },
+  padreApellidoPaterno: { tab: "family", formField: "apellidoPaternoPadre", shortLabel: "Apellido padre" },
+  padreTelefono: { tab: "family", formField: "telefonoPadre", shortLabel: "Tel. padre" },
+  padreEmail: { tab: "family", formField: "emailPadre", shortLabel: "Email padre" },
+  madreNombre: { tab: "family", formField: "nombreMadre", shortLabel: "Nombre madre" },
+  madreApellidoPaterno: { tab: "family", formField: "apellidoPaternoMadre", shortLabel: "Apellido madre" },
+  madreTelefono: { tab: "family", formField: "telefonoMadre", shortLabel: "Tel. madre" },
+  madreEmail: { tab: "family", formField: "emailMadre", shortLabel: "Email madre" },
+};
+const selectedMissingActions = computed(() =>
+  visibleBasicMissingFields.value.map((field) => ({
+    ...field,
+    ...(missingFieldTargets[field.key] || {
+      tab: "identity",
+      formField: field.key,
+      shortLabel: field.label,
+    }),
+  })),
+);
+const invalidFieldTargets = {
+  curp: { key: "curp-invalid", tab: "identity", formField: "curp", shortLabel: "CURP inválida", label: "CURP inválida", icon: LucideShieldCheck },
+  telefonoPadre: { key: "telefono-padre-invalid", tab: "family", formField: "telefonoPadre", shortLabel: "Tel. padre", label: "Teléfono padre inválido", icon: LucidePhone },
+  telefonoMadre: { key: "telefono-madre-invalid", tab: "family", formField: "telefonoMadre", shortLabel: "Tel. madre", label: "Teléfono madre inválido", icon: LucidePhone },
+  emailPadre: { key: "email-padre-invalid", tab: "family", formField: "emailPadre", shortLabel: "Email padre", label: "Email padre inválido", icon: LucideMail },
+  emailMadre: { key: "email-madre-invalid", tab: "family", formField: "emailMadre", shortLabel: "Email madre", label: "Email madre inválido", icon: LucideMail },
+};
+const selectedInvalidActions = computed(() =>
+  editableInvalidFields().map((field) => invalidFieldTargets[field]).filter(Boolean),
+);
+const selectedRecordActions = computed(() => {
+  const seen = new Set();
+  return [...selectedInvalidActions.value, ...selectedMissingActions.value].filter((field) => {
+    const key = field.formField || field.key;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+});
+const selectedRecordIssueCount = computed(() => selectedRecordActions.value.length);
+const selectedVisibleActionChips = computed(() =>
+  selectedRecordActions.value.slice(0, 3),
+);
+const selectedHiddenActionCount = computed(() =>
+  Math.max(0, selectedRecordActions.value.length - selectedVisibleActionChips.value.length),
+);
+const goToMissingField = (field = {}) => {
+  if (field.tab) activeDetailTab.value = field.tab;
+  nextTick(() => {
+    if (!process.client || !field.formField) return;
+    const target = document.querySelector(
+      `[data-ce-field="${field.formField}"] input, [data-ce-field="${field.formField}"] select, [data-ce-field="${field.formField}"] textarea`,
+    );
+    target?.focus?.();
+  });
+};
+const goToFirstPendingField = () => {
+  goToMissingField(selectedRecordActions.value[0] || {});
+};
+const selectedBasicMetrics = computed(() => rowHealthMetrics(selectedHealthStudent.value, 8));
 const selectedFamilySummaryCards = computed(() => {
   const father = familyPersonState("padre");
   const mother = familyPersonState("madre");
@@ -2495,6 +2672,7 @@ const selectedFamilySummaryCards = computed(() => {
       tone: `is-${father.tone}`,
       label: father.status,
       count: `${father.completed}/${father.total}`,
+      progress: father.progress,
       summary: father.summary,
       icon: LucideUserRound,
     },
@@ -2504,6 +2682,7 @@ const selectedFamilySummaryCards = computed(() => {
       tone: `is-${mother.tone}`,
       label: mother.status,
       count: `${mother.completed}/${mother.total}`,
+      progress: mother.progress,
       summary: mother.summary,
       icon: LucideUsersRound,
     },
@@ -2513,6 +2692,7 @@ const selectedFamilySummaryCards = computed(() => {
       tone: `is-${contact.tone}`,
       label: contact.status,
       count: `${contact.completed}/${contact.total}`,
+      progress: contact.progress,
       summary: contact.summary,
       icon: LucidePhone,
     },
@@ -2555,6 +2735,7 @@ const familyPersonState = (type = "padre") => {
     total: fields.length,
     completed,
     missing,
+    progress: Math.round((completed / Math.max(fields.length, 1)) * 100),
     tone: missing.length ? (missing.length >= 2 ? "danger" : "warning") : "complete",
     status: missing.length ? `${missing.length} pendiente${missing.length === 1 ? "" : "s"}` : "Completo",
     summary: missing.length
@@ -2575,6 +2756,7 @@ const familyCriticalContactState = computed(() => {
     total: 2,
     completed: Number(hasPhone) + Number(hasEmail),
     missing,
+    progress: Math.round(((Number(hasPhone) + Number(hasEmail)) / 2) * 100),
     tone: missing.length ? "danger" : "complete",
     status: missing.length ? "Incompleto" : "Listo",
     summary: missing.length ? `Falta ${missing.join(" y ")}` : "Hay vía familiar de contacto",
@@ -2585,6 +2767,7 @@ const familySectionState = (type = "padre") => {
   return {
     tone: `is-${state.tone}`,
     label: state.status,
+    progress: state.progress,
   };
 };
 const selectedFamilyReadiness = computed(() => {
@@ -2626,25 +2809,28 @@ const emailIsValid = (value) => {
 const phoneIsValid = (value) => String(value || "").replace(/\D/g, "").length >= 10;
 const fieldValidationState = (field) => {
   const value = String(editForm[field] ?? "").trim();
-  const selectedMissing = normalizedMissingFields(selectedStudent.value, "basic");
   const fieldMap = {
-    curp: "curp",
-    nombrePadre: "padreNombre",
-    apellidoPaternoPadre: "padreApellidoPaterno",
-    telefonoPadre: "padreTelefono",
-    emailPadre: "padreEmail",
-    nombreMadre: "madreNombre",
-    apellidoPaternoMadre: "madreApellidoPaterno",
-    telefonoMadre: "madreTelefono",
-    emailMadre: "madreEmail",
+    curp: { key: "curp", tier: "basic", kind: "curp" },
+    apellidoPaterno: { key: "apellidoPaternoAlumno", tier: "complete", kind: "text" },
+    apellidoMaterno: { key: "apellidoMaternoAlumno", tier: "complete", kind: "text" },
+    nombres: { key: "nombresAlumno", tier: "complete", kind: "text" },
+    nombrePadre: { key: "padreNombre", tier: "basic", kind: "text" },
+    apellidoPaternoPadre: { key: "padreApellidoPaterno", tier: "basic", kind: "text" },
+    telefonoPadre: { key: "padreTelefono", tier: "basic", kind: "phone" },
+    emailPadre: { key: "padreEmail", tier: "basic", kind: "email" },
+    nombreMadre: { key: "madreNombre", tier: "basic", kind: "text" },
+    apellidoPaternoMadre: { key: "madreApellidoPaterno", tier: "basic", kind: "text" },
+    telefonoMadre: { key: "madreTelefono", tier: "basic", kind: "phone" },
+    emailMadre: { key: "madreEmail", tier: "basic", kind: "email" },
   };
-  const missingKey = String(fieldMap[field] || field).toLowerCase();
-  const shouldValidate = Object.prototype.hasOwnProperty.call(fieldMap, field);
-  if (!shouldValidate) return "neutral";
+  const config = fieldMap[field];
+  if (!config) return "neutral";
+  const selectedMissing = normalizedMissingFields(selectedHealthStudent.value, config.tier);
+  const missingKey = String(config.key || field).toLowerCase();
   if (!value) return selectedMissing.includes(missingKey) ? "missing" : "neutral";
-  if (field === "curp") return inferMexicanCurpIdentity(value).valid ? "ok" : "invalid";
-  if (field.toLowerCase().includes("telefono")) return phoneIsValid(value) ? "ok" : "invalid";
-  if (field.toLowerCase().includes("email")) return emailIsValid(value) ? "ok" : "invalid";
+  if (config.kind === "curp") return inferMexicanCurpIdentity(value).valid ? "ok" : "invalid";
+  if (config.kind === "phone") return phoneIsValid(value) ? "ok" : "invalid";
+  if (config.kind === "email") return emailIsValid(value) ? "ok" : "invalid";
   return value.length >= 2 ? "ok" : "invalid";
 };
 const fieldShellClass = (field) => {
@@ -2669,6 +2855,108 @@ const fieldValidationMessage = (field) => {
   if (state === "missing") return "Requerido";
   if (state === "invalid") return "Revisa el dato";
   return "";
+};
+const validationCount = (fields = []) =>
+  fields.filter((field) => ["missing", "invalid"].includes(fieldValidationState(field))).length;
+const selectedIdentityStatus = computed(() => {
+  const curpState = fieldValidationState("curp");
+  const pending = validationCount(["curp", "apellidoPaterno", "apellidoMaterno", "nombres"]);
+  if (curpState === "invalid")
+    return { tone: "danger", label: "CURP inválida", count: pending };
+  if (pending)
+    return {
+      tone: curpState === "missing" ? "danger" : "warning",
+      label: `${pending} pendiente${pending === 1 ? "" : "s"}`,
+      count: pending,
+    };
+  return { tone: "complete", label: "Lista", count: 0 };
+});
+const selectedSchoolStatus = computed(() => {
+  const schoolKeys = ["nivel", "grado", "grupo", "servicio"];
+  const missing = schoolKeys.filter((key) =>
+    normalizedMissingFields(selectedHealthStudent.value, "complete").includes(key),
+  );
+  if (!missing.length)
+    return { tone: "complete", label: "Completo", count: 0, summary: "Nivel, grado y grupo listos." };
+  return {
+    tone: missing.length >= 3 ? "warning" : "neutral",
+    label: `${missing.length} pendiente${missing.length === 1 ? "" : "s"}`,
+    count: missing.length,
+    summary: `Falta ${missing.slice(0, 2).join(", ")}${missing.length > 2 ? "..." : ""}.`,
+  };
+});
+const selectedStatusSignals = computed(() => {
+  const curpState = fieldValidationState("curp");
+  const father = familyPersonState("padre");
+  const mother = familyPersonState("madre");
+  const contact = familyCriticalContactState.value;
+  const curpLabel =
+    curpState === "ok" ? "Derivada" : curpState === "invalid" ? "Inválida" : "Pendiente";
+  const curpSummary =
+    curpState === "ok"
+      ? `${curpDerivedIdentity.value.fechaNacimiento} · ${derivedGenderMeta.value.label}`
+      : curpState === "invalid"
+        ? "No se puede inferir nacimiento ni sexo."
+        : "Falta CURP para inferir identidad.";
+
+  return [
+    {
+      key: "curp",
+      title: "CURP",
+      label: curpLabel,
+      summary: curpSummary,
+      count: curpState === "ok" ? "1/1" : "0/1",
+      tone: curpState === "ok" ? "complete" : curpState === "invalid" ? "danger" : "warning",
+      icon: LucideShieldCheck,
+    },
+    {
+      key: "padre",
+      title: "Padre",
+      label: father.status,
+      summary: father.summary,
+      count: `${father.completed}/${father.total}`,
+      tone: father.tone,
+      icon: LucideUserRound,
+    },
+    {
+      key: "madre",
+      title: "Madre",
+      label: mother.status,
+      summary: mother.summary,
+      count: `${mother.completed}/${mother.total}`,
+      tone: mother.tone,
+      icon: LucideUsersRound,
+    },
+    {
+      key: "contacto",
+      title: "Contacto",
+      label: contact.status,
+      summary: contact.summary,
+      count: `${contact.completed}/${contact.total}`,
+      tone: contact.tone,
+      icon: LucidePhone,
+    },
+  ];
+});
+const detailTabState = (key) => {
+  const father = familyPersonState("padre");
+  const mother = familyPersonState("madre");
+  const contact = familyCriticalContactState.value;
+  const familyPending = father.missing.length + mother.missing.length + contact.missing.length;
+  const states = {
+    identity: selectedIdentityStatus.value,
+    school: selectedSchoolStatus.value,
+    family: {
+      tone: familyPending ? (familyPending >= 3 ? "danger" : "warning") : "complete",
+      count: familyPending,
+    },
+    system: {
+      tone: selectedStudent.value?.huskyPassAvailable ? "complete" : "warning",
+      count: selectedStudent.value?.huskyPassAvailable ? 0 : 1,
+    },
+    notes: { tone: "neutral", count: 0 },
+  };
+  return states[key] || { tone: "neutral", count: 0 };
 };
 const editableInvalidFields = () => [
   "curp",
@@ -2765,15 +3053,21 @@ const hasUnsavedChanges = computed(() =>
   ),
 );
 const saveStateTone = computed(() =>
-  savingStudent.value ? "saving" : hasUnsavedChanges.value ? "dirty" : "clean",
+  savingStudent.value
+    ? "saving"
+    : saveError.value
+      ? "error"
+      : hasUnsavedChanges.value
+        ? "dirty"
+        : "clean",
 );
 const saveStatusText = computed(() => {
   if (savingStudent.value) return "Guardando...";
+  if (saveError.value) return "Error al guardar";
   if (hasUnsavedChanges.value)
     return draftSavedAt.value
       ? `Borrador local ${draftSavedAt.value}`
       : "Cambios sin guardar";
-  if (draftSavedAt.value) return `Borrador local ${draftSavedAt.value}`;
   return selectedStudent.value?.overlayExists ? "Al día" : "Guardar";
 });
 const draftKey = computed(() =>
@@ -9765,6 +10059,1160 @@ onBeforeUnmount(() => {
   .ce-family-readiness-card b {
     grid-column: 2;
     justify-self: start;
+  }
+}
+
+/* Aurora record-health interface */
+.ce-student-row {
+  --ce-health-accent: #2f9138;
+  --ce-health-soft: #eef8eb;
+  --ce-health-border: rgba(63, 145, 56, 0.24);
+}
+
+.ce-student-row .ce-row-health.warning,
+.ce-detail-shell.is-warning {
+  --ce-health-accent: #c37412;
+  --ce-health-soft: #fff7e8;
+  --ce-health-border: rgba(216, 139, 28, 0.28);
+}
+
+.ce-student-row .ce-row-health.danger,
+.ce-detail-shell.is-danger {
+  --ce-health-accent: #d63f35;
+  --ce-health-soft: #fff1ef;
+  --ce-health-border: rgba(217, 67, 56, 0.3);
+}
+
+.ce-workspace.has-detail .ce-student-row,
+.ce-workspace.has-empty-detail .ce-student-row,
+.ce-student-row {
+  grid-template-columns: minmax(0, 1fr) minmax(218px, 252px) 40px;
+  align-items: center;
+  min-height: 92px;
+  border-color: rgba(218, 229, 238, 0.96);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--grade-soft, #f2f8ef) 28%, #fff), #fff 54%),
+    #fff;
+}
+
+.ce-student-row.selected {
+  border-color: color-mix(in srgb, var(--grade-accent, #4fa346) 52%, #d7e8d2);
+  box-shadow: 0 14px 32px rgba(63, 145, 56, 0.13);
+}
+
+.ce-row-health {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--ce-health-border);
+  border-radius: 15px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.98)),
+    var(--ce-health-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 9px 18px rgba(21, 35, 60, 0.045);
+}
+
+.ce-row-health.complete {
+  --ce-health-accent: #2f9138;
+  --ce-health-soft: #f6fbf5;
+  --ce-health-border: rgba(63, 145, 56, 0.18);
+}
+
+.ce-row-health.warning {
+  --ce-health-accent: #c37412;
+  --ce-health-soft: #fff8eb;
+  --ce-health-border: rgba(216, 139, 28, 0.28);
+}
+
+.ce-row-health.danger {
+  --ce-health-accent: #d63f35;
+  --ce-health-soft: #fff2f0;
+  --ce-health-border: rgba(217, 67, 56, 0.3);
+}
+
+.ce-row-health .ce-quality-score {
+  width: 50px;
+  height: 50px;
+  background: conic-gradient(var(--ce-health-accent) var(--quality-score), #e8edf2 0deg);
+}
+
+.ce-row-health .ce-quality-score b {
+  color: #18243a;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.ce-quality-cell--expanded {
+  gap: 4px;
+  padding: 0;
+}
+
+.ce-quality-cell--expanded strong {
+  color: #172238;
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.16;
+}
+
+.ce-row-health-summary {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ce-health-accent);
+  font-size: 10.5px;
+  font-weight: 820;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-quality-fields--stacked {
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  gap: 4px 7px;
+}
+
+.ce-quality-fields--stacked small {
+  color: #7b8798;
+  font-size: 9.5px;
+  font-weight: 800;
+}
+
+.ce-quality-fields--stacked small.missing {
+  color: var(--ce-health-accent);
+}
+
+.ce-detail-shell {
+  --ce-detail-accent: #2f9138;
+  --ce-detail-soft: #f4fbf3;
+  --ce-detail-border: rgba(63, 145, 56, 0.18);
+  border-color: rgba(218, 229, 238, 0.98);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 42px rgba(21, 35, 60, 0.07);
+  container-type: inline-size;
+}
+
+.ce-detail-shell.is-warning {
+  --ce-detail-accent: #c37412;
+  --ce-detail-soft: #fff8eb;
+  --ce-detail-border: rgba(216, 139, 28, 0.26);
+}
+
+.ce-detail-shell.is-danger {
+  --ce-detail-accent: #d63f35;
+  --ce-detail-soft: #fff2f0;
+  --ce-detail-border: rgba(217, 67, 56, 0.3);
+}
+
+.ce-detail-header {
+  grid-template-columns: minmax(240px, 1.2fr) minmax(250px, 0.9fr) minmax(210px, 0.72fr) auto 36px;
+  gap: 13px;
+  padding: 14px 16px;
+  border-bottom-color: rgba(221, 231, 240, 0.95);
+  background:
+    radial-gradient(circle at 0 0, color-mix(in srgb, var(--ce-detail-accent) 10%, transparent), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #fbfdfc 100%);
+}
+
+.ce-detail-title--with-photo {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.ce-access-header-card {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.ce-progress-cluster--health {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.ce-detail-actions {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+.ce-detail-menu-button {
+  grid-column: 5;
+  grid-row: 1;
+}
+
+.ce-detail-title-copy small,
+.ce-detail-title small {
+  color: #65738c;
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.ce-title-row h2 {
+  color: #12203a;
+  font-size: 18px;
+  font-weight: 920;
+  letter-spacing: 0;
+}
+
+.ce-access-header-card {
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px solid rgba(206, 219, 232, 0.94);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.045);
+}
+
+.ce-access-header-card > span,
+.ce-access-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #eef3f8;
+}
+
+.ce-access-header-card strong {
+  color: #173052;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.ce-access-header-card small {
+  color: #67758c;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.ce-progress-cluster--health {
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ce-detail-border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff, var(--ce-detail-soft));
+}
+
+.ce-progress-label-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.ce-progress-label-row span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ce-progress-cluster--health strong {
+  color: #172238;
+  font-size: 11.5px;
+  font-weight: 900;
+}
+
+.ce-progress-cluster--health b {
+  color: var(--ce-detail-accent);
+  font-size: 18px;
+  font-weight: 920;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.ce-progress-cluster--health small {
+  overflow: hidden;
+  color: #687790;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-progress-track {
+  height: 8px;
+  background: #e8eef3;
+}
+
+.ce-progress-track i {
+  background: linear-gradient(90deg, var(--ce-detail-accent), color-mix(in srgb, var(--ce-detail-accent) 58%, #b9d884));
+}
+
+.ce-detail-actions {
+  align-items: center;
+  gap: 8px;
+}
+
+.ce-detail-menu-button {
+  border: 1px solid rgba(217, 226, 236, 0.96);
+  border-radius: 12px;
+  background: #fff;
+  color: #5c6a80;
+}
+
+.ce-detail-body {
+  gap: 12px;
+  padding: 13px 16px 0;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #ffffff 68%, #fbfcfd 100%);
+}
+
+.ce-health-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(250px, 0.92fr);
+  gap: 12px;
+}
+
+.ce-health-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  min-height: 112px;
+  overflow: hidden;
+  padding: 14px 15px;
+  border: 1px solid rgba(221, 231, 240, 0.98);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff, #fbfdff);
+  box-shadow: 0 10px 24px rgba(21, 35, 60, 0.045);
+}
+
+.ce-health-card--basic {
+  order: 1;
+}
+
+.ce-health-card--action {
+  order: 2;
+}
+
+.ce-health-card--complete {
+  order: 3;
+}
+
+.ce-health-card--basic.complete {
+  border-color: rgba(63, 145, 56, 0.2);
+}
+
+.ce-health-card--basic.warning,
+.ce-health-card--action.warning {
+  border-color: rgba(216, 139, 28, 0.3);
+  background: linear-gradient(180deg, #fffdfa, #fff);
+}
+
+.ce-health-card--basic.danger,
+.ce-health-card--action.danger {
+  border-color: rgba(217, 67, 56, 0.32);
+  background:
+    radial-gradient(circle at 100% 0, rgba(217, 67, 56, 0.08), transparent 44%),
+    linear-gradient(180deg, #fffafa, #fff);
+}
+
+.ce-health-card--action {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+.ce-health-card--action.is-clear {
+  border-color: rgba(63, 145, 56, 0.2);
+  background: linear-gradient(180deg, #fbfefb, #fff);
+}
+
+.ce-health-ring {
+  position: relative;
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--ce-detail-accent) var(--ring-deg), #e8eef3 0deg);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.82), 0 8px 18px rgba(21, 35, 60, 0.08);
+}
+
+.ce-health-ring::after {
+  position: absolute;
+  inset: 7px;
+  border-radius: inherit;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(220, 229, 238, 0.92);
+  content: "";
+}
+
+.ce-health-ring.is-secondary {
+  background: conic-gradient(#4f8ed8 var(--ring-deg), #e5edf8 0deg);
+}
+
+.ce-health-ring b {
+  position: relative;
+  z-index: 1;
+  color: #172238;
+  font-size: 12px;
+  font-weight: 920;
+  letter-spacing: 0;
+}
+
+.ce-health-card__icon,
+.ce-status-signal-icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  background: var(--ce-detail-soft);
+  color: var(--ce-detail-accent);
+}
+
+.ce-health-card__copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ce-health-card__copy small,
+.ce-status-signal-card small {
+  color: #708098;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.ce-health-card__copy strong,
+.ce-status-signal-card strong {
+  overflow: hidden;
+  color: #14213a;
+  font-size: 13.5px;
+  font-weight: 920;
+  letter-spacing: 0;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-health-card__copy p,
+.ce-status-signal-card p {
+  margin: 0;
+  overflow: hidden;
+  color: #647188;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
+.ce-health-bar {
+  height: 8px;
+  margin-top: 3px;
+  background: #e8eef3;
+}
+
+.ce-health-bar i {
+  background: linear-gradient(90deg, var(--ce-detail-accent), color-mix(in srgb, var(--ce-detail-accent) 58%, #a6d384));
+}
+
+.ce-health-bar.is-secondary i {
+  background: linear-gradient(90deg, #4f8ed8, #7fbdf2);
+}
+
+.ce-health-card__copy em {
+  color: #56657a;
+  font-size: 10.8px;
+  font-style: normal;
+  font-weight: 780;
+}
+
+.ce-health-link,
+.ce-health-action-button,
+.ce-health-missing-chips button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(212, 223, 234, 0.98);
+  background: #fff;
+  color: #1f7f33;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ce-health-link {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 11px;
+  font-size: 10.5px;
+}
+
+.ce-health-action-button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-color: var(--ce-detail-border);
+  border-radius: 12px;
+  color: var(--ce-detail-accent);
+  font-size: 10.5px;
+}
+
+.ce-health-missing-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.ce-health-missing-chips button,
+.ce-health-missing-chips span {
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+.ce-health-missing-chips button {
+  border-color: var(--ce-detail-border);
+  background: var(--ce-detail-soft);
+  color: var(--ce-detail-accent);
+}
+
+.ce-health-missing-chips span {
+  display: inline-flex;
+  align-items: center;
+  background: #eef2f6;
+  color: #5f6f84;
+  font-weight: 900;
+}
+
+.ce-status-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ce-status-signal-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 11px 12px;
+  border: 1px solid rgba(221, 231, 240, 0.98);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.ce-status-signal-card > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ce-status-signal-card b {
+  color: #5c6a80;
+  font-size: 10.5px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.ce-status-signal-card.is-complete {
+  border-color: rgba(63, 145, 56, 0.2);
+  background: #fbfefb;
+}
+
+.ce-status-signal-card.is-complete .ce-status-signal-icon,
+.ce-family-readiness-card.is-complete > span {
+  background: #edf8ea;
+  color: #21882e;
+}
+
+.ce-status-signal-card.is-warning {
+  border-color: rgba(216, 139, 28, 0.28);
+  background: #fffdfa;
+}
+
+.ce-status-signal-card.is-warning .ce-status-signal-icon,
+.ce-family-readiness-card.is-warning > span {
+  background: #fff6e7;
+  color: #b36b12;
+}
+
+.ce-status-signal-card.is-danger {
+  border-color: rgba(217, 67, 56, 0.3);
+  background: #fffafa;
+}
+
+.ce-status-signal-card.is-danger .ce-status-signal-icon,
+.ce-family-readiness-card.is-danger > span {
+  background: #fff0ef;
+  color: #cf4036;
+}
+
+.ce-detail-tabs {
+  display: flex;
+  min-height: 46px;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 0 2px;
+  border: 1px solid rgba(224, 232, 241, 0.96);
+  border-radius: 14px;
+  background: #f7fafc;
+}
+
+.ce-detail-tabs button {
+  position: relative;
+  display: inline-flex;
+  min-width: max-content;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #647188;
+  font-size: 11px;
+  font-weight: 860;
+  letter-spacing: 0;
+}
+
+.ce-tab-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ce-detail-tabs button.active {
+  background: #fff;
+  color: #1f8f34;
+  box-shadow: 0 6px 16px rgba(21, 35, 60, 0.07);
+}
+
+.ce-tab-badge {
+  display: inline-flex;
+  min-width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #5f6f84;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.ce-detail-tabs button.is-warning .ce-tab-badge {
+  background: #fff1d8;
+  color: #b36b12;
+}
+
+.ce-detail-tabs button.is-danger .ce-tab-badge {
+  background: #ffe4e1;
+  color: #cf4036;
+}
+
+.ce-form-card.ce-tab-panel,
+.ce-family-card,
+.ce-complete-nested {
+  border: 1px solid rgba(221, 231, 240, 0.98);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 9px 22px rgba(21, 35, 60, 0.035);
+}
+
+.ce-form-card.ce-tab-panel {
+  padding: 16px;
+}
+
+.ce-panel-heading,
+.ce-section-heading.compact {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ce-section-heading.compact > div {
+  min-width: 0;
+}
+
+.ce-panel-heading h3,
+.ce-section-heading h3,
+.ce-family-card-head h3 {
+  color: #14213a;
+  font-size: 13px;
+  font-weight: 920;
+  letter-spacing: 0;
+}
+
+.ce-panel-heading p,
+.ce-section-heading p {
+  margin-top: 4px;
+  color: #66758c;
+  font-size: 11px;
+  font-weight: 680;
+  line-height: 1.35;
+}
+
+.ce-panel-status {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #5f6f84;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.ce-panel-status.complete {
+  background: #edf8ea;
+  color: #21882e;
+}
+
+.ce-panel-status.warning {
+  background: #fff6e7;
+  color: #b36b12;
+}
+
+.ce-panel-status.danger {
+  background: #fff0ef;
+  color: #cf4036;
+}
+
+.ce-form-grid {
+  gap: 11px;
+}
+
+.ce-form-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ce-tab-panel .ce-form-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ce-form-grid label,
+.ce-wide-field {
+  gap: 6px;
+}
+
+.ce-form-grid span,
+.ce-wide-field span {
+  color: #6b788e;
+  font-size: 10px;
+  font-weight: 880;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ce-form-grid input,
+.ce-form-grid select,
+.ce-wide-field textarea {
+  min-height: 46px;
+  border: 1px solid #d7e2ed;
+  border-radius: 12px;
+  background: #fbfdff;
+  color: #172238;
+  font-size: 12px;
+  font-weight: 690;
+  letter-spacing: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.ce-form-grid input:focus,
+.ce-form-grid select:focus,
+.ce-wide-field textarea:focus {
+  border-color: color-mix(in srgb, var(--ce-detail-accent) 42%, #d7e2ed);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ce-detail-accent) 13%, transparent);
+}
+
+.ce-smart-field {
+  position: relative;
+}
+
+.ce-smart-field small {
+  min-height: 15px;
+  color: #718095;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.ce-smart-field.is-ok input,
+.ce-smart-field.is-ok select {
+  border-color: rgba(63, 145, 56, 0.32);
+  background: #fbfefb;
+}
+
+.ce-smart-field.is-ok small {
+  color: #21882e;
+}
+
+.ce-smart-field.is-missing input,
+.ce-smart-field.is-missing select,
+.ce-smart-field.is-invalid input,
+.ce-smart-field.is-invalid select {
+  border-color: rgba(217, 67, 56, 0.74);
+  background: #fffafa;
+  box-shadow: inset 3px 0 0 rgba(217, 67, 56, 0.72);
+}
+
+.ce-smart-field.is-missing small,
+.ce-smart-field.is-invalid small {
+  color: #cf4036;
+  font-weight: 860;
+}
+
+.ce-derived-card {
+  min-height: 60px;
+  border: 1px solid rgba(221, 231, 240, 0.98);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfdff, #fff);
+}
+
+.ce-derived-card span,
+.ce-derived-card strong {
+  letter-spacing: 0;
+}
+
+.ce-family-readiness {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ce-family-readiness-card {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 92px;
+  padding: 12px;
+  border-radius: 15px;
+}
+
+.ce-family-readiness-card > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ce-family-readiness-meter,
+.ce-family-card-status i {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef3;
+}
+
+.ce-family-readiness-meter em,
+.ce-family-card-status i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+}
+
+.ce-family-readiness-card.is-complete {
+  color: #21882e;
+}
+
+.ce-family-readiness-card.is-warning {
+  color: #b36b12;
+}
+
+.ce-family-readiness-card.is-danger {
+  color: #cf4036;
+}
+
+.ce-family-readiness-card p,
+.ce-family-readiness-card strong,
+.ce-family-readiness-card small {
+  color: initial;
+}
+
+.ce-family-readiness-card p {
+  color: #647188;
+}
+
+.ce-family-readiness-card b {
+  color: currentColor;
+  font-size: 10.5px;
+  font-weight: 920;
+}
+
+.ce-family-metrics-strip {
+  min-height: 0;
+  margin-bottom: 12px;
+}
+
+.ce-family-metric-chip {
+  border-color: rgba(217, 67, 56, 0.24);
+  background: #fff7f6;
+  color: #cf4036;
+}
+
+.ce-family-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ce-family-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.ce-family-card.is-warning {
+  border-color: rgba(216, 139, 28, 0.26);
+}
+
+.ce-family-card.is-danger {
+  border-color: rgba(217, 67, 56, 0.3);
+}
+
+.ce-family-card-head {
+  align-items: start;
+}
+
+.ce-family-card-status {
+  display: grid;
+  min-width: 92px;
+  gap: 6px;
+  justify-items: end;
+}
+
+.ce-family-card-status span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #5f6f84;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.ce-family-card-status i {
+  width: 92px;
+  color: #8a98ab;
+}
+
+.ce-family-card.is-complete .ce-family-card-status span {
+  background: #edf8ea;
+  color: #21882e;
+}
+
+.ce-family-card.is-complete .ce-family-card-status i {
+  color: #21882e;
+}
+
+.ce-family-card.is-warning .ce-family-card-status span,
+.ce-family-card.is-warning .ce-family-card-status i {
+  color: #b36b12;
+}
+
+.ce-family-card.is-danger .ce-family-card-status span,
+.ce-family-card.is-danger .ce-family-card-status i {
+  color: #cf4036;
+}
+
+.ce-wide-field.ce-family-address {
+  margin-top: 12px;
+}
+
+.ce-detail-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 7;
+  min-height: 66px;
+  padding: 10px 16px;
+  border-top: 1px solid rgba(221, 231, 240, 0.95);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px) saturate(128%);
+  box-shadow: 0 -14px 30px rgba(21, 35, 60, 0.07);
+}
+
+.ce-save-state {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.ce-save-state.clean {
+  background: #edf8ea;
+  color: #21882e;
+}
+
+.ce-save-state.dirty {
+  background: #fff6e7;
+  color: #a35f0d;
+}
+
+.ce-save-state.saving {
+  background: #eef5ff;
+  color: #2b67a6;
+}
+
+.ce-save-state.error {
+  background: #fff0ef;
+  color: #cf4036;
+}
+
+.ce-detail-footer :deep(.ui-button) {
+  min-height: 42px;
+  min-width: 128px;
+  border-radius: 14px;
+}
+
+@container (max-width: 1180px) {
+  .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 38px;
+  }
+
+  .ce-detail-title--with-photo {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .ce-detail-menu-button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .ce-access-header-card {
+    grid-row: 2;
+  }
+
+  .ce-progress-cluster--health,
+  .ce-access-header-card,
+  .ce-detail-actions {
+    grid-column: 1 / -1;
+  }
+
+  .ce-progress-cluster--health {
+    grid-row: 3;
+  }
+
+  .ce-detail-actions {
+    grid-row: 4;
+  }
+
+  .ce-health-overview,
+  .ce-status-signal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 860px) {
+  .ce-workspace.has-detail .ce-student-row,
+  .ce-workspace.has-empty-detail .ce-student-row,
+  .ce-student-row {
+    grid-template-columns: minmax(0, 1fr) 40px;
+  }
+
+  .ce-row-health {
+    grid-column: 1 / -1;
+    margin-top: 8px;
+  }
+
+  .row-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .ce-detail-header,
+  .ce-health-overview,
+  .ce-status-signal-grid,
+  .ce-family-readiness,
+  .ce-family-grid {
+    grid-template-columns: minmax(0, 1fr) 38px;
+  }
+
+  .ce-access-header-card,
+  .ce-progress-cluster--health,
+  .ce-detail-actions {
+    grid-column: 1;
+  }
+
+  .ce-detail-actions {
+    justify-content: flex-start;
+  }
+
+  .ce-health-overview,
+  .ce-status-signal-grid,
+  .ce-family-readiness,
+  .ce-family-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ce-health-card--action {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .ce-health-action-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .ce-tab-panel .ce-form-grid.three,
+  .ce-form-grid.two,
+  .ce-family-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 560px) {
+  .ce-detail-body {
+    padding: 11px 12px 0;
+  }
+
+  .ce-detail-title--with-photo {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .ce-health-card,
+  .ce-status-signal-card,
+  .ce-family-readiness-card {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .ce-status-signal-card b,
+  .ce-family-readiness-card b {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .ce-detail-footer,
+  .ce-detail-footer div {
+    align-items: stretch;
+  }
+
+  .ce-detail-footer {
+    flex-direction: column;
+  }
+
+  .ce-detail-footer div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
   }
 }
 
