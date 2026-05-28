@@ -5906,11 +5906,73 @@ onBeforeUnmount(() => {
   --ce-warning: #c37412;
   --ce-danger: #d63f35;
   --ce-blue: #4f8ed8;
+  --ce-scrollbar-size: 8px;
+  --ce-scrollbar-thumb: rgba(85, 101, 116, 0.28);
+  --ce-scrollbar-thumb-hover: rgba(68, 84, 99, 0.42);
+}
+
+.control-escolar-screen .students-scale-shell,
+.control-escolar-screen .ce-list-scroll,
+.control-escolar-screen .ce-detail-panel,
+.control-escolar-screen .ce-detail-body,
+.control-escolar-screen .ce-detail-tabs {
+  scrollbar-color: var(--ce-scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+.control-escolar-screen .students-scale-shell::-webkit-scrollbar,
+.control-escolar-screen .ce-list-scroll::-webkit-scrollbar,
+.control-escolar-screen .ce-detail-panel::-webkit-scrollbar,
+.control-escolar-screen .ce-detail-body::-webkit-scrollbar,
+.control-escolar-screen .ce-detail-tabs::-webkit-scrollbar {
+  width: var(--ce-scrollbar-size);
+  height: var(--ce-scrollbar-size);
+}
+
+.control-escolar-screen .students-scale-shell::-webkit-scrollbar-track,
+.control-escolar-screen .ce-list-scroll::-webkit-scrollbar-track,
+.control-escolar-screen .ce-detail-panel::-webkit-scrollbar-track,
+.control-escolar-screen .ce-detail-body::-webkit-scrollbar-track,
+.control-escolar-screen .ce-detail-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.control-escolar-screen .students-scale-shell::-webkit-scrollbar-thumb,
+.control-escolar-screen .ce-list-scroll::-webkit-scrollbar-thumb,
+.control-escolar-screen .ce-detail-panel::-webkit-scrollbar-thumb,
+.control-escolar-screen .ce-detail-body::-webkit-scrollbar-thumb,
+.control-escolar-screen .ce-detail-tabs::-webkit-scrollbar-thumb {
+  min-height: 42px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--ce-scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.control-escolar-screen .students-scale-shell::-webkit-scrollbar-thumb:hover,
+.control-escolar-screen .ce-list-scroll::-webkit-scrollbar-thumb:hover,
+.control-escolar-screen .ce-detail-panel::-webkit-scrollbar-thumb:hover,
+.control-escolar-screen .ce-detail-body::-webkit-scrollbar-thumb:hover,
+.control-escolar-screen .ce-detail-tabs::-webkit-scrollbar-thumb:hover {
+  background: var(--ce-scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.control-escolar-screen .ce-quality-fields--stacked,
+.control-escolar-screen .ce-health-missing-chips {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.control-escolar-screen .ce-quality-fields--stacked::-webkit-scrollbar,
+.control-escolar-screen .ce-health-missing-chips::-webkit-scrollbar {
+  display: none;
 }
 
 .control-escolar-screen .students-scale-shell {
   overflow-x: auto;
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
 }
 
 .control-escolar-screen .students-design-canvas {
@@ -6038,7 +6100,9 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-list-scroll {
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 8px 7px 0 8px;
+  overscroll-behavior: contain;
+  padding: 8px 8px 0;
+  scrollbar-gutter: stable;
 }
 
 .control-escolar-screen .ce-list-columns {
@@ -6275,7 +6339,6 @@ onBeforeUnmount(() => {
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 1px;
-  scrollbar-width: thin;
 }
 
 .control-escolar-screen .ce-quality-fields--stacked small {
@@ -6402,11 +6465,14 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-detail-header {
   display: grid;
-  grid-template-columns: minmax(245px, 1fr) minmax(190px, 0.62fr) minmax(180px, 0.52fr) 38px;
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(280px, 1.18fr) minmax(180px, 0.68fr) minmax(170px, 0.62fr) 38px;
   align-items: center;
-  gap: 12px;
-  min-height: 96px;
-  padding: 14px 16px;
+  gap: 14px;
+  min-height: 106px;
+  padding: 16px 18px;
   border-bottom: 1px solid rgba(221, 231, 240, 0.95);
   background:
     radial-gradient(circle at 0 0, color-mix(in srgb, var(--ce-detail-accent) 9%, transparent), transparent 30%),
@@ -6503,23 +6569,23 @@ onBeforeUnmount(() => {
   display: grid;
   grid-column: 2;
   grid-row: 1;
-  grid-template-columns: 62px minmax(0, 1fr);
+  grid-template-columns: 58px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   min-width: 0;
-  min-height: 62px;
-  padding: 8px 12px;
-  border: 1px solid rgba(210, 222, 234, 0.96);
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid rgba(215, 226, 237, 0.9);
   border-radius: 13px;
-  background: linear-gradient(180deg, #fff, #f8fbff);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.04);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: none;
 }
 
 .control-escolar-screen .ce-access-header-card > span,
 .control-escolar-screen .ce-access-icon {
   display: inline-flex;
-  width: 58px;
-  height: 42px;
+  width: 54px;
+  height: 38px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -6530,10 +6596,10 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-access-icon img {
   display: block;
-  width: 26px;
-  max-height: 22px;
+  width: 44px;
+  max-height: 28px;
   object-fit: contain;
-  opacity: 0.86;
+  opacity: 0.88;
 }
 
 .control-escolar-screen .ce-access-header-card strong {
@@ -6560,11 +6626,11 @@ onBeforeUnmount(() => {
   grid-row: 1;
   gap: 7px;
   min-width: 0;
-  min-height: 58px;
-  padding: 9px 11px;
-  border: 1px solid var(--ce-detail-border);
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--ce-detail-accent) 20%, #dfe8f1);
   border-radius: 13px;
-  background: linear-gradient(180deg, #fff, var(--ce-detail-soft));
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .control-escolar-screen .ce-progress-label-row {
@@ -6577,7 +6643,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-progress-label-row span {
   display: grid;
   min-width: 0;
-  gap: 2px;
+  gap: 1px;
 }
 
 .control-escolar-screen .ce-progress-cluster--health strong {
@@ -6665,34 +6731,43 @@ onBeforeUnmount(() => {
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 12px;
-  overflow: auto;
-  padding: 12px 14px;
-  background: linear-gradient(180deg, #fff 0%, #fff 70%, #fbfcfd 100%);
+  position: relative;
+  z-index: 1;
+  gap: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 14px 16px;
+  background: linear-gradient(180deg, #fff 0%, #fff 72%, #fbfcfd 100%);
+  scrollbar-gutter: stable;
 }
 
 .control-escolar-screen .ce-health-overview {
   display: grid;
-  grid-template-columns: minmax(190px, 0.82fr) minmax(205px, 0.9fr) minmax(300px, 1.1fr);
-  align-items: start;
-  gap: 9px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 0.95fr) minmax(0, 1.15fr);
+  align-items: stretch;
+  gap: 7px;
   min-width: 0;
+  padding: 7px;
+  border: 1px solid rgba(224, 232, 241, 0.92);
+  border-radius: 17px;
+  background: linear-gradient(180deg, #f8fbfd, #ffffff);
 }
 
 .control-escolar-screen .ce-health-card {
   position: relative;
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   min-width: 0;
-  min-height: 84px;
+  min-height: 68px;
   overflow: hidden;
-  padding: 10px 12px;
-  border: 1px solid rgba(221, 231, 240, 0.98);
-  border-radius: 14px;
-  background: linear-gradient(180deg, #fff, #fbfdff);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.035);
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
   cursor: pointer;
   text-align: left;
 }
@@ -6703,51 +6778,53 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-health-card.is-active {
-  box-shadow: 0 12px 24px rgba(17, 24, 39, .07), 0 0 0 2px rgba(79, 163, 70, .12);
-  transform: translateY(-1px);
+  border-color: rgba(79, 163, 70, 0.18);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(79, 163, 70, 0.08), 0 8px 18px rgba(21, 35, 60, 0.035);
 }
 
 .control-escolar-screen .ce-health-card--complete {
-  border-color: rgba(74, 123, 217, .2);
-  background: linear-gradient(180deg, rgba(244, 248, 255, .98), rgba(255,255,255,.98));
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  border-color: transparent;
+  background: rgba(248, 251, 255, 0.8);
 }
 
 .control-escolar-screen .ce-health-card--complete.is-active {
-  box-shadow: 0 12px 24px rgba(47, 98, 184, .09), 0 0 0 2px rgba(89, 140, 232, .16);
+  border-color: rgba(89, 140, 232, 0.2);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(89, 140, 232, 0.1), 0 8px 18px rgba(21, 35, 60, 0.035);
 }
 
 .control-escolar-screen .ce-health-card--basic.complete,
 .control-escolar-screen .ce-health-card--action.is-clear {
-  border-color: rgba(63, 145, 56, 0.22);
-  background: linear-gradient(180deg, #fbfefb, #fff);
+  border-color: rgba(63, 145, 56, 0.18);
+  background: rgba(251, 254, 251, 0.82);
 }
 
 .control-escolar-screen .ce-health-card--basic.warning,
 .control-escolar-screen .ce-health-card--action.warning {
-  border-color: rgba(216, 139, 28, 0.32);
-  background: linear-gradient(180deg, #fffdfa, #fff);
+  border-color: rgba(216, 139, 28, 0.22);
+  background: rgba(255, 253, 250, 0.84);
 }
 
 .control-escolar-screen .ce-health-card--basic.danger,
 .control-escolar-screen .ce-health-card--action.danger {
-  border-color: rgba(217, 67, 56, 0.34);
-  background:
-    radial-gradient(circle at 100% 0, rgba(217, 67, 56, 0.08), transparent 44%),
-    linear-gradient(180deg, #fffafa, #fff);
+  border-color: rgba(217, 67, 56, 0.24);
+  background: rgba(255, 250, 250, 0.86);
 }
 
 .control-escolar-screen .ce-health-card--action {
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
-  border-color: rgba(224, 83, 74, 0.28);
-  background: linear-gradient(180deg, #fffafa, #ffffff);
+  border-color: rgba(224, 83, 74, 0.2);
+  background: rgba(255, 250, 250, 0.86);
 }
 
 .control-escolar-screen .ce-health-ring {
   position: relative;
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   place-items: center;
   border-radius: 50%;
   background: conic-gradient(var(--ce-detail-accent) var(--ring-deg), #e8eef3 0deg);
@@ -6756,7 +6833,7 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-health-ring::after {
   position: absolute;
-  inset: 6px;
+  inset: 5px;
   border-radius: inherit;
   background: #fff;
   box-shadow: inset 0 0 0 1px rgba(220, 229, 238, 0.92);
@@ -6771,7 +6848,7 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 1;
   color: var(--ce-ink);
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 950;
   letter-spacing: 0;
 }
@@ -6779,19 +6856,28 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-health-card__icon,
 .control-escolar-screen .ce-status-signal-icon {
   display: inline-flex;
-  width: 34px;
-  height: 34px;
   align-items: center;
   justify-content: center;
-  border-radius: 11px;
   background: var(--ce-detail-soft);
   color: var(--ce-detail-accent);
+}
+
+.control-escolar-screen .ce-health-card__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.control-escolar-screen .ce-status-signal-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
 }
 
 .control-escolar-screen .ce-health-card__copy {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  gap: 2px;
 }
 
 .control-escolar-screen .ce-health-card__copy small,
@@ -6810,7 +6896,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-status-signal-card strong {
   overflow: hidden;
   color: var(--ce-ink);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 950;
   letter-spacing: 0;
   line-height: 1.14;
@@ -6826,14 +6912,14 @@ onBeforeUnmount(() => {
   color: #647188;
   font-size: 10px;
   font-weight: 720;
-  line-height: 1.22;
+  line-height: 1.18;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
 }
 
 .control-escolar-screen .ce-health-bar {
   display: block;
-  height: 5px;
+  height: 4px;
   margin-top: 1px;
   overflow: hidden;
   border-radius: 999px;
@@ -6873,8 +6959,10 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-health-link {
-  grid-column: 2;
-  justify-self: start;
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
   min-height: 22px;
   padding: 0;
   border: 0;
@@ -6885,10 +6973,10 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-health-action-button {
-  min-height: 30px;
-  padding: 0 9px;
+  min-height: 28px;
+  padding: 0 8px;
   border-color: var(--ce-detail-border);
-  border-radius: 10px;
+  border-radius: 9px;
   color: var(--ce-detail-accent);
   font-size: 10px;
   white-space: nowrap;
@@ -6904,18 +6992,17 @@ onBeforeUnmount(() => {
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 1px;
-  scrollbar-width: thin;
 }
 
 .control-escolar-screen .ce-health-missing-chips button,
 .control-escolar-screen .ce-health-missing-chips span {
   display: inline-flex;
-  min-height: 22px;
+  min-height: 20px;
   align-items: center;
   flex: 0 0 auto;
-  padding: 0 7px;
+  padding: 0 6px;
   border-radius: 999px;
-  font-size: 9.2px;
+  font-size: 9px;
   line-height: 1;
   white-space: nowrap;
 }
@@ -6935,33 +7022,37 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-status-signal-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
+  padding: 6px;
+  border: 1px solid rgba(224, 232, 241, 0.88);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fafcff, #ffffff);
 }
 
 .control-escolar-screen .ce-status-signal-card {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
-  min-height: 54px;
-  padding: 8px 10px;
-  border: 1px solid rgba(221, 231, 240, 0.98);
-  border-radius: 13px;
+  min-height: 46px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 11px;
   appearance: none;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.58);
   color: inherit;
   cursor: pointer;
   font: inherit;
   text-align: left;
-  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
 .control-escolar-screen .ce-status-signal-card:hover,
 .control-escolar-screen .ce-status-signal-card:focus-visible {
   border-color: color-mix(in srgb, var(--ce-detail-accent) 28%, #dbe6f0);
-  box-shadow: 0 10px 20px rgba(21, 35, 60, 0.06);
+  box-shadow: 0 8px 16px rgba(21, 35, 60, 0.045);
   outline: 0;
   transform: translateY(-1px);
 }
@@ -6980,18 +7071,18 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-status-signal-card.is-complete {
-  border-color: rgba(63, 145, 56, 0.2);
-  background: #fbfefb;
+  border-color: rgba(63, 145, 56, 0.12);
+  background: rgba(251, 254, 251, 0.66);
 }
 
 .control-escolar-screen .ce-status-signal-card.is-warning {
-  border-color: rgba(216, 139, 28, 0.3);
-  background: #fffdfa;
+  border-color: rgba(216, 139, 28, 0.14);
+  background: rgba(255, 253, 250, 0.68);
 }
 
 .control-escolar-screen .ce-status-signal-card.is-danger {
-  border-color: rgba(217, 67, 56, 0.32);
-  background: #fffafa;
+  border-color: rgba(217, 67, 56, 0.16);
+  background: rgba(255, 250, 250, 0.7);
 }
 
 .control-escolar-screen .ce-status-signal-card.is-complete .ce-status-signal-icon,
@@ -7627,15 +7718,6 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-.ce-health-overview {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-}
-
-.ce-health-card--action {
-  border-color: rgba(224, 83, 74, 0.28);
-  background: linear-gradient(180deg, #fffafa, #ffffff);
-}
-
 .ce-health-card--complete .ce-health-card__copy > p:empty,
 .ce-health-card__copy > p:empty {
   display: none;
@@ -7702,44 +7784,6 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-empty-flow,
 .control-escolar-screen .ce-empty-tip {
   display: none;
-}
-
-.control-escolar-screen .ce-access-header-card {
-  grid-template-columns: 62px minmax(0, 1fr);
-  min-height: 64px;
-  padding: 8px 12px;
-}
-
-.control-escolar-screen .ce-access-header-card > .ce-access-logo {
-  width: 58px;
-  height: 42px;
-  border-radius: 13px;
-  background: #f5f7fa;
-  overflow: hidden;
-}
-
-.control-escolar-screen .ce-access-header-card > .ce-access-logo img {
-  display: block;
-  width: 56px;
-  height: 38px;
-  object-fit: contain;
-  object-position: center;
-  opacity: .74;
-}
-
-.control-escolar-screen .ce-access-header-card strong {
-  font-size: 11.5px;
-  line-height: 1.1;
-}
-
-.control-escolar-screen .ce-access-header-card small {
-  margin-top: 3px;
-  font-size: 9.8px;
-  line-height: 1.18;
-}
-
-.control-escolar-screen .ce-detail-body {
-  padding: 10px 14px 12px;
 }
 
 .control-escolar-screen .ce-health-overview,
@@ -7861,14 +7905,6 @@ onBeforeUnmount(() => {
 }
 
 @container (max-width: 920px) {
-  .control-escolar-screen .ce-access-header-card {
-    grid-template-columns: 56px minmax(0, 1fr);
-  }
-
-  .control-escolar-screen .ce-access-header-card > .ce-access-logo {
-    width: 52px;
-  }
-
   .control-escolar-screen .ce-form-grid,
   .control-escolar-screen .ce-form-grid.two,
   .control-escolar-screen .ce-form-grid.three,
@@ -8080,36 +8116,6 @@ onBeforeUnmount(() => {
   opacity: 0;
   overflow: hidden;
   pointer-events: none;
-}
-
-.control-escolar-screen .ce-access-header-card {
-  grid-template-columns: 72px minmax(0, 1fr);
-  min-height: 64px;
-  padding: 9px 13px;
-}
-
-.control-escolar-screen .ce-access-icon.ce-access-logo,
-.control-escolar-screen .ce-access-header-card > .ce-access-logo {
-  display: inline-flex;
-  width: 64px;
-  height: 42px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #e1e9f1;
-  border-radius: 13px;
-  background: linear-gradient(180deg, #f8fafc, #ffffff);
-  color: inherit;
-}
-
-.control-escolar-screen .ce-access-icon.ce-access-logo img,
-.control-escolar-screen .ce-access-header-card > .ce-access-logo img {
-  display: block;
-  width: 54px;
-  max-width: 54px;
-  height: auto;
-  max-height: 34px;
-  object-fit: contain;
-  opacity: 0.94;
 }
 
 .control-escolar-screen .ce-panel-heading {
