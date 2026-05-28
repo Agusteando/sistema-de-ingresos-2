@@ -2425,10 +2425,13 @@ const buildEditableMatriculaEntries = (
   }
 
   const invalidPhone = editableEntries.find(
-    (entry) =>
-      entry.field.toLowerCase().includes("telefono") &&
-      entry.value &&
-      String(entry.value).replace(/\D/g, "").length < 10,
+    (entry) => {
+      if (!entry.field.toLowerCase().includes("telefono") || !entry.value) return false;
+      let digits = String(entry.value).replace(/\D/g, "");
+      if (digits.startsWith("521") && digits.length === 13) digits = digits.slice(3);
+      else if (digits.startsWith("52") && digits.length === 12) digits = digits.slice(2);
+      return digits.length !== 10;
+    },
   );
   if (invalidPhone) {
     throw createError({ statusCode: 400, message: "Teléfono inválido. Usa al menos 10 dígitos." });
@@ -2514,6 +2517,24 @@ const upsertMatriculaOverlay = async (
   console.info(
     "[Control Escolar] centralized matricula overlay updated",
     auditContext,
+  );
+};
+
+const syncEditableFieldsToBase = async (
+  normalizedMatricula: string,
+  editableEntries: EditableMatriculaEntry[],
+  schema: ControlEscolarSchema,
+) => {
+  const syncableColumns = new Set(["nivel", "grado", "grupo", "ciclo"]);
+  const baseUpdates = editableEntries.filter(
+    (entry) => syncableColumns.has(entry.column) && schema.base.has(entry.column),
+  );
+  if (!baseUpdates.length) return;
+  const assignments = baseUpdates.map((entry) => `\`${entry.column}\` = ?`);
+  const params = [...baseUpdates.map((entry) => entry.value), canonicalMatriculaKey(normalizedMatricula)];
+  await query(
+    `UPDATE base SET ${assignments.join(", ")} WHERE UPPER(TRIM(matricula)) = ?`,
+    params,
   );
 };
 
@@ -2802,6 +2823,7 @@ export const updateControlEscolarStudent = async (
     visibleStudent.plantel || visibleStudent.basePlantel || agentId,
     schema,
   );
+  await syncEditableFieldsToBase(normalizedMatricula, editableEntries, schema);
 
   const result = await fetchControlEscolarStudents(agentId, {
     ...scopeFilters,

@@ -520,6 +520,19 @@
                         >{{ selectedStudent.status || "Activo" }}</span
                       >
                     </div>
+                    <div class="ce-profile-identity-cues">
+                      <span v-if="curpDerivedIdentity.valid" :class="['ce-profile-cue', 'is-gender', derivedGenderMeta.tone]">
+                        <b>{{ derivedGenderMeta.label === 'Femenino' ? '♀' : '♂' }}</b>
+                        {{ derivedGenderMeta.label }}
+                      </span>
+                      <span v-if="curpDerivedIdentity.valid" class="ce-profile-cue is-age">
+                        <LucideClock3 :size="13" />
+                        {{ derivedAgeLabel }}
+                      </span>
+                      <span v-if="curpDerivedIdentity.valid" class="ce-profile-cue is-born">
+                        {{ curpDerivedIdentity.fechaNacimiento }}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div
@@ -592,7 +605,11 @@
 
               <div class="ce-detail-body">
                 <section class="ce-health-overview" aria-label="Resumen del expediente seleccionado">
-                  <article :class="['ce-health-card', 'ce-health-card--basic', selectedRecordHealth.tone]">
+                  <button
+                    type="button"
+                    :class="['ce-health-card', 'ce-health-card--basic', selectedRecordHealth.tone, { 'is-active': !showCompleteExpediente }]"
+                    @click="showCompleteExpediente = false"
+                  >
                     <div
                       :class="['ce-health-ring', selectedRecordHealth.tone]"
                       :style="{ '--ring-deg': `${selectedProfileCompletion * 3.6}deg` }"
@@ -606,8 +623,12 @@
                       <span class="ce-health-bar"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
                       <em>{{ selectedBasicCompletedCount }} de {{ requiredDataFields.length }} campos completos</em>
                     </div>
-                  </article>
-                  <article class="ce-health-card ce-health-card--complete">
+                  </button>
+                  <button
+                    type="button"
+                    :class="['ce-health-card', 'ce-health-card--complete', { 'is-active': showCompleteExpediente }]"
+                    @click="showCompleteExpediente = true"
+                  >
                     <div
                       class="ce-health-ring is-secondary"
                       :style="{ '--ring-deg': `${selectedCompleteProfileCompletion * 3.6}deg` }"
@@ -615,17 +636,17 @@
                       <b>{{ selectedCompleteProfileCompletion }}%</b>
                     </div>
                     <div class="ce-health-card__copy">
-                      <small>Expediente completo</small>
+                      <small>Expediente avanzado</small>
                       <strong>{{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes avanzados` : 'Completo' }}</strong>
                       
                       <span class="ce-health-bar is-secondary"><i :style="{ width: `${selectedCompleteProfileCompletion}%` }"></i></span>
                       <em>{{ selectedCompleteProfileCompletion }}% · {{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes` : `${selectedCompleteCompletedCount}/${completeDataFields.length} completos` }}</em>
                     </div>
-                    <button type="button" class="ce-health-link" @click="showCompleteExpediente = !showCompleteExpediente">
-                      {{ showCompleteExpediente ? 'Ocultar expediente completo' : 'Ver expediente completo' }}
+                    <span class="ce-health-link">
+                      {{ showCompleteExpediente ? 'Vista avanzada' : 'Abrir avanzado' }}
                       <LucideChevronRight :size="16" />
-                    </button>
-                  </article>
+                    </span>
+                  </button>
                   <article v-if="selectedRecordIssueCount" :class="['ce-health-card', 'ce-health-card--action', selectedRecordHealth.tone]">
                     <div class="ce-health-card__icon">
                       <component
@@ -755,7 +776,8 @@
                       <article v-if="editForm.curp" class="ce-derived-card" :class="`is-${derivedGenderMeta.tone}`">
                         <span class="ce-derived-card__icon" aria-hidden="true"><b>{{ derivedGenderMeta.symbol }}</b></span>
                         <div>
-                          <strong>{{ curpDerivedIdentity.valid ? `${curpDerivedIdentity.fechaNacimiento} · ${derivedGenderMeta.label}` : 'CURP inválida' }}</strong>
+                          <strong>{{ curpDerivedIdentity.valid ? `${derivedGenderMeta.label} · ${derivedAgeLabel}` : 'CURP inválida' }}</strong>
+                          <small v-if="curpDerivedIdentity.valid">{{ curpDerivedIdentity.fechaNacimiento }}</small>
                         </div>
                       </article>
                       <template v-if="showCompleteExpediente">
@@ -833,6 +855,13 @@
                           </option>
                         </select>
                       </label>
+                      <label>
+                        <span>Condición</span>
+                        <select v-model="editForm.interno">
+                          <option :value="1">Interno</option>
+                          <option :value="0">Externo</option>
+                        </select>
+                      </label>
                       <label
                         ><span>Baja</span
                         ><select v-model="editForm.baja">
@@ -870,10 +899,6 @@
                           ><input v-model="editForm.servicio" autocomplete="off"
                         /></label>
                         <label
-                          ><span>Interno</span
-                          ><select v-model="editForm.interno"><option :value="0">No</option><option :value="1">Sí</option></select>
-                        </label>
-                        <label
                           ><span>Eventual</span
                           ><select v-model="editForm.eventual"><option :value="0">No</option><option :value="1">Sí</option></select>
                         </label>
@@ -882,6 +907,44 @@
                           ><select v-model="editForm.verified"><option :value="0">No</option><option :value="1">Sí</option></select>
                         </label>
                       </template>
+                    </div>
+                    <div class="ce-grade-pickers">
+                      <div class="ce-picker-group">
+                        <small>Acceso rápido por grado</small>
+                        <div class="ce-grade-picker-grid">
+                          <button
+                            v-for="grado in gradoOptions"
+                            :key="`quick-grado-${grado}`"
+                            type="button"
+                            :class="['ce-grade-picker-chip', { active: editForm.grado === grado }]"
+                            @click="editForm.grado = grado"
+                          >
+                            {{ labelize(grado) }}
+                          </button>
+                        </div>
+                      </div>
+                      <div class="ce-picker-group" v-if="groupOptions.length">
+                        <small>Selector visual de grupo</small>
+                        <div class="ce-group-picker-grid">
+                          <button
+                            type="button"
+                            :class="['ce-group-picker-chip', { active: !editForm.grupo }]"
+                            @click="editForm.grupo = ''"
+                          >
+                            <span>Sin grupo</span>
+                          </button>
+                          <button
+                            v-for="grupo in groupOptions"
+                            :key="`quick-grupo-${grupo}`"
+                            type="button"
+                            :class="['ce-group-picker-chip', { active: editForm.grupo === grupo }]"
+                            @click="editForm.grupo = grupo"
+                          >
+                            <UiGroupIcon :label="grupo" :missing="false" />
+                            <span>{{ grupo }}</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </section>
 
@@ -1097,7 +1160,7 @@
                   >
                     <div class="ce-section-heading compact">
                       <span><LucideKeyRound :size="18" /></span>
-                      <h3>Sistema</h3>
+                      <h3>Husky Pass</h3>
                     </div>
                     <div class="ce-system-grid">
                       <article>
@@ -2212,7 +2275,7 @@ const detailTabs = [
   { key: "identity", label: "Identidad", icon: LucideUserRound },
   { key: "school", label: "Escolar", icon: LucideGraduationCap },
   { key: "family", label: "Contacto familiar", icon: LucideUsersRound },
-  { key: "system", label: "Sistema", icon: LucideKeyRound },
+  { key: "system", label: "Husky Pass", icon: LucideKeyRound },
   { key: "notes", label: "Observaciones", icon: LucideAlertTriangle },
 ];
 
@@ -2728,11 +2791,46 @@ const normalizeCurpInput = (value) => String(value || "")
   .replace(/[^A-Z0-9]/g, "")
   .slice(0, 18);
 const curpDerivedIdentity = computed(() => inferMexicanCurpIdentity(editForm.curp || selectedStudent.value?.curp || ""));
+const computeAgeFromDate = (value) => {
+  const text = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const birth = new Date(`${text}T00:00:00`);
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDelta = today.getMonth() - birth.getMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < birth.getDate())) age -= 1;
+  return age >= 0 ? age : null;
+};
+const derivedAgeLabel = computed(() => {
+  const age = computeAgeFromDate(curpDerivedIdentity.value?.fechaNacimiento);
+  return age === null ? 'Edad no disponible' : `${age} año${age === 1 ? '' : 's'}`;
+});
+const curpValidationMeta = (value) => {
+  const normalized = normalizeCurpInput(value);
+  if (!normalized) return { state: 'missing', message: 'Requerida' };
+  if (normalized.length < 18) return { state: 'invalid', message: `Faltan ${18 - normalized.length} caracteres` };
+  if (!/^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(normalized)) {
+    return { state: 'invalid', message: 'Formato oficial inválido' };
+  }
+  const inferred = inferMexicanCurpIdentity(normalized);
+  if (!inferred.valid) return { state: 'invalid', message: 'Fecha o sexo no válidos en CURP' };
+  return { state: 'ok', message: '' };
+};
 const emailIsValid = (value) => {
   const email = String(value || "").trim().toLowerCase();
-  return Boolean(email && !email.includes("@casita") && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+  return Boolean(email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
 };
-const phoneIsValid = (value) => String(value || "").replace(/\D/g, "").length >= 10;
+const normalizePhoneForValidation = (value) => {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('521') && digits.length === 13) digits = digits.slice(3);
+  else if (digits.startsWith('52') && digits.length === 12) digits = digits.slice(2);
+  return digits;
+};
+const phoneIsValid = (value) => {
+  const digits = normalizePhoneForValidation(value);
+  return digits.length === 10;
+};
 const fieldValidationState = (field) => {
   const value = String(editForm[field] ?? "").trim();
   const fieldMap = {
@@ -2754,7 +2852,7 @@ const fieldValidationState = (field) => {
   const selectedMissing = normalizedMissingFields(selectedHealthStudent.value, config.tier);
   const missingKey = String(config.key || field).toLowerCase();
   if (!value) return selectedMissing.includes(missingKey) ? "missing" : "neutral";
-  if (config.kind === "curp") return inferMexicanCurpIdentity(value).valid ? "ok" : "invalid";
+  if (config.kind === "curp") return curpValidationMeta(value).state === 'ok' ? 'ok' : 'invalid';
   if (config.kind === "phone") return phoneIsValid(value) ? "ok" : "invalid";
   if (config.kind === "email") return emailIsValid(value) ? "ok" : "invalid";
   return value.length >= 2 ? "ok" : "invalid";
@@ -2767,12 +2865,11 @@ const fieldValidationMessage = (field) => {
   const state = fieldValidationState(field);
   if (state === "ok") return "";
   if (field === "curp") {
-    if (state === "missing") return "Requerida";
-    if (state === "invalid") return "CURP inválida";
+    return curpValidationMeta(editForm.curp).message;
   }
   if (field.toLowerCase().includes("telefono")) {
     if (state === "missing") return "Requerido";
-    if (state === "invalid") return "10 dígitos";
+    if (state === "invalid") return "Usa 10 dígitos válidos";
   }
   if (field.toLowerCase().includes("email")) {
     if (state === "missing") return "Requerido";
@@ -2820,7 +2917,7 @@ const selectedStatusSignals = computed(() => {
     curpState === "ok" ? "Lista" : curpState === "invalid" ? "Inválida" : "Pendiente";
   const curpSummary =
     curpState === "ok"
-      ? `${curpDerivedIdentity.value.fechaNacimiento} · ${derivedGenderMeta.value.label}`
+      ? `${curpDerivedIdentity.value.fechaNacimiento} · ${derivedGenderMeta.value.label} · ${derivedAgeLabel.value}`
       : curpState === "invalid"
         ? "No se puede inferir nacimiento ni sexo."
         : "Falta CURP para inferir identidad.";
@@ -7763,6 +7860,241 @@ onBeforeUnmount(() => {
 @container (max-width: 520px) {
   .control-escolar-screen .ce-identity-grid,
   .control-escolar-screen .ce-form-grid.ce-identity-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.control-escolar-screen .ce-list-card {
+  grid-template-rows: clamp(34px, 2.45vw, 38px) minmax(0, 1fr);
+}
+
+.control-escolar-screen .ce-list-card .list-columns {
+  display: none;
+}
+
+.control-escolar-screen .ce-list-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 14px 0 10px;
+}
+
+.control-escolar-screen .list-heading-copy h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.control-escolar-screen .ce-row-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #c8d2df;
+  border-radius: 7px;
+  background: #fff;
+  color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.92);
+  font-size: 13px;
+  font-weight: 900;
+  transition: all .18s ease;
+}
+
+.control-escolar-screen .ce-row-check.active {
+  border-color: #4fa346;
+  background: #4fa346;
+  color: #fff;
+}
+
+.control-escolar-screen .ce-profile-identity-cues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.control-escolar-screen .ce-profile-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid #dbe5ef;
+  border-radius: 999px;
+  background: #fff;
+  color: #4c5b75;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.control-escolar-screen .ce-profile-cue b {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.control-escolar-screen .ce-profile-cue.is-gender.female {
+  border-color: rgba(200, 94, 150, .26);
+  background: rgba(253, 243, 248, .96);
+  color: #b74f82;
+}
+
+.control-escolar-screen .ce-profile-cue.is-gender.male {
+  border-color: rgba(57, 123, 224, .24);
+  background: rgba(240, 247, 255, .96);
+  color: #2f69c9;
+}
+
+.control-escolar-screen .ce-profile-cue.is-age,
+.control-escolar-screen .ce-profile-cue.is-born {
+  background: rgba(247, 250, 252, .96);
+}
+
+.control-escolar-screen .ce-health-card {
+  cursor: pointer;
+  text-align: left;
+}
+
+.control-escolar-screen button.ce-health-card {
+  appearance: none;
+  border-width: 1px;
+}
+
+.control-escolar-screen .ce-health-card.is-active {
+  box-shadow: 0 14px 30px rgba(17, 24, 39, .08), 0 0 0 2px rgba(79, 163, 70, .14);
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-health-card--complete {
+  border-color: rgba(74, 123, 217, .2);
+  background: linear-gradient(180deg, rgba(244, 248, 255, .98), rgba(255,255,255,.98));
+}
+
+.control-escolar-screen .ce-health-card--complete.is-active {
+  box-shadow: 0 14px 30px rgba(47, 98, 184, .1), 0 0 0 2px rgba(89, 140, 232, .18);
+}
+
+.control-escolar-screen .ce-health-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: #2f62b8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.control-escolar-screen .ce-grade-pickers {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.control-escolar-screen .ce-picker-group {
+  display: grid;
+  gap: 8px;
+}
+
+.control-escolar-screen .ce-picker-group > small {
+  color: #6f7d93;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.control-escolar-screen .ce-grade-picker-grid,
+.control-escolar-screen .ce-group-picker-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.control-escolar-screen .ce-grade-picker-chip,
+.control-escolar-screen .ce-group-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d8e3ee;
+  border-radius: 12px;
+  background: #fff;
+  color: #4b5b72;
+  font-size: 12px;
+  font-weight: 780;
+  transition: all .18s ease;
+}
+
+.control-escolar-screen .ce-grade-picker-chip.active,
+.control-escolar-screen .ce-group-picker-chip.active {
+  border-color: rgba(79,163,70,.34);
+  background: rgba(240, 249, 238, .98);
+  color: #2f7f32;
+  box-shadow: 0 8px 20px rgba(79,163,70,.12);
+}
+
+.control-escolar-screen .ce-family-readiness-meter,
+.control-escolar-screen .ce-family-card-status i {
+  display: none;
+}
+
+.control-escolar-screen .ce-family-card-head {
+  align-items: flex-start;
+}
+
+.control-escolar-screen .ce-family-card-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.control-escolar-screen .ce-family-card-status > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(240, 247, 239, .98);
+  color: #36843c;
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.control-escolar-screen .ce-family-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-family-fields,
+.control-escolar-screen .ce-family-fields--mother {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.control-escolar-screen .ce-system-panel {
+  border-color: rgba(113, 128, 150, .18);
+  background: linear-gradient(180deg, rgba(250, 252, 255, .98), rgba(255,255,255,.98));
+}
+
+.control-escolar-screen .ce-detail-tabs button.is-complete.active,
+.control-escolar-screen .ce-detail-tabs button.is-warning.active,
+.control-escolar-screen .ce-detail-tabs button.is-danger.active {
+  box-shadow: 0 10px 24px rgba(17, 24, 39, .08);
+}
+
+.control-escolar-screen .ce-detail-tabs button.is-complete.active {
+  border-color: rgba(79,163,70,.28);
+}
+
+.control-escolar-screen .ce-detail-tabs button.is-warning.active {
+  border-color: rgba(225, 155, 32, .28);
+}
+
+.control-escolar-screen .ce-detail-tabs button.is-danger.active {
+  border-color: rgba(228, 82, 82, .28);
+}
+
+@media (max-width: 1100px) {
+  .control-escolar-screen .ce-family-grid {
     grid-template-columns: 1fr;
   }
 }
