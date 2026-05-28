@@ -232,13 +232,6 @@
                   <h2>
                     Alumnos <span>{{ pagination.total }}</span>
                   </h2>
-                  <p>
-                    {{
-                      selectedAgentId
-                        ? `Plantel ${selectedAgentId}`
-                        : "Sin plantel activo"
-                    }}
-                  </p>
                 </div>
                 <div class="ce-pagination-mini">
                   <button
@@ -720,7 +713,7 @@
                         selectedIdentityStatus.label
                       }}</span>
                     </div>
-                    <div class="ce-form-grid two">
+                    <div class="ce-form-grid ce-identity-grid">
                       <label
                         :class="fieldShellClass('apellidoPaterno')"
                         data-ce-field="apellidoPaterno"
@@ -1268,6 +1261,7 @@
               </div>
               <div class="ce-empty-copy">
                 <h2>Selecciona un alumno</h2>
+                <p>Elige un registro de la lista para revisar y editar su expediente.</p>
               </div>
             </div>
           </section>
@@ -7492,6 +7486,155 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-form-grid.two,
   .control-escolar-screen .ce-form-grid.three,
   .control-escolar-screen .ce-tab-panel .ce-form-grid.three {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Final cleanup for crowded identity and empty-detail states. */
+.control-escolar-screen .ce-list-titlebar {
+  align-items: center;
+}
+
+.control-escolar-screen .ce-list-titlebar .list-heading-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.control-escolar-screen .ce-list-titlebar .list-heading-copy p {
+  display: none;
+}
+
+.control-escolar-screen .ce-empty-detail-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.control-escolar-screen .ce-empty-detail-panel .ce-empty-shell {
+  width: min(100%, 360px);
+  min-height: 220px;
+  margin: auto;
+  padding: 28px 24px;
+  border: 1px solid #e2eaf2;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdfc 100%);
+  box-shadow: 0 16px 40px rgba(20, 46, 90, 0.06);
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 14px;
+}
+
+.control-escolar-screen .ce-empty-detail-panel .ce-empty-hero {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: #f4faf4;
+  color: #2a9b3d;
+}
+
+.control-escolar-screen .ce-empty-detail-panel .ce-empty-copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.control-escolar-screen .ce-empty-detail-panel .ce-empty-copy p {
+  display: block;
+  margin: 0;
+  color: #66758c;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.control-escolar-screen .ce-panel-heading {
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.control-escolar-screen .ce-panel-heading p {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.control-escolar-screen .ce-form-card.ce-tab-panel {
+  padding: 18px 20px 16px;
+}
+
+.control-escolar-screen .ce-identity-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 18px;
+  align-items: start;
+}
+
+.control-escolar-screen .ce-identity-grid > label,
+.control-escolar-screen .ce-identity-grid > .ce-derived-card {
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-identity-grid > .ce-derived-card {
+  grid-column: 1 / -1;
+}
+
+.control-escolar-screen .ce-form-grid label,
+.control-escolar-screen .ce-wide-field {
+  gap: 7px;
+}
+
+.control-escolar-screen .ce-form-grid label > span,
+.control-escolar-screen .ce-wide-field > span {
+  min-height: auto;
+  color: #5b6880;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.control-escolar-screen .ce-form-grid input,
+.control-escolar-screen .ce-form-grid select,
+.control-escolar-screen .ce-wide-field textarea {
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 13px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.control-escolar-screen .ce-form-grid label > small,
+.control-escolar-screen .ce-smart-field small {
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.control-escolar-screen .ce-derived-card {
+  min-height: 52px;
+  padding: 10px 14px;
+  border-radius: 14px;
+}
+
+.control-escolar-screen .ce-derived-card strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.control-escolar-screen .ce-derived-card__icon {
+  width: 36px;
+  height: 36px;
+}
+
+.control-escolar-screen .ce-derived-card__icon b {
+  font-size: 18px;
+  line-height: 1;
+}
+
+@container (max-width: 860px) {
+  .control-escolar-screen .ce-identity-grid {
     grid-template-columns: 1fr;
   }
 }

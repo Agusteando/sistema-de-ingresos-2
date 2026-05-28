@@ -1,1 +1,1 @@
-Corrige paneles de Control Escolar con ficha vacía limpia, logo Husky Pass y formularios legibles
+Limpia el estado vacío y corrige la densidad del panel de identidad en Control Escolar
