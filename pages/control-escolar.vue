@@ -7639,4 +7639,132 @@ onBeforeUnmount(() => {
   }
 }
 
+
+/* Final targeted repair for the circled Control Escolar areas. */
+.control-escolar-screen .ce-list-card {
+  grid-template-rows: 38px 0 minmax(0, 1fr) 38px;
+}
+
+.control-escolar-screen .ce-list-titlebar {
+  min-height: 38px;
+  padding: 0 11px 0 14px;
+  border-bottom: 1px solid #e5edf4;
+}
+
+.control-escolar-screen .ce-list-titlebar .list-heading-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-list-titlebar h2 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.control-escolar-screen .ce-list-titlebar h2 span {
+  font-size: 14px;
+}
+
+.control-escolar-screen .ce-list-columns {
+  height: 0;
+  min-height: 0;
+  max-height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.control-escolar-screen .ce-access-header-card {
+  grid-template-columns: 72px minmax(0, 1fr);
+  min-height: 64px;
+  padding: 9px 13px;
+}
+
+.control-escolar-screen .ce-access-icon.ce-access-logo,
+.control-escolar-screen .ce-access-header-card > .ce-access-logo {
+  display: inline-flex;
+  width: 64px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e1e9f1;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #f8fafc, #ffffff);
+  color: inherit;
+}
+
+.control-escolar-screen .ce-access-icon.ce-access-logo img,
+.control-escolar-screen .ce-access-header-card > .ce-access-logo img {
+  display: block;
+  width: 54px;
+  max-width: 54px;
+  height: auto;
+  max-height: 34px;
+  object-fit: contain;
+  opacity: 0.94;
+}
+
+.control-escolar-screen .ce-panel-heading {
+  margin-bottom: 12px;
+}
+
+.control-escolar-screen .ce-form-card.ce-tab-panel {
+  padding: 16px 18px 14px;
+}
+
+.control-escolar-screen .ce-identity-grid,
+.control-escolar-screen .ce-form-grid.ce-identity-grid {
+  grid-template-columns: repeat(4, minmax(118px, 1fr));
+  gap: 13px 14px;
+  align-items: start;
+  width: 100%;
+}
+
+.control-escolar-screen .ce-identity-grid > .ce-derived-card {
+  grid-column: 1 / -1;
+}
+
+.control-escolar-screen .ce-identity-grid label {
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-identity-grid input {
+  min-height: 44px;
+}
+
+.control-escolar-screen .ce-identity-grid label > span {
+  font-size: 10.5px;
+  line-height: 1.2;
+}
+
+.control-escolar-screen .ce-identity-grid label > small,
+.control-escolar-screen .ce-identity-grid .ce-smart-field small {
+  min-height: 12px;
+  font-size: 9.5px;
+  line-height: 1.2;
+}
+
+.control-escolar-screen .ce-identity-grid .ce-derived-card {
+  min-height: 48px;
+}
+
+@container (max-width: 760px) {
+  .control-escolar-screen .ce-identity-grid,
+  .control-escolar-screen .ce-form-grid.ce-identity-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 520px) {
+  .control-escolar-screen .ce-identity-grid,
+  .control-escolar-screen .ce-form-grid.ce-identity-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 </style>

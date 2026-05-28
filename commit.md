@@ -1,1 +1,1 @@
-Limpia el estado vacío y corrige la densidad del panel de identidad en Control Escolar
+Corrige encabezado, Husky Pass y panel de identidad de Control Escolar
