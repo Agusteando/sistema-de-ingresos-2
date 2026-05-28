@@ -1,1 +1,1 @@
-Recupera el lenguaje visual de progreso en Control Escolar y rediseña el detalle con métricas reales, iconografía y validación más estética
+Corrige iconografía de género en Control Escolar para evitar importaciones no soportadas por lucide

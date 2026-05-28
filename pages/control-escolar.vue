@@ -672,7 +672,7 @@
                         <small>{{ fieldValidationMessage('curp') }}</small>
                       </label>
                       <article v-if="editForm.curp" class="ce-derived-card" :class="`is-${derivedGenderMeta.tone}`">
-                        <span class="ce-derived-card__icon"><component :is="derivedGenderMeta.icon" :size="16" /></span>
+                        <span class="ce-derived-card__icon" aria-hidden="true"><b>{{ derivedGenderMeta.symbol }}</b></span>
                         <div>
                           <span>{{ curpDerivedIdentity.valid ? 'Derivado de CURP' : 'CURP pendiente' }}</span>
                           <strong>{{ curpDerivedIdentity.valid ? `${curpDerivedIdentity.fechaNacimiento} · ${derivedGenderMeta.label}` : 'Completa una CURP válida para inferir nacimiento y sexo' }}</strong>
@@ -1499,8 +1499,6 @@ import {
   LucideUsersRound,
   LucideUpload,
   LucideUserX,
-  LucideVenus,
-  LucideMars,
   LucideWifiOff,
   LucideX,
 } from "lucide-vue-next";
@@ -2524,13 +2522,13 @@ const derivedGenderMeta = computed(() => {
   if (!curpDerivedIdentity.value?.valid) {
     return {
       label: "Sin inferencia",
-      icon: LucideUserRound,
+      symbol: "•",
       tone: "neutral",
     };
   }
   return curpDerivedIdentity.value?.sexoCorto === "H"
-    ? { label: "Masculino", icon: LucideMars, tone: "male" }
-    : { label: "Femenino", icon: LucideVenus, tone: "female" };
+    ? { label: "Masculino", symbol: "♂", tone: "male" }
+    : { label: "Femenino", symbol: "♀", tone: "female" };
 });
 const formValue = (field) => String(editForm[field] ?? "").trim();
 const formFieldIsOk = (field) => fieldValidationState(field) === "ok";
@@ -9664,6 +9662,12 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   background: #eef4ff;
   color: #486ec3;
+}
+
+.ce-derived-card__icon b {
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1;
 }
 
 .ce-derived-card.is-female .ce-derived-card__icon {
