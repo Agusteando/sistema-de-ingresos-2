@@ -1,1 +1,1 @@
-refactor(control-escolar): rediseñar panel de detalle del alumno
+Ajusta el panel de detalle de Control Escolar para replicar la referencia del contacto familiar con escala responsiva precisa

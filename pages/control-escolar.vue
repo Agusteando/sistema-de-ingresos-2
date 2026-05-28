@@ -577,81 +577,16 @@
               </header>
 
               <div class="ce-detail-body">
-                <section class="ce-profile-card">
-                  <StudentGradePhotoCard
-                    class="ce-detail-photo"
-                    :student="selectedStudent"
-                    :photo-url="controlStudentPhotoUrl(selectedStudent)"
-                    :photo-loading="
-                      isControlStudentPhotoLoading(selectedStudent)
-                    "
-                    :is-enrolled="selectedStudent.status === 'Activo'"
-                  />
-                  <div class="ce-profile-copy">
-                    <strong>{{ selectedStudent.fullName }}</strong>
-                    <div class="ce-profile-pills">
-                      <span>{{ selectedStudent.grado || "Sin grado" }}</span>
-                      <span
-                        :class="{
-                          warning: controlMissingGroup(selectedStudent),
-                        }"
-                        >{{
-                          controlMissingGroup(selectedStudent)
-                            ? "Sin grupo"
-                            : `Grupo ${controlGroupLabel(selectedStudent)}`
-                        }}</span
-                      >
-                      <span>{{ selectedStudent.nivel || "Sin nivel" }}</span>
-                    </div>
-                    <p>
-                      Expediente editable desde matrícula · Plantel
-                      {{ selectedStudent.plantel || selectedAgentId }}
-                    </p>
-                  </div>
-                  <div
-                    class="ce-profile-summary-grid"
-                    aria-label="Resumen escolar del alumno"
-                  >
-                    <span class="ce-profile-summary-item">
-                      <small>Plantel</small>
-                      <strong>{{ selectedStudent.plantel || selectedAgentId || "Sin plantel" }}</strong>
-                    </span>
-                    <span class="ce-profile-summary-item">
-                      <small>Grupo</small>
-                      <strong>{{
-                        controlMissingGroup(selectedStudent)
-                          ? "Sin grupo"
-                          : controlGroupLabel(selectedStudent)
-                      }}</strong>
-                    </span>
-                    <span class="ce-profile-summary-item">
-                      <small>Nivel</small>
-                      <strong>{{ selectedStudent.nivel || "Sin nivel" }}</strong>
-                    </span>
-                  </div>
-                  <UiGroupIcon
-                    class="ce-profile-watermark"
-                    :class="{
-                      'is-missing-group': controlMissingGroup(selectedStudent),
-                    }"
-                    :label="controlGroupLabel(selectedStudent)"
-                    :missing="controlMissingGroup(selectedStudent)"
-                  />
-                </section>
-
-                <section class="ce-data-section">
-                  <div class="ce-section-heading">
+                <section class="ce-data-section ce-detail-status-strip">
+                  <div class="ce-inline-note ce-inline-note--quality">
                     <span><LucideShieldCheck :size="18" /></span>
-                    <div>
-                      <h3>Calidad del expediente</h3>
-                      <p>
-                        {{
-                          selectedStudent.missingFields.length
-                            ? "Completa estos datos para dejar el expediente listo para matrícula."
-                            : "Expediente listo para matrícula."
-                        }}
-                      </p>
-                    </div>
+                    <p>
+                      {{
+                        selectedStudent.missingFields.length
+                          ? "Completa los datos faltantes para finalizar el expediente del alumno."
+                          : "Expediente al día y listo para matrícula."
+                      }}
+                    </p>
                   </div>
                   <div class="ce-missing-grid">
                     <span
@@ -695,6 +630,13 @@
                     <component :is="tab.icon" :size="15" /> {{ tab.label }}
                   </button>
                 </nav>
+
+                <div class="ce-inline-note ce-inline-note--tab">
+                  <span>
+                    <component :is="activeDetailTabMeta.icon" :size="16" />
+                  </span>
+                  <p>{{ activeDetailTabDescription }}</p>
+                </div>
 
                 <form class="ce-edit-form" @submit.prevent="saveStudent">
                   <section
@@ -804,81 +746,82 @@
 
                   <section
                     v-show="activeDetailTab === 'family'"
-                    class="ce-form-card ce-contact-card ce-tab-panel"
+                    class="ce-tab-panel ce-family-panel"
                   >
-                    <div class="ce-section-heading compact">
-                      <span><LucideUsersRound :size="18" /></span>
-                      <h3>Contacto familiar</h3>
+                    <div class="ce-family-grid">
+                      <section class="ce-family-card">
+                        <h3>Datos del padre</h3>
+                        <div class="ce-form-grid two ce-family-fields">
+                          <label
+                            ><span>Nombre padre</span
+                            ><input
+                              v-model="editForm.nombrePadre"
+                              autocomplete="off"
+                          /></label>
+                          <label
+                            ><span>Apellido paterno padre</span
+                            ><input
+                              v-model="editForm.apellidoPaternoPadre"
+                              autocomplete="off"
+                          /></label>
+                          <label
+                            ><span>Teléfono padre</span
+                            ><input
+                              v-model="editForm.telefonoPadre"
+                              autocomplete="off"
+                          /></label>
+                          <label
+                            ><span>Email padre</span
+                            ><input
+                              v-model="editForm.emailPadre"
+                              type="email"
+                              autocomplete="off"
+                          /></label>
+                        </div>
+                      </section>
+
+                      <section class="ce-family-card">
+                        <h3>Datos de la madre</h3>
+                        <div class="ce-form-grid ce-family-fields ce-family-fields--mother">
+                          <label
+                            ><span>Nombre madre</span
+                            ><input
+                              v-model="editForm.nombreMadre"
+                              autocomplete="off"
+                          /></label>
+                          <label
+                            ><span>Apellido paterno madre</span
+                            ><input
+                              v-model="editForm.apellidoPaternoMadre"
+                              autocomplete="off"
+                          /></label>
+                          <label
+                            ><span>Apellido materno madre</span
+                            ><input
+                              v-model="editForm.apellidoMaternoMadre"
+                              autocomplete="off"
+                          /></label>
+                          <label
+                            ><span>Teléfono madre</span
+                            ><input
+                              v-model="editForm.telefonoMadre"
+                              autocomplete="off"
+                          /></label>
+                          <label class="ce-family-span-2"
+                            ><span>Email madre</span
+                            ><input
+                              v-model="editForm.emailMadre"
+                              type="email"
+                              autocomplete="off"
+                          /></label>
+                        </div>
+                      </section>
                     </div>
-                    <div class="ce-form-grid three">
-                      <label
-                        ><span>Nombre padre</span
-                        ><input
-                          v-model="editForm.nombrePadre"
-                          autocomplete="off"
-                      /></label>
-                      <label
-                        ><span>A. paterno padre</span
-                        ><input
-                          v-model="editForm.apellidoPaternoPadre"
-                          autocomplete="off"
-                      /></label>
-                      <label
-                        ><span>A. materno padre</span
-                        ><input
-                          v-model="editForm.apellidoMaternoPadre"
-                          autocomplete="off"
-                      /></label>
-                      <label
-                        ><span>Nombre madre</span
-                        ><input
-                          v-model="editForm.nombreMadre"
-                          autocomplete="off"
-                      /></label>
-                      <label
-                        ><span>A. paterno madre</span
-                        ><input
-                          v-model="editForm.apellidoPaternoMadre"
-                          autocomplete="off"
-                      /></label>
-                      <label
-                        ><span>A. materno madre</span
-                        ><input
-                          v-model="editForm.apellidoMaternoMadre"
-                          autocomplete="off"
-                      /></label>
-                      <label
-                        ><span>Teléfono padre</span
-                        ><input
-                          v-model="editForm.telefonoPadre"
-                          autocomplete="off"
-                      /></label>
-                      <label
-                        ><span>Teléfono madre</span
-                        ><input
-                          v-model="editForm.telefonoMadre"
-                          autocomplete="off"
-                      /></label>
-                      <label
-                        ><span>Email padre</span
-                        ><input
-                          v-model="editForm.emailPadre"
-                          type="email"
-                          autocomplete="off"
-                      /></label>
-                      <label
-                        ><span>Email madre</span
-                        ><input
-                          v-model="editForm.emailMadre"
-                          type="email"
-                          autocomplete="off"
-                      /></label>
-                    </div>
-                    <label class="ce-wide-field"
+                    <label class="ce-wide-field ce-family-address"
                       ><span>Dirección</span
                       ><textarea
                         v-model="editForm.direccion"
-                        rows="2"
+                        rows="4"
                       ></textarea>
                     </label>
                   </section>
@@ -1800,6 +1743,22 @@ const detailTabs = [
   { key: "system", label: "Sistema", icon: LucideKeyRound },
   { key: "notes", label: "Observaciones", icon: LucideAlertTriangle },
 ];
+
+const activeDetailTabMeta = computed(
+  () =>
+    detailTabs.find((tab) => tab.key === activeDetailTab.value) ||
+    detailTabs[0],
+);
+const activeDetailTabDescription = computed(
+  () =>
+    ({
+      identity: "Revisa y actualiza la identidad principal del alumno.",
+      school: "Actualiza la información escolar y los datos base de matrícula.",
+      family: "Ingresa o actualiza los datos de contacto de la familia del alumno.",
+      system: "Consulta el estado del registro y los accesos del sistema.",
+      notes: "Documenta observaciones y seguimiento interno del alumno.",
+    })[activeDetailTab.value] || "",
+);
 
 const qualityFilters = computed(() => {
   const data = kpis.value || {};
@@ -6755,6 +6714,453 @@ onBeforeUnmount(() => {
 
 @media (max-width: 860px) {
   .ce-diagnostics-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+
+/* Reference-aligned Control Escolar detail panel pass. */
+.ce-detail-shell {
+  container-type: inline-size;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.ce-detail-header {
+  grid-template-columns: minmax(0, 1.1fr) minmax(220px, 0.8fr) minmax(240px, 0.62fr) 48px;
+  min-height: 104px;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px 18px;
+  border-bottom: 1px solid #e7edf5;
+  background: #ffffff;
+}
+
+.ce-detail-title small {
+  color: #6b778e;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.ce-title-row {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.ce-title-row h2 {
+  margin: 0;
+  max-width: 11ch;
+  color: #10203a;
+  font-size: clamp(18px, 2.15cqi, 24px);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+.ce-status-pill.large {
+  min-height: 40px;
+  padding-inline: 18px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.ce-detail-actions {
+  display: none;
+}
+
+.ce-access-header-card {
+  grid-template-columns: 40px minmax(0, 1fr);
+  min-height: 72px;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.ce-access-header-card > span {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #f6f8f4;
+}
+
+.ce-access-icon img {
+  width: 24px;
+  max-height: 24px;
+  object-fit: contain;
+  opacity: 1;
+}
+
+.ce-access-header-card strong {
+  color: #1f8a34;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ce-access-header-card small {
+  color: #66758e;
+  font-size: 11px;
+  font-weight: 780;
+  line-height: 1.3;
+}
+
+.ce-progress-cluster {
+  align-self: center;
+  gap: 8px;
+}
+
+.ce-progress-cluster strong {
+  color: #32435d;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.ce-progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #dfebdf;
+}
+
+.ce-progress-cluster small {
+  display: block;
+  color: #66758e;
+  font-size: 11px;
+  font-weight: 780;
+  line-height: 1.25;
+}
+
+.ce-detail-menu-button {
+  width: 44px;
+  height: 44px;
+  align-self: start;
+  justify-self: end;
+  border: 1px solid #dfe7ef;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+
+.ce-detail-menu-button:hover {
+  background: #f7fafc;
+}
+
+.ce-detail-body {
+  gap: 14px;
+  padding: 14px 18px 14px;
+  background: #ffffff;
+}
+
+.ce-detail-status-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  padding: 12px 14px;
+  border: 1px solid rgba(86, 165, 85, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fcfefc, #ffffff);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+}
+
+.ce-inline-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.ce-inline-note > span {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #edf8ea;
+  color: #2f8f37;
+}
+
+.ce-inline-note p {
+  margin: 0;
+  color: #43536d;
+  font-size: 12px;
+  font-weight: 820;
+  line-height: 1.35;
+}
+
+.ce-missing-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.ce-missing-chip {
+  min-height: 42px;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid rgba(224, 98, 87, 0.24);
+  border-radius: 14px;
+  background: #fffdfd;
+  color: #df5142;
+  font-size: 12px;
+  font-weight: 860;
+  white-space: nowrap;
+}
+
+.ce-missing-chip b {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ce-missing-chip.ok {
+  border-color: rgba(86, 165, 85, 0.22);
+  background: #fbfefb;
+  color: #20882d;
+}
+
+.ce-detail-tabs {
+  min-height: 46px;
+  gap: clamp(12px, 2.3cqi, 28px);
+  padding: 0 4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ce-detail-tabs button {
+  height: 46px;
+  gap: 8px;
+  color: #5f6f89;
+  font-size: 12px;
+  font-weight: 860;
+}
+
+.ce-detail-tabs button.active {
+  border-bottom-color: #279233;
+  color: #229433;
+}
+
+.ce-inline-note--tab {
+  min-height: 56px;
+  padding: 0 14px;
+  border: 1px solid rgba(86, 165, 85, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fcfefc, #ffffff);
+}
+
+.ce-tab-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.ce-family-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.ce-family-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.ce-family-card {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: 14px 16px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.03);
+}
+
+.ce-family-card h3 {
+  margin: 0;
+  color: #42516c;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.ce-family-fields {
+  gap: 18px 18px;
+}
+
+.ce-family-fields--mother {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ce-family-span-2 {
+  grid-column: span 2;
+}
+
+.ce-form-grid label,
+.ce-wide-field {
+  gap: 8px;
+}
+
+.ce-form-grid span,
+.ce-wide-field span {
+  color: #56657e;
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ce-form-grid input,
+.ce-form-grid select,
+.ce-wide-field textarea {
+  min-height: 56px;
+  border: 1px solid #e4ebf3;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #22324a;
+  font-size: 13px;
+  font-weight: 720;
+  padding: 0 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.ce-form-grid input:focus,
+.ce-form-grid select:focus,
+.ce-wide-field textarea:focus {
+  border-color: rgba(60, 151, 65, 0.42);
+  box-shadow: 0 0 0 3px rgba(60, 151, 65, 0.1);
+}
+
+.ce-family-address {
+  margin-top: 0;
+}
+
+.ce-family-address textarea {
+  min-height: 112px;
+  padding: 14px 16px;
+  resize: vertical;
+}
+
+.ce-detail-footer {
+  min-height: 74px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid #e7edf5;
+  background: linear-gradient(180deg, #fffaf3, #ffffff);
+  box-shadow: none;
+}
+
+.ce-detail-footer .ce-save-state {
+  background: transparent;
+  color: #c26a15;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.ce-detail-footer div {
+  gap: 12px;
+}
+
+.ce-detail-footer :deep(.ui-button) {
+  min-height: 54px;
+  padding-inline: 24px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 860;
+}
+
+@container (max-width: 1100px) {
+  .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.95fr) 48px;
+  }
+
+  .ce-progress-cluster {
+    grid-column: 1 / span 2;
+    grid-row: 2;
+  }
+}
+
+@container (max-width: 860px) {
+  .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 48px;
+    gap: 14px;
+  }
+
+  .ce-access-header-card,
+  .ce-progress-cluster {
+    grid-column: 1 / -1;
+  }
+
+  .ce-detail-status-strip,
+  .ce-family-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ce-missing-grid {
+    justify-content: flex-start;
+  }
+}
+
+@container (max-width: 620px) {
+  .ce-detail-header,
+  .ce-detail-body,
+  .ce-detail-footer {
+    padding-inline: 12px;
+  }
+
+  .ce-title-row {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .ce-title-row h2 {
+    max-width: none;
+    font-size: 20px;
+  }
+
+  .ce-status-pill.large {
+    min-height: 34px;
+    padding-inline: 14px;
+    font-size: 12px;
+  }
+
+  .ce-inline-note--tab {
+    padding-inline: 12px;
+  }
+
+  .ce-family-fields--mother,
+  .ce-form-grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .ce-family-span-2 {
+    grid-column: auto;
+  }
+
+  .ce-detail-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ce-detail-footer div {
+    width: 100%;
+  }
+
+  .ce-detail-footer :deep(.ui-button) {
+    flex: 1 1 0;
+  }
 }
 
 </style>
