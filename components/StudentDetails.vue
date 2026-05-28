@@ -13,10 +13,11 @@
         {
           'student-details-shell--expanded': detailsExpanded,
           'is-detail-transitioning': detailTransitioning,
+          'is-detail-stack-resizing': detailStackResizing,
         },
       ]"
       :aria-expanded="detailsExpanded"
-      :style="detailShellStyle"
+      :style="detailShellRootStyle"
       @keydown.esc.stop="setDetailsExpanded(false)"
     >
       <div
@@ -58,6 +59,7 @@
           <LucideX :size="18" />
         </button>
       </div>
+      <div v-if="!detailsExpanded" class="student-overview-pane">
       <section
         class="student-profile-card"
         :style="studentPresentationStyle(student)"
@@ -230,6 +232,29 @@
           </button>
         </div>
       </section>
+      </div>
+
+      <button
+        v-if="!detailsExpanded"
+        type="button"
+        class="student-detail-stack-resizer"
+        role="separator"
+        aria-label="Redimensionar identidad del alumno y estado de cuenta"
+        aria-orientation="horizontal"
+        :aria-valuenow="Math.round(detailStackSplitPercent)"
+        :aria-valuetext="`Identidad ${Math.round(detailStackSplitPercent)}%, estado de cuenta ${Math.round(100 - detailStackSplitPercent)}%`"
+        :aria-valuemin="DETAIL_STACK_MIN"
+        :aria-valuemax="DETAIL_STACK_MAX"
+        title="Arrastra para ajustar identidad y estado de cuenta. Doble clic para restaurar."
+        @pointerdown.prevent="startDetailStackResize"
+        @dblclick.prevent="resetDetailStackSplit"
+        @keydown.up.prevent="nudgeDetailStackSplit(-2)"
+        @keydown.down.prevent="nudgeDetailStackSplit(2)"
+        @keydown.home.prevent="resetDetailStackSplit"
+        @keydown.end.prevent="resetDetailStackSplit"
+      >
+        <span aria-hidden="true"><i></i><i></i><i></i></span>
+      </button>
 
       <section
         ref="accountCard"
@@ -456,7 +481,7 @@
                       class="debt-row"
                       @contextmenu.prevent="showDebtContextMenu($event, debt)"
                     >
-                      <td class="check-cell">
+                      <td class="check-cell" data-label="Seleccionar">
                         <input
                           type="checkbox"
                           :value="debt"
@@ -465,7 +490,7 @@
                           class="debt-check"
                         />
                       </td>
-                      <td class="progress-cell">
+                      <td class="progress-cell" data-label="Progreso">
                         <div class="progress-track">
                           <span
                             class="paid-progress"
@@ -484,7 +509,7 @@
                           progressStatusLabel(debt)
                         }}</em>
                       </td>
-                      <td class="concept-cell">
+                      <td class="concept-cell" data-label="Concepto / Mes">
                         <strong>{{ debt.conceptoNombre }}</strong>
                         <small>
                           {{ debt.mesLabel }}
@@ -503,7 +528,7 @@
                           >
                         </small>
                       </td>
-                      <td class="money-cell">
+                      <td class="money-cell" data-label="Importe">
                         ${{ format(debt.subtotal) }}
                         <button
                           v-if="debt.montoFinalPendiente"
@@ -514,14 +539,15 @@
                           Fijar
                         </button>
                       </td>
-                      <td class="money-cell paid">${{ format(debt.pagos) }}</td>
+                      <td class="money-cell paid" data-label="Pagos">${{ format(debt.pagos) }}</td>
                       <td
                         class="money-cell"
                         :class="{ danger: debt.saldo > 0 }"
+                        data-label="Saldo"
                       >
                         ${{ format(debt.saldo) }}
                       </td>
-                      <td class="menu-cell">
+                      <td class="menu-cell" data-label="Opciones">
                         <button
                           @click="openConceptChange(debt)"
                           title="Ajustar concepto"
@@ -751,6 +777,12 @@ const accountSearchQuery = ref("");
 const accountFilter = ref("all");
 const detailsExpanded = ref(false);
 const detailTransitioning = ref(false);
+const detailStackSplitPercent = ref(32);
+const detailStackResizing = ref(false);
+const DETAIL_STACK_STORAGE_KEY = "students:detail-stack-split-percent:v1";
+const DETAIL_STACK_DEFAULT = 32;
+const DETAIL_STACK_MIN = 20;
+const DETAIL_STACK_MAX = 56;
 
 const photoUrl = ref(null);
 const photoLoading = ref(false);
@@ -1009,6 +1041,19 @@ const progressStatusLabel = (debt) => {
 
 const debtKey = (debt) => `${debt?.documento || ""}-${debt?.mes || ""}`;
 
+const clampDetailStackSplit = (value) =>
+  Math.min(DETAIL_STACK_MAX, Math.max(DETAIL_STACK_MIN, Number(value) || DETAIL_STACK_DEFAULT));
+const persistDetailStackSplit = () => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(
+    DETAIL_STACK_STORAGE_KEY,
+    String(Math.round(detailStackSplitPercent.value * 10) / 10),
+  );
+};
+const detailStackStyle = computed(() => ({
+  "--student-overview-panel-size": `${detailStackSplitPercent.value}%`,
+  "--student-account-panel-size": `${100 - detailStackSplitPercent.value}%`,
+}));
 const detailShellStyle = computed(() => {
   if (!detailsExpanded.value || !expandedShellBounds.value) return {};
   return {
@@ -1016,6 +1061,80 @@ const detailShellStyle = computed(() => {
     "--detail-expanded-width": `${expandedShellBounds.value.width}px`,
   };
 });
+const detailShellRootStyle = computed(() => ({
+  ...detailStackStyle.value,
+  ...detailShellStyle.value,
+}));
+
+let detailStackResizePointerId = null;
+let detailStackResizeFrame = null;
+let detailStackPendingPointer = null;
+const setDetailStackSplitFromPointer = (clientY) => {
+  const shell = detailsShell.value;
+  const rect = shell?.getBoundingClientRect?.();
+  if (!rect?.height) return;
+
+  const railAllowance = 42;
+  const availableHeight = Math.max(220, rect.height - railAllowance);
+  const minOverviewPx = Math.min(210, Math.max(96, availableHeight * 0.2));
+  const minAccountPx = Math.min(340, Math.max(190, availableHeight * 0.38));
+  const minPercent = Math.max(DETAIL_STACK_MIN, (minOverviewPx / availableHeight) * 100);
+  const maxPercent = Math.min(DETAIL_STACK_MAX, 100 - (minAccountPx / availableHeight) * 100);
+  const nextSplit = ((clientY - rect.top) / availableHeight) * 100;
+
+  if (minPercent > maxPercent) {
+    detailStackSplitPercent.value = Math.min(DETAIL_STACK_MAX, Math.max(DETAIL_STACK_MIN, (minPercent + maxPercent) / 2));
+    return;
+  }
+  detailStackSplitPercent.value = Math.min(maxPercent, Math.max(minPercent, nextSplit));
+};
+const stopDetailStackResize = () => {
+  if (!detailStackResizing.value) return;
+  detailStackResizing.value = false;
+  detailStackResizePointerId = null;
+  detailStackPendingPointer = null;
+  if (typeof window !== "undefined" && detailStackResizeFrame) {
+    window.cancelAnimationFrame(detailStackResizeFrame);
+    detailStackResizeFrame = null;
+  }
+  persistDetailStackSplit();
+  if (typeof window !== "undefined") {
+    document.body.classList.remove("student-detail-stack-resizing");
+    window.removeEventListener("pointermove", onDetailStackResizeMove);
+    window.removeEventListener("pointerup", stopDetailStackResize);
+    window.removeEventListener("pointercancel", stopDetailStackResize);
+  }
+};
+const onDetailStackResizeMove = (event) => {
+  if (!detailStackResizing.value) return;
+  if (detailStackResizePointerId !== null && event.pointerId !== detailStackResizePointerId) return;
+  detailStackPendingPointer = event.clientY;
+  if (detailStackResizeFrame || typeof window === "undefined") return;
+  detailStackResizeFrame = window.requestAnimationFrame(() => {
+    detailStackResizeFrame = null;
+    if (detailStackPendingPointer === null) return;
+    setDetailStackSplitFromPointer(detailStackPendingPointer);
+  });
+};
+const startDetailStackResize = (event) => {
+  if (typeof window === "undefined" || detailsExpanded.value) return;
+  detailStackResizePointerId = event.pointerId ?? null;
+  detailStackResizing.value = true;
+  document.body.classList.add("student-detail-stack-resizing");
+  setDetailStackSplitFromPointer(event.clientY);
+  event.currentTarget?.setPointerCapture?.(event.pointerId);
+  window.addEventListener("pointermove", onDetailStackResizeMove);
+  window.addEventListener("pointerup", stopDetailStackResize);
+  window.addEventListener("pointercancel", stopDetailStackResize);
+};
+const resetDetailStackSplit = () => {
+  detailStackSplitPercent.value = DETAIL_STACK_DEFAULT;
+  persistDetailStackSplit();
+};
+const nudgeDetailStackSplit = (amount) => {
+  detailStackSplitPercent.value = clampDetailStackSplit(detailStackSplitPercent.value + amount);
+  persistDetailStackSplit();
+};
 
 const getExpandedBoundsReference = () => {
   if (detailsExpanded.value && detailsPlaceholder.value)
@@ -1110,6 +1229,10 @@ const toggleDetailsExpanded = () => setDetailsExpanded(!detailsExpanded.value);
 
 onMounted(() => {
   if (typeof window === "undefined") return;
+  const savedDetailStack = Number(localStorage.getItem(DETAIL_STACK_STORAGE_KEY));
+  if (Number.isFinite(savedDetailStack)) {
+    detailStackSplitPercent.value = clampDetailStackSplit(savedDetailStack);
+  }
   window.addEventListener("resize", scheduleExpandedShellBoundsUpdate, {
     passive: true,
   });
@@ -1434,6 +1557,11 @@ onBeforeUnmount(() => {
       scheduleExpandedShellBoundsUpdate,
     );
     if (expandedBoundsFrame) window.cancelAnimationFrame(expandedBoundsFrame);
+    if (detailStackResizeFrame) window.cancelAnimationFrame(detailStackResizeFrame);
+    window.removeEventListener("pointermove", onDetailStackResizeMove);
+    window.removeEventListener("pointerup", stopDetailStackResize);
+    window.removeEventListener("pointercancel", stopDetailStackResize);
+    document.body.classList.remove("student-detail-stack-resizing");
   }
   clearAccountRefreshTimer();
   finishDetailLayoutTransition(detailsShell.value);

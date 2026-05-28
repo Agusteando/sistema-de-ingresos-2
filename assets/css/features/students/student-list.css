@@ -1,3 +1,8 @@
+.student-list-panel {
+  min-width: 0;
+  container: student-list / size;
+}
+
 .student-list-card {
   --student-list-balance-col: clamp(150px, 12vw, 180px);
   --student-list-action-col: clamp(50px, 4vw, 58px);
@@ -8,6 +13,7 @@
   --student-list-group-watermark-size: clamp(118px, 9.4vw, 144px);
   display: grid;
   grid-template-rows: clamp(34px, 2.45vw, 38px) clamp(50px, 3.65vw, 58px) minmax(0, 1fr);
+  min-width: 0;
 }
 
 .list-titlebar {
@@ -310,6 +316,11 @@
   color: #6c778f;
   font-size: clamp(12px, .88vw, 13px);
   font-weight: 610;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  border-top: 1px solid var(--students-border-soft);
+  background: linear-gradient(180deg, rgba(255,255,255,.86), #fff 42%);
 }
 
 .selection-inline-summary {
@@ -366,3 +377,218 @@
   background: rgba(65, 112, 205, .11);
 }
 
+@container student-list (max-width: 680px) {
+  .student-list-card {
+    --student-list-balance-col: minmax(92px, 112px);
+    --student-list-action-col: 42px;
+    --student-list-row-height: 86px;
+    --student-list-grade-size: 60px;
+    --student-list-grade-height: 56px;
+    --student-list-crest-size: 34px;
+  }
+
+  .list-columns {
+    grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-action-col);
+    padding-inline: 58px 14px;
+  }
+
+  .selection-control-row {
+    padding-inline: 12px;
+  }
+
+  .student-row {
+    margin-right: 6px;
+    padding-left: 10px;
+  }
+
+  .student-identity {
+    grid-template-columns: 28px var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .financial-cell {
+    padding-right: 6px;
+  }
+
+  .financial-label {
+    font-size: 9px;
+  }
+}
+
+@container student-list (max-width: 540px) {
+  .student-list-card {
+    --student-list-row-height: auto;
+    --student-list-grade-size: 54px;
+    --student-list-grade-height: 50px;
+    --student-list-crest-size: 30px;
+    grid-template-rows: 30px 44px minmax(0, 1fr);
+  }
+
+  .list-columns {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-inline: 14px;
+  }
+
+  .list-columns span:nth-child(2) {
+    justify-self: end;
+  }
+
+  .list-columns span:nth-child(3) {
+    display: none;
+  }
+
+  .selection-control-row {
+    align-items: center;
+    gap: 8px;
+  }
+
+  .selection-control-row strong {
+    white-space: nowrap;
+  }
+
+  .select-visible-row-control {
+    gap: 9px;
+    font-size: 11.5px;
+  }
+
+  .student-row {
+    grid-template-columns: minmax(0, 1fr) 38px;
+    grid-template-areas:
+      "identity action"
+      "financial action";
+    align-items: stretch;
+    min-height: 96px;
+    gap: 7px 8px;
+    padding: 9px 8px 9px 10px;
+  }
+
+  .student-identity {
+    grid-area: identity;
+    grid-template-columns: 26px var(--student-list-grade-size) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .student-group-sigil {
+    display: none;
+  }
+
+  .student-copy {
+    gap: 4px;
+  }
+
+  .student-copy strong {
+    font-size: 13px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .student-meta,
+  .student-tipo-chip {
+    min-height: 20px;
+    font-size: 9.5px;
+  }
+
+  .financial-cell {
+    grid-area: financial;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    justify-items: end;
+    gap: 8px;
+    padding: 5px 0 0 34px;
+    border-top: 1px solid var(--students-border-soft);
+  }
+
+  .financial-label {
+    justify-self: start;
+  }
+
+  .financial-balance,
+  .financial-balance.danger {
+    font-size: 15px;
+  }
+
+  .row-actions {
+    grid-area: action;
+    align-items: center;
+  }
+
+  .row-actions button {
+    width: 34px;
+    height: 100%;
+    min-height: 58px;
+  }
+}
+
+@container student-list (max-width: 420px) {
+  .student-list-card {
+    --student-list-grade-size: 46px;
+    --student-list-grade-height: 44px;
+  }
+
+  .student-row {
+    grid-template-columns: minmax(0, 1fr) 34px;
+    padding-inline: 8px 6px;
+  }
+
+  .student-identity {
+    grid-template-columns: 24px var(--student-list-grade-size) minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .select-box,
+  .row-select-toggle {
+    width: 23px;
+    height: 23px;
+    border-radius: 6px;
+  }
+
+  .student-row-grade-card {
+    --student-grade-photo-radius: 10px;
+  }
+
+  .student-copy strong {
+    font-size: 12.5px;
+  }
+
+  .student-type-line {
+    max-width: 100%;
+  }
+
+  .student-tipo-chip {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .financial-cell {
+    padding-left: 31px;
+  }
+}
+
+@container student-list (max-height: 560px) {
+  .student-list-card {
+    --student-list-row-height: 76px;
+    --student-list-grade-size: 54px;
+    --student-list-grade-height: 48px;
+    grid-template-rows: 30px 42px minmax(0, 1fr);
+  }
+
+  .selection-control-row {
+    min-height: 42px;
+  }
+
+  .student-row {
+    margin-bottom: 5px;
+  }
+
+  .student-copy {
+    gap: 3px;
+  }
+
+  .student-section-badges {
+    display: none;
+  }
+}

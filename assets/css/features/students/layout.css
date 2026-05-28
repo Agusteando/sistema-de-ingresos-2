@@ -74,16 +74,15 @@ body.students-route-active .income-content {
   min-height: 0;
   overflow: hidden;
   width: 100%;
+  container: students-shell / size;
 }
 
 .students-design-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: var(--workspace-design-width);
-  height: var(--workspace-design-height);
-  transform: none;
-  transform-origin: top left;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .students-workspace {
@@ -93,10 +92,7 @@ body.students-route-active .income-content {
   width: 100%;
   height: 100%;
   min-height: 0;
-}
-
-.students-workspace.has-detail {
-  grid-template-columns: minmax(620px, 0.98fr) minmax(640px, 1fr);
+  container: students-workspace / size;
 }
 
 .student-list-panel,
@@ -146,7 +142,6 @@ body.students-route-active .income-content {
   .section-manage-button { min-width: 136px; }
   .new-student-button { min-width: 170px; }
   .students-workspace { gap: 20px; }
-  .students-workspace.has-detail { grid-template-columns: minmax(690px, 0.98fr) minmax(720px, 1fr); }
 }
 
 .student-detail-panel > .student-details-shell,
@@ -279,13 +274,14 @@ body.students-route-active .income-content {
   }
 }
 
-/* Interactive financial workspace splitter. Default mirrors the current two-panel composition, while allowing the user to rebalance space without breaking either panel. */
 .students-workspace.has-detail {
-  --students-workspace-resizer-width: 18px;
+  --students-workspace-resizer-size: 18px;
+  --students-list-min: clamp(280px, 24cqi, 420px);
+  --students-detail-min: clamp(340px, 30cqi, 620px);
   grid-template-columns:
-    minmax(320px, var(--students-list-panel-size, 49%))
-    var(--students-workspace-resizer-width)
-    minmax(380px, 1fr);
+    minmax(var(--students-list-min), var(--students-list-panel-size, 51%))
+    var(--students-workspace-resizer-size)
+    minmax(var(--students-detail-min), var(--students-detail-panel-size, 49%));
   gap: 0;
   align-items: stretch;
 }
@@ -294,8 +290,8 @@ body.students-route-active .income-content {
   position: relative;
   z-index: 8;
   display: flex;
-  width: var(--students-workspace-resizer-width, 18px);
-  min-width: var(--students-workspace-resizer-width, 18px);
+  width: var(--students-workspace-resizer-size, 18px);
+  min-width: var(--students-workspace-resizer-size, 18px);
   height: 100%;
   align-items: center;
   justify-content: center;
@@ -310,9 +306,9 @@ body.students-route-active .income-content {
   position: absolute;
   inset: 12px 7px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(126, 177, 104, .16), rgba(63, 145, 56, .32), rgba(126, 177, 104, .16));
+  background: linear-gradient(180deg, rgba(126, 177, 104, .12), rgba(63, 145, 56, .34), rgba(126, 177, 104, .12));
   content: "";
-  opacity: .45;
+  opacity: .54;
   transition: inset 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
 }
 
@@ -320,15 +316,15 @@ body.students-route-active .income-content {
   position: relative;
   display: grid;
   width: 18px;
-  height: 68px;
+  height: 76px;
   place-items: center;
   gap: 5px;
-  border: 1px solid rgba(63, 145, 56, .16);
+  border: 1px solid rgba(63, 145, 56, .18);
   border-radius: 999px;
-  background: rgba(255, 255, 255, .92);
+  background: rgba(255, 255, 255, .94);
   box-shadow: 0 10px 22px rgba(21, 35, 60, .08);
-  opacity: .72;
-  transform: scale(.92);
+  opacity: .76;
+  transform: scale(.94);
   transition: transform 160ms ease, opacity 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -338,14 +334,33 @@ body.students-route-active .income-content {
   height: 4px;
   border-radius: 999px;
   background: currentColor;
-  opacity: .72;
+  opacity: .78;
+}
+
+.students-workspace-resizer-rail::before,
+.students-workspace-resizer-rail::after {
+  display: block;
+  width: 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+  opacity: .42;
+}
+
+.students-workspace-resizer-rail::before {
+  transform: translateY(-2px);
+}
+
+.students-workspace-resizer-rail::after {
+  transform: translateY(2px);
 }
 
 .students-workspace-resizer:hover::before,
 .students-workspace-resizer:focus-visible::before,
 .students-workspace.is-resizing .students-workspace-resizer::before {
   inset-inline: 5px;
-  opacity: .82;
+  opacity: .9;
   box-shadow: 0 0 0 5px rgba(63, 145, 56, .06);
 }
 
@@ -369,76 +384,9 @@ body.students-workspace-resizing * {
   user-select: none;
 }
 
-.students-workspace.has-detail > .student-list-panel,
-.students-workspace.has-detail > .student-detail-panel,
-.students-workspace.has-detail > .bulk-workspace-panel {
-  min-width: 0;
-}
-
-@media (max-width: 980px) {
-  .students-workspace-resizer {
-    display: none;
-  }
-}
-
-/* Two-axis financial workspace divider. Keeps the default composition, but allows precise resizing without hiding the detail pane on desktop widths. */
-.students-workspace.has-detail {
-  --students-workspace-resizer-width: 20px;
-  grid-template-columns:
-    minmax(300px, var(--students-list-panel-size, 49%))
-    var(--students-workspace-resizer-width)
-    minmax(330px, 1fr);
-  gap: 0;
-  align-items: stretch;
-}
-
-.students-workspace-resizer {
-  display: flex;
-  width: var(--students-workspace-resizer-width, 20px);
-  min-width: var(--students-workspace-resizer-width, 20px);
-  cursor: grab;
-  touch-action: none;
-}
-
-.students-workspace-resizer::before {
-  inset: 12px 7px;
-  background: linear-gradient(180deg, rgba(126, 177, 104, .12), rgba(63, 145, 56, .34), rgba(126, 177, 104, .12));
-}
-
-.students-workspace-resizer-rail {
-  width: 20px;
-  min-height: 76px;
-  cursor: grab;
-}
-
-.students-workspace-resizer-rail::before,
-.students-workspace-resizer-rail::after {
-  display: block;
-  width: 8px;
-  height: 2px;
-  border-radius: 999px;
-  background: currentColor;
-  content: "";
-  opacity: .42;
-}
-
-.students-workspace-resizer-rail::before {
-  transform: translateY(-2px);
-}
-
-.students-workspace-resizer-rail::after {
-  transform: translateY(2px);
-}
-
-.students-workspace.is-resizing .students-workspace-resizer,
-.students-workspace.is-resizing .students-workspace-resizer-rail {
-  cursor: grabbing;
-}
-
-body.students-workspace-resizing,
-body.students-workspace-resizing * {
-  cursor: grabbing;
-  user-select: none;
+body.students-workspace-resizing-stacked,
+body.students-workspace-resizing-stacked * {
+  cursor: row-resize;
 }
 
 .students-workspace.has-detail > .student-list-panel,
@@ -448,19 +396,46 @@ body.students-workspace-resizing * {
   container-type: inline-size;
 }
 
-@media (min-width: 721px) {
-  .students-workspace.has-detail .students-workspace-resizer {
-    display: flex;
-  }
+.students-workspace.has-detail > .student-detail-panel,
+.students-workspace.has-detail > .bulk-workspace-panel {
+  container: student-detail-panel / size;
 }
 
-@media (max-width: 720px) {
+@container students-shell (max-width: 760px) {
   .students-workspace.has-detail {
+    --students-workspace-resizer-size: 18px;
     grid-template-columns: 1fr;
-    gap: 14px;
+    grid-template-rows:
+      minmax(280px, var(--students-list-stack-size, 46%))
+      var(--students-workspace-resizer-size)
+      minmax(360px, var(--students-detail-stack-size, 54%));
+    gap: 0;
   }
 
   .students-workspace-resizer {
-    display: none;
+    width: 100%;
+    min-width: 0;
+    height: var(--students-workspace-resizer-size, 18px);
+    min-height: var(--students-workspace-resizer-size, 18px);
+    cursor: row-resize;
   }
+
+  .students-workspace-resizer::before {
+    inset: 7px 12px;
+    background: linear-gradient(90deg, rgba(126, 177, 104, .12), rgba(63, 145, 56, .34), rgba(126, 177, 104, .12));
+  }
+
+  .students-workspace-resizer-rail {
+    width: 76px;
+    height: 18px;
+    min-height: 0;
+    grid-auto-flow: column;
+  }
+
+  .students-workspace-resizer-rail::before,
+  .students-workspace-resizer-rail::after {
+    width: 2px;
+    height: 8px;
+  }
+
 }

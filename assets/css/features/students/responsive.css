@@ -1,7 +1,3 @@
-@media (max-width: 1700px) {
-  .students-workspace.has-detail { grid-template-columns: minmax(600px, .96fr) minmax(620px, 1fr); }
-}
-
 @media (max-width: 1120px) {
   .kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .kpi-summary-system.without-income .kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -11,28 +7,12 @@
   .export-button { justify-self: start; }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 720px) {
   body.students-route-active { overflow: auto; }
   body.students-route-active .income-shell { overflow: auto; }
   body.students-route-active .income-content { height: auto; overflow: visible; }
   .students-screen { height: auto; min-height: calc(100vh - 70px); overflow: visible; }
-  .students-scale-shell { height: auto; overflow: visible; }
-  .students-design-canvas { position: static; width: 100%; height: auto; transform: none; }
-  .students-workspace,
-  .students-workspace.has-detail { display: flex; flex-direction: column; height: auto; }
-  .student-list-card,
-  .student-detail-panel { height: 620px; }
-}
-
-/* Keep the splitter grid authoritative after viewport responsive rules. */
-@media (min-width: 981px) {
-  .students-workspace.has-detail {
-    --students-workspace-resizer-width: 18px;
-    display: grid;
-    grid-template-columns:
-      minmax(320px, var(--students-list-panel-size, 49%))
-      var(--students-workspace-resizer-width)
-      minmax(380px, 1fr);
-    gap: 0;
-  }
+  .students-scale-shell { min-height: 980px; overflow: visible; }
+  .students-design-canvas { height: auto; min-height: 980px; }
+  .students-workspace { height: auto; min-height: 980px; }
 }

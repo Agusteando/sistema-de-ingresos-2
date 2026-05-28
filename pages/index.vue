@@ -35,8 +35,8 @@
       @export="exportData"
     />
 
-    <div ref="studentsScaleShell" class="students-scale-shell" :style="studentsScaleShellStyle">
-      <div class="students-design-canvas" :style="studentsDesignCanvasStyle">
+    <div class="students-scale-shell">
+      <div class="students-design-canvas">
         <div
           ref="studentsWorkspaceEl"
           :class="[
@@ -76,20 +76,22 @@
             v-if="hasAccountWorkspace"
             type="button"
             class="students-workspace-resizer"
-            aria-label="Redimensionar paneles de alumnos y estado de cuenta"
-            aria-orientation="vertical"
+            :aria-label="workspaceResizerLabel"
+            :aria-orientation="workspaceResizerOrientation"
             role="separator"
-            :aria-valuenow="Math.round(workspaceSplitPercent)"
-            :aria-valuetext="`Lista ${Math.round(workspaceSplitPercent)}%, cuenta ${Math.round(100 - workspaceSplitPercent)}%, balance vertical ${Math.round(workspaceVerticalBalance)}%`"
-            aria-valuemin="28"
-            aria-valuemax="72"
-            title="Arrastra en cualquier dirección para ajustar ancho y balance vertical. Doble clic para restaurar."
+            :aria-valuenow="Math.round(workspaceResizerValue)"
+            :aria-valuetext="workspaceResizerText"
+            :aria-valuemin="workspaceResizerMin"
+            :aria-valuemax="workspaceResizerMax"
+            :title="workspaceResizerTitle"
             @pointerdown.prevent="startWorkspaceResize"
             @dblclick.prevent="resetWorkspaceSplit"
             @keydown.left.prevent="nudgeWorkspaceSplit(-2)"
             @keydown.right.prevent="nudgeWorkspaceSplit(2)"
-            @keydown.up.prevent="nudgeWorkspaceVertical(3)"
-            @keydown.down.prevent="nudgeWorkspaceVertical(-3)"
+            @keydown.up.prevent="nudgeWorkspaceStack(-2)"
+            @keydown.down.prevent="nudgeWorkspaceStack(2)"
+            @keydown.home.prevent="resetWorkspaceSplit"
+            @keydown.end.prevent="resetWorkspaceSplit"
           >
             <span class="students-workspace-resizer-rail" aria-hidden="true">
               <i></i><i></i><i></i>
@@ -265,7 +267,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
 import { useHead } from '#imports'
@@ -273,7 +275,6 @@ import { LucideBookOpen, LucideEye, LucideSettings, LucideTag, LucideTags, Lucid
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
-import { useStudentsWorkspaceScale } from '~/composables/useStudentsWorkspaceScale'
 import { useStudentSelection } from '~/composables/useStudentSelection'
 import { useStudentSections } from '~/composables/useStudentSections'
 import { useStudentBulkPayments } from '~/composables/useStudentBulkPayments'
@@ -451,61 +452,99 @@ const selectedSectionSummary = computed(() => {
 })
 const hasAccountWorkspace = computed(() => Boolean(selectedStudent.value) || (selectedCount.value > 1 && bulkWorkspaceMode.value !== 'none'))
 const studentsWorkspaceEl = ref(null)
-const workspaceSplitPercent = ref(49)
-const workspaceVerticalBalance = ref(64)
+const workspaceSplitPercent = ref(51)
+const workspaceStackPercent = ref(46)
+const workspaceIsStacked = ref(false)
 const workspaceResizing = ref(false)
 const WORKSPACE_SPLIT_STORAGE_KEY = 'students:workspace-split-percent:v1'
-const WORKSPACE_VERTICAL_STORAGE_KEY = 'students:workspace-vertical-balance:v1'
-const WORKSPACE_SPLIT_DEFAULT = 49
-const WORKSPACE_VERTICAL_DEFAULT = 64
-const WORKSPACE_SPLIT_MIN = 28
-const WORKSPACE_SPLIT_MAX = 72
-const WORKSPACE_VERTICAL_MIN = 42
-const WORKSPACE_VERTICAL_MAX = 82
+const WORKSPACE_STACK_STORAGE_KEY = 'students:workspace-stack-percent:v1'
+const WORKSPACE_SPLIT_DEFAULT = 51
+const WORKSPACE_STACK_DEFAULT = 46
+const WORKSPACE_SPLIT_MIN = 24
+const WORKSPACE_SPLIT_MAX = 76
+const WORKSPACE_STACK_MIN = 28
+const WORKSPACE_STACK_MAX = 68
+const WORKSPACE_STACK_THRESHOLD = 760
 const clampWorkspaceSplit = (value) => Math.min(WORKSPACE_SPLIT_MAX, Math.max(WORKSPACE_SPLIT_MIN, Number(value) || WORKSPACE_SPLIT_DEFAULT))
-const clampWorkspaceVertical = (value) => Math.min(WORKSPACE_VERTICAL_MAX, Math.max(WORKSPACE_VERTICAL_MIN, Number(value) || WORKSPACE_VERTICAL_DEFAULT))
-const studentsWorkspaceStyle = computed(() => {
-  const balance = clampWorkspaceVertical(workspaceVerticalBalance.value)
-  const accountMinSize = Math.round(250 + (balance - WORKSPACE_VERTICAL_MIN) * 3.15)
-  const profileSize = Math.round(166 - (balance - WORKSPACE_VERTICAL_MIN) * 1.08)
-  return {
-    '--students-list-panel-size': `${workspaceSplitPercent.value}%`,
-    '--students-detail-panel-size': `${100 - workspaceSplitPercent.value}%`,
-    '--students-detail-vertical-balance': `${balance}%`,
-    '--students-account-min-size': `${accountMinSize}px`,
-    '--students-profile-target-size': `${Math.max(108, profileSize)}px`,
-  }
-})
+const clampWorkspaceStack = (value) => Math.min(WORKSPACE_STACK_MAX, Math.max(WORKSPACE_STACK_MIN, Number(value) || WORKSPACE_STACK_DEFAULT))
+const clampWorkspacePointerPercent = (nextValue, minPercent, maxPercent, fallback) => {
+  if (!Number.isFinite(minPercent) || !Number.isFinite(maxPercent)) return fallback
+  if (minPercent > maxPercent) return Math.min(100, Math.max(0, (minPercent + maxPercent) / 2))
+  return Math.min(maxPercent, Math.max(minPercent, nextValue))
+}
+const studentsWorkspaceStyle = computed(() => ({
+  '--students-list-panel-size': `${workspaceSplitPercent.value}%`,
+  '--students-detail-panel-size': `${100 - workspaceSplitPercent.value}%`,
+  '--students-list-stack-size': `${workspaceStackPercent.value}%`,
+  '--students-detail-stack-size': `${100 - workspaceStackPercent.value}%`
+}))
+const workspaceResizerOrientation = computed(() => workspaceIsStacked.value ? 'horizontal' : 'vertical')
+const workspaceResizerValue = computed(() => workspaceIsStacked.value ? workspaceStackPercent.value : workspaceSplitPercent.value)
+const workspaceResizerMin = computed(() => workspaceIsStacked.value ? WORKSPACE_STACK_MIN : WORKSPACE_SPLIT_MIN)
+const workspaceResizerMax = computed(() => workspaceIsStacked.value ? WORKSPACE_STACK_MAX : WORKSPACE_SPLIT_MAX)
+const workspaceResizerLabel = computed(() => workspaceIsStacked.value
+  ? 'Redimensionar lista de alumnos y panel de trabajo'
+  : 'Redimensionar lista de alumnos y estado de cuenta')
+const workspaceResizerTitle = computed(() => workspaceIsStacked.value
+  ? 'Arrastra para ajustar la altura entre lista y panel. Doble clic para restaurar.'
+  : 'Arrastra para ajustar el ancho entre lista y panel. Doble clic para restaurar.')
+const workspaceResizerText = computed(() => workspaceIsStacked.value
+  ? `Lista ${Math.round(workspaceStackPercent.value)}%, panel ${Math.round(100 - workspaceStackPercent.value)}%`
+  : `Lista ${Math.round(workspaceSplitPercent.value)}%, panel ${Math.round(100 - workspaceSplitPercent.value)}%`)
 const persistWorkspaceSplit = () => {
   if (!process.client) return
   localStorage.setItem(WORKSPACE_SPLIT_STORAGE_KEY, String(Math.round(workspaceSplitPercent.value * 10) / 10))
-  localStorage.setItem(WORKSPACE_VERTICAL_STORAGE_KEY, String(Math.round(workspaceVerticalBalance.value * 10) / 10))
+  localStorage.setItem(WORKSPACE_STACK_STORAGE_KEY, String(Math.round(workspaceStackPercent.value * 10) / 10))
 }
 const setWorkspaceSplitFromPointer = (clientX, clientY) => {
   const workspace = studentsWorkspaceEl.value
   if (!workspace) return
   const rect = workspace.getBoundingClientRect()
   if (!rect.width || !rect.height) return
-  const minListPx = Math.min(520, Math.max(300, rect.width * 0.3))
-  const minDetailPx = Math.min(560, Math.max(330, rect.width * 0.32))
+
+  if (workspaceIsStacked.value) {
+    const minListPx = Math.min(420, Math.max(220, rect.height * 0.28))
+    const minDetailPx = Math.min(560, Math.max(300, rect.height * 0.34))
+    const minPercent = Math.max(WORKSPACE_STACK_MIN, (minListPx / rect.height) * 100)
+    const maxPercent = Math.min(WORKSPACE_STACK_MAX, 100 - (minDetailPx / rect.height) * 100)
+    const nextSplit = ((clientY - rect.top) / rect.height) * 100
+    workspaceStackPercent.value = clampWorkspacePointerPercent(nextSplit, minPercent, maxPercent, workspaceStackPercent.value)
+    return
+  }
+
+  const minListPx = Math.min(560, Math.max(300, rect.width * 0.26))
+  const minDetailPx = Math.min(620, Math.max(340, rect.width * 0.3))
   const minPercent = Math.max(WORKSPACE_SPLIT_MIN, (minListPx / rect.width) * 100)
   const maxPercent = Math.min(WORKSPACE_SPLIT_MAX, 100 - (minDetailPx / rect.width) * 100)
   const nextSplit = ((clientX - rect.left) / rect.width) * 100
-  workspaceSplitPercent.value = Math.min(maxPercent, Math.max(minPercent, nextSplit))
-
-  const verticalRatio = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height))
-  const nextVertical = WORKSPACE_VERTICAL_MAX - verticalRatio * (WORKSPACE_VERTICAL_MAX - WORKSPACE_VERTICAL_MIN)
-  workspaceVerticalBalance.value = clampWorkspaceVertical(nextVertical)
+  workspaceSplitPercent.value = clampWorkspacePointerPercent(nextSplit, minPercent, maxPercent, workspaceSplitPercent.value)
 }
 let workspaceResizePointerId = null
+let workspaceResizeFrame = null
+let workspaceResizeObserver = null
+let workspacePendingPointer = null
+const updateWorkspaceOrientation = () => {
+  const workspace = studentsWorkspaceEl.value
+  const rect = workspace?.getBoundingClientRect?.()
+  workspaceIsStacked.value = Boolean(rect?.width && rect.width <= WORKSPACE_STACK_THRESHOLD)
+}
+const scheduleWorkspaceOrientationUpdate = () => nextTick(() => {
+  if (!process.client) return
+  window.requestAnimationFrame(updateWorkspaceOrientation)
+})
 const stopWorkspaceResize = () => {
   if (!workspaceResizing.value) return
   workspaceResizing.value = false
   workspaceResizePointerId = null
+  workspacePendingPointer = null
+  if (process.client && workspaceResizeFrame) {
+    window.cancelAnimationFrame(workspaceResizeFrame)
+    workspaceResizeFrame = null
+  }
   persistWorkspaceSplit()
-  scheduleWorkspaceScaleUpdate()
   if (process.client) {
     document.body.classList.remove('students-workspace-resizing')
+    document.body.classList.remove('students-workspace-resizing-stacked')
     window.removeEventListener('pointermove', onWorkspaceResizeMove)
     window.removeEventListener('pointerup', stopWorkspaceResize)
     window.removeEventListener('pointercancel', stopWorkspaceResize)
@@ -514,13 +553,21 @@ const stopWorkspaceResize = () => {
 const onWorkspaceResizeMove = (event) => {
   if (!workspaceResizing.value) return
   if (workspaceResizePointerId !== null && event.pointerId !== workspaceResizePointerId) return
-  setWorkspaceSplitFromPointer(event.clientX, event.clientY)
+  workspacePendingPointer = { clientX: event.clientX, clientY: event.clientY }
+  if (workspaceResizeFrame || !process.client) return
+  workspaceResizeFrame = window.requestAnimationFrame(() => {
+    workspaceResizeFrame = null
+    if (!workspacePendingPointer) return
+    setWorkspaceSplitFromPointer(workspacePendingPointer.clientX, workspacePendingPointer.clientY)
+  })
 }
 const startWorkspaceResize = (event) => {
   if (!process.client || !hasAccountWorkspace.value) return
+  updateWorkspaceOrientation()
   workspaceResizePointerId = event.pointerId ?? null
   workspaceResizing.value = true
   document.body.classList.add('students-workspace-resizing')
+  document.body.classList.toggle('students-workspace-resizing-stacked', workspaceIsStacked.value)
   setWorkspaceSplitFromPointer(event.clientX, event.clientY)
   event.currentTarget?.setPointerCapture?.(event.pointerId)
   window.addEventListener('pointermove', onWorkspaceResizeMove)
@@ -529,19 +576,18 @@ const startWorkspaceResize = (event) => {
 }
 const resetWorkspaceSplit = () => {
   workspaceSplitPercent.value = WORKSPACE_SPLIT_DEFAULT
-  workspaceVerticalBalance.value = WORKSPACE_VERTICAL_DEFAULT
+  workspaceStackPercent.value = WORKSPACE_STACK_DEFAULT
   persistWorkspaceSplit()
-  scheduleWorkspaceScaleUpdate()
 }
 const nudgeWorkspaceSplit = (amount) => {
+  if (workspaceIsStacked.value) return
   workspaceSplitPercent.value = clampWorkspaceSplit(workspaceSplitPercent.value + amount)
   persistWorkspaceSplit()
-  scheduleWorkspaceScaleUpdate()
 }
-const nudgeWorkspaceVertical = (amount) => {
-  workspaceVerticalBalance.value = clampWorkspaceVertical(workspaceVerticalBalance.value + amount)
+const nudgeWorkspaceStack = (amount) => {
+  if (!workspaceIsStacked.value) return
+  workspaceStackPercent.value = clampWorkspaceStack(workspaceStackPercent.value + amount)
   persistWorkspaceSplit()
-  scheduleWorkspaceScaleUpdate()
 }
 const accountWorkspaceMode = computed(() => {
   if (selectedCount.value > 1 && bulkWorkspaceMode.value === 'bulk-payment') return 'bulk-payment'
@@ -549,13 +595,6 @@ const accountWorkspaceMode = computed(() => {
   if (selectedStudent.value) return 'detail'
   return 'none'
 })
-
-const {
-  studentsScaleShell,
-  studentsScaleShellStyle,
-  studentsDesignCanvasStyle,
-  scheduleWorkspaceScaleUpdate
-} = useStudentsWorkspaceScale(hasAccountWorkspace)
 const readCachedStudentPhotos = () => {
   if (!process.client) return
   const next = {}
@@ -1238,7 +1277,7 @@ const openSelectionDetails = () => {
   if (selectedCount.value > 1) {
     selectedStudent.value = null
     bulkWorkspaceMode.value = 'bulk'
-    scheduleWorkspaceScaleUpdate()
+    scheduleWorkspaceOrientationUpdate()
     return
   }
   const target = selectionPrimaryStudent.value
@@ -1255,7 +1294,7 @@ const openBulkPaymentFlow = async () => {
   selectedStudent.value = null
   bulkWorkspaceMode.value = 'bulk-payment'
   await loadBulkPaymentDebts()
-  scheduleWorkspaceScaleUpdate()
+  scheduleWorkspaceOrientationUpdate()
 }
 
 const openBulkIngresoCycleFlow = () => {
@@ -1490,9 +1529,14 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
 onMounted(() => {
   if (process.client) {
     const savedWorkspaceSplit = Number(localStorage.getItem(WORKSPACE_SPLIT_STORAGE_KEY))
-    const savedWorkspaceVertical = Number(localStorage.getItem(WORKSPACE_VERTICAL_STORAGE_KEY))
+    const savedWorkspaceStack = Number(localStorage.getItem(WORKSPACE_STACK_STORAGE_KEY))
     if (Number.isFinite(savedWorkspaceSplit)) workspaceSplitPercent.value = clampWorkspaceSplit(savedWorkspaceSplit)
-    if (Number.isFinite(savedWorkspaceVertical)) workspaceVerticalBalance.value = clampWorkspaceVertical(savedWorkspaceVertical)
+    if (Number.isFinite(savedWorkspaceStack)) workspaceStackPercent.value = clampWorkspaceStack(savedWorkspaceStack)
+    scheduleWorkspaceOrientationUpdate()
+    if (typeof ResizeObserver !== 'undefined') {
+      workspaceResizeObserver = new ResizeObserver(scheduleWorkspaceOrientationUpdate)
+      if (studentsWorkspaceEl.value) workspaceResizeObserver.observe(studentsWorkspaceEl.value)
+    }
     window.addEventListener('financial:open-sync-diagnostics', openFinancialDiagnosticsModal)
   }
   if (route.query.q) filters.value.q = String(route.query.q)
@@ -1503,7 +1547,7 @@ onMounted(() => {
 })
 
 
-watch(selectedStudent, scheduleWorkspaceScaleUpdate)
+watch(selectedStudent, scheduleWorkspaceOrientationUpdate)
 
 watch(selectedCount, (count) => {
   if (count <= 1 && bulkWorkspaceMode.value !== 'none') bulkWorkspaceMode.value = 'none'
@@ -1512,14 +1556,14 @@ watch(selectedCount, (count) => {
     bulkWorkspaceMode.value = 'bulk'
   }
   if (bulkWorkspaceMode.value === 'bulk-payment') loadBulkPaymentDebts()
-  scheduleWorkspaceScaleUpdate()
+  scheduleWorkspaceOrientationUpdate()
 })
 
 watch(() => selectedStudents.value.map(student => student.matricula).join('|'), () => {
   if (bulkWorkspaceMode.value === 'bulk-payment') loadBulkPaymentDebts()
 })
 
-watch(bulkWorkspaceMode, scheduleWorkspaceScaleUpdate)
+watch(bulkWorkspaceMode, scheduleWorkspaceOrientationUpdate)
 
 
 watch(activeFilter, (nextFilter) => {
@@ -1557,8 +1601,11 @@ onBeforeUnmount(() => {
     window.removeEventListener('pointermove', onWorkspaceResizeMove)
     window.removeEventListener('pointerup', stopWorkspaceResize)
     window.removeEventListener('pointercancel', stopWorkspaceResize)
+    if (workspaceResizeFrame) window.cancelAnimationFrame(workspaceResizeFrame)
     document.body.classList.remove('students-workspace-resizing')
+    document.body.classList.remove('students-workspace-resizing-stacked')
   }
+  workspaceResizeObserver?.disconnect?.()
   clearKpiRefreshTimer()
 })
 
