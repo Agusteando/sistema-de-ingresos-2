@@ -380,3 +380,87 @@ body.students-workspace-resizing * {
     display: none;
   }
 }
+
+/* Two-axis financial workspace divider. Keeps the default composition, but allows precise resizing without hiding the detail pane on desktop widths. */
+.students-workspace.has-detail {
+  --students-workspace-resizer-width: 20px;
+  grid-template-columns:
+    minmax(300px, var(--students-list-panel-size, 49%))
+    var(--students-workspace-resizer-width)
+    minmax(330px, 1fr);
+  gap: 0;
+  align-items: stretch;
+}
+
+.students-workspace-resizer {
+  display: flex;
+  width: var(--students-workspace-resizer-width, 20px);
+  min-width: var(--students-workspace-resizer-width, 20px);
+  cursor: grab;
+  touch-action: none;
+}
+
+.students-workspace-resizer::before {
+  inset: 12px 7px;
+  background: linear-gradient(180deg, rgba(126, 177, 104, .12), rgba(63, 145, 56, .34), rgba(126, 177, 104, .12));
+}
+
+.students-workspace-resizer-rail {
+  width: 20px;
+  min-height: 76px;
+  cursor: grab;
+}
+
+.students-workspace-resizer-rail::before,
+.students-workspace-resizer-rail::after {
+  display: block;
+  width: 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+  opacity: .42;
+}
+
+.students-workspace-resizer-rail::before {
+  transform: translateY(-2px);
+}
+
+.students-workspace-resizer-rail::after {
+  transform: translateY(2px);
+}
+
+.students-workspace.is-resizing .students-workspace-resizer,
+.students-workspace.is-resizing .students-workspace-resizer-rail {
+  cursor: grabbing;
+}
+
+body.students-workspace-resizing,
+body.students-workspace-resizing * {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.students-workspace.has-detail > .student-list-panel,
+.students-workspace.has-detail > .student-detail-panel,
+.students-workspace.has-detail > .bulk-workspace-panel {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@media (min-width: 721px) {
+  .students-workspace.has-detail .students-workspace-resizer {
+    display: flex;
+  }
+}
+
+@media (max-width: 720px) {
+  .students-workspace.has-detail {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .students-workspace-resizer {
+    display: none;
+  }
+}

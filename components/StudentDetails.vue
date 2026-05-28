@@ -341,20 +341,6 @@
         </div>
 
         <div
-          v-if="!detailsExpanded && accountMetaItems.length"
-          class="account-enrichment-strip"
-          aria-label="Enriquecimiento de Control Escolar aplicado"
-        >
-          <span class="account-enrichment-source">
-            <LucideShieldCheck :size="13" />
-            Control Escolar
-          </span>
-          <span v-for="item in accountMetaItems" :key="`compact-${item.label}`">
-            <small>{{ item.label }}</small>{{ item.value }}
-          </span>
-        </div>
-
-        <div
           v-if="detailsExpanded"
           class="account-summary-grid"
           aria-label="Resumen del estado de cuenta"

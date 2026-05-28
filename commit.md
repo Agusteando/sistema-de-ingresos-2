@@ -1,1 +1,1 @@
-Corrige la aplicación visible del enriquecimiento de matrícula en finanzas
+Restaura el Estado de Cuenta y mejora el divisor bidireccional del área financiera

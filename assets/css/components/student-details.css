@@ -1650,32 +1650,27 @@
   }
 }
 
-/* Adaptive Estado de Cuenta composition for user-resized financial panels. */
-.student-details-shell {
+/* Restored Estado de Cuenta composition with safer behavior inside user-resized panels. */
+.account-card {
   container-type: inline-size;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .student-profile-card {
-  flex: 0 0 auto;
-}
-
 .student-details-shell:not(.student-details-shell--expanded) .account-card {
-  min-height: 240px;
+  min-height: 0;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table {
-  min-width: min(100%, 560px);
+  min-width: 540px;
 }
 
-@container (max-width: 720px) {
+@container (max-width: 620px) {
   .student-details-shell:not(.student-details-shell--expanded) {
-    gap: 6px;
-    padding: 6px;
+    gap: 7px;
+    padding: 7px;
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .student-profile-card {
-    gap: 8px;
-    padding: 10px;
+    padding: 10px 11px;
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .profile-main {
@@ -1683,12 +1678,12 @@
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .profile-identity {
-    grid-template-columns: 58px minmax(0, 1fr);
+    grid-template-columns: 62px minmax(0, 1fr);
     gap: 10px;
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .student-account-photo-card {
-    --student-account-photo-size: 58px;
+    --student-account-photo-size: 62px;
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .profile-copy h2 {
@@ -1697,48 +1692,43 @@
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .profile-copy p {
-    flex-wrap: wrap;
-    gap: 5px;
     overflow: visible;
+    text-overflow: clip;
     white-space: normal;
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .profile-action-button--menu {
-    grid-column: span 3;
+    grid-column: span 2;
   }
 
-  .student-details-shell:not(.student-details-shell--expanded) .account-card {
-    grid-template-rows: 78px minmax(0, 1fr) 42px;
+  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) {
+    grid-template-rows: 82px minmax(0, 1fr) 44px;
   }
 
-  .student-details-shell:not(.student-details-shell--expanded) .account-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-content: center;
-    gap: 8px;
-    padding-block: 8px;
+  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) .account-header {
+    flex-wrap: wrap;
+    min-height: 82px;
+    padding: 8px 12px;
   }
 
-  .student-details-shell:not(.student-details-shell--expanded) .account-title-row {
-    justify-content: space-between;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-search-control {
+  .student-details-shell:not(.student-details-shell--expanded) .account-card:not(.account-card--workspace) .account-search-control {
+    order: 3;
     width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table {
+    min-width: 500px;
   }
 }
 
-@container (max-width: 560px) {
-  .student-details-shell:not(.student-details-shell--expanded) .profile-main {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
+@container (max-width: 460px) {
   .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
     grid-template-columns: 1fr;
   }
@@ -1747,208 +1737,19 @@
     grid-column: auto;
   }
 
-  .student-details-shell:not(.student-details-shell--expanded) .account-card {
-    grid-template-rows: 82px minmax(0, 1fr) auto;
-    min-height: 260px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap {
-    padding: 8px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table,
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tbody {
-    display: block;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap colgroup,
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap thead {
-    display: none;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row {
-    display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto;
-    gap: 7px 10px;
-    margin-bottom: 8px;
-    padding: 10px;
-    border: 1px solid var(--students-border-soft, #edf2f7);
-    border-radius: 13px;
-    background: #fff;
-    box-shadow: 0 7px 16px rgba(21, 35, 60, .035);
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row:last-child {
-    margin-bottom: 0;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td {
-    display: block;
-    height: auto;
-    padding: 0;
-    border: 0;
-    font-size: 11px;
-    line-height: 1.2;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row .check-cell {
-    grid-column: 1;
-    grid-row: 1 / span 3;
-    align-self: center;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row .concept-cell {
-    grid-column: 2;
-    grid-row: 1;
-    min-width: 0;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row .progress-cell {
-    grid-column: 3;
-    grid-row: 1;
-    align-self: start;
-    padding: 0;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row .progress-cell em {
-    width: 48px;
-    height: 24px;
-    font-size: 9px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(4),
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(5),
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(6) {
-    grid-column: 2 / 4;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    text-align: right;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(4) { grid-row: 2; }
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(5) { grid-row: 3; }
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(6) { grid-row: 4; }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(4)::before,
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(5)::before,
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(6)::before {
-    color: #7b879c;
-    font-size: 9px;
-    font-weight: 880;
-    letter-spacing: .07em;
-    text-transform: uppercase;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(4)::before { content: "Importe"; }
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(5)::before { content: "Pagos"; }
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td:nth-child(6)::before { content: "Saldo"; }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row .menu-cell {
-    grid-column: 2 / 4;
-    grid-row: 5;
-    opacity: 1;
-    text-align: right;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.history-row {
-    display: block;
-    margin-bottom: 8px;
-  }
-
-  .student-details-shell:not(.student-details-shell--expanded) .account-footer {
-    flex-wrap: wrap;
-    min-height: 48px;
-    padding-block: 8px;
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table {
+    min-width: 470px;
   }
 }
 
-/* Financial enrichment visibility: show Control Escolar overlay data in compact Estado de Cuenta. */
-.account-enrichment-strip {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 7px;
-  overflow: hidden;
-  padding: 6px 12px;
-  border-bottom: 1px solid rgba(223, 231, 240, .9);
-  background: linear-gradient(90deg, #fbfef9, #ffffff);
+.student-details-shell:not(.student-details-shell--expanded) .student-profile-card {
+  flex: 0 1 var(--students-profile-target-size, auto);
 }
 
-.account-enrichment-strip > span {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 34%;
-  align-items: center;
-  gap: 4px;
-  overflow: hidden;
-  border: 1px solid rgba(63, 145, 56, .14);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .92);
-  color: #27364d;
-  font-size: 10px;
-  font-weight: 760;
-  line-height: 1;
-  padding: 5px 8px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.student-details-shell:not(.student-details-shell--expanded) .account-card {
+  flex: 1 1 var(--students-account-min-size, 0px);
 }
 
-.account-enrichment-strip small {
-  flex: 0 0 auto;
-  color: #2f7f32;
-  font-size: 8.5px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.account-enrichment-strip .account-enrichment-source {
-  flex: 0 0 auto;
-  border-color: rgba(63, 145, 56, .18);
-  background: #edf8ea;
-  color: #2f7f32;
-  font-weight: 880;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .account-card:has(.account-enrichment-strip) {
-  grid-template-rows: 44px 36px minmax(0, 1fr) 42px;
-}
-
-@container (max-width: 720px) {
-  .student-details-shell:not(.student-details-shell--expanded) .account-card:has(.account-enrichment-strip) {
-    grid-template-rows: 78px 64px minmax(0, 1fr) 42px;
-  }
-
-  .account-enrichment-strip {
-    flex-wrap: wrap;
-    align-content: center;
-    gap: 5px;
-    padding-block: 7px;
-  }
-
-  .account-enrichment-strip > span {
-    max-width: calc(50% - 4px);
-  }
-
-  .account-enrichment-strip .account-enrichment-source {
-    width: 100%;
-    max-width: 100%;
-  }
-}
-
-@container (max-width: 500px) {
-  .student-details-shell:not(.student-details-shell--expanded) .account-card:has(.account-enrichment-strip) {
-    grid-template-rows: 78px 86px minmax(0, 1fr) 42px;
-  }
-
-  .account-enrichment-strip > span {
-    max-width: 100%;
-    width: 100%;
-  }
+.student-details-shell {
+  container-type: inline-size;
 }
