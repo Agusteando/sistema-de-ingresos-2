@@ -1,1 +1,1 @@
-Refina expediente avanzado, pendientes navegables y sugerencias familiares en Control Escolar
+Compacta y limpia el resumen de expediente en Control Escolar

@@ -49,7 +49,6 @@
       </div>
     </header>
 
-
     <section
       :class="[
         'kpi-summary-system ce-kpi-system',
@@ -1382,7 +1381,6 @@
       </section>
     </div>
 
-
     <IngresoCycleModal
       v-if="showAcademicPositionModal && selectedStudent"
       :student="selectedStudent"
@@ -1913,7 +1911,6 @@ const describeControlWhy = (step = {}, lane = "client") => {
   return "La etapa se registró automáticamente durante la última carga para explicar la decisión tomada.";
 };
 
-
 const controlSourceModeLabel = (value = "") => {
   const raw = String(value || "").trim();
   const normalized = raw.toLowerCase();
@@ -1930,7 +1927,6 @@ const controlSourceModeLabel = (value = "") => {
   if (normalized.includes("server")) return "Servidor";
   return raw.replace(/[-_]/g, " ");
 };
-
 
 const controlStepTitleLabel = (step = {}) => {
   const key = String(step.key || "");
@@ -4929,8 +4925,6 @@ onBeforeUnmount(() => {
   letter-spacing: -0.035em;
 }
 
-
-
 .ce-hero-actions {
   align-items: stretch;
   flex-wrap: nowrap;
@@ -5555,7 +5549,6 @@ onBeforeUnmount(() => {
 .ce-source-retry:hover {
   transform: translateY(-1px);
 }
-
 
 .ce-diagnostics-modal {
   width: min(880px, calc(100vw - 36px));
@@ -6191,11 +6184,11 @@ onBeforeUnmount(() => {
   --ce-health-border: rgba(63, 145, 56, 0.2);
   display: grid;
   grid-area: auto;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   min-width: 0;
-  min-height: 54px;
+  min-height: 58px;
   padding: 7px 9px;
   border: 1px solid var(--ce-health-border);
   border-radius: 13px;
@@ -6222,8 +6215,8 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-row-health .ce-quality-score {
   position: relative;
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   place-items: center;
   border-radius: 50%;
   background: conic-gradient(var(--ce-health-accent) var(--quality-score), #e8edf2 0deg);
@@ -6276,19 +6269,22 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-quality-fields--stacked {
   display: flex;
+  flex-wrap: nowrap;
   min-width: 0;
   gap: 4px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 1px;
+  scrollbar-width: thin;
 }
 
 .control-escolar-screen .ce-quality-fields--stacked small {
   display: inline-flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
-  max-width: 74px;
   align-items: center;
   gap: 3px;
-  overflow: hidden;
+  overflow: visible;
   padding: 3px 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--ce-health-accent) 10%, #fff);
@@ -6296,7 +6292,6 @@ onBeforeUnmount(() => {
   font-size: 8.8px;
   font-weight: 900;
   line-height: 1;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -6407,11 +6402,11 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-detail-header {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(235px, 0.72fr) minmax(210px, 0.56fr) 38px;
+  grid-template-columns: minmax(245px, 1fr) minmax(190px, 0.62fr) minmax(180px, 0.52fr) 38px;
   align-items: center;
   gap: 12px;
-  min-height: 84px;
-  padding: 13px 14px 13px 16px;
+  min-height: 96px;
+  padding: 14px 16px;
   border-bottom: 1px solid rgba(221, 231, 240, 0.95);
   background:
     radial-gradient(circle at 0 0, color-mix(in srgb, var(--ce-detail-accent) 9%, transparent), transparent 30%),
@@ -6508,12 +6503,12 @@ onBeforeUnmount(() => {
   display: grid;
   grid-column: 2;
   grid-row: 1;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: 62px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   min-width: 0;
-  min-height: 56px;
-  padding: 9px 11px;
+  min-height: 62px;
+  padding: 8px 12px;
   border: 1px solid rgba(210, 222, 234, 0.96);
   border-radius: 13px;
   background: linear-gradient(180deg, #fff, #f8fbff);
@@ -6522,10 +6517,15 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-access-header-card > span,
 .control-escolar-screen .ce-access-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  background: #eef3f8;
+  display: inline-flex;
+  width: 58px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #e1e9f1;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #f8fafc, #ffffff);
 }
 
 .control-escolar-screen .ce-access-icon img {
@@ -6560,7 +6560,7 @@ onBeforeUnmount(() => {
   grid-row: 1;
   gap: 7px;
   min-width: 0;
-  min-height: 56px;
+  min-height: 58px;
   padding: 9px 11px;
   border: 1px solid var(--ce-detail-border);
   border-radius: 13px;
@@ -6635,38 +6635,85 @@ onBeforeUnmount(() => {
   color: #5c6a80;
 }
 
+@media (max-width: 1180px) {
+  .control-escolar-screen .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 38px;
+    grid-template-rows: auto auto auto;
+  }
+
+  .control-escolar-screen .ce-access-header-card,
+  .control-escolar-screen .ce-progress-cluster--health {
+    grid-column: 1 / -1;
+  }
+
+  .control-escolar-screen .ce-access-header-card {
+    grid-row: 2;
+  }
+
+  .control-escolar-screen .ce-progress-cluster--health {
+    grid-row: 3;
+  }
+
+  .control-escolar-screen .ce-detail-menu-button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
 .control-escolar-screen .ce-detail-body {
   display: flex;
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 11px;
+  gap: 12px;
   overflow: auto;
-  padding: 12px 14px 0;
+  padding: 12px 14px;
   background: linear-gradient(180deg, #fff 0%, #fff 70%, #fbfcfd 100%);
 }
 
 .control-escolar-screen .ce-health-overview {
   display: grid;
-  grid-template-columns: minmax(220px, 0.86fr) minmax(220px, 0.86fr) minmax(295px, 1.12fr);
-  gap: 11px;
-  min-width: 760px;
+  grid-template-columns: minmax(190px, 0.82fr) minmax(205px, 0.9fr) minmax(300px, 1.1fr);
+  align-items: start;
+  gap: 9px;
+  min-width: 0;
 }
 
 .control-escolar-screen .ce-health-card {
   position: relative;
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-columns: 46px minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  min-height: 102px;
+  min-height: 84px;
   overflow: hidden;
-  padding: 13px 14px;
+  padding: 10px 12px;
   border: 1px solid rgba(221, 231, 240, 0.98);
   border-radius: 14px;
   background: linear-gradient(180deg, #fff, #fbfdff);
-  box-shadow: 0 8px 20px rgba(21, 35, 60, 0.04);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.035);
+  cursor: pointer;
+  text-align: left;
+}
+
+.control-escolar-screen button.ce-health-card {
+  appearance: none;
+  border-width: 1px;
+}
+
+.control-escolar-screen .ce-health-card.is-active {
+  box-shadow: 0 12px 24px rgba(17, 24, 39, .07), 0 0 0 2px rgba(79, 163, 70, .12);
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-health-card--complete {
+  border-color: rgba(74, 123, 217, .2);
+  background: linear-gradient(180deg, rgba(244, 248, 255, .98), rgba(255,255,255,.98));
+}
+
+.control-escolar-screen .ce-health-card--complete.is-active {
+  box-shadow: 0 12px 24px rgba(47, 98, 184, .09), 0 0 0 2px rgba(89, 140, 232, .16);
 }
 
 .control-escolar-screen .ce-health-card--basic.complete,
@@ -6690,23 +6737,26 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-health-card--action {
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  border-color: rgba(224, 83, 74, 0.28);
+  background: linear-gradient(180deg, #fffafa, #ffffff);
 }
 
 .control-escolar-screen .ce-health-ring {
   position: relative;
   display: grid;
-  width: 54px;
-  height: 54px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border-radius: 50%;
   background: conic-gradient(var(--ce-detail-accent) var(--ring-deg), #e8eef3 0deg);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.82), 0 8px 18px rgba(21, 35, 60, 0.075);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.82), 0 7px 16px rgba(21, 35, 60, 0.07);
 }
 
 .control-escolar-screen .ce-health-ring::after {
   position: absolute;
-  inset: 7px;
+  inset: 6px;
   border-radius: inherit;
   background: #fff;
   box-shadow: inset 0 0 0 1px rgba(220, 229, 238, 0.92);
@@ -6729,11 +6779,11 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-health-card__icon,
 .control-escolar-screen .ce-status-signal-icon {
   display: inline-flex;
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 11px;
   background: var(--ce-detail-soft);
   color: var(--ce-detail-accent);
 }
@@ -6741,7 +6791,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-health-card__copy {
   display: grid;
   min-width: 0;
-  gap: 4px;
+  gap: 3px;
 }
 
 .control-escolar-screen .ce-health-card__copy small,
@@ -6760,10 +6810,10 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-status-signal-card strong {
   overflow: hidden;
   color: var(--ce-ink);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 950;
   letter-spacing: 0;
-  line-height: 1.16;
+  line-height: 1.14;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -6774,17 +6824,17 @@ onBeforeUnmount(() => {
   margin: 0;
   overflow: hidden;
   color: #647188;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 720;
-  line-height: 1.28;
+  line-height: 1.22;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
 .control-escolar-screen .ce-health-bar {
   display: block;
-  height: 7px;
-  margin-top: 2px;
+  height: 5px;
+  margin-top: 1px;
   overflow: hidden;
   border-radius: 999px;
   background: #e8eef3;
@@ -6803,7 +6853,7 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-health-card__copy em {
   color: #56657a;
-  font-size: 10.4px;
+  font-size: 9.8px;
   font-style: normal;
   font-weight: 800;
 }
@@ -6823,20 +6873,22 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-health-link {
-  grid-column: 1 / -1;
+  grid-column: 2;
   justify-self: start;
-  min-height: 30px;
-  padding: 0 10px;
-  border-radius: 10px;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2f62b8;
   font-size: 10px;
   white-space: nowrap;
 }
 
 .control-escolar-screen .ce-health-action-button {
-  min-height: 34px;
-  padding: 0 10px;
+  min-height: 30px;
+  padding: 0 9px;
   border-color: var(--ce-detail-border);
-  border-radius: 11px;
+  border-radius: 10px;
   color: var(--ce-detail-accent);
   font-size: 10px;
   white-space: nowrap;
@@ -6847,19 +6899,25 @@ onBeforeUnmount(() => {
   flex-wrap: nowrap;
   gap: 5px;
   min-width: 0;
+  max-width: 100%;
   margin-top: 1px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 1px;
+  scrollbar-width: thin;
 }
 
 .control-escolar-screen .ce-health-missing-chips button,
 .control-escolar-screen .ce-health-missing-chips span {
   display: inline-flex;
-  min-height: 24px;
+  min-height: 22px;
   align-items: center;
   flex: 0 0 auto;
   padding: 0 7px;
   border-radius: 999px;
-  font-size: 9.5px;
+  font-size: 9.2px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .control-escolar-screen .ce-health-missing-chips button {
@@ -6877,21 +6935,35 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-status-signal-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 9px;
-  min-width: 760px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .control-escolar-screen .ce-status-signal-card {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
-  min-height: 66px;
-  padding: 10px 11px;
+  min-height: 54px;
+  padding: 8px 10px;
   border: 1px solid rgba(221, 231, 240, 0.98);
   border-radius: 13px;
+  appearance: none;
   background: #fff;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.control-escolar-screen .ce-status-signal-card:hover,
+.control-escolar-screen .ce-status-signal-card:focus-visible {
+  border-color: color-mix(in srgb, var(--ce-detail-accent) 28%, #dbe6f0);
+  box-shadow: 0 10px 20px rgba(21, 35, 60, 0.06);
+  outline: 0;
+  transform: translateY(-1px);
 }
 
 .control-escolar-screen .ce-status-signal-card > div {
@@ -7451,8 +7523,7 @@ onBeforeUnmount(() => {
   border-radius: 13px;
 }
 
-
-/* Control Escolar cleanup: remove noisy helper text and restore clean production panels. */
+/* Empty detail state and shared form primitives. */
 .ce-empty-detail-panel {
   display: grid;
   min-height: 0;
@@ -7577,9 +7648,7 @@ onBeforeUnmount(() => {
   }
 }
 
-
-
-/* Control Escolar corrective pass: fix circled layout regressions without adding fake states. */
+/* Compact form and panel layout. */
 .control-escolar-screen .ce-list-titlebar {
   min-height: 44px;
   padding-inline: 14px 10px;
@@ -7826,8 +7895,7 @@ onBeforeUnmount(() => {
   }
 }
 
-
-/* Final cleanup for crowded identity and empty-detail states. */
+/* Empty detail and identity layout. */
 .control-escolar-screen .ce-list-titlebar {
   align-items: center;
 }
@@ -7975,8 +8043,7 @@ onBeforeUnmount(() => {
   }
 }
 
-
-/* Final targeted repair for the circled Control Escolar areas. */
+/* Student list, profile cues, and family panels. */
 .control-escolar-screen .ce-list-card {
   grid-template-rows: 38px 0 minmax(0, 1fr) 38px;
 }
@@ -8190,40 +8257,6 @@ onBeforeUnmount(() => {
   background: rgba(247, 250, 252, .96);
 }
 
-.control-escolar-screen .ce-health-card {
-  cursor: pointer;
-  text-align: left;
-}
-
-.control-escolar-screen button.ce-health-card {
-  appearance: none;
-  border-width: 1px;
-}
-
-.control-escolar-screen .ce-health-card.is-active {
-  box-shadow: 0 14px 30px rgba(17, 24, 39, .08), 0 0 0 2px rgba(79, 163, 70, .14);
-  transform: translateY(-1px);
-}
-
-.control-escolar-screen .ce-health-card--complete {
-  border-color: rgba(74, 123, 217, .2);
-  background: linear-gradient(180deg, rgba(244, 248, 255, .98), rgba(255,255,255,.98));
-}
-
-.control-escolar-screen .ce-health-card--complete.is-active {
-  box-shadow: 0 14px 30px rgba(47, 98, 184, .1), 0 0 0 2px rgba(89, 140, 232, .18);
-}
-
-.control-escolar-screen .ce-health-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  color: #2f62b8;
-  font-size: 12px;
-  font-weight: 800;
-}
-
 .control-escolar-screen .ce-grade-pickers {
   display: grid;
   gap: 12px;
@@ -8338,8 +8371,7 @@ onBeforeUnmount(() => {
   }
 }
 
-
-/* Final cleanup: prioritize CURP, grado/grupo and symmetric parents layout. */
+/* Academic position, family, and advanced expediente panels. */
 .control-escolar-screen .ce-identity-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
@@ -8674,128 +8706,7 @@ onBeforeUnmount(() => {
   }
 }
 
-
-/* Detail refinement: breathable header, readable pending chips, and controlled suggestions. */
-.control-escolar-screen .ce-detail-header {
-  grid-template-columns: minmax(300px, 1fr) minmax(240px, 0.82fr) 42px;
-  grid-template-rows: auto auto;
-  align-items: stretch;
-  gap: 14px;
-  min-height: 128px;
-  padding: 18px;
-}
-
-.control-escolar-screen .ce-detail-title--with-photo {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.control-escolar-screen .ce-access-header-card {
-  grid-column: 2;
-  grid-row: 1;
-  min-height: 64px;
-}
-
-.control-escolar-screen .ce-progress-cluster--health {
-  grid-column: 1 / 3;
-  grid-row: 2;
-  min-height: 52px;
-}
-
-.control-escolar-screen .ce-detail-menu-button {
-  grid-column: 3;
-  grid-row: 1;
-}
-
-.control-escolar-screen .ce-detail-body {
-  gap: 14px;
-  padding-top: 16px;
-}
-
-.control-escolar-screen .ce-health-overview {
-  gap: 12px;
-}
-
-.control-escolar-screen .ce-health-card {
-  min-height: 112px;
-  overflow: visible;
-}
-
-.control-escolar-screen .ce-health-card--action {
-  align-items: start;
-}
-
-.control-escolar-screen .ce-health-missing-chips {
-  flex-wrap: wrap;
-  overflow: visible;
-  gap: 6px;
-}
-
-.control-escolar-screen .ce-health-missing-chips button,
-.control-escolar-screen .ce-health-missing-chips span {
-  min-height: 26px;
-  max-width: 100%;
-}
-
-.control-escolar-screen .ce-list-card {
-  --student-list-row-height: 86px;
-  --student-list-balance-col: 260px;
-}
-
-.control-escolar-screen .ce-list-columns,
-.control-escolar-screen .ce-student-row {
-  grid-template-columns: minmax(248px, 1fr) minmax(242px, 268px) 38px;
-}
-
-.control-escolar-screen .ce-row-health {
-  min-height: 70px;
-  align-items: start;
-  padding: 8px 10px;
-}
-
-.control-escolar-screen .ce-quality-cell--expanded {
-  gap: 5px;
-}
-
-.control-escolar-screen .ce-quality-fields--stacked {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  max-height: 42px;
-  overflow: hidden;
-}
-
-.control-escolar-screen .ce-quality-fields--stacked small {
-  flex: 0 0 auto;
-  max-width: none;
-  min-height: 19px;
-  padding: 4px 7px;
-  font-size: 9px;
-  line-height: 1.05;
-}
-
-.control-escolar-screen .ce-status-signal-card,
-.control-escolar-screen .ce-family-readiness-card {
-  appearance: none;
-  width: 100%;
-  border-style: solid;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
-}
-
-.control-escolar-screen .ce-status-signal-card:hover,
-.control-escolar-screen .ce-family-readiness-card:hover,
-.control-escolar-screen .ce-status-signal-card:focus-visible,
-.control-escolar-screen .ce-family-readiness-card:focus-visible {
-  border-color: color-mix(in srgb, var(--ce-detail-accent) 28%, #dbe6f0);
-  box-shadow: 0 12px 24px rgba(21, 35, 60, 0.07);
-  outline: 0;
-  transform: translateY(-1px);
-}
-
+/* Controlled inline suggestions. */
 .control-escolar-screen .ce-autocomplete-field {
   position: relative;
 }
@@ -8848,30 +8759,6 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-advanced-expediente-panel .ce-form-grid.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-@media (max-width: 1180px) {
-  .control-escolar-screen .ce-detail-header {
-    grid-template-columns: minmax(0, 1fr) 42px;
-  }
-
-  .control-escolar-screen .ce-access-header-card,
-  .control-escolar-screen .ce-progress-cluster--health {
-    grid-column: 1 / -1;
-  }
-
-  .control-escolar-screen .ce-access-header-card {
-    grid-row: 2;
-  }
-
-  .control-escolar-screen .ce-progress-cluster--health {
-    grid-row: 3;
-  }
-
-  .control-escolar-screen .ce-detail-menu-button {
-    grid-column: 2;
-    grid-row: 1;
-  }
 }
 
 </style>
