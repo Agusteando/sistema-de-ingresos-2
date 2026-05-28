@@ -1,1 +1,1 @@
-Agrega animación de versión aplicada con toast de actualizaciones y commits recientes
+Agrega avance y auditoría de Control Escolar por plantel y ciclo escolar

@@ -1424,6 +1424,8 @@ const photoCache = ref({});
 const photoLoadingKeys = ref(new Set());
 let searchTimer = null;
 let controlStudentsRequestId = 0;
+let lastControlAuditSnapshotKey = "";
+let lastControlAuditSnapshotAt = 0;
 const controlStudentPhotoRequests = new Map();
 const controlPhotoQueue = [];
 const controlPhotoQueuedKeys = new Set();
@@ -2988,6 +2990,66 @@ const buildClientKpisFromStudents = (sourceStudents = []) => {
   };
 };
 
+const buildControlAuditProgress = () => {
+  const rows = Array.isArray(controlStudentsIndex.value)
+    ? controlStudentsIndex.value
+    : [];
+  const progressRows = rows.filter(isInscritoForControlProgress);
+  const total = progressRows.length;
+  const completed = progressRows.filter(
+    (student) => normalizedMissingFields(student).length === 0,
+  ).length;
+  const pending = Math.max(0, total - completed);
+  const percent = total ? Math.round((completed / total) * 100) : 0;
+  return { percent, total, completed, pending };
+};
+
+const postControlAuditSnapshot = (reason = "control_escolar_page_loaded") => {
+  if (!selectedAgentId.value || typeof window === "undefined") return;
+  const progress = buildControlAuditProgress();
+  const source = controlDataSource.value || {};
+  const flow = source?.diagnostics?.flow || source?.phase || source?.cacheFreshness || "";
+  const snapshotKey = [
+    selectedAgentId.value,
+    currentCicloKey.value,
+    progress.percent,
+    progress.total,
+    progress.completed,
+    progress.pending,
+    source?.base || "",
+    flow,
+  ].join("|");
+  const now = Date.now();
+
+  if (snapshotKey === lastControlAuditSnapshotKey && now - lastControlAuditSnapshotAt < 5 * 60 * 1000) {
+    return;
+  }
+
+  lastControlAuditSnapshotKey = snapshotKey;
+  lastControlAuditSnapshotAt = now;
+
+  $fetch("/api/control-escolar/audit/snapshot", {
+    method: "POST",
+    body: {
+      plantel: selectedAgentId.value,
+      ciclo: currentCicloKey.value,
+      progress,
+      visibleRows: students.value.length,
+      totalRows: controlStudentsIndex.value.length,
+      counters: kpis.value || buildClientKpisFromStudents(controlStudentsIndex.value),
+      source: {
+        base: source?.base || "",
+        flow,
+        cacheFreshness: source?.cacheFreshness || "",
+        bridgeFallback: Boolean(source?.bridgeFallback),
+      },
+      reason,
+    },
+  }).catch((error) => {
+    console.warn("[Control Escolar Audit] Snapshot skipped", error?.message || error);
+  });
+};
+
 const applyControlStudentsPayload = (
   response = {},
   { reconcileSelection = true } = {},
@@ -3176,6 +3238,7 @@ const loadStudents = async (options = {}) => {
       status: "ready",
     });
     publishControlSyncIndicatorState();
+    postControlAuditSnapshot(isSnapshotFallback ? "snapshot_fallback_visible" : "live_bridge_visible");
   } catch (error) {
     markClientStep(
       "server-enriched",

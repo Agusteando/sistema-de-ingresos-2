@@ -26,7 +26,7 @@ export default defineNuxtRouteMiddleware((to) => {
     return navigateTo(isControlEscolarOnly ? '/control-escolar' : '/')
   }
 
-  if (email.value && isControlEscolarOnly && to.path !== '/control-escolar' && !to.path.startsWith('/print')) {
+  if (email.value && isControlEscolarOnly && !['/control-escolar', '/avance-control-escolar'].includes(to.path) && !to.path.startsWith('/print')) {
     return navigateTo('/control-escolar')
   }
 

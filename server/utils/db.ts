@@ -581,6 +581,31 @@ export const ensureSchema = async () => {
       `)
 
       await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS control_escolar_audit_events (
+          id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          event_type VARCHAR(40) NOT NULL,
+          plantel VARCHAR(20) NOT NULL,
+          ciclo VARCHAR(20) DEFAULT '',
+          matricula VARCHAR(64) DEFAULT NULL,
+          actor_email VARCHAR(255) DEFAULT NULL,
+          actor_name VARCHAR(255) DEFAULT NULL,
+          actor_role VARCHAR(255) DEFAULT NULL,
+          summary VARCHAR(255) NOT NULL,
+          progress_percent DECIMAL(5,2) DEFAULT NULL,
+          total_students INT DEFAULT NULL,
+          completed_students INT DEFAULT NULL,
+          pending_students INT DEFAULT NULL,
+          source_base VARCHAR(180) DEFAULT NULL,
+          source_flow VARCHAR(180) DEFAULT NULL,
+          payload JSON NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_control_audit_scope (plantel, ciclo, created_at),
+          INDEX idx_control_audit_type (event_type, created_at),
+          INDEX idx_control_audit_matricula (matricula, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS documento_concepto_periodos (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
           documento INT NOT NULL,

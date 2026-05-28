@@ -54,6 +54,9 @@
         <NuxtLink v-if="showControlEscolarNav" to="/control-escolar" class="nav-item group">
           <LucideSchool :size="22" stroke-width="2" /> <span class="nav-label">Control Escolar</span>
         </NuxtLink>
+        <NuxtLink to="/avance-control-escolar" class="nav-item group">
+          <LucideClipboardList :size="22" stroke-width="2" /> <span class="nav-label">Auditoría Control Escolar</span>
+        </NuxtLink>
         <NuxtLink to="/usuarios" class="nav-item group" v-if="isSuperAdmin">
           <LucideShield :size="22" stroke-width="2" /> <span class="nav-label">Usuarios</span>
         </NuxtLink>
@@ -296,6 +299,7 @@ import {
   LucideChevronDown,
   LucideExternalLink,
   LucideDatabase,
+  LucideClipboardList,
   LucidePanelLeftClose,
   LucidePanelLeftOpen
 } from 'lucide-vue-next'
@@ -589,6 +593,7 @@ const currentRouteName = computed(() => {
   if (route.path === '/usuarios') return 'Usuarios'
   if (route.path === '/sql-console') return 'SQL Console'
   if (route.path === '/control-escolar') return 'Control Escolar'
+  if (route.path === '/avance-control-escolar') return 'Avance Control Escolar'
   return 'SISTEMA DE INGRESOS'
 })
 

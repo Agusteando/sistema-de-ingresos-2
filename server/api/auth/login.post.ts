@@ -4,6 +4,7 @@ import { PLANTELES_LIST } from '../../../utils/constants'
 import { hasControlEscolarRole, isControlEscolarOnlyRole, isSuperAdminRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
 import { touchExternalUserLogin } from '../../utils/external-users'
 import { isCasitaWorkspaceEmail } from '../../utils/google-workspace-directory'
+import { logControlEscolarAuditEvent } from '../../utils/control-escolar-audit'
 
 const SUPERADMIN_EMAILS = new Set([
   'desarrollo.tecnologico@casitaiedis.edu.mx',
@@ -218,6 +219,28 @@ export default defineEventHandler(async (event) => {
     setCookie(event, 'auth_has_financial_access', superAdmin || !controlEscolarOnly ? 'true' : 'false', opts)
     setCookie(event, 'auth_is_super_admin', superAdmin ? 'true' : 'false', opts)
     setCookie(event, 'db_bridge_agent_id', homePlantel || PLANTELES_LIST[0], opts)
+
+    if (controlEscolar || superAdmin) {
+      const auditPlantel = normalizePlantel(activePlantel && activePlantel !== 'GLOBAL' ? activePlantel : homePlantel || PLANTELES_LIST[0])
+      logControlEscolarAuditEvent({
+        eventType: 'control_login',
+        plantel: auditPlantel,
+        user: {
+          email: resolvedUser.email || payload.email,
+          name: resolvedUser.username || payload.name || payload.email,
+          role,
+        },
+        summary: `${resolvedUser.username || payload.name || payload.email} inició sesión con acceso a Control Escolar`,
+        payload: {
+          activePlantel,
+          homePlantel,
+          controlEscolarOnly,
+          superAdmin,
+        },
+      }).catch((error: any) => {
+        console.warn('[Control Escolar Audit] Login audit skipped', error?.message || error)
+      })
+    }
 
     return {
       success: true,
