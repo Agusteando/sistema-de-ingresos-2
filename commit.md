@@ -1,1 +1,1 @@
-Refina expedientes de Control Escolar con CURP derivada y validación visual limpia
+Rediseña salud de expediente y edición familiar de Control Escolar con jerarquía operativa

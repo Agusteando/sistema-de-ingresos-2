@@ -420,30 +420,12 @@
                     </span>
 
                     <span
-                      :class="['ce-quality-score', qualityScoreTone(student)]"
-                      :style="{
-                        '--quality-score': `${completionFor(student)}%`,
-                      }"
-                      :aria-label="`Expediente ${completionFor(student)}% completo`"
+                      :class="['ce-row-health', recordHealth(student).tone]"
+                      :aria-label="recordHealth(student).aria"
                     >
-                      <b>{{ completionFor(student) }}%</b>
-                    </span>
-
-                    <span class="ce-quality-cell">
-                      <strong>{{ qualitySummary(student) }}</strong>
-                      <span class="ce-quality-fields">
-                        <small
-                          v-for="field in visibleBasicMissingFieldsFor(student)"
-                          :key="`${student.matricula}-${field.key}`"
-                          class="missing"
-                        >
-                          <component :is="field.icon" :size="12" />
-                          {{ field.label }}
-                        </small>
-                        <small v-if="!visibleBasicMissingFieldsFor(student).length" class="ok">
-                          <LucideShieldCheck :size="12" /> Básico listo
-                        </small>
-                      </span>
+                      <b>{{ recordHealth(student).percent }}%</b>
+                      <span>{{ recordHealth(student).label }}</span>
+                      <small>{{ recordHealth(student).summary }}</small>
                     </span>
 
                     <span class="row-actions">
@@ -544,18 +526,14 @@
                     >
                   </div>
                 </div>
-                <div class="ce-progress-cluster">
-                  <strong
-                    >Expediente básico {{ selectedProfileCompletion }}%</strong
-                  >
-                  <span class="ce-progress-track"
-                    ><i :style="{ width: `${selectedProfileCompletion}%` }"></i
-                  ></span>
-                  <small>{{
-                    selectedMissingCount
-                      ? `Faltan ${selectedMissingCount} datos básicos`
-                      : "Expediente básico completo"
-                  }}</small>
+                <div :class="['ce-progress-cluster', 'ce-progress-cluster--health', selectedRecordHealth.tone]">
+                  <div>
+                    <strong>{{ selectedRecordHealth.label }}</strong>
+                    <small>{{ selectedRecordHealth.summary }}</small>
+                  </div>
+                  <span class="ce-progress-track">
+                    <i :style="{ width: `${selectedProfileCompletion}%` }"></i>
+                  </span>
                 </div>
                 <div class="ce-detail-actions">
                   <span :class="['ce-save-state', saveStateTone]">{{
@@ -589,46 +567,40 @@
               </header>
 
               <div class="ce-detail-body">
-                <section class="ce-data-section ce-detail-status-strip">
-                  <div class="ce-inline-note ce-inline-note--quality">
-                    <span><LucideShieldCheck :size="18" /></span>
-                    <p>
-                      {{ selectedMissingCount ? `${selectedMissingCount} datos básicos pendientes` : "Expediente básico completo" }}
-                    </p>
-                  </div>
-                  <div class="ce-missing-grid" v-if="visibleBasicMissingFields.length">
-                    <span
-                      v-for="field in visibleBasicMissingFields"
-                      :key="field.key"
-                      class="ce-missing-chip"
-                    >
-                      <component :is="field.icon" :size="14" />
-                      {{ field.label }}
-                    </span>
-                  </div>
-                  <span v-else class="ce-missing-chip ok"><LucideShieldCheck :size="14" /> Básico listo</span>
-                </section>
-
-                <section :class="['ce-tier-panel', { 'show-complete': showCompleteExpediente }]">
-                  <article class="ce-tier-card is-basic">
-                    <div class="ce-tier-card-head">
-                      <strong>Expediente básico</strong>
+                <section class="ce-health-overview" aria-label="Resumen del expediente seleccionado">
+                  <article :class="['ce-health-card', 'is-primary', selectedRecordHealth.tone]">
+                    <div class="ce-health-card__score" :style="{ '--score': selectedProfileCompletion }">
                       <b>{{ selectedProfileCompletion }}%</b>
                     </div>
-                    <span class="ce-tier-bar"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
-                    <p>{{ selectedMissingCount ? `${selectedMissingCount} pendientes` : 'Completo para operación diaria' }}</p>
-                  </article>
-                  <article v-if="showCompleteExpediente" class="ce-tier-card is-complete">
-                    <div class="ce-tier-card-head">
-                      <strong>Expediente completo</strong>
-                      <b>{{ selectedCompleteProfileCompletion }}%</b>
+                    <div>
+                      <small>Expediente básico</small>
+                      <strong>{{ selectedRecordHealth.label }}</strong>
+                      <p>{{ selectedNextAction }}</p>
                     </div>
-                    <span class="ce-tier-bar"><i :style="{ width: `${selectedCompleteProfileCompletion}%` }"></i></span>
-                    <p>{{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes` : 'Cerrado' }}</p>
                   </article>
-                  <button type="button" class="ce-complete-toggle" @click="showCompleteExpediente = !showCompleteExpediente">
-                    {{ showCompleteExpediente ? 'Ocultar completo' : 'Expediente completo' }}
-                  </button>
+                  <article :class="['ce-health-card', selectedFamilyReadiness.tone]">
+                    <div class="ce-health-card__score compact">
+                      <b>{{ selectedFamilyReadiness.completed }}</b><span>/{{ selectedFamilyReadiness.total }}</span>
+                    </div>
+                    <div>
+                      <small>Familia y contacto</small>
+                      <strong>{{ selectedFamilyReadiness.label }}</strong>
+                      <p>{{ selectedFamilyReadiness.summary }}</p>
+                    </div>
+                  </article>
+                  <article class="ce-health-card is-secondary">
+                    <div class="ce-health-card__score compact">
+                      <b>{{ selectedCompleteMissingCount }}</b>
+                    </div>
+                    <div>
+                      <small>Expediente completo</small>
+                      <strong>{{ selectedCompleteProfileCompletion }}%</strong>
+                      <p>{{ selectedCompleteMissingCount ? `${selectedCompleteMissingCount} pendientes avanzados` : 'Completo' }}</p>
+                    </div>
+                    <button type="button" class="ce-health-link" @click="showCompleteExpediente = !showCompleteExpediente">
+                      {{ showCompleteExpediente ? 'Ocultar' : 'Ver' }}
+                    </button>
+                  </article>
                 </section>
 
                 <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
@@ -815,9 +787,27 @@
                     v-show="activeDetailTab === 'family'"
                     class="ce-tab-panel ce-family-panel"
                   >
+                    <section class="ce-family-readiness" aria-label="Estado de contacto familiar">
+                      <article
+                        v-for="group in familyReadinessGroups"
+                        :key="group.key"
+                        :class="['ce-family-readiness-card', group.tone]"
+                      >
+                        <span><component :is="group.icon" :size="16" /></span>
+                        <div>
+                          <small>{{ group.label }}</small>
+                          <strong>{{ group.status }}</strong>
+                          <p>{{ group.summary }}</p>
+                        </div>
+                      </article>
+                    </section>
+
                     <div class="ce-family-grid">
-                      <section class="ce-family-card">
-                        <h3>Datos del padre</h3>
+                      <section :class="['ce-family-card', familySectionState('padre').tone]">
+                        <header class="ce-family-card-head">
+                          <h3>Padre</h3>
+                          <span>{{ familySectionState('padre').label }}</span>
+                        </header>
                         <div class="ce-form-grid two ce-family-fields">
                           <label :class="fieldShellClass('nombrePadre')">
                             <span>Nombre padre</span>
@@ -874,8 +864,11 @@
                         </div>
                       </section>
 
-                      <section class="ce-family-card">
-                        <h3>Datos de la madre</h3>
+                      <section :class="['ce-family-card', familySectionState('madre').tone]">
+                        <header class="ce-family-card-head">
+                          <h3>Madre</h3>
+                          <span>{{ familySectionState('madre').label }}</span>
+                        </header>
                         <div class="ce-form-grid ce-family-fields ce-family-fields--mother">
                           <label :class="fieldShellClass('nombreMadre')">
                             <span>Nombre madre</span>
@@ -2390,6 +2383,137 @@ const visibleBasicMissingFieldsFor = (student) =>
 const visibleBasicMissingFields = computed(() =>
   visibleBasicMissingFieldsFor(selectedStudent.value),
 );
+const missingFieldLabelsFor = (student, limit = 2) =>
+  visibleBasicMissingFieldsFor(student)
+    .slice(0, limit)
+    .map((field) => field.label);
+const hasMissingContactFor = (student) =>
+  ["padreTelefono", "padreEmail", "madreTelefono", "madreEmail"].some((key) =>
+    normalizedMissingFields(student, "basic").includes(key.toLowerCase()),
+  );
+const recordHealth = (student = {}) => {
+  if (!isInscritoForControlProgress(student)) {
+    return {
+      percent: 0,
+      tone: "neutral",
+      label: "Fuera de alcance",
+      summary: "No cuenta para este ciclo.",
+      aria: "Alumno fuera del alcance de expediente del ciclo.",
+    };
+  }
+
+  const percent = completionFor(student);
+  const missing = studentMissingCount(student);
+  const topMissing = missingFieldLabelsFor(student, 2);
+  const missingText = topMissing.join(", ");
+  const blocked = missing >= 4 || hasMissingContactFor(student);
+  const tone = missing === 0 ? "complete" : blocked ? "danger" : "warning";
+  const label = missing === 0 ? "Listo" : blocked ? "Atención" : `Faltan ${missing}`;
+  const summary = missing === 0
+    ? "Básico completo"
+    : missingText
+      ? missingText
+      : "Revisar expediente";
+
+  return {
+    percent,
+    tone,
+    label,
+    summary,
+    aria: `Expediente básico ${percent}% completo. ${label}. ${summary}`,
+  };
+};
+const selectedRecordHealth = computed(() => recordHealth(selectedStudent.value));
+const selectedNextAction = computed(() => {
+  const missing = visibleBasicMissingFields.value;
+  if (!missing.length) return "Sin pendientes básicos.";
+  const first = missing[0]?.label || "el primer dato pendiente";
+  return `Siguiente: completar ${first.toLowerCase()}.`;
+});
+const formValue = (field) => String(editForm[field] ?? "").trim();
+const formFieldIsOk = (field) => fieldValidationState(field) === "ok";
+const familyPersonState = (type = "padre") => {
+  const fields = type === "madre"
+    ? ["nombreMadre", "apellidoPaternoMadre", "telefonoMadre", "emailMadre"]
+    : ["nombrePadre", "apellidoPaternoPadre", "telefonoPadre", "emailPadre"];
+  const labels = {
+    nombrePadre: "nombre",
+    apellidoPaternoPadre: "apellido paterno",
+    telefonoPadre: "teléfono",
+    emailPadre: "email",
+    nombreMadre: "nombre",
+    apellidoPaternoMadre: "apellido paterno",
+    telefonoMadre: "teléfono",
+    emailMadre: "email",
+  };
+  const missing = fields.filter((field) => !formFieldIsOk(field));
+  const completed = fields.length - missing.length;
+  const noun = type === "madre" ? "Madre" : "Padre";
+  return {
+    key: type,
+    label: noun,
+    total: fields.length,
+    completed,
+    missing,
+    tone: missing.length ? (missing.length >= 2 ? "danger" : "warning") : "complete",
+    status: missing.length ? `${missing.length} pendiente${missing.length === 1 ? "" : "s"}` : "Completo",
+    summary: missing.length
+      ? `Falta ${missing.slice(0, 2).map((field) => labels[field]).join(", ")}`
+      : "Identidad y contacto listos",
+  };
+};
+const familyCriticalContactState = computed(() => {
+  const hasPhone = phoneIsValid(formValue("telefonoPadre")) || phoneIsValid(formValue("telefonoMadre"));
+  const hasEmail = emailIsValid(formValue("emailPadre")) || emailIsValid(formValue("emailMadre"));
+  const missing = [
+    !hasPhone ? "teléfono" : "",
+    !hasEmail ? "email" : "",
+  ].filter(Boolean);
+  return {
+    key: "critical-contact",
+    label: "Contacto crítico",
+    total: 2,
+    completed: Number(hasPhone) + Number(hasEmail),
+    missing,
+    tone: missing.length ? "danger" : "complete",
+    status: missing.length ? "Incompleto" : "Listo",
+    summary: missing.length ? `Falta ${missing.join(" y ")}` : "Hay vía familiar de contacto",
+  };
+});
+const familySectionState = (type = "padre") => {
+  const state = familyPersonState(type);
+  return {
+    tone: `is-${state.tone}`,
+    label: state.status,
+  };
+};
+const selectedFamilyReadiness = computed(() => {
+  const father = familyPersonState("padre");
+  const mother = familyPersonState("madre");
+  const contact = familyCriticalContactState.value;
+  const total = father.total + mother.total + contact.total;
+  const completed = father.completed + mother.completed + contact.completed;
+  const pending = total - completed;
+  const severe = [father, mother, contact].some((item) => item.tone === "danger");
+  return {
+    total,
+    completed,
+    pending,
+    tone: pending ? (severe ? "danger" : "warning") : "complete",
+    label: pending ? `${pending} pendientes` : "Listo",
+    summary: pending
+      ? [father, mother, contact].filter((item) => item.missing.length).map((item) => item.label).join(" · ")
+      : "Contacto familiar completo",
+  };
+});
+const familyReadinessGroups = computed(() => {
+  const withIcon = (state, icon) => ({ ...state, icon, tone: `is-${state.tone}` });
+  return [
+    withIcon(familyPersonState("padre"), LucideUserRound),
+    withIcon(familyPersonState("madre"), LucideUsersRound),
+    withIcon(familyCriticalContactState.value, LucidePhone),
+  ];
+});
 const normalizeCurpInput = (value) => String(value || "")
   .toUpperCase()
   .replace(/[^A-Z0-9]/g, "")
@@ -8767,6 +8891,396 @@ onBeforeUnmount(() => {
   .ce-missing-chip {
     width: auto;
     min-width: 0;
+  }
+}
+
+/* Operational health redesign for Control Escolar. */
+.ce-workspace.has-detail .ce-student-row,
+.ce-workspace.has-empty-detail .ce-student-row,
+.ce-student-row {
+  grid-template-columns: minmax(0, 1fr) minmax(118px, 150px) 38px;
+  align-items: center;
+}
+
+.ce-row-health {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  justify-items: end;
+  padding: 8px 10px;
+  border: 1px solid #e5edf4;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff, #fbfdff);
+  color: #526175;
+  text-align: right;
+}
+
+.ce-row-health b {
+  color: #172033;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.ce-row-health span {
+  color: #263650;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.ce-row-health small {
+  max-width: 100%;
+  overflow: hidden;
+  color: #78869a;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-row-health.complete {
+  border-color: rgba(72, 158, 76, 0.22);
+  background: linear-gradient(180deg, #fbfefb, #ffffff);
+}
+
+.ce-row-health.complete b,
+.ce-row-health.complete span {
+  color: #1f8f34;
+}
+
+.ce-row-health.warning {
+  border-color: rgba(218, 151, 45, 0.28);
+  background: linear-gradient(180deg, #fffdf7, #ffffff);
+}
+
+.ce-row-health.warning b,
+.ce-row-health.warning span {
+  color: #b36b12;
+}
+
+.ce-row-health.danger {
+  border-color: rgba(224, 83, 74, 0.28);
+  background: linear-gradient(180deg, #fffafa, #ffffff);
+}
+
+.ce-row-health.danger b,
+.ce-row-health.danger span {
+  color: #cf3f35;
+}
+
+.ce-progress-cluster--health {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  padding: 0;
+}
+
+.ce-progress-cluster--health div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ce-progress-cluster--health.complete strong {
+  color: #1f8f34;
+}
+
+.ce-progress-cluster--health.warning strong {
+  color: #b36b12;
+}
+
+.ce-progress-cluster--health.danger strong {
+  color: #c93b31;
+}
+
+.ce-health-overview {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.1fr) minmax(220px, 1fr) minmax(190px, 0.82fr);
+  gap: 12px;
+}
+
+.ce-health-card {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 82px;
+  padding: 13px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.035);
+}
+
+.ce-health-card__score {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(#2f9138 calc(var(--score, 1) * 1%), #e8efe9 0);
+  border: 1px solid rgba(47, 145, 56, 0.16);
+}
+
+.ce-health-card__score b {
+  color: #15233c;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.ce-health-card__score.compact {
+  background: #f7fafc;
+  color: #15233c;
+}
+
+.ce-health-card__score.compact span {
+  margin-left: 1px;
+  color: #7b8798;
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.ce-health-card small {
+  color: #7a8798;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ce-health-card strong {
+  display: block;
+  margin-top: 2px;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 940;
+}
+
+.ce-health-card p {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: #5d6b83;
+  font-size: 11.5px;
+  font-weight: 760;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
+.ce-health-card.complete {
+  border-color: rgba(72, 158, 76, 0.22);
+}
+
+.ce-health-card.warning {
+  border-color: rgba(218, 151, 45, 0.28);
+}
+
+.ce-health-card.danger {
+  border-color: rgba(224, 83, 74, 0.28);
+}
+
+.ce-health-card.is-secondary {
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  background: linear-gradient(180deg, #ffffff, #fbfdff);
+}
+
+.ce-health-link {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #dce7ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #1f8f34;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ce-family-readiness {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ce-family-readiness-card {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.ce-family-readiness-card > span {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: #f4f8f5;
+  color: #2f9138;
+}
+
+.ce-family-readiness-card small {
+  color: #748095;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ce-family-readiness-card strong {
+  display: block;
+  margin-top: 2px;
+  color: #172033;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ce-family-readiness-card p {
+  margin: 3px 0 0;
+  color: #647087;
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.ce-family-readiness-card.is-complete {
+  border-color: rgba(72, 158, 76, 0.2);
+  background: #fbfefb;
+}
+
+.ce-family-readiness-card.is-warning {
+  border-color: rgba(218, 151, 45, 0.28);
+  background: #fffdf7;
+}
+
+.ce-family-readiness-card.is-danger {
+  border-color: rgba(224, 83, 74, 0.28);
+  background: #fffafa;
+}
+
+.ce-family-card {
+  gap: 14px;
+}
+
+.ce-family-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ce-family-card-head h3 {
+  margin: 0;
+}
+
+.ce-family-card-head span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #f5f7fa;
+  color: #5c6a80;
+  font-size: 10.5px;
+  font-weight: 900;
+}
+
+.ce-family-card.is-complete .ce-family-card-head span {
+  background: #edf8ea;
+  color: #1f8f34;
+}
+
+.ce-family-card.is-warning .ce-family-card-head span {
+  background: #fff6e7;
+  color: #b36b12;
+}
+
+.ce-family-card.is-danger .ce-family-card-head span {
+  background: #fff0ef;
+  color: #c93b31;
+}
+
+.ce-inline-note--tab {
+  min-height: 48px;
+  border-color: #edf2f7;
+  background: #fbfdff;
+}
+
+.ce-form-card.ce-tab-panel {
+  padding: 14px;
+  border: 1px solid #e5edf4;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.ce-section-heading.compact {
+  min-height: 34px;
+  margin-bottom: 12px;
+}
+
+.ce-form-grid input,
+.ce-form-grid select,
+.ce-wide-field textarea {
+  min-height: 48px;
+  border-radius: 12px;
+}
+
+.ce-smart-field small {
+  min-height: 14px;
+}
+
+.ce-derived-card {
+  min-height: 48px;
+}
+
+.ce-detail-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  min-height: 64px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px) saturate(120%);
+}
+
+@container (max-width: 980px) {
+  .ce-health-overview,
+  .ce-family-readiness,
+  .ce-family-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 720px) {
+  .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .ce-access-header-card,
+  .ce-progress-cluster--health {
+    grid-column: 1 / -1;
+  }
+
+  .ce-workspace.has-detail .ce-student-row,
+  .ce-workspace.has-empty-detail .ce-student-row,
+  .ce-student-row {
+    grid-template-columns: minmax(0, 1fr) 34px;
+  }
+
+  .ce-row-health {
+    grid-column: 1 / -1;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .row-actions {
+    grid-column: 2;
+    grid-row: 1;
   }
 }
 
