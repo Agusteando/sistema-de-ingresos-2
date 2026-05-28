@@ -148,7 +148,7 @@
       @clear-selected="clearSelectedStudents"
     />
 
-    <StudentFormModal v-if="showStudentModal" :student="editingStudent" @close="closeStudentModal" @success="handleStudentSuccess" />
+    <StudentFormModal v-if="showStudentModal" :student="editingStudent" :enrollment-concepts="externalConcepts" @close="closeStudentModal" @success="handleStudentSuccess" @ingreso-cycle-updated="handleIngresoCycleUpdated" />
     <BulkIngresoCycleModal
       v-if="showBulkIngresoCycleModal"
       :selected-students="selectedStudents"

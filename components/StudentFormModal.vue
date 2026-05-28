@@ -151,77 +151,53 @@
                   </Transition>
                 </div>
 
-                <div class="section-divider"></div>
+                <template v-if="!isEdit">
+                  <div class="section-divider"></div>
 
-                <div class="section-heading amber">
-                  <span aria-hidden="true"
-                    ><LucideUsersRound :size="24"
-                  /></span>
-                  <h3>3. Contacto familiar</h3>
-                </div>
+                  <div class="section-heading amber">
+                    <span aria-hidden="true"
+                      ><LucideUsersRound :size="24"
+                    /></span>
+                    <h3>3. Contacto familiar</h3>
+                  </div>
 
-                <div v-if="isEdit" class="family-readonly-panel" aria-label="Contacto familiar de Control Escolar">
-                  <div class="family-readonly-source">
-                    <span><LucideShieldCheck :size="16" /></span>
-                    <div>
-                      <strong>Control Escolar</strong>
-                      <p>Datos de enriquecimiento por matrícula. Consulta de solo lectura.</p>
+                  <div class="field-stack compact">
+                    <label class="polished-field">
+                      <span>Padre</span>
+                      <input
+                        :value="form.padre"
+                        type="text"
+                        placeholder="Ingresa el nombre completo"
+                        required
+                        @input="handleNameInput('padre', $event)"
+                        @blur="normalizeNameField('padre')"
+                      />
+                    </label>
+                    <div class="two-field-grid">
+                      <label class="polished-field">
+                        <span>Teléfono</span>
+                        <input
+                          v-model="form.telefono"
+                          type="text"
+                          inputmode="tel"
+                          placeholder="Ingresa el teléfono"
+                          @blur="trimField('telefono')"
+                        />
+                      </label>
+                      <label class="polished-field">
+                        <span>Correo electrónico</span>
+                        <input
+                          v-model="form.correo"
+                          type="email"
+                          placeholder="Ingresa el correo electrónico"
+                          required
+                          @blur="normalizeEmailField"
+                        />
+                      </label>
                     </div>
                   </div>
-                  <div v-if="centralOverlayLoading && !centralOverlayStudent" class="family-readonly-loading">
-                    Preparando contacto familiar…
-                  </div>
-                  <div v-else class="family-readonly-grid">
-                    <section :class="['family-readonly-card', { complete: centralFatherComplete }]">
-                      <small>Padre</small>
-                      <strong>{{ centralFatherName || 'Sin registrar' }}</strong>
-                      <span :class="{ invalid: centralFatherPhoneInvalid }">{{ centralFatherPhone }}</span>
-                      <span :class="{ invalid: centralFatherEmailInvalid }">{{ centralFatherEmail }}</span>
-                    </section>
-                    <section :class="['family-readonly-card', { complete: centralMotherComplete }]">
-                      <small>Madre</small>
-                      <strong>{{ centralMotherName || 'Sin registrar' }}</strong>
-                      <span :class="{ invalid: centralMotherPhoneInvalid }">{{ centralMotherPhone }}</span>
-                      <span :class="{ invalid: centralMotherEmailInvalid }">{{ centralMotherEmail }}</span>
-                    </section>
-                  </div>
-                </div>
+                </template>
 
-                <div v-else class="field-stack compact">
-                  <label class="polished-field">
-                    <span>Padre</span>
-                    <input
-                      :value="form.padre"
-                      type="text"
-                      placeholder="Ingresa el nombre completo"
-                      required
-                      @input="handleNameInput('padre', $event)"
-                      @blur="normalizeNameField('padre')"
-                    />
-                  </label>
-                  <div class="two-field-grid">
-                    <label class="polished-field">
-                      <span>Teléfono</span>
-                      <input
-                        v-model="form.telefono"
-                        type="text"
-                        inputmode="tel"
-                        placeholder="Ingresa el teléfono"
-                        @blur="trimField('telefono')"
-                      />
-                    </label>
-                    <label class="polished-field">
-                      <span>Correo electrónico</span>
-                      <input
-                        v-model="form.correo"
-                        type="email"
-                        placeholder="Ingresa el correo electrónico"
-                        required
-                        @blur="normalizeEmailField"
-                      />
-                    </label>
-                  </div>
-                </div>
               </section>
 
               <section
@@ -389,23 +365,76 @@
                   <span aria-hidden="true"
                     ><LucideGraduationCap :size="25"
                   /></span>
-                  <h3 id="admin-title">2. Administración</h3>
+                  <h3 id="admin-title">2. Control Escolar</h3>
                 </div>
 
-                <div class="field-stack compact">
+                <div class="edit-admin-layout">
                   <section
-                    class="edit-position-note"
-                    aria-label="Cambio de posición académica"
+                    class="academic-access-card"
+                    aria-label="Posición académica actual"
                   >
-                    <strong
-                      >Grado, nivel y ciclo se ajustan desde Ciclo de
-                      ingreso.</strong
+                    <div class="academic-access-main">
+                      <span class="academic-access-icon" aria-hidden="true">
+                        <LucideCalendarDays :size="21" />
+                      </span>
+                      <div>
+                        <small>Posición académica</small>
+                        <strong>{{ editAcademicHeadline }}</strong>
+                        <p>{{ editAcademicMeta }}</p>
+                      </div>
+                    </div>
+
+                    <div class="academic-access-facts" aria-label="Datos académicos sincronizados">
+                      <span>
+                        <small>Ciclo ingreso</small>
+                        <b>{{ editIngresoCicloLabel }}</b>
+                      </span>
+                      <span>
+                        <small>Tipo</small>
+                        <b>{{ editTipoIngresoLabel }}</b>
+                      </span>
+                      <span>
+                        <small>Plantel</small>
+                        <b>{{ editPlantelLabel }}</b>
+                      </span>
+                    </div>
+
+                    <button
+                      class="academic-cycle-action"
+                      type="button"
+                      :disabled="savingIngresoCycle"
+                      @click="showIngresoCycleModal = true"
                     >
-                    <p>
-                      Usa el botón de calendario en el detalle del alumno para
-                      cambiar la posición académica con nivel y grado
-                      vinculados.
-                    </p>
+                      <LucideCalendarDays :size="18" />
+                      <span>Ajustar ciclo de ingreso</span>
+                    </button>
+                  </section>
+
+                  <section class="family-readonly-panel" aria-label="Contacto familiar de Control Escolar">
+                    <div class="family-readonly-source">
+                      <span><LucideShieldCheck :size="16" /></span>
+                      <div>
+                        <strong>Control Escolar</strong>
+                        <p>Contacto familiar sincronizado por matrícula. Consulta de solo lectura.</p>
+                      </div>
+                    </div>
+                    <div v-if="centralOverlayLoading && !centralOverlayStudent" class="family-readonly-loading">
+                      Preparando contacto familiar…
+                    </div>
+                    <div v-else class="family-readonly-grid">
+                      <section :class="['family-readonly-card', { complete: centralFatherComplete }]">
+                        <small>Padre</small>
+                        <strong>{{ centralFatherName || 'Sin registrar' }}</strong>
+                        <span :class="{ invalid: centralFatherPhoneInvalid }">{{ centralFatherPhone }}</span>
+                        <span :class="{ invalid: centralFatherEmailInvalid }">{{ centralFatherEmail }}</span>
+                      </section>
+                      <section :class="['family-readonly-card', { complete: centralMotherComplete }]">
+                        <small>Madre</small>
+                        <strong>{{ centralMotherName || 'Sin registrar' }}</strong>
+                        <span :class="{ invalid: centralMotherPhoneInvalid }">{{ centralMotherPhone }}</span>
+                        <span :class="{ invalid: centralMotherEmailInvalid }">{{ centralMotherEmail }}</span>
+                      </section>
+                    </div>
                   </section>
                 </div>
               </section>
@@ -447,6 +476,17 @@
           </footer>
         </form>
       </section>
+
+      <IngresoCycleModal
+        v-if="showIngresoCycleModal"
+        :student="editIngresoStudent"
+        :target-ciclo="currentCicloKey"
+        :current-tipo-ingreso="editTipoIngreso"
+        :saving="savingIngresoCycle"
+        :enrollment-concepts="enrollmentConcepts"
+        @close="showIngresoCycleModal = false"
+        @confirm="saveIngresoCycle"
+      />
     </div>
   </Teleport>
 </template>
@@ -474,6 +514,7 @@ import { useState, useCookie } from "#app";
 import { useToast } from "~/composables/useToast";
 import { useScrollLock } from "~/composables/useScrollLock";
 import { useModalDraftPersistence } from "~/composables/useModalDraftPersistence";
+import IngresoCycleModal from "./IngresoCycleModal.vue";
 import { CICLOS_LIST } from "~/utils/constants";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
 import { formatBirthDate, normalizeCurp, parseCurp } from "~/shared/utils/curp";
@@ -489,8 +530,11 @@ import {
   resolveTipoIngreso,
 } from "~/shared/utils/tipoIngreso";
 
-const props = defineProps({ student: Object });
-const emit = defineEmits(["close", "success"]);
+const props = defineProps({
+  student: Object,
+  enrollmentConcepts: { type: Array, default: () => [] },
+});
+const emit = defineEmits(["close", "success", "ingreso-cycle-updated"]);
 const state = useState("globalState");
 const { show } = useToast();
 
@@ -508,6 +552,7 @@ const defaultPlantel =
     ? activePlantel
     : userPlanteles[0] || "PT";
 const isEdit = !!props.student;
+const enrollmentConcepts = computed(() => props.enrollmentConcepts || []);
 const loading = ref(false);
 const centralOverlayLoading = ref(false);
 const centralOverlayApplied = ref(false);
@@ -518,6 +563,8 @@ const userTouchedForm = ref(false);
 const showCyclePicker = ref(false);
 const showOlderCycles = ref(false);
 const cycleChangedByUser = ref(false);
+const showIngresoCycleModal = ref(false);
+const savingIngresoCycle = ref(false);
 const formTitleId = `student-form-title-${Math.random().toString(36).slice(2, 8)}`;
 
 const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo));
@@ -758,11 +805,11 @@ const centralOverlayStatusClass = computed(() => {
 });
 
 const centralOverlayStatusLabel = computed(() => {
-  if (centralOverlayLoading.value) return 'Preparando enriquecimiento de Control Escolar…';
-  if (centralOverlayApplied.value) return 'Enriquecimiento de Control Escolar listo.';
-  if (centralOverlayAvailable.value && userTouchedForm.value) return 'Enriquecimiento disponible; no se aplicó a campos editables para proteger cambios.';
-  if (centralOverlayError.value) return 'No se pudo cargar el enriquecimiento; puedes continuar con la información visible.';
-  return 'Preparando enriquecimiento de Control Escolar…';
+  if (centralOverlayLoading.value) return 'Sincronizando con Control Escolar…';
+  if (centralOverlayApplied.value) return 'Sincronización con Control Escolar listo.';
+  if (centralOverlayAvailable.value && userTouchedForm.value) return 'Sincronización disponible; revisa antes de aplicar cambios.';
+  if (centralOverlayError.value) return 'No se pudo sincronizar Control Escolar; puedes continuar con la información visible.';
+  return 'Sincronizando con Control Escolar…';
 });
 
 const firstFilled = (...values) => values.find((value) => String(value || '').trim()) || '';
@@ -912,6 +959,37 @@ const editInitials = computed(
       .map((part) => part.charAt(0).toUpperCase())
       .join("") || "A",
 );
+
+const editPlantelLabel = computed(() => String(form.value.plantel || defaultPlantel || "—").trim() || "—");
+const editIngresoCicloLabel = computed(() => formatCicloLabel(normalizeCicloKey(form.value.ciclo || currentCicloKey.value)));
+const editNivelLabel = computed(() => academicNivel.value || nivelFromPlantel(form.value.plantel || defaultPlantel) || "Nivel sin definir");
+const editGradoLabel = computed(() => displayGrado(form.value.grado || props.student?.grado || "Primero"));
+const editIngresoStudent = computed(() => ({
+  ...(props.student || {}),
+  matricula: props.student?.matricula || form.value.matricula,
+  nombreCompleto:
+    props.student?.nombreCompleto ||
+    [form.value.apellidoPaterno, form.value.apellidoMaterno, form.value.nombres]
+      .filter(Boolean)
+      .join(" ") ||
+    "Alumno",
+  plantel: form.value.plantel,
+  plantelBase: form.value.plantel,
+  nivel: editNivelLabel.value,
+  nivelBase: editNivelLabel.value,
+  grado: editGradoLabel.value,
+  gradoBase: editGradoLabel.value,
+  ciclo: normalizeCicloKey(form.value.ciclo || currentCicloKey.value),
+  cicloBase: normalizeCicloKey(form.value.ciclo || currentCicloKey.value),
+}));
+const editTipoIngreso = computed(() =>
+  resolveTipoIngreso(editIngresoStudent.value, currentCicloKey.value, {
+    enrollmentConcepts: enrollmentConcepts.value,
+  }),
+);
+const editTipoIngresoLabel = computed(() => formatTipoIngresoValue(editTipoIngreso.value));
+const editAcademicHeadline = computed(() => `${editGradoLabel.value} · ${editNivelLabel.value}`);
+const editAcademicMeta = computed(() => `${editIngresoCicloLabel.value} · ${editTipoIngresoLabel.value}`);
 
 const academicChanged = computed(() => {
   if (!isEdit) return true;
@@ -1142,6 +1220,67 @@ const normalizeNamesBeforeSubmit = () => {
   normalizeCurpField();
   trimField("telefono");
   normalizeEmailField();
+};
+
+const saveIngresoCycle = async (payload) => {
+  if (!isEdit || !editIngresoStudent.value?.matricula || savingIngresoCycle.value) return;
+  const ciclo = typeof payload === "object" && payload !== null ? payload.ciclo : payload;
+  savingIngresoCycle.value = true;
+
+  try {
+    const res = await $fetch(
+      `/api/students/${encodeURIComponent(editIngresoStudent.value.matricula)}/ingreso-cycle`,
+      {
+        method: "PUT",
+        body: {
+          ciclo,
+          targetCiclo: payload?.targetCiclo || currentCicloKey.value,
+          targetNivel: payload?.targetNivel,
+          targetGrado: payload?.targetGrado,
+        },
+      },
+    );
+
+    const updated = res?.student || {};
+    form.value = {
+      ...form.value,
+      plantel: updated.plantelBase || updated.plantel || form.value.plantel,
+      nivel:
+        normalizeNivelEscolar(updated.nivelBase || updated.nivel) &&
+        normalizeNivelEscolar(updated.nivelBase || updated.nivel) !==
+          nivelFromPlantel(updated.plantelBase || updated.plantel || form.value.plantel)
+          ? normalizeNivelEscolar(updated.nivelBase || updated.nivel)
+          : form.value.nivel,
+      grado: displayGrado(updated.gradoBase || updated.grado || form.value.grado),
+      ciclo: normalizeCicloKey(updated.cicloBase || updated.ciclo || ciclo || form.value.ciclo),
+    };
+    originalAcademic.value = {
+      plantel: String(form.value.plantel || "").trim(),
+      nivel: academicNivel.value,
+      grado: displayGrado(form.value.grado || "Primero"),
+      ciclo: normalizeCicloKey(form.value.ciclo),
+    };
+
+    showIngresoCycleModal.value = false;
+    show("Ciclo y posición actualizados", "success");
+    emit(
+      "ingreso-cycle-updated",
+      updated.matricula
+        ? updated
+        : {
+            matricula: editIngresoStudent.value.matricula,
+            ciclo,
+            cicloBase: ciclo,
+          },
+    );
+  } catch (e) {
+    show(
+      e?.data?.message || "No se pudo actualizar el ciclo y la posición",
+      "danger",
+    );
+  } finally {
+    savingIngresoCycle.value = false;
+  }
 };
 
 const submit = async () => {
@@ -1613,59 +1752,225 @@ const submit = async () => {
   color: #92400e;
 }
 
-.family-consult-panel {
+.edit-admin-layout {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: .7rem;
-  margin-top: .15rem;
+  gap: 18px;
 }
 
-.family-consult-card {
+.academic-access-card,
+.family-readonly-panel {
+  display: grid;
+  gap: 14px;
   min-width: 0;
-  border: 1px solid rgba(220, 228, 223, .96);
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,252,.92));
-  padding: .85rem .9rem;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, .045);
+  padding: 16px;
+  border: 1px solid rgba(215, 224, 239, 0.92);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 251, 255, 0.92));
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.055);
 }
 
-.family-consult-card.complete {
-  border-color: rgba(105, 196, 130, .58);
-  background: linear-gradient(180deg, rgba(244, 253, 247, .98), rgba(255,255,255,.95));
+.academic-access-main {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 13px;
+  align-items: center;
 }
 
-.family-consult-card small {
+.academic-access-icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #edf4ff;
+  color: #256ee4;
+}
+
+.academic-access-main small,
+.academic-access-facts small,
+.family-readonly-card small {
   display: block;
-  color: #2f7b3a;
-  font-size: .68rem;
-  font-weight: 950;
-  letter-spacing: .12em;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 920;
+  letter-spacing: 0.095em;
+  line-height: 1;
   text-transform: uppercase;
 }
 
-.family-consult-card strong {
+.academic-access-main strong {
   display: block;
   overflow: hidden;
-  margin-top: .35rem;
+  margin-top: 0.35rem;
   color: #14233b;
-  font-size: .86rem;
-  font-weight: 930;
+  font-size: 1.02rem;
+  font-weight: 940;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.family-consult-card span {
+.academic-access-main p {
+  margin: 0.35rem 0 0;
+  color: #60708d;
+  font-size: 0.83rem;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.academic-access-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.academic-access-facts span {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(215, 224, 239, 0.82);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.academic-access-facts b {
   display: block;
   overflow: hidden;
-  margin-top: .24rem;
-  color: #64748b;
-  font-size: .76rem;
-  font-weight: 760;
+  margin-top: 0.35rem;
+  color: #17243e;
+  font-size: 0.82rem;
+  font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.family-consult-card span.invalid {
+.academic-cycle-action {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid rgba(37, 110, 228, 0.28);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(246, 250, 255, 0.96), rgba(255, 255, 255, 0.96));
+  color: #235fca;
+  font-size: 0.86rem;
+  font-weight: 900;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
+}
+
+.academic-cycle-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(37, 110, 228, 0.48);
+  background: #fff;
+  box-shadow: 0 12px 26px rgba(37, 110, 228, 0.09);
+}
+
+.academic-cycle-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.family-readonly-source {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid rgba(64, 148, 70, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(249, 253, 248, 0.98), rgba(255, 255, 255, 0.96));
+  color: #23422b;
+}
+
+.family-readonly-source > span {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #edf8ea;
+  color: #2f8f37;
+}
+
+.family-readonly-source strong {
+  display: block;
+  color: #1f7f2c;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.family-readonly-source p {
+  margin: 0.15rem 0 0;
+  color: #66758e;
+  font-size: 0.78rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.family-readonly-loading {
+  padding: 16px;
+  border: 1px dashed rgba(148, 163, 184, 0.38);
+  border-radius: 16px;
+  background: #fbfdff;
+  color: #66758e;
+  font-size: 0.86rem;
+  font-weight: 760;
+}
+
+.family-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.family-readonly-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(220, 228, 223, 0.96);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 253, 0.94));
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.045);
+}
+
+.family-readonly-card.complete {
+  border-color: rgba(105, 196, 130, 0.58);
+  background: linear-gradient(180deg, rgba(244, 253, 247, 0.98), rgba(255, 255, 255, 0.96));
+}
+
+.family-readonly-card small {
+  color: #2f7b3a;
+}
+
+.family-readonly-card strong,
+.family-readonly-card span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.family-readonly-card strong {
+  margin-top: 0.42rem;
+  color: #14233b;
+  font-size: 0.9rem;
+  font-weight: 930;
+}
+
+.family-readonly-card span {
+  margin-top: 0.3rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.family-readonly-card span.invalid {
   color: #b24040;
   font-weight: 900;
 }
@@ -2230,16 +2535,6 @@ const submit = async () => {
   color: #256ee4;
 }
 
-.edit-admin-card {
-  display: grid;
-  gap: 16px;
-  margin-top: 18px;
-  padding: 16px;
-  border: 1px solid rgba(215, 224, 239, 0.9);
-  border-radius: 18px;
-  background: rgba(248, 250, 252, 0.76);
-}
-
 .student-form-footer {
   display: flex;
   flex: 0 0 auto;
@@ -2505,6 +2800,11 @@ const submit = async () => {
     text-align: left;
   }
 
+  .academic-access-facts,
+  .family-readonly-grid {
+    grid-template-columns: 1fr;
+  }
+
   .student-form-footer {
     flex-direction: column;
     align-items: stretch;
@@ -2537,6 +2837,7 @@ const submit = async () => {
   .curp-insights-leave-active,
   .change-cycle-button,
   .older-cycle-toggle,
+  .academic-cycle-action,
   .result-card-enter-active,
   .result-card-leave-active,
   .cycle-picker-enter-active,
@@ -2546,119 +2847,4 @@ const submit = async () => {
     transition: none;
   }
 }
-.family-readonly-panel {
-  display: grid;
-  gap: 14px;
-}
-
-.family-readonly-source {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  align-items: center;
-  gap: 11px;
-  padding: 12px 14px;
-  border: 1px solid rgba(64, 148, 70, .18);
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(249, 253, 248, .98), rgba(255, 255, 255, .96));
-  color: #23422b;
-}
-
-.family-readonly-source > span {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #edf8ea;
-  color: #2f8f37;
-}
-
-.family-readonly-source strong {
-  display: block;
-  color: #1f7f2c;
-  font-size: .82rem;
-  font-weight: 950;
-}
-
-.family-readonly-source p {
-  margin: .15rem 0 0;
-  color: #66758e;
-  font-size: .78rem;
-  font-weight: 720;
-  line-height: 1.35;
-}
-
-.family-readonly-loading {
-  padding: 16px;
-  border: 1px dashed rgba(148, 163, 184, .38);
-  border-radius: 16px;
-  background: #fbfdff;
-  color: #66758e;
-  font-size: .86rem;
-  font-weight: 760;
-}
-
-.family-readonly-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.family-readonly-card {
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid rgba(220, 228, 223, .96);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(249,251,253,.94));
-  box-shadow: 0 10px 22px rgba(15, 23, 42, .045);
-}
-
-.family-readonly-card.complete {
-  border-color: rgba(105, 196, 130, .58);
-  background: linear-gradient(180deg, rgba(244, 253, 247, .98), rgba(255,255,255,.96));
-}
-
-.family-readonly-card small {
-  display: block;
-  color: #2f7b3a;
-  font-size: .7rem;
-  font-weight: 950;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-
-.family-readonly-card strong {
-  display: block;
-  overflow: hidden;
-  margin-top: .45rem;
-  color: #14233b;
-  font-size: .92rem;
-  font-weight: 930;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.family-readonly-card span {
-  display: block;
-  overflow: hidden;
-  margin-top: .3rem;
-  color: #64748b;
-  font-size: .8rem;
-  font-weight: 760;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.family-readonly-card span.invalid {
-  color: #b24040;
-  font-weight: 900;
-}
-
-@media (max-width: 720px) {
-  .family-readonly-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 </style>
