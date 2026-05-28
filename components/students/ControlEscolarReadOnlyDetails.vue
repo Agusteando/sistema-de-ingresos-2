@@ -87,6 +87,19 @@ let requestId = 0
 
 const hasValue = (value) => value !== null && value !== undefined && String(value).trim() !== ''
 const firstValue = (...values) => values.find(hasValue) || ''
+const extractOverlayStudent = (payload) => {
+  if (!payload || typeof payload !== 'object') return null
+  const candidate = payload.student && typeof payload.student === 'object'
+    ? payload.student
+    : payload.centralMatricula?.student && typeof payload.centralMatricula.student === 'object'
+      ? payload.centralMatricula.student
+      : payload
+  return [
+    candidate.matricula, candidate.curp, candidate.padre, candidate.madre,
+    candidate.nombrePadre, candidate.nombreMadre, candidate.emailPadre, candidate.emailMadre,
+    candidate.telefonoPadre, candidate.telefonoMadre
+  ].some(hasValue) ? candidate : null
+}
 const normalizeLabel = (key) => String(key || '')
   .replace(/_/g, ' ')
   .replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -95,10 +108,12 @@ const normalizeLabel = (key) => String(key || '')
 
 const fallbackDetail = () => {
   const base = props.fallbackStudent || {}
+  const central = extractOverlayStudent(base.centralMatricula) || {}
   return {
     ...base,
-    ...(base.centralMatricula || {}),
-    matricula: firstValue(base.matricula, base.centralMatricula?.matricula, props.matricula)
+    ...central,
+    centralMatricula: central,
+    matricula: firstValue(base.matricula, central.matricula, props.matricula)
   }
 }
 
@@ -119,7 +134,7 @@ const loadDetail = async () => {
     })
     if (currentId !== requestId) return
     const overlayStudent = (response?.overlays || [])
-      .map((item) => item?.student)
+      .map(extractOverlayStudent)
       .find((item) => String(item?.matricula || '').trim().toUpperCase() === matricula.toUpperCase())
     detail.value = overlayStudent ? { ...fallback, ...overlayStudent, centralMatricula: overlayStudent } : fallback
     if (!overlayStudent && !Object.keys(detail.value || {}).length) {

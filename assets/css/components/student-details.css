@@ -1865,3 +1865,90 @@
     padding-block: 8px;
   }
 }
+
+/* Financial enrichment visibility: show Control Escolar overlay data in compact Estado de Cuenta. */
+.account-enrichment-strip {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(223, 231, 240, .9);
+  background: linear-gradient(90deg, #fbfef9, #ffffff);
+}
+
+.account-enrichment-strip > span {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 34%;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(63, 145, 56, .14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  color: #27364d;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1;
+  padding: 5px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-enrichment-strip small {
+  flex: 0 0 auto;
+  color: #2f7f32;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.account-enrichment-strip .account-enrichment-source {
+  flex: 0 0 auto;
+  border-color: rgba(63, 145, 56, .18);
+  background: #edf8ea;
+  color: #2f7f32;
+  font-weight: 880;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-card:has(.account-enrichment-strip) {
+  grid-template-rows: 44px 36px minmax(0, 1fr) 42px;
+}
+
+@container (max-width: 720px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-card:has(.account-enrichment-strip) {
+    grid-template-rows: 78px 64px minmax(0, 1fr) 42px;
+  }
+
+  .account-enrichment-strip {
+    flex-wrap: wrap;
+    align-content: center;
+    gap: 5px;
+    padding-block: 7px;
+  }
+
+  .account-enrichment-strip > span {
+    max-width: calc(50% - 4px);
+  }
+
+  .account-enrichment-strip .account-enrichment-source {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+@container (max-width: 500px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-card:has(.account-enrichment-strip) {
+    grid-template-rows: 78px 86px minmax(0, 1fr) 42px;
+  }
+
+  .account-enrichment-strip > span {
+    max-width: 100%;
+    width: 100%;
+  }
+}

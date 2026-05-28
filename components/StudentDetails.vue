@@ -283,7 +283,7 @@
                   type="button"
                   :class="{ complete: accountExpedienteProgress.complete }"
                   :title="accountExpedienteTitle"
-                  @click.stop="emit('open-operator-info', student)"
+                  @click.stop="emit('open-operator-info', accountOverlaySource)"
                 >
                   <LucideShieldCheck :size="13" />
                   Expediente {{ accountExpedienteProgress.progress }}%
@@ -338,6 +338,20 @@
               <span>Deuda: ${{ format(accountDebtTotal) }}</span>
             </div>
           </template>
+        </div>
+
+        <div
+          v-if="!detailsExpanded && accountMetaItems.length"
+          class="account-enrichment-strip"
+          aria-label="Enriquecimiento de Control Escolar aplicado"
+        >
+          <span class="account-enrichment-source">
+            <LucideShieldCheck :size="13" />
+            Control Escolar
+          </span>
+          <span v-for="item in accountMetaItems" :key="`compact-${item.label}`">
+            <small>{{ item.label }}</small>{{ item.value }}
+          </span>
         </div>
 
         <div
@@ -781,16 +795,29 @@ const accountJoinedName = (...values) => values.map(compactAccountText).filter(B
 const accountCentralOverlay = ref(null);
 let accountOverlayRequestId = 0;
 const normalizeAccountMatricula = (value) => String(value || '').trim().toUpperCase();
+const extractAccountOverlayStudent = (payload) => {
+  if (!payload || typeof payload !== 'object') return null;
+  const candidate = payload.student && typeof payload.student === 'object'
+    ? payload.student
+    : payload.centralMatricula?.student && typeof payload.centralMatricula.student === 'object'
+      ? payload.centralMatricula.student
+      : payload;
+  return [
+    candidate.matricula, candidate.curp, candidate.padre, candidate.madre,
+    candidate.nombrePadre, candidate.nombreMadre, candidate.emailPadre, candidate.emailMadre,
+    candidate.telefonoPadre, candidate.telefonoMadre
+  ].some((value) => compactAccountText(value)) ? candidate : null;
+};
 const accountOverlaySource = computed(() => ({
   ...(props.student || {}),
-  ...(props.student?.centralMatricula || {}),
-  ...(accountCentralOverlay.value || {}),
+  ...(extractAccountOverlayStudent(props.student?.centralMatricula) || {}),
+  ...(extractAccountOverlayStudent(accountCentralOverlay.value) || {}),
 }));
 const loadAccountMatriculaOverlay = async ({ force = false } = {}) => {
   const matricula = normalizeAccountMatricula(props.student?.matricula);
   if (!matricula) return;
   if (!force && props.student?.centralMatricula) {
-    accountCentralOverlay.value = props.student.centralMatricula;
+    accountCentralOverlay.value = extractAccountOverlayStudent(props.student.centralMatricula);
     return;
   }
 
@@ -802,9 +829,9 @@ const loadAccountMatriculaOverlay = async ({ force = false } = {}) => {
     });
     if (requestId !== accountOverlayRequestId || !response?.ok) return;
     const overlay = (response.overlays || [])
-      .map((item) => item?.student)
+      .map(extractAccountOverlayStudent)
       .find((item) => normalizeAccountMatricula(item?.matricula) === matricula);
-    if (overlay) accountCentralOverlay.value = overlay;
+    if (overlay) accountCentralOverlay.value = extractAccountOverlayStudent(overlay);
   } catch (error) {
     // Optional enrichment must never block Estado de Cuenta.
   }
@@ -837,7 +864,7 @@ const accountExpedienteTitle = computed(() => {
 watch(
   () => props.student?.matricula,
   () => {
-    accountCentralOverlay.value = props.student?.centralMatricula || null;
+    accountCentralOverlay.value = extractAccountOverlayStudent(props.student?.centralMatricula);
     void loadAccountMatriculaOverlay();
   },
   { immediate: true },
@@ -846,7 +873,7 @@ watch(
 watch(
   () => props.student?.centralMatricula,
   (overlay) => {
-    if (overlay) accountCentralOverlay.value = overlay;
+    if (overlay) accountCentralOverlay.value = extractAccountOverlayStudent(overlay);
   },
 );
 

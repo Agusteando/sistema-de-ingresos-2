@@ -224,12 +224,28 @@ const titleCase = (value) => {
 const OPERATOR_DETAIL_CACHE_PREFIX = 'student-operator-detail:v4:'
 const OPERATOR_DETAIL_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000
 
+const extractOverlayStudent = (payload) => {
+  if (!payload || typeof payload !== 'object') return null
+  const candidate = payload.student && typeof payload.student === 'object'
+    ? payload.student
+    : payload.centralMatricula?.student && typeof payload.centralMatricula.student === 'object'
+      ? payload.centralMatricula.student
+      : payload
+  return [
+    candidate.matricula, candidate.curp, candidate.padre, candidate.madre,
+    candidate.nombrePadre, candidate.nombreMadre, candidate.emailPadre, candidate.emailMadre,
+    candidate.telefonoPadre, candidate.telefonoMadre
+  ].some(hasValue) ? candidate : null
+}
+
 const localStudentSnapshot = () => {
   const base = props.student || {}
+  const central = extractOverlayStudent(base.centralMatricula) || {}
   return {
     ...base,
-    ...(base.centralMatricula || {}),
-    matricula: firstValue(base.matricula, base.centralMatricula?.matricula)
+    ...central,
+    centralMatricula: central,
+    matricula: firstValue(base.matricula, central.matricula)
   }
 }
 
@@ -288,7 +304,7 @@ const loadDetail = async (options = {}) => {
     })
     if (currentId !== requestId) return
     const overlayStudent = (response?.overlays || [])
-      .map((item) => item?.student)
+      .map(extractOverlayStudent)
       .find((item) => String(item?.matricula || '').trim().toUpperCase() === matricula.toUpperCase())
     const nextDetail = overlayStudent
       ? { ...fallbackDetail, ...overlayStudent, centralMatricula: overlayStudent }
@@ -308,7 +324,7 @@ const loadDetail = async (options = {}) => {
   }
 }
 
-const source = computed(() => ({ ...(props.student || {}), ...(props.student?.centralMatricula || {}), ...(detail.value || {}) }))
+const source = computed(() => ({ ...(props.student || {}), ...(extractOverlayStudent(props.student?.centralMatricula) || {}), ...(extractOverlayStudent(detail.value) || detail.value || {}) }))
 
 const safeMatricula = computed(() => fallbackText(firstValue(source.value.matricula, props.student?.matricula), 'Sin matrícula'))
 const fullName = computed(() => fallbackText(firstValue(source.value.fullName, source.value.nombreCompleto, source.value.nombre, props.student?.nombre), 'Alumno'))

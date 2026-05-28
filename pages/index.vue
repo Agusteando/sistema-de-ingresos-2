@@ -758,11 +758,60 @@ let matriculaOverlayRequestId = 0
 
 const compactText = (value) => String(value || '').trim()
 
-const withControlEscolarProgress = (student) => {
+const extractMatriculaOverlayStudent = (payload) => {
+  if (!payload || typeof payload !== 'object') return null
+  const candidate = payload.student && typeof payload.student === 'object'
+    ? payload.student
+    : payload.centralMatricula?.student && typeof payload.centralMatricula.student === 'object'
+      ? payload.centralMatricula.student
+      : payload
+  const hasUsefulData = [
+    candidate.matricula, candidate.curp, candidate.padre, candidate.madre,
+    candidate.nombrePadre, candidate.nombreMadre, candidate.emailPadre, candidate.emailMadre,
+    candidate.telefonoPadre, candidate.telefonoMadre
+  ].some((value) => compactText(value))
+  return hasUsefulData ? candidate : null
+}
+
+const applyMatriculaOverlayFields = (student, overlayPayload) => {
   if (!student) return student
-  const progress = resolveControlEscolarProgress(student)
+  const overlayStudent = extractMatriculaOverlayStudent(overlayPayload)
+  if (!overlayStudent) return student
+  const central = { ...(extractMatriculaOverlayStudent(student.centralMatricula) || {}), ...overlayStudent }
   return {
     ...student,
+    centralMatricula: central,
+    matriculaEnrichmentStatus: 'ready',
+    curp: compactText(central.curp) || student.curp,
+    padre: compactText(central.padre) || student.padre,
+    madre: compactText(central.madre) || student.madre,
+    telefonoPadre: compactText(central.telefonoPadre) || student.telefonoPadre,
+    telefonoMadre: compactText(central.telefonoMadre) || student.telefonoMadre,
+    emailPadre: compactText(central.emailPadre) || student.emailPadre,
+    emailMadre: compactText(central.emailMadre) || student.emailMadre,
+    nombrePadre: compactText(central.nombrePadre) || student.nombrePadre,
+    apellidoPaternoPadre: compactText(central.apellidoPaternoPadre) || student.apellidoPaternoPadre,
+    apellidoMaternoPadre: compactText(central.apellidoMaternoPadre) || student.apellidoMaternoPadre,
+    nombrePadreCompleto: compactText(central.nombrePadreCompleto) || student.nombrePadreCompleto,
+    ocupacionPadre: compactText(central.ocupacionPadre) || student.ocupacionPadre,
+    nombreMadre: compactText(central.nombreMadre) || student.nombreMadre,
+    apellidoPaternoMadre: compactText(central.apellidoPaternoMadre) || student.apellidoPaternoMadre,
+    apellidoMaternoMadre: compactText(central.apellidoMaternoMadre) || student.apellidoMaternoMadre,
+    nombreMadreCompleto: compactText(central.nombreMadreCompleto) || student.nombreMadreCompleto,
+    ocupacionMadre: compactText(central.ocupacionMadre) || student.ocupacionMadre,
+    direccion: compactText(central.direccion) || student.direccion,
+  }
+}
+
+const withControlEscolarProgress = (student) => {
+  if (!student) return student
+  const normalized = applyMatriculaOverlayFields(student, student.centralMatricula)
+  const progress = resolveControlEscolarProgress({
+    ...normalized,
+    ...(extractMatriculaOverlayStudent(normalized.centralMatricula) || {})
+  })
+  return {
+    ...normalized,
     controlEscolarProgress: progress.progress,
     controlEscolarMissingFields: progress.missingFields,
     controlEscolarProgressSummary: progress.summary,
@@ -770,32 +819,8 @@ const withControlEscolarProgress = (student) => {
   }
 }
 
-const mergeMatriculaOverlayIntoStudent = (student, overlayStudent) => {
-  if (!student || !overlayStudent) return withControlEscolarProgress(student)
-  const central = { ...(student.centralMatricula || {}), ...overlayStudent }
-  const merged = {
-    ...student,
-    centralMatricula: central,
-    matriculaEnrichmentStatus: 'ready',
-    curp: compactText(overlayStudent.curp) || student.curp,
-    padre: compactText(overlayStudent.padre) || student.padre,
-    madre: compactText(overlayStudent.madre) || student.madre,
-    telefonoPadre: compactText(overlayStudent.telefonoPadre) || student.telefonoPadre,
-    telefonoMadre: compactText(overlayStudent.telefonoMadre) || student.telefonoMadre,
-    emailPadre: compactText(overlayStudent.emailPadre) || student.emailPadre,
-    emailMadre: compactText(overlayStudent.emailMadre) || student.emailMadre,
-    nombrePadre: compactText(overlayStudent.nombrePadre) || student.nombrePadre,
-    apellidoPaternoPadre: compactText(overlayStudent.apellidoPaternoPadre) || student.apellidoPaternoPadre,
-    apellidoMaternoPadre: compactText(overlayStudent.apellidoMaternoPadre) || student.apellidoMaternoPadre,
-    nombrePadreCompleto: compactText(overlayStudent.nombrePadreCompleto) || student.nombrePadreCompleto,
-    ocupacionPadre: compactText(overlayStudent.ocupacionPadre) || student.ocupacionPadre,
-    nombreMadre: compactText(overlayStudent.nombreMadre) || student.nombreMadre,
-    apellidoPaternoMadre: compactText(overlayStudent.apellidoPaternoMadre) || student.apellidoPaternoMadre,
-    apellidoMaternoMadre: compactText(overlayStudent.apellidoMaternoMadre) || student.apellidoMaternoMadre,
-    nombreMadreCompleto: compactText(overlayStudent.nombreMadreCompleto) || student.nombreMadreCompleto,
-    ocupacionMadre: compactText(overlayStudent.ocupacionMadre) || student.ocupacionMadre,
-  }
-  return withControlEscolarProgress(merged)
+const mergeMatriculaOverlayIntoStudent = (student, overlayPayload) => {
+  return withControlEscolarProgress(applyMatriculaOverlayFields(student, overlayPayload))
 }
 
 const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
@@ -846,7 +871,7 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null) => {
 
     const overlays = new Map()
     for (const overlay of response.overlays || []) {
-      const overlayStudent = overlay?.student
+      const overlayStudent = extractMatriculaOverlayStudent(overlay)
       const key = normalizeStudentMatricula(overlayStudent?.matricula)
       if (key) overlays.set(key, overlayStudent)
     }
@@ -1370,9 +1395,16 @@ const handleIngresoCycleUpdated = (payload) => {
   }
 }
 
+const findCanonicalStudent = (student) => {
+  const key = normalizeStudentMatricula(student?.matricula)
+  return key
+    ? students.value.find((candidate) => normalizeStudentMatricula(candidate?.matricula) === key) || student
+    : student
+}
+
 const openStudentOperatorInfo = (student) => {
   if (!canOpenStudentOperatorInfo.value) return
-  operatorInfoStudent.value = student
+  operatorInfoStudent.value = findCanonicalStudent(student)
 }
 
 const openFinancialDiagnosticsModal = () => {
@@ -1507,7 +1539,7 @@ watch(() => state.value.ciclo, () => {
 })
 
 const openAlta = () => { editingStudent.value = null; showStudentModal.value = true }
-const openEdit = (studentData) => { editingStudent.value = studentData; showStudentModal.value = true }
+const openEdit = (studentData) => { editingStudent.value = findCanonicalStudent(studentData); showStudentModal.value = true }
 const closeStudentModal = () => { showStudentModal.value = false; editingStudent.value = null }
 
 const handleStudentSuccess = () => {

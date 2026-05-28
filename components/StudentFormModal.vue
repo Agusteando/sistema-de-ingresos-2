@@ -700,6 +700,19 @@ const resultAnimationKey = computed(
 );
 
 const overlayText = (value) => String(value || '').trim();
+const extractCentralOverlayStudent = (payload) => {
+  if (!payload || typeof payload !== 'object') return null;
+  const candidate = payload.student && typeof payload.student === 'object'
+    ? payload.student
+    : payload.centralMatricula?.student && typeof payload.centralMatricula.student === 'object'
+      ? payload.centralMatricula.student
+      : payload;
+  return [
+    candidate.matricula, candidate.curp, candidate.padre, candidate.madre,
+    candidate.nombrePadre, candidate.nombreMadre, candidate.emailPadre, candidate.emailMadre,
+    candidate.telefonoPadre, candidate.telefonoMadre
+  ].some((value) => overlayText(value)) ? candidate : null;
+};
 const overlayJoinedName = (...values) => values.map(overlayText).filter(Boolean).join(' ');
 const overlayDigits = (value) => overlayText(value).replace(/\D/g, '');
 const overlayValidPhone = (value) => overlayDigits(value).length >= 10;
@@ -827,7 +840,7 @@ const loadCentralMatriculaOverlay = async () => {
   const matricula = String(props.student?.matricula || form.value.matricula || '').trim();
   if (!matricula) return;
 
-  const propOverlay = props.student?.centralMatricula;
+  const propOverlay = extractCentralOverlayStudent(props.student?.centralMatricula);
   if (propOverlay && typeof propOverlay === 'object') {
     applyCentralOverlayToForm(propOverlay);
     writeCentralOverlayCache(propOverlay);
@@ -848,7 +861,7 @@ const loadCentralMatriculaOverlay = async () => {
       body: { matriculas: [matricula] },
     });
     const overlayStudent = (response?.overlays || [])
-      .map((item) => item?.student)
+      .map(extractCentralOverlayStudent)
       .find((item) => String(item?.matricula || '').trim().toUpperCase() === matricula.toUpperCase());
     if (response?.ok && overlayStudent) {
       centralOverlayStudent.value = overlayStudent;
