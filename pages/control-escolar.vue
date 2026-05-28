@@ -773,29 +773,11 @@
                         />
                         <small>{{ fieldValidationMessage('curp') }}</small>
                       </label>
-                      <article v-if="editForm.curp" class="ce-derived-card" :class="`is-${derivedGenderMeta.tone}`">
-                        <span class="ce-derived-card__icon" aria-hidden="true"><b>{{ derivedGenderMeta.symbol }}</b></span>
-                        <div>
-                          <strong>{{ curpDerivedIdentity.valid ? `${derivedGenderMeta.label} · ${derivedAgeLabel}` : 'CURP inválida' }}</strong>
-                          <small v-if="curpDerivedIdentity.valid">{{ curpDerivedIdentity.fechaNacimiento }}</small>
-                        </div>
-                      </article>
                       <template v-if="showCompleteExpediente">
                         <label
-                          ><span>Nombre verificado</span
-                          ><input v-model="editForm.nombreVerificado" autocomplete="off"
-                        /></label>
-                        <label
-                          ><span>Nombre completo alumno</span
-                          ><input v-model="editForm.nombreCompletoAlumno" autocomplete="off"
-                        /></label>
-                        <label
+                          class="ce-identity-span-2"
                           ><span>Lugar nacimiento</span
                           ><input v-model="editForm.lugarNacimiento" autocomplete="off"
-                        /></label>
-                        <label
-                          ><span>Foto</span
-                          ><input v-model="editForm.foto" autocomplete="off"
                         /></label>
                       </template>
                     </div>
@@ -815,7 +797,14 @@
                         selectedSchoolStatus.label
                       }}</b>
                     </div>
-                    <div class="ce-form-grid three">
+                    <div class="ce-school-priority-panel">
+                      <article class="ce-school-current-pill">
+                        <small>Asignación actual</small>
+                        <strong>{{ editForm.grado || 'Sin grado' }}<template v-if="editForm.grupo"> · {{ editForm.grupo }}</template></strong>
+                      </article>
+                      <p>Control Escolar puede actualizar grado y grupo. Estos cambios afectan el bridge y la base operativa del plantel.</p>
+                    </div>
+                    <div class="ce-form-grid three ce-school-grid-minimal">
                       <label>
                         <span>Nivel</span>
                         <select v-model="editForm.nivel">
@@ -827,39 +816,6 @@
                           >
                             {{ labelize(nivel) }}
                           </option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>Grado</span>
-                        <select v-model="editForm.grado">
-                          <option value="">Selecciona grado</option>
-                          <option
-                            v-for="grado in gradoOptions"
-                            :key="`grado-${grado}`"
-                            :value="grado"
-                          >
-                            {{ labelize(grado) }}
-                          </option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>Grupo</span>
-                        <select v-model="editForm.grupo">
-                          <option value="">Sin grupo</option>
-                          <option
-                            v-for="grupo in groupOptions"
-                            :key="`grupo-${grupo}`"
-                            :value="grupo"
-                          >
-                            {{ grupo }}
-                          </option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>Condición</span>
-                        <select v-model="editForm.interno">
-                          <option :value="1">Interno</option>
-                          <option :value="0">Externo</option>
                         </select>
                       </label>
                       <label
@@ -883,26 +839,6 @@
                       /></label>
                       <template v-if="showCompleteExpediente">
                         <label
-                          ><span>Ciclo matrícula</span
-                          ><input v-model="editForm.ciclo" autocomplete="off"
-                        /></label>
-                        <label
-                          ><span>Último grado</span
-                          ><input v-model="editForm.lastGrade" autocomplete="off"
-                        /></label>
-                        <label
-                          ><span>Último ciclo</span
-                          ><input v-model="editForm.lastCiclo" autocomplete="off"
-                        /></label>
-                        <label
-                          ><span>Servicio</span
-                          ><input v-model="editForm.servicio" autocomplete="off"
-                        /></label>
-                        <label
-                          ><span>Eventual</span
-                          ><select v-model="editForm.eventual"><option :value="0">No</option><option :value="1">Sí</option></select>
-                        </label>
-                        <label
                           ><span>Verificado</span
                           ><select v-model="editForm.verified"><option :value="0">No</option><option :value="1">Sí</option></select>
                         </label>
@@ -910,7 +846,7 @@
                     </div>
                     <div class="ce-grade-pickers">
                       <div class="ce-picker-group">
-                        <small>Acceso rápido por grado</small>
+                        <small>Grado</small>
                         <div class="ce-grade-picker-grid">
                           <button
                             v-for="grado in gradoOptions"
@@ -924,7 +860,7 @@
                         </div>
                       </div>
                       <div class="ce-picker-group" v-if="groupOptions.length">
-                        <small>Selector visual de grupo</small>
+                        <small>Grupo</small>
                         <div class="ce-group-picker-grid">
                           <button
                             type="button"
@@ -997,7 +933,7 @@
                             <i><b :style="{ width: `${familySectionState('padre').progress}%` }"></b></i>
                           </div>
                         </header>
-                        <div class="ce-form-grid two ce-family-fields">
+                        <div class="ce-form-grid two ce-family-fields ce-family-fields--father">
                           <label :class="fieldShellClass('nombrePadre')" data-ce-field="nombrePadre">
                             <span>Nombre padre</span>
                             <input v-model="editForm.nombrePadre" autocomplete="off" />
@@ -1019,7 +955,10 @@
                             <input v-model="editForm.telefonoPadre" autocomplete="off" inputmode="tel" />
                             <small>{{ fieldValidationMessage('telefonoPadre') }}</small>
                           </label>
-                          <label :class="fieldShellClass('emailPadre')" data-ce-field="emailPadre">
+                          <label
+                            :class="['ce-family-span-2', ...fieldShellClass('emailPadre')]"
+                            data-ce-field="emailPadre"
+                          >
                             <span>Email padre</span>
                             <input v-model="editForm.emailPadre" type="email" autocomplete="off" />
                             <small>{{ fieldValidationMessage('emailPadre') }}</small>
@@ -1061,7 +1000,7 @@
                             <i><b :style="{ width: `${familySectionState('madre').progress}%` }"></b></i>
                           </div>
                         </header>
-                        <div class="ce-form-grid ce-family-fields ce-family-fields--mother">
+                        <div class="ce-form-grid two ce-family-fields ce-family-fields--mother">
                           <label :class="fieldShellClass('nombreMadre')" data-ce-field="nombreMadre">
                             <span>Nombre madre</span>
                             <input v-model="editForm.nombreMadre" autocomplete="off" />
@@ -2895,7 +2834,7 @@ const selectedIdentityStatus = computed(() => {
   return { tone: "complete", label: "Listo", count: 0 };
 });
 const selectedSchoolStatus = computed(() => {
-  const schoolKeys = ["nivel", "grado", "grupo", "servicio"];
+  const schoolKeys = ["nivel", "grado", "grupo"];
   const missing = schoolKeys.filter((key) =>
     normalizedMissingFields(selectedHealthStudent.value, "complete").includes(key),
   );
@@ -8096,6 +8035,138 @@ onBeforeUnmount(() => {
 @media (max-width: 1100px) {
   .control-escolar-screen .ce-family-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+
+/* Final cleanup: prioritize CURP, grado/grupo and symmetric parents layout. */
+.control-escolar-screen .ce-identity-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.control-escolar-screen .ce-identity-span-2 {
+  grid-column: span 2;
+}
+
+.control-escolar-screen .ce-school-priority-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border: 1px solid #e1eaf3;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfdfd, #ffffff);
+}
+
+.control-escolar-screen .ce-school-priority-panel p {
+  margin: 0;
+  max-width: 520px;
+  color: #6b7a90;
+  font-size: 11.5px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.control-escolar-screen .ce-school-current-pill {
+  display: grid;
+  gap: 4px;
+  min-width: 200px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #f2f7f1;
+  color: #224d2b;
+}
+
+.control-escolar-screen .ce-school-current-pill small {
+  color: #5f7085;
+  font-size: 10.5px;
+  font-weight: 820;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.control-escolar-screen .ce-school-current-pill strong {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.control-escolar-screen .ce-school-grid-minimal {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.control-escolar-screen .ce-grade-pickers {
+  gap: 14px;
+  padding-top: 10px;
+}
+
+.control-escolar-screen .ce-grade-picker-chip,
+.control-escolar-screen .ce-group-picker-chip {
+  min-height: 42px;
+  border-radius: 14px;
+  font-weight: 820;
+}
+
+.control-escolar-screen .ce-family-card {
+  grid-template-rows: auto 1fr;
+}
+
+.control-escolar-screen .ce-family-fields--father,
+.control-escolar-screen .ce-family-fields--mother {
+  grid-auto-rows: minmax(74px, auto);
+  align-content: start;
+}
+
+.control-escolar-screen .ce-family-fields--father .ce-family-span-2,
+.control-escolar-screen .ce-family-fields--mother .ce-family-span-2 {
+  grid-column: 1 / -1;
+}
+
+.control-escolar-screen .ce-family-card-status > span {
+  background: rgba(241,247,240,.98);
+}
+
+.control-escolar-screen .ce-family-card input,
+.control-escolar-screen .ce-family-card select,
+.control-escolar-screen .ce-family-card textarea {
+  min-height: 46px;
+}
+
+.control-escolar-screen .ce-system-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.control-escolar-screen .ce-husky-card.compact {
+  margin-top: 14px;
+}
+
+@media (max-width: 1280px) {
+  .control-escolar-screen .ce-identity-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .control-escolar-screen .ce-school-priority-panel {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .control-escolar-screen .ce-school-grid-minimal,
+  .control-escolar-screen .ce-system-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .control-escolar-screen .ce-identity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .control-escolar-screen .ce-identity-span-2 {
+    grid-column: auto;
   }
 }
 
