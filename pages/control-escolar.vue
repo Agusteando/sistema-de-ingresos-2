@@ -604,20 +604,30 @@
                       <span>{{ selectedStudent.nivel || "Sin nivel" }}</span>
                     </div>
                     <p>
-                      Plantel {{ selectedStudent.plantel || selectedAgentId }}
+                      Expediente editable desde matrícula · Plantel
+                      {{ selectedStudent.plantel || selectedAgentId }}
                     </p>
                   </div>
-                  <div class="ce-family-mini-card">
-                    <section :class="['ce-parent-mini', { complete: isParentComplete(selectedStudent, 'padre') }]">
-                      <small>Padre</small>
-                      <strong>{{ parentDisplayName(selectedStudent, 'padre') || "Sin registrar" }}</strong>
-                      <span>{{ parentContactLine(selectedStudent, 'padre') }}</span>
-                    </section>
-                    <section :class="['ce-parent-mini', { complete: isParentComplete(selectedStudent, 'madre') }]">
-                      <small>Madre</small>
-                      <strong>{{ parentDisplayName(selectedStudent, 'madre') || "Sin registrar" }}</strong>
-                      <span>{{ parentContactLine(selectedStudent, 'madre') }}</span>
-                    </section>
+                  <div
+                    class="ce-profile-summary-grid"
+                    aria-label="Resumen escolar del alumno"
+                  >
+                    <span class="ce-profile-summary-item">
+                      <small>Plantel</small>
+                      <strong>{{ selectedStudent.plantel || selectedAgentId || "Sin plantel" }}</strong>
+                    </span>
+                    <span class="ce-profile-summary-item">
+                      <small>Grupo</small>
+                      <strong>{{
+                        controlMissingGroup(selectedStudent)
+                          ? "Sin grupo"
+                          : controlGroupLabel(selectedStudent)
+                      }}</strong>
+                    </span>
+                    <span class="ce-profile-summary-item">
+                      <small>Nivel</small>
+                      <strong>{{ selectedStudent.nivel || "Sin nivel" }}</strong>
+                    </span>
                   </div>
                   <UiGroupIcon
                     class="ce-profile-watermark"
@@ -2420,14 +2430,6 @@ const isParentComplete = (student = {}, type = "padre") => {
   const phone = type === "madre" ? student.telefonoMadre : (student.telefonoPadre || student.phone || student.telefono);
   const email = type === "madre" ? student.emailMadre : (student.emailPadre || student.email || student.correo);
   return Boolean(name && isValidPhone(phone) && isValidFamilyEmail(email));
-};
-const parentContactLine = (student = {}, type = "padre") => {
-  const phone = type === "madre" ? student.telefonoMadre : (student.telefonoPadre || student.phone || student.telefono);
-  const email = type === "madre" ? student.emailMadre : (student.emailPadre || student.email || student.correo);
-  const parts = [];
-  if (phone) parts.push(isValidPhone(phone) ? String(phone) : `${phone} · teléfono no válido`);
-  if (email) parts.push(isValidFamilyEmail(email) ? String(email) : `${email} · email no válido`);
-  return parts.length ? parts.join(" · ") : "Sin contacto válido";
 };
 const hasNoPrimaryContactClient = (student = {}) =>
   !isParentComplete(student, "padre") && !isParentComplete(student, "madre");
@@ -4415,60 +4417,6 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.ce-husky-header-card {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: 72px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid rgba(63, 145, 56, 0.14);
-  border-radius: 14px;
-  background: linear-gradient(110deg, #ffffff 0%, #f5fbf2 100%);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.045);
-}
-
-.ce-husky-header-card.unavailable {
-  border-color: rgba(129, 142, 162, 0.18);
-  background: #fbfcfd;
-}
-
-.ce-husky-header-card img {
-  display: block;
-  width: 72px;
-  max-height: 42px;
-  object-fit: contain;
-}
-
-.ce-husky-header-card div {
-  min-width: 0;
-}
-
-.ce-husky-header-card strong,
-.ce-husky-header-card span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ce-husky-header-card strong {
-  color: #1f7b2b;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.ce-husky-header-card.unavailable strong {
-  color: #677389;
-}
-
-.ce-husky-header-card span {
-  margin-top: 3px;
-  color: #59687f;
-  font-size: 10px;
-  font-weight: 760;
-}
-
 .ce-progress-cluster {
   display: flex;
   min-width: 0;
@@ -4565,7 +4513,7 @@ onBeforeUnmount(() => {
 }
 
 .ce-profile-copy,
-.ce-family-mini-card {
+.ce-profile-summary-grid {
   position: relative;
   z-index: 1;
   min-width: 0;
@@ -4612,52 +4560,37 @@ onBeforeUnmount(() => {
   font-weight: 720;
 }
 
-.ce-family-mini-card {
+.ce-profile-summary-grid {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.ce-parent-mini {
+.ce-profile-summary-item {
   min-width: 0;
+  padding: 9px 10px;
   border: 1px solid #e0e9e2;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.86);
-  padding: 8px 10px;
   box-shadow: 0 7px 16px rgba(36, 70, 44, 0.045);
 }
 
-.ce-parent-mini.complete {
-  border-color: #bfe8ca;
-  background: #f3fbf4;
-}
-
-.ce-parent-mini small {
+.ce-profile-summary-item small {
   display: block;
   color: #2f7b3a;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 920;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.ce-parent-mini strong {
+.ce-profile-summary-item strong {
   display: block;
   overflow: hidden;
-  margin-top: 3px;
+  margin-top: 4px;
   color: #16243d;
   font-size: 12px;
   font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ce-parent-mini span {
-  display: block;
-  overflow: hidden;
-  margin-top: 3px;
-  color: #5e6c84;
-  font-size: 11px;
-  font-weight: 720;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -6283,8 +6216,7 @@ onBeforeUnmount(() => {
 .ce-student-row .student-copy strong,
 .ce-title-row h2,
 .ce-profile-copy strong,
-.ce-parent-mini strong,
-.ce-parent-mini span,
+.ce-profile-summary-item strong,
 .ce-empty-flow li b {
   overflow: visible;
   text-overflow: clip;
@@ -6293,7 +6225,7 @@ onBeforeUnmount(() => {
 
 .ce-title-row h2,
 .ce-profile-copy strong,
-.ce-parent-mini strong {
+.ce-profile-summary-item strong {
   line-height: 1.1;
 }
 
@@ -6360,6 +6292,361 @@ onBeforeUnmount(() => {
   .ce-detail-tabs {
     gap: 14px;
     overflow-x: auto;
+  }
+}
+
+
+/* Control Escolar detail panel: compact responsive editorial pass. */
+.ce-detail-shell {
+  container-type: inline-size;
+  border-color: #dce6f0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(21, 35, 60, 0.05);
+}
+
+.ce-detail-header {
+  grid-template-columns: minmax(0, 1.1fr) minmax(214px, 0.58fr) minmax(172px, 0.42fr) 38px;
+  min-height: 86px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px 14px 18px;
+  border-bottom-color: #e8eef5;
+  background: #fff;
+}
+
+.ce-detail-title small {
+  color: #6b778e;
+  font-size: 10.5px;
+  letter-spacing: 0.055em;
+}
+
+.ce-title-row {
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.ce-title-row h2 {
+  min-width: min(100%, 240px);
+  font-size: clamp(16.5px, 1.28vw, 21px);
+  line-height: 1.08;
+  white-space: normal;
+}
+
+.ce-access-header-card {
+  grid-template-columns: 38px minmax(0, 1fr);
+  min-height: 60px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfef9, #fff);
+}
+
+.ce-access-header-card > span {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+}
+
+.ce-access-icon img {
+  display: block;
+  width: 26px;
+  max-height: 22px;
+  object-fit: contain;
+  opacity: 0.86;
+}
+
+.ce-access-header-card strong {
+  font-size: 12px;
+  letter-spacing: -0.01em;
+}
+
+.ce-access-header-card small {
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.ce-progress-cluster {
+  justify-self: stretch;
+  gap: 6px;
+}
+
+.ce-progress-cluster strong {
+  color: #394860;
+  font-size: 12px;
+  letter-spacing: -0.01em;
+}
+
+.ce-progress-track {
+  height: 8px;
+  background: #e7eee9;
+}
+
+.ce-detail-menu-button {
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+}
+
+.ce-detail-body {
+  gap: 12px;
+  padding: 12px 14px 14px;
+  background: #fff;
+  scrollbar-gutter: stable;
+}
+
+.ce-profile-card {
+  grid-template-columns: minmax(72px, 84px) minmax(0, 1fr) minmax(220px, 0.58fr);
+  min-height: 112px;
+  gap: 16px;
+  padding: 14px 16px;
+  border-color: #dce6f0;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 88% 50%, rgba(63, 145, 56, 0.08), transparent 170px),
+    linear-gradient(90deg, #fff 0%, #fff 78%, #f8fcf6 100%);
+}
+
+.ce-detail-photo {
+  --student-grade-photo-width: 80px;
+  --student-grade-photo-height: 74px;
+  --student-grade-photo-radius: 16px;
+}
+
+.ce-profile-copy strong {
+  color: #13223c;
+  font-size: clamp(16px, 1.2vw, 19px);
+  line-height: 1.1;
+}
+
+.ce-profile-pills {
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.ce-profile-pills span {
+  min-height: 24px;
+  padding-inline: 10px;
+  background: #edf8ea;
+}
+
+.ce-profile-copy p {
+  margin-top: 8px;
+  color: #68768f;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.ce-profile-summary-grid {
+  align-self: stretch;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ce-profile-summary-item {
+  display: grid;
+  min-height: 62px;
+  align-content: center;
+  border-color: #e1eadf;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.04);
+}
+
+.ce-profile-summary-item strong {
+  line-height: 1.15;
+}
+
+.ce-profile-watermark {
+  right: 20px;
+  --group-icon-size: 132px;
+  opacity: 0.075;
+}
+
+.ce-data-section {
+  grid-template-columns: minmax(210px, 0.35fr) minmax(0, 1fr);
+  min-height: 68px;
+  gap: 14px;
+  padding: 12px 14px;
+  border-color: rgba(63, 145, 56, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(90deg, #f8fcf6, #fff 62%);
+}
+
+.ce-section-heading > span {
+  width: 34px;
+  height: 34px;
+}
+
+.ce-section-heading h3 {
+  color: #15233c;
+  font-size: 13px;
+}
+
+.ce-section-heading p {
+  max-width: 36ch;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ce-missing-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.ce-missing-chip {
+  min-height: 42px;
+  justify-content: center;
+  border-radius: 13px;
+  font-size: 11px;
+}
+
+.ce-missing-chip b {
+  min-width: 42px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.54);
+  text-align: center;
+}
+
+.ce-detail-tabs {
+  min-height: 44px;
+  gap: clamp(12px, 2vw, 26px);
+  padding-inline: 12px;
+  border-bottom-color: #e3ebf3;
+}
+
+.ce-detail-tabs button {
+  height: 44px;
+  color: #5f6f89;
+}
+
+.ce-detail-tabs button.active {
+  border-bottom-color: #279233;
+  color: #20882d;
+}
+
+.ce-edit-form {
+  gap: 12px;
+}
+
+.ce-form-card {
+  border-color: #dce6f0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.035);
+}
+
+.ce-form-grid.two {
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+}
+
+.ce-form-grid input,
+.ce-form-grid select,
+.ce-wide-field textarea {
+  min-height: 42px;
+  border-color: #d3deeb;
+  border-radius: 12px;
+  background: #fbfdff;
+  font-size: 12.5px;
+}
+
+.ce-detail-footer {
+  min-height: 66px;
+  padding: 10px 18px;
+  border-top-color: rgba(223, 231, 240, 0.96);
+  background: linear-gradient(90deg, rgba(255, 251, 244, 0.96), rgba(255, 255, 255, 0.98));
+}
+
+@container (max-width: 860px) {
+  .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 38px;
+    min-height: 0;
+  }
+
+  .ce-detail-title {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .ce-detail-menu-button {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .ce-access-header-card,
+  .ce-progress-cluster {
+    grid-column: 1 / -1;
+  }
+
+  .ce-access-header-card {
+    grid-row: 2;
+  }
+
+  .ce-progress-cluster {
+    grid-row: 3;
+    max-width: none;
+  }
+
+  .ce-profile-card {
+    grid-template-columns: minmax(68px, 78px) minmax(0, 1fr);
+  }
+
+  .ce-profile-summary-grid {
+    grid-column: 1 / -1;
+  }
+
+  .ce-data-section {
+    grid-template-columns: 1fr;
+  }
+
+  .ce-section-heading p {
+    max-width: none;
+  }
+}
+
+@container (max-width: 620px) {
+  .ce-detail-header,
+  .ce-detail-body,
+  .ce-detail-footer {
+    padding-inline: 12px;
+  }
+
+  .ce-profile-card {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .ce-detail-photo {
+    --student-grade-photo-width: 64px;
+    --student-grade-photo-height: 62px;
+  }
+
+  .ce-profile-summary-grid,
+  .ce-missing-grid,
+  .ce-form-grid.two,
+  .ce-tab-panel .ce-form-grid.three,
+  .ce-system-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ce-detail-tabs {
+    gap: 14px;
+    padding-inline: 4px;
+  }
+
+  .ce-detail-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ce-detail-footer div {
+    justify-content: stretch;
+  }
+
+  .ce-detail-footer :deep(.ui-button) {
+    flex: 1 1 0;
   }
 }
 

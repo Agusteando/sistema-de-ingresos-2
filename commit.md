@@ -1,1 +1,1 @@
-feat(finanzas): enriquecer expedientes desde matrícula central sin bloquear estado de cuenta
+refactor(control-escolar): rediseñar panel de detalle del alumno
