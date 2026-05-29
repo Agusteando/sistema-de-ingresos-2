@@ -1,1 +1,1 @@
-Integrate legacy CFDI invoicing flow into student accounts
+Integrar facturación legacy al flujo del alumno con reglas operativas bloqueadas

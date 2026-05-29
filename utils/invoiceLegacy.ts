@@ -285,3 +285,106 @@ export const buildFiscalProfiles = (student: Record<string, any>, companyData: R
 
   return profiles.filter(profile => profile.key === 'stored' || profile.legal_name || profile.email || profile.tax_id)
 }
+
+export type ResolveLegacyInvoiceContextInput = {
+  student?: Record<string, any>
+  selectedConcepts?: InvoiceConceptInput[]
+}
+
+export type ResolvedLegacyInvoiceConcept = InvoiceConceptInput & {
+  id: string
+  conceptoNombre: string
+  monto: number
+  folio_plantel: string
+  plantel: string
+}
+
+export type ResolvedLegacyInvoiceContext = {
+  matricula: string
+  matriculaPrefix: string
+  plantel: string
+  facturaCon: string
+  seriesToSend: string
+  seriesLabel: string
+  folioPlantelRaw: string
+  folioNumber: number | null
+  externalId: string
+  productKey: string
+  primaryFormaDePago: string
+  paymentForm: string
+  conceptos: ResolvedLegacyInvoiceConcept[]
+  total: number
+  defaultRvoe: string
+  blockingErrors: string[]
+}
+
+export const resolveLegacyInvoiceContext = ({ student = {}, selectedConcepts = [] }: ResolveLegacyInvoiceContextInput = {}): ResolvedLegacyInvoiceContext => {
+  const matricula = normalizeText(student?.matricula)
+  const matriculaPrefix = normalizeUpper(matricula).substring(0, 2)
+  const studentPlantel = normalizeUpper(student?.plantel || student?.plantelCode || student?.campus || student?.sede)
+  const fallbackPlantel = plantelCodes.includes(studentPlantel)
+    ? studentPlantel
+    : (plantelCodes.includes(matriculaPrefix) ? matriculaPrefix : '')
+
+  const conceptos = (Array.isArray(selectedConcepts) ? selectedConcepts : []).map((source, index) => {
+    const normalized = normalizeInvoiceConcept(source, index)
+    const plantel = extractPlantelCode(normalized) || fallbackPlantel
+    return {
+      ...normalized,
+      id: normalizeText(normalized.id) || `${normalized.documento || 'concepto'}-${normalized.mes || index}`,
+      conceptoNombre: normalizeText(normalized.conceptoNombre),
+      monto: Number(normalized.monto || 0),
+      folio_plantel: normalizeText(normalized.folio_plantel || normalized.external_id || normalized.folio || ''),
+      plantel
+    } as ResolvedLegacyInvoiceConcept
+  })
+
+  const plantel = conceptos.map(concepto => extractPlantelCode(concepto) || normalizeUpper(concepto.plantel)).find(Boolean) || fallbackPlantel
+  const folioPlantelRaw = normalizeText(conceptos.find(concepto => concepto.folio_plantel)?.folio_plantel || '')
+  const folioNumber = parseFolioNumber(folioPlantelRaw)
+  const facturaCon = computeDefaultFacturaCon(matricula)
+  const productKey = computeDefaultProductKey(conceptos)
+  const primaryFormaDePago = normalizeText(
+    conceptos.find(concepto => normalizeText(concepto.formaDePago || concepto.payment_form || concepto.forma_pago))?.formaDePago
+    || conceptos.find(concepto => normalizeText(concepto.payment_form))?.payment_form
+    || conceptos.find(concepto => normalizeText(concepto.forma_pago))?.forma_pago
+    || 'Efectivo'
+  )
+  const paymentForm = mapPaymentForm(primaryFormaDePago)
+  const seriesCandidate = ['PT', 'ST'].includes(plantel) ? plantel : matriculaPrefix
+  const seriesToSend = matriculaPrefix === 'PT' ? (['PT', 'ST'].includes(seriesCandidate) ? seriesCandidate : 'PT') : ''
+  const total = conceptos.reduce((sum, concepto) => sum + (Number.isFinite(Number(concepto.monto)) ? Number(concepto.monto) : 0), 0)
+  const defaultRvoe = defaultRvoeFor(plantel, student?.nivel)
+  const blockingErrors: string[] = []
+
+  if (!matricula) blockingErrors.push('No se pudo determinar la matrícula del alumno.')
+  if (!conceptos.length) blockingErrors.push('Selecciona al menos un concepto o pago del estado de cuenta para facturar.')
+  if (!plantel) blockingErrors.push('No se pudo determinar el plantel desde el alumno ni desde el folio del concepto.')
+  if (!folioPlantelRaw) blockingErrors.push('No se pudo determinar el folio plantel/external_id desde el pago o concepto seleccionado.')
+  if (folioPlantelRaw && folioNumber === null) blockingErrors.push('No se pudo calcular el folio_number legacy desde el folio plantel seleccionado.')
+  if (!/^\d{8}$/.test(productKey)) blockingErrors.push('No se pudo determinar una clave SAT legacy válida para el plantel.')
+  conceptos.forEach((concepto, index) => {
+    if (!normalizeText(concepto.conceptoNombre)) blockingErrors.push(`Concepto ${index + 1}: descripción requerida desde el estado de cuenta.`)
+    if (!Number.isFinite(Number(concepto.monto)) || Number(concepto.monto) <= 0) blockingErrors.push(`Concepto ${index + 1}: monto inválido desde el estado de cuenta.`)
+  })
+
+  return {
+    matricula,
+    matriculaPrefix,
+    plantel,
+    facturaCon,
+    seriesToSend,
+    seriesLabel: seriesToSend || 'No se envía serie para esta matrícula',
+    folioPlantelRaw,
+    folioNumber,
+    externalId: folioPlantelRaw,
+    productKey,
+    primaryFormaDePago,
+    paymentForm,
+    conceptos,
+    total: Number(total.toFixed(2)),
+    defaultRvoe,
+    blockingErrors
+  }
+}
+

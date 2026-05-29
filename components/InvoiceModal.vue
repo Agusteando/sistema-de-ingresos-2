@@ -4,8 +4,8 @@
       <div class="modal-container large w-full max-w-6xl h-auto my-auto">
         <div class="modal-header rounded-t-xl sticky top-0 z-10">
           <div>
-            <h2 class="text-lg font-bold text-gray-800">Facturación CFDI del alumno</h2>
-            <p class="text-xs text-gray-500 mt-1">Flujo legacy integrado al estado de cuenta: mismos endpoints, emisor, serie, forma de pago y complemento IEDU.</p>
+            <h2 class="text-lg font-bold text-gray-800">Facturar alumno</h2>
+            <p class="text-xs text-gray-500 mt-1">Flujo operativo legacy: selecciona receptor fiscal, confirma los datos y timbra con serie, folio, emisor, clave SAT y conceptos calculados por el sistema.</p>
           </div>
         </div>
 
@@ -33,14 +33,27 @@
             </div>
           </div>
 
+          <div v-if="operationalIssues.length" class="card p-4 border-amber-200 bg-amber-50/70">
+            <div class="flex items-start gap-3">
+              <LucideAlertTriangle class="text-amber-600 shrink-0 mt-0.5" :size="18" />
+              <div>
+                <h3 class="text-sm font-bold text-amber-900 m-0">No se puede timbrar todavía</h3>
+                <p class="text-xs text-amber-800 mt-1">Los datos operativos no son editables aquí. Corrige el pago, concepto o expediente origen.</p>
+                <ul class="text-xs text-amber-900 mt-2 list-disc pl-5 space-y-1">
+                  <li v-for="issue in operationalIssues" :key="issue">{{ issue }}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div class="card p-5 xl:col-span-2">
               <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4 border-b border-gray-100 pb-3">
                 <div>
-                  <h3 class="text-xs font-bold text-brand-teal uppercase tracking-wide m-0">Receptor / datos fiscales</h3>
-                  <p class="text-xs text-gray-500 mt-1">Selecciona el responsable fiscal y completa lo que falte antes de timbrar.</p>
+                  <h3 class="text-xs font-bold text-brand-teal uppercase tracking-wide m-0">1. Receptor fiscal</h3>
+                  <p class="text-xs text-gray-500 mt-1">Elige el responsable y completa únicamente sus datos fiscales faltantes.</p>
                 </div>
-                <button class="btn btn-ghost text-xs py-1 px-2" type="button" @click="openInvoiceSearch" :disabled="!form.tax_id">
+                <button class="btn btn-ghost text-xs py-1 px-2" type="button" @click="openInvoiceSearch" :disabled="!isValidRFC(form.tax_id)">
                   <LucideSearch :size="14" /> Ver facturas del RFC
                 </button>
               </div>
@@ -61,23 +74,23 @@
 
               <div class="grid grid-cols-12 gap-4">
                 <div class="col-span-12 md:col-span-8 form-group mb-0">
-                  <label class="form-label">Razón Social</label>
-                  <input type="text" v-model.trim="form.legal_name" class="input-field" required>
+                  <label class="form-label">Razón social</label>
+                  <input type="text" v-model.trim="form.legal_name" class="input-field" required autocomplete="off">
                 </div>
                 <div class="col-span-12 md:col-span-4 form-group mb-0">
                   <label class="form-label">RFC</label>
-                  <input type="text" v-model.trim="form.tax_id" class="input-field uppercase font-mono" required @input="form.tax_id = form.tax_id.toUpperCase()">
+                  <input type="text" v-model.trim="form.tax_id" class="input-field uppercase font-mono" required @input="form.tax_id = form.tax_id.toUpperCase()" autocomplete="off">
                 </div>
                 <div class="col-span-12 md:col-span-6 form-group mb-0">
                   <label class="form-label">Email</label>
-                  <input type="email" v-model.trim="form.email" class="input-field" required>
+                  <input type="email" v-model.trim="form.email" class="input-field" required autocomplete="off">
                 </div>
                 <div class="col-span-12 md:col-span-2 form-group mb-0">
                   <label class="form-label">C.P.</label>
-                  <input type="text" v-model.trim="form.zip" class="input-field font-mono" required>
+                  <input type="text" v-model.trim="form.zip" class="input-field font-mono" required autocomplete="off">
                 </div>
                 <div class="col-span-12 md:col-span-4 form-group mb-0">
-                  <label class="form-label">Régimen Fiscal</label>
+                  <label class="form-label">Régimen fiscal</label>
                   <select v-model="form.tax_system" class="input-field" required>
                     <option v-for="system in taxSystems" :key="system.value" :value="system.value">{{ system.label }}</option>
                   </select>
@@ -89,103 +102,104 @@
                   </select>
                 </div>
                 <div class="col-span-12 md:col-span-6 form-group mb-0">
-                  <label class="form-label">Fecha/Hora</label>
-                  <input type="datetime-local" v-model="form.invoiceDate" class="input-field font-mono text-gray-600" required>
+                  <label class="form-label">Fecha/Hora de emisión</label>
+                  <input type="datetime-local" v-model="form.invoiceDate" class="input-field font-mono bg-gray-50 text-gray-600" readonly>
+                  <p class="text-[11px] text-gray-400 mt-1">La fecha se toma automáticamente al abrir el flujo; se valida contra la regla legacy de 72 horas.</p>
                 </div>
               </div>
             </div>
 
             <div class="card p-5">
-              <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Padres / tutores disponibles</h3>
-              <div class="space-y-3 text-sm">
-                <div class="rounded-xl border border-gray-200 p-3 bg-white">
-                  <span class="text-[10px] font-bold uppercase tracking-wide text-gray-400">Padre / tutor</span>
-                  <strong class="block text-gray-800 truncate">{{ parentSummary.father.name || 'Sin dato' }}</strong>
-                  <small class="block text-xs text-gray-500 truncate">{{ parentSummary.father.email || 'correo pendiente' }}</small>
-                </div>
-                <div class="rounded-xl border border-gray-200 p-3 bg-white">
-                  <span class="text-[10px] font-bold uppercase tracking-wide text-gray-400">Madre / tutora</span>
-                  <strong class="block text-gray-800 truncate">{{ parentSummary.mother.name || 'Sin dato' }}</strong>
-                  <small class="block text-xs text-gray-500 truncate">{{ parentSummary.mother.email || 'correo pendiente' }}</small>
-                </div>
-                <p class="text-xs text-gray-500 leading-relaxed">Estos datos se toman del expediente del alumno cuando existen. El RFC, régimen y CP se editan aquí y se envían al endpoint legacy al timbrar.</p>
-              </div>
+              <h3 class="text-xs font-bold text-accent-sky uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">2. Reglas legacy aplicadas</h3>
+              <dl class="space-y-3 text-sm">
+                <div class="flex justify-between gap-3"><dt class="text-gray-500">Matrícula</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.matricula || '—' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-gray-500">Plantel</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.plantel || '—' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-gray-500">Factura con</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.facturaCon || '—' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-gray-500">Serie enviada</dt><dd class="font-mono font-semibold text-gray-800 text-right">{{ legacyContext.seriesLabel }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-gray-500">Folio plantel</dt><dd class="font-mono font-semibold text-gray-800 text-right">{{ legacyContext.folioPlantelRaw || '—' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-gray-500">folio_number</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.folioNumber ?? '—' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-gray-500">Clave SAT</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.productKey || '—' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-gray-500">Forma SAT</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.paymentForm }} · {{ legacyContext.primaryFormaDePago }}</dd></div>
+              </dl>
+              <p class="text-xs text-gray-500 mt-4 leading-relaxed">Estos valores no se capturan manualmente. Se resuelven desde matrícula, plantel, folio del pago/concepto y forma de pago origen.</p>
             </div>
           </div>
 
           <div class="card p-5">
-            <h3 class="text-xs font-bold text-accent-sky uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Emisión legacy</h3>
-            <div class="grid grid-cols-12 gap-4">
-              <div class="col-span-12 md:col-span-3 form-group mb-0">
-                <label class="form-label">Factura con</label>
-                <select v-model="form.facturaCon" class="input-field">
-                  <option value="IECS">IECS</option>
-                  <option value="IEDIS">IEDIS</option>
-                </select>
-              </div>
-              <div v-if="showSeriesControl" class="col-span-12 md:col-span-3 form-group mb-0">
-                <label class="form-label">Serie</label>
-                <select v-model="form.series" class="input-field">
-                  <option value="PT">PT</option>
-                  <option value="ST">ST</option>
-                </select>
-              </div>
-              <div class="col-span-12 md:col-span-3 form-group mb-0">
-                <label class="form-label">Clave SAT global</label>
-                <input type="text" v-model.trim="form.productKeyGlobal" class="input-field font-mono" maxlength="8">
-              </div>
-              <div class="col-span-12 md:col-span-3 form-group mb-0">
-                <label class="form-label">Forma de pago SAT</label>
-                <input type="text" :value="`${mappedPaymentForm} · ${primaryFormaDePago}`" class="input-field font-mono bg-gray-50 text-gray-500" readonly>
-              </div>
-            </div>
-            <p class="text-xs text-gray-500 mt-3">Serie visible solo para matrículas PT/ST. Igual que el legado, la serie se envía únicamente cuando la matrícula es PT.</p>
-          </div>
-
-          <div class="card p-5">
-            <h3 class="text-xs font-bold text-brand-campus uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Complemento IEDU</h3>
+            <h3 class="text-xs font-bold text-brand-campus uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">3. Alumno / complemento IEDU</h3>
             <div class="grid grid-cols-12 gap-4">
               <div class="col-span-12 md:col-span-5 form-group mb-0">
                 <label class="form-label">Alumno</label>
-                <input type="text" v-model.trim="form.nombreCompleto" class="input-field">
+                <input type="text" v-model.trim="form.nombreCompleto" :readonly="ieduLocks.nombreCompleto" :class="['input-field', ieduLocks.nombreCompleto ? 'bg-gray-50 text-gray-600' : '']">
               </div>
               <div class="col-span-12 md:col-span-3 form-group mb-0">
                 <label class="form-label">CURP</label>
-                <input type="text" v-model.trim="form.CURP" class="input-field uppercase font-mono" @input="form.CURP = form.CURP.toUpperCase()">
+                <input type="text" v-model.trim="form.CURP" :readonly="ieduLocks.CURP" :class="['input-field uppercase font-mono', ieduLocks.CURP ? 'bg-gray-50 text-gray-600' : '']" @input="form.CURP = form.CURP.toUpperCase()">
               </div>
               <div class="col-span-12 md:col-span-2 form-group mb-0">
                 <label class="form-label">Nivel</label>
-                <select v-model="form.nivelEducativo" class="input-field">
+                <select v-model="form.nivelEducativo" class="input-field" :disabled="ieduLocks.nivelEducativo">
                   <option v-for="option in nivelEducativoOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                 </select>
               </div>
               <div class="col-span-12 md:col-span-2 form-group mb-0">
                 <label class="form-label">RVOE</label>
-                <input type="text" v-model.trim="form.autRVOE" class="input-field font-mono">
+                <input type="text" v-model.trim="form.autRVOE" :readonly="ieduLocks.autRVOE" :class="['input-field font-mono', ieduLocks.autRVOE ? 'bg-gray-50 text-gray-600' : '']">
               </div>
             </div>
+            <p class="text-xs text-gray-500 mt-3">Los datos IEDU se precargan desde el expediente o el perfil legacy. Solo quedan editables cuando faltan.</p>
           </div>
 
-          <div class="card p-5">
-            <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
-              <div>
-                <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wide m-0">Conceptos a facturar</h3>
-                <p class="text-xs text-gray-500 mt-1">El folio plantel se conserva como external_id y para folio_number cuando existe.</p>
+          <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div class="card p-5 xl:col-span-2">
+              <div class="flex justify-between items-start gap-4 mb-4 border-b border-gray-100 pb-2">
+                <div>
+                  <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wide m-0">4. Conceptos a facturar</h3>
+                  <p class="text-xs text-gray-500 mt-1">Lista bloqueada desde la selección del estado de cuenta o historial de pagos.</p>
+                </div>
+                <div class="text-right">
+                  <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Total</span>
+                  <span class="text-lg font-bold text-brand-campus font-mono">${{ legacyContext.total.toFixed(2) }}</span>
+                </div>
               </div>
-              <button class="btn btn-ghost text-xs py-1 px-2" type="button" @click="addConcepto">+ Fila</button>
-            </div>
-            <div class="space-y-2">
-              <div v-for="(c, i) in conceptos" :key="c.id || i" class="grid grid-cols-12 gap-3 items-center">
-                <input type="text" v-model.trim="c.conceptoNombre" class="input-field col-span-12 md:col-span-6" placeholder="Concepto">
-                <input type="number" step="0.01" min="0" v-model.number="c.monto" class="input-field col-span-6 md:col-span-2 text-right font-mono font-semibold text-brand-campus" placeholder="Monto">
-                <input type="text" v-model.trim="c.folio_plantel" class="input-field col-span-5 md:col-span-3 font-mono" placeholder="Folio plantel">
-                <button class="btn btn-ghost text-accent-coral px-2 col-span-1" type="button" @click="conceptos.splice(i, 1)"><LucideTrash2 :size="14"/></button>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                      <th class="py-2 pr-3">Concepto</th>
+                      <th class="py-2 px-3">Mes</th>
+                      <th class="py-2 px-3">Folio plantel</th>
+                      <th class="py-2 px-3">Plantel</th>
+                      <th class="py-2 pl-3 text-right">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(concepto, index) in legacyContext.conceptos" :key="concepto.id || index" class="border-b border-gray-50 last:border-0">
+                      <td class="py-2 pr-3 font-semibold text-gray-800">{{ concepto.conceptoNombre }}</td>
+                      <td class="py-2 px-3 text-gray-500">{{ concepto.mesLabel || concepto.mes || '—' }}</td>
+                      <td class="py-2 px-3 font-mono text-gray-600">{{ concepto.folio_plantel || '—' }}</td>
+                      <td class="py-2 px-3 font-mono text-gray-600">{{ concepto.plantel || '—' }}</td>
+                      <td class="py-2 pl-3 text-right font-mono font-semibold text-brand-campus">${{ Number(concepto.monto || 0).toFixed(2) }}</td>
+                    </tr>
+                    <tr v-if="!legacyContext.conceptos.length">
+                      <td colspan="5" class="py-6 text-center text-gray-400">No hay conceptos seleccionados.</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div class="flex justify-end mt-4 pt-3 border-t border-gray-100">
-              <div class="text-right">
-                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Total factura</span>
-                <span class="text-lg font-bold text-brand-campus font-mono">${{ totalFactura.toFixed(2) }}</span>
+
+            <div class="card p-5">
+              <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Checklist de timbrado</h3>
+              <div v-if="validationIssues.length" class="space-y-2">
+                <div v-for="issue in validationIssues" :key="issue" class="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                  <LucideAlertTriangle :size="14" class="shrink-0 mt-0.5" />
+                  <span>{{ issue }}</span>
+                </div>
+              </div>
+              <div v-else class="flex items-start gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                <LucideShieldCheck :size="14" class="shrink-0 mt-0.5" />
+                <span>Listo para timbrar con los valores legacy resueltos automáticamente.</span>
               </div>
             </div>
           </div>
@@ -194,9 +208,9 @@
         <div class="modal-footer rounded-b-xl sticky bottom-0 z-10">
           <span class="text-xs text-gray-400 font-medium absolute left-6 top-5 hidden md:block"><LucideShieldCheck :size="14" class="inline mr-1"/> /api/saveCompanyAndGenerate</span>
           <button class="btn btn-ghost" @click="$emit('close')" type="button">Cerrar</button>
-          <button class="btn btn-primary" @click="submit" :disabled="loading || conceptos.length === 0">
+          <button class="btn btn-primary" @click="submit" :disabled="loading || !canSubmit">
             <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
-            {{ loading ? 'Timbrando...' : 'Guardar y facturar' }}
+            {{ loading ? 'Timbrando...' : 'Confirmar y facturar' }}
           </button>
         </div>
       </div>
@@ -207,14 +221,14 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import {
+  LucideAlertTriangle,
   LucideArchive,
   LucideFileDown,
   LucideFileText,
   LucideLoader2,
   LucideMail,
   LucideSearch,
-  LucideShieldCheck,
-  LucideTrash2
+  LucideShieldCheck
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
@@ -222,12 +236,9 @@ import { studentNivelLabel } from '~/shared/utils/studentPresentation'
 import {
   INVOICE_BASE_API_URL,
   buildFiscalProfiles,
-  computeDefaultFacturaCon,
-  computeDefaultProductKey,
   defaultRvoeFor,
   determineReceiverType,
   escapeXml,
-  extractPlantelCode,
   getLocalISOStringNow,
   getUseOptions,
   inferNivelFromBase,
@@ -235,11 +246,9 @@ import {
   isValidEmail,
   isValidInvoiceDate,
   isValidRFC,
-  mapPaymentForm,
   nivelEducativoOptions,
-  normalizeInvoiceConcept,
   normalizeText,
-  parseFolioNumber,
+  resolveLegacyInvoiceContext,
   taxSystems,
   validateNivelEducativo
 } from '~/utils/invoiceLegacy'
@@ -259,11 +268,10 @@ const emailing = ref(false)
 const companyData = ref({})
 const selectedFiscalProfile = ref('stored')
 const generatedInvoice = ref(null)
-const conceptos = ref([])
+const ieduLocks = ref({ nombreCompleto: false, CURP: false, nivelEducativo: false, autRVOE: false })
 
-const studentMatricula = computed(() => normalizeText(props.student?.matricula))
-const matriculaPrefix = computed(() => studentMatricula.value.substring(0, 2).toUpperCase())
 const selectedNivelDefault = computed(() => inferNivelFromBase(props.student?.nivel) || studentNivelLabel(props.student))
+const legacyContext = computed(() => resolveLegacyInvoiceContext({ student: props.student || {}, selectedConcepts: props.debts || [] }))
 
 const form = ref({
   legal_name: '',
@@ -273,9 +281,6 @@ const form = ref({
   tax_system: '616',
   use: 'D10',
   invoiceDate: getLocalISOStringNow(),
-  facturaCon: computeDefaultFacturaCon(props.student?.matricula),
-  series: matriculaPrefix.value === 'ST' ? 'ST' : 'PT',
-  productKeyGlobal: '86121503',
   nombreCompleto: props.student?.nombreCompleto || '',
   CURP: (props.student?.curp || props.student?.CURP || '').toUpperCase(),
   nivelEducativo: validateNivelEducativo(selectedNivelDefault.value),
@@ -284,53 +289,62 @@ const form = ref({
 
 const fiscalProfiles = computed(() => buildFiscalProfiles(props.student || {}, companyData.value || {}))
 const useOptions = computed(() => getUseOptions(determineReceiverType(form.value.tax_system)))
-const showSeriesControl = computed(() => ['PT', 'ST'].includes(matriculaPrefix.value))
-const totalFactura = computed(() => conceptos.value.reduce((sum, c) => sum + Number(c.monto || 0), 0))
-const primaryFormaDePago = computed(() => normalizeText(conceptos.value.find(c => c.formaDePago)?.formaDePago || props.debts?.find?.(d => d?.formaDePago)?.formaDePago || 'Efectivo'))
-const mappedPaymentForm = computed(() => mapPaymentForm(primaryFormaDePago.value))
+const operationalIssues = computed(() => legacyContext.value.blockingErrors)
 
-const parentSummary = computed(() => {
-  const profileMap = new Map(fiscalProfiles.value.map(profile => [profile.key, profile]))
-  return {
-    father: { name: profileMap.get('father')?.legal_name || '', email: profileMap.get('father')?.email || '' },
-    mother: { name: profileMap.get('mother')?.legal_name || '', email: profileMap.get('mother')?.email || '' }
-  }
+const validationIssues = computed(() => {
+  const issues = [...operationalIssues.value]
+  if (!form.value.legal_name) issues.push('Falta razón social del receptor fiscal.')
+  if (!form.value.tax_id) issues.push('Falta RFC del receptor fiscal.')
+  else if (!isValidRFC(form.value.tax_id)) issues.push('RFC inválido.')
+  if (!form.value.email) issues.push('Falta email del receptor fiscal.')
+  else if (!isValidEmail(form.value.email)) issues.push('Email inválido.')
+  if (!form.value.zip) issues.push('Falta código postal del receptor fiscal.')
+  if (!form.value.tax_system) issues.push('Falta régimen fiscal del receptor.')
+  if (!form.value.use) issues.push('Falta uso de CFDI.')
+  if (!form.value.nombreCompleto) issues.push('Falta nombre del alumno para complemento IEDU.')
+  if (!form.value.CURP) issues.push('Falta CURP del alumno para complemento IEDU.')
+  else if (!isValidCURP(form.value.CURP)) issues.push('CURP inválida.')
+  if (!form.value.nivelEducativo) issues.push('Falta nivel educativo para complemento IEDU.')
+  if (!form.value.autRVOE) issues.push('Falta RVOE para complemento IEDU.')
+  if (!isValidInvoiceDate(form.value.invoiceDate)) issues.push('La fecha debe estar dentro de las últimas 72 horas y no puede estar en futuro.')
+  return Array.from(new Set(issues))
 })
 
-const firstPlantel = computed(() => {
-  const conceptPlantel = conceptos.value.map(extractPlantelCode).find(Boolean)
-  return conceptPlantel || String(props.student?.plantel || '').trim().toUpperCase() || matriculaPrefix.value
-})
+const canSubmit = computed(() => !loadingCompany.value && validationIssues.value.length === 0)
 
 watch(() => form.value.tax_system, () => {
   const validUses = new Set(useOptions.value.map(option => option.value))
   if (!validUses.has(form.value.use)) {
-    form.value.use = validUses.has('D10') ? 'D10' : (useOptions.value[0]?.value || 'S01')
+    form.value.use = validUses.has('D10') ? 'D10' : (validUses.has('G03') ? 'G03' : (useOptions.value[0]?.value || 'S01'))
   }
 })
 
-watch(() => props.debts, () => {
-  conceptos.value = (Array.isArray(props.debts) ? props.debts : []).map((debt, index) => {
-    const normalized = normalizeInvoiceConcept(debt, index)
-    return {
-      ...normalized,
-      plantel: normalized.plantel || String(props.student?.plantel || '').trim().toUpperCase()
-    }
-  })
-  form.value.productKeyGlobal = computeDefaultProductKey(conceptos.value)
-}, { immediate: true })
+watch(() => [legacyContext.value.plantel, form.value.nivelEducativo], ([plantel, nivel]) => {
+  if (!ieduLocks.value.autRVOE) {
+    form.value.autRVOE = defaultRvoeFor(plantel, nivel) || legacyContext.value.defaultRvoe || form.value.autRVOE
+  }
+})
 
-watch(firstPlantel, (plantel) => {
-  if (!form.value.autRVOE) form.value.autRVOE = defaultRvoeFor(plantel, form.value.nivelEducativo)
-}, { immediate: true })
+const lockIeduFromSources = (data = {}) => {
+  const sourceNombre = normalizeText(data.nombreCompleto || data.nombreAlumno || props.student?.nombreCompleto)
+  const sourceCurp = normalizeText(data.CURP || props.student?.curp || props.student?.CURP).toUpperCase()
+  const sourceNivel = normalizeText(data.nivelEducativo || selectedNivelDefault.value)
+  const sourceRvoe = normalizeText(data.autRVOE || defaultRvoeFor(legacyContext.value.plantel, sourceNivel))
+  ieduLocks.value = {
+    nombreCompleto: Boolean(sourceNombre),
+    CURP: isValidCURP(sourceCurp),
+    nivelEducativo: Boolean(sourceNivel),
+    autRVOE: Boolean(sourceRvoe)
+  }
+}
 
 const applyFiscalProfile = (profile) => {
   selectedFiscalProfile.value = profile.key
-  if (profile.legal_name) form.value.legal_name = profile.legal_name
-  if (profile.tax_id) form.value.tax_id = profile.tax_id.toUpperCase()
-  if (profile.email) form.value.email = profile.email
-  if (profile.zip) form.value.zip = profile.zip
-  if (profile.tax_system) form.value.tax_system = profile.tax_system
+  form.value.legal_name = profile.legal_name || ''
+  form.value.tax_id = (profile.tax_id || '').toUpperCase()
+  form.value.email = profile.email || ''
+  form.value.zip = profile.zip || ''
+  form.value.tax_system = profile.tax_system || '616'
 }
 
 const applyCompanyDefaults = (data = {}) => {
@@ -340,12 +354,11 @@ const applyCompanyDefaults = (data = {}) => {
   form.value.email = normalizeText(data.email || form.value.email || props.student?.correo)
   form.value.zip = normalizeText(data.zip || form.value.zip)
   form.value.tax_system = normalizeText(data.tax_system || form.value.tax_system || '616')
-  form.value.facturaCon = normalizeText(data.factura_con || form.value.facturaCon || computeDefaultFacturaCon(studentMatricula.value))
   form.value.nombreCompleto = normalizeText(data.nombreCompleto || data.nombreAlumno || form.value.nombreCompleto || props.student?.nombreCompleto)
   form.value.CURP = normalizeText(data.CURP || form.value.CURP || props.student?.curp || props.student?.CURP).toUpperCase()
   form.value.nivelEducativo = validateNivelEducativo(data.nivelEducativo || form.value.nivelEducativo || selectedNivelDefault.value)
-  form.value.autRVOE = normalizeText(data.autRVOE || form.value.autRVOE || defaultRvoeFor(firstPlantel.value, form.value.nivelEducativo))
-  form.value.productKeyGlobal = computeDefaultProductKey(conceptos.value)
+  form.value.autRVOE = normalizeText(data.autRVOE || form.value.autRVOE || defaultRvoeFor(legacyContext.value.plantel, form.value.nivelEducativo))
+  lockIeduFromSources(data)
 
   const storedProfile = fiscalProfiles.value.find(profile => profile.key === 'stored')
   if (storedProfile) selectedFiscalProfile.value = 'stored'
@@ -353,14 +366,13 @@ const applyCompanyDefaults = (data = {}) => {
 
 onMounted(async () => {
   form.value.invoiceDate = getLocalISOStringNow()
-  if (showSeriesControl.value) form.value.series = matriculaPrefix.value === 'ST' ? 'ST' : 'PT'
-  form.value.facturaCon = computeDefaultFacturaCon(studentMatricula.value)
-  form.value.autRVOE = defaultRvoeFor(firstPlantel.value, form.value.nivelEducativo)
+  form.value.autRVOE = defaultRvoeFor(legacyContext.value.plantel, form.value.nivelEducativo)
+  lockIeduFromSources({})
 
-  if (!studentMatricula.value) return
+  if (!legacyContext.value.matricula) return
   loadingCompany.value = true
   try {
-    const res = await $fetch(`${INVOICE_BASE_API_URL}/getCompanyData`, { params: { matricula: studentMatricula.value } })
+    const res = await $fetch(`${INVOICE_BASE_API_URL}/getCompanyData`, { params: { matricula: legacyContext.value.matricula } })
     if (res?.success && res?.data) applyCompanyDefaults(res.data)
   } catch (e) {
     show('No se pudo cargar la información fiscal guardada', 'danger')
@@ -369,48 +381,14 @@ onMounted(async () => {
   }
 })
 
-const addConcepto = () => {
-  conceptos.value.push({
-    id: `manual-${Date.now()}`,
-    conceptoNombre: 'Concepto Extraordinario',
-    monto: 0,
-    folio_plantel: '',
-    plantel: firstPlantel.value
-  })
-}
-
-const validateForm = () => {
-  if (!form.value.legal_name || !form.value.tax_id || !form.value.email || !form.value.tax_system || !form.value.zip || !form.value.nombreCompleto || !form.value.CURP || !form.value.nivelEducativo || !form.value.autRVOE || !form.value.use) {
-    show('Completa los campos fiscales, IEDU y uso CFDI requeridos.', 'danger')
-    return false
-  }
-  if (!isValidRFC(form.value.tax_id)) return show('RFC inválido.', 'danger'), false
-  if (!isValidEmail(form.value.email)) return show('Email inválido.', 'danger'), false
-  if (!isValidInvoiceDate(form.value.invoiceDate)) return show('La fecha debe estar dentro de las últimas 72 horas y no puede estar en futuro.', 'danger'), false
-  if (!isValidCURP(form.value.CURP)) return show('CURP inválida o faltante.', 'danger'), false
-  if (!['IECS', 'IEDIS'].includes(form.value.facturaCon)) return show('Emisor inválido.', 'danger'), false
-  if (matriculaPrefix.value === 'PT' && !form.value.series) return show('Seleccione serie.', 'danger'), false
-  if (form.value.series && !['PT', 'ST'].includes(form.value.series.toUpperCase())) return show('Serie inválida.', 'danger'), false
-  if (!/^\d{8}$/.test(form.value.productKeyGlobal)) return show('La clave SAT debe tener 8 dígitos.', 'danger'), false
-  if (!conceptos.value.length) return show('Agrega al menos un concepto.', 'danger'), false
-  for (const [index, concepto] of conceptos.value.entries()) {
-    if (!normalizeText(concepto.conceptoNombre)) return show(`Concepto ${index + 1}: descripción requerida.`, 'danger'), false
-    if (!Number.isFinite(Number(concepto.monto)) || Number(concepto.monto) <= 0) return show(`Concepto ${index + 1}: monto inválido.`, 'danger'), false
-  }
-  return true
-}
-
 const buildPayload = () => {
-  const folioPlantelRaw = normalizeText(conceptos.value.find(c => c.folio_plantel)?.folio_plantel || '')
-  const folioNumberInt = parseFolioNumber(folioPlantelRaw)
+  const ctx = legacyContext.value
   const validatedNivel = validateNivelEducativo(form.value.nivelEducativo)
-  const seriesToSend = matriculaPrefix.value === 'PT' ? form.value.series.toUpperCase() : ''
-
-  const items = conceptos.value.map(concepto => ({
+  const items = ctx.conceptos.map(concepto => ({
     quantity: 1,
     product: {
       description: normalizeText(concepto.conceptoNombre),
-      product_key: form.value.productKeyGlobal,
+      product_key: ctx.productKey,
       unit_key: 'E48',
       price: Number.parseFloat(concepto.monto),
       tax_included: true,
@@ -431,11 +409,11 @@ const buildPayload = () => {
       CURP: form.value.CURP.toUpperCase(),
       nivelEducativo: validatedNivel,
       autRVOE: form.value.autRVOE,
-      ...(folioNumberInt !== null ? { folio_number: folioNumberInt } : {})
+      ...(ctx.folioNumber !== null ? { folio_number: ctx.folioNumber } : {})
     },
     invoiceData: {
       customer: {
-        matricula: studentMatricula.value,
+        matricula: ctx.matricula,
         legal_name: form.value.legal_name,
         tax_id: form.value.tax_id.toUpperCase(),
         email: form.value.email,
@@ -444,22 +422,25 @@ const buildPayload = () => {
       },
       items,
       use: form.value.use,
-      payment_form: mappedPaymentForm.value,
+      payment_form: ctx.paymentForm,
       type: 'I',
       payment_method: 'PUE',
       currency: 'MXN',
       exchange: 1,
       date: new Date(form.value.invoiceDate).toISOString(),
-      ...(seriesToSend ? { series: seriesToSend } : {}),
-      ...(folioPlantelRaw ? { external_id: folioPlantelRaw } : {}),
-      facturaCon: form.value.facturaCon,
+      ...(ctx.seriesToSend ? { series: ctx.seriesToSend } : {}),
+      ...(ctx.externalId ? { external_id: ctx.externalId } : {}),
+      facturaCon: ctx.facturaCon,
       test_mode: false
     }
   }
 }
 
 const submit = async () => {
-  if (!validateForm()) return
+  if (!canSubmit.value) {
+    show(validationIssues.value[0] || 'No se puede timbrar con datos incompletos.', 'danger')
+    return
+  }
 
   loading.value = true
   generatedInvoice.value = null
@@ -477,6 +458,7 @@ const submit = async () => {
       email: form.value.email
     }
     show(`Factura timbrada. Folio ${generatedInvoice.value.folio}`, 'success')
+    emit('success')
   } catch (e) {
     show(e?.data?.message || e?.data?.error || 'Error de comunicación con CFDI.', 'danger')
   } finally {
@@ -484,7 +466,7 @@ const submit = async () => {
   }
 }
 
-const downloadUrl = (format) => `${INVOICE_BASE_API_URL}/downloadInvoice/${encodeURIComponent(generatedInvoice.value?.invoice_id || '')}/${format}?matricula=${encodeURIComponent(studentMatricula.value)}`
+const downloadUrl = (format) => `${INVOICE_BASE_API_URL}/downloadInvoice/${encodeURIComponent(generatedInvoice.value?.invoice_id || '')}/${format}?matricula=${encodeURIComponent(legacyContext.value.matricula)}`
 const openDownload = (format) => {
   if (!generatedInvoice.value?.invoice_id) return
   window.open(downloadUrl(format), '_blank')
@@ -500,7 +482,7 @@ const sendGeneratedByEmail = async () => {
   try {
     await $fetch(`${INVOICE_BASE_API_URL}/sendInvoiceEmail`, {
       method: 'POST',
-      body: { invoice_id: generatedInvoice.value.invoice_id, email: email || null, matricula: studentMatricula.value }
+      body: { invoice_id: generatedInvoice.value.invoice_id, email: email || null, matricula: legacyContext.value.matricula }
     })
     generatedInvoice.value.email = email || generatedInvoice.value.email
     show('Factura enviada por correo.', 'success')
@@ -514,7 +496,7 @@ const sendGeneratedByEmail = async () => {
 const openInvoiceSearch = () => {
   const taxId = form.value.tax_id?.toUpperCase()
   if (!taxId || !isValidRFC(taxId)) return show('RFC inválido para listar facturas.', 'danger')
-  const params = new URLSearchParams({ tax_id: taxId, matricula: studentMatricula.value })
+  const params = new URLSearchParams({ tax_id: taxId, matricula: legacyContext.value.matricula })
   window.open(`/facturas?${params.toString()}`, '_blank')
 }
 </script>
