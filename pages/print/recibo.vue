@@ -217,7 +217,12 @@ const openInvoiceModal = () => {
   invoiceDebts.value = items.value.map(item => ({
     conceptoNombre: item.conceptoNombre,
     pagos: item.monto,
-    documento: item.folio
+    documento: item.documento || item.folio,
+    folio_plantel: item.folio_plantel || '',
+    external_id: item.folio_plantel || '',
+    formaDePago: item.formaDePago || '',
+    mes: item.mes,
+    mesLabel: item.mesReal || item.mes
   }))
 
   invoiceStudent.value = {

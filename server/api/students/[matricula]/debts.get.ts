@@ -53,7 +53,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   `, [matricula.trim(), cicloKey])
 
   const pagosRows = await query<any[]>(`
-    SELECT folio, documento, mes, recargo, monto, fecha, formaDePago, conceptoNombre, estatus, depurado, depurado_por, depurado_fecha
+    SELECT folio, folio_plantel, documento, mes, recargo, monto, fecha, formaDePago, conceptoNombre, estatus, depurado, depurado_por, depurado_fecha
     FROM referenciasdepago
     WHERE matricula = ? AND ciclo = ? AND estatus = 'Vigente'
   `, [matricula.trim(), cicloKey])

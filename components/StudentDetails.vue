@@ -1813,8 +1813,8 @@ const invoicePaymentReceipt = (debt, payment) => {
     saldo: Number(payment.monto || 0),
     saldoAntes: Number(payment.monto || 0),
     formaDePago: payment.formaDePago || debt.formaDePago || 'Efectivo',
-    folio_plantel: payment.folio_plantel || payment.folio || '',
-    external_id: payment.folio_plantel || payment.folio || '',
+    folio_plantel: payment.folio_plantel || '',
+    external_id: payment.folio_plantel || '',
     mesLabel: debt.mesLabel || payment.mesReal || payment.mes,
     plantel: debt.plantel || props.student?.plantel || ''
   }];

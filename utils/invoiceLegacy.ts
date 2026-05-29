@@ -174,7 +174,7 @@ export const getUseOptions = (receiverType: string) => useOptionsData
 export const extractPlantelCode = (concepto?: InvoiceConceptInput | null) => {
   const explicit = normalizeUpper(concepto?.plantel)
   if (plantelCodes.includes(explicit)) return explicit
-  const folioPlantel = normalizeUpper(concepto?.folio_plantel || concepto?.folioPlantel || concepto?.folio || concepto?.documento)
+  const folioPlantel = normalizeUpper(concepto?.folio_plantel || concepto?.folioPlantel || concepto?.external_id)
   const match = folioPlantel.match(plantelRegexBounded) || folioPlantel.match(plantelRegexLoose)
   return match ? match[1].toUpperCase() : ''
 }
@@ -234,7 +234,7 @@ export const getInvoiceAmount = (concepto: InvoiceConceptInput) => {
 }
 
 export const normalizeInvoiceConcept = (source: InvoiceConceptInput, index = 0) => {
-  const folioPlantel = normalizeText(source.folio_plantel || source.folioPlantel || source.external_id || source.folio || '')
+  const folioPlantel = normalizeText(source.folio_plantel || source.folioPlantel || source.external_id || '')
   return {
     ...source,
     id: source.id || `${source.documento || 'concepto'}-${source.mes || index}`,
@@ -259,7 +259,7 @@ export const buildFiscalProfiles = (student: Record<string, any>, companyData: R
       email: normalizeText(companyData?.email || student?.correo),
       zip: normalizeText(companyData?.zip),
       tax_system: normalizeText(companyData?.tax_system),
-      note: 'Datos recuperados del endpoint legacy getCompanyData.'
+      note: 'Datos guardados.'
     },
     {
       key: 'father',
@@ -334,7 +334,7 @@ export const resolveLegacyInvoiceContext = ({ student = {}, selectedConcepts = [
       id: normalizeText(normalized.id) || `${normalized.documento || 'concepto'}-${normalized.mes || index}`,
       conceptoNombre: normalizeText(normalized.conceptoNombre),
       monto: Number(normalized.monto || 0),
-      folio_plantel: normalizeText(normalized.folio_plantel || normalized.external_id || normalized.folio || ''),
+      folio_plantel: normalizeText(normalized.folio_plantel || normalized.external_id || ''),
       plantel
     } as ResolvedLegacyInvoiceConcept
   })
@@ -357,15 +357,12 @@ export const resolveLegacyInvoiceContext = ({ student = {}, selectedConcepts = [
   const defaultRvoe = defaultRvoeFor(plantel, student?.nivel)
   const blockingErrors: string[] = []
 
-  if (!matricula) blockingErrors.push('No se pudo determinar la matrícula del alumno.')
-  if (!conceptos.length) blockingErrors.push('Selecciona al menos un concepto o pago del estado de cuenta para facturar.')
-  if (!plantel) blockingErrors.push('No se pudo determinar el plantel desde el alumno ni desde el folio del concepto.')
-  if (!folioPlantelRaw) blockingErrors.push('No se pudo determinar el folio plantel/external_id desde el pago o concepto seleccionado.')
-  if (folioPlantelRaw && folioNumber === null) blockingErrors.push('No se pudo calcular el folio_number legacy desde el folio plantel seleccionado.')
-  if (!/^\d{8}$/.test(productKey)) blockingErrors.push('No se pudo determinar una clave SAT legacy válida para el plantel.')
+  if (!matricula) blockingErrors.push('Falta matrícula del alumno.')
+  if (!conceptos.length) blockingErrors.push('Selecciona un concepto para facturar.')
+  if (!/^\d{8}$/.test(productKey)) blockingErrors.push('No se pudo preparar la clave de producto.')
   conceptos.forEach((concepto, index) => {
-    if (!normalizeText(concepto.conceptoNombre)) blockingErrors.push(`Concepto ${index + 1}: descripción requerida desde el estado de cuenta.`)
-    if (!Number.isFinite(Number(concepto.monto)) || Number(concepto.monto) <= 0) blockingErrors.push(`Concepto ${index + 1}: monto inválido desde el estado de cuenta.`)
+    if (!normalizeText(concepto.conceptoNombre)) blockingErrors.push(`Concepto ${index + 1}: falta descripción.`)
+    if (!Number.isFinite(Number(concepto.monto)) || Number(concepto.monto) <= 0) blockingErrors.push(`Concepto ${index + 1}: monto inválido.`)
   })
 
   return {

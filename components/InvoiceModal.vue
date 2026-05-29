@@ -5,7 +5,6 @@
         <div class="modal-header rounded-t-xl sticky top-0 z-10">
           <div>
             <h2 class="text-lg font-bold text-gray-800">Facturar alumno</h2>
-            <p class="text-xs text-gray-500 mt-1">Flujo operativo legacy: selecciona receptor fiscal, confirma los datos y timbra con serie, folio, emisor, clave SAT y conceptos calculados por el sistema.</p>
           </div>
         </div>
 
@@ -37,8 +36,7 @@
             <div class="flex items-start gap-3">
               <LucideAlertTriangle class="text-amber-600 shrink-0 mt-0.5" :size="18" />
               <div>
-                <h3 class="text-sm font-bold text-amber-900 m-0">No se puede timbrar todavía</h3>
-                <p class="text-xs text-amber-800 mt-1">Los datos operativos no son editables aquí. Corrige el pago, concepto o expediente origen.</p>
+                <h3 class="text-sm font-bold text-amber-900 m-0">Faltan datos para facturar</h3>
                 <ul class="text-xs text-amber-900 mt-2 list-disc pl-5 space-y-1">
                   <li v-for="issue in operationalIssues" :key="issue">{{ issue }}</li>
                 </ul>
@@ -50,8 +48,8 @@
             <div class="card p-5 xl:col-span-2">
               <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4 border-b border-gray-100 pb-3">
                 <div>
-                  <h3 class="text-xs font-bold text-brand-teal uppercase tracking-wide m-0">1. Receptor fiscal</h3>
-                  <p class="text-xs text-gray-500 mt-1">Elige el responsable y completa únicamente sus datos fiscales faltantes.</p>
+                  <h3 class="text-xs font-bold text-brand-teal uppercase tracking-wide m-0">Receptor fiscal</h3>
+                  <p class="text-xs text-gray-500 mt-1">Completa los datos fiscales.</p>
                 </div>
                 <button class="btn btn-ghost text-xs py-1 px-2" type="button" @click="openInvoiceSearch" :disabled="!isValidRFC(form.tax_id)">
                   <LucideSearch :size="14" /> Ver facturas del RFC
@@ -104,29 +102,24 @@
                 <div class="col-span-12 md:col-span-6 form-group mb-0">
                   <label class="form-label">Fecha/Hora de emisión</label>
                   <input type="datetime-local" v-model="form.invoiceDate" class="input-field font-mono bg-gray-50 text-gray-600" readonly>
-                  <p class="text-[11px] text-gray-400 mt-1">La fecha se toma automáticamente al abrir el flujo; se valida contra la regla legacy de 72 horas.</p>
+                  <p class="text-[11px] text-gray-400 mt-1">Fecha automática.</p>
                 </div>
               </div>
             </div>
 
             <div class="card p-5">
-              <h3 class="text-xs font-bold text-accent-sky uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">2. Reglas legacy aplicadas</h3>
+              <h3 class="text-xs font-bold text-accent-sky uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Resumen</h3>
               <dl class="space-y-3 text-sm">
                 <div class="flex justify-between gap-3"><dt class="text-gray-500">Matrícula</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.matricula || '—' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt class="text-gray-500">Plantel</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.plantel || '—' }}</dd></div>
-                <div class="flex justify-between gap-3"><dt class="text-gray-500">Factura con</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.facturaCon || '—' }}</dd></div>
-                <div class="flex justify-between gap-3"><dt class="text-gray-500">Serie enviada</dt><dd class="font-mono font-semibold text-gray-800 text-right">{{ legacyContext.seriesLabel }}</dd></div>
-                <div class="flex justify-between gap-3"><dt class="text-gray-500">Folio plantel</dt><dd class="font-mono font-semibold text-gray-800 text-right">{{ legacyContext.folioPlantelRaw || '—' }}</dd></div>
-                <div class="flex justify-between gap-3"><dt class="text-gray-500">folio_number</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.folioNumber ?? '—' }}</dd></div>
-                <div class="flex justify-between gap-3"><dt class="text-gray-500">Clave SAT</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.productKey || '—' }}</dd></div>
-                <div class="flex justify-between gap-3"><dt class="text-gray-500">Forma SAT</dt><dd class="font-mono font-semibold text-gray-800">{{ legacyContext.paymentForm }} · {{ legacyContext.primaryFormaDePago }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-gray-500">Forma de pago</dt><dd class="font-semibold text-gray-800 text-right">{{ legacyContext.primaryFormaDePago }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-gray-500">Total</dt><dd class="font-mono font-bold text-brand-campus">${{ legacyContext.total.toFixed(2) }}</dd></div>
               </dl>
-              <p class="text-xs text-gray-500 mt-4 leading-relaxed">Estos valores no se capturan manualmente. Se resuelven desde matrícula, plantel, folio del pago/concepto y forma de pago origen.</p>
             </div>
           </div>
 
           <div class="card p-5">
-            <h3 class="text-xs font-bold text-brand-campus uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">3. Alumno / complemento IEDU</h3>
+            <h3 class="text-xs font-bold text-brand-campus uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Alumno</h3>
             <div class="grid grid-cols-12 gap-4">
               <div class="col-span-12 md:col-span-5 form-group mb-0">
                 <label class="form-label">Alumno</label>
@@ -147,15 +140,14 @@
                 <input type="text" v-model.trim="form.autRVOE" :readonly="ieduLocks.autRVOE" :class="['input-field font-mono', ieduLocks.autRVOE ? 'bg-gray-50 text-gray-600' : '']">
               </div>
             </div>
-            <p class="text-xs text-gray-500 mt-3">Los datos IEDU se precargan desde el expediente o el perfil legacy. Solo quedan editables cuando faltan.</p>
+            <p class="text-xs text-gray-500 mt-3">Completa solo los datos faltantes.</p>
           </div>
 
           <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div class="card p-5 xl:col-span-2">
               <div class="flex justify-between items-start gap-4 mb-4 border-b border-gray-100 pb-2">
                 <div>
-                  <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wide m-0">4. Conceptos a facturar</h3>
-                  <p class="text-xs text-gray-500 mt-1">Lista bloqueada desde la selección del estado de cuenta o historial de pagos.</p>
+                  <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wide m-0">Conceptos</h3>
                 </div>
                 <div class="text-right">
                   <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Total</span>
@@ -168,8 +160,7 @@
                     <tr class="text-left text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
                       <th class="py-2 pr-3">Concepto</th>
                       <th class="py-2 px-3">Mes</th>
-                      <th class="py-2 px-3">Folio plantel</th>
-                      <th class="py-2 px-3">Plantel</th>
+                      <th class="py-2 px-3">Pago</th>
                       <th class="py-2 pl-3 text-right">Monto</th>
                     </tr>
                   </thead>
@@ -177,12 +168,11 @@
                     <tr v-for="(concepto, index) in legacyContext.conceptos" :key="concepto.id || index" class="border-b border-gray-50 last:border-0">
                       <td class="py-2 pr-3 font-semibold text-gray-800">{{ concepto.conceptoNombre }}</td>
                       <td class="py-2 px-3 text-gray-500">{{ concepto.mesLabel || concepto.mes || '—' }}</td>
-                      <td class="py-2 px-3 font-mono text-gray-600">{{ concepto.folio_plantel || '—' }}</td>
-                      <td class="py-2 px-3 font-mono text-gray-600">{{ concepto.plantel || '—' }}</td>
+                      <td class="py-2 px-3 text-gray-500">{{ concepto.formaDePago || legacyContext.primaryFormaDePago || '—' }}</td>
                       <td class="py-2 pl-3 text-right font-mono font-semibold text-brand-campus">${{ Number(concepto.monto || 0).toFixed(2) }}</td>
                     </tr>
                     <tr v-if="!legacyContext.conceptos.length">
-                      <td colspan="5" class="py-6 text-center text-gray-400">No hay conceptos seleccionados.</td>
+                      <td colspan="4" class="py-6 text-center text-gray-400">No hay conceptos seleccionados.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -190,7 +180,7 @@
             </div>
 
             <div class="card p-5">
-              <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Checklist de timbrado</h3>
+              <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Faltantes</h3>
               <div v-if="validationIssues.length" class="space-y-2">
                 <div v-for="issue in validationIssues" :key="issue" class="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                   <LucideAlertTriangle :size="14" class="shrink-0 mt-0.5" />
@@ -199,14 +189,13 @@
               </div>
               <div v-else class="flex items-start gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
                 <LucideShieldCheck :size="14" class="shrink-0 mt-0.5" />
-                <span>Listo para timbrar con los valores legacy resueltos automáticamente.</span>
+                <span>Listo para facturar.</span>
               </div>
             </div>
           </div>
         </div>
         
         <div class="modal-footer rounded-b-xl sticky bottom-0 z-10">
-          <span class="text-xs text-gray-400 font-medium absolute left-6 top-5 hidden md:block"><LucideShieldCheck :size="14" class="inline mr-1"/> /api/saveCompanyAndGenerate</span>
           <button class="btn btn-ghost" @click="$emit('close')" type="button">Cerrar</button>
           <button class="btn btn-primary" @click="submit" :disabled="loading || !canSubmit">
             <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />

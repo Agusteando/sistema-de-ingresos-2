@@ -1,1 +1,1 @@
-Integrar facturación legacy al flujo del alumno con reglas operativas bloqueadas
+Alinear facturación de alumnos al flujo legado con captura fiscal mínima
