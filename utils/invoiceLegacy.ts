@@ -94,11 +94,12 @@ export const escapeXml = (unsafe: unknown) => String(unsafe || '')
   .replace(/'/g, '&apos;')
 
 export const normalizeText = (value: unknown) => String(value || '').trim()
-export const normalizeUpper = (value: unknown) => normalizeText(value).toUpperCase()
+export const normalizeUpper = (value: unknown) => normalizeText(value).toLocaleUpperCase('es-MX')
+export const normalizeCurpForInvoice = (curp: unknown) => normalizeUpper(curp).replace(/[^A-ZÑ0-9]/g, '').slice(0, 18)
 
 export const isValidRFC = (rfc: unknown) => /^([A-ZÑ&]{3,4}) ?(?:- ?)?(\d{2})(\d{2})(\d{2})([A-Z\d]{3})$/i.test(String(rfc || ''))
 export const isValidEmail = (email: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || ''))
-export const isValidCURP = (curp: unknown) => /^[A-Z]{1}[AEIOU]{1}[A-Z]{2}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[HM]{1}[A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}\d{1}[A-Z0-9]{1}\d{1}$/i.test(String(curp || ''))
+export const isValidCURP = (curp: unknown) => /^[A-ZÑ][AEIOUX][A-ZÑ]{2}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[HM][A-Z]{2}[B-DF-HJ-NP-TV-ZÑ]{3}[A-Z0-9]\d$/i.test(normalizeCurpForInvoice(curp))
 
 export const validateNivelEducativo = (nivel: unknown) => {
   const value = normalizeText(nivel)

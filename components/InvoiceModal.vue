@@ -78,7 +78,7 @@
               </div>
               <div class="col-span-12 md:col-span-3 form-group mb-0">
                 <label class="form-label">CURP</label>
-                <input type="text" v-model.trim="form.CURP" :readonly="ieduLocks.CURP" :class="['input-field uppercase font-mono', ieduLocks.CURP ? 'bg-gray-50 text-gray-600' : '']" @input="form.CURP = form.CURP.toUpperCase()">
+                <input type="text" v-model.trim="form.CURP" :readonly="ieduLocks.CURP" :class="['input-field uppercase font-mono', ieduLocks.CURP ? 'bg-gray-50 text-gray-600' : '']" @input="form.CURP = normalizeCurpForInvoice(form.CURP)">
               </div>
               <div class="col-span-12 md:col-span-2 form-group mb-0">
                 <label class="form-label">Nivel</label>
@@ -164,6 +164,7 @@ import {
   isValidRFC,
   nivelEducativoOptions,
   normalizeText,
+  normalizeCurpForInvoice,
   resolveLegacyInvoiceContext,
   taxSystems,
   validateNivelEducativo
@@ -195,7 +196,7 @@ const form = ref({
   tax_system: '616',
   invoiceDate: getLocalISOStringNow(),
   nombreCompleto: props.student?.nombreCompleto || '',
-  CURP: (props.student?.curp || props.student?.CURP || '').toUpperCase(),
+  CURP: normalizeCurpForInvoice(props.student?.curp || props.student?.CURP),
   nivelEducativo: validateNivelEducativo(selectedNivelDefault.value),
   autRVOE: ''
 })
@@ -237,7 +238,7 @@ watch(() => [legacyContext.value.plantel, form.value.nivelEducativo], ([plantel,
 
 const lockIeduFromSources = (data = {}) => {
   const sourceNombre = normalizeText(data.nombreCompleto || data.nombreAlumno || props.student?.nombreCompleto)
-  const sourceCurp = normalizeText(data.CURP || props.student?.curp || props.student?.CURP).toUpperCase()
+  const sourceCurp = normalizeCurpForInvoice(data.CURP || props.student?.curp || props.student?.CURP)
   const sourceNivel = normalizeText(data.nivelEducativo || selectedNivelDefault.value)
   const sourceRvoe = normalizeText(data.autRVOE || defaultRvoeFor(legacyContext.value.plantel, sourceNivel))
   ieduLocks.value = {
@@ -255,7 +256,7 @@ const applyCompanyDefaults = (data = {}) => {
   form.value.zip = normalizeText(data.zip || form.value.zip)
   form.value.tax_system = normalizeText(data.tax_system || form.value.tax_system || '616')
   form.value.nombreCompleto = normalizeText(data.nombreCompleto || data.nombreAlumno || form.value.nombreCompleto || props.student?.nombreCompleto)
-  form.value.CURP = normalizeText(data.CURP || form.value.CURP || props.student?.curp || props.student?.CURP).toUpperCase()
+  form.value.CURP = normalizeCurpForInvoice(data.CURP || form.value.CURP || props.student?.curp || props.student?.CURP)
   form.value.nivelEducativo = validateNivelEducativo(data.nivelEducativo || form.value.nivelEducativo || selectedNivelDefault.value)
   form.value.autRVOE = normalizeText(data.autRVOE || form.value.autRVOE || defaultRvoeFor(legacyContext.value.plantel, form.value.nivelEducativo))
   lockIeduFromSources(data)
@@ -281,6 +282,7 @@ onMounted(async () => {
 const buildPayload = () => {
   const ctx = legacyContext.value
   const validatedNivel = validateNivelEducativo(form.value.nivelEducativo)
+  const studentCurp = normalizeCurpForInvoice(form.value.CURP)
   const items = ctx.conceptos.map(concepto => ({
     quantity: 1,
     product: {
@@ -292,7 +294,7 @@ const buildPayload = () => {
       taxability: '02',
       taxes: [{ type: 'IVA', rate: 0, factor: 'Exento' }]
     },
-    complement: `<iedu:instEducativas xmlns:iedu="http://www.sat.gob.mx/iedu" version="1.0" nombreAlumno="${escapeXml(form.value.nombreCompleto)}" CURP="${escapeXml(form.value.CURP)}" nivelEducativo="${escapeXml(validatedNivel)}" autRVOE="${escapeXml(form.value.autRVOE)}" />`
+    complement: `<iedu:instEducativas xmlns:iedu="http://www.sat.gob.mx/iedu" version="1.0" nombreAlumno="${escapeXml(form.value.nombreCompleto)}" CURP="${escapeXml(studentCurp)}" nivelEducativo="${escapeXml(validatedNivel)}" autRVOE="${escapeXml(form.value.autRVOE)}" />`
   }))
 
   return {
@@ -303,7 +305,7 @@ const buildPayload = () => {
       tax_system: form.value.tax_system,
       zip: form.value.zip,
       nombreCompleto: form.value.nombreCompleto,
-      CURP: form.value.CURP.toUpperCase(),
+      CURP: studentCurp,
       nivelEducativo: validatedNivel,
       autRVOE: form.value.autRVOE,
       ...(ctx.folioNumber !== null ? { folio_number: ctx.folioNumber } : {})

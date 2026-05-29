@@ -1,1 +1,1 @@
-Ajustar modal de facturación al flujo original con datos calculados automáticamente
+Corrige validación de CURP y conserva el modal de facturación durante actualizaciones

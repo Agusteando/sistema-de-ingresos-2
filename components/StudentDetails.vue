@@ -636,7 +636,7 @@
         :debts="selectedDebts"
         :student="accountOverlaySource"
         @close="showInvoiceModal = false"
-        @success="handleSuccess"
+        @success="handleInvoiceSuccess"
       />
       <ConceptChangeModal
         v-if="showConceptModal"
@@ -1190,9 +1190,13 @@ const applyAccountDebts = async (
   hasRenderedAccountState.value = true;
 
   if (preserveInteraction) {
-    selectedDebts.value = freshDebts.filter(
-      (debt) => selectedKeys.has(debtKey(debt)) && Number(debt.saldo || 0) > 0,
+    const preserveInvoiceSelection = showInvoiceModal.value;
+    const refreshedSelection = freshDebts.filter(
+      (debt) => selectedKeys.has(debtKey(debt)) && (preserveInvoiceSelection || Number(debt.saldo || 0) > 0),
     );
+    selectedDebts.value = preserveInvoiceSelection && selectedDebts.value.length && !refreshedSelection.length
+      ? selectedDebts.value
+      : refreshedSelection;
     expandedHistory.value =
       expandedKey && freshDebts.some((debt) => debtKey(debt) === expandedKey)
         ? expandedKey
@@ -1928,5 +1932,9 @@ const handleSuccess = () => {
   selectedDebts.value = [];
   loadDebts({ useCache: false, preserveInteraction: false });
   emit("refresh");
+};
+
+const handleInvoiceSuccess = () => {
+  loadDebts({ useCache: false, preserveInteraction: true });
 };
 </script>
