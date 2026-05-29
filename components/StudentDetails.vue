@@ -586,6 +586,12 @@
                                   <LucidePrinter :size="11" /> PDF
                                 </button>
                                 <button
+                                  class="history-action history-action-pdf"
+                                  @click="invoicePaymentReceipt(debt, h)"
+                                >
+                                  <LucideFileText :size="11" /> Facturar
+                                </button>
+                                <button
                                   class="history-action history-action-danger"
                                   @click="cancelPayment(h)"
                                 >
@@ -628,7 +634,7 @@
       <InvoiceModal
         v-if="showInvoiceModal"
         :debts="selectedDebts"
-        :student="student"
+        :student="accountOverlaySource"
         @close="showInvoiceModal = false"
         @success="handleSuccess"
       />
@@ -1795,6 +1801,24 @@ const openConceptChange = (debt) => {
 const closeConceptModal = () => {
   showConceptModal.value = false;
   selectedConceptDebt.value = null;
+};
+
+const invoicePaymentReceipt = (debt, payment) => {
+  selectedDebts.value = [{
+    ...debt,
+    ...payment,
+    conceptoNombre: payment.conceptoNombre || debt.conceptoNombre,
+    monto: Number(payment.monto || 0),
+    pagos: Number(payment.monto || 0),
+    saldo: Number(payment.monto || 0),
+    saldoAntes: Number(payment.monto || 0),
+    formaDePago: payment.formaDePago || debt.formaDePago || 'Efectivo',
+    folio_plantel: payment.folio_plantel || payment.folio || '',
+    external_id: payment.folio_plantel || payment.folio || '',
+    mesLabel: debt.mesLabel || payment.mesReal || payment.mes,
+    plantel: debt.plantel || props.student?.plantel || ''
+  }];
+  showInvoiceModal.value = true;
 };
 
 const showDebtContextMenu = (event, debt) => {

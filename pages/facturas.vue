@@ -2,9 +2,11 @@
   <div class="max-w-[1400px] mx-auto">
     <div class="card p-5 mb-6">
       <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <div class="form-group m-0"><label class="form-label">Buscar</label><input type="text" v-model="filters.q" @keyup.enter="performSearch" placeholder="Nombre o folio..." class="input-field"></div>
-        <div class="form-group m-0"><label class="form-label">RFC</label><input type="text" v-model="filters.tax_id" @keyup.enter="performSearch" placeholder="XAXX010101000" class="input-field uppercase"></div>
-        <div class="form-group m-0"><label class="form-label">Serie</label><input type="text" v-model="filters.series" @keyup.enter="performSearch" placeholder="PT / ST" class="input-field uppercase"></div>
+        <div class="form-group m-0"><label class="form-label">Buscar</label><input type="text" v-model="filters.q" @keyup.enter="performSearch" placeholder="Nombre, folio o UUID..." class="input-field"></div>
+        <div class="form-group m-0"><label class="form-label">RFC</label><input type="text" v-model="filters.tax_id" @keyup.enter="performSearch" placeholder="XAXX010101000" class="input-field uppercase" @input="filters.tax_id = filters.tax_id.toUpperCase()"></div>
+        <div class="form-group m-0"><label class="form-label">Serie</label><input type="text" v-model="filters.series" @keyup.enter="performSearch" placeholder="PT / ST" class="input-field uppercase" @input="filters.series = filters.series.toUpperCase()"></div>
+        <div class="form-group m-0"><label class="form-label">Desde</label><input type="date" v-model="filters.date_from" class="input-field" @change="performSearch"></div>
+        <div class="form-group m-0"><label class="form-label">Hasta</label><input type="date" v-model="filters.date_to" class="input-field" @change="performSearch"></div>
         <div class="form-group m-0"><label class="form-label">Estatus</label>
           <select v-model="filters.status" class="input-field" @change="performSearch">
             <option value="">Todas</option><option value="valid">Vigente</option><option value="canceled">Cancelada</option>
@@ -13,6 +15,21 @@
         <div class="form-group m-0"><label class="form-label">Cancelación SAT</label>
           <select v-model="filters.cancel_status" class="input-field" @change="performSearch">
             <option value="">Cualquiera</option><option value="none">Sin cancelar</option><option value="pending">Pendiente</option><option value="accepted">Aceptada</option><option value="rejected">Rechazada</option>
+          </select>
+        </div>
+        <div class="form-group m-0"><label class="form-label">Ordenar por</label>
+          <select v-model="filters.sort_by" class="input-field" @change="performSearch">
+            <option value="created_at">Fecha</option><option value="folio">Folio</option><option value="status">Estatus</option>
+          </select>
+        </div>
+        <div class="form-group m-0"><label class="form-label">Dirección</label>
+          <select v-model="filters.sort_dir" class="input-field" @change="performSearch">
+            <option value="desc">Desc</option><option value="asc">Asc</option>
+          </select>
+        </div>
+        <div class="form-group m-0"><label class="form-label">Mostrar</label>
+          <select v-model.number="filters.limit" class="input-field" @change="performSearch">
+            <option :value="10">10</option><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option>
           </select>
         </div>
       </div>
@@ -60,6 +77,7 @@
               <div class="flex gap-1 justify-center">
                 <button class="btn btn-outline px-2 py-1 text-xs text-brand-teal" title="PDF" @click="downloadPdf(inv)"><LucideFileDown :size="14"/></button>
                 <button class="btn btn-outline px-2 py-1 text-xs text-gray-500" title="XML" @click="downloadXml(inv)"><LucideFileText :size="14"/></button>
+                <button class="btn btn-outline px-2 py-1 text-xs text-gray-500" title="ZIP" @click="downloadZip(inv)"><LucideArchive :size="14"/></button>
               </div>
             </td>
           </tr>
@@ -80,12 +98,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { LucideSearch, LucideFileDown, LucideFileText, LucideMail, LucideXCircle } from 'lucide-vue-next'
+import { useRoute } from '#app'
+import { LucideArchive, LucideSearch, LucideFileDown, LucideFileText, LucideMail, LucideXCircle } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 
 const { show } = useToast()
 const { openMenu } = useContextMenu()
+const route = useRoute()
 
 const invoices = ref([])
 const loading = ref(false)
@@ -93,13 +113,15 @@ const total = ref(0)
 const pages = ref(1)
 
 const filters = ref({
-  q: '', tax_id: '', series: '', status: '', cancel_status: '', page: 1, limit: 20
+  q: '', tax_id: '', series: '', status: '', cancel_status: '', date_from: '', date_to: '', sort_by: 'created_at', sort_dir: 'desc', page: 1, limit: 20
 })
 
 const performSearch = async () => {
   loading.value = true
   try {
-    const res = await $fetch('/api/cfdi/invoices', { params: filters.value })
+    filters.value.tax_id = String(filters.value.tax_id || '').toUpperCase()
+    filters.value.series = String(filters.value.series || '').toUpperCase()
+    const res = await $fetch('/api/invoices', { params: filters.value })
     invoices.value = res.invoices || []
     total.value = res.total || 0
     pages.value = res.pages || 1
@@ -111,14 +133,30 @@ const performSearch = async () => {
 }
 
 const resetFilters = () => {
-  filters.value = { q: '', tax_id: '', series: '', status: '', cancel_status: '', page: 1, limit: 20 }
+  filters.value = { q: '', tax_id: '', series: '', status: '', cancel_status: '', date_from: '', date_to: '', sort_by: 'created_at', sort_dir: 'desc', page: 1, limit: 20 }
   performSearch()
 }
 
-onMounted(performSearch)
+onMounted(() => {
+  const query = route.query || {}
+  filters.value = {
+    ...filters.value,
+    q: String(query.q || filters.value.q || ''),
+    tax_id: String(query.tax_id || filters.value.tax_id || '').toUpperCase(),
+    series: String(query.series || filters.value.series || '').toUpperCase(),
+    status: String(query.status || filters.value.status || ''),
+    cancel_status: String(query.cancel_status || filters.value.cancel_status || ''),
+    date_from: String(query.date_from || filters.value.date_from || ''),
+    date_to: String(query.date_to || filters.value.date_to || ''),
+    page: Number(query.page || filters.value.page || 1),
+    limit: Number(query.limit || filters.value.limit || 20)
+  }
+  performSearch()
+})
 
-const downloadPdf = (inv) => window.open(`/api/cfdi/downloadInvoice/${encodeURIComponent(inv.invoice_id || inv.id)}/pdf?matricula=${encodeURIComponent(inv.matricula || '')}`, '_blank')
-const downloadXml = (inv) => window.open(`/api/cfdi/downloadInvoice/${encodeURIComponent(inv.invoice_id || inv.id)}/xml?matricula=${encodeURIComponent(inv.matricula || '')}`, '_blank')
+const downloadPdf = (inv) => window.open(`/api/downloadInvoice/${encodeURIComponent(inv.invoice_id || inv.id)}/pdf?matricula=${encodeURIComponent(inv.matricula || '')}`, '_blank')
+const downloadXml = (inv) => window.open(`/api/downloadInvoice/${encodeURIComponent(inv.invoice_id || inv.id)}/xml?matricula=${encodeURIComponent(inv.matricula || '')}`, '_blank')
+const downloadZip = (inv) => window.open(`/api/downloadInvoice/${encodeURIComponent(inv.invoice_id || inv.id)}/zip?matricula=${encodeURIComponent(inv.matricula || '')}`, '_blank')
 
 const showContextMenu = (event, inv) => {
   const isVigente = inv.status === 'valid' && (!inv.cancel_status_label || inv.cancel_status_label.includes('none') || inv.cancel_status_label === '')
@@ -128,6 +166,7 @@ const showContextMenu = (event, inv) => {
     { label: '-' },
     { label: 'Descargar PDF', icon: LucideFileDown, action: () => downloadPdf(inv) },
     { label: 'Descargar XML', icon: LucideFileDown, action: () => downloadXml(inv) },
+    { label: 'Descargar ZIP', icon: LucideArchive, action: () => downloadZip(inv) },
     { label: 'Reenviar por Email', icon: LucideMail, action: () => sendEmail(inv) },
     { label: 'Cancelar Factura', icon: LucideXCircle, class: 'text-accent-coral', disabled: !isVigente, action: () => cancelInvoice(inv) }
   ])
@@ -140,7 +179,7 @@ const cancelInvoice = async (inv) => {
   if (motivo === '01') substitution_folio = prompt('UUID de la factura que sustituye:')
   
   try {
-    await $fetch(`/api/cfdi/invoices/${encodeURIComponent(inv.invoice_id || inv.id)}/cancel`, {
+    await $fetch(`/api/invoices/${encodeURIComponent(inv.invoice_id || inv.id)}/cancel`, {
       method: 'POST',
       body: { matricula: inv.matricula || '', motive: motivo, substitution_folio }
     })
@@ -154,7 +193,7 @@ const sendEmail = async (inv) => {
   if (!correo) return
   
   try {
-    await $fetch('/api/cfdi/sendInvoiceEmail', {
+    await $fetch('/api/sendInvoiceEmail', {
       method: 'POST',
       body: { invoice_id: inv.invoice_id || inv.id, email: correo, matricula: inv.matricula || '' }
     })
