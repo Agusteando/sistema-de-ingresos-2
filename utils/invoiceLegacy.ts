@@ -358,11 +358,11 @@ export const resolveLegacyInvoiceContext = ({ student = {}, selectedConcepts = [
   const blockingErrors: string[] = []
 
   if (!matricula) blockingErrors.push('Falta matrícula del alumno.')
-  if (!conceptos.length) blockingErrors.push('Selecciona un concepto para facturar.')
-  if (!/^\d{8}$/.test(productKey)) blockingErrors.push('No se pudo preparar la clave de producto.')
+  if (!conceptos.length) blockingErrors.push('No hay conceptos seleccionados.')
+  if (!/^\d{8}$/.test(productKey)) blockingErrors.push('Revisa el concepto seleccionado.')
   conceptos.forEach((concepto, index) => {
     if (!normalizeText(concepto.conceptoNombre)) blockingErrors.push(`Concepto ${index + 1}: falta descripción.`)
-    if (!Number.isFinite(Number(concepto.monto)) || Number(concepto.monto) <= 0) blockingErrors.push(`Concepto ${index + 1}: monto inválido.`)
+    if (!Number.isFinite(Number(concepto.monto)) || Number(concepto.monto) <= 0) blockingErrors.push(`Concepto ${index + 1}: revisa el monto.`)
   })
 
   return {

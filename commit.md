@@ -1,1 +1,1 @@
-Alinear facturación de alumnos al flujo legado con captura fiscal mínima
+Ajustar modal de facturación al flujo original con datos calculados automáticamente
