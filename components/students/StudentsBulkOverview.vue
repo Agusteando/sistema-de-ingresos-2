@@ -38,6 +38,10 @@
           <LucideCalendarClock :size="18" />
           <span>Ciclo de ingreso</span>
         </button>
+        <button type="button" class="bulk-command" @click="$emit('open-no-adeudo')">
+          <LucideShieldCheck :size="18" />
+          <span>Cartas no adeudo</span>
+        </button>
         <button type="button" class="bulk-command" @click="$emit('clear-selected')">
           <LucideX :size="18" />
           <span>Limpiar</span>
@@ -59,7 +63,7 @@
 </template>
 
 <script setup>
-import { LucideCalendarClock, LucideCreditCard, LucideTags, LucideX } from 'lucide-vue-next'
+import { LucideCalendarClock, LucideCreditCard, LucideShieldCheck, LucideTags, LucideX } from 'lucide-vue-next'
 import { formatMoney, gradeAccentStyle, gradeVisualNumber, studentGroupLabel } from '~/shared/utils/studentPresentation'
 import UiIconButton from '~/components/ui/UiIconButton.vue'
 
@@ -73,5 +77,5 @@ defineProps({
   selectedStudents: { type: Array, default: () => [] }
 })
 
-defineEmits(['close-bulk', 'open-bulk-payment', 'open-section-selection', 'open-bulk-ingreso-cycle', 'clear-selected'])
+defineEmits(['close-bulk', 'open-bulk-payment', 'open-section-selection', 'open-bulk-ingreso-cycle', 'open-no-adeudo', 'clear-selected'])
 </script>

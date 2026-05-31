@@ -8,6 +8,7 @@ export default defineEventHandler(async (event) => {
   if (url.pathname.startsWith('/api/auth/')) return
   if (url.pathname.startsWith('/api/debug/')) return
   if (url.pathname.startsWith('/api/login/')) return
+  if (url.pathname.startsWith('/api/no-adeudo/verify/')) return
 
   const user = await getTrustedAuthUser(event)
   event.context.user = user

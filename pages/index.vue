@@ -128,6 +128,7 @@
             @open-bulk-payment="openBulkPaymentFlow"
             @open-section-selection="openSectionModalForSelection"
             @open-bulk-ingreso-cycle="openBulkIngresoCycleFlow"
+            @open-no-adeudo="openNoAdeudoForSelection"
             @clear-selected="clearSelectedStudents"
             @change-bulk-payment-method="bulkPaymentMethod = $event"
             @back-to-bulk="bulkWorkspaceMode = 'bulk'"
@@ -145,7 +146,16 @@
       @open-section-selection="openSectionModalForSelection"
       @open-bulk-ingreso-cycle="openBulkIngresoCycleFlow"
       @open-bulk-payment="openBulkPaymentFlow"
+      @open-no-adeudo="openNoAdeudoForSelection"
       @clear-selected="clearSelectedStudents"
+    />
+
+    <NoAdeudoModal
+      v-if="noAdeudoStudents.length"
+      :students="noAdeudoStudents"
+      :ciclo="currentCicloKey"
+      @close="noAdeudoStudents = []"
+      @sent="handleNoAdeudoSent"
     />
 
     <StudentFormModal v-if="showStudentModal" :student="editingStudent" :enrollment-concepts="externalConcepts" @close="closeStudentModal" @success="handleStudentSuccess" @ingreso-cycle-updated="handleIngresoCycleUpdated" />
@@ -322,7 +332,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
 import { useHead } from '#imports'
-import { LucideBookOpen, LucideEye, LucideSettings, LucideTag, LucideTags, LucideUserX } from 'lucide-vue-next'
+import { LucideBookOpen, LucideEye, LucideSettings, LucideShieldCheck, LucideTag, LucideTags, LucideUserX } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -359,6 +369,7 @@ import BulkIngresoCycleModal from '~/components/BulkIngresoCycleModal.vue'
 import StudentFormModal from '~/components/StudentFormModal.vue'
 import BajaReasonModal from '~/components/BajaReasonModal.vue'
 import StudentOperatorInfoModal from '~/components/students/StudentOperatorInfoModal.vue'
+import NoAdeudoModal from '~/components/NoAdeudoModal.vue'
 
 const { show } = useToast()
 const { openMenu } = useContextMenu()
@@ -585,6 +596,7 @@ const showStudentModal = ref(false)
 const editingStudent = ref(null)
 const pendingBajaStudent = ref(null)
 const operatorInfoStudent = ref(null)
+const noAdeudoStudents = ref([])
 const showFinancialDiagnosticsModal = ref(false)
 const bulkWorkspaceMode = ref('none')
 const showBulkIngresoCycleModal = ref(false)
@@ -1777,6 +1789,30 @@ const openBulkIngresoCycleFlow = () => {
   showBulkIngresoCycleModal.value = true
 }
 
+const openNoAdeudoForStudent = (student) => {
+  if (!student) return
+  noAdeudoStudents.value = [findCanonicalStudent(student)]
+}
+
+const openNoAdeudoForSelection = () => {
+  if (!selectedCount.value) return
+  const targets = selectedStudents.value.length
+    ? selectedStudents.value.map(findCanonicalStudent)
+    : (selectionPrimaryStudent.value ? [findCanonicalStudent(selectionPrimaryStudent.value)] : [])
+  noAdeudoStudents.value = targets
+}
+
+const handleNoAdeudoSent = (response) => {
+  noAdeudoStudents.value = []
+  const sent = Number(response?.sent || 0)
+  const failed = Number(response?.failed || 0)
+  show(
+    `${sent} carta${sent === 1 ? '' : 's'} de no adeudo enviada${sent === 1 ? '' : 's'}${failed ? `; ${failed} fallida${failed === 1 ? '' : 's'}` : ''}.`,
+    failed ? 'warning' : 'success'
+  )
+  performSearch({ useCache: false })
+}
+
 const closeBulkIngresoCycleModal = () => {
   if (bulkIngresoSaving.value) return
   showBulkIngresoCycleModal.value = false
@@ -1961,7 +1997,8 @@ const showStudentMenu = (event, student) => {
     : 'Asignar seccion'
 
   const actions = [
-    { label: 'Ver detalles', icon: LucideEye, action: () => selectStudent(student) }
+    { label: 'Ver detalles', icon: LucideEye, action: () => selectStudent(student) },
+    { label: 'Carta no adeudo', icon: LucideShieldCheck, action: () => openNoAdeudoForStudent(student) }
   ]
 
   if (canOpenStudentOperatorInfo.value) {

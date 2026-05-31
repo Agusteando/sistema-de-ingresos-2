@@ -217,6 +217,9 @@
             >
               <LucideFileText :size="15" /> Facturar
             </button>
+            <button class="profile-action-button" type="button" @click="showNoAdeudoModal = true">
+              <LucideShieldCheck :size="15" /> No adeudo
+            </button>
             <button class="profile-action-button" @click="showDocModal = true">
               <LucideFilePlus :size="15" /> Cargo extra
             </button>
@@ -655,6 +658,13 @@
         @close="showIngresoCycleModal = false"
         @confirm="saveIngresoCycle"
       />
+      <NoAdeudoModal
+        v-if="showNoAdeudoModal"
+        :students="[accountOverlaySource]"
+        :ciclo="selectedCicloKey"
+        @close="showNoAdeudoModal = false"
+        @sent="handleNoAdeudoSent"
+      />
     </div>
   </Teleport>
 </template>
@@ -722,6 +732,7 @@ import DocumentModal from "./DocumentModal.vue";
 import InvoiceModal from "./InvoiceModal.vue";
 import ConceptChangeModal from "./ConceptChangeModal.vue";
 import IngresoCycleModal from "./IngresoCycleModal.vue";
+import NoAdeudoModal from "~/components/NoAdeudoModal.vue";
 import StudentAccountPhotoCard from "~/components/students/StudentAccountPhotoCard.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 
@@ -774,6 +785,7 @@ const showDocModal = ref(false);
 const showInvoiceModal = ref(false);
 const showConceptModal = ref(false);
 const showIngresoCycleModal = ref(false);
+const showNoAdeudoModal = ref(false);
 const savingIngresoCycle = ref(false);
 const selectedConceptDebt = ref(null);
 const detailsShell = ref(null);
@@ -1168,6 +1180,7 @@ const resetAccountInteraction = () => {
   showDocModal.value = false;
   showInvoiceModal.value = false;
   showConceptModal.value = false;
+  showNoAdeudoModal.value = false;
 };
 
 const applyAccountDebts = async (
@@ -1579,6 +1592,7 @@ const showStudentActionsMenu = (event) => {
       action: () => emit("manage-sections", props.student),
     },
     { label: "Carta beca", icon: LucideAward, action: printBeca },
+    { label: "Carta no adeudo", icon: LucideShieldCheck, action: () => { showNoAdeudoModal.value = true; } },
     {
       label: reminding.value ? "Enviando aviso..." : "Enviar aviso",
       icon: reminding.value ? LucideLoader2 : LucideBell,
@@ -1922,6 +1936,17 @@ const saveIngresoCycle = async (payload) => {
   } finally {
     savingIngresoCycle.value = false;
   }
+};
+
+const handleNoAdeudoSent = (response) => {
+  showNoAdeudoModal.value = false;
+  const sent = Number(response?.sent || 0);
+  const failed = Number(response?.failed || 0);
+  show(
+    `${sent} carta${sent === 1 ? "" : "s"} de no adeudo enviada${sent === 1 ? "" : "s"}${failed ? `; ${failed} fallida${failed === 1 ? "" : "s"}` : ""}.`,
+    failed ? "warning" : "success",
+  );
+  emit("refresh");
 };
 
 const handleSuccess = () => {

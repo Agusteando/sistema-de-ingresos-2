@@ -1,1 +1,1 @@
-Corrige validación de CURP y conserva el modal de facturación durante actualizaciones
+integrar cartas de no adeudo con vista previa, envío masivo y validación QR antifraude

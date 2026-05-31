@@ -22,6 +22,10 @@
             <LucideCalendarClock :size="16" />
             <span>Ciclo ingreso</span>
           </button>
+          <button type="button" class="dock-action secondary" @click="$emit('open-no-adeudo')">
+            <LucideShieldCheck :size="16" />
+            <span>No adeudo</span>
+          </button>
           <button type="button" class="dock-action primary" @click="$emit('open-bulk-payment')">
             <LucideCreditCard :size="16" />
             <span>Aplicar pago</span>
@@ -34,7 +38,7 @@
 </template>
 
 <script setup>
-import { LucideArrowRight, LucideCalendarClock, LucideCreditCard, LucideTags } from 'lucide-vue-next'
+import { LucideArrowRight, LucideCalendarClock, LucideCreditCard, LucideShieldCheck, LucideTags } from 'lucide-vue-next'
 import { formatMoney } from '~/shared/utils/studentPresentation'
 
 defineProps({
@@ -47,6 +51,7 @@ defineEmits([
   'open-section-selection',
   'open-bulk-ingreso-cycle',
   'open-bulk-payment',
+  'open-no-adeudo',
   'clear-selected'
 ])
 </script>
