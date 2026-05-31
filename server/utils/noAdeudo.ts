@@ -8,6 +8,7 @@ import { isInProjectedPlantelScopeForCiclo } from '../../shared/utils/grado'
 import { escapeHtml } from './cobranzaEmail'
 import { generateNoAdeudoCartaPdf } from './noAdeudoCartaPdf'
 import { sendEmail, type MailAttachment } from './mailer'
+import { controlEscolarCentralQuery } from './control-escolar-central'
 
 type RuntimeNoAdeudoConfig = {
   noAdeudoControlEscolarTo?: string
@@ -34,6 +35,14 @@ type NoAdeudoTokenPayload = {
   pv?: 1
 }
 
+export type NoAdeudoDeudorCartaMark = {
+  sent: boolean
+  folio?: string
+  sentAt?: string
+  sentByName?: string
+  sentByEmail?: string
+}
+
 export type NoAdeudoStudentContext = {
   student: Record<string, any>
   debt: {
@@ -41,6 +50,7 @@ export type NoAdeudoStudentContext = {
     hasDebt: boolean
     concepts: Array<{ documento: string; conceptoNombre: string; mesLabel: string; saldo: number }>
   }
+  deudorCarta: NoAdeudoDeudorCartaMark | null
   recipients: {
     parents: string[]
     control: string[]
@@ -60,6 +70,15 @@ const safeFilePart = (value: unknown) => normalizeText(value)
   .replace(/[^a-zA-Z0-9_-]+/g, '-')
   .replace(/^-+|-+$/g, '')
   .slice(0, 90) || 'alumno'
+
+const NO_ADEUDO_DEUDOR_TABLE = 'no_adeudo_deudor_cartas'
+const quoteIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
+
+const isMissingNoAdeudoDeudorTableError = (error: any) => {
+  const code = String(error?.code || '').toUpperCase()
+  const message = String(error?.message || '')
+  return code === 'ER_NO_SUCH_TABLE' || (/no_adeudo_deudor_cartas/i.test(message) && /doesn.?t exist|no existe/i.test(message))
+}
 
 const getNoAdeudoConfig = () => useRuntimeConfig() as unknown as RuntimeNoAdeudoConfig
 
@@ -151,7 +170,7 @@ const normalizePaymentMethod = (value: unknown) => String(value || '')
 const isDepuracionPayment = (payment: any) => normalizePaymentMethod(payment.formaDePago) === 'depuracion' && (String(payment.depurado) === '1' || payment.depurado === true)
 
 export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) => {
-  const cicloKey = normalizeCicloKey(ciclo)
+  const cicloKey = normalizeCicloKey(String(ciclo || ''))
   const documentos = await query<any[]>(`
     SELECT d.documento, d.matricula, d.costo, d.montoFinal, d.meses, d.plazo, d.ciclo, d.conceptoNombre, d.eventual
     FROM documentos d
@@ -254,9 +273,49 @@ const assertStudentScope = (event: any, student: Record<string, any>, cicloKey: 
   if (!allowed) throw createError({ statusCode: isScopedToActivePlantel ? 403 : 404, message: 'Alumno fuera del alcance del plantel activo.' })
 }
 
+const getNoAdeudoDeudorCartaMark = async (plantelValue: unknown, matriculaValue: unknown, cicloValue: unknown): Promise<NoAdeudoDeudorCartaMark | null> => {
+  const plantel = normalizeText(plantelValue).toUpperCase()
+  const matricula = normalizeMatricula(matriculaValue)
+  const ciclo = normalizeCicloKey(String(cicloValue || ''))
+  if (!plantel || !matricula || !ciclo) return null
+
+  try {
+    const rows = await controlEscolarCentralQuery<any[]>(`
+      SELECT folio, sent_at, sent_by_name, sent_by_email
+      FROM ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)}
+      WHERE plantel = ? AND matricula = ? AND ciclo = ?
+      LIMIT 1
+    `, [plantel, matricula, ciclo])
+    const row = rows[0]
+    if (!row) return null
+    return {
+      sent: true,
+      folio: normalizeText(row.folio),
+      sentAt: row.sent_at ? String(row.sent_at) : '',
+      sentByName: normalizeText(row.sent_by_name),
+      sentByEmail: normalizeEmail(row.sent_by_email)
+    }
+  } catch (error: any) {
+    if (isMissingNoAdeudoDeudorTableError(error)) return null
+    console.error('[No Adeudo] No se pudo consultar la marca externa de carta con adeudo:', error?.message || error)
+    return null
+  }
+}
+
+const assertNoAdeudoDeudorCartaTableAvailable = async () => {
+  try {
+    await controlEscolarCentralQuery<any[]>(`SELECT id FROM ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)} LIMIT 1`)
+  } catch (error: any) {
+    if (isMissingNoAdeudoDeudorTableError(error)) {
+      throw createError({ statusCode: 500, message: 'Falta crear la tabla externa no_adeudo_deudor_cartas antes de enviar cartas de no adeudo a alumnos detectados con adeudo.' })
+    }
+    throw error
+  }
+}
+
 export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: unknown, cicloValue: unknown): Promise<NoAdeudoStudentContext> => {
   const matricula = normalizeMatricula(matriculaValue)
-  const cicloKey = normalizeCicloKey(cicloValue)
+  const cicloKey = normalizeCicloKey(String(cicloValue || ''))
   if (!matricula) throw createError({ statusCode: 400, message: 'Matrícula requerida.' })
 
   const [row] = await query<any[]>(`
@@ -275,6 +334,7 @@ export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: 
 
   const student = await mergeCentralOverlay(row)
   const debt = await calculateNoAdeudoDebt(row.matricula, cicloKey)
+  const deudorCarta = await getNoAdeudoDeudorCartaMark(student.plantel, row.matricula, cicloKey)
   const settings = getNoAdeudoSettings(student.plantel)
   const parents = unique([
     firstEmail(student.emailPadre),
@@ -286,6 +346,7 @@ export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: 
   return {
     student,
     debt,
+    deudorCarta,
     recipients: {
       parents,
       control,
@@ -402,7 +463,7 @@ export const renderNoAdeudoEmail = ({ student, ciclo, validationUrl }: { student
 }
 
 export const buildNoAdeudoPreviewPayload = async (event: any, matriculas: unknown[], ciclo: unknown) => {
-  const cicloKey = normalizeCicloKey(ciclo)
+  const cicloKey = normalizeCicloKey(String(ciclo || ''))
   const contexts = [] as Array<NoAdeudoStudentContext & { pdfPreviewUrl: string; email: ReturnType<typeof renderNoAdeudoEmail> }>
   for (const matricula of matriculas) {
     const context = await resolveNoAdeudoStudentContext(event, matricula, cicloKey)
@@ -425,6 +486,7 @@ export const buildNoAdeudoPreviewPayload = async (event: any, matriculas: unknow
       grado: item.student.grado || item.student.gradoBase,
       grupo: item.student.grupo,
       debt: item.debt,
+      deudorCarta: item.deudorCarta,
       recipients: item.recipients,
       pdfPreviewUrl: item.pdfPreviewUrl,
       email: item.email
@@ -455,59 +517,44 @@ export const generateNoAdeudoPdfForContext = (event: any, context: NoAdeudoStude
     validationUrl,
     verificationToken: tokenInfo.token,
     verificationHash: tokenInfo.verificationHash,
-    debtTotal: context.debt.total,
+    debtTotal: 0,
     preview
   })
   return { pdf, validationUrl, issuedAt, ...tokenInfo }
 }
 
-export const persistNoAdeudoIssue = async ({
+export const persistNoAdeudoDeudorCartaMark = async ({
   context,
   ciclo,
-  token,
-  verificationHash,
-  validationUrl,
+  folio,
   issuedAt,
   generatedBy,
   generatedByEmail,
-  recipients,
-  pdf,
 }: {
   context: NoAdeudoStudentContext
   ciclo: string
-  token: string
-  verificationHash: string
-  validationUrl: string
+  folio: string
   issuedAt: Date
   generatedBy: string
   generatedByEmail?: string
-  recipients: string[]
-  pdf: Buffer
 }) => {
-  await query<any>(`
-    INSERT INTO no_adeudo_cartas (
-      token, verification_hash, matricula, ciclo, plantel, student_name,
-      debt_total, generated_by, generated_by_email, generated_at,
-      recipients_json, validation_url, pdf_sha256, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent')
+  await controlEscolarCentralQuery<any>(`
+    INSERT INTO ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)} (
+      plantel, matricula, ciclo, folio, sent_at, sent_by_name, sent_by_email
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
-      debt_total = VALUES(debt_total), generated_by = VALUES(generated_by), generated_by_email = VALUES(generated_by_email),
-      generated_at = VALUES(generated_at), recipients_json = VALUES(recipients_json), validation_url = VALUES(validation_url),
-      pdf_sha256 = VALUES(pdf_sha256), status = VALUES(status)
+      folio = VALUES(folio),
+      sent_at = VALUES(sent_at),
+      sent_by_name = VALUES(sent_by_name),
+      sent_by_email = VALUES(sent_by_email)
   `, [
-    token,
-    verificationHash,
-    context.student.matricula,
+    normalizeText(context.student.plantel).toUpperCase(),
+    normalizeMatricula(context.student.matricula),
     normalizeCicloKey(ciclo),
-    context.student.plantel || '',
-    context.student.nombreCompleto || '',
-    Number(context.debt.total || 0),
-    generatedBy,
-    generatedByEmail || '',
+    normalizeText(folio),
     dayjs(issuedAt).format('YYYY-MM-DD HH:mm:ss'),
-    JSON.stringify(recipients),
-    validationUrl,
-    hashHex(pdf),
+    normalizeText(generatedBy),
+    normalizeEmail(generatedByEmail),
   ])
 }
 
@@ -521,6 +568,9 @@ export const sendNoAdeudoForContext = async (event: any, context: NoAdeudoStuden
   const recipients = selectNoAdeudoRecipients(context, options.mode || 'parents_control')
   if (!recipients.length) {
     return { matricula: context.student.matricula, success: false, message: 'No hay destinatarios configurados para esta carta.' }
+  }
+  if (context.debt.hasDebt) {
+    await assertNoAdeudoDeudorCartaTableAvailable()
   }
 
   const user = event.context.user || {}
@@ -538,7 +588,7 @@ export const sendNoAdeudoForContext = async (event: any, context: NoAdeudoStuden
     validationUrl,
     verificationToken: tokenInfo.token,
     verificationHash: tokenInfo.verificationHash,
-    debtTotal: context.debt.total,
+    debtTotal: 0,
   })
   const email = renderNoAdeudoEmail({ student: context.student, ciclo, validationUrl })
   const attachments: MailAttachment[] = [{
@@ -548,18 +598,16 @@ export const sendNoAdeudoForContext = async (event: any, context: NoAdeudoStuden
   }]
 
   await sendEmail(recipients.join(', '), email.subject, email.html, settings.fromAddress || generatedByEmail, attachments)
-  await persistNoAdeudoIssue({
-    context,
-    ciclo,
-    token: tokenInfo.token,
-    verificationHash: tokenInfo.verificationHash,
-    validationUrl,
-    issuedAt,
-    generatedBy,
-    generatedByEmail,
-    recipients,
-    pdf
-  })
+  if (context.debt.hasDebt) {
+    await persistNoAdeudoDeudorCartaMark({
+      context,
+      ciclo,
+      folio: tokenInfo.verificationHash.slice(0, 18).toUpperCase(),
+      issuedAt,
+      generatedBy,
+      generatedByEmail
+    })
+  }
 
   return {
     matricula: context.student.matricula,
@@ -569,6 +617,7 @@ export const sendNoAdeudoForContext = async (event: any, context: NoAdeudoStuden
     debtTotal: context.debt.total,
     warning: context.debt.hasDebt ? `El alumno aún tiene un adeudo de ${formatMoney(context.debt.total)}. Se generó de todas maneras.` : '',
     validationUrl,
-    verificationHash: tokenInfo.verificationHash
+    verificationHash: tokenInfo.verificationHash,
+    deudorCartaMarked: context.debt.hasDebt
   }
 }

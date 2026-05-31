@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     validationUrl,
     verificationToken: tokenInfo.token,
     verificationHash: tokenInfo.verificationHash,
-    debtTotal: context.debt.total,
+    debtTotal: 0,
     preview: String(preview) !== '0'
   })
 

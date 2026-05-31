@@ -24,6 +24,11 @@
             <span>El adeudo se muestra como advertencia administrativa. No aparece dentro de la carta.</span>
           </aside>
 
+          <aside v-if="deudorCartaNotice" class="no-adeudo-alert info">
+            <strong>{{ deudorCartaNotice }}</strong>
+            <span>Control externo de cartas emitidas con advertencia de adeudo.</span>
+          </aside>
+
           <div class="no-adeudo-body">
             <section class="no-adeudo-preview-card">
               <div class="no-adeudo-preview-toolbar">
@@ -126,6 +131,16 @@ const debtWarning = computed(() => {
   if (debtRows.value.length === 1) return `El alumno aún tiene un adeudo de $${formatMoney(debtRows.value[0].debt.total)}.`
   const total = debtRows.value.reduce((sum, item) => sum + Number(item.debt?.total || 0), 0)
   return `${debtRows.value.length} alumnos aún tienen adeudo por $${formatMoney(total)} en total.`
+})
+const deudorCartaNotice = computed(() => {
+  const marked = previewStudents.value.filter(item => item?.deudorCarta?.sent)
+  if (!marked.length) return ''
+  if (marked.length === 1) {
+    const mark = marked[0].deudorCarta || {}
+    const by = mark.sentByName || mark.sentByEmail || 'usuario no registrado'
+    return `Ya existe una marca externa de carta emitida con adeudo${mark.sentAt ? ` el ${mark.sentAt}` : ''} por ${by}${mark.folio ? ` · folio ${mark.folio}` : ''}.`
+  }
+  return `${marked.length} alumnos ya tienen marca externa de carta emitida con adeudo.`
 })
 const primaryButtonLabel = computed(() => {
   if (sending.value) return 'Enviando...'
@@ -286,6 +301,12 @@ watch(() => `${matriculas.value.join('|')}|${cicloKey.value}`, loadPreview)
   border: 1px solid #fecaca;
   background: #fff1f2;
   color: #b42318;
+}
+
+.no-adeudo-alert.info {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .no-adeudo-body {

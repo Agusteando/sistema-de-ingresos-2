@@ -673,29 +673,6 @@ export const ensureSchema = async () => {
 
 
       await runSafeQuery(`
-        CREATE TABLE IF NOT EXISTS no_adeudo_cartas (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          token VARCHAR(900) NOT NULL,
-          verification_hash VARCHAR(64) NOT NULL,
-          matricula VARCHAR(255) NOT NULL,
-          ciclo VARCHAR(50) NOT NULL,
-          plantel VARCHAR(255) DEFAULT NULL,
-          student_name VARCHAR(255) DEFAULT NULL,
-          debt_total DECIMAL(12,2) NOT NULL DEFAULT 0,
-          generated_by VARCHAR(255) DEFAULT NULL,
-          generated_by_email VARCHAR(255) DEFAULT NULL,
-          generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          recipients_json JSON NULL,
-          validation_url TEXT NULL,
-          pdf_sha256 VARCHAR(64) DEFAULT NULL,
-          status VARCHAR(30) NOT NULL DEFAULT 'sent',
-          UNIQUE KEY uniq_no_adeudo_token (token(191)),
-          INDEX idx_no_adeudo_lookup (matricula(64), ciclo, generated_at),
-          INDEX idx_no_adeudo_hash (verification_hash)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `)
-
-      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS cobranza_eventos (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
           matricula VARCHAR(255) NOT NULL,

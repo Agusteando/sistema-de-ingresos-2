@@ -1,1 +1,1 @@
-integrar cartas de no adeudo con vista previa, envío masivo y validación QR antifraude
+Integra control externo mínimo para cartas de no adeudo emitidas con advertencia de adeudo
