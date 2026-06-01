@@ -24,8 +24,17 @@ const NUM_ERROR_CORRECTION_BLOCKS = [
 const getBit = (value: number, index: number) => ((value >>> index) & 1) !== 0
 
 const appendBits = (value: number, length: number, bits: number[]) => {
-  if (length < 0 || length > 31 || value >>> length !== 0) throw new RangeError('Invalid QR bit range')
-  for (let i = length - 1; i >= 0; i--) bits.push((value >>> i) & 1)
+  const normalized = Number(value)
+  if (!Number.isFinite(normalized) || normalized < 0 || !Number.isInteger(normalized)) {
+    throw new RangeError('Invalid QR bit value')
+  }
+  if (length < 0 || length > 31) throw new RangeError('Invalid QR bit length')
+  if (length === 0) {
+    if (normalized !== 0) throw new RangeError('Invalid QR bit range')
+    return
+  }
+  if (normalized >= 2 ** length) throw new RangeError('Invalid QR bit range')
+  for (let i = length - 1; i >= 0; i--) bits.push((normalized >>> i) & 1)
 }
 
 const getNumRawDataModules = (version: number) => {
@@ -370,15 +379,20 @@ export const generateQrMatrix = (text: string, options: { minVersion?: number; m
   let dataCapacityBits = 0
   let bits: number[] = []
   for (; version <= maxVersion; version++) {
+    const countBitLength = version <= 9 ? 8 : 16
+    if (data.length >= 2 ** countBitLength) continue
+
     bits = []
     appendBits(0x4, 4, bits)
-    appendBits(data.length, version <= 9 ? 8 : 16, bits)
+    appendBits(data.length, countBitLength, bits)
     data.forEach((byte) => appendBits(byte, 8, bits))
     dataCapacityBits = getNumDataCodewords(version, ecl) * 8
     if (bits.length <= dataCapacityBits) break
   }
 
-  if (version > maxVersion) throw new Error('El contenido del QR excede la capacidad configurada.')
+  if (version > maxVersion) {
+    throw new Error(`El contenido del QR excede la capacidad configurada (${data.length} bytes, versión máxima ${maxVersion}).`)
+  }
 
   appendBits(0, Math.min(4, dataCapacityBits - bits.length), bits)
   appendBits(0, (8 - bits.length % 8) % 8, bits)

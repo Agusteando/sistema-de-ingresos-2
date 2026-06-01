@@ -46,6 +46,20 @@ const titleCase = (value: unknown) => String(value || '')
 
 const compact = (value: unknown) => String(value || '').trim()
 
+const buildValidationQr = (validationUrl: string) => {
+  try {
+    return generateQrMatrix(validationUrl, { ecc: 'M', maxVersion: 32 })
+  } catch (primaryError: any) {
+    try {
+      return generateQrMatrix(validationUrl, { ecc: 'L', maxVersion: 40 })
+    } catch (fallbackError: any) {
+      const primaryMessage = sanitizeWinAnsi(primaryError?.message || primaryError)
+      const fallbackMessage = sanitizeWinAnsi(fallbackError?.message || fallbackError)
+      throw new Error(`No se pudo construir el QR de validación. ${primaryMessage || fallbackMessage}`)
+    }
+  }
+}
+
 const wrapText = (text: string, maxChars: number) => {
   const words = sanitizeWinAnsi(text).split(/\s+/).filter(Boolean)
   const lines: string[] = []
@@ -178,7 +192,7 @@ export const generateNoAdeudoCartaPdf = ({
   const matricula = compact(student.matricula)
   const plantel = compact(student.plantel)
   const nivelGrado = [student.nivel || student.nivelBase, student.grado || student.gradoBase, student.grupo].filter(Boolean).join(' · ')
-  const qr = generateQrMatrix(validationUrl, { ecc: 'M', maxVersion: 24 })
+  const qr = buildValidationQr(validationUrl)
   const shortHash = verificationHash.slice(0, 18).toUpperCase()
 
   drawSecurityBackground(c)

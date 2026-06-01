@@ -185,6 +185,17 @@ export const diagnoseNoAdeudoError = (error: any, source = 'Carta de No Adeudo')
     }
   }
 
+  if (/Invalid QR bit range|Invalid QR bit length|Invalid QR bit value|contenido del QR excede/i.test(combined)) {
+    return {
+      title: 'No se pudo construir el QR de validación del PDF.',
+      detail: message || 'El contenido de validación excedió o rompió la codificación QR.',
+      statusCode: 500,
+      source,
+      code: code || 'NO_ADEUDO_QR_RENDER_ERROR',
+      action: 'Despliega la versión corregida del generador QR; la vista previa debe usar codificación byte-mode con conteo largo para URLs firmadas.'
+    }
+  }
+
   if (/google|gmail|service account|private key|unauthorized|invalid_grant|delegation/i.test(combined)) {
     return {
       title: 'No se pudo enviar el correo por Gmail.',
