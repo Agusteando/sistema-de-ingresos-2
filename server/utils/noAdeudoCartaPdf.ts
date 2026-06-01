@@ -249,15 +249,7 @@ export const generateNoAdeudoCartaPdf = ({
   c.text(fitText(plantelDetail, rightColWidth, 9), rightColRight, studentCardTop - 78, { size: 9, color: [18, 35, 54], align: 'right' })
 
   const body = `Por medio de la presente se hace constar que, de acuerdo con los registros administrativos disponibles al momento de emisión, el/la alumno(a) ${studentName}, con matrícula ${matricula}, no presenta adeudo registrado para el ciclo escolar ${ciclo}.`
-  let cursor = c.paragraph(body, MARGIN + 10, PAGE_H - 372, 93, 17, { size: 11.2, color: [37, 51, 70] })
-  cursor -= 16
-  c.paragraph('Esta constancia es personal e intransferible. Su validez depende de la verificación del código QR y de que los datos escaneados coincidan con los datos visibles del documento.', MARGIN + 10, cursor, 94, 15, { size: 10.2, color: [72, 86, 105] })
-
-  c.rect(MARGIN, PAGE_H - 548, PAGE_W - MARGIN * 2, 88, [247, 251, 247], [215, 229, 218])
-  c.text('Elementos de seguridad', MARGIN + 18, PAGE_H - 488, { size: 12, font: 'bold', color: [28, 80, 47] })
-  c.text('• QR firmado con identidad del alumno y generador', MARGIN + 20, PAGE_H - 510, { size: 9.2, color: [69, 83, 101] })
-  c.text('• Folio criptográfico visible y trazable', MARGIN + 20, PAGE_H - 527, { size: 9.2, color: [69, 83, 101] })
-  c.text('• Fondo institucional, microtexto y documento plano sin campos editables', MARGIN + 20, PAGE_H - 544, { size: 9.2, color: [69, 83, 101] })
+  c.paragraph(body, MARGIN + 10, PAGE_H - 372, 93, 17, { size: 11.2, color: [37, 51, 70] })
 
   const qrX = PAGE_W - MARGIN - 132
   const qrY = 118
@@ -270,9 +262,10 @@ export const generateNoAdeudoCartaPdf = ({
   c.text(`Generado por: ${generatedBy || 'Sistema Aurora'}`, MARGIN + 117, 151, { size: 8.2, color: [97, 111, 128], align: 'center' })
   if (generatedByEmail) c.text(generatedByEmail, MARGIN + 117, 138, { size: 7.5, color: [111, 123, 139], align: 'center' })
 
-  c.text('Documento generado por Aurora · Sistema de Ingresos IECS / IEDIS', MARGIN, 72, { size: 8, color: [112, 126, 144] })
-  c.text(`Verificación: ${shortHash}`, MARGIN, 58, { size: 7.5, color: [112, 126, 144] })
-  c.text(`Token: ${verificationToken.slice(0, 20)}…`, PAGE_W - MARGIN, 58, { size: 7.5, color: [112, 126, 144], align: 'right' })
+  c.line(MARGIN, 92, PAGE_W - MARGIN, 92, [215, 229, 218], 0.6)
+  c.paragraph('Documento personal e intransferible. Para validar su autenticidad, escanee el código QR y confirme que los datos mostrados coincidan con esta constancia.', MARGIN, 80, 76, 10, { size: 7.6, color: [112, 126, 144] })
+  c.text('Documento generado por Aurora · Sistema de Ingresos IECS / IEDIS', MARGIN, 50, { size: 7.4, color: [112, 126, 144] })
+  c.text(`Folio de verificación: ${shortHash}`, PAGE_W - MARGIN, 50, { size: 7.4, color: [112, 126, 144], align: 'right' })
 
   const stream = c.toString()
   const streamBuffer = Buffer.from(stream, 'latin1')

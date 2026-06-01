@@ -9,7 +9,7 @@ const formatDate = (value: string) => {
 
 export default defineEventHandler(async (event) => {
   const token = String(event.context.params?.token || '')
-  const { payload, verificationHash } = decodeNoAdeudoToken(token)
+  const { payload } = decodeNoAdeudoToken(token)
   setHeader(event, 'Content-Type', 'text/html; charset=utf-8')
   setHeader(event, 'Cache-Control', 'no-store')
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Validación Carta de No Adeudo</title><style>
@@ -38,8 +38,7 @@ export default defineEventHandler(async (event) => {
       <dt>Generado por</dt><dd>${escapeHtml(payload.by || 'Sistema Aurora')}</dd>
       <dt>Correo generador</dt><dd>${escapeHtml(payload.be || 'No disponible')}</dd>
       <dt>Fecha de emisión</dt><dd>${escapeHtml(formatDate(payload.at))}</dd>
-      <dt>Folio criptográfico</dt><dd>${escapeHtml(payload.f)}</dd>
-      <dt>Hash de verificación</dt><dd>${escapeHtml(verificationHash.toUpperCase())}</dd>
+      <dt>Folio de verificación</dt><dd>${escapeHtml(payload.f)}</dd>
     </dl>
-  </section><footer>La validación confirma que el QR fue firmado por Aurora. Compare estos datos contra el PDF impreso o digital; si no coinciden, no acepte el documento.</footer></article></main></body></html>`
+  </section><footer>Validación generada por Aurora. Compare estos datos contra el PDF impreso o digital; si no coinciden, no acepte el documento.</footer></article></main></body></html>`
 })

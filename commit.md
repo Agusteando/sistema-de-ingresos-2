@@ -1,1 +1,1 @@
-Corrige el acomodo de datos del alumno en cartas de no adeudo
+Depura texto visible y pie de validación en cartas de no adeudo
