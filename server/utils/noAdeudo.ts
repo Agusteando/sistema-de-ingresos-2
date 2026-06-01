@@ -82,6 +82,117 @@ const isMissingNoAdeudoDeudorTableError = (error: any) => {
 
 const getNoAdeudoConfig = () => useRuntimeConfig() as unknown as RuntimeNoAdeudoConfig
 
+export type NoAdeudoDiagnostic = {
+  title: string
+  detail: string
+  statusCode: number
+  source: string
+  code?: string
+  missing?: string[]
+  action?: string
+}
+
+const publicErrorMessage = (error: any) => normalizeText(error?.data?.message || error?.statusMessage || error?.message)
+
+export const diagnoseNoAdeudoError = (error: any, source = 'Carta de No Adeudo'): NoAdeudoDiagnostic => {
+  const message = publicErrorMessage(error)
+  const code = normalizeText(error?.code || error?.data?.code || error?.cause?.code).toUpperCase()
+  const errno = error?.errno || error?.data?.errno || error?.cause?.errno
+  const sqlMessage = normalizeText(error?.sqlMessage || error?.cause?.sqlMessage)
+  const combined = [message, sqlMessage, code, String(errno || '')].filter(Boolean).join(' | ')
+  const statusCode = Number(error?.statusCode || error?.status || error?.response?.status || 500)
+
+  const missingEnv = Array.from(new Set([
+    ...combined.matchAll(/CONTROL_ESCOLAR_MYSQL_[A-Z0-9_]+/g)
+  ].map((match) => match[0])))
+
+  if (missingEnv.length) {
+    return {
+      title: `Falta configurar ${missingEnv.join(', ')}.`,
+      detail: 'La carta necesita consultar la base externa de Control Escolar para validar y registrar el control de cartas emitidas con advertencia de adeudo.',
+      statusCode: 500,
+      source,
+      code: code || undefined,
+      missing: missingEnv,
+      action: 'Agrega la variable faltante en el ambiente del servidor y reinicia Aurora.'
+    }
+  }
+
+  if (isMissingNoAdeudoDeudorTableError(error) || /NO_ADEUDO_DEUDOR_CARTAS/i.test(combined)) {
+    return {
+      title: 'Falta crear la tabla externa no_adeudo_deudor_cartas.',
+      detail: 'Aurora detectó adeudo y necesita guardar una marca externa antes de permitir el envío de la carta generada de todas maneras.',
+      statusCode: 500,
+      source,
+      code: code || undefined,
+      missing: ['tabla externa no_adeudo_deudor_cartas'],
+      action: 'Ejecuta manualmente el CREATE TABLE en la base externa/control, no en la base bridge.'
+    }
+  }
+
+  if (['ER_ACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR'].includes(code) || /access denied|acceso denegado/i.test(combined)) {
+    return {
+      title: 'La conexión a la base externa fue rechazada.',
+      detail: 'Las credenciales CONTROL_ESCOLAR_MYSQL_USER / CONTROL_ESCOLAR_MYSQL_PASSWORD o los permisos de esa cuenta no permiten acceder a la base configurada.',
+      statusCode: 500,
+      source,
+      code: code || undefined,
+      action: 'Valida usuario, contraseña, permisos y base CONTROL_ESCOLAR_MYSQL_DATABASE.'
+    }
+  }
+
+  if (['ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', 'PROTOCOL_CONNECTION_LOST'].includes(code) || /connect|timeout|timed out|refused|ENOTFOUND/i.test(combined)) {
+    return {
+      title: 'No se pudo conectar a la base externa de Control Escolar.',
+      detail: 'Aurora no pudo abrir conexión con CONTROL_ESCOLAR_MYSQL_HOST / CONTROL_ESCOLAR_MYSQL_PORT.',
+      statusCode: 500,
+      source,
+      code: code || undefined,
+      action: 'Valida host, puerto, red/firewall y que MySQL esté aceptando conexiones externas.'
+    }
+  }
+
+  if (/no hay destinatarios/i.test(combined)) {
+    return {
+      title: 'No hay destinatarios configurados para esta carta.',
+      detail: 'No se encontraron correos de padres ni correos de Control Escolar para el modo de envío seleccionado.',
+      statusCode: 400,
+      source,
+      action: 'Configura NO_ADEUDO_CONTROL_ESCOLAR_TO o corrige los correos del alumno antes de enviar.'
+    }
+  }
+
+  if (/google|gmail|service account|private key|unauthorized|invalid_grant|delegation/i.test(combined)) {
+    return {
+      title: 'No se pudo enviar el correo por Gmail.',
+      detail: message || 'Gmail rechazó el envío o falta configuración del service account.',
+      statusCode: 500,
+      source,
+      code: code || undefined,
+      action: 'Valida GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, ADMIN_EMAIL_TO_IMPERSONATE y delegación de dominio.'
+    }
+  }
+
+  return {
+    title: message || 'No se pudo completar la operación de Carta de No Adeudo.',
+    detail: sqlMessage || message || 'El servidor no devolvió un detalle específico.',
+    statusCode: statusCode >= 400 ? statusCode : 500,
+    source,
+    code: code || undefined,
+    action: 'Revisa el log del servidor para el stack completo si este diagnóstico no es suficiente.'
+  }
+}
+
+export const throwNoAdeudoDiagnosticError = (error: any, source = 'Carta de No Adeudo') => {
+  const diagnostic = diagnoseNoAdeudoError(error, source)
+  throw createError({
+    statusCode: diagnostic.statusCode,
+    statusMessage: diagnostic.title,
+    message: diagnostic.title,
+    data: { diagnostic }
+  })
+}
+
 const parseBoolean = (value: unknown) => {
   if (typeof value === 'boolean') return value
   return ['1', 'true', 'yes', 'si', 'sí'].includes(String(value || '').trim().toLowerCase())
@@ -304,7 +415,7 @@ const getNoAdeudoDeudorCartaMark = async (plantelValue: unknown, matriculaValue:
 
 const assertNoAdeudoDeudorCartaTableAvailable = async () => {
   try {
-    await controlEscolarCentralQuery<any[]>(`SELECT id FROM ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)} LIMIT 1`)
+    await controlEscolarCentralQuery<any[]>(`SELECT 1 FROM ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)} LIMIT 1`)
   } catch (error: any) {
     if (isMissingNoAdeudoDeudorTableError(error)) {
       throw createError({ statusCode: 500, message: 'Falta crear la tabla externa no_adeudo_deudor_cartas antes de enviar cartas de no adeudo a alumnos detectados con adeudo.' })
@@ -334,6 +445,9 @@ export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: 
 
   const student = await mergeCentralOverlay(row)
   const debt = await calculateNoAdeudoDebt(row.matricula, cicloKey)
+  if (debt.hasDebt) {
+    await assertNoAdeudoDeudorCartaTableAvailable()
+  }
   const deudorCarta = await getNoAdeudoDeudorCartaMark(student.plantel, row.matricula, cicloKey)
   const settings = getNoAdeudoSettings(student.plantel)
   const parents = unique([

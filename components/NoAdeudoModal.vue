@@ -17,7 +17,19 @@
         </div>
 
         <template v-else>
-          <aside v-if="loadError" class="no-adeudo-alert danger">{{ loadError }}</aside>
+          <aside v-if="loadError" class="no-adeudo-alert danger">
+            <strong>{{ loadError }}</strong>
+            <template v-if="loadDiagnostic">
+              <span v-if="loadDiagnostic.detail">{{ loadDiagnostic.detail }}</span>
+              <ul v-if="loadDiagnostic.missing?.length" class="no-adeudo-diagnostic-list">
+                <li v-for="missing in loadDiagnostic.missing" :key="missing">Falta: {{ missing }}</li>
+              </ul>
+              <span v-if="loadDiagnostic.action">Acción: {{ loadDiagnostic.action }}</span>
+              <small v-if="loadDiagnostic.source || loadDiagnostic.code" class="no-adeudo-diagnostic-meta">
+                {{ [loadDiagnostic.source, loadDiagnostic.code].filter(Boolean).join(' · ') }}
+              </small>
+            </template>
+          </aside>
 
           <aside v-if="debtWarning" class="no-adeudo-alert warning">
             <strong>{{ debtWarning }}</strong>
@@ -81,9 +93,20 @@
 
               <div v-if="result" class="no-adeudo-result" :class="result.failed ? 'has-failures' : 'is-ok'">
                 <strong>{{ result.sent || 0 }} enviados · {{ result.failed || 0 }} fallidos</strong>
-                <p v-for="item in result.results || []" :key="`result-${item.matricula}`">
-                  {{ item.matricula }} — {{ item.success ? 'Enviado' : (item.message || 'Falló') }}
-                </p>
+                <div v-for="item in result.results || []" :key="`result-${item.matricula}`" class="no-adeudo-result-item">
+                  <p>{{ item.matricula }} — {{ item.success ? 'Enviado' : (item.message || 'Falló') }}</p>
+                  <details v-if="item.diagnostic" class="no-adeudo-result-diagnostic">
+                    <summary>Ver diagnóstico</summary>
+                    <span v-if="item.diagnostic.detail">{{ item.diagnostic.detail }}</span>
+                    <ul v-if="item.diagnostic.missing?.length" class="no-adeudo-diagnostic-list">
+                      <li v-for="missing in item.diagnostic.missing" :key="`${item.matricula}-${missing}`">Falta: {{ missing }}</li>
+                    </ul>
+                    <span v-if="item.diagnostic.action">Acción: {{ item.diagnostic.action }}</span>
+                    <small v-if="item.diagnostic.source || item.diagnostic.code" class="no-adeudo-diagnostic-meta">
+                      {{ [item.diagnostic.source, item.diagnostic.code].filter(Boolean).join(' · ') }}
+                    </small>
+                  </details>
+                </div>
               </div>
             </section>
           </div>
@@ -115,6 +138,7 @@ const emit = defineEmits(['close', 'sent'])
 const loading = ref(false)
 const sending = ref(false)
 const loadError = ref('')
+const loadDiagnostic = ref(null)
 const previewStudents = ref([])
 const activeMatricula = ref('')
 const sendMode = ref('parents_control')
@@ -142,6 +166,19 @@ const deudorCartaNotice = computed(() => {
   }
   return `${marked.length} alumnos ya tienen marca externa de carta emitida con adeudo.`
 })
+
+const extractDiagnostic = (error) => {
+  const payload = error?.data || error?.response?._data || error?.cause?.data || {}
+  return payload?.data?.diagnostic || payload?.diagnostic || error?.diagnostic || null
+}
+
+const extractErrorMessage = (error, fallback) => {
+  const diagnostic = extractDiagnostic(error)
+  if (diagnostic?.title) return diagnostic.title
+  const payload = error?.data || error?.response?._data || {}
+  return payload?.statusMessage || payload?.message || error?.statusMessage || error?.message || fallback
+}
+
 const primaryButtonLabel = computed(() => {
   if (sending.value) return 'Enviando...'
   return debtWarning.value ? 'Generar de todas maneras' : 'Generar y enviar'
@@ -151,6 +188,7 @@ const loadPreview = async () => {
   if (!matriculas.value.length) return
   loading.value = true
   loadError.value = ''
+  loadDiagnostic.value = null
   result.value = null
   try {
     const response = await $fetch('/api/no-adeudo/preview', {
@@ -161,7 +199,8 @@ const loadPreview = async () => {
     activeMatricula.value = previewStudents.value[0]?.matricula || ''
   } catch (error) {
     previewStudents.value = []
-    loadError.value = error?.data?.message || error?.message || 'No se pudo preparar la carta.'
+    loadDiagnostic.value = extractDiagnostic(error)
+    loadError.value = extractErrorMessage(error, 'No se pudo preparar la carta.')
   } finally {
     loading.value = false
   }
@@ -187,7 +226,7 @@ const sendLetters = async () => {
     result.value = {
       sent: 0,
       failed: previewStudents.value.length,
-      results: [{ matricula: 'Lote', success: false, message: error?.data?.message || error?.message || 'No se pudo enviar.' }]
+      results: [{ matricula: 'Lote', success: false, message: extractErrorMessage(error, 'No se pudo enviar.'), diagnostic: extractDiagnostic(error) }]
     }
   } finally {
     sending.value = false
@@ -454,6 +493,41 @@ watch(() => `${matriculas.value.join('|')}|${cicloKey.value}`, loadPreview)
 .no-adeudo-result.is-ok { background: #edf8ee; color: #2f7d38; }
 .no-adeudo-result.has-failures { background: #fff1f2; color: #b42318; }
 .no-adeudo-result p { margin: 5px 0 0; }
+
+.no-adeudo-diagnostic-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.no-adeudo-diagnostic-meta {
+  display: block;
+  margin-top: 8px;
+  opacity: .72;
+  font-weight: 800;
+}
+
+.no-adeudo-result-item + .no-adeudo-result-item {
+  margin-top: 10px;
+  border-top: 1px solid rgba(180, 35, 24, .18);
+  padding-top: 10px;
+}
+
+.no-adeudo-result-diagnostic {
+  margin-top: 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .55);
+  padding: 8px;
+}
+
+.no-adeudo-result-diagnostic summary {
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.no-adeudo-result-diagnostic span {
+  display: block;
+  margin-top: 6px;
+}
 
 .no-adeudo-actions {
   border-top: 1px solid #e5edf2;

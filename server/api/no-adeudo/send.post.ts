@@ -1,5 +1,5 @@
 import { runWithBridgeAgentId } from '../../utils/db'
-import { resolveNoAdeudoStudentContext, sendNoAdeudoForContext } from '../../utils/noAdeudo'
+import { diagnoseNoAdeudoError, resolveNoAdeudoStudentContext, sendNoAdeudoForContext } from '../../utils/noAdeudo'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
@@ -21,10 +21,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       const context = await resolveNoAdeudoStudentContext(event, matricula, ciclo)
       results.push(await sendNoAdeudoForContext(event, context, { ciclo, mode, force, blockOnDebt }))
     } catch (error: any) {
+      const diagnostic = diagnoseNoAdeudoError(error, `Envío de Carta de No Adeudo · ${String(matricula || '')}`)
       results.push({
         matricula: String(matricula || ''),
         success: false,
-        message: error?.data?.message || error?.statusMessage || error?.message || 'No se pudo generar la carta.'
+        message: diagnostic.title,
+        diagnostic
       })
     }
   }
@@ -34,6 +36,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     total: results.length,
     sent: results.filter((item: any) => item.success).length,
     failed: results.filter((item: any) => !item.success).length,
-    results
+    results,
+    diagnostics: results.map((item: any) => item.diagnostic).filter(Boolean)
   }
 }))
