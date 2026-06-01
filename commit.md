@@ -1,1 +1,1 @@
-Corrige diagnóstico y limpieza del control externo de cartas de no adeudo
+Corrige diagnóstico visible de cartas de no adeudo y mantiene el control externo sin archivos SQL agregados

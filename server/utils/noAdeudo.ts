@@ -445,9 +445,6 @@ export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: 
 
   const student = await mergeCentralOverlay(row)
   const debt = await calculateNoAdeudoDebt(row.matricula, cicloKey)
-  if (debt.hasDebt) {
-    await assertNoAdeudoDeudorCartaTableAvailable()
-  }
   const deudorCarta = await getNoAdeudoDeudorCartaMark(student.plantel, row.matricula, cicloKey)
   const settings = getNoAdeudoSettings(student.plantel)
   const parents = unique([
@@ -588,10 +585,21 @@ export const buildNoAdeudoPreviewPayload = async (event: any, matriculas: unknow
       email: renderNoAdeudoEmail({ student: context.student, ciclo: cicloKey })
     })
   }
+
+  const diagnostics: NoAdeudoDiagnostic[] = []
+  if (contexts.some((item) => item.debt.hasDebt)) {
+    try {
+      await assertNoAdeudoDeudorCartaTableAvailable()
+    } catch (error) {
+      diagnostics.push(diagnoseNoAdeudoError(error, 'Control externo de cartas con adeudo'))
+    }
+  }
+
   return {
     ok: true,
     ciclo: cicloKey,
     settings: getNoAdeudoSettings(contexts[0]?.student?.plantel || ''),
+    diagnostics,
     total: contexts.length,
     students: contexts.map((item) => ({
       matricula: item.student.matricula,

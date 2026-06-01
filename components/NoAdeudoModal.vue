@@ -25,10 +25,22 @@
                 <li v-for="missing in loadDiagnostic.missing" :key="missing">Falta: {{ missing }}</li>
               </ul>
               <span v-if="loadDiagnostic.action">Acción: {{ loadDiagnostic.action }}</span>
-              <small v-if="loadDiagnostic.source || loadDiagnostic.code" class="no-adeudo-diagnostic-meta">
-                {{ [loadDiagnostic.source, loadDiagnostic.code].filter(Boolean).join(' · ') }}
+              <small v-if="loadDiagnostic.source || loadDiagnostic.code || loadDiagnostic.statusCode" class="no-adeudo-diagnostic-meta">
+                {{ [loadDiagnostic.source, loadDiagnostic.code, loadDiagnostic.statusCode ? 'HTTP ' + loadDiagnostic.statusCode : ''].filter(Boolean).join(' · ') }}
               </small>
             </template>
+          </aside>
+
+          <aside v-for="diagnostic in previewDiagnostics" :key="(diagnostic.source || 'diagnostic') + '-' + diagnostic.title" class="no-adeudo-alert danger">
+            <strong>{{ diagnostic.title }}</strong>
+            <span v-if="diagnostic.detail">{{ diagnostic.detail }}</span>
+            <ul v-if="diagnostic.missing?.length" class="no-adeudo-diagnostic-list">
+              <li v-for="missing in diagnostic.missing" :key="diagnostic.title + '-' + missing">Falta: {{ missing }}</li>
+            </ul>
+            <span v-if="diagnostic.action">Acción: {{ diagnostic.action }}</span>
+            <small v-if="diagnostic.source || diagnostic.code || diagnostic.statusCode" class="no-adeudo-diagnostic-meta">
+              {{ [diagnostic.source, diagnostic.code, diagnostic.statusCode ? 'HTTP ' + diagnostic.statusCode : ''].filter(Boolean).join(' · ') }}
+            </small>
           </aside>
 
           <aside v-if="debtWarning" class="no-adeudo-alert warning">
@@ -143,6 +155,7 @@ const previewStudents = ref([])
 const activeMatricula = ref('')
 const sendMode = ref('parents_control')
 const result = ref(null)
+const previewDiagnostics = ref([])
 
 const cicloKey = computed(() => normalizeCicloKey(props.ciclo))
 const matriculas = computed(() => props.students.map(student => normalizeStudentMatricula(student?.matricula)).filter(Boolean))
@@ -167,16 +180,49 @@ const deudorCartaNotice = computed(() => {
   return `${marked.length} alumnos ya tienen marca externa de carta emitida con adeudo.`
 })
 
+const payloadCandidates = (error) => [
+  error?.data,
+  error?.response?._data,
+  error?.cause?.data,
+  error?.cause,
+  error
+].filter(Boolean)
+
 const extractDiagnostic = (error) => {
-  const payload = error?.data || error?.response?._data || error?.cause?.data || {}
-  return payload?.data?.diagnostic || payload?.diagnostic || error?.diagnostic || null
+  for (const payload of payloadCandidates(error)) {
+    if (payload?.data?.diagnostic) return payload.data.diagnostic
+    if (payload?.diagnostic) return payload.diagnostic
+    if (Array.isArray(payload?.diagnostics) && payload.diagnostics[0]) return payload.diagnostics[0]
+  }
+  return null
 }
 
 const extractErrorMessage = (error, fallback) => {
   const diagnostic = extractDiagnostic(error)
   if (diagnostic?.title) return diagnostic.title
-  const payload = error?.data || error?.response?._data || {}
-  return payload?.statusMessage || payload?.message || error?.statusMessage || error?.message || fallback
+  for (const payload of payloadCandidates(error)) {
+    if (typeof payload === 'string' && payload.trim() && !/^server error$/i.test(payload.trim())) return payload.trim()
+    const message = payload?.statusMessage || payload?.message || payload?.error
+    if (message && !/^server error$/i.test(String(message))) return message
+  }
+  return fallback
+}
+
+const buildFallbackDiagnostic = (error, source, fallback) => {
+  const diagnostic = extractDiagnostic(error)
+  if (diagnostic) return diagnostic
+  const statusCode = Number(error?.statusCode || error?.status || error?.response?.status || 0) || undefined
+  const statusText = error?.statusMessage || error?.statusText || error?.response?.statusText || ''
+  const data = error?.data || error?.response?._data
+  const dataText = typeof data === 'string' ? data : (data ? JSON.stringify(data) : '')
+  return {
+    title: extractErrorMessage(error, fallback),
+    detail: [statusText, dataText].filter(Boolean).join(' · ') || 'El servidor no devolvió un diagnóstico estructurado.',
+    statusCode,
+    source,
+    code: error?.name || undefined,
+    action: 'Revisa que el backend actualizado esté desplegado y abre la respuesta de Network para este endpoint si el detalle sigue vacío.'
+  }
 }
 
 const primaryButtonLabel = computed(() => {
@@ -189,18 +235,26 @@ const loadPreview = async () => {
   loading.value = true
   loadError.value = ''
   loadDiagnostic.value = null
+  previewDiagnostics.value = []
   result.value = null
   try {
     const response = await $fetch('/api/no-adeudo/preview', {
       method: 'POST',
       body: { matriculas: matriculas.value, ciclo: cicloKey.value }
     })
+    if (response?.ok === false) {
+      previewStudents.value = []
+      loadDiagnostic.value = response?.diagnostic || response?.diagnostics?.[0] || null
+      loadError.value = response?.error || response?.message || loadDiagnostic.value?.title || 'No se pudo preparar la carta.'
+      return
+    }
     previewStudents.value = Array.isArray(response?.students) ? response.students : []
+    previewDiagnostics.value = Array.isArray(response?.diagnostics) ? response.diagnostics.filter(Boolean) : []
     activeMatricula.value = previewStudents.value[0]?.matricula || ''
   } catch (error) {
     previewStudents.value = []
-    loadDiagnostic.value = extractDiagnostic(error)
-    loadError.value = extractErrorMessage(error, 'No se pudo preparar la carta.')
+    loadDiagnostic.value = buildFallbackDiagnostic(error, 'POST /api/no-adeudo/preview', 'No se pudo preparar la carta.')
+    loadError.value = loadDiagnostic.value.title
   } finally {
     loading.value = false
   }
@@ -226,7 +280,7 @@ const sendLetters = async () => {
     result.value = {
       sent: 0,
       failed: previewStudents.value.length,
-      results: [{ matricula: 'Lote', success: false, message: extractErrorMessage(error, 'No se pudo enviar.'), diagnostic: extractDiagnostic(error) }]
+      results: [{ matricula: 'Lote', success: false, message: extractErrorMessage(error, 'No se pudo enviar.'), diagnostic: buildFallbackDiagnostic(error, 'POST /api/no-adeudo/send', 'No se pudo enviar.') }]
     }
   } finally {
     sending.value = false
