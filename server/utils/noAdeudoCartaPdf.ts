@@ -46,6 +46,18 @@ const titleCase = (value: unknown) => String(value || '')
 
 const compact = (value: unknown) => String(value || '').trim()
 
+const approximateTextWidth = (value: unknown, size: number) => sanitizeWinAnsi(value).length * size * 0.5
+
+const fitText = (value: unknown, maxWidth: number, size: number) => {
+  const text = sanitizeWinAnsi(value).trim()
+  if (!text) return ''
+  if (approximateTextWidth(text, size) <= maxWidth) return text
+
+  const ellipsis = '...'
+  const maxChars = Math.max(4, Math.floor(maxWidth / (size * 0.5)) - ellipsis.length)
+  return `${text.slice(0, maxChars).trimEnd()}${ellipsis}`
+}
+
 const buildValidationQr = (validationUrl: string) => {
   try {
     return generateQrMatrix(validationUrl, { ecc: 'M', maxVersion: 32 })
@@ -217,13 +229,24 @@ export const generateNoAdeudoCartaPdf = ({
   c.text('CONSTANCIA ADMINISTRATIVA', PAGE_W / 2, PAGE_H - 188, { size: 13, font: 'bold', color: [69, 91, 112], align: 'center' })
   c.text('CARTA DE NO ADEUDO', PAGE_W / 2, PAGE_H - 212, { size: 23, font: 'bold', color: [18, 35, 54], align: 'center' })
 
-  c.rect(MARGIN, PAGE_H - 318, PAGE_W - MARGIN * 2, 78, [255, 255, 255], [210, 225, 214])
-  c.text('Alumno(a)', MARGIN + 18, PAGE_H - 263, { size: 8, color: [103, 116, 134] })
-  c.text(studentName, MARGIN + 18, PAGE_H - 282, { size: 14, font: 'bold', color: [18, 35, 54] })
-  c.text('Matrícula', PAGE_W - MARGIN - 180, PAGE_H - 263, { size: 8, color: [103, 116, 134] })
-  c.text(matricula, PAGE_W - MARGIN - 18, PAGE_H - 282, { size: 13, font: 'bold', color: [52, 116, 46], align: 'right' })
-  c.text('Plantel / nivel / grado', PAGE_W - MARGIN - 180, PAGE_H - 300, { size: 8, color: [103, 116, 134] })
-  c.text([plantel, nivelGrado].filter(Boolean).join(' · '), PAGE_W - MARGIN - 18, PAGE_H - 300, { size: 9, color: [18, 35, 54], align: 'right' })
+  const studentCardY = PAGE_H - 326
+  const studentCardH = 86
+  const studentCardTop = studentCardY + studentCardH
+  const leftColX = MARGIN + 18
+  const rightColX = PAGE_W - MARGIN - 184
+  const rightColRight = PAGE_W - MARGIN - 18
+  const leftColWidth = rightColX - leftColX - 18
+  const rightColWidth = rightColRight - rightColX
+  const plantelDetail = [plantel, nivelGrado].filter(Boolean).join(' · ')
+
+  c.rect(MARGIN, studentCardY, PAGE_W - MARGIN * 2, studentCardH, [255, 255, 255], [210, 225, 214])
+  c.line(rightColX - 14, studentCardY + 14, rightColX - 14, studentCardTop - 14, [226, 235, 228], 0.7)
+  c.text('Alumno(a)', leftColX, studentCardTop - 23, { size: 8, color: [103, 116, 134] })
+  c.text(fitText(studentName, leftColWidth, 14), leftColX, studentCardTop - 43, { size: 14, font: 'bold', color: [18, 35, 54] })
+  c.text('Matrícula', rightColX, studentCardTop - 23, { size: 8, color: [103, 116, 134] })
+  c.text(fitText(matricula, rightColWidth, 13), rightColRight, studentCardTop - 43, { size: 13, font: 'bold', color: [52, 116, 46], align: 'right' })
+  c.text('Plantel / nivel / grado', rightColX, studentCardTop - 62, { size: 8, color: [103, 116, 134] })
+  c.text(fitText(plantelDetail, rightColWidth, 9), rightColRight, studentCardTop - 78, { size: 9, color: [18, 35, 54], align: 'right' })
 
   const body = `Por medio de la presente se hace constar que, de acuerdo con los registros administrativos disponibles al momento de emisión, el/la alumno(a) ${studentName}, con matrícula ${matricula}, no presenta adeudo registrado para el ciclo escolar ${ciclo}.`
   let cursor = c.paragraph(body, MARGIN + 10, PAGE_H - 372, 93, 17, { size: 11.2, color: [37, 51, 70] })

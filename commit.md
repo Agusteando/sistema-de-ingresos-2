@@ -1,1 +1,1 @@
-Corrige la generación del QR en cartas de no adeudo
+Corrige el acomodo de datos del alumno en cartas de no adeudo
