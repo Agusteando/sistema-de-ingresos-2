@@ -106,6 +106,29 @@ export const diagnoseNoAdeudoError = (error: any, source = 'Carta de No Adeudo')
     ...combined.matchAll(/CONTROL_ESCOLAR_MYSQL_[A-Z0-9_]+/g)
   ].map((match) => match[0])))
 
+  if (/No DB bridge agent selected|DB_BRIDGE_AGENT_ID|Sesión sin plantel de datos/i.test(combined)) {
+    return {
+      title: 'No se pudo identificar el plantel de datos para esta sesión.',
+      detail: 'La operación necesita un agente de base/plantel activo antes de consultar alumnos, adeudos o generar la carta.',
+      statusCode: 401,
+      source,
+      code: code || 'MISSING_DB_BRIDGE_AGENT',
+      missing: ['plantel de datos activo / DB_BRIDGE_AGENT_ID'],
+      action: 'Vuelve a iniciar sesión, selecciona un plantel activo o valida DB_BRIDGE_AGENT_ID cuando Aurora esté en modo bridge.'
+    }
+  }
+
+  if (code.startsWith('DB_BRIDGE_') || /DB bridge|agente del plantel|base del plantel|conectividad del equipo del plantel|offline|fuera de línea/i.test(combined)) {
+    return {
+      title: 'La base del plantel no está disponible para preparar la carta.',
+      detail: message || 'Aurora no pudo consultar la base del plantel mediante el bridge.',
+      statusCode: statusCode >= 400 ? statusCode : 503,
+      source,
+      code: code || undefined,
+      action: 'Verifica que el bridge y el agente del plantel estén en línea. La previsualización necesita leer alumno, documentos y pagos del plantel.'
+    }
+  }
+
   if (missingEnv.length) {
     return {
       title: `Falta configurar ${missingEnv.join(', ')}.`,

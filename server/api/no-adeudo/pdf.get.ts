@@ -1,6 +1,4 @@
 import { runWithBridgeAgentId } from '../../utils/db'
-import { buildNoAdeudoValidationUrl, createNoAdeudoToken, diagnoseNoAdeudoError, resolveNoAdeudoStudentContext } from '../../utils/noAdeudo'
-import { generateNoAdeudoCartaPdf } from '../../utils/noAdeudoCartaPdf'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 const safeFilePart = (value: unknown) => String(value || '')
@@ -17,7 +15,34 @@ const escapeHtml = (value: unknown) => String(value || '')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#039;')
 
-const renderPdfDiagnosticHtml = (diagnostic: ReturnType<typeof diagnoseNoAdeudoError>) => `<!doctype html>
+type PdfDiagnostic = {
+  title: string
+  detail: string
+  statusCode?: number
+  source?: string
+  code?: string
+  missing?: string[]
+  action?: string
+}
+
+const diagnosePdfError = async (error: any, source = 'PDF de Carta de No Adeudo'): Promise<PdfDiagnostic> => {
+  try {
+    const { diagnoseNoAdeudoError } = await import('../../utils/noAdeudo')
+    return diagnoseNoAdeudoError(error, source)
+  } catch (diagnosticError: any) {
+    const message = String(error?.message || error?.statusMessage || 'No se pudo cargar el módulo de Carta de No Adeudo.')
+    return {
+      title: message && !/^server error$/i.test(message) ? message : 'No se pudo cargar el módulo de Carta de No Adeudo.',
+      detail: String(diagnosticError?.message || 'El backend falló antes de cargar el diagnóstico especializado.'),
+      statusCode: Number(error?.statusCode || error?.status || 500),
+      source,
+      code: String(error?.code || diagnosticError?.code || 'NO_ADEUDO_MODULE_LOAD').toUpperCase(),
+      action: 'Revisa el log del servidor para identificar el import o dependencia que impide renderizar el PDF.'
+    }
+  }
+}
+
+const renderPdfDiagnosticHtml = (diagnostic: PdfDiagnostic) => `<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -42,46 +67,58 @@ const renderPdfDiagnosticHtml = (diagnostic: ReturnType<typeof diagnoseNoAdeudoE
 </body>
 </html>`
 
-export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-  try {
-    const { matricula, ciclo = '2025', preview = '1' } = getQuery(event)
-    const cicloKey = normalizeCicloKey(ciclo)
-    const context = await resolveNoAdeudoStudentContext(event, matricula, cicloKey)
-    const user = event.context.user || {}
-    const issuedAt = new Date()
-    const generatedBy = String(user.name || user.nombre || user.email || 'Sistema Aurora')
-    const generatedByEmail = String(user.email || '')
-    const tokenInfo = createNoAdeudoToken({
-      student: context.student,
-      ciclo: cicloKey,
-      generatedBy,
-      generatedByEmail,
-      issuedAt,
-      preview: String(preview) !== '0'
-    })
-    const validationUrl = buildNoAdeudoValidationUrl(event, tokenInfo.token)
-    const pdf = generateNoAdeudoCartaPdf({
-      student: context.student,
-      ciclo: cicloKey,
-      generatedBy,
-      generatedByEmail,
-      issuedAt,
-      validationUrl,
-      verificationToken: tokenInfo.token,
-      verificationHash: tokenInfo.verificationHash,
-      debtTotal: 0,
-      preview: String(preview) !== '0'
-    })
+const pdfErrorResponse = async (event: any, error: any, source?: string) => {
+  const diagnostic = await diagnosePdfError(error, source)
+  setResponseStatus(event, Number(diagnostic.statusCode || 500))
+  setHeader(event, 'Content-Type', 'text/html; charset=utf-8')
+  setHeader(event, 'Cache-Control', 'no-store')
+  return renderPdfDiagnosticHtml(diagnostic)
+}
 
-    setHeader(event, 'Content-Type', 'application/pdf')
-    setHeader(event, 'Content-Disposition', `inline; filename="carta-no-adeudo-preview-${safeFilePart(context.student.matricula)}.pdf"`)
-    setHeader(event, 'Cache-Control', 'no-store')
-    return pdf
+export default defineEventHandler(async (event) => {
+  try {
+    return await runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
+      try {
+        const { buildNoAdeudoValidationUrl, createNoAdeudoToken, resolveNoAdeudoStudentContext } = await import('../../utils/noAdeudo')
+        const { generateNoAdeudoCartaPdf } = await import('../../utils/noAdeudoCartaPdf')
+        const { matricula, ciclo = '2025', preview = '1' } = getQuery(event)
+        const cicloKey = normalizeCicloKey(ciclo)
+        const context = await resolveNoAdeudoStudentContext(event, matricula, cicloKey)
+        const user = event.context.user || {}
+        const issuedAt = new Date()
+        const generatedBy = String(user.name || user.nombre || user.email || 'Sistema Aurora')
+        const generatedByEmail = String(user.email || '')
+        const tokenInfo = createNoAdeudoToken({
+          student: context.student,
+          ciclo: cicloKey,
+          generatedBy,
+          generatedByEmail,
+          issuedAt,
+          preview: String(preview) !== '0'
+        })
+        const validationUrl = buildNoAdeudoValidationUrl(event, tokenInfo.token)
+        const pdf = generateNoAdeudoCartaPdf({
+          student: context.student,
+          ciclo: cicloKey,
+          generatedBy,
+          generatedByEmail,
+          issuedAt,
+          validationUrl,
+          verificationToken: tokenInfo.token,
+          verificationHash: tokenInfo.verificationHash,
+          debtTotal: 0,
+          preview: String(preview) !== '0'
+        })
+
+        setHeader(event, 'Content-Type', 'application/pdf')
+        setHeader(event, 'Content-Disposition', `inline; filename="carta-no-adeudo-preview-${safeFilePart(context.student.matricula)}.pdf"`)
+        setHeader(event, 'Cache-Control', 'no-store')
+        return pdf
+      } catch (error) {
+        return await pdfErrorResponse(event, error)
+      }
+    })
   } catch (error) {
-    const diagnostic = diagnoseNoAdeudoError(error, 'PDF de Carta de No Adeudo')
-    setResponseStatus(event, diagnostic.statusCode)
-    setHeader(event, 'Content-Type', 'text/html; charset=utf-8')
-    setHeader(event, 'Cache-Control', 'no-store')
-    return renderPdfDiagnosticHtml(diagnostic)
+    return await pdfErrorResponse(event, error, 'PDF de Carta de No Adeudo · middleware/bridge')
   }
-}))
+})

@@ -221,8 +221,25 @@ const buildFallbackDiagnostic = (error, source, fallback) => {
     statusCode,
     source,
     code: error?.name || undefined,
-    action: 'Revisa que el backend actualizado esté desplegado y abre la respuesta de Network para este endpoint si el detalle sigue vacío.'
+    action: 'Aurora va a consultar /api/no-adeudo/diagnostics para aislar si falta backend actualizado, bridge, conexión externa o tabla de control.'
   }
+}
+
+const fetchNoAdeudoDiagnostics = async (stage, error) => {
+  try {
+    const statusCode = Number(error?.statusCode || error?.status || error?.response?.status || 0) || undefined
+    const response = await $fetch('/api/no-adeudo/diagnostics', {
+      query: {
+        stage,
+        statusCode,
+        matricula: matriculas.value[0] || '',
+        ciclo: cicloKey.value
+      }
+    })
+    if (Array.isArray(response?.diagnostics)) previewDiagnostics.value = response.diagnostics.filter(Boolean)
+    if (response?.diagnostic) return response.diagnostic
+  } catch (diagnosticError) {}
+  return null
 }
 
 const primaryButtonLabel = computed(() => {
@@ -253,8 +270,14 @@ const loadPreview = async () => {
     activeMatricula.value = previewStudents.value[0]?.matricula || ''
   } catch (error) {
     previewStudents.value = []
-    loadDiagnostic.value = buildFallbackDiagnostic(error, 'POST /api/no-adeudo/preview', 'No se pudo preparar la carta.')
-    loadError.value = loadDiagnostic.value.title
+    const fallback = buildFallbackDiagnostic(error, 'POST /api/no-adeudo/preview', 'No se pudo preparar la carta.')
+    loadDiagnostic.value = fallback
+    loadError.value = fallback.title
+    const serverDiagnostic = await fetchNoAdeudoDiagnostics('POST /api/no-adeudo/preview', error)
+    if (serverDiagnostic) {
+      loadDiagnostic.value = serverDiagnostic
+      loadError.value = serverDiagnostic.title || fallback.title
+    }
   } finally {
     loading.value = false
   }
@@ -277,10 +300,13 @@ const sendLetters = async () => {
     result.value = response
     if (response?.sent) emit('sent', response)
   } catch (error) {
+    const fallback = buildFallbackDiagnostic(error, 'POST /api/no-adeudo/send', 'No se pudo enviar.')
+    const serverDiagnostic = await fetchNoAdeudoDiagnostics('POST /api/no-adeudo/send', error)
+    const diagnostic = serverDiagnostic || fallback
     result.value = {
       sent: 0,
       failed: previewStudents.value.length,
-      results: [{ matricula: 'Lote', success: false, message: extractErrorMessage(error, 'No se pudo enviar.'), diagnostic: buildFallbackDiagnostic(error, 'POST /api/no-adeudo/send', 'No se pudo enviar.') }]
+      results: [{ matricula: 'Lote', success: false, message: diagnostic.title || extractErrorMessage(error, 'No se pudo enviar.'), diagnostic }]
     }
   } finally {
     sending.value = false

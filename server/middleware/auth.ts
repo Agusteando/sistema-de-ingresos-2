@@ -1,8 +1,23 @@
 import { enterBridgeAgentId, ensureSchema, getDbTransport } from '../utils/db'
 import { getTrustedAuthUser, resolveDataBridgeAgentId } from '../utils/auth-session'
 
+const noAdeudoMiddlewareDiagnostic = (event: any, diagnostic: Record<string, any>) => {
+  setResponseStatus(event, 200)
+  return {
+    ok: false,
+    error: diagnostic.title,
+    message: diagnostic.title,
+    diagnostic,
+    diagnostics: [diagnostic],
+    total: 0,
+    students: [],
+    results: [{ matricula: 'Lote', success: false, message: diagnostic.title, diagnostic }]
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
+  const isNoAdeudoEndpoint = url.pathname.startsWith('/api/no-adeudo/') && !url.pathname.startsWith('/api/no-adeudo/verify/')
 
   if (!url.pathname.startsWith('/api/')) return
   if (url.pathname.startsWith('/api/auth/')) return
@@ -33,6 +48,16 @@ export default defineEventHandler(async (event) => {
   }
 
   if (user.isControlEscolarOnly) {
+    if (isNoAdeudoEndpoint) {
+      return noAdeudoMiddlewareDiagnostic(event, {
+        title: 'No tiene permisos para generar cartas de no adeudo.',
+        detail: 'La sesión actual es sólo Control Escolar y no puede ejecutar esta acción administrativa.',
+        statusCode: 403,
+        source: 'Middleware de autenticación',
+        code: 'FORBIDDEN_CONTROL_ESCOLAR_ONLY',
+        action: 'Inicia sesión con un usuario administrativo autorizado para generar cartas.'
+      })
+    }
     throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
   }
 
@@ -42,10 +67,25 @@ export default defineEventHandler(async (event) => {
     event.context.dbBridgeAgentId = bridgeAgentId
     enterBridgeAgentId(bridgeAgentId)
   } else if (getDbTransport() === 'bridge') {
+    if (isNoAdeudoEndpoint) {
+      return noAdeudoMiddlewareDiagnostic(event, {
+        title: 'No se detectó plantel/agente de datos para preparar la carta.',
+        detail: 'Aurora está en modo bridge y la sesión no tiene plantel de datos activo.',
+        statusCode: 401,
+        source: 'DB bridge',
+        code: 'MISSING_DB_BRIDGE_AGENT',
+        missing: ['plantel activo de sesión o DB_BRIDGE_AGENT_ID'],
+        action: 'Vuelve a iniciar sesión con plantel activo o configura DB_BRIDGE_AGENT_ID si el servidor opera con un agente fijo.'
+      })
+    }
     throw createError({ statusCode: 401, message: 'Sesión sin plantel de datos para bridge mode.' })
   }
 
   if (url.pathname.startsWith('/api/admin/sql-console/')) {
+    return
+  }
+
+  if (url.pathname.startsWith('/api/no-adeudo/')) {
     return
   }
 

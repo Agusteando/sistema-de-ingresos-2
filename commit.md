@@ -1,1 +1,1 @@
-Corrige diagnóstico visible de cartas de no adeudo y mantiene el control externo sin archivos SQL agregados
+Aísla diagnóstico de cartas de no adeudo y evita errores genéricos del middleware
