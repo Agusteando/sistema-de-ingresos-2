@@ -1,1 +1,1 @@
-Depura texto visible y pie de validación en cartas de no adeudo
+corrige(control-escolar): sincroniza grado y ciclo sin recarga y agrega selector de grupo

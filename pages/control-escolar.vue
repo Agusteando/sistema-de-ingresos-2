@@ -813,22 +813,84 @@
                         :disabled="savingAcademicPosition"
                         @click="openAcademicPositionModal"
                       >
-                        <LucideGraduationCap :size="16" /> Ajustar ciclo y posición
+                        <LucideGraduationCap :size="16" /> Ajustar grado y ciclo
                       </UiButton>
                     </div>
+                    <section class="ce-group-picker-card" aria-label="Asignar grupo">
+                      <div class="ce-group-picker-card__heading">
+                        <span><LucideUsersRound :size="18" /></span>
+                        <div>
+                          <small>Grupo</small>
+                          <strong>{{ editForm.grupo || 'Sin grupo' }}</strong>
+                        </div>
+                      </div>
+                      <div
+                        class="ce-group-combobox"
+                        :class="{ open: groupPickerOpen }"
+                        @focusin="openGroupPicker"
+                        @focusout="closeGroupPickerSoon"
+                      >
+                        <label class="ce-group-combobox__input">
+                          <UiGroupIcon :label="editForm.grupo" :missing="!editForm.grupo" />
+                          <input
+                            v-model="groupPickerInput"
+                            autocomplete="off"
+                            placeholder="Buscar o escribir grupo"
+                            @keydown.enter.prevent="commitGroupPickerInput"
+                            @keydown.escape.prevent="groupPickerOpen = false"
+                          />
+                          <button
+                            v-if="editForm.grupo"
+                            type="button"
+                            aria-label="Limpiar grupo"
+                            @mousedown.prevent
+                            @click="clearGroupPicker"
+                          >
+                            <LucideX :size="15" />
+                          </button>
+                          <LucideChevronDown class="ce-group-combobox__chevron" :size="16" />
+                        </label>
+
+                        <div v-if="groupPickerOpen" class="ce-group-combobox__menu" role="listbox">
+                          <button
+                            v-for="option in filteredGroupOptions"
+                            :key="`group-option-${option.value}`"
+                            type="button"
+                            role="option"
+                            :aria-selected="option.selected"
+                            :class="['ce-group-option', { selected: option.selected }]"
+                            @mousedown.prevent
+                            @click="selectGroupOption(option.value)"
+                          >
+                            <UiGroupIcon :label="option.value" />
+                            <span>
+                              <strong>{{ option.label }}</strong>
+                              <small>{{ option.sourceLabel }}</small>
+                            </span>
+                            <LucideCheck v-if="option.selected" :size="16" />
+                          </button>
+                          <button
+                            v-if="customGroupOption"
+                            type="button"
+                            class="ce-group-option custom"
+                            role="option"
+                            @mousedown.prevent
+                            @click="selectGroupOption(customGroupOption.value)"
+                          >
+                            <UiGroupIcon :label="customGroupOption.value" />
+                            <span>
+                              <strong>{{ customGroupOption.label }}</strong>
+                              <small>Grupo personalizado</small>
+                            </span>
+                          </button>
+                          <div v-if="!filteredGroupOptions.length && !customGroupOption" class="ce-group-empty">
+                            Escribe un grupo para guardarlo como personalizado.
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
                     <div class="ce-form-grid three ce-school-grid-minimal">
-                      <label>
-                        <span>Tipo de ingreso</span>
-                        <input :value="selectedStudent.tipoIngreso || 'Sin clasificar'" readonly />
-                      </label>
-                      <label>
-                        <span>Ciclo de ingreso</span>
-                        <input :value="formatCicloLabel(editForm.ciclo || selectedStudent.cicloBase || currentCicloKey)" readonly />
-                      </label>
-                      <label>
-                        <span>Grupo</span>
-                        <input :value="editForm.grupo || 'Sin grupo'" readonly />
-                      </label>
                       <label
                         ><span>Baja</span
                         ><select v-model="editForm.baja">
@@ -1534,6 +1596,8 @@ import { useHead } from "#imports";
 import {
   LucideAlertTriangle,
   LucideBuilding2,
+  LucideCheck,
+  LucideChevronDown,
   LucideChevronLeft,
   LucideClock3,
   LucideCloudOff,
@@ -1584,6 +1648,7 @@ import {
   CONTROL_ESCOLAR_COMPLETE_REQUIRED_FIELDS,
 } from "~/shared/utils/studentPresentation";
 import { NIVELES_ESCOLARES, gradeOptionsForNivel } from "~/shared/utils/grado";
+import { STUDENT_GROUP_ICON_LABELS } from "~/shared/utils/studentGroupIcons";
 import { normalizeCicloOption } from "~/utils/constants";
 
 useHead({ bodyAttrs: { class: "students-route-active" } });
@@ -2221,14 +2286,77 @@ const gradoOptions = computed(() =>
     [editForm.grado],
   ),
 );
-const groupOptions = computed(() => {
+const knownGroupOptions = computed(() => {
   const byGrade = catalogs.gruposPorGrado || {};
   const scopedGroups =
     editForm.grado && Array.isArray(byGrade[editForm.grado])
       ? byGrade[editForm.grado]
       : [];
-  return mergeOptions(scopedGroups, catalogs.grupos, [editForm.grupo]);
+  return mergeOptions(scopedGroups, catalogs.grupos, STUDENT_GROUP_ICON_LABELS);
 });
+const groupOptions = computed(() =>
+  mergeOptions(knownGroupOptions.value, [editForm.grupo]),
+);
+const groupPickerOpen = ref(false);
+const normalizeGroupPickerText = (value) =>
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+const groupPickerInput = computed({
+  get: () => String(editForm.grupo || ""),
+  set: (value) => {
+    editForm.grupo = normalizeGroupPickerText(value).slice(0, 40);
+    groupPickerOpen.value = true;
+  },
+});
+const normalizedGroupPickerSearch = computed(() =>
+  normalizeClientText(groupPickerInput.value),
+);
+const filteredGroupOptions = computed(() => {
+  const query = normalizedGroupPickerSearch.value;
+  return knownGroupOptions.value
+    .filter((value) => !query || normalizeClientText(value).includes(query))
+    .slice(0, 12)
+    .map((value) => ({
+      value,
+      label: value,
+      selected:
+        normalizeClientText(value) === normalizeClientText(editForm.grupo),
+      sourceLabel: catalogs.grupos.includes(value)
+        ? "Grupo del plantel"
+        : "Opción con icono",
+    }));
+});
+const customGroupOption = computed(() => {
+  const value = normalizeGroupPickerText(groupPickerInput.value).slice(0, 40);
+  if (!value) return null;
+  const exists = knownGroupOptions.value.some(
+    (option) => normalizeClientText(option) === normalizeClientText(value),
+  );
+  if (exists) return null;
+  return { value, label: `Usar “${value}”` };
+});
+const openGroupPicker = () => {
+  groupPickerOpen.value = true;
+};
+const closeGroupPickerSoon = () => {
+  if (!process.client) return;
+  window.setTimeout(() => {
+    groupPickerOpen.value = false;
+  }, 120);
+};
+const selectGroupOption = (value) => {
+  editForm.grupo = normalizeGroupPickerText(value).slice(0, 40);
+  groupPickerOpen.value = false;
+};
+const commitGroupPickerInput = () => {
+  editForm.grupo = normalizeGroupPickerText(groupPickerInput.value).slice(0, 40);
+  groupPickerOpen.value = false;
+};
+const clearGroupPicker = () => {
+  editForm.grupo = "";
+  groupPickerOpen.value = true;
+};
 
 watch(
   () => editForm.nivel,
@@ -2236,7 +2364,6 @@ watch(
     const available = gradoOptions.value;
     if (editForm.grado && !available.includes(editForm.grado))
       editForm.grado = available[0] || "";
-    editForm.grupo = "";
   },
 );
 
@@ -3148,6 +3275,7 @@ const EDIT_FORM_FIELDS = [
   "tipoSangre",
   "alergias",
   "foto",
+  "grupo",
   "baja",
   "motivoBaja",
   "categoriaBaja",
@@ -4614,14 +4742,23 @@ const saveAcademicPosition = async (payload) => {
       },
     );
     showAcademicPositionModal.value = false;
-    show("Ciclo y posición actualizados.", "success");
-    await loadStudents({ useCache: false, clearExisting: false, forceLoading: false });
     const updated = response?.student;
     const current = selectedStudent.value;
     if (updated && current && normalizeMatriculaKey(updated.matricula) === normalizeMatriculaKey(current.matricula)) {
-      selectedStudent.value = { ...current, ...updated, group: current.group, grupo: current.grupo };
-      resetEditForm(selectedStudent.value, { restoreDraft: false });
+      const mergedStudent = {
+        ...current,
+        ...updated,
+        group: current.group || current.grupo || updated.group || updated.grupo || "",
+        grupo: current.grupo || current.group || updated.grupo || updated.group || "",
+      };
+      replaceControlStudentInIndex(mergedStudent);
+      selectedStudent.value = mergedStudent;
+      pendingSelectedStudentRefresh.value = null;
+      resetEditForm(mergedStudent, { restoreDraft: false });
+      persistCurrentControlStudentsCache();
     }
+    show("Grado y ciclo actualizados.", "success");
+    await loadStudents({ useCache: false, clearExisting: false, forceLoading: false });
     await loadKpis();
   } catch (error) {
     show(error?.data?.message || error?.message || "No se pudo actualizar el ciclo y la posición.", "danger");
@@ -8431,6 +8568,187 @@ onBeforeUnmount(() => {
   font-weight: 900;
 }
 
+
+.control-escolar-screen .ce-group-picker-card {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.38fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid #e1eaf3;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff, #fbfdfd);
+}
+
+.control-escolar-screen .ce-group-picker-card__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-group-picker-card__heading > span {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 13px;
+  background: #eef5ff;
+  color: #2f72d9;
+}
+
+.control-escolar-screen .ce-group-picker-card__heading div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.control-escolar-screen .ce-group-picker-card__heading small {
+  color: #6f7d93;
+  font-size: 10.5px;
+  font-weight: 820;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.control-escolar-screen .ce-group-picker-card__heading strong {
+  overflow: hidden;
+  color: #14233c;
+  font-size: 15px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-group-combobox {
+  position: relative;
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-group-combobox__input {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid #d8e3ee;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.96);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.control-escolar-screen .ce-group-combobox.open .ce-group-combobox__input,
+.control-escolar-screen .ce-group-combobox__input:focus-within {
+  border-color: rgba(47, 114, 217, .42);
+  box-shadow: 0 10px 24px rgba(47, 114, 217, .08);
+}
+
+.control-escolar-screen .ce-group-combobox__input input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #15233a;
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.control-escolar-screen .ce-group-combobox__input button {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #60708a;
+}
+
+.control-escolar-screen .ce-group-combobox__chevron {
+  color: #7c8aa0;
+  transition: transform .18s ease;
+}
+
+.control-escolar-screen .ce-group-combobox.open .ce-group-combobox__chevron {
+  transform: rotate(180deg);
+}
+
+.control-escolar-screen .ce-group-combobox__menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 310px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid #dbe5f0;
+  border-radius: 16px;
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 20px 44px rgba(21, 35, 60, .16);
+}
+
+.control-escolar-screen .ce-group-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: #14233c;
+  text-align: left;
+  transition: background .16s ease, border-color .16s ease;
+}
+
+.control-escolar-screen .ce-group-option:hover,
+.control-escolar-screen .ce-group-option.selected {
+  border-color: rgba(47, 114, 217, .18);
+  background: #f6f9ff;
+}
+
+.control-escolar-screen .ce-group-option.custom {
+  background: #fbfdfd;
+}
+
+.control-escolar-screen .ce-group-option span:not(.ui-group-icon) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.control-escolar-screen .ce-group-option strong {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 860;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-group-option small,
+.control-escolar-screen .ce-group-empty {
+  color: #718096;
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.control-escolar-screen .ce-group-empty {
+  padding: 12px;
+  text-align: center;
+}
+
 .control-escolar-screen .ce-school-grid-minimal {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -8694,6 +9012,7 @@ onBeforeUnmount(() => {
     align-items: flex-start;
   }
 
+  .control-escolar-screen .ce-group-picker-card,
   .control-escolar-screen .ce-school-grid-minimal,
   .control-escolar-screen .ce-system-grid,
   .control-escolar-screen .ce-advanced-upload-grid,

@@ -1,4 +1,5 @@
 import { runWithBridgeAgentId, query } from "../../../utils/db";
+import { controlEscolarCentralQuery, getCentralTableColumns } from "../../../utils/control-escolar-central";
 import {
   normalizeCicloForTipoIngreso,
   resolveTipoIngreso,
@@ -13,6 +14,83 @@ import {
   normalizePlantel,
   resolveNivelEscolar,
 } from "../../../../shared/utils/grado";
+
+const escapeColumn = (column: string) => `\`${String(column).replace(/`/g, "``")}\``;
+const canonicalMatriculaKey = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toUpperCase();
+
+const syncAcademicOverlay = async ({
+  matricula,
+  userEmail,
+  plantel,
+  nivel,
+  grado,
+  ciclo,
+}: {
+  matricula: string;
+  userEmail?: string;
+  plantel: string;
+  nivel: string;
+  grado: string;
+  ciclo: string;
+}) => {
+  try {
+    const columns = await getCentralTableColumns("matricula");
+    if (!columns.has("matricula")) return;
+
+    const entries = [
+      { column: "plantel", value: plantel },
+      { column: "nivel", value: nivel },
+      { column: "grado", value: displayGrado(grado).toLowerCase() },
+      { column: "ciclo", value: ciclo },
+    ].filter((entry) => columns.has(entry.column));
+
+    if (!entries.length) return;
+
+    const [existing] = await controlEscolarCentralQuery<any[]>(
+      `SELECT \`matricula\` FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) = ? LIMIT 1`,
+      [canonicalMatriculaKey(matricula)],
+    );
+
+    if (existing) {
+      const assignments = entries.map((entry) => `${escapeColumn(entry.column)} = ?`);
+      const params = entries.map((entry) => entry.value);
+      if (columns.has("updated_at")) assignments.push("`updated_at` = CURRENT_TIMESTAMP");
+      if (columns.has("updated_by")) {
+        assignments.push("`updated_by` = ?");
+        params.push(userEmail || "sistema");
+      }
+      params.push(canonicalMatriculaKey(matricula));
+      await controlEscolarCentralQuery(
+        `UPDATE \`matricula\` SET ${assignments.join(", ")} WHERE UPPER(TRIM(\`matricula\`)) = ?`,
+        params,
+      );
+      return;
+    }
+
+    const insertColumns = ["matricula", ...entries.map((entry) => entry.column)];
+    const insertValues: unknown[] = [matricula, ...entries.map((entry) => entry.value)];
+    if (columns.has("created_by")) {
+      insertColumns.push("created_by");
+      insertValues.push(userEmail || "sistema");
+    }
+    if (columns.has("updated_by")) {
+      insertColumns.push("updated_by");
+      insertValues.push(userEmail || "sistema");
+    }
+    await controlEscolarCentralQuery(
+      `INSERT INTO \`matricula\` (${insertColumns.map(escapeColumn).join(", ")}) VALUES (${insertColumns.map(() => "?").join(", ")})`,
+      insertValues,
+    );
+  } catch (error: any) {
+    console.warn(
+      "[Control Escolar] No se pudo sincronizar grado/ciclo en matricula central.",
+      error?.message || error,
+    );
+  }
+};
 
 export default defineEventHandler(async (event) =>
   runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
@@ -134,6 +212,15 @@ export default defineEventHandler(async (event) =>
         matricula,
       ],
     );
+
+    await syncAcademicOverlay({
+      matricula,
+      userEmail: user?.email,
+      plantel: basePlacement.plantel,
+      nivel: basePlacement.nivel,
+      grado: basePlacement.grado,
+      ciclo: ingresoCiclo,
+    });
 
     const projected = calculatePromotedGrado(
       basePlacement.grado,

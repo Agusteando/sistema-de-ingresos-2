@@ -48,14 +48,14 @@
               <LucideCalendarDays :size="27" />
             </span>
             <div>
-              <h2 id="ingreso-cycle-title">Definir ciclo de ingreso</h2>
+              <h2 id="ingreso-cycle-title">Ajustar grado y ciclo</h2>
               <p>
-                Selecciona el primer ciclo escolar en el que el alumno
-                perteneció al plantel.
+                Selecciona el ciclo de ingreso y la posición académica visible
+                del alumno.
               </p>
               <p>
-                Con este dato el sistema determina cómo se mostrará en cada
-                ciclo.
+                Con estos datos el sistema recalcula el grado base sin recargar
+                la página.
               </p>
             </div>
           </div>
@@ -65,7 +65,7 @@
               class="ingreso-panel ingreso-picker-panel"
               aria-labelledby="ingreso-picker-title"
             >
-              <h3 id="ingreso-picker-title">1. Primer ciclo en el plantel</h3>
+              <h3 id="ingreso-picker-title">1. Ciclo de ingreso</h3>
 
               <div
                 class="ingreso-primary-cycles"
@@ -307,7 +307,7 @@
         <footer class="ingreso-cycle-footer">
           <span class="ingreso-footer-note">
             <span aria-hidden="true"><LucideShieldCheck :size="22" /></span>
-            Este cambio actualiza el ciclo de ingreso y la posición académica
+            Este cambio actualiza el grado, el ciclo de ingreso y la posición
             base derivada.
           </span>
           <div class="ingreso-footer-actions">
@@ -326,7 +326,7 @@
               @click="confirmSelection"
             >
               <LucideLoader2 v-if="saving" class="animate-spin" :size="16" />
-              Guardar ciclo y posición
+              Guardar grado y ciclo
             </button>
           </div>
         </footer>

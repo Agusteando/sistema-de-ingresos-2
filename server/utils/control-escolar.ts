@@ -2320,7 +2320,6 @@ const ADVANCED_FILE_PATCH_FIELDS = new Set([
 const CONTROL_ESCOLAR_DIRECT_RESTRICTED_FIELDS = new Set([
   "nivel",
   "grado",
-  "grupo",
   "ciclo",
   "interno",
 ]);
@@ -2590,7 +2589,6 @@ export const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS = [
   "alergias",
   "nivel",
   "grado",
-  "grupo",
   "ciclo",
   "lastGrade",
   "lastCiclo",
@@ -2847,7 +2845,7 @@ export const updateControlEscolarStudent = async (
     throw createError({
       statusCode: 400,
       message:
-        "Nivel, grado, grupo, ciclo e interno se actualizan desde el flujo de ciclo y posición.",
+        "Nivel, grado, ciclo e interno se actualizan desde el flujo de grado y ciclo.",
     });
   }
 
