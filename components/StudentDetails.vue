@@ -243,14 +243,7 @@
           >
             <div class="account-family-header">
               <h4>Familia / Hermanos</h4>
-              <button
-                v-if="siblingSource === 'local'"
-                class="account-family-clear"
-                title="Limpiar vinculos"
-                @click="clearSiblingLinks"
-              >
-                <LucideUndo :size="12" /> Limpiar
-              </button>
+              <small>Control Escolar</small>
             </div>
             <div class="account-family-list">
               <button

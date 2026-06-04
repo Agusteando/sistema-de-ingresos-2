@@ -635,14 +635,8 @@ export const ensureSchema = async () => {
 
           const familiaIdCols = await rawQuery<any[]>(`SHOW COLUMNS FROM base LIKE 'familiaId'`)
           if (familiaIdCols.length > 0) {
-            await runSafeQuery(`
-              INSERT IGNORE INTO student_family_links (family_key, matricula)
-              SELECT CONCAT('legacy:', TRIM(CAST(familiaId AS CHAR))), matricula
-              FROM base
-              WHERE familiaId IS NOT NULL
-                AND TRIM(CAST(familiaId AS CHAR)) <> ''
-                AND LOWER(TRIM(CAST(familiaId AS CHAR))) NOT IN (${FAMILY_ID_PLACEHOLDER_SQL_LIST})
-            `)
+            // Familia / hermanos is now owned by Control Escolar via matricula.family_id.
+            // Do not migrate deprecated financial familiaId values into student_family_links.
             await runSafeQuery(`ALTER TABLE base DROP COLUMN familiaId`)
           }
 

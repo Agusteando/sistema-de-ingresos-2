@@ -1034,6 +1034,9 @@ const centralSelectColumns = (schema: ControlEscolarSchema) => {
     "seguimiento_baja",
     "servicio_notas",
     "family_id",
+    "familia_id",
+    "familiaId",
+    "familyId",
     "plantel",
     "nombre_padre_completo",
     "padre",
@@ -1159,6 +1162,13 @@ const firstText = (...values: unknown[]) => {
 
 const firstLower = (...values: unknown[]) => firstText(...values).toLowerCase();
 const firstUpper = (...values: unknown[]) => firstText(...values).toUpperCase();
+const firstUsableFamilyId = (...values: unknown[]) => {
+  for (const value of values) {
+    const familyId = normalizeFamilyId(value);
+    if (familyId) return familyId;
+  }
+  return "";
+};
 
 const normalizeEmailCandidate = (value: unknown) => firstLower(value).replace(/\s+/g, '');
 const isUsableFamilyEmail = (value: unknown) => {
@@ -1446,7 +1456,7 @@ const overlayStudentRow = (
     domicilioCp: normalizeText(overlay?.domicilio_cp),
     domicilioMunicipio: normalizeText(overlay?.domicilio_municipio),
     servicioNotas: normalizeText(overlay?.servicio_notas, 1000),
-    familyId: normalizeFamilyId(overlay?.family_id),
+    familyId: firstUsableFamilyId(overlay?.family_id, overlay?.familia_id, overlay?.familiaId, overlay?.familyId),
     eventual: firstText(overlay?.eventual),
     verified: firstText(overlay?.verified),
   });

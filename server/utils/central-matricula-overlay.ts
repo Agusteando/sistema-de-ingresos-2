@@ -34,6 +34,13 @@ const firstUpper = (...values: unknown[]) => {
   const text = firstText(...values)
   return text ? text.toUpperCase() : ''
 }
+const firstFamilyId = (...values: unknown[]) => {
+  for (const value of values) {
+    const familyId = normalizeFamilyId(value)
+    if (familyId) return familyId
+  }
+  return ''
+}
 
 const MATRICULA_COLUMNS = [
   'matricula',
@@ -114,6 +121,9 @@ const MATRICULA_COLUMNS = [
   'domicilio_municipio',
   'servicio_notas',
   'family_id',
+  'familia_id',
+  'familiaId',
+  'familyId',
   'foto',
   'updated_at',
   'updatedAt',
@@ -214,7 +224,7 @@ const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
       domicilioCp: normalizeText(raw.domicilio_cp),
       domicilioMunicipio: normalizeText(raw.domicilio_municipio),
       servicioNotas: normalizeText(raw.servicio_notas),
-      familyId: normalizeFamilyId(raw.family_id),
+      familyId: firstFamilyId(raw.family_id, raw.familia_id, raw.familiaId, raw.familyId),
       updatedAt: firstText(raw.updated_at, raw.updatedAt, raw.fecha_actualizacion, raw.created_at)
     }
   }

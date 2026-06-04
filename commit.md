@@ -1,3 +1,3 @@
-Corrige detección de familia y hermanos con Control Escolar
+Usa familia de Control Escolar para hermanos
 
-Hace que la relación de hermanos use family_id de Control Escolar como fuente autoritativa cuando existe la matrícula, ignorando valores vacíos o marcadores como null, undefined, nan, sin datos o 0 para evitar que alumnos sin familiaId queden agrupados entre sí. Además limpia vínculos familiares locales inválidos heredados, evita migrar familiaId nulos desde base y mantiene el fallback local/correo solo cuando Control Escolar no tiene registro disponible.
+Hace que la lógica de Familia / Hermanos en Alumnos-Financiero use únicamente el campo familiar de la tabla central matricula de Control Escolar, dejando student_family_links y la inferencia por correo fuera del flujo activo. Cuando la matrícula no tiene family_id/familiaId utilizable, no se muestran hermanos y no se aplican fallbacks financieros. También deja la limpieza local como endpoint deprecado, evita migrar familiaId financiero a vínculos locales y mantiene la vista financiera como lectura desde Control Escolar.

@@ -1,13 +1,19 @@
 import { runWithBridgeAgentId, query } from '../../../utils/db'
-import { controlEscolarCentralQuery } from '../../../utils/control-escolar-central'
+import { controlEscolarCentralQuery, getCentralTableColumns } from '../../../utils/control-escolar-central'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../../shared/utils/grado'
-import { buildFamilyLinkKey, normalizeFamilyId, normalizeFamilyLinkKey } from '../../../../shared/utils/familyIdentity'
+import { buildFamilyLinkKey, normalizeFamilyId } from '../../../../shared/utils/familyIdentity'
 
-const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
 const normalizeMatricula = (value: unknown) => String(value || '').trim().toUpperCase()
-const isReliableEmail = (value: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value))
 const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
+const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
+
+const MATRICULA_FAMILY_COLUMN_CANDIDATES = [
+  'family_id',
+  'familia_id',
+  'familiaId',
+  'familyId',
+]
 
 const filterProjectedSiblings = (siblings: any[], cicloKey: string, user: any) => {
   const plantelScope = isScopedToActivePlantel(user) ? user.active_plantel : 'GLOBAL'
@@ -39,16 +45,46 @@ const loadBaseSiblingsByMatriculas = async (matriculas: string[], currentMatricu
   `, normalizedMatriculas)
 }
 
-const tryLoadCentralFamilySiblings = async (matricula: string, cicloKey: string, user: any) => {
+const resolveMatriculaFamilyColumn = async () => {
+  const columns = await getCentralTableColumns('matricula')
+  for (const column of MATRICULA_FAMILY_COLUMN_CANDIDATES) {
+    if (columns.has(column)) return column
+  }
+  return ''
+}
+
+const loadControlEscolarFamilySiblings = async (matricula: string, cicloKey: string, user: any) => {
+  const normalizedMatricula = normalizeMatricula(matricula)
+  if (!normalizedMatricula) {
+    return { siblings: [], source: 'none', familyKey: null }
+  }
+
   try {
+    const familyColumn = await resolveMatriculaFamilyColumn()
+
+    if (!familyColumn) {
+      return {
+        siblings: [],
+        source: 'control-escolar-no-family-field',
+        familyKey: null
+      }
+    }
+
+    const familyColumnSql = escapeIdentifier(familyColumn)
     const [centralStudent] = await controlEscolarCentralQuery<any[]>(`
-      SELECT family_id AS familyId
+      SELECT ${familyColumnSql} AS familyId
       FROM \`matricula\`
       WHERE UPPER(TRIM(\`matricula\`)) = ?
       LIMIT 1
-    `, [normalizeMatricula(matricula)])
+    `, [normalizedMatricula])
 
-    if (!centralStudent) return null
+    if (!centralStudent) {
+      return {
+        siblings: [],
+        source: 'control-escolar-missing',
+        familyKey: null
+      }
+    }
 
     const familyId = normalizeFamilyId(centralStudent.familyId)
 
@@ -61,12 +97,12 @@ const tryLoadCentralFamilySiblings = async (matricula: string, cicloKey: string,
     }
 
     const centralRows = await controlEscolarCentralQuery<any[]>(`
-      SELECT matricula
+      SELECT \`matricula\`
       FROM \`matricula\`
-      WHERE family_id IS NOT NULL
-        AND TRIM(CAST(family_id AS CHAR)) = ?
+      WHERE ${familyColumnSql} IS NOT NULL
+        AND TRIM(CAST(${familyColumnSql} AS CHAR)) = ?
         AND UPPER(TRIM(\`matricula\`)) <> ?
-    `, [familyId, normalizeMatricula(matricula)])
+    `, [familyId, normalizedMatricula])
 
     const baseSiblings = await loadBaseSiblingsByMatriculas(
       centralRows.map((row) => row.matricula),
@@ -84,7 +120,11 @@ const tryLoadCentralFamilySiblings = async (matricula: string, cicloKey: string,
     if (code && !['ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_TABLE'].includes(code)) {
       console.warn('[students:siblings] Control Escolar family lookup unavailable', { code, message })
     }
-    return null
+    return {
+      siblings: [],
+      source: 'control-escolar-unavailable',
+      familyKey: null
+    }
   }
 }
 
@@ -95,53 +135,16 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const user = event.context.user
 
   const [student] = await query<any[]>(`
-    SELECT B.correo, F.family_key AS familyKey
-    FROM base B
-    LEFT JOIN student_family_links F ON F.matricula = B.matricula
-    WHERE B.matricula = ?
+    SELECT matricula
+    FROM base
+    WHERE matricula = ?
     LIMIT 1
   `, [matricula])
 
   if (!student) return { siblings: [], source: 'none', familyKey: null }
 
-  const centralFamilyResult = await tryLoadCentralFamilySiblings(String(matricula || ''), cicloKey, user)
-  if (centralFamilyResult) return centralFamilyResult
-
-  let siblings: any[] = []
-  let source = 'none'
-  const localFamilyKey = normalizeFamilyLinkKey(student.familyKey)
-
-  if (localFamilyKey) {
-    siblings = await query<any[]>(`
-      SELECT B.matricula, B.nombreCompleto, B.plantel, B.nivel, B.grado, B.grupo, B.ciclo
-      FROM student_family_links F
-      JOIN base B ON B.matricula = F.matricula
-      WHERE F.family_key = ? AND B.matricula != ? AND B.estatus = 'Activo'
-    `, [student.familyKey, matricula])
-
-    siblings = filterProjectedSiblings(siblings, cicloKey, user)
-
-    source = 'local'
-  } else if (isReliableEmail(student.correo)) {
-    const correo = normalizeEmail(student.correo)
-
-    siblings = await query<any[]>(`
-      SELECT matricula, nombreCompleto, plantel, nivel, grado, grupo, ciclo
-      FROM base
-      WHERE LOWER(TRIM(correo)) = ? AND matricula != ? AND estatus = 'Activo'
-    `, [correo, matricula])
-
-    siblings = filterProjectedSiblings(siblings, cicloKey, user)
-
-    source = siblings.length ? 'email' : 'none'
-  }
-
-  // Control Escolar family_id is authoritative when the matricula record exists.
-  // Local links are used only when Control Escolar has no row or is unavailable.
-  // Email fallback is exact and validated; parent/tutor names are never used to infer siblings.
-  return {
-    siblings,
-    source,
-    familyKey: localFamilyKey || null
-  }
+  // Familia / hermanos is now read-only in Alumnos-Financiero and comes only
+  // from the Control Escolar matricula family field. student_family_links and
+  // email inference are intentionally not used anymore.
+  return loadControlEscolarFamilySiblings(String(matricula || ''), cicloKey, user)
 }))
