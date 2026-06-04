@@ -1806,7 +1806,6 @@ const exportData = () => {
       Control_Escolar_Madre_CURP: central.curpMadre || '',
       Control_Escolar_Interno: central.interno || '',
       Control_Escolar_Servicio: central.servicio || '',
-      Control_Escolar_Family_ID: central.familyId || '',
       Control_Escolar_Foto: central.foto || '',
       Control_Escolar_Actualizado: central.updatedAt || '',
       Control_Escolar_RAW_JSON: centralRaw ? JSON.stringify(centralRaw) : '',

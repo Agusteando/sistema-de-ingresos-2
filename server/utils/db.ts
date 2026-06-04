@@ -635,8 +635,8 @@ export const ensureSchema = async () => {
 
           const familiaIdCols = await rawQuery<any[]>(`SHOW COLUMNS FROM base LIKE 'familiaId'`)
           if (familiaIdCols.length > 0) {
-            // Familia / hermanos is now owned by Control Escolar via matricula.family_id.
-            // Do not migrate deprecated financial familiaId values into student_family_links.
+            // Familia / hermanos se calcula por padre y madre en Control Escolar.
+            // No migrar familiaId financiero ni recrear vínculos locales.
             await runSafeQuery(`ALTER TABLE base DROP COLUMN familiaId`)
           }
 

@@ -955,6 +955,44 @@
                       </span>
                     </section>
 
+                    <section class="ce-family-siblings-card" aria-label="Hermanos detectados por Control Escolar">
+                      <header>
+                        <div>
+                          <small>Hermanos</small>
+                          <h3>Detección por padre y madre</h3>
+                          <p>{{ selectedSiblingMatchLabel }}</p>
+                        </div>
+                        <span>{{ selectedControlEscolarSiblings.length }}</span>
+                      </header>
+                      <dl class="ce-family-siblings-match">
+                        <div>
+                          <dt>Padre normalizado</dt>
+                          <dd>{{ selectedParentSiblingSignature.normalizedFatherName || 'Sin dato suficiente' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Madre normalizada</dt>
+                          <dd>{{ selectedParentSiblingSignature.normalizedMotherName || 'Sin dato suficiente' }}</dd>
+                        </div>
+                      </dl>
+                      <div v-if="selectedControlEscolarSiblings.length" class="ce-family-siblings-list">
+                        <button
+                          v-for="sibling in selectedControlEscolarSiblings"
+                          :key="`ce-sibling-${sibling.matricula}`"
+                          type="button"
+                          @click="selectSiblingStudent(sibling)"
+                        >
+                          <LucideUsersRound :size="14" />
+                          <span>
+                            <strong>{{ sibling.fullName || sibling.nombreCompleto }}</strong>
+                            <small>{{ sibling.matricula }} · {{ sibling.grado || 'Sin grado' }}<template v-if="sibling.group || sibling.grupo"> {{ sibling.group || sibling.grupo }}</template></small>
+                          </span>
+                        </button>
+                      </div>
+                      <p v-else class="ce-family-siblings-empty">
+                        {{ selectedParentSiblingSignature.complete ? 'No hay otros alumnos con el mismo padre y la misma madre en el alcance cargado.' : 'Falta completar padre y madre para calcular hermanos.' }}
+                      </p>
+                    </section>
+
                     <div class="ce-family-grid">
                       <section :class="['ce-family-card', familySectionState('padre').tone]">
                         <header class="ce-family-card-head">
@@ -1649,6 +1687,7 @@ import {
 } from "~/shared/utils/studentPresentation";
 import { NIVELES_ESCOLARES, gradeOptionsForNivel } from "~/shared/utils/grado";
 import { STUDENT_GROUP_ICON_LABELS } from "~/shared/utils/studentGroupIcons";
+import { buildParentSiblingSignature } from "~/shared/utils/parentSiblingMatch";
 import { normalizeCicloOption } from "~/utils/constants";
 
 useHead({ bodyAttrs: { class: "students-route-active" } });
@@ -2723,6 +2762,46 @@ const selectedHealthStudent = computed(() => {
   };
 });
 const selectedRecordHealth = computed(() => recordHealth(selectedHealthStudent.value));
+
+const selectedParentSiblingSignature = computed(() => {
+  if (!selectedStudent.value) return buildParentSiblingSignature({});
+  return buildParentSiblingSignature({
+    ...selectedStudent.value,
+    nombrePadre: editForm.nombrePadre,
+    apellidoPaternoPadre: editForm.apellidoPaternoPadre,
+    apellidoMaternoPadre: editForm.apellidoMaternoPadre,
+    nombreMadre: editForm.nombreMadre,
+    apellidoPaternoMadre: editForm.apellidoPaternoMadre,
+    apellidoMaternoMadre: editForm.apellidoMaternoMadre,
+  });
+});
+
+const selectedControlEscolarSiblings = computed(() => {
+  if (!selectedStudent.value || !selectedParentSiblingSignature.value.complete) return [];
+  const selectedKey = normalizeMatriculaKey(selectedStudent.value.matricula);
+  return controlStudentsIndex.value
+    .filter((student) => normalizeMatriculaKey(student.matricula) !== selectedKey)
+    .filter((student) => {
+      const signature = student.parentSiblingSignature || buildParentSiblingSignature(student);
+      return signature.complete && signature.key === selectedParentSiblingSignature.value.key;
+    })
+    .sort((left, right) => `${left.grado || ''}|${left.group || left.grupo || ''}|${left.fullName || left.nombreCompleto || ''}`.localeCompare(`${right.grado || ''}|${right.group || right.grupo || ''}|${right.fullName || right.nombreCompleto || ''}`, 'es'));
+});
+
+const selectedSiblingMatchLabel = computed(() => {
+  const signature = selectedParentSiblingSignature.value;
+  if (!signature.complete) return "Captura padre y madre completos para detectar hermanos.";
+  return "Mismo padre y misma madre normalizados.";
+});
+
+const selectSiblingStudent = (student) => {
+  if (!student?.matricula) return;
+  const candidate = controlStudentsIndex.value.find(
+    (item) => normalizeMatriculaKey(item.matricula) === normalizeMatriculaKey(student.matricula),
+  ) || student;
+  selectStudent(candidate);
+  activeDetailTab.value = "family";
+};
 const selectedNextAction = computed(() => {
   const invalid = selectedInvalidActions.value;
   if (invalid.length) {
@@ -4587,7 +4666,6 @@ const resetEditForm = (student = selectedStudent.value, options = {}) => {
     boletaSextoPrimariaAdjunta: student.boletaSextoPrimariaAdjunta || "",
     boletaPrimeroSecundariaAdjunta: student.boletaPrimeroSecundariaAdjunta || "",
     boletaSegundoSecundariaAdjunta: student.boletaSegundoSecundariaAdjunta || "",
-    familyId: student.familyId || "",
   });
   saveError.value = "";
   draftRestored.value = false;
@@ -7620,6 +7698,141 @@ onBeforeUnmount(() => {
   border-color: rgba(217, 67, 56, 0.24);
   background: #fff7f7;
   color: var(--ce-danger);
+}
+
+
+.control-escolar-screen .ce-family-siblings-card {
+  display: grid;
+  min-width: 760px;
+  gap: 10px;
+  margin-bottom: 11px;
+  padding: 13px;
+  border: 1px solid rgba(221, 231, 240, 0.98);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(21, 35, 60, 0.035);
+}
+
+.control-escolar-screen .ce-family-siblings-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-family-siblings-card header > div {
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-family-siblings-card small,
+.control-escolar-screen .ce-family-siblings-card dt {
+  color: #708098;
+  font-size: 9.5px;
+  font-weight: 900;
+}
+
+.control-escolar-screen .ce-family-siblings-card h3 {
+  margin: 2px 0 0;
+  color: var(--ce-ink);
+  font-size: 12.5px;
+  font-weight: 950;
+}
+
+.control-escolar-screen .ce-family-siblings-card p {
+  margin: 3px 0 0;
+  color: #647188;
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.control-escolar-screen .ce-family-siblings-card header > span {
+  display: inline-flex;
+  min-width: 28px;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #5f6f84;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.control-escolar-screen .ce-family-siblings-match {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.control-escolar-screen .ce-family-siblings-match div {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid #e6edf4;
+  border-radius: 12px;
+  background: #fbfdff;
+}
+
+.control-escolar-screen .ce-family-siblings-match dd {
+  overflow: hidden;
+  margin: 0;
+  color: var(--ce-ink);
+  font-size: 11px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-family-siblings-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.control-escolar-screen .ce-family-siblings-list button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid #e1e9f2;
+  border-radius: 12px;
+  background: #fbfdff;
+  color: var(--ce-ink);
+  text-align: left;
+}
+
+.control-escolar-screen .ce-family-siblings-list button:hover {
+  border-color: color-mix(in srgb, var(--ce-detail-accent) 34%, #e1e9f2);
+  background: #fff;
+}
+
+.control-escolar-screen .ce-family-siblings-list button > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.control-escolar-screen .ce-family-siblings-list strong,
+.control-escolar-screen .ce-family-siblings-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-family-siblings-list strong {
+  color: var(--ce-ink);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.control-escolar-screen .ce-family-siblings-empty {
+  padding: 9px 10px;
+  border: 1px dashed #d8e2ec;
+  border-radius: 12px;
+  background: #fbfdff;
 }
 
 .control-escolar-screen .ce-family-grid {

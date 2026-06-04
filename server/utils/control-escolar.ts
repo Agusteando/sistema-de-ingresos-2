@@ -26,7 +26,7 @@ import {
   maybeRefreshVerifiedControlEscolarScopeCache,
 } from "./control-escolar-cache";
 import { inferMexicanCurpIdentity, resolveControlEscolarCompleteness } from "../../shared/utils/studentPresentation";
-import { normalizeFamilyId } from "../../shared/utils/familyIdentity";
+import { buildParentSiblingSignature } from "../../shared/utils/parentSiblingMatch";
 
 export type ControlEscolarStudentRow = {
   agentId: string;
@@ -83,6 +83,14 @@ export type ControlEscolarStudentRow = {
   huskyPassPlaintext: string;
   huskyPassAvailable: boolean;
   huskyPassEmail: string;
+  parentSiblingSignature?: {
+    fatherName: string;
+    motherName: string;
+    normalizedFatherName: string;
+    normalizedMotherName: string;
+    key: string;
+    complete: boolean;
+  };
 };
 
 type TableColumn = {
@@ -1033,10 +1041,6 @@ const centralSelectColumns = (schema: ControlEscolarSchema) => {
     "categoria_baja",
     "seguimiento_baja",
     "servicio_notas",
-    "family_id",
-    "familia_id",
-    "familiaId",
-    "familyId",
     "plantel",
     "nombre_padre_completo",
     "padre",
@@ -1162,14 +1166,6 @@ const firstText = (...values: unknown[]) => {
 
 const firstLower = (...values: unknown[]) => firstText(...values).toLowerCase();
 const firstUpper = (...values: unknown[]) => firstText(...values).toUpperCase();
-const firstUsableFamilyId = (...values: unknown[]) => {
-  for (const value of values) {
-    const familyId = normalizeFamilyId(value);
-    if (familyId) return familyId;
-  }
-  return "";
-};
-
 const normalizeEmailCandidate = (value: unknown) => firstLower(value).replace(/\s+/g, '');
 const isUsableFamilyEmail = (value: unknown) => {
   const email = normalizeEmailCandidate(value);
@@ -1338,6 +1334,7 @@ const overlayStudentRow = (
   const huskyPassUsername = normalizeText(huskyPass?.username, 64);
   const huskyPassPlaintext = normalizeText(huskyPass?.plaintext, 255);
   const huskyPassEmail = firstLower(huskyPass?.email, huskyPass?.correo);
+  const parentSiblingSignature = hasOverlay ? buildParentSiblingSignature(overlay) : buildParentSiblingSignature({});
 
   const normalized: ControlEscolarStudentRow = {
     agentId: normalizePlantel(agentId),
@@ -1456,7 +1453,7 @@ const overlayStudentRow = (
     domicilioCp: normalizeText(overlay?.domicilio_cp),
     domicilioMunicipio: normalizeText(overlay?.domicilio_municipio),
     servicioNotas: normalizeText(overlay?.servicio_notas, 1000),
-    familyId: firstUsableFamilyId(overlay?.family_id, overlay?.familia_id, overlay?.familiaId, overlay?.familyId),
+    parentSiblingSignature,
     eventual: firstText(overlay?.eventual),
     verified: firstText(overlay?.verified),
   });
@@ -2157,6 +2154,69 @@ export const refreshVerifiedControlEscolarCacheForScope = async (
   });
 };
 
+
+export const fetchControlEscolarSiblingsByParentNames = async (
+  agentId: string,
+  matricula: string,
+  filters: any = {},
+) => {
+  const normalizedMatricula = canonicalMatriculaKey(matricula);
+  if (!normalizedMatricula) {
+    throw createError({ statusCode: 400, message: "Matrícula inválida." });
+  }
+
+  const loaded = await fetchAllNormalizedStudents(agentId, filters);
+  const current = loaded.students.find(
+    (student) => canonicalMatriculaKey(student.matricula) === normalizedMatricula,
+  );
+
+  if (!current) {
+    return {
+      siblings: [],
+      source: "control-escolar-missing",
+      match: null,
+      sourceMeta: loaded.source,
+    };
+  }
+
+  const signature = current.parentSiblingSignature || buildParentSiblingSignature(current as any);
+  if (!signature.complete) {
+    return {
+      siblings: [],
+      source: "control-escolar-parent-names-incomplete",
+      match: {
+        fatherName: signature.fatherName,
+        motherName: signature.motherName,
+        normalizedFatherName: signature.normalizedFatherName,
+        normalizedMotherName: signature.normalizedMotherName,
+      },
+      sourceMeta: loaded.source,
+    };
+  }
+
+  const siblings = loaded.students
+    .filter((student) => canonicalMatriculaKey(student.matricula) !== normalizedMatricula)
+    .filter((student) => (student.parentSiblingSignature || buildParentSiblingSignature(student as any)).key === signature.key)
+    .sort(compareStudents)
+    .map((student) => ({
+      ...student,
+      siblingMatchSource: "control-escolar-parent-names",
+      siblingMatchReason: "Mismo padre y misma madre normalizados",
+    }));
+
+  return {
+    siblings,
+    source: "control-escolar-parent-names",
+    match: {
+      fatherName: signature.fatherName,
+      motherName: signature.motherName,
+      normalizedFatherName: signature.normalizedFatherName,
+      normalizedMotherName: signature.normalizedMotherName,
+    },
+    sourceMeta: loaded.source,
+  };
+};
+
 export const fetchControlEscolarKpis = async (
   agentId: string,
   filters: any = {},
@@ -2314,7 +2374,6 @@ const PATCH_FIELD_COLUMN_MAP: Record<string, string> = {
   boletaSextoPrimariaAdjunta: "boleta_sexto_primaria_adjunta",
   boletaPrimeroSecundariaAdjunta: "boleta_primero_secundaria_adjunta",
   boletaSegundoSecundariaAdjunta: "boleta_segundo_secundaria_adjunta",
-  familyId: "family_id",
 };
 
 const ADVANCED_FILE_PATCH_FIELDS = new Set([
@@ -2640,7 +2699,6 @@ export const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS = [
   "categoriaBaja",
   "seguimientoBaja",
   "servicioNotas",
-  "familyId",
   "certificadoMedicoAdjunto",
   "certificadoVacunacionCovid19Adjunto",
   "actaNacimientoAdjunta",
@@ -2690,7 +2748,6 @@ export const CONTROL_ESCOLAR_MATRICULA_IMPORT_LABELS: Record<string, string> = {
   eventual: "Eventual",
   verified: "Verificado",
   servicioNotas: "Notas de servicio",
-  familyId: "Family ID",
   lugarTrabajoPadre: "Lugar trabajo padre",
   puestoPadre: "Puesto padre",
   estadoCivilPadre: "Estado civil padre",
