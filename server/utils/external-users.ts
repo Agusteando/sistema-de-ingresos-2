@@ -564,6 +564,11 @@ const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean,
   return Object.entries(values).filter(([column]) => columns.has(column))
 }
 
+const responseUserByEmail = async (email: unknown) => {
+  const user = await findExternalUserByEmail(normalizeEmail(email))
+  return user ? enrichAccessMetadata(user) : null
+}
+
 export const createExternalUser = async (body: ExternalUserInput) => {
   const email = assertWorkspaceEmail(body.email)
   const existing = await findExternalUserByEmail(email)
@@ -580,7 +585,8 @@ export const createExternalUser = async (body: ExternalUserInput) => {
     `INSERT INTO ${escapeIdentifier(TABLE)} (${columns.map(escapeIdentifier).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
     values
   )
-  return { success: true }
+  const user = await responseUserByEmail(email)
+  return { success: true, user, rows: user ? [user] : [] }
 }
 
 export const updateExternalUser = async (id: unknown, body: ExternalUserInput) => {
@@ -598,13 +604,13 @@ export const updateExternalUser = async (id: unknown, body: ExternalUserInput) =
 
   const assignments = entries.map(([column]) => `${escapeIdentifier(column)} = ?`)
   const values = entries.map(([, value]) => value)
-  values.push(id)
 
   await controlEscolarCentralQuery(
     `UPDATE ${escapeIdentifier(TABLE)} SET ${assignments.join(', ')} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
-    [...values, workspaceDomainParam()]
+    [...values, id, workspaceDomainParam()]
   )
-  return { success: true }
+  const user = await responseUserByEmail(body.email || current.email)
+  return { success: true, user, rows: user ? [user] : [] }
 }
 
 export const bulkUpdateExternalUsers = async (body: ExternalUserInput & {
@@ -643,6 +649,9 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & {
 
   const uniqueRows = Array.from(new Map(selectedRows.map((row) => [String(row.id), row])).values())
   let updated = 0
+  const skipped: Array<{ email: string; reason: string }> = []
+  const failed: Array<{ email: string; reason: string }> = []
+  const updatedEmails = new Set<string>()
   const shouldUpdateBlocked = columns.has('ingresos_blocked') && ('ingresosBlocked' in body || 'ingresos_blocked' in body)
   const shouldUpdateRole = Boolean(body.accessMode || body.role)
   const shouldReplacePlanteles = 'replacePlanteles' in body
@@ -653,8 +662,14 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & {
 
   for (const row of uniqueRows) {
     const email = normalizeEmail(row.email)
-    if (!isCasitaWorkspaceEmail(email)) continue
-    if (PROTECTED_EMAILS.has(email) && (shouldUpdateBlocked || shouldUpdateRole || shouldUpdatePlanteles)) continue
+    if (!isCasitaWorkspaceEmail(email)) {
+      skipped.push({ email: email || String(row.id || ''), reason: 'Correo fuera del dominio institucional.' })
+      continue
+    }
+    if (PROTECTED_EMAILS.has(email) && (shouldUpdateBlocked || shouldUpdateRole || shouldUpdatePlanteles)) {
+      skipped.push({ email, reason: 'Usuario protegido.' })
+      continue
+    }
 
     const values: Record<string, any> = {}
     if (shouldUpdateBlocked) {
@@ -676,16 +691,33 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & {
     }
 
     const entries = Object.entries(values).filter(([column]) => columns.has(column))
-    if (!entries.length) continue
+    if (!entries.length) {
+      skipped.push({ email, reason: 'No hubo cambios aplicables.' })
+      continue
+    }
 
-    await controlEscolarCentralQuery(
-      `UPDATE ${escapeIdentifier(TABLE)} SET ${entries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
-      [...entries.map(([, value]) => value), row.id, workspaceDomainParam()]
-    )
-    updated++
+    try {
+      await controlEscolarCentralQuery(
+        `UPDATE ${escapeIdentifier(TABLE)} SET ${entries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
+        [...entries.map(([, value]) => value), row.id, workspaceDomainParam()]
+      )
+      updated++
+      updatedEmails.add(email)
+    } catch (error: any) {
+      failed.push({ email, reason: error?.message || 'No se pudo actualizar.' })
+    }
   }
 
-  return { success: true, updated, requested: uniqueRows.length }
+  const rows = (await Promise.all(Array.from(updatedEmails).map(responseUserByEmail))).filter(Boolean)
+
+  return {
+    success: true,
+    updated,
+    requested: uniqueRows.length,
+    skipped,
+    failed,
+    rows
+  }
 }
 
 

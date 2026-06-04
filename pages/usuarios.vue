@@ -144,23 +144,55 @@
         </label>
       </section>
 
+      <section v-if="undoNotice" class="undo-card">
+        <div>
+          <strong>{{ undoNotice.title }}</strong>
+          <span>{{ undoNotice.body }}</span>
+        </div>
+        <div class="undo-actions">
+          <button type="button" class="soft-button action-button" :disabled="bulkSaving" @click="undoLastChange">
+            <LucideRotateCcw :size="15" /> Deshacer
+          </button>
+          <button type="button" class="icon-button" aria-label="Cerrar aviso" @click="clearUndoNotice"><LucideX :size="15" /></button>
+        </div>
+      </section>
+
       <section v-if="selectedEmails.length" class="bulk-card">
-        <strong>{{ selectedEmails.length }} seleccionados</strong>
+        <div class="bulk-summary">
+          <strong>{{ selectedEmails.length }} seleccionados</strong>
+          <span v-if="missingFilteredEmails.length">
+            <button type="button" class="bulk-link" @click="selectAllFiltered">Seleccionar los {{ missingFilteredEmails.length }} filtrados restantes</button>
+          </span>
+        </div>
         <div class="bulk-actions">
           <button type="button" class="bulk-button blue" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'control' }, 'Asignar acceso Control Escolar', 'Se actualizará el acceso de los usuarios seleccionados.')">
-            <LucideGraduationCap :size="15" /> Asignar acceso Control Escolar
+            <LucideGraduationCap :size="15" /> Control Escolar
           </button>
           <button type="button" class="bulk-button purple" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'admin_control' }, 'Asignar acceso combinado', 'Se actualizará el acceso de los usuarios seleccionados a Financiero + Control Escolar.')">
-            <LucideShieldCheck :size="15" /> Asignar ambos
+            <LucideShieldCheck :size="15" /> Ambos
           </button>
           <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'admin' }, 'Restaurar Financiero', 'Se actualizará el acceso de los usuarios seleccionados.')">
-            <LucideShieldCheck :size="15" /> Restaurar Financiero
+            <LucideShieldCheck :size="15" /> Financiero
           </button>
           <button type="button" class="bulk-button red" :disabled="bulkSaving" @click="requestBulkUpdate({ ingresosBlocked: true }, `¿Bloquear ${selectedEmails.length} usuarios?`, 'Se actualizará el estado de los usuarios seleccionados.', 'danger')">
-            <LucideBan :size="15" /> Bloquear seleccionados
+            <LucideBan :size="15" /> Bloquear
           </button>
           <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkUpdate({ ingresosBlocked: false }, 'Reactivar usuarios', 'Se actualizará el estado de los usuarios seleccionados.')">
-            <LucideUnlock :size="15" /> Reactivar seleccionados
+            <LucideUnlock :size="15" /> Reactivar
+          </button>
+        </div>
+        <div class="bulk-plantel-actions">
+          <select v-model="bulkPlantelAction" :disabled="bulkSaving">
+            <option value="add">Agregar plantel</option>
+            <option value="remove">Quitar plantel</option>
+            <option value="replace">Reemplazar planteles</option>
+          </select>
+          <select v-model="bulkPlantelValue" :disabled="bulkSaving">
+            <option value="">Plantel...</option>
+            <option v-for="p in PLANTELES_LIST" :key="`bulk-${p}`" :value="p">{{ p }}</option>
+          </select>
+          <button type="button" class="bulk-button" :disabled="bulkSaving || !bulkPlantelValue" @click="requestBulkPlantelUpdate">
+            Aplicar plantel
           </button>
         </div>
         <button type="button" class="bulk-close" @click="selectedEmails = []"><LucideX :size="16" /></button>
@@ -467,6 +499,13 @@
           </span>
           <h3>{{ pendingAction.title }}</h3>
           <p>{{ pendingAction.body }}</p>
+          <div class="confirm-preview">
+            <strong>{{ pendingAction.targetCount || pendingAction.emails.length }} usuarios editables</strong>
+            <span v-if="pendingAction.skippedCount">{{ pendingAction.skippedCount }} protegidos/omitidos no se tocarán.</span>
+            <ul v-if="pendingAction.examples?.length">
+              <li v-for="example in pendingAction.examples" :key="example">{{ example }}</li>
+            </ul>
+          </div>
           <div class="confirm-actions">
             <button type="button" class="soft-button" @click="pendingAction = null">Cancelar</button>
             <button type="button" class="primary-button" :class="{ danger: pendingAction.tone === 'danger' }" :disabled="bulkSaving" @click="runPendingAction">
@@ -532,6 +571,7 @@ import {
   LucidePencil,
   LucidePlus,
   LucideRefreshCw,
+  LucideRotateCcw,
   LucideSearch,
   LucideShield,
   LucideShieldCheck,
@@ -578,7 +618,11 @@ const fetchError = ref(null)
 const lastFetchDebug = ref(null)
 const showDebug = ref(false)
 const diagnosticsLoading = ref(false)
+const bulkPlantelAction = ref('add')
+const bulkPlantelValue = ref('')
+const undoNotice = ref(null)
 let directoryTimer = null
+let undoTimer = null
 
 const accessOptions = [
   { value: 'admin', label: 'Financiero', description: 'Acceso operativo estándar.', icon: LucideShieldCheck },
@@ -744,6 +788,8 @@ const blockedCount = computed(() => usuarios.value.filter(isBlocked).length)
 const protectedCount = computed(() => usuarios.value.filter(isProtectedUser).length)
 const todayCount = computed(() => usuarios.value.filter(u => isWithinDays(u, 1)).length)
 const visibleSelectableEmails = computed(() => pagedUsuarios.value.filter(u => !isProtectedUser(u)).map(u => normalizeEmail(u.email)).filter(Boolean))
+const filteredSelectableEmails = computed(() => filteredUsuarios.value.filter(u => !isProtectedUser(u)).map(u => normalizeEmail(u.email)).filter(Boolean))
+const missingFilteredEmails = computed(() => filteredSelectableEmails.value.filter(email => !selectedEmails.value.includes(email)))
 const allVisibleSelected = computed(() => visibleSelectableEmails.value.length > 0 && visibleSelectableEmails.value.every(email => selectedEmails.value.includes(email)))
 const someVisibleSelected = computed(() => visibleSelectableEmails.value.some(email => selectedEmails.value.includes(email)) && !allVisibleSelected.value)
 
@@ -761,6 +807,7 @@ watch(directoryQuery, () => {
 onMounted(loadUsers)
 onUnmounted(() => {
   if (directoryTimer) clearTimeout(directoryTimer)
+  if (undoTimer) clearTimeout(undoTimer)
   if (typeof document !== 'undefined') document.body.style.overflow = ''
 })
 
@@ -957,6 +1004,9 @@ const toggleAllVisible = () => {
     ? selectedEmails.value.filter(email => !visible.includes(email))
     : Array.from(new Set([...selectedEmails.value, ...visible]))
 }
+const selectAllFiltered = () => {
+  selectedEmails.value = Array.from(new Set([...selectedEmails.value, ...filteredSelectableEmails.value]))
+}
 const selectUser = (u) => { activeUserKey.value = userKey(u) }
 
 const searchDirectory = async () => {
@@ -984,21 +1034,177 @@ const selectWorkspaceUser = (person) => {
   form.value.picture = person.avatar || avatarFor(person)
 }
 
-const requestAccessChange = (u, mode) => {
-  if (!u || isProtectedUser(u) || accessMode(u) === mode) return
-  requestBulkUpdate(
-    { accessMode: mode },
-    `Cambiar acceso de ${displayNameFor(u)}`,
-    `Se actualizará el acceso a ${accessLabelForMode(mode)}.`,
-    'safe',
-    [u.email]
-  )
+const normalizePlantelArray = (value) => {
+  const raw = Array.isArray(value) ? value : String(value || '').split(',')
+  return Array.from(new Set(raw.map(p => String(p || '').trim()).filter(p => PLANTELES_LIST.includes(p))))
+}
+const serializePlanteles = (value) => normalizePlantelArray(value).join(',')
+const resolveClientRoleForAccess = (role, mode) => {
+  const tokens = Array.from(new Set(roleTokens(role).map(token => token.toUpperCase())))
+  const withoutControl = tokens.filter(token => token !== CONTROL_ROLE)
+  const baseRoles = withoutControl.filter(token => token !== 'PLANTEL')
+  if (mode === 'control') return CONTROL_ROLE
+  if (mode === 'admin_control') return Array.from(new Set([...(baseRoles.length ? baseRoles : ['ROLE_HUSKY_USER']), CONTROL_ROLE])).join(',')
+  if (mode === 'admin') return (baseRoles.length ? baseRoles : ['ROLE_HUSKY_USER']).join(',')
+  return role || 'ROLE_HUSKY_USER'
+}
+const optimisticUser = (u, patch) => {
+  const next = { ...u }
+  if (patch.accessMode) next.role = resolveClientRoleForAccess(next.role, patch.accessMode)
+  if ('ingresosBlocked' in patch || 'ingresos_blocked' in patch) {
+    const blocked = patch.ingresosBlocked ?? patch.ingresos_blocked
+    next.ingresosBlocked = Boolean(blocked)
+    next.ingresos_blocked = Boolean(blocked) ? 1 : 0
+  }
+  const hasReplacePlanteles = Object.prototype.hasOwnProperty.call(patch, 'replacePlanteles')
+  if (hasReplacePlanteles || patch.addPlanteles || patch.removePlanteles) {
+    const currentPlanteles = normalizePlantelArray(next.planteles || next.plantel)
+    let nextPlanteles = hasReplacePlanteles ? normalizePlantelArray(patch.replacePlanteles) : currentPlanteles
+    const addPlanteles = normalizePlantelArray(patch.addPlanteles)
+    const removePlanteles = normalizePlantelArray(patch.removePlanteles)
+    if (addPlanteles.length) nextPlanteles = Array.from(new Set([...nextPlanteles, ...addPlanteles]))
+    if (removePlanteles.length) nextPlanteles = nextPlanteles.filter(p => !removePlanteles.includes(p))
+    next.planteles = serializePlanteles(nextPlanteles)
+    next.plantel = nextPlanteles[0] || ''
+  }
+  return next
+}
+const mergeResponseUser = (row) => {
+  if (!row?.email) return
+  const email = normalizeEmail(row.email)
+  const existing = usuarios.value.find(u => normalizeEmail(u.email) === email)
+  const merged = {
+    ...(existing || {}),
+    ...row,
+    workspaceName: existing?.workspaceName || row.workspaceName || row.displayName || row.username,
+    workspaceAvatar: existing?.workspaceAvatar || row.workspaceAvatar || row.avatar || row.picture,
+    workspaceSuspended: existing?.workspaceSuspended || row.workspaceSuspended || false,
+    workspaceArchived: existing?.workspaceArchived || row.workspaceArchived || false,
+    workspaceOrgUnitPath: existing?.workspaceOrgUnitPath || row.workspaceOrgUnitPath || ''
+  }
+  if (existing) usuarios.value = usuarios.value.map(u => normalizeEmail(u.email) === email ? merged : u)
+  else usuarios.value = [merged, ...usuarios.value]
+}
+const mergeResponseRows = (rows) => {
+  if (!Array.isArray(rows)) return
+  rows.forEach(mergeResponseUser)
+}
+const patchLocalUsers = (emails, patch) => {
+  const target = new Set(emails.map(normalizeEmail))
+  usuarios.value = usuarios.value.map(u => target.has(normalizeEmail(u.email)) ? optimisticUser(u, patch) : u)
+}
+const rowsForEmails = (emails) => {
+  const target = new Set(emails.map(normalizeEmail))
+  return usuarios.value.filter(u => target.has(normalizeEmail(u.email)))
+}
+const cloneRowsForRollback = (emails) => rowsForEmails(emails).map(u => ({ ...u }))
+const restoreRows = (rows) => { rows.forEach(mergeResponseUser) }
+
+const clearUndoNotice = () => {
+  undoNotice.value = null
+  if (undoTimer) clearTimeout(undoTimer)
+  undoTimer = null
+}
+const setUndoNotice = (notice) => {
+  clearUndoNotice()
+  undoNotice.value = notice
+  undoTimer = setTimeout(clearUndoNotice, 9000)
+}
+const undoLastChange = async () => {
+  if (!undoNotice.value) return
+  const notice = undoNotice.value
+  clearUndoNotice()
+  await applyUserPatch(notice.emails, notice.patch, {
+    optimistic: true,
+    successMessage: 'Cambio revertido.',
+    skipUndo: true
+  })
 }
 
+const applyUserPatch = async (emails, patch, options = {}) => {
+  const normalizedEmails = Array.from(new Set((emails || []).map(normalizeEmail).filter(email => email && !isProtectedEmail(email))))
+  if (!normalizedEmails.length) return null
+  const rollbackRows = cloneRowsForRollback(normalizedEmails)
+  if (options.optimistic !== false) patchLocalUsers(normalizedEmails, patch)
+  bulkSaving.value = true
+  try {
+    const response = await $fetch('/api/users/bulk', {
+      method: 'PATCH',
+      body: { emails: normalizedEmails, ...patch }
+    })
+    mergeResponseRows(response?.rows)
+    const details = []
+    if (response?.skipped?.length) details.push(`${response.skipped.length} omitidos`)
+    if (response?.failed?.length) details.push(`${response.failed.length} errores`)
+    if (options.successMessage !== false) show(options.successMessage || 'Usuarios actualizados.', response?.failed?.length ? 'danger' : 'success', { details })
+    return response
+  } catch (e) {
+    restoreRows(rollbackRows)
+    const message = extractMessage(e) || 'Error al actualizar usuarios'
+    show(message, 'danger')
+    return null
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
+const requestAccessChange = async (u, mode) => {
+  if (!u || isProtectedUser(u) || accessMode(u) === mode) return
+  const previousMode = accessMode(u)
+  const email = normalizeEmail(u.email)
+  const response = await applyUserPatch([email], { accessMode: mode }, {
+    optimistic: true,
+    successMessage: `Acceso actualizado a ${accessLabelForMode(mode)}.`
+  })
+  if (response && !response.failed?.length) {
+    setUndoNotice({
+      title: 'Acceso actualizado',
+      body: `${displayNameFor(u)} ahora tiene acceso ${accessLabelForMode(mode)}.`,
+      emails: [email],
+      patch: { accessMode: previousMode }
+    })
+  }
+}
+
+const previewForPatch = (rows, patch) => rows.slice(0, 5).map((u) => {
+  if (patch.accessMode) return `${displayNameFor(u)}: ${accessLabel(u)} → ${accessLabelForMode(patch.accessMode)}`
+  if ('ingresosBlocked' in patch || 'ingresos_blocked' in patch) return `${displayNameFor(u)}: ${statusLabel(u)} → ${patch.ingresosBlocked ?? patch.ingresos_blocked ? 'Bloqueado' : 'Activo'}`
+  if (patch.addPlanteles) return `${displayNameFor(u)}: agregar ${normalizePlantelArray(patch.addPlanteles).join(', ')}`
+  if (patch.removePlanteles) return `${displayNameFor(u)}: quitar ${normalizePlantelArray(patch.removePlanteles).join(', ')}`
+  if (Object.prototype.hasOwnProperty.call(patch, 'replacePlanteles')) return `${displayNameFor(u)}: reemplazar planteles por ${normalizePlantelArray(patch.replacePlanteles).join(', ') || 'Sin plantel'}`
+  return displayNameFor(u)
+})
+
 const requestBulkUpdate = (patch, title, body, tone = 'safe', sourceEmails = selectedEmails.value) => {
-  const emails = sourceEmails.map(normalizeEmail).filter(email => email && !isProtectedEmail(email))
-  if (!emails.length) return
-  pendingAction.value = { patch, title, body, tone, emails }
+  const rawEmails = Array.from(new Set(sourceEmails.map(normalizeEmail).filter(Boolean)))
+  const targetRows = rowsForEmails(rawEmails).filter(u => !isProtectedUser(u))
+  const skippedRows = rowsForEmails(rawEmails).filter(isProtectedUser)
+  const emails = targetRows.map(u => normalizeEmail(u.email)).filter(Boolean)
+  if (!emails.length) {
+    show('No hay usuarios editables en la selección.', 'danger')
+    return
+  }
+  pendingAction.value = {
+    patch,
+    title,
+    body,
+    tone,
+    emails,
+    targetCount: emails.length,
+    skippedCount: skippedRows.length,
+    examples: previewForPatch(targetRows, patch)
+  }
+}
+const requestBulkPlantelUpdate = () => {
+  if (!bulkPlantelValue.value) return
+  const plantel = bulkPlantelValue.value
+  const patch = bulkPlantelAction.value === 'remove'
+    ? { removePlanteles: [plantel] }
+    : bulkPlantelAction.value === 'replace'
+      ? { replacePlanteles: [plantel] }
+      : { addPlanteles: [plantel] }
+  const label = bulkPlantelAction.value === 'remove' ? 'Quitar plantel' : bulkPlantelAction.value === 'replace' ? 'Reemplazar planteles' : 'Agregar plantel'
+  requestBulkUpdate(patch, label, `Se aplicará ${plantel} a los usuarios seleccionados.`)
 }
 const requestToggleBlocked = (u) => {
   if (!u || isProtectedUser(u)) return
@@ -1006,38 +1212,34 @@ const requestToggleBlocked = (u) => {
   requestBulkUpdate(
     { ingresosBlocked: blocked },
     blocked ? `¿Bloquear a ${displayNameFor(u)}?` : `¿Reactivar a ${displayNameFor(u)}?`,
-    blocked ? 'Se actualizará el estado del usuario.' : 'Se actualizará el estado del usuario.',
+    blocked ? 'Se bloqueará el acceso de este usuario.' : 'Se reactivará el acceso de este usuario.',
     blocked ? 'danger' : 'safe',
     [u.email]
   )
 }
 const runPendingAction = async () => {
   if (!pendingAction.value) return
-  bulkSaving.value = true
-  try {
-    await $fetch('/api/users/bulk', {
-      method: 'PATCH',
-      body: { emails: pendingAction.value.emails, ...pendingAction.value.patch }
-    })
-    show('Usuarios actualizados.')
-    selectedEmails.value = []
-    pendingAction.value = null
-    await loadUsers()
-  } catch (e) {
-    const message = extractMessage(e) || 'Error al actualizar usuarios'
-    show(message, 'danger')
-  } finally {
-    bulkSaving.value = false
-  }
+  const action = pendingAction.value
+  const response = await applyUserPatch(action.emails, action.patch, {
+    optimistic: true,
+    successMessage: false
+  })
+  if (!response) return
+  const details = []
+  if (response.skipped?.length) details.push(`${response.skipped.length} omitidos`)
+  if (response.failed?.length) details.push(`${response.failed.length} errores`)
+  show(`${response.updated || 0} usuarios actualizados.`, response.failed?.length ? 'danger' : 'success', { details })
+  selectedEmails.value = selectedEmails.value.filter(email => !action.emails.includes(email))
+  pendingAction.value = null
 }
 
 const showContextMenu = (event, u) => {
   openMenu(event, [
     { label: 'Opciones', disabled: true, action: () => {} },
     { label: 'Editar usuario', icon: LucidePencil, action: () => openModal(u) },
-    { label: 'Asignar acceso Control Escolar', icon: LucideGraduationCap, disabled: isProtectedUser(u), action: () => requestBulkUpdate({ accessMode: 'control' }, 'Asignar acceso Control Escolar', 'Se actualizará el acceso del usuario.', 'safe', [u.email]) },
-    { label: 'Asignar acceso combinado', icon: LucideShieldCheck, disabled: isProtectedUser(u), action: () => requestBulkUpdate({ accessMode: 'admin_control' }, 'Asignar acceso combinado', 'Se actualizará el acceso del usuario a Financiero + Control Escolar.', 'safe', [u.email]) },
-    { label: 'Restaurar Financiero', icon: LucideShieldCheck, disabled: isProtectedUser(u), action: () => requestBulkUpdate({ accessMode: 'admin' }, 'Restaurar Financiero', 'Se actualizará el acceso del usuario.', 'safe', [u.email]) },
+    { label: 'Asignar acceso Control Escolar', icon: LucideGraduationCap, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'control') },
+    { label: 'Asignar acceso combinado', icon: LucideShieldCheck, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'admin_control') },
+    { label: 'Restaurar Financiero', icon: LucideShieldCheck, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'admin') },
     { label: isBlocked(u) ? 'Reactivar acceso' : 'Bloquear acceso', icon: isBlocked(u) ? LucideUnlock : LucideBan, disabled: isProtectedUser(u), action: () => requestToggleBlocked(u) }
   ])
 }
@@ -1076,8 +1278,16 @@ const saveUser = async () => {
   saving.value = true
   const url = editingId.value ? `/api/users/${editingId.value}` : '/api/users'
   const method = editingId.value ? 'PUT' : 'POST'
+  const optimisticPatch = {
+    accessMode: form.value.accessMode,
+    replacePlanteles: form.value.planteles,
+    ingresosBlocked: form.value.ingresosBlocked
+  }
+  const email = normalizeEmail(form.value.email)
+  const rollbackRows = editingId.value ? cloneRowsForRollback([email]) : []
+  if (editingId.value) patchLocalUsers([email], optimisticPatch)
   try {
-    await $fetch(url, {
+    const response = await $fetch(url, {
       method,
       body: {
         username: form.value.username || form.value.email,
@@ -1090,10 +1300,29 @@ const saveUser = async () => {
         ingresosBlocked: form.value.ingresosBlocked
       }
     })
-    show('Usuario guardado.')
+    if (response?.user) mergeResponseUser(response.user)
+    else if (Array.isArray(response?.rows)) mergeResponseRows(response.rows)
+    else {
+      mergeResponseUser({
+        id: editingId.value,
+        username: form.value.username || form.value.email,
+        displayName: form.value.displayName,
+        workspaceName: form.value.displayName,
+        email: form.value.email,
+        avatar: form.value.avatar,
+        picture: form.value.picture || form.value.avatar,
+        planteles: serializePlanteles(form.value.planteles),
+        plantel: form.value.planteles[0] || '',
+        role: resolveClientRoleForAccess(null, form.value.accessMode),
+        ingresosBlocked: form.value.ingresosBlocked,
+        ingresos_blocked: form.value.ingresosBlocked ? 1 : 0
+      })
+    }
+    show('Usuario guardado sin recargar el directorio.')
     closeModal()
-    await loadUsers()
+    activeUserKey.value = email
   } catch (e) {
+    restoreRows(rollbackRows)
     const message = extractMessage(e) || 'Error al guardar'
     show(message, 'danger')
   } finally {
@@ -1503,6 +1732,75 @@ button:disabled {
   color: #116b2c;
   font-size: 13px;
   font-weight: 950;
+}
+
+.undo-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid #c7d9ff;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f4f8ff, #ffffff);
+  box-shadow: 0 16px 36px rgba(29, 78, 216, .09);
+}
+
+.undo-card strong {
+  display: block;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.undo-card span {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.undo-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bulk-summary {
+  min-width: 150px;
+  display: grid;
+  gap: 4px;
+}
+
+.bulk-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.bulk-plantel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bulk-plantel-actions select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: #263653;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 850;
 }
 
 .bulk-button {
@@ -1980,6 +2278,39 @@ button:disabled {
 .confirm-icon.danger { color: #b91c1c; background: #fff1f2; }
 .confirm-modal h3 { margin: 16px 0 0; color: var(--ink); font-size: 19px; font-weight: 950; letter-spacing: -.025em; }
 .confirm-modal p { margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; font-weight: 750; }
+
+.confirm-preview {
+  margin-top: 14px;
+  border: 1px solid #e5edf5;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 12px;
+  text-align: left;
+}
+
+.confirm-preview strong {
+  display: block;
+  color: #102044;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.confirm-preview span {
+  display: block;
+  margin-top: 4px;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.confirm-preview ul {
+  margin: 9px 0 0;
+  padding-left: 18px;
+  color: #52627a;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 750;
+}
 .confirm-actions { justify-content: center; margin-top: 20px; }
 
 .animate-spin { animation: spin 1s linear infinite; }

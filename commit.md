@@ -1,3 +1,3 @@
-Restaura Usuarios y mejora cambios rápidos de acceso
+Optimiza edición rápida de usuarios sin recargar directorio
 
-Recupera la pantalla funcional anterior de Usuarios como base, manteniendo la carga completa de usuarios y la hidratación de fotos desde Google Workspace. Añade filtro y columna de planteles, soporte visible para acceso Financiero, Control Escolar y Ambos, acciones rápidas por fila y en el panel lateral para cambiar el tipo de acceso, y conserva los flujos existentes de modal, búsqueda Workspace, exportación, diagnóstico y acciones masivas.
+Mantiene la interfaz restaurada de Usuarios como base y elimina la recarga completa después de cambios normales. Ahora los cambios de acceso por usuario se aplican de forma optimista con opción de deshacer, las actualizaciones masivas muestran una sola confirmación con vista previa, se puede seleccionar todo el conjunto filtrado y se pueden aplicar cambios masivos de acceso, bloqueo o planteles. El backend devuelve los usuarios modificados para que la pantalla actualice solo las filas afectadas y conserve las fotos de Workspace y el contexto visual.
