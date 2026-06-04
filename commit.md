@@ -1,3 +1,3 @@
-Corrige KPIs e inversa global en Usuarios
+Corrige mensajes de error en acción inversa de usuarios
 
-Refina la zona de métricas de Usuarios para que funcione como una barra compacta y estética de filtros rápidos, manteniendo el diseño restaurado y las fotos de Workspace. Ajusta la acción inversa avanzada para que el grupo inverso siempre sea todo el directorio institucional menos los usuarios seleccionados, sin depender del filtro activo, y actualiza el backend para ignorar filtros en esa operación global.
+Se ajusta la acción inversa global para construir el directorio completo directamente desde users, sin depender de paginación auxiliar, y se reemplaza el error genérico por diagnósticos específicos cuando no hay seleccionados, no existe directorio, los seleccionados no pertenecen al directorio o ya no queda un grupo inverso. También conserva el comportamiento global: los usuarios seleccionados reciben una acción y todos los demás usuarios institucionales reciben la acción inversa, ignorando filtros activos.
