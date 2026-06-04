@@ -1,5 +1,5 @@
 <template>
-  <div class="usuarios-page">
+  <div class="usuarios-page" :class="{ 'has-drawer': activeUser, 'has-selection': selectedEmails.length }">
     <div class="usuarios-main">
       <header class="usuarios-hero">
         <div>
@@ -23,63 +23,19 @@
         </div>
       </header>
 
-      <section class="metric-grid">
-        <article class="metric-card total-card">
-          <span class="metric-icon green"><LucideUsers :size="24" /></span>
-          <div>
-            <p>Total usuarios</p>
-            <strong>{{ usuarios.length }}</strong>
-            <small>Registrados</small>
-          </div>
-        </article>
-        <article class="metric-card general-card">
-          <span class="metric-icon green"><LucideShieldCheck :size="24" /></span>
-          <div>
-            <p>Financiero</p>
-            <strong>{{ defaultCount }}</strong>
-            <small>Acceso operativo</small>
-          </div>
-        </article>
-        <article class="metric-card control-card">
-          <span class="metric-icon blue"><LucideGraduationCap :size="24" /></span>
-          <div>
-            <p>Control Escolar</p>
-            <strong>{{ controlCount }}</strong>
-            <small>Solo expediente</small>
-          </div>
-        </article>
-        <article class="metric-card mixed-card">
-          <span class="metric-icon purple"><LucideShieldCheck :size="24" /></span>
-          <div>
-            <p>Ambos</p>
-            <strong>{{ mixedCount }}</strong>
-            <small>Financiero + Control</small>
-          </div>
-        </article>
-        <article class="metric-card blocked-card">
-          <span class="metric-icon red"><LucideBan :size="24" /></span>
-          <div>
-            <p>Bloqueados</p>
-            <strong>{{ blockedCount }}</strong>
-            <small>Usuarios restringidos</small>
-          </div>
-        </article>
-        <article class="metric-card protected-card">
-          <span class="metric-icon purple"><LucideShield :size="24" /></span>
-          <div>
-            <p>Protegidos</p>
-            <strong>{{ protectedCount }}</strong>
-            <small>Cuentas protegidas</small>
-          </div>
-        </article>
-        <article class="metric-card activity-card">
-          <span class="metric-icon cyan"><LucideActivity :size="24" /></span>
-          <div>
-            <p>Actividad hoy</p>
-            <strong>{{ todayCount }}</strong>
-            <small>Últimas 24 horas</small>
-          </div>
-        </article>
+      <section class="metric-grid" aria-label="Filtros rápidos de usuarios">
+        <button
+          v-for="metric in metricChips"
+          :key="metric.key"
+          type="button"
+          class="metric-card metric-chip"
+          :class="[{ active: metric.active }, metric.tone]"
+          @click="applyMetricChip(metric.key)"
+        >
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+          <small>{{ metric.caption }}</small>
+        </button>
       </section>
 
       <section class="filters-card">
@@ -179,6 +135,9 @@
           </button>
           <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkUpdate({ ingresosBlocked: false }, 'Reactivar usuarios', 'Se actualizará el estado de los usuarios seleccionados.')">
             <LucideUnlock :size="15" /> Reactivar
+          </button>
+          <button type="button" class="bulk-button inverse" :disabled="bulkSaving" @click="openInverseBulk">
+            <LucideRotateCcw :size="15" /> Inversa avanzada
           </button>
         </div>
         <div class="bulk-plantel-actions">
@@ -307,6 +266,45 @@
           </tbody>
         </table>
 
+        <div class="users-mobile-list">
+          <div v-if="loadingTable" class="mobile-empty"><LucideLoader2 :size="20" class="animate-spin" /> Cargando usuarios...</div>
+          <div v-else-if="fetchError" class="mobile-empty danger">No se pudo cargar Usuarios: {{ fetchError.message }}</div>
+          <div v-else-if="!pagedUsuarios.length" class="mobile-empty">Sin registros visibles para los filtros actuales.</div>
+          <article
+            v-else
+            v-for="u in pagedUsuarios"
+            :key="`mobile-${u.email || u.id}`"
+            class="mobile-user-card"
+            :class="{ active: activeUserKey === userKey(u), blocked: isBlocked(u) }"
+            @click="selectUser(u)"
+          >
+            <div class="mobile-user-top">
+              <input type="checkbox" :checked="isSelected(u)" :disabled="isProtectedUser(u)" @click.stop @change="toggleSelection(u)">
+              <img :src="avatarFor(u)" :alt="displayNameFor(u)" class="user-avatar">
+              <div class="mobile-user-identity">
+                <strong>{{ displayNameFor(u) }}</strong>
+                <span>{{ u.email }}</span>
+              </div>
+              <button type="button" class="icon-button" aria-label="Editar acceso" @click.stop="openModal(u)">
+                <LucidePencil :size="15" />
+              </button>
+            </div>
+            <div class="mobile-user-meta">
+              <span :class="['access-badge', accessBadgeClass(u)]">{{ accessLabel(u) }}</span>
+              <span :class="['status-badge', statusClass(u)]">{{ statusLabel(u) }}</span>
+            </div>
+            <div class="plantel-chip-row compact" v-if="plantelesFor(u).length">
+              <span v-for="p in plantelesFor(u)" :key="`mobile-${userKey(u)}-${p}`" class="plantel-chip">{{ p }}</span>
+            </div>
+            <span v-else class="muted-pill">Sin plantel</span>
+            <div class="access-switch mobile-access-switch" v-if="!isProtectedUser(u)" @click.stop>
+              <button type="button" :class="{ active: accessMode(u) === 'admin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin')">Fin</button>
+              <button type="button" :class="{ active: accessMode(u) === 'control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'control')">CTRL</button>
+              <button type="button" :class="{ active: accessMode(u) === 'admin_control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin_control')">Ambos</button>
+            </div>
+          </article>
+        </div>
+
         <footer class="table-footer">
           <span>Mostrando {{ pageStart }} a {{ pageEnd }} de {{ filteredUsuarios.length }} usuarios</span>
           <div class="pagination">
@@ -332,7 +330,8 @@
       </section>
     </div>
 
-    <aside class="user-drawer" v-if="activeUser">
+    <Transition name="drawer-slide">
+      <aside class="user-drawer" v-if="activeUser">
       <button type="button" class="drawer-close" @click="activeUserKey = ''"><LucideX :size="18" /></button>
       <div class="drawer-profile">
         <img :src="avatarFor(activeUser)" :alt="displayNameFor(activeUser)">
@@ -386,7 +385,8 @@
           <div><dt>Nombre completo</dt><dd>{{ displayNameFor(activeUser) }}</dd></div>
         </dl>
       </div>
-    </aside>
+      </aside>
+    </Transition>
 
     <Teleport to="body">
       <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
@@ -516,6 +516,80 @@
         </div>
       </div>
 
+      <div v-if="showInverseModal" class="modal-overlay" @click.self="closeInverseBulk">
+        <div class="inverse-modal">
+          <button type="button" class="confirm-close" @click="closeInverseBulk"><LucideX :size="18" /></button>
+          <div class="inverse-header">
+            <p class="eyebrow">Acción inversa</p>
+            <h3>Actualizar seleccionados y resto</h3>
+            <span>Define dos grupos: los usuarios seleccionados y el resto dentro del alcance.</span>
+          </div>
+
+          <div class="inverse-grid">
+            <section class="inverse-panel selected">
+              <small>Grupo seleccionado</small>
+              <strong>{{ inverseSelectedRows.length }} usuarios</strong>
+              <label class="field-label">Acceso para seleccionados</label>
+              <div class="inverse-access-options">
+                <button v-for="option in accessOptions" :key="`selected-${option.value}`" type="button" :class="[{ active: inverseSelectedAccess === option.value }, option.value]" @click="inverseSelectedAccess = option.value">
+                  {{ option.label }}
+                </button>
+              </div>
+            </section>
+
+            <section class="inverse-panel inverse">
+              <small>Grupo inverso</small>
+              <strong>{{ inverseRestRows.length }} usuarios</strong>
+              <label class="field-label">Acceso para el resto</label>
+              <div class="inverse-access-options">
+                <button v-for="option in accessOptions" :key="`rest-${option.value}`" type="button" :class="[{ active: inverseRestAccess === option.value }, option.value]" @click="inverseRestAccess = option.value">
+                  {{ option.label }}
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <section class="inverse-scope-card">
+            <h4>Alcance del “resto”</h4>
+            <label :class="{ active: inverseScope === 'current_filter' }">
+              <input type="radio" value="current_filter" v-model="inverseScope">
+              <span>Solo usuarios del filtro actual</span>
+              <strong>{{ inverseScopeCounts.current_filter }} usuarios</strong>
+            </label>
+            <label :class="{ active: inverseScope === 'current_plantel', disabled: !hasSpecificPlantelFilter }">
+              <input type="radio" value="current_plantel" v-model="inverseScope" :disabled="!hasSpecificPlantelFilter">
+              <span>Solo usuarios del plantel actual</span>
+              <strong>{{ hasSpecificPlantelFilter ? inverseScopeCounts.current_plantel : 'Elige un plantel' }}</strong>
+            </label>
+            <label :class="{ active: inverseScope === 'all_directory' }">
+              <input type="radio" value="all_directory" v-model="inverseScope">
+              <span>Todo el directorio</span>
+              <strong>{{ inverseScopeCounts.all_directory }} usuarios</strong>
+            </label>
+          </section>
+
+          <section class="inverse-summary">
+            <strong>Vista previa</strong>
+            <span>{{ inverseSelectedRows.length }} seleccionados → {{ accessLabelForMode(inverseSelectedAccess) }}</span>
+            <span>{{ inverseRestRows.length }} restantes → {{ accessLabelForMode(inverseRestAccess) }}</span>
+            <span v-if="inverseProtectedRows.length">{{ inverseProtectedRows.length }} protegidos se omitirán.</span>
+          </section>
+
+          <label class="inverse-ack" :class="{ required: inverseRequiresStrongAck }">
+            <input type="checkbox" v-model="inverseAcknowledged">
+            Entiendo que el grupo inverso también será modificado.
+          </label>
+
+          <div class="confirm-actions">
+            <button type="button" class="soft-button" @click="closeInverseBulk">Cancelar</button>
+            <button type="button" class="primary-button" :class="{ danger: inverseRequiresStrongAck }" :disabled="bulkSaving || !canApplyInverse" @click="applyInverseBulk">
+              <LucideLoader2 v-if="bulkSaving" :size="16" class="animate-spin" />
+              Aplicar a {{ inverseSelectedRows.length + inverseRestRows.length }} usuarios
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div v-if="showDebug" class="modal-overlay debug-overlay" @click.self="showDebug = false">
         <div class="debug-modal">
           <header>
@@ -621,6 +695,11 @@ const diagnosticsLoading = ref(false)
 const bulkPlantelAction = ref('add')
 const bulkPlantelValue = ref('')
 const undoNotice = ref(null)
+const showInverseModal = ref(false)
+const inverseScope = ref('current_filter')
+const inverseSelectedAccess = ref('admin')
+const inverseRestAccess = ref('control')
+const inverseAcknowledged = ref(false)
 let directoryTimer = null
 let undoTimer = null
 
@@ -787,11 +866,46 @@ const defaultCount = computed(() => usuarios.value.filter(u => accessMode(u) ===
 const blockedCount = computed(() => usuarios.value.filter(isBlocked).length)
 const protectedCount = computed(() => usuarios.value.filter(isProtectedUser).length)
 const todayCount = computed(() => usuarios.value.filter(u => isWithinDays(u, 1)).length)
+const missingPlantelCount = computed(() => usuarios.value.filter(u => !plantelesFor(u).length).length)
+const metricChips = computed(() => [
+  { key: 'all', label: 'Todos', value: usuarios.value.length, caption: 'Directorio', tone: 'neutral', active: statusFilter.value === 'all' && accessFilter.value === 'all' && plantelFilter.value === 'all' && activityFilter.value === 'all' },
+  { key: 'admin', label: 'Financiero', value: defaultCount.value, caption: 'Acceso operativo', tone: 'green', active: accessFilter.value === 'admin' },
+  { key: 'control', label: 'Control Escolar', value: controlCount.value, caption: 'Solo expediente', tone: 'blue', active: accessFilter.value === 'control' },
+  { key: 'admin_control', label: 'Ambos', value: mixedCount.value, caption: 'Doble acceso', tone: 'purple', active: accessFilter.value === 'admin_control' },
+  { key: 'blocked', label: 'Bloqueados', value: blockedCount.value, caption: 'Restringidos', tone: 'red', active: statusFilter.value === 'blocked' },
+  { key: 'protected', label: 'Protegidos', value: protectedCount.value, caption: 'No editables', tone: 'purple', active: statusFilter.value === 'protected' },
+  { key: 'missing_plantel', label: 'Sin plantel', value: missingPlantelCount.value, caption: 'Por asignar', tone: 'amber', active: plantelFilter.value === '__sin_plantel__' },
+  { key: 'today', label: 'Actividad hoy', value: todayCount.value, caption: 'Últimas 24h', tone: 'cyan', active: activityFilter.value === 'today' }
+])
 const visibleSelectableEmails = computed(() => pagedUsuarios.value.filter(u => !isProtectedUser(u)).map(u => normalizeEmail(u.email)).filter(Boolean))
 const filteredSelectableEmails = computed(() => filteredUsuarios.value.filter(u => !isProtectedUser(u)).map(u => normalizeEmail(u.email)).filter(Boolean))
 const missingFilteredEmails = computed(() => filteredSelectableEmails.value.filter(email => !selectedEmails.value.includes(email)))
 const allVisibleSelected = computed(() => visibleSelectableEmails.value.length > 0 && visibleSelectableEmails.value.every(email => selectedEmails.value.includes(email)))
 const someVisibleSelected = computed(() => visibleSelectableEmails.value.some(email => selectedEmails.value.includes(email)) && !allVisibleSelected.value)
+const hasSpecificPlantelFilter = computed(() => plantelFilter.value !== 'all' && plantelFilter.value !== '__sin_plantel__')
+const inverseScopeRows = computed(() => {
+  if (inverseScope.value === 'all_directory') return usuarios.value.filter(u => isWorkspaceEmail(u.email))
+  if (inverseScope.value === 'current_plantel' && hasSpecificPlantelFilter.value) {
+    return usuarios.value.filter(u => plantelesFor(u).includes(plantelFilter.value))
+  }
+  return filteredUsuarios.value
+})
+const inverseScopeCounts = computed(() => ({
+  current_filter: filteredUsuarios.value.length,
+  current_plantel: hasSpecificPlantelFilter.value ? usuarios.value.filter(u => plantelesFor(u).includes(plantelFilter.value)).length : 0,
+  all_directory: usuarios.value.length
+}))
+const inverseSelectedRows = computed(() => {
+  const selected = new Set(selectedEmails.value.map(normalizeEmail))
+  return inverseScopeRows.value.filter(u => selected.has(normalizeEmail(u.email)) && !isProtectedUser(u))
+})
+const inverseRestRows = computed(() => {
+  const selected = new Set(selectedEmails.value.map(normalizeEmail))
+  return inverseScopeRows.value.filter(u => !selected.has(normalizeEmail(u.email)) && !isProtectedUser(u))
+})
+const inverseProtectedRows = computed(() => inverseScopeRows.value.filter(isProtectedUser))
+const inverseRequiresStrongAck = computed(() => inverseScope.value === 'all_directory' || inverseSelectedRows.value.length + inverseRestRows.value.length > 50)
+const canApplyInverse = computed(() => inverseSelectedRows.value.length > 0 && inverseRestRows.value.length > 0 && (!inverseRequiresStrongAck.value || inverseAcknowledged.value))
 
 watch([searchQuery, statusFilter, plantelFilter, accessFilter, activityFilter, sortBy, pageSize], () => { page.value = 1 })
 watch(totalPages, (total) => { if (page.value > total) page.value = total })
@@ -858,6 +972,30 @@ const clearFiltersAndReload = async () => {
   sortBy.value = 'last_login_desc'
   page.value = 1
   await loadUsers()
+}
+
+const clearQuickFilters = () => {
+  statusFilter.value = 'all'
+  plantelFilter.value = 'all'
+  accessFilter.value = 'all'
+  activityFilter.value = 'all'
+  page.value = 1
+}
+const applyMetricChip = (key) => {
+  if (key === 'all') {
+    clearQuickFilters()
+    return
+  }
+  statusFilter.value = 'all'
+  plantelFilter.value = 'all'
+  accessFilter.value = 'all'
+  activityFilter.value = 'all'
+  if (['admin', 'control', 'admin_control'].includes(key)) accessFilter.value = key
+  if (key === 'blocked') statusFilter.value = 'blocked'
+  if (key === 'protected') statusFilter.value = 'protected'
+  if (key === 'missing_plantel') plantelFilter.value = '__sin_plantel__'
+  if (key === 'today') activityFilter.value = 'today'
+  page.value = 1
 }
 
 const hydrateWorkspaceProfiles = async (rows) => {
@@ -971,7 +1109,7 @@ async function loadUsers () {
       timestamp: new Date().toISOString()
     }
     selectedEmails.value = selectedEmails.value.filter(email => usuarios.value.some(u => normalizeEmail(u.email) === email))
-    if (!usuarios.value.some(u => userKey(u) === activeUserKey.value)) activeUserKey.value = usuarios.value.length ? userKey(usuarios.value[0]) : ''
+    if (!usuarios.value.some(u => userKey(u) === activeUserKey.value)) activeUserKey.value = ''
   } catch (e) {
     const debug = serializeFetchError(e, { endpoint: '/api/users' })
     fetchError.value = {
@@ -1231,6 +1369,70 @@ const runPendingAction = async () => {
   show(`${response.updated || 0} usuarios actualizados.`, response.failed?.length ? 'danger' : 'success', { details })
   selectedEmails.value = selectedEmails.value.filter(email => !action.emails.includes(email))
   pendingAction.value = null
+}
+
+const inverseScopeFilter = () => {
+  if (inverseScope.value === 'all_directory') return { search: '', plantel: 'all', access: 'all', status: 'all', activity: 'all', sort: sortBy.value }
+  if (inverseScope.value === 'current_plantel' && hasSpecificPlantelFilter.value) return { search: '', plantel: plantelFilter.value, access: 'all', status: 'all', activity: 'all', sort: sortBy.value }
+  return {
+    search: searchQuery.value,
+    plantel: plantelFilter.value,
+    access: accessFilter.value,
+    status: statusFilter.value,
+    activity: activityFilter.value,
+    sort: sortBy.value
+  }
+}
+const openInverseBulk = () => {
+  if (!selectedEmails.value.length) return
+  inverseScope.value = hasSpecificPlantelFilter.value ? 'current_plantel' : 'current_filter'
+  inverseSelectedAccess.value = 'admin'
+  inverseRestAccess.value = 'control'
+  inverseAcknowledged.value = false
+  showInverseModal.value = true
+}
+const closeInverseBulk = () => {
+  showInverseModal.value = false
+  inverseAcknowledged.value = false
+}
+const applyInverseBulk = async () => {
+  if (!canApplyInverse.value) return
+  const selectedPatch = { accessMode: inverseSelectedAccess.value }
+  const inversePatch = { accessMode: inverseRestAccess.value }
+  const selectedEmailsForPatch = inverseSelectedRows.value.map(u => normalizeEmail(u.email))
+  const inverseEmailsForPatch = inverseRestRows.value.map(u => normalizeEmail(u.email))
+  const rollbackRows = cloneRowsForRollback([...selectedEmailsForPatch, ...inverseEmailsForPatch])
+  patchLocalUsers(selectedEmailsForPatch, selectedPatch)
+  patchLocalUsers(inverseEmailsForPatch, inversePatch)
+  bulkSaving.value = true
+  try {
+    const response = await $fetch('/api/users/bulk-inverse', {
+      method: 'PATCH',
+      body: {
+        selectedEmails: selectedEmails.value,
+        scopeMode: inverseScope.value,
+        filterScope: inverseScopeFilter(),
+        selectedPatch,
+        inversePatch
+      }
+    })
+    mergeResponseRows(response?.rows)
+    const selectedUpdated = response?.selected?.updated || 0
+    const inverseUpdated = response?.inverse?.updated || 0
+    const skipped = (response?.selected?.skipped?.length || 0) + (response?.inverse?.skipped?.length || 0)
+    const failed = (response?.selected?.failed?.length || 0) + (response?.inverse?.failed?.length || 0)
+    const details = []
+    if (skipped) details.push(`${skipped} omitidos`)
+    if (failed) details.push(`${failed} errores`)
+    show(`${selectedUpdated + inverseUpdated} usuarios actualizados con acción inversa.`, failed ? 'danger' : 'success', { details })
+    selectedEmails.value = []
+    closeInverseBulk()
+  } catch (e) {
+    restoreRows(rollbackRows)
+    show(extractMessage(e) || 'No se pudo aplicar la acción inversa.', 'danger')
+  } finally {
+    bulkSaving.value = false
+  }
 }
 
 const showContextMenu = (event, u) => {
@@ -2455,4 +2657,268 @@ button:disabled {
   .modal-footer div { flex-direction: column; }
   .plantel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Usuarios polish pass: stateful drawer, compact KPI filters, fixed bulk workflow, mobile cards. */
+.usuarios-page {
+  grid-template-columns: minmax(0, 1fr);
+  transition: grid-template-columns .22s ease;
+}
+
+@media (min-width: 1321px) {
+  .usuarios-page.has-drawer {
+    grid-template-columns: minmax(0, 1fr) 352px;
+  }
+}
+
+.usuarios-page.has-selection .usuarios-main {
+  padding-bottom: 132px;
+}
+
+.drawer-slide-enter-active,
+.drawer-slide-leave-active {
+  transition: opacity .2s ease, transform .2s ease;
+}
+.drawer-slide-enter-from,
+.drawer-slide-leave-to {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+.metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.metric-card.metric-chip {
+  appearance: none;
+  min-height: 70px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "label value"
+    "caption value";
+  align-items: center;
+  gap: 2px 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.94);
+  box-shadow: 0 10px 28px rgba(16, 32, 68, .045);
+  text-align: left;
+  cursor: pointer;
+}
+.metric-card.metric-chip::before,
+.metric-card.metric-chip::after { display: none; }
+.metric-card.metric-chip span {
+  grid-area: label;
+  color: #263653;
+  font-size: 12px;
+  line-height: 1.15;
+  font-weight: 950;
+}
+.metric-card.metric-chip strong {
+  grid-area: value;
+  margin: 0;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -.04em;
+}
+.metric-card.metric-chip small {
+  grid-area: caption;
+  margin: 0;
+  padding: 0;
+  color: #7a879b;
+  font-size: 10px;
+  font-weight: 850;
+}
+.metric-card.metric-chip.active {
+  border-color: color-mix(in srgb, var(--accent, #22c55e) 48%, #e2e8f0);
+  background: color-mix(in srgb, var(--accent, #22c55e) 10%, #ffffff);
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--accent, #22c55e) 16%, transparent);
+}
+.metric-card.metric-chip.neutral { --accent: #64748b; }
+.metric-card.metric-chip.green { --accent: #16a34a; }
+.metric-card.metric-chip.blue { --accent: #2563eb; }
+.metric-card.metric-chip.purple { --accent: #7c3aed; }
+.metric-card.metric-chip.red { --accent: #dc2626; }
+.metric-card.metric-chip.amber { --accent: #d97706; }
+.metric-card.metric-chip.cyan { --accent: #0891b2; }
+
+.bulk-card {
+  position: fixed;
+  left: 24px;
+  right: 24px;
+  bottom: 18px;
+  top: auto;
+  z-index: 9990;
+  max-width: 1320px;
+  margin: 0 auto;
+  border-color: rgba(187, 230, 199, .95);
+  box-shadow: 0 22px 70px rgba(16, 32, 68, .20);
+}
+.bulk-button.inverse {
+  color: #854d0e;
+  border-color: #fde68a;
+  background: linear-gradient(180deg, #ffffff, #fffbeb);
+}
+
+.users-mobile-list { display: none; }
+.mobile-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 128px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 850;
+}
+.mobile-empty.danger { color: #b91c1c; }
+.mobile-user-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid #edf2f7;
+  background: #fff;
+  cursor: pointer;
+}
+.mobile-user-card.active { background: #f2fbf5; box-shadow: inset 4px 0 0 #22c55e; }
+.mobile-user-card.blocked { background: rgba(255, 241, 242, .55); }
+.mobile-user-top {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.mobile-user-identity { min-width: 0; }
+.mobile-user-identity strong,
+.mobile-user-identity span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-user-identity strong { color: var(--ink); font-size: 13px; font-weight: 950; }
+.mobile-user-identity span { color: #65728a; font-size: 11px; font-weight: 800; }
+.mobile-user-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.mobile-access-switch button { min-height: 32px; padding-inline: 12px; }
+
+.inverse-modal {
+  width: min(760px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  position: relative;
+  border: 1px solid rgba(226, 232, 240, .95);
+  border-radius: 26px;
+  background: #fff;
+  padding: 24px;
+  box-shadow: 0 30px 90px rgba(15, 23, 42, .26);
+}
+.inverse-header h3 { margin: 7px 0 0; color: var(--ink); font-size: 22px; font-weight: 950; letter-spacing: -.035em; }
+.inverse-header span { display: block; margin-top: 5px; color: var(--muted); font-size: 13px; font-weight: 750; }
+.inverse-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.inverse-panel,
+.inverse-scope-card,
+.inverse-summary,
+.inverse-ack {
+  border: 1px solid #e5edf5;
+  border-radius: 18px;
+  background: #fbfdff;
+  padding: 14px;
+}
+.inverse-panel small,
+.inverse-panel strong { display: block; }
+.inverse-panel small { color: #7a879b; font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .06em; }
+.inverse-panel strong { margin-top: 5px; color: var(--ink); font-size: 28px; line-height: 1; font-weight: 950; letter-spacing: -.05em; }
+.inverse-access-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.inverse-access-options button {
+  min-height: 34px;
+  border: 1px solid #dbe4ef;
+  border-radius: 999px;
+  background: #fff;
+  color: #59677c;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 950;
+}
+.inverse-access-options button.active.admin { color: #166534; background: #effcf3; border-color: #b7e6c3; }
+.inverse-access-options button.active.control { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; }
+.inverse-access-options button.active.admin_control { color: #6d28d9; background: #f5f0ff; border-color: #ddd6fe; }
+.inverse-scope-card { display: grid; gap: 9px; margin-top: 12px; }
+.inverse-scope-card h4 { margin: 0 0 2px; color: #263653; font-size: 12px; font-weight: 950; text-transform: uppercase; letter-spacing: .045em; }
+.inverse-scope-card label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid #e5edf5;
+  border-radius: 14px;
+  background: #fff;
+  color: #263653;
+  font-size: 12px;
+  font-weight: 850;
+}
+.inverse-scope-card label.active { border-color: #a9ddb8; background: #f2fcf5; }
+.inverse-scope-card label.disabled { opacity: .48; }
+.inverse-scope-card strong { color: #64748b; font-size: 11px; font-weight: 950; }
+.inverse-summary { display: grid; gap: 5px; margin-top: 12px; color: #475569; font-size: 12px; font-weight: 850; }
+.inverse-summary strong { color: var(--ink); font-size: 13px; font-weight: 950; }
+.inverse-ack { display: flex; align-items: center; gap: 9px; margin-top: 12px; color: #475569; font-size: 12px; font-weight: 900; }
+.inverse-ack.required { border-color: #fde68a; background: #fffbeb; }
+.inverse-ack input { accent-color: #22a947; }
+
+@media (max-width: 760px) {
+  .usuarios-page.has-selection .usuarios-main { padding-bottom: 112px; }
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-card.metric-chip { min-height: 62px; padding: 10px 12px; }
+  .metric-card.metric-chip strong { font-size: 22px; }
+  .bulk-card {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    padding: 12px 42px 12px 12px;
+    border-radius: 18px;
+  }
+  .bulk-actions,
+  .bulk-plantel-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+  .bulk-button { white-space: nowrap; }
+  .users-table { display: none; }
+  .users-mobile-list { display: block; }
+  .users-table-card { overflow: hidden; }
+  .table-footer { gap: 10px; }
+  .pagination { flex-wrap: wrap; }
+  .user-drawer {
+    position: fixed;
+    z-index: 9995;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    min-height: 0;
+    max-height: min(82vh, 680px);
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px 28px;
+    box-shadow: 0 -24px 70px rgba(15, 23, 42, .28);
+  }
+  .drawer-slide-enter-from,
+  .drawer-slide-leave-to {
+    transform: translateY(24px);
+  }
+  .inverse-modal { width: calc(100vw - 22px); padding: 20px; border-radius: 22px; }
+  .inverse-grid { grid-template-columns: 1fr; }
+  .inverse-scope-card label { grid-template-columns: auto minmax(0, 1fr); }
+  .inverse-scope-card strong { grid-column: 2; }
+}
+
 </style>
