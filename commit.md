@@ -1,3 +1,3 @@
-Sincroniza contactos familiares de Alumnos con Control Escolar
+Corrige detección de familia y hermanos con Control Escolar
 
-Prioriza los datos de padre y madre provenientes de Control Escolar en Alumnos-Financiero, deudores, recordatorios, WhatsApp, no adeudo y expediente de operador, manteniendo tutor, teléfono y correo financiero solo como respaldo cuando matrícula no tiene datos. También amplía la exportación de Alumnos para incluir los campos normalizados y el registro completo RAW de Control Escolar.
+Hace que la relación de hermanos use family_id de Control Escolar como fuente autoritativa cuando existe la matrícula, ignorando valores vacíos o marcadores como null, undefined, nan, sin datos o 0 para evitar que alumnos sin familiaId queden agrupados entre sí. Además limpia vínculos familiares locales inválidos heredados, evita migrar familiaId nulos desde base y mantiene el fallback local/correo solo cuando Control Escolar no tiene registro disponible.

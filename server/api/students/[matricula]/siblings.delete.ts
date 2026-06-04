@@ -1,4 +1,5 @@
 import { runWithBridgeAgentId, query } from '../../../utils/db'
+import { normalizeFamilyLinkKey } from '../../../../shared/utils/familyIdentity'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const matricula = event.context.params?.matricula
@@ -12,7 +13,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     LIMIT 1
   `, [matricula])
 
-  if (!student?.familyKey) {
+  const familyKey = normalizeFamilyLinkKey(student?.familyKey)
+
+  if (!familyKey) {
     return { success: true, cleared: 0 }
   }
 

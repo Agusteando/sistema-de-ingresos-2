@@ -244,6 +244,7 @@
             <div class="account-family-header">
               <h4>Familia / Hermanos</h4>
               <button
+                v-if="siblingSource === 'local'"
                 class="account-family-clear"
                 title="Limpiar vinculos"
                 @click="clearSiblingLinks"

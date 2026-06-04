@@ -26,6 +26,7 @@ import {
   maybeRefreshVerifiedControlEscolarScopeCache,
 } from "./control-escolar-cache";
 import { inferMexicanCurpIdentity, resolveControlEscolarCompleteness } from "../../shared/utils/studentPresentation";
+import { normalizeFamilyId } from "../../shared/utils/familyIdentity";
 
 export type ControlEscolarStudentRow = {
   agentId: string;
@@ -1445,7 +1446,7 @@ const overlayStudentRow = (
     domicilioCp: normalizeText(overlay?.domicilio_cp),
     domicilioMunicipio: normalizeText(overlay?.domicilio_municipio),
     servicioNotas: normalizeText(overlay?.servicio_notas, 1000),
-    familyId: normalizeText(overlay?.family_id),
+    familyId: normalizeFamilyId(overlay?.family_id),
     eventual: firstText(overlay?.eventual),
     verified: firstText(overlay?.verified),
   });

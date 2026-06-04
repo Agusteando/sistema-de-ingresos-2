@@ -1,4 +1,5 @@
 import { controlEscolarCentralQuery, getCentralTableColumns } from './control-escolar-central'
+import { normalizeFamilyId } from '../../shared/utils/familyIdentity'
 
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 const stringifyScalar = (value: unknown): string => {
@@ -213,7 +214,7 @@ const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
       domicilioCp: normalizeText(raw.domicilio_cp),
       domicilioMunicipio: normalizeText(raw.domicilio_municipio),
       servicioNotas: normalizeText(raw.servicio_notas),
-      familyId: normalizeText(raw.family_id),
+      familyId: normalizeFamilyId(raw.family_id),
       updatedAt: firstText(raw.updated_at, raw.updatedAt, raw.fecha_actualizacion, raw.created_at)
     }
   }

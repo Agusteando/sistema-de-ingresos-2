@@ -1,6 +1,15 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import mysql, { type PoolConnection } from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
+import { FAMILY_ID_PLACEHOLDER_VALUES } from '../../shared/utils/familyIdentity'
+
+const sqlStringLiteral = (value: string) => `'${String(value).replace(/'/g, "''")}'`
+const FAMILY_ID_PLACEHOLDER_SQL_LIST = FAMILY_ID_PLACEHOLDER_VALUES.map(sqlStringLiteral).join(', ')
+const INVALID_FAMILY_LINK_KEY_SQL = `
+  LOWER(TRIM(CAST(family_key AS CHAR))) IN (${FAMILY_ID_PLACEHOLDER_SQL_LIST})
+  OR (LOCATE(':', family_key) > 0 AND LOWER(TRIM(SUBSTRING(family_key, LOCATE(':', family_key) + 1))) IN (${FAMILY_ID_PLACEHOLDER_SQL_LIST}))
+  OR TRIM(CAST(family_key AS CHAR)) = ''
+`
 
 type DbTransport = 'direct' | 'bridge'
 type SqlParams = any[] | Record<string, any>
@@ -580,6 +589,11 @@ export const ensureSchema = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
+      await runSafeQuery(`
+        DELETE FROM student_family_links
+        WHERE ${INVALID_FAMILY_LINK_KEY_SQL}
+      `)
+
 
       await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS documento_concepto_periodos (
@@ -623,9 +637,11 @@ export const ensureSchema = async () => {
           if (familiaIdCols.length > 0) {
             await runSafeQuery(`
               INSERT IGNORE INTO student_family_links (family_key, matricula)
-              SELECT CONCAT('legacy:', familiaId), matricula
+              SELECT CONCAT('legacy:', TRIM(CAST(familiaId AS CHAR))), matricula
               FROM base
-              WHERE familiaId IS NOT NULL AND CAST(familiaId AS CHAR) <> ''
+              WHERE familiaId IS NOT NULL
+                AND TRIM(CAST(familiaId AS CHAR)) <> ''
+                AND LOWER(TRIM(CAST(familiaId AS CHAR))) NOT IN (${FAMILY_ID_PLACEHOLDER_SQL_LIST})
             `)
             await runSafeQuery(`ALTER TABLE base DROP COLUMN familiaId`)
           }
