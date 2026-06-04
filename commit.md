@@ -1,3 +1,3 @@
-Rediseña gestión de Usuarios por plantel y permisos
+Restaura Usuarios y mejora cambios rápidos de acceso
 
-Convierte la pantalla de Usuarios en un centro de control de acceso con paginación y facetas del lado servidor, organización por plantel, matriz de permisos, vista de problemas, edición rápida de acceso Financiero, Control Escolar o Ambos, panel lateral de permisos y acciones masivas sobre selección o resultado filtrado. También elimina la hidratación de Google Workspace del flujo normal de carga, conserva el buscador con foto solo para alta/edición, y amplía las actualizaciones masivas para roles, bloqueo y planteles.
+Recupera la pantalla funcional anterior de Usuarios como base, manteniendo la carga completa de usuarios y la hidratación de fotos desde Google Workspace. Añade filtro y columna de planteles, soporte visible para acceso Financiero, Control Escolar y Ambos, acciones rápidas por fila y en el panel lateral para cambiar el tipo de acceso, y conserva los flujos existentes de modal, búsqueda Workspace, exportación, diagnóstico y acciones masivas.
