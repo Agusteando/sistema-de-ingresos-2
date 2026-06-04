@@ -1,3 +1,3 @@
-Mejora experiencia de edición masiva de Usuarios
+Corrige KPIs e inversa global en Usuarios
 
-Conserva la pantalla restaurada de Usuarios como base, elimina el espacio vacío del drawer inicial y lo convierte en un panel animado que aparece solo al seleccionar usuario. Compacta los KPI para que funcionen como filtros rápidos, fija la barra de acciones masivas al viewport, agrega una vista móvil con tarjetas y drawer tipo bottom sheet, y añade la acción inversa avanzada para aplicar un acceso a seleccionados y otro al resto dentro de un alcance explícito. Mantiene la hidratación de fotos de Workspace y las actualizaciones locales sin recargar todo el directorio.
+Refina la zona de métricas de Usuarios para que funcione como una barra compacta y estética de filtros rápidos, manteniendo el diseño restaurado y las fotos de Workspace. Ajusta la acción inversa avanzada para que el grupo inverso siempre sea todo el directorio institucional menos los usuarios seleccionados, sin depender del filtro activo, y actualiza el backend para ignorar filtros en esa operación global.

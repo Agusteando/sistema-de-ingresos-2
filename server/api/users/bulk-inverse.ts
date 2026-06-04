@@ -34,24 +34,26 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Seleccione usuarios para la acción inversa.' })
   }
 
-  const scope = await queryExternalUsers({ ...(body?.filterScope || {}), page: 1, pageSize: 5000, bulk: true })
-  const scopeEmails = Array.from(new Set((scope?.rows || []).map((row: any) => normalizeEmail(row.email)).filter(Boolean)))
-  const scopeSet = new Set(scopeEmails)
-  const selectedInScope = selectedEmails.filter((email) => scopeSet.has(email))
-  const selectedSet = new Set(selectedInScope)
-  const inverseEmails = scopeEmails.filter((email) => !selectedSet.has(email))
+  // Inversa is intentionally global: filters are ignored. The selected set receives
+  // selectedPatch, and every other institutional user receives inversePatch.
+  const directory = await queryExternalUsers({ search: '', plantel: 'all', access: 'all', status: 'all', activity: 'all', sort: 'last_login_desc', page: 1, pageSize: 5000, bulk: true })
+  const directoryEmails = Array.from(new Set((directory?.rows || []).map((row: any) => normalizeEmail(row.email)).filter(Boolean)))
+  const directorySet = new Set(directoryEmails)
+  const selectedInDirectory = selectedEmails.filter((email) => directorySet.has(email))
+  const selectedSet = new Set(selectedInDirectory)
+  const inverseEmails = directoryEmails.filter((email) => !selectedSet.has(email))
 
-  if (!selectedInScope.length || !inverseEmails.length) {
-    throw createError({ statusCode: 400, message: 'La acción inversa necesita seleccionados y resto dentro del alcance.' })
+  if (!selectedInDirectory.length || !inverseEmails.length) {
+    throw createError({ statusCode: 400, message: 'La acción inversa necesita seleccionados y resto dentro del directorio.' })
   }
 
-  const selected = await bulkUpdateExternalUsers({ emails: selectedInScope, ...selectedPatch })
+  const selected = await bulkUpdateExternalUsers({ emails: selectedInDirectory, ...selectedPatch })
   const inverse = await bulkUpdateExternalUsers({ emails: inverseEmails, ...inversePatch })
 
   return {
     success: true,
-    scopeMode: body?.scopeMode || 'current_filter',
-    scopeTotal: scopeEmails.length,
+    scopeMode: 'all_directory',
+    scopeTotal: directoryEmails.length,
     selected,
     inverse,
     rows: [...(selected?.rows || []), ...(inverse?.rows || [])]

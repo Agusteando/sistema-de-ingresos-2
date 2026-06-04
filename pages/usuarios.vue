@@ -30,6 +30,7 @@
           type="button"
           class="metric-card metric-chip"
           :class="[{ active: metric.active }, metric.tone]"
+          :aria-pressed="metric.active"
           @click="applyMetricChip(metric.key)"
         >
           <span>{{ metric.label }}</span>
@@ -522,7 +523,7 @@
           <div class="inverse-header">
             <p class="eyebrow">Acción inversa</p>
             <h3>Actualizar seleccionados y resto</h3>
-            <span>Define dos grupos: los usuarios seleccionados y el resto dentro del alcance.</span>
+            <span>Define dos grupos globales: los usuarios seleccionados y todo el resto del directorio, aunque no estén dentro del filtro actual.</span>
           </div>
 
           <div class="inverse-grid">
@@ -538,9 +539,9 @@
             </section>
 
             <section class="inverse-panel inverse">
-              <small>Grupo inverso</small>
+              <small>Grupo inverso global</small>
               <strong>{{ inverseRestRows.length }} usuarios</strong>
-              <label class="field-label">Acceso para el resto</label>
+              <label class="field-label">Acceso para todos los no seleccionados</label>
               <div class="inverse-access-options">
                 <button v-for="option in accessOptions" :key="`rest-${option.value}`" type="button" :class="[{ active: inverseRestAccess === option.value }, option.value]" @click="inverseRestAccess = option.value">
                   {{ option.label }}
@@ -549,35 +550,25 @@
             </section>
           </div>
 
-          <section class="inverse-scope-card">
+          <section class="inverse-scope-card global-only">
             <h4>Alcance del “resto”</h4>
-            <label :class="{ active: inverseScope === 'current_filter' }">
-              <input type="radio" value="current_filter" v-model="inverseScope">
-              <span>Solo usuarios del filtro actual</span>
-              <strong>{{ inverseScopeCounts.current_filter }} usuarios</strong>
-            </label>
-            <label :class="{ active: inverseScope === 'current_plantel', disabled: !hasSpecificPlantelFilter }">
-              <input type="radio" value="current_plantel" v-model="inverseScope" :disabled="!hasSpecificPlantelFilter">
-              <span>Solo usuarios del plantel actual</span>
-              <strong>{{ hasSpecificPlantelFilter ? inverseScopeCounts.current_plantel : 'Elige un plantel' }}</strong>
-            </label>
-            <label :class="{ active: inverseScope === 'all_directory' }">
-              <input type="radio" value="all_directory" v-model="inverseScope">
-              <span>Todo el directorio</span>
+            <div class="inverse-global-note">
+              <span>Todo el directorio institucional</span>
               <strong>{{ inverseScopeCounts.all_directory }} usuarios</strong>
-            </label>
+              <small>El filtro actual solo sirve para ayudarte a seleccionar. La inversa siempre toma todos los usuarios no seleccionados.</small>
+            </div>
           </section>
 
           <section class="inverse-summary">
             <strong>Vista previa</strong>
             <span>{{ inverseSelectedRows.length }} seleccionados → {{ accessLabelForMode(inverseSelectedAccess) }}</span>
-            <span>{{ inverseRestRows.length }} restantes → {{ accessLabelForMode(inverseRestAccess) }}</span>
+            <span>{{ inverseRestRows.length }} no seleccionados del directorio completo → {{ accessLabelForMode(inverseRestAccess) }}</span>
             <span v-if="inverseProtectedRows.length">{{ inverseProtectedRows.length }} protegidos se omitirán.</span>
           </section>
 
           <label class="inverse-ack" :class="{ required: inverseRequiresStrongAck }">
             <input type="checkbox" v-model="inverseAcknowledged">
-            Entiendo que el grupo inverso también será modificado.
+            Entiendo que todos los usuarios no seleccionados del directorio también serán modificados.
           </label>
 
           <div class="confirm-actions">
@@ -696,7 +687,6 @@ const bulkPlantelAction = ref('add')
 const bulkPlantelValue = ref('')
 const undoNotice = ref(null)
 const showInverseModal = ref(false)
-const inverseScope = ref('current_filter')
 const inverseSelectedAccess = ref('admin')
 const inverseRestAccess = ref('control')
 const inverseAcknowledged = ref(false)
@@ -883,28 +873,20 @@ const missingFilteredEmails = computed(() => filteredSelectableEmails.value.filt
 const allVisibleSelected = computed(() => visibleSelectableEmails.value.length > 0 && visibleSelectableEmails.value.every(email => selectedEmails.value.includes(email)))
 const someVisibleSelected = computed(() => visibleSelectableEmails.value.some(email => selectedEmails.value.includes(email)) && !allVisibleSelected.value)
 const hasSpecificPlantelFilter = computed(() => plantelFilter.value !== 'all' && plantelFilter.value !== '__sin_plantel__')
-const inverseScopeRows = computed(() => {
-  if (inverseScope.value === 'all_directory') return usuarios.value.filter(u => isWorkspaceEmail(u.email))
-  if (inverseScope.value === 'current_plantel' && hasSpecificPlantelFilter.value) {
-    return usuarios.value.filter(u => plantelesFor(u).includes(plantelFilter.value))
-  }
-  return filteredUsuarios.value
-})
+const inverseDirectoryRows = computed(() => usuarios.value.filter(u => isWorkspaceEmail(u.email)))
 const inverseScopeCounts = computed(() => ({
-  current_filter: filteredUsuarios.value.length,
-  current_plantel: hasSpecificPlantelFilter.value ? usuarios.value.filter(u => plantelesFor(u).includes(plantelFilter.value)).length : 0,
-  all_directory: usuarios.value.length
+  all_directory: inverseDirectoryRows.value.length
 }))
 const inverseSelectedRows = computed(() => {
   const selected = new Set(selectedEmails.value.map(normalizeEmail))
-  return inverseScopeRows.value.filter(u => selected.has(normalizeEmail(u.email)) && !isProtectedUser(u))
+  return inverseDirectoryRows.value.filter(u => selected.has(normalizeEmail(u.email)) && !isProtectedUser(u))
 })
 const inverseRestRows = computed(() => {
   const selected = new Set(selectedEmails.value.map(normalizeEmail))
-  return inverseScopeRows.value.filter(u => !selected.has(normalizeEmail(u.email)) && !isProtectedUser(u))
+  return inverseDirectoryRows.value.filter(u => !selected.has(normalizeEmail(u.email)) && !isProtectedUser(u))
 })
-const inverseProtectedRows = computed(() => inverseScopeRows.value.filter(isProtectedUser))
-const inverseRequiresStrongAck = computed(() => inverseScope.value === 'all_directory' || inverseSelectedRows.value.length + inverseRestRows.value.length > 50)
+const inverseProtectedRows = computed(() => inverseDirectoryRows.value.filter(isProtectedUser))
+const inverseRequiresStrongAck = computed(() => true)
 const canApplyInverse = computed(() => inverseSelectedRows.value.length > 0 && inverseRestRows.value.length > 0 && (!inverseRequiresStrongAck.value || inverseAcknowledged.value))
 
 watch([searchQuery, statusFilter, plantelFilter, accessFilter, activityFilter, sortBy, pageSize], () => { page.value = 1 })
@@ -1371,21 +1353,9 @@ const runPendingAction = async () => {
   pendingAction.value = null
 }
 
-const inverseScopeFilter = () => {
-  if (inverseScope.value === 'all_directory') return { search: '', plantel: 'all', access: 'all', status: 'all', activity: 'all', sort: sortBy.value }
-  if (inverseScope.value === 'current_plantel' && hasSpecificPlantelFilter.value) return { search: '', plantel: plantelFilter.value, access: 'all', status: 'all', activity: 'all', sort: sortBy.value }
-  return {
-    search: searchQuery.value,
-    plantel: plantelFilter.value,
-    access: accessFilter.value,
-    status: statusFilter.value,
-    activity: activityFilter.value,
-    sort: sortBy.value
-  }
-}
+const inverseScopeFilter = () => ({ search: '', plantel: 'all', access: 'all', status: 'all', activity: 'all', sort: sortBy.value })
 const openInverseBulk = () => {
   if (!selectedEmails.value.length) return
-  inverseScope.value = hasSpecificPlantelFilter.value ? 'current_plantel' : 'current_filter'
   inverseSelectedAccess.value = 'admin'
   inverseRestAccess.value = 'control'
   inverseAcknowledged.value = false
@@ -1410,7 +1380,7 @@ const applyInverseBulk = async () => {
       method: 'PATCH',
       body: {
         selectedEmails: selectedEmails.value,
-        scopeMode: inverseScope.value,
+        scopeMode: 'all_directory',
         filterScope: inverseScopeFilter(),
         selectedPatch,
         inversePatch
@@ -2685,56 +2655,77 @@ button:disabled {
 }
 
 .metric-grid {
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 14px;
+  margin: 0 0 14px;
+  padding: 8px;
+  border: 1px solid rgba(222, 230, 241, .92);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .78);
+  box-shadow: 0 16px 42px rgba(16, 32, 68, .06);
+  backdrop-filter: blur(14px);
 }
 
 .metric-card.metric-chip {
+  --accent: #64748b;
   appearance: none;
-  min-height: 70px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-areas:
-    "label value"
-    "caption value";
+  min-height: 0;
+  width: auto;
+  display: inline-flex;
   align-items: center;
-  gap: 2px 10px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(255,255,255,.94);
-  box-shadow: 0 10px 28px rgba(16, 32, 68, .045);
+  gap: 8px;
+  padding: 9px 11px 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: #334155;
   text-align: left;
   cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease, color .16s ease;
+}
+.metric-card.metric-chip:hover {
+  transform: translateY(-1px);
+  background: #f8fafc;
+  border-color: #e2e8f0;
 }
 .metric-card.metric-chip::before,
 .metric-card.metric-chip::after { display: none; }
 .metric-card.metric-chip span {
-  grid-area: label;
-  color: #263653;
+  color: inherit;
   font-size: 12px;
-  line-height: 1.15;
-  font-weight: 950;
+  line-height: 1;
+  font-weight: 850;
+  letter-spacing: -.01em;
+  white-space: nowrap;
 }
 .metric-card.metric-chip strong {
-  grid-area: value;
   margin: 0;
-  font-size: 24px;
+  min-width: 26px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, #ffffff);
+  font-size: 12px;
   line-height: 1;
-  letter-spacing: -.04em;
+  font-weight: 950;
+  letter-spacing: -.02em;
+  text-align: center;
 }
 .metric-card.metric-chip small {
-  grid-area: caption;
-  margin: 0;
-  padding: 0;
-  color: #7a879b;
-  font-size: 10px;
-  font-weight: 850;
+  display: none;
 }
 .metric-card.metric-chip.active {
-  border-color: color-mix(in srgb, var(--accent, #22c55e) 48%, #e2e8f0);
-  background: color-mix(in srgb, var(--accent, #22c55e) 10%, #ffffff);
-  box-shadow: 0 14px 32px color-mix(in srgb, var(--accent, #22c55e) 16%, transparent);
+  color: color-mix(in srgb, var(--accent) 72%, #0f172a);
+  border-color: color-mix(in srgb, var(--accent) 26%, #e2e8f0);
+  background: color-mix(in srgb, var(--accent) 8%, #ffffff);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 12%, transparent), inset 0 0 0 1px rgba(255,255,255,.72);
+}
+.metric-card.metric-chip.active strong {
+  color: #ffffff;
+  background: var(--accent);
 }
 .metric-card.metric-chip.neutral { --accent: #64748b; }
 .metric-card.metric-chip.green { --accent: #16a34a; }
@@ -2863,6 +2854,37 @@ button:disabled {
 .inverse-scope-card label.active { border-color: #a9ddb8; background: #f2fcf5; }
 .inverse-scope-card label.disabled { opacity: .48; }
 .inverse-scope-card strong { color: #64748b; font-size: 11px; font-weight: 950; }
+.inverse-scope-card.global-only {
+  border-color: #fde68a;
+  background: linear-gradient(180deg, #fffbeb 0%, #ffffff 100%);
+}
+.inverse-global-note {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #fde68a;
+  border-radius: 16px;
+  background: rgba(255,255,255,.78);
+}
+.inverse-global-note span {
+  color: #263653;
+  font-size: 13px;
+  font-weight: 950;
+}
+.inverse-global-note strong {
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 950;
+}
+.inverse-global-note small {
+  grid-column: 1 / -1;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 800;
+}
 .inverse-summary { display: grid; gap: 5px; margin-top: 12px; color: #475569; font-size: 12px; font-weight: 850; }
 .inverse-summary strong { color: var(--ink); font-size: 13px; font-weight: 950; }
 .inverse-ack { display: flex; align-items: center; gap: 9px; margin-top: 12px; color: #475569; font-size: 12px; font-weight: 900; }
@@ -2871,9 +2893,10 @@ button:disabled {
 
 @media (max-width: 760px) {
   .usuarios-page.has-selection .usuarios-main { padding-bottom: 112px; }
-  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .metric-card.metric-chip { min-height: 62px; padding: 10px 12px; }
-  .metric-card.metric-chip strong { font-size: 22px; }
+  .metric-grid { flex-wrap: nowrap; overflow-x: auto; padding: 8px; border-radius: 18px; scrollbar-width: none; }
+  .metric-grid::-webkit-scrollbar { display: none; }
+  .metric-card.metric-chip { flex: 0 0 auto; padding: 9px 11px; }
+  .metric-card.metric-chip strong { font-size: 12px; }
   .bulk-card {
     left: 10px;
     right: 10px;
