@@ -1,4 +1,4 @@
-import { createExternalUser, getExternalUsersDiagnostics, isExternalUsersAvailable, listExternalUsers } from '../../utils/external-users'
+import { createExternalUser, getExternalUsersDiagnostics, isExternalUsersAvailable, listExternalUsers, queryExternalUsers } from '../../utils/external-users'
 
 const assertExternalUsersAvailable = async () => {
   if (await isExternalUsersAvailable()) return
@@ -22,6 +22,9 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'GET') {
     const query = getQuery(event)
+    if (query.server === '1' || query.page || query.pageSize || query.plantel || query.access || query.status || query.activity || query.sort) {
+      return await queryExternalUsers(query)
+    }
     return await listExternalUsers(query.q || query.search || '')
   }
 

@@ -28,7 +28,7 @@ type ExternalLoginInput = {
 }
 
 const TABLE = 'users'
-const CONTROL_ESCOLAR_ROLE = 'ROLE_CTRL'
+export const CONTROL_ESCOLAR_ROLE = 'ROLE_CTRL'
 export const NO_ADEUDO_CONTROL_PLANTELES_COLUMN = 'no_adeudo_control_planteles'
 const DEFAULT_EXTERNAL_ROLE = 'ROLE_HUSKY_USER'
 const PROTECTED_EMAILS = new Set([
@@ -261,18 +261,199 @@ const mergeRowsForEmail = (rows: any[]) => {
   const selected = normalizedRows.reduce((current, candidate) => betterDisplayRow(current, candidate), null as any)
   const blocked = normalizedRows.some((row) => row.ingresosBlocked)
   const lastLogin = normalizedRows.reduce((max, row) => dateMs(row.last_login_at) > dateMs(max) ? row.last_login_at : max, selected.last_login_at || null)
-  const role = normalizedRows.some((row) => hasControlRoleValue(row.role))
-    ? CONTROL_ESCOLAR_ROLE
-    : selected.role
+  const mergedRoles = Array.from(new Set(normalizedRows.flatMap((row) => splitRoleTokens(row.role))))
+  const role = mergedRoles.length ? mergedRoles.join(',') : selected.role
+  const mergedPlanteles = plantelesValue(normalizedRows.flatMap((row) => normalizedPlantelList(row.planteles || row.plantel)))
 
   return {
     ...selected,
     role,
+    planteles: mergedPlanteles || selected.planteles,
+    plantel: mergedPlanteles ? mergedPlanteles.split(',')[0] : selected.plantel,
     last_login_at: lastLogin,
     lastLoginAt: lastLogin,
     ingresos_blocked: blocked ? 1 : 0,
     ingresosBlocked: blocked,
     duplicateCount: normalizedRows.length
+  }
+}
+
+
+export const externalUserAccessMode = (role: unknown) => {
+  const roles = splitRoleTokens(role)
+  const hasControl = hasRole(roles, CONTROL_ESCOLAR_ROLE)
+  const baseRoles = withoutControlRole(roles).filter((role) => normalizedRole(role) !== 'plantel')
+  if (hasControl && baseRoles.length) return 'admin_control'
+  if (hasControl) return 'control'
+  return 'admin'
+}
+
+const accessLabelForMode = (mode: string) => {
+  if (mode === 'admin_control') return 'Financiero + Control Escolar'
+  if (mode === 'control') return 'Solo Control Escolar'
+  return 'Financiero'
+}
+
+const normalizedPlantelList = (value: unknown) => plantelesValue(value)
+  .split(',')
+  .map(normalizePlantel)
+  .filter(Boolean)
+
+const userMatchesPlantel = (user: any, plantelValue: unknown) => {
+  const rawPlantel = String(plantelValue || '').trim()
+  if (rawPlantel === '__sin_plantel__') return !normalizedPlantelList(user?.planteles || user?.plantel).length
+  const plantel = normalizePlantel(plantelValue)
+  if (!plantel || plantel === 'all') return true
+  return normalizedPlantelList(user?.planteles || user?.plantel).includes(plantel)
+}
+
+const userLastLoginMs = (user: any) => dateMs(user?.last_login_at || user?.lastLoginAt)
+const userIsProtected = (user: any) => Boolean(user?.protected) || PROTECTED_EMAILS.has(normalizeEmail(user?.email))
+const userIsBlocked = (user: any) => normalizeBlocked(user?.ingresos_blocked ?? user?.ingresosBlocked)
+const userStatusMode = (user: any) => {
+  if (userIsProtected(user)) return 'protected'
+  if (userIsBlocked(user)) return 'blocked'
+  return 'active'
+}
+const userActivityMode = (user: any) => {
+  const ms = userLastLoginMs(user)
+  if (!ms) return 'never'
+  const age = Date.now() - ms
+  if (age <= 24 * 60 * 60 * 1000) return 'today'
+  if (age <= 7 * 24 * 60 * 60 * 1000) return 'week'
+  if (age <= 30 * 24 * 60 * 60 * 1000) return 'month'
+  return 'older'
+}
+
+const enrichAccessMetadata = (user: any) => {
+  const accessMode = externalUserAccessMode(user?.role)
+  return {
+    ...user,
+    accessMode,
+    accessLabel: accessLabelForMode(accessMode),
+    statusMode: userStatusMode(user),
+    activityMode: userActivityMode(user),
+    plantelesList: normalizedPlantelList(user?.planteles || user?.plantel),
+    protected: userIsProtected(user)
+  }
+}
+
+const userMatchesStatus = (user: any, value: unknown) => {
+  const status = normalizeText(value, 40) || 'all'
+  if (status === 'all') return true
+  return userStatusMode(user) === status
+}
+
+const userMatchesAccess = (user: any, value: unknown) => {
+  const access = normalizeText(value, 40) || 'all'
+  if (access === 'all') return true
+  return externalUserAccessMode(user?.role) === access
+}
+
+const userMatchesActivity = (user: any, value: unknown) => {
+  const activity = normalizeText(value, 40) || 'all'
+  if (activity === 'all') return true
+  return userActivityMode(user) === activity
+}
+
+const sortExternalUsers = (rows: any[], sortValue: unknown) => {
+  const sort = normalizeText(sortValue, 60) || 'last_login_desc'
+  return [...rows].sort((a, b) => {
+    const nameA = String(a.displayName || a.username || a.email || '')
+    const nameB = String(b.displayName || b.username || b.email || '')
+    if (sort === 'name_asc') return nameA.localeCompare(nameB)
+    if (sort === 'name_desc') return nameB.localeCompare(nameA)
+    if (sort === 'access_asc') return String(a.accessLabel || '').localeCompare(String(b.accessLabel || '')) || nameA.localeCompare(nameB)
+    if (sort === 'status_asc') return String(a.statusMode || '').localeCompare(String(b.statusMode || '')) || nameA.localeCompare(nameB)
+    if (sort === 'plantel_asc') return String(a.planteles || '').localeCompare(String(b.planteles || '')) || nameA.localeCompare(nameB)
+    return userLastLoginMs(b) - userLastLoginMs(a) || nameA.localeCompare(nameB)
+  })
+}
+
+const buildExternalUsersFacets = (rows: any[]) => {
+  const byPlantel = new Map<string, any>()
+  const emptyPlantel = { plantel: '__sin_plantel__', label: 'Sin plantel', total: 0, admin: 0, control: 0, admin_control: 0, blocked: 0, protected: 0 }
+  const access = { admin: 0, control: 0, admin_control: 0 }
+  const status = { active: 0, blocked: 0, protected: 0 }
+  const activity = { today: 0, week: 0, month: 0, older: 0, never: 0 }
+
+  for (const user of rows) {
+    const mode = externalUserAccessMode(user.role) as 'admin' | 'control' | 'admin_control'
+    access[mode]++
+    status[userStatusMode(user) as 'active' | 'blocked' | 'protected']++
+    activity[userActivityMode(user) as 'today' | 'week' | 'month' | 'older' | 'never']++
+
+    const planteles = normalizedPlantelList(user.planteles || user.plantel)
+    if (!planteles.length) {
+      emptyPlantel.total++
+      emptyPlantel[mode]++
+      if (userIsBlocked(user)) emptyPlantel.blocked++
+      if (userIsProtected(user)) emptyPlantel.protected++
+    }
+    for (const plantel of planteles) {
+      const item = byPlantel.get(plantel) || { plantel, label: plantel, total: 0, admin: 0, control: 0, admin_control: 0, blocked: 0, protected: 0 }
+      item.total++
+      item[mode]++
+      if (userIsBlocked(user)) item.blocked++
+      if (userIsProtected(user)) item.protected++
+      byPlantel.set(plantel, item)
+    }
+  }
+
+  const planteles = PLANTELES_LIST.map((plantel) => byPlantel.get(plantel) || { plantel, label: plantel, total: 0, admin: 0, control: 0, admin_control: 0, blocked: 0, protected: 0 })
+  if (emptyPlantel.total) planteles.push(emptyPlantel)
+
+  return {
+    total: rows.length,
+    access,
+    status,
+    activity,
+    byPlantel: planteles,
+    alerts: {
+      missingPlantel: emptyPlantel.total,
+      blocked: status.blocked,
+      protected: status.protected,
+      noActivity: activity.never
+    }
+  }
+}
+
+export const queryExternalUsers = async (query: any = {}) => {
+  const page = Math.max(1, Number(query.page || 1) || 1)
+  const maxPageSize = query.bulk === true || query.bulk === '1' ? 5000 : 100
+  const pageSize = Math.min(maxPageSize, Math.max(10, Number(query.pageSize || query.limit || 25) || 25))
+  const search = normalizeText(query.search || query.q || '', 120)
+  const allRows = (await listExternalUsers(search)).map(enrichAccessMetadata)
+  const searchFacets = buildExternalUsersFacets(allRows)
+
+  const filtered = allRows.filter((user) => {
+    if (!userMatchesPlantel(user, query.plantel)) return false
+    if (!userMatchesAccess(user, query.access)) return false
+    if (!userMatchesStatus(user, query.status)) return false
+    if (!userMatchesActivity(user, query.activity)) return false
+    return true
+  })
+
+  const sorted = sortExternalUsers(filtered, query.sort)
+  const start = (page - 1) * pageSize
+  const rows = sorted.slice(start, start + pageSize)
+
+  return {
+    rows,
+    total: filtered.length,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
+    facets: buildExternalUsersFacets(filtered),
+    globalFacets: searchFacets,
+    filters: {
+      search,
+      plantel: normalizeText(query.plantel || 'all', 40),
+      access: normalizeText(query.access || 'all', 40),
+      status: normalizeText(query.status || 'all', 40),
+      activity: normalizeText(query.activity || 'all', 40),
+      sort: normalizeText(query.sort || 'last_login_desc', 60)
+    }
   }
 }
 
@@ -426,14 +607,28 @@ export const updateExternalUser = async (id: unknown, body: ExternalUserInput) =
   return { success: true }
 }
 
-export const bulkUpdateExternalUsers = async (body: ExternalUserInput & { emails?: string[]; ids?: Array<string | number> }) => {
+export const bulkUpdateExternalUsers = async (body: ExternalUserInput & {
+  emails?: string[]
+  ids?: Array<string | number>
+  filterScope?: Record<string, any>
+  addPlanteles?: string[] | string
+  removePlanteles?: string[] | string
+  replacePlanteles?: string[] | string
+}) => {
   const columns = await getExternalUsersColumns()
-  const emails = Array.from(new Set((body.emails || [])
+  let emails = Array.from(new Set((body.emails || [])
     .map(normalizeEmail)
     .filter((email) => isCasitaWorkspaceEmail(email))))
   const ids = Array.from(new Set((body.ids || [])
     .map((id) => Number(id))
     .filter((id) => Number.isFinite(id) && id > 0)))
+
+  if (body.filterScope && !emails.length && !ids.length) {
+    const result = await queryExternalUsers({ ...body.filterScope, page: 1, pageSize: 5000, bulk: true })
+    emails = Array.from(new Set((result.rows || [])
+      .map((row: any) => normalizeEmail(row.email))
+      .filter((email: string) => isCasitaWorkspaceEmail(email))))
+  }
 
   if (!emails.length && !ids.length) {
     throw createError({ statusCode: 400, message: 'Seleccione usuarios.' })
@@ -450,10 +645,16 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & { emails
   let updated = 0
   const shouldUpdateBlocked = columns.has('ingresos_blocked') && ('ingresosBlocked' in body || 'ingresos_blocked' in body)
   const shouldUpdateRole = Boolean(body.accessMode || body.role)
+  const shouldReplacePlanteles = 'replacePlanteles' in body
+  const addPlanteles = normalizedPlantelList(body.addPlanteles)
+  const removePlanteles = normalizedPlantelList(body.removePlanteles)
+  const replacePlanteles = normalizedPlantelList(body.replacePlanteles)
+  const shouldUpdatePlanteles = columns.has('planteles') && (shouldReplacePlanteles || addPlanteles.length || removePlanteles.length)
 
   for (const row of uniqueRows) {
     const email = normalizeEmail(row.email)
     if (!isCasitaWorkspaceEmail(email)) continue
+    if (PROTECTED_EMAILS.has(email) && (shouldUpdateBlocked || shouldUpdateRole || shouldUpdatePlanteles)) continue
 
     const values: Record<string, any> = {}
     if (shouldUpdateBlocked) {
@@ -463,6 +664,15 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & { emails
     }
     if (shouldUpdateRole && columns.has('role')) {
       values.role = resolveRoleForWrite({ ...body, email }, row.role)
+    }
+    if (shouldUpdatePlanteles) {
+      const currentPlanteles = normalizedPlantelList(row.planteles || row.plantel)
+      let nextPlanteles = shouldReplacePlanteles ? replacePlanteles : currentPlanteles
+      if (addPlanteles.length) nextPlanteles = Array.from(new Set([...nextPlanteles, ...addPlanteles]))
+      if (removePlanteles.length) nextPlanteles = nextPlanteles.filter((plantel) => !removePlanteles.includes(plantel))
+      const serializedPlanteles = plantelesValue(nextPlanteles)
+      values.planteles = serializedPlanteles
+      if (columns.has('plantel')) values.plantel = serializedPlanteles.split(',')[0] || ''
     }
 
     const entries = Object.entries(values).filter(([column]) => columns.has(column))
@@ -475,7 +685,7 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & { emails
     updated++
   }
 
-  return { success: true, updated }
+  return { success: true, updated, requested: uniqueRows.length }
 }
 
 
