@@ -102,11 +102,12 @@ const processAction = async ({
       `SELECT nombreCompleto, correo, telefono, nivel, grado, grupo, plantel, \`Nombre del padre o tutor\` AS padre FROM base WHERE matricula = ? LIMIT 1`,
       [matricula]
     )
-    if (!student?.correo) throw createError({ statusCode: 400, statusMessage: 'El alumno no tiene correo registrado.' })
+    const contactStudent = { ...(student || {}), ...(deudor || {}) }
+    if (!contactStudent?.correo) throw createError({ statusCode: 400, statusMessage: 'El alumno no tiene correo registrado.' })
 
     const template = await getCobranzaTemplate(emailOptions)
     const rendered = renderCobranzaEmail({
-      student,
+      student: contactStudent,
       deudor,
       matricula,
       ciclo,
@@ -116,9 +117,9 @@ const processAction = async ({
       includeDesglose: template.includeDesglose
     })
 
-    await sendEmail(student.correo, rendered.subject, rendered.html, user?.email)
+    await sendEmail(contactStudent.correo, rendered.subject, rendered.html, user?.email)
     emailMetadata = {
-      destinatario: student.correo,
+      destinatario: contactStudent.correo,
       subject: rendered.subject,
       includeDesglose: template.includeDesglose,
       conceptosEnviados: rendered.desglose.length
@@ -132,7 +133,8 @@ const processAction = async ({
     }
 
     const [student] = await query<any[]>(`SELECT telefono, nombreCompleto FROM base WHERE matricula = ? LIMIT 1`, [matricula])
-    const phone = String(student?.telefono || '').replace(/\D+/g, '')
+    const contactStudent = { ...(student || {}), ...(deudor || {}) }
+    const phone = String(contactStudent?.telefono || '').replace(/\D+/g, '')
     if (!phone) throw createError({ statusCode: 400, statusMessage: 'No hay teléfono válido para WhatsApp.' })
 
     const chatId = `${phone.startsWith('52') ? phone : `52${phone}`}@c.us`
@@ -140,7 +142,7 @@ const processAction = async ({
 
     await whatsappApi.sendMessage(client.client_id, {
       chatId: [chatId],
-      message: `Hola, le recordamos que ${student?.nombreCompleto || matricula} presenta un saldo pendiente por $${saldo.toFixed(2)} MXN correspondiente al periodo ${mes}/${ciclo}. Favor de revisar su estado de cuenta con Administración.`
+      message: `Hola, le recordamos que ${contactStudent?.nombreCompleto || matricula} presenta un saldo pendiente por $${saldo.toFixed(2)} MXN correspondiente al periodo ${mes}/${ciclo}. Favor de revisar su estado de cuenta con Administración.`
     }, idem)
   }
 

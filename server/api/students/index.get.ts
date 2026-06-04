@@ -6,20 +6,22 @@ import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 import { maybeRefreshControlEscolarCacheFromLoadedRows } from '../../utils/control-escolar-cache'
 import { fetchCentralMatriculaOverlays } from '../../utils/central-matricula-overlay'
+import { resolveFinancialFamilyContact } from '../../../shared/utils/familyContact'
 
 
 const compactText = (value: unknown) => String(value || '').trim()
 const normalizeFinancialMatricula = (value: unknown) => compactText(value).toUpperCase()
 
-const mergeCentralOverlayIntoFinancialStudent = (student: any, overlayStudent: any) => {
+const mergeCentralOverlayIntoFinancialStudent = (student: any, overlay: any) => {
+  const overlayStudent = overlay?.student || overlay
   if (!student || !overlayStudent) return student
   const centralMatricula = { ...(student.centralMatricula || {}), ...overlayStudent }
-  return {
+  const merged = {
     ...student,
     centralMatricula,
+    centralMatriculaRaw: overlay?.raw || student.centralMatriculaRaw || null,
     matriculaEnrichmentStatus: 'ready',
     curp: compactText(overlayStudent.curp) || student.curp,
-    padre: compactText(overlayStudent.padre) || student.padre,
     madre: compactText(overlayStudent.madre) || student.madre,
     telefonoPadre: compactText(overlayStudent.telefonoPadre) || student.telefonoPadre,
     telefonoMadre: compactText(overlayStudent.telefonoMadre) || student.telefonoMadre,
@@ -36,6 +38,15 @@ const mergeCentralOverlayIntoFinancialStudent = (student: any, overlayStudent: a
     nombreMadreCompleto: compactText(overlayStudent.nombreMadreCompleto) || student.nombreMadreCompleto,
     ocupacionMadre: compactText(overlayStudent.ocupacionMadre) || student.ocupacionMadre,
     direccion: compactText(overlayStudent.direccion) || student.direccion,
+  }
+  const familyContact = resolveFinancialFamilyContact(merged)
+  return {
+    ...merged,
+    padre: familyContact.tutorName || student.padre,
+    tutor: familyContact.tutorName || student.tutor,
+    telefono: familyContact.phone || student.telefono,
+    correo: familyContact.email || student.correo,
+    controlEscolarFamilyContact: familyContact,
   }
 }
 
@@ -71,9 +82,9 @@ const enrichFinancialStudentsWithMatricula = async (students: any[] = []) => {
 
     const mapped = students.map((student) => {
       const key = normalizeFinancialMatricula(student?.matricula)
-      const overlayStudent = overlays.get(key)?.student
-      return overlayStudent
-        ? mergeCentralOverlayIntoFinancialStudent(student, overlayStudent)
+      const overlay = overlays.get(key)
+      return overlay
+        ? mergeCentralOverlayIntoFinancialStudent(student, overlay)
         : { ...student, matriculaEnrichmentStatus: 'missing' }
     })
 

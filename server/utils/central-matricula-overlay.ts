@@ -224,7 +224,7 @@ const loadCentralMatriculaColumns = async () => {
   if (!columns.has('matricula')) {
     throw createError({ statusCode: 500, message: 'La tabla matricula no tiene columna matricula.' })
   }
-  const selected = MATRICULA_COLUMNS.filter((column) => columns.has(column))
+  const selected = Array.from(columns)
   if (!selected.includes('matricula')) selected.unshift('matricula')
   return selected
 }

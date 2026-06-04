@@ -5,6 +5,8 @@ import { parseCurp } from '../../../shared/utils/curp'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
+import { fetchCentralMatriculaOverlays } from '../../utils/central-matricula-overlay'
+import { resolveFinancialFamilyContact } from '../../../shared/utils/familyContact'
 
 type SqlWriteError = Error & {
   code?: string
@@ -20,6 +22,59 @@ type InsertResult = { insertId?: number }
 
 const normalizeTextValue = (value: unknown) => String(value || '').trim()
 const normalizeMatricula = (value: unknown) => normalizeTextValue(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+const normalizeFinancialMatricula = (value: unknown) => normalizeTextValue(value).toUpperCase()
+
+const mergeCentralOverlayIntoFinancialStudent = (student: any, overlay: any) => {
+  const central = overlay?.student || overlay
+  if (!student || !central) return student
+  const merged = {
+    ...student,
+    centralMatricula: { ...(student.centralMatricula || {}), ...central },
+    centralMatriculaRaw: overlay?.raw || student.centralMatriculaRaw || null,
+    matriculaEnrichmentStatus: 'ready',
+    curp: normalizeTextValue(central.curp) || student.curp,
+    madre: normalizeTextValue(central.madre) || student.madre,
+    telefonoPadre: normalizeTextValue(central.telefonoPadre) || student.telefonoPadre,
+    telefonoMadre: normalizeTextValue(central.telefonoMadre) || student.telefonoMadre,
+    emailPadre: normalizeTextValue(central.emailPadre) || student.emailPadre,
+    emailMadre: normalizeTextValue(central.emailMadre) || student.emailMadre,
+    nombrePadre: normalizeTextValue(central.nombrePadre) || student.nombrePadre,
+    apellidoPaternoPadre: normalizeTextValue(central.apellidoPaternoPadre) || student.apellidoPaternoPadre,
+    apellidoMaternoPadre: normalizeTextValue(central.apellidoMaternoPadre) || student.apellidoMaternoPadre,
+    nombreMadre: normalizeTextValue(central.nombreMadre) || student.nombreMadre,
+    apellidoPaternoMadre: normalizeTextValue(central.apellidoPaternoMadre) || student.apellidoPaternoMadre,
+    apellidoMaternoMadre: normalizeTextValue(central.apellidoMaternoMadre) || student.apellidoMaternoMadre,
+    direccion: normalizeTextValue(central.direccion) || student.direccion,
+  }
+  const familyContact = resolveFinancialFamilyContact(merged)
+  return {
+    ...merged,
+    padre: familyContact.tutorName || student.padre,
+    tutor: familyContact.tutorName || student.tutor,
+    telefono: familyContact.phone || student.telefono,
+    correo: familyContact.email || student.correo,
+    controlEscolarFamilyContact: familyContact,
+  }
+}
+
+const enrichFinancialStudentsWithMatricula = async (students: any[] = []) => {
+  const matriculas = Array.from(new Set(students.map(student => normalizeTextValue(student?.matricula)).filter(Boolean)))
+  if (!matriculas.length) return students
+  try {
+    const overlays = await fetchCentralMatriculaOverlays(matriculas)
+    if (!overlays.size) return students.map(student => ({ ...student, matriculaEnrichmentStatus: 'missing' }))
+    return students.map((student) => {
+      const overlay = overlays.get(normalizeFinancialMatricula(student?.matricula))
+      return overlay
+        ? mergeCentralOverlayIntoFinancialStudent(student, overlay)
+        : { ...student, matriculaEnrichmentStatus: 'missing' }
+    })
+  } catch (error: any) {
+    console.warn('[Students GET] central matricula enrichment unavailable.', { message: error?.message || error })
+    return students.map(student => ({ ...student, matriculaEnrichmentStatus: 'unavailable' }))
+  }
+}
 
 const isDuplicateKeyError = (error: unknown) => {
   const err = error as SqlWriteError
@@ -367,7 +422,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     if (grado) mapped = mapped.filter(r => String(r.grado).toLowerCase() === String(grado).toLowerCase())
     if (grupo) mapped = mapped.filter(r => r.grupo === grupo)
 
-    return await attachCustomSectionsToStudents(mapped, user)
+    const withSections = await attachCustomSectionsToStudents(mapped, user)
+    return await enrichFinancialStudentsWithMatricula(withSections)
   }
 
   if (method === 'POST') {

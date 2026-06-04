@@ -1,6 +1,8 @@
 import { query } from './db'
 import { resolveProjectedAmount } from './monto-final'
 import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../shared/utils/grado'
+import { resolveFinancialFamilyContact } from '../../shared/utils/familyContact'
+import { fetchCentralMatriculaOverlays } from './central-matricula-overlay'
 
 const parsePlazos = (plazoRaw: unknown, mesesRaw: unknown) => {
   const raw = String(plazoRaw || mesesRaw || '1').trim()
@@ -242,6 +244,54 @@ const stageByDay = (day: number, lastDay: number) => {
 
 const money = (value: unknown) => Number(Number(value || 0).toFixed(2))
 
+const normalizeMatriculaKey = (value: unknown) => String(value || '').trim().toUpperCase()
+
+const mergeControlEscolarContactIntoRows = async (rows: any[] = []) => {
+  const matriculas = Array.from(new Set(rows.map(row => normalizeMatriculaKey(row?.matricula)).filter(Boolean)))
+  if (!matriculas.length) return rows
+
+  try {
+    const overlays = await fetchCentralMatriculaOverlays(matriculas)
+    if (!overlays.size) return rows
+
+    return rows.map((row) => {
+      const overlay = overlays.get(normalizeMatriculaKey(row?.matricula))
+      const central = overlay?.student
+      if (!central) return row
+
+      const merged = {
+        ...row,
+        centralMatricula: { ...(row.centralMatricula || {}), ...central },
+        centralMatriculaRaw: overlay.raw || row.centralMatriculaRaw || null,
+        nombrePadre: central.nombrePadre || row.nombrePadre,
+        apellidoPaternoPadre: central.apellidoPaternoPadre || row.apellidoPaternoPadre,
+        apellidoMaternoPadre: central.apellidoMaternoPadre || row.apellidoMaternoPadre,
+        nombreMadre: central.nombreMadre || row.nombreMadre,
+        apellidoPaternoMadre: central.apellidoPaternoMadre || row.apellidoPaternoMadre,
+        apellidoMaternoMadre: central.apellidoMaternoMadre || row.apellidoMaternoMadre,
+        telefonoPadre: central.telefonoPadre || row.telefonoPadre,
+        telefonoMadre: central.telefonoMadre || row.telefonoMadre,
+        emailPadre: central.emailPadre || row.emailPadre,
+        emailMadre: central.emailMadre || row.emailMadre,
+      }
+      const familyContact = resolveFinancialFamilyContact(merged)
+      return {
+        ...merged,
+        padre: familyContact.tutorName || row.padre,
+        telefono: familyContact.phone || row.telefono,
+        correo: familyContact.email || row.correo,
+        controlEscolarFamilyContact: familyContact,
+      }
+    })
+  } catch (error: any) {
+    console.warn('[Deudores] Control Escolar contact enrichment unavailable.', {
+      count: matriculas.length,
+      message: error?.message || error
+    })
+    return rows
+  }
+}
+
 const shouldExposeBreakdownItem = (item: any) => {
   return Number(item.saldo || 0) > 0 ||
     Number(item.pendienteConciliacion || 0) > 0 ||
@@ -337,6 +387,8 @@ export const getDeudoresGlobal = async ({
   }
 
   if (!documentos.length) return []
+
+  documentos = await mergeControlEscolarContactIntoRows(documentos)
 
   const docIds = documentos.map(doc => Number(doc.documento))
   const matriculas = [...new Set(documentos.map(doc => String(doc.matricula)))]

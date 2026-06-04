@@ -341,6 +341,7 @@ import { useStudentSections } from '~/composables/useStudentSections'
 import { useStudentBulkPayments } from '~/composables/useStudentBulkPayments'
 import { useStudentsCacheSync } from '~/composables/useStudentsCacheSync'
 import { exportToCSV } from '~/utils/export'
+import { resolveFinancialFamilyContact } from '~/shared/utils/familyContact'
 import { GRADOS_ORDEN } from '~/utils/constants'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
@@ -1082,12 +1083,12 @@ const applyMatriculaOverlayFields = (student, overlayPayload) => {
   const overlayStudent = extractMatriculaOverlayStudent(overlayPayload)
   if (!overlayStudent) return student
   const central = { ...(extractMatriculaOverlayStudent(student.centralMatricula) || {}), ...overlayStudent }
-  return {
+  const merged = {
     ...student,
     centralMatricula: central,
+    centralMatriculaRaw: overlayPayload?.raw || overlayPayload?.centralMatriculaRaw || student.centralMatriculaRaw || null,
     matriculaEnrichmentStatus: 'ready',
     curp: compactText(central.curp) || student.curp,
-    padre: compactText(central.padre) || student.padre,
     madre: compactText(central.madre) || student.madre,
     telefonoPadre: compactText(central.telefonoPadre) || student.telefonoPadre,
     telefonoMadre: compactText(central.telefonoMadre) || student.telefonoMadre,
@@ -1104,6 +1105,15 @@ const applyMatriculaOverlayFields = (student, overlayPayload) => {
     nombreMadreCompleto: compactText(central.nombreMadreCompleto) || student.nombreMadreCompleto,
     ocupacionMadre: compactText(central.ocupacionMadre) || student.ocupacionMadre,
     direccion: compactText(central.direccion) || student.direccion,
+  }
+  const familyContact = resolveFinancialFamilyContact(merged)
+  return {
+    ...merged,
+    padre: familyContact.tutorName || student.padre,
+    tutor: familyContact.tutorName || student.tutor,
+    telefono: familyContact.phone || student.telefono,
+    correo: familyContact.email || student.correo,
+    controlEscolarFamilyContact: familyContact,
   }
 }
 
@@ -1724,6 +1734,10 @@ const exportData = () => {
   const exportCiclo = currentCicloKey.value
   const exportList = displayedStudents.value.map((s) => {
     const tipoIngreso = resolveStudentTipoIngreso(s)
+    const familyContact = resolveFinancialFamilyContact(s)
+    const central = s.centralMatricula || {}
+    const centralRaw = s.centralMatriculaRaw || central.raw || null
+    const centralFamilyContact = resolveFinancialFamilyContact({ centralMatricula: central, centralMatriculaRaw: centralRaw })
 
     return {
       Matrícula: s.matricula,
@@ -1737,9 +1751,65 @@ const exportData = () => {
       Grado: s.grado,
       Grupo: s.grupo,
       Plantel: s.plantel || '',
-      Tutor: s.padre || s['Nombre del padre o tutor'] || '',
-      Telefono: s.telefono || '',
-      Correo: s.correo || '',
+      Tutor: familyContact.tutorName || s.padre || s['Nombre del padre o tutor'] || '',
+      Telefono: familyContact.phone || s.telefono || '',
+      Correo: familyContact.email || s.correo || '',
+      Control_Escolar_Enriquecido: s.matriculaEnrichmentStatus === 'ready' ? 'Sí' : 'No',
+      Control_Escolar_Padre_Nombre: centralFamilyContact.fatherName || '',
+      Control_Escolar_Padre_Telefono: centralFamilyContact.fatherPhone || '',
+      Control_Escolar_Padre_Correo: centralFamilyContact.fatherEmail || '',
+      Control_Escolar_Madre_Nombre: centralFamilyContact.motherName || '',
+      Control_Escolar_Madre_Telefono: centralFamilyContact.motherPhone || '',
+      Control_Escolar_Madre_Correo: centralFamilyContact.motherEmail || '',
+      Control_Escolar_CURP: central.curp || s.curp || '',
+      Control_Escolar_Nombre_Verificado: central.nombreVerificado || '',
+      Control_Escolar_Nombre_Completo_Alumno: central.nombreCompletoAlumno || central.nombreCompleto || '',
+      Control_Escolar_Nombres: central.nombres || '',
+      Control_Escolar_Apellido_Paterno: central.apellidoPaterno || '',
+      Control_Escolar_Apellido_Materno: central.apellidoMaterno || '',
+      Control_Escolar_Nivel: central.nivel || '',
+      Control_Escolar_Grado: central.grado || '',
+      Control_Escolar_Grupo: central.grupo || '',
+      Control_Escolar_Plantel: central.plantel || '',
+      Control_Escolar_Fecha_Nacimiento: central.fechaNacimiento || '',
+      Control_Escolar_Lugar_Nacimiento: central.lugarNacimiento || '',
+      Control_Escolar_Sexo: central.sexo || '',
+      Control_Escolar_Talla: central.talla || '',
+      Control_Escolar_Peso: central.peso || '',
+      Control_Escolar_Tipo_Sangre: central.tipoSangre || '',
+      Control_Escolar_Alergias: central.alergias || '',
+      Control_Escolar_Direccion: central.direccion || '',
+      Control_Escolar_Domicilio_Calle: central.domicilioCalle || '',
+      Control_Escolar_Domicilio_Numero: central.domicilioNumero || central.domicilioNum || '',
+      Control_Escolar_Domicilio_Colonia: central.domicilioColonia || '',
+      Control_Escolar_Domicilio_CP: central.domicilioCp || '',
+      Control_Escolar_Domicilio_Municipio: central.domicilioMunicipio || '',
+      Control_Escolar_Padre_Nombres: central.nombrePadre || '',
+      Control_Escolar_Padre_Apellido_Paterno: central.apellidoPaternoPadre || '',
+      Control_Escolar_Padre_Apellido_Materno: central.apellidoMaternoPadre || '',
+      Control_Escolar_Padre_Ocupacion: central.ocupacionPadre || '',
+      Control_Escolar_Padre_Lugar_Trabajo: central.lugarTrabajoPadre || '',
+      Control_Escolar_Padre_Puesto: central.puestoPadre || '',
+      Control_Escolar_Padre_Estado_Civil: central.estadoCivilPadre || '',
+      Control_Escolar_Padre_Fecha_Nacimiento: central.fechaNacimientoPadre || '',
+      Control_Escolar_Padre_INE: central.inePadre || '',
+      Control_Escolar_Padre_CURP: central.curpPadre || '',
+      Control_Escolar_Madre_Nombres: central.nombreMadre || '',
+      Control_Escolar_Madre_Apellido_Paterno: central.apellidoPaternoMadre || '',
+      Control_Escolar_Madre_Apellido_Materno: central.apellidoMaternoMadre || '',
+      Control_Escolar_Madre_Ocupacion: central.ocupacionMadre || '',
+      Control_Escolar_Madre_Lugar_Trabajo: central.lugarTrabajoMadre || '',
+      Control_Escolar_Madre_Puesto: central.puestoMadre || '',
+      Control_Escolar_Madre_Estado_Civil: central.estadoCivilMadre || '',
+      Control_Escolar_Madre_Fecha_Nacimiento: central.fechaNacimientoMadre || '',
+      Control_Escolar_Madre_INE: central.ineMadre || '',
+      Control_Escolar_Madre_CURP: central.curpMadre || '',
+      Control_Escolar_Interno: central.interno || '',
+      Control_Escolar_Servicio: central.servicio || '',
+      Control_Escolar_Family_ID: central.familyId || '',
+      Control_Escolar_Foto: central.foto || '',
+      Control_Escolar_Actualizado: central.updatedAt || '',
+      Control_Escolar_RAW_JSON: centralRaw ? JSON.stringify(centralRaw) : '',
       Fecha_Nacimiento: s.birth || s['Fecha de nacimiento'] || '',
       Matricula_Anterior: s.matriculaAnterior || '',
       Matricula_Siguiente: s.matriculaSiguiente || '',

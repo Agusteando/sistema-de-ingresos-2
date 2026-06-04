@@ -1,6 +1,7 @@
 import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { getTrustedAuthUser } from '../../../utils/auth-session'
 import { fetchCentralMatriculaOverlay } from '../../../utils/central-matricula-overlay'
+import { resolveFinancialFamilyContact } from '../../../../shared/utils/familyContact'
 
 const text = (value: unknown) => String(value ?? '').trim()
 
@@ -111,6 +112,7 @@ export default defineEventHandler(async (event) => {
     ...(centralStudent || {}),
     matricula,
     centralMatricula: centralStudent || null,
+    centralMatriculaRaw: central.overlay?.raw || null,
     enrichment: {
       bridgeAvailable: bridge.available,
       matriculaAvailable: central.available,
@@ -119,6 +121,14 @@ export default defineEventHandler(async (event) => {
       matriculaMessage: central.message
     }
   }
+  const familyContact = resolveFinancialFamilyContact(merged)
 
-  return merged
+  return {
+    ...merged,
+    padre: familyContact.tutorName || merged.padre,
+    tutor: familyContact.tutorName || merged.tutor,
+    telefono: familyContact.phone || merged.telefono,
+    correo: familyContact.email || merged.correo,
+    controlEscolarFamilyContact: familyContact,
+  }
 })

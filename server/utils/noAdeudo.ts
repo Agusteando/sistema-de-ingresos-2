@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import dayjs from 'dayjs'
 import { query } from './db'
 import { fetchCentralMatriculaOverlay } from './central-matricula-overlay'
+import { resolveFinancialFamilyContact } from '../../shared/utils/familyContact'
 import { resolveProjectedAmount } from './monto-final'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../shared/utils/grado'
@@ -288,18 +289,32 @@ const mergeCentralOverlay = async (student: Record<string, any>) => {
     const overlay = await fetchCentralMatriculaOverlay(student.matricula)
     const central = overlay?.student || null
     if (!central) return student
-    return {
+    const merged = {
       ...student,
       centralMatricula: central,
+      centralMatriculaRaw: overlay?.raw || student.centralMatriculaRaw || null,
       nombreCompleto: normalizeText(central.nombreCompleto || central.nombreCompletoAlumno) || student.nombreCompleto,
       curp: normalizeText(central.curp) || student.curp,
-      padre: normalizeText(central.padre) || student.padre,
       madre: normalizeText(central.madre) || student.madre,
+      nombrePadre: normalizeText(central.nombrePadre) || student.nombrePadre,
+      apellidoPaternoPadre: normalizeText(central.apellidoPaternoPadre) || student.apellidoPaternoPadre,
+      apellidoMaternoPadre: normalizeText(central.apellidoMaternoPadre) || student.apellidoMaternoPadre,
+      nombreMadre: normalizeText(central.nombreMadre) || student.nombreMadre,
+      apellidoPaternoMadre: normalizeText(central.apellidoPaternoMadre) || student.apellidoPaternoMadre,
+      apellidoMaternoMadre: normalizeText(central.apellidoMaternoMadre) || student.apellidoMaternoMadre,
       emailPadre: firstEmail(central.emailPadre, central.correo) || student.emailPadre,
       emailMadre: firstEmail(central.emailMadre) || student.emailMadre,
       telefonoPadre: normalizeText(central.telefonoPadre) || student.telefonoPadre,
       telefonoMadre: normalizeText(central.telefonoMadre) || student.telefonoMadre,
       direccion: normalizeText(central.direccion) || student.direccion,
+    }
+    const familyContact = resolveFinancialFamilyContact(merged)
+    return {
+      ...merged,
+      padre: familyContact.tutorName || student.padre,
+      telefono: familyContact.phone || student.telefono,
+      correo: familyContact.email || student.correo,
+      controlEscolarFamilyContact: familyContact,
     }
   } catch (error) {
     return student

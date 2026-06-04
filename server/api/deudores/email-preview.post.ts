@@ -60,11 +60,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         [item.matricula]
       )
       if (!student) throw new Error('Alumno no encontrado.')
-      if (!student.correo) throw new Error('El alumno no tiene correo registrado.')
 
       const deudor = await getDeudorContext(item.matricula, ciclo, item.mes, user)
+      const contactStudent = { ...student, ...(deudor || {}) }
+      if (!contactStudent.correo) throw new Error('El alumno no tiene correo registrado.')
+
       const rendered = renderCobranzaEmail({
-        student,
+        student: contactStudent,
         deudor,
         matricula: item.matricula,
         ciclo,
@@ -78,8 +80,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         matricula: item.matricula,
         mes: item.mes,
         success: true,
-        to: student.correo,
-        alumno: student.nombreCompleto || deudor?.nombreCompleto || item.matricula,
+        to: contactStudent.correo,
+        alumno: contactStudent.nombreCompleto || deudor?.nombreCompleto || item.matricula,
         subject: rendered.subject,
         html: rendered.html,
         saldo: Number(deudor?.saldoPendiente || deudor?.saldoColegiatura || 0),
