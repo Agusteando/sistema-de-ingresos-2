@@ -10,6 +10,7 @@ import { escapeHtml } from './cobranzaEmail'
 import { generateNoAdeudoCartaPdf } from './noAdeudoCartaPdf'
 import { sendEmail, type MailAttachment } from './mailer'
 import { controlEscolarCentralQuery } from './control-escolar-central'
+import { getNoAdeudoControlUserForPlantel } from './external-users'
 
 type RuntimeNoAdeudoConfig = {
   noAdeudoControlEscolarTo?: string
@@ -56,6 +57,7 @@ export type NoAdeudoStudentContext = {
     parents: string[]
     control: string[]
     all: string[]
+    controlUser: Record<string, any> | null
   }
 }
 
@@ -182,7 +184,7 @@ export const diagnoseNoAdeudoError = (error: any, source = 'Carta de No Adeudo')
       detail: 'No se encontraron correos de padres ni correos de Control Escolar para el modo de envío seleccionado.',
       statusCode: 400,
       source,
-      action: 'Configura NO_ADEUDO_CONTROL_ESCOLAR_TO o corrige los correos del alumno antes de enviar.'
+      action: 'Asigna un usuario ROLE_CTRL para el plantel desde el modal de Carta de No Adeudo o corrige los correos del alumno antes de enviar.'
     }
   }
 
@@ -496,12 +498,14 @@ export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: 
   const debt = await calculateNoAdeudoDebt(row.matricula, cicloKey)
   const deudorCarta = await getNoAdeudoDeudorCartaMark(student.plantel, row.matricula, cicloKey)
   const settings = getNoAdeudoSettings(student.plantel)
+  const controlUser = await getNoAdeudoControlUserForPlantel(student.plantel)
   const parents = unique([
     firstEmail(student.emailPadre),
     firstEmail(student.emailMadre),
     firstEmail(student.correo),
   ].filter(Boolean))
-  const control = unique(settings.controlEmails)
+  const selectedControlEmail = firstEmail(controlUser?.email)
+  const control = unique([...(selectedControlEmail ? [selectedControlEmail] : []), ...settings.controlEmails])
 
   return {
     student,
@@ -510,7 +514,8 @@ export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: 
     recipients: {
       parents,
       control,
-      all: unique([...parents, ...control])
+      all: unique([...parents, ...control]),
+      controlUser: controlUser || null
     }
   }
 }
@@ -647,7 +652,10 @@ export const buildNoAdeudoPreviewPayload = async (event: any, matriculas: unknow
   return {
     ok: true,
     ciclo: cicloKey,
-    settings: getNoAdeudoSettings(contexts[0]?.student?.plantel || ''),
+    settings: {
+      ...getNoAdeudoSettings(contexts[0]?.student?.plantel || ''),
+      controlUser: contexts[0]?.recipients?.controlUser || null
+    },
     diagnostics,
     total: contexts.length,
     students: contexts.map((item) => ({
@@ -659,6 +667,7 @@ export const buildNoAdeudoPreviewPayload = async (event: any, matriculas: unknow
       debt: item.debt,
       deudorCarta: item.deudorCarta,
       recipients: item.recipients,
+      controlUser: item.recipients.controlUser || null,
       pdfPreviewUrl: item.pdfPreviewUrl,
       email: item.email
     }))

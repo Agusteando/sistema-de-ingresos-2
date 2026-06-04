@@ -177,15 +177,37 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (!hasValue(config.noAdeudoControlEscolarTo)) {
-    add({
-      level: 'warning',
-      title: 'No hay correo de Control Escolar configurado para cartas de no adeudo.',
-      detail: 'El modo “Padres + Control Escolar” no tendrá destinatarios de Control Escolar si NO_ADEUDO_CONTROL_ESCOLAR_TO está vacío.',
-      source: 'Destinatarios',
-      missing: ['NO_ADEUDO_CONTROL_ESCOLAR_TO'],
-      action: 'Configura NO_ADEUDO_CONTROL_ESCOLAR_TO o usa modo “Sólo padres” cuando existan correos de padres.'
-    })
+  if (!missingCentral.length) {
+    try {
+      const { noAdeudoControlUsersColumnExists, NO_ADEUDO_CONTROL_PLANTELES_COLUMN } = await import('../../utils/external-users')
+      const hasAssignmentColumn = await noAdeudoControlUsersColumnExists()
+      if (!hasAssignmentColumn) {
+        add({
+          level: 'warning',
+          title: 'Falta la columna externa para recordar Control Escolar por plantel.',
+          detail: `La selección del usuario ROLE_CTRL necesita users.${NO_ADEUDO_CONTROL_PLANTELES_COLUMN}.`,
+          source: 'Destinatarios',
+          missing: [`users.${NO_ADEUDO_CONTROL_PLANTELES_COLUMN}`],
+          action: 'Ejecuta manualmente el ALTER TABLE indicado para habilitar el selector del modal.'
+        })
+      } else {
+        checks.push({
+          level: 'ok',
+          title: 'Columna de destinatario Control Escolar disponible.',
+          detail: `La tabla externa users permite recordar la selección por plantel.`,
+          source: 'Destinatarios'
+        })
+      }
+    } catch (error: any) {
+      add({
+        level: 'warning',
+        title: 'No se pudo validar la configuración de usuarios Control Escolar.',
+        detail: normalize(error?.message) || 'Falló la lectura de la tabla externa users.',
+        source: 'Destinatarios',
+        code: normalize(error?.code || error?.name) || undefined,
+        action: 'Valida la conexión externa y que exista la tabla users.'
+      })
+    }
   }
 
   const previousStatus = Number(query.statusCode || query.status || 0)

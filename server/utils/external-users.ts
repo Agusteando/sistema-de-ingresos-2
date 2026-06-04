@@ -29,6 +29,7 @@ type ExternalLoginInput = {
 
 const TABLE = 'users'
 const CONTROL_ESCOLAR_ROLE = 'ROLE_CTRL'
+export const NO_ADEUDO_CONTROL_PLANTELES_COLUMN = 'no_adeudo_control_planteles'
 const DEFAULT_EXTERNAL_ROLE = 'ROLE_HUSKY_USER'
 const PROTECTED_EMAILS = new Set([
   `desarrollo.tecnologico@${WORKSPACE_DOMAIN}`,
@@ -204,7 +205,8 @@ const selectColumns = async () => {
     'picture',
     'avatar',
     'last_login_at',
-    'ingresos_blocked'
+    'ingresos_blocked',
+    NO_ADEUDO_CONTROL_PLANTELES_COLUMN
   ].filter((column) => columns.has(column))
 }
 
@@ -228,6 +230,8 @@ const normalizeUserRow = (row: any) => {
     lastLoginAt: row.last_login_at || null,
     ingresos_blocked: ingresosBlocked ? 1 : 0,
     ingresosBlocked,
+    no_adeudo_control_planteles: row[NO_ADEUDO_CONTROL_PLANTELES_COLUMN] || '',
+    noAdeudoControlPlanteles: plantelesValue(row[NO_ADEUDO_CONTROL_PLANTELES_COLUMN]),
     protected: PROTECTED_EMAILS.has(email),
     avatar,
     picture: avatar,
@@ -472,6 +476,127 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & { emails
   }
 
   return { success: true, updated }
+}
+
+
+const noAdeudoControlPlantelesValue = (value: unknown) => plantelesValue(value)
+const noAdeudoControlPlantelList = (value: unknown) => noAdeudoControlPlantelesValue(value)
+  .split(',')
+  .map(normalizePlantel)
+  .filter(Boolean)
+
+const serializeNoAdeudoControlPlanteles = (values: string[]) => Array.from(new Set(values.map(normalizePlantel).filter(Boolean))).join(',')
+
+export const hasExternalControlRole = (value: unknown) => hasControlRoleValue(value)
+
+const mapNoAdeudoControlUser = (user: any) => {
+  if (!user) return null
+  return {
+    id: user.id,
+    displayName: user.displayName || user.username || user.email || 'Control Escolar',
+    username: user.username || user.displayName || user.email || 'Control Escolar',
+    email: normalizeEmail(user.email),
+    role: user.role || CONTROL_ESCOLAR_ROLE,
+    avatar: user.avatar || user.picture || null,
+    picture: user.picture || user.avatar || null,
+    plantel: normalizePlantel(user.plantel),
+    planteles: plantelesValue(user.planteles || user.plantel),
+    noAdeudoControlPlanteles: noAdeudoControlPlantelesValue(user.noAdeudoControlPlanteles || user.no_adeudo_control_planteles)
+  }
+}
+
+export const noAdeudoControlUsersColumnExists = async () => {
+  const columns = await getExternalUsersColumns()
+  return columns.has(NO_ADEUDO_CONTROL_PLANTELES_COLUMN)
+}
+
+const assertNoAdeudoControlColumn = async () => {
+  const columns = await getExternalUsersColumns()
+  if (!columns.has(NO_ADEUDO_CONTROL_PLANTELES_COLUMN)) {
+    throw createError({
+      statusCode: 500,
+      message: `Falta la columna users.${NO_ADEUDO_CONTROL_PLANTELES_COLUMN} en la base externa. Ejecuta el ALTER TABLE manual indicado para recordar el usuario de Control Escolar por plantel.`
+    })
+  }
+  return columns
+}
+
+export const listExternalControlUsersForNoAdeudo = async (searchValue: unknown = '') => {
+  const users = await listExternalUsers(searchValue)
+  return users
+    .filter((user: any) => hasControlRoleValue(user.role))
+    .map(mapNoAdeudoControlUser)
+    .filter(Boolean)
+}
+
+export const getNoAdeudoControlUserForPlantel = async (plantelValue: unknown) => {
+  const plantel = normalizePlantel(plantelValue)
+  if (!plantel) return null
+  const hasColumn = await noAdeudoControlUsersColumnExists()
+  if (!hasColumn) return null
+  const users = await listExternalControlUsersForNoAdeudo('')
+  return users.find((user: any) => noAdeudoControlPlantelList(user.noAdeudoControlPlanteles).includes(plantel)) || null
+}
+
+export const setNoAdeudoControlUserForPlantel = async (plantelValue: unknown, userIdValue: unknown) => {
+  const plantel = normalizePlantel(plantelValue)
+  if (!plantel || !PLANTELES_LIST.includes(plantel)) {
+    throw createError({ statusCode: 400, message: 'Plantel inválido para asignar Control Escolar.' })
+  }
+
+  const columns = await assertNoAdeudoControlColumn()
+  const select = [
+    'id',
+    'displayName',
+    'username',
+    'email',
+    'planteles',
+    'plantel',
+    'role',
+    'picture',
+    'avatar',
+    NO_ADEUDO_CONTROL_PLANTELES_COLUMN
+  ].filter((column) => columns.has(column))
+  const rows = await controlEscolarCentralQuery<any[]>(`
+    SELECT ${select.map(escapeIdentifier).join(', ')}
+    FROM ${escapeIdentifier(TABLE)}
+    WHERE ${workspaceDomainWhere()}
+    ORDER BY ${escapeIdentifier('id')} ASC
+  `, [workspaceDomainParam()])
+
+  const userId = String(userIdValue || '').trim()
+  const selectedRaw = userId ? rows.find((row) => String(row.id) === userId) : null
+  if (userId && !selectedRaw) {
+    throw createError({ statusCode: 404, message: 'Usuario de Control Escolar no encontrado.' })
+  }
+  if (selectedRaw && !hasControlRoleValue(selectedRaw.role)) {
+    throw createError({ statusCode: 400, message: 'El usuario seleccionado no tiene rol ROLE_CTRL.' })
+  }
+
+  let updated = 0
+  for (const row of rows) {
+    const current = noAdeudoControlPlantelList(row[NO_ADEUDO_CONTROL_PLANTELES_COLUMN])
+    let next = current.filter((item) => item !== plantel)
+    if (selectedRaw && String(row.id) === String(selectedRaw.id)) next.push(plantel)
+    const serialized = serializeNoAdeudoControlPlanteles(next)
+    const currentSerialized = serializeNoAdeudoControlPlanteles(current)
+    if (serialized === currentSerialized) continue
+    await controlEscolarCentralQuery(
+      `UPDATE ${escapeIdentifier(TABLE)} SET ${escapeIdentifier(NO_ADEUDO_CONTROL_PLANTELES_COLUMN)} = ? WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
+      [serialized || null, row.id, workspaceDomainParam()]
+    )
+    updated++
+  }
+
+  const selected = selectedRaw ? mapNoAdeudoControlUser({
+    ...selectedRaw,
+    [NO_ADEUDO_CONTROL_PLANTELES_COLUMN]: serializeNoAdeudoControlPlanteles([
+      ...noAdeudoControlPlantelList(selectedRaw[NO_ADEUDO_CONTROL_PLANTELES_COLUMN]).filter((item) => item !== plantel),
+      plantel
+    ])
+  }) : null
+
+  return { success: true, plantel, selected, updated }
 }
 
 export const touchExternalUserLogin = async ({ email, name, picture, requestedPlantel }: ExternalLoginInput) => {

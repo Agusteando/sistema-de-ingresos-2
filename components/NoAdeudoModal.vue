@@ -91,10 +91,46 @@
                 </div>
                 <div class="recipient-group">
                   <small>Control Escolar</small>
+                  <div v-if="selectedControlUser" class="control-user-chip">
+                    <img :src="selectedControlUser.avatar || selectedControlUser.picture || fallbackUserPhoto(selectedControlUser)" :alt="selectedControlUser.displayName || selectedControlUser.email" loading="lazy" />
+                    <span>
+                      <strong>{{ selectedControlUser.displayName || selectedControlUser.username || 'Control Escolar' }}</strong>
+                      <i>{{ selectedControlUser.email }}</i>
+                    </span>
+                  </div>
                   <template v-if="activePreview?.recipients?.control?.length">
                     <b v-for="email in activePreview.recipients.control" :key="`control-${email}`">{{ email }}</b>
                   </template>
                   <em v-else>Sin correo configurado para Control Escolar.</em>
+
+                  <div class="control-user-picker">
+                    <div class="control-user-picker-header">
+                      <span>Asignar usuario del plantel {{ activePlantel || 'sin plantel' }}</span>
+                      <button type="button" :disabled="controlUsersLoading || controlSaving || !activePlantel" @click="loadControlUsers">Actualizar</button>
+                    </div>
+                    <input v-model="controlSearch" type="search" placeholder="Buscar ROLE_CTRL por nombre o correo" :disabled="controlUsersLoading || controlSaving" />
+                    <p v-if="controlUsersError" class="control-user-error">{{ controlUsersError }}</p>
+                    <p v-else-if="controlSchemaReady === false" class="control-user-error">Falta la columna externa para recordar la selección. Ejecuta el ALTER TABLE indicado.</p>
+                    <div v-else class="control-user-options">
+                      <button
+                        v-for="user in controlUsers"
+                        :key="user.id || user.email"
+                        type="button"
+                        class="control-user-option"
+                        :class="{ 'is-selected': String(user.id) === String(selectedControlUser?.id) }"
+                        :disabled="controlSaving || !activePlantel"
+                        @click="assignControlUser(user)"
+                      >
+                        <img :src="user.avatar || user.picture || fallbackUserPhoto(user)" :alt="user.displayName || user.email" loading="lazy" />
+                        <span>
+                          <strong>{{ user.displayName || user.username || user.email }}</strong>
+                          <i>{{ user.email }}</i>
+                        </span>
+                      </button>
+                      <em v-if="!controlUsersLoading && !controlUsers.length">No hay usuarios ROLE_CTRL con ese criterio.</em>
+                      <em v-if="controlUsersLoading">Cargando usuarios de Control Escolar…</em>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -156,12 +192,20 @@ const activeMatricula = ref('')
 const sendMode = ref('parents_control')
 const result = ref(null)
 const previewDiagnostics = ref([])
+const controlUsers = ref([])
+const controlUsersLoading = ref(false)
+const controlUsersError = ref('')
+const controlSearch = ref('')
+const controlSaving = ref(false)
+const controlSchemaReady = ref(null)
 
 const cicloKey = computed(() => normalizeCicloKey(props.ciclo))
 const matriculas = computed(() => props.students.map(student => normalizeStudentMatricula(student?.matricula)).filter(Boolean))
 const selectedTitle = computed(() => props.students[0]?.nombreCompleto || props.students[0]?.matricula || 'Alumno')
 const activePreview = computed(() => previewStudents.value.find(item => normalizeStudentMatricula(item.matricula) === normalizeStudentMatricula(activeMatricula.value)) || previewStudents.value[0] || null)
 const activePreviewName = computed(() => activePreview.value?.nombreCompleto || activePreview.value?.matricula || 'Carta de No Adeudo')
+const activePlantel = computed(() => activePreview.value?.plantel || props.students[0]?.plantel || '')
+const selectedControlUser = computed(() => activePreview.value?.controlUser || activePreview.value?.recipients?.controlUser || null)
 const debtRows = computed(() => previewStudents.value.filter(item => Number(item?.debt?.total || 0) > 0))
 const debtWarning = computed(() => {
   if (!debtRows.value.length) return ''
@@ -242,6 +286,56 @@ const fetchNoAdeudoDiagnostics = async (stage, error) => {
   return null
 }
 
+
+const fallbackUserPhoto = (user) => {
+  const label = user?.displayName || user?.username || user?.email || 'Control Escolar'
+  const params = new URLSearchParams({ name: label, background: 'dfe8df', color: '2f7d38', bold: 'true' })
+  return `https://ui-avatars.com/api/?${params.toString()}`
+}
+
+const loadControlUsers = async () => {
+  if (!activePlantel.value) return
+  controlUsersLoading.value = true
+  controlUsersError.value = ''
+  try {
+    const response = await $fetch('/api/no-adeudo/control-users', {
+      query: {
+        plantel: activePlantel.value,
+        q: controlSearch.value
+      }
+    })
+    controlUsers.value = Array.isArray(response?.users) ? response.users : []
+    controlSchemaReady.value = response?.schema?.assignmentColumnReady !== false
+  } catch (error) {
+    controlUsers.value = []
+    controlSchemaReady.value = null
+    controlUsersError.value = extractErrorMessage(error, 'No se pudieron cargar usuarios de Control Escolar.')
+  } finally {
+    controlUsersLoading.value = false
+  }
+}
+
+const assignControlUser = async (user) => {
+  if (!activePlantel.value || !user?.id || controlSaving.value) return
+  controlSaving.value = true
+  controlUsersError.value = ''
+  try {
+    await $fetch('/api/no-adeudo/control-recipient', {
+      method: 'PUT',
+      body: {
+        plantel: activePlantel.value,
+        userId: user.id
+      }
+    })
+    await loadControlUsers()
+    await loadPreview()
+  } catch (error) {
+    controlUsersError.value = extractErrorMessage(error, 'No se pudo guardar el usuario de Control Escolar para este plantel.')
+  } finally {
+    controlSaving.value = false
+  }
+}
+
 const primaryButtonLabel = computed(() => {
   if (sending.value) return 'Enviando...'
   return debtWarning.value ? 'Generar de todas maneras' : 'Generar y enviar'
@@ -313,8 +407,11 @@ const sendLetters = async () => {
   }
 }
 
-onMounted(loadPreview)
+onMounted(() => {
+  loadPreview()
+})
 watch(() => `${matriculas.value.join('|')}|${cicloKey.value}`, loadPreview)
+watch(() => `${activePlantel.value}|${controlSearch.value}`, loadControlUsers, { immediate: true })
 </script>
 
 <style scoped>
@@ -540,6 +637,142 @@ watch(() => `${matriculas.value.join('|')}|${cicloKey.value}`, loadPreview)
 .recipient-group em {
   color: #94a3b8;
   font-style: normal;
+}
+
+.control-user-chip,
+.control-user-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.control-user-chip {
+  margin: 4px 0 8px;
+  border: 1px solid #d8e3dd;
+  border-radius: 14px;
+  background: #fff;
+  padding: 8px;
+}
+
+.control-user-chip img,
+.control-user-option img {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  object-fit: cover;
+  background: #edf4ee;
+}
+
+.control-user-chip span,
+.control-user-option span {
+  display: grid;
+  min-width: 0;
+}
+
+.control-user-chip strong,
+.control-user-option strong {
+  overflow: hidden;
+  color: #15233c;
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-user-chip i,
+.control-user-option i {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-user-picker {
+  margin-top: 10px;
+  border-top: 1px solid #e5ece5;
+  padding-top: 10px;
+}
+
+.control-user-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.control-user-picker-header span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.control-user-picker-header button {
+  border: 1px solid #d8e3dd;
+  border-radius: 999px;
+  background: #fff;
+  padding: 4px 8px;
+  color: #2f7d38;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.control-user-picker input {
+  width: 100%;
+  height: 36px;
+  margin-top: 8px;
+  border: 1px solid #d8e3dd;
+  border-radius: 12px;
+  background: #fff;
+  padding: 0 10px;
+  color: #15233c;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.control-user-options {
+  display: grid;
+  gap: 7px;
+  max-height: 210px;
+  margin-top: 8px;
+  overflow: auto;
+}
+
+.control-user-option {
+  width: 100%;
+  border: 1px solid #e5ece5;
+  border-radius: 13px;
+  background: #fff;
+  padding: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.control-user-option.is-selected {
+  border-color: #58a94b;
+  background: #f1fbef;
+}
+
+.control-user-option:disabled,
+.control-user-picker-header button:disabled,
+.control-user-picker input:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.control-user-error {
+  margin: 8px 0 0;
+  border-radius: 12px;
+  background: #fff1f2;
+  padding: 8px;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .no-adeudo-email-preview {
