@@ -1,3 +1,3 @@
-Agrega API externa cálida de Control Escolar para Aurora
+Corrige autenticación de la API externa de Aurora en Vercel
 
-Expone endpoints read-only versionados para servicios externos protegidos por AURORA_API_TOKEN, leyendo alumnos desde un snapshot cálido por plantel y ciclo escolar en lugar de consultar el bridge en frío. La carga normal de Control Escolar publica la vista enriquecida que ya muestra la UI, con grado proyectado desde base, datos de matrícula normalizados, paginación, detalle por matrícula, cambios desde fecha y health de snapshots. También agrega el SQL manual de la tabla control_external_student_view y evita exponer contraseñas Husky Pass en el contrato externo.
+Lee el token externo directamente desde variables de entorno en runtime, acepta encabezados Authorization, x-aurora-token y x-api-key de forma consistente, agrega compatibilidad temporal con el nombre AURORA_STUDENTS_API_TOKEN para evitar fallas de configuración entre proyectos y expone diagnósticos seguros sin revelar secretos para validar la integración con SIPAE.
