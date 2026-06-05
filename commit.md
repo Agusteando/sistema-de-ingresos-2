@@ -1,3 +1,3 @@
-Corrige autenticación de la API externa de Aurora en Vercel
+Mejora diagnóstico de autenticación externa de Aurora
 
-Lee el token externo directamente desde variables de entorno en runtime, acepta encabezados Authorization, x-aurora-token y x-api-key de forma consistente, agrega compatibilidad temporal con el nombre AURORA_STUDENTS_API_TOKEN para evitar fallas de configuración entre proyectos y expone diagnósticos seguros sin revelar secretos para validar la integración con SIPAE.
+Agrega un endpoint de eco para validar la llegada de headers de autenticación desde servicios externos, endurece la lectura de tokens en Vercel y amplía los datos seguros de diagnóstico cuando una solicitud externa es rechazada.

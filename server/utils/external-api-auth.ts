@@ -12,16 +12,53 @@ const fingerprintToken = (value: string) => {
   return createHash('sha256').update(value).digest('hex').slice(0, 12)
 }
 
-const readTokenFromEvent = (event: any) => {
-  const auth = String(getHeader(event, 'authorization') || '').trim()
-  const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
-  return normalizeToken(
-    bearer ||
-    getHeader(event, 'x-aurora-token') ||
-    getHeader(event, 'x-api-key') ||
-    getQuery(event)?.token
-  )
+const getEventHeaderMap = (event: any) => {
+  const headers = getRequestHeaders(event) || {}
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    result[String(key).toLowerCase()] = Array.isArray(value) ? value.join(', ') : String(value || '')
+  }
+  return result
 }
+
+const getHeaderValue = (event: any, name: string) => {
+  const fromHeader = getHeader(event, name)
+  if (fromHeader) return String(fromHeader)
+  return getEventHeaderMap(event)[name.toLowerCase()] || ''
+}
+
+const getIncomingTokenDetails = (event: any) => {
+  const headers = getEventHeaderMap(event)
+  const auth = String(headers.authorization || getHeaderValue(event, 'authorization') || '').trim()
+  const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || ''
+  const xAurora = getHeaderValue(event, 'x-aurora-token')
+  const xApiKey = getHeaderValue(event, 'x-api-key')
+  const queryToken = getQuery(event)?.token
+
+  const candidates: Array<{ source: string, value: unknown }> = [
+    { source: 'authorization', value: bearer },
+    { source: 'x-aurora-token', value: xAurora },
+    { source: 'x-api-key', value: xApiKey },
+    { source: 'query.token', value: queryToken }
+  ]
+
+  const match = candidates.find((candidate) => normalizeToken(candidate.value))
+  const token = normalizeToken(match?.value)
+
+  return {
+    token,
+    source: match?.source || null,
+    fingerprint: fingerprintToken(token),
+    headersPresent: {
+      authorization: Boolean(headers.authorization || getHeaderValue(event, 'authorization')),
+      xAuroraToken: Boolean(headers['x-aurora-token'] || getHeaderValue(event, 'x-aurora-token')),
+      xApiKey: Boolean(headers['x-api-key'] || getHeaderValue(event, 'x-api-key'))
+    },
+    authorizationScheme: auth ? (auth.split(/\s+/)[0] || null) : null
+  }
+}
+
+const readTokenFromEvent = (event: any) => getIncomingTokenDetails(event).token
 
 const collectExpectedTokens = () => {
   const config = useRuntimeConfig() as any
@@ -52,6 +89,25 @@ export const getAuroraExternalApiAuthDiagnostics = () => {
   }
 }
 
+export const getAuroraExternalApiRequestAuthDiagnostics = (event: any) => {
+  const expected = collectExpectedTokens()
+  const incoming = getIncomingTokenDetails(event)
+  const matchedSource = expected.find((candidate) => candidate.value === incoming.token)?.source || null
+  return {
+    configured: expected.length > 0,
+    acceptedTokenSources: expected.map((item) => item.source),
+    acceptedTokenFingerprints: expected.map((item) => fingerprintToken(item.value)),
+    receivedTokenPresent: Boolean(incoming.token),
+    receivedTokenSource: incoming.source,
+    receivedTokenFingerprint: incoming.fingerprint || null,
+    matched: Boolean(matchedSource),
+    matchedTokenSource: matchedSource,
+    headersPresent: incoming.headersPresent,
+    authorizationScheme: incoming.authorizationScheme,
+    acceptedHeaders: ['Authorization: Bearer <token>', 'x-aurora-token', 'x-api-key']
+  }
+}
+
 export const assertAuroraExternalApiToken = (event: any) => {
   const expected = collectExpectedTokens()
 
@@ -67,7 +123,8 @@ export const assertAuroraExternalApiToken = (event: any) => {
     })
   }
 
-  const received = readTokenFromEvent(event)
+  const incoming = getIncomingTokenDetails(event)
+  const received = incoming.token
   const match = expected.find((candidate) => candidate.value === received)
 
   if (!received || !match) {
@@ -78,9 +135,13 @@ export const assertAuroraExternalApiToken = (event: any) => {
       data: {
         code: 'AURORA_API_UNAUTHORIZED',
         receivedTokenPresent: Boolean(received),
+        receivedTokenSource: incoming.source,
         receivedTokenFingerprint: fingerprintToken(received),
         expectedTokenConfigured: true,
         acceptedTokenSources: expected.map((item) => item.source),
+        acceptedTokenFingerprints: expected.map((item) => fingerprintToken(item.value)),
+        headersPresent: incoming.headersPresent,
+        authorizationScheme: incoming.authorizationScheme,
         acceptedHeaders: ['Authorization: Bearer <token>', 'x-aurora-token', 'x-api-key']
       }
     })
