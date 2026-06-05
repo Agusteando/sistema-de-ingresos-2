@@ -1,3 +1,3 @@
-Corrige grado visible de Control Escolar desde base
+Agrega API externa cálida de Control Escolar para Aurora
 
-Hace que Control Escolar use la proyección de grado, nivel, grupo y plantel proveniente de base como fuente autoritativa para el ciclo seleccionado, igual que Alumnos, evitando que los campos académicos de matricula sobrescriban la ubicación real del alumno. Mantiene los valores académicos de matricula solo como metadatos y sincroniza las actualizaciones de grado/ciclo tanto en base como en matricula, incluyendo el flujo masivo.
+Expone endpoints read-only versionados para servicios externos protegidos por AURORA_API_TOKEN, leyendo alumnos desde un snapshot cálido por plantel y ciclo escolar en lugar de consultar el bridge en frío. La carga normal de Control Escolar publica la vista enriquecida que ya muestra la UI, con grado proyectado desde base, datos de matrícula normalizados, paginación, detalle por matrícula, cambios desde fecha y health de snapshots. También agrega el SQL manual de la tabla control_external_student_view y evita exponer contraseñas Husky Pass en el contrato externo.

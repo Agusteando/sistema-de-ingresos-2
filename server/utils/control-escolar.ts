@@ -28,6 +28,7 @@ import {
 import { inferMexicanCurpIdentity, resolveControlEscolarCompleteness } from "../../shared/utils/studentPresentation";
 import { buildParentSiblingSignature } from "../../shared/utils/parentSiblingMatch";
 import { isControlEscolarNameField, toNameDisplayCase } from "../../shared/utils/nameCase";
+import { writeControlEscolarExternalStudentView } from "./control-escolar-external-view";
 
 export type ControlEscolarStudentRow = {
   agentId: string;
@@ -2110,6 +2111,15 @@ export const fetchControlEscolarStudents = async (
     : Math.min(100, Math.max(8, Number(filters.limit || 25) || 25));
   const loaded = await fetchAllNormalizedStudents(agentId, filters);
   const allStudents = loaded.students;
+  if (wantsAll && !normalizeText(filters.search || filters.q || "", 80)) {
+    writeControlEscolarExternalStudentView(agentId, filters, allStudents, loaded.source).catch((error: any) => {
+      console.warn("[Aurora External API] Warm student view publish failed.", {
+        plantel: normalizePlantel(agentId),
+        ciclo: normalizeText(filters.ciclo || filters.cicloKey || ""),
+        message: error?.message || error
+      });
+    });
+  }
   const filtered = applyFilters(
     allStudents,
     wantsAll
