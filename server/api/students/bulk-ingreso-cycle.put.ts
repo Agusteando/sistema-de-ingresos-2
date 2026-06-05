@@ -1,4 +1,5 @@
 import { executeStatementTransaction, query, runWithBridgeAgentId } from '../../utils/db'
+import { controlEscolarCentralQuery, getCentralTableColumns } from '../../utils/control-escolar-central'
 import { normalizeCicloForTipoIngreso, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import {
   calculateBasePlacementForTargetPosition,
@@ -16,6 +17,66 @@ const normalizeMatricula = (value: unknown) => String(value || '').trim()
 const sameText = (left: unknown, right: unknown) => String(left || '').trim().toLowerCase() === String(right || '').trim().toLowerCase()
 
 const sameGrado = (left: unknown, right: unknown) => displayGrado(left).toLowerCase() === displayGrado(right).toLowerCase()
+
+const escapeCentralColumn = (column: string) => `\`${String(column).replace(/`/g, '``')}\``
+const canonicalMatriculaKey = (value: unknown) => String(value || '').trim().toUpperCase()
+
+const syncCentralAcademicOverlays = async (updates: Map<string, any>, userEmail?: string) => {
+  if (!updates.size) return
+  try {
+    const columns = await getCentralTableColumns('matricula')
+    if (!columns.has('matricula')) return
+
+    for (const [matricula, update] of updates.entries()) {
+      const entries = [
+        { column: 'plantel', value: update.plantelBase || update.plantel },
+        { column: 'nivel', value: update.nivelBase || update.nivel },
+        { column: 'grado', value: displayGrado(update.gradoBase || update.grado).toLowerCase() },
+        { column: 'ciclo', value: update.cicloBase || update.ciclo },
+      ].filter((entry) => entry.value !== undefined && entry.value !== null && columns.has(entry.column))
+
+      if (!entries.length) continue
+
+      const [existing] = await controlEscolarCentralQuery<any[]>(
+        `SELECT \`matricula\` FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) = ? LIMIT 1`,
+        [canonicalMatriculaKey(matricula)],
+      )
+
+      if (existing) {
+        const assignments = entries.map((entry) => `${escapeCentralColumn(entry.column)} = ?`)
+        const params = entries.map((entry) => entry.value)
+        if (columns.has('updated_at')) assignments.push('`updated_at` = CURRENT_TIMESTAMP')
+        if (columns.has('updated_by')) {
+          assignments.push('`updated_by` = ?')
+          params.push(userEmail || 'sistema')
+        }
+        params.push(canonicalMatriculaKey(matricula))
+        await controlEscolarCentralQuery(
+          `UPDATE \`matricula\` SET ${assignments.join(', ')} WHERE UPPER(TRIM(\`matricula\`)) = ?`,
+          params,
+        )
+        continue
+      }
+
+      const insertColumns = ['matricula', ...entries.map((entry) => entry.column)]
+      const insertValues: unknown[] = [matricula, ...entries.map((entry) => entry.value)]
+      if (columns.has('created_by')) {
+        insertColumns.push('created_by')
+        insertValues.push(userEmail || 'sistema')
+      }
+      if (columns.has('updated_by')) {
+        insertColumns.push('updated_by')
+        insertValues.push(userEmail || 'sistema')
+      }
+      await controlEscolarCentralQuery(
+        `INSERT INTO \`matricula\` (${insertColumns.map(escapeCentralColumn).join(', ')}) VALUES (${insertColumns.map(() => '?').join(', ')})`,
+        insertValues,
+      )
+    }
+  } catch (error: any) {
+    console.warn('[Control Escolar] No se pudo sincronizar actualización masiva de grado/ciclo en matricula central.', error?.message || error)
+  }
+}
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
@@ -204,6 +265,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   if (statements.length) {
     await executeStatementTransaction(statements)
+    await syncCentralAcademicOverlays(updatesByMatricula, user?.email)
   }
 
   const finalizedResults = results.map((result) => {

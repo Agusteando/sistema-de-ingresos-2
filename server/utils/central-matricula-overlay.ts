@@ -1,4 +1,5 @@
 import { controlEscolarCentralQuery, getCentralTableColumns } from './control-escolar-central'
+import { toNameDisplayCase } from '../../shared/utils/nameCase'
 
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 const stringifyScalar = (value: unknown): string => {
@@ -16,6 +17,7 @@ const stringifyScalar = (value: unknown): string => {
   return ''
 }
 const normalizeText = (value: unknown, maxLength = 500) => stringifyScalar(value).trim().slice(0, maxLength)
+const normalizeNameText = (value: unknown, maxLength = 500) => toNameDisplayCase(normalizeText(value, maxLength)).slice(0, maxLength)
 const normalizeUpper = (value: unknown, maxLength = 500) => normalizeText(value, maxLength).toUpperCase()
 const normalizeLower = (value: unknown, maxLength = 500) => normalizeText(value, maxLength).toLowerCase()
 const firstText = (...values: unknown[]) => {
@@ -120,21 +122,21 @@ const MATRICULA_COLUMNS = [
 
 const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
   const padre = firstText(
-    [raw.nombre_padre, raw.apellido_paterno_padre, raw.apellido_materno_padre].map((value) => normalizeText(value)).filter(Boolean).join(' '),
+    [raw.nombre_padre, raw.apellido_paterno_padre, raw.apellido_materno_padre].map((value) => normalizeNameText(value)).filter(Boolean).join(' '),
     raw.nombre_padre_completo,
     raw.padre,
     raw.tutor,
     raw.padre_tutor
   )
   const madre = firstText(
-    [raw.nombre_madre, raw.apellido_paterno_madre, raw.apellido_materno_madre].map((value) => normalizeText(value)).filter(Boolean).join(' '),
+    [raw.nombre_madre, raw.apellido_paterno_madre, raw.apellido_materno_madre].map((value) => normalizeNameText(value)).filter(Boolean).join(' '),
     raw.nombre_madre_completo,
     raw.madre
   )
-  const apellidoPaterno = normalizeText(raw.apellido_paterno)
-  const apellidoMaterno = normalizeText(raw.apellido_materno)
-  const nombres = normalizeText(raw.nombres)
-  const fullName = firstText([apellidoPaterno, apellidoMaterno, nombres].filter(Boolean).join(' '))
+  const apellidoPaterno = normalizeNameText(raw.apellido_paterno)
+  const apellidoMaterno = normalizeNameText(raw.apellido_materno)
+  const nombres = normalizeNameText(raw.nombres)
+  const fullName = normalizeNameText(firstText([apellidoPaterno, apellidoMaterno, nombres].filter(Boolean).join(' ')))
 
   return {
     source: 'CONTROL_ESCOLAR_MYSQL.matricula',
@@ -152,8 +154,8 @@ const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
       nombreCompleto: fullName,
       fullName,
       curp: normalizeUpper(raw.curp, 18),
-      nombreVerificado: normalizeText(raw.nombre_verificado),
-      nombreCompletoAlumno: normalizeText(raw.nombre_completo_alumno),
+      nombreVerificado: normalizeNameText(raw.nombre_verificado),
+      nombreCompletoAlumno: normalizeNameText(raw.nombre_completo_alumno),
       fechaNacimiento: normalizeText(raw.fecha_nacimiento),
       lugarNacimiento: normalizeText(raw.lugar_nacimiento),
       sexo: normalizeText(raw.sexo),
@@ -178,10 +180,10 @@ const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
       telefonoMadre: firstText(raw.telefono_madre, raw.celular_madre),
       emailPadre: firstLower(raw.email_padre, raw.correo_padre),
       emailMadre: firstLower(raw.email_madre, raw.correo_madre),
-      nombrePadre: normalizeText(raw.nombre_padre),
-      apellidoPaternoPadre: normalizeText(raw.apellido_paterno_padre),
-      apellidoMaternoPadre: normalizeText(raw.apellido_materno_padre),
-      nombrePadreCompleto: normalizeText(raw.nombre_padre_completo),
+      nombrePadre: normalizeNameText(raw.nombre_padre),
+      apellidoPaternoPadre: normalizeNameText(raw.apellido_paterno_padre),
+      apellidoMaternoPadre: normalizeNameText(raw.apellido_materno_padre),
+      nombrePadreCompleto: normalizeNameText(raw.nombre_padre_completo),
       ocupacionPadre: firstText(raw.ocupacion_padre, raw.ocupacion_tutor),
       lugarTrabajoPadre: normalizeText(raw.lugar_trabajo_padre),
       puestoPadre: normalizeText(raw.puesto_padre),
@@ -189,10 +191,10 @@ const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
       fechaNacimientoPadre: normalizeText(raw.fecha_nacimiento_padre),
       inePadre: normalizeText(raw.ine_padre),
       curpPadre: normalizeText(raw.curp_padre),
-      nombreMadre: normalizeText(raw.nombre_madre),
-      apellidoPaternoMadre: normalizeText(raw.apellido_paterno_madre),
-      apellidoMaternoMadre: normalizeText(raw.apellido_materno_madre),
-      nombreMadreCompleto: normalizeText(raw.nombre_madre_completo),
+      nombreMadre: normalizeNameText(raw.nombre_madre),
+      apellidoPaternoMadre: normalizeNameText(raw.apellido_paterno_madre),
+      apellidoMaternoMadre: normalizeNameText(raw.apellido_materno_madre),
+      nombreMadreCompleto: normalizeNameText(raw.nombre_madre_completo),
       ocupacionMadre: normalizeText(raw.ocupacion_madre),
       lugarTrabajoMadre: normalizeText(raw.lugar_trabajo_madre),
       puestoMadre: normalizeText(raw.puesto_madre),

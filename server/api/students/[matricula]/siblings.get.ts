@@ -117,7 +117,7 @@ const loadControlEscolarParentNameSiblings = async (matricula: string, cicloKey:
       siblings: filterProjectedSiblings(baseSiblings, cicloKey, user).map((sibling) => ({
         ...sibling,
         siblingMatchSource: 'control-escolar-parent-names',
-        siblingMatchReason: 'Mismo padre y misma madre normalizados',
+        siblingMatchReason: 'Mismo padre y misma madre registrados',
       })),
       source: 'control-escolar-parent-names',
       familyKey: null,

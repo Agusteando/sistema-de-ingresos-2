@@ -27,6 +27,7 @@ import {
 } from "./control-escolar-cache";
 import { inferMexicanCurpIdentity, resolveControlEscolarCompleteness } from "../../shared/utils/studentPresentation";
 import { buildParentSiblingSignature } from "../../shared/utils/parentSiblingMatch";
+import { isControlEscolarNameField, toNameDisplayCase } from "../../shared/utils/nameCase";
 
 export type ControlEscolarStudentRow = {
   agentId: string;
@@ -143,6 +144,8 @@ const stringifyScalar = (value: unknown): string => {
 const normalizeKey = (value: unknown) => stringifyScalar(value).trim();
 const normalizeText = (value: unknown, max = 255) =>
   normalizeKey(value).slice(0, max);
+const normalizeNameText = (value: unknown, max = 255) =>
+  toNameDisplayCase(normalizeText(value, max)).slice(0, max);
 const normalizeUpper = (value: unknown, max = 255) =>
   normalizeText(value, max).toUpperCase();
 const normalizeEmail = (value: unknown) =>
@@ -1283,45 +1286,45 @@ const overlayStudentRow = (
   huskyPass?: any,
 ): ControlEscolarStudentRow => {
   const hasOverlay = Boolean(overlay?.matricula);
-  const nombres = firstText(overlay?.nombres, base.baseNombres);
-  const apellidoPaterno = firstText(
+  const nombres = normalizeNameText(firstText(overlay?.nombres, base.baseNombres));
+  const apellidoPaterno = normalizeNameText(firstText(
     overlay?.apellido_paterno,
     base.baseApellidoPaterno,
-  );
-  const apellidoMaterno = firstText(
+  ));
+  const apellidoMaterno = normalizeNameText(firstText(
     overlay?.apellido_materno,
     base.baseApellidoMaterno,
-  );
-  const fullName = firstText(
+  ));
+  const fullName = normalizeNameText(firstText(
     [apellidoPaterno, apellidoMaterno, nombres].filter(Boolean).join(" "),
     base.baseNombreCompleto,
-  );
-  const fatherName = firstText(
+  ));
+  const fatherName = normalizeNameText(firstText(
     [
       overlay?.nombre_padre,
       overlay?.apellido_paterno_padre,
       overlay?.apellido_materno_padre,
     ]
-      .map(normalizeText)
+      .map(normalizeNameText)
       .filter(Boolean)
       .join(" "),
     overlay?.nombre_padre_completo,
     overlay?.padre,
     overlay?.tutor,
     overlay?.padre_tutor,
-  );
-  const motherName = firstText(
+  ));
+  const motherName = normalizeNameText(firstText(
     [
       overlay?.nombre_madre,
       overlay?.apellido_paterno_madre,
       overlay?.apellido_materno_madre,
     ]
-      .map(normalizeText)
+      .map(normalizeNameText)
       .filter(Boolean)
       .join(" "),
     overlay?.nombre_madre_completo,
     overlay?.madre,
-  );
+  ));
   const updatedAt = firstText(
     overlay?.updated_at,
     overlay?.updatedAt,
@@ -1338,7 +1341,7 @@ const overlayStudentRow = (
 
   const normalized: ControlEscolarStudentRow = {
     agentId: normalizePlantel(agentId),
-    plantel: firstText(overlay?.plantel, base.basePlantel, agentId),
+    plantel: firstText(base.basePlantel, overlay?.plantel, agentId),
     basePlantel: firstText(base.basePlantel, agentId),
     studentId: normalizeText(base.studentId || base.matricula),
     matricula: normalizeText(base.matricula),
@@ -1356,19 +1359,19 @@ const overlayStudentRow = (
     motivoBaja: normalizeText(overlay?.motivo_baja, 500),
     categoriaBaja: normalizeText(overlay?.categoria_baja),
     seguimientoBaja: normalizeText(overlay?.seguimiento_baja, 500),
-    program: firstText(overlay?.servicio, overlay?.nivel, base.baseNivel),
-    nivel: firstLower(overlay?.nivel, base.baseNivel),
-    grado: firstLower(overlay?.grado, base.baseGrado),
-    group: firstText(overlay?.grupo, base.baseGrupo),
-    guardianName: firstText(fatherName, motherName, base.baseGuardian),
+    program: firstText(overlay?.servicio, base.baseNivel, overlay?.nivel),
+    nivel: firstLower(base.baseNivel, overlay?.nivel),
+    grado: firstLower(base.baseGrado, overlay?.grado),
+    group: firstText(base.baseGrupo, overlay?.grupo),
+    guardianName: normalizeNameText(firstText(fatherName, motherName, base.baseGuardian)),
     fatherName,
     motherName,
-    nombrePadre: firstText(overlay?.nombre_padre, overlay?.nombre_padre_completo, overlay?.padre, overlay?.tutor, overlay?.padre_tutor),
-    apellidoPaternoPadre: normalizeText(overlay?.apellido_paterno_padre),
-    apellidoMaternoPadre: normalizeText(overlay?.apellido_materno_padre),
-    nombreMadre: firstText(overlay?.nombre_madre, overlay?.nombre_madre_completo, overlay?.madre),
-    apellidoPaternoMadre: normalizeText(overlay?.apellido_paterno_madre),
-    apellidoMaternoMadre: normalizeText(overlay?.apellido_materno_madre),
+    nombrePadre: normalizeNameText(firstText(overlay?.nombre_padre, overlay?.nombre_padre_completo, overlay?.padre, overlay?.tutor, overlay?.padre_tutor)),
+    apellidoPaternoPadre: normalizeNameText(overlay?.apellido_paterno_padre),
+    apellidoMaternoPadre: normalizeNameText(overlay?.apellido_materno_padre),
+    nombreMadre: normalizeNameText(firstText(overlay?.nombre_madre, overlay?.nombre_madre_completo, overlay?.madre)),
+    apellidoPaternoMadre: normalizeNameText(overlay?.apellido_paterno_madre),
+    apellidoMaternoMadre: normalizeNameText(overlay?.apellido_materno_madre),
     telefonoPadre: firstText(overlay?.telefono_padre, overlay?.celular_padre, base.baseTelefono),
     telefonoMadre: firstText(overlay?.telefono_madre, overlay?.celular_madre),
     emailPadre: firstDisplayEmail(overlay?.email_padre, overlay?.correo_padre, base.baseCorreo),
@@ -1412,11 +1415,16 @@ const overlayStudentRow = (
   const derivedCurpIdentity = inferMexicanCurpIdentity(normalized.curp);
 
   Object.assign(normalized as any, {
+    matriculaPlantel: normalizeText(overlay?.plantel),
+    matriculaNivel: normalizeText(overlay?.nivel),
+    matriculaGrado: normalizeText(overlay?.grado),
+    matriculaGrupo: normalizeText(overlay?.grupo),
+    academicPlacementSource: "base-projection",
     lastGrade: normalizeText(overlay?.last_grade),
     lastCiclo: normalizeText(overlay?.last_ciclo),
-    nombreVerificado: normalizeText(overlay?.nombre_verificado),
+    nombreVerificado: normalizeNameText(overlay?.nombre_verificado),
     fechaNacimiento: derivedCurpIdentity.fechaNacimiento || normalizeText(overlay?.fecha_nacimiento),
-    nombreCompletoAlumno: normalizeText(overlay?.nombre_completo_alumno),
+    nombreCompletoAlumno: normalizeNameText(overlay?.nombre_completo_alumno),
     lugarNacimiento: normalizeText(overlay?.lugar_nacimiento),
     sexo: normalizeText(overlay?.sexo),
     talla: normalizeText(overlay?.talla),
@@ -2201,7 +2209,7 @@ export const fetchControlEscolarSiblingsByParentNames = async (
     .map((student) => ({
       ...student,
       siblingMatchSource: "control-escolar-parent-names",
-      siblingMatchReason: "Mismo padre y misma madre normalizados",
+      siblingMatchReason: "Mismo padre y misma madre registrados",
     }));
 
   return {
@@ -2406,6 +2414,7 @@ const normalizePatchValue = (field: string, value: unknown) => {
     if (["H", "HOMBRE", "MASCULINO"].includes(normalized)) return "H";
     return normalized || null;
   }
+  if (isControlEscolarNameField(field)) return normalizeNameText(value, 255) || null;
   if (["baja", "interno", "eventual", "verified"].includes(field))
     return value === true ||
       value === 1 ||

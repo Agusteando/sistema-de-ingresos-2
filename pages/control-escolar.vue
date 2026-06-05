@@ -754,6 +754,7 @@
                         ><input
                           v-model="editForm.apellidoPaterno"
                           autocomplete="off"
+                          @blur="formatNameField('apellidoPaterno')"
                         />
                         <small>{{ fieldValidationMessage('apellidoPaterno') }}</small>
                       </label>
@@ -764,6 +765,7 @@
                         ><input
                           v-model="editForm.apellidoMaterno"
                           autocomplete="off"
+                          @blur="formatNameField('apellidoMaterno')"
                         />
                         <small>{{ fieldValidationMessage('apellidoMaterno') }}</small>
                       </label>
@@ -771,7 +773,7 @@
                         :class="fieldShellClass('nombres')"
                         data-ce-field="nombres"
                         ><span>Nombre(s)</span
-                        ><input v-model="editForm.nombres" autocomplete="off"
+                        ><input v-model="editForm.nombres" autocomplete="off" @blur="formatNameField('nombres')"
                         />
                         <small>{{ fieldValidationMessage('nombres') }}</small>
                       </label>
@@ -966,12 +968,12 @@
                       </header>
                       <dl class="ce-family-siblings-match">
                         <div>
-                          <dt>Padre normalizado</dt>
-                          <dd>{{ selectedParentSiblingSignature.normalizedFatherName || 'Sin dato suficiente' }}</dd>
+                          <dt>Padre</dt>
+                          <dd>{{ selectedParentSiblingSignature.fatherName || 'Sin dato suficiente' }}</dd>
                         </div>
                         <div>
-                          <dt>Madre normalizada</dt>
-                          <dd>{{ selectedParentSiblingSignature.normalizedMotherName || 'Sin dato suficiente' }}</dd>
+                          <dt>Madre</dt>
+                          <dd>{{ selectedParentSiblingSignature.motherName || 'Sin dato suficiente' }}</dd>
                         </div>
                       </dl>
                       <div v-if="selectedControlEscolarSiblings.length" class="ce-family-siblings-list">
@@ -1005,7 +1007,7 @@
                         <div class="ce-form-grid two ce-family-fields ce-family-fields--father">
                           <label :class="fieldShellClass('nombrePadre')" data-ce-field="nombrePadre">
                             <span>Nombre padre</span>
-                            <input v-model="editForm.nombrePadre" autocomplete="off" />
+                            <input v-model="editForm.nombrePadre" autocomplete="off" @blur="formatNameField('nombrePadre')" />
                             <small>{{ fieldValidationMessage('nombrePadre') }}</small>
                           </label>
                           <label :class="fieldShellClass('apellidoPaternoPadre')" data-ce-field="apellidoPaternoPadre">
@@ -1016,7 +1018,7 @@
                                 autocomplete="off"
                                 @focus="showParentLastNameSuggestion('apellidoPaternoPadre')"
                                 @click="showParentLastNameSuggestion('apellidoPaternoPadre')"
-                                @blur="hideParentLastNameSuggestion"
+                                @blur="onParentLastNameBlur('apellidoPaternoPadre')"
                               />
                               <div
                                 v-if="parentLastNameSuggestionVisible('apellidoPaternoPadre')"
@@ -1045,6 +1047,7 @@
                             ><input
                               v-model="editForm.apellidoMaternoPadre"
                               autocomplete="off"
+                              @blur="formatNameField('apellidoMaternoPadre')"
                           /></label>
                           <label :class="fieldShellClass('telefonoPadre')" data-ce-field="telefonoPadre">
                             <span>Teléfono padre</span>
@@ -1073,7 +1076,7 @@
                         <div class="ce-form-grid two ce-family-fields ce-family-fields--mother">
                           <label :class="fieldShellClass('nombreMadre')" data-ce-field="nombreMadre">
                             <span>Nombre madre</span>
-                            <input v-model="editForm.nombreMadre" autocomplete="off" />
+                            <input v-model="editForm.nombreMadre" autocomplete="off" @blur="formatNameField('nombreMadre')" />
                             <small>{{ fieldValidationMessage('nombreMadre') }}</small>
                           </label>
                           <label :class="fieldShellClass('apellidoPaternoMadre')" data-ce-field="apellidoPaternoMadre">
@@ -1084,7 +1087,7 @@
                                 autocomplete="off"
                                 @focus="showParentLastNameSuggestion('apellidoPaternoMadre')"
                                 @click="showParentLastNameSuggestion('apellidoPaternoMadre')"
-                                @blur="hideParentLastNameSuggestion"
+                                @blur="onParentLastNameBlur('apellidoPaternoMadre')"
                               />
                               <div
                                 v-if="parentLastNameSuggestionVisible('apellidoPaternoMadre')"
@@ -1113,6 +1116,7 @@
                             ><input
                               v-model="editForm.apellidoMaternoMadre"
                               autocomplete="off"
+                              @blur="formatNameField('apellidoMaternoMadre')"
                           /></label>
                           <label :class="fieldShellClass('telefonoMadre')" data-ce-field="telefonoMadre">
                             <span>Teléfono madre</span>
@@ -1688,6 +1692,7 @@ import {
 import { NIVELES_ESCOLARES, gradeOptionsForNivel } from "~/shared/utils/grado";
 import { STUDENT_GROUP_ICON_LABELS } from "~/shared/utils/studentGroupIcons";
 import { buildParentSiblingSignature } from "~/shared/utils/parentSiblingMatch";
+import { isControlEscolarNameField, toNameDisplayCase } from "~/shared/utils/nameCase";
 import { normalizeCicloOption } from "~/utils/constants";
 
 useHead({ bodyAttrs: { class: "students-route-active" } });
@@ -2791,7 +2796,7 @@ const selectedControlEscolarSiblings = computed(() => {
 const selectedSiblingMatchLabel = computed(() => {
   const signature = selectedParentSiblingSignature.value;
   if (!signature.complete) return "Captura padre y madre completos para detectar hermanos.";
-  return "Mismo padre y misma madre normalizados.";
+  return "Mismo padre y misma madre registrados.";
 });
 
 const selectSiblingStudent = (student) => {
@@ -3392,11 +3397,29 @@ const EDIT_FORM_FIELDS = [
   "boletaPrimeroSecundariaAdjunta",
   "boletaSegundoSecundariaAdjunta",
 ];
-const readEditForm = () =>
-  EDIT_FORM_FIELDS.reduce((draft, field) => {
+const CONTROL_ESCOLAR_EDIT_NAME_FIELDS = EDIT_FORM_FIELDS.filter((field) => isControlEscolarNameField(field));
+
+const formatNameField = (field) => {
+  if (!isControlEscolarNameField(field)) return;
+  editForm[field] = toNameDisplayCase(editForm[field]);
+};
+
+const formatEditNameFields = () => {
+  CONTROL_ESCOLAR_EDIT_NAME_FIELDS.forEach(formatNameField);
+};
+
+const onParentLastNameBlur = (field) => {
+  hideParentLastNameSuggestion();
+  formatNameField(field);
+};
+
+const readEditForm = () => {
+  formatEditNameFields();
+  return EDIT_FORM_FIELDS.reduce((draft, field) => {
     draft[field] = editForm[field] ?? "";
     return draft;
   }, {});
+};
 const formSnapshot = () => JSON.stringify(readEditForm());
 const hasUnsavedChanges = computed(() =>
   Boolean(
@@ -4602,12 +4625,12 @@ const selectStudent = (student, copy = true) => {
 const resetEditForm = (student = selectedStudent.value, options = {}) => {
   if (!student) return;
   Object.assign(editForm, {
-    nombres: student.nombres || "",
-    apellidoPaterno: student.apellidoPaterno || "",
-    apellidoMaterno: student.apellidoMaterno || "",
+    nombres: toNameDisplayCase(student.nombres || ""),
+    apellidoPaterno: toNameDisplayCase(student.apellidoPaterno || ""),
+    apellidoMaterno: toNameDisplayCase(student.apellidoMaterno || ""),
     curp: student.curp || "",
-    nombreVerificado: student.nombreVerificado || "",
-    nombreCompletoAlumno: student.nombreCompletoAlumno || student.fullName || "",
+    nombreVerificado: toNameDisplayCase(student.nombreVerificado || ""),
+    nombreCompletoAlumno: toNameDisplayCase(student.nombreCompletoAlumno || student.fullName || ""),
     lastGrade: student.lastGrade || "",
     lastCiclo: student.lastCiclo || "",
     lugarNacimiento: student.lugarNacimiento || "",
@@ -4630,18 +4653,18 @@ const resetEditForm = (student = selectedStudent.value, options = {}) => {
     categoriaBaja: student.categoriaBaja || "",
     seguimientoBaja: student.seguimientoBaja || "",
     servicioNotas: student.servicioNotas || "",
-    nombrePadre: student.nombrePadre || "",
-    apellidoPaternoPadre: student.apellidoPaternoPadre || "",
-    apellidoMaternoPadre: student.apellidoMaternoPadre || "",
+    nombrePadre: toNameDisplayCase(student.nombrePadre || ""),
+    apellidoPaternoPadre: toNameDisplayCase(student.apellidoPaternoPadre || ""),
+    apellidoMaternoPadre: toNameDisplayCase(student.apellidoMaternoPadre || ""),
     lugarTrabajoPadre: student.lugarTrabajoPadre || "",
     puestoPadre: student.puestoPadre || "",
     estadoCivilPadre: student.estadoCivilPadre || "",
     fechaNacimientoPadre: normalizeDateInput(student.fechaNacimientoPadre),
     inePadre: student.inePadre || "",
     curpPadre: student.curpPadre || "",
-    nombreMadre: student.nombreMadre || "",
-    apellidoPaternoMadre: student.apellidoPaternoMadre || "",
-    apellidoMaternoMadre: student.apellidoMaternoMadre || "",
+    nombreMadre: toNameDisplayCase(student.nombreMadre || ""),
+    apellidoPaternoMadre: toNameDisplayCase(student.apellidoPaternoMadre || ""),
+    apellidoMaternoMadre: toNameDisplayCase(student.apellidoMaternoMadre || ""),
     lugarTrabajoMadre: student.lugarTrabajoMadre || "",
     puestoMadre: student.puestoMadre || "",
     estadoCivilMadre: student.estadoCivilMadre || "",

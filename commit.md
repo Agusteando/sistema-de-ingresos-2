@@ -1,3 +1,3 @@
-Corrige mensajes de error en acción inversa de usuarios
+Corrige grado visible de Control Escolar desde base
 
-Se ajusta la acción inversa global para construir el directorio completo directamente desde users, sin depender de paginación auxiliar, y se reemplaza el error genérico por diagnósticos específicos cuando no hay seleccionados, no existe directorio, los seleccionados no pertenecen al directorio o ya no queda un grupo inverso. También conserva el comportamiento global: los usuarios seleccionados reciben una acción y todos los demás usuarios institucionales reciben la acción inversa, ignorando filtros activos.
+Hace que Control Escolar use la proyección de grado, nivel, grupo y plantel proveniente de base como fuente autoritativa para el ciclo seleccionado, igual que Alumnos, evitando que los campos académicos de matricula sobrescriban la ubicación real del alumno. Mantiene los valores académicos de matricula solo como metadatos y sincroniza las actualizaciones de grado/ciclo tanto en base como en matricula, incluyendo el flujo masivo.
