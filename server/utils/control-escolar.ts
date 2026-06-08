@@ -1,4 +1,4 @@
-import { query, runWithBridgeAgentId } from "./db";
+import { getBridgeAgentId, query, runWithBridgeAgentId } from "./db";
 import {
   getTrustedAuthUser,
   normalizePlantel,
@@ -192,15 +192,26 @@ const getTransport = () => {
 
 export const assertControlEscolarDynamicBridge = (agentId: string) => {
   const configuredAgentId = getConfiguredBridgeAgentId();
+  const requestedAgentId = normalizePlantel(agentId);
   if (
     getTransport() === "bridge" &&
     configuredAgentId &&
-    normalizePlantel(configuredAgentId) !== normalizePlantel(agentId)
+    normalizePlantel(configuredAgentId) !== requestedAgentId
   ) {
+    const activeBridgeAgentId = normalizePlantel(getBridgeAgentId());
+    if (activeBridgeAgentId === requestedAgentId) return;
     throw createError({
       statusCode: 409,
+      statusMessage: "DB_BRIDGE_AGENT_FIXED",
       message:
-        "Control Escolar requiere selección dinámica de agentId. DB_BRIDGE_AGENT_ID está fijado y bloquearía el plantel solicitado.",
+        `El bridge de base está fijado en ${normalizePlantel(configuredAgentId)} y no permitió consultar ${requestedAgentId}.`,
+      data: {
+        code: "DB_BRIDGE_AGENT_FIXED",
+        configuredAgentId: normalizePlantel(configuredAgentId),
+        requestedAgentId,
+        activeBridgeAgentId,
+        action: "Aurora debe ejecutar la lectura con contexto dinámico de plantel o quitar DB_BRIDGE_AGENT_ID fijo para consultas multi-plantel.",
+      },
     });
   }
 };

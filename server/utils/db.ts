@@ -137,11 +137,11 @@ const getRequestContextBridgeAgentId = () => {
 }
 
 export const getBridgeAgentId = () => {
-  const configuredAgentId = getConfiguredBridgeAgentId()
+  const asyncContextAgentId = String(bridgeAgentContext.getStore()?.agentId || '').trim()
 
-  if (configuredAgentId) {
-    debugBridge('agent resolved from DB_BRIDGE_AGENT_ID', { agentId: configuredAgentId })
-    return configuredAgentId
+  if (asyncContextAgentId && asyncContextAgentId !== 'GLOBAL') {
+    debugBridge('agent resolved from async context', { agentId: asyncContextAgentId })
+    return asyncContextAgentId
   }
 
   const requestContextAgentId = getRequestContextBridgeAgentId()
@@ -151,11 +151,11 @@ export const getBridgeAgentId = () => {
     return requestContextAgentId
   }
 
-  const asyncContextAgentId = String(bridgeAgentContext.getStore()?.agentId || '').trim()
+  const configuredAgentId = getConfiguredBridgeAgentId()
 
-  if (asyncContextAgentId) {
-    debugBridge('agent resolved from async context', { agentId: asyncContextAgentId })
-    return asyncContextAgentId
+  if (configuredAgentId) {
+    debugBridge('agent resolved from DB_BRIDGE_AGENT_ID fallback', { agentId: configuredAgentId })
+    return configuredAgentId
   }
 
   throw new Error('No DB bridge agent selected. Provide DB_BRIDGE_AGENT_ID or call enterBridgeAgentId/runWithBridgeAgentId before database access.')

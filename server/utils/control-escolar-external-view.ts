@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { normalizePlantel } from './auth-session'
+import { runWithBridgeAgentId } from './db'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 import { buildControlEscolarScopeDescriptor, type ControlEscolarScopeDescriptor } from './control-escolar-cache'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
@@ -27,6 +28,46 @@ const normalizeText = (value: unknown, max = 255) =>
   String(value ?? '').trim().slice(0, max)
 
 const normalizeLower = (value: unknown, max = 255) => normalizeText(value, max).toLowerCase()
+
+const errorStatusCode = (error: any, fallback = 500) => Number(error?.statusCode || error?.status || error?.httpStatus || error?.response?.status || fallback) || fallback
+
+const publicErrorDetails = (error: any) => ({
+  statusCode: errorStatusCode(error),
+  statusMessage: normalizeText(error?.statusMessage || error?.code || error?.name || 'AURORA_ERROR', 120),
+  message: normalizeText(error?.message || error?.statusMessage || 'Error interno de Aurora.', 1000),
+  code: normalizeText(error?.data?.code || error?.code || error?.statusMessage || '', 120) || null,
+  data: error?.data || null,
+  bridgePayload: error?.bridgePayload?.error ? {
+    message: normalizeText(error.bridgePayload.error.message, 1000),
+    code: normalizeText(error.bridgePayload.error.code, 120) || null,
+    errno: error.bridgePayload.error.errno || null,
+    sqlState: normalizeText(error.bridgePayload.error.sqlState, 120) || null
+  } : null
+})
+
+const throwExternalStudentScopeError = (input: {
+  statusCode?: number
+  statusMessage: string
+  message: string
+  plantel?: string
+  ciclo?: string
+  cause?: any
+  extra?: Record<string, any>
+}) => {
+  const causeDetails = input.cause ? publicErrorDetails(input.cause) : null
+  throw createError({
+    statusCode: input.statusCode || 502,
+    statusMessage: input.statusMessage,
+    message: input.message,
+    data: {
+      code: input.statusMessage,
+      plantel: input.plantel || null,
+      ciclo: input.ciclo || null,
+      cause: causeDetails,
+      ...(input.extra || {})
+    }
+  })
+}
 
 const toIsoOrNull = (value: unknown) => {
   if (!value) return null
@@ -366,10 +407,22 @@ export const warmExternalControlEscolarStudentScope = async (input: any = {}) =>
       quality: '',
       recent: ''
     }
-    const result: any = await fetchControlEscolarStudents(scope.plantel, filters)
-    const rows = Array.isArray(result?.data) ? result.data : []
-    const written = await writeControlEscolarExternalStudentView(scope.plantel, filters, rows, result?.source || { onDemand: true })
-    return { ...written, rows: rows.length, plantel: scope.plantel, ciclo: scope.cicloKey }
+    try {
+      const result: any = await runWithBridgeAgentId(scope.plantel, async () => await fetchControlEscolarStudents(scope.plantel, filters))
+      const rows = Array.isArray(result?.data) ? result.data : []
+      const written = await writeControlEscolarExternalStudentView(scope.plantel, filters, rows, result?.source || { onDemand: true })
+      return { ...written, rows: rows.length, plantel: scope.plantel, ciclo: scope.cicloKey }
+    } catch (error: any) {
+      throwExternalStudentScopeError({
+        statusCode: 502,
+        statusMessage: 'AURORA_STUDENT_SCOPE_WARM_FAILED',
+        message: `Aurora no pudo preparar la base de alumnos de ${scope.plantel} para ciclo ${scope.cicloKey}.`,
+        plantel: scope.plantel,
+        ciclo: scope.cicloKey,
+        cause: error,
+        extra: { phase: 'on-demand-warm' }
+      })
+    }
   })().finally(() => warmingScopes.delete(warmKey))
 
   warmingScopes.set(warmKey, promise)
@@ -388,15 +441,15 @@ export const warmExternalControlEscolarStudentScopes = async (input: any = {}) =
     try {
       results.push(await warmExternalControlEscolarStudentScope({ ...input, plantel, ciclo }))
     } catch (error: any) {
-      failures.push({ plantel, message: error?.message || error?.statusMessage || 'No se pudo preparar la base.' })
+      failures.push({ plantel, ciclo, ...publicErrorDetails(error) })
     }
   }
   if (failures.length) {
     throw createError({
       statusCode: 502,
       statusMessage: 'WARM_STUDENT_SCOPES_FAILED',
-      message: `No se pudo preparar la base de alumnos para ${failures.map((failure) => failure.plantel).join(', ')}.`,
-      data: { failures, results }
+      message: `Aurora no pudo preparar la base de alumnos para ${failures.map((failure) => failure.plantel).join(', ')}.`,
+      data: { code: 'WARM_STUDENT_SCOPES_FAILED', failures, results }
     })
   }
   return { success: true, results }
@@ -465,15 +518,15 @@ export const readExternalControlEscolarStudents = async (query: any = {}) => {
         const result = await readExternalControlEscolarStudents({ ...query, plantel, limit: MAX_LIMIT, cursor: '' })
         results.push(result)
       } catch (error: any) {
-        failures.push({ plantel, message: error?.message || error?.statusMessage || 'No se pudo consultar el plantel.' })
+        failures.push({ plantel, ...publicErrorDetails(error) })
       }
     }
     if (failures.length) {
       throw createError({
         statusCode: 502,
         statusMessage: 'STUDENT_SCOPE_QUERY_FAILED',
-        message: `No se pudo consultar alumnos para ${failures.map((failure) => failure.plantel).join(', ')}.`,
-        data: { failures }
+        message: `Aurora no pudo consultar alumnos para ${failures.map((failure) => failure.plantel).join(', ')}.`,
+        data: { code: 'STUDENT_SCOPE_QUERY_FAILED', failures }
       })
     }
     const data = results.flatMap((result) => Array.isArray(result?.data) ? result.data : [])
