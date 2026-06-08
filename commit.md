@@ -1,3 +1,3 @@
-Permite autenticación por token en API externa de Aurora
+Garantiza consulta externa de alumnos por plantel y ciclo
 
-Excluye las rutas /api/external del middleware de sesión para que la API externa pueda validarse únicamente con el token de servicio, evitando que las solicitudes server-to-server desde SIPAE sean rechazadas antes de revisar los headers de autenticación.
+Hace que la API externa de Control Escolar prepare automáticamente la base de alumnos para cualquier plantel escolar canónico y ciclo solicitado cuando no exista un snapshot previo, evitando estados de plantel no disponible para SIPAE y agregando un calentador explícito para precargar planteles/ciclos.

@@ -13,8 +13,15 @@ const EXPIRED_HOURS = 24
 const MAX_LIMIT = 500
 const DEFAULT_LIMIT = 100
 const SCHEMA_CACHE_MS = 1000 * 60 * 5
+const CANONICAL_STUDENT_PLANTELES = ['PREEM', 'PREET', 'PM', 'PT', 'SM', 'ST']
+const DEFAULT_EXTERNAL_CICLOS = [
+  { value: '2025', label: '2025-2026' },
+  { value: '2026', label: '2026-2027' }
+]
+const WARM_LIMIT = 10000
 
 let schemaVerifiedAt = 0
+const warmingScopes = new Map<string, Promise<any>>()
 
 const normalizeText = (value: unknown, max = 255) =>
   String(value ?? '').trim().slice(0, max)
@@ -50,6 +57,23 @@ const decodeCursor = (value: unknown) => {
 }
 
 const sqlLike = (value: string) => `%${value}%`
+
+const normalizeExternalStudentPlantel = (value: unknown) => {
+  const plantel = normalizePlantel(value || '')
+  if (plantel === 'CT') return 'PREET'
+  if (plantel === 'CM') return 'PREEM'
+  if (plantel === 'PMA' || plantel === 'PMB') return 'PM'
+  return plantel
+}
+
+export const getExternalStudentPlanteles = () => [...CANONICAL_STUDENT_PLANTELES]
+
+const requestedPlantelesFromQuery = (query: any = {}) => {
+  const raw = query.planteles || query.plantel || ''
+  const values = Array.isArray(raw) ? raw : String(raw || '').split(',')
+  const planteles = values.map(normalizeExternalStudentPlantel).filter((plantel) => CANONICAL_STUDENT_PLANTELES.includes(plantel))
+  return planteles.length ? Array.from(new Set(planteles)) : [...CANONICAL_STUDENT_PLANTELES]
+}
 
 const safeJsonParse = (value: unknown) => {
   if (!value) return null
@@ -172,7 +196,7 @@ export const ensureControlEscolarExternalViewSchema = async () => {
 }
 
 export const buildExternalControlEscolarScope = (input: any = {}) => {
-  const plantel = normalizePlantel(input.plantel || input.agentId || '')
+  const plantel = normalizeExternalStudentPlantel(input.plantel || input.agentId || '')
   const cicloKey = normalizeCicloKey(input.ciclo || input.cicloKey || input.schoolYear || '')
   const concepts = parseEnrollmentConceptIds(input.concepts || input.enrollmentConcepts || input.conceptIds || '')
   const previousCiclo = normalizeCicloKey(input.previousCiclo || '') || previousCicloKey(cicloKey)
@@ -294,6 +318,90 @@ export const writeControlEscolarExternalStudentView = async (
   }
 }
 
+
+const findLatestWarmScopeRow = async (scope: any) => {
+  const latest = await controlEscolarCentralQuery<any[]>(
+    `SELECT scope_key, previous_ciclo, concept_hash, concept_ids, MAX(generated_at) AS generated_at, COUNT(*) AS rows_count
+     FROM ${EXTERNAL_VIEW_TABLE}
+     WHERE plantel = ? AND ciclo_key = ? AND view_version = ?
+     GROUP BY scope_key, previous_ciclo, concept_hash, concept_ids
+     ORDER BY generated_at DESC
+     LIMIT 1`,
+    [scope.plantel, scope.cicloKey, VIEW_VERSION]
+  )
+  return latest[0] || null
+}
+
+export const warmExternalControlEscolarStudentScope = async (input: any = {}) => {
+  const scope = buildExternalControlEscolarScope(input)
+  if (!scope.plantel || !scope.cicloKey) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'SCOPE_REQUIRED',
+      message: 'Plantel y ciclo son obligatorios para preparar la base de alumnos.'
+    })
+  }
+  const warmKey = `${scope.plantel}:${scope.cicloKey}:${scope.descriptor.conceptHash}`
+  const existing = warmingScopes.get(warmKey)
+  if (existing) return await existing
+
+  const promise = (async () => {
+    const { fetchControlEscolarStudents } = await import('./control-escolar')
+    const filters = {
+      ...input,
+      plantel: scope.plantel,
+      agentId: scope.plantel,
+      ciclo: scope.cicloKey,
+      cicloKey: scope.cicloKey,
+      previousCiclo: scope.previousCiclo,
+      all: 'snapshot',
+      mode: 'snapshot',
+      limit: WARM_LIMIT,
+      search: '',
+      q: '',
+      status: '',
+      grado: '',
+      grupo: '',
+      group: '',
+      quality: '',
+      recent: ''
+    }
+    const result: any = await fetchControlEscolarStudents(scope.plantel, filters)
+    const rows = Array.isArray(result?.data) ? result.data : []
+    const written = await writeControlEscolarExternalStudentView(scope.plantel, filters, rows, result?.source || { onDemand: true })
+    return { ...written, rows: rows.length, plantel: scope.plantel, ciclo: scope.cicloKey }
+  })().finally(() => warmingScopes.delete(warmKey))
+
+  warmingScopes.set(warmKey, promise)
+  return await promise
+}
+
+export const warmExternalControlEscolarStudentScopes = async (input: any = {}) => {
+  const planteles = requestedPlantelesFromQuery(input)
+  const ciclo = normalizeCicloKey(input.ciclo || input.cicloKey || input.schoolYear || '')
+  if (!ciclo) {
+    throw createError({ statusCode: 400, statusMessage: 'CICLO_REQUIRED', message: 'El ciclo escolar es obligatorio.' })
+  }
+  const results: any[] = []
+  const failures: any[] = []
+  for (const plantel of planteles) {
+    try {
+      results.push(await warmExternalControlEscolarStudentScope({ ...input, plantel, ciclo }))
+    } catch (error: any) {
+      failures.push({ plantel, message: error?.message || error?.statusMessage || 'No se pudo preparar la base.' })
+    }
+  }
+  if (failures.length) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'WARM_STUDENT_SCOPES_FAILED',
+      message: `No se pudo preparar la base de alumnos para ${failures.map((failure) => failure.plantel).join(', ')}.`,
+      data: { failures, results }
+    })
+  }
+  return { success: true, results }
+}
+
 const resolveScopeForRead = async (input: any = {}) => {
   const scope = buildExternalControlEscolarScope(input)
   if (!scope.plantel) {
@@ -314,22 +422,21 @@ const resolveScopeForRead = async (input: any = {}) => {
 
   if (scope.hasExplicitConcepts) return scope
 
-  const latest = await controlEscolarCentralQuery<any[]>(
-    `SELECT scope_key, previous_ciclo, concept_hash, concept_ids, MAX(generated_at) AS generated_at, COUNT(*) AS rows_count
-     FROM ${EXTERNAL_VIEW_TABLE}
-     WHERE plantel = ? AND ciclo_key = ? AND view_version = ?
-     GROUP BY scope_key, previous_ciclo, concept_hash, concept_ids
-     ORDER BY generated_at DESC
-     LIMIT 1`,
-    [scope.plantel, scope.cicloKey, VIEW_VERSION]
-  )
-  const row = latest[0]
+  let row = await findLatestWarmScopeRow(scope)
   if (!row?.scope_key) {
-    throw createError({
-      statusCode: 503,
-      statusMessage: 'CACHE_NOT_READY',
-      message: `No hay snapshot cálido para ${scope.plantel} en ciclo ${scope.cicloKey}. Abre Control Escolar para ese plantel/ciclo o ejecuta el calentador interno antes de consumir la API externa.`
-    })
+    await warmExternalControlEscolarStudentScope(input)
+    row = await findLatestWarmScopeRow(scope)
+  }
+
+  if (!row?.scope_key) {
+    return {
+      ...scope,
+      warmedEmptyScope: true,
+      descriptor: {
+        ...scope.descriptor,
+        cacheable: true
+      }
+    }
   }
 
   return {
@@ -348,6 +455,45 @@ const resolveScopeForRead = async (input: any = {}) => {
 }
 
 export const readExternalControlEscolarStudents = async (query: any = {}) => {
+  if (!normalizeExternalStudentPlantel(query.plantel || '')) {
+    const limit = Math.min(MAX_LIMIT, Math.max(1, Number(query.limit || DEFAULT_LIMIT) || DEFAULT_LIMIT))
+    const planteles = requestedPlantelesFromQuery(query)
+    const results: any[] = []
+    const failures: any[] = []
+    for (const plantel of planteles) {
+      try {
+        const result = await readExternalControlEscolarStudents({ ...query, plantel, limit: MAX_LIMIT, cursor: '' })
+        results.push(result)
+      } catch (error: any) {
+        failures.push({ plantel, message: error?.message || error?.statusMessage || 'No se pudo consultar el plantel.' })
+      }
+    }
+    if (failures.length) {
+      throw createError({
+        statusCode: 502,
+        statusMessage: 'STUDENT_SCOPE_QUERY_FAILED',
+        message: `No se pudo consultar alumnos para ${failures.map((failure) => failure.plantel).join(', ')}.`,
+        data: { failures }
+      })
+    }
+    const data = results.flatMap((result) => Array.isArray(result?.data) ? result.data : [])
+      .sort((a, b) => normalizeText(a?.nombreCompleto || a?.fullName).localeCompare(normalizeText(b?.nombreCompleto || b?.fullName), 'es'))
+      .slice(0, limit)
+    return {
+      data,
+      pagination: { limit, nextCursor: null, total: results.reduce((sum, result) => sum + Number(result?.pagination?.total || result?.data?.length || 0), 0) },
+      meta: {
+        version: 'v1',
+        viewVersion: VIEW_VERSION,
+        source: 'warm-cache',
+        freshness: freshnessRank(results.map((result) => String(result?.meta?.freshness || '')).filter(Boolean)),
+        rows: data.length,
+        planteles,
+        ciclo: normalizeCicloKey(query.ciclo || query.cicloKey || query.schoolYear || ''),
+        scopes: results.map((result) => result?.meta).filter(Boolean)
+      }
+    }
+  }
   const scope = await resolveScopeForRead(query)
   const limit = Math.min(MAX_LIMIT, Math.max(1, Number(query.limit || DEFAULT_LIMIT) || DEFAULT_LIMIT))
   const offset = decodeCursor(query.cursor)
@@ -435,6 +581,18 @@ export const readExternalControlEscolarStudents = async (query: any = {}) => {
 }
 
 export const readExternalControlEscolarStudentDetail = async (query: any = {}, matriculaValue: unknown) => {
+  if (!normalizeExternalStudentPlantel(query.plantel || '')) {
+    const planteles = requestedPlantelesFromQuery(query)
+    for (const plantel of planteles) {
+      try {
+        return await readExternalControlEscolarStudentDetail({ ...query, plantel }, matriculaValue)
+      } catch (error: any) {
+        const statusCode = Number(error?.statusCode || 0)
+        if (statusCode !== 404) throw error
+      }
+    }
+    throw createError({ statusCode: 404, statusMessage: 'STUDENT_NOT_FOUND', message: `No se encontró la matrícula ${normalizeText(matriculaValue, 64)}.` })
+  }
   const scope = await resolveScopeForRead(query)
   const matricula = normalizeText(matriculaValue, 64)
   if (!matricula) {
@@ -518,6 +676,8 @@ export const readExternalControlEscolarHealth = async () => {
   return {
     status: 'ok',
     viewVersion: VIEW_VERSION,
+    canonicalPlanteles: CANONICAL_STUDENT_PLANTELES.map((plantel) => ({ plantel })),
+    schoolYears: DEFAULT_EXTERNAL_CICLOS,
     scopes: rows.map((row) => ({
       plantel: normalizeText(row.plantel, 40),
       ciclo: normalizeText(row.ciclo_key, 20),
