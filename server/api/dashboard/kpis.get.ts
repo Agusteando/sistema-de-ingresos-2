@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
   
   let alumnosWhere = "A.estatus = 'Activo'"
-  let ingresosWhere = "r.ciclo = ? AND r.estatus = 'Vigente' AND MONTH(r.fecha) = MONTH(CURRENT_DATE())"
+  let ingresosWhere = "r.ciclo = ? AND r.estatus = 'Vigente' AND COALESCE(r.depurado, 0) = 0 AND MONTH(r.fecha) = MONTH(CURRENT_DATE())"
   const paramArr: any[] = [cicloKey]
   const alumnosParams: any[] = [cicloKey, cicloKey, previousCiclo, previousCiclo]
 

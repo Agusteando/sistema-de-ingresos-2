@@ -4,8 +4,8 @@
       <div class="modal-container document-modal-container">
         <div class="modal-header document-modal-header">
           <div>
-            <p class="document-eyebrow">Cargo extra</p>
-            <h2 class="text-lg font-bold text-gray-800">Agregar documento</h2>
+            <p class="document-eyebrow">Alta de concepto</p>
+            <h2 class="text-lg font-bold text-gray-800">Agregar concepto</h2>
           </div>
           <button class="document-close-button" type="button" aria-label="Cerrar" @click="$emit('close')">
             <LucideX :size="18" />
@@ -183,7 +183,7 @@
                   <span class="font-mono text-emerald-700 font-bold">-${{ scholarshipDiscount.toFixed(2) }} · {{ scholarshipPercent.toFixed(2) }}%</span>
                 </div>
                 <div class="flex justify-between items-center mt-2 bg-white p-3 rounded-md border border-gray-100 shadow-sm">
-                  <span class="text-xs font-bold text-gray-700 uppercase">Se cobrará:</span>
+                  <span class="text-xs font-bold text-gray-700 uppercase">{{ pagoRealizadoEnOtroPlantel ? 'Se depurará:' : 'Se cobrará:' }}</span>
                   <span class="font-mono text-lg font-bold text-brand-campus">${{ Number(montoFinalInput || 0).toFixed(2) }}</span>
                 </div>
                 <label class="mt-3 flex items-start gap-2 text-xs font-semibold text-gray-600">
@@ -191,6 +191,20 @@
                   <span>Confirmo que este monto final es correcto.</span>
                 </label>
               </div>
+            </div>
+
+            <div class="form-group col-span-2 mb-0 other-campus-payment-card" :class="{ selected: pagoRealizadoEnOtroPlantel }">
+              <label class="other-campus-payment-toggle">
+                <input
+                  v-model="pagoRealizadoEnOtroPlantel"
+                  type="checkbox"
+                  :disabled="loading"
+                >
+                <span>
+                  <strong><LucideBuilding2 :size="15" /> Pago realizado en otro plantel</strong>
+                  <small>Alumno ya pagó en otro plantel. El concepto quedará liquidado por depuración y no se registrará como ingreso de este plantel.</small>
+                </span>
+              </label>
             </div>
 
             <div class="form-group col-span-2 mb-0 carta-beca-card" :class="{ disabled: !selectedBecaTypes.length }">
@@ -212,7 +226,7 @@
           <button class="btn btn-ghost" @click="$emit('close')" type="button">Cancelar</button>
           <button class="btn btn-primary" @click="submit" :disabled="loading || loadingConcepts || !selectedDocumentoId">
             <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
-            {{ loading ? 'Agregando...' : 'Agregar' }}
+            {{ loading ? 'Agregando...' : (pagoRealizadoEnOtroPlantel ? 'Agregar y depurar' : 'Agregar concepto') }}
           </button>
         </div>
       </div>
@@ -222,7 +236,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { LucideBadgePercent, LucideCheckCircle, LucideFileCheck2, LucideLoader2, LucideRefreshCcw, LucideSearch, LucideX } from 'lucide-vue-next'
+import { LucideBadgePercent, LucideBuilding2, LucideCheckCircle, LucideFileCheck2, LucideLoader2, LucideRefreshCcw, LucideSearch, LucideX } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
@@ -248,6 +262,7 @@ const form = ref({ costo: 0, meses: 1, eventual: false })
 const selectedBecaTypes = ref([])
 const becaMotivo = ref('')
 const generarCartaBeca = ref(false)
+const pagoRealizadoEnOtroPlantel = ref(false)
 
 const montoFinalInput = ref(0)
 const montoFinalConfirmed = ref(false)
@@ -414,6 +429,7 @@ const submit = async () => {
         becaTipos: selectedBecaTypes.value,
         becaMotivo: becaMotivo.value,
         generarCartaBeca: generarCartaBeca.value,
+        pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
         ciclo: activeCicloKey.value, 
         eventual: form.value.eventual 
       }
@@ -422,10 +438,10 @@ const submit = async () => {
     if (generarCartaBeca.value && result?.becaCartaUrl) {
       if (cartaWindow) cartaWindow.location.href = result.becaCartaUrl
       else window.open(result.becaCartaUrl, '_blank', 'noopener')
-      show('Documento agregado y carta de beca generada.')
+      show(result?.depurado ? 'Documento agregado, carta generada y pago marcado como realizado en otro plantel.' : 'Documento agregado y carta de beca generada.')
     } else {
       cartaWindow?.close?.()
-      show('Documento agregado.')
+      show(result?.depurado ? 'Documento agregado y pago marcado como realizado en otro plantel.' : 'Documento agregado.')
     }
     emit('success')
   } catch (e) {
@@ -706,6 +722,7 @@ onMounted(() => loadConcepts())
 }
 
 .scholarship-card,
+.other-campus-payment-card,
 .carta-beca-card {
   border: 1px solid #dce8d9;
   border-radius: 14px;
@@ -803,6 +820,16 @@ onMounted(() => loadConcepts())
   opacity: 0.72;
 }
 
+.other-campus-payment-card {
+  background: linear-gradient(180deg, #fffdf8 0%, #fff7e6 100%);
+  border-color: #f0d9ad;
+}
+
+.other-campus-payment-card.selected {
+  box-shadow: 0 0 0 3px rgba(217, 151, 43, 0.12);
+}
+
+.other-campus-payment-toggle,
 .carta-beca-toggle {
   display: flex;
   align-items: flex-start;
@@ -810,10 +837,12 @@ onMounted(() => loadConcepts())
   cursor: pointer;
 }
 
+.other-campus-payment-toggle input,
 .carta-beca-toggle input {
   margin-top: 4px;
 }
 
+.other-campus-payment-toggle strong,
 .carta-beca-toggle strong {
   display: inline-flex;
   align-items: center;
@@ -822,6 +851,7 @@ onMounted(() => loadConcepts())
   font-size: 0.82rem;
 }
 
+.other-campus-payment-toggle small,
 .carta-beca-toggle small {
   display: block;
   color: #758399;

@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
      throw createError({ statusCode: 403, message: 'No tiene permisos para acceder a este reporte.' })
   }
   
-  let where = "r.estatus = 'Vigente' AND r.ciclo = ?"
+  let where = "r.estatus = 'Vigente' AND COALESCE(r.depurado, 0) = 0 AND r.ciclo = ?"
   const params: any[] = [cicloKey]
 
   if (inicio && fin) {

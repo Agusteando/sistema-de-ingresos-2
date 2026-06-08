@@ -1,1 +1,1 @@
-Corrige preparación multi-plantel de alumnos externos
+Agrega opción para marcar conceptos como pagados en otro plantel y excluir depuraciones de ingresos.

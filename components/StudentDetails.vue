@@ -221,7 +221,7 @@
               <LucideShieldCheck :size="15" /> No adeudo
             </button>
             <button class="profile-action-button" @click="showDocModal = true">
-              <LucideFilePlus :size="15" /> Cargo extra
+              <LucideFilePlus :size="15" /> Alta concepto
             </button>
             <button
               class="profile-action-button profile-action-button--menu"
@@ -583,6 +583,7 @@
                                   <LucidePrinter :size="11" /> PDF
                                 </button>
                                 <button
+                                  v-if="!h.depurado"
                                   class="history-action history-action-pdf"
                                   @click="invoicePaymentReceipt(debt, h)"
                                 >

@@ -11,6 +11,7 @@ import { generateNoAdeudoCartaPdf } from './noAdeudoCartaPdf'
 import { sendEmail, type MailAttachment } from './mailer'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 import { getNoAdeudoControlUserForPlantel } from './external-users'
+import { isDepuradoPayment } from './payment-classification'
 
 type RuntimeNoAdeudoConfig = {
   noAdeudoControlEscolarTo?: string
@@ -323,13 +324,6 @@ const mergeCentralOverlay = async (student: Record<string, any>) => {
   }
 }
 
-const normalizePaymentMethod = (value: unknown) => String(value || '')
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .trim()
-
-const isDepuracionPayment = (payment: any) => normalizePaymentMethod(payment.formaDePago) === 'depuracion' && (String(payment.depurado) === '1' || payment.depurado === true)
 
 export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) => {
   const cicloKey = normalizeCicloKey(String(ciclo || ''))
@@ -392,8 +386,8 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
       const projected = resolveProjectedAmount(doc, activePeriod)
       const totalOriginal = Number(projected.amount || 0)
       const pagosDelMes = pagosRows.filter(p => String(p.documento) === String(doc.documento) && (String(p.mes) === mesStr || String(p.mes) === String(mes)))
-      const pagosTotalMes = pagosDelMes.filter(p => !isDepuracionPayment(p)).reduce((sum, p) => sum + Number(p.monto || 0), 0)
-      const depuradoTotalMes = pagosDelMes.filter(isDepuracionPayment).reduce((sum, p) => sum + Number(p.monto || 0), 0)
+      const pagosTotalMes = pagosDelMes.filter(p => !isDepuradoPayment(p)).reduce((sum, p) => sum + Number(p.monto || 0), 0)
+      const depuradoTotalMes = pagosDelMes.filter(isDepuradoPayment).reduce((sum, p) => sum + Number(p.monto || 0), 0)
       const resueltoTotalMes = pagosTotalMes + depuradoTotalMes
       const hasRecargoManual = pagosDelMes.some(p => String(p.recargo) === '1')
       const monthOffset = mes > 5 ? (mes - 6) : (mes + 6)

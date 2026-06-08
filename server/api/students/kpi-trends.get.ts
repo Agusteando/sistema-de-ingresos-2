@@ -172,6 +172,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE r.ciclo = ?
       AND r.estatus = 'Vigente'
+      AND COALESCE(r.depurado, 0) = 0
       ${incomeWhere}
   `, [cicloKey, ...plantelParams])
 

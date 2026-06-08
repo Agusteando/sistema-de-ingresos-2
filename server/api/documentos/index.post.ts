@@ -1,12 +1,31 @@
-import { runWithBridgeAgentId, query } from '../../utils/db'
+import { runWithBridgeAgentId, query, executeStatementTransaction, type SqlStatement } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney } from '../../utils/monto-final'
 import { normalizeBecaTypes } from '../../utils/becaTypes'
+import { numeroALetras } from '../../utils/numberToWords'
 
 const clampMotivo = (value: unknown) => {
   const text = String(value || '').trim()
   return text ? text.slice(0, 1200) : null
+}
+
+
+const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
+
+const spanishMonths = [
+  'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  'Enero', 'Febrero', 'Marzo', 'Abril',
+  'Mayo', 'Junio', 'Julio', 'Agosto'
+]
+
+const buildDepuracionPeriods = (meses: number, eventual: boolean) => {
+  if (eventual) return [{ mes: 'ev', mesLabel: 'Cargo Único' }]
+
+  return Array.from({ length: meses }, (_, index) => ({
+    mes: String(index + 1),
+    mesLabel: spanishMonths[index] || `Mensualidad ${index + 1}`
+  }))
 }
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
@@ -15,7 +34,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const user = event.context.user
 
   const [studentRef] = await query<any[]>(
-    `SELECT matricula, plantel, nivel as nivelBase, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
+    `SELECT matricula, nombreCompleto, plantel, nivel as nivelBase, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
     [body.matricula]
   )
 
@@ -60,38 +79,116 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 400, message: 'El monto final no puede ser mayor al costo del concepto cuando se registra una beca.' })
   }
 
-  const result = await query<any>(`
-    INSERT INTO documentos (
-      concepto, conceptoNombre, matricula, costo, montoFinal, plazo, meses,
-      beca, becaNombre, becaTipos, becaMotivo, becaMonto, becaPorcentaje,
-      becaCartaGenerada, becaCartaFecha, ciclo, eventual, responsable, estatus
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Admin', 'Activo')
-  `, [
-    body.conceptoId,
-    conceptoNombre,
-    body.matricula,
-    costo,
-    montoFinal,
-    plazoLegacy,
-    meses,
-    String(becaPorcentaje || 0),
-    becaTiposCsv,
-    becaTiposCsv,
-    becaMotivo,
-    becaMonto,
-    becaPorcentaje,
-    body.generarCartaBeca && becaTipos.length ? 1 : 0,
-    body.generarCartaBeca && becaTipos.length ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null,
-    cicloKey,
-    body.eventual ? 1 : 0
-  ])
+  const pagoRealizadoEnOtroPlantel = truthyFlag(body.pagoRealizadoEnOtroPlantel)
+  const eventual = truthyFlag(body.eventual)
+  const userName = user?.name || 'Sistema'
+  const plantel = studentRef.plantel || user?.active_plantel || 'PT'
+  const instituto = (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0
+  const cartaFecha = body.generarCartaBeca && becaTipos.length ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
+  const statements: SqlStatement[] = [{
+    sql: `
+      INSERT INTO documentos (
+        concepto, conceptoNombre, matricula, costo, montoFinal, plazo, meses,
+        beca, becaNombre, becaTipos, becaMotivo, becaMonto, becaPorcentaje,
+        becaCartaGenerada, becaCartaFecha, ciclo, eventual, responsable, estatus
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Admin', 'Activo')
+    `,
+    params: [
+      body.conceptoId,
+      conceptoNombre,
+      body.matricula,
+      costo,
+      montoFinal,
+      plazoLegacy,
+      meses,
+      String(becaPorcentaje || 0),
+      becaTiposCsv,
+      becaTiposCsv,
+      becaMotivo,
+      becaMonto,
+      becaPorcentaje,
+      body.generarCartaBeca && becaTipos.length ? 1 : 0,
+      cartaFecha,
+      cicloKey,
+      eventual ? 1 : 0
+    ]
+  }]
+
+  if (pagoRealizadoEnOtroPlantel && montoFinal > 0) {
+    const periods = buildDepuracionPeriods(meses, eventual)
+    const valueGroups = periods.map(() => `(
+      ?, @documento_insertado, ?, ?, ?, CAST(@documento_insertado AS CHAR), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    )`).join(',')
+    const referenceParams = periods.flatMap((period) => [
+      body.matricula,
+      period.mes,
+      period.mesLabel,
+      studentRef.nombreCompleto || body.matricula,
+      conceptoNombre,
+      montoFinal,
+      numeroALetras(montoFinal),
+      montoFinal,
+      montoFinal,
+      0,
+      0,
+      montoFinal,
+      0,
+      userName,
+      'Pago realizado en otro plantel',
+      plantel,
+      instituto,
+      cicloKey,
+      'Vigente',
+      1,
+      userName,
+      new Date()
+    ])
+
+    statements.push({ sql: 'SET @documento_insertado := LAST_INSERT_ID()' })
+    statements.push({
+      sql: `
+        INSERT INTO referenciasdepago (
+          matricula,
+          documento,
+          mes,
+          mesReal,
+          nombreCompleto,
+          concepto,
+          conceptoNombre,
+          monto,
+          montoLetra,
+          importeTotal,
+          saldoAntes,
+          saldoDespues,
+          pagos,
+          pagosDespues,
+          recargo,
+          usuario,
+          formaDePago,
+          plantel,
+          instituto,
+          ciclo,
+          estatus,
+          depurado,
+          depurado_por,
+          depurado_fecha
+        ) VALUES ${valueGroups}
+      `,
+      params: referenceParams
+    })
+  }
+
+  const results = await executeStatementTransaction<any>(statements)
+  const documentResult = results[0] || {}
+  const documento = Number(documentResult.insertId || 0)
   
   return {
     success: true,
-    documento: result.insertId,
+    documento,
+    depurado: pagoRealizadoEnOtroPlantel && montoFinal > 0,
     becaCartaUrl: body.generarCartaBeca && becaTipos.length
-      ? `/api/documentos/${result.insertId}/beca-carta?ciclo=${encodeURIComponent(cicloKey)}`
+      ? `/api/documentos/${documento}/beca-carta?ciclo=${encodeURIComponent(cicloKey)}`
       : null
   }
 }))

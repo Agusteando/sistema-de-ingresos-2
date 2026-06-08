@@ -30,6 +30,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   let where = `
     r.estatus = 'Vigente'
+    AND COALESCE(r.depurado, 0) = 0
     AND r.ciclo = ?
     AND (
       r.conceptoNombre = ?

@@ -4,17 +4,7 @@ import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../../shared/utils/grado'
 import { resolveProjectedAmount } from '../../../utils/monto-final'
 import { normalizeBecaTypes } from '../../../utils/becaTypes'
-
-const normalizePaymentMethod = (value: unknown) => String(value || '')
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .trim()
-
-const isDepuracionPayment = (payment: any) => (
-  normalizePaymentMethod(payment.formaDePago) === 'depuracion' &&
-  (String(payment.depurado) === '1' || payment.depurado === true)
-)
+import { isDepuradoPayment } from '../../../utils/payment-classification'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const matricula = event.context.params?.matricula
@@ -123,8 +113,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         (String(p.mes) === mesStr || String(p.mes) === String(mes))
       )
       
-      const pagosAplicadosDelMes = pagosDelMes.filter(p => !isDepuracionPayment(p))
-      const depuracionesDelMes = pagosDelMes.filter(isDepuracionPayment)
+      const pagosAplicadosDelMes = pagosDelMes.filter(p => !isDepuradoPayment(p))
+      const depuracionesDelMes = pagosDelMes.filter(isDepuradoPayment)
       const pagosTotalMes = pagosAplicadosDelMes.reduce((sum, p) => sum + parseFloat(p.monto), 0)
       const depuradoTotalMes = depuracionesDelMes
         .reduce((sum, p) => sum + parseFloat(p.monto), 0)
@@ -177,7 +167,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         hasRecargo: subtotal > totalOriginal,
         historialPagos: pagosDelMes.map(p => ({
           ...p,
-          depurado: isDepuracionPayment(p)
+          depurado: isDepuradoPayment(p)
         }))
       })
     }
