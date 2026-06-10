@@ -311,7 +311,7 @@ const insertStageRows = async (
           scopeKey,
           refreshToken,
           normalizeText(row.matricula, 64),
-          normalizePlantel(row.basePlantel || row.plantel || ""),
+          normalizePlantel(row.projectedPlantel || row.plantel || row.basePlantel || ""),
           JSON.stringify(payload),
           computeHash(payload),
         );
