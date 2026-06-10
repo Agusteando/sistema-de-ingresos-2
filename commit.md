@@ -1,1 +1,1 @@
-Corrige la proyección de grado en Control Escolar usando la posición base del bridge como origen.
+Corrige el ajuste de grado y ciclo para guardar la posición académica base sin reproyección.

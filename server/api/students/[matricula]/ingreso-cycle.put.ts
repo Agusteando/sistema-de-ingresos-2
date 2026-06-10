@@ -5,13 +5,12 @@ import {
   resolveTipoIngreso,
 } from "../../../../shared/utils/tipoIngreso";
 import {
-  calculateBasePlacementForTargetPosition,
-  calculatePromotedGrado,
   displayGrado,
   isInProjectedPlantelScopeForCiclo,
   normalizeGradoForPlantel,
   normalizeNivelEscolar,
   normalizePlantel,
+  projectPlantelForNivel,
   resolveNivelEscolar,
 } from "../../../../shared/utils/grado";
 
@@ -142,100 +141,49 @@ export default defineEventHandler(async (event) =>
       });
     }
 
-    const currentProjection = calculatePromotedGrado(
-      student.gradoBase,
-      student.plantel,
-      student.cicloBase,
-      targetCiclo,
-      student.nivelBase,
-    );
-    const requestedNivel =
-      normalizeNivelEscolar(body?.targetNivel) ||
-      (currentProjection.nivel === "Egresado"
-        ? resolveNivelEscolar(student.plantel, student.nivelBase)
-        : currentProjection.nivel);
-    const requestedGrado = normalizeGradoForPlantel(
-      body?.targetGrado || currentProjection.grado,
-      currentProjection.plantel || student.plantel,
-      requestedNivel,
-    );
+    const currentNivel = resolveNivelEscolar(student.plantel, student.nivelBase);
+    const requestedNivel = normalizeNivelEscolar(body?.targetNivel) || currentNivel;
     const targetPlantel = normalizePlantel(
-      isScopedToActivePlantel
-        ? user.active_plantel
-        : currentProjection.plantel || student.plantel,
+      isScopedToActivePlantel ? user.active_plantel : student.plantel,
     );
-    const basePlacement = calculateBasePlacementForTargetPosition(
+    const placementPlantel = projectPlantelForNivel(
+      targetPlantel || student.plantel,
       requestedNivel,
-      requestedGrado,
-      ingresoCiclo,
-      targetCiclo,
-      targetPlantel || currentProjection.plantel || student.plantel,
+    );
+    const requestedGrado = normalizeGradoForPlantel(
+      body?.targetGrado || student.gradoBase,
+      placementPlantel,
+      requestedNivel,
     );
 
-    if (
-      basePlacement.outOfScope ||
-      !basePlacement.nivel ||
-      !basePlacement.grado ||
-      !basePlacement.plantel
-    ) {
+    if (!requestedNivel || !requestedGrado || !placementPlantel) {
       throw createError({
         statusCode: 400,
-        message:
-          "La posición elegida no corresponde con el ciclo de ingreso seleccionado.",
-      });
-    }
-
-    if (
-      !isInProjectedPlantelScopeForCiclo(
-        basePlacement.grado,
-        basePlacement.plantel,
-        ingresoCiclo,
-        targetCiclo,
-        basePlacement.nivel,
-        isScopedToActivePlantel ? user.active_plantel : "GLOBAL",
-      )
-    ) {
-      throw createError({
-        statusCode: isScopedToActivePlantel ? 403 : 409,
-        message:
-          "La posición elegida queda fuera del plantel activo en este ciclo.",
+        message: "La posición académica seleccionada no es válida.",
       });
     }
 
     await query(
       `UPDATE base SET ciclo = ?, nivel = ?, grado = ?, plantel = ? WHERE matricula = ?`,
-      [
-        ingresoCiclo,
-        basePlacement.nivel,
-        basePlacement.grado,
-        basePlacement.plantel,
-        matricula,
-      ],
+      [ingresoCiclo, requestedNivel, requestedGrado, placementPlantel, matricula],
     );
 
     await syncAcademicOverlay({
       matricula,
       userEmail: user?.email,
-      plantel: basePlacement.plantel,
-      nivel: basePlacement.nivel,
-      grado: basePlacement.grado,
+      plantel: placementPlantel,
+      nivel: requestedNivel,
+      grado: requestedGrado,
       ciclo: ingresoCiclo,
     });
 
-    const projected = calculatePromotedGrado(
-      basePlacement.grado,
-      basePlacement.plantel,
-      ingresoCiclo,
-      targetCiclo,
-      basePlacement.nivel,
-    );
     const tipoIngreso = resolveTipoIngreso(
       {
         ...student,
-        plantel: basePlacement.plantel,
-        plantelBase: basePlacement.plantel,
-        nivelBase: basePlacement.nivel,
-        gradoBase: basePlacement.grado,
+        plantel: placementPlantel,
+        plantelBase: placementPlantel,
+        nivelBase: requestedNivel,
+        gradoBase: requestedGrado,
         ciclo: ingresoCiclo,
         cicloBase: ingresoCiclo,
       },
@@ -246,12 +194,12 @@ export default defineEventHandler(async (event) =>
       success: true,
       student: {
         matricula,
-        plantelBase: basePlacement.plantel,
-        plantel: projected.plantel,
-        nivelBase: basePlacement.nivel,
-        nivel: projected.nivel,
-        gradoBase: basePlacement.grado,
-        grado: displayGrado(projected.grado),
+        plantelBase: placementPlantel,
+        plantel: placementPlantel,
+        nivelBase: requestedNivel,
+        nivel: requestedNivel,
+        gradoBase: requestedGrado,
+        grado: displayGrado(requestedGrado),
         ciclo: ingresoCiclo,
         cicloBase: ingresoCiclo,
         tipoIngreso,

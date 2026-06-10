@@ -50,11 +50,11 @@
             <div>
               <h2 id="ingreso-cycle-title">Ajustar grado y ciclo</h2>
               <p>
-                Selecciona el ciclo de ingreso y la posición académica visible
+                Selecciona el ciclo de ingreso y la posición académica base
                 del alumno.
               </p>
               <p>
-                Con estos datos el sistema recalcula el grado base sin recargar
+                Con estos datos el sistema actualiza base y matrícula sin recargar
                 la página.
               </p>
             </div>
@@ -160,7 +160,7 @@
                       2. Posición en {{ formatCicloLabel(targetCicloKey) }}
                     </h4>
                     <p>
-                      Nivel y grado se mueven juntos; no se guarda un grado
+                      Nivel y grado se guardan juntos; no se guarda un grado
                       aislado.
                     </p>
                   </div>
@@ -354,10 +354,12 @@ import {
   NIVEL_SEQUENCE,
   academicPositionIndex,
   academicPositionSequence,
-  calculateBasePlacementForTargetPosition,
-  calculatePromotedGrado,
   displayGrado,
   gradeOptionsForNivel,
+  normalizeGradoForPlantel,
+  normalizeNivelEscolar,
+  projectPlantelForNivel,
+  resolveNivelEscolar,
 } from "~/shared/utils/grado";
 import {
   normalizeCicloForTipoIngreso,
@@ -410,20 +412,29 @@ const initials = computed(
       .join("") || "A",
 );
 
-const projectedCurrentPosition = computed(() =>
-  calculatePromotedGrado(
+const currentAcademicPosition = computed(() => {
+  const plantel = props.student?.plantelBase ?? props.student?.plantel;
+  const nivel =
+    normalizeNivelEscolar(props.student?.nivelBase ?? props.student?.nivel) ||
+    resolveNivelEscolar(plantel, props.student?.nivelBase ?? props.student?.nivel);
+  const grado = normalizeGradoForPlantel(
     props.student?.gradoBase ?? props.student?.grado,
-    props.student?.plantelBase ?? props.student?.plantel,
-    props.student?.cicloBase ?? props.student?.ciclo,
-    targetCicloKey.value,
-    props.student?.nivelBase ?? props.student?.nivel,
-  ),
-);
+    plantel,
+    nivel,
+  );
+
+  return {
+    plantel: projectPlantelForNivel(plantel, nivel),
+    nivel,
+    grado,
+    outOfScope: false,
+  };
+});
 
 const currentPositionIndex = computed(() => {
   const index = academicPositionIndex(
-    projectedCurrentPosition.value.nivel,
-    projectedCurrentPosition.value.grado,
+    currentAcademicPosition.value.nivel,
+    currentAcademicPosition.value.grado,
   );
   return index >= 0 ? index : 0;
 });
@@ -441,7 +452,7 @@ const selectedPosition = computed(
 );
 const currentContextLabel = computed(
   () =>
-    `${projectedCurrentPosition.value.nivel} · ${displayGrado(projectedCurrentPosition.value.grado)}`,
+    `${currentAcademicPosition.value.nivel} · ${displayGrado(currentAcademicPosition.value.grado)}`,
 );
 const targetPositionLabel = computed(
   () =>
@@ -455,7 +466,7 @@ const canMovePrevious = computed(() => selectedPositionIndex.value > 0);
 const canMoveNext = computed(
   () => selectedPositionIndex.value < positionOptions.value.length - 1,
 );
-const placementInvalid = computed(() => basePlacement.value.outOfScope);
+const placementInvalid = computed(() => selectedBasePlacement.value.outOfScope);
 const positionChanged = computed(
   () => selectedPositionIndex.value !== currentPositionIndex.value,
 );
@@ -499,22 +510,31 @@ const shiftPosition = (direction) => {
   }
 };
 
-const basePlacement = computed(() =>
-  calculateBasePlacementForTargetPosition(
+const selectedBasePlacement = computed(() => {
+  const plantel = projectPlantelForNivel(
+    currentAcademicPosition.value.plantel || props.student?.plantelBase || props.student?.plantel,
     selectedPosition.value.nivel,
+  );
+  const grado = normalizeGradoForPlantel(
     selectedPosition.value.grado,
-    selectedIngresoCiclo.value,
-    targetCicloKey.value,
-    projectedCurrentPosition.value.plantel || props.student?.plantel,
-  ),
-);
+    plantel,
+    selectedPosition.value.nivel,
+  );
+
+  return {
+    plantel,
+    nivel: selectedPosition.value.nivel,
+    grado,
+    outOfScope: academicPositionIndex(selectedPosition.value.nivel, grado) < 0,
+  };
+});
 
 const basePlacementCopy = computed(() => {
   if (placementInvalid.value) {
     return "La combinación de ciclo y posición no es válida para la progresión escolar.";
   }
 
-  return `Se guardará como ${basePlacement.value.nivel} · ${displayGrado(basePlacement.value.grado)} en ${formatCicloLabel(selectedIngresoCiclo.value)}.`;
+  return `Se guardará como ${selectedBasePlacement.value.nivel} · ${displayGrado(selectedBasePlacement.value.grado)} en ${formatCicloLabel(selectedIngresoCiclo.value)}.`;
 });
 
 const cicloOptions = computed(() => {
@@ -546,18 +566,18 @@ const simulatedStudent = computed(() => ({
   ...props.student,
   plantel: placementInvalid.value
     ? props.student?.plantel
-    : basePlacement.value.plantel,
+    : selectedBasePlacement.value.plantel,
   plantelBase: placementInvalid.value
     ? props.student?.plantelBase
-    : basePlacement.value.plantel,
+    : selectedBasePlacement.value.plantel,
   nivel: selectedPosition.value.nivel,
   nivelBase: placementInvalid.value
     ? props.student?.nivelBase
-    : basePlacement.value.nivel,
+    : selectedBasePlacement.value.nivel,
   grado: selectedPosition.value.grado,
   gradoBase: placementInvalid.value
     ? props.student?.gradoBase
-    : basePlacement.value.grado,
+    : selectedBasePlacement.value.grado,
   ciclo: selectedIngresoCiclo.value,
   cicloBase: selectedIngresoCiclo.value,
 }));
@@ -581,7 +601,7 @@ const resultExplanation = computed(() => {
   const targetLabel = formatCicloLabel(targetCicloKey.value);
 
   if (placementInvalid.value) {
-    return `La posición elegida no puede derivarse desde ${formatCicloLabel(selectedIngresoCiclo.value)} hasta ${targetLabel}.`;
+    return `La posición elegida no es válida para el nivel y grado seleccionados.`;
   }
 
   if (selected === target) {

@@ -196,10 +196,12 @@ import {
   NIVEL_SEQUENCE,
   academicPositionIndex,
   academicPositionSequence,
-  calculateBasePlacementForTargetPosition,
-  calculatePromotedGrado,
   displayGrado,
-  gradeOptionsForNivel
+  gradeOptionsForNivel,
+  normalizeGradoForPlantel,
+  normalizeNivelEscolar,
+  projectPlantelForNivel,
+  resolveNivelEscolar
 } from '~/shared/utils/grado'
 import { normalizeStudentMatricula } from '~/shared/utils/studentPresentation'
 
@@ -224,19 +226,23 @@ watch(targetCicloKey, (value) => {
 const positionOptions = computed(() => academicPositionSequence())
 const positionNivelOptions = NIVEL_SEQUENCE
 
-const projectedPositionForStudent = (student) => calculatePromotedGrado(
-  student?.gradoBase ?? student?.grado,
-  student?.plantelBase ?? student?.plantel,
-  student?.cicloBase ?? student?.ciclo,
-  targetCicloKey.value,
-  student?.nivelBase ?? student?.nivel
-)
+const currentPositionForStudent = (student) => {
+  const plantel = student?.plantelBase ?? student?.plantel
+  const nivel = normalizeNivelEscolar(student?.nivelBase ?? student?.nivel) || resolveNivelEscolar(plantel, student?.nivelBase ?? student?.nivel)
+  const grado = normalizeGradoForPlantel(student?.gradoBase ?? student?.grado, plantel, nivel)
+
+  return {
+    plantel: projectPlantelForNivel(plantel, nivel),
+    nivel,
+    grado
+  }
+}
 
 const initialPositionIndex = computed(() => {
   const counts = new Map()
   props.selectedStudents.forEach((student) => {
-    const projected = projectedPositionForStudent(student)
-    const index = academicPositionIndex(projected.nivel, projected.grado)
+    const currentPosition = currentPositionForStudent(student)
+    const index = academicPositionIndex(currentPosition.nivel, currentPosition.grado)
     if (index < 0) return
     counts.set(index, (counts.get(index) || 0) + 1)
   })
@@ -316,40 +322,40 @@ const initials = (student) => String(student?.nombreCompleto || 'A')
   .join('') || 'A'
 
 const currentPositionCopy = (student) => {
-  const projected = projectedPositionForStudent(student)
-  return `${projected.nivel} · ${displayGrado(projected.grado)}`
+  const currentPosition = currentPositionForStudent(student)
+  return `${currentPosition.nivel} · ${displayGrado(currentPosition.grado)}`
 }
 
 const normalizeBaseGrado = (value) => displayGrado(value).toLowerCase()
 const normalizeCiclo = (value) => normalizeCicloForTipoIngreso(value) || ''
 
 const previewRows = computed(() => props.selectedStudents.map((student) => {
-  const projected = projectedPositionForStudent(student)
-  const targetPlantel = projected?.plantel || student?.plantelBase || student?.plantel
-  const basePlacement = calculateBasePlacementForTargetPosition(
-    selectedPosition.value.nivel,
+  const currentPosition = currentPositionForStudent(student)
+  const targetPlantel = currentPosition?.plantel || student?.plantelBase || student?.plantel
+  const placementPlantel = projectPlantelForNivel(targetPlantel, selectedPosition.value.nivel)
+  const placementGrado = normalizeGradoForPlantel(
     selectedPosition.value.grado,
-    selectedIngresoCiclo.value,
-    targetCicloKey.value,
-    targetPlantel
+    placementPlantel,
+    selectedPosition.value.nivel
   )
+  const placementInvalid = academicPositionIndex(selectedPosition.value.nivel, placementGrado) < 0
   const beforeCiclo = normalizeCiclo(student?.cicloBase ?? student?.ciclo)
   const beforeNivel = student?.nivelBase || student?.nivel || ''
   const beforeGrado = student?.gradoBase || student?.grado || ''
-  const unchanged = !basePlacement.outOfScope &&
+  const unchanged = !placementInvalid &&
     beforeCiclo === selectedIngresoCiclo.value &&
-    String(beforeNivel || '').toLowerCase() === String(basePlacement.nivel || '').toLowerCase() &&
-    normalizeBaseGrado(beforeGrado) === normalizeBaseGrado(basePlacement.grado)
+    String(beforeNivel || '').toLowerCase() === String(selectedPosition.value.nivel || '').toLowerCase() &&
+    normalizeBaseGrado(beforeGrado) === normalizeBaseGrado(placementGrado)
 
-  const status = basePlacement.outOfScope ? 'invalid' : unchanged ? 'unchanged' : 'ready'
+  const status = placementInvalid ? 'invalid' : unchanged ? 'unchanged' : 'ready'
 
   return {
     matricula: normalizeStudentMatricula(student?.matricula),
     nombreCompleto: student?.nombreCompleto || student?.matricula,
-    beforeLabel: `${formatCicloLabel(beforeCiclo || targetCicloKey.value)} · ${beforeNivel || projected.nivel} · ${displayGrado(beforeGrado || projected.grado)}`,
-    afterLabel: basePlacement.outOfScope
+    beforeLabel: `${formatCicloLabel(beforeCiclo || targetCicloKey.value)} · ${beforeNivel || currentPosition.nivel} · ${displayGrado(beforeGrado || currentPosition.grado)}`,
+    afterLabel: placementInvalid
       ? 'No válido'
-      : `${formatCicloLabel(selectedIngresoCiclo.value)} · ${basePlacement.nivel} · ${displayGrado(basePlacement.grado)}`,
+      : `${formatCicloLabel(selectedIngresoCiclo.value)} · ${selectedPosition.value.nivel} · ${displayGrado(placementGrado)}`,
     status,
     statusLabel: status === 'invalid' ? 'Revisar' : status === 'unchanged' ? 'Sin cambios' : 'Listo'
   }

@@ -34,12 +34,6 @@ export type ControlEscolarStudentRow = {
   agentId: string;
   plantel: string;
   basePlantel: string;
-  plantelBase: string;
-  nivelBase: string;
-  gradoBase: string;
-  projectedPlantel?: string;
-  projectedNivel?: string;
-  projectedGrado?: string;
   studentId: string;
   matricula: string;
   fullName: string;
@@ -752,10 +746,9 @@ const applyOperatorProjection = async (
         ...row,
         plantelBaseOriginal: sourcePlantel,
         plantelBase: sourcePlantel,
-        basePlantel: sourcePlantel,
-        projectedPlantel: projectedPlantel || sourcePlantel,
-        projectedGrado: displayGrado(promoted.grado),
-        projectedNivel: promoted.nivel,
+        basePlantel: projectedPlantel || sourcePlantel,
+        baseGrado: displayGrado(promoted.grado),
+        baseNivel: promoted.nivel,
         conceptoIdsHistoricos: historicalConceptIds,
         currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,
         inscritoCicloActual: hasCurrentEnrollmentEvidence,
@@ -1357,23 +1350,11 @@ const overlayStudentRow = (
   const huskyPassPlaintext = normalizeText(huskyPass?.plaintext, 255);
   const huskyPassEmail = firstLower(huskyPass?.email, huskyPass?.correo);
   const parentSiblingSignature = hasOverlay ? buildParentSiblingSignature(overlay) : buildParentSiblingSignature({});
-  const sourcePlantel = firstText(base.plantelBase, base.plantelBaseOriginal, base.basePlantel, agentId);
-  const projectedPlantel = firstText(base.projectedPlantel, base.basePlantel, sourcePlantel, overlay?.plantel, agentId);
-  const sourceNivel = firstLower(base.nivelBase, base.baseNivel, overlay?.nivel);
-  const projectedNivel = firstLower(base.projectedNivel, base.baseNivel, overlay?.nivel);
-  const sourceGrado = firstLower(base.gradoBase, base.baseGrado, overlay?.grado);
-  const projectedGrado = firstLower(base.projectedGrado, base.baseGrado, overlay?.grado);
 
   const normalized: ControlEscolarStudentRow = {
     agentId: normalizePlantel(agentId),
-    plantel: projectedPlantel,
-    basePlantel: projectedPlantel,
-    plantelBase: sourcePlantel,
-    nivelBase: sourceNivel,
-    gradoBase: sourceGrado,
-    projectedPlantel,
-    projectedNivel,
-    projectedGrado,
+    plantel: firstText(base.basePlantel, overlay?.plantel, agentId),
+    basePlantel: firstText(base.basePlantel, agentId),
     studentId: normalizeText(base.studentId || base.matricula),
     matricula: normalizeText(base.matricula),
     fullName,
@@ -1390,9 +1371,9 @@ const overlayStudentRow = (
     motivoBaja: normalizeText(overlay?.motivo_baja, 500),
     categoriaBaja: normalizeText(overlay?.categoria_baja),
     seguimientoBaja: normalizeText(overlay?.seguimiento_baja, 500),
-    program: firstText(overlay?.servicio, projectedNivel, sourceNivel, overlay?.nivel),
-    nivel: projectedNivel,
-    grado: projectedGrado,
+    program: firstText(overlay?.servicio, base.baseNivel, overlay?.nivel),
+    nivel: firstLower(base.baseNivel, overlay?.nivel),
+    grado: firstLower(base.baseGrado, overlay?.grado),
     group: firstText(base.baseGrupo, overlay?.grupo),
     guardianName: normalizeNameText(firstText(fatherName, motherName, base.baseGuardian)),
     fatherName,
@@ -1423,7 +1404,9 @@ const overlayStudentRow = (
       ? new Date(updatedAt).toISOString?.() || String(updatedAt)
       : null,
     cicloBase: normalizeText(base.baseCiclo),
-    plantelBaseOriginal: normalizeText(sourcePlantel),
+    plantelBaseOriginal: normalizeText(
+      base.plantelBaseOriginal || base.basePlantel,
+    ),
     enrollmentState: normalizeText(base.operatorEnrollmentState || "inscrito"),
     currentEnrollmentConceptMatch: Boolean(base.currentEnrollmentConceptMatch),
     inscritoCicloActual: Boolean(base.inscritoCicloActual),
@@ -1539,7 +1522,6 @@ export const fetchControlEscolarStudentDetail = async (
     requireCentral: false,
   });
   const fields = buildLocalBaseSelect(agentId, schema.base);
-  fields.push(selectAs(expr(schema.base, "b", "ciclo", "NULL"), "baseCiclo"));
   const [baseRow] = await query<any[]>(
     `
     SELECT ${fields.join(",\n      ")}

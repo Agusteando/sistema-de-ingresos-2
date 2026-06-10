@@ -2,13 +2,12 @@ import { executeStatementTransaction, query, runWithBridgeAgentId } from '../../
 import { controlEscolarCentralQuery, getCentralTableColumns } from '../../utils/control-escolar-central'
 import { normalizeCicloForTipoIngreso, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import {
-  calculateBasePlacementForTargetPosition,
-  calculatePromotedGrado,
   displayGrado,
   isInProjectedPlantelScopeForCiclo,
   normalizeGradoForPlantel,
   normalizeNivelEscolar,
   normalizePlantel,
+  projectPlantelForNivel,
   resolveNivelEscolar
 } from '../../../shared/utils/grado'
 
@@ -80,7 +79,7 @@ const syncCentralAcademicOverlays = async (updates: Map<string, any>, userEmail?
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
-  const matriculas = Array.from(new Set((Array.isArray(body?.matriculas) ? body.matriculas : [])
+  const matriculas = Array.from(new Set<string>((Array.isArray(body?.matriculas) ? body.matriculas : [])
     .map(normalizeMatricula)
     .filter(Boolean)))
 
@@ -138,78 +137,47 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       return
     }
 
-    const currentProjection = calculatePromotedGrado(
-      student.gradoBase,
-      student.plantel,
-      student.cicloBase,
-      targetCiclo,
-      student.nivelBase
+    const targetPlantel = normalizePlantel(
+      isScopedToActivePlantel ? user.active_plantel : student.plantel
     )
-    const requestedGrado = normalizeGradoForPlantel(
-      body?.targetGrado || currentProjection.grado,
-      currentProjection.plantel || student.plantel,
+    const placementPlantel = projectPlantelForNivel(
+      targetPlantel || student.plantel,
       requestedNivel
     )
-    const targetPlantel = normalizePlantel(
-      isScopedToActivePlantel
-        ? user.active_plantel
-        : currentProjection.plantel || student.plantel
-    )
-    const basePlacement = calculateBasePlacementForTargetPosition(
-      requestedNivel,
-      requestedGrado,
-      ingresoCiclo,
-      targetCiclo,
-      targetPlantel || currentProjection.plantel || student.plantel
+    const requestedGrado = normalizeGradoForPlantel(
+      body?.targetGrado || student.gradoBase,
+      placementPlantel,
+      requestedNivel
     )
 
-    if (basePlacement.outOfScope || !basePlacement.nivel || !basePlacement.grado || !basePlacement.plantel) {
-      results.push({ matricula, nombreCompleto: student.nombreCompleto, status: 'failed', message: 'La posición no corresponde con el ciclo elegido.' })
-      return
-    }
-
-    if (!isInProjectedPlantelScopeForCiclo(
-      basePlacement.grado,
-      basePlacement.plantel,
-      ingresoCiclo,
-      targetCiclo,
-      basePlacement.nivel,
-      isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
-    )) {
-      results.push({ matricula, nombreCompleto: student.nombreCompleto, status: 'failed', message: 'La posición queda fuera del plantel activo.' })
+    if (!requestedNivel || !requestedGrado || !placementPlantel) {
+      results.push({ matricula, nombreCompleto: student.nombreCompleto, status: 'failed', message: 'La posición académica seleccionada no es válida.' })
       return
     }
 
     const unchanged =
       normalizeCicloForTipoIngreso(student.cicloBase || student.ciclo) === ingresoCiclo &&
-      sameText(student.nivelBase || resolveNivelEscolar(student.plantel, student.nivelBase), basePlacement.nivel) &&
-      sameGrado(student.gradoBase, basePlacement.grado) &&
-      normalizePlantel(student.plantel) === normalizePlantel(basePlacement.plantel)
+      sameText(student.nivelBase || resolveNivelEscolar(student.plantel, student.nivelBase), requestedNivel) &&
+      sameGrado(student.gradoBase, requestedGrado) &&
+      normalizePlantel(student.plantel) === normalizePlantel(placementPlantel)
 
-    const projected = calculatePromotedGrado(
-      basePlacement.grado,
-      basePlacement.plantel,
-      ingresoCiclo,
-      targetCiclo,
-      basePlacement.nivel
-    )
     const updatedStudent = {
       matricula,
       nombreCompleto: student.nombreCompleto,
-      plantelBase: basePlacement.plantel,
-      plantel: projected.plantel,
-      nivelBase: basePlacement.nivel,
-      nivel: projected.nivel,
-      gradoBase: basePlacement.grado,
-      grado: displayGrado(projected.grado),
+      plantelBase: placementPlantel,
+      plantel: placementPlantel,
+      nivelBase: requestedNivel,
+      nivel: requestedNivel,
+      gradoBase: requestedGrado,
+      grado: displayGrado(requestedGrado),
       ciclo: ingresoCiclo,
       cicloBase: ingresoCiclo,
       tipoIngreso: resolveTipoIngreso({
         ...student,
-        plantel: basePlacement.plantel,
-        plantelBase: basePlacement.plantel,
-        nivelBase: basePlacement.nivel,
-        gradoBase: basePlacement.grado,
+        plantel: placementPlantel,
+        plantelBase: placementPlantel,
+        nivelBase: requestedNivel,
+        gradoBase: requestedGrado,
         ciclo: ingresoCiclo,
         cicloBase: ingresoCiclo
       }, targetCiclo)
@@ -230,9 +198,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         },
         after: {
           ciclo: ingresoCiclo,
-          nivel: basePlacement.nivel,
-          grado: displayGrado(basePlacement.grado),
-          plantel: basePlacement.plantel
+          nivel: requestedNivel,
+          grado: displayGrado(requestedGrado),
+          plantel: placementPlantel
         }
       })
       return
@@ -240,7 +208,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     statements.push({
       sql: 'UPDATE base SET ciclo = ?, nivel = ?, grado = ?, plantel = ? WHERE matricula = ?',
-      params: [ingresoCiclo, basePlacement.nivel, basePlacement.grado, basePlacement.plantel, matricula]
+      params: [ingresoCiclo, requestedNivel, requestedGrado, placementPlantel, matricula]
     })
     updatesByMatricula.set(matricula, updatedStudent)
     results.push({
@@ -256,9 +224,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       },
       after: {
         ciclo: ingresoCiclo,
-        nivel: basePlacement.nivel,
-        grado: displayGrado(basePlacement.grado),
-        plantel: basePlacement.plantel
+        nivel: requestedNivel,
+        grado: displayGrado(requestedGrado),
+        plantel: placementPlantel
       }
     })
   })
