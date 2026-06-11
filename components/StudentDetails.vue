@@ -349,6 +349,23 @@
                 placeholder="Buscar concepto o mes..."
               />
             </label>
+            <button
+              type="button"
+              :class="[
+                'account-view-toggle',
+                { active: accountViewMode === 'timeline' },
+              ]"
+              :aria-label="accountViewToggleLabel"
+              :title="accountViewToggleLabel"
+              @click="toggleAccountView"
+            >
+              <LucideHistory
+                v-if="accountViewMode === 'classic'"
+                :size="15"
+                aria-hidden="true"
+              />
+              <LucideFileText v-else :size="15" aria-hidden="true" />
+            </button>
             <div class="account-totals">
               <span>Deuda: ${{ format(accountDebtTotal) }}</span>
             </div>
@@ -384,6 +401,23 @@
               placeholder="Buscar concepto o mes..."
             />
           </label>
+          <button
+            type="button"
+            :class="[
+              'account-view-toggle',
+              { active: accountViewMode === 'timeline' },
+            ]"
+            :aria-label="accountViewToggleLabel"
+            :title="accountViewToggleLabel"
+            @click="toggleAccountView"
+          >
+            <LucideHistory
+              v-if="accountViewMode === 'classic'"
+              :size="15"
+              aria-hidden="true"
+            />
+            <LucideFileText v-else :size="15" aria-hidden="true" />
+          </button>
           <div class="account-totals">
             <span>Deuda: ${{ format(accountDebtTotal) }}</span>
           </div>
@@ -397,30 +431,6 @@
           </button>
         </div>
 
-        <div
-          class="account-view-tabs"
-          role="tablist"
-          aria-label="Vista del estado de cuenta"
-        >
-          <button
-            type="button"
-            :class="{ active: accountViewMode === 'timeline' }"
-            aria-label="Ver por meses"
-            @click="accountViewMode = 'timeline'"
-          >
-            <LucideCalendarClock :size="14" aria-hidden="true" />
-            Meses
-          </button>
-          <button
-            type="button"
-            :class="{ active: accountViewMode === 'classic' }"
-            aria-label="Ver tabla"
-            @click="accountViewMode = 'classic'"
-          >
-            <LucideFileText :size="14" aria-hidden="true" />
-            Tabla
-          </button>
-        </div>
 
         <div
           :class="[
@@ -902,9 +912,19 @@ const expandedHistory = ref(null);
 const depurandoDebt = ref(null);
 const accountSearchQuery = ref("");
 const accountFilter = ref("all");
-const accountViewMode = ref("timeline");
+const accountViewMode = ref("classic");
 const detailsExpanded = ref(false);
 const detailTransitioning = ref(false);
+const accountViewToggleLabel = computed(() =>
+  accountViewMode.value === "classic"
+    ? "Ver historial"
+    : "Ver Estado de Cuenta",
+);
+
+const toggleAccountView = () => {
+  accountViewMode.value =
+    accountViewMode.value === "classic" ? "timeline" : "classic";
+};
 
 const photoUrl = ref(null);
 const photoLoading = ref(false);
@@ -2376,73 +2396,37 @@ const handleInvoiceSuccess = () => {
 </script>
 
 <style scoped>
-.account-view-tabs {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  width: fit-content;
-  height: 34px;
-  gap: 3px;
-  margin: 0 0 10px;
-  border: 1px solid #d9e3ef;
-  border-radius: 14px;
-  background: rgba(248, 251, 253, 0.92);
-  padding: 3px;
-}
-
-.account-view-tabs button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 0;
-  height: 28px;
-  border: 0;
-  border-radius: 11px;
-  background: transparent;
-  color: #64748b;
-  cursor: pointer;
-  padding: 0 10px;
-  font-size: 0.72rem;
-  font-weight: 820;
-  line-height: 1;
-  white-space: nowrap;
-  transition:
-    background 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.account-view-tabs button.active {
-  background: #ffffff;
-  color: #21324c;
-  box-shadow: 0 5px 14px rgba(30, 47, 74, 0.08);
-}
-
 .account-timeline-wrap {
-  min-height: 220px;
+  min-height: 0;
   overflow: auto;
-  padding-right: 2px;
+  border: 1px solid var(--students-border-soft, #edf2f7);
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.03);
 }
 
 .timeline-empty {
-  border: 1px dashed #dce6f0;
-  border-radius: 16px;
+  min-height: 190px;
+  border: 0;
+  border-radius: 13px;
   background: #fbfcfe;
 }
 
 .timeline-list {
   display: grid;
-  gap: 8px;
 }
 
 .timeline-card {
   display: grid;
   overflow: hidden;
-  border: 1px solid #dce6f0;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 10px 28px rgba(30, 47, 74, 0.045);
+  border: 0;
+  border-bottom: 1px solid #edf2f7;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.timeline-card:last-child {
+  border-bottom: 0;
 }
 
 .timeline-card-header {
@@ -2450,41 +2434,45 @@ const handleInvoiceSuccess = () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 11px 13px;
-  border-bottom: 1px solid #edf2f7;
-  background: linear-gradient(90deg, rgba(247, 250, 252, 0.92), rgba(255, 255, 255, 0.98));
+  padding: 10px 12px 7px;
+  background: #fff;
 }
 
 .timeline-card-header strong {
   display: block;
+  overflow: hidden;
   color: #17243c;
-  font-size: 0.8rem;
+  font-size: 0.77rem;
   font-weight: 860;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timeline-card-header span {
   display: block;
   margin-top: 2px;
-  color: #758299;
-  font-size: 0.68rem;
+  color: #7b8798;
+  font-size: 0.66rem;
   font-weight: 720;
 }
 
 .timeline-card-actions {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
   justify-content: flex-end;
   gap: 6px;
 }
 
 .timeline-action {
+  height: 28px;
   border: 1px solid #d7e1ec;
-  border-radius: 11px;
+  border-radius: 10px;
   background: #ffffff;
   color: #516174;
   cursor: pointer;
-  padding: 6px 9px;
-  font-size: 0.68rem;
+  padding: 0 9px;
+  font-size: 0.66rem;
   font-weight: 820;
 }
 
@@ -2495,53 +2483,85 @@ const handleInvoiceSuccess = () => {
 }
 
 .timeline-track {
+  position: relative;
   display: grid;
-  gap: 0;
-  padding: 0;
+  gap: 7px;
+  padding: 0 12px 11px 18px;
+}
+
+.timeline-track::before {
+  position: absolute;
+  top: 7px;
+  bottom: 18px;
+  left: 18px;
+  width: 1px;
+  background: #dce8d8;
+  content: "";
 }
 
 .timeline-segment {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(74px, 0.55fr) minmax(0, 1.9fr) minmax(82px, 0.7fr);
+  grid-template-columns: minmax(72px, 0.58fr) minmax(0, 1.8fr) minmax(72px, 0.62fr);
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   width: 100%;
-  border: 0;
-  border-bottom: 1px solid #edf2f7;
-  background: #ffffff;
+  min-height: 42px;
+  border: 1px solid #e2eaf3;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #fbfcfe);
   color: inherit;
   cursor: pointer;
-  padding: 10px 13px;
+  padding: 8px 10px 8px 18px;
   text-align: left;
   transition:
     background 160ms ease,
-    box-shadow 160ms ease;
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
-.timeline-segment:last-child {
-  border-bottom: 0;
+.timeline-segment::before {
+  position: absolute;
+  top: 50%;
+  left: -6px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #45a341;
+  box-shadow: 0 0 0 1px rgba(69, 163, 65, 0.22);
+  content: "";
+  transform: translateY(-50%);
 }
 
 .timeline-segment:hover:not(:disabled) {
-  background: #f8fbfd;
-  box-shadow: inset 3px 0 0 #9bcf93;
+  border-color: rgba(63, 145, 56, 0.25);
+  background: #f9fcf8;
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.05);
+  transform: translateY(-1px);
 }
 
 .timeline-segment.changed {
-  background: #fbfef9;
+  background: linear-gradient(180deg, #ffffff, #fbfef9);
 }
 
 .timeline-segment.cancelled {
-  background: #fff8f7;
+  background: #fff9f8;
   cursor: default;
-  opacity: 0.86;
+  opacity: 0.9;
+}
+
+.timeline-segment.cancelled::before {
+  background: #c86a61;
+  box-shadow: 0 0 0 1px rgba(200, 106, 97, 0.22);
 }
 
 .timeline-segment strong {
   overflow: hidden;
   color: #17243c;
-  font-size: 0.76rem;
-  font-weight: 840;
+  font-size: 0.74rem;
+  font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2549,7 +2569,7 @@ const handleInvoiceSuccess = () => {
 .timeline-segment span,
 .timeline-segment em {
   color: #6b778a;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-style: normal;
   font-weight: 760;
 }
@@ -2571,9 +2591,7 @@ const handleInvoiceSuccess = () => {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
-  padding: 10px 13px;
-  border-top: 1px solid #edf2f7;
-  background: #fffdf8;
+  padding: 0 12px 11px 18px;
 }
 
 .timeline-differential {
@@ -2581,11 +2599,11 @@ const handleInvoiceSuccess = () => {
   align-items: center;
   gap: 8px;
   border: 1px solid #f0dfb8;
-  border-radius: 11px;
-  background: #fff8e7;
+  border-radius: 10px;
+  background: #fffaf0;
   color: #806018;
   padding: 6px 9px;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 820;
 }
 

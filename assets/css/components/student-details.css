@@ -670,7 +670,7 @@
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) 34px auto auto;
   align-items: center;
   gap: 10px;
   padding: 4px 18px 6px;
@@ -698,6 +698,40 @@
 .account-filter-button:hover {
   border-color: rgba(63, 145, 56, .3);
   box-shadow: 0 10px 22px rgba(63, 145, 56, .08);
+}
+
+.account-view-toggle {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--students-border, #dfe7f0);
+  border-radius: 11px;
+  background: linear-gradient(180deg, #fff, #fbfcfd);
+  color: #627085;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 6px 14px rgba(21, 35, 60, .035);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.account-view-toggle:hover {
+  border-color: rgba(63, 145, 56, .28);
+  color: #2f7f32;
+  box-shadow: 0 10px 20px rgba(63, 145, 56, .08);
+  transform: translateY(-1px);
+}
+
+.account-view-toggle.active {
+  border-color: rgba(63, 145, 56, .24);
+  background: linear-gradient(180deg, #f4fbf0, #ffffff);
+  color: #2f7f32;
 }
 
 .account-title-area {
@@ -1586,8 +1620,8 @@
 
 .student-details-shell:not(.student-details-shell--expanded) .account-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(188px, 34%) auto;
-  grid-template-areas: "title search total";
+  grid-template-columns: minmax(0, 1fr) minmax(188px, 34%) 34px auto;
+  grid-template-areas: "title search view total";
   align-content: center;
   min-height: 0;
   gap: 8px 10px;
@@ -1632,6 +1666,11 @@
   width: 100%;
   min-width: 0;
   margin-left: 0;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-view-toggle {
+  grid-area: view;
+  justify-self: center;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-totals {
@@ -1739,10 +1778,10 @@
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-header {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) 34px auto;
     grid-template-areas:
-      "title total"
-      "search search";
+      "title title total"
+      "search view view";
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table {
@@ -1756,11 +1795,11 @@
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-header {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) 34px;
     grid-template-areas:
-      "title"
-      "search"
-      "total";
+      "title title"
+      "search view"
+      "total total";
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-title-row {

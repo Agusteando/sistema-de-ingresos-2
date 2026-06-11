@@ -1,1 +1,1 @@
-Corrige la vista por meses del estado de cuenta y conserva el cambio de concepto bajo el mismo documento.
+Refina Estado de Cuenta para mantener tabla por defecto y alternar historial desde la barra de búsqueda.
