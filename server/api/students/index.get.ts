@@ -3,7 +3,7 @@ import { calculatePromotedGrado, displayGrado, normalizePlantel, plantelCandidat
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
-import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
+import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds, resolveEnrollmentConceptIdsForPlantel } from '../../utils/enrollment-evidence'
 import { maybeRefreshControlEscolarCacheFromLoadedRows } from '../../utils/control-escolar-cache'
 import { fetchCentralMatriculaOverlays } from '../../utils/central-matricula-overlay'
 import { resolveFinancialFamilyContact } from '../../../shared/utils/familyContact'
@@ -126,8 +126,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const { q = '', ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
-  const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
   const user = event.context.user
+  const incomingEnrollmentConceptIds = parseEnrollmentConceptIds(concepts)
+  const enrollmentConceptIds = await resolveEnrollmentConceptIdsForPlantel(incomingEnrollmentConceptIds, user?.active_plantel)
   
   let whereClause = "1=1"
   const params: any[] = []
@@ -377,6 +378,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   setResponseHeader(event, 'X-Financial-Students-Query-Mode', q ? 'search' : 'scope')
   setResponseHeader(event, 'X-Financial-Students-Scoped-Plantel', isScopedToActivePlantel ? normalizePlantel(user.active_plantel) : 'GLOBAL')
   setResponseHeader(event, 'X-Financial-Students-Enrollment-Concepts', String(enrollmentConceptIds.length))
+  setResponseHeader(event, 'X-Financial-Students-Enrollment-Concept-Ids', enrollmentConceptIds.join('|'))
+  setResponseHeader(event, 'X-Financial-Students-Enrollment-Concepts-Incoming', String(incomingEnrollmentConceptIds.length))
   setResponseHeader(event, 'X-Financial-Students-Cache-Refresh', q ? 'skipped_search_query' : 'scheduled_from_live_rows')
 
   return enriched.students

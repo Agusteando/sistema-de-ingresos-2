@@ -19,6 +19,7 @@ import {
 import {
   getHistoricalEnrollmentConceptEvidence,
   parseEnrollmentConceptIds,
+  resolveEnrollmentConceptIdsForPlantel,
 } from "./enrollment-evidence";
 import { controlEscolarCentralQuery } from "./control-escolar-central";
 import {
@@ -551,17 +552,22 @@ type ControlEscolarOperatorScope = {
   enrollmentConceptIds: string[];
 };
 
-const resolveOperatorScope = (
+const resolveOperatorScope = async (
+  agentId: string,
   filters: any = {},
-): ControlEscolarOperatorScope => {
+): Promise<ControlEscolarOperatorScope> => {
   const cicloKey = normalizeCicloKey(
     filters.ciclo || filters.cicloKey || filters.targetCiclo || "2025",
+  );
+  const incomingEnrollmentConceptIds = parseEnrollmentConceptIds(
+    filters.concepts || filters.enrollmentConcepts || "",
   );
   return {
     cicloKey,
     previousCiclo: previousCicloKey(cicloKey),
-    enrollmentConceptIds: parseEnrollmentConceptIds(
-      filters.concepts || filters.enrollmentConcepts || "",
+    enrollmentConceptIds: await resolveEnrollmentConceptIdsForPlantel(
+      incomingEnrollmentConceptIds,
+      agentId,
     ),
   };
 };
@@ -889,7 +895,7 @@ const fetchLocalBaseRows = async (
   schema: ControlEscolarSchema,
   filters: any = {},
 ) => {
-  const scope = resolveOperatorScope(filters);
+  const scope = await resolveOperatorScope(agentId, filters);
   const fields = buildLocalBaseSelect(agentId, schema.base);
   fields.push(selectAs(expr(schema.base, "b", "ciclo", "NULL"), "baseCiclo"));
 
@@ -1636,7 +1642,7 @@ const fetchAllNormalizedStudents = async (
   const requestStartedAt = Date.now();
   const phase = resolveControlEscolarLoadPhase(filters);
   const localOnly = phase === "base";
-  const scope = resolveOperatorScope(filters);
+  const scope = await resolveOperatorScope(agentId, filters);
   const search = normalizeText(filters.search || filters.q || "", 80);
   const diagnosticsSteps: any[] = [];
 
@@ -2169,7 +2175,7 @@ export const refreshVerifiedControlEscolarCacheForScope = async (
 ) => {
   const search = normalizeText(filters.search || filters.q || "", 80);
   if (search) return { success: true, skipped: true, reason: "search_result_not_cacheable" };
-  const scope = resolveOperatorScope(filters);
+  const scope = await resolveOperatorScope(agentId, filters);
   if (!scope.enrollmentConceptIds.length)
     return { success: true, skipped: true, reason: "missing_enrollment_concepts" };
   assertControlEscolarDynamicBridge(agentId);

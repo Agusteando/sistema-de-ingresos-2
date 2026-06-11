@@ -1,1 +1,1 @@
-Refina Estado de Cuenta para mantener tabla por defecto y alternar historial desde la barra de búsqueda.
+Filtra conceptos de inscripción por plantel para corregir el estado de inscritos.

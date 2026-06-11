@@ -1706,6 +1706,7 @@ const activePlantelCookie = useCookie("auth_active_plantel");
 const initialControlPlantel = String(activePlantelCookie.value || "").trim();
 const externalConcepts = ref([]);
 const ENROLLMENT_CONCEPTS_CACHE_KEY = "students-enrollment-concepts:v1";
+const enrollmentConceptsCacheKey = () => `${ENROLLMENT_CONCEPTS_CACHE_KEY}:${String(selectedAgentId.value || initialControlPlantel || "GLOBAL").trim().toUpperCase() || "GLOBAL"}`;
 const CONTROL_STUDENTS_CACHE_VERSION = 2;
 const CONTROL_STUDENTS_SCOPE_CACHE_VERSION = 3;
 const CONTROL_STUDENTS_CACHE_READ_VERSIONS = [
@@ -4922,7 +4923,7 @@ const cacheEnrollmentConcepts = (conceptIds) => {
     return;
   try {
     localStorage.setItem(
-      ENROLLMENT_CONCEPTS_CACHE_KEY,
+      enrollmentConceptsCacheKey(),
       JSON.stringify({
         savedAt: new Date().toISOString(),
         concepts: conceptIds,
@@ -4940,7 +4941,7 @@ const hydrateCachedEnrollmentConcepts = () => {
   if (!process.client || externalConcepts.value.length) return;
   try {
     const parsed = JSON.parse(
-      localStorage.getItem(ENROLLMENT_CONCEPTS_CACHE_KEY) || "null",
+      localStorage.getItem(enrollmentConceptsCacheKey()) || "null",
     );
     const conceptIds = normalizeEnrollmentConceptIds(parsed?.concepts);
     if (conceptIds.length) externalConcepts.value = conceptIds;
