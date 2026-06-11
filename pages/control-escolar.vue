@@ -1680,8 +1680,9 @@ import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
 import {
   normalizeEnrollmentConceptIds,
+  normalizeEnrollmentPlantelKey,
   normalizeStudentMatricula,
-  parseEnrollmentConcepts,
+  parseEnrollmentConceptsForScope,
   photoStorageKey,
   studentPresentationStyle,
   resolveControlEscolarCompleteness,
@@ -1705,8 +1706,7 @@ const state = useState("globalState", () => ({
 const activePlantelCookie = useCookie("auth_active_plantel");
 const initialControlPlantel = String(activePlantelCookie.value || "").trim();
 const externalConcepts = ref([]);
-const ENROLLMENT_CONCEPTS_CACHE_KEY = "students-enrollment-concepts:v1";
-const enrollmentConceptsCacheKey = () => `${ENROLLMENT_CONCEPTS_CACHE_KEY}:${String(selectedAgentId.value || initialControlPlantel || "GLOBAL").trim().toUpperCase() || "GLOBAL"}`;
+const ENROLLMENT_CONCEPTS_CACHE_BASE_KEY = "students-enrollment-concepts:v2";
 const CONTROL_STUDENTS_CACHE_VERSION = 2;
 const CONTROL_STUDENTS_SCOPE_CACHE_VERSION = 3;
 const CONTROL_STUDENTS_CACHE_READ_VERSIONS = [
@@ -1723,13 +1723,19 @@ const currentCicloKey = computed(() =>
     normalizeCicloOption(state.value?.ciclo || cicloCookie.value),
   ),
 );
-const currentCicloLabel = computed(() =>
-  formatCicloLabel(currentCicloKey.value),
-);
 const selectedAgentId = ref(
   initialControlPlantel && initialControlPlantel !== "GLOBAL"
     ? initialControlPlantel
     : "",
+);
+const currentPlantelKey = computed(() =>
+  normalizeEnrollmentPlantelKey(selectedAgentId.value || activePlantelCookie.value || initialControlPlantel || "GLOBAL") || "GLOBAL",
+);
+const enrollmentConceptsCacheKey = computed(() =>
+  `${ENROLLMENT_CONCEPTS_CACHE_BASE_KEY}:${currentCicloKey.value}:${currentPlantelKey.value}`,
+);
+const currentCicloLabel = computed(() =>
+  formatCicloLabel(currentCicloKey.value),
 );
 const optionsLoading = ref(false);
 const kpisLoading = ref(false);
@@ -4923,7 +4929,7 @@ const cacheEnrollmentConcepts = (conceptIds) => {
     return;
   try {
     localStorage.setItem(
-      enrollmentConceptsCacheKey(),
+      enrollmentConceptsCacheKey.value,
       JSON.stringify({
         savedAt: new Date().toISOString(),
         concepts: conceptIds,
@@ -4941,7 +4947,7 @@ const hydrateCachedEnrollmentConcepts = () => {
   if (!process.client || externalConcepts.value.length) return;
   try {
     const parsed = JSON.parse(
-      localStorage.getItem(enrollmentConceptsCacheKey()) || "null",
+      localStorage.getItem(enrollmentConceptsCacheKey.value) || "null",
     );
     const conceptIds = normalizeEnrollmentConceptIds(parsed?.concepts);
     if (conceptIds.length) externalConcepts.value = conceptIds;
@@ -4954,7 +4960,10 @@ const hydrateCachedEnrollmentConcepts = () => {
 };
 
 const parseEnrollmentConfig = (obj) => {
-  const conceptIds = parseEnrollmentConcepts(obj);
+  const conceptIds = parseEnrollmentConceptsForScope(obj, {
+    ciclo: currentCicloKey.value,
+    plantel: currentPlantelKey.value,
+  });
   if (!conceptIds.length) return;
   externalConcepts.value = conceptIds;
   cacheEnrollmentConcepts(conceptIds);

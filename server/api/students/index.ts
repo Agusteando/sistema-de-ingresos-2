@@ -4,7 +4,7 @@ import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { parseCurp } from '../../../shared/utils/curp'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
-import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds, resolveEnrollmentConceptIdsForPlantel } from '../../utils/enrollment-evidence'
+import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 import { fetchCentralMatriculaOverlays } from '../../utils/central-matricula-overlay'
 import { resolveFinancialFamilyContact } from '../../../shared/utils/familyContact'
 
@@ -211,8 +211,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     const { q = '', ciclo = '2025', nivel = '', grado = '', grupo = '', concepts = '' } = getQuery(event)
     const cicloKey = normalizeCicloKey(ciclo)
     const previousCiclo = previousCicloKey(cicloKey)
-    const incomingEnrollmentConceptIds = parseEnrollmentConceptIds(concepts)
-    const enrollmentConceptIds = await resolveEnrollmentConceptIdsForPlantel(incomingEnrollmentConceptIds, user?.active_plantel)
+    const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
     
     let whereClause = "1=1"
     const params: any[] = []

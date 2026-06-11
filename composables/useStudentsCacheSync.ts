@@ -31,7 +31,7 @@ type StudentsSyncState = {
   error: string | null
 }
 
-const CACHE_VERSION = 4
+const CACHE_VERSION = 3
 const LEGACY_CACHE_VERSIONS = [2]
 const CACHE_NAMESPACE = 'students-cache'
 

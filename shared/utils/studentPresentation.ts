@@ -1,3 +1,4 @@
+import { normalizeCicloKey } from './ciclo'
 import { resolveNivelEscolar } from './grado'
 import { studentGroupIconUrl } from './studentGroupIcons'
 
@@ -274,6 +275,98 @@ export const parseEnrollmentConcepts = (source: unknown) => {
 
   traverse(source)
   return [...new Set(ids)]
+}
+
+
+export const normalizeEnrollmentPlantelKey = (value: unknown) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toUpperCase()
+  .trim()
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value))
+
+const pickRecordValueByNormalizedKey = (record: Record<string, unknown>, target: string, normalize: (value: unknown) => string) => {
+  if (!target) return undefined
+  const match = Object.entries(record).find(([key]) => normalize(key) === target)
+  return match ? match[1] : undefined
+}
+
+
+const parseScopedEnrollmentConceptIds = (source: unknown): string[] => {
+  const ids: string[] = []
+  const explicitConceptIdKeys = new Set([
+    'conceptoid',
+    'concepto_id',
+    'conceptid',
+    'concept_id',
+    'idconcepto',
+    'id_concepto'
+  ])
+  const normalizedKey = (key: unknown) => String(key || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+  const pushId = (value: unknown) => {
+    const conceptId = normalizeEnrollmentConceptId(value)
+    if (conceptId) ids.push(conceptId)
+  }
+  const visit = (value: unknown) => {
+    if (!value) return
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+    if (!isPlainRecord(value)) return
+
+    const explicitEntry = Object.entries(value).find(([key]) => explicitConceptIdKeys.has(normalizedKey(key)))
+    if (explicitEntry) pushId(explicitEntry[1])
+
+    Object.entries(value).forEach(([key, entryValue]) => {
+      if (explicitConceptIdKeys.has(normalizedKey(key))) return
+      if (isPlainRecord(entryValue) || Array.isArray(entryValue)) visit(entryValue)
+    })
+  }
+
+  visit(source)
+  return [...new Set(ids)]
+}
+
+export const parseEnrollmentConceptsForScope = (
+  source: unknown,
+  options: { ciclo?: unknown; plantel?: unknown } = {}
+) => {
+  if (!isPlainRecord(source)) return parseEnrollmentConcepts(source)
+
+  const cicloKey = normalizeCicloKey(options.ciclo as any)
+  const plantelKey = normalizeEnrollmentPlantelKey(options.plantel)
+  const ciclos = isPlainRecord(source.ciclos) ? source.ciclos : null
+  const cycleNode = ciclos
+    ? pickRecordValueByNormalizedKey(ciclos, cicloKey, value => normalizeCicloKey(value as any))
+    : source
+
+  if (!cycleNode || !isPlainRecord(cycleNode)) return []
+  if (!plantelKey || plantelKey === 'GLOBAL') {
+    const globalSources = [cycleNode.planteles, cycleNode.planteles_mensual_baja4, cycleNode.planteles_issste].filter(Boolean)
+    const globalIds = parseScopedEnrollmentConceptIds(globalSources)
+    return globalIds.length ? globalIds : parseEnrollmentConcepts(cycleNode)
+  }
+
+  const scopedSources: unknown[] = []
+  const pushPlantelBucket = (key: string) => {
+    const bucket = cycleNode[key]
+    if (!isPlainRecord(bucket)) return
+    const scoped = pickRecordValueByNormalizedKey(bucket, plantelKey, normalizeEnrollmentPlantelKey)
+    if (scoped) scopedSources.push(scoped)
+  }
+
+  pushPlantelBucket('planteles')
+  pushPlantelBucket('planteles_mensual_baja4')
+  pushPlantelBucket('planteles_issste')
+
+  const scopedIds = parseScopedEnrollmentConceptIds(scopedSources)
+  return scopedIds.length ? scopedIds : parseEnrollmentConcepts(scopedSources)
 }
 
 export const expedienteDisplayText = (value: unknown): string => {

@@ -1,4 +1,3 @@
-import { normalizePlantel } from '../../shared/utils/grado'
 import { query } from './db'
 
 const EVIDENCE_CHUNK_SIZE = 500
@@ -39,47 +38,6 @@ const addEvidenceRows = (
     conceptIds.forEach((conceptId) => current.add(conceptId))
     target.set(matricula, current)
   })
-}
-
-
-const GLOBAL_CONCEPT_PLANTELES = new Set(['', 'GLOBAL', 'GENERAL', 'ALL', 'TODOS', 'TODAS'])
-
-export const resolveEnrollmentConceptIdsForPlantel = async (
-  raw: unknown,
-  plantel: unknown
-): Promise<string[]> => {
-  const conceptIds = parseEnrollmentConceptIds(raw)
-  const plantelScope = normalizePlantel(plantel)
-
-  if (!conceptIds.length || !plantelScope || plantelScope === 'GLOBAL') return conceptIds
-
-  try {
-    const placeholders = conceptIds.map(() => '?').join(',')
-    const rows = await query<Array<{ id: unknown; plantel: unknown }>>(`
-      SELECT CAST(id AS CHAR) AS id, plantel
-      FROM conceptos
-      WHERE CAST(id AS CHAR) IN (${placeholders})
-    `, conceptIds)
-
-    const allowed = new Set<string>()
-    rows.forEach((row) => {
-      const conceptId = normalizeConceptId(row.id)
-      if (!conceptId) return
-      const conceptPlantel = normalizePlantel(row.plantel)
-      if (conceptPlantel === plantelScope || GLOBAL_CONCEPT_PLANTELES.has(conceptPlantel)) {
-        allowed.add(conceptId)
-      }
-    })
-
-    return conceptIds.filter((conceptId) => allowed.has(conceptId))
-  } catch (error: any) {
-    console.warn('[Enrollment concepts] Could not scope enrollment concepts by plantel.', {
-      plantel: plantelScope,
-      count: conceptIds.length,
-      message: error?.message || error
-    })
-    return conceptIds
-  }
 }
 
 export const getHistoricalEnrollmentConceptEvidence = async (

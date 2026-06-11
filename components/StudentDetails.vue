@@ -226,7 +226,7 @@
               <LucideShieldCheck :size="15" /> No adeudo
             </button>
             <button class="profile-action-button" @click="showDocModal = true">
-              <LucideFilePlus :size="15" /> Alta concepto
+              <LucideFilePlus :size="15" /> Agregar documento
             </button>
             <button
               class="profile-action-button profile-action-button--menu"

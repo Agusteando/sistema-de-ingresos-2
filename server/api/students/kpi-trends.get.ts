@@ -2,7 +2,7 @@ import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
-import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds, resolveEnrollmentConceptIdsForPlantel } from '../../utils/enrollment-evidence'
+import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 
 const CACHE_TTL_MS = 5 * 60 * 1000
 const MAX_POINTS = 8
@@ -50,8 +50,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const { ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
-  const incomingEnrollmentConceptIds = parseEnrollmentConceptIds(concepts)
-  const enrollmentConceptIds = await resolveEnrollmentConceptIdsForPlantel(incomingEnrollmentConceptIds, user?.active_plantel)
+  const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
   const plantelScope = user.active_plantel || 'GLOBAL'
   const cacheKey = [user.role, plantelScope, cicloKey, enrollmentConceptIds.join('|')].join('::')
   const cached = trendCache.get(cacheKey)

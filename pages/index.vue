@@ -351,7 +351,8 @@ import {
   isSectionFilter,
   normalizeStudentMatricula,
   normalizeEnrollmentConceptIds,
-  parseEnrollmentConcepts,
+  normalizeEnrollmentPlantelKey,
+  parseEnrollmentConceptsForScope,
   photoStorageKey,
   sectionIdFromFilter,
   studentGroupLabel,
@@ -393,9 +394,10 @@ const activeGrupo = ref('')
 const activeSaldoFilter = ref('all')
 
 const externalConcepts = ref([])
-const ENROLLMENT_CONCEPTS_CACHE_KEY = 'students-enrollment-concepts:v1'
-const enrollmentConceptsCacheKey = () => `${ENROLLMENT_CONCEPTS_CACHE_KEY}:${String(activePlantelCookie.value || 'GLOBAL').trim().toUpperCase() || 'GLOBAL'}`
+const ENROLLMENT_CONCEPTS_CACHE_BASE_KEY = 'students-enrollment-concepts:v2'
 const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
+const currentPlantelKey = computed(() => normalizeEnrollmentPlantelKey(activePlantelCookie.value || 'GLOBAL') || 'GLOBAL')
+const enrollmentConceptsCacheKey = computed(() => `${ENROLLMENT_CONCEPTS_CACHE_BASE_KEY}:${currentCicloKey.value}:${currentPlantelKey.value}`)
 
 const students = ref([])
 const loading = ref(false)
@@ -530,8 +532,6 @@ const readFinancialDiagnosticsHeaders = (response) => ({
   scopedPlantel: response?.headers?.get('x-financial-students-scoped-plantel') || '',
   queryMode: response?.headers?.get('x-financial-students-query-mode') || 'scope',
   enrollmentConcepts: Number(response?.headers?.get('x-financial-students-enrollment-concepts') || 0),
-  enrollmentConceptsIncoming: Number(response?.headers?.get('x-financial-students-enrollment-concepts-incoming') || 0),
-  enrollmentConceptIds: normalizeEnrollmentConceptIds(response?.headers?.get('x-financial-students-enrollment-concept-ids') || ''),
 })
 const financialDiagnosticsTree = computed(() => {
   const diagnostics = lastFinancialLoadDiagnostics.value
@@ -1020,11 +1020,11 @@ const clearFilters = () => {
 
 
 const cacheEnrollmentConcepts = (conceptIds) => {
-  if (!process.client || !Array.isArray(conceptIds)) return
+  if (!process.client || !Array.isArray(conceptIds) || !conceptIds.length) return
   try {
-    localStorage.setItem(enrollmentConceptsCacheKey(), JSON.stringify({
+    localStorage.setItem(enrollmentConceptsCacheKey.value, JSON.stringify({
       savedAt: new Date().toISOString(),
-      concepts: normalizeEnrollmentConceptIds(conceptIds)
+      concepts: conceptIds
     }))
   } catch (error) {
     console.warn('[Enrollment concepts cache] Could not persist enrollment concepts.', error)
@@ -1034,7 +1034,7 @@ const cacheEnrollmentConcepts = (conceptIds) => {
 const hydrateCachedEnrollmentConcepts = () => {
   if (!process.client || externalConcepts.value.length) return
   try {
-    const parsed = JSON.parse(localStorage.getItem(enrollmentConceptsCacheKey()) || 'null')
+    const parsed = JSON.parse(localStorage.getItem(enrollmentConceptsCacheKey.value) || 'null')
     const conceptIds = normalizeEnrollmentConceptIds(parsed?.concepts)
     if (conceptIds.length) externalConcepts.value = conceptIds
   } catch (error) {
@@ -1043,7 +1043,7 @@ const hydrateCachedEnrollmentConcepts = () => {
 }
 
 const parseEnrollmentConfig = (obj) => {
-  const conceptIds = parseEnrollmentConcepts(obj)
+  const conceptIds = parseEnrollmentConceptsForScope(obj, { ciclo: currentCicloKey.value, plantel: currentPlantelKey.value })
   if (!conceptIds.length) {
     console.warn('[Enrollment concepts] Remote config did not include enrollment concept ids; preserving the current local concepts.')
     return
@@ -1513,10 +1513,6 @@ const performSearch = async (options = {}) => {
     })
 
     const freshStudents = Array.isArray(response?._data) ? response._data : []
-    if (headers.enrollmentConceptsIncoming > 0) {
-      externalConcepts.value = headers.enrollmentConceptIds
-      cacheEnrollmentConcepts(headers.enrollmentConceptIds)
-    }
     applyStudentsList(freshStudents, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }, traceContext: trace })
     const cacheWritten = writeCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }, freshStudents)
     const updatedAt = new Date().toISOString()

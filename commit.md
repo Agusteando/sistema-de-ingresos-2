@@ -1,1 +1,1 @@
-Filtra conceptos de inscripción por plantel para corregir el estado de inscritos.
+Corrige conceptos de inscripción por ciclo y plantel sin depender del campo plantel de conceptos.

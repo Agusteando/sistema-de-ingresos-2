@@ -2,15 +2,14 @@ import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
-import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds, resolveEnrollmentConceptIdsForPlantel } from '../../utils/enrollment-evidence'
+import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { ciclo = '2025', concepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
   const user = event.context.user
-  const incomingEnrollmentConceptIds = parseEnrollmentConceptIds(concepts)
-  const enrollmentConceptIds = await resolveEnrollmentConceptIdsForPlantel(incomingEnrollmentConceptIds, user?.active_plantel)
+  const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
   
   let alumnosWhere = "A.estatus = 'Activo'"
   let ingresosWhere = "r.ciclo = ? AND r.estatus = 'Vigente' AND COALESCE(r.depurado, 0) = 0 AND MONTH(r.fecha) = MONTH(CURRENT_DATE())"
