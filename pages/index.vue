@@ -644,7 +644,7 @@ const {
   selectedStudents,
   state,
   notify: show,
-  refreshStudents: () => performSearch({ useCache: false }),
+  refreshStudents: () => refreshAfterStudentMutation(),
   clearSelection: () => {
     clearStudentSelection()
     bulkWorkspaceMode.value = 'none'
@@ -1603,11 +1603,11 @@ const performSearch = async (options = {}) => {
 }
 
 const refreshStudentsFromServer = () => performSearch({ useCache: false, serverQuery: '' })
-const refreshStudentsAndKpis = () => {
-  refreshStudentsFromServer()
-  loadGlobalKpis()
-  loadKpiSparklines()
+const refreshStudentsAndKpis = async () => {
+  await refreshStudentsFromServer()
+  await Promise.allSettled([loadGlobalKpis(), loadKpiSparklines()])
 }
+const refreshAfterStudentMutation = () => refreshStudentsAndKpis()
 
 const enrollmentConceptIds = computed(() => normalizeEnrollmentConceptIds(externalConcepts.value))
 const enrollmentConceptIdSet = computed(() => new Set(enrollmentConceptIds.value))
@@ -1889,7 +1889,7 @@ const openNoAdeudoForSelection = () => {
   noAdeudoStudents.value = targets
 }
 
-const handleNoAdeudoSent = (response) => {
+const handleNoAdeudoSent = async (response) => {
   noAdeudoStudents.value = []
   const sent = Number(response?.sent || 0)
   const failed = Number(response?.failed || 0)
@@ -1897,7 +1897,7 @@ const handleNoAdeudoSent = (response) => {
     `${sent} carta${sent === 1 ? '' : 's'} de no adeudo enviada${sent === 1 ? '' : 's'}${failed ? `; ${failed} fallida${failed === 1 ? '' : 's'}` : ''}.`,
     failed ? 'warning' : 'success'
   )
-  performSearch({ useCache: false })
+  await refreshAfterStudentMutation()
 }
 
 const closeBulkIngresoCycleModal = () => {
@@ -1964,9 +1964,7 @@ const submitBulkIngresoCycle = async (payload) => {
       bulkWorkspaceMode.value = 'none'
     }
 
-    await refreshStudentsFromServer()
-    loadGlobalKpis()
-    loadKpiSparklines()
+    await refreshAfterStudentMutation()
     show(`${res?.updated || 0} alumnos actualizados`, (res?.failed || 0) ? 'warning' : 'success')
   } catch (e) {
     show(e?.data?.message || e?.message || 'No se pudo actualizar la selección', 'danger')
@@ -2023,14 +2021,12 @@ const confirmBaja = async (motivo) => {
       () => {
         const s = students.value.find(x => x.matricula === student.matricula)
         if (s) s.estatus = previousEstatus
-        performSearch({ useCache: false })
+        refreshAfterStudentMutation()
       },
       { pending: 'Procesando baja...', success: 'Alumno dado de baja exitosamente', error: 'Fallo al procesar baja' }
     )
     pendingBajaStudent.value = null
-    await performSearch({ useCache: false })
-    loadGlobalKpis()
-    loadKpiSparklines()
+    await refreshAfterStudentMutation()
   } catch (e) {}
 }
 
@@ -2117,11 +2113,10 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
 
   const nextConcepts = externalConcepts.value.join('|')
   const nextTipoConcepts = tipoIngresoConcepts.value.join('|')
-  loadGlobalKpis()
-  loadKpiSparklines()
+  await Promise.allSettled([loadGlobalKpis(), loadKpiSparklines()])
 
   if (refreshStudents && nextConcepts && (nextConcepts !== previousConcepts || nextTipoConcepts !== previousTipoConcepts)) {
-    performSearch({ useCache: false })
+    await refreshStudentsFromServer()
   }
 }
 
@@ -2220,8 +2215,6 @@ const closeStudentModal = () => { showStudentModal.value = false; editingStudent
 
 const handleStudentSuccess = () => {
   closeStudentModal()
-  refreshStudentsFromServer()
-  loadGlobalKpis()
-  loadKpiSparklines()
+  refreshAfterStudentMutation()
 }
 </script>

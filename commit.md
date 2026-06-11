@@ -1,1 +1,1 @@
-Corrige inscripción por ciclo y plantel sin afectar clasificación interno externo.
+Corrige refresh posterior a cambios de alumnos para conservar KPIs consistentes.
