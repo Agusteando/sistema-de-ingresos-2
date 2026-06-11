@@ -213,6 +213,7 @@ const props = defineProps({
   hasActiveFilters: { type: Boolean, default: false },
   selectedStudent: { type: Object, default: null },
   externalConcepts: { type: Array, default: () => [] },
+  tipoIngresoConcepts: { type: Array, default: () => [] },
   targetCiclo: { type: [String, Number], default: '2025' },
   photoCache: { type: Object, default: () => ({}) },
   sourceUnavailable: { type: Boolean, default: false }
@@ -232,7 +233,7 @@ const sourceUnavailableMessage = computed(() => isAfterOfficeHours.value
 const sourceUnavailableHint = computed(() => isAfterOfficeHours.value ? 'Fuera de horario' : 'Esperando conexión')
 
 const isSelected = (student) => props.selectedMatriculas.has(normalizeStudentMatricula(student?.matricula))
-const resolvedTipoIngreso = (student) => resolveTipoIngreso(student, props.targetCiclo, { enrollmentConcepts: props.externalConcepts })
+const resolvedTipoIngreso = (student) => resolveTipoIngreso(student, props.targetCiclo, { enrollmentConcepts: props.tipoIngresoConcepts.length ? props.tipoIngresoConcepts : props.externalConcepts })
 const resolvedTipoIngresoLabel = (student) => formatTipoIngresoValue(resolvedTipoIngreso(student))
 const tipoIngresoIcon = (student) => resolvedTipoIngreso(student).value === 'interno' ? LucideBuilding2 : LucideGlobe2
 const studentMissingGroup = (student) => !studentGroupLabel(student)

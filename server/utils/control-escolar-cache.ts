@@ -57,18 +57,21 @@ export type ControlEscolarScopeDescriptor = {
   cicloKey: string;
   previousCiclo: string;
   enrollmentConceptIds: string[];
+  tipoIngresoConceptIds?: string[];
 };
 
 export const buildControlEscolarScopeDescriptor = (
   scope: ControlEscolarScopeDescriptor,
 ) => {
   const conceptIds = sortedConceptIds(scope.enrollmentConceptIds);
+  const tipoIngresoConceptIds = sortedConceptIds(scope.tipoIngresoConceptIds || []);
   const payload = {
     cicloKey: normalizeText(scope.cicloKey, 20),
     previousCiclo: normalizeText(scope.previousCiclo, 20),
     enrollmentConceptIds: conceptIds,
+    tipoIngresoConceptIds,
   };
-  const conceptHash = computeHash(conceptIds).slice(0, 64);
+  const conceptHash = computeHash([conceptIds, tipoIngresoConceptIds]).slice(0, 64);
   const scopeKey = computeHash(payload).slice(0, 64);
   return {
     ...payload,

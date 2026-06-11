@@ -1,1 +1,1 @@
-Corrige conceptos de inscripción por ciclo y plantel sin depender del campo plantel de conceptos.
+Corrige inscripción por ciclo y plantel sin afectar clasificación interno externo.

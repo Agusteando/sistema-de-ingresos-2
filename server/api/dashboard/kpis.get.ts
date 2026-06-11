@@ -5,11 +5,12 @@ import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipo
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-  const { ciclo = '2025', concepts = '' } = getQuery(event)
+  const { ciclo = '2025', concepts = '', tipoConcepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
   const user = event.context.user
   const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
+  const tipoIngresoConceptIds = parseEnrollmentConceptIds(tipoConcepts).length ? parseEnrollmentConceptIds(tipoConcepts) : enrollmentConceptIds
   
   let alumnosWhere = "A.estatus = 'Activo'"
   let ingresosWhere = "r.ciclo = ? AND r.estatus = 'Vigente' AND COALESCE(r.depurado, 0) = 0 AND MONTH(r.fecha) = MONTH(CURRENT_DATE())"
@@ -102,7 +103,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const alumnosInScope = alumnosRows.filter(row => (
     isInProjectedPlantelScopeForCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase, isScopedToActivePlantel ? user.active_plantel : 'GLOBAL')
   ))
-  const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(alumnosInScope.map(row => row.matricula), enrollmentConceptIds)
+  const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(alumnosInScope.map(row => row.matricula), tipoIngresoConceptIds)
   
   const ingresosRows = await query<any[]>(`
     SELECT r.monto, A.grado as gradoBase, A.ciclo as cicloBase, A.nivel as nivelBase, COALESCE(A.plantel, r.plantel) as plantel
@@ -126,7 +127,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         previousConceptIds: [row.conceptoIdsPagadosPrevios, row.conceptoIdsCargadosPrevios, row.conceptoIdsCicloPrevio],
         allConceptIds: [historicalConceptIds]
       }
-    }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
+    }, cicloKey, { enrollmentConcepts: tipoIngresoConceptIds })
 
     acc[tipoIngreso.value] += 1
     return acc

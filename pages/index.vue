@@ -59,6 +59,7 @@
             :selected-student="selectedStudent"
             :selected-matriculas="selectedMatriculas"
             :external-concepts="externalConcepts"
+            :tipo-ingreso-concepts="tipoIngresoConcepts.length ? tipoIngresoConcepts : externalConcepts"
             :target-ciclo="currentCicloKey"
             :photo-cache="photoCache"
             :source-unavailable="studentsSourceUnavailable"
@@ -116,6 +117,7 @@
             :bulk-payment-loading="bulkPaymentLoading"
             :bulk-payment-processing="bulkPaymentProcessing"
             :external-concepts="externalConcepts"
+            :tipo-ingreso-concepts="tipoIngresoConcepts.length ? tipoIngresoConcepts : externalConcepts"
             @refresh="refreshStudentsAndKpis"
             @edit="openEdit"
             @close-detail="selectedStudent = null"
@@ -158,7 +160,7 @@
       @sent="handleNoAdeudoSent"
     />
 
-    <StudentFormModal v-if="showStudentModal" :student="editingStudent" :enrollment-concepts="externalConcepts" @close="closeStudentModal" @success="handleStudentSuccess" @ingreso-cycle-updated="handleIngresoCycleUpdated" />
+    <StudentFormModal v-if="showStudentModal" :student="editingStudent" :enrollment-concepts="tipoIngresoConcepts.length ? tipoIngresoConcepts : externalConcepts" @close="closeStudentModal" @success="handleStudentSuccess" @ingreso-cycle-updated="handleIngresoCycleUpdated" />
     <BulkIngresoCycleModal
       v-if="showBulkIngresoCycleModal"
       :selected-students="selectedStudents"
@@ -352,6 +354,7 @@ import {
   normalizeStudentMatricula,
   normalizeEnrollmentConceptIds,
   normalizeEnrollmentPlantelKey,
+  parseEnrollmentConceptsForPlantelHistory,
   parseEnrollmentConceptsForScope,
   photoStorageKey,
   sectionIdFromFilter,
@@ -394,7 +397,8 @@ const activeGrupo = ref('')
 const activeSaldoFilter = ref('all')
 
 const externalConcepts = ref([])
-const ENROLLMENT_CONCEPTS_CACHE_BASE_KEY = 'students-enrollment-concepts:v2'
+const tipoIngresoConcepts = ref([])
+const ENROLLMENT_CONCEPTS_CACHE_BASE_KEY = 'students-enrollment-concepts:v3'
 const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const currentPlantelKey = computed(() => normalizeEnrollmentPlantelKey(activePlantelCookie.value || 'GLOBAL') || 'GLOBAL')
 const enrollmentConceptsCacheKey = computed(() => `${ENROLLMENT_CONCEPTS_CACHE_BASE_KEY}:${currentCicloKey.value}:${currentPlantelKey.value}`)
@@ -933,7 +937,8 @@ const loadKpiSparklines = async () => {
     const res = await $fetch('/api/students/kpi-trends', {
       params: {
         ciclo: cicloKey,
-        concepts: externalConcepts.value.join(',')
+        concepts: externalConcepts.value.join(','),
+        tipoConcepts: tipoIngresoConcepts.value.join(',')
       }
     })
     if (requestId !== kpiSparklineRequestId) return
@@ -1019,12 +1024,15 @@ const clearFilters = () => {
 }
 
 
-const cacheEnrollmentConcepts = (conceptIds) => {
-  if (!process.client || !Array.isArray(conceptIds) || !conceptIds.length) return
+const cacheEnrollmentConcepts = ({ current = [], tipoIngreso = [] } = {}) => {
+  const currentConceptIds = normalizeEnrollmentConceptIds(current)
+  const tipoIngresoConceptIds = normalizeEnrollmentConceptIds(tipoIngreso)
+  if (!process.client || (!currentConceptIds.length && !tipoIngresoConceptIds.length)) return
   try {
     localStorage.setItem(enrollmentConceptsCacheKey.value, JSON.stringify({
       savedAt: new Date().toISOString(),
-      concepts: conceptIds
+      currentConcepts: currentConceptIds,
+      tipoIngresoConcepts: tipoIngresoConceptIds
     }))
   } catch (error) {
     console.warn('[Enrollment concepts cache] Could not persist enrollment concepts.', error)
@@ -1035,28 +1043,32 @@ const hydrateCachedEnrollmentConcepts = () => {
   if (!process.client || externalConcepts.value.length) return
   try {
     const parsed = JSON.parse(localStorage.getItem(enrollmentConceptsCacheKey.value) || 'null')
-    const conceptIds = normalizeEnrollmentConceptIds(parsed?.concepts)
-    if (conceptIds.length) externalConcepts.value = conceptIds
+    const currentConceptIds = normalizeEnrollmentConceptIds(parsed?.currentConcepts || parsed?.concepts)
+    const tipoIngresoConceptIds = normalizeEnrollmentConceptIds(parsed?.tipoIngresoConcepts || currentConceptIds)
+    if (currentConceptIds.length) externalConcepts.value = currentConceptIds
+    if (tipoIngresoConceptIds.length) tipoIngresoConcepts.value = tipoIngresoConceptIds
   } catch (error) {
     console.warn('[Enrollment concepts cache] Could not read enrollment concepts.', error)
   }
 }
 
 const parseEnrollmentConfig = (obj) => {
-  const conceptIds = parseEnrollmentConceptsForScope(obj, { ciclo: currentCicloKey.value, plantel: currentPlantelKey.value })
-  if (!conceptIds.length) {
-    console.warn('[Enrollment concepts] Remote config did not include enrollment concept ids; preserving the current local concepts.')
+  const currentConceptIds = parseEnrollmentConceptsForScope(obj, { ciclo: currentCicloKey.value, plantel: currentPlantelKey.value })
+  const tipoIngresoConceptIds = parseEnrollmentConceptsForPlantelHistory(obj, { plantel: currentPlantelKey.value })
+  if (!currentConceptIds.length) {
+    console.warn('[Enrollment concepts] Remote config did not include current-cycle concept ids for this plantel; preserving the current local concepts.')
     return
   }
 
-  externalConcepts.value = conceptIds
-  cacheEnrollmentConcepts(conceptIds)
+  externalConcepts.value = currentConceptIds
+  tipoIngresoConcepts.value = tipoIngresoConceptIds.length ? tipoIngresoConceptIds : currentConceptIds
+  cacheEnrollmentConcepts({ current: externalConcepts.value, tipoIngreso: tipoIngresoConcepts.value })
 }
 
 const loadGlobalKpis = async () => {
   try {
     const cicloKey = normalizeCicloKey(state.value.ciclo)
-    const res = await $fetch('/api/dashboard/kpis', { params: { ciclo: cicloKey, concepts: externalConcepts.value.join(',') } })
+    const res = await $fetch('/api/dashboard/kpis', { params: { ciclo: cicloKey, concepts: externalConcepts.value.join(','), tipoConcepts: tipoIngresoConcepts.value.join(',') } })
     globalKpis.value.ingresosMes = res.ingresosMes || 0
   } catch(e) {}
 }
@@ -1338,7 +1350,7 @@ const applyStudentsList = (nextStudents, { selectRouteStudent = true, cacheOptio
   }
 
   loadVisibleMatriculaOverlays(
-    cacheOptions || { ciclo: normalizeCicloKey(state.value.ciclo), q: filters.value.q || '', enrollmentConcepts: externalConcepts.value },
+    cacheOptions || { ciclo: normalizeCicloKey(state.value.ciclo), q: filters.value.q || '', enrollmentConcepts: externalConcepts.value, tipoIngresoConcepts: tipoIngresoConcepts.value },
     traceContext,
   )
 }
@@ -1350,8 +1362,9 @@ const performSearch = async (options = {}) => {
   const query = serverQuery === undefined ? (filters.value.q || '') : String(serverQuery || '')
   const startedAt = financialNow()
 
-  const cached = useCache ? readCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }) : null
+  const cached = useCache ? readCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value, tipoIngresoConcepts: tipoIngresoConcepts.value }) : null
   const cachedConcepts = normalizeEnrollmentConceptIds(cached?.enrollmentConcepts)
+  const cachedTipoConcepts = normalizeEnrollmentConceptIds(cached?.tipoIngresoConcepts || cachedConcepts)
   const hadStudents = students.value.length > 0
   const trace = createFinancialDiagnosticsTrace({ requestId, useCache, cicloKey, query, hadStudents })
 
@@ -1384,7 +1397,8 @@ const performSearch = async (options = {}) => {
 
   if (!externalConcepts.value.length && cachedConcepts.length) {
     externalConcepts.value = cachedConcepts
-    cacheEnrollmentConcepts(cachedConcepts)
+    if (!tipoIngresoConcepts.value.length && cachedTipoConcepts.length) tipoIngresoConcepts.value = cachedTipoConcepts
+    cacheEnrollmentConcepts({ current: cachedConcepts, tipoIngreso: cachedTipoConcepts })
     upsertFinancialTraceStep(trace, 'client', {
       key: 'cached-concepts',
       label: 'Restaurar conceptos de inscripción',
@@ -1413,7 +1427,7 @@ const performSearch = async (options = {}) => {
   const hasCachedStudents = Boolean(cached?.students?.length)
 
   if (hasCachedStudents) {
-    applyStudentsList(cached.students, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }, traceContext: trace })
+    applyStudentsList(cached.students, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value, tipoIngresoConcepts: tipoIngresoConcepts.value }, traceContext: trace })
     loading.value = false
     setStudentsSyncState({
       status: 'cached',
@@ -1441,7 +1455,7 @@ const performSearch = async (options = {}) => {
 
   try {
     const serverStartedAt = financialNow()
-    const response = await $fetch.raw('/api/students', { params: { ciclo: cicloKey, q: query, concepts: externalConcepts.value.join(',') } })
+    const response = await $fetch.raw('/api/students', { params: { ciclo: cicloKey, q: query, concepts: externalConcepts.value.join(','), tipoConcepts: tipoIngresoConcepts.value.join(',') } })
     if (requestId !== studentsRequestId) return
     const headers = readFinancialDiagnosticsHeaders(response)
     trace.source.base = 'bridge:financial.base'
@@ -1513,8 +1527,8 @@ const performSearch = async (options = {}) => {
     })
 
     const freshStudents = Array.isArray(response?._data) ? response._data : []
-    applyStudentsList(freshStudents, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }, traceContext: trace })
-    const cacheWritten = writeCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value }, freshStudents)
+    applyStudentsList(freshStudents, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value, tipoIngresoConcepts: tipoIngresoConcepts.value }, traceContext: trace })
+    const cacheWritten = writeCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value, tipoIngresoConcepts: tipoIngresoConcepts.value }, freshStudents)
     const updatedAt = new Date().toISOString()
     trace.status = 'updated'
     trace.statusLabel = financialStatusLabel('updated')
@@ -1628,7 +1642,7 @@ const isNoInscritoForSelectedCiclo = (student) => (
   && !hasCurrentEnrollmentConcept(student)
 )
 const isBajaInscritaCurrent = (student) => student?.estatus !== 'Activo' && hasCurrentEnrollmentConcept(student)
-const resolveStudentTipoIngreso = (student) => resolveTipoIngreso(student, currentCicloKey.value, { enrollmentConcepts: externalConcepts.value })
+const resolveStudentTipoIngreso = (student) => resolveTipoIngreso(student, currentCicloKey.value, { enrollmentConcepts: tipoIngresoConcepts.value.length ? tipoIngresoConcepts.value : externalConcepts.value })
 
 const kpiCounts = computed(() => {
   let inscritos = 0, internos = 0, externos = 0, no_inscritos = 0, bajas = 0
@@ -2092,6 +2106,7 @@ const showStudentMenu = (event, student) => {
 
 const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
   const previousConcepts = externalConcepts.value.join('|')
+  const previousTipoConcepts = tipoIngresoConcepts.value.join('|')
 
   try {
     const configData = await $fetch('https://matricula.casitaapps.com/api/enrollment-config/all')
@@ -2101,10 +2116,11 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
   }
 
   const nextConcepts = externalConcepts.value.join('|')
+  const nextTipoConcepts = tipoIngresoConcepts.value.join('|')
   loadGlobalKpis()
   loadKpiSparklines()
 
-  if (refreshStudents && nextConcepts && nextConcepts !== previousConcepts) {
+  if (refreshStudents && nextConcepts && (nextConcepts !== previousConcepts || nextTipoConcepts !== previousTipoConcepts)) {
     performSearch({ useCache: false })
   }
 }
@@ -2155,7 +2171,7 @@ watch(activeFilter, (nextFilter) => {
 })
 
 watch(
-  () => [currentCicloKey.value, externalConcepts.value.join('|'), students.value.length],
+  () => [currentCicloKey.value, externalConcepts.value.join('|'), tipoIngresoConcepts.value.join('|'), students.value.length],
   () => {
     if (!activeFilter.value) activeFilter.value = DEFAULT_KPI_FILTER
   },

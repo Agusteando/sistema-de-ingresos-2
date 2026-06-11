@@ -549,6 +549,7 @@ type ControlEscolarOperatorScope = {
   cicloKey: string;
   previousCiclo: string;
   enrollmentConceptIds: string[];
+  tipoIngresoConceptIds: string[];
 };
 
 const resolveOperatorScope = (
@@ -562,6 +563,9 @@ const resolveOperatorScope = (
     previousCiclo: previousCicloKey(cicloKey),
     enrollmentConceptIds: parseEnrollmentConceptIds(
       filters.concepts || filters.enrollmentConcepts || "",
+    ),
+    tipoIngresoConceptIds: parseEnrollmentConceptIds(
+      filters.tipoConcepts || filters.tipoIngresoConcepts || "",
     ),
   };
 };
@@ -669,7 +673,9 @@ const applyOperatorProjection = async (
   const historicalEnrollmentEvidence = missingHistoricalFromRows
     ? await getHistoricalEnrollmentConceptEvidence(
         rows.map((row) => row.matricula),
-        scope.enrollmentConceptIds,
+        scope.tipoIngresoConceptIds.length
+          ? scope.tipoIngresoConceptIds
+          : scope.enrollmentConceptIds,
       )
     : new Map<string, string>();
 
@@ -738,7 +744,11 @@ const applyOperatorProjection = async (
         },
       },
       scope.cicloKey,
-      { enrollmentConcepts: scope.enrollmentConceptIds },
+      {
+        enrollmentConcepts: scope.tipoIngresoConceptIds.length
+          ? scope.tipoIngresoConceptIds
+          : scope.enrollmentConceptIds,
+      },
     );
 
     return [
@@ -950,7 +960,9 @@ const fetchLocalBaseRows = async (
     fetchCycleConceptEvidence(
       rows.map((row) => row.matricula),
       scope.previousCiclo,
-      scope.enrollmentConceptIds,
+      scope.tipoIngresoConceptIds.length
+        ? scope.tipoIngresoConceptIds
+        : scope.enrollmentConceptIds,
     ),
   ]);
 

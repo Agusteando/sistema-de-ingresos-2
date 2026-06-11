@@ -792,7 +792,7 @@
         :current-tipo-ingreso="resolvedTipoIngreso"
         :photo-url="photoUrl || ''"
         :saving="savingIngresoCycle"
-        :enrollment-concepts="externalConcepts"
+        :enrollment-concepts="tipoIngresoConcepts.length ? tipoIngresoConcepts : externalConcepts"
         @close="showIngresoCycleModal = false"
         @confirm="saveIngresoCycle"
       />
@@ -878,6 +878,7 @@ const props = defineProps({
   student: Object,
   isEnrolled: { type: Boolean, default: true },
   externalConcepts: { type: Array, default: () => [] },
+  tipoIngresoConcepts: { type: Array, default: () => [] },
 });
 const emit = defineEmits([
   "refresh",
@@ -1377,7 +1378,7 @@ const accountSyncLabel = computed(
 );
 const resolvedTipoIngreso = computed(() =>
   resolveTipoIngreso(props.student, selectedCicloKey.value, {
-    enrollmentConcepts: props.externalConcepts,
+    enrollmentConcepts: props.tipoIngresoConcepts.length ? props.tipoIngresoConcepts : props.externalConcepts,
   }),
 );
 const resolvedTipoIngresoLabel = computed(() =>

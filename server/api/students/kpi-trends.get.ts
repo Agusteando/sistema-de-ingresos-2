@@ -47,12 +47,13 @@ const increment = (map: Map<string, number>, bucket: string, amount = 1) => {
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
-  const { ciclo = '2025', concepts = '' } = getQuery(event)
+  const { ciclo = '2025', concepts = '', tipoConcepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
   const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
+  const tipoIngresoConceptIds = parseEnrollmentConceptIds(tipoConcepts).length ? parseEnrollmentConceptIds(tipoConcepts) : enrollmentConceptIds
   const plantelScope = user.active_plantel || 'GLOBAL'
-  const cacheKey = [user.role, plantelScope, cicloKey, enrollmentConceptIds.join('|')].join('::')
+  const cacheKey = [user.role, plantelScope, cicloKey, enrollmentConceptIds.join('|'), tipoIngresoConceptIds.join('|')].join('::')
   const cached = trendCache.get(cacheKey)
 
   if (cached && cached.expiresAt > Date.now()) return cached.value
@@ -134,7 +135,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       WHERE 1 = 1 ${plantelWhere}
     `, [cicloKey, ...enrollmentConceptIds, previousCiclo, previousCiclo, ...plantelParams])
 
-    const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(enrollmentRows.map(row => row.matricula), enrollmentConceptIds)
+    const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(enrollmentRows.map(row => row.matricula), tipoIngresoConceptIds)
 
     enrollmentRows.forEach((row) => {
       if (!isInProjectedPlantelScopeForCiclo(row.gradoBase, row.plantel, row.cicloBase, cicloKey, row.nivelBase, isScopedToActivePlantel ? plantelScope : 'GLOBAL')) return
@@ -153,7 +154,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           previousConceptIds: [row.conceptoIdsPagadosPrevios, row.conceptoIdsCargadosPrevios, row.conceptoIdsCicloPrevio],
           allConceptIds: [historicalConceptIds]
         }
-      }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
+      }, cicloKey, { enrollmentConcepts: tipoIngresoConceptIds })
       if (tipoIngreso.value === 'interno') increment(internos, bucket)
       else increment(externos, bucket)
     })

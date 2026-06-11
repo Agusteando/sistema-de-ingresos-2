@@ -1,6 +1,6 @@
-import { normalizeCicloKey } from './ciclo'
 import { resolveNivelEscolar } from './grado'
 import { studentGroupIconUrl } from './studentGroupIcons'
+import { normalizeCicloKey } from './ciclo'
 
 export const formatMoney = (value: unknown) => Number(value || 0).toFixed(2)
 
@@ -280,7 +280,7 @@ export const parseEnrollmentConcepts = (source: unknown) => {
 
 export const normalizeEnrollmentPlantelKey = (value: unknown) => String(value || '')
   .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[̀-ͯ]/g, '')
   .toUpperCase()
   .trim()
 
@@ -291,7 +291,6 @@ const pickRecordValueByNormalizedKey = (record: Record<string, unknown>, target:
   const match = Object.entries(record).find(([key]) => normalize(key) === target)
   return match ? match[1] : undefined
 }
-
 
 const parseScopedEnrollmentConceptIds = (source: unknown): string[] => {
   const ids: string[] = []
@@ -305,7 +304,7 @@ const parseScopedEnrollmentConceptIds = (source: unknown): string[] => {
   ])
   const normalizedKey = (key: unknown) => String(key || '')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .trim()
   const pushId = (value: unknown) => {
@@ -333,24 +332,21 @@ const parseScopedEnrollmentConceptIds = (source: unknown): string[] => {
   return [...new Set(ids)]
 }
 
-export const parseEnrollmentConceptsForScope = (
-  source: unknown,
-  options: { ciclo?: unknown; plantel?: unknown } = {}
-) => {
-  if (!isPlainRecord(source)) return parseEnrollmentConcepts(source)
-
-  const cicloKey = normalizeCicloKey(options.ciclo as any)
-  const plantelKey = normalizeEnrollmentPlantelKey(options.plantel)
+const readEnrollmentCycleNode = (source: unknown, ciclo: unknown): unknown => {
+  if (!isPlainRecord(source)) return null
+  const cicloKey = normalizeCicloKey(ciclo as any)
   const ciclos = isPlainRecord(source.ciclos) ? source.ciclos : null
-  const cycleNode = ciclos
+  return ciclos
     ? pickRecordValueByNormalizedKey(ciclos, cicloKey, value => normalizeCicloKey(value as any))
     : source
+}
 
-  if (!cycleNode || !isPlainRecord(cycleNode)) return []
+const collectEnrollmentSourcesForPlantel = (cycleNode: unknown, plantel: unknown): unknown[] => {
+  if (!isPlainRecord(cycleNode)) return []
+  const plantelKey = normalizeEnrollmentPlantelKey(plantel)
+
   if (!plantelKey || plantelKey === 'GLOBAL') {
-    const globalSources = [cycleNode.planteles, cycleNode.planteles_mensual_baja4, cycleNode.planteles_issste].filter(Boolean)
-    const globalIds = parseScopedEnrollmentConceptIds(globalSources)
-    return globalIds.length ? globalIds : parseEnrollmentConcepts(cycleNode)
+    return [cycleNode.planteles, cycleNode.planteles_mensual_baja4, cycleNode.planteles_issste].filter(Boolean)
   }
 
   const scopedSources: unknown[] = []
@@ -364,9 +360,30 @@ export const parseEnrollmentConceptsForScope = (
   pushPlantelBucket('planteles')
   pushPlantelBucket('planteles_mensual_baja4')
   pushPlantelBucket('planteles_issste')
+  return scopedSources
+}
 
+export const parseEnrollmentConceptsForScope = (
+  source: unknown,
+  options: { ciclo?: unknown; plantel?: unknown } = {}
+) => {
+  const cycleNode = readEnrollmentCycleNode(source, options.ciclo)
+  if (!cycleNode) return []
+  const scopedSources = collectEnrollmentSourcesForPlantel(cycleNode, options.plantel)
   const scopedIds = parseScopedEnrollmentConceptIds(scopedSources)
   return scopedIds.length ? scopedIds : parseEnrollmentConcepts(scopedSources)
+}
+
+export const parseEnrollmentConceptsForPlantelHistory = (
+  source: unknown,
+  options: { plantel?: unknown } = {}
+) => {
+  if (!isPlainRecord(source)) return parseEnrollmentConcepts(source)
+  const ciclos = isPlainRecord(source.ciclos) ? source.ciclos : null
+  const cycleNodes = ciclos ? Object.values(ciclos) : [source]
+  const sources = cycleNodes.flatMap(cycleNode => collectEnrollmentSourcesForPlantel(cycleNode, options.plantel))
+  const ids = parseScopedEnrollmentConceptIds(sources)
+  return ids.length ? ids : parseEnrollmentConcepts(sources)
 }
 
 export const expedienteDisplayText = (value: unknown): string => {

@@ -1492,7 +1492,7 @@
       :current-tipo-ingreso="selectedStudent.tipoIngresoValue ? { value: selectedStudent.tipoIngresoValue } : { value: 'externo' }"
       :photo-url="controlStudentPhotoUrl(selectedStudent) || ''"
       :saving="savingAcademicPosition"
-      :enrollment-concepts="externalConcepts"
+      :enrollment-concepts="tipoIngresoConcepts.length ? tipoIngresoConcepts : externalConcepts"
       @close="showAcademicPositionModal = false"
       @confirm="saveAcademicPosition"
     />
@@ -1682,6 +1682,7 @@ import {
   normalizeEnrollmentConceptIds,
   normalizeEnrollmentPlantelKey,
   normalizeStudentMatricula,
+  parseEnrollmentConceptsForPlantelHistory,
   parseEnrollmentConceptsForScope,
   photoStorageKey,
   studentPresentationStyle,
@@ -1706,7 +1707,8 @@ const state = useState("globalState", () => ({
 const activePlantelCookie = useCookie("auth_active_plantel");
 const initialControlPlantel = String(activePlantelCookie.value || "").trim();
 const externalConcepts = ref([]);
-const ENROLLMENT_CONCEPTS_CACHE_BASE_KEY = "students-enrollment-concepts:v2";
+const tipoIngresoConcepts = ref([]);
+const ENROLLMENT_CONCEPTS_CACHE_BASE_KEY = "control-escolar-enrollment-concepts:v3";
 const CONTROL_STUDENTS_CACHE_VERSION = 2;
 const CONTROL_STUDENTS_SCOPE_CACHE_VERSION = 3;
 const CONTROL_STUDENTS_CACHE_READ_VERSIONS = [
@@ -1723,19 +1725,19 @@ const currentCicloKey = computed(() =>
     normalizeCicloOption(state.value?.ciclo || cicloCookie.value),
   ),
 );
+const currentCicloLabel = computed(() =>
+  formatCicloLabel(currentCicloKey.value),
+);
 const selectedAgentId = ref(
   initialControlPlantel && initialControlPlantel !== "GLOBAL"
     ? initialControlPlantel
     : "",
 );
-const currentPlantelKey = computed(() =>
-  normalizeEnrollmentPlantelKey(selectedAgentId.value || activePlantelCookie.value || initialControlPlantel || "GLOBAL") || "GLOBAL",
+const currentEnrollmentPlantelKey = computed(() =>
+  normalizeEnrollmentPlantelKey(selectedAgentId.value || activePlantelCookie.value || "GLOBAL") || "GLOBAL",
 );
-const enrollmentConceptsCacheKey = computed(() =>
-  `${ENROLLMENT_CONCEPTS_CACHE_BASE_KEY}:${currentCicloKey.value}:${currentPlantelKey.value}`,
-);
-const currentCicloLabel = computed(() =>
-  formatCicloLabel(currentCicloKey.value),
+const enrollmentConceptsCacheKey = computed(
+  () => `${ENROLLMENT_CONCEPTS_CACHE_BASE_KEY}:${currentCicloKey.value}:${currentEnrollmentPlantelKey.value}`,
 );
 const optionsLoading = ref(false);
 const kpisLoading = ref(false);
@@ -3463,6 +3465,7 @@ const buildScopeQuery = () => ({
   agentId: selectedAgentId.value || undefined,
   ciclo: currentCicloKey.value,
   concepts: externalConcepts.value.join(",") || undefined,
+  tipoConcepts: tipoIngresoConcepts.value.join(",") || undefined,
 });
 
 const buildQuery = (extra = {}) => ({
@@ -4924,15 +4927,18 @@ const sendHuskyPassEmail = async () => {
   }
 };
 
-const cacheEnrollmentConcepts = (conceptIds) => {
-  if (!process.client || !Array.isArray(conceptIds) || !conceptIds.length)
+const cacheEnrollmentConcepts = ({ current = [], tipoIngreso = [] } = {}) => {
+  const currentConceptIds = normalizeEnrollmentConceptIds(current);
+  const tipoIngresoConceptIds = normalizeEnrollmentConceptIds(tipoIngreso);
+  if (!process.client || (!currentConceptIds.length && !tipoIngresoConceptIds.length))
     return;
   try {
     localStorage.setItem(
       enrollmentConceptsCacheKey.value,
       JSON.stringify({
         savedAt: new Date().toISOString(),
-        concepts: conceptIds,
+        currentConcepts: currentConceptIds,
+        tipoIngresoConcepts: tipoIngresoConceptIds,
       }),
     );
   } catch (error) {
@@ -4949,8 +4955,10 @@ const hydrateCachedEnrollmentConcepts = () => {
     const parsed = JSON.parse(
       localStorage.getItem(enrollmentConceptsCacheKey.value) || "null",
     );
-    const conceptIds = normalizeEnrollmentConceptIds(parsed?.concepts);
-    if (conceptIds.length) externalConcepts.value = conceptIds;
+    const currentConceptIds = normalizeEnrollmentConceptIds(parsed?.currentConcepts || parsed?.concepts);
+    const tipoIngresoConceptIds = normalizeEnrollmentConceptIds(parsed?.tipoIngresoConcepts || currentConceptIds);
+    if (currentConceptIds.length) externalConcepts.value = currentConceptIds;
+    if (tipoIngresoConceptIds.length) tipoIngresoConcepts.value = tipoIngresoConceptIds;
   } catch (error) {
     console.warn(
       "[Control Escolar] No se pudo leer la configuración de inscripción.",
@@ -4960,17 +4968,22 @@ const hydrateCachedEnrollmentConcepts = () => {
 };
 
 const parseEnrollmentConfig = (obj) => {
-  const conceptIds = parseEnrollmentConceptsForScope(obj, {
+  const currentConceptIds = parseEnrollmentConceptsForScope(obj, {
     ciclo: currentCicloKey.value,
-    plantel: currentPlantelKey.value,
+    plantel: currentEnrollmentPlantelKey.value,
   });
-  if (!conceptIds.length) return;
-  externalConcepts.value = conceptIds;
-  cacheEnrollmentConcepts(conceptIds);
+  const tipoIngresoConceptIds = parseEnrollmentConceptsForPlantelHistory(obj, {
+    plantel: currentEnrollmentPlantelKey.value,
+  });
+  if (!currentConceptIds.length) return;
+  externalConcepts.value = currentConceptIds;
+  tipoIngresoConcepts.value = tipoIngresoConceptIds.length ? tipoIngresoConceptIds : currentConceptIds;
+  cacheEnrollmentConcepts({ current: externalConcepts.value, tipoIngreso: tipoIngresoConcepts.value });
 };
 
 const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
   const previousConcepts = externalConcepts.value.join("|");
+  const previousTipoConcepts = tipoIngresoConcepts.value.join("|");
 
   try {
     const configData = await $fetch("/api/control-escolar/enrollment-config");
@@ -4991,7 +5004,8 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
 
   if (
     refreshStudents &&
-    externalConcepts.value.join("|") !== previousConcepts
+    (externalConcepts.value.join("|") !== previousConcepts ||
+      tipoIngresoConcepts.value.join("|") !== previousTipoConcepts)
   ) {
     await refreshAll({
       clearExisting: false,

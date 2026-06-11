@@ -5,6 +5,7 @@
         :student="selectedStudent"
         :is-enrolled="isStudentEnrolled(selectedStudent, externalConcepts)"
         :external-concepts="externalConcepts"
+        :tipo-ingreso-concepts="tipoIngresoConcepts.length ? tipoIngresoConcepts : externalConcepts"
         @refresh="$emit('refresh')"
         @edit="$emit('edit', $event)"
         @close="$emit('close-detail')"
@@ -76,7 +77,8 @@ defineProps({
   bulkPaymentRows: { type: Array, default: () => [] },
   bulkPaymentLoading: { type: Boolean, default: false },
   bulkPaymentProcessing: { type: Boolean, default: false },
-  externalConcepts: { type: Array, default: () => [] }
+  externalConcepts: { type: Array, default: () => [] },
+  tipoIngresoConcepts: { type: Array, default: () => [] }
 })
 
 defineEmits([

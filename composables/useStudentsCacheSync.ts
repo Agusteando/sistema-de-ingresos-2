@@ -9,6 +9,7 @@ type StudentsCacheOptions = {
   ciclo?: string | number | null
   q?: string | null
   enrollmentConcepts?: unknown
+  tipoIngresoConcepts?: unknown
 }
 
 type StudentsCacheRecord = {
@@ -20,6 +21,8 @@ type StudentsCacheRecord = {
   students: unknown[]
   enrollmentConceptSignature?: string
   enrollmentConcepts?: string[]
+  tipoIngresoConceptSignature?: string
+  tipoIngresoConcepts?: string[]
 }
 
 type StudentsSyncState = {
@@ -31,8 +34,8 @@ type StudentsSyncState = {
   error: string | null
 }
 
-const CACHE_VERSION = 3
-const LEGACY_CACHE_VERSIONS = [2]
+const CACHE_VERSION = 5
+const LEGACY_CACHE_VERSIONS = []
 const CACHE_NAMESPACE = 'students-cache'
 
 const normalizeQuery = (value?: string | null) => String(value || '').trim()
@@ -61,14 +64,24 @@ const safeParseRecord = (raw: string | null): StudentsCacheRecord | null => {
 
 const isCacheRecordConceptCompatible = (record: StudentsCacheRecord, options: StudentsCacheOptions = {}) => {
   const requestedSignature = enrollmentConceptSignature(options.enrollmentConcepts)
-  if (!requestedSignature) return true
+  const requestedTipoSignature = enrollmentConceptSignature(options.tipoIngresoConcepts)
 
-  const recordSignature = typeof record.enrollmentConceptSignature === 'string'
-    ? record.enrollmentConceptSignature
-    : null
+  if (requestedSignature) {
+    const recordSignature = typeof record.enrollmentConceptSignature === 'string'
+      ? record.enrollmentConceptSignature
+      : null
+    if (recordSignature !== null && recordSignature !== requestedSignature) return false
+  }
 
-  if (recordSignature === null) return true
-  return recordSignature === requestedSignature
+  if (requestedTipoSignature) {
+    const recordTipoSignature = typeof record.tipoIngresoConceptSignature === 'string'
+      ? record.tipoIngresoConceptSignature
+      : null
+    if (recordTipoSignature === null) return false
+    if (recordTipoSignature !== requestedTipoSignature) return false
+  }
+
+  return true
 }
 
 export const useStudentsCacheSync = () => {
@@ -133,7 +146,11 @@ export const useStudentsCacheSync = () => {
         enrollmentConceptSignature: record.enrollmentConceptSignature || '',
         enrollmentConcepts: Array.isArray(record.enrollmentConcepts)
           ? normalizeEnrollmentConceptIds(record.enrollmentConcepts)
-          : normalizeEnrollmentConceptIds(record.enrollmentConceptSignature || '')
+          : normalizeEnrollmentConceptIds(record.enrollmentConceptSignature || ''),
+        tipoIngresoConceptSignature: record.tipoIngresoConceptSignature || '',
+        tipoIngresoConcepts: Array.isArray(record.tipoIngresoConcepts)
+          ? normalizeEnrollmentConceptIds(record.tipoIngresoConcepts)
+          : normalizeEnrollmentConceptIds(record.tipoIngresoConceptSignature || '')
       }
     }
 
@@ -152,7 +169,9 @@ export const useStudentsCacheSync = () => {
       savedAt: new Date().toISOString(),
       students,
       enrollmentConceptSignature: enrollmentConceptSignature(options.enrollmentConcepts),
-      enrollmentConcepts: normalizeEnrollmentConceptIds(options.enrollmentConcepts)
+      enrollmentConcepts: normalizeEnrollmentConceptIds(options.enrollmentConcepts),
+      tipoIngresoConceptSignature: enrollmentConceptSignature(options.tipoIngresoConcepts),
+      tipoIngresoConcepts: normalizeEnrollmentConceptIds(options.tipoIngresoConcepts)
     }
 
     try {

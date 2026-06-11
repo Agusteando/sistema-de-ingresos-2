@@ -208,10 +208,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const user = event.context.user
 
   if (method === 'GET') {
-    const { q = '', ciclo = '2025', nivel = '', grado = '', grupo = '', concepts = '' } = getQuery(event)
+    const { q = '', ciclo = '2025', nivel = '', grado = '', grupo = '', concepts = '', tipoConcepts = '' } = getQuery(event)
     const cicloKey = normalizeCicloKey(ciclo)
     const previousCiclo = previousCicloKey(cicloKey)
     const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
+    const tipoIngresoConceptIds = parseEnrollmentConceptIds(tipoConcepts).length ? parseEnrollmentConceptIds(tipoConcepts) : enrollmentConceptIds
     
     let whereClause = "1=1"
     const params: any[] = []
@@ -381,7 +382,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC LIMIT 5000;
     `
     const rows = await query<any[]>(sql, [cicloKey, cicloKey, previousCiclo, previousCiclo, ...params])
-    const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(rows.map(r => r.matricula), enrollmentConceptIds)
+    const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(rows.map(r => r.matricula), tipoIngresoConceptIds)
     let mapped = rows.flatMap(r => {
       const p = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey, r.nivelBase)
       const hasCurrentEnrollmentEvidence = rowHasCurrentEnrollmentEvidence(r)
@@ -398,7 +399,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           previousConceptIds: [r.conceptoIdsPagadosPrevios, r.conceptoIdsCargadosPrevios, r.conceptoIdsCicloPrevio],
           allConceptIds: [historicalConceptIds]
         }
-      }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
+      }, cicloKey, { enrollmentConcepts: tipoIngresoConceptIds })
       const enrollmentState = r.estatus === 'Activo'
         ? (hasCurrentEnrollmentEvidence ? 'inscrito' : 'no_inscrito')
         : (hasCurrentEnrollmentEvidence ? 'baja_inscrita' : 'baja')

@@ -123,10 +123,11 @@ const enrichFinancialStudentsWithMatricula = async (students: any[] = []) => {
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   setResponseHeader(event, 'Cache-Control', 'no-store')
-  const { q = '', ciclo = '2025', concepts = '' } = getQuery(event)
+  const { q = '', ciclo = '2025', concepts = '', tipoConcepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
   const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)
+  const tipoIngresoConceptIds = parseEnrollmentConceptIds(tipoConcepts).length ? parseEnrollmentConceptIds(tipoConcepts) : enrollmentConceptIds
   const user = event.context.user
   
   let whereClause = "1=1"
@@ -300,7 +301,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   
   const queryParams = [cicloKey, cicloKey, previousCiclo, previousCiclo, ...params]
   const rows = await query<any[]>(sql, queryParams)
-  const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(rows.map(r => r.matricula), enrollmentConceptIds)
+  const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(rows.map(r => r.matricula), tipoIngresoConceptIds)
   
   const mapped = rows.flatMap(r => {
     const promoted = calculatePromotedGrado(r.gradoBase, r.plantel, r.cicloBase, cicloKey, r.nivelBase)
@@ -318,7 +319,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         previousConceptIds: [r.conceptoIdsPagadosPrevios, r.conceptoIdsCargadosPrevios, r.conceptoIdsCicloPrevio],
         allConceptIds: [historicalConceptIds]
       }
-    }, cicloKey, { enrollmentConcepts: enrollmentConceptIds })
+    }, cicloKey, { enrollmentConcepts: tipoIngresoConceptIds })
     const enrollmentState = r.estatus === 'Activo'
       ? (hasCurrentEnrollmentEvidence ? 'inscrito' : 'no_inscrito')
       : (hasCurrentEnrollmentEvidence ? 'baja_inscrita' : 'baja')
