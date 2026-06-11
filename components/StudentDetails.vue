@@ -405,16 +405,20 @@
           <button
             type="button"
             :class="{ active: accountViewMode === 'timeline' }"
+            aria-label="Ver por meses"
             @click="accountViewMode = 'timeline'"
           >
-            Timeline
+            <LucideCalendarClock :size="14" aria-hidden="true" />
+            Meses
           </button>
           <button
             type="button"
             :class="{ active: accountViewMode === 'classic' }"
+            aria-label="Ver tabla"
             @click="accountViewMode = 'classic'"
           >
-            Vista clásica
+            <LucideFileText :size="14" aria-hidden="true" />
+            Tabla
           </button>
         </div>
 
@@ -460,11 +464,8 @@
                 >
                   <header class="timeline-card-header">
                     <div>
-                      <strong>Doc. {{ group.documento }}</strong>
-                      <span
-                        >{{ group.conceptoNombre }} ·
-                        {{ group.totalMonths }} meses</span
-                      >
+                      <strong>{{ group.conceptoNombre }}</strong>
+                      <span>Doc. {{ group.documento }} · {{ group.rangeLabel }}</span>
                     </div>
                     <div class="timeline-card-actions">
                       <button
@@ -497,12 +498,11 @@
                         'timeline-segment',
                         timelineSegmentTone(segment),
                       ]"
-                      :style="{ flexGrow: timelineSegmentWeight(segment) }"
                       :disabled="segment.cancelled"
                       @click="openTimelineSegmentChange(group, segment)"
                     >
-                      <strong>{{ segment.conceptoNombre }}</strong>
                       <span>{{ timelineSegmentRange(segment) }}</span>
+                      <strong>{{ segment.conceptoNombre }}</strong>
                       <em>{{ timelineSegmentStatus(segment) }}</em>
                     </button>
                   </div>
@@ -1108,42 +1108,178 @@ const filteredDebts = computed(() => {
     return true;
   });
 });
-const accountTimelineGroups = computed(() => {
-  const visibleDocIds = new Set();
-  filteredDebts.value.forEach((debt) => {
-    const documentId = Number(debt?.documento || 0);
-    const parentId = Number(debt?.parentDocumento || 0);
-    if (parentId) visibleDocIds.add(parentId);
-    else if (documentId) visibleDocIds.add(documentId);
+const resolveDebtMonthNumber = (debt) => {
+  const raw = String(debt?.mes || "").trim().toLowerCase();
+  if (raw === "ev") return 1;
+  const numeric = Number(debt?.mes || 1);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 1;
+};
+
+const sortDebtsByMonth = (items) =>
+  [...items].sort((a, b) => {
+    const byMonth = resolveDebtMonthNumber(a) - resolveDebtMonthNumber(b);
+    if (byMonth) return byMonth;
+    return String(a?.conceptoNombre || "").localeCompare(
+      String(b?.conceptoNombre || ""),
+      "es",
+    );
   });
 
-  return Array.from(visibleDocIds)
-    .map((documentId) => {
-      const sourceDebt = debts.value.find(
-        (debt) => Number(debt?.documento) === Number(documentId),
-      );
-      const timeline = sourceDebt?.documentTimeline;
-      if (!timeline) return null;
+const buildSegmentsFromDebts = (items) => {
+  const segments = [];
+  sortDebtsByMonth(items).forEach((debt) => {
+    const mes = resolveDebtMonthNumber(debt);
+    const conceptoNombre =
+      compactAccountText(debt?.conceptoNombre) || "Concepto";
+    const last = segments[segments.length - 1];
+    const sameSegment =
+      last &&
+      last.conceptoNombre === conceptoNombre &&
+      last.endMes + 1 === mes &&
+      !last.cancelled;
 
-      const linkedIds = new Set(
-        (timeline.linkedDifferentials || []).map((item) =>
-          Number(item.documento),
-        ),
-      );
-      const allDebts = debts.value.filter((debt) => {
-        const debtDocumento = Number(debt?.documento || 0);
-        return (
-          debtDocumento === Number(documentId) || linkedIds.has(debtDocumento)
-        );
+    if (sameSegment) {
+      last.endMes = mes;
+      last.endLabel = debt?.mesLabel || `Mes ${mes}`;
+      last.months.push(mes);
+      last.debts.push(debt);
+      last.subtotal += Number(debt?.subtotal || 0);
+      last.pagos += Number(debt?.pagos || 0);
+      last.saldo += Number(debt?.saldo || 0);
+      last.hasRecargo = last.hasRecargo || Boolean(debt?.hasRecargo);
+      return;
+    }
+
+    segments.push({
+      conceptoNombre,
+      accion:
+        debt?.originalConceptoNombre &&
+        debt.originalConceptoNombre !== conceptoNombre
+          ? "cambio"
+          : "original",
+      periodoId: debt?.linkedChangePeriodoId || null,
+      startMes: mes,
+      endMes: mes,
+      startLabel: debt?.mesLabel || `Mes ${mes}`,
+      endLabel: debt?.mesLabel || `Mes ${mes}`,
+      months: [mes],
+      debts: [debt],
+      subtotal: Number(debt?.subtotal || 0),
+      pagos: Number(debt?.pagos || 0),
+      saldo: Number(debt?.saldo || 0),
+      hasRecargo: Boolean(debt?.hasRecargo),
+      cancelled: false,
+    });
+  });
+  return segments;
+};
+
+const buildDifferentialsFromDebts = (items) => {
+  const byDocument = new Map();
+  items.forEach((debt) => {
+    const documento = Number(debt?.documento || 0);
+    if (!documento) return;
+    const current = byDocument.get(documento) || {
+      documento,
+      conceptoNombre: debt?.conceptoNombre || "Diferencia",
+      monto: 0,
+      pagos: 0,
+      saldo: 0,
+    };
+    current.monto += Number(debt?.subtotal || 0);
+    current.pagos += Number(debt?.pagos || 0);
+    current.saldo += Number(debt?.saldo || 0);
+    byDocument.set(documento, current);
+  });
+  return Array.from(byDocument.values());
+};
+
+const accountTimelineGroups = computed(() => {
+  const grouped = new Map();
+
+  filteredDebts.value.forEach((debt, index) => {
+    const documentId = Number(debt?.documento || 0);
+    const parentId = Number(debt?.parentDocumento || 0);
+    const groupId = parentId || documentId || `row-${index}`;
+    const group = grouped.get(groupId) || {
+      documento: groupId,
+      rows: [],
+      differentialRows: [],
+    };
+
+    if (parentId) group.differentialRows.push(debt);
+    else group.rows.push(debt);
+    grouped.set(groupId, group);
+  });
+
+  return Array.from(grouped.values()).map((group) => {
+    const documentId = Number(group.documento || 0);
+    const sourceDebt =
+      debts.value.find((debt) => Number(debt?.documento || 0) === documentId) ||
+      group.rows[0] ||
+      group.differentialRows[0];
+    const timeline = sourceDebt?.documentTimeline || null;
+    const visibleRows = group.rows.length ? group.rows : group.differentialRows;
+    const segments = buildSegmentsFromDebts(visibleRows);
+    const timelineDifferentials = Array.isArray(timeline?.linkedDifferentials)
+      ? timeline.linkedDifferentials
+      : [];
+    const visibleDifferentials = buildDifferentialsFromDebts(
+      group.differentialRows,
+    );
+    const differentialByDocument = new Map();
+    timelineDifferentials.forEach((item) => {
+      const key = Number(item?.documento || 0);
+      if (!key) return;
+      differentialByDocument.set(key, {
+        documento: key,
+        conceptoNombre: item?.conceptoNombre || "Diferencia",
+        monto: Number(item?.monto || 0),
+        pagos: Number(item?.pagos || 0),
+        saldo: Number(item?.saldo || 0),
       });
+    });
+    visibleDifferentials.forEach((item) => {
+      const key = Number(item?.documento || 0);
+      if (!key) return;
+      differentialByDocument.set(key, item);
+    });
 
-      return {
-        ...timeline,
-        allDebts,
-        pendingDebts: allDebts.filter((debt) => Number(debt?.saldo || 0) > 0),
-      };
-    })
-    .filter(Boolean);
+    const allDebts = [
+      ...debts.value.filter((debt) => Number(debt?.documento || 0) === documentId),
+      ...debts.value.filter(
+        (debt) => Number(debt?.parentDocumento || 0) === documentId,
+      ),
+    ];
+    const totalMonths =
+      segments.reduce((max, segment) => Math.max(max, Number(segment.endMes || 1)), 1) ||
+      Number(timeline?.totalMonths || 1) ||
+      1;
+    const firstSegment = segments[0];
+    const lastSegment = segments[segments.length - 1];
+    const rangeLabel = firstSegment
+      ? firstSegment.startMes === lastSegment.endMes
+        ? timelineSegmentRange(firstSegment)
+        : `Mes ${firstSegment.startMes}-${lastSegment.endMes}`
+      : `${totalMonths} meses`;
+
+    return {
+      documento: group.documento,
+      conceptoNombre:
+        firstSegment?.conceptoNombre ||
+        timeline?.conceptoNombre ||
+        sourceDebt?.conceptoNombre ||
+        "Concepto",
+      totalMonths,
+      rangeLabel,
+      segments,
+      linkedDifferentials: Array.from(differentialByDocument.values()),
+      allDebts: allDebts.length ? allDebts : visibleRows,
+      pendingDebts: (allDebts.length ? allDebts : visibleRows).filter(
+        (debt) => Number(debt?.saldo || 0) > 0,
+      ),
+    };
+  });
 });
 
 const visibleValidDebts = computed(() =>
@@ -1242,11 +1378,6 @@ const progressStatusLabel = (debt) => {
   return `${Math.max(0, Math.min(100, paid))}%`;
 };
 
-const timelineSegmentWeight = (segment) =>
-  Math.max(
-    1,
-    Number(segment?.endMes || 1) - Number(segment?.startMes || 1) + 1,
-  );
 const timelineSegmentRange = (segment) => {
   const start = Number(segment?.startMes || 1);
   const end = Number(segment?.endMes || start);
@@ -2247,24 +2378,35 @@ const handleInvoiceSuccess = () => {
 <style scoped>
 .account-view-tabs {
   display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
   width: fit-content;
-  gap: 4px;
-  margin: 0 0 12px;
-  border: 1px solid #dce6f0;
-  border-radius: 999px;
-  background: #f6f8fb;
-  padding: 4px;
+  height: 34px;
+  gap: 3px;
+  margin: 0 0 10px;
+  border: 1px solid #d9e3ef;
+  border-radius: 14px;
+  background: rgba(248, 251, 253, 0.92);
+  padding: 3px;
 }
 
 .account-view-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 11px;
   background: transparent;
-  color: #718096;
+  color: #64748b;
   cursor: pointer;
-  padding: 7px 12px;
-  font-size: 0.74rem;
-  font-weight: 800;
+  padding: 0 10px;
+  font-size: 0.72rem;
+  font-weight: 820;
+  line-height: 1;
+  white-space: nowrap;
   transition:
     background 160ms ease,
     color 160ms ease,
@@ -2273,8 +2415,8 @@ const handleInvoiceSuccess = () => {
 
 .account-view-tabs button.active {
   background: #ffffff;
-  color: #263752;
-  box-shadow: 0 6px 18px rgba(30, 47, 74, 0.08);
+  color: #21324c;
+  box-shadow: 0 5px 14px rgba(30, 47, 74, 0.08);
 }
 
 .account-timeline-wrap {
@@ -2285,23 +2427,22 @@ const handleInvoiceSuccess = () => {
 
 .timeline-empty {
   border: 1px dashed #dce6f0;
-  border-radius: 18px;
+  border-radius: 16px;
   background: #fbfcfe;
 }
 
 .timeline-list {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .timeline-card {
   display: grid;
-  gap: 12px;
+  overflow: hidden;
   border: 1px solid #dce6f0;
-  border-radius: 18px;
-  background: #ffffff;
-  padding: 14px;
-  box-shadow: 0 16px 36px rgba(30, 47, 74, 0.055);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 28px rgba(30, 47, 74, 0.045);
 }
 
 .timeline-card-header {
@@ -2309,108 +2450,117 @@ const handleInvoiceSuccess = () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 11px 13px;
+  border-bottom: 1px solid #edf2f7;
+  background: linear-gradient(90deg, rgba(247, 250, 252, 0.92), rgba(255, 255, 255, 0.98));
 }
 
 .timeline-card-header strong {
   display: block;
-  color: #263752;
-  font-size: 0.86rem;
+  color: #17243c;
+  font-size: 0.8rem;
   font-weight: 860;
 }
 
 .timeline-card-header span {
   display: block;
-  margin-top: 3px;
-  color: #7b8798;
-  font-size: 0.72rem;
-  font-weight: 650;
+  margin-top: 2px;
+  color: #758299;
+  font-size: 0.68rem;
+  font-weight: 720;
 }
 
 .timeline-card-actions {
   display: inline-flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 7px;
+  gap: 6px;
 }
 
 .timeline-action {
   border: 1px solid #d7e1ec;
-  border-radius: 999px;
+  border-radius: 11px;
   background: #ffffff;
   color: #516174;
   cursor: pointer;
-  padding: 7px 11px;
-  font-size: 0.7rem;
+  padding: 6px 9px;
+  font-size: 0.68rem;
   font-weight: 820;
 }
 
 .timeline-action.primary {
   border-color: #cae3c3;
   background: #eff9ed;
-  color: #427d3c;
+  color: #2e7d32;
 }
 
 .timeline-track {
-  display: flex;
-  gap: 7px;
-  min-height: 84px;
+  display: grid;
+  gap: 0;
+  padding: 0;
 }
 
 .timeline-segment {
-  display: flex;
-  min-width: 112px;
-  flex-direction: column;
-  justify-content: space-between;
-  border: 1px solid #dce6f0;
-  border-radius: 15px;
-  background: #f8fafc;
+  display: grid;
+  grid-template-columns: minmax(74px, 0.55fr) minmax(0, 1.9fr) minmax(82px, 0.7fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #edf2f7;
+  background: #ffffff;
   color: inherit;
   cursor: pointer;
-  padding: 10px;
+  padding: 10px 13px;
   text-align: left;
   transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.timeline-segment:last-child {
+  border-bottom: 0;
 }
 
 .timeline-segment:hover:not(:disabled) {
-  border-color: #b9cadc;
-  box-shadow: 0 10px 22px rgba(30, 47, 74, 0.08);
-  transform: translateY(-1px);
+  background: #f8fbfd;
+  box-shadow: inset 3px 0 0 #9bcf93;
 }
 
 .timeline-segment.changed {
-  border-color: #cfe7c7;
-  background: #f4fbf1;
+  background: #fbfef9;
 }
 
 .timeline-segment.cancelled {
-  border-color: #efd2cf;
-  background: #fff6f5;
+  background: #fff8f7;
   cursor: default;
   opacity: 0.86;
 }
 
 .timeline-segment strong {
   overflow: hidden;
-  color: #263752;
-  font-size: 0.78rem;
-  font-weight: 860;
+  color: #17243c;
+  font-size: 0.76rem;
+  font-weight: 840;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .timeline-segment span,
 .timeline-segment em {
-  color: #6f7b8f;
-  font-size: 0.7rem;
+  color: #6b778a;
+  font-size: 0.68rem;
   font-style: normal;
   font-weight: 760;
 }
 
+.timeline-segment span {
+  color: #8a96a8;
+}
+
 .timeline-segment em {
-  color: #427d3c;
+  justify-self: end;
+  color: #2e7d32;
 }
 
 .timeline-segment.cancelled em {
@@ -2420,23 +2570,27 @@ const handleInvoiceSuccess = () => {
 .timeline-differentials {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 7px;
+  padding: 10px 13px;
+  border-top: 1px solid #edf2f7;
+  background: #fffdf8;
 }
 
 .timeline-differential {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border-radius: 999px;
-  background: #fff4db;
-  color: #8a6616;
-  padding: 7px 10px;
-  font-size: 0.72rem;
+  border: 1px solid #f0dfb8;
+  border-radius: 11px;
+  background: #fff8e7;
+  color: #806018;
+  padding: 6px 9px;
+  font-size: 0.7rem;
   font-weight: 820;
 }
 
 .timeline-differential strong {
-  color: #6d4f0d;
+  color: #624808;
 }
 
 @media (max-width: 760px) {
@@ -2450,8 +2604,13 @@ const handleInvoiceSuccess = () => {
     justify-content: flex-start;
   }
 
-  .timeline-track {
-    flex-direction: column;
+  .timeline-segment {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .timeline-segment em {
+    justify-self: start;
   }
 }
 </style>
