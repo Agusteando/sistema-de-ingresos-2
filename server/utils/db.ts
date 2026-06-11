@@ -609,7 +609,11 @@ export const ensureSchema = async () => {
           estatus VARCHAR(30) NOT NULL DEFAULT 'Activo',
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           created_by VARCHAR(255) DEFAULT NULL,
-          INDEX idx_documento_periodo (documento, start_mes, end_mes, estatus)
+          payment_policy VARCHAR(40) NOT NULL DEFAULT 'mantener_pagos_existentes',
+          diferencia_monto DECIMAL(65,2) NOT NULL DEFAULT 0,
+          diferencial_documento INT DEFAULT NULL,
+          INDEX idx_documento_periodo (documento, start_mes, end_mes, estatus),
+          INDEX idx_documento_periodo_diferencial (diferencial_documento)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
@@ -678,6 +682,10 @@ export const ensureSchema = async () => {
 
         if (tables.length > 0) {
           await checkAndAddColumn('documento_concepto_periodos', 'montoFinal', "DECIMAL(65,2) DEFAULT NULL")
+          await checkAndAddColumn('documento_concepto_periodos', 'payment_policy', "VARCHAR(40) NOT NULL DEFAULT 'mantener_pagos_existentes'")
+          await checkAndAddColumn('documento_concepto_periodos', 'diferencia_monto', "DECIMAL(65,2) NOT NULL DEFAULT 0")
+          await checkAndAddColumn('documento_concepto_periodos', 'diferencial_documento', "INT DEFAULT NULL")
+          await runOptionalIndexQuery(`ALTER TABLE documento_concepto_periodos ADD INDEX idx_documento_periodo_diferencial (diferencial_documento)`)
         }
       } catch (e) {}
 

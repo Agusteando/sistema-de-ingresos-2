@@ -130,7 +130,8 @@
                 <p>
                   <span class="student-code">{{ student.matricula }}</span>
                   <i></i>
-                  {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} · {{ studentGroupInlineLabel(student) }}
+                  {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} ·
+                  {{ studentGroupInlineLabel(student) }}
                   <template v-if="student.matriculaAnterior">
                     <i></i>
                     Ant. {{ student.matriculaAnterior }}
@@ -217,7 +218,11 @@
             >
               <LucideFileText :size="15" /> Facturar
             </button>
-            <button class="profile-action-button" type="button" @click="showNoAdeudoModal = true">
+            <button
+              class="profile-action-button"
+              type="button"
+              @click="showNoAdeudoModal = true"
+            >
               <LucideShieldCheck :size="15" /> No adeudo
             </button>
             <button class="profile-action-button" @click="showDocModal = true">
@@ -307,11 +312,17 @@
               <p>
                 <span class="student-code">{{ student.matricula }}</span>
                 <i></i>
-                {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} · {{ studentGroupInlineLabel(student) }}
+                {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} ·
+                {{ studentGroupInlineLabel(student) }}
               </p>
-              <div v-if="accountMetaItems.length" class="account-student-meta" aria-label="Datos complementarios del alumno">
+              <div
+                v-if="accountMetaItems.length"
+                class="account-student-meta"
+                aria-label="Datos complementarios del alumno"
+              >
                 <span v-for="item in accountMetaItems" :key="item.label">
-                  <small>{{ item.label }}</small>{{ item.value }}
+                  <small>{{ item.label }}</small
+                  >{{ item.value }}
                 </span>
               </div>
             </div>
@@ -387,6 +398,27 @@
         </div>
 
         <div
+          class="account-view-tabs"
+          role="tablist"
+          aria-label="Vista del estado de cuenta"
+        >
+          <button
+            type="button"
+            :class="{ active: accountViewMode === 'timeline' }"
+            @click="accountViewMode = 'timeline'"
+          >
+            Timeline
+          </button>
+          <button
+            type="button"
+            :class="{ active: accountViewMode === 'classic' }"
+            @click="accountViewMode = 'classic'"
+          >
+            Vista clásica
+          </button>
+        </div>
+
+        <div
           :class="[
             'account-workspace-body',
             { 'account-workspace-body--expanded': detailsExpanded },
@@ -394,9 +426,108 @@
         >
           <Transition name="account-flow" mode="out-in">
             <div
+              v-if="accountViewMode === 'timeline'"
+              ref="accountTableWrap"
+              class="account-timeline-wrap"
+              :key="`${student.matricula}-timeline`"
+            >
+              <div
+                v-if="showBlockingAccountLoader"
+                class="account-empty timeline-empty"
+              >
+                <span class="liquid-loader small" aria-hidden="true"
+                  ><i></i><i></i><i></i
+                ></span>
+                Cargando estado de cuenta...
+              </div>
+              <div
+                v-else-if="!debts.length"
+                class="account-empty muted timeline-empty"
+              >
+                Sin adeudos o documentos registrados en este ciclo escolar.
+              </div>
+              <div
+                v-else-if="!filteredDebts.length"
+                class="account-empty muted timeline-empty"
+              >
+                Sin resultados para la búsqueda actual.
+              </div>
+              <div v-else class="timeline-list">
+                <article
+                  v-for="group in accountTimelineGroups"
+                  :key="`timeline-${group.documento}`"
+                  class="timeline-card"
+                >
+                  <header class="timeline-card-header">
+                    <div>
+                      <strong>Doc. {{ group.documento }}</strong>
+                      <span
+                        >{{ group.conceptoNombre }} ·
+                        {{ group.totalMonths }} meses</span
+                      >
+                    </div>
+                    <div class="timeline-card-actions">
+                      <button
+                        v-if="group.pendingDebts.length"
+                        class="timeline-action primary"
+                        type="button"
+                        @click="payTimelineGroup(group)"
+                      >
+                        Pagar
+                      </button>
+                      <button
+                        class="timeline-action"
+                        type="button"
+                        @click="invoiceTimelineGroup(group)"
+                      >
+                        Facturar
+                      </button>
+                    </div>
+                  </header>
+
+                  <div
+                    class="timeline-track"
+                    :style="{ '--timeline-months': group.totalMonths }"
+                  >
+                    <button
+                      v-for="segment in group.segments"
+                      :key="`${group.documento}-${segment.startMes}-${segment.endMes}-${segment.conceptoNombre}`"
+                      type="button"
+                      :class="[
+                        'timeline-segment',
+                        timelineSegmentTone(segment),
+                      ]"
+                      :style="{ flexGrow: timelineSegmentWeight(segment) }"
+                      :disabled="segment.cancelled"
+                      @click="openTimelineSegmentChange(group, segment)"
+                    >
+                      <strong>{{ segment.conceptoNombre }}</strong>
+                      <span>{{ timelineSegmentRange(segment) }}</span>
+                      <em>{{ timelineSegmentStatus(segment) }}</em>
+                    </button>
+                  </div>
+
+                  <div
+                    v-if="group.linkedDifferentials.length"
+                    class="timeline-differentials"
+                  >
+                    <div
+                      v-for="item in group.linkedDifferentials"
+                      :key="`diff-${group.documento}-${item.documento}`"
+                      class="timeline-differential"
+                    >
+                      <span>Diferencia · Doc. {{ item.documento }}</span>
+                      <strong>${{ format(item.saldo || item.monto) }}</strong>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+            <div
+              v-else
               ref="accountTableWrap"
               class="account-table-wrap"
-              :key="student.matricula"
+              :key="`${student.matricula}-classic`"
             >
               <table>
                 <colgroup>
@@ -518,7 +649,9 @@
                           Fijar
                         </button>
                       </td>
-                      <td class="money-cell paid" data-label="Pagos">${{ format(debt.pagos) }}</td>
+                      <td class="money-cell paid" data-label="Pagos">
+                        ${{ format(debt.pagos) }}
+                      </td>
                       <td
                         class="money-cell"
                         :class="{ danger: debt.saldo > 0 }"
@@ -769,6 +902,7 @@ const expandedHistory = ref(null);
 const depurandoDebt = ref(null);
 const accountSearchQuery = ref("");
 const accountFilter = ref("all");
+const accountViewMode = ref("timeline");
 const detailsExpanded = ref(false);
 const detailTransitioning = ref(false);
 
@@ -797,23 +931,38 @@ let accountRefreshTimer = null;
 let debtsRequestId = 0;
 
 const format = (val) => Number(val || 0).toFixed(2);
-const compactAccountText = (value) => String(value || '').trim();
-const accountJoinedName = (...values) => values.map(compactAccountText).filter(Boolean).join(' ');
+const compactAccountText = (value) => String(value || "").trim();
+const accountJoinedName = (...values) =>
+  values.map(compactAccountText).filter(Boolean).join(" ");
 const accountCentralOverlay = ref(null);
 let accountOverlayRequestId = 0;
-const normalizeAccountMatricula = (value) => String(value || '').trim().toUpperCase();
+const normalizeAccountMatricula = (value) =>
+  String(value || "")
+    .trim()
+    .toUpperCase();
 const extractAccountOverlayStudent = (payload) => {
-  if (!payload || typeof payload !== 'object') return null;
-  const candidate = payload.student && typeof payload.student === 'object'
-    ? payload.student
-    : payload.centralMatricula?.student && typeof payload.centralMatricula.student === 'object'
-      ? payload.centralMatricula.student
-      : payload;
+  if (!payload || typeof payload !== "object") return null;
+  const candidate =
+    payload.student && typeof payload.student === "object"
+      ? payload.student
+      : payload.centralMatricula?.student &&
+          typeof payload.centralMatricula.student === "object"
+        ? payload.centralMatricula.student
+        : payload;
   return [
-    candidate.matricula, candidate.curp, candidate.padre, candidate.madre,
-    candidate.nombrePadre, candidate.nombreMadre, candidate.emailPadre, candidate.emailMadre,
-    candidate.telefonoPadre, candidate.telefonoMadre
-  ].some((value) => compactAccountText(value)) ? candidate : null;
+    candidate.matricula,
+    candidate.curp,
+    candidate.padre,
+    candidate.madre,
+    candidate.nombrePadre,
+    candidate.nombreMadre,
+    candidate.emailPadre,
+    candidate.emailMadre,
+    candidate.telefonoPadre,
+    candidate.telefonoMadre,
+  ].some((value) => compactAccountText(value))
+    ? candidate
+    : null;
 };
 const accountOverlaySource = computed(() => ({
   ...(props.student || {}),
@@ -824,54 +973,80 @@ const loadAccountMatriculaOverlay = async ({ force = false } = {}) => {
   const matricula = normalizeAccountMatricula(props.student?.matricula);
   if (!matricula) return;
   if (!force && props.student?.centralMatricula) {
-    accountCentralOverlay.value = extractAccountOverlayStudent(props.student.centralMatricula);
+    accountCentralOverlay.value = extractAccountOverlayStudent(
+      props.student.centralMatricula,
+    );
     return;
   }
 
   const requestId = ++accountOverlayRequestId;
   try {
-    const response = await $fetch('/api/students/matricula-overlays', {
-      method: 'POST',
+    const response = await $fetch("/api/students/matricula-overlays", {
+      method: "POST",
       body: { matriculas: [matricula] },
     });
     if (requestId !== accountOverlayRequestId || !response?.ok) return;
     const overlay = (response.overlays || [])
       .map(extractAccountOverlayStudent)
       .find((item) => normalizeAccountMatricula(item?.matricula) === matricula);
-    if (overlay) accountCentralOverlay.value = extractAccountOverlayStudent(overlay);
+    if (overlay)
+      accountCentralOverlay.value = extractAccountOverlayStudent(overlay);
   } catch (error) {
     // Optional enrichment must never block Estado de Cuenta.
   }
 };
-const accountCurpLabel = computed(() => compactAccountText(accountOverlaySource.value.curp));
-const accountFatherLabel = computed(() => compactAccountText(
-  accountJoinedName(accountOverlaySource.value.nombrePadre, accountOverlaySource.value.apellidoPaternoPadre, accountOverlaySource.value.apellidoMaternoPadre) ||
-  accountOverlaySource.value.nombrePadreCompleto ||
-  accountOverlaySource.value.padre
-));
-const accountMotherLabel = computed(() => compactAccountText(
-  accountJoinedName(accountOverlaySource.value.nombreMadre, accountOverlaySource.value.apellidoPaternoMadre, accountOverlaySource.value.apellidoMaternoMadre) ||
-  accountOverlaySource.value.nombreMadreCompleto ||
-  accountOverlaySource.value.madre
-));
-const accountMetaItems = computed(() => [
-  { label: 'CURP', value: accountCurpLabel.value },
-  { label: 'Padre', value: accountFatherLabel.value },
-  { label: 'Madre', value: accountMotherLabel.value },
-].filter((item) => item.value));
+const accountCurpLabel = computed(() =>
+  compactAccountText(accountOverlaySource.value.curp),
+);
+const accountFatherLabel = computed(() =>
+  compactAccountText(
+    accountJoinedName(
+      accountOverlaySource.value.nombrePadre,
+      accountOverlaySource.value.apellidoPaternoPadre,
+      accountOverlaySource.value.apellidoMaternoPadre,
+    ) ||
+      accountOverlaySource.value.nombrePadreCompleto ||
+      accountOverlaySource.value.padre,
+  ),
+);
+const accountMotherLabel = computed(() =>
+  compactAccountText(
+    accountJoinedName(
+      accountOverlaySource.value.nombreMadre,
+      accountOverlaySource.value.apellidoPaternoMadre,
+      accountOverlaySource.value.apellidoMaternoMadre,
+    ) ||
+      accountOverlaySource.value.nombreMadreCompleto ||
+      accountOverlaySource.value.madre,
+  ),
+);
+const accountMetaItems = computed(() =>
+  [
+    { label: "CURP", value: accountCurpLabel.value },
+    { label: "Padre", value: accountFatherLabel.value },
+    { label: "Madre", value: accountMotherLabel.value },
+  ].filter((item) => item.value),
+);
 
-const accountExpedienteProgress = computed(() => resolveControlEscolarProgress(accountOverlaySource.value));
+const accountExpedienteProgress = computed(() =>
+  resolveControlEscolarProgress(accountOverlaySource.value),
+);
 const accountExpedienteTitle = computed(() => {
-  const summary = accountExpedienteProgress.value.summary || 'Expediente'
+  const summary = accountExpedienteProgress.value.summary || "Expediente";
   const missing = (accountExpedienteProgress.value.missingFields || [])
-    .map((field) => ({ curp: 'CURP', padre: 'Padre', madre: 'Madre' })[field] || field)
-    .join(', ')
-  return missing ? `${summary}: ${missing}` : summary
+    .map(
+      (field) =>
+        ({ curp: "CURP", padre: "Padre", madre: "Madre" })[field] || field,
+    )
+    .join(", ");
+  return missing ? `${summary}: ${missing}` : summary;
 });
 watch(
   () => props.student?.matricula,
   () => {
-    accountCentralOverlay.value = extractAccountOverlayStudent(props.student?.centralMatricula);
+    accountCentralOverlay.value = extractAccountOverlayStudent(
+      props.student?.centralMatricula,
+    );
     void loadAccountMatriculaOverlay();
   },
   { immediate: true },
@@ -880,7 +1055,8 @@ watch(
 watch(
   () => props.student?.centralMatricula,
   (overlay) => {
-    if (overlay) accountCentralOverlay.value = extractAccountOverlayStudent(overlay);
+    if (overlay)
+      accountCentralOverlay.value = extractAccountOverlayStudent(overlay);
   },
 );
 
@@ -932,6 +1108,44 @@ const filteredDebts = computed(() => {
     return true;
   });
 });
+const accountTimelineGroups = computed(() => {
+  const visibleDocIds = new Set();
+  filteredDebts.value.forEach((debt) => {
+    const documentId = Number(debt?.documento || 0);
+    const parentId = Number(debt?.parentDocumento || 0);
+    if (parentId) visibleDocIds.add(parentId);
+    else if (documentId) visibleDocIds.add(documentId);
+  });
+
+  return Array.from(visibleDocIds)
+    .map((documentId) => {
+      const sourceDebt = debts.value.find(
+        (debt) => Number(debt?.documento) === Number(documentId),
+      );
+      const timeline = sourceDebt?.documentTimeline;
+      if (!timeline) return null;
+
+      const linkedIds = new Set(
+        (timeline.linkedDifferentials || []).map((item) =>
+          Number(item.documento),
+        ),
+      );
+      const allDebts = debts.value.filter((debt) => {
+        const debtDocumento = Number(debt?.documento || 0);
+        return (
+          debtDocumento === Number(documentId) || linkedIds.has(debtDocumento)
+        );
+      });
+
+      return {
+        ...timeline,
+        allDebts,
+        pendingDebts: allDebts.filter((debt) => Number(debt?.saldo || 0) > 0),
+      };
+    })
+    .filter(Boolean);
+});
+
 const visibleValidDebts = computed(() =>
   filteredDebts.value.filter((debt) => Number(debt.saldo || 0) > 0),
 );
@@ -976,7 +1190,7 @@ const resolvedNivelLabel = computed(() => studentNivelLabel(props.student));
 const studentMissingGroup = (student) => !studentGroupLabel(student);
 const studentGroupInlineLabel = (student) => {
   const group = studentGroupLabel(student);
-  return group ? group : 'Sin grupo';
+  return group ? group : "Sin grupo";
 };
 const accountCacheOptions = computed(() => ({
   matricula: props.student?.matricula || "",
@@ -1026,6 +1240,30 @@ const progressStatusLabel = (debt) => {
   if (Number(debt.pagosDepurados) > 0 && debt.saldo <= 0) return "100%";
   if (paid >= 100 || debt.saldo <= 0) return "100%";
   return `${Math.max(0, Math.min(100, paid))}%`;
+};
+
+const timelineSegmentWeight = (segment) =>
+  Math.max(
+    1,
+    Number(segment?.endMes || 1) - Number(segment?.startMes || 1) + 1,
+  );
+const timelineSegmentRange = (segment) => {
+  const start = Number(segment?.startMes || 1);
+  const end = Number(segment?.endMes || start);
+  return start === end ? `Mes ${start}` : `Mes ${start}-${end}`;
+};
+const timelineSegmentTone = (segment) => {
+  if (segment?.cancelled || segment?.accion === "cancelacion")
+    return "cancelled";
+  if (segment?.accion === "cambio") return "changed";
+  return "base";
+};
+const timelineSegmentStatus = (segment) => {
+  if (segment?.cancelled || segment?.accion === "cancelacion")
+    return "Cancelado";
+  const saldo = Number(segment?.saldo || 0);
+  if (saldo <= 0) return "Cubierto";
+  return `$${format(saldo)}`;
 };
 
 const debtKey = (debt) => `${debt?.documento || ""}-${debt?.mes || ""}`;
@@ -1200,11 +1438,16 @@ const applyAccountDebts = async (
   if (preserveInteraction) {
     const preserveInvoiceSelection = showInvoiceModal.value;
     const refreshedSelection = freshDebts.filter(
-      (debt) => selectedKeys.has(debtKey(debt)) && (preserveInvoiceSelection || Number(debt.saldo || 0) > 0),
+      (debt) =>
+        selectedKeys.has(debtKey(debt)) &&
+        (preserveInvoiceSelection || Number(debt.saldo || 0) > 0),
     );
-    selectedDebts.value = preserveInvoiceSelection && selectedDebts.value.length && !refreshedSelection.length
-      ? selectedDebts.value
-      : refreshedSelection;
+    selectedDebts.value =
+      preserveInvoiceSelection &&
+      selectedDebts.value.length &&
+      !refreshedSelection.length
+        ? selectedDebts.value
+        : refreshedSelection;
     expandedHistory.value =
       expandedKey && freshDebts.some((debt) => debtKey(debt) === expandedKey)
         ? expandedKey
@@ -1587,7 +1830,13 @@ const showStudentActionsMenu = (event) => {
       action: () => emit("manage-sections", props.student),
     },
     { label: "Carta beca", icon: LucideAward, action: printBeca },
-    { label: "Carta no adeudo", icon: LucideShieldCheck, action: () => { showNoAdeudoModal.value = true; } },
+    {
+      label: "Carta no adeudo",
+      icon: LucideShieldCheck,
+      action: () => {
+        showNoAdeudoModal.value = true;
+      },
+    },
     {
       label: reminding.value ? "Enviando aviso..." : "Enviar aviso",
       icon: reminding.value ? LucideLoader2 : LucideBell,
@@ -1816,21 +2065,57 @@ const closeConceptModal = () => {
   selectedConceptDebt.value = null;
 };
 
+const payTimelineGroup = (group) => {
+  const pending = group?.pendingDebts || [];
+  if (!pending.length) return;
+  selectedDebts.value = pending;
+  showPaymentModal.value = true;
+};
+
+const invoiceTimelineGroup = (group) => {
+  const items = group?.allDebts || [];
+  if (!items.length) return;
+  selectedDebts.value = items;
+  showInvoiceModal.value = true;
+};
+
+const openTimelineSegmentChange = (group, segment) => {
+  if (!group || !segment || segment.cancelled) return;
+  const targetDebt =
+    debts.value.find((debt) => {
+      const debtMonth =
+        String(debt?.mes || "").toLowerCase() === "ev"
+          ? 1
+          : Number(debt?.mes || 1);
+      return (
+        Number(debt?.documento) === Number(group.documento) &&
+        debtMonth === Number(segment.startMes || 1)
+      );
+    }) ||
+    debts.value.find(
+      (debt) => Number(debt?.documento) === Number(group.documento),
+    );
+
+  if (targetDebt) openConceptChange(targetDebt);
+};
+
 const invoicePaymentReceipt = (debt, payment) => {
-  selectedDebts.value = [{
-    ...debt,
-    ...payment,
-    conceptoNombre: payment.conceptoNombre || debt.conceptoNombre,
-    monto: Number(payment.monto || 0),
-    pagos: Number(payment.monto || 0),
-    saldo: Number(payment.monto || 0),
-    saldoAntes: Number(payment.monto || 0),
-    formaDePago: payment.formaDePago || debt.formaDePago || 'Efectivo',
-    folio_plantel: payment.folio_plantel || '',
-    external_id: payment.folio_plantel || '',
-    mesLabel: debt.mesLabel || payment.mesReal || payment.mes,
-    plantel: debt.plantel || props.student?.plantel || ''
-  }];
+  selectedDebts.value = [
+    {
+      ...debt,
+      ...payment,
+      conceptoNombre: payment.conceptoNombre || debt.conceptoNombre,
+      monto: Number(payment.monto || 0),
+      pagos: Number(payment.monto || 0),
+      saldo: Number(payment.monto || 0),
+      saldoAntes: Number(payment.monto || 0),
+      formaDePago: payment.formaDePago || debt.formaDePago || "Efectivo",
+      folio_plantel: payment.folio_plantel || "",
+      external_id: payment.folio_plantel || "",
+      mesLabel: debt.mesLabel || payment.mesReal || payment.mes,
+      plantel: debt.plantel || props.student?.plantel || "",
+    },
+  ];
   showInvoiceModal.value = true;
 };
 
@@ -1958,3 +2243,215 @@ const handleInvoiceSuccess = () => {
   loadDebts({ useCache: false, preserveInteraction: true });
 };
 </script>
+
+<style scoped>
+.account-view-tabs {
+  display: inline-flex;
+  width: fit-content;
+  gap: 4px;
+  margin: 0 0 12px;
+  border: 1px solid #dce6f0;
+  border-radius: 999px;
+  background: #f6f8fb;
+  padding: 4px;
+}
+
+.account-view-tabs button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #718096;
+  cursor: pointer;
+  padding: 7px 12px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.account-view-tabs button.active {
+  background: #ffffff;
+  color: #263752;
+  box-shadow: 0 6px 18px rgba(30, 47, 74, 0.08);
+}
+
+.account-timeline-wrap {
+  min-height: 220px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.timeline-empty {
+  border: 1px dashed #dce6f0;
+  border-radius: 18px;
+  background: #fbfcfe;
+}
+
+.timeline-list {
+  display: grid;
+  gap: 12px;
+}
+
+.timeline-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce6f0;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 16px 36px rgba(30, 47, 74, 0.055);
+}
+
+.timeline-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timeline-card-header strong {
+  display: block;
+  color: #263752;
+  font-size: 0.86rem;
+  font-weight: 860;
+}
+
+.timeline-card-header span {
+  display: block;
+  margin-top: 3px;
+  color: #7b8798;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.timeline-card-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.timeline-action {
+  border: 1px solid #d7e1ec;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #516174;
+  cursor: pointer;
+  padding: 7px 11px;
+  font-size: 0.7rem;
+  font-weight: 820;
+}
+
+.timeline-action.primary {
+  border-color: #cae3c3;
+  background: #eff9ed;
+  color: #427d3c;
+}
+
+.timeline-track {
+  display: flex;
+  gap: 7px;
+  min-height: 84px;
+}
+
+.timeline-segment {
+  display: flex;
+  min-width: 112px;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid #dce6f0;
+  border-radius: 15px;
+  background: #f8fafc;
+  color: inherit;
+  cursor: pointer;
+  padding: 10px;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.timeline-segment:hover:not(:disabled) {
+  border-color: #b9cadc;
+  box-shadow: 0 10px 22px rgba(30, 47, 74, 0.08);
+  transform: translateY(-1px);
+}
+
+.timeline-segment.changed {
+  border-color: #cfe7c7;
+  background: #f4fbf1;
+}
+
+.timeline-segment.cancelled {
+  border-color: #efd2cf;
+  background: #fff6f5;
+  cursor: default;
+  opacity: 0.86;
+}
+
+.timeline-segment strong {
+  overflow: hidden;
+  color: #263752;
+  font-size: 0.78rem;
+  font-weight: 860;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-segment span,
+.timeline-segment em {
+  color: #6f7b8f;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.timeline-segment em {
+  color: #427d3c;
+}
+
+.timeline-segment.cancelled em {
+  color: #b85a54;
+}
+
+.timeline-differentials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.timeline-differential {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  background: #fff4db;
+  color: #8a6616;
+  padding: 7px 10px;
+  font-size: 0.72rem;
+  font-weight: 820;
+}
+
+.timeline-differential strong {
+  color: #6d4f0d;
+}
+
+@media (max-width: 760px) {
+  .timeline-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .timeline-card-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .timeline-track {
+    flex-direction: column;
+  }
+}
+</style>

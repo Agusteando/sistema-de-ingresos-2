@@ -1,1 +1,1 @@
-Corrige el ajuste de grado y ciclo para guardar la posición académica base sin reproyección.
+Implementa timeline de Estado de Cuenta y cambios de concepto bajo el mismo documento con diferencial opcional.
