@@ -1,13 +1,13 @@
 <template>
   <Teleport to="body">
-    <div class="modal-overlay" @click.self="$emit('close')">
+    <div class="modal-overlay" @click.self="requestClose">
       <div class="modal-container document-modal-container">
         <div class="modal-header document-modal-header">
           <div>
             <p class="document-eyebrow">Documento</p>
             <h2 class="text-lg font-bold text-gray-800">Agregar documento</h2>
           </div>
-          <button class="document-close-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+          <button class="document-close-button" type="button" aria-label="Cerrar" @click="requestClose">
             <LucideX :size="18" />
           </button>
         </div>
@@ -113,9 +113,6 @@
                 </div>
               </div>
 
-              <p class="concept-source-note">
-                Fuente: tabla <code>conceptos</code> del bridge del plantel activo, filtrada por ciclo {{ activeCicloLabel }}. “Actualizar” vuelve a consultar esa fuente.
-              </p>
             </div>
 
             <div class="form-group mb-0">
@@ -262,8 +259,18 @@
             </div>
           </form>
         </div>
+        <div v-if="showDiscardConfirm" class="document-draft-confirm" role="alert">
+          <div>
+            <strong>Hay cambios sin guardar</strong>
+            <span>Si sales ahora, se perderá lo capturado en este documento.</span>
+          </div>
+          <div class="document-draft-actions">
+            <button type="button" class="btn btn-ghost" @click="keepEditing">Seguir editando</button>
+            <button type="button" class="btn btn-danger" @click="discardAndClose">Salir sin guardar</button>
+          </div>
+        </div>
         <div class="modal-footer">
-          <button class="btn btn-ghost" @click="$emit('close')" type="button">Cancelar</button>
+          <button class="btn btn-ghost" @click="requestClose" type="button">Cancelar</button>
           <button class="btn btn-primary" @click="submit" :disabled="loading || loadingConcepts || !selectedDocumentoId">
             <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
             {{ loading ? 'Agregando...' : (pagoRealizadoEnOtroPlantel ? 'Agregar y registrar' : 'Agregar documento') }}
@@ -307,6 +314,7 @@ const generarCartaBeca = ref(false)
 const pagoRealizadoEnOtroPlantel = ref(false)
 const montoPagadoOtroPlantel = ref(0)
 const montoPagadoOtroPlantelEditado = ref(false)
+const showDiscardConfirm = ref(false)
 
 const montoFinalInput = ref(0)
 const montoFinalConfirmed = ref(false)
@@ -333,6 +341,23 @@ const otherCampusTotal = computed(() => Math.max(0, Number(montoFinalInput.value
 const otherCampusPaid = computed(() => Math.max(0, Number(montoPagadoOtroPlantel.value || 0)))
 const otherCampusBalance = computed(() => Math.max(0, otherCampusTotal.value - Math.min(otherCampusPaid.value, otherCampusTotal.value)))
 const otherCampusIsPartial = computed(() => pagoRealizadoEnOtroPlantel.value && otherCampusPaid.value > 0 && otherCampusPaid.value < otherCampusTotal.value)
+const hasDraftChanges = computed(() => {
+  return Boolean(
+    selectedDocumentoId.value ||
+    conceptSearch.value.trim() ||
+    Number(form.value.costo || 0) > 0 ||
+    Number(form.value.meses || 1) !== 1 ||
+    form.value.eventual ||
+    selectedBecaTypes.value.length ||
+    becaMotivo.value.trim() ||
+    generarCartaBeca.value ||
+    pagoRealizadoEnOtroPlantel.value ||
+    Number(montoPagadoOtroPlantel.value || 0) > 0 ||
+    Number(montoFinalInput.value || 0) > 0 ||
+    montoFinalConfirmed.value
+  )
+})
+
 
 const filteredConceptos = computed(() => {
   const term = conceptSearch.value.trim().toLowerCase()
@@ -351,6 +376,29 @@ const filteredConceptos = computed(() => {
 })
 
 const visibleConceptos = computed(() => filteredConceptos.value.slice(0, 80))
+
+
+const requestClose = () => {
+  if (loading.value) {
+    show('Espera a que termine el registro.', 'info')
+    return
+  }
+  if (!hasDraftChanges.value) {
+    emit('close')
+    return
+  }
+  conceptDropdownOpen.value = false
+  showDiscardConfirm.value = true
+}
+
+const keepEditing = () => {
+  showDiscardConfirm.value = false
+}
+
+const discardAndClose = () => {
+  showDiscardConfirm.value = false
+  emit('close')
+}
 
 const formatMoney = (value) => Number(value || 0).toFixed(2)
 
@@ -616,6 +664,46 @@ onMounted(() => {
   color: #617087;
 }
 
+.document-draft-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid #edf2f7;
+  background: #fffaf0;
+  padding: 14px 18px;
+}
+
+.document-draft-confirm strong,
+.document-draft-confirm span {
+  display: block;
+}
+
+.document-draft-confirm strong {
+  color: #6f4b11;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.document-draft-confirm span {
+  color: #7c6a52;
+  font-size: 0.74rem;
+  font-weight: 650;
+  margin-top: 2px;
+}
+
+.document-draft-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.document-draft-actions .btn {
+  min-height: 34px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
 .document-modal-content {
   max-height: min(72vh, 720px);
   overflow: auto;
@@ -837,21 +925,6 @@ onMounted(() => {
   justify-content: flex-start;
   border-top: 1px solid #edf2f7;
   padding: 9px 10px 6px;
-}
-
-.concept-source-note {
-  margin: 7px 0 0;
-  color: #768398;
-  font-size: 0.68rem;
-  font-weight: 620;
-  line-height: 1.35;
-}
-
-.concept-source-note code {
-  border-radius: 5px;
-  background: #f0f4f8;
-  color: #45566f;
-  padding: 1px 4px;
 }
 
 .scholarship-card,

@@ -1,1 +1,1 @@
-Aclara pago parcial en otro plantel al agregar documento.
+Protege borradores al agregar documento y prioriza conceptos centrales.
