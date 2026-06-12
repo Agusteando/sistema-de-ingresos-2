@@ -365,7 +365,7 @@
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-columns: minmax(118px, 1.08fr) minmax(108px, .92fr) minmax(118px, .96fr) minmax(92px, .62fr);
+  grid-template-columns: minmax(148px, 1.15fr) minmax(88px, .7fr) minmax(100px, .8fr) minmax(104px, .82fr) minmax(76px, .52fr);
   align-items: center;
   gap: 10px;
 }
@@ -394,6 +394,16 @@
 }
 
 .profile-action-button svg {
+  flex: 0 0 auto;
+}
+
+.profile-action-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-action-count {
   flex: 0 0 auto;
 }
 
@@ -2051,11 +2061,13 @@
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
-  grid-template-columns: minmax(112px, 1fr) repeat(4, 34px);
+  grid-template-columns: minmax(152px, 184px) repeat(4, 34px);
+  justify-content: start;
   gap: 6px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .profile-action-button {
+  position: relative;
   height: 30px;
   padding-inline: 8px;
   border-radius: 9px;
@@ -2063,7 +2075,7 @@
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .profile-action-button--primary {
-  justify-content: flex-start;
+  justify-content: center;
   padding-inline: 10px;
 }
 
@@ -2080,6 +2092,25 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--pay-compact .profile-action-count {
+  position: absolute;
+  inset-block-start: -5px;
+  inset-inline-end: -4px;
+  display: inline-grid;
+  min-width: 15px;
+  height: 15px;
+  padding-inline: 4px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .86);
+  border-radius: 999px;
+  background: #3f9138;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 4px 10px rgba(31, 82, 29, .18);
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-header {
@@ -2326,7 +2357,7 @@
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
-    grid-template-columns: minmax(108px, 1fr) repeat(4, 32px);
+    grid-template-columns: minmax(138px, 164px) repeat(4, 32px);
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-header {

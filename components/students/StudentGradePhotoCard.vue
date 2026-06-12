@@ -65,22 +65,23 @@ const hasPhoto = computed(() => Boolean(props.photoUrl && props.photoUrl !== 'no
 
 .student-grade-photo-card__grade {
   z-index: 2;
+  gap: var(--student-grade-photo-label-gap, 7px);
   text-transform: uppercase;
 }
 
 .student-grade-photo-card__grade strong {
-  font-size: 31px;
+  font-size: var(--student-grade-photo-number-size, 31px);
   font-weight: 880;
-  letter-spacing: -.05em;
-  line-height: .86;
+  letter-spacing: var(--student-grade-photo-number-spacing, -.05em);
+  line-height: var(--student-grade-photo-number-line-height, .86);
   text-shadow: 0 1px 0 rgba(255, 255, 255, .9);
 }
 
 .student-grade-photo-card__grade span {
-  margin-top: 7px;
-  font-size: 8px;
+  font-size: var(--student-grade-photo-label-size, 8px);
   font-weight: 900;
   letter-spacing: .02em;
+  line-height: 1;
 }
 
 .student-grade-photo-card__photo {

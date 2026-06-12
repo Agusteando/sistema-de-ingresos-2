@@ -205,14 +205,22 @@
             aria-label="Acciones del alumno"
           >
             <button
-              class="profile-action-button profile-action-button--primary"
+              class="profile-action-button profile-action-button--primary profile-action-button--document-primary"
+              title="Agregar documento"
+              @click="showDocModal = true"
+            >
+              <LucideFilePlus :size="15" />
+              <span class="profile-action-label">Agregar documento</span>
+            </button>
+            <button
+              class="profile-action-button profile-action-button--pay-compact"
               title="Pagar conceptos seleccionados"
               :disabled="!selectedDebts.length"
               @click="showPaymentModal = true"
             >
               <LucideCreditCard :size="15" />
               <span class="profile-action-label">Pagar</span>
-              <span class="profile-action-count">({{ selectedDebts.length }})</span>
+              <span v-if="selectedDebts.length" class="profile-action-count">{{ selectedDebts.length }}</span>
             </button>
             <button
               class="profile-action-button"
@@ -231,14 +239,6 @@
             >
               <LucideShieldCheck :size="15" />
               <span class="profile-action-label">No adeudo</span>
-            </button>
-            <button
-              class="profile-action-button"
-              title="Agregar documento"
-              @click="showDocModal = true"
-            >
-              <LucideFilePlus :size="15" />
-              <span class="profile-action-label">Documento</span>
             </button>
             <button
               class="profile-action-button profile-action-button--menu"

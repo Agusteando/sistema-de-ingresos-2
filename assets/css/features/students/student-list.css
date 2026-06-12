@@ -595,11 +595,11 @@
 
 /* Detail-open list density: keep rows polished while reserving room for account work. */
 .student-list-panel.is-compact .student-list-card {
-  --student-list-balance-col: 86px;
-  --student-list-action-col: 38px;
-  --student-list-row-height: 78px;
-  --student-list-grade-size: 56px;
-  --student-list-grade-height: 52px;
+  --student-list-balance-col: 78px;
+  --student-list-action-col: 36px;
+  --student-list-row-height: 72px;
+  --student-list-grade-size: 52px;
+  --student-list-grade-height: 48px;
   --student-list-crest-size: 0px;
   --student-list-group-watermark-size: 112px;
   grid-template-rows: 28px 40px minmax(0, 1fr);
@@ -635,9 +635,12 @@
 .student-list-panel.is-compact .student-row {
   min-height: var(--student-list-row-height);
   margin: 0 5px 5px 0;
-  padding-left: 9px;
+  padding-left: 8px;
   border-radius: 12px;
   grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-action-col);
+  grid-template-areas: none;
+  grid-template-rows: 1fr;
+  align-items: center;
 }
 
 .student-list-panel.is-compact .student-group-watermark {
@@ -648,6 +651,7 @@
 }
 
 .student-list-panel.is-compact .student-identity {
+  grid-area: auto;
   grid-template-columns: 26px var(--student-list-grade-size) minmax(0, 1fr);
   gap: 8px;
 }
@@ -660,11 +664,16 @@
   --student-grade-photo-width: var(--student-list-grade-size);
   --student-grade-photo-height: var(--student-list-grade-height);
   --student-grade-photo-radius: 11px;
+  --student-grade-photo-label-gap: 4px;
+  --student-grade-photo-label-size: 7.2px;
+  --student-grade-photo-number-line-height: .9;
+  --student-grade-photo-number-size: 27px;
+  --student-grade-photo-number-spacing: 0;
 }
 
 .student-list-panel.is-compact .student-copy {
   display: grid;
-  grid-template-columns: auto minmax(0, max-content);
+  grid-template-columns: minmax(0, auto) max-content;
   grid-template-areas:
     "name name"
     "meta type";
@@ -680,21 +689,29 @@
 
 .student-list-panel.is-compact .student-meta {
   grid-area: meta;
+  width: fit-content;
+  max-width: 62px;
+  padding-inline: 6px;
+  justify-self: start;
 }
 
 .student-list-panel.is-compact .student-type-line {
   grid-area: type;
+  min-width: 0;
+  justify-self: start;
 }
 
 .student-list-panel.is-compact .student-meta,
 .student-list-panel.is-compact .student-tipo-chip {
-  min-height: 18px;
-  font-size: 9px;
+  min-height: 17px;
+  font-size: 8.5px;
+  line-height: 1;
 }
 
 .student-list-panel.is-compact .student-tipo-chip {
   gap: 4px;
   padding-inline: 6px 7px;
+  max-width: 76px;
 }
 
 .student-list-panel.is-compact .student-tipo-chip svg {
@@ -704,6 +721,7 @@
 }
 
 .student-list-panel.is-compact .financial-cell {
+  grid-area: auto;
   gap: 3px;
   padding-right: 5px;
 }
@@ -718,42 +736,46 @@
 }
 
 .student-list-panel.is-compact .row-actions button {
-  width: 32px;
-  height: 46px;
+  width: 31px;
+  height: 44px;
   border-radius: 10px;
+}
+
+.student-list-panel.is-compact .row-actions {
+  grid-area: auto;
 }
 
 @container student-list (max-width: 460px) {
   .student-list-panel.is-compact .student-list-card {
-    --student-list-row-height: 82px;
+    --student-list-balance-col: 72px;
+    --student-list-action-col: 34px;
+    --student-list-row-height: 68px;
     --student-list-grade-size: 48px;
     --student-list-grade-height: 46px;
     grid-template-rows: 26px 38px minmax(0, 1fr);
   }
 
   .student-list-panel.is-compact .list-columns {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-action-col);
     padding-inline: 12px;
   }
 
   .student-list-panel.is-compact .list-columns span:nth-child(3) {
-    display: none;
+    display: inline;
   }
 
   .student-list-panel.is-compact .student-row {
-    grid-template-columns: minmax(0, 1fr) 34px;
-    grid-template-areas:
-      "identity action"
-      "financial action";
-    align-items: stretch;
-    gap: 5px 6px;
-    padding: 7px 6px 7px 8px;
+    grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-action-col);
+    grid-template-areas: none;
+    grid-template-rows: 1fr;
+    align-items: center;
+    gap: 0;
+    padding: 0 5px 0 7px;
   }
 
   .student-list-panel.is-compact .student-identity {
-    grid-area: identity;
-    grid-template-columns: 24px var(--student-list-grade-size) minmax(0, 1fr);
-    gap: 7px;
+    grid-template-columns: 23px var(--student-list-grade-size) minmax(0, 1fr);
+    gap: 6px;
   }
 
   .student-list-panel.is-compact .student-copy strong {
@@ -763,36 +785,35 @@
   }
 
   .student-list-panel.is-compact .financial-cell {
-    grid-area: financial;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 8px;
-    padding: 4px 0 0 31px;
-    border-top: 1px solid var(--students-border-soft);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    padding: 0 3px 0 0;
+    border-top: 0;
   }
 
   .student-list-panel.is-compact .financial-label {
-    justify-self: start;
+    justify-self: auto;
+    font-size: 7.8px;
   }
 
   .student-list-panel.is-compact .row-actions {
-    grid-area: action;
     align-items: center;
   }
 
   .student-list-panel.is-compact .row-actions button {
-    width: 32px;
-    height: 100%;
-    min-height: 54px;
+    width: 30px;
+    height: 42px;
+    min-height: 0;
   }
 }
 
 @container student-list (max-height: 560px) {
   .student-list-panel.is-compact .student-list-card {
-    --student-list-row-height: 70px;
-    --student-list-grade-size: 50px;
-    --student-list-grade-height: 46px;
+    --student-list-row-height: 66px;
+    --student-list-grade-size: 46px;
+    --student-list-grade-height: 44px;
     grid-template-rows: 26px 36px minmax(0, 1fr);
   }
 
@@ -808,10 +829,16 @@
     font-size: 12.2px;
   }
 
+  .student-list-panel.is-compact .student-row-grade-card {
+    --student-grade-photo-label-gap: 3px;
+    --student-grade-photo-label-size: 6.8px;
+    --student-grade-photo-number-size: 25px;
+  }
+
   .student-list-panel.is-compact .student-meta,
   .student-list-panel.is-compact .student-tipo-chip {
-    min-height: 17px;
-    font-size: 8.6px;
+    min-height: 16px;
+    font-size: 8.2px;
   }
 
   .student-list-panel.is-compact .financial-label {
