@@ -163,8 +163,8 @@
             </div>
             
             <div class="form-group col-span-2 mt-1 p-5 bg-gray-50 rounded-lg border border-gray-200">
-              <label class="form-label mb-1 text-brand-campus">Monto final</label>
-              <p class="text-xs text-gray-500 mb-3">Este es el monto final autorizado para cobrar, sin decimales. La beca se calcula contra el costo del concepto.</p>
+              <label class="form-label mb-1 text-brand-campus">Total del documento</label>
+              <p class="text-xs text-gray-500 mb-3">Este es el total que tendrá el documento. La beca se calcula contra el costo del concepto.</p>
               <div class="relative">
                 <div class="absolute inset-y-0 left-3 flex items-center text-brand-campus text-sm font-bold">$</div>
                 <input
@@ -187,12 +187,12 @@
                   <span class="font-mono text-emerald-700 font-bold">-${{ scholarshipDiscount.toFixed(2) }} · {{ scholarshipPercent.toFixed(2) }}%</span>
                 </div>
                 <div class="flex justify-between items-center mt-2 bg-white p-3 rounded-md border border-gray-100 shadow-sm">
-                  <span class="text-xs font-bold text-gray-700 uppercase">Monto final:</span>
+                  <span class="text-xs font-bold text-gray-700 uppercase">Total a generar:</span>
                   <span class="font-mono text-lg font-bold text-brand-campus">${{ Number(montoFinalInput || 0).toFixed(2) }}</span>
                 </div>
                 <label class="mt-3 flex items-start gap-2 text-xs font-semibold text-gray-600">
                   <input type="checkbox" v-model="montoFinalConfirmed" class="mt-0.5">
-                  <span>Confirmo que este monto final es correcto.</span>
+                  <span>Confirmo que este total es correcto.</span>
                 </label>
               </div>
             </div>
@@ -205,15 +205,20 @@
                   :disabled="loading"
                 >
                 <span>
-                  <strong><LucideBuilding2 :size="15" /> Pago realizado en otro plantel</strong>
-                  <small>Registra el monto ya cubierto fuera de este plantel. Si fue parcial, quedará saldo pendiente.</small>
+                  <strong><LucideBuilding2 :size="15" /> Pagado en otro plantel</strong>
+                  <small>Marca esta opción solo si una parte o todo el documento ya fue pagado fuera de este plantel.</small>
                 </span>
               </label>
 
               <div v-if="pagoRealizadoEnOtroPlantel" class="other-campus-payment-details">
-                <div class="other-campus-amount-row">
-                  <label>
-                    <span>Monto pagado en otro plantel</span>
+                <div class="other-campus-ledger">
+                  <div class="other-campus-ledger-card total">
+                    <span>Total del documento</span>
+                    <strong>${{ formatMoney(otherCampusTotal) }}</strong>
+                  </div>
+
+                  <label class="other-campus-ledger-card editable">
+                    <span>Pagado en otro plantel</span>
                     <div class="other-campus-amount-input">
                       <b>$</b>
                       <input
@@ -227,15 +232,17 @@
                       >
                     </div>
                   </label>
-                  <div class="other-campus-balance-card" :class="{ pending: otherCampusIsPartial }">
+
+                  <div class="other-campus-ledger-card balance" :class="{ pending: otherCampusIsPartial }">
                     <span>Saldo pendiente</span>
                     <strong>${{ formatMoney(otherCampusBalance) }}</strong>
                   </div>
                 </div>
 
                 <div class="other-campus-summary">
-                  <span>Total del documento: ${{ formatMoney(otherCampusTotal) }}</span>
                   <span v-if="periodCount > 1">{{ periodCount }} cargos de ${{ formatMoney(montoFinalInput) }}</span>
+                  <span v-if="!otherCampusIsPartial && otherCampusPaid >= otherCampusTotal">Quedará cubierto completo</span>
+                  <span v-else>Quedará saldo por cobrar en este plantel</span>
                 </div>
               </div>
             </div>
@@ -993,89 +1000,64 @@ onMounted(() => {
   padding-top: 13px;
 }
 
-.other-campus-amount-row {
+.other-campus-ledger {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 170px;
-  gap: 12px;
-  align-items: end;
+  grid-template-columns: minmax(0, 0.86fr) minmax(150px, 1fr) minmax(0, 0.86fr);
+  gap: 10px;
+  align-items: stretch;
 }
 
-.other-campus-amount-row label {
-  display: block;
+.other-campus-ledger-card {
+  min-height: 58px;
+  border: 1px solid rgba(234, 211, 158, 0.85);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 9px 11px;
 }
 
-.other-campus-amount-row label span,
-.other-campus-balance-card span {
+.other-campus-ledger-card span {
   display: block;
   color: #6f7b8f;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 820;
   letter-spacing: 0.035em;
   margin-bottom: 5px;
   text-transform: uppercase;
 }
 
-.other-campus-amount-input {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.other-campus-amount-input b {
-  position: absolute;
-  left: 12px;
-  color: #7d5d20;
+.other-campus-ledger-card strong {
+  color: #34445e;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.84rem;
-  pointer-events: none;
-}
-
-.other-campus-amount-input input {
-  width: 100%;
-  min-height: 40px;
-  border: 1px solid #ead39e;
-  border-radius: 12px;
-  background: #fff;
-  color: #263752;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.9rem;
-  font-weight: 820;
-  outline: none;
-  padding: 0 12px 0 29px;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
-}
-
-.other-campus-amount-input input:focus {
-  border-color: #d99a2f;
-  box-shadow: 0 0 0 3px rgba(217, 151, 43, 0.14);
-}
-
-.other-campus-balance-card {
-  min-height: 40px;
-  border: 1px solid #dfe8d9;
-  border-radius: 12px;
-  background: #fbfefb;
-  padding: 8px 11px;
-}
-
-.other-campus-balance-card span {
-  margin-bottom: 1px;
-  font-size: 0.62rem;
-}
-
-.other-campus-balance-card strong {
-  color: #327036;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   font-weight: 900;
 }
 
-.other-campus-balance-card.pending {
+.other-campus-ledger-card.total strong {
+  color: #7d5d20;
+}
+
+.other-campus-ledger-card.editable {
+  display: block;
+  border-color: #dca545;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(138, 95, 28, 0.08);
+}
+
+.other-campus-ledger-card.balance {
+  border-color: #dfe8d9;
+  background: #fbfefb;
+}
+
+.other-campus-ledger-card.balance strong {
+  color: #327036;
+}
+
+.other-campus-ledger-card.balance.pending {
   border-color: #ead39e;
   background: #fffaf0;
 }
 
-.other-campus-balance-card.pending strong {
+.other-campus-ledger-card.balance.pending strong {
   color: #996515;
 }
 
@@ -1097,7 +1079,7 @@ onMounted(() => {
 }
 
 @media (max-width: 640px) {
-  .other-campus-amount-row {
+  .other-campus-ledger {
     grid-template-columns: 1fr;
   }
 }

@@ -1,1 +1,1 @@
-Permite registrar pago parcial en otro plantel al agregar documento.
+Aclara pago parcial en otro plantel al agregar documento.
