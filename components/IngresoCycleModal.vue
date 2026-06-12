@@ -270,6 +270,45 @@
                 ></p>
               </Transition>
 
+              <div
+                :class="[
+                  'ingreso-rule-card',
+                  { active: automaticRuleActive, override: forceExternalOverride },
+                ]"
+              >
+                <span class="ingreso-rule-icon" aria-hidden="true">
+                  <LucideShieldCheck v-if="automaticRuleActive" :size="18" />
+                  <LucideInfo v-else :size="18" />
+                </span>
+                <div>
+                  <small>Regla automática</small>
+                  <strong>{{ automaticRuleTitle }}</strong>
+                  <p>{{ automaticRuleCopy }}</p>
+                </div>
+              </div>
+
+              <section class="ingreso-override-card" aria-label="Override de tipo de ingreso">
+                <div>
+                  <small>Control excepcional</small>
+                  <strong>Forzar Externo</strong>
+                  <p>
+                    Desactívalo para volver a la regla automática. Por defecto
+                    todos los alumnos quedan sin override.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  :class="['ingreso-override-switch', { active: forceExternalOverride }]"
+                  role="switch"
+                  :aria-checked="forceExternalOverride"
+                  :disabled="saving"
+                  @click="forceExternalOverride = !forceExternalOverride"
+                >
+                  <span aria-hidden="true"></span>
+                  {{ forceExternalOverride ? "Override activo" : "Sin override" }}
+                </button>
+              </section>
+
               <div class="ingreso-interpretation-card">
                 <h4>Cómo se interpretará</h4>
                 <div
@@ -392,6 +431,26 @@ const currentIngresoCicloKey = computed(
 const selectedIngresoCiclo = ref(currentIngresoCicloKey.value);
 const showOlderCycles = ref(false);
 
+const truthyOverride = (value) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  const raw = String(value ?? "").trim().toLowerCase();
+  return ["1", "true", "si", "sí", "yes", "activo", "active"].includes(raw);
+};
+
+const currentOverrideActive = computed(() =>
+  truthyOverride(
+    props.student?.tipoIngresoOverrideActivo ??
+      props.student?.tipoIngresoOverrideActive ??
+      props.student?.tipo_ingreso_override_activo,
+  ),
+);
+const forceExternalOverride = ref(currentOverrideActive.value);
+
+watch(currentOverrideActive, (value) => {
+  forceExternalOverride.value = value;
+});
+
 watch(currentIngresoCicloKey, (value) => {
   selectedIngresoCiclo.value = value;
 });
@@ -469,12 +528,16 @@ const placementInvalid = computed(() => selectedBasePlacement.value.outOfScope);
 const positionChanged = computed(
   () => selectedPositionIndex.value !== currentPositionIndex.value,
 );
+const overrideChanged = computed(
+  () => forceExternalOverride.value !== currentOverrideActive.value,
+);
 const canSave = computed(
   () =>
     !props.saving &&
     !placementInvalid.value &&
     (selectedIngresoCiclo.value !== currentIngresoCicloKey.value ||
-      positionChanged.value),
+      positionChanged.value ||
+      overrideChanged.value),
 );
 
 const selectedNivel = computed({
@@ -561,7 +624,7 @@ const cicloOptions = computed(() => {
 const primaryCicloOptions = computed(() => cicloOptions.value.slice(0, 4));
 const olderCicloOptions = computed(() => cicloOptions.value.slice(4));
 
-const simulatedStudent = computed(() => ({
+const simulatedStudentBase = computed(() => ({
   ...props.student,
   plantel: placementInvalid.value
     ? props.student?.plantel
@@ -581,6 +644,38 @@ const simulatedStudent = computed(() => ({
   cicloBase: selectedIngresoCiclo.value,
 }));
 
+const simulatedStudent = computed(() => ({
+  ...simulatedStudentBase.value,
+  tipoIngresoOverrideActivo: forceExternalOverride.value ? 1 : 0,
+  tipoIngresoOverride: "externo",
+}));
+
+const automaticTargetTipo = computed(() =>
+  resolveTipoIngreso(simulatedStudentBase.value, targetCicloKey.value, {
+    enrollmentConcepts: props.enrollmentConcepts,
+    ignoreManualOverride: true,
+  }),
+);
+const automaticRuleActive = computed(
+  () =>
+    automaticTargetTipo.value?.source === "confirmed_conceptos" &&
+    automaticTargetTipo.value?.value === "interno",
+);
+const automaticRuleTitle = computed(() =>
+  automaticRuleActive.value
+    ? "2 conceptos de inscripción detectados"
+    : "Sin regla de doble inscripción activa",
+);
+const automaticRuleCopy = computed(() => {
+  if (automaticRuleActive.value && forceExternalOverride.value) {
+    return "La regla automática marcaría Interno, pero el override manual fuerza Externo para este alumno.";
+  }
+  if (automaticRuleActive.value) {
+    return "La regla automática está en juego: al detectar dos conceptos configurados de inscripción/reinscripción, el resultado se interpreta como Interno.";
+  }
+  return "Se usará el ciclo de ingreso y la evidencia disponible. No hay override manual activo.";
+});
+
 const previewTargetTipo = computed(() =>
   resolveTipoIngreso(simulatedStudent.value, targetCicloKey.value, {
     enrollmentConcepts: props.enrollmentConcepts,
@@ -591,7 +686,7 @@ const previewTargetLabel = computed(() =>
 );
 const resultAnimationKey = computed(
   () =>
-    `${selectedIngresoCiclo.value}-${targetCicloKey.value}-${selectedPositionIndex.value}-${previewTargetTipo.value.value}`,
+    `${selectedIngresoCiclo.value}-${targetCicloKey.value}-${selectedPositionIndex.value}-${previewTargetTipo.value.value}-${forceExternalOverride.value ? "override" : "auto"}`,
 );
 
 const resultExplanation = computed(() => {
@@ -601,6 +696,14 @@ const resultExplanation = computed(() => {
 
   if (placementInvalid.value) {
     return `La posición elegida no es válida para el nivel y grado seleccionados.`;
+  }
+
+  if (forceExternalOverride.value) {
+    return `Override manual activo: este alumno se mostrará como <strong>externo</strong> en ${targetLabel}, aunque la regla automática detecte dos conceptos de inscripción.`;
+  }
+
+  if (automaticRuleActive.value) {
+    return `Regla automática activa: se detectaron dos conceptos configurados de inscripción/reinscripción, por eso este alumno se mostrará como <strong>interno</strong> en ${targetLabel}.`;
   }
 
   if (selected === target) {
@@ -685,6 +788,8 @@ const confirmSelection = () => {
     targetCiclo: targetCicloKey.value,
     targetNivel: selectedPosition.value.nivel,
     targetGrado: selectedPosition.value.grado,
+    tipoIngresoOverrideActivo: forceExternalOverride.value,
+    tipoIngresoOverride: forceExternalOverride.value ? "externo" : null,
   });
 };
 </script>
@@ -1465,6 +1570,142 @@ const confirmSelection = () => {
 .ingreso-result-copy :deep(strong) {
   color: #2f8f3d;
   font-weight: 900;
+}
+
+.ingreso-rule-card,
+.ingreso-override-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 13px 15px;
+  border: 1px solid rgba(218, 227, 238, 0.98);
+  border-radius: 13px;
+  background: #fff;
+}
+
+.ingreso-rule-card.active {
+  border-color: rgba(51, 151, 62, 0.28);
+  background: linear-gradient(180deg, rgba(248, 255, 249, 0.98), #fff);
+}
+
+.ingreso-rule-card.override {
+  border-color: rgba(47, 114, 217, 0.26);
+  background: linear-gradient(180deg, rgba(247, 251, 255, 0.98), #fff);
+}
+
+.ingreso-rule-icon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #edf4ff;
+  color: #2f72d9;
+}
+
+.ingreso-rule-card.active .ingreso-rule-icon {
+  background: #eaf8ed;
+  color: #2f8f3d;
+}
+
+.ingreso-rule-card small,
+.ingreso-override-card small {
+  display: block;
+  color: #6f7f99;
+  font-size: 10px;
+  font-weight: 890;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.ingreso-rule-card strong,
+.ingreso-override-card strong {
+  display: block;
+  margin-top: 2px;
+  color: #172742;
+  font-size: 13px;
+  font-weight: 930;
+}
+
+.ingreso-rule-card p,
+.ingreso-override-card p {
+  margin: 4px 0 0;
+  color: #64738e;
+  font-size: 12px;
+  font-weight: 630;
+  line-height: 1.38;
+}
+
+.ingreso-override-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.ingreso-override-switch {
+  display: inline-flex;
+  min-width: 132px;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px 0 8px;
+  border: 1px solid rgba(218, 227, 238, 0.98);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #64738e;
+  font-size: 12px;
+  font-weight: 860;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.ingreso-override-switch span {
+  position: relative;
+  display: inline-flex;
+  width: 28px;
+  height: 18px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #d8e1ed;
+  transition: background 0.18s ease;
+}
+
+.ingreso-override-switch span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(24, 39, 64, 0.18);
+  transition: transform 0.18s ease;
+}
+
+.ingreso-override-switch.active {
+  border-color: rgba(47, 114, 217, 0.34);
+  background: #edf4ff;
+  color: #2f6fd2;
+  box-shadow: 0 10px 22px rgba(47, 114, 217, 0.09);
+}
+
+.ingreso-override-switch.active span {
+  background: #2f72d9;
+}
+
+.ingreso-override-switch.active span::after {
+  transform: translateX(10px);
+}
+
+.ingreso-override-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .ingreso-interpretation-card {

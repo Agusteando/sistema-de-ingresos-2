@@ -83,6 +83,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         A.ciclo,
         A.plantel,
         A.nivel AS nivelBase,
+        IFNULL(TIO.override_activo, 0) AS tipoIngresoOverrideActivo,
+        IFNULL(TIO.tipo_forzado, 'externo') AS tipoIngresoOverride,
         BPrev.conceptosPagadosPrevios,
         BPrev.conceptoIdsPagadosPrevios,
         CPrev.conceptosCargadosPrevios,
@@ -108,6 +110,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         GROUP BY r.matricula
       ) E
       JOIN base A ON A.matricula = E.matricula
+      LEFT JOIN student_tipo_ingreso_overrides TIO ON TIO.matricula = A.matricula
       LEFT JOIN (
         SELECT
           r.matricula AS matricula,

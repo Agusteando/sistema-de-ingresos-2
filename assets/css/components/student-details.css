@@ -1334,6 +1334,23 @@
   background: rgba(65, 112, 205, .11);
 }
 
+.tipo-ingreso-override-chip {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid rgba(65, 112, 205, .22);
+  border-radius: 999px;
+  background: #f4f8ff;
+  color: #2f62b8;
+  font-size: 10px;
+  font-weight: 880;
+  letter-spacing: .02em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .ingreso-icon-button {
   display: inline-flex;
   width: 31px;

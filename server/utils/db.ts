@@ -626,6 +626,18 @@ export const ensureSchema = async () => {
       `)
 
       await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS student_tipo_ingreso_overrides (
+          matricula VARCHAR(255) NOT NULL PRIMARY KEY,
+          override_activo TINYINT(1) NOT NULL DEFAULT 0,
+          tipo_forzado VARCHAR(20) NOT NULL DEFAULT 'externo',
+          updated_by VARCHAR(255) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_student_tipo_ingreso_override_estado (override_activo, tipo_forzado)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
         DELETE FROM student_family_links
         WHERE ${INVALID_FAMILY_LINK_KEY_SQL}
       `)

@@ -107,9 +107,19 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   const placeholders = matriculas.map(() => '?').join(',')
   const rows = await query<any[]>(`
-    SELECT matricula, nombreCompleto, plantel, nivel AS nivelBase, grado AS gradoBase, ciclo AS cicloBase, ciclo
+    SELECT
+      base.matricula,
+      base.nombreCompleto,
+      base.plantel,
+      base.nivel AS nivelBase,
+      base.grado AS gradoBase,
+      base.ciclo AS cicloBase,
+      base.ciclo,
+      IFNULL(TIO.override_activo, 0) AS tipoIngresoOverrideActivo,
+      IFNULL(TIO.tipo_forzado, 'externo') AS tipoIngresoOverride
     FROM base
-    WHERE matricula IN (${placeholders})
+    LEFT JOIN student_tipo_ingreso_overrides TIO ON TIO.matricula = base.matricula
+    WHERE base.matricula IN (${placeholders})
   `, matriculas)
 
   const rowsByMatricula = new Map(rows.map((row) => [normalizeMatricula(row.matricula), row]))
@@ -172,6 +182,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       grado: displayGrado(requestedGrado),
       ciclo: ingresoCiclo,
       cicloBase: ingresoCiclo,
+      tipoIngresoOverrideActivo: student.tipoIngresoOverrideActivo || 0,
+      tipoIngresoOverride: student.tipoIngresoOverride || 'externo',
       tipoIngreso: resolveTipoIngreso({
         ...student,
         plantel: placementPlantel,

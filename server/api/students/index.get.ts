@@ -207,6 +207,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       A.correo, A.telefono, A.\`Nombre del padre o tutor\` as padre, A.\`Fecha de nacimiento\` as birth,
       Prev.previous_matricula AS matriculaAnterior,
       Next.successor_matricula AS matriculaSiguiente,
+      IFNULL(TIO.override_activo, 0) AS tipoIngresoOverrideActivo,
+      IFNULL(TIO.tipo_forzado, 'externo') AS tipoIngresoOverride,
       IFNULL(B.pagosTotal, 0) AS pagosTotal,
       B.conceptosPagados,
       B.conceptoIdsPagados,
@@ -294,6 +296,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     ) CPrev ON A.matricula = CPrev.matricula
     LEFT JOIN alumno_matricula_links Prev ON Prev.successor_matricula = A.matricula
     LEFT JOIN alumno_matricula_links Next ON Next.previous_matricula = A.matricula
+    LEFT JOIN student_tipo_ingreso_overrides TIO ON TIO.matricula = A.matricula
     WHERE ${whereClause}
     ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC
     LIMIT 5000;

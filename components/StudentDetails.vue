@@ -157,6 +157,13 @@
                     <LucideGlobe2 v-else :size="12" :stroke-width="2.4" />
                     {{ resolvedTipoIngresoLabel }}
                   </span>
+                  <span
+                    v-if="tipoIngresoOverrideActive"
+                    class="tipo-ingreso-override-chip"
+                    title="Override manual activo: fuerza Externo y omite la regla automática"
+                  >
+                    Override
+                  </span>
                 </div>
                 <div
                   v-if="student.customSections?.length"
@@ -351,6 +358,13 @@
               />
               <LucideGlobe2 v-else :size="12" :stroke-width="2.4" />
               {{ resolvedTipoIngresoLabel }}
+            </span>
+            <span
+              v-if="tipoIngresoOverrideActive"
+              class="tipo-ingreso-override-chip"
+              title="Override manual activo: fuerza Externo y omite la regla automática"
+            >
+              Override
             </span>
           </div>
 
@@ -1431,6 +1445,9 @@ const resolvedTipoIngreso = computed(() =>
 const resolvedTipoIngresoLabel = computed(() =>
   formatTipoIngresoValue(resolvedTipoIngreso.value),
 );
+const tipoIngresoOverrideActive = computed(
+  () => resolvedTipoIngreso.value?.source === "manual_override",
+);
 const progressPaidWidth = (debt) =>
   `${Math.min(100, Number(debt.porcentajePagoReal ?? debt.porcentajePagado) || 0)}%`;
 const progressCleanupWidth = (debt) =>
@@ -2436,6 +2453,8 @@ const saveIngresoCycle = async (payload) => {
           targetCiclo: payload?.targetCiclo || selectedCicloKey.value,
           targetNivel: payload?.targetNivel,
           targetGrado: payload?.targetGrado,
+          tipoIngresoOverrideActivo: payload?.tipoIngresoOverrideActivo,
+          tipoIngresoOverride: payload?.tipoIngresoOverride,
         },
       },
     );

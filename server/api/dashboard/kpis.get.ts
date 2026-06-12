@@ -36,6 +36,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       A.ciclo,
       A.plantel,
       A.nivel as nivelBase,
+      IFNULL(TIO.override_activo, 0) AS tipoIngresoOverrideActivo,
+      IFNULL(TIO.tipo_forzado, 'externo') AS tipoIngresoOverride,
       B.conceptosPagados,
       B.conceptoIdsPagados,
       C.conceptosCargados,
@@ -49,6 +51,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       CONCAT_WS('|', BPrev.conceptosPagadosPrevios, CPrev.conceptosCargadosPrevios) AS conceptosCicloPrevio,
       CONCAT_WS('|', BPrev.conceptoIdsPagadosPrevios, CPrev.conceptoIdsCargadosPrevios) AS conceptoIdsCicloPrevio
     FROM base A
+    LEFT JOIN student_tipo_ingreso_overrides TIO ON TIO.matricula = A.matricula
     LEFT JOIN (
       SELECT
         R.matricula AS matricula,

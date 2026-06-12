@@ -1,1 +1,1 @@
-Agrega baja masiva para alumnos seleccionados.
+Agrega override manual de tipo de ingreso.

@@ -2,6 +2,7 @@ import { formatCicloLabel } from "./ciclo";
 
 export type TipoIngresoValue = "interno" | "externo";
 export type TipoIngresoSource =
+  | "manual_override"
   | "ingreso_anchor"
   | "confirmed_conceptos"
   | "legacy_fallback";
@@ -15,9 +16,41 @@ export interface TipoIngresoResult {
 
 export interface TipoIngresoResolverOptions {
   enrollmentConcepts?: unknown[];
+  ignoreManualOverride?: boolean;
 }
 
 const DEFAULT_CICLO = "2025";
+const truthyOverride = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  const raw = String(value ?? "").trim().toLowerCase();
+  return ["1", "true", "si", "sí", "yes", "activo", "active"].includes(raw);
+};
+
+const normalizeTipoOverride = (value: unknown): TipoIngresoValue => {
+  const raw = String(value ?? "").trim().toLowerCase();
+  return raw === "interno" ? "interno" : "externo";
+};
+
+const readManualOverride = (student: any): { active: boolean; value: TipoIngresoValue } => {
+  const active = truthyOverride(
+    student?.tipoIngresoOverrideActivo ??
+      student?.tipoIngresoOverrideActive ??
+      student?.tipo_ingreso_override_activo ??
+      student?.overrideTipoIngresoActivo ??
+      student?.override_tipo_ingreso_activo,
+  );
+  const value = normalizeTipoOverride(
+    student?.tipoIngresoOverride ??
+      student?.tipoIngresoOverrideValue ??
+      student?.tipo_ingreso_override ??
+      student?.tipo_forzado ??
+      student?.tipoIngresoForzado,
+  );
+
+  return { active, value };
+};
+
 
 const normalizeEnrollmentConceptId = (value: unknown): string => {
   const raw = String(value ?? "").trim();
@@ -197,6 +230,19 @@ export const resolveTipoIngreso = (
       DEFAULT_CICLO,
       "El ciclo seleccionado no se pudo normalizar.",
     );
+  }
+
+  const manualOverride = readManualOverride(student);
+  if (!options.ignoreManualOverride && manualOverride.active) {
+    return {
+      value: manualOverride.value,
+      ciclo: targetCicloKey,
+      source: "manual_override",
+      reason:
+        manualOverride.value === "externo"
+          ? "Tiene override manual activo: se fuerza Externo aunque la regla automática detecte evidencia de inscripción."
+          : "Tiene override manual activo: se fuerza Interno y se omite la regla automática.",
+    };
   }
 
   const previousCiclo = previousCicloKey(targetCicloKey);

@@ -20,6 +20,22 @@ const canonicalMatriculaKey = (value: unknown) =>
     .trim()
     .toUpperCase();
 
+const readOverrideRequested = (body: any) =>
+  Object.prototype.hasOwnProperty.call(body || {}, "tipoIngresoOverrideActivo") ||
+  Object.prototype.hasOwnProperty.call(body || {}, "tipoIngresoOverride");
+
+const normalizeOverrideActive = (value: unknown) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  const raw = String(value ?? "").trim().toLowerCase();
+  return ["1", "true", "si", "sí", "yes", "activo", "active"].includes(raw);
+};
+
+const normalizeOverrideValue = (value: unknown) =>
+  String(value || "externo").trim().toLowerCase() === "interno"
+    ? "interno"
+    : "externo";
+
 const syncAcademicOverlay = async ({
   matricula,
   userEmail,
@@ -110,9 +126,18 @@ export default defineEventHandler(async (event) =>
       normalizeCicloForTipoIngreso(body?.targetCiclo) || ingresoCiclo;
     const [student] = await query<any[]>(
       `
-    SELECT matricula, plantel, nivel AS nivelBase, grado AS gradoBase, ciclo AS cicloBase, ciclo
+    SELECT
+      base.matricula,
+      base.plantel,
+      base.nivel AS nivelBase,
+      base.grado AS gradoBase,
+      base.ciclo AS cicloBase,
+      base.ciclo,
+      IFNULL(TIO.override_activo, 0) AS tipoIngresoOverrideActivo,
+      IFNULL(TIO.tipo_forzado, 'externo') AS tipoIngresoOverride
     FROM base
-    WHERE matricula = ?
+    LEFT JOIN student_tipo_ingreso_overrides TIO ON TIO.matricula = base.matricula
+    WHERE base.matricula = ?
     LIMIT 1
   `,
       [matricula],
@@ -168,6 +193,31 @@ export default defineEventHandler(async (event) =>
       [ingresoCiclo, requestedNivel, requestedGrado, placementPlantel, matricula],
     );
 
+    const overrideRequested = readOverrideRequested(body);
+    const overrideActive = normalizeOverrideActive(body?.tipoIngresoOverrideActivo);
+    const overrideValue = normalizeOverrideValue(body?.tipoIngresoOverride);
+
+    if (overrideRequested) {
+      if (overrideActive) {
+        await query(
+          `INSERT INTO student_tipo_ingreso_overrides
+             (matricula, override_activo, tipo_forzado, updated_by)
+           VALUES (?, 1, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             override_activo = VALUES(override_activo),
+             tipo_forzado = VALUES(tipo_forzado),
+             updated_by = VALUES(updated_by),
+             updated_at = CURRENT_TIMESTAMP`,
+          [matricula, overrideValue, user?.email || "sistema"],
+        );
+      } else {
+        await query(
+          `DELETE FROM student_tipo_ingreso_overrides WHERE matricula = ?`,
+          [matricula],
+        );
+      }
+    }
+
     await syncAcademicOverlay({
       matricula,
       userEmail: user?.email,
@@ -176,6 +226,13 @@ export default defineEventHandler(async (event) =>
       grado: requestedGrado,
       ciclo: ingresoCiclo,
     });
+
+    const effectiveOverrideActive = overrideRequested
+      ? overrideActive
+      : normalizeOverrideActive((student as any).tipoIngresoOverrideActivo);
+    const effectiveOverrideValue = overrideRequested
+      ? overrideValue
+      : normalizeOverrideValue((student as any).tipoIngresoOverride);
 
     const tipoIngreso = resolveTipoIngreso(
       {
@@ -186,6 +243,8 @@ export default defineEventHandler(async (event) =>
         gradoBase: requestedGrado,
         ciclo: ingresoCiclo,
         cicloBase: ingresoCiclo,
+        tipoIngresoOverrideActivo: effectiveOverrideActive ? 1 : 0,
+        tipoIngresoOverride: effectiveOverrideValue,
       },
       targetCiclo,
     );
@@ -202,6 +261,8 @@ export default defineEventHandler(async (event) =>
         grado: displayGrado(requestedGrado),
         ciclo: ingresoCiclo,
         cicloBase: ingresoCiclo,
+        tipoIngresoOverrideActivo: effectiveOverrideActive ? 1 : 0,
+        tipoIngresoOverride: effectiveOverrideValue,
         tipoIngreso,
       },
     };
