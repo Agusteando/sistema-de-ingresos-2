@@ -147,7 +147,7 @@
                 <div class="tipo-ingreso-row">
                   <span
                     :class="['tipo-ingreso-badge', resolvedTipoIngreso.value]"
-                    :title="`${resolvedTipoIngresoLabel} en ${selectedCicloLabel}. ${resolvedTipoIngreso.reason}`"
+                    :title="`${resolvedTipoIngresoLabel} en ${selectedCicloLabel}`"
                   >
                     <LucideBuilding2
                       v-if="resolvedTipoIngreso.value === 'interno'"
@@ -156,13 +156,6 @@
                     />
                     <LucideGlobe2 v-else :size="12" :stroke-width="2.4" />
                     {{ resolvedTipoIngresoLabel }}
-                  </span>
-                  <span
-                    v-if="tipoIngresoOverrideActive"
-                    class="tipo-ingreso-override-chip"
-                    title="Override manual activo: fuerza Externo y omite la regla automática"
-                  >
-                    Override
                   </span>
                 </div>
                 <div
@@ -349,7 +342,7 @@
             </div>
             <span
               :class="['tipo-ingreso-badge', resolvedTipoIngreso.value]"
-              :title="`${resolvedTipoIngresoLabel} en ${selectedCicloLabel}. ${resolvedTipoIngreso.reason}`"
+              :title="`${resolvedTipoIngresoLabel} en ${selectedCicloLabel}`"
             >
               <LucideBuilding2
                 v-if="resolvedTipoIngreso.value === 'interno'"
@@ -358,13 +351,6 @@
               />
               <LucideGlobe2 v-else :size="12" :stroke-width="2.4" />
               {{ resolvedTipoIngresoLabel }}
-            </span>
-            <span
-              v-if="tipoIngresoOverrideActive"
-              class="tipo-ingreso-override-chip"
-              title="Override manual activo: fuerza Externo y omite la regla automática"
-            >
-              Override
             </span>
           </div>
 
@@ -1444,9 +1430,6 @@ const resolvedTipoIngreso = computed(() =>
 );
 const resolvedTipoIngresoLabel = computed(() =>
   formatTipoIngresoValue(resolvedTipoIngreso.value),
-);
-const tipoIngresoOverrideActive = computed(
-  () => resolvedTipoIngreso.value?.source === "manual_override",
 );
 const progressPaidWidth = (debt) =>
   `${Math.min(100, Number(debt.porcentajePagoReal ?? debt.porcentajePagado) || 0)}%`;

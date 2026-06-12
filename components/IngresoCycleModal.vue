@@ -270,44 +270,18 @@
                 ></p>
               </Transition>
 
-              <div
-                :class="[
-                  'ingreso-rule-card',
-                  { active: automaticRuleActive, override: forceExternalOverride },
-                ]"
-              >
-                <span class="ingreso-rule-icon" aria-hidden="true">
-                  <LucideShieldCheck v-if="automaticRuleActive" :size="18" />
-                  <LucideInfo v-else :size="18" />
-                </span>
-                <div>
-                  <small>Regla automática</small>
-                  <strong>{{ automaticRuleTitle }}</strong>
-                  <p>{{ automaticRuleCopy }}</p>
-                </div>
-              </div>
-
-              <section class="ingreso-override-card" aria-label="Override de tipo de ingreso">
-                <div>
-                  <small>Control excepcional</small>
-                  <strong>Forzar Externo</strong>
-                  <p>
-                    Desactívalo para volver a la regla automática. Por defecto
-                    todos los alumnos quedan sin override.
-                  </p>
-                </div>
+              <div v-if="showExternalChangeAction" class="ingreso-external-action-row">
                 <button
                   type="button"
-                  :class="['ingreso-override-switch', { active: forceExternalOverride }]"
-                  role="switch"
-                  :aria-checked="forceExternalOverride"
+                  :class="['ingreso-external-action-button', { active: forceExternalOverride }]"
                   :disabled="saving"
-                  @click="forceExternalOverride = !forceExternalOverride"
+                  @click="toggleExternalChange"
                 >
-                  <span aria-hidden="true"></span>
-                  {{ forceExternalOverride ? "Override activo" : "Sin override" }}
+                  <LucideGlobe2 v-if="!forceExternalOverride" :size="15" />
+                  <LucideShieldCheck v-else :size="15" />
+                  {{ externalChangeActionLabel }}
                 </button>
-              </section>
+              </div>
 
               <div class="ingreso-interpretation-card">
                 <h4>Cómo se interpretará</h4>
@@ -661,21 +635,17 @@ const automaticRuleActive = computed(
     automaticTargetTipo.value?.source === "confirmed_conceptos" &&
     automaticTargetTipo.value?.value === "interno",
 );
-const automaticRuleTitle = computed(() =>
-  automaticRuleActive.value
-    ? "2 conceptos de inscripción detectados"
-    : "Sin regla de doble inscripción activa",
+const showExternalChangeAction = computed(
+  () => automaticRuleActive.value || forceExternalOverride.value,
 );
-const automaticRuleCopy = computed(() => {
-  if (automaticRuleActive.value && forceExternalOverride.value) {
-    return "La regla automática marcaría Interno, pero el override manual fuerza Externo para este alumno.";
-  }
-  if (automaticRuleActive.value) {
-    return "La regla automática está en juego: al detectar dos conceptos configurados de inscripción/reinscripción, el resultado se interpreta como Interno.";
-  }
-  return "Se usará el ciclo de ingreso y la evidencia disponible. No hay override manual activo.";
+const externalChangeActionLabel = computed(() => {
+  if (!forceExternalOverride.value) return "Cambiar a Externo";
+  return automaticRuleActive.value ? "Volver a Interno" : "Quitar cambio";
 });
-
+const toggleExternalChange = () => {
+  if (props.saving || !showExternalChangeAction.value) return;
+  forceExternalOverride.value = !forceExternalOverride.value;
+};
 const previewTargetTipo = computed(() =>
   resolveTipoIngreso(simulatedStudent.value, targetCicloKey.value, {
     enrollmentConcepts: props.enrollmentConcepts,
@@ -699,11 +669,11 @@ const resultExplanation = computed(() => {
   }
 
   if (forceExternalOverride.value) {
-    return `Override manual activo: este alumno se mostrará como <strong>externo</strong> en ${targetLabel}, aunque la regla automática detecte dos conceptos de inscripción.`;
+    return `Este alumno se guardará como <strong>externo</strong> en ${targetLabel}, ubicado en <strong>${targetPositionLabel.value}</strong>.`;
   }
 
   if (automaticRuleActive.value) {
-    return `Regla automática activa: se detectaron dos conceptos configurados de inscripción/reinscripción, por eso este alumno se mostrará como <strong>interno</strong> en ${targetLabel}.`;
+    return `Este alumno se guardará como <strong>interno</strong> en ${targetLabel}, ubicado en <strong>${targetPositionLabel.value}</strong>.`;
   }
 
   if (selected === target) {
@@ -1572,138 +1542,49 @@ const confirmSelection = () => {
   font-weight: 900;
 }
 
-.ingreso-rule-card,
-.ingreso-override-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 12px;
-  padding: 13px 15px;
-  border: 1px solid rgba(218, 227, 238, 0.98);
-  border-radius: 13px;
-  background: #fff;
+.ingreso-external-action-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -2px;
 }
 
-.ingreso-rule-card.active {
-  border-color: rgba(51, 151, 62, 0.28);
-  background: linear-gradient(180deg, rgba(248, 255, 249, 0.98), #fff);
-}
-
-.ingreso-rule-card.override {
-  border-color: rgba(47, 114, 217, 0.26);
-  background: linear-gradient(180deg, rgba(247, 251, 255, 0.98), #fff);
-}
-
-.ingreso-rule-icon {
+.ingreso-external-action-button {
   display: inline-flex;
-  width: 32px;
-  height: 32px;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid rgba(47, 114, 217, 0.24);
   border-radius: 999px;
-  background: #edf4ff;
-  color: #2f72d9;
-}
-
-.ingreso-rule-card.active .ingreso-rule-icon {
-  background: #eaf8ed;
-  color: #2f8f3d;
-}
-
-.ingreso-rule-card small,
-.ingreso-override-card small {
-  display: block;
-  color: #6f7f99;
-  font-size: 10px;
+  background: #f7fbff;
+  color: #2f62b8;
+  font-size: 12px;
   font-weight: 890;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.ingreso-rule-card strong,
-.ingreso-override-card strong {
-  display: block;
-  margin-top: 2px;
-  color: #172742;
-  font-size: 13px;
-  font-weight: 930;
-}
-
-.ingreso-rule-card p,
-.ingreso-override-card p {
-  margin: 4px 0 0;
-  color: #64738e;
-  font-size: 12px;
-  font-weight: 630;
-  line-height: 1.38;
-}
-
-.ingreso-override-card {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
-.ingreso-override-switch {
-  display: inline-flex;
-  min-width: 132px;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 12px 0 8px;
-  border: 1px solid rgba(218, 227, 238, 0.98);
-  border-radius: 999px;
-  background: #f8fafc;
-  color: #64738e;
-  font-size: 12px;
-  font-weight: 860;
+  letter-spacing: -0.01em;
+  box-shadow: 0 9px 18px rgba(47, 114, 217, 0.07);
   transition:
-    border-color 0.18s ease,
-    background 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease;
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
-.ingreso-override-switch span {
-  position: relative;
-  display: inline-flex;
-  width: 28px;
-  height: 18px;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: #d8e1ed;
-  transition: background 0.18s ease;
-}
-
-.ingreso-override-switch span::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 2px 5px rgba(24, 39, 64, 0.18);
-  transition: transform 0.18s ease;
-}
-
-.ingreso-override-switch.active {
-  border-color: rgba(47, 114, 217, 0.34);
+.ingreso-external-action-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(47, 114, 217, 0.36);
   background: #edf4ff;
-  color: #2f6fd2;
-  box-shadow: 0 10px 22px rgba(47, 114, 217, 0.09);
+  box-shadow: 0 12px 22px rgba(47, 114, 217, 0.11);
 }
 
-.ingreso-override-switch.active span {
-  background: #2f72d9;
+.ingreso-external-action-button.active {
+  border-color: rgba(51, 151, 62, 0.28);
+  background: #f2fbf4;
+  color: #2e7d38;
 }
 
-.ingreso-override-switch.active span::after {
-  transform: translateX(10px);
-}
-
-.ingreso-override-switch:disabled {
+.ingreso-external-action-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }

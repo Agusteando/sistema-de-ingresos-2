@@ -1,1 +1,1 @@
-Agrega override manual de tipo de ingreso.
+Limpia la experiencia del cambio manual a externo.
