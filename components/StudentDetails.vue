@@ -1679,6 +1679,8 @@ const loadDebts = async (options = {}) => {
   if (contextChanged) {
     visibleAccountContextKey.value = contextKey;
     hasRenderedAccountState.value = false;
+    accountSearchQuery.value = "";
+    accountFilter.value = "all";
     resetAccountInteraction();
   }
 

@@ -333,14 +333,21 @@ export const collectUnassociatedServices = (mappings: ConceptosConfigRow[] = [])
   .filter((service) => !Array.isArray(service.conceptos) || service.conceptos.length === 0)
 
 export const readBestConceptosConfig = async () => {
+  let local: Awaited<ReturnType<typeof readLocalConceptosConfig>> | null = null
+
   try {
-    const local = await readLocalConceptosConfig()
-    if (local.mappings.length || local.cycles.length) return local
+    local = await readLocalConceptosConfig()
+    if (local.mappings.length) return local
   } catch (e) {}
 
-  const central = await readCentralConceptosConfig()
-  try { await syncCentralConceptosConfigToBridge(central) } catch (e) {}
-  return central
+  try {
+    const central = await readCentralConceptosConfig()
+    try { await syncCentralConceptosConfigToBridge(central) } catch (e) {}
+    return central
+  } catch (error) {
+    if (local && (local.mappings.length || local.cycles.length)) return local
+    throw error
+  }
 }
 
 export const readBestConceptosConfigPayload = async () => {

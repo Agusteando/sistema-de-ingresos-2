@@ -215,16 +215,52 @@
 
         <div class="header-actions">
           <SyncBadge v-if="showFinancialNav" />
-          <div v-if="showCicloPicker" class="ciclo-picker">
-            <LucideCalendarDays :size="18" />
-            <select
-              v-model="state.ciclo"
-              aria-label="Ciclo escolar"
-              @change="handleCicloChange"
+          <div v-if="showCicloPicker" ref="cicloPickerRef" class="ciclo-picker" :class="{ open: cicloMenuOpen }">
+            <button
+              type="button"
+              class="ciclo-picker-button"
+              aria-haspopup="listbox"
+              :aria-expanded="cicloMenuOpen ? 'true' : 'false'"
+              aria-labelledby="header-ciclo-label header-ciclo-value"
+              @click="toggleCicloMenu"
+              @keydown.down.prevent="openCicloMenu"
+              @keydown.enter.prevent="toggleCicloMenu"
+              @keydown.space.prevent="toggleCicloMenu"
+              @keydown.esc.prevent="closeCicloMenu"
             >
-              <option v-for="c in CICLOS_LIST" :key="c.value" :value="c.value">{{ c.label }}</option>
-            </select>
-            <LucideChevronDown :size="16" />
+              <span class="ciclo-picker-icon" aria-hidden="true">
+                <LucideCalendarDays :size="17" />
+              </span>
+              <span class="ciclo-picker-current">
+                <small id="header-ciclo-label">Ciclo</small>
+                <strong id="header-ciclo-value">{{ activeCicloOption.label }}</strong>
+              </span>
+              <LucideChevronDown class="ciclo-picker-chevron" :size="16" />
+            </button>
+
+            <div
+              v-if="cicloMenuOpen"
+              class="ciclo-options"
+              role="listbox"
+              aria-labelledby="header-ciclo-label"
+            >
+              <button
+                v-for="c in CICLOS_LIST"
+                :key="c.value"
+                type="button"
+                class="ciclo-option"
+                :class="{ selected: c.value === activeCicloOption.value }"
+                role="option"
+                :aria-selected="c.value === activeCicloOption.value ? 'true' : 'false'"
+                @click="selectCiclo(c.value)"
+              >
+                <span class="ciclo-option-main">
+                  <strong>{{ c.label }}</strong>
+                  <small>Clave {{ c.value }}</small>
+                </span>
+                <span v-if="c.value === activeCicloOption.value" class="ciclo-option-chip">Actual</span>
+              </button>
+            </div>
           </div>
           <NuxtLink v-if="showFinancialNav" to="/" class="header-home-button" title="Inicio" aria-label="Inicio">
             <LucideSchool :size="23" />
@@ -363,14 +399,46 @@ watch(() => state.value.ciclo, (newVal) => {
   cicloCookie.value = cicloKey
 })
 
-const handleCicloChange = () => {
+const activeCicloOption = computed(() => {
   const cicloKey = normalizeCicloOption(state.value.ciclo)
-  state.value.ciclo = cicloKey
-  cicloCookie.value = cicloKey
+  return CICLOS_LIST.find(ciclo => ciclo.value === cicloKey) || CICLOS_LIST[0]
+})
 
+const dispatchCicloChanged = (cicloKey) => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('ingresos:ciclo-changed', { detail: { ciclo: cicloKey } }))
   }
+}
+
+const openCicloMenu = () => {
+  cicloMenuOpen.value = true
+}
+
+const closeCicloMenu = () => {
+  cicloMenuOpen.value = false
+}
+
+const toggleCicloMenu = () => {
+  if (cicloMenuOpen.value) {
+    closeCicloMenu()
+    return
+  }
+
+  openCicloMenu()
+}
+
+const selectCiclo = (value) => {
+  const cicloKey = normalizeCicloOption(value)
+  closeCicloMenu()
+
+  if (state.value.ciclo === cicloKey) {
+    cicloCookie.value = cicloKey
+    return
+  }
+
+  state.value.ciclo = cicloKey
+  cicloCookie.value = cicloKey
+  dispatchCicloChanged(cicloKey)
 }
 
 const adminPhoto = ref(null)
@@ -380,6 +448,8 @@ const hasControlEscolarCookie = useCookie('auth_has_control_escolar')
 const activePlantel = ref(useCookie('auth_active_plantel').value || 'PT')
 const plantelSelectRef = ref(null)
 const plantelMenuOpen = ref(false)
+const cicloPickerRef = ref(null)
+const cicloMenuOpen = ref(false)
 const { getPlantelStatus, loadPlantelStatuses } = usePlantelAgentStatuses()
 const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
 const hasSuperAdminRole = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
@@ -526,6 +596,13 @@ const handlePlantelDocumentPointerDown = (event) => {
   closePlantelMenu()
 }
 
+const handleCicloDocumentPointerDown = (event) => {
+  if (!cicloMenuOpen.value || !cicloPickerRef.value) return
+  if (cicloPickerRef.value.contains(event.target)) return
+
+  closeCicloMenu()
+}
+
 const selectPlantel = async (plantel) => {
   const normalizedPlantel = String(plantel || '').trim().toUpperCase()
   if (normalizedPlantel !== 'GLOBAL' && !PLANTELES_LIST.includes(normalizedPlantel)) return
@@ -557,6 +634,7 @@ onMounted(async () => {
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', scheduleSidebarScaleUpdate, { passive: true })
     document.addEventListener('pointerdown', handlePlantelDocumentPointerDown)
+    document.addEventListener('pointerdown', handleCicloDocumentPointerDown)
     if (typeof ResizeObserver !== 'undefined' && sidebarScaleShell.value) {
       sidebarResizeObserver = new ResizeObserver(scheduleSidebarScaleUpdate)
       sidebarResizeObserver.observe(sidebarScaleShell.value)
@@ -580,6 +658,7 @@ onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', scheduleSidebarScaleUpdate)
     document.removeEventListener('pointerdown', handlePlantelDocumentPointerDown)
+    document.removeEventListener('pointerdown', handleCicloDocumentPointerDown)
     if (sidebarFrame) window.cancelAnimationFrame(sidebarFrame)
   }
   sidebarResizeObserver?.disconnect?.()
@@ -1521,7 +1600,6 @@ const logout = async () => {
   gap: 12px;
 }
 
-.ciclo-picker,
 .header-home-button {
   display: inline-flex;
   height: 38px;
@@ -1534,25 +1612,151 @@ const logout = async () => {
 }
 
 .ciclo-picker {
-  min-width: 160px;
-  gap: 9px;
+  position: relative;
+  min-width: 176px;
+}
+
+.ciclo-picker-button {
+  display: inline-flex;
+  width: 100%;
+  height: 42px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(210, 225, 213, 0.92);
+  border-radius: 15px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 252, 249, 0.9));
+  color: #20304d;
   padding: 0 12px;
+  cursor: pointer;
+  text-align: left;
+  box-shadow:
+    0 12px 26px rgba(22, 38, 65, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
 }
 
-.ciclo-picker svg:first-child {
+.ciclo-picker-button:hover,
+.ciclo-picker.open .ciclo-picker-button {
+  border-color: rgba(111, 174, 79, 0.48);
+  box-shadow:
+    0 16px 30px rgba(31, 76, 40, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+  transform: translateY(-1px);
+}
+
+.ciclo-picker-button:focus-visible {
+  outline: 3px solid rgba(101, 167, 68, 0.18);
+  outline-offset: 2px;
+}
+
+.ciclo-picker-icon {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
   color: #2d7132;
+  background: rgba(232, 246, 229, 0.92);
 }
 
-.ciclo-picker select {
+.ciclo-picker-current,
+.ciclo-option-main {
+  display: grid;
   min-width: 0;
   flex: 1;
-  appearance: none;
+  gap: 2px;
+}
+
+.ciclo-picker-current small,
+.ciclo-option-main small {
+  overflow: hidden;
+  color: #667185;
+  font-size: 0.58rem;
+  font-weight: 850;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ciclo-picker-current strong,
+.ciclo-option-main strong {
+  overflow: hidden;
+  color: #1e2d49;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ciclo-picker-chevron {
+  flex: 0 0 auto;
+  color: #5d6d82;
+  transition: transform 160ms ease;
+}
+
+.ciclo-picker.open .ciclo-picker-chevron {
+  transform: rotate(180deg);
+}
+
+.ciclo-options {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  width: min(250px, calc(100vw - 36px));
+  gap: 6px;
+  border: 1px solid rgba(205, 222, 211, 0.96);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 8px;
+  box-shadow: 0 24px 48px rgba(25, 45, 72, 0.16);
+}
+
+.ciclo-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
   border: 0;
+  border-radius: 13px;
   background: transparent;
-  color: #20304d;
-  font-size: 0.84rem;
-  font-weight: 800;
-  outline: none;
+  padding: 10px 9px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.ciclo-option:hover,
+.ciclo-option.selected {
+  background: #f0faee;
+}
+
+.ciclo-option:hover {
+  transform: translateY(-1px);
+}
+
+.ciclo-option-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 5px 7px;
+  color: #286d2b;
+  background: #e9f7e7;
+  font-size: 0.52rem;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .header-home-button {
@@ -1646,7 +1850,17 @@ const logout = async () => {
   }
 
   .ciclo-picker {
-    min-width: 150px;
+    min-width: 158px;
+  }
+
+  .ciclo-picker-button {
+    height: 40px;
+    padding-inline: 10px;
+  }
+
+  .ciclo-picker-icon {
+    width: 26px;
+    height: 26px;
   }
 }
 

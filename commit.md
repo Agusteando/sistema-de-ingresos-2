@@ -1,1 +1,1 @@
-Normaliza superadmin como rol único y permite asignarlo desde Usuarios.
+Corrige la visibilidad legacy del estado de cuenta.

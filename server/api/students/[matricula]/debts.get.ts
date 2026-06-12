@@ -1,7 +1,11 @@
 import { runWithBridgeAgentId, query } from "../../../utils/db";
 import dayjs from "dayjs";
 import { normalizeCicloKey } from "../../../../shared/utils/ciclo";
-import { isInProjectedPlantelScopeForCiclo } from "../../../../shared/utils/grado";
+import {
+  isInProjectedPlantelScopeForCiclo,
+  normalizePlantel,
+  plantelCandidatesForProjectedScope,
+} from "../../../../shared/utils/grado";
 import { resolveProjectedAmount } from "../../../utils/monto-final";
 import { normalizeBecaTypes } from "../../../utils/becaTypes";
 import { isDepuradoPayment } from "../../../utils/payment-classification";
@@ -9,6 +13,21 @@ import {
   getDocumentoPeriodoSchema,
   periodoLifecycleSelect,
 } from "../../../utils/documento-periods";
+
+const cicloQueryValues = (cicloKey: string) => {
+  const key = String(cicloKey || "").trim();
+  const numeric = Number(key);
+  return Array.from(
+    new Set(
+      [
+        key,
+        Number.isFinite(numeric) ? `${key}-${numeric + 1}` : "",
+      ].filter(Boolean),
+    ),
+  );
+};
+
+const cicloInClause = (values: string[]) => values.map(() => "?").join(",");
 
 export default defineEventHandler(async (event) =>
   runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
@@ -18,30 +37,8 @@ export default defineEventHandler(async (event) =>
     if (!matricula)
       throw createError({ statusCode: 400, message: "Matrícula requerida" });
 
-    const [studentRef] = await query<any[]>(
-      `SELECT matricula, plantel, nivel as nivelBase, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
-      [matricula.trim()],
-    );
-
-    if (!studentRef) return [];
-
-    const user = event.context.user;
-    const isScopedToActivePlantel =
-      !user.isSuperAdmin ||
-      (user.isSuperAdmin && user.active_plantel !== "GLOBAL");
-
-    if (
-      !isInProjectedPlantelScopeForCiclo(
-        studentRef.gradoBase,
-        studentRef.plantel,
-        studentRef.cicloBase,
-        cicloKey,
-        studentRef.nivelBase,
-        isScopedToActivePlantel ? user.active_plantel : "GLOBAL",
-      )
-    ) {
-      return [];
-    }
+    const normalizedMatricula = matricula.trim();
+    const cicloValues = cicloQueryValues(cicloKey);
 
     const documentos = await query<any[]>(
       `
@@ -50,32 +47,118 @@ export default defineEventHandler(async (event) =>
       d.beca, d.becaNombre, d.becaTipos, d.becaMotivo, d.becaMonto, d.becaPorcentaje,
       d.becaCartaGenerada, d.ciclo, d.concepto, d.conceptoNombre, d.eventual
     FROM documentos d
-    WHERE d.matricula = ? AND d.ciclo = ? AND d.estatus = 'Activo'
+    WHERE d.matricula = ?
+      AND CAST(d.ciclo AS CHAR) IN (${cicloInClause(cicloValues)})
+      AND LOWER(TRIM(CAST(d.estatus AS CHAR))) = 'activo'
   `,
-      [matricula.trim(), cicloKey],
+      [normalizedMatricula, ...cicloValues],
     );
 
     const pagosRows = await query<any[]>(
       `
     SELECT folio, folio_plantel, documento, mes, recargo, monto, fecha, formaDePago, conceptoNombre, estatus, depurado, depurado_por, depurado_fecha
     FROM referenciasdepago
-    WHERE matricula = ? AND ciclo = ? AND estatus = 'Vigente'
+    WHERE matricula = ?
+      AND CAST(ciclo AS CHAR) IN (${cicloInClause(cicloValues)})
+      AND LOWER(TRIM(CAST(estatus AS CHAR))) = 'vigente'
   `,
-      [matricula.trim(), cicloKey],
+      [normalizedMatricula, ...cicloValues],
     );
 
-    const periodoSchema = await getDocumentoPeriodoSchema();
-    const periodRows = documentos.length
-      ? await query<any[]>(
+    const [studentRef] = await query<any[]>(
+      `SELECT matricula, plantel, nivel as nivelBase, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
+      [normalizedMatricula],
+    );
+
+    const hasLegacyFinancialEvidence = documentos.length > 0 || pagosRows.length > 0;
+    if (!studentRef && !hasLegacyFinancialEvidence) return [];
+
+    const user = event.context.user;
+    const isScopedToActivePlantel =
+      !user.isSuperAdmin ||
+      (user.isSuperAdmin && user.active_plantel !== "GLOBAL");
+
+    if (studentRef) {
+      const projectedPlantelInScope = isInProjectedPlantelScopeForCiclo(
+        studentRef.gradoBase,
+        studentRef.plantel,
+        studentRef.cicloBase,
+        cicloKey,
+        studentRef.nivelBase,
+        isScopedToActivePlantel ? user.active_plantel : "GLOBAL",
+      );
+
+      if (!projectedPlantelInScope) {
+        const activePlantelKey = normalizePlantel(user.active_plantel);
+        const basePlantelKey = normalizePlantel(studentRef.plantel);
+        const plantelCandidates = isScopedToActivePlantel
+          ? plantelCandidatesForProjectedScope(activePlantelKey)
+          : [];
+        const basePlantelAllowed =
+          !isScopedToActivePlantel ||
+          plantelCandidates.includes(basePlantelKey);
+
+        if (!hasLegacyFinancialEvidence) {
+          console.info("[EstadoCuentaDebug] Estado de Cuenta filtered by scope", {
+            matricula: normalizedMatricula,
+            selectedCicloRaw: ciclo,
+            normalizedCicloKey: cicloKey,
+            cicloQueryValues: cicloValues,
+            basePlantel: basePlantelKey,
+            activePlantel: activePlantelKey || "GLOBAL",
+            hasLegacyFinancialEvidence,
+            returnedDocumentosCount: documentos.length,
+            returnedReferenciasCount: pagosRows.length,
+          });
+          return [];
+        }
+
+        console.info("[EstadoCuentaDebug] Estado de Cuenta scope bypassed by legacy financial evidence", {
+          matricula: normalizedMatricula,
+          selectedCicloRaw: ciclo,
+          normalizedCicloKey: cicloKey,
+          cicloQueryValues: cicloValues,
+          basePlantel: basePlantelKey,
+          activePlantel: activePlantelKey || "GLOBAL",
+          basePlantelAllowed,
+          returnedDocumentosCount: documentos.length,
+          returnedReferenciasCount: pagosRows.length,
+        });
+      }
+    } else {
+      console.info("[EstadoCuentaDebug] Estado de Cuenta loaded without base row using legacy financial evidence", {
+        matricula: normalizedMatricula,
+        selectedCicloRaw: ciclo,
+        normalizedCicloKey: cicloKey,
+        cicloQueryValues: cicloValues,
+        returnedDocumentosCount: documentos.length,
+        returnedReferenciasCount: pagosRows.length,
+      });
+    }
+
+    let periodRows: any[] = [];
+    if (documentos.length) {
+      try {
+        const periodoSchema = await getDocumentoPeriodoSchema();
+        periodRows = await query<any[]>(
           `
         SELECT id, documento, start_mes, end_mes, concepto_id, conceptoNombre, costo, montoFinal, accion, estatus, ${periodoLifecycleSelect(periodoSchema)}
         FROM documento_concepto_periodos
-        WHERE documento IN (${documentos.map(() => "?").join(",")}) AND estatus = 'Activo'
+        WHERE documento IN (${documentos.map(() => "?").join(",")}) AND LOWER(TRIM(CAST(estatus AS CHAR))) = 'activo'
         ORDER BY documento ASC, start_mes ASC, id ASC
       `,
           documentos.map((doc) => doc.documento),
-        )
-      : [];
+        );
+      } catch (error: any) {
+        console.warn("[EstadoCuentaDebug] documento_concepto_periodos unavailable; legacy documentos will render without period overrides", {
+          matricula: normalizedMatricula,
+          selectedCicloRaw: ciclo,
+          normalizedCicloKey: cicloKey,
+          message: error?.message || error,
+        });
+        periodRows = [];
+      }
+    }
 
     const periodsByDocument = new Map<number, any[]>();
     periodRows.forEach((period) => {
@@ -445,10 +528,10 @@ export default defineEventHandler(async (event) =>
     });
 
     console.info("[EstadoCuentaDebug] Estado de Cuenta DB result", {
-      matricula: matricula.trim(),
+      matricula: normalizedMatricula,
       selectedCicloRaw: ciclo,
       normalizedCicloKey: cicloKey,
-      apiQueryCiclo: cicloKey,
+      cicloQueryValues: cicloValues,
       returnedDocumentosCount: documentos.length,
       returnedReferenciasCount: pagosRows.length,
       renderedConceptosCount: debts.length,

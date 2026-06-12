@@ -382,6 +382,7 @@ const { executeOptimistic } = useOptimisticSync()
 const route = useRoute()
 useHead({ bodyAttrs: { class: 'students-route-active' } })
 const { studentsSyncState, readCachedStudents, writeCachedStudents, setStudentsSyncState } = useStudentsCacheSync()
+const { accountStateSyncState } = useAccountStateCacheSync()
 const state = useState('globalState')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 const activePlantelCookie = useCookie('auth_active_plantel')
@@ -888,6 +889,22 @@ const stopKpiRefresh = () => {
   }, remaining)
 }
 
+let kpiRefreshScopeId = 0
+const activeKpiRefreshScopes = new Set()
+
+const beginKpiRefreshScope = () => {
+  const token = ++kpiRefreshScopeId
+  activeKpiRefreshScopes.add(token)
+  startKpiRefresh()
+  return token
+}
+
+const endKpiRefreshScope = (token) => {
+  if (!token) return
+  activeKpiRefreshScopes.delete(token)
+  if (!activeKpiRefreshScopes.size) stopKpiRefresh()
+}
+
 
 const gradeNumberForSparkline = (student) => {
   const value = String(student?.grado || '')
@@ -927,6 +944,7 @@ const kpiSparklines = computed(() => ({
 let kpiSparklineRequestId = 0
 const loadKpiSparklines = async () => {
   const requestId = ++kpiSparklineRequestId
+  let refreshToken = null
   try {
     const cicloKey = normalizeCicloKey(state.value.ciclo)
     if (!externalConcepts.value.length) {
@@ -934,6 +952,7 @@ const loadKpiSparklines = async () => {
       return
     }
 
+    refreshToken = beginKpiRefreshScope()
     const res = await $fetch('/api/students/kpi-trends', {
       params: {
         ciclo: cicloKey,
@@ -950,6 +969,8 @@ const loadKpiSparklines = async () => {
     }
   } catch (e) {
     if (requestId === kpiSparklineRequestId) paymentKpiSparklines.value = { inscritos: [], internos: [], externos: [], ingresos: [] }
+  } finally {
+    endKpiRefreshScope(refreshToken)
   }
 }
 
@@ -1066,11 +1087,15 @@ const parseEnrollmentConfig = (obj) => {
 }
 
 const loadGlobalKpis = async () => {
+  const refreshToken = beginKpiRefreshScope()
   try {
     const cicloKey = normalizeCicloKey(state.value.ciclo)
     const res = await $fetch('/api/dashboard/kpis', { params: { ciclo: cicloKey, concepts: externalConcepts.value.join(','), tipoConcepts: tipoIngresoConcepts.value.join(',') } })
     globalKpis.value.ingresosMes = res.ingresosMes || 0
-  } catch(e) {}
+  } catch(e) {
+  } finally {
+    endKpiRefreshScope(refreshToken)
+  }
 }
 
 let studentsRequestId = 0
@@ -1356,7 +1381,7 @@ const applyStudentsList = (nextStudents, { selectRouteStudent = true, cacheOptio
 }
 
 const performSearch = async (options = {}) => {
-  const { useCache = true, serverQuery } = options || {}
+  const { useCache = true, serverQuery, clearStaleOnCacheMiss = false } = options || {}
   const requestId = ++studentsRequestId
   const cicloKey = normalizeCicloKey(state.value.ciclo)
   const query = serverQuery === undefined ? (filters.value.q || '') : String(serverQuery || '')
@@ -1437,7 +1462,11 @@ const performSearch = async (options = {}) => {
       hasCache: true,
       error: null
     })
-  } else if (!hadStudents) {
+  } else if (!hadStudents || clearStaleOnCacheMiss) {
+    if (clearStaleOnCacheMiss && hadStudents) {
+      students.value = []
+      matriculaOverlayRequestId++
+    }
     loading.value = true
   } else {
     loading.value = false
@@ -1452,6 +1481,8 @@ const performSearch = async (options = {}) => {
     hasCache: hasCachedStudents || hadStudents,
     error: null
   })
+
+  const bridgeRefreshToken = beginKpiRefreshScope()
 
   try {
     const serverStartedAt = financialNow()
@@ -1598,6 +1629,7 @@ const performSearch = async (options = {}) => {
 
     if (!canKeepWorking) show('Error al cargar la base de datos', 'danger')
   } finally {
+    endKpiRefreshScope(bridgeRefreshToken)
     if (requestId === studentsRequestId) loading.value = false
   }
 }
@@ -1698,7 +1730,9 @@ watch(displayedStudents, () => {
   if (!selectedKey) return
 
   const selectedStillLoaded = students.value.some(student => normalizeStudentMatricula(student.matricula) === selectedKey)
-  if (selectedStudent.value && !selectedStillLoaded) selectedStudent.value = null
+  if (selectedStillLoaded) {
+    selectedStudent.value = students.value.find(student => normalizeStudentMatricula(student.matricula) === selectedKey) || selectedStudent.value
+  }
 }, { flush: 'post' })
 
 const resetInvalidDashboardFilters = () => {
@@ -2100,20 +2134,23 @@ const showStudentMenu = (event, student) => {
   openMenu(event, actions)
 }
 
-const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
+const loadEnrollmentConfig = async ({ refreshStudents = false, refreshKpis = true } = {}) => {
   const previousConcepts = externalConcepts.value.join('|')
   const previousTipoConcepts = tipoIngresoConcepts.value.join('|')
+  const refreshToken = beginKpiRefreshScope()
 
   try {
     const configData = await $fetch('/api/conceptos-config/all')
     parseEnrollmentConfig(configData)
   } catch (e) {
     console.warn('Fallback al carecer de configuración externa.')
+  } finally {
+    endKpiRefreshScope(refreshToken)
   }
 
   const nextConcepts = externalConcepts.value.join('|')
   const nextTipoConcepts = tipoIngresoConcepts.value.join('|')
-  await Promise.allSettled([loadGlobalKpis(), loadKpiSparklines()])
+  if (refreshKpis) await Promise.allSettled([loadGlobalKpis(), loadKpiSparklines()])
 
   if (refreshStudents && nextConcepts && (nextConcepts !== previousConcepts || nextTipoConcepts !== previousTipoConcepts)) {
     await refreshStudentsFromServer()
@@ -2173,6 +2210,11 @@ watch(
   { flush: 'post' }
 )
 
+const hasActiveBridgeRefreshSignal = () => (
+  studentsSyncState.value.status === 'syncing' ||
+  accountStateSyncState.value.status === 'syncing'
+)
+
 watch(
   () => ({
     status: studentsSyncState.value.status,
@@ -2180,9 +2222,25 @@ watch(
     count: students.value.length
   }),
   ({ status, hasCache, count }) => {
-    if (status === 'syncing' && hasCache && count > 0) {
+    if (status === 'syncing' && (hasCache || count > 0)) {
       startKpiRefresh()
-    } else {
+    } else if (!activeKpiRefreshScopes.size && !hasActiveBridgeRefreshSignal()) {
+      stopKpiRefresh()
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => ({
+    status: accountStateSyncState.value.status,
+    hasCache: accountStateSyncState.value.hasCache,
+    count: accountStateSyncState.value.recordCount
+  }),
+  ({ status, hasCache, count }) => {
+    if (status === 'syncing' && (hasCache || count > 0 || selectedStudent.value)) {
+      startKpiRefresh()
+    } else if (!activeKpiRefreshScopes.size && !hasActiveBridgeRefreshSignal()) {
       stopKpiRefresh()
     }
   },
@@ -2203,10 +2261,31 @@ onBeforeUnmount(() => {
   clearKpiRefreshTimer()
 })
 
+let cicloRefreshRequestId = 0
+const refreshForCicloChange = async () => {
+  const requestId = ++cicloRefreshRequestId
+  matriculaOverlayRequestId++
+  clearStudentSelection()
+  bulkWorkspaceMode.value = 'none'
+  resetBulkPayments()
+  activeGrado.value = ''
+  activeGrupo.value = ''
+  activeSaldoFilter.value = 'all'
+  externalConcepts.value = []
+  tipoIngresoConcepts.value = []
+  hydrateCachedEnrollmentConcepts()
+
+  await loadEnrollmentConfig({ refreshStudents: false, refreshKpis: false })
+  if (requestId !== cicloRefreshRequestId) return
+
+  await performSearch({ useCache: true, clearStaleOnCacheMiss: true })
+  if (requestId !== cicloRefreshRequestId) return
+
+  await Promise.allSettled([loadGlobalKpis(), loadKpiSparklines()])
+}
+
 watch(() => state.value.ciclo, () => {
-  performSearch({ useCache: true })
-  loadGlobalKpis()
-  loadKpiSparklines()
+  refreshForCicloChange()
 })
 
 const openAlta = () => { editingStudent.value = null; showStudentModal.value = true }

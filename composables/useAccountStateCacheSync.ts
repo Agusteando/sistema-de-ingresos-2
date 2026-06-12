@@ -29,7 +29,7 @@ type AccountStateSyncState = {
   error: string | null
 }
 
-const CACHE_VERSION = 1
+const CACHE_VERSION = 2
 const CACHE_NAMESPACE = 'account-state-cache'
 
 const encodeKeySegment = (value: string) => encodeURIComponent(value || 'default')
