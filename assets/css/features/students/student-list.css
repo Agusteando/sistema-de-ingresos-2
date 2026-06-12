@@ -592,3 +592,234 @@
     display: none;
   }
 }
+
+/* Detail-open list density: keep rows polished while reserving room for account work. */
+.student-list-panel.is-compact .student-list-card {
+  --student-list-balance-col: 86px;
+  --student-list-action-col: 38px;
+  --student-list-row-height: 78px;
+  --student-list-grade-size: 56px;
+  --student-list-grade-height: 52px;
+  --student-list-crest-size: 0px;
+  --student-list-group-watermark-size: 112px;
+  grid-template-rows: 28px 40px minmax(0, 1fr);
+}
+
+.student-list-panel.is-compact .list-columns {
+  grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-action-col);
+  padding-inline: 54px 10px;
+  font-size: 9.5px;
+}
+
+.student-list-panel.is-compact .selection-control-row {
+  min-height: 40px;
+  padding-inline: 10px;
+}
+
+.student-list-panel.is-compact .select-visible-row-control {
+  gap: 9px;
+  font-size: 11px;
+}
+
+.student-list-panel.is-compact .select-box,
+.student-list-panel.is-compact .row-select-toggle {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+
+.student-list-panel.is-compact .student-list-scroll {
+  padding-inline: 5px 4px;
+}
+
+.student-list-panel.is-compact .student-row {
+  min-height: var(--student-list-row-height);
+  margin: 0 5px 5px 0;
+  padding-left: 9px;
+  border-radius: 12px;
+  grid-template-columns: minmax(0, 1fr) var(--student-list-balance-col) var(--student-list-action-col);
+}
+
+.student-list-panel.is-compact .student-group-watermark {
+  --group-icon-size: var(--student-list-group-watermark-size);
+  inset-inline-start: auto;
+  inset-inline-end: 54px;
+  opacity: .085;
+}
+
+.student-list-panel.is-compact .student-identity {
+  grid-template-columns: 26px var(--student-list-grade-size) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.student-list-panel.is-compact .student-group-sigil {
+  display: none;
+}
+
+.student-list-panel.is-compact .student-row-grade-card {
+  --student-grade-photo-width: var(--student-list-grade-size);
+  --student-grade-photo-height: var(--student-list-grade-height);
+  --student-grade-photo-radius: 11px;
+}
+
+.student-list-panel.is-compact .student-copy {
+  display: grid;
+  grid-template-columns: auto minmax(0, max-content);
+  grid-template-areas:
+    "name name"
+    "meta type";
+  align-items: center;
+  gap: 3px 6px;
+}
+
+.student-list-panel.is-compact .student-copy strong {
+  grid-area: name;
+  font-size: 12.7px;
+  line-height: 1.08;
+}
+
+.student-list-panel.is-compact .student-meta {
+  grid-area: meta;
+}
+
+.student-list-panel.is-compact .student-type-line {
+  grid-area: type;
+}
+
+.student-list-panel.is-compact .student-meta,
+.student-list-panel.is-compact .student-tipo-chip {
+  min-height: 18px;
+  font-size: 9px;
+}
+
+.student-list-panel.is-compact .student-tipo-chip {
+  gap: 4px;
+  padding-inline: 6px 7px;
+}
+
+.student-list-panel.is-compact .student-tipo-chip svg {
+  width: 14px;
+  height: 14px;
+  padding: 2px;
+}
+
+.student-list-panel.is-compact .financial-cell {
+  gap: 3px;
+  padding-right: 5px;
+}
+
+.student-list-panel.is-compact .financial-label {
+  font-size: 8.8px;
+}
+
+.student-list-panel.is-compact .financial-balance,
+.student-list-panel.is-compact .financial-balance.danger {
+  font-size: 14.2px;
+}
+
+.student-list-panel.is-compact .row-actions button {
+  width: 32px;
+  height: 46px;
+  border-radius: 10px;
+}
+
+@container student-list (max-width: 460px) {
+  .student-list-panel.is-compact .student-list-card {
+    --student-list-row-height: 82px;
+    --student-list-grade-size: 48px;
+    --student-list-grade-height: 46px;
+    grid-template-rows: 26px 38px minmax(0, 1fr);
+  }
+
+  .student-list-panel.is-compact .list-columns {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-inline: 12px;
+  }
+
+  .student-list-panel.is-compact .list-columns span:nth-child(3) {
+    display: none;
+  }
+
+  .student-list-panel.is-compact .student-row {
+    grid-template-columns: minmax(0, 1fr) 34px;
+    grid-template-areas:
+      "identity action"
+      "financial action";
+    align-items: stretch;
+    gap: 5px 6px;
+    padding: 7px 6px 7px 8px;
+  }
+
+  .student-list-panel.is-compact .student-identity {
+    grid-area: identity;
+    grid-template-columns: 24px var(--student-list-grade-size) minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .student-list-panel.is-compact .student-copy strong {
+    display: block;
+    white-space: nowrap;
+    -webkit-line-clamp: initial;
+  }
+
+  .student-list-panel.is-compact .financial-cell {
+    grid-area: financial;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0 0 31px;
+    border-top: 1px solid var(--students-border-soft);
+  }
+
+  .student-list-panel.is-compact .financial-label {
+    justify-self: start;
+  }
+
+  .student-list-panel.is-compact .row-actions {
+    grid-area: action;
+    align-items: center;
+  }
+
+  .student-list-panel.is-compact .row-actions button {
+    width: 32px;
+    height: 100%;
+    min-height: 54px;
+  }
+}
+
+@container student-list (max-height: 560px) {
+  .student-list-panel.is-compact .student-list-card {
+    --student-list-row-height: 70px;
+    --student-list-grade-size: 50px;
+    --student-list-grade-height: 46px;
+    grid-template-rows: 26px 36px minmax(0, 1fr);
+  }
+
+  .student-list-panel.is-compact .selection-control-row {
+    min-height: 36px;
+  }
+
+  .student-list-panel.is-compact .student-row {
+    margin-bottom: 4px;
+  }
+
+  .student-list-panel.is-compact .student-copy strong {
+    font-size: 12.2px;
+  }
+
+  .student-list-panel.is-compact .student-meta,
+  .student-list-panel.is-compact .student-tipo-chip {
+    min-height: 17px;
+    font-size: 8.6px;
+  }
+
+  .student-list-panel.is-compact .financial-label {
+    font-size: 8.4px;
+  }
+
+  .student-list-panel.is-compact .financial-balance,
+  .student-list-panel.is-compact .financial-balance.danger {
+    font-size: 13.4px;
+  }
+}

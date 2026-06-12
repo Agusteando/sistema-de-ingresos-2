@@ -1924,3 +1924,424 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Compact embedded account panel: prioritizes visible debt rows on small canvases. */
+.account-expediente-short {
+  display: none;
+}
+
+.profile-action-label,
+.profile-action-count,
+.account-sync-label,
+.account-expediente-label,
+.account-expediente-short {
+  min-width: 0;
+}
+
+.account-totals span {
+  gap: 6px;
+}
+
+.account-totals small {
+  color: inherit;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .055em;
+  line-height: 1;
+  text-transform: uppercase;
+  opacity: .78;
+}
+
+.account-totals b {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: 1;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) {
+  --detail-rail-row: 14px;
+  --account-student-row-min: 112px;
+  --account-tools-row-min: 42px;
+  --account-footer-row-min: 36px;
+  padding: 5px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .detail-expand-rail {
+  min-height: var(--detail-rail-row);
+  margin: -5px -2px -2px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .detail-expand-zone {
+  height: var(--detail-rail-row);
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-student-composition {
+  gap: 7px;
+  padding: 9px 11px 8px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-main {
+  gap: 8px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-identity {
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .student-account-photo-card {
+  --student-account-photo-size: 58px;
+  --student-account-photo-radius: 17px;
+  --student-account-photo-inner-inset: 5px;
+  --student-account-photo-inner-radius: 14px;
+  --student-account-photo-orb-height: 21px;
+  --student-account-photo-fallback-size: 40px;
+  --student-account-photo-fallback-font-size: 15px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-copy h2 {
+  margin-bottom: 4px;
+  font-size: 14px;
+  line-height: 1.08;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-copy p {
+  gap: 5px;
+  font-size: 10.25px;
+  line-height: 1.15;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .student-code {
+  height: 17px;
+  padding-inline: 7px;
+  font-size: 9.5px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .tipo-ingreso-row {
+  margin-top: 5px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .tipo-ingreso-badge {
+  min-height: 21px;
+  padding-inline: 7px;
+  font-size: 9.8px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .tipo-ingreso-badge svg {
+  width: 15px;
+  height: 15px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .detail-section-badges {
+  display: none;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-top-actions {
+  gap: 5px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .ingreso-icon-button,
+.student-details-shell:not(.student-details-shell--expanded) .danger-icon-button,
+.student-details-shell:not(.student-details-shell--expanded) .plain-icon-button {
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-actions {
+  grid-template-columns: minmax(112px, 1fr) repeat(4, 34px);
+  gap: 6px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button {
+  height: 30px;
+  padding-inline: 8px;
+  border-radius: 9px;
+  font-size: 10.2px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--primary {
+  justify-content: flex-start;
+  padding-inline: 10px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button:not(.profile-action-button--primary) {
+  width: 34px;
+  padding: 0;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button:not(.profile-action-button--primary) .profile-action-label,
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--menu .profile-action-caret {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-header {
+  grid-template-columns: minmax(146px, auto) minmax(128px, 1fr) 30px minmax(78px, auto);
+  grid-template-areas: "title search view total";
+  min-height: 0;
+  gap: 6px;
+  padding: 5px 10px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-title-row {
+  gap: 5px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-header h3 {
+  font-size: 13px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-sync-indicator {
+  width: auto;
+  min-width: 7px;
+  max-width: 7px;
+  min-height: 18px;
+  gap: 0;
+  opacity: 1;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-sync-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-sync-indicator i {
+  width: 7px;
+  height: 7px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-expediente-button {
+  height: 21px;
+  max-width: none;
+  gap: 4px;
+  padding-inline: 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  letter-spacing: 0;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-expediente-label {
+  display: none;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-expediente-short {
+  display: inline;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-search-control {
+  height: 30px;
+  padding-inline: 9px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-search-control input {
+  font-size: 10.5px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-view-toggle {
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
+  border-radius: 9px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-totals span {
+  min-height: 30px;
+  padding-inline: 9px;
+  border-radius: 9px;
+  font-size: 10px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap thead th {
+  height: 27px;
+  padding-inline: 7px;
+  font-size: 8.5px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tbody td {
+  height: 35px;
+  padding-inline: 7px;
+  font-size: 10.2px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .col-check {
+  width: 30px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .col-progress {
+  width: 62px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .col-money {
+  width: 72px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .col-actions {
+  width: 34px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .concept-cell strong {
+  margin-bottom: 1px;
+  font-size: 10.3px;
+  line-height: 1.08;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .concept-cell small {
+  font-size: 9px;
+  line-height: 1.08;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .progress-cell em {
+  width: 42px;
+  height: 19px;
+  border-width: 1.4px;
+  font-size: 8.7px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .debt-check {
+  width: 14px;
+  height: 14px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .menu-cell button {
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  border-radius: 7px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .menu-cell button:not(:first-child) {
+  display: none;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-footer {
+  min-height: 36px;
+  padding-inline: 10px;
+  font-size: 10.8px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-footer strong {
+  gap: 8px;
+  font-size: 10.7px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-footer b {
+  font-size: 15px;
+}
+
+@container student-detail-panel (max-width: 760px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap table {
+    min-width: 0;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .col-amount,
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .col-payments {
+    display: none;
+    width: 0;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .amount-cell,
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .payments-cell {
+    display: none;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .col-balance {
+    width: 72px;
+  }
+}
+
+@container student-detail-panel (max-width: 560px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-header {
+    grid-template-columns: minmax(0, 1fr) 30px minmax(78px, auto);
+    grid-template-areas:
+      "title view total"
+      "search search search";
+    gap: 5px 6px;
+    padding-block: 5px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-search-control {
+    height: 28px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-totals span {
+    min-height: 28px;
+  }
+}
+
+@container student-detail-panel (max-height: 620px) {
+  .student-details-shell:not(.student-details-shell--expanded) {
+    --detail-rail-row: 12px;
+    --account-student-row-min: 104px;
+    --account-tools-row-min: 38px;
+    --account-footer-row-min: 34px;
+    padding: 4px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-student-composition {
+    gap: 6px;
+    padding: 8px 10px 7px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-identity {
+    grid-template-columns: 54px minmax(0, 1fr);
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .student-account-photo-card {
+    --student-account-photo-size: 54px;
+    --student-account-photo-radius: 16px;
+    --student-account-photo-fallback-size: 37px;
+    --student-account-photo-fallback-font-size: 14px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-copy h2 {
+    margin-bottom: 3px;
+    font-size: 13.2px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-copy p {
+    font-size: 9.8px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .tipo-ingreso-row {
+    margin-top: 4px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button {
+    height: 28px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button:not(.profile-action-button--primary) {
+    width: 32px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
+    grid-template-columns: minmax(108px, 1fr) repeat(4, 32px);
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-header {
+    padding-block: 4px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap thead th {
+    height: 25px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tbody td {
+    height: 32px;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-footer {
+    min-height: 34px;
+  }
+}

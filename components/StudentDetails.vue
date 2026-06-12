@@ -206,27 +206,39 @@
           >
             <button
               class="profile-action-button profile-action-button--primary"
+              title="Pagar conceptos seleccionados"
               :disabled="!selectedDebts.length"
               @click="showPaymentModal = true"
             >
-              <LucideCreditCard :size="15" /> Pagar ({{ selectedDebts.length }})
+              <LucideCreditCard :size="15" />
+              <span class="profile-action-label">Pagar</span>
+              <span class="profile-action-count">({{ selectedDebts.length }})</span>
             </button>
             <button
               class="profile-action-button"
+              title="Facturar conceptos seleccionados"
               :disabled="!selectedDebts.length"
               @click="showInvoiceModal = true"
             >
-              <LucideFileText :size="15" /> Facturar
+              <LucideFileText :size="15" />
+              <span class="profile-action-label">Facturar</span>
             </button>
             <button
               class="profile-action-button"
               type="button"
+              title="Carta de no adeudo"
               @click="showNoAdeudoModal = true"
             >
-              <LucideShieldCheck :size="15" /> No adeudo
+              <LucideShieldCheck :size="15" />
+              <span class="profile-action-label">No adeudo</span>
             </button>
-            <button class="profile-action-button" @click="showDocModal = true">
-              <LucideFilePlus :size="15" /> Agregar documento
+            <button
+              class="profile-action-button"
+              title="Agregar documento"
+              @click="showDocModal = true"
+            >
+              <LucideFilePlus :size="15" />
+              <span class="profile-action-label">Documento</span>
             </button>
             <button
               class="profile-action-button profile-action-button--menu"
@@ -236,7 +248,7 @@
               @click="showStudentActionsMenu"
             >
               <LucideMoreVertical :size="15" />
-              <span>Más</span>
+              <span class="profile-action-label">Más</span>
               <LucideChevronDown class="profile-action-caret" :size="14" />
             </button>
           </div>
@@ -285,7 +297,7 @@
                   @keydown.space.prevent="openFinancialSyncDiagnostics"
                 >
                   <i aria-hidden="true"></i>
-                  {{ accountSyncLabel }}
+                  <span class="account-sync-label">{{ accountSyncLabel }}</span>
                 </span>
                 <button
                   class="account-expediente-button"
@@ -295,7 +307,9 @@
                   @click.stop="emit('open-operator-info', accountOverlaySource)"
                 >
                   <LucideShieldCheck :size="13" />
-                  Expediente {{ accountExpedienteProgress.progress }}%
+                  <span class="account-expediente-label">Expediente</span>
+                  <span class="account-expediente-short">Exp.</span>
+                  {{ accountExpedienteProgress.progress }}%
                 </button>
               </div>
             </div>
@@ -367,7 +381,10 @@
               <LucideFileText v-else :size="15" aria-hidden="true" />
             </button>
             <div class="account-totals">
-              <span>Deuda: ${{ format(accountDebtTotal) }}</span>
+              <span>
+                <small>Deuda</small>
+                <b>${{ format(accountDebtTotal) }}</b>
+              </span>
             </div>
           </template>
         </div>
@@ -419,7 +436,10 @@
             <LucideFileText v-else :size="15" aria-hidden="true" />
           </button>
           <div class="account-totals">
-            <span>Deuda: ${{ format(accountDebtTotal) }}</span>
+            <span>
+              <small>Deuda</small>
+              <b>${{ format(accountDebtTotal) }}</b>
+            </span>
           </div>
           <button
             class="account-filter-button"
@@ -544,9 +564,9 @@
                   <col class="col-check" />
                   <col class="col-progress" />
                   <col class="col-concept" />
-                  <col class="col-money" />
-                  <col class="col-money" />
-                  <col class="col-money" />
+                  <col class="col-money col-amount" />
+                  <col class="col-money col-payments" />
+                  <col class="col-money col-balance" />
                   <col class="col-actions" />
                 </colgroup>
                 <thead>
@@ -561,9 +581,9 @@
                     </th>
                     <th class="progress-cell">Progreso</th>
                     <th>Concepto / Mes</th>
-                    <th class="money-cell">Importe</th>
-                    <th class="money-cell">Pagos</th>
-                    <th class="money-cell">Saldo</th>
+                    <th class="money-cell amount-cell">Importe</th>
+                    <th class="money-cell payments-cell">Pagos</th>
+                    <th class="money-cell balance-cell">Saldo</th>
                     <th class="menu-cell"></th>
                   </tr>
                 </thead>
@@ -648,7 +668,7 @@
                           >
                         </small>
                       </td>
-                      <td class="money-cell" data-label="Importe">
+                      <td class="money-cell amount-cell" data-label="Importe">
                         ${{ format(debt.subtotal) }}
                         <button
                           v-if="debt.montoFinalPendiente"
@@ -659,11 +679,11 @@
                           Fijar
                         </button>
                       </td>
-                      <td class="money-cell paid" data-label="Pagos">
+                      <td class="money-cell payments-cell paid" data-label="Pagos">
                         ${{ format(debt.pagos) }}
                       </td>
                       <td
-                        class="money-cell"
+                        class="money-cell balance-cell"
                         :class="{ danger: debt.saldo > 0 }"
                         data-label="Saldo"
                       >
@@ -2662,6 +2682,56 @@ const handleInvoiceSuccess = () => {
 
 .timeline-differential strong {
   color: #624808;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-timeline-wrap {
+  border-radius: 10px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-header {
+  gap: 8px;
+  padding: 8px 10px 5px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-header strong {
+  font-size: 0.7rem;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-header span {
+  font-size: 0.6rem;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-action {
+  height: 24px;
+  padding-inline: 8px;
+  border-radius: 8px;
+  font-size: 0.61rem;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-track {
+  gap: 5px;
+  padding: 0 10px 9px 16px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-track::before {
+  left: 16px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-segment {
+  min-height: 34px;
+  grid-template-columns: minmax(58px, 0.48fr) minmax(0, 1.7fr) minmax(58px, 0.5fr);
+  gap: 7px;
+  padding: 6px 8px 6px 16px;
+  border-radius: 10px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-segment strong {
+  font-size: 0.66rem;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-segment span,
+.student-details-shell:not(.student-details-shell--expanded) .timeline-segment em {
+  font-size: 0.59rem;
 }
 
 @media (max-width: 760px) {
