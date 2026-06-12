@@ -50,8 +50,8 @@
             <div>
               <h2 id="ingreso-cycle-title">Ajustar grado y ciclo</h2>
               <p>
-                Selecciona el ciclo de ingreso y la posición académica base
-                del alumno.
+                Selecciona el ciclo de ingreso y la posición académica que
+                se guardará.
               </p>
               <p>
                 Con estos datos el sistema actualiza base y matrícula sin recargar
@@ -152,16 +152,15 @@
 
               <section
                 class="ingreso-position-card"
-                aria-label="Posición académica actual"
+                aria-label="Posición académica seleccionada"
               >
                 <div class="ingreso-position-header">
                   <div>
                     <h4>
-                      2. Posición en {{ formatCicloLabel(targetCicloKey) }}
+                      2. Posición a guardar
                     </h4>
                     <p>
-                      Nivel y grado se guardan juntos; no se guarda un grado
-                      aislado.
+                      Nivel, grado y ciclo de ingreso se guardan juntos.
                     </p>
                   </div>
                   <strong>{{ targetPositionLabel }}</strong>
@@ -181,7 +180,7 @@
                     Anterior
                   </button>
                   <div>
-                    <small>Posición actual del alumno</small>
+                    <small>Posición seleccionada</small>
                     <strong>{{ targetPositionLabel }}</strong>
                   </div>
                   <button
@@ -308,7 +307,7 @@
           <span class="ingreso-footer-note">
             <span aria-hidden="true"><LucideShieldCheck :size="22" /></span>
             Este cambio actualiza el grado, el ciclo de ingreso y la posición
-            base derivada.
+            académica seleccionada.
           </span>
           <div class="ingreso-footer-actions">
             <button

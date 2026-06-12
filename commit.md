@@ -1,1 +1,1 @@
-Corrige depuración por otro plantel y alta de ciclo de ingreso.
+Aclara la interfaz del ciclo de ingreso.
