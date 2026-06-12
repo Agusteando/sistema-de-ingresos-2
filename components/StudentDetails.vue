@@ -918,22 +918,13 @@ const {
 } = useAccountStateCacheSync();
 const state = useState("globalState");
 const authRoleCookie = useCookie("auth_role");
-const superAdminCookie = useCookie("auth_is_super_admin");
 const roleTokens = computed(() =>
   String(authRoleCookie.value || "")
     .split(",")
     .map((role) => role.trim().toLowerCase())
     .filter(Boolean),
 );
-const isSuperAdmin = computed(
-  () =>
-    superAdminCookie.value === "true" ||
-    roleTokens.value.some((role) =>
-      ["global", "superadmin", "role_super_admin", "role_superadmin"].includes(
-        role,
-      ),
-    ),
-);
+const isSuperAdmin = computed(() => roleTokens.value.includes("superadmin"));
 
 const debts = ref([]);
 const siblings = ref([]);

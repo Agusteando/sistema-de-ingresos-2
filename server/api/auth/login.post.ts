@@ -70,7 +70,7 @@ const ensureLocalUser = async (payload: any, requestedPlantel: string): Promise<
   if (!user) {
     const allUsers = await query<any[]>('SELECT id FROM users LIMIT 1')
     const firstUser = allUsers.length === 0
-    const defaultRole = seedAdmin || firstUser ? 'global' : 'plantel'
+    const defaultRole = seedAdmin || firstUser ? 'superadmin' : 'plantel'
     const defaultPlanteles = seedAdmin || firstUser ? ALL_PLANTELES : (requestedPlantel || PLANTELES_LIST[0])
     const defaultPlantel = requestedPlantel || PLANTELES_LIST[0]
 
@@ -98,8 +98,8 @@ const ensureLocalUser = async (payload: any, requestedPlantel: string): Promise<
     }
   } else {
     if (seedAdmin && !isSuperAdminRole(user.role)) {
-      user.role = 'global'
-      await query('UPDATE users SET role = ? WHERE id = ?', ['global', user.id])
+      user.role = 'superadmin'
+      await query('UPDATE users SET role = ? WHERE id = ?', ['superadmin', user.id])
     }
 
     if (payload.picture && user.avatar !== payload.picture) {
@@ -166,7 +166,7 @@ export default defineEventHandler(async (event) => {
       ? {
           username: payload.name || normalizedEmail,
           email: normalizedEmail,
-          role: 'global',
+          role: 'superadmin',
           planteles: ALL_PLANTELES,
           plantel: requestedPlantel || PLANTELES_LIST[0],
           avatar: payload.picture || null
@@ -217,7 +217,7 @@ export default defineEventHandler(async (event) => {
     setCookie(event, 'auth_nav_mode', controlEscolarOnly ? 'control-escolar' : 'financial', opts)
     setCookie(event, 'auth_has_control_escolar', controlEscolar || superAdmin ? 'true' : 'false', opts)
     setCookie(event, 'auth_has_financial_access', superAdmin || !controlEscolarOnly ? 'true' : 'false', opts)
-    setCookie(event, 'auth_is_super_admin', superAdmin ? 'true' : 'false', opts)
+    deleteCookie(event, 'auth_is_super_admin', { path: '/' })
     setCookie(event, 'db_bridge_agent_id', homePlantel || PLANTELES_LIST[0], opts)
 
     if (controlEscolar || superAdmin) {

@@ -202,11 +202,10 @@ const audit = ref({ summary: {}, timeline: [], updatedStudents: [], filters: {} 
 const activePlantelCookie = useCookie('auth_active_plantel')
 const plantelesCookie = useCookie('auth_planteles')
 const roleCookie = useCookie('auth_role')
-const superAdminCookie = useCookie('auth_is_super_admin')
 const activeCicloCookie = useCookie('active_ciclo')
 
 const roleTokens = computed(() => String(roleCookie.value || '').split(',').map((role) => role.trim().toLowerCase()).filter(Boolean))
-const isSuperAdmin = computed(() => superAdminCookie.value === 'true' || roleTokens.value.some((role) => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
+const isSuperAdmin = computed(() => roleTokens.value.includes('superadmin'))
 const visiblePlanteles = computed(() => {
   if (isSuperAdmin.value) return [...PLANTELES_LIST]
   const parsed = String(plantelesCookie.value || '')

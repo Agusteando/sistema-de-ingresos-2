@@ -238,7 +238,7 @@
                     <component :is="accessIcon(u)" :size="14" />
                     {{ accessLabel(u) }}
                   </span>
-                  <div class="access-switch" v-if="!isProtectedUser(u)">
+                  <div class="access-switch">
                     <button type="button" :class="{ active: accessMode(u) === 'admin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin')">Fin</button>
                     <button type="button" :class="{ active: accessMode(u) === 'control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'control')">CTRL</button>
                     <button type="button" :class="{ active: accessMode(u) === 'admin_control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin_control')">Ambos</button>
@@ -303,7 +303,7 @@
               <span v-for="p in plantelesFor(u)" :key="`mobile-${userKey(u)}-${p}`" class="plantel-chip">{{ p }}</span>
             </div>
             <span v-else class="muted-pill">Sin plantel</span>
-            <div class="access-switch mobile-access-switch" v-if="!isProtectedUser(u)" @click.stop>
+            <div class="access-switch mobile-access-switch" @click.stop>
               <button type="button" :class="{ active: accessMode(u) === 'admin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin')">Fin</button>
               <button type="button" :class="{ active: accessMode(u) === 'control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'control')">CTRL</button>
               <button type="button" :class="{ active: accessMode(u) === 'admin_control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin_control')">Ambos</button>
@@ -356,7 +356,7 @@
           <component :is="accessIcon(activeUser)" :size="14" />
           {{ accessLabel(activeUser) }}
         </span>
-        <div class="drawer-access-actions" v-if="!isProtectedUser(activeUser)">
+        <div class="drawer-access-actions">
           <button type="button" :class="{ active: accessMode(activeUser) === 'admin' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'admin')">Financiero</button>
           <button type="button" :class="{ active: accessMode(activeUser) === 'control' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'control')">Control Escolar</button>
           <button type="button" :class="{ active: accessMode(activeUser) === 'admin_control' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'admin_control')">Ambos</button>
@@ -660,7 +660,7 @@ const { openMenu } = useContextMenu()
 
 const WORKSPACE_DOMAIN = 'casitaiedis.edu.mx'
 const CONTROL_ROLE = 'ROLE_CTRL'
-const SUPERADMIN_ROLES = new Set(['global', 'superadmin', 'role_super_admin', 'role_superadmin'])
+const SUPERADMIN_ROLES = new Set(['superadmin'])
 const PROTECTED_EMAILS = new Set([
   `desarrollo.tecnologico@${WORKSPACE_DOMAIN}`,
   `coord.admon@${WORKSPACE_DOMAIN}`
@@ -1178,7 +1178,7 @@ const resolveClientRoleForAccess = (role, mode) => {
   const tokens = Array.from(new Set(roleTokens(role).map(token => token.toUpperCase())))
   const withoutControl = tokens.filter(token => token !== CONTROL_ROLE)
   const baseRoles = withoutControl.filter(token => token !== 'PLANTEL' && !SUPERADMIN_ROLES.has(token.toLowerCase()))
-  if (mode === 'superadmin') return 'global'
+  if (mode === 'superadmin') return 'superadmin'
   if (mode === 'control') return CONTROL_ROLE
   if (mode === 'admin_control') return Array.from(new Set([...(baseRoles.length ? baseRoles : ['ROLE_HUSKY_USER']), CONTROL_ROLE])).join(',')
   if (mode === 'admin') return (baseRoles.length ? baseRoles : ['ROLE_HUSKY_USER']).join(',')
@@ -1258,7 +1258,8 @@ const undoLastChange = async () => {
 }
 
 const applyUserPatch = async (emails, patch, options = {}) => {
-  const normalizedEmails = Array.from(new Set((emails || []).map(normalizeEmail).filter(email => email && !isProtectedEmail(email))))
+  const allowsProtectedRoleChange = Boolean(patch?.accessMode) && !('ingresosBlocked' in patch) && !('ingresos_blocked' in patch) && !('replacePlanteles' in patch) && !patch.addPlanteles && !patch.removePlanteles
+  const normalizedEmails = Array.from(new Set((emails || []).map(normalizeEmail).filter(email => email && (allowsProtectedRoleChange || !isProtectedEmail(email)))))
   if (!normalizedEmails.length) return null
   const rollbackRows = cloneRowsForRollback(normalizedEmails)
   if (options.optimistic !== false) patchLocalUsers(normalizedEmails, patch)
@@ -1285,7 +1286,7 @@ const applyUserPatch = async (emails, patch, options = {}) => {
 }
 
 const requestAccessChange = async (u, mode) => {
-  if (!u || isProtectedUser(u) || accessMode(u) === mode) return
+  if (!u || accessMode(u) === mode) return
   const previousMode = accessMode(u)
   const email = normalizeEmail(u.email)
   const response = await applyUserPatch([email], { accessMode: mode }, {
@@ -1313,8 +1314,9 @@ const previewForPatch = (rows, patch) => rows.slice(0, 5).map((u) => {
 
 const requestBulkUpdate = (patch, title, body, tone = 'safe', sourceEmails = selectedEmails.value) => {
   const rawEmails = Array.from(new Set(sourceEmails.map(normalizeEmail).filter(Boolean)))
-  const targetRows = rowsForEmails(rawEmails).filter(u => !isProtectedUser(u))
-  const skippedRows = rowsForEmails(rawEmails).filter(isProtectedUser)
+  const allowsProtectedRoleChange = Boolean(patch?.accessMode) && !('ingresosBlocked' in patch) && !('ingresos_blocked' in patch) && !('replacePlanteles' in patch) && !patch.addPlanteles && !patch.removePlanteles
+  const targetRows = rowsForEmails(rawEmails).filter(u => allowsProtectedRoleChange || !isProtectedUser(u))
+  const skippedRows = rowsForEmails(rawEmails).filter(u => !allowsProtectedRoleChange && isProtectedUser(u))
   const emails = targetRows.map(u => normalizeEmail(u.email)).filter(Boolean)
   if (!emails.length) {
     show('No hay usuarios editables en la selección.', 'danger')
@@ -1425,10 +1427,10 @@ const showContextMenu = (event, u) => {
   openMenu(event, [
     { label: 'Opciones', disabled: true, action: () => {} },
     { label: 'Editar usuario', icon: LucidePencil, action: () => openModal(u) },
-    { label: 'Asignar acceso Control Escolar', icon: LucideGraduationCap, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'control') },
-    { label: 'Asignar acceso combinado', icon: LucideShieldCheck, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'admin_control') },
-    { label: 'Asignar superadmin', icon: LucideShield, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'superadmin') },
-    { label: 'Restaurar Financiero', icon: LucideShieldCheck, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'admin') },
+    { label: 'Asignar acceso Control Escolar', icon: LucideGraduationCap, action: () => requestAccessChange(u, 'control') },
+    { label: 'Asignar acceso combinado', icon: LucideShieldCheck, action: () => requestAccessChange(u, 'admin_control') },
+    { label: 'Asignar superadmin', icon: LucideShield, action: () => requestAccessChange(u, 'superadmin') },
+    { label: 'Restaurar Financiero', icon: LucideShieldCheck, action: () => requestAccessChange(u, 'admin') },
     { label: isBlocked(u) ? 'Reactivar acceso' : 'Bloquear acceso', icon: isBlocked(u) ? LucideUnlock : LucideBan, disabled: isProtectedUser(u), action: () => requestToggleBlocked(u) }
   ])
 }

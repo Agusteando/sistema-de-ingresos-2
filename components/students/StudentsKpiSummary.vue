@@ -61,7 +61,7 @@ const props = defineProps({
 defineEmits(['set-filter'])
 
 const roleTokens = computed(() => String(props.userRole || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
-const isSuperAdmin = computed(() => roleTokens.value.some(role => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
+const isSuperAdmin = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
 const formattedIncome = computed(() => `$${Number(props.globalKpis.ingresosMes).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`)
 
 const enrollmentKpis = computed(() => [

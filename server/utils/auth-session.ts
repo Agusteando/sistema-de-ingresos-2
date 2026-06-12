@@ -1,6 +1,6 @@
 import { PLANTELES_LIST } from '../../utils/constants'
 
-export type AuthRole = 'plantel' | 'global' | 'superadmin' | string
+export type AuthRole = 'plantel' | 'superadmin' | string
 
 export type AuthSessionUser = {
   email: string
@@ -17,7 +17,7 @@ export type AuthSessionUser = {
   hasFinancialAccess: boolean
 }
 
-const SUPERADMIN_ROLES = new Set(['global', 'superadmin', 'role_super_admin', 'role_superadmin'])
+const SUPERADMIN_ROLES = new Set(['superadmin'])
 const CONTROL_ESCOLAR_ROLE = 'role_ctrl'
 const VALID_PLANTELES = new Set(PLANTELES_LIST)
 
@@ -101,7 +101,7 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
 
   const role = String(getCookie(event, 'auth_role') || 'plantel').trim() || 'plantel'
   const roles = parseRoles(role)
-  const superAdmin = isSuperAdminRole(role) || String(getCookie(event, 'auth_is_super_admin') || '') === 'true'
+  const superAdmin = isSuperAdminRole(role)
   const controlEscolar = hasControlEscolarRole(role)
   const controlEscolarOnly = !superAdmin && isControlEscolarOnlyRole(role)
   const allowedPlanteles = resolveAllowedPlanteles(event)

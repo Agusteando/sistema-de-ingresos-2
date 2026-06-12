@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   setCookie(event, 'auth_nav_mode', user.isControlEscolarOnly ? 'control-escolar' : 'financial', cookieOpts)
   setCookie(event, 'auth_has_control_escolar', user.hasControlEscolarRole || user.isSuperAdmin ? 'true' : 'false', cookieOpts)
   setCookie(event, 'auth_has_financial_access', user.hasFinancialAccess ? 'true' : 'false', cookieOpts)
-  setCookie(event, 'auth_is_super_admin', user.isSuperAdmin ? 'true' : 'false', cookieOpts)
+  deleteCookie(event, 'auth_is_super_admin', { path: '/' })
   setCookie(event, 'db_bridge_agent_id', dataBridgeAgentId, cookieOpts)
 
   event.context.dbBridgeAgentId = dataBridgeAgentId

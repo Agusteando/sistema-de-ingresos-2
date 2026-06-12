@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const { template, asunto, destinatarios } = await readBody(event)
   const user = event.context.user
 
-  if (!user || !['global', 'plantel'].includes(user.role)) {
+  if (!user || !['superadmin', 'plantel'].includes(user.role)) {
     throw createError({ statusCode: 403, message: 'Operación denegada' })
   }
 

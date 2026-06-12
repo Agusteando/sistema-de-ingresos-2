@@ -862,7 +862,7 @@ export const ensureSchema = async () => {
           const allPlanteles = 'PREEM,PREET,CT,CM,DM,CO,DC,PM,PT,SM,ST,IS,ISM'
 
           await rawQuery(
-            `INSERT INTO users (username, password, email, planteles, role, plantel) VALUES (?, ?, ?, ?, 'global', ?)`,
+            `INSERT INTO users (username, password, email, planteles, role, plantel) VALUES (?, ?, ?, ?, 'superadmin', ?)`,
             ['Super Administrador', hash, superAdminEmail, allPlanteles, 'PREEM']
           )
         }

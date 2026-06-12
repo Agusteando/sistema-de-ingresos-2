@@ -247,7 +247,7 @@ const { show } = useToast()
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 const activePlantel = ref(useCookie('auth_active_plantel').value || '')
 const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
-const isSuperAdmin = computed(() => roleTokens.value.some(role => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
+const isSuperAdmin = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
 const canFilterPlantel = computed(() => isSuperAdmin.value && activePlantel.value === 'GLOBAL')
 const activeReport = ref(route.query.tipo === 'corte' && isSuperAdmin.value ? 'corte' : 'concepto')
 

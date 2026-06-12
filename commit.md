@@ -1,1 +1,1 @@
-Permite asignar superadministradores desde Usuarios.
+Normaliza superadmin como rol único y permite asignarlo desde Usuarios.

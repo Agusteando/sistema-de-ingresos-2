@@ -31,7 +31,7 @@ const TABLE = 'users'
 export const CONTROL_ESCOLAR_ROLE = 'ROLE_CTRL'
 export const NO_ADEUDO_CONTROL_PLANTELES_COLUMN = 'no_adeudo_control_planteles'
 const DEFAULT_EXTERNAL_ROLE = 'ROLE_HUSKY_USER'
-const SUPERADMIN_ROLES = new Set(['global', 'superadmin', 'role_super_admin', 'role_superadmin'])
+const SUPERADMIN_ROLES = new Set(['superadmin'])
 const PROTECTED_EMAILS = new Set([
   `desarrollo.tecnologico@${WORKSPACE_DOMAIN}`,
   `coord.admon@${WORKSPACE_DOMAIN}`
@@ -70,7 +70,7 @@ const resolveRoleForWrite = (body: ExternalUserInput, currentRole?: string | nul
   const sourceRoles = splitRoleTokens(currentRole || body.role || DEFAULT_EXTERNAL_ROLE)
 
   if (accessMode === 'superadmin') {
-    return 'global'
+    return 'superadmin'
   }
 
   if (accessMode === 'control') {
@@ -674,7 +674,8 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & {
       skipped.push({ email: email || String(row.id || ''), reason: 'Correo fuera del dominio institucional.' })
       continue
     }
-    if (PROTECTED_EMAILS.has(email) && (shouldUpdateBlocked || shouldUpdateRole || shouldUpdatePlanteles)) {
+    const protectedRoleOnlyChange = PROTECTED_EMAILS.has(email) && shouldUpdateRole && !shouldUpdateBlocked && !shouldUpdatePlanteles
+    if (PROTECTED_EMAILS.has(email) && !protectedRoleOnlyChange && (shouldUpdateBlocked || shouldUpdateRole || shouldUpdatePlanteles)) {
       skipped.push({ email, reason: 'Usuario protegido.' })
       continue
     }

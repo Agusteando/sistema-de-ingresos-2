@@ -386,7 +386,7 @@ const state = useState('globalState')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 const activePlantelCookie = useCookie('auth_active_plantel')
 const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
-const isSuperAdminRole = computed(() => roleTokens.value.some(role => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
+const isSuperAdminRole = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
 const isControlEscolarOnly = computed(() => !isSuperAdminRole.value && roleTokens.value.includes('role_ctrl'))
 const canOpenStudentOperatorInfo = computed(() => !isControlEscolarOnly.value)
 
