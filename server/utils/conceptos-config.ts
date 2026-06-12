@@ -1,276 +1,257 @@
 import { query, executeStatementTransaction, type SqlStatement } from './db'
-import { controlEscolarCentralQuery } from './control-escolar-central'
-import { formatCicloLabel, normalizeCicloKey } from '../../shared/utils/ciclo'
+import { controlEscolarCentralQuery, getControlEscolarCentralDb, getCentralTableColumns } from './control-escolar-central'
+import { getTrustedAuthUser, type AuthSessionUser } from './auth-session'
+import { normalizeCicloKey } from '../../shared/utils/ciclo'
 
-export const CONCEPTO_CATEGORY_DEFINITIONS = [
-  { clave: 'inscripcion', nombre: 'Inscripción', orden: 10 },
-  { clave: 'talleres_servicios', nombre: 'Talleres y Servicios', orden: 20 },
-  { clave: 'servicio_global', nombre: 'Servicio global', orden: 25 },
-  { clave: 'curso_verano', nombre: 'Curso de Verano', orden: 30 },
-  { clave: 'mensual_baja4', nombre: 'Mensual baja 4', orden: 40 },
-  { clave: 'issste', nombre: 'ISSSTE', orden: 50 },
-  { clave: 'otro', nombre: 'Otro', orden: 999 }
+export const CONCEPTO_CATEGORIES = [
+  { key: 'regular', legacyKey: 'planteles', label: 'Inscripción', order: 10 },
+  { key: 'talleres_servicios', legacyKey: 'planteles_talleres_servicios', label: 'Talleres y Servicios', order: 20 },
+  { key: 'servicio_global', legacyKey: 'serviciosGlobales', label: 'Servicio global', order: 25 },
+  { key: 'curso_verano', legacyKey: 'planteles_curso_verano', label: 'Curso de Verano', order: 30 },
+  { key: 'mensual_baja4', legacyKey: 'planteles_mensual_baja4', label: 'Mensual baja 4', order: 40 },
+  { key: 'issste', legacyKey: 'planteles_issste', label: 'ISSSTE', order: 50 },
+  { key: 'otro', legacyKey: 'planteles_otro', label: 'Otro', order: 999 }
 ]
 
-export const CONCEPTO_CATEGORY_KEYS = new Set(CONCEPTO_CATEGORY_DEFINITIONS.map((item) => item.clave))
+export const DEFAULT_PLANTELES = ['PT', 'PM', 'ST', 'SM', 'PREET', 'PREEM']
 
-export type ConceptosConfigSource = 'central' | 'local'
-
-type DbReader = <T>(sql: string, params?: any[]) => Promise<T>
-
-const normalizeText = (value: unknown) => String(value ?? '').trim()
-const normalizePlantel = (value: unknown) => normalizeText(value).toUpperCase()
-const normalizeCycleName = (value: unknown) => {
-  const text = normalizeText(value)
-  return text ? formatCicloLabel(normalizeCicloKey(text)) : ''
+export type ConceptosConfigRow = {
+  id: number
+  cycle_name: string
+  plantel: string
+  concepto_id: number
+  concepto_nombre: string
+  enrollment_type: string
+  months_json?: string | null
+  servicio_clave?: string | null
+  servicio_nombre?: string | null
+  servicio_icono?: string | null
+  servicio_color?: string | null
+  activo?: number | boolean | null
+  sync_version?: number | string | null
+  updated_at?: string | null
+  updated_by?: string | null
 }
 
+type CycleRow = { cycle_name: string; is_current: number | boolean }
+type ConceptRow = {
+  id: number
+  concepto: string
+  ciclo_escolar?: string | null
+  ciclo?: string | null
+  costo?: number | string | null
+  montoFinal?: number | string | null
+  monto_final?: number | string | null
+  meses?: number | string | null
+  plazo?: string | null
+  eventual?: number | boolean | null
+}
+
+const normalizeText = (value: unknown, maxLength = 255) => String(value ?? '').trim().slice(0, maxLength)
+const normalizePlantel = (value: unknown) => normalizeText(value, 40).toUpperCase()
 const normalizeCategory = (value: unknown) => {
-  const key = normalizeText(value || 'inscripcion').toLowerCase()
-  return CONCEPTO_CATEGORY_KEYS.has(key) ? key : 'otro'
+  const raw = normalizeText(value || 'regular', 80).toLowerCase()
+  if (raw === 'inscripcion' || raw === 'regular') return 'regular'
+  if (raw === 'talleres' || raw === 'talleres_y_servicios') return 'talleres_servicios'
+  return CONCEPTO_CATEGORIES.some((entry) => entry.key === raw) ? raw : 'otro'
 }
-const normalizeBool = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes'].includes(String(value ?? '').trim().toLowerCase()) ? 1 : 0
+const normalizeServiceKey = (value: unknown) => normalizeText(value, 120)
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '')
 
-const dbReader = (source: ConceptosConfigSource): DbReader => {
-  return source === 'central' ? controlEscolarCentralQuery : query
-}
-
-export const categoryDefinitions = () => CONCEPTO_CATEGORY_DEFINITIONS.map((entry) => ({ ...entry }))
-
-export const normalizeMonths = (value: unknown) => {
-  if (Array.isArray(value)) return value.map((item) => normalizeText(item)).filter(Boolean)
-  const raw = normalizeText(value)
+const parseMonths = (value: unknown) => {
+  if (Array.isArray(value)) return value.map((entry) => normalizeText(entry, 20)).filter(Boolean)
+  const raw = normalizeText(value, 1000)
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.map((item) => normalizeText(item)).filter(Boolean) : []
-  } catch (e) {
-    return raw.split(',').map((item) => normalizeText(item)).filter(Boolean)
+    return Array.isArray(parsed) ? parsed.map((entry) => normalizeText(entry, 20)).filter(Boolean) : []
+  } catch {
+    return raw.split(',').map((entry) => normalizeText(entry, 20)).filter(Boolean)
   }
 }
 
-const parseJsonArray = (value: unknown) => normalizeMonths(value)
+const stringifyMonths = (value: unknown) => JSON.stringify(parseMonths(value))
+const isActive = (value: unknown) => value === undefined || value === null ? true : Number(value) !== 0
 
-const quoteSyncVersion = (value: unknown) => {
-  const number = Number(value || 1)
-  return Number.isFinite(number) && number > 0 ? Math.trunc(number) : 1
+export const canManageConceptosConfig = (user: AuthSessionUser) => {
+  if (user.isSuperAdmin) return true
+  return user.roles.some((role) => ['admin', 'role_admin', 'conceptos_admin', 'role_conceptos'].includes(String(role || '').toLowerCase()))
 }
 
-export const conceptIdFrom = (value: unknown) => {
-  const normalized = normalizeText(value)
-  if (!normalized) return ''
-  return normalized
+export const requireConceptosAdmin = async (event: any) => {
+  const user = await getTrustedAuthUser(event)
+  if (!canManageConceptosConfig(user)) {
+    throw createError({ statusCode: 403, message: 'Solo super admin puede modificar esta configuración.' })
+  }
+  return user
 }
 
-export const readConceptosCatalog = async (source: ConceptosConfigSource = 'local', options: { ciclo?: string; q?: string; limit?: number } = {}) => {
-  const reader = dbReader(source)
-  const ciclo = normalizeText(options.ciclo)
-  const search = normalizeText(options.q).toLowerCase()
-  const limit = Math.max(1, Math.min(500, Number(options.limit || 200)))
-  const params: any[] = []
-  const where: string[] = ['activo = 1']
+const categoryFor = (key: unknown) => CONCEPTO_CATEGORIES.find((entry) => entry.key === normalizeCategory(key)) || CONCEPTO_CATEGORIES[CONCEPTO_CATEGORIES.length - 1]
 
-  if (ciclo) {
-    where.push('(ciclo IS NULL OR ciclo = ? OR ciclo = ? OR ciclo = ?)')
-    params.push('', normalizeCicloKey(ciclo), normalizeCycleName(ciclo))
+const normalizeMappingRow = (row: any): ConceptosConfigRow => ({
+  id: Number(row.id || 0),
+  cycle_name: normalizeCicloKey(row.cycle_name || row.ciclo || row.ciclo_escolar),
+  plantel: normalizePlantel(row.plantel),
+  concepto_id: Number(row.concepto_id || 0),
+  concepto_nombre: normalizeText(row.concepto_nombre || row.concepto || row.servicio_nombre || 'Sin concepto'),
+  enrollment_type: normalizeCategory(row.enrollment_type || row.categoria || row.categoria_clave || 'regular'),
+  months_json: normalizeText(row.months_json || '[]', 1000) || '[]',
+  servicio_clave: normalizeText(row.servicio_clave, 120) || null,
+  servicio_nombre: normalizeText(row.servicio_nombre, 160) || null,
+  servicio_icono: normalizeText(row.servicio_icono, 80) || null,
+  servicio_color: normalizeText(row.servicio_color, 40) || null,
+  activo: isActive(row.activo) ? 1 : 0,
+  sync_version: Number(row.sync_version || 1),
+  updated_at: row.updated_at || null,
+  updated_by: row.updated_by || null
+})
+
+const normalizeConceptRow = (row: any): ConceptRow => ({
+  id: Number(row.id || 0),
+  concepto: normalizeText(row.concepto || row.concepto_nombre || 'Sin concepto'),
+  ciclo_escolar: normalizeCicloKey(row.ciclo_escolar || row.ciclo || ''),
+  costo: row.costo ?? null,
+  montoFinal: row.montoFinal ?? row.monto_final ?? null,
+  meses: row.meses ?? null,
+  plazo: row.plazo ?? null,
+  eventual: row.eventual ?? null
+})
+
+const optionalCentralColumn = (columns: Set<string>, column: string, fallbackSql: string, alias = column) =>
+  columns.has(column) ? `\`${column}\`` : `${fallbackSql} AS ${alias}`
+
+export const readCentralConceptosConfig = async () => {
+  const cycleColumns = await getCentralTableColumns('config_school_cycles')
+  const cycleSyncSelect = cycleColumns.has('is_current') ? 'is_current' : '0 AS is_current'
+  const cycles = await controlEscolarCentralQuery<CycleRow[]>(
+    `SELECT cycle_name, ${cycleSyncSelect} FROM config_school_cycles ORDER BY cycle_name DESC`
+  )
+
+  const mappingColumns = await getCentralTableColumns('config_enrollment_mappings')
+  const selectParts = [
+    'id',
+    'cycle_name',
+    'plantel',
+    'concepto_id',
+    'concepto_nombre',
+    mappingColumns.has('enrollment_type') ? `IFNULL(enrollment_type, 'regular') AS enrollment_type` : `'regular' AS enrollment_type`,
+    mappingColumns.has('months_json') ? `IFNULL(months_json, '[]') AS months_json` : `'[]' AS months_json`,
+    optionalCentralColumn(mappingColumns, 'servicio_clave', 'NULL'),
+    optionalCentralColumn(mappingColumns, 'servicio_nombre', 'NULL'),
+    optionalCentralColumn(mappingColumns, 'servicio_icono', 'NULL'),
+    optionalCentralColumn(mappingColumns, 'servicio_color', 'NULL'),
+    mappingColumns.has('activo') ? `IFNULL(activo, 1) AS activo` : '1 AS activo',
+    mappingColumns.has('sync_version') ? `IFNULL(sync_version, 1) AS sync_version` : '1 AS sync_version',
+    optionalCentralColumn(mappingColumns, 'updated_at', 'NULL'),
+    optionalCentralColumn(mappingColumns, 'updated_by', 'NULL')
+  ]
+
+  const mappings = await controlEscolarCentralQuery<any[]>(
+    `SELECT ${selectParts.join(', ')}
+       FROM config_enrollment_mappings
+      ORDER BY cycle_name DESC, plantel ASC, enrollment_type ASC, concepto_nombre ASC`
+  )
+
+  return {
+    source: 'central',
+    cycles: cycles.map((row) => ({ cycle_name: normalizeCicloKey(row.cycle_name), is_current: Number(row.is_current || 0) })),
+    mappings: mappings.map(normalizeMappingRow)
   }
-
-  if (search) {
-    where.push('(LOWER(concepto_nombre) LIKE ? OR CAST(concepto_id AS CHAR) = ?)')
-    params.push(`%${search}%`, search)
-  }
-
-  params.push(limit)
-
-  const rows = await reader<any[]>(`
-    SELECT id, concepto_id, concepto_nombre, costo, monto_final, meses, plazo, eventual, ciclo, activo, sync_version, updated_at
-    FROM conceptos_global
-    WHERE ${where.join(' AND ')}
-    ORDER BY concepto_nombre ASC
-    LIMIT ?
-  `, params)
-
-  return rows.map((row) => ({
-    id: Number(row.id || 0),
-    concepto_id: Number(row.concepto_id || 0),
-    concepto_nombre: normalizeText(row.concepto_nombre),
-    concepto: normalizeText(row.concepto_nombre),
-    costo: row.costo,
-    monto_final: row.monto_final,
-    montoFinal: row.monto_final,
-    meses: row.meses,
-    plazo: row.plazo,
-    eventual: Number(row.eventual || 0),
-    ciclo: normalizeText(row.ciclo),
-    activo: Number(row.activo ?? 1),
-    sync_version: quoteSyncVersion(row.sync_version),
-    updated_at: row.updated_at
-  }))
 }
 
-export const readServiciosCatalog = async (source: ConceptosConfigSource = 'local', options: { q?: string; includeInactive?: boolean } = {}) => {
-  const reader = dbReader(source)
-  const search = normalizeText(options.q).toLowerCase()
-  const params: any[] = []
-  const where: string[] = []
-
-  if (!options.includeInactive) where.push('activo = 1')
-  if (search) {
-    where.push('(LOWER(nombre) LIKE ? OR LOWER(clave) LIKE ?)')
-    params.push(`%${search}%`, `%${search}%`)
-  }
-
-  const rows = await reader<any[]>(`
-    SELECT id, clave, nombre, tipo, icono, color, orden, activo, sync_version, updated_at
-    FROM servicios_catalogo
-    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY activo DESC, orden ASC, nombre ASC
-  `, params)
-
-  return rows.map((row) => ({
-    id: Number(row.id || 0),
-    clave: normalizeText(row.clave),
-    nombre: normalizeText(row.nombre),
-    tipo: normalizeText(row.tipo) || 'servicio',
-    icono: normalizeText(row.icono),
-    color: normalizeText(row.color),
-    orden: Number(row.orden || 0),
-    activo: Number(row.activo ?? 1),
-    sync_version: quoteSyncVersion(row.sync_version),
-    updated_at: row.updated_at
-  }))
+export const readCentralConceptos = async () => {
+  const columns = await getCentralTableColumns('conceptos')
+  const selectParts = [
+    'id',
+    'concepto',
+    columns.has('ciclo') ? 'CAST(ciclo AS CHAR) AS ciclo_escolar' : `'' AS ciclo_escolar`,
+    optionalCentralColumn(columns, 'costo', 'NULL'),
+    optionalCentralColumn(columns, 'montoFinal', 'NULL'),
+    optionalCentralColumn(columns, 'meses', 'NULL'),
+    optionalCentralColumn(columns, 'plazo', 'NULL'),
+    optionalCentralColumn(columns, 'eventual', 'NULL')
+  ]
+  const rows = await controlEscolarCentralQuery<any[]>(
+    `SELECT ${selectParts.join(', ')}
+       FROM conceptos
+      WHERE concepto IS NOT NULL AND TRIM(concepto) <> ''
+      ORDER BY concepto ASC`
+  )
+  return rows.map(normalizeConceptRow)
 }
 
-export const readConceptConfigRows = async (source: ConceptosConfigSource = 'local', options: { ciclo?: string; plantel?: string; categoria?: string; includeInactive?: boolean } = {}) => {
-  const reader = dbReader(source)
-  const params: any[] = []
-  const where: string[] = []
-  const ciclo = normalizeText(options.ciclo)
-  const plantel = normalizePlantel(options.plantel)
-  const categoria = normalizeText(options.categoria).toLowerCase()
-
-  if (ciclo) {
-    where.push('(cfg.ciclo = ? OR cfg.ciclo = ?)')
-    params.push(normalizeCicloKey(ciclo), normalizeCycleName(ciclo))
+export const readLocalConceptosConfig = async () => {
+  const cycles = await query<CycleRow[]>(
+    `SELECT cycle_name, is_current FROM config_school_cycles ORDER BY cycle_name DESC`
+  )
+  const mappings = await query<any[]>(
+    `SELECT id, cycle_name, plantel, concepto_id, concepto_nombre,
+            IFNULL(enrollment_type, 'regular') AS enrollment_type,
+            IFNULL(months_json, '[]') AS months_json,
+            servicio_clave, servicio_nombre, servicio_icono, servicio_color,
+            IFNULL(activo, 1) AS activo,
+            IFNULL(sync_version, 1) AS sync_version,
+            updated_at, updated_by
+       FROM config_enrollment_mappings
+      WHERE IFNULL(activo, 1) = 1
+      ORDER BY cycle_name DESC, plantel ASC, enrollment_type ASC, concepto_nombre ASC`
+  )
+  return {
+    source: 'bridge',
+    cycles: cycles.map((row) => ({ cycle_name: normalizeCicloKey(row.cycle_name), is_current: Number(row.is_current || 0) })),
+    mappings: mappings.map(normalizeMappingRow)
   }
-  if (plantel && plantel !== 'GLOBAL') {
-    where.push('cfg.plantel = ?')
-    params.push(plantel)
-  }
-  if (categoria) {
-    where.push('cfg.categoria_clave = ?')
-    params.push(normalizeCategory(categoria))
-  }
-  if (!options.includeInactive) where.push('cfg.activo = 1')
-
-  const rows = await reader<any[]>(`
-    SELECT
-      cfg.id,
-      cfg.concepto_id,
-      cfg.concepto_nombre,
-      cfg.ciclo,
-      cfg.plantel,
-      cfg.categoria_clave,
-      cfg.months_json,
-      cfg.activo,
-      cfg.sync_version,
-      cfg.updated_at,
-      cg.costo,
-      cg.monto_final,
-      cg.meses,
-      cg.plazo,
-      cg.eventual,
-      scm.id AS mapping_id,
-      svc.id AS servicio_id,
-      svc.clave AS servicio_clave,
-      svc.nombre AS servicio_nombre,
-      svc.tipo AS servicio_tipo,
-      svc.icono AS servicio_icono,
-      svc.color AS servicio_color
-    FROM concepto_config cfg
-    LEFT JOIN conceptos_global cg ON cg.concepto_id = cfg.concepto_id
-    LEFT JOIN concepto_servicio_map scm ON scm.concepto_config_id = cfg.id AND scm.activo = 1
-    LEFT JOIN servicios_catalogo svc ON svc.id = scm.servicio_id
-    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY cfg.ciclo DESC, cfg.plantel ASC, cfg.categoria_clave ASC, cfg.concepto_nombre ASC
-  `, params)
-
-  return rows.map((row) => ({
-    id: Number(row.id || 0),
-    concepto_id: Number(row.concepto_id || 0),
-    concepto_nombre: normalizeText(row.concepto_nombre),
-    ciclo: normalizeText(row.ciclo),
-    plantel: normalizePlantel(row.plantel),
-    categoria_clave: normalizeCategory(row.categoria_clave),
-    months: parseJsonArray(row.months_json),
-    months_json: normalizeText(row.months_json || '[]'),
-    activo: Number(row.activo ?? 1),
-    sync_version: quoteSyncVersion(row.sync_version),
-    updated_at: row.updated_at,
-    costo: row.costo,
-    monto_final: row.monto_final,
-    meses: row.meses,
-    plazo: row.plazo,
-    eventual: Number(row.eventual || 0),
-    mapping_id: row.mapping_id ? Number(row.mapping_id) : null,
-    servicio: row.servicio_id ? {
-      id: Number(row.servicio_id),
-      clave: normalizeText(row.servicio_clave),
-      nombre: normalizeText(row.servicio_nombre),
-      tipo: normalizeText(row.servicio_tipo) || 'servicio',
-      icono: normalizeText(row.servicio_icono),
-      color: normalizeText(row.servicio_color)
-    } : null
-  }))
 }
 
-const mappedItemFromConfig = (row: any) => {
-  const item: any = {
+const legacyItem = (row: ConceptosConfigRow) => {
+  const item: Record<string, any> = {
     id: row.id,
     concepto_id: row.concepto_id,
     concepto_nombre: row.concepto_nombre
   }
-  if (row.months?.length) item.meses = row.months
-  if (row.servicio) item.servicio = row.servicio
+  if (row.enrollment_type === 'mensual_baja4') item.meses = parseMonths(row.months_json)
+  if (row.enrollment_type === 'talleres_servicios') {
+    item.servicio = row.servicio_nombre || ''
+    item.servicio_clave = row.servicio_clave || ''
+    item.icono = row.servicio_icono || ''
+    item.color = row.servicio_color || ''
+  }
   return item
 }
 
-export const buildConceptConfigResponse = async (source: ConceptosConfigSource = 'local') => {
-  const reader = dbReader(source)
-  const cycleRows = await reader<any[]>(`
-    SELECT cycle_name, is_current
-    FROM config_school_cycles
-    ORDER BY cycle_name DESC
-  `)
-
-  const cycles = cycleRows.length
-    ? cycleRows
-    : [{ cycle_name: normalizeCicloKey(new Date().getFullYear()), is_current: 1 }]
-
+export const buildConceptosConfigPayload = (input: { source?: string; cycles: any[]; mappings: ConceptosConfigRow[]; conceptos?: ConceptRow[] }) => {
   const response: any = {
     _api_docs: {
       host: 'nuxt-local',
-      description: 'Configuración centralizada de conceptos por ciclo, plantel y categoría.',
+      description: 'Configuración centralizada de conceptos extendida desde Nuxt.',
       retrocompatibilidad: "El nodo 'planteles' mantiene SOLO inscripciones normales.",
       nodos_extendidos: {
-        serviciosGlobales: 'Arreglo de servicios globales por ciclo escolar.',
+        serviciosGlobales: 'Arreglo de servicios por ciclo escolar.',
         planteles_mensual_baja4: 'Diccionario por plantel con conceptos ligados a meses específicos.',
         planteles_issste: 'Diccionario por plantel con convenios ISSSTE.',
         planteles_curso_verano: 'Diccionario por plantel con conceptos de curso de verano.',
         planteles_talleres_servicios: 'Diccionario por plantel con conceptos mapeados a talleres/servicios.'
       }
     },
+    source: input.source || 'bridge',
     cicloActual: null,
+    categorias: CONCEPTO_CATEGORIES,
     ciclos: {},
-    categorias: categoryDefinitions(),
-    serviciosCatalogo: await readServiciosCatalog(source),
-    source
+    conceptos: input.conceptos || [],
+    talleres: collectServiceCatalog(input.mappings),
+    talleresSinConcepto: collectUnassociatedServices(input.mappings),
+    conceptosSinCategoria: []
   }
 
-  for (const cycle of cycles) {
-    const ciclo = normalizeText(cycle.cycle_name)
-    if (Number(cycle.is_current || 0) === 1) response.cicloActual = ciclo
-    response.ciclos[ciclo] = {
+  for (const cycle of input.cycles || []) {
+    const cycleName = normalizeCicloKey(cycle.cycle_name || cycle.cycleName || cycle)
+    if (!cycleName) continue
+    if (Number(cycle.is_current || 0) === 1) response.cicloActual = cycleName
+    response.ciclos[cycleName] = {
       esActual: Number(cycle.is_current || 0) === 1,
       serviciosGlobales: [],
       planteles: {},
@@ -282,11 +263,10 @@ export const buildConceptConfigResponse = async (source: ConceptosConfigSource =
     }
   }
 
-  const mappings = await readConceptConfigRows(source, { includeInactive: false })
-
-  for (const mapping of mappings) {
-    if (!response.ciclos[mapping.ciclo]) {
-      response.ciclos[mapping.ciclo] = {
+  const ensureCycle = (cycleName: string) => {
+    const normalized = normalizeCicloKey(cycleName)
+    if (!response.ciclos[normalized]) {
+      response.ciclos[normalized] = {
         esActual: false,
         serviciosGlobales: [],
         planteles: {},
@@ -297,321 +277,214 @@ export const buildConceptConfigResponse = async (source: ConceptosConfigSource =
         planteles_otro: {}
       }
     }
+    return response.ciclos[normalized]
+  }
 
-    const cycle = response.ciclos[mapping.ciclo]
-    const item = mappedItemFromConfig(mapping)
-    const plantel = mapping.plantel
+  for (const row of input.mappings || []) {
+    if (!isActive(row.activo)) continue
+    const cycle = ensureCycle(row.cycle_name)
+    const type = normalizeCategory(row.enrollment_type)
+    const plantel = normalizePlantel(row.plantel) || 'GLOBAL'
+    const item = legacyItem(row)
 
-    if (mapping.categoria_clave === 'servicio_global') {
+    if (type === 'servicio_global') {
       cycle.serviciosGlobales.push(item)
       continue
     }
 
-    const bucketName = mapping.categoria_clave === 'inscripcion'
-      ? 'planteles'
-      : mapping.categoria_clave === 'mensual_baja4'
-        ? 'planteles_mensual_baja4'
-        : mapping.categoria_clave === 'issste'
-          ? 'planteles_issste'
-          : mapping.categoria_clave === 'curso_verano'
-            ? 'planteles_curso_verano'
-            : mapping.categoria_clave === 'talleres_servicios'
-              ? 'planteles_talleres_servicios'
-              : 'planteles_otro'
-
-    if (!cycle[bucketName][plantel]) cycle[bucketName][plantel] = []
-    cycle[bucketName][plantel].push(item)
+    const targetKey = categoryFor(type).legacyKey
+    if (!cycle[targetKey]) cycle[targetKey] = {}
+    if (!cycle[targetKey][plantel]) cycle[targetKey][plantel] = []
+    cycle[targetKey][plantel].push(item)
   }
 
   if (!response.cicloActual) {
-    const firstCycle = Object.keys(response.ciclos)[0]
-    response.cicloActual = firstCycle || null
-    if (firstCycle) response.ciclos[firstCycle].esActual = true
+    response.cicloActual = Object.keys(response.ciclos).sort().reverse()[0] || null
   }
 
   return response
 }
 
-export const createService = async (payload: any, userEmail: string) => {
-  const nombre = normalizeText(payload.nombre)
-  if (!nombre) throw createError({ statusCode: 400, message: 'Nombre requerido.' })
-  const clave = normalizeText(payload.clave || nombre)
-    .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '') || `servicio_${Date.now()}`
-
-  await controlEscolarCentralQuery<any>(`
-    INSERT INTO servicios_catalogo (clave, nombre, tipo, icono, color, orden, activo, updated_by, sync_version)
-    VALUES (?, ?, ?, ?, ?, ?, 1, ?, UNIX_TIMESTAMP())
-    ON DUPLICATE KEY UPDATE
-      nombre = VALUES(nombre),
-      tipo = VALUES(tipo),
-      icono = VALUES(icono),
-      color = VALUES(color),
-      orden = VALUES(orden),
-      activo = 1,
-      updated_by = VALUES(updated_by),
-      sync_version = UNIX_TIMESTAMP(),
-      updated_at = CURRENT_TIMESTAMP
-  `, [clave, nombre, normalizeText(payload.tipo || 'servicio'), normalizeText(payload.icono), normalizeText(payload.color), Number(payload.orden || 0), userEmail])
-
-  const [service] = await controlEscolarCentralQuery<any[]>(`SELECT * FROM servicios_catalogo WHERE clave = ? LIMIT 1`, [clave])
-  return service
-}
-
-export const importLocalConceptosToCentral = async (userEmail: string, options: { ciclo?: string; plantel?: string } = {}) => {
-  const ciclo = normalizeText(options.ciclo)
-  const params: any[] = []
-  const where: string[] = []
-  if (ciclo) {
-    where.push('(ciclo = ? OR ciclo = ?)')
-    params.push(normalizeCicloKey(ciclo), normalizeCycleName(ciclo))
+export const collectServiceCatalog = (mappings: ConceptosConfigRow[] = []) => {
+  const map = new Map<string, any>()
+  for (const row of mappings) {
+    if (normalizeCategory(row.enrollment_type) !== 'talleres_servicios') continue
+    const name = normalizeText(row.servicio_nombre || '')
+    if (!name) continue
+    const key = normalizeText(row.servicio_clave || normalizeServiceKey(name), 120)
+    if (!map.has(key)) {
+      map.set(key, {
+        clave: key,
+        nombre: name,
+        icono: row.servicio_icono || '',
+        color: row.servicio_color || '',
+        activo: isActive(row.activo),
+        conceptos: []
+      })
+    }
+    if (Number(row.concepto_id || 0) > 0) {
+      map.get(key).conceptos.push({ id: row.id, concepto_id: row.concepto_id, concepto_nombre: row.concepto_nombre, ciclo: row.cycle_name, plantel: row.plantel })
+    }
   }
-
-  const rows = await query<any[]>(`
-    SELECT id, concepto, costo, plazo, eventual, ciclo
-    FROM conceptos
-    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY concepto ASC
-  `, params)
-
-  for (const row of rows) {
-    await controlEscolarCentralQuery<any>(`
-      INSERT INTO conceptos_global (concepto_id, concepto_nombre, costo, monto_final, meses, plazo, eventual, ciclo, activo, updated_by, sync_version)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, UNIX_TIMESTAMP())
-      ON DUPLICATE KEY UPDATE
-        concepto_nombre = VALUES(concepto_nombre),
-        costo = VALUES(costo),
-        monto_final = VALUES(monto_final),
-        meses = VALUES(meses),
-        plazo = VALUES(plazo),
-        eventual = VALUES(eventual),
-        ciclo = VALUES(ciclo),
-        activo = 1,
-        updated_by = VALUES(updated_by),
-        sync_version = UNIX_TIMESTAMP(),
-        updated_at = CURRENT_TIMESTAMP
-    `, [
-      Number(row.id || 0),
-      normalizeText(row.concepto),
-      row.costo ?? null,
-      row.costo ?? null,
-      Number(row.plazo || 1) || null,
-      normalizeText(row.plazo),
-      normalizeBool(row.eventual),
-      normalizeCycleName(row.ciclo || ciclo),
-      userEmail
-    ])
-  }
-
-  await syncCentralConceptConfigToBridge({ ciclo })
-  return { imported: rows.length }
+  return Array.from(map.values()).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'))
 }
 
-export const saveConceptMapping = async (payload: any, userEmail: string) => {
-  const conceptoId = Number(payload.concepto_id || payload.conceptoId || 0)
-  const conceptoNombre = normalizeText(payload.concepto_nombre || payload.conceptoNombre)
-  const ciclo = normalizeCycleName(payload.ciclo)
-  const plantel = normalizePlantel(payload.plantel)
-  const categoria = normalizeCategory(payload.categoria_clave || payload.categoria || payload.tipo)
-  const months = normalizeMonths(payload.meses || payload.months || payload.months_json)
-  const servicioId = Number(payload.servicio_id || payload.servicioId || 0)
+export const collectUnassociatedServices = (mappings: ConceptosConfigRow[] = []) => collectServiceCatalog(mappings)
+  .filter((service) => !Array.isArray(service.conceptos) || service.conceptos.length === 0)
 
-  if (!conceptoId || !conceptoNombre || !ciclo || !plantel) {
-    throw createError({ statusCode: 400, message: 'Faltan datos de concepto, ciclo o plantel.' })
-  }
+export const readBestConceptosConfig = async () => {
+  try {
+    const local = await readLocalConceptosConfig()
+    if (local.mappings.length || local.cycles.length) return local
+  } catch (e) {}
 
-  await controlEscolarCentralQuery<any>(`
-    INSERT INTO conceptos_global (concepto_id, concepto_nombre, activo, updated_by, sync_version)
-    VALUES (?, ?, 1, ?, UNIX_TIMESTAMP())
-    ON DUPLICATE KEY UPDATE
-      concepto_nombre = VALUES(concepto_nombre),
-      activo = 1,
-      updated_by = VALUES(updated_by),
-      sync_version = UNIX_TIMESTAMP(),
-      updated_at = CURRENT_TIMESTAMP
-  `, [conceptoId, conceptoNombre, userEmail])
-
-  await controlEscolarCentralQuery<any>(`
-    INSERT INTO concepto_config (concepto_id, concepto_nombre, ciclo, plantel, categoria_clave, months_json, activo, updated_by, sync_version)
-    VALUES (?, ?, ?, ?, ?, ?, 1, ?, UNIX_TIMESTAMP())
-    ON DUPLICATE KEY UPDATE
-      concepto_nombre = VALUES(concepto_nombre),
-      months_json = VALUES(months_json),
-      activo = 1,
-      updated_by = VALUES(updated_by),
-      sync_version = UNIX_TIMESTAMP(),
-      updated_at = CURRENT_TIMESTAMP
-  `, [conceptoId, conceptoNombre, ciclo, plantel, categoria, JSON.stringify(months), userEmail])
-
-  const [configRow] = await controlEscolarCentralQuery<any[]>(`
-    SELECT id FROM concepto_config
-    WHERE concepto_id = ? AND ciclo = ? AND plantel = ? AND categoria_clave = ?
-    LIMIT 1
-  `, [conceptoId, ciclo, plantel, categoria])
-
-  if (categoria === 'talleres_servicios' && servicioId) {
-    await controlEscolarCentralQuery<any>(`
-      INSERT INTO concepto_servicio_map (concepto_config_id, servicio_id, activo, updated_by, sync_version)
-      VALUES (?, ?, 1, ?, UNIX_TIMESTAMP())
-      ON DUPLICATE KEY UPDATE
-        servicio_id = VALUES(servicio_id),
-        activo = 1,
-        updated_by = VALUES(updated_by),
-        sync_version = UNIX_TIMESTAMP(),
-        updated_at = CURRENT_TIMESTAMP
-    `, [Number(configRow.id), servicioId, userEmail])
-  } else if (configRow?.id) {
-    await controlEscolarCentralQuery<any>(`
-      UPDATE concepto_servicio_map
-      SET activo = 0, updated_by = ?, sync_version = UNIX_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP
-      WHERE concepto_config_id = ?
-    `, [userEmail, Number(configRow.id)])
-  }
-
-  await syncCentralConceptConfigToBridge({ ciclo, plantel })
-  return { success: true, id: Number(configRow?.id || 0) }
+  const central = await readCentralConceptosConfig()
+  try { await syncCentralConceptosConfigToBridge(central) } catch (e) {}
+  return central
 }
 
-export const deleteConceptMapping = async (id: number, userEmail: string) => {
-  const [existing] = await controlEscolarCentralQuery<any[]>(`SELECT ciclo, plantel FROM concepto_config WHERE id = ? LIMIT 1`, [id])
-  if (!existing) throw createError({ statusCode: 404, message: 'Mapeo no encontrado.' })
-
-  await controlEscolarCentralQuery<any>(`
-    UPDATE concepto_config
-    SET activo = 0, updated_by = ?, sync_version = UNIX_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `, [userEmail, id])
-  await controlEscolarCentralQuery<any>(`
-    UPDATE concepto_servicio_map
-    SET activo = 0, updated_by = ?, sync_version = UNIX_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP
-    WHERE concepto_config_id = ?
-  `, [userEmail, id])
-
-  await syncCentralConceptConfigToBridge({ ciclo: existing.ciclo, plantel: existing.plantel })
-  return { success: true }
+export const readBestConceptosConfigPayload = async () => {
+  const config = await readBestConceptosConfig()
+  let conceptos: ConceptRow[] = []
+  try { conceptos = await readCentralConceptos() } catch (e) {}
+  return buildConceptosConfigPayload({ ...config, conceptos })
 }
 
-export const saveCycle = async (ciclo: string, userEmail: string) => {
-  const cycle = normalizeCycleName(ciclo)
-  if (!cycle) throw createError({ statusCode: 400, message: 'Ciclo requerido.' })
-  await controlEscolarCentralQuery<any>(`
-    INSERT INTO config_school_cycles (cycle_name, is_current, updated_by, sync_version)
-    VALUES (?, 0, ?, UNIX_TIMESTAMP())
-    ON DUPLICATE KEY UPDATE updated_by = VALUES(updated_by), sync_version = UNIX_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP
-  `, [cycle, userEmail])
-  await syncCentralConceptConfigToBridge({ ciclo: cycle })
-  return { success: true, ciclo: cycle }
-}
+export const syncCentralConceptosConfigToBridge = async (preloaded?: Awaited<ReturnType<typeof readCentralConceptosConfig>>) => {
+  const central = preloaded || await readCentralConceptosConfig()
+  const statements: SqlStatement[] = [
+    { sql: 'DELETE FROM config_school_cycles' },
+    { sql: 'DELETE FROM config_enrollment_mappings' }
+  ]
 
-export const setCurrentCycle = async (ciclo: string, userEmail: string) => {
-  const cycle = normalizeCycleName(ciclo)
-  if (!cycle) throw createError({ statusCode: 400, message: 'Ciclo requerido.' })
-  await controlEscolarCentralQuery<any>(`INSERT IGNORE INTO config_school_cycles (cycle_name, is_current, updated_by, sync_version) VALUES (?, 0, ?, UNIX_TIMESTAMP())`, [cycle, userEmail])
-  await controlEscolarCentralQuery<any>(`UPDATE config_school_cycles SET is_current = 0, updated_by = ?, sync_version = UNIX_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP`, [userEmail])
-  await controlEscolarCentralQuery<any>(`UPDATE config_school_cycles SET is_current = 1, updated_by = ?, sync_version = UNIX_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP WHERE cycle_name = ?`, [userEmail, cycle])
-  await syncCentralConceptConfigToBridge({})
-  return { success: true, cicloActual: cycle }
-}
-
-export const syncCentralConceptConfigToBridge = async (options: { ciclo?: string; plantel?: string } = {}) => {
-  const ciclos = await controlEscolarCentralQuery<any[]>(`SELECT cycle_name, is_current, sync_version FROM config_school_cycles`)
-  const categorias = await controlEscolarCentralQuery<any[]>(`SELECT clave, nombre, orden, activo, sync_version FROM concepto_categorias`)
-  const conceptos = await controlEscolarCentralQuery<any[]>(`SELECT * FROM conceptos_global`)
-  const servicios = await controlEscolarCentralQuery<any[]>(`SELECT * FROM servicios_catalogo`)
-  const configs = await controlEscolarCentralQuery<any[]>(`SELECT * FROM concepto_config`)
-  const maps = await controlEscolarCentralQuery<any[]>(`SELECT * FROM concepto_servicio_map`)
-
-  const statements: SqlStatement[] = []
-
-  for (const category of CONCEPTO_CATEGORY_DEFINITIONS) {
+  for (const cycle of central.cycles) {
     statements.push({
-      sql: `INSERT INTO concepto_categorias (clave, nombre, orden, activo, sync_version) VALUES (?, ?, ?, 1, 1)
-            ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), orden = VALUES(orden), activo = 1`,
-      params: [category.clave, category.nombre, category.orden]
+      sql: `INSERT INTO config_school_cycles (cycle_name, is_current) VALUES (?, ?)`,
+      params: [cycle.cycle_name, Number(cycle.is_current || 0)]
     })
   }
 
-  for (const row of ciclos) {
+  for (const row of central.mappings) {
     statements.push({
-      sql: `INSERT INTO config_school_cycles (cycle_name, is_current, sync_version) VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE is_current = VALUES(is_current), sync_version = VALUES(sync_version), updated_at = CURRENT_TIMESTAMP`,
-      params: [row.cycle_name, Number(row.is_current || 0), quoteSyncVersion(row.sync_version)]
-    })
-  }
-
-  for (const row of categorias) {
-    statements.push({
-      sql: `INSERT INTO concepto_categorias (clave, nombre, orden, activo, sync_version) VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), orden = VALUES(orden), activo = VALUES(activo), sync_version = VALUES(sync_version), updated_at = CURRENT_TIMESTAMP`,
-      params: [row.clave, row.nombre, Number(row.orden || 0), Number(row.activo ?? 1), quoteSyncVersion(row.sync_version)]
-    })
-  }
-
-  for (const row of conceptos) {
-    statements.push({
-      sql: `INSERT INTO conceptos_global (id, concepto_id, concepto_nombre, costo, monto_final, meses, plazo, eventual, ciclo, activo, sync_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE concepto_id = VALUES(concepto_id), concepto_nombre = VALUES(concepto_nombre), costo = VALUES(costo), monto_final = VALUES(monto_final), meses = VALUES(meses), plazo = VALUES(plazo), eventual = VALUES(eventual), ciclo = VALUES(ciclo), activo = VALUES(activo), sync_version = VALUES(sync_version), updated_at = CURRENT_TIMESTAMP`,
-      params: [row.id, row.concepto_id, row.concepto_nombre, row.costo, row.monto_final, row.meses, row.plazo, Number(row.eventual || 0), row.ciclo || '', Number(row.activo ?? 1), quoteSyncVersion(row.sync_version)]
-    })
-  }
-
-  for (const row of servicios) {
-    statements.push({
-      sql: `INSERT INTO servicios_catalogo (id, clave, nombre, tipo, icono, color, orden, activo, sync_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE clave = VALUES(clave), nombre = VALUES(nombre), tipo = VALUES(tipo), icono = VALUES(icono), color = VALUES(color), orden = VALUES(orden), activo = VALUES(activo), sync_version = VALUES(sync_version), updated_at = CURRENT_TIMESTAMP`,
-      params: [row.id, row.clave, row.nombre, row.tipo || 'servicio', row.icono || '', row.color || '', Number(row.orden || 0), Number(row.activo ?? 1), quoteSyncVersion(row.sync_version)]
-    })
-  }
-
-  for (const row of configs) {
-    statements.push({
-      sql: `INSERT INTO concepto_config (id, concepto_id, concepto_nombre, ciclo, plantel, categoria_clave, months_json, activo, sync_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE concepto_id = VALUES(concepto_id), concepto_nombre = VALUES(concepto_nombre), ciclo = VALUES(ciclo), plantel = VALUES(plantel), categoria_clave = VALUES(categoria_clave), months_json = VALUES(months_json), activo = VALUES(activo), sync_version = VALUES(sync_version), updated_at = CURRENT_TIMESTAMP`,
-      params: [row.id, row.concepto_id, row.concepto_nombre, row.ciclo, row.plantel, row.categoria_clave, row.months_json || '[]', Number(row.activo ?? 1), quoteSyncVersion(row.sync_version)]
-    })
-  }
-
-  for (const row of maps) {
-    statements.push({
-      sql: `INSERT INTO concepto_servicio_map (id, concepto_config_id, servicio_id, activo, sync_version)
-            VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE concepto_config_id = VALUES(concepto_config_id), servicio_id = VALUES(servicio_id), activo = VALUES(activo), sync_version = VALUES(sync_version), updated_at = CURRENT_TIMESTAMP`,
-      params: [row.id, row.concepto_config_id, row.servicio_id, Number(row.activo ?? 1), quoteSyncVersion(row.sync_version)]
+      sql: `INSERT INTO config_enrollment_mappings
+        (id, cycle_name, plantel, concepto_id, concepto_nombre, enrollment_type, months_json,
+         servicio_clave, servicio_nombre, servicio_icono, servicio_color, activo, sync_version, updated_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
+        row.id,
+        row.cycle_name,
+        row.plantel,
+        row.concepto_id,
+        row.concepto_nombre,
+        row.enrollment_type,
+        row.months_json || '[]',
+        row.servicio_clave || null,
+        row.servicio_nombre || null,
+        row.servicio_icono || null,
+        row.servicio_color || null,
+        isActive(row.activo) ? 1 : 0,
+        Number(row.sync_version || 1),
+        row.updated_by || null
+      ]
     })
   }
 
   await executeStatementTransaction(statements)
-  const scopeKey = [normalizeText(options.ciclo) || 'ALL', normalizePlantel(options.plantel) || 'ALL'].join(':')
-  await query(`INSERT INTO conceptos_sync_state (scope_key, last_sync_version, last_synced_at) VALUES (?, UNIX_TIMESTAMP(), CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE last_sync_version = VALUES(last_sync_version), last_synced_at = VALUES(last_synced_at), updated_at = CURRENT_TIMESTAMP`, [scopeKey])
-
-  return { success: true, synced: { ciclos: ciclos.length, conceptos: conceptos.length, configs: configs.length, servicios: servicios.length, maps: maps.length } }
+  return { ok: true, cycles: central.cycles.length, mappings: central.mappings.length }
 }
 
-export const readAdminDashboard = async (options: { ciclo?: string; plantel?: string; categoria?: string } = {}) => {
-  const [conceptos, servicios, mappings, configResponse] = await Promise.all([
-    readConceptosCatalog('central', { ciclo: options.ciclo, limit: 500 }),
-    readServiciosCatalog('central', { includeInactive: true }),
-    readConceptConfigRows('central', { ciclo: options.ciclo, plantel: options.plantel, categoria: options.categoria, includeInactive: true }),
-    buildConceptConfigResponse('central')
-  ])
+export const runSyncForActiveBridge = async () => await syncCentralConceptosConfigToBridge()
 
-  const activeMappings = mappings.filter((row) => row.activo)
-  const mappedConceptIds = new Set(activeMappings.map((row) => String(row.concepto_id)))
-  const mappedServiceIds = new Set(activeMappings.map((row) => String(row.servicio?.id || '')).filter(Boolean))
+export const createOrUpdateMapping = async (input: any, user: AuthSessionUser) => {
+  const ciclo = normalizeCicloKey(input.ciclo || input.cycle_name)
+  const plantel = normalizePlantel(input.plantel)
+  const type = normalizeCategory(input.tipo || input.enrollment_type)
+  const conceptoId = Number(input.concepto_id || 0)
+  const servicioNombre = normalizeText(input.servicio_nombre || input.servicio || '', 160)
+  const conceptoNombre = normalizeText(input.concepto_nombre || input.concepto || servicioNombre || 'Sin concepto')
 
-  return {
-    conceptos,
-    servicios,
-    mappings,
-    categorias: categoryDefinitions(),
-    config: configResponse,
-    conceptosSinCategoria: conceptos.filter((concepto) => !mappedConceptIds.has(String(concepto.concepto_id))),
-    talleresSinConcepto: servicios.filter((servicio) => !mappedServiceIds.has(String(servicio.id))),
-    sync: await query<any[]>(`SELECT scope_key, last_sync_version, last_synced_at, updated_at FROM conceptos_sync_state ORDER BY updated_at DESC LIMIT 10`).catch(() => [])
+  if (!ciclo || !plantel || !type) throw createError({ statusCode: 400, message: 'Faltan ciclo, plantel o categoría.' })
+  if (conceptoId <= 0 && !servicioNombre) throw createError({ statusCode: 400, message: 'Selecciona un concepto o registra un taller/servicio.' })
+
+  const serviceKey = normalizeText(input.servicio_clave || normalizeServiceKey(servicioNombre), 120) || null
+  const monthsJson = stringifyMonths(input.meses || input.months_json)
+  const syncVersion = Date.now()
+
+  const exists = conceptoId > 0
+    ? await controlEscolarCentralQuery<any[]>(
+      `SELECT id FROM config_enrollment_mappings
+        WHERE cycle_name = ? AND plantel = ? AND concepto_id = ? AND IFNULL(enrollment_type, 'regular') = ?
+        LIMIT 1`,
+      [ciclo, plantel, conceptoId, type]
+    )
+    : await controlEscolarCentralQuery<any[]>(
+      `SELECT id FROM config_enrollment_mappings
+        WHERE cycle_name = ? AND plantel = ? AND IFNULL(enrollment_type, 'regular') = ? AND IFNULL(servicio_clave, '') = ?
+        LIMIT 1`,
+      [ciclo, plantel, type, serviceKey || '']
+    )
+
+  if (exists.length) {
+    await controlEscolarCentralQuery(
+      `UPDATE config_enrollment_mappings
+          SET concepto_nombre = ?, months_json = ?, servicio_clave = ?, servicio_nombre = ?, servicio_icono = ?, servicio_color = ?, activo = 1, sync_version = ?, updated_by = ?
+        WHERE id = ?`,
+      [conceptoNombre, monthsJson, serviceKey, servicioNombre || null, normalizeText(input.servicio_icono, 80) || null, normalizeText(input.servicio_color, 40) || null, syncVersion, user.email, exists[0].id]
+    )
+  } else {
+    await controlEscolarCentralQuery(
+      `INSERT INTO config_enrollment_mappings
+        (cycle_name, plantel, concepto_id, concepto_nombre, enrollment_type, months_json,
+         servicio_clave, servicio_nombre, servicio_icono, servicio_color, activo, sync_version, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      [ciclo, plantel, conceptoId, conceptoNombre, type, monthsJson, serviceKey, servicioNombre || null, normalizeText(input.servicio_icono, 80) || null, normalizeText(input.servicio_color, 40) || null, syncVersion, user.email]
+    )
   }
+
+  const synced = await syncCentralConceptosConfigToBridge()
+  return { ok: true, synced }
+}
+
+export const deleteMapping = async (id: unknown) => {
+  const mappingId = Number(id || 0)
+  if (!mappingId) throw createError({ statusCode: 400, message: 'Mapeo inválido.' })
+  await controlEscolarCentralQuery(`DELETE FROM config_enrollment_mappings WHERE id = ?`, [mappingId])
+  const synced = await syncCentralConceptosConfigToBridge()
+  return { ok: true, synced }
+}
+
+export const saveCycle = async (ciclo: unknown, current = false, user?: AuthSessionUser) => {
+  const cycle = normalizeCicloKey(ciclo)
+  if (!cycle) throw createError({ statusCode: 400, message: 'Ciclo requerido.' })
+  if (current) {
+    const db = getControlEscolarCentralDb()
+    const conn = await db.getConnection()
+    try {
+      await conn.beginTransaction()
+      await conn.query(`INSERT IGNORE INTO config_school_cycles (cycle_name, is_current, sync_version, updated_by) VALUES (?, 0, ?, ?)`, [cycle, Date.now(), user?.email || null])
+      await conn.query(`UPDATE config_school_cycles SET is_current = 0, sync_version = ?, updated_by = ?`, [Date.now(), user?.email || null])
+      await conn.query(`UPDATE config_school_cycles SET is_current = 1, sync_version = ?, updated_by = ? WHERE cycle_name = ?`, [Date.now(), user?.email || null, cycle])
+      await conn.commit()
+    } catch (error) {
+      await conn.rollback()
+      throw error
+    } finally {
+      conn.release()
+    }
+  } else {
+    await controlEscolarCentralQuery(
+      `INSERT IGNORE INTO config_school_cycles (cycle_name, is_current, sync_version, updated_by) VALUES (?, 0, ?, ?)`,
+      [cycle, Date.now(), user?.email || null]
+    )
+  }
+  const synced = await syncCentralConceptosConfigToBridge()
+  return { ok: true, ciclo: cycle, synced }
+}
+
+export const deleteCycle = async (ciclo: unknown) => {
+  const cycle = normalizeCicloKey(ciclo)
+  if (!cycle) throw createError({ statusCode: 400, message: 'Ciclo requerido.' })
+  await controlEscolarCentralQuery(`DELETE FROM config_school_cycles WHERE cycle_name = ?`, [cycle])
+  const synced = await syncCentralConceptosConfigToBridge()
+  return { ok: true, ciclo: cycle, synced }
 }

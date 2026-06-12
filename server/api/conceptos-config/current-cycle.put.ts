@@ -1,9 +1,7 @@
-import { getTrustedAuthUser } from '../../utils/auth-session'
-import { setCurrentCycle } from '../../utils/conceptos-config'
+import { requireConceptosAdmin, saveCycle } from '../../utils/conceptos-config'
 
 export default defineEventHandler(async (event) => {
-  const user = await getTrustedAuthUser(event)
-  if (!user.isSuperAdmin) throw createError({ statusCode: 403, message: 'Solo super admin puede administrar ciclos.' })
+  const user = await requireConceptosAdmin(event)
   const body = await readBody(event)
-  return await setCurrentCycle(body?.ciclo, user.email)
+  return await saveCycle(body?.ciclo || body?.cycle_name, true, user)
 })

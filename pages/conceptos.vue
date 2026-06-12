@@ -1,817 +1,475 @@
 <template>
-  <div class="concept-config-page">
-    <section class="concept-hero">
-      <div class="hero-copy">
+  <div class="concept-governance-page">
+    <section class="governance-hero">
+      <div>
         <span class="section-kicker">Super admin</span>
         <h2>Conceptos</h2>
-        <p>Configura categorías por ciclo y plantel. El espejo local del Bridge se actualiza al guardar.</p>
+        <p>Configuración central por ciclo, plantel y categoría. Los datos existentes de inscripción se leen desde la tabla legacy extendida.</p>
       </div>
-      <div class="hero-metrics">
-        <div>
-          <span>Conceptos</span>
-          <strong>{{ conceptos.length }}</strong>
-        </div>
-        <div>
-          <span>Mapeados</span>
-          <strong>{{ activeMappings.length }}</strong>
-        </div>
-        <div>
-          <span>Talleres libres</span>
-          <strong>{{ talleresSinConcepto.length }}</strong>
-        </div>
+      <div class="governance-status">
+        <span>Fuente</span>
+        <strong>{{ sourceLabel }}</strong>
+        <button v-if="canManage" type="button" class="mini-action" :disabled="loading || syncing" @click="syncCentralToBridge">
+          <LucideRefreshCw :size="15" :class="{ 'animate-spin': syncing }" />
+          Sync
+        </button>
       </div>
     </section>
 
-    <section class="concept-toolbar">
-      <div class="field-chip">
-        <LucideCalendarDays :size="16" />
-        <select v-model="selectedCiclo" aria-label="Ciclo">
-          <option v-for="ciclo in cycleOptions" :key="ciclo" :value="ciclo">{{ ciclo }}</option>
-        </select>
-      </div>
-      <div class="field-chip">
-        <LucideBuilding2 :size="16" />
-        <select v-model="selectedPlantel" aria-label="Plantel">
-          <option v-for="plantel in planteles" :key="plantel" :value="plantel">{{ plantel }}</option>
-        </select>
-      </div>
-      <div class="field-chip">
-        <LucideTags :size="16" />
-        <select v-model="selectedCategoria" aria-label="Categoría">
-          <option value="">Todas</option>
-          <option v-for="cat in categorias" :key="cat.clave" :value="cat.clave">{{ cat.nombre }}</option>
-        </select>
-      </div>
-      <div class="search-box">
-        <LucideSearch :size="16" />
-        <input v-model="search" type="search" placeholder="Buscar concepto o taller" />
-      </div>
-      <button v-if="canManageConceptos" class="toolbar-action primary" type="button" title="Importar conceptos del Bridge local a central" @click="importCatalog" :disabled="busy">
-        <LucideDownload :class="{ 'animate-spin': busyAction === 'import' }" :size="16" />
-        <span>Importar</span>
-      </button>
-      <button v-if="canManageConceptos" class="toolbar-action" type="button" title="Sincronizar central al Bridge local" @click="syncBridge" :disabled="busy">
-        <LucideRefreshCw :class="{ 'animate-spin': busyAction === 'sync' }" :size="16" />
-        <span>Sync</span>
-      </button>
-      <button class="icon-button" type="button" title="Actualizar" @click="loadAdmin" :disabled="loading">
-        <LucideRefreshCw :class="{ 'animate-spin': loading }" :size="17" />
-      </button>
+    <section v-if="!canManage" class="card blocked-card">
+      <LucideLock :size="18" />
+      <span>Ruta administrativa.</span>
     </section>
 
-    <section v-if="!canManageConceptos" class="readonly-card">
-      <LucideLock :size="17" />
-      <span>Solo super admin puede modificar esta configuración.</span>
-    </section>
-
-    <section class="config-grid">
-      <div class="config-main card-panel">
-        <div class="panel-head">
-          <div>
-            <h3>Configuración</h3>
-            <small>{{ filteredMappings.length }} asignaciones</small>
-          </div>
-          <button v-if="canManageConceptos" class="btn-compact" type="button" @click="resetDraft">
-            <LucidePlus :size="15" />
-            Agregar
-          </button>
+    <template v-else>
+      <section class="governance-toolbar">
+        <label>
+          <span>Ciclo</span>
+          <select v-model="selectedCiclo">
+            <option v-for="cycle in cycleOptions" :key="cycle.value" :value="cycle.value">{{ cycle.label }}</option>
+          </select>
+        </label>
+        <label>
+          <span>Plantel</span>
+          <select v-model="selectedPlantel">
+            <option v-for="plantel in plantelOptions" :key="plantel" :value="plantel">{{ plantel }}</option>
+          </select>
+        </label>
+        <label>
+          <span>Categoría</span>
+          <select v-model="selectedCategory">
+            <option v-for="category in categories" :key="category.key" :value="category.key">{{ category.label }}</option>
+          </select>
+        </label>
+        <div class="search-box governance-search">
+          <LucideSearch :size="16" />
+          <input v-model="search" type="search" placeholder="Buscar concepto o taller" />
         </div>
+        <button type="button" class="btn btn-outline" :disabled="loading" @click="loadAdmin">
+          <LucideRefreshCw :size="16" :class="{ 'animate-spin': loading }" />
+          Actualizar
+        </button>
+      </section>
 
-        <div v-if="draftVisible" class="assignment-composer">
-          <div class="concept-picker">
-            <label>Concepto</label>
-            <div class="search-box compact">
-              <LucideSearch :size="15" />
-              <input v-model="conceptSearch" type="search" placeholder="ID o nombre" />
+      <section class="governance-grid">
+        <div class="governance-main-card card">
+          <div class="governance-card-head">
+            <div>
+              <span class="section-kicker">{{ activeCategoryLabel }}</span>
+              <h3>{{ selectedCiclo || 'Ciclo' }} · {{ selectedPlantel }}</h3>
             </div>
-            <div class="picker-list">
-              <button
-                v-for="concepto in conceptPickerItems"
-                :key="concepto.concepto_id"
-                type="button"
-                :class="{ selected: Number(draft.concepto_id) === Number(concepto.concepto_id) }"
-                @click="selectConcept(concepto)"
-              >
-                <strong>{{ concepto.concepto_nombre }}</strong>
-                <span>#{{ concepto.concepto_id }}</span>
-              </button>
-            </div>
+            <strong>{{ visibleMappings.length }}</strong>
           </div>
 
-          <div class="assignment-fields">
-            <label>Categoría</label>
-            <select v-model="draft.categoria_clave">
-              <option v-for="cat in categorias" :key="cat.clave" :value="cat.clave">{{ cat.nombre }}</option>
-            </select>
+          <div v-if="loading" class="empty-panel">Cargando configuración...</div>
+          <div v-else-if="!visibleMappings.length" class="empty-panel">Sin conceptos asignados.</div>
 
-            <template v-if="draft.categoria_clave === 'talleres_servicios'">
-              <label>Taller / servicio</label>
-              <select v-model="draft.servicio_id">
-                <option value="">Sin mapear</option>
-                <option v-for="servicio in servicios" :key="servicio.id" :value="servicio.id">{{ servicio.nombre }}</option>
-              </select>
-            </template>
-
-            <template v-if="draft.categoria_clave === 'mensual_baja4'">
-              <label>Meses</label>
-              <input v-model="draft.monthsText" type="text" placeholder="Ago, Sep, Oct" />
-            </template>
-
-            <button class="save-button" type="button" :disabled="!canSaveDraft || busy" @click="saveDraft">
-              <LucideCheck :size="16" />
-              Guardar
-            </button>
-          </div>
-        </div>
-
-        <div class="category-lanes">
-          <article v-for="group in groupedMappings" :key="group.key" class="category-lane">
-            <header>
-              <span :class="['category-dot', `dot-${group.key}`]"></span>
-              <strong>{{ group.label }}</strong>
-              <small>{{ group.items.length }}</small>
-            </header>
-            <div v-if="!group.items.length" class="empty-row">Sin asignaciones</div>
-            <div v-else class="mapping-list">
-              <div v-for="item in group.items" :key="item.id" class="mapping-row" :class="{ inactive: !item.activo }">
-                <div class="mapping-main">
-                  <span class="concept-id">#{{ item.concepto_id }}</span>
-                  <strong>{{ item.concepto_nombre }}</strong>
-                  <small>{{ item.plantel }} · {{ item.ciclo }}</small>
+          <div v-else class="mapping-list">
+            <article v-for="mapping in visibleMappings" :key="mapping.id" class="mapping-row">
+              <div class="mapping-id">{{ mapping.concepto_id || '—' }}</div>
+              <div class="mapping-body">
+                <strong>{{ mapping.concepto_nombre }}</strong>
+                <span>{{ mapping.plantel }} · {{ mapping.cycle_name }}</span>
+                <div v-if="mapping.enrollment_type === 'mensual_baja4'" class="tiny-chip-row">
+                  <span v-for="month in parseMonths(mapping.months_json)" :key="month" class="tiny-chip">{{ month }}</span>
                 </div>
-                <div class="mapping-side">
-                  <span v-if="item.servicio" class="service-chip" :style="chipStyle(item.servicio)">
-                    <component :is="serviceIcon(item.servicio)" :size="14" />
-                    {{ item.servicio.nombre }}
-                  </span>
-                  <span v-else-if="item.categoria_clave === 'talleres_servicios'" class="soft-warning">Sin taller</span>
-                  <span v-if="item.months?.length" class="months-chip">{{ item.months.join(' · ') }}</span>
-                  <button v-if="canManageConceptos" class="row-action danger" type="button" title="Quitar" @click="removeMapping(item)">
-                    <LucideX :size="15" />
-                  </button>
+                <div v-if="mapping.enrollment_type === 'talleres_servicios' && mapping.servicio_nombre" class="service-link">
+                  <span :style="serviceAccent(mapping)">{{ mapping.servicio_icono || '✦' }}</span>
+                  {{ mapping.servicio_nombre }}
                 </div>
               </div>
-            </div>
-          </article>
+              <button type="button" class="icon-action danger" title="Quitar" @click="removeMapping(mapping)">
+                <LucideTrash2 :size="15" />
+              </button>
+            </article>
+          </div>
         </div>
-      </div>
 
-      <aside class="config-side">
-        <section class="card-panel side-card">
-          <div class="panel-head tight">
+        <aside class="governance-side card">
+          <div class="governance-card-head compact">
             <div>
-              <h3>Talleres</h3>
-              <small>{{ servicios.length }} activos</small>
+              <span class="section-kicker">Asignar</span>
+              <h3>Concepto</h3>
             </div>
-            <button v-if="canManageConceptos" class="icon-button" type="button" title="Nuevo taller" @click="newServiceVisible = !newServiceVisible">
-              <LucidePlus :size="16" />
-            </button>
           </div>
 
-          <div v-if="newServiceVisible" class="service-form">
-            <input v-model="newService.nombre" type="text" placeholder="Nombre" />
-            <select v-model="newService.tipo">
-              <option value="taller">Taller</option>
-              <option value="servicio">Servicio</option>
-            </select>
-            <div class="icon-grid">
-              <button v-for="icon in iconOptions" :key="icon" type="button" :class="{ selected: newService.icono === icon }" @click="newService.icono = icon">
-                <component :is="iconComponent(icon)" :size="16" />
+          <div class="concept-search-select">
+            <div class="search-box">
+              <LucideSearch :size="15" />
+              <input v-model="conceptSearch" type="search" placeholder="Buscar concepto" />
+            </div>
+            <div class="concept-options">
+              <button
+                v-for="concept in conceptOptions"
+                :key="concept.id"
+                type="button"
+                :class="['concept-option', { selected: selectedConcept?.id === concept.id }]"
+                @click="selectedConcept = concept"
+              >
+                <span>{{ concept.id }}</span>
+                <strong>{{ concept.concepto }}</strong>
+                <small>{{ concept.ciclo_escolar || 'sin ciclo' }}</small>
               </button>
             </div>
-            <button class="save-button small" type="button" :disabled="!newService.nombre || busy" @click="createService">
-              Guardar taller
-            </button>
           </div>
 
-          <div class="service-list">
-            <div v-for="servicio in filteredServicios" :key="servicio.id" class="service-row">
-              <span class="service-icon" :style="chipStyle(servicio)">
-                <component :is="serviceIcon(servicio)" :size="15" />
-              </span>
-              <strong>{{ servicio.nombre }}</strong>
-              <small>{{ servicio.tipo }}</small>
+          <div v-if="selectedCategory === 'talleres_servicios'" class="service-editor">
+            <label>
+              <span>Taller/servicio</span>
+              <input v-model="serviceName" type="text" placeholder="Ballet, Fútbol, Comedor" />
+            </label>
+            <div class="service-inline-fields">
+              <label>
+                <span>Icono</span>
+                <input v-model="serviceIcon" type="text" maxlength="8" placeholder="⚽" />
+              </label>
+              <label>
+                <span>Color</span>
+                <input v-model="serviceColor" type="text" placeholder="#6aa957" />
+              </label>
             </div>
           </div>
-        </section>
 
-        <section class="card-panel side-card">
-          <div class="panel-head tight">
-            <div>
-              <h3>Pendientes</h3>
-              <small>{{ conceptosSinCategoria.length + talleresSinConcepto.length }}</small>
-            </div>
+          <div v-if="selectedCategory === 'mensual_baja4'" class="months-grid">
+            <button
+              v-for="month in months"
+              :key="month"
+              type="button"
+              :class="{ selected: selectedMonths.includes(month) }"
+              @click="toggleMonth(month)"
+            >{{ month }}</button>
           </div>
-          <div class="gap-stack">
-            <div>
-              <span>Conceptos sin categoría</span>
-              <strong>{{ conceptosSinCategoria.length }}</strong>
-            </div>
-            <div>
-              <span>Talleres sin concepto</span>
-              <strong>{{ talleresSinConcepto.length }}</strong>
-            </div>
+
+          <button type="button" class="btn btn-primary full" :disabled="saving || !canSaveMapping" @click="saveMapping">
+            <LucidePlus :size="16" />
+            Guardar
+          </button>
+
+          <button v-if="selectedCategory === 'talleres_servicios'" type="button" class="btn btn-outline full" :disabled="saving || !serviceName.trim()" @click="saveServiceOnly">
+            <LucideSparkles :size="16" />
+            Taller sin concepto
+          </button>
+        </aside>
+      </section>
+
+      <section class="governance-bottom-grid">
+        <div class="card insight-card">
+          <div class="insight-head">
+            <span>Sin categoría</span>
+            <strong>{{ uncategorizedConcepts.length }}</strong>
           </div>
-          <div class="mini-list">
-            <span v-for="item in talleresSinConcepto.slice(0, 6)" :key="item.id">{{ item.nombre }}</span>
+          <div class="insight-list">
+            <span v-for="concept in uncategorizedConcepts.slice(0, 8)" :key="concept.id">{{ concept.id }} · {{ concept.concepto }}</span>
+            <em v-if="!uncategorizedConcepts.length">Todo clasificado en este ciclo.</em>
           </div>
-        </section>
-      </aside>
-    </section>
+        </div>
+        <div class="card insight-card">
+          <div class="insight-head">
+            <span>Talleres sin concepto</span>
+            <strong>{{ unassociatedServices.length }}</strong>
+          </div>
+          <div class="insight-list service-tags">
+            <span v-for="service in unassociatedServices.slice(0, 12)" :key="service.clave" :style="serviceTagStyle(service)">
+              {{ service.icono || '✦' }} {{ service.nombre }}
+            </span>
+            <em v-if="!unassociatedServices.length">Sin pendientes.</em>
+          </div>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import {
-  LucideActivity,
-  LucideBuilding2,
-  LucideCalendarDays,
-  LucideCheck,
-  LucideDumbbell,
-  LucideDownload,
-  LucideGraduationCap,
-  LucideLock,
-  LucideMusic,
-  LucidePalette,
-  LucidePlus,
-  LucideRefreshCw,
-  LucideSearch,
-  LucideSparkles,
-  LucideUtensils,
-  LucideX,
-  LucideTags
-} from 'lucide-vue-next'
-import { useState } from '#app'
-import { PLANTELES_LIST } from '~/utils/constants'
-import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
+import { useCookie, useState } from '#app'
+import { LucideLock, LucidePlus, LucideRefreshCw, LucideSearch, LucideSparkles, LucideTrash2 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
+import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
+import { PLANTELES_LIST } from '~/utils/constants'
 
-const state = useState('globalState')
 const { show } = useToast()
-
-const superAdminCookie = useCookie('auth_is_super_admin')
-const roleCookie = useCookie('auth_role')
+const state = useState('globalState')
 const activePlantelCookie = useCookie('auth_active_plantel')
-const roleTokens = computed(() => String(roleCookie.value || '')
-  .split(',')
-  .map((role) => role.trim().toLowerCase())
-  .filter(Boolean))
-const canManageConceptos = computed(() => superAdminCookie.value === 'true' || roleTokens.value.some((role) => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
-const isSuperAdmin = canManageConceptos
 
 const loading = ref(false)
-const busy = ref(false)
-const busyAction = ref('')
-const adminData = ref({ conceptos: [], servicios: [], mappings: [], categorias: [], conceptosSinCategoria: [], talleresSinConcepto: [], config: null })
+const saving = ref(false)
+const syncing = ref(false)
+const adminPayload = ref(null)
+const selectedCiclo = ref('')
+const selectedPlantel = ref(String(activePlantelCookie.value || 'PT').toUpperCase() === 'GLOBAL' ? 'PT' : String(activePlantelCookie.value || 'PT').toUpperCase())
+const selectedCategory = ref('regular')
 const search = ref('')
 const conceptSearch = ref('')
-const selectedCiclo = ref(formatCicloLabel(state.value?.ciclo || '2025'))
-const selectedPlantel = ref(String(activePlantelCookie.value || 'PT') === 'GLOBAL' ? 'PT' : String(activePlantelCookie.value || 'PT'))
-const selectedCategoria = ref('')
-const draftVisible = ref(false)
-const newServiceVisible = ref(false)
-const draft = ref({ concepto_id: '', concepto_nombre: '', categoria_clave: 'inscripcion', servicio_id: '', monthsText: '' })
-const newService = ref({ nombre: '', tipo: 'taller', icono: 'sparkles', color: '' })
+const selectedConcept = ref(null)
+const serviceName = ref('')
+const serviceIcon = ref('')
+const serviceColor = ref('')
+const selectedMonths = ref([])
 
-const planteles = PLANTELES_LIST
-const iconOptions = ['sparkles', 'dumbbell', 'music', 'palette', 'utensils', 'activity', 'graduation']
+const months = ['Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul']
+const fallbackCategories = [
+  { key: 'regular', label: 'Inscripción' },
+  { key: 'talleres_servicios', label: 'Talleres y Servicios' },
+  { key: 'servicio_global', label: 'Servicio global' },
+  { key: 'curso_verano', label: 'Curso de Verano' },
+  { key: 'mensual_baja4', label: 'Mensual baja 4' },
+  { key: 'issste', label: 'ISSSTE' },
+  { key: 'otro', label: 'Otro' },
+]
 
-const iconComponent = (icon) => ({
-  sparkles: LucideSparkles,
-  dumbbell: LucideDumbbell,
-  music: LucideMusic,
-  palette: LucidePalette,
-  utensils: LucideUtensils,
-  activity: LucideActivity,
-  graduation: LucideGraduationCap
-}[icon] || LucideSparkles)
-
-const serviceIcon = (service) => iconComponent(service?.icono)
-const chipStyle = (service) => {
-  const color = service?.color || '#eef7ee'
-  return { '--chip-bg': color.startsWith('#') ? `${color}22` : '#eef7ee', '--chip-fg': color.startsWith('#') ? color : '#2f6d35' }
-}
-
-const conceptos = computed(() => adminData.value.conceptos || [])
-const servicios = computed(() => (adminData.value.servicios || []).filter((item) => Number(item.activo ?? 1) === 1))
-const mappings = computed(() => adminData.value.mappings || [])
-const categorias = computed(() => adminData.value.categorias?.length ? adminData.value.categorias : [
-  { clave: 'inscripcion', nombre: 'Inscripción' },
-  { clave: 'talleres_servicios', nombre: 'Talleres y Servicios' },
-  { clave: 'curso_verano', nombre: 'Curso de Verano' },
-  { clave: 'mensual_baja4', nombre: 'Mensual baja 4' },
-  { clave: 'issste', nombre: 'ISSSTE' },
-  { clave: 'otro', nombre: 'Otro' }
-])
-const conceptosSinCategoria = computed(() => adminData.value.conceptosSinCategoria || [])
-const talleresSinConcepto = computed(() => adminData.value.talleresSinConcepto || [])
-const activeMappings = computed(() => mappings.value.filter((item) => Number(item.activo ?? 1) === 1))
-
+const canManage = computed(() => Boolean(adminPayload.value?.canManage))
+const sourceLabel = computed(() => adminPayload.value?.source === 'central' ? 'Central' : 'Nuxt')
+const categories = computed(() => adminPayload.value?.categorias?.length ? adminPayload.value.categorias.map((item) => ({ key: item.key, label: item.label })) : fallbackCategories)
+const mappings = computed(() => Array.isArray(adminPayload.value?.mappings) ? adminPayload.value.mappings : [])
+const conceptos = computed(() => Array.isArray(adminPayload.value?.conceptos) ? adminPayload.value.conceptos : [])
+const talleres = computed(() => Array.isArray(adminPayload.value?.talleres) ? adminPayload.value.talleres : [])
+const unassociatedServices = computed(() => Array.isArray(adminPayload.value?.talleresSinConcepto) ? adminPayload.value.talleresSinConcepto : [])
+const plantelOptions = computed(() => [...PLANTELES_LIST])
 const cycleOptions = computed(() => {
-  const cycles = Object.keys(adminData.value.config?.ciclos || {})
-  const fallback = formatCicloLabel(state.value?.ciclo || selectedCiclo.value)
-  return [...new Set([selectedCiclo.value, fallback, ...cycles].filter(Boolean))]
+  const fromCycles = Array.isArray(adminPayload.value?.cycles)
+    ? adminPayload.value.cycles.map((cycle) => cycle.cycle_name).filter(Boolean)
+    : []
+  const fromPayload = Object.keys(adminPayload.value?.ciclos || {})
+  const fromConcepts = conceptos.value.map((concept) => concept.ciclo_escolar).filter(Boolean)
+  const values = Array.from(new Set([adminPayload.value?.cicloActual, normalizeCicloKey(state.value?.ciclo), ...fromCycles, ...fromPayload, ...fromConcepts].filter(Boolean)))
+  return values.map((value) => ({ value, label: formatCicloLabel(value) })).sort((a, b) => b.value.localeCompare(a.value))
 })
+const activeCategoryLabel = computed(() => categories.value.find((entry) => entry.key === selectedCategory.value)?.label || 'Categoría')
 
-const filteredMappings = computed(() => {
-  const term = search.value.trim().toLowerCase()
-  return activeMappings.value.filter((item) => {
-    if (selectedCiclo.value && item.ciclo !== selectedCiclo.value) return false
-    if (selectedPlantel.value && item.plantel !== selectedPlantel.value) return false
-    if (selectedCategoria.value && item.categoria_clave !== selectedCategoria.value) return false
+const normalizeText = (value) => String(value || '').trim().toLowerCase()
+const parseMonths = (value) => {
+  if (Array.isArray(value)) return value
+  try {
+    const parsed = JSON.parse(String(value || '[]'))
+    return Array.isArray(parsed) ? parsed : []
+  } catch { return [] }
+}
+const serviceKey = (name) => String(name || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '')
+
+const visibleMappings = computed(() => {
+  const term = normalizeText(search.value)
+  return mappings.value.filter((mapping) => {
+    if (normalizeCicloKey(mapping.cycle_name) !== selectedCiclo.value) return false
+    if (String(mapping.plantel || '').toUpperCase() !== selectedPlantel.value) return false
+    if (String(mapping.enrollment_type || 'regular') !== selectedCategory.value) return false
     if (!term) return true
-    return [item.concepto_id, item.concepto_nombre, item.servicio?.nombre, item.categoria_clave].some((value) => String(value || '').toLowerCase().includes(term))
+    return [mapping.concepto_id, mapping.concepto_nombre, mapping.servicio_nombre, mapping.servicio_clave]
+      .some((value) => normalizeText(value).includes(term))
   })
 })
 
-const groupedMappings = computed(() => categorias.value
-  .filter((cat) => !selectedCategoria.value || cat.clave === selectedCategoria.value)
-  .map((cat) => ({
-    key: cat.clave,
-    label: cat.nombre,
-    items: filteredMappings.value.filter((item) => item.categoria_clave === cat.clave)
-  })))
-
-const filteredServicios = computed(() => {
-  const term = search.value.trim().toLowerCase()
-  if (!term) return servicios.value
-  return servicios.value.filter((item) => [item.nombre, item.clave, item.tipo].some((value) => String(value || '').toLowerCase().includes(term)))
+const conceptOptions = computed(() => {
+  const term = normalizeText(conceptSearch.value)
+  return conceptos.value
+    .filter((concept) => {
+      if (selectedCiclo.value && concept.ciclo_escolar && normalizeCicloKey(concept.ciclo_escolar) !== selectedCiclo.value) return false
+      if (!term) return true
+      return [concept.id, concept.concepto, concept.ciclo_escolar].some((value) => normalizeText(value).includes(term))
+    })
+    .slice(0, 80)
 })
 
-const conceptPickerItems = computed(() => {
-  const term = conceptSearch.value.trim().toLowerCase()
-  const base = conceptos.value.filter((concepto) => {
-    if (!term) return true
-    return [concepto.concepto_id, concepto.concepto_nombre].some((value) => String(value || '').toLowerCase().includes(term))
-  })
-  return base.slice(0, 80)
-})
+const configuredConceptIds = computed(() => new Set(mappings.value
+  .filter((mapping) => normalizeCicloKey(mapping.cycle_name) === selectedCiclo.value && Number(mapping.concepto_id || 0) > 0)
+  .map((mapping) => String(Number(mapping.concepto_id))))
+)
+const uncategorizedConcepts = computed(() => conceptos.value
+  .filter((concept) => (!selectedCiclo.value || normalizeCicloKey(concept.ciclo_escolar) === selectedCiclo.value) && !configuredConceptIds.value.has(String(Number(concept.id))))
+  .slice(0, 80)
+)
+const canSaveMapping = computed(() => Boolean(selectedConcept.value?.id && selectedCiclo.value && selectedPlantel.value && selectedCategory.value && (selectedCategory.value !== 'talleres_servicios' || serviceName.value.trim())))
 
-const canSaveDraft = computed(() => draft.value.concepto_id && draft.value.concepto_nombre && draft.value.categoria_clave)
+const serviceAccent = (mapping) => ({ '--service-accent': mapping.servicio_color || '#6aa957' })
+const serviceTagStyle = (service) => ({ '--service-accent': service.color || '#6aa957' })
 
 const loadAdmin = async () => {
   loading.value = true
   try {
-    adminData.value = await $fetch('/api/conceptos-config/admin', {
-      params: {
-        ciclo: selectedCiclo.value,
-        plantel: selectedPlantel.value,
-        categoria: selectedCategoria.value
-      }
-    })
+    const result = await $fetch('/api/conceptos-config/admin')
+    adminPayload.value = result
+    if (!selectedCiclo.value) selectedCiclo.value = result?.cicloActual || cycleOptions.value[0]?.value || normalizeCicloKey(state.value?.ciclo)
   } catch (error) {
-    show(error?.data?.message || 'No se pudo cargar configuración', 'danger')
+    show('Error cargando conceptos', 'danger')
   } finally {
     loading.value = false
   }
 }
 
 const resetDraft = () => {
-  draft.value = { concepto_id: '', concepto_nombre: '', categoria_clave: selectedCategoria.value || 'inscripcion', servicio_id: '', monthsText: '' }
+  selectedConcept.value = null
   conceptSearch.value = ''
-  draftVisible.value = true
+  serviceName.value = ''
+  serviceIcon.value = ''
+  serviceColor.value = ''
+  selectedMonths.value = []
 }
 
-const selectConcept = (concepto) => {
-  draft.value.concepto_id = concepto.concepto_id
-  draft.value.concepto_nombre = concepto.concepto_nombre
-}
-
-const saveDraft = async () => {
-  if (!canSaveDraft.value) return
-  busy.value = true
-  busyAction.value = 'save'
+const saveMapping = async () => {
+  if (!canSaveMapping.value) return
+  saving.value = true
   try {
     await $fetch('/api/conceptos-config/mappings', {
       method: 'POST',
       body: {
-        concepto_id: draft.value.concepto_id,
-        concepto_nombre: draft.value.concepto_nombre,
         ciclo: selectedCiclo.value,
         plantel: selectedPlantel.value,
-        categoria_clave: draft.value.categoria_clave,
-        servicio_id: draft.value.servicio_id || null,
-        meses: draft.value.monthsText
+        tipo: selectedCategory.value,
+        concepto_id: selectedConcept.value.id,
+        concepto_nombre: selectedConcept.value.concepto,
+        meses: selectedMonths.value,
+        servicio_nombre: serviceName.value,
+        servicio_clave: serviceKey(serviceName.value),
+        servicio_icono: serviceIcon.value,
+        servicio_color: serviceColor.value,
       }
     })
     show('Concepto guardado', 'success')
-    draftVisible.value = false
+    resetDraft()
+    await loadAdmin()
+  } catch (error) {
+    show(error?.data?.message || error?.data?.error || 'No se pudo guardar', 'danger')
+  } finally {
+    saving.value = false
+  }
+}
+
+const saveServiceOnly = async () => {
+  if (!serviceName.value.trim()) return
+  saving.value = true
+  try {
+    await $fetch('/api/conceptos-config/services', {
+      method: 'POST',
+      body: {
+        ciclo: selectedCiclo.value,
+        plantel: selectedPlantel.value,
+        servicio_nombre: serviceName.value,
+        servicio_clave: serviceKey(serviceName.value),
+        servicio_icono: serviceIcon.value,
+        servicio_color: serviceColor.value,
+      }
+    })
+    show('Taller guardado', 'success')
+    resetDraft()
     await loadAdmin()
   } catch (error) {
     show(error?.data?.message || 'No se pudo guardar', 'danger')
   } finally {
-    busy.value = false
-    busyAction.value = ''
+    saving.value = false
   }
 }
 
-const removeMapping = async (item) => {
-  busy.value = true
+const removeMapping = async (mapping) => {
+  if (!window.confirm(`Quitar ${mapping.concepto_nombre}?`)) return
   try {
-    await $fetch(`/api/conceptos-config/mappings/${item.id}`, { method: 'DELETE' })
-    show('Concepto desasignado', 'success')
+    await $fetch(`/api/conceptos-config/mappings/${mapping.id}`, { method: 'DELETE' })
+    show('Concepto quitado', 'success')
     await loadAdmin()
   } catch (error) {
-    show(error?.data?.message || 'No se pudo desasignar', 'danger')
-  } finally {
-    busy.value = false
+    show('No se pudo quitar', 'danger')
   }
 }
 
-const createService = async () => {
-  busy.value = true
+const syncCentralToBridge = async () => {
+  syncing.value = true
   try {
-    await $fetch('/api/conceptos-config/services', { method: 'POST', body: newService.value })
-    newService.value = { nombre: '', tipo: 'taller', icono: 'sparkles', color: '' }
-    newServiceVisible.value = false
-    show('Taller guardado', 'success')
+    await $fetch('/api/conceptos-config/sync/central-to-bridge', { method: 'POST' })
+    show('Bridge sincronizado', 'success')
     await loadAdmin()
   } catch (error) {
-    show(error?.data?.message || 'No se pudo guardar taller', 'danger')
+    show('No se pudo sincronizar', 'danger')
   } finally {
-    busy.value = false
+    syncing.value = false
   }
 }
 
-const importCatalog = async () => {
-  busy.value = true
-  busyAction.value = 'import'
-  try {
-    const result = await $fetch('/api/conceptos-config/sync-catalog', {
-      method: 'POST',
-      body: { ciclo: selectedCiclo.value, plantel: selectedPlantel.value }
-    })
-    show(`Catálogo sincronizado (${result.imported || 0})`, 'success')
-    await loadAdmin()
-  } catch (error) {
-    show(error?.data?.message || 'No se pudo sincronizar catálogo', 'danger')
-  } finally {
-    busy.value = false
-    busyAction.value = ''
-  }
+const toggleMonth = (month) => {
+  selectedMonths.value = selectedMonths.value.includes(month)
+    ? selectedMonths.value.filter((entry) => entry !== month)
+    : [...selectedMonths.value, month]
 }
 
-const syncBridge = async () => {
-  busy.value = true
-  busyAction.value = 'sync'
-  try {
-    const result = await $fetch('/api/conceptos-config/sync-bridge', {
-      method: 'POST',
-      body: { ciclo: selectedCiclo.value, plantel: selectedPlantel.value }
-    })
-    const synced = result?.synced?.configs ?? 0
-    show(`Bridge sincronizado (${synced})`, 'success')
-    await loadAdmin()
-  } catch (error) {
-    show(error?.data?.message || 'No se pudo sincronizar Bridge', 'danger')
-  } finally {
-    busy.value = false
-    busyAction.value = ''
+watch(selectedCategory, () => {
+  if (selectedCategory.value !== 'talleres_servicios') {
+    serviceName.value = ''
+    serviceIcon.value = ''
+    serviceColor.value = ''
   }
-}
-
-onMounted(() => {
-  if (canManageConceptos.value) loadAdmin()
+  if (selectedCategory.value !== 'mensual_baja4') selectedMonths.value = []
+})
+watch(selectedConcept, (concept) => {
+  if (concept && selectedCategory.value === 'talleres_servicios' && !serviceName.value.trim()) {
+    serviceName.value = concept.concepto
+  }
 })
 
-watch([selectedCiclo, selectedPlantel, selectedCategoria], () => {
-  if (canManageConceptos.value) loadAdmin()
-})
+onMounted(loadAdmin)
 </script>
 
 <style scoped>
-.concept-config-page {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.concept-hero {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 16px;
-  border: 1px solid #dfe6ef;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(247,252,246,.96));
-  padding: 18px 20px;
-  box-shadow: 0 12px 30px rgba(22, 38, 65, 0.06);
-}
-
-.section-kicker {
-  display: block;
-  margin-bottom: 4px;
-  color: #3f7e36;
-  font-size: .66rem;
-  font-weight: 850;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.hero-copy h2,
-.panel-head h3 {
-  margin: 0;
-  color: #162641;
-  font-weight: 850;
-}
-
-.hero-copy h2 { font-size: 1.24rem; }
-.hero-copy p {
-  margin: 4px 0 0;
-  color: #66728a;
-  font-size: .82rem;
-  font-weight: 520;
-}
-
-.hero-metrics {
-  display: grid;
-  min-width: 340px;
-  grid-template-columns: repeat(3, minmax(0,1fr));
-  overflow: hidden;
-  border: 1px solid #dfe6ef;
-  border-radius: 14px;
-  background: rgba(255,255,255,.86);
-}
-
-.hero-metrics div {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  border-right: 1px solid #edf2f7;
-  padding: 12px 14px;
-}
-.hero-metrics div:last-child { border-right: 0; }
-.hero-metrics span,
-.panel-head small,
-.mapping-main small,
-.service-row small,
-.gap-stack span {
-  color: #66728a;
-  font-size: .67rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-.hero-metrics strong { color: #162641; font-size: 1.12rem; line-height: 1; }
-
-.concept-toolbar {
-  display: grid;
-  grid-template-columns: auto auto auto minmax(260px, 1fr) auto auto auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.field-chip,
-.search-box {
-  display: flex;
-  height: 38px;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #dfe6ef;
-  border-radius: 12px;
-  background: #fff;
-  padding: 0 11px;
-  color: #66728a;
-  box-shadow: 0 8px 20px rgba(22,38,65,.04);
-}
-
-.field-chip select,
-.search-box input,
-.assignment-fields select,
-.assignment-fields input,
-.service-form input,
-.service-form select {
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: #162641;
-  font-size: .82rem;
-  font-weight: 700;
-  outline: none;
-}
-
-.search-box input { flex: 1; }
-.search-box.compact { height: 34px; box-shadow: none; }
-
-.icon-button,
-.toolbar-action,
-.btn-compact,
-.save-button,
-.row-action,
-.icon-grid button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #dfe6ef;
-  background: #fff;
-  color: #397fe8;
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
-}
-.icon-button { width: 38px; height: 38px; border-radius: 12px; }
-.icon-button.primary { color: #2f7a37; background: #f5fbf3; }
-.toolbar-action { height: 38px; gap: 7px; border-radius: 12px; padding: 0 12px; color: #4a596f; font-size: .76rem; font-weight: 850; }
-.toolbar-action.primary { color: #2f7a37; background: #f5fbf3; }
-.icon-button:hover,
-.toolbar-action:hover,
-.btn-compact:hover,
-.row-action:hover { transform: translateY(-1px); border-color: rgba(57,127,232,.32); background: rgba(57,127,232,.06); }
-
-.readonly-card,
-.card-panel {
-  border: 1px solid #dfe6ef;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 10px 28px rgba(22,38,65,.05);
-}
-.readonly-card {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  color: #66728a;
-  font-weight: 750;
-  font-size: .82rem;
-}
-
-.config-grid {
-  display: grid;
-  min-height: 0;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 14px;
-}
-
-.card-panel { min-width: 0; overflow: hidden; }
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-bottom: 1px solid #edf2f7;
-  padding: 14px 16px;
-}
-.panel-head.tight { padding: 13px 14px; }
-.panel-head h3 { font-size: .96rem; }
-
-.btn-compact {
-  height: 32px;
-  gap: 6px;
-  border-radius: 10px;
-  padding: 0 10px;
-  font-size: .74rem;
-  font-weight: 850;
-}
-
-.assignment-composer {
-  display: grid;
-  grid-template-columns: minmax(0,1fr) 280px;
-  gap: 14px;
-  border-bottom: 1px solid #edf2f7;
-  padding: 14px 16px;
-  background: #fbfdff;
-}
-.concept-picker label,
-.assignment-fields label {
-  display: block;
-  margin-bottom: 7px;
-  color: #66728a;
-  font-size: .68rem;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-.picker-list {
-  display: grid;
-  max-height: 220px;
-  overflow: auto;
-  gap: 6px;
-  margin-top: 8px;
-}
-.picker-list button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  border: 1px solid #edf2f7;
-  border-radius: 11px;
-  background: #fff;
-  padding: 9px 10px;
-  color: #162641;
-  text-align: left;
-}
-.picker-list button.selected { border-color: rgba(63,126,54,.42); background: #f1faef; }
-.picker-list strong { font-size: .78rem; }
-.picker-list span { color: #8a96aa; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; }
-.assignment-fields { display: grid; align-content: start; gap: 9px; }
-.assignment-fields select,
-.assignment-fields input,
-.service-form input,
-.service-form select {
-  height: 36px;
-  border: 1px solid #dfe6ef;
-  border-radius: 11px;
-  background: #fff;
-  padding: 0 10px;
-}
-.save-button {
-  height: 36px;
-  gap: 7px;
-  border-radius: 11px;
-  background: #1f6f3c;
-  color: #fff;
-  font-size: .78rem;
-  font-weight: 850;
-}
-.save-button:disabled { opacity: .48; cursor: not-allowed; }
-.save-button.small { width: 100%; height: 34px; }
-
-.category-lanes { display: grid; gap: 12px; padding: 14px 16px 16px; }
-.category-lane {
-  border: 1px solid #edf2f7;
-  border-radius: 14px;
-  background: #fff;
-  overflow: hidden;
-}
-.category-lane header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid #edf2f7;
-  padding: 10px 12px;
-  color: #162641;
-}
-.category-lane header small { margin-left: auto; color: #8a96aa; font-weight: 850; }
-.category-dot { width: 8px; height: 8px; border-radius: 999px; background: #8aa3bd; }
-.dot-inscripcion { background: #3f7e36; }
-.dot-talleres_servicios { background: #397fe8; }
-.dot-curso_verano { background: #f59e0b; }
-.dot-mensual_baja4 { background: #8b5cf6; }
-.dot-issste { background: #0f766e; }
-
-.empty-row { padding: 18px 12px; color: #9aa5b5; font-size: .8rem; font-weight: 700; }
-.mapping-list { display: grid; }
-.mapping-row {
-  display: grid;
-  grid-template-columns: minmax(0,1fr) auto;
-  gap: 12px;
-  align-items: center;
-  border-bottom: 1px solid #f1f5f9;
-  padding: 10px 12px;
-}
-.mapping-row:last-child { border-bottom: 0; }
-.mapping-row.inactive { opacity: .55; }
-.mapping-main { display: grid; gap: 2px; min-width: 0; }
-.mapping-main strong { overflow: hidden; color: #162641; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
-.concept-id { color: #8a96aa; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .68rem; font-weight: 850; }
-.mapping-side { display: flex; align-items: center; gap: 8px; }
-.service-chip,
-.months-chip,
-.soft-warning {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border-radius: 999px;
-  padding: 5px 8px;
-  font-size: .68rem;
-  font-weight: 850;
-}
-.service-chip { background: var(--chip-bg); color: var(--chip-fg); }
-.months-chip { background: #f8fafc; color: #66728a; border: 1px solid #edf2f7; }
-.soft-warning { background: #fff7ed; color: #c05621; }
-.row-action { width: 28px; height: 28px; border-radius: 9px; }
-.row-action.danger { color: #e05252; }
-
-.config-side { display: grid; gap: 14px; align-content: start; }
-.side-card { overflow: hidden; }
-.service-form { display: grid; gap: 8px; border-bottom: 1px solid #edf2f7; padding: 12px 14px; background: #fbfdff; }
-.icon-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
-.icon-grid button { height: 30px; border-radius: 9px; color: #66728a; }
-.icon-grid button.selected { background: #eef7ee; color: #2f6d35; border-color: rgba(47,109,53,.3); }
-.service-list { display: grid; max-height: 360px; overflow: auto; }
-.service-row {
-  display: grid;
-  grid-template-columns: 30px minmax(0,1fr) auto;
-  gap: 8px;
-  align-items: center;
-  border-bottom: 1px solid #f1f5f9;
-  padding: 9px 14px;
-}
-.service-row:last-child { border-bottom: 0; }
-.service-row strong { overflow: hidden; color: #162641; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
-.service-icon { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 9px; background: var(--chip-bg); color: var(--chip-fg); }
-.gap-stack { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 14px; }
-.gap-stack div { border: 1px solid #edf2f7; border-radius: 12px; padding: 10px; background: #fbfdff; }
-.gap-stack strong { display: block; margin-top: 3px; color: #162641; font-size: 1rem; }
-.mini-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 14px; }
-.mini-list span { border-radius: 999px; background: #f8fafc; color: #66728a; padding: 5px 8px; font-size: .68rem; font-weight: 800; }
-
-@media (max-width: 1180px) {
-  .concept-hero,
-  .config-grid,
-  .assignment-composer { grid-template-columns: 1fr; }
-  .concept-hero { flex-direction: column; }
-  .hero-metrics { min-width: 0; }
-  .concept-toolbar { grid-template-columns: 1fr 1fr; }
-}
+.concept-governance-page { display: flex; flex-direction: column; gap: 14px; min-height: 0; flex: 1; }
+.governance-hero { display: flex; justify-content: space-between; gap: 18px; align-items: stretch; border: 1px solid #dfe6ef; border-radius: 18px; background: radial-gradient(circle at 96% 10%, rgba(103,168,216,.13), transparent 13rem), linear-gradient(135deg, #fff, #f8fbf7); padding: 18px 20px; box-shadow: 0 12px 30px rgba(22,38,65,.055); }
+.section-kicker { display:block; margin-bottom: 4px; color:#3f7e36; font-size:.66rem; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+.governance-hero h2, .governance-card-head h3 { margin:0; color:#162641; font-weight:850; }
+.governance-hero h2 { font-size:1.22rem; }
+.governance-hero p { max-width: 720px; margin: 6px 0 0; color:#637189; font-size:.88rem; line-height:1.45; }
+.governance-status { min-width: 180px; border:1px solid #dfe7ef; border-radius:16px; background:#fff; padding:12px; display:flex; flex-direction:column; justify-content:center; gap:6px; box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
+.governance-status span { color:#718096; font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.governance-status strong { color:#162641; font-size:1.05rem; }
+.mini-action { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid #cdd9e7; background:#fff; border-radius:999px; padding:7px 10px; color:#24445f; font-weight:800; font-size:.74rem; }
+.blocked-card { display:flex; align-items:center; gap:10px; padding:18px; color:#53647a; font-weight:750; }
+.governance-toolbar { display:grid; grid-template-columns: minmax(120px, .7fr) minmax(120px, .55fr) minmax(170px, .85fr) minmax(260px, 1.3fr) auto; gap:10px; align-items:end; }
+.governance-toolbar label, .service-editor label { display:flex; flex-direction:column; gap:5px; }
+.governance-toolbar label span, .service-editor label span { color:#708096; font-size:.66rem; font-weight:850; text-transform:uppercase; letter-spacing:.075em; }
+.governance-toolbar select, .service-editor input { height:38px; border:1px solid #d8e1ec; border-radius:12px; background:#fff; color:#162641; padding:0 11px; font-size:.86rem; font-weight:700; outline:none; }
+.search-box { display:flex; align-items:center; gap:8px; height:38px; border:1px solid #d8e1ec; border-radius:12px; background:#fff; padding:0 11px; color:#718096; }
+.search-box input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:#162641; font-size:.86rem; }
+.governance-grid { display:grid; grid-template-columns: minmax(0, 1fr) 340px; gap:14px; min-height:0; }
+.card { border:1px solid #dfe6ef; border-radius:18px; background:#fff; box-shadow:0 12px 30px rgba(22,38,65,.055); }
+.governance-main-card, .governance-side { padding:14px; min-height:0; }
+.governance-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:12px; }
+.governance-card-head.compact { margin-bottom:10px; }
+.governance-card-head h3 { font-size:1rem; }
+.governance-card-head strong { min-width:34px; height:30px; display:grid; place-items:center; border-radius:11px; background:#f0f7ec; color:#3f7e36; font-weight:900; }
+.mapping-list { display:flex; flex-direction:column; gap:8px; max-height:54vh; overflow:auto; padding-right:4px; }
+.mapping-row { display:grid; grid-template-columns: 52px minmax(0,1fr) auto; gap:10px; align-items:center; border:1px solid #e4eaf1; border-radius:14px; padding:10px; background:#fbfcfe; }
+.mapping-id { height:36px; border-radius:11px; background:#eff4f8; color:#5c6d82; display:grid; place-items:center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.74rem; font-weight:850; }
+.mapping-body { min-width:0; display:flex; flex-direction:column; gap:3px; }
+.mapping-body strong { color:#162641; font-size:.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mapping-body span { color:#718096; font-size:.75rem; font-weight:650; }
+.tiny-chip-row { display:flex; gap:4px; flex-wrap:wrap; margin-top:3px; }
+.tiny-chip { border:1px solid #d8e6d2; background:#f5faf2; color:#407337; border-radius:999px; padding:2px 6px; font-size:.65rem; font-weight:850; }
+.service-link { display:inline-flex; align-items:center; width:max-content; max-width:100%; gap:6px; color:#274560; font-size:.75rem; font-weight:800; }
+.service-link span { --service-accent:#6aa957; width:22px; height:22px; border-radius:9px; display:grid; place-items:center; background: color-mix(in srgb, var(--service-accent) 14%, white); color: var(--service-accent); }
+.icon-action { width:32px; height:32px; border:1px solid #dfe6ef; border-radius:11px; background:#fff; color:#65758c; display:grid; place-items:center; }
+.icon-action.danger:hover { color:#c24141; border-color:#f0caca; background:#fff7f7; }
+.empty-panel { display:grid; place-items:center; min-height:170px; color:#718096; font-weight:750; }
+.concept-search-select { display:flex; flex-direction:column; gap:8px; }
+.concept-options { display:flex; flex-direction:column; gap:6px; max-height:250px; overflow:auto; padding-right:3px; }
+.concept-option { display:grid; grid-template-columns: 46px minmax(0,1fr) auto; gap:8px; align-items:center; text-align:left; border:1px solid #e3eaf1; border-radius:12px; background:#fbfcfe; padding:8px; }
+.concept-option.selected { border-color:#7fb069; background:#f4faef; }
+.concept-option span { color:#708096; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-weight:850; font-size:.7rem; }
+.concept-option strong { color:#162641; font-size:.78rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.concept-option small { color:#8a98aa; font-size:.68rem; font-weight:750; }
+.service-editor { display:flex; flex-direction:column; gap:9px; margin-top:12px; }
+.service-inline-fields { display:grid; grid-template-columns: 88px 1fr; gap:8px; }
+.months-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; margin-top:12px; }
+.months-grid button { border:1px solid #dfe6ef; border-radius:10px; background:#fff; color:#65758c; padding:7px 0; font-size:.72rem; font-weight:850; }
+.months-grid button.selected { border-color:#7fb069; background:#f4faef; color:#3f7e36; }
+.btn.full { width:100%; justify-content:center; margin-top:12px; }
+.governance-bottom-grid { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+.insight-card { padding:13px; }
+.insight-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.insight-head span { color:#65758c; font-size:.74rem; font-weight:850; text-transform:uppercase; letter-spacing:.07em; }
+.insight-head strong { color:#162641; font-size:1.05rem; }
+.insight-list { display:flex; flex-wrap:wrap; gap:6px; }
+.insight-list span { border:1px solid #e3eaf1; background:#fbfcfe; border-radius:999px; padding:5px 8px; color:#52647a; font-size:.72rem; font-weight:750; }
+.insight-list em { color:#8a98aa; font-size:.8rem; font-style:normal; }
+.service-tags span { --service-accent:#6aa957; background: color-mix(in srgb, var(--service-accent) 12%, white); border-color: color-mix(in srgb, var(--service-accent) 28%, white); color:#274560; }
+@media (max-width: 1120px) { .governance-toolbar, .governance-grid, .governance-bottom-grid { grid-template-columns: 1fr; } }
 </style>

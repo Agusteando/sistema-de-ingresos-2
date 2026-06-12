@@ -534,6 +534,42 @@ export const ensureSchema = async () => {
       `)
 
       await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS config_school_cycles (
+          cycle_name VARCHAR(20) NOT NULL PRIMARY KEY,
+          is_current TINYINT(1) NOT NULL DEFAULT 0,
+          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
+          updated_by VARCHAR(255) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_config_school_cycles_current (is_current)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS config_enrollment_mappings (
+          id INT NOT NULL PRIMARY KEY,
+          cycle_name VARCHAR(20) NOT NULL,
+          plantel VARCHAR(40) NOT NULL,
+          concepto_id INT NOT NULL DEFAULT 0,
+          concepto_nombre VARCHAR(255) NOT NULL,
+          enrollment_type VARCHAR(80) NOT NULL DEFAULT 'regular',
+          months_json TEXT NULL,
+          servicio_clave VARCHAR(120) DEFAULT NULL,
+          servicio_nombre VARCHAR(160) DEFAULT NULL,
+          servicio_icono VARCHAR(80) DEFAULT NULL,
+          servicio_color VARCHAR(40) DEFAULT NULL,
+          activo TINYINT(1) NOT NULL DEFAULT 1,
+          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
+          updated_by VARCHAR(255) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_config_enrollment_scope (cycle_name, plantel, enrollment_type, activo),
+          INDEX idx_config_enrollment_concepto (concepto_id),
+          INDEX idx_config_enrollment_servicio (servicio_clave, activo)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS alumno_matricula_links (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
           previous_matricula VARCHAR(255) NOT NULL,
@@ -596,135 +632,6 @@ export const ensureSchema = async () => {
 
 
       await runSafeQuery(`
-        CREATE TABLE IF NOT EXISTS config_school_cycles (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          cycle_name VARCHAR(20) NOT NULL,
-          is_current TINYINT(1) NOT NULL DEFAULT 0,
-          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
-          updated_by VARCHAR(255) DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uniq_config_school_cycles_name (cycle_name),
-          INDEX idx_config_school_cycles_current (is_current)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `)
-
-      await runSafeQuery(`
-        CREATE TABLE IF NOT EXISTS conceptos_global (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          concepto_id INT NOT NULL,
-          concepto_nombre VARCHAR(255) NOT NULL,
-          costo DECIMAL(65,2) DEFAULT NULL,
-          monto_final DECIMAL(65,2) DEFAULT NULL,
-          meses INT DEFAULT NULL,
-          plazo VARCHAR(80) DEFAULT NULL,
-          eventual TINYINT(1) NOT NULL DEFAULT 0,
-          ciclo VARCHAR(20) DEFAULT NULL,
-          activo TINYINT(1) NOT NULL DEFAULT 1,
-          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
-          updated_by VARCHAR(255) DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uq_conceptos_global_concepto_id (concepto_id),
-          INDEX idx_conceptos_global_ciclo (ciclo, activo),
-          INDEX idx_conceptos_global_nombre (concepto_nombre)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `)
-
-      await runSafeQuery(`
-        CREATE TABLE IF NOT EXISTS concepto_categorias (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          clave VARCHAR(80) NOT NULL,
-          nombre VARCHAR(120) NOT NULL,
-          orden INT NOT NULL DEFAULT 0,
-          activo TINYINT(1) NOT NULL DEFAULT 1,
-          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uq_concepto_categorias_clave (clave)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `)
-
-      await runSafeQuery(`
-        INSERT INTO concepto_categorias (clave, nombre, orden, activo, sync_version)
-        VALUES
-          ('inscripcion', 'Inscripción', 10, 1, 1),
-          ('talleres_servicios', 'Talleres y Servicios', 20, 1, 1),
-          ('servicio_global', 'Servicio global', 25, 1, 1),
-          ('curso_verano', 'Curso de Verano', 30, 1, 1),
-          ('mensual_baja4', 'Mensual baja 4', 40, 1, 1),
-          ('issste', 'ISSSTE', 50, 1, 1),
-          ('otro', 'Otro', 999, 1, 1)
-        ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), orden = VALUES(orden), activo = 1;
-      `)
-
-      await runSafeQuery(`
-        CREATE TABLE IF NOT EXISTS concepto_config (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          concepto_id INT NOT NULL,
-          concepto_nombre VARCHAR(255) NOT NULL,
-          ciclo VARCHAR(20) NOT NULL,
-          plantel VARCHAR(40) NOT NULL,
-          categoria_clave VARCHAR(80) NOT NULL,
-          months_json JSON NULL,
-          activo TINYINT(1) NOT NULL DEFAULT 1,
-          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
-          updated_by VARCHAR(255) DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uq_concepto_config_scope (concepto_id, ciclo, plantel, categoria_clave),
-          INDEX idx_concepto_config_scope (ciclo, plantel, categoria_clave, activo),
-          INDEX idx_concepto_config_concepto (concepto_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `)
-
-      await runSafeQuery(`
-        CREATE TABLE IF NOT EXISTS servicios_catalogo (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          clave VARCHAR(120) NOT NULL,
-          nombre VARCHAR(160) NOT NULL,
-          tipo VARCHAR(30) NOT NULL DEFAULT 'servicio',
-          icono VARCHAR(80) DEFAULT NULL,
-          color VARCHAR(40) DEFAULT NULL,
-          orden INT NOT NULL DEFAULT 0,
-          activo TINYINT(1) NOT NULL DEFAULT 1,
-          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
-          updated_by VARCHAR(255) DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uq_servicios_catalogo_clave (clave),
-          INDEX idx_servicios_catalogo_tipo (tipo, activo),
-          INDEX idx_servicios_catalogo_nombre (nombre)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `)
-
-      await runSafeQuery(`
-        CREATE TABLE IF NOT EXISTS concepto_servicio_map (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          concepto_config_id BIGINT UNSIGNED NOT NULL,
-          servicio_id BIGINT UNSIGNED NOT NULL,
-          activo TINYINT(1) NOT NULL DEFAULT 1,
-          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
-          updated_by VARCHAR(255) DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uq_concepto_servicio_map_config (concepto_config_id),
-          INDEX idx_concepto_servicio_map_servicio (servicio_id, activo)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `)
-
-      await runSafeQuery(`
-        CREATE TABLE IF NOT EXISTS conceptos_sync_state (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          scope_key VARCHAR(190) NOT NULL,
-          last_sync_version BIGINT UNSIGNED NOT NULL DEFAULT 0,
-          last_synced_at DATETIME DEFAULT NULL,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uq_conceptos_sync_state_scope (scope_key)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `)
-
-      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS documento_concepto_periodos (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
           documento INT NOT NULL,
@@ -764,6 +671,26 @@ export const ensureSchema = async () => {
           INDEX idx_documento_concepto_correcciones_matricula (matricula(64), ciclo(20))
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
+
+      try {
+        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'config_enrollment_mappings'`)
+
+        if (tables.length > 0) {
+          await checkAndAddColumn('config_enrollment_mappings', 'enrollment_type', "VARCHAR(80) NOT NULL DEFAULT 'regular'")
+          await checkAndAddColumn('config_enrollment_mappings', 'months_json', "TEXT NULL")
+          await checkAndAddColumn('config_enrollment_mappings', 'servicio_clave', "VARCHAR(120) DEFAULT NULL")
+          await checkAndAddColumn('config_enrollment_mappings', 'servicio_nombre', "VARCHAR(160) DEFAULT NULL")
+          await checkAndAddColumn('config_enrollment_mappings', 'servicio_icono', "VARCHAR(80) DEFAULT NULL")
+          await checkAndAddColumn('config_enrollment_mappings', 'servicio_color', "VARCHAR(40) DEFAULT NULL")
+          await checkAndAddColumn('config_enrollment_mappings', 'activo', "TINYINT(1) NOT NULL DEFAULT 1")
+          await checkAndAddColumn('config_enrollment_mappings', 'sync_version', "BIGINT UNSIGNED NOT NULL DEFAULT 1")
+          await checkAndAddColumn('config_enrollment_mappings', 'updated_by', "VARCHAR(255) DEFAULT NULL")
+          await checkAndAddColumn('config_enrollment_mappings', 'created_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP")
+          await checkAndAddColumn('config_enrollment_mappings', 'updated_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+          await runOptionalIndexQuery(`ALTER TABLE config_enrollment_mappings ADD INDEX idx_config_enrollment_scope (cycle_name, plantel, enrollment_type, activo)`)
+          await runOptionalIndexQuery(`ALTER TABLE config_enrollment_mappings ADD INDEX idx_config_enrollment_servicio (servicio_clave, activo)`)
+        }
+      } catch (e) {}
 
       await checkAndAddColumn('users', 'role', "VARCHAR(20) NOT NULL DEFAULT 'plantel'")
       await checkAndAddColumn('users', 'planteles', "TEXT", "UPDATE users SET planteles = plantel WHERE plantel IS NOT NULL AND (planteles IS NULL OR planteles = '')")
@@ -822,47 +749,6 @@ export const ensureSchema = async () => {
           await checkAndAddColumn('documentos', 'becaCartaGenerada', "TINYINT(1) NOT NULL DEFAULT 0")
           await checkAndAddColumn('documentos', 'becaCartaFecha', "DATETIME DEFAULT NULL")
           await runOptionalIndexQuery(`ALTER TABLE documentos ADD INDEX idx_documentos_ciclo_estatus_matricula (ciclo(20), estatus(20), matricula(64))`)
-        }
-      } catch (e) {}
-
-      try {
-        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'config_school_cycles'`)
-        if (tables.length > 0) {
-          await checkAndAddColumn('config_school_cycles', 'sync_version', "BIGINT UNSIGNED NOT NULL DEFAULT 1")
-          await checkAndAddColumn('config_school_cycles', 'updated_by', "VARCHAR(255) DEFAULT NULL")
-        }
-      } catch (e) {}
-
-      try {
-        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'conceptos_global'`)
-        if (tables.length > 0) {
-          await checkAndAddColumn('conceptos_global', 'monto_final', "DECIMAL(65,2) DEFAULT NULL")
-          await checkAndAddColumn('conceptos_global', 'meses', "INT DEFAULT NULL")
-          await checkAndAddColumn('conceptos_global', 'plazo', "VARCHAR(80) DEFAULT NULL")
-          await checkAndAddColumn('conceptos_global', 'eventual', "TINYINT(1) NOT NULL DEFAULT 0")
-          await checkAndAddColumn('conceptos_global', 'ciclo', "VARCHAR(20) DEFAULT NULL")
-          await checkAndAddColumn('conceptos_global', 'sync_version', "BIGINT UNSIGNED NOT NULL DEFAULT 1")
-          await checkAndAddColumn('conceptos_global', 'updated_by', "VARCHAR(255) DEFAULT NULL")
-        }
-      } catch (e) {}
-
-      try {
-        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'concepto_config'`)
-        if (tables.length > 0) {
-          await checkAndAddColumn('concepto_config', 'concepto_nombre', "VARCHAR(255) DEFAULT ''")
-          await checkAndAddColumn('concepto_config', 'months_json', "JSON NULL")
-          await checkAndAddColumn('concepto_config', 'sync_version', "BIGINT UNSIGNED NOT NULL DEFAULT 1")
-          await checkAndAddColumn('concepto_config', 'updated_by', "VARCHAR(255) DEFAULT NULL")
-        }
-      } catch (e) {}
-
-      try {
-        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'servicios_catalogo'`)
-        if (tables.length > 0) {
-          await checkAndAddColumn('servicios_catalogo', 'icono', "VARCHAR(80) DEFAULT NULL")
-          await checkAndAddColumn('servicios_catalogo', 'color', "VARCHAR(40) DEFAULT NULL")
-          await checkAndAddColumn('servicios_catalogo', 'sync_version', "BIGINT UNSIGNED NOT NULL DEFAULT 1")
-          await checkAndAddColumn('servicios_catalogo', 'updated_by', "VARCHAR(255) DEFAULT NULL")
         }
       } catch (e) {}
 

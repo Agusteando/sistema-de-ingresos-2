@@ -1,13 +1,12 @@
-import { getTrustedAuthUser } from '../../../utils/auth-session'
-import { createService, syncCentralConceptConfigToBridge } from '../../../utils/conceptos-config'
+import { createOrUpdateMapping, requireConceptosAdmin } from '../../../utils/conceptos-config'
 
 export default defineEventHandler(async (event) => {
-  const user = await getTrustedAuthUser(event)
-  if (!user.isSuperAdmin) {
-    throw createError({ statusCode: 403, message: 'Solo super admin puede administrar servicios.' })
-  }
+  const user = await requireConceptosAdmin(event)
   const body = await readBody(event)
-  const service = await createService(body, user.email)
-  await syncCentralConceptConfigToBridge({})
-  return { success: true, service }
+  return await createOrUpdateMapping({
+    ...body,
+    tipo: 'talleres_servicios',
+    concepto_id: 0,
+    concepto_nombre: body?.servicio_nombre || body?.servicio || 'Taller sin concepto',
+  }, user)
 })

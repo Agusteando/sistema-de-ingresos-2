@@ -1,11 +1,7 @@
-import { getTrustedAuthUser } from '../../../utils/auth-session'
-import { saveConceptMapping } from '../../../utils/conceptos-config'
+import { createOrUpdateMapping, requireConceptosAdmin } from '../../../utils/conceptos-config'
 
 export default defineEventHandler(async (event) => {
-  const user = await getTrustedAuthUser(event)
-  if (!user.isSuperAdmin) {
-    throw createError({ statusCode: 403, message: 'Solo super admin puede administrar conceptos.' })
-  }
+  const user = await requireConceptosAdmin(event)
   const body = await readBody(event)
-  return await saveConceptMapping(body, user.email)
+  return await createOrUpdateMapping(body, user)
 })

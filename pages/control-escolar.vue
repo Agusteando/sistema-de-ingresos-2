@@ -4989,15 +4989,10 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
     const configData = await $fetch("/api/control-escolar/enrollment-config");
     parseEnrollmentConfig(configData);
   } catch (serverError) {
-    try {
-      const configData = await $fetch("/api/conceptos-config/all");
-      parseEnrollmentConfig(configData);
-    } catch (externalError) {
-      console.warn(
-        "[Control Escolar] Usando configuración de inscripción local o por defecto.",
-        externalError || serverError,
-      );
-    }
+    console.warn(
+      "[Control Escolar] Usando configuración de inscripción local o por defecto.",
+      serverError,
+    );
   }
 
   if (

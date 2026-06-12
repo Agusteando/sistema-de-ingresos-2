@@ -1,7 +1,5 @@
-import { buildConceptConfigResponse } from '../../utils/conceptos-config'
-import { runWithBridgeAgentId } from '../../utils/db'
+import { readBestConceptosConfigPayload } from '../../utils/conceptos-config'
 
-export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-  setResponseHeader(event, 'Cache-Control', 'no-store, max-age=0, must-revalidate')
-  return await buildConceptConfigResponse('local')
-}))
+export default defineEventHandler(async () => {
+  return await readBestConceptosConfigPayload()
+})

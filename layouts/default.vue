@@ -42,7 +42,7 @@
         <NuxtLink v-if="showFinancialNav" to="/reportes" class="nav-item group">
           <LucidePieChart :size="22" stroke-width="2" /> <span class="nav-label">Reportes</span>
         </NuxtLink>
-        <NuxtLink v-if="isSuperAdmin" to="/conceptos" class="nav-item group">
+        <NuxtLink v-if="showConceptosNav" to="/conceptos" class="nav-item group">
           <LucideSettings :size="22" stroke-width="2" /> <span class="nav-label">Conceptos</span>
         </NuxtLink>
         <NuxtLink v-if="showFinancialNav" to="/facturas" class="nav-item group">
@@ -399,6 +399,8 @@ const userPlanteles = computed(() => {
   return planteles.length ? planteles : [...PLANTELES_LIST]
 })
 const showFinancialNav = computed(() => !isControlEscolarOnly.value)
+const hasConceptosAdminRole = computed(() => isSuperAdmin.value || roleTokens.value.some(role => ['admin', 'role_admin', 'conceptos_admin', 'role_conceptos'].includes(role)))
+const showConceptosNav = computed(() => showFinancialNav.value && hasConceptosAdminRole.value)
 const showCicloPicker = computed(() => isSuperAdmin.value || hasControlEscolarRole.value || showFinancialNav.value)
 const activePlantelLabel = computed(() => activePlantel.value === 'GLOBAL' ? 'CONSOLIDADO' : `PLANTEL ${activePlantel.value || 'PT'}`)
 const activePlantelStatus = computed(() => activePlantel.value === 'GLOBAL'

@@ -1,1 +1,1 @@
-Corrige permisos y sincronización visible de configuración de conceptos.
+Extiende configuración legacy de conceptos en Nuxt con categorías y talleres sin tablas paralelas.
