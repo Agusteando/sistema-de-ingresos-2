@@ -310,6 +310,7 @@ declare global {
   const signExternalRow: typeof import('../../server/utils/externalBaseSync').signExternalRow
   const splitCookiesString: typeof import('../../node_modules/h3').splitCookiesString
   const syncCentralConceptosConfigToBridge: typeof import('../../server/utils/conceptos-config').syncCentralConceptosConfigToBridge
+  const syncCentralConceptosConfigToBridgeBestEffort: typeof import('../../server/utils/conceptos-config').syncCentralConceptosConfigToBridgeBestEffort
   const throwNoAdeudoDiagnosticError: typeof import('../../server/utils/noAdeudo').throwNoAdeudoDiagnosticError
   const toEventHandler: typeof import('../../node_modules/h3').toEventHandler
   const toNodeListener: typeof import('../../node_modules/h3').toNodeListener
@@ -407,7 +408,7 @@ export { BECA_TYPE_OPTIONS, normalizeBecaTypes } from 'C:/Users/hp/sistema-de-in
 export { fetchCentralMatriculaOverlay, fetchCentralMatriculaOverlays } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/central-matricula-overlay';
 export { resolveCfdiPath, proxyCfdiEvent } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/cfdi-proxy';
 export { DEFAULT_COBRANZA_EMAIL_SUBJECT, DEFAULT_COBRANZA_EMAIL_TEMPLATE, escapeHtml, normalizeTemplateInput, formatCobranzaMoney, minimumFractionDigits, renderCobranzaEmail } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/cobranzaEmail';
-export { CONCEPTO_CATEGORIES, DEFAULT_PLANTELES, canManageConceptosConfig, requireConceptosAdmin, readCentralConceptosConfig, readCentralConceptos, readLocalConceptosConfig, buildConceptosConfigPayload, collectServiceCatalog, collectUnassociatedServices, readBestConceptosConfig, readBestConceptosConfigPayload, syncCentralConceptosConfigToBridge, runSyncForActiveBridge, createOrUpdateMapping, deleteMapping, saveCycle, deleteCycle } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/conceptos-config';
+export { CONCEPTO_CATEGORIES, DEFAULT_PLANTELES, canManageConceptosConfig, requireConceptosAdmin, readCentralConceptosConfig, readCentralConceptos, readLocalConceptosConfig, buildConceptosConfigPayload, collectServiceCatalog, collectUnassociatedServices, readBestConceptosConfig, readBestConceptosConfigPayload, syncCentralConceptosConfigToBridge, syncCentralConceptosConfigToBridgeBestEffort, runSyncForActiveBridge, createOrUpdateMapping, deleteMapping, saveCycle, deleteCycle } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/conceptos-config';
 export { logControlEscolarAuditEvent, getControlEscolarAuditSummary } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/control-escolar-audit';
 export { buildControlEscolarScopeDescriptor, ensureControlEscolarCacheSchema, getControlBaseSourceId, ensureControlBaseSource, fetchVerifiedControlEscolarScopeRows, maybeRefreshVerifiedControlEscolarScopeCache, maybeRefreshControlEscolarCacheFromLoadedRows, maybePublishControlEscolarSnapshotFromBridge, publishControlEscolarSnapshotFromBridge, readControlCacheSourceMeta } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/control-escolar-cache';
 export { getControlEscolarCentralDb, controlEscolarCentralQuery, getCentralTableColumns, centralTableHasColumn } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/control-escolar-central';

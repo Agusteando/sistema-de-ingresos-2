@@ -1,6 +1,10 @@
 import { requireConceptosAdmin, syncCentralConceptosConfigToBridge } from '../../../utils/conceptos-config'
+import { resolveDataBridgeAgentId } from '../../../utils/auth-session'
+import { runWithBridgeAgentId } from '../../../utils/db'
 
 export default defineEventHandler(async (event) => {
-  await requireConceptosAdmin(event)
-  return await syncCentralConceptosConfigToBridge()
+  const user = await requireConceptosAdmin(event)
+  const bridgeAgentId = resolveDataBridgeAgentId(event, user)
+
+  return await runWithBridgeAgentId(bridgeAgentId, async () => await syncCentralConceptosConfigToBridge())
 })

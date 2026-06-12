@@ -121,6 +121,23 @@ const normalizeConceptRow = (row: any): ConceptRow => ({
   eventual: row.eventual ?? null
 })
 
+const normalizeCycleRows = (rows: CycleRow[] = []) => {
+  const byCycle = new Map<string, { cycle_name: string; is_current: number }>()
+
+  for (const row of rows) {
+    const cycle = normalizeCicloKey(row.cycle_name)
+    if (!cycle) continue
+    const existing = byCycle.get(cycle)
+    const isCurrent = Number(row.is_current || 0) ? 1 : 0
+    byCycle.set(cycle, {
+      cycle_name: cycle,
+      is_current: Math.max(existing?.is_current || 0, isCurrent)
+    })
+  }
+
+  return Array.from(byCycle.values()).sort((a, b) => String(b.cycle_name).localeCompare(String(a.cycle_name), 'es'))
+}
+
 const optionalCentralColumn = (columns: Set<string>, column: string, fallbackSql: string, alias = column) =>
   columns.has(column) ? `\`${column}\`` : `${fallbackSql} AS ${alias}`
 
@@ -158,7 +175,7 @@ export const readCentralConceptosConfig = async () => {
 
   return {
     source: 'central',
-    cycles: cycles.map((row) => ({ cycle_name: normalizeCicloKey(row.cycle_name), is_current: Number(row.is_current || 0) })),
+    cycles: normalizeCycleRows(cycles),
     mappings: mappings.map(normalizeMappingRow)
   }
 }
@@ -202,7 +219,7 @@ export const readLocalConceptosConfig = async () => {
   )
   return {
     source: 'bridge',
-    cycles: cycles.map((row) => ({ cycle_name: normalizeCicloKey(row.cycle_name), is_current: Number(row.is_current || 0) })),
+    cycles: normalizeCycleRows(cycles),
     mappings: mappings.map(normalizeMappingRow)
   }
 }
@@ -400,6 +417,29 @@ export const syncCentralConceptosConfigToBridge = async (preloaded?: Awaited<Ret
   return { ok: true, cycles: central.cycles.length, mappings: central.mappings.length }
 }
 
+const getSyncErrorMessage = (error: any) => String(
+  error?.data?.message ||
+  error?.statusMessage ||
+  error?.message ||
+  'No se pudo sincronizar el espejo Bridge.'
+).trim()
+
+export const syncCentralConceptosConfigToBridgeBestEffort = async () => {
+  try {
+    return await syncCentralConceptosConfigToBridge()
+  } catch (error: any) {
+    const message = getSyncErrorMessage(error)
+    console.warn('[Conceptos Config] Central write completed; Bridge mirror sync skipped:', message)
+    return {
+      ok: false,
+      skipped: true,
+      source: 'central',
+      reason: 'bridge_sync_unavailable',
+      message
+    }
+  }
+}
+
 export const runSyncForActiveBridge = async () => await syncCentralConceptosConfigToBridge()
 
 export const createOrUpdateMapping = async (input: any, user: AuthSessionUser) => {
@@ -448,7 +488,7 @@ export const createOrUpdateMapping = async (input: any, user: AuthSessionUser) =
     )
   }
 
-  const synced = await syncCentralConceptosConfigToBridge()
+  const synced = await syncCentralConceptosConfigToBridgeBestEffort()
   return { ok: true, synced }
 }
 
@@ -456,7 +496,7 @@ export const deleteMapping = async (id: unknown) => {
   const mappingId = Number(id || 0)
   if (!mappingId) throw createError({ statusCode: 400, message: 'Mapeo inválido.' })
   await controlEscolarCentralQuery(`DELETE FROM config_enrollment_mappings WHERE id = ?`, [mappingId])
-  const synced = await syncCentralConceptosConfigToBridge()
+  const synced = await syncCentralConceptosConfigToBridgeBestEffort()
   return { ok: true, synced }
 }
 
@@ -484,7 +524,7 @@ export const saveCycle = async (ciclo: unknown, current = false, user?: AuthSess
       [cycle, Date.now(), user?.email || null]
     )
   }
-  const synced = await syncCentralConceptosConfigToBridge()
+  const synced = await syncCentralConceptosConfigToBridgeBestEffort()
   return { ok: true, ciclo: cycle, synced }
 }
 
@@ -492,6 +532,6 @@ export const deleteCycle = async (ciclo: unknown) => {
   const cycle = normalizeCicloKey(ciclo)
   if (!cycle) throw createError({ statusCode: 400, message: 'Ciclo requerido.' })
   await controlEscolarCentralQuery(`DELETE FROM config_school_cycles WHERE cycle_name = ?`, [cycle])
-  const synced = await syncCentralConceptosConfigToBridge()
+  const synced = await syncCentralConceptosConfigToBridgeBestEffort()
   return { ok: true, ciclo: cycle, synced }
 }

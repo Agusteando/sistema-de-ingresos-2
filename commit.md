@@ -1,1 +1,1 @@
-Corrige el alcance superadmin al cambiar concepto.
+Corrige la sincronización Bridge de configuración de conceptos.
