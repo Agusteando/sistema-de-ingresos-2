@@ -3,6 +3,7 @@ import { runWithBridgeAgentId, query } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
+import { resolvePaymentConceptSnapshot } from '../../utils/payment-concept'
 
 type PendingDepuracion = {
   code: string
@@ -12,6 +13,7 @@ type PendingDepuracion = {
   mes: string
   mesLabel: string
   ciclo: string
+  concepto: string
   conceptoNombre: string
   monto: number
   subtotal: number
@@ -66,7 +68,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     const documento = Number(body.documento)
     const mes = String(body.mes || '').trim()
     const ciclo = normalizeCicloKey(body.ciclo || '2025')
-    const conceptoNombre = String(body.conceptoNombre || 'Concepto').trim()
     const mesLabel = String(body.mesLabel || mes).trim()
     const monto = toMoney(body.saldo)
     const subtotal = toMoney(body.subtotal)
@@ -118,7 +119,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const [documentRef] = await query<any[]>(
       `
-        SELECT documento
+        SELECT documento, concepto, conceptoNombre
         FROM documentos
         WHERE documento = ? AND matricula = ? AND ciclo = ? AND estatus = 'Activo'
         LIMIT 1
@@ -129,6 +130,22 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     if (!documentRef) {
       throw createError({ statusCode: 404, message: 'Concepto no encontrado en este ciclo.' })
     }
+
+    const mesNumber = mes === 'ev' ? 1 : Math.max(1, Number.parseInt(mes, 10) || 1)
+    const [activePeriod] = await query<any[]>(
+      `
+        SELECT id, documento, start_mes, end_mes, concepto_id, conceptoNombre, accion, estatus
+        FROM documento_concepto_periodos
+        WHERE documento = ?
+          AND estatus = 'Activo'
+          AND start_mes <= ?
+          AND (end_mes IS NULL OR end_mes >= ?)
+        ORDER BY start_mes DESC, id DESC
+        LIMIT 1
+      `,
+      [documento, mesNumber, mesNumber]
+    )
+    const paymentConcept = resolvePaymentConceptSnapshot(documentRef, activePeriod)
 
     const code = String(randomInt(10000, 100000))
     const requestId = randomUUID()
@@ -143,7 +160,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       mes,
       mesLabel,
       ciclo,
-      conceptoNombre,
+      concepto: paymentConcept.concepto,
+      conceptoNombre: paymentConcept.conceptoNombre,
       monto,
       subtotal,
       resueltoAntes,
@@ -157,7 +175,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     try {
       await sendTgBotMessage(
-        `*${userName}* solicita depurar el saldo restante de _${conceptoNombre}_ (${mesLabel}) ` +
+        `*${userName}* solicita depurar el saldo restante de _${paymentConcept.conceptoNombre}_ (${mesLabel}) ` +
         `por _$${monto.toFixed(2)}_ para *${studentRef.nombreCompleto}* (${matricula}).\n` +
         `Motivo: _${motivo}_\nCódigo de depuración: *${code}*`
       )
@@ -249,7 +267,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         pending.mes,
         pending.mesLabel,
         pending.nombreCompleto,
-        String(pending.documento),
+        pending.concepto,
         pending.conceptoNombre,
         montoDecimal,
         numeroALetras(montoDecimal),

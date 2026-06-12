@@ -1,6 +1,7 @@
 import dayjs from 'dayjs'
 import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
+import { resolvePaymentConceptSnapshot } from '../../utils/payment-concept'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney, parseNullableMoney } from '../../utils/monto-final'
@@ -74,7 +75,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     }
 
     const [doc] = await query<any[]>(`
-      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, ciclo, conceptoNombre, eventual, estatus
+      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, ciclo, concepto, conceptoNombre, eventual, estatus
       FROM documentos
       WHERE documento = ? AND matricula = ? AND ciclo = ? AND estatus = 'Activo'
       LIMIT 1
@@ -96,9 +97,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       LIMIT 1
     `, [documento, mesNumber, mesNumber])
 
-    if (period?.accion === 'cancelacion') {
-      throw createError({ statusCode: 409, message: 'El pago contiene un concepto cancelado.' })
-    }
+    const paymentConcept = resolvePaymentConceptSnapshot(doc, period)
 
     const periodIsChangedConcept = period?.accion === 'cambio'
     const targetKey = periodIsChangedConcept ? `period:${period.id}` : `doc:${doc.documento}`
@@ -156,8 +155,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const montoDecimal = Number(requestedAmount.toFixed(2))
     const letra = numeroALetras(montoDecimal)
-    const conceptoNombre = period?.conceptoNombre || doc.conceptoNombre
-
     statements.push({
       sql: `
         INSERT INTO referenciasdepago (
@@ -190,8 +187,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         mes,
         p.mesLabel,
         nombreCompleto,
-        String(documento),
-        conceptoNombre,
+        paymentConcept.concepto,
+        paymentConcept.conceptoNombre,
         montoDecimal,
         letra,
         subtotal,

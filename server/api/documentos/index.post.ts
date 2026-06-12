@@ -118,13 +118,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   if (pagoRealizadoEnOtroPlantel && montoFinal > 0) {
     const periods = buildDepuracionPeriods(meses, eventual)
     const valueGroups = periods.map(() => `(
-      ?, @documento_insertado, ?, ?, ?, CAST(@documento_insertado AS CHAR), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ?, @documento_insertado, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )`).join(',')
     const referenceParams = periods.flatMap((period) => [
       body.matricula,
       period.mes,
       period.mesLabel,
       studentRef.nombreCompleto || body.matricula,
+      String(body.conceptoId),
       conceptoNombre,
       montoFinal,
       numeroALetras(montoFinal),

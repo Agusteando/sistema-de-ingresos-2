@@ -1,1 +1,1 @@
-Corrige refresh posterior a cambios de alumnos para conservar KPIs consistentes.
+Corrige el concepto registrado en referencias de pago para preservar auditoría financiera.
