@@ -556,8 +556,6 @@ export const ensureSchema = async () => {
           months_json TEXT NULL,
           servicio_clave VARCHAR(120) DEFAULT NULL,
           servicio_nombre VARCHAR(160) DEFAULT NULL,
-          servicio_icono VARCHAR(80) DEFAULT NULL,
-          servicio_color VARCHAR(40) DEFAULT NULL,
           activo TINYINT(1) NOT NULL DEFAULT 1,
           sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
           updated_by VARCHAR(255) DEFAULT NULL,
@@ -566,6 +564,21 @@ export const ensureSchema = async () => {
           INDEX idx_config_enrollment_scope (cycle_name, plantel, enrollment_type, activo),
           INDEX idx_config_enrollment_concepto (concepto_id),
           INDEX idx_config_enrollment_servicio (servicio_clave, activo)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS talleres_servicios_catalogo (
+          servicio_clave VARCHAR(120) NOT NULL PRIMARY KEY,
+          servicio_nombre VARCHAR(160) NOT NULL,
+          imagen_url VARCHAR(255) DEFAULT NULL,
+          activo TINYINT(1) NOT NULL DEFAULT 1,
+          orden INT NOT NULL DEFAULT 9999,
+          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
+          updated_by VARCHAR(255) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_talleres_servicios_activo_orden (activo, orden)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
@@ -692,8 +705,6 @@ export const ensureSchema = async () => {
           await checkAndAddColumn('config_enrollment_mappings', 'months_json', "TEXT NULL")
           await checkAndAddColumn('config_enrollment_mappings', 'servicio_clave', "VARCHAR(120) DEFAULT NULL")
           await checkAndAddColumn('config_enrollment_mappings', 'servicio_nombre', "VARCHAR(160) DEFAULT NULL")
-          await checkAndAddColumn('config_enrollment_mappings', 'servicio_icono', "VARCHAR(80) DEFAULT NULL")
-          await checkAndAddColumn('config_enrollment_mappings', 'servicio_color', "VARCHAR(40) DEFAULT NULL")
           await checkAndAddColumn('config_enrollment_mappings', 'activo', "TINYINT(1) NOT NULL DEFAULT 1")
           await checkAndAddColumn('config_enrollment_mappings', 'sync_version', "BIGINT UNSIGNED NOT NULL DEFAULT 1")
           await checkAndAddColumn('config_enrollment_mappings', 'updated_by', "VARCHAR(255) DEFAULT NULL")
@@ -701,6 +712,20 @@ export const ensureSchema = async () => {
           await checkAndAddColumn('config_enrollment_mappings', 'updated_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
           await runOptionalIndexQuery(`ALTER TABLE config_enrollment_mappings ADD INDEX idx_config_enrollment_scope (cycle_name, plantel, enrollment_type, activo)`)
           await runOptionalIndexQuery(`ALTER TABLE config_enrollment_mappings ADD INDEX idx_config_enrollment_servicio (servicio_clave, activo)`)
+        }
+      } catch (e) {}
+
+      try {
+        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'talleres_servicios_catalogo'`)
+        if (tables.length > 0) {
+          await checkAndAddColumn('talleres_servicios_catalogo', 'imagen_url', "VARCHAR(255) DEFAULT NULL")
+          await checkAndAddColumn('talleres_servicios_catalogo', 'activo', "TINYINT(1) NOT NULL DEFAULT 1")
+          await checkAndAddColumn('talleres_servicios_catalogo', 'orden', "INT NOT NULL DEFAULT 9999")
+          await checkAndAddColumn('talleres_servicios_catalogo', 'sync_version', "BIGINT UNSIGNED NOT NULL DEFAULT 1")
+          await checkAndAddColumn('talleres_servicios_catalogo', 'updated_by', "VARCHAR(255) DEFAULT NULL")
+          await checkAndAddColumn('talleres_servicios_catalogo', 'created_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP")
+          await checkAndAddColumn('talleres_servicios_catalogo', 'updated_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+          await runOptionalIndexQuery(`ALTER TABLE talleres_servicios_catalogo ADD INDEX idx_talleres_servicios_activo_orden (activo, orden)`)
         }
       } catch (e) {}
 

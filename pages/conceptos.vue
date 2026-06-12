@@ -74,7 +74,7 @@
                   <span v-for="month in parseMonths(mapping.months_json)" :key="month" class="tiny-chip">{{ month }}</span>
                 </div>
                 <div v-if="mapping.enrollment_type === 'talleres_servicios' && mapping.servicio_nombre" class="service-link">
-                  <span :style="serviceAccent(mapping)">{{ mapping.servicio_icono || '✦' }}</span>
+                  <img :src="serviceImage(mapping.servicio_clave || mapping.servicio_nombre)" alt="" loading="lazy" />
                   {{ mapping.servicio_nombre }}
                 </div>
               </div>
@@ -113,20 +113,22 @@
             </div>
           </div>
 
-          <div v-if="selectedCategory === 'talleres_servicios'" class="service-editor">
+          <div v-if="selectedCategory === 'talleres_servicios'" class="service-editor service-catalog-picker">
             <label>
               <span>Taller/servicio</span>
-              <input v-model="serviceName" type="text" placeholder="Ballet, Fútbol, Comedor" />
+              <input v-model="serviceSearch" type="search" placeholder="Buscar taller" />
             </label>
-            <div class="service-inline-fields">
-              <label>
-                <span>Icono</span>
-                <input v-model="serviceIcon" type="text" maxlength="8" placeholder="⚽" />
-              </label>
-              <label>
-                <span>Color</span>
-                <input v-model="serviceColor" type="text" placeholder="#6aa957" />
-              </label>
+            <div class="service-catalog-options">
+              <button
+                v-for="service in visibleCatalogServices"
+                :key="service.clave"
+                type="button"
+                :class="['service-catalog-option', { selected: selectedService?.clave === service.clave }]"
+                @click="selectService(service)"
+              >
+                <img :src="service.imagen" alt="" loading="lazy" />
+                <span>{{ service.nombre }}</span>
+              </button>
             </div>
           </div>
 
@@ -145,10 +147,6 @@
             Guardar
           </button>
 
-          <button v-if="selectedCategory === 'talleres_servicios'" type="button" class="btn btn-outline full" :disabled="saving || !serviceName.trim()" @click="saveServiceOnly">
-            <LucideSparkles :size="16" />
-            Taller sin concepto
-          </button>
         </aside>
       </section>
 
@@ -165,14 +163,14 @@
         </div>
         <div class="card insight-card">
           <div class="insight-head">
-            <span>Talleres sin concepto</span>
-            <strong>{{ unassociatedServices.length }}</strong>
+            <span>Catálogo de talleres</span>
+            <strong>{{ serviciosCatalogo.length }}</strong>
           </div>
           <div class="insight-list service-tags">
-            <span v-for="service in unassociatedServices.slice(0, 12)" :key="service.clave" :style="serviceTagStyle(service)">
-              {{ service.icono || '✦' }} {{ service.nombre }}
+            <span v-for="service in serviciosCatalogo.slice(0, 12)" :key="service.clave">
+              <img :src="service.imagen || serviceImage(service.clave || service.nombre)" alt="" loading="lazy" /> {{ service.nombre }}
             </span>
-            <em v-if="!unassociatedServices.length">Sin pendientes.</em>
+            <em v-if="!serviciosCatalogo.length">Sin servicios configurados.</em>
           </div>
         </div>
       </section>
@@ -183,10 +181,11 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useCookie, useState } from '#app'
-import { LucideLock, LucidePlus, LucideRefreshCw, LucideSearch, LucideSparkles, LucideTrash2 } from 'lucide-vue-next'
+import { LucideLock, LucidePlus, LucideRefreshCw, LucideSearch, LucideTrash2 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
 import { PLANTELES_LIST } from '~/utils/constants'
+import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave } from '~/shared/utils/talleresServicios'
 
 const { show } = useToast()
 const state = useState('globalState')
@@ -203,8 +202,7 @@ const search = ref('')
 const conceptSearch = ref('')
 const selectedConcept = ref(null)
 const serviceName = ref('')
-const serviceIcon = ref('')
-const serviceColor = ref('')
+const serviceSearch = ref('')
 const selectedMonths = ref([])
 
 const months = ['Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul']
@@ -224,7 +222,7 @@ const categories = computed(() => adminPayload.value?.categorias?.length ? admin
 const mappings = computed(() => Array.isArray(adminPayload.value?.mappings) ? adminPayload.value.mappings : [])
 const conceptos = computed(() => Array.isArray(adminPayload.value?.conceptos) ? adminPayload.value.conceptos : [])
 const talleres = computed(() => Array.isArray(adminPayload.value?.talleres) ? adminPayload.value.talleres : [])
-const unassociatedServices = computed(() => Array.isArray(adminPayload.value?.talleresSinConcepto) ? adminPayload.value.talleresSinConcepto : [])
+const serviciosCatalogo = computed(() => Array.isArray(adminPayload.value?.serviciosCatalogo) ? adminPayload.value.serviciosCatalogo : [])
 const plantelOptions = computed(() => [...PLANTELES_LIST])
 const cycleOptions = computed(() => {
   const fromCycles = Array.isArray(adminPayload.value?.cycles)
@@ -245,12 +243,11 @@ const parseMonths = (value) => {
     return Array.isArray(parsed) ? parsed : []
   } catch { return [] }
 }
-const serviceKey = (name) => String(name || '')
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .replace(/[^a-z0-9]+/g, '_')
-  .replace(/^_+|_+$/g, '')
+const serviceKey = (name) => normalizeServicioClave(name)
+const serviceImage = (value) => {
+  const key = serviceKey(value)
+  return serviciosCatalogo.value.find((service) => service.clave === key)?.imagen || (key ? `/talleres-servicios/${key}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE)
+}
 
 const visibleMappings = computed(() => {
   const term = normalizeText(search.value)
@@ -283,10 +280,15 @@ const uncategorizedConcepts = computed(() => conceptos.value
   .filter((concept) => (!selectedCiclo.value || normalizeCicloKey(concept.ciclo_escolar) === selectedCiclo.value) && !configuredConceptIds.value.has(String(Number(concept.id))))
   .slice(0, 80)
 )
-const canSaveMapping = computed(() => Boolean(selectedConcept.value?.id && selectedCiclo.value && selectedPlantel.value && selectedCategory.value && (selectedCategory.value !== 'talleres_servicios' || serviceName.value.trim())))
+const selectedService = computed(() => serviciosCatalogo.value.find((service) => service.clave === serviceKey(serviceName.value)) || null)
+const visibleCatalogServices = computed(() => {
+  const term = normalizeText(serviceSearch.value)
+  return serviciosCatalogo.value
+    .filter((service) => !term || [service.nombre, service.clave].some((value) => normalizeText(value).includes(term)))
+    .slice(0, 48)
+})
+const canSaveMapping = computed(() => Boolean(selectedConcept.value?.id && selectedCiclo.value && selectedPlantel.value && selectedCategory.value && (selectedCategory.value !== 'talleres_servicios' || selectedService.value?.clave)))
 
-const serviceAccent = (mapping) => ({ '--service-accent': mapping.servicio_color || '#6aa957' })
-const serviceTagStyle = (service) => ({ '--service-accent': service.color || '#6aa957' })
 
 const loadAdmin = async () => {
   loading.value = true
@@ -305,8 +307,7 @@ const resetDraft = () => {
   selectedConcept.value = null
   conceptSearch.value = ''
   serviceName.value = ''
-  serviceIcon.value = ''
-  serviceColor.value = ''
+  serviceSearch.value = ''
   selectedMonths.value = []
 }
 
@@ -323,10 +324,8 @@ const saveMapping = async () => {
         concepto_id: selectedConcept.value.id,
         concepto_nombre: selectedConcept.value.concepto,
         meses: selectedMonths.value,
-        servicio_nombre: serviceName.value,
-        servicio_clave: serviceKey(serviceName.value),
-        servicio_icono: serviceIcon.value,
-        servicio_color: serviceColor.value,
+        servicio_nombre: selectedService.value?.nombre || serviceName.value,
+        servicio_clave: selectedService.value?.clave || serviceKey(serviceName.value),
       }
     })
     show('Concepto guardado', 'success')
@@ -334,31 +333,6 @@ const saveMapping = async () => {
     await loadAdmin()
   } catch (error) {
     show(error?.data?.message || error?.data?.error || 'No se pudo guardar', 'danger')
-  } finally {
-    saving.value = false
-  }
-}
-
-const saveServiceOnly = async () => {
-  if (!serviceName.value.trim()) return
-  saving.value = true
-  try {
-    await $fetch('/api/conceptos-config/services', {
-      method: 'POST',
-      body: {
-        ciclo: selectedCiclo.value,
-        plantel: selectedPlantel.value,
-        servicio_nombre: serviceName.value,
-        servicio_clave: serviceKey(serviceName.value),
-        servicio_icono: serviceIcon.value,
-        servicio_color: serviceColor.value,
-      }
-    })
-    show('Taller guardado', 'success')
-    resetDraft()
-    await loadAdmin()
-  } catch (error) {
-    show(error?.data?.message || 'No se pudo guardar', 'danger')
   } finally {
     saving.value = false
   }
@@ -397,15 +371,18 @@ const toggleMonth = (month) => {
 watch(selectedCategory, () => {
   if (selectedCategory.value !== 'talleres_servicios') {
     serviceName.value = ''
-    serviceIcon.value = ''
-    serviceColor.value = ''
+    serviceSearch.value = ''
   }
   if (selectedCategory.value !== 'mensual_baja4') selectedMonths.value = []
 })
-watch(selectedConcept, (concept) => {
-  if (concept && selectedCategory.value === 'talleres_servicios' && !serviceName.value.trim()) {
-    serviceName.value = concept.concepto
-  }
+const selectService = (service) => {
+  serviceName.value = service?.nombre || ''
+  serviceSearch.value = service?.nombre || ''
+}
+
+watch(selectedCategory, () => {
+  if (selectedCategory.value !== 'talleres_servicios') return
+  if (!serviceName.value && serviciosCatalogo.value.length) selectService(serviciosCatalogo.value[0])
 })
 
 onMounted(loadAdmin)
@@ -646,4 +623,78 @@ onMounted(loadAdmin)
   .mapping-row .icon-action,
   .concept-option small { grid-column: 2; justify-self: start; }
 }
+
+
+.service-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.service-link img,
+.service-tags img {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.service-catalog-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.service-catalog-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 7px;
+  max-height: 230px;
+  overflow: auto;
+}
+
+.service-catalog-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid #dde7ef;
+  border-radius: 13px;
+  background: #fff;
+  color: #314158;
+  cursor: pointer;
+  padding: 7px;
+  text-align: left;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.service-catalog-option:hover,
+.service-catalog-option.selected {
+  border-color: rgba(79, 139, 71, .34);
+  box-shadow: 0 10px 18px rgba(21, 35, 60, .055);
+  transform: translateY(-1px);
+}
+
+.service-catalog-option.selected {
+  background: #f7fbf5;
+  color: #3f7c38;
+}
+
+.service-catalog-option img {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.service-catalog-option span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: .72rem;
+  font-weight: 840;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 </style>

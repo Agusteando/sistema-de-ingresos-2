@@ -38,6 +38,8 @@ const mergeCentralOverlayIntoFinancialStudent = (student: any, overlay: any) => 
     nombreMadreCompleto: compactText(overlayStudent.nombreMadreCompleto) || student.nombreMadreCompleto,
     ocupacionMadre: compactText(overlayStudent.ocupacionMadre) || student.ocupacionMadre,
     direccion: compactText(overlayStudent.direccion) || student.direccion,
+    servicio: compactText(overlayStudent.servicio || overlayStudent.servicios) || student.servicio,
+    servicios: compactText(overlayStudent.servicio || overlayStudent.servicios) || student.servicios,
   }
   const familyContact = resolveFinancialFamilyContact(merged)
   return {

@@ -23,6 +23,7 @@ declare global {
   const WORKSPACE_DOMAIN: typeof import('../../server/utils/google-workspace-directory').WORKSPACE_DOMAIN
   const __buildAssetsURL: typeof import('../../node_modules/@nuxt/nitro-server/dist/runtime/utils/paths').buildAssetsURL
   const __publicAssetsURL: typeof import('../../node_modules/@nuxt/nitro-server/dist/runtime/utils/paths').publicAssetsURL
+  const appendConceptMappedServicioToMatricula: typeof import('../../server/utils/talleres-servicios').appendConceptMappedServicioToMatricula
   const appendCorsHeaders: typeof import('../../node_modules/h3').appendCorsHeaders
   const appendCorsPreflightHeaders: typeof import('../../node_modules/h3').appendCorsPreflightHeaders
   const appendHeader: typeof import('../../node_modules/h3').appendHeader
@@ -119,6 +120,7 @@ declare global {
   const fetchVerifiedControlEscolarScopeRows: typeof import('../../server/utils/control-escolar-cache').fetchVerifiedControlEscolarScopeRows
   const fetchWithEvent: typeof import('../../node_modules/h3').fetchWithEvent
   const findExternalUserByEmail: typeof import('../../server/utils/external-users').findExternalUserByEmail
+  const findTallerServicioForConcept: typeof import('../../server/utils/talleres-servicios').findTallerServicioForConcept
   const finishRun: typeof import('../../server/utils/externalBaseSync').finishRun
   const formatCobranzaMoney: typeof import('../../server/utils/cobranzaEmail').formatCobranzaMoney
   const formatTipoIngresoValue: typeof import('../../shared/utils/tipoIngreso').formatTipoIngresoValue
@@ -246,9 +248,12 @@ declare global {
   const queryExternalUsers: typeof import('../../server/utils/external-users').queryExternalUsers
   const readBestConceptosConfig: typeof import('../../server/utils/conceptos-config').readBestConceptosConfig
   const readBestConceptosConfigPayload: typeof import('../../server/utils/conceptos-config').readBestConceptosConfigPayload
+  const readBestTalleresServiciosCatalog: typeof import('../../server/utils/talleres-servicios').readBestTalleresServiciosCatalog
   const readBody: typeof import('../../node_modules/h3').readBody
   const readCentralConceptos: typeof import('../../server/utils/conceptos-config').readCentralConceptos
   const readCentralConceptosConfig: typeof import('../../server/utils/conceptos-config').readCentralConceptosConfig
+  const readCentralMatriculaServicios: typeof import('../../server/utils/talleres-servicios').readCentralMatriculaServicios
+  const readCentralTalleresServiciosCatalog: typeof import('../../server/utils/talleres-servicios').readCentralTalleresServiciosCatalog
   const readControlCacheSourceMeta: typeof import('../../server/utils/control-escolar-cache').readControlCacheSourceMeta
   const readExternalControlEscolarChanges: typeof import('../../server/utils/control-escolar-external-view').readExternalControlEscolarChanges
   const readExternalControlEscolarHealth: typeof import('../../server/utils/control-escolar-external-view').readExternalControlEscolarHealth
@@ -257,6 +262,7 @@ declare global {
   const readExternalErrorBody: typeof import('../../server/utils/externalBaseSync').readExternalErrorBody
   const readFormData: typeof import('../../node_modules/h3').readFormData
   const readLocalConceptosConfig: typeof import('../../server/utils/conceptos-config').readLocalConceptosConfig
+  const readLocalTalleresServiciosCatalog: typeof import('../../server/utils/talleres-servicios').readLocalTalleresServiciosCatalog
   const readMultipartFormData: typeof import('../../node_modules/h3').readMultipartFormData
   const readRawBody: typeof import('../../node_modules/h3').readRawBody
   const readSyncRun: typeof import('../../server/utils/externalBaseSync').readSyncRun
@@ -275,6 +281,7 @@ declare global {
   const resolveNoAdeudoVerifyBaseUrl: typeof import('../../server/utils/noAdeudo').resolveNoAdeudoVerifyBaseUrl
   const resolvePaymentConceptSnapshot: typeof import('../../server/utils/payment-concept').resolvePaymentConceptSnapshot
   const resolveProjectedAmount: typeof import('../../server/utils/monto-final').resolveProjectedAmount
+  const resolveServiciosWithCatalog: typeof import('../../server/utils/talleres-servicios').resolveServiciosWithCatalog
   const resolveTipoIngreso: typeof import('../../shared/utils/tipoIngreso').resolveTipoIngreso
   const runControlEscolar: typeof import('../../server/utils/control-escolar').runControlEscolar
   const runRawSqlStatement: typeof import('../../server/utils/db').runRawSqlStatement
@@ -298,6 +305,7 @@ declare global {
   const sendRedirect: typeof import('../../node_modules/h3').sendRedirect
   const sendStream: typeof import('../../node_modules/h3').sendStream
   const sendWebResponse: typeof import('../../node_modules/h3').sendWebResponse
+  const serializeServicios: typeof import('../../server/utils/talleres-servicios').serializeServicios
   const serveStatic: typeof import('../../node_modules/h3').serveStatic
   const setCookie: typeof import('../../node_modules/h3').setCookie
   const setExternalApiResponseHeaders: typeof import('../../server/utils/external-api-auth').setExternalApiResponseHeaders
@@ -311,6 +319,7 @@ declare global {
   const splitCookiesString: typeof import('../../node_modules/h3').splitCookiesString
   const syncCentralConceptosConfigToBridge: typeof import('../../server/utils/conceptos-config').syncCentralConceptosConfigToBridge
   const syncCentralConceptosConfigToBridgeBestEffort: typeof import('../../server/utils/conceptos-config').syncCentralConceptosConfigToBridgeBestEffort
+  const syncCentralTalleresServiciosCatalogToBridge: typeof import('../../server/utils/talleres-servicios').syncCentralTalleresServiciosCatalogToBridge
   const throwNoAdeudoDiagnosticError: typeof import('../../server/utils/noAdeudo').throwNoAdeudoDiagnosticError
   const toEventHandler: typeof import('../../node_modules/h3').toEventHandler
   const toNodeListener: typeof import('../../node_modules/h3').toNodeListener
@@ -320,6 +329,7 @@ declare global {
   const toWebRequest: typeof import('../../node_modules/h3').toWebRequest
   const touchExternalUserLogin: typeof import('../../server/utils/external-users').touchExternalUserLogin
   const unsealSession: typeof import('../../node_modules/h3').unsealSession
+  const updateCentralMatriculaServicio: typeof import('../../server/utils/talleres-servicios').updateCentralMatriculaServicio
   const updateControlEscolarStudent: typeof import('../../server/utils/control-escolar').updateControlEscolarStudent
   const updateExternalUser: typeof import('../../server/utils/external-users').updateExternalUser
   const updateRunProgress: typeof import('../../server/utils/externalBaseSync').updateRunProgress
@@ -387,6 +397,9 @@ declare global {
   // @ts-ignore
   export type { TipoIngresoValue, TipoIngresoSource, TipoIngresoResult, TipoIngresoResolverOptions } from '../../shared/utils/tipoIngreso'
   import('../../shared/utils/tipoIngreso')
+  // @ts-ignore
+  export type { TallerServicioCatalogRow } from '../../server/utils/talleres-servicios'
+  import('../../server/utils/talleres-servicios')
 }
 export { H3Event, H3Error, appendCorsHeaders, appendCorsPreflightHeaders, appendHeader, appendHeaders, appendResponseHeader, appendResponseHeaders, assertMethod, callNodeListener, clearResponseHeaders, clearSession, createApp, createAppEventHandler, createError, createEvent, createEventStream, createRouter, defaultContentType, defineEventHandler, defineLazyEventHandler, defineNodeListener, defineNodeMiddleware, defineRequestMiddleware, defineResponseMiddleware, defineWebSocket, defineWebSocketHandler, deleteCookie, dynamicEventHandler, eventHandler, fetchWithEvent, fromNodeMiddleware, fromPlainHandler, fromWebHandler, getCookie, getHeader, getHeaders, getMethod, getProxyRequestHeaders, getQuery, getRequestFingerprint, getRequestHeader, getRequestHeaders, getRequestHost, getRequestIP, getRequestPath, getRequestProtocol, getRequestURL, getRequestWebStream, getResponseHeader, getResponseHeaders, getResponseStatus, getResponseStatusText, getRouterParam, getRouterParams, getSession, getValidatedQuery, getValidatedRouterParams, handleCacheHeaders, handleCors, isCorsOriginAllowed, isError, isEvent, isEventHandler, isMethod, isPreflightRequest, isStream, isWebResponse, lazyEventHandler, parseCookies, promisifyNodeListener, proxyRequest, readBody, readFormData, readMultipartFormData, readRawBody, readValidatedBody, removeResponseHeader, sanitizeStatusCode, sanitizeStatusMessage, sealSession, send, sendError, sendIterable, sendNoContent, sendProxy, sendRedirect, sendStream, sendWebResponse, serveStatic, setCookie, setHeader, setHeaders, setResponseHeader, setResponseHeaders, setResponseStatus, splitCookiesString, toEventHandler, toNodeListener, toPlainHandler, toWebHandler, toWebRequest, unsealSession, updateSession, useBase, useSession, writeEarlyHints } from 'h3';
 export { useNitroApp } from 'nitropack/runtime/internal/app';
@@ -433,5 +446,6 @@ export { resolvePaymentConceptSnapshot } from 'C:/Users/hp/sistema-de-ingresos-2
 export { generateQrMatrix } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/qr';
 export { normalizeCicloForTipoIngreso, previousCicloKey, nextCicloKey, resolveTipoIngreso, formatTipoIngresoValue } from 'C:/Users/hp/sistema-de-ingresos-2/shared/utils/tipoIngreso';
 export { isScopedToActivePlantel, attachCustomSectionsToStudents } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/student-sections';
+export { readCentralTalleresServiciosCatalog, readLocalTalleresServiciosCatalog, readBestTalleresServiciosCatalog, syncCentralTalleresServiciosCatalogToBridge, readCentralMatriculaServicios, resolveServiciosWithCatalog, updateCentralMatriculaServicio, findTallerServicioForConcept, appendConceptMappedServicioToMatricula, serializeServicios } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/talleres-servicios';
 export { whatsappApi } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/whatsapp';
 export { createXlsxWorkbook } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/xlsx';

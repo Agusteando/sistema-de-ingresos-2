@@ -62,6 +62,10 @@
                   <span>{{ selectedConcept.concepto }}</span>
                   <strong>${{ formatMoney(selectedConcept.costo) }}</strong>
                 </div>
+                <div v-if="selectedConceptServicio" class="concept-service-pill">
+                  <img :src="selectedConceptServicio.imagen" alt="" loading="lazy" />
+                  <span>{{ selectedConceptServicio.nombre }}</span>
+                </div>
 
                 <div
                   v-if="conceptDropdownOpen"
@@ -241,6 +245,7 @@ import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave } from '~/shared/utils/talleresServicios'
 
 const props = defineProps({ student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -251,6 +256,7 @@ useScrollLock()
 
 const becaOptions = ['Colaborador', 'DRES', 'Hermanos', 'Promoción', 'SEP', 'Mercadotecnia']
 const conceptos = ref([])
+const serviceLinks = ref([])
 const selectedDocumentoId = ref('')
 const conceptSearch = ref('')
 const conceptDropdownOpen = ref(false)
@@ -272,6 +278,10 @@ const activeCicloLabel = computed(() => String(activeCicloKey.value || state.val
 
 const selectedConcept = computed(() => {
   return conceptos.value.find((item) => String(item.id) === String(selectedDocumentoId.value)) || null
+})
+const selectedConceptServicio = computed(() => {
+  if (!selectedConcept.value?.id) return null
+  return serviceLinks.value.find((item) => String(item.concepto_id) === String(selectedConcept.value.id)) || null
 })
 
 const becaTypesCsv = computed(() => selectedBecaTypes.value.join(', '))
@@ -360,6 +370,29 @@ const toggleBecaType = (option) => {
   if (!selectedBecaTypes.value.length) generarCartaBeca.value = false
 }
 
+
+const loadServiceLinks = async () => {
+  try {
+    const config = await $fetch('/api/conceptos-config/all')
+    const cicloNode = config?.ciclos?.[activeCicloKey.value]
+    const planteles = cicloNode?.planteles_talleres_servicios || {}
+    const rows = Object.values(planteles).flatMap((items) => Array.isArray(items) ? items : [])
+    serviceLinks.value = rows
+      .filter((item) => Number(item?.concepto_id || 0) > 0 && item?.servicio_clave)
+      .map((item) => {
+        const key = normalizeServicioClave(item.servicio_clave || item.servicio)
+        return {
+          concepto_id: Number(item.concepto_id),
+          clave: key,
+          nombre: item.servicio || item.concepto_nombre || key,
+          imagen: key ? `/talleres-servicios/${key}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE,
+        }
+      })
+  } catch (e) {
+    serviceLinks.value = []
+  }
+}
+
 const loadConcepts = async ({ manual = false } = {}) => {
   loadingConcepts.value = true
   conceptLoadError.value = ''
@@ -391,7 +424,9 @@ const loadConcepts = async ({ manual = false } = {}) => {
   }
 }
 
-const refreshConcepts = () => loadConcepts({ manual: true })
+const refreshConcepts = async () => {
+  await Promise.all([loadConcepts({ manual: true }), loadServiceLinks()])
+}
 
 const openCartaWindow = () => {
   if (!generarCartaBeca.value || !selectedBecaTypes.value.length || typeof window === 'undefined') return null
@@ -438,10 +473,12 @@ const submit = async () => {
     if (generarCartaBeca.value && result?.becaCartaUrl) {
       if (cartaWindow) cartaWindow.location.href = result.becaCartaUrl
       else window.open(result.becaCartaUrl, '_blank', 'noopener')
-      show(result?.depurado ? 'Documento agregado, carta generada y pago marcado como realizado en otro plantel.' : 'Documento agregado y carta de beca generada.')
+      const serviceText = result?.servicio?.mapped ? ` Servicio: ${result.servicio.servicio?.nombre || result.servicio.servicio?.clave || ''}.` : ''
+      show((result?.depurado ? 'Documento agregado, carta generada y pago marcado como realizado en otro plantel.' : 'Documento agregado y carta de beca generada.') + serviceText)
     } else {
       cartaWindow?.close?.()
-      show(result?.depurado ? 'Documento agregado y pago marcado como realizado en otro plantel.' : 'Documento agregado.')
+      const serviceText = result?.servicio?.mapped ? ` Servicio: ${result.servicio.servicio?.nombre || result.servicio.servicio?.clave || ''}.` : ''
+      show((result?.depurado ? 'Documento agregado y pago marcado como realizado en otro plantel.' : 'Documento agregado.') + serviceText)
     }
     emit('success')
   } catch (e) {
@@ -450,7 +487,10 @@ const submit = async () => {
   } finally { loading.value = false }
 }
 
-onMounted(() => loadConcepts())
+onMounted(() => {
+  loadConcepts()
+  loadServiceLinks()
+})
 </script>
 
 <style scoped>
@@ -859,5 +899,30 @@ onMounted(() => loadConcepts())
   font-weight: 620;
   line-height: 1.35;
   margin-top: 2px;
+}
+</style>
+
+<style scoped>
+.concept-service-pill {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  margin-top: 7px;
+  border: 1px solid #d7ead2;
+  border-radius: 999px;
+  background: #f8fcf5;
+  color: #44723d;
+  padding: 4px 9px 4px 4px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.concept-service-pill img {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  object-fit: cover;
 }
 </style>

@@ -4,6 +4,7 @@ import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney } from '../../utils/monto-final'
 import { normalizeBecaTypes } from '../../utils/becaTypes'
 import { numeroALetras } from '../../utils/numberToWords'
+import { appendConceptMappedServicioToMatricula } from '../../utils/talleres-servicios'
 
 const clampMotivo = (value: unknown) => {
   const text = String(value || '').trim()
@@ -212,10 +213,30 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     }
   }
   
+  let servicioSync: any = { ok: true, mapped: false, changed: false, servicio: null }
+  try {
+    servicioSync = await appendConceptMappedServicioToMatricula({
+      matricula: body.matricula,
+      conceptoId: body.conceptoId,
+      ciclo: cicloKey,
+      plantel,
+      userEmail: user?.email || userName,
+    })
+  } catch (error: any) {
+    console.warn('[Documentos] Documento creado; no se pudo anexar taller/servicio a matricula.servicio.', {
+      documento,
+      matricula: body.matricula,
+      conceptoId: body.conceptoId,
+      message: error?.message || error
+    })
+    servicioSync = { ok: false, mapped: false, changed: false, servicio: null, message: error?.message || 'servicio_sync_failed' }
+  }
+
   return {
     success: true,
     documento,
     depurado: pagoRealizadoEnOtroPlantel && montoFinal > 0,
+    servicio: servicioSync,
     becaCartaUrl: body.generarCartaBeca && becaTipos.length
       ? `/api/documentos/${documento}/beca-carta?ciclo=${encodeURIComponent(cicloKey)}`
       : null

@@ -278,6 +278,10 @@ declare module "nitropack/types" {
     '/api/students/:matricula/sections': {
       'put': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/students/[matricula]/sections.put').default>>>>
     }
+    '/api/students/:matricula/servicios': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/students/[matricula]/servicios/index.get').default>>>>
+      'put': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/students/[matricula]/servicios/index.put').default>>>>
+    }
     '/api/students/:matricula/siblings': {
       'delete': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/students/[matricula]/siblings.delete').default>>>>
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/students/[matricula]/siblings.get').default>>>>
@@ -315,6 +319,9 @@ declare module "nitropack/types" {
     }
     '/api/sync/base/status': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/sync/base/status.get').default>>>>
+    }
+    '/api/talleres-servicios/catalogo': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/talleres-servicios/catalogo.get').default>>>>
     }
     '/api/users/:id': {
       'default': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/users/[id]').default>>>>

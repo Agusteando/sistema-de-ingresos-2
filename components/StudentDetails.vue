@@ -145,6 +145,10 @@
                   >
                 </p>
                 <div class="tipo-ingreso-row">
+                  <span v-if="isEnrolled && student.estatus === 'Activo'" class="tipo-ingreso-badge inscrito">
+                    <LucideShieldCheck :size="12" :stroke-width="2.4" />
+                    Inscrito
+                  </span>
                   <span
                     :class="['tipo-ingreso-badge', resolvedTipoIngreso.value]"
                     :title="`${resolvedTipoIngresoLabel} en ${selectedCicloLabel}`"
@@ -157,6 +161,24 @@
                     <LucideGlobe2 v-else :size="12" :stroke-width="2.4" />
                     {{ resolvedTipoIngresoLabel }}
                   </span>
+                  <span
+                    v-for="servicio in serviciosTags.slice(0, 5)"
+                    :key="`service-inline-${servicio.clave}`"
+                    class="student-service-mini"
+                    :title="servicio.nombre"
+                  >
+                    <img :src="servicio.imagen" alt="" loading="lazy" />
+                    {{ servicio.nombre }}
+                  </span>
+                  <button
+                    class="student-service-mini student-service-mini--add"
+                    type="button"
+                    title="Talleres y servicios"
+                    @click="toggleServiciosPanel"
+                  >
+                    <LucidePlus :size="12" />
+                    {{ serviciosTags.length ? 'Gestionar' : 'Agregar taller' }}
+                  </button>
                 </div>
                 <div
                   v-if="student.customSections?.length"
@@ -252,6 +274,50 @@
               <LucideChevronDown class="profile-action-caret" :size="14" />
             </button>
           </div>
+
+          <section class="student-services-panel" :class="{ open: showServiciosPanel }" aria-label="Talleres y servicios">
+            <header class="student-services-head">
+              <div>
+                <span>Talleres y Servicios</span>
+                <strong>{{ serviciosTags.length ? `${serviciosTags.length} activo${serviciosTags.length === 1 ? '' : 's'}` : 'Sin talleres' }}</strong>
+              </div>
+              <button type="button" class="student-services-toggle" @click="toggleServiciosPanel">
+                <LucidePlus v-if="!showServiciosPanel" :size="14" />
+                <LucideX v-else :size="14" />
+                {{ showServiciosPanel ? 'Cerrar' : 'Agregar' }}
+              </button>
+            </header>
+
+            <div v-if="serviciosTags.length" class="student-services-tags">
+              <span v-for="servicio in serviciosTags" :key="`service-tag-${servicio.clave}`" class="student-service-tag">
+                <img :src="servicio.imagen" alt="" loading="lazy" />
+                {{ servicio.nombre }}
+                <button type="button" :disabled="savingServicio === servicio.clave" title="Quitar" @click="removeServicio(servicio)">
+                  <LucideX :size="11" />
+                </button>
+              </span>
+            </div>
+            <div v-else class="student-services-empty">Sin talleres o servicios registrados.</div>
+
+            <div v-if="showServiciosPanel" class="student-services-picker">
+              <label class="student-services-search">
+                <LucideSearch :size="14" />
+                <input v-model="servicioSearch" type="search" placeholder="Buscar taller o servicio" />
+              </label>
+              <div class="student-services-catalog">
+                <button
+                  v-for="servicio in availableServiciosCatalog"
+                  :key="`service-option-${servicio.clave}`"
+                  type="button"
+                  :disabled="savingServicio === servicio.clave"
+                  @click="addServicio(servicio)"
+                >
+                  <img :src="servicio.imagen" alt="" loading="lazy" />
+                  <span>{{ servicio.nombre }}</span>
+                </button>
+              </div>
+            </div>
+          </section>
 
           <section
             v-if="siblings.length"
@@ -881,6 +947,7 @@ import {
   LucideMinimize2,
   LucideSlidersHorizontal,
   LucidePencilLine,
+  LucidePlus,
 } from "lucide-vue-next";
 import { useState, useCookie } from "#app";
 import { useToast } from "~/composables/useToast";
@@ -888,6 +955,7 @@ import { useContextMenu } from "~/composables/useContextMenu";
 import { useOptimisticSync } from "~/composables/useOptimisticSync";
 import { useAccountStateCacheSync } from "~/composables/useAccountStateCacheSync";
 import { formatCicloLabel, normalizeCicloKey } from "~/shared/utils/ciclo";
+import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave, parseServiciosCsv } from "~/shared/utils/talleresServicios";
 import {
   formatTipoIngresoValue,
   resolveTipoIngreso,
@@ -951,6 +1019,13 @@ const isSuperAdmin = computed(() => roleTokens.value.includes("superadmin"));
 const debts = ref([]);
 const siblings = ref([]);
 const siblingSource = ref("none");
+const serviciosTags = ref([]);
+const serviciosCatalog = ref([]);
+const serviciosRaw = ref("");
+const serviciosLoading = ref(false);
+const showServiciosPanel = ref(false);
+const servicioSearch = ref("");
+const savingServicio = ref("");
 const loading = ref(false);
 const reminding = ref(false);
 const selectedDebts = ref([]);
@@ -1095,6 +1170,91 @@ const accountMetaItems = computed(() =>
     { label: "Madre", value: accountMotherLabel.value },
   ].filter((item) => item.value),
 );
+
+const normalizeServicioSearch = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+const servicioKeySet = computed(() => new Set(serviciosTags.value.map((item) => item.clave)));
+const availableServiciosCatalog = computed(() => {
+  const term = normalizeServicioSearch(servicioSearch.value).trim();
+  return serviciosCatalog.value
+    .filter((item) => !servicioKeySet.value.has(item.clave))
+    .filter((item) => !term || [item.nombre, item.clave].some((value) => normalizeServicioSearch(value).includes(term)))
+    .slice(0, 36);
+});
+const serviceImageFor = (value) => {
+  const key = normalizeServicioClave(value);
+  return serviciosCatalog.value.find((item) => item.clave === key)?.imagen || (key ? `/talleres-servicios/${key}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE);
+};
+const resolveLocalServicios = () => {
+  const raw = serviciosRaw.value || accountOverlaySource.value.servicio || accountOverlaySource.value.servicios || props.student?.servicio || props.student?.servicios;
+  serviciosTags.value = parseServiciosCsv(raw).map((nombre) => {
+    const clave = normalizeServicioClave(nombre);
+    const catalogItem = serviciosCatalog.value.find((item) => item.clave === clave);
+    return {
+      clave,
+      nombre: catalogItem?.nombre || nombre,
+      imagen: catalogItem?.imagen || serviceImageFor(clave),
+      source: catalogItem ? 'catalog' : 'legacy',
+    };
+  });
+};
+const applyServiciosPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') return;
+  serviciosRaw.value = payload.raw || '';
+  serviciosCatalog.value = Array.isArray(payload.catalog) ? payload.catalog : serviciosCatalog.value;
+  serviciosTags.value = Array.isArray(payload.servicios) ? payload.servicios.map((item) => ({
+    clave: normalizeServicioClave(item.clave || item.nombre),
+    nombre: item.nombre || item.clave,
+    imagen: item.imagen || serviceImageFor(item.clave || item.nombre),
+    source: item.source || 'catalog',
+  })) : serviciosTags.value;
+};
+const loadServicios = async () => {
+  const matricula = normalizeAccountMatricula(props.student?.matricula);
+  if (!matricula) return;
+  serviciosLoading.value = true;
+  try {
+    const payload = await $fetch(`/api/students/${encodeURIComponent(matricula)}/servicios`);
+    if (normalizeAccountMatricula(props.student?.matricula) !== matricula) return;
+    applyServiciosPayload(payload);
+  } catch (error) {
+    try {
+      const catalog = await $fetch('/api/talleres-servicios/catalogo');
+      serviciosCatalog.value = Array.isArray(catalog?.catalog) ? catalog.catalog : serviciosCatalog.value;
+    } catch (e) {}
+    resolveLocalServicios();
+  } finally {
+    if (normalizeAccountMatricula(props.student?.matricula) === matricula) serviciosLoading.value = false;
+  }
+};
+const toggleServiciosPanel = () => {
+  showServiciosPanel.value = !showServiciosPanel.value;
+  if (showServiciosPanel.value && !serviciosCatalog.value.length) void loadServicios();
+};
+const mutateServicio = async (servicio, action) => {
+  if (!props.student?.matricula || !servicio?.clave || savingServicio.value) return;
+  savingServicio.value = servicio.clave;
+  try {
+    const payload = await $fetch(`/api/students/${encodeURIComponent(props.student.matricula)}/servicios`, {
+      method: 'PUT',
+      body: { action, servicio_clave: servicio.clave, servicio_nombre: servicio.nombre },
+    });
+    applyServiciosPayload(payload);
+    servicioSearch.value = '';
+    show(action === 'remove' ? 'Taller eliminado' : 'Taller agregado', 'success');
+    emit('refresh');
+    void loadAccountMatriculaOverlay({ force: true });
+  } catch (error) {
+    show(error?.data?.message || 'No se pudo actualizar talleres y servicios', 'danger');
+  } finally {
+    savingServicio.value = '';
+  }
+};
+const addServicio = (servicio) => mutateServicio(servicio, 'add');
+const removeServicio = (servicio) => mutateServicio(servicio, 'remove');
 
 const accountExpedienteProgress = computed(() =>
   resolveControlEscolarProgress(accountOverlaySource.value),
@@ -1891,6 +2051,7 @@ watch(
     if (props.student) {
       loadDebts({ useCache: true });
       loadSiblings();
+      loadServicios();
     }
   },
   { immediate: true },
@@ -1933,7 +2094,10 @@ watch(
     accountFilter.value = "all";
     photoUrl.value = null;
     photoLoading.value = false;
-    if (props.student) loadPhoto();
+    if (props.student) {
+      loadPhoto();
+      loadServicios();
+    }
   },
   { immediate: true },
 );
@@ -2482,6 +2646,8 @@ const handleSuccess = () => {
   closeDirectConceptModal();
   selectedDebts.value = [];
   loadDebts({ useCache: false, preserveInteraction: false });
+  loadServicios();
+  void loadAccountMatriculaOverlay({ force: true });
   emit("refresh");
 };
 
