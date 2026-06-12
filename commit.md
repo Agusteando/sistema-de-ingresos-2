@@ -1,1 +1,1 @@
-Ajusta talleres para usar matricula.servicio.
+Mueve talleres y servicios a una vista gestionable.

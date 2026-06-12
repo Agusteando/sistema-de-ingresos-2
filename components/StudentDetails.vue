@@ -171,13 +171,18 @@
                     {{ servicio.nombre }}
                   </span>
                   <button
-                    class="student-service-mini student-service-mini--add"
+                    :class="[
+                      'student-service-mini',
+                      'student-service-mini--add',
+                      { active: accountViewMode === 'services' },
+                    ]"
                     type="button"
-                    title="Talleres y servicios"
-                    @click="toggleServiciosPanel"
+                    :title="accountViewMode === 'services' ? 'Volver a Estado de Cuenta' : 'Talleres y servicios'"
+                    @click="toggleServiciosView"
                   >
-                    <LucidePlus :size="12" />
-                    {{ serviciosTags.length ? 'Gestionar' : 'Agregar taller' }}
+                    <LucideFileText v-if="accountViewMode === 'services'" :size="12" />
+                    <LucidePlus v-else :size="12" />
+                    {{ accountViewMode === 'services' ? 'Estado' : (serviciosTags.length ? 'Gestionar' : 'Agregar taller') }}
                   </button>
                 </div>
                 <div
@@ -275,50 +280,6 @@
             </button>
           </div>
 
-          <section class="student-services-panel" :class="{ open: showServiciosPanel }" aria-label="Talleres y servicios">
-            <header class="student-services-head">
-              <div>
-                <span>Talleres y Servicios</span>
-                <strong>{{ serviciosTags.length ? `${serviciosTags.length} activo${serviciosTags.length === 1 ? '' : 's'}` : 'Sin talleres' }}</strong>
-              </div>
-              <button type="button" class="student-services-toggle" @click="toggleServiciosPanel">
-                <LucidePlus v-if="!showServiciosPanel" :size="14" />
-                <LucideX v-else :size="14" />
-                {{ showServiciosPanel ? 'Cerrar' : 'Agregar' }}
-              </button>
-            </header>
-
-            <div v-if="serviciosTags.length" class="student-services-tags">
-              <span v-for="servicio in serviciosTags" :key="`service-tag-${servicio.clave}`" class="student-service-tag">
-                <img :src="servicio.imagen" alt="" loading="lazy" />
-                {{ servicio.nombre }}
-                <button type="button" :disabled="savingServicio === servicio.clave" title="Quitar" @click="removeServicio(servicio)">
-                  <LucideX :size="11" />
-                </button>
-              </span>
-            </div>
-            <div v-else class="student-services-empty">Sin talleres o servicios registrados.</div>
-
-            <div v-if="showServiciosPanel" class="student-services-picker">
-              <label class="student-services-search">
-                <LucideSearch :size="14" />
-                <input v-model="servicioSearch" type="search" placeholder="Buscar taller o servicio" />
-              </label>
-              <div class="student-services-catalog">
-                <button
-                  v-for="servicio in availableServiciosCatalog"
-                  :key="`service-option-${servicio.clave}`"
-                  type="button"
-                  :disabled="savingServicio === servicio.clave"
-                  @click="addServicio(servicio)"
-                >
-                  <img :src="servicio.imagen" alt="" loading="lazy" />
-                  <span>{{ servicio.nombre }}</span>
-                </button>
-              </div>
-            </div>
-          </section>
-
           <section
             v-if="siblings.length"
             class="account-family-strip"
@@ -346,7 +307,7 @@
           <div class="account-title-area">
             <div class="account-title-copy">
               <div class="account-title-row">
-                <h3>Estado de Cuenta</h3>
+                <h3>{{ accountWorkspaceTitle }}</h3>
                 <span
                   :class="[
                     'account-sync-indicator',
@@ -421,42 +382,54 @@
           </div>
 
           <template v-else>
-            <label class="account-search-control">
-              <LucideSearch :size="15" aria-hidden="true" />
-              <input
-                v-model="accountSearchQuery"
-                type="search"
-                placeholder="Buscar concepto o mes..."
-              />
-            </label>
+            <template v-if="accountViewMode !== 'services'">
+              <label class="account-search-control">
+                <LucideSearch :size="15" aria-hidden="true" />
+                <input
+                  v-model="accountSearchQuery"
+                  type="search"
+                  placeholder="Buscar concepto o mes..."
+                />
+              </label>
+              <button
+                type="button"
+                :class="[
+                  'account-view-toggle',
+                  { active: accountViewMode === 'timeline' },
+                ]"
+                :aria-label="accountViewToggleLabel"
+                :title="accountViewToggleLabel"
+                @click="toggleAccountView"
+              >
+                <LucideHistory
+                  v-if="accountViewMode === 'classic'"
+                  :size="15"
+                  aria-hidden="true"
+                />
+                <LucideFileText v-else :size="15" aria-hidden="true" />
+              </button>
+              <div class="account-totals">
+                <span>
+                  <small>Deuda</small>
+                  <b>${{ format(accountDebtTotal) }}</b>
+                </span>
+              </div>
+            </template>
             <button
+              v-else
               type="button"
-              :class="[
-                'account-view-toggle',
-                { active: accountViewMode === 'timeline' },
-              ]"
-              :aria-label="accountViewToggleLabel"
-              :title="accountViewToggleLabel"
-              @click="toggleAccountView"
+              class="account-view-toggle active"
+              aria-label="Volver a Estado de Cuenta"
+              title="Volver a Estado de Cuenta"
+              @click="toggleServiciosView"
             >
-              <LucideHistory
-                v-if="accountViewMode === 'classic'"
-                :size="15"
-                aria-hidden="true"
-              />
-              <LucideFileText v-else :size="15" aria-hidden="true" />
+              <LucideFileText :size="15" aria-hidden="true" />
             </button>
-            <div class="account-totals">
-              <span>
-                <small>Deuda</small>
-                <b>${{ format(accountDebtTotal) }}</b>
-              </span>
-            </div>
           </template>
         </div>
 
         <div
-          v-if="detailsExpanded"
+          v-if="detailsExpanded && accountViewMode !== 'services'"
           class="account-summary-grid"
           aria-label="Resumen del estado de cuenta"
         >
@@ -473,7 +446,7 @@
           </article>
         </div>
 
-        <div v-if="detailsExpanded" class="account-expanded-controls">
+        <div v-if="detailsExpanded && accountViewMode !== 'services'" class="account-expanded-controls">
           <label
             class="account-search-control account-search-control--expanded"
           >
@@ -525,8 +498,58 @@
           ]"
         >
           <Transition name="account-flow" mode="out-in">
+            <section
+              v-if="accountViewMode === 'services'"
+              ref="accountTableWrap"
+              class="student-services-panel student-services-panel--workspace"
+              :class="{ open: showServiciosPanel }"
+              :key="`${student.matricula}-services`"
+              aria-label="Talleres y servicios"
+            >
+              <header class="student-services-head">
+                <div>
+                  <span>Talleres y Servicios</span>
+                  <strong>{{ serviciosTags.length ? `${serviciosTags.length} activo${serviciosTags.length === 1 ? '' : 's'}` : 'Sin talleres' }}</strong>
+                </div>
+                <button type="button" class="student-services-toggle" @click="toggleServiciosPanel">
+                  <LucidePlus v-if="!showServiciosPanel" :size="14" />
+                  <LucideX v-else :size="14" />
+                  {{ showServiciosPanel ? 'Cerrar' : 'Agregar' }}
+                </button>
+              </header>
+
+              <div v-if="serviciosTags.length" class="student-services-tags">
+                <span v-for="servicio in serviciosTags" :key="`service-tag-${servicio.clave}`" class="student-service-tag">
+                  <img :src="servicio.imagen" alt="" loading="lazy" />
+                  {{ servicio.nombre }}
+                  <button type="button" :disabled="savingServicio === servicio.clave" title="Quitar" @click="removeServicio(servicio)">
+                    <LucideX :size="11" />
+                  </button>
+                </span>
+              </div>
+              <div v-else class="student-services-empty">Sin talleres o servicios registrados.</div>
+
+              <div v-if="showServiciosPanel" class="student-services-picker">
+                <label class="student-services-search">
+                  <LucideSearch :size="14" />
+                  <input v-model="servicioSearch" type="search" placeholder="Buscar taller o servicio" />
+                </label>
+                <div class="student-services-catalog">
+                  <button
+                    v-for="servicio in availableServiciosCatalog"
+                    :key="`service-option-${servicio.clave}`"
+                    type="button"
+                    :disabled="savingServicio === servicio.clave"
+                    @click="addServicio(servicio)"
+                  >
+                    <img :src="servicio.imagen" alt="" loading="lazy" />
+                    <span>{{ servicio.nombre }}</span>
+                  </button>
+                </div>
+              </div>
+            </section>
             <div
-              v-if="accountViewMode === 'timeline'"
+              v-else-if="accountViewMode === 'timeline'"
               ref="accountTableWrap"
               class="account-timeline-wrap"
               :key="`${student.matricula}-timeline`"
@@ -1036,15 +1059,18 @@ const accountFilter = ref("all");
 const accountViewMode = ref("classic");
 const detailsExpanded = ref(false);
 const detailTransitioning = ref(false);
+const accountWorkspaceTitle = computed(() =>
+  accountViewMode.value === "services" ? "Talleres y Servicios" : "Estado de Cuenta",
+);
 const accountViewToggleLabel = computed(() =>
-  accountViewMode.value === "classic"
-    ? "Ver historial"
-    : "Ver Estado de Cuenta",
+  accountViewMode.value === "timeline"
+    ? "Ver Estado de Cuenta"
+    : "Ver historial",
 );
 
 const toggleAccountView = () => {
   accountViewMode.value =
-    accountViewMode.value === "classic" ? "timeline" : "classic";
+    accountViewMode.value === "timeline" ? "classic" : "timeline";
 };
 
 const photoUrl = ref(null);
@@ -1233,6 +1259,15 @@ const loadServicios = async () => {
 const toggleServiciosPanel = () => {
   showServiciosPanel.value = !showServiciosPanel.value;
   if (showServiciosPanel.value && !serviciosCatalog.value.length) void loadServicios();
+};
+const toggleServiciosView = () => {
+  if (accountViewMode.value === 'services') {
+    accountViewMode.value = 'classic';
+    return;
+  }
+  accountViewMode.value = 'services';
+  showServiciosPanel.value = true;
+  if (!serviciosCatalog.value.length) void loadServicios();
 };
 const mutateServicio = async (servicio, action) => {
   if (!props.student?.matricula || !servicio?.clave || savingServicio.value) return;

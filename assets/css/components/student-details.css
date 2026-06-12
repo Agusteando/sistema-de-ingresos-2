@@ -2426,6 +2426,24 @@ button.student-service-mini {
   color: #44723d;
 }
 
+
+.student-service-mini--add.active {
+  border-color: rgba(47, 111, 43, .34);
+  background: linear-gradient(180deg, rgba(247, 251, 245, .98), rgba(238, 248, 235, .96));
+  color: #356f31;
+  box-shadow: 0 10px 20px rgba(79, 139, 71, .12), inset 0 1px 0 rgba(255,255,255,.92);
+}
+
+.student-services-panel--workspace {
+  margin-top: 0;
+  min-height: 180px;
+  align-content: start;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .student-services-panel--workspace {
+  min-height: 156px;
+}
+
 .student-services-panel {
   position: relative;
   z-index: 1;
