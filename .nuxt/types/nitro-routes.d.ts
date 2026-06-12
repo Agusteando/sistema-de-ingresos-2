@@ -282,6 +282,9 @@ declare module "nitropack/types" {
       'delete': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/students/[matricula]/siblings.delete').default>>>>
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/students/[matricula]/siblings.get').default>>>>
     }
+    '/api/students/bulk-baja': {
+      'put': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/students/bulk-baja.put').default>>>>
+    }
     '/api/students/bulk-ingreso-cycle': {
       'put': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/students/bulk-ingreso-cycle.put').default>>>>
     }

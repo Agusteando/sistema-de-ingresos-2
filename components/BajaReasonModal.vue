@@ -4,8 +4,8 @@
       <div class="modal-container baja-modal">
         <div class="modal-header">
           <div>
-            <h2 class="modal-title">Dar de baja</h2>
-            <p class="modal-subtitle">{{ student?.nombreCompleto }}</p>
+            <h2 class="modal-title">{{ isBulk ? 'Baja masiva' : 'Dar de baja' }}</h2>
+            <p class="modal-subtitle">{{ modalSubtitle }}</p>
           </div>
           <button class="modal-icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
             <LucideX :size="18" />
@@ -13,6 +13,11 @@
         </div>
 
         <div class="modal-content">
+          <div v-if="isBulk" class="bulk-baja-note">
+            <strong>{{ selectedCount }} alumnos seleccionados</strong>
+            <span>Se aplicará el mismo motivo solo a alumnos activos.</span>
+          </div>
+
           <div class="reason-grid">
             <button
               v-for="reason in presetReasons"
@@ -39,10 +44,10 @@
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-ghost" type="button" @click="$emit('close')">Cancelar</button>
-          <button class="btn btn-danger" type="button" :disabled="!canSubmit" @click="submit">
+          <button class="btn btn-ghost" type="button" :disabled="saving" @click="$emit('close')">Cancelar</button>
+          <button class="btn btn-danger" type="button" :disabled="!canSubmit || saving" @click="submit">
             <LucideCheckCircle :size="16" />
-            Confirmar baja
+            {{ saving ? 'Procesando...' : (isBulk ? 'Confirmar bajas' : 'Confirmar baja') }}
           </button>
         </div>
       </div>
@@ -55,7 +60,11 @@ import { computed, ref } from 'vue'
 import { LucideCheckCircle, LucideX } from 'lucide-vue-next'
 import { useScrollLock } from '~/composables/useScrollLock'
 
-defineProps({ student: Object })
+const props = defineProps({
+  student: { type: Object, default: null },
+  students: { type: Array, default: () => [] },
+  saving: { type: Boolean, default: false }
+})
 const emit = defineEmits(['close', 'confirm'])
 
 useScrollLock()
@@ -63,6 +72,14 @@ useScrollLock()
 const presetReasons = ['Cambio de domicilio', 'Económico', 'Tema pedagógico', 'Otro']
 const selectedReason = ref(presetReasons[0])
 const customReason = ref('')
+
+const selectedCount = computed(() => Array.isArray(props.students) ? props.students.length : 0)
+const isBulk = computed(() => selectedCount.value > 1)
+const modalSubtitle = computed(() => {
+  if (isBulk.value) return `${selectedCount.value} alumnos seleccionados`
+  if (selectedCount.value === 1) return props.students?.[0]?.nombreCompleto || 'Alumno seleccionado'
+  return props.student?.nombreCompleto || 'Alumno seleccionado'
+})
 
 const requiresCustomText = computed(() => ['Otro', 'Personalizado'].includes(selectedReason.value))
 const finalReason = computed(() => requiresCustomText.value ? customReason.value : selectedReason.value)
@@ -147,6 +164,30 @@ const submit = () => {
   background: linear-gradient(135deg, rgba(236, 248, 230, 0.96), rgba(255, 255, 255, 0.98));
   box-shadow: inset 0 0 0 1px rgba(101, 167, 68, 0.24), 0 12px 26px rgba(22, 38, 65, 0.06);
   color: #2f7036;
+}
+
+.bulk-baja-note {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(227, 116, 98, 0.16);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 250, 248, 0.96), rgba(255, 255, 255, 0.98));
+  color: #334155;
+}
+
+.bulk-baja-note strong {
+  color: #263752;
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.bulk-baja-note span {
+  color: #7b8798;
+  font-size: 0.76rem;
+  font-weight: 620;
 }
 
 .custom-reason {

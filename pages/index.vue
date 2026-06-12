@@ -131,6 +131,7 @@
             @open-section-selection="openSectionModalForSelection"
             @open-bulk-ingreso-cycle="openBulkIngresoCycleFlow"
             @open-no-adeudo="openNoAdeudoForSelection"
+            @open-bulk-baja="openBulkBajaFlow"
             @clear-selected="clearSelectedStudents"
             @change-bulk-payment-method="bulkPaymentMethod = $event"
             @back-to-bulk="bulkWorkspaceMode = 'bulk'"
@@ -149,6 +150,7 @@
       @open-bulk-ingreso-cycle="openBulkIngresoCycleFlow"
       @open-bulk-payment="openBulkPaymentFlow"
       @open-no-adeudo="openNoAdeudoForSelection"
+      @open-bulk-baja="openBulkBajaFlow"
       @clear-selected="clearSelectedStudents"
     />
 
@@ -171,7 +173,14 @@
       @confirm="submitBulkIngresoCycle"
       @remove-student="removeStudentFromSelection"
     />
-    <BajaReasonModal v-if="pendingBajaStudent" :student="pendingBajaStudent" @close="pendingBajaStudent = null" @confirm="confirmBaja" />
+    <BajaReasonModal
+      v-if="pendingBajaStudent || pendingBulkBajaStudents.length"
+      :student="pendingBajaStudent"
+      :students="pendingBulkBajaStudents"
+      :saving="bulkBajaSaving"
+      @close="closeBajaModal"
+      @confirm="confirmBaja"
+    />
     <StudentOperatorInfoModal
       v-if="operatorInfoStudent"
       :student="operatorInfoStudent"
@@ -605,6 +614,8 @@ let kpiRefreshTimer = null
 const showStudentModal = ref(false)
 const editingStudent = ref(null)
 const pendingBajaStudent = ref(null)
+const pendingBulkBajaStudents = ref([])
+const bulkBajaSaving = ref(false)
 const operatorInfoStudent = ref(null)
 const noAdeudoStudents = ref([])
 const showFinancialDiagnosticsModal = ref(false)
@@ -2037,11 +2048,91 @@ const selectStudentByMatricula = (matricula) => {
 }
 
 const bajaAlumno = (student) => {
+  pendingBulkBajaStudents.value = []
   pendingBajaStudent.value = student
 }
 
+const openBulkBajaFlow = () => {
+  if (!selectedCount.value) return
+  pendingBajaStudent.value = null
+  pendingBulkBajaStudents.value = selectedStudents.value.map(findCanonicalStudent).filter(Boolean)
+}
+
+const closeBajaModal = () => {
+  if (bulkBajaSaving.value) return
+  pendingBajaStudent.value = null
+  pendingBulkBajaStudents.value = []
+}
+
+const applyBulkBajaResult = (results = [], motivo = '') => {
+  const updated = new Set(results
+    .filter(row => row?.status === 'updated')
+    .map(row => normalizeStudentMatricula(row?.matricula))
+    .filter(Boolean))
+
+  if (!updated.size) return
+
+  students.value = students.value.map((student) => {
+    const key = normalizeStudentMatricula(student?.matricula)
+    return updated.has(key) ? { ...student, estatus: motivo } : student
+  })
+
+  if (selectedStudent.value && updated.has(normalizeStudentMatricula(selectedStudent.value.matricula))) {
+    selectedStudent.value = { ...selectedStudent.value, estatus: motivo }
+  }
+}
+
+const confirmBulkBaja = async (motivo) => {
+  if (bulkBajaSaving.value || !pendingBulkBajaStudents.value.length || !motivo) return
+  bulkBajaSaving.value = true
+
+  try {
+    const res = await $fetch('/api/students/bulk-baja', {
+      method: 'PUT',
+      body: {
+        motivo,
+        matriculas: pendingBulkBajaStudents.value.map(student => student?.matricula).filter(Boolean)
+      }
+    })
+
+    applyBulkBajaResult(res?.results || [], motivo)
+    const failedMatriculas = (res?.results || [])
+      .filter(row => row?.status === 'failed')
+      .map(row => normalizeStudentMatricula(row?.matricula))
+      .filter(Boolean)
+
+    if (failedMatriculas.length) setSelectedMatriculas(failedMatriculas)
+    else {
+      clearStudentSelection()
+      bulkWorkspaceMode.value = 'none'
+      resetBulkPayments()
+    }
+
+    pendingBulkBajaStudents.value = []
+    await refreshAfterStudentMutation()
+
+    const updated = Number(res?.updated || 0)
+    const skipped = Number(res?.skipped || 0)
+    const failed = Number(res?.failed || 0)
+    const extra = [
+      skipped ? `${skipped} omitido${skipped === 1 ? '' : 's'}` : '',
+      failed ? `${failed} fallido${failed === 1 ? '' : 's'}` : ''
+    ].filter(Boolean).join('; ')
+    show(`${updated} baja${updated === 1 ? '' : 's'} aplicada${updated === 1 ? '' : 's'}${extra ? `; ${extra}` : ''}.`, failed ? 'warning' : 'success')
+  } catch (e) {
+    show(e?.data?.message || e?.message || 'No se pudo procesar la baja masiva', 'danger')
+  } finally {
+    bulkBajaSaving.value = false
+  }
+}
+
 const confirmBaja = async (motivo) => {
-  const student = pendingBajaStudent.value
+  if (pendingBulkBajaStudents.value.length > 1) {
+    await confirmBulkBaja(motivo)
+    return
+  }
+
+  const student = pendingBajaStudent.value || pendingBulkBajaStudents.value[0]
   if (!student || !motivo) return
   const previousEstatus = student.estatus
 
@@ -2059,7 +2150,7 @@ const confirmBaja = async (motivo) => {
       },
       { pending: 'Procesando baja...', success: 'Alumno dado de baja exitosamente', error: 'Fallo al procesar baja' }
     )
-    pendingBajaStudent.value = null
+    closeBajaModal()
     await refreshAfterStudentMutation()
   } catch (e) {}
 }

@@ -33,6 +33,7 @@
       @open-section-selection="$emit('open-section-selection')"
       @open-bulk-ingreso-cycle="$emit('open-bulk-ingreso-cycle')"
       @open-no-adeudo="$emit('open-no-adeudo')"
+      @open-bulk-baja="$emit('open-bulk-baja')"
       @clear-selected="$emit('clear-selected')"
     />
 
@@ -96,6 +97,7 @@ defineEmits([
   'open-section-selection',
   'open-bulk-ingreso-cycle',
   'open-no-adeudo',
+  'open-bulk-baja',
   'clear-selected',
   'change-bulk-payment-method',
   'back-to-bulk',

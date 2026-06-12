@@ -87,6 +87,12 @@
   background: linear-gradient(180deg, #58a94b, #328632);
   color: #fff;
 }
+.bulk-command.danger {
+  border-color: rgba(227, 116, 98, .28);
+  background: linear-gradient(180deg, #fff, #fff7f5);
+  color: #b84634;
+}
+
 
 .bulk-selected-list {
   min-height: 0;

@@ -101,6 +101,12 @@
   min-width: 78px;
   color: #6f7b95;
 }
+.dock-action.danger {
+  border-color: rgba(227, 116, 98, .28);
+  background: linear-gradient(180deg, #fff, #fff7f5);
+  color: #b84634;
+}
+
 
 @media (max-width: 1280px) {
   .selection-action-dock {

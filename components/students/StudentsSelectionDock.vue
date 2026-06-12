@@ -26,6 +26,10 @@
             <LucideShieldCheck :size="16" />
             <span>No adeudo</span>
           </button>
+          <button type="button" class="dock-action danger" @click="$emit('open-bulk-baja')">
+            <LucideUserX :size="16" />
+            <span>Baja masiva</span>
+          </button>
           <button type="button" class="dock-action primary" @click="$emit('open-bulk-payment')">
             <LucideCreditCard :size="16" />
             <span>Aplicar pago</span>
@@ -38,7 +42,7 @@
 </template>
 
 <script setup>
-import { LucideArrowRight, LucideCalendarClock, LucideCreditCard, LucideShieldCheck, LucideTags } from 'lucide-vue-next'
+import { LucideArrowRight, LucideCalendarClock, LucideCreditCard, LucideShieldCheck, LucideTags, LucideUserX } from 'lucide-vue-next'
 import { formatMoney } from '~/shared/utils/studentPresentation'
 
 defineProps({
@@ -52,6 +56,7 @@ defineEmits([
   'open-bulk-ingreso-cycle',
   'open-bulk-payment',
   'open-no-adeudo',
+  'open-bulk-baja',
   'clear-selected'
 ])
 </script>

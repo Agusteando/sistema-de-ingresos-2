@@ -1,1 +1,1 @@
-Aclara la interfaz del ciclo de ingreso.
+Agrega baja masiva para alumnos seleccionados.
