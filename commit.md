@@ -1,1 +1,1 @@
-Corrige la visibilidad legacy del estado de cuenta.
+Corrige el alcance superadmin al cambiar concepto.

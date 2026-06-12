@@ -1,6 +1,5 @@
 import { executeStatementTransaction, query, runWithBridgeAgentId, type SqlStatement } from '../../../utils/db'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
-import { isInProjectedPlantelScopeForCiclo } from '../../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
@@ -25,13 +24,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       D.concepto,
       D.conceptoNombre,
       D.ciclo,
-      D.estatus,
-      B.plantel,
-      B.nivel AS nivelBase,
-      B.grado AS gradoBase,
-      B.ciclo AS cicloBase
+      D.estatus
     FROM documentos D
-    LEFT JOIN base B ON B.matricula = D.matricula
     WHERE D.documento = ?
     LIMIT 1
   `, [documento])
@@ -45,18 +39,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   const effectiveCiclo = normalizeCicloKey(doc.ciclo || cicloKey)
-  const isScopedToActivePlantel = user.isSuperAdmin && user.active_plantel !== 'GLOBAL'
-
-  if (isScopedToActivePlantel && !isInProjectedPlantelScopeForCiclo(
-    doc.gradoBase,
-    doc.plantel,
-    doc.cicloBase,
-    effectiveCiclo,
-    doc.nivelBase,
-    user.active_plantel,
-  )) {
-    throw createError({ statusCode: 403, message: 'Alumno fuera del alcance del plantel activo.' })
-  }
 
   const [activePeriod] = await query<any[]>(`
     SELECT id
