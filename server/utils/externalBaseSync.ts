@@ -19,12 +19,10 @@ export type SyncRuntimeConfig = {
 }
 
 export const ACTIVE_SYNC_STATUSES = ['running', 'fetching', 'processing']
-export const ENROLLMENT_CONFIG_URL = 'https://matricula.casitaapps.com/api/enrollment-config/all'
 export const EXTERNAL_SYNC_URL = 'https://matricula.casitaapps.com/api/sync'
 export const EXTERNAL_SYNC_TIMEOUT_MS = 60000
 export const EXTERNAL_SYNC_STALE_AFTER_MINUTES = 30
 export const EXTERNAL_SYNC_BATCH_LIMIT = 50
-export const ENROLLMENT_CONFIG_TIMEOUT_MS = 15000
 export const LOG_PREFIX = '[External Base Sync]'
 
 export const createEmptyCounters = (total = 0): SyncCounters => ({
@@ -455,29 +453,27 @@ const readCurrentCicloFromConfig = (configData: any): unknown => {
 }
 
 export const fetchCurrentEnrollmentCicloKey = async () => {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), ENROLLMENT_CONFIG_TIMEOUT_MS)
+  const rows = await query<any[]>(`
+    SELECT cycle_name
+    FROM config_school_cycles
+    WHERE is_current = 1
+    ORDER BY cycle_name DESC
+    LIMIT 1
+  `)
 
-  try {
-    const response = await fetch(ENROLLMENT_CONFIG_URL, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-      signal: controller.signal
-    })
-
-    if (!response.ok) {
-      throw new Error(`Configuracion de ciclo respondio con HTTP ${response.status}.`)
-    }
-
-    const configData = await response.json()
-    return requireSimpleCicloKey(
-      readCurrentCicloFromConfig(configData),
-      ENROLLMENT_CONFIG_URL
-    )
-  } finally {
-    clearTimeout(timeout)
+  const current = rows?.[0]?.cycle_name
+  if (current) {
+    return requireSimpleCicloKey(current, 'config_school_cycles')
   }
+
+  const fallbackRows = await query<any[]>(`
+    SELECT cycle_name
+    FROM config_school_cycles
+    ORDER BY cycle_name DESC
+    LIMIT 1
+  `)
+
+  return requireSimpleCicloKey(fallbackRows?.[0]?.cycle_name || new Date().getFullYear(), 'config_school_cycles')
 }
 
 const normalizePayloadKey = (key: unknown) => String(key || '')

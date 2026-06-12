@@ -4990,9 +4990,7 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
     parseEnrollmentConfig(configData);
   } catch (serverError) {
     try {
-      const configData = await $fetch(
-        "https://matricula.casitaapps.com/api/enrollment-config/all",
-      );
+      const configData = await $fetch("/api/conceptos-config/all");
       parseEnrollmentConfig(configData);
     } catch (externalError) {
       console.warn(

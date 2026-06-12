@@ -2105,7 +2105,7 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
   const previousTipoConcepts = tipoIngresoConcepts.value.join('|')
 
   try {
-    const configData = await $fetch('https://matricula.casitaapps.com/api/enrollment-config/all')
+    const configData = await $fetch('/api/conceptos-config/all')
     parseEnrollmentConfig(configData)
   } catch (e) {
     console.warn('Fallback al carecer de configuración externa.')

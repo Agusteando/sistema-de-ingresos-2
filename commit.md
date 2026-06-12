@@ -1,1 +1,1 @@
-Agrega corrección directa de concepto con selector buscable y refuerza auditoría de referencias de pago.
+Migra configuración de conceptos a Nuxt con categorías, mappings y espejo local para Bridge.
