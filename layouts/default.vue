@@ -42,7 +42,7 @@
         <NuxtLink v-if="showFinancialNav" to="/reportes" class="nav-item group">
           <LucidePieChart :size="22" stroke-width="2" /> <span class="nav-label">Reportes</span>
         </NuxtLink>
-        <NuxtLink v-if="showFinancialNav" to="/conceptos" class="nav-item group">
+        <NuxtLink v-if="isSuperAdmin" to="/conceptos" class="nav-item group">
           <LucideSettings :size="22" stroke-width="2" /> <span class="nav-label">Conceptos</span>
         </NuxtLink>
         <NuxtLink v-if="showFinancialNav" to="/facturas" class="nav-item group">

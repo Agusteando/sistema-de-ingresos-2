@@ -46,15 +46,20 @@
         <LucideSearch :size="16" />
         <input v-model="search" type="search" placeholder="Buscar concepto o taller" />
       </div>
-      <button v-if="isSuperAdmin" class="icon-button primary" type="button" title="Sincronizar catálogo local" @click="importCatalog" :disabled="busy">
-        <LucideDownload :class="{ 'animate-spin': busyAction === 'import' }" :size="17" />
+      <button v-if="canManageConceptos" class="toolbar-action primary" type="button" title="Importar conceptos del Bridge local a central" @click="importCatalog" :disabled="busy">
+        <LucideDownload :class="{ 'animate-spin': busyAction === 'import' }" :size="16" />
+        <span>Importar</span>
+      </button>
+      <button v-if="canManageConceptos" class="toolbar-action" type="button" title="Sincronizar central al Bridge local" @click="syncBridge" :disabled="busy">
+        <LucideRefreshCw :class="{ 'animate-spin': busyAction === 'sync' }" :size="16" />
+        <span>Sync</span>
       </button>
       <button class="icon-button" type="button" title="Actualizar" @click="loadAdmin" :disabled="loading">
         <LucideRefreshCw :class="{ 'animate-spin': loading }" :size="17" />
       </button>
     </section>
 
-    <section v-if="!isSuperAdmin" class="readonly-card">
+    <section v-if="!canManageConceptos" class="readonly-card">
       <LucideLock :size="17" />
       <span>Solo super admin puede modificar esta configuración.</span>
     </section>
@@ -66,7 +71,7 @@
             <h3>Configuración</h3>
             <small>{{ filteredMappings.length }} asignaciones</small>
           </div>
-          <button v-if="isSuperAdmin" class="btn-compact" type="button" @click="resetDraft">
+          <button v-if="canManageConceptos" class="btn-compact" type="button" @click="resetDraft">
             <LucidePlus :size="15" />
             Agregar
           </button>
@@ -141,7 +146,7 @@
                   </span>
                   <span v-else-if="item.categoria_clave === 'talleres_servicios'" class="soft-warning">Sin taller</span>
                   <span v-if="item.months?.length" class="months-chip">{{ item.months.join(' · ') }}</span>
-                  <button v-if="isSuperAdmin" class="row-action danger" type="button" title="Quitar" @click="removeMapping(item)">
+                  <button v-if="canManageConceptos" class="row-action danger" type="button" title="Quitar" @click="removeMapping(item)">
                     <LucideX :size="15" />
                   </button>
                 </div>
@@ -158,7 +163,7 @@
               <h3>Talleres</h3>
               <small>{{ servicios.length }} activos</small>
             </div>
-            <button v-if="isSuperAdmin" class="icon-button" type="button" title="Nuevo taller" @click="newServiceVisible = !newServiceVisible">
+            <button v-if="canManageConceptos" class="icon-button" type="button" title="Nuevo taller" @click="newServiceVisible = !newServiceVisible">
               <LucidePlus :size="16" />
             </button>
           </div>
@@ -246,8 +251,14 @@ const state = useState('globalState')
 const { show } = useToast()
 
 const superAdminCookie = useCookie('auth_is_super_admin')
+const roleCookie = useCookie('auth_role')
 const activePlantelCookie = useCookie('auth_active_plantel')
-const isSuperAdmin = computed(() => superAdminCookie.value === 'true')
+const roleTokens = computed(() => String(roleCookie.value || '')
+  .split(',')
+  .map((role) => role.trim().toLowerCase())
+  .filter(Boolean))
+const canManageConceptos = computed(() => superAdminCookie.value === 'true' || roleTokens.value.some((role) => ['global', 'superadmin', 'role_super_admin', 'role_superadmin'].includes(role)))
+const isSuperAdmin = canManageConceptos
 
 const loading = ref(false)
 const busy = ref(false)
@@ -441,12 +452,31 @@ const importCatalog = async () => {
   }
 }
 
+const syncBridge = async () => {
+  busy.value = true
+  busyAction.value = 'sync'
+  try {
+    const result = await $fetch('/api/conceptos-config/sync-bridge', {
+      method: 'POST',
+      body: { ciclo: selectedCiclo.value, plantel: selectedPlantel.value }
+    })
+    const synced = result?.synced?.configs ?? 0
+    show(`Bridge sincronizado (${synced})`, 'success')
+    await loadAdmin()
+  } catch (error) {
+    show(error?.data?.message || 'No se pudo sincronizar Bridge', 'danger')
+  } finally {
+    busy.value = false
+    busyAction.value = ''
+  }
+}
+
 onMounted(() => {
-  if (isSuperAdmin.value) loadAdmin()
+  if (canManageConceptos.value) loadAdmin()
 })
 
 watch([selectedCiclo, selectedPlantel, selectedCategoria], () => {
-  if (isSuperAdmin.value) loadAdmin()
+  if (canManageConceptos.value) loadAdmin()
 })
 </script>
 
@@ -529,7 +559,7 @@ watch([selectedCiclo, selectedPlantel, selectedCategoria], () => {
 
 .concept-toolbar {
   display: grid;
-  grid-template-columns: auto auto auto minmax(260px, 1fr) auto auto;
+  grid-template-columns: auto auto auto minmax(260px, 1fr) auto auto auto;
   gap: 10px;
   align-items: center;
 }
@@ -567,6 +597,7 @@ watch([selectedCiclo, selectedPlantel, selectedCategoria], () => {
 .search-box.compact { height: 34px; box-shadow: none; }
 
 .icon-button,
+.toolbar-action,
 .btn-compact,
 .save-button,
 .row-action,
@@ -581,7 +612,10 @@ watch([selectedCiclo, selectedPlantel, selectedCategoria], () => {
 }
 .icon-button { width: 38px; height: 38px; border-radius: 12px; }
 .icon-button.primary { color: #2f7a37; background: #f5fbf3; }
+.toolbar-action { height: 38px; gap: 7px; border-radius: 12px; padding: 0 12px; color: #4a596f; font-size: .76rem; font-weight: 850; }
+.toolbar-action.primary { color: #2f7a37; background: #f5fbf3; }
 .icon-button:hover,
+.toolbar-action:hover,
 .btn-compact:hover,
 .row-action:hover { transform: translateY(-1px); border-color: rgba(57,127,232,.32); background: rgba(57,127,232,.06); }
 

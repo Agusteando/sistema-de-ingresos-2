@@ -1,1 +1,1 @@
-Migra configuración de conceptos a Nuxt con categorías, mappings y espejo local para Bridge.
+Corrige permisos y sincronización visible de configuración de conceptos.
