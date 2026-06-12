@@ -11,11 +11,18 @@ export default defineNuxtRouteMiddleware((to) => {
   const planteles = useCookie('auth_planteles')
   const role = useCookie('auth_role')
   const hasControlEscolarCookie = useCookie('auth_has_control_escolar')
+  const isVisualLabPath = to.path.startsWith('/__visual-lab')
   const roleTokens = roleTokensFrom(role.value)
   const isSuperAdmin = roleTokens.some((entry) => SUPERADMIN_ROLES.has(entry))
   const hasControlEscolarRole = hasControlEscolarCookie.value === 'true' || roleTokens.includes(CONTROL_ESCOLAR_ROLE)
   const isControlEscolarOnly = !isSuperAdmin && roleTokens.includes(CONTROL_ESCOLAR_ROLE)
   const isPublicPath = to.path === '/login' || to.path.startsWith('/print')
+
+  // Permanent dev-only visual lab. Do not remove without replacing docs/visual-testing.md.
+  if (isVisualLabPath) {
+    if (import.meta.dev) return
+    return navigateTo(email.value ? '/' : '/login')
+  }
 
   if (!email.value && !isPublicPath) {
     return navigateTo('/login')

@@ -914,6 +914,8 @@ const props = defineProps({
   isEnrolled: { type: Boolean, default: true },
   externalConcepts: { type: Array, default: () => [] },
   tipoIngresoConcepts: { type: Array, default: () => [] },
+  // Dev visual lab only: lets auth-heavy layouts render deterministic account rows.
+  visualLabDebts: { type: Array, default: null },
 });
 const emit = defineEmits([
   "refresh",
@@ -1681,6 +1683,22 @@ const loadDebts = async (options = {}) => {
   }
 
   const shouldPreserveInteraction = preserveInteraction && !contextChanged;
+  if (Array.isArray(props.visualLabDebts)) {
+    await applyAccountDebts(props.visualLabDebts, {
+      preserveInteraction: shouldPreserveInteraction,
+    });
+    loading.value = false;
+    setAccountStateSyncState({
+      status: "updated",
+      message: "Visual lab con datos sinteticos.",
+      lastUpdatedAt: new Date().toISOString(),
+      recordCount: props.visualLabDebts.length,
+      hasCache: true,
+      error: null,
+    });
+    return;
+  }
+
   const cached = useCache ? readCachedAccountState(cacheOptions) : null;
   const hasCachedAccountState = Boolean(cached);
   if (contextChanged && !hasCachedAccountState) {
