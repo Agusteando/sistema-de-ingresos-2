@@ -85,7 +85,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const plantel = studentRef.plantel || user?.active_plantel || 'PT'
   const instituto = (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0
   const cartaFecha = body.generarCartaBeca && becaTipos.length ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
-  const statements: SqlStatement[] = [{
+  const documentStatement: SqlStatement = {
     sql: `
       INSERT INTO documentos (
         concepto, conceptoNombre, matricula, costo, montoFinal, plazo, meses,
@@ -113,15 +113,23 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       cicloKey,
       eventual ? 1 : 0
     ]
-  }]
+  }
+
+  const [documentResult] = await executeStatementTransaction<any>([documentStatement])
+  const documento = Number(documentResult?.insertId || 0)
+
+  if (!documento) {
+    throw createError({ statusCode: 500, message: 'No se pudo confirmar el documento creado.' })
+  }
 
   if (pagoRealizadoEnOtroPlantel && montoFinal > 0) {
     const periods = buildDepuracionPeriods(meses, eventual)
     const valueGroups = periods.map(() => `(
-      ?, @documento_insertado, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )`).join(',')
     const referenceParams = periods.flatMap((period) => [
       body.matricula,
+      documento,
       period.mes,
       period.mesLabel,
       studentRef.nombreCompleto || body.matricula,
@@ -146,43 +154,63 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       new Date()
     ])
 
-    statements.push({ sql: 'SET @documento_insertado := LAST_INSERT_ID()' })
-    statements.push({
-      sql: `
-        INSERT INTO referenciasdepago (
-          matricula,
+    try {
+      await executeStatementTransaction([{
+        sql: `
+          INSERT INTO referenciasdepago (
+            matricula,
+            documento,
+            mes,
+            mesReal,
+            nombreCompleto,
+            concepto,
+            conceptoNombre,
+            monto,
+            montoLetra,
+            importeTotal,
+            saldoAntes,
+            saldoDespues,
+            pagos,
+            pagosDespues,
+            recargo,
+            usuario,
+            formaDePago,
+            plantel,
+            instituto,
+            ciclo,
+            estatus,
+            depurado,
+            depurado_por,
+            depurado_fecha
+          ) VALUES ${valueGroups}
+        `,
+        params: referenceParams
+      }])
+    } catch (error: any) {
+      try {
+        await query(
+          `DELETE FROM documentos
+           WHERE documento = ?
+             AND matricula = ?
+             AND ciclo = ?
+             AND NOT EXISTS (SELECT 1 FROM referenciasdepago WHERE documento = ?)`,
+          [documento, body.matricula, cicloKey, documento]
+        )
+      } catch (cleanupError: any) {
+        console.warn('[Documentos] No se pudo revertir documento tras fallo de depuración por otro plantel.', {
           documento,
-          mes,
-          mesReal,
-          nombreCompleto,
-          concepto,
-          conceptoNombre,
-          monto,
-          montoLetra,
-          importeTotal,
-          saldoAntes,
-          saldoDespues,
-          pagos,
-          pagosDespues,
-          recargo,
-          usuario,
-          formaDePago,
-          plantel,
-          instituto,
-          ciclo,
-          estatus,
-          depurado,
-          depurado_por,
-          depurado_fecha
-        ) VALUES ${valueGroups}
-      `,
-      params: referenceParams
-    })
-  }
+          matricula: body.matricula,
+          message: cleanupError?.message || cleanupError
+        })
+      }
 
-  const results = await executeStatementTransaction<any>(statements)
-  const documentResult = results[0] || {}
-  const documento = Number(documentResult.insertId || 0)
+      throw createError({
+        statusCode: 500,
+        message: 'No se pudo registrar el pago realizado en otro plantel. El documento no fue confirmado; vuelve a intentar.',
+        cause: error
+      })
+    }
+  }
   
   return {
     success: true,

@@ -1,1 +1,1 @@
-Corrige la sincronización Bridge de configuración de conceptos.
+Corrige depuración por otro plantel y alta de ciclo de ingreso.

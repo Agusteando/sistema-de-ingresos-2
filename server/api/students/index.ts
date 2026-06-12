@@ -1,5 +1,5 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
-import { calculateBasePlacementForTargetPosition, calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, normalizePlantel, plantelCandidatesForProjectedScope, resolveNivelEscolar } from '../../../shared/utils/grado'
+import { calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, normalizePlantel, plantelCandidatesForProjectedScope, projectPlantelForNivel, resolveNivelEscolar } from '../../../shared/utils/grado'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { parseCurp } from '../../../shared/utils/curp'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
@@ -135,28 +135,22 @@ const buildNombreCompleto = (body: Record<string, any>) => [
 
 const resolveAltaBasePlacement = (body: Record<string, any>, assignedPlantel: string, assignedNivel: string, cicloKey: string) => {
   const targetCiclo = normalizeCicloKey(body.targetCiclo || cicloKey)
-  const targetNivel = resolveNivelEscolar({ plantel: assignedPlantel, nivel: body.targetNivel || body.resolvedNivel || assignedNivel })
-  const targetGrado = normalizeGradoForPlantel(body.targetGrado || body.grado, assignedPlantel, targetNivel)
-  const placement = calculateBasePlacementForTargetPosition(
-    targetNivel,
-    targetGrado,
-    cicloKey,
-    targetCiclo,
-    assignedPlantel
-  )
+  const requestedNivel = resolveNivelEscolar({ plantel: assignedPlantel, nivel: body.targetNivel || body.resolvedNivel || assignedNivel })
+  const placementPlantel = projectPlantelForNivel(assignedPlantel, requestedNivel)
+  const requestedGrado = normalizeGradoForPlantel(body.targetGrado || body.grado, placementPlantel, requestedNivel)
 
-  if (placement.outOfScope || !placement.nivel || !placement.grado || !placement.plantel) {
+  if (!targetCiclo || !requestedNivel || !requestedGrado || !placementPlantel) {
     throw createError({
       statusCode: 400,
-      message: 'La combinación de grado y ciclo de ingreso no corresponde con la progresión escolar. Selecciona el grado actual del alumno y el ciclo real de ingreso.'
+      message: 'La posición académica seleccionada no es válida.'
     })
   }
 
   return {
     targetCiclo,
-    plantel: placement.plantel || assignedPlantel,
-    nivel: placement.nivel || assignedNivel,
-    grado: placement.grado || normalizeGradoForPlantel(body.grado, assignedPlantel, assignedNivel)
+    plantel: placementPlantel,
+    nivel: requestedNivel,
+    grado: requestedGrado
   }
 }
 
