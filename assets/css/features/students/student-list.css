@@ -219,7 +219,7 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   flex-direction: column;
   align-items: flex-start;
   gap: clamp(5px, .48vw, 7px);
@@ -228,15 +228,15 @@
 .student-copy strong {
   display: block;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
   color: #15233c;
   font-size: clamp(13.5px, 1vw, 15px);
   font-weight: 840;
-  letter-spacing: -.018em;
+  letter-spacing: 0;
   line-height: 1.16;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  overflow-wrap: normal;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: break-word;
   word-break: normal;
 }
 
@@ -479,9 +479,7 @@
   .student-copy strong {
     font-size: 13px;
     white-space: normal;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    display: block;
   }
 
   .student-meta,
@@ -687,6 +685,9 @@
   grid-area: name;
   font-size: 12.7px;
   line-height: 1.08;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .student-list-panel.is-compact .student-meta {
@@ -802,8 +803,7 @@
 
   .student-list-panel.is-compact .student-copy strong {
     display: block;
-    white-space: nowrap;
-    -webkit-line-clamp: initial;
+    white-space: normal;
   }
 
   .student-list-panel.is-compact .student-copy {

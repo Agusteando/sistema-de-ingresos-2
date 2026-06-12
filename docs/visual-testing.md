@@ -13,7 +13,7 @@ The route renders the real `StudentsListPanel`, `StudentDetails`, `DocumentModal
 - auth cookies for a dev superadmin/control-escolar session
 - `auth_active_plantel=PT`
 - local Estado de Cuenta cache records for four synthetic students
-- a synthetic photo cache entry for `PTO574` so card hover previews can be tested, with the other photo entries set to `none`
+- a synthetic photo cache entry for `PTO574` so the detail-panel photo preview can be tested, with the other photo entries set to `none`
 - `visual_lab=students-account` cookie for any future dev-only API fixtures
 
 After opening the route, agents can navigate to `/`, `/control-escolar`, or other protected pages in the same browser context without hitting the login redirect first.
@@ -46,7 +46,7 @@ After opening the route, agents can navigate to `/`, `/control-escolar`, or othe
    - student rows do not grow unexpectedly when compressed
    - the grade tile remains centered
   - matricula and ingreso chips stay compact
-  - hovering the first student grade/photo tile shows an enlarged photo preview without clipping
+  - hovering or tapping the selected student's detail-panel photo shows an enlarged photo preview without clipping
   - Estado de Cuenta shows four rows in a short viewport
    - `Agregar documento`, the document modal, and `Mas` menu remain usable
 
