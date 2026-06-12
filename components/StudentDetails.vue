@@ -677,6 +677,13 @@
                           <LucideSettings :size="16" />
                         </button>
                         <button
+                          v-if="canDirectCorrectConcept(debt)"
+                          @click="openDirectConceptCorrection(debt)"
+                          title="Cambiar concepto"
+                        >
+                          <LucidePencilLine :size="16" />
+                        </button>
+                        <button
                           v-if="debt.historialPagos?.length"
                           @click="toggleHistory(debt)"
                           title="Historial"
@@ -785,6 +792,12 @@
         @close="closeConceptModal"
         @success="handleSuccess"
       />
+      <ConceptDirectCorrectionModal
+        v-if="showDirectConceptModal"
+        :debt="selectedDirectConceptDebt"
+        @close="closeDirectConceptModal"
+        @success="handleSuccess"
+      />
       <IngresoCycleModal
         v-if="showIngresoCycleModal"
         :student="student"
@@ -847,6 +860,7 @@ import {
   LucideMaximize2,
   LucideMinimize2,
   LucideSlidersHorizontal,
+  LucidePencilLine,
 } from "lucide-vue-next";
 import { useState, useCookie } from "#app";
 import { useToast } from "~/composables/useToast";
@@ -869,6 +883,7 @@ import PaymentModal from "./PaymentModal.vue";
 import DocumentModal from "./DocumentModal.vue";
 import InvoiceModal from "./InvoiceModal.vue";
 import ConceptChangeModal from "./ConceptChangeModal.vue";
+import ConceptDirectCorrectionModal from "./ConceptDirectCorrectionModal.vue";
 import IngresoCycleModal from "./IngresoCycleModal.vue";
 import NoAdeudoModal from "~/components/NoAdeudoModal.vue";
 import StudentAccountPhotoCard from "~/components/students/StudentAccountPhotoCard.vue";
@@ -902,6 +917,23 @@ const {
   setAccountStateSyncState,
 } = useAccountStateCacheSync();
 const state = useState("globalState");
+const authRoleCookie = useCookie("auth_role");
+const superAdminCookie = useCookie("auth_is_super_admin");
+const roleTokens = computed(() =>
+  String(authRoleCookie.value || "")
+    .split(",")
+    .map((role) => role.trim().toLowerCase())
+    .filter(Boolean),
+);
+const isSuperAdmin = computed(
+  () =>
+    superAdminCookie.value === "true" ||
+    roleTokens.value.some((role) =>
+      ["global", "superadmin", "role_super_admin", "role_superadmin"].includes(
+        role,
+      ),
+    ),
+);
 
 const debts = ref([]);
 const siblings = ref([]);
@@ -934,10 +966,12 @@ const showPaymentModal = ref(false);
 const showDocModal = ref(false);
 const showInvoiceModal = ref(false);
 const showConceptModal = ref(false);
+const showDirectConceptModal = ref(false);
 const showIngresoCycleModal = ref(false);
 const showNoAdeudoModal = ref(false);
 const savingIngresoCycle = ref(false);
 const selectedConceptDebt = ref(null);
+const selectedDirectConceptDebt = ref(null);
 const detailsShell = ref(null);
 const detailsPlaceholder = ref(null);
 const expandedShellBounds = ref(null);
@@ -2217,6 +2251,24 @@ const closeConceptModal = () => {
   selectedConceptDebt.value = null;
 };
 
+const canDirectCorrectConcept = (debt) =>
+  Boolean(
+    isSuperAdmin.value &&
+      debt?.documento &&
+      !debt?.documentTimeline?.hasChanges,
+  );
+
+const openDirectConceptCorrection = (debt) => {
+  if (!canDirectCorrectConcept(debt)) return;
+  selectedDirectConceptDebt.value = debt;
+  showDirectConceptModal.value = true;
+};
+
+const closeDirectConceptModal = () => {
+  showDirectConceptModal.value = false;
+  selectedDirectConceptDebt.value = null;
+};
+
 const payTimelineGroup = (group) => {
   const pending = group?.pendingDebts || [];
   if (!pending.length) return;
@@ -2321,6 +2373,14 @@ const showDebtContextMenu = (event, debt) => {
     menuItems.push({ label: "-" });
   }
 
+  if (canDirectCorrectConcept(debt)) {
+    menuItems.push({
+      label: "Cambiar concepto",
+      icon: LucidePencilLine,
+      action: () => openDirectConceptCorrection(debt),
+    });
+  }
+
   menuItems.push({
     label: "Ajustar concepto",
     icon: LucideSettings,
@@ -2386,6 +2446,7 @@ const handleSuccess = () => {
   showDocModal.value = false;
   showInvoiceModal.value = false;
   closeConceptModal();
+  closeDirectConceptModal();
   selectedDebts.value = [];
   loadDebts({ useCache: false, preserveInteraction: false });
   emit("refresh");

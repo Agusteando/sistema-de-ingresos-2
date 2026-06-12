@@ -35,24 +35,13 @@
           <section class="change-grid">
             <label class="field-block">
               <span>Nuevo concepto</span>
-              <select
+              <ConceptSearchSelect
                 v-model="selectedConceptId"
-                class="input-field"
-                :disabled="loadingConcepts || busy"
-              >
-                <option disabled value="">
-                  {{ loadingConcepts ? "Cargando..." : "Seleccionar" }}
-                </option>
-                <option
-                  v-for="concept in conceptos"
-                  :key="concept.id"
-                  :value="concept.id"
-                >
-                  {{ concept.concepto }} · ${{
-                    Number(concept.costo || 0).toFixed(2)
-                  }}
-                </option>
-              </select>
+                :concepts="conceptos"
+                :loading="loadingConcepts"
+                :disabled="busy"
+                placeholder="Buscar concepto..."
+              />
             </label>
 
             <label class="field-block compact-field">
@@ -152,6 +141,7 @@ import {
 } from "lucide-vue-next";
 import { useScrollLock } from "~/composables/useScrollLock";
 import { useToast } from "~/composables/useToast";
+import ConceptSearchSelect from "~/components/ConceptSearchSelect.vue";
 import { normalizeCicloKey } from "~/shared/utils/ciclo";
 
 const props = defineProps({ debt: Object });

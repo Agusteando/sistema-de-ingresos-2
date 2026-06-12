@@ -617,6 +617,25 @@ export const ensureSchema = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS documento_concepto_correcciones (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          documento INT NOT NULL,
+          matricula VARCHAR(255) NOT NULL,
+          ciclo VARCHAR(50) DEFAULT NULL,
+          concepto_anterior INT DEFAULT NULL,
+          concepto_nombre_anterior VARCHAR(255) DEFAULT NULL,
+          concepto_nuevo INT NOT NULL,
+          concepto_nombre_nuevo VARCHAR(255) NOT NULL,
+          referencias_afectadas INT NOT NULL DEFAULT 0,
+          folios_afectados TEXT DEFAULT NULL,
+          usuario VARCHAR(255) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_documento_concepto_correcciones_documento (documento, created_at),
+          INDEX idx_documento_concepto_correcciones_matricula (matricula(64), ciclo(20))
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
       await checkAndAddColumn('users', 'role', "VARCHAR(20) NOT NULL DEFAULT 'plantel'")
       await checkAndAddColumn('users', 'planteles', "TEXT", "UPDATE users SET planteles = plantel WHERE plantel IS NOT NULL AND (planteles IS NULL OR planteles = '')")
       await checkAndAddColumn('users', 'email', "VARCHAR(255) DEFAULT NULL")

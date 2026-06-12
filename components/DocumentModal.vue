@@ -4,8 +4,8 @@
       <div class="modal-container document-modal-container">
         <div class="modal-header document-modal-header">
           <div>
-            <p class="document-eyebrow">Alta de concepto</p>
-            <h2 class="text-lg font-bold text-gray-800">Agregar concepto</h2>
+            <p class="document-eyebrow">Documento</p>
+            <h2 class="text-lg font-bold text-gray-800">Agregar documento</h2>
           </div>
           <button class="document-close-button" type="button" aria-label="Cerrar" @click="$emit('close')">
             <LucideX :size="18" />
@@ -226,7 +226,7 @@
           <button class="btn btn-ghost" @click="$emit('close')" type="button">Cancelar</button>
           <button class="btn btn-primary" @click="submit" :disabled="loading || loadingConcepts || !selectedDocumentoId">
             <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
-            {{ loading ? 'Agregando...' : (pagoRealizadoEnOtroPlantel ? 'Agregar y depurar' : 'Agregar concepto') }}
+            {{ loading ? 'Agregando...' : (pagoRealizadoEnOtroPlantel ? 'Agregar y depurar' : 'Agregar documento') }}
           </button>
         </div>
       </div>

@@ -27,3 +27,20 @@ Si el periodo activo está cancelado, no se debe registrar pago.
 No escribir `documento` dentro de `referenciasdepago.concepto`.
 No corregir esto con fallbacks silenciosos.
 No mover ni reescribir folios históricos sin proceso de auditoría/backfill aprobado.
+
+## Corrección directa de concepto
+
+La corrección directa de concepto es una acción de super admin para corregir la identidad completa de un documento cuando fue capturado con el concepto equivocado.
+
+Esta corrección actualiza de forma explícita:
+
+- `documentos.concepto`
+- `documentos.conceptoNombre`
+- `referenciasdepago.concepto`
+- `referenciasdepago.conceptoNombre`
+
+No modifica importes, folios, fechas, meses, formas de pago, estatus ni saldos.
+
+La corrección directa no usa `documento_concepto_periodos`, no crea diferenciales y no representa un cambio por mes. Si el documento ya tiene periodos activos, debe usarse el flujo de Ajustar concepto.
+
+Cada corrección directa debe registrarse en `documento_concepto_correcciones` con concepto anterior, concepto nuevo, folios afectados, usuario y fecha.

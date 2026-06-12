@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) =>
     SELECT
       d.documento, d.matricula, d.costo, d.montoFinal, d.meses, d.plazo,
       d.beca, d.becaNombre, d.becaTipos, d.becaMotivo, d.becaMonto, d.becaPorcentaje,
-      d.becaCartaGenerada, d.ciclo, d.conceptoNombre, d.eventual
+      d.becaCartaGenerada, d.ciclo, d.concepto, d.conceptoNombre, d.eventual
     FROM documentos d
     WHERE d.matricula = ? AND d.ciclo = ? AND d.estatus = 'Activo'
   `,
@@ -208,6 +208,8 @@ export default defineEventHandler(async (event) =>
 
         debts.push({
           documento: doc.documento,
+          concepto: doc.concepto,
+          conceptoId: activePeriod?.concepto_id || doc.concepto,
           periodoId: activePeriod?.id || null,
           conceptoNombre,
           mes: mesStr, // Pass the parsed mes value ('ev' or numeric string) for reliable future binding

@@ -1,1 +1,1 @@
-Corrige el concepto registrado en referencias de pago para preservar auditoría financiera.
+Agrega corrección directa de concepto con selector buscable y refuerza auditoría de referencias de pago.
