@@ -868,7 +868,7 @@ const emailPreviewFailedCount = computed(() => emailComposer.value.previews.filt
 const activeEmailPreview = computed(() => emailComposer.value.previews[emailComposer.value.previewIndex] || null)
 const activeEmailPreviewHtml = computed(() => activeEmailPreview.value?.success
   ? activeEmailPreview.value.html
-  : '<div style="font-family:Inter,Arial,sans-serif;padding:24px;color:#64748b;">Sin vista previa disponible.</div>'
+  : '<div style="font-family:Montserrat,Arial,sans-serif;padding:24px;color:#64748b;">Sin vista previa disponible.</div>'
 )
 
 const actionReadyCount = (action) => filteredDeudores.value.filter(d => canRunAction(d, action)).length

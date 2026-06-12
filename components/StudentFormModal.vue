@@ -1382,7 +1382,7 @@ const submit = async () => {
   color: #12213c;
   font-family: var(
     --students-font,
-    Inter,
+    Montserrat,
     ui-sans-serif,
     system-ui,
     -apple-system,
