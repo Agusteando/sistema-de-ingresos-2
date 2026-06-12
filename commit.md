@@ -1,1 +1,1 @@
-Refina interfaz de conceptos y actualiza tipografías globales.
+Permite asignar superadministradores desde Usuarios.

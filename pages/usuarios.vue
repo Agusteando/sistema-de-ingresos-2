@@ -77,6 +77,7 @@
             <option value="admin">Financiero</option>
             <option value="control">Control Escolar</option>
             <option value="admin_control">Ambos</option>
+            <option value="superadmin">Superadmin</option>
           </select>
         </label>
 
@@ -130,6 +131,9 @@
           </button>
           <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'admin' }, 'Restaurar Financiero', 'Se actualizará el acceso de los usuarios seleccionados.')">
             <LucideShieldCheck :size="15" /> Financiero
+          </button>
+          <button type="button" class="bulk-button purple" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'superadmin' }, 'Asignar superadmin', 'Se actualizará el acceso de los usuarios seleccionados a superadmin.', 'danger')">
+            <LucideShield :size="15" /> Superadmin
           </button>
           <button type="button" class="bulk-button red" :disabled="bulkSaving" @click="requestBulkUpdate({ ingresosBlocked: true }, `¿Bloquear ${selectedEmails.length} usuarios?`, 'Se actualizará el estado de los usuarios seleccionados.', 'danger')">
             <LucideBan :size="15" /> Bloquear
@@ -238,6 +242,7 @@
                     <button type="button" :class="{ active: accessMode(u) === 'admin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin')">Fin</button>
                     <button type="button" :class="{ active: accessMode(u) === 'control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'control')">CTRL</button>
                     <button type="button" :class="{ active: accessMode(u) === 'admin_control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin_control')">Ambos</button>
+                    <button type="button" :class="{ active: accessMode(u) === 'superadmin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'superadmin')">SA</button>
                   </div>
                 </div>
               </td>
@@ -302,6 +307,7 @@
               <button type="button" :class="{ active: accessMode(u) === 'admin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin')">Fin</button>
               <button type="button" :class="{ active: accessMode(u) === 'control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'control')">CTRL</button>
               <button type="button" :class="{ active: accessMode(u) === 'admin_control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin_control')">Ambos</button>
+              <button type="button" :class="{ active: accessMode(u) === 'superadmin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'superadmin')">SA</button>
             </div>
           </article>
         </div>
@@ -354,6 +360,7 @@
           <button type="button" :class="{ active: accessMode(activeUser) === 'admin' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'admin')">Financiero</button>
           <button type="button" :class="{ active: accessMode(activeUser) === 'control' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'control')">Control Escolar</button>
           <button type="button" :class="{ active: accessMode(activeUser) === 'admin_control' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'admin_control')">Ambos</button>
+          <button type="button" :class="{ active: accessMode(activeUser) === 'superadmin' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'superadmin')">Superadmin</button>
         </div>
         <button type="button" class="drawer-link" @click="openModal(activeUser)">Editar detalles</button>
         <button v-if="!isBlocked(activeUser) && !isProtectedUser(activeUser)" type="button" class="drawer-link danger" @click="requestToggleBlocked(activeUser)">Bloquear acceso</button>
@@ -653,6 +660,7 @@ const { openMenu } = useContextMenu()
 
 const WORKSPACE_DOMAIN = 'casitaiedis.edu.mx'
 const CONTROL_ROLE = 'ROLE_CTRL'
+const SUPERADMIN_ROLES = new Set(['global', 'superadmin', 'role_super_admin', 'role_superadmin'])
 const PROTECTED_EMAILS = new Set([
   `desarrollo.tecnologico@${WORKSPACE_DOMAIN}`,
   `coord.admon@${WORKSPACE_DOMAIN}`
@@ -696,7 +704,8 @@ let undoTimer = null
 const accessOptions = [
   { value: 'admin', label: 'Financiero', description: 'Acceso operativo estándar.', icon: LucideShieldCheck },
   { value: 'control', label: 'Control Escolar', description: 'Solo gestión escolar.', icon: LucideGraduationCap },
-  { value: 'admin_control', label: 'Ambos', description: 'Financiero + Control Escolar.', icon: LucideShieldCheck }
+  { value: 'admin_control', label: 'Ambos', description: 'Financiero + Control Escolar.', icon: LucideShieldCheck },
+  { value: 'superadmin', label: 'Superadmin', description: 'Acceso total a configuración global.', icon: LucideShield }
 ]
 
 const emptyForm = () => ({
@@ -730,6 +739,7 @@ const plantelesFor = (u) => String(u?.planteles || u?.plantel || '').split(',').
 
 const accessModeForRole = (role) => {
   const tokens = roleTokens(role)
+  if (tokens.some(token => SUPERADMIN_ROLES.has(token))) return 'superadmin'
   const hasControl = tokens.includes(CONTROL_ROLE.toLowerCase())
   const baseRoles = tokens.filter(token => token !== CONTROL_ROLE.toLowerCase() && token !== 'plantel')
   if (hasControl && baseRoles.length) return 'admin_control'
@@ -737,15 +747,18 @@ const accessModeForRole = (role) => {
   return 'admin'
 }
 const accessLabelForMode = (mode) => {
+  if (mode === 'superadmin') return 'Superadmin'
   if (mode === 'admin_control') return 'Ambos'
   if (mode === 'control') return 'Control Escolar'
   return 'Financiero'
 }
 const accessIconForMode = (mode) => {
+  if (mode === 'superadmin') return LucideShield
   if (mode === 'control') return LucideGraduationCap
   return LucideShieldCheck
 }
 const accessClassForMode = (mode) => {
+  if (mode === 'superadmin') return 'superadmin'
   if (mode === 'admin_control') return 'mixed'
   if (mode === 'control') return 'control'
   return 'general'
@@ -850,6 +863,7 @@ const pageItems = computed(() => {
   return items
 })
 
+const superAdminCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'superadmin').length)
 const controlCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'control').length)
 const mixedCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'admin_control').length)
 const defaultCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'admin').length)
@@ -862,6 +876,7 @@ const metricChips = computed(() => [
   { key: 'admin', label: 'Financiero', value: defaultCount.value, caption: 'Acceso operativo', tone: 'green', active: accessFilter.value === 'admin' },
   { key: 'control', label: 'Control Escolar', value: controlCount.value, caption: 'Solo expediente', tone: 'blue', active: accessFilter.value === 'control' },
   { key: 'admin_control', label: 'Ambos', value: mixedCount.value, caption: 'Doble acceso', tone: 'purple', active: accessFilter.value === 'admin_control' },
+  { key: 'superadmin', label: 'Superadmin', value: superAdminCount.value, caption: 'Acceso global', tone: 'purple', active: accessFilter.value === 'superadmin' },
   { key: 'blocked', label: 'Bloqueados', value: blockedCount.value, caption: 'Restringidos', tone: 'red', active: statusFilter.value === 'blocked' },
   { key: 'protected', label: 'Protegidos', value: protectedCount.value, caption: 'No editables', tone: 'purple', active: statusFilter.value === 'protected' },
   { key: 'missing_plantel', label: 'Sin plantel', value: missingPlantelCount.value, caption: 'Por asignar', tone: 'amber', active: plantelFilter.value === '__sin_plantel__' },
@@ -972,7 +987,7 @@ const applyMetricChip = (key) => {
   plantelFilter.value = 'all'
   accessFilter.value = 'all'
   activityFilter.value = 'all'
-  if (['admin', 'control', 'admin_control'].includes(key)) accessFilter.value = key
+  if (['admin', 'control', 'admin_control', 'superadmin'].includes(key)) accessFilter.value = key
   if (key === 'blocked') statusFilter.value = 'blocked'
   if (key === 'protected') statusFilter.value = 'protected'
   if (key === 'missing_plantel') plantelFilter.value = '__sin_plantel__'
@@ -1162,7 +1177,8 @@ const serializePlanteles = (value) => normalizePlantelArray(value).join(',')
 const resolveClientRoleForAccess = (role, mode) => {
   const tokens = Array.from(new Set(roleTokens(role).map(token => token.toUpperCase())))
   const withoutControl = tokens.filter(token => token !== CONTROL_ROLE)
-  const baseRoles = withoutControl.filter(token => token !== 'PLANTEL')
+  const baseRoles = withoutControl.filter(token => token !== 'PLANTEL' && !SUPERADMIN_ROLES.has(token.toLowerCase()))
+  if (mode === 'superadmin') return 'global'
   if (mode === 'control') return CONTROL_ROLE
   if (mode === 'admin_control') return Array.from(new Set([...(baseRoles.length ? baseRoles : ['ROLE_HUSKY_USER']), CONTROL_ROLE])).join(',')
   if (mode === 'admin') return (baseRoles.length ? baseRoles : ['ROLE_HUSKY_USER']).join(',')
@@ -1411,6 +1427,7 @@ const showContextMenu = (event, u) => {
     { label: 'Editar usuario', icon: LucidePencil, action: () => openModal(u) },
     { label: 'Asignar acceso Control Escolar', icon: LucideGraduationCap, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'control') },
     { label: 'Asignar acceso combinado', icon: LucideShieldCheck, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'admin_control') },
+    { label: 'Asignar superadmin', icon: LucideShield, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'superadmin') },
     { label: 'Restaurar Financiero', icon: LucideShieldCheck, disabled: isProtectedUser(u), action: () => requestAccessChange(u, 'admin') },
     { label: isBlocked(u) ? 'Reactivar acceso' : 'Bloquear acceso', icon: isBlocked(u) ? LucideUnlock : LucideBan, disabled: isProtectedUser(u), action: () => requestToggleBlocked(u) }
   ])
@@ -2115,6 +2132,7 @@ button:disabled {
 .access-badge.general { color: #166534; background: #effcf3; border-color: #b7e6c3; }
 .access-badge.control { color: #1d4ed8; background: #eff6ff; border-color: #bfd7ff; }
 .access-badge.mixed { color: #6d28d9; background: #f5f0ff; border-color: #ddd6fe; }
+.access-badge.superadmin { color: #7c2d12; background: #fff7ed; border-color: #fed7aa; }
 .status-badge.active { color: #166534; background: #effcf3; border-color: #b7e6c3; }
 .status-badge.blocked { color: #b91c1c; background: #fff1f2; border-color: #fecdd3; }
 .status-badge.protected { color: #6d28d9; background: #f5f0ff; border-color: #ddd6fe; }

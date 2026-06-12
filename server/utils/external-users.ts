@@ -31,6 +31,7 @@ const TABLE = 'users'
 export const CONTROL_ESCOLAR_ROLE = 'ROLE_CTRL'
 export const NO_ADEUDO_CONTROL_PLANTELES_COLUMN = 'no_adeudo_control_planteles'
 const DEFAULT_EXTERNAL_ROLE = 'ROLE_HUSKY_USER'
+const SUPERADMIN_ROLES = new Set(['global', 'superadmin', 'role_super_admin', 'role_superadmin'])
 const PROTECTED_EMAILS = new Set([
   `desarrollo.tecnologico@${WORKSPACE_DOMAIN}`,
   `coord.admon@${WORKSPACE_DOMAIN}`
@@ -56,6 +57,7 @@ const splitRoleTokens = (value: unknown) => Array.from(new Set(String(value || '
 
 const hasRole = (roles: string[], target: string) => roles.some((role) => normalizedRole(role) === normalizedRole(target))
 const hasControlRoleValue = (value: unknown) => hasRole(splitRoleTokens(value), CONTROL_ESCOLAR_ROLE)
+const hasSuperAdminRoleValue = (value: unknown) => splitRoleTokens(value).some((role) => SUPERADMIN_ROLES.has(normalizedRole(role)))
 const withoutControlRole = (roles: string[]) => roles.filter((role) => normalizedRole(role) !== normalizedRole(CONTROL_ESCOLAR_ROLE))
 
 const ensureDefaultBase = (roles: string[]) => {
@@ -67,18 +69,22 @@ const resolveRoleForWrite = (body: ExternalUserInput, currentRole?: string | nul
   const accessMode = normalizeText(body.accessMode, 40)
   const sourceRoles = splitRoleTokens(currentRole || body.role || DEFAULT_EXTERNAL_ROLE)
 
+  if (accessMode === 'superadmin') {
+    return 'global'
+  }
+
   if (accessMode === 'control') {
     return CONTROL_ESCOLAR_ROLE
   }
 
   if (accessMode === 'admin_control') {
-    const roles = ensureDefaultBase(withoutControlRole(sourceRoles))
+    const roles = ensureDefaultBase(withoutControlRole(sourceRoles).filter((role) => !SUPERADMIN_ROLES.has(normalizedRole(role))))
     if (!hasRole(roles, CONTROL_ESCOLAR_ROLE)) roles.push(CONTROL_ESCOLAR_ROLE)
     return roles.join(',')
   }
 
   if (accessMode === 'admin') {
-    return ensureDefaultBase(withoutControlRole(sourceRoles)).join(',')
+    return ensureDefaultBase(withoutControlRole(sourceRoles).filter((role) => !SUPERADMIN_ROLES.has(normalizedRole(role)))).join(',')
   }
 
   return (splitRoleTokens(body.role || currentRole).join(',') || DEFAULT_EXTERNAL_ROLE).slice(0, 255)
@@ -281,6 +287,7 @@ const mergeRowsForEmail = (rows: any[]) => {
 
 export const externalUserAccessMode = (role: unknown) => {
   const roles = splitRoleTokens(role)
+  if (hasSuperAdminRoleValue(role)) return 'superadmin'
   const hasControl = hasRole(roles, CONTROL_ESCOLAR_ROLE)
   const baseRoles = withoutControlRole(roles).filter((role) => normalizedRole(role) !== 'plantel')
   if (hasControl && baseRoles.length) return 'admin_control'
@@ -289,6 +296,7 @@ export const externalUserAccessMode = (role: unknown) => {
 }
 
 const accessLabelForMode = (mode: string) => {
+  if (mode === 'superadmin') return 'Superadmin'
   if (mode === 'admin_control') return 'Financiero + Control Escolar'
   if (mode === 'control') return 'Solo Control Escolar'
   return 'Financiero'
@@ -372,13 +380,13 @@ const sortExternalUsers = (rows: any[], sortValue: unknown) => {
 
 const buildExternalUsersFacets = (rows: any[]) => {
   const byPlantel = new Map<string, any>()
-  const emptyPlantel = { plantel: '__sin_plantel__', label: 'Sin plantel', total: 0, admin: 0, control: 0, admin_control: 0, blocked: 0, protected: 0 }
-  const access = { admin: 0, control: 0, admin_control: 0 }
+  const emptyPlantel = { plantel: '__sin_plantel__', label: 'Sin plantel', total: 0, admin: 0, control: 0, admin_control: 0, superadmin: 0, blocked: 0, protected: 0 }
+  const access = { admin: 0, control: 0, admin_control: 0, superadmin: 0 }
   const status = { active: 0, blocked: 0, protected: 0 }
   const activity = { today: 0, week: 0, month: 0, older: 0, never: 0 }
 
   for (const user of rows) {
-    const mode = externalUserAccessMode(user.role) as 'admin' | 'control' | 'admin_control'
+    const mode = externalUserAccessMode(user.role) as 'admin' | 'control' | 'admin_control' | 'superadmin'
     access[mode]++
     status[userStatusMode(user) as 'active' | 'blocked' | 'protected']++
     activity[userActivityMode(user) as 'today' | 'week' | 'month' | 'older' | 'never']++
@@ -391,7 +399,7 @@ const buildExternalUsersFacets = (rows: any[]) => {
       if (userIsProtected(user)) emptyPlantel.protected++
     }
     for (const plantel of planteles) {
-      const item = byPlantel.get(plantel) || { plantel, label: plantel, total: 0, admin: 0, control: 0, admin_control: 0, blocked: 0, protected: 0 }
+      const item = byPlantel.get(plantel) || { plantel, label: plantel, total: 0, admin: 0, control: 0, admin_control: 0, superadmin: 0, blocked: 0, protected: 0 }
       item.total++
       item[mode]++
       if (userIsBlocked(user)) item.blocked++
@@ -400,7 +408,7 @@ const buildExternalUsersFacets = (rows: any[]) => {
     }
   }
 
-  const planteles = PLANTELES_LIST.map((plantel) => byPlantel.get(plantel) || { plantel, label: plantel, total: 0, admin: 0, control: 0, admin_control: 0, blocked: 0, protected: 0 })
+  const planteles = PLANTELES_LIST.map((plantel) => byPlantel.get(plantel) || { plantel, label: plantel, total: 0, admin: 0, control: 0, admin_control: 0, superadmin: 0, blocked: 0, protected: 0 })
   if (emptyPlantel.total) planteles.push(emptyPlantel)
 
   return {
