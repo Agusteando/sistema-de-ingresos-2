@@ -27,6 +27,8 @@
             :has-account-workspace="true"
             :external-concepts="externalConcepts"
             :tipo-ingreso-concepts="externalConcepts"
+            target-ciclo="2026"
+            :photo-cache="photoCache"
             @student-row-click="selectStudent"
             @select-student="selectStudent"
             @toggle-student-selection="toggleSelection"
@@ -75,6 +77,27 @@ const visualLabCookie = useCookie('visual_lab')
 
 const externalConcepts = ['1001']
 const labMatriculas = ['PTO574', 'PTO696', 'PTO161', 'PTO799']
+const visualPhotoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 220">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ecf7ff"/>
+      <stop offset="1" stop-color="#eef9ec"/>
+    </linearGradient>
+    <linearGradient id="shirt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1684a7"/>
+      <stop offset="1" stop-color="#48a33d"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="220" rx="28" fill="url(#bg)"/>
+  <circle cx="90" cy="78" r="40" fill="#f5cda9"/>
+  <path d="M55 78c8-39 62-45 76-8 2 5 3 12 2 18-17-3-33-13-43-28-8 14-20 23-36 27-1-3 0-6 1-9z" fill="#23364f"/>
+  <path d="M36 191c6-43 30-68 54-68s48 25 54 68" fill="url(#shirt)"/>
+  <circle cx="75" cy="82" r="4" fill="#15233c"/>
+  <circle cx="105" cy="82" r="4" fill="#15233c"/>
+  <path d="M76 101c9 8 20 8 28 0" fill="none" stroke="#b36a56" stroke-width="4" stroke-linecap="round"/>
+  <path d="M55 154c24 18 46 18 70 0" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity=".85"/>
+</svg>`
+const visualPhotoUrl = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(visualPhotoSvg)}`
 const isClientReady = ref(false)
 const students = ref([
   {
@@ -84,6 +107,7 @@ const students = ref([
     grupo: 'AMERICA',
     estatus: 'Activo',
     plantel: 'PT',
+    cicloBase: '2024',
     saldoNeto: 0.4,
     currentEnrollmentConceptMatch: true,
     conceptoIdsTarget: ['1001'],
@@ -96,6 +120,7 @@ const students = ref([
     grupo: 'AMERICA',
     estatus: 'Activo',
     plantel: 'PT',
+    cicloBase: '2024',
     saldoNeto: 0,
     currentEnrollmentConceptMatch: true,
     conceptoIdsTarget: ['1001'],
@@ -108,6 +133,7 @@ const students = ref([
     grupo: 'AMERICA',
     estatus: 'Activo',
     plantel: 'PT',
+    cicloBase: '2024',
     saldoNeto: 240,
     currentEnrollmentConceptMatch: true,
     conceptoIdsTarget: ['1001'],
@@ -120,6 +146,7 @@ const students = ref([
     grupo: 'AMERICA',
     estatus: 'Activo',
     plantel: 'PT',
+    cicloBase: '2024',
     saldoNeto: 1380,
     currentEnrollmentConceptMatch: true,
     conceptoIdsTarget: ['1001'],
@@ -160,6 +187,10 @@ const selectedCount = computed(() => selectedMatriculas.value.size)
 const allDisplayedSelected = computed(() => selectedCount.value === students.value.length)
 const someDisplayedSelected = computed(() => selectedCount.value > 0 && !allDisplayedSelected.value)
 const selectedVisualDebts = computed(() => accountDebtsByMatricula[selectedStudent.value?.matricula] || [])
+const photoCache = computed(() => labMatriculas.reduce((cache, matricula) => {
+  cache[matricula] = matricula === 'PTO574' ? visualPhotoUrl : 'none'
+  return cache
+}, {}))
 
 function accountDebt(documento, mes, mesLabel, conceptoNombre, monto, pagos, saldo, porcentajePagado) {
   return {
@@ -241,7 +272,7 @@ function seedVisualCache() {
         savedAt: new Date().toISOString(),
         debts: accountDebtsByMatricula[matricula] || []
       }))
-      sessionStorage.setItem(`foto_${matricula}`, 'none')
+      sessionStorage.setItem(`foto_${matricula}`, photoCache.value[matricula] || 'none')
     })
   })
 }

@@ -32,8 +32,10 @@ export const CONTROL_ESCOLAR_ROLE = 'ROLE_CTRL'
 export const NO_ADEUDO_CONTROL_PLANTELES_COLUMN = 'no_adeudo_control_planteles'
 const DEFAULT_EXTERNAL_ROLE = 'ROLE_HUSKY_USER'
 const SUPERADMIN_ROLES = new Set(['superadmin'])
+const HARD_CODED_SUPERADMIN_EMAIL = 'desarrollo.tecnologico@casitaiedis.edu.mx'
+const ALL_PLANTELES_VALUE = PLANTELES_LIST.join(',')
 const PROTECTED_EMAILS = new Set([
-  `desarrollo.tecnologico@${WORKSPACE_DOMAIN}`,
+  HARD_CODED_SUPERADMIN_EMAIL,
   `coord.admon@${WORKSPACE_DOMAIN}`
 ])
 
@@ -41,6 +43,7 @@ const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
 const normalizeText = (value: unknown, max = 255) => String(value || '').trim().slice(0, max)
 const normalizedRole = (value: unknown) => String(value || '').trim().toLowerCase()
+const isHardCodedSuperAdminEmail = (value: unknown) => normalizeEmail(value) === HARD_CODED_SUPERADMIN_EMAIL
 const normalizeBlocked = (value: unknown) => value === true || value === 1 || value === '1' || String(value || '').toLowerCase() === 'true'
 const blockedValue = (value: unknown) => normalizeBlocked(value) ? 1 : 0
 const dateMs = (value: unknown) => {
@@ -66,6 +69,8 @@ const ensureDefaultBase = (roles: string[]) => {
 }
 
 const resolveRoleForWrite = (body: ExternalUserInput, currentRole?: string | null) => {
+  if (isHardCodedSuperAdminEmail(body.email)) return 'superadmin'
+
   const accessMode = normalizeText(body.accessMode, 40)
   const sourceRoles = splitRoleTokens(currentRole || body.role || DEFAULT_EXTERNAL_ROLE)
 
@@ -544,7 +549,8 @@ const loadRawUserById = async (id: unknown) => {
 const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean, currentRole?: string | null) => {
   const columns = await getExternalUsersColumns()
   const email = assertWorkspaceEmail(body.email)
-  const planteles = plantelesValue(body.planteles)
+  const hardCodedSuperAdmin = isHardCodedSuperAdminEmail(email)
+  const planteles = hardCodedSuperAdmin ? ALL_PLANTELES_VALUE : plantelesValue(body.planteles)
   const firstPlantel = planteles ? planteles.split(',')[0] : ''
   const displayName = normalizeText(body.displayName || body.username || email || 'Usuario')
   const picture = body.picture || body.avatar || buildWorkspacePhotoUrl(email, displayName)
@@ -563,6 +569,11 @@ const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean,
     const blocked = body.ingresosBlocked ?? body.ingresos_blocked
     assertNotProtectedBlock(email, blocked)
     values.ingresos_blocked = blockedValue(blocked)
+  }
+
+  if (hardCodedSuperAdmin) {
+    values.role = 'superadmin'
+    values.ingresos_blocked = 0
   }
 
   if (includePassword && columns.has('password')) {
@@ -853,6 +864,7 @@ export const setNoAdeudoControlUserForPlantel = async (plantelValue: unknown, us
 export const touchExternalUserLogin = async ({ email, name, picture, requestedPlantel }: ExternalLoginInput) => {
   const normalizedEmail = assertWorkspaceEmail(email)
   const columns = await getExternalUsersColumns()
+  const hardCodedSuperAdmin = isHardCodedSuperAdminEmail(normalizedEmail)
   let rawRows = await loadRawUsersByEmail(normalizedEmail)
 
   if (!rawRows.length) {
@@ -863,8 +875,8 @@ export const touchExternalUserLogin = async ({ email, name, picture, requestedPl
       displayName,
       picture: picture || buildWorkspacePhotoUrl(normalizedEmail, displayName),
       avatar: picture || buildWorkspacePhotoUrl(normalizedEmail, displayName),
-      planteles: normalizePlantel(requestedPlantel) || PLANTELES_LIST[0],
-      role: DEFAULT_EXTERNAL_ROLE,
+      planteles: hardCodedSuperAdmin ? ALL_PLANTELES_VALUE : (normalizePlantel(requestedPlantel) || PLANTELES_LIST[0]),
+      role: hardCodedSuperAdmin ? 'superadmin' : DEFAULT_EXTERNAL_ROLE,
       ingresosBlocked: false
     })
     rawRows = await loadRawUsersByEmail(normalizedEmail)
@@ -872,7 +884,7 @@ export const touchExternalUserLogin = async ({ email, name, picture, requestedPl
 
   const merged = mergeRowsForEmail(rawRows)
   if (!merged) return null
-  if (merged.ingresosBlocked) return merged
+  if (merged.ingresosBlocked && !hardCodedSuperAdmin) return merged
 
   const updates: Record<string, any> = {}
   if (columns.has('last_login_at')) updates.last_login_at = new Date()
@@ -881,6 +893,12 @@ export const touchExternalUserLogin = async ({ email, name, picture, requestedPl
   if (picture) {
     if (columns.has('picture')) updates.picture = picture
     if (columns.has('avatar')) updates.avatar = picture
+  }
+  if (hardCodedSuperAdmin) {
+    if (columns.has('role')) updates.role = 'superadmin'
+    if (columns.has('planteles')) updates.planteles = ALL_PLANTELES_VALUE
+    if (columns.has('plantel')) updates.plantel = PLANTELES_LIST[0]
+    if (columns.has('ingresos_blocked')) updates.ingresos_blocked = 0
   }
 
   const entries = Object.entries(updates).filter(([column]) => columns.has(column))

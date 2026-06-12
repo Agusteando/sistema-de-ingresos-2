@@ -673,12 +673,14 @@
 
 .student-list-panel.is-compact .student-copy {
   display: grid;
-  grid-template-columns: minmax(0, auto) max-content;
+  grid-template-columns: minmax(44px, 62px) minmax(0, 76px);
   grid-template-areas:
     "name name"
     "meta type";
   align-items: center;
   gap: 3px 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .student-list-panel.is-compact .student-copy strong {
@@ -689,16 +691,19 @@
 
 .student-list-panel.is-compact .student-meta {
   grid-area: meta;
-  width: fit-content;
+  width: 100%;
   max-width: 62px;
   padding-inline: 6px;
   justify-self: start;
+  overflow: hidden;
 }
 
 .student-list-panel.is-compact .student-type-line {
   grid-area: type;
   min-width: 0;
+  max-width: 76px;
   justify-self: start;
+  overflow: hidden;
 }
 
 .student-list-panel.is-compact .student-meta,
@@ -710,11 +715,28 @@
 
 .student-list-panel.is-compact .student-tipo-chip {
   gap: 4px;
+  width: 100%;
+  min-width: 0;
   padding-inline: 6px 7px;
   max-width: 76px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.student-list-panel.is-compact .student-meta span,
+.student-list-panel.is-compact .student-tipo-chip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-list-panel.is-compact .student-meta span {
+  display: block;
 }
 
 .student-list-panel.is-compact .student-tipo-chip svg {
+  flex: 0 0 auto;
   width: 14px;
   height: 14px;
   padding: 2px;
@@ -782,6 +804,26 @@
     display: block;
     white-space: nowrap;
     -webkit-line-clamp: initial;
+  }
+
+  .student-list-panel.is-compact .student-copy {
+    grid-template-columns: minmax(40px, 56px) minmax(0, 70px);
+    gap: 3px 4px;
+  }
+
+  .student-list-panel.is-compact .student-meta {
+    max-width: 56px;
+    padding-inline: 5px;
+  }
+
+  .student-list-panel.is-compact .student-type-line,
+  .student-list-panel.is-compact .student-tipo-chip {
+    max-width: 70px;
+  }
+
+  .student-list-panel.is-compact .student-tipo-chip {
+    gap: 3px;
+    padding-inline: 5px 6px;
   }
 
   .student-list-panel.is-compact .financial-cell {

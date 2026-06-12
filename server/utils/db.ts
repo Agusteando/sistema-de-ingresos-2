@@ -855,15 +855,20 @@ export const ensureSchema = async () => {
       `)
       try {
         const superAdminEmail = 'desarrollo.tecnologico@casitaiedis.edu.mx'
-        const existingAdmin = await rawQuery<any[]>(`SELECT id FROM users WHERE email = ?`, [superAdminEmail])
+        const existingAdmin = await rawQuery<any[]>(`SELECT id FROM users WHERE LOWER(TRIM(email)) = ? LIMIT 1`, [superAdminEmail])
+        const allPlanteles = 'PREEM,PREET,CT,CM,DM,CO,DC,PM,PT,SM,ST,IS,ISM'
 
         if (existingAdmin.length === 0) {
           const hash = bcrypt.hashSync('SUPER_ADMIN_AUTO_SEED', 10)
-          const allPlanteles = 'PREEM,PREET,CT,CM,DM,CO,DC,PM,PT,SM,ST,IS,ISM'
 
           await rawQuery(
             `INSERT INTO users (username, password, email, planteles, role, plantel) VALUES (?, ?, ?, ?, 'superadmin', ?)`,
             ['Super Administrador', hash, superAdminEmail, allPlanteles, 'PREEM']
+          )
+        } else {
+          await rawQuery(
+            `UPDATE users SET role = 'superadmin', planteles = ?, plantel = IFNULL(NULLIF(plantel, ''), ?) WHERE id = ?`,
+            [allPlanteles, 'PREEM', existingAdmin[0].id]
           )
         }
       } catch (err: any) {
