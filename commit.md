@@ -1,1 +1,1 @@
-Mueve talleres y servicios a una vista gestionable.
+Permite registrar pago parcial en otro plantel al agregar documento.

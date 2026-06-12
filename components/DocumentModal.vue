@@ -187,7 +187,7 @@
                   <span class="font-mono text-emerald-700 font-bold">-${{ scholarshipDiscount.toFixed(2) }} · {{ scholarshipPercent.toFixed(2) }}%</span>
                 </div>
                 <div class="flex justify-between items-center mt-2 bg-white p-3 rounded-md border border-gray-100 shadow-sm">
-                  <span class="text-xs font-bold text-gray-700 uppercase">{{ pagoRealizadoEnOtroPlantel ? 'Se depurará:' : 'Se cobrará:' }}</span>
+                  <span class="text-xs font-bold text-gray-700 uppercase">Monto final:</span>
                   <span class="font-mono text-lg font-bold text-brand-campus">${{ Number(montoFinalInput || 0).toFixed(2) }}</span>
                 </div>
                 <label class="mt-3 flex items-start gap-2 text-xs font-semibold text-gray-600">
@@ -206,9 +206,38 @@
                 >
                 <span>
                   <strong><LucideBuilding2 :size="15" /> Pago realizado en otro plantel</strong>
-                  <small>Alumno ya pagó en otro plantel. El concepto quedará liquidado por depuración y no se registrará como ingreso de este plantel.</small>
+                  <small>Registra el monto ya cubierto fuera de este plantel. Si fue parcial, quedará saldo pendiente.</small>
                 </span>
               </label>
+
+              <div v-if="pagoRealizadoEnOtroPlantel" class="other-campus-payment-details">
+                <div class="other-campus-amount-row">
+                  <label>
+                    <span>Monto pagado en otro plantel</span>
+                    <div class="other-campus-amount-input">
+                      <b>$</b>
+                      <input
+                        v-model.number="montoPagadoOtroPlantel"
+                        type="number"
+                        min="0.01"
+                        :max="otherCampusTotal"
+                        step="0.01"
+                        :disabled="loading"
+                        @input="markOtherCampusAmountEdited"
+                      >
+                    </div>
+                  </label>
+                  <div class="other-campus-balance-card" :class="{ pending: otherCampusIsPartial }">
+                    <span>Saldo pendiente</span>
+                    <strong>${{ formatMoney(otherCampusBalance) }}</strong>
+                  </div>
+                </div>
+
+                <div class="other-campus-summary">
+                  <span>Total del documento: ${{ formatMoney(otherCampusTotal) }}</span>
+                  <span v-if="periodCount > 1">{{ periodCount }} cargos de ${{ formatMoney(montoFinalInput) }}</span>
+                </div>
+              </div>
             </div>
 
             <div class="form-group col-span-2 mb-0 carta-beca-card" :class="{ disabled: !selectedBecaTypes.length }">
@@ -230,7 +259,7 @@
           <button class="btn btn-ghost" @click="$emit('close')" type="button">Cancelar</button>
           <button class="btn btn-primary" @click="submit" :disabled="loading || loadingConcepts || !selectedDocumentoId">
             <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
-            {{ loading ? 'Agregando...' : (pagoRealizadoEnOtroPlantel ? 'Agregar y depurar' : 'Agregar documento') }}
+            {{ loading ? 'Agregando...' : (pagoRealizadoEnOtroPlantel ? 'Agregar y registrar' : 'Agregar documento') }}
           </button>
         </div>
       </div>
@@ -239,7 +268,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { LucideBadgePercent, LucideBuilding2, LucideCheckCircle, LucideFileCheck2, LucideLoader2, LucideRefreshCcw, LucideSearch, LucideX } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
@@ -269,6 +298,8 @@ const selectedBecaTypes = ref([])
 const becaMotivo = ref('')
 const generarCartaBeca = ref(false)
 const pagoRealizadoEnOtroPlantel = ref(false)
+const montoPagadoOtroPlantel = ref(0)
+const montoPagadoOtroPlantelEditado = ref(false)
 
 const montoFinalInput = ref(0)
 const montoFinalConfirmed = ref(false)
@@ -290,6 +321,11 @@ const scholarshipPercent = computed(() => {
   const costo = Number(form.value.costo || 0)
   return costo > 0 ? (scholarshipDiscount.value * 100) / costo : 0
 })
+const periodCount = computed(() => form.value.eventual ? 1 : Math.max(1, Number(form.value.meses || 1) || 1))
+const otherCampusTotal = computed(() => Math.max(0, Number(montoFinalInput.value || 0)) * periodCount.value)
+const otherCampusPaid = computed(() => Math.max(0, Number(montoPagadoOtroPlantel.value || 0)))
+const otherCampusBalance = computed(() => Math.max(0, otherCampusTotal.value - Math.min(otherCampusPaid.value, otherCampusTotal.value)))
+const otherCampusIsPartial = computed(() => pagoRealizadoEnOtroPlantel.value && otherCampusPaid.value > 0 && otherCampusPaid.value < otherCampusTotal.value)
 
 const filteredConceptos = computed(() => {
   const term = conceptSearch.value.trim().toLowerCase()
@@ -337,12 +373,35 @@ const deferCloseDropdown = () => {
   }, 140)
 }
 
+const syncOtherCampusAmount = ({ force = false } = {}) => {
+  if (!pagoRealizadoEnOtroPlantel.value) {
+    montoPagadoOtroPlantel.value = 0
+    montoPagadoOtroPlantelEditado.value = false
+    return
+  }
+  const max = otherCampusTotal.value
+  const current = Number(montoPagadoOtroPlantel.value || 0)
+  if (force || !montoPagadoOtroPlantelEditado.value || current <= 0) {
+    montoPagadoOtroPlantel.value = max
+  } else if (current > max) {
+    montoPagadoOtroPlantel.value = max
+  }
+}
+
+const markOtherCampusAmountEdited = () => {
+  montoPagadoOtroPlantelEditado.value = true
+  if (Number(montoPagadoOtroPlantel.value || 0) > otherCampusTotal.value) {
+    montoPagadoOtroPlantel.value = otherCampusTotal.value
+  }
+}
+
 const applyConceptToForm = (concepto) => {
   form.value.costo = Number(concepto?.costo || 0)
   form.value.meses = Number(concepto?.plazo || 1) || 1
   form.value.eventual = isTruthyFlag(concepto?.eventual)
   montoFinalInput.value = Math.round(Number(concepto?.costo || 0))
   montoFinalConfirmed.value = false
+  syncOtherCampusAmount()
 }
 
 const selectConcept = (concepto) => {
@@ -358,6 +417,7 @@ const clearConceptSelection = () => {
   form.value = { costo: 0, meses: 1, eventual: false }
   montoFinalInput.value = 0
   montoFinalConfirmed.value = false
+  syncOtherCampusAmount({ force: true })
   conceptDropdownOpen.value = true
 }
 
@@ -447,6 +507,15 @@ const submit = async () => {
     return show('El monto final no puede ser mayor al costo cuando hay beca.', 'danger')
   }
   if (generarCartaBeca.value && !selectedBecaTypes.value.length) return show('Selecciona al menos un tipo de beca para generar la carta.', 'danger')
+  if (pagoRealizadoEnOtroPlantel.value) {
+    const pagoOtroPlantel = Number(montoPagadoOtroPlantel.value || 0)
+    if (!Number.isFinite(pagoOtroPlantel) || pagoOtroPlantel <= 0) {
+      return show('Ingresa el monto pagado en otro plantel.', 'danger')
+    }
+    if (pagoOtroPlantel > otherCampusTotal.value + 0.009) {
+      return show('El monto pagado en otro plantel no puede ser mayor al total.', 'danger')
+    }
+  }
   if (!montoFinalConfirmed.value) return show('Confirma el monto final', 'danger')
 
   const cartaWindow = openCartaWindow()
@@ -465,6 +534,7 @@ const submit = async () => {
         becaMotivo: becaMotivo.value,
         generarCartaBeca: generarCartaBeca.value,
         pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
+        montoPagadoOtroPlantel: pagoRealizadoEnOtroPlantel.value ? Number(montoPagadoOtroPlantel.value || 0) : undefined,
         ciclo: activeCicloKey.value, 
         eventual: form.value.eventual 
       }
@@ -474,11 +544,17 @@ const submit = async () => {
       if (cartaWindow) cartaWindow.location.href = result.becaCartaUrl
       else window.open(result.becaCartaUrl, '_blank', 'noopener')
       const serviceText = result?.servicio?.mapped ? ` Servicio: ${result.servicio.servicio?.nombre || result.servicio.servicio?.clave || ''}.` : ''
-      show((result?.depurado ? 'Documento agregado, carta generada y pago marcado como realizado en otro plantel.' : 'Documento agregado y carta de beca generada.') + serviceText)
+      const depuracionText = result?.depurado
+        ? (result?.depuradoParcial ? `Documento agregado, carta generada y pago en otro plantel registrado. Saldo pendiente: $${formatMoney(result?.depuradoSaldoPendiente || 0)}.` : 'Documento agregado, carta generada y pago marcado como realizado en otro plantel.')
+        : 'Documento agregado y carta de beca generada.'
+      show(depuracionText + serviceText)
     } else {
       cartaWindow?.close?.()
       const serviceText = result?.servicio?.mapped ? ` Servicio: ${result.servicio.servicio?.nombre || result.servicio.servicio?.clave || ''}.` : ''
-      show((result?.depurado ? 'Documento agregado y pago marcado como realizado en otro plantel.' : 'Documento agregado.') + serviceText)
+      const depuracionText = result?.depurado
+        ? (result?.depuradoParcial ? `Documento agregado y pago en otro plantel registrado. Saldo pendiente: $${formatMoney(result?.depuradoSaldoPendiente || 0)}.` : 'Documento agregado y pago marcado como realizado en otro plantel.')
+        : 'Documento agregado.'
+      show(depuracionText + serviceText)
     }
     emit('success')
   } catch (e) {
@@ -486,6 +562,16 @@ const submit = async () => {
     show(e?.data?.message || 'Error al agregar', 'danger')
   } finally { loading.value = false }
 }
+
+
+watch(pagoRealizadoEnOtroPlantel, (active) => {
+  if (active) syncOtherCampusAmount({ force: true })
+  else syncOtherCampusAmount()
+})
+
+watch([montoFinalInput, () => form.value.meses, () => form.value.eventual], () => {
+  syncOtherCampusAmount()
+})
 
 onMounted(() => {
   loadConcepts()
@@ -899,6 +985,121 @@ onMounted(() => {
   font-weight: 620;
   line-height: 1.35;
   margin-top: 2px;
+}
+
+.other-campus-payment-details {
+  margin-top: 13px;
+  border-top: 1px solid rgba(220, 153, 44, 0.24);
+  padding-top: 13px;
+}
+
+.other-campus-amount-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px;
+  gap: 12px;
+  align-items: end;
+}
+
+.other-campus-amount-row label {
+  display: block;
+}
+
+.other-campus-amount-row label span,
+.other-campus-balance-card span {
+  display: block;
+  color: #6f7b8f;
+  font-size: 0.68rem;
+  font-weight: 820;
+  letter-spacing: 0.035em;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+}
+
+.other-campus-amount-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.other-campus-amount-input b {
+  position: absolute;
+  left: 12px;
+  color: #7d5d20;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.84rem;
+  pointer-events: none;
+}
+
+.other-campus-amount-input input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #ead39e;
+  border-radius: 12px;
+  background: #fff;
+  color: #263752;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9rem;
+  font-weight: 820;
+  outline: none;
+  padding: 0 12px 0 29px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.other-campus-amount-input input:focus {
+  border-color: #d99a2f;
+  box-shadow: 0 0 0 3px rgba(217, 151, 43, 0.14);
+}
+
+.other-campus-balance-card {
+  min-height: 40px;
+  border: 1px solid #dfe8d9;
+  border-radius: 12px;
+  background: #fbfefb;
+  padding: 8px 11px;
+}
+
+.other-campus-balance-card span {
+  margin-bottom: 1px;
+  font-size: 0.62rem;
+}
+
+.other-campus-balance-card strong {
+  color: #327036;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.other-campus-balance-card.pending {
+  border-color: #ead39e;
+  background: #fffaf0;
+}
+
+.other-campus-balance-card.pending strong {
+  color: #996515;
+}
+
+.other-campus-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.other-campus-summary span {
+  border: 1px solid rgba(234, 211, 158, 0.8);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #806328;
+  font-size: 0.66rem;
+  font-weight: 780;
+  padding: 4px 8px;
+}
+
+@media (max-width: 640px) {
+  .other-campus-amount-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
 
