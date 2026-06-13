@@ -198,6 +198,7 @@ declare global {
   const isEventHandler: typeof import('../../node_modules/h3').isEventHandler
   const isExternalUsersAvailable: typeof import('../../server/utils/external-users').isExternalUsersAvailable
   const isMethod: typeof import('../../node_modules/h3').isMethod
+  const isOtherCampusPayment: typeof import('../../server/utils/payment-classification').isOtherCampusPayment
   const isPreflightRequest: typeof import('../../node_modules/h3').isPreflightRequest
   const isRunCancelled: typeof import('../../server/utils/externalBaseSync').isRunCancelled
   const isScopedToActivePlantel: typeof import('../../server/utils/student-sections').isScopedToActivePlantel
@@ -443,7 +444,7 @@ export { parseNullableMoney, isWholeMoney, legacyProjectedAmount, resolveProject
 export { diagnoseNoAdeudoError, throwNoAdeudoDiagnosticError, getNoAdeudoSettings, calculateNoAdeudoDebt, resolveNoAdeudoStudentContext, selectNoAdeudoRecipients, createNoAdeudoToken, decodeNoAdeudoToken, resolveNoAdeudoVerifyBaseUrl, buildNoAdeudoValidationUrl, renderNoAdeudoEmail, buildNoAdeudoPreviewPayload, generateNoAdeudoPdfForContext, persistNoAdeudoDeudorCartaMark, sendNoAdeudoForContext } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/noAdeudo';
 export { generateNoAdeudoCartaPdf } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/noAdeudoCartaPdf';
 export { numeroALetras } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/numberToWords';
-export { normalizePaymentMethod, isDepuradoPayment } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/payment-classification';
+export { normalizePaymentMethod, isOtherCampusPayment, isDepuradoPayment } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/payment-classification';
 export { resolvePaymentConceptSnapshot } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/payment-concept';
 export { generateQrMatrix } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/qr';
 export { normalizeCicloForTipoIngreso, previousCicloKey, nextCicloKey, resolveTipoIngreso, formatTipoIngresoValue } from 'C:/Users/hp/sistema-de-ingresos-2/shared/utils/tipoIngreso';

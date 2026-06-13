@@ -48,13 +48,15 @@
                 <div class="payment-history-item__title-row">
                   <strong>Folio {{ item.payment.folio_plantel || item.payment.folio }}</strong>
                   <span v-if="item.cancelled" class="payment-status-badge is-cancelled">Cancelado</span>
-                  <span v-else-if="item.payment.depurado" class="payment-status-badge is-external">Otro plantel</span>
+                  <span v-else-if="isOtherCampus(item.payment)" class="payment-status-badge is-external">Otro plantel</span>
+                  <span v-else-if="item.payment.depurado" class="payment-status-badge is-audit">Depurado</span>
                   <span v-else class="payment-status-badge is-active">Vigente</span>
                 </div>
                 <span>{{ item.debt.mesLabel || item.payment.mesReal || item.payment.mes || 'Cargo' }}</span>
                 <div class="payment-history-item__meta">
                   <span><LucideCalendarClock :size="13" /> {{ formatDateTime(item.payment.fecha) }}</span>
-                  <span><LucideCreditCard :size="13" /> {{ item.payment.formaDePago || 'Sin método' }}</span>
+                  <span><LucideCreditCard :size="13" /> {{ paymentMethodLabel(item.payment) }}</span>
+                  <span v-if="isOtherCampus(item.payment)"><LucideBuilding2 :size="13" /> {{ paymentCampusLabel(item.payment) }}</span>
                 </div>
                 <small v-if="hasAdjustedDate(item.payment)">
                   Fecha original: {{ formatDateTime(item.payment.fecha_original) }}
@@ -111,6 +113,7 @@
 import { computed } from 'vue'
 import {
   LucideBan,
+  LucideBuilding2,
   LucideCalendarClock,
   LucideCreditCard,
   LucideDownload,
@@ -131,7 +134,29 @@ useScrollLock()
 useModalEscape(() => emit('close'))
 
 const statusKey = (value) => String(value || '').trim().toLowerCase()
+const normalizedMethod = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase()
+const truthyFlag = (value) => ['1', 'true'].includes(String(value ?? '').trim().toLowerCase())
 const isCancelled = (payment) => ['cancelada', 'cancelado'].includes(statusKey(payment?.estatus))
+const isOtherCampus = (payment) => {
+  if (truthyFlag(payment?.pagoOtroPlantel ?? payment?.pago_otro_plantel)) return true
+  const method = normalizedMethod(payment?.formaDePago)
+  if (method === 'pago realizado en otro plantel') return true
+  return truthyFlag(payment?.depurado) && method !== 'depuracion'
+}
+const paymentMethodLabel = (payment) => {
+  const method = String(payment?.formaDePago || '').trim()
+  return normalizedMethod(method) === 'pago realizado en otro plantel'
+    ? 'Método no registrado'
+    : (method || 'Sin método')
+}
+const paymentCampusLabel = (payment) => {
+  const plantel = String(payment?.plantelPago || payment?.plantel_pago || '').trim().toUpperCase()
+  return plantel ? `Plantel ${plantel}` : 'Plantel no especificado'
+}
 const paymentDateKey = (value) => String(value || '').slice(0, 10)
 const hasAdjustedDate = (payment) => Boolean(
   payment?.fecha_original &&
@@ -414,6 +439,11 @@ const formatDateTime = (value) => {
 .payment-status-badge.is-external {
   background: #fff5df;
   color: #9b6516;
+}
+
+.payment-status-badge.is-audit {
+  background: #f1f5f9;
+  color: #52606f;
 }
 
 .payment-status-badge.is-cancelled {

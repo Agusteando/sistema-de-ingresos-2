@@ -1,1 +1,1 @@
-Agrega cambio manual a Interno para alumnos externos.
+Separa el plantel de origen del método de pago.

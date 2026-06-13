@@ -8,7 +8,7 @@ import {
 } from "../../../../shared/utils/grado";
 import { resolveProjectedAmount } from "../../../utils/monto-final";
 import { normalizeBecaTypes } from "../../../utils/becaTypes";
-import { isDepuradoPayment } from "../../../utils/payment-classification";
+import { isDepuradoPayment, isOtherCampusPayment } from "../../../utils/payment-classification";
 import {
   getDocumentoPeriodoSchema,
   periodoLifecycleSelect,
@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) =>
 
     const pagosRows = await query<any[]>(
       `
-    SELECT folio, folio_plantel, documento, mes, mesReal, recargo, monto, fecha, fecha_original, fecha_modificada_at, fecha_modificada_por, formaDePago, concepto, conceptoNombre, estatus, depurado, depurado_por, depurado_fecha
+    SELECT folio, folio_plantel, documento, mes, mesReal, recargo, monto, fecha, fecha_original, fecha_modificada_at, fecha_modificada_por, formaDePago, concepto, conceptoNombre, estatus, depurado, depurado_por, depurado_fecha, pago_otro_plantel, plantel_pago
     FROM referenciasdepago
     WHERE matricula = ?
       AND CAST(ciclo AS CHAR) IN (${cicloInClause(cicloValues)})
@@ -364,6 +364,8 @@ export default defineEventHandler(async (event) =>
           historialPagos: historialPagosDelMes.map((p) => ({
             ...p,
             depurado: isDepuradoPayment(p),
+            pagoOtroPlantel: isOtherCampusPayment(p),
+            plantelPago: p.plantel_pago || null,
             cancelado: ["cancelada", "cancelado"].includes(
               String(p.estatus || "").trim().toLowerCase(),
             ),

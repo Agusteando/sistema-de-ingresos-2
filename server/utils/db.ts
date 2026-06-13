@@ -804,6 +804,15 @@ export const ensureSchema = async () => {
           await checkAndAddColumn('referenciasdepago', 'depurado', "TINYINT(1) NOT NULL DEFAULT 0")
           await checkAndAddColumn('referenciasdepago', 'depurado_por', "VARCHAR(255) DEFAULT NULL")
           await checkAndAddColumn('referenciasdepago', 'depurado_fecha', "DATETIME DEFAULT NULL")
+          await checkAndAddColumn('referenciasdepago', 'pago_otro_plantel', "TINYINT(1) NOT NULL DEFAULT 0")
+          await checkAndAddColumn('referenciasdepago', 'plantel_pago', "VARCHAR(20) DEFAULT NULL")
+          await runSafeQuery(`
+            UPDATE referenciasdepago
+            SET pago_otro_plantel = 1
+            WHERE COALESCE(pago_otro_plantel, 0) = 0
+              AND COALESCE(depurado, 0) = 1
+              AND LOWER(TRIM(COALESCE(formaDePago, ''))) NOT IN ('depuracion', 'depuración')
+          `)
           await runOptionalIndexQuery(`ALTER TABLE referenciasdepago ADD INDEX idx_ref_ciclo_matricula_documento_mes_estatus (ciclo(20), matricula(64), documento, mes(20), estatus(30))`)
         }
       } catch (e) {}

@@ -5,6 +5,7 @@ import { resolvePaymentConceptSnapshot } from '../../utils/payment-concept'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney, parseNullableMoney } from '../../utils/monto-final'
+import { PLANTELES_LIST } from '../../../utils/constants'
 
 const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 
@@ -48,6 +49,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const body = await readBody(event)
   const { matricula, pagos, formaDePago, ciclo = '2025', lateFeeActive = true, fechaPago } = body
   const pagoRealizadoEnOtroPlantel = truthyFlag(body.pagoRealizadoEnOtroPlantel)
+  const plantelPago = String(body.plantelPago || '').trim().toUpperCase()
   const cicloKey = normalizeCicloKey(ciclo)
   const requestedPaymentDate = normalizePaymentDate(fechaPago)
   const user = event.context.user
@@ -62,6 +64,18 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   if (!ALLOWED_PAYMENT_METHODS.has(String(formaDePago || ''))) {
     throw createError({ statusCode: 400, message: 'Selecciona un método de pago válido.' })
+  }
+
+
+  if (pagoRealizadoEnOtroPlantel) {
+    if (!plantelPago || !PLANTELES_LIST.includes(plantelPago)) {
+      throw createError({ statusCode: 400, message: 'Selecciona el plantel donde se realizó el pago.' })
+    }
+
+    const activePlantel = String(event.context.dbBridgeAgentId || user?.active_plantel || '').trim().toUpperCase()
+    if (PLANTELES_LIST.includes(activePlantel) && plantelPago === activePlantel) {
+      throw createError({ statusCode: 400, message: 'Ese plantel es el plantel activo. Registra el pago como pago normal.' })
+    }
   }
 
   const [studentRef] = await query<any[]>(
@@ -230,11 +244,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           depurado,
           depurado_por,
           depurado_fecha,
+          pago_otro_plantel,
+          plantel_pago,
           fecha,
           fecha_original,
           fecha_modificada_at,
           fecha_modificada_por
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       params: [
         matricula,
@@ -261,6 +277,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         pagoRealizadoEnOtroPlantel ? 1 : 0,
         pagoRealizadoEnOtroPlantel ? userName : null,
         pagoRealizadoEnOtroPlantel ? originalTimestamp : null,
+        pagoRealizadoEnOtroPlantel ? 1 : 0,
+        pagoRealizadoEnOtroPlantel ? plantelPago : null,
         effectiveTimestamp,
         originalTimestamp,
         paymentDateChanged ? originalTimestamp : null,
@@ -282,6 +300,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     fechaEfectiva: effectiveTimestamp,
     fechaOriginal: originalTimestamp,
     fechaAjustada: paymentDateChanged,
-    pagoRealizadoEnOtroPlantel
+    pagoRealizadoEnOtroPlantel,
+    plantelPago: pagoRealizadoEnOtroPlantel ? plantelPago : null
   }
 }))

@@ -71,7 +71,7 @@
               </tr>
               <tr>
                 <td class="py-1.5 px-2 font-mono font-semibold text-gray-800">{{ r.folio_plantel || r.folio }}</td>
-                <td class="py-1.5 px-2 text-gray-700">{{ r.formaDePago }}</td>
+                <td class="py-1.5 px-2 text-gray-700">{{ paymentMethodLabel(r) }}</td>
                 <td class="py-1.5 px-2 text-gray-700">${{ Number(r.saldoDespues || 0).toFixed(2) }}</td>
                 <td class="py-1.5 px-2 text-gray-700">${{ Number(r.importeTotal || 0).toFixed(2) }}</td>
                 <td class="py-1.5 px-2 font-bold text-brand-campus">${{ Number(r.monto || 0).toFixed(2) }}</td>
@@ -103,6 +103,13 @@
               </tr>
             </tbody>
           </table>
+          <div
+            v-if="isOtherCampusPayment(r)"
+            class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px]"
+          >
+            <span class="font-semibold text-amber-900">Pago realizado en otro plantel</span>
+            <span class="font-bold text-amber-800">{{ paymentCampusLabel(r) }}</span>
+          </div>
           <hr class="mt-4 border-gray-200 border-dashed" />
         </div>
 
@@ -191,6 +198,30 @@ const institutoNombre = computed(() => {
     ? 'INSTITUTO EDUCATIVO PARA EL DESARROLLO INTEGRAL DEL SABER SC' 
     : 'INSTITUTO EDUCATIVO LA CASITA DEL SABER SC'
 })
+
+
+const normalizedMethod = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase()
+const truthyFlag = (value) => ['1', 'true'].includes(String(value ?? '').trim().toLowerCase())
+const isOtherCampusPayment = (payment) => {
+  if (truthyFlag(payment?.pago_otro_plantel)) return true
+  const method = normalizedMethod(payment?.formaDePago)
+  if (method === 'pago realizado en otro plantel') return true
+  return truthyFlag(payment?.depurado) && method !== 'depuracion'
+}
+const paymentMethodLabel = (payment) => {
+  const method = String(payment?.formaDePago || '').trim()
+  return normalizedMethod(method) === 'pago realizado en otro plantel'
+    ? 'Método no registrado'
+    : (method || 'Sin método')
+}
+const paymentCampusLabel = (payment) => {
+  const plantel = String(payment?.plantel_pago || '').trim().toUpperCase()
+  return plantel ? `Plantel ${plantel}` : 'Plantel no especificado'
+}
 
 const closeWindow = () => window.close()
 const triggerPrint = () => window.print()

@@ -150,39 +150,82 @@
 
           <div
             v-if="pagoRealizadoEnOtroPlantel"
-            class="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center sm:justify-between"
+            class="mb-4 rounded-xl border border-amber-200 bg-amber-50/70 p-4"
           >
-            <div class="flex min-w-0 items-start gap-3">
-              <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm ring-1 ring-amber-200">
-                <LucideBuilding2 :size="18" />
-              </span>
-              <div class="min-w-0">
-                <p class="text-sm font-bold text-gray-800">Pagado en otro plantel</p>
-                <p class="mt-0.5 text-xs leading-5 text-gray-600">
-                  El monto se aplicará al saldo sin registrarse como ingreso de este plantel. Conserva el método de pago seleccionado.
-                </p>
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div class="flex min-w-0 items-start gap-3">
+                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm ring-1 ring-amber-200">
+                  <LucideBuilding2 :size="18" />
+                </span>
+                <div class="min-w-0">
+                  <p class="text-sm font-bold text-gray-800">Pagado en otro plantel</p>
+                  <p class="mt-0.5 text-xs leading-5 text-gray-600">
+                    El método de pago se conserva. Selecciona por separado el plantel que recibió el pago.
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div ref="paymentCampusRef" class="relative min-w-0 sm:w-56" @keydown.esc.stop="paymentCampusMenuOpen = false">
+                  <label class="mb-1.5 block text-[0.68rem] font-bold uppercase tracking-wide text-amber-800">Plantel donde se pagó</label>
+                  <button
+                    type="button"
+                    class="flex h-11 w-full items-center gap-2 rounded-lg border bg-white px-3 text-left transition"
+                    :class="paymentCampusError ? 'border-red-300 ring-2 ring-red-100' : 'border-amber-200 hover:border-amber-300'"
+                    aria-haspopup="listbox"
+                    :aria-expanded="paymentCampusMenuOpen"
+                    @click="paymentCampusMenuOpen = !paymentCampusMenuOpen"
+                  >
+                    <LucideBuilding2 :size="16" class="shrink-0 text-amber-700" />
+                    <span
+                      class="min-w-0 flex-1 truncate text-sm font-bold"
+                      :class="plantelPago ? 'text-gray-800' : 'text-gray-500'"
+                    >
+                      {{ selectedPaymentCampusLabel }}
+                    </span>
+                    <LucideChevronDown :size="15" class="shrink-0 text-gray-400" />
+                  </button>
+
+                  <Transition name="payment-options">
+                    <div
+                      v-if="paymentCampusMenuOpen"
+                      class="absolute right-0 top-full z-40 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl"
+                      role="listbox"
+                      aria-label="Plantel donde se realizó el pago"
+                    >
+                      <button
+                        v-for="plantel in paymentCampusOptions"
+                        :key="plantel"
+                        type="button"
+                        class="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-gray-700 transition hover:bg-amber-50 hover:text-amber-900"
+                        role="option"
+                        :aria-selected="plantelPago === plantel"
+                        @click="selectPaymentCampus(plantel)"
+                      >
+                        <span class="inline-flex h-7 min-w-10 items-center justify-center rounded-md bg-gray-100 px-2 text-xs font-black tracking-wide text-gray-700">
+                          {{ plantel }}
+                        </span>
+                        <span class="text-xs font-medium text-gray-500">Plantel</span>
+                        <LucideCheck v-if="plantelPago === plantel" :size="15" class="ml-auto text-amber-700" />
+                      </button>
+                    </div>
+                  </Transition>
+                  <p v-if="paymentCampusError" class="mt-1.5 text-xs font-semibold text-red-600">Selecciona el plantel donde se realizó el pago.</p>
+                </div>
+
+                <button type="button" class="btn btn-ghost h-11 shrink-0 px-3 text-xs" @click="toggleOtherCampusPayment">
+                  Quitar
+                </button>
               </div>
             </div>
-            <button type="button" class="btn btn-ghost h-9 shrink-0 px-3 text-xs" @click="toggleOtherCampusPayment">
-              Registrar como pago normal
-            </button>
           </div>
 
           <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
             <div class="form-group mb-0">
               <label class="form-label">Método de pago</label>
-              <div
-                class="flex h-11 items-center gap-2 rounded-lg border bg-white px-3"
-                :class="pagoRealizadoEnOtroPlantel ? 'border-amber-200' : 'border-gray-200'"
-              >
+              <div class="flex h-11 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3">
                 <component :is="selectedPaymentMethodOption.icon" :size="16" class="shrink-0 text-brand-campus" />
                 <span class="min-w-0 flex-1 truncate text-sm font-bold text-gray-800">{{ selectedPaymentMethodOption.label }}</span>
-                <span
-                  v-if="pagoRealizadoEnOtroPlantel"
-                  class="shrink-0 rounded-full bg-amber-50 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-amber-800"
-                >
-                  Otro plantel
-                </span>
                 <button
                   type="button"
                   class="rounded-md px-2 py-1 text-xs font-bold text-brand-campus transition hover:bg-brand-campus/5"
@@ -193,7 +236,7 @@
               </div>
             </div>
             <div class="text-right flex flex-col justify-center">
-              <span class="text-[0.7rem] font-bold text-gray-500 uppercase tracking-wide">{{ pagoRealizadoEnOtroPlantel ? 'Total a registrar' : 'Total a cobrar' }}</span>
+              <span class="text-[0.7rem] font-bold text-gray-500 uppercase tracking-wide">Total del pago</span>
               <span class="text-2xl font-bold text-brand-campus leading-none mt-1 font-mono">${{ totalCobrar.toFixed(2) }}</span>
             </div>
           </div>
@@ -256,13 +299,14 @@
 
 <script setup>
 import { ref, watch, computed, onMounted, onBeforeUnmount, markRaw } from 'vue'
-import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheckCircle, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideMoreHorizontal, LucideReceiptText, LucideRotateCcw, LucideWalletCards } from 'lucide-vue-next'
-import { useState } from '#app'
+import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheck, LucideCheckCircle, LucideChevronDown, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideMoreHorizontal, LucideReceiptText, LucideRotateCcw, LucideWalletCards } from 'lucide-vue-next'
+import { useCookie, useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { useModalDraftPersistence } from '~/composables/useModalDraftPersistence'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
+import { PLANTELES_LIST } from '~/utils/constants'
 
 const props = defineProps({ debts: Array, student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -275,10 +319,15 @@ const formaDePago = ref('Efectivo')
 const processing = ref(false)
 const processedDebts = ref([])
 const paymentOptionsRef = ref(null)
+const paymentCampusRef = ref(null)
 const paymentOptionsOpen = ref(false)
+const paymentCampusMenuOpen = ref(false)
 const paymentDateEditorOpen = ref(false)
 const paymentMethodEditorOpen = ref(false)
 const pagoRealizadoEnOtroPlantel = ref(false)
+const plantelPago = ref('')
+const paymentCampusError = ref(false)
+const activePlantelCookie = useCookie('auth_active_plantel')
 
 const localDateKey = (date = new Date()) => {
   const year = date.getFullYear()
@@ -311,8 +360,16 @@ const selectedPaymentMethodOption = computed(() => (
   paymentMethodOptions.find(option => option.value === formaDePago.value) || paymentMethodOptions[0]
 ))
 
+const paymentCampusOptions = computed(() => {
+  const active = String(activePlantelCookie.value || '').trim().toUpperCase()
+  return PLANTELES_LIST.filter(plantel => plantel !== active)
+})
+
+const selectedPaymentCampusLabel = computed(() => plantelPago.value || 'Seleccionar plantel')
+
 const openPaymentMethodEditor = () => {
   paymentOptionsOpen.value = false
+  paymentCampusMenuOpen.value = false
   paymentDateEditorOpen.value = false
   paymentMethodEditorOpen.value = true
 }
@@ -324,6 +381,7 @@ const selectPaymentMethod = (value) => {
 
 const openPaymentDateEditor = () => {
   paymentOptionsOpen.value = false
+  paymentCampusMenuOpen.value = false
   paymentMethodEditorOpen.value = false
   paymentDateEditorOpen.value = true
 }
@@ -334,15 +392,39 @@ const resetPaymentDate = () => {
 }
 
 const toggleOtherCampusPayment = () => {
-  pagoRealizadoEnOtroPlantel.value = !pagoRealizadoEnOtroPlantel.value
+  const nextValue = !pagoRealizadoEnOtroPlantel.value
+  pagoRealizadoEnOtroPlantel.value = nextValue
   paymentOptionsOpen.value = false
+  paymentMethodEditorOpen.value = false
+  paymentDateEditorOpen.value = false
+  paymentCampusError.value = false
+
+  if (nextValue) {
+    paymentCampusMenuOpen.value = true
+  } else {
+    plantelPago.value = ''
+    paymentCampusMenuOpen.value = false
+  }
+}
+
+const selectPaymentCampus = (plantel) => {
+  const normalized = String(plantel || '').trim().toUpperCase()
+  if (!paymentCampusOptions.value.includes(normalized)) return
+  plantelPago.value = normalized
+  paymentCampusError.value = false
+  paymentCampusMenuOpen.value = false
 }
 
 const closePaymentOptionsOnOutsideClick = (event) => {
-  if (!paymentOptionsOpen.value) return
   const target = event.target
-  if (paymentOptionsRef.value && target instanceof Node && !paymentOptionsRef.value.contains(target)) {
+  if (!(target instanceof Node)) return
+
+  if (paymentOptionsOpen.value && paymentOptionsRef.value && !paymentOptionsRef.value.contains(target)) {
     paymentOptionsOpen.value = false
+  }
+
+  if (paymentCampusMenuOpen.value && paymentCampusRef.value && !paymentCampusRef.value.contains(target)) {
+    paymentCampusMenuOpen.value = false
   }
 }
 
@@ -396,6 +478,7 @@ const readPaymentDraft = () => ({
   paymentDateEditorOpen: paymentDateEditorOpen.value,
   paymentMethodEditorOpen: paymentMethodEditorOpen.value,
   pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
+  plantelPago: plantelPago.value,
   debts: processedDebts.value.map(debt => ({
     key: paymentDebtKey(debt),
     montoPagado: debt.montoPagado,
@@ -413,6 +496,10 @@ const writePaymentDraft = (draft) => {
   paymentDateEditorOpen.value = Boolean(draft.paymentDateEditorOpen || paymentDate.value !== localDateKey())
   paymentMethodEditorOpen.value = Boolean(draft.paymentMethodEditorOpen)
   pagoRealizadoEnOtroPlantel.value = Boolean(draft.pagoRealizadoEnOtroPlantel)
+  const restoredPlantelPago = String(draft.plantelPago || '').trim().toUpperCase()
+  plantelPago.value = pagoRealizadoEnOtroPlantel.value && paymentCampusOptions.value.includes(restoredPlantelPago)
+    ? restoredPlantelPago
+    : ''
   const restoredDebts = new Map((Array.isArray(draft.debts) ? draft.debts : []).map(debt => [debt.key, debt]))
 
   processedDebts.value = processedDebts.value.map((debt) => {
@@ -434,6 +521,7 @@ const paymentDraftHasContent = (draft) => {
   if (String(draft.formaDePago || 'Efectivo') !== 'Efectivo') return true
   if (String(draft.paymentDate || localDateKey()) !== localDateKey()) return true
   if (Boolean(draft.pagoRealizadoEnOtroPlantel)) return true
+  if (String(draft.plantelPago || '').trim()) return true
   return Array.isArray(draft.debts) && draft.debts.length > 0
 }
 
@@ -533,6 +621,11 @@ const previewReceipt = () => {
 
 const submit = async () => {
   if (!validateFinalAmounts()) return
+  if (pagoRealizadoEnOtroPlantel.value && !plantelPago.value) {
+    paymentCampusError.value = true
+    paymentCampusMenuOpen.value = true
+    return
+  }
   const payload = {
     matricula: props.student.matricula,
     formaDePago: formaDePago.value,
@@ -540,6 +633,7 @@ const submit = async () => {
     lateFeeActive: state.value.lateFeeActive,
     fechaPago: hasCustomPaymentDate.value ? paymentDate.value : null,
     pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
+    plantelPago: pagoRealizadoEnOtroPlantel.value ? plantelPago.value : null,
     pagos: paymentRows()
   }
   processing.value = true
