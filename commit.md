@@ -1,1 +1,1 @@
-Restaura cancelación, recibos y facturación por pago individual.
+Agrega cambio manual a Interno para alumnos externos.

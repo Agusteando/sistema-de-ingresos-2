@@ -270,16 +270,16 @@
                 ></p>
               </Transition>
 
-              <div v-if="showExternalChangeAction" class="ingreso-external-action-row">
+              <div v-if="showTypeChangeAction" class="ingreso-type-action-row">
                 <button
                   type="button"
-                  :class="['ingreso-external-action-button', { active: forceExternalOverride }]"
+                  :class="['ingreso-type-action-button', actionTargetValue]"
                   :disabled="saving"
-                  @click="toggleExternalChange"
+                  @click="toggleTypeChange"
                 >
-                  <LucideGlobe2 v-if="!forceExternalOverride" :size="15" />
-                  <LucideShieldCheck v-else :size="15" />
-                  {{ externalChangeActionLabel }}
+                  <LucideShieldCheck v-if="actionTargetValue === 'interno'" :size="15" />
+                  <LucideGlobe2 v-else :size="15" />
+                  {{ typeChangeActionLabel }}
                 </button>
               </div>
 
@@ -423,10 +423,25 @@ const currentOverrideActive = computed(() =>
       props.student?.tipo_ingreso_override_activo,
   ),
 );
-const forceExternalOverride = ref(currentOverrideActive.value);
+const currentOverrideValue = computed(() =>
+  String(
+    props.student?.tipoIngresoOverride ??
+      props.student?.tipoIngresoOverrideValue ??
+      props.student?.tipo_ingreso_override ??
+      props.student?.tipo_forzado ??
+      "externo",
+  )
+    .trim()
+    .toLowerCase() === "interno"
+    ? "interno"
+    : "externo",
+);
+const selectedOverrideValue = ref(
+  currentOverrideActive.value ? currentOverrideValue.value : null,
+);
 
-watch(currentOverrideActive, (value) => {
-  forceExternalOverride.value = value;
+watch([currentOverrideActive, currentOverrideValue], ([active, value]) => {
+  selectedOverrideValue.value = active ? value : null;
 });
 
 watch(currentIngresoCicloKey, (value) => {
@@ -506,9 +521,12 @@ const placementInvalid = computed(() => selectedBasePlacement.value.outOfScope);
 const positionChanged = computed(
   () => selectedPositionIndex.value !== currentPositionIndex.value,
 );
-const overrideChanged = computed(
-  () => forceExternalOverride.value !== currentOverrideActive.value,
-);
+const overrideChanged = computed(() => {
+  const currentValue = currentOverrideActive.value
+    ? currentOverrideValue.value
+    : null;
+  return selectedOverrideValue.value !== currentValue;
+});
 const canSave = computed(
   () =>
     !props.saving &&
@@ -624,8 +642,8 @@ const simulatedStudentBase = computed(() => ({
 
 const simulatedStudent = computed(() => ({
   ...simulatedStudentBase.value,
-  tipoIngresoOverrideActivo: forceExternalOverride.value ? 1 : 0,
-  tipoIngresoOverride: "externo",
+  tipoIngresoOverrideActivo: selectedOverrideValue.value ? 1 : 0,
+  tipoIngresoOverride: selectedOverrideValue.value || "externo",
 }));
 
 const automaticTargetTipo = computed(() =>
@@ -639,16 +657,30 @@ const automaticRuleActive = computed(
     automaticTargetTipo.value?.source === "confirmed_conceptos" &&
     automaticTargetTipo.value?.value === "interno",
 );
-const showExternalChangeAction = computed(
-  () => automaticRuleActive.value || forceExternalOverride.value,
-);
-const externalChangeActionLabel = computed(() => {
-  if (!forceExternalOverride.value) return "Cambiar a Externo";
-  return automaticRuleActive.value ? "Volver a Interno" : "Quitar cambio";
+const showTypeChangeAction = computed(() => {
+  if (selectedOverrideValue.value) return true;
+  if (automaticTargetTipo.value?.value === "externo") return true;
+  return automaticRuleActive.value;
 });
-const toggleExternalChange = () => {
-  if (props.saving || !showExternalChangeAction.value) return;
-  forceExternalOverride.value = !forceExternalOverride.value;
+const actionTargetValue = computed(() => {
+  if (selectedOverrideValue.value) return automaticTargetTipo.value.value;
+  return automaticTargetTipo.value.value === "interno" ? "externo" : "interno";
+});
+const typeChangeActionLabel = computed(() => {
+  const targetLabel = formatTipoIngresoValue(actionTargetValue.value);
+  if (!selectedOverrideValue.value) return `Cambiar a ${targetLabel}`;
+  if (selectedOverrideValue.value !== automaticTargetTipo.value.value) {
+    return `Volver a ${targetLabel}`;
+  }
+  return "Quitar cambio";
+});
+const toggleTypeChange = () => {
+  if (props.saving || !showTypeChangeAction.value) return;
+  if (selectedOverrideValue.value) {
+    selectedOverrideValue.value = null;
+    return;
+  }
+  selectedOverrideValue.value = actionTargetValue.value;
 };
 const previewTargetTipo = computed(() =>
   resolveTipoIngreso(simulatedStudent.value, targetCicloKey.value, {
@@ -660,7 +692,7 @@ const previewTargetLabel = computed(() =>
 );
 const resultAnimationKey = computed(
   () =>
-    `${selectedIngresoCiclo.value}-${targetCicloKey.value}-${selectedPositionIndex.value}-${previewTargetTipo.value.value}-${forceExternalOverride.value ? "override" : "auto"}`,
+    `${selectedIngresoCiclo.value}-${targetCicloKey.value}-${selectedPositionIndex.value}-${previewTargetTipo.value.value}-${selectedOverrideValue.value || "auto"}`,
 );
 
 const resultExplanation = computed(() => {
@@ -672,8 +704,8 @@ const resultExplanation = computed(() => {
     return `La posición elegida no es válida para el nivel y grado seleccionados.`;
   }
 
-  if (forceExternalOverride.value) {
-    return `Este alumno se guardará como <strong>externo</strong> en ${targetLabel}, ubicado en <strong>${targetPositionLabel.value}</strong>.`;
+  if (selectedOverrideValue.value) {
+    return `Este alumno se guardará como <strong>${selectedOverrideValue.value}</strong> en ${targetLabel}, ubicado en <strong>${targetPositionLabel.value}</strong>.`;
   }
 
   if (automaticRuleActive.value) {
@@ -762,8 +794,8 @@ const confirmSelection = () => {
     targetCiclo: targetCicloKey.value,
     targetNivel: selectedPosition.value.nivel,
     targetGrado: selectedPosition.value.grado,
-    tipoIngresoOverrideActivo: forceExternalOverride.value,
-    tipoIngresoOverride: forceExternalOverride.value ? "externo" : null,
+    tipoIngresoOverrideActivo: Boolean(selectedOverrideValue.value),
+    tipoIngresoOverride: selectedOverrideValue.value,
   });
 };
 </script>
@@ -1546,13 +1578,13 @@ const confirmSelection = () => {
   font-weight: 900;
 }
 
-.ingreso-external-action-row {
+.ingreso-type-action-row {
   display: flex;
   justify-content: flex-end;
   margin-top: -2px;
 }
 
-.ingreso-external-action-button {
+.ingreso-type-action-button {
   display: inline-flex;
   min-height: 36px;
   align-items: center;
@@ -1575,20 +1607,33 @@ const confirmSelection = () => {
     box-shadow 0.16s ease;
 }
 
-.ingreso-external-action-button:hover:not(:disabled) {
+.ingreso-type-action-button:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: rgba(47, 114, 217, 0.36);
   background: #edf4ff;
   box-shadow: 0 12px 22px rgba(47, 114, 217, 0.11);
 }
 
-.ingreso-external-action-button.active {
+.ingreso-type-action-button.interno {
   border-color: rgba(51, 151, 62, 0.28);
   background: #f2fbf4;
   color: #2e7d38;
+  box-shadow: 0 9px 18px rgba(51, 151, 62, 0.08);
 }
 
-.ingreso-external-action-button:disabled {
+.ingreso-type-action-button.interno:hover:not(:disabled) {
+  border-color: rgba(51, 151, 62, 0.4);
+  background: #eaf8ed;
+  box-shadow: 0 12px 22px rgba(51, 151, 62, 0.12);
+}
+
+.ingreso-type-action-button.externo {
+  border-color: rgba(47, 114, 217, 0.24);
+  background: #f7fbff;
+  color: #2f62b8;
+}
+
+.ingreso-type-action-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
