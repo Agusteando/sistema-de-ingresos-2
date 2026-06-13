@@ -767,6 +767,14 @@
                         >
                           Fijar
                         </button>
+                        <button
+                          v-else-if="canAdjustFinalAmount(debt) && isFirstDocumentRow(debt)"
+                          class="final-amount-link tuition-adjust-link"
+                          type="button"
+                          @click="openTuitionAmount(debt)"
+                        >
+                          Ajustar
+                        </button>
                       </td>
                       <td class="money-cell payments-cell paid" data-label="Pagos">
                         ${{ format(debt.pagos) }}
@@ -907,6 +915,13 @@
         @close="closeDirectConceptModal"
         @success="handleSuccess"
       />
+      <TuitionAmountModal
+        v-if="showTuitionAmountModal"
+        :debt="selectedTuitionDebt"
+        :document-debts="selectedTuitionDocumentDebts"
+        @close="closeTuitionAmount"
+        @success="handleSuccess"
+      />
       <IngresoCycleModal
         v-if="showIngresoCycleModal"
         :student="student"
@@ -971,6 +986,7 @@ import {
   LucideSlidersHorizontal,
   LucidePencilLine,
   LucidePlus,
+  LucideBadgeDollarSign,
 } from "lucide-vue-next";
 import { useState, useCookie } from "#app";
 import { useToast } from "~/composables/useToast";
@@ -995,6 +1011,7 @@ import DocumentModal from "./DocumentModal.vue";
 import InvoiceModal from "./InvoiceModal.vue";
 import ConceptChangeModal from "./ConceptChangeModal.vue";
 import ConceptDirectCorrectionModal from "./ConceptDirectCorrectionModal.vue";
+import TuitionAmountModal from "./TuitionAmountModal.vue";
 import IngresoCycleModal from "./IngresoCycleModal.vue";
 import NoAdeudoModal from "~/components/NoAdeudoModal.vue";
 import StudentAccountPhotoCard from "~/components/students/StudentAccountPhotoCard.vue";
@@ -1081,11 +1098,13 @@ const showDocModal = ref(false);
 const showInvoiceModal = ref(false);
 const showConceptModal = ref(false);
 const showDirectConceptModal = ref(false);
+const showTuitionAmountModal = ref(false);
 const showIngresoCycleModal = ref(false);
 const showNoAdeudoModal = ref(false);
 const savingIngresoCycle = ref(false);
 const selectedConceptDebt = ref(null);
 const selectedDirectConceptDebt = ref(null);
+const selectedTuitionDebt = ref(null);
 const detailsShell = ref(null);
 const detailsPlaceholder = ref(null);
 const expandedShellBounds = ref(null);
@@ -1803,10 +1822,12 @@ const resetAccountInteraction = () => {
   selectedDebts.value = [];
   expandedHistory.value = null;
   selectedConceptDebt.value = null;
+  selectedTuitionDebt.value = null;
   showPaymentModal.value = false;
   showDocModal.value = false;
   showInvoiceModal.value = false;
   showConceptModal.value = false;
+  showTuitionAmountModal.value = false;
   showNoAdeudoModal.value = false;
 };
 
@@ -2481,6 +2502,40 @@ const closeConceptModal = () => {
   selectedConceptDebt.value = null;
 };
 
+const canAdjustFinalAmount = (debt) =>
+  Boolean(
+    debt?.documento &&
+      debt?.recurring &&
+      !debt?.isEventual &&
+      !debt?.montoFinalPendiente,
+  );
+
+const isFirstDocumentRow = (debt) => {
+  const first = filteredDebts.value.find(
+    (candidate) => Number(candidate?.documento) === Number(debt?.documento),
+  );
+  return first === debt || String(first?.mes) === String(debt?.mes);
+};
+
+const selectedTuitionDocumentDebts = computed(() => {
+  const documento = Number(selectedTuitionDebt.value?.documento || 0);
+  if (!documento) return [];
+  return debts.value.filter(
+    (debt) => Number(debt?.documento || 0) === documento,
+  );
+});
+
+const openTuitionAmount = (debt) => {
+  if (!canAdjustFinalAmount(debt)) return;
+  selectedTuitionDebt.value = debt;
+  showTuitionAmountModal.value = true;
+};
+
+const closeTuitionAmount = () => {
+  showTuitionAmountModal.value = false;
+  selectedTuitionDebt.value = null;
+};
+
 const canDirectCorrectConcept = (debt) =>
   Boolean(
     isSuperAdmin.value &&
@@ -2590,6 +2645,15 @@ const showDebtContextMenu = (event, debt) => {
     menuItems.push({ label: "-" });
   }
 
+  if (canAdjustFinalAmount(debt)) {
+    menuItems.push({
+      label: "Ajustar monto final",
+      icon: LucideBadgeDollarSign,
+      action: () => openTuitionAmount(debt),
+    });
+    menuItems.push({ label: "-" });
+  }
+
   if (canDepurarDebt(debt)) {
     menuItems.push({
       label:
@@ -2679,6 +2743,7 @@ const handleSuccess = () => {
   showInvoiceModal.value = false;
   closeConceptModal();
   closeDirectConceptModal();
+  closeTuitionAmount();
   selectedDebts.value = [];
   loadDebts({ useCache: false, preserveInteraction: false });
   loadServicios();

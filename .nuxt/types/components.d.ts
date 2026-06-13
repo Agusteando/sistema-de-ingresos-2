@@ -31,6 +31,7 @@ interface _GlobalComponents {
   StudentDetails: typeof import("../../components/StudentDetails.vue")['default']
   StudentFormModal: typeof import("../../components/StudentFormModal.vue")['default']
   SyncBadge: typeof import("../../components/SyncBadge.vue")['default']
+  TuitionAmountModal: typeof import("../../components/TuitionAmountModal.vue")['default']
   WhatsappOnboarding: typeof import("../../components/WhatsappOnboarding.vue")['default']
   StudentsControlEscolarReadOnlyDetails: typeof import("../../components/students/ControlEscolarReadOnlyDetails.vue")['default']
   StudentsControlEscolarSyncIndicator: typeof import("../../components/students/ControlEscolarSyncIndicator.vue")['default']
@@ -94,6 +95,7 @@ interface _GlobalComponents {
   LazyStudentDetails: LazyComponent<typeof import("../../components/StudentDetails.vue")['default']>
   LazyStudentFormModal: LazyComponent<typeof import("../../components/StudentFormModal.vue")['default']>
   LazySyncBadge: LazyComponent<typeof import("../../components/SyncBadge.vue")['default']>
+  LazyTuitionAmountModal: LazyComponent<typeof import("../../components/TuitionAmountModal.vue")['default']>
   LazyWhatsappOnboarding: LazyComponent<typeof import("../../components/WhatsappOnboarding.vue")['default']>
   LazyStudentsControlEscolarReadOnlyDetails: LazyComponent<typeof import("../../components/students/ControlEscolarReadOnlyDetails.vue")['default']>
   LazyStudentsControlEscolarSyncIndicator: LazyComponent<typeof import("../../components/students/ControlEscolarSyncIndicator.vue")['default']>

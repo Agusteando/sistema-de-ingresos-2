@@ -1,1 +1,1 @@
-Protege borradores al agregar documento y prioriza conceptos centrales.
+Agrega corrección manual histórica del monto final.

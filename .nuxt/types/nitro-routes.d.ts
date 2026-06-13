@@ -140,6 +140,9 @@ declare module "nitropack/types" {
     '/api/documentos/:id/concepto': {
       'put': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/documentos/[id]/concepto.put').default>>>>
     }
+    '/api/documentos/:id/monto': {
+      'put': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/documentos/[id]/monto.put').default>>>>
+    }
     '/api/documentos': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/documentos/index.post').default>>>>
     }

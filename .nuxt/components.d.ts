@@ -31,6 +31,7 @@ export const PaymentModal: typeof import("../components/PaymentModal.vue")['defa
 export const StudentDetails: typeof import("../components/StudentDetails.vue")['default']
 export const StudentFormModal: typeof import("../components/StudentFormModal.vue")['default']
 export const SyncBadge: typeof import("../components/SyncBadge.vue")['default']
+export const TuitionAmountModal: typeof import("../components/TuitionAmountModal.vue")['default']
 export const WhatsappOnboarding: typeof import("../components/WhatsappOnboarding.vue")['default']
 export const StudentsControlEscolarReadOnlyDetails: typeof import("../components/students/ControlEscolarReadOnlyDetails.vue")['default']
 export const StudentsControlEscolarSyncIndicator: typeof import("../components/students/ControlEscolarSyncIndicator.vue")['default']
@@ -94,6 +95,7 @@ export const LazyPaymentModal: LazyComponent<typeof import("../components/Paymen
 export const LazyStudentDetails: LazyComponent<typeof import("../components/StudentDetails.vue")['default']>
 export const LazyStudentFormModal: LazyComponent<typeof import("../components/StudentFormModal.vue")['default']>
 export const LazySyncBadge: LazyComponent<typeof import("../components/SyncBadge.vue")['default']>
+export const LazyTuitionAmountModal: LazyComponent<typeof import("../components/TuitionAmountModal.vue")['default']>
 export const LazyWhatsappOnboarding: LazyComponent<typeof import("../components/WhatsappOnboarding.vue")['default']>
 export const LazyStudentsControlEscolarReadOnlyDetails: LazyComponent<typeof import("../components/students/ControlEscolarReadOnlyDetails.vue")['default']>
 export const LazyStudentsControlEscolarSyncIndicator: LazyComponent<typeof import("../components/students/ControlEscolarSyncIndicator.vue")['default']>

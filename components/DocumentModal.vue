@@ -160,8 +160,8 @@
             </div>
             
             <div class="form-group col-span-2 mt-1 p-5 bg-gray-50 rounded-lg border border-gray-200">
-              <label class="form-label mb-1 text-brand-campus">Total del documento</label>
-              <p class="text-xs text-gray-500 mb-3">Este es el total que tendrá el documento. La beca se calcula contra el costo del concepto.</p>
+              <label class="form-label mb-1 text-brand-campus">{{ amountFieldLabel }}</label>
+              <p class="text-xs text-gray-500 mb-3">{{ amountFieldHelp }}</p>
               <div class="relative">
                 <div class="absolute inset-y-0 left-3 flex items-center text-brand-campus text-sm font-bold">$</div>
                 <input
@@ -184,12 +184,16 @@
                   <span class="font-mono text-emerald-700 font-bold">-${{ scholarshipDiscount.toFixed(2) }} · {{ scholarshipPercent.toFixed(2) }}%</span>
                 </div>
                 <div class="flex justify-between items-center mt-2 bg-white p-3 rounded-md border border-gray-100 shadow-sm">
-                  <span class="text-xs font-bold text-gray-700 uppercase">Total a generar:</span>
+                  <span class="text-xs font-bold text-gray-700 uppercase">{{ amountSummaryLabel }}:</span>
                   <span class="font-mono text-lg font-bold text-brand-campus">${{ Number(montoFinalInput || 0).toFixed(2) }}</span>
+                </div>
+                <div v-if="isRecurringDocument" class="flex justify-between items-center text-xs mt-3 px-1">
+                  <span class="text-gray-500 font-medium">Total proyectado · {{ periodCount }} meses:</span>
+                  <strong class="font-mono text-gray-700">${{ formatMoney(projectedDocumentTotal) }}</strong>
                 </div>
                 <label class="mt-3 flex items-start gap-2 text-xs font-semibold text-gray-600">
                   <input type="checkbox" v-model="montoFinalConfirmed" class="mt-0.5">
-                  <span>Confirmo que este total es correcto.</span>
+                  <span>Confirmo que este monto es correcto.</span>
                 </label>
               </div>
             </div>
@@ -337,6 +341,13 @@ const scholarshipPercent = computed(() => {
   return costo > 0 ? (scholarshipDiscount.value * 100) / costo : 0
 })
 const periodCount = computed(() => form.value.eventual ? 1 : Math.max(1, Number(form.value.meses || 1) || 1))
+const isRecurringDocument = computed(() => !form.value.eventual && periodCount.value > 1)
+const amountFieldLabel = computed(() => isRecurringDocument.value ? 'Monto mensual' : 'Total del cargo')
+const amountFieldHelp = computed(() => isRecurringDocument.value
+  ? 'Este es el importe real de cada mensualidad, después de beca o convenio.'
+  : 'Este es el importe real del cargo, después de beca o convenio.')
+const amountSummaryLabel = computed(() => isRecurringDocument.value ? 'Mensualidad a generar' : 'Total a generar')
+const projectedDocumentTotal = computed(() => Math.max(0, Number(montoFinalInput.value || 0)) * periodCount.value)
 const otherCampusTotal = computed(() => Math.max(0, Number(montoFinalInput.value || 0)) * periodCount.value)
 const otherCampusPaid = computed(() => Math.max(0, Number(montoPagadoOtroPlantel.value || 0)))
 const otherCampusBalance = computed(() => Math.max(0, otherCampusTotal.value - Math.min(otherCampusPaid.value, otherCampusTotal.value)))

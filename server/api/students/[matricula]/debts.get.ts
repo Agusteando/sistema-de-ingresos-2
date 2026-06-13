@@ -295,6 +295,10 @@ export default defineEventHandler(async (event) =>
           conceptoId: activePeriod?.concepto_id || doc.concepto,
           periodoId: activePeriod?.id || null,
           conceptoNombre,
+          isEventual,
+          recurring: !isEventual && plazos > 1,
+          totalMonths: plazos,
+          periodoAccion: activePeriod?.accion || 'original',
           mes: mesStr, // Pass the parsed mes value ('ev' or numeric string) for reliable future binding
           mesLabel,
           costoOriginal: totalOriginal,

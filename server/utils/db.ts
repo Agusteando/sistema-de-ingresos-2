@@ -679,6 +679,27 @@ export const ensureSchema = async () => {
       `)
 
       await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS documento_monto_correcciones (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          documento INT NOT NULL,
+          matricula VARCHAR(255) NOT NULL,
+          ciclo VARCHAR(50) DEFAULT NULL,
+          monto_anterior DECIMAL(65,2) NOT NULL DEFAULT 0,
+          monto_nuevo DECIMAL(65,2) NOT NULL DEFAULT 0,
+          mensualidades_afectadas INT NOT NULL DEFAULT 0,
+          pago_maximo_mensual DECIMAL(65,2) NOT NULL DEFAULT 0,
+          pagos_totales DECIMAL(65,2) NOT NULL DEFAULT 0,
+          periodos_actualizados INT NOT NULL DEFAULT 0,
+          motivo VARCHAR(80) NOT NULL,
+          detalle_anterior LONGTEXT DEFAULT NULL,
+          usuario VARCHAR(255) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_documento_monto_correcciones_documento (documento, created_at),
+          INDEX idx_documento_monto_correcciones_matricula (matricula(64), ciclo(20))
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS documento_concepto_correcciones (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
           documento INT NOT NULL,
