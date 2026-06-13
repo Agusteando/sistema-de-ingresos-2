@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) =>
 
     const pagosRows = await query<any[]>(
       `
-    SELECT folio, folio_plantel, documento, mes, recargo, monto, fecha, formaDePago, conceptoNombre, estatus, depurado, depurado_por, depurado_fecha
+    SELECT folio, folio_plantel, documento, mes, recargo, monto, fecha, fecha_original, fecha_modificada_at, fecha_modificada_por, formaDePago, conceptoNombre, estatus, depurado, depurado_por, depurado_fecha
     FROM referenciasdepago
     WHERE matricula = ?
       AND CAST(ciclo AS CHAR) IN (${cicloInClause(cicloValues)})

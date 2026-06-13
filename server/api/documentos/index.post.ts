@@ -175,7 +175,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     }
 
     const valueGroups = referenceRows.map(() => `(
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, NULL
     )`).join(',')
     const referenceParams = referenceRows.flatMap(({ period, amount }) => {
       const saldoDespues = Number(Math.max(0, montoFinal - amount).toFixed(2))
@@ -234,7 +234,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
             estatus,
             depurado,
             depurado_por,
-            depurado_fecha
+            depurado_fecha,
+            fecha,
+            fecha_original,
+            fecha_modificada_at,
+            fecha_modificada_por
           ) VALUES ${valueGroups}
         `,
         params: referenceParams

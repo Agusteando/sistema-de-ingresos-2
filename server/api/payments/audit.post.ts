@@ -258,8 +258,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           estatus,
           depurado,
           depurado_por,
-          depurado_fecha
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          depurado_fecha,
+          fecha,
+          fecha_original,
+          fecha_modificada_at,
+          fecha_modificada_por
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, NULL)
       `,
       [
         pending.matricula,

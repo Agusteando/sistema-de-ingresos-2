@@ -2654,3 +2654,38 @@ button.student-service-mini {
   grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
   max-height: 178px;
 }
+
+.payment-history-date {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 10.5rem;
+}
+
+.payment-history-date-main {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-primary, #1f2937);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.payment-history-date-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.9);
+  color: #1d4ed8;
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  padding: 0.24rem 0.42rem;
+}
+
+.payment-history-date-original {
+  color: var(--text-muted, #6b7280);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}

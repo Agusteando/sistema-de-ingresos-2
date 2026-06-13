@@ -828,7 +828,23 @@
                             <tr v-for="h in debt.historialPagos" :key="h.folio">
                               <td class="folio">#{{ h.folio }}</td>
                               <td>
-                                {{ new Date(h.fecha).toLocaleString("es-MX") }}
+                                <div class="payment-history-date">
+                                  <div class="payment-history-date-main">
+                                    <span>{{ formatPaymentDateTime(h.fecha) }}</span>
+                                    <span
+                                      v-if="hasAdjustedPaymentDate(h)"
+                                      class="payment-history-date-badge"
+                                    >
+                                      Ajustada
+                                    </span>
+                                  </div>
+                                  <span
+                                    v-if="hasAdjustedPaymentDate(h)"
+                                    class="payment-history-date-original"
+                                  >
+                                    Original: {{ formatPaymentDateTime(h.fecha_original) }}
+                                  </span>
+                                </div>
                               </td>
                               <td>
                                 <span
@@ -1122,6 +1138,22 @@ let accountRefreshTimer = null;
 let debtsRequestId = 0;
 
 const format = (val) => Number(val || 0).toFixed(2);
+const formatPaymentDateTime = (value) => {
+  if (!value) return "Sin fecha";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  });
+};
+const paymentDateKey = (value) => String(value || "").slice(0, 10);
+const hasAdjustedPaymentDate = (payment) =>
+  Boolean(
+    payment?.fecha_original &&
+      paymentDateKey(payment.fecha) &&
+      paymentDateKey(payment.fecha) !== paymentDateKey(payment.fecha_original),
+  );
 const compactAccountText = (value) => String(value || "").trim();
 const accountJoinedName = (...values) =>
   values.map(compactAccountText).filter(Boolean).join(" ");

@@ -19,10 +19,26 @@ const toMesNumber = (value: unknown) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
 }
 
+const normalizePaymentDate = (value: unknown) => {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    throw createError({ statusCode: 400, message: 'La fecha del pago no es válida.' })
+  }
+
+  const parsed = dayjs(`${raw}T12:00:00`)
+  if (!parsed.isValid() || parsed.format('YYYY-MM-DD') !== raw) {
+    throw createError({ statusCode: 400, message: 'La fecha del pago no es válida.' })
+  }
+
+  return raw
+}
+
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
-  const { matricula, pagos, formaDePago, ciclo = '2025', lateFeeActive = true } = body
+  const { matricula, pagos, formaDePago, ciclo = '2025', lateFeeActive = true, fechaPago } = body
   const cicloKey = normalizeCicloKey(ciclo)
+  const requestedPaymentDate = normalizePaymentDate(fechaPago)
   const user = event.context.user
 
   if (!matricula || !pagos || !pagos.length) {
@@ -60,6 +76,20 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   const instituto = (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0
+  const [dbClock] = await query<any[]>(`
+    SELECT
+      DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s') AS currentTimestamp,
+      DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS currentDate
+  `)
+  const originalTimestamp = String(dbClock?.currentTimestamp || dayjs().format('YYYY-MM-DD HH:mm:ss'))
+  const originalDateKey = String(dbClock?.currentDate || originalTimestamp.slice(0, 10))
+  const originalTime = originalTimestamp.slice(11, 19) || '00:00:00'
+  const effectiveTimestamp = requestedPaymentDate
+    ? `${requestedPaymentDate} ${originalTime}`
+    : originalTimestamp
+  const paymentDateChanged = Boolean(requestedPaymentDate && requestedPaymentDate !== originalDateKey)
+  const paymentDateChangedBy = paymentDateChanged ? (user?.name || user?.email || 'Sistema') : null
+
   const statements: SqlStatement[] = []
   const finalAmountByTarget = new Map<string, number>()
   const today = dayjs()
@@ -178,8 +208,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           plantel,
           instituto,
           ciclo,
-          estatus
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          estatus,
+          fecha,
+          fecha_original,
+          fecha_modificada_at,
+          fecha_modificada_por
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       params: [
         matricula,
@@ -202,7 +236,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         plantel,
         instituto,
         cicloKey,
-        'Vigente'
+        'Vigente',
+        effectiveTimestamp,
+        originalTimestamp,
+        paymentDateChanged ? originalTimestamp : null,
+        paymentDateChangedBy
       ]
     })
   }
@@ -214,5 +252,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const results = await executeStatementTransaction<any>(statements)
   const resultFolios = results.map(result => Number(result.insertId)).filter(Boolean)
 
-  return { success: true, folios: resultFolios }
+  return {
+    success: true,
+    folios: resultFolios,
+    fechaEfectiva: effectiveTimestamp,
+    fechaOriginal: originalTimestamp,
+    fechaAjustada: paymentDateChanged
+  }
 }))

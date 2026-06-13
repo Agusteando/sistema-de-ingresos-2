@@ -1,1 +1,1 @@
-Reemplaza el diálogo de monto final con una vista previa financiera.
+Agrega fecha efectiva auditada al registrar pagos.

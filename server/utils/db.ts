@@ -786,6 +786,21 @@ export const ensureSchema = async () => {
         const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'referenciasdepago'`)
 
         if (tables.length > 0) {
+          const fechaColumns = await rawQuery<any[]>(`SHOW COLUMNS FROM referenciasdepago LIKE 'fecha'`)
+          if (fechaColumns.length === 0) {
+            await rawQuery(`ALTER TABLE referenciasdepago ADD COLUMN fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`)
+          } else {
+            const fechaType = String(fechaColumns[0]?.Type || '').toLowerCase()
+            if (fechaType === 'date') {
+              await runSafeQuery(`UPDATE referenciasdepago SET fecha = CURRENT_DATE WHERE fecha IS NULL`)
+              await rawQuery(`ALTER TABLE referenciasdepago MODIFY COLUMN fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`)
+            }
+          }
+
+          await checkAndAddColumn('referenciasdepago', 'fecha_original', "DATETIME DEFAULT NULL")
+          await checkAndAddColumn('referenciasdepago', 'fecha_modificada_at', "DATETIME DEFAULT NULL")
+          await checkAndAddColumn('referenciasdepago', 'fecha_modificada_por', "VARCHAR(255) DEFAULT NULL")
+          await runSafeQuery(`UPDATE referenciasdepago SET fecha_original = fecha WHERE fecha_original IS NULL AND fecha IS NOT NULL`)
           await checkAndAddColumn('referenciasdepago', 'depurado', "TINYINT(1) NOT NULL DEFAULT 0")
           await checkAndAddColumn('referenciasdepago', 'depurado_por', "VARCHAR(255) DEFAULT NULL")
           await checkAndAddColumn('referenciasdepago', 'depurado_fecha', "DATETIME DEFAULT NULL")

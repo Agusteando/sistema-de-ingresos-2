@@ -2,11 +2,89 @@
   <Teleport to="body">
     <div class="modal-overlay" @click.self="requestClose">
       <div class="modal-container large">
-        <div class="modal-header modal-header-with-status">
+        <div class="modal-header modal-header-with-status relative">
           <h2 class="text-lg font-bold text-gray-800">Recibir Pago</h2>
           <ModalDraftStatus :restored="draftRestored" :status="draftSaveState" :dirty="hasUnsavedChanges" />
+          <div ref="paymentOptionsRef" class="relative ml-auto">
+            <button
+              type="button"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800"
+              :aria-expanded="paymentOptionsOpen"
+              aria-label="Más opciones del pago"
+              title="Más opciones"
+              @click="paymentOptionsOpen = !paymentOptionsOpen"
+            >
+              <LucideMoreHorizontal :size="18" />
+            </button>
+            <Transition name="payment-options">
+              <div
+                v-if="paymentOptionsOpen"
+                class="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl"
+              >
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                  @click="openPaymentDateEditor"
+                >
+                  <LucideCalendarDays :size="16" class="text-brand-campus" />
+                  Cambiar fecha
+                </button>
+                <button
+                  v-if="hasCustomPaymentDate"
+                  type="button"
+                  class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                  @click="resetPaymentDate"
+                >
+                  <LucideRotateCcw :size="15" />
+                  Usar fecha de hoy
+                </button>
+              </div>
+            </Transition>
+          </div>
         </div>
         <div class="modal-content">
+          <div
+            v-if="paymentDateEditorOpen || hasCustomPaymentDate"
+            class="mb-4 rounded-xl border border-blue-100 bg-blue-50/60 p-4"
+          >
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div class="flex min-w-0 items-start gap-3">
+                <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand-campus shadow-sm ring-1 ring-blue-100">
+                  <LucideCalendarDays :size="18" />
+                </span>
+                <div class="min-w-0">
+                  <p class="text-sm font-bold text-gray-800">Fecha del pago</p>
+                  <p class="mt-0.5 text-xs leading-5 text-gray-500">
+                    La hora se registra automáticamente y no se puede editar.
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 sm:justify-end">
+                <input
+                  v-model="paymentDate"
+                  type="date"
+                  class="input-field h-10 min-w-[10.5rem] bg-white text-sm font-semibold"
+                  aria-label="Fecha del pago"
+                >
+                <button
+                  v-if="hasCustomPaymentDate"
+                  type="button"
+                  class="btn btn-ghost h-10 px-3 text-xs"
+                  @click="resetPaymentDate"
+                >
+                  Hoy
+                </button>
+              </div>
+            </div>
+            <div
+              v-if="hasCustomPaymentDate"
+              class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-blue-100 pt-3 text-xs"
+            >
+              <span class="font-semibold text-gray-700">Visible en reportes: {{ formattedEffectivePaymentDate }}</span>
+              <span class="text-gray-500">Registro original: hoy, con hora automática</span>
+            </div>
+          </div>
+
           <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
             <div class="form-group mb-0">
               <label class="form-label">Forma de Pago</label>
@@ -81,8 +159,8 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, onMounted } from 'vue'
-import { LucideCheckCircle, LucideEye, LucideLoader2 } from 'lucide-vue-next'
+import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
+import { LucideCalendarDays, LucideCheckCircle, LucideEye, LucideLoader2, LucideMoreHorizontal, LucideRotateCcw } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -100,6 +178,62 @@ useScrollLock()
 const formaDePago = ref('Efectivo')
 const processing = ref(false)
 const processedDebts = ref([])
+const paymentOptionsRef = ref(null)
+const paymentOptionsOpen = ref(false)
+const paymentDateEditorOpen = ref(false)
+
+const localDateKey = (date = new Date()) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const paymentDate = ref(localDateKey())
+const hasCustomPaymentDate = computed(() => paymentDate.value !== localDateKey())
+const formattedEffectivePaymentDate = computed(() => {
+  const [year, month, day] = String(paymentDate.value || '').split('-').map(Number)
+  if (!year || !month || !day) return 'Fecha no válida'
+  return new Intl.DateTimeFormat('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  }).format(new Date(year, month - 1, day))
+})
+
+const openPaymentDateEditor = () => {
+  paymentOptionsOpen.value = false
+  paymentDateEditorOpen.value = true
+}
+
+const resetPaymentDate = () => {
+  paymentDate.value = localDateKey()
+  paymentOptionsOpen.value = false
+}
+
+const closePaymentOptionsOnOutsideClick = (event) => {
+  if (!paymentOptionsOpen.value) return
+  const target = event.target
+  if (paymentOptionsRef.value && target instanceof Node && !paymentOptionsRef.value.contains(target)) {
+    paymentOptionsOpen.value = false
+  }
+}
+
+const effectivePaymentDateIso = () => {
+  if (!hasCustomPaymentDate.value) return new Date().toISOString()
+  const [year, month, day] = String(paymentDate.value || '').split('-').map(Number)
+  const now = new Date()
+  if (!year || !month || !day) return now.toISOString()
+  return new Date(
+    year,
+    month - 1,
+    day,
+    now.getHours(),
+    now.getMinutes(),
+    now.getSeconds(),
+    now.getMilliseconds()
+  ).toISOString()
+}
 
 const paymentDebtKey = (debt) => `${debt?.documento || ''}-${debt?.mes || ''}-${debt?.conceptoId || debt?.conceptoNombre || ''}`
 
@@ -131,6 +265,8 @@ const paymentDraftKey = computed(() => {
 
 const readPaymentDraft = () => ({
   formaDePago: formaDePago.value,
+  paymentDate: paymentDate.value,
+  paymentDateEditorOpen: paymentDateEditorOpen.value,
   debts: processedDebts.value.map(debt => ({
     key: paymentDebtKey(debt),
     montoPagado: debt.montoPagado,
@@ -142,6 +278,10 @@ const writePaymentDraft = (draft) => {
   if (!draft || typeof draft !== 'object') return
 
   if (draft.formaDePago) formaDePago.value = String(draft.formaDePago)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(draft.paymentDate || ''))) {
+    paymentDate.value = String(draft.paymentDate)
+  }
+  paymentDateEditorOpen.value = Boolean(draft.paymentDateEditorOpen || paymentDate.value !== localDateKey())
   const restoredDebts = new Map((Array.isArray(draft.debts) ? draft.debts : []).map(debt => [debt.key, debt]))
 
   processedDebts.value = processedDebts.value.map((debt) => {
@@ -161,6 +301,7 @@ const writePaymentDraft = (draft) => {
 const paymentDraftHasContent = (draft) => {
   if (!draft || typeof draft !== 'object') return false
   if (String(draft.formaDePago || 'Efectivo') !== 'Efectivo') return true
+  if (String(draft.paymentDate || localDateKey()) !== localDateKey()) return true
   return Array.isArray(draft.debts) && draft.debts.length > 0
 }
 
@@ -185,6 +326,11 @@ const {
 
 onMounted(() => {
   initializeDraft()
+  document.addEventListener('pointerdown', closePaymentOptionsOnOutsideClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closePaymentOptionsOnOutsideClick)
 })
 
 const hasPendingFinalAmounts = computed(() => processedDebts.value.some(debt => debt.montoFinalPendiente))
@@ -223,7 +369,7 @@ const previewReceipt = () => {
   if (!validateFinalAmounts()) return
   const previewData = {
     folios: 'PREVIO',
-    fecha: new Date().toISOString(),
+    fecha: effectivePaymentDateIso(),
     nombreCompleto: props.student.nombreCompleto,
     matricula: props.student.matricula,
     nivel: studentNivelLabel(props.student),
@@ -245,7 +391,7 @@ const previewReceipt = () => {
       mes: d.mes,
       mesReal: d.mesLabel,
       conceptoNombre: d.conceptoNombre,
-      fecha: new Date().toISOString()
+      fecha: effectivePaymentDateIso()
     }))
   }
   sessionStorage.setItem('receipt_preview', JSON.stringify(previewData))
@@ -259,6 +405,7 @@ const submit = async () => {
     formaDePago: formaDePago.value,
     ciclo: normalizeCicloKey(state.value.ciclo),
     lateFeeActive: state.value.lateFeeActive,
+    fechaPago: hasCustomPaymentDate.value ? paymentDate.value : null,
     pagos: paymentRows()
   }
   processing.value = true
@@ -278,3 +425,16 @@ const submit = async () => {
   })
 }
 </script>
+
+<style scoped>
+.payment-options-enter-active,
+.payment-options-leave-active {
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.payment-options-enter-from,
+.payment-options-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+}
+</style>
