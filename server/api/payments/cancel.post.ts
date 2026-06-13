@@ -27,13 +27,24 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 404, message: 'Pago no encontrado en el sistema.' })
   }
 
+  const status = String(pago.estatus || '').trim().toLowerCase()
+  if (status === 'cancelada' || status === 'cancelado') {
+    throw createError({ statusCode: 409, message: 'Este pago ya fue cancelado.' })
+  }
+
   if (user.isSuperAdmin || body.force_direct) {
-    await query(
-      `UPDATE referenciasdepago SET estatus = 'Cancelada', cancelada_por = ? WHERE folio = ?`,
+    const result: any = await query(
+      `UPDATE referenciasdepago
+       SET estatus = 'Cancelada', cancelada_por = ?
+       WHERE folio = ? AND LOWER(TRIM(CAST(estatus AS CHAR))) = 'vigente'`,
       [user.name, pago.folio]
     )
 
-    return { success: true, status: 'canceled' }
+    if (Number(result?.affectedRows || 0) !== 1) {
+      throw createError({ statusCode: 409, message: 'El pago cambió de estado antes de completar la cancelación.' })
+    }
+
+    return { success: true, status: 'canceled', folio: pago.folio }
   }
 
   const cancellationRequestsTable = await getCancellationRequestsTable()

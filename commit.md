@@ -1,1 +1,1 @@
-Agrega selección clara de método de pago.
+Restaura cancelación, recibos y facturación por pago individual.

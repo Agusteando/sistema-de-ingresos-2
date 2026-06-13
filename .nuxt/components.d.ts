@@ -27,6 +27,8 @@ export const InvoiceModal: typeof import("../components/InvoiceModal.vue")['defa
 export const ModalDiscardDialog: typeof import("../components/ModalDiscardDialog.vue")['default']
 export const ModalDraftStatus: typeof import("../components/ModalDraftStatus.vue")['default']
 export const NoAdeudoModal: typeof import("../components/NoAdeudoModal.vue")['default']
+export const PaymentCancelModal: typeof import("../components/PaymentCancelModal.vue")['default']
+export const PaymentHistoryModal: typeof import("../components/PaymentHistoryModal.vue")['default']
 export const PaymentModal: typeof import("../components/PaymentModal.vue")['default']
 export const StudentDetails: typeof import("../components/StudentDetails.vue")['default']
 export const StudentFormModal: typeof import("../components/StudentFormModal.vue")['default']
@@ -91,6 +93,8 @@ export const LazyInvoiceModal: LazyComponent<typeof import("../components/Invoic
 export const LazyModalDiscardDialog: LazyComponent<typeof import("../components/ModalDiscardDialog.vue")['default']>
 export const LazyModalDraftStatus: LazyComponent<typeof import("../components/ModalDraftStatus.vue")['default']>
 export const LazyNoAdeudoModal: LazyComponent<typeof import("../components/NoAdeudoModal.vue")['default']>
+export const LazyPaymentCancelModal: LazyComponent<typeof import("../components/PaymentCancelModal.vue")['default']>
+export const LazyPaymentHistoryModal: LazyComponent<typeof import("../components/PaymentHistoryModal.vue")['default']>
 export const LazyPaymentModal: LazyComponent<typeof import("../components/PaymentModal.vue")['default']>
 export const LazyStudentDetails: LazyComponent<typeof import("../components/StudentDetails.vue")['default']>
 export const LazyStudentFormModal: LazyComponent<typeof import("../components/StudentFormModal.vue")['default']>

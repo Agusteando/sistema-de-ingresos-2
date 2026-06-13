@@ -193,6 +193,42 @@ const photoCache = computed(() => labMatriculas.reduce((cache, matricula) => {
 }, {}))
 
 function accountDebt(documento, mes, mesLabel, conceptoNombre, monto, pagos, saldo, porcentajePagado) {
+  const numericPagos = Number(pagos || 0)
+  const firstPayment = numericPagos > 0 ? Math.min(numericPagos, Math.max(0, Math.round(numericPagos * 0.62 * 100) / 100)) : 0
+  const secondPayment = Math.max(0, Math.round((numericPagos - firstPayment) * 100) / 100)
+  const historialPagos = []
+  if (firstPayment > 0) {
+    historialPagos.push({
+      folio: Number(String(documento).replace(/\D/g, '').slice(-5) || 1) * 10 + 1,
+      folio_plantel: `PT-${String(documento).slice(-4)}-A`,
+      documento,
+      mes: String(mes),
+      mesReal: mesLabel,
+      conceptoNombre,
+      monto: firstPayment,
+      fecha: '2026-01-16T10:24:18',
+      fecha_original: '2026-01-16T10:24:18',
+      formaDePago: 'Transferencia',
+      estatus: 'Vigente',
+      depurado: 0
+    })
+  }
+  if (secondPayment > 0) {
+    historialPagos.push({
+      folio: Number(String(documento).replace(/\D/g, '').slice(-5) || 1) * 10 + 2,
+      folio_plantel: `PT-${String(documento).slice(-4)}-B`,
+      documento,
+      mes: String(mes),
+      mesReal: mesLabel,
+      conceptoNombre,
+      monto: secondPayment,
+      fecha: '2026-02-03T13:41:09',
+      fecha_original: '2026-02-01T13:41:09',
+      formaDePago: 'Tarjeta de débito',
+      estatus: 'Vigente',
+      depurado: 0
+    })
+  }
   return {
     documento,
     mes,
@@ -208,7 +244,7 @@ function accountDebt(documento, mes, mesLabel, conceptoNombre, monto, pagos, sal
     porcentajeDepurado: 0,
     hasRecargo: false,
     plantel: 'PT',
-    historialPagos: []
+    historialPagos
   }
 }
 

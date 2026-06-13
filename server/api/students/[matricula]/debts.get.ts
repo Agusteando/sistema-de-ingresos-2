@@ -56,11 +56,11 @@ export default defineEventHandler(async (event) =>
 
     const pagosRows = await query<any[]>(
       `
-    SELECT folio, folio_plantel, documento, mes, recargo, monto, fecha, fecha_original, fecha_modificada_at, fecha_modificada_por, formaDePago, conceptoNombre, estatus, depurado, depurado_por, depurado_fecha
+    SELECT folio, folio_plantel, documento, mes, mesReal, recargo, monto, fecha, fecha_original, fecha_modificada_at, fecha_modificada_por, formaDePago, concepto, conceptoNombre, estatus, depurado, depurado_por, depurado_fecha
     FROM referenciasdepago
     WHERE matricula = ?
       AND CAST(ciclo AS CHAR) IN (${cicloInClause(cicloValues)})
-      AND LOWER(TRIM(CAST(estatus AS CHAR))) = 'vigente'
+    ORDER BY fecha DESC, folio DESC
   `,
       [normalizedMatricula, ...cicloValues],
     );
@@ -241,11 +241,14 @@ export default defineEventHandler(async (event) =>
         const costoBase = projected.baseCost;
         const totalOriginal = projected.amount;
 
-        // Support matching mes by strict string, or fallback to the numeric representation
-        const pagosDelMes = pagosRows.filter(
+        // Preserve the full payment history for audit/actions, but only vigente rows affect balances.
+        const historialPagosDelMes = pagosRows.filter(
           (p) =>
             String(p.documento) === String(doc.documento) &&
             (String(p.mes) === mesStr || String(p.mes) === String(mes)),
+        );
+        const pagosDelMes = historialPagosDelMes.filter(
+          (p) => String(p.estatus || "").trim().toLowerCase() === "vigente",
         );
 
         const pagosAplicadosDelMes = pagosDelMes.filter(
@@ -358,9 +361,12 @@ export default defineEventHandler(async (event) =>
             differentialParentByDocument.get(Number(doc.documento)) || null,
           linkedChangePeriodoId:
             differentialPeriodByDocument.get(Number(doc.documento))?.id || null,
-          historialPagos: pagosDelMes.map((p) => ({
+          historialPagos: historialPagosDelMes.map((p) => ({
             ...p,
             depurado: isDepuradoPayment(p),
+            cancelado: ["cancelada", "cancelado"].includes(
+              String(p.estatus || "").trim().toLowerCase(),
+            ),
           })),
         });
       }

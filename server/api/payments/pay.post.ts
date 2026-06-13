@@ -56,11 +56,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
   }
 
-  if (!pagoRealizadoEnOtroPlantel && normalizePaymentMethod(formaDePago) === 'depuracion') {
+  if (normalizePaymentMethod(formaDePago) === 'depuracion') {
     throw createError({ statusCode: 400, message: 'La depuración requiere autorización por código.' })
   }
 
-  if (!pagoRealizadoEnOtroPlantel && !ALLOWED_PAYMENT_METHODS.has(String(formaDePago || ''))) {
+  if (!ALLOWED_PAYMENT_METHODS.has(String(formaDePago || ''))) {
     throw createError({ statusCode: 400, message: 'Selecciona un método de pago válido.' })
   }
 
@@ -106,7 +106,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const paymentDateChangedBy = paymentDateChanged ? (user?.name || user?.email || 'Sistema') : null
 
   const userName = user?.name || user?.email || 'Sistema'
-  const effectivePaymentMethod = pagoRealizadoEnOtroPlantel ? 'Pago realizado en otro plantel' : formaDePago
+  const effectivePaymentMethod = formaDePago
 
   const statements: SqlStatement[] = []
   const finalAmountByTarget = new Map<string, number>()

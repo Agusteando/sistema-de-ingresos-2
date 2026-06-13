@@ -2719,3 +2719,38 @@ button.student-service-mini {
   font-size: 0.68rem;
   line-height: 1.35;
 }
+
+.payment-summary-button {
+  display: inline-grid;
+  justify-items: end;
+  gap: 1px;
+  min-width: 74px;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: right;
+}
+
+.payment-summary-button strong {
+  color: #2f7f4d;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.payment-summary-button small {
+  color: #6f7f93;
+  font-size: 8.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.payment-summary-button:hover {
+  background: rgba(47, 127, 77, .07);
+}
+
+.payment-summary-button:focus-visible {
+  outline: 2px solid rgba(47, 127, 77, .28);
+  outline-offset: 1px;
+}

@@ -22,7 +22,6 @@
                 class="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl"
               >
                 <button
-                  v-if="!pagoRealizadoEnOtroPlantel"
                   type="button"
                   class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                   @click="openPaymentMethodEditor"
@@ -63,7 +62,7 @@
         </div>
         <div class="modal-content">
           <div
-            v-if="paymentMethodEditorOpen && !pagoRealizadoEnOtroPlantel"
+            v-if="paymentMethodEditorOpen"
             class="mb-4 rounded-xl border border-gray-200 bg-gray-50/70 p-4"
           >
             <div class="flex items-start justify-between gap-4">
@@ -160,7 +159,7 @@
               <div class="min-w-0">
                 <p class="text-sm font-bold text-gray-800">Pagado en otro plantel</p>
                 <p class="mt-0.5 text-xs leading-5 text-gray-600">
-                  El monto se aplicará al saldo sin registrarse como ingreso de este plantel.
+                  El monto se aplicará al saldo sin registrarse como ingreso de este plantel. Conserva el método de pago seleccionado.
                 </p>
               </div>
             </div>
@@ -171,13 +170,19 @@
 
           <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
             <div class="form-group mb-0">
-              <label class="form-label">{{ pagoRealizadoEnOtroPlantel ? 'Tipo de registro' : 'Método de pago' }}</label>
+              <label class="form-label">Método de pago</label>
               <div
-                v-if="!pagoRealizadoEnOtroPlantel"
-                class="flex h-11 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3"
+                class="flex h-11 items-center gap-2 rounded-lg border bg-white px-3"
+                :class="pagoRealizadoEnOtroPlantel ? 'border-amber-200' : 'border-gray-200'"
               >
                 <component :is="selectedPaymentMethodOption.icon" :size="16" class="shrink-0 text-brand-campus" />
                 <span class="min-w-0 flex-1 truncate text-sm font-bold text-gray-800">{{ selectedPaymentMethodOption.label }}</span>
+                <span
+                  v-if="pagoRealizadoEnOtroPlantel"
+                  class="shrink-0 rounded-full bg-amber-50 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-amber-800"
+                >
+                  Otro plantel
+                </span>
                 <button
                   type="button"
                   class="rounded-md px-2 py-1 text-xs font-bold text-brand-campus transition hover:bg-brand-campus/5"
@@ -185,10 +190,6 @@
                 >
                   Cambiar
                 </button>
-              </div>
-              <div v-else class="flex h-11 items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 text-sm font-bold text-amber-800">
-                <LucideBuilding2 :size="16" />
-                Pago realizado en otro plantel
               </div>
             </div>
             <div class="text-right flex flex-col justify-center">
@@ -335,7 +336,6 @@ const resetPaymentDate = () => {
 const toggleOtherCampusPayment = () => {
   pagoRealizadoEnOtroPlantel.value = !pagoRealizadoEnOtroPlantel.value
   paymentOptionsOpen.value = false
-  if (pagoRealizadoEnOtroPlantel.value) paymentMethodEditorOpen.value = false
 }
 
 const closePaymentOptionsOnOutsideClick = (event) => {

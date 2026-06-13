@@ -599,6 +599,14 @@
                         Pagar
                       </button>
                       <button
+                        v-if="paymentCountForDebts(group.allDebts)"
+                        class="timeline-action"
+                        type="button"
+                        @click="openPaymentHistory(group.allDebts)"
+                      >
+                        Pagos ({{ paymentCountForDebts(group.allDebts) }})
+                      </button>
+                      <button
                         class="timeline-action"
                         type="button"
                         @click="invoiceTimelineGroup(group)"
@@ -780,7 +788,17 @@
                         </button>
                       </td>
                       <td class="money-cell payments-cell paid" data-label="Pagos">
-                        ${{ format(debt.pagos) }}
+                        <button
+                          v-if="debt.historialPagos?.length"
+                          class="payment-summary-button"
+                          type="button"
+                          title="Ver pagos individuales"
+                          @click.stop="openPaymentHistory([debt])"
+                        >
+                          <strong>${{ format(debt.pagos) }}</strong>
+                          <small>Ver {{ paymentCountForDebts([debt]) }} pago{{ paymentCountForDebts([debt]) === 1 ? '' : 's' }}</small>
+                        </button>
+                        <span v-else>${{ format(debt.pagos) }}</span>
                       </td>
                       <td
                         class="money-cell balance-cell"
@@ -805,88 +823,14 @@
                         </button>
                         <button
                           v-if="debt.historialPagos?.length"
-                          @click="toggleHistory(debt)"
-                          title="Historial"
+                          @click="openPaymentHistory([debt])"
+                          title="Ver pagos individuales"
                         >
                           <LucideHistory :size="16" />
                         </button>
                       </td>
                     </tr>
-                    <tr
-                      v-if="expandedHistory === `${debt.documento}-${debt.mes}`"
-                      class="history-row"
-                    >
-                      <td colspan="7">
-                        <table class="history-table">
-                          <thead>
-                            <tr>
-                              <th>Folio</th>
-                              <th>Fecha</th>
-                              <th>Forma de Pago</th>
-                              <th class="money-cell">Importe</th>
-                              <th class="menu-cell">Opciones</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr v-for="h in debt.historialPagos" :key="h.folio">
-                              <td class="folio">#{{ h.folio }}</td>
-                              <td>
-                                <div class="payment-history-date">
-                                  <div class="payment-history-date-main">
-                                    <span>{{ formatPaymentDateTime(h.fecha) }}</span>
-                                    <span
-                                      v-if="hasAdjustedPaymentDate(h)"
-                                      class="payment-history-date-badge"
-                                    >
-                                      Ajustada
-                                    </span>
-                                  </div>
-                                  <span
-                                    v-if="hasAdjustedPaymentDate(h)"
-                                    class="payment-history-date-original"
-                                  >
-                                    Original: {{ formatPaymentDateTime(h.fecha_original) }}
-                                  </span>
-                                </div>
-                              </td>
-                              <td>
-                                <span
-                                  :class="[
-                                    'method-pill',
-                                    h.depurado ? 'cleanup' : '',
-                                  ]"
-                                  >{{ h.formaDePago }}</span
-                                >
-                              </td>
-                              <td class="money-cell paid">
-                                ${{ format(h.monto) }}
-                              </td>
-                              <td class="history-actions">
-                                <button
-                                  class="history-action history-action-pdf"
-                                  @click="reprintPayment(h)"
-                                >
-                                  <LucidePrinter :size="11" /> PDF
-                                </button>
-                                <button
-                                  v-if="!h.depurado"
-                                  class="history-action history-action-pdf"
-                                  @click="invoicePaymentReceipt(debt, h)"
-                                >
-                                  <LucideFileText :size="11" /> Facturar
-                                </button>
-                                <button
-                                  class="history-action history-action-danger"
-                                  @click="cancelPayment(h)"
-                                >
-                                  <LucideUndo :size="11" /> Anular
-                                </button>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
+
                   </template>
                 </tbody>
               </table>
@@ -921,6 +865,21 @@
         :student="accountOverlaySource"
         @close="showInvoiceModal = false"
         @success="handleInvoiceSuccess"
+      />
+      <PaymentHistoryModal
+        v-if="showPaymentHistoryModal && !showPaymentCancelModal"
+        :debts="selectedPaymentDebts"
+        @close="closePaymentHistory"
+        @receipt="handlePaymentReceipt"
+        @invoice="handlePaymentInvoice"
+        @cancel="openPaymentCancellation"
+      />
+      <PaymentCancelModal
+        v-if="showPaymentCancelModal && selectedPaymentForCancel"
+        :payment="selectedPaymentForCancel.payment"
+        :debt="selectedPaymentForCancel.debt"
+        @close="closePaymentCancellation"
+        @success="handlePaymentCancellationSuccess"
       />
       <ConceptChangeModal
         v-if="showConceptModal"
@@ -987,8 +946,6 @@ import {
   LucideHistory,
   LucideSettings,
   LucideBell,
-  LucidePrinter,
-  LucideUndo,
   LucideAward,
   LucideUsers,
   LucideX,
@@ -1030,6 +987,8 @@ import {
 import PaymentModal from "./PaymentModal.vue";
 import DocumentModal from "./DocumentModal.vue";
 import InvoiceModal from "./InvoiceModal.vue";
+import PaymentHistoryModal from "./PaymentHistoryModal.vue";
+import PaymentCancelModal from "./PaymentCancelModal.vue";
 import ConceptChangeModal from "./ConceptChangeModal.vue";
 import ConceptDirectCorrectionModal from "./ConceptDirectCorrectionModal.vue";
 import TuitionAmountModal from "./TuitionAmountModal.vue";
@@ -1090,7 +1049,6 @@ const savingServicio = ref("");
 const loading = ref(false);
 const reminding = ref(false);
 const selectedDebts = ref([]);
-const expandedHistory = ref(null);
 const depurandoDebt = ref(null);
 const accountSearchQuery = ref("");
 const accountFilter = ref("all");
@@ -1117,6 +1075,10 @@ const photoLoading = ref(false);
 const showPaymentModal = ref(false);
 const showDocModal = ref(false);
 const showInvoiceModal = ref(false);
+const showPaymentHistoryModal = ref(false);
+const showPaymentCancelModal = ref(false);
+const selectedPaymentDebts = ref([]);
+const selectedPaymentForCancel = ref(null);
 const showConceptModal = ref(false);
 const showDirectConceptModal = ref(false);
 const showTuitionAmountModal = ref(false);
@@ -1141,22 +1103,6 @@ let accountRefreshTimer = null;
 let debtsRequestId = 0;
 
 const format = (val) => Number(val || 0).toFixed(2);
-const formatPaymentDateTime = (value) => {
-  if (!value) return "Sin fecha";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value);
-  return parsed.toLocaleString("es-MX", {
-    dateStyle: "medium",
-    timeStyle: "medium",
-  });
-};
-const paymentDateKey = (value) => String(value || "").slice(0, 10);
-const hasAdjustedPaymentDate = (payment) =>
-  Boolean(
-    payment?.fecha_original &&
-      paymentDateKey(payment.fecha) &&
-      paymentDateKey(payment.fecha) !== paymentDateKey(payment.fecha_original),
-  );
 const compactAccountText = (value) => String(value || "").trim();
 const accountJoinedName = (...values) =>
   values.map(compactAccountText).filter(Boolean).join(" ");
@@ -1858,13 +1804,16 @@ const stopAccountRefresh = () => {
 
 const resetAccountInteraction = () => {
   selectedDebts.value = [];
-  expandedHistory.value = null;
+  selectedPaymentDebts.value = [];
+  selectedPaymentForCancel.value = null;
   selectedConceptDebt.value = null;
   selectedTuitionDebt.value = null;
   selectedTuitionMode.value = 'adjust';
   showPaymentModal.value = false;
   showDocModal.value = false;
   showInvoiceModal.value = false;
+  showPaymentHistoryModal.value = false;
+  showPaymentCancelModal.value = false;
   showConceptModal.value = false;
   showTuitionAmountModal.value = false;
   showNoAdeudoModal.value = false;
@@ -1879,7 +1828,9 @@ const applyAccountDebts = async (
   const selectedKeys = preserveInteraction
     ? new Set(selectedDebts.value.map(debtKey))
     : new Set();
-  const expandedKey = preserveInteraction ? expandedHistory.value : null;
+  const paymentHistoryKeys = preserveInteraction
+    ? new Set(selectedPaymentDebts.value.map(debtKey))
+    : new Set();
   const selectedConceptKey =
     preserveInteraction && selectedConceptDebt.value
       ? debtKey(selectedConceptDebt.value)
@@ -1902,10 +1853,12 @@ const applyAccountDebts = async (
       !refreshedSelection.length
         ? selectedDebts.value
         : refreshedSelection;
-    expandedHistory.value =
-      expandedKey && freshDebts.some((debt) => debtKey(debt) === expandedKey)
-        ? expandedKey
-        : null;
+    if (showPaymentHistoryModal.value) {
+      selectedPaymentDebts.value = freshDebts.filter((debt) =>
+        paymentHistoryKeys.has(debtKey(debt)),
+      );
+      if (!selectedPaymentDebts.value.length) closePaymentHistory();
+    }
     if (selectedConceptKey) {
       selectedConceptDebt.value =
         freshDebts.find((debt) => debtKey(debt) === selectedConceptKey) ||
@@ -2228,9 +2181,55 @@ const toggleAll = (e) => {
     (debt) => !visibleKeys.has(debtKey(debt)),
   );
 };
-const toggleHistory = (debt) => {
-  const id = `${debt.documento}-${debt.mes}`;
-  expandedHistory.value = expandedHistory.value === id ? null : id;
+const paymentStatusKey = (value) => String(value || "").trim().toLowerCase();
+const isPaymentCancelled = (payment) =>
+  ["cancelada", "cancelado"].includes(paymentStatusKey(payment?.estatus));
+const paymentCountForDebts = (debtList = []) => {
+  const folios = new Set();
+  debtList.forEach((debt) => {
+    (debt?.historialPagos || []).forEach((payment) => {
+      const folio = String(payment?.folio || "").trim();
+      if (folio) folios.add(folio);
+    });
+  });
+  return folios.size;
+};
+
+const openPaymentHistory = (debtList) => {
+  const normalized = Array.isArray(debtList)
+    ? debtList.filter(Boolean)
+    : [debtList].filter(Boolean);
+  if (!normalized.some((debt) => debt?.historialPagos?.length)) return;
+  selectedPaymentDebts.value = normalized;
+  showPaymentHistoryModal.value = true;
+};
+
+const closePaymentHistory = () => {
+  showPaymentHistoryModal.value = false;
+  selectedPaymentDebts.value = [];
+};
+
+const handlePaymentReceipt = ({ payment }) => reprintPayment(payment);
+const handlePaymentInvoice = ({ debt, payment }) => {
+  closePaymentHistory();
+  invoicePaymentReceipt(debt, payment);
+};
+const openPaymentCancellation = (item) => {
+  if (!item?.payment || isPaymentCancelled(item.payment)) return;
+  selectedPaymentForCancel.value = item;
+  showPaymentHistoryModal.value = false;
+  showPaymentCancelModal.value = true;
+};
+const closePaymentCancellation = () => {
+  showPaymentCancelModal.value = false;
+  selectedPaymentForCancel.value = null;
+  if (selectedPaymentDebts.value.length) showPaymentHistoryModal.value = true;
+};
+const handlePaymentCancellationSuccess = async () => {
+  closePaymentCancellation();
+  closePaymentHistory();
+  await loadDebts({ useCache: false });
+  emit("refresh");
 };
 
 const reprintPayment = (pago) => {
@@ -2323,74 +2322,6 @@ const showStudentActionsMenu = (event) => {
   );
 
   openMenu(event, menuItems);
-};
-
-const cancelPayment = async (pago) => {
-  if (pago.estatus === "Cancelada" || pago.estatus === "cancelado") {
-    return show("Este folio ya estaba cancelado.", "danger");
-  }
-
-  if (
-    !confirm(
-      "Contacta a soporte y solicítales el código que les va a llegar por Telegram para confirmar la anulación.",
-    )
-  ) {
-    return;
-  }
-
-  const motivo = prompt("Motivo de cancelación:");
-  if (!motivo) return;
-
-  const secret = Math.floor(Math.random() * 9000) + 1000;
-  const userName = useCookie("auth_name").value || "Operador";
-  const stringMsg = `*${userName}* solicita una cancelación del concepto _${pago.conceptoNombre}_ por el monto de _$${pago.monto}_ con motivo de _${motivo}_\nCódigo para cancelar: *${secret}*`;
-
-  try {
-    await fetch("https://tgbot.casitaapps.com/sendMessages", {
-      method: "POST",
-      body: JSON.stringify({ chatId: ["-4885991203"], message: stringMsg }),
-      headers: { "Content-Type": "application/json" },
-    });
-
-    const input = prompt(
-      "Ingresa el código de cancelación de 4 dígitos proporcionado:",
-    );
-
-    if (input === secret.toString()) {
-      await executeOptimistic(
-        () =>
-          $fetch("/api/payments/cancel", {
-            method: "POST",
-            body: { folio: pago.folio, motivo, force_direct: true },
-          }),
-        () => {},
-        () => {
-          loadDebts({ useCache: false });
-          emit("refresh");
-        },
-        {
-          pending: "Procesando anulación...",
-          success: "Anulación exitosa",
-          error: "Error al anular",
-        },
-      ).then(async () => {
-        await fetch("https://tgbot.casitaapps.com/sendMessages", {
-          method: "POST",
-          body: JSON.stringify({
-            chatId: ["-4885991203"],
-            message: `La solicitud de cancelación de *${userName}* con código *${secret}* ha sido procesada exitosamente.`,
-          }),
-          headers: { "Content-Type": "application/json" },
-        });
-        loadDebts({ useCache: false });
-        emit("refresh");
-      });
-    } else {
-      alert("Código incorrecto. Operación abortada.");
-    }
-  } catch (e) {
-    show("Error al procesar la cancelación, contacte a soporte.", "danger");
-  }
 };
 
 const sendReminder = async () => {
@@ -2630,9 +2561,10 @@ const showDebtContextMenu = (event, debt) => {
       },
     },
     {
-      label: "Historial",
+      label: `Pagos (${paymentCountForDebts([debt])})`,
       icon: LucideHistory,
-      action: () => toggleHistory(debt),
+      disabled: !debt.historialPagos?.length,
+      action: () => openPaymentHistory([debt]),
     },
     { label: "-" },
   ];

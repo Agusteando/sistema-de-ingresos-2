@@ -27,6 +27,8 @@ interface _GlobalComponents {
   ModalDiscardDialog: typeof import("../../components/ModalDiscardDialog.vue")['default']
   ModalDraftStatus: typeof import("../../components/ModalDraftStatus.vue")['default']
   NoAdeudoModal: typeof import("../../components/NoAdeudoModal.vue")['default']
+  PaymentCancelModal: typeof import("../../components/PaymentCancelModal.vue")['default']
+  PaymentHistoryModal: typeof import("../../components/PaymentHistoryModal.vue")['default']
   PaymentModal: typeof import("../../components/PaymentModal.vue")['default']
   StudentDetails: typeof import("../../components/StudentDetails.vue")['default']
   StudentFormModal: typeof import("../../components/StudentFormModal.vue")['default']
@@ -91,6 +93,8 @@ interface _GlobalComponents {
   LazyModalDiscardDialog: LazyComponent<typeof import("../../components/ModalDiscardDialog.vue")['default']>
   LazyModalDraftStatus: LazyComponent<typeof import("../../components/ModalDraftStatus.vue")['default']>
   LazyNoAdeudoModal: LazyComponent<typeof import("../../components/NoAdeudoModal.vue")['default']>
+  LazyPaymentCancelModal: LazyComponent<typeof import("../../components/PaymentCancelModal.vue")['default']>
+  LazyPaymentHistoryModal: LazyComponent<typeof import("../../components/PaymentHistoryModal.vue")['default']>
   LazyPaymentModal: LazyComponent<typeof import("../../components/PaymentModal.vue")['default']>
   LazyStudentDetails: LazyComponent<typeof import("../../components/StudentDetails.vue")['default']>
   LazyStudentFormModal: LazyComponent<typeof import("../../components/StudentFormModal.vue")['default']>
