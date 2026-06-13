@@ -38,6 +38,16 @@
                   <LucideRotateCcw :size="15" />
                   Usar fecha de hoy
                 </button>
+                <div class="my-1 border-t border-gray-100"></div>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition"
+                  :class="pagoRealizadoEnOtroPlantel ? 'bg-amber-50 text-amber-800' : 'text-gray-700 hover:bg-gray-50'"
+                  @click="toggleOtherCampusPayment"
+                >
+                  <LucideBuilding2 :size="16" :class="pagoRealizadoEnOtroPlantel ? 'text-amber-700' : 'text-brand-campus'" />
+                  {{ pagoRealizadoEnOtroPlantel ? 'Pago en otro plantel activo' : 'Pagado en otro plantel' }}
+                </button>
               </div>
             </Transition>
           </div>
@@ -85,19 +95,43 @@
             </div>
           </div>
 
+          <div
+            v-if="pagoRealizadoEnOtroPlantel"
+            class="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div class="flex min-w-0 items-start gap-3">
+              <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm ring-1 ring-amber-200">
+                <LucideBuilding2 :size="18" />
+              </span>
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-gray-800">Pagado en otro plantel</p>
+                <p class="mt-0.5 text-xs leading-5 text-gray-600">
+                  El monto se aplicará al saldo sin registrarse como ingreso de este plantel.
+                </p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost h-9 shrink-0 px-3 text-xs" @click="toggleOtherCampusPayment">
+              Registrar como pago normal
+            </button>
+          </div>
+
           <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
             <div class="form-group mb-0">
-              <label class="form-label">Forma de Pago</label>
-              <select v-model="formaDePago" class="input-field bg-white">
+              <label class="form-label">{{ pagoRealizadoEnOtroPlantel ? 'Tipo de registro' : 'Forma de Pago' }}</label>
+              <select v-if="!pagoRealizadoEnOtroPlantel" v-model="formaDePago" class="input-field bg-white">
                 <option value="Efectivo">Efectivo</option>
                 <option value="Tarjeta de débito">Tarjeta de Débito</option>
                 <option value="Tarjeta de crédito">Tarjeta de Crédito</option>
                 <option value="Transferencia">Transferencia</option>
                 <option value="Cheque">Cheque</option>
               </select>
+              <div v-else class="flex h-11 items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 text-sm font-bold text-amber-800">
+                <LucideBuilding2 :size="16" />
+                Pago realizado en otro plantel
+              </div>
             </div>
             <div class="text-right flex flex-col justify-center">
-              <span class="text-[0.7rem] font-bold text-gray-500 uppercase tracking-wide">Total a Cobrar</span>
+              <span class="text-[0.7rem] font-bold text-gray-500 uppercase tracking-wide">{{ pagoRealizadoEnOtroPlantel ? 'Total a registrar' : 'Total a cobrar' }}</span>
               <span class="text-2xl font-bold text-brand-campus leading-none mt-1 font-mono">${{ totalCobrar.toFixed(2) }}</span>
             </div>
           </div>
@@ -144,13 +178,13 @@
         />
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="requestClose" :disabled="processing">Cancelar</button>
-          <button class="btn btn-outline" type="button" @click="previewReceipt" :disabled="processing || totalCobrar <= 0">
+          <button v-if="!pagoRealizadoEnOtroPlantel" class="btn btn-outline" type="button" @click="previewReceipt" :disabled="processing || totalCobrar <= 0">
             <LucideEye :size="16"/> Previa
           </button>
           <button class="btn btn-primary" @click="submit" :disabled="processing || totalCobrar <= 0">
             <LucideLoader2 v-if="processing" class="animate-spin" :size="16"/>
             <LucideCheckCircle v-else :size="16"/>
-            {{ processing ? 'Registrando...' : 'Registrar Pago' }}
+            {{ processing ? 'Registrando...' : (pagoRealizadoEnOtroPlantel ? 'Registrar pago' : 'Registrar Pago') }}
           </button>
         </div>
       </div>
@@ -160,7 +194,7 @@
 
 <script setup>
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
-import { LucideCalendarDays, LucideCheckCircle, LucideEye, LucideLoader2, LucideMoreHorizontal, LucideRotateCcw } from 'lucide-vue-next'
+import { LucideBuilding2, LucideCalendarDays, LucideCheckCircle, LucideEye, LucideLoader2, LucideMoreHorizontal, LucideRotateCcw } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -181,6 +215,7 @@ const processedDebts = ref([])
 const paymentOptionsRef = ref(null)
 const paymentOptionsOpen = ref(false)
 const paymentDateEditorOpen = ref(false)
+const pagoRealizadoEnOtroPlantel = ref(false)
 
 const localDateKey = (date = new Date()) => {
   const year = date.getFullYear()
@@ -208,6 +243,11 @@ const openPaymentDateEditor = () => {
 
 const resetPaymentDate = () => {
   paymentDate.value = localDateKey()
+  paymentOptionsOpen.value = false
+}
+
+const toggleOtherCampusPayment = () => {
+  pagoRealizadoEnOtroPlantel.value = !pagoRealizadoEnOtroPlantel.value
   paymentOptionsOpen.value = false
 }
 
@@ -267,6 +307,7 @@ const readPaymentDraft = () => ({
   formaDePago: formaDePago.value,
   paymentDate: paymentDate.value,
   paymentDateEditorOpen: paymentDateEditorOpen.value,
+  pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
   debts: processedDebts.value.map(debt => ({
     key: paymentDebtKey(debt),
     montoPagado: debt.montoPagado,
@@ -282,6 +323,7 @@ const writePaymentDraft = (draft) => {
     paymentDate.value = String(draft.paymentDate)
   }
   paymentDateEditorOpen.value = Boolean(draft.paymentDateEditorOpen || paymentDate.value !== localDateKey())
+  pagoRealizadoEnOtroPlantel.value = Boolean(draft.pagoRealizadoEnOtroPlantel)
   const restoredDebts = new Map((Array.isArray(draft.debts) ? draft.debts : []).map(debt => [debt.key, debt]))
 
   processedDebts.value = processedDebts.value.map((debt) => {
@@ -302,6 +344,7 @@ const paymentDraftHasContent = (draft) => {
   if (!draft || typeof draft !== 'object') return false
   if (String(draft.formaDePago || 'Efectivo') !== 'Efectivo') return true
   if (String(draft.paymentDate || localDateKey()) !== localDateKey()) return true
+  if (Boolean(draft.pagoRealizadoEnOtroPlantel)) return true
   return Array.isArray(draft.debts) && draft.debts.length > 0
 }
 
@@ -366,6 +409,7 @@ const validateFinalAmounts = () => {
 }
 
 const previewReceipt = () => {
+  if (pagoRealizadoEnOtroPlantel.value) return
   if (!validateFinalAmounts()) return
   const previewData = {
     folios: 'PREVIO',
@@ -406,6 +450,7 @@ const submit = async () => {
     ciclo: normalizeCicloKey(state.value.ciclo),
     lateFeeActive: state.value.lateFeeActive,
     fechaPago: hasCustomPaymentDate.value ? paymentDate.value : null,
+    pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
     pagos: paymentRows()
   }
   processing.value = true
@@ -414,10 +459,14 @@ const submit = async () => {
     () => $fetch('/api/payments/pay', { method: 'POST', body: payload }),
     () => emit('success'),
     () => emit('success'),
-    { pending: 'Registrando pago...', success: 'Pago exitoso', error: 'Error al registrar' }
+    {
+      pending: pagoRealizadoEnOtroPlantel.value ? 'Registrando pago en otro plantel...' : 'Registrando pago...',
+      success: pagoRealizadoEnOtroPlantel.value ? 'Pago en otro plantel registrado' : 'Pago exitoso',
+      error: 'Error al registrar'
+    }
   ).then((res) => {
     markSaved()
-    if (res && res.folios) {
+    if (!pagoRealizadoEnOtroPlantel.value && res && res.folios) {
       window.open(`/print/recibo?folios=${res.folios.join(',')}`, '_blank', 'width=850,height=800')
     }
   }).catch(() => {}).finally(() => {

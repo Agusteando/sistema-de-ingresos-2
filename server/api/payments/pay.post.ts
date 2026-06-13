@@ -6,6 +6,8 @@ import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney, parseNullableMoney } from '../../utils/monto-final'
 
+const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
+
 const normalizePaymentMethod = (value: unknown) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -37,6 +39,7 @@ const normalizePaymentDate = (value: unknown) => {
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const { matricula, pagos, formaDePago, ciclo = '2025', lateFeeActive = true, fechaPago } = body
+  const pagoRealizadoEnOtroPlantel = truthyFlag(body.pagoRealizadoEnOtroPlantel)
   const cicloKey = normalizeCicloKey(ciclo)
   const requestedPaymentDate = normalizePaymentDate(fechaPago)
   const user = event.context.user
@@ -45,7 +48,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
   }
 
-  if (normalizePaymentMethod(formaDePago) === 'depuracion') {
+  if (!pagoRealizadoEnOtroPlantel && normalizePaymentMethod(formaDePago) === 'depuracion') {
     throw createError({ statusCode: 400, message: 'La depuración requiere autorización por código.' })
   }
 
@@ -89,6 +92,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     : originalTimestamp
   const paymentDateChanged = Boolean(requestedPaymentDate && requestedPaymentDate !== originalDateKey)
   const paymentDateChangedBy = paymentDateChanged ? (user?.name || user?.email || 'Sistema') : null
+
+  const userName = user?.name || user?.email || 'Sistema'
+  const effectivePaymentMethod = pagoRealizadoEnOtroPlantel ? 'Pago realizado en otro plantel' : formaDePago
 
   const statements: SqlStatement[] = []
   const finalAmountByTarget = new Map<string, number>()
@@ -209,11 +215,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           instituto,
           ciclo,
           estatus,
+          depurado,
+          depurado_por,
+          depurado_fecha,
           fecha,
           fecha_original,
           fecha_modificada_at,
           fecha_modificada_por
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       params: [
         matricula,
@@ -231,12 +240,15 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         resuelto,
         resuelto + montoDecimal,
         subtotal > Number(finalAmount) ? 1 : 0,
-        user?.name || 'Sistema',
-        formaDePago,
+        userName,
+        effectivePaymentMethod,
         plantel,
         instituto,
         cicloKey,
         'Vigente',
+        pagoRealizadoEnOtroPlantel ? 1 : 0,
+        pagoRealizadoEnOtroPlantel ? userName : null,
+        pagoRealizadoEnOtroPlantel ? originalTimestamp : null,
         effectiveTimestamp,
         originalTimestamp,
         paymentDateChanged ? originalTimestamp : null,
@@ -257,6 +269,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     folios: resultFolios,
     fechaEfectiva: effectiveTimestamp,
     fechaOriginal: originalTimestamp,
-    fechaAjustada: paymentDateChanged
+    fechaAjustada: paymentDateChanged,
+    pagoRealizadoEnOtroPlantel
   }
 }))

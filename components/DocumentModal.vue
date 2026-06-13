@@ -198,56 +198,6 @@
               </div>
             </div>
 
-            <div class="form-group col-span-2 mb-0 other-campus-payment-card" :class="{ selected: pagoRealizadoEnOtroPlantel }">
-              <label class="other-campus-payment-toggle">
-                <input
-                  v-model="pagoRealizadoEnOtroPlantel"
-                  type="checkbox"
-                  :disabled="loading"
-                >
-                <span>
-                  <strong><LucideBuilding2 :size="15" /> Pagado en otro plantel</strong>
-                  <small>Marca esta opción solo si una parte o todo el documento ya fue pagado fuera de este plantel.</small>
-                </span>
-              </label>
-
-              <div v-if="pagoRealizadoEnOtroPlantel" class="other-campus-payment-details">
-                <div class="other-campus-ledger">
-                  <div class="other-campus-ledger-card total">
-                    <span>Total del documento</span>
-                    <strong>${{ formatMoney(otherCampusTotal) }}</strong>
-                  </div>
-
-                  <label class="other-campus-ledger-card editable">
-                    <span>Pagado en otro plantel</span>
-                    <div class="other-campus-amount-input">
-                      <b>$</b>
-                      <input
-                        v-model.number="montoPagadoOtroPlantel"
-                        type="number"
-                        min="0.01"
-                        :max="otherCampusTotal"
-                        step="0.01"
-                        :disabled="loading"
-                        @input="markOtherCampusAmountEdited"
-                      >
-                    </div>
-                  </label>
-
-                  <div class="other-campus-ledger-card balance" :class="{ pending: otherCampusIsPartial }">
-                    <span>Saldo pendiente</span>
-                    <strong>${{ formatMoney(otherCampusBalance) }}</strong>
-                  </div>
-                </div>
-
-                <div class="other-campus-summary">
-                  <span v-if="periodCount > 1">{{ periodCount }} cargos de ${{ formatMoney(montoFinalInput) }}</span>
-                  <span v-if="!otherCampusIsPartial && otherCampusPaid >= otherCampusTotal">Quedará cubierto completo</span>
-                  <span v-else>Quedará saldo por cobrar en este plantel</span>
-                </div>
-              </div>
-            </div>
-
             <div class="form-group col-span-2 mb-0 carta-beca-card" :class="{ disabled: !selectedBecaTypes.length }">
               <label class="carta-beca-toggle">
                 <input
@@ -263,21 +213,16 @@
             </div>
           </form>
         </div>
-        <div v-if="showDiscardConfirm" class="document-draft-confirm" role="alert">
-          <div>
-            <strong>Hay cambios sin guardar</strong>
-            <span>Si sales ahora, se perderá lo capturado en este documento.</span>
-          </div>
-          <div class="document-draft-actions">
-            <button type="button" class="btn btn-ghost" @click="keepEditing">Seguir editando</button>
-            <button type="button" class="btn btn-danger" @click="discardAndClose">Salir sin guardar</button>
-          </div>
-        </div>
+        <ModalDiscardDialog
+          :show="showDiscardConfirm"
+          @continue="keepEditing"
+          @discard="discardAndClose"
+        />
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="requestClose" type="button">Cancelar</button>
           <button class="btn btn-primary" @click="submit" :disabled="loading || loadingConcepts || !selectedDocumentoId">
             <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
-            {{ loading ? 'Agregando...' : (pagoRealizadoEnOtroPlantel ? 'Agregar y registrar' : 'Agregar documento') }}
+            {{ loading ? 'Agregando...' : 'Agregar documento' }}
           </button>
         </div>
       </div>
@@ -286,8 +231,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
-import { LucideBadgePercent, LucideBuilding2, LucideCheckCircle, LucideFileCheck2, LucideLoader2, LucideRefreshCcw, LucideSearch, LucideX } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { LucideBadgePercent, LucideCheckCircle, LucideFileCheck2, LucideLoader2, LucideRefreshCcw, LucideSearch, LucideX } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
@@ -315,16 +260,12 @@ const form = ref({ costo: 0, meses: 1, eventual: false })
 const selectedBecaTypes = ref([])
 const becaMotivo = ref('')
 const generarCartaBeca = ref(false)
-const pagoRealizadoEnOtroPlantel = ref(false)
-const montoPagadoOtroPlantel = ref(0)
-const montoPagadoOtroPlantelEditado = ref(false)
 const showDiscardConfirm = ref(false)
 
 const montoFinalInput = ref(0)
 const montoFinalConfirmed = ref(false)
 
 const activeCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
-const activeCicloLabel = computed(() => String(activeCicloKey.value || state.value.ciclo || '').trim() || 'activo')
 
 const selectedConcept = computed(() => {
   return conceptos.value.find((item) => String(item.id) === String(selectedDocumentoId.value)) || null
@@ -348,10 +289,6 @@ const amountFieldHelp = computed(() => isRecurringDocument.value
   : 'Este es el importe real del cargo, después de beca o convenio.')
 const amountSummaryLabel = computed(() => isRecurringDocument.value ? 'Mensualidad a generar' : 'Total a generar')
 const projectedDocumentTotal = computed(() => Math.max(0, Number(montoFinalInput.value || 0)) * periodCount.value)
-const otherCampusTotal = computed(() => Math.max(0, Number(montoFinalInput.value || 0)) * periodCount.value)
-const otherCampusPaid = computed(() => Math.max(0, Number(montoPagadoOtroPlantel.value || 0)))
-const otherCampusBalance = computed(() => Math.max(0, otherCampusTotal.value - Math.min(otherCampusPaid.value, otherCampusTotal.value)))
-const otherCampusIsPartial = computed(() => pagoRealizadoEnOtroPlantel.value && otherCampusPaid.value > 0 && otherCampusPaid.value < otherCampusTotal.value)
 const hasDraftChanges = computed(() => {
   return Boolean(
     selectedDocumentoId.value ||
@@ -362,8 +299,6 @@ const hasDraftChanges = computed(() => {
     selectedBecaTypes.value.length ||
     becaMotivo.value.trim() ||
     generarCartaBeca.value ||
-    pagoRealizadoEnOtroPlantel.value ||
-    Number(montoPagadoOtroPlantel.value || 0) > 0 ||
     Number(montoFinalInput.value || 0) > 0 ||
     montoFinalConfirmed.value
   )
@@ -441,35 +376,12 @@ const deferCloseDropdown = () => {
   }, 140)
 }
 
-const syncOtherCampusAmount = ({ force = false } = {}) => {
-  if (!pagoRealizadoEnOtroPlantel.value) {
-    montoPagadoOtroPlantel.value = 0
-    montoPagadoOtroPlantelEditado.value = false
-    return
-  }
-  const max = otherCampusTotal.value
-  const current = Number(montoPagadoOtroPlantel.value || 0)
-  if (force || !montoPagadoOtroPlantelEditado.value || current <= 0) {
-    montoPagadoOtroPlantel.value = max
-  } else if (current > max) {
-    montoPagadoOtroPlantel.value = max
-  }
-}
-
-const markOtherCampusAmountEdited = () => {
-  montoPagadoOtroPlantelEditado.value = true
-  if (Number(montoPagadoOtroPlantel.value || 0) > otherCampusTotal.value) {
-    montoPagadoOtroPlantel.value = otherCampusTotal.value
-  }
-}
-
 const applyConceptToForm = (concepto) => {
   form.value.costo = Number(concepto?.costo || 0)
   form.value.meses = Number(concepto?.plazo || 1) || 1
   form.value.eventual = isTruthyFlag(concepto?.eventual)
   montoFinalInput.value = Math.round(Number(concepto?.costo || 0))
   montoFinalConfirmed.value = false
-  syncOtherCampusAmount()
 }
 
 const selectConcept = (concepto) => {
@@ -485,7 +397,6 @@ const clearConceptSelection = () => {
   form.value = { costo: 0, meses: 1, eventual: false }
   montoFinalInput.value = 0
   montoFinalConfirmed.value = false
-  syncOtherCampusAmount({ force: true })
   conceptDropdownOpen.value = true
 }
 
@@ -575,15 +486,6 @@ const submit = async () => {
     return show('El monto final no puede ser mayor al costo cuando hay beca.', 'danger')
   }
   if (generarCartaBeca.value && !selectedBecaTypes.value.length) return show('Selecciona al menos un tipo de beca para generar la carta.', 'danger')
-  if (pagoRealizadoEnOtroPlantel.value) {
-    const pagoOtroPlantel = Number(montoPagadoOtroPlantel.value || 0)
-    if (!Number.isFinite(pagoOtroPlantel) || pagoOtroPlantel <= 0) {
-      return show('Ingresa el monto pagado en otro plantel.', 'danger')
-    }
-    if (pagoOtroPlantel > otherCampusTotal.value + 0.009) {
-      return show('El monto pagado en otro plantel no puede ser mayor al total.', 'danger')
-    }
-  }
   if (!montoFinalConfirmed.value) return show('Confirma el monto final', 'danger')
 
   const cartaWindow = openCartaWindow()
@@ -601,8 +503,6 @@ const submit = async () => {
         becaTipos: selectedBecaTypes.value,
         becaMotivo: becaMotivo.value,
         generarCartaBeca: generarCartaBeca.value,
-        pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
-        montoPagadoOtroPlantel: pagoRealizadoEnOtroPlantel.value ? Number(montoPagadoOtroPlantel.value || 0) : undefined,
         ciclo: activeCicloKey.value, 
         eventual: form.value.eventual 
       }
@@ -612,17 +512,11 @@ const submit = async () => {
       if (cartaWindow) cartaWindow.location.href = result.becaCartaUrl
       else window.open(result.becaCartaUrl, '_blank', 'noopener')
       const serviceText = result?.servicio?.mapped ? ` Servicio: ${result.servicio.servicio?.nombre || result.servicio.servicio?.clave || ''}.` : ''
-      const depuracionText = result?.depurado
-        ? (result?.depuradoParcial ? `Documento agregado, carta generada y pago en otro plantel registrado. Saldo pendiente: $${formatMoney(result?.depuradoSaldoPendiente || 0)}.` : 'Documento agregado, carta generada y pago marcado como realizado en otro plantel.')
-        : 'Documento agregado y carta de beca generada.'
-      show(depuracionText + serviceText)
+      show('Documento agregado y carta de beca generada.' + serviceText)
     } else {
       cartaWindow?.close?.()
       const serviceText = result?.servicio?.mapped ? ` Servicio: ${result.servicio.servicio?.nombre || result.servicio.servicio?.clave || ''}.` : ''
-      const depuracionText = result?.depurado
-        ? (result?.depuradoParcial ? `Documento agregado y pago en otro plantel registrado. Saldo pendiente: $${formatMoney(result?.depuradoSaldoPendiente || 0)}.` : 'Documento agregado y pago marcado como realizado en otro plantel.')
-        : 'Documento agregado.'
-      show(depuracionText + serviceText)
+      show('Documento agregado.' + serviceText)
     }
     emit('success')
   } catch (e) {
@@ -632,14 +526,6 @@ const submit = async () => {
 }
 
 
-watch(pagoRealizadoEnOtroPlantel, (active) => {
-  if (active) syncOtherCampusAmount({ force: true })
-  else syncOtherCampusAmount()
-})
-
-watch([montoFinalInput, () => form.value.meses, () => form.value.eventual], () => {
-  syncOtherCampusAmount()
-})
 
 onMounted(() => {
   loadConcepts()
@@ -677,45 +563,6 @@ onMounted(() => {
   color: #617087;
 }
 
-.document-draft-confirm {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  border-top: 1px solid #edf2f7;
-  background: #fffaf0;
-  padding: 14px 18px;
-}
-
-.document-draft-confirm strong,
-.document-draft-confirm span {
-  display: block;
-}
-
-.document-draft-confirm strong {
-  color: #6f4b11;
-  font-size: 0.82rem;
-  font-weight: 850;
-}
-
-.document-draft-confirm span {
-  color: #7c6a52;
-  font-size: 0.74rem;
-  font-weight: 650;
-  margin-top: 2px;
-}
-
-.document-draft-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-}
-
-.document-draft-actions .btn {
-  min-height: 34px;
-  padding: 0 12px;
-  white-space: nowrap;
-}
 
 .document-modal-content {
   max-height: min(72vh, 720px);
@@ -941,7 +788,6 @@ onMounted(() => {
 }
 
 .scholarship-card,
-.other-campus-payment-card,
 .carta-beca-card {
   border: 1px solid #dce8d9;
   border-radius: 14px;
@@ -1039,136 +885,7 @@ onMounted(() => {
   opacity: 0.72;
 }
 
-.other-campus-payment-card {
-  background: linear-gradient(180deg, #fffdf8 0%, #fff7e6 100%);
-  border-color: #f0d9ad;
-}
 
-.other-campus-payment-card.selected {
-  box-shadow: 0 0 0 3px rgba(217, 151, 43, 0.12);
-}
-
-.other-campus-payment-toggle,
-.carta-beca-toggle {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  cursor: pointer;
-}
-
-.other-campus-payment-toggle input,
-.carta-beca-toggle input {
-  margin-top: 4px;
-}
-
-.other-campus-payment-toggle strong,
-.carta-beca-toggle strong {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #284c2a;
-  font-size: 0.82rem;
-}
-
-.other-campus-payment-toggle small,
-.carta-beca-toggle small {
-  display: block;
-  color: #758399;
-  font-size: 0.72rem;
-  font-weight: 620;
-  line-height: 1.35;
-  margin-top: 2px;
-}
-
-.other-campus-payment-details {
-  margin-top: 13px;
-  border-top: 1px solid rgba(220, 153, 44, 0.24);
-  padding-top: 13px;
-}
-
-.other-campus-ledger {
-  display: grid;
-  grid-template-columns: minmax(0, 0.86fr) minmax(150px, 1fr) minmax(0, 0.86fr);
-  gap: 10px;
-  align-items: stretch;
-}
-
-.other-campus-ledger-card {
-  min-height: 58px;
-  border: 1px solid rgba(234, 211, 158, 0.85);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.78);
-  padding: 9px 11px;
-}
-
-.other-campus-ledger-card span {
-  display: block;
-  color: #6f7b8f;
-  font-size: 0.62rem;
-  font-weight: 820;
-  letter-spacing: 0.035em;
-  margin-bottom: 5px;
-  text-transform: uppercase;
-}
-
-.other-campus-ledger-card strong {
-  color: #34445e;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.92rem;
-  font-weight: 900;
-}
-
-.other-campus-ledger-card.total strong {
-  color: #7d5d20;
-}
-
-.other-campus-ledger-card.editable {
-  display: block;
-  border-color: #dca545;
-  background: #fff;
-  box-shadow: 0 8px 18px rgba(138, 95, 28, 0.08);
-}
-
-.other-campus-ledger-card.balance {
-  border-color: #dfe8d9;
-  background: #fbfefb;
-}
-
-.other-campus-ledger-card.balance strong {
-  color: #327036;
-}
-
-.other-campus-ledger-card.balance.pending {
-  border-color: #ead39e;
-  background: #fffaf0;
-}
-
-.other-campus-ledger-card.balance.pending strong {
-  color: #996515;
-}
-
-.other-campus-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
-}
-
-.other-campus-summary span {
-  border: 1px solid rgba(234, 211, 158, 0.8);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
-  color: #806328;
-  font-size: 0.66rem;
-  font-weight: 780;
-  padding: 4px 8px;
-}
-
-@media (max-width: 640px) {
-  .other-campus-ledger {
-    grid-template-columns: 1fr;
-  }
-}
 </style>
 
 <style scoped>
