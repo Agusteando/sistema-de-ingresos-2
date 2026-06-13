@@ -183,6 +183,10 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'sent'])
 
+useModalEscape(() => {
+  if (!sending.value) emit('close')
+})
+
 const loading = ref(false)
 const sending = ref(false)
 const loadError = ref('')

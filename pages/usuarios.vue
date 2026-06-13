@@ -1461,6 +1461,24 @@ const openModal = (u = null) => {
 }
 const closeModal = () => { showModal.value = false }
 
+const hasUsersModalOpen = computed(() => showModal.value || Boolean(pendingAction.value) || showInverseModal.value || showDebug.value)
+
+useModalEscape(() => {
+  if (showDebug.value) {
+    showDebug.value = false
+    return
+  }
+  if (showInverseModal.value) {
+    closeInverseBulk()
+    return
+  }
+  if (pendingAction.value) {
+    pendingAction.value = null
+    return
+  }
+  closeModal()
+}, { enabled: hasUsersModalOpen })
+
 const saveUser = async () => {
   if (!canSave.value) {
     show('Seleccione una cuenta válida y al menos un plantel.', 'danger')

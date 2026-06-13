@@ -44,6 +44,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['continue', 'discard'])
+
+useModalEscape(() => emit('continue'), { enabled: () => props.show })
 const continueButton = ref(null)
 const idSuffix = Math.random().toString(36).slice(2, 8)
 const titleId = `modal-unsaved-title-${idSuffix}`

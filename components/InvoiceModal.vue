@@ -175,6 +175,10 @@ const props = defineProps({
   student: { type: Object, default: () => ({}) }
 })
 const emit = defineEmits(['close', 'success'])
+
+useModalEscape(() => {
+  if (!loading.value) emit('close')
+})
 const { show } = useToast()
 
 useScrollLock()

@@ -33,6 +33,7 @@ export { defineLazyHydrationComponent } from '#app/composables/lazy-hydration';
 export { useAccountStateCacheSync } from '../composables/useAccountStateCacheSync';
 export { useContextMenu, ContextMenuItem } from '../composables/useContextMenu';
 export { useModalDraftPersistence } from '../composables/useModalDraftPersistence';
+export { useModalEscape } from '../composables/useModalEscape';
 export { globalSyncState, globalSyncMessage, useOptimisticSync } from '../composables/useOptimisticSync';
 export { usePlantelAgentStatuses } from '../composables/usePlantelAgentStatuses';
 export { useScrollLock } from '../composables/useScrollLock';

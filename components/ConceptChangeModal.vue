@@ -146,6 +146,10 @@ import { normalizeCicloKey } from "~/shared/utils/ciclo";
 
 const props = defineProps({ debt: Object });
 const emit = defineEmits(["close", "success"]);
+
+useModalEscape(() => {
+  if (!busy.value) emit("close");
+});
 const state = useState("globalState");
 const { show } = useToast();
 

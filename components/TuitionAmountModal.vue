@@ -315,6 +315,8 @@ function discardAndClose() {
   emit('close')
 }
 
+useModalEscape(requestClose)
+
 async function save() {
   if (!canSave.value) return
   saving.value = true

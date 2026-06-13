@@ -57,7 +57,7 @@ import { studentHasSection } from '~/shared/utils/studentPresentation'
 import UiButton from '~/components/ui/UiButton.vue'
 import UiIconButton from '~/components/ui/UiIconButton.vue'
 
-defineProps({
+const props = defineProps({
   show: { type: Boolean, default: false },
   sectionModalStudent: { type: Object, default: null },
   sectionModalStudents: { type: Array, default: () => [] },
@@ -69,7 +69,7 @@ defineProps({
   bulkSectionState: { type: Function, required: true }
 })
 
-defineEmits([
+const emit = defineEmits([
   'close',
   'update-new-section-name',
   'create-section',
@@ -77,4 +77,6 @@ defineEmits([
   'toggle-bulk-section',
   'delete-section'
 ])
+
+useModalEscape(() => emit('close'), { enabled: () => props.show })
 </script>

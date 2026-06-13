@@ -404,6 +404,7 @@ const updatesPending = ref(false)
 const updatesError = ref('')
 const updatesSearch = ref('')
 const updatesModalOpen = ref(false)
+useModalEscape(() => { updatesModalOpen.value = false }, { enabled: updatesModalOpen })
 const loginUpdates = ref({
   ok: false,
   configured: false,

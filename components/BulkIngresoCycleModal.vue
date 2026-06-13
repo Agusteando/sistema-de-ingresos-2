@@ -214,6 +214,10 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'confirm', 'remove-student'])
 
+useModalEscape(() => {
+  if (!props.saving) emit('close')
+})
+
 const fallbackCiclo = normalizeCicloForTipoIngreso(CICLOS_LIST[0]?.value) || '2025'
 const targetCicloKey = computed(() => normalizeCicloForTipoIngreso(props.targetCiclo) || fallbackCiclo)
 const selectedIngresoCiclo = ref(targetCicloKey.value)

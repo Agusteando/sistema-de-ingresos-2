@@ -294,7 +294,9 @@ const props = defineProps({
   student: { type: Object, required: true }
 })
 
-defineEmits(['close'])
+const emit = defineEmits(['close'])
+
+useModalEscape(() => emit('close'))
 
 const detail = ref(null)
 const loading = ref(false)

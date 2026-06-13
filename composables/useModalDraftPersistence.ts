@@ -1,4 +1,5 @@
 import { computed, onMounted, onUnmounted, ref, toValue, watch } from 'vue'
+import { useModalEscape } from '~/composables/useModalEscape'
 import type { MaybeRefOrGetter } from 'vue'
 
 type ModalDraftPayload<TDraft> = {
@@ -209,12 +210,6 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
     return true
   }
 
-  const handleKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || event.defaultPrevented || !isEnabled()) return
-    event.preventDefault()
-    requestClose()
-  }
-
   const handleBeforeUnload = () => {
     if (hasUnsavedChanges.value) persistDraftNow()
   }
@@ -225,14 +220,14 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
     { flush: 'post' }
   )
 
+  useModalEscape(requestClose, { enabled: () => isEnabled() })
+
   onMounted(() => {
-    if (typeof document !== 'undefined') document.addEventListener('keydown', handleKeydown)
     if (typeof window !== 'undefined') window.addEventListener('beforeunload', handleBeforeUnload)
   })
 
   onUnmounted(() => {
     clearPendingPersist()
-    if (typeof document !== 'undefined') document.removeEventListener('keydown', handleKeydown)
     if (typeof window !== 'undefined') window.removeEventListener('beforeunload', handleBeforeUnload)
   })
 

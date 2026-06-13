@@ -2199,6 +2199,8 @@ const closeFinancialDiagnosticsModal = () => {
   showFinancialDiagnosticsModal.value = false
 }
 
+useModalEscape(closeFinancialDiagnosticsModal, { enabled: showFinancialDiagnosticsModal })
+
 const showStudentMenu = (event, student) => {
   const selectedActionLabel = selectedCount.value > 1 && isStudentSelected(student)
     ? `Asignar sección a ${selectedCount.value}`

@@ -494,7 +494,10 @@
         <div
           :class="[
             'account-workspace-body',
-            { 'account-workspace-body--expanded': detailsExpanded },
+            {
+              'account-workspace-body--expanded': detailsExpanded,
+              'account-workspace-body--services': accountViewMode === 'services',
+            },
           ]"
         >
           <Transition name="account-flow" mode="out-in">

@@ -67,6 +67,8 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'confirm'])
 
+useModalEscape(() => emit('close'))
+
 useScrollLock()
 
 const presetReasons = ['Cambio de domicilio', 'Económico', 'Tema pedagógico', 'Otro']

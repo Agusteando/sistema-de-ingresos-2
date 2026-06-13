@@ -411,6 +411,8 @@ const discardAndClose = () => {
   emit('close')
 }
 
+useModalEscape(requestClose)
+
 const formatMoney = (value) => Number(value || 0).toFixed(2)
 
 const isTruthyFlag = (value) => ['1', 'true', 'si', 'sí', 'yes'].includes(String(value || '').trim().toLowerCase())

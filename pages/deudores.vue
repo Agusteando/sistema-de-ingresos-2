@@ -875,6 +875,13 @@ const actionReadyCount = (action) => filteredDeudores.value.filter(d => canRunAc
 
 const hasBlockingOverlay = computed(() => showExceptionModal.value || showWhatsappSetup.value || emailComposer.value.open || Boolean(detailsTarget.value))
 
+useModalEscape(() => {
+  if (detailsTarget.value) return closeDetails()
+  if (emailComposer.value.open) return closeEmailComposer()
+  if (showWhatsappSetup.value) return closeWhatsappSetup()
+  if (showExceptionModal.value) return closeException()
+}, { enabled: hasBlockingOverlay })
+
 watch(hasBlockingOverlay, (val) => {
   if (typeof document !== 'undefined') document.body.style.overflow = val ? 'hidden' : ''
 })

@@ -2162,6 +2162,8 @@ const closeControlDiagnosticsModal = () => {
   showControlDiagnosticsModal.value = false;
 };
 
+useModalEscape(closeControlDiagnosticsModal, { enabled: showControlDiagnosticsModal });
+
 const publishControlSyncIndicatorState = (override = {}) => {
   if (!process.client) return;
   const rows = controlStudentsIndex.value.length || students.value.length || 0;
@@ -4791,6 +4793,8 @@ const closeMassImportModal = () => {
   massImportFile.value = null;
   massImportError.value = "";
 };
+
+useModalEscape(closeMassImportModal, { enabled: showMassImportModal });
 
 const onMassImportFileChange = (event) => {
   massImportFile.value = event?.target?.files?.[0] || null;

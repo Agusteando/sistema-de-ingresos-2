@@ -2435,13 +2435,21 @@ button.student-service-mini {
 }
 
 .student-services-panel--workspace {
-  margin-top: 0;
-  min-height: 180px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   align-content: start;
+  margin-top: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-bottom: 18px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .student-services-panel--workspace {
-  min-height: 156px;
+  min-height: 0;
 }
 
 .student-services-panel {
@@ -2562,6 +2570,18 @@ button.student-service-mini {
   padding-top: 10px;
 }
 
+.student-services-panel--workspace .student-services-picker {
+  min-height: 0;
+}
+
+.student-services-panel--workspace .student-services-search {
+  position: sticky;
+  top: -1px;
+  z-index: 3;
+  padding: 2px 0 5px;
+  background: linear-gradient(180deg, rgba(249, 252, 248, .99) 0%, rgba(249, 252, 248, .97) 78%, rgba(249, 252, 248, 0) 100%);
+}
+
 .student-services-search {
   position: relative;
   display: flex;
@@ -2599,6 +2619,12 @@ button.student-service-mini {
   max-height: 220px;
   overflow: auto;
   padding-right: 2px;
+}
+
+.student-services-panel--workspace .student-services-catalog {
+  max-height: none;
+  overflow: visible;
+  padding-bottom: 4px;
 }
 
 .student-services-catalog button {
@@ -2653,6 +2679,10 @@ button.student-service-mini {
 .student-details-shell:not(.student-details-shell--expanded) .student-services-catalog {
   grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
   max-height: 178px;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .student-services-panel--workspace .student-services-catalog {
+  max-height: none;
 }
 
 .payment-history-date {

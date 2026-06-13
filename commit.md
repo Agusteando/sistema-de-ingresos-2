@@ -1,1 +1,1 @@
-Agrega fecha efectiva auditada al registrar pagos.
+Corrige cierre global de modales y desplazamiento de talleres.
