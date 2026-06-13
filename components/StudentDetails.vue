@@ -763,7 +763,7 @@
                           v-if="debt.montoFinalPendiente"
                           class="final-amount-link"
                           type="button"
-                          @click="setMontoFinal(debt)"
+                          @click="openTuitionAmount(debt, 'set')"
                         >
                           Fijar
                         </button>
@@ -919,6 +919,8 @@
         v-if="showTuitionAmountModal"
         :debt="selectedTuitionDebt"
         :document-debts="selectedTuitionDocumentDebts"
+        :mode="selectedTuitionMode"
+        :ciclo="selectedCicloKey"
         @close="closeTuitionAmount"
         @success="handleSuccess"
       />
@@ -1105,6 +1107,7 @@ const savingIngresoCycle = ref(false);
 const selectedConceptDebt = ref(null);
 const selectedDirectConceptDebt = ref(null);
 const selectedTuitionDebt = ref(null);
+const selectedTuitionMode = ref('adjust');
 const detailsShell = ref(null);
 const detailsPlaceholder = ref(null);
 const expandedShellBounds = ref(null);
@@ -1823,6 +1826,7 @@ const resetAccountInteraction = () => {
   expandedHistory.value = null;
   selectedConceptDebt.value = null;
   selectedTuitionDebt.value = null;
+  selectedTuitionMode.value = 'adjust';
   showPaymentModal.value = false;
   showDocModal.value = false;
   showInvoiceModal.value = false;
@@ -2451,47 +2455,6 @@ const requestDepuracion = async (debt) => {
   }
 };
 
-const setMontoFinal = async (debt) => {
-  const suggested = Math.round(
-    Number(debt.subtotal || debt.costoOriginal || debt.saldo || 0),
-  );
-  const value = prompt(
-    "Este debe ser el monto final de tu proyección, sin decimales.",
-    String(suggested),
-  );
-  if (value === null) return;
-  const montoFinal = Number(value);
-  if (
-    !Number.isFinite(montoFinal) ||
-    montoFinal < 0 ||
-    Math.floor(montoFinal) !== montoFinal
-  ) {
-    return show("Ingresa un monto final sin decimales", "danger");
-  }
-  if (
-    !confirm(
-      `Confirmar monto final de $${montoFinal.toFixed(2)} para ${debt.conceptoNombre}?`,
-    )
-  )
-    return;
-  try {
-    await $fetch("/api/documentos/monto-final", {
-      method: "POST",
-      body: {
-        documento: debt.documento,
-        mes: debt.mes,
-        montoFinal,
-        ciclo: normalizeCicloKey(state.value.ciclo),
-      },
-    });
-    show("Monto final definido", "success");
-    await loadDebts({ useCache: false });
-    emit("refresh");
-  } catch (e) {
-    show(e?.data?.message || "No se pudo fijar el monto final", "danger");
-  }
-};
-
 const openConceptChange = (debt) => {
   selectedConceptDebt.value = debt;
   showConceptModal.value = true;
@@ -2525,15 +2488,18 @@ const selectedTuitionDocumentDebts = computed(() => {
   );
 });
 
-const openTuitionAmount = (debt) => {
-  if (!canAdjustFinalAmount(debt)) return;
+const openTuitionAmount = (debt, mode = 'adjust') => {
+  if (mode === 'adjust' && !canAdjustFinalAmount(debt)) return;
+  if (mode === 'set' && !debt?.montoFinalPendiente) return;
   selectedTuitionDebt.value = debt;
+  selectedTuitionMode.value = mode;
   showTuitionAmountModal.value = true;
 };
 
 const closeTuitionAmount = () => {
   showTuitionAmountModal.value = false;
   selectedTuitionDebt.value = null;
+  selectedTuitionMode.value = 'adjust';
 };
 
 const canDirectCorrectConcept = (debt) =>
@@ -2640,7 +2606,7 @@ const showDebtContextMenu = (event, debt) => {
     menuItems.push({
       label: "Fijar monto final",
       icon: LucideSettings,
-      action: () => setMontoFinal(debt),
+      action: () => openTuitionAmount(debt, 'set'),
     });
     menuItems.push({ label: "-" });
   }

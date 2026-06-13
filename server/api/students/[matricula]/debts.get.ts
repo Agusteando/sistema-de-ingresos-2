@@ -348,6 +348,8 @@ export default defineEventHandler(async (event) =>
               : 0,
           isLate,
           hasRecargo: subtotal > totalOriginal,
+          recargoActivo: lateFeeActive === "true",
+          recargoManual: hasRecargoManual,
           originalConceptoNombre: doc.conceptoNombre,
           isDifferentialDocument: differentialParentByDocument.has(
             Number(doc.documento),

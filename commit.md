@@ -1,1 +1,1 @@
-Agrega corrección manual histórica del monto final.
+Reemplaza el diálogo de monto final con una vista previa financiera.

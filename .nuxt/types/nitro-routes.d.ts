@@ -177,6 +177,9 @@ declare module "nitropack/types" {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/external/v1/control-escolar/warm/index.get').default>>>>
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/external/v1/control-escolar/warm/index.post').default>>>>
     }
+    '/api/external/v1/deudores': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/external/v1/deudores/index.get').default>>>>
+    }
     '/api/getCompanyData': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/getCompanyData.get').default>>>>
     }
