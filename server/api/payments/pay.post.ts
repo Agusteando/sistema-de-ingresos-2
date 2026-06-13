@@ -14,6 +14,14 @@ const normalizePaymentMethod = (value: unknown) => String(value || '')
   .toLowerCase()
   .trim()
 
+const ALLOWED_PAYMENT_METHODS = new Set([
+  'Efectivo',
+  'Tarjeta de débito',
+  'Tarjeta de crédito',
+  'Transferencia',
+  'Cheque'
+])
+
 const toMesNumber = (value: unknown) => {
   const raw = String(value || '').trim().toLowerCase()
   if (raw === 'ev') return 1
@@ -50,6 +58,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   if (!pagoRealizadoEnOtroPlantel && normalizePaymentMethod(formaDePago) === 'depuracion') {
     throw createError({ statusCode: 400, message: 'La depuración requiere autorización por código.' })
+  }
+
+  if (!pagoRealizadoEnOtroPlantel && !ALLOWED_PAYMENT_METHODS.has(String(formaDePago || ''))) {
+    throw createError({ statusCode: 400, message: 'Selecciona un método de pago válido.' })
   }
 
   const [studentRef] = await query<any[]>(

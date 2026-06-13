@@ -22,6 +22,15 @@
                 class="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl"
               >
                 <button
+                  v-if="!pagoRealizadoEnOtroPlantel"
+                  type="button"
+                  class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                  @click="openPaymentMethodEditor"
+                >
+                  <LucideWalletCards :size="16" class="text-brand-campus" />
+                  Cambiar método de pago
+                </button>
+                <button
                   type="button"
                   class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                   @click="openPaymentDateEditor"
@@ -53,6 +62,51 @@
           </div>
         </div>
         <div class="modal-content">
+          <div
+            v-if="paymentMethodEditorOpen && !pagoRealizadoEnOtroPlantel"
+            class="mb-4 rounded-xl border border-gray-200 bg-gray-50/70 p-4"
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex min-w-0 items-start gap-3">
+                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand-campus shadow-sm ring-1 ring-gray-200">
+                  <LucideWalletCards :size="18" />
+                </span>
+                <div class="min-w-0">
+                  <p class="text-sm font-bold text-gray-800">Método de pago</p>
+                  <p class="mt-0.5 text-xs leading-5 text-gray-500">Selecciona cómo se recibió este pago.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="btn btn-ghost h-9 shrink-0 px-3 text-xs"
+                @click="paymentMethodEditorOpen = false"
+              >
+                Listo
+              </button>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <button
+                v-for="option in paymentMethodOptions"
+                :key="option.value"
+                type="button"
+                class="flex min-h-12 items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition"
+                :class="formaDePago === option.value
+                  ? 'border-brand-campus/30 bg-white text-brand-campus shadow-sm ring-1 ring-brand-campus/10'
+                  : 'border-gray-200 bg-white/80 text-gray-700 hover:border-gray-300 hover:bg-white'"
+                @click="selectPaymentMethod(option.value)"
+              >
+                <component :is="option.icon" :size="17" class="shrink-0" />
+                <span class="text-sm font-semibold">{{ option.label }}</span>
+                <LucideCheckCircle
+                  v-if="formaDePago === option.value"
+                  :size="16"
+                  class="ml-auto shrink-0"
+                />
+              </button>
+            </div>
+          </div>
+
           <div
             v-if="paymentDateEditorOpen || hasCustomPaymentDate"
             class="mb-4 rounded-xl border border-blue-100 bg-blue-50/60 p-4"
@@ -117,14 +171,21 @@
 
           <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
             <div class="form-group mb-0">
-              <label class="form-label">{{ pagoRealizadoEnOtroPlantel ? 'Tipo de registro' : 'Forma de Pago' }}</label>
-              <select v-if="!pagoRealizadoEnOtroPlantel" v-model="formaDePago" class="input-field bg-white">
-                <option value="Efectivo">Efectivo</option>
-                <option value="Tarjeta de débito">Tarjeta de Débito</option>
-                <option value="Tarjeta de crédito">Tarjeta de Crédito</option>
-                <option value="Transferencia">Transferencia</option>
-                <option value="Cheque">Cheque</option>
-              </select>
+              <label class="form-label">{{ pagoRealizadoEnOtroPlantel ? 'Tipo de registro' : 'Método de pago' }}</label>
+              <div
+                v-if="!pagoRealizadoEnOtroPlantel"
+                class="flex h-11 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3"
+              >
+                <component :is="selectedPaymentMethodOption.icon" :size="16" class="shrink-0 text-brand-campus" />
+                <span class="min-w-0 flex-1 truncate text-sm font-bold text-gray-800">{{ selectedPaymentMethodOption.label }}</span>
+                <button
+                  type="button"
+                  class="rounded-md px-2 py-1 text-xs font-bold text-brand-campus transition hover:bg-brand-campus/5"
+                  @click="openPaymentMethodEditor"
+                >
+                  Cambiar
+                </button>
+              </div>
               <div v-else class="flex h-11 items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 text-sm font-bold text-amber-800">
                 <LucideBuilding2 :size="16" />
                 Pago realizado en otro plantel
@@ -193,8 +254,8 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
-import { LucideBuilding2, LucideCalendarDays, LucideCheckCircle, LucideEye, LucideLoader2, LucideMoreHorizontal, LucideRotateCcw } from 'lucide-vue-next'
+import { ref, watch, computed, onMounted, onBeforeUnmount, markRaw } from 'vue'
+import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheckCircle, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideMoreHorizontal, LucideReceiptText, LucideRotateCcw, LucideWalletCards } from 'lucide-vue-next'
 import { useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -215,6 +276,7 @@ const processedDebts = ref([])
 const paymentOptionsRef = ref(null)
 const paymentOptionsOpen = ref(false)
 const paymentDateEditorOpen = ref(false)
+const paymentMethodEditorOpen = ref(false)
 const pagoRealizadoEnOtroPlantel = ref(false)
 
 const localDateKey = (date = new Date()) => {
@@ -236,8 +298,32 @@ const formattedEffectivePaymentDate = computed(() => {
   }).format(new Date(year, month - 1, day))
 })
 
+const paymentMethodOptions = [
+  { value: 'Efectivo', label: 'Efectivo', icon: markRaw(LucideBanknote) },
+  { value: 'Tarjeta de débito', label: 'Tarjeta de débito', icon: markRaw(LucideCreditCard) },
+  { value: 'Tarjeta de crédito', label: 'Tarjeta de crédito', icon: markRaw(LucideCreditCard) },
+  { value: 'Transferencia', label: 'Transferencia', icon: markRaw(LucideLandmark) },
+  { value: 'Cheque', label: 'Cheque', icon: markRaw(LucideReceiptText) }
+]
+
+const selectedPaymentMethodOption = computed(() => (
+  paymentMethodOptions.find(option => option.value === formaDePago.value) || paymentMethodOptions[0]
+))
+
+const openPaymentMethodEditor = () => {
+  paymentOptionsOpen.value = false
+  paymentDateEditorOpen.value = false
+  paymentMethodEditorOpen.value = true
+}
+
+const selectPaymentMethod = (value) => {
+  if (!paymentMethodOptions.some(option => option.value === value)) return
+  formaDePago.value = value
+}
+
 const openPaymentDateEditor = () => {
   paymentOptionsOpen.value = false
+  paymentMethodEditorOpen.value = false
   paymentDateEditorOpen.value = true
 }
 
@@ -249,6 +335,7 @@ const resetPaymentDate = () => {
 const toggleOtherCampusPayment = () => {
   pagoRealizadoEnOtroPlantel.value = !pagoRealizadoEnOtroPlantel.value
   paymentOptionsOpen.value = false
+  if (pagoRealizadoEnOtroPlantel.value) paymentMethodEditorOpen.value = false
 }
 
 const closePaymentOptionsOnOutsideClick = (event) => {
@@ -307,6 +394,7 @@ const readPaymentDraft = () => ({
   formaDePago: formaDePago.value,
   paymentDate: paymentDate.value,
   paymentDateEditorOpen: paymentDateEditorOpen.value,
+  paymentMethodEditorOpen: paymentMethodEditorOpen.value,
   pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
   debts: processedDebts.value.map(debt => ({
     key: paymentDebtKey(debt),
@@ -323,6 +411,7 @@ const writePaymentDraft = (draft) => {
     paymentDate.value = String(draft.paymentDate)
   }
   paymentDateEditorOpen.value = Boolean(draft.paymentDateEditorOpen || paymentDate.value !== localDateKey())
+  paymentMethodEditorOpen.value = Boolean(draft.paymentMethodEditorOpen)
   pagoRealizadoEnOtroPlantel.value = Boolean(draft.pagoRealizadoEnOtroPlantel)
   const restoredDebts = new Map((Array.isArray(draft.debts) ? draft.debts : []).map(debt => [debt.key, debt]))
 
