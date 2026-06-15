@@ -444,6 +444,7 @@ const selectCiclo = (value) => {
 const adminPhoto = ref(null)
 const adminName = ref(useCookie('auth_name').value || 'Usuario')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
+const hasControlEscolarCookie = useCookie('auth_has_control_escolar')
 const hasFinancialAccessCookie = useCookie('auth_has_financial_access')
 const activePlantel = ref(useCookie('auth_active_plantel').value || 'PT')
 const plantelSelectRef = ref(null)
@@ -455,8 +456,9 @@ const roleTokens = computed(() => String(userRole.value || '').split(',').map(ro
 const hasSuperAdminRole = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
 const isSuperAdmin = computed(() => hasSuperAdminRole.value)
 const hasFinancialAccess = computed(() => isSuperAdmin.value || hasFinancialAccessCookie.value === 'true')
-const isControlEscolarOnly = computed(() => !isSuperAdmin.value && !hasFinancialAccess.value)
-const showControlEscolarNav = computed(() => true)
+const hasControlEscolarAccess = computed(() => isSuperAdmin.value || hasControlEscolarCookie.value === 'true')
+const isControlEscolarOnly = computed(() => hasControlEscolarAccess.value && !hasFinancialAccess.value)
+const showControlEscolarNav = computed(() => hasControlEscolarAccess.value)
 const userPlanteles = computed(() => {
   if (isSuperAdmin.value) return [...PLANTELES_LIST]
 

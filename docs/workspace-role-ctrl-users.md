@@ -6,8 +6,10 @@ The authorization model uses the existing fields only:
 
 - `users.role` determines the available domain.
 - `users.plantel` contains the authorized plantels as a comma-separated list.
-- `ROLE_CTRL` is the safe default and enables Control Escolar.
-- `ROLE_ADMON` enables the Financial domain in every plantel already listed in `users.plantel`.
+- `ROLE_CTRL` enables only Control Escolar.
+- `ROLE_ADMON` enables only the Financial domain in every plantel already listed in `users.plantel`.
+- `ROLE_CTRL,ROLE_ADMON` enables both domains in those plantels.
+- Empty, unknown, or legacy roles normalize to the safe `ROLE_CTRL` default.
 - `superadmin` enables both domains globally.
 
 No second financial-plantel column is used. Changing a user's domain does not replace or duplicate the existing `users.plantel` assignment.
@@ -42,9 +44,9 @@ The delegated admin account must be allowed to use the Admin Directory readonly 
 
 ## Assignment behavior
 
-New users default to `ROLE_CTRL`. A superadministrator can select Financial access from Usuarios; that stores the canonical role pair `ROLE_CTRL,ROLE_ADMON` and keeps the existing comma-separated `users.plantel` value unchanged.
+New users default to `ROLE_CTRL`. A superadministrator can select Control Escolar, Financial, or Both from Usuarios. The application stores exactly `ROLE_CTRL`, `ROLE_ADMON`, or `ROLE_CTRL,ROLE_ADMON` and keeps the existing comma-separated `users.plantel` value unchanged.
 
-Financial access is strict: only an explicit `ROLE_ADMON` token grants the Financial domain. Empty, unknown, or legacy roles remain in Control Escolar. Saving from Usuarios normalizes the selected user to either `ROLE_CTRL` or `ROLE_CTRL,ROLE_ADMON`.
+Each domain is strict and independent: `ROLE_CTRL` is required for Control Escolar and `ROLE_ADMON` is required for Financial access. One role never implies the other. Empty, unknown, or legacy roles remain in the safe Control Escolar domain.
 
 Authorization is re-read from the centralized `users` table on protected requests. A non-superadmin account without a valid plantel in `users.plantel` is denied instead of receiving an implicit fallback plantel.
 

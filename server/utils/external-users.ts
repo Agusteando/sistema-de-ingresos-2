@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto'
 import bcrypt from 'bcryptjs'
+import type { PoolConnection } from 'mysql2/promise'
 import { PLANTELES_LIST } from '../../utils/constants'
-import { controlEscolarCentralQuery } from './control-escolar-central'
+import { controlEscolarCentralQuery, withControlEscolarCentralConnection } from './control-escolar-central'
 import { buildWorkspacePhotoUrl, isCasitaWorkspaceEmail, WORKSPACE_DOMAIN } from './google-workspace-directory'
 import { CONTROL_ESCOLAR_ROLE, FINANCIAL_ADMIN_ROLE, normalizePlantel } from './auth-session'
 
@@ -13,7 +15,7 @@ type ExternalUserInput = {
   email?: string
   plantel?: string[] | string
   role?: string
-  accessMode?: 'admin' | 'control' | 'admin_control' | string
+  accessMode?: 'admin' | 'control' | 'financial' | 'both' | 'admin_control' | string
   avatar?: string | null
   picture?: string | null
   ingresosBlocked?: boolean | number | string | null
@@ -63,21 +65,28 @@ const hasControlRoleValue = (value: unknown) => hasRole(splitRoleTokens(value), 
 const hasSuperAdminRoleValue = (value: unknown) => splitRoleTokens(value).some((role) => SUPERADMIN_ROLES.has(normalizedRole(role)))
 const hasFinancialAdminRoleValue = (value: unknown) => hasRole(splitRoleTokens(value), FINANCIAL_ADMIN_ROLE)
 
+const normalizedApplicationRoles = (value: unknown) => {
+  if (hasSuperAdminRoleValue(value)) return ['superadmin']
+  const roles: string[] = []
+  if (hasControlRoleValue(value)) roles.push(CONTROL_ESCOLAR_ROLE)
+  if (hasFinancialAdminRoleValue(value)) roles.push(FINANCIAL_ADMIN_ROLE)
+  return roles.length ? roles : [DEFAULT_EXTERNAL_ROLE]
+}
+
+const serializeApplicationRoles = (value: unknown) => normalizedApplicationRoles(value).join(',')
+
 const resolveRoleForWrite = (body: ExternalUserInput, currentRole?: string | null) => {
   if (isHardCodedSuperAdminEmail(body.email)) return 'superadmin'
 
   const accessMode = normalizeText(body.accessMode, 40)
   if (accessMode === 'superadmin') return 'superadmin'
-  if (accessMode === 'financial' || accessMode === 'admin' || accessMode === 'admin_control') {
+  if (accessMode === 'both' || accessMode === 'admin_control') {
     return `${CONTROL_ESCOLAR_ROLE},${FINANCIAL_ADMIN_ROLE}`
   }
+  if (accessMode === 'financial' || accessMode === 'admin') return FINANCIAL_ADMIN_ROLE
   if (accessMode === 'control') return CONTROL_ESCOLAR_ROLE
 
-  const sourceRole = body.role || currentRole || DEFAULT_EXTERNAL_ROLE
-  if (hasSuperAdminRoleValue(sourceRole)) return 'superadmin'
-  return hasFinancialAdminRoleValue(sourceRole)
-    ? `${CONTROL_ESCOLAR_ROLE},${FINANCIAL_ADMIN_ROLE}`
-    : CONTROL_ESCOLAR_ROLE
+  return serializeApplicationRoles(body.role || currentRole || DEFAULT_EXTERNAL_ROLE)
 }
 
 const assertWorkspaceEmail = (email: unknown) => {
@@ -101,6 +110,43 @@ const plantelesValue = (value: unknown) => {
     .map(normalizePlantel)
     .filter((plantel) => PLANTELES_LIST.includes(plantel))
   return Array.from(new Set(planteles)).join(',')
+}
+
+type SqlExecutor = <T>(sql: string, params?: any[]) => Promise<T>
+
+const centralExecutor: SqlExecutor = async <T>(sql: string, params?: any[]) =>
+  await controlEscolarCentralQuery<T>(sql, params)
+
+const connectionExecutor = (connection: PoolConnection): SqlExecutor => async <T>(sql: string, params?: any[]) => {
+  const [rows] = await connection.query(sql, params as never)
+  return rows as T
+}
+
+const externalUserLockName = (email: string) => `aurora-user-${createHash('sha256').update(email).digest('hex').slice(0, 40)}`
+
+const withExternalUserEmailLocks = async <T>(emails: unknown[], callback: (query: SqlExecutor) => Promise<T>) => {
+  const normalizedEmails = Array.from(new Set(emails.map(normalizeEmail).filter(Boolean))).sort()
+  return await withControlEscolarCentralConnection(async (connection) => {
+    const query = connectionExecutor(connection)
+    const acquired: string[] = []
+    try {
+      for (const email of normalizedEmails) {
+        const lockName = externalUserLockName(email)
+        const rows = await query<Array<{ acquired: number | string | null }>>('SELECT GET_LOCK(?, 10) AS acquired', [lockName])
+        if (Number(rows?.[0]?.acquired) !== 1) {
+          throw createError({ statusCode: 503, message: 'No se pudo asegurar la actualización única del usuario.' })
+        }
+        acquired.push(lockName)
+      }
+      return await callback(query)
+    } finally {
+      for (const lockName of acquired.reverse()) {
+        try {
+          await query('SELECT RELEASE_LOCK(?)', [lockName])
+        } catch {}
+      }
+    }
+  })
 }
 
 let externalUsersReady: { ok: boolean; columns: Set<string>; loadedAt: number; error?: string } | null = null
@@ -237,39 +283,24 @@ const normalizeUserRow = (row: any) => {
   }
 }
 
-const betterDisplayRow = (current: any, candidate: any) => {
-  if (!current) return candidate
-  const currentHasControl = hasControlRoleValue(current.role)
-  const candidateHasControl = hasControlRoleValue(candidate.role)
-  if (candidateHasControl && !currentHasControl) return candidate
-  if (candidate.ingresos_blocked && !current.ingresos_blocked) return candidate
-  if (dateMs(candidate.last_login_at) > dateMs(current.last_login_at)) return candidate
-  if (!current.displayName && candidate.displayName) return candidate
-  if ((Number(candidate.id) || 0) > (Number(current.id) || 0) && dateMs(candidate.last_login_at) === dateMs(current.last_login_at)) return candidate
-  return current
+const rawUserSortValue = (row: any) => {
+  const id = Number(row?.id)
+  if (Number.isFinite(id) && id > 0) return id
+  const created = dateMs(row?.created_at)
+  return created || Number.MAX_SAFE_INTEGER
 }
 
-const mergeRowsForEmail = (rows: any[]) => {
-  if (!rows.length) return null
-  const normalizedRows = rows.map(normalizeUserRow).filter((row) => isCasitaWorkspaceEmail(row.email))
-  if (!normalizedRows.length) return null
-  const selected = normalizedRows.reduce((current, candidate) => betterDisplayRow(current, candidate), null as any)
-  const blocked = normalizedRows.some((row) => row.ingresosBlocked)
-  const lastLogin = normalizedRows.reduce((max, row) => dateMs(row.last_login_at) > dateMs(max) ? row.last_login_at : max, selected.last_login_at || null)
-  const mergedRoles = Array.from(new Set(normalizedRows.flatMap((row) => splitRoleTokens(row.role))))
-  const mergedPlanteles = plantelesValue(normalizedRows.flatMap((row) => normalizedPlantelList(row.plantel)))
-  const role = mergedRoles.length ? mergedRoles.join(',') : selected.role
+const canonicalRawUserRow = (rows: any[]) => [...rows]
+  .filter((row) => isCasitaWorkspaceEmail(normalizeEmail(row?.email)))
+  .sort((a, b) => rawUserSortValue(a) - rawUserSortValue(b))[0] || null
 
+const mergeRowsForEmail = (rows: any[]) => {
+  const canonical = canonicalRawUserRow(rows)
+  if (!canonical) return null
   return {
-    ...selected,
-    role,
-    plantel: mergedPlanteles || selected.plantel,
-    planteles: mergedPlanteles || selected.planteles,
-    last_login_at: lastLogin,
-    lastLoginAt: lastLogin,
-    ingresos_blocked: blocked ? 1 : 0,
-    ingresosBlocked: blocked,
-    duplicateCount: normalizedRows.length
+    ...normalizeUserRow(canonical),
+    role: serializeApplicationRoles(canonical.role),
+    duplicateCount: rows.length
   }
 }
 
@@ -278,12 +309,17 @@ export const externalUserAccessMode = (userOrRole: unknown) => {
   const user = userOrRole && typeof userOrRole === 'object' ? userOrRole as any : null
   const role = user ? user.role : userOrRole
   if (hasSuperAdminRoleValue(role)) return 'superadmin'
-  return hasFinancialAdminRoleValue(role) ? 'financial' : 'control'
+  const control = hasControlRoleValue(role)
+  const financial = hasFinancialAdminRoleValue(role)
+  if (control && financial) return 'both'
+  if (financial) return 'financial'
+  return 'control'
 }
 
 const accessLabelForMode = (mode: string) => {
   if (mode === 'superadmin') return 'Superadmin'
-  if (mode === 'financial') return 'Control Escolar + Financiero'
+  if (mode === 'both') return 'Control Escolar + Financiero'
+  if (mode === 'financial') return 'Financiero'
   return 'Control Escolar'
 }
 
@@ -365,13 +401,13 @@ const sortExternalUsers = (rows: any[], sortValue: unknown) => {
 
 const buildExternalUsersFacets = (rows: any[]) => {
   const byPlantel = new Map<string, any>()
-  const emptyPlantel = { plantel: '__sin_plantel__', label: 'Sin plantel', total: 0, control: 0, financial: 0, superadmin: 0, blocked: 0, protected: 0 }
-  const access = { control: 0, financial: 0, superadmin: 0 }
+  const emptyPlantel = { plantel: '__sin_plantel__', label: 'Sin plantel', total: 0, control: 0, financial: 0, both: 0, superadmin: 0, blocked: 0, protected: 0 }
+  const access = { control: 0, financial: 0, both: 0, superadmin: 0 }
   const status = { active: 0, blocked: 0, protected: 0 }
   const activity = { today: 0, week: 0, month: 0, older: 0, never: 0 }
 
   for (const user of rows) {
-    const mode = externalUserAccessMode(user) as 'control' | 'financial' | 'superadmin'
+    const mode = externalUserAccessMode(user) as 'control' | 'financial' | 'both' | 'superadmin'
     access[mode]++
     status[userStatusMode(user) as 'active' | 'blocked' | 'protected']++
     activity[userActivityMode(user) as 'today' | 'week' | 'month' | 'older' | 'never']++
@@ -384,7 +420,7 @@ const buildExternalUsersFacets = (rows: any[]) => {
       if (userIsProtected(user)) emptyPlantel.protected++
     }
     for (const plantel of planteles) {
-      const item = byPlantel.get(plantel) || { plantel, label: plantel, total: 0, control: 0, financial: 0, superadmin: 0, blocked: 0, protected: 0 }
+      const item = byPlantel.get(plantel) || { plantel, label: plantel, total: 0, control: 0, financial: 0, both: 0, superadmin: 0, blocked: 0, protected: 0 }
       item.total++
       item[mode]++
       if (userIsBlocked(user)) item.blocked++
@@ -393,7 +429,7 @@ const buildExternalUsersFacets = (rows: any[]) => {
     }
   }
 
-  const planteles = PLANTELES_LIST.map((plantel) => byPlantel.get(plantel) || { plantel, label: plantel, total: 0, control: 0, financial: 0, superadmin: 0, blocked: 0, protected: 0 })
+  const planteles = PLANTELES_LIST.map((plantel) => byPlantel.get(plantel) || { plantel, label: plantel, total: 0, control: 0, financial: 0, both: 0, superadmin: 0, blocked: 0, protected: 0 })
   if (emptyPlantel.total) planteles.push(emptyPlantel)
 
   return {
@@ -453,32 +489,98 @@ export const queryExternalUsers = async (query: any = {}) => {
 const workspaceDomainWhere = () => `LOWER(TRIM(COALESCE(${escapeIdentifier('email')}, ''))) LIKE ?`
 const workspaceDomainParam = () => `%@${WORKSPACE_DOMAIN}`
 
+const loadRawUsersByEmail = async (email: string, query: SqlExecutor = centralExecutor) => {
+  const normalizedEmail = normalizeEmail(email)
+  if (!normalizedEmail || !isCasitaWorkspaceEmail(normalizedEmail)) return []
+
+  const columns = await selectColumns()
+  if (!columns.includes('email')) return []
+
+  return await query<any[]>(`
+    SELECT ${columns.map(escapeIdentifier).join(', ')}
+    FROM ${escapeIdentifier(TABLE)}
+    WHERE LOWER(TRIM(${escapeIdentifier('email')})) = ? AND ${workspaceDomainWhere()}
+    ORDER BY ${escapeIdentifier('id')} ASC
+  `, [normalizedEmail, workspaceDomainParam()])
+}
+
+const loadRawUserById = async (id: unknown, query: SqlExecutor = centralExecutor) => {
+  const columns = await selectColumns()
+  const rows = await query<any[]>(`
+    SELECT ${columns.map(escapeIdentifier).join(', ')}
+    FROM ${escapeIdentifier(TABLE)}
+    WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}
+    LIMIT 1
+  `, [id, workspaceDomainParam()])
+  return rows[0] || null
+}
+
+const consolidateExternalUserRows = async (email: string, rows: any[], query: SqlExecutor) => {
+  const canonical = canonicalRawUserRow(rows)
+  if (!canonical) return null
+  const duplicateIds = rows
+    .filter((row) => String(row.id) !== String(canonical.id))
+    .map((row) => Number(row.id))
+    .filter((id) => Number.isFinite(id) && id > 0)
+
+  const canonicalUpdates: Record<string, any> = {}
+  if (String(canonical.email || '') !== email) canonicalUpdates.email = email
+
+  // A duplicate marked as blocked must never be discarded in a way that re-enables access.
+  // Roles and plantels intentionally remain those of the oldest canonical row; they are not
+  // merged because combining permissions from stale duplicates can grant unintended access.
+  if (rows.some((row) => normalizeBlocked(row.ingresos_blocked)) && !normalizeBlocked(canonical.ingresos_blocked)) {
+    canonicalUpdates.ingresos_blocked = 1
+  }
+
+  const updateEntries = Object.entries(canonicalUpdates)
+  if (updateEntries.length) {
+    await query(
+      `UPDATE ${escapeIdentifier(TABLE)} SET ${updateEntries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
+      [...updateEntries.map(([, value]) => value), canonical.id, workspaceDomainParam()]
+    )
+    Object.assign(canonical, canonicalUpdates)
+  }
+
+  if (duplicateIds.length) {
+    const placeholders = duplicateIds.map(() => '?').join(', ')
+    await query(
+      `DELETE FROM ${escapeIdentifier(TABLE)} WHERE ${escapeIdentifier('id')} IN (${placeholders}) AND ${workspaceDomainWhere()}`,
+      [...duplicateIds, workspaceDomainParam()]
+    )
+  }
+
+  return canonical
+}
+
+export const findExternalUserByEmail = async (email: string) => {
+  const normalizedEmail = normalizeEmail(email)
+  const rows = await loadRawUsersByEmail(normalizedEmail)
+  if (rows.length <= 1) return mergeRowsForEmail(rows)
+
+  return await withExternalUserEmailLocks([normalizedEmail], async (query) => {
+    const lockedRows = await loadRawUsersByEmail(normalizedEmail, query)
+    const canonical = await consolidateExternalUserRows(normalizedEmail, lockedRows, query)
+    return canonical ? mergeRowsForEmail([canonical]) : null
+  })
+}
+
 export const listExternalUsers = async (searchValue: unknown = '') => {
   const columns = await selectColumns()
   const search = normalizeText(searchValue, 120).toLowerCase()
-  const where = [workspaceDomainWhere()]
-  const params: any[] = [workspaceDomainParam()]
-
-  if (search) {
-    const searchable = ['displayName', 'username', 'email', 'planteles', 'plantel', 'campus', 'empresa', 'role']
-      .filter((column) => columns.includes(column))
-    if (searchable.length) {
-      where.push(`(${searchable.map((column) => `LOWER(COALESCE(${escapeIdentifier(column)}, '')) LIKE ?`).join(' OR ')})`)
-      params.push(...searchable.map(() => `%${search}%`))
-    }
-  }
-
   const orderParts = []
   if (columns.includes('last_login_at')) orderParts.push(`${escapeIdentifier('last_login_at')} IS NULL ASC`, `${escapeIdentifier('last_login_at')} DESC`)
   if (columns.includes('displayName')) orderParts.push(`${escapeIdentifier('displayName')} ASC`)
-  orderParts.push(`${escapeIdentifier('id')} DESC`)
+  orderParts.push(`${escapeIdentifier('id')} ASC`)
 
+  // Resolve uniqueness before applying search. Filtering raw duplicate rows first could
+  // expose a stale role or plantel from a non-canonical duplicate.
   const rows = await controlEscolarCentralQuery<any[]>(`
     SELECT ${columns.map(escapeIdentifier).join(', ')}
     FROM ${escapeIdentifier(TABLE)}
-    WHERE ${where.join(' AND ')}
+    WHERE ${workspaceDomainWhere()}
     ORDER BY ${orderParts.join(', ')}
-  `, params)
+  `, [workspaceDomainParam()])
 
   const byEmail = new Map<string, any[]>()
   for (const row of rows) {
@@ -489,41 +591,28 @@ export const listExternalUsers = async (searchValue: unknown = '') => {
     byEmail.set(email, bucket)
   }
 
-  return Array.from(byEmail.values())
-    .map((emailRows) => mergeRowsForEmail(emailRows))
-    .filter(Boolean)
+  const users: any[] = []
+  for (const [email, emailRows] of byEmail.entries()) {
+    const user = emailRows.length === 1
+      ? mergeRowsForEmail(emailRows)
+      : await findExternalUserByEmail(email)
+    if (user) users.push(user)
+  }
+
+  const filtered = search
+    ? users.filter((user) => [
+        user.displayName,
+        user.username,
+        user.email,
+        user.plantel,
+        user.campus,
+        user.empresa,
+        user.role
+      ].some((value) => String(value || '').toLowerCase().includes(search)))
+    : users
+
+  return filtered
     .sort((a, b) => dateMs(b.last_login_at) - dateMs(a.last_login_at) || String(a.displayName || a.email).localeCompare(String(b.displayName || b.email)))
-}
-
-const loadRawUsersByEmail = async (email: string) => {
-  const normalizedEmail = normalizeEmail(email)
-  if (!normalizedEmail || !isCasitaWorkspaceEmail(normalizedEmail)) return []
-
-  const columns = await selectColumns()
-  if (!columns.includes('email')) return []
-
-  return await controlEscolarCentralQuery<any[]>(`
-    SELECT ${columns.map(escapeIdentifier).join(', ')}
-    FROM ${escapeIdentifier(TABLE)}
-    WHERE LOWER(TRIM(${escapeIdentifier('email')})) = ? AND ${workspaceDomainWhere()}
-    ORDER BY ${escapeIdentifier('id')} DESC
-  `, [normalizedEmail, workspaceDomainParam()])
-}
-
-export const findExternalUserByEmail = async (email: string) => {
-  const rows = await loadRawUsersByEmail(email)
-  return mergeRowsForEmail(rows)
-}
-
-const loadRawUserById = async (id: unknown) => {
-  const columns = await selectColumns()
-  const rows = await controlEscolarCentralQuery<any[]>(`
-    SELECT ${columns.map(escapeIdentifier).join(', ')}
-    FROM ${escapeIdentifier(TABLE)}
-    WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}
-    LIMIT 1
-  `, [id, workspaceDomainParam()])
-  return rows[0] || null
 }
 
 const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean, current: any = null) => {
@@ -571,62 +660,80 @@ const responseUserByEmail = async (email: unknown) => {
 
 export const createExternalUser = async (body: ExternalUserInput) => {
   const email = assertWorkspaceEmail(body.email)
-  const existing = await findExternalUserByEmail(email)
-  if (existing?.id) return updateExternalUser(existing.id, body)
 
-  const entries = await buildUserWrite(body, true)
-  if (!entries.some(([column]) => column === 'email')) {
-    throw createError({ statusCode: 400, message: 'Correo requerido.' })
-  }
+  return await withExternalUserEmailLocks([email], async (query) => {
+    const existingRows = await loadRawUsersByEmail(email, query)
+    if (existingRows.length) {
+      await consolidateExternalUserRows(email, existingRows, query)
+      throw createError({ statusCode: 409, message: 'Ya existe un usuario con este correo.' })
+    }
 
-  const columns = entries.map(([column]) => column)
-  const values = entries.map(([, value]) => value)
-  await controlEscolarCentralQuery(
-    `INSERT INTO ${escapeIdentifier(TABLE)} (${columns.map(escapeIdentifier).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
-    values
-  )
-  const user = await responseUserByEmail(email)
-  return { success: true, user, rows: user ? [user] : [] }
+    const entries = await buildUserWrite({ ...body, email }, true)
+    if (!entries.some(([column]) => column === 'email')) {
+      throw createError({ statusCode: 400, message: 'Correo requerido.' })
+    }
+
+    const columns = entries.map(([column]) => column)
+    const values = entries.map(([, value]) => value)
+    try {
+      await query(
+        `INSERT INTO ${escapeIdentifier(TABLE)} (${columns.map(escapeIdentifier).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+        values
+      )
+    } catch (error: any) {
+      if (Number(error?.errno) === 1062 || String(error?.code || '') === 'ER_DUP_ENTRY') {
+        throw createError({ statusCode: 409, message: 'Ya existe un usuario con este correo.' })
+      }
+      throw error
+    }
+
+    const rows = await loadRawUsersByEmail(email, query)
+    const user = mergeRowsForEmail(rows)
+    const enriched = user ? enrichAccessMetadata(user) : null
+    return { success: true, user: enriched, rows: enriched ? [enriched] : [] }
+  })
 }
 
 export const updateExternalUser = async (id: unknown, body: ExternalUserInput) => {
-  const current = await loadRawUserById(id)
-  if (!current) {
+  const initial = await loadRawUserById(id)
+  if (!initial) {
     throw createError({ statusCode: 404, message: 'Usuario no encontrado.' })
   }
 
-  const entries = (await buildUserWrite({ ...body, email: body.email || current.email }, Boolean(body.password && String(body.password).trim()), current))
-    .filter(([column]) => column !== 'password' || Boolean(body.password && String(body.password).trim()))
+  const sourceEmail = assertWorkspaceEmail(initial.email)
+  const targetEmail = assertWorkspaceEmail(body.email || initial.email)
 
-  if (!entries.length) {
-    throw createError({ statusCode: 400, message: 'No hay cambios para guardar.' })
-  }
+  return await withExternalUserEmailLocks([sourceEmail, targetEmail], async (query) => {
+    const sourceRows = await loadRawUsersByEmail(sourceEmail, query)
+    const canonical = await consolidateExternalUserRows(sourceEmail, sourceRows, query)
+    if (!canonical) {
+      throw createError({ statusCode: 404, message: 'Usuario no encontrado.' })
+    }
 
-  const authorizationColumns = new Set([
-    'plantel',
-    'role',
-    'ingresos_blocked'
-  ])
-  const identityEntries = entries.filter(([column]) => !authorizationColumns.has(column))
-  const authorizationEntries = entries.filter(([column]) => authorizationColumns.has(column))
+    if (targetEmail !== sourceEmail) {
+      const targetRows = await loadRawUsersByEmail(targetEmail, query)
+      if (targetRows.some((row) => String(row.id) !== String(canonical.id))) {
+        throw createError({ statusCode: 409, message: 'Ya existe un usuario con este correo.' })
+      }
+    }
 
-  if (identityEntries.length) {
-    await controlEscolarCentralQuery(
-      `UPDATE ${escapeIdentifier(TABLE)} SET ${identityEntries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
-      [...identityEntries.map(([, value]) => value), id, workspaceDomainParam()]
+    const entries = (await buildUserWrite({ ...body, email: targetEmail }, Boolean(body.password && String(body.password).trim()), canonical))
+      .filter(([column]) => column !== 'password' || Boolean(body.password && String(body.password).trim()))
+
+    if (!entries.length) {
+      throw createError({ statusCode: 400, message: 'No hay cambios para guardar.' })
+    }
+
+    await query(
+      `UPDATE ${escapeIdentifier(TABLE)} SET ${entries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
+      [...entries.map(([, value]) => value), canonical.id, workspaceDomainParam()]
     )
-  }
 
-  const effectiveEmail = normalizeEmail(body.email || current.email)
-  if (authorizationEntries.length) {
-    await controlEscolarCentralQuery(
-      `UPDATE ${escapeIdentifier(TABLE)} SET ${authorizationEntries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE LOWER(TRIM(${escapeIdentifier('email')})) = ? AND ${workspaceDomainWhere()}`,
-      [...authorizationEntries.map(([, value]) => value), effectiveEmail, workspaceDomainParam()]
-    )
-  }
-
-  const user = await responseUserByEmail(effectiveEmail)
-  return { success: true, user, rows: user ? [user] : [] }
+    const rows = await loadRawUsersByEmail(targetEmail, query)
+    const user = mergeRowsForEmail(rows)
+    const enriched = user ? enrichAccessMetadata(user) : null
+    return { success: true, user: enriched, rows: enriched ? [enriched] : [] }
+  })
 }
 
 export const bulkUpdateExternalUsers = async (body: ExternalUserInput & {
@@ -657,13 +764,22 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & {
   }
 
   const selectedRows: any[] = []
-  for (const email of emails) selectedRows.push(...await loadRawUsersByEmail(email))
+  for (const email of emails) {
+    const user = await findExternalUserByEmail(email)
+    if (!user?.id) continue
+    const row = await loadRawUserById(user.id)
+    if (row) selectedRows.push(row)
+  }
   for (const id of ids) {
-    const row = await loadRawUserById(id)
+    const raw = await loadRawUserById(id)
+    if (!raw?.email) continue
+    const user = await findExternalUserByEmail(raw.email)
+    if (!user?.id) continue
+    const row = await loadRawUserById(user.id)
     if (row) selectedRows.push(row)
   }
 
-  const uniqueRows = Array.from(new Map(selectedRows.map((row) => [String(row.id), row])).values())
+  const uniqueRows = Array.from(new Map(selectedRows.map((row) => [normalizeEmail(row.email), row])).values())
   let updated = 0
   const skipped: Array<{ email: string; reason: string }> = []
   const failed: Array<{ email: string; reason: string }> = []
@@ -867,56 +983,72 @@ export const touchExternalUserLogin = async ({ email, name, picture, requestedPl
   const normalizedEmail = assertWorkspaceEmail(email)
   const columns = await getExternalUsersColumns()
   const hardCodedSuperAdmin = isHardCodedSuperAdminEmail(normalizedEmail)
-  let rawRows = await loadRawUsersByEmail(normalizedEmail)
 
-  if (!rawRows.length) {
-    const displayName = normalizeText(name || normalizedEmail)
-    await createExternalUser({
-      email: normalizedEmail,
-      username: normalizedEmail,
-      displayName,
-      picture: picture || buildWorkspacePhotoUrl(normalizedEmail, displayName),
-      avatar: picture || buildWorkspacePhotoUrl(normalizedEmail, displayName),
-      plantel: hardCodedSuperAdmin ? ALL_PLANTELES_VALUE : (normalizePlantel(requestedPlantel) || PLANTELES_LIST[0]),
-      role: hardCodedSuperAdmin ? 'superadmin' : DEFAULT_EXTERNAL_ROLE,
-      ingresosBlocked: false
-    })
-    rawRows = await loadRawUsersByEmail(normalizedEmail)
-  }
+  return await withExternalUserEmailLocks([normalizedEmail], async (query) => {
+    let rawRows = await loadRawUsersByEmail(normalizedEmail, query)
+    let canonical = await consolidateExternalUserRows(normalizedEmail, rawRows, query)
 
-  const merged = mergeRowsForEmail(rawRows)
-  if (!merged) return null
-  if (merged.ingresosBlocked && !hardCodedSuperAdmin) return merged
-
-  const updates: Record<string, any> = {}
-  if (columns.has('last_login_at')) updates.last_login_at = new Date()
-  if (columns.has('displayName') && name) updates.displayName = normalizeText(name)
-  if (columns.has('username')) updates.username = normalizedEmail
-  if (picture) {
-    if (columns.has('picture')) updates.picture = picture
-    if (columns.has('avatar')) updates.avatar = picture
-  }
-  if (hardCodedSuperAdmin) {
-    if (columns.has('role')) updates.role = 'superadmin'
-    if (columns.has('plantel')) updates.plantel = ALL_PLANTELES_VALUE
-    if (columns.has('ingresos_blocked')) updates.ingresos_blocked = 0
-  }
-
-  const entries = Object.entries(updates).filter(([column]) => columns.has(column))
-  if (entries.length) {
-    try {
-      await controlEscolarCentralQuery(
-        `UPDATE ${escapeIdentifier(TABLE)} SET ${entries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE LOWER(TRIM(${escapeIdentifier('email')})) = ? AND ${workspaceDomainWhere()}`,
-        [...entries.map(([, value]) => value), normalizedEmail, workspaceDomainParam()]
-      )
-      return await findExternalUserByEmail(normalizedEmail)
-    } catch (error: any) {
-      console.warn('[Auth Login] External users login touch skipped after role read', error?.message || error)
-      return merged
+    if (!canonical) {
+      const displayName = normalizeText(name || normalizedEmail)
+      const entries = await buildUserWrite({
+        email: normalizedEmail,
+        username: normalizedEmail,
+        displayName,
+        picture: picture || buildWorkspacePhotoUrl(normalizedEmail, displayName),
+        avatar: picture || buildWorkspacePhotoUrl(normalizedEmail, displayName),
+        plantel: hardCodedSuperAdmin ? ALL_PLANTELES_VALUE : (normalizePlantel(requestedPlantel) || PLANTELES_LIST[0]),
+        role: hardCodedSuperAdmin ? 'superadmin' : DEFAULT_EXTERNAL_ROLE,
+        ingresosBlocked: false
+      }, true)
+      const insertColumns = entries.map(([column]) => column)
+      const insertValues = entries.map(([, value]) => value)
+      try {
+        await query(
+          `INSERT INTO ${escapeIdentifier(TABLE)} (${insertColumns.map(escapeIdentifier).join(', ')}) VALUES (${insertColumns.map(() => '?').join(', ')})`,
+          insertValues
+        )
+      } catch (error: any) {
+        if (Number(error?.errno) !== 1062 && String(error?.code || '') !== 'ER_DUP_ENTRY') throw error
+      }
+      rawRows = await loadRawUsersByEmail(normalizedEmail, query)
+      canonical = await consolidateExternalUserRows(normalizedEmail, rawRows, query)
     }
-  }
 
-  return merged
+    if (!canonical) return null
+    const merged = mergeRowsForEmail([canonical])
+    if (!merged) return null
+    if (merged.ingresosBlocked && !hardCodedSuperAdmin) return merged
+
+    const updates: Record<string, any> = {}
+    if (columns.has('last_login_at')) updates.last_login_at = new Date()
+    if (columns.has('displayName') && name) updates.displayName = normalizeText(name)
+    if (columns.has('username')) updates.username = normalizedEmail
+    if (picture) {
+      if (columns.has('picture')) updates.picture = picture
+      if (columns.has('avatar')) updates.avatar = picture
+    }
+    if (hardCodedSuperAdmin) {
+      if (columns.has('role')) updates.role = 'superadmin'
+      if (columns.has('plantel')) updates.plantel = ALL_PLANTELES_VALUE
+      if (columns.has('ingresos_blocked')) updates.ingresos_blocked = 0
+    }
+
+    const entries = Object.entries(updates).filter(([column]) => columns.has(column))
+    if (entries.length) {
+      try {
+        await query(
+          `UPDATE ${escapeIdentifier(TABLE)} SET ${entries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
+          [...entries.map(([, value]) => value), canonical.id, workspaceDomainParam()]
+        )
+      } catch (error: any) {
+        console.warn('[Auth Login] External users login touch skipped after role read', error?.message || error)
+        return merged
+      }
+    }
+
+    const refreshed = await loadRawUserById(canonical.id, query)
+    return refreshed ? mergeRowsForEmail([refreshed]) : merged
+  })
 }
 
 export const deleteExternalUser = async (id: unknown) => {

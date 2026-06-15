@@ -41,8 +41,14 @@ export default defineEventHandler(async (event) => {
     /^\/api\/students\/[^/]+\/matricula-overlay$/.test(url.pathname) ||
     /^\/api\/students\/[^/]+\/operator-info$/.test(url.pathname)
 
+  if (isControlEscolarEndpoint) {
+    if (!user.hasControlEscolarRole) {
+      throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
+    }
+    return
+  }
+
   if (
-    isControlEscolarEndpoint ||
     isDirectoryEndpoint ||
     isExternalUsersEndpoint ||
     isProfileEndpoint ||

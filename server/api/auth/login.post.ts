@@ -1,6 +1,6 @@
 import { OAuth2Client } from 'google-auth-library'
 import { PLANTELES_LIST } from '../../../utils/constants'
-import { CONTROL_ESCOLAR_ROLE, hasFinancialAccessForPlantel, isSuperAdminRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
+import { CONTROL_ESCOLAR_ROLE, hasControlEscolarRole, hasFinancialAccessForPlantel, isSuperAdminRole, normalizeAuthRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
 import { touchExternalUserLogin } from '../../utils/external-users'
 import { isCasitaWorkspaceEmail } from '../../utils/google-workspace-directory'
 import { logControlEscolarAuditEvent } from '../../utils/control-escolar-audit'
@@ -52,7 +52,7 @@ const resolveAllowedPlanteles = (user: DbUser, isSuperAdmin: boolean) => {
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const config = useRuntimeConfig()
-  const requestedPlantel = getRequestedPlantel(event, body) || PLANTELES_LIST[0]
+  const requestedPlantel = getRequestedPlantel(event, body) || PLANTELES_LIST[0] || ''
 
   if (requestedPlantel && !PLANTELES_LIST.includes(requestedPlantel)) {
     throw createError({ statusCode: 400, message: 'Plantel inválido.' })
@@ -114,21 +114,25 @@ export default defineEventHandler(async (event) => {
         }
 
     const resolvedUser = centralAuthUser
-    const role = String(resolvedUser.role || CONTROL_ESCOLAR_ROLE).trim() || CONTROL_ESCOLAR_ROLE
+    const role = normalizeAuthRole(resolvedUser.role || CONTROL_ESCOLAR_ROLE)
     const superAdmin = isSuperAdminRole(role)
-    const controlEscolar = true
+    const controlEscolar = superAdmin || hasControlEscolarRole(role)
     const allowedPlanteles = resolveAllowedPlanteles(resolvedUser, superAdmin)
     if (!superAdmin && !allowedPlanteles.length) {
       throw createError({ statusCode: 403, message: 'Tu cuenta no tiene un plantel asignado.' })
     }
+    const fallbackPlantel = allowedPlanteles[0] || PLANTELES_LIST[0] || ''
+    if (!fallbackPlantel) {
+      throw createError({ statusCode: 500, message: 'No hay planteles configurados.' })
+    }
     const requestedAllowed = allowedPlanteles.includes(requestedPlantel)
-    const activePlantel = superAdmin
-      ? (requestedPlantel || allowedPlanteles[0])
-      : (requestedAllowed ? requestedPlantel : allowedPlanteles[0])
-    const homePlantel = activePlantel && activePlantel !== 'GLOBAL' ? activePlantel : allowedPlanteles[0]
+    const activePlantel: string = superAdmin
+      ? (requestedPlantel || fallbackPlantel)
+      : (requestedAllowed ? requestedPlantel : fallbackPlantel)
+    const homePlantel: string = activePlantel !== 'GLOBAL' ? activePlantel : fallbackPlantel
     const financialPlanteles = allowedPlanteles.filter((plantel) => hasFinancialAccessForPlantel(role, allowedPlanteles, plantel))
     const financialAccess = hasFinancialAccessForPlantel(role, allowedPlanteles, activePlantel)
-    const controlEscolarOnly = !superAdmin && !financialAccess
+    const controlEscolarOnly = controlEscolar && !financialAccess
     const opts = cookieOptions()
 
     setCookie(event, 'auth_email', resolvedUser.email || payload.email, opts)
@@ -139,13 +143,13 @@ export default defineEventHandler(async (event) => {
     setCookie(event, 'auth_home_plantel', homePlantel, opts)
     setCookie(event, 'auth_financial_planteles', financialPlanteles.join(','), opts)
     setCookie(event, 'auth_nav_mode', controlEscolarOnly ? 'control-escolar' : 'financial', opts)
-    setCookie(event, 'auth_has_control_escolar', 'true', opts)
+    setCookie(event, 'auth_has_control_escolar', controlEscolar ? 'true' : 'false', opts)
     setCookie(event, 'auth_has_financial_access', financialAccess ? 'true' : 'false', opts)
     deleteCookie(event, 'auth_is_super_admin', { path: '/' })
-    setCookie(event, 'db_bridge_agent_id', homePlantel || PLANTELES_LIST[0], opts)
+    setCookie(event, 'db_bridge_agent_id', homePlantel, opts)
 
     if (controlEscolar || superAdmin) {
-      const auditPlantel = normalizePlantel(activePlantel && activePlantel !== 'GLOBAL' ? activePlantel : homePlantel || PLANTELES_LIST[0])
+      const auditPlantel = normalizePlantel(activePlantel !== 'GLOBAL' ? activePlantel : homePlantel)
       logControlEscolarAuditEvent({
         eventType: 'control_login',
         plantel: auditPlantel,
@@ -169,7 +173,7 @@ export default defineEventHandler(async (event) => {
     return {
       success: true,
       activePlantel,
-      redirectTo: controlEscolarOnly ? '/control-escolar' : '/'
+      redirectTo: financialAccess ? '/' : '/control-escolar'
     }
   } catch (error: any) {
     console.error('[Auth Login Error]', error)

@@ -75,7 +75,8 @@
           <select v-model="accessFilter">
             <option value="all">Todos</option>
             <option value="control">Control Escolar</option>
-            <option value="financial">Con acceso financiero</option>
+            <option value="financial">Solo Financiero</option>
+            <option value="both">Control Escolar + Financiero</option>
             <option value="superadmin">Superadmin</option>
           </select>
         </label>
@@ -122,11 +123,14 @@
           </span>
         </div>
         <div class="bulk-actions">
-          <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkFinancialUpdate(true)">
-            <LucideShieldCheck :size="15" /> Dar Financiero
+          <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkAccessUpdate('financial')">
+            <LucideShieldCheck :size="15" /> Solo Financiero
           </button>
-          <button type="button" class="bulk-button blue" :disabled="bulkSaving" @click="requestBulkFinancialUpdate(false)">
-            <LucideGraduationCap :size="15" /> Quitar Financiero
+          <button type="button" class="bulk-button blue" :disabled="bulkSaving" @click="requestBulkAccessUpdate('control')">
+            <LucideGraduationCap :size="15" /> Solo Control
+          </button>
+          <button type="button" class="bulk-button purple" :disabled="bulkSaving" @click="requestBulkAccessUpdate('both')">
+            <LucideUsers :size="15" /> Ambos
           </button>
           <button type="button" class="bulk-button purple" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'superadmin' }, 'Asignar superadmin', 'Se actualizará el acceso de los usuarios seleccionados a superadmin.', 'danger')">
             <LucideShield :size="15" /> Superadmin
@@ -232,7 +236,8 @@
                     {{ accessLabel(u) }}
                   </span>
                   <span v-if="accessMode(u) === 'superadmin'" class="muted-pill">Todos los planteles</span>
-                  <span v-else-if="accessMode(u) === 'financial'" class="muted-pill">Finanzas en sus planteles</span>
+                  <span v-else-if="accessMode(u) === 'financial'" class="muted-pill">Solo Finanzas</span>
+                  <span v-else-if="accessMode(u) === 'both'" class="muted-pill">Ambos dominios</span>
                   <span v-else class="muted-pill">Solo Control Escolar</span>
                 </div>
               </td>
@@ -294,7 +299,8 @@
             </div>
             <span v-else class="muted-pill">Sin plantel</span>
             <span v-if="accessMode(u) === 'superadmin'" class="muted-pill">Acceso global</span>
-            <span v-else-if="accessMode(u) === 'financial'" class="muted-pill">Finanzas en sus planteles</span>
+            <span v-else-if="accessMode(u) === 'financial'" class="muted-pill">Solo Finanzas</span>
+            <span v-else-if="accessMode(u) === 'both'" class="muted-pill">Ambos dominios</span>
             <span v-else class="muted-pill">Solo Control Escolar</span>
           </article>
         </div>
@@ -343,10 +349,11 @@
           <component :is="accessIcon(activeUser)" :size="14" />
           {{ accessLabel(activeUser) }}
         </span>
-        <p class="drawer-access-note">Control Escolar es el área predeterminada.</p>
+        <p class="drawer-access-note">Cada dominio requiere su rol explícito.</p>
         <span v-if="accessMode(activeUser) === 'superadmin'" class="muted-pill">Acceso global</span>
-        <span v-else-if="accessMode(activeUser) === 'financial'" class="muted-pill">Finanzas en los planteles asignados</span>
-        <span v-else class="muted-pill">Sin acceso financiero</span>
+        <span v-else-if="accessMode(activeUser) === 'financial'" class="muted-pill">Solo Finanzas en los planteles asignados</span>
+        <span v-else-if="accessMode(activeUser) === 'both'" class="muted-pill">Ambos dominios en los planteles asignados</span>
+        <span v-else class="muted-pill">Solo Control Escolar</span>
         <button type="button" class="drawer-link" @click="openModal(activeUser)">Editar detalles</button>
         <button v-if="!isBlocked(activeUser) && !isProtectedUser(activeUser)" type="button" class="drawer-link danger" @click="requestToggleBlocked(activeUser)">Bloquear acceso</button>
         <button v-else-if="isBlocked(activeUser) && !isProtectedUser(activeUser)" type="button" class="drawer-link" @click="requestToggleBlocked(activeUser)">Reactivar acceso</button>
@@ -468,7 +475,8 @@
                   </label>
                 </div>
 
-                <p v-if="form.accessMode === 'financial'" class="field-help">ROLE_ADMON habilita Finanzas en los planteles seleccionados arriba.</p>
+                <p v-if="form.accessMode === 'financial'" class="field-help">ROLE_ADMON habilita únicamente Finanzas en los planteles seleccionados.</p>
+                <p v-else-if="form.accessMode === 'both'" class="field-help">ROLE_CTRL y ROLE_ADMON habilitan ambos dominios en los planteles seleccionados.</p>
                 <p v-else-if="form.accessMode === 'superadmin'" class="field-help">Superadmin conserva acceso global a ambos dominios.</p>
                 <p v-else class="field-help">Control Escolar es el acceso seguro predeterminado.</p>
               </section>
@@ -623,8 +631,9 @@ let directoryTimer = null
 let undoTimer = null
 
 const accessOptions = [
-  { value: 'control', label: 'Control Escolar', description: 'Área predeterminada para usuarios institucionales.', icon: LucideGraduationCap },
-  { value: 'financial', label: 'Financiero', description: 'ROLE_ADMON en los planteles asignados.', icon: LucideShieldCheck },
+  { value: 'control', label: 'Control Escolar', description: 'Solo ROLE_CTRL.', icon: LucideGraduationCap },
+  { value: 'financial', label: 'Financiero', description: 'Solo ROLE_ADMON.', icon: LucideShieldCheck },
+  { value: 'both', label: 'Ambos', description: 'ROLE_CTRL y ROLE_ADMON.', icon: LucideUsers },
   { value: 'superadmin', label: 'Superadmin', description: 'Acceso total a configuración global.', icon: LucideShield }
 ]
 
@@ -642,6 +651,7 @@ const form = ref(emptyForm())
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase()
 const roleTokens = (role) => String(role || '').split(',').map(entry => entry.trim().toLowerCase()).filter(Boolean)
+const hasControlRole = (role) => roleTokens(role).includes(CONTROL_ROLE.toLowerCase())
 const hasFinancialRole = (role) => roleTokens(role).includes(FINANCIAL_ROLE.toLowerCase())
 const isWorkspaceEmail = (email) => normalizeEmail(email).endsWith(`@${WORKSPACE_DOMAIN}`)
 const isProtectedEmail = (email) => PROTECTED_EMAILS.has(normalizeEmail(email))
@@ -660,11 +670,16 @@ const plantelesFor = (u) => String(u?.plantel || u?.planteles || '').split(',').
 const accessModeForUser = (u) => {
   const tokens = roleTokens(u?.role)
   if (tokens.some(token => SUPERADMIN_ROLES.has(token))) return 'superadmin'
-  return hasFinancialRole(u?.role) ? 'financial' : 'control'
+  const control = hasControlRole(u?.role)
+  const financial = hasFinancialRole(u?.role)
+  if (control && financial) return 'both'
+  if (financial) return 'financial'
+  return 'control'
 }
 const accessLabelForMode = (mode) => {
   if (mode === 'superadmin') return 'Superadmin'
-  if (mode === 'financial') return 'Control Escolar + Financiero'
+  if (mode === 'both') return 'Control Escolar + Financiero'
+  if (mode === 'financial') return 'Financiero'
   return 'Control Escolar'
 }
 const accessIconForMode = (mode) => {
@@ -674,7 +689,8 @@ const accessIconForMode = (mode) => {
 }
 const accessClassForMode = (mode) => {
   if (mode === 'superadmin') return 'superadmin'
-  if (mode === 'financial') return 'mixed'
+  if (mode === 'both') return 'mixed'
+  if (mode === 'financial') return 'general'
   if (mode === 'control') return 'control'
   return 'general'
 }
@@ -781,6 +797,7 @@ const pageItems = computed(() => {
 const superAdminCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'superadmin').length)
 const controlCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'control').length)
 const financialCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'financial').length)
+const bothCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'both').length)
 const blockedCount = computed(() => usuarios.value.filter(isBlocked).length)
 const protectedCount = computed(() => usuarios.value.filter(isProtectedUser).length)
 const todayCount = computed(() => usuarios.value.filter(u => isWithinDays(u, 1)).length)
@@ -788,7 +805,8 @@ const missingPlantelCount = computed(() => usuarios.value.filter(u => !planteles
 const metricChips = computed(() => [
   { key: 'all', label: 'Todos', value: usuarios.value.length, caption: 'Directorio', tone: 'neutral', active: statusFilter.value === 'all' && accessFilter.value === 'all' && plantelFilter.value === 'all' && activityFilter.value === 'all' },
   { key: 'control', label: 'Control Escolar', value: controlCount.value, caption: 'Acceso predeterminado', tone: 'blue', active: accessFilter.value === 'control' },
-  { key: 'financial', label: 'Financiero', value: financialCount.value, caption: 'ROLE_ADMON', tone: 'green', active: accessFilter.value === 'financial' },
+  { key: 'financial', label: 'Solo Financiero', value: financialCount.value, caption: 'ROLE_ADMON', tone: 'green', active: accessFilter.value === 'financial' },
+  { key: 'both', label: 'Ambos', value: bothCount.value, caption: 'CTRL + ADMON', tone: 'purple', active: accessFilter.value === 'both' },
   { key: 'superadmin', label: 'Superadmin', value: superAdminCount.value, caption: 'Acceso global', tone: 'purple', active: accessFilter.value === 'superadmin' },
   { key: 'blocked', label: 'Bloqueados', value: blockedCount.value, caption: 'Restringidos', tone: 'red', active: statusFilter.value === 'blocked' },
   { key: 'protected', label: 'Protegidos', value: protectedCount.value, caption: 'No editables', tone: 'purple', active: statusFilter.value === 'protected' },
@@ -1072,7 +1090,8 @@ const normalizePlantelArray = (value) => {
 const serializePlanteles = (value) => normalizePlantelArray(value).join(',')
 const resolveClientRoleForAccess = (_role, mode) => {
   if (mode === 'superadmin') return 'superadmin'
-  if (mode === 'financial') return `${CONTROL_ROLE},${FINANCIAL_ROLE}`
+  if (mode === 'both') return `${CONTROL_ROLE},${FINANCIAL_ROLE}`
+  if (mode === 'financial') return FINANCIAL_ROLE
   return CONTROL_ROLE
 }
 const optimisticUser = (u, patch) => {
@@ -1237,15 +1256,14 @@ const requestBulkPlantelUpdate = () => {
   const label = bulkPlantelAction.value === 'remove' ? 'Quitar plantel' : bulkPlantelAction.value === 'replace' ? 'Reemplazar planteles' : 'Agregar plantel'
   requestBulkUpdate(patch, label, `Se aplicará ${plantel} a los usuarios seleccionados.`)
 }
-const requestBulkFinancialUpdate = (grant) => {
-  requestBulkUpdate(
-    { accessMode: grant ? 'financial' : 'control' },
-    grant ? 'Dar acceso financiero' : 'Quitar acceso financiero',
-    grant
-      ? 'ROLE_ADMON habilitará Finanzas en los planteles que cada usuario ya tiene asignados.'
-      : 'Los usuarios conservarán sus planteles y quedarán únicamente en Control Escolar.',
-    grant ? 'safe' : 'danger'
-  )
+const requestBulkAccessUpdate = (mode) => {
+  const copy = {
+    control: ['Asignar solo Control Escolar', 'Se guardará únicamente ROLE_CTRL.'],
+    financial: ['Asignar solo Financiero', 'Se guardará únicamente ROLE_ADMON.'],
+    both: ['Asignar ambos dominios', 'Se guardarán ROLE_CTRL y ROLE_ADMON.']
+  }[mode]
+  if (!copy) return
+  requestBulkUpdate({ accessMode: mode }, copy[0], copy[1], mode === 'control' ? 'danger' : 'safe')
 }
 const requestToggleBlocked = (u) => {
   if (!u || isProtectedUser(u)) return
@@ -1279,10 +1297,14 @@ const showContextMenu = (event, u) => {
     { label: 'Opciones', disabled: true, action: () => {} },
     { label: 'Editar usuario', icon: LucidePencil, action: () => openModal(u) }
   ]
-  if (accessMode(u) === 'financial') {
-    items.push({ label: 'Quitar acceso financiero', icon: LucideGraduationCap, action: () => requestAccessChange(u, 'control') })
-  } else if (accessMode(u) === 'control') {
-    items.push({ label: 'Dar acceso financiero', icon: LucideShieldCheck, action: () => requestAccessChange(u, 'financial') })
+  if (accessMode(u) !== 'control' && accessMode(u) !== 'superadmin') {
+    items.push({ label: 'Dejar solo Control Escolar', icon: LucideGraduationCap, action: () => requestAccessChange(u, 'control') })
+  }
+  if (accessMode(u) !== 'financial' && accessMode(u) !== 'superadmin') {
+    items.push({ label: 'Dejar solo Financiero', icon: LucideShieldCheck, action: () => requestAccessChange(u, 'financial') })
+  }
+  if (accessMode(u) !== 'both' && accessMode(u) !== 'superadmin') {
+    items.push({ label: 'Habilitar ambos dominios', icon: LucideUsers, action: () => requestAccessChange(u, 'both') })
   }
   if (accessMode(u) !== 'superadmin') {
     items.push({ label: 'Asignar superadmin', icon: LucideShield, action: () => requestAccessChange(u, 'superadmin') })
@@ -2304,6 +2326,7 @@ button:disabled {
 .access-option small { color: var(--muted); font-size: 11px; font-weight: 750; }
 .access-option.active.control { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; }
 .access-option.active.financial { color: #166534; background: #effcf3; border-color: #b7e6c3; }
+.access-option.active.both { color: #6d28d9; background: #f5f0ff; border-color: #ddd6fe; }
 .access-option.active.superadmin { color: #6d28d9; background: #f5f0ff; border-color: #ddd6fe; }
 
 .block-toggle { min-height: 44px; display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: #166534; padding: 0 12px; font-size: 12px; font-weight: 950; }

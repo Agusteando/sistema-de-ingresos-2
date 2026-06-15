@@ -1,1 +1,1 @@
-Corregir autorización de recordatorios masivos para ROLE_ADMON
+Corregir unicidad de usuarios y separar accesos por rol

@@ -38,7 +38,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   const financialAccess = hasFinancialAccessForPlantel(user.role, user.plantelesList, requested)
-  const controlEscolarOnly = !user.isSuperAdmin && !financialAccess
+  const controlAccess = user.isSuperAdmin || user.hasControlEscolarRole
+  const controlEscolarOnly = controlAccess && !financialAccess
 
   setCookie(event, 'auth_role', user.role || 'ROLE_CTRL', cookieOpts)
   setCookie(event, 'auth_planteles', user.isSuperAdmin ? PLANTELES_LIST.join(',') : user.planteles, cookieOpts)
@@ -46,7 +47,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   setCookie(event, 'auth_active_plantel', requested, cookieOpts)
   setCookie(event, 'auth_home_plantel', user.auth_home_plantel || dataBridgeAgentId, cookieOpts)
   setCookie(event, 'auth_nav_mode', controlEscolarOnly ? 'control-escolar' : 'financial', cookieOpts)
-  setCookie(event, 'auth_has_control_escolar', 'true', cookieOpts)
+  setCookie(event, 'auth_has_control_escolar', controlAccess ? 'true' : 'false', cookieOpts)
   setCookie(event, 'auth_has_financial_access', financialAccess ? 'true' : 'false', cookieOpts)
   deleteCookie(event, 'auth_is_super_admin', { path: '/' })
   setCookie(event, 'db_bridge_agent_id', dataBridgeAgentId, cookieOpts)
@@ -58,6 +59,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     activePlantel: requested,
     dataBridgeAgentId,
     financialAccess,
-    redirectTo: controlEscolarOnly ? '/control-escolar' : '/'
+    redirectTo: financialAccess ? '/' : '/control-escolar'
   }
 }))

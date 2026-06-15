@@ -64,6 +64,17 @@ export const controlEscolarCentralQuery = async <T>(sql: string, params?: SqlPar
   return rows as T
 }
 
+export const withControlEscolarCentralConnection = async <T>(
+  callback: (connection: mysql.PoolConnection) => Promise<T>
+): Promise<T> => {
+  const connection = await getControlEscolarCentralDb().getConnection()
+  try {
+    return await callback(connection)
+  } finally {
+    connection.release()
+  }
+}
+
 export const getCentralTableColumns = async (tableName: string) => {
   const normalized = String(tableName || '').trim()
   if (!normalized) return new Set<string>()

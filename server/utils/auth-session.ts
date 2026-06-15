@@ -52,7 +52,15 @@ export const hasControlEscolarRole = (role: unknown) => hasRole(role, CONTROL_ES
  */
 export const hasFinancialAdminRole = (role: unknown) => hasRole(role, FINANCIAL_ADMIN_ROLE)
 
-export const isControlEscolarOnlyRole = (role: unknown) => !isSuperAdminRole(role) && !hasFinancialAdminRole(role)
+export const normalizeAuthRole = (role: unknown) => {
+  if (isSuperAdminRole(role)) return 'superadmin'
+  const roles: string[] = []
+  if (hasControlEscolarRole(role)) roles.push(CONTROL_ESCOLAR_ROLE)
+  if (hasFinancialAdminRole(role)) roles.push(FINANCIAL_ADMIN_ROLE)
+  return roles.length ? roles.join(',') : CONTROL_ESCOLAR_ROLE
+}
+
+export const isControlEscolarOnlyRole = (role: unknown) => hasControlEscolarRole(normalizeAuthRole(role)) && !hasFinancialAdminRole(role)
 
 export const parsePlanteles = (value: unknown) => Array.from(new Set(String(value || '')
   .split(',')
@@ -102,13 +110,13 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
     throw createError({ statusCode: 403, message: 'La cuenta ya no tiene acceso al sistema.' })
   }
 
-  if (!seededSuperAdmin && (centralUser?.ingresosBlocked || centralUser?.ingresos_blocked === 1 || centralUser?.ingresos_blocked === '1')) {
+  if (!seededSuperAdmin && (centralUser?.ingresosBlocked || Number(centralUser?.ingresos_blocked || 0) === 1)) {
     throw createError({ statusCode: 403, message: 'La cuenta está bloqueada.' })
   }
 
   const role = seededSuperAdmin
     ? 'superadmin'
-    : String(centralUser?.role || CONTROL_ESCOLAR_ROLE).trim() || CONTROL_ESCOLAR_ROLE
+    : normalizeAuthRole(centralUser?.role)
   const roles = parseRoles(role)
   const superAdmin = isSuperAdminRole(role)
   const assignedPlanteles = parsePlanteles(centralUser?.plantel)
@@ -118,20 +126,25 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
   }
 
   const allowedPlanteles = superAdmin ? [...PLANTELES_LIST] : assignedPlanteles
+  const fallbackPlantel = allowedPlanteles[0] || PLANTELES_LIST[0] || ''
+  if (!fallbackPlantel) {
+    throw createError({ statusCode: 500, message: 'No hay planteles configurados.' })
+  }
   const allowedSet = new Set(allowedPlanteles)
   const cookieActive = getCookiePlantel(event, 'auth_active_plantel')
-  const activePlantel = cookieActive === 'GLOBAL' && superAdmin
+  const activePlantel: string = cookieActive === 'GLOBAL' && superAdmin
     ? 'GLOBAL'
     : cookieActive && allowedSet.has(cookieActive)
       ? cookieActive
-      : allowedPlanteles[0]
+      : fallbackPlantel
   const cookieHome = getCookiePlantel(event, 'auth_home_plantel')
-  const homePlantel = cookieHome && allowedSet.has(cookieHome)
+  const homePlantel: string = cookieHome && allowedSet.has(cookieHome)
     ? cookieHome
-    : (activePlantel !== 'GLOBAL' ? activePlantel : allowedPlanteles[0])
+    : (activePlantel !== 'GLOBAL' ? activePlantel : fallbackPlantel)
+  const controlAccess = superAdmin || hasControlEscolarRole(role)
   const financialPlanteles = superAdmin || hasFinancialAdminRole(role) ? [...allowedPlanteles] : []
   const financialAccess = hasFinancialAccessForPlantel(role, allowedPlanteles, activePlantel)
-  const controlEscolarOnly = !superAdmin && !financialAccess
+  const controlEscolarOnly = controlAccess && !financialAccess
 
   if (activePlantel && !isValidPlantelScope(activePlantel)) {
     throw createError({ statusCode: 400, message: 'Plantel activo inválido.' })
@@ -155,7 +168,7 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
   setCookie(event, 'auth_home_plantel', homePlantel, cookieOptions)
   setCookie(event, 'auth_financial_planteles', financialPlanteles.join(','), cookieOptions)
   setCookie(event, 'auth_nav_mode', controlEscolarOnly ? 'control-escolar' : 'financial', cookieOptions)
-  setCookie(event, 'auth_has_control_escolar', 'true', cookieOptions)
+  setCookie(event, 'auth_has_control_escolar', controlAccess ? 'true' : 'false', cookieOptions)
   setCookie(event, 'auth_has_financial_access', financialAccess ? 'true' : 'false', cookieOptions)
   setCookie(event, 'db_bridge_agent_id', activePlantel !== 'GLOBAL' ? activePlantel : homePlantel, cookieOptions)
 
@@ -171,7 +184,7 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
     active_plantel: activePlantel,
     auth_home_plantel: homePlantel,
     isSuperAdmin: superAdmin,
-    hasControlEscolarRole: true,
+    hasControlEscolarRole: controlAccess,
     isControlEscolarOnly: controlEscolarOnly,
     hasFinancialAccess: financialAccess
   }
