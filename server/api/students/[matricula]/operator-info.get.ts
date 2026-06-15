@@ -8,7 +8,7 @@ const text = (value: unknown) => String(value ?? '').trim()
 const resolveOperatorInfoAccess = async (event: any) => {
   const user = event.context.user || await getTrustedAuthUser(event)
 
-  if (user.isControlEscolarOnly) {
+  if (!user.hasFinancialAccess) {
     throw createError({ statusCode: 403, message: 'La información ampliada de alumno es una vista de operadores y no está disponible para Control Escolar.' })
   }
 

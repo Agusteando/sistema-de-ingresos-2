@@ -444,7 +444,7 @@ const selectCiclo = (value) => {
 const adminPhoto = ref(null)
 const adminName = ref(useCookie('auth_name').value || 'Usuario')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
-const hasControlEscolarCookie = useCookie('auth_has_control_escolar')
+const hasFinancialAccessCookie = useCookie('auth_has_financial_access')
 const activePlantel = ref(useCookie('auth_active_plantel').value || 'PT')
 const plantelSelectRef = ref(null)
 const plantelMenuOpen = ref(false)
@@ -454,9 +454,9 @@ const { getPlantelStatus, loadPlantelStatuses } = usePlantelAgentStatuses()
 const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
 const hasSuperAdminRole = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
 const isSuperAdmin = computed(() => hasSuperAdminRole.value)
-const hasControlEscolarRole = computed(() => hasControlEscolarCookie.value === 'true' || roleTokens.value.includes('role_ctrl'))
-const isControlEscolarOnly = computed(() => !isSuperAdmin.value && roleTokens.value.includes('role_ctrl'))
-const showControlEscolarNav = computed(() => isSuperAdmin.value || hasControlEscolarRole.value)
+const hasFinancialAccess = computed(() => isSuperAdmin.value || hasFinancialAccessCookie.value === 'true')
+const isControlEscolarOnly = computed(() => !isSuperAdmin.value && !hasFinancialAccess.value)
+const showControlEscolarNav = computed(() => true)
 const userPlanteles = computed(() => {
   if (isSuperAdmin.value) return [...PLANTELES_LIST]
 
@@ -465,12 +465,12 @@ const userPlanteles = computed(() => {
     .map(p => p.trim().toUpperCase())
     .filter(p => PLANTELES_LIST.includes(p))
 
-  return planteles.length ? planteles : [...PLANTELES_LIST]
+  return planteles
 })
-const showFinancialNav = computed(() => !isControlEscolarOnly.value)
+const showFinancialNav = computed(() => hasFinancialAccess.value)
 const hasConceptosAdminRole = computed(() => isSuperAdmin.value || roleTokens.value.some(role => ['admin', 'role_admin', 'conceptos_admin', 'role_conceptos'].includes(role)))
 const showConceptosNav = computed(() => showFinancialNav.value && hasConceptosAdminRole.value)
-const showCicloPicker = computed(() => isSuperAdmin.value || hasControlEscolarRole.value || showFinancialNav.value)
+const showCicloPicker = computed(() => true)
 const activePlantelLabel = computed(() => activePlantel.value === 'GLOBAL' ? 'CONSOLIDADO' : `PLANTEL ${activePlantel.value || 'PT'}`)
 const activePlantelStatus = computed(() => activePlantel.value === 'GLOBAL'
   ? { status: 'unknown', online: true, label: 'Global', message: 'Vista consolidada', action: '' }
@@ -681,11 +681,15 @@ const switchPlantel = async (plantel = activePlantel.value) => {
   const previousPlantel = useCookie('auth_active_plantel').value || 'PT'
 
   try {
-    await $fetch('/api/auth/switch', { method: 'POST', body: { plantel } })
+    const response = await $fetch('/api/auth/switch', { method: 'POST', body: { plantel } })
+    if (response?.redirectTo && response.redirectTo !== route.path && route.path !== '/control-escolar' && route.path !== '/avance-control-escolar') {
+      window.location.href = response.redirectTo
+      return
+    }
     window.location.reload()
   } catch (e) {
     activePlantel.value = previousPlantel
-    alert('No autorizado para ver este plantel.')
+    show('No tienes acceso a este plantel.', 'danger')
   }
 }
 

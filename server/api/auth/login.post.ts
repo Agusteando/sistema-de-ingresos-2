@@ -1,7 +1,6 @@
 import { OAuth2Client } from 'google-auth-library'
-import { BRIDGE_AGENT_UNAVAILABLE_MESSAGE, isBridgeAgentUnavailableError, query, runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
-import { hasControlEscolarRole, isControlEscolarOnlyRole, isSuperAdminRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
+import { CONTROL_ESCOLAR_ROLE, hasFinancialAccessForPlantel, isSuperAdminRole, normalizePlantel, parsePlanteles } from '../../utils/auth-session'
 import { touchExternalUserLogin } from '../../utils/external-users'
 import { isCasitaWorkspaceEmail } from '../../utils/google-workspace-directory'
 import { logControlEscolarAuditEvent } from '../../utils/control-escolar-audit'
@@ -18,7 +17,6 @@ type DbUser = {
   username?: string | null
   email?: string | null
   role?: string | null
-  planteles?: string | null
   avatar?: string | null
   plantel?: string | null
 }
@@ -46,69 +44,9 @@ const cookieOptions = () => ({
   sameSite: 'lax' as const
 })
 
-const resolveAllowedPlanteles = (user: DbUser, isSuperAdmin: boolean, requestedPlantel: string) => {
+const resolveAllowedPlanteles = (user: DbUser, isSuperAdmin: boolean) => {
   if (isSuperAdmin) return [...PLANTELES_LIST]
-
-  const fromPlanteles = parsePlanteles(user.planteles).filter((plantel) => PLANTELES_LIST.includes(plantel))
-  if (fromPlanteles.length) return fromPlanteles
-
-  const legacyPlantel = normalizePlantel(user.plantel)
-  if (legacyPlantel && PLANTELES_LIST.includes(legacyPlantel)) return [legacyPlantel]
-
-  if (requestedPlantel && PLANTELES_LIST.includes(requestedPlantel)) return [requestedPlantel]
-
-  return [PLANTELES_LIST[0]]
-}
-
-const ensureLocalUser = async (payload: any, requestedPlantel: string): Promise<DbUser> => {
-  const email = String(payload.email || '').trim()
-  const emailKey = email.toLowerCase()
-  const seedAdmin = SUPERADMIN_EMAILS.has(emailKey)
-
-  let [user] = await query<DbUser[]>('SELECT * FROM users WHERE email = ? LIMIT 1', [email])
-
-  if (!user) {
-    const allUsers = await query<any[]>('SELECT id FROM users LIMIT 1')
-    const firstUser = allUsers.length === 0
-    const defaultRole = seedAdmin || firstUser ? 'superadmin' : 'plantel'
-    const defaultPlanteles = seedAdmin || firstUser ? ALL_PLANTELES : (requestedPlantel || PLANTELES_LIST[0])
-    const defaultPlantel = requestedPlantel || PLANTELES_LIST[0]
-
-    const result: any = await query(
-      'INSERT INTO users (username, password, email, planteles, role, avatar, plantel) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [
-        payload.name || email,
-        'GOOGLE_AUTH',
-        email,
-        defaultPlanteles,
-        defaultRole,
-        payload.picture || null,
-        defaultPlantel
-      ]
-    )
-
-    user = {
-      id: result.insertId,
-      username: payload.name || email,
-      email,
-      role: defaultRole,
-      planteles: defaultPlanteles,
-      avatar: payload.picture || null,
-      plantel: defaultPlantel
-    }
-  } else {
-    if (seedAdmin && !isSuperAdminRole(user.role)) {
-      user.role = 'superadmin'
-      await query('UPDATE users SET role = ? WHERE id = ?', ['superadmin', user.id])
-    }
-
-    if (payload.picture && user.avatar !== payload.picture) {
-      user.avatar = payload.picture
-      await query('UPDATE users SET avatar = ? WHERE id = ?', [payload.picture, user.id])
-    }
-  }
-
-  return user
+  return parsePlanteles(user.plantel).filter((plantel) => PLANTELES_LIST.includes(plantel))
 }
 
 export default defineEventHandler(async (event) => {
@@ -153,59 +91,44 @@ export default defineEventHandler(async (event) => {
       name: payload.name,
       picture: payload.picture,
       requestedPlantel
-    }).catch((error: any) => {
-      console.warn('[Auth Login] External users login sync skipped; login continues', error?.message || error)
-      return null
     })
 
     if (!seedAdmin && externalUser?.ingresosBlocked) {
       throw createError({ statusCode: 403, message: 'Tu cuenta no tiene acceso al sistema.' })
     }
 
-    const centralAuthUser = seedAdmin
+    const centralAuthUser: DbUser = seedAdmin
       ? {
           username: payload.name || normalizedEmail,
           email: normalizedEmail,
           role: 'superadmin',
-          planteles: ALL_PLANTELES,
-          plantel: requestedPlantel || PLANTELES_LIST[0],
+          plantel: ALL_PLANTELES,
           avatar: payload.picture || null
         }
-      : (externalUser && hasControlEscolarRole(externalUser.role)
-          ? {
-              username: externalUser.username || externalUser.displayName || payload.name || normalizedEmail,
-              email: externalUser.email || normalizedEmail,
-              role: externalUser.role || 'ROLE_CTRL',
-              planteles: externalUser.planteles || requestedPlantel || PLANTELES_LIST[0],
-              plantel: externalUser.plantel || requestedPlantel || PLANTELES_LIST[0],
-              avatar: externalUser.avatar || externalUser.picture || payload.picture || null
-            }
-          : null)
+      : {
+          username: externalUser?.username || externalUser?.displayName || payload.name || normalizedEmail,
+          email: externalUser?.email || normalizedEmail,
+          role: externalUser?.role || CONTROL_ESCOLAR_ROLE,
+          plantel: externalUser?.plantel || '',
+          avatar: externalUser?.avatar || externalUser?.picture || payload.picture || null
+        }
 
-    const resolvedUser = centralAuthUser || await runWithBridgeAgentId(requestedPlantel, async () => {
-      const localUser = await ensureLocalUser(payload, requestedPlantel)
-      return externalUser && !isSuperAdminRole(localUser.role)
-        ? {
-            ...localUser,
-            username: externalUser.username || localUser.username,
-            email: externalUser.email || localUser.email,
-            role: externalUser.role || 'plantel',
-            planteles: externalUser.planteles || localUser.planteles,
-            plantel: externalUser.plantel || localUser.plantel,
-            avatar: externalUser.avatar || localUser.avatar
-          }
-        : localUser
-    })
-    const role = String(resolvedUser.role || 'plantel').trim() || 'plantel'
+    const resolvedUser = centralAuthUser
+    const role = String(resolvedUser.role || CONTROL_ESCOLAR_ROLE).trim() || CONTROL_ESCOLAR_ROLE
     const superAdmin = isSuperAdminRole(role)
-    const controlEscolar = hasControlEscolarRole(role)
-    const controlEscolarOnly = !superAdmin && isControlEscolarOnlyRole(role)
-    const allowedPlanteles = resolveAllowedPlanteles(resolvedUser, superAdmin, requestedPlantel)
+    const controlEscolar = true
+    const allowedPlanteles = resolveAllowedPlanteles(resolvedUser, superAdmin)
+    if (!superAdmin && !allowedPlanteles.length) {
+      throw createError({ statusCode: 403, message: 'Tu cuenta no tiene un plantel asignado.' })
+    }
     const requestedAllowed = allowedPlanteles.includes(requestedPlantel)
     const activePlantel = superAdmin
       ? (requestedPlantel || allowedPlanteles[0])
       : (requestedAllowed ? requestedPlantel : allowedPlanteles[0])
     const homePlantel = activePlantel && activePlantel !== 'GLOBAL' ? activePlantel : allowedPlanteles[0]
+    const financialPlanteles = allowedPlanteles.filter((plantel) => hasFinancialAccessForPlantel(role, allowedPlanteles, plantel))
+    const financialAccess = hasFinancialAccessForPlantel(role, allowedPlanteles, activePlantel)
+    const controlEscolarOnly = !superAdmin && !financialAccess
     const opts = cookieOptions()
 
     setCookie(event, 'auth_email', resolvedUser.email || payload.email, opts)
@@ -214,9 +137,10 @@ export default defineEventHandler(async (event) => {
     setCookie(event, 'auth_planteles', superAdmin ? ALL_PLANTELES : allowedPlanteles.join(','), opts)
     setCookie(event, 'auth_active_plantel', activePlantel, opts)
     setCookie(event, 'auth_home_plantel', homePlantel, opts)
+    setCookie(event, 'auth_financial_planteles', financialPlanteles.join(','), opts)
     setCookie(event, 'auth_nav_mode', controlEscolarOnly ? 'control-escolar' : 'financial', opts)
-    setCookie(event, 'auth_has_control_escolar', controlEscolar || superAdmin ? 'true' : 'false', opts)
-    setCookie(event, 'auth_has_financial_access', superAdmin || !controlEscolarOnly ? 'true' : 'false', opts)
+    setCookie(event, 'auth_has_control_escolar', 'true', opts)
+    setCookie(event, 'auth_has_financial_access', financialAccess ? 'true' : 'false', opts)
     deleteCookie(event, 'auth_is_super_admin', { path: '/' })
     setCookie(event, 'db_bridge_agent_id', homePlantel || PLANTELES_LIST[0], opts)
 
@@ -249,11 +173,11 @@ export default defineEventHandler(async (event) => {
     }
   } catch (error: any) {
     console.error('[Auth Login Error]', error)
-    const agentUnavailable = isBridgeAgentUnavailableError(error)
+    const statusCode = Number(error?.statusCode || (error?.code ? 503 : 401))
+    const message = statusCode >= 500
+      ? 'No se pudo validar el acceso en este momento.'
+      : (error?.message || 'Error de autenticación con Google.')
 
-    throw createError({
-      statusCode: agentUnavailable ? 503 : (error?.statusCode || 401),
-      message: agentUnavailable ? BRIDGE_AGENT_UNAVAILABLE_MESSAGE : (error?.message || 'Error de autenticación con Google.')
-    })
+    throw createError({ statusCode, message })
   }
 })

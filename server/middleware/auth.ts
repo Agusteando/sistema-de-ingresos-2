@@ -51,11 +51,11 @@ export default defineEventHandler(async (event) => {
     return
   }
 
-  if (user.isControlEscolarOnly) {
+  if (!user.hasFinancialAccess) {
     if (isNoAdeudoEndpoint) {
       return noAdeudoMiddlewareDiagnostic(event, {
         title: 'No tiene permisos para generar cartas de no adeudo.',
-        detail: 'La sesión actual es sólo Control Escolar y no puede ejecutar esta acción administrativa.',
+        detail: 'La sesión actual no tiene acceso financiero en este plantel y no puede ejecutar esta acción administrativa.',
         statusCode: 403,
         source: 'Middleware de autenticación',
         code: 'FORBIDDEN_CONTROL_ESCOLAR_ONLY',

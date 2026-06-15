@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs'
 import { PLANTELES_LIST } from '../../utils/constants'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 import { buildWorkspacePhotoUrl, isCasitaWorkspaceEmail, WORKSPACE_DOMAIN } from './google-workspace-directory'
-import { normalizePlantel } from './auth-session'
+import { CONTROL_ESCOLAR_ROLE, FINANCIAL_ADMIN_ROLE, normalizePlantel } from './auth-session'
 
 type TableColumn = { Field: string }
 
@@ -11,7 +11,7 @@ type ExternalUserInput = {
   displayName?: string
   password?: string
   email?: string
-  planteles?: string[] | string
+  plantel?: string[] | string
   role?: string
   accessMode?: 'admin' | 'control' | 'admin_control' | string
   avatar?: string | null
@@ -28,22 +28,22 @@ type ExternalLoginInput = {
 }
 
 const TABLE = 'users'
-export const CONTROL_ESCOLAR_ROLE = 'ROLE_CTRL'
 export const NO_ADEUDO_CONTROL_PLANTELES_COLUMN = 'no_adeudo_control_planteles'
-const DEFAULT_EXTERNAL_ROLE = 'ROLE_HUSKY_USER'
+const DEFAULT_EXTERNAL_ROLE = CONTROL_ESCOLAR_ROLE
 const SUPERADMIN_ROLES = new Set(['superadmin'])
 const HARD_CODED_SUPERADMIN_EMAIL = 'desarrollo.tecnologico@casitaiedis.edu.mx'
 const ALL_PLANTELES_VALUE = PLANTELES_LIST.join(',')
-const PROTECTED_EMAILS = new Set([
+const SEEDED_SUPERADMIN_EMAILS = new Set([
   HARD_CODED_SUPERADMIN_EMAIL,
   `coord.admon@${WORKSPACE_DOMAIN}`
 ])
+const PROTECTED_EMAILS = SEEDED_SUPERADMIN_EMAILS
 
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
 const normalizeText = (value: unknown, max = 255) => String(value || '').trim().slice(0, max)
 const normalizedRole = (value: unknown) => String(value || '').trim().toLowerCase()
-const isHardCodedSuperAdminEmail = (value: unknown) => normalizeEmail(value) === HARD_CODED_SUPERADMIN_EMAIL
+const isHardCodedSuperAdminEmail = (value: unknown) => SEEDED_SUPERADMIN_EMAILS.has(normalizeEmail(value))
 const normalizeBlocked = (value: unknown) => value === true || value === 1 || value === '1' || String(value || '').toLowerCase() === 'true'
 const blockedValue = (value: unknown) => normalizeBlocked(value) ? 1 : 0
 const dateMs = (value: unknown) => {
@@ -61,38 +61,23 @@ const splitRoleTokens = (value: unknown) => Array.from(new Set(String(value || '
 const hasRole = (roles: string[], target: string) => roles.some((role) => normalizedRole(role) === normalizedRole(target))
 const hasControlRoleValue = (value: unknown) => hasRole(splitRoleTokens(value), CONTROL_ESCOLAR_ROLE)
 const hasSuperAdminRoleValue = (value: unknown) => splitRoleTokens(value).some((role) => SUPERADMIN_ROLES.has(normalizedRole(role)))
-const withoutControlRole = (roles: string[]) => roles.filter((role) => normalizedRole(role) !== normalizedRole(CONTROL_ESCOLAR_ROLE))
-
-const ensureDefaultBase = (roles: string[]) => {
-  const cleaned = roles.filter((role) => normalizedRole(role) !== 'plantel')
-  return cleaned.length ? cleaned : [DEFAULT_EXTERNAL_ROLE]
-}
+const hasFinancialAdminRoleValue = (value: unknown) => hasRole(splitRoleTokens(value), FINANCIAL_ADMIN_ROLE)
 
 const resolveRoleForWrite = (body: ExternalUserInput, currentRole?: string | null) => {
   if (isHardCodedSuperAdminEmail(body.email)) return 'superadmin'
 
   const accessMode = normalizeText(body.accessMode, 40)
-  const sourceRoles = splitRoleTokens(currentRole || body.role || DEFAULT_EXTERNAL_ROLE)
-
-  if (accessMode === 'superadmin') {
-    return 'superadmin'
+  if (accessMode === 'superadmin') return 'superadmin'
+  if (accessMode === 'financial' || accessMode === 'admin' || accessMode === 'admin_control') {
+    return `${CONTROL_ESCOLAR_ROLE},${FINANCIAL_ADMIN_ROLE}`
   }
+  if (accessMode === 'control') return CONTROL_ESCOLAR_ROLE
 
-  if (accessMode === 'control') {
-    return CONTROL_ESCOLAR_ROLE
-  }
-
-  if (accessMode === 'admin_control') {
-    const roles = ensureDefaultBase(withoutControlRole(sourceRoles).filter((role) => !SUPERADMIN_ROLES.has(normalizedRole(role))))
-    if (!hasRole(roles, CONTROL_ESCOLAR_ROLE)) roles.push(CONTROL_ESCOLAR_ROLE)
-    return roles.join(',')
-  }
-
-  if (accessMode === 'admin') {
-    return ensureDefaultBase(withoutControlRole(sourceRoles).filter((role) => !SUPERADMIN_ROLES.has(normalizedRole(role)))).join(',')
-  }
-
-  return (splitRoleTokens(body.role || currentRole).join(',') || DEFAULT_EXTERNAL_ROLE).slice(0, 255)
+  const sourceRole = body.role || currentRole || DEFAULT_EXTERNAL_ROLE
+  if (hasSuperAdminRoleValue(sourceRole)) return 'superadmin'
+  return hasFinancialAdminRoleValue(sourceRole)
+    ? `${CONTROL_ESCOLAR_ROLE},${FINANCIAL_ADMIN_ROLE}`
+    : CONTROL_ESCOLAR_ROLE
 }
 
 const assertWorkspaceEmail = (email: unknown) => {
@@ -144,7 +129,7 @@ export const getExternalUsersColumns = async (force = false) => {
 
 export const getExternalUsersDiagnostics = async () => {
   const config = useRuntimeConfig() as any
-  const requiredColumns = ['email', 'role', 'last_login_at', 'ingresos_blocked']
+  const requiredColumns = ['email', 'plantel', 'role', 'last_login_at', 'ingresos_blocked']
   const safeRuntime = {
     target: 'CONTROL_ESCOLAR_MYSQL_DATABASE.users',
     table: TABLE,
@@ -208,7 +193,6 @@ const selectColumns = async () => {
     'displayName',
     'username',
     'email',
-    'planteles',
     'plantel',
     'campus',
     'empresa',
@@ -224,7 +208,7 @@ const selectColumns = async () => {
 const normalizeUserRow = (row: any) => {
   const email = normalizeEmail(row.email)
   const fullName = normalizeText(row.displayName || row.username || email || 'Usuario')
-  const planteles = plantelesValue(row.planteles || row.plantel)
+  const plantel = plantelesValue(row.plantel)
   const avatar = row.picture || row.avatar || (email ? buildWorkspacePhotoUrl(email, fullName) : null)
   const ingresosBlocked = normalizeBlocked(row.ingresos_blocked)
 
@@ -234,7 +218,8 @@ const normalizeUserRow = (row: any) => {
     displayName: fullName,
     workspaceName: fullName,
     email,
-    planteles,
+    plantel,
+    planteles: plantel,
     role: row.role || DEFAULT_EXTERNAL_ROLE,
     created_at: row.created_at || null,
     last_login_at: row.last_login_at || null,
@@ -246,7 +231,6 @@ const normalizeUserRow = (row: any) => {
     protected: PROTECTED_EMAILS.has(email),
     avatar,
     picture: avatar,
-    plantel: normalizePlantel(row.plantel) || (planteles ? planteles.split(',')[0] : ''),
     campus: row.campus || '',
     empresa: row.empresa || '',
     source: 'external'
@@ -273,14 +257,14 @@ const mergeRowsForEmail = (rows: any[]) => {
   const blocked = normalizedRows.some((row) => row.ingresosBlocked)
   const lastLogin = normalizedRows.reduce((max, row) => dateMs(row.last_login_at) > dateMs(max) ? row.last_login_at : max, selected.last_login_at || null)
   const mergedRoles = Array.from(new Set(normalizedRows.flatMap((row) => splitRoleTokens(row.role))))
+  const mergedPlanteles = plantelesValue(normalizedRows.flatMap((row) => normalizedPlantelList(row.plantel)))
   const role = mergedRoles.length ? mergedRoles.join(',') : selected.role
-  const mergedPlanteles = plantelesValue(normalizedRows.flatMap((row) => normalizedPlantelList(row.planteles || row.plantel)))
 
   return {
     ...selected,
     role,
+    plantel: mergedPlanteles || selected.plantel,
     planteles: mergedPlanteles || selected.planteles,
-    plantel: mergedPlanteles ? mergedPlanteles.split(',')[0] : selected.plantel,
     last_login_at: lastLogin,
     lastLoginAt: lastLogin,
     ingresos_blocked: blocked ? 1 : 0,
@@ -290,21 +274,17 @@ const mergeRowsForEmail = (rows: any[]) => {
 }
 
 
-export const externalUserAccessMode = (role: unknown) => {
-  const roles = splitRoleTokens(role)
+export const externalUserAccessMode = (userOrRole: unknown) => {
+  const user = userOrRole && typeof userOrRole === 'object' ? userOrRole as any : null
+  const role = user ? user.role : userOrRole
   if (hasSuperAdminRoleValue(role)) return 'superadmin'
-  const hasControl = hasRole(roles, CONTROL_ESCOLAR_ROLE)
-  const baseRoles = withoutControlRole(roles).filter((role) => normalizedRole(role) !== 'plantel')
-  if (hasControl && baseRoles.length) return 'admin_control'
-  if (hasControl) return 'control'
-  return 'admin'
+  return hasFinancialAdminRoleValue(role) ? 'financial' : 'control'
 }
 
 const accessLabelForMode = (mode: string) => {
   if (mode === 'superadmin') return 'Superadmin'
-  if (mode === 'admin_control') return 'Financiero + Control Escolar'
-  if (mode === 'control') return 'Solo Control Escolar'
-  return 'Financiero'
+  if (mode === 'financial') return 'Control Escolar + Financiero'
+  return 'Control Escolar'
 }
 
 const normalizedPlantelList = (value: unknown) => plantelesValue(value)
@@ -314,10 +294,10 @@ const normalizedPlantelList = (value: unknown) => plantelesValue(value)
 
 const userMatchesPlantel = (user: any, plantelValue: unknown) => {
   const rawPlantel = String(plantelValue || '').trim()
-  if (rawPlantel === '__sin_plantel__') return !normalizedPlantelList(user?.planteles || user?.plantel).length
+  if (rawPlantel === '__sin_plantel__') return !normalizedPlantelList(user?.plantel).length
   const plantel = normalizePlantel(plantelValue)
   if (!plantel || plantel === 'all') return true
-  return normalizedPlantelList(user?.planteles || user?.plantel).includes(plantel)
+  return normalizedPlantelList(user?.plantel).includes(plantel)
 }
 
 const userLastLoginMs = (user: any) => dateMs(user?.last_login_at || user?.lastLoginAt)
@@ -339,14 +319,14 @@ const userActivityMode = (user: any) => {
 }
 
 const enrichAccessMetadata = (user: any) => {
-  const accessMode = externalUserAccessMode(user?.role)
+  const accessMode = externalUserAccessMode(user)
   return {
     ...user,
     accessMode,
     accessLabel: accessLabelForMode(accessMode),
     statusMode: userStatusMode(user),
     activityMode: userActivityMode(user),
-    plantelesList: normalizedPlantelList(user?.planteles || user?.plantel),
+    plantelesList: normalizedPlantelList(user?.plantel),
     protected: userIsProtected(user)
   }
 }
@@ -360,7 +340,7 @@ const userMatchesStatus = (user: any, value: unknown) => {
 const userMatchesAccess = (user: any, value: unknown) => {
   const access = normalizeText(value, 40) || 'all'
   if (access === 'all') return true
-  return externalUserAccessMode(user?.role) === access
+  return externalUserAccessMode(user) === access
 }
 
 const userMatchesActivity = (user: any, value: unknown) => {
@@ -385,18 +365,18 @@ const sortExternalUsers = (rows: any[], sortValue: unknown) => {
 
 const buildExternalUsersFacets = (rows: any[]) => {
   const byPlantel = new Map<string, any>()
-  const emptyPlantel = { plantel: '__sin_plantel__', label: 'Sin plantel', total: 0, admin: 0, control: 0, admin_control: 0, superadmin: 0, blocked: 0, protected: 0 }
-  const access = { admin: 0, control: 0, admin_control: 0, superadmin: 0 }
+  const emptyPlantel = { plantel: '__sin_plantel__', label: 'Sin plantel', total: 0, control: 0, financial: 0, superadmin: 0, blocked: 0, protected: 0 }
+  const access = { control: 0, financial: 0, superadmin: 0 }
   const status = { active: 0, blocked: 0, protected: 0 }
   const activity = { today: 0, week: 0, month: 0, older: 0, never: 0 }
 
   for (const user of rows) {
-    const mode = externalUserAccessMode(user.role) as 'admin' | 'control' | 'admin_control' | 'superadmin'
+    const mode = externalUserAccessMode(user) as 'control' | 'financial' | 'superadmin'
     access[mode]++
     status[userStatusMode(user) as 'active' | 'blocked' | 'protected']++
     activity[userActivityMode(user) as 'today' | 'week' | 'month' | 'older' | 'never']++
 
-    const planteles = normalizedPlantelList(user.planteles || user.plantel)
+    const planteles = normalizedPlantelList(user.plantel)
     if (!planteles.length) {
       emptyPlantel.total++
       emptyPlantel[mode]++
@@ -404,7 +384,7 @@ const buildExternalUsersFacets = (rows: any[]) => {
       if (userIsProtected(user)) emptyPlantel.protected++
     }
     for (const plantel of planteles) {
-      const item = byPlantel.get(plantel) || { plantel, label: plantel, total: 0, admin: 0, control: 0, admin_control: 0, superadmin: 0, blocked: 0, protected: 0 }
+      const item = byPlantel.get(plantel) || { plantel, label: plantel, total: 0, control: 0, financial: 0, superadmin: 0, blocked: 0, protected: 0 }
       item.total++
       item[mode]++
       if (userIsBlocked(user)) item.blocked++
@@ -413,7 +393,7 @@ const buildExternalUsersFacets = (rows: any[]) => {
     }
   }
 
-  const planteles = PLANTELES_LIST.map((plantel) => byPlantel.get(plantel) || { plantel, label: plantel, total: 0, admin: 0, control: 0, admin_control: 0, superadmin: 0, blocked: 0, protected: 0 })
+  const planteles = PLANTELES_LIST.map((plantel) => byPlantel.get(plantel) || { plantel, label: plantel, total: 0, control: 0, financial: 0, superadmin: 0, blocked: 0, protected: 0 })
   if (emptyPlantel.total) planteles.push(emptyPlantel)
 
   return {
@@ -546,21 +526,21 @@ const loadRawUserById = async (id: unknown) => {
   return rows[0] || null
 }
 
-const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean, currentRole?: string | null) => {
+const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean, current: any = null) => {
   const columns = await getExternalUsersColumns()
   const email = assertWorkspaceEmail(body.email)
   const hardCodedSuperAdmin = isHardCodedSuperAdminEmail(email)
-  const planteles = hardCodedSuperAdmin ? ALL_PLANTELES_VALUE : plantelesValue(body.planteles)
-  const firstPlantel = planteles ? planteles.split(',')[0] : ''
-  const displayName = normalizeText(body.displayName || body.username || email || 'Usuario')
-  const picture = body.picture || body.avatar || buildWorkspacePhotoUrl(email, displayName)
+  const plantel = hardCodedSuperAdmin
+    ? ALL_PLANTELES_VALUE
+    : plantelesValue(body.plantel ?? current?.plantel)
+  const displayName = normalizeText(body.displayName || body.username || current?.displayName || current?.username || email || 'Usuario')
+  const picture = body.picture || body.avatar || current?.picture || current?.avatar || buildWorkspacePhotoUrl(email, displayName)
   const values: Record<string, any> = {
     displayName,
-    username: normalizeText(body.username || email || displayName),
+    username: normalizeText(body.username || current?.username || email || displayName),
     email,
-    planteles,
-    role: resolveRoleForWrite(body, currentRole),
-    plantel: firstPlantel,
+    plantel,
+    role: resolveRoleForWrite(body, current?.role),
     avatar: picture,
     picture
   }
@@ -573,6 +553,7 @@ const buildUserWrite = async (body: ExternalUserInput, includePassword: boolean,
 
   if (hardCodedSuperAdmin) {
     values.role = 'superadmin'
+    values.plantel = ALL_PLANTELES_VALUE
     values.ingresos_blocked = 0
   }
 
@@ -614,21 +595,37 @@ export const updateExternalUser = async (id: unknown, body: ExternalUserInput) =
     throw createError({ statusCode: 404, message: 'Usuario no encontrado.' })
   }
 
-  const entries = (await buildUserWrite({ ...body, email: body.email || current.email }, Boolean(body.password && String(body.password).trim()), current.role))
+  const entries = (await buildUserWrite({ ...body, email: body.email || current.email }, Boolean(body.password && String(body.password).trim()), current))
     .filter(([column]) => column !== 'password' || Boolean(body.password && String(body.password).trim()))
 
   if (!entries.length) {
     throw createError({ statusCode: 400, message: 'No hay cambios para guardar.' })
   }
 
-  const assignments = entries.map(([column]) => `${escapeIdentifier(column)} = ?`)
-  const values = entries.map(([, value]) => value)
+  const authorizationColumns = new Set([
+    'plantel',
+    'role',
+    'ingresos_blocked'
+  ])
+  const identityEntries = entries.filter(([column]) => !authorizationColumns.has(column))
+  const authorizationEntries = entries.filter(([column]) => authorizationColumns.has(column))
 
-  await controlEscolarCentralQuery(
-    `UPDATE ${escapeIdentifier(TABLE)} SET ${assignments.join(', ')} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
-    [...values, id, workspaceDomainParam()]
-  )
-  const user = await responseUserByEmail(body.email || current.email)
+  if (identityEntries.length) {
+    await controlEscolarCentralQuery(
+      `UPDATE ${escapeIdentifier(TABLE)} SET ${identityEntries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE ${escapeIdentifier('id')} = ? AND ${workspaceDomainWhere()}`,
+      [...identityEntries.map(([, value]) => value), id, workspaceDomainParam()]
+    )
+  }
+
+  const effectiveEmail = normalizeEmail(body.email || current.email)
+  if (authorizationEntries.length) {
+    await controlEscolarCentralQuery(
+      `UPDATE ${escapeIdentifier(TABLE)} SET ${authorizationEntries.map(([column]) => `${escapeIdentifier(column)} = ?`).join(', ')} WHERE LOWER(TRIM(${escapeIdentifier('email')})) = ? AND ${workspaceDomainWhere()}`,
+      [...authorizationEntries.map(([, value]) => value), effectiveEmail, workspaceDomainParam()]
+    )
+  }
+
+  const user = await responseUserByEmail(effectiveEmail)
   return { success: true, user, rows: user ? [user] : [] }
 }
 
@@ -672,12 +669,12 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & {
   const failed: Array<{ email: string; reason: string }> = []
   const updatedEmails = new Set<string>()
   const shouldUpdateBlocked = columns.has('ingresos_blocked') && ('ingresosBlocked' in body || 'ingresos_blocked' in body)
-  const shouldUpdateRole = Boolean(body.accessMode || body.role)
   const shouldReplacePlanteles = 'replacePlanteles' in body
   const addPlanteles = normalizedPlantelList(body.addPlanteles)
   const removePlanteles = normalizedPlantelList(body.removePlanteles)
   const replacePlanteles = normalizedPlantelList(body.replacePlanteles)
-  const shouldUpdatePlanteles = columns.has('planteles') && (shouldReplacePlanteles || addPlanteles.length || removePlanteles.length)
+  const shouldUpdatePlanteles = columns.has('plantel') && (shouldReplacePlanteles || addPlanteles.length || removePlanteles.length)
+  const shouldUpdateRole = Boolean(body.accessMode || body.role)
 
   for (const row of uniqueRows) {
     const email = normalizeEmail(row.email)
@@ -697,17 +694,23 @@ export const bulkUpdateExternalUsers = async (body: ExternalUserInput & {
       assertNotProtectedBlock(email, blocked)
       values.ingresos_blocked = blockedValue(blocked)
     }
+
+    const currentPlanteles = normalizedPlantelList(row.plantel)
+    let nextPlanteles = shouldReplacePlanteles ? replacePlanteles : currentPlanteles
+    if (addPlanteles.length) nextPlanteles = Array.from(new Set([...nextPlanteles, ...addPlanteles]))
+    if (removePlanteles.length) nextPlanteles = nextPlanteles.filter((plantel) => !removePlanteles.includes(plantel))
+
+    if (shouldUpdatePlanteles) {
+      values.plantel = plantelesValue(nextPlanteles)
+    }
     if (shouldUpdateRole && columns.has('role')) {
       values.role = resolveRoleForWrite({ ...body, email }, row.role)
     }
-    if (shouldUpdatePlanteles) {
-      const currentPlanteles = normalizedPlantelList(row.planteles || row.plantel)
-      let nextPlanteles = shouldReplacePlanteles ? replacePlanteles : currentPlanteles
-      if (addPlanteles.length) nextPlanteles = Array.from(new Set([...nextPlanteles, ...addPlanteles]))
-      if (removePlanteles.length) nextPlanteles = nextPlanteles.filter((plantel) => !removePlanteles.includes(plantel))
-      const serializedPlanteles = plantelesValue(nextPlanteles)
-      values.planteles = serializedPlanteles
-      if (columns.has('plantel')) values.plantel = serializedPlanteles.split(',')[0] || ''
+
+    if (isHardCodedSuperAdminEmail(email)) {
+      if (columns.has('plantel')) values.plantel = ALL_PLANTELES_VALUE
+      if (columns.has('role')) values.role = 'superadmin'
+      if (columns.has('ingresos_blocked')) values.ingresos_blocked = 0
     }
 
     const entries = Object.entries(values).filter(([column]) => columns.has(column))
@@ -761,8 +764,8 @@ const mapNoAdeudoControlUser = (user: any) => {
     role: user.role || CONTROL_ESCOLAR_ROLE,
     avatar: user.avatar || user.picture || null,
     picture: user.picture || user.avatar || null,
-    plantel: normalizePlantel(user.plantel),
-    planteles: plantelesValue(user.planteles || user.plantel),
+    plantel: plantelesValue(user.plantel),
+    planteles: plantelesValue(user.plantel),
     noAdeudoControlPlanteles: noAdeudoControlPlantelesValue(user.noAdeudoControlPlanteles || user.no_adeudo_control_planteles)
   }
 }
@@ -812,7 +815,6 @@ export const setNoAdeudoControlUserForPlantel = async (plantelValue: unknown, us
     'displayName',
     'username',
     'email',
-    'planteles',
     'plantel',
     'role',
     'picture',
@@ -875,7 +877,7 @@ export const touchExternalUserLogin = async ({ email, name, picture, requestedPl
       displayName,
       picture: picture || buildWorkspacePhotoUrl(normalizedEmail, displayName),
       avatar: picture || buildWorkspacePhotoUrl(normalizedEmail, displayName),
-      planteles: hardCodedSuperAdmin ? ALL_PLANTELES_VALUE : (normalizePlantel(requestedPlantel) || PLANTELES_LIST[0]),
+      plantel: hardCodedSuperAdmin ? ALL_PLANTELES_VALUE : (normalizePlantel(requestedPlantel) || PLANTELES_LIST[0]),
       role: hardCodedSuperAdmin ? 'superadmin' : DEFAULT_EXTERNAL_ROLE,
       ingresosBlocked: false
     })
@@ -896,8 +898,7 @@ export const touchExternalUserLogin = async ({ email, name, picture, requestedPl
   }
   if (hardCodedSuperAdmin) {
     if (columns.has('role')) updates.role = 'superadmin'
-    if (columns.has('planteles')) updates.planteles = ALL_PLANTELES_VALUE
-    if (columns.has('plantel')) updates.plantel = PLANTELES_LIST[0]
+    if (columns.has('plantel')) updates.plantel = ALL_PLANTELES_VALUE
     if (columns.has('ingresos_blocked')) updates.ingresos_blocked = 0
   }
 

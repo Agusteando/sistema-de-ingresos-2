@@ -212,7 +212,7 @@ const visiblePlanteles = computed(() => {
     .split(',')
     .map((plantel) => plantel.trim().toUpperCase())
     .filter((plantel) => PLANTELES_LIST.includes(plantel))
-  return parsed.length ? parsed : [...PLANTELES_LIST]
+  return parsed
 })
 const defaultPlantel = computed(() => {
   const active = String(activePlantelCookie.value || '').trim().toUpperCase()

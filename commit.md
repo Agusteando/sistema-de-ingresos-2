@@ -1,1 +1,1 @@
-Separa el plantel de origen del método de pago.
+Corregir autorización de recordatorios masivos para ROLE_ADMON

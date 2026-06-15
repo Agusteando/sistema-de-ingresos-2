@@ -1,6 +1,6 @@
 import { runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
-import { getTrustedAuthUser, isValidPlantelScope, normalizePlantel } from '../../utils/auth-session'
+import { getTrustedAuthUser, hasFinancialAccessForPlantel, isValidPlantelScope, normalizePlantel } from '../../utils/auth-session'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
@@ -19,11 +19,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 403, message: 'No tiene permisos para vista consolidada.' })
   }
 
-  if (requested !== 'GLOBAL' && !PLANTELES_LIST.includes(requested)) {
-    throw createError({ statusCode: 403, message: 'No tiene permisos para acceder a este plantel.' })
-  }
-
-  if (requested !== 'GLOBAL' && user.isControlEscolarOnly && !user.plantelesList.includes(requested)) {
+  if (requested !== 'GLOBAL' && (!PLANTELES_LIST.includes(requested) || (!user.isSuperAdmin && !user.plantelesList.includes(requested)))) {
     throw createError({ statusCode: 403, message: 'No tiene permisos para acceder a este plantel.' })
   }
 
@@ -41,17 +37,27 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 400, message: 'No se pudo resolver un plantel de datos para bridge mode.' })
   }
 
-  setCookie(event, 'auth_role', user.role || 'plantel', cookieOpts)
+  const financialAccess = hasFinancialAccessForPlantel(user.role, user.plantelesList, requested)
+  const controlEscolarOnly = !user.isSuperAdmin && !financialAccess
+
+  setCookie(event, 'auth_role', user.role || 'ROLE_CTRL', cookieOpts)
   setCookie(event, 'auth_planteles', user.isSuperAdmin ? PLANTELES_LIST.join(',') : user.planteles, cookieOpts)
+  setCookie(event, 'auth_financial_planteles', user.isSuperAdmin ? PLANTELES_LIST.join(',') : user.financialPlanteles, cookieOpts)
   setCookie(event, 'auth_active_plantel', requested, cookieOpts)
   setCookie(event, 'auth_home_plantel', user.auth_home_plantel || dataBridgeAgentId, cookieOpts)
-  setCookie(event, 'auth_nav_mode', user.isControlEscolarOnly ? 'control-escolar' : 'financial', cookieOpts)
-  setCookie(event, 'auth_has_control_escolar', user.hasControlEscolarRole || user.isSuperAdmin ? 'true' : 'false', cookieOpts)
-  setCookie(event, 'auth_has_financial_access', user.hasFinancialAccess ? 'true' : 'false', cookieOpts)
+  setCookie(event, 'auth_nav_mode', controlEscolarOnly ? 'control-escolar' : 'financial', cookieOpts)
+  setCookie(event, 'auth_has_control_escolar', 'true', cookieOpts)
+  setCookie(event, 'auth_has_financial_access', financialAccess ? 'true' : 'false', cookieOpts)
   deleteCookie(event, 'auth_is_super_admin', { path: '/' })
   setCookie(event, 'db_bridge_agent_id', dataBridgeAgentId, cookieOpts)
 
   event.context.dbBridgeAgentId = dataBridgeAgentId
 
-  return { success: true, activePlantel: requested, dataBridgeAgentId }
+  return {
+    success: true,
+    activePlantel: requested,
+    dataBridgeAgentId,
+    financialAccess,
+    redirectTo: controlEscolarOnly ? '/control-escolar' : '/'
+  }
 }))

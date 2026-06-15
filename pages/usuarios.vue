@@ -74,9 +74,8 @@
           <span>Acceso</span>
           <select v-model="accessFilter">
             <option value="all">Todos</option>
-            <option value="admin">Financiero</option>
             <option value="control">Control Escolar</option>
-            <option value="admin_control">Ambos</option>
+            <option value="financial">Con acceso financiero</option>
             <option value="superadmin">Superadmin</option>
           </select>
         </label>
@@ -123,14 +122,11 @@
           </span>
         </div>
         <div class="bulk-actions">
-          <button type="button" class="bulk-button blue" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'control' }, 'Asignar acceso Control Escolar', 'Se actualizará el acceso de los usuarios seleccionados.')">
-            <LucideGraduationCap :size="15" /> Control Escolar
+          <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkFinancialUpdate(true)">
+            <LucideShieldCheck :size="15" /> Dar Financiero
           </button>
-          <button type="button" class="bulk-button purple" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'admin_control' }, 'Asignar acceso combinado', 'Se actualizará el acceso de los usuarios seleccionados a Financiero + Control Escolar.')">
-            <LucideShieldCheck :size="15" /> Ambos
-          </button>
-          <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'admin' }, 'Restaurar Financiero', 'Se actualizará el acceso de los usuarios seleccionados.')">
-            <LucideShieldCheck :size="15" /> Financiero
+          <button type="button" class="bulk-button blue" :disabled="bulkSaving" @click="requestBulkFinancialUpdate(false)">
+            <LucideGraduationCap :size="15" /> Quitar Financiero
           </button>
           <button type="button" class="bulk-button purple" :disabled="bulkSaving" @click="requestBulkUpdate({ accessMode: 'superadmin' }, 'Asignar superadmin', 'Se actualizará el acceso de los usuarios seleccionados a superadmin.', 'danger')">
             <LucideShield :size="15" /> Superadmin
@@ -140,9 +136,6 @@
           </button>
           <button type="button" class="bulk-button green" :disabled="bulkSaving" @click="requestBulkUpdate({ ingresosBlocked: false }, 'Reactivar usuarios', 'Se actualizará el estado de los usuarios seleccionados.')">
             <LucideUnlock :size="15" /> Reactivar
-          </button>
-          <button type="button" class="bulk-button inverse" :disabled="bulkSaving" @click="openInverseBulk">
-            <LucideRotateCcw :size="15" /> Inversa avanzada
           </button>
         </div>
         <div class="bulk-plantel-actions">
@@ -169,7 +162,7 @@
               <th class="check-col"><input type="checkbox" :checked="allVisibleSelected" :indeterminate.prop="someVisibleSelected" @change="toggleAllVisible"></th>
               <th>Usuario</th>
               <th>Planteles</th>
-              <th>Acceso rápido</th>
+              <th>Acceso</th>
               <th>Estado</th>
               <th>Último ingreso</th>
               <th class="actions-col">Acciones</th>
@@ -238,12 +231,9 @@
                     <component :is="accessIcon(u)" :size="14" />
                     {{ accessLabel(u) }}
                   </span>
-                  <div class="access-switch">
-                    <button type="button" :class="{ active: accessMode(u) === 'admin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin')">Fin</button>
-                    <button type="button" :class="{ active: accessMode(u) === 'control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'control')">CTRL</button>
-                    <button type="button" :class="{ active: accessMode(u) === 'admin_control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin_control')">Ambos</button>
-                    <button type="button" :class="{ active: accessMode(u) === 'superadmin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'superadmin')">SA</button>
-                  </div>
+                  <span v-if="accessMode(u) === 'superadmin'" class="muted-pill">Todos los planteles</span>
+                  <span v-else-if="accessMode(u) === 'financial'" class="muted-pill">Finanzas en sus planteles</span>
+                  <span v-else class="muted-pill">Solo Control Escolar</span>
                 </div>
               </td>
               <td>
@@ -303,12 +293,9 @@
               <span v-for="p in plantelesFor(u)" :key="`mobile-${userKey(u)}-${p}`" class="plantel-chip">{{ p }}</span>
             </div>
             <span v-else class="muted-pill">Sin plantel</span>
-            <div class="access-switch mobile-access-switch" @click.stop>
-              <button type="button" :class="{ active: accessMode(u) === 'admin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin')">Fin</button>
-              <button type="button" :class="{ active: accessMode(u) === 'control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'control')">CTRL</button>
-              <button type="button" :class="{ active: accessMode(u) === 'admin_control' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'admin_control')">Ambos</button>
-              <button type="button" :class="{ active: accessMode(u) === 'superadmin' }" :disabled="bulkSaving" @click="requestAccessChange(u, 'superadmin')">SA</button>
-            </div>
+            <span v-if="accessMode(u) === 'superadmin'" class="muted-pill">Acceso global</span>
+            <span v-else-if="accessMode(u) === 'financial'" class="muted-pill">Finanzas en sus planteles</span>
+            <span v-else class="muted-pill">Solo Control Escolar</span>
           </article>
         </div>
 
@@ -356,12 +343,10 @@
           <component :is="accessIcon(activeUser)" :size="14" />
           {{ accessLabel(activeUser) }}
         </span>
-        <div class="drawer-access-actions">
-          <button type="button" :class="{ active: accessMode(activeUser) === 'admin' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'admin')">Financiero</button>
-          <button type="button" :class="{ active: accessMode(activeUser) === 'control' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'control')">Control Escolar</button>
-          <button type="button" :class="{ active: accessMode(activeUser) === 'admin_control' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'admin_control')">Ambos</button>
-          <button type="button" :class="{ active: accessMode(activeUser) === 'superadmin' }" :disabled="bulkSaving" @click="requestAccessChange(activeUser, 'superadmin')">Superadmin</button>
-        </div>
+        <p class="drawer-access-note">Control Escolar es el área predeterminada.</p>
+        <span v-if="accessMode(activeUser) === 'superadmin'" class="muted-pill">Acceso global</span>
+        <span v-else-if="accessMode(activeUser) === 'financial'" class="muted-pill">Finanzas en los planteles asignados</span>
+        <span v-else class="muted-pill">Sin acceso financiero</span>
         <button type="button" class="drawer-link" @click="openModal(activeUser)">Editar detalles</button>
         <button v-if="!isBlocked(activeUser) && !isProtectedUser(activeUser)" type="button" class="drawer-link danger" @click="requestToggleBlocked(activeUser)">Bloquear acceso</button>
         <button v-else-if="isBlocked(activeUser) && !isProtectedUser(activeUser)" type="button" class="drawer-link" @click="requestToggleBlocked(activeUser)">Reactivar acceso</button>
@@ -453,7 +438,7 @@
                   </div>
                 </div>
 
-                <label class="field-label">Acceso</label>
+                <label class="field-label">Acceso del usuario</label>
                 <div class="access-options">
                   <button
                     v-for="option in accessOptions"
@@ -469,19 +454,23 @@
                   </button>
                 </div>
 
-                <label class="field-label">Estado en Sistema de Ingresos</label>
+                <label class="field-label">Estado de la cuenta</label>
                 <label class="block-toggle" :class="{ active: form.ingresosBlocked }">
                   <input type="checkbox" v-model="form.ingresosBlocked" :disabled="isProtectedEmail(form.email)">
                   <span>{{ form.ingresosBlocked ? 'Bloqueado' : 'Activo' }}</span>
                 </label>
 
-                <label class="field-label">Planteles</label>
+                <label class="field-label">Planteles asignados</label>
                 <div class="plantel-grid">
                   <label v-for="p in PLANTELES_LIST" :key="p" :class="{ active: form.planteles.includes(p) }">
                     <input type="checkbox" :value="p" v-model="form.planteles">
                     {{ p }}
                   </label>
                 </div>
+
+                <p v-if="form.accessMode === 'financial'" class="field-help">ROLE_ADMON habilita Finanzas en los planteles seleccionados arriba.</p>
+                <p v-else-if="form.accessMode === 'superadmin'" class="field-help">Superadmin conserva acceso global a ambos dominios.</p>
+                <p v-else class="field-help">Control Escolar es el acceso seguro predeterminado.</p>
               </section>
             </div>
 
@@ -519,70 +508,6 @@
             <button type="button" class="primary-button" :class="{ danger: pendingAction.tone === 'danger' }" :disabled="bulkSaving" @click="runPendingAction">
               <LucideLoader2 v-if="bulkSaving" :size="16" class="animate-spin" />
               Confirmar
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="showInverseModal" class="modal-overlay" @click.self="closeInverseBulk">
-        <div class="inverse-modal">
-          <button type="button" class="confirm-close" @click="closeInverseBulk"><LucideX :size="18" /></button>
-          <div class="inverse-header">
-            <p class="eyebrow">Acción inversa</p>
-            <h3>Actualizar seleccionados y resto</h3>
-            <span>Define dos grupos globales: los usuarios seleccionados y todo el resto del directorio, aunque no estén dentro del filtro actual.</span>
-          </div>
-
-          <div class="inverse-grid">
-            <section class="inverse-panel selected">
-              <small>Grupo seleccionado</small>
-              <strong>{{ inverseSelectedRows.length }} usuarios</strong>
-              <label class="field-label">Acceso para seleccionados</label>
-              <div class="inverse-access-options">
-                <button v-for="option in accessOptions" :key="`selected-${option.value}`" type="button" :class="[{ active: inverseSelectedAccess === option.value }, option.value]" @click="inverseSelectedAccess = option.value">
-                  {{ option.label }}
-                </button>
-              </div>
-            </section>
-
-            <section class="inverse-panel inverse">
-              <small>Grupo inverso global</small>
-              <strong>{{ inverseRestRows.length }} usuarios</strong>
-              <label class="field-label">Acceso para todos los no seleccionados</label>
-              <div class="inverse-access-options">
-                <button v-for="option in accessOptions" :key="`rest-${option.value}`" type="button" :class="[{ active: inverseRestAccess === option.value }, option.value]" @click="inverseRestAccess = option.value">
-                  {{ option.label }}
-                </button>
-              </div>
-            </section>
-          </div>
-
-          <section class="inverse-scope-card global-only">
-            <h4>Alcance del “resto”</h4>
-            <div class="inverse-global-note">
-              <span>Todo el directorio institucional</span>
-              <strong>{{ inverseScopeCounts.all_directory }} usuarios</strong>
-              <small>El filtro actual solo sirve para ayudarte a seleccionar. La inversa siempre toma todos los usuarios no seleccionados.</small>
-            </div>
-          </section>
-
-          <section class="inverse-summary">
-            <strong>Vista previa</strong>
-            <span>{{ inverseSelectedRows.length }} seleccionados → {{ accessLabelForMode(inverseSelectedAccess) }}</span>
-            <span>{{ inverseRestRows.length }} no seleccionados del directorio completo → {{ accessLabelForMode(inverseRestAccess) }}</span>
-            <span v-if="inverseProtectedRows.length">{{ inverseProtectedRows.length }} protegidos se omitirán.</span>
-          </section>
-
-          <label class="inverse-ack" :class="{ required: inverseRequiresStrongAck }">
-            <input type="checkbox" v-model="inverseAcknowledged">
-            Entiendo que todos los usuarios no seleccionados del directorio también serán modificados.
-          </label>
-
-          <div class="confirm-actions">
-            <button type="button" class="soft-button" @click="closeInverseBulk">Cancelar</button>
-            <button type="button" class="primary-button" :class="{ danger: inverseRequiresStrongAck }" :disabled="bulkSaving || !canApplyInverse" @click="applyInverseBulk">
-              <LucideLoader2 v-if="bulkSaving" :size="16" class="animate-spin" />
-              Aplicar a {{ inverseSelectedRows.length + inverseRestRows.length }} usuarios
             </button>
           </div>
         </div>
@@ -629,7 +554,6 @@
 <script setup>
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import {
-  LucideActivity,
   LucideBan,
   LucideCalendarDays,
   LucideCheckCircle2,
@@ -660,6 +584,7 @@ const { openMenu } = useContextMenu()
 
 const WORKSPACE_DOMAIN = 'casitaiedis.edu.mx'
 const CONTROL_ROLE = 'ROLE_CTRL'
+const FINANCIAL_ROLE = 'ROLE_ADMON'
 const SUPERADMIN_ROLES = new Set(['superadmin'])
 const PROTECTED_EMAILS = new Set([
   `desarrollo.tecnologico@${WORKSPACE_DOMAIN}`,
@@ -694,17 +619,12 @@ const diagnosticsLoading = ref(false)
 const bulkPlantelAction = ref('add')
 const bulkPlantelValue = ref('')
 const undoNotice = ref(null)
-const showInverseModal = ref(false)
-const inverseSelectedAccess = ref('admin')
-const inverseRestAccess = ref('control')
-const inverseAcknowledged = ref(false)
 let directoryTimer = null
 let undoTimer = null
 
 const accessOptions = [
-  { value: 'admin', label: 'Financiero', description: 'Acceso operativo estándar.', icon: LucideShieldCheck },
-  { value: 'control', label: 'Control Escolar', description: 'Solo gestión escolar.', icon: LucideGraduationCap },
-  { value: 'admin_control', label: 'Ambos', description: 'Financiero + Control Escolar.', icon: LucideShieldCheck },
+  { value: 'control', label: 'Control Escolar', description: 'Área predeterminada para usuarios institucionales.', icon: LucideGraduationCap },
+  { value: 'financial', label: 'Financiero', description: 'ROLE_ADMON en los planteles asignados.', icon: LucideShieldCheck },
   { value: 'superadmin', label: 'Superadmin', description: 'Acceso total a configuración global.', icon: LucideShield }
 ]
 
@@ -714,15 +634,15 @@ const emptyForm = () => ({
   email: '',
   avatar: '',
   picture: '',
-  planteles: ['PT'],
-  accessMode: 'admin',
+  planteles: [],
+  accessMode: 'control',
   ingresosBlocked: false
 })
 const form = ref(emptyForm())
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase()
 const roleTokens = (role) => String(role || '').split(',').map(entry => entry.trim().toLowerCase()).filter(Boolean)
-const hasControlEscolarRole = (role) => roleTokens(role).includes(CONTROL_ROLE.toLowerCase())
+const hasFinancialRole = (role) => roleTokens(role).includes(FINANCIAL_ROLE.toLowerCase())
 const isWorkspaceEmail = (email) => normalizeEmail(email).endsWith(`@${WORKSPACE_DOMAIN}`)
 const isProtectedEmail = (email) => PROTECTED_EMAILS.has(normalizeEmail(email))
 const isProtectedUser = (u) => Boolean(u?.protected) || isProtectedEmail(u?.email)
@@ -735,22 +655,17 @@ const avatarFor = (u) => {
   const params = new URLSearchParams({ email: u?.email || '', name: displayNameFor(u) })
   return `/api/directory/photo?${params.toString()}`
 }
-const plantelesFor = (u) => String(u?.planteles || u?.plantel || '').split(',').map(p => p.trim()).filter(Boolean)
+const plantelesFor = (u) => String(u?.plantel || u?.planteles || '').split(',').map(p => p.trim()).filter(Boolean)
 
-const accessModeForRole = (role) => {
-  const tokens = roleTokens(role)
+const accessModeForUser = (u) => {
+  const tokens = roleTokens(u?.role)
   if (tokens.some(token => SUPERADMIN_ROLES.has(token))) return 'superadmin'
-  const hasControl = tokens.includes(CONTROL_ROLE.toLowerCase())
-  const baseRoles = tokens.filter(token => token !== CONTROL_ROLE.toLowerCase() && token !== 'plantel')
-  if (hasControl && baseRoles.length) return 'admin_control'
-  if (hasControl) return 'control'
-  return 'admin'
+  return hasFinancialRole(u?.role) ? 'financial' : 'control'
 }
 const accessLabelForMode = (mode) => {
   if (mode === 'superadmin') return 'Superadmin'
-  if (mode === 'admin_control') return 'Ambos'
-  if (mode === 'control') return 'Control Escolar'
-  return 'Financiero'
+  if (mode === 'financial') return 'Control Escolar + Financiero'
+  return 'Control Escolar'
 }
 const accessIconForMode = (mode) => {
   if (mode === 'superadmin') return LucideShield
@@ -759,11 +674,11 @@ const accessIconForMode = (mode) => {
 }
 const accessClassForMode = (mode) => {
   if (mode === 'superadmin') return 'superadmin'
-  if (mode === 'admin_control') return 'mixed'
+  if (mode === 'financial') return 'mixed'
   if (mode === 'control') return 'control'
   return 'general'
 }
-const accessMode = (u) => accessModeForRole(u?.role)
+const accessMode = (u) => accessModeForUser(u)
 const accessLabel = (u) => accessLabelForMode(accessMode(u))
 const accessIcon = (u) => accessIconForMode(accessMode(u))
 const accessBadgeClass = (u) => accessClassForMode(accessMode(u))
@@ -865,17 +780,15 @@ const pageItems = computed(() => {
 
 const superAdminCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'superadmin').length)
 const controlCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'control').length)
-const mixedCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'admin_control').length)
-const defaultCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'admin').length)
+const financialCount = computed(() => usuarios.value.filter(u => accessMode(u) === 'financial').length)
 const blockedCount = computed(() => usuarios.value.filter(isBlocked).length)
 const protectedCount = computed(() => usuarios.value.filter(isProtectedUser).length)
 const todayCount = computed(() => usuarios.value.filter(u => isWithinDays(u, 1)).length)
 const missingPlantelCount = computed(() => usuarios.value.filter(u => !plantelesFor(u).length).length)
 const metricChips = computed(() => [
   { key: 'all', label: 'Todos', value: usuarios.value.length, caption: 'Directorio', tone: 'neutral', active: statusFilter.value === 'all' && accessFilter.value === 'all' && plantelFilter.value === 'all' && activityFilter.value === 'all' },
-  { key: 'admin', label: 'Financiero', value: defaultCount.value, caption: 'Acceso operativo', tone: 'green', active: accessFilter.value === 'admin' },
-  { key: 'control', label: 'Control Escolar', value: controlCount.value, caption: 'Solo expediente', tone: 'blue', active: accessFilter.value === 'control' },
-  { key: 'admin_control', label: 'Ambos', value: mixedCount.value, caption: 'Doble acceso', tone: 'purple', active: accessFilter.value === 'admin_control' },
+  { key: 'control', label: 'Control Escolar', value: controlCount.value, caption: 'Acceso predeterminado', tone: 'blue', active: accessFilter.value === 'control' },
+  { key: 'financial', label: 'Financiero', value: financialCount.value, caption: 'ROLE_ADMON', tone: 'green', active: accessFilter.value === 'financial' },
   { key: 'superadmin', label: 'Superadmin', value: superAdminCount.value, caption: 'Acceso global', tone: 'purple', active: accessFilter.value === 'superadmin' },
   { key: 'blocked', label: 'Bloqueados', value: blockedCount.value, caption: 'Restringidos', tone: 'red', active: statusFilter.value === 'blocked' },
   { key: 'protected', label: 'Protegidos', value: protectedCount.value, caption: 'No editables', tone: 'purple', active: statusFilter.value === 'protected' },
@@ -887,23 +800,6 @@ const filteredSelectableEmails = computed(() => filteredUsuarios.value.filter(u 
 const missingFilteredEmails = computed(() => filteredSelectableEmails.value.filter(email => !selectedEmails.value.includes(email)))
 const allVisibleSelected = computed(() => visibleSelectableEmails.value.length > 0 && visibleSelectableEmails.value.every(email => selectedEmails.value.includes(email)))
 const someVisibleSelected = computed(() => visibleSelectableEmails.value.some(email => selectedEmails.value.includes(email)) && !allVisibleSelected.value)
-const hasSpecificPlantelFilter = computed(() => plantelFilter.value !== 'all' && plantelFilter.value !== '__sin_plantel__')
-const inverseDirectoryRows = computed(() => usuarios.value.filter(u => isWorkspaceEmail(u.email)))
-const inverseScopeCounts = computed(() => ({
-  all_directory: inverseDirectoryRows.value.length
-}))
-const inverseSelectedRows = computed(() => {
-  const selected = new Set(selectedEmails.value.map(normalizeEmail))
-  return inverseDirectoryRows.value.filter(u => selected.has(normalizeEmail(u.email)) && !isProtectedUser(u))
-})
-const inverseRestRows = computed(() => {
-  const selected = new Set(selectedEmails.value.map(normalizeEmail))
-  return inverseDirectoryRows.value.filter(u => !selected.has(normalizeEmail(u.email)) && !isProtectedUser(u))
-})
-const inverseProtectedRows = computed(() => inverseDirectoryRows.value.filter(isProtectedUser))
-const inverseRequiresStrongAck = computed(() => true)
-const canApplyInverse = computed(() => inverseSelectedRows.value.length > 0 && inverseRestRows.value.length > 0 && (!inverseRequiresStrongAck.value || inverseAcknowledged.value))
-
 watch([searchQuery, statusFilter, plantelFilter, accessFilter, activityFilter, sortBy, pageSize], () => { page.value = 1 })
 watch(totalPages, (total) => { if (page.value > total) page.value = total })
 watch(showModal, (val) => {
@@ -987,7 +883,7 @@ const applyMetricChip = (key) => {
   plantelFilter.value = 'all'
   accessFilter.value = 'all'
   activityFilter.value = 'all'
-  if (['admin', 'control', 'admin_control', 'superadmin'].includes(key)) accessFilter.value = key
+  if (['control', 'financial', 'superadmin'].includes(key)) accessFilter.value = key
   if (key === 'blocked') statusFilter.value = 'blocked'
   if (key === 'protected') statusFilter.value = 'protected'
   if (key === 'missing_plantel') plantelFilter.value = '__sin_plantel__'
@@ -1174,19 +1070,13 @@ const normalizePlantelArray = (value) => {
   return Array.from(new Set(raw.map(p => String(p || '').trim()).filter(p => PLANTELES_LIST.includes(p))))
 }
 const serializePlanteles = (value) => normalizePlantelArray(value).join(',')
-const resolveClientRoleForAccess = (role, mode) => {
-  const tokens = Array.from(new Set(roleTokens(role).map(token => token.toUpperCase())))
-  const withoutControl = tokens.filter(token => token !== CONTROL_ROLE)
-  const baseRoles = withoutControl.filter(token => token !== 'PLANTEL' && !SUPERADMIN_ROLES.has(token.toLowerCase()))
+const resolveClientRoleForAccess = (_role, mode) => {
   if (mode === 'superadmin') return 'superadmin'
-  if (mode === 'control') return CONTROL_ROLE
-  if (mode === 'admin_control') return Array.from(new Set([...(baseRoles.length ? baseRoles : ['ROLE_HUSKY_USER']), CONTROL_ROLE])).join(',')
-  if (mode === 'admin') return (baseRoles.length ? baseRoles : ['ROLE_HUSKY_USER']).join(',')
-  return role || 'ROLE_HUSKY_USER'
+  if (mode === 'financial') return `${CONTROL_ROLE},${FINANCIAL_ROLE}`
+  return CONTROL_ROLE
 }
 const optimisticUser = (u, patch) => {
   const next = { ...u }
-  if (patch.accessMode) next.role = resolveClientRoleForAccess(next.role, patch.accessMode)
   if ('ingresosBlocked' in patch || 'ingresos_blocked' in patch) {
     const blocked = patch.ingresosBlocked ?? patch.ingresos_blocked
     next.ingresosBlocked = Boolean(blocked)
@@ -1194,17 +1084,20 @@ const optimisticUser = (u, patch) => {
   }
   const hasReplacePlanteles = Object.prototype.hasOwnProperty.call(patch, 'replacePlanteles')
   if (hasReplacePlanteles || patch.addPlanteles || patch.removePlanteles) {
-    const currentPlanteles = normalizePlantelArray(next.planteles || next.plantel)
+    const currentPlanteles = normalizePlantelArray(next.plantel || next.planteles)
     let nextPlanteles = hasReplacePlanteles ? normalizePlantelArray(patch.replacePlanteles) : currentPlanteles
     const addPlanteles = normalizePlantelArray(patch.addPlanteles)
     const removePlanteles = normalizePlantelArray(patch.removePlanteles)
     if (addPlanteles.length) nextPlanteles = Array.from(new Set([...nextPlanteles, ...addPlanteles]))
     if (removePlanteles.length) nextPlanteles = nextPlanteles.filter(p => !removePlanteles.includes(p))
-    next.planteles = serializePlanteles(nextPlanteles)
-    next.plantel = nextPlanteles[0] || ''
+    const serialized = serializePlanteles(nextPlanteles)
+    next.plantel = serialized
+    next.planteles = serialized
   }
+  if (patch.accessMode) next.role = resolveClientRoleForAccess(next.role, patch.accessMode)
   return next
 }
+
 const mergeResponseUser = (row) => {
   if (!row?.email) return
   const email = normalizeEmail(row.email)
@@ -1287,8 +1180,8 @@ const applyUserPatch = async (emails, patch, options = {}) => {
 
 const requestAccessChange = async (u, mode) => {
   if (!u || accessMode(u) === mode) return
-  const previousMode = accessMode(u)
   const email = normalizeEmail(u.email)
+  const previousMode = accessMode(u)
   const response = await applyUserPatch([email], { accessMode: mode }, {
     optimistic: true,
     successMessage: `Acceso actualizado a ${accessLabelForMode(mode)}.`
@@ -1296,7 +1189,7 @@ const requestAccessChange = async (u, mode) => {
   if (response && !response.failed?.length) {
     setUndoNotice({
       title: 'Acceso actualizado',
-      body: `${displayNameFor(u)} ahora tiene acceso ${accessLabelForMode(mode)}.`,
+      body: `${displayNameFor(u)} conserva sus planteles asignados.`,
       emails: [email],
       patch: { accessMode: previousMode }
     })
@@ -1344,6 +1237,16 @@ const requestBulkPlantelUpdate = () => {
   const label = bulkPlantelAction.value === 'remove' ? 'Quitar plantel' : bulkPlantelAction.value === 'replace' ? 'Reemplazar planteles' : 'Agregar plantel'
   requestBulkUpdate(patch, label, `Se aplicará ${plantel} a los usuarios seleccionados.`)
 }
+const requestBulkFinancialUpdate = (grant) => {
+  requestBulkUpdate(
+    { accessMode: grant ? 'financial' : 'control' },
+    grant ? 'Dar acceso financiero' : 'Quitar acceso financiero',
+    grant
+      ? 'ROLE_ADMON habilitará Finanzas en los planteles que cada usuario ya tiene asignados.'
+      : 'Los usuarios conservarán sus planteles y quedarán únicamente en Control Escolar.',
+    grant ? 'safe' : 'danger'
+  )
+}
 const requestToggleBlocked = (u) => {
   if (!u || isProtectedUser(u)) return
   const blocked = !isBlocked(u)
@@ -1371,68 +1274,21 @@ const runPendingAction = async () => {
   pendingAction.value = null
 }
 
-const inverseScopeFilter = () => ({ search: '', plantel: 'all', access: 'all', status: 'all', activity: 'all', sort: sortBy.value })
-const openInverseBulk = () => {
-  if (!selectedEmails.value.length) return
-  inverseSelectedAccess.value = 'admin'
-  inverseRestAccess.value = 'control'
-  inverseAcknowledged.value = false
-  showInverseModal.value = true
-}
-const closeInverseBulk = () => {
-  showInverseModal.value = false
-  inverseAcknowledged.value = false
-}
-const applyInverseBulk = async () => {
-  if (!canApplyInverse.value) return
-  const selectedPatch = { accessMode: inverseSelectedAccess.value }
-  const inversePatch = { accessMode: inverseRestAccess.value }
-  const selectedEmailsForPatch = inverseSelectedRows.value.map(u => normalizeEmail(u.email))
-  const inverseEmailsForPatch = inverseRestRows.value.map(u => normalizeEmail(u.email))
-  const rollbackRows = cloneRowsForRollback([...selectedEmailsForPatch, ...inverseEmailsForPatch])
-  patchLocalUsers(selectedEmailsForPatch, selectedPatch)
-  patchLocalUsers(inverseEmailsForPatch, inversePatch)
-  bulkSaving.value = true
-  try {
-    const response = await $fetch('/api/users/bulk-inverse', {
-      method: 'PATCH',
-      body: {
-        selectedEmails: selectedEmails.value,
-        scopeMode: 'all_directory',
-        filterScope: inverseScopeFilter(),
-        selectedPatch,
-        inversePatch
-      }
-    })
-    mergeResponseRows(response?.rows)
-    const selectedUpdated = response?.selected?.updated || 0
-    const inverseUpdated = response?.inverse?.updated || 0
-    const skipped = (response?.selected?.skipped?.length || 0) + (response?.inverse?.skipped?.length || 0)
-    const failed = (response?.selected?.failed?.length || 0) + (response?.inverse?.failed?.length || 0)
-    const details = []
-    if (skipped) details.push(`${skipped} omitidos`)
-    if (failed) details.push(`${failed} errores`)
-    show(`${selectedUpdated + inverseUpdated} usuarios actualizados con acción inversa.`, failed ? 'danger' : 'success', { details })
-    selectedEmails.value = []
-    closeInverseBulk()
-  } catch (e) {
-    restoreRows(rollbackRows)
-    show(extractMessage(e) || 'No se pudo aplicar la acción inversa.', 'danger')
-  } finally {
-    bulkSaving.value = false
-  }
-}
-
 const showContextMenu = (event, u) => {
-  openMenu(event, [
+  const items = [
     { label: 'Opciones', disabled: true, action: () => {} },
-    { label: 'Editar usuario', icon: LucidePencil, action: () => openModal(u) },
-    { label: 'Asignar acceso Control Escolar', icon: LucideGraduationCap, action: () => requestAccessChange(u, 'control') },
-    { label: 'Asignar acceso combinado', icon: LucideShieldCheck, action: () => requestAccessChange(u, 'admin_control') },
-    { label: 'Asignar superadmin', icon: LucideShield, action: () => requestAccessChange(u, 'superadmin') },
-    { label: 'Restaurar Financiero', icon: LucideShieldCheck, action: () => requestAccessChange(u, 'admin') },
-    { label: isBlocked(u) ? 'Reactivar acceso' : 'Bloquear acceso', icon: isBlocked(u) ? LucideUnlock : LucideBan, disabled: isProtectedUser(u), action: () => requestToggleBlocked(u) }
-  ])
+    { label: 'Editar usuario', icon: LucidePencil, action: () => openModal(u) }
+  ]
+  if (accessMode(u) === 'financial') {
+    items.push({ label: 'Quitar acceso financiero', icon: LucideGraduationCap, action: () => requestAccessChange(u, 'control') })
+  } else if (accessMode(u) === 'control') {
+    items.push({ label: 'Dar acceso financiero', icon: LucideShieldCheck, action: () => requestAccessChange(u, 'financial') })
+  }
+  if (accessMode(u) !== 'superadmin') {
+    items.push({ label: 'Asignar superadmin', icon: LucideShield, action: () => requestAccessChange(u, 'superadmin') })
+  }
+  items.push({ label: isBlocked(u) ? 'Reactivar acceso' : 'Bloquear acceso', icon: isBlocked(u) ? LucideUnlock : LucideBan, disabled: isProtectedUser(u), action: () => requestToggleBlocked(u) })
+  openMenu(event, items)
 }
 
 const openModal = (u = null) => {
@@ -1444,8 +1300,8 @@ const openModal = (u = null) => {
       email: u.email,
       avatar: avatarFor(u),
       picture: avatarFor(u),
-      planteles: plantelesFor(u).length ? plantelesFor(u) : ['PT'],
-      accessMode: accessModeForRole(u.role),
+      planteles: plantelesFor(u),
+      accessMode: accessModeForUser(u),
       ingresosBlocked: isBlocked(u)
     }
     directoryQuery.value = u.email || displayNameFor(u)
@@ -1461,15 +1317,11 @@ const openModal = (u = null) => {
 }
 const closeModal = () => { showModal.value = false }
 
-const hasUsersModalOpen = computed(() => showModal.value || Boolean(pendingAction.value) || showInverseModal.value || showDebug.value)
+const hasUsersModalOpen = computed(() => showModal.value || Boolean(pendingAction.value) || showDebug.value)
 
 useModalEscape(() => {
   if (showDebug.value) {
     showDebug.value = false
-    return
-  }
-  if (showInverseModal.value) {
-    closeInverseBulk()
     return
   }
   if (pendingAction.value) {
@@ -1504,7 +1356,7 @@ const saveUser = async () => {
         email: form.value.email,
         avatar: form.value.avatar,
         picture: form.value.picture || form.value.avatar,
-        planteles: form.value.planteles,
+        plantel: form.value.planteles,
         accessMode: form.value.accessMode,
         ingresosBlocked: form.value.ingresosBlocked
       }
@@ -1520,8 +1372,8 @@ const saveUser = async () => {
         email: form.value.email,
         avatar: form.value.avatar,
         picture: form.value.picture || form.value.avatar,
+        plantel: serializePlanteles(form.value.planteles),
         planteles: serializePlanteles(form.value.planteles),
-        plantel: form.value.planteles[0] || '',
         role: resolveClientRoleForAccess(null, form.value.accessMode),
         ingresosBlocked: form.value.ingresosBlocked,
         ingresos_blocked: form.value.ingresosBlocked ? 1 : 0
@@ -2012,6 +1864,7 @@ button:disabled {
   font-weight: 850;
 }
 
+
 .bulk-button {
   min-height: 36px;
   display: inline-flex;
@@ -2171,36 +2024,6 @@ button:disabled {
   align-items: center;
 }
 
-.access-switch,
-.drawer-access-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.access-switch button,
-.drawer-access-actions button {
-  min-height: 26px;
-  border: 1px solid #dbe4ef;
-  border-radius: 999px;
-  background: #fff;
-  color: #59677c;
-  padding: 0 8px;
-  font-size: 10px;
-  font-weight: 950;
-}
-
-.access-switch button.active,
-.drawer-access-actions button.active {
-  color: #166534;
-  background: #effcf3;
-  border-color: #b7e6c3;
-}
-
-.drawer-access-actions {
-  margin-top: 12px;
-}
-
 .plantel-chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -2210,6 +2033,20 @@ button:disabled {
 
 .plantel-chip-row.compact {
   max-width: 190px;
+}
+
+.plantel-chip.financial {
+  color: #6d28d9;
+  background: #f5f0ff;
+  border-color: #ddd6fe;
+}
+
+.drawer-access-note {
+  margin: 9px 0 12px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 800;
 }
 
 .plantel-chip,
@@ -2433,6 +2270,7 @@ button:disabled {
 .modal-panel { border: 1px solid var(--line); border-radius: 20px; padding: 16px; background: linear-gradient(180deg, #fff, #f8fafc); }
 .field-label { display: block; margin: 14px 0 9px; color: #263653; font-size: 12px; font-weight: 950; }
 .field-label:first-child { margin-top: 0; }
+.field-help { margin: -3px 0 10px; color: #64748b; font-size: 11px; line-height: 1.45; font-weight: 750; }
 
 .directory-list { min-height: 300px; max-height: 355px; overflow: auto; display: grid; align-content: start; gap: 9px; margin-top: 12px; }
 .directory-option { display: flex; align-items: center; gap: 12px; min-height: 62px; padding: 10px; border: 1px solid var(--line); border-radius: 16px; background: #fff; text-align: left; }
@@ -2464,9 +2302,9 @@ button:disabled {
 .access-option svg { grid-row: span 2; }
 .access-option span { font-size: 13px; font-weight: 950; }
 .access-option small { color: var(--muted); font-size: 11px; font-weight: 750; }
-.access-option.active.admin { color: #166534; background: #effcf3; border-color: #b7e6c3; }
 .access-option.active.control { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; }
-.access-option.active.admin_control { color: #6d28d9; background: #f5f0ff; border-color: #ddd6fe; }
+.access-option.active.financial { color: #166534; background: #effcf3; border-color: #b7e6c3; }
+.access-option.active.superadmin { color: #6d28d9; background: #f5f0ff; border-color: #ddd6fe; }
 
 .block-toggle { min-height: 44px; display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: #166534; padding: 0 12px; font-size: 12px; font-weight: 950; }
 .block-toggle.active { color: #b91c1c; background: #fff1f2; border-color: #fecdd3; }
@@ -2475,6 +2313,7 @@ button:disabled {
 .plantel-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .plantel-grid label { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; border: 1px solid var(--line); border-radius: 11px; background: #fff; color: #47546b; font-size: 11px; font-weight: 900; }
 .plantel-grid label.active { color: #166534; background: #effcf3; border-color: #b7e6c3; }
+.plantel-grid label.disabled { opacity: .48; cursor: not-allowed; }
 .plantel-grid input { accent-color: #22a947; }
 
 .modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 22px 22px; border-top: 1px solid #e5edf5; }
@@ -2825,110 +2664,6 @@ button:disabled {
 .mobile-user-identity strong { color: var(--ink); font-size: 13px; font-weight: 950; }
 .mobile-user-identity span { color: #65728a; font-size: 11px; font-weight: 800; }
 .mobile-user-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-.mobile-access-switch button { min-height: 32px; padding-inline: 12px; }
-
-.inverse-modal {
-  width: min(760px, calc(100vw - 40px));
-  max-height: calc(100vh - 40px);
-  overflow: auto;
-  position: relative;
-  border: 1px solid rgba(226, 232, 240, .95);
-  border-radius: 26px;
-  background: #fff;
-  padding: 24px;
-  box-shadow: 0 30px 90px rgba(15, 23, 42, .26);
-}
-.inverse-header h3 { margin: 7px 0 0; color: var(--ink); font-size: 22px; font-weight: 950; letter-spacing: -.035em; }
-.inverse-header span { display: block; margin-top: 5px; color: var(--muted); font-size: 13px; font-weight: 750; }
-.inverse-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 18px;
-}
-.inverse-panel,
-.inverse-scope-card,
-.inverse-summary,
-.inverse-ack {
-  border: 1px solid #e5edf5;
-  border-radius: 18px;
-  background: #fbfdff;
-  padding: 14px;
-}
-.inverse-panel small,
-.inverse-panel strong { display: block; }
-.inverse-panel small { color: #7a879b; font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .06em; }
-.inverse-panel strong { margin-top: 5px; color: var(--ink); font-size: 28px; line-height: 1; font-weight: 950; letter-spacing: -.05em; }
-.inverse-access-options { display: flex; flex-wrap: wrap; gap: 8px; }
-.inverse-access-options button {
-  min-height: 34px;
-  border: 1px solid #dbe4ef;
-  border-radius: 999px;
-  background: #fff;
-  color: #59677c;
-  padding: 0 12px;
-  font-size: 11px;
-  font-weight: 950;
-}
-.inverse-access-options button.active.admin { color: #166534; background: #effcf3; border-color: #b7e6c3; }
-.inverse-access-options button.active.control { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; }
-.inverse-access-options button.active.admin_control { color: #6d28d9; background: #f5f0ff; border-color: #ddd6fe; }
-.inverse-scope-card { display: grid; gap: 9px; margin-top: 12px; }
-.inverse-scope-card h4 { margin: 0 0 2px; color: #263653; font-size: 12px; font-weight: 950; text-transform: uppercase; letter-spacing: .045em; }
-.inverse-scope-card label {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 0 10px;
-  border: 1px solid #e5edf5;
-  border-radius: 14px;
-  background: #fff;
-  color: #263653;
-  font-size: 12px;
-  font-weight: 850;
-}
-.inverse-scope-card label.active { border-color: #a9ddb8; background: #f2fcf5; }
-.inverse-scope-card label.disabled { opacity: .48; }
-.inverse-scope-card strong { color: #64748b; font-size: 11px; font-weight: 950; }
-.inverse-scope-card.global-only {
-  border-color: #fde68a;
-  background: linear-gradient(180deg, #fffbeb 0%, #ffffff 100%);
-}
-.inverse-global-note {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 5px 12px;
-  align-items: center;
-  padding: 12px;
-  border: 1px solid #fde68a;
-  border-radius: 16px;
-  background: rgba(255,255,255,.78);
-}
-.inverse-global-note span {
-  color: #263653;
-  font-size: 13px;
-  font-weight: 950;
-}
-.inverse-global-note strong {
-  color: #92400e;
-  font-size: 13px;
-  font-weight: 950;
-}
-.inverse-global-note small {
-  grid-column: 1 / -1;
-  color: #64748b;
-  font-size: 11px;
-  line-height: 1.35;
-  font-weight: 800;
-}
-.inverse-summary { display: grid; gap: 5px; margin-top: 12px; color: #475569; font-size: 12px; font-weight: 850; }
-.inverse-summary strong { color: var(--ink); font-size: 13px; font-weight: 950; }
-.inverse-ack { display: flex; align-items: center; gap: 9px; margin-top: 12px; color: #475569; font-size: 12px; font-weight: 900; }
-.inverse-ack.required { border-color: #fde68a; background: #fffbeb; }
-.inverse-ack input { accent-color: #22a947; }
-
 @media (max-width: 760px) {
   .usuarios-page.has-selection .usuarios-main { padding-bottom: 112px; }
   .metric-grid { flex-wrap: nowrap; overflow-x: auto; padding: 8px; border-radius: 18px; scrollbar-width: none; }
@@ -2976,10 +2711,6 @@ button:disabled {
   .drawer-slide-leave-to {
     transform: translateY(24px);
   }
-  .inverse-modal { width: calc(100vw - 22px); padding: 20px; border-radius: 22px; }
-  .inverse-grid { grid-template-columns: 1fr; }
-  .inverse-scope-card label { grid-template-columns: auto minmax(0, 1fr); }
-  .inverse-scope-card strong { grid-column: 2; }
 }
 
 </style>

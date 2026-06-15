@@ -5,7 +5,7 @@ declare global {
   const CONCEPTO_CATEGORIES: typeof import('../../server/utils/conceptos-config').CONCEPTO_CATEGORIES
   const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS: typeof import('../../server/utils/control-escolar').CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS
   const CONTROL_ESCOLAR_MATRICULA_IMPORT_LABELS: typeof import('../../server/utils/control-escolar').CONTROL_ESCOLAR_MATRICULA_IMPORT_LABELS
-  const CONTROL_ESCOLAR_ROLE: typeof import('../../server/utils/external-users').CONTROL_ESCOLAR_ROLE
+  const CONTROL_ESCOLAR_ROLE: typeof import('../../server/utils/auth-session').CONTROL_ESCOLAR_ROLE
   const DEFAULT_COBRANZA_EMAIL_SUBJECT: typeof import('../../server/utils/cobranzaEmail').DEFAULT_COBRANZA_EMAIL_SUBJECT
   const DEFAULT_COBRANZA_EMAIL_TEMPLATE: typeof import('../../server/utils/cobranzaEmail').DEFAULT_COBRANZA_EMAIL_TEMPLATE
   const DEFAULT_PLANTELES: typeof import('../../server/utils/conceptos-config').DEFAULT_PLANTELES
@@ -15,6 +15,7 @@ declare global {
   const EXTERNAL_SYNC_STALE_AFTER_MINUTES: typeof import('../../server/utils/externalBaseSync').EXTERNAL_SYNC_STALE_AFTER_MINUTES
   const EXTERNAL_SYNC_TIMEOUT_MS: typeof import('../../server/utils/externalBaseSync').EXTERNAL_SYNC_TIMEOUT_MS
   const EXTERNAL_SYNC_URL: typeof import('../../server/utils/externalBaseSync').EXTERNAL_SYNC_URL
+  const FINANCIAL_ADMIN_ROLE: typeof import('../../server/utils/auth-session').FINANCIAL_ADMIN_ROLE
   const H3Error: typeof import('../../node_modules/h3').H3Error
   const H3Event: typeof import('../../node_modules/h3').H3Event
   const LOG_PREFIX: typeof import('../../server/utils/externalBaseSync').LOG_PREFIX
@@ -186,6 +187,8 @@ declare global {
   const handleCors: typeof import('../../node_modules/h3').handleCors
   const hasControlEscolarRole: typeof import('../../server/utils/auth-session').hasControlEscolarRole
   const hasExternalControlRole: typeof import('../../server/utils/external-users').hasExternalControlRole
+  const hasFinancialAccessForPlantel: typeof import('../../server/utils/auth-session').hasFinancialAccessForPlantel
+  const hasFinancialAdminRole: typeof import('../../server/utils/auth-session').hasFinancialAdminRole
   const hasRole: typeof import('../../server/utils/auth-session').hasRole
   const importControlEscolarMatriculaUpdates: typeof import('../../server/utils/control-escolar').importControlEscolarMatriculaUpdates
   const isBridgeAgentUnavailableError: typeof import('../../server/utils/db').isBridgeAgentUnavailableError
@@ -274,7 +277,6 @@ declare global {
   const renderCobranzaEmail: typeof import('../../server/utils/cobranzaEmail').renderCobranzaEmail
   const renderNoAdeudoEmail: typeof import('../../server/utils/noAdeudo').renderNoAdeudoEmail
   const requireConceptosAdmin: typeof import('../../server/utils/conceptos-config').requireConceptosAdmin
-  const resolveAuthHomePlantel: typeof import('../../server/utils/auth-session').resolveAuthHomePlantel
   const resolveCfdiPath: typeof import('../../server/utils/cfdi-proxy').resolveCfdiPath
   const resolveControlEscolarAuth: typeof import('../../server/utils/control-escolar').resolveControlEscolarAuth
   const resolveDataBridgeAgentId: typeof import('../../server/utils/auth-session').resolveDataBridgeAgentId
@@ -417,7 +419,7 @@ export { defineTask, runTask } from 'nitropack/runtime/internal/task';
 export { defineNitroErrorHandler } from 'nitropack/runtime/internal/error/utils';
 export { buildAssetsURL as __buildAssetsURL, publicAssetsURL as __publicAssetsURL } from 'C:/Users/hp/sistema-de-ingresos-2/node_modules/@nuxt/nitro-server/dist/runtime/utils/paths';
 export { defineAppConfig } from 'C:/Users/hp/sistema-de-ingresos-2/node_modules/@nuxt/nitro-server/dist/runtime/utils/config';
-export { normalizePlantel, parseRoles, hasRole, isSuperAdminRole, hasControlEscolarRole, isControlEscolarOnlyRole, parsePlanteles, getSuperAdminPlanteles, isValidPlantelScope, resolveAuthHomePlantel, getTrustedAuthUser, resolveDataBridgeAgentId } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/auth-session';
+export { CONTROL_ESCOLAR_ROLE, FINANCIAL_ADMIN_ROLE, normalizePlantel, parseRoles, hasRole, isSuperAdminRole, hasControlEscolarRole, hasFinancialAdminRole, isControlEscolarOnlyRole, parsePlanteles, getSuperAdminPlanteles, isValidPlantelScope, hasFinancialAccessForPlantel, getTrustedAuthUser, resolveDataBridgeAgentId } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/auth-session';
 export { generateBecaCartaPdf } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/becaCartaPdf';
 export { BECA_TYPE_OPTIONS, normalizeBecaTypes } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/becaTypes';
 export { fetchCentralMatriculaOverlay, fetchCentralMatriculaOverlays } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/central-matricula-overlay';
@@ -435,7 +437,7 @@ export { getDocumentoPeriodoSchema, periodoLifecycleSelect, assertDocumentoPerio
 export { parseEnrollmentConceptIds, getHistoricalEnrollmentConceptEvidence } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/enrollment-evidence';
 export { getAuroraExternalApiAuthDiagnostics, getAuroraExternalApiRequestAuthDiagnostics, assertAuroraExternalApiToken, setExternalApiResponseHeaders } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/external-api-auth';
 export { readExternalDeudorStatus } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/external-deudores';
-export { CONTROL_ESCOLAR_ROLE, NO_ADEUDO_CONTROL_PLANTELES_COLUMN, getExternalUsersColumns, getExternalUsersDiagnostics, ensureExternalUsersTable, isExternalUsersAvailable, externalUserAccessMode, queryExternalUsers, listExternalUsers, findExternalUserByEmail, createExternalUser, updateExternalUser, bulkUpdateExternalUsers, hasExternalControlRole, noAdeudoControlUsersColumnExists, listExternalControlUsersForNoAdeudo, getNoAdeudoControlUserForPlantel, setNoAdeudoControlUserForPlantel, touchExternalUserLogin, deleteExternalUser } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/external-users';
+export { NO_ADEUDO_CONTROL_PLANTELES_COLUMN, getExternalUsersColumns, getExternalUsersDiagnostics, ensureExternalUsersTable, isExternalUsersAvailable, externalUserAccessMode, queryExternalUsers, listExternalUsers, findExternalUserByEmail, createExternalUser, updateExternalUser, bulkUpdateExternalUsers, hasExternalControlRole, noAdeudoControlUsersColumnExists, listExternalControlUsersForNoAdeudo, getNoAdeudoControlUserForPlantel, setNoAdeudoControlUserForPlantel, touchExternalUserLogin, deleteExternalUser } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/external-users';
 export { ACTIVE_SYNC_STATUSES, ENROLLMENT_CONFIG_URL, EXTERNAL_SYNC_URL, EXTERNAL_SYNC_TIMEOUT_MS, EXTERNAL_SYNC_STALE_AFTER_MINUTES, EXTERNAL_SYNC_BATCH_LIMIT, ENROLLMENT_CONFIG_TIMEOUT_MS, LOG_PREFIX, createEmptyCounters, cleanApiKey, getExternalSyncConfig, logSyncInfo, logSyncWarn, logSyncError, normalizeMatricula, safeErrorMessage, toStatusPayload, readSyncRun, cleanupBlockingRuns, markRunStatus, updateRunProgress, finishRun, isRunCancelled, buildExternalUrl, buildExternalHeaders, readExternalErrorBody, extractExternalRows, fetchExternalRows, fetchCurrentEnrollmentCicloKey, mapExternalRow, computeHash, signExternalRow, attachRowSignatures, detachAndVerifySignedRow, resolveFinalEstatus, processExternalRowsBatch } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/externalBaseSync';
 export { WORKSPACE_DOMAIN, WORKSPACE_DIRECTORY_SCOPE, isCasitaWorkspaceEmail, getWorkspaceDirectoryService, buildWorkspacePhotoUrl, searchWorkspaceDirectoryUsers, getWorkspaceDirectoryUsersByEmails, getWorkspaceDirectoryPhoto } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/google-workspace-directory';
 export { getAdminProfilePhoto } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/googleAdmin';

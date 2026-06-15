@@ -9,6 +9,8 @@ export type AuthSessionUser = {
   roles: string[]
   planteles: string
   plantelesList: string[]
+  financialPlanteles: string
+  financialPlantelesList: string[]
   active_plantel: string
   auth_home_plantel: string
   isSuperAdmin: boolean
@@ -18,7 +20,12 @@ export type AuthSessionUser = {
 }
 
 const SUPERADMIN_ROLES = new Set(['superadmin'])
-const CONTROL_ESCOLAR_ROLE = 'role_ctrl'
+const SEEDED_SUPERADMIN_EMAILS = new Set([
+  'desarrollo.tecnologico@casitaiedis.edu.mx',
+  'coord.admon@casitaiedis.edu.mx'
+])
+export const CONTROL_ESCOLAR_ROLE = 'ROLE_CTRL'
+export const FINANCIAL_ADMIN_ROLE = 'ROLE_ADMON'
 const VALID_PLANTELES = new Set(PLANTELES_LIST)
 
 export const normalizePlantel = (value: unknown) => String(value || '').trim().toUpperCase()
@@ -39,16 +46,34 @@ export const isSuperAdminRole = (role: unknown) => parseRoles(role).some((entry)
 
 export const hasControlEscolarRole = (role: unknown) => hasRole(role, CONTROL_ESCOLAR_ROLE)
 
-export const isControlEscolarOnlyRole = (role: unknown) => hasControlEscolarRole(role)
+/**
+ * Financial access is explicit: only ROLE_ADMON grants the Financial domain.
+ * Unknown, empty, or legacy roles remain in the safe Control Escolar domain.
+ */
+export const hasFinancialAdminRole = (role: unknown) => hasRole(role, FINANCIAL_ADMIN_ROLE)
 
-export const parsePlanteles = (value: unknown) => String(value || '')
+export const isControlEscolarOnlyRole = (role: unknown) => !isSuperAdminRole(role) && !hasFinancialAdminRole(role)
+
+export const parsePlanteles = (value: unknown) => Array.from(new Set(String(value || '')
   .split(',')
   .map(normalizePlantel)
-  .filter(Boolean)
+  .filter((plantel) => VALID_PLANTELES.has(plantel))))
 
 export const getSuperAdminPlanteles = () => [...PLANTELES_LIST]
 
 export const isValidPlantelScope = (plantel: string) => plantel === 'GLOBAL' || VALID_PLANTELES.has(plantel)
+
+export const hasFinancialAccessForPlantel = (
+  role: unknown,
+  assignedPlanteles: unknown,
+  plantelValue: unknown,
+) => {
+  if (isSuperAdminRole(role)) return true
+  const plantel = normalizePlantel(plantelValue)
+  if (!plantel || plantel === 'GLOBAL' || !VALID_PLANTELES.has(plantel)) return false
+  if (!hasFinancialAdminRole(role)) return false
+  return parsePlanteles(assignedPlanteles).includes(plantel)
+}
 
 const getCookiePlantel = (event: any, name: string) => normalizePlantel(getCookie(event, name))
 
@@ -60,53 +85,53 @@ const firstText = (...values: unknown[]) => {
   return ''
 }
 
-const resolveAllowedPlanteles = (event: any) => {
-  const cookiePlanteles = parsePlanteles(getCookie(event, 'auth_planteles'))
-    .filter((plantel) => VALID_PLANTELES.has(plantel))
-
-  return cookiePlanteles.length ? cookiePlanteles : [...PLANTELES_LIST]
-}
-
-export const resolveAuthHomePlantel = (event: any, allowedPlanteles: string[] = []) => {
-  const explicitHome = getCookiePlantel(event, 'auth_home_plantel')
-  if (explicitHome && VALID_PLANTELES.has(explicitHome) && allowedPlanteles.includes(explicitHome)) return explicitHome
-
-  const bridgeAgent = getCookiePlantel(event, 'db_bridge_agent_id')
-  if (bridgeAgent && VALID_PLANTELES.has(bridgeAgent) && allowedPlanteles.includes(bridgeAgent)) return bridgeAgent
-
-  const activePlantel = getCookiePlantel(event, 'auth_active_plantel')
-  if (activePlantel && VALID_PLANTELES.has(activePlantel) && allowedPlanteles.includes(activePlantel)) return activePlantel
-
-  return allowedPlanteles[0] || PLANTELES_LIST[0]
-}
-
-const resolveActivePlantel = (event: any, allowedPlanteles: string[], isSuperAdmin: boolean) => {
-  const cookieActive = getCookiePlantel(event, 'auth_active_plantel')
-
-  if (cookieActive === 'GLOBAL' && isSuperAdmin) return 'GLOBAL'
-  if (cookieActive && VALID_PLANTELES.has(cookieActive) && allowedPlanteles.includes(cookieActive)) return cookieActive
-
-  const bridgeAgent = getCookiePlantel(event, 'db_bridge_agent_id')
-  if (bridgeAgent && VALID_PLANTELES.has(bridgeAgent) && allowedPlanteles.includes(bridgeAgent)) return bridgeAgent
-
-  return allowedPlanteles[0] || PLANTELES_LIST[0]
-}
-
 export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> => {
-  const email = String(getCookie(event, 'auth_email') || '').trim()
+  if (event?.context?.trustedAuthUser) return event.context.trustedAuthUser as AuthSessionUser
+
+  const email = String(getCookie(event, 'auth_email') || '').trim().toLowerCase()
 
   if (!email) {
     throw createError({ statusCode: 401, message: 'Acceso no autorizado.' })
   }
 
-  const role = String(getCookie(event, 'auth_role') || 'plantel').trim() || 'plantel'
+  const { findExternalUserByEmail } = await import('./external-users')
+  const centralUser = await findExternalUserByEmail(email)
+  const seededSuperAdmin = SEEDED_SUPERADMIN_EMAILS.has(email)
+
+  if (!centralUser && !seededSuperAdmin) {
+    throw createError({ statusCode: 403, message: 'La cuenta ya no tiene acceso al sistema.' })
+  }
+
+  if (!seededSuperAdmin && (centralUser?.ingresosBlocked || centralUser?.ingresos_blocked === 1 || centralUser?.ingresos_blocked === '1')) {
+    throw createError({ statusCode: 403, message: 'La cuenta está bloqueada.' })
+  }
+
+  const role = seededSuperAdmin
+    ? 'superadmin'
+    : String(centralUser?.role || CONTROL_ESCOLAR_ROLE).trim() || CONTROL_ESCOLAR_ROLE
   const roles = parseRoles(role)
   const superAdmin = isSuperAdminRole(role)
-  const controlEscolar = hasControlEscolarRole(role)
-  const controlEscolarOnly = !superAdmin && isControlEscolarOnlyRole(role)
-  const allowedPlanteles = resolveAllowedPlanteles(event)
-  const activePlantel = resolveActivePlantel(event, allowedPlanteles, superAdmin)
-  const homePlantel = resolveAuthHomePlantel(event, allowedPlanteles)
+  const assignedPlanteles = parsePlanteles(centralUser?.plantel)
+
+  if (!superAdmin && !assignedPlanteles.length) {
+    throw createError({ statusCode: 403, message: 'La cuenta no tiene un plantel asignado.' })
+  }
+
+  const allowedPlanteles = superAdmin ? [...PLANTELES_LIST] : assignedPlanteles
+  const allowedSet = new Set(allowedPlanteles)
+  const cookieActive = getCookiePlantel(event, 'auth_active_plantel')
+  const activePlantel = cookieActive === 'GLOBAL' && superAdmin
+    ? 'GLOBAL'
+    : cookieActive && allowedSet.has(cookieActive)
+      ? cookieActive
+      : allowedPlanteles[0]
+  const cookieHome = getCookiePlantel(event, 'auth_home_plantel')
+  const homePlantel = cookieHome && allowedSet.has(cookieHome)
+    ? cookieHome
+    : (activePlantel !== 'GLOBAL' ? activePlantel : allowedPlanteles[0])
+  const financialPlanteles = superAdmin || hasFinancialAdminRole(role) ? [...allowedPlanteles] : []
+  const financialAccess = hasFinancialAccessForPlantel(role, allowedPlanteles, activePlantel)
+  const controlEscolarOnly = !superAdmin && !financialAccess
 
   if (activePlantel && !isValidPlantelScope(activePlantel)) {
     throw createError({ statusCode: 400, message: 'Plantel activo inválido.' })
@@ -116,20 +141,43 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
     throw createError({ statusCode: 403, message: 'No tiene permisos para vista consolidada.' })
   }
 
-  return {
+  const cookieOptions = {
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 86400 * 7,
+    sameSite: 'lax' as const
+  }
+  const name = firstText(centralUser?.displayName, centralUser?.username, getCookie(event, 'auth_name'), email)
+  setCookie(event, 'auth_name', name, cookieOptions)
+  setCookie(event, 'auth_role', role, cookieOptions)
+  setCookie(event, 'auth_planteles', allowedPlanteles.join(','), cookieOptions)
+  setCookie(event, 'auth_active_plantel', activePlantel, cookieOptions)
+  setCookie(event, 'auth_home_plantel', homePlantel, cookieOptions)
+  setCookie(event, 'auth_financial_planteles', financialPlanteles.join(','), cookieOptions)
+  setCookie(event, 'auth_nav_mode', controlEscolarOnly ? 'control-escolar' : 'financial', cookieOptions)
+  setCookie(event, 'auth_has_control_escolar', 'true', cookieOptions)
+  setCookie(event, 'auth_has_financial_access', financialAccess ? 'true' : 'false', cookieOptions)
+  setCookie(event, 'db_bridge_agent_id', activePlantel !== 'GLOBAL' ? activePlantel : homePlantel, cookieOptions)
+
+  const user: AuthSessionUser = {
     email,
-    name: firstText(getCookie(event, 'auth_name'), email),
+    name,
     role,
     roles,
     planteles: allowedPlanteles.join(','),
     plantelesList: allowedPlanteles,
+    financialPlanteles: financialPlanteles.join(','),
+    financialPlantelesList: financialPlanteles,
     active_plantel: activePlantel,
     auth_home_plantel: homePlantel,
     isSuperAdmin: superAdmin,
-    hasControlEscolarRole: controlEscolar,
+    hasControlEscolarRole: true,
     isControlEscolarOnly: controlEscolarOnly,
-    hasFinancialAccess: superAdmin || !controlEscolarOnly
+    hasFinancialAccess: financialAccess
   }
+
+  if (event?.context) event.context.trustedAuthUser = user
+  return user
 }
 
 export const resolveDataBridgeAgentId = (event: any, user: AuthSessionUser) => {

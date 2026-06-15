@@ -1,12 +1,20 @@
-# Workspace users and ROLE_CTRL assignment
+# Workspace users and domain assignment
 
-Control Escolar workspace access is assigned through the centralized external `users` table, not through the plantel-local financial database. The user-management screen reads and writes this external table only. The table is accessed through the same external Control Escolar MySQL connection configured with `CONTROL_ESCOLAR_MYSQL_*`.
+User access is assigned through the centralized external `users` table, read and written through the Control Escolar MySQL connection configured with `CONTROL_ESCOLAR_MYSQL_*`.
 
-This table is only an access/role assignment layer. It must not be used as a hard gate for normal `/api/students` loading or other financial/operator APIs.
+The authorization model uses the existing fields only:
+
+- `users.role` determines the available domain.
+- `users.plantel` contains the authorized plantels as a comma-separated list.
+- `ROLE_CTRL` is the safe default and enables Control Escolar.
+- `ROLE_ADMON` enables the Financial domain in every plantel already listed in `users.plantel`.
+- `superadmin` enables both domains globally.
+
+No second financial-plantel column is used. Changing a user's domain does not replace or duplicate the existing `users.plantel` assignment.
 
 ## Directory source
 
-The `Usuarios / ROLE_CTRL` page searches Google Workspace through the Admin Directory API using a service account with domain-wide delegation.
+The Usuarios page searches Google Workspace through the Admin Directory API using a service account with domain-wide delegation.
 
 The search endpoint is:
 
@@ -32,31 +40,18 @@ The delegated admin account must be allowed to use the Admin Directory readonly 
 
 `https://www.googleapis.com/auth/admin.directory.user.readonly`
 
-## Role assignment behavior
+## Assignment behavior
 
-New workspace assignments are not restricted by default.
+New users default to `ROLE_CTRL`. A superadministrator can select Financial access from Usuarios; that stores the canonical role pair `ROLE_CTRL,ROLE_ADMON` and keeps the existing comma-separated `users.plantel` value unchanged.
 
-Default role:
+Financial access is strict: only an explicit `ROLE_ADMON` token grants the Financial domain. Empty, unknown, or legacy roles remain in Control Escolar. Saving from Usuarios normalizes the selected user to either `ROLE_CTRL` or `ROLE_CTRL,ROLE_ADMON`.
 
-`plantel`
-
-This means normal operator/financial access.
-
-Restricted Control Escolar-only role:
-
-`ROLE_CTRL`
-
-Only an exact non-superadmin `ROLE_CTRL` session is routed to the Control Escolar workspace and hidden from the default financial/sidebar controls.
-
-Superadmin role:
-
-`global`
-
-Existing operators should not be logged out or restricted just because the external `users` table exists. A user only becomes Control Escolar-only when their external `users.role` is explicitly set to `ROLE_CTRL`.
+Authorization is re-read from the centralized `users` table on protected requests. A non-superadmin account without a valid plantel in `users.plantel` is denied instead of receiving an implicit fallback plantel.
 
 ## Data boundaries
 
-- Google Workspace Directory is read-only and is used only to select valid institutional users and display profile images.
-- The centralized external `users` table stores the workspace role assignment, planteles, avatar URL, and email. User management does not write local fallback `users` rows for ROLE_CTRL.
+- Google Workspace Directory is read-only and is used only to select institutional users and display profile images.
+- The centralized external `users` table stores identity, `users.plantel`, role, blocked status, and login metadata.
 - The centralized external `matricula` table stores Control Escolar student overlay data.
-- The plantel-local `base` table remains the source for the normal operator-facing student list.
+- The plantel-local financial database remains the source for financial operations.
+- Bridge/direct transport selection and plantel database routing are unchanged by these roles.
