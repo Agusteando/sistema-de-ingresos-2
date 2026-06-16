@@ -639,12 +639,34 @@ const loadLocalSystemLaunch = async (refresh = false) => {
 
 const openLocalSystem = async () => {
   if (localSystemLaunchPending.value) return
-  await loadLocalSystemLaunch(true)
-  if (localSystemLaunchAvailable.value && localSystemLaunchUrl.value) {
-    window.location.href = localSystemLaunchUrl.value
+  if (activePlantel.value === 'GLOBAL') {
+    show('Selecciona un plantel antes de abrir Sistema Rápido.', 'danger')
     return
   }
-  show(localSystemLaunchMessage.value || 'Sistema Rápido todavía no está disponible en este plantel.', 'danger')
+
+  localSystemLaunchPending.value = true
+  try {
+    const result = await $fetch('/api/system/launch', {
+      query: {
+        plantel: activePlantel.value,
+        format: 'json'
+      }
+    })
+    const launchUrl = String(result?.launchUrl || '')
+    if (!launchUrl) throw new Error('El agente no devolvió una dirección para Sistema Rápido.')
+    window.location.assign(launchUrl)
+  } catch (error) {
+    const message = String(
+      error?.data?.message
+      || error?.message
+      || 'No se pudo abrir Sistema Rápido en este momento.'
+    )
+    localSystemLaunchAvailable.value = false
+    localSystemLaunchMessage.value = message
+    show(message, 'danger')
+  } finally {
+    localSystemLaunchPending.value = false
+  }
 }
 
 const scheduleLocalSystemPoll = (delay = 15000) => {

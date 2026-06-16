@@ -1,6 +1,6 @@
 import { getDbTransport, runRawSqlStatement, runWithBridgeAgentId } from '../../utils/db'
 import { normalizePlantel } from '../../utils/auth-session'
-import { LOCAL_SYSTEM_BRIDGE_COMMAND, type LocalSystemBridgeResult } from '../../utils/local-system-handoff'
+import { LOCAL_SYSTEM_BRIDGE_COMMAND, type LocalSystemBridgeResult, unwrapLocalSystemBridgeResult } from '../../utils/local-system-handoff'
 import { isLocalSystemRuntime, requestLocalSystemManager } from '../../utils/local-system-manager'
 
 export default defineEventHandler(async (event) => {
@@ -14,11 +14,11 @@ export default defineEventHandler(async (event) => {
 
     if (activePlantel && activePlantel !== 'GLOBAL' && getDbTransport() === 'bridge') {
       try {
-        const rows = await runWithBridgeAgentId(activePlantel, () => runRawSqlStatement<LocalSystemBridgeResult[]>(
+        const bridgeResponse = await runWithBridgeAgentId(activePlantel, () => runRawSqlStatement<unknown>(
           LOCAL_SYSTEM_BRIDGE_COMMAND,
           ['status', user?.email || '', activePlantel]
         ))
-        discovery = Array.isArray(rows) ? rows[0] || null : null
+        discovery = unwrapLocalSystemBridgeResult(bridgeResponse)
       } catch {}
     }
 

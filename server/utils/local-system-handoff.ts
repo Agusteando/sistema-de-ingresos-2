@@ -11,3 +11,26 @@ export type LocalSystemBridgeResult = {
   installedSha?: string
   message?: string
 }
+
+
+export const unwrapLocalSystemBridgeResult = (value: unknown): LocalSystemBridgeResult | null => {
+  let current: any = value
+
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (Array.isArray(current)) return (current[0] || null) as LocalSystemBridgeResult | null
+    if (!current || typeof current !== 'object') return null
+    if (typeof current.ok === 'boolean') return current as LocalSystemBridgeResult
+    if (Array.isArray(current.rows)) return (current.rows[0] || null) as LocalSystemBridgeResult | null
+    if (current.result !== undefined) {
+      current = current.result
+      continue
+    }
+    if (current.data !== undefined) {
+      current = current.data
+      continue
+    }
+    return null
+  }
+
+  return null
+}

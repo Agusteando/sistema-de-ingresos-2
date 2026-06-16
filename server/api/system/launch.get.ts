@@ -1,6 +1,6 @@
 import { getDbTransport, runRawSqlStatement, runWithBridgeAgentId } from '../../utils/db'
 import { normalizePlantel } from '../../utils/auth-session'
-import { LOCAL_SYSTEM_BRIDGE_COMMAND, type LocalSystemBridgeResult } from '../../utils/local-system-handoff'
+import { LOCAL_SYSTEM_BRIDGE_COMMAND, unwrapLocalSystemBridgeResult } from '../../utils/local-system-handoff'
 import { isLocalSystemRuntime } from '../../utils/local-system-manager'
 
 export default defineEventHandler(async (event) => {
@@ -18,16 +18,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'No tienes acceso a este plantel.' })
   }
 
-  const rows = await runWithBridgeAgentId(requested, () => runRawSqlStatement<LocalSystemBridgeResult[]>(
+  const bridgeResponse = await runWithBridgeAgentId(requested, () => runRawSqlStatement<unknown>(
     LOCAL_SYSTEM_BRIDGE_COMMAND,
     ['launch', user.email, requested]
   ))
-  const result = Array.isArray(rows) ? rows[0] : null
+  const result = unwrapLocalSystemBridgeResult(bridgeResponse)
   if (!result?.ok || !result.launchUrl) {
     throw createError({
       statusCode: 503,
       message: result?.message || 'Sistema Rápido todavía no está disponible en este plantel.'
     })
+  }
+
+  const accept = String(getHeader(event, 'accept') || '').toLowerCase()
+  if (accept.includes('application/json') || getQuery(event).format === 'json') {
+    return { ok: true, launchUrl: result.launchUrl, expiresAt: result.expiresAt || null }
   }
 
   return sendRedirect(event, result.launchUrl, 302)

@@ -343,6 +343,7 @@ declare global {
   const toWebRequest: typeof import('../../node_modules/h3').toWebRequest
   const touchExternalUserLogin: typeof import('../../server/utils/external-users').touchExternalUserLogin
   const unsealSession: typeof import('../../node_modules/h3').unsealSession
+  const unwrapLocalSystemBridgeResult: typeof import('../../server/utils/local-system-handoff').unwrapLocalSystemBridgeResult
   const updateCentralMatriculaServicio: typeof import('../../server/utils/talleres-servicios').updateCentralMatriculaServicio
   const updateControlEscolarStudent: typeof import('../../server/utils/control-escolar').updateControlEscolarStudent
   const updateExternalUser: typeof import('../../server/utils/external-users').updateExternalUser
@@ -462,7 +463,7 @@ export { ACTIVE_SYNC_STATUSES, ENROLLMENT_CONFIG_URL, EXTERNAL_SYNC_URL, EXTERNA
 export { WORKSPACE_DOMAIN, WORKSPACE_DIRECTORY_SCOPE, isCasitaWorkspaceEmail, getWorkspaceDirectoryService, buildWorkspacePhotoUrl, searchWorkspaceDirectoryUsers, getWorkspaceDirectoryUsersByEmails, getWorkspaceDirectoryPhoto } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/google-workspace-directory';
 export { getAdminProfilePhoto } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/googleAdmin';
 export { createImpersonationToken, verifyImpersonationToken, impersonationCookieOptions, impersonatedAuthCookieOptions, impersonationSecondsRemaining, clearImpersonationCookies } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/impersonation-session';
-export { LOCAL_SYSTEM_BRIDGE_COMMAND } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/local-system-handoff';
+export { LOCAL_SYSTEM_BRIDGE_COMMAND, unwrapLocalSystemBridgeResult } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/local-system-handoff';
 export { isLocalSystemRuntime, requestLocalSystemManager } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/local-system-manager';
 export { sendEmail } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/mailer';
 export { parseNullableMoney, isWholeMoney, legacyProjectedAmount, resolveProjectedAmount } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/monto-final';

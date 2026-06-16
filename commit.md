@@ -1,1 +1,1 @@
-Mantener visible el acceso a Sistema Rápido
+Corregir apertura directa de Sistema Rápido desde Vercel
