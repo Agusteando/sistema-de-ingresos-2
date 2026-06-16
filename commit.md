@@ -1,1 +1,1 @@
-Eliminar variables externas de Carta de No Adeudo
+Evitar sondeo automático de Bridge para Sistema Rápido

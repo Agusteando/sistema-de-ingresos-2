@@ -1,6 +1,4 @@
-import { getDbTransport, runRawSqlStatement, runWithBridgeAgentId } from '../../utils/db'
 import { normalizePlantel } from '../../utils/auth-session'
-import { LOCAL_SYSTEM_BRIDGE_COMMAND, type LocalSystemBridgeResult, unwrapLocalSystemBridgeResult } from '../../utils/local-system-handoff'
 import { isLocalSystemRuntime, requestLocalSystemManager } from '../../utils/local-system-manager'
 
 export default defineEventHandler(async (event) => {
@@ -10,34 +8,22 @@ export default defineEventHandler(async (event) => {
   if (!isLocalSystemRuntime()) {
     const user = event.context.user
     const activePlantel = normalizePlantel(user?.active_plantel)
-    let discovery: LocalSystemBridgeResult | null = null
-
-    if (activePlantel && activePlantel !== 'GLOBAL' && getDbTransport() === 'bridge') {
-      try {
-        const bridgeResponse = await runWithBridgeAgentId(activePlantel, () => runRawSqlStatement<unknown>(
-          LOCAL_SYSTEM_BRIDGE_COMMAND,
-          ['status', user?.email || '', activePlantel]
-        ))
-        discovery = unwrapLocalSystemBridgeResult(bridgeResponse)
-      } catch {}
-    }
+    const launchAvailable = Boolean(activePlantel && activePlantel !== 'GLOBAL')
 
     return {
       ok: true,
       localSystem: false,
       mode: 'central',
       activePlantel,
-      launchAvailable: Boolean(discovery?.ok && discovery?.available),
-      launchUrl: discovery?.ok && discovery?.available
+      launchAvailable,
+      launchUrl: launchAvailable
         ? `/api/system/launch?plantel=${encodeURIComponent(activePlantel)}`
         : '',
-      message: discovery?.message || (discovery?.ok
-        ? 'Sistema Rápido todavía no está disponible en este plantel.'
-        : 'No se pudo verificar Sistema Rápido mediante Bridge.'),
-      localUrl: discovery?.localUrl || '',
-      installed: discovery?.installedSha
-        ? { sha: discovery.installedSha, version: discovery.installedVersion || '' }
-        : null,
+      message: launchAvailable
+        ? 'Selecciona para abrir Sistema Rápido.'
+        : 'Selecciona un plantel para abrir Sistema Rápido.',
+      localUrl: '',
+      installed: null,
       available: null,
       updateAvailable: false
     }

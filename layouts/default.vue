@@ -900,7 +900,6 @@ onMounted(async () => {
   }
 
   await loadSystemVersion()
-  if (!localSystemRuntime) await loadLocalSystemLaunch()
   if (localSystemRuntime) scheduleLocalSystemPoll(localSystemUpdating.value ? 3000 : 15000)
 
   try {
