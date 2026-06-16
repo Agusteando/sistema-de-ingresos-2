@@ -81,6 +81,8 @@ import { NuxtModule, ModuleDependencyMeta } from '@nuxt/schema'
 
    noAdeudoSignatureSecret: string,
 
+   authImpersonationSecret: string,
+
    nitro: {
       envPrefix: string,
    },

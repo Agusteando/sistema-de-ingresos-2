@@ -4,6 +4,7 @@ import { CONTROL_ESCOLAR_ROLE, hasControlEscolarRole, hasFinancialAccessForPlant
 import { touchExternalUserLogin } from '../../utils/external-users'
 import { isCasitaWorkspaceEmail } from '../../utils/google-workspace-directory'
 import { logControlEscolarAuditEvent } from '../../utils/control-escolar-audit'
+import { clearImpersonationCookies } from '../../utils/impersonation-session'
 
 const SUPERADMIN_EMAILS = new Set([
   'desarrollo.tecnologico@casitaiedis.edu.mx',
@@ -134,6 +135,8 @@ export default defineEventHandler(async (event) => {
     const financialAccess = hasFinancialAccessForPlantel(role, allowedPlanteles, activePlantel)
     const controlEscolarOnly = controlEscolar && !financialAccess
     const opts = cookieOptions()
+
+    clearImpersonationCookies(event)
 
     setCookie(event, 'auth_email', resolvedUser.email || payload.email, opts)
     setCookie(event, 'auth_name', resolvedUser.username || payload.name || payload.email, opts)

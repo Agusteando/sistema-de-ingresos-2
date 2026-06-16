@@ -1,4 +1,5 @@
 import { PLANTELES_LIST } from '../../utils/constants'
+import { impersonationSecondsRemaining, verifyImpersonationToken, type ImpersonationSession } from './impersonation-session'
 
 export type AuthRole = 'plantel' | 'superadmin' | string
 
@@ -97,10 +98,14 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
   if (event?.context?.trustedAuthUser) return event.context.trustedAuthUser as AuthSessionUser
 
   const email = String(getCookie(event, 'auth_email') || '').trim().toLowerCase()
-
   if (!email) {
     throw createError({ statusCode: 401, message: 'Acceso no autorizado.' })
   }
+
+  const impersonationToken = getCookie(event, 'auth_impersonation_token')
+  const impersonationSession: ImpersonationSession | null = impersonationToken
+    ? verifyImpersonationToken(impersonationToken)
+    : null
 
   const { findExternalUserByEmail } = await import('./external-users')
   const centralUser = await findExternalUserByEmail(email)
@@ -157,7 +162,7 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
   const cookieOptions = {
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 86400 * 7,
+    maxAge: impersonationSession ? impersonationSecondsRemaining(impersonationSession) : 86400 * 7,
     sameSite: 'lax' as const
   }
   const name = firstText(centralUser?.displayName, centralUser?.username, getCookie(event, 'auth_name'), email)

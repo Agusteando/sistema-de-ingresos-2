@@ -1,1 +1,1 @@
-Corregir unicidad de usuarios y separar accesos por rol
+Implementar suplantación segura y clarificar planteles de usuarios

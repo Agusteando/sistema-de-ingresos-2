@@ -57,6 +57,7 @@ export default defineNuxtConfig({
     noAdeudoBlockOnDebt: process.env.NO_ADEUDO_BLOCK_ON_DEBT || '',
     noAdeudoVerifyBaseUrl: process.env.NO_ADEUDO_VERIFY_BASE_URL || '',
     noAdeudoSignatureSecret: process.env.NO_ADEUDO_SIGNATURE_SECRET || '',
+    authImpersonationSecret: process.env.AUTH_IMPERSONATION_SECRET || '',
 
     public: {
       googleClientId: process.env.GOOGLE_CLIENT_ID || ''

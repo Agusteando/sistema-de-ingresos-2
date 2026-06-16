@@ -9,6 +9,12 @@ declare module "nitropack/types" {
     '/api/admin/sql-console/execute': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/admin/sql-console/execute.post').default>>>>
     }
+    '/api/auth/impersonation/start': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/auth/impersonation/start.post').default>>>>
+    }
+    '/api/auth/impersonation/stop': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/auth/impersonation/stop.post').default>>>>
+    }
     '/api/auth/login': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/auth/login.post').default>>>>
     }

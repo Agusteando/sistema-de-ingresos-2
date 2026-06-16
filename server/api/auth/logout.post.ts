@@ -11,6 +11,9 @@ export default defineEventHandler((event) => {
   deleteCookie(event, 'auth_has_financial_access', { path: '/' })
   deleteCookie(event, 'auth_is_super_admin', { path: '/' })
   deleteCookie(event, 'db_bridge_agent_id', { path: '/' })
+  deleteCookie(event, 'auth_impersonator_name', { path: '/' })
+  deleteCookie(event, 'auth_impersonating', { path: '/' })
+  deleteCookie(event, 'auth_impersonation_token', { path: '/' })
 
   return { success: true }
 })

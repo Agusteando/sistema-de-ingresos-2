@@ -1,5 +1,17 @@
 <template>
-  <div class="income-shell font-sans" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+  <div class="income-shell font-sans" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'is-impersonating': isImpersonating }">
+    <div v-if="isImpersonating" class="impersonation-banner" role="status">
+      <span class="impersonation-banner-icon"><LucideEye :size="18" /></span>
+      <div class="impersonation-banner-copy">
+        <strong>Vista como {{ adminName }}</strong>
+        <small>Estás usando exactamente sus roles y planteles.</small>
+      </div>
+      <button type="button" :disabled="stoppingImpersonation" @click="stopImpersonation">
+        <LucideRefreshCw v-if="stoppingImpersonation" :size="15" class="animate-spin" />
+        <LucideUndo2 v-else :size="15" />
+        Volver a {{ impersonatorName }}
+      </button>
+    </div>
     <aside class="income-sidebar" :style="sidebarRootStyle">
       <button type="button" class="sidebar-collapse-button" :aria-label="sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'" @click="toggleSidebar">
         <component :is="sidebarCollapsed ? LucidePanelLeftOpen : LucidePanelLeftClose" :size="18" />
@@ -334,10 +346,12 @@ import {
   LucideBuilding2,
   LucideChevronDown,
   LucideExternalLink,
+  LucideEye,
   LucideDatabase,
   LucideClipboardList,
   LucidePanelLeftClose,
-  LucidePanelLeftOpen
+  LucidePanelLeftOpen,
+  LucideUndo2
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -443,6 +457,11 @@ const selectCiclo = (value) => {
 
 const adminPhoto = ref(null)
 const adminName = ref(useCookie('auth_name').value || 'Usuario')
+const impersonatingCookie = useCookie('auth_impersonating')
+const impersonatorNameCookie = useCookie('auth_impersonator_name')
+const isImpersonating = computed(() => impersonatingCookie.value === 'true')
+const impersonatorName = computed(() => String(impersonatorNameCookie.value || 'Superadmin'))
+const stoppingImpersonation = ref(false)
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 const hasControlEscolarCookie = useCookie('auth_has_control_escolar')
 const hasFinancialAccessCookie = useCookie('auth_has_financial_access')
@@ -692,6 +711,18 @@ const switchPlantel = async (plantel = activePlantel.value) => {
   } catch (e) {
     activePlantel.value = previousPlantel
     show('No tienes acceso a este plantel.', 'danger')
+  }
+}
+
+const stopImpersonation = async () => {
+  if (stoppingImpersonation.value) return
+  stoppingImpersonation.value = true
+  try {
+    const response = await $fetch('/api/auth/impersonation/stop', { method: 'POST' })
+    window.location.href = response?.redirectTo || '/usuarios'
+  } catch (error) {
+    stoppingImpersonation.value = false
+    show(error?.data?.message || error?.message || 'No se pudo regresar a la cuenta de superadministrador.', 'danger')
   }
 }
 
@@ -2036,4 +2067,104 @@ const logout = async () => {
 
 
 
+
+.impersonation-banner {
+  position: fixed;
+  z-index: 10020;
+  top: 12px;
+  left: 50%;
+  width: min(680px, calc(100vw - 32px));
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid #93c5fd;
+  border-radius: 16px;
+  background: rgba(239, 246, 255, .97);
+  color: #183153;
+  box-shadow: 0 18px 46px rgba(30, 64, 175, .22);
+  backdrop-filter: blur(14px);
+  transform: translateX(-50%);
+}
+
+.impersonation-banner-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  color: #fff;
+  background: #2563eb;
+}
+
+.impersonation-banner-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.impersonation-banner-copy strong,
+.impersonation-banner-copy small {
+  display: block;
+}
+
+.impersonation-banner-copy strong {
+  overflow: hidden;
+  color: #173b78;
+  font-size: 12px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.impersonation-banner-copy small {
+  margin-top: 2px;
+  color: #55709c;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.impersonation-banner button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #1d4ed8;
+  border-radius: 11px;
+  color: #fff;
+  background: #1d4ed8;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.impersonation-banner button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+
+.income-shell.is-impersonating .app-header {
+  padding-top: 58px;
+  height: 122px;
+}
+
+@media (max-width: 720px) {
+  .impersonation-banner {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .impersonation-banner button {
+    width: 100%;
+  }
+
+  .income-shell.is-impersonating .app-header {
+    padding-top: 98px;
+    height: 162px;
+  }
+}
 </style>

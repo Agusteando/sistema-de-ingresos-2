@@ -55,6 +55,7 @@ declare global {
   const checkBridgeAgentAvailability: typeof import('../../server/utils/db').checkBridgeAgentAvailability
   const cleanApiKey: typeof import('../../server/utils/externalBaseSync').cleanApiKey
   const cleanupBlockingRuns: typeof import('../../server/utils/externalBaseSync').cleanupBlockingRuns
+  const clearImpersonationCookies: typeof import('../../server/utils/impersonation-session').clearImpersonationCookies
   const clearResponseHeaders: typeof import('../../node_modules/h3').clearResponseHeaders
   const clearSession: typeof import('../../node_modules/h3').clearSession
   const collectServiceCatalog: typeof import('../../server/utils/conceptos-config').collectServiceCatalog
@@ -68,6 +69,7 @@ declare global {
   const createEvent: typeof import('../../node_modules/h3').createEvent
   const createEventStream: typeof import('../../node_modules/h3').createEventStream
   const createExternalUser: typeof import('../../server/utils/external-users').createExternalUser
+  const createImpersonationToken: typeof import('../../server/utils/impersonation-session').createImpersonationToken
   const createNoAdeudoToken: typeof import('../../server/utils/noAdeudo').createNoAdeudoToken
   const createOrUpdateMapping: typeof import('../../server/utils/conceptos-config').createOrUpdateMapping
   const createRouter: typeof import('../../node_modules/h3').createRouter
@@ -190,6 +192,9 @@ declare global {
   const hasFinancialAccessForPlantel: typeof import('../../server/utils/auth-session').hasFinancialAccessForPlantel
   const hasFinancialAdminRole: typeof import('../../server/utils/auth-session').hasFinancialAdminRole
   const hasRole: typeof import('../../server/utils/auth-session').hasRole
+  const impersonatedAuthCookieOptions: typeof import('../../server/utils/impersonation-session').impersonatedAuthCookieOptions
+  const impersonationCookieOptions: typeof import('../../server/utils/impersonation-session').impersonationCookieOptions
+  const impersonationSecondsRemaining: typeof import('../../server/utils/impersonation-session').impersonationSecondsRemaining
   const importControlEscolarMatriculaUpdates: typeof import('../../server/utils/control-escolar').importControlEscolarMatriculaUpdates
   const isBridgeAgentUnavailableError: typeof import('../../server/utils/db').isBridgeAgentUnavailableError
   const isCasitaWorkspaceEmail: typeof import('../../server/utils/google-workspace-directory').isCasitaWorkspaceEmail
@@ -346,6 +351,7 @@ declare global {
   const useRuntimeConfig: typeof import('../../node_modules/nitropack/dist/runtime/internal/config').useRuntimeConfig
   const useSession: typeof import('../../node_modules/h3').useSession
   const useStorage: typeof import('../../node_modules/nitropack/dist/runtime/internal/storage').useStorage
+  const verifyImpersonationToken: typeof import('../../server/utils/impersonation-session').verifyImpersonationToken
   const warmExternalControlEscolarStudentScope: typeof import('../../server/utils/control-escolar-external-view').warmExternalControlEscolarStudentScope
   const warmExternalControlEscolarStudentScopes: typeof import('../../server/utils/control-escolar-external-view').warmExternalControlEscolarStudentScopes
   const whatsappApi: typeof import('../../server/utils/whatsapp').whatsappApi
@@ -385,6 +391,9 @@ declare global {
   // @ts-ignore
   export type { SyncCounters, SyncRuntimeConfig } from '../../server/utils/externalBaseSync'
   import('../../server/utils/externalBaseSync')
+  // @ts-ignore
+  export type { ImpersonationSession } from '../../server/utils/impersonation-session'
+  import('../../server/utils/impersonation-session')
   // @ts-ignore
   export type { MailAttachment } from '../../server/utils/mailer'
   import('../../server/utils/mailer')
@@ -443,6 +452,7 @@ export { NO_ADEUDO_CONTROL_PLANTELES_COLUMN, getExternalUsersColumns, getExterna
 export { ACTIVE_SYNC_STATUSES, ENROLLMENT_CONFIG_URL, EXTERNAL_SYNC_URL, EXTERNAL_SYNC_TIMEOUT_MS, EXTERNAL_SYNC_STALE_AFTER_MINUTES, EXTERNAL_SYNC_BATCH_LIMIT, ENROLLMENT_CONFIG_TIMEOUT_MS, LOG_PREFIX, createEmptyCounters, cleanApiKey, getExternalSyncConfig, logSyncInfo, logSyncWarn, logSyncError, normalizeMatricula, safeErrorMessage, toStatusPayload, readSyncRun, cleanupBlockingRuns, markRunStatus, updateRunProgress, finishRun, isRunCancelled, buildExternalUrl, buildExternalHeaders, readExternalErrorBody, extractExternalRows, fetchExternalRows, fetchCurrentEnrollmentCicloKey, mapExternalRow, computeHash, signExternalRow, attachRowSignatures, detachAndVerifySignedRow, resolveFinalEstatus, processExternalRowsBatch } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/externalBaseSync';
 export { WORKSPACE_DOMAIN, WORKSPACE_DIRECTORY_SCOPE, isCasitaWorkspaceEmail, getWorkspaceDirectoryService, buildWorkspacePhotoUrl, searchWorkspaceDirectoryUsers, getWorkspaceDirectoryUsersByEmails, getWorkspaceDirectoryPhoto } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/google-workspace-directory';
 export { getAdminProfilePhoto } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/googleAdmin';
+export { createImpersonationToken, verifyImpersonationToken, impersonationCookieOptions, impersonatedAuthCookieOptions, impersonationSecondsRemaining, clearImpersonationCookies } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/impersonation-session';
 export { sendEmail } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/mailer';
 export { parseNullableMoney, isWholeMoney, legacyProjectedAmount, resolveProjectedAmount } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/monto-final';
 export { diagnoseNoAdeudoError, throwNoAdeudoDiagnosticError, getNoAdeudoSettings, calculateNoAdeudoDebt, resolveNoAdeudoStudentContext, selectNoAdeudoRecipients, createNoAdeudoToken, decodeNoAdeudoToken, resolveNoAdeudoVerifyBaseUrl, buildNoAdeudoValidationUrl, renderNoAdeudoEmail, buildNoAdeudoPreviewPayload, generateNoAdeudoPdfForContext, persistNoAdeudoDeudorCartaMark, sendNoAdeudoForContext } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/noAdeudo';

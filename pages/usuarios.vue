@@ -165,7 +165,7 @@
             <tr>
               <th class="check-col"><input type="checkbox" :checked="allVisibleSelected" :indeterminate.prop="someVisibleSelected" @change="toggleAllVisible"></th>
               <th>Usuario</th>
-              <th>Planteles</th>
+              <th>Planteles asignados</th>
               <th>Acceso</th>
               <th>Estado</th>
               <th>Último ingreso</th>
@@ -224,8 +224,15 @@
                 </div>
               </td>
               <td>
-                <div class="plantel-chip-row compact" v-if="plantelesFor(u).length">
-                  <span v-for="p in plantelesFor(u)" :key="`${userKey(u)}-${p}`" class="plantel-chip">{{ p }}</span>
+                <div v-if="plantelesFor(u).length" class="plantel-summary">
+                  <div class="plantel-summary-title">
+                    <LucideMapPin :size="14" />
+                    <strong>{{ plantelCountLabel(u) }}</strong>
+                  </div>
+                  <div class="plantel-chip-row compact">
+                    <span v-for="p in visiblePlantelesFor(u)" :key="`${userKey(u)}-${p}`" class="plantel-chip">{{ p }}</span>
+                    <span v-if="hiddenPlantelesCount(u)" class="plantel-chip more">+{{ hiddenPlantelesCount(u) }}</span>
+                  </div>
                 </div>
                 <span v-else class="muted-pill">Sin plantel</span>
               </td>
@@ -253,6 +260,9 @@
                 <small>{{ relativeLastLogin(u.last_login_at || u.lastLoginAt) }}</small>
               </td>
               <td class="actions-col" @click.stop>
+                <button type="button" class="icon-button view-action" :disabled="!canImpersonate(u)" aria-label="Ver como usuario" @click="requestImpersonation(u)">
+                  <LucideEye :size="15" />
+                </button>
                 <button type="button" class="icon-button edit-action" aria-label="Editar acceso" @click="openModal(u)">
                   <LucidePencil :size="15" />
                 </button>
@@ -286,6 +296,9 @@
                 <strong>{{ displayNameFor(u) }}</strong>
                 <span>{{ u.email }}</span>
               </div>
+              <button type="button" class="icon-button" :disabled="!canImpersonate(u)" aria-label="Ver como usuario" @click.stop="requestImpersonation(u)">
+                <LucideEye :size="15" />
+              </button>
               <button type="button" class="icon-button" aria-label="Editar acceso" @click.stop="openModal(u)">
                 <LucidePencil :size="15" />
               </button>
@@ -294,8 +307,14 @@
               <span :class="['access-badge', accessBadgeClass(u)]">{{ accessLabel(u) }}</span>
               <span :class="['status-badge', statusClass(u)]">{{ statusLabel(u) }}</span>
             </div>
-            <div class="plantel-chip-row compact" v-if="plantelesFor(u).length">
-              <span v-for="p in plantelesFor(u)" :key="`mobile-${userKey(u)}-${p}`" class="plantel-chip">{{ p }}</span>
+            <div v-if="plantelesFor(u).length" class="plantel-summary mobile">
+              <div class="plantel-summary-title">
+                <LucideMapPin :size="14" />
+                <strong>{{ plantelCountLabel(u) }}</strong>
+              </div>
+              <div class="plantel-chip-row compact">
+                <span v-for="p in plantelesFor(u)" :key="`mobile-${userKey(u)}-${p}`" class="plantel-chip">{{ p }}</span>
+              </div>
             </div>
             <span v-else class="muted-pill">Sin plantel</span>
             <span v-if="accessMode(u) === 'superadmin'" class="muted-pill">Acceso global</span>
@@ -354,15 +373,24 @@
         <span v-else-if="accessMode(activeUser) === 'financial'" class="muted-pill">Solo Finanzas en los planteles asignados</span>
         <span v-else-if="accessMode(activeUser) === 'both'" class="muted-pill">Ambos dominios en los planteles asignados</span>
         <span v-else class="muted-pill">Solo Control Escolar</span>
+        <button v-if="canImpersonate(activeUser)" type="button" class="drawer-link primary" @click="requestImpersonation(activeUser)">
+          <LucideEye :size="15" /> Ver como este usuario
+        </button>
         <button type="button" class="drawer-link" @click="openModal(activeUser)">Editar detalles</button>
         <button v-if="!isBlocked(activeUser) && !isProtectedUser(activeUser)" type="button" class="drawer-link danger" @click="requestToggleBlocked(activeUser)">Bloquear acceso</button>
         <button v-else-if="isBlocked(activeUser) && !isProtectedUser(activeUser)" type="button" class="drawer-link" @click="requestToggleBlocked(activeUser)">Reactivar acceso</button>
       </div>
 
       <div class="drawer-section">
-        <h4>Planteles</h4>
-        <div class="plantel-chip-row" v-if="plantelesFor(activeUser).length">
-          <span v-for="p in plantelesFor(activeUser)" :key="`drawer-${p}`" class="plantel-chip">{{ p }}</span>
+        <div class="drawer-section-heading">
+          <h4>Planteles asignados</h4>
+          <span v-if="plantelesFor(activeUser).length">{{ plantelCountLabel(activeUser) }}</span>
+        </div>
+        <div v-if="plantelesFor(activeUser).length" class="plantel-assignment-grid">
+          <div v-for="p in plantelesFor(activeUser)" :key="`drawer-${p}`" class="plantel-assignment-card">
+            <LucideMapPin :size="16" />
+            <div><strong>{{ p }}</strong><span>Asignado</span></div>
+          </div>
         </div>
         <span v-else class="muted-pill">Sin plantel asignado</span>
       </div>
@@ -467,7 +495,10 @@
                   <span>{{ form.ingresosBlocked ? 'Bloqueado' : 'Activo' }}</span>
                 </label>
 
-                <label class="field-label">Planteles asignados</label>
+                <div class="field-label-row">
+                  <label class="field-label">Planteles asignados</label>
+                  <span>{{ form.planteles.length }} seleccionados</span>
+                </div>
                 <div class="plantel-grid">
                   <label v-for="p in PLANTELES_LIST" :key="p" :class="{ active: form.planteles.includes(p) }">
                     <input type="checkbox" :value="p" v-model="form.planteles">
@@ -493,6 +524,48 @@
               </div>
             </footer>
           </form>
+        </div>
+      </div>
+
+      <div v-if="impersonationUser" class="modal-overlay" @click.self="closeImpersonation">
+        <div class="impersonation-modal">
+          <button type="button" class="confirm-close" @click="closeImpersonation"><LucideX :size="18" /></button>
+          <div class="impersonation-modal-icon"><LucideEye :size="28" /></div>
+          <p class="eyebrow">Vista de permisos</p>
+          <h3>Ver como {{ displayNameFor(impersonationUser) }}</h3>
+          <p>La aplicación usará exactamente sus roles y planteles hasta que regreses a tu cuenta.</p>
+
+          <div class="impersonation-user-summary">
+            <img :src="avatarFor(impersonationUser)" :alt="displayNameFor(impersonationUser)">
+            <div>
+              <strong>{{ displayNameFor(impersonationUser) }}</strong>
+              <span>{{ impersonationUser.email }}</span>
+              <small>{{ accessLabel(impersonationUser) }}</small>
+            </div>
+          </div>
+
+          <label class="field-label">Plantel inicial</label>
+          <div class="impersonation-plantel-grid">
+            <button
+              v-for="p in plantelesFor(impersonationUser)"
+              :key="`impersonate-${p}`"
+              type="button"
+              :class="{ active: impersonationPlantel === p }"
+              @click="impersonationPlantel = p"
+            >
+              <LucideMapPin :size="16" />
+              <span><strong>{{ p }}</strong><small>Plantel asignado</small></span>
+            </button>
+          </div>
+
+          <div class="confirm-actions">
+            <button type="button" class="soft-button action-button" @click="closeImpersonation">Cancelar</button>
+            <button type="button" class="primary-button action-button" :disabled="impersonating || !impersonationPlantel" @click="startImpersonation">
+              <LucideLoader2 v-if="impersonating" :size="16" class="animate-spin" />
+              <LucideEye v-else :size="16" />
+              Iniciar vista
+            </button>
+          </div>
         </div>
       </div>
 
@@ -568,9 +641,11 @@ import {
   LucideChevronLeft,
   LucideChevronRight,
   LucideDownload,
+  LucideEye,
   LucideGraduationCap,
   LucideLoader2,
   LucideLock,
+  LucideMapPin,
   LucideMoreVertical,
   LucidePencil,
   LucidePlus,
@@ -627,6 +702,9 @@ const diagnosticsLoading = ref(false)
 const bulkPlantelAction = ref('add')
 const bulkPlantelValue = ref('')
 const undoNotice = ref(null)
+const impersonationUser = ref(null)
+const impersonationPlantel = ref('')
+const impersonating = ref(false)
 let directoryTimer = null
 let undoTimer = null
 
@@ -666,6 +744,12 @@ const avatarFor = (u) => {
   return `/api/directory/photo?${params.toString()}`
 }
 const plantelesFor = (u) => String(u?.plantel || u?.planteles || '').split(',').map(p => p.trim()).filter(Boolean)
+const visiblePlantelesFor = (u, limit = 3) => plantelesFor(u).slice(0, limit)
+const hiddenPlantelesCount = (u, limit = 3) => Math.max(0, plantelesFor(u).length - limit)
+const plantelCountLabel = (u) => {
+  const count = plantelesFor(u).length
+  return `${count} plantel${count === 1 ? '' : 'es'}`
+}
 
 const accessModeForUser = (u) => {
   const tokens = roleTokens(u?.role)
@@ -698,6 +782,7 @@ const accessMode = (u) => accessModeForUser(u)
 const accessLabel = (u) => accessLabelForMode(accessMode(u))
 const accessIcon = (u) => accessIconForMode(accessMode(u))
 const accessBadgeClass = (u) => accessClassForMode(accessMode(u))
+const canImpersonate = (u) => Boolean(u) && !isBlocked(u) && accessMode(u) !== 'superadmin' && plantelesFor(u).length > 0
 
 const statusLabel = (u) => {
   if (isProtectedUser(u)) return 'Protegido'
@@ -1295,7 +1380,8 @@ const runPendingAction = async () => {
 const showContextMenu = (event, u) => {
   const items = [
     { label: 'Opciones', disabled: true, action: () => {} },
-    { label: 'Editar usuario', icon: LucidePencil, action: () => openModal(u) }
+    { label: 'Editar usuario', icon: LucidePencil, action: () => openModal(u) },
+    { label: 'Ver como usuario', icon: LucideEye, disabled: !canImpersonate(u), action: () => requestImpersonation(u) }
   ]
   if (accessMode(u) !== 'control' && accessMode(u) !== 'superadmin') {
     items.push({ label: 'Dejar solo Control Escolar', icon: LucideGraduationCap, action: () => requestAccessChange(u, 'control') })
@@ -1311,6 +1397,39 @@ const showContextMenu = (event, u) => {
   }
   items.push({ label: isBlocked(u) ? 'Reactivar acceso' : 'Bloquear acceso', icon: isBlocked(u) ? LucideUnlock : LucideBan, disabled: isProtectedUser(u), action: () => requestToggleBlocked(u) })
   openMenu(event, items)
+}
+
+const requestImpersonation = (u) => {
+  if (!canImpersonate(u)) {
+    show('Este usuario no está disponible para la vista de permisos.', 'danger')
+    return
+  }
+  impersonationUser.value = u
+  impersonationPlantel.value = plantelesFor(u)[0] || ''
+}
+
+const closeImpersonation = () => {
+  if (impersonating.value) return
+  impersonationUser.value = null
+  impersonationPlantel.value = ''
+}
+
+const startImpersonation = async () => {
+  if (!impersonationUser.value || !impersonationPlantel.value) return
+  impersonating.value = true
+  try {
+    const response = await $fetch('/api/auth/impersonation/start', {
+      method: 'POST',
+      body: {
+        email: impersonationUser.value.email,
+        plantel: impersonationPlantel.value
+      }
+    })
+    window.location.href = response?.redirectTo || '/control-escolar'
+  } catch (error) {
+    show(extractMessage(error) || 'No se pudo iniciar la vista de usuario.', 'danger')
+    impersonating.value = false
+  }
 }
 
 const openModal = (u = null) => {
@@ -1339,11 +1458,15 @@ const openModal = (u = null) => {
 }
 const closeModal = () => { showModal.value = false }
 
-const hasUsersModalOpen = computed(() => showModal.value || Boolean(pendingAction.value) || showDebug.value)
+const hasUsersModalOpen = computed(() => showModal.value || Boolean(pendingAction.value) || Boolean(impersonationUser.value) || showDebug.value)
 
 useModalEscape(() => {
   if (showDebug.value) {
     showDebug.value = false
+    return
+  }
+  if (impersonationUser.value) {
+    closeImpersonation()
     return
   }
   if (pendingAction.value) {
@@ -1958,7 +2081,7 @@ button:disabled {
 .user-row.blocked.active { box-shadow: inset 4px 0 0 var(--red); }
 
 .check-col { width: 46px; text-align: center !important; }
-.actions-col { width: 150px; text-align: right !important; }
+.actions-col { width: 186px; text-align: right !important; }
 .planteles-col { min-width: 140px; }
 
 .users-table input[type='checkbox'] {
@@ -2736,4 +2859,286 @@ button:disabled {
   }
 }
 
+
+/* Explicit plantel scope and superadmin user-view controls. */
+.plantel-summary {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.plantel-summary.mobile {
+  padding: 10px 0 2px;
+}
+
+.plantel-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #52627a;
+}
+
+.plantel-summary-title svg {
+  color: #168c35;
+}
+
+.plantel-summary-title strong {
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .02em;
+}
+
+.plantel-chip.more {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #dbe4ee;
+}
+
+.icon-button.view-action {
+  color: #1d4ed8;
+  background: linear-gradient(180deg, #ffffff, #f2f7ff);
+  border-color: #c7d9ff;
+}
+
+.drawer-link.primary {
+  gap: 8px;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  border-color: #1d4ed8;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, .18);
+}
+
+.drawer-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.drawer-section-heading h4 {
+  margin: 0;
+}
+
+.drawer-section-heading > span {
+  color: #166534;
+  background: #effcf3;
+  border: 1px solid #c8ead2;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.plantel-assignment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.plantel-assignment-card {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid #dce8df;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #ffffff, #f4fbf5);
+}
+
+.plantel-assignment-card svg {
+  flex: 0 0 auto;
+  color: #168c35;
+}
+
+.plantel-assignment-card div {
+  min-width: 0;
+}
+
+.plantel-assignment-card strong,
+.plantel-assignment-card span {
+  display: block;
+}
+
+.plantel-assignment-card strong {
+  color: #183153;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.plantel-assignment-card span {
+  margin-top: 2px;
+  color: #718096;
+  font-size: 9px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.field-label-row .field-label {
+  margin: 0;
+}
+
+.field-label-row > span {
+  color: #166534;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.impersonation-modal {
+  position: relative;
+  width: min(540px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 30px;
+  border: 1px solid #dbe7f5;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 30px 90px rgba(15, 23, 42, .24);
+}
+
+.impersonation-modal-icon {
+  width: 54px;
+  height: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  border-radius: 18px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.impersonation-modal h3 {
+  margin: 8px 42px 0 0;
+  color: var(--ink);
+  font-size: 23px;
+  line-height: 1.12;
+  font-weight: 950;
+  letter-spacing: -.035em;
+}
+
+.impersonation-modal > p:not(.eyebrow) {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 700;
+}
+
+.impersonation-user-summary {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 20px 0;
+  padding: 14px;
+  border: 1px solid #e3eaf3;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.impersonation-user-summary img {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.impersonation-user-summary strong,
+.impersonation-user-summary span,
+.impersonation-user-summary small {
+  display: block;
+}
+
+.impersonation-user-summary strong {
+  color: #183153;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.impersonation-user-summary span {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.impersonation-user-summary small {
+  margin-top: 5px;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.impersonation-plantel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: 8px 0 22px;
+}
+
+.impersonation-plantel-grid button {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dce5ef;
+  border-radius: 14px;
+  color: #475569;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.impersonation-plantel-grid button.active {
+  color: #166534;
+  border-color: #86d19a;
+  background: #effcf3;
+  box-shadow: inset 0 0 0 1px #b7e6c3;
+}
+
+.impersonation-plantel-grid button svg {
+  flex: 0 0 auto;
+}
+
+.impersonation-plantel-grid button span,
+.impersonation-plantel-grid button strong,
+.impersonation-plantel-grid button small {
+  display: block;
+}
+
+.impersonation-plantel-grid button strong {
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.impersonation-plantel-grid button small {
+  margin-top: 2px;
+  color: #718096;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .plantel-assignment-grid,
+  .impersonation-plantel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .impersonation-modal {
+    padding: 24px 18px;
+  }
+}
 </style>
