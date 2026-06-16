@@ -162,7 +162,15 @@
       @sent="handleNoAdeudoSent"
     />
 
-    <StudentFormModal v-if="showStudentModal" :student="editingStudent" :enrollment-concepts="tipoIngresoConcepts.length ? tipoIngresoConcepts : externalConcepts" @close="closeStudentModal" @success="handleStudentSuccess" @ingreso-cycle-updated="handleIngresoCycleUpdated" />
+    <StudentFormModal
+      v-if="showStudentModal"
+      :student="editingStudent"
+      :custom-sections="customSections"
+      :enrollment-concepts="tipoIngresoConcepts.length ? tipoIngresoConcepts : externalConcepts"
+      @close="closeStudentModal"
+      @success="handleStudentSuccess"
+      @ingreso-cycle-updated="handleIngresoCycleUpdated"
+    />
     <BulkIngresoCycleModal
       v-if="showBulkIngresoCycleModal"
       :selected-students="selectedStudents"

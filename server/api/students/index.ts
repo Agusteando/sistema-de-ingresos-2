@@ -22,6 +22,10 @@ type InsertResult = { insertId?: number }
 
 const normalizeTextValue = (value: unknown) => String(value || '').trim()
 const normalizeMatricula = (value: unknown) => normalizeTextValue(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
+const normalizeSectionId = (value: unknown) => {
+  const id = Number(value || 0)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
 
 const normalizeFinancialMatricula = (value: unknown) => normalizeTextValue(value).toUpperCase()
 
@@ -132,6 +136,68 @@ const buildNombreCompleto = (body: Record<string, any>) => [
   normalizeTextValue(body.apellidoMaterno),
   normalizeTextValue(body.nombres)
 ].filter(Boolean).join(' ')
+
+const resolveAltaSection = async (sectionId: number | null, assignedPlantel: string) => {
+  if (!sectionId) return null
+
+  const [section] = await query<any[]>(`
+    SELECT id, name, plantel, color
+    FROM student_custom_sections
+    WHERE id = ?
+      AND is_active = 1
+      AND plantel = ?
+    LIMIT 1
+  `, [sectionId, assignedPlantel])
+
+  if (!section) {
+    throw createError({
+      statusCode: 400,
+      message: 'La sección seleccionada ya no está disponible para este plantel.'
+    })
+  }
+
+  return {
+    id: Number(section.id),
+    name: section.name,
+    plantel: section.plantel,
+    color: section.color
+  }
+}
+
+const assignAltaSection = async (section: any, matricula: string, user: any) => {
+  if (!section) return null
+  if (!matricula) {
+    return {
+      assigned: false,
+      section,
+      warning: 'El alumno fue registrado, pero no se pudo asignar la sección porque la matrícula generada no estuvo disponible.'
+    }
+  }
+
+  try {
+    await query(`
+      INSERT INTO student_custom_section_memberships (section_id, matricula, created_by)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE created_by = VALUES(created_by)
+    `, [section.id, matricula, normalizeTextValue(user?.name || user?.email) || null])
+
+    return { assigned: true, section }
+  } catch (error: any) {
+    console.error('[Students POST] Alumno registrado, pero no se pudo asignar la sección solicitada.', {
+      matricula,
+      sectionId: section.id,
+      code: error?.code,
+      errno: error?.errno,
+      message: error?.message
+    })
+
+    return {
+      assigned: false,
+      section,
+      warning: `El alumno fue registrado, pero no se pudo asignar a ${section.name}. Puedes hacerlo desde Secciones.`
+    }
+  }
+}
 
 const resolveAltaBasePlacement = (body: Record<string, any>, assignedPlantel: string, assignedNivel: string, cicloKey: string) => {
   const targetCiclo = normalizeCicloKey(body.targetCiclo || cicloKey)
@@ -439,10 +505,16 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const assignedNivel = resolveNivelEscolar({ plantel: assignedPlantel, nivel: body.nivel })
     const explicitMatricula = normalizeMatricula(body.matricula)
+    const requestedSection = await resolveAltaSection(normalizeSectionId(body.sectionId), assignedPlantel)
 
     try {
       const matricula = await insertStudent(body, user, assignedPlantel, assignedNivel, cicloKey, explicitMatricula)
-      return { success: true, matricula: matricula || undefined }
+      const sectionAssignment = await assignAltaSection(requestedSection, matricula, user)
+      return {
+        success: true,
+        matricula: matricula || undefined,
+        ...(sectionAssignment ? { sectionAssignment } : {})
+      }
     } catch (error) {
       if (isHandledHttpError(error)) throw error
 

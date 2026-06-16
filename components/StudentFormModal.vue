@@ -212,7 +212,7 @@
                   <h3 id="academic-title">2. Grado</h3>
                 </div>
 
-                <div class="field-stack compact academic-grade-only">
+                <div class="field-stack compact academic-placement-fields">
                   <label class="polished-field select-field">
                     <span>Grado</span>
                     <select v-model="form.grado" required>
@@ -222,6 +222,29 @@
                     </select>
                     <LucideChevronDown :size="18" aria-hidden="true" />
                   </label>
+
+                  <label class="polished-field select-field">
+                    <span>Sección (opcional)</span>
+                    <select v-model="form.sectionId">
+                      <option value="">Sin sección</option>
+                      <option
+                        v-for="section in availableSections"
+                        :key="section.id"
+                        :value="String(section.id)"
+                      >
+                        {{ section.name }}
+                      </option>
+                    </select>
+                    <LucideChevronDown :size="18" aria-hidden="true" />
+                  </label>
+
+                  <p class="section-selection-hint">
+                    {{
+                      availableSections.length
+                        ? "Puedes asignarlo ahora o dejarlo sin sección para organizarlo después."
+                        : "No hay secciones disponibles en este plantel. El alumno se guardará sin sección."
+                    }}
+                  </p>
                 </div>
 
                 <Transition name="result-card" mode="out-in">
@@ -523,6 +546,7 @@ import {
   gradeOptionsForPlantel,
   nivelFromPlantel,
   normalizeNivelEscolar,
+  normalizePlantel,
   resolveNivelEscolar,
 } from "~/shared/utils/grado";
 import {
@@ -532,6 +556,7 @@ import {
 
 const props = defineProps({
   student: Object,
+  customSections: { type: Array, default: () => [] },
   enrollmentConcepts: { type: Array, default: () => [] },
 });
 const emit = defineEmits(["close", "success", "ingreso-cycle-updated"]);
@@ -583,6 +608,7 @@ const form = ref({
   plantel: defaultPlantel,
   nivel: "",
   grado: "Primero",
+  sectionId: "",
   padre: "",
   telefono: "",
   correo: "",
@@ -603,6 +629,20 @@ const academicNivel = computed(() =>
 const availableGrades = computed(() =>
   gradeOptionsForPlantel(form.value.plantel, academicNivel.value),
 );
+const availableSections = computed(() => {
+  const plantel = normalizePlantel(form.value.plantel || defaultPlantel);
+  return (props.customSections || [])
+    .filter((section) => {
+      const id = Number(section?.id || 0);
+      return id > 0 && normalizePlantel(section?.plantel) === plantel;
+    })
+    .slice()
+    .sort((a, b) =>
+      String(a?.name || "").localeCompare(String(b?.name || ""), "es-MX", {
+        sensitivity: "base",
+      }),
+    );
+});
 
 const studentDraftFields = isEdit
   ? [
@@ -626,6 +666,7 @@ const studentDraftFields = isEdit
       "plantel",
       "nivel",
       "grado",
+      "sectionId",
       "padre",
       "telefono",
       "correo",
@@ -683,6 +724,7 @@ const studentDraftHasContent = (draft) => {
     return true;
   if (!isEdit && String(draft.nivel || "").trim().length > 0) return true;
   if (!isEdit && String(draft.grado || "Primero") !== "Primero") return true;
+  if (!isEdit && String(draft.sectionId || "").trim()) return true;
   if (
     !isEdit &&
     normalizeCicloKey(draft.ciclo || currentCicloKey.value) !==
@@ -1058,6 +1100,18 @@ watch(
 );
 
 watch(
+  [availableSections, () => form.value.sectionId],
+  ([sections, selectedSectionId]) => {
+    const selectedId = Number(selectedSectionId || 0);
+    if (!selectedId) return;
+    if (!sections.some((section) => Number(section.id) === selectedId)) {
+      form.value.sectionId = "";
+    }
+  },
+  { immediate: true },
+);
+
+watch(
   curpInfo,
   (info) => {
     if (!info.isValid) return;
@@ -1305,7 +1359,7 @@ const submit = async () => {
       ? `/api/students/${encodeURIComponent(studentMatricula)}`
       : "/api/students";
     const method = isEdit ? "PUT" : "POST";
-    await $fetch(url, {
+    const result = await $fetch(url, {
       method,
       body: {
         apellidoPaterno: form.value.apellidoPaterno,
@@ -1318,6 +1372,7 @@ const submit = async () => {
         nivel: form.value.nivel,
         resolvedNivel: academicNivel.value,
         grado: form.value.grado,
+        sectionId: isEdit ? undefined : Number(form.value.sectionId || 0) || null,
         targetCiclo: currentCicloKey.value,
         targetNivel: academicNivel.value,
         targetGrado: form.value.grado,
@@ -1330,12 +1385,21 @@ const submit = async () => {
         academicChanged: academicChanged.value,
       },
     });
-    show(
-      isEdit
-        ? "Alumno actualizado correctamente"
-        : "Alumno registrado exitosamente",
-      "success",
-    );
+    if (!isEdit && result?.sectionAssignment?.warning) {
+      show(result.sectionAssignment.warning, "warning");
+    } else if (!isEdit && result?.sectionAssignment?.assigned) {
+      show(
+        `Alumno registrado en ${result.sectionAssignment.section?.name || "la sección seleccionada"}`,
+        "success",
+      );
+    } else {
+      show(
+        isEdit
+          ? "Alumno actualizado correctamente"
+          : "Alumno registrado exitosamente",
+        "success",
+      );
+    }
     markSaved();
     emit("success");
   } catch (e) {
@@ -2137,8 +2201,16 @@ const submit = async () => {
   white-space: nowrap;
 }
 
-.academic-grade-only {
-  max-width: 360px;
+.academic-placement-fields {
+  max-width: 520px;
+}
+
+.section-selection-hint {
+  margin: -2px 0 0;
+  color: #708099;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .alta-ingreso-card {
