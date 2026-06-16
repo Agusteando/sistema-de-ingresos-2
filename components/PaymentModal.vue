@@ -626,6 +626,7 @@ const submit = async () => {
     paymentCampusMenuOpen.value = true
     return
   }
+
   const payload = {
     matricula: props.student.matricula,
     formaDePago: formaDePago.value,
@@ -636,25 +637,49 @@ const submit = async () => {
     plantelPago: pagoRealizadoEnOtroPlantel.value ? plantelPago.value : null,
     pagos: paymentRows()
   }
+
+  // Open the receipt window while the action is still inside the operator's click.
+  // Browsers may block a window opened only after the asynchronous payment request finishes.
+  const receiptWindow = window.open('', '_blank', 'width=850,height=800')
+  if (receiptWindow) {
+    receiptWindow.document.title = 'Generando recibo...'
+    receiptWindow.document.body.innerHTML = '<main style="font-family:system-ui,sans-serif;padding:32px;color:#24364b"><h1 style="font-size:20px;margin:0 0 8px">Generando recibo...</h1><p style="margin:0;color:#667085">El pago se está registrando. Esta ventana continuará automáticamente.</p></main>'
+  }
+
   processing.value = true
-  
-  await executeOptimistic(
-    () => $fetch('/api/payments/pay', { method: 'POST', body: payload }),
-    () => emit('success'),
-    () => emit('success'),
-    {
-      pending: pagoRealizadoEnOtroPlantel.value ? 'Registrando pago en otro plantel...' : 'Registrando pago...',
-      success: pagoRealizadoEnOtroPlantel.value ? 'Pago en otro plantel registrado' : 'Pago exitoso',
-      error: 'Error al registrar'
-    }
-  ).then((res) => {
+
+  try {
+    const res = await executeOptimistic(
+      () => $fetch('/api/payments/pay', { method: 'POST', body: payload }),
+      () => {},
+      () => {},
+      {
+        pending: pagoRealizadoEnOtroPlantel.value ? 'Registrando pago en otro plantel...' : 'Registrando pago...',
+        success: pagoRealizadoEnOtroPlantel.value ? 'Pago en otro plantel registrado' : 'Pago exitoso',
+        error: 'Error al registrar'
+      }
+    )
+
+    const folios = Array.isArray(res?.folios) ? res.folios.filter(Boolean) : []
     markSaved()
-    if (!pagoRealizadoEnOtroPlantel.value && res && res.folios) {
-      window.open(`/print/recibo?folios=${res.folios.join(',')}`, '_blank', 'width=850,height=800')
+
+    if (folios.length) {
+      const receiptUrl = `/print/recibo?folios=${encodeURIComponent(folios.join(','))}`
+      if (receiptWindow && !receiptWindow.closed) {
+        receiptWindow.location.replace(receiptUrl)
+      } else {
+        window.open(receiptUrl, '_blank', 'width=850,height=800')
+      }
+    } else if (receiptWindow && !receiptWindow.closed) {
+      receiptWindow.close()
     }
-  }).catch(() => {}).finally(() => {
+
+    emit('success', res)
+  } catch {
+    if (receiptWindow && !receiptWindow.closed) receiptWindow.close()
+  } finally {
     processing.value = false
-  })
+  }
 }
 </script>
 

@@ -1,1 +1,1 @@
-Corregir apertura directa de Sistema Rápido desde Vercel
+Disparar recibo al registrar un pago
