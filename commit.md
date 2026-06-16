@@ -1,1 +1,1 @@
-Permitir asignar una sección al dar de alta un alumno
+Eliminar variables externas de Carta de No Adeudo

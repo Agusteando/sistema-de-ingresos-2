@@ -17,10 +17,6 @@ type RuntimeNoAdeudoDiagnosticConfig = {
   controlEscolarMysqlUser?: string
   controlEscolarMysqlPassword?: string
   controlEscolarMysqlDatabase?: string
-  noAdeudoControlEscolarTo?: string
-  noAdeudoAdminFrom?: string
-  noAdeudoVerifyBaseUrl?: string
-  noAdeudoSignatureSecret?: string
   googlePrivateKey?: string
   adminEmailToImpersonate?: string
 }

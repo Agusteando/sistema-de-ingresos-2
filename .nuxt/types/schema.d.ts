@@ -71,16 +71,6 @@ import { NuxtModule, ModuleDependencyMeta } from '@nuxt/schema'
 
    studentPhotoApiKey: string,
 
-   noAdeudoControlEscolarTo: string,
-
-   noAdeudoAdminFrom: string,
-
-   noAdeudoBlockOnDebt: string,
-
-   noAdeudoVerifyBaseUrl: string,
-
-   noAdeudoSignatureSecret: string,
-
    authImpersonationSecret: string,
 
    localSystemMode: string,

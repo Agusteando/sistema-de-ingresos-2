@@ -14,11 +14,6 @@ import { getNoAdeudoControlUserForPlantel } from './external-users'
 import { isDepuradoPayment } from './payment-classification'
 
 type RuntimeNoAdeudoConfig = {
-  noAdeudoControlEscolarTo?: string
-  noAdeudoAdminFrom?: string
-  noAdeudoBlockOnDebt?: string | boolean
-  noAdeudoVerifyBaseUrl?: string
-  noAdeudoSignatureSecret?: string
   googlePrivateKey?: string
   adminEmailToImpersonate?: string
 }
@@ -231,53 +226,11 @@ export const throwNoAdeudoDiagnosticError = (error: any, source = 'Carta de No A
   })
 }
 
-const parseBoolean = (value: unknown) => {
-  if (typeof value === 'boolean') return value
-  return ['1', 'true', 'yes', 'si', 'sí'].includes(String(value || '').trim().toLowerCase())
-}
-
-const splitEmails = (value: unknown) => String(value || '')
-  .split(/[;,\n]+/)
-  .map(normalizeEmail)
-  .filter((email) => emailRegex.test(email))
-
-const parseScopedEmails = (raw: unknown, plantel: string) => {
-  const value = String(raw || '').trim()
-  if (!value) return [] as string[]
-
-  try {
-    const parsed = JSON.parse(value)
-    if (Array.isArray(parsed)) return unique(parsed.map(normalizeEmail).filter((email) => emailRegex.test(email)))
-    if (parsed && typeof parsed === 'object') {
-      const source = parsed[plantel] || parsed[plantel.toUpperCase()] || parsed.default || parsed.global || ''
-      return splitEmails(Array.isArray(source) ? source.join(',') : source)
-    }
-  } catch (e) {}
-
-  const scopedEntries = value.split(';').map((entry) => entry.trim()).filter(Boolean)
-  const hasScopes = scopedEntries.some((entry) => /[:=]/.test(entry))
-  if (hasScopes) {
-    const matches: string[] = []
-    scopedEntries.forEach((entry) => {
-      const [scope, emails] = entry.split(/[:=]/, 2)
-      const key = String(scope || '').trim().toUpperCase()
-      if ([plantel.toUpperCase(), 'DEFAULT', 'GLOBAL', '*'].includes(key)) matches.push(...splitEmails(emails))
-    })
-    return unique(matches)
-  }
-
-  return unique(splitEmails(value))
-}
-
-export const getNoAdeudoSettings = (plantel = '') => {
-  const config = getNoAdeudoConfig()
-  const normalizedPlantel = normalizeText(plantel).toUpperCase()
-  return {
-    blockOnDebt: parseBoolean(config.noAdeudoBlockOnDebt),
-    controlEmails: parseScopedEmails(config.noAdeudoControlEscolarTo, normalizedPlantel),
-    fromAddress: parseScopedEmails(config.noAdeudoAdminFrom, normalizedPlantel)[0] || normalizeEmail(config.adminEmailToImpersonate)
-  }
-}
+export const getNoAdeudoSettings = (_plantel = '') => ({
+  blockOnDebt: false,
+  controlEmails: [] as string[],
+  fromAddress: ''
+})
 
 const firstEmail = (...values: unknown[]) => {
   for (const value of values) {
@@ -522,8 +475,6 @@ export const selectNoAdeudoRecipients = (context: NoAdeudoStudentContext, mode =
 
 const getSigningSecret = () => {
   const config = getNoAdeudoConfig()
-  const explicit = normalizeText(config.noAdeudoSignatureSecret)
-  if (explicit) return explicit
   const privateKey = normalizeText(config.googlePrivateKey).replace(/\\n/g, '\n')
   if (privateKey) return privateKey
   return `aurora-no-adeudo:${normalizeText(config.adminEmailToImpersonate) || 'local'}`
@@ -586,9 +537,6 @@ export const decodeNoAdeudoToken = (token: string) => {
 }
 
 export const resolveNoAdeudoVerifyBaseUrl = (event: any) => {
-  const config = getNoAdeudoConfig()
-  const explicit = normalizeText(config.noAdeudoVerifyBaseUrl).replace(/\/+$/, '')
-  if (explicit) return explicit
   const url = getRequestURL(event)
   return `${url.protocol}//${url.host}`.replace(/\/+$/, '')
 }
@@ -771,7 +719,7 @@ export const sendNoAdeudoForContext = async (event: any, context: NoAdeudoStuden
     contentType: 'application/pdf'
   }]
 
-  await sendEmail(recipients.join(', '), email.subject, email.html, settings.fromAddress || generatedByEmail, attachments)
+  await sendEmail(recipients.join(', '), email.subject, email.html, generatedByEmail, attachments)
   if (context.debt.hasDebt) {
     await persistNoAdeudoDeudorCartaMark({
       context,

@@ -52,11 +52,6 @@ export default defineNuxtConfig({
     studentPhotoBaseUrl: process.env.STUDENT_PHOTO_BASE_URL || 'https://matricula.casitaapps.com',
     studentPhotoApiKey: process.env.STUDENT_PHOTO_API_KEY || process.env.EXTERNAL_SYNC_API_KEY || '',
 
-    noAdeudoControlEscolarTo: process.env.NO_ADEUDO_CONTROL_ESCOLAR_TO || '',
-    noAdeudoAdminFrom: process.env.NO_ADEUDO_ADMIN_FROM || '',
-    noAdeudoBlockOnDebt: process.env.NO_ADEUDO_BLOCK_ON_DEBT || '',
-    noAdeudoVerifyBaseUrl: process.env.NO_ADEUDO_VERIFY_BASE_URL || '',
-    noAdeudoSignatureSecret: process.env.NO_ADEUDO_SIGNATURE_SECRET || '',
     authImpersonationSecret: process.env.AUTH_IMPERSONATION_SECRET || '',
 
     localSystemMode: process.env.LOCAL_SYSTEM_MODE || '',
