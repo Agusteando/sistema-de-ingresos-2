@@ -15,6 +15,9 @@ declare module "nitropack/types" {
     '/api/auth/impersonation/stop': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/auth/impersonation/stop.post').default>>>>
     }
+    '/api/auth/local-handoff': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/auth/local-handoff.get').default>>>>
+    }
     '/api/auth/login': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/auth/login.post').default>>>>
     }
@@ -331,6 +334,21 @@ declare module "nitropack/types" {
     }
     '/api/sync/base/status': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/sync/base/status.get').default>>>>
+    }
+    '/api/system/health': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/system/health.get').default>>>>
+    }
+    '/api/system/info': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/system/info.get').default>>>>
+    }
+    '/api/system/launch': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/system/launch.get').default>>>>
+    }
+    '/api/system/local-status': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/system/local-status.get').default>>>>
+    }
+    '/api/system/local-update': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/system/local-update.post').default>>>>
     }
     '/api/talleres-servicios/catalogo': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/talleres-servicios/catalogo.get').default>>>>

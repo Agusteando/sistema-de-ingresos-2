@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
   if (url.pathname.startsWith('/api/auth/')) return
   if (url.pathname.startsWith('/api/debug/')) return
   if (url.pathname.startsWith('/api/login/')) return
+  if (url.pathname === '/api/system/health') return
   if (url.pathname.startsWith('/api/no-adeudo/verify/')) return
   // External API routes are authenticated with their own service-token guard.
   // Do not require a browser session here, otherwise server-to-server requests
@@ -33,6 +34,7 @@ export default defineEventHandler(async (event) => {
   event.context.user = user
 
   const isControlEscolarEndpoint = url.pathname.startsWith('/api/control-escolar/')
+  const isSystemEndpoint = url.pathname.startsWith('/api/system/')
   const isDirectoryEndpoint = url.pathname.startsWith('/api/directory/')
   const isExternalUsersEndpoint = url.pathname === '/api/users' || url.pathname.startsWith('/api/users/')
   const isProfileEndpoint = url.pathname === '/api/admin/profile'
@@ -40,6 +42,10 @@ export default defineEventHandler(async (event) => {
     url.pathname === '/api/students/matricula-overlays' ||
     /^\/api\/students\/[^/]+\/matricula-overlay$/.test(url.pathname) ||
     /^\/api\/students\/[^/]+\/operator-info$/.test(url.pathname)
+
+  if (isSystemEndpoint) {
+    return
+  }
 
   if (isControlEscolarEndpoint) {
     if (!user.hasControlEscolarRole) {

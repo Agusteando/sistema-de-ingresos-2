@@ -1,5 +1,6 @@
 import { PLANTELES_LIST } from '../../utils/constants'
 import { impersonationSecondsRemaining, verifyImpersonationToken, type ImpersonationSession } from './impersonation-session'
+import { authCookieOptions } from './auth-cookie-options'
 
 export type AuthRole = 'plantel' | 'superadmin' | string
 
@@ -159,12 +160,7 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
     throw createError({ statusCode: 403, message: 'No tiene permisos para vista consolidada.' })
   }
 
-  const cookieOptions = {
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: impersonationSession ? impersonationSecondsRemaining(impersonationSession) : 86400 * 7,
-    sameSite: 'lax' as const
-  }
+  const cookieOptions = authCookieOptions(impersonationSession ? impersonationSecondsRemaining(impersonationSession) : 86400 * 7)
   const name = firstText(centralUser?.displayName, centralUser?.username, getCookie(event, 'auth_name'), email)
   setCookie(event, 'auth_name', name, cookieOptions)
   setCookie(event, 'auth_role', role, cookieOptions)

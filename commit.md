@@ -1,1 +1,1 @@
-Implementar suplantación segura y clarificar planteles de usuarios
+Corregir memoria de compilación en Vercel

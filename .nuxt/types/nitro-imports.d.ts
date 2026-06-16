@@ -18,6 +18,7 @@ declare global {
   const FINANCIAL_ADMIN_ROLE: typeof import('../../server/utils/auth-session').FINANCIAL_ADMIN_ROLE
   const H3Error: typeof import('../../node_modules/h3').H3Error
   const H3Event: typeof import('../../node_modules/h3').H3Event
+  const LOCAL_SYSTEM_BRIDGE_COMMAND: typeof import('../../server/utils/local-system-handoff').LOCAL_SYSTEM_BRIDGE_COMMAND
   const LOG_PREFIX: typeof import('../../server/utils/externalBaseSync').LOG_PREFIX
   const NO_ADEUDO_CONTROL_PLANTELES_COLUMN: typeof import('../../server/utils/external-users').NO_ADEUDO_CONTROL_PLANTELES_COLUMN
   const WORKSPACE_DIRECTORY_SCOPE: typeof import('../../server/utils/google-workspace-directory').WORKSPACE_DIRECTORY_SCOPE
@@ -37,6 +38,7 @@ declare global {
   const assertMethod: typeof import('../../node_modules/h3').assertMethod
   const attachCustomSectionsToStudents: typeof import('../../server/utils/student-sections').attachCustomSectionsToStudents
   const attachRowSignatures: typeof import('../../server/utils/externalBaseSync').attachRowSignatures
+  const authCookieOptions: typeof import('../../server/utils/auth-cookie-options').authCookieOptions
   const buildConceptosConfigPayload: typeof import('../../server/utils/conceptos-config').buildConceptosConfigPayload
   const buildControlEscolarScopeDescriptor: typeof import('../../server/utils/control-escolar-cache').buildControlEscolarScopeDescriptor
   const buildExternalControlEscolarScope: typeof import('../../server/utils/control-escolar-external-view').buildExternalControlEscolarScope
@@ -205,6 +207,7 @@ declare global {
   const isEvent: typeof import('../../node_modules/h3').isEvent
   const isEventHandler: typeof import('../../node_modules/h3').isEventHandler
   const isExternalUsersAvailable: typeof import('../../server/utils/external-users').isExternalUsersAvailable
+  const isLocalSystemRuntime: typeof import('../../server/utils/local-system-manager').isLocalSystemRuntime
   const isMethod: typeof import('../../node_modules/h3').isMethod
   const isOtherCampusPayment: typeof import('../../server/utils/payment-classification').isOtherCampusPayment
   const isPreflightRequest: typeof import('../../node_modules/h3').isPreflightRequest
@@ -282,6 +285,7 @@ declare global {
   const removeResponseHeader: typeof import('../../node_modules/h3').removeResponseHeader
   const renderCobranzaEmail: typeof import('../../server/utils/cobranzaEmail').renderCobranzaEmail
   const renderNoAdeudoEmail: typeof import('../../server/utils/noAdeudo').renderNoAdeudoEmail
+  const requestLocalSystemManager: typeof import('../../server/utils/local-system-manager').requestLocalSystemManager
   const requireConceptosAdmin: typeof import('../../server/utils/conceptos-config').requireConceptosAdmin
   const resolveCfdiPath: typeof import('../../server/utils/cfdi-proxy').resolveCfdiPath
   const resolveControlEscolarAuth: typeof import('../../server/utils/control-escolar').resolveControlEscolarAuth
@@ -349,6 +353,7 @@ declare global {
   const useEvent: typeof import('../../node_modules/nitropack/dist/runtime/internal/context').useEvent
   const useNitroApp: typeof import('../../node_modules/nitropack/dist/runtime/internal/app').useNitroApp
   const useRuntimeConfig: typeof import('../../node_modules/nitropack/dist/runtime/internal/config').useRuntimeConfig
+  const useSecureAuthCookies: typeof import('../../server/utils/auth-cookie-options').useSecureAuthCookies
   const useSession: typeof import('../../node_modules/h3').useSession
   const useStorage: typeof import('../../node_modules/nitropack/dist/runtime/internal/storage').useStorage
   const verifyImpersonationToken: typeof import('../../server/utils/impersonation-session').verifyImpersonationToken
@@ -395,6 +400,9 @@ declare global {
   export type { ImpersonationSession } from '../../server/utils/impersonation-session'
   import('../../server/utils/impersonation-session')
   // @ts-ignore
+  export type { LocalSystemBridgeResult } from '../../server/utils/local-system-handoff'
+  import('../../server/utils/local-system-handoff')
+  // @ts-ignore
   export type { MailAttachment } from '../../server/utils/mailer'
   import('../../server/utils/mailer')
   // @ts-ignore
@@ -430,6 +438,7 @@ export { defineTask, runTask } from 'nitropack/runtime/internal/task';
 export { defineNitroErrorHandler } from 'nitropack/runtime/internal/error/utils';
 export { buildAssetsURL as __buildAssetsURL, publicAssetsURL as __publicAssetsURL } from 'C:/Users/hp/sistema-de-ingresos-2/node_modules/@nuxt/nitro-server/dist/runtime/utils/paths';
 export { defineAppConfig } from 'C:/Users/hp/sistema-de-ingresos-2/node_modules/@nuxt/nitro-server/dist/runtime/utils/config';
+export { useSecureAuthCookies, authCookieOptions } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/auth-cookie-options';
 export { CONTROL_ESCOLAR_ROLE, FINANCIAL_ADMIN_ROLE, normalizePlantel, parseRoles, hasRole, isSuperAdminRole, hasControlEscolarRole, hasFinancialAdminRole, normalizeAuthRole, isControlEscolarOnlyRole, parsePlanteles, getSuperAdminPlanteles, isValidPlantelScope, hasFinancialAccessForPlantel, getTrustedAuthUser, resolveDataBridgeAgentId } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/auth-session';
 export { generateBecaCartaPdf } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/becaCartaPdf';
 export { BECA_TYPE_OPTIONS, normalizeBecaTypes } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/becaTypes';
@@ -453,6 +462,8 @@ export { ACTIVE_SYNC_STATUSES, ENROLLMENT_CONFIG_URL, EXTERNAL_SYNC_URL, EXTERNA
 export { WORKSPACE_DOMAIN, WORKSPACE_DIRECTORY_SCOPE, isCasitaWorkspaceEmail, getWorkspaceDirectoryService, buildWorkspacePhotoUrl, searchWorkspaceDirectoryUsers, getWorkspaceDirectoryUsersByEmails, getWorkspaceDirectoryPhoto } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/google-workspace-directory';
 export { getAdminProfilePhoto } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/googleAdmin';
 export { createImpersonationToken, verifyImpersonationToken, impersonationCookieOptions, impersonatedAuthCookieOptions, impersonationSecondsRemaining, clearImpersonationCookies } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/impersonation-session';
+export { LOCAL_SYSTEM_BRIDGE_COMMAND } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/local-system-handoff';
+export { isLocalSystemRuntime, requestLocalSystemManager } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/local-system-manager';
 export { sendEmail } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/mailer';
 export { parseNullableMoney, isWholeMoney, legacyProjectedAmount, resolveProjectedAmount } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/monto-final';
 export { diagnoseNoAdeudoError, throwNoAdeudoDiagnosticError, getNoAdeudoSettings, calculateNoAdeudoDebt, resolveNoAdeudoStudentContext, selectNoAdeudoRecipients, createNoAdeudoToken, decodeNoAdeudoToken, resolveNoAdeudoVerifyBaseUrl, buildNoAdeudoValidationUrl, renderNoAdeudoEmail, buildNoAdeudoPreviewPayload, generateNoAdeudoPdfForContext, persistNoAdeudoDeudorCartaMark, sendNoAdeudoForContext } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/noAdeudo';

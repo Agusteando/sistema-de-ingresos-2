@@ -83,12 +83,30 @@ import { NuxtModule, ModuleDependencyMeta } from '@nuxt/schema'
 
    authImpersonationSecret: string,
 
+   localSystemMode: string,
+
+   localSystemManagerUrl: string,
+
+   localSystemManagerToken: string,
+
+   localSystemBuildSha: string,
+
+   localSystemBuildVersion: string,
+
+   localSystemBuildDate: string,
+
+   localSystemPlantel: string,
+
+   localSystemCookieSecure: string,
+
    nitro: {
       envPrefix: string,
    },
   }
   interface SharedPublicRuntimeConfig {
    googleClientId: string,
+
+   localSystemMode: string,
   }
 declare module '@nuxt/schema' {
   interface ModuleDependencies {

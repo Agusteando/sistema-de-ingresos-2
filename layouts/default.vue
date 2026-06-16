@@ -226,6 +226,43 @@
         <h1>{{ currentRouteName }}</h1>
 
         <div class="header-actions">
+          <a
+            v-if="!localSystemRuntime && localSystemLaunchAvailable"
+            :href="localSystemLaunchUrl"
+            class="local-system-launch"
+            title="Abrir la conexión local de alto rendimiento"
+          >
+            <span class="local-system-status-icon"><LucideZap :size="16" /></span>
+            <span class="local-system-status-copy">
+              <small>Conexión local</small>
+              <strong>Sistema Rápido</strong>
+            </span>
+          </a>
+          <button
+            v-if="localSystemRuntime"
+            type="button"
+            class="local-system-status"
+            :class="{
+              'has-update': localSystemUpdateAvailable,
+              'is-updating': localSystemUpdating,
+              'is-failed': localSystemFailed,
+              'is-current': !localSystemUpdateAvailable && !localSystemUpdating && !localSystemFailed
+            }"
+            :disabled="!isSuperAdmin || !localSystemUpdateAvailable || localSystemUpdating"
+            :title="localSystemStatusTitle"
+            @click="startLocalSystemUpdate"
+          >
+            <span class="local-system-status-icon">
+              <LucideRefreshCw v-if="localSystemUpdating" :size="16" class="animate-spin" />
+              <LucideAlertTriangle v-else-if="localSystemFailed" :size="16" />
+              <LucideCheckCircle v-else-if="!localSystemUpdateAvailable" :size="16" />
+              <LucideZap v-else :size="16" />
+            </span>
+            <span class="local-system-status-copy">
+              <small>Sistema Rápido</small>
+              <strong>{{ localSystemStatusLabel }}</strong>
+            </span>
+          </button>
           <SyncBadge v-if="showFinancialNav" />
           <div v-if="showCicloPicker" ref="cicloPickerRef" class="ciclo-picker" :class="{ open: cicloMenuOpen }">
             <button
@@ -351,7 +388,8 @@ import {
   LucideClipboardList,
   LucidePanelLeftClose,
   LucidePanelLeftOpen,
-  LucideUndo2
+  LucideUndo2,
+  LucideZap
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -497,6 +535,127 @@ const activePlantelStatus = computed(() => activePlantel.value === 'GLOBAL'
   ? { status: 'unknown', online: true, label: 'Global', message: 'Vista consolidada', action: '' }
   : getPlantelStatus(activePlantel.value))
 
+const runtimeConfig = useRuntimeConfig()
+const localSystemRuntime = String(runtimeConfig.public?.localSystemMode || '').toLowerCase() === 'true'
+const localSystemLaunchAvailable = ref(false)
+const localSystemLaunchUrl = ref('')
+const localSystemStatus = ref(null)
+const localSystemStatusPending = ref(false)
+const localSystemInitialSha = ref('')
+let localSystemPollTimer = null
+
+const localSystemOperation = computed(() => localSystemStatus.value?.operation || {})
+const localSystemUpdating = computed(() => Boolean(localSystemOperation.value?.running))
+const localSystemFailed = computed(() => String(localSystemOperation.value?.phase || '') === 'failed')
+const localSystemUpdateAvailable = computed(() => Boolean(localSystemStatus.value?.updateAvailable))
+const localSystemStatusLabel = computed(() => {
+  if (localSystemUpdating.value) {
+    const phase = String(localSystemOperation.value?.phase || '')
+    if (phase === 'downloading') return 'Descargando actualización'
+    if (phase === 'dependencies') return 'Preparando actualización'
+    if (phase === 'building') return 'Construyendo actualización'
+    if (phase === 'testing') return 'Verificando actualización'
+    if (phase === 'activating') return 'Activando actualización'
+    return 'Actualizando sistema'
+  }
+  if (localSystemFailed.value) return 'Actualización no aplicada'
+  if (localSystemUpdateAvailable.value) return 'Actualización disponible'
+  if (localSystemStatus.value?.checkError) return 'Sin conexión al actualizador'
+  return 'Sistema actualizado'
+})
+const localSystemStatusTitle = computed(() => {
+  const current = localSystemStatus.value?.current?.version || systemVersionLabel.value || 'sin versión'
+  const available = localSystemStatus.value?.available?.version || ''
+  if (localSystemUpdating.value) return `${localSystemStatusLabel.value}. La versión actual continúa disponible.`
+  if (localSystemFailed.value) return localSystemOperation.value?.error || 'La actualización falló y la versión anterior continúa activa.'
+  if (localSystemUpdateAvailable.value) {
+    return isSuperAdmin.value
+      ? `Instalada ${current}. Disponible ${available}. Selecciona para actualizar.`
+      : `Instalada ${current}. Disponible ${available}.`
+  }
+  return `Versión instalada ${current}.`
+})
+
+const applyLocalSystemVersion = (status) => {
+  const current = status?.current
+  if (!current) return
+  const nextVersion = normalizeVersionLabel(current.version || current.shortSha || '')
+  if (nextVersion) {
+    systemVersionLabel.value = nextVersion
+    systemVersionUpdatedLabel.value = current.builtAt
+      ? `Compilado ${new Date(current.builtAt).toLocaleString('es-MX')}`
+      : ''
+  }
+}
+
+const loadLocalSystemLaunch = async () => {
+  if (localSystemRuntime) return
+  try {
+    const info = await $fetch('/api/system/info')
+    localSystemLaunchAvailable.value = Boolean(info?.launchAvailable)
+    localSystemLaunchUrl.value = String(info?.launchUrl || '')
+  } catch {
+    localSystemLaunchAvailable.value = false
+    localSystemLaunchUrl.value = ''
+  }
+}
+
+const scheduleLocalSystemPoll = (delay = 15000) => {
+  if (typeof window === 'undefined' || !localSystemRuntime) return
+  if (localSystemPollTimer) window.clearTimeout(localSystemPollTimer)
+  localSystemPollTimer = window.setTimeout(async () => {
+    await loadLocalSystemStatus(false)
+    scheduleLocalSystemPoll(localSystemUpdating.value ? 3000 : 15000)
+  }, delay)
+}
+
+const loadLocalSystemStatus = async (refresh = false) => {
+  if (!localSystemRuntime || localSystemStatusPending.value) return localSystemStatus.value
+  localSystemStatusPending.value = true
+  try {
+    const status = await $fetch('/api/system/local-status', {
+      query: refresh ? { refresh: 1 } : undefined
+    })
+    localSystemStatus.value = status
+    applyLocalSystemVersion(status)
+
+    const currentSha = String(status?.current?.sha || '')
+    if (!localSystemInitialSha.value && currentSha) localSystemInitialSha.value = currentSha
+    if (localSystemInitialSha.value && currentSha && currentSha !== localSystemInitialSha.value && !status?.operation?.running) {
+      window.location.reload()
+    }
+    return status
+  } catch (error) {
+    localSystemStatus.value = {
+      ...(localSystemStatus.value || {}),
+      checkError: error?.data?.message || error?.message || 'No se pudo consultar el actualizador.'
+    }
+    return localSystemStatus.value
+  } finally {
+    localSystemStatusPending.value = false
+  }
+}
+
+const startLocalSystemUpdate = async () => {
+  if (!isSuperAdmin.value || !localSystemUpdateAvailable.value || localSystemUpdating.value) return
+  try {
+    await $fetch('/api/system/local-update', { method: 'POST' })
+    localSystemStatus.value = {
+      ...(localSystemStatus.value || {}),
+      operation: {
+        ...(localSystemStatus.value?.operation || {}),
+        running: true,
+        phase: 'checking',
+        message: 'Buscando la versión más reciente'
+      }
+    }
+    show('La actualización se está preparando. La versión actual seguirá disponible.', 'success')
+    scheduleLocalSystemPoll(1000)
+  } catch (error) {
+    show(error?.data?.message || error?.message || 'No se pudo iniciar la actualización.', 'danger')
+  }
+}
+
 const systemVersionLabel = ref('')
 const systemVersionUpdatedLabel = ref('')
 const previousSystemVersionLabel = ref('')
@@ -560,6 +719,11 @@ const startVersionUpgradeEffect = ({ previousLabel, nextLabel, count, updates })
 }
 
 const loadSystemVersion = async () => {
+  if (localSystemRuntime) {
+    await loadLocalSystemStatus(false)
+    return
+  }
+
   try {
     const result = await $fetch('/api/login/updates')
     const nextVersionLabel = normalizeVersionLabel(result?.versionLabel || '')
@@ -666,7 +830,9 @@ onMounted(async () => {
     loadPlantelStatuses({ force: true, plantel: activePlantel.value })
   }
 
-  loadSystemVersion()
+  await loadSystemVersion()
+  if (!localSystemRuntime) await loadLocalSystemLaunch()
+  if (localSystemRuntime) scheduleLocalSystemPoll(localSystemUpdating.value ? 3000 : 15000)
 
   try {
     const res = await $fetch('/api/admin/profile')
@@ -676,6 +842,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearVersionUpgradeTimers()
+  if (localSystemPollTimer && typeof window !== 'undefined') window.clearTimeout(localSystemPollTimer)
+  localSystemPollTimer = null
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', scheduleSidebarScaleUpdate)
     document.removeEventListener('pointerdown', handlePlantelDocumentPointerDown)
@@ -1637,6 +1805,111 @@ const logout = async () => {
   gap: 12px;
 }
 
+
+.local-system-status,
+.local-system-launch {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(203, 220, 208, 0.94);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 6px 12px 6px 8px;
+  color: #244736;
+  box-shadow: 0 10px 24px rgba(22, 38, 65, 0.05);
+  text-align: left;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+
+.local-system-launch {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.local-system-launch:hover {
+  border-color: rgba(77, 145, 87, 0.54);
+  box-shadow: 0 14px 28px rgba(31, 85, 45, 0.11);
+  transform: translateY(-1px);
+}
+
+.local-system-status.has-update {
+  border-color: rgba(220, 153, 51, 0.56);
+  background: linear-gradient(180deg, #fffdf7, #fff7e7);
+  color: #704414;
+  cursor: pointer;
+}
+
+.local-system-status.has-update:not(:disabled):hover {
+  border-color: rgba(210, 132, 19, 0.72);
+  box-shadow: 0 14px 28px rgba(105, 66, 16, 0.12);
+  transform: translateY(-1px);
+}
+
+
+.local-system-status.is-failed {
+  border-color: rgba(210, 74, 74, 0.48);
+  background: linear-gradient(180deg, #fffafa, #fff0f0);
+  color: #8d2d2d;
+}
+
+.local-system-status.is-failed .local-system-status-icon {
+  background: rgba(210, 74, 74, 0.13);
+  color: #b43b3b;
+}
+
+.local-system-status.is-updating {
+  border-color: rgba(78, 137, 91, 0.46);
+  background: linear-gradient(180deg, #f5fcf5, #eaf7eb);
+}
+
+.local-system-status:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.local-system-status-icon {
+  display: inline-grid;
+  width: 29px;
+  height: 29px;
+  flex: 0 0 29px;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(92, 151, 78, 0.13);
+  color: #397447;
+}
+
+.local-system-status.has-update .local-system-status-icon {
+  background: rgba(225, 151, 42, 0.14);
+  color: #a35f08;
+}
+
+.local-system-status-copy {
+  display: grid;
+  gap: 1px;
+}
+
+.local-system-status-copy small {
+  color: currentColor;
+  font-size: 0.58rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  opacity: 0.72;
+  text-transform: uppercase;
+}
+
+.local-system-status-copy strong {
+  max-width: 190px;
+  overflow: hidden;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .header-home-button {
   display: inline-flex;
   height: 38px;
@@ -1884,6 +2157,10 @@ const logout = async () => {
 
   .header-actions {
     gap: 10px;
+  }
+
+  .local-system-status-copy strong {
+    max-width: 132px;
   }
 
   .ciclo-picker {

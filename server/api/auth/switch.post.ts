@@ -1,6 +1,7 @@
 import { runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { getTrustedAuthUser, hasFinancialAccessForPlantel, isValidPlantelScope, normalizePlantel } from '../../utils/auth-session'
+import { authCookieOptions } from '../../utils/auth-cookie-options'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
@@ -23,11 +24,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 403, message: 'No tiene permisos para acceder a este plantel.' })
   }
 
-  const cookieOpts = {
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: 86400 * 7
-  }
+  const cookieOpts = authCookieOptions()
 
   const dataBridgeAgentId = requested !== 'GLOBAL'
     ? requested

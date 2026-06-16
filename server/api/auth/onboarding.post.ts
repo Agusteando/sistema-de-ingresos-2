@@ -1,5 +1,6 @@
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { getTrustedAuthUser, hasFinancialAccessForPlantel, normalizePlantel } from '../../utils/auth-session'
+import { authCookieOptions } from '../../utils/auth-cookie-options'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -15,12 +16,7 @@ export default defineEventHandler(async (event) => {
   const controlAccess = user.isSuperAdmin || user.hasControlEscolarRole
   const redirectTo = financialAccess ? '/' : '/control-escolar'
 
-  const cookieOpts = {
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: 86400 * 7,
-    sameSite: 'lax' as const
-  }
+  const cookieOpts = authCookieOptions()
 
   setCookie(event, 'auth_planteles', allowedPlanteles.join(','), cookieOpts)
   setCookie(event, 'auth_active_plantel', activePlantel, cookieOpts)

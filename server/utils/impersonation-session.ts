@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { authCookieOptions } from './auth-cookie-options'
 
 const TOKEN_VERSION = 1
 const ACTIVE_MAX_AGE_SECONDS = 60 * 60 * 8
@@ -80,20 +81,9 @@ export const verifyImpersonationToken = (tokenValue: unknown, options: { allowEx
   return payload
 }
 
-export const impersonationCookieOptions = () => ({
-  secure: process.env.NODE_ENV === 'production',
-  path: '/',
-  maxAge: COOKIE_RETENTION_SECONDS,
-  sameSite: 'lax' as const
-})
+export const impersonationCookieOptions = () => authCookieOptions(COOKIE_RETENTION_SECONDS)
 
-
-export const impersonatedAuthCookieOptions = () => ({
-  secure: process.env.NODE_ENV === 'production',
-  path: '/',
-  maxAge: ACTIVE_MAX_AGE_SECONDS,
-  sameSite: 'lax' as const
-})
+export const impersonatedAuthCookieOptions = () => authCookieOptions(ACTIVE_MAX_AGE_SECONDS)
 
 export const impersonationSecondsRemaining = (session: ImpersonationSession) => Math.max(
   1,

@@ -59,8 +59,18 @@ export default defineNuxtConfig({
     noAdeudoSignatureSecret: process.env.NO_ADEUDO_SIGNATURE_SECRET || '',
     authImpersonationSecret: process.env.AUTH_IMPERSONATION_SECRET || '',
 
+    localSystemMode: process.env.LOCAL_SYSTEM_MODE || '',
+    localSystemManagerUrl: process.env.LOCAL_SYSTEM_MANAGER_URL || 'http://127.0.0.1:8790',
+    localSystemManagerToken: process.env.LOCAL_SYSTEM_MANAGER_TOKEN || '',
+    localSystemBuildSha: process.env.LOCAL_SYSTEM_BUILD_SHA || '',
+    localSystemBuildVersion: process.env.LOCAL_SYSTEM_BUILD_VERSION || '',
+    localSystemBuildDate: process.env.LOCAL_SYSTEM_BUILD_DATE || '',
+    localSystemPlantel: process.env.LOCAL_SYSTEM_PLANTEL || process.env.AGENT_ID || '',
+    localSystemCookieSecure: process.env.LOCAL_SYSTEM_COOKIE_SECURE || '',
+
     public: {
-      googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+      googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+      localSystemMode: process.env.LOCAL_SYSTEM_MODE || ''
     }
   },
   app: {
