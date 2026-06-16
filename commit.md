@@ -1,1 +1,1 @@
-Corregir memoria de compilación en Vercel
+Mantener visible el acceso a Sistema Rápido

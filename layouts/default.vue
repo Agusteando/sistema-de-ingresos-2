@@ -226,18 +226,24 @@
         <h1>{{ currentRouteName }}</h1>
 
         <div class="header-actions">
-          <a
-            v-if="!localSystemRuntime && localSystemLaunchAvailable"
-            :href="localSystemLaunchUrl"
+          <button
+            v-if="!localSystemRuntime"
+            type="button"
             class="local-system-launch"
-            title="Abrir la conexión local de alto rendimiento"
+            :class="{
+              'is-unavailable': !localSystemLaunchAvailable,
+              'is-checking': localSystemLaunchPending
+            }"
+            :disabled="localSystemLaunchPending"
+            :title="localSystemLaunchTitle"
+            @click="openLocalSystem"
           >
             <span class="local-system-status-icon"><LucideZap :size="16" /></span>
             <span class="local-system-status-copy">
-              <small>Conexión local</small>
+              <small>{{ localSystemLaunchPending ? 'Verificando conexión' : 'Conexión local' }}</small>
               <strong>Sistema Rápido</strong>
             </span>
-          </a>
+          </button>
           <button
             v-if="localSystemRuntime"
             type="button"
@@ -539,6 +545,8 @@ const runtimeConfig = useRuntimeConfig()
 const localSystemRuntime = String(runtimeConfig.public?.localSystemMode || '').toLowerCase() === 'true'
 const localSystemLaunchAvailable = ref(false)
 const localSystemLaunchUrl = ref('')
+const localSystemLaunchMessage = ref('')
+const localSystemLaunchPending = ref(false)
 const localSystemStatus = ref(null)
 const localSystemStatusPending = ref(false)
 const localSystemInitialSha = ref('')
@@ -588,16 +596,55 @@ const applyLocalSystemVersion = (status) => {
   }
 }
 
-const loadLocalSystemLaunch = async () => {
+const localSystemLaunchTitle = computed(() => {
+  if (localSystemLaunchPending.value) return 'Verificando disponibilidad de Sistema Rápido.'
+  if (localSystemLaunchAvailable.value) return 'Abrir la conexión local de alto rendimiento.'
+  return localSystemLaunchMessage.value || 'Sistema Rápido todavía no está disponible. Selecciona para verificar nuevamente.'
+})
+
+const loadLocalSystemLaunch = async (refresh = false) => {
   if (localSystemRuntime) return
-  try {
-    const info = await $fetch('/api/system/info')
-    localSystemLaunchAvailable.value = Boolean(info?.launchAvailable)
-    localSystemLaunchUrl.value = String(info?.launchUrl || '')
-  } catch {
+  if (activePlantel.value === 'GLOBAL') {
     localSystemLaunchAvailable.value = false
     localSystemLaunchUrl.value = ''
+    localSystemLaunchMessage.value = 'Selecciona un plantel para abrir Sistema Rápido.'
+    return
   }
+
+  localSystemLaunchPending.value = true
+  try {
+    const info = await $fetch('/api/system/info', {
+      query: refresh ? { refresh: Date.now() } : undefined
+    })
+    localSystemLaunchAvailable.value = Boolean(info?.launchAvailable)
+    localSystemLaunchUrl.value = String(info?.launchUrl || '')
+    localSystemLaunchMessage.value = String(
+      info?.message
+      || (info?.launchAvailable
+        ? 'Sistema Rápido está disponible.'
+        : 'Sistema Rápido todavía no está disponible en este plantel.')
+    )
+  } catch (error) {
+    localSystemLaunchAvailable.value = false
+    localSystemLaunchUrl.value = ''
+    localSystemLaunchMessage.value = String(
+      error?.data?.message
+      || error?.message
+      || 'No se pudo verificar Sistema Rápido en este momento.'
+    )
+  } finally {
+    localSystemLaunchPending.value = false
+  }
+}
+
+const openLocalSystem = async () => {
+  if (localSystemLaunchPending.value) return
+  await loadLocalSystemLaunch(true)
+  if (localSystemLaunchAvailable.value && localSystemLaunchUrl.value) {
+    window.location.href = localSystemLaunchUrl.value
+    return
+  }
+  show(localSystemLaunchMessage.value || 'Sistema Rápido todavía no está disponible en este plantel.', 'danger')
 }
 
 const scheduleLocalSystemPoll = (delay = 15000) => {
@@ -1824,14 +1871,28 @@ const logout = async () => {
 
 
 .local-system-launch {
+  appearance: none;
+  font: inherit;
   text-decoration: none;
   cursor: pointer;
 }
 
-.local-system-launch:hover {
+.local-system-launch:hover:not(:disabled) {
   border-color: rgba(77, 145, 87, 0.54);
   box-shadow: 0 14px 28px rgba(31, 85, 45, 0.11);
   transform: translateY(-1px);
+}
+
+.local-system-launch.is-unavailable {
+  border-color: rgba(174, 186, 181, 0.86);
+  background: rgba(247, 249, 248, 0.96);
+  color: #64736c;
+}
+
+.local-system-launch.is-checking,
+.local-system-launch:disabled {
+  cursor: wait;
+  opacity: 0.78;
 }
 
 .local-system-status.has-update {

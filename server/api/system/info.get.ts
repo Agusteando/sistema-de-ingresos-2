@@ -4,7 +4,7 @@ import { LOCAL_SYSTEM_BRIDGE_COMMAND, type LocalSystemBridgeResult } from '../..
 import { isLocalSystemRuntime, requestLocalSystemManager } from '../../utils/local-system-manager'
 
 export default defineEventHandler(async (event) => {
-  setResponseHeader(event, 'Cache-Control', 'private, max-age=15')
+  setResponseHeader(event, 'Cache-Control', 'no-store')
   const config = useRuntimeConfig()
 
   if (!isLocalSystemRuntime()) {
@@ -31,6 +31,9 @@ export default defineEventHandler(async (event) => {
       launchUrl: discovery?.ok && discovery?.available
         ? `/api/system/launch?plantel=${encodeURIComponent(activePlantel)}`
         : '',
+      message: discovery?.message || (discovery?.ok
+        ? 'Sistema Rápido todavía no está disponible en este plantel.'
+        : 'No se pudo verificar Sistema Rápido mediante Bridge.'),
       localUrl: discovery?.localUrl || '',
       installed: discovery?.installedSha
         ? { sha: discovery.installedSha, version: discovery.installedVersion || '' }
