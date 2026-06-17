@@ -1,6 +1,8 @@
 import { getTrustedAuthUser } from '../../utils/auth-session'
 import { fetchCentralMatriculaOverlays } from '../../utils/central-matricula-overlay'
 
+const MAX_BULK_MATRICULAS = 500
+
 export default defineEventHandler(async (event) => {
   await getTrustedAuthUser(event)
   const body = await readBody(event).catch(() => ({}))
@@ -10,6 +12,13 @@ export default defineEventHandler(async (event) => {
       .map((value: any) => String(value || '').trim())
       .filter(Boolean)
   ))
+
+  if (normalized.length > MAX_BULK_MATRICULAS) {
+    throw createError({
+      statusCode: 413,
+      message: `La consulta admite hasta ${MAX_BULK_MATRICULAS} matrículas por lote.`
+    })
+  }
 
   try {
     const overlays = await fetchCentralMatriculaOverlays(normalized)

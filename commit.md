@@ -1,1 +1,1 @@
-Corregir agotamiento de memoria al cargar alumnos para ROLE_ADMON
+Corregir agotamiento de memoria al iniciar sesiones ROLE_ADMON e impersonadas

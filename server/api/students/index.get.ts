@@ -5,123 +5,7 @@ import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipo
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 import { maybeRefreshControlEscolarCacheFromLoadedRows } from '../../utils/control-escolar-cache'
-import { fetchCentralMatriculaOverlays } from '../../utils/central-matricula-overlay'
-import { resolveFinancialFamilyContact } from '../../../shared/utils/familyContact'
 
-
-const compactText = (value: unknown) => String(value || '').trim()
-const normalizeFinancialMatricula = (value: unknown) => compactText(value).toUpperCase()
-
-const mergeCentralOverlayIntoFinancialStudent = (student: any, overlay: any) => {
-  const overlayStudent = overlay?.student || overlay
-  if (!student || !overlayStudent) return student
-  const centralMatricula = { ...(student.centralMatricula || {}), ...overlayStudent }
-  const merged = {
-    ...student,
-    centralMatricula,
-    centralMatriculaRaw: overlay?.raw || student.centralMatriculaRaw || null,
-    matriculaEnrichmentStatus: 'ready',
-    curp: compactText(overlayStudent.curp) || student.curp,
-    madre: compactText(overlayStudent.madre) || student.madre,
-    telefonoPadre: compactText(overlayStudent.telefonoPadre) || student.telefonoPadre,
-    telefonoMadre: compactText(overlayStudent.telefonoMadre) || student.telefonoMadre,
-    emailPadre: compactText(overlayStudent.emailPadre) || student.emailPadre,
-    emailMadre: compactText(overlayStudent.emailMadre) || student.emailMadre,
-    nombrePadre: compactText(overlayStudent.nombrePadre) || student.nombrePadre,
-    apellidoPaternoPadre: compactText(overlayStudent.apellidoPaternoPadre) || student.apellidoPaternoPadre,
-    apellidoMaternoPadre: compactText(overlayStudent.apellidoMaternoPadre) || student.apellidoMaternoPadre,
-    nombrePadreCompleto: compactText(overlayStudent.nombrePadreCompleto) || student.nombrePadreCompleto,
-    ocupacionPadre: compactText(overlayStudent.ocupacionPadre) || student.ocupacionPadre,
-    nombreMadre: compactText(overlayStudent.nombreMadre) || student.nombreMadre,
-    apellidoPaternoMadre: compactText(overlayStudent.apellidoPaternoMadre) || student.apellidoPaternoMadre,
-    apellidoMaternoMadre: compactText(overlayStudent.apellidoMaternoMadre) || student.apellidoMaternoMadre,
-    nombreMadreCompleto: compactText(overlayStudent.nombreMadreCompleto) || student.nombreMadreCompleto,
-    ocupacionMadre: compactText(overlayStudent.ocupacionMadre) || student.ocupacionMadre,
-    direccion: compactText(overlayStudent.direccion) || student.direccion,
-    servicio: compactText(overlayStudent.servicio || overlayStudent.servicios) || student.servicio,
-    servicios: compactText(overlayStudent.servicio || overlayStudent.servicios) || student.servicios,
-  }
-  const familyContact = resolveFinancialFamilyContact(merged)
-  return {
-    ...merged,
-    padre: familyContact.tutorName || student.padre,
-    tutor: familyContact.tutorName || student.tutor,
-    telefono: familyContact.phone || student.telefono,
-    correo: familyContact.email || student.correo,
-    controlEscolarFamilyContact: familyContact,
-  }
-}
-
-const enrichFinancialStudentsWithMatricula = async (students: any[] = []) => {
-  const matriculas = Array.from(new Set(students.map((student) => compactText(student?.matricula)).filter(Boolean)))
-  if (!matriculas.length) {
-    return {
-      students,
-      diagnostics: {
-        status: 'skipped',
-        requested: 0,
-        found: 0,
-        error: '',
-        reason: 'no_matriculas_visible'
-      }
-    }
-  }
-
-  try {
-    const overlays = await fetchCentralMatriculaOverlays(matriculas)
-    if (!overlays.size) {
-      return {
-        students: students.map((student) => ({ ...student, matriculaEnrichmentStatus: 'missing' })),
-        diagnostics: {
-          status: 'missing',
-          requested: matriculas.length,
-          found: 0,
-          error: '',
-          reason: 'central_returned_no_rows'
-        }
-      }
-    }
-
-    const mapped = students.map((student) => {
-      const key = normalizeFinancialMatricula(student?.matricula)
-      const overlay = overlays.get(key)
-      return overlay
-        ? mergeCentralOverlayIntoFinancialStudent(student, overlay)
-        : { ...student, matriculaEnrichmentStatus: 'missing' }
-    })
-
-    const found = mapped.filter((student) => student?.matriculaEnrichmentStatus === 'ready').length
-    return {
-      students: mapped,
-      diagnostics: {
-        status: found === matriculas.length ? 'ready' : found > 0 ? 'partial' : 'missing',
-        requested: matriculas.length,
-        found,
-        error: '',
-        reason: found === matriculas.length
-          ? 'all_visible_students_enriched'
-          : found > 0
-            ? 'central_missing_some_visible_rows'
-            : 'central_missing_all_visible_rows'
-      }
-    }
-  } catch (error: any) {
-    console.warn('[Students] central matricula enrichment unavailable during financial load', {
-      count: matriculas.length,
-      message: error?.message || error
-    })
-    return {
-      students: students.map((student) => ({ ...student, matriculaEnrichmentStatus: 'unavailable' })),
-      diagnostics: {
-        status: 'failed',
-        requested: matriculas.length,
-        found: 0,
-        error: error?.message || String(error || 'matricula_enrichment_failed'),
-        reason: 'central_overlay_lookup_failed'
-      }
-    }
-  }
-}
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   setResponseHeader(event, 'Cache-Control', 'no-store')
@@ -367,23 +251,19 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   const withSections = await attachCustomSectionsToStudents(mapped, user)
-  const enriched = await enrichFinancialStudentsWithMatricula(withSections)
 
   setResponseHeader(event, 'X-Financial-Students-Bridge-State', 'ready')
-  setResponseHeader(event, 'X-Financial-Students-Flow', 'bridge_financial_base_plus_central_overlay')
+  setResponseHeader(event, 'X-Financial-Students-Flow', 'bridge_financial_base_then_deferred_central_overlay')
   setResponseHeader(event, 'X-Financial-Students-Base-Rows', String(mapped.length))
   setResponseHeader(event, 'X-Financial-Students-Sections-Rows', String(withSections.length))
-  setResponseHeader(event, 'X-Financial-Students-Overlay-Requested', String(enriched.diagnostics.requested || 0))
-  setResponseHeader(event, 'X-Financial-Students-Overlay-Found', String(enriched.diagnostics.found || 0))
-  setResponseHeader(event, 'X-Financial-Students-Overlay-Status', String(enriched.diagnostics.status || 'unknown'))
-  setResponseHeader(event, 'X-Financial-Students-Overlay-Reason', String(enriched.diagnostics.reason || ''))
-  if (enriched.diagnostics.error) {
-    setResponseHeader(event, 'X-Financial-Students-Overlay-Error', String(enriched.diagnostics.error))
-  }
+  setResponseHeader(event, 'X-Financial-Students-Overlay-Requested', '0')
+  setResponseHeader(event, 'X-Financial-Students-Overlay-Found', '0')
+  setResponseHeader(event, 'X-Financial-Students-Overlay-Status', 'deferred')
+  setResponseHeader(event, 'X-Financial-Students-Overlay-Reason', 'client_background_batches')
   setResponseHeader(event, 'X-Financial-Students-Query-Mode', q ? 'search' : 'scope')
   setResponseHeader(event, 'X-Financial-Students-Scoped-Plantel', isScopedToActivePlantel ? normalizePlantel(user.active_plantel) : 'GLOBAL')
   setResponseHeader(event, 'X-Financial-Students-Enrollment-Concepts', String(enrollmentConceptIds.length))
   setResponseHeader(event, 'X-Financial-Students-Cache-Refresh', q ? 'skipped_search_query' : 'scheduled_from_live_rows')
 
-  return enriched.students
+  return withSections
 }))

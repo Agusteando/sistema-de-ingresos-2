@@ -1253,46 +1253,42 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null, traceContext = 
   }
 
   try {
-    const response = await $fetch('/api/students/matricula-overlays', {
-      method: 'POST',
-      body: { matriculas }
-    })
-    if (requestId !== matriculaOverlayRequestId) return
-
-    if (!response?.ok) {
-      financialEnrichmentState.value = {
-        status: 'failed',
-        message: response?.message || 'No se pudo consultar matrícula central.',
-        requested: Number(response?.requested || matriculas.length),
-        found: Number(response?.found || 0),
-        error: response?.message || 'matricula-enrichment-failed',
-        lastUpdatedAt: new Date().toISOString()
-      }
-      if (traceContext) {
-        traceContext.resolution.visibleOverlayStatus = 'failed'
-        traceContext.resolution.visibleOverlayFound = Number(response?.found || 0)
-        traceContext.resolution.visibleOverlayRequested = Number(response?.requested || matriculas.length)
-        upsertFinancialTraceStep(traceContext, 'client', {
-          key: 'client-visible-overlay',
-          label: 'Revisión visible de matrícula central',
-          status: 'failed',
-          ms: financialNow() - overlayStartedAt,
-          decision: 'La revalidación visible no pudo completar el contraste.',
-          why: response?.message || 'La API de matrícula central respondió sin confirmar la revisión visible.',
-          meta: [
-            { label: 'Solicitados', value: Number(response?.requested || matriculas.length) },
-            { label: 'Encontrados', value: Number(response?.found || 0) },
-          ],
-        })
-      }
-      return
-    }
-
     const overlays = new Map()
-    for (const overlay of response.overlays || []) {
-      const overlayStudent = extractMatriculaOverlayStudent(overlay)
-      const key = normalizeStudentMatricula(overlayStudent?.matricula)
-      if (key) overlays.set(key, overlayStudent)
+    const overlayBatchSize = 250
+    let requestedCount = 0
+    let foundCount = 0
+
+    for (let index = 0; index < matriculas.length; index += overlayBatchSize) {
+      const batch = matriculas.slice(index, index + overlayBatchSize)
+      const response = await $fetch('/api/students/matricula-overlays', {
+        method: 'POST',
+        body: { matriculas: batch }
+      })
+      if (requestId !== matriculaOverlayRequestId) return
+
+      if (!response?.ok) {
+        const batchError = new Error(response?.message || 'No se pudo consultar matrícula central.')
+        batchError.data = { message: batchError.message }
+        throw batchError
+      }
+
+      requestedCount += Number(response.requested || batch.length)
+      foundCount += Number(response.found || 0)
+
+      for (const overlay of response.overlays || []) {
+        const overlayStudent = extractMatriculaOverlayStudent(overlay)
+        const key = normalizeStudentMatricula(overlayStudent?.matricula)
+        if (key) overlays.set(key, overlayStudent)
+      }
+
+      financialEnrichmentState.value = {
+        ...financialEnrichmentState.value,
+        status: 'syncing',
+        message: `Consultando matrícula central por lotes (${Math.min(index + batch.length, matriculas.length)} de ${matriculas.length}).`,
+        requested: matriculas.length,
+        found: overlays.size,
+        error: null
+      }
     }
 
     students.value = students.value.map((student) => {
@@ -1321,16 +1317,16 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null, traceContext = 
       message: found
         ? 'Matrícula central aplicada como enriquecimiento opcional.'
         : 'Matrícula central respondió sin fichas para las matrículas visibles.',
-      requested: Number(response.requested || matriculas.length),
-      found: Number(response.found || found),
+      requested: requestedCount || matriculas.length,
+      found: foundCount || found,
       error: null,
       lastUpdatedAt: new Date().toISOString()
     }
 
     if (traceContext) {
       traceContext.resolution.visibleOverlayStatus = found === matriculas.length ? 'ready' : 'partial'
-      traceContext.resolution.visibleOverlayFound = Number(response.found || found)
-      traceContext.resolution.visibleOverlayRequested = Number(response.requested || matriculas.length)
+      traceContext.resolution.visibleOverlayFound = foundCount || found
+      traceContext.resolution.visibleOverlayRequested = requestedCount || matriculas.length
       upsertFinancialTraceStep(traceContext, 'client', {
         key: 'client-visible-overlay',
         label: 'Revisión visible de matrícula central',
@@ -1343,8 +1339,8 @@ const loadVisibleMatriculaOverlays = async (cacheOptions = null, traceContext = 
           ? 'El contraste final no detectó huecos entre lo visible y la respuesta de matrícula.'
           : 'Hay matrículas visibles sin ficha central o aún pendientes de normalización.',
         meta: [
-          { label: 'Solicitados', value: Number(response.requested || matriculas.length) },
-          { label: 'Encontrados', value: Number(response.found || found) },
+          { label: 'Solicitados', value: requestedCount || matriculas.length },
+          { label: 'Encontrados', value: foundCount || found },
         ],
       })
     }
@@ -2259,7 +2255,7 @@ const loadEnrollmentConfig = async ({ refreshStudents = false, refreshKpis = tru
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (process.client) {
     const savedWorkspaceSplit = Number(localStorage.getItem(WORKSPACE_SPLIT_STORAGE_KEY))
     const savedWorkspaceStack = Number(localStorage.getItem(WORKSPACE_STACK_STORAGE_KEY))
@@ -2275,8 +2271,13 @@ onMounted(() => {
   if (route.query.q) filters.value.q = String(route.query.q)
   hydrateCachedEnrollmentConcepts()
   loadCustomSections()
-  performSearch({ useCache: true })
-  loadEnrollmentConfig({ refreshStudents: true })
+  // Resolve the enrollment configuration before issuing the single initial
+  // students request. Previously both calls ran at the same time and a config
+  // change launched a second full /api/students request while the first one was
+  // still executing, doubling bridge and heap pressure immediately after login.
+  await loadEnrollmentConfig({ refreshStudents: false, refreshKpis: false })
+  await performSearch({ useCache: true })
+  await Promise.allSettled([loadGlobalKpis(), loadKpiSparklines()])
 })
 
 

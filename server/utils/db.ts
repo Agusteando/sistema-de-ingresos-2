@@ -79,6 +79,10 @@ export type SqlStatement = {
   params?: SqlParams
 }
 
+type EnsureSchemaOptions = {
+  allowBridge?: boolean
+}
+
 let pool: mysql.Pool
 const ensuredSchemaKeys = new Set<string>()
 const schemaPromises = new Map<string, Promise<void>>()
@@ -462,7 +466,15 @@ const checkAndAddColumn = async (table: string, column: string, definition: stri
   }
 }
 
-export const ensureSchema = async () => {
+export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
+  // En bridge mode, schema migrations must never be coupled to a normal user
+  // request. A ROLE_ADMON login selects a concrete plantel and immediately
+  // opens several financial endpoints; running the full migration sequence in
+  // that request context can retain hundreds of bridge responses and exhaust
+  // the Nuxt process heap. Bridge migrations are allowed only from the explicit
+  // startup path, which passes allowBridge=true.
+  if (getTransport() === 'bridge' && !options.allowBridge) return
+
   const schemaKey = getSchemaStateKey()
 
   if (ensuredSchemaKeys.has(schemaKey)) return
@@ -979,7 +991,11 @@ export const query = async <T>(sql: string, params?: SqlParams, isRetry = false)
   try {
     return await rawQuery<T>(sql, params)
   } catch (err: any) {
-    if (!isRetry && (err.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_NO_SUCH_TABLE')) {
+    if (
+      getTransport() !== 'bridge' &&
+      !isRetry &&
+      (err.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_NO_SUCH_TABLE')
+    ) {
       console.warn('[DB Auto-Healing] Detectado esquema incompleto o desincronizado. Forzando re-evaluacion...')
       const schemaKey = getSchemaStateKey()
       ensuredSchemaKeys.delete(schemaKey)

@@ -162,7 +162,10 @@ const sanitizeCentralMatriculaRaw = (raw: Record<string, any>) => {
   return sanitized
 }
 
-const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
+const normalizeCentralMatriculaOverlay = (
+  raw: Record<string, any>,
+  options: { includeRaw?: boolean } = {}
+) => {
   raw = sanitizeCentralMatriculaRaw(raw)
   const padre = firstText(
     [raw.nombre_padre, raw.apellido_paterno_padre, raw.apellido_materno_padre].map((value) => normalizeNameText(value)).filter(Boolean).join(' '),
@@ -184,7 +187,7 @@ const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
   return {
     source: 'CONTROL_ESCOLAR_MYSQL.matricula',
     overlayExists: true,
-    raw,
+    ...(options.includeRaw === false ? {} : { raw }),
     student: {
       matricula: normalizeText(raw.matricula, 64),
       plantel: normalizeUpper(raw.plantel, 40),
@@ -291,7 +294,7 @@ export const fetchCentralMatriculaOverlay = async (matricula: string) => {
     [normalizedMatricula.toUpperCase()]
   )
   const raw = rows[0] || null
-  return raw ? normalizeCentralMatriculaOverlay(raw) : null
+  return raw ? normalizeCentralMatriculaOverlay(raw, { includeRaw: true }) : null
 }
 
 export const fetchCentralMatriculaOverlays = async (matriculas: string[]) => {
@@ -314,7 +317,10 @@ export const fetchCentralMatriculaOverlays = async (matriculas: string[]) => {
       batch.map((matricula) => String(matricula || '').toUpperCase())
     )
     for (const raw of rows) {
-      const overlay = normalizeCentralMatriculaOverlay(raw)
+      // Bulk financial enrichment only needs the normalized student payload.
+      // Keeping a second `raw` copy for every matrícula doubles retained memory
+      // and is unnecessary for list screens.
+      const overlay = normalizeCentralMatriculaOverlay(raw, { includeRaw: false })
       const key = normalizeText(overlay.student?.matricula, 64).toUpperCase()
       if (key) result.set(key, overlay)
     }

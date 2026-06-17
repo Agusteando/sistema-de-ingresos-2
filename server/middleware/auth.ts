@@ -1,4 +1,4 @@
-import { enterBridgeAgentId, ensureSchema, getDbTransport } from '../utils/db'
+import { enterBridgeAgentId, getDbTransport } from '../utils/db'
 import { getTrustedAuthUser, resolveDataBridgeAgentId } from '../utils/auth-session'
 
 const noAdeudoMiddlewareDiagnostic = (event: any, diagnostic: Record<string, any>) => {
@@ -105,5 +105,4 @@ export default defineEventHandler(async (event) => {
     return
   }
 
-  await ensureSchema()
 })
