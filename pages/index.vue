@@ -393,6 +393,7 @@ import BajaReasonModal from '~/components/BajaReasonModal.vue'
 import StudentOperatorInfoModal from '~/components/students/StudentOperatorInfoModal.vue'
 import NoAdeudoModal from '~/components/NoAdeudoModal.vue'
 import { resolveClientAuthAccess } from '~/utils/authAccess'
+import { logApiDiagnostic } from '~/utils/apiDiagnostic'
 
 const { show } = useToast()
 const { openMenu } = useContextMenu()
@@ -428,6 +429,51 @@ const ENROLLMENT_CONCEPTS_CACHE_BASE_KEY = 'students-enrollment-concepts:v3'
 const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const currentPlantelKey = computed(() => normalizeEnrollmentPlantelKey(activePlantelCookie.value || 'GLOBAL') || 'GLOBAL')
 const enrollmentConceptsCacheKey = computed(() => `${ENROLLMENT_CONCEPTS_CACHE_BASE_KEY}:${currentCicloKey.value}:${currentPlantelKey.value}`)
+
+const verifyFinancialBridgeBeforeInitialLoad = async () => {
+  const plantel = currentPlantelKey.value
+  if (!plantel || plantel === 'GLOBAL') return true
+
+  try {
+    const result = await $fetch('/api/auth/planteles-status', {
+      params: { plantel },
+      retry: 0
+    })
+    const availability = Array.isArray(result?.statuses) ? result.statuses[0] : null
+    if (availability?.online === true) return true
+
+    const code = availability?.code || 'BRIDGE_AGENT_UNAVAILABLE'
+    const message = availability?.message || `El agente de datos de ${plantel} no está disponible.`
+    console.error('[AuroraDiag:financial.preflight]', {
+      status: availability?.httpStatus || 503,
+      code,
+      source: 'bridge_preflight',
+      plantel,
+      agentId: plantel,
+      message
+    })
+    setStudentsSyncState({
+      status: 'unavailable',
+      message: `No se cargó el dashboard porque el agente de ${plantel} está fuera de línea.`,
+      recordCount: students.value.length,
+      hasCache: students.value.length > 0,
+      error: code
+    })
+    show(`Plantel ${plantel} sin conexión de datos`, 'danger')
+    return false
+  } catch (error) {
+    const diagnostic = logApiDiagnostic('financial.preflight', error, { plantel, agentId: plantel })
+    setStudentsSyncState({
+      status: 'unavailable',
+      message: 'No se pudo verificar la conexión del plantel. Se detuvo la carga automática para evitar múltiples errores.',
+      recordCount: students.value.length,
+      hasCache: students.value.length > 0,
+      error: diagnostic.code || 'BRIDGE_PREFLIGHT_FAILED'
+    })
+    show('No se pudo verificar la conexión del plantel', 'danger')
+    return false
+  }
+}
 
 const students = ref([])
 const loading = ref(false)
@@ -981,6 +1027,7 @@ const loadKpiSparklines = async () => {
 
     refreshToken = beginKpiRefreshScope()
     const res = await $fetch('/api/students/kpi-trends', {
+      retry: 0,
       params: {
         ciclo: cicloKey,
         concepts: externalConcepts.value.join(','),
@@ -995,6 +1042,7 @@ const loadKpiSparklines = async () => {
       ingresos: Array.isArray(res?.ingresos) ? res.ingresos : []
     }
   } catch (e) {
+    logApiDiagnostic('students.kpi-trends', e)
     if (requestId === kpiSparklineRequestId) paymentKpiSparklines.value = { inscritos: [], internos: [], externos: [], ingresos: [] }
   } finally {
     endKpiRefreshScope(refreshToken)
@@ -1117,9 +1165,10 @@ const loadGlobalKpis = async () => {
   const refreshToken = beginKpiRefreshScope()
   try {
     const cicloKey = normalizeCicloKey(state.value.ciclo)
-    const res = await $fetch('/api/dashboard/kpis', { params: { ciclo: cicloKey, concepts: externalConcepts.value.join(','), tipoConcepts: tipoIngresoConcepts.value.join(',') } })
+    const res = await $fetch('/api/dashboard/kpis', { retry: 0, params: { ciclo: cicloKey, concepts: externalConcepts.value.join(','), tipoConcepts: tipoIngresoConcepts.value.join(',') } })
     globalKpis.value.ingresosMes = res.ingresosMes || 0
   } catch(e) {
+    logApiDiagnostic('dashboard.kpis', e)
   } finally {
     endKpiRefreshScope(refreshToken)
   }
@@ -1509,7 +1558,7 @@ const performSearch = async (options = {}) => {
 
   try {
     const serverStartedAt = financialNow()
-    const response = await $fetch.raw('/api/students', { params: { ciclo: cicloKey, q: query, concepts: externalConcepts.value.join(','), tipoConcepts: tipoIngresoConcepts.value.join(',') } })
+    const response = await $fetch.raw('/api/students', { retry: 0, params: { ciclo: cicloKey, q: query, concepts: externalConcepts.value.join(','), tipoConcepts: tipoIngresoConcepts.value.join(',') } })
     if (requestId !== studentsRequestId) return
     const headers = readFinancialDiagnosticsHeaders(response)
     trace.source.base = 'bridge:financial.base'
@@ -1620,6 +1669,7 @@ const performSearch = async (options = {}) => {
     })
   } catch (e) {
     if (requestId !== studentsRequestId) return
+    logApiDiagnostic('students.load', e, { plantel: currentPlantelKey.value, ciclo: cicloKey })
     trace.status = hasCachedStudents || hadStudents ? 'failed' : 'unavailable'
     trace.statusLabel = financialStatusLabel(trace.status)
     trace.totalMs = Math.max(0, Math.round(financialNow() - startedAt))
@@ -2245,9 +2295,10 @@ const loadEnrollmentConfig = async ({ refreshStudents = false, refreshKpis = tru
   const refreshToken = beginKpiRefreshScope()
 
   try {
-    const configData = await $fetch('/api/conceptos-config/all')
+    const configData = await $fetch('/api/conceptos-config/all', { retry: 0 })
     parseEnrollmentConfig(configData)
   } catch (e) {
+    logApiDiagnostic('enrollment-config.load', e)
     console.warn('Fallback al carecer de configuración externa.')
   } finally {
     endKpiRefreshScope(refreshToken)
@@ -2277,7 +2328,9 @@ onMounted(async () => {
   }
   if (route.query.q) filters.value.q = String(route.query.q)
   hydrateCachedEnrollmentConcepts()
-  loadCustomSections()
+  const bridgeReady = await verifyFinancialBridgeBeforeInitialLoad()
+  if (!bridgeReady) return
+  await loadCustomSections()
   // Resolve the enrollment configuration before issuing the single initial
   // students request. Previously both calls ran at the same time and a config
   // change launched a second full /api/students request while the first one was

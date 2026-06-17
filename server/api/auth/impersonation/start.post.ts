@@ -8,6 +8,7 @@ import {
   parsePlanteles
 } from '../../../utils/auth-session'
 import { findExternalUserByEmail } from '../../../utils/external-users'
+import { checkBridgeAgentAvailability } from '../../../utils/db'
 import { createImpersonationToken, impersonatedAuthCookieOptions, impersonationCookieOptions } from '../../../utils/impersonation-session'
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
@@ -60,6 +61,30 @@ export default defineEventHandler(async (event) => {
   const financialPlanteles = planteles.filter((plantel) => hasFinancialAccessForPlantel(role, planteles, plantel))
   const financialAccess = hasFinancialAccessForPlantel(role, planteles, activePlantel)
   const controlEscolarOnly = controlAccess && !financialAccess
+
+  if (financialAccess) {
+    const availability = await checkBridgeAgentAvailability(activePlantel, { timeoutMs: 3500 })
+    if (!availability.online) {
+      const requestId = String(event.context?.auroraRequestId || '')
+      throw createError({
+        statusCode: 503,
+        message: `No se puede abrir la vista financiera de ${activePlantel}: el agente de datos no está disponible.`,
+        data: {
+          diagnostic: {
+            requestId,
+            code: availability.code || 'IMPERSONATION_BRIDGE_AGENT_UNAVAILABLE',
+            source: 'impersonation_bridge_preflight',
+            status: availability.httpStatus || 503,
+            plantel: activePlantel,
+            agentId: activePlantel,
+            retryable: true,
+            message: availability.message,
+            action: availability.action || 'Verifica el agente del plantel antes de volver a intentar.'
+          }
+        }
+      })
+    }
+  }
   const targetName = String(target.displayName || target.username || target.email || email).trim()
   const impersonationOptions = impersonationCookieOptions()
   const authOptions = impersonatedAuthCookieOptions()

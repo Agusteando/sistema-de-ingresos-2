@@ -69,6 +69,7 @@ declare global {
   const isVue3: typeof import('../../node_modules/nuxt/dist/app/compat/vue-demi').isVue3
   const legacyInvoiceConfig: typeof import('../../utils/invoiceLegacy').legacyInvoiceConfig
   const loadPayload: typeof import('../../node_modules/nuxt/dist/app/composables/payload').loadPayload
+  const logApiDiagnostic: typeof import('../../utils/apiDiagnostic').logApiDiagnostic
   const mapPaymentForm: typeof import('../../utils/invoiceLegacy').mapPaymentForm
   const markRaw: typeof import('vue').markRaw
   const navigateTo: typeof import('../../node_modules/nuxt/dist/app/composables/router').navigateTo
@@ -107,6 +108,7 @@ declare global {
   const provide: typeof import('vue').provide
   const proxyRefs: typeof import('vue').proxyRefs
   const reactive: typeof import('vue').reactive
+  const readApiDiagnostic: typeof import('../../utils/apiDiagnostic').readApiDiagnostic
   const readonly: typeof import('vue').readonly
   const ref: typeof import('vue').ref
   const refreshCookie: typeof import('../../node_modules/nuxt/dist/app/composables/cookie').refreshCookie
@@ -313,6 +315,7 @@ declare module 'vue' {
     readonly isVue3: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/compat/vue-demi')['isVue3']>
     readonly legacyInvoiceConfig: UnwrapRef<typeof import('../../utils/invoiceLegacy')['legacyInvoiceConfig']>
     readonly loadPayload: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/payload')['loadPayload']>
+    readonly logApiDiagnostic: UnwrapRef<typeof import('../../utils/apiDiagnostic')['logApiDiagnostic']>
     readonly mapPaymentForm: UnwrapRef<typeof import('../../utils/invoiceLegacy')['mapPaymentForm']>
     readonly markRaw: UnwrapRef<typeof import('vue')['markRaw']>
     readonly navigateTo: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/router')['navigateTo']>
@@ -351,6 +354,7 @@ declare module 'vue' {
     readonly provide: UnwrapRef<typeof import('vue')['provide']>
     readonly proxyRefs: UnwrapRef<typeof import('vue')['proxyRefs']>
     readonly reactive: UnwrapRef<typeof import('vue')['reactive']>
+    readonly readApiDiagnostic: UnwrapRef<typeof import('../../utils/apiDiagnostic')['readApiDiagnostic']>
     readonly readonly: UnwrapRef<typeof import('vue')['readonly']>
     readonly ref: UnwrapRef<typeof import('vue')['ref']>
     readonly refreshCookie: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/cookie')['refreshCookie']>

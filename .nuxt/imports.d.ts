@@ -44,6 +44,7 @@ export { useStudentsCacheSync } from '../composables/useStudentsCacheSync';
 export { useStudentsWorkspaceScale } from '../composables/useStudentsWorkspaceScale';
 export { useToast } from '../composables/useToast';
 export { useVisionFaceImage } from '../composables/useVisionFaceImage';
+export { readApiDiagnostic, logApiDiagnostic } from '../utils/apiDiagnostic';
 export { authCookieFlagEnabled, authRoleTokens, resolveClientAuthAccess } from '../utils/authAccess';
 export { PLANTELES_LIST, CICLOS_LIST, GRADOS_ORDEN, normalizeCicloOption } from '../utils/constants';
 export { exportToCSV, exportToExcel } from '../utils/export';

@@ -106,7 +106,7 @@ export const usePlantelAgentStatuses = () => {
       const path = normalizedPlantel
         ? `/api/auth/planteles-status?plantel=${encodeURIComponent(normalizedPlantel)}`
         : '/api/auth/planteles-status'
-      const result = await $fetch<{ statuses?: Array<Partial<PlantelAgentStatus> & { plantel?: string }> }>(path)
+      const result = await $fetch<{ statuses?: Array<Partial<PlantelAgentStatus> & { plantel?: string }> }>(path, { retry: 0 })
       const nextStatuses = { ...statuses.value }
 
       for (const status of result?.statuses || []) {

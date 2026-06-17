@@ -1,1 +1,1 @@
-Corregir bucle de acceso para usuarios no superadmin
+Agregar diagnóstico correlacionado para fallas de bridge

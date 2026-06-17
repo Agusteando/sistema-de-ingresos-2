@@ -2,7 +2,7 @@ import { checkBridgeAgentAvailability } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { normalizePlantel } from '../../utils/auth-session'
 
-const STATUS_TIMEOUT_MS = 1200
+const STATUS_TIMEOUT_MS = 3500
 const STATUS_CONCURRENCY = 8
 
 const runLimited = async <T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>) => {
@@ -37,6 +37,8 @@ export default defineEventHandler(async (event) => {
       status: availability.status,
       message: availability.message,
       action: availability.action || '',
+      code: availability.code || null,
+      httpStatus: availability.httpStatus || null,
       checkedAt: new Date().toISOString()
     }
   })

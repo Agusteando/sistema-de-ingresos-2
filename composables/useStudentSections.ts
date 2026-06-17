@@ -1,5 +1,6 @@
 import { computed, ref, type Ref } from 'vue'
 import { useToast } from '~/composables/useToast'
+import { logApiDiagnostic } from '~/utils/apiDiagnostic'
 import {
   normalizeSectionIds,
   normalizeStudentMatricula,
@@ -48,9 +49,10 @@ export const useStudentSections = ({
 
   const loadCustomSections = async () => {
     try {
-      const res = await $fetch('/api/student-sections')
+      const res = await $fetch('/api/student-sections', { retry: 0 })
       customSections.value = Array.isArray(res) ? res : []
     } catch (e) {
+      logApiDiagnostic('student-sections.load', e)
       customSections.value = []
     }
   }

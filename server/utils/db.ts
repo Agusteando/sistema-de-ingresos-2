@@ -191,6 +191,34 @@ const getBridgeTimeoutMs = () => {
   return Number.isFinite(raw) && raw > 0 ? raw : 45000
 }
 
+const bridgeAgentFromPath = (path: string) => {
+  const match = String(path || '').match(/^\/agents\/([^/]+)/)
+  return match ? decodeURIComponent(match[1]) : ''
+}
+
+const attachBridgeDiagnostic = (error: any, path: string) => {
+  let event: any = null
+  try { event = useRequestEvent() } catch {}
+
+  const status = Number(error?.httpStatus || error?.statusCode || error?.status || 503) || 503
+  const agentId = bridgeAgentFromPath(path) || String(event?.context?.dbBridgeAgentId || '').trim()
+  const activePlantelCookie = event ? getCookie(event, 'auth_active_plantel') : ''
+  const diagnostic = {
+    requestId: String(event?.context?.auroraRequestId || '').trim(),
+    code: String(error?.code || `DB_BRIDGE_HTTP_${status}`),
+    source: 'db_bridge',
+    status,
+    plantel: String(event?.context?.user?.active_plantel || activePlantelCookie || agentId || '').trim(),
+    agentId,
+    retryable: [502, 503, 504].includes(status),
+    message: String(error?.message || BRIDGE_AGENT_UNAVAILABLE_MESSAGE).replace(/\s+/g, ' ').trim().slice(0, 240)
+  }
+
+  error.data = { ...(error?.data || {}), diagnostic }
+  error.diagnostic = diagnostic
+  return error
+}
+
 export const BRIDGE_AGENT_UNAVAILABLE_MESSAGE = 'La base del plantel no está disponible en este momento. Solicita al Administrador verificar la conectividad del equipo del plantel e inténtalo nuevamente.'
 
 const getBridgeErrorText = (error: any) => [
@@ -292,7 +320,7 @@ const bridgeFetch = async <T>(path: string, body?: unknown, options: BridgeFetch
       err.code = isTimeout ? 'DB_BRIDGE_TIMEOUT' : 'DB_BRIDGE_NETWORK'
       err.httpStatus = isTimeout ? 504 : 503
       err.statusCode = err.httpStatus
-      throw err
+      throw attachBridgeDiagnostic(err, path)
     }
 
     const payload = await response.json().catch(() => null)
@@ -305,11 +333,11 @@ const bridgeFetch = async <T>(path: string, body?: unknown, options: BridgeFetch
     })
 
     if (!response.ok || !payload) {
-      throw makeBridgeHttpError(response.status, payload)
+      throw attachBridgeDiagnostic(makeBridgeHttpError(response.status, payload), path)
     }
 
     if (payload.ok === false) {
-      throw makeBridgeError(payload, response.status)
+      throw attachBridgeDiagnostic(makeBridgeError(payload, response.status), path)
     }
 
     return payload as T
