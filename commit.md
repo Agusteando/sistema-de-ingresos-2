@@ -1,1 +1,1 @@
-Agregar diagnóstico y recuperación de Sistema Rápido
+Diagnosticar versiones de agente sin soporte de handoff
