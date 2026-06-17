@@ -121,7 +121,49 @@ const MATRICULA_COLUMNS = [
   'created_at'
 ]
 
+const MATRICULA_LARGE_VALUE_COLUMNS = new Set([
+  'foto',
+  'certificado_medico_adjunto',
+  'certificado_vacunacion_covid19_adjunto',
+  'acta_nacimiento_adjunta',
+  'curp_alumno_adjunto',
+  'certificado_primaria_adjunto',
+  'boleta_sexto_primaria_adjunta',
+  'boleta_primero_secundaria_adjunta',
+  'boleta_segundo_secundaria_adjunta'
+])
+
+const PRESENCE_ALIAS_PREFIX = '__aurora_has_'
+const presenceAlias = (column: string) => `${PRESENCE_ALIAS_PREFIX}${column}`
+
+const hasStoredValue = (value: unknown) => {
+  if (value === null || value === undefined) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  if (typeof value === 'number') return value !== 0
+  if (typeof value === 'boolean') return value
+  if (ArrayBuffer.isView(value)) return value.byteLength > 0
+  if (value instanceof ArrayBuffer) return value.byteLength > 0
+  return true
+}
+
+const sanitizeCentralMatriculaRaw = (raw: Record<string, any>) => {
+  const sanitized: Record<string, any> = {}
+
+  for (const column of MATRICULA_COLUMNS) {
+    if (MATRICULA_LARGE_VALUE_COLUMNS.has(column)) {
+      const exists = hasStoredValue(raw[presenceAlias(column)]) || hasStoredValue(raw[column])
+      sanitized[column] = exists ? '1' : ''
+      continue
+    }
+
+    if (Object.prototype.hasOwnProperty.call(raw, column)) sanitized[column] = raw[column]
+  }
+
+  return sanitized
+}
+
 const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
+  raw = sanitizeCentralMatriculaRaw(raw)
   const padre = firstText(
     [raw.nombre_padre, raw.apellido_paterno_padre, raw.apellido_materno_padre].map((value) => normalizeNameText(value)).filter(Boolean).join(' '),
     raw.nombre_padre_completo,
@@ -220,14 +262,21 @@ const normalizeCentralMatriculaOverlay = (raw: Record<string, any>) => {
   }
 }
 
-const loadCentralMatriculaColumns = async () => {
+const loadCentralMatriculaSelectExpressions = async () => {
   const columns = await getCentralTableColumns('matricula')
   if (!columns.has('matricula')) {
     throw createError({ statusCode: 500, message: 'La tabla matricula no tiene columna matricula.' })
   }
-  const selected = Array.from(columns)
-  if (!selected.includes('matricula')) selected.unshift('matricula')
-  return selected
+
+  return MATRICULA_COLUMNS
+    .filter((column) => columns.has(column))
+    .map((column) => {
+      if (!MATRICULA_LARGE_VALUE_COLUMNS.has(column)) return escapeIdentifier(column)
+
+      const identifier = escapeIdentifier(column)
+      const alias = escapeIdentifier(presenceAlias(column))
+      return `CASE WHEN ${identifier} IS NULL OR OCTET_LENGTH(${identifier}) = 0 THEN 0 ELSE 1 END AS ${alias}`
+    })
 }
 
 export const fetchCentralMatriculaOverlay = async (matricula: string) => {
@@ -236,9 +285,9 @@ export const fetchCentralMatriculaOverlay = async (matricula: string) => {
     throw createError({ statusCode: 400, message: 'Matrícula requerida.' })
   }
 
-  const selected = await loadCentralMatriculaColumns()
+  const selectExpressions = await loadCentralMatriculaSelectExpressions()
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT ${selected.map(escapeIdentifier).join(', ')} FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) = ? LIMIT 1`,
+    `SELECT ${selectExpressions.join(', ')} FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) = ? LIMIT 1`,
     [normalizedMatricula.toUpperCase()]
   )
   const raw = rows[0] || null
@@ -253,7 +302,7 @@ export const fetchCentralMatriculaOverlays = async (matriculas: string[]) => {
   ))
   if (!normalized.length) return new Map<string, any>()
 
-  const selected = await loadCentralMatriculaColumns()
+  const selectExpressions = await loadCentralMatriculaSelectExpressions()
   const result = new Map<string, any>()
   const batchSize = 250
 
@@ -261,7 +310,7 @@ export const fetchCentralMatriculaOverlays = async (matriculas: string[]) => {
     const batch = normalized.slice(index, index + batchSize)
     const placeholders = batch.map(() => '?').join(', ')
     const rows = await controlEscolarCentralQuery<any[]>(
-      `SELECT ${selected.map(escapeIdentifier).join(', ')} FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) IN (${placeholders})`,
+      `SELECT ${selectExpressions.join(', ')} FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) IN (${placeholders})`,
       batch.map((matricula) => String(matricula || '').toUpperCase())
     )
     for (const raw of rows) {

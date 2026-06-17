@@ -1,1 +1,1 @@
-Agregar el plantel GM al sistema
+Corregir agotamiento de memoria al cargar alumnos para ROLE_ADMON
