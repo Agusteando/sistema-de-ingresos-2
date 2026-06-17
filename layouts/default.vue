@@ -552,6 +552,8 @@ const localSystemLaunchAvailable = ref(false)
 const localSystemLaunchUrl = ref('')
 const localSystemLaunchMessage = ref('')
 const localSystemLaunchPending = ref(false)
+const localSystemLaunchCode = ref('')
+const localSystemLaunchRequestId = ref('')
 const localSystemStatus = ref(null)
 const localSystemStatusPending = ref(false)
 const localSystemInitialSha = ref('')
@@ -601,10 +603,15 @@ const applyLocalSystemVersion = (status) => {
   }
 }
 
+const localSystemDiagnosticSuffix = computed(() => {
+  const parts = [localSystemLaunchCode.value, localSystemLaunchRequestId.value].filter(Boolean)
+  return parts.length ? ` [${parts.join(' · ')}]` : ''
+})
+
 const localSystemLaunchTitle = computed(() => {
   if (localSystemLaunchPending.value) return 'Verificando disponibilidad de Sistema Rápido.'
-  if (localSystemLaunchAvailable.value) return 'Abrir la conexión local de alto rendimiento.'
-  return localSystemLaunchMessage.value || 'Sistema Rápido todavía no está disponible. Selecciona para verificar nuevamente.'
+  if (localSystemLaunchAvailable.value) return `Abrir la conexión local de alto rendimiento.${localSystemDiagnosticSuffix.value}`
+  return `${localSystemLaunchMessage.value || 'Sistema Rápido todavía no está disponible. Selecciona para verificar nuevamente.'}${localSystemDiagnosticSuffix.value}`
 })
 
 const loadLocalSystemLaunch = async (refresh = false) => {
@@ -613,6 +620,8 @@ const loadLocalSystemLaunch = async (refresh = false) => {
     localSystemLaunchAvailable.value = false
     localSystemLaunchUrl.value = ''
     localSystemLaunchMessage.value = 'Selecciona un plantel para abrir Sistema Rápido.'
+    localSystemLaunchCode.value = 'LOCAL_SYSTEM_PLANTEL_REQUIRED'
+    localSystemLaunchRequestId.value = ''
     return
   }
 
@@ -629,14 +638,36 @@ const loadLocalSystemLaunch = async (refresh = false) => {
         ? 'Sistema Rápido está disponible.'
         : 'Sistema Rápido todavía no está disponible en este plantel.')
     )
+    localSystemLaunchCode.value = String(info?.code || '')
+    localSystemLaunchRequestId.value = String(info?.requestId || '')
+    console.info('[SistemaRapidoDiag]', {
+      event: 'status',
+      plantel: activePlantel.value,
+      available: Boolean(info?.launchAvailable),
+      code: localSystemLaunchCode.value,
+      requestId: localSystemLaunchRequestId.value,
+      message: localSystemLaunchMessage.value,
+      diagnostics: info?.diagnostics || null
+    })
   } catch (error) {
     localSystemLaunchAvailable.value = false
     localSystemLaunchUrl.value = ''
+    const payload = error?.data?.data || error?.data || {}
     localSystemLaunchMessage.value = String(
-      error?.data?.message
+      payload?.message
       || error?.message
       || 'No se pudo verificar Sistema Rápido en este momento.'
     )
+    localSystemLaunchCode.value = String(payload?.code || 'LOCAL_SYSTEM_STATUS_FAILED')
+    localSystemLaunchRequestId.value = String(payload?.requestId || '')
+    console.error('[SistemaRapidoDiag]', {
+      event: 'status_error',
+      plantel: activePlantel.value,
+      code: localSystemLaunchCode.value,
+      requestId: localSystemLaunchRequestId.value,
+      message: localSystemLaunchMessage.value,
+      payload
+    })
   } finally {
     localSystemLaunchPending.value = false
   }
@@ -659,16 +690,30 @@ const openLocalSystem = async () => {
     })
     const launchUrl = String(result?.launchUrl || '')
     if (!launchUrl) throw new Error('El agente no devolvió una dirección para Sistema Rápido.')
+    localSystemLaunchCode.value = String(result?.code || 'LOCAL_SYSTEM_READY')
+    localSystemLaunchRequestId.value = String(result?.requestId || '')
+    console.info('[SistemaRapidoDiag]', { event: 'launch_ready', plantel: activePlantel.value, code: localSystemLaunchCode.value, requestId: localSystemLaunchRequestId.value, launchUrl })
     window.location.assign(launchUrl)
   } catch (error) {
+    const payload = error?.data?.data || error?.data || {}
     const message = String(
-      error?.data?.message
+      payload?.message
       || error?.message
       || 'No se pudo abrir Sistema Rápido en este momento.'
     )
     localSystemLaunchAvailable.value = false
     localSystemLaunchMessage.value = message
-    show(message, 'danger')
+    localSystemLaunchCode.value = String(payload?.code || 'LOCAL_SYSTEM_LAUNCH_FAILED')
+    localSystemLaunchRequestId.value = String(payload?.requestId || '')
+    console.error('[SistemaRapidoDiag]', {
+      event: 'launch_error',
+      plantel: activePlantel.value,
+      code: localSystemLaunchCode.value,
+      requestId: localSystemLaunchRequestId.value,
+      message,
+      diagnostics: payload?.diagnostics || null
+    })
+    show(`${message}${localSystemDiagnosticSuffix.value}`, 'danger')
   } finally {
     localSystemLaunchPending.value = false
   }

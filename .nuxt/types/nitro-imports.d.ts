@@ -227,6 +227,7 @@ declare global {
   const listControlEscolarPlanteles: typeof import('../../server/utils/control-escolar').listControlEscolarPlanteles
   const listExternalControlUsersForNoAdeudo: typeof import('../../server/utils/external-users').listExternalControlUsersForNoAdeudo
   const listExternalUsers: typeof import('../../server/utils/external-users').listExternalUsers
+  const localSystemDiagnosticSummary: typeof import('../../server/utils/local-system-handoff').localSystemDiagnosticSummary
   const logControlEscolarAuditEvent: typeof import('../../server/utils/control-escolar-audit').logControlEscolarAuditEvent
   const logSyncError: typeof import('../../server/utils/externalBaseSync').logSyncError
   const logSyncInfo: typeof import('../../server/utils/externalBaseSync').logSyncInfo
@@ -409,7 +410,7 @@ declare global {
   export type { ImpersonationSession } from '../../server/utils/impersonation-session'
   import('../../server/utils/impersonation-session')
   // @ts-ignore
-  export type { LocalSystemBridgeResult } from '../../server/utils/local-system-handoff'
+  export type { LocalSystemHealthSummary, LocalSystemBridgeResult } from '../../server/utils/local-system-handoff'
   import('../../server/utils/local-system-handoff')
   // @ts-ignore
   export type { MailAttachment } from '../../server/utils/mailer'
@@ -472,7 +473,7 @@ export { ACTIVE_SYNC_STATUSES, ENROLLMENT_CONFIG_URL, EXTERNAL_SYNC_URL, EXTERNA
 export { WORKSPACE_DOMAIN, WORKSPACE_DIRECTORY_SCOPE, isCasitaWorkspaceEmail, getWorkspaceDirectoryService, buildWorkspacePhotoUrl, searchWorkspaceDirectoryUsers, getWorkspaceDirectoryUsersByEmails, getWorkspaceDirectoryPhoto } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/google-workspace-directory';
 export { getAdminProfilePhoto } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/googleAdmin';
 export { createImpersonationToken, verifyImpersonationToken, impersonationCookieOptions, impersonatedAuthCookieOptions, impersonationSecondsRemaining, clearImpersonationCookies } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/impersonation-session';
-export { LOCAL_SYSTEM_BRIDGE_COMMAND, unwrapLocalSystemBridgeResult } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/local-system-handoff';
+export { LOCAL_SYSTEM_BRIDGE_COMMAND, unwrapLocalSystemBridgeResult, localSystemDiagnosticSummary } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/local-system-handoff';
 export { isLocalSystemRuntime, requestLocalSystemManager } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/local-system-manager';
 export { sendEmail } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/mailer';
 export { parseNullableMoney, isWholeMoney, legacyProjectedAmount, resolveProjectedAmount } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/monto-final';
