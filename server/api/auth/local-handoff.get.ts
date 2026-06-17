@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
 
   const email = String(payload.email || '').trim().toLowerCase()
   const seededSuperAdmin = SEEDED_SUPERADMIN_EMAILS.has(email)
-  const centralUser = seededSuperAdmin ? null : await findExternalAuthUserByEmail(email)
+  const centralUser = await findExternalAuthUserByEmail(email)
 
   if (!centralUser && !seededSuperAdmin) {
     throw createError({ statusCode: 403, message: 'La cuenta ya no tiene acceso al sistema.' })
