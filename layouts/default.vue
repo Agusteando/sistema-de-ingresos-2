@@ -240,7 +240,7 @@
           >
             <span class="local-system-status-icon"><LucideZap :size="16" /></span>
             <span class="local-system-status-copy">
-              <small>{{ localSystemLaunchPending ? 'Verificando conexión' : 'Conexión local' }}</small>
+              <small>{{ localSystemLaunchKicker }}</small>
               <strong>Sistema Rápido</strong>
             </span>
           </button>
@@ -254,7 +254,7 @@
               'is-failed': localSystemFailed,
               'is-current': !localSystemUpdateAvailable && !localSystemUpdating && !localSystemFailed
             }"
-            :disabled="!isSuperAdmin || !localSystemUpdateAvailable || localSystemUpdating"
+            :disabled="localSystemUpdating || (!localSystemUpdateAvailable && !localSystemFailed) || (!localSystemAutoUpdateEnabled && !isSuperAdmin)"
             :title="localSystemStatusTitle"
             @click="startLocalSystemUpdate"
           >
@@ -556,6 +556,7 @@ const localSystemLaunchCode = ref('')
 const localSystemLaunchRequestId = ref('')
 const localSystemStatus = ref(null)
 const localSystemStatusPending = ref(false)
+const localSystemCloudStatus = ref(null)
 const localSystemInitialSha = ref('')
 let localSystemPollTimer = null
 
@@ -563,6 +564,15 @@ const localSystemOperation = computed(() => localSystemStatus.value?.operation |
 const localSystemUpdating = computed(() => Boolean(localSystemOperation.value?.running))
 const localSystemFailed = computed(() => String(localSystemOperation.value?.phase || '') === 'failed')
 const localSystemUpdateAvailable = computed(() => Boolean(localSystemStatus.value?.updateAvailable))
+const localSystemAutoUpdateEnabled = computed(() => localSystemStatus.value?.autoUpdateEnabled !== false)
+const localSystemCloudOperation = computed(() => localSystemCloudStatus.value?.operation || {})
+const localSystemCloudUpdating = computed(() => Boolean(localSystemCloudOperation.value?.running))
+const localSystemLaunchKicker = computed(() => {
+  if (localSystemLaunchPending.value) return 'Verificando conexión'
+  if (localSystemCloudUpdating.value) return 'Actualizando en segundo plano'
+  if (localSystemCloudStatus.value?.updateAvailable) return 'Actualización automática pendiente'
+  return 'Conexión local'
+})
 const localSystemStatusLabel = computed(() => {
   if (localSystemUpdating.value) {
     const phase = String(localSystemOperation.value?.phase || '')
@@ -574,7 +584,7 @@ const localSystemStatusLabel = computed(() => {
     return 'Actualizando sistema'
   }
   if (localSystemFailed.value) return 'Actualización no aplicada'
-  if (localSystemUpdateAvailable.value) return 'Actualización disponible'
+  if (localSystemUpdateAvailable.value) return localSystemAutoUpdateEnabled.value ? 'Actualización automática pendiente' : 'Actualización disponible'
   if (localSystemStatus.value?.checkError) return 'Sin conexión al actualizador'
   return 'Sistema actualizado'
 })
@@ -584,6 +594,7 @@ const localSystemStatusTitle = computed(() => {
   if (localSystemUpdating.value) return `${localSystemStatusLabel.value}. La versión actual continúa disponible.`
   if (localSystemFailed.value) return localSystemOperation.value?.error || 'La actualización falló y la versión anterior continúa activa.'
   if (localSystemUpdateAvailable.value) {
+    if (localSystemAutoUpdateEnabled.value) return `Instalada ${current}. Disponible ${available}. La actualización se aplicará automáticamente.`
     return isSuperAdmin.value
       ? `Instalada ${current}. Disponible ${available}. Selecciona para actualizar.`
       : `Instalada ${current}. Disponible ${available}.`
@@ -632,6 +643,16 @@ const loadLocalSystemLaunch = async (refresh = false) => {
     })
     localSystemLaunchAvailable.value = Boolean(info?.launchAvailable)
     localSystemLaunchUrl.value = String(info?.launchUrl || '')
+    localSystemCloudStatus.value = {
+      updateAvailable: Boolean(info?.updateAvailable),
+      autoUpdateEnabled: info?.autoUpdateEnabled !== false,
+      autoUpdateTriggered: Boolean(info?.autoUpdateTriggered),
+      autoUpdateReason: String(info?.autoUpdateReason || ''),
+      available: info?.available || null,
+      installed: info?.installed || null,
+      operation: info?.operation || null,
+      checkError: String(info?.checkError || '')
+    }
     localSystemLaunchMessage.value = String(
       info?.message
       || (info?.launchAvailable
@@ -720,11 +741,16 @@ const openLocalSystem = async () => {
 }
 
 const scheduleLocalSystemPoll = (delay = 15000) => {
-  if (typeof window === 'undefined' || !localSystemRuntime) return
+  if (typeof window === 'undefined') return
   if (localSystemPollTimer) window.clearTimeout(localSystemPollTimer)
   localSystemPollTimer = window.setTimeout(async () => {
-    await loadLocalSystemStatus(false)
-    scheduleLocalSystemPoll(localSystemUpdating.value ? 3000 : 15000)
+    if (localSystemRuntime) {
+      await loadLocalSystemStatus(false)
+      scheduleLocalSystemPoll(localSystemUpdating.value ? 3000 : 15000)
+      return
+    }
+    await loadLocalSystemLaunch(false)
+    scheduleLocalSystemPoll(localSystemCloudUpdating.value ? 5000 : 60000)
   }, delay)
 }
 
@@ -756,6 +782,11 @@ const loadLocalSystemStatus = async (refresh = false) => {
 }
 
 const startLocalSystemUpdate = async () => {
+  if (localSystemAutoUpdateEnabled.value) {
+    show('La actualización se aplicará automáticamente en segundo plano.', 'success')
+    scheduleLocalSystemPoll(1000)
+    return
+  }
   if (!isSuperAdmin.value || !localSystemUpdateAvailable.value || localSystemUpdating.value) return
   try {
     await $fetch('/api/system/local-update', { method: 'POST' })
@@ -950,7 +981,12 @@ onMounted(async () => {
   }
 
   await loadSystemVersion()
-  if (localSystemRuntime) scheduleLocalSystemPoll(localSystemUpdating.value ? 3000 : 15000)
+  if (localSystemRuntime) {
+    scheduleLocalSystemPoll(localSystemUpdating.value ? 3000 : 15000)
+  } else {
+    await loadLocalSystemLaunch(false)
+    scheduleLocalSystemPoll(localSystemCloudUpdating.value ? 5000 : 60000)
+  }
 
   try {
     const res = await $fetch('/api/admin/profile')

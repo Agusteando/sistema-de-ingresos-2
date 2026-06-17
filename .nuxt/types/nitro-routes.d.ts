@@ -350,6 +350,9 @@ declare module "nitropack/types" {
     '/api/system/local-update': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/system/local-update.post').default>>>>
     }
+    '/api/system/update': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/system/update.post').default>>>>
+    }
     '/api/talleres-servicios/catalogo': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/talleres-servicios/catalogo.get').default>>>>
     }

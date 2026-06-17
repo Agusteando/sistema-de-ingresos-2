@@ -1,1 +1,1 @@
-Diagnosticar versiones de agente sin soporte de handoff
+Automatizar actualizaciones de Sistema Rápido desde Aurora

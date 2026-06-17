@@ -21,6 +21,14 @@ export type LocalSystemBridgeResult = {
   expiresAt?: string
   installedVersion?: string
   installedSha?: string
+  availableVersion?: string
+  availableSha?: string
+  updateAvailable?: boolean
+  autoUpdateEnabled?: boolean
+  autoUpdateTriggered?: boolean
+  autoUpdateReason?: string
+  operation?: { phase?: string; running?: boolean; message?: string; error?: string; source?: string; requestId?: string } | null
+  checkError?: string
   message?: string
   diagnostics?: {
     operation?: string
@@ -38,6 +46,13 @@ export type LocalSystemBridgeResult = {
     echoedOperation?: string
     echoedPlantel?: string
     responseShape?: string
+    updateAvailable?: boolean
+    availableVersion?: string
+    availableSha?: string
+    autoUpdateEnabled?: boolean
+    autoUpdateTriggered?: boolean
+    autoUpdateReason?: string
+    checkError?: string
   }
 }
 
@@ -101,7 +116,7 @@ export const unwrapLocalSystemBridgeResult = (value: unknown): LocalSystemBridge
     const echo = commandEcho(object)
     if (echo) return unsupportedAgentResult(echo)
 
-    if (typeof object.ok === 'boolean' && ('available' in object || 'launchUrl' in object || 'diagnostics' in object || 'code' in object)) {
+    if (typeof object.ok === 'boolean' && ('available' in object || 'launchUrl' in object || 'diagnostics' in object || 'code' in object || 'operation' in object || 'accepted' in object)) {
       return object as LocalSystemBridgeResult
     }
 
@@ -149,5 +164,12 @@ export const localSystemDiagnosticSummary = (result: LocalSystemBridgeResult | n
   agentCommandIntercepted: result?.diagnostics?.agentCommandIntercepted !== false,
   echoedOperation: String(result?.diagnostics?.echoedOperation || ''),
   echoedPlantel: String(result?.diagnostics?.echoedPlantel || ''),
-  responseShape: String(result?.diagnostics?.responseShape || '')
+  responseShape: String(result?.diagnostics?.responseShape || ''),
+  updateAvailable: Boolean(result?.updateAvailable ?? result?.diagnostics?.updateAvailable),
+  availableVersion: String(result?.availableVersion || result?.diagnostics?.availableVersion || ''),
+  availableSha: String(result?.availableSha || result?.diagnostics?.availableSha || ''),
+  autoUpdateEnabled: Boolean(result?.autoUpdateEnabled ?? result?.diagnostics?.autoUpdateEnabled),
+  autoUpdateTriggered: Boolean(result?.autoUpdateTriggered ?? result?.diagnostics?.autoUpdateTriggered),
+  autoUpdateReason: String(result?.autoUpdateReason || result?.diagnostics?.autoUpdateReason || ''),
+  checkError: String(result?.checkError || result?.diagnostics?.checkError || '')
 })

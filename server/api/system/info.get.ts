@@ -79,8 +79,15 @@ export default defineEventHandler(async (event) => {
         installed: result?.installedVersion || result?.installedSha
           ? { version: result?.installedVersion || '', sha: result?.installedSha || '' }
           : null,
-        available: null,
-        updateAvailable: false,
+        available: result?.availableVersion || result?.availableSha
+          ? { version: result?.availableVersion || '', sha: result?.availableSha || '' }
+          : null,
+        updateAvailable: Boolean(result?.updateAvailable),
+        autoUpdateEnabled: result?.autoUpdateEnabled !== false,
+        autoUpdateTriggered: Boolean(result?.autoUpdateTriggered),
+        autoUpdateReason: result?.autoUpdateReason || '',
+        operation: result?.operation || null,
+        checkError: result?.checkError || '',
         diagnostics
       }
     } catch (error: any) {
@@ -109,6 +116,11 @@ export default defineEventHandler(async (event) => {
         installed: null,
         available: null,
         updateAvailable: false,
+        autoUpdateEnabled: true,
+        autoUpdateTriggered: false,
+        autoUpdateReason: 'status-error',
+        operation: null,
+        checkError: message,
         diagnostics: { code, requestId, available: false, plantel: activePlantel }
       }
     }
@@ -131,6 +143,9 @@ export default defineEventHandler(async (event) => {
     },
     available: status.available || null,
     updateAvailable: Boolean(status.updateAvailable),
+    autoUpdateEnabled: status.autoUpdateEnabled !== false,
+    autoUpdateTriggered: Boolean(status.autoUpdateTriggered),
+    autoUpdateReason: String(status.autoUpdateReason || ''),
     operation: status.operation || null,
     localAvailability: status.localAvailability || null,
     diagnosticsLog: status.diagnosticsLog || '',
