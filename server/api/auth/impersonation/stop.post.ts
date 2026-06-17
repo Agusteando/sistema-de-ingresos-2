@@ -1,6 +1,6 @@
 import { PLANTELES_LIST } from '../../../../utils/constants'
 import { isSuperAdminRole, normalizeAuthRole, normalizePlantel } from '../../../utils/auth-session'
-import { findExternalUserByEmail } from '../../../utils/external-users'
+import { findExternalAuthUserByEmail } from '../../../utils/external-users'
 import {
   clearImpersonationCookies,
   impersonationCookieOptions,
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   }
   const email = String(token.impersonatorEmail || '').trim().toLowerCase()
   const seeded = SEEDED_SUPERADMIN_EMAILS.has(email)
-  const original = seeded ? null : await findExternalUserByEmail(email)
+  const original = seeded ? null : await findExternalAuthUserByEmail(email)
   const role = seeded ? 'superadmin' : normalizeAuthRole(original?.role)
 
   if (!seeded && (!original || !isSuperAdminRole(role) || original.ingresosBlocked || Number(original.ingresos_blocked || 0) === 1)) {

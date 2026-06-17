@@ -81,12 +81,14 @@ export default defineEventHandler(async (event) => {
     }
 
     const seedAdmin = SUPERADMIN_EMAILS.has(normalizedEmail)
-    const externalUser = await touchExternalUserLogin({
-      email: normalizedEmail,
-      name: payload.name,
-      picture: payload.picture,
-      requestedPlantel
-    })
+    const externalUser = seedAdmin
+      ? null
+      : await touchExternalUserLogin({
+          email: normalizedEmail,
+          name: payload.name,
+          picture: payload.picture,
+          requestedPlantel
+        })
 
     if (!seedAdmin && externalUser?.ingresosBlocked) {
       throw createError({ statusCode: 403, message: 'Tu cuenta no tiene acceso al sistema.' })
@@ -105,7 +107,7 @@ export default defineEventHandler(async (event) => {
           email: externalUser?.email || normalizedEmail,
           role: externalUser?.role || CONTROL_ESCOLAR_ROLE,
           plantel: externalUser?.plantel || '',
-          avatar: externalUser?.avatar || externalUser?.picture || payload.picture || null
+          avatar: payload.picture || null
         }
 
     const resolvedUser = centralAuthUser

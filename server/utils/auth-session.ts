@@ -108,9 +108,10 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
     ? verifyImpersonationToken(impersonationToken)
     : null
 
-  const { findExternalUserByEmail } = await import('./external-users')
-  const centralUser = await findExternalUserByEmail(email)
   const seededSuperAdmin = SEEDED_SUPERADMIN_EMAILS.has(email)
+  const centralUser = seededSuperAdmin
+    ? null
+    : await (await import('./external-users')).findExternalAuthUserByEmail(email)
 
   if (!centralUser && !seededSuperAdmin) {
     throw createError({ statusCode: 403, message: 'La cuenta ya no tiene acceso al sistema.' })

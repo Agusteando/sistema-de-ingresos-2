@@ -1,1 +1,1 @@
-Corregir agotamiento de memoria al iniciar sesiones ROLE_ADMON e impersonadas
+Corregir agotamiento de memoria en la autorización de usuarios no superadmin

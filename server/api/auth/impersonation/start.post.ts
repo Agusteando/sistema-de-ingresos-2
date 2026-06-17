@@ -7,7 +7,7 @@ import {
   normalizePlantel,
   parsePlanteles
 } from '../../../utils/auth-session'
-import { findExternalUserByEmail } from '../../../utils/external-users'
+import { findExternalAuthUserByEmail } from '../../../utils/external-users'
 import { createImpersonationToken, impersonatedAuthCookieOptions, impersonationCookieOptions } from '../../../utils/impersonation-session'
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'No puede iniciar una vista sobre su propia cuenta.' })
   }
 
-  const target = await findExternalUserByEmail(email)
+  const target = await findExternalAuthUserByEmail(email)
   if (!target) {
     throw createError({ statusCode: 404, message: 'Usuario no encontrado.' })
   }
