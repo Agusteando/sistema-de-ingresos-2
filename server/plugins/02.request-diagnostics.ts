@@ -35,7 +35,11 @@ export default defineNitroPlugin((nitroApp) => {
       impersonating: Boolean(getCookie(event, 'auth_impersonation_token')),
       activePlantel: compactText(user?.active_plantel || getCookie(event, 'auth_active_plantel'), 32),
       bridgeAgent: compactText(event.context?.dbBridgeAgentId || diagnostic.agentId || getCookie(event, 'db_bridge_agent_id'), 32),
-      message: compactText(diagnostic.message || error?.message || error?.statusMessage || 'Error de API')
+      protocolVersion: compactText(diagnostic.protocolVersion, 24),
+      upstreamStatus: Number(diagnostic.upstreamStatus || 0) || null,
+      upstreamRequestId: compactText(diagnostic.upstreamRequestId, 120),
+      upstreamBody: compactText(diagnostic.upstreamBody, 500),
+      message: compactText(diagnostic.message || error?.message || error?.statusMessage || 'Error de API', 500)
     }
 
     console.error(`[AuroraDiag] ${JSON.stringify(payload)}`)

@@ -124,6 +124,9 @@ declare global {
   const fetchExternalRows: typeof import('../../server/utils/externalBaseSync').fetchExternalRows
   const fetchVerifiedControlEscolarScopeRows: typeof import('../../server/utils/control-escolar-cache').fetchVerifiedControlEscolarScopeRows
   const fetchWithEvent: typeof import('../../node_modules/h3').fetchWithEvent
+  const findBridgeErrorPayload: typeof import('../../server/utils/db-bridge-contract').findBridgeErrorPayload
+  const findBridgeQueryPayload: typeof import('../../server/utils/db-bridge-contract').findBridgeQueryPayload
+  const findBridgeTransactionResults: typeof import('../../server/utils/db-bridge-contract').findBridgeTransactionResults
   const findExternalAuthUserByEmail: typeof import('../../server/utils/external-users').findExternalAuthUserByEmail
   const findExternalUserByEmail: typeof import('../../server/utils/external-users').findExternalUserByEmail
   const findTallerServicioForConcept: typeof import('../../server/utils/talleres-servicios').findTallerServicioForConcept
@@ -239,6 +242,7 @@ declare global {
   const noAdeudoControlUsersColumnExists: typeof import('../../server/utils/external-users').noAdeudoControlUsersColumnExists
   const normalizeAuthRole: typeof import('../../server/utils/auth-session').normalizeAuthRole
   const normalizeBecaTypes: typeof import('../../server/utils/becaTypes').normalizeBecaTypes
+  const normalizeBridgeQueryResult: typeof import('../../server/utils/db-bridge-contract').normalizeBridgeQueryResult
   const normalizeCicloForTipoIngreso: typeof import('../../shared/utils/tipoIngreso').normalizeCicloForTipoIngreso
   const normalizeMatricula: typeof import('../../server/utils/externalBaseSync').normalizeMatricula
   const normalizePaymentMethod: typeof import('../../server/utils/payment-classification').normalizePaymentMethod
@@ -390,6 +394,9 @@ declare global {
   export type { ControlEscolarStudentRow } from '../../server/utils/control-escolar'
   import('../../server/utils/control-escolar')
   // @ts-ignore
+  export type { BridgeQueryResponse, BridgeErrorResponse } from '../../server/utils/db-bridge-contract'
+  import('../../server/utils/db-bridge-contract')
+  // @ts-ignore
   export type { BridgeAgentAvailability, SqlStatement } from '../../server/utils/db'
   import('../../server/utils/db')
   // @ts-ignore
@@ -453,6 +460,7 @@ export { buildControlEscolarScopeDescriptor, ensureControlEscolarCacheSchema, ge
 export { getControlEscolarCentralDb, controlEscolarCentralQuery, withControlEscolarCentralConnection, getCentralTableColumns, centralTableHasColumn } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/control-escolar-central';
 export { getExternalStudentPlanteles, ensureControlEscolarExternalViewSchema, buildExternalControlEscolarScope, writeControlEscolarExternalStudentView, warmExternalControlEscolarStudentScope, warmExternalControlEscolarStudentScopes, readExternalControlEscolarStudents, readExternalControlEscolarStudentDetail, readExternalControlEscolarChanges, readExternalControlEscolarHealth } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/control-escolar-external-view';
 export { assertControlEscolarDynamicBridge, resolveControlEscolarAuth, listControlEscolarPlanteles, getControlEscolarSchema, fetchControlEscolarStudentDetail, fetchControlEscolarStudents, refreshVerifiedControlEscolarCacheForScope, fetchControlEscolarSiblingsByParentNames, fetchControlEscolarKpis, CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS, CONTROL_ESCOLAR_MATRICULA_IMPORT_LABELS, importControlEscolarMatriculaUpdates, updateControlEscolarStudent, runControlEscolar, fetchControlEscolarExportRows } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/control-escolar';
+export { findBridgeErrorPayload, findBridgeQueryPayload, findBridgeTransactionResults, normalizeBridgeQueryResult } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/db-bridge-contract';
 export { enterBridgeAgentId, runWithBridgeAgentId, getDbTransport, getBridgeAgentId, BRIDGE_AGENT_UNAVAILABLE_MESSAGE, isBridgeAgentUnavailableError, checkBridgeAgentAvailability, getDb, ensureSchema, runRawSqlStatement, query, executeStatementTransaction, executeTransaction } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/db';
 export { getDeudoresGlobal, getDeudoresColeg } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/deudores';
 export { getDocumentoPeriodoSchema, periodoLifecycleSelect, assertDocumentoPeriodoLifecycleSchema } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/documento-periods';

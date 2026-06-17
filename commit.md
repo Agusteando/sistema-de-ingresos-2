@@ -1,1 +1,1 @@
-Corregir fallas 502 antes de resolver el bridge
+Compatibilizar Aurora con el contrato del agente bridge

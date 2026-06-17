@@ -2,6 +2,13 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import mysql, { type PoolConnection } from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
 import { FAMILY_ID_PLACEHOLDER_VALUES } from '../../shared/utils/familyIdentity'
+import {
+  findBridgeErrorPayload,
+  findBridgeTransactionResults,
+  normalizeBridgeQueryResult,
+  type BridgeErrorResponse,
+  type BridgeQueryResponse
+} from './db-bridge-contract'
 
 const sqlStringLiteral = (value: string) => `'${String(value).replace(/'/g, "''")}'`
 const FAMILY_ID_PLACEHOLDER_SQL_LIST = FAMILY_ID_PLACEHOLDER_VALUES.map(sqlStringLiteral).join(', ')
@@ -28,32 +35,6 @@ type RuntimeDbConfig = {
   mysqlUser?: string
   mysqlPassword?: string
   mysqlDatabase?: string
-}
-
-type BridgeQueryResponse = {
-  ok: true
-  rows?: any
-  result?: any
-  fields?: Array<{
-    name: string
-    table?: string
-    orgTable?: string
-    type?: number
-  }>
-  affectedRows?: number
-  insertId?: number
-  changedRows?: number
-  warningStatus?: number
-}
-
-type BridgeErrorResponse = {
-  ok: false
-  error: {
-    message: string
-    code?: string
-    errno?: number
-    sqlState?: string
-  }
 }
 
 type BridgeAgentContext = {
@@ -213,7 +194,10 @@ const attachBridgeDiagnostic = (error: any, path: string) => {
     plantel: String(event?.context?.user?.active_plantel || activePlantelCookie || agentId || '').trim(),
     agentId,
     retryable: [502, 503, 504].includes(status),
-    message: String(error?.message || BRIDGE_AGENT_UNAVAILABLE_MESSAGE).replace(/\s+/g, ' ').trim().slice(0, 240)
+    protocolVersion: '2.2',
+    upstreamRequestId: String(error?.upstreamRequestId || '').trim(),
+    upstreamBody: String(error?.bridgeResponseText || '').replace(/\s+/g, ' ').trim().slice(0, 500),
+    message: String(error?.message || BRIDGE_AGENT_UNAVAILABLE_MESSAGE).replace(/\s+/g, ' ').trim().slice(0, 500)
   }
 
   // Plain Error instances are sanitized by H3 in production and arrive at the
@@ -238,6 +222,7 @@ export const BRIDGE_AGENT_UNAVAILABLE_MESSAGE = 'La base del plantel no está di
 const getBridgeErrorText = (error: any) => [
   error?.bridgePayload?.error?.message,
   error?.bridgePayload?.message,
+  error?.bridgeResponseText,
   error?.data?.message,
   error?.statusMessage,
   error?.message,
@@ -259,8 +244,8 @@ export const isBridgeAgentUnavailableError = (error: any) => {
 }
 
 const makeBridgeError = (payload: BridgeErrorResponse, fallbackStatus?: number) => {
-  const err: any = new Error(payload.error?.message || `DB bridge error${fallbackStatus ? ` (${fallbackStatus})` : ''}`)
-  err.code = payload.error?.code || (fallbackStatus ? `DB_BRIDGE_HTTP_${fallbackStatus}` : undefined)
+  const err: any = new Error(payload.error?.message || payload.message || `DB bridge error${fallbackStatus ? ` (${fallbackStatus})` : ''}`)
+  err.code = payload.error?.code || payload.code || (fallbackStatus ? `DB_BRIDGE_HTTP_${fallbackStatus}` : undefined)
   err.errno = payload.error?.errno
   err.sqlState = payload.error?.sqlState
   err.httpStatus = fallbackStatus
@@ -268,35 +253,23 @@ const makeBridgeError = (payload: BridgeErrorResponse, fallbackStatus?: number) 
   return err
 }
 
-const makeBridgeHttpError = (status: number, payload: any) => {
-  const bridgeMessage = payload?.error?.message || payload?.message || ''
+const makeBridgeHttpError = (
+  status: number,
+  payload: any,
+  responseText = '',
+  upstreamRequestId = ''
+) => {
+  const textDetail = String(responseText || '').replace(/\s+/g, ' ').trim().slice(0, 500)
+  const bridgeMessage = payload?.error?.message || payload?.message || textDetail
   const suffix = bridgeMessage ? `: ${bridgeMessage}` : ' sin detalle del servicio'
-  const err: any = new Error(`DB bridge respondió con HTTP ${status}${suffix}. La operación no fue confirmada; revisa que el bridge y el agente de base estén disponibles.`)
+  const err: any = new Error(`DB bridge respondió con HTTP ${status}${suffix}. La operación no fue confirmada; revisa el relay y el agente de base.`)
   err.code = `DB_BRIDGE_HTTP_${status}`
   err.httpStatus = status
   err.statusCode = status >= 400 && status < 600 ? status : 500
   err.bridgePayload = payload
+  err.bridgeResponseText = textDetail
+  err.upstreamRequestId = upstreamRequestId
   return err
-}
-
-const normalizeBridgeQueryResult = <T>(payload: BridgeQueryResponse): T => {
-  const rows = payload.rows ?? payload.result
-  const isWriteResult =
-    typeof payload.affectedRows === 'number' ||
-    typeof payload.insertId === 'number' ||
-    typeof payload.changedRows === 'number' ||
-    typeof payload.warningStatus === 'number'
-
-  if (isWriteResult) {
-    return {
-      affectedRows: payload.affectedRows || 0,
-      insertId: payload.insertId || 0,
-      changedRows: payload.changedRows || 0,
-      warningStatus: payload.warningStatus || 0
-    } as T
-  }
-
-  return rows as T
 }
 
 const bridgeFetch = async <T>(path: string, body?: unknown, options: BridgeFetchOptions = {}): Promise<T> => {
@@ -305,17 +278,24 @@ const bridgeFetch = async <T>(path: string, body?: unknown, options: BridgeFetch
   const controller = new AbortController()
   const timeoutMs = Number(options.timeoutMs || getBridgeTimeoutMs())
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  let event: any = null
+  try { event = useRequestEvent() } catch {}
+  const requestId = String(event?.context?.auroraRequestId || '').trim()
 
   try {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-DB-Bridge-Protocol': '2.2'
     }
+
+    if (requestId) headers['X-Aurora-Request-Id'] = requestId
 
     if (config.dbBridgeToken) {
       headers.Authorization = `Bearer ${config.dbBridgeToken}`
     }
 
-    debugBridge('fetch bridge request', { url })
+    debugBridge('fetch bridge request', { url, requestId, protocolVersion: '2.2' })
 
     let response
 
@@ -323,6 +303,9 @@ const bridgeFetch = async <T>(path: string, body?: unknown, options: BridgeFetch
       response = await fetch(url, {
         method: body ? 'POST' : 'GET',
         headers,
+        // Keep the established HTTP relay body shape. The agent accepts both
+        // root and nested payloads, but Aurora does not require the relay to
+        // tolerate additional JSON properties.
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal
       })
@@ -337,21 +320,40 @@ const bridgeFetch = async <T>(path: string, body?: unknown, options: BridgeFetch
       throw attachBridgeDiagnostic(err, path)
     }
 
-    const payload = await response.json().catch(() => null)
+    const responseText = await response.text().catch(() => '')
+    let payload: any = null
+    if (responseText) {
+      try { payload = JSON.parse(responseText) } catch {}
+    }
+    const upstreamRequestId = String(
+      response.headers.get('x-request-id') ||
+      response.headers.get('x-correlation-id') ||
+      response.headers.get('cf-ray') ||
+      ''
+    ).trim()
 
     debugBridge('fetch bridge response', {
       url,
+      requestId,
+      upstreamRequestId,
       status: response.status,
       ok: response.ok,
-      payloadOk: payload?.ok
+      payloadOk: payload?.ok,
+      responseBytes: Buffer.byteLength(responseText || '')
     })
 
     if (!response.ok || !payload) {
-      throw attachBridgeDiagnostic(makeBridgeHttpError(response.status, payload), path)
+      throw attachBridgeDiagnostic(
+        makeBridgeHttpError(response.status, payload, responseText, upstreamRequestId),
+        path
+      )
     }
 
-    if (payload.ok === false) {
-      throw attachBridgeDiagnostic(makeBridgeError(payload, response.status), path)
+    const errorPayload = findBridgeErrorPayload(payload)
+    if (errorPayload) {
+      const error = makeBridgeError(errorPayload, response.status)
+      error.upstreamRequestId = upstreamRequestId
+      throw attachBridgeDiagnostic(error, path)
     }
 
     return payload as T
@@ -1058,11 +1060,20 @@ export const executeStatementTransaction = async <T = any>(statements: SqlStatem
   if (getTransport() === 'bridge') {
     const agentId = getBridgeAgentId()
 
-    const payload = await bridgeFetch<{ ok: true; results: BridgeQueryResponse[] }>(`/agents/${encodeURIComponent(agentId)}/transaction`, {
+    const payload = await bridgeFetch<BridgeQueryResponse>(`/agents/${encodeURIComponent(agentId)}/transaction`, {
       statements
     })
+    const results = findBridgeTransactionResults(payload)
 
-    return payload.results.map(result => normalizeBridgeQueryResult<T>(result))
+    if (!results) {
+      const error: any = new Error('DB bridge transaction response did not include a results array.')
+      error.code = 'DB_BRIDGE_BAD_TRANSACTION_RESPONSE'
+      error.httpStatus = 502
+      error.bridgePayload = payload
+      throw attachBridgeDiagnostic(error, `/agents/${encodeURIComponent(agentId)}/transaction`)
+    }
+
+    return results.map(result => normalizeBridgeQueryResult<T>(result))
   }
 
   const db = getDb()
