@@ -7,6 +7,8 @@ declare global {
   const PLANTELES_LIST: typeof import('../../utils/constants').PLANTELES_LIST
   const abortNavigation: typeof import('../../node_modules/nuxt/dist/app/composables/router').abortNavigation
   const addRouteMiddleware: typeof import('../../node_modules/nuxt/dist/app/composables/router').addRouteMiddleware
+  const authCookieFlagEnabled: typeof import('../../utils/authAccess').authCookieFlagEnabled
+  const authRoleTokens: typeof import('../../utils/authAccess').authRoleTokens
   const buildFiscalProfiles: typeof import('../../utils/invoiceLegacy').buildFiscalProfiles
   const callOnce: typeof import('../../node_modules/nuxt/dist/app/composables/once').callOnce
   const cancelIdleCallback: typeof import('../../node_modules/nuxt/dist/app/compat/idle-callback').cancelIdleCallback
@@ -111,6 +113,7 @@ declare global {
   const refreshNuxtData: typeof import('../../node_modules/nuxt/dist/app/composables/asyncData').refreshNuxtData
   const reloadNuxtApp: typeof import('../../node_modules/nuxt/dist/app/composables/chunk').reloadNuxtApp
   const requestIdleCallback: typeof import('../../node_modules/nuxt/dist/app/compat/idle-callback').requestIdleCallback
+  const resolveClientAuthAccess: typeof import('../../utils/authAccess').resolveClientAuthAccess
   const resolveComponent: typeof import('vue').resolveComponent
   const resolveLegacyInvoiceContext: typeof import('../../utils/invoiceLegacy').resolveLegacyInvoiceContext
   const setInterval: typeof import('../../node_modules/nuxt/dist/app/compat/interval').setInterval
@@ -248,6 +251,8 @@ declare module 'vue' {
     readonly PLANTELES_LIST: UnwrapRef<typeof import('../../utils/constants')['PLANTELES_LIST']>
     readonly abortNavigation: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/router')['abortNavigation']>
     readonly addRouteMiddleware: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/router')['addRouteMiddleware']>
+    readonly authCookieFlagEnabled: UnwrapRef<typeof import('../../utils/authAccess')['authCookieFlagEnabled']>
+    readonly authRoleTokens: UnwrapRef<typeof import('../../utils/authAccess')['authRoleTokens']>
     readonly buildFiscalProfiles: UnwrapRef<typeof import('../../utils/invoiceLegacy')['buildFiscalProfiles']>
     readonly callOnce: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/once')['callOnce']>
     readonly cancelIdleCallback: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/compat/idle-callback')['cancelIdleCallback']>
@@ -352,6 +357,7 @@ declare module 'vue' {
     readonly refreshNuxtData: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/asyncData')['refreshNuxtData']>
     readonly reloadNuxtApp: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/chunk')['reloadNuxtApp']>
     readonly requestIdleCallback: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/compat/idle-callback')['requestIdleCallback']>
+    readonly resolveClientAuthAccess: UnwrapRef<typeof import('../../utils/authAccess')['resolveClientAuthAccess']>
     readonly resolveComponent: UnwrapRef<typeof import('vue')['resolveComponent']>
     readonly resolveLegacyInvoiceContext: UnwrapRef<typeof import('../../utils/invoiceLegacy')['resolveLegacyInvoiceContext']>
     readonly setInterval: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/compat/interval')['setInterval']>

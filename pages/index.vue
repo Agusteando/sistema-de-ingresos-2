@@ -392,6 +392,7 @@ import StudentFormModal from '~/components/StudentFormModal.vue'
 import BajaReasonModal from '~/components/BajaReasonModal.vue'
 import StudentOperatorInfoModal from '~/components/students/StudentOperatorInfoModal.vue'
 import NoAdeudoModal from '~/components/NoAdeudoModal.vue'
+import { resolveClientAuthAccess } from '~/utils/authAccess'
 
 const { show } = useToast()
 const { openMenu } = useContextMenu()
@@ -403,10 +404,16 @@ const { accountStateSyncState } = useAccountStateCacheSync()
 const state = useState('globalState')
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 const activePlantelCookie = useCookie('auth_active_plantel')
-const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
-const isSuperAdminRole = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
+const hasControlEscolarCookie = useCookie('auth_has_control_escolar')
 const hasFinancialAccessCookie = useCookie('auth_has_financial_access')
-const isControlEscolarOnly = computed(() => !isSuperAdminRole.value && hasFinancialAccessCookie.value !== 'true')
+const clientAccess = computed(() => resolveClientAuthAccess({
+  role: userRole.value,
+  hasControlEscolar: hasControlEscolarCookie.value,
+  hasFinancialAccess: hasFinancialAccessCookie.value
+}))
+const roleTokens = computed(() => clientAccess.value.roles)
+const isSuperAdminRole = computed(() => clientAccess.value.isSuperAdmin)
+const isControlEscolarOnly = computed(() => clientAccess.value.controlEscolarOnly)
 const canOpenStudentOperatorInfo = computed(() => !isControlEscolarOnly.value)
 
 const filters = ref({ q: '' })

@@ -1,1 +1,1 @@
-Restaurar el flujo de sesión del acceso financiero anterior
+Corregir bucle de acceso para usuarios no superadmin

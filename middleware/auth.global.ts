@@ -1,9 +1,4 @@
-const SUPERADMIN_ROLES = new Set(['superadmin'])
-
-const roleTokensFrom = (value: unknown) => String(value || '')
-  .split(',')
-  .map((role) => role.trim().toLowerCase())
-  .filter(Boolean)
+import { resolveClientAuthAccess } from '~/utils/authAccess'
 
 export default defineNuxtRouteMiddleware((to) => {
   const email = useCookie('auth_email')
@@ -12,10 +7,12 @@ export default defineNuxtRouteMiddleware((to) => {
   const hasControlEscolarCookie = useCookie('auth_has_control_escolar')
   const hasFinancialAccessCookie = useCookie('auth_has_financial_access')
   const isVisualLabPath = to.path.startsWith('/__visual-lab')
-  const roleTokens = roleTokensFrom(role.value)
-  const isSuperAdmin = roleTokens.some((entry) => SUPERADMIN_ROLES.has(entry))
-  const hasControlEscolar = isSuperAdmin || hasControlEscolarCookie.value === 'true'
-  const hasFinancialAccess = isSuperAdmin || hasFinancialAccessCookie.value === 'true'
+  const access = resolveClientAuthAccess({
+    role: role.value,
+    hasControlEscolar: hasControlEscolarCookie.value,
+    hasFinancialAccess: hasFinancialAccessCookie.value
+  })
+  const { isSuperAdmin, controlAccess: hasControlEscolar, financialAccess: hasFinancialAccess } = access
   const defaultRoute = hasFinancialAccess ? '/' : '/control-escolar'
   const isPublicPath = to.path === '/login' || to.path.startsWith('/print')
   const isControlEscolarPath = ['/control-escolar', '/avance-control-escolar'].includes(to.path)

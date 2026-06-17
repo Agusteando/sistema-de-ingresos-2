@@ -405,6 +405,7 @@ import StudentsCacheSyncIndicator from '~/components/students/StudentsCacheSyncI
 import ControlEscolarSyncIndicator from '~/components/students/ControlEscolarSyncIndicator.vue'
 import { usePlantelAgentStatuses } from '~/composables/usePlantelAgentStatuses'
 import { CICLOS_LIST, PLANTELES_LIST, normalizeCicloOption } from '~/utils/constants'
+import { authCookieFlagEnabled, resolveClientAuthAccess } from '~/utils/authAccess'
 
 const { toasts, show } = useToast()
 const { syncState, syncMessage } = useOptimisticSync()
@@ -503,7 +504,7 @@ const adminPhoto = ref(null)
 const adminName = ref(useCookie('auth_name').value || 'Usuario')
 const impersonatingCookie = useCookie('auth_impersonating')
 const impersonatorNameCookie = useCookie('auth_impersonator_name')
-const isImpersonating = computed(() => impersonatingCookie.value === 'true')
+const isImpersonating = computed(() => authCookieFlagEnabled(impersonatingCookie.value))
 const impersonatorName = computed(() => String(impersonatorNameCookie.value || 'Superadmin'))
 const stoppingImpersonation = ref(false)
 const userRole = ref(useCookie('auth_role').value || 'plantel')
@@ -515,12 +516,16 @@ const plantelMenuOpen = ref(false)
 const cicloPickerRef = ref(null)
 const cicloMenuOpen = ref(false)
 const { getPlantelStatus, loadPlantelStatuses } = usePlantelAgentStatuses()
-const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
-const hasSuperAdminRole = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
-const isSuperAdmin = computed(() => hasSuperAdminRole.value)
-const hasFinancialAccess = computed(() => isSuperAdmin.value || hasFinancialAccessCookie.value === 'true')
-const hasControlEscolarAccess = computed(() => isSuperAdmin.value || hasControlEscolarCookie.value === 'true')
-const isControlEscolarOnly = computed(() => hasControlEscolarAccess.value && !hasFinancialAccess.value)
+const clientAccess = computed(() => resolveClientAuthAccess({
+  role: userRole.value,
+  hasControlEscolar: hasControlEscolarCookie.value,
+  hasFinancialAccess: hasFinancialAccessCookie.value
+}))
+const roleTokens = computed(() => clientAccess.value.roles)
+const isSuperAdmin = computed(() => clientAccess.value.isSuperAdmin)
+const hasFinancialAccess = computed(() => clientAccess.value.financialAccess)
+const hasControlEscolarAccess = computed(() => clientAccess.value.controlAccess)
+const isControlEscolarOnly = computed(() => clientAccess.value.controlEscolarOnly)
 const showControlEscolarNav = computed(() => hasControlEscolarAccess.value)
 const userPlanteles = computed(() => {
   if (isSuperAdmin.value) return [...PLANTELES_LIST]
