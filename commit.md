@@ -1,1 +1,1 @@
-Evitar sondeo automático de Bridge para Sistema Rápido
+Agregar el plantel GM al sistema

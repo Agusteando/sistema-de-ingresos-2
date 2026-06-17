@@ -1,7 +1,7 @@
 import { normalizeCicloKey } from '../shared/utils/ciclo'
 
 export const PLANTELES_LIST = [
-  'PREEM', 'PREET', 'CT', 'CM', 'DM', 'CO', 'DC', 'PM', 'PT', 'SM', 'ST', 'IS', 'ISM'
+  'PREEM', 'PREET', 'CT', 'CM', 'DM', 'CO', 'DC', 'GM', 'PM', 'PT', 'SM', 'ST', 'IS', 'ISM'
 ]
 
 export const CICLOS_LIST = [

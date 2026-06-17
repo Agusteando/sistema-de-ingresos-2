@@ -938,7 +938,7 @@ export const ensureSchema = async () => {
       try {
         const superAdminEmail = 'desarrollo.tecnologico@casitaiedis.edu.mx'
         const existingAdmin = await rawQuery<any[]>(`SELECT id FROM users WHERE LOWER(TRIM(email)) = ? LIMIT 1`, [superAdminEmail])
-        const allPlanteles = 'PREEM,PREET,CT,CM,DM,CO,DC,PM,PT,SM,ST,IS,ISM'
+        const allPlanteles = 'PREEM,PREET,CT,CM,DM,CO,DC,GM,PM,PT,SM,ST,IS,ISM'
 
         if (existingAdmin.length === 0) {
           const hash = bcrypt.hashSync('SUPER_ADMIN_AUTO_SEED', 10)
