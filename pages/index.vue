@@ -1042,7 +1042,7 @@ const loadKpiSparklines = async () => {
       ingresos: Array.isArray(res?.ingresos) ? res.ingresos : []
     }
   } catch (e) {
-    logApiDiagnostic('students.kpi-trends', e)
+    logApiDiagnostic('students.kpi-trends', e, { endpoint: '/api/students/kpi-trends', plantel: currentPlantelKey.value, ciclo: currentCicloKey.value })
     if (requestId === kpiSparklineRequestId) paymentKpiSparklines.value = { inscritos: [], internos: [], externos: [], ingresos: [] }
   } finally {
     endKpiRefreshScope(refreshToken)
@@ -1168,7 +1168,7 @@ const loadGlobalKpis = async () => {
     const res = await $fetch('/api/dashboard/kpis', { retry: 0, params: { ciclo: cicloKey, concepts: externalConcepts.value.join(','), tipoConcepts: tipoIngresoConcepts.value.join(',') } })
     globalKpis.value.ingresosMes = res.ingresosMes || 0
   } catch(e) {
-    logApiDiagnostic('dashboard.kpis', e)
+    logApiDiagnostic('dashboard.kpis', e, { endpoint: '/api/dashboard/kpis', plantel: currentPlantelKey.value, ciclo: currentCicloKey.value })
   } finally {
     endKpiRefreshScope(refreshToken)
   }
@@ -1669,7 +1669,7 @@ const performSearch = async (options = {}) => {
     })
   } catch (e) {
     if (requestId !== studentsRequestId) return
-    logApiDiagnostic('students.load', e, { plantel: currentPlantelKey.value, ciclo: cicloKey })
+    logApiDiagnostic('students.load', e, { endpoint: '/api/students', plantel: currentPlantelKey.value, ciclo: cicloKey })
     trace.status = hasCachedStudents || hadStudents ? 'failed' : 'unavailable'
     trace.statusLabel = financialStatusLabel(trace.status)
     trace.totalMs = Math.max(0, Math.round(financialNow() - startedAt))
@@ -2298,7 +2298,7 @@ const loadEnrollmentConfig = async ({ refreshStudents = false, refreshKpis = tru
     const configData = await $fetch('/api/conceptos-config/all', { retry: 0 })
     parseEnrollmentConfig(configData)
   } catch (e) {
-    logApiDiagnostic('enrollment-config.load', e)
+    logApiDiagnostic('enrollment-config.load', e, { endpoint: '/api/conceptos-config/all', plantel: currentPlantelKey.value, ciclo: currentCicloKey.value })
     console.warn('Fallback al carecer de configuración externa.')
   } finally {
     endKpiRefreshScope(refreshToken)

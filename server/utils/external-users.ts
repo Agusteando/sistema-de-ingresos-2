@@ -251,6 +251,95 @@ const selectColumns = async () => {
   ].filter((column) => columns.has(column))
 }
 
+// Authentication must never reuse the administrative user projection. The
+// administrative projection includes avatar/picture fields and can load every
+// duplicate row for an email. That is appropriate for the Usuarios workspace,
+// but it is unsafe on the login/request hot path where many API calls run in
+// parallel immediately after a non-superadmin session starts.
+const AUTH_TEXT_LIMITS: Record<string, number> = {
+  displayName: 255,
+  username: 255,
+  email: 320,
+  plantel: 1024,
+  role: 255
+}
+
+const selectAuthColumns = async () => {
+  const columns = await getExternalUsersColumns()
+  return [
+    'id',
+    'displayName',
+    'username',
+    'email',
+    'plantel',
+    'role',
+    'ingresos_blocked'
+  ].filter((column) => columns.has(column))
+}
+
+const authSelectExpression = (column: string) => {
+  const identifier = escapeIdentifier(column)
+  const maxLength = AUTH_TEXT_LIMITS[column]
+  return maxLength
+    ? `LEFT(CAST(${identifier} AS CHAR), ${maxLength}) AS ${identifier}`
+    : identifier
+}
+
+const normalizeAuthUserRow = (row: any) => {
+  if (!row) return null
+  const email = normalizeEmail(row.email)
+  const fullName = normalizeText(row.displayName || row.username || email || 'Usuario')
+  const plantel = plantelesValue(row.plantel)
+  const ingresosBlocked = normalizeBlocked(row.__effective_ingresos_blocked ?? row.ingresos_blocked)
+
+  return {
+    id: row.id,
+    username: fullName,
+    displayName: fullName,
+    email,
+    plantel,
+    planteles: plantel,
+    role: serializeApplicationRoles(row.role),
+    ingresos_blocked: ingresosBlocked ? 1 : 0,
+    ingresosBlocked,
+    source: 'external-auth'
+  }
+}
+
+const loadRawAuthUserByEmail = async (email: string, query: SqlExecutor = centralExecutor) => {
+  const normalizedEmail = normalizeEmail(email)
+  if (!normalizedEmail || !isCasitaWorkspaceEmail(normalizedEmail)) return null
+
+  const columns = await selectAuthColumns()
+  if (!columns.includes('email')) return null
+
+  const blockedProjection = columns.includes('ingresos_blocked')
+    ? `COALESCE((
+        SELECT MAX(COALESCE(auth_blocked.${escapeIdentifier('ingresos_blocked')}, 0))
+        FROM ${escapeIdentifier(TABLE)} auth_blocked
+        WHERE LOWER(TRIM(auth_blocked.${escapeIdentifier('email')})) = ?
+      ), 0) AS ${escapeIdentifier('__effective_ingresos_blocked')}`
+    : `0 AS ${escapeIdentifier('__effective_ingresos_blocked')}`
+  const params = columns.includes('ingresos_blocked')
+    ? [normalizedEmail, normalizedEmail, workspaceDomainParam()]
+    : [normalizedEmail, workspaceDomainParam()]
+
+  const rows = await query<any[]>(`
+    SELECT ${columns.map(authSelectExpression).join(', ')}, ${blockedProjection}
+    FROM ${escapeIdentifier(TABLE)}
+    WHERE LOWER(TRIM(${escapeIdentifier('email')})) = ? AND ${workspaceDomainWhere()}
+    ORDER BY ${escapeIdentifier('id')} ASC
+    LIMIT 1
+  `, params)
+
+  return rows[0] || null
+}
+
+export const findExternalAuthUserByEmail = async (email: string) => {
+  const row = await loadRawAuthUserByEmail(email)
+  return normalizeAuthUserRow(row)
+}
+
 const normalizeUserRow = (row: any) => {
   const email = normalizeEmail(row.email)
   const fullName = normalizeText(row.displayName || row.username || email || 'Usuario')
@@ -985,8 +1074,10 @@ export const touchExternalUserLogin = async ({ email, name, picture, requestedPl
   const hardCodedSuperAdmin = isHardCodedSuperAdminEmail(normalizedEmail)
 
   return await withExternalUserEmailLocks([normalizedEmail], async (query) => {
-    let rawRows = await loadRawUsersByEmail(normalizedEmail, query)
-    let canonical = await consolidateExternalUserRows(normalizedEmail, rawRows, query)
+    // Login only needs the canonical authorization row. Do not materialize every
+    // duplicate and do not run destructive consolidation while a session is
+    // starting; duplicate cleanup belongs to an explicit administrative flow.
+    let canonical = await loadRawAuthUserByEmail(normalizedEmail, query)
 
     if (!canonical) {
       const displayName = normalizeText(name || normalizedEmail)
@@ -1010,14 +1101,13 @@ export const touchExternalUserLogin = async ({ email, name, picture, requestedPl
       } catch (error: any) {
         if (Number(error?.errno) !== 1062 && String(error?.code || '') !== 'ER_DUP_ENTRY') throw error
       }
-      rawRows = await loadRawUsersByEmail(normalizedEmail, query)
-      canonical = await consolidateExternalUserRows(normalizedEmail, rawRows, query)
+      canonical = await loadRawAuthUserByEmail(normalizedEmail, query)
     }
 
     if (!canonical) return null
-    const merged = mergeRowsForEmail([canonical])
-    if (!merged) return null
-    if (merged.ingresosBlocked && !hardCodedSuperAdmin) return merged
+    const authUser = normalizeAuthUserRow(canonical)
+    if (!authUser) return null
+    if (authUser.ingresosBlocked && !hardCodedSuperAdmin) return authUser
 
     const updates: Record<string, any> = {}
     if (columns.has('last_login_at')) updates.last_login_at = new Date()
@@ -1042,12 +1132,12 @@ export const touchExternalUserLogin = async ({ email, name, picture, requestedPl
         )
       } catch (error: any) {
         console.warn('[Auth Login] External users login touch skipped after role read', error?.message || error)
-        return merged
+        return authUser
       }
     }
 
-    const refreshed = await loadRawUserById(canonical.id, query)
-    return refreshed ? mergeRowsForEmail([refreshed]) : merged
+    const refreshed = await loadRawAuthUserByEmail(normalizedEmail, query)
+    return normalizeAuthUserRow(refreshed) || authUser
   })
 }
 

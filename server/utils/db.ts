@@ -200,23 +200,37 @@ const attachBridgeDiagnostic = (error: any, path: string) => {
   let event: any = null
   try { event = useRequestEvent() } catch {}
 
-  const status = Number(error?.httpStatus || error?.statusCode || error?.status || 503) || 503
+  const upstreamStatus = Number(error?.httpStatus || error?.statusCode || error?.status || 503) || 503
+  const status = upstreamStatus >= 500 && upstreamStatus < 600 ? upstreamStatus : 502
   const agentId = bridgeAgentFromPath(path) || String(event?.context?.dbBridgeAgentId || '').trim()
   const activePlantelCookie = event ? getCookie(event, 'auth_active_plantel') : ''
   const diagnostic = {
     requestId: String(event?.context?.auroraRequestId || '').trim(),
-    code: String(error?.code || `DB_BRIDGE_HTTP_${status}`),
+    code: String(error?.code || `DB_BRIDGE_HTTP_${upstreamStatus}`),
     source: 'db_bridge',
     status,
+    upstreamStatus,
     plantel: String(event?.context?.user?.active_plantel || activePlantelCookie || agentId || '').trim(),
     agentId,
     retryable: [502, 503, 504].includes(status),
     message: String(error?.message || BRIDGE_AGENT_UNAVAILABLE_MESSAGE).replace(/\s+/g, ' ').trim().slice(0, 240)
   }
 
-  error.data = { ...(error?.data || {}), diagnostic }
-  error.diagnostic = diagnostic
-  return error
+  // Plain Error instances are sanitized by H3 in production and arrive at the
+  // browser as an opaque "Server Error". Convert every bridge failure into an
+  // H3 error so the bounded diagnostic survives serialization.
+  const wrapped: any = createError({
+    statusCode: status,
+    statusMessage: 'DB bridge request failed',
+    message: diagnostic.message,
+    data: { diagnostic }
+  })
+  wrapped.code = diagnostic.code
+  wrapped.httpStatus = upstreamStatus
+  wrapped.diagnostic = diagnostic
+  wrapped.bridgePayload = error?.bridgePayload
+  wrapped.cause = error
+  return wrapped
 }
 
 export const BRIDGE_AGENT_UNAVAILABLE_MESSAGE = 'La base del plantel no está disponible en este momento. Solicita al Administrador verificar la conectividad del equipo del plantel e inténtalo nuevamente.'

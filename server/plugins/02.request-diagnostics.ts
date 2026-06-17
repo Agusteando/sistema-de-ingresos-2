@@ -27,14 +27,15 @@ export default defineNitroPlugin((nitroApp) => {
       path: url.pathname,
       status,
       code: compactText(diagnostic.code || error?.code || error?.data?.code || `HTTP_${status}`, 80),
-      source: compactText(diagnostic.source || 'api', 80),
+      source: compactText(diagnostic.source || event.context?.auroraStage || 'api', 80),
+      stage: compactText(event.context?.auroraStage || '', 80),
       ms: Math.max(0, Date.now() - startedAt),
       email: compactText(user?.email, 120),
       role: compactText(user?.role, 120),
       impersonating: Boolean(getCookie(event, 'auth_impersonation_token')),
       activePlantel: compactText(user?.active_plantel || getCookie(event, 'auth_active_plantel'), 32),
       bridgeAgent: compactText(event.context?.dbBridgeAgentId || diagnostic.agentId || getCookie(event, 'db_bridge_agent_id'), 32),
-      message: compactText(error?.statusMessage || error?.message || diagnostic.message || 'Error de API')
+      message: compactText(diagnostic.message || error?.message || error?.statusMessage || 'Error de API')
     }
 
     console.error(`[AuroraDiag] ${JSON.stringify(payload)}`)

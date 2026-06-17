@@ -22,6 +22,7 @@ export const useStudentSections = ({
   activeFilter: Ref<string>
 }) => {
   const { show } = useToast()
+  const activePlantelCookie = useCookie('auth_active_plantel')
   const customSections = ref<any[]>([])
   const showSectionModal = ref(false)
   const sectionModalStudent = ref<any | null>(null)
@@ -52,7 +53,10 @@ export const useStudentSections = ({
       const res = await $fetch('/api/student-sections', { retry: 0 })
       customSections.value = Array.isArray(res) ? res : []
     } catch (e) {
-      logApiDiagnostic('student-sections.load', e)
+      logApiDiagnostic('student-sections.load', e, {
+        endpoint: '/api/student-sections',
+        plantel: String(activePlantelCookie.value || '').trim().toUpperCase()
+      })
       customSections.value = []
     }
   }

@@ -30,8 +30,31 @@ export default defineEventHandler(async (event) => {
   // from SIPAE are rejected before the external token can be inspected.
   if (url.pathname.startsWith('/api/external/')) return
 
-  const user = await getTrustedAuthUser(event)
+  event.context.auroraStage = 'auth_session'
+  let user
+  try {
+    user = await getTrustedAuthUser(event)
+  } catch (error: any) {
+    const status = Number(error?.statusCode || error?.status || error?.httpStatus || 500) || 500
+    const diagnostic = error?.data?.diagnostic || error?.diagnostic || {
+      requestId: String(event.context?.auroraRequestId || ''),
+      code: String(error?.code || error?.data?.code || `AUTH_SESSION_HTTP_${status}`),
+      source: 'auth_session',
+      status,
+      plantel: String(getCookie(event, 'auth_active_plantel') || ''),
+      agentId: String(getCookie(event, 'db_bridge_agent_id') || ''),
+      retryable: status >= 500,
+      message: String(error?.message || 'No se pudo resolver la sesión.').replace(/\s+/g, ' ').trim().slice(0, 240)
+    }
+    throw createError({
+      statusCode: status,
+      statusMessage: status >= 500 ? 'Auth session failed' : undefined,
+      message: diagnostic.message,
+      data: { diagnostic }
+    })
+  }
   event.context.user = user
+  event.context.auroraStage = 'authorization'
 
   const isControlEscolarEndpoint = url.pathname.startsWith('/api/control-escolar/')
   const isSystemEndpoint = url.pathname.startsWith('/api/system/')
@@ -81,6 +104,7 @@ export default defineEventHandler(async (event) => {
 
   if (bridgeAgentId && bridgeAgentId !== 'GLOBAL') {
     event.context.dbBridgeAgentId = bridgeAgentId
+    event.context.auroraStage = 'bridge_context'
     enterBridgeAgentId(bridgeAgentId)
   } else if (getDbTransport() === 'bridge') {
     if (isNoAdeudoEndpoint) {
@@ -105,4 +129,5 @@ export default defineEventHandler(async (event) => {
     return
   }
 
+  event.context.auroraStage = 'api_handler'
 })

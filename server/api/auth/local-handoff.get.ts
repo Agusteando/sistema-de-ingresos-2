@@ -9,7 +9,7 @@ import {
   normalizePlantel,
   parsePlanteles
 } from '../../utils/auth-session'
-import { findExternalUserByEmail } from '../../utils/external-users'
+import { findExternalAuthUserByEmail } from '../../utils/external-users'
 import { clearImpersonationCookies } from '../../utils/impersonation-session'
 import { isLocalSystemRuntime, requestLocalSystemManager } from '../../utils/local-system-manager'
 
@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
 
   const email = String(payload.email || '').trim().toLowerCase()
   const seededSuperAdmin = SEEDED_SUPERADMIN_EMAILS.has(email)
-  const centralUser = await findExternalUserByEmail(email)
+  const centralUser = await findExternalAuthUserByEmail(email)
 
   if (!centralUser && !seededSuperAdmin) {
     throw createError({ statusCode: 403, message: 'La cuenta ya no tiene acceso al sistema.' })
