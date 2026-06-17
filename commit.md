@@ -1,1 +1,1 @@
-Compatibilizar Aurora con el contrato del agente bridge
+Corregir el contrato integral entre Aurora relay y agente

@@ -64,9 +64,12 @@ type EnsureSchemaOptions = {
   allowBridge?: boolean
 }
 
+const DB_BRIDGE_PROTOCOL_VERSION = '3.0'
+
 let pool: mysql.Pool
 const ensuredSchemaKeys = new Set<string>()
 const schemaPromises = new Map<string, Promise<void>>()
+const schemaRepairPromises = new Map<string, Promise<void>>()
 const bridgeAgentContext = new AsyncLocalStorage<BridgeAgentContext>()
 
 export const enterBridgeAgentId = (agentId: string | undefined | null) => {
@@ -182,19 +185,19 @@ const attachBridgeDiagnostic = (error: any, path: string) => {
   try { event = useRequestEvent() } catch {}
 
   const upstreamStatus = Number(error?.httpStatus || error?.statusCode || error?.status || 503) || 503
-  const status = upstreamStatus >= 500 && upstreamStatus < 600 ? upstreamStatus : 502
+  const status = upstreamStatus >= 400 && upstreamStatus < 600 ? upstreamStatus : 502
   const agentId = bridgeAgentFromPath(path) || String(event?.context?.dbBridgeAgentId || '').trim()
   const activePlantelCookie = event ? getCookie(event, 'auth_active_plantel') : ''
   const diagnostic = {
     requestId: String(event?.context?.auroraRequestId || '').trim(),
     code: String(error?.code || `DB_BRIDGE_HTTP_${upstreamStatus}`),
-    source: 'db_bridge',
+    source: String(error?.source || error?.bridgePayload?.source || (String(error?.code || '').startsWith('ER_') ? 'agent_mysql' : 'db_bridge')),
     status,
     upstreamStatus,
     plantel: String(event?.context?.user?.active_plantel || activePlantelCookie || agentId || '').trim(),
     agentId,
     retryable: [502, 503, 504].includes(status),
-    protocolVersion: '2.2',
+    protocolVersion: String(error?.bridgePayload?.protocolVersion || DB_BRIDGE_PROTOCOL_VERSION),
     upstreamRequestId: String(error?.upstreamRequestId || '').trim(),
     upstreamBody: String(error?.bridgeResponseText || '').replace(/\s+/g, ' ').trim().slice(0, 500),
     message: String(error?.message || BRIDGE_AGENT_UNAVAILABLE_MESSAGE).replace(/\s+/g, ' ').trim().slice(0, 500)
@@ -263,12 +266,13 @@ const makeBridgeHttpError = (
   const bridgeMessage = payload?.error?.message || payload?.message || textDetail
   const suffix = bridgeMessage ? `: ${bridgeMessage}` : ' sin detalle del servicio'
   const err: any = new Error(`DB bridge respondió con HTTP ${status}${suffix}. La operación no fue confirmada; revisa el relay y el agente de base.`)
-  err.code = `DB_BRIDGE_HTTP_${status}`
+  err.code = payload?.error?.code || payload?.code || `DB_BRIDGE_HTTP_${status}`
   err.httpStatus = status
   err.statusCode = status >= 400 && status < 600 ? status : 500
   err.bridgePayload = payload
   err.bridgeResponseText = textDetail
   err.upstreamRequestId = upstreamRequestId
+  err.source = payload?.source || (String(err.code).startsWith('ER_') ? 'agent_mysql' : 'db_bridge')
   return err
 }
 
@@ -286,7 +290,7 @@ const bridgeFetch = async <T>(path: string, body?: unknown, options: BridgeFetch
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      'X-DB-Bridge-Protocol': '2.2'
+      'X-DB-Bridge-Protocol': DB_BRIDGE_PROTOCOL_VERSION
     }
 
     if (requestId) headers['X-Aurora-Request-Id'] = requestId
@@ -295,7 +299,7 @@ const bridgeFetch = async <T>(path: string, body?: unknown, options: BridgeFetch
       headers.Authorization = `Bearer ${config.dbBridgeToken}`
     }
 
-    debugBridge('fetch bridge request', { url, requestId, protocolVersion: '2.2' })
+    debugBridge('fetch bridge request', { url, requestId, protocolVersion: DB_BRIDGE_PROTOCOL_VERSION })
 
     let response
 
@@ -326,6 +330,8 @@ const bridgeFetch = async <T>(path: string, body?: unknown, options: BridgeFetch
       try { payload = JSON.parse(responseText) } catch {}
     }
     const upstreamRequestId = String(
+      response.headers.get('x-db-relay-request-id') ||
+      response.headers.get('x-aurora-request-id') ||
       response.headers.get('x-request-id') ||
       response.headers.get('x-correlation-id') ||
       response.headers.get('cf-ray') ||
@@ -1029,22 +1035,66 @@ export const runRawSqlStatement = async <T>(sql: string, params?: SqlParams): Pr
   return await rawQuery<T>(sql, params)
 }
 
+const schemaErrorCode = (error: any) => String(
+  error?.code ||
+  error?.data?.diagnostic?.code ||
+  error?.diagnostic?.code ||
+  error?.bridgePayload?.error?.code ||
+  error?.cause?.code ||
+  ''
+).trim().toUpperCase()
+
+const isSchemaDriftError = (error: any) => {
+  const code = schemaErrorCode(error)
+  return code === 'ER_BAD_FIELD_ERROR' || code === 'ER_NO_SUCH_TABLE'
+}
+
+const repairSchemaForCurrentScope = async (error: any) => {
+  const schemaKey = getSchemaStateKey()
+  const existing = schemaRepairPromises.get(schemaKey)
+  if (existing) return await existing
+
+  const repair = (async () => {
+    const code = schemaErrorCode(error)
+    console.warn(`[AuroraDiag] ${JSON.stringify({
+      scope: 'db.schema-repair',
+      phase: 'start',
+      schemaKey,
+      agentId: getTransport() === 'bridge' ? getBridgeAgentId() : '',
+      code
+    })}`)
+
+    ensuredSchemaKeys.delete(schemaKey)
+    schemaPromises.delete(schemaKey)
+    await ensureSchema({ allowBridge: getTransport() === 'bridge' })
+
+    console.warn(`[AuroraDiag] ${JSON.stringify({
+      scope: 'db.schema-repair',
+      phase: 'finish',
+      schemaKey,
+      agentId: getTransport() === 'bridge' ? getBridgeAgentId() : '',
+      code,
+      ok: true
+    })}`)
+  })().finally(() => {
+    schemaRepairPromises.delete(schemaKey)
+  })
+
+  schemaRepairPromises.set(schemaKey, repair)
+  return await repair
+}
+
 export const query = async <T>(sql: string, params?: SqlParams, isRetry = false): Promise<T> => {
-  await ensureSchema()
+  // Direct databases keep the normal startup check. Bridge databases are
+  // repaired only after an explicit schema error, coalesced per agent, so a
+  // healthy login never launches the full migration sequence.
+  if (getTransport() !== 'bridge') await ensureSchema()
 
   try {
     return await rawQuery<T>(sql, params)
   } catch (err: any) {
-    if (
-      getTransport() !== 'bridge' &&
-      !isRetry &&
-      (err.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_NO_SUCH_TABLE')
-    ) {
-      console.warn('[DB Auto-Healing] Detectado esquema incompleto o desincronizado. Forzando re-evaluacion...')
-      const schemaKey = getSchemaStateKey()
-      ensuredSchemaKeys.delete(schemaKey)
-      schemaPromises.delete(schemaKey)
-      await ensureSchema()
+    if (!isRetry && isSchemaDriftError(err)) {
+      await repairSchemaForCurrentScope(err)
       return await rawQuery<T>(sql, params)
     }
 
@@ -1052,28 +1102,36 @@ export const query = async <T>(sql: string, params?: SqlParams, isRetry = false)
   }
 }
 
-export const executeStatementTransaction = async <T = any>(statements: SqlStatement[]): Promise<T[]> => {
-  await ensureSchema()
+export const executeStatementTransaction = async <T = any>(statements: SqlStatement[], isRetry = false): Promise<T[]> => {
+  if (getTransport() !== 'bridge') await ensureSchema()
 
   if (!statements.length) return []
 
   if (getTransport() === 'bridge') {
     const agentId = getBridgeAgentId()
 
-    const payload = await bridgeFetch<BridgeQueryResponse>(`/agents/${encodeURIComponent(agentId)}/transaction`, {
-      statements
-    })
-    const results = findBridgeTransactionResults(payload)
+    try {
+      const payload = await bridgeFetch<BridgeQueryResponse>(`/agents/${encodeURIComponent(agentId)}/transaction`, {
+        statements
+      })
+      const results = findBridgeTransactionResults(payload)
 
-    if (!results) {
-      const error: any = new Error('DB bridge transaction response did not include a results array.')
-      error.code = 'DB_BRIDGE_BAD_TRANSACTION_RESPONSE'
-      error.httpStatus = 502
-      error.bridgePayload = payload
-      throw attachBridgeDiagnostic(error, `/agents/${encodeURIComponent(agentId)}/transaction`)
+      if (!results) {
+        const error: any = new Error('DB bridge transaction response did not include a results array.')
+        error.code = 'DB_BRIDGE_BAD_TRANSACTION_RESPONSE'
+        error.httpStatus = 502
+        error.bridgePayload = payload
+        throw attachBridgeDiagnostic(error, `/agents/${encodeURIComponent(agentId)}/transaction`)
+      }
+
+      return results.map(result => normalizeBridgeQueryResult<T>(result))
+    } catch (error: any) {
+      if (!isRetry && isSchemaDriftError(error)) {
+        await repairSchemaForCurrentScope(error)
+        return await executeStatementTransaction<T>(statements, true)
+      }
+      throw error
     }
-
-    return results.map(result => normalizeBridgeQueryResult<T>(result))
   }
 
   const db = getDb()
