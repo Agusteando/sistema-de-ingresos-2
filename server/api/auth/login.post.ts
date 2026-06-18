@@ -6,6 +6,7 @@ import { isCasitaWorkspaceEmail } from '../../utils/google-workspace-directory'
 import { logControlEscolarAuditEvent } from '../../utils/control-escolar-audit'
 import { clearImpersonationCookies } from '../../utils/impersonation-session'
 import { authCookieOptions } from '../../utils/auth-cookie-options'
+import { setAuthSessionToken } from '../../utils/auth-session-token'
 
 const SUPERADMIN_EMAILS = new Set([
   'desarrollo.tecnologico@casitaiedis.edu.mx',
@@ -144,6 +145,14 @@ export default defineEventHandler(async (event) => {
     setCookie(event, 'auth_has_financial_access', financialAccess ? 'true' : 'false', opts)
     deleteCookie(event, 'auth_is_super_admin', { path: '/' })
     setCookie(event, 'db_bridge_agent_id', homePlantel, opts)
+    setAuthSessionToken(event, {
+      email: resolvedUser.email || normalizedEmail,
+      name: resolvedUser.username || payload.name || normalizedEmail,
+      role,
+      planteles: superAdmin ? ALL_PLANTELES : allowedPlanteles.join(','),
+      activePlantel,
+      homePlantel
+    })
 
     if (controlEscolar || superAdmin) {
       const auditPlantel = normalizePlantel(activePlantel !== 'GLOBAL' ? activePlantel : homePlantel)

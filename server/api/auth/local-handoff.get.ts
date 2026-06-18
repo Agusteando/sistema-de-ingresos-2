@@ -1,5 +1,6 @@
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { authCookieOptions } from '../../utils/auth-cookie-options'
+import { setAuthSessionToken } from '../../utils/auth-session-token'
 import {
   CONTROL_ESCOLAR_ROLE,
   hasControlEscolarRole,
@@ -85,6 +86,14 @@ export default defineEventHandler(async (event) => {
   setCookie(event, 'auth_has_control_escolar', controlAccess ? 'true' : 'false', opts)
   setCookie(event, 'auth_has_financial_access', financialAccess ? 'true' : 'false', opts)
   setCookie(event, 'db_bridge_agent_id', localPlantel, opts)
+  setAuthSessionToken(event, {
+    email,
+    name,
+    role,
+    planteles: assignedPlanteles.join(','),
+    activePlantel: localPlantel,
+    homePlantel: localPlantel
+  })
   deleteCookie(event, 'auth_is_super_admin', { path: '/' })
 
   return sendRedirect(event, financialAccess ? '/' : '/control-escolar', 302)

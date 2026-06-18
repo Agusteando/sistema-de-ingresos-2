@@ -57,6 +57,7 @@ declare global {
   const checkBridgeAgentAvailability: typeof import('../../server/utils/db').checkBridgeAgentAvailability
   const cleanApiKey: typeof import('../../server/utils/externalBaseSync').cleanApiKey
   const cleanupBlockingRuns: typeof import('../../server/utils/externalBaseSync').cleanupBlockingRuns
+  const clearAuthSessionToken: typeof import('../../server/utils/auth-session-token').clearAuthSessionToken
   const clearImpersonationCookies: typeof import('../../server/utils/impersonation-session').clearImpersonationCookies
   const clearResponseHeaders: typeof import('../../node_modules/h3').clearResponseHeaders
   const clearSession: typeof import('../../node_modules/h3').clearSession
@@ -66,6 +67,7 @@ declare global {
   const controlEscolarCentralQuery: typeof import('../../server/utils/control-escolar-central').controlEscolarCentralQuery
   const createApp: typeof import('../../node_modules/h3').createApp
   const createAppEventHandler: typeof import('../../node_modules/h3').createAppEventHandler
+  const createAuthSessionToken: typeof import('../../server/utils/auth-session-token').createAuthSessionToken
   const createEmptyCounters: typeof import('../../server/utils/externalBaseSync').createEmptyCounters
   const createError: typeof import('../../node_modules/h3').createError
   const createEvent: typeof import('../../node_modules/h3').createEvent
@@ -265,6 +267,7 @@ declare global {
   const publishControlEscolarSnapshotFromBridge: typeof import('../../server/utils/control-escolar-cache').publishControlEscolarSnapshotFromBridge
   const query: typeof import('../../server/utils/db').query
   const queryExternalUsers: typeof import('../../server/utils/external-users').queryExternalUsers
+  const readAuthSessionToken: typeof import('../../server/utils/auth-session-token').readAuthSessionToken
   const readBestConceptosConfig: typeof import('../../server/utils/conceptos-config').readBestConceptosConfig
   const readBestConceptosConfigPayload: typeof import('../../server/utils/conceptos-config').readBestConceptosConfigPayload
   const readBestTalleresServiciosCatalog: typeof import('../../server/utils/talleres-servicios').readBestTalleresServiciosCatalog
@@ -327,6 +330,7 @@ declare global {
   const sendWebResponse: typeof import('../../node_modules/h3').sendWebResponse
   const serializeServicios: typeof import('../../server/utils/talleres-servicios').serializeServicios
   const serveStatic: typeof import('../../node_modules/h3').serveStatic
+  const setAuthSessionToken: typeof import('../../server/utils/auth-session-token').setAuthSessionToken
   const setCookie: typeof import('../../node_modules/h3').setCookie
   const setExternalApiResponseHeaders: typeof import('../../server/utils/external-api-auth').setExternalApiResponseHeaders
   const setHeader: typeof import('../../node_modules/h3').setHeader
@@ -363,6 +367,7 @@ declare global {
   const useSecureAuthCookies: typeof import('../../server/utils/auth-cookie-options').useSecureAuthCookies
   const useSession: typeof import('../../node_modules/h3').useSession
   const useStorage: typeof import('../../node_modules/nitropack/dist/runtime/internal/storage').useStorage
+  const verifyAuthSessionToken: typeof import('../../server/utils/auth-session-token').verifyAuthSessionToken
   const verifyImpersonationToken: typeof import('../../server/utils/impersonation-session').verifyImpersonationToken
   const warmExternalControlEscolarStudentScope: typeof import('../../server/utils/control-escolar-external-view').warmExternalControlEscolarStudentScope
   const warmExternalControlEscolarStudentScopes: typeof import('../../server/utils/control-escolar-external-view').warmExternalControlEscolarStudentScopes
@@ -376,6 +381,9 @@ declare global {
   // @ts-ignore
   export type { EventHandler, EventHandlerRequest, EventHandlerResponse, EventHandlerObject, H3EventContext } from '../../node_modules/h3'
   import('../../node_modules/h3')
+  // @ts-ignore
+  export type { SignedAuthSession } from '../../server/utils/auth-session-token'
+  import('../../server/utils/auth-session-token')
   // @ts-ignore
   export type { AuthRole, AuthSessionUser } from '../../server/utils/auth-session'
   import('../../server/utils/auth-session')
@@ -449,6 +457,7 @@ export { defineNitroErrorHandler } from 'nitropack/runtime/internal/error/utils'
 export { buildAssetsURL as __buildAssetsURL, publicAssetsURL as __publicAssetsURL } from 'C:/Users/hp/sistema-de-ingresos-2/node_modules/@nuxt/nitro-server/dist/runtime/utils/paths';
 export { defineAppConfig } from 'C:/Users/hp/sistema-de-ingresos-2/node_modules/@nuxt/nitro-server/dist/runtime/utils/config';
 export { useSecureAuthCookies, authCookieOptions } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/auth-cookie-options';
+export { createAuthSessionToken, verifyAuthSessionToken, readAuthSessionToken, setAuthSessionToken, clearAuthSessionToken } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/auth-session-token';
 export { CONTROL_ESCOLAR_ROLE, FINANCIAL_ADMIN_ROLE, normalizePlantel, parseRoles, hasRole, isSuperAdminRole, hasControlEscolarRole, hasFinancialAdminRole, normalizeAuthRole, isControlEscolarOnlyRole, parsePlanteles, getSuperAdminPlanteles, isValidPlantelScope, hasFinancialAccessForPlantel, getTrustedAuthUser, resolveDataBridgeAgentId } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/auth-session';
 export { generateBecaCartaPdf } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/becaCartaPdf';
 export { BECA_TYPE_OPTIONS, normalizeBecaTypes } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/becaTypes';

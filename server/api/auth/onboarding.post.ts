@@ -1,6 +1,7 @@
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { getTrustedAuthUser, hasFinancialAccessForPlantel, normalizePlantel } from '../../utils/auth-session'
 import { authCookieOptions } from '../../utils/auth-cookie-options'
+import { setAuthSessionToken } from '../../utils/auth-session-token'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -26,6 +27,14 @@ export default defineEventHandler(async (event) => {
   setCookie(event, 'auth_has_control_escolar', controlAccess ? 'true' : 'false', cookieOpts)
   setCookie(event, 'auth_nav_mode', financialAccess ? 'financial' : 'control-escolar', cookieOpts)
   setCookie(event, 'db_bridge_agent_id', activePlantel, cookieOpts)
+  setAuthSessionToken(event, {
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    planteles: allowedPlanteles.join(','),
+    activePlantel,
+    homePlantel: activePlantel
+  })
 
   return { success: true, activePlantel, financialAccess, redirectTo }
 })

@@ -57,7 +57,6 @@ export default defineEventHandler(async (event) => {
   event.context.auroraStage = 'authorization'
 
   const isControlEscolarEndpoint = url.pathname.startsWith('/api/control-escolar/')
-  const isSystemEndpoint = url.pathname.startsWith('/api/system/')
   const isDirectoryEndpoint = url.pathname.startsWith('/api/directory/')
   const isExternalUsersEndpoint = url.pathname === '/api/users' || url.pathname.startsWith('/api/users/')
   const isProfileEndpoint = url.pathname === '/api/admin/profile'
@@ -66,9 +65,6 @@ export default defineEventHandler(async (event) => {
     /^\/api\/students\/[^/]+\/matricula-overlay$/.test(url.pathname) ||
     /^\/api\/students\/[^/]+\/operator-info$/.test(url.pathname)
 
-  if (isSystemEndpoint) {
-    return
-  }
 
   if (isControlEscolarEndpoint) {
     if (!user.hasControlEscolarRole) {

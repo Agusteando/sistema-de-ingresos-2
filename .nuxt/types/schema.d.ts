@@ -71,6 +71,8 @@ import { NuxtModule, ModuleDependencyMeta } from '@nuxt/schema'
 
    studentPhotoApiKey: string,
 
+   authSessionSecret: string,
+
    authImpersonationSecret: string,
 
    localSystemMode: string,

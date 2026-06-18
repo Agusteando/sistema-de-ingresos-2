@@ -23,13 +23,10 @@ export const resolveClientAuthAccess = ({
   const hasControlRole = roles.includes('role_ctrl')
   const hasFinancialRole = roles.includes('role_admon')
 
-  const controlAccess = isSuperAdmin || authCookieFlagEnabled(hasControlEscolar) || hasControlRole
-  const financialAccess = isSuperAdmin
-    || authCookieFlagEnabled(hasFinancialAccess)
-    || hasFinancialRole
-    // Preserve the working behavior from ebe34bf: authenticated legacy roles
-    // were financial unless they were explicitly Control Escolar-only.
-    || (roles.length > 0 && !hasControlRole)
+  // Permission cookies are display hints only. The role is the client-side
+  // source of truth, while the backend enforces the signed session snapshot.
+  const controlAccess = isSuperAdmin || hasControlRole || (roles.length > 0 && !hasFinancialRole)
+  const financialAccess = isSuperAdmin || hasFinancialRole
 
   return {
     roles,

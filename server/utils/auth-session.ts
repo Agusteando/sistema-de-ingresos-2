@@ -1,5 +1,6 @@
 import { PLANTELES_LIST } from '../../utils/constants'
 import { verifyImpersonationToken } from './impersonation-session'
+import { readAuthSessionToken } from './auth-session-token'
 
 export type AuthRole = 'plantel' | 'superadmin' | string
 
@@ -23,7 +24,6 @@ export type AuthSessionUser = {
 const SUPERADMIN_ROLES = new Set(['superadmin'])
 export const CONTROL_ESCOLAR_ROLE = 'ROLE_CTRL'
 export const FINANCIAL_ADMIN_ROLE = 'ROLE_ADMON'
-const LEGACY_FINANCIAL_ROLE = 'plantel'
 const VALID_PLANTELES = new Set(PLANTELES_LIST)
 
 export const normalizePlantel = (value: unknown) => String(value || '').trim().toUpperCase()
@@ -47,10 +47,8 @@ export const hasControlEscolarRole = (role: unknown) => hasRole(role, CONTROL_ES
 export const hasFinancialAdminRole = (role: unknown) => hasRole(role, FINANCIAL_ADMIN_ROLE)
 
 /**
- * Keep the legacy financial role semantics from ebe34bf. Before ROLE_ADMON was
- * introduced, every authenticated non-ROLE_CTRL account used the financial
- * workspace. ROLE_ADMON is supported explicitly, but legacy role values are
- * intentionally preserved instead of being rewritten to ROLE_CTRL.
+ * Financial access is explicit. Unknown, empty and legacy roles are normalized
+ * to ROLE_CTRL so they fail closed and never inherit access to Finanzas.
  */
 export const normalizeAuthRole = (role: unknown) => {
   if (isSuperAdminRole(role)) return 'superadmin'
@@ -59,13 +57,7 @@ export const normalizeAuthRole = (role: unknown) => {
   const normalized: string[] = []
   if (hasControlEscolarRole(source.join(','))) normalized.push(CONTROL_ESCOLAR_ROLE)
   if (hasFinancialAdminRole(source.join(','))) normalized.push(FINANCIAL_ADMIN_ROLE)
-  if (normalized.length) return normalized.join(',')
-
-  const legacy = source
-    .map((entry) => String(entry || '').replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 80))
-    .find(Boolean)
-
-  return legacy || LEGACY_FINANCIAL_ROLE
+  return normalized.length ? normalized.join(',') : CONTROL_ESCOLAR_ROLE
 }
 
 export const isControlEscolarOnlyRole = (role: unknown) => {
@@ -92,16 +84,8 @@ export const hasFinancialAccessForPlantel = (
   if (!plantel || plantel === 'GLOBAL' || !VALID_PLANTELES.has(plantel)) return false
   if (!parsePlanteles(assignedPlanteles).includes(plantel)) return false
 
-  const normalized = normalizeAuthRole(role)
-  if (hasFinancialAdminRole(normalized)) return true
-  if (hasControlEscolarRole(normalized)) return false
-
-  // Legacy behavior from ebe34bf: any authenticated role that was not the
-  // dedicated Control Escolar role entered the financial workspace.
-  return true
+  return hasFinancialAdminRole(normalizeAuthRole(role))
 }
-
-const getCookiePlantel = (event: any, name: string) => normalizePlantel(getCookie(event, name))
 
 const firstText = (...values: unknown[]) => {
   for (const value of values) {
@@ -111,39 +95,47 @@ const firstText = (...values: unknown[]) => {
   return ''
 }
 
-const resolveCookiePlanteles = (event: any, superAdmin: boolean) => {
-  if (superAdmin) return [...PLANTELES_LIST]
-
-  const assigned = parsePlanteles(getCookie(event, 'auth_planteles'))
-  if (assigned.length) return assigned
-
-  // Preserve the old session fallback without granting a global scope. This is
-  // only used for legacy sessions created before auth_planteles existed.
-  const candidates = [
-    getCookiePlantel(event, 'auth_home_plantel'),
-    getCookiePlantel(event, 'auth_active_plantel'),
-    getCookiePlantel(event, 'db_bridge_agent_id')
-  ].filter((plantel) => VALID_PLANTELES.has(plantel))
-
-  return Array.from(new Set(candidates))
-}
-
 export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> => {
   if (event?.context?.trustedAuthUser) return event.context.trustedAuthUser as AuthSessionUser
 
-  const email = String(getCookie(event, 'auth_email') || '').trim().toLowerCase()
-  if (!email) throw createError({ statusCode: 401, message: 'Acceso no autorizado.' })
+  let signedSession: ReturnType<typeof readAuthSessionToken>
+  try {
+    signedSession = readAuthSessionToken(event)
+  } catch (error: any) {
+    if (Number(error?.statusCode || error?.status || 0) === 401) {
+      for (const cookieName of [
+        'auth_email',
+        'auth_name',
+        'auth_role',
+        'auth_planteles',
+        'auth_active_plantel',
+        'auth_home_plantel',
+        'auth_financial_planteles',
+        'auth_nav_mode',
+        'auth_has_control_escolar',
+        'auth_has_financial_access',
+        'db_bridge_agent_id'
+      ]) {
+        deleteCookie(event, cookieName, { path: '/' })
+      }
+    }
+    throw error
+  }
 
-  // Impersonation still has a signed expiration boundary. The target identity,
-  // role and planteles are the snapshot cookies written by the start endpoint.
+  // Impersonation keeps its own signed expiration boundary in addition to the
+  // signed effective-session snapshot.
   const impersonationToken = getCookie(event, 'auth_impersonation_token')
   if (impersonationToken) verifyImpersonationToken(impersonationToken)
 
-  const role = normalizeAuthRole(getCookie(event, 'auth_role') || LEGACY_FINANCIAL_ROLE)
+  const email = String(signedSession.email || '').trim().toLowerCase()
+  const role = normalizeAuthRole(signedSession.role)
   const roles = parseRoles(role)
   const superAdmin = isSuperAdminRole(role)
-  const allowedPlanteles = resolveCookiePlanteles(event, superAdmin)
+  const allowedPlanteles = superAdmin
+    ? [...PLANTELES_LIST]
+    : parsePlanteles(signedSession.planteles)
 
+  if (!email) throw createError({ statusCode: 401, message: 'Acceso no autorizado.' })
   if (!superAdmin && !allowedPlanteles.length) {
     throw createError({ statusCode: 403, message: 'La sesión no tiene un plantel asignado.' })
   }
@@ -152,16 +144,16 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
   if (!fallbackPlantel) throw createError({ statusCode: 500, message: 'No hay planteles configurados.' })
 
   const allowedSet = new Set(allowedPlanteles)
-  const cookieActive = getCookiePlantel(event, 'auth_active_plantel')
-  const activePlantel = cookieActive === 'GLOBAL' && superAdmin
+  const signedActive = normalizePlantel(signedSession.activePlantel)
+  const activePlantel = signedActive === 'GLOBAL' && superAdmin
     ? 'GLOBAL'
-    : cookieActive && allowedSet.has(cookieActive)
-      ? cookieActive
+    : signedActive && allowedSet.has(signedActive)
+      ? signedActive
       : fallbackPlantel
 
-  const cookieHome = getCookiePlantel(event, 'auth_home_plantel')
-  const homePlantel = cookieHome && allowedSet.has(cookieHome)
-    ? cookieHome
+  const signedHome = normalizePlantel(signedSession.homePlantel)
+  const homePlantel = signedHome && allowedSet.has(signedHome)
+    ? signedHome
     : (activePlantel !== 'GLOBAL' ? activePlantel : fallbackPlantel)
 
   if (!isValidPlantelScope(activePlantel)) {
@@ -180,7 +172,7 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
 
   const user: AuthSessionUser = {
     email,
-    name: firstText(getCookie(event, 'auth_name'), email),
+    name: firstText(signedSession.name, email),
     role,
     roles,
     planteles: allowedPlanteles.join(','),
@@ -201,9 +193,6 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
 
 export const resolveDataBridgeAgentId = (event: any, user: AuthSessionUser) => {
   if (user.active_plantel && user.active_plantel !== 'GLOBAL') return user.active_plantel
-
-  const bridgeAgent = getCookiePlantel(event, 'db_bridge_agent_id')
-  if (bridgeAgent && VALID_PLANTELES.has(bridgeAgent) && user.plantelesList.includes(bridgeAgent)) return bridgeAgent
 
   return user.auth_home_plantel || PLANTELES_LIST[0]
 }

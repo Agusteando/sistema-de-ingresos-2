@@ -2,6 +2,7 @@ import { runWithBridgeAgentId } from '../../utils/db'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { getTrustedAuthUser, hasFinancialAccessForPlantel, isValidPlantelScope, normalizePlantel } from '../../utils/auth-session'
 import { authCookieOptions } from '../../utils/auth-cookie-options'
+import { setAuthSessionToken } from '../../utils/auth-session-token'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
@@ -48,6 +49,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   setCookie(event, 'auth_has_financial_access', financialAccess ? 'true' : 'false', cookieOpts)
   deleteCookie(event, 'auth_is_super_admin', { path: '/' })
   setCookie(event, 'db_bridge_agent_id', dataBridgeAgentId, cookieOpts)
+  setAuthSessionToken(event, {
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    planteles: user.isSuperAdmin ? PLANTELES_LIST.join(',') : user.planteles,
+    activePlantel: requested,
+    homePlantel: user.auth_home_plantel || dataBridgeAgentId
+  })
 
   event.context.dbBridgeAgentId = dataBridgeAgentId
 

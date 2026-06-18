@@ -1,4 +1,7 @@
+import { clearAuthSessionToken } from '../../utils/auth-session-token'
+
 export default defineEventHandler((event) => {
+  clearAuthSessionToken(event)
   deleteCookie(event, 'auth_email', { path: '/' })
   deleteCookie(event, 'auth_name', { path: '/' })
   deleteCookie(event, 'auth_role', { path: '/' })

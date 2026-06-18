@@ -6,6 +6,7 @@ import {
   impersonationCookieOptions,
   verifyImpersonationToken
 } from '../../../utils/impersonation-session'
+import { setAuthSessionToken } from '../../../utils/auth-session-token'
 
 const SEEDED_SUPERADMIN_EMAILS = new Set([
   'desarrollo.tecnologico@casitaiedis.edu.mx',
@@ -53,6 +54,14 @@ export default defineEventHandler(async (event) => {
   setCookie(event, 'auth_has_financial_access', 'true', options)
   deleteCookie(event, 'auth_is_super_admin', { path: '/' })
   setCookie(event, 'db_bridge_agent_id', resolvedHomePlantel, options)
+  setAuthSessionToken(event, {
+    email,
+    name,
+    role: 'superadmin',
+    planteles: PLANTELES_LIST.join(','),
+    activePlantel,
+    homePlantel: resolvedHomePlantel
+  })
   clearImpersonationCookies(event)
 
   return { success: true, redirectTo: '/usuarios' }

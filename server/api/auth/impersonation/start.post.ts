@@ -10,6 +10,7 @@ import {
 import { findExternalAuthUserByEmail } from '../../../utils/external-users'
 import { checkBridgeAgentAvailability } from '../../../utils/db'
 import { createImpersonationToken, impersonatedAuthCookieOptions, impersonationCookieOptions } from '../../../utils/impersonation-session'
+import { setAuthSessionToken } from '../../../utils/auth-session-token'
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
 
@@ -111,6 +112,14 @@ export default defineEventHandler(async (event) => {
   setCookie(event, 'auth_has_financial_access', financialAccess ? 'true' : 'false', authOptions)
   deleteCookie(event, 'auth_is_super_admin', { path: '/' })
   setCookie(event, 'db_bridge_agent_id', activePlantel, authOptions)
+  setAuthSessionToken(event, {
+    email,
+    name: targetName,
+    role,
+    planteles: planteles.join(','),
+    activePlantel,
+    homePlantel: activePlantel
+  }, 60 * 60 * 8)
 
   return {
     success: true,

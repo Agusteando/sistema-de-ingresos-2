@@ -1,1 +1,1 @@
-Automatizar actualizaciones de Sistema Rápido desde Aurora
+Restringir el acceso financiero a ROLE_ADMON con sesión firmada
