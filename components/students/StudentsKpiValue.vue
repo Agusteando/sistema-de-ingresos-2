@@ -1,6 +1,6 @@
 <template>
   <div :class="['kpi-value-stage', { 'has-no-value': !hasDisplayText }]" aria-live="polite" :aria-label="ariaLabel">
-    <Transition :name="transitionName" mode="out-in">
+    <Transition :name="transitionName">
       <strong
         v-if="hasDisplayText"
         :key="animationKey"

@@ -1,1 +1,1 @@
-Evitar contadores cero cuando falla la carga de datos
+Preservar estilo original de KPI con animación de dígitos

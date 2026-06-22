@@ -396,18 +396,24 @@
   min-height: 1em;
 }
 
+/* Keep the pre-existing KPI typography/layout. The rolling effect is applied
+   only to each character, without changing the parent number styling. */
 .kpi-value-stage__value--rolling {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.01em;
-  font-variant-numeric: tabular-nums;
+  display: inline;
   white-space: nowrap;
-  perspective: 12em;
 }
 
 .kpi-value-stage__value--empty {
   min-width: 1.6ch;
   opacity: 0;
+}
+
+.section-kpi-card > .kpi-value-stage {
+  margin-left: auto;
+}
+
+.section-kpi-card .kpi-value-stage__value {
+  margin-left: 0;
 }
 
 .kpi-value-stage__char {
