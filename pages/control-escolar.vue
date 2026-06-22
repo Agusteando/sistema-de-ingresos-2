@@ -71,7 +71,7 @@
           <span class="kpi-icon"><component :is="item.icon" :size="24" /></span>
           <span class="kpi-text">
             <span>{{ item.label }}</span>
-            <StudentsKpiValue :value="item.value" />
+            <StudentsKpiValue as="strong" :value="item.value" />
           </span>
           <span class="ce-kpi-mass" :aria-label="item.volumeAria">
             <i

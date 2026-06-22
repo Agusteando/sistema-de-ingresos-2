@@ -1,1 +1,1 @@
-Preservar apariencia exacta de KPI con dígitos rodantes
+Preservar DOM original de KPI con animación overlay

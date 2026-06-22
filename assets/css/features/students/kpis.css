@@ -259,7 +259,7 @@
   z-index: 1;
 }
 
-.kpi-summary-system.is-refreshing .kpi-card .kpi-text span {
+.kpi-summary-system.is-refreshing .kpi-card .kpi-text > span {
   animation: kpi-refresh-label-breathe 2.55s ease-in-out infinite;
 }
 
@@ -392,35 +392,23 @@
   }
 }
 
-
 .kpi-value-stage.has-no-value {
   min-height: 1em;
 }
 
-/* Resting state keeps the original KPI number rendering: one text run inside
-   the original strong element. The rolling layer appears only during the
-   animation and inherits the old number typography. */
-.kpi-value-stage__value {
+.kpi-value-stage__value,
+.kpi-value-strong {
   position: relative;
 }
 
-.students-kpi-value-up-leave-active.kpi-value-stage__value,
-.students-kpi-value-down-leave-active.kpi-value-stage__value {
-  position: absolute;
-}
-
-.kpi-value-stage__plain {
-  display: inline;
-}
-
-.kpi-value-stage__plain.is-roll-hidden {
+.kpi-value-stage__value--empty,
+.kpi-value-strong.has-no-value {
   opacity: 0;
 }
 
-.kpi-value-stage__roll {
+.kpi-digit-roll-overlay {
   position: absolute;
   inset: 0 auto auto 0;
-  display: inline;
   white-space: nowrap;
   pointer-events: none;
   color: currentColor;
@@ -431,54 +419,25 @@
   line-height: inherit;
 }
 
-.kpi-value-stage__value--empty {
-  min-width: 1.6ch;
-  opacity: 0;
-}
-
-.section-kpi-card > .kpi-value-stage {
-  display: contents;
-}
-
-.kpi-value-stage__char {
+.kpi-digit-roll-char {
   display: inline-block;
   transform-origin: 50% 70%;
   animation: kpi-digit-roll 540ms cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: calc(min(var(--kpi-char-index), 10) * 28ms);
 }
 
-.kpi-value-stage__char:not(.is-digit) {
+.kpi-digit-roll-char:not(.is-digit) {
   animation-name: kpi-symbol-fade-in;
-}
-
-.students-kpi-value-down-enter-active .kpi-value-stage__char.is-digit,
-.students-kpi-value-down-enter-from .kpi-value-stage__char.is-digit {
-  animation-name: kpi-digit-roll-down;
 }
 
 @keyframes kpi-digit-roll {
   0% {
     opacity: 0;
-    transform: translateY(0.72em) rotateX(-82deg) scale(0.96);
+    transform: translateY(calc(0.72em * var(--kpi-roll-direction, 1))) rotateX(calc(-82deg * var(--kpi-roll-direction, 1))) scale(0.96);
   }
   58% {
     opacity: 1;
-    transform: translateY(-0.08em) rotateX(10deg) scale(1.01);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) rotateX(0deg) scale(1);
-  }
-}
-
-@keyframes kpi-digit-roll-down {
-  0% {
-    opacity: 0;
-    transform: translateY(-0.72em) rotateX(82deg) scale(0.96);
-  }
-  58% {
-    opacity: 1;
-    transform: translateY(0.08em) rotateX(-10deg) scale(1.01);
+    transform: translateY(calc(-0.08em * var(--kpi-roll-direction, 1))) rotateX(calc(10deg * var(--kpi-roll-direction, 1))) scale(1.01);
   }
   100% {
     opacity: 1;
@@ -492,14 +451,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kpi-value-stage__plain.is-roll-hidden {
-    opacity: 1;
-  }
-
-  .kpi-value-stage__roll,
-  .kpi-value-stage__char,
-  .students-kpi-value-down-enter-active .kpi-value-stage__char.is-digit,
-  .students-kpi-value-down-enter-from .kpi-value-stage__char.is-digit {
+  .kpi-digit-roll-overlay,
+  .kpi-digit-roll-char {
     animation: none;
     display: none;
   }

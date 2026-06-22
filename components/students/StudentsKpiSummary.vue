@@ -35,7 +35,7 @@
       >
         <span class="section-kpi-icon"><LucideTag :size="14" /></span>
         <span class="section-kpi-name">{{ section.name }}</span>
-        <StudentsKpiValue :value="dataAvailable ? (customSectionCounts[section.id] ?? 0) : null" />
+        <StudentsKpiValue as="strong" :value="dataAvailable ? (customSectionCounts[section.id] ?? 0) : null" />
       </button>
     </div>
   </section>

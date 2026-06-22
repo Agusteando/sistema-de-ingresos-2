@@ -1,21 +1,28 @@
 <template>
-  <div :class="['kpi-value-stage', { 'has-no-value': !hasDisplayText }]" aria-live="polite" :aria-label="ariaLabel">
+  <strong
+    v-if="asStrong"
+    :class="['kpi-value-strong', { 'has-no-value': !hasDisplayText }]"
+    aria-live="polite"
+    :aria-label="ariaLabel"
+    :aria-hidden="hasDisplayText ? undefined : 'true'"
+  >{{ hasDisplayText ? displayText : '\u00a0' }}<span v-if="rollingActive && hasDisplayText" class="kpi-digit-roll-overlay" aria-hidden="true"><span
+      v-for="(char, index) in displayChars"
+      :key="`${animationVersion}-${index}-${char}`"
+      :class="['kpi-digit-roll-char', { 'is-digit': isDigit(char) }]"
+      :style="{ '--kpi-char-index': index, '--kpi-roll-direction': rollDirection }"
+    >{{ char }}</span></span></strong>
+  <div v-else :class="['kpi-value-stage', { 'has-no-value': !hasDisplayText }]" aria-live="polite" :aria-label="ariaLabel">
     <Transition :name="transitionName">
       <strong
         v-if="hasDisplayText"
-        :key="animationKey"
+        :key="displayText"
         class="kpi-value-stage__value"
-      >
-        <span :class="['kpi-value-stage__plain', { 'is-roll-hidden': rollingActive }]">{{ displayText }}</span>
-        <span v-if="rollingActive" class="kpi-value-stage__roll" aria-hidden="true">
-          <span
-            v-for="(char, index) in displayChars"
-            :key="`${animationKey}-${index}-${char}`"
-            :class="['kpi-value-stage__char', { 'is-digit': isDigit(char) }]"
-            :style="{ '--kpi-char-index': index }"
-          >{{ char }}</span>
-        </span>
-      </strong>
+      >{{ displayText }}<span v-if="rollingActive" class="kpi-digit-roll-overlay" aria-hidden="true"><span
+          v-for="(char, index) in displayChars"
+          :key="`${animationVersion}-${index}-${char}`"
+          :class="['kpi-digit-roll-char', { 'is-digit': isDigit(char) }]"
+          :style="{ '--kpi-char-index': index, '--kpi-roll-direction': rollDirection }"
+        >{{ char }}</span></span></strong>
       <strong v-else key="empty" class="kpi-value-stage__value kpi-value-stage__value--empty" aria-hidden="true">&nbsp;</strong>
     </Transition>
   </div>
@@ -25,7 +32,8 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 const props = defineProps({
-  value: { type: [Number, String], default: null }
+  value: { type: [Number, String], default: null },
+  as: { type: String, default: 'stage' }
 })
 
 const isBlankValue = (value) => value === null || value === undefined || value === ''
@@ -33,6 +41,7 @@ const displayText = computed(() => isBlankValue(props.value) ? '' : String(props
 const hasDisplayText = computed(() => displayText.value.length > 0)
 const displayChars = computed(() => displayText.value.split(''))
 const ariaLabel = computed(() => hasDisplayText.value ? displayText.value : 'Sin dato disponible')
+const asStrong = computed(() => props.as === 'strong')
 const direction = ref('up')
 const animationVersion = ref(0)
 const rollingActive = ref(false)
@@ -89,5 +98,5 @@ watch(
 onBeforeUnmount(stopRollingTimer)
 
 const transitionName = computed(() => direction.value === 'down' ? 'students-kpi-value-down' : 'students-kpi-value-up')
-const animationKey = computed(() => `${transitionName.value}-${animationVersion.value}-${displayText.value}`)
+const rollDirection = computed(() => direction.value === 'down' ? '-1' : '1')
 </script>
