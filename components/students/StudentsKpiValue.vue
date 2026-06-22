@@ -1,30 +1,58 @@
 <template>
   <strong
     v-if="asStrong"
-    :class="['kpi-value-strong', { 'has-no-value': !hasDisplayText }]"
+    :class="['kpi-value-strong', { 'has-no-value': !hasDisplayText, 'is-rolling': rollingActive && hasDisplayText }]"
     aria-live="polite"
     :aria-label="ariaLabel"
     :aria-hidden="hasDisplayText ? undefined : 'true'"
-  >{{ hasDisplayText ? displayText : '\u00a0' }}<span v-if="rollingActive && hasDisplayText" class="kpi-digit-roll-overlay" aria-hidden="true"><span
-      v-for="(char, index) in displayChars"
-      :key="`${animationVersion}-${index}-${char}`"
-      :class="['kpi-digit-roll-char', { 'is-digit': isDigit(char) }]"
-      :style="{ '--kpi-char-index': index, '--kpi-roll-direction': rollDirection }"
-    >{{ char }}</span></span></strong>
+  >
+    <b class="kpi-value-static">{{ hasDisplayText ? displayText : '\u00a0' }}</b>
+    <b v-if="rollingActive && hasDisplayText" class="kpi-digit-roll-overlay" aria-hidden="true">
+      <b
+        v-for="(char, index) in rollingChars"
+        :key="`${animationVersion}-${index}-${char.value}`"
+        :class="['kpi-digit-roll-char', { 'is-digit': char.isDigit }]"
+        :style="{ '--kpi-char-index': index }"
+      >
+        <b class="kpi-digit-roll-sizer">{{ char.value }}</b>
+        <b v-if="char.isDigit" class="kpi-digit-roll-window">
+          <b class="kpi-digit-roll-track" :style="{ '--kpi-roll-steps': char.sequence.length - 1 }">
+            <b v-for="(digit, digitIndex) in char.sequence" :key="`${animationVersion}-${index}-${digitIndex}`">{{ digit }}</b>
+          </b>
+        </b>
+        <b v-else class="kpi-digit-roll-symbol">{{ char.value }}</b>
+      </b>
+    </b>
+  </strong>
   <div v-else :class="['kpi-value-stage', { 'has-no-value': !hasDisplayText }]" aria-live="polite" :aria-label="ariaLabel">
-    <Transition :name="transitionName">
-      <strong
-        v-if="hasDisplayText"
-        :key="displayText"
-        class="kpi-value-stage__value"
-      >{{ displayText }}<span v-if="rollingActive" class="kpi-digit-roll-overlay" aria-hidden="true"><span
-          v-for="(char, index) in displayChars"
-          :key="`${animationVersion}-${index}-${char}`"
-          :class="['kpi-digit-roll-char', { 'is-digit': isDigit(char) }]"
-          :style="{ '--kpi-char-index': index, '--kpi-roll-direction': rollDirection }"
-        >{{ char }}</span></span></strong>
-      <strong v-else key="empty" class="kpi-value-stage__value kpi-value-stage__value--empty" aria-hidden="true">&nbsp;</strong>
-    </Transition>
+    <strong
+      :class="[
+        'kpi-value-stage__value',
+        {
+          'kpi-value-stage__value--empty': !hasDisplayText,
+          'is-rolling': rollingActive && hasDisplayText
+        }
+      ]"
+      :aria-hidden="hasDisplayText ? undefined : 'true'"
+    >
+      <b class="kpi-value-static">{{ hasDisplayText ? displayText : '\u00a0' }}</b>
+      <b v-if="rollingActive && hasDisplayText" class="kpi-digit-roll-overlay" aria-hidden="true">
+        <b
+          v-for="(char, index) in rollingChars"
+          :key="`${animationVersion}-${index}-${char.value}`"
+          :class="['kpi-digit-roll-char', { 'is-digit': char.isDigit }]"
+          :style="{ '--kpi-char-index': index }"
+        >
+          <b class="kpi-digit-roll-sizer">{{ char.value }}</b>
+          <b v-if="char.isDigit" class="kpi-digit-roll-window">
+            <b class="kpi-digit-roll-track" :style="{ '--kpi-roll-steps': char.sequence.length - 1 }">
+              <b v-for="(digit, digitIndex) in char.sequence" :key="`${animationVersion}-${index}-${digitIndex}`">{{ digit }}</b>
+            </b>
+          </b>
+          <b v-else class="kpi-digit-roll-symbol">{{ char.value }}</b>
+        </b>
+      </b>
+    </strong>
   </div>
 </template>
 
@@ -48,6 +76,25 @@ const rollingActive = ref(false)
 let rollingTimer = null
 
 const isDigit = (char) => /\d/.test(String(char || ''))
+const moduloDigit = (value) => ((value % 10) + 10) % 10
+
+const buildDigitSequence = (char, index) => {
+  const finalDigit = Number(char)
+  const steps = 8 + (index % 3)
+  return Array.from({ length: steps + 1 }, (_, stepIndex) => {
+    const offset = steps - stepIndex
+    const nextDigit = direction.value === 'down'
+      ? moduloDigit(finalDigit + offset)
+      : moduloDigit(finalDigit - offset)
+    return String(nextDigit)
+  })
+}
+
+const rollingChars = computed(() => displayChars.value.map((char, index) => ({
+  value: char,
+  isDigit: isDigit(char),
+  sequence: isDigit(char) ? buildDigitSequence(char, index) : [char]
+})))
 
 const stopRollingTimer = () => {
   if (!rollingTimer) return
@@ -65,7 +112,7 @@ const triggerRolling = () => {
   rollingTimer = setTimeout(() => {
     rollingActive.value = false
     rollingTimer = null
-  }, 720)
+  }, 1580)
 }
 
 const toComparableNumber = (value) => {
@@ -96,7 +143,4 @@ watch(
 )
 
 onBeforeUnmount(stopRollingTimer)
-
-const transitionName = computed(() => direction.value === 'down' ? 'students-kpi-value-down' : 'students-kpi-value-up')
-const rollDirection = computed(() => direction.value === 'down' ? '-1' : '1')
 </script>

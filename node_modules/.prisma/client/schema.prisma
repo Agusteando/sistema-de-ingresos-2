@@ -1,0 +1,310 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Alumnos {
+  matricula       Int    @id @default(autoincrement())
+  nombreCompleto  String @db.VarChar(255)
+  apellidoPaterno String @db.VarChar(255)
+  apellidoMaterno String @db.VarChar(255)
+  nombres         String @db.VarChar(255)
+  genero          String @db.VarChar(255)
+  nacimiento      String @db.VarChar(255)
+  grupo           String @db.VarChar(255)
+  telefono        String @db.VarChar(255)
+  correo          String @db.VarChar(255)
+  plantel         String @db.VarChar(255)
+  contratos       String @db.LongText
+
+  @@map("alumnos")
+}
+
+model Base {
+  id              Int      @id @default(autoincrement())
+  matricula       String   @db.VarChar(255)
+  nombreCompleto  String   @db.VarChar(255)
+  apellidoPaterno String   @db.VarChar(255)
+  apellidoMaterno String   @db.VarChar(255)
+  nombres         String   @db.VarChar(255)
+  genero          Boolean  @default(true)
+  fechaNacimiento String   @map("Fecha de nacimiento") @db.VarChar(255)
+  plantel         String   @db.VarChar(255)
+  nivel           String   @db.VarChar(255)
+  grado           String   @db.VarChar(255)
+  grupo           String   @db.VarChar(255)
+  padreTutor      String   @map("Nombre del padre o tutor") @db.VarChar(255)
+  telefono        String   @db.VarChar(255)
+  correo          String   @db.VarChar(255)
+  usuario         String   @db.VarChar(255)
+  estatus         String   @default("Activo") @db.VarChar(255)
+  contingencia    Boolean? @default(false)
+  ciclo           String?  @db.VarChar(255)
+  interno         Boolean? @default(true)
+
+  @@map("base")
+}
+
+model Becas {
+  id         Int    @id @default(autoincrement())
+  concepto   String @unique(map: "id") @db.VarChar(255)
+  porcentaje Int
+  plantel    String @default("global") @db.VarChar(255)
+  autor      String @db.VarChar(255)
+
+  @@map("becas")
+}
+
+model CiclosEscolares {
+  id            Int     @id @default(autoincrement())
+  ciclo_escolar String? @db.VarChar(255)
+
+  @@map("ciclos_escolares")
+}
+
+model Conceptos {
+  id          Int     @id @default(autoincrement())
+  concepto    String  @db.VarChar(255)
+  costo       Int
+  description String? @db.VarChar(255)
+  plantel     String  @default("global") @db.VarChar(255)
+  eventual    Boolean @default(true)
+  plazo       String  @default("[1]") @db.VarChar(255)
+  ciclo       String  @db.VarChar(255)
+
+  @@map("conceptos")
+}
+
+model Documentos {
+  documento      Int      @id @default(autoincrement())
+  concepto       String   @db.VarChar(255)
+  conceptoNombre String   @db.VarChar(255)
+  matricula      String   @db.VarChar(255)
+  costo          Int
+  plazo          String   @db.Text
+  meses          String?  @default("1") @db.VarChar(11)
+  anual          Int?
+  beca           String?  @db.VarChar(255)
+  becaNombre     String?  @db.VarChar(255)
+  fecha          DateTime @default(now()) @db.DateTime(0)
+  ciclo          String   @default("2019") @db.VarChar(255)
+  eventual       Boolean  @default(false)
+  responsable    String   @db.VarChar(255)
+  estatus        String   @default("Vigente") @db.VarChar(255)
+  contingencia   Boolean? @default(false)
+
+  @@map("documentos")
+}
+
+model Facturas {
+  id            Int       @id @default(autoincrement())
+  matricula     String    @db.VarChar(50)
+  rfc           String    @db.VarChar(20)
+  razonSocial   String    @db.VarChar(255)
+  regimenFiscal String?   @db.VarChar(10)
+  usoCfdi       String?   @db.VarChar(10)
+  cp            String?   @db.VarChar(10)
+  correo        String?   @db.VarChar(255)
+  total         Decimal   @db.Decimal(10, 2)
+  folios        String    @db.Text
+  fecha         DateTime? @default(now()) @db.DateTime(0)
+
+  @@map("facturas")
+}
+
+model FormasPago {
+  id    Int    @id @default(autoincrement())
+  forma String @db.VarChar(255)
+
+  @@map("formaspago")
+}
+
+model Modificadores {
+  id          Int      @id @default(autoincrement())
+  documento   Int
+  mes         String?  @db.VarChar(255)
+  recargo     Boolean? @default(false)
+  formaDePago Int?
+  uid         String?  @unique(map: "id") @db.VarChar(255)
+
+  @@map("modificadores")
+}
+
+model Notificaciones {
+  id        Int      @id @default(autoincrement())
+  fecha     DateTime @default(now()) @db.DateTime(0)
+  mensaje   String   @db.VarChar(255)
+  usuarioId Int
+  leido     Boolean  @default(false)
+
+  @@map("notificaciones")
+}
+
+model Preview {
+  folio          Int      @id @unique(map: "folio") @default(autoincrement())
+  folio_plantel  String?  @db.VarChar(255)
+  fecha          DateTime @default(now()) @db.Timestamp(0)
+  matricula      String   @db.VarChar(255)
+  documento      Int
+  mes            String   @db.VarChar(255)
+  mesReal        String?  @db.VarChar(50)
+  nombreCompleto String   @db.VarChar(255)
+  concepto       String   @db.VarChar(255)
+  conceptoNombre String   @db.VarChar(255)
+  monto          Decimal  @db.Decimal(65, 2)
+  montoLetra     String   @db.VarChar(255)
+  importeTotal   Decimal  @db.Decimal(65, 2)
+  saldoAntes     Decimal  @db.Decimal(65, 2)
+  saldoDespues   Decimal  @db.Decimal(65, 2)
+  pagos          Decimal  @db.Decimal(65, 2)
+  pagosDespues   Decimal  @db.Decimal(65, 2)
+  recargo        Boolean  @default(false)
+  referencia     String?  @db.VarChar(255)
+  usuario        String   @db.VarChar(255)
+  usuarioId      Int?
+  formaDePago    String   @db.VarChar(255)
+  plantel        String?  @db.VarChar(50)
+  instituto      String?  @default("1") @db.VarChar(55)
+  ciclo          String   @default("2019-2020") @db.VarChar(255)
+  estatus        String   @default("Vigente") @db.VarChar(255)
+  cancelada_por  String?  @db.VarChar(255)
+  base64         Bytes?
+  filename       String?  @db.VarChar(255)
+
+  @@map("preview")
+}
+
+model ReferenciasDePago {
+  folio          Int      @id @unique(map: "folio") @default(autoincrement())
+  fecha          DateTime @default(now()) @db.Timestamp(0)
+  matricula      String   @db.VarChar(255)
+  documento      Int
+  mes            String   @db.VarChar(255)
+  mesReal        String?  @db.VarChar(50)
+  nombreCompleto String   @db.VarChar(255)
+  concepto       String   @db.VarChar(255)
+  conceptoNombre String   @db.VarChar(255)
+  monto          Decimal  @db.Decimal(65, 2)
+  montoLetra     String   @db.VarChar(255)
+  importeTotal   Decimal  @db.Decimal(65, 2)
+  saldoAntes     Decimal  @db.Decimal(65, 2)
+  saldoDespues   Decimal  @db.Decimal(65, 2)
+  pagos          Decimal  @db.Decimal(65, 2)
+  pagosDespues   Decimal  @db.Decimal(65, 2)
+  recargo        Boolean  @default(false)
+  referencia     String?  @db.VarChar(255)
+  usuario        String   @db.VarChar(255)
+  usuarioId      Int?
+  formaDePago    String   @db.VarChar(255)
+  plantel        String?  @db.VarChar(50)
+  instituto      Boolean? @default(true)
+  ciclo          String   @default("") @db.VarChar(255)
+  estatus        String   @default("Vigente") @db.VarChar(255)
+  contingencia   Boolean? @default(false)
+  cancelada_por  String?  @db.VarChar(255)
+  base64         Bytes?
+  filename       String?  @db.VarChar(255)
+  folio_plantel  String?  @db.VarChar(255)
+  aplicable      String?  @db.VarChar(255)
+
+  @@map("referenciasdepago")
+}
+
+model SolicitudesCancelaciones {
+  id             Int      @id @default(autoincrement())
+  fecha          DateTime @default(now()) @db.DateTime(0)
+  folio          Int
+  motivo         String   @db.Text
+  monto          Int
+  nombreCompleto String   @db.VarChar(255)
+  conceptoNombre String   @db.VarChar(255)
+  usuario        String   @db.VarChar(255)
+  usuarioId      Int
+  revisado_por   String?  @db.VarChar(255)
+  status         String   @default("pendiente") @db.VarChar(255)
+
+  @@map("solicitudescancelaciones")
+}
+
+model Users {
+  id         Int       @id @default(autoincrement())
+  username   String    @unique(map: "username") @db.VarChar(50)
+  password   String    @db.VarChar(255)
+  plantel    String    @db.VarChar(255)
+  created_at DateTime? @default(now()) @db.DateTime(0)
+  avatar     String?   @db.VarChar(255)
+  email      String?   @db.VarChar(255)
+  role       String    @default("plantel") @db.VarChar(20)
+  planteles  String?   @db.Text
+
+  @@map("users")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model base2 {
+  id                       Int      @default(0)
+  matricula                String   @db.VarChar(255)
+  nombreCompleto           String   @db.VarChar(255)
+  apellidoPaterno          String   @db.VarChar(255)
+  apellidoMaterno          String   @db.VarChar(255)
+  nombres                  String   @db.VarChar(255)
+  genero                   Boolean  @default(true)
+  Fecha_de_nacimiento      String   @map("Fecha de nacimiento") @db.VarChar(255)
+  plantel                  String   @db.VarChar(255)
+  nivel                    String   @db.VarChar(255)
+  grado                    String   @db.VarChar(255)
+  grupo                    String   @db.VarChar(255)
+  Nombre_del_padre_o_tutor String   @map("Nombre del padre o tutor") @db.VarChar(255)
+  telefono                 String   @db.VarChar(255)
+  correo                   String   @db.VarChar(255)
+  usuario                  String   @db.VarChar(255)
+  estatus                  String   @default("Activo") @db.VarChar(255)
+  contingencia             Boolean? @default(false)
+  ciclo                    String?  @db.VarChar(255)
+  interno                  Boolean? @default(true)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ingresos {
+  folio          Int      @default(0)
+  fecha          DateTime @default(now()) @db.Timestamp(0)
+  matricula      String   @db.VarChar(255)
+  documento      Int
+  mes            String   @db.VarChar(255)
+  mesReal        String?  @db.VarChar(50)
+  nombreCompleto String   @db.VarChar(255)
+  concepto       String   @db.VarChar(255)
+  conceptoNombre String   @db.VarChar(255)
+  monto          Decimal  @db.Decimal(65, 2)
+  montoLetra     String   @db.VarChar(255)
+  importeTotal   Decimal  @db.Decimal(65, 2)
+  saldoAntes     Decimal  @db.Decimal(65, 2)
+  saldoDespues   Decimal  @db.Decimal(65, 2)
+  pagos          Decimal  @db.Decimal(65, 2)
+  pagosDespues   Decimal  @db.Decimal(65, 2)
+  recargo        Boolean  @default(false)
+  referencia     String?  @db.VarChar(255)
+  usuario        String   @db.VarChar(255)
+  usuarioId      Int?
+  formaDePago    String   @db.VarChar(255)
+  plantel        String?  @db.VarChar(50)
+  instituto      Boolean? @default(true)
+  ciclo          String   @default("") @db.VarChar(255)
+  estatus        String   @default("Vigente") @db.VarChar(255)
+  contingencia   Boolean? @default(false)
+  cancelada_por  String?  @db.VarChar(255)
+  base64         Bytes?
+  filename       String?  @db.VarChar(255)
+  folio_plantel  String?  @db.VarChar(255)
+  aplicable      String?  @db.VarChar(255)
+
+  @@ignore
+}
