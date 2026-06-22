@@ -428,6 +428,44 @@ const tipoIngresoConcepts = ref([])
 const ENROLLMENT_CONCEPTS_CACHE_BASE_KEY = 'students-enrollment-concepts:v3'
 const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
 const currentPlantelKey = computed(() => normalizeEnrollmentPlantelKey(activePlantelCookie.value || 'GLOBAL') || 'GLOBAL')
+const sessionRedirecting = ref(false)
+const PUBLIC_AUTH_COOKIE_NAMES = [
+  'auth_email',
+  'auth_name',
+  'auth_role',
+  'auth_planteles',
+  'auth_active_plantel',
+  'auth_home_plantel',
+  'auth_financial_planteles',
+  'auth_nav_mode',
+  'auth_has_control_escolar',
+  'auth_has_financial_access',
+  'auth_is_super_admin',
+  'db_bridge_agent_id'
+]
+
+const clearVisibleAuthCookies = () => {
+  if (!process.client) return
+  for (const cookieName of PUBLIC_AUTH_COOKIE_NAMES) useCookie(cookieName).value = null
+}
+
+const isAuthSessionDiagnostic = (diagnostic = {}) => {
+  const status = Number(diagnostic.status || 0)
+  const code = String(diagnostic.code || '').toUpperCase()
+  const message = String(diagnostic.message || '')
+  return status === 401 || code.startsWith('AUTH_SESSION_') || /sesión|session|autorizado|authorized/i.test(message)
+}
+
+const handleApiSessionError = (scope, error, extra = {}) => {
+  const diagnostic = logApiDiagnostic(scope, error, extra)
+  if (!isAuthSessionDiagnostic(diagnostic)) return false
+  if (!sessionRedirecting.value) {
+    sessionRedirecting.value = true
+    clearVisibleAuthCookies()
+    navigateTo({ path: '/login', query: { session: 'expired' } })
+  }
+  return true
+}
 const enrollmentConceptsCacheKey = computed(() => `${ENROLLMENT_CONCEPTS_CACHE_BASE_KEY}:${currentCicloKey.value}:${currentPlantelKey.value}`)
 
 const verifyFinancialBridgeBeforeInitialLoad = async () => {
@@ -463,6 +501,10 @@ const verifyFinancialBridgeBeforeInitialLoad = async () => {
     return false
   } catch (error) {
     const diagnostic = logApiDiagnostic('financial.preflight', error, { plantel, agentId: plantel })
+    if (isAuthSessionDiagnostic(diagnostic)) {
+      handleApiSessionError('financial.preflight', error, { plantel, agentId: plantel })
+      return false
+    }
     setStudentsSyncState({
       status: 'unavailable',
       message: 'No se pudo verificar la conexión del plantel. Se detuvo la carga automática para evitar múltiples errores.',
@@ -1042,7 +1084,7 @@ const loadKpiSparklines = async () => {
       ingresos: Array.isArray(res?.ingresos) ? res.ingresos : []
     }
   } catch (e) {
-    logApiDiagnostic('students.kpi-trends', e, { endpoint: '/api/students/kpi-trends', plantel: currentPlantelKey.value, ciclo: currentCicloKey.value })
+    if (handleApiSessionError('students.kpi-trends', e, { endpoint: '/api/students/kpi-trends', plantel: currentPlantelKey.value, ciclo: currentCicloKey.value })) return
     if (requestId === kpiSparklineRequestId) paymentKpiSparklines.value = { inscritos: [], internos: [], externos: [], ingresos: [] }
   } finally {
     endKpiRefreshScope(refreshToken)
@@ -1168,7 +1210,7 @@ const loadGlobalKpis = async () => {
     const res = await $fetch('/api/dashboard/kpis', { retry: 0, params: { ciclo: cicloKey, concepts: externalConcepts.value.join(','), tipoConcepts: tipoIngresoConcepts.value.join(',') } })
     globalKpis.value.ingresosMes = res.ingresosMes || 0
   } catch(e) {
-    logApiDiagnostic('dashboard.kpis', e, { endpoint: '/api/dashboard/kpis', plantel: currentPlantelKey.value, ciclo: currentCicloKey.value })
+    handleApiSessionError('dashboard.kpis', e, { endpoint: '/api/dashboard/kpis', plantel: currentPlantelKey.value, ciclo: currentCicloKey.value })
   } finally {
     endKpiRefreshScope(refreshToken)
   }
@@ -1669,7 +1711,7 @@ const performSearch = async (options = {}) => {
     })
   } catch (e) {
     if (requestId !== studentsRequestId) return
-    logApiDiagnostic('students.load', e, { endpoint: '/api/students', plantel: currentPlantelKey.value, ciclo: cicloKey })
+    if (handleApiSessionError('students.load', e, { endpoint: '/api/students', plantel: currentPlantelKey.value, ciclo: cicloKey })) return
     trace.status = hasCachedStudents || hadStudents ? 'failed' : 'unavailable'
     trace.statusLabel = financialStatusLabel(trace.status)
     trace.totalMs = Math.max(0, Math.round(financialNow() - startedAt))
@@ -2298,8 +2340,9 @@ const loadEnrollmentConfig = async ({ refreshStudents = false, refreshKpis = tru
     const configData = await $fetch('/api/conceptos-config/all', { retry: 0 })
     parseEnrollmentConfig(configData)
   } catch (e) {
-    logApiDiagnostic('enrollment-config.load', e, { endpoint: '/api/conceptos-config/all', plantel: currentPlantelKey.value, ciclo: currentCicloKey.value })
-    console.warn('Fallback al carecer de configuración externa.')
+    if (!handleApiSessionError('enrollment-config.load', e, { endpoint: '/api/conceptos-config/all', plantel: currentPlantelKey.value, ciclo: currentCicloKey.value })) {
+      console.warn('Fallback al carecer de configuración externa.')
+    }
   } finally {
     endKpiRefreshScope(refreshToken)
   }

@@ -636,6 +636,9 @@ const initializeGoogle = () => {
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
+  if (route.query.session === 'expired') {
+    errorMsg.value = 'Tu sesión expiró o ya no es válida. Inicia sesión nuevamente para cargar los datos.'
+  }
   loadPersistedPlantel()
   loadPlantelStatuses({ force: true, plantel: selectedPlantel.value })
   loadLoginUpdates()

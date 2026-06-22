@@ -1,6 +1,6 @@
 import { PLANTELES_LIST } from '../../utils/constants'
 import { verifyImpersonationToken } from './impersonation-session'
-import { readAuthSessionToken } from './auth-session-token'
+import { clearAuthSessionToken, readAuthSessionToken } from './auth-session-token'
 
 export type AuthRole = 'plantel' | 'superadmin' | string
 
@@ -102,7 +102,8 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
   try {
     signedSession = readAuthSessionToken(event)
   } catch (error: any) {
-    if (Number(error?.statusCode || error?.status || 0) === 401) {
+    if ([401, 403].includes(Number(error?.statusCode || error?.status || 0))) {
+      clearAuthSessionToken(event)
       for (const cookieName of [
         'auth_email',
         'auth_name',
@@ -114,6 +115,7 @@ export const getTrustedAuthUser = async (event: any): Promise<AuthSessionUser> =
         'auth_nav_mode',
         'auth_has_control_escolar',
         'auth_has_financial_access',
+        'auth_is_super_admin',
         'db_bridge_agent_id'
       ]) {
         deleteCookie(event, cookieName, { path: '/' })

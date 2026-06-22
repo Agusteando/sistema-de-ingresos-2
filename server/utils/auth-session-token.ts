@@ -75,21 +75,21 @@ export const verifyAuthSessionToken = (value: unknown): SignedAuthSession => {
   const token = String(value || '').trim()
   const [encodedPayload, receivedSignature, ...extra] = token.split('.')
   if (!encodedPayload || !receivedSignature || extra.length) {
-    throw createError({ statusCode: 401, message: 'La sesión no es válida. Inicia sesión nuevamente.' })
+    throw createError({ statusCode: 401, message: 'La sesión no es válida. Inicia sesión nuevamente.', data: { diagnostic: { code: 'AUTH_SESSION_INVALID', source: 'auth_session', status: 401, retryable: false, message: 'La sesión no es válida. Inicia sesión nuevamente.' } } })
   }
 
   const expectedSignature = signatureFor(encodedPayload, getAuthSessionSecret())
   const received = Buffer.from(receivedSignature)
   const expected = Buffer.from(expectedSignature)
   if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
-    throw createError({ statusCode: 401, message: 'La sesión no es válida. Inicia sesión nuevamente.' })
+    throw createError({ statusCode: 401, message: 'La sesión no es válida. Inicia sesión nuevamente.', data: { diagnostic: { code: 'AUTH_SESSION_INVALID', source: 'auth_session', status: 401, retryable: false, message: 'La sesión no es válida. Inicia sesión nuevamente.' } } })
   }
 
   let payload: SignedAuthSession
   try {
     payload = JSON.parse(decode(encodedPayload)) as SignedAuthSession
   } catch {
-    throw createError({ statusCode: 401, message: 'La sesión no es válida. Inicia sesión nuevamente.' })
+    throw createError({ statusCode: 401, message: 'La sesión no es válida. Inicia sesión nuevamente.', data: { diagnostic: { code: 'AUTH_SESSION_INVALID', source: 'auth_session', status: 401, retryable: false, message: 'La sesión no es válida. Inicia sesión nuevamente.' } } })
   }
 
   const now = Math.floor(Date.now() / 1000)
@@ -101,7 +101,7 @@ export const verifyAuthSessionToken = (value: unknown): SignedAuthSession => {
     !payload.expiresAt ||
     payload.expiresAt <= now
   ) {
-    throw createError({ statusCode: 401, message: 'La sesión expiró. Inicia sesión nuevamente.' })
+    throw createError({ statusCode: 401, message: 'La sesión expiró. Inicia sesión nuevamente.', data: { diagnostic: { code: 'AUTH_SESSION_EXPIRED', source: 'auth_session', status: 401, retryable: false, message: 'La sesión expiró. Inicia sesión nuevamente.' } } })
   }
 
   return payload

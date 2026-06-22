@@ -1,1 +1,1 @@
-Restringir el acceso financiero a ROLE_ADMON con sesión firmada
+Redirigir sesiones inválidas al inicio de sesión

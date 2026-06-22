@@ -30,6 +30,9 @@ declare module "nitropack/types" {
     '/api/auth/planteles-status': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/auth/planteles-status.get').default>>>>
     }
+    '/api/auth/session': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/auth/session.get').default>>>>
+    }
     '/api/auth/switch': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/auth/switch.post').default>>>>
     }
