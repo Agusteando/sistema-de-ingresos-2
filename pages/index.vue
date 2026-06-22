@@ -13,6 +13,7 @@
       :custom-section-counts="customSectionCounts"
       :global-kpis="globalKpis"
       :kpi-sparklines="kpiSparklines"
+      :data-available="kpiDataAvailable"
       :is-refreshing="isKpiRefreshing"
       @set-filter="setActiveFilter"
     />
@@ -490,6 +491,7 @@ const verifyFinancialBridgeBeforeInitialLoad = async () => {
       agentId: plantel,
       message
     })
+    studentsDataAvailable.value = students.value.length > 0
     setStudentsSyncState({
       status: 'unavailable',
       message: `No se cargó el dashboard porque el agente de ${plantel} está fuera de línea.`,
@@ -505,6 +507,7 @@ const verifyFinancialBridgeBeforeInitialLoad = async () => {
       handleApiSessionError('financial.preflight', error, { plantel, agentId: plantel })
       return false
     }
+    studentsDataAvailable.value = students.value.length > 0
     setStudentsSyncState({
       status: 'unavailable',
       message: 'No se pudo verificar la conexión del plantel. Se detuvo la carga automática para evitar múltiples errores.',
@@ -519,6 +522,7 @@ const verifyFinancialBridgeBeforeInitialLoad = async () => {
 
 const students = ref([])
 const loading = ref(false)
+const studentsDataAvailable = ref(false)
 const studentsSourceUnavailable = computed(() => studentsSyncState.value.status === 'unavailable' && !students.value.length && !loading.value)
 const financialEnrichmentState = ref({
   status: 'idle',
@@ -533,6 +537,7 @@ const financialEnrichmentDiagnostics = computed(() => {
   const enriched = students.value.filter(student => Boolean(student?.centralMatricula) || student?.matriculaEnrichmentStatus === 'ready').length
   return { total, enriched, pending: Math.max(total - enriched, 0) }
 })
+const kpiDataAvailable = computed(() => studentsDataAvailable.value && !studentsSourceUnavailable.value)
 const lastFinancialLoadDiagnostics = ref(null)
 
 const financialNow = () => (typeof performance !== 'undefined' && performance?.now ? performance.now() : Date.now())
@@ -709,7 +714,7 @@ const financialDiagnosticsSummary = computed(() => {
 })
 const selectedStudent = ref(null)
 const photoCache = ref({})
-const globalKpis = ref({ ingresosMes: 0 })
+const globalKpis = ref({ ingresosMes: null })
 const paymentKpiSparklines = ref({ inscritos: [], internos: [], externos: [], ingresos: [] })
 const isKpiRefreshing = ref(false)
 const KPI_REFRESH_MIN_VISIBLE_MS = 1400
@@ -1047,7 +1052,7 @@ const distributionSeries = (list) => {
   return buckets.some(Boolean) ? buckets : []
 }
 
-const kpiSparklines = computed(() => ({
+const kpiSparklines = computed(() => !kpiDataAvailable.value ? ({ inscritos: [], internos: [], externos: [], ingresos: [], no_inscritos: [], bajas: [] }) : ({
   inscritos: paymentKpiSparklines.value.inscritos || [],
   internos: paymentKpiSparklines.value.internos || [],
   externos: paymentKpiSparklines.value.externos || [],
@@ -1208,8 +1213,10 @@ const loadGlobalKpis = async () => {
   try {
     const cicloKey = normalizeCicloKey(state.value.ciclo)
     const res = await $fetch('/api/dashboard/kpis', { retry: 0, params: { ciclo: cicloKey, concepts: externalConcepts.value.join(','), tipoConcepts: tipoIngresoConcepts.value.join(',') } })
-    globalKpis.value.ingresosMes = res.ingresosMes || 0
+    const ingresosMes = Number(res?.ingresosMes)
+    globalKpis.value.ingresosMes = Number.isFinite(ingresosMes) ? ingresosMes : null
   } catch(e) {
+    globalKpis.value.ingresosMes = null
     handleApiSessionError('dashboard.kpis', e, { endpoint: '/api/dashboard/kpis', plantel: currentPlantelKey.value, ciclo: currentCicloKey.value })
   } finally {
     endKpiRefreshScope(refreshToken)
@@ -1566,6 +1573,7 @@ const performSearch = async (options = {}) => {
   const hasCachedStudents = Boolean(cached?.students?.length)
 
   if (hasCachedStudents) {
+    studentsDataAvailable.value = true
     applyStudentsList(cached.students, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value, tipoIngresoConcepts: tipoIngresoConcepts.value }, traceContext: trace })
     loading.value = false
     setStudentsSyncState({
@@ -1579,6 +1587,7 @@ const performSearch = async (options = {}) => {
   } else if (!hadStudents || clearStaleOnCacheMiss) {
     if (clearStaleOnCacheMiss && hadStudents) {
       students.value = []
+      studentsDataAvailable.value = false
       matriculaOverlayRequestId++
     }
     loading.value = true
@@ -1672,6 +1681,7 @@ const performSearch = async (options = {}) => {
     })
 
     const freshStudents = Array.isArray(response?._data) ? response._data : []
+    studentsDataAvailable.value = true
     applyStudentsList(freshStudents, { cacheOptions: { ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value, tipoIngresoConcepts: tipoIngresoConcepts.value }, traceContext: trace })
     const cacheWritten = writeCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value, tipoIngresoConcepts: tipoIngresoConcepts.value }, freshStudents)
     const updatedAt = new Date().toISOString()
@@ -1732,6 +1742,7 @@ const performSearch = async (options = {}) => {
     publishFinancialDiagnostics(trace)
 
     const canKeepWorking = hasCachedStudents || hadStudents
+    studentsDataAvailable.value = false
     setStudentsSyncState({
       status: canKeepWorking ? 'failed' : 'unavailable',
       message: canKeepWorking
@@ -1792,6 +1803,10 @@ const isBajaInscritaCurrent = (student) => student?.estatus !== 'Activo' && hasC
 const resolveStudentTipoIngreso = (student) => resolveTipoIngreso(student, currentCicloKey.value, { enrollmentConcepts: tipoIngresoConcepts.value.length ? tipoIngresoConcepts.value : externalConcepts.value })
 
 const kpiCounts = computed(() => {
+  if (!kpiDataAvailable.value) {
+    return { inscritos: null, internos: null, externos: null, no_inscritos: null, bajas: null }
+  }
+
   let inscritos = 0, internos = 0, externos = 0, no_inscritos = 0, bajas = 0
   students.value.forEach(s => {
     if (isEnrolled(s)) {

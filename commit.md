@@ -1,1 +1,1 @@
-Redirigir sesiones inválidas al inicio de sesión
+Evitar contadores cero cuando falla la carga de datos

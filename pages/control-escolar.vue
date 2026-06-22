@@ -71,7 +71,7 @@
           <span class="kpi-icon"><component :is="item.icon" :size="24" /></span>
           <span class="kpi-text">
             <span>{{ item.label }}</span>
-            <strong>{{ formatNumber(item.value) }}</strong>
+            <StudentsKpiValue :value="item.value" />
           </span>
           <span class="ce-kpi-mass" :aria-label="item.volumeAria">
             <i
@@ -1675,6 +1675,7 @@ import UiButton from "~/components/ui/UiButton.vue";
 import UiChip from "~/components/ui/UiChip.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.vue";
+import StudentsKpiValue from "~/components/students/StudentsKpiValue.vue";
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
 import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
@@ -2495,27 +2496,40 @@ const buildMassUnits = (value, total) => {
   }));
 };
 const volumePercent = (value, total) => {
+  if (value === null || value === undefined || total === null || total === undefined) return 0;
   const safeValue = Math.max(0, Number(value || 0));
   const safeTotal = Math.max(0, Number(total || 0));
   if (!safeTotal) return 0;
   return Math.min(100, Math.round((safeValue / safeTotal) * 100));
 };
 const withVolume = (card, total) => {
+  const hasValue = card.value !== null && card.value !== undefined;
+  const hasTotal = total !== null && total !== undefined;
   const percent =
-    card.key === "inscritos" && Number(card.value || 0) > 0
+    hasValue && hasTotal && card.key === "inscritos" && Number(card.value || 0) > 0
       ? 100
       : volumePercent(card.value, total);
   return {
     ...card,
-    massUnits: buildMassUnits(
-      card.key === "inscritos" ? total : card.value,
-      total,
-    ),
-    volumeAria: `${card.label}: ${formatNumber(card.value)}; ${card.key === "inscritos" ? "total de inscritos" : `${percent}% del total de inscritos`}`,
+    massUnits: hasValue && hasTotal
+      ? buildMassUnits(card.key === "inscritos" ? total : card.value, total)
+      : buildMassUnits(0, 0),
+    volumeAria: hasValue
+      ? `${card.label}: ${formatNumber(card.value)}; ${card.key === "inscritos" ? "total de inscritos" : `${percent}% del total de inscritos`}`
+      : `${card.label}: sin dato disponible`,
   };
 };
 const kpiCards = computed(() => {
-  const data = kpis.value || {};
+  if (!kpis.value) {
+    return [
+      { key: "inscritos", label: "Inscritos", value: null, tone: "kpi-green", icon: LucideUsersRound },
+      { key: "internos", label: "Internos", value: null, tone: "kpi-teal", icon: LucideUserCheck },
+      { key: "externos", label: "Externos", value: null, tone: "kpi-blue", icon: LucideGlobe2 },
+      { key: "no_inscritos", label: "No inscritos", value: null, tone: "kpi-red", icon: LucideUserX },
+      { key: "bajas", label: "Bajas", value: null, tone: "kpi-gray", icon: LucideUserX },
+    ].map((card) => withVolume(card, null));
+  }
+  const data = kpis.value;
   const total = Number(data.inscritos || data.totalInscritos || 0);
   return [
     {
@@ -2528,28 +2542,28 @@ const kpiCards = computed(() => {
     {
       key: "internos",
       label: "Internos",
-      value: data.internos || 0,
+      value: data.internos ?? 0,
       tone: "kpi-teal",
       icon: LucideUserCheck,
     },
     {
       key: "externos",
       label: "Externos",
-      value: data.externos || 0,
+      value: data.externos ?? 0,
       tone: "kpi-blue",
       icon: LucideGlobe2,
     },
     {
       key: "no_inscritos",
       label: "No inscritos",
-      value: data.noInscritos || 0,
+      value: data.noInscritos ?? 0,
       tone: "kpi-red",
       icon: LucideUserX,
     },
     {
       key: "bajas",
       label: "Bajas",
-      value: data.bajas || 0,
+      value: data.bajas ?? 0,
       tone: "kpi-gray",
       icon: LucideUserX,
     },
@@ -3516,6 +3530,7 @@ const loadKpis = async () => {
     });
     kpis.value = response.kpis;
   } catch (error) {
+    kpis.value = null;
     loadError.value =
       error?.data?.message ||
       error?.message ||

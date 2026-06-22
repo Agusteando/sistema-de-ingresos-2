@@ -1,7 +1,19 @@
 <template>
-  <div class="kpi-value-stage" aria-live="polite" :aria-label="displayText">
-    <Transition :name="transitionName">
-      <strong :key="displayText" class="kpi-value-stage__value">{{ displayText }}</strong>
+  <div :class="['kpi-value-stage', { 'has-no-value': !hasDisplayText }]" aria-live="polite" :aria-label="ariaLabel">
+    <Transition :name="transitionName" mode="out-in">
+      <strong
+        v-if="hasDisplayText"
+        :key="animationKey"
+        class="kpi-value-stage__value kpi-value-stage__value--rolling"
+      >
+        <span
+          v-for="(char, index) in displayChars"
+          :key="`${animationKey}-${index}-${char}`"
+          :class="['kpi-value-stage__char', { 'is-digit': isDigit(char) }]"
+          :style="{ '--kpi-char-index': index }"
+        >{{ char }}</span>
+      </strong>
+      <strong v-else key="empty" class="kpi-value-stage__value kpi-value-stage__value--empty" aria-hidden="true">&nbsp;</strong>
     </Transition>
   </div>
 </template>
@@ -10,11 +22,18 @@
 import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
-  value: { type: [Number, String], default: 0 }
+  value: { type: [Number, String], default: null }
 })
 
-const displayText = computed(() => String(props.value ?? 0))
+const isBlankValue = (value) => value === null || value === undefined || value === ''
+const displayText = computed(() => isBlankValue(props.value) ? '' : String(props.value))
+const hasDisplayText = computed(() => displayText.value.length > 0)
+const displayChars = computed(() => displayText.value.split(''))
+const ariaLabel = computed(() => hasDisplayText.value ? displayText.value : 'Sin dato disponible')
 const direction = ref('up')
+const animationVersion = ref(0)
+
+const isDigit = (char) => /\d/.test(String(char || ''))
 
 const toComparableNumber = (value) => {
   const normalized = String(value ?? '')
@@ -33,12 +52,15 @@ watch(
 
     if (nextNumber !== null && previousNumber !== null && nextNumber < previousNumber) {
       direction.value = 'down'
-      return
+    } else {
+      direction.value = 'up'
     }
 
-    direction.value = 'up'
-  }
+    animationVersion.value += 1
+  },
+  { immediate: true }
 )
 
 const transitionName = computed(() => direction.value === 'down' ? 'students-kpi-value-down' : 'students-kpi-value-up')
+const animationKey = computed(() => `${transitionName.value}-${animationVersion.value}-${displayText.value}`)
 </script>

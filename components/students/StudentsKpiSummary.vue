@@ -35,7 +35,7 @@
       >
         <span class="section-kpi-icon"><LucideTag :size="14" /></span>
         <span class="section-kpi-name">{{ section.name }}</span>
-        <strong>{{ customSectionCounts[section.id] || 0 }}</strong>
+        <StudentsKpiValue :value="dataAvailable ? (customSectionCounts[section.id] ?? 0) : null" />
       </button>
     </div>
   </section>
@@ -50,6 +50,7 @@ import UiKpiSparkline from '~/components/ui/UiKpiSparkline.vue'
 const props = defineProps({
   userRole: { type: String, default: 'plantel' },
   kpiCounts: { type: Object, required: true },
+  dataAvailable: { type: Boolean, default: true },
   activeFilter: { type: String, default: '' },
   customSections: { type: Array, default: () => [] },
   customSectionCounts: { type: Object, default: () => ({}) },
@@ -62,14 +63,19 @@ defineEmits(['set-filter'])
 
 const roleTokens = computed(() => String(props.userRole || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
 const isSuperAdmin = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
-const formattedIncome = computed(() => `$${Number(props.globalKpis.ingresosMes).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`)
+const formattedIncome = computed(() => {
+  if (!props.dataAvailable || props.globalKpis?.ingresosMes === null || props.globalKpis?.ingresosMes === undefined) return null
+  return `$${Number(props.globalKpis.ingresosMes).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+})
+
+const kpiValue = (key) => props.dataAvailable ? (props.kpiCounts?.[key] ?? 0) : null
 
 const enrollmentKpis = computed(() => [
   {
     key: 'inscritos',
     filter: 'inscritos',
     label: 'Inscritos',
-    value: props.kpiCounts.inscritos,
+    value: kpiValue('inscritos'),
     icon: LucideUsers,
     toneClass: 'kpi-green',
     sparkline: props.kpiSparklines.inscritos
@@ -78,7 +84,7 @@ const enrollmentKpis = computed(() => [
     key: 'internos',
     filter: 'internos',
     label: 'Internos',
-    value: props.kpiCounts.internos,
+    value: kpiValue('internos'),
     icon: LucideUserCheck,
     toneClass: 'kpi-teal',
     sparkline: props.kpiSparklines.internos
@@ -87,7 +93,7 @@ const enrollmentKpis = computed(() => [
     key: 'externos',
     filter: 'externos',
     label: 'Externos',
-    value: props.kpiCounts.externos,
+    value: kpiValue('externos'),
     icon: LucideGlobe2,
     toneClass: 'kpi-blue',
     sparkline: props.kpiSparklines.externos
@@ -96,7 +102,7 @@ const enrollmentKpis = computed(() => [
     key: 'no_inscritos',
     filter: 'no_inscritos',
     label: 'No inscritos',
-    value: props.kpiCounts.no_inscritos,
+    value: kpiValue('no_inscritos'),
     icon: LucideUserX,
     toneClass: 'kpi-red',
     sparkline: props.kpiSparklines.no_inscritos
@@ -105,7 +111,7 @@ const enrollmentKpis = computed(() => [
     key: 'bajas',
     filter: 'bajas',
     label: 'Bajas',
-    value: props.kpiCounts.bajas,
+    value: kpiValue('bajas'),
     icon: LucideUserX,
     toneClass: 'kpi-gray',
     sparkline: props.kpiSparklines.bajas
