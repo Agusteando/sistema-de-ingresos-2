@@ -4,14 +4,17 @@
       <strong
         v-if="hasDisplayText"
         :key="animationKey"
-        class="kpi-value-stage__value kpi-value-stage__value--rolling"
+        class="kpi-value-stage__value"
       >
-        <span
-          v-for="(char, index) in displayChars"
-          :key="`${animationKey}-${index}-${char}`"
-          :class="['kpi-value-stage__char', { 'is-digit': isDigit(char) }]"
-          :style="{ '--kpi-char-index': index }"
-        >{{ char }}</span>
+        <span :class="['kpi-value-stage__plain', { 'is-roll-hidden': rollingActive }]">{{ displayText }}</span>
+        <span v-if="rollingActive" class="kpi-value-stage__roll" aria-hidden="true">
+          <span
+            v-for="(char, index) in displayChars"
+            :key="`${animationKey}-${index}-${char}`"
+            :class="['kpi-value-stage__char', { 'is-digit': isDigit(char) }]"
+            :style="{ '--kpi-char-index': index }"
+          >{{ char }}</span>
+        </span>
       </strong>
       <strong v-else key="empty" class="kpi-value-stage__value kpi-value-stage__value--empty" aria-hidden="true">&nbsp;</strong>
     </Transition>
@@ -19,7 +22,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 const props = defineProps({
   value: { type: [Number, String], default: null }
@@ -32,8 +35,29 @@ const displayChars = computed(() => displayText.value.split(''))
 const ariaLabel = computed(() => hasDisplayText.value ? displayText.value : 'Sin dato disponible')
 const direction = ref('up')
 const animationVersion = ref(0)
+const rollingActive = ref(false)
+let rollingTimer = null
 
 const isDigit = (char) => /\d/.test(String(char || ''))
+
+const stopRollingTimer = () => {
+  if (!rollingTimer) return
+  clearTimeout(rollingTimer)
+  rollingTimer = null
+}
+
+const triggerRolling = () => {
+  stopRollingTimer()
+  if (!hasDisplayText.value) {
+    rollingActive.value = false
+    return
+  }
+  rollingActive.value = true
+  rollingTimer = setTimeout(() => {
+    rollingActive.value = false
+    rollingTimer = null
+  }, 720)
+}
 
 const toComparableNumber = (value) => {
   const normalized = String(value ?? '')
@@ -57,9 +81,12 @@ watch(
     }
 
     animationVersion.value += 1
+    triggerRolling()
   },
   { immediate: true }
 )
+
+onBeforeUnmount(stopRollingTimer)
 
 const transitionName = computed(() => direction.value === 'down' ? 'students-kpi-value-down' : 'students-kpi-value-up')
 const animationKey = computed(() => `${transitionName.value}-${animationVersion.value}-${displayText.value}`)

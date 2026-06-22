@@ -1,1 +1,1 @@
-Preservar estilo original de KPI con animación de dígitos
+Preservar apariencia exacta de KPI con dígitos rodantes

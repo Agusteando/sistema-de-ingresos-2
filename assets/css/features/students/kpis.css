@@ -392,15 +392,43 @@
   }
 }
 
+
 .kpi-value-stage.has-no-value {
   min-height: 1em;
 }
 
-/* Keep the pre-existing KPI typography/layout. The rolling effect is applied
-   only to each character, without changing the parent number styling. */
-.kpi-value-stage__value--rolling {
+/* Resting state keeps the original KPI number rendering: one text run inside
+   the original strong element. The rolling layer appears only during the
+   animation and inherits the old number typography. */
+.kpi-value-stage__value {
+  position: relative;
+}
+
+.students-kpi-value-up-leave-active.kpi-value-stage__value,
+.students-kpi-value-down-leave-active.kpi-value-stage__value {
+  position: absolute;
+}
+
+.kpi-value-stage__plain {
+  display: inline;
+}
+
+.kpi-value-stage__plain.is-roll-hidden {
+  opacity: 0;
+}
+
+.kpi-value-stage__roll {
+  position: absolute;
+  inset: 0 auto auto 0;
   display: inline;
   white-space: nowrap;
+  pointer-events: none;
+  color: currentColor;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
 }
 
 .kpi-value-stage__value--empty {
@@ -409,11 +437,7 @@
 }
 
 .section-kpi-card > .kpi-value-stage {
-  margin-left: auto;
-}
-
-.section-kpi-card .kpi-value-stage__value {
-  margin-left: 0;
+  display: contents;
 }
 
 .kpi-value-stage__char {
@@ -468,9 +492,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .kpi-value-stage__plain.is-roll-hidden {
+    opacity: 1;
+  }
+
+  .kpi-value-stage__roll,
   .kpi-value-stage__char,
   .students-kpi-value-down-enter-active .kpi-value-stage__char.is-digit,
   .students-kpi-value-down-enter-from .kpi-value-stage__char.is-digit {
     animation: none;
+    display: none;
   }
 }
