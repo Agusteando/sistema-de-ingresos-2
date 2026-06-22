@@ -57,7 +57,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   value: { type: [Number, String], default: null },
@@ -74,6 +74,7 @@ const direction = ref('up')
 const animationVersion = ref(0)
 const rollingActive = ref(false)
 let rollingTimer = null
+let rollingFrame = null
 
 const isDigit = (char) => /\d/.test(String(char || ''))
 const moduloDigit = (value) => ((value % 10) + 10) % 10
@@ -102,17 +103,42 @@ const stopRollingTimer = () => {
   rollingTimer = null
 }
 
-const triggerRolling = () => {
-  stopRollingTimer()
-  if (!hasDisplayText.value) {
-    rollingActive.value = false
+const stopRollingFrame = () => {
+  if (!rollingFrame || typeof window === 'undefined') return
+  window.cancelAnimationFrame(rollingFrame)
+  rollingFrame = null
+}
+
+const requestPaintFrame = (callback) => {
+  if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+    callback()
     return
   }
+  rollingFrame = window.requestAnimationFrame(() => {
+    rollingFrame = null
+    callback()
+  })
+}
+
+const startRolling = () => {
+  animationVersion.value += 1
   rollingActive.value = true
   rollingTimer = setTimeout(() => {
     rollingActive.value = false
     rollingTimer = null
   }, 1580)
+}
+
+const triggerRolling = async () => {
+  stopRollingTimer()
+  stopRollingFrame()
+  if (!hasDisplayText.value) {
+    rollingActive.value = false
+    return
+  }
+  rollingActive.value = false
+  await nextTick()
+  requestPaintFrame(() => requestPaintFrame(startRolling))
 }
 
 const toComparableNumber = (value) => {
@@ -136,11 +162,15 @@ watch(
       direction.value = 'up'
     }
 
-    animationVersion.value += 1
     triggerRolling()
   },
-  { immediate: true }
+  { flush: 'post' }
 )
 
-onBeforeUnmount(stopRollingTimer)
+onMounted(triggerRolling)
+
+onBeforeUnmount(() => {
+  stopRollingTimer()
+  stopRollingFrame()
+})
 </script>

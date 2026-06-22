@@ -509,6 +509,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .kpi-value-stage__value.is-rolling .kpi-value-static,
+  .kpi-value-strong.is-rolling .kpi-value-static {
+    visibility: visible;
+  }
+
   .kpi-digit-roll-overlay,
   .kpi-digit-roll-char {
     animation: none;
