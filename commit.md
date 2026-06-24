@@ -1,1 +1,1 @@
-Agregar gitignore útil para proyecto Nuxt
+Corregir despliegue de Nuxt en Vercel
