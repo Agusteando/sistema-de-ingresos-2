@@ -1,1 +1,1 @@
-Agregar generación y cambio de contraseña Husky Pass en Control Escolar
+Agregar gitignore útil para proyecto Nuxt
