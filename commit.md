@@ -1,1 +1,1 @@
-Corregir despliegue de Nuxt en Vercel
+Restaurar scripts estándar de Nuxt para Vercel
