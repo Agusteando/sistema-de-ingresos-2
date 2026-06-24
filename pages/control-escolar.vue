@@ -1234,38 +1234,6 @@
                     v-show="activeDetailTab === 'system'"
                     class="ce-form-card ce-system-panel ce-tab-panel"
                   >
-                    <div class="ce-section-heading compact">
-                      <span><LucideKeyRound :size="18" /></span>
-                      <h3>Husky Pass</h3>
-                    </div>
-                    <div class="ce-system-grid">
-                      <article>
-                        <span>Registro de matrícula</span>
-                        <strong>{{
-                          selectedStudent.overlayExists ? "Creado" : "Pendiente"
-                        }}</strong>
-                      </article>
-                      <article>
-                        <span>Tipo de ingreso</span>
-                        <strong>{{
-                          selectedStudent.tipoIngreso || "Sin clasificar"
-                        }}</strong>
-                      </article>
-                      <article>
-                        <span>Ciclo base</span>
-                        <strong>{{
-                          selectedStudent.cicloBase || currentCicloKey
-                        }}</strong>
-                      </article>
-                      <article>
-                        <span>Plantel origen</span>
-                        <strong>{{
-                          selectedStudent.plantelBaseOriginal ||
-                          selectedStudent.basePlantel ||
-                          selectedAgentId
-                        }}</strong>
-                      </article>
-                    </div>
                     <section class="ce-husky-card compact">
                       <div class="ce-section-heading ce-husky-heading">
                         <img
@@ -1298,28 +1266,90 @@
                         >
                       </div>
                       <div v-else class="ce-husky-empty">
-                        Sin Husky Pass registrado para esta matrícula.
+                        <strong>Sin Husky Pass registrado para esta matrícula.</strong>
+                        <small>Genera una contraseña para crear el acceso del alumno en este momento.</small>
                       </div>
                       <div class="ce-husky-actions">
                         <small>{{
                           huskyPassEmailTarget || "Sin correo de padre/tutor"
                         }}</small>
-                        <UiButton
-                          variant="secondary"
-                          type="button"
-                          :disabled="
-                            sendingHuskyPass ||
-                            !selectedStudent.huskyPassAvailable ||
-                            !huskyPassEmailTarget
-                          "
-                          @click="sendHuskyPassEmail"
-                        >
-                          <LucideSend :size="16" />
-                          {{
-                            sendingHuskyPass ? "Enviando..." : "Enviar acceso"
-                          }}
-                        </UiButton>
+                        <div class="ce-husky-action-buttons">
+                          <UiButton
+                            variant="primary"
+                            type="button"
+                            :disabled="savingHuskyPass || !selectedAgentId"
+                            @click="generateOrRegenerateHuskyPass"
+                          >
+                            <LucideRefreshCw
+                              v-if="selectedStudent.huskyPassAvailable"
+                              :size="16"
+                              :class="{ spinning: savingHuskyPass }"
+                            />
+                            <LucideKeyRound v-else :size="16" />
+                            {{ huskyPassGenerateLabel }}
+                          </UiButton>
+                          <UiButton
+                            variant="secondary"
+                            type="button"
+                            :disabled="savingHuskyPass"
+                            @click="toggleManualHuskyPassForm"
+                          >
+                            <LucideSave :size="16" />
+                            Cambiar manualmente
+                          </UiButton>
+                          <UiButton
+                            variant="secondary"
+                            type="button"
+                            :disabled="
+                              sendingHuskyPass ||
+                              savingHuskyPass ||
+                              !selectedStudent.huskyPassAvailable ||
+                              !huskyPassEmailTarget
+                            "
+                            @click="sendHuskyPassEmail"
+                          >
+                            <LucideSend :size="16" />
+                            {{
+                              sendingHuskyPass ? "Enviando..." : "Enviar acceso"
+                            }}
+                          </UiButton>
+                        </div>
                       </div>
+                      <form
+                        v-if="showManualHuskyPassForm"
+                        class="ce-husky-manual-form"
+                        @submit.prevent="saveManualHuskyPassPassword"
+                      >
+                        <label>
+                          <span>Nueva contraseña</span>
+                          <input
+                            v-model.trim="manualHuskyPassPassword"
+                            type="text"
+                            autocomplete="off"
+                            minlength="6"
+                            maxlength="64"
+                            placeholder="Escribe una contraseña de 6 a 64 caracteres"
+                          />
+                        </label>
+                        <div class="ce-husky-manual-actions">
+                          <UiButton
+                            variant="secondary"
+                            type="button"
+                            :disabled="savingHuskyPass"
+                            @click="closeManualHuskyPassForm"
+                          >
+                            Cancelar
+                          </UiButton>
+                          <UiButton
+                            variant="primary"
+                            type="submit"
+                            :disabled="savingHuskyPass || !huskyPassManualPasswordValid"
+                          >
+                            <LucideSave :size="16" />
+                            {{ savingHuskyPass ? "Guardando..." : "Guardar contraseña" }}
+                          </UiButton>
+                        </div>
+                      </form>
                     </section>
                   </section>
 
@@ -1746,6 +1776,9 @@ const studentsLoading = ref(false);
 const savingStudent = ref(false);
 const massImporting = ref(false);
 const sendingHuskyPass = ref(false);
+const savingHuskyPass = ref(false);
+const showManualHuskyPassForm = ref(false);
+const manualHuskyPassPassword = ref("");
 const activeParentLastNameSuggestion = ref("");
 const dismissedParentLastNameSuggestions = ref({});
 const loadError = ref("");
@@ -3314,6 +3347,14 @@ const huskyPassEmailTarget = computed(
     selectedStudent.value?.huskyPassEmail ||
     "",
 );
+const huskyPassManualPasswordValid = computed(() => {
+  const value = String(manualHuskyPassPassword.value || "").trim();
+  return value.length >= 6 && value.length <= 64;
+});
+const huskyPassGenerateLabel = computed(() => {
+  if (savingHuskyPass.value) return "Guardando...";
+  return selectedStudent.value?.huskyPassAvailable ? "Regenerar contraseña" : "Generar acceso";
+});
 const bloodTypeOptions = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const advancedTextFields = [
   { key: "lugarNacimiento", label: "Lugar nacimiento" },
@@ -4642,6 +4683,7 @@ const restoreEditDraft = () => {
 const selectStudent = (student, copy = true) => {
   selectedStudent.value = student;
   activeDetailTab.value = "identity";
+  closeManualHuskyPassForm();
   activeParentLastNameSuggestion.value = "";
   dismissedParentLastNameSuggestions.value = {};
   if (copy) resetEditForm(student, { restoreDraft: true });
@@ -4921,6 +4963,68 @@ const uploadAdvancedFile = async (field, event) => {
   } finally {
     uploadingAdvancedField.value = "";
   }
+};
+
+const applyHuskyPassStudentUpdate = (student) => {
+  if (!student?.matricula) return;
+  replaceControlStudentInIndex(student);
+  selectedStudent.value = student;
+  pendingSelectedStudentRefresh.value = null;
+  persistCurrentControlStudentsCache();
+};
+
+const closeManualHuskyPassForm = () => {
+  showManualHuskyPassForm.value = false;
+  manualHuskyPassPassword.value = "";
+};
+
+const toggleManualHuskyPassForm = () => {
+  showManualHuskyPassForm.value = !showManualHuskyPassForm.value;
+  manualHuskyPassPassword.value = selectedStudent.value?.huskyPassPlaintext || "";
+};
+
+const saveHuskyPassPassword = async (body) => {
+  if (!selectedStudent.value || !selectedAgentId.value || savingHuskyPass.value)
+    return;
+  savingHuskyPass.value = true;
+  try {
+    const response = await $fetch(
+      `/api/control-escolar/students/${encodeURIComponent(selectedStudent.value.matricula)}/husky-pass`,
+      {
+        method: "POST",
+        query: buildScopeQuery(),
+        body,
+      },
+    );
+    if (response.student) applyHuskyPassStudentUpdate(response.student);
+    closeManualHuskyPassForm();
+    show("Husky Pass actualizado.", "success");
+    await loadKpis();
+  } catch (error) {
+    show(
+      error?.data?.message || error?.message || "No se pudo actualizar Husky Pass.",
+      "danger",
+    );
+  } finally {
+    savingHuskyPass.value = false;
+  }
+};
+
+const generateOrRegenerateHuskyPass = async () => {
+  await saveHuskyPassPassword({
+    action: selectedStudent.value?.huskyPassAvailable ? "regenerate" : "generate",
+  });
+};
+
+const saveManualHuskyPassPassword = async () => {
+  if (!huskyPassManualPasswordValid.value) {
+    show("La contraseña debe tener entre 6 y 64 caracteres.", "danger");
+    return;
+  }
+  await saveHuskyPassPassword({
+    action: "manual",
+    plaintext: manualHuskyPassPassword.value,
+  });
 };
 
 const sendHuskyPassEmail = async () => {
@@ -9164,37 +9268,6 @@ onBeforeUnmount(() => {
   gap: 14px;
 }
 
-.control-escolar-screen .ce-system-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.control-escolar-screen .ce-system-grid article {
-  display: grid;
-  gap: 5px;
-  min-height: 76px;
-  padding: 13px 14px;
-  border: 1px solid #dfe8f1;
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 8px 18px rgba(21, 35, 60, .035);
-}
-
-.control-escolar-screen .ce-system-grid span {
-  color: #65758a;
-  font-size: 10.5px;
-  font-weight: 850;
-  text-transform: uppercase;
-  letter-spacing: .035em;
-}
-
-.control-escolar-screen .ce-system-grid strong {
-  color: #1f2f45;
-  font-size: 15px;
-  font-weight: 920;
-}
-
 .control-escolar-screen .ce-husky-card.compact {
   display: grid;
   gap: 14px;
@@ -9272,6 +9345,72 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.control-escolar-screen .ce-husky-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.control-escolar-screen .ce-husky-empty strong {
+  color: #1f2f45;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.control-escolar-screen .ce-husky-empty small {
+  color: #65758a;
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.control-escolar-screen .ce-husky-manual-form {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid rgba(63, 145, 56, .18);
+  border-radius: 14px;
+  background: #f8fcf6;
+}
+
+.control-escolar-screen .ce-husky-manual-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.control-escolar-screen .ce-husky-manual-form label span {
+  color: #65758a;
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.control-escolar-screen .ce-husky-manual-form input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d8e4ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #1f2f45;
+  font-size: 13px;
+  font-weight: 780;
+  outline: none;
+}
+
+.control-escolar-screen .ce-husky-manual-form input:focus {
+  border-color: rgba(63, 145, 56, .45);
+  box-shadow: 0 0 0 3px rgba(63, 145, 56, .1);
+}
+
+.control-escolar-screen .ce-husky-manual-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @media (max-width: 1280px) {
   .control-escolar-screen .ce-identity-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -9286,7 +9425,6 @@ onBeforeUnmount(() => {
 
   .control-escolar-screen .ce-group-picker-card,
   .control-escolar-screen .ce-school-grid-minimal,
-  .control-escolar-screen .ce-system-grid,
   .control-escolar-screen .ce-advanced-upload-grid,
   .control-escolar-screen .ce-husky-credentials {
     grid-template-columns: 1fr;

@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { getBridgeAgentId, query, runWithBridgeAgentId } from "./db";
 import {
   getTrustedAuthUser,
@@ -331,6 +332,20 @@ const getCentralMatriculaColumns = async () => {
   return columns;
 };
 
+const getCentralOptionalTableColumnRows = async (tableName: string) => {
+  const normalized = normalizeText(tableName, 80);
+  if (!normalized) return [] as TableColumn[];
+
+  const tableRows = await controlEscolarCentralQuery<any[]>(
+    `SHOW TABLES LIKE ${sqlLiteral(normalized)}`,
+  );
+  if (!tableRows.length) return [] as TableColumn[];
+
+  return await controlEscolarCentralQuery<TableColumn[]>(
+    `SHOW COLUMNS FROM ${escapeColumn(normalized)}`,
+  );
+};
+
 const getCentralOptionalTableColumns = async (tableName: string) => {
   const normalized = normalizeText(tableName, 80);
   if (!normalized) return new Set<string>();
@@ -339,15 +354,9 @@ const getCentralOptionalTableColumns = async (tableName: string) => {
   if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS)
     return cached.columns;
 
-  const tableRows = await controlEscolarCentralQuery<any[]>(
-    `SHOW TABLES LIKE ${sqlLiteral(normalized)}`,
-  );
-  if (!tableRows.length) return new Set<string>();
-
-  const rows = await controlEscolarCentralQuery<TableColumn[]>(
-    `SHOW COLUMNS FROM ${escapeColumn(normalized)}`,
-  );
+  const rows = await getCentralOptionalTableColumnRows(normalized);
   const columns = new Set(rows.map((row) => row.Field));
+  if (!columns.size) return columns;
   centralSchemaCache.set(normalized, { columns, loadedAt: Date.now() });
   return columns;
 };
@@ -1595,6 +1604,150 @@ export const fetchControlEscolarStudentDetail = async (
     rawBase: compactRawRecord(rawBaseRows[0] || {}),
     rawMatricula: compactRawRecord(rawMatricula || {}),
     rawUsers: compactRawRecord(huskyPass || {}),
+  };
+};
+
+const HUSKY_PASS_PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+
+const generateHuskyPassPassword = () =>
+  Array.from({ length: 10 }, () =>
+    HUSKY_PASS_PASSWORD_CHARS[randomInt(0, HUSKY_PASS_PASSWORD_CHARS.length)],
+  ).join("");
+
+const normalizeHuskyPassPlaintext = (value: unknown) => normalizeText(value, 64);
+
+const pickHuskyPassContactEmail = (student: any) =>
+  firstDisplayEmail(
+    student?.emailPadre,
+    student?.emailMadre,
+    student?.email,
+    student?.huskyPassEmail,
+  ).toLowerCase();
+
+const columnValueMode = (column: TableColumn | undefined) => ({
+  nullable: String(column?.Null || "").toUpperCase() === "YES",
+  hasDefault: column?.Default !== null && column?.Default !== undefined,
+  autoIncrement: String(column?.Extra || "").toLowerCase().includes("auto_increment"),
+});
+
+export const updateControlEscolarHuskyPass = async (
+  agentId: string,
+  matricula: string,
+  body: MatriculaPatch = {},
+) => {
+  const normalizedMatricula = normalizeText(matricula, 64);
+  if (!normalizedMatricula) {
+    throw createError({ statusCode: 400, message: "Matrícula inválida." });
+  }
+
+  const currentStudent = await fetchControlEscolarStudentDetail(
+    agentId,
+    normalizedMatricula,
+  );
+  const schema = await getControlEscolarCentralOnlySchema(agentId, {
+    requireCentral: true,
+  });
+  if (!schema.usersAvailable) {
+    throw createError({
+      statusCode: 500,
+      message:
+        "La tabla central users no está disponible o no tiene username/plaintext.",
+    });
+  }
+
+  const action = normalizeText(body?.action || body?.mode || "generate", 32).toLowerCase();
+  const manualPlaintext = normalizeHuskyPassPlaintext(
+    body?.plaintext || body?.password || body?.contraseña || body?.contrasena,
+  );
+  const nextPlaintext = action === "manual" || manualPlaintext
+    ? manualPlaintext
+    : generateHuskyPassPassword();
+
+  if (nextPlaintext.length < 6 || nextPlaintext.length > 64) {
+    throw createError({
+      statusCode: 400,
+      message: "La contraseña Husky Pass debe tener entre 6 y 64 caracteres.",
+    });
+  }
+
+  const usersColumns = schema.users;
+  const usersColumnRows = await getCentralOptionalTableColumnRows("users");
+  const existing = await fetchHuskyPassRow(normalizedMatricula, schema);
+  const contactEmail = pickHuskyPassContactEmail(currentStudent);
+  const writeEntries: Array<{ column: string; value?: string; raw?: string }> = [
+    { column: "plaintext", value: nextPlaintext },
+  ];
+
+  if (usersColumns.has("password")) {
+    writeEntries.push({ column: "password", value: nextPlaintext });
+  }
+  if (contactEmail) {
+    if (usersColumns.has("email")) writeEntries.push({ column: "email", value: contactEmail });
+    if (usersColumns.has("correo")) writeEntries.push({ column: "correo", value: contactEmail });
+  }
+  if (usersColumns.has("updated_at")) writeEntries.push({ column: "updated_at", raw: "NOW()" });
+  else if (usersColumns.has("updatedAt")) writeEntries.push({ column: "updatedAt", raw: "NOW()" });
+
+  if (existing) {
+    const assignments = writeEntries
+      .map((entry) => `${escapeColumn(entry.column)} = ${entry.raw || "?"}`)
+      .join(", ");
+    const params = writeEntries
+      .filter((entry) => !entry.raw)
+      .map((entry) => entry.value ?? "");
+    params.push(canonicalMatriculaKey(normalizedMatricula));
+    await controlEscolarCentralQuery(
+      `UPDATE \`users\` SET ${assignments} WHERE UPPER(TRIM(\`username\`)) = ? LIMIT 1`,
+      params,
+    );
+  } else {
+    const insertEntries: Array<{ column: string; value?: string; raw?: string }> = [
+      { column: "username", value: normalizedMatricula },
+      ...writeEntries,
+    ];
+    if (usersColumns.has("created_at")) insertEntries.push({ column: "created_at", raw: "NOW()" });
+    else if (usersColumns.has("createdAt")) insertEntries.push({ column: "createdAt", raw: "NOW()" });
+
+    for (const column of usersColumnRows) {
+      if (insertEntries.some((entry) => entry.column === column.Field)) continue;
+      const mode = columnValueMode(column);
+      if (mode.nullable || mode.hasDefault || mode.autoIncrement) continue;
+      const normalizedField = column.Field.toLowerCase();
+      if (normalizedField.includes("email") || normalizedField.includes("correo")) {
+        insertEntries.push({ column: column.Field, value: contactEmail });
+      } else if (normalizedField.includes("password") || normalizedField.includes("pass")) {
+        insertEntries.push({ column: column.Field, value: nextPlaintext });
+      } else if (normalizedField.includes("name") || normalizedField.includes("nombre")) {
+        insertEntries.push({ column: column.Field, value: currentStudent.fullName || normalizedMatricula });
+      } else if (normalizedField.includes("role") || normalizedField.includes("rol")) {
+        insertEntries.push({ column: column.Field, value: "student" });
+      } else if (normalizedField.includes("created") || normalizedField.includes("updated")) {
+        insertEntries.push({ column: column.Field, raw: "NOW()" });
+      } else {
+        insertEntries.push({ column: column.Field, value: "" });
+      }
+    }
+
+    const columnsSql = insertEntries.map((entry) => escapeColumn(entry.column)).join(", ");
+    const valuesSql = insertEntries.map((entry) => entry.raw || "?").join(", ");
+    const params = insertEntries
+      .filter((entry) => !entry.raw)
+      .map((entry) => entry.value ?? "");
+    await controlEscolarCentralQuery(
+      `INSERT INTO \`users\` (${columnsSql}) VALUES (${valuesSql})`,
+      params,
+    );
+  }
+
+  const updatedStudent = await fetchControlEscolarStudentDetail(
+    agentId,
+    normalizedMatricula,
+  );
+  return {
+    success: true,
+    action: existing ? (action === "manual" ? "manual" : "regenerate") : "generate",
+    plaintext: nextPlaintext,
+    student: updatedStudent,
   };
 };
 

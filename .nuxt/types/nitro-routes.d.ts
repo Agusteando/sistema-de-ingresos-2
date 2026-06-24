@@ -102,6 +102,9 @@ declare module "nitropack/types" {
     '/api/control-escolar/students/:id/husky-pass-email': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/control-escolar/students/[id]/husky-pass-email.post').default>>>>
     }
+    '/api/control-escolar/students/:id/husky-pass': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/control-escolar/students/[id]/husky-pass.post').default>>>>
+    }
     '/api/control-escolar/students/:id/siblings': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/control-escolar/students/[id]/siblings.get').default>>>>
     }
