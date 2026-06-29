@@ -258,7 +258,7 @@
                   <td class="font-semibold text-sm py-2 px-4 text-gray-800">
                     <div class="payment-concept-cell">
                       <span>{{ debt.conceptoNombre }}</span>
-                      <em :class="['payment-stock-chip', stockClass(debt.stock)]">{{ stockLabel(debt.stock) }}</em>
+                      <em v-if="debt.stock?.controlled" :class="['payment-stock-chip', stockClass(debt.stock)]">{{ stockLabel(debt.stock) }}</em>
                     </div>
                   </td>
                   <td class="text-xs text-gray-500 py-2 px-4">{{ debt.mesLabel }}</td>
@@ -563,7 +563,7 @@ const effectiveSubtotal = (debt) => debt.montoFinalPendiente ? Number(debt.monto
 const effectiveSaldoFinal = (debt) => Math.max(0, effectiveSubtotal(debt) - Number(debt.pagosPrevios || 0))
 const totalCobrar = computed(() => processedDebts.value.reduce((a, b) => a + (b.montoPagado || 0), 0))
 const stockLabel = (stock) => {
-  if (!stock?.controlled) return 'stock infinito'
+  if (!stock?.controlled) return ''
   if (stock.status === 'out') return 'agotado'
   if (stock.status === 'low') return `bajo · ${stock.available ?? 0}`
   return `${stock.available ?? 0} disp.`

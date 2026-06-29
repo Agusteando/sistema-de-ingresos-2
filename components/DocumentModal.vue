@@ -61,7 +61,7 @@
                   <LucideCheckCircle :size="13" />
                   <span>{{ selectedConcept.concepto }}</span>
                   <strong>${{ formatMoney(selectedConcept.costo) }}</strong>
-                  <em :class="['stock-chip', stockClass(selectedConcept.stock)]">{{ stockLabel(selectedConcept.stock) }}</em>
+                  <em v-if="selectedConcept.stock?.controlled" :class="['stock-chip', stockClass(selectedConcept.stock)]">{{ stockLabel(selectedConcept.stock) }}</em>
                 </div>
                 <div v-if="selectedConceptServicio" class="concept-service-pill">
                   <img :src="selectedConceptServicio.imagen" alt="" loading="lazy" />
@@ -106,7 +106,7 @@
                       <span class="concept-option-meta">
                         <b>${{ formatMoney(c.costo) }}</b>
                         <em>{{ conceptMeta(c) }}</em>
-                        <i :class="['stock-chip', stockClass(c.stock)]">{{ stockLabel(c.stock) }}</i>
+                        <i v-if="c.stock?.controlled" :class="['stock-chip', stockClass(c.stock)]">{{ stockLabel(c.stock) }}</i>
                       </span>
                     </button>
                     <div v-if="filteredConceptos.length > visibleConceptos.length" class="concept-dropdown-hint">
@@ -365,7 +365,7 @@ const conceptMeta = (concepto) => {
 }
 
 const stockLabel = (stock) => {
-  if (!stock?.controlled) return 'stock infinito'
+  if (!stock?.controlled) return ''
   if (stock.status === 'out') return 'agotado'
   if (stock.status === 'low') return `bajo · ${stock.available ?? 0}`
   return `${stock.available ?? 0} disponibles`

@@ -4,14 +4,14 @@
       <div>
         <span class="section-kicker">Super admin</span>
         <h2>Conceptos</h2>
-        <p>Configuración central por ciclo, plantel y categoría. El stock es una capa opcional por plantel: sin configuración se conserva comportamiento intangible/infinito.</p>
+        <p>Existencias por plantel para los conceptos que requieren control físico.</p>
       </div>
       <div class="governance-status">
         <span>Fuente</span>
         <strong>{{ sourceLabel }}</strong>
         <button v-if="canManage" type="button" class="mini-action" :disabled="loading || syncing" @click="syncCentralToBridge">
           <LucideRefreshCw :size="15" :class="{ 'animate-spin': syncing }" />
-          Sync
+          Actualizar
         </button>
       </div>
     </section>
@@ -23,9 +23,8 @@
 
     <template v-else>
       <section class="mode-switcher" aria-label="Modo de conceptos">
-        <button type="button" :class="{ active: viewMode === 'mappings' }" @click="viewMode = 'mappings'">Mapeos</button>
-        <button type="button" :class="{ active: viewMode === 'stock' }" @click="viewMode = 'stock'">Stock por plantel</button>
-        <span>Stock sin fila configurada = infinito / intangible</span>
+        <button type="button" :class="{ active: viewMode === 'mappings' }" @click="viewMode = 'mappings'">Categorías</button>
+        <button type="button" :class="{ active: viewMode === 'stock' }" @click="viewMode = 'stock'">Existencias</button>
       </section>
 
       <section class="governance-toolbar">
@@ -35,7 +34,7 @@
             <option v-for="cycle in cycleOptions" :key="cycle.value" :value="cycle.value">{{ cycle.label }}</option>
           </select>
         </label>
-        <label>
+        <label v-if="viewMode === 'mappings'">
           <span>Plantel</span>
           <select v-model="selectedPlantel">
             <option v-for="plantel in plantelOptions" :key="plantel" :value="plantel">{{ plantel }}</option>
@@ -51,10 +50,9 @@
           <span>Estado stock</span>
           <select v-model="stockFilter">
             <option value="all">Todos</option>
-            <option value="controlled">Con stock</option>
-            <option value="low">Bajo mínimo</option>
+            <option value="controlled">Con existencia</option>
+            <option value="low">Bajos</option>
             <option value="out">Agotados</option>
-            <option value="uncontrolled">Intangibles</option>
           </select>
         </label>
         <div class="search-box governance-search">
@@ -68,9 +66,9 @@
       </section>
 
       <section v-if="viewMode === 'stock'" class="stock-kpi-grid">
-        <div class="card stock-kpi"><span>Con stock</span><strong>{{ stockKpis.controlled }}</strong></div>
-        <div class="card stock-kpi"><span>Disponibles</span><strong>{{ stockKpis.available }}</strong></div>
-        <div class="card stock-kpi"><span>Bajo mínimo</span><strong>{{ stockKpis.low }}</strong></div>
+        <div class="card stock-kpi"><span>Conceptos</span><strong>{{ stockKpis.controlled }}</strong></div>
+        <div class="card stock-kpi"><span>Unidades</span><strong>{{ stockKpis.available }}</strong></div>
+        <div class="card stock-kpi"><span>Bajos</span><strong>{{ stockKpis.low }}</strong></div>
         <div class="card stock-kpi danger"><span>Agotados</span><strong>{{ stockKpis.out }}</strong></div>
       </section>
 
@@ -78,96 +76,91 @@
         <div class="card stock-list-card">
           <div class="governance-card-head">
             <div>
-              <span class="section-kicker">Stock · {{ selectedPlantel }}</span>
+              <span class="section-kicker">Existencias</span>
               <h3>{{ selectedCiclo || 'Ciclo' }}</h3>
             </div>
             <button type="button" class="btn btn-outline" :disabled="syncingStock" @click="syncStockCentralToBridge">
               <LucideRefreshCw :size="16" :class="{ 'animate-spin': syncingStock }" />
-              Sync stock
+              Actualizar stock
             </button>
           </div>
 
-          <div v-if="loading" class="empty-panel">Cargando stock...</div>
-          <div v-else-if="!visibleStockRows.length" class="empty-panel">Sin conceptos para el filtro.</div>
+          <div v-if="loading" class="empty-panel">Cargando...</div>
+          <div v-else-if="!visibleStockRows.length" class="empty-panel">Sin resultados</div>
           <div v-else class="stock-list">
             <button
               v-for="concept in visibleStockRows"
               :key="concept.id"
               type="button"
-              :class="['stock-row', { selected: selectedStockConcept?.id === concept.id, danger: concept.stock?.status === 'out', warning: concept.stock?.status === 'low' }]"
+              :class="['stock-row', stockRowClass(concept), { selected: selectedStockConcept?.id === concept.id }]"
               @click="selectStockConcept(concept)"
             >
               <span class="stock-row-id">{{ concept.id }}</span>
               <span class="stock-row-main">
                 <strong>{{ concept.concepto }}</strong>
-                <small>{{ concept.ciclo_escolar || concept.ciclo || 'sin ciclo' }} · ${{ formatMoney(concept.costo) }}</small>
+                <small>${{ formatMoney(concept.costo) }}</small>
               </span>
-              <span :class="['stock-badge', stockBadgeClass(concept.stock)]">{{ stockLabel(concept.stock) }}</span>
+              <span class="stock-plantel-strip">
+                <template v-if="conceptControlledPlantels(concept).length">
+                  <span
+                    v-for="item in conceptControlledPlantels(concept).slice(0, 5)"
+                    :key="`${concept.id}-${item.plantel}`"
+                    :class="['stock-mini-chip', stockBadgeClass(item.stock)]"
+                  >
+                    <b>{{ item.plantel }}</b>
+                    {{ stockMiniLabel(item.stock) }}
+                  </span>
+                </template>
+                <span v-else class="stock-add-dot">+</span>
+              </span>
             </button>
           </div>
         </div>
 
         <aside class="card stock-editor">
           <template v-if="selectedStockConcept">
-            <div class="governance-card-head compact">
+            <div class="governance-card-head compact stock-detail-head">
               <div>
-                <span class="section-kicker">Overlay de stock</span>
+                <span class="section-kicker">{{ selectedStockConcept.id }}</span>
                 <h3>{{ selectedStockConcept.concepto }}</h3>
               </div>
-            </div>
-            <div class="stock-summary">
-              <span :class="['stock-badge', stockBadgeClass(selectedStockConcept.stock)]">{{ stockLabel(selectedStockConcept.stock) }}</span>
-              <strong v-if="selectedStockConcept.stock?.controlled">{{ selectedStockConcept.stock.available }} {{ selectedStockConcept.stock.unit_label || 'unidad' }} disponibles</strong>
-              <strong v-else>Intangible / infinito</strong>
-              <small>Plantel {{ selectedPlantel }} · Fuente {{ stockSourceLabel }}</small>
+              <strong>{{ selectedConceptTotal }}</strong>
             </div>
 
-            <div class="stock-form">
-              <label class="stock-toggle">
-                <input v-model="stockDraft.enabled" type="checkbox" />
-                <span>Controlar stock en {{ selectedPlantel }}</span>
-              </label>
-              <label>
-                <span>Unidad</span>
-                <input v-model="stockDraft.unitLabel" type="text" placeholder="unidad" />
-              </label>
-              <label>
-                <span>Mínimo</span>
-                <input v-model.number="stockDraft.reorderPoint" type="number" min="0" step="1" />
-              </label>
-              <label class="stock-toggle subtle">
-                <input v-model="stockDraft.allowNegative" type="checkbox" />
-                <span>Permitir negativo</span>
-              </label>
-              <button type="button" class="btn btn-primary full" :disabled="savingStock" @click="saveStockSettings">Guardar configuración</button>
+            <div class="plantel-stock-grid">
+              <article
+                v-for="item in selectedPlantelStates"
+                :key="`${selectedStockConcept.id}-${item.plantel}`"
+                :class="['plantel-stock-card', stockBadgeClass(item.stock), { empty: !item.stock.controlled }]"
+              >
+                <header>
+                  <span>{{ item.plantel }}</span>
+                  <i v-if="item.stock.controlled && item.stock.status === 'out'">Agotado</i>
+                  <i v-else-if="item.stock.controlled && item.stock.status === 'low'">Bajo</i>
+                </header>
+                <strong>{{ stockDisplayValue(item.stock) }}</strong>
+                <footer>
+                  <button type="button" class="stock-card-action primary" :disabled="savingStock" @click="openStockSheet('add', item)">
+                    + Agregar
+                  </button>
+                  <button v-if="item.stock.controlled" type="button" class="stock-card-action" :disabled="savingStock" @click="openStockSheet('adjust', item)">
+                    Ajustar
+                  </button>
+                </footer>
+              </article>
             </div>
-
-            <div class="stock-action-grid">
-              <label>
-                <span>Restock</span>
-                <input v-model.number="restockQuantity" type="number" min="1" step="1" />
-              </label>
-              <button type="button" class="btn btn-outline" :disabled="savingStock || !selectedStockConcept.stock?.controlled" @click="restockSelected">Restockear</button>
-              <label>
-                <span>Ajuste +/-</span>
-                <input v-model.number="adjustQuantity" type="number" step="1" />
-              </label>
-              <button type="button" class="btn btn-outline" :disabled="savingStock || !selectedStockConcept.stock?.controlled" @click="adjustSelected">Ajustar</button>
-            </div>
-
-            <textarea v-model="stockNote" class="stock-note" placeholder="Nota opcional para el movimiento"></textarea>
 
             <div class="stock-movements">
-              <div class="insight-head"><span>Movimientos recientes</span><strong>{{ selectedStockMovements.length }}</strong></div>
-              <div v-if="!selectedStockMovements.length" class="empty-inline">Sin movimientos.</div>
+              <div class="insight-head"><span>Movimientos</span><strong>{{ selectedStockMovements.length }}</strong></div>
+              <div v-if="!selectedStockMovements.length" class="empty-inline">—</div>
               <div v-for="movement in selectedStockMovements" :key="movement.id" class="movement-row">
-                <span>{{ movement.movement_type }}</span>
+                <span>{{ formatMovementType(movement.movement_type) }} · {{ movement.plantel }}</span>
                 <strong>{{ signedQuantity(movement.quantity_delta) }}</strong>
-                <small>{{ movement.created_at || 'sin fecha' }}</small>
+                <small>{{ movement.created_at || '—' }}</small>
               </div>
             </div>
           </template>
-          <div v-else class="empty-panel">Selecciona un concepto para configurar stock.</div>
+          <div v-else class="empty-panel">Selecciona un concepto</div>
         </aside>
       </section>
 
@@ -295,6 +288,31 @@
         </div>
       </section>
     </template>
+
+    <Teleport to="body">
+      <div v-if="stockSheet.open" class="stock-sheet-overlay" @click.self="closeStockSheet">
+        <div class="stock-sheet" role="dialog" aria-modal="true">
+          <header>
+            <div>
+              <span>{{ stockSheet.plantel }}</span>
+              <strong>{{ stockSheet.mode === 'adjust' ? 'Ajustar' : 'Agregar' }}</strong>
+            </div>
+            <button type="button" class="stock-sheet-close" aria-label="Cerrar" @click="closeStockSheet">×</button>
+          </header>
+          <p>{{ selectedStockConcept?.concepto }}</p>
+          <div class="stock-sheet-qty">
+            <button type="button" @click="nudgeStockQuantity(-1)">−</button>
+            <input v-model.number="stockSheet.quantity" type="number" min="0" step="1" inputmode="numeric" />
+            <button type="button" @click="nudgeStockQuantity(1)">+</button>
+          </div>
+          <textarea v-model="stockSheet.note" placeholder="Nota"></textarea>
+          <footer>
+            <button type="button" class="btn btn-outline" @click="closeStockSheet">Cancelar</button>
+            <button type="button" class="btn btn-primary" :disabled="savingStock" @click="submitStockSheet">Guardar</button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -327,10 +345,7 @@ const selectedMonths = ref([])
 const viewMode = ref('mappings')
 const stockFilter = ref('all')
 const selectedStockConcept = ref(null)
-const stockDraft = ref({ enabled: false, unitLabel: 'unidad', reorderPoint: 0, allowNegative: false })
-const restockQuantity = ref(1)
-const adjustQuantity = ref(0)
-const stockNote = ref('')
+const stockSheet = ref({ open: false, mode: 'add', plantel: '', quantity: 1, note: '' })
 const savingStock = ref(false)
 const syncingStock = ref(false)
 
@@ -346,7 +361,7 @@ const fallbackCategories = [
 ]
 
 const canManage = computed(() => Boolean(adminPayload.value?.canManage))
-const sourceLabel = computed(() => adminPayload.value?.source === 'central' ? 'Central' : 'Nuxt')
+const sourceLabel = computed(() => adminPayload.value?.source === 'central' ? 'Central' : 'Respaldo')
 const categories = computed(() => adminPayload.value?.categorias?.length ? adminPayload.value.categorias.map((item) => ({ key: item.key, label: item.label })) : fallbackCategories)
 const mappings = computed(() => Array.isArray(adminPayload.value?.mappings) ? adminPayload.value.mappings : [])
 const conceptos = computed(() => Array.isArray(adminPayload.value?.conceptos) ? adminPayload.value.conceptos : [])
@@ -418,9 +433,9 @@ const visibleCatalogServices = computed(() => {
     .filter((service) => !term || [service.nombre, service.clave].some((value) => normalizeText(value).includes(term)))
     .slice(0, 48)
 })
-const defaultStock = (concept) => ({
+const defaultStock = (concept, plantel = '') => ({
   concepto_id: Number(concept?.id || 0),
-  plantel: selectedPlantel.value,
+  plantel: String(plantel || '').toUpperCase(),
   controlled: false,
   stock_enabled: false,
   status: 'uncontrolled',
@@ -432,32 +447,56 @@ const defaultStock = (concept) => ({
   unit_label: 'unidad'
 })
 
+const allStockSnapshots = computed(() => {
+  const snapshots = Array.isArray(stockPayload.value?.allSnapshots)
+    ? stockPayload.value.allSnapshots
+    : Array.isArray(stockPayload.value?.snapshots) ? stockPayload.value.snapshots : []
+  return snapshots.filter((snapshot) => Number(snapshot?.concepto_id || 0) > 0 && String(snapshot?.plantel || '').trim())
+})
+
+const stockForPlantel = (concept, plantel) => {
+  const conceptoId = Number(concept?.id || 0)
+  const code = String(plantel || '').toUpperCase()
+  return allStockSnapshots.value.find((snapshot) => Number(snapshot.concepto_id || 0) === conceptoId && String(snapshot.plantel || '').toUpperCase() === code) || defaultStock(concept, code)
+}
+
+const plantelStatesForConcept = (concept) => plantelOptions.value.map((plantel) => ({ plantel, stock: stockForPlantel(concept, plantel) }))
+const conceptControlledPlantels = (concept) => plantelStatesForConcept(concept).filter((item) => item.stock?.controlled)
+
 const stockRows = computed(() => conceptos.value
   .filter((concept) => !selectedCiclo.value || normalizeCicloKey(concept.ciclo_escolar || concept.ciclo) === selectedCiclo.value)
-  .map((concept) => ({ ...concept, stock: concept.stock || defaultStock(concept) }))
 )
 
 const visibleStockRows = computed(() => {
   const term = normalizeText(search.value)
   return stockRows.value.filter((concept) => {
-    const stock = concept.stock || defaultStock(concept)
-    if (stockFilter.value === 'controlled' && !stock.controlled) return false
-    if (stockFilter.value === 'uncontrolled' && stock.controlled) return false
-    if (stockFilter.value === 'low' && stock.status !== 'low') return false
-    if (stockFilter.value === 'out' && stock.status !== 'out') return false
+    const states = plantelStatesForConcept(concept)
+    const hasControlled = states.some((item) => item.stock?.controlled)
+    const hasLow = states.some((item) => item.stock?.status === 'low')
+    const hasOut = states.some((item) => item.stock?.status === 'out')
+    if (stockFilter.value === 'controlled' && !hasControlled) return false
+    if (stockFilter.value === 'low' && !hasLow) return false
+    if (stockFilter.value === 'out' && !hasOut) return false
     if (!term) return true
     return [concept.id, concept.concepto, concept.ciclo_escolar, concept.description].some((value) => normalizeText(value).includes(term))
   })
 })
 
-const stockKpis = computed(() => stockRows.value.reduce((acc, concept) => {
-  const stock = concept.stock || defaultStock(concept)
-  if (stock.controlled) acc.controlled += 1
-  if (stock.status === 'available') acc.available += 1
-  if (stock.status === 'low') acc.low += 1
-  if (stock.status === 'out') acc.out += 1
-  return acc
-}, { controlled: 0, available: 0, low: 0, out: 0 }))
+const stockKpis = computed(() => {
+  const controlledSnapshots = allStockSnapshots.value.filter((stock) => stock?.controlled)
+  return {
+    controlled: new Set(controlledSnapshots.map((stock) => Number(stock.concepto_id || 0))).size,
+    available: controlledSnapshots.reduce((sum, stock) => sum + Math.max(0, Number(stock.available ?? stock.on_hand ?? 0)), 0),
+    low: controlledSnapshots.filter((stock) => stock.status === 'low').length,
+    out: controlledSnapshots.filter((stock) => stock.status === 'out').length,
+  }
+})
+
+const selectedPlantelStates = computed(() => selectedStockConcept.value ? plantelStatesForConcept(selectedStockConcept.value) : [])
+const selectedConceptTotal = computed(() => selectedPlantelStates.value
+  .filter((item) => item.stock?.controlled)
+  .reduce((sum, item) => sum + Math.max(0, Number(item.stock.available ?? item.stock.on_hand ?? 0)), 0)
+)
 
 const selectedStockMovements = computed(() => {
   const conceptId = Number(selectedStockConcept.value?.id || 0)
@@ -465,12 +504,8 @@ const selectedStockMovements = computed(() => {
   return movements.filter((movement) => Number(movement.concepto_id || 0) === conceptId).slice(0, 12)
 })
 
-const stockLabel = (stock) => {
-  if (!stock?.controlled) return 'Infinito'
-  if (stock.status === 'out') return 'Agotado'
-  if (stock.status === 'low') return `Bajo · ${stock.available ?? 0}`
-  return `${stock.available ?? 0} disp.`
-}
+const stockDisplayValue = (stock) => stock?.controlled ? String(Math.max(0, Number(stock.available ?? stock.on_hand ?? 0))) : '—'
+const stockMiniLabel = (stock) => stock?.status === 'out' ? '0' : String(Math.max(0, Number(stock?.available ?? stock?.on_hand ?? 0)))
 
 const stockBadgeClass = (stock) => {
   if (!stock?.controlled) return 'neutral'
@@ -479,93 +514,89 @@ const stockBadgeClass = (stock) => {
   return 'success'
 }
 
+const stockRowClass = (concept) => {
+  const states = plantelStatesForConcept(concept)
+  if (states.some((item) => item.stock?.status === 'out')) return 'danger'
+  if (states.some((item) => item.stock?.status === 'low')) return 'warning'
+  if (states.some((item) => item.stock?.controlled)) return 'has-stock'
+  return 'empty'
+}
+
 const signedQuantity = (value) => {
   const qty = Number(value || 0)
   return qty > 0 ? `+${qty}` : String(qty)
 }
 
-const formatMoney = (value) => Number(value || 0).toFixed(2)
+const formatMovementType = (type) => ({
+  restock: 'Entrada',
+  adjustment: 'Ajuste',
+  payment_consume: 'Venta',
+  payment_release: 'Liberación',
+  payment_cancel_restore: 'Cancelación',
+}[String(type || '')] || 'Movimiento')
 
-const syncStockDraft = (concept) => {
-  const stock = concept?.stock || defaultStock(concept)
-  stockDraft.value = {
-    enabled: Boolean(stock.controlled || stock.stock_enabled),
-    unitLabel: stock.unit_label || 'unidad',
-    reorderPoint: Number(stock.reorder_point || 0),
-    allowNegative: Boolean(stock.allow_negative)
-  }
-}
+const formatMoney = (value) => Number(value || 0).toFixed(2)
 
 const selectStockConcept = (concept) => {
   selectedStockConcept.value = concept
-  syncStockDraft(concept)
-  restockQuantity.value = 1
-  adjustQuantity.value = 0
-  stockNote.value = ''
+  stockSheet.value = { open: false, mode: 'add', plantel: '', quantity: 1, note: '' }
 }
 
 const refreshSelectedStockConcept = () => {
   if (!selectedStockConcept.value?.id) return
   const updated = stockRows.value.find((concept) => String(concept.id) === String(selectedStockConcept.value.id))
-  if (updated) selectStockConcept(updated)
+  if (updated) selectedStockConcept.value = updated
 }
 
-const saveStockSettings = async () => {
-  if (!selectedStockConcept.value?.id) return
+const openStockSheet = (mode, item) => {
+  const current = Math.max(0, Number(item?.stock?.on_hand ?? item?.stock?.available ?? 0))
+  stockSheet.value = {
+    open: true,
+    mode,
+    plantel: item?.plantel || '',
+    quantity: mode === 'adjust' ? current : 1,
+    note: ''
+  }
+}
+
+const closeStockSheet = () => {
+  stockSheet.value.open = false
+}
+
+const nudgeStockQuantity = (delta) => {
+  const next = Math.max(0, Number(stockSheet.value.quantity || 0) + delta)
+  stockSheet.value.quantity = next
+}
+
+const submitStockSheet = async () => {
+  if (!selectedStockConcept.value?.id || !stockSheet.value.plantel) return
+  const plantel = stockSheet.value.plantel
+  const quantity = Math.trunc(Number(stockSheet.value.quantity || 0))
+  if (!Number.isFinite(quantity) || quantity < 0) return show('Cantidad inválida', 'danger')
   savingStock.value = true
   try {
-    await $fetch('/api/conceptos-stock/settings', {
-      method: 'POST',
-      body: {
-        concepto_id: selectedStockConcept.value.id,
-        plantel: selectedPlantel.value,
-        stock_enabled: stockDraft.value.enabled,
-        unit_label: stockDraft.value.unitLabel,
-        reorder_point: stockDraft.value.reorderPoint,
-        allow_negative: stockDraft.value.allowNegative
+    if (stockSheet.value.mode === 'adjust') {
+      const current = Math.max(0, Number(stockForPlantel(selectedStockConcept.value, plantel)?.on_hand ?? stockForPlantel(selectedStockConcept.value, plantel)?.available ?? 0))
+      const delta = quantity - current
+      if (delta !== 0) {
+        await $fetch('/api/conceptos-stock/adjust', {
+          method: 'POST',
+          body: { concepto_id: selectedStockConcept.value.id, plantel, quantity: delta, note: stockSheet.value.note }
+        })
       }
-    })
-    show('Stock configurado', 'success')
+    } else {
+      if (quantity <= 0) return show('Cantidad inválida', 'danger')
+      await $fetch('/api/conceptos-stock/restock', {
+        method: 'POST',
+        body: { concepto_id: selectedStockConcept.value.id, plantel, quantity, note: stockSheet.value.note }
+      })
+    }
+    show('Existencia actualizada', 'success')
+    closeStockSheet()
     await loadAdmin()
     refreshSelectedStockConcept()
   } catch (error) {
-    show(error?.data?.message || 'No se pudo guardar stock', 'danger')
-  } finally {
-    savingStock.value = false
-  }
-}
-
-const restockSelected = async () => {
-  if (!selectedStockConcept.value?.id) return
-  savingStock.value = true
-  try {
-    await $fetch('/api/conceptos-stock/restock', {
-      method: 'POST',
-      body: { concepto_id: selectedStockConcept.value.id, plantel: selectedPlantel.value, quantity: restockQuantity.value, note: stockNote.value }
-    })
-    show('Stock restockeado', 'success')
-    await loadAdmin()
-    refreshSelectedStockConcept()
-  } catch (error) {
-    show(error?.data?.message || 'No se pudo restockear', 'danger')
-  } finally {
-    savingStock.value = false
-  }
-}
-
-const adjustSelected = async () => {
-  if (!selectedStockConcept.value?.id) return
-  savingStock.value = true
-  try {
-    await $fetch('/api/conceptos-stock/adjust', {
-      method: 'POST',
-      body: { concepto_id: selectedStockConcept.value.id, plantel: selectedPlantel.value, quantity: adjustQuantity.value, note: stockNote.value }
-    })
-    show('Stock ajustado', 'success')
-    await loadAdmin()
-    refreshSelectedStockConcept()
-  } catch (error) {
-    show(error?.data?.message || 'No se pudo ajustar', 'danger')
+    show(error?.data?.message || 'No se pudo actualizar', 'danger')
   } finally {
     savingStock.value = false
   }
@@ -575,11 +606,11 @@ const syncStockCentralToBridge = async () => {
   syncingStock.value = true
   try {
     await $fetch('/api/conceptos-stock/sync/central-to-bridge', { method: 'POST' })
-    show('Stock sincronizado al Bridge', 'success')
+    show('Existencias actualizadas', 'success')
     await loadAdmin()
     refreshSelectedStockConcept()
   } catch (error) {
-    show(error?.data?.message || 'No se pudo sincronizar stock', 'danger')
+    show(error?.data?.message || 'No se pudo actualizar existencias', 'danger')
   } finally {
     syncingStock.value = false
   }
@@ -785,7 +816,7 @@ onMounted(loadAdmin)
 
 .governance-toolbar {
   display: grid;
-  grid-template-columns: minmax(150px, .65fr) minmax(126px, .45fr) minmax(190px, .72fr) minmax(280px, 1fr) auto;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   align-items: end;
   flex-shrink: 0;
@@ -902,7 +933,7 @@ onMounted(loadAdmin)
 
 @media (min-width: 1600px) {
   .governance-grid { grid-template-columns: minmax(720px, 1fr) minmax(480px, .42fr); }
-  .governance-toolbar { grid-template-columns: minmax(180px, .65fr) minmax(140px, .42fr) minmax(220px, .75fr) minmax(360px, 1fr) auto; }
+  .governance-toolbar { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 }
 
 @media (max-width: 1320px) {
@@ -1258,6 +1289,255 @@ onMounted(loadAdmin)
   .stock-row { grid-template-columns: 46px minmax(0, 1fr); }
   .stock-row .stock-badge { grid-column: 2; justify-self: start; }
   .stock-action-grid { grid-template-columns: 1fr; }
+}
+
+.stock-plantel-strip {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.stock-mini-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: .76rem;
+  font-weight: 850;
+}
+
+.stock-mini-chip b {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .68rem;
+  opacity: .75;
+}
+
+.stock-mini-chip.success { border: 1px solid #cbe7c5; background: #f1faee; color: #356b2f; }
+.stock-mini-chip.warning { border: 1px solid #f2d59a; background: #fff8e8; color: #9a6512; }
+.stock-mini-chip.danger { border: 1px solid #f0b4b4; background: #fff1f1; color: #b42318; }
+.stock-mini-chip.neutral { border: 1px solid #dfe6ef; background: #f6f8fb; color: #68778c; }
+
+.stock-add-dot {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px dashed #b9cad8;
+  border-radius: 999px;
+  color: #65758c;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.stock-row.empty .stock-row-id { background: #f6f8fb; color: #8a98aa; }
+.stock-row.has-stock { border-color: #d8e6d2; }
+
+.stock-detail-head strong {
+  min-width: 48px;
+  height: 42px;
+  border-radius: 14px;
+  font-size: 1.2rem;
+}
+
+.plantel-stock-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  gap: 10px;
+  overflow: auto;
+  padding: 2px 2px 4px;
+}
+
+.plantel-stock-card {
+  display: grid;
+  gap: 10px;
+  min-height: 154px;
+  border: 1px solid #dfe6ef;
+  border-radius: 18px;
+  background: #fff;
+  padding: 13px;
+}
+
+.plantel-stock-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plantel-stock-card header span {
+  color: #314158;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .82rem;
+  font-weight: 900;
+}
+
+.plantel-stock-card header i {
+  border-radius: 999px;
+  background: rgba(255,255,255,.72);
+  padding: 3px 7px;
+  font-size: .64rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.plantel-stock-card > strong {
+  color: #162641;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(2rem, 1.5rem + 2vw, 3rem);
+  font-weight: 900;
+  line-height: .95;
+}
+
+.plantel-stock-card footer {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+  align-self: end;
+}
+
+.stock-card-action {
+  min-height: 42px;
+  border: 1px solid #d8e2eb;
+  border-radius: 13px;
+  background: #fff;
+  color: #314158;
+  font-size: .82rem;
+  font-weight: 850;
+}
+
+.stock-card-action.primary {
+  border-color: #2f6f35;
+  background: #2f6f35;
+  color: #fff;
+}
+
+.plantel-stock-card.neutral { background: #fbfcfe; }
+.plantel-stock-card.success { border-color: #cbe7c5; background: #f6fbf3; }
+.plantel-stock-card.warning { border-color: #f2d59a; background: #fff9ea; }
+.plantel-stock-card.danger { border-color: #efb1b1; background: #fff3f3; }
+.plantel-stock-card.empty > strong { color: #a7b2c1; }
+
+.stock-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: end center;
+  background: rgba(9, 20, 36, .42);
+  padding: 18px;
+}
+
+.stock-sheet {
+  width: min(460px, 100%);
+  border: 1px solid rgba(255,255,255,.48);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 24px 68px rgba(7, 18, 34, .22);
+  padding: 16px;
+}
+
+.stock-sheet header,
+.stock-sheet footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stock-sheet header span {
+  display: block;
+  color: #3d7f36;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .78rem;
+  font-weight: 900;
+}
+
+.stock-sheet header strong {
+  display: block;
+  color: #162641;
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+.stock-sheet-close {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #dfe6ef;
+  border-radius: 13px;
+  background: #fff;
+  color: #52647a;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.stock-sheet p {
+  margin: 10px 0 14px;
+  color: #65758c;
+  font-size: .9rem;
+  font-weight: 750;
+}
+
+.stock-sheet-qty {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 58px;
+  gap: 10px;
+  align-items: center;
+}
+
+.stock-sheet-qty button {
+  height: 58px;
+  border: 1px solid #d8e2eb;
+  border-radius: 18px;
+  background: #f8fafc;
+  color: #162641;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.stock-sheet-qty input {
+  height: 66px;
+  width: 100%;
+  border: 1px solid #d8e2eb;
+  border-radius: 18px;
+  color: #162641;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 2rem;
+  font-weight: 900;
+  text-align: center;
+  outline: none;
+}
+
+.stock-sheet textarea {
+  width: 100%;
+  min-height: 74px;
+  margin: 12px 0;
+  border: 1px solid #d8e2eb;
+  border-radius: 16px;
+  color: #162641;
+  padding: 12px;
+  font-size: .9rem;
+  font-weight: 650;
+  outline: none;
+  resize: vertical;
+}
+
+.stock-sheet footer .btn {
+  min-height: 44px;
+  flex: 1;
+  justify-content: center;
+}
+
+@media (max-width: 760px) {
+  .stock-plantel-strip { justify-content: flex-start; grid-column: 1 / -1; }
+  .plantel-stock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .plantel-stock-card { min-height: 150px; padding: 11px; }
+  .stock-card-action { min-height: 44px; }
+  .stock-sheet-overlay { padding: 10px; }
+  .stock-sheet { border-radius: 22px 22px 16px 16px; }
 }
 
 </style>

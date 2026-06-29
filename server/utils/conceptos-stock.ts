@@ -98,7 +98,7 @@ const ensureCentralStockSchema = async () => {
     if (!rows.length) {
       throw createError({
         statusCode: 503,
-        message: 'El overlay de stock no está instalado en la base externa. Ejecuta manualmente el SQL entregado para habilitar stock.'
+        message: 'Las tablas de stock no están instaladas en la base externa. Ejecuta manualmente el SQL entregado para habilitar existencias.'
       })
     }
   }
@@ -391,9 +391,22 @@ const stockMutation = async (input: any, user: AuthSessionUser, type: 'restock' 
       WHERE concepto_id = ? AND plantel = ? AND IFNULL(activo, 1) = 1
       FOR UPDATE
     `, [conceptoId, plantel])
-    const setting = settingsRows[0]
+    let setting = settingsRows[0]
+    if ((!setting || Number(setting.stock_enabled || 0) === 0) && type === 'restock') {
+      await conn.query(`
+        INSERT INTO concepto_stock_settings
+          (concepto_id, plantel, stock_enabled, unit_label, reorder_point, allow_negative, activo, sync_version, updated_by)
+        VALUES (?, ?, 1, ?, 0, 0, 1, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          stock_enabled = 1,
+          activo = 1,
+          sync_version = VALUES(sync_version),
+          updated_by = VALUES(updated_by)
+      `, [conceptoId, plantel, DEFAULT_UNIT_LABEL, Date.now(), user.email])
+      setting = { stock_enabled: 1 }
+    }
     if (!setting || Number(setting.stock_enabled || 0) === 0) {
-      throw createError({ statusCode: 409, message: 'El concepto no tiene stock activo para este plantel.' })
+      throw createError({ statusCode: 409, message: 'Primero agrega existencia para este plantel.' })
     }
 
     await conn.query(`INSERT IGNORE INTO concepto_stock_balances (concepto_id, plantel, on_hand, reserved) VALUES (?, ?, 0, 0)`, [conceptoId, plantel])
