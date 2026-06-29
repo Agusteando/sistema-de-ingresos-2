@@ -1,1 +1,1 @@
-Rediseña inventario de conceptos con imagenes y alta central
+Ajusta categorías de conceptos al diseño objetivo

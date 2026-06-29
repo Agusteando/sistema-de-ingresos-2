@@ -233,148 +233,144 @@
       </template>
 
       <template v-else>
-        <section class="inventory-hero card categories-hero">
-          <div class="inventory-title-block">
+        <section class="category-reference-hero card">
+          <div class="category-hero-copy">
+            <span>{{ adminScopeLabel }}</span>
             <div class="inventory-title-line">
-              <h2>Categorías</h2>
-              <span class="live-chip"><i></i> {{ sourceLabel }}</span>
+              <h2>Conceptos</h2>
+              <span class="live-chip"><i></i> Stock en tiempo real</span>
             </div>
+            <p>Administra y organiza los conceptos que requieren control físico.</p>
           </div>
-          <div class="hero-actions">
-            <div class="conceptos-tabs" aria-label="Modo de conceptos">
-              <button type="button" :class="{ active: viewMode === 'stock' }" @click="viewMode = 'stock'">
-                <LucidePackage :size="16" />
-                Inventario
-              </button>
-              <button type="button" :class="{ active: viewMode === 'mappings' }" @click="viewMode = 'mappings'">
-                <LucideTag :size="16" />
-                Categorías
-              </button>
+          <div class="category-hero-actions">
+            <div class="reference-source-chip">
+              <span>Fuente</span>
+              <strong>{{ sourceLabel === 'Base externa' ? 'Central' : 'Local' }}</strong>
+              <LucideChevronDown :size="15" />
             </div>
+            <button type="button" class="btn btn-outline category-refresh-button" :disabled="loading" @click="loadAdmin">
+              <LucideRefreshCw :size="17" :class="{ 'animate-spin': loading }" />
+              Actualizar
+            </button>
           </div>
         </section>
 
-        <section class="inventory-kpis category-kpis">
-          <article v-for="kpi in categoryKpiCards" :key="kpi.key" class="inventory-kpi card" :class="kpi.tone">
-            <div>
-              <span>{{ kpi.label }}</span>
-              <strong>{{ kpi.value }}</strong>
-              <small>{{ kpi.caption }}</small>
-            </div>
-            <i class="kpi-icon" aria-hidden="true"><component :is="kpi.icon" :size="26" /></i>
-          </article>
+        <section class="category-mode-tabs card" aria-label="Modo de conceptos">
+          <button type="button" :class="{ active: viewMode === 'mappings' }" @click="viewMode = 'mappings'">
+            <LucideTag :size="18" />
+            Categorías
+          </button>
+          <button type="button" :class="{ active: viewMode === 'stock' }" @click="viewMode = 'stock'">
+            <LucidePackage :size="18" />
+            Existencias
+          </button>
         </section>
 
-        <section class="inventory-toolbar card categories-toolbar">
-          <label class="toolbar-field compact">
+        <section class="category-filter-bar card">
+          <label class="category-select-field">
             <span>Ciclo</span>
             <select v-model="selectedCiclo">
               <option v-for="cycle in cycleOptions" :key="cycle.value" :value="cycle.value">{{ cycle.label }}</option>
             </select>
           </label>
-          <label class="toolbar-field compact">
+          <label class="category-select-field">
             <span>Plantel</span>
             <select v-model="selectedPlantel">
               <option v-for="plantel in plantelOptions" :key="plantel" :value="plantel">{{ plantel }}</option>
             </select>
           </label>
-          <div class="filter-chips category-chip-row" aria-label="Categorías">
-            <button
-              v-for="category in categories"
-              :key="category.key"
-              type="button"
-              :class="{ active: selectedCategory === category.key }"
-              @click="selectedCategory = category.key"
-            >{{ category.label }}</button>
+          <label class="category-select-field wide">
+            <span>Categoría</span>
+            <select v-model="selectedCategory">
+              <option v-for="category in categories" :key="category.key" :value="category.key">{{ category.label }}</option>
+            </select>
+          </label>
+          <div class="search-box category-main-search">
+            <LucideSearch :size="20" />
+            <input v-model="search" type="search" placeholder="Buscar concepto o taller..." />
           </div>
-          <div class="search-box inventory-search">
-            <LucideSearch :size="18" />
-            <input v-model="search" type="search" placeholder="Buscar concepto..." />
-          </div>
-          <button type="button" class="btn btn-outline inventory-refresh" :disabled="loading" @click="loadAdmin">
-            <LucideRefreshCw :size="16" :class="{ 'animate-spin': loading }" />
+          <button type="button" class="btn btn-outline category-filter-refresh" :disabled="loading" @click="loadAdmin">
+            <LucideRefreshCw :size="17" :class="{ 'animate-spin': loading }" />
             Actualizar
           </button>
         </section>
 
-        <section class="categories-workspace">
-          <div class="inventory-list-card card">
-            <header class="panel-head">
-              <h3>{{ activeCategoryLabel }} <span>({{ visibleMappings.length }})</span></h3>
+        <section class="category-board">
+          <main class="category-selected-card card">
+            <header class="category-panel-header">
+              <div class="category-title-cluster">
+                <span class="category-folder-icon"><LucideTag :size="26" /></span>
+                <div>
+                  <small>Categoría seleccionada</small>
+                  <h3>{{ activeCategoryLabel }} {{ formatCicloLabel(selectedCiclo) }} · {{ selectedPlantel }}</h3>
+                </div>
+              </div>
+              <div class="category-count-pill">
+                <strong>{{ categoryAssignedItems.length }}</strong>
+                <span>{{ categoryAssignedItems.length === 1 ? 'concepto asignado' : 'conceptos asignados' }}</span>
+                <LucideGrid3X3 :size="14" />
+              </div>
             </header>
 
-            <div v-if="loading" class="empty-panel">Cargando...</div>
-            <div v-else-if="!visibleMappings.length" class="empty-panel">Sin conceptos asignados</div>
-            <div v-else class="mapping-list redesigned">
-              <article v-for="mapping in visibleMappings" :key="mapping.id" class="mapping-row">
-                <div class="mapping-id">{{ mapping.concepto_id || '—' }}</div>
-                <div class="mapping-body">
-                  <strong>{{ mapping.concepto_nombre }}</strong>
-                  <span>{{ mapping.plantel }} · {{ mapping.cycle_name }}</span>
-                  <div v-if="mapping.enrollment_type === 'mensual_baja4'" class="tiny-chip-row">
-                    <span v-for="month in parseMonths(mapping.months_json)" :key="month" class="tiny-chip">{{ month }}</span>
+            <div
+              class="assigned-drop-zone"
+              :class="{ empty: !categoryAssignedItems.length, receiving: dropReceiving }"
+              @dragenter.prevent="dropReceiving = true"
+              @dragover.prevent="dropReceiving = true"
+              @dragleave="dropReceiving = false"
+              @drop.prevent="handleConceptDrop"
+            >
+              <article
+                v-for="item in categoryAssignedItems"
+                :key="item.key"
+                class="assigned-concept-row"
+                :class="{ pending: item.pending }"
+              >
+                <span class="assigned-id">{{ item.concepto_id || '—' }}</span>
+                <span class="assigned-doc-icon"><LucideFileText :size="20" /></span>
+                <div class="assigned-copy">
+                  <strong>{{ item.concepto_nombre }}</strong>
+                  <small>{{ item.plantel }} · {{ formatCicloLabel(item.cycle_name || selectedCiclo) }}</small>
+                  <div v-if="item.enrollment_type === 'mensual_baja4' && parseMonths(item.months_json).length" class="tiny-chip-row">
+                    <span v-for="month in parseMonths(item.months_json)" :key="month" class="tiny-chip">{{ month }}</span>
                   </div>
-                  <div v-if="mapping.enrollment_type === 'talleres_servicios' && mapping.servicio_nombre" class="service-link">
-                    <img :src="serviceImage(mapping.servicio_clave || mapping.servicio_nombre)" alt="" loading="lazy" />
-                    {{ mapping.servicio_nombre }}
+                  <div v-if="item.enrollment_type === 'talleres_servicios' && item.servicio_nombre" class="service-link">
+                    <img :src="serviceImage(item.servicio_clave || item.servicio_nombre)" alt="" loading="lazy" />
+                    {{ item.servicio_nombre }}
                   </div>
                 </div>
-                <button type="button" class="icon-action danger" title="Quitar" @click="removeMapping(mapping)">
-                  <LucideTrash2 :size="15" />
+                <button type="button" class="category-trash" :title="item.pending ? 'Quitar' : 'Quitar asignación'" @click="removeAssignedItem(item)">
+                  <LucideTrash2 :size="17" />
                 </button>
               </article>
-            </div>
-          </div>
 
-          <aside class="category-editor card">
-            <header class="panel-head compact">
-              <h3>Asignar concepto</h3>
+              <div class="assigned-empty-state">
+                <LucidePackage :size="25" />
+                <span>Suelta conceptos aquí</span>
+              </div>
+            </div>
+          </main>
+
+          <aside class="add-concepts-panel card">
+            <header class="add-panel-header">
+              <div class="add-title-cluster">
+                <span><LucidePlus :size="19" /></span>
+                <h3>Agregar conceptos</h3>
+              </div>
+              <LucideInfo :size="18" />
             </header>
 
-            <div class="concept-search-select">
-              <div class="search-box">
-                <LucideSearch :size="15" />
-                <input v-model="conceptSearch" type="search" placeholder="Buscar concepto" />
-              </div>
-              <div class="concept-options redesigned">
-                <button
-                  v-for="concept in conceptOptions"
-                  :key="concept.id"
-                  type="button"
-                  :class="['concept-option', { selected: selectedConcept?.id === concept.id }]"
-                  @click="selectedConcept = concept"
-                >
-                  <span class="concept-option-id">{{ concept.id }}</span>
-                  <span class="concept-option-thumb" :class="{ empty: !conceptImageUrl(concept) }">
-                    <img v-if="conceptImageUrl(concept)" :src="conceptImageUrl(concept)" alt="" loading="lazy" />
-                    <LucidePackage v-else :size="17" />
-                  </span>
-                  <strong>{{ concept.concepto }}</strong>
-                  <small>{{ concept.ciclo_escolar || 'sin ciclo' }}</small>
-                </button>
-              </div>
-            </div>
-
-            <div v-if="selectedCategory === 'talleres_servicios'" class="service-editor service-catalog-picker">
+            <div v-if="selectedCategory === 'talleres_servicios'" class="service-inline-picker">
               <label>
                 <span>Taller/servicio</span>
-                <input v-model="serviceSearch" type="search" placeholder="Buscar taller" />
+                <select v-model="serviceName">
+                  <option value="">Selecciona taller</option>
+                  <option v-for="service in serviciosCatalogo" :key="service.clave" :value="service.nombre">{{ service.nombre }}</option>
+                </select>
               </label>
-              <div class="service-catalog-options">
-                <button
-                  v-for="service in visibleCatalogServices"
-                  :key="service.clave"
-                  type="button"
-                  :class="['service-catalog-option', { selected: selectedService?.clave === service.clave }]"
-                  @click="selectService(service)"
-                >
-                  <img :src="service.imagen" alt="" loading="lazy" />
-                  <span>{{ service.nombre }}</span>
-                </button>
-              </div>
             </div>
 
-            <div v-if="selectedCategory === 'mensual_baja4'" class="months-grid">
+            <div v-if="selectedCategory === 'mensual_baja4'" class="months-grid category-months-grid">
               <button
                 v-for="month in months"
                 :key="month"
@@ -384,11 +380,83 @@
               >{{ month }}</button>
             </div>
 
-            <button type="button" class="btn btn-primary full" :disabled="saving || !canSaveMapping" @click="saveMapping">
-              <LucidePlus :size="16" />
-              Guardar
+            <div class="add-search-row">
+              <div class="search-box add-search-box">
+                <LucideSearch :size="18" />
+                <input v-model="conceptSearch" type="search" placeholder="Buscar concepto" />
+              </div>
+              <button type="button" class="filter-square" aria-label="Filtros"><LucideSlidersHorizontal :size="18" /></button>
+            </div>
+
+            <div v-if="loading" class="add-list-empty">Cargando...</div>
+            <div v-else-if="!availableConceptOptions.length" class="add-list-empty">Sin conceptos disponibles</div>
+            <div v-else class="add-concept-list">
+              <article
+                v-for="concept in availableConceptOptions"
+                :key="concept.id"
+                class="add-concept-row"
+                draggable="true"
+                @dragstart="onConceptDragStart($event, concept)"
+              >
+                <span class="drag-handle"><LucideFileText :size="18" /></span>
+                <span class="add-concept-id">{{ concept.id }}</span>
+                <div>
+                  <strong>{{ concept.concepto }}</strong>
+                  <small>{{ formatCicloLabel(concept.ciclo_escolar || selectedCiclo) }}</small>
+                </div>
+                <button type="button" class="add-plus" :disabled="!canStageConcept" @click="addPendingConcept(concept)">
+                  <LucidePlus :size="18" />
+                </button>
+              </article>
+            </div>
+
+            <button type="button" class="save-category-button" :disabled="saving || !pendingAssignments.length || !canStageConcept" @click="savePendingAssignments">
+              <LucidePlus :size="18" />
+              Guardar cambios ({{ pendingAssignments.length }})
             </button>
           </aside>
+        </section>
+
+        <section class="category-support-grid">
+          <article class="support-card card">
+            <header>
+              <div>
+                <LucidePackage :size="18" />
+                <h3>Sin categoría</h3>
+              </div>
+              <strong>{{ uncategorizedConcepts.length }}</strong>
+            </header>
+            <div class="uncategorized-chip-cloud">
+              <span v-for="concept in uncategorizedPreview" :key="concept.id">{{ concept.id }} · {{ concept.concepto }}</span>
+              <button v-if="uncategorizedRemainder > 0" type="button" @click="conceptSearch = ''">+{{ uncategorizedRemainder }} más</button>
+            </div>
+          </article>
+
+          <article class="support-card card workshops-support-card">
+            <header>
+              <div>
+                <LucideGrid3X3 :size="18" />
+                <h3>Catálogo de talleres</h3>
+              </div>
+              <strong>{{ serviciosCatalogo.length }}</strong>
+            </header>
+            <div class="workshop-chip-grid">
+              <button
+                v-for="service in categoryServicePreview"
+                :key="service.clave"
+                type="button"
+                :class="{ selected: selectedService?.clave === service.clave }"
+                @click="selectService(service)"
+              >
+                <img :src="service.imagen" alt="" loading="lazy" />
+                <span>{{ service.nombre }}</span>
+              </button>
+              <button v-if="serviciosCatalogo.length > servicePreviewLimit" type="button" class="more-services-button" @click="showAllServices = !showAllServices">
+                <LucideMoreVertical :size="18" />
+                <span>{{ showAllServices ? 'Ver menos' : 'Ver más' }}</span>
+              </button>
+            </div>
+          </article>
         </section>
       </template>
     </template>
@@ -489,10 +557,12 @@ import {
   LucideBox,
   LucideBuilding2,
   LucideCheck,
-  LucideCircleMinus,
+  LucideChevronDown,
   LucideDollarSign,
+  LucideFileText,
   LucideGrid3X3,
   LucideImage,
+  LucideInfo,
   LucideLock,
   LucideMoreVertical,
   LucidePackage,
@@ -500,9 +570,11 @@ import {
   LucidePlus,
   LucideRefreshCw,
   LucideSearch,
+  LucideSlidersHorizontal,
   LucideTag,
   LucideTrash2,
-  LucideX
+  LucideX,
+  LucideXCircle
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
@@ -512,6 +584,7 @@ import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave } from '~/shared/
 const { show } = useToast()
 const state = useState('globalState')
 const activePlantelCookie = useCookie('auth_active_plantel')
+const authRoleCookie = useCookie('auth_role')
 
 const loading = ref(false)
 const saving = ref(false)
@@ -536,6 +609,11 @@ const savingStock = ref(false)
 const syncingStock = ref(false)
 const savingConcept = ref(false)
 const conceptModal = ref({ open: false, mode: 'create', concepto_id: null, concepto: '', costo: 0, ciclo: '', description: '', image_url: '' })
+const pendingAssignments = ref([])
+const draggedConceptId = ref(null)
+const dropReceiving = ref(false)
+const showAllServices = ref(false)
+const servicePreviewLimit = 11
 
 const months = ['Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul']
 const fallbackCategories = [
@@ -573,6 +651,7 @@ const cycleOptions = computed(() => {
   return values.map((value) => ({ value, label: formatCicloLabel(value) })).sort((a, b) => b.value.localeCompare(a.value))
 })
 const activeCategoryLabel = computed(() => categories.value.find((entry) => entry.key === selectedCategory.value)?.label || 'Categoría')
+const adminScopeLabel = computed(() => String(authRoleCookie.value || '').toLowerCase().includes('super') ? 'SUPER ADMIN' : 'ADMIN')
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase()
 const parseMonths = (value) => {
@@ -610,6 +689,50 @@ const conceptOptions = computed(() => {
     })
     .slice(0, 80)
 })
+
+const categoryAssignedConceptIds = computed(() => new Set([
+  ...visibleMappings.value.map((mapping) => String(Number(mapping.concepto_id || 0))).filter((id) => id !== '0'),
+  ...pendingAssignments.value.map((concept) => String(Number(concept.id || 0))).filter((id) => id !== '0')
+]))
+
+const availableConceptOptions = computed(() => conceptOptions.value
+  .filter((concept) => !categoryAssignedConceptIds.value.has(String(Number(concept.id || 0))))
+  .slice(0, 80)
+)
+
+const categoryAssignedItems = computed(() => [
+  ...visibleMappings.value.map((mapping) => ({
+    key: `mapping-${mapping.id}`,
+    pending: false,
+    mapping,
+    id: mapping.id,
+    concepto_id: mapping.concepto_id,
+    concepto_nombre: mapping.concepto_nombre,
+    plantel: mapping.plantel,
+    cycle_name: mapping.cycle_name,
+    enrollment_type: mapping.enrollment_type,
+    months_json: mapping.months_json,
+    servicio_nombre: mapping.servicio_nombre,
+    servicio_clave: mapping.servicio_clave
+  })),
+  ...pendingAssignments.value.map((concept) => ({
+    key: `pending-${concept.id}`,
+    pending: true,
+    concepto_id: concept.id,
+    concepto_nombre: concept.concepto,
+    plantel: selectedPlantel.value,
+    cycle_name: selectedCiclo.value,
+    enrollment_type: selectedCategory.value,
+    months_json: JSON.stringify(selectedMonths.value),
+    servicio_nombre: selectedService.value?.nombre || serviceName.value || '',
+    servicio_clave: selectedService.value?.clave || serviceKey(serviceName.value)
+  }))
+])
+
+const canStageConcept = computed(() => selectedCategory.value !== 'talleres_servicios' || Boolean(selectedService.value?.clave))
+const uncategorizedPreview = computed(() => uncategorizedConcepts.value.slice(0, 6))
+const uncategorizedRemainder = computed(() => Math.max(0, uncategorizedConcepts.value.length - uncategorizedPreview.value.length))
+const categoryServicePreview = computed(() => showAllServices.value ? serviciosCatalogo.value : serviciosCatalogo.value.slice(0, servicePreviewLimit))
 
 const configuredConceptIds = computed(() => new Set(mappings.value
   .filter((mapping) => normalizeCicloKey(mapping.cycle_name) === selectedCiclo.value && Number(mapping.concepto_id || 0) > 0)
@@ -708,7 +831,7 @@ const inventoryKpiCards = computed(() => [
   { key: 'value', label: 'Valor total', value: formatCurrency(stockKpis.value.value), caption: 'Valor de inventario', tone: 'blue', icon: LucideDollarSign },
   { key: 'units', label: 'Unidades totales', value: formatInteger(stockKpis.value.available), caption: 'Unidades disponibles', tone: 'purple', icon: LucidePackage },
   { key: 'low', label: 'Stock bajo', value: formatInteger(stockKpis.value.low), caption: 'Requieren atención', tone: 'amber', icon: LucideAlertTriangle },
-  { key: 'out', label: 'Agotados', value: formatInteger(stockKpis.value.out), caption: 'Sin existencias', tone: 'red', icon: LucideCircleMinus }
+  { key: 'out', label: 'Agotados', value: formatInteger(stockKpis.value.out), caption: 'Sin existencias', tone: 'red', icon: LucideXCircle }
 ])
 
 const categoryKpiCards = computed(() => [
@@ -912,6 +1035,67 @@ const submitConceptModal = async () => {
   }
 }
 
+const addPendingConcept = (concept) => {
+  if (!concept?.id || !canStageConcept.value) {
+    if (selectedCategory.value === 'talleres_servicios') show('Selecciona un taller', 'danger')
+    return
+  }
+  const conceptId = String(Number(concept.id || 0))
+  if (!conceptId || conceptId === '0' || categoryAssignedConceptIds.value.has(conceptId)) return
+  pendingAssignments.value = [...pendingAssignments.value, concept]
+}
+
+const onConceptDragStart = (event, concept) => {
+  draggedConceptId.value = Number(concept?.id || 0)
+  event?.dataTransfer?.setData('text/plain', String(concept?.id || ''))
+  if (event?.dataTransfer) event.dataTransfer.effectAllowed = 'copy'
+}
+
+const handleConceptDrop = (event) => {
+  dropReceiving.value = false
+  const conceptId = Number(event?.dataTransfer?.getData('text/plain') || draggedConceptId.value || 0)
+  const concept = conceptOptions.value.find((entry) => Number(entry.id || 0) === conceptId)
+  if (concept) addPendingConcept(concept)
+  draggedConceptId.value = null
+}
+
+const removeAssignedItem = (item) => {
+  if (item?.pending) {
+    pendingAssignments.value = pendingAssignments.value.filter((concept) => String(concept.id) !== String(item.concepto_id))
+    return
+  }
+  if (item?.mapping) removeMapping(item.mapping)
+}
+
+const savePendingAssignments = async () => {
+  if (!pendingAssignments.value.length || !canStageConcept.value) return
+  saving.value = true
+  try {
+    for (const concept of pendingAssignments.value) {
+      await $fetch('/api/conceptos-config/mappings', {
+        method: 'POST',
+        body: {
+          ciclo: selectedCiclo.value,
+          plantel: selectedPlantel.value,
+          tipo: selectedCategory.value,
+          concepto_id: concept.id,
+          concepto_nombre: concept.concepto,
+          meses: selectedMonths.value,
+          servicio_nombre: selectedService.value?.nombre || serviceName.value,
+          servicio_clave: selectedService.value?.clave || serviceKey(serviceName.value),
+        }
+      })
+    }
+    show('Cambios guardados', 'success')
+    pendingAssignments.value = []
+    await loadAdmin()
+  } catch (error) {
+    show(error?.data?.message || error?.data?.error || 'No se pudo guardar', 'danger')
+  } finally {
+    saving.value = false
+  }
+}
+
 const canSaveMapping = computed(() => Boolean(selectedConcept.value?.id && selectedCiclo.value && selectedPlantel.value && selectedCategory.value && (selectedCategory.value !== 'talleres_servicios' || selectedService.value?.clave)))
 
 const loadAdmin = async () => {
@@ -994,15 +1178,18 @@ const toggleMonth = (month) => {
 }
 
 watch(selectedPlantel, () => {
+  pendingAssignments.value = []
   if (viewMode.value === 'mappings') loadAdmin()
 })
 
 watch(selectedCiclo, () => {
+  pendingAssignments.value = []
   const exists = selectedStockConcept.value && stockRows.value.some((concept) => String(concept.id) === String(selectedStockConcept.value.id))
   if (!exists && stockRows.value.length) selectStockConcept(stockRows.value[0])
 })
 
 watch(selectedCategory, () => {
+  pendingAssignments.value = []
   if (selectedCategory.value !== 'talleres_servicios') {
     serviceName.value = ''
     serviceSearch.value = ''
@@ -1204,6 +1391,485 @@ onMounted(loadAdmin)
 .concept-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .modal-field { display: grid; gap: 6px; }
 .modal-field.span-2 { grid-column: 1 / -1; }
+.category-reference-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 28px 22px;
+  flex-shrink: 0;
+}
+.category-hero-copy { display: grid; gap: 8px; }
+.category-hero-copy > span {
+  color: #2f8b34;
+  font-size: .68rem;
+  font-weight: 950;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.category-hero-copy p {
+  margin: 0;
+  color: #65758c;
+  font-size: .91rem;
+  font-weight: 760;
+}
+.category-hero-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.reference-source-chip {
+  display: inline-grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 50px;
+  border: 1px solid #dfe7f0;
+  border-radius: 16px;
+  background: #fff;
+  color: var(--ink);
+  padding: 0 18px;
+  box-shadow: 0 10px 22px rgba(22,38,65,.042);
+}
+.reference-source-chip span {
+  color: #68778d;
+  font-size: .67rem;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.reference-source-chip strong { font-size: .92rem; font-weight: 950; }
+.category-refresh-button { min-height: 50px; border-radius: 16px; padding-inline: 20px; font-weight: 920; }
+.category-mode-tabs {
+  display: grid;
+  grid-template-columns: 180px 180px minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.category-mode-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 54px;
+  border: 0;
+  border-right: 1px solid #e7edf4;
+  border-bottom: 3px solid transparent;
+  background: rgba(255,255,255,.94);
+  color: #64738a;
+  font-size: .86rem;
+  font-weight: 930;
+}
+.category-mode-tabs button.active {
+  border-bottom-color: #48a044;
+  background: linear-gradient(180deg, #fbfff9, #fff);
+  color: #2f8632;
+  box-shadow: inset 0 -18px 28px rgba(71,161,68,.055);
+}
+.category-filter-bar {
+  display: grid;
+  grid-template-columns: 240px 240px minmax(260px, 1fr) minmax(360px, 1.4fr) 150px;
+  gap: 22px;
+  align-items: end;
+  padding: 18px 20px;
+  flex-shrink: 0;
+}
+.category-select-field { display: grid; gap: 7px; min-width: 0; }
+.category-select-field span {
+  color: #65758c;
+  font-size: .67rem;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.category-select-field select {
+  width: 100%;
+  height: 48px;
+  border: 1px solid #d8e2ec;
+  border-radius: 15px;
+  background: #fff;
+  color: var(--ink);
+  padding: 0 16px;
+  font-size: .86rem;
+  font-weight: 900;
+  outline: none;
+  box-shadow: 0 8px 20px rgba(22,38,65,.028);
+}
+.category-main-search { height: 48px; border-radius: 15px; padding-inline: 16px; }
+.category-filter-refresh { min-height: 48px; border-radius: 15px; justify-content: center; font-weight: 920; }
+.category-board {
+  display: grid;
+  grid-template-columns: minmax(620px, 1.15fr) minmax(430px, .85fr);
+  gap: 16px;
+  min-height: 0;
+  flex: 1;
+}
+.category-selected-card, .add-concepts-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 18px;
+}
+.category-panel-header, .add-panel-header, .support-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.category-title-cluster, .add-title-cluster, .support-card header > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.category-folder-icon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border-radius: 24px;
+  background: #eaf8e6;
+  color: #3f8c3c;
+  flex: 0 0 auto;
+}
+.category-title-cluster small {
+  display: block;
+  color: #66758a;
+  font-size: .67rem;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.category-title-cluster h3, .add-panel-header h3, .support-card h3 {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-size: 1.14rem;
+  font-weight: 950;
+  letter-spacing: -.01em;
+}
+.category-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  border: 1px solid #dfe7ef;
+  border-radius: 14px;
+  background: #fff;
+  color: #63728a;
+  padding: 0 12px;
+  font-size: .76rem;
+  font-weight: 900;
+  box-shadow: 0 9px 18px rgba(22,38,65,.035);
+}
+.category-count-pill strong {
+  display: grid;
+  min-width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 9px;
+  background: #e9f7e5;
+  color: #2d8732;
+}
+.assigned-drop-zone {
+  position: relative;
+  display: flex;
+  min-height: 270px;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  border: 1.5px dashed rgba(87,158,75,.35);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(250,255,248,.95), rgba(255,255,255,.96));
+  margin-top: 18px;
+  padding: 22px 20px;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+.assigned-drop-zone.receiving {
+  border-color: rgba(73,160,70,.72);
+  background: #f5fff1;
+  box-shadow: inset 0 0 0 4px rgba(73,160,70,.08);
+}
+.assigned-concept-row {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 58px 44px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 14px;
+  min-height: 70px;
+  border: 1px solid #dfe8f1;
+  border-radius: 16px;
+  background: #fff;
+  padding: 10px 12px;
+  box-shadow: 0 12px 24px rgba(22,38,65,.04);
+}
+.assigned-concept-row.pending { border-color: #b6dca8; background: linear-gradient(135deg, #fbfff9, #fff); }
+.assigned-id {
+  display: grid;
+  height: 44px;
+  place-items: center;
+  border-radius: 14px;
+  background: #ecf6e7;
+  color: #2f8333;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .82rem;
+  font-weight: 950;
+}
+.assigned-doc-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 13px;
+  background: #eef7ee;
+  color: #488d43;
+}
+.assigned-copy { display: grid; min-width: 0; gap: 4px; }
+.assigned-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: .91rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assigned-copy small { color: #65758c; font-size: .76rem; font-weight: 820; }
+.category-trash {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid #dfe7ef;
+  border-radius: 13px;
+  background: #fff;
+  color: #5d6e84;
+}
+.category-trash:hover { border-color: #efc7c7; background: #fff5f5; color: #c84343; }
+.assigned-empty-state {
+  position: absolute;
+  inset: auto 0 28px;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  color: #9aa7b7;
+  font-size: .82rem;
+  font-weight: 820;
+  pointer-events: none;
+}
+.assigned-drop-zone:not(.empty) .assigned-empty-state { opacity: .42; }
+.add-panel-header { margin-bottom: 12px; }
+.add-title-cluster span {
+  display: grid;
+  width: 37px;
+  height: 37px;
+  place-items: center;
+  border-radius: 14px;
+  background: #e9f8e5;
+  color: #32913a;
+}
+.add-panel-header h3 { font-size: 1.12rem; }
+.add-panel-header > svg { color: #718096; }
+.service-inline-picker { margin-bottom: 10px; }
+.service-inline-picker label { display: grid; gap: 6px; }
+.service-inline-picker span {
+  color: #66758a;
+  font-size: .64rem;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.service-inline-picker select {
+  height: 42px;
+  border: 1px solid #d8e2ec;
+  border-radius: 14px;
+  background: #fff;
+  padding-inline: 12px;
+  color: var(--ink);
+  font-weight: 850;
+}
+.category-months-grid { margin: 0 0 10px; grid-template-columns: repeat(6, 1fr); }
+.add-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.add-search-box { height: 48px; border-radius: 15px; padding-inline: 15px; }
+.filter-square {
+  display: grid;
+  height: 48px;
+  place-items: center;
+  border: 1px solid #dbe4ee;
+  border-radius: 15px;
+  background: #fff;
+  color: #52647a;
+  box-shadow: 0 8px 18px rgba(22,38,65,.035);
+}
+.add-concept-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 7px;
+  overflow: auto;
+  padding-right: 4px;
+}
+.add-concept-row {
+  display: grid;
+  grid-template-columns: 38px 48px minmax(0,1fr) 38px;
+  align-items: center;
+  gap: 9px;
+  min-height: 50px;
+  border: 1px solid #e4ebf2;
+  border-radius: 14px;
+  background: #fff;
+  padding: 6px 8px;
+  cursor: grab;
+  box-shadow: 0 8px 16px rgba(22,38,65,.032);
+}
+.add-concept-row:active { cursor: grabbing; }
+.drag-handle {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 11px;
+  background: #eef3f8;
+  color: #7c8b9f;
+}
+.add-concept-id {
+  color: #627289;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .71rem;
+  font-weight: 950;
+  text-align: center;
+}
+.add-concept-row div { display: grid; gap: 2px; min-width: 0; }
+.add-concept-row strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: .75rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.add-concept-row small { color: #65758c; font-size: .68rem; font-weight: 850; }
+.add-plus {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #cfe6c7;
+  border-radius: 12px;
+  background: #f6fcf3;
+  color: #2f8935;
+}
+.add-plus:disabled { opacity: .45; cursor: not-allowed; }
+.add-list-empty {
+  display: grid;
+  flex: 1;
+  min-height: 150px;
+  place-items: center;
+  color: #8290a2;
+  font-weight: 850;
+}
+.save-category-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 45px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #58ad49, #398f34);
+  color: #fff;
+  font-size: .9rem;
+  font-weight: 950;
+  box-shadow: 0 14px 28px rgba(57,143,52,.28);
+  margin-top: 12px;
+}
+.save-category-button:disabled { opacity: .55; box-shadow: none; cursor: not-allowed; }
+.category-support-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr);
+  gap: 16px;
+  flex-shrink: 0;
+}
+.support-card {
+  min-height: 132px;
+  padding: 16px 18px;
+}
+.support-card header { margin-bottom: 12px; }
+.support-card header > div { gap: 10px; }
+.support-card header > div svg { color: #536b88; }
+.support-card h3 { margin: 0; font-size: 1rem; }
+.support-card header > strong {
+  display: grid;
+  min-width: 38px;
+  height: 30px;
+  place-items: center;
+  border-radius: 11px;
+  background: #eef4f8;
+  color: var(--ink);
+  font-size: .84rem;
+  font-weight: 950;
+}
+.uncategorized-chip-cloud {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.uncategorized-chip-cloud span, .uncategorized-chip-cloud button {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #dbe5ee;
+  border-radius: 999px;
+  background: #fff;
+  color: #4e6076;
+  padding: 7px 12px;
+  font-size: .74rem;
+  font-weight: 870;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uncategorized-chip-cloud button { background: #edf8e8; color: #397c35; border-color: #d4eacb; }
+.workshop-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(122px, 1fr));
+  gap: 9px;
+}
+.workshop-chip-grid button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid #dfe7ef;
+  border-radius: 15px;
+  background: #fff;
+  color: #263952;
+  padding: 8px 10px;
+  text-align: left;
+  box-shadow: 0 8px 16px rgba(22,38,65,.03);
+}
+.workshop-chip-grid button.selected { border-color: #93c77e; background: #f6fcf3; color: #2e7f33; }
+.workshop-chip-grid img {
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.workshop-chip-grid span {
+  overflow: hidden;
+  font-size: .72rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.more-services-button { justify-content: center; border-style: dashed !important; }
+
 @media (max-width: 1440px) {
   .inventory-kpis { grid-template-columns: repeat(5, minmax(150px, 1fr)); overflow-x: auto; padding-bottom: 2px; }
   .inventory-kpi { min-width: 190px; }
@@ -1246,4 +1912,36 @@ onMounted(loadAdmin)
   .stock-sheet, .concept-modal { border-radius: 22px 22px 16px 16px; }
   .concept-modal-grid { grid-template-columns: 1fr; }
 }
+
+@media (max-width: 1180px) {
+  .category-filter-bar { grid-template-columns: 1fr 1fr; }
+  .category-select-field.wide, .category-main-search, .category-filter-refresh { grid-column: auto; }
+  .category-board, .category-support-grid { grid-template-columns: 1fr; }
+  .category-selected-card { min-height: 430px; }
+}
+@media (max-width: 760px) {
+  .category-reference-hero { align-items: stretch; flex-direction: column; padding: 17px; }
+  .category-hero-actions { display: grid; grid-template-columns: 1fr; }
+  .reference-source-chip, .category-refresh-button { width: 100%; justify-content: center; }
+  .category-mode-tabs { grid-template-columns: 1fr 1fr; }
+  .category-mode-tabs button { min-height: 52px; }
+  .category-filter-bar { grid-template-columns: 1fr; gap: 12px; padding: 14px; }
+  .category-board { gap: 12px; }
+  .category-selected-card, .add-concepts-panel, .support-card { padding: 13px; }
+  .category-panel-header, .support-card header { align-items: flex-start; flex-direction: column; }
+  .category-count-pill { width: 100%; justify-content: center; }
+  .category-title-cluster { align-items: flex-start; }
+  .category-folder-icon { width: 50px; height: 50px; border-radius: 19px; }
+  .category-title-cluster h3 { font-size: 1rem; }
+  .assigned-drop-zone { min-height: 260px; margin-top: 14px; padding: 14px; }
+  .assigned-concept-row { grid-template-columns: 48px minmax(0,1fr) 38px; gap: 10px; }
+  .assigned-doc-icon { display: none; }
+  .assigned-id { height: 40px; }
+  .add-search-row { grid-template-columns: 1fr 48px; }
+  .add-concept-row { grid-template-columns: 34px minmax(0,1fr) 36px; }
+  .add-concept-id { display: none; }
+  .category-months-grid { grid-template-columns: repeat(4, 1fr); }
+  .workshop-chip-grid { grid-template-columns: 1fr 1fr; }
+}
+
 </style>
