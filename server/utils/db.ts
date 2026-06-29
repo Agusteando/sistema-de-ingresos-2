@@ -687,6 +687,19 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
       `)
 
       await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS concepto_media (
+          concepto_id INT NOT NULL PRIMARY KEY,
+          image_url TEXT DEFAULT NULL,
+          activo TINYINT(1) NOT NULL DEFAULT 1,
+          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
+          updated_by VARCHAR(255) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_concepto_media_activo (activo)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS talleres_servicios_catalogo (
           servicio_clave VARCHAR(120) NOT NULL PRIMARY KEY,
           servicio_nombre VARCHAR(160) NOT NULL,
@@ -852,6 +865,19 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
           await checkAndAddColumn('config_enrollment_mappings', 'updated_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
           await runOptionalIndexQuery(`ALTER TABLE config_enrollment_mappings ADD INDEX idx_config_enrollment_scope (cycle_name, plantel, enrollment_type, activo)`)
           await runOptionalIndexQuery(`ALTER TABLE config_enrollment_mappings ADD INDEX idx_config_enrollment_servicio (servicio_clave, activo)`)
+        }
+      } catch (e) {}
+
+      try {
+        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'concepto_media'`)
+        if (tables.length > 0) {
+          await checkAndAddColumn('concepto_media', 'image_url', "TEXT DEFAULT NULL")
+          await checkAndAddColumn('concepto_media', 'activo', "TINYINT(1) NOT NULL DEFAULT 1")
+          await checkAndAddColumn('concepto_media', 'sync_version', "BIGINT UNSIGNED NOT NULL DEFAULT 1")
+          await checkAndAddColumn('concepto_media', 'updated_by', "VARCHAR(255) DEFAULT NULL")
+          await checkAndAddColumn('concepto_media', 'created_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP")
+          await checkAndAddColumn('concepto_media', 'updated_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+          await runOptionalIndexQuery(`ALTER TABLE concepto_media ADD INDEX idx_concepto_media_activo (activo)`)
         }
       } catch (e) {}
 

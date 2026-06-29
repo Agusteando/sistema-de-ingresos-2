@@ -2,6 +2,7 @@ import { runWithBridgeAgentId, query } from '../../utils/db'
 import { controlEscolarCentralQuery, getCentralTableColumns } from '../../utils/control-escolar-central'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { enrichConceptosWithStock } from '../../utils/conceptos-stock'
+import { createCentralConcepto, readCentralConceptMediaForIds, requireConceptosAdmin } from '../../utils/conceptos-config'
 
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 
@@ -48,7 +49,8 @@ const readCentralConceptosForCycle = async (ciclo: unknown, search: string) => {
     optionalConceptColumn(columns, 'plantel', "''"),
     optionalConceptColumn(columns, 'eventual', '0'),
     optionalConceptColumn(columns, 'plazo', "'1'"),
-    optionalConceptColumn(columns, 'ciclo', "''")
+    optionalConceptColumn(columns, 'ciclo', "''"),
+    columns.has('image_url') ? '`image_url` AS `image_url`' : columns.has('imagen_url') ? '`imagen_url` AS `image_url`' : columns.has('imagen') ? '`imagen` AS `image_url`' : 'NULL AS `image_url`'
   ]
 
   const params: any[] = []
@@ -61,12 +63,14 @@ const readCentralConceptosForCycle = async (ciclo: unknown, search: string) => {
 
   where += buildConceptSearchWhere(search, params, columns)
 
-  return await controlEscolarCentralQuery<any[]>(`
+  const rows = await controlEscolarCentralQuery<any[]>(`
     SELECT ${selectParts.join(', ')}
       FROM conceptos
       ${where}
      ORDER BY concepto ASC
   `, params)
+  const media = await readCentralConceptMediaForIds(rows.map((row) => Number(row?.id || 0)))
+  return rows.map((row) => ({ ...row, image_url: row.image_url || media.get(Number(row?.id || 0)) || null }))
 }
 
 const readBridgeConceptosForCycle = async (event: any, ciclo: unknown, search: string) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
@@ -79,8 +83,25 @@ const readBridgeConceptosForCycle = async (event: any, ciclo: unknown, search: s
     params.push(`%${search}%`, `%${search}%`, search)
   }
 
+  const mediaTables = await query<any[]>(`SHOW TABLES LIKE 'concepto_media'`).catch(() => [])
+  if (mediaTables.length) {
+    const aliasedParams: any[] = [cicloKey]
+    let aliasedWhere = 'c.ciclo = ?'
+    if (search) {
+      aliasedWhere += ' AND (c.concepto LIKE ? OR c.description LIKE ? OR CAST(c.id AS CHAR) = ?)'
+      aliasedParams.push(`%${search}%`, `%${search}%`, search)
+    }
+    return await query(`
+      SELECT c.id, c.concepto, c.costo, c.description, c.plantel, c.eventual, c.plazo, c.ciclo, m.image_url
+      FROM conceptos c
+      LEFT JOIN concepto_media m ON m.concepto_id = c.id AND IFNULL(m.activo, 1) = 1
+      WHERE ${aliasedWhere}
+      ORDER BY c.concepto ASC
+    `, aliasedParams)
+  }
+
   return await query(`
-    SELECT id, concepto, costo, description, plantel, eventual, plazo, ciclo
+    SELECT id, concepto, costo, description, plantel, eventual, plazo, ciclo, NULL AS image_url
     FROM conceptos
     WHERE ${where}
     ORDER BY concepto ASC
@@ -112,10 +133,9 @@ export default defineEventHandler(async (event) => {
   }
 
   if (method === 'POST') {
-    throw createError({
-      statusCode: 405,
-      message: 'Los conceptos se administran desde la fuente central.'
-    })
+    const user = await requireConceptosAdmin(event)
+    const body = await readBody(event)
+    return await createCentralConcepto(body, user)
   }
 
   throw createError({ statusCode: 405, message: 'Metodo no permitido.' })

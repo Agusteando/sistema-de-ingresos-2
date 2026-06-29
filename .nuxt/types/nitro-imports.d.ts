@@ -71,6 +71,7 @@ declare global {
   const createApp: typeof import('../../node_modules/h3').createApp
   const createAppEventHandler: typeof import('../../node_modules/h3').createAppEventHandler
   const createAuthSessionToken: typeof import('../../server/utils/auth-session-token').createAuthSessionToken
+  const createCentralConcepto: typeof import('../../server/utils/conceptos-config').createCentralConcepto
   const createEmptyCounters: typeof import('../../server/utils/externalBaseSync').createEmptyCounters
   const createError: typeof import('../../node_modules/h3').createError
   const createEvent: typeof import('../../node_modules/h3').createEvent
@@ -278,6 +279,7 @@ declare global {
   const readBestStockSnapshots: typeof import('../../server/utils/conceptos-stock').readBestStockSnapshots
   const readBestTalleresServiciosCatalog: typeof import('../../server/utils/talleres-servicios').readBestTalleresServiciosCatalog
   const readBody: typeof import('../../node_modules/h3').readBody
+  const readCentralConceptMediaForIds: typeof import('../../server/utils/conceptos-config').readCentralConceptMediaForIds
   const readCentralConceptos: typeof import('../../server/utils/conceptos-config').readCentralConceptos
   const readCentralConceptosConfig: typeof import('../../server/utils/conceptos-config').readCentralConceptosConfig
   const readCentralMatriculaServicios: typeof import('../../server/utils/talleres-servicios').readCentralMatriculaServicios
@@ -371,6 +373,7 @@ declare global {
   const uncontrolledStockSnapshot: typeof import('../../server/utils/conceptos-stock').uncontrolledStockSnapshot
   const unsealSession: typeof import('../../node_modules/h3').unsealSession
   const unwrapLocalSystemBridgeResult: typeof import('../../server/utils/local-system-handoff').unwrapLocalSystemBridgeResult
+  const updateCentralConceptImage: typeof import('../../server/utils/conceptos-config').updateCentralConceptImage
   const updateCentralMatriculaServicio: typeof import('../../server/utils/talleres-servicios').updateCentralMatriculaServicio
   const updateControlEscolarHuskyPass: typeof import('../../server/utils/control-escolar').updateControlEscolarHuskyPass
   const updateControlEscolarStudent: typeof import('../../server/utils/control-escolar').updateControlEscolarStudent
@@ -485,7 +488,7 @@ export { BECA_TYPE_OPTIONS, normalizeBecaTypes } from 'C:/Users/hp/sistema-de-in
 export { fetchCentralMatriculaOverlay, fetchCentralMatriculaOverlays } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/central-matricula-overlay';
 export { resolveCfdiPath, proxyCfdiEvent } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/cfdi-proxy';
 export { DEFAULT_COBRANZA_EMAIL_SUBJECT, DEFAULT_COBRANZA_EMAIL_TEMPLATE, escapeHtml, normalizeTemplateInput, formatCobranzaMoney, minimumFractionDigits, renderCobranzaEmail } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/cobranzaEmail';
-export { CONCEPTO_CATEGORIES, DEFAULT_PLANTELES, canManageConceptosConfig, requireConceptosAdmin, readCentralConceptosConfig, readCentralConceptos, readLocalConceptosConfig, buildConceptosConfigPayload, collectServiceCatalog, collectUnassociatedServices, readBestConceptosConfig, readBestConceptosConfigPayload, syncCentralConceptosConfigToBridge, syncCentralConceptosConfigToBridgeBestEffort, runSyncForActiveBridge, createOrUpdateMapping, deleteMapping, saveCycle, deleteCycle } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/conceptos-config';
+export { CONCEPTO_CATEGORIES, DEFAULT_PLANTELES, canManageConceptosConfig, requireConceptosAdmin, readCentralConceptMediaForIds, updateCentralConceptImage, createCentralConcepto, readCentralConceptosConfig, readCentralConceptos, readLocalConceptosConfig, buildConceptosConfigPayload, collectServiceCatalog, collectUnassociatedServices, readBestConceptosConfig, readBestConceptosConfigPayload, syncCentralConceptosConfigToBridge, syncCentralConceptosConfigToBridgeBestEffort, runSyncForActiveBridge, createOrUpdateMapping, deleteMapping, saveCycle, deleteCycle } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/conceptos-config';
 export { uncontrolledStockSnapshot, readBestStockSnapshots, stockMapByConceptId, enrichConceptosWithStock, readStockMovements, syncCentralConceptosStockToBridge, syncCentralConceptosStockToBridgeBestEffort, canManageConceptosStock, requireConceptosStockAdmin, saveStockSettings, restockConceptoStock, adjustConceptoStock, assertStockAvailableForConcept, reserveStockForPayment, releaseStockReservation, finalizeStockReservation, restoreStockForCanceledPayment } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/conceptos-stock';
 export { logControlEscolarAuditEvent, getControlEscolarAuditSummary } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/control-escolar-audit';
 export { buildControlEscolarScopeDescriptor, ensureControlEscolarCacheSchema, getControlBaseSourceId, ensureControlBaseSource, fetchVerifiedControlEscolarScopeRows, maybeRefreshVerifiedControlEscolarScopeCache, maybeRefreshControlEscolarCacheFromLoadedRows, maybePublishControlEscolarSnapshotFromBridge, publishControlEscolarSnapshotFromBridge, readControlCacheSourceMeta } from 'C:/Users/hp/sistema-de-ingresos-2/server/utils/control-escolar-cache';

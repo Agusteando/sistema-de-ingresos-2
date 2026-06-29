@@ -43,6 +43,8 @@ type ConceptRow = {
   meses?: number | string | null
   plazo?: string | null
   eventual?: number | boolean | null
+  image_url?: string | null
+  imagen_url?: string | null
 }
 
 const normalizeText = (value: unknown, maxLength = 255) => String(value ?? '').trim().slice(0, maxLength)
@@ -114,7 +116,8 @@ const normalizeConceptRow = (row: any): ConceptRow => ({
   montoFinal: row.montoFinal ?? row.monto_final ?? null,
   meses: row.meses ?? null,
   plazo: row.plazo ?? null,
-  eventual: row.eventual ?? null
+  eventual: row.eventual ?? null,
+  image_url: normalizeText(row.image_url || row.imagen_url || row.imagen || row.foto_url || '', 1000) || null
 })
 
 const normalizeCycleRows = (rows: CycleRow[] = []) => {
@@ -136,6 +139,127 @@ const normalizeCycleRows = (rows: CycleRow[] = []) => {
 
 const optionalCentralColumn = (columns: Set<string>, column: string, fallbackSql: string, alias = column) =>
   columns.has(column) ? `\`${column}\`` : `${fallbackSql} AS ${alias}`
+
+const imageColumnFor = (columns: Set<string>) => ['image_url', 'imagen_url', 'imagen', 'foto_url'].find((column) => columns.has(column)) || ''
+
+const centralTableExists = async (tableName: string) => {
+  try {
+    const rows = await controlEscolarCentralQuery<any[]>(`SHOW TABLES LIKE ?`, [tableName])
+    return rows.length > 0
+  } catch {
+    return false
+  }
+}
+
+export const readCentralConceptMediaForIds = async (conceptoIds: number[] = []) => {
+  const ids = Array.from(new Set(conceptoIds.map((id) => Number(id || 0)).filter((id) => id > 0)))
+  const media = new Map<number, string>()
+  if (!ids.length || !(await centralTableExists('concepto_media'))) return media
+
+  const rows = await controlEscolarCentralQuery<any[]>(`
+    SELECT concepto_id, image_url
+      FROM concepto_media
+     WHERE IFNULL(activo, 1) = 1
+       AND concepto_id IN (${ids.map(() => '?').join(',')})
+  `, ids)
+  rows.forEach((row) => {
+    const id = Number(row?.concepto_id || 0)
+    const imageUrl = normalizeText(row?.image_url || '', 1000)
+    if (id > 0 && imageUrl) media.set(id, imageUrl)
+  })
+  return media
+}
+
+const mergeConceptMedia = async (rows: ConceptRow[]) => {
+  const media = await readCentralConceptMediaForIds(rows.map((row) => Number(row.id || 0)))
+  return rows.map((row) => ({
+    ...row,
+    image_url: normalizeText(row.image_url || media.get(Number(row.id || 0)) || '', 1000) || null
+  }))
+}
+
+const requireConceptImageStorage = async () => {
+  if (!(await centralTableExists('concepto_media'))) {
+    throw createError({
+      statusCode: 503,
+      message: 'Falta la tabla concepto_media en la base externa para guardar imagenes de conceptos.'
+    })
+  }
+}
+
+export const updateCentralConceptImage = async (conceptoId: unknown, imageUrlInput: unknown, user: AuthSessionUser) => {
+  const id = Number(conceptoId || 0)
+  const imageUrl = normalizeText(imageUrlInput, 1000)
+  if (id <= 0) throw createError({ statusCode: 400, message: 'Concepto inválido.' })
+
+  const columns = await getCentralTableColumns('conceptos')
+  const imageColumn = imageColumnFor(columns)
+  if (imageColumn) {
+    await controlEscolarCentralQuery(`UPDATE conceptos SET \`${imageColumn}\` = ? WHERE id = ?`, [imageUrl || null, id])
+  } else {
+    await requireConceptImageStorage()
+    await controlEscolarCentralQuery(`
+      INSERT INTO concepto_media (concepto_id, image_url, activo, updated_by)
+      VALUES (?, ?, 1, ?)
+      ON DUPLICATE KEY UPDATE image_url = VALUES(image_url), activo = 1, updated_by = VALUES(updated_by), updated_at = CURRENT_TIMESTAMP
+    `, [id, imageUrl || null, user.email || null])
+  }
+  return { ok: true, concepto_id: id, image_url: imageUrl || null }
+}
+
+export const createCentralConcepto = async (input: any, user: AuthSessionUser) => {
+  const nombre = normalizeText(input?.concepto || input?.nombre || '', 255)
+  const costo = Number(input?.costo ?? input?.monto ?? 0)
+  const ciclo = normalizeCicloKey(input?.ciclo || input?.ciclo_escolar || '')
+  const description = normalizeText(input?.description || input?.descripcion || '', 255)
+  const plantel = normalizePlantel(input?.plantel || 'global') || 'global'
+  const imageUrl = normalizeText(input?.image_url || input?.imagen_url || input?.imagen || '', 1000)
+
+  if (!nombre) throw createError({ statusCode: 400, message: 'Escribe el nombre del concepto.' })
+  if (!Number.isFinite(costo) || costo < 0) throw createError({ statusCode: 400, message: 'Costo inválido.' })
+  if (!ciclo) throw createError({ statusCode: 400, message: 'Selecciona un ciclo.' })
+
+  const columns = await getCentralTableColumns('conceptos')
+  if (!columns.has('concepto')) throw createError({ statusCode: 503, message: 'La tabla conceptos externa no tiene la columna concepto.' })
+
+  const fields: string[] = ['concepto']
+  const values: any[] = [nombre]
+  const add = (column: string, value: any) => {
+    if (columns.has(column)) {
+      fields.push(column)
+      values.push(value)
+    }
+  }
+
+  add('costo', Math.round(costo))
+  add('description', description || null)
+  add('plantel', plantel)
+  if (columns.has('ciclo')) add('ciclo', ciclo)
+  else add('ciclo_escolar', ciclo)
+  add('eventual', input?.eventual === undefined ? 1 : (Number(input.eventual) ? 1 : 0))
+  add('plazo', normalizeText(input?.plazo || '[1]', 255) || '[1]')
+  add('meses', input?.meses ?? null)
+
+  const imageColumn = imageColumnFor(columns)
+  if (imageUrl && !imageColumn) await requireConceptImageStorage()
+  if (imageUrl && imageColumn) add(imageColumn, imageUrl)
+
+  const result = await controlEscolarCentralQuery<any>(`
+    INSERT INTO conceptos (${fields.map((field) => `\`${field}\``).join(', ')})
+    VALUES (${fields.map(() => '?').join(', ')})
+  `, values)
+
+  const newId = Number(result?.insertId || input?.id || 0)
+  if (imageUrl && !imageColumn && newId > 0) {
+    await updateCentralConceptImage(newId, imageUrl, user)
+  }
+
+  const rows = newId > 0
+    ? await controlEscolarCentralQuery<any[]>(`SELECT * FROM conceptos WHERE id = ? LIMIT 1`, [newId])
+    : await controlEscolarCentralQuery<any[]>(`SELECT * FROM conceptos WHERE concepto = ? ORDER BY id DESC LIMIT 1`, [nombre])
+  const normalized = await mergeConceptMedia(rows.map(normalizeConceptRow))
+  return { ok: true, concepto: normalized[0] || { id: newId, concepto: nombre, costo, ciclo_escolar: ciclo, image_url: imageUrl || null } }
+}
 
 export const readCentralConceptosConfig = async () => {
   const cycleColumns = await getCentralTableColumns('config_school_cycles')
@@ -176,6 +300,7 @@ export const readCentralConceptosConfig = async () => {
 
 export const readCentralConceptos = async () => {
   const columns = await getCentralTableColumns('conceptos')
+  const imageColumn = imageColumnFor(columns)
   const selectParts = [
     'id',
     'concepto',
@@ -184,7 +309,8 @@ export const readCentralConceptos = async () => {
     optionalCentralColumn(columns, 'montoFinal', 'NULL'),
     optionalCentralColumn(columns, 'meses', 'NULL'),
     optionalCentralColumn(columns, 'plazo', 'NULL'),
-    optionalCentralColumn(columns, 'eventual', 'NULL')
+    optionalCentralColumn(columns, 'eventual', 'NULL'),
+    imageColumn ? `\`${imageColumn}\` AS image_url` : 'NULL AS image_url'
   ]
   const rows = await controlEscolarCentralQuery<any[]>(
     `SELECT ${selectParts.join(', ')}
@@ -192,7 +318,7 @@ export const readCentralConceptos = async () => {
       WHERE concepto IS NOT NULL AND TRIM(concepto) <> ''
       ORDER BY concepto ASC`
   )
-  return rows.map(normalizeConceptRow)
+  return await mergeConceptMedia(rows.map(normalizeConceptRow))
 }
 
 const getLocalTableColumns = async (tableName: string) => {

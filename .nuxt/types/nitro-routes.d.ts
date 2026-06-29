@@ -81,6 +81,9 @@ declare module "nitropack/types" {
     '/api/conceptos-stock/sync/central-to-bridge': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/conceptos-stock/sync/central-to-bridge.post').default>>>>
     }
+    '/api/conceptos/:id': {
+      'put': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/conceptos/[id].put').default>>>>
+    }
     '/api/conceptos': {
       'default': Simplify<Serialize<Awaited<ReturnType<typeof import('../../server/api/conceptos/index').default>>>>
     }

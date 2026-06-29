@@ -1,1 +1,1 @@
-Mejora la experiencia de existencias por plantel
+Rediseña inventario de conceptos con imagenes y alta central
