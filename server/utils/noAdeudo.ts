@@ -546,6 +546,21 @@ export const buildNoAdeudoValidationUrl = (event: any, token: string) => `${reso
 export const renderNoAdeudoEmail = ({ student, ciclo, validationUrl }: { student: Record<string, any>; ciclo: string; validationUrl?: string }) => {
   const studentName = normalizeText(student.nombreCompleto || student.nombreCompletoAlumno || student.nombre || student.nombres) || normalizeText(student.matricula)
   const subject = `Carta de No Adeudo - ${studentName}`
+  const text = [
+    'Estimado(a) padre, madre o tutor:',
+    '',
+    `Adjuntamos en PDF la Carta de No Adeudo correspondiente a ${studentName}, matrícula ${normalizeText(student.matricula)}.`,
+    '',
+    `Alumno(a): ${studentName}`,
+    `Matrícula: ${normalizeText(student.matricula)}`,
+    `Ciclo escolar: ${normalizeText(ciclo)}`,
+    '',
+    'El documento incluye un código QR firmado para validar su autenticidad.',
+    validationUrl ? `Validación: ${validationUrl}` : '',
+    '',
+    'Atentamente,',
+    'Administración Escolar'
+  ].filter((line, idx, arr) => line || arr[idx - 1]).join('\n').trim()
   const html = `<div style="font-family:Inter,Arial,sans-serif;color:#1f2937;max-width:680px;margin:0 auto;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;background:#ffffff;">
     <div style="background:#2f7d38;color:#fff;padding:18px 24px;">
       <h2 style="margin:0;font-size:19px;">Carta de No Adeudo</h2>
@@ -553,7 +568,7 @@ export const renderNoAdeudoEmail = ({ student, ciclo, validationUrl }: { student
     </div>
     <div style="padding:24px;">
       <p style="margin-top:0;">Estimado(a) padre, madre o tutor:</p>
-      <p>Adjuntamos la Carta de No Adeudo correspondiente a <strong>${escapeHtml(studentName)}</strong>, matrícula <strong>${escapeHtml(student.matricula)}</strong>.</p>
+      <p>Adjuntamos en PDF la Carta de No Adeudo correspondiente a <strong>${escapeHtml(studentName)}</strong>, matrícula <strong>${escapeHtml(student.matricula)}</strong>.</p>
       <table style="width:100%;border-collapse:collapse;margin:18px 0;font-size:13px;">
         <tbody>
           <tr><td style="padding:8px 0;color:#64748b;">Alumno(a)</td><td style="padding:8px 0;text-align:right;font-weight:700;">${escapeHtml(studentName)}</td></tr>
@@ -561,12 +576,12 @@ export const renderNoAdeudoEmail = ({ student, ciclo, validationUrl }: { student
           <tr><td style="padding:8px 0;color:#64748b;">Ciclo escolar</td><td style="padding:8px 0;text-align:right;font-weight:700;">${escapeHtml(ciclo)}</td></tr>
         </tbody>
       </table>
-      <p>El documento incluye un código QR firmado. Para validar que no haya sido alterado, escanee el QR y confirme que la identidad visible coincida con la información desplegada.</p>
+      <p>El documento incluye un código QR firmado para validar su autenticidad.</p>
       ${validationUrl ? `<p style="font-size:12px;color:#64748b;word-break:break-all;">Validación: ${escapeHtml(validationUrl)}</p>` : ''}
       <p style="margin-bottom:0;">Atentamente,<br><strong>Administración Escolar</strong></p>
     </div>
   </div>`
-  return { subject, html }
+  return { subject, text, html }
 }
 
 export const buildNoAdeudoPreviewPayload = async (event: any, matriculas: unknown[], ciclo: unknown) => {
@@ -713,13 +728,14 @@ export const sendNoAdeudoForContext = async (event: any, context: NoAdeudoStuden
     debtTotal: 0,
   })
   const email = renderNoAdeudoEmail({ student: context.student, ciclo, validationUrl })
+  const pdfBuffer = Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf as any)
   const attachments: MailAttachment[] = [{
     filename: `Carta-No-Adeudo-${safeFilePart(context.student.matricula)}.pdf`,
-    content: pdf,
+    content: pdfBuffer,
     contentType: 'application/pdf'
   }]
 
-  await sendEmail(recipients.join(', '), email.subject, email.html, generatedByEmail, attachments)
+  await sendEmail(recipients.join(', '), email.subject, email.html, generatedByEmail, attachments, email.text)
   if (context.debt.hasDebt) {
     await persistNoAdeudoDeudorCartaMark({
       context,
