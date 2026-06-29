@@ -1,1 +1,1 @@
-Ajusta categorías de conceptos al diseño objetivo
+Limita planteles visibles en conceptos

@@ -2,6 +2,7 @@
 export {}
 declare global {
   const CICLOS_LIST: typeof import('../../utils/constants').CICLOS_LIST
+  const CONCEPTOS_PLANTELES_LIST: typeof import('../../utils/constants').CONCEPTOS_PLANTELES_LIST
   const GRADOS_ORDEN: typeof import('../../utils/constants').GRADOS_ORDEN
   const INVOICE_BASE_API_URL: typeof import('../../utils/invoiceLegacy').INVOICE_BASE_API_URL
   const PLANTELES_LIST: typeof import('../../utils/constants').PLANTELES_LIST
@@ -54,6 +55,7 @@ declare global {
   const inferNivelFromBase: typeof import('../../utils/invoiceLegacy').inferNivelFromBase
   const inject: typeof import('vue').inject
   const injectHead: typeof import('../../node_modules/nuxt/dist/app/composables/head').injectHead
+  const isConceptosPlantel: typeof import('../../utils/constants').isConceptosPlantel
   const isNuxtError: typeof import('../../node_modules/nuxt/dist/app/composables/error').isNuxtError
   const isPrerendered: typeof import('../../node_modules/nuxt/dist/app/composables/payload').isPrerendered
   const isProxy: typeof import('vue').isProxy
@@ -76,6 +78,7 @@ declare global {
   const nextTick: typeof import('vue').nextTick
   const nivelEducativoOptions: typeof import('../../utils/invoiceLegacy').nivelEducativoOptions
   const normalizeCicloOption: typeof import('../../utils/constants').normalizeCicloOption
+  const normalizeConceptosPlantel: typeof import('../../utils/constants').normalizeConceptosPlantel
   const normalizeCurpForInvoice: typeof import('../../utils/invoiceLegacy').normalizeCurpForInvoice
   const normalizeInvoiceConcept: typeof import('../../utils/invoiceLegacy').normalizeInvoiceConcept
   const normalizeText: typeof import('../../utils/invoiceLegacy').normalizeText
@@ -248,6 +251,7 @@ import { UnwrapRef } from 'vue'
 declare module 'vue' {
   interface ComponentCustomProperties {
     readonly CICLOS_LIST: UnwrapRef<typeof import('../../utils/constants')['CICLOS_LIST']>
+    readonly CONCEPTOS_PLANTELES_LIST: UnwrapRef<typeof import('../../utils/constants')['CONCEPTOS_PLANTELES_LIST']>
     readonly GRADOS_ORDEN: UnwrapRef<typeof import('../../utils/constants')['GRADOS_ORDEN']>
     readonly INVOICE_BASE_API_URL: UnwrapRef<typeof import('../../utils/invoiceLegacy')['INVOICE_BASE_API_URL']>
     readonly PLANTELES_LIST: UnwrapRef<typeof import('../../utils/constants')['PLANTELES_LIST']>
@@ -300,6 +304,7 @@ declare module 'vue' {
     readonly inferNivelFromBase: UnwrapRef<typeof import('../../utils/invoiceLegacy')['inferNivelFromBase']>
     readonly inject: UnwrapRef<typeof import('vue')['inject']>
     readonly injectHead: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/head')['injectHead']>
+    readonly isConceptosPlantel: UnwrapRef<typeof import('../../utils/constants')['isConceptosPlantel']>
     readonly isNuxtError: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/error')['isNuxtError']>
     readonly isPrerendered: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/payload')['isPrerendered']>
     readonly isProxy: UnwrapRef<typeof import('vue')['isProxy']>
@@ -322,6 +327,7 @@ declare module 'vue' {
     readonly nextTick: UnwrapRef<typeof import('vue')['nextTick']>
     readonly nivelEducativoOptions: UnwrapRef<typeof import('../../utils/invoiceLegacy')['nivelEducativoOptions']>
     readonly normalizeCicloOption: UnwrapRef<typeof import('../../utils/constants')['normalizeCicloOption']>
+    readonly normalizeConceptosPlantel: UnwrapRef<typeof import('../../utils/constants')['normalizeConceptosPlantel']>
     readonly normalizeCurpForInvoice: UnwrapRef<typeof import('../../utils/invoiceLegacy')['normalizeCurpForInvoice']>
     readonly normalizeInvoiceConcept: UnwrapRef<typeof import('../../utils/invoiceLegacy')['normalizeInvoiceConcept']>
     readonly normalizeText: UnwrapRef<typeof import('../../utils/invoiceLegacy')['normalizeText']>

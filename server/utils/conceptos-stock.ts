@@ -2,6 +2,7 @@ import type mysql from 'mysql2/promise'
 import { query, executeStatementTransaction, type SqlStatement } from './db'
 import { controlEscolarCentralQuery, getControlEscolarCentralDb } from './control-escolar-central'
 import { getTrustedAuthUser, type AuthSessionUser } from './auth-session'
+import { CONCEPTOS_PLANTELES_LIST, isConceptosPlantel } from '../../utils/constants'
 
 export type ConceptoStockStatus = 'uncontrolled' | 'available' | 'low' | 'out'
 export type StockSource = 'central' | 'bridge'
@@ -36,6 +37,9 @@ const STOCK_TABLES = ['concepto_stock_settings', 'concepto_stock_balances', 'con
 const DEFAULT_UNIT_LABEL = 'unidad'
 
 const normalizePlantel = (value: unknown) => String(value || '').trim().toUpperCase()
+const visiblePlantelParams = () => CONCEPTOS_PLANTELES_LIST.map((plantel) => String(plantel).toUpperCase())
+const isVisiblePlantel = (plantel: unknown) => isConceptosPlantel(normalizePlantel(plantel))
+const visiblePlantelWhere = (column = 'plantel') => `${column} IN (${CONCEPTOS_PLANTELES_LIST.map(() => '?').join(',')})`
 const normalizeText = (value: unknown, maxLength = 255) => String(value ?? '').trim().slice(0, maxLength)
 const toInt = (value: unknown, fallback = 0) => {
   const parsed = Number.parseInt(String(value ?? ''), 10)
@@ -119,8 +123,12 @@ const readCentralSnapshots = async (input: { plantel?: unknown; conceptoIds?: nu
   const params: any[] = []
   const where: string[] = ['IFNULL(s.activo, 1) = 1']
   if (plantel) {
+    if (!isVisiblePlantel(plantel)) return []
     where.push('s.plantel = ?')
     params.push(plantel)
+  } else {
+    where.push(visiblePlantelWhere('s.plantel'))
+    params.push(...visiblePlantelParams())
   }
   if (conceptoIds.length) {
     where.push(`s.concepto_id IN (${conceptoIds.map(() => '?').join(',')})`)
@@ -155,8 +163,12 @@ const readBridgeSnapshots = async (input: { plantel?: unknown; conceptoIds?: num
   const params: any[] = []
   const where: string[] = ['IFNULL(s.activo, 1) = 1']
   if (plantel) {
+    if (!isVisiblePlantel(plantel)) return []
     where.push('s.plantel = ?')
     params.push(plantel)
+  } else {
+    where.push(visiblePlantelWhere('s.plantel'))
+    params.push(...visiblePlantelParams())
   }
   if (conceptoIds.length) {
     where.push(`s.concepto_id IN (${conceptoIds.map(() => '?').join(',')})`)
@@ -224,8 +236,12 @@ export const readStockMovements = async (input: { plantel?: unknown; conceptoId?
   const params: any[] = []
   const where: string[] = ['1 = 1']
   if (plantel) {
+    if (!isVisiblePlantel(plantel)) return { source: 'bridge' as StockSource, movements: [] }
     where.push('plantel = ?')
     params.push(plantel)
+  } else {
+    where.push(visiblePlantelWhere('plantel'))
+    params.push(...visiblePlantelParams())
   }
   if (conceptoId > 0) {
     where.push('concepto_id = ?')
@@ -339,6 +355,7 @@ export const saveStockSettings = async (input: any, user: AuthSessionUser) => {
   const conceptoId = Number(input?.concepto_id || input?.conceptoId || 0)
   const plantel = normalizePlantel(input?.plantel)
   if (!conceptoId || !plantel) throw createError({ statusCode: 400, message: 'Concepto y plantel requeridos.' })
+  if (!isVisiblePlantel(plantel)) throw createError({ statusCode: 400, message: 'Plantel no disponible para conceptos.' })
 
   const enabled = isTruthy(input?.stock_enabled ?? input?.enabled)
   const reorderPoint = Math.max(0, toInt(input?.reorder_point ?? input?.reorderPoint, 0))
@@ -379,6 +396,7 @@ const stockMutation = async (input: any, user: AuthSessionUser, type: 'restock' 
   const note = normalizeText(input?.note || input?.motivo || '', 1200) || null
 
   if (!conceptoId || !plantel) throw createError({ statusCode: 400, message: 'Concepto y plantel requeridos.' })
+  if (!isVisiblePlantel(plantel)) throw createError({ statusCode: 400, message: 'Plantel no disponible para conceptos.' })
   if (!Number.isFinite(quantity) || quantity === 0) throw createError({ statusCode: 400, message: 'Cantidad inválida.' })
 
   const db = getControlEscolarCentralDb()
@@ -455,7 +473,7 @@ export const assertStockAvailableForConcept = async (input: { conceptoId: unknow
   const conceptoId = Number(input.conceptoId || 0)
   const plantel = normalizePlantel(input.plantel)
   const quantity = toPositiveInt(input.quantity, 1)
-  if (!conceptoId || !plantel) return uncontrolledStockSnapshot(conceptoId, plantel)
+  if (!conceptoId || !plantel || !isVisiblePlantel(plantel)) return uncontrolledStockSnapshot(conceptoId, plantel)
   const { snapshots, source } = await readBestStockSnapshots({ plantel, conceptoIds: [conceptoId] })
   const snapshot = snapshots[0] || uncontrolledStockSnapshot(conceptoId, plantel, source)
   if (!snapshot.controlled) return snapshot
@@ -562,7 +580,7 @@ const reserveBridge = async (input: any): Promise<StockReservation> => {
 export const reserveStockForPayment = async (input: any): Promise<StockReservation> => {
   const conceptoId = Number(input?.conceptoId || 0)
   const plantel = normalizePlantel(input?.plantel)
-  if (!conceptoId || !plantel) return { controlled: false, source: 'bridge', concepto_id: conceptoId, plantel, quantity: 0 }
+  if (!conceptoId || !plantel || !isVisiblePlantel(plantel)) return { controlled: false, source: 'bridge', concepto_id: conceptoId, plantel, quantity: 0 }
   try {
     return await reserveCentral(input)
   } catch (error: any) {
@@ -643,7 +661,7 @@ export const restoreStockForCanceledPayment = async (pago: any, user: AuthSessio
   const conceptoId = Number(pago?.stock_concepto_id || pago?.concepto || 0)
   const plantel = normalizePlantel(pago?.stock_plantel || pago?.plantel)
   const quantity = toPositiveInt(pago?.stock_quantity, 1)
-  if (!stockControlled || !conceptoId || !plantel) return { restored: false }
+  if (!stockControlled || !conceptoId || !plantel || !isVisiblePlantel(plantel)) return { restored: false }
 
   const idempotencyKey = `cancel:${pago.folio}:${conceptoId}:${plantel}`
   const applyCentral = async () => {

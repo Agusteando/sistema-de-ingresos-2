@@ -4,6 +4,18 @@ export const PLANTELES_LIST = [
   'PREEM', 'PREET', 'CT', 'CM', 'DM', 'CO', 'DC', 'GM', 'PM', 'PT', 'SM', 'ST', 'IS', 'ISM'
 ]
 
+export const CONCEPTOS_PLANTELES_LIST = ['PM', 'SM', 'PT', 'ST', 'CT', 'PREEM', 'GM']
+
+export const normalizeConceptosPlantel = (value: string | null | undefined, fallback = CONCEPTOS_PLANTELES_LIST[0]) => {
+  const code = String(value || '').trim().toUpperCase()
+  return CONCEPTOS_PLANTELES_LIST.includes(code) ? code : fallback
+}
+
+export const isConceptosPlantel = (value: string | null | undefined) => {
+  const code = String(value || '').trim().toUpperCase()
+  return CONCEPTOS_PLANTELES_LIST.includes(code)
+}
+
 export const CICLOS_LIST = [
   { value: '2025', label: '2025-2026' },
   { value: '2026', label: '2026-2027' }

@@ -578,7 +578,7 @@ import {
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
-import { PLANTELES_LIST } from '~/utils/constants'
+import { CONCEPTOS_PLANTELES_LIST, isConceptosPlantel, normalizeConceptosPlantel } from '~/utils/constants'
 import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave } from '~/shared/utils/talleresServicios'
 
 const { show } = useToast()
@@ -591,7 +591,7 @@ const saving = ref(false)
 const syncing = ref(false)
 const adminPayload = ref(null)
 const selectedCiclo = ref('')
-const selectedPlantel = ref(String(activePlantelCookie.value || 'PT').toUpperCase() === 'GLOBAL' ? 'PT' : String(activePlantelCookie.value || 'PT').toUpperCase())
+const selectedPlantel = ref(normalizeConceptosPlantel(String(activePlantelCookie.value || 'PM').toUpperCase()))
 const selectedCategory = ref('regular')
 const search = ref('')
 const conceptSearch = ref('')
@@ -640,7 +640,7 @@ const conceptos = computed(() => Array.isArray(adminPayload.value?.conceptos) ? 
 const serviciosCatalogo = computed(() => Array.isArray(adminPayload.value?.serviciosCatalogo) ? adminPayload.value.serviciosCatalogo : [])
 const stockPayload = computed(() => adminPayload.value?.stock || { source: 'bridge', snapshots: [], movements: [] })
 const stockSourceLabel = computed(() => stockPayload.value?.source === 'central' ? 'Base externa' : 'Respaldo local')
-const plantelOptions = computed(() => [...PLANTELES_LIST])
+const plantelOptions = computed(() => [...CONCEPTOS_PLANTELES_LIST])
 const cycleOptions = computed(() => {
   const fromCycles = Array.isArray(adminPayload.value?.cycles)
     ? adminPayload.value.cycles.map((cycle) => cycle.cycle_name).filter(Boolean)
@@ -767,7 +767,7 @@ const allStockSnapshots = computed(() => {
   const snapshots = Array.isArray(stockPayload.value?.allSnapshots)
     ? stockPayload.value.allSnapshots
     : Array.isArray(stockPayload.value?.snapshots) ? stockPayload.value.snapshots : []
-  return snapshots.filter((snapshot) => Number(snapshot?.concepto_id || 0) > 0 && String(snapshot?.plantel || '').trim())
+  return snapshots.filter((snapshot) => Number(snapshot?.concepto_id || 0) > 0 && isConceptosPlantel(String(snapshot?.plantel || '')))
 })
 
 const stockForPlantel = (concept, plantel) => {
@@ -857,7 +857,7 @@ const activePlantelStockItem = computed(() => {
 const selectedStockMovements = computed(() => {
   const conceptId = Number(selectedStockConcept.value?.id || 0)
   const movements = Array.isArray(stockPayload.value?.movements) ? stockPayload.value.movements : []
-  return movements.filter((movement) => Number(movement.concepto_id || 0) === conceptId).slice(0, 16)
+  return movements.filter((movement) => Number(movement.concepto_id || 0) === conceptId && isConceptosPlantel(String(movement.plantel || ''))).slice(0, 16)
 })
 
 const stockDisplayValue = (stock) => stock?.controlled ? String(Math.max(0, Number(stock.available ?? stock.on_hand ?? 0))) : '—'

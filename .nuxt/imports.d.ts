@@ -46,6 +46,6 @@ export { useToast } from '../composables/useToast';
 export { useVisionFaceImage } from '../composables/useVisionFaceImage';
 export { readApiDiagnostic, logApiDiagnostic } from '../utils/apiDiagnostic';
 export { authCookieFlagEnabled, authRoleTokens, resolveClientAuthAccess } from '../utils/authAccess';
-export { PLANTELES_LIST, CICLOS_LIST, GRADOS_ORDEN, normalizeCicloOption } from '../utils/constants';
+export { PLANTELES_LIST, CONCEPTOS_PLANTELES_LIST, normalizeConceptosPlantel, isConceptosPlantel, CICLOS_LIST, GRADOS_ORDEN, normalizeCicloOption } from '../utils/constants';
 export { exportToCSV, exportToExcel } from '../utils/export';
 export { INVOICE_BASE_API_URL, legacyInvoiceConfig, plantelCodes, taxSystems, nivelEducativoOptions, useOptionsData, escapeXml, normalizeText, normalizeUpper, normalizeCurpForInvoice, isValidRFC, isValidEmail, isValidCURP, validateNivelEducativo, mapPaymentForm, getLocalISOStringNow, isValidInvoiceDate, determineReceiverType, getUseOptions, extractPlantelCode, parseFolioNumber, computeDefaultProductKey, computeDefaultFacturaCon, inferNivelFromBase, defaultRvoeFor, getInvoiceAmount, normalizeInvoiceConcept, buildFiscalProfiles, resolveLegacyInvoiceContext, InvoiceConceptInput, ResolveLegacyInvoiceContextInput, ResolvedLegacyInvoiceConcept, ResolvedLegacyInvoiceContext } from '../utils/invoiceLegacy';
