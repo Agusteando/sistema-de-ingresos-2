@@ -61,6 +61,7 @@
                   <LucideCheckCircle :size="13" />
                   <span>{{ selectedConcept.concepto }}</span>
                   <strong>${{ formatMoney(selectedConcept.costo) }}</strong>
+                  <em :class="['stock-chip', stockClass(selectedConcept.stock)]">{{ stockLabel(selectedConcept.stock) }}</em>
                 </div>
                 <div v-if="selectedConceptServicio" class="concept-service-pill">
                   <img :src="selectedConceptServicio.imagen" alt="" loading="lazy" />
@@ -92,6 +93,7 @@
                       type="button"
                       role="option"
                       :aria-selected="String(c.id) === String(selectedDocumentoId)"
+                      :disabled="isStockBlocked(c)"
                       @mousedown.prevent
                       @click="selectConcept(c)"
                     >
@@ -104,6 +106,7 @@
                       <span class="concept-option-meta">
                         <b>${{ formatMoney(c.costo) }}</b>
                         <em>{{ conceptMeta(c) }}</em>
+                        <i :class="['stock-chip', stockClass(c.stock)]">{{ stockLabel(c.stock) }}</i>
                       </span>
                     </button>
                     <div v-if="filteredConceptos.length > visibleConceptos.length" class="concept-dropdown-hint">
@@ -361,6 +364,22 @@ const conceptMeta = (concepto) => {
   return parts.filter(Boolean).join(' · ')
 }
 
+const stockLabel = (stock) => {
+  if (!stock?.controlled) return 'stock infinito'
+  if (stock.status === 'out') return 'agotado'
+  if (stock.status === 'low') return `bajo · ${stock.available ?? 0}`
+  return `${stock.available ?? 0} disponibles`
+}
+
+const stockClass = (stock) => {
+  if (!stock?.controlled) return 'neutral'
+  if (stock.status === 'out') return 'danger'
+  if (stock.status === 'low') return 'warning'
+  return 'success'
+}
+
+const isStockBlocked = (concepto) => Boolean(concepto?.stock?.controlled && concepto?.stock?.status === 'out' && !concepto?.stock?.allow_negative)
+
 const setFirstConceptOptionRef = (el) => {
   firstConceptOptionRef.value = el
 }
@@ -385,6 +404,10 @@ const applyConceptToForm = (concepto) => {
 }
 
 const selectConcept = (concepto) => {
+  if (isStockBlocked(concepto)) {
+    show('Este concepto está agotado para el plantel activo.', 'danger')
+    return
+  }
   selectedDocumentoId.value = String(concepto.id)
   conceptSearch.value = concepto.concepto || String(concepto.id)
   conceptDropdownOpen.value = false
@@ -478,6 +501,7 @@ const openCartaWindow = () => {
 
 const submit = async () => {
   if (!selectedDocumentoId.value) return show('Seleccione un concepto', 'danger')
+  if (isStockBlocked(selectedConcept.value)) return show('No hay stock disponible para este concepto en el plantel activo.', 'danger')
   const montoFinal = Number(montoFinalInput.value)
   if (!Number.isFinite(montoFinal) || montoFinal < 0 || Math.floor(montoFinal) !== montoFinal) {
     return show('Ingresa un monto final sin decimales', 'danger')
@@ -885,7 +909,6 @@ onMounted(() => {
   opacity: 0.72;
 }
 
-
 </style>
 
 <style scoped>
@@ -911,4 +934,25 @@ onMounted(() => {
   border-radius: 9px;
   object-fit: cover;
 }
+.stock-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 20px;
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: .63rem;
+  font-style: normal;
+  font-weight: 850;
+}
+.stock-chip.neutral { background: #f1f4f8; color: #68778c; }
+.stock-chip.success { background: #edf8ea; color: #356b2f; }
+.stock-chip.warning { background: #fff4d9; color: #925b0d; }
+.stock-chip.danger { background: #fff1f1; color: #b42318; }
+.concept-option:disabled {
+  cursor: not-allowed;
+  opacity: .66;
+}
+
 </style>

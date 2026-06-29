@@ -6,6 +6,7 @@ import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney, parseNullableMoney } from '../../utils/monto-final'
 import { PLANTELES_LIST } from '../../../utils/constants'
+import { finalizeStockReservation, releaseStockReservation, reserveStockForPayment, type StockReservation } from '../../utils/conceptos-stock'
 
 const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 
@@ -123,9 +124,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const effectivePaymentMethod = formaDePago
 
   const statements: SqlStatement[] = []
+  const stockReservations: StockReservation[] = []
+  const paymentStockReservations: StockReservation[] = []
   const finalAmountByTarget = new Map<string, number>()
   const today = dayjs()
 
+  try {
   for (const p of pagos) {
     const requestedAmount = Number(p.montoPagado || 0)
     if (requestedAmount <= 0) continue
@@ -215,6 +219,24 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       throw createError({ statusCode: 400, message: 'El monto excede el saldo del documento seleccionado.' })
     }
 
+    const stockConceptoId = Number(paymentConcept.concepto || 0)
+    const shouldConsumeStock = resuelto <= 0.009
+    const stockReservation = shouldConsumeStock
+      ? await reserveStockForPayment({
+          conceptoId: stockConceptoId,
+          plantel,
+          quantity: 1,
+          matricula,
+          documento,
+          mes: mesNumber,
+          userEmail: user?.email || userName,
+          note: paymentConcept.conceptoNombre,
+          idempotencyKey: `payment:${matricula}:${documento}:${mesNumber}:${Date.now()}:${stockReservations.length}`
+        })
+      : { controlled: false, source: 'bridge' as const, concepto_id: stockConceptoId, plantel, quantity: 0 }
+    stockReservations.push(stockReservation)
+    paymentStockReservations.push(stockReservation)
+
     const montoDecimal = Number(requestedAmount.toFixed(2))
     const letra = numeroALetras(montoDecimal)
     statements.push({
@@ -246,11 +268,17 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           depurado_fecha,
           pago_otro_plantel,
           plantel_pago,
+          stock_controlled,
+          stock_source,
+          stock_concepto_id,
+          stock_plantel,
+          stock_quantity,
+          stock_movement_id,
           fecha,
           fecha_original,
           fecha_modificada_at,
           fecha_modificada_por
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       params: [
         matricula,
@@ -279,6 +307,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         pagoRealizadoEnOtroPlantel ? originalTimestamp : null,
         pagoRealizadoEnOtroPlantel ? 1 : 0,
         pagoRealizadoEnOtroPlantel ? plantelPago : null,
+        stockReservation.controlled ? 1 : 0,
+        stockReservation.controlled ? stockReservation.source : null,
+        stockReservation.controlled ? stockReservation.concepto_id : null,
+        stockReservation.controlled ? stockReservation.plantel : null,
+        stockReservation.controlled ? stockReservation.quantity : 0,
+        stockReservation.controlled ? stockReservation.movement_id || null : null,
         effectiveTimestamp,
         originalTimestamp,
         paymentDateChanged ? originalTimestamp : null,
@@ -286,13 +320,25 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       ]
     })
   }
+  } catch (error) {
+    await Promise.all(stockReservations.map((reservation) => releaseStockReservation(reservation, 'Pago no confirmado por validación fallida')))
+    throw error
+  }
 
   if (!statements.some(statement => /INSERT INTO referenciasdepago/i.test(statement.sql))) {
     throw createError({ statusCode: 400, message: 'No hay pagos validos para registrar.' })
   }
 
-  const results = await executeStatementTransaction<any>(statements)
+  let results: any[] = []
+  try {
+    results = await executeStatementTransaction<any>(statements)
+  } catch (error) {
+    await Promise.all(stockReservations.map((reservation) => releaseStockReservation(reservation, 'Pago no confirmado por error transaccional')))
+    throw error
+  }
+
   const resultFolios = results.map(result => Number(result.insertId)).filter(Boolean)
+  await Promise.all(paymentStockReservations.map((reservation, index) => finalizeStockReservation(reservation, resultFolios[index])))
 
   return {
     success: true,

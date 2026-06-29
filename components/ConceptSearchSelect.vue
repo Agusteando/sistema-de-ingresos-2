@@ -33,6 +33,7 @@
       <LucideCheckCircle :size="12" />
       <span>{{ selectedConcept.concepto }}</span>
       <strong>${{ formatMoney(selectedConcept.costo) }}</strong>
+      <em :class="['concept-stock-chip', stockClass(selectedConcept.stock)]">{{ stockLabel(selectedConcept.stock) }}</em>
     </div>
 
     <div v-if="isOpen" class="concept-select-menu" role="listbox" aria-label="Conceptos">
@@ -51,6 +52,7 @@
           class="concept-select-option"
           type="button"
           role="option"
+          :disabled="isStockBlocked(concept)"
           :aria-selected="String(concept.id) === String(modelValue)"
           @mousedown.prevent
           @click="select(concept)"
@@ -62,6 +64,7 @@
           <span class="concept-select-meta">
             <b>${{ formatMoney(concept.costo) }}</b>
             <em>{{ conceptMeta(concept) }}</em>
+            <i :class="['concept-stock-chip', stockClass(concept.stock)]">{{ stockLabel(concept.stock) }}</i>
           </span>
         </button>
         <div v-if="filteredConcepts.length > visibleConcepts.length" class="concept-select-hint">
@@ -128,6 +131,22 @@ const conceptMeta = (concept) => {
   return parts.join(' · ')
 }
 
+const stockLabel = (stock) => {
+  if (!stock?.controlled) return 'infinito'
+  if (stock.status === 'out') return 'agotado'
+  if (stock.status === 'low') return `bajo · ${stock.available ?? 0}`
+  return `${stock.available ?? 0} disp.`
+}
+
+const stockClass = (stock) => {
+  if (!stock?.controlled) return 'neutral'
+  if (stock.status === 'out') return 'danger'
+  if (stock.status === 'low') return 'warning'
+  return 'success'
+}
+
+const isStockBlocked = (concept) => Boolean(concept?.stock?.controlled && concept?.stock?.status === 'out' && !concept?.stock?.allow_negative)
+
 const syncSearchFromSelection = () => {
   if (selectedConcept.value) search.value = selectedConcept.value.concepto || String(selectedConcept.value.id)
 }
@@ -157,6 +176,7 @@ const focusFirstOption = async () => {
 }
 
 const select = (concept) => {
+  if (isStockBlocked(concept)) return
   emit('update:modelValue', String(concept.id))
   emit('select', concept)
   search.value = concept.concepto || String(concept.id)
@@ -300,6 +320,11 @@ watch(() => props.concepts, syncSearchFromSelection, { immediate: true })
   outline: none;
 }
 
+.concept-select-option:disabled {
+  cursor: not-allowed;
+  opacity: .62;
+}
+
 .concept-select-main,
 .concept-select-meta {
   display: grid;
@@ -336,4 +361,22 @@ watch(() => props.concepts, syncSearchFromSelection, { immediate: true })
   font-size: 0.78rem;
   font-weight: 820;
 }
+.concept-stock-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 19px;
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 0.63rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.concept-stock-chip.neutral { background: #f1f4f8; color: #68778c; }
+.concept-stock-chip.success { background: #edf8ea; color: #356b2f; }
+.concept-stock-chip.warning { background: #fff4d9; color: #925b0d; }
+.concept-stock-chip.danger { background: #fff1f1; color: #b42318; }
+
 </style>

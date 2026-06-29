@@ -281,6 +281,12 @@ model ReferenciasDePago {
   depurado_fecha    DateTime? @db.DateTime(0)
   pago_otro_plantel Boolean   @default(false)
   plantel_pago      String?   @db.VarChar(20)
+  stock_controlled  Boolean   @default(false)
+  stock_source      String?   @db.VarChar(20)
+  stock_concepto_id Int?
+  stock_plantel     String?   @db.VarChar(40)
+  stock_quantity    Int       @default(0)
+  stock_movement_id BigInt?
 
   @@map("referenciasdepago")
 }
@@ -301,6 +307,63 @@ model DocumentoConceptoPeriodos {
 
   @@index([documento, start_mes, end_mes, estatus], map: "idx_documento_periodo")
   @@map("documento_concepto_periodos")
+}
+
+
+model ConceptoStockSettings {
+  concepto_id    Int
+  plantel        String   @db.VarChar(40)
+  stock_enabled  Boolean  @default(false)
+  unit_label     String   @default("unidad") @db.VarChar(40)
+  reorder_point  Int      @default(0)
+  allow_negative Boolean  @default(false)
+  activo         Boolean  @default(true)
+  sync_version   BigInt   @default(1) @db.UnsignedBigInt
+  updated_by     String?  @db.VarChar(255)
+  created_at     DateTime @default(now()) @db.DateTime(0)
+  updated_at     DateTime @updatedAt @db.DateTime(0)
+
+  @@id([concepto_id, plantel])
+  @@index([plantel, stock_enabled, activo], map: "idx_concepto_stock_settings_scope")
+  @@index([concepto_id], map: "idx_concepto_stock_settings_concepto")
+  @@map("concepto_stock_settings")
+}
+
+model ConceptoStockBalances {
+  concepto_id      Int
+  plantel          String   @db.VarChar(40)
+  on_hand          Int      @default(0)
+  reserved         Int      @default(0)
+  last_movement_id BigInt?
+  updated_at       DateTime @updatedAt @db.DateTime(0)
+
+  @@id([concepto_id, plantel])
+  @@index([plantel, on_hand], map: "idx_concepto_stock_balances_scope")
+  @@index([last_movement_id], map: "idx_concepto_stock_balances_movement")
+  @@map("concepto_stock_balances")
+}
+
+model ConceptoStockMovements {
+  id              BigInt   @id @default(autoincrement())
+  concepto_id     Int
+  plantel         String   @db.VarChar(40)
+  movement_type   String   @db.VarChar(40)
+  quantity_delta  Int
+  quantity_after  Int
+  source_type     String?  @db.VarChar(60)
+  source_id       String?  @db.VarChar(120)
+  documento       Int?
+  folio           Int?
+  matricula       String?  @db.VarChar(255)
+  note            String?  @db.Text
+  idempotency_key String?  @unique(map: "uniq_concepto_stock_movement_idempotency") @db.VarChar(160)
+  created_at      DateTime @default(now()) @db.DateTime(0)
+  created_by      String?  @db.VarChar(255)
+
+  @@index([plantel, concepto_id, id], map: "idx_concepto_stock_movements_scope")
+  @@index([source_type, source_id], map: "idx_concepto_stock_movements_source")
+  @@index([folio], map: "idx_concepto_stock_movements_folio")
+  @@map("concepto_stock_movements")
 }
 
 model SolicitudesCancelaciones {

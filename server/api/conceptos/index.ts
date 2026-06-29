@@ -1,6 +1,7 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { controlEscolarCentralQuery, getCentralTableColumns } from '../../utils/control-escolar-central'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { enrichConceptosWithStock } from '../../utils/conceptos-stock'
 
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 
@@ -95,11 +96,18 @@ export default defineEventHandler(async (event) => {
     const { ciclo = '2025', q = '' } = getQuery(event)
     const search = String(Array.isArray(q) ? q[0] : q || '').trim()
 
+    const plantel = String(getQuery(event).plantel || event.context.user?.active_plantel || event.context.dbBridgeAgentId || '').trim().toUpperCase()
+    const stockPlantel = plantel && plantel !== 'GLOBAL' ? plantel : String(event.context.dbBridgeAgentId || event.context.user?.auth_home_plantel || 'PT').trim().toUpperCase()
+
     try {
-      return await readCentralConceptosForCycle(ciclo, search)
+      const rows = await readCentralConceptosForCycle(ciclo, search)
+      const enriched = await enrichConceptosWithStock(rows, stockPlantel)
+      return enriched.conceptos
     } catch (error) {
       console.warn('[conceptos] central unavailable; falling back to Bridge conceptos.', error)
-      return await readBridgeConceptosForCycle(event, ciclo, search)
+      const rows = await readBridgeConceptosForCycle(event, ciclo, search)
+      const enriched = await enrichConceptosWithStock(rows as any[], stockPlantel)
+      return enriched.conceptos
     }
   }
 

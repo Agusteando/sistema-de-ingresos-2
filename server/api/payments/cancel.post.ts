@@ -1,4 +1,5 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
+import { restoreStockForCanceledPayment } from '../../utils/conceptos-stock'
 
 const getCancellationRequestsTable = async () => {
   const candidates = ['solicitudescancelaciones', 'solicitudesCancelaciones']
@@ -44,7 +45,15 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       throw createError({ statusCode: 409, message: 'El pago cambió de estado antes de completar la cancelación.' })
     }
 
-    return { success: true, status: 'canceled', folio: pago.folio }
+    let stock: any = { restored: false }
+    try {
+      stock = await restoreStockForCanceledPayment(pago, user)
+    } catch (error: any) {
+      console.error('[Conceptos Stock] Pago cancelado, pero no se pudo restaurar stock:', error)
+      stock = { restored: false, error: error?.message || 'No se pudo restaurar stock.' }
+    }
+
+    return { success: true, status: 'canceled', folio: pago.folio, stock }
   }
 
   const cancellationRequestsTable = await getCancellationRequestsTable()

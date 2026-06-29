@@ -9,6 +9,7 @@ import {
 import { resolveProjectedAmount } from "../../../utils/monto-final";
 import { normalizeBecaTypes } from "../../../utils/becaTypes";
 import { isDepuradoPayment, isOtherCampusPayment } from "../../../utils/payment-classification";
+import { readBestStockSnapshots, stockMapByConceptId, uncontrolledStockSnapshot } from '../../../utils/conceptos-stock';
 import {
   getDocumentoPeriodoSchema,
   periodoLifecycleSelect,
@@ -536,9 +537,18 @@ export default defineEventHandler(async (event) =>
       });
     });
 
+    const stockPlantel = normalizePlantel(studentRef?.plantel || user.active_plantel || event.context.dbBridgeAgentId || '');
+    const stockConceptIds = Array.from(new Set(debts
+      .map((debt: any) => Number(debt.conceptoId || debt.concepto || 0))
+      .filter((id: number) => id > 0)));
+    const stockPayload = await readBestStockSnapshots({ plantel: stockPlantel, conceptoIds: stockConceptIds });
+    const stockByConcept = stockMapByConceptId(stockPayload.snapshots);
+
     debts.forEach((debt: any) => {
       debt.documentTimeline =
         documentTimelineById.get(Number(debt.documento)) || null;
+      const conceptoId = Number(debt.conceptoId || debt.concepto || 0);
+      debt.stock = stockByConcept.get(conceptoId) || uncontrolledStockSnapshot(conceptoId, stockPlantel, stockPayload.source);
     });
 
     console.info("[EstadoCuentaDebug] Estado de Cuenta DB result", {

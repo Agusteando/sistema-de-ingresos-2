@@ -1,1 +1,1 @@
-Restaurar scripts estándar de Nuxt para Vercel
+Agrega stock opcional por plantel para conceptos financieros

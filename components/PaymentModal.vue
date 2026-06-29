@@ -255,7 +255,12 @@
               </thead>
               <tbody>
                 <tr v-for="(debt, i) in processedDebts" :key="i" class="border-t border-gray-100 hover:bg-transparent">
-                  <td class="font-semibold text-sm py-2 px-4 text-gray-800">{{ debt.conceptoNombre }}</td>
+                  <td class="font-semibold text-sm py-2 px-4 text-gray-800">
+                    <div class="payment-concept-cell">
+                      <span>{{ debt.conceptoNombre }}</span>
+                      <em :class="['payment-stock-chip', stockClass(debt.stock)]">{{ stockLabel(debt.stock) }}</em>
+                    </div>
+                  </td>
                   <td class="text-xs text-gray-500 py-2 px-4">{{ debt.mesLabel }}</td>
                   <td class="py-2 px-4 text-right">
                     <input
@@ -286,7 +291,7 @@
           <button v-if="!pagoRealizadoEnOtroPlantel" class="btn btn-outline" type="button" @click="previewReceipt" :disabled="processing || totalCobrar <= 0">
             <LucideEye :size="16"/> Previa
           </button>
-          <button class="btn btn-primary" @click="submit" :disabled="processing || totalCobrar <= 0">
+          <button class="btn btn-primary" @click="submit" :disabled="processing || totalCobrar <= 0 || hasBlockingStock">
             <LucideLoader2 v-if="processing" class="animate-spin" :size="16"/>
             <LucideCheckCircle v-else :size="16"/>
             {{ processing ? 'Registrando...' : (pagoRealizadoEnOtroPlantel ? 'Registrar pago' : 'Registrar Pago') }}
@@ -557,6 +562,20 @@ const hasPendingFinalAmounts = computed(() => processedDebts.value.some(debt => 
 const effectiveSubtotal = (debt) => debt.montoFinalPendiente ? Number(debt.montoFinalInput || 0) : Number(debt.subtotal || 0)
 const effectiveSaldoFinal = (debt) => Math.max(0, effectiveSubtotal(debt) - Number(debt.pagosPrevios || 0))
 const totalCobrar = computed(() => processedDebts.value.reduce((a, b) => a + (b.montoPagado || 0), 0))
+const stockLabel = (stock) => {
+  if (!stock?.controlled) return 'stock infinito'
+  if (stock.status === 'out') return 'agotado'
+  if (stock.status === 'low') return `bajo · ${stock.available ?? 0}`
+  return `${stock.available ?? 0} disp.`
+}
+const stockClass = (stock) => {
+  if (!stock?.controlled) return 'neutral'
+  if (stock.status === 'out') return 'danger'
+  if (stock.status === 'low') return 'warning'
+  return 'success'
+}
+const isDebtStockBlocked = (debt) => Boolean(Number(debt?.montoPagado || 0) > 0 && debt?.stock?.controlled && debt?.stock?.status === 'out' && !debt?.stock?.allow_negative)
+const hasBlockingStock = computed(() => processedDebts.value.some(isDebtStockBlocked))
 
 const paymentRows = () => processedDebts.value.filter(d => Number(d.montoPagado || 0) > 0).map((d) => {
   const subtotal = effectiveSubtotal(d)
@@ -620,6 +639,10 @@ const previewReceipt = () => {
 }
 
 const submit = async () => {
+  if (hasBlockingStock.value) {
+    window.alert('Uno o más conceptos seleccionados están agotados para este plantel.')
+    return
+  }
   if (!validateFinalAmounts()) return
   if (pagoRealizadoEnOtroPlantel.value && !plantelPago.value) {
     paymentCampusError.value = true
@@ -694,4 +717,32 @@ const submit = async () => {
   opacity: 0;
   transform: translateY(-4px) scale(0.98);
 }
+.payment-concept-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.payment-concept-cell span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.payment-stock-chip {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  min-height: 19px;
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: .63rem;
+  font-style: normal;
+  font-weight: 850;
+}
+.payment-stock-chip.neutral { background: #f1f4f8; color: #68778c; }
+.payment-stock-chip.success { background: #edf8ea; color: #356b2f; }
+.payment-stock-chip.warning { background: #fff4d9; color: #925b0d; }
+.payment-stock-chip.danger { background: #fff1f1; color: #b42318; }
+
 </style>

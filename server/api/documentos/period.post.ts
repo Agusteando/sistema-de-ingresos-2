@@ -8,6 +8,7 @@ import { normalizeCicloKey } from "../../../shared/utils/ciclo";
 import { isInProjectedPlantelScopeForCiclo } from "../../../shared/utils/grado";
 import { isWholeMoney } from "../../utils/monto-final";
 import { assertDocumentoPeriodoLifecycleSchema } from "../../utils/documento-periods";
+import { assertStockAvailableForConcept } from '../../utils/conceptos-stock';
 
 const toMesNumber = (value: unknown) => {
   const raw = String(value || "")
@@ -229,6 +230,8 @@ export default defineEventHandler(async (event) =>
           message: "Concepto no encontrado para el ciclo activo.",
         });
       }
+
+      await assertStockAvailableForConcept({ conceptoId: concepto.id, plantel: doc.plantel, quantity: 1, operation: 'cambiar a este concepto' });
 
       const baseCoverageAmount = toWholeMoney(doc.montoFinal ?? doc.costo ?? 0);
       const coverageAmount = isWholeMoney(body.montoFinal)

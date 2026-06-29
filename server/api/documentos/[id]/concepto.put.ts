@@ -1,5 +1,6 @@
 import { executeStatementTransaction, query, runWithBridgeAgentId, type SqlStatement } from '../../../utils/db'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
+import { assertStockAvailableForConcept } from '../../../utils/conceptos-stock'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
@@ -24,8 +25,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       D.concepto,
       D.conceptoNombre,
       D.ciclo,
-      D.estatus
+      D.estatus,
+      B.plantel
     FROM documentos D
+    LEFT JOIN base B ON B.matricula = D.matricula
     WHERE D.documento = ?
     LIMIT 1
   `, [documento])
@@ -68,6 +71,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   if (String(doc.concepto) === String(concepto.id) && String(doc.conceptoNombre || '') === String(concepto.concepto || '')) {
     return { success: true, unchanged: true, documento }
   }
+
+  await assertStockAvailableForConcept({ conceptoId: concepto.id, plantel: doc.plantel, quantity: 1, operation: 'cambiar a este concepto' })
 
   const pagos = await query<any[]>(`
     SELECT folio

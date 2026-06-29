@@ -630,6 +630,63 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
       `)
 
       await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS concepto_stock_settings (
+          concepto_id INT NOT NULL,
+          plantel VARCHAR(40) NOT NULL,
+          stock_enabled TINYINT(1) NOT NULL DEFAULT 0,
+          unit_label VARCHAR(40) NOT NULL DEFAULT 'unidad',
+          reorder_point INT NOT NULL DEFAULT 0,
+          allow_negative TINYINT(1) NOT NULL DEFAULT 0,
+          activo TINYINT(1) NOT NULL DEFAULT 1,
+          sync_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
+          updated_by VARCHAR(255) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (concepto_id, plantel),
+          INDEX idx_concepto_stock_settings_scope (plantel, stock_enabled, activo),
+          INDEX idx_concepto_stock_settings_concepto (concepto_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS concepto_stock_balances (
+          concepto_id INT NOT NULL,
+          plantel VARCHAR(40) NOT NULL,
+          on_hand INT NOT NULL DEFAULT 0,
+          reserved INT NOT NULL DEFAULT 0,
+          last_movement_id BIGINT DEFAULT NULL,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (concepto_id, plantel),
+          INDEX idx_concepto_stock_balances_scope (plantel, on_hand),
+          INDEX idx_concepto_stock_balances_movement (last_movement_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS concepto_stock_movements (
+          id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          concepto_id INT NOT NULL,
+          plantel VARCHAR(40) NOT NULL,
+          movement_type VARCHAR(40) NOT NULL,
+          quantity_delta INT NOT NULL,
+          quantity_after INT NOT NULL,
+          source_type VARCHAR(60) DEFAULT NULL,
+          source_id VARCHAR(120) DEFAULT NULL,
+          documento INT DEFAULT NULL,
+          folio INT DEFAULT NULL,
+          matricula VARCHAR(255) DEFAULT NULL,
+          note TEXT DEFAULT NULL,
+          idempotency_key VARCHAR(160) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_by VARCHAR(255) DEFAULT NULL,
+          UNIQUE KEY uniq_concepto_stock_movement_idempotency (idempotency_key),
+          INDEX idx_concepto_stock_movements_scope (plantel, concepto_id, id),
+          INDEX idx_concepto_stock_movements_source (source_type, source_id),
+          INDEX idx_concepto_stock_movements_folio (folio)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS talleres_servicios_catalogo (
           servicio_clave VARCHAR(120) NOT NULL PRIMARY KEY,
           servicio_nombre VARCHAR(160) NOT NULL,
@@ -868,6 +925,13 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
           await checkAndAddColumn('referenciasdepago', 'depurado_fecha', "DATETIME DEFAULT NULL")
           await checkAndAddColumn('referenciasdepago', 'pago_otro_plantel', "TINYINT(1) NOT NULL DEFAULT 0")
           await checkAndAddColumn('referenciasdepago', 'plantel_pago', "VARCHAR(20) DEFAULT NULL")
+          await checkAndAddColumn('referenciasdepago', 'stock_controlled', "TINYINT(1) NOT NULL DEFAULT 0")
+          await checkAndAddColumn('referenciasdepago', 'stock_source', "VARCHAR(20) DEFAULT NULL")
+          await checkAndAddColumn('referenciasdepago', 'stock_concepto_id', "INT DEFAULT NULL")
+          await checkAndAddColumn('referenciasdepago', 'stock_plantel', "VARCHAR(40) DEFAULT NULL")
+          await checkAndAddColumn('referenciasdepago', 'stock_quantity', "INT NOT NULL DEFAULT 0")
+          await checkAndAddColumn('referenciasdepago', 'stock_movement_id', "BIGINT DEFAULT NULL")
+          await runOptionalIndexQuery(`ALTER TABLE referenciasdepago ADD INDEX idx_ref_stock_movement (stock_movement_id)`)
           await runSafeQuery(`
             UPDATE referenciasdepago
             SET pago_otro_plantel = 1

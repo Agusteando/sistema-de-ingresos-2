@@ -4,6 +4,7 @@ import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney } from '../../utils/monto-final'
 import { normalizeBecaTypes } from '../../utils/becaTypes'
 import { appendConceptMappedServicioToMatricula } from '../../utils/talleres-servicios'
+import { assertStockAvailableForConcept } from '../../utils/conceptos-stock'
 
 const clampMotivo = (value: unknown) => {
   const text = String(value || '').trim()
@@ -68,6 +69,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const userName = user?.name || 'Sistema'
   const plantel = studentRef.plantel || user?.active_plantel || 'PT'
   const cartaFecha = body.generarCartaBeca && becaTipos.length ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
+
+  await assertStockAvailableForConcept({ conceptoId: body.conceptoId, plantel, quantity: 1, operation: 'crear este cargo' })
 
   const documentStatement: SqlStatement = {
     sql: `
