@@ -1,1 +1,1 @@
-Corrige integración de pagos Aurora-Husky
+Agrega selector de ciclo escolar en pagos Aurora

@@ -60,6 +60,16 @@ const currentMexicoDate = () => {
   return { year, month, day, key: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` }
 }
 
+const currentSchoolCycleKey = () => {
+  const date = currentMexicoDate()
+  return String(date.month >= 9 ? date.year : date.year - 1)
+}
+
+const cycleKeyFromValue = (value: unknown) => {
+  const match = text(value, 30).match(/\d{4}/)
+  return match?.[0] || ''
+}
+
 const getSchoolMonthForCycle = (date: ReturnType<typeof currentMexicoDate>, cycleStartYear: number) => {
   if (date.year < cycleStartYear || (date.year === cycleStartYear && date.month < 9)) return 0
   if (date.year === cycleStartYear && date.month >= 9) return date.month - 8
@@ -156,6 +166,61 @@ const findStudentInAgent = async (agentId: string, matricula: string) => {
   } catch {
     return null
   }
+}
+
+const readAvailableCyclesForStudent = async (matricula: string, selectedCycle: string) => {
+  type CycleOption = { clave: string; nombre: string; actual: boolean; seleccionado: boolean; conMovimientos: boolean }
+  const dynamicCurrent = currentSchoolCycleKey()
+  const configuredCurrent = new Set<string>()
+  const configuredCycles = new Set<string>()
+  const movementCycles = new Set<string>()
+
+  try {
+    const rows = await query<Array<{ cycle_name?: string | number | null; is_current?: number | string | null }>>(`
+      SELECT CAST(cycle_name AS CHAR) AS cycle_name, is_current
+      FROM config_school_cycles
+      ORDER BY cycle_name DESC
+    `)
+    for (const row of rows || []) {
+      const key = cycleKeyFromValue(row.cycle_name)
+      if (!key) continue
+      configuredCycles.add(key)
+      if (Number(row.is_current || 0) === 1) configuredCurrent.add(key)
+    }
+  } catch {
+    // Older/local Aurora instances may not have the centralized cycle config yet.
+  }
+
+  try {
+    const rows = await query<Array<{ ciclo?: string | number | null }>>(`
+      SELECT DISTINCT CAST(ciclo AS CHAR) AS ciclo
+      FROM documentos
+      WHERE UPPER(TRIM(CAST(matricula AS CHAR))) = ?
+      UNION
+      SELECT DISTINCT CAST(ciclo AS CHAR) AS ciclo
+      FROM referenciasdepago
+      WHERE UPPER(TRIM(CAST(matricula AS CHAR))) = ?
+    `, [matricula, matricula])
+    for (const row of rows || []) {
+      const key = cycleKeyFromValue(row.ciclo)
+      if (key) movementCycles.add(key)
+    }
+  } catch {
+    // Cycle availability is decorative for Husky Pass; account data remains the source of truth.
+  }
+
+  const current = Array.from(configuredCurrent).sort((a, b) => Number(b) - Number(a))[0] || dynamicCurrent
+  const keys = new Set<string>([...configuredCycles, ...movementCycles, selectedCycle, current, dynamicCurrent].filter(Boolean))
+
+  return Array.from(keys)
+    .sort((left, right) => Number(right) - Number(left))
+    .map((key): CycleOption => ({
+      clave: key,
+      nombre: formatCicloLabel(key),
+      actual: key === current,
+      seleccionado: key === selectedCycle,
+      conMovimientos: movementCycles.has(key)
+    }))
 }
 
 const resolveBridgeSource = async (matricula: string) => {
@@ -344,7 +409,7 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
         monto: total,
         pagado: paid,
         saldo: balance,
-        pendienteConciliacion,
+        pendienteConciliacion: pendingConciliation,
         pagadoEn: paidAt,
         recibos: paidRows.map(row => Number(row.folio)).filter(Boolean),
         servicio: mapped
@@ -371,6 +436,7 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
     }))
 
   const centralServices = await readCentralServices(matricula)
+  const ciclos = await readAvailableCyclesForStudent(matricula, ciclo)
   const servicios = uniqueServices([...mappedServices, ...centralServices])
   const balanceDue = money(conceptos.reduce((sum, item) => sum + Number(item.saldo || 0), 0))
   const overdueBalance = money(conceptos.filter(item => item.estatus === 'overdue').reduce((sum, item) => sum + Number(item.saldo || 0), 0))
@@ -399,7 +465,7 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
       pendiente: balanceDue,
       vencido: overdueBalance,
       pagadoCiclo: paidThisCycle,
-      pendienteConciliacion
+      pendienteConciliacion: pendingConciliation
     },
     conteos: {
       pendientes: conceptos.filter(item => item.estatus === 'pending').length,
@@ -411,6 +477,7 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
     conceptos,
     recibos,
     servicios,
+    ciclos,
     consultadoEn: new Date().toISOString(),
     fuente: source
   }
@@ -427,7 +494,7 @@ export const readExternalHuskyPassAccount = async (queryParams: Record<string, a
     })
   }
 
-  const ciclo = normalizeCicloKey(queryParams.ciclo)
+  const ciclo = normalizeCicloKey(queryParams.ciclo, currentSchoolCycleKey())
 
   if (getDbTransport() === 'direct') {
     return await readAccountInCurrentSource({ matricula, ciclo, source: { tipo: 'direct' } })
