@@ -991,13 +991,15 @@ const assertNoAdeudoControlColumn = async () => {
   return columns
 }
 
-export const listExternalControlUsersForNoAdeudo = async (searchValue: unknown = '') => {
+const listExternalNoAdeudoRecipientUsers = async (searchValue: unknown = '') => {
   const users = await listExternalUsers(searchValue)
   return users
-    .filter((user: any) => hasControlRoleValue(user.role))
     .map(mapNoAdeudoControlUser)
-    .filter(Boolean)
+    .filter((user: any) => Boolean(user?.email))
 }
+
+export const listExternalControlUsersForNoAdeudo = async (searchValue: unknown = '') =>
+  await listExternalNoAdeudoRecipientUsers(searchValue)
 
 export const getNoAdeudoControlUserForPlantel = async (plantelValue: unknown) => {
   const plantel = normalizePlantel(plantelValue)
@@ -1038,8 +1040,8 @@ export const setNoAdeudoControlUserForPlantel = async (plantelValue: unknown, us
   if (userId && !selectedRaw) {
     throw createError({ statusCode: 404, message: 'Usuario de Control Escolar no encontrado.' })
   }
-  if (selectedRaw && !hasControlRoleValue(selectedRaw.role)) {
-    throw createError({ statusCode: 400, message: 'El usuario seleccionado no tiene rol ROLE_CTRL.' })
+  if (selectedRaw && !normalizeEmail(selectedRaw.email)) {
+    throw createError({ statusCode: 400, message: 'El usuario seleccionado no tiene correo válido.' })
   }
 
   let updated = 0

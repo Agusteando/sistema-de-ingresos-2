@@ -105,10 +105,10 @@
 
                   <div class="control-user-picker">
                     <div class="control-user-picker-header">
-                      <span>Asignar usuario del plantel {{ activePlantel || 'sin plantel' }}</span>
+                      <span>Asignar destinatario del plantel {{ activePlantel || 'sin plantel' }}</span>
                       <button type="button" :disabled="controlUsersLoading || controlSaving || !activePlantel" @click="loadControlUsers">Actualizar</button>
                     </div>
-                    <input v-model="controlSearch" type="search" placeholder="Buscar usuario de Control Escolar por nombre o correo" :disabled="controlUsersLoading || controlSaving" />
+                    <input v-model="controlSearch" type="search" placeholder="Buscar destinatario por nombre o correo" :disabled="controlUsersLoading || controlSaving" />
                     <p v-if="controlUsersError" class="control-user-error">{{ controlUsersError }}</p>
                     <p v-else-if="controlSchemaReady === false" class="control-user-error">Falta la columna externa para recordar la selección. Ejecuta el ALTER TABLE indicado.</p>
                     <div v-else class="control-user-options">
@@ -127,8 +127,8 @@
                           <i>{{ user.email }}</i>
                         </span>
                       </button>
-                      <em v-if="!controlUsersLoading && !controlUsers.length">No hay usuarios de Control Escolar con ese criterio.</em>
-                      <em v-if="controlUsersLoading">Cargando usuarios de Control Escolar…</em>
+                      <em v-if="!controlUsersLoading && !controlUsers.length">No hay destinatarios con ese criterio.</em>
+                      <em v-if="controlUsersLoading">Cargando destinatarios…</em>
                     </div>
                   </div>
                 </div>

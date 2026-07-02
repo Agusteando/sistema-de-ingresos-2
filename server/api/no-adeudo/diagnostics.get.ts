@@ -181,7 +181,7 @@ export default defineEventHandler(async (event) => {
         add({
           level: 'warning',
           title: 'Falta la columna externa para recordar Control Escolar por plantel.',
-          detail: `La selección del usuario ROLE_CTRL necesita users.${NO_ADEUDO_CONTROL_PLANTELES_COLUMN}.`,
+          detail: `La selección del destinatario de Control Escolar necesita users.${NO_ADEUDO_CONTROL_PLANTELES_COLUMN}.`,
           source: 'Destinatarios',
           missing: [`users.${NO_ADEUDO_CONTROL_PLANTELES_COLUMN}`],
           action: 'Ejecuta manualmente el ALTER TABLE indicado para habilitar el selector del modal.'

@@ -180,7 +180,7 @@ export const diagnoseNoAdeudoError = (error: any, source = 'Carta de No Adeudo')
       detail: 'No se encontraron correos de padres ni correos de Control Escolar para el modo de envío seleccionado.',
       statusCode: 400,
       source,
-      action: 'Asigna un usuario ROLE_CTRL para el plantel desde el modal de Carta de No Adeudo o corrige los correos del alumno antes de enviar.'
+      action: 'Asigna un destinatario de Control Escolar para el plantel desde el modal de Carta de No Adeudo o corrige los correos del alumno antes de enviar.'
     }
   }
 
