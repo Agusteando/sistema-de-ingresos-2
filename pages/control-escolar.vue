@@ -3465,9 +3465,11 @@ const EDIT_FORM_FIELDS = [
 ];
 const CONTROL_ESCOLAR_EDIT_NAME_FIELDS = EDIT_FORM_FIELDS.filter((field) => isControlEscolarNameField(field));
 
+const formatNameValue = (value) => toNameDisplayCase(value);
+
 const formatNameField = (field) => {
   if (!isControlEscolarNameField(field)) return;
-  editForm[field] = toNameDisplayCase(editForm[field]);
+  editForm[field] = formatNameValue(editForm[field]);
 };
 
 const formatEditNameFields = () => {
@@ -3479,13 +3481,14 @@ const onParentLastNameBlur = (field) => {
   formatNameField(field);
 };
 
-const readEditForm = () => {
-  formatEditNameFields();
-  return EDIT_FORM_FIELDS.reduce((draft, field) => {
-    draft[field] = editForm[field] ?? "";
+const readEditForm = ({ normalizeNames = false } = {}) =>
+  EDIT_FORM_FIELDS.reduce((draft, field) => {
+    const value = editForm[field] ?? "";
+    draft[field] = normalizeNames && isControlEscolarNameField(field)
+      ? formatNameValue(value)
+      : value;
     return draft;
   }, {});
-};
 const formSnapshot = () => JSON.stringify(readEditForm());
 const hasUnsavedChanges = computed(() =>
   Boolean(
@@ -4786,7 +4789,8 @@ const saveStudent = async () => {
   savingStudent.value = true;
   saveError.value = "";
   try {
-    const payload = readEditForm();
+    formatEditNameFields();
+    const payload = readEditForm({ normalizeNames: true });
     const response = await $fetch(
       `/api/control-escolar/students/${encodeURIComponent(selectedStudent.value.matricula)}`,
       {
