@@ -1,4 +1,5 @@
 import { executeStatementTransaction, query, runWithBridgeAgentId, type SqlStatement } from '../../utils/db'
+import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 const normalizeMatricula = (value: unknown) => String(value || '').trim()
 const canonicalMatriculaKey = (value: unknown) => normalizeMatricula(value).toUpperCase()
@@ -7,6 +8,8 @@ const normalizeStatus = (value: unknown) => String(value || '').trim().toLowerCa
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const motivo = String(body?.motivo || '').trim()
+  const rawCiclo = String(body?.ciclo || body?.targetCiclo || '').trim()
+  const cicloKey = rawCiclo ? normalizeCicloKey(rawCiclo) : ''
   const matriculas = Array.from(new Set<string>((Array.isArray(body?.matriculas) ? body.matriculas : [])
     .map(normalizeMatricula)
     .filter(Boolean)))
@@ -58,11 +61,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     statements.push({
       sql: `
         UPDATE base
-        SET estatus = ?
+        SET estatus = ?${cicloKey ? ', ciclo = ?' : ''}
         WHERE matricula = ?
           AND LOWER(TRIM(CAST(estatus AS CHAR))) = 'activo'
       `,
-      params: [motivo, student.matricula],
+      params: cicloKey ? [motivo, cicloKey, student.matricula] : [motivo, student.matricula],
     })
     results.push({
       matricula: student.matricula,
@@ -84,6 +87,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       status: 'updated',
       message: 'Baja aplicada.',
       estatus: motivo,
+      ...(cicloKey ? { ciclo: cicloKey } : {}),
     }
   })
 
@@ -94,6 +98,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     skipped: finalizedResults.filter((result) => result.status === 'skipped').length,
     failed: finalizedResults.filter((result) => result.status === 'failed').length,
     motivo,
+    ...(cicloKey ? { ciclo: cicloKey } : {}),
     results: finalizedResults,
   }
 }))

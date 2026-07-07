@@ -19,6 +19,8 @@ type SqlWriteError = Error & {
 type InsertResult = { insertId?: number }
 
 const normalizeTextValue = (value: unknown) => String(value || '').trim()
+const isActiveEstatus = (value: unknown) => normalizeTextValue(value).toLowerCase() === 'activo'
+const activeEstatusSql = "LOWER(TRIM(CAST(A.estatus AS CHAR))) = 'activo'"
 const normalizeMatricula = (value: unknown) => normalizeTextValue(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
 const normalizeSectionId = (value: unknown) => {
   const id = Number(value || 0)
@@ -224,14 +226,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     const params: any[] = []
     const addCurrentEnrollmentScope = () => {
       if (!enrollmentConceptIds.length) {
-        whereClause += " AND (A.estatus = 'Activo' OR A.ciclo = ?)"
+        whereClause += ` AND (${activeEstatusSql} OR A.ciclo = ?)`
         params.push(cicloKey)
         return
       }
 
       const conceptPlaceholders = enrollmentConceptIds.map(() => '?').join(',')
       whereClause += ` AND (
-        A.estatus = 'Activo'
+        ${activeEstatusSql}
         OR A.ciclo = ?
         OR EXISTS (
           SELECT 1
@@ -385,7 +387,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       LEFT JOIN alumno_matricula_links Prev ON Prev.successor_matricula = A.matricula
       LEFT JOIN alumno_matricula_links Next ON Next.previous_matricula = A.matricula
       WHERE ${whereClause}
-      ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC LIMIT 5000;
+      ORDER BY ${activeEstatusSql} DESC, A.nombreCompleto ASC LIMIT 5000;
     `
     const rows = await query<any[]>(sql, [cicloKey, cicloKey, previousCiclo, previousCiclo, ...params])
     const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(rows.map(r => r.matricula), tipoIngresoConceptIds)
@@ -406,7 +408,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           allConceptIds: [historicalConceptIds]
         }
       }, cicloKey, { enrollmentConcepts: tipoIngresoConceptIds })
-      const enrollmentState = r.estatus === 'Activo'
+      const enrollmentState = isActiveEstatus(r.estatus)
         ? (hasCurrentEnrollmentEvidence ? 'inscrito' : 'no_inscrito')
         : (hasCurrentEnrollmentEvidence ? 'baja_inscrita' : 'baja')
 

@@ -204,11 +204,24 @@ export default defineEventHandler(async (event) =>
 
     if (method === "DELETE") {
       const body = await readBody(event);
+      const motivo = String(body?.motivo || "Baja").trim() || "Baja";
+      const rawCiclo = String(body?.ciclo || body?.targetCiclo || "").trim();
+      const cicloKey = rawCiclo ? normalizeCicloKey(rawCiclo) : "";
+
+      if (cicloKey) {
+        await query(`UPDATE base SET estatus = ?, ciclo = ? WHERE matricula = ?`, [
+          motivo,
+          cicloKey,
+          matricula,
+        ]);
+        return { success: true, estatus: motivo, ciclo: cicloKey };
+      }
+
       await query(`UPDATE base SET estatus = ? WHERE matricula = ?`, [
-        body.motivo || "Baja",
+        motivo,
         matricula,
       ]);
-      return { success: true };
+      return { success: true, estatus: motivo };
     }
   }),
 );

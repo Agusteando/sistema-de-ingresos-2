@@ -1058,7 +1058,7 @@ const kpiSparklines = computed(() => !kpiDataAvailable.value ? ({ inscritos: [],
   externos: paymentKpiSparklines.value.externos || [],
   ingresos: paymentKpiSparklines.value.ingresos || [],
   no_inscritos: distributionSeries(students.value.filter(isNoInscritoForSelectedCiclo)),
-  bajas: distributionSeries(students.value.filter(isBajaInscritaCurrent))
+  bajas: distributionSeries(students.value.filter(isBajaForSelectedCiclo))
 }))
 
 let kpiSparklineRequestId = 0
@@ -1147,6 +1147,13 @@ const setActiveFilter = (filter) => {
     : nextFilter
   activeGrado.value = ''
   activeGrupo.value = ''
+}
+
+const activateBajasFilter = () => {
+  activeFilter.value = 'bajas'
+  activeGrado.value = ''
+  activeGrupo.value = ''
+  activeSaldoFilter.value = 'all'
 }
 
 const toggleSaldoDebtFilter = () => {
@@ -1794,13 +1801,29 @@ const hasCurrentEnrollmentConcept = (student) => {
 ])
 }
 
-const isEnrolled = (student) => student?.estatus === 'Activo' && hasCurrentEnrollmentConcept(student)
+const resolveStudentTipoIngreso = (student) => resolveTipoIngreso(student, currentCicloKey.value, { enrollmentConcepts: tipoIngresoConcepts.value.length ? tipoIngresoConcepts.value : externalConcepts.value })
+const normalizedStudentStatus = (student) => String(student?.estatus || '').trim().toLowerCase()
+const isActiveStudent = (student) => normalizedStudentStatus(student) === 'activo'
+const isEnrolled = (student) => isActiveStudent(student) && hasCurrentEnrollmentConcept(student)
 const isNoInscritoForSelectedCiclo = (student) => (
-  student?.estatus === 'Activo'
+  isActiveStudent(student)
   && !hasCurrentEnrollmentConcept(student)
 )
-const isBajaInscritaCurrent = (student) => student?.estatus !== 'Activo' && hasCurrentEnrollmentConcept(student)
-const resolveStudentTipoIngreso = (student) => resolveTipoIngreso(student, currentCicloKey.value, { enrollmentConcepts: tipoIngresoConcepts.value.length ? tipoIngresoConcepts.value : externalConcepts.value })
+const isBajaForSelectedCiclo = (student) => !isActiveStudent(student)
+const resolveBajaEnrollmentState = (student) => hasCurrentEnrollmentConcept(student) ? 'baja_inscrita' : 'baja'
+const markStudentAsBaja = (student, motivo) => {
+  const updated = {
+    ...student,
+    estatus: motivo,
+    ciclo: currentCicloKey.value,
+    cicloBase: currentCicloKey.value
+  }
+  return {
+    ...updated,
+    enrollmentState: resolveBajaEnrollmentState(updated),
+    tipoIngreso: resolveStudentTipoIngreso(updated)
+  }
+}
 
 const kpiCounts = computed(() => {
   if (!kpiDataAvailable.value) {
@@ -1816,7 +1839,7 @@ const kpiCounts = computed(() => {
       else externos++
     } else if (isNoInscritoForSelectedCiclo(s)) {
       no_inscritos++
-    } else if (isBajaInscritaCurrent(s)) {
+    } else if (isBajaForSelectedCiclo(s)) {
       bajas++
     }
   })
@@ -1828,7 +1851,7 @@ const studentMatchesActiveFilter = (student) => {
   if (activeFilter.value === 'internos') return isEnrolled(student) && resolveStudentTipoIngreso(student).value === 'interno'
   if (activeFilter.value === 'externos') return isEnrolled(student) && resolveStudentTipoIngreso(student).value === 'externo'
   if (activeFilter.value === 'no_inscritos') return isNoInscritoForSelectedCiclo(student)
-  if (activeFilter.value === 'bajas') return isBajaInscritaCurrent(student)
+  if (activeFilter.value === 'bajas') return isBajaForSelectedCiclo(student)
   if (isSectionFilter(activeFilter.value)) return studentHasSection(student, sectionIdFromFilter(activeFilter.value))
   return true
 }
@@ -2193,11 +2216,11 @@ const applyBulkBajaResult = (results = [], motivo = '') => {
 
   students.value = students.value.map((student) => {
     const key = normalizeStudentMatricula(student?.matricula)
-    return updated.has(key) ? { ...student, estatus: motivo } : student
+    return updated.has(key) ? markStudentAsBaja(student, motivo) : student
   })
 
   if (selectedStudent.value && updated.has(normalizeStudentMatricula(selectedStudent.value.matricula))) {
-    selectedStudent.value = { ...selectedStudent.value, estatus: motivo }
+    selectedStudent.value = markStudentAsBaja(selectedStudent.value, motivo)
   }
 }
 
@@ -2210,11 +2233,13 @@ const confirmBulkBaja = async (motivo) => {
       method: 'PUT',
       body: {
         motivo,
+        ciclo: currentCicloKey.value,
         matriculas: pendingBulkBajaStudents.value.map(student => student?.matricula).filter(Boolean)
       }
     })
 
     applyBulkBajaResult(res?.results || [], motivo)
+    if (Number(res?.updated || 0) > 0) activateBajasFilter()
     const failedMatriculas = (res?.results || [])
       .filter(row => row?.status === 'failed')
       .map(row => normalizeStudentMatricula(row?.matricula))
@@ -2253,22 +2278,36 @@ const confirmBaja = async (motivo) => {
 
   const student = pendingBajaStudent.value || pendingBulkBajaStudents.value[0]
   if (!student || !motivo) return
-  const previousEstatus = student.estatus
+  const studentKey = normalizeStudentMatricula(student.matricula)
+  const previousStudentSnapshot = students.value.find(candidate => normalizeStudentMatricula(candidate?.matricula) === studentKey) || student
 
   try {
     await executeOptimistic(
-      () => $fetch(`/api/students/${student.matricula}`, { method: 'DELETE', body: { motivo } }),
+      () => $fetch(`/api/students/${student.matricula}`, { method: 'DELETE', body: { motivo, ciclo: currentCicloKey.value } }),
       () => {
-        const s = students.value.find(x => x.matricula === student.matricula)
-        if (s) s.estatus = motivo
+        students.value = students.value.map((candidate) => (
+          normalizeStudentMatricula(candidate?.matricula) === studentKey
+            ? markStudentAsBaja(candidate, motivo)
+            : candidate
+        ))
+        if (selectedStudent.value && normalizeStudentMatricula(selectedStudent.value.matricula) === studentKey) {
+          selectedStudent.value = markStudentAsBaja(selectedStudent.value, motivo)
+        }
       },
       () => {
-        const s = students.value.find(x => x.matricula === student.matricula)
-        if (s) s.estatus = previousEstatus
+        students.value = students.value.map((candidate) => (
+          normalizeStudentMatricula(candidate?.matricula) === studentKey
+            ? { ...candidate, ...previousStudentSnapshot }
+            : candidate
+        ))
+        if (selectedStudent.value && normalizeStudentMatricula(selectedStudent.value.matricula) === studentKey) {
+          selectedStudent.value = { ...selectedStudent.value, ...previousStudentSnapshot }
+        }
         refreshAfterStudentMutation()
       },
       { pending: 'Procesando baja...', success: 'Alumno dado de baja exitosamente', error: 'Fallo al procesar baja' }
     )
+    activateBajasFilter()
     closeBajaModal()
     await refreshAfterStudentMutation()
   } catch (e) {}
@@ -2340,7 +2379,7 @@ const showStudentMenu = (event, student) => {
     { label: selectedActionLabel, icon: LucideTags, action: () => (selectedCount.value > 1 && isStudentSelected(student) ? openSectionModalForSelection() : openSectionModal(student)) },
     { label: isStudentSelected(student) ? 'Quitar de selección' : 'Seleccionar', icon: LucideTag, action: () => toggleStudentSelection(student) },
     { label: '-' },
-    { label: 'Dar de baja', icon: LucideUserX, class: 'text-accent-coral font-bold', disabled: student.estatus !== 'Activo', action: () => bajaAlumno(student) }
+    { label: 'Dar de baja', icon: LucideUserX, class: 'text-accent-coral font-bold', disabled: !isActiveStudent(student), action: () => bajaAlumno(student) }
   )
 
   openMenu(event, actions)

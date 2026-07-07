@@ -411,8 +411,8 @@ const { toasts, show } = useToast()
 const { syncState, syncMessage } = useOptimisticSync()
 const route = useRoute()
 
-const SIDEBAR_DESIGN_WIDTH = 232
-const SIDEBAR_DESIGN_HEIGHT = 800
+const SIDEBAR_DESIGN_WIDTH = 260
+const SIDEBAR_DESIGN_HEIGHT = 860
 const sidebarScaleShell = ref(null)
 const sidebarScale = ref(1)
 const sidebarCollapsed = ref(false)
@@ -1956,20 +1956,20 @@ const logout = async () => {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 
 .local-system-status,
 .local-system-launch {
   display: inline-flex;
-  min-height: 42px;
+  min-height: 50px;
   align-items: center;
-  gap: 9px;
+  gap: 11px;
   border: 1px solid rgba(203, 220, 208, 0.94);
-  border-radius: 15px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.94);
-  padding: 6px 12px 6px 8px;
+  padding: 7px 16px 7px 10px;
   color: #244736;
   box-shadow: 0 10px 24px rgba(22, 38, 65, 0.05);
   text-align: left;
@@ -2039,11 +2039,11 @@ const logout = async () => {
 
 .local-system-status-icon {
   display: inline-grid;
-  width: 29px;
-  height: 29px;
-  flex: 0 0 29px;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgba(92, 151, 78, 0.13);
   color: #397447;
 }
@@ -2060,7 +2060,7 @@ const logout = async () => {
 
 .local-system-status-copy small {
   color: currentColor;
-  font-size: 0.58rem;
+  font-size: 0.68rem;
   font-weight: 850;
   letter-spacing: 0.08em;
   line-height: 1.1;
@@ -2069,9 +2069,9 @@ const logout = async () => {
 }
 
 .local-system-status-copy strong {
-  max-width: 190px;
+  max-width: 218px;
   overflow: hidden;
-  font-size: 0.76rem;
+  font-size: 0.92rem;
   font-weight: 900;
   line-height: 1.15;
   text-overflow: ellipsis;
@@ -2080,10 +2080,10 @@ const logout = async () => {
 
 .header-home-button {
   display: inline-flex;
-  height: 38px;
+  height: 46px;
   align-items: center;
   border: 1px solid #dfe6ef;
-  border-radius: 13px;
+  border-radius: 15px;
   background: rgba(255, 255, 255, 0.88);
   color: #20304d;
   box-shadow: 0 10px 22px rgba(22, 38, 65, 0.04);
@@ -2091,21 +2091,21 @@ const logout = async () => {
 
 .ciclo-picker {
   position: relative;
-  min-width: 176px;
+  min-width: 206px;
 }
 
 .ciclo-picker-button {
   display: inline-flex;
   width: 100%;
-  height: 42px;
+  height: 50px;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   border: 1px solid rgba(210, 225, 213, 0.92);
-  border-radius: 15px;
+  border-radius: 16px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 252, 249, 0.9));
   color: #20304d;
-  padding: 0 12px;
+  padding: 0 14px;
   cursor: pointer;
   text-align: left;
   box-shadow:
@@ -2134,11 +2134,11 @@ const logout = async () => {
 
 .ciclo-picker-icon {
   display: inline-grid;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 12px;
   color: #2d7132;
   background: rgba(232, 246, 229, 0.92);
 }
@@ -2155,7 +2155,7 @@ const logout = async () => {
 .ciclo-option-main small {
   overflow: hidden;
   color: #667185;
-  font-size: 0.58rem;
+  font-size: 0.68rem;
   font-weight: 850;
   line-height: 1.05;
   text-overflow: ellipsis;
@@ -2167,7 +2167,7 @@ const logout = async () => {
 .ciclo-option-main strong {
   overflow: hidden;
   color: #1e2d49;
-  font-size: 0.82rem;
+  font-size: 1rem;
   font-weight: 900;
   line-height: 1.05;
   text-overflow: ellipsis;
@@ -2238,7 +2238,7 @@ const logout = async () => {
 }
 
 .header-home-button {
-  width: 38px;
+  width: 46px;
   justify-content: center;
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
@@ -2428,71 +2428,72 @@ const logout = async () => {
 }
 
 .sidebar-design-canvas .sidebar-brand {
-  padding: 24px 18px 20px;
+  padding: 28px 22px 24px;
 }
 
 .sidebar-design-canvas .sidebar-logo {
-  max-height: 42px;
-  max-width: 96px;
-  margin-bottom: 10px;
+  max-height: 46px;
+  max-width: 108px;
+  margin-bottom: 12px;
 }
 
 .sidebar-design-canvas .sidebar-system-logo {
-  width: min(100%, 172px);
-  margin-bottom: 8px;
+  width: min(100%, 194px);
+  margin-bottom: 10px;
 }
 
 .sidebar-design-canvas .sidebar-brand h2 {
   color: #2e6f3d;
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   letter-spacing: 0;
 }
 
 .sidebar-design-canvas .sidebar-nav {
-  gap: 5px;
-  padding: 2px 12px 10px;
+  gap: 7px;
+  padding: 2px 16px 12px;
 }
 
 .sidebar-design-canvas .nav-item {
-  min-height: 38px;
-  gap: 10px;
-  border-radius: 11px;
-  padding: 0 12px;
-  font-size: 0.8rem;
+  min-height: 44px;
+  gap: 12px;
+  border-radius: 13px;
+  padding: 0 15px;
+  font-size: 0.92rem;
   font-weight: 700;
 }
 
 .sidebar-design-canvas .nav-item svg {
-  width: 18px;
-  height: 18px;
+  width: 21px;
+  height: 21px;
 }
 
 .sidebar-design-canvas .sidebar-footer {
-  gap: 10px;
-  padding: 0 14px 16px;
+  gap: 12px;
+  padding: 0 16px 20px;
 }
 
 .sidebar-design-canvas .plantel-select {
   height: auto;
-  min-height: 40px;
-  border-radius: 11px;
+  min-height: 48px;
+  border-radius: 13px;
 }
 
 .sidebar-design-canvas .admin-card {
-  min-height: 56px;
-  border-radius: 12px;
-  padding: 8px 9px;
+  min-height: 62px;
+  border-radius: 14px;
+  padding: 10px 11px;
 }
 
 .app-header {
-  height: 54px;
-  padding: 0 20px;
+  height: 70px;
+  padding: 0 28px;
   border-bottom-color: #e6edf5;
   background: rgba(255, 255, 255, 0.94);
 }
 
 .app-header h1 {
-  font-size: 1.08rem;
+  font-size: 1.55rem;
+  line-height: 1;
 }
 
 .income-main::before {
@@ -2500,7 +2501,7 @@ const logout = async () => {
 }
 
 .income-content {
-  padding: 12px 18px 14px;
+  padding: 16px 24px 18px;
 }
 
 @media (max-height: 840px) and (min-width: 1081px) {

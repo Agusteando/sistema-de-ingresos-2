@@ -1,1 +1,1 @@
-Corrige captura de nombres compuestos en Control Escolar
+Corrige clasificación y persistencia de bajas en el ciclo actual

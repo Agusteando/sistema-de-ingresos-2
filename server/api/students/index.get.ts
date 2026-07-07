@@ -6,6 +6,8 @@ import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 import { maybeRefreshControlEscolarCacheFromLoadedRows } from '../../utils/control-escolar-cache'
 
+const isActiveEstatus = (value: unknown) => String(value || '').trim().toLowerCase() === 'activo'
+const activeEstatusSql = "LOWER(TRIM(CAST(A.estatus AS CHAR))) = 'activo'"
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   setResponseHeader(event, 'Cache-Control', 'no-store')
@@ -20,14 +22,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const params: any[] = []
   const addCurrentEnrollmentScope = () => {
     if (!enrollmentConceptIds.length) {
-      whereClause += " AND (A.estatus = 'Activo' OR A.ciclo = ?)"
+      whereClause += ` AND (${activeEstatusSql} OR A.ciclo = ?)`
       params.push(cicloKey)
       return
     }
 
     const conceptPlaceholders = enrollmentConceptIds.map(() => '?').join(',')
     whereClause += ` AND (
-      A.estatus = 'Activo'
+      ${activeEstatusSql}
       OR A.ciclo = ?
       OR EXISTS (
         SELECT 1
@@ -184,7 +186,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     LEFT JOIN alumno_matricula_links Next ON Next.previous_matricula = A.matricula
     LEFT JOIN student_tipo_ingreso_overrides TIO ON TIO.matricula = A.matricula
     WHERE ${whereClause}
-    ORDER BY A.estatus = 'Activo' DESC, A.nombreCompleto ASC
+    ORDER BY ${activeEstatusSql} DESC, A.nombreCompleto ASC
     LIMIT 5000;
   `
   
@@ -209,7 +211,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         allConceptIds: [historicalConceptIds]
       }
     }, cicloKey, { enrollmentConcepts: tipoIngresoConceptIds })
-    const enrollmentState = r.estatus === 'Activo'
+    const enrollmentState = isActiveEstatus(r.estatus)
       ? (hasCurrentEnrollmentEvidence ? 'inscrito' : 'no_inscrito')
       : (hasCurrentEnrollmentEvidence ? 'baja_inscrita' : 'baja')
 
