@@ -1,1 +1,1 @@
-Rediseña el workspace de alumno en Control Escolar
+Rediseña encabezado de ficha de alumno en Control Escolar

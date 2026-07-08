@@ -5,7 +5,8 @@
       'has-photo': hasPhoto,
       'is-loading-photo': photoLoading,
       inactive: student?.estatus !== 'Activo',
-      unenrolled: !isEnrolled
+      unenrolled: !isEnrolled,
+      'is-static-photo': staticPhoto
     }"
     :style="studentPresentationStyle(student)"
     :title="gradeVisualTitle(student)"
@@ -30,7 +31,8 @@ const props = defineProps({
   student: { type: Object, default: null },
   photoUrl: { type: String, default: '' },
   photoLoading: { type: Boolean, default: false },
-  isEnrolled: { type: Boolean, default: true }
+  isEnrolled: { type: Boolean, default: true },
+  staticPhoto: { type: Boolean, default: false }
 })
 
 const hasPhoto = computed(() => Boolean(props.photoUrl && props.photoUrl !== 'none'))
@@ -100,6 +102,19 @@ const hasPhoto = computed(() => Boolean(props.photoUrl && props.photoUrl !== 'no
 
 .student-grade-photo-card.has-photo .student-grade-photo-card__photo {
   animation: grade-card-photo-slide 8.8s ease-in-out infinite;
+}
+
+
+.student-grade-photo-card.has-photo.is-static-photo .student-grade-photo-card__grade {
+  animation: none;
+  opacity: 0;
+  transform: none;
+}
+
+.student-grade-photo-card.has-photo.is-static-photo .student-grade-photo-card__photo {
+  animation: none;
+  opacity: 1;
+  transform: none;
 }
 
 .student-grade-photo-card.inactive {

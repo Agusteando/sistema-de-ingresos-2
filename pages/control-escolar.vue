@@ -464,89 +464,75 @@
             class="student-detail-panel ce-detail-panel"
           >
             <div :class="['ce-detail-shell', `is-${selectedRecordHealth.tone}`]">
-              <header class="ce-detail-header">
-                <div class="ce-detail-title ce-detail-title--with-photo">
+              <header :class="['ce-detail-header', 'ce-student-hero-header', `is-${selectedRecordHealth.tone}`]">
+                <div class="ce-student-hero-main">
                   <StudentGradePhotoCard
-                    class="ce-detail-header-photo"
+                    class="ce-student-hero-photo"
                     :student="selectedStudent"
                     :photo-url="controlStudentPhotoUrl(selectedStudent)"
                     :photo-loading="
                       isControlStudentPhotoLoading(selectedStudent)
                     "
                     :is-enrolled="selectedStudent.status === 'Activo'"
+                    static-photo
                   />
-                  <div class="ce-detail-title-copy">
-                    <small>{{ selectedStudent.matricula }} · Matrícula</small>
-                    <div class="ce-title-row">
-                      <h2>{{ selectedStudent.fullName || "Ficha de alumno" }}</h2>
-                      <span
-                        :class="[
-                          'ce-status-pill large',
-                          statusTone(selectedStudent),
-                        ]"
-                        >{{ selectedStudent.status || "Activo" }}</span
-                      >
-                    </div>
-                    <div class="ce-profile-identity-cues">
-                      <span v-if="curpDerivedIdentity.valid" :class="['ce-profile-cue', 'is-gender', derivedGenderMeta.tone]">
-                        <b>{{ derivedGenderMeta.label === 'Femenino' ? '♀' : '♂' }}</b>
-                        {{ derivedGenderMeta.label }}
-                      </span>
-                      <span v-if="curpDerivedIdentity.valid" class="ce-profile-cue is-age">
-                        <LucideClock3 :size="13" />
-                        {{ derivedAgeLabel }}
-                      </span>
-                      <span v-if="curpDerivedIdentity.valid" class="ce-profile-cue is-born">
-                        {{ curpDerivedIdentity.fechaNacimiento }}
+                  <div class="ce-student-hero-copy">
+                    <h2>{{ selectedStudent.fullName || "Ficha de alumno" }}</h2>
+                    <div class="ce-student-hero-meta">
+                      <span>{{ selectedStudent.matricula || "Sin matrícula" }}</span>
+                      <i aria-hidden="true"></i>
+                      <span>{{ selectedWorkspaceGradeLabel }}</span>
+                      <i aria-hidden="true"></i>
+                      <span class="ce-student-hero-pass">
+                        <LucideShieldCheck :size="19" />
+                        {{ selectedHuskyPassInlineLabel }}
                       </span>
                     </div>
                   </div>
-                </div>
-                <div
-                  class="ce-access-header-card"
-                  :class="{ unavailable: !selectedStudent.huskyPassAvailable }"
-                >
-                  <span class="ce-access-icon ce-access-logo" aria-hidden="true">
-                    <img src="/brand/ID-HUSKY-PASS-GREY.png" alt="" />
+                  <span
+                    :class="[
+                      'ce-student-hero-status',
+                      statusTone(selectedStudent),
+                    ]"
+                  >
+                    <i aria-hidden="true"></i>
+                    {{ selectedStudent.status || "Activo" }}
                   </span>
-                  <div>
-                    <strong>Husky Pass</strong>
-                    <small v-if="selectedStudent.huskyPassAvailable"
-                      >Acceso activo · {{ selectedStudent.huskyPassUsername }} ·
-                      {{ selectedStudent.huskyPassPlaintext }}</small
-                    >
-                    <small v-else
-                      >Acceso pendiente ·
-                      {{ huskyPassEmailTarget || "Sin correo de padre/tutor" }}</small
-                    >
-                  </div>
+                  <button
+                    type="button"
+                    class="detail-shell-close ce-detail-menu-button ce-student-hero-menu"
+                    aria-label="Cerrar detalle"
+                    @click="selectedStudent = null"
+                  >
+                    <LucideMoreVertical :size="28" />
+                  </button>
                 </div>
-                <div
-                  :class="[
-                    'ce-progress-cluster',
-                    'ce-progress-cluster--health',
-                    selectedRecordHealth.tone,
-                  ]"
-                >
-                  <div class="ce-progress-label-row">
-                    <span>
-                      <strong>Expediente básico</strong>
-                      <small>{{ selectedRecordHealth.summary }}</small>
-                    </span>
-                    <b>{{ selectedProfileCompletion }}%</b>
-                  </div>
-                  <span class="ce-progress-track">
+
+                <div class="ce-student-hero-progress">
+                  <span class="ce-student-hero-progress-icon" aria-hidden="true">
+                    <LucideFileSpreadsheet :size="26" />
+                  </span>
+                  <strong>Expediente básico</strong>
+                  <span class="ce-student-hero-progress-divider" aria-hidden="true"></span>
+                  <span class="ce-student-hero-progress-state">
+                    <LucideCheck v-if="selectedRecordHealth.tone === 'complete'" :size="26" />
+                    <LucideAlertTriangle v-else :size="24" />
+                    <b>{{ selectedBasicHeaderStatusLabel }}</b>
+                  </span>
+                  <span class="ce-student-hero-progress-percent">{{ selectedProfileCompletion }}%</span>
+                  <span class="ce-student-hero-progress-track" aria-hidden="true">
                     <i :style="{ width: `${selectedProfileCompletion}%` }"></i>
                   </span>
+                  <button
+                    v-if="selectedRecordIssueCount"
+                    type="button"
+                    class="ce-student-hero-progress-action"
+                    @click="goToFirstPendingField"
+                  >
+                    Resolver
+                    <LucideChevronRight :size="22" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  class="detail-shell-close ce-detail-menu-button"
-                  aria-label="Cerrar detalle"
-                  @click="selectedStudent = null"
-                >
-                  <LucideMoreVertical :size="20" />
-                </button>
               </header>
 
               <div class="ce-detail-body">
@@ -1594,7 +1580,7 @@ import {
   CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS,
   CONTROL_ESCOLAR_COMPLETE_REQUIRED_FIELDS,
 } from "~/shared/utils/studentPresentation";
-import { NIVELES_ESCOLARES, gradeOptionsForNivel } from "~/shared/utils/grado";
+import { NIVELES_ESCOLARES, displayGrado, gradeOptionsForNivel } from "~/shared/utils/grado";
 import { STUDENT_GROUP_ICON_LABELS } from "~/shared/utils/studentGroupIcons";
 import { buildParentSiblingSignature } from "~/shared/utils/parentSiblingMatch";
 import { isControlEscolarNameField, toNameDisplayCase } from "~/shared/utils/nameCase";
@@ -2742,6 +2728,51 @@ const selectedHealthStudent = computed(() => {
   };
 });
 const selectedRecordHealth = computed(() => recordHealth(selectedHealthStudent.value));
+
+const gradoOrdinalByName = {
+  primero: "1°",
+  primer: "1°",
+  "1": "1°",
+  segundo: "2°",
+  "2": "2°",
+  tercero: "3°",
+  tercer: "3°",
+  "3": "3°",
+  cuarto: "4°",
+  "4": "4°",
+  quinto: "5°",
+  "5": "5°",
+  sexto: "6°",
+  "6": "6°",
+};
+const gradoHeaderOrdinal = (grado) => {
+  const key = String(grado || "")
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return gradoOrdinalByName[key] || displayGrado(grado);
+};
+const selectedWorkspaceGradeLabel = computed(() => {
+  const grade = selectedHealthStudent.value?.grado || selectedStudent.value?.grado;
+  const ordinal = gradoHeaderOrdinal(grade);
+  return ordinal ? `${ordinal} grado` : "Sin grado";
+});
+const selectedHuskyPassInlineLabel = computed(() => {
+  if (!selectedStudent.value?.huskyPassAvailable) return "Husky Pass pendiente";
+  const credential =
+    selectedStudent.value?.huskyPassPlaintext ||
+    selectedStudent.value?.huskyPassUsername ||
+    "";
+  return credential ? `Husky Pass ${credential}` : "Husky Pass activo";
+});
+const selectedBasicHeaderStatusLabel = computed(() => {
+  if (selectedRecordHealth.value?.tone === "complete") return "Completo";
+  if (studentCurpIsInvalid(selectedHealthStudent.value)) return "CURP inválida";
+  const missing = selectedMissingCount.value;
+  if (!missing) return selectedRecordHealth.value?.label || "Revisar";
+  return missing === 1 ? "1 faltante" : `${missing} faltantes`;
+});
 
 const selectedParentSiblingSignature = computed(() => {
   if (!selectedStudent.value) return buildParentSiblingSignature({});
@@ -11587,6 +11618,415 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-identity-panel .ce-form-grid,
   .control-escolar-screen .ce-identity-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* Reference-style selected-student hero header. */
+.control-escolar-screen .ce-student-hero-header {
+  --hero-accent: var(--ce-green);
+  --hero-accent-strong: var(--ce-green-strong);
+  --hero-soft: #f5fbf3;
+  --hero-border: rgba(63, 145, 56, 0.2);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border-bottom: 1px solid #dfe9f2;
+  border-radius: 16px 16px 0 0;
+  background: #fff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.control-escolar-screen .ce-student-hero-header.is-danger {
+  --hero-accent: #ef4337;
+  --hero-accent-strong: #d7352c;
+  --hero-soft: #fff5f3;
+  --hero-border: rgba(239, 67, 55, 0.24);
+}
+
+.control-escolar-screen .ce-student-hero-header.is-warning {
+  --hero-accent: #dd8b21;
+  --hero-accent-strong: #bd7015;
+  --hero-soft: #fff9ed;
+  --hero-border: rgba(221, 139, 33, 0.24);
+}
+
+.control-escolar-screen .ce-student-hero-header.is-neutral {
+  --hero-accent: #7b8797;
+  --hero-accent-strong: #5c6878;
+  --hero-soft: #f6f8fa;
+  --hero-border: rgba(123, 135, 151, 0.22);
+}
+
+.control-escolar-screen .ce-student-hero-main {
+  display: grid;
+  grid-template-columns: clamp(76px, 6.5vw, 96px) minmax(0, 1fr) auto 54px;
+  align-items: center;
+  column-gap: clamp(18px, 2vw, 32px);
+  min-height: clamp(124px, 12vh, 158px);
+  padding: clamp(20px, 2vw, 30px) clamp(22px, 2.4vw, 34px);
+  background:
+    radial-gradient(circle at 0 0, rgba(63, 145, 56, 0.055), transparent 32%),
+    linear-gradient(180deg, #fff 0%, #fff 70%, #fcfefd 100%);
+}
+
+.control-escolar-screen .ce-student-hero-photo {
+  --student-grade-photo-width: clamp(76px, 6.5vw, 96px);
+  --student-grade-photo-height: clamp(76px, 6.5vw, 96px);
+  --student-grade-photo-radius: clamp(18px, 1.5vw, 22px);
+  --student-grade-photo-number-size: 38px;
+  justify-self: center;
+  border-color: var(--hero-border);
+  box-shadow: 0 14px 30px rgba(16, 32, 58, 0.07);
+}
+
+.control-escolar-screen .ce-student-hero-copy {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.control-escolar-screen .ce-student-hero-copy h2 {
+  margin: 0;
+  overflow: visible;
+  color: #13213a;
+  font-size: clamp(25px, 2.1vw, 38px);
+  font-weight: 950;
+  letter-spacing: -0.055em;
+  line-height: 1.03;
+  text-wrap: balance;
+}
+
+.control-escolar-screen .ce-student-hero-meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 18px;
+  color: #6f7d92;
+  font-size: clamp(14px, 1.08vw, 18px);
+  font-weight: 860;
+  line-height: 1.25;
+}
+
+.control-escolar-screen .ce-student-hero-meta > span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-student-hero-meta > i {
+  display: inline-block;
+  width: 1px;
+  height: 24px;
+  margin-inline: 3px;
+  border-radius: 999px;
+  background: #d5dde7;
+}
+
+.control-escolar-screen .ce-student-hero-pass svg {
+  color: #9aa5b4;
+  stroke-width: 2.4;
+}
+
+.control-escolar-screen .ce-student-hero-status {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  padding: 0 22px;
+  border: 1px solid rgba(63, 145, 56, 0.12);
+  border-radius: 999px;
+  background: #eaf7e8;
+  color: var(--ce-green-strong);
+  font-size: clamp(14px, 1.15vw, 20px);
+  font-weight: 940;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-student-hero-status > i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.control-escolar-screen .ce-student-hero-status.danger {
+  border-color: rgba(217, 67, 56, 0.16);
+  background: #fff0ef;
+  color: #d94338;
+}
+
+.control-escolar-screen .ce-student-hero-status.neutral {
+  border-color: rgba(99, 111, 129, 0.16);
+  background: #f2f5f8;
+  color: #657083;
+}
+
+.control-escolar-screen .ce-student-hero-menu {
+  width: 54px;
+  height: 54px;
+  align-self: center;
+  justify-self: end;
+  border: 1px solid #dfe9f2;
+  border-radius: 18px;
+  background: #fff;
+  color: #68778d;
+  box-shadow: 0 10px 24px rgba(16, 32, 58, 0.045);
+}
+
+.control-escolar-screen .ce-student-hero-menu:hover {
+  border-color: #cbd9e8;
+  color: #14233d;
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-student-hero-progress {
+  display: grid;
+  grid-template-columns: 58px minmax(145px, auto) 1px minmax(112px, auto) auto minmax(140px, 1fr) auto;
+  align-items: center;
+  gap: clamp(11px, 1.25vw, 22px);
+  min-height: clamp(74px, 8.5vh, 96px);
+  padding: clamp(14px, 1.5vw, 20px) clamp(22px, 2.4vw, 34px);
+  border-top: 1px solid var(--hero-border);
+  background:
+    radial-gradient(circle at 0 100%, color-mix(in srgb, var(--hero-accent) 7%, transparent), transparent 34%),
+    linear-gradient(90deg, var(--hero-soft), #ffffff 62%);
+  color: var(--hero-accent-strong);
+}
+
+.control-escolar-screen .ce-student-hero-progress-icon {
+  display: inline-flex;
+  width: 58px;
+  height: 58px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hero-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--hero-accent-strong);
+  box-shadow: 0 10px 22px rgba(16, 32, 58, 0.055);
+}
+
+.control-escolar-screen .ce-student-hero-progress > strong {
+  color: #13213a;
+  font-size: clamp(18px, 1.35vw, 24px);
+  font-weight: 930;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-student-hero-progress-divider {
+  width: 1px;
+  height: 38px;
+  background: #dce5ee;
+}
+
+.control-escolar-screen .ce-student-hero-progress-state {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  color: var(--hero-accent-strong);
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-student-hero-progress-state svg {
+  flex: 0 0 auto;
+  stroke-width: 2.7;
+}
+
+.control-escolar-screen .ce-student-hero-progress-state b {
+  color: var(--hero-accent-strong);
+  font-size: clamp(17px, 1.35vw, 24px);
+  font-weight: 930;
+  letter-spacing: -0.025em;
+}
+
+.control-escolar-screen .ce-student-hero-progress-percent {
+  justify-self: end;
+  color: var(--hero-accent-strong);
+  font-size: clamp(20px, 1.8vw, 30px);
+  font-weight: 950;
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.control-escolar-screen .ce-student-hero-progress-track {
+  position: relative;
+  display: block;
+  height: 14px;
+  min-width: 120px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9eff5;
+  box-shadow: inset 0 0 0 1px rgba(212, 222, 232, 0.5);
+}
+
+.control-escolar-screen .ce-student-hero-progress-track i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--hero-accent), color-mix(in srgb, var(--hero-accent) 82%, #73c56a));
+}
+
+.control-escolar-screen .ce-student-hero-progress-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent calc(12.5% - 1px),
+    rgba(255, 255, 255, 0.72) calc(12.5% - 1px),
+    rgba(255, 255, 255, 0.72) 12.5%
+  );
+}
+
+.control-escolar-screen .ce-student-hero-progress-action {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 18px;
+  border: 2px solid var(--hero-accent);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--hero-accent-strong);
+  font-size: clamp(14px, 1vw, 18px);
+  font-weight: 930;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.control-escolar-screen .ce-student-hero-progress-action:hover {
+  background: color-mix(in srgb, var(--hero-accent) 7%, #fff);
+  box-shadow: 0 12px 22px color-mix(in srgb, var(--hero-accent) 14%, transparent);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 1480px) {
+  .control-escolar-screen .ce-student-hero-main {
+    grid-template-columns: 74px minmax(0, 1fr) auto 46px;
+    column-gap: 16px;
+    min-height: 112px;
+    padding: 18px 20px;
+  }
+
+  .control-escolar-screen .ce-student-hero-photo {
+    --student-grade-photo-width: 74px;
+    --student-grade-photo-height: 74px;
+    --student-grade-photo-radius: 17px;
+  }
+
+  .control-escolar-screen .ce-student-hero-copy {
+    gap: 11px;
+  }
+
+  .control-escolar-screen .ce-student-hero-copy h2 {
+    font-size: clamp(21px, 1.6vw, 29px);
+  }
+
+  .control-escolar-screen .ce-student-hero-meta {
+    gap: 0 12px;
+    font-size: 13.5px;
+  }
+
+  .control-escolar-screen .ce-student-hero-meta > i {
+    height: 20px;
+  }
+
+  .control-escolar-screen .ce-student-hero-status {
+    min-height: 38px;
+    padding-inline: 16px;
+    font-size: 13.5px;
+  }
+
+  .control-escolar-screen .ce-student-hero-menu {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .control-escolar-screen .ce-student-hero-progress {
+    grid-template-columns: 46px minmax(128px, auto) 1px minmax(104px, auto) auto minmax(110px, 1fr) auto;
+    gap: 10px;
+    min-height: 72px;
+    padding: 12px 20px;
+  }
+
+  .control-escolar-screen .ce-student-hero-progress-icon {
+    width: 46px;
+    height: 46px;
+  }
+
+  .control-escolar-screen .ce-student-hero-progress > strong,
+  .control-escolar-screen .ce-student-hero-progress-state b {
+    font-size: 16px;
+  }
+
+  .control-escolar-screen .ce-student-hero-progress-percent {
+    font-size: 22px;
+  }
+
+  .control-escolar-screen .ce-student-hero-progress-track {
+    height: 11px;
+    min-width: 92px;
+  }
+
+  .control-escolar-screen .ce-student-hero-progress-action {
+    min-height: 38px;
+    padding-inline: 14px;
+    border-radius: 13px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 1240px) {
+  .control-escolar-screen .ce-student-hero-main {
+    grid-template-columns: 68px minmax(0, 1fr) 42px;
+    grid-template-rows: auto auto;
+  }
+
+  .control-escolar-screen .ce-student-hero-status {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    margin-top: 8px;
+  }
+
+  .control-escolar-screen .ce-student-hero-menu {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .control-escolar-screen .ce-student-hero-progress {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+
+  .control-escolar-screen .ce-student-hero-progress-divider {
+    display: none;
+  }
+
+  .control-escolar-screen .ce-student-hero-progress-state,
+  .control-escolar-screen .ce-student-hero-progress-action {
+    grid-column: auto;
+  }
+
+  .control-escolar-screen .ce-student-hero-progress-track {
+    grid-column: 2 / 4;
   }
 }
 
