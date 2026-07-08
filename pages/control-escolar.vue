@@ -565,7 +565,7 @@
                 </button>
               </header>
 
-              <div class="ce-detail-body">
+              <section class="ce-workspace-summary-strip" aria-label="Resumen operativo del expediente seleccionado">
                 <section class="ce-health-overview" aria-label="Resumen del expediente seleccionado">
                   <button
                     type="button"
@@ -663,7 +663,9 @@
                     <b>{{ signal.count }}</b>
                   </button>
                 </section>
+              </section>
 
+              <div class="ce-detail-body">
                 <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
                   <button
                     v-for="tab in detailTabs"
@@ -10346,6 +10348,464 @@ onBeforeUnmount(() => {
 
   .control-escolar-screen .ce-kpi-strip .kpi-card {
     padding-inline: 16px;
+  }
+}
+
+
+/* Full-height selected student workspace. */
+.control-escolar-screen .ce-workspace.has-detail,
+.control-escolar-screen .ce-workspace.has-empty-detail {
+  grid-template-columns: minmax(520px, 0.82fr) minmax(760px, 1.32fr);
+  align-items: stretch;
+}
+
+.control-escolar-screen .ce-detail-panel {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.control-escolar-screen .ce-detail-shell {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(219, 230, 240, 0.98);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--ce-detail-accent) 7%, transparent), transparent 230px),
+    linear-gradient(180deg, #ffffff 0%, #f9fbfc 100%);
+  box-shadow: 0 16px 36px rgba(21, 35, 60, 0.055);
+}
+
+.control-escolar-screen .ce-detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  grid-template-columns: minmax(260px, 1fr) minmax(230px, 0.48fr) minmax(180px, 0.34fr) 34px;
+  gap: 11px;
+  min-height: 74px;
+  padding: 10px 13px 9px;
+  border-bottom: 1px solid rgba(221, 231, 240, 0.9);
+  background:
+    radial-gradient(circle at 0 0, color-mix(in srgb, var(--ce-detail-accent) 8%, transparent), transparent 240px),
+    rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px) saturate(130%);
+}
+
+.control-escolar-screen .ce-detail-title--with-photo {
+  grid-template-columns: 50px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.control-escolar-screen .ce-detail-header-photo {
+  --student-grade-photo-width: 50px;
+  --student-grade-photo-height: 50px;
+  --student-grade-photo-radius: 13px;
+}
+
+.control-escolar-screen .ce-detail-title-copy small {
+  margin-bottom: 4px;
+  color: #5f6e85;
+  font-size: 10.5px;
+}
+
+.control-escolar-screen .ce-title-row {
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.control-escolar-screen .ce-title-row h2 {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: clamp(15px, 1.15vw, 18px);
+  line-height: 1.12;
+  text-overflow: clip;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.control-escolar-screen .ce-status-pill.large {
+  min-height: 26px;
+  padding-inline: 10px;
+  font-size: 10px;
+}
+
+.control-escolar-screen .ce-profile-identity-cues {
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.control-escolar-screen .ce-profile-cue {
+  min-height: 23px;
+  padding-inline: 8px;
+  font-size: 10.5px;
+}
+
+.control-escolar-screen .ce-access-header-card,
+.control-escolar-screen .ce-progress-cluster--health {
+  min-height: 50px;
+  padding: 7px 9px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.control-escolar-screen .ce-access-header-card {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.control-escolar-screen .ce-access-header-card > span,
+.control-escolar-screen .ce-access-icon {
+  width: 46px;
+  height: 34px;
+  border-radius: 12px;
+}
+
+.control-escolar-screen .ce-access-icon img {
+  width: 38px;
+  max-height: 24px;
+}
+
+.control-escolar-screen .ce-access-header-card strong,
+.control-escolar-screen .ce-progress-cluster--health strong {
+  font-size: 11.5px;
+}
+
+.control-escolar-screen .ce-access-header-card small,
+.control-escolar-screen .ce-progress-cluster--health small {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.25;
+  text-overflow: clip;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.control-escolar-screen .ce-progress-cluster--health b {
+  font-size: 18px;
+}
+
+.control-escolar-screen .ce-detail-menu-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip {
+  position: relative;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: minmax(300px, 0.98fr) minmax(360px, 1.02fr);
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid rgba(221, 231, 240, 0.92);
+  background:
+    linear-gradient(180deg, rgba(250, 253, 251, 0.96), rgba(255, 255, 255, 0.94));
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-overview,
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-grid {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-overview {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 7px;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-card,
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card {
+  min-height: 56px;
+  padding: 8px 9px;
+  border: 1px solid rgba(221, 231, 240, 0.82);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-card.is-active,
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card:hover,
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card:focus-visible {
+  border-color: color-mix(in srgb, var(--ce-detail-accent) 28%, #dbe6f0);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.045);
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-card--complete.is-active {
+  border-color: rgba(79, 142, 216, 0.28);
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-ring {
+  width: 36px;
+  height: 36px;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-ring b {
+  font-size: 10px;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-card__copy small,
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card small {
+  overflow: visible;
+  font-size: 9.5px;
+  line-height: 1.15;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-card__copy strong,
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.18;
+  text-overflow: clip;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-card__copy p,
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card p {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 9.8px;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-card__copy em {
+  font-size: 9.5px;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-health-link {
+  align-self: end;
+  font-size: 9.5px;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card {
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card b {
+  font-size: 10px;
+}
+
+.control-escolar-screen .ce-detail-body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  scrollbar-gutter: stable;
+}
+
+.control-escolar-screen .ce-detail-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  min-width: 0;
+  min-height: 38px;
+  padding: 3px;
+  border-radius: 14px;
+  background: rgba(244, 248, 251, 0.94);
+  backdrop-filter: blur(12px) saturate(128%);
+}
+
+.control-escolar-screen .ce-detail-tabs button {
+  height: 32px;
+  min-height: 32px;
+  padding-inline: 9px;
+  border-radius: 11px;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.control-escolar-screen .ce-edit-form {
+  min-width: 0;
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-form-card.ce-tab-panel,
+.control-escolar-screen .ce-family-card,
+.control-escolar-screen .ce-family-siblings-card,
+.control-escolar-screen .ce-advanced-section,
+.control-escolar-screen .ce-husky-card.compact {
+  border-color: rgba(221, 231, 240, 0.86);
+  box-shadow: none;
+}
+
+.control-escolar-screen .ce-form-card.ce-tab-panel {
+  padding: 15px 16px;
+  border-radius: 16px;
+}
+
+.control-escolar-screen .ce-panel-heading {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+}
+
+.control-escolar-screen .ce-panel-heading h3,
+.control-escolar-screen .ce-section-heading h3,
+.control-escolar-screen .ce-family-siblings-card h3 {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.control-escolar-screen .ce-panel-heading p,
+.control-escolar-screen .ce-section-heading p,
+.control-escolar-screen .ce-family-siblings-card p {
+  overflow: visible;
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.control-escolar-screen .ce-family-readiness {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.control-escolar-screen .ce-family-readiness-card {
+  min-height: 58px;
+  padding: 9px;
+}
+
+.control-escolar-screen .ce-family-readiness-card strong,
+.control-escolar-screen .ce-family-readiness-card p,
+.control-escolar-screen .ce-family-siblings-match dd,
+.control-escolar-screen .ce-family-siblings-list strong,
+.control-escolar-screen .ce-family-siblings-list small {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.control-escolar-screen .ce-family-grid {
+  gap: 10px;
+}
+
+.control-escolar-screen .ce-family-card {
+  padding: 12px;
+  border-radius: 15px;
+}
+
+.control-escolar-screen .ce-family-fields,
+.control-escolar-screen .ce-family-fields--father,
+.control-escolar-screen .ce-family-fields--mother {
+  grid-auto-rows: auto;
+  gap: 10px 12px;
+}
+
+.control-escolar-screen .ce-detail-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  min-height: 52px;
+  padding: 7px 12px;
+  border-top: 1px solid rgba(221, 231, 240, 0.92);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(15px) saturate(130%);
+  box-shadow: 0 -8px 22px rgba(21, 35, 60, 0.055);
+}
+
+.control-escolar-screen .ce-detail-footer .ce-save-state,
+.control-escolar-screen .ce-save-state {
+  min-height: 28px;
+  padding-inline: 11px;
+  font-size: 10.5px;
+}
+
+.control-escolar-screen .ce-detail-footer :deep(.ui-button) {
+  min-height: 36px;
+  min-width: 112px;
+  border-radius: 12px;
+  font-size: 12.5px;
+}
+
+@media (max-width: 1380px) {
+  .control-escolar-screen .ce-workspace.has-detail,
+  .control-escolar-screen .ce-workspace.has-empty-detail {
+    grid-template-columns: minmax(510px, 0.76fr) minmax(720px, 1.24fr);
+    min-width: 1240px;
+  }
+
+  .control-escolar-screen .ce-detail-shell,
+  .control-escolar-screen .ce-detail-tabs,
+  .control-escolar-screen .ce-edit-form {
+    min-width: 0;
+  }
+
+  .control-escolar-screen .ce-detail-header {
+    grid-template-columns: minmax(240px, 1fr) minmax(210px, 0.5fr) minmax(168px, 0.36fr) 34px;
+    gap: 9px;
+    padding-inline: 11px;
+  }
+
+  .control-escolar-screen .ce-workspace-summary-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  .control-escolar-screen .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 34px;
+    grid-template-rows: auto auto auto;
+  }
+
+  .control-escolar-screen .ce-access-header-card,
+  .control-escolar-screen .ce-progress-cluster--health {
+    grid-column: 1 / -1;
+  }
+
+  .control-escolar-screen .ce-access-header-card {
+    grid-row: 2;
+  }
+
+  .control-escolar-screen .ce-progress-cluster--health {
+    grid-row: 3;
+  }
+
+  .control-escolar-screen .ce-detail-menu-button {
+    grid-column: 2;
+    grid-row: 1;
   }
 }
 

@@ -1,1 +1,1 @@
-Permite cartas de no adeudo sin bloqueo por plantel activo
+Rediseña la ficha de alumno de Control Escolar como espacio de trabajo vertical
