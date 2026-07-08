@@ -488,24 +488,52 @@
                         {{ selectedHuskyPassInlineLabel }}
                       </span>
                     </div>
+                    <div class="ce-student-hero-cues" aria-label="Datos rápidos del alumno">
+                      <span
+                        :class="[
+                          'ce-student-identity-chip',
+                          `is-${selectedHeaderGenderChip.tone}`,
+                        ]"
+                      >
+                        <i aria-hidden="true"></i>
+                        {{ selectedHeaderGenderChip.label }}
+                      </span>
+                      <span class="ce-student-identity-chip is-age">
+                        {{ selectedHeaderAgeLabel }}
+                      </span>
+                    </div>
                   </div>
-                  <span
-                    :class="[
-                      'ce-student-hero-status',
-                      statusTone(selectedStudent),
-                    ]"
-                  >
-                    <i aria-hidden="true"></i>
-                    {{ selectedStudent.status || "Activo" }}
-                  </span>
-                  <button
-                    type="button"
-                    class="detail-shell-close ce-detail-menu-button ce-student-hero-menu"
-                    aria-label="Cerrar detalle"
-                    @click="selectedStudent = null"
-                  >
-                    <LucideMoreVertical :size="28" />
-                  </button>
+                  <div class="ce-student-hero-side">
+                    <span
+                      v-if="selectedHeaderGroupSigil"
+                      :class="[
+                        'ce-student-hero-group-sigil',
+                        `is-${selectedHeaderGenderChip.tone}`,
+                      ]"
+                      :aria-label="selectedHeaderGroupSigil.label"
+                      :title="selectedHeaderGroupSigil.label"
+                    >
+                      <LucideShield :size="22" aria-hidden="true" />
+                      <b>{{ selectedHeaderGroupSigil.letter }}</b>
+                    </span>
+                    <span
+                      :class="[
+                        'ce-student-hero-status',
+                        statusTone(selectedStudent),
+                      ]"
+                    >
+                      <i aria-hidden="true"></i>
+                      {{ selectedStudent.status || "Activo" }}
+                    </span>
+                    <button
+                      type="button"
+                      class="detail-shell-close ce-detail-menu-button ce-student-hero-menu"
+                      aria-label="Cerrar detalle"
+                      @click="selectedStudent = null"
+                    >
+                      <LucideMoreVertical :size="28" />
+                    </button>
+                  </div>
                 </div>
 
                 <div class="ce-student-hero-progress">
@@ -1550,6 +1578,7 @@ import {
   LucideSearch,
   LucideSearchX,
   LucideSend,
+  LucideShield,
   LucideShieldCheck,
   LucideUserCheck,
   LucideUserRound,
@@ -3116,6 +3145,55 @@ const computeAgeFromDate = (value) => {
 const derivedAgeLabel = computed(() => {
   const age = computeAgeFromDate(curpDerivedIdentity.value?.fechaNacimiento);
   return age === null ? 'Edad no disponible' : `${age} año${age === 1 ? '' : 's'}`;
+});
+const normalizeHeaderGender = (value) => {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (!raw) return "";
+  if (["1", "h", "hombre", "masculino", "male", "nino", "niño"].includes(raw)) return "male";
+  if (["0", "m", "mujer", "f", "femenino", "female", "nina", "niña"].includes(raw)) return "female";
+  return "";
+};
+const selectedHeaderGenderChip = computed(() => {
+  const explicit =
+    normalizeHeaderGender(selectedHealthStudent.value?.sexo) ||
+    normalizeHeaderGender(selectedStudent.value?.genero) ||
+    normalizeHeaderGender(selectedStudent.value?.gender) ||
+    normalizeHeaderGender(curpDerivedIdentity.value?.sexoCorto);
+  if (explicit === "male") return { label: "Niño", tone: "male" };
+  if (explicit === "female") return { label: "Niña", tone: "female" };
+  return { label: "Sin género", tone: "neutral" };
+});
+const normalizeHeaderBirthDate = (value) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const slash = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (slash) return `${slash[3]}-${String(slash[2]).padStart(2, "0")}-${String(slash[1]).padStart(2, "0")}`;
+  return "";
+};
+const selectedHeaderAgeLabel = computed(() => {
+  const birthDate =
+    normalizeHeaderBirthDate(curpDerivedIdentity.value?.fechaNacimiento) ||
+    normalizeHeaderBirthDate(selectedStudent.value?.fechaNacimiento) ||
+    normalizeHeaderBirthDate(selectedStudent.value?.birth) ||
+    normalizeHeaderBirthDate(selectedStudent.value?.birthDate) ||
+    normalizeHeaderBirthDate(selectedStudent.value?.nacimiento);
+  const age = computeAgeFromDate(birthDate);
+  return age === null ? "Edad pendiente" : `${age} año${age === 1 ? "" : "s"}`;
+});
+const selectedHeaderGroupSigil = computed(() => {
+  const group = controlGroupLabel(selectedHealthStudent.value || selectedStudent.value);
+  if (!group) return null;
+  const letter = String(group).trim().slice(0, 2).toUpperCase();
+  return {
+    letter,
+    label: `Grupo ${group}`,
+  };
 });
 const curpValidationMeta = (value) => {
   const normalized = normalizeCurpInput(value);
@@ -11664,7 +11742,7 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-student-hero-main {
   display: grid;
-  grid-template-columns: clamp(76px, 6.5vw, 96px) minmax(0, 1fr) auto 54px;
+  grid-template-columns: clamp(76px, 6.5vw, 96px) minmax(0, 1fr) auto;
   align-items: center;
   column-gap: clamp(18px, 2vw, 32px);
   min-height: clamp(124px, 12vh, 158px);
@@ -11733,6 +11811,130 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-student-hero-pass svg {
   color: #9aa5b4;
   stroke-width: 2.4;
+}
+
+.control-escolar-screen .ce-student-hero-cues {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-escolar-screen .ce-student-identity-chip {
+  display: inline-flex;
+  min-height: 31px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid rgba(214, 225, 235, 0.9);
+  border-radius: 999px;
+  background: rgba(247, 250, 252, 0.9);
+  color: #66758b;
+  font-size: clamp(12px, 0.9vw, 14px);
+  font-weight: 870;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 7px 15px rgba(16, 32, 58, 0.025), inset 0 1px 0 rgba(255, 255, 255, 0.84);
+}
+
+.control-escolar-screen .ce-student-identity-chip > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.72;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-female {
+  border-color: rgba(223, 129, 174, 0.28);
+  background: linear-gradient(180deg, #fff7fb 0%, #fdeef6 100%);
+  color: #b65386;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-male {
+  border-color: rgba(98, 159, 234, 0.3);
+  background: linear-gradient(180deg, #f7fbff 0%, #edf6ff 100%);
+  color: #376fca;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-neutral,
+.control-escolar-screen .ce-student-identity-chip.is-age {
+  border-color: rgba(210, 222, 233, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #f4f8fb 100%);
+  color: #657286;
+}
+
+.control-escolar-screen .ce-student-hero-side {
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil {
+  position: relative;
+  display: inline-flex;
+  width: clamp(50px, 4.2vw, 62px);
+  height: clamp(50px, 4.2vw, 62px);
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
+  border: 1px solid color-mix(in srgb, var(--hero-accent) 18%, #dce8f0);
+  border-radius: clamp(17px, 1.3vw, 20px);
+  background:
+    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.9), transparent 35%),
+    linear-gradient(135deg, color-mix(in srgb, var(--hero-accent) 11%, #fff) 0%, #fff 56%, color-mix(in srgb, var(--hero-accent) 7%, #f6faf8) 100%);
+  color: var(--hero-accent-strong);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--hero-accent) 10%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil.is-female {
+  border-color: rgba(223, 129, 174, 0.24);
+  background:
+    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.92), transparent 35%),
+    linear-gradient(135deg, #fff6fb 0%, #ffffff 56%, #fdf0f7 100%);
+  color: #b65386;
+  box-shadow: 0 14px 28px rgba(182, 83, 134, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil.is-male {
+  border-color: rgba(98, 159, 234, 0.25);
+  background:
+    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.92), transparent 35%),
+    linear-gradient(135deg, #f5fbff 0%, #ffffff 56%, #edf6ff 100%);
+  color: #376fca;
+  box-shadow: 0 14px 28px rgba(55, 111, 202, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil svg {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 0;
+  transform: translate(-50%, -50%);
+  color: color-mix(in srgb, var(--hero-accent) 58%, #ffffff);
+  opacity: 0.45;
+  stroke-width: 1.8;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil b {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--hero-accent-strong);
+  font-size: clamp(19px, 1.5vw, 24px);
+  font-weight: 950;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .control-escolar-screen .ce-student-hero-status {
@@ -11918,7 +12120,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1480px) {
   .control-escolar-screen .ce-student-hero-main {
-    grid-template-columns: 74px minmax(0, 1fr) auto 46px;
+    grid-template-columns: 74px minmax(0, 1fr) auto;
     column-gap: 16px;
     min-height: 112px;
     padding: 18px 20px;
@@ -11951,6 +12153,28 @@ onBeforeUnmount(() => {
     min-height: 38px;
     padding-inline: 16px;
     font-size: 13.5px;
+  }
+
+  .control-escolar-screen .ce-student-identity-chip {
+    min-height: 27px;
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+
+  .control-escolar-screen .ce-student-hero-side {
+    gap: 10px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-sigil {
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-sigil b {
+    width: 28px;
+    height: 28px;
+    font-size: 19px;
   }
 
   .control-escolar-screen .ce-student-hero-menu {
@@ -11995,20 +12219,21 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1240px) {
   .control-escolar-screen .ce-student-hero-main {
-    grid-template-columns: 68px minmax(0, 1fr) 42px;
+    grid-template-columns: 68px minmax(0, 1fr);
     grid-template-rows: auto auto;
   }
 
-  .control-escolar-screen .ce-student-hero-status {
+  .control-escolar-screen .ce-student-hero-side {
     grid-column: 2;
     grid-row: 2;
-    justify-self: start;
-    margin-top: 8px;
+    min-width: 0;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-top: 10px;
   }
 
-  .control-escolar-screen .ce-student-hero-menu {
-    grid-column: 3;
-    grid-row: 1;
+  .control-escolar-screen .ce-student-hero-status {
+    justify-self: start;
   }
 
   .control-escolar-screen .ce-student-hero-progress {

@@ -1,1 +1,1 @@
-Rediseña encabezado de ficha de alumno en Control Escolar
+Actualiza encabezado de alumno con chips y sigilo de grupo
