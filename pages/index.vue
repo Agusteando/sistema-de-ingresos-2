@@ -1509,10 +1509,13 @@ const applyStudentsList = (nextStudents, { selectRouteStudent = true, cacheOptio
 }
 
 const performSearch = async (options = {}) => {
-  const { useCache = true, serverQuery, clearStaleOnCacheMiss = false } = options || {}
+  const { useCache = true, serverQuery = '', clearStaleOnCacheMiss = false } = options || {}
   const requestId = ++studentsRequestId
   const cicloKey = normalizeCicloKey(state.value.ciclo)
-  const query = serverQuery === undefined ? (filters.value.q || '') : String(serverQuery || '')
+  // La búsqueda del input es un filtro visual sobre la lista completa. Si se usa
+  // como q de servidor, la lista canónica queda recortada y los KPI se calculan
+  // sobre una muestra parcial del ciclo.
+  const query = String(serverQuery || '')
   const startedAt = financialNow()
 
   const cached = useCache ? readCachedStudents({ ciclo: cicloKey, q: query, enrollmentConcepts: externalConcepts.value, tipoIngresoConcepts: tipoIngresoConcepts.value }) : null
@@ -2538,7 +2541,7 @@ const refreshForCicloChange = async () => {
   await loadEnrollmentConfig({ refreshStudents: false, refreshKpis: false })
   if (requestId !== cicloRefreshRequestId) return
 
-  await performSearch({ useCache: true, clearStaleOnCacheMiss: true })
+  await performSearch({ useCache: true, serverQuery: '', clearStaleOnCacheMiss: true })
   if (requestId !== cicloRefreshRequestId) return
 
   await Promise.allSettled([loadGlobalKpis(), loadKpiSparklines()])

@@ -1,1 +1,1 @@
-Corrige clasificación y persistencia de bajas en el ciclo actual
+Corrige recarga completa de alumnos al cambiar ciclo escolar
