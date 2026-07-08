@@ -36,126 +36,6 @@
       </div>
     </section>
 
-    <div class="filter-bar ce-filter-bar">
-      <div class="ce-primary-filter-row">
-        <div
-          class="search-control"
-          :class="{ 'has-filter-token': activeFilterLabel }"
-        >
-          <span class="search-filter-icon" aria-hidden="true"
-            ><LucideFilter :size="15"
-          /></span>
-          <button
-            v-if="activeFilterLabel"
-            type="button"
-            class="search-filter-token"
-            @click="clearFilters"
-          >
-            <span>{{ activeFilterLabel }}</span
-            ><b aria-hidden="true">×</b>
-          </button>
-          <LucideSearch class="search-icon" :size="18" />
-          <input
-            v-model="filters.search"
-            placeholder="Matrícula, nombre, CURP, teléfono o correo..."
-          />
-        </div>
-
-        <button
-          type="button"
-          :class="[
-            'ce-filter-button',
-            { active: showAdvancedFilters || advancedFilterCount },
-          ]"
-          @click="showAdvancedFilters = !showAdvancedFilters"
-        >
-          <LucideFilter :size="16" /> Filtros
-          <b v-if="advancedFilterCount">{{ advancedFilterCount }}</b>
-        </button>
-
-        <div
-          class="ce-chip-cluster ce-chip-cluster--quality"
-          aria-label="Calidad del expediente"
-        >
-          <UiChip
-            v-for="filter in qualityFilters"
-            :key="`quality-${filter.key}`"
-            :active="filters.quality === filter.key"
-            @click="toggleQualityFilter(filter.key)"
-          >
-            <span>{{ filter.label }}</span
-            ><b class="ce-chip-count">{{ formatNumber(filter.count) }}</b>
-          </UiChip>
-        </div>
-
-        <button
-          type="button"
-          class="ce-clear-link"
-          :disabled="!hasActiveFilters"
-          @click="clearFilters"
-        >
-          <LucideRotateCcw :size="15" /> Limpiar filtros
-        </button>
-      </div>
-
-      <div class="ce-secondary-filter-row">
-        <div class="ce-status-tabs" aria-label="Filtros principales">
-          <button
-            v-for="filter in primaryFilters"
-            :key="filter.key"
-            type="button"
-            :class="[
-              'ce-status-tab',
-              { active: filters.status === filter.key && !filters.quality },
-            ]"
-            @click="applyPrimaryFilter(filter.key)"
-          >
-            {{ filter.label }}
-          </button>
-        </div>
-
-        <div
-          v-if="catalogs.grados.length"
-          class="ce-chip-cluster ce-chip-cluster--grade"
-          aria-label="Filtrar por grado"
-        >
-          <span class="ce-chip-label">Grado</span>
-          <UiChip
-            :active="!filters.grado && !filters.group"
-            @click="clearAcademicFilters"
-            >Todos</UiChip
-          >
-          <UiChip
-            v-for="grado in catalogs.grados"
-            :key="`grado-${grado}`"
-            :active="filters.grado === grado"
-            @click="selectGrade(grado)"
-            >{{ grado }}</UiChip
-          >
-        </div>
-
-        <div
-          v-if="filters.grado && availableGroups.length"
-          class="ce-chip-cluster ce-chip-cluster--group"
-          aria-label="Filtrar por grupo"
-        >
-          <span class="ce-chip-label">Grupo</span>
-          <UiChip
-            :active-group="filters.group === ''"
-            @click="filters.group = ''"
-            >Todos</UiChip
-          >
-          <UiChip
-            v-for="grupo in availableGroups"
-            :key="`grupo-${grupo}`"
-            :active-group="filters.group === grupo"
-            @click="toggleFilter('group', grupo)"
-            >{{ grupo }}</UiChip
-          >
-        </div>
-      </div>
-    </div>
-
     <div
       ref="studentsScaleShell"
       class="students-scale-shell"
@@ -177,6 +57,126 @@
               selectedStudent ? 'is-compact' : 'is-full',
             ]"
           >
+            <div class="filter-bar ce-filter-bar">
+              <div class="ce-primary-filter-row">
+                <div
+                  class="search-control"
+                  :class="{ 'has-filter-token': activeFilterLabel }"
+                >
+                  <span class="search-filter-icon" aria-hidden="true"
+                    ><LucideFilter :size="15"
+                  /></span>
+                  <button
+                    v-if="activeFilterLabel"
+                    type="button"
+                    class="search-filter-token"
+                    @click="clearFilters"
+                  >
+                    <span>{{ activeFilterLabel }}</span
+                    ><b aria-hidden="true">×</b>
+                  </button>
+                  <LucideSearch class="search-icon" :size="18" />
+                  <input
+                    v-model="filters.search"
+                    placeholder="Matrícula, nombre, CURP, teléfono o correo..."
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  :class="[
+                    'ce-filter-button',
+                    { active: showAdvancedFilters || advancedFilterCount },
+                  ]"
+                  @click="showAdvancedFilters = !showAdvancedFilters"
+                >
+                  <LucideFilter :size="16" /> Filtros
+                  <b v-if="advancedFilterCount">{{ advancedFilterCount }}</b>
+                </button>
+
+                <div
+                  class="ce-chip-cluster ce-chip-cluster--quality"
+                  aria-label="Calidad del expediente"
+                >
+                  <UiChip
+                    v-for="filter in qualityFilters"
+                    :key="`quality-${filter.key}`"
+                    :active="filters.quality === filter.key"
+                    @click="toggleQualityFilter(filter.key)"
+                  >
+                    <span>{{ filter.label }}</span
+                    ><b class="ce-chip-count">{{ formatNumber(filter.count) }}</b>
+                  </UiChip>
+                </div>
+
+                <button
+                  type="button"
+                  class="ce-clear-link"
+                  :disabled="!hasActiveFilters"
+                  @click="clearFilters"
+                >
+                  <LucideRotateCcw :size="15" /> Limpiar filtros
+                </button>
+              </div>
+
+              <div class="ce-secondary-filter-row">
+                <div class="ce-status-tabs" aria-label="Filtros principales">
+                  <button
+                    v-for="filter in primaryFilters"
+                    :key="filter.key"
+                    type="button"
+                    :class="[
+                      'ce-status-tab',
+                      { active: filters.status === filter.key && !filters.quality },
+                    ]"
+                    @click="applyPrimaryFilter(filter.key)"
+                  >
+                    {{ filter.label }}
+                  </button>
+                </div>
+
+                <div
+                  v-if="catalogs.grados.length"
+                  class="ce-chip-cluster ce-chip-cluster--grade"
+                  aria-label="Filtrar por grado"
+                >
+                  <span class="ce-chip-label">Grado</span>
+                  <UiChip
+                    :active="!filters.grado && !filters.group"
+                    @click="clearAcademicFilters"
+                    >Todos</UiChip
+                  >
+                  <UiChip
+                    v-for="grado in catalogs.grados"
+                    :key="`grado-${grado}`"
+                    :active="filters.grado === grado"
+                    @click="selectGrade(grado)"
+                    >{{ grado }}</UiChip
+                  >
+                </div>
+
+                <div
+                  v-if="filters.grado && availableGroups.length"
+                  class="ce-chip-cluster ce-chip-cluster--group"
+                  aria-label="Filtrar por grupo"
+                >
+                  <span class="ce-chip-label">Grupo</span>
+                  <UiChip
+                    :active-group="filters.group === ''"
+                    @click="filters.group = ''"
+                    >Todos</UiChip
+                  >
+                  <UiChip
+                    v-for="grupo in availableGroups"
+                    :key="`grupo-${grupo}`"
+                    :active-group="filters.group === grupo"
+                    @click="toggleFilter('group', grupo)"
+                    >{{ grupo }}</UiChip
+                  >
+                </div>
+              </div>
+            </div>
+
             <div class="student-list-card ce-list-card">
               <div class="list-titlebar ce-list-titlebar">
                 <div class="list-heading-copy">
@@ -10806,6 +10806,176 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-detail-menu-button {
     grid-column: 2;
     grid-row: 1;
+  }
+}
+
+
+/* Control Escolar full-height workspace refinement: keep filters/list in the left rail
+   so the selected student record can use the full vertical lane beside it. */
+.control-escolar-screen .students-scale-shell {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.control-escolar-screen .ce-workspace.has-detail,
+.control-escolar-screen .ce-workspace.has-empty-detail {
+  align-items: stretch;
+  min-height: 0;
+}
+
+.control-escolar-screen .student-list-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-self: stretch;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0 0 2px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-primary-filter-row {
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  min-width: 0;
+  gap: 8px;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .search-control {
+  height: 41px;
+  min-width: 0;
+  border-radius: 14px;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-filter-button,
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-clear-link {
+  min-height: 41px;
+  border-radius: 14px;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-clear-link {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  font-size: 0;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-clear-link svg {
+  flex: 0 0 auto;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--quality {
+  grid-column: 1 / -1;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--quality::-webkit-scrollbar {
+  display: none;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-secondary-filter-row {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow: visible;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-status-tabs,
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--grade,
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--group {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-status-tabs::-webkit-scrollbar,
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--grade::-webkit-scrollbar,
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--group::-webkit-scrollbar {
+  display: none;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster {
+  padding: 5px;
+  border-radius: 15px;
+}
+
+.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-status-tab,
+.control-escolar-screen .student-list-panel > .ce-filter-bar :deep(.ui-chip) {
+  min-height: 34px;
+  padding-inline: 12px;
+}
+
+.control-escolar-screen .ce-list-card {
+  height: 100%;
+  min-height: 0;
+}
+
+.control-escolar-screen .ce-detail-panel {
+  align-self: stretch;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.control-escolar-screen .ce-detail-shell {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 18px;
+}
+
+.control-escolar-screen .ce-detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  min-height: 104px;
+  padding: 15px 17px;
+}
+
+.control-escolar-screen .ce-workspace-summary-strip {
+  flex: 0 0 auto;
+}
+
+.control-escolar-screen .ce-detail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.control-escolar-screen .ce-detail-footer {
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding-block: 6px;
+}
+
+@media (max-width: 1380px) {
+  .control-escolar-screen .student-list-panel > .ce-filter-bar .ce-primary-filter-row {
+    grid-template-columns: minmax(0, 1fr) max-content max-content;
+    min-width: 0;
+  }
+
+  .control-escolar-screen .student-list-panel > .ce-filter-bar .ce-secondary-filter-row {
+    min-width: 0;
   }
 }
 
