@@ -539,27 +539,6 @@
                     <i :style="{ width: `${selectedProfileCompletion}%` }"></i>
                   </span>
                 </div>
-                <div class="ce-detail-actions">
-                  <span :class="['ce-save-state', saveStateTone]">{{
-                    saveStatusText
-                  }}</span>
-                  <UiButton
-                    variant="secondary"
-                    type="button"
-                    :disabled="savingStudent || !hasUnsavedChanges"
-                    @click="discardChanges"
-                    >Restaurar</UiButton
-                  >
-                  <UiButton
-                    variant="primary"
-                    type="button"
-                    :disabled="savingStudent || !hasUnsavedChanges"
-                    @click="saveStudent"
-                  >
-                    <LucideSave :size="17" />
-                    {{ savingStudent ? "Guardando..." : "Guardar" }}
-                  </UiButton>
-                </div>
                 <button
                   type="button"
                   class="detail-shell-close ce-detail-menu-button"
@@ -569,106 +548,6 @@
                   <LucideMoreVertical :size="20" />
                 </button>
               </header>
-
-              <section class="ce-workspace-summary-strip" aria-label="Resumen operativo del expediente seleccionado">
-                <section class="ce-health-overview" aria-label="Resumen del expediente seleccionado">
-                  <button
-                    type="button"
-                    :class="['ce-health-card', 'ce-health-card--basic', selectedRecordHealth.tone, { 'is-active': activeDetailTab !== 'advanced' }]"
-                    @click="activeDetailTab = 'identity'"
-                  >
-                    <div
-                      :class="['ce-health-ring', selectedRecordHealth.tone]"
-                      :style="{ '--ring-deg': `${selectedProfileCompletion * 3.6}deg` }"
-                    >
-                      <b>{{ selectedProfileCompletion }}%</b>
-                    </div>
-                    <div class="ce-health-card__copy">
-                      <small>Expediente básico</small>
-                      <strong>{{ rowHealthHeadline(selectedHealthStudent) }}</strong>
-                      <p v-if="selectedMissingCount">{{ selectedNextAction }}</p>
-                      <span class="ce-health-bar"><i :style="{ width: `${selectedProfileCompletion}%` }"></i></span>
-                      <em>{{ selectedBasicCompletedCount }} de {{ requiredDataFields.length }} campos completos</em>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    :class="['ce-health-card', 'ce-health-card--complete', { 'is-active': activeDetailTab === 'advanced' }]"
-                    @click="activeDetailTab = 'advanced'"
-                  >
-                    <div
-                      class="ce-health-ring is-secondary"
-                      :style="{ '--ring-deg': `${selectedAdvancedProfileCompletion * 3.6}deg` }"
-                    >
-                      <b>{{ selectedAdvancedProfileCompletion }}%</b>
-                    </div>
-                    <div class="ce-health-card__copy">
-                      <small>Expediente avanzado</small>
-                      <strong>{{ selectedAdvancedMissingCount ? `${selectedAdvancedMissingCount} pendientes avanzados` : 'Completo' }}</strong>
-                      
-                      <span class="ce-health-bar is-secondary"><i :style="{ width: `${selectedAdvancedProfileCompletion}%` }"></i></span>
-                      <em>{{ selectedAdvancedProfileCompletion }}% · {{ selectedAdvancedMissingCount ? `${selectedAdvancedMissingCount} pendientes` : `${selectedAdvancedCompletedCount}/${selectedAdvancedTotal} completos` }}</em>
-                    </div>
-                    <span class="ce-health-link">
-                      Abrir avanzado
-                      <LucideChevronRight :size="16" />
-                    </span>
-                  </button>
-                  <article v-if="selectedRecordIssueCount" :class="['ce-health-card', 'ce-health-card--action', selectedRecordHealth.tone]">
-                    <div class="ce-health-card__icon">
-                      <component
-                        :is="selectedRecordIssueCount ? LucideAlertTriangle : LucideShieldCheck"
-                        :size="19"
-                      />
-                    </div>
-                    <div class="ce-health-card__copy">
-                      <small>Pendientes</small>
-                      <strong>{{ `${selectedRecordIssueCount} dato${selectedRecordIssueCount === 1 ? '' : 's'} por revisar` }}</strong>
-                      <p>{{ selectedNextAction }}</p>
-                      <div v-if="selectedVisibleActionChips.length" class="ce-health-missing-chips">
-                        <button
-                          v-for="field in selectedVisibleActionChips"
-                          :key="`missing-chip-${field.key}`"
-                          type="button"
-                          @click="goToMissingField(field)"
-                        >
-                          <component :is="field.icon" :size="12" />
-                          {{ field.shortLabel }}
-                        </button>
-                        <span v-if="selectedHiddenActionCount">+{{ selectedHiddenActionCount }}</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      class="ce-health-action-button"
-                      @click="goToFirstPendingField"
-                    >
-                      Resolver
-                      <LucideChevronRight :size="15" />
-                    </button>
-                  </article>
-                </section>
-
-                <section class="ce-status-signal-grid" aria-label="Estado operativo del expediente">
-                  <button
-                    v-for="signal in selectedStatusSignals"
-                    :key="`signal-${signal.key}`"
-                    type="button"
-                    :class="['ce-status-signal-card', `is-${signal.tone}`]"
-                    @click="goToStatusSignal(signal)"
-                  >
-                    <span class="ce-status-signal-icon">
-                      <component :is="signal.icon" :size="16" />
-                    </span>
-                    <div>
-                      <small>{{ signal.title }}</small>
-                      <strong>{{ signal.label }}</strong>
-                      <p v-if="signal.summary">{{ signal.summary }}</p>
-                    </div>
-                    <b>{{ signal.count }}</b>
-                  </button>
-                </section>
-              </section>
 
               <div class="ce-detail-body">
                 <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
@@ -693,8 +572,55 @@
 
                 <form class="ce-edit-form" @submit.prevent="saveStudent">
                   <section
-                    v-show="activeDetailTab === 'identity'"
-                    class="ce-form-card ce-tab-panel"
+                    v-show="activeDetailTab === 'summary'"
+                    class="ce-primary-pending-panel ce-tab-panel"
+                    aria-label="Pendientes principales del expediente"
+                  >
+                    <div class="ce-panel-heading ce-panel-heading--pending">
+                      <div>
+                        <h3>Pendientes principales</h3>
+                        <p>Resuelve los pendientes para completar el expediente.</p>
+                      </div>
+                      <button
+                        v-if="selectedRecordIssueCount"
+                        type="button"
+                        class="ce-view-all-pending"
+                        @click="goToFirstPendingField"
+                      >
+                        Ver todos los pendientes ({{ selectedRecordIssueCount }})
+                        <LucideChevronRight :size="14" />
+                      </button>
+                    </div>
+                    <div class="ce-primary-pending-grid">
+                      <button
+                        v-for="signal in selectedStatusSignals"
+                        :key="`primary-pending-${signal.key}`"
+                        type="button"
+                        :class="['ce-primary-pending-card', `is-${signal.tone}`]"
+                        @click="goToStatusSignal(signal)"
+                      >
+                        <span class="ce-primary-pending-icon">
+                          <component :is="signal.icon" :size="18" />
+                        </span>
+                        <span class="ce-primary-pending-copy">
+                          <small>{{ signal.title }}</small>
+                          <strong>{{ signal.label }}</strong>
+                          <em>{{ signal.summary }}</em>
+                        </span>
+                        <span class="ce-primary-pending-count">{{ signal.count }}</span>
+                        <span class="ce-primary-pending-action">
+                          <template v-if="signal.tone === 'complete'">
+                            <LucideCheck :size="22" />
+                          </template>
+                          <template v-else>Completar</template>
+                        </span>
+                      </button>
+                    </div>
+                  </section>
+
+                  <section
+                    v-show="activeDetailTab === 'summary' || activeDetailTab === 'identity'"
+                    class="ce-form-card ce-tab-panel ce-identity-panel"
                   >
                     <div class="ce-panel-heading">
                       <div>
@@ -1336,10 +1262,13 @@
               </div>
 
               <footer class="ce-detail-footer">
-                <span :class="['ce-save-state', saveStateTone]">{{
-                  saveStatusText
-                }}</span>
-                <div>
+                <div class="ce-detail-footer-meta">
+                  <span :class="['ce-save-state', saveStateTone]">{{
+                    saveStatusText
+                  }}</span>
+                  <span class="ce-last-update-text">{{ selectedLastUpdateLabel }}</span>
+                </div>
+                <div class="ce-detail-footer-actions">
                   <UiButton
                     variant="secondary"
                     type="button"
@@ -1354,7 +1283,7 @@
                     @click="saveStudent"
                   >
                     <LucideSave :size="17" />
-                    {{ savingStudent ? "Guardando..." : "Guardar" }}
+                    {{ savingStudent ? "Guardando..." : "Guardar cambios" }}
                   </UiButton>
                 </div>
               </footer>
@@ -1752,7 +1681,7 @@ const showMassImportModal = ref(false);
 const massImportFile = ref(null);
 const massImportResult = ref(null);
 const massImportError = ref("");
-const activeDetailTab = ref("identity");
+const activeDetailTab = ref("summary");
 const editSnapshot = ref("");
 const showAcademicPositionModal = ref(false);
 const savingAcademicPosition = ref(false);
@@ -2480,6 +2409,7 @@ const primaryFilters = [
 ];
 
 const detailTabs = [
+  { key: "summary", label: "Resumen", icon: LucideCheck },
   { key: "identity", label: "Identidad", icon: LucideUserRound },
   { key: "school", label: "Escolar", icon: LucideGraduationCap },
   { key: "family", label: "Contacto familiar", icon: LucideUsersRound },
@@ -2907,6 +2837,22 @@ const selectedRecordActions = computed(() => {
   });
 });
 const selectedRecordIssueCount = computed(() => selectedRecordActions.value.length);
+const selectedLastUpdateLabel = computed(() => {
+  const value = selectedStudent.value?.updatedAt || selectedStudent.value?.lastUpdatedAt || draftSavedAt.value;
+  if (!value) return "Última actualización no disponible";
+  try {
+    const formatted = new Intl.DateTimeFormat("es-MX", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+    return `Última actualización: ${formatted}`;
+  } catch (_) {
+    return "Última actualización no disponible";
+  }
+});
 const selectedVisibleActionChips = computed(() => selectedRecordActions.value);
 const selectedHiddenActionCount = computed(() =>
   Math.max(0, selectedRecordActions.value.length - selectedVisibleActionChips.value.length),
@@ -3301,6 +3247,10 @@ const detailTabState = (key) => {
   const contact = familyCriticalContactState.value;
   const familyPending = father.missing.length + mother.missing.length + contact.missing.length;
   const states = {
+    summary: {
+      tone: selectedRecordIssueCount.value ? selectedRecordHealth.value.tone : "complete",
+      count: selectedRecordIssueCount.value,
+    },
     identity: selectedIdentityStatus.value,
     school: selectedSchoolStatus.value,
     family: {
@@ -4672,7 +4622,7 @@ const restoreEditDraft = () => {
 
 const selectStudent = (student, copy = true) => {
   selectedStudent.value = student;
-  activeDetailTab.value = "identity";
+  activeDetailTab.value = "summary";
   closeManualHuskyPassForm();
   activeParentLastNameSuggestion.value = "";
   dismissedParentLastNameSuggestions.value = {};
@@ -10497,124 +10447,6 @@ onBeforeUnmount(() => {
   border-radius: 11px;
 }
 
-.control-escolar-screen .ce-workspace-summary-strip {
-  position: relative;
-  z-index: 6;
-  display: grid;
-  grid-template-columns: minmax(300px, 0.98fr) minmax(360px, 1.02fr);
-  align-items: stretch;
-  gap: 8px;
-  min-width: 0;
-  padding: 8px 12px 10px;
-  border-bottom: 1px solid rgba(221, 231, 240, 0.92);
-  background:
-    linear-gradient(180deg, rgba(250, 253, 251, 0.96), rgba(255, 255, 255, 0.94));
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-overview,
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-grid {
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-overview {
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 7px;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-card,
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card {
-  min-height: 56px;
-  padding: 8px 9px;
-  border: 1px solid rgba(221, 231, 240, 0.82);
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-card.is-active,
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card:hover,
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card:focus-visible {
-  border-color: color-mix(in srgb, var(--ce-detail-accent) 28%, #dbe6f0);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.045);
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-card--complete.is-active {
-  border-color: rgba(79, 142, 216, 0.28);
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-ring {
-  width: 36px;
-  height: 36px;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-ring b {
-  font-size: 10px;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-card__copy small,
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card small {
-  overflow: visible;
-  font-size: 9.5px;
-  line-height: 1.15;
-  text-overflow: clip;
-  white-space: normal;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-card__copy strong,
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card strong {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: 11.5px;
-  line-height: 1.18;
-  text-overflow: clip;
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-card__copy p,
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card p {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: 9.8px;
-  line-height: 1.25;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-card__copy em {
-  font-size: 9.5px;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-health-link {
-  align-self: end;
-  font-size: 9.5px;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card {
-  grid-template-columns: 28px minmax(0, 1fr) auto;
-  gap: 6px;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-icon {
-  width: 28px;
-  height: 28px;
-}
-
-.control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-card b {
-  font-size: 10px;
-}
-
 .control-escolar-screen .ce-detail-body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -10771,13 +10603,6 @@ onBeforeUnmount(() => {
     padding-inline: 11px;
   }
 
-  .control-escolar-screen .ce-workspace-summary-strip {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .control-escolar-screen .ce-workspace-summary-strip .ce-status-signal-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 1180px) {
@@ -10949,9 +10774,6 @@ onBeforeUnmount(() => {
   padding: 15px 17px;
 }
 
-.control-escolar-screen .ce-workspace-summary-strip {
-  flex: 0 0 auto;
-}
 
 .control-escolar-screen .ce-detail-body {
   flex: 1 1 auto;
@@ -11234,6 +11056,538 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-detail-tabs::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(63, 145, 56, 0.42);
+}
+
+
+/* Control Escolar: reference-style full-height student workbench. */
+.control-escolar-screen .ce-workspace.has-detail {
+  grid-template-columns: minmax(430px, 0.74fr) minmax(800px, 1.36fr);
+  gap: 10px;
+  min-width: 1260px;
+  align-items: stretch;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel.is-compact {
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .ce-list-card {
+  --student-list-balance-col: 218px;
+  --student-list-action-col: 34px;
+  --student-list-row-height: 78px;
+  border-radius: 15px;
+  box-shadow: 0 10px 24px rgba(16, 32, 58, 0.045);
+}
+
+.control-escolar-screen .ce-workspace.has-detail .ce-list-columns {
+  display: none;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .ce-student-row {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 218px) 28px;
+  width: calc(100% - 4px);
+  min-height: 78px;
+  margin-bottom: 8px;
+  border-radius: 14px;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .ce-student-row.selected {
+  border-color: rgba(63, 145, 56, 0.42);
+  background:
+    linear-gradient(90deg, rgba(239, 249, 236, 0.96), rgba(255, 255, 255, 0.98)),
+    #fff;
+  box-shadow: 0 10px 22px rgba(63, 145, 56, 0.12);
+}
+
+.control-escolar-screen .ce-detail-panel {
+  overflow: hidden;
+  border: 1px solid rgba(218, 228, 238, 0.98);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(16, 32, 58, 0.05);
+}
+
+.control-escolar-screen .ce-detail-shell {
+  height: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.control-escolar-screen .ce-detail-header {
+  grid-template-columns: minmax(330px, 1fr) minmax(230px, 0.62fr) minmax(220px, 0.54fr) 38px;
+  gap: 14px;
+  min-height: 104px;
+  padding: 17px 18px;
+  border-bottom: 1px solid #e5edf5;
+  background: #fff;
+}
+
+.control-escolar-screen .ce-detail-title--with-photo {
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.control-escolar-screen .ce-detail-header-photo {
+  --student-grade-photo-width: 62px;
+  --student-grade-photo-height: 62px;
+  --student-grade-photo-radius: 14px;
+}
+
+.control-escolar-screen .ce-detail-title-copy small {
+  margin-bottom: 5px;
+  color: #718098;
+  font-size: 10.5px;
+  font-weight: 900;
+}
+
+.control-escolar-screen .ce-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-title-row h2 {
+  margin: 0;
+  color: #13213a;
+  font-size: clamp(18px, 1.15vw, 22px);
+  font-weight: 950;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  white-space: normal;
+}
+
+.control-escolar-screen .ce-status-pill.large {
+  min-height: 26px;
+  padding-inline: 12px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 920;
+}
+
+.control-escolar-screen .ce-profile-identity-cues {
+  display: none;
+}
+
+.control-escolar-screen .ce-access-header-card {
+  min-height: 58px;
+  padding: 9px 12px;
+  border: 1px solid #e2ebf3;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(16, 32, 58, 0.035);
+}
+
+.control-escolar-screen .ce-access-header-card strong {
+  color: #13213a;
+  font-size: 12px;
+  font-weight: 940;
+}
+
+.control-escolar-screen .ce-access-header-card small {
+  max-width: none;
+  color: #64738b;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+.control-escolar-screen .ce-progress-cluster--health {
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217, 67, 56, 0.22);
+  border-radius: 14px;
+  background: #fffafa;
+  box-shadow: 0 8px 18px rgba(16, 32, 58, 0.035);
+}
+
+.control-escolar-screen .ce-progress-cluster--health.complete {
+  border-color: rgba(63, 145, 56, 0.22);
+  background: #fbfefb;
+}
+
+.control-escolar-screen .ce-progress-cluster--health.warning {
+  border-color: rgba(216, 139, 28, 0.22);
+  background: #fffdfa;
+}
+
+.control-escolar-screen .ce-progress-label-row strong {
+  color: #13213a;
+  font-size: 11.5px;
+  font-weight: 940;
+}
+
+.control-escolar-screen .ce-progress-label-row small {
+  margin-top: 2px;
+  color: #64738b;
+  font-size: 10px;
+  line-height: 1.18;
+  white-space: normal;
+}
+
+.control-escolar-screen .ce-progress-label-row b {
+  color: var(--ce-detail-accent);
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.control-escolar-screen .ce-detail-menu-button {
+  width: 36px;
+  height: 36px;
+  border-color: #e2ebf3;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.control-escolar-screen .ce-detail-body {
+  gap: 0;
+  padding: 0;
+  background: #fff;
+}
+
+.control-escolar-screen .ce-detail-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  min-width: 0;
+  min-height: 52px;
+  align-items: stretch;
+  gap: 6px;
+  padding: 0 18px;
+  border: 0;
+  border-bottom: 1px solid #e5edf5;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: none;
+  mask-image: none;
+  backdrop-filter: blur(14px) saturate(130%);
+}
+
+.control-escolar-screen .ce-detail-tabs button {
+  height: 51px;
+  padding: 0 10px;
+  border-radius: 0;
+  color: #6a788f;
+  font-size: 11px;
+  font-weight: 850;
+  box-shadow: none;
+}
+
+.control-escolar-screen .ce-detail-tabs button::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: 0;
+  left: 10px;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: transparent;
+}
+
+.control-escolar-screen .ce-detail-tabs button.active {
+  background: transparent;
+  color: var(--ce-green-strong);
+  box-shadow: none;
+}
+
+.control-escolar-screen .ce-detail-tabs button.active::after {
+  background: var(--ce-green-strong);
+}
+
+.control-escolar-screen .ce-tab-badge {
+  min-width: 19px;
+  height: 19px;
+  background: #ffe8e5;
+  color: #d63f35;
+  font-size: 9.5px;
+}
+
+.control-escolar-screen .ce-edit-form {
+  min-width: 0;
+  gap: 14px;
+  padding: 14px 18px 18px;
+  background: linear-gradient(180deg, #fff, #fbfcfd 100%);
+}
+
+.control-escolar-screen .ce-primary-pending-panel,
+.control-escolar-screen .ce-form-card.ce-tab-panel {
+  border: 1px solid #e3ebf4;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(16, 32, 58, 0.035);
+}
+
+.control-escolar-screen .ce-primary-pending-panel {
+  padding: 16px;
+}
+
+.control-escolar-screen .ce-panel-heading--pending {
+  margin-bottom: 15px;
+}
+
+.control-escolar-screen .ce-panel-heading--pending h3,
+.control-escolar-screen .ce-panel-heading h3 {
+  color: #13213a;
+  font-size: 15px;
+  font-weight: 950;
+  letter-spacing: -0.015em;
+}
+
+.control-escolar-screen .ce-panel-heading--pending p,
+.control-escolar-screen .ce-panel-heading p {
+  margin-top: 3px;
+  color: #66758c;
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.32;
+}
+
+.control-escolar-screen .ce-view-all-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: #d63f35;
+  font-size: 10.5px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.control-escolar-screen .ce-primary-pending-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-primary-pending-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: start;
+  gap: 8px 10px;
+  min-height: 128px;
+  padding: 16px 14px 14px;
+  border: 1px solid rgba(217, 67, 56, 0.18);
+  border-radius: 15px;
+  background: linear-gradient(180deg, #fffafa, #fff);
+  color: #d63f35;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.control-escolar-screen .ce-primary-pending-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(16, 32, 58, 0.065);
+}
+
+.control-escolar-screen .ce-primary-pending-card.is-complete {
+  border-color: rgba(63, 145, 56, 0.18);
+  background: linear-gradient(180deg, #fbfefb, #fff);
+  color: #20842f;
+}
+
+.control-escolar-screen .ce-primary-pending-card.is-warning {
+  border-color: rgba(216, 139, 28, 0.22);
+  background: linear-gradient(180deg, #fffdfa, #fff);
+  color: #c37412;
+}
+
+.control-escolar-screen .ce-primary-pending-icon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  background: currentColor;
+  color: #fff;
+  opacity: 0.88;
+}
+
+.control-escolar-screen .ce-primary-pending-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.control-escolar-screen .ce-primary-pending-copy small {
+  color: #7a879a;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.control-escolar-screen .ce-primary-pending-copy strong {
+  color: currentColor;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.control-escolar-screen .ce-primary-pending-copy em {
+  display: block;
+  color: #66758c;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 740;
+  line-height: 1.3;
+}
+
+.control-escolar-screen .ce-primary-pending-count {
+  justify-self: end;
+  color: currentColor;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.control-escolar-screen .ce-primary-pending-action {
+  grid-column: 1 / -1;
+  justify-self: center;
+  display: inline-flex;
+  min-width: 92px;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: #fff;
+  color: currentColor;
+  font-size: 10.5px;
+  font-weight: 930;
+}
+
+.control-escolar-screen .ce-primary-pending-card.is-complete .ce-primary-pending-action {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border-color: rgba(63, 145, 56, 0.26);
+  border-radius: 999px;
+}
+
+.control-escolar-screen .ce-form-card.ce-tab-panel {
+  padding: 18px;
+}
+
+.control-escolar-screen .ce-identity-panel .ce-form-grid,
+.control-escolar-screen .ce-identity-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.control-escolar-screen .ce-smart-field span,
+.control-escolar-screen .ce-wide-field span {
+  color: #65738b;
+  font-size: 11px;
+  font-weight: 860;
+}
+
+.control-escolar-screen .ce-smart-field input,
+.control-escolar-screen .ce-smart-field select,
+.control-escolar-screen .ce-wide-field input,
+.control-escolar-screen .ce-wide-field select,
+.control-escolar-screen .ce-wide-field textarea {
+  min-height: 43px;
+  border-radius: 11px;
+  border-color: #dfe8f1;
+  background: #fff;
+  color: #13213a;
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.control-escolar-screen .ce-smart-field.is-ok input,
+.control-escolar-screen .ce-smart-field.is-ok select {
+  border-color: rgba(63, 145, 56, 0.32);
+  background: linear-gradient(180deg, #fbfefb, #fff);
+}
+
+.control-escolar-screen .ce-smart-field.is-missing input,
+.control-escolar-screen .ce-smart-field.is-invalid input,
+.control-escolar-screen .ce-smart-field.is-missing select,
+.control-escolar-screen .ce-smart-field.is-invalid select {
+  border-color: rgba(217, 67, 56, 0.62);
+  background: #fffafa;
+  box-shadow: none;
+}
+
+.control-escolar-screen .ce-detail-footer {
+  min-height: 60px;
+  padding: 9px 18px;
+  border-top: 1px solid #e5edf5;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 -12px 26px rgba(16, 32, 58, 0.055);
+}
+
+.control-escolar-screen .ce-detail-footer-meta {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-last-update-text {
+  color: #7a879a;
+  font-size: 11px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-detail-footer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.control-escolar-screen .ce-detail-footer :deep(.ui-button) {
+  min-height: 40px;
+  min-width: 132px;
+  border-radius: 12px;
+  font-weight: 900;
+}
+
+.control-escolar-screen .ce-detail-footer :deep(.ui-button.primary),
+.control-escolar-screen .ce-detail-footer :deep(.ui-button--primary) {
+  min-width: 160px;
+}
+
+@media (max-width: 1480px) {
+  .control-escolar-screen .ce-workspace.has-detail {
+    grid-template-columns: minmax(410px, 0.68fr) minmax(760px, 1.32fr);
+    min-width: 1200px;
+  }
+
+  .control-escolar-screen .ce-primary-pending-grid {
+    gap: 10px;
+  }
+
+  .control-escolar-screen .ce-primary-pending-card {
+    min-height: 118px;
+    padding: 13px 12px;
+  }
+}
+
+@media (max-width: 1240px) {
+  .control-escolar-screen .ce-detail-header {
+    grid-template-columns: minmax(0, 1fr) 38px;
+    grid-template-rows: auto auto auto;
+  }
+
+  .control-escolar-screen .ce-access-header-card,
+  .control-escolar-screen .ce-progress-cluster--health {
+    grid-column: 1 / -1;
+  }
+
+  .control-escolar-screen .ce-primary-pending-grid,
+  .control-escolar-screen .ce-identity-panel .ce-form-grid,
+  .control-escolar-screen .ce-identity-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 </style>

@@ -1,1 +1,1 @@
-Refina los filtros comprimidos de Control Escolar
+Rediseña el workspace de alumno en Control Escolar
