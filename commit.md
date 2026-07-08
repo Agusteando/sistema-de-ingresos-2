@@ -1,1 +1,1 @@
-Mejora barra lateral compacta en Control Escolar
+Ajusta exploración y detalle de Control Escolar

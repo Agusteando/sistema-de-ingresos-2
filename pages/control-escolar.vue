@@ -47,7 +47,7 @@
             'students-workspace ce-workspace',
             {
               'has-detail': Boolean(selectedStudent),
-              'has-empty-detail': !selectedStudent,
+              'is-browsing': !selectedStudent,
             },
           ]"
         >
@@ -1353,22 +1353,6 @@
                   </UiButton>
                 </div>
               </footer>
-            </div>
-          </section>
-
-          <section
-            v-else
-            class="student-detail-panel ce-detail-panel ce-empty-detail-panel"
-            aria-label="Seleccionar alumno"
-          >
-            <div class="ce-empty-shell">
-              <div class="ce-empty-hero" aria-hidden="true">
-                <LucideUserRound :size="34" />
-              </div>
-              <div class="ce-empty-copy">
-                <h2>Selecciona un alumno</h2>
-                <p>Elige un registro de la lista para revisar y editar su expediente.</p>
-              </div>
             </div>
           </section>
         </div>
@@ -10840,7 +10824,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar {
   width: 100%;
   min-width: 0;
   min-height: 0;
@@ -10852,36 +10836,36 @@ onBeforeUnmount(() => {
   overflow: visible;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-primary-filter-row {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-primary-filter-row {
   grid-template-columns: minmax(0, 1fr) max-content max-content;
   min-width: 0;
   gap: 8px;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .search-control {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .search-control {
   height: 41px;
   min-width: 0;
   border-radius: 14px;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-filter-button,
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-clear-link {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-filter-button,
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-clear-link {
   min-height: 41px;
   border-radius: 14px;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-clear-link {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-clear-link {
   width: 42px;
   min-width: 42px;
   padding: 0;
   font-size: 0;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-clear-link svg {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-clear-link svg {
   flex: 0 0 auto;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--quality {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--quality {
   grid-column: 1 / -1;
   min-width: 0;
   max-width: 100%;
@@ -10894,11 +10878,11 @@ onBeforeUnmount(() => {
   scrollbar-width: none;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--quality::-webkit-scrollbar {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--quality::-webkit-scrollbar {
   display: none;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-secondary-filter-row {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-secondary-filter-row {
   min-width: 0;
   max-width: 100%;
   flex-wrap: wrap;
@@ -10906,9 +10890,9 @@ onBeforeUnmount(() => {
   overflow: visible;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-status-tabs,
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--grade,
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--group {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-status-tabs,
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--grade,
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--group {
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
@@ -10916,19 +10900,19 @@ onBeforeUnmount(() => {
   scrollbar-width: none;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-status-tabs::-webkit-scrollbar,
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--grade::-webkit-scrollbar,
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster--group::-webkit-scrollbar {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-status-tabs::-webkit-scrollbar,
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--grade::-webkit-scrollbar,
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--group::-webkit-scrollbar {
   display: none;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-chip-cluster {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster {
   padding: 5px;
   border-radius: 15px;
 }
 
-.control-escolar-screen .student-list-panel > .ce-filter-bar .ce-status-tab,
-.control-escolar-screen .student-list-panel > .ce-filter-bar :deep(.ui-chip) {
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-status-tab,
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar :deep(.ui-chip) {
   min-height: 34px;
   padding-inline: 12px;
 }
@@ -10976,13 +10960,128 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1380px) {
-  .control-escolar-screen .student-list-panel > .ce-filter-bar .ce-primary-filter-row {
+  .control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-primary-filter-row {
     grid-template-columns: minmax(0, 1fr) max-content max-content;
     min-width: 0;
   }
 
-  .control-escolar-screen .student-list-panel > .ce-filter-bar .ce-secondary-filter-row {
+  .control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-secondary-filter-row {
     min-width: 0;
+  }
+}
+
+
+/* Browsing mode keeps filters spacious until a student workspace is opened. */
+.control-escolar-screen .ce-workspace.is-browsing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  min-width: max(100%, 1280px);
+  height: 100%;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .student-list-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar {
+  width: 100%;
+  min-width: 0;
+  min-height: 96px;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 0 12px;
+  border-top: 1px solid var(--students-border-soft);
+  border-bottom: 1px solid var(--students-border-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-primary-filter-row {
+  grid-template-columns: minmax(460px, 1fr) max-content minmax(430px, 0.95fr) auto;
+  gap: 12px;
+  min-width: max(100%, 1260px);
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-secondary-filter-row {
+  min-width: max(100%, 1260px);
+  max-width: none;
+  flex-wrap: nowrap;
+  gap: 10px;
+  overflow: visible;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .search-control {
+  height: 46px;
+  min-width: 0;
+  border-radius: 15px;
+  padding-inline: 14px;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .ce-filter-button,
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .ce-clear-link {
+  width: auto;
+  min-width: 0;
+  min-height: 42px;
+  padding-inline: 16px;
+  border-radius: 13px;
+  font-size: 13px;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .ce-chip-cluster--quality {
+  grid-column: auto;
+  min-width: 0;
+  max-width: none;
+  padding: 7px 12px;
+  border: 1px solid rgba(217, 227, 238, 0.9);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 6px 14px rgba(21, 35, 60, 0.035);
+  overflow: visible;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .ce-status-tabs,
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .ce-chip-cluster--grade,
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .ce-chip-cluster--group {
+  min-width: 0;
+  max-width: none;
+  overflow: visible;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .ce-status-tab,
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar :deep(.ui-chip) {
+  min-height: 34px;
+  padding-inline: 14px;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-list-card {
+  height: 100%;
+  min-height: 0;
+}
+
+@media (max-width: 1380px) {
+  .control-escolar-screen .ce-workspace.is-browsing {
+    min-width: max(100%, 1180px);
+  }
+
+  .control-escolar-screen .ce-workspace.is-browsing .ce-primary-filter-row,
+  .control-escolar-screen .ce-workspace.is-browsing .ce-secondary-filter-row {
+    min-width: max(100%, 1160px);
   }
 }
 
