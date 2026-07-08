@@ -45,34 +45,34 @@
       </NuxtLink>
 
       <nav class="sidebar-nav">
-        <NuxtLink v-if="showFinancialNav" to="/" class="nav-item group">
+        <NuxtLink v-if="showFinancialNav" to="/" class="nav-item group" title="Alumnos" aria-label="Alumnos">
           <LucideUsers :size="22" stroke-width="2.2" /> <span class="nav-label">Alumnos</span>
         </NuxtLink>
-        <NuxtLink v-if="showFinancialNav" to="/deudores" class="nav-item group">
+        <NuxtLink v-if="showFinancialNav" to="/deudores" class="nav-item group" title="Deudores" aria-label="Deudores">
           <LucideAlertTriangle :size="22" stroke-width="2" /> <span class="nav-label">Deudores</span>
         </NuxtLink>
-        <NuxtLink v-if="showFinancialNav" to="/reportes" class="nav-item group">
+        <NuxtLink v-if="showFinancialNav" to="/reportes" class="nav-item group" title="Reportes" aria-label="Reportes">
           <LucidePieChart :size="22" stroke-width="2" /> <span class="nav-label">Reportes</span>
         </NuxtLink>
-        <NuxtLink v-if="showConceptosNav" to="/conceptos" class="nav-item group">
+        <NuxtLink v-if="showConceptosNav" to="/conceptos" class="nav-item group" title="Conceptos" aria-label="Conceptos">
           <LucideSettings :size="22" stroke-width="2" /> <span class="nav-label">Conceptos</span>
         </NuxtLink>
-        <NuxtLink v-if="showFinancialNav" to="/facturas" class="nav-item group">
+        <NuxtLink v-if="showFinancialNav" to="/facturas" class="nav-item group" title="Facturas CFDI" aria-label="Facturas CFDI">
           <LucideFileText :size="22" stroke-width="2" /> <span class="nav-label">Facturas CFDI</span>
         </NuxtLink>
-        <a v-if="showFinancialNav" href="http://localhost/Sistema%20de%20ingresos/login.php" class="nav-item group" target="_blank" rel="noopener">
+        <a v-if="showFinancialNav" href="http://localhost/Sistema%20de%20ingresos/login.php" class="nav-item group" target="_blank" rel="noopener" title="Sistema de Contingencia" aria-label="Sistema de Contingencia">
           <LucideExternalLink :size="22" stroke-width="2" /> <span class="nav-label">Sistema de Contingencia</span>
         </a>
-        <NuxtLink v-if="showControlEscolarNav" to="/control-escolar" class="nav-item group">
+        <NuxtLink v-if="showControlEscolarNav" to="/control-escolar" class="nav-item group" title="Control Escolar" aria-label="Control Escolar">
           <LucideSchool :size="22" stroke-width="2" /> <span class="nav-label">Control Escolar</span>
         </NuxtLink>
-        <NuxtLink to="/avance-control-escolar" class="nav-item group">
+        <NuxtLink to="/avance-control-escolar" class="nav-item group" title="Auditoría Control Escolar" aria-label="Auditoría Control Escolar">
           <LucideClipboardList :size="22" stroke-width="2" /> <span class="nav-label">Auditoría Control Escolar</span>
         </NuxtLink>
-        <NuxtLink to="/usuarios" class="nav-item group" v-if="isSuperAdmin">
+        <NuxtLink to="/usuarios" class="nav-item group" v-if="isSuperAdmin" title="Usuarios" aria-label="Usuarios">
           <LucideShield :size="22" stroke-width="2" /> <span class="nav-label">Usuarios</span>
         </NuxtLink>
-        <NuxtLink to="/sql-console" class="nav-item group" v-if="isSuperAdmin">
+        <NuxtLink to="/sql-console" class="nav-item group" v-if="isSuperAdmin" title="SQL Console" aria-label="SQL Console">
           <LucideDatabase :size="22" stroke-width="2" /> <span class="nav-label">SQL Console</span>
         </NuxtLink>
       </nav>
@@ -436,22 +436,40 @@ const { syncState, syncMessage } = useOptimisticSync()
 const route = useRoute()
 
 const SIDEBAR_DESIGN_WIDTH = 260
+const SIDEBAR_COLLAPSED_WIDTH = 84
 const SIDEBAR_DESIGN_HEIGHT = 860
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'income-sidebar-collapsed'
 const sidebarScaleShell = ref(null)
 const sidebarScale = ref(1)
 const sidebarCollapsed = ref(false)
+const controlEscolarDetailOpen = useState('controlEscolarDetailOpen', () => false)
+const controlDetailAutoCollapsed = ref(false)
+const controlDetailRestoreCollapsed = ref(false)
+const controlDetailUserOverride = ref(false)
 const sidebarRootStyle = computed(() => {
-  if (sidebarCollapsed.value) return { width: '72px', flexBasis: '72px' }
+  if (sidebarCollapsed.value) {
+    return { width: `${SIDEBAR_COLLAPSED_WIDTH}px`, flexBasis: `${SIDEBAR_COLLAPSED_WIDTH}px` }
+  }
   return {
     width: `${Math.ceil(SIDEBAR_DESIGN_WIDTH * sidebarScale.value)}px`,
     flexBasis: `${Math.ceil(SIDEBAR_DESIGN_WIDTH * sidebarScale.value)}px`
   }
 })
-const sidebarDesignCanvasStyle = computed(() => ({
-  width: `${SIDEBAR_DESIGN_WIDTH}px`,
-  height: `${SIDEBAR_DESIGN_HEIGHT}px`,
-  transform: `scale(${sidebarScale.value})`
-}))
+const sidebarDesignCanvasStyle = computed(() => {
+  if (sidebarCollapsed.value) {
+    return {
+      width: `${SIDEBAR_COLLAPSED_WIDTH}px`,
+      height: '100%',
+      transform: 'none'
+    }
+  }
+
+  return {
+    width: `${SIDEBAR_DESIGN_WIDTH}px`,
+    height: `${SIDEBAR_DESIGN_HEIGHT}px`,
+    transform: `scale(${sidebarScale.value})`
+  }
+})
 
 let sidebarResizeObserver = null
 let sidebarFrame = null
@@ -1005,18 +1023,50 @@ const selectPlantel = async (plantel) => {
   await switchPlantel(normalizedPlantel)
 }
 
-const toggleSidebar = () => {
-  sidebarCollapsed.value = !sidebarCollapsed.value
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('income-sidebar-collapsed', sidebarCollapsed.value ? '1' : '0')
+const setSidebarCollapsed = (collapsed, options = {}) => {
+  const { persist = true } = options
+  sidebarCollapsed.value = Boolean(collapsed)
+  if (persist && typeof window !== 'undefined') {
+    localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, sidebarCollapsed.value ? '1' : '0')
   }
   scheduleSidebarScaleUpdate()
 }
 
+const toggleSidebar = () => {
+  if (isControlEscolarPage.value && controlEscolarDetailOpen.value) {
+    controlDetailUserOverride.value = true
+  }
+  setSidebarCollapsed(!sidebarCollapsed.value, { persist: true })
+}
+
+const reconcileControlDetailSidebar = (isDetailWorkspaceOpen) => {
+  if (!isControlEscolarPage.value || !isDetailWorkspaceOpen) {
+    if (controlDetailAutoCollapsed.value && !controlDetailUserOverride.value) {
+      setSidebarCollapsed(controlDetailRestoreCollapsed.value, { persist: false })
+    }
+    controlDetailAutoCollapsed.value = false
+    controlDetailUserOverride.value = false
+    return
+  }
+
+  if (controlDetailAutoCollapsed.value) return
+  controlDetailRestoreCollapsed.value = sidebarCollapsed.value
+  controlDetailUserOverride.value = false
+  controlDetailAutoCollapsed.value = true
+  if (!sidebarCollapsed.value) setSidebarCollapsed(true, { persist: false })
+}
+
+watch(
+  [isControlEscolarPage, controlEscolarDetailOpen],
+  ([isPage, isOpen]) => reconcileControlDetailSidebar(Boolean(isPage && isOpen)),
+  { immediate: true },
+)
+
 onMounted(async () => {
   if (typeof window !== 'undefined') {
-    sidebarCollapsed.value = localStorage.getItem('income-sidebar-collapsed') === '1'
+    sidebarCollapsed.value = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === '1'
   }
+  reconcileControlDetailSidebar(Boolean(isControlEscolarPage.value && controlEscolarDetailOpen.value))
   scheduleSidebarScaleUpdate()
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', scheduleSidebarScaleUpdate, { passive: true })
@@ -1160,18 +1210,46 @@ const logout = async () => {
   background: #f3fbf1;
 }
 
+/* Compact icon rail used by manual collapse and Control Escolar detail focus mode. */
 .income-shell.sidebar-collapsed .income-sidebar {
-  border-radius: 0 18px 18px 0;
+  border-radius: 0 22px 22px 0;
+  background:
+    radial-gradient(circle at 50% 5%, rgba(142, 193, 83, 0.18), transparent 112px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 251, 247, 0.96));
+  box-shadow: 8px 0 26px rgba(15, 23, 42, 0.05);
+}
+
+.income-shell.sidebar-collapsed .sidebar-collapse-button {
+  top: 18px;
+  right: -15px;
+  width: 32px;
+  height: 32px;
+}
+
+.income-shell.sidebar-collapsed .sidebar-scale-shell {
+  overflow: visible;
+}
+
+.income-shell.sidebar-collapsed .sidebar-design-canvas {
+  width: 84px;
+  min-width: 84px;
+  height: 100%;
+  align-items: center;
+  overflow: visible;
 }
 
 .income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-brand {
-  padding: 22px 8px 16px;
+  display: grid;
+  width: 100%;
+  place-items: center;
+  padding: 24px 12px 18px;
 }
 
 .income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-logo {
   max-width: 42px;
-  max-height: 34px;
-  margin-bottom: 0;
+  max-height: 36px;
+  margin: 0;
+  filter: drop-shadow(0 8px 14px rgba(31, 111, 52, 0.1));
 }
 
 .income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-system-logo,
@@ -1184,26 +1262,63 @@ const logout = async () => {
   display: none;
 }
 
+.income-shell.sidebar-collapsed .sidebar-sheen {
+  opacity: 0.24;
+  background: radial-gradient(circle at 50% 0, rgba(255, 255, 255, 0.9), transparent 116px);
+}
+
 .income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-nav {
+  width: 100%;
   align-items: center;
-  padding: 4px 10px 10px;
+  gap: 9px;
+  overflow: visible;
+  padding: 4px 12px 14px;
 }
 
 .income-shell.sidebar-collapsed .sidebar-design-canvas .nav-item {
+  position: relative;
   width: 48px;
-  min-height: 42px;
+  min-width: 48px;
+  min-height: 48px;
   justify-content: center;
   gap: 0;
+  border: 1px solid transparent;
+  border-radius: 16px;
   padding: 0;
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: none;
 }
 
 .income-shell.sidebar-collapsed .sidebar-design-canvas .nav-item svg {
-  width: 20px;
-  height: 20px;
+  width: 21px;
+  height: 21px;
 }
 
 .income-shell.sidebar-collapsed .sidebar-design-canvas .nav-item:hover {
-  transform: none;
+  border-color: rgba(130, 184, 105, 0.3);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 24px rgba(31, 76, 40, 0.1);
+  transform: translateY(-1px);
+}
+
+.income-shell.sidebar-collapsed .sidebar-design-canvas .nav-item.router-link-active {
+  border-color: rgba(85, 158, 72, 0.32);
+  background: linear-gradient(180deg, #effbea, #ffffff);
+  box-shadow:
+    0 12px 24px rgba(31, 76, 40, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.income-shell.sidebar-collapsed .sidebar-design-canvas .nav-item.router-link-active::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 4px;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #86c859, #2f913f);
+  transform: translateY(-50%);
 }
 
 .sidebar-scale-shell {

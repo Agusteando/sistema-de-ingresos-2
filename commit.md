@@ -1,1 +1,1 @@
-Ajusta Control Escolar a workspace de alumno de altura completa
+Mejora barra lateral compacta en Control Escolar

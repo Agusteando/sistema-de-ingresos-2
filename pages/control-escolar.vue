@@ -1726,6 +1726,7 @@ const controlEscolarTopbarState = useState("controlEscolarTopbarState", () => ({
   syncStatus: "idle",
   syncMessage: "",
 }));
+const controlEscolarDetailOpen = useState("controlEscolarDetailOpen", () => false);
 const currentEnrollmentPlantelKey = computed(() =>
   normalizeEnrollmentPlantelKey(selectedAgentId.value || activePlantelCookie.value || "GLOBAL") || "GLOBAL",
 );
@@ -5198,8 +5199,13 @@ watch(
   (visibleStudents) => queueControlStudentPhotos(visibleStudents),
   { deep: false },
 );
-watch(selectedStudent, (student) =>
-  queueControlStudentPhotos(student ? [student] : [], { priority: true }),
+watch(
+  selectedStudent,
+  (student) => {
+    controlEscolarDetailOpen.value = Boolean(student);
+    queueControlStudentPhotos(student ? [student] : [], { priority: true });
+  },
+  { immediate: true },
 );
 watch(
   [
@@ -5274,6 +5280,7 @@ onBeforeUnmount(() => {
     if (controlScreenFrame) window.cancelAnimationFrame(controlScreenFrame);
   }
   controlScreenResizeObserver?.disconnect?.();
+  controlEscolarDetailOpen.value = false;
   resetControlTopbarState();
 });
 </script>
