@@ -483,13 +483,23 @@
                       <i aria-hidden="true"></i>
                       <span>{{ selectedWorkspaceGradeLabel }}</span>
                       <i aria-hidden="true"></i>
-                      <span class="ce-student-hero-pass">
-                        <LucideShieldCheck :size="19" />
-                        {{ selectedHuskyPassInlineLabel }}
-                      </span>
+                      <button
+                        type="button"
+                        class="ce-student-hero-pass-card"
+                        :aria-label="selectedHuskyPassAriaLabel"
+                        @click="goToHuskyPassTab"
+                      >
+                        <img src="/brand/husky-pass-header-gray.png" alt="" aria-hidden="true" />
+                        <strong>{{ selectedHuskyPassPasswordLabel }}</strong>
+                      </button>
                     </div>
-                    <div class="ce-student-hero-cues" aria-label="Datos rápidos del alumno">
+                    <div
+                      v-if="selectedHeaderGenderChip || selectedHeaderBirthDateLabel || selectedHeaderAgeChip"
+                      class="ce-student-hero-cues"
+                      aria-label="Datos rápidos del alumno"
+                    >
                       <span
+                        v-if="selectedHeaderGenderChip"
                         :class="[
                           'ce-student-identity-chip',
                           `is-${selectedHeaderGenderChip.tone}`,
@@ -498,24 +508,48 @@
                         <i aria-hidden="true"></i>
                         {{ selectedHeaderGenderChip.label }}
                       </span>
-                      <span class="ce-student-identity-chip is-age">
-                        {{ selectedHeaderAgeLabel }}
+                      <span
+                        v-if="selectedHeaderBirthDateLabel"
+                        class="ce-student-identity-chip is-birthday"
+                      >
+                        <LucideCake :size="15" aria-hidden="true" />
+                        {{ selectedHeaderBirthDateLabel }}
                       </span>
+                      <button
+                        v-if="selectedHeaderAgeChip"
+                        type="button"
+                        class="ce-student-identity-chip is-age is-action"
+                        @click="goToCurpField"
+                      >
+                        <LucideClock3 :size="15" aria-hidden="true" />
+                        {{ selectedHeaderAgeChip }}
+                      </button>
                     </div>
                   </div>
                   <div class="ce-student-hero-side">
-                    <span
+                    <button
                       v-if="selectedHeaderGroupSigil"
+                      type="button"
                       :class="[
                         'ce-student-hero-group-sigil',
-                        `is-${selectedHeaderGenderChip.tone}`,
+                        `is-${selectedHeaderContextTone}`,
                       ]"
-                      :aria-label="selectedHeaderGroupSigil.label"
-                      :title="selectedHeaderGroupSigil.label"
+                      :aria-label="`${selectedHeaderGroupSigil.label}. Cambiar grupo`"
+                      :title="`${selectedHeaderGroupSigil.label}. Cambiar grupo`"
+                      @click="openGroupModal"
                     >
                       <LucideShield :size="22" aria-hidden="true" />
                       <b>{{ selectedHeaderGroupSigil.letter }}</b>
-                    </span>
+                    </button>
+                    <button
+                      v-else
+                      type="button"
+                      class="ce-student-hero-group-cta"
+                      @click="openGroupModal"
+                    >
+                      <LucideShield :size="18" aria-hidden="true" />
+                      ASIGNAR GRUPO
+                    </button>
                     <span
                       :class="[
                         'ce-student-hero-status',
@@ -1401,6 +1435,117 @@
       </section>
     </div>
 
+    <div
+      v-if="groupModalOpen"
+      class="ce-group-modal-backdrop"
+      role="presentation"
+      @mousedown.self="closeGroupModal"
+    >
+      <section
+        class="ce-group-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ce-group-modal-title"
+      >
+        <header class="ce-group-modal__header">
+          <span class="ce-group-modal__icon" aria-hidden="true">
+            <LucideShield :size="22" />
+          </span>
+          <div>
+            <small>Grupo del alumno</small>
+            <h2 id="ce-group-modal-title">Asignar grupo</h2>
+            <p>{{ selectedStudent?.fullName || 'Ficha seleccionada' }}</p>
+          </div>
+          <button type="button" aria-label="Cerrar asignación de grupo" @click="closeGroupModal">
+            <LucideX :size="20" />
+          </button>
+        </header>
+
+        <div class="ce-group-modal__body">
+          <div class="ce-group-modal__current">
+            <UiGroupIcon :label="groupModalDraft" :missing="!groupModalDraft" />
+            <div>
+              <small>Grupo seleccionado</small>
+              <strong>{{ groupModalDraft || 'Sin grupo asignado' }}</strong>
+            </div>
+          </div>
+
+          <div
+            class="ce-group-combobox ce-group-modal__picker"
+            :class="{ open: groupPickerOpen }"
+            @focusin="openGroupPicker"
+            @focusout="closeGroupPickerSoon"
+          >
+            <label class="ce-group-combobox__input">
+              <UiGroupIcon :label="groupModalDraft" :missing="!groupModalDraft" />
+              <input
+                v-model="groupModalPickerInput"
+                autocomplete="off"
+                placeholder="Buscar o escribir grupo"
+                @keydown.enter.prevent="confirmGroupModal"
+                @keydown.escape.prevent="closeGroupModal"
+              />
+              <button
+                v-if="groupModalDraft"
+                type="button"
+                aria-label="Limpiar grupo"
+                @mousedown.prevent
+                @click="clearGroupModalPicker"
+              >
+                <LucideX :size="15" />
+              </button>
+              <LucideChevronDown class="ce-group-combobox__chevron" :size="16" />
+            </label>
+
+            <div v-if="groupPickerOpen" class="ce-group-combobox__menu" role="listbox">
+              <button
+                v-for="option in filteredGroupModalOptions"
+                :key="`group-modal-option-${option.value}`"
+                type="button"
+                role="option"
+                :aria-selected="option.selected"
+                :class="['ce-group-option', { selected: option.selected }]"
+                @mousedown.prevent
+                @click="selectGroupModalOption(option.value)"
+              >
+                <UiGroupIcon :label="option.value" />
+                <span>
+                  <strong>{{ option.label }}</strong>
+                  <small>{{ option.sourceLabel }}</small>
+                </span>
+                <LucideCheck v-if="option.selected" :size="16" />
+              </button>
+              <button
+                v-if="customGroupModalOption"
+                type="button"
+                class="ce-group-option custom"
+                role="option"
+                @mousedown.prevent
+                @click="selectGroupModalOption(customGroupModalOption.value)"
+              >
+                <UiGroupIcon :label="customGroupModalOption.value" />
+                <span>
+                  <strong>{{ customGroupModalOption.label }}</strong>
+                  <small>Grupo personalizado</small>
+                </span>
+              </button>
+              <div v-if="!filteredGroupModalOptions.length && !customGroupModalOption" class="ce-group-empty">
+                Escribe un grupo para guardarlo como personalizado.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="ce-group-modal__footer">
+          <button type="button" class="ce-group-modal__secondary" @click="closeGroupModal">Cerrar</button>
+          <button type="button" class="ce-group-modal__primary" @click="confirmGroupModal">
+            <LucideCheck :size="16" />
+            Aplicar grupo
+          </button>
+        </footer>
+      </section>
+    </div>
+
     <IngresoCycleModal
       v-if="showAcademicPositionModal && selectedStudent"
       :student="selectedStudent"
@@ -1554,6 +1699,7 @@ import { useHead } from "#imports";
 import {
   LucideAlertTriangle,
   LucideBuilding2,
+  LucideCake,
   LucideCheck,
   LucideChevronDown,
   LucideChevronLeft,
@@ -2318,6 +2464,25 @@ const groupOptions = computed(() =>
   mergeOptions(knownGroupOptions.value, [editForm.grupo]),
 );
 const groupPickerOpen = ref(false);
+const groupModalOpen = ref(false);
+const groupModalDraft = ref("");
+const openGroupModal = () => {
+  groupModalDraft.value = normalizeGroupPickerText(editForm.grupo).slice(0, 40);
+  groupModalOpen.value = true;
+  groupPickerOpen.value = true;
+  nextTick(() => {
+    if (!process.client) return;
+    document.querySelector('.ce-group-modal__picker input')?.focus?.();
+  });
+};
+const closeGroupModal = () => {
+  groupModalOpen.value = false;
+  groupPickerOpen.value = false;
+};
+const confirmGroupModal = () => {
+  editForm.grupo = normalizeGroupPickerText(groupModalDraft.value).slice(0, 40);
+  closeGroupModal();
+};
 const normalizeGroupPickerText = (value) =>
   String(value || "")
     .replace(/\s+/g, " ")
@@ -2332,6 +2497,48 @@ const groupPickerInput = computed({
 const normalizedGroupPickerSearch = computed(() =>
   normalizeClientText(groupPickerInput.value),
 );
+const groupModalPickerInput = computed({
+  get: () => String(groupModalDraft.value || ""),
+  set: (value) => {
+    groupModalDraft.value = normalizeGroupPickerText(value).slice(0, 40);
+    groupPickerOpen.value = true;
+  },
+});
+const normalizedGroupModalSearch = computed(() =>
+  normalizeClientText(groupModalPickerInput.value),
+);
+const filteredGroupModalOptions = computed(() => {
+  const query = normalizedGroupModalSearch.value;
+  return knownGroupOptions.value
+    .filter((value) => !query || normalizeClientText(value).includes(query))
+    .slice(0, 12)
+    .map((value) => ({
+      value,
+      label: value,
+      selected:
+        normalizeClientText(value) === normalizeClientText(groupModalDraft.value),
+      sourceLabel: catalogs.grupos.includes(value)
+        ? "Grupo del plantel"
+        : "Opción con icono",
+    }));
+});
+const customGroupModalOption = computed(() => {
+  const value = normalizeGroupPickerText(groupModalPickerInput.value).slice(0, 40);
+  if (!value) return null;
+  const exists = knownGroupOptions.value.some(
+    (option) => normalizeClientText(option) === normalizeClientText(value),
+  );
+  if (exists) return null;
+  return { value, label: `Usar “${value}”` };
+});
+const selectGroupModalOption = (value) => {
+  groupModalDraft.value = normalizeGroupPickerText(value).slice(0, 40);
+  groupPickerOpen.value = false;
+};
+const clearGroupModalPicker = () => {
+  groupModalDraft.value = "";
+  groupPickerOpen.value = true;
+};
 const filteredGroupOptions = computed(() => {
   const query = normalizedGroupPickerSearch.value;
   return knownGroupOptions.value
@@ -2787,14 +2994,22 @@ const selectedWorkspaceGradeLabel = computed(() => {
   const ordinal = gradoHeaderOrdinal(grade);
   return ordinal ? `${ordinal} grado` : "Sin grado";
 });
-const selectedHuskyPassInlineLabel = computed(() => {
-  if (!selectedStudent.value?.huskyPassAvailable) return "Husky Pass pendiente";
+const selectedHuskyPassPasswordLabel = computed(() => {
+  if (!selectedStudent.value?.huskyPassAvailable) return "Pendiente";
   const credential =
     selectedStudent.value?.huskyPassPlaintext ||
     selectedStudent.value?.huskyPassUsername ||
     "";
-  return credential ? `Husky Pass ${credential}` : "Husky Pass activo";
+  return credential || "Activo";
 });
+const selectedHuskyPassAriaLabel = computed(() =>
+  selectedStudent.value?.huskyPassAvailable
+    ? `Abrir Husky Pass ${selectedHuskyPassPasswordLabel.value}`
+    : "Abrir Husky Pass pendiente",
+);
+const goToHuskyPassTab = () => {
+  activeDetailTab.value = "system";
+};
 const selectedBasicHeaderStatusLabel = computed(() => {
   if (selectedRecordHealth.value?.tone === "complete") return "Completo";
   if (studentCurpIsInvalid(selectedHealthStudent.value)) return "CURP inválida";
@@ -3165,8 +3380,9 @@ const selectedHeaderGenderChip = computed(() => {
     normalizeHeaderGender(curpDerivedIdentity.value?.sexoCorto);
   if (explicit === "male") return { label: "Niño", tone: "male" };
   if (explicit === "female") return { label: "Niña", tone: "female" };
-  return { label: "Sin género", tone: "neutral" };
+  return null;
 });
+const selectedHeaderContextTone = computed(() => selectedHeaderGenderChip.value?.tone || "neutral");
 const normalizeHeaderBirthDate = (value) => {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -3176,18 +3392,28 @@ const normalizeHeaderBirthDate = (value) => {
   if (slash) return `${slash[3]}-${String(slash[2]).padStart(2, "0")}-${String(slash[1]).padStart(2, "0")}`;
   return "";
 };
-const selectedHeaderAgeLabel = computed(() => {
-  const birthDate =
-    normalizeHeaderBirthDate(curpDerivedIdentity.value?.fechaNacimiento) ||
-    normalizeHeaderBirthDate(selectedStudent.value?.fechaNacimiento) ||
-    normalizeHeaderBirthDate(selectedStudent.value?.birth) ||
-    normalizeHeaderBirthDate(selectedStudent.value?.birthDate) ||
-    normalizeHeaderBirthDate(selectedStudent.value?.nacimiento);
-  const age = computeAgeFromDate(birthDate);
-  return age === null ? "Edad pendiente" : `${age} año${age === 1 ? "" : "s"}`;
+const selectedHeaderBirthDate = computed(() =>
+  normalizeHeaderBirthDate(curpDerivedIdentity.value?.fechaNacimiento) ||
+  normalizeHeaderBirthDate(selectedStudent.value?.fechaNacimiento) ||
+  normalizeHeaderBirthDate(selectedStudent.value?.birth) ||
+  normalizeHeaderBirthDate(selectedStudent.value?.birthDate) ||
+  normalizeHeaderBirthDate(selectedStudent.value?.nacimiento),
+);
+const selectedHeaderBirthDateLabel = computed(() => {
+  if (!selectedHeaderBirthDate.value) return "";
+  const [year, month, day] = selectedHeaderBirthDate.value.split("-");
+  if (!year || !month || !day) return "";
+  return `${day}/${month}/${year}`;
 });
+const selectedHeaderAgeChip = computed(() => {
+  const age = computeAgeFromDate(selectedHeaderBirthDate.value);
+  return age === null ? "" : `${age} año${age === 1 ? "" : "s"}`;
+});
+const goToCurpField = () => {
+  goToMissingField({ tab: "identity", formField: "curp" });
+};
 const selectedHeaderGroupSigil = computed(() => {
-  const group = controlGroupLabel(selectedHealthStudent.value || selectedStudent.value);
+  const group = editForm.grupo || controlGroupLabel(selectedHealthStudent.value || selectedStudent.value);
   if (!group) return null;
   const letter = String(group).trim().slice(0, 2).toUpperCase();
   return {
@@ -9201,6 +9427,178 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
+.control-escolar-screen .ce-group-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 29, 53, .22);
+  backdrop-filter: blur(10px);
+}
+
+.control-escolar-screen .ce-group-modal {
+  display: grid;
+  width: min(520px, 100%);
+  max-height: min(680px, calc(100vh - 48px));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: visible;
+  border: 1px solid rgba(216, 228, 239, .98);
+  border-radius: 24px;
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 28px 80px rgba(15, 29, 53, .24), inset 0 1px 0 rgba(255,255,255,.94);
+}
+
+.control-escolar-screen .ce-group-modal__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid #e4edf5;
+}
+
+.control-escolar-screen .ce-group-modal__icon,
+.control-escolar-screen .ce-group-modal__header > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+}
+
+.control-escolar-screen .ce-group-modal__icon {
+  width: 46px;
+  height: 46px;
+  background: #eef8eb;
+  color: var(--ce-green-strong);
+}
+
+.control-escolar-screen .ce-group-modal__header div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.control-escolar-screen .ce-group-modal__header small {
+  color: #4c8d51;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.control-escolar-screen .ce-group-modal__header h2 {
+  margin: 0;
+  color: #13213a;
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -.035em;
+}
+
+.control-escolar-screen .ce-group-modal__header p {
+  margin: 0;
+  overflow: hidden;
+  color: #6c7a91;
+  font-size: 12px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-group-modal__header > button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #dbe6f0;
+  background: #fff;
+  color: #63738b;
+  cursor: pointer;
+}
+
+.control-escolar-screen .ce-group-modal__body {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 250px;
+  overflow: visible;
+  padding: 18px 22px 20px;
+}
+
+.control-escolar-screen .ce-group-modal__current {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e2ebf3;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbf9 100%);
+}
+
+.control-escolar-screen .ce-group-modal__current div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.control-escolar-screen .ce-group-modal__current small {
+  color: #78869a;
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.control-escolar-screen .ce-group-modal__current strong {
+  overflow: hidden;
+  color: #14233c;
+  font-size: 17px;
+  font-weight: 930;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-group-modal__picker .ce-group-combobox__menu {
+  z-index: 260;
+  max-height: 300px;
+}
+
+.control-escolar-screen .ce-group-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 22px 20px;
+  border-top: 1px solid #e4edf5;
+}
+
+.control-escolar-screen .ce-group-modal__secondary,
+.control-escolar-screen .ce-group-modal__primary {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.control-escolar-screen .ce-group-modal__secondary {
+  border: 1px solid #dbe6f0;
+  background: #fff;
+  color: #5f7088;
+}
+
+.control-escolar-screen .ce-group-modal__primary {
+  border: 1px solid rgba(63, 145, 56, .26);
+  background: linear-gradient(180deg, #43ad44, #2d982f);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(45, 152, 47, .22);
+}
+
 .control-escolar-screen .ce-school-grid-minimal {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -11808,9 +12206,45 @@ onBeforeUnmount(() => {
   background: #d5dde7;
 }
 
-.control-escolar-screen .ce-student-hero-pass svg {
-  color: #9aa5b4;
-  stroke-width: 2.4;
+.control-escolar-screen .ce-student-hero-pass-card {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, auto);
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 3px 11px 3px 7px;
+  border: 1px solid #dfe8f1;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff 0%, #f8fbfd 100%);
+  color: #5e6f86;
+  font: inherit;
+  font-size: clamp(13px, .98vw, 16px);
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(16, 32, 58, 0.04), inset 0 1px 0 rgba(255, 255, 255, .92);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, color .18s ease;
+}
+
+.control-escolar-screen .ce-student-hero-pass-card:hover {
+  border-color: rgba(63, 145, 56, .28);
+  color: #213a2a;
+  box-shadow: 0 12px 24px rgba(63, 145, 56, .08), inset 0 1px 0 rgba(255, 255, 255, .94);
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-student-hero-pass-card img {
+  width: 33px;
+  height: 24px;
+  object-fit: contain;
+  opacity: .82;
+  filter: grayscale(18%);
+}
+
+.control-escolar-screen .ce-student-hero-pass-card strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .control-escolar-screen .ce-student-hero-cues {
@@ -11866,6 +12300,29 @@ onBeforeUnmount(() => {
   color: #657286;
 }
 
+.control-escolar-screen .ce-student-identity-chip.is-birthday {
+  border-color: rgba(221, 139, 33, 0.18);
+  background: linear-gradient(180deg, #fffdf8 0%, #fff7e7 100%);
+  color: #8b6f3d;
+}
+
+.control-escolar-screen button.ce-student-identity-chip {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-action:hover {
+  border-color: rgba(63, 145, 56, .24);
+  color: #315e37;
+  box-shadow: 0 10px 20px rgba(63, 145, 56, .07), inset 0 1px 0 rgba(255, 255, 255, .9);
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-student-identity-chip svg {
+  flex: 0 0 auto;
+  stroke-width: 2.25;
+}
+
 .control-escolar-screen .ce-student-hero-side {
   display: flex;
   min-width: max-content;
@@ -11908,6 +12365,45 @@ onBeforeUnmount(() => {
     linear-gradient(135deg, #f5fbff 0%, #ffffff 56%, #edf6ff 100%);
   color: #376fca;
   box-shadow: 0 14px 28px rgba(55, 111, 202, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.control-escolar-screen button.ce-student-hero-group-sigil {
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.control-escolar-screen button.ce-student-hero-group-sigil:hover {
+  border-color: color-mix(in srgb, currentColor 34%, #dce8f0);
+  box-shadow: 0 18px 34px rgba(16, 32, 58, .09), inset 0 1px 0 rgba(255, 255, 255, .94);
+  transform: translateY(-1px) scale(1.015);
+}
+
+.control-escolar-screen .ce-student-hero-group-cta {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 15px;
+  border: 1px solid rgba(63, 145, 56, .24);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f6fbf4 0%, #edf8ea 100%);
+  color: var(--ce-green-strong);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 940;
+  letter-spacing: .035em;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 12px 26px rgba(63, 145, 56, .09), inset 0 1px 0 rgba(255, 255, 255, .9);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.control-escolar-screen .ce-student-hero-group-cta:hover {
+  border-color: rgba(63, 145, 56, .42);
+  box-shadow: 0 16px 30px rgba(63, 145, 56, .13), inset 0 1px 0 rgba(255, 255, 255, .94);
+  transform: translateY(-1px);
 }
 
 .control-escolar-screen .ce-student-hero-group-sigil svg {

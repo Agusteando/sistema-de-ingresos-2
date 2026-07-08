@@ -1,1 +1,1 @@
-Actualiza encabezado de alumno con chips y sigilo de grupo
+Mejora encabezado de alumno con chips contextuales y modal de grupo
