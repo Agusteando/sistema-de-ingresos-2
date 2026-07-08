@@ -95,8 +95,9 @@
                 </button>
 
                 <div
-                  class="ce-chip-cluster ce-chip-cluster--quality"
-                  aria-label="Calidad del expediente"
+                  class="ce-chip-cluster ce-chip-cluster--quality ce-scrollable-filter-strip"
+                  aria-label="Calidad del expediente. Desplázate horizontalmente para ver más filtros."
+                  tabindex="0"
                 >
                   <UiChip
                     v-for="filter in qualityFilters"
@@ -110,17 +111,19 @@
                 </div>
 
                 <button
+                  v-if="hasActiveFilters"
                   type="button"
                   class="ce-clear-link"
-                  :disabled="!hasActiveFilters"
+                  title="Limpiar filtros"
+                  aria-label="Limpiar filtros"
                   @click="clearFilters"
                 >
-                  <LucideRotateCcw :size="15" /> Limpiar filtros
+                  <LucideRotateCcw :size="15" /> <span>Limpiar filtros</span>
                 </button>
               </div>
 
               <div class="ce-secondary-filter-row">
-                <div class="ce-status-tabs" aria-label="Filtros principales">
+                <div class="ce-status-tabs ce-scrollable-filter-strip" aria-label="Filtros principales" tabindex="0">
                   <button
                     v-for="filter in primaryFilters"
                     :key="filter.key"
@@ -137,8 +140,9 @@
 
                 <div
                   v-if="catalogs.grados.length"
-                  class="ce-chip-cluster ce-chip-cluster--grade"
+                  class="ce-chip-cluster ce-chip-cluster--grade ce-scrollable-filter-strip"
                   aria-label="Filtrar por grado"
+                  tabindex="0"
                 >
                   <span class="ce-chip-label">Grado</span>
                   <UiChip
@@ -157,8 +161,9 @@
 
                 <div
                   v-if="filters.grado && availableGroups.length"
-                  class="ce-chip-cluster ce-chip-cluster--group"
+                  class="ce-chip-cluster ce-chip-cluster--group ce-scrollable-filter-strip"
                   aria-label="Filtrar por grupo"
+                  tabindex="0"
                 >
                   <span class="ce-chip-label">Grupo</span>
                   <UiChip
@@ -11083,6 +11088,152 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-workspace.is-browsing .ce-secondary-filter-row {
     min-width: max(100%, 1160px);
   }
+}
+
+
+/* Control Escolar filter ergonomics: no dead reset row; visible horizontal filter rails. */
+.control-escolar-screen .ce-scrollable-filter-strip {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(63, 145, 56, 0.38) rgba(220, 232, 221, 0.75);
+}
+
+.control-escolar-screen .ce-scrollable-filter-strip::-webkit-scrollbar {
+  display: block !important;
+  width: 6px;
+  height: 6px;
+}
+
+.control-escolar-screen .ce-scrollable-filter-strip::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(220, 232, 221, 0.72);
+}
+
+.control-escolar-screen .ce-scrollable-filter-strip::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(63, 145, 56, 0.42);
+}
+
+.control-escolar-screen .ce-scrollable-filter-strip:focus-visible {
+  outline: 2px solid rgba(63, 145, 56, 0.32);
+  outline-offset: 2px;
+}
+
+.control-escolar-screen .ce-scrollable-filter-strip > * {
+  scroll-snap-align: start;
+}
+
+.control-escolar-screen .ce-clear-link span {
+  display: inline-flex;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-primary-filter-row {
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  align-items: start;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-filter-button {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-clear-link {
+  grid-column: 3;
+  grid-row: 1;
+  width: 42px;
+  min-width: 42px;
+  min-height: 41px;
+  padding: 0;
+  border: 1px solid rgba(217, 227, 238, 0.94);
+  background: #fff;
+  color: #6f7b8f;
+  box-shadow: 0 5px 12px rgba(21, 35, 60, 0.04);
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-clear-link span {
+  display: none;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-clear-link:hover,
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-clear-link:focus-visible {
+  border-color: rgba(63, 145, 56, 0.32);
+  color: #20882d;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--quality {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  max-width: 100%;
+  padding: 0 0 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: inset -22px 0 18px -24px rgba(21, 35, 60, 0.58);
+  gap: 7px;
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--quality :deep(.ui-chip),
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--quality button {
+  flex: 0 0 auto;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-secondary-filter-row {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-status-tabs,
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--grade,
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--group {
+  padding-bottom: 7px;
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-status-tabs {
+  flex: 1 1 auto;
+}
+
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--grade,
+.control-escolar-screen .ce-workspace.has-detail .student-list-panel > .ce-filter-bar .ce-chip-cluster--group {
+  flex: 0 1 auto;
+  min-width: 150px;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .ce-clear-link {
+  border: 1px solid rgba(217, 227, 238, 0.94);
+  background: #fff;
+  color: #20882d;
+}
+
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .ce-clear-link:hover,
+.control-escolar-screen .ce-workspace.is-browsing .ce-filter-bar .ce-clear-link:focus-visible {
+  border-color: rgba(63, 145, 56, 0.32);
+  background: #f4fbf2;
+}
+
+.control-escolar-screen .ce-detail-tabs {
+  padding-bottom: 7px;
+  scrollbar-color: rgba(63, 145, 56, 0.38) rgba(220, 232, 221, 0.75);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%);
+}
+
+.control-escolar-screen .ce-detail-tabs::-webkit-scrollbar {
+  display: block !important;
+  height: 6px;
+}
+
+.control-escolar-screen .ce-detail-tabs::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(220, 232, 221, 0.72);
+}
+
+.control-escolar-screen .ce-detail-tabs::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(63, 145, 56, 0.42);
 }
 
 </style>

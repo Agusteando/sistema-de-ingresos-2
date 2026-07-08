@@ -1,1 +1,1 @@
-Ajusta exploración y detalle de Control Escolar
+Refina los filtros comprimidos de Control Escolar
