@@ -3,7 +3,10 @@
     <button
       type="button"
       @click="isExpanded = !isExpanded"
-      class="h-[38px] inline-flex items-center gap-2 rounded-[11px] border border-[#dfe6ef] bg-white/90 px-3 text-[0.8rem] font-bold text-[#20304d] shadow-[0_8px_18px_rgba(22,38,65,0.04)] transition-colors hover:border-brand-leaf hover:bg-white"
+      :class="[
+        'h-[38px] inline-flex items-center rounded-[11px] border border-[#dfe6ef] bg-white/90 text-[0.8rem] font-bold text-[#20304d] shadow-[0_8px_18px_rgba(22,38,65,0.04)] transition-colors hover:border-brand-leaf hover:bg-white',
+        iconOnly ? 'w-[38px] justify-center px-0' : 'gap-2 px-3'
+      ]"
       :title="buttonTitle"
     >
       <LucideRefreshCcw v-if="isProcessing || starting || batching" :size="14" class="text-brand-campus animate-spin" />
@@ -11,7 +14,7 @@
       <LucideAlertCircle v-else-if="status === 'error' || status === 'cancelled' || status === 'abandoned'" :size="14" class="text-accent-coral" />
       <LucideCloud v-else :size="14" class="text-gray-500" />
 
-      <span class="hidden xl:inline">{{ compactLabel }}</span>
+      <span v-if="!iconOnly" class="hidden xl:inline">{{ compactLabel }}</span>
     </button>
 
     <div
@@ -139,6 +142,14 @@ import {
   LucideServer,
   LucideX
 } from 'lucide-vue-next'
+
+const props = defineProps({
+  iconOnly: {
+    type: Boolean,
+    default: false
+  }
+})
+const iconOnly = computed(() => props.iconOnly)
 
 const BATCH_SIZE = 25
 

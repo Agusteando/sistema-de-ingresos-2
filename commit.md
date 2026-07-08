@@ -1,1 +1,1 @@
-Corrige recarga completa de alumnos al cambiar ciclo escolar
+Optimiza topbar dinámico de Control Escolar

@@ -31,7 +31,7 @@
         <span></span>
       </div>
 
-      <div class="sidebar-brand">
+      <NuxtLink to="/" class="sidebar-brand sidebar-brand-link" title="Inicio" aria-label="Inicio">
         <img
           src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp"
           alt="IECS IEDIS"
@@ -42,7 +42,7 @@
           alt="Aurora"
           class="sidebar-system-logo"
         />
-      </div>
+      </NuxtLink>
 
       <nav class="sidebar-nav">
         <NuxtLink v-if="showFinancialNav" to="/" class="nav-item group">
@@ -226,10 +226,33 @@
         <h1>{{ currentRouteName }}</h1>
 
         <div class="header-actions">
+          <div v-if="isControlEscolarPage" class="control-header-tools" aria-label="Acciones de Control Escolar">
+            <div
+              class="control-topbar-plantel"
+              :class="{ empty: !controlTopbarPlantel }"
+              :title="controlTopbarPlantel ? `Plantel activo ${controlTopbarPlantel}` : 'Sin plantel activo'"
+            >
+              <LucideBuilding2 :size="15" />
+              <span>{{ controlTopbarPlantel || 'Plantel' }}</span>
+            </div>
+            <button type="button" class="header-icon-action" :disabled="controlTopbarRefreshDisabled" title="Actualizar Control Escolar" aria-label="Actualizar Control Escolar" @click="emitControlTopbarAction('refresh')">
+              <LucideRefreshCw :size="17" :class="{ 'animate-spin': controlTopbarBusy }" />
+            </button>
+            <button type="button" class="header-icon-action" :disabled="controlTopbarExportDisabled" title="Exportar base de matrícula" aria-label="Exportar base de matrícula" @click="emitControlTopbarAction('export-db')">
+              <LucideFileSpreadsheet :size="17" />
+            </button>
+            <button type="button" class="header-icon-action" :disabled="controlTopbarImportDisabled" title="Importar base de matrícula" aria-label="Importar base de matrícula" @click="emitControlTopbarAction('import-db')">
+              <LucideUpload :size="17" :class="{ 'animate-pulse': controlTopbarImporting }" />
+            </button>
+            <button type="button" class="header-icon-action header-icon-action-subtle" :title="controlTopbarSyncTitle" aria-label="Diagnóstico de sincronización" @click="openControlTopbarDiagnostics">
+              <LucideCloud :size="17" />
+            </button>
+          </div>
+
           <button
-            v-if="!localSystemRuntime"
+            v-if="showLocalSystemControls && !localSystemRuntime"
             type="button"
-            class="local-system-launch"
+            class="local-system-launch local-system-launch-compact"
             :class="{
               'is-unavailable': !localSystemLaunchAvailable,
               'is-checking': localSystemLaunchPending
@@ -241,13 +264,13 @@
             <span class="local-system-status-icon"><LucideZap :size="16" /></span>
             <span class="local-system-status-copy">
               <small>{{ localSystemLaunchKicker }}</small>
-              <strong>Sistema Rápido</strong>
+              <strong>Abrir localmente</strong>
             </span>
           </button>
           <button
-            v-if="localSystemRuntime"
+            v-if="showLocalSystemControls && localSystemRuntime"
             type="button"
-            class="local-system-status"
+            class="local-system-status local-system-launch-compact"
             :class="{
               'has-update': localSystemUpdateAvailable,
               'is-updating': localSystemUpdating,
@@ -265,11 +288,11 @@
               <LucideZap v-else :size="16" />
             </span>
             <span class="local-system-status-copy">
-              <small>Sistema Rápido</small>
+              <small>Sistema local</small>
               <strong>{{ localSystemStatusLabel }}</strong>
             </span>
           </button>
-          <SyncBadge v-if="showFinancialNav" />
+          <SyncBadge v-if="showExternalBaseBadge" :icon-only="true" />
           <div v-if="showCicloPicker" ref="cicloPickerRef" class="ciclo-picker" :class="{ open: cicloMenuOpen }">
             <button
               type="button"
@@ -317,9 +340,7 @@
               </button>
             </div>
           </div>
-          <NuxtLink v-if="showFinancialNav" to="/" class="header-home-button" title="Inicio" aria-label="Inicio">
-            <LucideSchool :size="23" />
-          </NuxtLink>
+
         </div>
       </header>
 
@@ -395,7 +416,10 @@ import {
   LucidePanelLeftClose,
   LucidePanelLeftOpen,
   LucideUndo2,
-  LucideZap
+  LucideZap,
+  LucideCloud,
+  LucideFileSpreadsheet,
+  LucideUpload
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -540,6 +564,34 @@ const userPlanteles = computed(() => {
 const showFinancialNav = computed(() => hasFinancialAccess.value)
 const hasConceptosAdminRole = computed(() => isSuperAdmin.value || roleTokens.value.some(role => ['admin', 'role_admin', 'conceptos_admin', 'role_conceptos'].includes(role)))
 const showConceptosNav = computed(() => showFinancialNav.value && hasConceptosAdminRole.value)
+const isStudentsPage = computed(() => route.path === '/')
+const isControlEscolarPage = computed(() => route.path === '/control-escolar')
+const showLocalSystemControls = computed(() => isStudentsPage.value && showFinancialNav.value)
+const showExternalBaseBadge = computed(() => showFinancialNav.value && !isControlEscolarPage.value)
+const controlEscolarTopbarState = useState('controlEscolarTopbarState', () => ({
+  plantel: '',
+  studentsCount: 0,
+  loading: false,
+  importing: false,
+  syncStatus: 'idle',
+  syncMessage: ''
+}))
+const controlTopbarPlantel = computed(() => String(controlEscolarTopbarState.value?.plantel || '').trim())
+const controlTopbarStudentsCount = computed(() => Number(controlEscolarTopbarState.value?.studentsCount || 0))
+const controlTopbarBusy = computed(() => Boolean(controlEscolarTopbarState.value?.loading))
+const controlTopbarImporting = computed(() => Boolean(controlEscolarTopbarState.value?.importing))
+const controlTopbarRefreshDisabled = computed(() => !controlTopbarPlantel.value || controlTopbarBusy.value)
+const controlTopbarExportDisabled = computed(() => !controlTopbarPlantel.value || controlTopbarStudentsCount.value <= 0)
+const controlTopbarImportDisabled = computed(() => !controlTopbarPlantel.value || controlTopbarImporting.value)
+const controlTopbarSyncTitle = computed(() => String(controlEscolarTopbarState.value?.syncMessage || 'Diagnóstico de sincronización de Control Escolar'))
+const emitControlTopbarAction = (action) => {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('control-escolar:topbar-action', { detail: { action } }))
+}
+const openControlTopbarDiagnostics = () => {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('control-escolar:open-sync-diagnostics'))
+}
 const showCicloPicker = computed(() => true)
 const activePlantelLabel = computed(() => activePlantel.value === 'GLOBAL' ? 'CONSOLIDADO' : `PLANTEL ${activePlantel.value || 'PT'}`)
 const activePlantelStatus = computed(() => activePlantel.value === 'GLOBAL'
@@ -1200,6 +1252,19 @@ const logout = async () => {
   z-index: 3;
   padding: 38px 24px 31px;
   text-align: center;
+}
+
+.sidebar-brand-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.sidebar-brand-link:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
 }
 
 .sidebar-logo {
@@ -1956,7 +2021,67 @@ const logout = async () => {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+}
+
+.control-header-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-topbar-plantel,
+.header-icon-action {
+  display: inline-flex;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(210, 225, 213, 0.9);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #274057;
+  box-shadow: 0 8px 18px rgba(22, 38, 65, 0.045);
+}
+
+.control-topbar-plantel {
+  gap: 7px;
+  min-width: 72px;
+  padding: 0 12px;
+  color: #276f34;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.control-topbar-plantel.empty {
+  color: #68778a;
+}
+
+.header-icon-action {
+  width: 40px;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease, color 150ms ease;
+}
+
+.header-icon-action:hover:not(:disabled) {
+  border-color: rgba(82, 143, 67, 0.5);
+  background: #fff;
+  color: #276f34;
+  box-shadow: 0 12px 22px rgba(31, 76, 40, 0.09);
+  transform: translateY(-1px);
+}
+
+.header-icon-action:disabled {
+  cursor: not-allowed;
+  color: #a5afbd;
+  background: rgba(247, 249, 250, 0.88);
+  box-shadow: none;
+}
+
+.header-icon-action-subtle {
+  color: #657287;
+  opacity: 0.82;
 }
 
 
@@ -1982,6 +2107,11 @@ const logout = async () => {
   font: inherit;
   text-decoration: none;
   cursor: pointer;
+}
+
+.local-system-launch-compact {
+  min-height: 46px;
+  padding-right: 14px;
 }
 
 .local-system-launch:hover:not(:disabled) {
@@ -2325,6 +2455,24 @@ const logout = async () => {
 
   .header-actions {
     gap: 10px;
+  }
+
+  .control-header-tools {
+    gap: 6px;
+  }
+
+  .control-topbar-plantel {
+    min-width: 48px;
+    padding: 0 10px;
+  }
+
+  .control-topbar-plantel svg {
+    display: none;
+  }
+
+  .header-icon-action {
+    width: 38px;
+    height: 38px;
   }
 
   .local-system-status-copy strong {

@@ -1,53 +1,5 @@
 <template>
   <div ref="controlScreenRef" class="students-screen control-escolar-screen" :style="controlScreenStyle">
-    <header class="students-hero ce-hero">
-      <div class="ce-hero-spacer">
-        <Transition name="ce-sync-trace-fade">
-          <ControlSyncTrace
-            v-if="showControlSyncVisual"
-            :cache-stage="controlCacheStage"
-            :base-stage="controlBaseStage"
-            :external-stage="controlExternalDbStage"
-            :complete-stage="controlCompleteStage"
-            :freshness="controlDataFreshness"
-            :cache-title="controlCacheStepTitle"
-            :base-title="controlBaseStepTitle"
-            :external-title="controlExternalDbStepTitle"
-            :complete-title="controlCompleteStepTitle"
-            :external-rows="controlExternalDbRows"
-            :aria-label="controlSyncAriaLabel"
-          />
-        </Transition>
-      </div>
-      <div class="hero-actions ce-hero-actions">
-        <div class="ce-selected-plantel" :class="{ empty: !selectedAgentId }">
-          <span>Plantel activo</span>
-          <strong>{{ selectedAgentId || "Selecciona" }}</strong>
-        </div>
-        <UiButton
-          variant="secondary"
-          :disabled="loadingAny || !selectedAgentId"
-          @click="refreshAll"
-        >
-          <LucideRefreshCw :size="18" :class="{ spinning: loadingAny }" />
-          Actualizar
-        </UiButton>
-        <UiButton
-          variant="secondary"
-          :disabled="!selectedAgentId || !students.length"
-          @click="exportMatriculaDb"
-        >
-          <LucideFileSpreadsheet :size="18" /> Exportar DB
-        </UiButton>
-        <UiButton
-          variant="secondary"
-          :disabled="!selectedAgentId || massImporting"
-          @click="openMassImportModal"
-        >
-          <LucideUpload :size="18" /> Importar DB
-        </UiButton>
-      </div>
-    </header>
 
     <section
       :class="[
@@ -1764,6 +1716,14 @@ const selectedAgentId = ref(
     ? initialControlPlantel
     : "",
 );
+const controlEscolarTopbarState = useState("controlEscolarTopbarState", () => ({
+  plantel: "",
+  studentsCount: 0,
+  loading: false,
+  importing: false,
+  syncStatus: "idle",
+  syncMessage: "",
+}));
 const currentEnrollmentPlantelKey = computed(() =>
   normalizeEnrollmentPlantelKey(selectedAgentId.value || activePlantelCookie.value || "GLOBAL") || "GLOBAL",
 );
@@ -2241,6 +2201,41 @@ const publishControlSyncIndicatorState = (override = {}) => {
       },
     }),
   );
+};
+
+const publishControlTopbarState = () => {
+  controlEscolarTopbarState.value = {
+    plantel: selectedAgentId.value || "",
+    studentsCount: Number(pagination.total || students.value.length || 0),
+    loading: Boolean(loadingAny.value),
+    importing: Boolean(massImporting.value),
+    syncStatus: String(controlDataFreshness.value || controlCacheStage.value || "idle"),
+    syncMessage: controlSyncAriaLabel.value || loadError.value || "Control Escolar",
+  };
+};
+
+const resetControlTopbarState = () => {
+  controlEscolarTopbarState.value = {
+    plantel: "",
+    studentsCount: 0,
+    loading: false,
+    importing: false,
+    syncStatus: "idle",
+    syncMessage: "",
+  };
+};
+
+const handleControlTopbarAction = async (event) => {
+  const action = String(event?.detail?.action || "");
+  if (action === "refresh") {
+    await refreshAll();
+    return;
+  }
+  if (action === "export-db") {
+    exportMatriculaDb();
+    return;
+  }
+  if (action === "import-db") openMassImportModal();
 };
 
 const showControlSyncVisual = computed(() =>
@@ -5204,6 +5199,23 @@ watch(
 watch(selectedStudent, (student) =>
   queueControlStudentPhotos(student ? [student] : [], { priority: true }),
 );
+watch(
+  [
+    selectedAgentId,
+    () => pagination.total,
+    () => students.value.length,
+    loadingAny,
+    massImporting,
+    controlDataFreshness,
+    controlCacheStage,
+    controlBaseStage,
+    controlExternalDbStage,
+    controlCompleteStage,
+    loadError,
+  ],
+  publishControlTopbarState,
+  { immediate: true },
+);
 
 const handleCicloChanged = (event) => {
   const previousCiclo = currentCicloKey.value;
@@ -5223,6 +5235,7 @@ onMounted(async () => {
     localHour.value = new Date().getHours();
     window.addEventListener("ingresos:ciclo-changed", handleCicloChanged);
     window.addEventListener("control-escolar:open-sync-diagnostics", openControlDiagnosticsModal);
+    window.addEventListener("control-escolar:topbar-action", handleControlTopbarAction);
     window.addEventListener("resize", scheduleControlScreenScaleUpdate, { passive: true });
     publishControlSyncIndicatorState();
     const controlScreenHost = controlScreenRef.value?.parentElement;
@@ -5254,10 +5267,12 @@ onBeforeUnmount(() => {
   if (process.client) {
     window.removeEventListener("ingresos:ciclo-changed", handleCicloChanged);
     window.removeEventListener("control-escolar:open-sync-diagnostics", openControlDiagnosticsModal);
+    window.removeEventListener("control-escolar:topbar-action", handleControlTopbarAction);
     window.removeEventListener("resize", scheduleControlScreenScaleUpdate);
     if (controlScreenFrame) window.cancelAnimationFrame(controlScreenFrame);
   }
   controlScreenResizeObserver?.disconnect?.();
+  resetControlTopbarState();
 });
 </script>
 
