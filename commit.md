@@ -1,1 +1,1 @@
-Optimiza topbar dinámico de Control Escolar
+Permite cartas de no adeudo sin bloqueo por plantel activo

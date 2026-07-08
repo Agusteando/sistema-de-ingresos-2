@@ -5,7 +5,6 @@ import { fetchCentralMatriculaOverlay } from './central-matricula-overlay'
 import { resolveFinancialFamilyContact } from '../../shared/utils/familyContact'
 import { resolveProjectedAmount } from './monto-final'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
-import { isInProjectedPlantelScopeForCiclo } from '../../shared/utils/grado'
 import { escapeHtml } from './cobranzaEmail'
 import { generateNoAdeudoCartaPdf } from './noAdeudoCartaPdf'
 import { sendEmail, type MailAttachment } from './mailer'
@@ -368,20 +367,6 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
   return { total, hasDebt: total > 0.01, concepts }
 }
 
-const assertStudentScope = (event: any, student: Record<string, any>, cicloKey: string) => {
-  const user = event.context.user
-  const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
-  const allowed = isInProjectedPlantelScopeForCiclo(
-    student.gradoBase || student.grado,
-    student.plantel,
-    student.cicloBase || student.ciclo,
-    cicloKey,
-    student.nivelBase || student.nivel,
-    isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
-  )
-  if (!allowed) throw createError({ statusCode: isScopedToActivePlantel ? 403 : 404, message: 'Alumno fuera del alcance del plantel activo.' })
-}
-
 const getNoAdeudoDeudorCartaMark = async (plantelValue: unknown, matriculaValue: unknown, cicloValue: unknown): Promise<NoAdeudoDeudorCartaMark | null> => {
   const plantel = normalizeText(plantelValue).toUpperCase()
   const matricula = normalizeMatricula(matriculaValue)
@@ -439,7 +424,6 @@ export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: 
   `, [matricula])
 
   if (!row) throw createError({ statusCode: 404, message: 'Alumno no encontrado.' })
-  assertStudentScope(event, row, cicloKey)
 
   const student = await mergeCentralOverlay(row)
   const debt = await calculateNoAdeudoDebt(row.matricula, cicloKey)
