@@ -5123,18 +5123,6 @@ const loadStudents = async (options = {}) => {
         controlStudentsIndex.value.length > 0 ||
         students.value.length > 0));
 
-  const isPlantelScopeMismatchError = (error) => {
-    const status = Number(
-      error?.statusCode ||
-        error?.status ||
-        error?.response?.status ||
-        error?.data?.statusCode ||
-        0,
-    );
-    const code = String(error?.data?.code || error?.data?.data?.code || error?.code || "");
-    return status === 409 || code === "CONTROL_ESCOLAR_PLANTEL_SCOPE_MISMATCH";
-  };
-
   try {
     controlBaseStage.value = "loading";
     controlExternalDbStage.value = "loading";
@@ -5204,8 +5192,7 @@ const loadStudents = async (options = {}) => {
       !isCurrentControlScopeSignature(requestScopeSignature)
     )
       return;
-    const plantelScopeMismatch = isPlantelScopeMismatchError(error);
-    controlBaseStage.value = canKeepVisibleData() && !plantelScopeMismatch ? "partial" : "failed";
+    controlBaseStage.value = canKeepVisibleData() ? "partial" : "failed";
     controlExternalDbStage.value = "failed";
     controlCompleteStage.value = "failed";
     lastControlLoadDiagnostics.value = normalizeControlDiagnostics({
@@ -5218,9 +5205,9 @@ const loadStudents = async (options = {}) => {
       status: "failed",
     });
 
-    if (!canKeepVisibleData() || plantelScopeMismatch) {
+    if (!canKeepVisibleData()) {
       resetControlStudentsView();
-      controlCacheStage.value = cached && !plantelScopeMismatch ? "ready" : "empty";
+      controlCacheStage.value = cached ? "ready" : "empty";
       loadError.value =
         error?.data?.message ||
         error?.message ||
