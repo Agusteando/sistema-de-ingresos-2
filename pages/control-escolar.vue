@@ -529,10 +529,8 @@
                   <div class="ce-student-hero-copy">
                     <h2>{{ selectedStudent.fullName || "Ficha de alumno" }}</h2>
                     <div class="ce-student-hero-meta" aria-label="Datos rápidos del alumno">
-                      <span class="ce-student-hero-meta-token">{{ selectedStudent.matricula || "Sin matrícula" }}</span>
-                      <i aria-hidden="true"></i>
-                      <span class="ce-student-hero-meta-token">{{ selectedWorkspaceGradeLabel }}</span>
-                      <i aria-hidden="true"></i>
+                      <span class="ce-student-hero-meta-token is-matricula">{{ selectedStudent.matricula || "Sin matrícula" }}</span>
+                      <span class="ce-student-hero-meta-token is-grade">{{ selectedWorkspaceGradeLabel }}</span>
                       <button
                         type="button"
                         class="ce-student-hero-pass-card"
@@ -542,15 +540,19 @@
                         <img src="/brand/husky-pass-header-gray.png" alt="" aria-hidden="true" />
                         <strong>{{ selectedHuskyPassPasswordLabel }}</strong>
                       </button>
+                    </div>
+                    <div class="ce-student-hero-cues" aria-label="Identidad y datos personales rápidos">
                       <span
                         v-if="selectedHeaderGenderChip"
                         :class="[
                           'ce-student-identity-chip',
+                          'is-symbol',
                           `is-${selectedHeaderGenderChip.tone}`,
                         ]"
+                        :aria-label="selectedHeaderGenderChip.label"
+                        :title="selectedHeaderGenderChip.label"
                       >
-                        <i aria-hidden="true"></i>
-                        {{ selectedHeaderGenderChip.label }}
+                        <span class="ce-student-identity-glyph" aria-hidden="true">{{ selectedHeaderGenderChip.symbol }}</span>
                       </span>
                       <span
                         v-if="selectedHeaderBirthDateLabel"
@@ -3542,8 +3544,8 @@ const selectedHeaderGenderChip = computed(() => {
     normalizeHeaderGender(selectedStudent.value?.genero) ||
     normalizeHeaderGender(selectedStudent.value?.gender) ||
     normalizeHeaderGender(curpDerivedIdentity.value?.sexoCorto);
-  if (explicit === "male") return { label: "Niño", tone: "male" };
-  if (explicit === "female") return { label: "Niña", tone: "female" };
+  if (explicit === "male") return { label: "Niño", tone: "male", symbol: "♂" };
+  if (explicit === "female") return { label: "Niña", tone: "female", symbol: "♀" };
   return null;
 });
 const selectedHeaderContextTone = computed(() => selectedHeaderGenderChip.value?.tone || "neutral");
@@ -13428,6 +13430,24 @@ onBeforeUnmount(() => {
   opacity: 0.72;
 }
 
+.control-escolar-screen .ce-student-identity-chip.is-symbol {
+  min-width: 31px;
+  padding-inline: 0;
+}
+
+.control-escolar-screen .ce-student-identity-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-symbol > i {
+  display: none;
+}
+
 .control-escolar-screen .ce-student-identity-chip.is-female {
   border-color: rgba(223, 129, 174, 0.28);
   background: linear-gradient(180deg, #fff7fb 0%, #fdeef6 100%);
@@ -13973,6 +13993,16 @@ onBeforeUnmount(() => {
     justify-self: start;
   }
 
+  .control-escolar-screen .ce-student-hero-copy {
+    gap: 8px;
+  }
+
+  .control-escolar-screen .ce-student-hero-meta,
+  .control-escolar-screen .ce-student-hero-cues {
+    row-gap: 8px;
+  }
+
+
   .control-escolar-screen .ce-student-hero-progress {
     grid-template-columns: 42px minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
@@ -13998,11 +14028,10 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-student-hero-meta {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
   max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   padding-bottom: 1px;
   color: #6d7b91;
   font-size: clamp(12.5px, 0.86vw, 15px);
@@ -14014,13 +14043,40 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-student-hero-meta > i {
-  height: 20px;
-  margin-inline: 2px;
+  display: none;
 }
 
 .control-escolar-screen .ce-student-hero-meta-token {
   flex: 0 0 auto;
   min-height: 30px;
+}
+
+.control-escolar-screen .ce-student-hero-meta-token.is-matricula,
+.control-escolar-screen .ce-student-hero-meta-token.is-grade {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(214, 225, 235, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+  color: #657286;
+  font-size: clamp(11.5px, 0.78vw, 13px);
+  font-weight: 860;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 7px 15px rgba(16, 32, 58, 0.025), inset 0 1px 0 rgba(255, 255, 255, 0.84);
+}
+
+.control-escolar-screen .ce-student-hero-meta-token.is-matricula {
+  border-color: rgba(149, 202, 143, 0.44);
+  background: linear-gradient(180deg, #f9fdf8 0%, #f0f8ee 100%);
+  color: #39723d;
+}
+
+.control-escolar-screen .ce-student-hero-cues {
+  gap: 8px;
 }
 
 .control-escolar-screen .ce-student-hero-pass-card {
@@ -15049,8 +15105,9 @@ onBeforeUnmount(() => {
 
   .control-escolar-screen .ce-student-hero-meta {
     max-width: 100%;
+    flex-wrap: wrap;
     gap: 5px;
-    overflow-x: auto;
+    overflow: visible;
     padding-bottom: 2px;
     scrollbar-width: none;
   }
@@ -15070,6 +15127,14 @@ onBeforeUnmount(() => {
     min-height: 26px;
     border-radius: 999px;
     font-size: 10px;
+  }
+
+  .control-escolar-screen .ce-student-hero-cues {
+    gap: 5px;
+  }
+
+  .control-escolar-screen .ce-student-identity-chip.is-symbol {
+    min-width: 26px;
   }
 
   .control-escolar-screen .ce-student-hero-side {
@@ -15593,7 +15658,8 @@ onBeforeUnmount(() => {
     -webkit-line-clamp: 2;
   }
 
-  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-meta {
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-meta,
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-cues {
     max-height: 0;
     overflow: hidden;
     padding: 0;

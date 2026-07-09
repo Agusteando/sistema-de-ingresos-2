@@ -1,1 +1,1 @@
-Refina la matrícula en filas de Control Escolar
+Reordena el encabezado del alumno en Control Escolar
