@@ -7418,13 +7418,15 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-student-row .student-copy strong {
   display: block;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
   color: var(--ce-ink);
   font-size: 13.5px;
   font-weight: 900;
   line-height: 1.12;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .control-escolar-screen .student-tipo-chip {

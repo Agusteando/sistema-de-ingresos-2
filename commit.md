@@ -1,1 +1,1 @@
-Corrige guardado parcial de ficha en Control Escolar
+Muestra el nombre completo del alumno en Control Escolar
