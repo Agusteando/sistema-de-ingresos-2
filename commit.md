@@ -1,1 +1,1 @@
-Mejora el CTA de grupo en Control Escolar
+Muestra identidad y servicios en el encabezado de Control Escolar

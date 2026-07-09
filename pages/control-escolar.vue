@@ -546,13 +546,34 @@
                         v-if="selectedHeaderGenderChip"
                         :class="[
                           'ce-student-identity-chip',
-                          'is-symbol',
+                          'is-gender-icon',
                           `is-${selectedHeaderGenderChip.tone}`,
                         ]"
                         :aria-label="selectedHeaderGenderChip.label"
                         :title="selectedHeaderGenderChip.label"
                       >
-                        <span class="ce-student-identity-glyph" aria-hidden="true">{{ selectedHeaderGenderChip.symbol }}</span>
+                        <LucideMars
+                          v-if="selectedHeaderGenderChip.tone === 'male'"
+                          :size="15"
+                          :stroke-width="2.65"
+                          aria-hidden="true"
+                        />
+                        <LucideVenus
+                          v-else
+                          :size="15"
+                          :stroke-width="2.65"
+                          aria-hidden="true"
+                        />
+                      </span>
+                      <span
+                        :class="[
+                          'ce-student-identity-chip',
+                          'is-status',
+                          statusTone(selectedStudent),
+                        ]"
+                      >
+                        <LucideShieldCheck :size="14" :stroke-width="2.5" aria-hidden="true" />
+                        {{ selectedStudent.status || "Activo" }}
                       </span>
                       <span
                         v-if="selectedHeaderBirthDateLabel"
@@ -570,6 +591,21 @@
                         <LucideClock3 :size="15" aria-hidden="true" />
                         {{ selectedHeaderAgeChip }}
                       </button>
+                    </div>
+                    <div
+                      v-if="selectedHeaderServiceTags.length"
+                      class="ce-student-hero-services"
+                      aria-label="Talleres y servicios del alumno"
+                    >
+                      <span
+                        v-for="servicio in selectedHeaderServiceTags"
+                        :key="servicio.clave"
+                        class="ce-student-service-chip"
+                        :title="servicio.nombre"
+                      >
+                        <img :src="servicio.imagen" alt="" loading="lazy" />
+                        <span>{{ servicio.nombre }}</span>
+                      </span>
                     </div>
                   </div>
                   <div class="ce-student-hero-side">
@@ -611,15 +647,6 @@
                         <small>Seleccionar sigil</small>
                       </span>
                     </button>
-                    <span
-                      :class="[
-                        'ce-student-hero-status',
-                        statusTone(selectedStudent),
-                      ]"
-                    >
-                      <i aria-hidden="true"></i>
-                      {{ selectedStudent.status || "Activo" }}
-                    </span>
                     <button
                       type="button"
                       class="detail-shell-close ce-detail-menu-button ce-student-hero-menu"
@@ -1799,6 +1826,7 @@ import {
   LucideKeyRound,
   LucideLoader2,
   LucideMail,
+  LucideMars,
   LucideMoreVertical,
   LucidePhone,
   LucideRefreshCw,
@@ -1814,6 +1842,7 @@ import {
   LucideUsersRound,
   LucideUpload,
   LucideUserX,
+  LucideVenus,
   LucideWifiOff,
   LucideX,
 } from "lucide-vue-next";
@@ -1825,6 +1854,7 @@ import StudentsKpiValue from "~/components/students/StudentsKpiValue.vue";
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
 import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
+import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave, parseServiciosCsv } from "~/shared/utils/talleresServicios";
 import {
   normalizeEnrollmentConceptIds,
   normalizeEnrollmentPlantelKey,
@@ -1941,6 +1971,8 @@ const saveError = ref("");
 const students = ref([]);
 const controlStudentsIndex = ref([]);
 const selectedStudent = ref(null);
+const selectedHeaderServices = ref({ matricula: "", servicios: [], raw: "" });
+let selectedHeaderServicesRequestId = 0;
 const kpis = ref(null);
 const catalogs = reactive({
   niveles: [],
@@ -3544,11 +3576,63 @@ const selectedHeaderGenderChip = computed(() => {
     normalizeHeaderGender(selectedStudent.value?.genero) ||
     normalizeHeaderGender(selectedStudent.value?.gender) ||
     normalizeHeaderGender(curpDerivedIdentity.value?.sexoCorto);
-  if (explicit === "male") return { label: "Niño", tone: "male", symbol: "♂" };
-  if (explicit === "female") return { label: "Niña", tone: "female", symbol: "♀" };
+  if (explicit === "male") return { label: "Niño", tone: "male" };
+  if (explicit === "female") return { label: "Niña", tone: "female" };
   return null;
 });
 const selectedHeaderContextTone = computed(() => selectedHeaderGenderChip.value?.tone || "neutral");
+const normalizeHeaderServiceMatricula = (value) =>
+  String(value || "")
+    .trim()
+    .toUpperCase();
+const normalizeHeaderServiceTag = (item) => {
+  const nombre = String(item?.nombre || item?.servicio || item?.label || item || "")
+    .trim()
+    .replace(/\s+/g, " ");
+  const clave = normalizeServicioClave(item?.clave || item?.servicio_clave || nombre);
+  if (!nombre && !clave) return null;
+  return {
+    clave: clave || normalizeServicioClave(nombre),
+    nombre: nombre || clave,
+    imagen: item?.imagen || item?.imagen_url || (clave ? `/talleres-servicios/${clave}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE),
+  };
+};
+const dedupeHeaderServiceTags = (items) => {
+  const seen = new Set();
+  return items
+    .map(normalizeHeaderServiceTag)
+    .filter(Boolean)
+    .filter((servicio) => {
+      const key = servicio.clave || normalizeServicioClave(servicio.nombre);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+const resolveHeaderServicesFromRaw = (raw) =>
+  dedupeHeaderServiceTags(parseServiciosCsv(raw).map((nombre) => ({ nombre })));
+const selectedHeaderServiceTags = computed(() => {
+  const student = selectedStudent.value || {};
+  const selectedKey = normalizeHeaderServiceMatricula(student.matricula);
+  if (
+    selectedKey &&
+    selectedHeaderServices.value.matricula === selectedKey &&
+    Array.isArray(selectedHeaderServices.value.servicios) &&
+    selectedHeaderServices.value.servicios.length
+  ) {
+    return dedupeHeaderServiceTags(selectedHeaderServices.value.servicios);
+  }
+  const raw =
+    student.servicios ||
+    student.servicio ||
+    student.centralMatricula?.servicios ||
+    student.centralMatricula?.servicio ||
+    student.matriculaOverlay?.servicios ||
+    student.matriculaOverlay?.servicio ||
+    selectedHeaderServices.value.raw ||
+    "";
+  return resolveHeaderServicesFromRaw(raw);
+});
 const normalizeHeaderBirthDate = (value) => {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -4081,6 +4165,49 @@ const buildScopeQuery = () => ({
   concepts: externalConcepts.value.join(",") || undefined,
   tipoConcepts: tipoIngresoConcepts.value.join(",") || undefined,
 });
+const loadSelectedHeaderServices = async () => {
+  const matricula = normalizeHeaderServiceMatricula(selectedStudent.value?.matricula);
+  const requestId = ++selectedHeaderServicesRequestId;
+  if (!matricula) {
+    selectedHeaderServices.value = { matricula: "", servicios: [], raw: "" };
+    return;
+  }
+  selectedHeaderServices.value = {
+    matricula,
+    servicios: [],
+    raw:
+      selectedStudent.value?.servicios ||
+      selectedStudent.value?.servicio ||
+      selectedStudent.value?.centralMatricula?.servicios ||
+      selectedStudent.value?.centralMatricula?.servicio ||
+      "",
+  };
+  try {
+    const response = await $fetch(
+      `/api/control-escolar/students/${encodeURIComponent(matricula)}/servicios`,
+      {
+        query: buildScopeQuery(),
+        cache: "no-store",
+      },
+    );
+    if (requestId !== selectedHeaderServicesRequestId) return;
+    selectedHeaderServices.value = {
+      matricula,
+      servicios: Array.isArray(response?.servicios) ? response.servicios : [],
+      raw: response?.raw || selectedHeaderServices.value.raw || "",
+    };
+  } catch (error) {
+    if (requestId !== selectedHeaderServicesRequestId) return;
+    // Talleres/servicios are visual enrichment in this header; keep the local fallback.
+  }
+};
+watch(
+  () => [selectedStudent.value?.matricula, selectedAgentId.value, currentCicloKey.value],
+  () => {
+    void loadSelectedHeaderServices();
+  },
+  { immediate: true },
+);
 
 const buildQuery = (extra = {}) => ({
   ...buildScopeQuery(),
@@ -13430,22 +13557,13 @@ onBeforeUnmount(() => {
   opacity: 0.72;
 }
 
-.control-escolar-screen .ce-student-identity-chip.is-symbol {
+.control-escolar-screen .ce-student-identity-chip.is-gender-icon {
   min-width: 31px;
   padding-inline: 0;
 }
 
-.control-escolar-screen .ce-student-identity-glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  font-weight: 950;
-  line-height: 1;
-}
-
-.control-escolar-screen .ce-student-identity-chip.is-symbol > i {
-  display: none;
+.control-escolar-screen .ce-student-identity-chip.is-gender-icon svg {
+  stroke-width: 2.65;
 }
 
 .control-escolar-screen .ce-student-identity-chip.is-female {
@@ -14498,6 +14616,81 @@ onBeforeUnmount(() => {
 }
 
 
+/* Header identity/status/services chips. */
+.control-escolar-screen .ce-student-identity-chip.is-gender-icon {
+  min-width: 31px;
+  padding-inline: 0;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-gender-icon svg {
+  stroke-width: 2.65;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-status {
+  gap: 6px;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-status.success {
+  border-color: rgba(63, 145, 56, 0.24);
+  background: linear-gradient(180deg, #f8fdf7 0%, #eef8ea 100%);
+  color: #2f7b37;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-status.danger {
+  border-color: rgba(229, 72, 77, 0.24);
+  background: linear-gradient(180deg, #fff8f8 0%, #fff0f0 100%);
+  color: #c43f45;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-status.neutral {
+  border-color: rgba(210, 222, 233, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #f4f8fb 100%);
+  color: #657286;
+}
+
+.control-escolar-screen .ce-student-hero-services {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 1px;
+}
+
+.control-escolar-screen .ce-student-service-chip {
+  display: inline-flex;
+  min-width: 0;
+  max-width: min(260px, 100%);
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px 3px 5px;
+  border: 1px solid rgba(168, 137, 215, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%);
+  color: #6b5ca8;
+  font-size: clamp(11px, .74vw, 12.5px);
+  font-weight: 880;
+  line-height: 1;
+  box-shadow: 0 7px 15px rgba(16, 32, 58, 0.025), inset 0 1px 0 rgba(255,255,255,.9);
+}
+
+.control-escolar-screen .ce-student-service-chip img {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #f3f0fb;
+}
+
+.control-escolar-screen .ce-student-service-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Group CTA polish: remove decorative CTA panel gradients and make the action explicit. */
 .control-escolar-screen .ce-student-hero-side {
   min-width: 0;
@@ -15219,8 +15412,25 @@ onBeforeUnmount(() => {
     gap: 5px;
   }
 
-  .control-escolar-screen .ce-student-identity-chip.is-symbol {
+  .control-escolar-screen .ce-student-identity-chip.is-gender-icon {
     min-width: 26px;
+  }
+
+  .control-escolar-screen .ce-student-hero-services {
+    gap: 5px;
+  }
+
+  .control-escolar-screen .ce-student-service-chip {
+    max-width: 100%;
+    min-height: 26px;
+    padding: 2px 8px 2px 4px;
+    font-size: 10px;
+  }
+
+  .control-escolar-screen .ce-student-service-chip img {
+    width: 20px;
+    height: 20px;
+    border-radius: 7px;
   }
 
   .control-escolar-screen .ce-student-hero-side {
@@ -15745,7 +15955,8 @@ onBeforeUnmount(() => {
   }
 
   .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-meta,
-  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-cues {
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-cues,
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-services {
     max-height: 0;
     overflow: hidden;
     padding: 0;
