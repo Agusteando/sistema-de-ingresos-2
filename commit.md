@@ -1,1 +1,1 @@
-Pulir filas compactas de alumnos en Control Escolar
+Refina la matrícula en filas de Control Escolar

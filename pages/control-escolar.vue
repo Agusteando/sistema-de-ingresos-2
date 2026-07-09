@@ -379,10 +379,11 @@
                         <strong :title="student.fullName">{{
                           student.fullName || "Alumno sin nombre"
                         }}</strong>
-                        <span class="student-type-line">
+                        <span class="student-type-line student-matricula-line">
                           <span
                             :class="[
                               'student-tipo-chip',
+                              'student-matricula-token',
                               student.overlayExists ? 'interno' : 'externo',
                             ]"
                           >
@@ -15813,6 +15814,71 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-type-line {
     justify-content: flex-start;
     align-self: flex-start;
+  }
+}
+
+
+/* Control Escolar matrícula token polish: the row identifier should read as quiet metadata, not a long pill. */
+.control-escolar-screen .ce-student-row .student-matricula-token,
+.control-escolar-screen .ce-student-row .student-matricula-token.interno,
+.control-escolar-screen .ce-student-row .student-matricula-token.externo,
+.control-escolar-screen .student-list-panel.is-compact .ce-student-row .student-matricula-token,
+.control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-matricula-token {
+  position: relative;
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  min-height: auto;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--grade-accent, var(--ce-green)) 70%, #16321f);
+  font-size: 12px;
+  font-weight: 880;
+  letter-spacing: 0.018em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-student-row .student-matricula-token::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.38;
+}
+
+.control-escolar-screen .ce-student-row .student-matricula-token.externo {
+  color: #315fa7;
+}
+
+.control-escolar-screen .ce-student-row .student-matricula-line {
+  min-height: auto;
+  align-items: center;
+}
+
+.control-escolar-screen .student-list-panel.is-compact .ce-student-row .student-matricula-line,
+.control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-matricula-line {
+  width: auto;
+  max-width: 100%;
+  overflow: visible;
+}
+
+@media (max-width: 820px) {
+  .control-escolar-screen .ce-student-row .student-matricula-token,
+  .control-escolar-screen .ce-workspace.is-browsing .ce-student-row .student-matricula-token,
+  .control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-matricula-token {
+    font-size: 11.4px;
+    letter-spacing: 0.016em;
   }
 }
 
