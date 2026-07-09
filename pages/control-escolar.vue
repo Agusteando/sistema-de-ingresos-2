@@ -530,15 +530,19 @@
                         `is-${selectedHeaderContextTone}`,
                         { 'is-swapping': groupSigilSwapping },
                       ]"
-                      :aria-label="`${selectedHeaderGroupSigil.label}. Cambiar grupo`"
-                      :title="`${selectedHeaderGroupSigil.label}. Cambiar grupo`"
+                      :aria-label="`${selectedHeaderGroupSigil.label}. Editar grupo`"
+                      :title="`${selectedHeaderGroupSigil.label}. Editar grupo`"
                       @click="openGroupModal"
                     >
                       <span class="ce-student-hero-group-art" aria-hidden="true">
                         <UiGroupIcon :label="selectedHeaderGroupSigil.value" />
                       </span>
-                      <span class="ce-student-hero-group-edit" aria-hidden="true">
-                        <LucideChevronDown :size="15" />
+                      <span class="ce-student-hero-group-action">
+                        <strong>Grupo {{ selectedHeaderGroupSigil.displayLabel }}</strong>
+                        <small>
+                          Editar
+                          <LucideChevronDown :size="13" aria-hidden="true" />
+                        </small>
                       </span>
                     </button>
                     <button
@@ -13730,6 +13734,178 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-student-hero-group-edit {
     width: 24px;
     height: 24px;
+  }
+}
+
+/* Corrected group CTA: keep the sigil decorative, but expose a compact action instead of hiding the CTA. */
+.control-escolar-screen .ce-student-hero-group-sigil {
+  width: auto;
+  min-width: clamp(142px, 11vw, 172px);
+  height: auto;
+  min-height: clamp(76px, 6.4vw, 94px);
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #c65c9a;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil::after {
+  display: none;
+}
+
+.control-escolar-screen button.ce-student-hero-group-sigil:hover {
+  border-color: transparent;
+  box-shadow: none;
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-student-hero-group-art {
+  width: clamp(76px, 6.2vw, 96px);
+  height: clamp(76px, 6.2vw, 96px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.control-escolar-screen .ce-student-hero-group-art .ui-group-icon {
+  --group-icon-size: clamp(70px, 5.7vw, 90px);
+  --group-icon-letter-font-size: .47em;
+  --group-icon-stroke-width: .045em;
+  opacity: .96;
+  filter: drop-shadow(0 16px 24px rgba(168, 75, 131, .14));
+}
+
+.control-escolar-screen .ce-student-hero-group-action {
+  position: relative;
+  z-index: 2;
+  display: inline-grid;
+  gap: 2px;
+  min-width: 70px;
+  padding: 8px 12px;
+  border: 1px solid rgba(206, 92, 158, .2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  color: currentColor;
+  text-align: left;
+  box-shadow: 0 10px 22px rgba(16, 32, 58, .08), inset 0 1px 0 rgba(255,255,255,.9);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.control-escolar-screen button.ce-student-hero-group-sigil:hover .ce-student-hero-group-action {
+  border-color: color-mix(in srgb, currentColor 32%, #dfe6ef);
+  box-shadow: 0 14px 28px rgba(16, 32, 58, .11), inset 0 1px 0 rgba(255,255,255,.94);
+  transform: translateX(1px);
+}
+
+.control-escolar-screen .ce-student-hero-group-action strong,
+.control-escolar-screen .ce-student-hero-group-action small {
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-student-hero-group-action strong {
+  color: #16243b;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: -.01em;
+  line-height: 1;
+}
+
+.control-escolar-screen .ce-student-hero-group-action small {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: currentColor;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .03em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil.is-male {
+  color: #5d93d8;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil.is-neutral {
+  color: #8491a3;
+}
+
+.control-escolar-screen .ce-student-hero-group-edit,
+.control-escolar-screen .ce-student-hero-group-caption {
+  display: none;
+}
+
+.control-escolar-screen .ce-student-hero-group-cta {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, auto);
+  width: auto;
+  min-width: clamp(150px, 12vw, 184px);
+  min-height: 54px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 10px;
+  border: 1px solid rgba(63, 145, 56, .24);
+  border-radius: 999px;
+  background: rgba(255,255,255,.92);
+  color: var(--ce-green-strong);
+  box-shadow: 0 12px 24px rgba(63, 145, 56, .09), inset 0 1px 0 rgba(255,255,255,.9);
+}
+
+.control-escolar-screen .ce-student-hero-group-cta-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #eef8ea;
+}
+
+.control-escolar-screen .ce-student-hero-group-cta strong {
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .015em;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-student-hero-group-cta small {
+  display: block;
+  color: #6f9272;
+  font-size: 9.5px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+@media (max-width: 1480px) {
+  .control-escolar-screen .ce-student-hero-group-sigil {
+    min-width: 128px;
+    min-height: 70px;
+    gap: 6px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-art,
+  .control-escolar-screen .ce-student-hero-group-art .ui-group-icon {
+    --group-icon-size: 64px;
+    width: 68px;
+    height: 68px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-action {
+    min-width: 62px;
+    padding: 7px 10px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-action strong {
+    font-size: 10px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-action small {
+    font-size: 9px;
   }
 }
 

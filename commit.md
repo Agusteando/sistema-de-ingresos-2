@@ -1,1 +1,1 @@
-Ajusta resumen y sigil de grupo en Control Escolar
+Rediseña CTA de grupo en el encabezado de Control Escolar
