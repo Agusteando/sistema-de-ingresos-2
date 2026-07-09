@@ -529,17 +529,24 @@
                   <div class="ce-student-hero-side">
                     <button
                       v-if="selectedHeaderGroupSigil"
+                      :key="`${selectedHeaderGroupSigil.value}-${groupSigilTransitionKey}`"
                       type="button"
                       :class="[
                         'ce-student-hero-group-sigil',
                         `is-${selectedHeaderContextTone}`,
+                        { 'is-swapping': groupSigilSwapping },
                       ]"
                       :aria-label="`${selectedHeaderGroupSigil.label}. Cambiar grupo`"
                       :title="`${selectedHeaderGroupSigil.label}. Cambiar grupo`"
                       @click="openGroupModal"
                     >
-                      <LucideShield :size="22" aria-hidden="true" />
-                      <b>{{ selectedHeaderGroupSigil.letter }}</b>
+                      <span class="ce-student-hero-group-art" aria-hidden="true">
+                        <UiGroupIcon :label="selectedHeaderGroupSigil.value" />
+                      </span>
+                      <span class="ce-student-hero-group-caption">
+                        <strong>{{ selectedHeaderGroupSigil.displayLabel }}</strong>
+                        <em>Cambiar grupo</em>
+                      </span>
                     </button>
                     <button
                       v-else
@@ -547,8 +554,13 @@
                       class="ce-student-hero-group-cta"
                       @click="openGroupModal"
                     >
-                      <LucideShield :size="18" aria-hidden="true" />
-                      ASIGNAR GRUPO
+                      <span class="ce-student-hero-group-cta-icon" aria-hidden="true">
+                        <LucideShield :size="22" />
+                      </span>
+                      <span>
+                        <strong>ASIGNAR GRUPO</strong>
+                        <small>Seleccionar sigil</small>
+                      </span>
                     </button>
                     <span
                       :class="[
@@ -1453,7 +1465,7 @@
           </span>
           <div>
             <small>Grupo del alumno</small>
-            <h2 id="ce-group-modal-title">Asignar grupo</h2>
+            <h2 id="ce-group-modal-title">{{ editForm.grupo ? 'Cambiar grupo' : 'Asignar grupo' }}</h2>
             <p>{{ selectedStudent?.fullName || 'Ficha seleccionada' }}</p>
           </div>
           <button type="button" aria-label="Cerrar asignación de grupo" @click="closeGroupModal">
@@ -1462,75 +1474,73 @@
         </header>
 
         <div class="ce-group-modal__body">
-          <div class="ce-group-modal__current">
-            <UiGroupIcon :label="groupModalDraft" :missing="!groupModalDraft" />
+          <div :class="['ce-group-modal__preview', { 'is-empty': !groupModalDraft }]">
+            <span class="ce-group-modal__preview-art" aria-hidden="true">
+              <UiGroupIcon :label="groupModalDraft" :missing="!groupModalDraft" />
+            </span>
             <div>
-              <small>Grupo seleccionado</small>
-              <strong>{{ groupModalDraft || 'Sin grupo asignado' }}</strong>
+              <small>Sigil seleccionado</small>
+              <strong>{{ groupLabelForUi(groupModalDraft) }}</strong>
+              <p>{{ groupModalDraft ? 'Este cambio se aplicará al guardar la ficha.' : 'Elige un sigil para identificar rápidamente al alumno.' }}</p>
             </div>
           </div>
 
-          <div
-            class="ce-group-combobox ce-group-modal__picker"
-            :class="{ open: groupPickerOpen }"
-            @focusin="openGroupPicker"
-            @focusout="closeGroupPickerSoon"
-          >
-            <label class="ce-group-combobox__input">
-              <UiGroupIcon :label="groupModalDraft" :missing="!groupModalDraft" />
-              <input
-                v-model="groupModalPickerInput"
-                autocomplete="off"
-                placeholder="Buscar o escribir grupo"
-                @keydown.enter.prevent="confirmGroupModal"
-                @keydown.escape.prevent="closeGroupModal"
-              />
-              <button
-                v-if="groupModalDraft"
-                type="button"
-                aria-label="Limpiar grupo"
-                @mousedown.prevent
-                @click="clearGroupModalPicker"
-              >
-                <LucideX :size="15" />
-              </button>
-              <LucideChevronDown class="ce-group-combobox__chevron" :size="16" />
-            </label>
+          <label class="ce-group-modal__search">
+            <LucideSearch :size="16" aria-hidden="true" />
+            <input
+              v-model="groupModalPickerInput"
+              autocomplete="off"
+              placeholder="Buscar grupo o escribir uno nuevo"
+              @keydown.enter.prevent="confirmGroupModal"
+              @keydown.escape.prevent="closeGroupModal"
+            />
+            <button
+              v-if="groupModalDraft"
+              type="button"
+              aria-label="Limpiar grupo"
+              @click="clearGroupModalPicker"
+            >
+              <LucideX :size="15" />
+            </button>
+          </label>
 
-            <div v-if="groupPickerOpen" class="ce-group-combobox__menu" role="listbox">
+          <div class="ce-group-modal__slider-wrap">
+            <div class="ce-group-modal__slider-heading">
+              <strong>Elige un sigil</strong>
+              <small>Desliza horizontalmente para ver más opciones</small>
+            </div>
+            <div class="ce-group-sigil-slider" role="listbox" aria-label="Opciones de grupo">
               <button
                 v-for="option in filteredGroupModalOptions"
                 :key="`group-modal-option-${option.value}`"
                 type="button"
                 role="option"
                 :aria-selected="option.selected"
-                :class="['ce-group-option', { selected: option.selected }]"
-                @mousedown.prevent
+                :class="['ce-group-sigil-option', { selected: option.selected }]"
                 @click="selectGroupModalOption(option.value)"
               >
-                <UiGroupIcon :label="option.value" />
-                <span>
-                  <strong>{{ option.label }}</strong>
-                  <small>{{ option.sourceLabel }}</small>
+                <span class="ce-group-sigil-option__art" aria-hidden="true">
+                  <UiGroupIcon :label="option.value" />
                 </span>
-                <LucideCheck v-if="option.selected" :size="16" />
+                <strong>{{ option.label }}</strong>
+                <small>{{ option.sourceLabel }}</small>
               </button>
               <button
                 v-if="customGroupModalOption"
                 type="button"
-                class="ce-group-option custom"
+                class="ce-group-sigil-option custom"
                 role="option"
-                @mousedown.prevent
+                :aria-selected="false"
                 @click="selectGroupModalOption(customGroupModalOption.value)"
               >
-                <UiGroupIcon :label="customGroupModalOption.value" />
-                <span>
-                  <strong>{{ customGroupModalOption.label }}</strong>
-                  <small>Grupo personalizado</small>
+                <span class="ce-group-sigil-option__art" aria-hidden="true">
+                  <UiGroupIcon :label="customGroupModalOption.value" />
                 </span>
+                <strong>{{ customGroupModalOption.label }}</strong>
+                <small>Grupo personalizado</small>
               </button>
               <div v-if="!filteredGroupModalOptions.length && !customGroupModalOption" class="ce-group-empty">
-                Escribe un grupo para guardarlo como personalizado.
+                No hay coincidencias. Escribe el grupo y presiona Enter para aplicarlo.
               </div>
             </div>
           </div>
@@ -1756,7 +1766,7 @@ import {
   CONTROL_ESCOLAR_COMPLETE_REQUIRED_FIELDS,
 } from "~/shared/utils/studentPresentation";
 import { NIVELES_ESCOLARES, displayGrado, gradeOptionsForNivel } from "~/shared/utils/grado";
-import { STUDENT_GROUP_ICON_LABELS } from "~/shared/utils/studentGroupIcons";
+import { STUDENT_GROUP_ICON_LABELS, studentGroupIconLabel } from "~/shared/utils/studentGroupIcons";
 import { buildParentSiblingSignature } from "~/shared/utils/parentSiblingMatch";
 import { isControlEscolarNameField, toNameDisplayCase } from "~/shared/utils/nameCase";
 import { normalizeCicloOption } from "~/utils/constants";
@@ -2469,10 +2479,10 @@ const groupModalDraft = ref("");
 const openGroupModal = () => {
   groupModalDraft.value = normalizeGroupPickerText(editForm.grupo).slice(0, 40);
   groupModalOpen.value = true;
-  groupPickerOpen.value = true;
+  groupPickerOpen.value = false;
   nextTick(() => {
     if (!process.client) return;
-    document.querySelector('.ce-group-modal__picker input')?.focus?.();
+    document.querySelector('.ce-group-modal__search input')?.focus?.();
   });
 };
 const closeGroupModal = () => {
@@ -2487,6 +2497,11 @@ const normalizeGroupPickerText = (value) =>
   String(value || "")
     .replace(/\s+/g, " ")
     .trim();
+const groupLabelForUi = (value) => {
+  const normalized = normalizeGroupPickerText(value);
+  if (!normalized) return "Sin grupo asignado";
+  return studentGroupIconLabel(normalized) || normalized;
+};
 const groupPickerInput = computed({
   get: () => String(editForm.grupo || ""),
   set: (value) => {
@@ -2501,7 +2516,6 @@ const groupModalPickerInput = computed({
   get: () => String(groupModalDraft.value || ""),
   set: (value) => {
     groupModalDraft.value = normalizeGroupPickerText(value).slice(0, 40);
-    groupPickerOpen.value = true;
   },
 });
 const normalizedGroupModalSearch = computed(() =>
@@ -2511,15 +2525,14 @@ const filteredGroupModalOptions = computed(() => {
   const query = normalizedGroupModalSearch.value;
   return knownGroupOptions.value
     .filter((value) => !query || normalizeClientText(value).includes(query))
-    .slice(0, 12)
     .map((value) => ({
       value,
-      label: value,
+      label: groupLabelForUi(value),
       selected:
         normalizeClientText(value) === normalizeClientText(groupModalDraft.value),
       sourceLabel: catalogs.grupos.includes(value)
         ? "Grupo del plantel"
-        : "Opción con icono",
+        : "Sigil disponible",
     }));
 });
 const customGroupModalOption = computed(() => {
@@ -2533,11 +2546,9 @@ const customGroupModalOption = computed(() => {
 });
 const selectGroupModalOption = (value) => {
   groupModalDraft.value = normalizeGroupPickerText(value).slice(0, 40);
-  groupPickerOpen.value = false;
 };
 const clearGroupModalPicker = () => {
   groupModalDraft.value = "";
-  groupPickerOpen.value = true;
 };
 const filteredGroupOptions = computed(() => {
   const query = normalizedGroupPickerSearch.value;
@@ -3412,15 +3423,32 @@ const selectedHeaderAgeChip = computed(() => {
 const goToCurpField = () => {
   goToMissingField({ tab: "identity", formField: "curp" });
 };
+const groupSigilTransitionKey = ref(0);
+const groupSigilSwapping = ref(false);
+let groupSigilSwapTimer = null;
 const selectedHeaderGroupSigil = computed(() => {
   const group = editForm.grupo || controlGroupLabel(selectedHealthStudent.value || selectedStudent.value);
   if (!group) return null;
-  const letter = String(group).trim().slice(0, 2).toUpperCase();
+  const displayLabel = groupLabelForUi(group);
   return {
-    letter,
-    label: `Grupo ${group}`,
+    value: group,
+    displayLabel,
+    label: `Grupo ${displayLabel}`,
   };
 });
+watch(
+  () => normalizeGroupPickerText(editForm.grupo),
+  (nextGroup, previousGroup) => {
+    if (nextGroup === previousGroup || !selectedStudent.value) return;
+    groupSigilTransitionKey.value += 1;
+    groupSigilSwapping.value = true;
+    if (groupSigilSwapTimer) globalThis.clearTimeout(groupSigilSwapTimer);
+    groupSigilSwapTimer = globalThis.setTimeout(() => {
+      groupSigilSwapping.value = false;
+      groupSigilSwapTimer = null;
+    }, 720);
+  },
+);
 const curpValidationMeta = (value) => {
   const normalized = normalizeCurpInput(value);
   if (!normalized) return { state: 'missing', message: 'Requerida' };
@@ -5554,6 +5582,10 @@ onBeforeUnmount(() => {
     if (controlScreenFrame) window.cancelAnimationFrame(controlScreenFrame);
   }
   controlScreenResizeObserver?.disconnect?.();
+  if (groupSigilSwapTimer) {
+    globalThis.clearTimeout(groupSigilSwapTimer);
+    groupSigilSwapTimer = null;
+  }
   controlEscolarDetailOpen.value = false;
   resetControlTopbarState();
 });
@@ -9434,20 +9466,22 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(15, 29, 53, .22);
-  backdrop-filter: blur(10px);
+  background: rgba(15, 29, 53, .23);
+  backdrop-filter: blur(12px);
 }
 
 .control-escolar-screen .ce-group-modal {
   display: grid;
-  width: min(520px, 100%);
-  max-height: min(680px, calc(100vh - 48px));
+  width: min(720px, 100%);
+  max-height: min(720px, calc(100vh - 48px));
   grid-template-rows: auto minmax(0, 1fr) auto;
-  overflow: visible;
+  overflow: hidden;
   border: 1px solid rgba(216, 228, 239, .98);
-  border-radius: 24px;
-  background: rgba(255,255,255,.98);
-  box-shadow: 0 28px 80px rgba(15, 29, 53, .24), inset 0 1px 0 rgba(255,255,255,.94);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 0 0, rgba(63, 145, 56, .07), transparent 32%),
+    rgba(255,255,255,.98);
+  box-shadow: 0 32px 88px rgba(15, 29, 53, .25), inset 0 1px 0 rgba(255,255,255,.94);
 }
 
 .control-escolar-screen .ce-group-modal__header {
@@ -9455,7 +9489,7 @@ onBeforeUnmount(() => {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
-  padding: 20px 22px 16px;
+  padding: 22px 24px 16px;
   border-bottom: 1px solid #e4edf5;
 }
 
@@ -9464,12 +9498,12 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
+  border-radius: 18px;
 }
 
 .control-escolar-screen .ce-group-modal__icon {
-  width: 46px;
-  height: 46px;
+  width: 50px;
+  height: 50px;
   background: #eef8eb;
   color: var(--ce-green-strong);
 }
@@ -9491,9 +9525,9 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-group-modal__header h2 {
   margin: 0;
   color: #13213a;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 950;
-  letter-spacing: -.035em;
+  letter-spacing: -.04em;
 }
 
 .control-escolar-screen .ce-group-modal__header p {
@@ -9507,8 +9541,8 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-group-modal__header > button {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border: 1px solid #dbe6f0;
   background: #fff;
   color: #63738b;
@@ -9518,68 +9552,273 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-group-modal__body {
   display: grid;
   align-content: start;
-  gap: 14px;
-  min-height: 250px;
-  overflow: visible;
-  padding: 18px 22px 20px;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 24px 20px;
 }
 
-.control-escolar-screen .ce-group-modal__current {
+.control-escolar-screen .ce-group-modal__preview {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid #e2ebf3;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbf9 100%);
+  gap: 16px;
+  min-height: 108px;
+  padding: 16px;
+  border: 1px solid #dfeaf3;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 24% 14%, rgba(255,255,255,.98), transparent 35%),
+    linear-gradient(135deg, #ffffff 0%, #f8fbf9 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
 }
 
-.control-escolar-screen .ce-group-modal__current div {
+.control-escolar-screen .ce-group-modal__preview.is-empty {
+  border-color: rgba(213, 139, 33, .22);
+  background: linear-gradient(135deg, #fff 0%, #fff9ed 100%);
+}
+
+.control-escolar-screen .ce-group-modal__preview-art {
+  display: inline-grid;
+  width: 76px;
+  height: 76px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--ce-green-strong) 18%, #dfeaf3);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 35% 26%, rgba(255,255,255,.98), rgba(255,255,255,.52) 48%, transparent 49%),
+    #f3faf1;
+  color: var(--ce-green-strong);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.76), 0 14px 24px rgba(63,145,56,.08);
+}
+
+.control-escolar-screen .ce-group-modal__preview-art .ui-group-icon {
+  --group-icon-size: 54px;
+  --group-icon-letter-font-size: .52em;
+  --group-icon-stroke-width: .052em;
+}
+
+.control-escolar-screen .ce-group-modal__preview div {
   display: grid;
   min-width: 0;
-  gap: 2px;
+  gap: 5px;
 }
 
-.control-escolar-screen .ce-group-modal__current small {
-  color: #78869a;
+.control-escolar-screen .ce-group-modal__preview small {
+  color: #4c8d51;
   font-size: 10.5px;
-  font-weight: 850;
-  letter-spacing: .05em;
+  font-weight: 900;
+  letter-spacing: .07em;
   text-transform: uppercase;
 }
 
-.control-escolar-screen .ce-group-modal__current strong {
+.control-escolar-screen .ce-group-modal__preview strong {
   overflow: hidden;
   color: #14233c;
-  font-size: 17px;
-  font-weight: 930;
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -.035em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.control-escolar-screen .ce-group-modal__picker .ce-group-combobox__menu {
-  z-index: 260;
-  max-height: 300px;
+.control-escolar-screen .ce-group-modal__preview p {
+  margin: 0;
+  color: #6f7d93;
+  font-size: 12px;
+  font-weight: 740;
+}
+
+.control-escolar-screen .ce-group-modal__search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid #d8e3ee;
+  border-radius: 16px;
+  background: rgba(255,255,255,.96);
+  color: #69788e;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.96);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.control-escolar-screen .ce-group-modal__search:focus-within {
+  border-color: rgba(63,145,56,.36);
+  box-shadow: 0 12px 24px rgba(63,145,56,.08), inset 0 1px 0 rgba(255,255,255,.96);
+}
+
+.control-escolar-screen .ce-group-modal__search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #15233a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.control-escolar-screen .ce-group-modal__search button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #60708a;
+  cursor: pointer;
+}
+
+.control-escolar-screen .ce-group-modal__slider-wrap {
+  display: grid;
+  gap: 10px;
+}
+
+.control-escolar-screen .ce-group-modal__slider-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-inline: 2px;
+}
+
+.control-escolar-screen .ce-group-modal__slider-heading strong {
+  color: #14233c;
+  font-size: 13px;
+  font-weight: 930;
+}
+
+.control-escolar-screen .ce-group-modal__slider-heading small {
+  color: #7b8798;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.control-escolar-screen .ce-group-sigil-slider {
+  display: grid;
+  grid-auto-columns: minmax(116px, 132px);
+  grid-auto-flow: column;
+  gap: 10px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding: 2px 2px 12px;
+  scroll-snap-type: inline proximity;
+  scrollbar-color: rgba(63,145,56,.48) rgba(221,231,240,.7);
+  scrollbar-width: thin;
+}
+
+.control-escolar-screen .ce-group-sigil-slider::-webkit-scrollbar {
+  height: 8px;
+}
+
+.control-escolar-screen .ce-group-sigil-slider::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(221,231,240,.7);
+}
+
+.control-escolar-screen .ce-group-sigil-slider::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(63,145,56,.48);
+}
+
+.control-escolar-screen .ce-group-sigil-option {
+  display: grid;
+  min-height: 142px;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 12px 10px;
+  border: 1px solid #dfe8f1;
+  border-radius: 22px;
+  background: rgba(255,255,255,.92);
+  color: #53637a;
+  font-family: inherit;
+  text-align: center;
+  scroll-snap-align: start;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease, color .18s ease;
+}
+
+.control-escolar-screen .ce-group-sigil-option:hover,
+.control-escolar-screen .ce-group-sigil-option.selected {
+  border-color: rgba(63,145,56,.34);
+  background: linear-gradient(180deg, #fff 0%, #f5fbf3 100%);
+  color: var(--ce-green-strong);
+  box-shadow: 0 14px 28px rgba(63,145,56,.11), inset 0 1px 0 rgba(255,255,255,.92);
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-group-sigil-option.custom {
+  border-style: dashed;
+}
+
+.control-escolar-screen .ce-group-sigil-option__art {
+  display: inline-grid;
+  width: 60px;
+  height: 60px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 18%, #dfe8f1);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 35% 26%, rgba(255,255,255,.98), rgba(255,255,255,.52) 48%, transparent 49%),
+    color-mix(in srgb, currentColor 7%, #fff);
+}
+
+.control-escolar-screen .ce-group-sigil-option__art .ui-group-icon {
+  --group-icon-size: 42px;
+  --group-icon-letter-font-size: .52em;
+  --group-icon-stroke-width: .052em;
+}
+
+.control-escolar-screen .ce-group-sigil-option strong {
+  overflow: hidden;
+  max-width: 100%;
+  color: #15233a;
+  font-size: 12px;
+  font-weight: 920;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-group-sigil-option small,
+.control-escolar-screen .ce-group-empty {
+  color: #718096;
+  font-size: 10.5px;
+  font-weight: 760;
+  line-height: 1.15;
+}
+
+.control-escolar-screen .ce-group-empty {
+  display: grid;
+  min-height: 118px;
+  align-content: center;
+  padding: 12px;
+  text-align: center;
 }
 
 .control-escolar-screen .ce-group-modal__footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding: 16px 22px 20px;
+  padding: 16px 24px 22px;
   border-top: 1px solid #e4edf5;
+  background: rgba(255,255,255,.9);
 }
 
 .control-escolar-screen .ce-group-modal__secondary,
 .control-escolar-screen .ce-group-modal__primary {
   display: inline-flex;
-  min-height: 42px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0 16px;
-  border-radius: 14px;
+  padding: 0 17px;
+  border-radius: 15px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 900;
@@ -12333,104 +12572,183 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-student-hero-group-sigil {
   position: relative;
-  display: inline-flex;
-  width: clamp(50px, 4.2vw, 62px);
-  height: clamp(50px, 4.2vw, 62px);
-  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto minmax(0, auto);
+  width: clamp(150px, 13vw, 184px);
+  min-height: clamp(82px, 7.2vw, 104px);
   align-items: center;
-  justify-content: center;
+  justify-content: start;
+  gap: 12px;
   isolation: isolate;
+  padding: 10px 14px 10px 10px;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--hero-accent) 18%, #dce8f0);
-  border-radius: clamp(17px, 1.3vw, 20px);
+  border-radius: clamp(24px, 1.8vw, 30px);
   background:
-    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.9), transparent 35%),
-    linear-gradient(135deg, color-mix(in srgb, var(--hero-accent) 11%, #fff) 0%, #fff 56%, color-mix(in srgb, var(--hero-accent) 7%, #f6faf8) 100%);
+    radial-gradient(circle at 20% 14%, rgba(255, 255, 255, 0.96), transparent 34%),
+    radial-gradient(circle at 84% 90%, color-mix(in srgb, var(--hero-accent) 12%, transparent), transparent 42%),
+    linear-gradient(135deg, color-mix(in srgb, var(--hero-accent) 10%, #fff) 0%, #fff 58%, color-mix(in srgb, var(--hero-accent) 8%, #f6faf8) 100%);
   color: var(--hero-accent-strong);
-  box-shadow: 0 14px 28px color-mix(in srgb, var(--hero-accent) 10%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 18px 34px color-mix(in srgb, var(--hero-accent) 11%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil::after {
+  content: "";
+  position: absolute;
+  inset: 10px 10px 10px auto;
+  width: 54%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.62));
+  pointer-events: none;
 }
 
 .control-escolar-screen .ce-student-hero-group-sigil.is-female {
   border-color: rgba(223, 129, 174, 0.24);
   background:
-    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.92), transparent 35%),
-    linear-gradient(135deg, #fff6fb 0%, #ffffff 56%, #fdf0f7 100%);
+    radial-gradient(circle at 20% 14%, rgba(255, 255, 255, 0.96), transparent 34%),
+    radial-gradient(circle at 84% 90%, rgba(223, 129, 174, .13), transparent 42%),
+    linear-gradient(135deg, #fff6fb 0%, #ffffff 58%, #fdf0f7 100%);
   color: #b65386;
-  box-shadow: 0 14px 28px rgba(182, 83, 134, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 34px rgba(182, 83, 134, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .control-escolar-screen .ce-student-hero-group-sigil.is-male {
   border-color: rgba(98, 159, 234, 0.25);
   background:
-    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.92), transparent 35%),
-    linear-gradient(135deg, #f5fbff 0%, #ffffff 56%, #edf6ff 100%);
+    radial-gradient(circle at 20% 14%, rgba(255, 255, 255, 0.96), transparent 34%),
+    radial-gradient(circle at 84% 90%, rgba(98, 159, 234, .14), transparent 42%),
+    linear-gradient(135deg, #f5fbff 0%, #ffffff 58%, #edf6ff 100%);
   color: #376fca;
-  box-shadow: 0 14px 28px rgba(55, 111, 202, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
-}
-
-.control-escolar-screen button.ce-student-hero-group-sigil {
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  box-shadow: 0 18px 34px rgba(55, 111, 202, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .control-escolar-screen button.ce-student-hero-group-sigil:hover {
   border-color: color-mix(in srgb, currentColor 34%, #dce8f0);
-  box-shadow: 0 18px 34px rgba(16, 32, 58, .09), inset 0 1px 0 rgba(255, 255, 255, .94);
-  transform: translateY(-1px) scale(1.015);
+  box-shadow: 0 22px 42px rgba(16, 32, 58, .11), inset 0 1px 0 rgba(255, 255, 255, .94);
+  transform: translateY(-1px) scale(1.012);
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil.is-swapping .ce-student-hero-group-art {
+  animation: ceGroupSigilSwap .68s cubic-bezier(.18,.8,.22,1);
+}
+
+.control-escolar-screen .ce-student-hero-group-art {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  width: clamp(62px, 5.8vw, 82px);
+  height: clamp(62px, 5.8vw, 82px);
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 20%, #e2ebf3);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 35% 26%, rgba(255,255,255,.98), rgba(255,255,255,.5) 48%, transparent 49%),
+    color-mix(in srgb, currentColor 8%, #fff);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.76), 0 12px 22px color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.control-escolar-screen .ce-student-hero-group-art .ui-group-icon {
+  --group-icon-size: clamp(42px, 4.15vw, 60px);
+  --group-icon-letter-font-size: .52em;
+  --group-icon-stroke-width: .052em;
+  opacity: .94;
+}
+
+.control-escolar-screen .ce-student-hero-group-caption {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  text-align: left;
+}
+
+.control-escolar-screen .ce-student-hero-group-caption strong {
+  overflow: hidden;
+  color: #15233a;
+  font-size: clamp(13px, 1vw, 15px);
+  font-weight: 950;
+  letter-spacing: -.025em;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 74px;
+}
+
+.control-escolar-screen .ce-student-hero-group-caption em {
+  color: currentColor;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 920;
+  letter-spacing: .045em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .control-escolar-screen .ce-student-hero-group-cta {
-  display: inline-flex;
-  min-height: 48px;
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: clamp(66px, 6vw, 82px);
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  padding: 0 15px;
-  border: 1px solid rgba(63, 145, 56, .24);
-  border-radius: 16px;
-  background: linear-gradient(180deg, #f6fbf4 0%, #edf8ea 100%);
+  gap: 12px;
+  padding: 10px 16px 10px 12px;
+  border: 1px solid rgba(63, 145, 56, .28);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(255,255,255,.98), transparent 35%),
+    linear-gradient(180deg, #f6fbf4 0%, #edf8ea 100%);
   color: var(--ce-green-strong);
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 940;
-  letter-spacing: .035em;
-  white-space: nowrap;
   cursor: pointer;
-  box-shadow: 0 12px 26px rgba(63, 145, 56, .09), inset 0 1px 0 rgba(255, 255, 255, .9);
+  box-shadow: 0 16px 32px rgba(63, 145, 56, .11), inset 0 1px 0 rgba(255, 255, 255, .9);
   transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
+.control-escolar-screen .ce-student-hero-group-cta-icon {
+  display: inline-grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(63,145,56,.12);
+}
+
+.control-escolar-screen .ce-student-hero-group-cta span:not(.ce-student-hero-group-cta-icon) {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.control-escolar-screen .ce-student-hero-group-cta strong {
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-student-hero-group-cta small {
+  color: #6f9272;
+  font-size: 10.5px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
 .control-escolar-screen .ce-student-hero-group-cta:hover {
-  border-color: rgba(63, 145, 56, .42);
-  box-shadow: 0 16px 30px rgba(63, 145, 56, .13), inset 0 1px 0 rgba(255, 255, 255, .94);
+  border-color: rgba(63, 145, 56, .45);
+  box-shadow: 0 20px 38px rgba(63, 145, 56, .15), inset 0 1px 0 rgba(255, 255, 255, .94);
   transform: translateY(-1px);
 }
 
-.control-escolar-screen .ce-student-hero-group-sigil svg {
-  position: absolute;
-  inset: 50% auto auto 50%;
-  z-index: 0;
-  transform: translate(-50%, -50%);
-  color: color-mix(in srgb, var(--hero-accent) 58%, #ffffff);
-  opacity: 0.45;
-  stroke-width: 1.8;
-}
-
-.control-escolar-screen .ce-student-hero-group-sigil b {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  color: var(--hero-accent-strong);
-  font-size: clamp(19px, 1.5vw, 24px);
-  font-weight: 950;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  text-transform: uppercase;
+@keyframes ceGroupSigilSwap {
+  0% { opacity: .35; transform: scale(.72) rotate(-8deg); filter: blur(2px); }
+  54% { opacity: 1; transform: scale(1.08) rotate(3deg); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); filter: blur(0); }
 }
 
 .control-escolar-screen .ce-student-hero-status {
@@ -12662,15 +12980,30 @@ onBeforeUnmount(() => {
   }
 
   .control-escolar-screen .ce-student-hero-group-sigil {
-    width: 46px;
-    height: 46px;
-    border-radius: 15px;
+    width: 132px;
+    min-height: 68px;
+    gap: 9px;
+    padding: 8px 10px 8px 8px;
+    border-radius: 21px;
   }
 
-  .control-escolar-screen .ce-student-hero-group-sigil b {
-    width: 28px;
-    height: 28px;
-    font-size: 19px;
+  .control-escolar-screen .ce-student-hero-group-art {
+    width: 52px;
+    height: 52px;
+    border-radius: 18px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-art .ui-group-icon {
+    --group-icon-size: 38px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-caption strong {
+    max-width: 58px;
+    font-size: 12px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-caption em {
+    font-size: 9.5px;
   }
 
   .control-escolar-screen .ce-student-hero-menu {

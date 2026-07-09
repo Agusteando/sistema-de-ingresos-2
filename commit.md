@@ -1,1 +1,1 @@
-Mejora encabezado de alumno con chips contextuales y modal de grupo
+Mejora sigil y selector de grupo en Control Escolar
