@@ -590,11 +590,11 @@
                         <UiGroupIcon :label="selectedHeaderGroupSigil.value" />
                       </span>
                       <span class="ce-student-hero-group-action">
-                        <strong>Grupo {{ selectedHeaderGroupSigil.displayLabel }}</strong>
-                        <small>
-                          Editar
+                        <small>Grupo {{ selectedHeaderGroupSigil.displayLabel }}</small>
+                        <strong>
+                          Editar grupo
                           <LucideChevronDown :size="13" aria-hidden="true" />
-                        </small>
+                        </strong>
                       </span>
                     </button>
                     <button
@@ -14496,6 +14496,92 @@ onBeforeUnmount(() => {
     font-size: 9px;
   }
 }
+
+
+/* Group CTA polish: remove decorative CTA panel gradients and make the action explicit. */
+.control-escolar-screen .ce-student-hero-side {
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil::after {
+  display: none !important;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil.is-female,
+.control-escolar-screen .ce-student-hero-group-sigil.is-male,
+.control-escolar-screen .ce-student-hero-group-sigil.is-neutral {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.control-escolar-screen .ce-student-hero-group-art {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.control-escolar-screen .ce-student-hero-group-art .ui-group-icon {
+  filter: drop-shadow(0 10px 18px color-mix(in srgb, currentColor 14%, transparent));
+}
+
+.control-escolar-screen .ce-student-hero-group-action {
+  min-width: 96px;
+  gap: 4px;
+  padding: 8px 11px 8px 12px;
+  border: 1px solid color-mix(in srgb, currentColor 24%, #dfe7ef);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  color: currentColor;
+  box-shadow: 0 10px 22px rgba(16, 32, 58, 0.07), inset 0 1px 0 rgba(255,255,255,.92);
+}
+
+.control-escolar-screen .ce-student-hero-group-action small {
+  order: 1;
+  color: #738198;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .035em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.control-escolar-screen .ce-student-hero-group-action strong {
+  order: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #16243b;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: -.01em;
+  line-height: 1.05;
+}
+
+.control-escolar-screen .ce-student-hero-group-action strong svg {
+  color: currentColor;
+  stroke-width: 3;
+}
+
+.control-escolar-screen button.ce-student-hero-group-sigil:hover .ce-student-hero-group-action {
+  border-color: color-mix(in srgb, currentColor 38%, #dfe7ef);
+  background: #ffffff;
+  box-shadow: 0 14px 28px rgba(16, 32, 58, .1), inset 0 1px 0 rgba(255,255,255,.96);
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen button.ce-student-hero-group-sigil:focus-visible .ce-student-hero-group-action {
+  outline: 3px solid color-mix(in srgb, currentColor 22%, transparent);
+  outline-offset: 3px;
+}
+
 
 /* Mobile Control Escolar workbench: phone-native flow layered after all desktop rules. */
 .control-escolar-screen .ce-mobile-detail-back {

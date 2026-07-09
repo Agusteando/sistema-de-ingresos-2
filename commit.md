@@ -1,1 +1,1 @@
-Reordena el encabezado del alumno en Control Escolar
+Mejora el CTA de grupo en Control Escolar
