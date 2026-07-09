@@ -313,6 +313,7 @@
                           selectedStudent?.matricula === student.matricula,
                         'missing-overlay': !student.overlayExists,
                       },
+                      controlStudentMutationClass(student),
                     ]"
                     :style="studentPresentationStyle(student)"
                     @click="selectStudent(student)"
@@ -411,7 +412,28 @@
                     </span>
 
                     <span class="row-actions">
-                      <span class="ce-row-action"
+                      <span
+                        v-if="controlStudentMutationStatus(student)"
+                        :class="[
+                          'ce-row-save-indicator',
+                          `is-${controlStudentMutationStatus(student)}`,
+                        ]"
+                        :title="controlStudentMutationTitle(student)"
+                        :aria-label="controlStudentMutationTitle(student)"
+                        role="status"
+                      >
+                        <LucideLoader2
+                          v-if="controlStudentMutationStatus(student) === 'saving'"
+                          :size="16"
+                          class="spinning"
+                        />
+                        <LucideAlertTriangle
+                          v-else-if="controlStudentMutationStatus(student) === 'failed'"
+                          :size="16"
+                        />
+                        <LucideCheck v-else :size="16" />
+                      </span>
+                      <span v-else class="ce-row-action"
                         ><LucideChevronRight :size="18"
                       /></span>
                     </span>
@@ -1359,7 +1381,7 @@
                     @click="saveStudent"
                   >
                     <LucideSave :size="17" />
-                    {{ savingStudent ? "Guardando..." : "Guardar cambios" }}
+                    Guardar cambios
                   </UiButton>
                 </div>
               </footer>
@@ -1741,6 +1763,7 @@ import {
   LucideGlobe2,
   LucideGraduationCap,
   LucideKeyRound,
+  LucideLoader2,
   LucideMail,
   LucideMoreVertical,
   LucidePhone,
@@ -1841,7 +1864,15 @@ const enrollmentConceptsCacheKey = computed(
 const optionsLoading = ref(false);
 const kpisLoading = ref(false);
 const studentsLoading = ref(false);
-const savingStudent = ref(false);
+const controlStudentMutationStates = reactive({});
+const controlStudentMutationTimers = new Map();
+let controlStudentMutationSequence = 0;
+const CONTROL_STUDENT_SUCCESS_BADGE_MS = 1400;
+const savingStudent = computed(() =>
+  selectedStudent.value
+    ? controlStudentMutationStatus(selectedStudent.value) === "saving"
+    : false,
+);
 const massImporting = ref(false);
 const sendingHuskyPass = ref(false);
 const savingHuskyPass = ref(false);
@@ -3922,16 +3953,13 @@ const hasUnsavedChanges = computed(() =>
   ),
 );
 const saveStateTone = computed(() =>
-  savingStudent.value
-    ? "saving"
-    : saveError.value
-      ? "error"
-      : hasUnsavedChanges.value
-        ? "dirty"
-        : "clean",
+  saveError.value
+    ? "error"
+    : hasUnsavedChanges.value
+      ? "dirty"
+      : "clean",
 );
 const saveStatusText = computed(() => {
-  if (savingStudent.value) return "Guardando...";
   if (saveError.value) return "Error al guardar";
   if (hasUnsavedChanges.value)
     return draftSavedAt.value
@@ -3940,9 +3968,7 @@ const saveStatusText = computed(() => {
   return selectedStudent.value?.overlayExists ? "Al día" : "Guardar";
 });
 const draftKey = computed(() =>
-  selectedStudent.value?.matricula
-    ? `control-escolar:draft:${selectedAgentId.value}:${selectedStudent.value.matricula}`
-    : "",
+  draftStorageKeyFor(selectedAgentId.value, selectedStudent.value?.matricula),
 );
 
 const buildScopeQuery = () => ({
@@ -4243,6 +4269,82 @@ const normalizeMatriculaKey = (value) =>
   String(value || "")
     .trim()
     .toLowerCase();
+
+const draftStorageKeyFor = (agentId, matricula) => {
+  const key = normalizeMatriculaKey(matricula);
+  if (!agentId || !key) return "";
+  return `control-escolar:draft:${agentId}:${key}`;
+};
+
+const mutationKeyFor = (studentOrMatricula) =>
+  normalizeMatriculaKey(
+    typeof studentOrMatricula === "object"
+      ? studentOrMatricula?.matricula
+      : studentOrMatricula,
+  );
+
+const clearControlStudentMutationTimer = (key) => {
+  const timer = controlStudentMutationTimers.get(key);
+  if (timer) globalThis.clearTimeout(timer);
+  controlStudentMutationTimers.delete(key);
+};
+
+const setControlStudentMutationState = (studentOrMatricula, state = null) => {
+  const key = mutationKeyFor(studentOrMatricula);
+  if (!key) return;
+  clearControlStudentMutationTimer(key);
+  if (!state) {
+    delete controlStudentMutationStates[key];
+    return;
+  }
+  controlStudentMutationStates[key] = {
+    status: "saving",
+    message: "",
+    operationId: 0,
+    updatedAt: Date.now(),
+    ...state,
+  };
+};
+
+const scheduleControlStudentMutationClear = (studentOrMatricula, operationId, delay = CONTROL_STUDENT_SUCCESS_BADGE_MS) => {
+  const key = mutationKeyFor(studentOrMatricula);
+  if (!key) return;
+  clearControlStudentMutationTimer(key);
+  const timer = globalThis.setTimeout(() => {
+    if (controlStudentMutationStates[key]?.operationId === operationId) {
+      delete controlStudentMutationStates[key];
+    }
+    controlStudentMutationTimers.delete(key);
+  }, delay);
+  controlStudentMutationTimers.set(key, timer);
+};
+
+const clearControlStudentMutationStates = () => {
+  controlStudentMutationTimers.forEach((timer) => globalThis.clearTimeout(timer));
+  controlStudentMutationTimers.clear();
+  Object.keys(controlStudentMutationStates).forEach((key) => {
+    delete controlStudentMutationStates[key];
+  });
+};
+
+const controlStudentMutationState = (studentOrMatricula) =>
+  controlStudentMutationStates[mutationKeyFor(studentOrMatricula)] || null;
+
+const controlStudentMutationStatus = (studentOrMatricula) =>
+  controlStudentMutationState(studentOrMatricula)?.status || "";
+
+const controlStudentMutationClass = (studentOrMatricula) => {
+  const status = controlStudentMutationStatus(studentOrMatricula);
+  return status ? `is-mutation-${status}` : "";
+};
+
+const controlStudentMutationTitle = (studentOrMatricula) => {
+  const state = controlStudentMutationState(studentOrMatricula);
+  if (!state) return "";
+  if (state.status === "saving") return "Guardando cambios";
+  if (state.status === "failed") return state.message || "No se pudo guardar";
+  return "Cambios guardados";
+};
 
 const isDetailFieldFocused = () => {
   if (!process.client) return false;
@@ -4622,6 +4724,7 @@ const applyInstantStudentFilters = ({ reconcileSelection = false } = {}) => {
 };
 
 const resetControlStudentsView = () => {
+  clearControlStudentMutationStates();
   controlStudentsIndex.value = [];
   students.value = [];
   selectedStudent.value = null;
@@ -5134,15 +5237,22 @@ const readStoredDraft = () => {
   }
 };
 
-const clearEditDraft = () => {
-  if (!process.client || !draftKey.value) return;
+const clearEditDraftForStudent = (matricula, agentId = selectedAgentId.value) => {
+  const key = draftStorageKeyFor(agentId, matricula);
+  if (!process.client || !key) return;
   try {
-    localStorage.removeItem(draftKey.value);
+    localStorage.removeItem(key);
   } catch (error) {
     console.warn(
       "[Control Escolar] No se pudo limpiar el borrador local.",
       error,
     );
+  }
+};
+
+const clearEditDraft = () => {
+  if (selectedStudent.value?.matricula) {
+    clearEditDraftForStudent(selectedStudent.value.matricula);
   }
   draftRestored.value = false;
   draftSavedAt.value = "";
@@ -5267,9 +5377,127 @@ const discardChanges = () => {
   resetEditForm(selectedStudent.value, { restoreDraft: false });
 };
 
+const readEditFormFromStudent = (student = {}) => ({
+  nombres: toNameDisplayCase(student.nombres || ""),
+  apellidoPaterno: toNameDisplayCase(student.apellidoPaterno || ""),
+  apellidoMaterno: toNameDisplayCase(student.apellidoMaterno || ""),
+  curp: student.curp || "",
+  nombreVerificado: toNameDisplayCase(student.nombreVerificado || ""),
+  nombreCompletoAlumno: toNameDisplayCase(student.nombreCompletoAlumno || student.fullName || ""),
+  lugarNacimiento: student.lugarNacimiento || "",
+  sexo: student.sexo || "",
+  talla: student.talla || "",
+  peso: student.peso || "",
+  tipoSangre: student.tipoSangre || "",
+  alergias: student.alergias || "",
+  foto: student.foto || "",
+  grupo: student.group || student.grupo || "",
+  baja: Number(student.baja || 0),
+  motivoBaja: student.motivoBaja || "",
+  categoriaBaja: student.categoriaBaja || "",
+  seguimientoBaja: student.seguimientoBaja || "",
+  nombrePadre: toNameDisplayCase(student.nombrePadre || ""),
+  apellidoPaternoPadre: toNameDisplayCase(student.apellidoPaternoPadre || ""),
+  apellidoMaternoPadre: toNameDisplayCase(student.apellidoMaternoPadre || ""),
+  estadoCivilPadre: student.estadoCivilPadre || "",
+  fechaNacimientoPadre: normalizeDateInput(student.fechaNacimientoPadre),
+  inePadre: student.inePadre || "",
+  curpPadre: student.curpPadre || "",
+  nombreMadre: toNameDisplayCase(student.nombreMadre || ""),
+  apellidoPaternoMadre: toNameDisplayCase(student.apellidoPaternoMadre || ""),
+  apellidoMaternoMadre: toNameDisplayCase(student.apellidoMaternoMadre || ""),
+  estadoCivilMadre: student.estadoCivilMadre || "",
+  fechaNacimientoMadre: normalizeDateInput(student.fechaNacimientoMadre),
+  ineMadre: student.ineMadre || "",
+  curpMadre: student.curpMadre || "",
+  telefonoPadre: student.telefonoPadre || "",
+  telefonoMadre: student.telefonoMadre || "",
+  emailPadre: student.emailPadre || "",
+  emailMadre: student.emailMadre || "",
+  direccion: student.address || student.direccion || "",
+  domicilioCalle: student.domicilioCalle || "",
+  domicilioNumero: student.domicilioNumero || student.domicioNum || "",
+  domicilioColonia: student.domicilioColonia || "",
+  domicilioCp: student.domicilioCp || "",
+  domicilioMunicipio: student.domicilioMunicipio || "",
+  certificadoMedicoAdjunto: student.certificadoMedicoAdjunto || "",
+  certificadoVacunacionCovid19Adjunto: student.certificadoVacunacionCovid19Adjunto || "",
+  actaNacimientoAdjunta: student.actaNacimientoAdjunta || "",
+  curpAlumnoAdjunto: student.curpAlumnoAdjunto || "",
+  certificadoPrimariaAdjunto: student.certificadoPrimariaAdjunto || "",
+  boletaSextoPrimariaAdjunta: student.boletaSextoPrimariaAdjunta || "",
+  boletaPrimeroSecundariaAdjunta: student.boletaPrimeroSecundariaAdjunta || "",
+  boletaSegundoSecundariaAdjunta: student.boletaSegundoSecundariaAdjunta || "",
+});
+
+const buildOptimisticControlStudent = (baseStudent = {}, payload = {}) => {
+  const next = {
+    ...baseStudent,
+    ...payload,
+  };
+  const fullName = [payload.nombres, payload.apellidoPaterno, payload.apellidoMaterno]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  next.fullName = fullName || payload.nombreCompletoAlumno || baseStudent.fullName || "";
+  next.nombreCompletoAlumno = next.fullName;
+  next.address = payload.direccion ?? baseStudent.address ?? baseStudent.direccion ?? "";
+  next.direccion = next.address;
+  next.group = payload.grupo ?? baseStudent.group ?? baseStudent.grupo ?? "";
+  next.grupo = next.group;
+  next.baja = Number(payload.baja || 0);
+  next.status = next.baja ? "Baja" : baseStudent.status === "Baja" ? "Activo" : baseStudent.status || "Activo";
+  const completenessTiers = resolveControlEscolarCompleteness(next, { honorEnrollmentState: true });
+  next.completenessTiers = completenessTiers;
+  next.completion = completenessTiers?.basic?.progress ?? next.completion ?? 0;
+  next.completeness = next.completion;
+  next.missingFields = completenessTiers?.basic?.missingFields || [];
+  return next;
+};
+
+const persistEditDraftForStudent = (matricula, values) => {
+  const key = draftStorageKeyFor(selectedAgentId.value, matricula);
+  if (!process.client || !key || !values || typeof values !== "object") return;
+  const savedAt = new Date().toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  try {
+    localStorage.setItem(key, JSON.stringify({ savedAt, values }));
+    if (normalizeMatriculaKey(selectedStudent.value?.matricula) === normalizeMatriculaKey(matricula)) {
+      draftSavedAt.value = savedAt;
+      draftRestored.value = true;
+    }
+  } catch (error) {
+    console.warn(
+      "[Control Escolar] No se pudo conservar el borrador fallido.",
+      error,
+    );
+  }
+};
+
+const reconcileControlKpisInBackground = () => {
+  kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
+  const query = buildScopeQuery();
+  const scopeSignature = controlScopeSignatureFromQuery(query);
+  $fetch("/api/control-escolar/kpis", { query })
+    .then((response) => {
+      if (isCurrentControlScopeSignature(scopeSignature) && response?.kpis) {
+        kpis.value = response.kpis;
+      }
+    })
+    .catch((error) => {
+      console.warn(
+        "[Control Escolar] No se pudo reconciliar KPIs después de guardar.",
+        error?.message || error,
+      );
+    });
+};
+
 const saveStudent = async () => {
-  if (!selectedStudent.value || !selectedAgentId.value || savingStudent.value)
-    return;
+  if (!selectedStudent.value || !selectedAgentId.value) return;
+  const selectedKey = normalizeMatriculaKey(selectedStudent.value.matricula);
+  if (!selectedKey || controlStudentMutationStatus(selectedStudent.value) === "saving") return;
   if (uploadingAdvancedField.value) {
     saveError.value = "Espera a que termine la carga del archivo.";
     return;
@@ -5279,34 +5507,69 @@ const saveStudent = async () => {
     saveError.value = "Revisa los campos marcados antes de guardar.";
     return;
   }
-  savingStudent.value = true;
+
+  formatEditNameFields();
+  const payload = readEditForm({ normalizeNames: true });
+  const rollbackStudent = { ...selectedStudent.value };
+  const optimisticStudent = buildOptimisticControlStudent(rollbackStudent, payload);
+  const operationId = ++controlStudentMutationSequence;
+
   saveError.value = "";
+  setControlStudentMutationState(selectedKey, { status: "saving", operationId });
+  replaceControlStudentInIndex(optimisticStudent);
+  selectedStudent.value = optimisticStudent;
+  pendingSelectedStudentRefresh.value = null;
+  resetEditForm(optimisticStudent, { restoreDraft: false });
+  kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
+  persistCurrentControlStudentsCache({ optimistic: true });
+
   try {
-    formatEditNameFields();
-    const payload = readEditForm({ normalizeNames: true });
     const response = await $fetch(
-      `/api/control-escolar/students/${encodeURIComponent(selectedStudent.value.matricula)}`,
+      `/api/control-escolar/students/${encodeURIComponent(rollbackStudent.matricula)}`,
       {
         method: "PATCH",
         query: buildScopeQuery(),
         body: payload,
       },
     );
+    if (controlStudentMutationState(selectedKey)?.operationId !== operationId) return;
+
     if (response.student) {
       replaceControlStudentInIndex(response.student);
-      selectedStudent.value = response.student;
-      pendingSelectedStudentRefresh.value = null;
-      clearEditDraft();
-      resetEditForm(response.student, { restoreDraft: false });
+      clearEditDraftForStudent(rollbackStudent.matricula);
+      if (normalizeMatriculaKey(selectedStudent.value?.matricula) === selectedKey) {
+        selectedStudent.value = response.student;
+        pendingSelectedStudentRefresh.value = null;
+        clearEditDraft();
+        resetEditForm(response.student, { restoreDraft: false });
+      }
       persistCurrentControlStudentsCache();
+      kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
     }
+    setControlStudentMutationState(selectedKey, { status: "saved", operationId });
+    scheduleControlStudentMutationClear(selectedKey, operationId);
     show("Ficha de Control Escolar guardada.", "success");
-    await loadKpis();
+    reconcileControlKpisInBackground();
   } catch (error) {
-    saveError.value =
+    if (controlStudentMutationState(selectedKey)?.operationId !== operationId) return;
+    const message =
       error?.data?.message || error?.message || "No se pudo guardar la ficha.";
-  } finally {
-    savingStudent.value = false;
+    replaceControlStudentInIndex(rollbackStudent);
+    kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
+    persistCurrentControlStudentsCache({ rollback: true });
+    persistEditDraftForStudent(rollbackStudent.matricula, payload);
+    setControlStudentMutationState(selectedKey, {
+      status: "failed",
+      operationId,
+      message,
+    });
+    if (normalizeMatriculaKey(selectedStudent.value?.matricula) === selectedKey) {
+      selectedStudent.value = rollbackStudent;
+      Object.assign(editForm, payload);
+      editSnapshot.value = JSON.stringify(readEditFormFromStudent(rollbackStudent));
+      saveError.value = message;
+    }
+    show(message, "error");
   }
 };
 
@@ -5795,6 +6058,7 @@ onBeforeUnmount(() => {
     globalThis.clearTimeout(groupSigilSwapTimer);
     groupSigilSwapTimer = null;
   }
+  clearControlStudentMutationStates();
   controlEscolarDetailOpen.value = false;
   resetControlTopbarState();
 });
@@ -7297,6 +7561,43 @@ onBeforeUnmount(() => {
   background: #fff;
   color: #66758c;
   box-shadow: 0 8px 16px rgba(21, 35, 60, 0.055);
+}
+
+.control-escolar-screen .ce-row-save-indicator {
+  --ce-row-save-accent: #2b67a6;
+  --ce-row-save-soft: #eef5ff;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--ce-row-save-accent) 28%, #dce7f2);
+  border-radius: 11px;
+  background: var(--ce-row-save-soft);
+  color: var(--ce-row-save-accent);
+  box-shadow: 0 8px 16px color-mix(in srgb, var(--ce-row-save-accent) 12%, transparent);
+}
+
+.control-escolar-screen .ce-row-save-indicator.is-saved {
+  --ce-row-save-accent: var(--ce-green-strong);
+  --ce-row-save-soft: #edf8ea;
+}
+
+.control-escolar-screen .ce-row-save-indicator.is-failed {
+  --ce-row-save-accent: var(--ce-danger);
+  --ce-row-save-soft: #fff0ef;
+}
+
+.control-escolar-screen .ce-student-row.is-mutation-saving {
+  border-color: color-mix(in srgb, #2b67a6 32%, rgba(219, 230, 240, 0.98));
+}
+
+.control-escolar-screen .ce-student-row.is-mutation-failed {
+  border-color: color-mix(in srgb, var(--ce-danger) 34%, rgba(219, 230, 240, 0.98));
+}
+
+.control-escolar-screen .ce-student-row.is-mutation-saved {
+  border-color: color-mix(in srgb, var(--ce-green-strong) 30%, rgba(219, 230, 240, 0.98));
 }
 
 .control-escolar-screen .ce-list-footer {
@@ -10737,7 +11038,8 @@ onBeforeUnmount(() => {
   font-size: 10px;
 }
 
-.control-escolar-screen .ce-row-action {
+.control-escolar-screen .ce-row-action,
+.control-escolar-screen .ce-row-save-indicator {
   width: 40px;
   height: 40px;
   border-radius: 13px;

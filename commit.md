@@ -1,1 +1,1 @@
-Corrige recarga de KPIs al cambiar ciclo escolar
+Añade guardado optimista por fila en Control Escolar
