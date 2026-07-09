@@ -1,5 +1,12 @@
 <template>
-  <div ref="controlScreenRef" class="students-screen control-escolar-screen" :style="controlScreenStyle">
+  <div
+    ref="controlScreenRef"
+    :class="[
+      'students-screen control-escolar-screen',
+      { 'has-selected-student': Boolean(selectedStudent) },
+    ]"
+    :style="controlScreenStyle"
+  >
 
     <section
       :class="[
@@ -490,7 +497,13 @@
             v-if="selectedStudent"
             class="student-detail-panel ce-detail-panel"
           >
-            <div :class="['ce-detail-shell', `is-${selectedRecordHealth.tone}`]">
+            <div
+              :class="[
+                'ce-detail-shell',
+                `is-${selectedRecordHealth.tone}`,
+                { 'is-mobile-detail-scrolled': mobileDetailScrolled },
+              ]"
+            >
               <button
                 type="button"
                 class="ce-mobile-detail-back"
@@ -642,7 +655,11 @@
                 </div>
               </header>
 
-              <div class="ce-detail-body">
+              <div
+                ref="detailBodyRef"
+                class="ce-detail-body"
+                @scroll="handleDetailBodyScroll"
+              >
                 <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
                   <button
                     v-for="tab in detailTabs"
@@ -1964,6 +1981,8 @@ const CONTROL_SCREEN_MOBILE_BREAKPOINT = 820;
 const controlScreenRef = ref(null);
 const controlScreenScale = ref(1);
 const studentsScaleShell = ref(null);
+const detailBodyRef = ref(null);
+const mobileDetailScrolled = ref(false);
 let controlScreenResizeObserver = null;
 let controlScreenFrame = null;
 
@@ -1998,6 +2017,13 @@ const scheduleControlScreenScaleUpdate = () =>
   });
 
 const scheduleWorkspaceScaleUpdate = scheduleControlScreenScaleUpdate;
+
+const handleDetailBodyScroll = (event) => {
+  if (!process.client) return;
+  const target = event?.target || detailBodyRef.value;
+  mobileDetailScrolled.value = Number(target?.scrollTop || 0) > 12;
+};
+
 const controlSyncBusy = computed(
   () =>
     controlBaseStage.value === "loading" ||
@@ -6045,6 +6071,10 @@ watch(
   selectedStudent,
   (student) => {
     controlEscolarDetailOpen.value = Boolean(student);
+    mobileDetailScrolled.value = false;
+    nextTick(() => {
+      if (detailBodyRef.value) detailBodyRef.value.scrollTop = 0;
+    });
     queueControlStudentPhotos(student ? [student] : [], { priority: true });
   },
   { immediate: true },
@@ -15365,6 +15395,217 @@ onBeforeUnmount(() => {
 
   .control-escolar-screen .ce-detail-footer-actions :deep(.ui-button:last-child) {
     flex: 1 1 auto;
+  }
+}
+
+
+/* Mobile polish pass: focused detail mode, calmer KPI cards, and collapsible student chrome. */
+@media (max-width: 820px) {
+  .control-escolar-screen.has-selected-student .ce-kpi-system {
+    display: none;
+  }
+
+  .control-escolar-screen .ce-kpi-system {
+    margin: 0 0 10px;
+  }
+
+  .control-escolar-screen .ce-kpi-strip {
+    min-height: 92px;
+    gap: 10px;
+    padding: 6px 2px 10px;
+  }
+
+  .control-escolar-screen .ce-kpi-strip .kpi-card {
+    isolation: isolate;
+    flex: 0 0 clamp(156px, 42vw, 188px);
+    min-width: clamp(156px, 42vw, 188px);
+    height: 82px;
+    min-height: 82px;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--kpi-color, #3f9138) 18%, rgba(220, 231, 240, 0.98));
+    border-radius: 22px;
+    background:
+      radial-gradient(circle at 0 0, color-mix(in srgb, var(--kpi-color, #3f9138) 15%, transparent), transparent 58%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), color-mix(in srgb, var(--kpi-color, #3f9138) 4%, #ffffff));
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.075);
+  }
+
+  .control-escolar-screen .ce-kpi-strip .kpi-card::after {
+    content: "";
+    position: absolute;
+    inset: auto 10px 9px 58px;
+    z-index: -1;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--kpi-color, #3f9138) 45%, transparent), transparent);
+    opacity: 0.34;
+  }
+
+  .control-escolar-screen .ce-kpi-strip .kpi-card.active {
+    border-color: color-mix(in srgb, var(--kpi-color, #3f9138) 42%, rgba(220, 231, 240, 0.98));
+    background:
+      radial-gradient(circle at 0 0, color-mix(in srgb, var(--kpi-color, #3f9138) 22%, transparent), transparent 64%),
+      linear-gradient(180deg, #ffffff, color-mix(in srgb, var(--kpi-color, #3f9138) 9%, #ffffff));
+    box-shadow: 0 16px 34px color-mix(in srgb, var(--kpi-color, #3f9138) 14%, rgba(15, 23, 42, 0.08));
+  }
+
+  .control-escolar-screen .ce-kpi-strip .kpi-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--kpi-color, #3f9138) 10%, #ffffff);
+  }
+
+  .control-escolar-screen .ce-kpi-strip .kpi-icon svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .control-escolar-screen .ce-kpi-strip .kpi-text {
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .control-escolar-screen .ce-kpi-strip .kpi-text span {
+    max-width: none;
+    overflow: visible;
+    font-size: 9.5px;
+    line-height: 1.1;
+    letter-spacing: .045em;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .control-escolar-screen .ce-kpi-strip .kpi-text strong {
+    font-size: 25px;
+    line-height: .95;
+    letter-spacing: -.04em;
+  }
+
+  .control-escolar-screen .ce-kpi-mass {
+    display: none;
+  }
+
+  .control-escolar-screen .ce-detail-shell,
+  .control-escolar-screen .ce-mobile-detail-back,
+  .control-escolar-screen .ce-student-hero-header,
+  .control-escolar-screen .ce-student-hero-main,
+  .control-escolar-screen .ce-student-hero-photo,
+  .control-escolar-screen .ce-student-hero-copy h2,
+  .control-escolar-screen .ce-student-hero-meta,
+  .control-escolar-screen .ce-student-hero-progress,
+  .control-escolar-screen .ce-detail-body {
+    transition:
+      min-height .22s ease,
+      height .22s ease,
+      max-height .22s ease,
+      padding .22s ease,
+      gap .22s ease,
+      opacity .18s ease,
+      transform .22s ease;
+  }
+
+  .control-escolar-screen .ce-student-hero-header {
+    position: relative;
+    z-index: 13;
+    box-shadow: 0 1px 0 rgba(223, 232, 241, 0.72);
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-mobile-detail-back {
+    min-height: 38px;
+    padding-inline: 12px;
+    background: rgba(255, 255, 255, 0.985);
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-header {
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.985);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-main {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-photo {
+    --student-grade-photo-width: 42px;
+    --student-grade-photo-height: 46px;
+    --student-grade-photo-radius: 13px;
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-copy h2 {
+    display: -webkit-box;
+    overflow: hidden;
+    max-height: 34px;
+    font-size: 14.5px;
+    line-height: 1.08;
+    text-overflow: clip;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-meta {
+    max-height: 0;
+    overflow: hidden;
+    padding: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-side,
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-progress {
+    display: none;
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-detail-tabs {
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.055);
+  }
+
+  .control-escolar-screen .ce-detail-footer {
+    --ce-mobile-footer-height: 64px;
+    min-height: var(--ce-mobile-footer-height);
+    padding-top: 8px;
+  }
+
+  .control-escolar-screen .ce-detail-footer .ce-save-state,
+  .control-escolar-screen .ce-save-state {
+    min-height: 24px;
+  }
+
+  .control-escolar-screen .ce-last-update-text {
+    font-size: 9.5px;
+  }
+
+  .control-escolar-screen .ce-edit-form {
+    padding-bottom: max(104px, calc(80px + env(safe-area-inset-bottom)));
+  }
+}
+
+@media (max-width: 430px) {
+  .control-escolar-screen .ce-kpi-strip .kpi-card {
+    flex-basis: 152px;
+    min-width: 152px;
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-main {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-photo {
+    --student-grade-photo-width: 40px;
+    --student-grade-photo-height: 44px;
+  }
+
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-copy h2 {
+    font-size: 13.8px;
   }
 }
 

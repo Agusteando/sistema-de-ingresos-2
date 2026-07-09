@@ -1,1 +1,1 @@
-Rediseña Control Escolar para uso móvil premium
+Refina experiencia móvil de Control Escolar
