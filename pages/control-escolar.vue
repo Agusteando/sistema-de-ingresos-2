@@ -537,9 +537,8 @@
                       <span class="ce-student-hero-group-art" aria-hidden="true">
                         <UiGroupIcon :label="selectedHeaderGroupSigil.value" />
                       </span>
-                      <span class="ce-student-hero-group-caption">
-                        <strong>{{ selectedHeaderGroupSigil.displayLabel }}</strong>
-                        <em>Cambiar grupo</em>
+                      <span class="ce-student-hero-group-edit" aria-hidden="true">
+                        <LucideChevronDown :size="15" />
                       </span>
                     </button>
                     <button
@@ -630,27 +629,6 @@
                     class="ce-primary-pending-panel ce-tab-panel"
                     aria-label="Pendientes principales del expediente"
                   >
-                    <div class="ce-panel-heading ce-panel-heading--pending">
-                      <div class="ce-panel-heading-copy ce-panel-heading-copy--with-icon">
-                        <span class="ce-panel-heading-icon" aria-hidden="true">
-                          <LucideFileSpreadsheet :size="22" />
-                        </span>
-                        <div>
-                          <h3>Pendientes principales</h3>
-                          <p>Resuelve los pendientes para completar el expediente.</p>
-                        </div>
-                      </div>
-                      <button
-                        v-if="selectedRecordIssueCount"
-                        type="button"
-                        class="ce-view-all-pending"
-                        @click="goToFirstPendingField"
-                      >
-                        Ver todos los pendientes ({{ selectedRecordIssueCount }})
-                        <LucideChevronRight :size="14" />
-                      </button>
-                    </div>
-
                     <article :class="['ce-pending-summary-strip', `is-${selectedPendingSummary.tone}`]">
                       <div class="ce-pending-summary-primary">
                         <span class="ce-pending-summary-primary-icon" aria-hidden="true">
@@ -13612,6 +13590,146 @@ onBeforeUnmount(() => {
 
   .control-escolar-screen .ce-primary-pending-action {
     min-width: 88px;
+  }
+}
+
+
+/* Final UX cleanup: remove instructional pending header, expose the group sigil as a direct decorative control, and ensure the summary scroll reaches the bottom. */
+.control-escolar-screen .ce-primary-pending-panel {
+  padding: 14px 18px 18px;
+}
+
+.control-escolar-screen .ce-pending-summary-strip {
+  margin-top: 0;
+}
+
+.control-escolar-screen .ce-edit-form {
+  padding-bottom: max(136px, calc(68px + env(safe-area-inset-bottom)));
+}
+
+.control-escolar-screen .ce-detail-body {
+  scroll-padding-bottom: 132px;
+}
+
+.control-escolar-screen .ce-student-hero-side {
+  gap: clamp(12px, 1.2vw, 18px);
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil {
+  position: relative;
+  display: inline-grid;
+  width: clamp(74px, 6.2vw, 96px);
+  min-width: 0;
+  height: clamp(74px, 6.2vw, 96px);
+  grid-template-columns: 1fr;
+  place-items: center;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #c65c9a;
+  box-shadow: none;
+  isolation: isolate;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil::after {
+  display: none;
+}
+
+.control-escolar-screen button.ce-student-hero-group-sigil:hover {
+  border-color: transparent;
+  box-shadow: none;
+  transform: translateY(-1px) scale(1.025);
+}
+
+.control-escolar-screen .ce-student-hero-group-art {
+  width: clamp(72px, 6vw, 92px);
+  height: clamp(72px, 6vw, 92px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.control-escolar-screen .ce-student-hero-group-art .ui-group-icon {
+  --group-icon-size: clamp(66px, 5.45vw, 86px);
+  --group-icon-letter-font-size: .47em;
+  --group-icon-stroke-width: .045em;
+  opacity: .96;
+  filter: drop-shadow(0 16px 24px rgba(168, 75, 131, .14));
+}
+
+.control-escolar-screen .ce-student-hero-group-caption {
+  display: none;
+}
+
+.control-escolar-screen .ce-student-hero-group-edit {
+  position: absolute;
+  right: clamp(0px, .25vw, 4px);
+  bottom: clamp(2px, .35vw, 6px);
+  z-index: 2;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(206, 92, 158, .2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .96);
+  color: currentColor;
+  box-shadow: 0 8px 18px rgba(16, 32, 58, .11);
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil.is-male {
+  color: #5d93d8;
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil.is-neutral {
+  color: #8491a3;
+}
+
+.control-escolar-screen .ce-student-hero-group-cta {
+  width: auto;
+  min-width: clamp(156px, 12vw, 184px);
+  min-height: 54px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 18px;
+}
+
+.control-escolar-screen .ce-student-hero-group-cta strong {
+  font-size: 11px;
+  letter-spacing: .02em;
+}
+
+.control-escolar-screen .ce-student-hero-group-cta small {
+  display: none;
+}
+
+@media (max-width: 1480px) {
+  .control-escolar-screen .ce-primary-pending-panel {
+    padding: 12px 14px 16px;
+  }
+
+  .control-escolar-screen .ce-edit-form {
+    padding-bottom: max(148px, calc(76px + env(safe-area-inset-bottom)));
+  }
+
+  .control-escolar-screen .ce-student-hero-group-sigil {
+    width: 68px;
+    height: 68px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-art,
+  .control-escolar-screen .ce-student-hero-group-art .ui-group-icon {
+    --group-icon-size: 64px;
+    width: 64px;
+    height: 64px;
+  }
+
+  .control-escolar-screen .ce-student-hero-group-edit {
+    width: 24px;
+    height: 24px;
   }
 }
 
