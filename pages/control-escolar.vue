@@ -1891,6 +1891,8 @@ const photoCache = ref({});
 const photoLoadingKeys = ref(new Set());
 let searchTimer = null;
 let controlStudentsRequestId = 0;
+let controlScopeReloadId = 0;
+let controlInitialScopeLoading = true;
 let lastControlAuditSnapshotKey = "";
 let lastControlAuditSnapshotAt = 0;
 const controlStudentPhotoRequests = new Map();
@@ -3970,6 +3972,27 @@ const buildIndexQuery = () => ({
   all: "1",
 });
 
+const normalizeControlScopeConcepts = (value = "") =>
+  String(value || "")
+    .split(",")
+    .map((concept) => concept.trim())
+    .filter(Boolean)
+    .join(",");
+
+const controlScopeSignatureFromQuery = (query = buildScopeQuery()) =>
+  JSON.stringify({
+    agentId: String(query?.agentId || "").trim(),
+    ciclo: normalizeCicloKey(query?.ciclo || ""),
+    concepts: normalizeControlScopeConcepts(query?.concepts),
+    tipoConcepts: normalizeControlScopeConcepts(query?.tipoConcepts),
+  });
+
+const currentControlScopeSignature = () =>
+  controlScopeSignatureFromQuery(buildScopeQuery());
+
+const isCurrentControlScopeSignature = (scopeSignature = "") =>
+  scopeSignature === currentControlScopeSignature();
+
 const loadOptions = async () => {
   optionsLoading.value = true;
   try {
@@ -4816,7 +4839,11 @@ const loadStudents = async (options = {}) => {
   } = safeOptions;
   const requestId = ++controlStudentsRequestId;
   const query = buildIndexQuery();
-  const hadStudents =
+  const requestScopeSignature = controlScopeSignatureFromQuery(query);
+  const hadVisibleStudents =
+    controlStudentsIndex.value.length > 0 || students.value.length > 0;
+  if (clearExisting) resetControlStudentsView();
+  const hasVisibleStudents =
     controlStudentsIndex.value.length > 0 || students.value.length > 0;
   const startedAt = controlNow();
   const clientSteps = [];
@@ -4861,19 +4888,20 @@ const loadStudents = async (options = {}) => {
     controlExternalDbRows.value = getControlExternalDbRowCount(cached.source || {});
   } else {
     controlCacheStage.value = "empty";
-    if (clearExisting && !hadStudents) resetControlStudentsView();
-    studentsLoading.value = forceLoading || !hadStudents;
+    studentsLoading.value = forceLoading || clearExisting || !hasVisibleStudents;
     controlDataFreshness.value =
-      hadStudents ? controlDataFreshness.value : "empty";
+      hasVisibleStudents ? controlDataFreshness.value : "empty";
     controlDataSavedAt.value = "";
-    if (!hadStudents) controlExternalDbRows.value = 0;
+    if (!hasVisibleStudents) controlExternalDbRows.value = 0;
   }
 
   const canKeepVisibleData = () =>
     Boolean(cached) ||
-    (!clearExisting && hadStudents) ||
-    controlStudentsIndex.value.length > 0 ||
-    students.value.length > 0;
+    (!clearExisting &&
+      isCurrentControlScopeSignature(requestScopeSignature) &&
+      (hadVisibleStudents ||
+        controlStudentsIndex.value.length > 0 ||
+        students.value.length > 0));
 
   try {
     controlBaseStage.value = "loading";
@@ -4890,7 +4918,11 @@ const loadStudents = async (options = {}) => {
       "ready",
       { rows: Array.isArray(response?.data) ? response.data.length : 0 },
     );
-    if (requestId !== controlStudentsRequestId) return;
+    if (
+      requestId !== controlStudentsRequestId ||
+      !isCurrentControlScopeSignature(requestScopeSignature)
+    )
+      return;
 
     pagination.page = 1;
     applyControlStudentsPayload(response);
@@ -4934,7 +4966,11 @@ const loadStudents = async (options = {}) => {
       "failed",
       { error: error?.data?.message || error?.message || String(error || "") },
     );
-    if (requestId !== controlStudentsRequestId) return;
+    if (
+      requestId !== controlStudentsRequestId ||
+      !isCurrentControlScopeSignature(requestScopeSignature)
+    )
+      return;
     controlBaseStage.value = canKeepVisibleData() ? "partial" : "failed";
     controlExternalDbStage.value = "failed";
     controlCompleteStage.value = "failed";
@@ -4979,10 +5015,42 @@ const refreshAll = async (options = {}) => {
   }
 };
 
-const reloadControlStudentsForCurrentScope = async () => {
+const reloadControlStudentsForCurrentScope = async ({
+  clearExisting = true,
+  refreshEnrollmentConfig = true,
+} = {}) => {
   if (!selectedAgentId.value) return;
+
+  const reloadId = ++controlScopeReloadId;
   pagination.page = 1;
-  await refreshAll({ clearExisting: false, forceLoading: !students.value.length });
+
+  if (clearExisting) resetControlStudentsView();
+  loadError.value = "";
+  studentsLoading.value = true;
+  kpisLoading.value = true;
+  publishControlSyncIndicatorState({
+    status: "syncing",
+    message: "Cargando Control Escolar",
+  });
+
+  try {
+    if (refreshEnrollmentConfig) {
+      hydrateCachedEnrollmentConcepts({ replaceExisting: true });
+      await loadEnrollmentConfig({ refreshStudents: false });
+      if (reloadId !== controlScopeReloadId) return;
+    }
+
+    await refreshAll({
+      clearExisting,
+      forceLoading: true,
+      forceNetwork: true,
+    });
+  } finally {
+    if (reloadId === controlScopeReloadId) {
+      studentsLoading.value = false;
+      kpisLoading.value = false;
+    }
+  }
 };
 
 const clearQuickFilters = () => {
@@ -5482,9 +5550,12 @@ const sendHuskyPassEmail = async () => {
 const cacheEnrollmentConcepts = ({ current = [], tipoIngreso = [] } = {}) => {
   const currentConceptIds = normalizeEnrollmentConceptIds(current);
   const tipoIngresoConceptIds = normalizeEnrollmentConceptIds(tipoIngreso);
-  if (!process.client || (!currentConceptIds.length && !tipoIngresoConceptIds.length))
-    return;
+  if (!process.client) return;
   try {
+    if (!currentConceptIds.length && !tipoIngresoConceptIds.length) {
+      localStorage.removeItem(enrollmentConceptsCacheKey.value);
+      return;
+    }
     localStorage.setItem(
       enrollmentConceptsCacheKey.value,
       JSON.stringify({
@@ -5501,17 +5572,25 @@ const cacheEnrollmentConcepts = ({ current = [], tipoIngreso = [] } = {}) => {
   }
 };
 
-const hydrateCachedEnrollmentConcepts = () => {
-  if (!process.client || externalConcepts.value.length) return;
+const hydrateCachedEnrollmentConcepts = ({ replaceExisting = false } = {}) => {
+  if (!process.client) return;
+  if (!replaceExisting && externalConcepts.value.length) return;
+
   try {
     const parsed = JSON.parse(
       localStorage.getItem(enrollmentConceptsCacheKey.value) || "null",
     );
     const currentConceptIds = normalizeEnrollmentConceptIds(parsed?.currentConcepts || parsed?.concepts);
     const tipoIngresoConceptIds = normalizeEnrollmentConceptIds(parsed?.tipoIngresoConcepts || currentConceptIds);
-    if (currentConceptIds.length) externalConcepts.value = currentConceptIds;
-    if (tipoIngresoConceptIds.length) tipoIngresoConcepts.value = tipoIngresoConceptIds;
+    externalConcepts.value = currentConceptIds;
+    tipoIngresoConcepts.value = tipoIngresoConceptIds.length
+      ? tipoIngresoConceptIds
+      : currentConceptIds;
   } catch (error) {
+    if (replaceExisting) {
+      externalConcepts.value = [];
+      tipoIngresoConcepts.value = [];
+    }
     console.warn(
       "[Control Escolar] No se pudo leer la configuración de inscripción.",
       error,
@@ -5527,9 +5606,10 @@ const parseEnrollmentConfig = (obj) => {
   const tipoIngresoConceptIds = parseEnrollmentConceptsForPlantelHistory(obj, {
     plantel: currentEnrollmentPlantelKey.value,
   });
-  if (!currentConceptIds.length) return;
   externalConcepts.value = currentConceptIds;
-  tipoIngresoConcepts.value = tipoIngresoConceptIds.length ? tipoIngresoConceptIds : currentConceptIds;
+  tipoIngresoConcepts.value = tipoIngresoConceptIds.length
+    ? tipoIngresoConceptIds
+    : currentConceptIds;
   cacheEnrollmentConcepts({ current: externalConcepts.value, tipoIngreso: tipoIngresoConcepts.value });
 };
 
@@ -5553,8 +5633,9 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
       tipoIngresoConcepts.value.join("|") !== previousTipoConcepts)
   ) {
     await refreshAll({
-      clearExisting: false,
-      forceLoading: !controlStudentsIndex.value.length,
+      clearExisting: true,
+      forceLoading: true,
+      forceNetwork: true,
     });
   }
 };
@@ -5588,20 +5669,19 @@ watch(
   () => applyInstantStudentFilters(),
 );
 watch(
-  () => [
-    selectedAgentId.value,
-    currentCicloKey.value,
-    externalConcepts.value.join("|"),
-  ],
+  () => [selectedAgentId.value, currentCicloKey.value],
   ([nextAgent], [previousAgent]) => {
-    if (!nextAgent) return;
+    if (!nextAgent || controlInitialScopeLoading) return;
     if (
       !previousAgent &&
       controlStudentsIndex.value.length === 0 &&
       studentsLoading.value
     )
       return;
-    reloadControlStudentsForCurrentScope();
+    reloadControlStudentsForCurrentScope({
+      clearExisting: true,
+      refreshEnrollmentConfig: true,
+    });
   },
   { flush: "post" },
 );
@@ -5660,7 +5740,10 @@ const handleCicloChanged = (event) => {
   if (state.value.ciclo !== cicloKey) state.value.ciclo = cicloKey;
   cicloCookie.value = cicloKey;
   if (normalizeCicloKey(cicloKey) === previousCiclo)
-    reloadControlStudentsForCurrentScope();
+    reloadControlStudentsForCurrentScope({
+      clearExisting: true,
+      refreshEnrollmentConfig: true,
+    });
 };
 
 onMounted(async () => {
@@ -5683,19 +5766,20 @@ onMounted(async () => {
   state.value.ciclo = normalizeCicloOption(
     state.value?.ciclo || cicloCookie.value,
   );
-  hydrateCachedEnrollmentConcepts();
-  const initialAgentId = selectedAgentId.value;
-  const initialStudentsLoad = initialAgentId ? loadStudents() : null;
+  hydrateCachedEnrollmentConcepts({ replaceExisting: true });
 
-  await loadOptions();
+  try {
+    await loadOptions();
 
-  if (selectedAgentId.value) {
-    if (selectedAgentId.value !== initialAgentId) await refreshAll();
-    else if (initialStudentsLoad) await initialStudentsLoad;
-    else await refreshAll();
+    if (selectedAgentId.value) {
+      await reloadControlStudentsForCurrentScope({
+        clearExisting: true,
+        refreshEnrollmentConfig: true,
+      });
+    }
+  } finally {
+    controlInitialScopeLoading = false;
   }
-
-  await loadEnrollmentConfig({ refreshStudents: true });
 });
 
 onBeforeUnmount(() => {
