@@ -637,9 +637,14 @@
                     aria-label="Pendientes principales del expediente"
                   >
                     <div class="ce-panel-heading ce-panel-heading--pending">
-                      <div>
-                        <h3>Pendientes principales</h3>
-                        <p>Resuelve los pendientes para completar el expediente.</p>
+                      <div class="ce-panel-heading-copy ce-panel-heading-copy--with-icon">
+                        <span class="ce-panel-heading-icon" aria-hidden="true">
+                          <LucideFileSpreadsheet :size="22" />
+                        </span>
+                        <div>
+                          <h3>Pendientes principales</h3>
+                          <p>Resuelve los pendientes para completar el expediente.</p>
+                        </div>
                       </div>
                       <button
                         v-if="selectedRecordIssueCount"
@@ -651,6 +656,35 @@
                         <LucideChevronRight :size="14" />
                       </button>
                     </div>
+
+                    <article :class="['ce-pending-summary-strip', `is-${selectedPendingSummary.tone}`]">
+                      <div class="ce-pending-summary-primary">
+                        <span class="ce-pending-summary-primary-icon" aria-hidden="true">
+                          <component :is="selectedPendingSummary.icon" :size="24" />
+                        </span>
+                        <div class="ce-pending-summary-primary-copy">
+                          <strong>{{ selectedPendingSummary.title }}</strong>
+                          <p>{{ selectedPendingSummary.summary }}</p>
+                        </div>
+                      </div>
+                      <div class="ce-pending-summary-metrics">
+                        <div
+                          v-for="metric in selectedPendingSummary.metrics"
+                          :key="`summary-metric-${metric.key}`"
+                          class="ce-pending-summary-metric"
+                        >
+                          <span class="ce-pending-summary-metric-icon" aria-hidden="true">
+                            <component :is="metric.icon" :size="22" />
+                          </span>
+                          <div>
+                            <strong>{{ metric.value }}</strong>
+                            <small>{{ metric.label }}</small>
+                            <em v-if="metric.caption">{{ metric.caption }}</em>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+
                     <div class="ce-primary-pending-grid">
                       <button
                         v-for="signal in selectedStatusSignals"
@@ -659,21 +693,27 @@
                         :class="['ce-primary-pending-card', `is-${signal.tone}`]"
                         @click="goToStatusSignal(signal)"
                       >
-                        <span class="ce-primary-pending-icon">
-                          <component :is="signal.icon" :size="18" />
-                        </span>
-                        <span class="ce-primary-pending-copy">
-                          <small>{{ signal.title }}</small>
-                          <strong>{{ signal.label }}</strong>
-                          <em>{{ signal.summary }}</em>
-                        </span>
-                        <span class="ce-primary-pending-count">{{ signal.count }}</span>
-                        <span class="ce-primary-pending-action">
-                          <template v-if="signal.tone === 'complete'">
-                            <LucideCheck :size="22" />
-                          </template>
-                          <template v-else>Completar</template>
-                        </span>
+                        <div class="ce-primary-pending-card-head">
+                          <span class="ce-primary-pending-icon">
+                            <component :is="signal.icon" :size="22" />
+                          </span>
+                          <span class="ce-primary-pending-copy">
+                            <strong>{{ signal.title }}</strong>
+                            <b>{{ signal.label }}</b>
+                          </span>
+                          <span class="ce-primary-pending-count">{{ signal.count }}</span>
+                        </div>
+                        <div class="ce-primary-pending-card-body">
+                          <span class="ce-primary-pending-meta">{{ signal.summary }}</span>
+                        </div>
+                        <div class="ce-primary-pending-card-footer">
+                          <span v-if="signal.tone === 'complete'" class="ce-primary-pending-checkmark">
+                            <LucideCheck :size="20" />
+                          </span>
+                          <span v-else class="ce-primary-pending-action">
+                            Completar
+                          </span>
+                        </div>
                       </button>
                     </div>
                   </section>
@@ -3139,6 +3179,27 @@ const selectedLastUpdateLabel = computed(() => {
     return "Última actualización no disponible";
   }
 });
+const selectedVerificationRecencyLabel = computed(() => {
+  const value = selectedStudent.value?.updatedAt || selectedStudent.value?.lastUpdatedAt || draftSavedAt.value;
+  if (!value) return "Sin verificación reciente";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sin verificación reciente";
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startOfTarget = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const days = Math.round((startOfToday.getTime() - startOfTarget.getTime()) / 86400000);
+  if (days <= 0) return "Última verificación: hoy";
+  if (days === 1) return "Última verificación: ayer";
+  try {
+    return `Última verificación: ${new Intl.DateTimeFormat("es-MX", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(date)}`;
+  } catch (_) {
+    return "Última verificación reciente";
+  }
+});
 const selectedVisibleActionChips = computed(() => selectedRecordActions.value);
 const selectedHiddenActionCount = computed(() =>
   Math.max(0, selectedRecordActions.value.length - selectedVisibleActionChips.value.length),
@@ -3557,7 +3618,7 @@ const selectedStatusSignals = computed(() => {
   const mother = familyPersonState("madre");
   const contact = familyCriticalContactState.value;
   const curpLabel =
-    curpState === "ok" ? "Lista" : curpState === "invalid" ? "Inválida" : "Pendiente";
+    curpState === "ok" ? "Listo" : curpState === "invalid" ? "Inválida" : "Pendiente";
   const curpSummary =
     curpState === "ok"
       ? `${curpDerivedIdentity.value.fechaNacimiento} · ${derivedGenderMeta.value.label} · ${derivedAgeLabel.value}`
@@ -3579,7 +3640,7 @@ const selectedStatusSignals = computed(() => {
       key: "padre",
       title: "Padre",
       label: father.status,
-      summary: father.summary,
+      summary: father.summary || "Información completa y verificada.",
       count: `${father.completed}/${father.total}`,
       tone: father.tone,
       icon: LucideUserRound,
@@ -3588,7 +3649,7 @@ const selectedStatusSignals = computed(() => {
       key: "madre",
       title: "Madre",
       label: mother.status,
-      summary: mother.summary,
+      summary: mother.summary || "Información completa y verificada.",
       count: `${mother.completed}/${mother.total}`,
       tone: mother.tone,
       icon: LucideUsersRound,
@@ -3597,12 +3658,59 @@ const selectedStatusSignals = computed(() => {
       key: "contacto",
       title: "Contacto",
       label: contact.status,
-      summary: contact.summary,
+      summary: contact.summary || "Información completa y verificada.",
       count: `${contact.completed}/${contact.total}`,
       tone: contact.tone,
       icon: LucidePhone,
     },
   ];
+});
+const selectedPendingSummary = computed(() => {
+  const signals = selectedStatusSignals.value;
+  const completeCount = signals.filter((signal) => signal.tone === "complete").length;
+  const total = signals.length || 1;
+  const allComplete = completeCount === total && selectedRecordIssueCount.value === 0;
+  const tone = allComplete
+    ? "complete"
+    : selectedRecordHealth.value?.tone === "danger"
+      ? "danger"
+      : "warning";
+  return {
+    tone,
+    icon: allComplete ? LucideCheck : LucideAlertTriangle,
+    title: allComplete ? "Todo al día" : tone === "danger" ? "Requiere atención" : "Pendientes en revisión",
+    summary: allComplete
+      ? `Las ${completeCount} secciones requeridas están completas.`
+      : `${selectedRecordIssueCount.value} pendiente${selectedRecordIssueCount.value === 1 ? "" : "s"} por resolver para completar el expediente.`,
+    metrics: [
+      {
+        key: "sections",
+        icon: LucideFileSpreadsheet,
+        value: `${completeCount} de ${total}`,
+        label: "Secciones completas",
+      },
+      {
+        key: "expediente",
+        icon: LucideShieldCheck,
+        value: `${selectedProfileCompletion.value}%`,
+        label: "Expediente básico",
+      },
+      allComplete
+        ? {
+            key: "updated",
+            icon: LucideClock3,
+            value: "Actualizado",
+            label: selectedVerificationRecencyLabel.value,
+          }
+        : {
+            key: "issues",
+            icon: LucideAlertTriangle,
+            value: `${selectedRecordIssueCount.value}`,
+            label: "Pendientes activos",
+            caption: selectedNextAction.value,
+          },
+    ],
+  };
 });
 const detailTabState = (key) => {
   const father = familyPersonState("padre");
@@ -12067,11 +12175,38 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-primary-pending-panel {
-  padding: 16px;
+  padding: 18px;
 }
 
 .control-escolar-screen .ce-panel-heading--pending {
-  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.control-escolar-screen .ce-panel-heading-copy {
+  display: flex;
+  min-width: 0;
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-panel-heading-copy--with-icon {
+  align-items: center;
+}
+
+.control-escolar-screen .ce-panel-heading-icon {
+  display: inline-flex;
+  width: 50px;
+  height: 50px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #eff8ef, #f7fbf5 100%);
+  border: 1px solid #d9edd9;
+  color: #2b9d44;
 }
 
 .control-escolar-screen .ce-panel-heading--pending h3,
@@ -12103,24 +12238,182 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.control-escolar-screen .ce-pending-summary-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.75fr);
+  gap: 0;
+  padding: 16px 18px;
+  border: 1px solid #dcebdc;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fcfefb, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-warning {
+  border-color: #f1e4be;
+  background: linear-gradient(180deg, #fffef8, #ffffff 100%);
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-danger {
+  border-color: #f2d9d4;
+  background: linear-gradient(180deg, #fffafa, #ffffff 100%);
+}
+
+.control-escolar-screen .ce-pending-summary-primary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding-right: 20px;
+}
+
+.control-escolar-screen .ce-pending-summary-primary-icon {
+  display: inline-flex;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #2f9f43;
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(47, 159, 67, 0.18);
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-warning .ce-pending-summary-primary-icon {
+  background: #dbb24d;
+  box-shadow: 0 10px 18px rgba(219, 178, 77, 0.18);
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-danger .ce-pending-summary-primary-icon {
+  background: #e16355;
+  box-shadow: 0 10px 18px rgba(225, 99, 85, 0.16);
+}
+
+.control-escolar-screen .ce-pending-summary-primary-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-pending-summary-primary-copy strong {
+  color: #1b8d32;
+  font-size: 16px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-warning .ce-pending-summary-primary-copy strong {
+  color: #ad780d;
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-danger .ce-pending-summary-primary-copy strong {
+  color: #d14338;
+}
+
+.control-escolar-screen .ce-pending-summary-primary-copy p {
+  margin: 0;
+  color: #66758c;
+  font-size: 11.5px;
+  font-weight: 740;
+  line-height: 1.45;
+}
+
+.control-escolar-screen .ce-pending-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+}
+
+.control-escolar-screen .ce-pending-summary-metric {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 2px 16px;
+}
+
+.control-escolar-screen .ce-pending-summary-metric + .ce-pending-summary-metric {
+  border-left: 1px solid #dce8da;
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-warning .ce-pending-summary-metric + .ce-pending-summary-metric {
+  border-left-color: #efe3c8;
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-danger .ce-pending-summary-metric + .ce-pending-summary-metric {
+  border-left-color: #f0ddd9;
+}
+
+.control-escolar-screen .ce-pending-summary-metric-icon {
+  display: inline-flex;
+  color: #2b9d44;
+  flex: 0 0 auto;
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-warning .ce-pending-summary-metric-icon {
+  color: #cb8c16;
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-danger .ce-pending-summary-metric-icon {
+  color: #d85143;
+}
+
+.control-escolar-screen .ce-pending-summary-metric div {
+  display: grid;
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-pending-summary-metric strong {
+  color: #1f9338;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: -0.015em;
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-warning .ce-pending-summary-metric strong {
+  color: #b98318;
+}
+
+.control-escolar-screen .ce-pending-summary-strip.is-danger .ce-pending-summary-metric strong {
+  color: #d14338;
+}
+
+.control-escolar-screen .ce-pending-summary-metric small,
+.control-escolar-screen .ce-pending-summary-metric em {
+  color: #66758c;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.control-escolar-screen .ce-pending-summary-metric small {
+  font-size: 10.5px;
+  font-weight: 780;
+}
+
+.control-escolar-screen .ce-pending-summary-metric em {
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .control-escolar-screen .ce-primary-pending-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
+  margin-top: 16px;
 }
 
 .control-escolar-screen .ce-primary-pending-card {
   position: relative;
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  align-items: start;
-  gap: 8px 10px;
-  min-height: 128px;
-  padding: 16px 14px 14px;
-  border: 1px solid rgba(217, 67, 56, 0.18);
-  border-radius: 15px;
-  background: linear-gradient(180deg, #fffafa, #fff);
+  grid-template-rows: auto 1fr auto;
+  align-items: stretch;
+  gap: 0;
+  min-height: 178px;
+  padding: 18px 18px 16px;
+  border: 1px solid #dce8da;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fdfffd, #fff 100%);
   color: #d63f35;
   text-align: left;
   cursor: pointer;
@@ -12133,27 +12426,40 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-primary-pending-card.is-complete {
-  border-color: rgba(63, 145, 56, 0.18);
-  background: linear-gradient(180deg, #fbfefb, #fff);
+  border-color: #dcebdc;
+  background: linear-gradient(180deg, #fcfffc, #fff);
   color: #20842f;
 }
 
 .control-escolar-screen .ce-primary-pending-card.is-warning {
-  border-color: rgba(216, 139, 28, 0.22);
-  background: linear-gradient(180deg, #fffdfa, #fff);
+  border-color: #f0e0b7;
+  background: linear-gradient(180deg, #fffef9, #fff);
   color: #c37412;
+}
+
+.control-escolar-screen .ce-primary-pending-card.is-danger {
+  border-color: #f0d7d1;
+  background: linear-gradient(180deg, #fffafa, #fff);
+}
+
+.control-escolar-screen .ce-primary-pending-card-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
 }
 
 .control-escolar-screen .ce-primary-pending-icon {
   display: inline-flex;
-  width: 36px;
-  height: 36px;
+  width: 52px;
+  height: 52px;
   align-items: center;
   justify-content: center;
-  border-radius: 13px;
-  background: currentColor;
-  color: #fff;
-  opacity: 0.88;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.84);
+  color: currentColor;
+  opacity: 0.92;
 }
 
 .control-escolar-screen .ce-primary-pending-copy {
@@ -12162,57 +12468,74 @@ onBeforeUnmount(() => {
   gap: 4px;
 }
 
-.control-escolar-screen .ce-primary-pending-copy small {
-  color: #7a879a;
-  font-size: 10px;
-  font-weight: 900;
-}
-
 .control-escolar-screen .ce-primary-pending-copy strong {
-  color: currentColor;
-  font-size: 14px;
+  color: #15233b;
+  font-size: 13px;
   font-weight: 950;
   line-height: 1.1;
 }
 
-.control-escolar-screen .ce-primary-pending-copy em {
-  display: block;
-  color: #66758c;
-  font-size: 10.5px;
-  font-style: normal;
-  font-weight: 740;
-  line-height: 1.3;
+.control-escolar-screen .ce-primary-pending-copy b {
+  color: currentColor;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.05;
 }
 
 .control-escolar-screen .ce-primary-pending-count {
   justify-self: end;
   color: currentColor;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 950;
+  line-height: 1;
+}
+
+.control-escolar-screen .ce-primary-pending-card-body {
+  display: flex;
+  align-items: flex-end;
+  min-height: 62px;
+  padding: 16px 0 14px;
+  border-top: 1px solid rgba(17, 34, 60, 0.08);
+  margin-top: 18px;
+}
+
+.control-escolar-screen .ce-primary-pending-meta {
+  color: #66758c;
+  font-size: 11.5px;
+  font-weight: 740;
+  line-height: 1.55;
+}
+
+.control-escolar-screen .ce-primary-pending-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .control-escolar-screen .ce-primary-pending-action {
-  grid-column: 1 / -1;
-  justify-self: center;
   display: inline-flex;
-  min-width: 92px;
-  min-height: 32px;
+  min-width: 118px;
+  min-height: 38px;
   align-items: center;
   justify-content: center;
-  padding: 0 16px;
+  padding: 0 18px;
   border: 1px solid currentColor;
   border-radius: 999px;
   background: #fff;
   color: currentColor;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 930;
 }
 
-.control-escolar-screen .ce-primary-pending-card.is-complete .ce-primary-pending-action {
+.control-escolar-screen .ce-primary-pending-checkmark {
+  display: inline-flex;
   width: 44px;
-  min-width: 44px;
   height: 44px;
-  border-color: rgba(63, 145, 56, 0.26);
+  align-items: center;
+  justify-content: center;
+  color: #2a993f;
+  background: #eef8ea;
+  border: 1px solid #d6ead2;
   border-radius: 999px;
 }
 
@@ -12308,13 +12631,22 @@ onBeforeUnmount(() => {
     min-width: 1200px;
   }
 
+  .control-escolar-screen .ce-pending-summary-strip {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .control-escolar-screen .ce-pending-summary-primary {
+    padding-right: 0;
+  }
+
   .control-escolar-screen .ce-primary-pending-grid {
     gap: 10px;
   }
 
   .control-escolar-screen .ce-primary-pending-card {
-    min-height: 118px;
-    padding: 13px 12px;
+    min-height: 164px;
+    padding: 14px;
   }
 }
 
@@ -12327,6 +12659,27 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-access-header-card,
   .control-escolar-screen .ce-progress-cluster--health {
     grid-column: 1 / -1;
+  }
+
+  .control-escolar-screen .ce-pending-summary-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .control-escolar-screen .ce-pending-summary-metric {
+    padding: 10px 0;
+  }
+
+  .control-escolar-screen .ce-pending-summary-metric + .ce-pending-summary-metric {
+    border-left: 0;
+    border-top: 1px solid #dce8da;
+  }
+
+  .control-escolar-screen .ce-pending-summary-strip.is-warning .ce-pending-summary-metric + .ce-pending-summary-metric {
+    border-top-color: #efe3c8;
+  }
+
+  .control-escolar-screen .ce-pending-summary-strip.is-danger .ce-pending-summary-metric + .ce-pending-summary-metric {
+    border-top-color: #f0ddd9;
   }
 
   .control-escolar-screen .ce-primary-pending-grid,

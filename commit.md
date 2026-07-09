@@ -1,1 +1,1 @@
-Mejora sigil y selector de grupo en Control Escolar
+Rediseña pendientes principales de Control Escolar
