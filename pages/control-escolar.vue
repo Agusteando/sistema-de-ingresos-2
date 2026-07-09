@@ -3787,13 +3787,20 @@ const detailTabState = (key) => {
   };
   return states[key] || { tone: "neutral", count: 0 };
 };
-const editableInvalidFields = () => [
+const EDIT_FORM_SAVE_VALIDATION_FIELDS = [
   "curp",
   "telefonoPadre",
   "telefonoMadre",
   "emailPadre",
   "emailMadre",
-].filter((field) => fieldValidationState(field) === "invalid");
+];
+
+const editableInvalidFields = (fields = EDIT_FORM_SAVE_VALIDATION_FIELDS) =>
+  fields.filter(
+    (field) =>
+      EDIT_FORM_SAVE_VALIDATION_FIELDS.includes(field) &&
+      fieldValidationState(field) === "invalid",
+  );
 const huskyPassEmailTarget = computed(
   () =>
     selectedStudent.value?.emailPadre ||
@@ -3944,6 +3951,32 @@ const readEditForm = ({ normalizeNames = false } = {}) =>
       : value;
     return draft;
   }, {});
+
+const parseEditSnapshot = () => {
+  try {
+    const parsed = JSON.parse(editSnapshot.value || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const editFieldValuesEqual = (field, currentValue, snapshotValue) => {
+  if (field === "baja") return Number(currentValue || 0) === Number(snapshotValue || 0);
+  return String(currentValue ?? "") === String(snapshotValue ?? "");
+};
+
+const readDirtyEditForm = ({ normalizeNames = false } = {}) => {
+  const current = readEditForm({ normalizeNames });
+  const snapshot = parseEditSnapshot();
+  return EDIT_FORM_FIELDS.reduce((draft, field) => {
+    if (!editFieldValuesEqual(field, current[field], snapshot[field])) {
+      draft[field] = current[field];
+    }
+    return draft;
+  }, {});
+};
+
 const formSnapshot = () => JSON.stringify(readEditForm());
 const hasUnsavedChanges = computed(() =>
   Boolean(
@@ -5431,22 +5464,31 @@ const readEditFormFromStudent = (student = {}) => ({
 });
 
 const buildOptimisticControlStudent = (baseStudent = {}, payload = {}) => {
+  const hasPayloadField = (field) => Object.prototype.hasOwnProperty.call(payload, field);
   const next = {
     ...baseStudent,
     ...payload,
   };
-  const fullName = [payload.nombres, payload.apellidoPaterno, payload.apellidoMaterno]
+  const fullName = [next.nombres, next.apellidoPaterno, next.apellidoMaterno]
     .map((part) => String(part || "").trim())
     .filter(Boolean)
     .join(" ");
-  next.fullName = fullName || payload.nombreCompletoAlumno || baseStudent.fullName || "";
+  next.fullName = fullName || next.nombreCompletoAlumno || baseStudent.fullName || "";
   next.nombreCompletoAlumno = next.fullName;
-  next.address = payload.direccion ?? baseStudent.address ?? baseStudent.direccion ?? "";
+  next.address = hasPayloadField("direccion")
+    ? payload.direccion
+    : baseStudent.address ?? baseStudent.direccion ?? "";
   next.direccion = next.address;
-  next.group = payload.grupo ?? baseStudent.group ?? baseStudent.grupo ?? "";
+  next.group = hasPayloadField("grupo")
+    ? payload.grupo
+    : baseStudent.group ?? baseStudent.grupo ?? "";
   next.grupo = next.group;
-  next.baja = Number(payload.baja || 0);
-  next.status = next.baja ? "Baja" : baseStudent.status === "Baja" ? "Activo" : baseStudent.status || "Activo";
+  next.baja = Number(hasPayloadField("baja") ? payload.baja : baseStudent.baja || 0);
+  next.status = next.baja
+    ? "Baja"
+    : hasPayloadField("baja")
+      ? "Activo"
+      : baseStudent.status || "Activo";
   const completenessTiers = resolveControlEscolarCompleteness(next, { honorEnrollmentState: true });
   next.completenessTiers = completenessTiers;
   next.completion = completenessTiers?.basic?.progress ?? next.completion ?? 0;
@@ -5502,14 +5544,24 @@ const saveStudent = async () => {
     saveError.value = "Espera a que termine la carga del archivo.";
     return;
   }
-  const invalidFields = editableInvalidFields();
-  if (invalidFields.length) {
-    saveError.value = "Revisa los campos marcados antes de guardar.";
+  formatEditNameFields();
+  const payload = readDirtyEditForm({ normalizeNames: true });
+  const dirtyFields = Object.keys(payload);
+  if (!dirtyFields.length) {
+    clearEditDraft();
+    saveError.value = "";
+    editSnapshot.value = formSnapshot();
     return;
   }
 
-  formatEditNameFields();
-  const payload = readEditForm({ normalizeNames: true });
+  const invalidFields = editableInvalidFields(dirtyFields);
+  if (invalidFields.length) {
+    const fieldLabels = invalidFields
+      .map((field) => invalidFieldTargets[field]?.shortLabel || field)
+      .join(", ");
+    saveError.value = `Revisa ${fieldLabels} antes de guardar.`;
+    return;
+  }
   const rollbackStudent = { ...selectedStudent.value };
   const optimisticStudent = buildOptimisticControlStudent(rollbackStudent, payload);
   const operationId = ++controlStudentMutationSequence;

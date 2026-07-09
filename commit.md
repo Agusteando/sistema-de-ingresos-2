@@ -1,1 +1,1 @@
-Añade guardado optimista por fila en Control Escolar
+Corrige guardado parcial de ficha en Control Escolar
