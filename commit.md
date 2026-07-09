@@ -1,1 +1,1 @@
-Agrega filtro sin grupo en Control Escolar
+Ajusta encabezado, grupo y pendientes de Control Escolar

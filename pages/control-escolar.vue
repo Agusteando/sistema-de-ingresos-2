@@ -478,10 +478,10 @@
                   />
                   <div class="ce-student-hero-copy">
                     <h2>{{ selectedStudent.fullName || "Ficha de alumno" }}</h2>
-                    <div class="ce-student-hero-meta">
-                      <span>{{ selectedStudent.matricula || "Sin matrícula" }}</span>
+                    <div class="ce-student-hero-meta" aria-label="Datos rápidos del alumno">
+                      <span class="ce-student-hero-meta-token">{{ selectedStudent.matricula || "Sin matrícula" }}</span>
                       <i aria-hidden="true"></i>
-                      <span>{{ selectedWorkspaceGradeLabel }}</span>
+                      <span class="ce-student-hero-meta-token">{{ selectedWorkspaceGradeLabel }}</span>
                       <i aria-hidden="true"></i>
                       <button
                         type="button"
@@ -492,12 +492,6 @@
                         <img src="/brand/husky-pass-header-gray.png" alt="" aria-hidden="true" />
                         <strong>{{ selectedHuskyPassPasswordLabel }}</strong>
                       </button>
-                    </div>
-                    <div
-                      v-if="selectedHeaderGenderChip || selectedHeaderBirthDateLabel || selectedHeaderAgeChip"
-                      class="ce-student-hero-cues"
-                      aria-label="Datos rápidos del alumno"
-                    >
                       <span
                         v-if="selectedHeaderGenderChip"
                         :class="[
@@ -2796,6 +2790,7 @@ const kpiCards = computed(() => {
 
 const iconForCompletenessField = (key = "") => {
   if (key === "curp") return LucideShieldCheck;
+  if (key === "grupo" || key === "group") return LucideGraduationCap;
   if (key.toLowerCase().includes("email")) return LucideMail;
   if (key.toLowerCase().includes("telefono")) return LucidePhone;
   return LucideUsersRound;
@@ -2984,6 +2979,7 @@ const rowHealthHeadline = (student = {}) => {
 };
 const compactMissingFieldLabels = {
   curp: "CURP",
+  grupo: "Grupo",
   padreNombre: "Nombre padre",
   padreApellidoPaterno: "Ap. padre",
   padreTelefono: "Tel. padre",
@@ -3014,7 +3010,7 @@ const selectedHealthStudent = computed(() => {
   return {
     ...selectedStudent.value,
     ...editForm,
-    group: editForm.grupo || selectedStudent.value.group || selectedStudent.value.grupo || "",
+    group: editForm.grupo ?? selectedStudent.value.group ?? selectedStudent.value.grupo ?? "",
     direccion: editForm.direccion || selectedStudent.value.direccion || selectedStudent.value.address || "",
   };
 });
@@ -3128,6 +3124,7 @@ const selectedBasicCompletedCount = computed(() =>
 );
 const missingFieldTargets = {
   curp: { tab: "identity", formField: "curp", shortLabel: "CURP" },
+  grupo: { tab: "school", formField: "grupo", shortLabel: "Grupo", label: "Grupo pendiente", icon: LucideGraduationCap },
   padreNombre: { tab: "family", formField: "nombrePadre", shortLabel: "Nombre padre" },
   padreApellidoPaterno: { tab: "family", formField: "apellidoPaternoPadre", shortLabel: "Apellido padre" },
   padreTelefono: { tab: "family", formField: "telefonoPadre", shortLabel: "Tel. padre" },
@@ -3209,6 +3206,11 @@ const selectedHiddenActionCount = computed(() =>
   Math.max(0, selectedRecordActions.value.length - selectedVisibleActionChips.value.length),
 );
 const goToMissingField = (field = {}) => {
+  if (field.formField === "grupo") {
+    activeDetailTab.value = "school";
+    openGroupModal();
+    return;
+  }
   if (field.tab) activeDetailTab.value = field.tab;
   nextTick(() => {
     if (!process.client || !field.formField) return;
@@ -3222,10 +3224,12 @@ const familyTargetFields = {
   padre: ["nombrePadre", "apellidoPaternoPadre", "telefonoPadre", "emailPadre"],
   madre: ["nombreMadre", "apellidoPaternoMadre", "telefonoMadre", "emailMadre"],
   contacto: ["telefonoPadre", "telefonoMadre", "emailPadre", "emailMadre"],
+  grupo: ["grupo"],
   curp: ["curp"],
 };
 const targetForFamilyArea = (key = "") => {
   const normalizedKey = String(key || "").toLowerCase();
+  if (normalizedKey === "grupo") return { tab: "school", formField: "grupo" };
   const fields = familyTargetFields[normalizedKey] || familyTargetFields.curp;
   const formField = fields.find((field) => fieldValidationState(field) !== "ok") || fields[0];
   return { tab: normalizedKey === "curp" ? "identity" : "family", formField };
@@ -3492,7 +3496,7 @@ const groupSigilTransitionKey = ref(0);
 const groupSigilSwapping = ref(false);
 let groupSigilSwapTimer = null;
 const selectedHeaderGroupSigil = computed(() => {
-  const group = editForm.grupo || controlGroupLabel(selectedHealthStudent.value || selectedStudent.value);
+  const group = normalizeGroupPickerText(editForm.grupo);
   if (!group) return null;
   const displayLabel = groupLabelForUi(group);
   return {
@@ -3616,11 +3620,26 @@ const selectedSchoolStatus = computed(() => {
     summary: `Falta ${missing.slice(0, 2).join(", ")}${missing.length > 2 ? "..." : ""}.`,
   };
 });
+const selectedGroupState = computed(() => {
+  const group = controlGroupLabel(selectedHealthStudent.value || selectedStudent.value);
+  const missing = !group;
+  return {
+    key: "grupo",
+    title: "Grupo",
+    total: 1,
+    completed: missing ? 0 : 1,
+    missing: missing ? ["grupo"] : [],
+    tone: missing ? "warning" : "complete",
+    status: missing ? "Sin grupo" : "Listo",
+    summary: missing ? "Asigna un grupo para completar el expediente básico." : `Grupo ${group} asignado.`,
+  };
+});
 const selectedStatusSignals = computed(() => {
   const curpState = fieldValidationState("curp");
   const father = familyPersonState("padre");
   const mother = familyPersonState("madre");
   const contact = familyCriticalContactState.value;
+  const group = selectedGroupState.value;
   const curpLabel =
     curpState === "ok" ? "Listo" : curpState === "invalid" ? "Inválida" : "Pendiente";
   const curpSummary =
@@ -3639,6 +3658,15 @@ const selectedStatusSignals = computed(() => {
       count: curpState === "ok" ? "1/1" : "0/1",
       tone: curpState === "ok" ? "complete" : curpState === "invalid" ? "danger" : "warning",
       icon: LucideShieldCheck,
+    },
+    {
+      key: "grupo",
+      title: "Grupo",
+      label: group.status,
+      summary: group.summary,
+      count: `${group.completed}/${group.total}`,
+      tone: group.tone,
+      icon: LucideGraduationCap,
     },
     {
       key: "padre",
@@ -7551,6 +7579,12 @@ onBeforeUnmount(() => {
     grid-column: 2;
     grid-row: 1;
   }
+}
+
+
+.control-escolar-screen .ce-student-hero-group-cta {
+  width: clamp(198px, 16.5vw, 252px);
+  justify-content: start;
 }
 
 .control-escolar-screen .ce-detail-body {
@@ -12405,8 +12439,8 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-primary-pending-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(5, minmax(138px, 1fr));
+  gap: 12px;
   margin-top: 16px;
 }
 
@@ -13441,6 +13475,143 @@ onBeforeUnmount(() => {
 
   .control-escolar-screen .ce-student-hero-progress-track {
     grid-column: 2 / 4;
+  }
+}
+
+/* Control Escolar refinements: compact one-row identity cues, wider group sigil, and safer workspace scrolling. */
+.control-escolar-screen .ce-student-hero-copy {
+  gap: 10px;
+}
+
+.control-escolar-screen .ce-student-hero-meta {
+  flex-wrap: nowrap;
+  gap: 8px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 1px;
+  color: #6d7b91;
+  font-size: clamp(12.5px, 0.86vw, 15px);
+  scrollbar-width: none;
+}
+
+.control-escolar-screen .ce-student-hero-meta::-webkit-scrollbar {
+  display: none;
+}
+
+.control-escolar-screen .ce-student-hero-meta > i {
+  height: 20px;
+  margin-inline: 2px;
+}
+
+.control-escolar-screen .ce-student-hero-meta-token {
+  flex: 0 0 auto;
+  min-height: 30px;
+}
+
+.control-escolar-screen .ce-student-hero-pass-card {
+  flex: 0 0 auto;
+  min-height: 31px;
+  padding: 3px 10px 3px 6px;
+  font-size: clamp(12px, 0.82vw, 14px);
+}
+
+.control-escolar-screen .ce-student-identity-chip {
+  flex: 0 0 auto;
+  min-height: 29px;
+  padding-inline: 10px;
+  font-size: clamp(11.5px, 0.78vw, 13px);
+}
+
+.control-escolar-screen .ce-student-hero-group-sigil {
+  width: clamp(198px, 16.5vw, 252px);
+  grid-template-columns: auto minmax(92px, 1fr);
+  gap: 14px;
+  padding-right: 18px;
+}
+
+.control-escolar-screen .ce-student-hero-group-caption strong {
+  max-width: 128px;
+}
+
+.control-escolar-screen .ce-student-hero-group-caption em {
+  white-space: nowrap;
+  font-size: 10px;
+  letter-spacing: .035em;
+}
+
+.control-escolar-screen .ce-student-hero-group-art {
+  width: clamp(66px, 5.9vw, 86px);
+  height: clamp(66px, 5.9vw, 86px);
+}
+
+.control-escolar-screen .ce-detail-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow-y: auto;
+  scroll-padding-bottom: 96px;
+}
+
+.control-escolar-screen .ce-edit-form {
+  flex: 0 0 auto;
+  padding-bottom: max(92px, calc(24px + env(safe-area-inset-bottom)));
+}
+
+.control-escolar-screen .ce-primary-pending-card {
+  min-height: 168px;
+  padding: 16px 14px 14px;
+}
+
+.control-escolar-screen .ce-primary-pending-icon {
+  width: 46px;
+  height: 46px;
+}
+
+.control-escolar-screen .ce-primary-pending-copy b {
+  font-size: 16px;
+}
+
+.control-escolar-screen .ce-primary-pending-card-body {
+  min-height: 58px;
+  margin-top: 14px;
+  padding: 14px 0 12px;
+}
+
+.control-escolar-screen .ce-primary-pending-action {
+  min-width: 104px;
+  min-height: 34px;
+}
+
+@media (max-width: 1480px) {
+  .control-escolar-screen .ce-primary-pending-grid {
+    grid-template-columns: repeat(5, minmax(124px, 1fr));
+    gap: 9px;
+  }
+
+  .control-escolar-screen .ce-primary-pending-card {
+    min-height: 154px;
+    padding: 13px 11px 12px;
+  }
+
+  .control-escolar-screen .ce-primary-pending-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .control-escolar-screen .ce-primary-pending-copy strong,
+  .control-escolar-screen .ce-primary-pending-count,
+  .control-escolar-screen .ce-primary-pending-meta {
+    font-size: 10.5px;
+  }
+
+  .control-escolar-screen .ce-primary-pending-copy b {
+    font-size: 14px;
+  }
+
+  .control-escolar-screen .ce-primary-pending-action {
+    min-width: 88px;
   }
 }
 

@@ -485,6 +485,7 @@ export const isExpedienteParentComplete = (student: any = {}, type: 'padre' | 'm
 
 export const CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS = [
   { key: 'curp', label: 'CURP' },
+  { key: 'grupo', label: 'Grupo' },
   { key: 'padreNombre', label: 'Nombre padre' },
   { key: 'padreApellidoPaterno', label: 'Apellido paterno padre' },
   { key: 'padreTelefono', label: 'Teléfono padre' },
