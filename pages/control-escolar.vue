@@ -1849,7 +1849,29 @@ const state = useState("globalState", () => ({
   ciclo: normalizeCicloOption(cicloCookie.value),
 }));
 const activePlantelCookie = useCookie("auth_active_plantel");
-const initialControlPlantel = String(activePlantelCookie.value || "").trim();
+const normalizeControlPlantel = (value) => String(value || "").trim().toUpperCase();
+const controlSpecificPlantel = (value) => {
+  const normalized = normalizeControlPlantel(value);
+  return normalized && normalized !== "GLOBAL" ? normalized : "";
+};
+const readActiveControlPlantelCookie = () => {
+  if (process.client && typeof document !== "undefined") {
+    const cookie = document.cookie
+      .split(";")
+      .map((entry) => entry.trim())
+      .find((entry) => entry.startsWith("auth_active_plantel="));
+    if (cookie) {
+      try {
+        return controlSpecificPlantel(decodeURIComponent(cookie.split("=").slice(1).join("=")));
+      } catch {
+        return controlSpecificPlantel(cookie.split("=").slice(1).join("="));
+      }
+    }
+  }
+
+  return controlSpecificPlantel(activePlantelCookie.value);
+};
+const initialControlPlantel = readActiveControlPlantelCookie();
 const externalConcepts = ref([]);
 const tipoIngresoConcepts = ref([]);
 const ENROLLMENT_CONCEPTS_CACHE_BASE_KEY = "control-escolar-enrollment-concepts:v3";
@@ -4101,11 +4123,26 @@ const isCurrentControlScopeSignature = (scopeSignature = "") =>
 const loadOptions = async () => {
   optionsLoading.value = true;
   try {
-    const response = await $fetch("/api/control-escolar/options");
+    const activeCookiePlantel = readActiveControlPlantelCookie();
+    const response = await $fetch("/api/control-escolar/options", {
+      cache: "no-store",
+      query: { _scope: Date.now() },
+    });
+    const responsePlantel = controlSpecificPlantel(response?.activePlantel);
     loadError.value = "";
-    selectedAgentId.value = response.activePlantel || "";
+
+    if (activeCookiePlantel && responsePlantel && responsePlantel !== activeCookiePlantel) {
+      console.warn("[Control Escolar] Ignorando opciones con plantel activo obsoleto.", {
+        cookiePlantel: activeCookiePlantel,
+        responsePlantel,
+      });
+      selectedAgentId.value = activeCookiePlantel;
+      return;
+    }
+
+    selectedAgentId.value = responsePlantel || activeCookiePlantel || "";
   } catch (error) {
-    selectedAgentId.value = "";
+    selectedAgentId.value = readActiveControlPlantelCookie();
     loadError.value =
       error?.data?.message ||
       error?.message ||
@@ -4120,6 +4157,7 @@ const loadKpis = async () => {
   kpisLoading.value = true;
   try {
     const response = await $fetch("/api/control-escolar/kpis", {
+      cache: "no-store",
       query: buildScopeQuery(),
     });
     kpis.value = response.kpis;
@@ -5085,12 +5123,25 @@ const loadStudents = async (options = {}) => {
         controlStudentsIndex.value.length > 0 ||
         students.value.length > 0));
 
+  const isPlantelScopeMismatchError = (error) => {
+    const status = Number(
+      error?.statusCode ||
+        error?.status ||
+        error?.response?.status ||
+        error?.data?.statusCode ||
+        0,
+    );
+    const code = String(error?.data?.code || error?.data?.data?.code || error?.code || "");
+    return status === 409 || code === "CONTROL_ESCOLAR_PLANTEL_SCOPE_MISMATCH";
+  };
+
   try {
     controlBaseStage.value = "loading";
     controlExternalDbStage.value = "loading";
     controlCompleteStage.value = "loading";
     const requestStartedAt = controlNow();
     const response = await $fetch("/api/control-escolar/students", {
+      cache: "no-store",
       query: { ...query, phase: "enriched" },
     });
     markClientStep(
@@ -5153,7 +5204,8 @@ const loadStudents = async (options = {}) => {
       !isCurrentControlScopeSignature(requestScopeSignature)
     )
       return;
-    controlBaseStage.value = canKeepVisibleData() ? "partial" : "failed";
+    const plantelScopeMismatch = isPlantelScopeMismatchError(error);
+    controlBaseStage.value = canKeepVisibleData() && !plantelScopeMismatch ? "partial" : "failed";
     controlExternalDbStage.value = "failed";
     controlCompleteStage.value = "failed";
     lastControlLoadDiagnostics.value = normalizeControlDiagnostics({
@@ -5166,9 +5218,9 @@ const loadStudents = async (options = {}) => {
       status: "failed",
     });
 
-    if (!canKeepVisibleData()) {
+    if (!canKeepVisibleData() || plantelScopeMismatch) {
       resetControlStudentsView();
-      controlCacheStage.value = cached ? "ready" : "empty";
+      controlCacheStage.value = cached && !plantelScopeMismatch ? "ready" : "empty";
       loadError.value =
         error?.data?.message ||
         error?.message ||
@@ -5568,7 +5620,7 @@ const reconcileControlKpisInBackground = () => {
   kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
   const query = buildScopeQuery();
   const scopeSignature = controlScopeSignatureFromQuery(query);
-  $fetch("/api/control-escolar/kpis", { query })
+  $fetch("/api/control-escolar/kpis", { cache: "no-store", query })
     .then((response) => {
       if (isCurrentControlScopeSignature(scopeSignature) && response?.kpis) {
         kpis.value = response.kpis;
@@ -5679,6 +5731,7 @@ const exportCurrentView = () => {
       if (value !== undefined && value !== "") params.set(key, value);
     },
   );
+  params.set("_scope", String(Date.now()));
   window.open(`/api/control-escolar/export?${params.toString()}`, "_blank");
 };
 
@@ -5690,6 +5743,7 @@ const exportMatriculaDb = () => {
       if (value !== undefined && value !== "") params.set(key, value);
     },
   );
+  params.set("_scope", String(Date.now()));
   window.open(
     `/api/control-escolar/matricula-db/export?${params.toString()}`,
     "_blank",
@@ -5979,7 +6033,7 @@ const loadEnrollmentConfig = async ({ refreshStudents = false } = {}) => {
   const previousTipoConcepts = tipoIngresoConcepts.value.join("|");
 
   try {
-    const configData = await $fetch("/api/control-escolar/enrollment-config");
+    const configData = await $fetch("/api/control-escolar/enrollment-config", { cache: "no-store" });
     parseEnrollmentConfig(configData);
   } catch (serverError) {
     console.warn(

@@ -1,1 +1,1 @@
-Refina experiencia móvil de Control Escolar
+Corrige alcance de plantel en Control Escolar

@@ -240,24 +240,38 @@ export const resolveControlEscolarAuth = async (
   const allowedPlanteles = user.isSuperAdmin
     ? [...PLANTELES_LIST]
     : user.plantelesList.map(normalizePlantel);
-  const agentId = requested || active;
 
-  if (!agentId || agentId === "GLOBAL" || !PLANTEL_SET.has(agentId)) {
+  if (!active || active === "GLOBAL" || !PLANTEL_SET.has(active)) {
     throw createError({
       statusCode: 400,
       message:
         "Selecciona un plantel específico en el selector lateral para usar Control Escolar.",
+      data: { code: "CONTROL_ESCOLAR_ACTIVE_PLANTEL_REQUIRED" },
     });
   }
 
-  if (!allowedPlanteles.includes(agentId)) {
+  if (!allowedPlanteles.includes(active)) {
     throw createError({
       statusCode: 403,
-      message: "El plantel solicitado no está dentro del alcance del usuario.",
+      message: "El plantel activo no está dentro del alcance del usuario.",
+      data: { code: "CONTROL_ESCOLAR_ACTIVE_PLANTEL_FORBIDDEN" },
     });
   }
 
-  return { user, agentId };
+  if (requested && requested !== active) {
+    throw createError({
+      statusCode: 409,
+      message:
+        "El plantel solicitado no coincide con el plantel activo. Vuelve a cargar Control Escolar.",
+      data: {
+        code: "CONTROL_ESCOLAR_PLANTEL_SCOPE_MISMATCH",
+        activePlantel: active,
+        requestedPlantel: requested,
+      },
+    });
+  }
+
+  return { user, agentId: active };
 };
 
 export const listControlEscolarPlanteles = async (event: any) => {

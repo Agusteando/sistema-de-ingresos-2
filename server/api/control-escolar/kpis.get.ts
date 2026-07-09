@@ -10,8 +10,9 @@ export default defineEventHandler(async (event) => {
       const kpis = await fetchControlEscolarKpis(auth.agentId, getQuery(event))
       return { agentId: auth.agentId, kpis }
     } catch (error: any) {
+      const errorData = error?.data || {}
       const statusCode = error?.statusCode || error?.httpStatus || (error?.name === 'AbortError' ? 504 : 502)
-      const message = error?.data?.message || error?.statusMessage || error?.message || 'No se pudieron cargar los KPIs de Control Escolar para este plantel.'
+      const message = errorData?.message || error?.statusMessage || error?.message || 'No se pudieron cargar los KPIs de Control Escolar para este plantel.'
       const safeMessage = String(message).slice(0, 500)
 
       setResponseStatus(event, statusCode, safeMessage)
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
         statusCode,
         statusMessage: safeMessage,
         message: safeMessage,
-        code: error?.code || null,
+        code: error?.code || errorData?.code || errorData?.data?.code || null,
         bridgeStatus: error?.httpStatus || null,
         agentId: auth.agentId
       }
