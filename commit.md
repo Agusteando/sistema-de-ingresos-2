@@ -1,1 +1,1 @@
-Rediseña pendientes principales de Control Escolar
+Agrega filtro sin grupo en Control Escolar

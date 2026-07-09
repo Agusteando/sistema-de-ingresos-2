@@ -2700,6 +2700,7 @@ const qualityFilters = computed(() => {
       count: data.expedientesIncompletos || 0,
     },
     { key: "curp", label: "Sin CURP", count: data.sinCurp || 0 },
+    { key: "grupo", label: "Sin grupo", count: data.sinGrupo || 0 },
     { key: "padre", label: "Sin datos de padre", count: data.sinPadre || 0 },
     { key: "madre", label: "Sin datos de madre", count: data.sinMadre || 0 },
     { key: "contact", label: "Sin contacto válido", count: data.sinContacto || 0 },
@@ -2827,6 +2828,9 @@ const qualityLabel = (value) =>
     complete: "Completo",
     incomplete: "Expediente incompleto",
     curp: "Sin CURP",
+    grupo: "Sin grupo",
+    sin_grupo: "Sin grupo",
+    group: "Sin grupo",
     phone: "Sin datos familiares",
     email: "Sin datos familiares",
     guardian: "Sin datos familiares",
@@ -4357,6 +4361,8 @@ const localStudentMatchesQuality = (student, quality) => {
   if (normalized === "incomplete" || normalized === "incompleto")
     return missing.length > 0;
   if (normalized === "curp") return missing.includes("curp");
+  if (normalized === "grupo" || normalized === "group" || normalized === "sin_grupo")
+    return controlMissingGroup(student);
   if (normalized === "padre" || normalized === "father") return missing.includes("padre");
   if (normalized === "madre" || normalized === "mother") return missing.includes("madre");
   if (normalized === "phone" || normalized === "telefono" || normalized === "email" || normalized === "guardian" || normalized === "tutor")
@@ -4652,6 +4658,7 @@ const buildClientKpisFromStudents = (sourceStudents = []) => {
     ).length,
     sinContacto,
     sinCurp: missing("curp"),
+    sinGrupo: progressRows.filter(controlMissingGroup).length,
     sinPadre: progressRows.filter((student) => ["padrenombre", "padreapellidopaterno", "padretelefono", "padreemail"].some((field) => normalizedMissingFields(student).includes(field))).length,
     sinMadre: progressRows.filter((student) => ["madrenombre", "madreapellidopaterno", "madretelefono", "madreemail"].some((field) => normalizedMissingFields(student).includes(field))).length,
     sinTelefono: progressRows.filter((student) => ["padretelefono", "madretelefono"].some((field) => normalizedMissingFields(student).includes(field))).length,

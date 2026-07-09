@@ -2200,6 +2200,11 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
       result = result.filter((student) =>
         student.missingFields.includes("curp"),
       );
+    if (quality === "grupo" || quality === "group" || quality === "sin_grupo")
+      result = result.filter((student) => {
+        const group = String(student.group || "").replaceAll('"', "").trim().toLowerCase();
+        return !group || group === "null";
+      });
     if (quality === "padre" || quality === "father")
       result = result.filter((student) => hasMissing(student, fatherKeys));
     if (quality === "madre" || quality === "mother")
@@ -2485,6 +2490,10 @@ export const fetchControlEscolarKpis = async (
     expedientesIncompletos,
     sinContacto,
     sinCurp: missing("curp"),
+    sinGrupo: progressStudents.filter((student) => {
+      const group = String(student.group || "").replaceAll('"', "").trim().toLowerCase();
+      return !group || group === "null";
+    }).length,
     sinPadre: progressStudents.filter((student) => ["padreNombre", "padreApellidoPaterno", "padreTelefono", "padreEmail"].some((field) => student.missingFields.includes(field))).length,
     sinMadre: progressStudents.filter((student) => ["madreNombre", "madreApellidoPaterno", "madreTelefono", "madreEmail"].some((field) => student.missingFields.includes(field))).length,
     sinTelefono: progressStudents.filter((student) => ["padreTelefono", "madreTelefono"].some((field) => student.missingFields.includes(field))).length,
