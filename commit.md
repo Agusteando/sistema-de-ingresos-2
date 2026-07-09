@@ -1,1 +1,1 @@
-Corrige los íconos de género en Control Escolar
+Simplifica los vínculos familiares en Control Escolar

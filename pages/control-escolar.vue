@@ -963,10 +963,9 @@
                     v-show="activeDetailTab === 'family'"
                     class="ce-tab-panel ce-family-panel"
                   >
-                    <div class="ce-panel-heading">
+                    <div class="ce-panel-heading ce-panel-heading--compact">
                       <div>
-                        <h3>Familia y contactos</h3>
-                        <p>Los estados se calculan automáticamente con la información capturada.</p>
+                        <h3>Familia y vínculos</h3>
                       </div>
                     </div>
                     <section class="ce-family-readiness" aria-label="Estado de contacto familiar">
@@ -1001,23 +1000,36 @@
                       </span>
                     </section>
 
-                    <section class="ce-family-siblings-card" aria-label="Hermanos detectados por Control Escolar">
+                    <section class="ce-family-siblings-card" aria-label="Vínculos familiares">
                       <header>
-                        <div>
-                          <small>Hermanos</small>
-                          <h3>Detección por padre y madre</h3>
-                          <p>{{ selectedSiblingMatchLabel }}</p>
+                        <div class="ce-family-siblings-heading">
+                          <span class="ce-family-siblings-icon" aria-hidden="true">
+                            <LucideUsersRound :size="17" />
+                          </span>
+                          <div>
+                            <small>Vínculos</small>
+                            <h3>Familia escolar</h3>
+                          </div>
                         </div>
-                        <span>{{ selectedControlEscolarSiblings.length }}</span>
+                        <span
+                          :class="[
+                            'ce-family-siblings-count',
+                            selectedControlEscolarSiblings.length ? 'has-links' : selectedParentSiblingSignature.complete ? 'is-clear' : 'is-pending',
+                          ]"
+                          :title="selectedSiblingMatchLabel"
+                          :aria-label="selectedSiblingMatchLabel"
+                        >
+                          {{ selectedControlEscolarSiblings.length }}
+                        </span>
                       </header>
-                      <dl class="ce-family-siblings-match">
-                        <div>
+                      <dl class="ce-family-siblings-match" aria-label="Padres registrados">
+                        <div :class="{ 'is-missing': !selectedParentSiblingSignature.fatherName }">
                           <dt>Padre</dt>
-                          <dd>{{ selectedParentSiblingSignature.fatherName || 'Sin dato suficiente' }}</dd>
+                          <dd>{{ selectedParentSiblingSignature.fatherName || 'Pendiente' }}</dd>
                         </div>
-                        <div>
+                        <div :class="{ 'is-missing': !selectedParentSiblingSignature.motherName }">
                           <dt>Madre</dt>
-                          <dd>{{ selectedParentSiblingSignature.motherName || 'Sin dato suficiente' }}</dd>
+                          <dd>{{ selectedParentSiblingSignature.motherName || 'Pendiente' }}</dd>
                         </div>
                       </dl>
                       <div v-if="selectedControlEscolarSiblings.length" class="ce-family-siblings-list">
@@ -1034,9 +1046,19 @@
                           </span>
                         </button>
                       </div>
-                      <p v-else class="ce-family-siblings-empty">
-                        {{ selectedParentSiblingSignature.complete ? 'No hay otros alumnos con el mismo padre y la misma madre en el alcance cargado.' : 'Falta completar padre y madre para calcular hermanos.' }}
-                      </p>
+                      <div
+                        v-else
+                        :class="[
+                          'ce-family-siblings-state',
+                          selectedParentSiblingSignature.complete ? 'is-clear' : 'is-pending',
+                        ]"
+                        :title="selectedSiblingMatchLabel"
+                        :aria-label="selectedSiblingMatchLabel"
+                      >
+                        <LucideCheck v-if="selectedParentSiblingSignature.complete" :size="14" />
+                        <LucideAlertTriangle v-else :size="14" />
+                        <span>{{ selectedParentSiblingSignature.complete ? 'Sin vínculos' : 'Pendiente' }}</span>
+                      </div>
                     </section>
 
                     <div class="ce-family-grid">
@@ -3214,8 +3236,9 @@ const selectedControlEscolarSiblings = computed(() => {
 
 const selectedSiblingMatchLabel = computed(() => {
   const signature = selectedParentSiblingSignature.value;
-  if (!signature.complete) return "Captura padre y madre completos para detectar hermanos.";
-  return "Mismo padre y misma madre registrados.";
+  if (!signature.complete) return "Vínculo familiar pendiente";
+  const count = selectedControlEscolarSiblings.value.length;
+  return count ? `${count} vínculo${count === 1 ? "" : "s"} familiar${count === 1 ? "" : "es"}` : "Sin vínculos familiares";
 });
 
 const selectSiblingStudent = (student) => {
@@ -8992,24 +9015,48 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-family-siblings-card {
   display: grid;
   min-width: 760px;
-  gap: 10px;
+  gap: 11px;
   margin-bottom: 11px;
-  padding: 13px;
+  padding: 14px;
   border: 1px solid rgba(221, 231, 240, 0.98);
-  border-radius: 14px;
-  background: #fff;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 0 0, rgba(63, 145, 56, 0.04), transparent 28%),
+    #fff;
   box-shadow: 0 8px 20px rgba(21, 35, 60, 0.035);
 }
 
 .control-escolar-screen .ce-family-siblings-card header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.control-escolar-screen .ce-family-siblings-card header > div {
+.control-escolar-screen .ce-family-siblings-heading {
+  display: inline-flex;
   min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.control-escolar-screen .ce-family-siblings-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.control-escolar-screen .ce-family-siblings-icon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(63, 145, 56, 0.16);
+  border-radius: 12px;
+  background: #f4faf2;
+  color: var(--ce-green-strong);
 }
 
 .control-escolar-screen .ce-family-siblings-card small,
@@ -9017,34 +9064,43 @@ onBeforeUnmount(() => {
   color: #708098;
   font-size: 9.5px;
   font-weight: 900;
+  letter-spacing: .035em;
+  text-transform: uppercase;
 }
 
 .control-escolar-screen .ce-family-siblings-card h3 {
-  margin: 2px 0 0;
+  margin: 0;
   color: var(--ce-ink);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 950;
+  letter-spacing: -.015em;
+  line-height: 1.1;
 }
 
-.control-escolar-screen .ce-family-siblings-card p {
-  margin: 3px 0 0;
-  color: #647188;
-  font-size: 10px;
-  font-weight: 720;
-  line-height: 1.3;
-}
-
-.control-escolar-screen .ce-family-siblings-card header > span {
+.control-escolar-screen .ce-family-siblings-count {
   display: inline-flex;
-  min-width: 28px;
-  min-height: 24px;
+  min-width: 31px;
+  min-height: 28px;
   align-items: center;
   justify-content: center;
+  border: 1px solid #dde6ef;
   border-radius: 999px;
-  background: #eef2f6;
-  color: #5f6f84;
-  font-size: 10px;
+  background: #f6f9fc;
+  color: #647188;
+  font-size: 11px;
   font-weight: 950;
+}
+
+.control-escolar-screen .ce-family-siblings-count.has-links {
+  border-color: rgba(63, 145, 56, 0.22);
+  background: #eef8ea;
+  color: var(--ce-green-strong);
+}
+
+.control-escolar-screen .ce-family-siblings-count.is-pending {
+  border-color: rgba(221, 139, 33, 0.22);
+  background: #fff8eb;
+  color: #9a6c1d;
 }
 
 .control-escolar-screen .ce-family-siblings-match {
@@ -9055,22 +9111,49 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-family-siblings-match div {
+  position: relative;
   display: grid;
-  gap: 3px;
-  padding: 9px 10px;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 11px 10px 14px;
+  overflow: hidden;
   border: 1px solid #e6edf4;
-  border-radius: 12px;
+  border-radius: 13px;
   background: #fbfdff;
+}
+
+.control-escolar-screen .ce-family-siblings-match div::before {
+  content: "";
+  position: absolute;
+  inset: 10px auto 10px 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--ce-green-strong);
+  opacity: .62;
+}
+
+.control-escolar-screen .ce-family-siblings-match div.is-missing {
+  border-color: rgba(221, 139, 33, 0.22);
+  background: #fffbf4;
+}
+
+.control-escolar-screen .ce-family-siblings-match div.is-missing::before {
+  background: #c4812b;
+  opacity: .55;
 }
 
 .control-escolar-screen .ce-family-siblings-match dd {
   overflow: hidden;
   margin: 0;
   color: var(--ce-ink);
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 11.5px;
+  font-weight: 880;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.control-escolar-screen .ce-family-siblings-match div.is-missing dd {
+  color: #9a6c1d;
 }
 
 .control-escolar-screen .ce-family-siblings-list {
@@ -9116,11 +9199,32 @@ onBeforeUnmount(() => {
   font-weight: 900;
 }
 
-.control-escolar-screen .ce-family-siblings-empty {
-  padding: 9px 10px;
-  border: 1px dashed #d8e2ec;
-  border-radius: 12px;
-  background: #fbfdff;
+.control-escolar-screen .ce-family-siblings-state {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  min-height: 29px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid #dde6ef;
+  border-radius: 999px;
+  background: #f6f9fc;
+  color: #647188;
+  font-size: 10.5px;
+  font-weight: 900;
+}
+
+.control-escolar-screen .ce-family-siblings-state.is-clear {
+  border-color: rgba(63, 145, 56, 0.22);
+  background: #f4faf2;
+  color: var(--ce-green-strong);
+}
+
+.control-escolar-screen .ce-family-siblings-state.is-pending {
+  border-color: rgba(221, 139, 33, 0.22);
+  background: #fff8eb;
+  color: #9a6c1d;
 }
 
 .control-escolar-screen .ce-family-grid {
