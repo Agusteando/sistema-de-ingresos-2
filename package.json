@@ -16,7 +16,7 @@
     "dayjs": "^1.11.10",
     "google-auth-library": "^9.6.3",
     "googleapis": "^133.0.0",
-    "lucide-vue-next": "^0.344.0",
+    "lucide-vue-next": "^1.0.0",
     "mysql2": "^3.9.2",
     "nuxt": "^3.10.3",
     "vue": "^3.4.21",

@@ -1,1 +1,1 @@
-Muestra identidad y servicios en el encabezado de Control Escolar
+Corrige los íconos de género en Control Escolar
