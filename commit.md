@@ -1,1 +1,1 @@
-Muestra el nombre completo del alumno en Control Escolar
+Rediseña Control Escolar para uso móvil premium
