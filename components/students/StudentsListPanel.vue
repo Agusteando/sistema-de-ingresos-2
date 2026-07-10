@@ -10,14 +10,27 @@
           <h3>{{ sourceUnavailableTitle }}</h3>
           <p>{{ sourceUnavailableMessage }}</p>
         </div>
-        <div class="source-hints">
-          <span><LucideComputer :size="15" /> Equipo del plantel</span>
-          <span><LucideClock3 :size="15" /> {{ sourceUnavailableHint }}</span>
+        <div class="source-diagnostic" role="status">
+          <LucideInfo :size="17" aria-hidden="true" />
+          <span class="source-diagnostic-copy">
+            <strong>Motivo detectado</strong>
+            <span>{{ sourceUnavailableReason }}</span>
+          </span>
+          <small v-if="sourceUnavailableReference" class="source-diagnostic-reference">
+            Ref. {{ sourceUnavailableReference }}
+          </small>
         </div>
-        <button type="button" class="source-retry" @click="$emit('refresh-source')">
-          <LucideRotateCcw :size="16" />
-          Intentar de nuevo
-        </button>
+        <p class="source-next-step">Reintenta nuevamente o reinicia tu sesión.</p>
+        <div class="source-actions">
+          <button type="button" class="source-retry" @click="$emit('refresh-source')">
+            <LucideRotateCcw :size="16" />
+            REINTENTAR
+          </button>
+          <button type="button" class="source-session-restart" @click="$emit('restart-session')">
+            <LucideLogIn :size="16" />
+            Reiniciar sesión
+          </button>
+        </div>
       </section>
     </div>
 
@@ -77,14 +90,27 @@
             <h3>{{ sourceUnavailableTitle }}</h3>
             <p>{{ sourceUnavailableMessage }}</p>
           </div>
-          <div class="source-hints">
-            <span><LucideComputer :size="15" /> Equipo del plantel</span>
-            <span><LucideClock3 :size="15" /> {{ sourceUnavailableHint }}</span>
+          <div class="source-diagnostic" role="status">
+            <LucideInfo :size="17" aria-hidden="true" />
+            <span class="source-diagnostic-copy">
+              <strong>Motivo detectado</strong>
+              <span>{{ sourceUnavailableReason }}</span>
+            </span>
+            <small v-if="sourceUnavailableReference" class="source-diagnostic-reference">
+              Ref. {{ sourceUnavailableReference }}
+            </small>
           </div>
-          <button type="button" class="source-retry" @click="$emit('refresh-source')">
-            <LucideRotateCcw :size="16" />
-            Intentar de nuevo
-          </button>
+          <p class="source-next-step">Reintenta nuevamente o reinicia tu sesión.</p>
+          <div class="source-actions">
+            <button type="button" class="source-retry" @click="$emit('refresh-source')">
+              <LucideRotateCcw :size="16" />
+              REINTENTAR
+            </button>
+            <button type="button" class="source-session-restart" @click="$emit('restart-session')">
+              <LucideLogIn :size="16" />
+              Reiniciar sesión
+            </button>
+          </div>
         </section>
         <div v-else-if="!displayedStudents.length" class="empty-state muted">No hay registros bajo los filtros actuales.</div>
         <template v-else>
@@ -183,8 +209,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { LucideBuilding2, LucideChevronRight, LucideClock3, LucideCloudOff, LucideComputer, LucideGlobe2, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
+import { computed } from 'vue'
+import { LucideBuilding2, LucideChevronRight, LucideGlobe2, LucideInfo, LucideLogIn, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
@@ -216,21 +242,43 @@ const props = defineProps({
   tipoIngresoConcepts: { type: Array, default: () => [] },
   targetCiclo: { type: [String, Number], default: '2025' },
   photoCache: { type: Object, default: () => ({}) },
-  sourceUnavailable: { type: Boolean, default: false }
+  sourceUnavailable: { type: Boolean, default: false },
+  sourceUnavailableCode: { type: String, default: '' },
+  sourceUnavailableDetail: { type: String, default: '' }
 })
 
-const localHour = ref(12)
-onMounted(() => {
-  localHour.value = new Date().getHours()
+const sourceUnavailableTitle = 'La información del plantel está tardando en responder'
+const sourceUnavailableMessage = 'La consulta local se pausó por un momento. Tus datos permanecen sin cambios.'
+
+const sourceUnavailableContext = computed(() => {
+  const code = String(props.sourceUnavailableCode || '').trim()
+  const detail = String(props.sourceUnavailableDetail || '').trim()
+  return String(code || detail).toUpperCase()
 })
-const isAfterOfficeHours = computed(() => localHour.value >= 17)
-const sourceUnavailableTitle = computed(() => isAfterOfficeHours.value
-  ? 'El equipo del plantel ya cerró por hoy'
-  : 'La base del plantel no está disponible en este momento')
-const sourceUnavailableMessage = computed(() => isAfterOfficeHours.value
-  ? 'La información se consulta desde el equipo local del plantel. Si el administrador ya terminó su jornada, la lista volverá a estar disponible cuando ese equipo se encienda de nuevo.'
-  : 'La lista se activa cuando el equipo del administrador del plantel está encendido y conectado. Solicita que lo mantengan disponible y vuelve a intentarlo.')
-const sourceUnavailableHint = computed(() => isAfterOfficeHours.value ? 'Fuera de horario' : 'Esperando conexión')
+
+const sourceUnavailableReason = computed(() => {
+  const context = sourceUnavailableContext.value
+
+  if (/AUTH_SESSION|SESSION|SESI[ÓO]N|UNAUTHORIZED|FORBIDDEN|\b401\b|\b403\b/.test(context)) {
+    return 'La sesión necesita renovarse antes de volver a consultar la información.'
+  }
+  if (/MISSING_AGENT|NO DB BRIDGE AGENT|PLANTEL ACTIVO|IDENTIFICAR EL PLANTEL/.test(context)) {
+    return 'La sesión no pudo confirmar el plantel activo para esta consulta.'
+  }
+  if (/TIMEOUT|TIMED OUT|\b504\b|TIEMPO DE ESPERA|TARD[ÓO]/.test(context)) {
+    return 'La conexión local tardó más de lo habitual en responder.'
+  }
+  if (/NETWORK|OFFLINE|UNAVAILABLE|FUERA DE L[ÍI]NEA|\b502\b|\b503\b|CONEXI[ÓO]N/.test(context)) {
+    return 'El enlace con el equipo del plantel se interrumpió por un momento.'
+  }
+
+  return 'La conexión local no respondió en este intento.'
+})
+
+const sourceUnavailableReference = computed(() => {
+  const code = String(props.sourceUnavailableCode || '').trim().toUpperCase()
+  return /^[A-Z][A-Z0-9_:-]{2,79}$/.test(code) ? code : ''
+})
 
 const isSelected = (student) => props.selectedMatriculas.has(normalizeStudentMatricula(student?.matricula))
 const resolvedTipoIngreso = (student) => resolveTipoIngreso(student, props.targetCiclo, { enrollmentConcepts: props.tipoIngresoConcepts.length ? props.tipoIngresoConcepts : props.externalConcepts })
@@ -263,7 +311,8 @@ defineEmits([
   'student-row-click',
   'select-student',
   'show-student-menu',
-  'refresh-source'
+  'refresh-source',
+  'restart-session'
 ])
 </script>
 
@@ -302,7 +351,7 @@ defineEmits([
   position: relative;
   display: flex;
   width: 100%;
-  min-height: clamp(360px, 50vh, 540px);
+  min-height: clamp(340px, 48vh, 500px);
   height: auto;
   z-index: 5;
   flex-direction: column;
@@ -315,7 +364,7 @@ defineEmits([
     radial-gradient(circle at 20% 18%, rgba(112, 180, 73, 0.16), transparent 12rem),
     radial-gradient(circle at 84% 12%, rgba(0, 126, 148, 0.12), transparent 13rem),
     linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 248, 0.96));
-  padding: 34px 28px;
+  padding: clamp(18px, 3vw, 30px) 28px;
   text-align: center;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 22px 55px rgba(22, 64, 46, 0.08);
 }
@@ -335,8 +384,8 @@ defineEmits([
 .source-visual {
   position: relative;
   z-index: 1;
-  width: min(88%, 360px);
-  margin: -10px auto 4px;
+  width: min(72%, 280px);
+  margin: -12px auto 0;
 }
 
 .source-visual img {
@@ -369,7 +418,7 @@ defineEmits([
 }
 
 .source-copy h3 {
-  margin: 16px 0 10px;
+  margin: 12px 0 8px;
   color: #16213b;
   font-size: clamp(1.25rem, 2.1vw, 1.75rem);
   font-weight: 950;
@@ -381,52 +430,175 @@ defineEmits([
   color: #64748b;
   font-size: 0.98rem;
   font-weight: 650;
-  line-height: 1.65;
+  line-height: 1.55;
 }
 
-.source-hints {
+.source-diagnostic {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(100%, 620px);
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  border: 1px solid rgba(184, 214, 195, 0.92);
+  border-radius: 16px;
+  background: rgba(244, 251, 246, 0.9);
+  padding: 11px 13px;
+  color: #475569;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.source-diagnostic > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #2f7d38;
+}
+
+.source-diagnostic-copy {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+}
+
+.source-diagnostic-copy strong {
+  color: #244a31;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.source-diagnostic-reference {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 3px 7px;
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.source-next-step {
+  position: relative;
+  z-index: 1;
+  margin: 13px 0 0;
+  color: #475569;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.source-actions {
   position: relative;
   z-index: 1;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
-  margin-top: 22px;
+  margin-top: 14px;
 }
 
-.source-hints span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid rgba(204, 216, 226, 0.9);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  padding: 8px 12px;
-  color: #475569;
-  font-size: 0.82rem;
-  font-weight: 800;
-}
-
-.source-retry {
-  position: relative;
-  z-index: 1;
+.source-retry,
+.source-session-restart {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 24px;
-  border: 0;
   border-radius: 14px;
-  background: linear-gradient(135deg, #2f8f46, #52b343);
-  padding: 12px 18px;
-  color: white;
+  padding: 11px 17px;
   font-size: 0.9rem;
   font-weight: 900;
-  box-shadow: 0 18px 30px rgba(45, 142, 66, 0.22);
   cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
 }
 
-.source-retry:hover {
+.source-retry {
+  border: 0;
+  background: linear-gradient(135deg, #2f8f46, #52b343);
+  color: white;
+  box-shadow: 0 18px 30px rgba(45, 142, 66, 0.22);
+}
+
+.source-session-restart {
+  border: 1px solid rgba(82, 112, 126, 0.24);
+  background: rgba(255, 255, 255, 0.88);
+  color: #34495e;
+  box-shadow: 0 12px 24px rgba(32, 63, 78, 0.08);
+}
+
+.source-retry:hover,
+.source-session-restart:hover {
   transform: translateY(-1px);
+}
+
+.source-retry:focus-visible,
+.source-session-restart:focus-visible {
+  outline: 3px solid rgba(47, 143, 70, 0.24);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .student-source-unavailable {
+    padding-inline: 18px;
+  }
+
+  .source-visual {
+    width: min(78%, 230px);
+  }
+
+  .source-diagnostic {
+    flex-wrap: wrap;
+  }
+
+  .source-diagnostic-reference {
+    margin-left: 27px;
+  }
+
+  .source-actions {
+    width: min(100%, 360px);
+  }
+
+  .source-retry,
+  .source-session-restart {
+    flex: 1 1 150px;
+  }
+}
+
+@media (max-height: 620px) and (min-width: 641px) {
+  .student-source-unavailable {
+    min-height: 320px;
+    padding-block: 14px;
+  }
+
+  .source-visual {
+    width: min(58%, 205px);
+    margin-top: -14px;
+  }
+
+  .source-copy h3 {
+    margin-block: 8px 5px;
+    font-size: clamp(1.1rem, 1.8vw, 1.45rem);
+  }
+
+  .source-copy p {
+    font-size: 0.9rem;
+  }
+
+  .source-diagnostic {
+    margin-top: 10px;
+    padding-block: 8px;
+  }
+
+  .source-next-step,
+  .source-actions {
+    margin-top: 9px;
+  }
+
+  .source-retry,
+  .source-session-restart {
+    padding-block: 9px;
+  }
 }
 </style>

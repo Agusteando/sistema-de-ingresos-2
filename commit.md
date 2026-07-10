@@ -1,1 +1,1 @@
-Simplifica los vínculos familiares en Control Escolar
+Mejora el estado de conexión local con diagnóstico y acciones de recuperación

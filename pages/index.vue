@@ -64,6 +64,8 @@
             :target-ciclo="currentCicloKey"
             :photo-cache="photoCache"
             :source-unavailable="studentsSourceUnavailable"
+            :source-unavailable-code="studentsSyncState.error || ''"
+            :source-unavailable-detail="studentsSyncState.message || ''"
             @open-section-selection="openSectionModalForSelection"
             @clear-filters="clearFilters"
             @toggle-displayed-selection="toggleDisplayedSelection"
@@ -72,6 +74,7 @@
             @select-student="selectStudent"
             @show-student-menu="showStudentMenu"
             @refresh-source="refreshStudentsFromServer"
+            @restart-session="restartFinancialSession"
           />
 
           <button
@@ -394,7 +397,7 @@ import BajaReasonModal from '~/components/BajaReasonModal.vue'
 import StudentOperatorInfoModal from '~/components/students/StudentOperatorInfoModal.vue'
 import NoAdeudoModal from '~/components/NoAdeudoModal.vue'
 import { resolveClientAuthAccess } from '~/utils/authAccess'
-import { logApiDiagnostic } from '~/utils/apiDiagnostic'
+import { logApiDiagnostic, readApiDiagnostic } from '~/utils/apiDiagnostic'
 
 const { show } = useToast()
 const { openMenu } = useContextMenu()
@@ -450,6 +453,20 @@ const clearVisibleAuthCookies = () => {
   for (const cookieName of PUBLIC_AUTH_COOKIE_NAMES) useCookie(cookieName).value = null
 }
 
+const restartFinancialSession = async () => {
+  if (sessionRedirecting.value) return
+  sessionRedirecting.value = true
+
+  try {
+    await $fetch('/api/auth/logout', { method: 'POST', retry: 0 })
+  } catch (error) {
+    console.warn('[Students] No se pudo cerrar la sesión en el servidor; se continuará al acceso.', error)
+  } finally {
+    clearVisibleAuthCookies()
+    if (process.client) window.location.href = '/login'
+  }
+}
+
 const isAuthSessionDiagnostic = (diagnostic = {}) => {
   const status = Number(diagnostic.status || 0)
   const code = String(diagnostic.code || '').toUpperCase()
@@ -494,12 +511,12 @@ const verifyFinancialBridgeBeforeInitialLoad = async () => {
     studentsDataAvailable.value = students.value.length > 0
     setStudentsSyncState({
       status: 'unavailable',
-      message: `No se cargó el dashboard porque el agente de ${plantel} está fuera de línea.`,
+      message: 'La conexión local no respondió en este intento.',
       recordCount: students.value.length,
       hasCache: students.value.length > 0,
       error: code
     })
-    show(`Plantel ${plantel} sin conexión de datos`, 'danger')
+    show('La conexión local está en pausa. Reintenta en un momento.', 'danger')
     return false
   } catch (error) {
     const diagnostic = logApiDiagnostic('financial.preflight', error, { plantel, agentId: plantel })
@@ -510,12 +527,12 @@ const verifyFinancialBridgeBeforeInitialLoad = async () => {
     studentsDataAvailable.value = students.value.length > 0
     setStudentsSyncState({
       status: 'unavailable',
-      message: 'No se pudo verificar la conexión del plantel. Se detuvo la carga automática para evitar múltiples errores.',
+      message: 'La conexión local no respondió en este intento.',
       recordCount: students.value.length,
       hasCache: students.value.length > 0,
       error: diagnostic.code || 'BRIDGE_PREFLIGHT_FAILED'
     })
-    show('No se pudo verificar la conexión del plantel', 'danger')
+    show('La conexión local está en pausa. Reintenta en un momento.', 'danger')
     return false
   }
 }
@@ -1732,6 +1749,7 @@ const performSearch = async (options = {}) => {
   } catch (e) {
     if (requestId !== studentsRequestId) return
     if (handleApiSessionError('students.load', e, { endpoint: '/api/students', plantel: currentPlantelKey.value, ciclo: cicloKey })) return
+    const syncDiagnostic = readApiDiagnostic(e)
     trace.status = hasCachedStudents || hadStudents ? 'failed' : 'unavailable'
     trace.statusLabel = financialStatusLabel(trace.status)
     trace.totalMs = Math.max(0, Math.round(financialNow() - startedAt))
@@ -1757,13 +1775,13 @@ const performSearch = async (options = {}) => {
       status: canKeepWorking ? 'failed' : 'unavailable',
       message: canKeepWorking
         ? 'No se pudo actualizar. Se conservan los alumnos disponibles.'
-        : 'No se pudo cargar la base de datos.',
+        : 'La conexión local no respondió en este intento.',
       recordCount: students.value.length,
       hasCache: canKeepWorking,
-      error: e?.data?.message || e?.message || 'students-sync-failed'
+      error: syncDiagnostic.code || e?.data?.message || e?.message || 'students-sync-failed'
     })
 
-    if (!canKeepWorking) show('Error al cargar la base de datos', 'danger')
+    if (!canKeepWorking) show('La conexión local está en pausa. Reintenta en un momento.', 'danger')
   } finally {
     endKpiRefreshScope(bridgeRefreshToken)
     if (requestId === studentsRequestId) loading.value = false
