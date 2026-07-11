@@ -1,8 +1,8 @@
 import { assertAuroraExternalApiToken, setExternalApiResponseHeaders } from '../../../../utils/external-api-auth'
-import { readExternalControlEscolarHealth } from '../../../../utils/control-escolar-external-view'
+import { readExternalLiveHealth } from '../../../../utils/control-escolar-external-live'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler((event) => {
   assertAuroraExternalApiToken(event)
-  setExternalApiResponseHeaders(event, 30)
-  return await readExternalControlEscolarHealth()
+  setExternalApiResponseHeaders(event, 60)
+  return readExternalLiveHealth()
 })

@@ -1,8 +1,8 @@
 import { getHeader, getQuery, readBody } from 'h3'
 import { assertAuroraExternalApiToken, setExternalApiResponseHeaders } from '../../../../../utils/external-api-auth'
 import { logControlEscolarAuditEvent } from '../../../../../utils/control-escolar-audit'
-import { readExternalControlEscolarStudentDetail, refreshExternalControlEscolarStudentViewRow } from '../../../../../utils/control-escolar-external-view'
 import { runControlEscolar, updateControlEscolarStudent } from '../../../../../utils/control-escolar'
+import { sanitizeExternalLiveStudent } from '../../../../../utils/control-escolar-external-live'
 import type { AuthSessionUser } from '../../../../../utils/auth-session'
 
 const ALLOWED_MARKETING_FIELDS = new Set([
@@ -74,15 +74,8 @@ export default defineEventHandler(async (event) => {
   const actor = actorFromRequest(event, plantel)
   return await runControlEscolar(event, plantel, async () => {
     const result = await updateControlEscolarStudent(plantel, matricula, patch, actor, { ...query, ciclo, cicloKey: ciclo })
-    const student = result?.student || null
-    let responseData = student
-    let responseMeta: Record<string, any> = { plantel, ciclo }
-    if (student) {
-      await refreshExternalControlEscolarStudentViewRow({ ...query, plantel, ciclo, cicloKey: ciclo }, student)
-      const refreshed = await readExternalControlEscolarStudentDetail({ ...query, plantel, ciclo, cicloKey: ciclo }, matricula)
-      responseData = refreshed?.data || student
-      responseMeta = refreshed?.meta || responseMeta
-    }
+    const student = result?.student ? sanitizeExternalLiveStudent(result.student) : null
+
     logControlEscolarAuditEvent({
       eventType: 'student_update',
       plantel,
@@ -94,6 +87,16 @@ export default defineEventHandler(async (event) => {
       payload: { fields: Object.keys(patch), client: 'husky-pass-marketing' }
     }).catch(() => null)
 
-    return { success: true, data: responseData, meta: responseMeta }
+    return {
+      success: true,
+      data: student,
+      meta: {
+        source: 'aurora-control-escolar',
+        freshness: 'fresh',
+        plantel,
+        ciclo,
+        generatedAt: new Date().toISOString()
+      }
+    }
   })
 })

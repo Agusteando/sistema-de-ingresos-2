@@ -1,1 +1,1 @@
-feat(api): habilita matrícula actual para Husky Pass
+Conecta la API externa de Control Escolar al puente activo de Aurora

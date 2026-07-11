@@ -48,7 +48,7 @@ export default defineNuxtConfig({
     githubToken: process.env.GITHUB_TOKEN || '',
 
     externalSyncApiKey: process.env.EXTERNAL_SYNC_API_KEY || '',
-    auroraApiToken: process.env.AURORA_API_TOKEN || process.env.EXTERNAL_CONTROL_ESCOLAR_API_TOKEN || '',
+    auroraApiToken: process.env.AURORA_API_TOKEN || process.env.HUSKY_PASS_AURORA_API_TOKEN || process.env.EXTERNAL_CONTROL_ESCOLAR_API_TOKEN || '',
     studentPhotoBaseUrl: process.env.STUDENT_PHOTO_BASE_URL || 'https://matricula.casitaapps.com',
     studentPhotoApiKey: process.env.STUDENT_PHOTO_API_KEY || process.env.EXTERNAL_SYNC_API_KEY || '',
 

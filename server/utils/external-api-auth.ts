@@ -64,6 +64,7 @@ const collectExpectedTokens = () => {
   const config = useRuntimeConfig() as any
   const candidates: Array<{ source: string, value: string }> = [
     { source: 'AURORA_API_TOKEN', value: normalizeToken(process.env.AURORA_API_TOKEN) },
+    { source: 'HUSKY_PASS_AURORA_API_TOKEN', value: normalizeToken(process.env.HUSKY_PASS_AURORA_API_TOKEN) },
     // Compatibility fallback: this is the SIPAE-side name, but accepting it in Aurora
     // prevents a production outage when both Vercel projects were configured with the same key name.
     { source: 'AURORA_STUDENTS_API_TOKEN', value: normalizeToken(process.env.AURORA_STUDENTS_API_TOKEN) },
@@ -118,7 +119,7 @@ export const assertAuroraExternalApiToken = (event: any) => {
       message: 'La API externa de Aurora no está habilitada. Configura AURORA_API_TOKEN en las variables de entorno de Aurora.',
       data: {
         code: 'AURORA_API_TOKEN_NOT_CONFIGURED',
-        acceptedEnvVars: ['AURORA_API_TOKEN', 'EXTERNAL_CONTROL_ESCOLAR_API_TOKEN']
+        acceptedEnvVars: ['AURORA_API_TOKEN', 'HUSKY_PASS_AURORA_API_TOKEN', 'EXTERNAL_CONTROL_ESCOLAR_API_TOKEN']
       }
     })
   }
