@@ -14,7 +14,7 @@ const EXPIRED_HOURS = 24
 const MAX_LIMIT = 500
 const DEFAULT_LIMIT = 100
 const SCHEMA_CACHE_MS = 1000 * 60 * 5
-const CANONICAL_STUDENT_PLANTELES = ['PREEM', 'PREET', 'PM', 'PT', 'SM', 'ST']
+const CANONICAL_STUDENT_PLANTELES = ['PREEM', 'PREET', 'GM', 'PM', 'PT', 'SM', 'ST']
 const DEFAULT_EXTERNAL_CICLOS = [
   { value: '2025', label: '2025-2026' },
   { value: '2026', label: '2026-2027' }
@@ -507,6 +507,132 @@ const resolveScopeForRead = async (input: any = {}) => {
   }
 }
 
+
+const sortCatalogValues = (values: string[]) => Array.from(new Set(values.filter(Boolean)))
+  .sort((left, right) => left.localeCompare(right, 'es', { numeric: true, sensitivity: 'base' }))
+
+const mergeExternalCatalogs = (catalogs: any[]) => {
+  const niveles: string[] = []
+  const grados: string[] = []
+  const grupos: string[] = []
+  const gruposPorGrado: Record<string, string[]> = {}
+
+  catalogs.forEach((catalog) => {
+    niveles.push(...(Array.isArray(catalog?.niveles) ? catalog.niveles : []))
+    grados.push(...(Array.isArray(catalog?.grados) ? catalog.grados : []))
+    grupos.push(...(Array.isArray(catalog?.grupos) ? catalog.grupos : []))
+    Object.entries(catalog?.gruposPorGrado || {}).forEach(([grado, values]) => {
+      gruposPorGrado[grado] ||= []
+      gruposPorGrado[grado].push(...(Array.isArray(values) ? values.map(String) : []))
+    })
+  })
+
+  Object.keys(gruposPorGrado).forEach((grado) => {
+    gruposPorGrado[grado] = sortCatalogValues(gruposPorGrado[grado])
+  })
+
+  return {
+    niveles: sortCatalogValues(niveles.map(String)),
+    grados: sortCatalogValues(grados.map(String)),
+    grupos: sortCatalogValues(grupos.map(String)),
+    gruposPorGrado
+  }
+}
+
+const readExternalControlEscolarCatalogs = async (scope: any) => {
+  const rows = await controlEscolarCentralQuery<any[]>(
+    `SELECT nivel, grado, grupo, COUNT(*) AS total
+     FROM ${EXTERNAL_VIEW_TABLE}
+     WHERE plantel = ? AND scope_key = ? AND view_version = ?
+     GROUP BY nivel, grado, grupo
+     ORDER BY grado ASC, grupo ASC`,
+    [scope.plantel, scope.descriptor.scopeKey, VIEW_VERSION]
+  )
+
+  const gruposPorGrado: Record<string, string[]> = {}
+  rows.forEach((row) => {
+    const grado = normalizeText(row.grado, 80)
+    const grupo = normalizeText(row.grupo, 80)
+    if (!grado || !grupo) return
+    gruposPorGrado[grado] ||= []
+    gruposPorGrado[grado].push(grupo)
+  })
+  Object.keys(gruposPorGrado).forEach((grado) => {
+    gruposPorGrado[grado] = sortCatalogValues(gruposPorGrado[grado])
+  })
+
+  return {
+    niveles: sortCatalogValues(rows.map((row) => normalizeText(row.nivel, 80))),
+    grados: sortCatalogValues(rows.map((row) => normalizeText(row.grado, 80))),
+    grupos: sortCatalogValues(rows.map((row) => normalizeText(row.grupo, 80))),
+    gruposPorGrado
+  }
+}
+
+export const refreshExternalControlEscolarStudentViewRow = async (input: any, student: any) => {
+  const scope = await resolveScopeForRead(input)
+  const payload = sanitizeExternalStudentPayload(student)
+  const matricula = normalizeText(payload?.matricula, 64)
+  if (!matricula) {
+    throw createError({ statusCode: 400, statusMessage: 'MATRICULA_REQUIRED', message: 'La matrícula es obligatoria.' })
+  }
+
+  const generatedAt = nowDate()
+  const staleAfter = dateMinutesFromNow(FRESH_MINUTES)
+  const expiresAt = dateHoursFromNow(EXPIRED_HOURS)
+  const payloadJson = JSON.stringify(payload)
+
+  await controlEscolarCentralQuery(
+    `INSERT INTO ${EXTERNAL_VIEW_TABLE}
+      (scope_key, plantel, ciclo_key, previous_ciclo, concept_hash, concept_ids, view_version,
+       matricula, nombre_completo, nivel, grado, grupo, status, enrollment_state, tipo_ingreso,
+       search_text, payload_json, payload_hash, generated_at, payload_changed_at, stale_after, expires_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON DUPLICATE KEY UPDATE
+       nombre_completo = VALUES(nombre_completo),
+       nivel = VALUES(nivel),
+       grado = VALUES(grado),
+       grupo = VALUES(grupo),
+       status = VALUES(status),
+       enrollment_state = VALUES(enrollment_state),
+       tipo_ingreso = VALUES(tipo_ingreso),
+       search_text = VALUES(search_text),
+       payload_json = VALUES(payload_json),
+       payload_changed_at = IF(payload_hash <> VALUES(payload_hash), CURRENT_TIMESTAMP, payload_changed_at),
+       payload_hash = VALUES(payload_hash),
+       generated_at = VALUES(generated_at),
+       stale_after = VALUES(stale_after),
+       expires_at = VALUES(expires_at),
+       updated_at = CURRENT_TIMESTAMP`,
+    [
+      scope.descriptor.scopeKey,
+      scope.plantel,
+      scope.cicloKey,
+      scope.previousCiclo,
+      scope.descriptor.conceptHash,
+      scope.descriptor.conceptIdsPipe,
+      VIEW_VERSION,
+      matricula,
+      normalizeText(payload.nombreCompleto || payload.fullName, 255),
+      normalizeText(payload.nivel, 80),
+      normalizeText(payload.grado, 80).toLowerCase(),
+      normalizeText(payload.group || payload.grupo, 80),
+      normalizeText(payload.status, 80),
+      normalizeText(payload.enrollmentState, 80),
+      normalizeText(payload.tipoIngresoValue || payload.tipoIngreso, 80),
+      buildSearchText(payload),
+      payloadJson,
+      computeHash(payloadJson),
+      generatedAt,
+      generatedAt,
+      staleAfter,
+      expiresAt
+    ]
+  )
+
+  return { success: true, data: payload, meta: buildExternalMeta(scope, { generated_at: generatedAt, stale_after: staleAfter, expires_at: expiresAt }, 1) }
+}
+
 export const readExternalControlEscolarStudents = async (query: any = {}) => {
   if (!normalizeExternalStudentPlantel(query.plantel || '')) {
     const limit = Math.min(MAX_LIMIT, Math.max(1, Number(query.limit || DEFAULT_LIMIT) || DEFAULT_LIMIT))
@@ -535,6 +661,7 @@ export const readExternalControlEscolarStudents = async (query: any = {}) => {
     return {
       data,
       pagination: { limit, nextCursor: null, total: results.reduce((sum, result) => sum + Number(result?.pagination?.total || result?.data?.length || 0), 0) },
+      catalogs: mergeExternalCatalogs(results.map((result) => result?.catalogs).filter(Boolean)),
       meta: {
         version: 'v1',
         viewVersion: VIEW_VERSION,
@@ -548,6 +675,7 @@ export const readExternalControlEscolarStudents = async (query: any = {}) => {
     }
   }
   const scope = await resolveScopeForRead(query)
+  const catalogs = await readExternalControlEscolarCatalogs(scope)
   const limit = Math.min(MAX_LIMIT, Math.max(1, Number(query.limit || DEFAULT_LIMIT) || DEFAULT_LIMIT))
   const offset = decodeCursor(query.cursor)
   const params: any[] = [scope.plantel, scope.descriptor.scopeKey, VIEW_VERSION]
@@ -605,6 +733,7 @@ export const readExternalControlEscolarStudents = async (query: any = {}) => {
     return {
       data: [],
       pagination: { limit, nextCursor: null, total: 0 },
+      catalogs,
       meta: buildExternalMeta(scope, null, 0)
     }
   }
@@ -629,11 +758,12 @@ export const readExternalControlEscolarStudents = async (query: any = {}) => {
       nextCursor: nextOffset === null ? null : encodeCursor(nextOffset),
       total
     },
+    catalogs,
     meta: buildExternalMeta(scope, firstMetaRow, total)
   }
 }
 
-export const readExternalControlEscolarStudentDetail = async (query: any = {}, matriculaValue: unknown) => {
+export const readExternalControlEscolarStudentDetail = async (query: any = {}, matriculaValue: unknown): Promise<any> => {
   if (!normalizeExternalStudentPlantel(query.plantel || '')) {
     const planteles = requestedPlantelesFromQuery(query)
     for (const plantel of planteles) {

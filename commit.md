@@ -1,1 +1,1 @@
-Mejora el estado de conexión local con diagnóstico y acciones de recuperación
+feat(api): habilita matrícula actual para Husky Pass
