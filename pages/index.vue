@@ -122,6 +122,15 @@
             :bulk-payment-processing="bulkPaymentProcessing"
             :external-concepts="externalConcepts"
             :tipo-ingreso-concepts="tipoIngresoConcepts.length ? tipoIngresoConcepts : externalConcepts"
+            :enrollment-summary="enrollmentSummary"
+            :summary-plantel-label="currentPlantelKey"
+            :summary-ciclo-label="currentCicloLabel"
+            :summary-active-grade="activeGrado"
+            :summary-active-group="activeGrupo"
+            :summary-loading="loading"
+            @select-summary-grade="selectSummaryGrade"
+            @select-summary-group="selectSummaryGroup"
+            @clear-summary-filter="clearSummaryAcademicFilter"
             @refresh="refreshStudentsAndKpis"
             @edit="openEdit"
             @close-detail="selectedStudent = null"
@@ -366,8 +375,9 @@ import { useStudentsCacheSync } from '~/composables/useStudentsCacheSync'
 import { exportToCSV } from '~/utils/export'
 import { resolveFinancialFamilyContact } from '~/shared/utils/familyContact'
 import { GRADOS_ORDEN } from '~/utils/constants'
-import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
+import { buildEnrollmentSummary } from '~/shared/utils/enrollmentSummary'
 import {
   formatMoney,
   gradeVisualTitle,
@@ -431,6 +441,7 @@ const externalConcepts = ref([])
 const tipoIngresoConcepts = ref([])
 const ENROLLMENT_CONCEPTS_CACHE_BASE_KEY = 'students-enrollment-concepts:v3'
 const currentCicloKey = computed(() => normalizeCicloKey(state.value.ciclo))
+const currentCicloLabel = computed(() => formatCicloLabel(currentCicloKey.value))
 const currentPlantelKey = computed(() => normalizeEnrollmentPlantelKey(activePlantelCookie.value || 'GLOBAL') || 'GLOBAL')
 const sessionRedirecting = ref(false)
 const PUBLIC_AUTH_COOKIE_NAMES = [
@@ -834,7 +845,7 @@ const selectedSectionSummary = computed(() => {
   const values = Array.from(names)
   return values.length > 2 ? `${values.slice(0, 2).join(', ')} +${values.length - 2}` : values.join(', ')
 })
-const hasAccountWorkspace = computed(() => Boolean(selectedStudent.value) || (selectedCount.value > 1 && bulkWorkspaceMode.value !== 'none'))
+const hasAccountWorkspace = computed(() => true)
 const studentsWorkspaceEl = ref(null)
 const workspaceSplitPercent = ref(51)
 const workspaceStackPercent = ref(46)
@@ -977,7 +988,7 @@ const accountWorkspaceMode = computed(() => {
   if (selectedCount.value > 1 && bulkWorkspaceMode.value === 'bulk-payment') return 'bulk-payment'
   if (selectedCount.value > 1 && bulkWorkspaceMode.value === 'bulk') return 'bulk'
   if (selectedStudent.value) return 'detail'
-  return 'none'
+  return 'summary'
 })
 const readCachedStudentPhotos = () => {
   if (!process.client) return
@@ -1866,6 +1877,32 @@ const kpiCounts = computed(() => {
   })
   return { inscritos, internos, externos, no_inscritos, bajas }
 })
+
+
+const enrollmentSummary = computed(() => buildEnrollmentSummary(students.value, {
+  include: (student) => isEnrolled(student),
+  type: (student) => resolveStudentTipoIngreso(student).value,
+  grade: (student) => student?.grado,
+  group: (student) => studentGroupLabel(student),
+  nivel: (student) => studentNivelLabel(student),
+}))
+
+const selectSummaryGrade = (grade) => {
+  const nextGrade = activeGrado.value === grade && !activeGrupo.value ? '' : grade
+  activeGrado.value = nextGrade
+  activeGrupo.value = ''
+}
+
+const selectSummaryGroup = ({ grade, group } = {}) => {
+  const sameSelection = activeGrado.value === grade && activeGrupo.value === group
+  activeGrado.value = sameSelection ? '' : String(grade || '')
+  activeGrupo.value = sameSelection ? '' : String(group || '')
+}
+
+const clearSummaryAcademicFilter = () => {
+  activeGrado.value = ''
+  activeGrupo.value = ''
+}
 
 const studentMatchesActiveFilter = (student) => {
   if (activeFilter.value === 'inscritos') return isEnrolled(student)

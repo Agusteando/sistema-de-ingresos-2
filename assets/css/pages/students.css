@@ -4,6 +4,7 @@
 @import '../features/students/kpis.css';
 @import '../features/students/filters.css';
 @import '../features/students/student-list.css';
+@import '../features/students/enrollment-summary.css';
 @import '../features/students/bulk-workspace.css';
 @import '../features/students/section-modal.css';
 @import '../features/students/selection-dock.css';

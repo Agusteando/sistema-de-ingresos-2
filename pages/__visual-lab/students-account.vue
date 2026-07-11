@@ -8,6 +8,7 @@
       </div>
       <nav aria-label="Visual lab actions">
         <button type="button" @click="seedVisualState">Sembrar sesion y cache</button>
+        <button type="button" @click="selectedStudent = null">Mostrar resumen</button>
         <NuxtLink to="/">Inicio protegido</NuxtLink>
         <NuxtLink to="/control-escolar">Control escolar</NuxtLink>
         <button type="button" @click="clearVisualState">Limpiar lab</button>
@@ -36,7 +37,18 @@
           <div class="students-workspace-resizer" aria-hidden="true">
             <span class="students-workspace-resizer-rail"></span>
           </div>
-          <section class="student-detail-panel student-detail-panel--account">
+          <StudentsEnrollmentSummary
+            v-if="!selectedStudent"
+            :summary="enrollmentSummary"
+            plantel-label="PT"
+            ciclo-label="2026 - 2027"
+            :active-grade="activeSummaryGrade"
+            :active-group="activeSummaryGroup"
+            @select-grade="activeSummaryGrade = $event; activeSummaryGroup = ''"
+            @select-group="activeSummaryGrade = $event.grade; activeSummaryGroup = $event.group"
+            @clear="activeSummaryGrade = ''; activeSummaryGroup = ''"
+          />
+          <section v-else class="student-detail-panel student-detail-panel--account">
             <StudentDetails
               :student="selectedStudent"
               :is-enrolled="true"
@@ -59,6 +71,8 @@ import { computed, onMounted, ref } from 'vue'
 import ContextMenu from '~/components/ContextMenu.vue'
 import StudentDetails from '~/components/StudentDetails.vue'
 import StudentsListPanel from '~/components/students/StudentsListPanel.vue'
+import StudentsEnrollmentSummary from '~/components/students/StudentsEnrollmentSummary.vue'
+import { buildEnrollmentSummary } from '~/shared/utils/enrollmentSummary'
 
 definePageMeta({ layout: false })
 
@@ -104,7 +118,7 @@ const students = ref([
     matricula: 'PTO574',
     nombreCompleto: 'Acra Ayllon Kaleb Alexander',
     grado: '4',
-    grupo: 'AMERICA',
+    grupo: 'DINAMARCA',
     estatus: 'Activo',
     plantel: 'PT',
     cicloBase: '2024',
@@ -117,7 +131,7 @@ const students = ref([
     matricula: 'PTO696',
     nombreCompleto: 'Adan Gutierrez Melissa',
     grado: '5',
-    grupo: 'AMERICA',
+    grupo: 'CANADA',
     estatus: 'Activo',
     plantel: 'PT',
     cicloBase: '2024',
@@ -150,7 +164,7 @@ const students = ref([
     saldoNeto: 1380,
     currentEnrollmentConceptMatch: true,
     conceptoIdsTarget: ['1001'],
-    tipoIngreso: 'interno'
+    tipoIngreso: 'externo'
   }
 ])
 
@@ -181,7 +195,16 @@ const accountDebtsByMatricula = {
   ]
 }
 
-const selectedStudent = ref(students.value[0])
+const selectedStudent = ref(route.query.summary === '1' ? null : students.value[0])
+const activeSummaryGrade = ref('')
+const activeSummaryGroup = ref('')
+const enrollmentSummary = computed(() => buildEnrollmentSummary(students.value, {
+  include: () => true,
+  type: (student) => student.tipoIngreso === 'interno' ? 'interno' : 'externo',
+  grade: (student) => student.grado,
+  group: (student) => student.grupo,
+  nivel: () => 'Primaria',
+}))
 const selectedMatriculas = ref(new Set(['PTO574']))
 const selectedCount = computed(() => selectedMatriculas.value.size)
 const allDisplayedSelected = computed(() => selectedCount.value === students.value.length)

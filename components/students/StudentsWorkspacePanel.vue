@@ -1,6 +1,20 @@
 <template>
   <Transition name="detail-flow" mode="out-in">
-    <section v-if="accountWorkspaceMode === 'detail' && selectedStudent" :key="`detail-${selectedStudent.matricula}`" class="student-detail-panel student-detail-panel--account">
+    <StudentsEnrollmentSummary
+      v-if="accountWorkspaceMode === 'summary'"
+      key="enrollment-summary"
+      :summary="enrollmentSummary"
+      :plantel-label="summaryPlantelLabel"
+      :ciclo-label="summaryCicloLabel"
+      :active-grade="summaryActiveGrade"
+      :active-group="summaryActiveGroup"
+      :loading="summaryLoading"
+      @select-grade="$emit('select-summary-grade', $event)"
+      @select-group="$emit('select-summary-group', $event)"
+      @clear="$emit('clear-summary-filter')"
+    />
+
+    <section v-else-if="accountWorkspaceMode === 'detail' && selectedStudent" :key="`detail-${selectedStudent.matricula}`" class="student-detail-panel student-detail-panel--account">
       <StudentDetails
         :student="selectedStudent"
         :is-enrolled="isStudentEnrolled(selectedStudent, externalConcepts)"
@@ -57,6 +71,7 @@
 
 <script setup>
 import StudentDetails from '~/components/StudentDetails.vue'
+import StudentsEnrollmentSummary from '~/components/students/StudentsEnrollmentSummary.vue'
 import StudentsBulkOverview from '~/components/students/StudentsBulkOverview.vue'
 import StudentsBulkPaymentPanel from '~/components/students/StudentsBulkPaymentPanel.vue'
 import { isStudentEnrolled } from '~/shared/utils/studentPresentation'
@@ -79,7 +94,13 @@ defineProps({
   bulkPaymentLoading: { type: Boolean, default: false },
   bulkPaymentProcessing: { type: Boolean, default: false },
   externalConcepts: { type: Array, default: () => [] },
-  tipoIngresoConcepts: { type: Array, default: () => [] }
+  tipoIngresoConcepts: { type: Array, default: () => [] },
+  enrollmentSummary: { type: Object, default: () => ({ rows: [], internos: 0, externos: 0, total: 0 }) },
+  summaryPlantelLabel: { type: String, default: '' },
+  summaryCicloLabel: { type: String, default: '' },
+  summaryActiveGrade: { type: String, default: '' },
+  summaryActiveGroup: { type: String, default: '' },
+  summaryLoading: { type: Boolean, default: false }
 })
 
 defineEmits([
@@ -101,6 +122,9 @@ defineEmits([
   'clear-selected',
   'change-bulk-payment-method',
   'back-to-bulk',
-  'submit-bulk-payments'
+  'submit-bulk-payments',
+  'select-summary-grade',
+  'select-summary-group',
+  'clear-summary-filter'
 ])
 </script>

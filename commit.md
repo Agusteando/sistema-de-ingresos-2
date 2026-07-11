@@ -1,1 +1,1 @@
-Conecta la API externa de Control Escolar al puente activo de Aurora
+feat: agrega resumen interactivo por grado en Alumnos y Control Escolar

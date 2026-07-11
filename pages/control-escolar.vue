@@ -54,14 +54,14 @@
             'students-workspace ce-workspace',
             {
               'has-detail': Boolean(selectedStudent),
-              'is-browsing': !selectedStudent,
+              'has-empty-detail': !selectedStudent,
             },
           ]"
         >
           <section
             :class="[
               'student-list-panel',
-              selectedStudent ? 'is-compact' : 'is-full',
+              'is-compact',
             ]"
           >
             <div
@@ -236,7 +236,7 @@
               <div
                 :class="[
                   'list-columns ce-list-columns',
-                  selectedStudent ? 'compact' : 'full',
+                  'compact',
                 ]"
               >
                 <span>Alumno</span>
@@ -1470,6 +1470,20 @@
               </footer>
             </div>
           </section>
+
+          <StudentsEnrollmentSummary
+            v-else
+            class="ce-enrollment-summary"
+            :summary="controlEnrollmentSummary"
+            :plantel-label="selectedAgentId"
+            :ciclo-label="currentCicloLabel"
+            :active-grade="filters.grado"
+            :active-group="filters.group"
+            :loading="studentsLoading"
+            @select-grade="selectSummaryGrade"
+            @select-group="selectSummaryGroup"
+            @clear="clearAcademicFilters"
+          />
         </div>
       </div>
     </div>
@@ -1873,9 +1887,11 @@ import UiChip from "~/components/ui/UiChip.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.vue";
 import StudentsKpiValue from "~/components/students/StudentsKpiValue.vue";
+import StudentsEnrollmentSummary from "~/components/students/StudentsEnrollmentSummary.vue";
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
 import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
+import { buildEnrollmentSummary } from "~/shared/utils/enrollmentSummary";
 import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave, parseServiciosCsv } from "~/shared/utils/talleresServicios";
 import {
   normalizeEnrollmentConceptIds,
@@ -5073,6 +5089,15 @@ const buildClientKpisFromStudents = (sourceStudents = []) => {
   };
 };
 
+
+const controlEnrollmentSummary = computed(() => buildEnrollmentSummary(controlStudentsIndex.value, {
+  include: (student) => student?.enrollmentState === "inscrito",
+  type: (student) => student?.tipoIngresoValue === "interno" ? "interno" : "externo",
+  grade: (student) => student?.grado,
+  group: (student) => student?.group || student?.grupo,
+  nivel: (student) => student?.nivel,
+}));
+
 const buildControlAuditProgress = () => {
   const rows = Array.isArray(controlStudentsIndex.value)
     ? controlStudentsIndex.value
@@ -5447,6 +5472,17 @@ const clearAcademicFilters = () => {
 const selectGrade = (grado) => {
   filters.grado = filters.grado === grado ? "" : grado;
   filters.group = "";
+  pagination.page = 1;
+};
+
+const selectSummaryGrade = (grado) => {
+  selectGrade(grado);
+};
+
+const selectSummaryGroup = ({ grade, group } = {}) => {
+  const sameSelection = filters.grado === grade && filters.group === group;
+  filters.grado = sameSelection ? "" : String(grade || "");
+  filters.group = sameSelection ? "" : String(group || "");
   pagination.page = 1;
 };
 
@@ -16346,6 +16382,28 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-matricula-token {
     font-size: 11.4px;
     letter-spacing: 0.016em;
+  }
+}
+
+
+
+/* Keep the pre-selection summary reachable in the single-column mobile workspace. */
+@media (max-width: 820px) {
+  .control-escolar-screen .ce-workspace.has-empty-detail {
+    grid-template-rows: minmax(360px, 48vh) minmax(420px, 58vh) !important;
+    gap: 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+  }
+
+  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel,
+  .control-escolar-screen .ce-workspace.has-empty-detail > :deep(.ce-enrollment-summary) {
+    width: 100%;
+    min-width: 0 !important;
+    height: 100%;
+    min-height: 0;
   }
 }
 
