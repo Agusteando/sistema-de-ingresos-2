@@ -1,4 +1,4 @@
-import { displayGrado, normalizeGrado, normalizeNivelEscolar } from './grado'
+import { displayGrado, nivelFromMatricula, normalizeGrado } from './grado'
 
 export type EnrollmentSummaryType = 'interno' | 'externo'
 
@@ -35,7 +35,7 @@ interface EnrollmentSummaryOptions<T> {
   type: (student: T) => EnrollmentSummaryType
   grade: (student: T) => unknown
   group: (student: T) => unknown
-  nivel?: (student: T) => unknown
+  matricula: (student: T) => unknown
 }
 
 const normalizeText = (value: unknown) => String(value || '')
@@ -74,10 +74,12 @@ export const buildEnrollmentSummary = <T>(
     if (!options.include(student)) continue
 
     const rawGrade = String(options.grade(student) || '').trim()
-    const rawNivel = String(options.nivel?.(student) || '').trim()
-    const nivel = normalizeNivelEscolar(rawNivel) || rawNivel
-    const normalizedGrade = !rawGrade ? 'sin-grado' : normalizeText(rawGrade) === 'egresado' ? 'egresado' : normalizeGrado(rawGrade)
-    const key = `${normalizeText(nivel)}|${normalizedGrade || 'sin-grado'}`
+    const normalizedGrade = !rawGrade
+      ? 'sin-grado'
+      : normalizeText(rawGrade) === 'egresado'
+        ? 'egresado'
+        : normalizeGrado(rawGrade)
+    const key = normalizedGrade || 'sin-grado'
     const type = options.type(student) === 'interno' ? 'interno' : 'externo'
     const countKey = type === 'interno' ? 'internos' : 'externos'
 
@@ -87,7 +89,7 @@ export const buildEnrollmentSummary = <T>(
         key,
         gradeValue: rawGrade,
         gradeLabel: normalizedGradeLabel(rawGrade),
-        nivel,
+        nivel: nivelFromMatricula(options.matricula(student)),
         internos: 0,
         externos: 0,
         total: 0,
@@ -123,10 +125,6 @@ export const buildEnrollmentSummary = <T>(
   const rows = Array.from(rowMap.values())
     .map(({ groupMap, ...row }) => ({ ...row, groups: Array.from(groupMap.values()).sort(groupSort) }))
     .sort((left, right) => {
-      const nivelOrder = ['Preescolar', 'Primaria', 'Secundaria']
-      const leftNivel = nivelOrder.indexOf(left.nivel)
-      const rightNivel = nivelOrder.indexOf(right.nivel)
-      if (leftNivel !== rightNivel) return (leftNivel < 0 ? 99 : leftNivel) - (rightNivel < 0 ? 99 : rightNivel)
       if (left.sortIndex !== right.sortIndex) return left.sortIndex - right.sortIndex
       return left.gradeLabel.localeCompare(right.gradeLabel, 'es', { numeric: true, sensitivity: 'base' })
     })

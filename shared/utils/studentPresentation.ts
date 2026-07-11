@@ -1,4 +1,4 @@
-import { resolveNivelEscolar } from './grado'
+import { nivelFromMatricula } from './grado'
 import { studentGroupIconUrl } from './studentGroupIcons'
 import { normalizeCicloKey } from './ciclo'
 
@@ -126,10 +126,7 @@ export const gradeAccentStyle = (student: any) => {
 }
 
 
-export const studentNivelLabel = (student: any) => {
-  const nivel = resolveNivelEscolar(student)
-  return nivel || 'Preescolar'
-}
+export const studentNivelLabel = (student: any) => nivelFromMatricula(student?.matricula)
 
 export const gradeVisualTitle = (student: any) => {
   const number = gradeNumberValue(student?.grado)

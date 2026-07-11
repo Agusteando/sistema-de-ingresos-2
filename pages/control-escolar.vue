@@ -5095,7 +5095,7 @@ const controlEnrollmentSummary = computed(() => buildEnrollmentSummary(controlSt
   type: (student) => student?.tipoIngresoValue === "interno" ? "interno" : "externo",
   grade: (student) => student?.grado,
   group: (student) => student?.group || student?.grupo,
-  nivel: (student) => student?.nivel,
+  matricula: (student) => student?.matricula,
 }));
 
 const buildControlAuditProgress = () => {

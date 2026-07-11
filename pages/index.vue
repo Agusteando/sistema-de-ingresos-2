@@ -1884,7 +1884,7 @@ const enrollmentSummary = computed(() => buildEnrollmentSummary(students.value, 
   type: (student) => resolveStudentTipoIngreso(student).value,
   grade: (student) => student?.grado,
   group: (student) => studentGroupLabel(student),
-  nivel: (student) => studentNivelLabel(student),
+  matricula: (student) => student?.matricula,
 }))
 
 const selectSummaryGrade = (grade) => {

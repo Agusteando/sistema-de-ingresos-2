@@ -203,7 +203,7 @@ const enrollmentSummary = computed(() => buildEnrollmentSummary(students.value, 
   type: (student) => student.tipoIngreso === 'interno' ? 'interno' : 'externo',
   grade: (student) => student.grado,
   group: (student) => student.grupo,
-  nivel: () => 'Primaria',
+  matricula: (student) => student.matricula,
 }))
 const selectedMatriculas = ref(new Set(['PTO574']))
 const selectedCount = computed(() => selectedMatriculas.value.size)

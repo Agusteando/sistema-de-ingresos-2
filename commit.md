@@ -1,1 +1,1 @@
-feat: agrega resumen interactivo por grado en Alumnos y Control Escolar
+Simplifica el resumen por grado y corrige la inferencia del nivel escolar

@@ -121,6 +121,16 @@ export const nivelFromPlantel = (plantel: unknown): NivelEscolar => {
   return "Preescolar";
 };
 
+export const nivelFromMatricula = (matricula: unknown): NivelEscolar => {
+  const normalized = String(matricula || "")
+    .trim()
+    .toUpperCase();
+  const prefix = normalized.slice(0, 2);
+  if (PRIMARIA_PLANTELES.has(prefix)) return "Primaria";
+  if (SECUNDARIA_PLANTELES.has(prefix)) return "Secundaria";
+  return "Preescolar";
+};
+
 export const resolveNivelEscolar = (
   input: unknown,
   nivelOverride?: unknown,
