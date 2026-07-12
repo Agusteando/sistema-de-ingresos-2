@@ -55,6 +55,7 @@
             {
               'has-detail': Boolean(selectedStudent),
               'has-empty-detail': !selectedStudent,
+              'is-browsing': !selectedStudent,
             },
           ]"
         >
@@ -16382,6 +16383,38 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-matricula-token {
     font-size: 11.4px;
     letter-spacing: 0.016em;
+  }
+}
+
+
+/* Preserve Control Escolar's full-width browsing controls while only splitting the
+   results/detail lane for the pre-selection enrollment summary. */
+@media (min-width: 821px) {
+  .control-escolar-screen .ce-workspace.has-empty-detail {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel {
+    display: contents;
+  }
+
+  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel > .ce-filter-bar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel > .ce-list-card {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .control-escolar-screen .ce-workspace.has-empty-detail > :deep(.ce-enrollment-summary) {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
   }
 }
 

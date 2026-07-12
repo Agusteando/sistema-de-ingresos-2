@@ -1,1 +1,1 @@
-Simplifica el resumen por grado y corrige la inferencia del nivel escolar
+Corrige la distribución de Control Escolar sin alterar sus controles
