@@ -1,1 +1,1 @@
-Restaura la lista de Control Escolar y simplifica los estados no disponibles
+Restaura la tabla original de Control Escolar

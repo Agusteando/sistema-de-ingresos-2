@@ -54,7 +54,6 @@
             'students-workspace ce-workspace',
             {
               'has-detail': Boolean(selectedStudent),
-              'has-empty-detail': !selectedStudent,
               'is-browsing': !selectedStudent,
             },
           ]"
@@ -62,7 +61,7 @@
           <section
             :class="[
               'student-list-panel',
-              'is-compact',
+              selectedStudent ? 'is-compact' : 'is-full',
             ]"
           >
             <div
@@ -237,7 +236,7 @@
               <div
                 :class="[
                   'list-columns ce-list-columns',
-                  'compact',
+                  selectedStudent ? 'compact' : 'full',
                 ]"
               >
                 <span>Alumno</span>
@@ -1461,21 +1460,6 @@
               </footer>
             </div>
           </section>
-
-          <StudentsEnrollmentSummary
-            v-else
-            class="ce-enrollment-summary"
-            :summary="controlEnrollmentSummary"
-            :plantel-label="selectedAgentId"
-            :ciclo-label="currentCicloLabel"
-            :active-grade="filters.grado"
-            :active-group="filters.group"
-            :loading="studentsLoading"
-            :unavailable="controlEnrollmentSummaryUnavailable"
-            @select-grade="selectSummaryGrade"
-            @select-group="selectSummaryGroup"
-            @clear="clearAcademicFilters"
-          />
         </div>
       </div>
     </div>
@@ -1879,11 +1863,9 @@ import UiChip from "~/components/ui/UiChip.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.vue";
 import StudentsKpiValue from "~/components/students/StudentsKpiValue.vue";
-import StudentsEnrollmentSummary from "~/components/students/StudentsEnrollmentSummary.vue";
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
 import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
-import { buildEnrollmentSummary } from "~/shared/utils/enrollmentSummary";
 import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave, parseServiciosCsv } from "~/shared/utils/talleresServicios";
 import {
   normalizeEnrollmentConceptIds,
@@ -2133,11 +2115,6 @@ const studentsSourceUnavailable = computed(() =>
     !studentsLoading.value &&
     !students.value.length,
   ),
-);
-const controlEnrollmentSummaryUnavailable = computed(
-  () =>
-    !studentsLoading.value &&
-    (studentsSourceUnavailable.value || controlCompleteStage.value === "failed"),
 );
 const sourceUnavailableTitle = "No disponible de momento";
 const sourceUnavailableMessage = "Intenta nuevamente más tarde.";
@@ -5073,15 +5050,6 @@ const buildClientKpisFromStudents = (sourceStudents = []) => {
   };
 };
 
-
-const controlEnrollmentSummary = computed(() => buildEnrollmentSummary(controlStudentsIndex.value, {
-  include: (student) => student?.enrollmentState === "inscrito",
-  type: (student) => student?.tipoIngresoValue === "interno" ? "interno" : "externo",
-  grade: (student) => student?.grado,
-  group: (student) => student?.group || student?.grupo,
-  matricula: (student) => student?.matricula,
-}));
-
 const buildControlAuditProgress = () => {
   const rows = Array.isArray(controlStudentsIndex.value)
     ? controlStudentsIndex.value
@@ -5456,17 +5424,6 @@ const clearAcademicFilters = () => {
 const selectGrade = (grado) => {
   filters.grado = filters.grado === grado ? "" : grado;
   filters.group = "";
-  pagination.page = 1;
-};
-
-const selectSummaryGrade = (grado) => {
-  selectGrade(grado);
-};
-
-const selectSummaryGroup = ({ grade, group } = {}) => {
-  const sameSelection = filters.grado === grade && filters.group === group;
-  filters.grado = sameSelection ? "" : String(grade || "");
-  filters.group = sameSelection ? "" : String(group || "");
   pagination.page = 1;
 };
 
@@ -16283,60 +16240,6 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-matricula-token {
     font-size: 11.4px;
     letter-spacing: 0.016em;
-  }
-}
-
-
-/* Preserve Control Escolar's full-width browsing controls while only splitting the
-   results/detail lane for the pre-selection enrollment summary. */
-@media (min-width: 821px) {
-  .control-escolar-screen .ce-workspace.has-empty-detail {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel {
-    display: contents;
-  }
-
-  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel > .ce-filter-bar {
-    grid-column: 1 / -1;
-    grid-row: 1;
-  }
-
-  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel > .ce-list-card {
-    grid-column: 1;
-    grid-row: 2;
-    min-width: 0;
-    min-height: 0;
-  }
-
-  .control-escolar-screen .ce-workspace.has-empty-detail > :deep(.ce-enrollment-summary) {
-    grid-column: 2;
-    grid-row: 2;
-    min-width: 0;
-    min-height: 0;
-  }
-}
-
-
-
-/* Keep the pre-selection summary reachable in the single-column mobile workspace. */
-@media (max-width: 820px) {
-  .control-escolar-screen .ce-workspace.has-empty-detail {
-    grid-template-rows: minmax(360px, 48vh) minmax(420px, 58vh) !important;
-    gap: 10px !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior-y: contain;
-    scrollbar-width: thin;
-  }
-
-  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel,
-  .control-escolar-screen .ce-workspace.has-empty-detail > :deep(.ce-enrollment-summary) {
-    width: 100%;
-    min-width: 0 !important;
-    height: 100%;
-    min-height: 0;
   }
 }
 
