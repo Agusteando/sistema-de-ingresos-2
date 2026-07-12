@@ -1,1 +1,1 @@
-Integra estadísticas por grado y edición completa de matrícula para Marketing
+Restaura la lista de Control Escolar y simplifica los estados no disponibles

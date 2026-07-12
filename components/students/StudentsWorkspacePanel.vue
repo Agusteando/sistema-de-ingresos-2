@@ -9,6 +9,7 @@
       :active-grade="summaryActiveGrade"
       :active-group="summaryActiveGroup"
       :loading="summaryLoading"
+      :unavailable="summaryUnavailable"
       @select-grade="$emit('select-summary-grade', $event)"
       @select-group="$emit('select-summary-group', $event)"
       @clear="$emit('clear-summary-filter')"
@@ -100,7 +101,8 @@ defineProps({
   summaryCicloLabel: { type: String, default: '' },
   summaryActiveGrade: { type: String, default: '' },
   summaryActiveGroup: { type: String, default: '' },
-  summaryLoading: { type: Boolean, default: false }
+  summaryLoading: { type: Boolean, default: false },
+  summaryUnavailable: { type: Boolean, default: false }
 })
 
 defineEmits([

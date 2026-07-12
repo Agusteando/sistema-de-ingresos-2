@@ -128,6 +128,7 @@
             :summary-active-grade="activeGrado"
             :summary-active-group="activeGrupo"
             :summary-loading="loading"
+            :summary-unavailable="enrollmentSummaryUnavailable"
             @select-summary-grade="selectSummaryGrade"
             @select-summary-group="selectSummaryGroup"
             @clear-summary-filter="clearSummaryAcademicFilter"
@@ -527,7 +528,7 @@ const verifyFinancialBridgeBeforeInitialLoad = async () => {
       hasCache: students.value.length > 0,
       error: code
     })
-    show('La conexión local está en pausa. Reintenta en un momento.', 'danger')
+    show('No disponible de momento.', 'danger')
     return false
   } catch (error) {
     const diagnostic = logApiDiagnostic('financial.preflight', error, { plantel, agentId: plantel })
@@ -543,7 +544,7 @@ const verifyFinancialBridgeBeforeInitialLoad = async () => {
       hasCache: students.value.length > 0,
       error: diagnostic.code || 'BRIDGE_PREFLIGHT_FAILED'
     })
-    show('La conexión local está en pausa. Reintenta en un momento.', 'danger')
+    show('No disponible de momento.', 'danger')
     return false
   }
 }
@@ -552,6 +553,7 @@ const students = ref([])
 const loading = ref(false)
 const studentsDataAvailable = ref(false)
 const studentsSourceUnavailable = computed(() => studentsSyncState.value.status === 'unavailable' && !students.value.length && !loading.value)
+const enrollmentSummaryUnavailable = computed(() => studentsSyncState.value.status === 'unavailable' && !loading.value)
 const financialEnrichmentState = ref({
   status: 'idle',
   message: 'Enriquecimiento pendiente.',
@@ -1792,7 +1794,7 @@ const performSearch = async (options = {}) => {
       error: syncDiagnostic.code || e?.data?.message || e?.message || 'students-sync-failed'
     })
 
-    if (!canKeepWorking) show('La conexión local está en pausa. Reintenta en un momento.', 'danger')
+    if (!canKeepWorking) show('No disponible de momento.', 'danger')
   } finally {
     endKpiRefreshScope(bridgeRefreshToken)
     if (requestId === studentsRequestId) loading.value = false

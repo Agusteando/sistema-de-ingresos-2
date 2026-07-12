@@ -1,40 +1,6 @@
 <template>
   <section :class="['student-list-panel', hasAccountWorkspace ? 'is-compact' : 'is-full']">
-    <div v-if="sourceUnavailable && !loading" class="student-list-card source-unavailable-card">
-      <section class="student-source-unavailable" aria-live="polite">
-        <figure class="source-visual" aria-hidden="true">
-          <img src="/brand/plantel-offline-visual.png" alt="" />
-        </figure>
-        <div class="source-copy">
-          <span class="source-eyebrow">Conexión local en pausa</span>
-          <h3>{{ sourceUnavailableTitle }}</h3>
-          <p>{{ sourceUnavailableMessage }}</p>
-        </div>
-        <div class="source-diagnostic" role="status">
-          <LucideInfo :size="17" aria-hidden="true" />
-          <span class="source-diagnostic-copy">
-            <strong>Motivo detectado</strong>
-            <span>{{ sourceUnavailableReason }}</span>
-          </span>
-          <small v-if="sourceUnavailableReference" class="source-diagnostic-reference">
-            Ref. {{ sourceUnavailableReference }}
-          </small>
-        </div>
-        <p class="source-next-step">Reintenta nuevamente o reinicia tu sesión.</p>
-        <div class="source-actions">
-          <button type="button" class="source-retry" @click="$emit('refresh-source')">
-            <LucideRotateCcw :size="16" />
-            REINTENTAR
-          </button>
-          <button type="button" class="source-session-restart" @click="$emit('restart-session')">
-            <LucideLogIn :size="16" />
-            Reiniciar sesión
-          </button>
-        </div>
-      </section>
-    </div>
-
-    <div v-else class="student-list-card">
+    <div class="student-list-card">
       <div class="list-titlebar">
         <div class="list-heading">
           <div class="list-heading-copy">
@@ -82,35 +48,15 @@
           Cargando estudiantes...
         </div>
         <section v-else-if="sourceUnavailable" class="student-source-unavailable" aria-live="polite">
-          <figure class="source-visual" aria-hidden="true">
-            <img src="/brand/plantel-offline-visual.png" alt="" />
-          </figure>
+          <span class="source-status-icon" aria-hidden="true"><LucideInfo :size="18" /></span>
           <div class="source-copy">
-            <span class="source-eyebrow">Conexión local en pausa</span>
-            <h3>{{ sourceUnavailableTitle }}</h3>
-            <p>{{ sourceUnavailableMessage }}</p>
+            <h3>No disponible de momento</h3>
+            <p>Intenta nuevamente más tarde.</p>
           </div>
-          <div class="source-diagnostic" role="status">
-            <LucideInfo :size="17" aria-hidden="true" />
-            <span class="source-diagnostic-copy">
-              <strong>Motivo detectado</strong>
-              <span>{{ sourceUnavailableReason }}</span>
-            </span>
-            <small v-if="sourceUnavailableReference" class="source-diagnostic-reference">
-              Ref. {{ sourceUnavailableReference }}
-            </small>
-          </div>
-          <p class="source-next-step">Reintenta nuevamente o reinicia tu sesión.</p>
-          <div class="source-actions">
-            <button type="button" class="source-retry" @click="$emit('refresh-source')">
-              <LucideRotateCcw :size="16" />
-              REINTENTAR
-            </button>
-            <button type="button" class="source-session-restart" @click="$emit('restart-session')">
-              <LucideLogIn :size="16" />
-              Reiniciar sesión
-            </button>
-          </div>
+          <button type="button" class="source-retry" @click="$emit('refresh-source')">
+            <LucideRotateCcw :size="15" />
+            Volver a intentar
+          </button>
         </section>
         <div v-else-if="!displayedStudents.length" class="empty-state muted">No hay registros bajo los filtros actuales.</div>
         <template v-else>
@@ -209,8 +155,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { LucideBuilding2, LucideChevronRight, LucideGlobe2, LucideInfo, LucideLogIn, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
+import { LucideBuilding2, LucideChevronRight, LucideGlobe2, LucideInfo, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
@@ -245,39 +190,6 @@ const props = defineProps({
   sourceUnavailable: { type: Boolean, default: false },
   sourceUnavailableCode: { type: String, default: '' },
   sourceUnavailableDetail: { type: String, default: '' }
-})
-
-const sourceUnavailableTitle = 'La información del plantel está tardando en responder'
-const sourceUnavailableMessage = 'La consulta local se pausó por un momento. Tus datos permanecen sin cambios.'
-
-const sourceUnavailableContext = computed(() => {
-  const code = String(props.sourceUnavailableCode || '').trim()
-  const detail = String(props.sourceUnavailableDetail || '').trim()
-  return String(code || detail).toUpperCase()
-})
-
-const sourceUnavailableReason = computed(() => {
-  const context = sourceUnavailableContext.value
-
-  if (/AUTH_SESSION|SESSION|SESI[ÓO]N|UNAUTHORIZED|FORBIDDEN|\b401\b|\b403\b/.test(context)) {
-    return 'La sesión necesita renovarse antes de volver a consultar la información.'
-  }
-  if (/MISSING_AGENT|NO DB BRIDGE AGENT|PLANTEL ACTIVO|IDENTIFICAR EL PLANTEL/.test(context)) {
-    return 'La sesión no pudo confirmar el plantel activo para esta consulta.'
-  }
-  if (/TIMEOUT|TIMED OUT|\b504\b|TIEMPO DE ESPERA|TARD[ÓO]/.test(context)) {
-    return 'La conexión local tardó más de lo habitual en responder.'
-  }
-  if (/NETWORK|OFFLINE|UNAVAILABLE|FUERA DE L[ÍI]NEA|\b502\b|\b503\b|CONEXI[ÓO]N/.test(context)) {
-    return 'El enlace con el equipo del plantel se interrumpió por un momento.'
-  }
-
-  return 'La conexión local no respondió en este intento.'
-})
-
-const sourceUnavailableReference = computed(() => {
-  const code = String(props.sourceUnavailableCode || '').trim().toUpperCase()
-  return /^[A-Z][A-Z0-9_:-]{2,79}$/.test(code) ? code : ''
 })
 
 const isSelected = (student) => props.selectedMatriculas.has(normalizeStudentMatricula(student?.matricula))
@@ -317,288 +229,78 @@ defineEmits([
 </script>
 
 <style scoped>
-
-.source-unavailable-card {
-  display: flex;
-  min-height: 0;
-  overflow: visible;
-  padding: clamp(12px, 1.2vw, 18px);
-  background: linear-gradient(180deg, #ffffff, #fbfdfb);
-}
-
-.source-unavailable-card .student-source-unavailable {
-  width: 100%;
-  min-height: 100%;
-  height: auto;
-  flex: 1 1 auto;
-}
-
 .student-list-scroll.is-source-unavailable {
-  position: relative;
   display: flex;
   min-height: 0;
-  padding: clamp(10px, 1vw, 14px);
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
   background: #fff;
-  isolation: isolate;
-}
-
-.student-list-scroll.is-source-unavailable::before,
-.student-list-scroll.is-source-unavailable::after {
-  display: none;
 }
 
 .student-source-unavailable {
-  position: relative;
   display: flex;
-  width: 100%;
-  min-height: clamp(340px, 48vh, 500px);
-  height: auto;
-  z-index: 5;
+  width: min(100%, 360px);
+  min-height: 180px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  border: 1px solid rgba(198, 221, 204, 0.9);
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at 20% 18%, rgba(112, 180, 73, 0.16), transparent 12rem),
-    radial-gradient(circle at 84% 12%, rgba(0, 126, 148, 0.12), transparent 13rem),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 248, 0.96));
-  padding: clamp(18px, 3vw, 30px) 28px;
+  gap: 10px;
+  padding: 24px;
   text-align: center;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 22px 55px rgba(22, 64, 46, 0.08);
 }
 
-.student-source-unavailable::before {
-  content: '';
-  position: absolute;
-  z-index: 0;
-  width: 280px;
-  height: 280px;
-  right: -118px;
-  bottom: -126px;
-  border: 34px solid rgba(47, 125, 56, 0.06);
-  border-radius: 999px;
-}
-
-.source-visual {
-  position: relative;
-  z-index: 1;
-  width: min(72%, 280px);
-  margin: -12px auto 0;
-}
-
-.source-visual img {
-  display: block;
-  width: 100%;
-  height: auto;
-  object-fit: contain;
-  filter: drop-shadow(0 22px 32px rgba(27, 99, 85, 0.12));
-}
-
-.source-copy {
-  position: relative;
-  z-index: 1;
-  max-width: 570px;
-}
-
-.source-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(47, 125, 56, 0.14);
-  border-radius: 999px;
-  background: rgba(235, 248, 236, 0.82);
-  padding: 7px 12px;
-  color: #2f7d38;
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.source-status-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid #e1e8e0;
+  border-radius: 12px;
+  background: #f7faf6;
+  color: #688064;
 }
 
 .source-copy h3 {
-  margin: 12px 0 8px;
-  color: #16213b;
-  font-size: clamp(1.25rem, 2.1vw, 1.75rem);
-  font-weight: 950;
-  letter-spacing: -0.04em;
+  margin: 0;
+  color: #26364b;
+  font-size: 14px;
+  font-weight: 820;
+  letter-spacing: -0.01em;
 }
 
 .source-copy p {
-  margin: 0 auto;
-  color: #64748b;
-  font-size: 0.98rem;
-  font-weight: 650;
-  line-height: 1.55;
-}
-
-.source-diagnostic {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  width: min(100%, 620px);
-  align-items: flex-start;
-  gap: 10px;
-  margin-top: 16px;
-  border: 1px solid rgba(184, 214, 195, 0.92);
-  border-radius: 16px;
-  background: rgba(244, 251, 246, 0.9);
-  padding: 11px 13px;
-  color: #475569;
-  font-size: 0.82rem;
+  margin: 4px 0 0;
+  color: #7a8593;
+  font-size: 11.5px;
   line-height: 1.45;
-  text-align: left;
-}
-
-.source-diagnostic > svg {
-  flex: 0 0 auto;
-  margin-top: 1px;
-  color: #2f7d38;
-}
-
-.source-diagnostic-copy {
-  display: grid;
-  flex: 1 1 auto;
-  gap: 1px;
-}
-
-.source-diagnostic-copy strong {
-  color: #244a31;
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
-.source-diagnostic-reference {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  padding: 3px 7px;
-  color: #64748b;
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-
-.source-next-step {
-  position: relative;
-  z-index: 1;
-  margin: 13px 0 0;
-  color: #475569;
-  font-size: 0.86rem;
-  font-weight: 750;
-}
-
-.source-actions {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.source-retry,
-.source-session-restart {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 14px;
-  padding: 11px 17px;
-  font-size: 0.9rem;
-  font-weight: 900;
-  cursor: pointer;
-  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
 }
 
 .source-retry {
-  border: 0;
-  background: linear-gradient(135deg, #2f8f46, #52b343);
-  color: white;
-  box-shadow: 0 18px 30px rgba(45, 142, 66, 0.22);
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 2px;
+  border: 1px solid #dce5dc;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 12px;
+  color: #486544;
+  font-size: 11.5px;
+  font-weight: 780;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
 }
 
-.source-session-restart {
-  border: 1px solid rgba(82, 112, 126, 0.24);
-  background: rgba(255, 255, 255, 0.88);
-  color: #34495e;
-  box-shadow: 0 12px 24px rgba(32, 63, 78, 0.08);
+.source-retry:hover {
+  border-color: #c8d8c6;
+  background: #f7faf6;
 }
 
-.source-retry:hover,
-.source-session-restart:hover {
-  transform: translateY(-1px);
-}
-
-.source-retry:focus-visible,
-.source-session-restart:focus-visible {
-  outline: 3px solid rgba(47, 143, 70, 0.24);
+.source-retry:focus-visible {
+  outline: 3px solid rgba(83, 133, 70, 0.18);
   outline-offset: 2px;
-}
-
-@media (max-width: 640px) {
-  .student-source-unavailable {
-    padding-inline: 18px;
-  }
-
-  .source-visual {
-    width: min(78%, 230px);
-  }
-
-  .source-diagnostic {
-    flex-wrap: wrap;
-  }
-
-  .source-diagnostic-reference {
-    margin-left: 27px;
-  }
-
-  .source-actions {
-    width: min(100%, 360px);
-  }
-
-  .source-retry,
-  .source-session-restart {
-    flex: 1 1 150px;
-  }
-}
-
-@media (max-height: 620px) and (min-width: 641px) {
-  .student-source-unavailable {
-    min-height: 320px;
-    padding-block: 14px;
-  }
-
-  .source-visual {
-    width: min(58%, 205px);
-    margin-top: -14px;
-  }
-
-  .source-copy h3 {
-    margin-block: 8px 5px;
-    font-size: clamp(1.1rem, 1.8vw, 1.45rem);
-  }
-
-  .source-copy p {
-    font-size: 0.9rem;
-  }
-
-  .source-diagnostic {
-    margin-top: 10px;
-    padding-block: 8px;
-  }
-
-  .source-next-step,
-  .source-actions {
-    margin-top: 9px;
-  }
-
-  .source-retry,
-  .source-session-restart {
-    padding-block: 9px;
-  }
 }
 </style>

@@ -268,34 +268,24 @@
                   class="ce-source-unavailable"
                   aria-live="polite"
                 >
-                  <figure class="ce-source-visual" aria-hidden="true">
-                    <img src="/brand/plantel-offline-visual.png" alt="" />
-                  </figure>
-                  <span class="ce-source-eyebrow">Conexión local en pausa</span>
+                  <span class="ce-source-status-icon" aria-hidden="true">
+                    <LucideInfo :size="18" />
+                  </span>
                   <h3>{{ sourceUnavailableTitle }}</h3>
                   <p>{{ sourceUnavailableMessage }}</p>
-                  <div class="ce-source-hints">
-                    <span
-                      ><LucideComputer :size="15" /> Equipo del plantel</span
-                    >
-                    <span
-                      ><LucideClock3 :size="15" />
-                      {{ sourceUnavailableHint }}</span
-                    >
-                  </div>
                   <button
                     type="button"
                     class="ce-source-retry"
                     @click="
                       refreshAll({
                         forceNetwork: true,
-                        clearExisting: true,
-                        forceLoading: true,
+                        clearExisting: false,
+                        forceLoading: false,
                       })
                     "
                   >
                     <LucideRefreshCw :size="16" />
-                    Intentar de nuevo
+                    Volver a intentar
                   </button>
                 </section>
                 <div
@@ -1481,6 +1471,7 @@
             :active-grade="filters.grado"
             :active-group="filters.group"
             :loading="studentsLoading"
+            :unavailable="controlEnrollmentSummaryUnavailable"
             @select-grade="selectSummaryGrade"
             @select-group="selectSummaryGroup"
             @clear="clearAcademicFilters"
@@ -1851,7 +1842,6 @@ import {
   LucideChevronLeft,
   LucideClock3,
   LucideCloudOff,
-  LucideComputer,
   LucideChevronRight,
   LucideDatabase,
   LucideDownload,
@@ -1860,6 +1850,7 @@ import {
   LucideFileUp,
   LucideGlobe2,
   LucideGraduationCap,
+  LucideInfo,
   LucideKeyRound,
   LucideLoader2,
   LucideMail,
@@ -2135,8 +2126,6 @@ const loadingAny = computed(
     controlSyncBusy.value,
 );
 
-const localHour = ref(12);
-const isAfterOfficeHours = computed(() => localHour.value >= 17);
 const studentsSourceUnavailable = computed(() =>
   Boolean(
     selectedAgentId.value &&
@@ -2145,19 +2134,13 @@ const studentsSourceUnavailable = computed(() =>
     !students.value.length,
   ),
 );
-const sourceUnavailableTitle = computed(() =>
-  isAfterOfficeHours.value
-    ? "El equipo del plantel ya cerró por hoy"
-    : "La base del plantel no está disponible en este momento",
+const controlEnrollmentSummaryUnavailable = computed(
+  () =>
+    !studentsLoading.value &&
+    (studentsSourceUnavailable.value || controlCompleteStage.value === "failed"),
 );
-const sourceUnavailableMessage = computed(() =>
-  isAfterOfficeHours.value
-    ? "La información se consulta desde el equipo local del plantel. Si el administrador ya terminó su jornada, la lista volverá a estar disponible cuando ese equipo se encienda de nuevo."
-    : "La lista se activa cuando el equipo del administrador del plantel está encendido y conectado. Solicita que lo mantengan disponible y vuelve a intentarlo.",
-);
-const sourceUnavailableHint = computed(() =>
-  isAfterOfficeHours.value ? "Fuera de horario" : "Esperando conexión",
-);
+const sourceUnavailableTitle = "No disponible de momento";
+const sourceUnavailableMessage = "Intenta nuevamente más tarde.";
 
 const formatControlSyncTime = (value) => {
   if (!value) return "";
@@ -5390,7 +5373,7 @@ const loadStudents = async (options = {}) => {
       loadError.value =
         error?.data?.message ||
         error?.message ||
-        "Plantel fuera de línea o sin respuesta.";
+        "No disponible de momento.";
     } else {
       loadError.value = "";
       applyInstantStudentFilters();
@@ -6346,7 +6329,6 @@ onMounted(async () => {
   scheduleControlScreenScaleUpdate();
   if (process.client) {
     clearControlStudentsBrowserCache();
-    localHour.value = new Date().getHours();
     window.addEventListener("ingresos:ciclo-changed", handleCicloChanged);
     window.addEventListener("control-escolar:open-sync-diagnostics", openControlDiagnosticsModal);
     window.addEventListener("control-escolar:topbar-action", handleControlTopbarAction);
@@ -6919,153 +6901,71 @@ onBeforeUnmount(() => {
 }
 
 .ce-source-unavailable {
-  position: relative;
-  z-index: 5;
   display: flex;
   width: 100%;
-  min-height: clamp(390px, 52vh, 560px);
-  height: auto;
+  min-height: 180px;
   flex: 1 1 auto;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  border: 1px solid rgba(198, 221, 204, 0.92);
-  border-radius: 30px;
-  background:
-    radial-gradient(
-      circle at 17% 18%,
-      rgba(112, 180, 73, 0.17),
-      transparent 13rem
-    ),
-    radial-gradient(
-      circle at 86% 12%,
-      rgba(0, 126, 148, 0.12),
-      transparent 13rem
-    ),
-    linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.98),
-      rgba(247, 252, 248, 0.96)
-    );
+  gap: 10px;
   margin: 0;
-  padding: 38px 30px;
+  padding: 24px;
   text-align: center;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 22px 55px rgba(22, 64, 46, 0.08);
 }
 
-.ce-source-unavailable::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  width: 292px;
-  height: 292px;
-  right: -124px;
-  bottom: -130px;
-  border: 36px solid rgba(47, 125, 56, 0.06);
-  border-radius: 999px;
-}
-
-.ce-source-visual {
-  position: relative;
-  z-index: 1;
-  width: min(86%, 390px);
-  margin: -10px auto 4px;
-}
-
-.ce-source-visual img {
-  display: block;
-  width: 100%;
-  height: auto;
-  object-fit: contain;
-  filter: drop-shadow(0 22px 32px rgba(27, 99, 85, 0.12));
-}
-
-.ce-source-eyebrow {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(47, 125, 56, 0.14);
-  border-radius: 999px;
-  background: rgba(235, 248, 236, 0.82);
-  padding: 7px 12px;
-  color: #2f7d38;
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.ce-source-status-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid #e1e8e0;
+  border-radius: 12px;
+  background: #f7faf6;
+  color: #688064;
 }
 
 .ce-source-unavailable h3 {
-  position: relative;
-  z-index: 1;
-  max-width: 610px;
-  margin: 16px auto 10px;
-  color: #16213b;
-  font-size: clamp(1.3rem, 2.1vw, 1.82rem);
-  font-weight: 950;
-  letter-spacing: -0.04em;
+  margin: 0;
+  color: #26364b;
+  font-size: 14px;
+  font-weight: 820;
+  letter-spacing: -0.01em;
 }
 
 .ce-source-unavailable p {
-  position: relative;
-  z-index: 1;
-  max-width: 640px;
-  margin: 0 auto;
-  color: #64748b;
-  font-size: 0.99rem;
-  font-weight: 650;
-  line-height: 1.65;
-}
-
-.ce-source-hints {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 22px;
-}
-
-.ce-source-hints span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid rgba(204, 216, 226, 0.9);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  padding: 8px 12px;
-  color: #475569;
-  font-size: 0.82rem;
-  font-weight: 800;
+  margin: -2px 0 0;
+  color: #7a8593;
+  font-size: 11.5px;
+  line-height: 1.45;
 }
 
 .ce-source-retry {
-  position: relative;
-  z-index: 1;
   display: inline-flex;
+  min-height: 34px;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin-top: 24px;
-  border: 0;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #2f8f46, #52b343);
-  padding: 12px 18px;
-  color: white;
-  font-size: 0.9rem;
-  font-weight: 900;
-  box-shadow: 0 18px 30px rgba(45, 142, 66, 0.22);
+  gap: 7px;
+  margin-top: 2px;
+  border: 1px solid #dce5dc;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 12px;
+  color: #486544;
+  font-size: 11.5px;
+  font-weight: 780;
   cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
 }
 
 .ce-source-retry:hover {
-  transform: translateY(-1px);
+  border-color: #c8d8c6;
+  background: #f7faf6;
+}
+
+.ce-source-retry:focus-visible {
+  outline: 3px solid rgba(83, 133, 70, 0.18);
+  outline-offset: 2px;
 }
 
 .ce-diagnostics-modal {

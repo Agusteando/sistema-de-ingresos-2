@@ -5,6 +5,8 @@
         <span v-for="index in 4" :key="index"></span>
       </div>
 
+      <div v-else-if="unavailable" class="enrollment-summary-unavailable" aria-hidden="true"></div>
+
       <div v-else-if="!summary.rows.length" class="enrollment-summary-empty">
         <span><LucideUsersRound :size="22" /></span>
         <div>
@@ -128,6 +130,7 @@ const props = withDefaults(defineProps<{
   activeGrade?: string
   activeGroup?: string
   loading?: boolean
+  unavailable?: boolean
 }>(), {
   summary: () => ({ rows: [], internos: 0, externos: 0, total: 0 }),
   plantelLabel: '',
@@ -135,6 +138,7 @@ const props = withDefaults(defineProps<{
   activeGrade: '',
   activeGroup: '',
   loading: false,
+  unavailable: false,
 })
 
 defineEmits<{

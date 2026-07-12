@@ -6,46 +6,22 @@ import { sanitizeExternalLiveStudent } from '../../../../../utils/control-escola
 import type { AuthSessionUser } from '../../../../../utils/auth-session'
 
 const ALLOWED_MARKETING_FIELDS = new Set([
-  'nombres',
-  'apellidoPaterno',
-  'apellidoMaterno',
-  'curp',
-  'lugarNacimiento',
-  'sexo',
-  'talla',
-  'peso',
-  'tipoSangre',
-  'alergias',
   'nombrePadre',
   'apellidoPaternoPadre',
   'apellidoMaternoPadre',
   'telefonoPadre',
   'emailPadre',
-  'lugarTrabajoPadre',
-  'puestoPadre',
-  'estadoCivilPadre',
-  'fechaNacimientoPadre',
-  'inePadre',
-  'curpPadre',
   'nombreMadre',
   'apellidoPaternoMadre',
   'apellidoMaternoMadre',
   'telefonoMadre',
   'emailMadre',
-  'lugarTrabajoMadre',
-  'puestoMadre',
-  'estadoCivilMadre',
-  'fechaNacimientoMadre',
-  'ineMadre',
-  'curpMadre',
   'direccion',
   'domicilioCalle',
   'domicilioNumero',
   'domicilioColonia',
   'domicilioCp',
-  'domicilioMunicipio',
-  'servicio',
-  'servicioNotas'
+  'domicilioMunicipio'
 ])
 
 const clean = (value: unknown, max = 255) => String(value ?? '').trim().slice(0, max)
@@ -76,10 +52,7 @@ const actorFromRequest = (event: any, plantel: string): AuthSessionUser => {
 const sanitizePatch = (body: any) => Object.fromEntries(
   Object.entries(body || {})
     .filter(([key]) => ALLOWED_MARKETING_FIELDS.has(key))
-    .map(([key, value]) => {
-      const max = ['direccion', 'alergias', 'servicioNotas'].includes(key) ? 1000 : 255
-      return [key, clean(value, max)]
-    })
+    .map(([key, value]) => [key, clean(value, key === 'direccion' ? 500 : 255)])
 )
 
 export default defineEventHandler(async (event) => {
@@ -96,7 +69,7 @@ export default defineEventHandler(async (event) => {
   if (!plantel) throw createError({ statusCode: 400, statusMessage: 'PLANTEL_REQUIRED', message: 'El plantel es obligatorio.' })
   if (!ciclo) throw createError({ statusCode: 400, statusMessage: 'CICLO_REQUIRED', message: 'El ciclo escolar es obligatorio.' })
   if (!matricula) throw createError({ statusCode: 400, statusMessage: 'MATRICULA_REQUIRED', message: 'La matrícula es obligatoria.' })
-  if (!Object.keys(patch).length) throw createError({ statusCode: 400, statusMessage: 'NO_EDITABLE_FIELDS', message: 'No hay información para actualizar.' })
+  if (!Object.keys(patch).length) throw createError({ statusCode: 400, statusMessage: 'NO_EDITABLE_FIELDS', message: 'No hay datos familiares para actualizar.' })
 
   const actor = actorFromRequest(event, plantel)
   return await runControlEscolar(event, plantel, async () => {
@@ -109,8 +82,8 @@ export default defineEventHandler(async (event) => {
       ciclo,
       matricula,
       user: actor,
-      summary: `Mercadotecnia actualizó la ficha de ${matricula}`,
-      source: { base: (student as any)?.sourceBase || (student as any)?.baseSource || '', flow: 'husky_pass_marketing_student_update' },
+      summary: `Mercadotecnia actualizó información familiar de ${matricula}`,
+      source: { base: (student as any)?.sourceBase || (student as any)?.baseSource || '', flow: 'husky_pass_marketing_parent_update' },
       payload: { fields: Object.keys(patch), client: 'husky-pass-marketing' }
     }).catch(() => null)
 
