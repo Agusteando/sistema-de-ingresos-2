@@ -2424,6 +2424,13 @@ export const fetchControlEscolarKpis = async (
   const students = loaded.students;
   const byNivel = new Map<string, number>();
   const byGrupo = new Map<string, number>();
+  const gradeBuckets = new Map<string, {
+    grado: string;
+    interno: number;
+    externo: number;
+    total: number;
+    grupos: Map<string, { grupo: string; interno: number; externo: number; total: number }>;
+  }>();
 
   students.forEach((student) => {
     if (student.nivel)
@@ -2433,21 +2440,40 @@ export const fetchControlEscolarKpis = async (
     if (groupKey) byGrupo.set(groupKey, (byGrupo.get(groupKey) || 0) + 1);
   });
 
+  const enrolledStudents = students.filter(
+    (student) => student.enrollmentState === "inscrito",
+  );
+
+  enrolledStudents.forEach((student) => {
+    const grado = displayGrado(student.grado) || "Sin grado";
+    const grupo = normalizeText(student.group || student.grupo || "", 40) || "Sin grupo";
+    const kind = student.tipoIngresoValue === "interno" ? "interno" : "externo";
+    const grade = gradeBuckets.get(grado) || {
+      grado,
+      interno: 0,
+      externo: 0,
+      total: 0,
+      grupos: new Map(),
+    };
+    grade[kind] += 1;
+    grade.total += 1;
+
+    const group = grade.grupos.get(grupo) || { grupo, interno: 0, externo: 0, total: 0 };
+    group[kind] += 1;
+    group.total += 1;
+    grade.grupos.set(grupo, group);
+    gradeBuckets.set(grado, grade);
+  });
+
   const active = students.filter(
     (student) => student.status === "Activo",
   ).length;
-  const inscritos = students.filter(
-    (student) => student.enrollmentState === "inscrito",
+  const inscritos = enrolledStudents.length;
+  const internos = enrolledStudents.filter(
+    (student) => student.tipoIngresoValue === "interno",
   ).length;
-  const internos = students.filter(
-    (student) =>
-      student.enrollmentState === "inscrito" &&
-      student.tipoIngresoValue === "interno",
-  ).length;
-  const externos = students.filter(
-    (student) =>
-      student.enrollmentState === "inscrito" &&
-      student.tipoIngresoValue !== "interno",
+  const externos = enrolledStudents.filter(
+    (student) => student.tipoIngresoValue !== "interno",
   ).length;
   const noInscritos = students.filter(
     (student) => student.enrollmentState === "no_inscrito",
@@ -2472,6 +2498,18 @@ export const fetchControlEscolarKpis = async (
   const missing = (field: string) =>
     progressStudents.filter((student) => student.missingFields.includes(field))
       .length;
+
+  const porGrado = Array.from(gradeBuckets.values())
+    .sort((left, right) => compareAcademicGrade(left.grado, right.grado))
+    .map((grade) => ({
+      grado: grade.grado,
+      interno: grade.interno,
+      externo: grade.externo,
+      total: grade.total,
+      grupos: Array.from(grade.grupos.values()).sort((left, right) =>
+        left.grupo.localeCompare(right.grupo, "es", { numeric: true, sensitivity: "base" }),
+      ),
+    }));
 
   return {
     totalInscritos: inscritos,
@@ -2506,6 +2544,7 @@ export const fetchControlEscolarKpis = async (
     porGrupo: Array.from(byGrupo.entries())
       .map(([label, total]) => ({ label, total }))
       .slice(0, 18),
+    porGrado,
   };
 };
 

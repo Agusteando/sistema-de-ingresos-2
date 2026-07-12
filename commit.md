@@ -1,1 +1,1 @@
-Corrige la distribución de Control Escolar sin alterar sus controles
+Integra estadísticas por grado y edición completa de matrícula para Marketing
