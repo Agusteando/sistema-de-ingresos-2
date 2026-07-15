@@ -1,16 +1,24 @@
-import { fetchCentralMatriculaOverlays } from './central-matricula-overlay'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 import { query, runWithBridgeAgentId } from './db'
-import { PLANTELES_LIST } from '../../utils/constants'
+import { CONCEPTOS_PLANTELES_LIST } from '../../utils/constants'
 
-const SUMMER_PLANTELES = new Set(PLANTELES_LIST)
 const DEFAULT_CONCEPTS = [986, 987, 988]
+const DEFAULT_PLANTELES = [...CONCEPTOS_PLANTELES_LIST]
+const SUMMER_PLANTELES = new Set(DEFAULT_PLANTELES)
 const clean = (value: unknown, max = 255) => String(value ?? '').trim().slice(0, max)
 const matriculaKey = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
+const SUMMER_QUERY_VERSION = 3
+const SUMMER_QUERY_STRATEGY = 'single-union-direct-concept'
 
 export const normalizeSummerPlantel = (value: unknown) => {
   const raw = clean(value, 40).toUpperCase()
   return SUMMER_PLANTELES.has(raw) ? raw : ''
+}
+
+export const parseSummerPlanteles = (value: unknown) => {
+  const values = Array.isArray(value) ? value : String(value || '').split(',')
+  const normalized = values.map(normalizeSummerPlantel).filter(Boolean)
+  return Array.from(new Set(normalized.length ? normalized : DEFAULT_PLANTELES))
 }
 
 export const parseSummerConcepts = (value: unknown) => {
@@ -29,14 +37,15 @@ type SummerQueryError = {
   errno: number | null
   sqlState: string | null
   sqlMessage: string | null
+  statusCode: number | null
   stack: string | null
 }
 
-type SummerQueryBranch = {
-  key: 'paid' | 'charged'
+type SummerPlantelResult = {
+  plantel: string
   ok: boolean
-  rowCount: number
   latencyMs: number
+  rowCount: number
   rows: any[]
   error: SummerQueryError | null
 }
@@ -48,231 +57,270 @@ const serializeSummerQueryError = (error: any): SummerQueryError => ({
   errno: Number.isFinite(Number(error?.errno)) ? Number(error.errno) : null,
   sqlState: clean(error?.sqlState, 120) || null,
   sqlMessage: clean(error?.sqlMessage, 4000) || null,
+  statusCode: Number.isFinite(Number(error?.statusCode || error?.status || error?.httpStatus))
+    ? Number(error?.statusCode || error?.status || error?.httpStatus)
+    : null,
   stack: clean(error?.stack, 12000) || null
 })
 
-const runSummerQueryBranch = async (key: 'paid' | 'charged', task: () => Promise<any[]>): Promise<SummerQueryBranch> => {
+const readSummerRowsForPlantel = async (plantel: string, cycle: string, concepts: number[]): Promise<SummerPlantelResult> => {
   const started = Date.now()
-  try {
-    const rows = await task()
-    return { key, ok: true, rowCount: rows.length, latencyMs: Date.now() - started, rows, error: null }
-  } catch (error: any) {
-    return { key, ok: false, rowCount: 0, latencyMs: Date.now() - started, rows: [], error: serializeSummerQueryError(error) }
-  }
-}
-
-const readSummerEnrollmentBranches = async (plantel: string, cycle: string, concepts: number[]) => {
   const placeholders = concepts.map(() => '?').join(',')
-  return await runWithBridgeAgentId(plantel, async () => {
-    const [paid, charged] = await Promise.all([
-      runSummerQueryBranch('paid', async () => await query<any[]>(`
+
+  try {
+    const rows = await runWithBridgeAgentId(plantel, async () => await query<any[]>(`
+      SELECT
+        UPPER(TRIM(E.matricula)) AS matricula,
+        MAX(TRIM(COALESCE(NULLIF(B.nombreCompleto, ''), NULLIF(E.nombreCompleto, ''), ''))) AS nombreCompleto,
+        ? AS plantel,
+        MAX(TRIM(COALESCE(B.curp, ''))) AS curp,
+        MAX(E.conceptId) AS conceptId,
+        MAX(E.hasPayment) AS hasPayment,
+        MAX(E.hasCharge) AS hasCharge,
+        MAX(CASE WHEN B.matricula IS NULL THEN 1 ELSE 0 END) AS externalStudent
+      FROM (
         SELECT
-          UPPER(TRIM(R.matricula)) AS matricula,
-          MAX(TRIM(COALESCE(R.nombreCompleto, B.nombreCompleto, ''))) AS nombreCompleto,
-          MAX(UPPER(TRIM(COALESCE(R.plantel, B.plantel, ?)))) AS plantel,
-          MAX(TRIM(COALESCE(B.curp, ''))) AS curp,
-          MAX(CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS UNSIGNED)) AS conceptId
+          R.matricula,
+          R.nombreCompleto,
+          CAST(R.concepto AS UNSIGNED) AS conceptId,
+          1 AS hasPayment,
+          0 AS hasCharge
         FROM referenciasdepago R
-        LEFT JOIN documentos D ON D.documento = R.documento
-        LEFT JOIN documento_concepto_periodos P
-          ON P.documento = R.documento
-          AND P.estatus = 'Activo'
-          AND CAST(R.mes AS UNSIGNED) >= P.start_mes
-          AND (P.end_mes IS NULL OR CAST(R.mes AS UNSIGNED) <= P.end_mes)
-        LEFT JOIN base B ON B.matricula = R.matricula
         WHERE R.estatus = 'Vigente'
           AND R.ciclo = ?
-          AND CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS UNSIGNED) IN (${placeholders})
-        GROUP BY UPPER(TRIM(R.matricula))
-      `, [plantel, cycle, ...concepts])),
-      runSummerQueryBranch('charged', async () => await query<any[]>(`
+          AND CAST(R.concepto AS UNSIGNED) IN (${placeholders})
+
+        UNION ALL
+
         SELECT
-          UPPER(TRIM(D.matricula)) AS matricula,
-          MAX(TRIM(COALESCE(B.nombreCompleto, ''))) AS nombreCompleto,
-          MAX(UPPER(TRIM(COALESCE(D.plantel, B.plantel, ?)))) AS plantel,
-          MAX(TRIM(COALESCE(B.curp, ''))) AS curp,
-          MAX(CAST(COALESCE(P.concepto_id, D.concepto) AS UNSIGNED)) AS conceptId
+          D.matricula,
+          '' AS nombreCompleto,
+          CAST(D.concepto AS UNSIGNED) AS conceptId,
+          0 AS hasPayment,
+          1 AS hasCharge
         FROM documentos D
-        LEFT JOIN documento_concepto_periodos P ON P.documento = D.documento AND P.estatus = 'Activo'
-        LEFT JOIN base B ON B.matricula = D.matricula
         WHERE D.estatus = 'Activo'
           AND D.ciclo = ?
-          AND CAST(COALESCE(P.concepto_id, D.concepto) AS UNSIGNED) IN (${placeholders})
-        GROUP BY UPPER(TRIM(D.matricula))
-      `, [plantel, cycle, ...concepts]))
-    ])
-    return { paid, charged }
-  })
+          AND CAST(D.concepto AS UNSIGNED) IN (${placeholders})
+      ) E
+      LEFT JOIN base B ON B.matricula = E.matricula
+      WHERE TRIM(COALESCE(E.matricula, '')) <> ''
+      GROUP BY UPPER(TRIM(E.matricula))
+      ORDER BY nombreCompleto ASC, matricula ASC
+    `, [plantel, cycle, ...concepts, cycle, ...concepts]))
+
+    return {
+      plantel,
+      ok: true,
+      latencyMs: Date.now() - started,
+      rowCount: rows.length,
+      rows,
+      error: null
+    }
+  } catch (error: any) {
+    return {
+      plantel,
+      ok: false,
+      latencyMs: Date.now() - started,
+      rowCount: 0,
+      rows: [],
+      error: serializeSummerQueryError(error)
+    }
+  }
 }
 
-const publicBranchDiagnostic = (branch: SummerQueryBranch) => ({
-  key: branch.key,
-  ok: branch.ok,
-  rowCount: branch.rowCount,
-  latencyMs: branch.latencyMs,
-  error: branch.error
-})
+const mapWithConcurrency = async <T, R>(values: T[], concurrency: number, task: (value: T, index: number) => Promise<R>) => {
+  const results = new Array<R>(values.length)
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(Math.max(1, concurrency), values.length) }, async () => {
+    while (true) {
+      const index = cursor++
+      if (index >= values.length) return
+      results[index] = await task(values[index], index)
+    }
+  })
+  await Promise.all(workers)
+  return results
+}
 
-const mergeSummerRows = (rows: any[], plantel: string) => {
+const mergeSummerRows = (plantelResults: SummerPlantelResult[]) => {
   const merged = new Map<string, any>()
-  for (const row of rows) {
-    const matricula = matriculaKey(row.matricula)
-    if (!matricula) continue
-    const current = merged.get(matricula)
-    const conceptId = Number(row.conceptId || 0)
-    if (!current) {
-      merged.set(matricula, {
-        matricula,
-        nombreCompleto: clean(row.nombreCompleto, 255),
-        plantel: normalizeSummerPlantel(row.plantel) || plantel,
-        curp: clean(row.curp, 18).toUpperCase(),
-        conceptId
-      })
-    } else {
+  const crossPlantelDuplicates: Array<{ matricula: string; planteles: string[] }> = []
+  const identityPlanteles = new Map<string, Set<string>>()
+
+  for (const result of plantelResults) {
+    if (!result.ok) continue
+    for (const row of result.rows) {
+      const matricula = matriculaKey(row.matricula)
+      if (!matricula) continue
+      const planteles = identityPlanteles.get(matricula) || new Set<string>()
+      planteles.add(result.plantel)
+      identityPlanteles.set(matricula, planteles)
+
+      const conceptId = Number(row.conceptId || 0)
+      const current = merged.get(matricula)
+      if (!current) {
+        merged.set(matricula, {
+          matricula,
+          nombreCompleto: clean(row.nombreCompleto, 255) || matricula,
+          plantel: result.plantel,
+          curp: clean(row.curp, 18).toUpperCase(),
+          conceptId,
+          mealCount: mealCountFor(conceptId),
+          photoAvailable: false,
+          externalStudent: Boolean(Number(row.externalStudent || 0)),
+          hasPayment: Boolean(Number(row.hasPayment || 0)),
+          hasCharge: Boolean(Number(row.hasCharge || 0)),
+          updatedAt: null
+        })
+        continue
+      }
+
       current.nombreCompleto ||= clean(row.nombreCompleto, 255)
       current.curp ||= clean(row.curp, 18).toUpperCase()
-      current.conceptId = betterConcept(current.conceptId, conceptId)
+      current.conceptId = betterConcept(Number(current.conceptId || 0), conceptId)
+      current.mealCount = mealCountFor(current.conceptId)
+      current.externalStudent = current.externalStudent && Boolean(Number(row.externalStudent || 0))
+      current.hasPayment = current.hasPayment || Boolean(Number(row.hasPayment || 0))
+      current.hasCharge = current.hasCharge || Boolean(Number(row.hasCharge || 0))
     }
   }
-  return merged
-}
 
-export const readSummerStudentsFromBridge = async (plantelValue: unknown, cycleValue: unknown, conceptsValue: unknown) => {
-  const plantel = normalizeSummerPlantel(plantelValue)
-  const cycle = clean(cycleValue || '2026', 20).match(/\d{4}/)?.[0] || '2026'
-  const concepts = parseSummerConcepts(conceptsValue)
-  if (!plantel) throw createError({ statusCode: 400, statusMessage: 'PLANTEL_INVALID', message: 'El plantel no es válido.' })
-
-  let branches: Awaited<ReturnType<typeof readSummerEnrollmentBranches>>
-  try {
-    branches = await readSummerEnrollmentBranches(plantel, cycle, concepts)
-  } catch (error: any) {
-    throw createError({
-      statusCode: 502,
-      statusMessage: 'SUMMER_BRIDGE_CONTEXT_FAILED',
-      message: 'No se pudo abrir el contexto Bridge del plantel.',
-      data: { plantel, cycle, concepts, boundary: 'bridge_context', error: serializeSummerQueryError(error) }
-    })
+  for (const [matricula, planteles] of identityPlanteles) {
+    if (planteles.size > 1) crossPlantelDuplicates.push({ matricula, planteles: Array.from(planteles).sort() })
   }
-
-  const queryDiagnostics = {
-    paid: publicBranchDiagnostic(branches.paid),
-    charged: publicBranchDiagnostic(branches.charged)
-  }
-  if (!branches.paid.ok && !branches.charged.ok) {
-    throw createError({
-      statusCode: 502,
-      statusMessage: 'SUMMER_FINANCIAL_QUERIES_FAILED',
-      message: 'Las dos consultas financieras de Summer Camp fallaron.',
-      data: { plantel, cycle, concepts, boundary: 'financial_queries', queryDiagnostics }
-    })
-  }
-
-  const merged = mergeSummerRows([...branches.paid.rows, ...branches.charged.rows], plantel)
-
-  let centralReachable = true
-  let overlays = new Map<string, any>()
-  let centralError: SummerQueryError | null = null
-  try {
-    overlays = await fetchCentralMatriculaOverlays(Array.from(merged.keys()))
-  } catch (error: any) {
-    centralReachable = false
-    centralError = serializeSummerQueryError(error)
-    console.warn('[Summer API] Central matricula enrichment unavailable.', { plantel, message: error?.message || error })
-  }
-
-  const data = Array.from(merged.values()).map((student) => {
-    const central = overlays.get(student.matricula)?.student || null
-    return {
-      matricula: student.matricula,
-      nombreCompleto: clean(central?.nombreCompleto || central?.fullName || student.nombreCompleto, 255) || student.matricula,
-      plantel: normalizeSummerPlantel(student.plantel) || plantel,
-      curp: clean(central?.curp || student.curp, 18).toUpperCase(),
-      conceptId: Number(student.conceptId || 0),
-      mealCount: mealCountFor(Number(student.conceptId || 0)),
-      photoAvailable: Boolean(central?.foto),
-      externalStudent: !central,
-      updatedAt: central?.updatedAt || null
-    }
-  }).sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto, 'es'))
 
   return {
-    data,
+    data: Array.from(merged.values()).sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto, 'es')),
+    crossPlantelDuplicates
+  }
+}
+
+const publicPlantelResult = (result: SummerPlantelResult) => ({
+  plantel: result.plantel,
+  ok: result.ok,
+  latencyMs: result.latencyMs,
+  rowCount: result.rowCount,
+  error: result.error
+})
+
+export const readSummerStudentsFromBridge = async (plantelesValue: unknown, cycleValue: unknown, conceptsValue: unknown) => {
+  const planteles = parseSummerPlanteles(plantelesValue)
+  const cycle = clean(cycleValue || '2026', 20).match(/\d{4}/)?.[0] || '2026'
+  const concepts = parseSummerConcepts(conceptsValue)
+  const started = Date.now()
+
+  const plantelResults = await mapWithConcurrency(planteles, 3, async (plantel) => await readSummerRowsForPlantel(plantel, cycle, concepts))
+  const successful = plantelResults.filter((result) => result.ok)
+  const failed = plantelResults.filter((result) => !result.ok)
+
+  if (!successful.length) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'SUMMER_ALL_FINANCIAL_AGENTS_FAILED',
+      message: 'No fue posible consultar ningún agente financiero de Summer Camp.',
+      data: {
+        queryVersion: SUMMER_QUERY_VERSION,
+        queryStrategy: SUMMER_QUERY_STRATEGY,
+        boundary: 'financial_agents',
+        cycle,
+        concepts,
+        requestedPlanteles: planteles,
+        plantelResults: plantelResults.map(publicPlantelResult)
+      }
+    })
+  }
+
+  const merged = mergeSummerRows(plantelResults)
+  const successfulPlanteles = successful.map((result) => result.plantel)
+  const emptyPlanteles = successful.filter((result) => result.rowCount === 0).map((result) => result.plantel)
+  const failedPlanteles = failed.map((result) => result.plantel)
+
+  return {
+    data: merged.data,
     meta: {
-      diagnosticVersion: 1,
-      plantel,
+      diagnosticVersion: 3,
+      queryVersion: SUMMER_QUERY_VERSION,
+      queryStrategy: SUMMER_QUERY_STRATEGY,
       cycle,
       concepts,
-      total: data.length,
+      requestedPlanteles: planteles,
+      successfulPlanteles,
+      emptyPlanteles,
+      failedPlanteles,
+      total: merged.data.length,
       generatedAt: new Date().toISOString(),
-      bridgeReachable: true,
-      centralReachable,
-      partial: !centralReachable || !branches.paid.ok || !branches.charged.ok,
+      latencyMs: Date.now() - started,
+      bridgeReachable: successful.length > 0,
+      partial: failed.length > 0,
       source: 'aurora-summer-bridge',
-      queryDiagnostics,
-      centralDiagnostic: centralReachable ? null : centralError,
+      plantelResults: plantelResults.map(publicPlantelResult),
       counts: {
-        paidRows: branches.paid.rowCount,
-        chargedRows: branches.charged.rowCount,
-        rowsBeforeDeduplication: branches.paid.rowCount + branches.charged.rowCount,
-        distinctMatriculas: merged.size,
-        responseStudents: data.length
+        successfulAgents: successful.length,
+        failedAgents: failed.length,
+        rawRows: successful.reduce((sum, result) => sum + result.rowCount, 0),
+        distinctMatriculas: merged.data.length,
+        crossPlantelDuplicates: merged.crossPlantelDuplicates.length,
+        withPayment: merged.data.filter((student) => student.hasPayment).length,
+        withCharge: merged.data.filter((student) => student.hasCharge).length
+      },
+      crossPlantelDuplicates: merged.crossPlantelDuplicates.slice(0, 50).map((item) => ({
+        matricula: `${item.matricula.slice(0, 2)}***${item.matricula.slice(-4)}`,
+        planteles: item.planteles
+      })),
+      assumptions: {
+        enrollmentEvidence: 'Active documentos.concepto OR Vigente referenciasdepago.concepto',
+        cycleColumn: 'documentos.ciclo / referenciasdepago.ciclo',
+        conceptColumns: 'documentos.concepto / referenciasdepago.concepto',
+        plantelSource: 'Bridge agent requested by Aurora',
+        studentDetails: 'Local base table in the same financial agent',
+        centralEnrichment: 'Not used in the primary list path',
+        concurrency: 3
       }
     }
   }
 }
 
-export const diagnoseSummerStudentsFromBridge = async (plantelValue: unknown, cycleValue: unknown, conceptsValue: unknown) => {
-  const plantel = normalizeSummerPlantel(plantelValue)
+export const diagnoseSummerStudentsFromBridge = async (plantelesValue: unknown, cycleValue: unknown, conceptsValue: unknown) => {
+  const planteles = parseSummerPlanteles(plantelesValue)
   const cycle = clean(cycleValue || '2026', 20).match(/\d{4}/)?.[0] || '2026'
   const concepts = parseSummerConcepts(conceptsValue)
   const started = Date.now()
-  if (!plantel) return { ok: false, diagnosticVersion: 1, boundary: 'configuration', configuration: { plantel: clean(plantelValue, 40), cycle, concepts }, error: { message: 'El plantel no es válido.' } }
+  const plantelResults = await mapWithConcurrency(planteles, 2, async (plantel) => await readSummerRowsForPlantel(plantel, cycle, concepts))
+  const merged = mergeSummerRows(plantelResults)
+  const successful = plantelResults.filter((result) => result.ok)
+  const failed = plantelResults.filter((result) => !result.ok)
 
-  try {
-    const branches = await readSummerEnrollmentBranches(plantel, cycle, concepts)
-    const merged = mergeSummerRows([...branches.paid.rows, ...branches.charged.rows], plantel)
-    const queryDiagnostics = { paid: publicBranchDiagnostic(branches.paid), charged: publicBranchDiagnostic(branches.charged) }
-    const failedBranches = [branches.paid, branches.charged].filter((branch) => !branch.ok).map((branch) => branch.key)
-    return {
-      ok: branches.paid.ok || branches.charged.ok,
-      diagnosticVersion: 1,
-      checkedAt: new Date().toISOString(),
-      latencyMs: Date.now() - started,
-      boundary: failedBranches.length === 2 ? 'financial_queries' : failedBranches.length === 1 ? 'partial_financial_query' : 'complete',
-      configuration: { plantel, cycle, concepts, bridgeAgentId: plantel },
-      assumptions: {
-        paidTables: ['referenciasdepago', 'documentos', 'documento_concepto_periodos', 'base'],
-        chargedTables: ['documentos', 'documento_concepto_periodos', 'base'],
-        paidFilters: { referenciaEstatus: 'Vigente', ciclo: cycle, concepts },
-        chargedFilters: { documentoEstatus: 'Activo', ciclo: cycle, concepts },
-        conceptResolutionPaid: 'COALESCE(P.concepto_id, D.concepto, R.concepto)',
-        conceptResolutionCharged: 'COALESCE(P.concepto_id, D.concepto)'
-      },
-      queryDiagnostics,
-      counts: {
-        paidRows: branches.paid.rowCount,
-        chargedRows: branches.charged.rowCount,
-        rowsBeforeDeduplication: branches.paid.rowCount + branches.charged.rowCount,
-        distinctMatriculas: merged.size
-      },
-      conclusion: failedBranches.length
-        ? { code: failedBranches.length === 2 ? 'BOTH_FINANCIAL_QUERIES_FAILED' : 'ONE_FINANCIAL_QUERY_FAILED', failedBranches }
-        : merged.size
-          ? { code: 'STUDENTS_FOUND', failedBranches: [] }
-          : { code: 'QUERIES_OK_ZERO_STUDENTS', failedBranches: [] }
-    }
-  } catch (error: any) {
-    return {
-      ok: false,
-      diagnosticVersion: 1,
-      checkedAt: new Date().toISOString(),
-      latencyMs: Date.now() - started,
-      boundary: 'bridge_context',
-      configuration: { plantel, cycle, concepts, bridgeAgentId: plantel },
-      error: serializeSummerQueryError(error),
-      conclusion: { code: 'BRIDGE_CONTEXT_FAILED' }
-    }
+  return {
+    ok: successful.length > 0,
+    diagnosticVersion: 3,
+    queryVersion: SUMMER_QUERY_VERSION,
+    queryStrategy: SUMMER_QUERY_STRATEGY,
+    checkedAt: new Date().toISOString(),
+    latencyMs: Date.now() - started,
+    boundary: successful.length ? (failed.length ? 'partial_financial_agents' : 'complete') : 'financial_agents',
+    configuration: { planteles, cycle, concepts },
+    assumptions: {
+      oneQueryPerAgent: true,
+      parallelQueryBranchesPerAgent: false,
+      directConceptColumnsOnly: ['documentos.concepto', 'referenciasdepago.concepto'],
+      documentPlantelColumnUsed: false,
+      periodTableUsed: false,
+      centralOverlayUsed: false,
+      concurrency: 2
+    },
+    plantelResults: plantelResults.map(publicPlantelResult),
+    counts: {
+      successfulAgents: successful.length,
+      failedAgents: failed.length,
+      rawRows: successful.reduce((sum, result) => sum + result.rowCount, 0),
+      distinctMatriculas: merged.data.length
+    },
+    conclusion: !successful.length
+      ? { code: 'ALL_FINANCIAL_AGENTS_FAILED' }
+      : merged.data.length
+        ? { code: failed.length ? 'PARTIAL_STUDENTS_FOUND' : 'STUDENTS_FOUND' }
+        : { code: failed.length ? 'PARTIAL_ZERO_STUDENTS' : 'QUERIES_OK_ZERO_STUDENTS' }
   }
 }
 
@@ -285,21 +333,20 @@ export const readSummerExternalHealth = async (plantelValue?: unknown) => {
     centralReachable = true
   } catch {}
 
-  const plantel = normalizeSummerPlantel(plantelValue)
-  if (plantel) {
-    try {
-      await runWithBridgeAgentId(plantel, async () => await query('SELECT 1 AS ok'))
-      bridgeReachable = true
-    } catch {
-      bridgeReachable = false
-    }
+  const plantel = normalizeSummerPlantel(plantelValue) || DEFAULT_PLANTELES[0]
+  try {
+    await runWithBridgeAgentId(plantel, async () => await query('SELECT 1 AS ok'))
+    bridgeReachable = true
+  } catch {
+    bridgeReachable = false
   }
 
   return {
-    status: centralReachable && bridgeReachable !== false ? 'ok' : 'degraded',
+    status: bridgeReachable ? 'ok' : 'degraded',
     centralReachable,
     bridgeReachable,
-    plantel: plantel || null,
+    plantel,
+    queryVersion: SUMMER_QUERY_VERSION,
     latencyMs: Date.now() - started,
     checkedAt: new Date().toISOString()
   }

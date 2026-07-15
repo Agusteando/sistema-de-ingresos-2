@@ -1,1 +1,1 @@
-Corrige la API de Summer Camp y expone diagnósticos financieros por plantel
+Consolida la consulta Summer Camp por agentes financieros

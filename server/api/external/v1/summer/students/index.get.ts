@@ -5,6 +5,8 @@ export default defineEventHandler(async (event) => {
   assertAuroraExternalApiToken(event)
   setExternalApiResponseHeaders(event, 0)
   setResponseHeader(event, 'Cache-Control', 'no-store')
+  setResponseHeader(event, 'X-Aurora-Summer-Query-Version', '3')
   const query = getQuery(event)
-  return await readSummerStudentsFromBridge(query.plantel || query.agentId, query.cycle || query.ciclo || query.year, query.concepts)
+  const planteles = query.planteles || query.plantel || query.agentId
+  return await readSummerStudentsFromBridge(planteles, query.cycle || query.ciclo || query.year, query.concepts)
 })
