@@ -433,29 +433,57 @@
                     </button>
                   </section>
 
-                  <section class="family-readonly-panel" aria-label="Contacto familiar de Control Escolar">
-                    <div class="family-readonly-source">
+                  <section class="family-contact-panel" aria-label="Contacto familiar de Control Escolar">
+                    <div class="family-contact-source">
                       <span><LucideShieldCheck :size="16" /></span>
                       <div>
                         <strong>Control Escolar</strong>
-                        <p>Contacto familiar sincronizado por matrícula. Consulta de solo lectura.</p>
+                        <p>Nombres y teléfonos sincronizados por matrícula. Administración puede actualizar los correos.</p>
                       </div>
                     </div>
-                    <div v-if="centralOverlayLoading && !centralOverlayStudent" class="family-readonly-loading">
+                    <div v-if="centralOverlayLoading && !centralOverlayStudent" class="family-contact-loading">
                       Preparando contacto familiar…
                     </div>
-                    <div v-else class="family-readonly-grid">
-                      <section :class="['family-readonly-card', { complete: centralFatherComplete }]">
+                    <div v-else class="family-contact-grid">
+                      <section :class="['family-contact-card', { complete: centralFatherComplete }]">
                         <small>Padre</small>
                         <strong>{{ centralFatherName || 'Sin registrar' }}</strong>
                         <span :class="{ invalid: centralFatherPhoneInvalid }">{{ centralFatherPhone }}</span>
-                        <span :class="{ invalid: centralFatherEmailInvalid }">{{ centralFatherEmail }}</span>
+                        <label :class="['family-email-field', { invalid: showFatherEmailError }]">
+                          <span><LucideMail :size="14" /> Correo del padre</span>
+                          <input
+                            v-model="form.emailPadre"
+                            type="email"
+                            inputmode="email"
+                            autocomplete="email"
+                            maxlength="254"
+                            placeholder="padre@correo.com"
+                            :aria-invalid="showFatherEmailError ? 'true' : 'false'"
+                            @input="touchFamilyEmail('emailPadre')"
+                            @blur="normalizeFamilyEmailField('emailPadre')"
+                          />
+                          <em v-if="showFatherEmailError">{{ fatherEmailError }}</em>
+                        </label>
                       </section>
-                      <section :class="['family-readonly-card', { complete: centralMotherComplete }]">
+                      <section :class="['family-contact-card', { complete: centralMotherComplete }]">
                         <small>Madre</small>
                         <strong>{{ centralMotherName || 'Sin registrar' }}</strong>
                         <span :class="{ invalid: centralMotherPhoneInvalid }">{{ centralMotherPhone }}</span>
-                        <span :class="{ invalid: centralMotherEmailInvalid }">{{ centralMotherEmail }}</span>
+                        <label :class="['family-email-field', { invalid: showMotherEmailError }]">
+                          <span><LucideMail :size="14" /> Correo de la madre</span>
+                          <input
+                            v-model="form.emailMadre"
+                            type="email"
+                            inputmode="email"
+                            autocomplete="email"
+                            maxlength="254"
+                            placeholder="madre@correo.com"
+                            :aria-invalid="showMotherEmailError ? 'true' : 'false'"
+                            @input="touchFamilyEmail('emailMadre')"
+                            @blur="normalizeFamilyEmailField('emailMadre')"
+                          />
+                          <em v-if="showMotherEmailError">{{ motherEmailError }}</em>
+                        </label>
                       </section>
                     </div>
                   </section>
@@ -526,6 +554,7 @@ import {
   LucideInfo,
   LucideList,
   LucideLoader2,
+  LucideMail,
   LucideSave,
   LucideShieldCheck,
   LucideUserPlus,
@@ -541,6 +570,11 @@ import IngresoCycleModal from "./IngresoCycleModal.vue";
 import { CICLOS_LIST } from "~/utils/constants";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
 import { formatBirthDate, normalizeCurp, parseCurp } from "~/shared/utils/curp";
+import {
+  emailAddressValidationMessage,
+  isValidEmailAddress,
+  normalizeEmailAddress,
+} from "~/shared/utils/email";
 import {
   displayGrado,
   gradeOptionsForPlantel,
@@ -585,6 +619,9 @@ const centralOverlayAvailable = ref(false);
 const centralOverlayError = ref('');
 const centralOverlayStudent = ref(null);
 const userTouchedForm = ref(false);
+const familyEmailTouched = ref({ emailPadre: false, emailMadre: false });
+const familyEmailSubmitAttempted = ref(false);
+const originalFamilyEmails = ref({ emailPadre: '', emailMadre: '' });
 const showCyclePicker = ref(false);
 const showOlderCycles = ref(false);
 const cycleChangedByUser = ref(false);
@@ -612,6 +649,8 @@ const form = ref({
   padre: "",
   telefono: "",
   correo: "",
+  emailPadre: "",
+  emailMadre: "",
   ciclo: currentCicloKey.value,
   estatus: "Activo",
 });
@@ -655,6 +694,8 @@ const studentDraftFields = isEdit
       "padre",
       "telefono",
       "correo",
+      "emailPadre",
+      "emailMadre",
     ]
   : [
       "apellidoPaterno",
@@ -715,6 +756,8 @@ const studentDraftHasContent = (draft) => {
     "padre",
     "telefono",
     "correo",
+    "emailPadre",
+    "emailMadre",
   ];
   if (
     relevantFields.some((field) => String(draft[field] || "").trim().length > 0)
@@ -806,11 +849,7 @@ const overlayJoinedName = (...values) => values.map(overlayText).filter(Boolean)
 const overlayDigits = (value) => overlayText(value).replace(/\D/g, '');
 const overlayValidPhone = (value) => overlayDigits(value).length >= 10;
 const overlayEmail = (value) => overlayText(value).toLowerCase();
-const overlayValidEmail = (value) => {
-  const email = overlayEmail(value);
-  if (!email || email.includes('@casita')) return false;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-};
+const overlayValidEmail = (value) => isValidEmailAddress(overlayEmail(value), { allowEmpty: false });
 const centralFatherNameRaw = computed(() => overlayJoinedName(
   centralOverlayStudent.value?.nombrePadre,
   centralOverlayStudent.value?.apellidoPaternoPadre,
@@ -823,20 +862,39 @@ const centralMotherNameRaw = computed(() => overlayJoinedName(
 ) || overlayText(centralOverlayStudent.value?.motherName || centralOverlayStudent.value?.nombreMadreCompleto || centralOverlayStudent.value?.madre));
 const centralFatherPhoneRaw = computed(() => overlayText(centralOverlayStudent.value?.telefonoPadre || centralOverlayStudent.value?.telefono));
 const centralMotherPhoneRaw = computed(() => overlayText(centralOverlayStudent.value?.telefonoMadre));
-const centralFatherEmailRaw = computed(() => overlayText(centralOverlayStudent.value?.emailPadre || centralOverlayStudent.value?.correo));
-const centralMotherEmailRaw = computed(() => overlayText(centralOverlayStudent.value?.emailMadre));
 const centralFatherName = computed(() => centralFatherNameRaw.value);
 const centralMotherName = computed(() => centralMotherNameRaw.value);
 const centralFatherPhoneInvalid = computed(() => Boolean(centralFatherPhoneRaw.value && !overlayValidPhone(centralFatherPhoneRaw.value)));
 const centralMotherPhoneInvalid = computed(() => Boolean(centralMotherPhoneRaw.value && !overlayValidPhone(centralMotherPhoneRaw.value)));
-const centralFatherEmailInvalid = computed(() => Boolean(centralFatherEmailRaw.value && !overlayValidEmail(centralFatherEmailRaw.value)));
-const centralMotherEmailInvalid = computed(() => Boolean(centralMotherEmailRaw.value && !overlayValidEmail(centralMotherEmailRaw.value)));
 const centralFatherPhone = computed(() => centralFatherPhoneInvalid.value ? `${centralFatherPhoneRaw.value} · no válido` : (centralFatherPhoneRaw.value || 'Sin teléfono'));
 const centralMotherPhone = computed(() => centralMotherPhoneInvalid.value ? `${centralMotherPhoneRaw.value} · no válido` : (centralMotherPhoneRaw.value || 'Sin teléfono'));
-const centralFatherEmail = computed(() => centralFatherEmailInvalid.value ? `${centralFatherEmailRaw.value} · no válido` : (centralFatherEmailRaw.value || 'Sin email'));
-const centralMotherEmail = computed(() => centralMotherEmailInvalid.value ? `${centralMotherEmailRaw.value} · no válido` : (centralMotherEmailRaw.value || 'Sin email'));
-const centralFatherComplete = computed(() => Boolean(centralFatherNameRaw.value && overlayValidPhone(centralFatherPhoneRaw.value) && overlayValidEmail(centralFatherEmailRaw.value)));
-const centralMotherComplete = computed(() => Boolean(centralMotherNameRaw.value && overlayValidPhone(centralMotherPhoneRaw.value) && overlayValidEmail(centralMotherEmailRaw.value)));
+const fatherEmailError = computed(() => emailAddressValidationMessage(form.value.emailPadre));
+const motherEmailError = computed(() => emailAddressValidationMessage(form.value.emailMadre));
+const showFatherEmailError = computed(() => Boolean(
+  fatherEmailError.value && (familyEmailTouched.value.emailPadre || familyEmailSubmitAttempted.value),
+));
+const showMotherEmailError = computed(() => Boolean(
+  motherEmailError.value && (familyEmailTouched.value.emailMadre || familyEmailSubmitAttempted.value),
+));
+const familyEmailsValid = computed(() => !fatherEmailError.value && !motherEmailError.value);
+const normalizedFamilyEmails = computed(() => ({
+  emailPadre: normalizeEmailAddress(form.value.emailPadre),
+  emailMadre: normalizeEmailAddress(form.value.emailMadre),
+}));
+const familyEmailsChanged = computed(() => isEdit && (
+  normalizedFamilyEmails.value.emailPadre !== originalFamilyEmails.value.emailPadre ||
+  normalizedFamilyEmails.value.emailMadre !== originalFamilyEmails.value.emailMadre
+));
+const centralFatherComplete = computed(() => Boolean(
+  centralFatherNameRaw.value &&
+  overlayValidPhone(centralFatherPhoneRaw.value) &&
+  overlayValidEmail(form.value.emailPadre)
+));
+const centralMotherComplete = computed(() => Boolean(
+  centralMotherNameRaw.value &&
+  overlayValidPhone(centralMotherPhoneRaw.value) &&
+  overlayValidEmail(form.value.emailMadre)
+));
 
 const centralOverlayStatusClass = computed(() => {
   if (centralOverlayLoading.value) return 'loading';
@@ -887,9 +945,31 @@ const writeCentralOverlayCache = (overlayStudent) => {
   } catch (_) {}
 };
 
+const setFamilyEmailFromSource = (field, value) => {
+  if (familyEmailTouched.value[field]) return;
+  const normalized = normalizeEmailAddress(value);
+  form.value[field] = normalized;
+  originalFamilyEmails.value = {
+    ...originalFamilyEmails.value,
+    [field]: normalized,
+  };
+};
+
+const applyCentralFamilyEmails = (overlayStudent) => {
+  setFamilyEmailFromSource(
+    'emailPadre',
+    firstFilled(overlayStudent?.emailPadre, overlayStudent?.correo, form.value.emailPadre),
+  );
+  setFamilyEmailFromSource(
+    'emailMadre',
+    firstFilled(overlayStudent?.emailMadre, form.value.emailMadre),
+  );
+};
+
 const applyCentralOverlayToForm = (overlayStudent) => {
   if (!overlayStudent || typeof overlayStudent !== 'object') return false;
   centralOverlayStudent.value = overlayStudent;
+  applyCentralFamilyEmails(overlayStudent);
   if (userTouchedForm.value || loading.value) {
     centralOverlayAvailable.value = true;
     return false;
@@ -1157,8 +1237,14 @@ onMounted(() => {
       padre: s.padre || "",
       telefono: s.telefono || "",
       correo: s.correo || "",
+      emailPadre: normalizeEmailAddress(s.emailPadre || s.correo || ""),
+      emailMadre: normalizeEmailAddress(s.emailMadre || ""),
       ciclo: normalizeCicloKey(s.cicloBase || s.ciclo || currentCicloKey.value),
       estatus: s.estatus || "Activo",
+    };
+    originalFamilyEmails.value = {
+      emailPadre: form.value.emailPadre,
+      emailMadre: form.value.emailMadre,
     };
     originalAcademic.value = {
       plantel: String(form.value.plantel || "").trim(),
@@ -1169,6 +1255,12 @@ onMounted(() => {
   }
 
   initializeDraft();
+  if (isEdit && draftRestored.value) {
+    familyEmailTouched.value = {
+      emailPadre: normalizeEmailAddress(form.value.emailPadre) !== originalFamilyEmails.value.emailPadre,
+      emailMadre: normalizeEmailAddress(form.value.emailMadre) !== originalFamilyEmails.value.emailMadre,
+    };
+  }
   userTouchedForm.value = false;
   void loadCentralMatriculaOverlay();
 });
@@ -1261,6 +1353,21 @@ const normalizeEmailField = () => {
     .toLowerCase();
 };
 
+const touchFamilyEmail = (field) => {
+  userTouchedForm.value = true;
+  familyEmailTouched.value[field] = true;
+};
+
+const normalizeFamilyEmailField = (field) => {
+  touchFamilyEmail(field);
+  form.value[field] = normalizeEmailAddress(form.value[field]);
+};
+
+const normalizeFamilyEmails = () => {
+  form.value.emailPadre = normalizeEmailAddress(form.value.emailPadre);
+  form.value.emailMadre = normalizeEmailAddress(form.value.emailMadre);
+};
+
 const normalizeCurpField = (event) => {
   userTouchedForm.value = true;
   const value = event?.target ? event.target.value : form.value.curp;
@@ -1274,6 +1381,7 @@ const normalizeNamesBeforeSubmit = () => {
   normalizeCurpField();
   trimField("telefono");
   normalizeEmailField();
+  normalizeFamilyEmails();
 };
 
 const saveIngresoCycle = async (payload) => {
@@ -1341,6 +1449,11 @@ const saveIngresoCycle = async (payload) => {
 
 const submit = async () => {
   normalizeNamesBeforeSubmit();
+  familyEmailSubmitAttempted.value = isEdit;
+  if (isEdit && !familyEmailsValid.value) {
+    show("Corrige los correos familiares antes de guardar.", "danger");
+    return;
+  }
   if (curpHasValue.value && !curpInfo.value.isValid) {
     show(
       curpInfo.value.message || "Captura una CURP válida antes de guardar.",
@@ -1359,6 +1472,10 @@ const submit = async () => {
       ? `/api/students/${encodeURIComponent(studentMatricula)}`
       : "/api/students";
     const method = isEdit ? "PUT" : "POST";
+    const shouldUpdateFamilyEmails = familyEmailsChanged.value;
+    const localContactEmail = isEdit
+      ? normalizedFamilyEmails.value.emailPadre || normalizedFamilyEmails.value.emailMadre
+      : form.value.correo;
     const result = await $fetch(url, {
       method,
       body: {
@@ -1378,13 +1495,48 @@ const submit = async () => {
         targetGrado: form.value.grado,
         padre: form.value.padre,
         telefono: form.value.telefono,
-        correo: form.value.correo,
+        correo: localContactEmail,
         ciclo: cicloKey,
         cicloIngreso: cicloKey,
         estatus: form.value.estatus,
         academicChanged: academicChanged.value,
       },
     });
+
+    if (isEdit && shouldUpdateFamilyEmails) {
+      try {
+        const familyResult = await $fetch(
+          `/api/students/${encodeURIComponent(studentMatricula)}/family-emails`,
+          {
+            method: "PATCH",
+            body: {
+              emailPadre: normalizedFamilyEmails.value.emailPadre,
+              emailMadre: normalizedFamilyEmails.value.emailMadre,
+              plantel: form.value.plantel,
+              ciclo: cicloKey,
+            },
+          },
+        );
+        if (familyResult?.student) {
+          centralOverlayStudent.value = familyResult.student;
+          writeCentralOverlayCache(familyResult.student);
+        }
+        originalFamilyEmails.value = { ...normalizedFamilyEmails.value };
+        familyEmailTouched.value = { emailPadre: false, emailMadre: false };
+      } catch (familyError) {
+        const detail =
+          familyError?.data?.message ||
+          familyError?.statusMessage ||
+          familyError?.message ||
+          "No se pudieron actualizar los correos familiares.";
+        show(
+          `Los demás datos del alumno se guardaron, pero los correos familiares no: ${detail}`,
+          "danger",
+        );
+        return;
+      }
+    }
+
     if (!isEdit && result?.sectionAssignment?.warning) {
       show(result.sectionAssignment.warning, "warning");
     } else if (!isEdit && result?.sectionAssignment?.assigned) {
@@ -1395,7 +1547,9 @@ const submit = async () => {
     } else {
       show(
         isEdit
-          ? "Alumno actualizado correctamente"
+          ? shouldUpdateFamilyEmails
+            ? "Alumno y correos familiares actualizados correctamente"
+            : "Alumno actualizado correctamente"
           : "Alumno registrado exitosamente",
         "success",
       );
@@ -1824,7 +1978,7 @@ const submit = async () => {
 }
 
 .academic-access-card,
-.family-readonly-panel {
+.family-contact-panel {
   display: grid;
   gap: 14px;
   min-width: 0;
@@ -1855,7 +2009,7 @@ const submit = async () => {
 
 .academic-access-main small,
 .academic-access-facts small,
-.family-readonly-card small {
+.family-contact-card small {
   display: block;
   color: #64748b;
   font-size: 0.68rem;
@@ -1942,7 +2096,7 @@ const submit = async () => {
   opacity: 0.62;
 }
 
-.family-readonly-source {
+.family-contact-source {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
@@ -1954,7 +2108,7 @@ const submit = async () => {
   color: #23422b;
 }
 
-.family-readonly-source > span {
+.family-contact-source > span {
   display: inline-flex;
   width: 34px;
   height: 34px;
@@ -1965,14 +2119,14 @@ const submit = async () => {
   color: #2f8f37;
 }
 
-.family-readonly-source strong {
+.family-contact-source strong {
   display: block;
   color: #1f7f2c;
   font-size: 0.82rem;
   font-weight: 950;
 }
 
-.family-readonly-source p {
+.family-contact-source p {
   margin: 0.15rem 0 0;
   color: #66758e;
   font-size: 0.78rem;
@@ -1980,7 +2134,7 @@ const submit = async () => {
   line-height: 1.35;
 }
 
-.family-readonly-loading {
+.family-contact-loading {
   padding: 16px;
   border: 1px dashed rgba(148, 163, 184, 0.38);
   border-radius: 16px;
@@ -1990,13 +2144,13 @@ const submit = async () => {
   font-weight: 760;
 }
 
-.family-readonly-grid {
+.family-contact-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.family-readonly-card {
+.family-contact-card {
   min-width: 0;
   padding: 14px;
   border: 1px solid rgba(220, 228, 223, 0.96);
@@ -2005,40 +2159,98 @@ const submit = async () => {
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.045);
 }
 
-.family-readonly-card.complete {
+.family-contact-card.complete {
   border-color: rgba(105, 196, 130, 0.58);
   background: linear-gradient(180deg, rgba(244, 253, 247, 0.98), rgba(255, 255, 255, 0.96));
 }
 
-.family-readonly-card small {
+.family-contact-card small {
   color: #2f7b3a;
 }
 
-.family-readonly-card strong,
-.family-readonly-card span {
+.family-contact-card strong,
+.family-contact-card span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.family-readonly-card strong {
+.family-contact-card strong {
   margin-top: 0.42rem;
   color: #14233b;
   font-size: 0.9rem;
   font-weight: 930;
 }
 
-.family-readonly-card span {
+.family-contact-card span {
   margin-top: 0.3rem;
   color: #64748b;
   font-size: 0.78rem;
   font-weight: 760;
 }
 
-.family-readonly-card span.invalid {
+.family-contact-card span.invalid {
   color: #b24040;
   font-weight: 900;
+}
+
+.family-email-field {
+  display: grid;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.family-email-field > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
+  margin: 0;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.family-email-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 12px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.96);
+  color: #14233b;
+  font-size: 0.82rem;
+  font-weight: 760;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
+}
+
+.family-email-field input:focus {
+  border-color: rgba(37, 110, 228, 0.62);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 110, 228, 0.12);
+}
+
+.family-email-field.invalid input {
+  border-color: rgba(190, 54, 54, 0.58);
+  background: rgba(255, 248, 248, 0.98);
+  box-shadow: 0 0 0 3px rgba(190, 54, 54, 0.08);
+}
+
+.family-email-field em {
+  color: #b24040;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 820;
+  line-height: 1.35;
 }
 
 .curp-field input {
@@ -2875,7 +3087,7 @@ const submit = async () => {
   }
 
   .academic-access-facts,
-  .family-readonly-grid {
+  .family-contact-grid {
     grid-template-columns: 1fr;
   }
 

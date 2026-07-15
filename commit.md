@@ -1,1 +1,1 @@
-Publica la API de Summer Camp con alumnos por concepto y fotos diferidas
+Permite a administración editar y validar los correos de padre y madre
