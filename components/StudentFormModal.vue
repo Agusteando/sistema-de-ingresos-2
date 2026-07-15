@@ -438,7 +438,6 @@
                       <span><LucideShieldCheck :size="16" /></span>
                       <div>
                         <strong>Control Escolar</strong>
-                        <p>Nombres y teléfonos sincronizados por matrícula. Administración puede actualizar los correos.</p>
                       </div>
                     </div>
                     <div v-if="centralOverlayLoading && !centralOverlayStudent" class="family-contact-loading">

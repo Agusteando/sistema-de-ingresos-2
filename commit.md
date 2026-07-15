@@ -1,1 +1,1 @@
-Permite a administración editar y validar los correos de padre y madre
+Elimina únicamente el texto explicativo del bloque de contacto familiar
