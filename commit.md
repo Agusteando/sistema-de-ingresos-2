@@ -1,1 +1,1 @@
-Elimina únicamente el texto explicativo del bloque de contacto familiar
+Corrige la API de Summer Camp y expone diagnósticos financieros por plantel
