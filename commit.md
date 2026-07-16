@@ -1,1 +1,1 @@
-Mejora el comparativo de avance por plantel en Control Escolar
+Corrige el desplazamiento y oculta planteles con error

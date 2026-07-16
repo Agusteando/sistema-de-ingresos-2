@@ -34,8 +34,7 @@
       <div class="load-monitor-row">
         <div class="load-state">
           <LucideLoader2 v-if="loading" class="spinning" :size="17" />
-          <LucideCheck v-else-if="!failedCount" :size="17" />
-          <LucideTriangleAlert v-else :size="17" />
+          <LucideCheck v-else :size="17" />
           <strong>{{ loading ? `Plantel ${currentPlantel || '…'}` : loadSummaryLabel }}</strong>
         </div>
         <span>{{ processedCount }}/{{ queueRows.length }}</span>
@@ -54,7 +53,7 @@
     <section class="summary-grid">
       <article class="summary-card">
         <span>Planteles</span>
-        <strong>{{ successfulReports.length }}/{{ queueRows.length || planteles.length }}</strong>
+        <strong>{{ successfulReports.length }}</strong>
       </article>
       <article class="summary-card">
         <span>Evaluados</span>
@@ -68,11 +67,6 @@
         <span>Expediente avanzado</span>
         <strong>{{ globalAdvanced.averagePercent }}%</strong>
       </article>
-      <article v-if="failedCount" class="summary-card is-error">
-        <span>Con error</span>
-        <strong>{{ failedCount }}</strong>
-        <button type="button" :disabled="loading" @click="retryFailed">Reintentar</button>
-      </article>
     </section>
 
     <section class="plantel-section">
@@ -83,7 +77,7 @@
 
       <div class="plantel-list">
         <article
-          v-for="item in queueRows"
+          v-for="item in visibleQueueRows"
           :key="item.plantel"
           :class="['plantel-card', `is-${item.status}`]"
         >
@@ -199,10 +193,6 @@
             </details>
           </template>
 
-          <div v-else-if="item.status === 'error'" class="plantel-state is-error">
-            <span>{{ item.error }}</span>
-            <button type="button" :disabled="loading" @click="retryPlantel(item)">Reintentar</button>
-          </div>
           <div v-else class="plantel-state">
             <LucideLoader2 v-if="item.status === 'loading'" class="spinning" :size="18" />
             <LucideClock3 v-else :size="18" />
@@ -248,12 +238,10 @@ let currentRunId = 0
 
 const reportFor = (plantel) => reports.value.find((report) => report.agentId === plantel) || null
 const successfulReports = computed(() => planteles.value.map((item) => reportFor(item.agentId)).filter(Boolean))
-const failedCount = computed(() => queueRows.value.filter((item) => item.status === 'error').length)
+const visibleQueueRows = computed(() => queueRows.value.filter((item) => item.status !== 'error'))
 const processedCount = computed(() => queueRows.value.filter((item) => ['success', 'error'].includes(item.status)).length)
 const loadingPercent = computed(() => queueRows.value.length ? Math.round((processedCount.value / queueRows.value.length) * 100) : 0)
-const loadSummaryLabel = computed(() => failedCount.value
-  ? `${successfulReports.value.length} listos · ${failedCount.value} con error`
-  : `${successfulReports.value.length} planteles listos`)
+const loadSummaryLabel = computed(() => `${successfulReports.value.length} planteles listos`)
 
 const emptyTier = () => ({
   completedFields: 0,
@@ -431,8 +419,6 @@ const prepareReport = async () => {
 }
 
 const refreshReport = () => prepareReport()
-const retryFailed = () => runQueue(queueRows.value.filter((item) => item.status === 'error'))
-const retryPlantel = (item) => runQueue([{ plantel: item.plantel }])
 const cancelLoad = () => {
   currentController?.abort()
   queueRows.value = queueRows.value.map((item) => item.status === 'loading' ? { ...item, status: 'cancelled' } : item)
@@ -472,10 +458,17 @@ onBeforeUnmount(() => currentController?.abort())
 
 <style scoped>
 .progress-report-page {
+  box-sizing: border-box;
   display: grid;
   gap: .85rem;
-  min-height: 100%;
-  padding: 1rem;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 1rem 1rem 2rem;
   color: #17233a;
 }
 
@@ -642,21 +635,6 @@ onBeforeUnmount(() => currentController?.abort())
 }
 .summary-card.is-basic { border-bottom: 3px solid #4f9d56; }
 .summary-card.is-advanced { border-bottom: 3px solid #4d7f9d; }
-.summary-card.is-error {
-  grid-template-columns: minmax(0, 1fr) auto;
-  border-color: #edc5ba;
-  background: #fff7f4;
-}
-.summary-card.is-error > span,
-.summary-card.is-error > strong { grid-column: 1; }
-.summary-card.is-error button {
-  grid-column: 2;
-  grid-row: 1 / 3;
-  min-height: 34px;
-  align-self: center;
-  color: #a14335;
-}
-
 .plantel-section {
   border-radius: 20px;
   padding: .85rem;
@@ -691,7 +669,6 @@ onBeforeUnmount(() => currentController?.abort())
   background: #fff;
 }
 .plantel-card.is-loading { border-color: #bfd5e6; }
-.plantel-card.is-error { border-color: #efc9c0; }
 
 .plantel-card-header {
   display: flex;
@@ -724,7 +701,6 @@ onBeforeUnmount(() => currentController?.abort())
 }
 .status-pill.is-success { background: #e7f4e8; color: #23743a; }
 .status-pill.is-loading { background: #e8f1fb; color: #286a9e; }
-.status-pill.is-error { background: #fff0ed; color: #ad4336; }
 
 .plantel-head-metrics {
   display: flex;
@@ -896,11 +872,6 @@ onBeforeUnmount(() => currentController?.abort())
   font-size: .78rem;
   font-weight: 800;
 }
-.plantel-state.is-error {
-  justify-content: space-between;
-  color: #9e4438;
-}
-.plantel-state button { min-height: 34px; color: #9e4438; }
 .spinning { animation: reportSpin .9s linear infinite; }
 
 @keyframes reportSpin { to { transform: rotate(360deg); } }
