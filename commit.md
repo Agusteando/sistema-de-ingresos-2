@@ -1,1 +1,1 @@
-feat: agrega reporte consolidado de avance de Control Escolar por plantel
+Mejora el comparativo de avance por plantel en Control Escolar

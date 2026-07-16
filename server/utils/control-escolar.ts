@@ -2587,6 +2587,29 @@ export const fetchControlEscolarProgressReport = async (
     byGrupo.set(grupo, (byGrupo.get(grupo) || 0) + 1);
   });
 
+  const quality = {
+    complete: resolved.filter(({ completeness }) => completeness.basic.complete).length,
+    incomplete: resolved.filter(({ completeness }) => !completeness.basic.complete).length,
+    sinCurp: resolved.filter(({ completeness }) =>
+      completeness.basic.missingFields.includes("curp"),
+    ).length,
+    sinGrupo: evaluatedStudents.filter((student) => {
+      const group = String(student.group || "").replaceAll('"', "").trim().toLowerCase();
+      return !group || group === "null";
+    }).length,
+    sinPadre: resolved.filter(({ completeness }) =>
+      ["padreNombre", "padreApellidoPaterno", "padreTelefono", "padreEmail"].some((field) =>
+        completeness.basic.missingFields.includes(field),
+      ),
+    ).length,
+    sinMadre: resolved.filter(({ completeness }) =>
+      ["madreNombre", "madreApellidoPaterno", "madreTelefono", "madreEmail"].some((field) =>
+        completeness.basic.missingFields.includes(field),
+      ),
+    ).length,
+    sinContacto: evaluatedStudents.filter(hasNoPrimaryContact).length,
+  };
+
   const inscritos = students.filter(
     (student) => student.enrollmentState === "inscrito",
   ).length;
@@ -2628,6 +2651,7 @@ export const fetchControlEscolarProgressReport = async (
       "complete",
       CONTROL_ESCOLAR_ADVANCED_REQUIRED_FIELDS,
     ),
+    quality,
     distribution: {
       byNivel: Array.from(byNivel.entries())
         .map(([label, total]) => ({ label, total }))
