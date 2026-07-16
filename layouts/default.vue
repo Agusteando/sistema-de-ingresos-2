@@ -66,8 +66,8 @@
         <NuxtLink v-if="showControlEscolarNav" to="/control-escolar" class="nav-item group" title="Control Escolar" aria-label="Control Escolar">
           <LucideSchool :size="22" stroke-width="2" /> <span class="nav-label">Control Escolar</span>
         </NuxtLink>
-        <NuxtLink to="/avance-control-escolar" class="nav-item group" title="Auditoría Control Escolar" aria-label="Auditoría Control Escolar">
-          <LucideClipboardList :size="22" stroke-width="2" /> <span class="nav-label">Auditoría Control Escolar</span>
+        <NuxtLink v-if="showControlEscolarNav" to="/avance-control-escolar" class="nav-item group" title="Reporte Control Escolar" aria-label="Reporte Control Escolar">
+          <LucideClipboardList :size="22" stroke-width="2" /> <span class="nav-label">Reporte Control Escolar</span>
         </NuxtLink>
         <NuxtLink to="/usuarios" class="nav-item group" v-if="isSuperAdmin" title="Usuarios" aria-label="Usuarios">
           <LucideShield :size="22" stroke-width="2" /> <span class="nav-label">Usuarios</span>
@@ -1118,7 +1118,8 @@ const currentRouteName = computed(() => {
   if (route.path === '/usuarios') return 'Usuarios'
   if (route.path === '/sql-console') return 'SQL Console'
   if (route.path === '/control-escolar') return 'Control Escolar'
-  if (route.path === '/avance-control-escolar') return 'Avance Control Escolar'
+  if (route.path === '/avance-control-escolar') return 'Reporte Control Escolar'
+  if (route.path === '/auditoria-control-escolar') return 'Auditoría Control Escolar'
   return 'SISTEMA DE INGRESOS'
 })
 
@@ -1127,7 +1128,7 @@ const switchPlantel = async (plantel = activePlantel.value) => {
 
   try {
     const response = await $fetch('/api/auth/switch', { method: 'POST', body: { plantel } })
-    if (response?.redirectTo && response.redirectTo !== route.path && route.path !== '/control-escolar' && route.path !== '/avance-control-escolar') {
+    if (response?.redirectTo && response.redirectTo !== route.path && route.path !== '/control-escolar' && route.path !== '/avance-control-escolar' && route.path !== '/auditoria-control-escolar') {
       window.location.href = response.redirectTo
       return
     }

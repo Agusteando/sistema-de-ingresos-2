@@ -26,7 +26,12 @@ import {
   fetchVerifiedControlEscolarScopeRows,
   maybeRefreshVerifiedControlEscolarScopeCache,
 } from "./control-escolar-cache";
-import { inferMexicanCurpIdentity, resolveControlEscolarCompleteness } from "../../shared/utils/studentPresentation";
+import {
+  CONTROL_ESCOLAR_ADVANCED_REQUIRED_FIELDS,
+  CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS,
+  inferMexicanCurpIdentity,
+  resolveControlEscolarCompleteness,
+} from "../../shared/utils/studentPresentation";
 import { buildParentSiblingSignature } from "../../shared/utils/parentSiblingMatch";
 import { isControlEscolarNameField, toNameDisplayCase } from "../../shared/utils/nameCase";
 import { writeControlEscolarExternalStudentView } from "./control-escolar-external-view";
@@ -2506,6 +2511,132 @@ export const fetchControlEscolarKpis = async (
     porGrupo: Array.from(byGrupo.entries())
       .map(([label, total]) => ({ label, total }))
       .slice(0, 18),
+  };
+};
+
+
+const safePercent = (completed: number, total: number) =>
+  total > 0 ? Math.max(0, Math.min(100, Math.round((completed / total) * 100))) : 0;
+
+export const fetchControlEscolarProgressReport = async (
+  agentId: string,
+  filters: any = {},
+) => {
+  const loaded = await fetchAllNormalizedStudents(agentId, filters);
+  const students = loaded.students;
+  const evaluatedStudents = students.filter(isInscritoForControlProgress);
+  const resolved = evaluatedStudents.map((student) => ({
+    student,
+    completeness: resolveControlEscolarCompleteness(student, {
+      honorEnrollmentState: false,
+    }),
+  }));
+
+  const summarizeTier = (
+    tier: "basic" | "complete",
+    fields: Array<{ key: string; label: string }>,
+  ) => {
+    const fieldStats = fields.map((field) => {
+      const completed = resolved.filter(
+        ({ completeness }) =>
+          !completeness[tier].missingFields.includes(field.key),
+      ).length;
+      const total = evaluatedStudents.length;
+      return {
+        key: field.key,
+        label: field.label,
+        completed,
+        missing: Math.max(0, total - completed),
+        total,
+        percent: safePercent(completed, total),
+      };
+    });
+
+    const completedFields = resolved.reduce(
+      (sum, { completeness }) => sum + completeness[tier].completed,
+      0,
+    );
+    const possibleFields = evaluatedStudents.length * fields.length;
+    const completeRecords = resolved.filter(
+      ({ completeness }) => completeness[tier].complete,
+    ).length;
+
+    return {
+      fieldCount: fields.length,
+      completedFields,
+      possibleFields,
+      averagePercent: safePercent(completedFields, possibleFields),
+      completeRecords,
+      incompleteRecords: Math.max(0, evaluatedStudents.length - completeRecords),
+      completeRecordPercent: safePercent(
+        completeRecords,
+        evaluatedStudents.length,
+      ),
+      fields: fieldStats,
+    };
+  };
+
+  const byNivel = new Map<string, number>();
+  const byGrupo = new Map<string, number>();
+  evaluatedStudents.forEach((student) => {
+    const nivel = normalizeText(student.nivel || "Sin nivel", 80) || "Sin nivel";
+    const grupo =
+      [student.grado, student.group].filter(Boolean).join(" ").trim() ||
+      "Sin grupo";
+    byNivel.set(nivel, (byNivel.get(nivel) || 0) + 1);
+    byGrupo.set(grupo, (byGrupo.get(grupo) || 0) + 1);
+  });
+
+  const inscritos = students.filter(
+    (student) => student.enrollmentState === "inscrito",
+  ).length;
+  const internos = students.filter(
+    (student) =>
+      student.enrollmentState === "inscrito" &&
+      student.tipoIngresoValue === "interno",
+  ).length;
+  const externos = students.filter(
+    (student) =>
+      student.enrollmentState === "inscrito" &&
+      student.tipoIngresoValue !== "interno",
+  ).length;
+  const bajas = students.filter(
+    (student) =>
+      student.status === "Baja" ||
+      student.enrollmentState === "baja_inscrita" ||
+      student.enrollmentState === "baja",
+  ).length;
+
+  return {
+    agentId,
+    generatedAt: new Date().toISOString(),
+    cycle: normalizeCicloKey(filters.ciclo || ""),
+    population: {
+      totalVisible: students.length,
+      evaluated: evaluatedStudents.length,
+      inscritos,
+      internos,
+      externos,
+      noInscritos: students.filter(
+        (student) => student.enrollmentState === "no_inscrito",
+      ).length,
+      bajas,
+      withoutOverlay: students.filter((student) => !student.overlayExists).length,
+    },
+    basic: summarizeTier("basic", CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS),
+    advanced: summarizeTier(
+      "complete",
+      CONTROL_ESCOLAR_ADVANCED_REQUIRED_FIELDS,
+    ),
+    distribution: {
+      byNivel: Array.from(byNivel.entries())
+        .map(([label, total]) => ({ label, total }))
+        .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "es")),
+      byGrupo: Array.from(byGrupo.entries())
+        .map(([label, total]) => ({ label, total }))
+        .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "es")),
+    },
+    source: loaded.source,
   };
 };
 

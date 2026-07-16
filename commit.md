@@ -1,1 +1,1 @@
-Consolida la consulta Summer Camp por agentes financieros
+feat: agrega reporte consolidado de avance de Control Escolar por plantel

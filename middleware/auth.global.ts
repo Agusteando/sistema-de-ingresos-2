@@ -66,7 +66,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const { isSuperAdmin, controlAccess: hasControlEscolar, financialAccess: hasFinancialAccess } = access
   const defaultRoute = hasFinancialAccess ? '/' : '/control-escolar'
   const isPublicPath = to.path === '/login' || to.path.startsWith('/print')
-  const isControlEscolarPath = ['/control-escolar', '/avance-control-escolar'].includes(to.path)
+  const isControlEscolarPath = ['/control-escolar', '/avance-control-escolar', '/auditoria-control-escolar'].includes(to.path)
   const isExpiredLogin = to.path === '/login' && loginExpiredQuery(to.query?.session)
 
   // Permanent dev-only visual lab. Do not remove without replacing docs/visual-testing.md.
