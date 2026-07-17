@@ -1,1 +1,1 @@
-Corrige el desplazamiento y oculta planteles con error
+Agrega comparativo por plantel para todos y externos

@@ -7,6 +7,25 @@
       </div>
 
       <div class="report-actions">
+        <div class="scope-toggle" role="group" aria-label="Tipo de alumnos">
+          <button
+            type="button"
+            :class="{ active: scopeMode === 'all' }"
+            :aria-pressed="scopeMode === 'all'"
+            @click="scopeMode = 'all'"
+          >
+            Todos
+          </button>
+          <button
+            type="button"
+            :class="{ active: scopeMode === 'externos' }"
+            :aria-pressed="scopeMode === 'externos'"
+            @click="scopeMode = 'externos'"
+          >
+            Externos
+          </button>
+        </div>
+
         <label class="cycle-control">
           <span>Ciclo</span>
           <select v-model="selectedCiclo" :disabled="loading" @change="refreshReport">
@@ -15,6 +34,7 @@
             </option>
           </select>
         </label>
+
         <button type="button" class="secondary" :disabled="!successfulReports.length || loading" @click="downloadCsv">
           <LucideDownload :size="17" />
           CSV
@@ -35,7 +55,7 @@
         <div class="load-state">
           <LucideLoader2 v-if="loading" class="spinning" :size="17" />
           <LucideCheck v-else :size="17" />
-          <strong>{{ loading ? `Plantel ${currentPlantel || '…'}` : loadSummaryLabel }}</strong>
+          <strong>{{ loading ? currentPlantel || 'Cargando' : loadSummaryLabel }}</strong>
         </div>
         <span>{{ processedCount }}/{{ queueRows.length }}</span>
         <strong>{{ loadingPercent }}%</strong>
@@ -56,7 +76,7 @@
         <strong>{{ successfulReports.length }}</strong>
       </article>
       <article class="summary-card">
-        <span>Evaluados</span>
+        <span>{{ scopeMode === 'externos' ? 'Externos evaluados' : 'Evaluados' }}</span>
         <strong>{{ formatNumber(globalPopulation.evaluated) }}</strong>
       </article>
       <article class="summary-card is-basic">
@@ -69,135 +89,137 @@
       </article>
     </section>
 
-    <section class="plantel-section">
+    <section class="chart-section">
       <header class="section-heading">
-        <h2>Planteles</h2>
-        <span>{{ successfulReports.length }} disponibles</span>
+        <h2>Comparativo por plantel</h2>
+        <div class="chart-legend" aria-label="Series">
+          <span><i class="is-basic"></i>Básico</span>
+          <span><i class="is-advanced"></i>Avanzado</span>
+        </div>
+      </header>
+
+      <div v-if="chartRows.length" class="comparison-chart" role="img" :aria-label="chartAriaLabel">
+        <div class="chart-axis" aria-hidden="true">
+          <span>0%</span>
+          <span>25%</span>
+          <span>50%</span>
+          <span>75%</span>
+          <span>100%</span>
+        </div>
+
+        <article v-for="row in chartRows" :key="row.plantel" class="chart-row">
+          <div class="chart-plantel">
+            <strong>{{ row.plantel }}</strong>
+            <span>{{ formatNumber(row.evaluated) }}</span>
+          </div>
+
+          <div class="chart-series">
+            <div class="chart-bar-line">
+              <span>Básico</span>
+              <div class="chart-track">
+                <i class="is-basic" :style="{ width: `${row.basic}%` }"></i>
+              </div>
+              <strong>{{ row.basic }}%</strong>
+            </div>
+            <div class="chart-bar-line">
+              <span>Avanzado</span>
+              <div class="chart-track">
+                <i class="is-advanced" :style="{ width: `${row.advanced}%` }"></i>
+              </div>
+              <strong>{{ row.advanced }}%</strong>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section v-if="successfulReports.length" class="plantel-section">
+      <header class="section-heading">
+        <h2>Desglose por plantel</h2>
+        <span>{{ scopeMode === 'externos' ? 'Externos' : 'Todos' }}</span>
       </header>
 
       <div class="plantel-list">
-        <article
-          v-for="item in visibleQueueRows"
-          :key="item.plantel"
-          :class="['plantel-card', `is-${item.status}`]"
-        >
+        <article v-for="report in successfulReports" :key="report.agentId" class="plantel-card">
           <header class="plantel-card-header">
             <div class="plantel-identity">
               <span>Plantel</span>
-              <h3>{{ item.plantel }}</h3>
-              <span :class="['status-pill', `is-${item.status}`]">{{ queueStatusLabel(item) }}</span>
+              <h3>{{ report.agentId }}</h3>
             </div>
-            <div v-if="reportFor(item.plantel)" class="plantel-head-metrics">
+            <div class="plantel-head-metrics">
               <div>
                 <span>Evaluados</span>
-                <strong>{{ formatNumber(reportFor(item.plantel).population.evaluated) }}</strong>
+                <strong>{{ formatNumber(scopeForReport(report).population.evaluated) }}</strong>
               </div>
               <div>
-                <span>Inscritos</span>
-                <strong>{{ formatNumber(reportFor(item.plantel).population.inscritos) }}</strong>
+                <span>Básico</span>
+                <strong>{{ scopeForReport(report).basic.averagePercent }}%</strong>
+              </div>
+              <div>
+                <span>Avanzado</span>
+                <strong>{{ scopeForReport(report).advanced.averagePercent }}%</strong>
               </div>
             </div>
           </header>
 
-          <template v-if="reportFor(item.plantel)">
-            <div class="plantel-progress-grid">
-              <section class="progress-metric is-basic">
-                <div class="progress-metric-head">
-                  <div>
-                    <span>Expediente básico</span>
-                    <small>
-                      {{ formatNumber(reportFor(item.plantel).basic.completeRecords) }}/{{ formatNumber(reportFor(item.plantel).population.evaluated) }} completos
-                    </small>
-                  </div>
-                  <strong>{{ reportFor(item.plantel).basic.averagePercent }}%</strong>
-                </div>
-                <div class="metric-track">
-                  <i :style="{ width: `${reportFor(item.plantel).basic.averagePercent}%` }"></i>
-                </div>
-              </section>
-
-              <section class="progress-metric is-advanced">
-                <div class="progress-metric-head">
-                  <div>
-                    <span>Expediente avanzado</span>
-                    <small>
-                      {{ formatNumber(reportFor(item.plantel).advanced.completeRecords) }}/{{ formatNumber(reportFor(item.plantel).population.evaluated) }} completos
-                    </small>
-                  </div>
-                  <strong>{{ reportFor(item.plantel).advanced.averagePercent }}%</strong>
-                </div>
-                <div class="metric-track">
-                  <i :style="{ width: `${reportFor(item.plantel).advanced.averagePercent}%` }"></i>
-                </div>
-              </section>
+          <div class="quality-strip" :aria-label="`Calidad de datos del plantel ${report.agentId}`">
+            <div v-for="quality in qualityBreakdown(scopeForReport(report))" :key="quality.key" class="quality-chip">
+              <span>{{ quality.label }}</span>
+              <strong>{{ formatNumber(quality.count) }}</strong>
             </div>
-
-            <div class="quality-strip" :aria-label="`Calidad de datos del plantel ${item.plantel}`">
-              <div v-for="quality in qualityBreakdown(reportFor(item.plantel))" :key="quality.key" class="quality-chip">
-                <span>{{ quality.label }}</span>
-                <strong>{{ formatNumber(quality.count) }}</strong>
-              </div>
-            </div>
-
-            <details class="plantel-breakdown">
-              <summary>
-                <span>Desglose de campos</span>
-                <LucideChevronDown :size="18" />
-              </summary>
-
-              <div class="breakdown-body">
-                <div class="population-strip">
-                  <div><span>Internos</span><strong>{{ formatNumber(reportFor(item.plantel).population.internos) }}</strong></div>
-                  <div><span>Externos</span><strong>{{ formatNumber(reportFor(item.plantel).population.externos) }}</strong></div>
-                  <div><span>No inscritos</span><strong>{{ formatNumber(reportFor(item.plantel).population.noInscritos) }}</strong></div>
-                  <div><span>Bajas</span><strong>{{ formatNumber(reportFor(item.plantel).population.bajas) }}</strong></div>
-                  <div><span>Sin ficha</span><strong>{{ formatNumber(reportFor(item.plantel).population.withoutOverlay) }}</strong></div>
-                </div>
-
-                <div class="field-columns">
-                  <section class="field-tier">
-                    <header>
-                      <h4>Expediente básico</h4>
-                      <strong>{{ reportFor(item.plantel).basic.averagePercent }}%</strong>
-                    </header>
-                    <div class="field-list">
-                      <div v-for="field in reportFor(item.plantel).basic.fields" :key="field.key" class="field-row">
-                        <div>
-                          <span>{{ field.label }}</span>
-                          <small>{{ formatNumber(field.completed) }}/{{ formatNumber(field.total) }}</small>
-                        </div>
-                        <strong>{{ field.percent }}%</strong>
-                        <div class="field-track"><i :style="{ width: `${field.percent}%` }"></i></div>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section class="field-tier is-advanced">
-                    <header>
-                      <h4>Expediente avanzado</h4>
-                      <strong>{{ reportFor(item.plantel).advanced.averagePercent }}%</strong>
-                    </header>
-                    <div class="field-list">
-                      <div v-for="field in reportFor(item.plantel).advanced.fields" :key="field.key" class="field-row">
-                        <div>
-                          <span>{{ field.label }}</span>
-                          <small>{{ formatNumber(field.completed) }}/{{ formatNumber(field.total) }}</small>
-                        </div>
-                        <strong>{{ field.percent }}%</strong>
-                        <div class="field-track"><i :style="{ width: `${field.percent}%` }"></i></div>
-                      </div>
-                    </div>
-                  </section>
-                </div>
-              </div>
-            </details>
-          </template>
-
-          <div v-else class="plantel-state">
-            <LucideLoader2 v-if="item.status === 'loading'" class="spinning" :size="18" />
-            <LucideClock3 v-else :size="18" />
-            <span>{{ queueStatusLabel(item) }}</span>
           </div>
+
+          <details class="plantel-breakdown">
+            <summary>
+              <span>Campos</span>
+              <LucideChevronDown :size="18" />
+            </summary>
+
+            <div class="breakdown-body">
+              <div class="population-strip">
+                <div v-for="item in populationBreakdown(scopeForReport(report))" :key="item.label">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ formatNumber(item.count) }}</strong>
+                </div>
+              </div>
+
+              <div class="field-columns">
+                <section class="field-tier">
+                  <header>
+                    <h4>Expediente básico</h4>
+                    <strong>{{ scopeForReport(report).basic.averagePercent }}%</strong>
+                  </header>
+                  <div class="field-list">
+                    <div v-for="field in scopeForReport(report).basic.fields" :key="field.key" class="field-row">
+                      <div>
+                        <span>{{ field.label }}</span>
+                        <small>{{ formatNumber(field.completed) }}/{{ formatNumber(field.total) }}</small>
+                      </div>
+                      <strong>{{ field.percent }}%</strong>
+                      <div class="field-track"><i :style="{ width: `${field.percent}%` }"></i></div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="field-tier is-advanced">
+                  <header>
+                    <h4>Expediente avanzado</h4>
+                    <strong>{{ scopeForReport(report).advanced.averagePercent }}%</strong>
+                  </header>
+                  <div class="field-list">
+                    <div v-for="field in scopeForReport(report).advanced.fields" :key="field.key" class="field-row">
+                      <div>
+                        <span>{{ field.label }}</span>
+                        <small>{{ formatNumber(field.completed) }}/{{ formatNumber(field.total) }}</small>
+                      </div>
+                      <strong>{{ field.percent }}%</strong>
+                      <div class="field-track"><i :style="{ width: `${field.percent}%` }"></i></div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </details>
         </article>
       </div>
     </section>
@@ -209,7 +231,6 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   LucideCheck,
   LucideChevronDown,
-  LucideClock3,
   LucideDownload,
   LucideLoader2,
   LucideRefreshCw,
@@ -225,6 +246,7 @@ import {
 
 const activeCicloCookie = useCookie('active_ciclo')
 const selectedCiclo = ref(normalizeCicloOption(activeCicloCookie.value || ''))
+const scopeMode = ref('all')
 const optionsLoading = ref(false)
 const loading = ref(false)
 const pageError = ref('')
@@ -236,20 +258,54 @@ const currentPlantel = ref('')
 let currentController = null
 let currentRunId = 0
 
-const reportFor = (plantel) => reports.value.find((report) => report.agentId === plantel) || null
-const successfulReports = computed(() => planteles.value.map((item) => reportFor(item.agentId)).filter(Boolean))
-const visibleQueueRows = computed(() => queueRows.value.filter((item) => item.status !== 'error'))
-const processedCount = computed(() => queueRows.value.filter((item) => ['success', 'error'].includes(item.status)).length)
-const loadingPercent = computed(() => queueRows.value.length ? Math.round((processedCount.value / queueRows.value.length) * 100) : 0)
-const loadSummaryLabel = computed(() => `${successfulReports.value.length} planteles listos`)
-
 const emptyTier = () => ({
+  fieldCount: 0,
   completedFields: 0,
   possibleFields: 0,
   averagePercent: 0,
   completeRecords: 0,
   incompleteRecords: 0,
+  completeRecordPercent: 0,
+  fields: [],
 })
+
+const emptyScope = () => ({
+  population: {
+    totalVisible: 0,
+    evaluated: 0,
+    inscritos: 0,
+    internos: 0,
+    externos: 0,
+    noInscritos: 0,
+    bajas: 0,
+    withoutOverlay: 0,
+  },
+  basic: emptyTier(),
+  advanced: emptyTier(),
+  quality: {},
+  distribution: { byNivel: [], byGrupo: [] },
+})
+
+const scopeForReport = (report, mode = scopeMode.value) => {
+  if (!report) return emptyScope()
+  if (mode === 'externos') return report.scopes?.externos || emptyScope()
+  return report.scopes?.all || {
+    population: report.population || emptyScope().population,
+    basic: report.basic || emptyTier(),
+    advanced: report.advanced || emptyTier(),
+    quality: report.quality || {},
+    distribution: report.distribution || { byNivel: [], byGrupo: [] },
+  }
+}
+
+const successfulReports = computed(() => planteles.value
+  .map((item) => reports.value.find((report) => report.agentId === item.agentId))
+  .filter(Boolean)
+  .sort((a, b) => String(a.agentId).localeCompare(String(b.agentId), 'es', { numeric: true, sensitivity: 'base' })))
+
+const processedCount = computed(() => queueRows.value.filter((item) => ['success', 'error', 'cancelled'].includes(item.status)).length)
+const loadingPercent = computed(() => queueRows.value.length ? Math.round((processedCount.value / queueRows.value.length) * 100) : 0)
+const loadSummaryLabel = computed(() => `${successfulReports.value.length} planteles`)
 
 const aggregateTier = (key) => {
   let completedFields = 0
@@ -258,7 +314,7 @@ const aggregateTier = (key) => {
   let incompleteRecords = 0
 
   successfulReports.value.forEach((report) => {
-    const tier = report[key] || emptyTier()
+    const tier = scopeForReport(report)[key] || emptyTier()
     completedFields += Number(tier.completedFields || 0)
     possibleFields += Number(tier.possibleFields || 0)
     completeRecords += Number(tier.completeRecords || 0)
@@ -277,18 +333,25 @@ const aggregateTier = (key) => {
 const globalBasic = computed(() => aggregateTier('basic'))
 const globalAdvanced = computed(() => aggregateTier('advanced'))
 const globalPopulation = computed(() => successfulReports.value.reduce((total, report) => {
-  Object.keys(total).forEach((key) => { total[key] += Number(report.population?.[key] || 0) })
+  const population = scopeForReport(report).population
+  Object.keys(total).forEach((key) => { total[key] += Number(population?.[key] || 0) })
   return total
-}, {
-  totalVisible: 0,
-  evaluated: 0,
-  inscritos: 0,
-  internos: 0,
-  externos: 0,
-  noInscritos: 0,
-  bajas: 0,
-  withoutOverlay: 0,
+}, emptyScope().population))
+
+const chartRows = computed(() => successfulReports.value.map((report) => {
+  const scope = scopeForReport(report)
+  return {
+    plantel: report.agentId,
+    evaluated: scope.population.evaluated,
+    basic: scope.basic.averagePercent,
+    advanced: scope.advanced.averagePercent,
+  }
 }))
+
+const chartAriaLabel = computed(() => {
+  const scope = scopeMode.value === 'externos' ? 'alumnos externos' : 'todos los alumnos'
+  return `Avance de expediente básico y avanzado por plantel para ${scope}`
+})
 
 const formatNumber = (value) => new Intl.NumberFormat('es-MX').format(Number(value || 0))
 const sourceLabel = (source = {}) => {
@@ -296,24 +359,36 @@ const sourceLabel = (source = {}) => {
   if (source.cacheFreshness === 'live-bridge') return 'bridge en vivo'
   return source.base || source.cacheFreshness || 'Control Escolar'
 }
-const queueStatusLabel = (item) => ({
-  pending: 'En espera',
-  loading: 'Consultando',
-  success: 'Listo',
-  error: 'Error',
-  cancelled: 'Detenido',
-}[item.status] || item.status)
 
-const qualityBreakdown = (report) => {
-  const quality = report?.quality || {}
-  const basicFields = new Map((report?.basic?.fields || []).map((field) => [field.key, Number(field.missing || 0)]))
+const qualityBreakdown = (scope) => {
+  const quality = scope?.quality || {}
+  const basicFields = new Map((scope?.basic?.fields || []).map((field) => [field.key, Number(field.missing || 0)]))
   return [
-    { key: 'incomplete', label: 'Expediente incompleto', count: quality.incomplete ?? report?.basic?.incompleteRecords ?? 0 },
+    { key: 'incomplete', label: 'Expediente incompleto', count: quality.incomplete ?? scope?.basic?.incompleteRecords ?? 0 },
     { key: 'curp', label: 'Sin CURP', count: quality.sinCurp ?? basicFields.get('curp') ?? 0 },
     { key: 'grupo', label: 'Sin grupo', count: quality.sinGrupo ?? basicFields.get('grupo') ?? 0 },
     { key: 'padre', label: 'Sin datos de padre', count: quality.sinPadre ?? 0 },
     { key: 'madre', label: 'Sin datos de madre', count: quality.sinMadre ?? 0 },
     { key: 'contact', label: 'Sin contacto válido', count: quality.sinContacto ?? 0 },
+  ]
+}
+
+const populationBreakdown = (scope) => {
+  const population = scope?.population || emptyScope().population
+  if (scopeMode.value === 'externos') {
+    return [
+      { label: 'Externos', count: population.externos },
+      { label: 'Básicos completos', count: scope?.basic?.completeRecords || 0 },
+      { label: 'Avanzados completos', count: scope?.advanced?.completeRecords || 0 },
+      { label: 'Sin ficha', count: population.withoutOverlay },
+    ]
+  }
+  return [
+    { label: 'Internos', count: population.internos },
+    { label: 'Externos', count: population.externos },
+    { label: 'No inscritos', count: population.noInscritos },
+    { label: 'Bajas', count: population.bajas },
+    { label: 'Sin ficha', count: population.withoutOverlay },
   ]
 }
 
@@ -421,35 +496,37 @@ const prepareReport = async () => {
 const refreshReport = () => prepareReport()
 const cancelLoad = () => {
   currentController?.abort()
-  queueRows.value = queueRows.value.map((item) => item.status === 'loading' ? { ...item, status: 'cancelled' } : item)
+  queueRows.value = queueRows.value.map((item) => ['loading', 'pending'].includes(item.status) ? { ...item, status: 'cancelled' } : item)
   loading.value = false
   currentPlantel.value = ''
 }
 const downloadCsv = () => {
   const rows = successfulReports.value.map((report) => {
-    const quality = Object.fromEntries(qualityBreakdown(report).map((item) => [item.key, item.count]))
+    const scope = scopeForReport(report)
+    const quality = Object.fromEntries(qualityBreakdown(scope).map((item) => [item.key, item.count]))
     return {
       Plantel: report.agentId,
       Ciclo: selectedCiclo.value,
-      Evaluados: report.population.evaluated,
-      Inscritos: report.population.inscritos,
-      Internos: report.population.internos,
-      Externos: report.population.externos,
-      'Expediente básico (%)': report.basic.averagePercent,
-      'Básicos completos': report.basic.completeRecords,
-      'Expediente avanzado (%)': report.advanced.averagePercent,
-      'Avanzados completos': report.advanced.completeRecords,
+      Vista: scopeMode.value === 'externos' ? 'Externos' : 'Todos',
+      Evaluados: scope.population.evaluated,
+      Internos: scope.population.internos,
+      Externos: scope.population.externos,
+      'Expediente básico (%)': scope.basic.averagePercent,
+      'Básicos completos': scope.basic.completeRecords,
+      'Expediente avanzado (%)': scope.advanced.averagePercent,
+      'Avanzados completos': scope.advanced.completeRecords,
       'Expediente incompleto': quality.incomplete,
       'Sin CURP': quality.curp,
       'Sin grupo': quality.grupo,
       'Sin datos de padre': quality.padre,
       'Sin datos de madre': quality.madre,
       'Sin contacto válido': quality.contact,
-      'Sin ficha matrícula': report.population.withoutOverlay,
+      'Sin ficha matrícula': scope.population.withoutOverlay,
       Fuente: sourceLabel(report.source),
     }
   })
-  exportToCSV(`avance-control-escolar-${selectedCiclo.value}.csv`, rows)
+  const scopeSuffix = scopeMode.value === 'externos' ? 'externos' : 'todos'
+  exportToCSV(`avance-control-escolar-${scopeSuffix}-${selectedCiclo.value}.csv`, rows)
 }
 
 onMounted(prepareReport)
@@ -474,6 +551,7 @@ onBeforeUnmount(() => currentController?.abort())
 
 .report-toolbar,
 .load-monitor,
+.chart-section,
 .plantel-section,
 .summary-card {
   border: 1px solid rgba(210, 224, 214, .92);
@@ -524,9 +602,8 @@ onBeforeUnmount(() => currentController?.abort())
 }
 
 .report-actions select,
-.report-actions button,
-.summary-card button,
-.plantel-state button {
+.report-actions > button,
+.scope-toggle button {
   min-height: 40px;
   border: 1px solid #cfdcd1;
   border-radius: 12px;
@@ -536,9 +613,8 @@ onBeforeUnmount(() => currentController?.abort())
 }
 
 .report-actions select { padding: 0 .75rem; }
-.report-actions button,
-.summary-card button,
-.plantel-state button {
+.report-actions > button,
+.scope-toggle button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -546,16 +622,35 @@ onBeforeUnmount(() => currentController?.abort())
   padding: 0 .78rem;
   cursor: pointer;
 }
-.report-actions button.primary {
+.report-actions > button.primary {
   border-color: #27733a;
   background: #27733a;
   color: #fff;
 }
-.report-actions button:disabled,
-.summary-card button:disabled,
-.plantel-state button:disabled {
+.report-actions > button:disabled {
   cursor: not-allowed;
   opacity: .55;
+}
+
+.scope-toggle {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(76px, 1fr));
+  gap: 3px;
+  border: 1px solid #cfdcd1;
+  border-radius: 13px;
+  background: #edf2ee;
+  padding: 3px;
+}
+.scope-toggle button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  padding: 0 .8rem;
+}
+.scope-toggle button.active {
+  background: #27733a;
+  color: #fff;
 }
 
 .load-monitor {
@@ -585,7 +680,6 @@ onBeforeUnmount(() => currentController?.abort())
 .load-monitor-row > strong { color: #216f37; font-size: 1rem; }
 
 .overall-track,
-.metric-track,
 .field-track {
   overflow: hidden;
   border-radius: 999px;
@@ -593,7 +687,6 @@ onBeforeUnmount(() => currentController?.abort())
 }
 .overall-track { height: 7px; margin-top: .6rem; }
 .overall-track i,
-.metric-track i,
 .field-track i {
   display: block;
   height: 100%;
@@ -635,6 +728,8 @@ onBeforeUnmount(() => currentController?.abort())
 }
 .summary-card.is-basic { border-bottom: 3px solid #4f9d56; }
 .summary-card.is-advanced { border-bottom: 3px solid #4d7f9d; }
+
+.chart-section,
 .plantel-section {
   border-radius: 20px;
   padding: .85rem;
@@ -660,6 +755,104 @@ onBeforeUnmount(() => currentController?.abort())
   font-size: .7rem;
   font-weight: 900;
 }
+.chart-legend {
+  display: flex;
+  gap: .8rem;
+  color: #526158;
+  font-size: .7rem;
+  font-weight: 850;
+}
+.chart-legend span {
+  display: inline-flex;
+  gap: .35rem;
+  align-items: center;
+}
+.chart-legend i {
+  width: 18px;
+  height: 8px;
+  border-radius: 999px;
+}
+.chart-legend i.is-basic,
+.chart-track i.is-basic { background: #388447; }
+.chart-legend i.is-advanced,
+.chart-track i.is-advanced { background: #416f91; }
+
+.comparison-chart {
+  display: grid;
+  gap: .35rem;
+  border-top: 1px solid #e8eee9;
+  padding-top: .7rem;
+}
+.chart-axis {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin-left: 168px;
+  padding: 0 48px 0 68px;
+  color: #7b877f;
+  font-size: .62rem;
+  font-weight: 750;
+}
+.chart-axis span { text-align: center; }
+.chart-axis span:first-child { text-align: left; }
+.chart-axis span:last-child { text-align: right; }
+.chart-row {
+  display: grid;
+  grid-template-columns: 155px minmax(0, 1fr);
+  gap: .8rem;
+  align-items: center;
+  border-radius: 12px;
+  padding: .5rem .6rem;
+}
+.chart-row:nth-child(even) { background: #fafcfb; }
+.chart-plantel {
+  display: grid;
+  min-width: 0;
+}
+.chart-plantel strong {
+  overflow: hidden;
+  color: #1c2b43;
+  font-size: .78rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart-plantel span {
+  color: #7a867e;
+  font-size: .64rem;
+  font-weight: 750;
+}
+.chart-series { display: grid; gap: .32rem; }
+.chart-bar-line {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) 42px;
+  gap: .5rem;
+  align-items: center;
+}
+.chart-bar-line > span {
+  color: #66736b;
+  font-size: .64rem;
+  font-weight: 800;
+}
+.chart-bar-line > strong {
+  text-align: right;
+  font-size: .7rem;
+  font-weight: 900;
+}
+.chart-track {
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background-color: #edf1ee;
+  background-image: linear-gradient(to right, transparent calc(25% - 1px), rgba(135, 151, 141, .2) 25%, transparent calc(25% + 1px));
+  background-size: 25% 100%;
+}
+.chart-track i {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  transition: width .25s ease;
+}
 
 .plantel-list { display: grid; gap: .72rem; }
 .plantel-card {
@@ -668,8 +861,6 @@ onBeforeUnmount(() => currentController?.abort())
   border-radius: 17px;
   background: #fff;
 }
-.plantel-card.is-loading { border-color: #bfd5e6; }
-
 .plantel-card-header {
   display: flex;
   gap: 1rem;
@@ -690,76 +881,22 @@ onBeforeUnmount(() => currentController?.abort())
   font-weight: 950;
   letter-spacing: -.035em;
 }
-.status-pill {
-  display: inline-flex;
-  border-radius: 999px;
-  background: #eef2ef;
-  padding: .28rem .5rem;
-  color: #67736b;
-  font-size: .65rem;
-  font-weight: 850;
-}
-.status-pill.is-success { background: #e7f4e8; color: #23743a; }
-.status-pill.is-loading { background: #e8f1fb; color: #286a9e; }
-
 .plantel-head-metrics {
   display: flex;
-  gap: .65rem;
+  gap: .8rem;
 }
 .plantel-head-metrics > div {
   display: grid;
-  min-width: 74px;
+  min-width: 72px;
   text-align: right;
 }
 .plantel-head-metrics strong { font-size: 1rem; }
-
-.plantel-progress-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: .7rem;
-  padding: .8rem .9rem .65rem;
-}
-.progress-metric {
-  border: 1px solid #e2e9e3;
-  border-radius: 14px;
-  padding: .72rem;
-  background: #fbfdfb;
-}
-.progress-metric-head {
-  display: flex;
-  gap: .75rem;
-  align-items: start;
-  justify-content: space-between;
-}
-.progress-metric-head span {
-  display: block;
-  font-size: .78rem;
-  font-weight: 850;
-}
-.progress-metric-head small {
-  display: block;
-  margin-top: .15rem;
-  color: #77847b;
-  font-size: .67rem;
-}
-.progress-metric-head > strong {
-  color: #247139;
-  font-size: 1.3rem;
-  font-weight: 950;
-  letter-spacing: -.04em;
-}
-.metric-track { height: 9px; margin-top: .55rem; }
-.progress-metric.is-advanced .metric-track i,
-.field-tier.is-advanced .field-track i {
-  background: linear-gradient(90deg, #315f82, #5b8fb1);
-}
-.progress-metric.is-advanced .progress-metric-head > strong { color: #315f82; }
 
 .quality-strip {
   display: flex;
   gap: .45rem;
   overflow-x: auto;
-  padding: .15rem .9rem .85rem;
+  padding: .75rem .9rem .85rem;
   scrollbar-width: thin;
 }
 .quality-chip {
@@ -789,9 +926,7 @@ onBeforeUnmount(() => currentController?.abort())
   font-weight: 950;
 }
 
-.plantel-breakdown {
-  border-top: 1px solid #e4ebe5;
-}
+.plantel-breakdown { border-top: 1px solid #e4ebe5; }
 .plantel-breakdown summary {
   display: flex;
   gap: .55rem;
@@ -860,20 +995,9 @@ onBeforeUnmount(() => currentController?.abort())
 .field-row small { color: #7a867e; font-size: .63rem; }
 .field-row > strong { font-size: .7rem; }
 .field-track { grid-column: 1 / -1; height: 6px; }
+.field-tier.is-advanced .field-track i { background: linear-gradient(90deg, #315f82, #5b8fb1); }
 
-.plantel-state {
-  display: flex;
-  gap: .55rem;
-  align-items: center;
-  min-height: 76px;
-  justify-content: center;
-  padding: .9rem;
-  color: #738078;
-  font-size: .78rem;
-  font-weight: 800;
-}
 .spinning { animation: reportSpin .9s linear infinite; }
-
 @keyframes reportSpin { to { transform: rotate(360deg); } }
 
 @media (max-width: 900px) {
@@ -885,10 +1009,18 @@ onBeforeUnmount(() => currentController?.abort())
   .progress-report-page { padding: .7rem; }
   .report-toolbar { align-items: start; flex-direction: column; }
   .report-actions { width: 100%; justify-content: flex-start; }
+  .scope-toggle { order: -1; width: 100%; }
   .cycle-control { flex: 1 1 160px; }
   .cycle-control select { width: 100%; }
+  .chart-axis { display: none; }
+  .chart-row {
+    grid-template-columns: 1fr;
+    gap: .35rem;
+    padding: .65rem;
+  }
+  .chart-plantel { grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; }
+  .chart-plantel span { align-self: center; }
   .plantel-card-header { align-items: start; }
-  .plantel-progress-grid,
   .field-columns { grid-template-columns: 1fr; }
   .population-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -898,10 +1030,11 @@ onBeforeUnmount(() => currentController?.abort())
   .summary-card { min-height: 78px; }
   .summary-card > strong { font-size: 1.5rem; }
   .plantel-card-header { display: grid; }
-  .plantel-head-metrics { justify-content: flex-start; }
+  .plantel-head-metrics { justify-content: flex-start; flex-wrap: wrap; }
   .plantel-head-metrics > div { text-align: left; }
   .plantel-identity { flex-wrap: wrap; }
   .load-monitor-row { grid-template-columns: minmax(0, 1fr) auto; }
   .load-monitor-row > span { display: none; }
+  .chart-bar-line { grid-template-columns: 52px minmax(0, 1fr) 38px; gap: .35rem; }
 }
 </style>
