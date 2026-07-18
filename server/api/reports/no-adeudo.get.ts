@@ -1,6 +1,8 @@
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { displayGrado } from '../../../shared/utils/grado'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { normalizePlantel } from '../../utils/auth-session'
+import { fetchCentralMatriculaOverlays } from '../../utils/central-matricula-overlay'
 import { controlEscolarCentralQuery } from '../../utils/control-escolar-central'
 
 const NO_ADEUDO_TABLE = 'no_adeudo_deudor_cartas'
@@ -86,11 +88,22 @@ export default defineEventHandler(async (event) => {
     ORDER BY sent_at DESC, plantel ASC, matricula ASC
   `, params)
 
+  const centralOverlays = await fetchCentralMatriculaOverlays(rows.map((row) => String(row.matricula || '')))
+  const enrichedRows = rows.map((row) => {
+    const matriculaKey = String(row.matricula || '').trim().toUpperCase()
+    const centralStudent = centralOverlays.get(matriculaKey)?.student
+    const grado = String(centralStudent?.grado || '').trim()
+    return {
+      ...row,
+      grado: grado ? displayGrado(grado) : ''
+    }
+  })
+
   const students = new Set<string>()
   const senders = new Set<string>()
   const planteles = new Set<string>()
 
-  for (const row of rows) {
+  for (const row of enrichedRows) {
     students.add(`${String(row.plantel || '').trim()}::${String(row.matricula || '').trim()}`)
     const sender = String(row.sentByEmail || row.sentByName || '').trim().toLowerCase()
     if (sender) senders.add(sender)
@@ -99,9 +112,9 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    rows,
+    rows: enrichedRows,
     summary: {
-      total: rows.length,
+      total: enrichedRows.length,
       students: students.size,
       senders: senders.size,
       planteles: planteles.size,

@@ -103,6 +103,7 @@
                 <th>Fecha de envío</th>
                 <th>Plantel</th>
                 <th>Matrícula</th>
+                <th>Grado</th>
                 <th>Ciclo</th>
                 <th>Folio</th>
                 <th>Responsable</th>
@@ -111,16 +112,17 @@
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="8" class="empty-state">Cargando reporte...</td>
+                <td colspan="9" class="empty-state">Cargando reporte...</td>
               </tr>
               <tr v-else-if="!rows.length">
-                <td colspan="8" class="empty-state">No hay cartas registradas con los filtros seleccionados.</td>
+                <td colspan="9" class="empty-state">No hay cartas registradas con los filtros seleccionados.</td>
               </tr>
               <tr v-for="row in paginatedRows" v-else :key="`${row.plantel}-${row.matricula}-${row.ciclo}`">
                 <td><span class="sent-badge"><LucideCheck :size="13" /> Enviada</span></td>
                 <td class="date-cell">{{ formatDate(row.sentAt) }}</td>
                 <td><span class="plantel-badge">{{ row.plantel || '—' }}</span></td>
                 <td class="mono strong">{{ row.matricula || '—' }}</td>
+                <td>{{ row.grado || '—' }}</td>
                 <td>{{ row.ciclo || '—' }}</td>
                 <td class="mono">{{ row.folio || '—' }}</td>
                 <td>{{ row.sentByName || 'Sin nombre registrado' }}</td>
@@ -231,6 +233,7 @@ const downloadReport = () => {
     'Fecha de envío': formatDate(row.sentAt),
     Plantel: row.plantel || '',
     Matrícula: row.matricula || '',
+    Grado: row.grado || '',
     Ciclo: row.ciclo || '',
     Folio: row.folio || '',
     Responsable: row.sentByName || '',
@@ -247,6 +250,7 @@ const downloadReport = () => {
       { key: 'Fecha de envío', label: 'Fecha de envío' },
       { key: 'Plantel', label: 'Plantel' },
       { key: 'Matrícula', label: 'Matrícula' },
+      { key: 'Grado', label: 'Grado' },
       { key: 'Ciclo', label: 'Ciclo' },
       { key: 'Folio', label: 'Folio' },
       { key: 'Responsable', label: 'Responsable' },

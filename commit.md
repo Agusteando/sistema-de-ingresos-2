@@ -1,1 +1,1 @@
-Registra todas las cartas de no adeudo enviadas y agrega su reporte descargable
+Agrega el grado al reporte de cartas de no adeudo
