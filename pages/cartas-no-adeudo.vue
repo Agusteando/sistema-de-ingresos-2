@@ -3,9 +3,9 @@
     <section class="report-shell">
       <header class="report-header">
         <div class="report-heading">
-          <span class="section-kicker">Control de envíos</span>
-          <h2>Cartas de no adeudo enviadas</h2>
-          <p>Consulta y descarga el historial completo disponible de cada envío exitoso.</p>
+          <span class="section-kicker">Evidencia existente</span>
+          <h2>Historial de cartas de no adeudo</h2>
+          <p>Descarga de las marcas que el sistema ya conserva en Control Escolar.</p>
         </div>
 
         <div class="header-actions">
@@ -20,12 +20,25 @@
         </div>
       </header>
 
+      <aside class="scope-notice" role="note">
+        <LucideInfo :size="19" />
+        <div>
+          <strong>Alcance de este historial</strong>
+          <p>
+            Este reporte no crea controles nuevos ni modifica envíos. Sólo muestra las marcas existentes en
+            <code>no_adeudo_deudor_cartas</code>, generadas históricamente cuando se forzó una carta para un alumno con adeudo.
+            El nombre, nivel, grado, grupo y tutor son referencias actuales de matrícula y no una fotografía histórica del envío.
+            El correo destinatario no se incluye porque nunca fue almacenado en esta marca.
+          </p>
+        </div>
+      </aside>
+
       <form class="filters-grid" @submit.prevent="loadReport">
         <label class="filter-field search-field">
           <span>Buscar</span>
           <div class="input-with-icon">
             <LucideSearch :size="16" />
-            <input v-model.trim="filters.search" type="search" placeholder="Alumno, matrícula, destinatario, folio o responsable">
+            <input v-model.trim="filters.search" type="search" placeholder="Alumno, matrícula, folio o responsable">
           </div>
         </label>
 
@@ -64,24 +77,24 @@
 
       <div class="summary-grid">
         <article class="metric-card">
-          <span>Cartas registradas</span>
-          <strong>{{ summary.total }}</strong>
+          <span>Marcas existentes</span>
+          <strong>{{ summary.totalMarks }}</strong>
         </article>
         <article class="metric-card">
-          <span>Alumnos</span>
+          <span>Alumnos marcados</span>
           <strong>{{ summary.students }}</strong>
         </article>
         <article class="metric-card">
-          <span>Destinatarios únicos</span>
-          <strong>{{ summary.recipients }}</strong>
+          <span>Responsables</span>
+          <strong>{{ summary.senders }}</strong>
         </article>
-        <article class="metric-card warning" :title="summary.incomplete ? 'Estos envíos son anteriores al historial detallado y no conservan el correo destino exacto.' : ''">
-          <span>Registros anteriores incompletos</span>
-          <strong>{{ summary.incomplete }}</strong>
+        <article class="metric-card">
+          <span>Planteles</span>
+          <strong>{{ summary.planteles }}</strong>
         </article>
         <article class="metric-card muted">
-          <span>Último envío</span>
-          <strong>{{ summary.lastSentAt ? formatDate(summary.lastSentAt) : 'Sin registros' }}</strong>
+          <span>Última marca</span>
+          <strong>{{ summary.lastMarkedAt ? formatDate(summary.lastMarkedAt) : 'Sin registros' }}</strong>
         </article>
       </div>
 
@@ -98,7 +111,7 @@
       <div class="table-card">
         <div class="table-meta">
           <div>
-            <LucideFileCheck2 :size="17" />
+            <LucideHistory :size="17" />
             <strong>{{ scopeLabel }}</strong>
           </div>
           <span v-if="rows.length">Mostrando {{ visibleStart }}–{{ visibleEnd }} de {{ rows.length }}</span>
@@ -108,58 +121,37 @@
           <table>
             <thead>
               <tr>
-                <th>Estado</th>
-                <th>Fecha de envío</th>
+                <th>Fecha de marca</th>
                 <th>Plantel</th>
                 <th>Matrícula</th>
-                <th>Nombre del alumno</th>
-                <th>Nivel</th>
-                <th>Grado</th>
-                <th>Grupo</th>
-                <th>Padre / tutor</th>
-                <th>Ciclo</th>
-                <th>Correo(s) destino</th>
-                <th>Tipo de destinatario</th>
-                <th>Condición al enviar</th>
+                <th>Alumno actual</th>
+                <th>Nivel actual</th>
+                <th>Grado actual</th>
+                <th>Grupo actual</th>
+                <th>Tutor actual</th>
+                <th>Ciclo marcado</th>
                 <th>Folio</th>
-                <th>Enviado por</th>
+                <th>Registrado por</th>
                 <th>Correo del responsable</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="16" class="empty-state">Cargando reporte...</td>
+                <td colspan="12" class="empty-state">Cargando marcas existentes...</td>
               </tr>
               <tr v-else-if="!rows.length">
-                <td colspan="16" class="empty-state">No hay cartas registradas con los filtros seleccionados.</td>
+                <td colspan="12" class="empty-state">No hay marcas existentes con los filtros seleccionados.</td>
               </tr>
-              <tr v-for="row in paginatedRows" v-else :key="row.id || `${row.plantel}-${row.matricula}-${row.ciclo}-${row.folio}`">
-                <td>
-                  <span class="sent-badge"><LucideCheck :size="13" /> Enviada</span>
-                  <small v-if="!row.recipientDataExact" class="legacy-note">Registro anterior</small>
-                </td>
+              <tr v-for="row in paginatedRows" v-else :key="`${row.plantel}-${row.matricula}-${row.ciclo}-${row.folio}`">
                 <td class="date-cell">{{ formatDate(row.sentAt) }}</td>
                 <td><span class="plantel-badge">{{ row.plantel || '—' }}</span></td>
                 <td class="mono strong">{{ row.matricula || '—' }}</td>
-                <td class="student-cell">{{ row.studentName || 'Sin nombre disponible' }}</td>
-                <td>{{ row.nivel || '—' }}</td>
-                <td>{{ row.grado || '—' }}</td>
-                <td>{{ row.grupo || '—' }}</td>
-                <td class="student-cell">{{ row.tutorName || '—' }}</td>
+                <td class="student-cell">{{ row.currentStudentName || 'Sin referencia actual' }}</td>
+                <td>{{ row.currentNivel || '—' }}</td>
+                <td>{{ row.currentGrado || '—' }}</td>
+                <td>{{ row.currentGrupo || '—' }}</td>
+                <td class="student-cell">{{ row.currentTutorName || '—' }}</td>
                 <td>{{ row.ciclo || '—' }}</td>
-                <td class="recipient-cell">
-                  <template v-if="row.recipientEmails?.length">
-                    <span v-for="email in row.recipientEmails" :key="email">{{ email }}</span>
-                  </template>
-                  <em v-else-if="!row.recipientDataExact">No registrado en el envío anterior</em>
-                  <em v-else>Sin correo registrado</em>
-                </td>
-                <td>{{ row.recipientModeLabel || (row.recipientDataExact ? '—' : 'No registrado') }}</td>
-                <td>
-                  <span v-if="row.hadDebt === true" class="debt-badge debt-badge--warning">Con adeudo · {{ formatMoney(row.debtTotal) }}</span>
-                  <span v-else-if="row.hadDebt === false" class="debt-badge">Sin adeudo</span>
-                  <span v-else class="muted-value">No registrado</span>
-                </td>
                 <td class="mono">{{ row.folio || '—' }}</td>
                 <td>{{ row.sentByName || 'Sin nombre registrado' }}</td>
                 <td class="email-cell">{{ row.sentByEmail || '—' }}</td>
@@ -182,11 +174,11 @@
 import dayjs from 'dayjs'
 import { computed, onMounted, ref, watch } from 'vue'
 import {
-  LucideCheck,
   LucideCircleAlert,
   LucideDownload,
-  LucideFileCheck2,
   LucideFilter,
+  LucideHistory,
+  LucideInfo,
   LucideLoader2,
   LucideRefreshCw,
   LucideSearch
@@ -210,7 +202,7 @@ const filters = ref({
   plantel: ''
 })
 const rows = ref([])
-const summary = ref({ total: 0, students: 0, senders: 0, recipients: 0, planteles: 0, incomplete: 0, lastSentAt: '' })
+const summary = ref({ totalMarks: 0, students: 0, senders: 0, planteles: 0, lastMarkedAt: '' })
 const reportScope = ref({ plantel: activePlantel.value || '', canFilterPlantel: false })
 const loading = ref(false)
 const errorMessage = ref('')
@@ -225,7 +217,7 @@ const paginatedRows = computed(() => {
 const visibleStart = computed(() => rows.value.length ? ((page.value - 1) * PAGE_SIZE) + 1 : 0)
 const visibleEnd = computed(() => Math.min(page.value * PAGE_SIZE, rows.value.length))
 const scopeLabel = computed(() => reportScope.value.plantel === 'GLOBAL'
-  ? 'Todos los planteles autorizados'
+  ? 'Todos los planteles financieros autorizados'
   : `Plantel ${reportScope.value.plantel || activePlantel.value || '—'}`)
 
 watch(rows, () => { page.value = 1 })
@@ -239,14 +231,10 @@ const formatDate = (value) => {
   return parsed.isValid() ? parsed.format('DD/MM/YYYY HH:mm') : String(value)
 }
 
-const formatMoney = (value) => Number(value || 0).toLocaleString('es-MX', {
-  style: 'currency',
-  currency: 'MXN'
-})
-
 const loadReport = async () => {
   loading.value = true
   errorMessage.value = ''
+  warningMessages.value = []
   try {
     const response = await $fetch('/api/reports/no-adeudo', {
       query: {
@@ -258,14 +246,13 @@ const loadReport = async () => {
       }
     })
     rows.value = Array.isArray(response?.rows) ? response.rows : []
-    summary.value = response?.summary || { total: 0, students: 0, senders: 0, recipients: 0, planteles: 0, incomplete: 0, lastSentAt: '' }
+    summary.value = response?.summary || summary.value
     reportScope.value = response?.scope || reportScope.value
     warningMessages.value = Array.isArray(response?.warnings) ? response.warnings : []
   } catch (error) {
     rows.value = []
-    summary.value = { total: 0, students: 0, senders: 0, recipients: 0, planteles: 0, incomplete: 0, lastSentAt: '' }
-    warningMessages.value = []
-    errorMessage.value = error?.data?.message || error?.message || 'No se pudo cargar el reporte de cartas enviadas.'
+    summary.value = { totalMarks: 0, students: 0, senders: 0, planteles: 0, lastMarkedAt: '' }
+    errorMessage.value = error?.data?.message || error?.message || 'No se pudo cargar el historial de marcas.'
   } finally {
     loading.value = false
   }
@@ -273,50 +260,43 @@ const loadReport = async () => {
 
 const downloadReport = () => {
   const exportRows = rows.value.map((row) => ({
-    Estado: 'Enviada',
-    'Fecha de envío': formatDate(row.sentAt),
+    'Fecha de marca': formatDate(row.sentAt),
     Plantel: row.plantel || '',
     Matrícula: row.matricula || '',
-    'Nombre del alumno': row.studentName || '',
-    Nivel: row.nivel || '',
-    Grado: row.grado || '',
-    Grupo: row.grupo || '',
-    'Padre / tutor': row.tutorName || '',
-    Ciclo: row.ciclo || '',
-    'Correo(s) destino': row.recipientEmails?.join('; ') || (row.recipientDataExact ? '' : 'No registrado en el envío anterior'),
-    'Tipo de destinatario': row.recipientModeLabel || (row.recipientDataExact ? '' : 'No registrado'),
-    'Condición al enviar': row.hadDebt === true ? 'Con adeudo' : (row.hadDebt === false ? 'Sin adeudo' : 'No registrado'),
-    'Adeudo al enviar': row.debtTotal === null || row.debtTotal === undefined ? '' : formatMoney(row.debtTotal),
+    'Alumno actual': row.currentStudentName || '',
+    'Nivel actual': row.currentNivel || '',
+    'Grado actual': row.currentGrado || '',
+    'Grupo actual': row.currentGrupo || '',
+    'Tutor actual': row.currentTutorName || '',
+    'Ciclo marcado': row.ciclo || '',
     Folio: row.folio || '',
-    'Enviado por': row.sentByName || '',
+    'Registrado por': row.sentByName || '',
     'Correo del responsable': row.sentByEmail || '',
-    'Integridad del registro': row.recipientDataExact ? 'Completo' : 'Registro anterior incompleto'
+    Fuente: 'Marca existente no_adeudo_deudor_cartas'
   }))
   const dateSuffix = dayjs().format('YYYY-MM-DD')
-  const scopeSuffix = reportScope.value.plantel === 'GLOBAL' ? 'todos-planteles' : `plantel-${reportScope.value.plantel || 'sin-plantel'}`
-  exportToExcel(`cartas-no-adeudo-${scopeSuffix}-${dateSuffix}.xls`, exportRows, {
-    title: 'Cartas de no adeudo enviadas',
-    subtitle: `${scopeLabel.value} · ${rows.value.length} envíos`,
-    sheetName: 'Cartas enviadas',
+  const scopeSuffix = reportScope.value.plantel === 'GLOBAL'
+    ? 'todos-planteles'
+    : `plantel-${reportScope.value.plantel || 'sin-plantel'}`
+
+  exportToExcel(`historial-marcas-cartas-no-adeudo-${scopeSuffix}-${dateSuffix}.xls`, exportRows, {
+    title: 'Historial de marcas de cartas de no adeudo',
+    subtitle: `${scopeLabel.value} · ${rows.value.length} marcas existentes · Reporte de sólo lectura`,
+    sheetName: 'Marcas existentes',
     columns: [
-      { key: 'Estado', label: 'Estado' },
-      { key: 'Fecha de envío', label: 'Fecha de envío' },
+      { key: 'Fecha de marca', label: 'Fecha de marca' },
       { key: 'Plantel', label: 'Plantel' },
       { key: 'Matrícula', label: 'Matrícula' },
-      { key: 'Nombre del alumno', label: 'Nombre del alumno' },
-      { key: 'Nivel', label: 'Nivel' },
-      { key: 'Grado', label: 'Grado' },
-      { key: 'Grupo', label: 'Grupo' },
-      { key: 'Padre / tutor', label: 'Padre / tutor' },
-      { key: 'Ciclo', label: 'Ciclo' },
-      { key: 'Correo(s) destino', label: 'Correo(s) destino' },
-      { key: 'Tipo de destinatario', label: 'Tipo de destinatario' },
-      { key: 'Condición al enviar', label: 'Condición al enviar' },
-      { key: 'Adeudo al enviar', label: 'Adeudo al enviar' },
+      { key: 'Alumno actual', label: 'Alumno actual' },
+      { key: 'Nivel actual', label: 'Nivel actual' },
+      { key: 'Grado actual', label: 'Grado actual' },
+      { key: 'Grupo actual', label: 'Grupo actual' },
+      { key: 'Tutor actual', label: 'Tutor actual' },
+      { key: 'Ciclo marcado', label: 'Ciclo marcado' },
       { key: 'Folio', label: 'Folio' },
-      { key: 'Enviado por', label: 'Enviado por' },
+      { key: 'Registrado por', label: 'Registrado por' },
       { key: 'Correo del responsable', label: 'Correo del responsable' },
-      { key: 'Integridad del registro', label: 'Integridad del registro' }
+      { key: 'Fuente', label: 'Fuente' }
     ]
   })
 }
@@ -380,6 +360,41 @@ onMounted(loadReport)
   gap: 8px;
 }
 
+.scope-notice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border-bottom: 1px solid #e7edf4;
+  background: #f7fafc;
+  color: #40506a;
+  padding: 14px 20px;
+}
+
+.scope-notice svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #477742;
+}
+
+.scope-notice strong {
+  color: #20334f;
+  font-size: 0.82rem;
+}
+
+.scope-notice p {
+  margin: 4px 0 0;
+  max-width: 1100px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.scope-notice code {
+  border-radius: 5px;
+  background: #e8eef5;
+  padding: 1px 4px;
+  color: #253750;
+}
+
 .filters-grid {
   display: grid;
   grid-template-columns: minmax(240px, 1.5fr) repeat(4, minmax(145px, 0.8fr)) auto;
@@ -427,86 +442,77 @@ onMounted(loadReport)
 .input-with-icon svg {
   position: absolute;
   top: 12px;
-  left: 12px;
-  color: #8390a3;
+  left: 11px;
+  color: #8390a5;
 }
 
 .input-with-icon input {
-  padding-left: 37px;
+  padding-left: 36px;
 }
 
 .filter-button {
-  min-height: 40px;
+  height: 40px;
 }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(145px, 1fr));
   gap: 10px;
-  padding: 14px 20px;
+  border-bottom: 1px solid #edf2f7;
+  padding: 13px 20px;
 }
 
 .metric-card {
-  min-width: 0;
-  border: 1px solid #dfe6ef;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #ffffff, #f8fcf6);
-  padding: 13px 14px;
-}
-
-.metric-card.muted {
-  background: linear-gradient(135deg, #ffffff, #f7fbff);
-}
-
-.metric-card.warning {
-  border-color: #f2d7a0;
-  background: linear-gradient(135deg, #ffffff, #fff9ed);
+  display: grid;
+  gap: 4px;
+  min-height: 70px;
+  align-content: center;
+  border: 1px solid #e2e9f0;
+  border-radius: 13px;
+  background: #fbfdfb;
+  padding: 11px 13px;
 }
 
 .metric-card span {
-  display: block;
-  color: #66728a;
-  font-size: 0.66rem;
-  font-weight: 820;
+  color: #6d788b;
+  font-size: 0.68rem;
+  font-weight: 750;
   text-transform: uppercase;
 }
 
 .metric-card strong {
-  display: block;
   overflow: hidden;
-  color: #162641;
+  color: #1e3425;
   font-size: 1.05rem;
-  font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.report-error {
+.metric-card.muted {
+  background: #f8fafc;
+}
+
+.report-error,
+.report-warning {
   display: flex;
-  align-items: center;
   gap: 9px;
-  margin: 0 20px 14px;
-  border: 1px solid #fecaca;
-  border-radius: 12px;
-  background: #fff7f7;
-  color: #b42318;
+  align-items: center;
+  margin: 12px 20px 0;
+  border-radius: 10px;
   padding: 10px 12px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.report-error {
+  border: 1px solid #efc7c7;
+  background: #fff5f5;
+  color: #9f2f2f;
 }
 
 .report-warning {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 0 20px 14px;
-  border: 1px solid #f2d7a0;
-  border-radius: 12px;
-  background: #fff9ed;
-  color: #8a5a0a;
-  padding: 10px 12px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  border: 1px solid #ead9aa;
+  background: #fff9e9;
+  color: #775a13;
 }
 
 .table-card {
@@ -514,29 +520,29 @@ onMounted(loadReport)
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  margin: 0 20px 20px;
+  margin: 14px 20px 20px;
   overflow: hidden;
-  border: 1px solid #dfe6ef;
-  border-radius: 15px;
+  border: 1px solid #e1e8ef;
+  border-radius: 14px;
 }
 
 .table-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  border-bottom: 1px solid #edf2f7;
+  gap: 16px;
+  border-bottom: 1px solid #e8edf3;
   background: #fbfcfd;
-  padding: 10px 13px;
   color: #66728a;
-  font-size: 0.75rem;
+  padding: 10px 13px;
+  font-size: 0.74rem;
 }
 
-.table-meta div {
+.table-meta > div {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #30405b;
+  color: #293d58;
 }
 
 .table-scroll {
@@ -547,55 +553,49 @@ onMounted(loadReport)
 
 table {
   width: 100%;
-  min-width: 2380px;
+  min-width: 1520px;
   border-collapse: collapse;
-  font-size: 0.78rem;
+}
+
+th,
+td {
+  border-bottom: 1px solid #edf1f5;
+  padding: 10px 11px;
+  text-align: left;
+  vertical-align: top;
+  font-size: 0.75rem;
 }
 
 th {
   position: sticky;
-  top: 0;
   z-index: 1;
-  border-bottom: 1px solid #dfe6ef;
-  background: #f6f9fb;
-  color: #526077;
-  padding: 11px 12px;
-  text-align: left;
+  top: 0;
+  background: #f4f7f9;
+  color: #536077;
+  font-size: 0.67rem;
+  font-weight: 850;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
-  font-size: 0.65rem;
-  letter-spacing: 0.035em;
 }
 
-td {
-  border-bottom: 1px solid #edf2f7;
-  color: #344158;
-  padding: 10px 12px;
-  white-space: nowrap;
-}
-
-tbody tr:hover td {
+tbody tr:hover {
   background: #fbfdfb;
 }
 
-.sent-badge,
+.empty-state {
+  height: 150px;
+  color: #8290a3;
+  text-align: center;
+  vertical-align: middle;
+}
+
 .plantel-badge {
   display: inline-flex;
-  align-items: center;
-  gap: 5px;
   border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 0.68rem;
-  font-weight: 850;
-}
-
-.sent-badge {
-  background: #eaf8e7;
-  color: #2d6b31;
-}
-
-.plantel-badge {
-  background: #eef4fb;
-  color: #355a7d;
+  background: #edf4ec;
+  color: #37623a;
+  padding: 3px 8px;
+  font-weight: 800;
 }
 
 .mono {
@@ -603,89 +603,44 @@ tbody tr:hover td {
 }
 
 .strong {
-  color: #162641;
+  color: #253750;
   font-weight: 800;
-}
-
-.date-cell,
-.email-cell {
-  color: #5e6b80;
 }
 
 .student-cell {
-  min-width: 210px;
-  max-width: 300px;
-  white-space: normal;
-}
-
-.recipient-cell {
-  min-width: 250px;
-  max-width: 340px;
-  white-space: normal;
-}
-
-.recipient-cell span {
-  display: block;
-  color: #42536d;
-  line-height: 1.45;
-}
-
-.recipient-cell em,
-.muted-value,
-.legacy-note {
-  color: #8792a5;
-  font-style: normal;
-}
-
-.legacy-note {
-  display: block;
-  margin-top: 5px;
-  font-size: 0.65rem;
-  font-weight: 750;
-}
-
-.debt-badge {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  background: #eef7ec;
-  color: #356a31;
-  padding: 4px 8px;
-  font-size: 0.68rem;
-  font-weight: 800;
-}
-
-.debt-badge--warning {
-  background: #fff3df;
-  color: #9a5b00;
-}
-
-.empty-state {
-  height: 180px;
-  color: #8792a5;
-  text-align: center;
+  min-width: 190px;
+  color: #263a55;
   font-weight: 650;
+}
+
+.email-cell {
+  min-width: 190px;
+  word-break: break-word;
+}
+
+.date-cell {
+  min-width: 132px;
+  white-space: nowrap;
 }
 
 .pagination {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  border-top: 1px solid #edf2f7;
+  justify-content: center;
+  gap: 14px;
+  border-top: 1px solid #e6ebf0;
   background: #fbfcfd;
-  padding: 9px 12px;
-  color: #66728a;
+  padding: 9px;
+  color: #5f6d82;
   font-size: 0.75rem;
-  font-weight: 750;
 }
 
 .pagination button {
-  border: 1px solid #d9e2ec;
-  border-radius: 9px;
+  border: 1px solid #d8e0e8;
+  border-radius: 8px;
   background: #fff;
-  color: #30405b;
   padding: 6px 10px;
+  color: #31445f;
   font-weight: 750;
 }
 
@@ -694,45 +649,49 @@ tbody tr:hover td {
   opacity: 0.45;
 }
 
-@media (max-width: 1220px) {
+@media (max-width: 1180px) {
   .filters-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
   }
 
   .search-field {
     grid-column: span 2;
   }
+
+  .summary-grid {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+  }
 }
 
-@media (max-width: 820px) {
+@media (max-width: 760px) {
   .letters-report-page {
     padding: 10px;
   }
 
-  .report-header,
+  .report-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+  }
+
   .filters-grid,
   .summary-grid {
     grid-template-columns: 1fr;
   }
 
-  .report-header,
-  .header-actions,
-  .table-meta {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .header-actions,
-  .header-actions .btn {
-    width: 100%;
-  }
-
-  .summary-grid {
-    display: grid;
-  }
-
   .search-field {
     grid-column: auto;
+  }
+
+  .table-card {
+    margin: 10px;
   }
 }
 </style>

@@ -32,25 +32,38 @@ const classifyCentralDbError = (error: any): DiagnosticItem => {
   const message = normalize(error?.message || error?.statusMessage || error?.sqlMessage || error?.cause?.message)
   const combined = [message, code].filter(Boolean).join(' | ')
 
+  if (code === 'ER_NO_SUCH_TABLE' || /no_adeudo_deudor_cartas/i.test(combined)) {
+    return makeItem({
+      level: 'error',
+      title: 'Falta crear la tabla externa no_adeudo_deudor_cartas.',
+      detail: 'La base externa responde, pero no existe la tabla de control para cartas emitidas a alumnos detectados con adeudo.',
+      statusCode: 500,
+      source: 'Control externo de cartas con adeudo',
+      code: code || undefined,
+      missing: ['tabla externa no_adeudo_deudor_cartas'],
+      action: 'Ejecuta manualmente el CREATE TABLE en la base externa/control, no en la base bridge.'
+    })
+  }
+
   if (['ER_ACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR'].includes(code) || /access denied|acceso denegado/i.test(combined)) {
     return makeItem({
       level: 'error',
-      title: 'La conexión de lectura a Control Escolar fue rechazada.',
-      detail: 'Las credenciales CONTROL_ESCOLAR_MYSQL_USER / CONTROL_ESCOLAR_MYSQL_PASSWORD o sus permisos no permiten consultar la base configurada.',
+      title: 'La conexión a la base externa fue rechazada.',
+      detail: 'Las credenciales CONTROL_ESCOLAR_MYSQL_USER / CONTROL_ESCOLAR_MYSQL_PASSWORD o sus permisos no permiten acceder a la base configurada.',
       statusCode: 500,
-      source: 'Lectura de Control Escolar',
+      source: 'Control externo de cartas con adeudo',
       code: code || undefined,
-      action: 'Valida usuario, contraseña, permisos de lectura y CONTROL_ESCOLAR_MYSQL_DATABASE.'
+      action: 'Valida usuario, contraseña, permisos y CONTROL_ESCOLAR_MYSQL_DATABASE.'
     })
   }
 
   if (['ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', 'PROTOCOL_CONNECTION_LOST'].includes(code) || /connect|timeout|timed out|refused|ENOTFOUND/i.test(combined)) {
     return makeItem({
       level: 'error',
-      title: 'No se pudo conectar a Control Escolar en modo lectura.',
+      title: 'No se pudo conectar a la base externa de Control Escolar.',
       detail: 'Aurora no pudo abrir conexión con CONTROL_ESCOLAR_MYSQL_HOST / CONTROL_ESCOLAR_MYSQL_PORT.',
       statusCode: 500,
-      source: 'Lectura de Control Escolar',
+      source: 'Control externo de cartas con adeudo',
       code: code || undefined,
       action: 'Valida host, puerto, red/firewall y que MySQL acepte conexiones desde el servidor de Aurora.'
     })
@@ -58,27 +71,12 @@ const classifyCentralDbError = (error: any): DiagnosticItem => {
 
   return makeItem({
     level: 'error',
-    title: 'No se pudo validar la lectura de Control Escolar.',
+    title: 'No se pudo validar el control externo de cartas con adeudo.',
     detail: message || 'La consulta de diagnóstico a la base externa falló sin detalle específico.',
     statusCode: 500,
-    source: 'Lectura de Control Escolar',
+    source: 'Control externo de cartas con adeudo',
     code: code || undefined,
     action: 'Revisa el log del servidor para el stack completo de la conexión externa.'
-  })
-}
-
-const classifyBridgeHistoryError = (error: any): DiagnosticItem => {
-  const code = String(error?.code || error?.data?.diagnostic?.code || error?.diagnostic?.code || '').toUpperCase()
-  const message = normalize(error?.message || error?.statusMessage || error?.sqlMessage)
-  return makeItem({
-    level: 'error',
-    title: 'El bridge no pudo preparar el historial de cartas.',
-    detail: message || 'No fue posible consultar las tablas operativas de marca e historial en el plantel.',
-    statusCode: Number(error?.statusCode || error?.status || 500) || 500,
-    source: 'Historial de cartas en el bridge',
-    code: code || undefined,
-    missing: code === 'ER_NO_SUCH_TABLE' ? ['no_adeudo_deudor_cartas y no_adeudo_cartas_envios en el bridge'] : undefined,
-    action: 'Verifica el agente del plantel y ejecuta la migración normal del bridge. No se requiere DDL en Control Escolar.'
   })
 }
 
@@ -137,19 +135,6 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  try {
-    const { assertNoAdeudoBridgeTablesAvailable } = await import('../../utils/no-adeudo-history')
-    await assertNoAdeudoBridgeTablesAvailable()
-    checks.push({
-      level: 'ok',
-      title: 'Historial de cartas disponible en el bridge.',
-      detail: 'Las marcas y el detalle de cada envío se guardan en la base operativa del plantel.',
-      source: 'Historial de cartas en el bridge'
-    })
-  } catch (error: any) {
-    add(classifyBridgeHistoryError(error))
-  }
-
   const missingCentral = [
     ['CONTROL_ESCOLAR_MYSQL_HOST', config.controlEscolarMysqlHost],
     ['CONTROL_ESCOLAR_MYSQL_USER', config.controlEscolarMysqlUser],
@@ -160,28 +145,28 @@ export default defineEventHandler(async (event) => {
     add({
       level: 'warning',
       title: `Falta configuración de base externa: ${missingCentral.join(', ')}.`,
-      detail: 'El historial se seguirá guardando en el bridge, pero faltará el enriquecimiento de matrícula y la resolución de destinatarios desde Control Escolar.',
+      detail: 'La vista previa puede prepararse, pero si el alumno tiene adeudo no se podrá validar/escribir la marca externa de control al enviar.',
       statusCode: 500,
-      source: 'Lectura de Control Escolar',
+      source: 'Control externo de cartas con adeudo',
       missing: missingCentral,
       action: 'Configura las variables faltantes en el ambiente del servidor y reinicia Aurora.'
     })
   } else {
     checks.push({
       level: 'ok',
-      title: 'Variables de lectura de Control Escolar presentes.',
+      title: 'Variables de base externa presentes.',
       detail: `HOST=${redact(config.controlEscolarMysqlHost)} · USER=${redact(config.controlEscolarMysqlUser)} · DATABASE=${redact(config.controlEscolarMysqlDatabase)}`,
-      source: 'Lectura de Control Escolar'
+      source: 'Control externo de cartas con adeudo'
     })
 
     try {
       const { controlEscolarCentralQuery } = await import('../../utils/control-escolar-central')
-      await controlEscolarCentralQuery<any[]>('SELECT 1 AS ok')
+      await controlEscolarCentralQuery<any[]>('SELECT 1 FROM `no_adeudo_deudor_cartas` LIMIT 1')
       checks.push({
         level: 'ok',
-        title: 'Lectura de Control Escolar disponible.',
-        detail: 'Aurora puede consultar matrícula y destinatarios sin escribir marcas ni crear tablas en la base externa.',
-        source: 'Lectura de Control Escolar'
+        title: 'Tabla externa no_adeudo_deudor_cartas disponible.',
+        detail: 'Aurora puede validar el control externo para cartas generadas con advertencia de adeudo.',
+        source: 'Control externo de cartas con adeudo'
       })
     } catch (error: any) {
       add(classifyCentralDbError(error))
