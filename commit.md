@@ -1,1 +1,1 @@
-Completa el historial y reporte de cartas de no adeudo
+Guarda y reporta cartas de no adeudo únicamente mediante el bridge

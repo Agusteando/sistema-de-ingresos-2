@@ -5,8 +5,9 @@ import { PLANTELES_LIST } from '../../../utils/constants'
 import { normalizePlantel } from '../../utils/auth-session'
 import { fetchCentralMatriculaOverlays } from '../../utils/central-matricula-overlay'
 import { controlEscolarCentralQuery } from '../../utils/control-escolar-central'
+import { query as bridgeQuery, runWithBridgeAgentId } from '../../utils/db'
 import {
-  ensureNoAdeudoHistoryTableAvailable,
+  assertNoAdeudoBridgeTablesAvailable,
   NO_ADEUDO_HISTORY_TABLE,
   NO_ADEUDO_MARK_TABLE
 } from '../../utils/no-adeudo-history'
@@ -60,122 +61,234 @@ const recipientModeLabel = (value: unknown) => {
   return ''
 }
 
+const isMissingLegacyMarkTable = (error: any) => {
+  const code = String(error?.code || '').toUpperCase()
+  const message = String(error?.message || error?.sqlMessage || '')
+  return code === 'ER_NO_SUCH_TABLE' || (
+    /no_adeudo_deudor_cartas/i.test(message) && /doesn.?t exist|no existe/i.test(message)
+  )
+}
+
+type ReportFilters = {
+  ciclo: string
+  inicio: string
+  fin: string
+}
+
+const buildScopedWhere = (alias: string, plantel: string, filters: ReportFilters) => {
+  const prefix = alias ? `${alias}.` : ''
+  const where = [`${prefix}plantel = ?`]
+  const params: any[] = [plantel]
+
+  if (filters.ciclo) {
+    where.push(`${prefix}ciclo = ?`)
+    params.push(filters.ciclo)
+  }
+  if (filters.inicio) {
+    where.push(`DATE(${prefix}sent_at) >= ?`)
+    params.push(filters.inicio)
+  }
+  if (filters.fin) {
+    where.push(`DATE(${prefix}sent_at) <= ?`)
+    params.push(filters.fin)
+  }
+
+  return { where, params }
+}
+
+const fetchBridgeReportRows = async (plantel: string, filters: ReportFilters) => {
+  return await runWithBridgeAgentId(plantel, async () => {
+    await assertNoAdeudoBridgeTablesAvailable()
+
+    const historyFilter = buildScopedWhere('h', plantel, filters)
+    const markFilter = buildScopedWhere('m', plantel, filters)
+    const [historyRows, markRows] = await Promise.all([
+      bridgeQuery<any[]>(`
+        SELECT
+          h.id,
+          h.plantel,
+          h.matricula,
+          h.student_name AS studentName,
+          h.tutor_name AS tutorName,
+          h.nivel,
+          h.grado,
+          h.grupo,
+          h.ciclo,
+          h.folio,
+          h.recipient_emails AS recipientEmailsRaw,
+          h.recipient_mode AS recipientMode,
+          h.had_debt AS hadDebt,
+          h.debt_total AS debtTotal,
+          DATE_FORMAT(h.sent_at, '%Y-%m-%d %H:%i:%s') AS sentAt,
+          h.sent_by_name AS sentByName,
+          h.sent_by_email AS sentByEmail,
+          'captured' AS recordStatus
+        FROM \`${NO_ADEUDO_HISTORY_TABLE}\` h
+        WHERE ${historyFilter.where.join(' AND ')}
+      `, historyFilter.params),
+      bridgeQuery<any[]>(`
+        SELECT
+          NULL AS id,
+          m.plantel,
+          m.matricula,
+          '' AS studentName,
+          '' AS tutorName,
+          '' AS nivel,
+          '' AS grado,
+          '' AS grupo,
+          m.ciclo,
+          m.folio,
+          '' AS recipientEmailsRaw,
+          '' AS recipientMode,
+          NULL AS hadDebt,
+          NULL AS debtTotal,
+          DATE_FORMAT(m.sent_at, '%Y-%m-%d %H:%i:%s') AS sentAt,
+          m.sent_by_name AS sentByName,
+          m.sent_by_email AS sentByEmail,
+          'bridge_mark' AS recordStatus
+        FROM \`${NO_ADEUDO_MARK_TABLE}\` m
+        WHERE ${markFilter.where.join(' AND ')}
+      `, markFilter.params)
+    ])
+
+    const capturedFolios = new Set(historyRows.map((row) => [
+      String(row.plantel || '').trim().toUpperCase(),
+      String(row.matricula || '').trim().toUpperCase(),
+      String(row.ciclo || '').trim(),
+      String(row.folio || '').trim()
+    ].join('::')))
+
+    const unmatchedMarks = markRows.filter((row) => !capturedFolios.has([
+      String(row.plantel || '').trim().toUpperCase(),
+      String(row.matricula || '').trim().toUpperCase(),
+      String(row.ciclo || '').trim(),
+      String(row.folio || '').trim()
+    ].join('::')))
+
+    return [...historyRows, ...unmatchedMarks]
+  })
+}
+
+const fetchLegacyExternalRows = async (planteles: string[], filters: ReportFilters) => {
+  if (!planteles.length) return []
+
+  const where = [`m.plantel IN (${planteles.map(() => '?').join(', ')})`]
+  const params: any[] = [...planteles]
+  if (filters.ciclo) {
+    where.push('m.ciclo = ?')
+    params.push(filters.ciclo)
+  }
+  if (filters.inicio) {
+    where.push('DATE(m.sent_at) >= ?')
+    params.push(filters.inicio)
+  }
+  if (filters.fin) {
+    where.push('DATE(m.sent_at) <= ?')
+    params.push(filters.fin)
+  }
+
+  return await controlEscolarCentralQuery<any[]>(`
+    SELECT
+      NULL AS id,
+      m.plantel,
+      m.matricula,
+      '' AS studentName,
+      '' AS tutorName,
+      '' AS nivel,
+      '' AS grado,
+      '' AS grupo,
+      m.ciclo,
+      m.folio,
+      '' AS recipientEmailsRaw,
+      '' AS recipientMode,
+      NULL AS hadDebt,
+      NULL AS debtTotal,
+      DATE_FORMAT(m.sent_at, '%Y-%m-%d %H:%i:%s') AS sentAt,
+      m.sent_by_name AS sentByName,
+      m.sent_by_email AS sentByEmail,
+      'external_legacy' AS recordStatus
+    FROM \`${NO_ADEUDO_MARK_TABLE}\` m
+    WHERE ${where.join(' AND ')}
+  `, params)
+}
+
 export default defineEventHandler(async (event) => {
   const user = event.context.user
   if (!user?.hasFinancialAccess) {
     throw createError({ statusCode: 403, message: 'No tiene permisos para consultar este reporte.' })
   }
 
-  const query = getQuery(event)
-  const requestedPlantel = normalizePlantel(firstQueryValue(query.plantel))
+  const requestQuery = getQuery(event)
+  const requestedPlantel = normalizePlantel(firstQueryValue(requestQuery.plantel))
   if (requestedPlantel && requestedPlantel !== 'GLOBAL' && !VALID_PLANTELES.has(requestedPlantel)) {
     throw createError({ statusCode: 400, message: 'Plantel inválido.' })
   }
 
   const canFilterPlantel = Boolean(user.isSuperAdmin && user.active_plantel === 'GLOBAL')
-  const scopePlantel = canFilterPlantel
-    ? (requestedPlantel === 'GLOBAL' ? '' : requestedPlantel)
-    : normalizePlantel(user.active_plantel)
+  const authorizedPlanteles: string[] = Array.from(new Set<string>(
+    (user.financialPlantelesList || user.plantelesList || [])
+      .map(normalizePlantel)
+      .filter((plantel: string) => VALID_PLANTELES.has(plantel))
+  ))
+  const activePlantel = normalizePlantel(user.active_plantel)
+  const scopePlanteles: string[] = canFilterPlantel
+    ? (requestedPlantel && requestedPlantel !== 'GLOBAL' ? [requestedPlantel] : authorizedPlanteles)
+    : [activePlantel].filter((plantel) => VALID_PLANTELES.has(plantel))
 
-  const cicloInput = firstQueryValue(query.ciclo)
-  const ciclo = cicloInput ? normalizeCicloKey(cicloInput) : ''
-  const inicio = normalizeDate(query.inicio, 'La fecha inicial')
-  const fin = normalizeDate(query.fin, 'La fecha final')
-  const search = firstQueryValue(query.search).slice(0, 120).toLowerCase()
+  if (!scopePlanteles.length) {
+    throw createError({ statusCode: 403, message: 'La sesión no tiene planteles financieros disponibles para este reporte.' })
+  }
+  if (scopePlanteles.some((plantel) => !authorizedPlanteles.includes(plantel))) {
+    throw createError({ statusCode: 403, message: 'No tiene permisos para consultar el plantel solicitado.' })
+  }
 
-  if (inicio && fin && inicio > fin) {
+  const cicloInput = firstQueryValue(requestQuery.ciclo)
+  const filters: ReportFilters = {
+    ciclo: cicloInput ? normalizeCicloKey(cicloInput) : '',
+    inicio: normalizeDate(requestQuery.inicio, 'La fecha inicial'),
+    fin: normalizeDate(requestQuery.fin, 'La fecha final')
+  }
+  const search = firstQueryValue(requestQuery.search).slice(0, 120).toLowerCase()
+
+  if (filters.inicio && filters.fin && filters.inicio > filters.fin) {
     throw createError({ statusCode: 400, message: 'La fecha inicial no puede ser posterior a la fecha final.' })
   }
 
-  await ensureNoAdeudoHistoryTableAvailable()
+  const bridgeGroups = await Promise.all(scopePlanteles.map((plantel) => fetchBridgeReportRows(plantel, filters)))
+  const bridgeRows = bridgeGroups.flat()
+  const warnings: string[] = []
+  let legacyRows: any[] = []
 
-  const buildWhere = (alias: string) => {
-    const where: string[] = []
-    const params: any[] = []
-    const prefix = alias ? `${alias}.` : ''
-
-    if (scopePlantel) {
-      where.push(`${prefix}plantel = ?`)
-      params.push(scopePlantel)
+  try {
+    legacyRows = await fetchLegacyExternalRows(scopePlanteles, filters)
+  } catch (error: any) {
+    if (!isMissingLegacyMarkTable(error)) {
+      console.error('[No Adeudo Report] No se pudo consultar la marca histórica externa:', error?.message || error)
+      warnings.push('No se pudo consultar el histórico anterior almacenado en Control Escolar. Los envíos nuevos del bridge sí están incluidos.')
     }
-    if (ciclo) {
-      where.push(`${prefix}ciclo = ?`)
-      params.push(ciclo)
-    }
-    if (inicio) {
-      where.push(`DATE(${prefix}sent_at) >= ?`)
-      params.push(inicio)
-    }
-    if (fin) {
-      where.push(`DATE(${prefix}sent_at) <= ?`)
-      params.push(fin)
-    }
-
-    return { where, params }
   }
 
-  const historyFilter = buildWhere('h')
-  const legacyFilter = buildWhere('m')
+  const bridgeKeys = new Set(bridgeRows.map((row) => [
+    String(row.plantel || '').trim().toUpperCase(),
+    String(row.matricula || '').trim().toUpperCase(),
+    String(row.ciclo || '').trim(),
+    String(row.folio || '').trim()
+  ].join('::')))
+  const uniqueLegacyRows = legacyRows.filter((row) => !bridgeKeys.has([
+    String(row.plantel || '').trim().toUpperCase(),
+    String(row.matricula || '').trim().toUpperCase(),
+    String(row.ciclo || '').trim(),
+    String(row.folio || '').trim()
+  ].join('::')))
 
-  const [historyRows, legacyRows] = await Promise.all([
-    controlEscolarCentralQuery<any[]>(`
-      SELECT
-        h.id,
-        h.plantel,
-        h.matricula,
-        h.student_name AS studentName,
-        h.tutor_name AS tutorName,
-        h.nivel,
-        h.grado,
-        h.grupo,
-        h.ciclo,
-        h.folio,
-        h.recipient_emails AS recipientEmailsRaw,
-        h.recipient_mode AS recipientMode,
-        h.had_debt AS hadDebt,
-        h.debt_total AS debtTotal,
-        DATE_FORMAT(h.sent_at, '%Y-%m-%d %H:%i:%s') AS sentAt,
-        h.sent_by_name AS sentByName,
-        h.sent_by_email AS sentByEmail,
-        'captured' AS recordStatus
-      FROM \`${NO_ADEUDO_HISTORY_TABLE}\` h
-      ${historyFilter.where.length ? `WHERE ${historyFilter.where.join(' AND ')}` : ''}
-    `, historyFilter.params),
-    controlEscolarCentralQuery<any[]>(`
-      SELECT
-        NULL AS id,
-        m.plantel,
-        m.matricula,
-        '' AS studentName,
-        '' AS tutorName,
-        '' AS nivel,
-        '' AS grado,
-        '' AS grupo,
-        m.ciclo,
-        m.folio,
-        '' AS recipientEmailsRaw,
-        '' AS recipientMode,
-        NULL AS hadDebt,
-        NULL AS debtTotal,
-        DATE_FORMAT(m.sent_at, '%Y-%m-%d %H:%i:%s') AS sentAt,
-        m.sent_by_name AS sentByName,
-        m.sent_by_email AS sentByEmail,
-        'legacy' AS recordStatus
-      FROM \`${NO_ADEUDO_MARK_TABLE}\` m
-      ${legacyFilter.where.length ? `WHERE ${legacyFilter.where.join(' AND ')} AND` : 'WHERE'}
-        NOT EXISTS (
-          SELECT 1
-          FROM \`${NO_ADEUDO_HISTORY_TABLE}\` h
-          WHERE h.plantel = m.plantel
-            AND h.matricula = m.matricula
-            AND h.ciclo = m.ciclo
-            AND h.folio = m.folio
-        )
-    `, legacyFilter.params)
-  ])
-
-  const sourceRows = [...historyRows, ...legacyRows]
-  const centralOverlays = await fetchCentralMatriculaOverlays(sourceRows.map((row) => String(row.matricula || '')))
+  const sourceRows = [...bridgeRows, ...uniqueLegacyRows]
+  let centralOverlays = new Map<string, any>()
+  try {
+    centralOverlays = await fetchCentralMatriculaOverlays(sourceRows.map((row) => String(row.matricula || '')))
+  } catch (error: any) {
+    console.error('[No Adeudo Report] No se pudo enriquecer el reporte con matrícula central:', error?.message || error)
+    warnings.push('No se pudo enriquecer el reporte con datos actuales de matrícula. Los registros nuevos conservan la información capturada al enviarse.')
+  }
 
   let enrichedRows = sourceRows.map((row) => {
     const matriculaKey = String(row.matricula || '').trim().toUpperCase()
@@ -193,12 +306,12 @@ export default defineEventHandler(async (event) => {
     const gradoRaw = String(row.grado || centralStudent.grado || '').trim()
     const nivelRaw = String(row.nivel || centralStudent.nivel || '').trim()
     const grupo = String(row.grupo || centralStudent.grupo || '').trim()
-    const recordStatus = row.recordStatus === 'captured' ? 'captured' : 'legacy'
+    const recordStatus = row.recordStatus === 'captured' ? 'captured' : String(row.recordStatus || 'external_legacy')
 
     return {
       id: row.id || null,
       plantel: String(row.plantel || '').trim().toUpperCase(),
-      matricula: String(row.matricula || '').trim().toUpperCase(),
+      matricula: matriculaKey,
       studentName,
       tutorName,
       nivel: displayNivel(nivelRaw),
@@ -246,7 +359,7 @@ export default defineEventHandler(async (event) => {
   const students = new Set<string>()
   const senders = new Set<string>()
   const recipients = new Set<string>()
-  const planteles = new Set<string>()
+  const reportPlanteles = new Set<string>()
   let incomplete = 0
 
   for (const row of enrichedRows) {
@@ -254,7 +367,7 @@ export default defineEventHandler(async (event) => {
     const sender = String(row.sentByEmail || row.sentByName || '').trim().toLowerCase()
     if (sender) senders.add(sender)
     row.recipientEmails.forEach((email) => recipients.add(email))
-    if (row.plantel) planteles.add(row.plantel)
+    if (row.plantel) reportPlanteles.add(row.plantel)
     if (!row.recipientDataExact) incomplete += 1
   }
 
@@ -265,12 +378,13 @@ export default defineEventHandler(async (event) => {
       students: students.size,
       senders: senders.size,
       recipients: recipients.size,
-      planteles: planteles.size,
+      planteles: reportPlanteles.size,
       incomplete,
       lastSentAt: enrichedRows[0]?.sentAt || ''
     },
+    warnings,
     scope: {
-      plantel: scopePlantel || 'GLOBAL',
+      plantel: scopePlanteles.length === 1 ? scopePlanteles[0] : 'GLOBAL',
       canFilterPlantel
     }
   }

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import dayjs from 'dayjs'
-import { query } from './db'
+import { executeStatementTransaction, query } from './db'
 import { fetchCentralMatriculaOverlay } from './central-matricula-overlay'
 import { resolveFinancialFamilyContact } from '../../shared/utils/familyContact'
 import { resolveProjectedAmount } from './monto-final'
@@ -8,8 +8,8 @@ import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import { escapeHtml } from './cobranzaEmail'
 import { generateNoAdeudoCartaPdf } from './noAdeudoCartaPdf'
 import { sendEmail, type MailAttachment } from './mailer'
-import { controlEscolarCentralQuery, withControlEscolarCentralConnection } from './control-escolar-central'
-import { ensureNoAdeudoHistoryTableAvailable, NO_ADEUDO_HISTORY_TABLE, NO_ADEUDO_MARK_TABLE } from './no-adeudo-history'
+import { controlEscolarCentralQuery } from './control-escolar-central'
+import { assertNoAdeudoBridgeTablesAvailable, isMissingNoAdeudoBridgeTableError, NO_ADEUDO_HISTORY_TABLE, NO_ADEUDO_MARK_TABLE } from './no-adeudo-history'
 import { getNoAdeudoControlUserForPlantel } from './external-users'
 import { isDepuradoPayment } from './payment-classification'
 
@@ -131,7 +131,7 @@ export const diagnoseNoAdeudoError = (error: any, source = 'Carta de No Adeudo')
   if (missingEnv.length) {
     return {
       title: `Falta configurar ${missingEnv.join(', ')}.`,
-      detail: 'La carta necesita consultar la base externa de Control Escolar para registrar cada envío de Carta de No Adeudo.',
+      detail: 'La carta consulta la base externa de Control Escolar únicamente para enriquecer la matrícula y resolver destinatarios. El historial de envío se guarda en el bridge del plantel.',
       statusCode: 500,
       source,
       code: code || undefined,
@@ -140,15 +140,15 @@ export const diagnoseNoAdeudoError = (error: any, source = 'Carta de No Adeudo')
     }
   }
 
-  if (isMissingNoAdeudoDeudorTableError(error) || /NO_ADEUDO_DEUDOR_CARTAS/i.test(combined)) {
+  if (isMissingNoAdeudoBridgeTableError(error)) {
     return {
-      title: 'Falta crear la tabla externa no_adeudo_deudor_cartas.',
-      detail: 'Aurora necesita guardar una marca externa para cada Carta de No Adeudo enviada.',
+      title: 'El bridge del plantel no tiene preparado el historial de cartas.',
+      detail: 'Las tablas de marca e historial de Carta de No Adeudo deben existir en la base operativa del plantel, no en la base externa de Control Escolar.',
       statusCode: 500,
       source,
       code: code || undefined,
-      missing: ['tabla externa no_adeudo_deudor_cartas'],
-      action: 'Ejecuta manualmente el CREATE TABLE en la base externa/control, no en la base bridge.'
+      missing: ['no_adeudo_deudor_cartas y no_adeudo_cartas_envios en el bridge'],
+      action: 'Ejecuta la migración normal del bridge para el plantel y vuelve a intentar.'
     }
   }
 
@@ -368,6 +368,17 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
   return { total, hasDebt: total > 0.01, concepts }
 }
 
+const mapNoAdeudoMark = (row: any): NoAdeudoDeudorCartaMark | null => {
+  if (!row) return null
+  return {
+    sent: true,
+    folio: normalizeText(row.folio),
+    sentAt: row.sent_at ? String(row.sent_at) : '',
+    sentByName: normalizeText(row.sent_by_name),
+    sentByEmail: normalizeEmail(row.sent_by_email)
+  }
+}
+
 const getNoAdeudoDeudorCartaMark = async (plantelValue: unknown, matriculaValue: unknown, cicloValue: unknown): Promise<NoAdeudoDeudorCartaMark | null> => {
   const plantel = normalizeText(plantelValue).toUpperCase()
   const matricula = normalizeMatricula(matriculaValue)
@@ -375,38 +386,39 @@ const getNoAdeudoDeudorCartaMark = async (plantelValue: unknown, matriculaValue:
   if (!plantel || !matricula || !ciclo) return null
 
   try {
+    const rows = await query<any[]>(`
+      SELECT folio, sent_at, sent_by_name, sent_by_email
+      FROM ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)}
+      WHERE plantel = ? AND matricula = ? AND ciclo = ?
+      LIMIT 1
+    `, [plantel, matricula, ciclo])
+    const bridgeMark = mapNoAdeudoMark(rows[0])
+    if (bridgeMark) return bridgeMark
+  } catch (error: any) {
+    console.error('[No Adeudo] No se pudo consultar la marca del bridge:', error?.message || error)
+  }
+
+  // Compatibilidad histórica de solo lectura. Los envíos nuevos nunca escriben
+  // en Control Escolar; esta consulta únicamente conserva visibles las marcas
+  // que ya existían antes de mover el historial al bridge.
+  try {
     const rows = await controlEscolarCentralQuery<any[]>(`
       SELECT folio, sent_at, sent_by_name, sent_by_email
       FROM ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)}
       WHERE plantel = ? AND matricula = ? AND ciclo = ?
       LIMIT 1
     `, [plantel, matricula, ciclo])
-    const row = rows[0]
-    if (!row) return null
-    return {
-      sent: true,
-      folio: normalizeText(row.folio),
-      sentAt: row.sent_at ? String(row.sent_at) : '',
-      sentByName: normalizeText(row.sent_by_name),
-      sentByEmail: normalizeEmail(row.sent_by_email)
-    }
+    return mapNoAdeudoMark(rows[0])
   } catch (error: any) {
-    if (isMissingNoAdeudoDeudorTableError(error)) return null
-    console.error('[No Adeudo] No se pudo consultar la marca externa de carta enviada:', error?.message || error)
+    if (!isMissingNoAdeudoDeudorTableError(error)) {
+      console.error('[No Adeudo] No se pudo consultar la marca histórica externa:', error?.message || error)
+    }
     return null
   }
 }
 
 const assertNoAdeudoDeudorCartaTableAvailable = async () => {
-  try {
-    await controlEscolarCentralQuery<any[]>(`SELECT 1 FROM ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)} LIMIT 1`)
-    await ensureNoAdeudoHistoryTableAvailable()
-  } catch (error: any) {
-    if (isMissingNoAdeudoDeudorTableError(error)) {
-      throw createError({ statusCode: 500, message: 'Falta crear la tabla externa no_adeudo_deudor_cartas antes de enviar cartas de no adeudo.' })
-    }
-    throw error
-  }
+  await assertNoAdeudoBridgeTablesAvailable()
 }
 
 export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: unknown, cicloValue: unknown): Promise<NoAdeudoStudentContext> => {
@@ -588,7 +600,7 @@ export const buildNoAdeudoPreviewPayload = async (event: any, matriculas: unknow
     try {
       await assertNoAdeudoDeudorCartaTableAvailable()
     } catch (error) {
-      diagnostics.push(diagnoseNoAdeudoError(error, 'Control externo de cartas enviadas'))
+      diagnostics.push(diagnoseNoAdeudoError(error, 'Historial de cartas en el bridge'))
     }
   }
 
@@ -665,8 +677,6 @@ export const persistNoAdeudoDeudorCartaMark = async ({
   recipients: string[]
   recipientMode: string
 }) => {
-  await ensureNoAdeudoHistoryTableAvailable()
-
   const studentName = normalizeText(
     context.student.nombreCompleto ||
     context.student.nombreCompletoAlumno ||
@@ -679,13 +689,13 @@ export const persistNoAdeudoDeudorCartaMark = async ({
   const plantel = normalizeText(context.student.plantel).toUpperCase()
   const matricula = normalizeMatricula(context.student.matricula)
   const cicloKey = normalizeCicloKey(ciclo)
+  const normalizedFolio = normalizeText(folio)
   const senderName = normalizeText(generatedBy)
   const senderEmail = normalizeEmail(generatedByEmail)
 
-  await withControlEscolarCentralConnection(async (connection) => {
-    await connection.beginTransaction()
-    try {
-      await connection.query(`
+  await executeStatementTransaction([
+    {
+      sql: `
         INSERT INTO ${quoteIdentifier(NO_ADEUDO_HISTORY_TABLE)} (
           plantel, matricula, student_name, tutor_name, nivel, grado, grupo,
           ciclo, folio, recipient_emails, recipient_mode, had_debt, debt_total,
@@ -704,7 +714,8 @@ export const persistNoAdeudoDeudorCartaMark = async ({
           sent_at = VALUES(sent_at),
           sent_by_name = VALUES(sent_by_name),
           sent_by_email = VALUES(sent_by_email)
-      `, [
+      `,
+      params: [
         plantel,
         matricula,
         studentName,
@@ -713,7 +724,7 @@ export const persistNoAdeudoDeudorCartaMark = async ({
         normalizeText(context.student.grado || context.student.gradoBase),
         normalizeText(context.student.grupo),
         cicloKey,
-        normalizeText(folio),
+        normalizedFolio,
         JSON.stringify(normalizedRecipients),
         normalizeText(recipientMode),
         context.debt.hasDebt ? 1 : 0,
@@ -721,9 +732,10 @@ export const persistNoAdeudoDeudorCartaMark = async ({
         sentAt,
         senderName,
         senderEmail,
-      ])
-
-      await connection.query(`
+      ]
+    },
+    {
+      sql: `
         INSERT INTO ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)} (
           plantel, matricula, ciclo, folio, sent_at, sent_by_name, sent_by_email
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -732,22 +744,18 @@ export const persistNoAdeudoDeudorCartaMark = async ({
           sent_at = VALUES(sent_at),
           sent_by_name = VALUES(sent_by_name),
           sent_by_email = VALUES(sent_by_email)
-      `, [
+      `,
+      params: [
         plantel,
         matricula,
         cicloKey,
-        normalizeText(folio),
+        normalizedFolio,
         sentAt,
         senderName,
         senderEmail,
-      ])
-
-      await connection.commit()
-    } catch (error) {
-      await connection.rollback()
-      throw error
+      ]
     }
-  })
+  ])
 }
 
 export const sendNoAdeudoForContext = async (event: any, context: NoAdeudoStudentContext, options: { ciclo: string; mode?: string; force?: boolean; blockOnDebt?: boolean }) => {

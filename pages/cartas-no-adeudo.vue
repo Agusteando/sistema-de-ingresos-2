@@ -90,6 +90,11 @@
         <span>{{ errorMessage }}</span>
       </aside>
 
+      <aside v-for="warning in warningMessages" :key="warning" class="report-warning" role="status">
+        <LucideCircleAlert :size="18" />
+        <span>{{ warning }}</span>
+      </aside>
+
       <div class="table-card">
         <div class="table-meta">
           <div>
@@ -209,6 +214,7 @@ const summary = ref({ total: 0, students: 0, senders: 0, recipients: 0, plantele
 const reportScope = ref({ plantel: activePlantel.value || '', canFilterPlantel: false })
 const loading = ref(false)
 const errorMessage = ref('')
+const warningMessages = ref([])
 const page = ref(1)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(rows.value.length / PAGE_SIZE)))
@@ -254,9 +260,11 @@ const loadReport = async () => {
     rows.value = Array.isArray(response?.rows) ? response.rows : []
     summary.value = response?.summary || { total: 0, students: 0, senders: 0, recipients: 0, planteles: 0, incomplete: 0, lastSentAt: '' }
     reportScope.value = response?.scope || reportScope.value
+    warningMessages.value = Array.isArray(response?.warnings) ? response.warnings : []
   } catch (error) {
     rows.value = []
     summary.value = { total: 0, students: 0, senders: 0, recipients: 0, planteles: 0, incomplete: 0, lastSentAt: '' }
+    warningMessages.value = []
     errorMessage.value = error?.data?.message || error?.message || 'No se pudo cargar el reporte de cartas enviadas.'
   } finally {
     loading.value = false
@@ -482,6 +490,20 @@ onMounted(loadReport)
   border-radius: 12px;
   background: #fff7f7;
   color: #b42318;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.report-warning {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 20px 14px;
+  border: 1px solid #f2d7a0;
+  border-radius: 12px;
+  background: #fff9ed;
+  color: #8a5a0a;
   padding: 10px 12px;
   font-size: 0.8rem;
   font-weight: 700;
