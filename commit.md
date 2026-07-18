@@ -1,1 +1,1 @@
-Agrega el grado al reporte de cartas de no adeudo
+Completa el historial y reporte de cartas de no adeudo

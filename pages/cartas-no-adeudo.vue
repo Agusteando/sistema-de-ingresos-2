@@ -5,7 +5,7 @@
         <div class="report-heading">
           <span class="section-kicker">Control de envíos</span>
           <h2>Cartas de no adeudo enviadas</h2>
-          <p>Consulta y descarga las marcas registradas después de cada envío exitoso.</p>
+          <p>Consulta y descarga el historial completo disponible de cada envío exitoso.</p>
         </div>
 
         <div class="header-actions">
@@ -25,7 +25,7 @@
           <span>Buscar</span>
           <div class="input-with-icon">
             <LucideSearch :size="16" />
-            <input v-model.trim="filters.search" type="search" placeholder="Matrícula, folio o responsable">
+            <input v-model.trim="filters.search" type="search" placeholder="Alumno, matrícula, destinatario, folio o responsable">
           </div>
         </label>
 
@@ -72,8 +72,12 @@
           <strong>{{ summary.students }}</strong>
         </article>
         <article class="metric-card">
-          <span>Responsables</span>
-          <strong>{{ summary.senders }}</strong>
+          <span>Destinatarios únicos</span>
+          <strong>{{ summary.recipients }}</strong>
+        </article>
+        <article class="metric-card warning" :title="summary.incomplete ? 'Estos envíos son anteriores al historial detallado y no conservan el correo destino exacto.' : ''">
+          <span>Registros anteriores incompletos</span>
+          <strong>{{ summary.incomplete }}</strong>
         </article>
         <article class="metric-card muted">
           <span>Último envío</span>
@@ -103,27 +107,54 @@
                 <th>Fecha de envío</th>
                 <th>Plantel</th>
                 <th>Matrícula</th>
+                <th>Nombre del alumno</th>
+                <th>Nivel</th>
                 <th>Grado</th>
+                <th>Grupo</th>
+                <th>Padre / tutor</th>
                 <th>Ciclo</th>
+                <th>Correo(s) destino</th>
+                <th>Tipo de destinatario</th>
+                <th>Condición al enviar</th>
                 <th>Folio</th>
-                <th>Responsable</th>
-                <th>Correo</th>
+                <th>Enviado por</th>
+                <th>Correo del responsable</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="9" class="empty-state">Cargando reporte...</td>
+                <td colspan="16" class="empty-state">Cargando reporte...</td>
               </tr>
               <tr v-else-if="!rows.length">
-                <td colspan="9" class="empty-state">No hay cartas registradas con los filtros seleccionados.</td>
+                <td colspan="16" class="empty-state">No hay cartas registradas con los filtros seleccionados.</td>
               </tr>
-              <tr v-for="row in paginatedRows" v-else :key="`${row.plantel}-${row.matricula}-${row.ciclo}`">
-                <td><span class="sent-badge"><LucideCheck :size="13" /> Enviada</span></td>
+              <tr v-for="row in paginatedRows" v-else :key="row.id || `${row.plantel}-${row.matricula}-${row.ciclo}-${row.folio}`">
+                <td>
+                  <span class="sent-badge"><LucideCheck :size="13" /> Enviada</span>
+                  <small v-if="!row.recipientDataExact" class="legacy-note">Registro anterior</small>
+                </td>
                 <td class="date-cell">{{ formatDate(row.sentAt) }}</td>
                 <td><span class="plantel-badge">{{ row.plantel || '—' }}</span></td>
                 <td class="mono strong">{{ row.matricula || '—' }}</td>
+                <td class="student-cell">{{ row.studentName || 'Sin nombre disponible' }}</td>
+                <td>{{ row.nivel || '—' }}</td>
                 <td>{{ row.grado || '—' }}</td>
+                <td>{{ row.grupo || '—' }}</td>
+                <td class="student-cell">{{ row.tutorName || '—' }}</td>
                 <td>{{ row.ciclo || '—' }}</td>
+                <td class="recipient-cell">
+                  <template v-if="row.recipientEmails?.length">
+                    <span v-for="email in row.recipientEmails" :key="email">{{ email }}</span>
+                  </template>
+                  <em v-else-if="!row.recipientDataExact">No registrado en el envío anterior</em>
+                  <em v-else>Sin correo registrado</em>
+                </td>
+                <td>{{ row.recipientModeLabel || (row.recipientDataExact ? '—' : 'No registrado') }}</td>
+                <td>
+                  <span v-if="row.hadDebt === true" class="debt-badge debt-badge--warning">Con adeudo · {{ formatMoney(row.debtTotal) }}</span>
+                  <span v-else-if="row.hadDebt === false" class="debt-badge">Sin adeudo</span>
+                  <span v-else class="muted-value">No registrado</span>
+                </td>
                 <td class="mono">{{ row.folio || '—' }}</td>
                 <td>{{ row.sentByName || 'Sin nombre registrado' }}</td>
                 <td class="email-cell">{{ row.sentByEmail || '—' }}</td>
@@ -174,7 +205,7 @@ const filters = ref({
   plantel: ''
 })
 const rows = ref([])
-const summary = ref({ total: 0, students: 0, senders: 0, planteles: 0, lastSentAt: '' })
+const summary = ref({ total: 0, students: 0, senders: 0, recipients: 0, planteles: 0, incomplete: 0, lastSentAt: '' })
 const reportScope = ref({ plantel: activePlantel.value || '', canFilterPlantel: false })
 const loading = ref(false)
 const errorMessage = ref('')
@@ -202,6 +233,11 @@ const formatDate = (value) => {
   return parsed.isValid() ? parsed.format('DD/MM/YYYY HH:mm') : String(value)
 }
 
+const formatMoney = (value) => Number(value || 0).toLocaleString('es-MX', {
+  style: 'currency',
+  currency: 'MXN'
+})
+
 const loadReport = async () => {
   loading.value = true
   errorMessage.value = ''
@@ -216,11 +252,11 @@ const loadReport = async () => {
       }
     })
     rows.value = Array.isArray(response?.rows) ? response.rows : []
-    summary.value = response?.summary || { total: 0, students: 0, senders: 0, planteles: 0, lastSentAt: '' }
+    summary.value = response?.summary || { total: 0, students: 0, senders: 0, recipients: 0, planteles: 0, incomplete: 0, lastSentAt: '' }
     reportScope.value = response?.scope || reportScope.value
   } catch (error) {
     rows.value = []
-    summary.value = { total: 0, students: 0, senders: 0, planteles: 0, lastSentAt: '' }
+    summary.value = { total: 0, students: 0, senders: 0, recipients: 0, planteles: 0, incomplete: 0, lastSentAt: '' }
     errorMessage.value = error?.data?.message || error?.message || 'No se pudo cargar el reporte de cartas enviadas.'
   } finally {
     loading.value = false
@@ -233,28 +269,46 @@ const downloadReport = () => {
     'Fecha de envío': formatDate(row.sentAt),
     Plantel: row.plantel || '',
     Matrícula: row.matricula || '',
+    'Nombre del alumno': row.studentName || '',
+    Nivel: row.nivel || '',
     Grado: row.grado || '',
+    Grupo: row.grupo || '',
+    'Padre / tutor': row.tutorName || '',
     Ciclo: row.ciclo || '',
+    'Correo(s) destino': row.recipientEmails?.join('; ') || (row.recipientDataExact ? '' : 'No registrado en el envío anterior'),
+    'Tipo de destinatario': row.recipientModeLabel || (row.recipientDataExact ? '' : 'No registrado'),
+    'Condición al enviar': row.hadDebt === true ? 'Con adeudo' : (row.hadDebt === false ? 'Sin adeudo' : 'No registrado'),
+    'Adeudo al enviar': row.debtTotal === null || row.debtTotal === undefined ? '' : formatMoney(row.debtTotal),
     Folio: row.folio || '',
-    Responsable: row.sentByName || '',
-    Correo: row.sentByEmail || ''
+    'Enviado por': row.sentByName || '',
+    'Correo del responsable': row.sentByEmail || '',
+    'Integridad del registro': row.recipientDataExact ? 'Completo' : 'Registro anterior incompleto'
   }))
   const dateSuffix = dayjs().format('YYYY-MM-DD')
   const scopeSuffix = reportScope.value.plantel === 'GLOBAL' ? 'todos-planteles' : `plantel-${reportScope.value.plantel || 'sin-plantel'}`
   exportToExcel(`cartas-no-adeudo-${scopeSuffix}-${dateSuffix}.xls`, exportRows, {
     title: 'Cartas de no adeudo enviadas',
-    subtitle: `${scopeLabel.value} · ${rows.value.length} registros`,
+    subtitle: `${scopeLabel.value} · ${rows.value.length} envíos`,
     sheetName: 'Cartas enviadas',
     columns: [
       { key: 'Estado', label: 'Estado' },
       { key: 'Fecha de envío', label: 'Fecha de envío' },
       { key: 'Plantel', label: 'Plantel' },
       { key: 'Matrícula', label: 'Matrícula' },
+      { key: 'Nombre del alumno', label: 'Nombre del alumno' },
+      { key: 'Nivel', label: 'Nivel' },
       { key: 'Grado', label: 'Grado' },
+      { key: 'Grupo', label: 'Grupo' },
+      { key: 'Padre / tutor', label: 'Padre / tutor' },
       { key: 'Ciclo', label: 'Ciclo' },
+      { key: 'Correo(s) destino', label: 'Correo(s) destino' },
+      { key: 'Tipo de destinatario', label: 'Tipo de destinatario' },
+      { key: 'Condición al enviar', label: 'Condición al enviar' },
+      { key: 'Adeudo al enviar', label: 'Adeudo al enviar' },
       { key: 'Folio', label: 'Folio' },
-      { key: 'Responsable', label: 'Responsable' },
-      { key: 'Correo', label: 'Correo' }
+      { key: 'Enviado por', label: 'Enviado por' },
+      { key: 'Correo del responsable', label: 'Correo del responsable' },
+      { key: 'Integridad del registro', label: 'Integridad del registro' }
     ]
   })
 }
@@ -379,7 +433,7 @@ onMounted(loadReport)
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   padding: 14px 20px;
 }
@@ -394,6 +448,11 @@ onMounted(loadReport)
 
 .metric-card.muted {
   background: linear-gradient(135deg, #ffffff, #f7fbff);
+}
+
+.metric-card.warning {
+  border-color: #f2d7a0;
+  background: linear-gradient(135deg, #ffffff, #fff9ed);
 }
 
 .metric-card span {
@@ -466,6 +525,7 @@ onMounted(loadReport)
 
 table {
   width: 100%;
+  min-width: 2380px;
   border-collapse: collapse;
   font-size: 0.78rem;
 }
@@ -528,6 +588,54 @@ tbody tr:hover td {
 .date-cell,
 .email-cell {
   color: #5e6b80;
+}
+
+.student-cell {
+  min-width: 210px;
+  max-width: 300px;
+  white-space: normal;
+}
+
+.recipient-cell {
+  min-width: 250px;
+  max-width: 340px;
+  white-space: normal;
+}
+
+.recipient-cell span {
+  display: block;
+  color: #42536d;
+  line-height: 1.45;
+}
+
+.recipient-cell em,
+.muted-value,
+.legacy-note {
+  color: #8792a5;
+  font-style: normal;
+}
+
+.legacy-note {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.65rem;
+  font-weight: 750;
+}
+
+.debt-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #eef7ec;
+  color: #356a31;
+  padding: 4px 8px;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.debt-badge--warning {
+  background: #fff3df;
+  color: #9a5b00;
 }
 
 .empty-state {
