@@ -130,7 +130,7 @@ export const diagnoseNoAdeudoError = (error: any, source = 'Carta de No Adeudo')
   if (missingEnv.length) {
     return {
       title: `Falta configurar ${missingEnv.join(', ')}.`,
-      detail: 'La carta necesita consultar la base externa de Control Escolar para validar y registrar el control de cartas emitidas con advertencia de adeudo.',
+      detail: 'La carta necesita consultar la base externa de Control Escolar para registrar cada envío de Carta de No Adeudo.',
       statusCode: 500,
       source,
       code: code || undefined,
@@ -142,7 +142,7 @@ export const diagnoseNoAdeudoError = (error: any, source = 'Carta de No Adeudo')
   if (isMissingNoAdeudoDeudorTableError(error) || /NO_ADEUDO_DEUDOR_CARTAS/i.test(combined)) {
     return {
       title: 'Falta crear la tabla externa no_adeudo_deudor_cartas.',
-      detail: 'Aurora detectó adeudo y necesita guardar una marca externa antes de permitir el envío de la carta generada de todas maneras.',
+      detail: 'Aurora necesita guardar una marca externa para cada Carta de No Adeudo enviada.',
       statusCode: 500,
       source,
       code: code || undefined,
@@ -391,7 +391,7 @@ const getNoAdeudoDeudorCartaMark = async (plantelValue: unknown, matriculaValue:
     }
   } catch (error: any) {
     if (isMissingNoAdeudoDeudorTableError(error)) return null
-    console.error('[No Adeudo] No se pudo consultar la marca externa de carta con adeudo:', error?.message || error)
+    console.error('[No Adeudo] No se pudo consultar la marca externa de carta enviada:', error?.message || error)
     return null
   }
 }
@@ -401,7 +401,7 @@ const assertNoAdeudoDeudorCartaTableAvailable = async () => {
     await controlEscolarCentralQuery<any[]>(`SELECT 1 FROM ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)} LIMIT 1`)
   } catch (error: any) {
     if (isMissingNoAdeudoDeudorTableError(error)) {
-      throw createError({ statusCode: 500, message: 'Falta crear la tabla externa no_adeudo_deudor_cartas antes de enviar cartas de no adeudo a alumnos detectados con adeudo.' })
+      throw createError({ statusCode: 500, message: 'Falta crear la tabla externa no_adeudo_deudor_cartas antes de enviar cartas de no adeudo.' })
     }
     throw error
   }
@@ -582,11 +582,11 @@ export const buildNoAdeudoPreviewPayload = async (event: any, matriculas: unknow
   }
 
   const diagnostics: NoAdeudoDiagnostic[] = []
-  if (contexts.some((item) => item.debt.hasDebt)) {
+  if (contexts.length) {
     try {
       await assertNoAdeudoDeudorCartaTableAvailable()
     } catch (error) {
-      diagnostics.push(diagnoseNoAdeudoError(error, 'Control externo de cartas con adeudo'))
+      diagnostics.push(diagnoseNoAdeudoError(error, 'Control externo de cartas enviadas'))
     }
   }
 
@@ -690,9 +690,7 @@ export const sendNoAdeudoForContext = async (event: any, context: NoAdeudoStuden
   if (!recipients.length) {
     return { matricula: context.student.matricula, success: false, message: 'No hay destinatarios configurados para esta carta.' }
   }
-  if (context.debt.hasDebt) {
-    await assertNoAdeudoDeudorCartaTableAvailable()
-  }
+  await assertNoAdeudoDeudorCartaTableAvailable()
 
   const user = event.context.user || {}
   const issuedAt = new Date()
@@ -720,16 +718,14 @@ export const sendNoAdeudoForContext = async (event: any, context: NoAdeudoStuden
   }]
 
   await sendEmail(recipients.join(', '), email.subject, email.html, generatedByEmail, attachments, email.text)
-  if (context.debt.hasDebt) {
-    await persistNoAdeudoDeudorCartaMark({
-      context,
-      ciclo,
-      folio: tokenInfo.verificationHash.slice(0, 18).toUpperCase(),
-      issuedAt,
-      generatedBy,
-      generatedByEmail
-    })
-  }
+  await persistNoAdeudoDeudorCartaMark({
+    context,
+    ciclo,
+    folio: tokenInfo.verificationHash.slice(0, 18).toUpperCase(),
+    issuedAt,
+    generatedBy,
+    generatedByEmail
+  })
 
   return {
     matricula: context.student.matricula,
@@ -740,6 +736,6 @@ export const sendNoAdeudoForContext = async (event: any, context: NoAdeudoStuden
     warning: context.debt.hasDebt ? `El alumno aún tiene un adeudo de ${formatMoney(context.debt.total)}. Se generó de todas maneras.` : '',
     validationUrl,
     verificationHash: tokenInfo.verificationHash,
-    deudorCartaMarked: context.debt.hasDebt
+    deudorCartaMarked: true
   }
 }

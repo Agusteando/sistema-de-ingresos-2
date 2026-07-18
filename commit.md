@@ -1,1 +1,1 @@
-Agrega comparativo por plantel para todos y externos
+Registra todas las cartas de no adeudo enviadas y agrega su reporte descargable

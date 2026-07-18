@@ -50,7 +50,7 @@
 
           <aside v-if="deudorCartaNotice" class="no-adeudo-alert info">
             <strong>{{ deudorCartaNotice }}</strong>
-            <span>Control externo de cartas emitidas con advertencia de adeudo.</span>
+            <span>Control externo de cartas de no adeudo enviadas.</span>
           </aside>
 
           <div class="no-adeudo-body">
@@ -223,9 +223,9 @@ const deudorCartaNotice = computed(() => {
   if (marked.length === 1) {
     const mark = marked[0].deudorCarta || {}
     const by = mark.sentByName || mark.sentByEmail || 'usuario no registrado'
-    return `Ya existe una marca externa de carta emitida con adeudo${mark.sentAt ? ` el ${mark.sentAt}` : ''} por ${by}${mark.folio ? ` · folio ${mark.folio}` : ''}.`
+    return `Ya existe una marca externa de carta enviada${mark.sentAt ? ` el ${mark.sentAt}` : ''} por ${by}${mark.folio ? ` · folio ${mark.folio}` : ''}.`
   }
-  return `${marked.length} alumnos ya tienen marca externa de carta emitida con adeudo.`
+  return `${marked.length} alumnos ya tienen marca externa de carta enviada.`
 })
 
 const payloadCandidates = (error) => [

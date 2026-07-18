@@ -54,6 +54,9 @@
         <NuxtLink v-if="showFinancialNav" to="/reportes" class="nav-item group" title="Reportes" aria-label="Reportes">
           <LucidePieChart :size="22" stroke-width="2" /> <span class="nav-label">Reportes</span>
         </NuxtLink>
+        <NuxtLink v-if="showFinancialNav" to="/cartas-no-adeudo" class="nav-item group" title="Cartas de no adeudo enviadas" aria-label="Cartas de no adeudo enviadas">
+          <LucideFileCheck2 :size="22" stroke-width="2" /> <span class="nav-label">Cartas enviadas</span>
+        </NuxtLink>
         <NuxtLink v-if="showConceptosNav" to="/conceptos" class="nav-item group" title="Conceptos" aria-label="Conceptos">
           <LucideSettings :size="22" stroke-width="2" /> <span class="nav-label">Conceptos</span>
         </NuxtLink>
@@ -419,6 +422,7 @@ import {
   LucideZap,
   LucideCloud,
   LucideFileSpreadsheet,
+  LucideFileCheck2,
   LucideUpload
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
@@ -1113,6 +1117,7 @@ const currentRouteName = computed(() => {
   if (route.path === '/') return 'Alumnos'
   if (route.path === '/deudores') return 'Deudores'
   if (route.path === '/reportes') return 'Centro de reportes'
+  if (route.path === '/cartas-no-adeudo') return 'Cartas de no adeudo enviadas'
   if (route.path === '/conceptos') return 'Conceptos'
   if (route.path === '/facturas') return 'Facturas CFDI'
   if (route.path === '/usuarios') return 'Usuarios'

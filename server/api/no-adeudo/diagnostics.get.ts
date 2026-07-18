@@ -36,9 +36,9 @@ const classifyCentralDbError = (error: any): DiagnosticItem => {
     return makeItem({
       level: 'error',
       title: 'Falta crear la tabla externa no_adeudo_deudor_cartas.',
-      detail: 'La base externa responde, pero no existe la tabla de control para cartas emitidas a alumnos detectados con adeudo.',
+      detail: 'La base externa responde, pero no existe la tabla de control para registrar las cartas de no adeudo enviadas.',
       statusCode: 500,
-      source: 'Control externo de cartas con adeudo',
+      source: 'Control externo de cartas enviadas',
       code: code || undefined,
       missing: ['tabla externa no_adeudo_deudor_cartas'],
       action: 'Ejecuta manualmente el CREATE TABLE en la base externa/control, no en la base bridge.'
@@ -51,7 +51,7 @@ const classifyCentralDbError = (error: any): DiagnosticItem => {
       title: 'La conexión a la base externa fue rechazada.',
       detail: 'Las credenciales CONTROL_ESCOLAR_MYSQL_USER / CONTROL_ESCOLAR_MYSQL_PASSWORD o sus permisos no permiten acceder a la base configurada.',
       statusCode: 500,
-      source: 'Control externo de cartas con adeudo',
+      source: 'Control externo de cartas enviadas',
       code: code || undefined,
       action: 'Valida usuario, contraseña, permisos y CONTROL_ESCOLAR_MYSQL_DATABASE.'
     })
@@ -63,7 +63,7 @@ const classifyCentralDbError = (error: any): DiagnosticItem => {
       title: 'No se pudo conectar a la base externa de Control Escolar.',
       detail: 'Aurora no pudo abrir conexión con CONTROL_ESCOLAR_MYSQL_HOST / CONTROL_ESCOLAR_MYSQL_PORT.',
       statusCode: 500,
-      source: 'Control externo de cartas con adeudo',
+      source: 'Control externo de cartas enviadas',
       code: code || undefined,
       action: 'Valida host, puerto, red/firewall y que MySQL acepte conexiones desde el servidor de Aurora.'
     })
@@ -74,7 +74,7 @@ const classifyCentralDbError = (error: any): DiagnosticItem => {
     title: 'No se pudo validar el control externo de cartas con adeudo.',
     detail: message || 'La consulta de diagnóstico a la base externa falló sin detalle específico.',
     statusCode: 500,
-    source: 'Control externo de cartas con adeudo',
+    source: 'Control externo de cartas enviadas',
     code: code || undefined,
     action: 'Revisa el log del servidor para el stack completo de la conexión externa.'
   })
@@ -145,9 +145,9 @@ export default defineEventHandler(async (event) => {
     add({
       level: 'warning',
       title: `Falta configuración de base externa: ${missingCentral.join(', ')}.`,
-      detail: 'La vista previa puede prepararse, pero si el alumno tiene adeudo no se podrá validar/escribir la marca externa de control al enviar.',
+      detail: 'La vista previa puede prepararse, pero no será posible registrar la marca obligatoria de envío.',
       statusCode: 500,
-      source: 'Control externo de cartas con adeudo',
+      source: 'Control externo de cartas enviadas',
       missing: missingCentral,
       action: 'Configura las variables faltantes en el ambiente del servidor y reinicia Aurora.'
     })
@@ -156,7 +156,7 @@ export default defineEventHandler(async (event) => {
       level: 'ok',
       title: 'Variables de base externa presentes.',
       detail: `HOST=${redact(config.controlEscolarMysqlHost)} · USER=${redact(config.controlEscolarMysqlUser)} · DATABASE=${redact(config.controlEscolarMysqlDatabase)}`,
-      source: 'Control externo de cartas con adeudo'
+      source: 'Control externo de cartas enviadas'
     })
 
     try {
@@ -165,8 +165,8 @@ export default defineEventHandler(async (event) => {
       checks.push({
         level: 'ok',
         title: 'Tabla externa no_adeudo_deudor_cartas disponible.',
-        detail: 'Aurora puede validar el control externo para cartas generadas con advertencia de adeudo.',
-        source: 'Control externo de cartas con adeudo'
+        detail: 'Aurora puede registrar y consultar las cartas de no adeudo enviadas.',
+        source: 'Control externo de cartas enviadas'
       })
     } catch (error: any) {
       add(classifyCentralDbError(error))
