@@ -5939,6 +5939,8 @@ const saveAcademicPosition = async (payload) => {
           targetCiclo: payload?.targetCiclo || currentCicloKey.value,
           targetNivel: payload?.targetNivel,
           targetGrado: payload?.targetGrado,
+          tipoIngresoOverrideActivo: payload?.tipoIngresoOverrideActivo,
+          tipoIngresoOverride: payload?.tipoIngresoOverride,
         },
       },
     );

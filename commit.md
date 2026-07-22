@@ -1,1 +1,1 @@
-Agrega reporte de solo lectura para marcas existentes de cartas de no adeudo
+Corrige permisos para ajustar grado y ciclo en Control Escolar

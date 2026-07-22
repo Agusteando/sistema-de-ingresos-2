@@ -64,6 +64,9 @@ export default defineEventHandler(async (event) => {
     url.pathname === '/api/students/matricula-overlays' ||
     /^\/api\/students\/[^/]+\/matricula-overlay$/.test(url.pathname) ||
     /^\/api\/students\/[^/]+\/operator-info$/.test(url.pathname)
+  const isControlEscolarAcademicMutation =
+    url.pathname === '/api/students/bulk-ingreso-cycle' ||
+    /^\/api\/students\/[^/]+\/ingreso-cycle$/.test(url.pathname)
 
 
   if (isControlEscolarEndpoint) {
@@ -82,7 +85,15 @@ export default defineEventHandler(async (event) => {
     return
   }
 
-  if (!user.hasFinancialAccess) {
+  if (
+    isControlEscolarAcademicMutation &&
+    !user.hasControlEscolarRole &&
+    !user.hasFinancialAccess
+  ) {
+    throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
+  }
+
+  if (!user.hasFinancialAccess && !isControlEscolarAcademicMutation) {
     if (isNoAdeudoEndpoint) {
       return noAdeudoMiddlewareDiagnostic(event, {
         title: 'No tiene permisos para generar cartas de no adeudo.',
