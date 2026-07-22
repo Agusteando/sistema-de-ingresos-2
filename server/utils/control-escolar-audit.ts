@@ -1,7 +1,7 @@
 import { PLANTELES_LIST } from '../../utils/constants'
 import { createError, getQuery } from 'h3'
 import { getTrustedAuthUser, normalizePlantel, type AuthSessionUser } from './auth-session'
-import { query, runWithBridgeAgentId } from './db'
+import { controlEscolarCentralQuery } from './control-escolar-central'
 
 const VALID_PLANTELES = new Set(PLANTELES_LIST)
 const AUDIT_RETENTION_DAYS = 180
@@ -86,18 +86,14 @@ const resolveRequestedPlantel = (event: any, user: AuthSessionUser, requested?: 
   throw createError({ statusCode: 403, message: 'No tiene permisos para consultar este plantel.' })
 }
 
-const withPlantel = async <T>(plantel: string, callback: () => Promise<T>) => {
-  return await runWithBridgeAgentId(plantel, callback)
-}
-
 const pruneAuditEvents = async (plantel: string, ciclo: string) => {
-  await query(
+  await controlEscolarCentralQuery(
     `DELETE FROM control_escolar_audit_events WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`,
     [AUDIT_RETENTION_DAYS]
   ).catch(() => null)
 
   if (ciclo) {
-    await query(
+    await controlEscolarCentralQuery(
       `DELETE FROM control_escolar_audit_events
        WHERE plantel = ? AND ciclo = ? AND id NOT IN (
          SELECT id FROM (
@@ -123,51 +119,49 @@ export const logControlEscolarAuditEvent = async (input: AuditLogInput) => {
   const user = input.user || {}
   const payload = safeJson(input.payload || null)
 
-  return await withPlantel(plantel, async () => {
-    if (input.eventType === 'page_snapshot' && user.email) {
-      const [recentSnapshot] = await query<any[]>(
-        `SELECT id FROM control_escolar_audit_events
-         WHERE event_type = 'page_snapshot'
-           AND plantel = ?
-           AND ciclo = ?
-           AND actor_email = ?
-           AND created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
-         ORDER BY created_at DESC
-         LIMIT 1`,
-        [plantel, ciclo, cleanText(user.email, 255)]
-      ).catch(() => [])
-      if (recentSnapshot?.id) return { skipped: true, reason: 'recent_snapshot_exists' }
-    }
+  if (input.eventType === 'page_snapshot' && user.email) {
+    const [recentSnapshot] = await controlEscolarCentralQuery<any[]>(
+      `SELECT id FROM control_escolar_audit_events
+       WHERE event_type = 'page_snapshot'
+         AND plantel = ?
+         AND ciclo = ?
+         AND actor_email = ?
+         AND created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [plantel, ciclo, cleanText(user.email, 255)]
+    ).catch(() => [])
+    if (recentSnapshot?.id) return { skipped: true, reason: 'recent_snapshot_exists' }
+  }
 
-    const result: any = await query(
-      `INSERT INTO control_escolar_audit_events (
-        event_type, plantel, ciclo, matricula,
-        actor_email, actor_name, actor_role, summary,
-        progress_percent, total_students, completed_students, pending_students,
-        source_base, source_flow, payload
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        input.eventType,
-        plantel,
-        ciclo,
-        matricula,
-        cleanText(user.email, 255) || null,
-        cleanText(user.name, 255) || null,
-        cleanText(user.role, 255) || null,
-        cleanText(input.summary, 255),
-        clampPercent(progress.percent),
-        safeNumber(progress.total),
-        safeNumber(progress.completed),
-        safeNumber(progress.pending),
-        cleanText(source.base, 180) || null,
-        cleanText(source.flow, 180) || null,
-        payload,
-      ]
-    )
+  const result: any = await controlEscolarCentralQuery(
+    `INSERT INTO control_escolar_audit_events (
+      event_type, plantel, ciclo, matricula,
+      actor_email, actor_name, actor_role, summary,
+      progress_percent, total_students, completed_students, pending_students,
+      source_base, source_flow, payload
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.eventType,
+      plantel,
+      ciclo,
+      matricula,
+      cleanText(user.email, 255) || null,
+      cleanText(user.name, 255) || null,
+      cleanText(user.role, 255) || null,
+      cleanText(input.summary, 255),
+      clampPercent(progress.percent),
+      safeNumber(progress.total),
+      safeNumber(progress.completed),
+      safeNumber(progress.pending),
+      cleanText(source.base, 180) || null,
+      cleanText(source.flow, 180) || null,
+      payload,
+    ]
+  )
 
-    await pruneAuditEvents(plantel, ciclo)
-    return result
-  })
+  await pruneAuditEvents(plantel, ciclo)
+  return result
 }
 
 const normalizeEventRow = (row: any, plantelFallback = '') => ({
@@ -200,53 +194,51 @@ const fetchPlantelAudit = async (plantel: string, options: AuditQueryOptions) =>
     params.push(ciclo)
   }
 
-  return await withPlantel(plantel, async () => {
-    const events = await query<any[]>(
-      `SELECT * FROM control_escolar_audit_events
-       WHERE ${where.join(' AND ')}
-       ORDER BY created_at DESC
-       LIMIT ?`,
-      [...params, limit]
-    ).catch(() => [])
+  const events = await controlEscolarCentralQuery<any[]>(
+    `SELECT * FROM control_escolar_audit_events
+     WHERE ${where.join(' AND ')}
+     ORDER BY created_at DESC
+     LIMIT ?`,
+    [...params, limit]
+  ).catch(() => [])
 
-    const counts = await query<any[]>(
-      `SELECT event_type, COUNT(*) AS total
-       FROM control_escolar_audit_events
-       WHERE ${where.join(' AND ')} AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
-       GROUP BY event_type`,
-      [...params, AUDIT_RETENTION_DAYS]
-    ).catch(() => [])
+  const counts = await controlEscolarCentralQuery<any[]>(
+    `SELECT event_type, COUNT(*) AS total
+     FROM control_escolar_audit_events
+     WHERE ${where.join(' AND ')} AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+     GROUP BY event_type`,
+    [...params, AUDIT_RETENTION_DAYS]
+  ).catch(() => [])
 
-    const latestSnapshot = await query<any[]>(
-      `SELECT * FROM control_escolar_audit_events
-       WHERE ${where.join(' AND ')} AND event_type = 'page_snapshot'
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      params
-    ).catch(() => [])
+  const latestSnapshot = await controlEscolarCentralQuery<any[]>(
+    `SELECT * FROM control_escolar_audit_events
+     WHERE ${where.join(' AND ')} AND event_type = 'page_snapshot'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    params
+  ).catch(() => [])
 
-    const updatedStudents = await query<any[]>(
-      `SELECT matricula, MAX(created_at) AS last_at, COUNT(*) AS total
-       FROM control_escolar_audit_events
-       WHERE ${where.join(' AND ')} AND event_type = 'student_update' AND matricula IS NOT NULL AND matricula <> ''
-       GROUP BY matricula
-       ORDER BY last_at DESC
-       LIMIT 14`,
-      params
-    ).catch(() => [])
+  const updatedStudents = await controlEscolarCentralQuery<any[]>(
+    `SELECT matricula, MAX(created_at) AS last_at, COUNT(*) AS total
+     FROM control_escolar_audit_events
+     WHERE ${where.join(' AND ')} AND event_type = 'student_update' AND matricula IS NOT NULL AND matricula <> ''
+     GROUP BY matricula
+     ORDER BY last_at DESC
+     LIMIT 14`,
+    params
+  ).catch(() => [])
 
-    return {
-      plantel,
-      events: events.map((event) => normalizeEventRow(event, plantel)),
-      counts,
-      latestSnapshot: latestSnapshot[0] ? normalizeEventRow(latestSnapshot[0], plantel) : null,
-      updatedStudents: updatedStudents.map((row) => ({
-        matricula: cleanMatricula(row.matricula),
-        lastAt: row.last_at ? new Date(row.last_at).toISOString() : '',
-        total: Number(row.total || 0),
-      })),
-    }
-  })
+  return {
+    plantel,
+    events: events.map((event) => normalizeEventRow(event, plantel)),
+    counts,
+    latestSnapshot: latestSnapshot[0] ? normalizeEventRow(latestSnapshot[0], plantel) : null,
+    updatedStudents: updatedStudents.map((row) => ({
+      matricula: cleanMatricula(row.matricula),
+      lastAt: row.last_at ? new Date(row.last_at).toISOString() : '',
+      total: Number(row.total || 0),
+    })),
+  }
 }
 
 const mergeAuditResults = (results: Awaited<ReturnType<typeof fetchPlantelAudit>>[], limit: number) => {
@@ -303,7 +295,7 @@ export const getControlEscolarAuditSummary = async (event: any, options: AuditQu
   const merged = mergeAuditResults(results, limit)
   const countMap = countsByType(merged.counts)
   const latest = merged.latestSnapshot
-  const totalEvents = Object.values(countMap).reduce((sum, value) => sum + Number(value || 0), 0)
+  const totalEvents = Object.values(countMap).reduce<number>((sum, value) => sum + Number(value || 0), 0)
 
   return {
     ok: true,

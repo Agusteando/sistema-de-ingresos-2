@@ -39,6 +39,26 @@ const requiredValue = (value: unknown, name: string) => {
 
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 
+const stripLeadingSqlComments = (sql: string) => {
+  let statement = String(sql || '')
+  while (true) {
+    const next = statement.replace(/^\s*(?:(?:--[^\n]*(?:\n|$))|(?:#[^\n]*(?:\n|$))|(?:\/\*[\s\S]*?\*\/))\s*/, '')
+    if (next === statement) return statement.trimStart()
+    statement = next
+  }
+}
+
+const assertCentralStatementIsDataOnly = (sql: string) => {
+  const statement = stripLeadingSqlComments(sql)
+  if (!/^(?:CREATE|ALTER|DROP|TRUNCATE|RENAME)\b/i.test(statement)) return
+
+  const error: any = new Error(
+    'Las modificaciones de esquema en CONTROL_ESCOLAR_MYSQL_DATABASE deben ejecutarse manualmente fuera de la aplicación.'
+  )
+  error.code = 'CENTRAL_DB_SCHEMA_MUTATION_BLOCKED'
+  throw error
+}
+
 export const getControlEscolarCentralDb = () => {
   if (!controlEscolarPool) {
     const config = getConfig()
@@ -59,6 +79,7 @@ export const getControlEscolarCentralDb = () => {
 }
 
 export const controlEscolarCentralQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
+  assertCentralStatementIsDataOnly(sql)
   const db = getControlEscolarCentralDb()
   const [rows] = await db.query(sql, params as never)
   return rows as T
