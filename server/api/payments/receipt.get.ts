@@ -1,6 +1,5 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
-import { loadActiveReceiptPayments } from '../../utils/paymentReceipt'
-import { resolveNivelEscolar } from '../../../shared/utils/grado'
+import { loadActiveReceiptPayments, resolveReceiptAcademicPlacement } from '../../utils/paymentReceipt'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { folios } = getQuery(event)
@@ -9,9 +8,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   if (!items.length) return []
 
   const [studentData] = await query<any[]>(
-    `SELECT grado, grupo, plantel, nivel FROM base WHERE matricula = ? LIMIT 1`,
+    `SELECT grado, grupo, plantel, nivel, ciclo FROM base WHERE matricula = ? LIMIT 1`,
     [matricula]
   )
+
+  const academicPlacement = resolveReceiptAcademicPlacement(studentData, items[0]?.ciclo)
 
   return items.map(ref => ({
     folio: ref.folio,
@@ -37,8 +38,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     montoLetra: ref.montoLetra,
     instituto: ref.instituto,
     ciclo: ref.ciclo,
-    grado: studentData?.grado || '',
+    grado: academicPlacement.grado,
     grupo: studentData?.grupo || '',
-    nivel: studentData ? resolveNivelEscolar(studentData) : ''
+    nivel: academicPlacement.nivel
   }))
 }))

@@ -1,1 +1,1 @@
-Permite regenerar recibos combinando pagos de distintos conceptos
+Corrige el grado proyectado en los recibos de pago

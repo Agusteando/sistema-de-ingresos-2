@@ -1,6 +1,27 @@
 import { MAX_COMBINED_RECEIPT_PAYMENTS } from '../../shared/constants/paymentReceipt'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { calculatePromotedGrado, displayGrado } from '../../shared/utils/grado'
 import { query } from './db'
+
+
+export const resolveReceiptAcademicPlacement = (student: any, receiptCycle: unknown) => {
+  if (!student) {
+    return { grado: '', nivel: '' }
+  }
+
+  const projected = calculatePromotedGrado(
+    student.grado,
+    student.plantel,
+    student.ciclo,
+    receiptCycle,
+    student.nivel,
+  )
+
+  return {
+    grado: displayGrado(projected.grado),
+    nivel: projected.nivel,
+  }
+}
 
 export const normalizeReceiptFolios = (value: unknown): number[] => {
   const rawValues = Array.isArray(value)

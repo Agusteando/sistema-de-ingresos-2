@@ -310,6 +310,7 @@ import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { useModalDraftPersistence } from '~/composables/useModalDraftPersistence'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import { calculatePromotedGrado, displayGrado } from '~/shared/utils/grado'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
 import { PLANTELES_LIST } from '~/utils/constants'
 
@@ -604,16 +605,46 @@ const validateFinalAmounts = () => {
   return true
 }
 
+
+const previewAcademicPlacement = () => {
+  const hasBasePlacement = Boolean(
+    props.student?.gradoBase &&
+    props.student?.cicloBase &&
+    (props.student?.plantelBase || props.student?.plantel),
+  )
+
+  if (!hasBasePlacement) {
+    return {
+      grado: props.student?.grado || '',
+      nivel: studentNivelLabel(props.student),
+    }
+  }
+
+  const projected = calculatePromotedGrado(
+    props.student.gradoBase,
+    props.student.plantelBase || props.student.plantel,
+    props.student.cicloBase,
+    normalizeCicloKey(state.value.ciclo),
+    props.student.nivelBase || props.student.nivel,
+  )
+
+  return {
+    grado: displayGrado(projected.grado),
+    nivel: projected.nivel,
+  }
+}
+
 const previewReceipt = () => {
   if (pagoRealizadoEnOtroPlantel.value) return
   if (!validateFinalAmounts()) return
+  const academicPlacement = previewAcademicPlacement()
   const previewData = {
     folios: 'PREVIO',
     fecha: effectivePaymentDateIso(),
     nombreCompleto: props.student.nombreCompleto,
     matricula: props.student.matricula,
-    nivel: studentNivelLabel(props.student),
-    grado: props.student.grado,
+    nivel: academicPlacement.nivel,
+    grado: academicPlacement.grado,
     grupo: props.student.grupo,
     ciclo: normalizeCicloKey(state.value.ciclo),
     instituto: props.student.plantel === 'PT' || props.student.plantel === 'PM' || props.student.plantel === 'SM' ? 1 : 0,
