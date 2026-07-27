@@ -1,1 +1,1 @@
-Corrige la resolución de nombres reales de conceptos financieros
+Corrige la persistencia de grupo en Control Escolar

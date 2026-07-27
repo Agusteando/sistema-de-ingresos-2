@@ -60,6 +60,7 @@ export type ControlEscolarStudentRow = {
   nivel: string;
   grado: string;
   group: string;
+  grupo: string;
   guardianName: string;
   fatherName: string;
   motherName: string;
@@ -164,6 +165,17 @@ const normalizePhone = (value: unknown) =>
 const normalizeNullable = (value: unknown, max = 255) => {
   const text = normalizeText(value, max);
   return text || null;
+};
+
+const resolveControlEscolarGroup = (baseGroup: unknown, overlay: any) => {
+  const hasCentralGroup =
+    overlay &&
+    Object.prototype.hasOwnProperty.call(overlay, "grupo") &&
+    overlay.grupo !== null &&
+    overlay.grupo !== undefined;
+  return hasCentralGroup
+    ? normalizeText(overlay.grupo, 40)
+    : normalizeText(baseGroup, 40);
 };
 
 const sqlLiteral = (value: string) => `'${String(value).replace(/'/g, "''")}'`;
@@ -1376,6 +1388,7 @@ const overlayStudentRow = (
   const huskyPassPlaintext = normalizeText(huskyPass?.plaintext, 255);
   const huskyPassEmail = firstLower(huskyPass?.email, huskyPass?.correo);
   const parentSiblingSignature = hasOverlay ? buildParentSiblingSignature(overlay) : buildParentSiblingSignature({});
+  const resolvedGroup = resolveControlEscolarGroup(base.baseGrupo, overlay);
 
   const normalized: ControlEscolarStudentRow = {
     agentId: normalizePlantel(agentId),
@@ -1400,7 +1413,8 @@ const overlayStudentRow = (
     program: firstText(overlay?.servicio, base.baseNivel, overlay?.nivel),
     nivel: firstLower(base.baseNivel, overlay?.nivel),
     grado: firstLower(base.baseGrado, overlay?.grado),
-    group: firstText(base.baseGrupo, overlay?.grupo),
+    group: resolvedGroup,
+    grupo: resolvedGroup,
     guardianName: normalizeNameText(firstText(fatherName, motherName, base.baseGuardian)),
     fatherName,
     motherName,
@@ -2809,7 +2823,7 @@ const normalizePatchValue = (field: string, value: unknown) => {
   if (field === "grado" || field === "lastGrade")
     return normalizeText(value, 80) ? displayGrado(value).toLowerCase() : null;
   if (field === "nivel") return normalizeNivelEscolar(value) || null;
-  if (field === "grupo") return normalizeText(value, 40) || null;
+  if (field === "grupo") return normalizeText(value, 40);
   if (field === "domicilioCp") return normalizeText(value, 12).replace(/\D/g, "").slice(0, 5) || null;
   if (ADVANCED_FILE_PATCH_FIELDS.has(field)) return normalizeNullable(value, 2048);
   if (["tipoSangre", "talla", "peso"].includes(field)) return normalizeNullable(value, 40);
@@ -2856,6 +2870,14 @@ const buildEditableMatriculaEntries = (
     throw createError({
       statusCode: 400,
       message: `Campos no permitidos para Control Escolar: ${rejected.join(", ")}`,
+    });
+  }
+
+  if (requestedFields.includes("grupo") && !schema.matricula.has("grupo")) {
+    throw createError({
+      statusCode: 500,
+      message:
+        "La tabla centralizada matricula no tiene la columna grupo requerida por Control Escolar.",
     });
   }
 
@@ -3017,24 +3039,6 @@ const upsertMatriculaOverlay = async (
   );
 };
 
-const syncEditableFieldsToBase = async (
-  normalizedMatricula: string,
-  editableEntries: EditableMatriculaEntry[],
-  schema: ControlEscolarSchema,
-) => {
-  const syncableColumns = new Set(["nivel", "grado", "grupo", "ciclo"]);
-  const baseUpdates = editableEntries.filter(
-    (entry) => syncableColumns.has(entry.column) && schema.base.has(entry.column),
-  );
-  if (!baseUpdates.length) return;
-  const assignments = baseUpdates.map((entry) => `\`${entry.column}\` = ?`);
-  const params = [...baseUpdates.map((entry) => entry.value), canonicalMatriculaKey(normalizedMatricula)];
-  await query(
-    `UPDATE base SET ${assignments.join(", ")} WHERE UPPER(TRIM(matricula)) = ?`,
-    params,
-  );
-};
-
 export const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS = [
   "matricula",
   "apellidoPaterno",
@@ -3050,6 +3054,7 @@ export const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS = [
   "alergias",
   "nivel",
   "grado",
+  "grupo",
   "ciclo",
   "lastGrade",
   "lastCiclo",
@@ -3328,7 +3333,6 @@ export const updateControlEscolarStudent = async (
     visibleStudent.plantel || visibleStudent.basePlantel || agentId,
     schema,
   );
-  await syncEditableFieldsToBase(normalizedMatricula, editableEntries, schema);
 
   const result = await fetchControlEscolarStudents(agentId, {
     ...scopeFilters,
