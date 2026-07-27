@@ -1,5 +1,5 @@
 import { normalizeCicloKey, type CicloInput } from '../../shared/utils/ciclo'
-import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../shared/utils/grado'
+import { PLANTELES_LIST } from '../../utils/constants'
 import { query } from './db'
 import { hydrateFinancialConceptNames } from './financial-concept'
 import type { AuthSessionUser } from './auth-session'
@@ -24,12 +24,10 @@ export type CorteCajaRow = {
   monto: number | string
   formaDePago: string
   plantel?: string | null
+  plantel_pago?: string | null
   instituto?: unknown
   usuario?: string | null
   usuario_email?: string | null
-  gradoBase?: string | null
-  nivelBase?: string | null
-  cicloBase?: string | null
   scopePlantel?: string | null
 }
 
@@ -46,36 +44,42 @@ export type CorteCajaGroupedRow = {
   total: number
 }
 
-const normalizeOwnerValue = (value: unknown) => String(value || '').trim().toLowerCase()
-
 const normalizeDateFilter = (value: unknown) => {
   const normalized = String(value || '').trim()
   return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : ''
 }
 
-const currentUserOwnerClause = (user: AuthSessionUser) => {
-  const email = normalizeOwnerValue(user.email)
+const normalizePlantel = (value: unknown) => String(value || '').trim().toUpperCase()
 
-  if (!email) {
-    throw createError({ statusCode: 401, message: 'La sesión no tiene un correo válido para generar el corte.' })
+const resolveCortePlantel = (user: AuthSessionUser, requestedPlantelValue: unknown) => {
+  const activePlantel = normalizePlantel(user.active_plantel)
+
+  if (activePlantel && activePlantel !== 'GLOBAL') {
+    if (!PLANTELES_LIST.includes(activePlantel)) {
+      throw createError({ statusCode: 400, message: 'El plantel activo no es válido.' })
+    }
+    return activePlantel
   }
 
-  // Fail closed: display names are not unique enough to authorize a financial
-  // report. New and safely backfilled rows use usuario_email. The only legacy
-  // fallback accepted here is an exact email already stored in usuario.
-  return {
-    sql: `(
-      LOWER(TRIM(COALESCE(r.usuario_email, ''))) = ?
-      OR (
-        COALESCE(TRIM(r.usuario_email), '') = ''
-        AND LOWER(TRIM(COALESCE(r.usuario, ''))) = ?
-      )
-    )`,
-    params: [email, email]
+  if (!user.isSuperAdmin) {
+    throw createError({ statusCode: 403, message: 'No tiene permisos para una vista consolidada.' })
   }
+
+  const requestedPlantel = normalizePlantel(requestedPlantelValue)
+  if (!requestedPlantel || requestedPlantel === 'GLOBAL' || !PLANTELES_LIST.includes(requestedPlantel)) {
+    throw createError({ statusCode: 400, message: 'Seleccione un plantel para generar el corte de caja.' })
+  }
+
+  return requestedPlantel
 }
 
-export const loadCurrentUserCorteCaja = async (
+const PAYMENT_PLANTEL_SQL = `UPPER(COALESCE(
+  NULLIF(TRIM(r.plantel_pago), ''),
+  NULLIF(TRIM(r.plantel), ''),
+  NULLIF(TRIM(A.plantel), '')
+))`
+
+export const loadPlantelCorteCaja = async (
   user: AuthSessionUser,
   filters: CorteCajaFilters = {}
 ) => {
@@ -86,31 +90,22 @@ export const loadCurrentUserCorteCaja = async (
   const cicloKey = normalizeCicloKey(filters.ciclo || '2025')
   const inicio = normalizeDateFilter(filters.inicio)
   const fin = normalizeDateFilter(filters.fin)
-  const requestedPlantel = String(filters.plantel || '').trim().toUpperCase()
-  const ownerClause = currentUserOwnerClause(user)
+  const scopePlantel = resolveCortePlantel(user, filters.plantel)
 
-  let where = "r.estatus = 'Vigente' AND COALESCE(r.depurado, 0) = 0 AND r.ciclo = ?"
-  const params: any[] = [cicloKey]
+  let where = `
+    r.estatus = 'Vigente'
+    AND COALESCE(r.depurado, 0) = 0
+    AND r.ciclo = ?
+    AND ${PAYMENT_PLANTEL_SQL} = ?
+  `
+  const params: any[] = [cicloKey, scopePlantel]
 
   if (inicio && fin) {
     where += ' AND DATE(r.fecha) BETWEEN ? AND ?'
     params.push(inicio, fin)
   }
 
-  const scopePlantel = (!user.isSuperAdmin || user.active_plantel !== 'GLOBAL')
-    ? user.active_plantel
-    : requestedPlantel
-
-  if (scopePlantel) {
-    const plantelCandidates = plantelCandidatesForProjectedScope(scopePlantel)
-    where += ` AND COALESCE(A.plantel, r.plantel) IN (${plantelCandidates.map(() => '?').join(',')})`
-    params.push(...plantelCandidates)
-  }
-
-  where += ` AND ${ownerClause.sql}`
-  params.push(...ownerClause.params)
-
-  const rawRows = await query<CorteCajaRow[]>(`
+  const rows = await query<CorteCajaRow[]>(`
     SELECT
       r.folio,
       r.fecha,
@@ -124,29 +119,16 @@ export const loadCurrentUserCorteCaja = async (
       r.monto,
       r.formaDePago,
       r.plantel,
+      r.plantel_pago,
       r.instituto,
       r.usuario,
       r.usuario_email,
-      A.grado as gradoBase,
-      A.nivel as nivelBase,
-      A.ciclo as cicloBase,
-      COALESCE(A.plantel, r.plantel) as scopePlantel
+      ${PAYMENT_PLANTEL_SQL} as scopePlantel
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${where}
     ORDER BY r.fecha DESC, r.folio ASC
   `, params)
-
-  const rows = rawRows.filter(row => (
-    isInProjectedPlantelScopeForCiclo(
-      row.gradoBase,
-      row.scopePlantel,
-      row.cicloBase,
-      cicloKey,
-      row.nivelBase,
-      scopePlantel || 'GLOBAL'
-    )
-  ))
 
   await hydrateFinancialConceptNames(rows, { ciclo: cicloKey })
 
@@ -199,7 +181,7 @@ export const loadCurrentUserCorteCaja = async (
       ciclo: cicloKey,
       inicio: inicio || null,
       fin: fin || null,
-      plantel: scopePlantel || 'GLOBAL'
+      plantel: scopePlantel
     }
   }
 }

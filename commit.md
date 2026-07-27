@@ -1,1 +1,1 @@
-Corrige la exportación XLSX y conserva protegido el corte de caja
+Corrige el corte de caja para mostrar movimientos por plantel

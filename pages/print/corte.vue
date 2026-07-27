@@ -15,7 +15,8 @@
         <div class="text-right text-[11px] text-gray-600">
           <div class="font-bold text-[12px] mb-1 text-gray-900 uppercase">Corte de caja</div>
           <div>{{ new Date().toLocaleString('es-MX') }}</div>
-          <div>Usuario: {{ activeUserName }}</div>
+          <div>Plantel: {{ reportPlantel }}</div>
+          <div>Generado por: {{ activeUserName }}</div>
         </div>
       </div>
 
@@ -78,6 +79,7 @@ const route = useRoute()
 const rows = ref([])
 const totales = ref([])
 const activeUserName = ref(useCookie('auth_name').value || 'Administrador')
+const reportPlantel = ref('')
 
 onMounted(async () => {
   const query = new URLSearchParams(route.query).toString()
@@ -86,6 +88,7 @@ onMounted(async () => {
     rows.value = res.rows || []
     totales.value = res.totales || []
     activeUserName.value = res.usuario?.nombre || activeUserName.value
+    reportPlantel.value = res.filtros?.plantel || ''
     setTimeout(() => window.print(), 800)
   } catch(e) {}
 })

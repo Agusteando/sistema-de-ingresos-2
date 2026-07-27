@@ -1,13 +1,13 @@
 import { runWithBridgeAgentId } from '../../utils/db'
-import { loadCurrentUserCorteCaja } from '../../utils/corte-caja'
+import { loadPlantelCorteCaja } from '../../utils/corte-caja'
 import { buildProtectedXlsx } from '../../utils/protected-xlsx'
 
-const safeFilePart = (value: unknown) => String(value || 'usuario')
+const safeFilePart = (value: unknown) => String(value || 'plantel')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .replace(/[^a-zA-Z0-9_-]+/g, '_')
   .replace(/^_+|_+$/g, '')
-  .slice(0, 60) || 'usuario'
+  .slice(0, 60) || 'plantel'
 
 const formatDate = (value: unknown) => {
   if (!value) return ''
@@ -21,7 +21,7 @@ const formatDate = (value: unknown) => {
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const filters = getQuery(event)
   const user = event.context.user
-  const result = await loadCurrentUserCorteCaja(user, filters)
+  const result = await loadPlantelCorteCaja(user, filters)
   const periodLabel = result.filtros.inicio && result.filtros.fin
     ? `${result.filtros.inicio} a ${result.filtros.fin}`
     : 'Periodo completo del ciclo'
@@ -29,10 +29,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const workbook = buildProtectedXlsx({
     sheetName: 'Corte de Caja',
     title: 'Corte de Caja',
-    subtitle: 'Hoja protegida contra edición. Solo contiene movimientos del usuario autenticado.',
+    subtitle: 'Hoja protegida contra edición. Contiene los movimientos registrados para el plantel seleccionado.',
     metaLines: [
-      `Usuario: ${result.usuario.nombre} (${result.usuario.email})`,
-      `Ciclo: ${result.filtros.ciclo} | Periodo: ${periodLabel} | Plantel: ${result.filtros.plantel}`
+      `Plantel: ${result.filtros.plantel}`,
+      `Ciclo: ${result.filtros.ciclo} | Periodo: ${periodLabel} | Generado por: ${result.usuario.nombre}`
     ],
     headers: [
       'Folio',
@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   })
 
   const today = new Date().toISOString().slice(0, 10)
-  const filename = `Corte_de_Caja_${safeFilePart(result.usuario.nombre)}_${today}.xlsx`
+  const filename = `Corte_de_Caja_Plantel_${safeFilePart(result.filtros.plantel)}_${today}.xlsx`
   const encodedFilename = encodeURIComponent(filename)
 
   setHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

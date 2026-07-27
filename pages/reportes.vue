@@ -152,7 +152,7 @@
       <div class="panel-header">
         <div>
           <h3>Corte de caja</h3>
-          <p>Bitácora de ingresos registrados por tu usuario para cierre operativo.</p>
+          <p>Bitácora de ingresos registrados en el plantel seleccionado para cierre operativo.</p>
         </div>
         <div class="panel-actions">
           <button class="btn btn-outline" @click="downloadCorteExcel" :disabled="loadingCorte || downloadingCorteExcel">
@@ -179,7 +179,7 @@
         <div class="form-group m-0" v-if="canFilterPlantel">
           <label class="form-label">Plantel</label>
           <select v-model="filtrosCorte.plantel" class="input-field">
-            <option value="">Todos</option>
+            <option value="" disabled>Seleccione un plantel</option>
             <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
           </select>
         </div>
@@ -252,6 +252,7 @@ const { show } = useToast()
 
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 const activePlantel = ref(useCookie('auth_active_plantel').value || '')
+const homePlantel = ref(useCookie('auth_home_plantel').value || '')
 const hasFinancialAccessCookie = useCookie('auth_has_financial_access')
 const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
 const isSuperAdmin = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
@@ -284,7 +285,12 @@ const emptyConceptReport = () => ({
 })
 const conceptReport = ref(emptyConceptReport())
 
-const filtrosCorte = ref({ inicio: '', fin: '', plantel: '' })
+const defaultCortePlantel = canFilterPlantel.value
+  ? (PLANTELES_LIST.includes(String(homePlantel.value || '').toUpperCase())
+      ? String(homePlantel.value).toUpperCase()
+      : (PLANTELES_LIST[0] || ''))
+  : ''
+const filtrosCorte = ref({ inicio: '', fin: '', plantel: defaultCortePlantel })
 const datosCorte = ref([])
 const loadingCorte = ref(false)
 const downloadingCorteExcel = ref(false)
