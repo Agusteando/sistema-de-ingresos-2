@@ -1,1 +1,1 @@
-Agrega Excel protegido de corte de caja por usuario autenticado
+Corrige la exportación XLSX y conserva protegido el corte de caja

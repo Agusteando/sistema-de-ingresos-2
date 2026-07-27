@@ -1,6 +1,6 @@
 import { runWithBridgeAgentId } from '../../utils/db'
 import { loadCurrentUserCorteCaja } from '../../utils/corte-caja'
-import { buildProtectedXlsx } from '../../utils/xlsx'
+import { buildProtectedXlsx } from '../../utils/protected-xlsx'
 
 const safeFilePart = (value: unknown) => String(value || 'usuario')
   .normalize('NFD')
