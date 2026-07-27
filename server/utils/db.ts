@@ -949,6 +949,28 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
           await checkAndAddColumn('referenciasdepago', 'depurado', "TINYINT(1) NOT NULL DEFAULT 0")
           await checkAndAddColumn('referenciasdepago', 'depurado_por', "VARCHAR(255) DEFAULT NULL")
           await checkAndAddColumn('referenciasdepago', 'depurado_fecha', "DATETIME DEFAULT NULL")
+          await checkAndAddColumn('referenciasdepago', 'usuario_email', "VARCHAR(255) DEFAULT NULL")
+          await runSafeQuery(`
+            UPDATE referenciasdepago r
+            JOIN (
+              SELECT owner_key, MIN(owner_email) AS owner_email
+              FROM (
+                SELECT LOWER(TRIM(email)) AS owner_key, LOWER(TRIM(email)) AS owner_email
+                FROM users
+                WHERE COALESCE(TRIM(email), '') <> ''
+                UNION ALL
+                SELECT LOWER(TRIM(username)) AS owner_key, LOWER(TRIM(email)) AS owner_email
+                FROM users
+                WHERE COALESCE(TRIM(username), '') <> ''
+                  AND COALESCE(TRIM(email), '') <> ''
+              ) owner_aliases
+              WHERE owner_key <> '' AND owner_email <> ''
+              GROUP BY owner_key
+              HAVING COUNT(DISTINCT owner_email) = 1
+            ) owners ON LOWER(TRIM(COALESCE(r.usuario, ''))) = owners.owner_key
+            SET r.usuario_email = owners.owner_email
+            WHERE COALESCE(TRIM(r.usuario_email), '') = ''
+          `)
           await checkAndAddColumn('referenciasdepago', 'pago_otro_plantel', "TINYINT(1) NOT NULL DEFAULT 0")
           await checkAndAddColumn('referenciasdepago', 'plantel_pago', "VARCHAR(20) DEFAULT NULL")
           await checkAndAddColumn('referenciasdepago', 'stock_controlled', "TINYINT(1) NOT NULL DEFAULT 0")
@@ -958,6 +980,7 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
           await checkAndAddColumn('referenciasdepago', 'stock_quantity', "INT NOT NULL DEFAULT 0")
           await checkAndAddColumn('referenciasdepago', 'stock_movement_id', "BIGINT DEFAULT NULL")
           await runOptionalIndexQuery(`ALTER TABLE referenciasdepago ADD INDEX idx_ref_stock_movement (stock_movement_id)`)
+          await runOptionalIndexQuery(`ALTER TABLE referenciasdepago ADD INDEX idx_ref_usuario_email_fecha (usuario_email(191), fecha)`)
           await runSafeQuery(`
             UPDATE referenciasdepago
             SET pago_otro_plantel = 1

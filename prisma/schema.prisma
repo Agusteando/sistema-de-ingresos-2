@@ -264,6 +264,7 @@ model ReferenciasDePago {
   recargo        Boolean  @default(false)
   referencia     String?  @db.VarChar(255)
   usuario        String   @db.VarChar(255)
+  usuario_email  String?  @db.VarChar(255)
   usuarioId      Int?
   formaDePago    String   @db.VarChar(255)
   plantel        String?  @db.VarChar(50)

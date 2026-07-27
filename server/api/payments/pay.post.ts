@@ -263,6 +263,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           pagosDespues,
           recargo,
           usuario,
+          usuario_email,
           formaDePago,
           plantel,
           instituto,
@@ -283,7 +284,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           fecha_original,
           fecha_modificada_at,
           fecha_modificada_por
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       params: [
         matricula,
@@ -302,6 +303,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         resuelto + montoDecimal,
         subtotal > Number(finalAmount) ? 1 : 0,
         userName,
+        user?.email || null,
         effectivePaymentMethod,
         plantel,
         instituto,

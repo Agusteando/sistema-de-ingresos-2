@@ -152,10 +152,15 @@
       <div class="panel-header">
         <div>
           <h3>Corte de caja</h3>
-          <p>Bitácora de ingresos vigente para cierre operativo.</p>
+          <p>Bitácora de ingresos registrados por tu usuario para cierre operativo.</p>
         </div>
         <div class="panel-actions">
-          <button class="btn btn-outline" @click="printCorte" :disabled="loadingCorte">
+          <button class="btn btn-outline" @click="downloadCorteExcel" :disabled="loadingCorte || downloadingCorteExcel">
+            <LucideLoader2 v-if="downloadingCorteExcel" class="animate-spin" :size="16" />
+            <LucideDownload v-else :size="16" />
+            Excel protegido
+          </button>
+          <button class="btn btn-outline" @click="printCorte" :disabled="loadingCorte || downloadingCorteExcel">
             <LucidePrinter :size="16" />
             Imprimir
           </button>
@@ -282,6 +287,7 @@ const conceptReport = ref(emptyConceptReport())
 const filtrosCorte = ref({ inicio: '', fin: '', plantel: '' })
 const datosCorte = ref([])
 const loadingCorte = ref(false)
+const downloadingCorteExcel = ref(false)
 
 const conceptRows = computed(() => conceptReport.value.rows || [])
 const conceptSummary = computed(() => conceptReport.value.resumen || emptyConceptReport().resumen)
@@ -393,10 +399,49 @@ const printCorte = () => {
   window.open(`/print/corte?${q}`, '_blank', 'width=850,height=800')
 }
 
+const downloadCorteExcel = async () => {
+  if (!hasFinancialAccess.value || downloadingCorteExcel.value) return
+
+  downloadingCorteExcel.value = true
+  try {
+    const q = new URLSearchParams(buildParams(filtrosCorte.value)).toString()
+    const response = await fetch(`/api/reports/corte_excel?${q}`, {
+      credentials: 'same-origin'
+    })
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      throw new Error(payload?.message || payload?.statusMessage || 'No se pudo generar el Excel')
+    }
+
+    const blob = await response.blob()
+    const disposition = response.headers.get('content-disposition') || ''
+    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
+    const filename = encodedName
+      ? decodeURIComponent(encodedName)
+      : (plainName || `Corte_de_Caja_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    show(e?.message || 'No se pudo generar el Excel protegido', 'danger')
+  } finally {
+    downloadingCorteExcel.value = false
+  }
+}
+
 const showCorteContextMenu = (event, row) => {
   openMenu(event, [
     { label: `Fila: $${Number(row.total).toFixed(2)}`, disabled: true },
     { label: '-' },
+    { label: 'Descargar Excel protegido', icon: LucideDownload, action: downloadCorteExcel },
     { label: 'Imprimir corte', icon: LucidePrinter, action: printCorte }
   ])
 }

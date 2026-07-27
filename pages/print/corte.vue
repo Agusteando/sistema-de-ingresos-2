@@ -77,7 +77,7 @@ definePageMeta({ layout: false })
 const route = useRoute()
 const rows = ref([])
 const totales = ref([])
-const activeUserName = useCookie('auth_name').value || 'Administrador'
+const activeUserName = ref(useCookie('auth_name').value || 'Administrador')
 
 onMounted(async () => {
   const query = new URLSearchParams(route.query).toString()
@@ -85,6 +85,7 @@ onMounted(async () => {
     const res = await $fetch(`/api/reports/corte_print?${query}`)
     rows.value = res.rows || []
     totales.value = res.totales || []
+    activeUserName.value = res.usuario?.nombre || activeUserName.value
     setTimeout(() => window.print(), 800)
   } catch(e) {}
 })

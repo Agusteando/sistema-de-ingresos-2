@@ -21,6 +21,7 @@ type PendingDepuracion = {
   recargo: boolean
   motivo: string
   userName: string
+  userEmail: string
   nombreCompleto: string
   plantel: string
   instituto: number
@@ -148,6 +149,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     const code = String(randomInt(10000, 100000))
     const requestId = randomUUID()
     const userName = user?.name || 'Operador'
+    const userEmail = String(user?.email || '').trim().toLowerCase()
     const plantel = studentRef.plantel || 'PT'
 
     pendingDepuraciones.set(requestId, {
@@ -166,6 +168,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       recargo,
       motivo,
       userName,
+      userEmail,
       nombreCompleto: studentRef.nombreCompleto,
       plantel,
       instituto: (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0
@@ -249,6 +252,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           pagosDespues,
           recargo,
           usuario,
+          usuario_email,
           formaDePago,
           plantel,
           instituto,
@@ -261,7 +265,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           fecha_original,
           fecha_modificada_at,
           fecha_modificada_por
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, NULL)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, NULL)
       `,
       [
         pending.matricula,
@@ -280,6 +284,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         currentResolved + montoDecimal,
         pending.recargo ? 1 : 0,
         pending.userName,
+        pending.userEmail || null,
         'Depuración',
         pending.plantel,
         pending.instituto,

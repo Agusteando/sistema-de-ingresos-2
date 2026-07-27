@@ -1,1 +1,1 @@
-Habilita el corte de caja para todos los usuarios financieros
+Agrega Excel protegido de corte de caja por usuario autenticado
