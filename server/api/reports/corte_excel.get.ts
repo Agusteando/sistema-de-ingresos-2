@@ -18,6 +18,14 @@ const formatDate = (value: unknown) => {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : dateKey
 }
 
+const formatRegisteringUser = (nameValue: unknown, emailValue: unknown) => {
+  const name = String(nameValue || '').trim()
+  const email = String(emailValue || '').trim().toLowerCase()
+
+  if (name && email && name.toLowerCase() !== email) return `${name} (${email})`
+  return email || name || 'No identificado'
+}
+
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const filters = getQuery(event)
   const user = event.context.user
@@ -44,6 +52,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       'Concepto',
       'Forma de pago',
       'Plantel',
+      'Usuario que registró',
       'Monto (MXN)'
     ],
     rows: result.rows.map(row => [
@@ -56,10 +65,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       row.conceptoNombre,
       row.formaDePago,
       row.scopePlantel || row.plantel || '',
+      formatRegisteringUser(row.usuario, row.usuario_email),
       Number(row.monto || 0)
     ]),
     numericColumns: [0, 3],
-    currencyColumns: [9],
+    currencyColumns: [10],
     totals: [
       ...result.totales.map(total => ({ label: total.formaDePago, value: total.total })),
       { label: 'Importe total', value: result.total }

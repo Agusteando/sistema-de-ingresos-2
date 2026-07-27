@@ -1,1 +1,1 @@
-Permite filtrar el Excel del corte de caja y simplifica sus etiquetas
+Agrega el usuario que registró cada movimiento al Excel del corte de caja

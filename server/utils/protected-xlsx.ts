@@ -268,7 +268,7 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
   const filterEndRow = Math.max(headerRowIndex, dataEndRow)
   const lastRow = rowModels.length
   const rowXml = rowModels.map((row, index) => renderRow(index + 1, row)).join('')
-  const columnWidths = [12, 13, 16, 12, 13, 30, 26, 22, 12, 16]
+  const columnWidths = [12, 13, 16, 12, 13, 30, 26, 22, 12, 34, 16]
   const colsXml = Array.from({ length: columnCount }, (_, index) => (
     `<col min="${index + 1}" max="${index + 1}" width="${columnWidths[index] || 18}" customWidth="1"/>`
   )).join('')
