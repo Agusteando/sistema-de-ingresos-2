@@ -3,6 +3,7 @@ import { runWithBridgeAgentId, query } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { resolvePaymentConceptSnapshot } from '../../utils/payment-concept'
+import { isPlaceholderConceptName, resolveFinancialConcept } from '../../utils/financial-concept'
 
 type PendingDepuracion = {
   code: string
@@ -131,7 +132,18 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       `,
       [documento, mesNumber, mesNumber]
     )
-    const paymentConcept = resolvePaymentConceptSnapshot(documentRef, activePeriod)
+    const storedPaymentConcept = resolvePaymentConceptSnapshot(documentRef, activePeriod)
+    let paymentConcept = storedPaymentConcept
+    if (isPlaceholderConceptName(storedPaymentConcept.conceptoNombre)) {
+      const resolvedConcept = await resolveFinancialConcept({
+        conceptoId: storedPaymentConcept.concepto,
+        ciclo,
+      })
+      paymentConcept = {
+        concepto: String(resolvedConcept.id),
+        conceptoNombre: resolvedConcept.concepto,
+      }
+    }
 
     const code = String(randomInt(10000, 100000))
     const requestId = randomUUID()

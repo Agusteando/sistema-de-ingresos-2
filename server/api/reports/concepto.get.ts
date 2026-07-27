@@ -1,6 +1,7 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
+import { hydrateFinancialConceptNames, resolveFinancialConcept } from '../../utils/financial-concept'
 
 const firstQueryValue = (value: unknown) => {
   if (Array.isArray(value)) return firstQueryValue(value[0])
@@ -17,35 +18,28 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 400, message: 'Seleccione un concepto.' })
   }
 
-  const [concepto] = await query<any[]>(`
+  const resolvedConcept = await resolveFinancialConcept({ conceptoId: id, ciclo: cicloKey })
+  const [bridgeMetadata] = await query<any[]>(`
     SELECT id, concepto, costo, description, plantel, eventual, plazo, ciclo
     FROM conceptos
-    WHERE id = ? AND ciclo = ?
+    WHERE id = ?
     LIMIT 1
-  `, [id, cicloKey])
-
-  if (!concepto) {
-    throw createError({ statusCode: 404, message: 'Concepto no encontrado para el ciclo activo.' })
+  `, [id]).catch(() => [])
+  const concepto = {
+    ...(bridgeMetadata || {}),
+    id: resolvedConcept.id,
+    concepto: resolvedConcept.concepto,
+    costo: bridgeMetadata?.costo ?? resolvedConcept.costo,
+    ciclo: bridgeMetadata?.ciclo || resolvedConcept.ciclo || cicloKey,
   }
 
   let where = `
     r.estatus = 'Vigente'
     AND COALESCE(r.depurado, 0) = 0
     AND r.ciclo = ?
-    AND (
-      r.conceptoNombre = ?
-      OR (CAST(d.concepto AS CHAR) = ? AND r.conceptoNombre = d.conceptoNombre)
-      OR EXISTS (
-        SELECT 1
-        FROM documento_concepto_periodos p
-        WHERE p.documento = r.documento
-          AND p.estatus = 'Activo'
-          AND p.concepto_id = ?
-          AND p.conceptoNombre = r.conceptoNombre
-      )
-    )
+    AND CAST(r.concepto AS CHAR) = ?
   `
-  const params: any[] = [cicloKey, concepto.concepto, String(concepto.id), concepto.id]
+  const params: any[] = [cicloKey, String(concepto.id)]
   const inicioValue = firstQueryValue(inicio)
   const finValue = firstQueryValue(fin)
   const plantelValue = firstQueryValue(plantel)
@@ -79,6 +73,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       r.mes,
       r.mesReal,
       r.nombreCompleto,
+      r.concepto,
       r.conceptoNombre,
       r.monto,
       r.formaDePago,
@@ -88,7 +83,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       A.ciclo as cicloBase,
       COALESCE(A.plantel, r.plantel) as scopePlantel
     FROM referenciasdepago r
-    LEFT JOIN documentos d ON d.documento = r.documento
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${where}
     ORDER BY r.fecha DESC, r.folio DESC
@@ -97,6 +91,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const rows = rawRows.filter(row => (
     isInProjectedPlantelScopeForCiclo(row.gradoBase, row.scopePlantel, row.cicloBase, cicloKey, row.nivelBase, scopePlantel || 'GLOBAL')
   ))
+
+  await hydrateFinancialConceptNames(rows, { ciclo: cicloKey })
 
   const formasPagoMap = new Map<string, number>()
   const plantelesMap = new Map<string, number>()

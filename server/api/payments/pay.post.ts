@@ -6,6 +6,7 @@ import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isWholeMoney, parseNullableMoney } from '../../utils/monto-final'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { finalizeStockReservation, releaseStockReservation, reserveStockForPayment, type StockReservation } from '../../utils/conceptos-stock'
+import { isPlaceholderConceptName, resolveFinancialConcept } from '../../utils/financial-concept'
 
 const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 
@@ -112,6 +113,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const stockReservations: StockReservation[] = []
   const paymentStockReservations: StockReservation[] = []
   const finalAmountByTarget = new Map<string, number>()
+  const resolvedPaymentConcepts = new Map<string, { concepto: string; conceptoNombre: string }>()
   const today = dayjs()
 
   try {
@@ -148,7 +150,25 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       LIMIT 1
     `, [documento, mesNumber, mesNumber])
 
-    const paymentConcept = resolvePaymentConceptSnapshot(doc, period)
+    const storedPaymentConcept = resolvePaymentConceptSnapshot(doc, period)
+    let paymentConcept = storedPaymentConcept
+    if (isPlaceholderConceptName(storedPaymentConcept.conceptoNombre)) {
+      const conceptCacheKey = `${normalizeCicloKey(doc.ciclo || cicloKey)}:${storedPaymentConcept.concepto}`
+      const cachedConcept = resolvedPaymentConcepts.get(conceptCacheKey)
+      if (cachedConcept) {
+        paymentConcept = cachedConcept
+      } else {
+        const resolvedConcept = await resolveFinancialConcept({
+          conceptoId: storedPaymentConcept.concepto,
+          ciclo: doc.ciclo || cicloKey,
+        })
+        paymentConcept = {
+          concepto: String(resolvedConcept.id),
+          conceptoNombre: resolvedConcept.concepto,
+        }
+        resolvedPaymentConcepts.set(conceptCacheKey, paymentConcept)
+      }
+    }
 
     const periodIsChangedConcept = period?.accion === 'cambio'
     const targetKey = periodIsChangedConcept ? `period:${period.id}` : `doc:${doc.documento}`

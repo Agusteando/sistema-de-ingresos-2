@@ -8,6 +8,7 @@ import { normalizeCicloKey } from "../../../shared/utils/ciclo";
 import { isWholeMoney } from "../../utils/monto-final";
 import { assertDocumentoPeriodoLifecycleSchema } from "../../utils/documento-periods";
 import { assertStockAvailableForConcept } from '../../utils/conceptos-stock';
+import { resolveFinancialConcept } from '../../utils/financial-concept';
 
 const toMesNumber = (value: unknown) => {
   const raw = String(value || "")
@@ -198,17 +199,10 @@ export default defineEventHandler(async (event) =>
         });
       }
 
-      const [concepto] = await query<any[]>(
-        `SELECT id, concepto, costo FROM conceptos WHERE id = ? AND ciclo = ? LIMIT 1`,
-        [conceptoId, cicloKey],
-      );
-
-      if (!concepto) {
-        throw createError({
-          statusCode: 404,
-          message: "Concepto no encontrado para el ciclo activo.",
-        });
-      }
+      const concepto = await resolveFinancialConcept({
+        conceptoId,
+        ciclo: cicloKey,
+      });
 
       await assertStockAvailableForConcept({ conceptoId: concepto.id, plantel: doc.plantel, quantity: 1, operation: 'cambiar a este concepto' });
 

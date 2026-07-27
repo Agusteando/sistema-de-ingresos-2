@@ -10,6 +10,7 @@ import { resolveProjectedAmount } from "../../../utils/monto-final";
 import { normalizeBecaTypes } from "../../../utils/becaTypes";
 import { isDepuradoPayment, isOtherCampusPayment } from "../../../utils/payment-classification";
 import { readBestStockSnapshots, stockMapByConceptId, uncontrolledStockSnapshot } from '../../../utils/conceptos-stock';
+import { loadFinancialConceptMap, resolveConceptDisplayName } from '../../../utils/financial-concept';
 import {
   getDocumentoPeriodoSchema,
   periodoLifecycleSelect,
@@ -160,6 +161,23 @@ export default defineEventHandler(async (event) =>
         periodRows = [];
       }
     }
+
+    const conceptMap = await loadFinancialConceptMap([
+      ...documentos.map((doc) => doc.concepto),
+      ...periodRows.map((period) => period.concepto_id),
+      ...pagosRows.map((payment) => payment.concepto),
+    ], cicloKey);
+
+    documentos.forEach((doc) => {
+      doc.conceptoNombre = resolveConceptDisplayName(doc.conceptoNombre, doc.concepto, conceptMap);
+    });
+    periodRows.forEach((period) => {
+      if (!Number(period.concepto_id || 0)) return;
+      period.conceptoNombre = resolveConceptDisplayName(period.conceptoNombre, period.concepto_id, conceptMap);
+    });
+    pagosRows.forEach((payment) => {
+      payment.conceptoNombre = resolveConceptDisplayName(payment.conceptoNombre, payment.concepto, conceptMap);
+    });
 
     const periodsByDocument = new Map<number, any[]>();
     periodRows.forEach((period) => {

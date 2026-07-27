@@ -1,6 +1,7 @@
 import { executeStatementTransaction, query, runWithBridgeAgentId, type SqlStatement } from '../../../utils/db'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { assertStockAvailableForConcept } from '../../../utils/conceptos-stock'
+import { resolveFinancialConcept } from '../../../utils/financial-concept'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
@@ -57,16 +58,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     })
   }
 
-  const [concepto] = await query<any[]>(`
-    SELECT id, concepto
-    FROM conceptos
-    WHERE id = ? AND ciclo = ?
-    LIMIT 1
-  `, [conceptoId, effectiveCiclo])
-
-  if (!concepto) {
-    throw createError({ statusCode: 404, message: 'Concepto no encontrado para el ciclo del documento.' })
-  }
+  const concepto = await resolveFinancialConcept({
+    conceptoId,
+    ciclo: effectiveCiclo,
+  })
 
   if (String(doc.concepto) === String(concepto.id) && String(doc.conceptoNombre || '') === String(concepto.concepto || '')) {
     return { success: true, unchanged: true, documento }

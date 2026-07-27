@@ -2,6 +2,7 @@ import { MAX_COMBINED_RECEIPT_PAYMENTS } from '../../shared/constants/paymentRec
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import { calculatePromotedGrado, displayGrado } from '../../shared/utils/grado'
 import { query } from './db'
+import { hydrateFinancialConceptNames } from './financial-concept'
 
 
 export const resolveReceiptAcademicPlacement = (student: any, receiptCycle: unknown) => {
@@ -82,6 +83,8 @@ export const loadActiveReceiptPayments = async (value: unknown) => {
       message: 'Un recibo combinado solo puede incluir pagos del mismo ciclo escolar.',
     })
   }
+
+  await hydrateFinancialConceptNames(rows, { ciclo: ciclos[0] || undefined })
 
   const rowsByFolio = new Map<number, any>()
   rows.forEach((row) => rowsByFolio.set(Number(row.folio), row))

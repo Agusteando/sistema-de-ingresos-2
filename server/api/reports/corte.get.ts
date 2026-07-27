@@ -1,6 +1,7 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
+import { hydrateFinancialConceptNames } from '../../utils/financial-concept'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { inicio, fin, plantel, ciclo = '2025' } = getQuery(event)
@@ -33,6 +34,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     SELECT
       DATE(r.fecha) as fecha,
       r.formaDePago,
+      r.concepto,
       r.conceptoNombre as categoria,
       r.folio,
       r.monto,
@@ -45,6 +47,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     WHERE ${where}
     ORDER BY r.fecha DESC, r.folio ASC
   `, params)
+
+  await hydrateFinancialConceptNames(rows, {
+    ciclo: cicloKey,
+    idField: 'concepto',
+    nameField: 'categoria',
+  })
 
   const grouped = new Map<string, any>()
 

@@ -4,6 +4,7 @@ import { isWholeMoney } from '../../utils/monto-final'
 import { normalizeBecaTypes } from '../../utils/becaTypes'
 import { appendConceptMappedServicioToMatricula } from '../../utils/talleres-servicios'
 import { assertStockAvailableForConcept } from '../../utils/conceptos-stock'
+import { resolveFinancialConcept } from '../../utils/financial-concept'
 
 const clampMotivo = (value: unknown) => {
   const text = String(value || '').trim()
@@ -27,8 +28,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 404, message: 'Alumno no encontrado.' })
   }
 
-  const [conceptoRef] = await query<any[]>(`SELECT concepto FROM conceptos WHERE id = ?`, [body.conceptoId])
-  const conceptoNombre = conceptoRef ? conceptoRef.concepto : 'Cargo'
+  const conceptoRef = await resolveFinancialConcept({
+    conceptoId: body.conceptoId,
+    ciclo: cicloKey,
+  })
+  const conceptoNombre = conceptoRef.concepto
   const meses = Math.max(1, Number(body.meses) || 1)
   const plazoLegacy = Array.from({ length: meses }, (_, i) => i + 1).join(',')
   const costo = Number(body.costo || 0)
@@ -55,7 +59,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const plantel = studentRef.plantel || user?.active_plantel || 'PT'
   const cartaFecha = body.generarCartaBeca && becaTipos.length ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
 
-  await assertStockAvailableForConcept({ conceptoId: body.conceptoId, plantel, quantity: 1, operation: 'crear este cargo' })
+  await assertStockAvailableForConcept({ conceptoId: conceptoRef.id, plantel, quantity: 1, operation: 'crear este cargo' })
 
   const documentStatement: SqlStatement = {
     sql: `
@@ -67,7 +71,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Admin', 'Activo')
     `,
     params: [
-      body.conceptoId,
+      conceptoRef.id,
       conceptoNombre,
       body.matricula,
       costo,
@@ -98,7 +102,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   try {
     servicioSync = await appendConceptMappedServicioToMatricula({
       matricula: body.matricula,
-      conceptoId: body.conceptoId,
+      conceptoId: conceptoRef.id,
       ciclo: cicloKey,
       plantel,
       userEmail: user?.email || userName,
@@ -107,7 +111,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     console.warn('[Documentos] Documento creado; no se pudo anexar taller/servicio a matricula.servicio.', {
       documento,
       matricula: body.matricula,
-      conceptoId: body.conceptoId,
+      conceptoId: conceptoRef.id,
       message: error?.message || error
     })
     servicioSync = { ok: false, mapped: false, changed: false, servicio: null, message: error?.message || 'servicio_sync_failed' }

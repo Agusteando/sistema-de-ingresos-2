@@ -34,9 +34,9 @@ export const resolvePaymentConceptSnapshot = (
     const conceptId = toPositiveConceptId(period?.concepto_id);
     const conceptName = toConceptName(period?.conceptoNombre);
 
-    if (!conceptId || !conceptName) {
+    if (!conceptId) {
       throwContractError(
-        "El periodo de cambio no tiene concepto financiero completo.",
+        "El periodo de cambio no tiene identificador de concepto financiero.",
       );
     }
 
@@ -49,8 +49,8 @@ export const resolvePaymentConceptSnapshot = (
   const conceptId = toPositiveConceptId(doc?.concepto);
   const conceptName = toConceptName(doc?.conceptoNombre);
 
-  if (!conceptId || !conceptName) {
-    throwContractError("El documento no tiene concepto financiero completo.");
+  if (!conceptId) {
+    throwContractError("El documento no tiene identificador de concepto financiero.");
   }
 
   return {

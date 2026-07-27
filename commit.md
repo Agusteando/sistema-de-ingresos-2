@@ -1,1 +1,1 @@
-Corrige el grado proyectado en los recibos de pago
+Corrige la resolución de nombres reales de conceptos financieros
