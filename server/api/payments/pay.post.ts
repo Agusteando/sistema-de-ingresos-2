@@ -3,7 +3,6 @@ import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlState
 import { numeroALetras } from '../../utils/numberToWords'
 import { resolvePaymentConceptSnapshot } from '../../utils/payment-concept'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney, parseNullableMoney } from '../../utils/monto-final'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { finalizeStockReservation, releaseStockReservation, reserveStockForPayment, type StockReservation } from '../../utils/conceptos-stock'
@@ -80,7 +79,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   const [studentRef] = await query<any[]>(
-    `SELECT * FROM base WHERE matricula = ? LIMIT 1`,
+    `SELECT nombreCompleto, plantel FROM base WHERE matricula = ? LIMIT 1`,
     [matricula]
   )
 
@@ -90,20 +89,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   const nombreCompleto = studentRef.nombreCompleto
   const plantel = studentRef.plantel || 'PT'
-
-  const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
-  const isProjectedInScope = isInProjectedPlantelScopeForCiclo(
-    studentRef.grado,
-    plantel,
-    studentRef.ciclo,
-    cicloKey,
-    studentRef.nivel,
-    isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
-  )
-
-  if (!isProjectedInScope) {
-    throw createError({ statusCode: isScopedToActivePlantel ? 403 : 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
-  }
 
   const instituto = (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0
   const [dbClock] = await query<any[]>(`

@@ -6,7 +6,6 @@ import {
 } from '../../../utils/db'
 import { isWholeMoney, legacyProjectedAmount } from '../../../utils/monto-final'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
-import { isInProjectedPlantelScopeForCiclo } from '../../../../shared/utils/grado'
 
 const countDocumentPeriods = (doc: any) => {
   const raw = doc?.plazo || doc?.meses
@@ -74,10 +73,8 @@ export default defineEventHandler(async (event) =>
         SELECT
           D.documento, D.matricula, D.concepto, D.conceptoNombre, D.costo,
           D.montoFinal, D.ciclo, D.meses, D.plazo, D.eventual, D.estatus,
-          D.beca, D.becaMonto, D.becaPorcentaje,
-          B.plantel, B.nivel AS nivelBase, B.grado AS gradoBase, B.ciclo AS cicloBase
+          D.beca, D.becaMonto, D.becaPorcentaje
         FROM documentos D
-        LEFT JOIN base B ON B.matricula = D.matricula
         WHERE D.documento = ?
         LIMIT 1
       `,
@@ -101,25 +98,6 @@ export default defineEventHandler(async (event) =>
     }
 
     const cicloKey = normalizeCicloKey(doc.ciclo)
-    const scopedToPlantel = !user?.isSuperAdmin || user?.active_plantel !== 'GLOBAL'
-
-    if (
-      scopedToPlantel &&
-      (!doc.plantel ||
-        !isInProjectedPlantelScopeForCiclo(
-          doc.gradoBase,
-          doc.plantel,
-          doc.cicloBase,
-          cicloKey,
-          doc.nivelBase,
-          user?.active_plantel,
-        ))
-    ) {
-      throw createError({
-        statusCode: 403,
-        message: 'Alumno fuera del alcance del plantel activo.',
-      })
-    }
 
     const payments = await query<any[]>(
       `

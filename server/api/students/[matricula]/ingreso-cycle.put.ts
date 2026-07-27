@@ -6,7 +6,6 @@ import {
 } from "../../../../shared/utils/tipoIngreso";
 import {
   displayGrado,
-  isInProjectedPlantelScopeForCiclo,
   normalizeGradoForPlantel,
   normalizeNivelEscolar,
   normalizePlantel,
@@ -149,22 +148,6 @@ export default defineEventHandler(async (event) =>
     const isScopedToActivePlantel =
       !user.isSuperAdmin ||
       (user.isSuperAdmin && user.active_plantel !== "GLOBAL");
-
-    if (
-      !isInProjectedPlantelScopeForCiclo(
-        student.gradoBase,
-        student.plantel,
-        student.cicloBase,
-        targetCiclo,
-        student.nivelBase,
-        isScopedToActivePlantel ? user.active_plantel : "GLOBAL",
-      )
-    ) {
-      throw createError({
-        statusCode: isScopedToActivePlantel ? 403 : 409,
-        message: "No tienes acceso a este alumno en este ciclo",
-      });
-    }
 
     const currentNivel = resolveNivelEscolar(student.plantel, student.nivelBase);
     const requestedNivel = normalizeNivelEscolar(body?.targetNivel) || currentNivel;

@@ -1,6 +1,5 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney } from '../../utils/monto-final'
 
 const toMesNumber = (value: unknown) => {
@@ -12,7 +11,6 @@ const toMesNumber = (value: unknown) => {
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
-  const user = event.context.user
   const documento = Number(body.documento)
   const montoFinal = Number(body.montoFinal)
   const cicloKey = normalizeCicloKey(body.ciclo)
@@ -25,10 +23,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   const [doc] = await query<any[]>(`
     SELECT
-      D.documento, D.matricula, D.ciclo, D.estatus, D.montoFinal,
-      B.plantel, B.nivel as nivelBase, B.grado as gradoBase, B.ciclo as cicloBase
+      D.documento, D.estatus, D.montoFinal
     FROM documentos D
-    LEFT JOIN base B ON B.matricula = D.matricula
     WHERE D.documento = ? AND D.ciclo = ?
     LIMIT 1
   `, [documento, cicloKey])
@@ -36,19 +32,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   if (!doc) throw createError({ statusCode: 404, message: 'Documento no encontrado.' })
   if (String(doc.estatus).toLowerCase() !== 'activo') {
     throw createError({ statusCode: 409, message: 'El documento no esta activo.' })
-  }
-
-  const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
-
-  if (!isInProjectedPlantelScopeForCiclo(
-    doc.gradoBase,
-    doc.plantel,
-    doc.cicloBase,
-    cicloKey,
-    doc.nivelBase,
-    isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
-  )) {
-    throw createError({ statusCode: isScopedToActivePlantel ? 403 : 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 
   const [period] = await query<any[]>(`

@@ -1,6 +1,5 @@
 import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
-import { isInProjectedPlantelScopeForCiclo } from '../../../../shared/utils/grado'
 import { generateBecaCartaPdf } from '../../../utils/becaCartaPdf'
 import { normalizeBecaTypes } from '../../../utils/becaTypes'
 
@@ -25,8 +24,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       D.beca, D.becaNombre, D.becaTipos, D.becaMotivo, D.becaMonto, D.becaPorcentaje,
       D.ciclo, D.estatus, D.fecha,
       B.nombreCompleto, B.apellidoPaterno, B.apellidoMaterno, B.nombre,
-      B.plantel, B.nivel, B.grado, B.grupo,
-      B.plantel as plantelBase, B.nivel as nivelBase, B.grado as gradoBase, B.ciclo as cicloBase
+      B.plantel, B.nivel, B.grado, B.grupo
     FROM documentos D
     LEFT JOIN base B ON B.matricula = D.matricula
     WHERE D.documento = ?
@@ -39,18 +37,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
   if (String(doc.estatus || '').toLowerCase() !== 'activo') {
     throw createError({ statusCode: 409, message: 'El documento no esta activo.' })
-  }
-
-  const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
-  if (!isInProjectedPlantelScopeForCiclo(
-    doc.gradoBase,
-    doc.plantelBase,
-    doc.cicloBase,
-    normalizeCicloKey(doc.ciclo),
-    doc.nivelBase,
-    isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
-  )) {
-    throw createError({ statusCode: isScopedToActivePlantel ? 403 : 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
   }
 
   const { selected: becaTipos } = normalizeBecaTypes(doc.becaTipos || doc.becaNombre)

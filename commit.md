@@ -1,1 +1,1 @@
-Centraliza la auditoría escolar y bloquea DDL en la base externa
+Elimina bloqueos por alcance proyectado en operaciones de alumnos

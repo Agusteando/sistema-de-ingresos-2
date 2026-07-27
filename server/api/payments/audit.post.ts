@@ -2,7 +2,6 @@ import { randomInt, randomUUID } from 'node:crypto'
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { resolvePaymentConceptSnapshot } from '../../utils/payment-concept'
 
 type PendingDepuracion = {
@@ -96,25 +95,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     }
 
     const [studentRef] = await query<any[]>(
-      `SELECT nombreCompleto, plantel, nivel as nivelBase, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
+      `SELECT nombreCompleto, plantel FROM base WHERE matricula = ? LIMIT 1`,
       [matricula]
     )
 
     if (!studentRef) {
       throw createError({ statusCode: 404, message: 'Alumno no encontrado.' })
-    }
-
-    const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
-
-    if (!isInProjectedPlantelScopeForCiclo(
-      studentRef.gradoBase,
-      studentRef.plantel,
-      studentRef.cicloBase,
-      ciclo,
-      studentRef.nivelBase,
-      isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
-    )) {
-      throw createError({ statusCode: isScopedToActivePlantel ? 403 : 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
     }
 
     const [documentRef] = await query<any[]>(

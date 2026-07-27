@@ -3,7 +3,6 @@ import { controlEscolarCentralQuery, getCentralTableColumns } from '../../utils/
 import { normalizeCicloForTipoIngreso, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import {
   displayGrado,
-  isInProjectedPlantelScopeForCiclo,
   normalizeGradoForPlantel,
   normalizeNivelEscolar,
   normalizePlantel,
@@ -132,18 +131,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     if (!student) {
       results.push({ matricula, status: 'failed', message: 'Alumno no encontrado.' })
-      return
-    }
-
-    if (!isInProjectedPlantelScopeForCiclo(
-      student.gradoBase,
-      student.plantel,
-      student.cicloBase,
-      targetCiclo,
-      student.nivelBase,
-      isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
-    )) {
-      results.push({ matricula, nombreCompleto: student.nombreCompleto, status: 'failed', message: 'Fuera del plantel activo.' })
       return
     }
 

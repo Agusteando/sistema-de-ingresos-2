@@ -5,7 +5,6 @@ import {
   type SqlStatement,
 } from "../../utils/db";
 import { normalizeCicloKey } from "../../../shared/utils/ciclo";
-import { isInProjectedPlantelScopeForCiclo } from "../../../shared/utils/grado";
 import { isWholeMoney } from "../../utils/monto-final";
 import { assertDocumentoPeriodoLifecycleSchema } from "../../utils/documento-periods";
 import { assertStockAvailableForConcept } from '../../utils/conceptos-stock';
@@ -134,26 +133,6 @@ export default defineEventHandler(async (event) =>
       throw createError({
         statusCode: 409,
         message: "El documento no esta activo.",
-      });
-    }
-
-    const isScopedToActivePlantel =
-      !user.isSuperAdmin ||
-      (user.isSuperAdmin && user.active_plantel !== "GLOBAL");
-
-    if (
-      !isInProjectedPlantelScopeForCiclo(
-        doc.gradoBase,
-        doc.plantel,
-        doc.cicloBase,
-        cicloKey,
-        doc.nivelBase,
-        isScopedToActivePlantel ? user.active_plantel : "GLOBAL",
-      )
-    ) {
-      throw createError({
-        statusCode: isScopedToActivePlantel ? 403 : 409,
-        message: "Alumno fuera del alcance del plantel para este ciclo.",
       });
     }
 

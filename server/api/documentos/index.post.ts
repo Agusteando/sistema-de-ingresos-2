@@ -1,6 +1,5 @@
 import { runWithBridgeAgentId, query, executeStatementTransaction, type SqlStatement } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { isInProjectedPlantelScopeForCiclo } from '../../../shared/utils/grado'
 import { isWholeMoney } from '../../utils/monto-final'
 import { normalizeBecaTypes } from '../../utils/becaTypes'
 import { appendConceptMappedServicioToMatricula } from '../../utils/talleres-servicios'
@@ -20,7 +19,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const user = event.context.user
 
   const [studentRef] = await query<any[]>(
-    `SELECT matricula, nombreCompleto, plantel, nivel as nivelBase, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
+    `SELECT plantel FROM base WHERE matricula = ? LIMIT 1`,
     [body.matricula]
   )
 
@@ -28,20 +27,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 404, message: 'Alumno no encontrado.' })
   }
 
-  const isScopedToActivePlantel = !user.isSuperAdmin || (user.isSuperAdmin && user.active_plantel !== 'GLOBAL')
-  const isProjectedInScope = isInProjectedPlantelScopeForCiclo(
-    studentRef.gradoBase,
-    studentRef.plantel,
-    studentRef.cicloBase,
-    cicloKey,
-    studentRef.nivelBase,
-    isScopedToActivePlantel ? user.active_plantel : 'GLOBAL'
-  )
-
-  if (!isProjectedInScope) {
-    throw createError({ statusCode: isScopedToActivePlantel ? 403 : 409, message: 'Alumno fuera del alcance del plantel para este ciclo.' })
-  }
-  
   const [conceptoRef] = await query<any[]>(`SELECT concepto FROM conceptos WHERE id = ?`, [body.conceptoId])
   const conceptoNombre = conceptoRef ? conceptoRef.concepto : 'Cargo'
   const meses = Math.max(1, Number(body.meses) || 1)
