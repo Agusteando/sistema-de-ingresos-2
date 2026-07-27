@@ -1,0 +1,1 @@
+export const MAX_COMBINED_RECEIPT_PAYMENTS = 100

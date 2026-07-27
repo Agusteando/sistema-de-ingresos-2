@@ -250,6 +250,17 @@
               <span v-if="selectedDebts.length" class="profile-action-count">{{ selectedDebts.length }}</span>
             </button>
             <button
+              class="profile-action-button profile-action-button--receipt-compact"
+              type="button"
+              title="Seleccionar pagos para regenerar un recibo"
+              :disabled="!receiptablePaymentCount"
+              @click="openPaymentHistory(debts)"
+            >
+              <LucideReceiptText :size="15" />
+              <span class="profile-action-label">Recibos</span>
+              <span v-if="receiptablePaymentCount" class="profile-action-count">{{ receiptablePaymentCount }}</span>
+            </button>
+            <button
               class="profile-action-button"
               title="Facturar conceptos seleccionados"
               :disabled="!selectedDebts.length"
@@ -965,6 +976,7 @@ import {
   LucidePencilLine,
   LucidePlus,
   LucideBadgeDollarSign,
+  LucideReceiptText,
 } from "lucide-vue-next";
 import { useState, useCookie } from "#app";
 import { useToast } from "~/composables/useToast";
@@ -2194,6 +2206,20 @@ const paymentCountForDebts = (debtList = []) => {
   });
   return folios.size;
 };
+const receiptablePaymentCountForDebts = (debtList = []) => {
+  const folios = new Set();
+  debtList.forEach((debt) => {
+    (debt?.historialPagos || []).forEach((payment) => {
+      if (isPaymentCancelled(payment)) return;
+      const folio = String(payment?.folio || "").trim();
+      if (folio) folios.add(folio);
+    });
+  });
+  return folios.size;
+};
+const receiptablePaymentCount = computed(() =>
+  receiptablePaymentCountForDebts(debts.value),
+);
 
 const openPaymentHistory = (debtList) => {
   const normalized = Array.isArray(debtList)
@@ -2209,7 +2235,12 @@ const closePaymentHistory = () => {
   selectedPaymentDebts.value = [];
 };
 
-const handlePaymentReceipt = ({ payment }) => reprintPayment(payment);
+const handlePaymentReceipt = (payload = {}) => {
+  const folios = Array.isArray(payload?.folios)
+    ? payload.folios
+    : [payload?.payment?.folio];
+  reprintPayments(folios);
+};
 const handlePaymentInvoice = ({ debt, payment }) => {
   closePaymentHistory();
   invoicePaymentReceipt(debt, payment);
@@ -2232,9 +2263,18 @@ const handlePaymentCancellationSuccess = async () => {
   emit("refresh");
 };
 
-const reprintPayment = (pago) => {
+const reprintPayments = (folios = []) => {
+  const normalizedFolios = Array.from(
+    new Set(
+      (Array.isArray(folios) ? folios : [folios])
+        .map((folio) => Number(folio))
+        .filter((folio) => Number.isInteger(folio) && folio > 0),
+    ),
+  );
+  if (!normalizedFolios.length) return;
+
   window.open(
-    `/print/recibo?folios=${pago.folio}`,
+    `/print/recibo?folios=${encodeURIComponent(normalizedFolios.join(","))}`,
     "_blank",
     "width=850,height=800",
   );

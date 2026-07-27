@@ -1,10 +1,16 @@
 <template>
   <Teleport to="body">
     <div class="modal-overlay payment-history-modal-overlay" @click.self="emit('close')">
-      <section class="modal-container payment-history-modal" role="dialog" aria-modal="true" aria-labelledby="payment-history-title">
+      <section
+        class="modal-container payment-history-modal"
+        :class="{ 'has-payment-tools': paymentItems.length }"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-history-title"
+      >
         <header class="payment-history-modal__header">
           <div class="payment-history-modal__heading">
-            <span class="payment-history-modal__eyebrow">Pagos registrados</span>
+            <span class="payment-history-modal__eyebrow">Recibos de pago</span>
             <h2 id="payment-history-title">{{ title }}</h2>
             <p>{{ subtitle }}</p>
           </div>
@@ -19,90 +25,177 @@
             <strong>${{ money(activePaidTotal) }}</strong>
           </article>
           <article>
-            <span>Pagos</span>
+            <span>Pagos vigentes</span>
             <strong>{{ activeCount }}</strong>
           </article>
-          <article v-if="cancelledCount">
-            <span>Cancelados</span>
-            <strong>{{ cancelledCount }}</strong>
+          <article>
+            <span>Conceptos</span>
+            <strong>{{ conceptCount }}</strong>
           </article>
+        </div>
+
+        <div v-if="paymentItems.length" class="payment-history-modal__tools">
+          <label class="payment-history-search">
+            <LucideSearch :size="15" aria-hidden="true" />
+            <input
+              v-model.trim="searchQuery"
+              type="search"
+              autocomplete="off"
+              placeholder="Buscar folio, concepto, mes o método"
+              aria-label="Buscar pagos"
+            />
+          </label>
+          <button
+            type="button"
+            class="payment-selection-toggle"
+            :disabled="!visibleSelectableItems.length || (selectionLimitReached && !allVisibleSelected)"
+            @click="toggleVisibleSelection"
+          >
+            {{ allVisibleSelected ? 'Quitar visibles' : 'Seleccionar visibles' }}
+          </button>
+          <button
+            v-if="selectedCount"
+            type="button"
+            class="payment-selection-clear"
+            @click="clearSelection"
+          >
+            Limpiar
+          </button>
         </div>
 
         <div class="payment-history-modal__body">
           <div v-if="!paymentItems.length" class="payment-history-modal__empty">
             <LucideReceiptText :size="28" />
             <strong>Sin pagos registrados</strong>
-            <span>Este concepto todavía no tiene movimientos individuales.</span>
+            <span>Los conceptos seleccionados todavía no tienen movimientos individuales.</span>
           </div>
 
-          <article
-            v-for="item in paymentItems"
-            :key="`${item.payment.folio}-${item.debt.documento}-${item.debt.mes}`"
-            :class="['payment-history-item', { 'is-cancelled': item.cancelled }]"
-          >
-            <div class="payment-history-item__main">
-              <div class="payment-history-item__icon" aria-hidden="true">
-                <LucideReceiptText :size="18" />
-              </div>
-              <div class="payment-history-item__copy">
-                <div class="payment-history-item__title-row">
-                  <strong>Folio {{ item.payment.folio_plantel || item.payment.folio }}</strong>
-                  <span v-if="item.cancelled" class="payment-status-badge is-cancelled">Cancelado</span>
-                  <span v-else-if="isOtherCampus(item.payment)" class="payment-status-badge is-external">Otro plantel</span>
-                  <span v-else-if="item.payment.depurado" class="payment-status-badge is-audit">Depurado</span>
-                  <span v-else class="payment-status-badge is-active">Vigente</span>
-                </div>
-                <span>{{ item.debt.mesLabel || item.payment.mesReal || item.payment.mes || 'Cargo' }}</span>
-                <div class="payment-history-item__meta">
-                  <span><LucideCalendarClock :size="13" /> {{ formatDateTime(item.payment.fecha) }}</span>
-                  <span><LucideCreditCard :size="13" /> {{ paymentMethodLabel(item.payment) }}</span>
-                  <span v-if="isOtherCampus(item.payment)"><LucideBuilding2 :size="13" /> {{ paymentCampusLabel(item.payment) }}</span>
-                </div>
-                <small v-if="hasAdjustedDate(item.payment)">
-                  Fecha original: {{ formatDateTime(item.payment.fecha_original) }}
-                </small>
-              </div>
-              <div class="payment-history-item__amount">
-                <span>Importe</span>
-                <strong>${{ money(item.payment.monto) }}</strong>
-              </div>
-            </div>
+          <div v-else-if="!filteredPaymentItems.length" class="payment-history-modal__empty payment-history-modal__empty--compact">
+            <LucideSearch :size="25" />
+            <strong>Sin coincidencias</strong>
+            <span>Prueba con otro folio, concepto, mes o método de pago.</span>
+          </div>
 
-            <div class="payment-history-item__actions">
-              <button
-                type="button"
-                class="payment-item-action"
-                :disabled="item.cancelled"
-                @click="emit('receipt', item)"
-              >
-                <LucideDownload :size="14" />
-                Descargar recibo
-              </button>
-              <button
-                v-if="!item.payment.depurado"
-                type="button"
-                class="payment-item-action"
-                :disabled="item.cancelled"
-                @click="emit('invoice', item)"
-              >
-                <LucideFileText :size="14" />
-                Facturar
-              </button>
-              <button
-                type="button"
-                class="payment-item-action payment-item-action--danger"
-                :disabled="item.cancelled"
-                @click="emit('cancel', item)"
-              >
-                <LucideBan :size="14" />
-                Cancelar pago
-              </button>
-            </div>
-          </article>
+          <template v-else>
+            <article
+              v-for="item in filteredPaymentItems"
+              :key="paymentItemKey(item)"
+              :class="[
+                'payment-history-item',
+                {
+                  'is-cancelled': item.cancelled,
+                  'is-selected': isSelected(item),
+                  'is-selectable': !isItemSelectionDisabled(item),
+                  'is-limit-disabled': isItemSelectionDisabled(item) && !item.cancelled,
+                },
+              ]"
+              @click="toggleItem(item)"
+            >
+              <div class="payment-history-item__main">
+                <label
+                  class="payment-history-item__selector"
+                  :class="{ 'is-disabled': isItemSelectionDisabled(item) }"
+                  :aria-label="selectionLabel(item)"
+                  @click.stop
+                >
+                  <input
+                    type="checkbox"
+                    :checked="isSelected(item)"
+                    :disabled="isItemSelectionDisabled(item)"
+                    @change="toggleItem(item)"
+                  />
+                  <span aria-hidden="true"></span>
+                </label>
+
+                <div class="payment-history-item__icon" aria-hidden="true">
+                  <LucideReceiptText :size="18" />
+                </div>
+
+                <div class="payment-history-item__copy">
+                  <div class="payment-history-item__title-row">
+                    <strong>Folio {{ item.payment.folio_plantel || item.payment.folio }}</strong>
+                    <span v-if="item.cancelled" class="payment-status-badge is-cancelled">Cancelado</span>
+                    <span v-else-if="isOtherCampus(item.payment)" class="payment-status-badge is-external">Otro plantel</span>
+                    <span v-else-if="item.payment.depurado" class="payment-status-badge is-audit">Depurado</span>
+                    <span v-else class="payment-status-badge is-active">Vigente</span>
+                  </div>
+                  <span class="payment-history-item__concept">{{ conceptLabel(item) }}</span>
+                  <span class="payment-history-item__period">{{ periodLabel(item) }}</span>
+                  <div class="payment-history-item__meta">
+                    <span><LucideCalendarClock :size="13" /> {{ formatDateTime(item.payment.fecha) }}</span>
+                    <span><LucideCreditCard :size="13" /> {{ paymentMethodLabel(item.payment) }}</span>
+                    <span v-if="isOtherCampus(item.payment)"><LucideBuilding2 :size="13" /> {{ paymentCampusLabel(item.payment) }}</span>
+                  </div>
+                  <small v-if="hasAdjustedDate(item.payment)">
+                    Fecha original: {{ formatDateTime(item.payment.fecha_original) }}
+                  </small>
+                </div>
+
+                <div class="payment-history-item__amount">
+                  <span>Importe</span>
+                  <strong>${{ money(item.payment.monto) }}</strong>
+                </div>
+              </div>
+
+              <div class="payment-history-item__actions" @click.stop>
+                <button
+                  type="button"
+                  class="payment-item-action"
+                  :disabled="item.cancelled"
+                  @click="emitReceipt([item])"
+                >
+                  <LucideDownload :size="14" />
+                  Recibo individual
+                </button>
+                <button
+                  v-if="!item.payment.depurado"
+                  type="button"
+                  class="payment-item-action"
+                  :disabled="item.cancelled"
+                  @click="emit('invoice', item)"
+                >
+                  <LucideFileText :size="14" />
+                  Facturar
+                </button>
+                <button
+                  type="button"
+                  class="payment-item-action payment-item-action--danger"
+                  :disabled="item.cancelled"
+                  @click="emit('cancel', item)"
+                >
+                  <LucideBan :size="14" />
+                  Cancelar pago
+                </button>
+              </div>
+            </article>
+          </template>
         </div>
 
         <footer class="payment-history-modal__footer">
-          <button class="btn btn-ghost" type="button" @click="emit('close')">Cerrar</button>
+          <div :class="['payment-selection-summary', { 'is-empty': !selectedCount }]" aria-live="polite">
+            <span>{{ selectedCount ? 'Selección actual' : 'Recibo combinado' }}</span>
+            <strong v-if="selectedCount">{{ selectedCount }} pago{{ selectedCount === 1 ? '' : 's' }} · ${{ money(selectedTotal) }}</strong>
+            <strong v-else>Selecciona uno o varios pagos</strong>
+            <small v-if="selectionLimitReached">
+              Máximo de {{ MAX_COMBINED_RECEIPT_PAYMENTS }} pagos alcanzado para este recibo.
+            </small>
+            <small v-else-if="selectedCount">
+              {{ selectedConceptCount }} concepto{{ selectedConceptCount === 1 ? '' : 's' }} en un solo recibo
+            </small>
+            <small v-else>Puedes combinar pagos de conceptos y fechas distintas.</small>
+          </div>
+          <div class="payment-history-modal__footer-actions">
+            <button class="btn btn-ghost" type="button" @click="emit('close')">Cerrar</button>
+            <button
+              class="btn btn-primary payment-history-generate"
+              type="button"
+              :disabled="!selectedCount"
+              @click="emitReceipt(selectedItems)"
+            >
+              <LucideDownload :size="15" />
+              {{ selectedCount > 1 ? 'Generar recibo combinado' : 'Generar recibo' }}
+            </button>
+          </div>
         </footer>
       </section>
     </div>
@@ -110,7 +203,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { MAX_COMBINED_RECEIPT_PAYMENTS } from '~/shared/constants/paymentReceipt'
 import {
   LucideBan,
   LucideBuilding2,
@@ -119,6 +213,7 @@ import {
   LucideDownload,
   LucideFileText,
   LucideReceiptText,
+  LucideSearch,
   LucideX,
 } from 'lucide-vue-next'
 import { useModalEscape } from '~/composables/useModalEscape'
@@ -133,12 +228,16 @@ const emit = defineEmits(['close', 'receipt', 'invoice', 'cancel'])
 useScrollLock()
 useModalEscape(() => emit('close'))
 
+const searchQuery = ref('')
+const selectedKeys = ref(new Set())
+
 const statusKey = (value) => String(value || '').trim().toLowerCase()
-const normalizedMethod = (value) => String(value || '')
+const normalizedText = (value) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .trim()
   .toLowerCase()
+const normalizedMethod = normalizedText
 const truthyFlag = (value) => ['1', 'true'].includes(String(value ?? '').trim().toLowerCase())
 const isCancelled = (payment) => ['cancelada', 'cancelado'].includes(statusKey(payment?.estatus))
 const isOtherCampus = (payment) => {
@@ -163,6 +262,20 @@ const hasAdjustedDate = (payment) => Boolean(
   paymentDateKey(payment.fecha) &&
   paymentDateKey(payment.fecha) !== paymentDateKey(payment.fecha_original),
 )
+const paymentItemKey = (item) => {
+  const folio = Number(item?.payment?.folio)
+  if (Number.isInteger(folio) && folio > 0) return `folio:${folio}`
+
+  return [
+    'payment',
+    item?.debt?.documento || item?.payment?.documento || '',
+    item?.payment?.mes || item?.debt?.mes || '',
+    item?.payment?.fecha || '',
+    item?.payment?.monto || '',
+  ].join(':')
+}
+const conceptLabel = (item) => item?.payment?.conceptoNombre || item?.debt?.conceptoNombre || 'Concepto financiero'
+const periodLabel = (item) => item?.debt?.mesLabel || item?.payment?.mesReal || item?.payment?.mes || 'Cargo'
 
 const paymentItems = computed(() => {
   const seen = new Set()
@@ -170,10 +283,11 @@ const paymentItems = computed(() => {
 
   for (const debt of props.debts || []) {
     for (const payment of debt?.historialPagos || []) {
-      const key = `${payment?.folio || ''}:${debt?.documento || ''}:${payment?.mes || debt?.mes || ''}`
+      const row = { debt, payment, cancelled: isCancelled(payment) }
+      const key = paymentItemKey(row)
       if (seen.has(key)) continue
       seen.add(key)
-      rows.push({ debt, payment, cancelled: isCancelled(payment) })
+      rows.push(row)
     }
   }
 
@@ -185,27 +299,116 @@ const paymentItems = computed(() => {
   })
 })
 
+watch(paymentItems, (items) => {
+  const validKeys = new Set(items.filter((item) => !item.cancelled).map(paymentItemKey))
+  selectedKeys.value = new Set([...selectedKeys.value].filter((key) => validKeys.has(key)))
+}, { immediate: true })
+
+const filteredPaymentItems = computed(() => {
+  const query = normalizedText(searchQuery.value)
+  if (!query) return paymentItems.value
+
+  return paymentItems.value.filter((item) => {
+    const haystack = [
+      item.payment?.folio,
+      item.payment?.folio_plantel,
+      conceptLabel(item),
+      periodLabel(item),
+      paymentMethodLabel(item.payment),
+      paymentCampusLabel(item.payment),
+      item.payment?.fecha,
+      item.payment?.monto,
+    ].map(normalizedText).join(' ')
+    return haystack.includes(query)
+  })
+})
+
+const paymentConceptNames = computed(() => Array.from(new Set(paymentItems.value.map(conceptLabel).filter(Boolean))))
 const activeItems = computed(() => paymentItems.value.filter((item) => !item.cancelled))
+const visibleSelectableItems = computed(() => filteredPaymentItems.value.filter((item) => !item.cancelled))
 const activePaidTotal = computed(() => activeItems.value.reduce((sum, item) => sum + Number(item.payment?.monto || 0), 0))
 const activeCount = computed(() => activeItems.value.length)
-const cancelledCount = computed(() => paymentItems.value.filter((item) => item.cancelled).length)
+const conceptCount = computed(() => paymentConceptNames.value.length)
+const selectedItems = computed(() => paymentItems.value.filter((item) => selectedKeys.value.has(paymentItemKey(item)) && !item.cancelled))
+const selectedCount = computed(() => selectedItems.value.length)
+const selectedTotal = computed(() => selectedItems.value.reduce((sum, item) => sum + Number(item.payment?.monto || 0), 0))
+const selectedConceptCount = computed(() => new Set(selectedItems.value.map(conceptLabel)).size)
+const allVisibleSelected = computed(() => (
+  visibleSelectableItems.value.length > 0 &&
+  visibleSelectableItems.value.every((item) => selectedKeys.value.has(paymentItemKey(item)))
+))
+const selectionLimitReached = computed(() => selectedCount.value >= MAX_COMBINED_RECEIPT_PAYMENTS)
 
-const title = computed(() => {
-  const names = Array.from(new Set((props.debts || []).map((debt) => debt?.conceptoNombre).filter(Boolean)))
-  return names.length === 1 ? names[0] : 'Pagos del concepto'
-})
+const isSelected = (item) => selectedKeys.value.has(paymentItemKey(item))
+const isItemSelectionDisabled = (item) => (
+  Boolean(item?.cancelled) || (selectionLimitReached.value && !isSelected(item))
+)
+const selectionLabel = (item) => {
+  if (item?.cancelled) return 'Pago cancelado'
+  if (isItemSelectionDisabled(item)) return `Límite de ${MAX_COMBINED_RECEIPT_PAYMENTS} pagos alcanzado`
+  const action = isSelected(item) ? 'Quitar' : 'Seleccionar'
+  return `${action} folio ${item?.payment?.folio_plantel || item?.payment?.folio}`
+}
+const toggleItem = (item) => {
+  if (!item || item.cancelled) return
+  const key = paymentItemKey(item)
+  const next = new Set(selectedKeys.value)
+  if (next.has(key)) next.delete(key)
+  else if (next.size < MAX_COMBINED_RECEIPT_PAYMENTS) next.add(key)
+  selectedKeys.value = next
+}
+const toggleVisibleSelection = () => {
+  if (!visibleSelectableItems.value.length) return
+  const next = new Set(selectedKeys.value)
+  if (allVisibleSelected.value) {
+    visibleSelectableItems.value.forEach((item) => next.delete(paymentItemKey(item)))
+  } else {
+    for (const item of visibleSelectableItems.value) {
+      if (next.size >= MAX_COMBINED_RECEIPT_PAYMENTS) break
+      next.add(paymentItemKey(item))
+    }
+  }
+  selectedKeys.value = next
+}
+const clearSelection = () => {
+  selectedKeys.value = new Set()
+}
+const emitReceipt = (items) => {
+  const normalizedItems = (Array.isArray(items) ? items : []).filter((item) => item && !item.cancelled)
+  const folios = Array.from(new Set(normalizedItems
+    .map((item) => Number(item.payment?.folio))
+    .filter((folio) => Number.isInteger(folio) && folio > 0)))
+  if (!folios.length) return
+  emit('receipt', { items: normalizedItems, folios, payment: normalizedItems[0]?.payment })
+}
+
+const title = computed(() => (
+  paymentConceptNames.value.length === 1
+    ? paymentConceptNames.value[0]
+    : 'Seleccionar pagos para recibo'
+))
 
 const subtitle = computed(() => {
-  const months = Array.from(new Set((props.debts || []).map((debt) => debt?.mesLabel).filter(Boolean)))
-  const document = (props.debts || []).find((debt) => debt?.documento)?.documento
+  if (paymentConceptNames.value.length > 1) {
+    return `${paymentConceptNames.value.length} conceptos con pagos · combina movimientos en un solo recibo`
+  }
+
+  const periods = Array.from(new Set(paymentItems.value.map(periodLabel).filter(Boolean)))
+  const documents = Array.from(new Set(paymentItems.value
+    .map((item) => item?.debt?.documento || item?.payment?.documento)
+    .filter(Boolean)))
   const parts = []
-  if (months.length === 1) parts.push(months[0])
-  else if (months.length > 1) parts.push(`${months.length} mensualidades`)
-  if (document) parts.push(`Documento ${document}`)
-  return parts.join(' · ') || 'Detalle de movimientos individuales'
+  if (periods.length === 1) parts.push(periods[0])
+  else if (periods.length > 1) parts.push(`${periods.length} periodos`)
+  if (documents.length === 1) parts.push(`Documento ${documents[0]}`)
+  else if (documents.length > 1) parts.push(`${documents.length} documentos`)
+  return parts.join(' · ') || 'Selecciona uno o varios movimientos vigentes'
 })
 
-const money = (value) => Number(value || 0).toFixed(2)
+const money = (value) => Number(value || 0).toLocaleString('es-MX', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
 const formatDateTime = (value) => {
   if (!value) return 'Sin fecha'
   const parsed = new Date(value)
@@ -221,11 +424,15 @@ const formatDateTime = (value) => {
 }
 
 .payment-history-modal {
-  width: min(760px, 100%);
-  max-height: min(820px, calc(100vh - 40px));
+  width: min(860px, 100%);
+  max-height: min(880px, calc(100vh - 40px));
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   overflow: hidden;
+}
+
+.payment-history-modal.has-payment-tools {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
 }
 
 .payment-history-modal__header,
@@ -243,7 +450,7 @@ const formatDateTime = (value) => {
 }
 
 .payment-history-modal__footer {
-  justify-content: flex-end;
+  align-items: flex-end;
   border-top: 1px solid var(--students-border-soft, #edf2f7);
 }
 
@@ -298,7 +505,8 @@ const formatDateTime = (value) => {
 }
 
 .payment-history-modal__summary span,
-.payment-history-item__amount span {
+.payment-history-item__amount span,
+.payment-selection-summary > span {
   color: #7b8799;
   font-size: 9px;
   font-weight: 800;
@@ -309,6 +517,73 @@ const formatDateTime = (value) => {
 .payment-history-modal__summary strong {
   color: #1c2b43;
   font-size: 15px;
+}
+
+.payment-history-modal__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-bottom: 1px solid #edf1f5;
+  background: #fff;
+}
+
+.payment-history-search {
+  display: flex;
+  flex: 1 1 280px;
+  min-width: 160px;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #dfe7ef;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: #7b8799;
+}
+
+.payment-history-search:focus-within {
+  border-color: #94c3aa;
+  box-shadow: 0 0 0 3px rgba(47, 127, 77, .08);
+}
+
+.payment-history-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #25324a;
+  font: inherit;
+  font-size: 11px;
+}
+
+.payment-selection-toggle,
+.payment-selection-clear {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #dfe7ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #2f6f57;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.payment-selection-toggle:hover:not(:disabled),
+.payment-selection-clear:hover {
+  border-color: #b8d3c4;
+  background: #f4faf6;
+}
+
+.payment-selection-clear {
+  color: #677386;
+}
+
+.payment-selection-toggle:disabled {
+  cursor: default;
+  opacity: .45;
 }
 
 .payment-history-modal__body {
@@ -330,6 +605,10 @@ const formatDateTime = (value) => {
   text-align: center;
 }
 
+.payment-history-modal__empty--compact {
+  padding-block: 30px;
+}
+
 .payment-history-modal__empty strong {
   color: #435069;
 }
@@ -340,6 +619,30 @@ const formatDateTime = (value) => {
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 8px 22px rgba(31, 43, 67, .045);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.payment-history-item.is-selectable {
+  cursor: pointer;
+}
+
+.payment-history-item.is-selectable:hover {
+  border-color: #bdd5c6;
+}
+
+.payment-history-item.is-selected {
+  border-color: #68a97c;
+  background: #fbfefc;
+  box-shadow: 0 0 0 3px rgba(47, 127, 77, .08), 0 10px 24px rgba(31, 43, 67, .055);
+}
+
+.payment-history-item.is-limit-disabled {
+  cursor: default;
+}
+
+.payment-history-item:focus-visible {
+  outline: 3px solid rgba(47, 127, 77, .16);
+  outline-offset: 2px;
 }
 
 .payment-history-item.is-cancelled {
@@ -349,9 +652,77 @@ const formatDateTime = (value) => {
 
 .payment-history-item__main {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
+}
+
+.payment-history-item__selector {
+  position: relative;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  cursor: pointer;
+}
+
+.payment-history-item__selector input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.payment-history-item__selector span {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1.5px solid #bcc7d4;
+  border-radius: 5px;
+  background: #fff;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.payment-history-item__selector span::after {
+  width: 8px;
+  height: 4px;
+  border-bottom: 2px solid #fff;
+  border-left: 2px solid #fff;
+  content: '';
+  opacity: 0;
+  transform: translateY(-1px) rotate(-45deg) scale(.7);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.payment-history-item__selector input:checked + span {
+  border-color: #2f7f4d;
+  background: #2f7f4d;
+  box-shadow: 0 3px 8px rgba(47, 127, 77, .2);
+}
+
+.payment-history-item__selector input:checked + span::after {
+  opacity: 1;
+  transform: translateY(-1px) rotate(-45deg) scale(1);
+}
+
+.payment-history-item__selector input:focus-visible + span {
+  box-shadow: 0 0 0 3px rgba(47, 127, 77, .14);
+}
+
+.payment-history-item__selector.is-disabled {
+  cursor: default;
+}
+
+.payment-history-item__selector.is-disabled span {
+  background: #f1f3f5;
+  opacity: .65;
 }
 
 .payment-history-item__icon {
@@ -366,7 +737,7 @@ const formatDateTime = (value) => {
 
 .payment-history-item__copy {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -382,18 +753,27 @@ const formatDateTime = (value) => {
   font-size: 13px;
 }
 
-.payment-history-item__copy > span {
-  overflow: hidden;
-  color: #5e6c82;
+.payment-history-item__concept,
+.payment-history-item__period {
+  overflow-wrap: anywhere;
+}
+
+.payment-history-item__concept {
+  color: #33425a;
   font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 750;
+}
+
+.payment-history-item__period {
+  color: #69768a;
+  font-size: 10px;
 }
 
 .payment-history-item__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  margin-top: 2px;
   color: #6f7b8e;
   font-size: 10px;
 }
@@ -495,7 +875,39 @@ const formatDateTime = (value) => {
   opacity: .45;
 }
 
-@media (max-width: 620px) {
+.payment-selection-summary {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.payment-selection-summary strong {
+  color: #203047;
+  font-size: 13px;
+}
+
+.payment-selection-summary small {
+  color: #6d798b;
+  font-size: 10px;
+}
+
+.payment-selection-summary.is-empty strong {
+  color: #536177;
+}
+
+.payment-history-modal__footer-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.payment-history-generate {
+  min-width: 194px;
+}
+
+@media (max-width: 720px) {
   .payment-history-modal-overlay {
     padding: 8px;
   }
@@ -504,21 +916,66 @@ const formatDateTime = (value) => {
     max-height: calc(100vh - 16px);
   }
 
+  .payment-history-modal__tools {
+    flex-wrap: wrap;
+  }
+
+  .payment-history-search {
+    flex-basis: 100%;
+  }
+
+  .payment-history-item__main {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+
+  .payment-history-item__amount {
+    grid-column: 3;
+    justify-items: start;
+  }
+
+  .payment-history-modal__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .payment-history-modal__footer-actions {
+    display: grid;
+    grid-template-columns: minmax(0, .65fr) minmax(0, 1.35fr);
+  }
+
+  .payment-history-generate {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 520px) {
   .payment-history-modal__summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .payment-history-modal__summary article:last-child {
+    grid-column: 1 / -1;
+  }
+
   .payment-history-item__main {
     grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .payment-history-item__icon {
+    display: none;
   }
 
   .payment-history-item__amount {
     grid-column: 2;
-    justify-items: start;
   }
 
   .payment-history-item__actions {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .payment-history-modal__footer-actions {
     grid-template-columns: 1fr;
   }
 }

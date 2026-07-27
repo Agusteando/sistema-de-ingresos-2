@@ -8,21 +8,32 @@
     <div class="max-w-[850px] mx-auto mb-6 print:hidden flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm relative z-20">
       <button class="btn btn-ghost" @click="closeWindow">Volver</button>
       <div class="flex gap-2">
-        <button class="btn btn-outline" @click="emailReceipt" :disabled="emailing || isPreview">
+        <button class="btn btn-outline" @click="emailReceipt" :disabled="emailing || isPreview || loadingReceipt || receiptError || !items.length">
           <LucideMail :size="16" /> {{ emailing ? 'Enviando...' : 'Enviar email' }}
         </button>
-        <button class="btn btn-secondary" @click="openInvoiceModal" :disabled="isPreview">
+        <button class="btn btn-secondary" @click="openInvoiceModal" :disabled="isPreview || loadingReceipt || receiptError || !items.length">
           <LucideFileText :size="16" /> Facturar CFDI
         </button>
-        <button class="btn btn-primary" @click="triggerPrint">
+        <button class="btn btn-primary" :disabled="loadingReceipt || receiptError || !items.length" @click="triggerPrint">
           <LucidePrinter :size="16" /> Imprimir
         </button>
       </div>
     </div>
 
+    <div v-if="!isPreview && loadingReceipt" class="receipt-state max-w-[850px] mx-auto relative z-10">
+      <strong>Cargando pagos seleccionados...</strong>
+      <span>Preparando el recibo con el desglose completo.</span>
+    </div>
+
+    <div v-else-if="receiptError" class="receipt-state receipt-state--error max-w-[850px] mx-auto relative z-10">
+      <strong>No se pudo generar el recibo</strong>
+      <span>{{ receiptError }}</span>
+    </div>
+
     <div
+      v-else-if="items.length"
       class="receipt-sheet mx-auto border border-gray-200 p-8 rounded-2xl relative z-10 bg-white shadow-lg w-full"
-      :class="hasMultipleConcepts ? 'receipt-sheet--multi' : 'receipt-sheet--single'"
+      :class="hasMultiplePayments ? 'receipt-sheet--multi' : 'receipt-sheet--single'"
     >
       
       <div class="receipt-content">
@@ -32,7 +43,7 @@
               <img :src="logoSrc" alt="Logo" class="receipt-logo h-[60px] object-contain" />
               <div>
                 <h2 class="receipt-institute-name m-0 text-sm font-bold text-gray-900 tracking-tight">{{ institutoNombre }}</h2>
-                <p class="m-0 mt-0.5 text-[11px] text-brand-teal uppercase font-semibold">{{ isPreview ? 'Vista previa, carece de validez' : 'Comprobante de pago' }}</p>
+                <p class="m-0 mt-0.5 text-[11px] text-brand-teal uppercase font-semibold">{{ isPreview ? 'Vista previa, carece de validez' : receiptHeading }}</p>
                 <p class="m-0 mt-1 text-[10px] text-gray-500">Documento no válido como comprobante fiscal.</p>
               </div>
             </div>
@@ -65,8 +76,8 @@
         </section>
         
         <section v-for="(r, i) in items" :key="i" class="receipt-item mb-6">
-          <div v-if="hasMultipleConcepts" class="receipt-item-index">
-            Concepto {{ i + 1 }} de {{ items.length }}
+          <div v-if="hasMultiplePayments" class="receipt-item-index">
+            Pago {{ i + 1 }} de {{ items.length }}
           </div>
           <table class="receipt-item-table w-full text-[11px] border-collapse">
             <tbody>
@@ -164,6 +175,8 @@ const fecha = dayjs().format('DD/MM/YYYY HH:mm')
 const isPreview = computed(() => route.query.preview === 'true')
 const activeUserName = useCookie('auth_name').value || 'Administrador'
 const emailing = ref(false)
+const loadingReceipt = ref(!isPreview.value)
+const receiptError = ref('')
 
 const showInvoiceModal = ref(false)
 const invoiceDebts = ref([])
@@ -171,6 +184,7 @@ const invoiceStudent = ref({})
 
 onMounted(async () => {
   if (isPreview.value) {
+    loadingReceipt.value = false
     try {
       const data = JSON.parse(sessionStorage.getItem('receipt_preview') || '{}')
       items.value = (data.items || []).map(r => ({
@@ -178,28 +192,46 @@ onMounted(async () => {
         montoLetra: r.montoLetra || numeroALetras(Number(r.monto || 0))
       }))
       receiptData.value = { ...data, usuario: activeUserName }
-    } catch (e) {}
+      if (!items.value.length) receiptError.value = 'La vista previa no contiene pagos para mostrar.'
+    } catch (e) {
+      receiptError.value = 'La vista previa no contiene datos válidos.'
+    }
     return
   }
 
-  const folios = route.query.folios
-  if (!folios) return
+  const folios = Array.isArray(route.query.folios)
+    ? route.query.folios.join(',')
+    : String(route.query.folios || '').trim()
+  if (!folios) {
+    loadingReceipt.value = false
+    receiptError.value = 'No se seleccionaron pagos para este recibo.'
+    return
+  }
+
   try {
-    const res = await $fetch(`/api/payments/receipt?folios=${folios}`)
-    if (res && res.length) {
-      items.value = res.map(r => ({
-        ...r,
-        montoLetra: r.montoLetra || numeroALetras(Number(r.monto || 0))
-      }))
-      receiptData.value = res[0]
-      setTimeout(() => window.print(), 800)
+    const res = await $fetch('/api/payments/receipt', { params: { folios } })
+    if (!Array.isArray(res) || !res.length) {
+      receiptError.value = 'Los pagos seleccionados ya no están vigentes o no se encontraron.'
+      return
     }
-  } catch(e) {}
+
+    items.value = res.map(r => ({
+      ...r,
+      montoLetra: r.montoLetra || numeroALetras(Number(r.monto || 0))
+    }))
+    receiptData.value = res[0]
+    setTimeout(() => window.print(), 800)
+  } catch (error) {
+    receiptError.value = error?.data?.message || error?.message || 'Ocurrió un error al consultar los pagos seleccionados.'
+  } finally {
+    loadingReceipt.value = false
+  }
 })
 
 const total = computed(() => items.value.reduce((a,b) => a + Number(b.monto || 0), 0))
 const letrasGeneradas = computed(() => numeroALetras(total.value))
-const hasMultipleConcepts = computed(() => items.value.length > 1)
+const hasMultiplePayments = computed(() => items.value.length > 1)
+const receiptHeading = computed(() => hasMultiplePayments.value ? 'Comprobante de pagos' : 'Comprobante de pago')
 const logoSrc = computed(() => receiptData.value.instituto === 1 ? 'https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp' : 'https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp')
 
 const institutoNombre = computed(() => {
@@ -247,7 +279,7 @@ const emailReceipt = async () => {
     })
     alert('Comprobante enviado exitosamente.')
   } catch (e) {
-    alert('Error enviando correo.')
+    alert(e?.data?.message || e?.message || 'Error enviando correo.')
   } finally {
     emailing.value = false
   }
@@ -280,6 +312,33 @@ const handleInvoiceSuccess = () => {
 </script>
 
 <style scoped>
+.receipt-state {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 48px 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  color: #64748b;
+  text-align: center;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, .08);
+}
+
+.receipt-state strong {
+  color: #1e293b;
+  font-size: 16px;
+}
+
+.receipt-state--error {
+  border-color: #fecaca;
+  background: #fffafa;
+}
+
+.receipt-state--error strong {
+  color: #b42318;
+}
+
 .receipt-sheet {
   max-width: 850px;
   min-height: 8.5in;

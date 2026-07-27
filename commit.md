@@ -1,1 +1,1 @@
-Evita cortes en recibos con múltiples conceptos financieros
+Permite regenerar recibos combinando pagos de distintos conceptos

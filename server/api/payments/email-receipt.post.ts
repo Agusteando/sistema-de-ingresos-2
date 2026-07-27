@@ -1,27 +1,21 @@
 import { sendEmail } from '../../utils/mailer'
-import { runWithBridgeAgentId, query } from '../../utils/db'
+import { runWithBridgeAgentId } from '../../utils/db'
+import { loadActiveReceiptPayments } from '../../utils/paymentReceipt'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const { folios, email } = body
 
-  if (!folios || !email) {
+  if (!email) {
     throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
   }
-
-  const folioList = Array.isArray(folios)
-    ? folios.map(Number)
-    : String(folios).split(',').map(Number)
-
-  const items = await query<any[]>(
-    `SELECT * FROM referenciasdepago WHERE folio IN (?) AND estatus = 'Vigente'`,
-    [folioList]
-  )
-
+  const { folios: normalizedFolios, items } = await loadActiveReceiptPayments(folios)
+  if (!normalizedFolios.length) {
+    throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
+  }
   if (!items.length) {
     throw createError({ statusCode: 404, message: 'Recibos no vigentes o no encontrados.' })
   }
-
   const total = items.reduce((sum, item) => sum + Number(item.monto), 0)
 
   const templateRows = items.map(i => `
@@ -35,7 +29,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const htmlContent = `
     <div style="font-family: 'Inter', sans-serif; color: #1F2937; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #E5E7EB; border-radius: 12px;">
       <h2 style="color: #4E844E; margin-bottom: 20px;">Comprobante de Pago Institucional</h2>
-      <p>Estimado(a), adjunto encontrará el desglose de su pago procesado en el Instituto.</p>
+      <p>Estimado(a), adjunto encontrará el desglose de los pagos seleccionados y procesados en el Instituto.</p>
       
       <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px;">
         <thead>

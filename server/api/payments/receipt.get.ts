@@ -1,28 +1,19 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
+import { loadActiveReceiptPayments } from '../../utils/paymentReceipt'
 import { resolveNivelEscolar } from '../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const { folios } = getQuery(event)
+  const { items, matricula } = await loadActiveReceiptPayments(folios)
 
-  if (!folios) return []
-
-  const folioList = Array.isArray(folios)
-    ? folios.map(Number)
-    : String(folios).split(',').map(Number)
-
-  const refs = await query<any[]>(
-    `SELECT * FROM referenciasdepago WHERE folio IN (?) AND estatus = 'Vigente'`,
-    [folioList]
-  )
-
-  if (refs.length === 0) return []
+  if (!items.length) return []
 
   const [studentData] = await query<any[]>(
     `SELECT grado, grupo, plantel, nivel FROM base WHERE matricula = ? LIMIT 1`,
-    [refs[0].matricula]
+    [matricula]
   )
 
-  return refs.map(ref => ({
+  return items.map(ref => ({
     folio: ref.folio,
     folio_plantel: ref.folio_plantel,
     documento: ref.documento,

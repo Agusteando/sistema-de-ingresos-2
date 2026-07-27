@@ -365,7 +365,7 @@
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-columns: minmax(148px, 1.15fr) minmax(88px, .7fr) minmax(100px, .8fr) minmax(104px, .82fr) minmax(76px, .52fr);
+  grid-template-columns: minmax(148px, 1.15fr) minmax(82px, .62fr) minmax(92px, .7fr) minmax(94px, .72fr) minmax(100px, .76fr) minmax(72px, .5fr);
   align-items: center;
   gap: 10px;
 }
@@ -2061,7 +2061,7 @@
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
-  grid-template-columns: minmax(152px, 184px) repeat(4, 34px);
+  grid-template-columns: minmax(152px, 184px) repeat(5, 34px);
   justify-content: start;
   gap: 6px;
 }
@@ -2094,7 +2094,8 @@
   white-space: nowrap;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--pay-compact .profile-action-count {
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--pay-compact .profile-action-count,
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--receipt-compact .profile-action-count {
   position: absolute;
   inset-block-start: -5px;
   inset-inline-end: -4px;
@@ -2357,7 +2358,7 @@
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .profile-actions {
-    grid-template-columns: minmax(138px, 164px) repeat(4, 32px);
+    grid-template-columns: minmax(138px, 164px) repeat(5, 32px);
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-header {
