@@ -1,1 +1,1 @@
-Agrega el usuario que registró cada movimiento al Excel del corte de caja
+Permite seleccionar usuarios antes de generar el Excel del corte de caja

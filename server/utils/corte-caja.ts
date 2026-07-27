@@ -11,6 +11,10 @@ type CorteCajaFilters = {
   ciclo?: CicloInput
 }
 
+type CorteCajaLoadOptions = {
+  userKeys?: unknown
+}
+
 export type CorteCajaRow = {
   folio: number
   fecha: Date | string
@@ -42,6 +46,24 @@ export type CorteCajaGroupedRow = {
   categoria: string
   transacciones: number
   total: number
+}
+
+export type CorteCajaUserOption = {
+  key: string
+  nombre: string
+  email: string
+  label: string
+  movimientos: number
+  total: number
+}
+
+type CorteCajaContext = {
+  cicloKey: string
+  inicio: string
+  fin: string
+  scopePlantel: string
+  where: string
+  params: any[]
 }
 
 const normalizeDateFilter = (value: unknown) => {
@@ -79,10 +101,44 @@ const PAYMENT_PLANTEL_SQL = `UPPER(COALESCE(
   NULLIF(TRIM(A.plantel), '')
 ))`
 
-export const loadPlantelCorteCaja = async (
-  user: AuthSessionUser,
-  filters: CorteCajaFilters = {}
-) => {
+const REGISTERING_USER_KEY_SQL = `CASE
+  WHEN NULLIF(TRIM(r.usuario_email), '') IS NOT NULL
+    THEN CONCAT('email:', LOWER(TRIM(r.usuario_email)))
+  WHEN NULLIF(TRIM(r.usuario), '') IS NOT NULL
+    THEN CONCAT('name:', LOWER(TRIM(r.usuario)))
+  ELSE 'unknown:'
+END`
+
+export const normalizeCorteUserKeys = (value: unknown): string[] => {
+  let source: unknown[] = Array.isArray(value)
+    ? value
+    : (value === null || value === undefined ? [] : [value])
+
+  if (source.length === 1 && typeof source[0] === 'string' && source[0].trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(source[0])
+      if (Array.isArray(parsed)) source = parsed
+    } catch {
+      source = []
+    }
+  }
+
+  const keys = source
+    .map(item => String(item || '').trim())
+    .filter(key => /^(email:|name:|unknown:)/.test(key) && key.length <= 320)
+
+  return Array.from(new Set(keys))
+}
+
+const formatUserLabel = (nameValue: unknown, emailValue: unknown) => {
+  const nombre = String(nameValue || '').trim()
+  const email = String(emailValue || '').trim().toLowerCase()
+
+  if (nombre && email && nombre.toLowerCase() !== email) return `${nombre} (${email})`
+  return email || nombre || 'No identificado'
+}
+
+const resolveCorteContext = (user: AuthSessionUser, filters: CorteCajaFilters): CorteCajaContext => {
   if (!user?.hasFinancialAccess) {
     throw createError({ statusCode: 403, message: 'No tiene permisos financieros para acceder a este reporte.' })
   }
@@ -103,6 +159,70 @@ export const loadPlantelCorteCaja = async (
   if (inicio && fin) {
     where += ' AND DATE(r.fecha) BETWEEN ? AND ?'
     params.push(inicio, fin)
+  }
+
+  return { cicloKey, inicio, fin, scopePlantel, where, params }
+}
+
+export const loadPlantelCorteCajaUsers = async (
+  user: AuthSessionUser,
+  filters: CorteCajaFilters = {}
+) => {
+  const context = resolveCorteContext(user, filters)
+  const rows = await query<Array<{
+    usuarioKey: string
+    nombre: string | null
+    email: string | null
+    movimientos: number | string
+    total: number | string
+  }>>(`
+    SELECT
+      ${REGISTERING_USER_KEY_SQL} AS usuarioKey,
+      MAX(NULLIF(TRIM(r.usuario), '')) AS nombre,
+      MAX(NULLIF(TRIM(r.usuario_email), '')) AS email,
+      COUNT(*) AS movimientos,
+      COALESCE(SUM(r.monto), 0) AS total
+    FROM referenciasdepago r
+    LEFT JOIN base A ON A.matricula = r.matricula
+    WHERE ${context.where}
+    GROUP BY ${REGISTERING_USER_KEY_SQL}
+  `, context.params)
+
+  const usuarios: CorteCajaUserOption[] = rows
+    .map(row => ({
+      key: String(row.usuarioKey || 'unknown:'),
+      nombre: String(row.nombre || '').trim(),
+      email: String(row.email || '').trim().toLowerCase(),
+      label: formatUserLabel(row.nombre, row.email),
+      movimientos: Number(row.movimientos || 0),
+      total: Number(row.total || 0)
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }))
+
+  return {
+    usuarios,
+    filtros: {
+      ciclo: context.cicloKey,
+      inicio: context.inicio || null,
+      fin: context.fin || null,
+      plantel: context.scopePlantel
+    }
+  }
+}
+
+export const loadPlantelCorteCaja = async (
+  user: AuthSessionUser,
+  filters: CorteCajaFilters = {},
+  options: CorteCajaLoadOptions = {}
+) => {
+  const context = resolveCorteContext(user, filters)
+  const selectedUserKeys = normalizeCorteUserKeys(options.userKeys)
+  let where = context.where
+  const params = [...context.params]
+
+  if (selectedUserKeys.length) {
+    where += ` AND ${REGISTERING_USER_KEY_SQL} IN (${selectedUserKeys.map(() => '?').join(', ')})`
+    params.push(...selectedUserKeys)
   }
 
   const rows = await query<CorteCajaRow[]>(`
@@ -130,7 +250,7 @@ export const loadPlantelCorteCaja = async (
     ORDER BY r.fecha DESC, r.folio ASC
   `, params)
 
-  await hydrateFinancialConceptNames(rows, { ciclo: cicloKey })
+  await hydrateFinancialConceptNames(rows, { ciclo: context.cicloKey })
 
   const totalsMap = new Map<string, number>()
   const groupedMap = new Map<string, CorteCajaGroupedRow>()
@@ -178,10 +298,10 @@ export const loadPlantelCorteCaja = async (
       email: String(user.email || '')
     },
     filtros: {
-      ciclo: cicloKey,
-      inicio: inicio || null,
-      fin: fin || null,
-      plantel: scopePlantel
+      ciclo: context.cicloKey,
+      inicio: context.inicio || null,
+      fin: context.fin || null,
+      plantel: context.scopePlantel
     }
   }
 }

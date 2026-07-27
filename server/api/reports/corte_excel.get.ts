@@ -1,5 +1,5 @@
 import { runWithBridgeAgentId } from '../../utils/db'
-import { loadPlantelCorteCaja } from '../../utils/corte-caja'
+import { loadPlantelCorteCaja, loadPlantelCorteCajaUsers, normalizeCorteUserKeys } from '../../utils/corte-caja'
 import { buildProtectedXlsx } from '../../utils/protected-xlsx'
 
 const safeFilePart = (value: unknown) => String(value || 'plantel')
@@ -29,7 +29,29 @@ const formatRegisteringUser = (nameValue: unknown, emailValue: unknown) => {
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const filters = getQuery(event)
   const user = event.context.user
-  const result = await loadPlantelCorteCaja(user, filters)
+  const availableUsers = await loadPlantelCorteCajaUsers(user, filters)
+  const requestedUserKeys = normalizeCorteUserKeys(filters.usuarios)
+  const availableKeys = new Set(availableUsers.usuarios.map(option => option.key))
+
+  if (availableUsers.usuarios.length > 1 && !requestedUserKeys.length) {
+    throw createError({ statusCode: 400, message: 'Seleccione los usuarios que desea incluir en el Excel.' })
+  }
+
+  const invalidUserKeys = requestedUserKeys.filter(key => !availableKeys.has(key))
+  if (invalidUserKeys.length) {
+    throw createError({ statusCode: 400, message: 'La selección de usuarios ya no coincide con el periodo. Vuelva a intentarlo.' })
+  }
+
+  const selectedUserKeys = requestedUserKeys.length
+    ? requestedUserKeys
+    : availableUsers.usuarios.map(option => option.key)
+
+  if (availableUsers.usuarios.length && !selectedUserKeys.length) {
+    throw createError({ statusCode: 400, message: 'Seleccione al menos un usuario para generar el Excel.' })
+  }
+
+  const selectedUsers = availableUsers.usuarios.filter(option => selectedUserKeys.includes(option.key))
+  const result = await loadPlantelCorteCaja(user, filters, { userKeys: selectedUserKeys })
   const periodLabel = result.filtros.inicio && result.filtros.fin
     ? `${result.filtros.inicio} a ${result.filtros.fin}`
     : 'Periodo completo del ciclo'
@@ -40,7 +62,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     subtitle: 'Movimientos registrados para el plantel seleccionado.',
     metaLines: [
       `Plantel: ${result.filtros.plantel}`,
-      `Ciclo: ${result.filtros.ciclo} | Periodo: ${periodLabel} | Generado por: ${result.usuario.nombre}`
+      `Ciclo: ${result.filtros.ciclo} | Periodo: ${periodLabel} | Generado por: ${result.usuario.nombre}`,
+      `Usuarios incluidos: ${selectedUsers.map(option => option.label).join(', ') || 'Sin movimientos'}`
     ],
     headers: [
       'Folio',

@@ -155,7 +155,7 @@
           <p>Bitácora de ingresos registrados en el plantel seleccionado para cierre operativo.</p>
         </div>
         <div class="panel-actions">
-          <button class="btn btn-outline" @click="downloadCorteExcel" :disabled="loadingCorte || downloadingCorteExcel">
+          <button class="btn btn-outline" @click="prepareCorteExcel" :disabled="loadingCorte || downloadingCorteExcel">
             <LucideLoader2 v-if="downloadingCorteExcel" class="animate-spin" :size="16" />
             <LucideDownload v-else :size="16" />
             Excel
@@ -223,6 +223,16 @@
         </table>
       </div>
     </section>
+
+    <CorteUserSelectionModal
+      v-if="corteUserSelectorOpen"
+      :users="corteUserOptions"
+      :plantel="corteUserSelectionContext.plantel"
+      :period-label="corteUserPeriodLabel"
+      :loading="downloadingCorteExcel"
+      @cancel="closeCorteUserSelector"
+      @confirm="confirmCorteExcelUsers"
+    />
   </div>
 </template>
 
@@ -294,6 +304,13 @@ const filtrosCorte = ref({ inicio: '', fin: '', plantel: defaultCortePlantel })
 const datosCorte = ref([])
 const loadingCorte = ref(false)
 const downloadingCorteExcel = ref(false)
+const corteUserSelectorOpen = ref(false)
+const corteUserOptions = ref([])
+const corteUserSelectionContext = ref({
+  inicio: null,
+  fin: null,
+  plantel: ''
+})
 
 const conceptRows = computed(() => conceptReport.value.rows || [])
 const conceptSummary = computed(() => conceptReport.value.resumen || emptyConceptReport().resumen)
@@ -302,10 +319,20 @@ const selectedConcept = computed(() => {
 })
 const selectedConceptName = computed(() => selectedConcept.value?.concepto || 'Sin selección')
 const totalCorte = computed(() => datosCorte.value.reduce((sum, row) => sum + Number(row.total), 0))
+const corteUserPeriodLabel = computed(() => {
+  const { inicio, fin } = corteUserSelectionContext.value
+  if (!inicio || !fin) return 'Periodo completo del ciclo'
+  return `${formatFilterDate(inicio)} al ${formatFilterDate(fin)}`
+})
 
 const formatDate = (value) => {
   if (!value) return ''
   return new Date(value).toLocaleDateString('es-MX')
+}
+
+const formatFilterDate = (value) => {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value || '')
 }
 
 const buildParams = (source) => {
@@ -405,39 +432,84 @@ const printCorte = () => {
   window.open(`/print/corte?${q}`, '_blank', 'width=850,height=800')
 }
 
-const downloadCorteExcel = async () => {
+const executeCorteExcelDownload = async (selectedUserKeys = []) => {
+  const query = new URLSearchParams(buildParams(filtrosCorte.value))
+  if (selectedUserKeys.length) query.set('usuarios', JSON.stringify(selectedUserKeys))
+
+  const response = await fetch(`/api/reports/corte_excel?${query.toString()}`, {
+    credentials: 'same-origin'
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new Error(payload?.message || payload?.statusMessage || 'No se pudo generar el Excel')
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('content-disposition') || ''
+  const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
+  const filename = encodedName
+    ? decodeURIComponent(encodedName)
+    : (plainName || `Corte_de_Caja_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+const prepareCorteExcel = async () => {
   if (!hasFinancialAccess.value || downloadingCorteExcel.value) return
 
   downloadingCorteExcel.value = true
   try {
-    const q = new URLSearchParams(buildParams(filtrosCorte.value)).toString()
-    const response = await fetch(`/api/reports/corte_excel?${q}`, {
-      credentials: 'same-origin'
+    const response = await $fetch('/api/reports/corte_users', {
+      params: buildParams(filtrosCorte.value)
     })
+    const users = Array.isArray(response?.usuarios) ? response.usuarios : []
 
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      throw new Error(payload?.message || payload?.statusMessage || 'No se pudo generar el Excel')
+    if (users.length <= 1) {
+      await executeCorteExcelDownload(users.map(user => user.key))
+      return
     }
 
-    const blob = await response.blob()
-    const disposition = response.headers.get('content-disposition') || ''
-    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
-    const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
-    const filename = encodedName
-      ? decodeURIComponent(encodedName)
-      : (plainName || `Corte_de_Caja_${new Date().toISOString().slice(0, 10)}.xlsx`)
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.style.display = 'none'
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
+    corteUserOptions.value = users
+    corteUserSelectionContext.value = {
+      inicio: response?.filtros?.inicio || null,
+      fin: response?.filtros?.fin || null,
+      plantel: response?.filtros?.plantel || ''
+    }
+    corteUserSelectorOpen.value = true
   } catch (e) {
-    show(e?.message || 'No se pudo generar el Excel', 'danger')
+    show(e?.data?.message || e?.message || 'No se pudo preparar el Excel', 'danger')
+  } finally {
+    downloadingCorteExcel.value = false
+  }
+}
+
+const closeCorteUserSelector = () => {
+  if (downloadingCorteExcel.value) return
+  corteUserSelectorOpen.value = false
+  corteUserOptions.value = []
+}
+
+const confirmCorteExcelUsers = async (selectedUserKeys) => {
+  if (downloadingCorteExcel.value || !selectedUserKeys?.length) return
+
+  downloadingCorteExcel.value = true
+  try {
+    await executeCorteExcelDownload(selectedUserKeys)
+    corteUserSelectorOpen.value = false
+    corteUserOptions.value = []
+  } catch (e) {
+    corteUserSelectorOpen.value = false
+    corteUserOptions.value = []
+    show(e?.data?.message || e?.message || 'No se pudo generar el Excel', 'danger')
   } finally {
     downloadingCorteExcel.value = false
   }
@@ -447,7 +519,7 @@ const showCorteContextMenu = (event, row) => {
   openMenu(event, [
     { label: `Fila: $${Number(row.total).toFixed(2)}`, disabled: true },
     { label: '-' },
-    { label: 'Descargar Excel', icon: LucideDownload, action: downloadCorteExcel },
+    { label: 'Descargar Excel', icon: LucideDownload, action: prepareCorteExcel },
     { label: 'Imprimir corte', icon: LucidePrinter, action: printCorte }
   ])
 }
