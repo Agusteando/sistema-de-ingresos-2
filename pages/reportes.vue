@@ -7,7 +7,7 @@
         <p>Genera consultas puntuales sin mezclar el Corte de Caja con los reportes de conceptos.</p>
       </div>
 
-      <div class="report-switcher" v-if="isSuperAdmin">
+      <div class="report-switcher" v-if="hasFinancialAccess">
         <button type="button" :class="{ active: activeReport === 'concepto' }" @click="activeReport = 'concepto'">
           <LucideFileText :size="16" />
           Concepto
@@ -238,6 +238,7 @@ import { exportToCSV } from '~/utils/export'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useToast } from '~/composables/useToast'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import { resolveClientAuthAccess } from '~/utils/authAccess'
 
 const state = useState('globalState')
 const route = useRoute()
@@ -246,10 +247,15 @@ const { show } = useToast()
 
 const userRole = ref(useCookie('auth_role').value || 'plantel')
 const activePlantel = ref(useCookie('auth_active_plantel').value || '')
+const hasFinancialAccessCookie = useCookie('auth_has_financial_access')
 const roleTokens = computed(() => String(userRole.value || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
 const isSuperAdmin = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
+const hasFinancialAccess = computed(() => resolveClientAuthAccess({
+  role: userRole.value,
+  hasFinancialAccess: hasFinancialAccessCookie.value
+}).financialAccess)
 const canFilterPlantel = computed(() => isSuperAdmin.value && activePlantel.value === 'GLOBAL')
-const activeReport = ref(route.query.tipo === 'corte' && isSuperAdmin.value ? 'corte' : 'concepto')
+const activeReport = ref(route.query.tipo === 'corte' && hasFinancialAccess.value ? 'corte' : 'concepto')
 
 const conceptos = ref([])
 const loadingConceptos = ref(false)
@@ -368,7 +374,7 @@ const openCorte = () => {
 }
 
 const loadCorte = async () => {
-  if (!isSuperAdmin.value) return
+  if (!hasFinancialAccess.value) return
 
   loadingCorte.value = true
   try {

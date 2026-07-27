@@ -8,8 +8,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
   
-  if (!user.isSuperAdmin) {
-     throw createError({ statusCode: 403, message: 'No tiene permisos para realizar esta operación.' })
+  if (!user?.hasFinancialAccess) {
+    throw createError({ statusCode: 403, message: 'No tiene permisos financieros para realizar esta operación.' })
   }
   
   let where = "r.estatus = 'Vigente' AND COALESCE(r.depurado, 0) = 0 AND r.ciclo = ?"

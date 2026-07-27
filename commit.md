@@ -1,1 +1,1 @@
-Corrige la persistencia de grupo en Control Escolar
+Habilita el corte de caja para todos los usuarios financieros
