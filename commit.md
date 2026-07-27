@@ -1,1 +1,1 @@
-Elimina bloqueos por alcance proyectado en operaciones de alumnos
+Evita cortes en recibos con múltiples conceptos financieros
