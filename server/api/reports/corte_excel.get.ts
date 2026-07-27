@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const workbook = buildProtectedXlsx({
     sheetName: 'Corte de Caja',
     title: 'Corte de Caja',
-    subtitle: 'Hoja protegida contra edición. Contiene los movimientos registrados para el plantel seleccionado.',
+    subtitle: 'Movimientos registrados para el plantel seleccionado.',
     metaLines: [
       `Plantel: ${result.filtros.plantel}`,
       `Ciclo: ${result.filtros.ciclo} | Periodo: ${periodLabel} | Generado por: ${result.usuario.nombre}`

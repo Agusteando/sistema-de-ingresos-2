@@ -264,6 +264,8 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
     })
   }
 
+  const dataEndRow = headerRowIndex + options.rows.length
+  const filterEndRow = Math.max(headerRowIndex, dataEndRow)
   const lastRow = rowModels.length
   const rowXml = rowModels.map((row, index) => renderRow(index + 1, row)).join('')
   const columnWidths = [12, 13, 16, 12, 13, 30, 26, 22, 12, 16]
@@ -281,19 +283,27 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
   <sheetFormatPr defaultRowHeight="15"/>
   <cols>${colsXml}</cols>
   <sheetData>${rowXml}</sheetData>
-  <sheetProtection password="${passwordHash}" sheet="1" objects="1" scenarios="1" formatCells="1" formatColumns="1" formatRows="1" insertColumns="1" insertRows="1" insertHyperlinks="1" deleteColumns="1" deleteRows="1" selectLockedCells="0" selectUnlockedCells="0" sort="1" autoFilter="1" pivotTables="1"/>
+  <sheetProtection password="${passwordHash}" sheet="1" objects="1" scenarios="1" formatCells="1" formatColumns="1" formatRows="1" insertColumns="1" insertRows="1" insertHyperlinks="1" deleteColumns="1" deleteRows="1" selectLockedCells="0" selectUnlockedCells="0" sort="0" autoFilter="0" pivotTables="1"/>
   ${mergeXml}
   <printOptions horizontalCentered="1"/>
   <pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/>
   <pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>
+  <tableParts count="1"><tablePart r:id="rId1"/></tableParts>
 </worksheet>`
+
+  const tableRange = `A${headerRowIndex}:${lastColumn}${filterEndRow}`
+  const tableXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<table xmlns="${XML_NS}" id="1" name="CorteDeCaja" displayName="CorteDeCaja" ref="${tableRange}" totalsRowShown="0">
+  <autoFilter ref="${tableRange}"/>
+  <tableColumns count="${columnCount}">${options.headers.map((header, index) => `<tableColumn id="${index + 1}" name="${escapeXml(header)}"/>`).join('')}</tableColumns>
+  <tableStyleInfo name="TableStyleMedium2" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/>
+</table>`
 
   const createdAt = new Date().toISOString()
   const creator = escapeXml(options.creator || 'Sistema Aurora')
   const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="${XML_NS}" xmlns:r="${REL_NS}">
   <fileVersion appName="xl"/>
-  <fileSharing readOnlyRecommended="1"/>
   <workbookPr/>
   <workbookProtection workbookPassword="${passwordHash}" lockStructure="1"/>
   <bookViews><workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="12000"/></bookViews>
@@ -310,6 +320,7 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
   <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>
   <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
   <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
@@ -358,8 +369,19 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
       data: Buffer.from(stylesXml, 'utf8')
     },
     {
+      name: 'xl/worksheets/_rels/sheet1.xml.rels',
+      data: Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/>
+</Relationships>`, 'utf8')
+    },
+    {
       name: 'xl/worksheets/sheet1.xml',
       data: Buffer.from(worksheetXml, 'utf8')
+    },
+    {
+      name: 'xl/tables/table1.xml',
+      data: Buffer.from(tableXml, 'utf8')
     }
   ]
 

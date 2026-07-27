@@ -1,1 +1,1 @@
-Corrige el corte de caja para mostrar movimientos por plantel
+Permite filtrar el Excel del corte de caja y simplifica sus etiquetas

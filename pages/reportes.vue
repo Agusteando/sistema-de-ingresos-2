@@ -158,7 +158,7 @@
           <button class="btn btn-outline" @click="downloadCorteExcel" :disabled="loadingCorte || downloadingCorteExcel">
             <LucideLoader2 v-if="downloadingCorteExcel" class="animate-spin" :size="16" />
             <LucideDownload v-else :size="16" />
-            Excel protegido
+            Excel
           </button>
           <button class="btn btn-outline" @click="printCorte" :disabled="loadingCorte || downloadingCorteExcel">
             <LucidePrinter :size="16" />
@@ -437,7 +437,7 @@ const downloadCorteExcel = async () => {
     link.remove()
     URL.revokeObjectURL(url)
   } catch (e) {
-    show(e?.message || 'No se pudo generar el Excel protegido', 'danger')
+    show(e?.message || 'No se pudo generar el Excel', 'danger')
   } finally {
     downloadingCorteExcel.value = false
   }
@@ -447,7 +447,7 @@ const showCorteContextMenu = (event, row) => {
   openMenu(event, [
     { label: `Fila: $${Number(row.total).toFixed(2)}`, disabled: true },
     { label: '-' },
-    { label: 'Descargar Excel protegido', icon: LucideDownload, action: downloadCorteExcel },
+    { label: 'Descargar Excel', icon: LucideDownload, action: downloadCorteExcel },
     { label: 'Imprimir corte', icon: LucidePrinter, action: printCorte }
   ])
 }
