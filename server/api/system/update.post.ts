@@ -94,5 +94,7 @@ export default defineEventHandler(async (event) => {
     requestId: launchResult.requestId || requestId,
     plantel: activePlantel,
     protocol: launchExecution.protocol,
+    installedSha: String(statusResult?.installedSha || launchResult?.installedSha || ''),
+    installedVersion: String(statusResult?.installedVersion || launchResult?.installedVersion || ''),
   }
 })

@@ -115,11 +115,20 @@ const renderUpdateProgressPage = (event: any, options: {
       let startedAt = Date.now();
       let failures = 0;
 
+      const notifyOpener = (status, detail = {}) => {
+        try {
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage({ type: 'aurora-local-update', status, ...detail }, '*');
+          }
+        } catch {}
+      };
+
       const setPreparing = () => {
         mark.className = 'mark';
         title.textContent = 'Preparando actualización…';
         message.textContent = 'Aurora se abrirá cuando la versión más reciente esté lista.';
         actions.classList.remove('is-visible');
+        notifyOpener('started');
       };
 
       const openUpdatedVersion = (sha) => {
@@ -128,6 +137,7 @@ const renderUpdateProgressPage = (event: any, options: {
         mark.className = 'mark is-ready';
         title.textContent = 'Actualización lista';
         message.textContent = 'Abriendo Aurora…';
+        notifyOpener('ready', { sha: sha || '' });
         const url = new URL(config.destination, window.location.origin);
         url.searchParams.set('_release', sha || String(Date.now()));
         window.setTimeout(() => window.location.replace(url.toString()), 550);
@@ -140,6 +150,7 @@ const renderUpdateProgressPage = (event: any, options: {
         title.textContent = 'No se pudo actualizar';
         message.textContent = detail || 'La versión anterior continúa disponible.';
         actions.classList.add('is-visible');
+        notifyOpener('failed', { message: message.textContent });
       };
 
       const operationFailed = (operation) => String(operation?.phase || '').toLowerCase() === 'failed';

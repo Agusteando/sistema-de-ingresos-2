@@ -627,7 +627,11 @@ const localSystemStatus = ref(null)
 const localSystemStatusPending = ref(false)
 const localSystemCloudStatus = ref(null)
 const localSystemInitialSha = ref('')
+const localSystemLegacyUpdateRequired = ref(false)
+const localSystemUpdateHandoffAcknowledged = ref(false)
 let localSystemPollTimer = null
+let localSystemUpdateWatchTimer = null
+let localSystemUpdateWindow = null
 
 const localSystemOperation = computed(() => localSystemStatus.value?.operation || {})
 const localSystemUpdating = computed(() => Boolean(localSystemOperation.value?.running))
@@ -713,6 +717,7 @@ const localContextTechnicalTitle = computed(() => {
   return `No disponible${localSystemDiagnosticSuffix.value}`
 })
 const localUpdateActionTitle = computed(() => {
+  if (localSystemLegacyUpdateRequired.value) return 'Completar actualización en la ventana local'
   if (localUpdateActionPending.value) {
     return isSuperAdmin.value && localContextPhaseLabel.value
       ? localContextPhaseLabel.value
@@ -745,7 +750,7 @@ const localSystemDiagnosticSuffix = computed(() => {
 
 
 const loadLocalSystemLaunch = async (refresh = false) => {
-  if (localSystemRuntime) return
+  if (localSystemRuntime) return null
   if (activePlantel.value === 'GLOBAL') {
     localSystemLaunchAvailable.value = false
     localSystemLaunchUrl.value = ''
@@ -757,7 +762,7 @@ const loadLocalSystemLaunch = async (refresh = false) => {
     localSystemLaunchMessage.value = 'Selecciona un plantel para abrir en este equipo.'
     localSystemLaunchCode.value = 'LOCAL_SYSTEM_PLANTEL_REQUIRED'
     localSystemLaunchRequestId.value = ''
-    return
+    return null
   }
 
   localSystemLaunchPending.value = true
@@ -795,6 +800,7 @@ const loadLocalSystemLaunch = async (refresh = false) => {
       message: localSystemLaunchMessage.value,
       diagnostics: info?.diagnostics || null
     })
+    return info
   } catch (error) {
     localSystemLaunchAvailable.value = false
     localSystemLaunchUrl.value = ''
@@ -819,6 +825,7 @@ const loadLocalSystemLaunch = async (refresh = false) => {
       message: localSystemLaunchMessage.value,
       payload
     })
+    return null
   } finally {
     localSystemLaunchPending.value = false
   }
@@ -923,8 +930,159 @@ const loadLocalSystemStatus = async (refresh = false) => {
   }
 }
 
+const clearLocalSystemUpdateWatch = () => {
+  if (localSystemUpdateWatchTimer && typeof window !== 'undefined') {
+    window.clearTimeout(localSystemUpdateWatchTimer)
+  }
+  localSystemUpdateWatchTimer = null
+}
+
+const openLocalSystemUpdateWindow = () => {
+  if (typeof window === 'undefined') return null
+  const popup = window.open('', 'aurora-local-update', 'popup=yes,width=520,height=720')
+  if (!popup) return null
+  try {
+    popup.document.open()
+    popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Actualizando Aurora</title><style>html,body{height:100%;margin:0;font-family:Inter,system-ui,sans-serif;background:#f7faf8;color:#173326}body{display:grid;place-items:center}.box{text-align:center;padding:32px}.spin{width:30px;height:30px;margin:0 auto 16px;border:3px solid #dce7df;border-top-color:#3c8050;border-radius:50%;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}h1{font-size:18px;margin:0 0 7px}p{font-size:14px;color:#607067;margin:0}</style></head><body><div class="box"><div class="spin"></div><h1>Preparando…</h1><p>Esta ventana continuará con la actualización.</p></div></body></html>`)
+    popup.document.close()
+  } catch {}
+  return popup
+}
+
+const handleLocalSystemUpdateMessage = (event) => {
+  if (!localSystemUpdateWindow || event.source !== localSystemUpdateWindow) return
+  const payload = event?.data || {}
+  if (payload?.type !== 'aurora-local-update') return
+
+  const status = String(payload?.status || '').toLowerCase()
+  if (status === 'started') {
+    localSystemUpdateHandoffAcknowledged.value = true
+    localSystemLegacyUpdateRequired.value = false
+    localSystemCloudStatus.value = {
+      ...(localSystemCloudStatus.value || {}),
+      operation: {
+        ...(localSystemCloudStatus.value?.operation || {}),
+        running: true,
+        phase: 'checking',
+        message: 'Preparando la actualización'
+      }
+    }
+    return
+  }
+
+  if (status === 'ready') {
+    clearLocalSystemUpdateWatch()
+    localSystemUpdateHandoffAcknowledged.value = true
+    localSystemLegacyUpdateRequired.value = false
+    localSystemCloudStatus.value = {
+      ...(localSystemCloudStatus.value || {}),
+      operation: null,
+      installed: payload?.sha
+        ? { ...(localSystemCloudStatus.value?.installed || {}), sha: String(payload.sha) }
+        : localSystemCloudStatus.value?.installed || null
+    }
+    show('Actualización lista.', 'success')
+    return
+  }
+
+  if (status === 'failed') {
+    clearLocalSystemUpdateWatch()
+    localSystemUpdateHandoffAcknowledged.value = true
+    localSystemLegacyUpdateRequired.value = false
+    localSystemCloudStatus.value = {
+      ...(localSystemCloudStatus.value || {}),
+      operation: null
+    }
+    show(String(payload?.message || 'No se pudo completar la actualización.'), 'danger')
+  }
+}
+
+const watchCloudLocalUpdate = ({ baselineSha = '', popup = null } = {}) => {
+  clearLocalSystemUpdateWatch()
+  const startedAt = Date.now()
+  let sawRunningOperation = false
+  let consecutiveErrors = 0
+
+  const poll = async () => {
+    try {
+      const info = await loadLocalSystemLaunch(true)
+      if (!info) throw new Error('status-unavailable')
+      consecutiveErrors = 0
+
+      const operation = info?.operation || {}
+      const running = Boolean(operation?.running)
+      const phase = String(operation?.phase || '').toLowerCase()
+      const installedSha = String(info?.installed?.sha || '')
+      if (running) sawRunningOperation = true
+
+      if (baselineSha && installedSha && installedSha !== baselineSha) {
+        clearLocalSystemUpdateWatch()
+        localSystemLegacyUpdateRequired.value = false
+        show('Actualización lista.', 'success')
+        try { popup?.focus?.() } catch {}
+        return
+      }
+
+      if (!running && phase === 'failed') {
+        clearLocalSystemUpdateWatch()
+        localSystemLegacyUpdateRequired.value = false
+        show(String(operation?.error || operation?.message || 'No se pudo completar la actualización.'), 'danger')
+        return
+      }
+
+      // A compatible local Aurora starts the manager almost immediately. If the
+      // manager never reports an operation, the installed bundle consumed the
+      // handoff with the legacy redirect and cannot understand intent=update.
+      if (!sawRunningOperation && !localSystemUpdateHandoffAcknowledged.value && Date.now() - startedAt > 9000) {
+        clearLocalSystemUpdateWatch()
+        localSystemLegacyUpdateRequired.value = true
+        localSystemCloudStatus.value = {
+          ...(localSystemCloudStatus.value || {}),
+          operation: null
+        }
+        try { popup?.focus?.() } catch {}
+        show('La versión local anterior se abrió sin iniciar la actualización. Pulsa el icono ↻ en esa ventana una vez.', 'danger')
+        return
+      }
+
+      if (sawRunningOperation && !running && Date.now() - startedAt > 25 * 60 * 1000) {
+        clearLocalSystemUpdateWatch()
+        show('No fue posible confirmar la nueva versión.', 'danger')
+        return
+      }
+    } catch {
+      consecutiveErrors += 1
+      // Brief status interruptions are expected while the local runner changes.
+      if (consecutiveErrors > 100 && Date.now() - startedAt > 10 * 60 * 1000) {
+        clearLocalSystemUpdateWatch()
+        show('No fue posible confirmar la actualización.', 'danger')
+        return
+      }
+    }
+    if (typeof window !== 'undefined') {
+      localSystemUpdateWatchTimer = window.setTimeout(poll, 1800)
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    localSystemUpdateWatchTimer = window.setTimeout(poll, 900)
+  }
+}
+
 const startLocalSystemUpdate = async () => {
   if (localUpdateActionDisabled.value || !localUpdateActionVisible.value) return
+
+  if (!localSystemRuntime && localSystemLegacyUpdateRequired.value && localSystemUpdateWindow && !localSystemUpdateWindow.closed) {
+    try { localSystemUpdateWindow.focus() } catch {}
+    show('Completa esta actualización inicial con el icono ↻ de la ventana local.', 'danger')
+    return
+  }
+
+  const popup = !localSystemRuntime ? openLocalSystemUpdateWindow() : null
+  if (!localSystemRuntime && !popup) {
+    show('Permite la ventana emergente para actualizar en este equipo.', 'danger')
+    return
+  }
 
   try {
     if (localSystemRuntime) {
@@ -939,6 +1097,10 @@ const startLocalSystemUpdate = async () => {
         }
       }
     } else {
+      localSystemLegacyUpdateRequired.value = false
+      localSystemUpdateHandoffAcknowledged.value = false
+      localSystemUpdateWindow = popup
+      const baselineSha = String(localSystemCloudStatus.value?.installed?.sha || '')
       localSystemCloudStatus.value = {
         ...(localSystemCloudStatus.value || {}),
         operation: {
@@ -954,7 +1116,9 @@ const startLocalSystemUpdate = async () => {
       })
       const launchUrl = String(result?.launchUrl || '')
       if (!launchUrl) throw new Error('No se recibió el acceso a la instalación de este equipo.')
-      window.location.assign(launchUrl)
+      const effectiveBaselineSha = String(result?.installedSha || baselineSha)
+      popup.location.href = launchUrl
+      watchCloudLocalUpdate({ baselineSha: effectiveBaselineSha, popup })
       return
     }
 
@@ -962,10 +1126,12 @@ const startLocalSystemUpdate = async () => {
     scheduleLocalSystemPoll(1000)
   } catch (error) {
     if (!localSystemRuntime) {
+      clearLocalSystemUpdateWatch()
       localSystemCloudStatus.value = {
         ...(localSystemCloudStatus.value || {}),
         operation: null
       }
+      try { popup?.close?.() } catch {}
     }
     show(error?.data?.message || error?.message || 'No se pudo iniciar la actualización.', 'danger')
   }
@@ -1182,6 +1348,7 @@ onMounted(async () => {
   scheduleSidebarScaleUpdate()
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', scheduleSidebarScaleUpdate, { passive: true })
+    window.addEventListener('message', handleLocalSystemUpdateMessage)
     document.addEventListener('pointerdown', handlePlantelDocumentPointerDown)
     document.addEventListener('pointerdown', handleCicloDocumentPointerDown)
     if (typeof ResizeObserver !== 'undefined' && sidebarScaleShell.value) {
@@ -1212,10 +1379,12 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearVersionUpgradeTimers()
+  clearLocalSystemUpdateWatch()
   if (localSystemPollTimer && typeof window !== 'undefined') window.clearTimeout(localSystemPollTimer)
   localSystemPollTimer = null
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', scheduleSidebarScaleUpdate)
+    window.removeEventListener('message', handleLocalSystemUpdateMessage)
     document.removeEventListener('pointerdown', handlePlantelDocumentPointerDown)
     document.removeEventListener('pointerdown', handleCicloDocumentPointerDown)
     if (sidebarFrame) window.cancelAnimationFrame(sidebarFrame)
