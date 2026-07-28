@@ -256,47 +256,30 @@
           </div>
 
           <button
-            v-if="showLocalSystemControls && !localSystemRuntime"
+            v-if="showLocalSystemControls"
             type="button"
-            class="local-system-launch local-system-launch-compact"
-            :class="{
-              'is-unavailable': !localSystemLaunchAvailable,
-              'is-checking': localSystemLaunchPending
-            }"
-            :disabled="localSystemLaunchPending"
-            :title="localSystemLaunchTitle"
-            @click="openLocalSystem"
+            class="local-context-cta"
+            :class="`is-${localContextCtaState}`"
+            :disabled="localContextCtaDisabled"
+            :aria-busy="localContextPreparing ? 'true' : 'false'"
+            :aria-label="localContextCtaAriaLabel"
+            @click="handleLocalContextCta"
           >
-            <span class="local-system-status-icon"><LucideZap :size="16" /></span>
-            <span class="local-system-status-copy">
-              <small>{{ localSystemLaunchKicker }}</small>
-              <strong>Abrir localmente</strong>
+            <span
+              class="local-context-cta-icon"
+              :title="isSuperAdmin ? localContextTechnicalTitle : undefined"
+              aria-hidden="true"
+            >
+              <LucideSettings v-if="localContextBuildPhase" :size="17" class="animate-spin" />
+              <LucideShield v-else-if="localContextVerificationPhase" :size="17" />
+              <LucideRefreshCw v-else-if="localContextIconSpinning" :size="17" class="animate-spin" />
+              <LucideRefreshCw v-else-if="localContextManualUpdateAvailable" :size="17" />
+              <LucideCheckCircle v-else-if="localSystemRuntime" :size="17" />
+              <LucideMonitor v-else-if="localSystemLaunchAvailable" :size="17" />
+              <LucideRefreshCw v-else :size="17" />
             </span>
-          </button>
-          <button
-            v-if="showLocalSystemControls && localSystemRuntime"
-            type="button"
-            class="local-system-status local-system-launch-compact"
-            :class="{
-              'has-update': localSystemUpdateAvailable,
-              'is-updating': localSystemUpdating,
-              'is-failed': localSystemFailed,
-              'is-current': !localSystemUpdateAvailable && !localSystemUpdating && !localSystemFailed
-            }"
-            :disabled="localSystemUpdating || (!localSystemUpdateAvailable && !localSystemFailed) || (!localSystemAutoUpdateEnabled && !isSuperAdmin)"
-            :title="localSystemStatusTitle"
-            @click="startLocalSystemUpdate"
-          >
-            <span class="local-system-status-icon">
-              <LucideRefreshCw v-if="localSystemUpdating" :size="16" class="animate-spin" />
-              <LucideAlertTriangle v-else-if="localSystemFailed" :size="16" />
-              <LucideCheckCircle v-else-if="!localSystemUpdateAvailable" :size="16" />
-              <LucideZap v-else :size="16" />
-            </span>
-            <span class="local-system-status-copy">
-              <small>Sistema local</small>
-              <strong>{{ localSystemStatusLabel }}</strong>
-            </span>
+            <span class="local-context-cta-label local-context-cta-label-full">{{ localContextCtaLabel }}</span>
+            <span class="local-context-cta-label local-context-cta-label-compact">{{ localContextCtaCompactLabel }}</span>
           </button>
           <SyncBadge v-if="showExternalBaseBadge" :icon-only="true" />
           <div v-if="showCicloPicker" ref="cicloPickerRef" class="ciclo-picker" :class="{ open: cicloMenuOpen }">
@@ -423,6 +406,7 @@ import {
   LucidePanelLeftOpen,
   LucideUndo2,
   LucideZap,
+  LucideMonitor,
   LucideCloud,
   LucideFileSpreadsheet,
   LucideUpload,
@@ -589,9 +573,8 @@ const userPlanteles = computed(() => {
 const showFinancialNav = computed(() => hasFinancialAccess.value)
 const hasConceptosAdminRole = computed(() => isSuperAdmin.value || roleTokens.value.some(role => ['admin', 'role_admin', 'conceptos_admin', 'role_conceptos'].includes(role)))
 const showConceptosNav = computed(() => showFinancialNav.value && hasConceptosAdminRole.value)
-const isStudentsPage = computed(() => route.path === '/')
 const isControlEscolarPage = computed(() => route.path === '/control-escolar')
-const showLocalSystemControls = computed(() => isStudentsPage.value && showFinancialNav.value)
+const showLocalSystemControls = computed(() => true)
 const showExternalBaseBadge = computed(() => showFinancialNav.value && !isControlEscolarPage.value)
 const controlEscolarTopbarState = useState('controlEscolarTopbarState', () => ({
   plantel: '',
@@ -628,7 +611,7 @@ const localSystemRuntime = String(runtimeConfig.public?.localSystemMode || '').t
 const localSystemLaunchAvailable = ref(false)
 const localSystemLaunchUrl = ref('')
 const localSystemLaunchMessage = ref('')
-const localSystemLaunchPending = ref(false)
+const localSystemLaunchPending = ref(!localSystemRuntime)
 const localSystemLaunchCode = ref('')
 const localSystemLaunchRequestId = ref('')
 const localSystemStatus = ref(null)
@@ -639,44 +622,78 @@ let localSystemPollTimer = null
 
 const localSystemOperation = computed(() => localSystemStatus.value?.operation || {})
 const localSystemUpdating = computed(() => Boolean(localSystemOperation.value?.running))
-const localSystemFailed = computed(() => String(localSystemOperation.value?.phase || '') === 'failed')
 const localSystemUpdateAvailable = computed(() => Boolean(localSystemStatus.value?.updateAvailable))
 const localSystemAutoUpdateEnabled = computed(() => localSystemStatus.value?.autoUpdateEnabled !== false)
 const localSystemCloudOperation = computed(() => localSystemCloudStatus.value?.operation || {})
 const localSystemCloudUpdating = computed(() => Boolean(localSystemCloudOperation.value?.running))
-const localSystemLaunchKicker = computed(() => {
-  if (localSystemLaunchPending.value) return 'Verificando conexión'
-  if (localSystemCloudUpdating.value) return 'Actualizando en segundo plano'
-  if (localSystemCloudStatus.value?.updateAvailable) return 'Actualización automática pendiente'
-  return 'Conexión local'
+const localContextPreparing = computed(() => !localSystemRuntime && (
+  localSystemLaunchPending.value || localSystemCloudUpdating.value
+))
+const localContextIconSpinning = computed(() => localContextPreparing.value || localSystemUpdating.value)
+const localContextCtaState = computed(() => {
+  if (localSystemRuntime) return 'active'
+  if (localContextPreparing.value) return 'preparing'
+  if (localSystemLaunchAvailable.value) return 'open'
+  return 'retry'
 })
-const localSystemStatusLabel = computed(() => {
-  if (localSystemUpdating.value) {
-    const phase = String(localSystemOperation.value?.phase || '')
-    if (phase === 'downloading') return 'Descargando actualización'
-    if (phase === 'dependencies') return 'Preparando actualización'
-    if (phase === 'building') return 'Construyendo actualización'
-    if (phase === 'testing') return 'Verificando actualización'
-    if (phase === 'activating') return 'Activando actualización'
-    return 'Actualizando sistema'
-  }
-  if (localSystemFailed.value) return 'Actualización no aplicada'
-  if (localSystemUpdateAvailable.value) return localSystemAutoUpdateEnabled.value ? 'Actualización automática pendiente' : 'Actualización disponible'
-  if (localSystemStatus.value?.checkError) return 'Sin conexión al actualizador'
-  return 'Sistema actualizado'
+const localContextCtaLabel = computed(() => {
+  if (localSystemRuntime) return 'En este equipo'
+  if (localContextPreparing.value) return 'Preparando…'
+  if (localSystemLaunchAvailable.value) return 'Abrir en este equipo'
+  return 'Reintentar'
 })
-const localSystemStatusTitle = computed(() => {
-  const current = localSystemStatus.value?.current?.version || systemVersionLabel.value || 'sin versión'
-  const available = localSystemStatus.value?.available?.version || ''
-  if (localSystemUpdating.value) return `${localSystemStatusLabel.value}. La versión actual continúa disponible.`
-  if (localSystemFailed.value) return localSystemOperation.value?.error || 'La actualización falló y la versión anterior continúa activa.'
-  if (localSystemUpdateAvailable.value) {
-    if (localSystemAutoUpdateEnabled.value) return `Instalada ${current}. Disponible ${available}. La actualización se aplicará automáticamente.`
-    return isSuperAdmin.value
-      ? `Instalada ${current}. Disponible ${available}. Selecciona para actualizar.`
-      : `Instalada ${current}. Disponible ${available}.`
+const localContextCtaCompactLabel = computed(() => {
+  if (localSystemRuntime) return 'En este equipo'
+  if (localContextPreparing.value) return 'Preparando…'
+  if (localSystemLaunchAvailable.value) return 'Abrir aquí'
+  return 'Reintentar'
+})
+const localContextManualUpdateAvailable = computed(() => Boolean(
+  localSystemRuntime
+  && isSuperAdmin.value
+  && localSystemUpdateAvailable.value
+  && !localSystemAutoUpdateEnabled.value
+  && !localSystemUpdating.value
+))
+const localContextCtaDisabled = computed(() => {
+  if (localSystemRuntime) return !localContextManualUpdateAvailable.value
+  return localContextPreparing.value
+})
+const localContextOperationPhase = computed(() => String(
+  (localSystemRuntime ? localSystemOperation.value : localSystemCloudOperation.value)?.phase || ''
+))
+const localContextBuildPhase = computed(() => ['dependencies', 'building'].includes(localContextOperationPhase.value))
+const localContextVerificationPhase = computed(() => localContextOperationPhase.value === 'testing')
+const localContextPhaseLabel = computed(() => {
+  const phase = localContextOperationPhase.value
+  if (phase === 'checking') return 'Buscando actualización'
+  if (phase === 'downloading') return 'Descargando actualización'
+  if (phase === 'dependencies') return 'Instalando dependencias'
+  if (phase === 'building') return 'Compilando versión local'
+  if (phase === 'testing') return 'Verificando versión local'
+  if (phase === 'activating') return 'Activando versión local'
+  if (phase === 'failed') return 'La actualización local falló'
+  return ''
+})
+const localContextCtaAriaLabel = computed(() => {
+  if (localSystemRuntime) {
+    return localContextPhaseLabel.value
+      ? `En este equipo. ${localContextPhaseLabel.value}.`
+      : 'En este equipo.'
   }
-  return `Versión instalada ${current}.`
+  return localContextCtaLabel.value
+})
+const localContextTechnicalTitle = computed(() => {
+  if (localContextPhaseLabel.value) return localContextPhaseLabel.value
+  if (localSystemRuntime) {
+    if (localContextManualUpdateAvailable.value) return 'Actualización disponible. Selecciona para instalarla.'
+    if (localSystemStatus.value?.checkError) return 'No se pudo consultar el servicio local'
+    const version = localSystemStatus.value?.current?.version || ''
+    return version ? `Ejecución local · ${version}` : 'Ejecución local'
+  }
+  if (localSystemLaunchPending.value) return 'Consultando disponibilidad local'
+  if (localSystemLaunchAvailable.value) return `Disponible para ${activePlantel.value}`
+  return `No disponible${localSystemDiagnosticSuffix.value}`
 })
 
 const applyLocalSystemVersion = (status) => {
@@ -696,18 +713,13 @@ const localSystemDiagnosticSuffix = computed(() => {
   return parts.length ? ` [${parts.join(' · ')}]` : ''
 })
 
-const localSystemLaunchTitle = computed(() => {
-  if (localSystemLaunchPending.value) return 'Verificando disponibilidad de Sistema Rápido.'
-  if (localSystemLaunchAvailable.value) return `Abrir la conexión local de alto rendimiento.${localSystemDiagnosticSuffix.value}`
-  return `${localSystemLaunchMessage.value || 'Sistema Rápido todavía no está disponible. Selecciona para verificar nuevamente.'}${localSystemDiagnosticSuffix.value}`
-})
 
 const loadLocalSystemLaunch = async (refresh = false) => {
   if (localSystemRuntime) return
   if (activePlantel.value === 'GLOBAL') {
     localSystemLaunchAvailable.value = false
     localSystemLaunchUrl.value = ''
-    localSystemLaunchMessage.value = 'Selecciona un plantel para abrir Sistema Rápido.'
+    localSystemLaunchMessage.value = 'Selecciona un plantel para abrir en este equipo.'
     localSystemLaunchCode.value = 'LOCAL_SYSTEM_PLANTEL_REQUIRED'
     localSystemLaunchRequestId.value = ''
     return
@@ -733,8 +745,8 @@ const loadLocalSystemLaunch = async (refresh = false) => {
     localSystemLaunchMessage.value = String(
       info?.message
       || (info?.launchAvailable
-        ? 'Sistema Rápido está disponible.'
-        : 'Sistema Rápido todavía no está disponible en este plantel.')
+        ? 'La opción de este equipo está disponible.'
+        : 'La opción de este equipo todavía no está disponible en este plantel.')
     )
     localSystemLaunchCode.value = String(info?.code || '')
     localSystemLaunchRequestId.value = String(info?.requestId || '')
@@ -754,7 +766,7 @@ const loadLocalSystemLaunch = async (refresh = false) => {
     localSystemLaunchMessage.value = String(
       payload?.message
       || error?.message
-      || 'No se pudo verificar Sistema Rápido en este momento.'
+      || 'No se pudo verificar la opción de este equipo.'
     )
     localSystemLaunchCode.value = String(payload?.code || 'LOCAL_SYSTEM_STATUS_FAILED')
     localSystemLaunchRequestId.value = String(payload?.requestId || '')
@@ -774,7 +786,7 @@ const loadLocalSystemLaunch = async (refresh = false) => {
 const openLocalSystem = async () => {
   if (localSystemLaunchPending.value) return
   if (activePlantel.value === 'GLOBAL') {
-    show('Selecciona un plantel antes de abrir Sistema Rápido.', 'danger')
+    show('Selecciona un plantel.', 'danger')
     return
   }
 
@@ -787,7 +799,7 @@ const openLocalSystem = async () => {
       }
     })
     const launchUrl = String(result?.launchUrl || '')
-    if (!launchUrl) throw new Error('El agente no devolvió una dirección para Sistema Rápido.')
+    if (!launchUrl) throw new Error('El agente no devolvió una dirección local.')
     localSystemLaunchCode.value = String(result?.code || 'LOCAL_SYSTEM_READY')
     localSystemLaunchRequestId.value = String(result?.requestId || '')
     console.info('[SistemaRapidoDiag]', { event: 'launch_ready', plantel: activePlantel.value, code: localSystemLaunchCode.value, requestId: localSystemLaunchRequestId.value, launchUrl })
@@ -797,7 +809,7 @@ const openLocalSystem = async () => {
     const message = String(
       payload?.message
       || error?.message
-      || 'No se pudo abrir Sistema Rápido en este momento.'
+      || 'No se pudo abrir en este equipo.'
     )
     localSystemLaunchAvailable.value = false
     localSystemLaunchMessage.value = message
@@ -811,10 +823,29 @@ const openLocalSystem = async () => {
       message,
       diagnostics: payload?.diagnostics || null
     })
-    show(`${message}${localSystemDiagnosticSuffix.value}`, 'danger')
+    show(`No se pudo abrir en este equipo.${isSuperAdmin.value ? localSystemDiagnosticSuffix.value : ''}`, 'danger')
   } finally {
     localSystemLaunchPending.value = false
   }
+}
+
+const handleLocalContextCta = async () => {
+  if (localSystemRuntime) {
+    if (localContextManualUpdateAvailable.value) await startLocalSystemUpdate()
+    return
+  }
+
+  if (localContextPreparing.value) return
+  if (localSystemLaunchAvailable.value) {
+    await openLocalSystem()
+    return
+  }
+
+  if (activePlantel.value === 'GLOBAL') {
+    show('Selecciona un plantel.', 'danger')
+    return
+  }
+  await loadLocalSystemLaunch(true)
 }
 
 const scheduleLocalSystemPoll = (delay = 15000) => {
@@ -860,7 +891,7 @@ const loadLocalSystemStatus = async (refresh = false) => {
 
 const startLocalSystemUpdate = async () => {
   if (localSystemAutoUpdateEnabled.value) {
-    show('La actualización se aplicará automáticamente en segundo plano.', 'success')
+    if (isSuperAdmin.value) show('La actualización se aplicará automáticamente.', 'success')
     scheduleLocalSystemPoll(1000)
     return
   }
@@ -876,7 +907,7 @@ const startLocalSystemUpdate = async () => {
         message: 'Buscando la versión más reciente'
       }
     }
-    show('La actualización se está preparando. La versión actual seguirá disponible.', 'success')
+    show('Preparando actualización.', 'success')
     scheduleLocalSystemPoll(1000)
   } catch (error) {
     show(error?.data?.message || error?.message || 'No se pudo iniciar la actualización.', 'danger')
@@ -2210,127 +2241,69 @@ const logout = async () => {
 }
 
 
-.local-system-status,
-.local-system-launch {
+.local-context-cta {
   display: inline-flex;
-  min-height: 50px;
+  min-height: 42px;
   align-items: center;
-  gap: 11px;
-  border: 1px solid rgba(203, 220, 208, 0.94);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.94);
-  padding: 7px 16px 7px 10px;
-  color: #244736;
-  box-shadow: 0 10px 24px rgba(22, 38, 65, 0.05);
-  text-align: left;
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
-}
-
-
-.local-system-launch {
-  appearance: none;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid #dbe4df;
+  border-radius: 12px;
+  background: #fff;
+  padding: 0 14px;
+  color: #263b31;
   font: inherit;
-  text-decoration: none;
+  font-size: 0.84rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
 }
 
-.local-system-launch-compact {
-  min-height: 46px;
-  padding-right: 14px;
+.local-context-cta:hover:not(:disabled) {
+  border-color: #92b79b;
+  background: #f8fbf8;
+  color: #245d33;
 }
 
-.local-system-launch:hover:not(:disabled) {
-  border-color: rgba(77, 145, 87, 0.54);
-  box-shadow: 0 14px 28px rgba(31, 85, 45, 0.11);
-  transform: translateY(-1px);
+.local-context-cta:focus-visible {
+  outline: 3px solid rgba(77, 145, 87, 0.2);
+  outline-offset: 2px;
 }
 
-.local-system-launch.is-unavailable {
-  border-color: rgba(174, 186, 181, 0.86);
-  background: rgba(247, 249, 248, 0.96);
-  color: #64736c;
-}
-
-.local-system-launch.is-checking,
-.local-system-launch:disabled {
-  cursor: wait;
-  opacity: 0.78;
-}
-
-.local-system-status.has-update {
-  border-color: rgba(220, 153, 51, 0.56);
-  background: linear-gradient(180deg, #fffdf7, #fff7e7);
-  color: #704414;
-  cursor: pointer;
-}
-
-.local-system-status.has-update:not(:disabled):hover {
-  border-color: rgba(210, 132, 19, 0.72);
-  box-shadow: 0 14px 28px rgba(105, 66, 16, 0.12);
-  transform: translateY(-1px);
-}
-
-
-.local-system-status.is-failed {
-  border-color: rgba(210, 74, 74, 0.48);
-  background: linear-gradient(180deg, #fffafa, #fff0f0);
-  color: #8d2d2d;
-}
-
-.local-system-status.is-failed .local-system-status-icon {
-  background: rgba(210, 74, 74, 0.13);
-  color: #b43b3b;
-}
-
-.local-system-status.is-updating {
-  border-color: rgba(78, 137, 91, 0.46);
-  background: linear-gradient(180deg, #f5fcf5, #eaf7eb);
-}
-
-.local-system-status:disabled {
+.local-context-cta:disabled {
   cursor: default;
   opacity: 1;
 }
 
-.local-system-status-icon {
+.local-context-cta.is-active {
+  border-color: #cfe1d3;
+  background: #f6faf7;
+  color: #28633a;
+}
+
+.local-context-cta.is-preparing {
+  border-color: #d8e1dd;
+  background: #f8faf9;
+  color: #5b6b63;
+}
+
+.local-context-cta.is-retry {
+  color: #596861;
+}
+
+.local-context-cta-icon {
   display: inline-grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   place-items: center;
-  border-radius: 12px;
-  background: rgba(92, 151, 78, 0.13);
-  color: #397447;
-}
-
-.local-system-status.has-update .local-system-status-icon {
-  background: rgba(225, 151, 42, 0.14);
-  color: #a35f08;
-}
-
-.local-system-status-copy {
-  display: grid;
-  gap: 1px;
-}
-
-.local-system-status-copy small {
   color: currentColor;
-  font-size: 0.68rem;
-  font-weight: 850;
-  letter-spacing: 0.08em;
-  line-height: 1.1;
-  opacity: 0.72;
-  text-transform: uppercase;
 }
 
-.local-system-status-copy strong {
-  max-width: 218px;
-  overflow: hidden;
-  font-size: 0.92rem;
-  font-weight: 900;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.local-context-cta-label-compact {
+  display: none;
 }
 
 .header-home-button {
@@ -2607,8 +2580,10 @@ const logout = async () => {
     height: 38px;
   }
 
-  .local-system-status-copy strong {
-    max-width: 132px;
+  .local-context-cta {
+    min-height: 40px;
+    padding-inline: 11px;
+    font-size: 0.78rem;
   }
 
   .ciclo-picker {
@@ -3208,7 +3183,28 @@ const logout = async () => {
 
 @media (max-width: 430px) {
   .app-header h1 {
-    max-width: 28vw;
+    max-width: 24vw;
+  }
+
+  .local-context-cta {
+    min-height: 38px;
+    gap: 6px;
+    padding-inline: 8px;
+    font-size: 0.72rem;
+  }
+
+  .local-context-cta-icon {
+    width: 17px;
+    height: 17px;
+    flex-basis: 17px;
+  }
+
+  .local-context-cta-label-full {
+    display: none;
+  }
+
+  .local-context-cta-label-compact {
+    display: inline;
   }
 
   .control-header-tools .header-icon-action-subtle {

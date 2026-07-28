@@ -1,1 +1,1 @@
-Hace visibles las etiquetas de plantel en todas las barras
+Simplifica el acceso local con un CTA claro y persistente
