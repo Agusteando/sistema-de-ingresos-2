@@ -939,24 +939,34 @@ const startLocalSystemUpdate = async () => {
         }
       }
     } else {
-      await $fetch('/api/system/update', {
-        method: 'POST',
-        body: { plantel: activePlantel.value }
-      })
       localSystemCloudStatus.value = {
         ...(localSystemCloudStatus.value || {}),
         operation: {
           ...(localSystemCloudStatus.value?.operation || {}),
           running: true,
           phase: 'checking',
-          message: 'Buscando la versión más reciente'
+          message: 'Preparando la actualización'
         }
       }
+      const result = await $fetch('/api/system/update', {
+        method: 'POST',
+        body: { plantel: activePlantel.value }
+      })
+      const launchUrl = String(result?.launchUrl || '')
+      if (!launchUrl) throw new Error('No se recibió el acceso a la instalación de este equipo.')
+      window.location.assign(launchUrl)
+      return
     }
 
     show('Actualización iniciada.', 'success')
     scheduleLocalSystemPoll(1000)
   } catch (error) {
+    if (!localSystemRuntime) {
+      localSystemCloudStatus.value = {
+        ...(localSystemCloudStatus.value || {}),
+        operation: null
+      }
+    }
     show(error?.data?.message || error?.message || 'No se pudo iniciar la actualización.', 'danger')
   }
 }
@@ -1147,6 +1157,23 @@ watch(
   { immediate: true },
 )
 
+
+const consumeLocalUpdateHandoffState = async () => {
+  if (!localSystemRuntime) return
+  const state = String(route.query.local_update || '').trim().toLowerCase()
+  if (!state) return
+
+  if (state === 'started' || state === 'running') {
+    show('Actualización iniciada.', 'success')
+  } else if (state === 'failed') {
+    show('No se pudo iniciar la actualización.', 'danger')
+  }
+
+  const query = { ...route.query }
+  delete query.local_update
+  await navigateTo({ path: route.path, query }, { replace: true })
+}
+
 onMounted(async () => {
   if (typeof window !== 'undefined') {
     sidebarCollapsed.value = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === '1'
@@ -1170,6 +1197,7 @@ onMounted(async () => {
   await loadSystemVersion()
   if (localSystemRuntime) {
     await loadLocalSystemStatus(false)
+    await consumeLocalUpdateHandoffState()
     scheduleLocalSystemPoll(localSystemUpdating.value ? 3000 : 15000)
   } else {
     await loadLocalSystemLaunch(false)

@@ -1,4 +1,12 @@
-export const LOCAL_SYSTEM_BRIDGE_COMMAND = '/* CASITA_SISTEMA_RAPIDO_V2 */ SELECT ? AS __casita_local_system_operation, ? AS __casita_local_system_email, ? AS __casita_local_system_plantel'
+export const LOCAL_SYSTEM_BRIDGE_COMMAND_V1 = '/* CASITA_SISTEMA_RAPIDO_V1 */ SELECT ? AS operation, ? AS email, ? AS plantel'
+export const LOCAL_SYSTEM_BRIDGE_COMMAND_V2 = '/* CASITA_SISTEMA_RAPIDO_V2 */ SELECT ? AS __casita_local_system_operation, ? AS __casita_local_system_email, ? AS __casita_local_system_plantel'
+
+// The deployed bridge agent currently implements V1. Keep V2 as a fallback so
+// Aurora can negotiate either protocol without requiring an agent update.
+export const LOCAL_SYSTEM_BRIDGE_COMMAND = LOCAL_SYSTEM_BRIDGE_COMMAND_V1
+
+export type LocalSystemBridgeProtocol = 'v1' | 'v2'
+export type LocalSystemBridgeOperation = 'status' | 'launch'
 
 export type LocalSystemHealthSummary = {
   ok?: boolean
@@ -53,6 +61,7 @@ export type LocalSystemBridgeResult = {
     autoUpdateTriggered?: boolean
     autoUpdateReason?: string
     checkError?: string
+    protocol?: LocalSystemBridgeProtocol
   }
 }
 
@@ -88,7 +97,7 @@ const unsupportedAgentResult = (echo: ReturnType<typeof commandEcho>): LocalSyst
   available: false,
   code: 'LOCAL_SYSTEM_AGENT_COMMAND_NOT_INTERCEPTED',
   plantel: echo?.plantel || '',
-  message: 'El agente Bridge ejecutó el comando de Sistema Rápido como SQL normal. Actualiza o reinicia el proceso db-bridge-agent del plantel; el manager local puede estar sano, pero el proceso principal no tiene activo el contrato de handoff.',
+  message: 'El agente del plantel no reconoció este protocolo de acceso local.',
   diagnostics: {
     operation: echo?.operation || '',
     agentCommandIntercepted: false,
@@ -146,6 +155,42 @@ export const unwrapLocalSystemBridgeResult = (value: unknown): LocalSystemBridge
   return null
 }
 
+export type CompatibleLocalSystemBridgeExecution = {
+  raw: unknown
+  result: LocalSystemBridgeResult | null
+  protocol: LocalSystemBridgeProtocol
+}
+
+export const runCompatibleLocalSystemBridgeCommand = async (
+  execute: (sql: string, params: [LocalSystemBridgeOperation, string, string]) => Promise<unknown>,
+  operation: LocalSystemBridgeOperation,
+  email: string,
+  plantel: string,
+): Promise<CompatibleLocalSystemBridgeExecution> => {
+  const params: [LocalSystemBridgeOperation, string, string] = [
+    operation,
+    String(email || '').trim().toLowerCase(),
+    String(plantel || '').trim().toUpperCase(),
+  ]
+  const protocols: Array<{ protocol: LocalSystemBridgeProtocol; command: string }> = [
+    { protocol: 'v1', command: LOCAL_SYSTEM_BRIDGE_COMMAND_V1 },
+    { protocol: 'v2', command: LOCAL_SYSTEM_BRIDGE_COMMAND_V2 },
+  ]
+
+  let last: CompatibleLocalSystemBridgeExecution | null = null
+  for (const candidate of protocols) {
+    const raw = await execute(candidate.command, params)
+    const result = unwrapLocalSystemBridgeResult(raw)
+    last = { raw, result, protocol: candidate.protocol }
+    if (result?.code !== 'LOCAL_SYSTEM_AGENT_COMMAND_NOT_INTERCEPTED') {
+      if (result?.diagnostics) result.diagnostics.protocol = candidate.protocol
+      return last
+    }
+  }
+
+  return last || { raw: null, result: null, protocol: 'v1' }
+}
+
 export const localSystemDiagnosticSummary = (result: LocalSystemBridgeResult | null) => ({
   code: String(result?.code || 'LOCAL_SYSTEM_UNKNOWN'),
   requestId: String(result?.requestId || ''),
@@ -171,5 +216,6 @@ export const localSystemDiagnosticSummary = (result: LocalSystemBridgeResult | n
   autoUpdateEnabled: Boolean(result?.autoUpdateEnabled ?? result?.diagnostics?.autoUpdateEnabled),
   autoUpdateTriggered: Boolean(result?.autoUpdateTriggered ?? result?.diagnostics?.autoUpdateTriggered),
   autoUpdateReason: String(result?.autoUpdateReason || result?.diagnostics?.autoUpdateReason || ''),
-  checkError: String(result?.checkError || result?.diagnostics?.checkError || '')
+  checkError: String(result?.checkError || result?.diagnostics?.checkError || ''),
+  protocol: result?.diagnostics?.protocol || ''
 })

@@ -38,6 +38,7 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event)
   const ticket = String(query.ticket || '').trim()
+  const intent = String(query.intent || '').trim().toLowerCase()
   if (!ticket) throw createError({ statusCode: 401, message: 'El acceso a Sistema Rápido no es válido.' })
   const payload = await requestLocalSystemManager<{ email: string; plantel: string; nonce: string; exp: number }>(`/handoff/consume?ticket=${encodeURIComponent(ticket)}`)
 
@@ -96,5 +97,29 @@ export default defineEventHandler(async (event) => {
   })
   deleteCookie(event, 'auth_is_super_admin', { path: '/' })
 
-  return sendRedirect(event, financialAccess ? '/' : '/control-escolar', 302)
+  const destination = financialAccess ? '/' : '/control-escolar'
+  if (intent !== 'update') {
+    return sendRedirect(event, destination, 302)
+  }
+
+  let updateState = 'started'
+  try {
+    await requestLocalSystemManager('/update', { method: 'POST' })
+  } catch (error: any) {
+    // A second click while an update is already running should still enter the
+    // local application and display the active operation instead of failing the
+    // one-time handoff.
+    updateState = Number(error?.statusCode || error?.status || 0) === 409
+      ? 'running'
+      : 'failed'
+    console.error(`[LocalUpdateHandoff] ${JSON.stringify({
+      email,
+      plantel: localPlantel,
+      state: updateState,
+      message: String(error?.message || 'No se pudo iniciar la actualización local.')
+    })}`)
+  }
+
+  const separator = destination.includes('?') ? '&' : '?'
+  return sendRedirect(event, `${destination}${separator}local_update=${encodeURIComponent(updateState)}`, 302)
 })

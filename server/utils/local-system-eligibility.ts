@@ -52,7 +52,7 @@ export const bridgeAgentMatchesPlantel = (
     result.diagnostics?.echoedPlantel
   )
 
-  // runWithBridgeAgentId already routes the command to the requested agent.
-  // When the agent also reports its plantel, require an exact match.
-  return Boolean(expected && (!reported || reported === expected))
+  // Sensitive local actions require the agent to report the exact plantel.
+  // Routing alone is not sufficient proof of eligibility.
+  return Boolean(expected && reported && reported === expected)
 }

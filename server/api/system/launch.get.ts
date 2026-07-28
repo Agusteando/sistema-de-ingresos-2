@@ -1,6 +1,7 @@
 import { getDbTransport, runRawSqlStatement, runWithBridgeAgentId } from '../../utils/db'
 import { normalizePlantel } from '../../utils/auth-session'
-import { LOCAL_SYSTEM_BRIDGE_COMMAND, localSystemDiagnosticSummary, unwrapLocalSystemBridgeResult } from '../../utils/local-system-handoff'
+import { localSystemDiagnosticSummary, runCompatibleLocalSystemBridgeCommand } from '../../utils/local-system-handoff'
+import { bridgeAgentMatchesPlantel } from '../../utils/local-system-eligibility'
 import { isLocalSystemRuntime } from '../../utils/local-system-manager'
 
 export default defineEventHandler(async (event) => {
@@ -19,13 +20,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'No tienes acceso a este plantel.' })
   }
 
-  const bridgeResponse = await runWithBridgeAgentId(requested, () => runRawSqlStatement<unknown>(
-    LOCAL_SYSTEM_BRIDGE_COMMAND,
-    ['launch', user.email, requested]
-  ))
-  const result = unwrapLocalSystemBridgeResult(bridgeResponse)
-  const diagnostics = localSystemDiagnosticSummary(result)
-  if (!result?.ok || !result.launchUrl) {
+  const { result, protocol } = await runCompatibleLocalSystemBridgeCommand(
+    (sql, params) => runWithBridgeAgentId(requested, () => runRawSqlStatement<unknown>(sql, params)),
+    'launch',
+    user.email,
+    requested,
+  )
+  const diagnostics = { ...localSystemDiagnosticSummary(result), protocol }
+  if (!bridgeAgentMatchesPlantel(result, requested) || !result?.ok || !result.launchUrl) {
     const code = result?.code || 'LOCAL_SYSTEM_LAUNCH_UNAVAILABLE'
     const effectiveRequestId = result?.requestId || requestId
     const message = result?.message || 'Sistema Rápido todavía no está disponible en este plantel.'

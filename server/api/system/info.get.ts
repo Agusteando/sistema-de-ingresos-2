@@ -1,6 +1,6 @@
 import { getDbTransport, runRawSqlStatement, runWithBridgeAgentId } from '../../utils/db'
 import { normalizePlantel } from '../../utils/auth-session'
-import { LOCAL_SYSTEM_BRIDGE_COMMAND, localSystemDiagnosticSummary, unwrapLocalSystemBridgeResult } from '../../utils/local-system-handoff'
+import { localSystemDiagnosticSummary, runCompatibleLocalSystemBridgeCommand } from '../../utils/local-system-handoff'
 import { bridgeAgentMatchesPlantel, localSystemPlantelEligibility } from '../../utils/local-system-eligibility'
 import { isLocalSystemRuntime, requestLocalSystemManager } from '../../utils/local-system-manager'
 
@@ -51,18 +51,33 @@ export default defineEventHandler(async (event) => {
     }
 
     try {
-      const bridgeResponse = await runWithBridgeAgentId(activePlantel, () => runRawSqlStatement<unknown>(
-        LOCAL_SYSTEM_BRIDGE_COMMAND,
-        ['status', user?.email || '', activePlantel]
-      ))
-      const result = unwrapLocalSystemBridgeResult(bridgeResponse)
-      const diagnostics = localSystemDiagnosticSummary(result)
-      const updateEligible = bridgeAgentMatchesPlantel(result, activePlantel)
+      const { result, protocol } = await runCompatibleLocalSystemBridgeCommand(
+        (sql, params) => runWithBridgeAgentId(activePlantel, () => runRawSqlStatement<unknown>(sql, params)),
+        'status',
+        user?.email || '',
+        activePlantel,
+      )
+      const diagnostics = { ...localSystemDiagnosticSummary(result), protocol }
+      const agentMatchesPlantel = bridgeAgentMatchesPlantel(result, activePlantel)
+      const launchAvailable = Boolean(agentMatchesPlantel && result?.ok && result?.available)
+      const operation = result?.operation || (diagnostics.phase || diagnostics.running || diagnostics.operationError
+        ? {
+            phase: diagnostics.phase,
+            running: diagnostics.running,
+            message: result?.message || '',
+            error: diagnostics.operationError
+          }
+        : null)
+      // The deployed V1 agent can create a handoff only when a local Aurora
+      // release is already active. Initial installation remains the manager's
+      // automatic responsibility; do not expose a manual action that cannot run.
+      const updateEligible = launchAvailable
       console.info(`[SistemaRapidoDiag] ${JSON.stringify({
         event: 'central_status',
         requestId,
         activePlantel,
         agentId: activePlantel,
+        agentMatchesPlantel,
         updateEligible,
         ...diagnostics,
         message: result?.message || ''
@@ -73,9 +88,9 @@ export default defineEventHandler(async (event) => {
         localSystem: false,
         mode: 'central',
         activePlantel,
-        launchAvailable: Boolean(updateEligible && result?.ok && result?.available),
+        launchAvailable,
         updateEligible,
-        launchUrl: updateEligible && result?.ok && result?.available
+        launchUrl: launchAvailable
           ? `/api/system/launch?plantel=${encodeURIComponent(activePlantel)}`
           : '',
         code: result?.code || 'LOCAL_SYSTEM_STATUS_INVALID',
@@ -89,10 +104,10 @@ export default defineEventHandler(async (event) => {
           ? { version: result?.availableVersion || '', sha: result?.availableSha || '' }
           : null,
         updateAvailable: Boolean(result?.updateAvailable),
-        autoUpdateEnabled: result?.autoUpdateEnabled !== false,
+        autoUpdateEnabled: result?.autoUpdateEnabled === true,
         autoUpdateTriggered: Boolean(result?.autoUpdateTriggered),
         autoUpdateReason: result?.autoUpdateReason || '',
-        operation: result?.operation || null,
+        operation,
         checkError: result?.checkError || '',
         diagnostics
       }
@@ -123,7 +138,7 @@ export default defineEventHandler(async (event) => {
         installed: null,
         available: null,
         updateAvailable: false,
-        autoUpdateEnabled: true,
+        autoUpdateEnabled: false,
         autoUpdateTriggered: false,
         autoUpdateReason: 'status-error',
         operation: null,
@@ -173,7 +188,7 @@ export default defineEventHandler(async (event) => {
     },
     available: status.available || null,
     updateAvailable: Boolean(status.updateAvailable),
-    autoUpdateEnabled: status.autoUpdateEnabled !== false,
+    autoUpdateEnabled: status.autoUpdateEnabled === true,
     autoUpdateTriggered: Boolean(status.autoUpdateTriggered),
     autoUpdateReason: String(status.autoUpdateReason || ''),
     operation: status.operation || null,

@@ -1,8 +1,14 @@
 import { getDbTransport, runRawSqlStatement, runWithBridgeAgentId } from '../../utils/db'
 import { normalizePlantel } from '../../utils/auth-session'
-import { LOCAL_SYSTEM_BRIDGE_COMMAND, unwrapLocalSystemBridgeResult } from '../../utils/local-system-handoff'
+import { runCompatibleLocalSystemBridgeCommand } from '../../utils/local-system-handoff'
 import { assertLocalSystemPlantelEligibility, bridgeAgentMatchesPlantel } from '../../utils/local-system-eligibility'
 import { isLocalSystemRuntime, requestLocalSystemManager } from '../../utils/local-system-manager'
+
+const withUpdateIntent = (value: string) => {
+  const url = new URL(value)
+  url.searchParams.set('intent', 'update')
+  return url.toString()
+}
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
@@ -30,13 +36,19 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, message: 'La actualización solo puede ejecutarse para el plantel activo.' })
   }
 
-  // Preflight the exact bridge agent before sending the update command. A
-  // missing or mismatched agent must never start installation or build work.
-  const statusBridgeResponse = await runWithBridgeAgentId(activePlantel, () => runRawSqlStatement<unknown>(
-    LOCAL_SYSTEM_BRIDGE_COMMAND,
-    ['status', user.email, activePlantel]
-  ))
-  const statusResult = unwrapLocalSystemBridgeResult(statusBridgeResponse)
+  const execute = (sql: string, params: ['status' | 'launch', string, string]) => (
+    runWithBridgeAgentId(activePlantel, () => runRawSqlStatement<unknown>(sql, params))
+  )
+
+  // First prove that the routed agent reports the exact active plantel. No
+  // installation, build, or launch is attempted when this preflight fails.
+  const statusExecution = await runCompatibleLocalSystemBridgeCommand(
+    execute,
+    'status',
+    user.email,
+    activePlantel,
+  )
+  const statusResult = statusExecution.result
   if (!bridgeAgentMatchesPlantel(statusResult, activePlantel)) {
     throw createError({
       statusCode: 409,
@@ -44,24 +56,31 @@ export default defineEventHandler(async (event) => {
       data: {
         code: statusResult?.code || 'LOCAL_SYSTEM_AGENT_MISMATCH',
         requestId: statusResult?.requestId || requestId,
-        plantel: activePlantel
+        plantel: activePlantel,
+        protocol: statusExecution.protocol,
       }
     })
   }
 
-  const bridgeResponse = await runWithBridgeAgentId(activePlantel, () => runRawSqlStatement<unknown>(
-    LOCAL_SYSTEM_BRIDGE_COMMAND,
-    ['update', user.email, activePlantel]
-  ))
-  const result = unwrapLocalSystemBridgeResult(bridgeResponse)
-  if (!bridgeAgentMatchesPlantel(result, activePlantel) || !result?.ok) {
+  // The deployed agent intentionally exposes only status and launch. Aurora
+  // therefore enters the authenticated local runtime and lets that runtime
+  // call its manager's /update endpoint; the bridge agent is never updated.
+  const launchExecution = await runCompatibleLocalSystemBridgeCommand(
+    execute,
+    'launch',
+    user.email,
+    activePlantel,
+  )
+  const launchResult = launchExecution.result
+  if (!bridgeAgentMatchesPlantel(launchResult, activePlantel) || !launchResult?.ok || !launchResult.launchUrl) {
     throw createError({
       statusCode: 503,
-      message: result?.message || 'El agente no aceptó la actualización.',
+      message: launchResult?.message || 'La instalación de este equipo no está disponible para actualizarse.',
       data: {
-        code: result?.code || 'LOCAL_SYSTEM_UPDATE_REJECTED',
-        requestId: result?.requestId || requestId,
-        plantel: activePlantel
+        code: launchResult?.code || 'LOCAL_SYSTEM_UPDATE_HANDOFF_REJECTED',
+        requestId: launchResult?.requestId || requestId,
+        plantel: activePlantel,
+        protocol: launchExecution.protocol,
       }
     })
   }
@@ -69,8 +88,11 @@ export default defineEventHandler(async (event) => {
   return {
     ok: true,
     accepted: true,
-    requestId: result.requestId || requestId,
+    requiresLocalHandoff: true,
+    launchUrl: withUpdateIntent(launchResult.launchUrl),
+    expiresAt: launchResult.expiresAt || null,
+    requestId: launchResult.requestId || requestId,
     plantel: activePlantel,
-    operation: result.operation || null
+    protocol: launchExecution.protocol,
   }
 })

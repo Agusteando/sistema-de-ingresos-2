@@ -1,1 +1,1 @@
-Restaura la actualización local para usuarios con agente y plantel coincidentes
+Compatibiliza Aurora con el agente local sin actualizarlo

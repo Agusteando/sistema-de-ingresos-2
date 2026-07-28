@@ -10,6 +10,28 @@ export const isLocalSystemRuntime = () => {
   return String(process.env.LOCAL_SYSTEM_MODE || config.localSystemMode || '').toLowerCase() === 'true'
 }
 
+
+const boolValue = (value: unknown, fallback = false) => {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) return fallback
+  return ['1', 'true', 'yes', 'on'].includes(normalized)
+}
+
+export const isLocalSystemAutoUpdateEnabled = () => {
+  if (!isLocalSystemRuntime()) return false
+  const explicit = String(process.env.LOCAL_SYSTEM_AUTO_UPDATE || '').trim()
+  if (explicit) return boolValue(explicit, false)
+  // Existing agent installations already carry LOCAL_SYSTEM_AUTO_INSTALL.
+  // Reuse it as the compatibility default so Aurora can apply later releases
+  // automatically without modifying the bridge agent.
+  return boolValue(process.env.LOCAL_SYSTEM_AUTO_INSTALL, true)
+}
+
+export const localSystemAutoUpdateIntervalMs = () => {
+  const value = Number(process.env.LOCAL_SYSTEM_CHECK_INTERVAL_MS || 300000)
+  return Number.isFinite(value) && value >= 60000 ? Math.floor(value) : 300000
+}
+
 export const requestLocalSystemManager = async <T = any>(path: string, options: ManagerRequestOptions = {}): Promise<T> => {
   const config = useRuntimeConfig()
   const managerUrl = normalizeManagerUrl(process.env.LOCAL_SYSTEM_MANAGER_URL || config.localSystemManagerUrl)
