@@ -16,7 +16,7 @@
             <div>
               <h3 id="corte-users-title">Selecciona los usuarios</h3>
               <p id="corte-users-description">
-                El corte en pantalla y el PDF conservan todos los movimientos. Elige cuáles incluir únicamente en este Excel.
+                Usuarios incluidos en el Excel.
               </p>
             </div>
             <button ref="closeButton" class="corte-users-close" type="button" aria-label="Cerrar" :disabled="loading" @click="closeModal">

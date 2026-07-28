@@ -16,6 +16,7 @@ type CorteCajaLoadOptions = {
 
 export type CorteCajaRow = {
   folio: number
+  folio_plantel?: string | null
   fecha: Date | string
   fechaPago?: Date | string | null
   matricula: string
@@ -26,6 +27,12 @@ export type CorteCajaRow = {
   concepto: string
   conceptoNombre: string
   monto: number | string
+  importeTotal?: number | string | null
+  saldoAntes?: number | string | null
+  saldoDespues?: number | string | null
+  pagos?: number | string | null
+  pagosDespues?: number | string | null
+  montoLetra?: string | null
   montoAplicado: number
   formaDePago: string
   plantel?: string | null
@@ -284,6 +291,7 @@ export const loadPlantelCorteCaja = async (
   const rows = await query<CorteCajaRow[]>(`
     SELECT
       r.folio,
+      r.folio_plantel,
       ${PAYMENT_REGISTERED_AT_SQL} AS fecha,
       r.fecha AS fechaPago,
       r.matricula,
@@ -294,6 +302,12 @@ export const loadPlantelCorteCaja = async (
       r.concepto,
       r.conceptoNombre,
       r.monto,
+      r.importeTotal,
+      r.saldoAntes,
+      r.saldoDespues,
+      r.pagos,
+      r.pagosDespues,
+      r.montoLetra,
       r.formaDePago,
       r.plantel,
       r.plantel_pago,

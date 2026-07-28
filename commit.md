@@ -1,1 +1,1 @@
-Corrige el corte de caja para auditar todos los pagos sin filtrar por ciclo
+feat: agrega PDF seriado de recibos y simplifica la interfaz de reportes

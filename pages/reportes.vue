@@ -1,11 +1,7 @@
 <template>
   <div class="reports-page">
     <section class="reports-heading">
-      <div>
-        <span class="section-kicker">Centro de reportes</span>
-        <h2>Reportes operativos</h2>
-        <p>Genera consultas puntuales sin mezclar el Corte de Caja con los reportes de conceptos.</p>
-      </div>
+      <h2>Reportes</h2>
 
       <div class="report-switcher" v-if="hasFinancialAccess">
         <button type="button" :class="{ active: activeReport === 'concepto' }" @click="activeReport = 'concepto'">
@@ -16,15 +12,16 @@
           <LucideReceipt :size="16" />
           Corte de caja
         </button>
+        <button type="button" :class="{ active: activeReport === 'recibos' }" @click="activeReport = 'recibos'">
+          <LucidePrinter :size="16" />
+          Recibos
+        </button>
       </div>
     </section>
 
     <section v-if="activeReport === 'concepto'" class="report-panel">
       <div class="panel-header">
-        <div>
-          <h3>Reporte por concepto</h3>
-          <p>Selecciona un concepto del ciclo activo y revisa sus ingresos vigentes.</p>
-        </div>
+        <h3>Reporte por concepto</h3>
         <div class="panel-actions">
           <button class="btn btn-outline" type="button" @click="printConceptReport" :disabled="!conceptRows.length || loadingConceptReport">
             <LucidePrinter :size="16" />
@@ -148,12 +145,9 @@
       </div>
     </section>
 
-    <section v-else class="report-panel">
+    <section v-else-if="activeReport === 'corte'" class="report-panel">
       <div class="panel-header">
-        <div>
-          <h3>Corte de caja</h3>
-          <p>Bitácora por fecha de registro, independiente del ciclo escolar y del estatus del alumno.</p>
-        </div>
+        <h3>Corte de caja</h3>
         <div class="panel-actions">
           <button class="btn btn-outline" @click="prepareCorteExcel" :disabled="loadingCorte || downloadingCorteExcel">
             <LucideLoader2 v-if="downloadingCorteExcel" class="animate-spin" :size="16" />
@@ -167,7 +161,7 @@
         </div>
       </div>
 
-      <div class="filters-grid">
+      <div class="filters-grid corte-filters">
         <div class="form-group m-0">
           <label class="form-label">Apertura</label>
           <input type="date" v-model="filtrosCorte.inicio" class="input-field">
@@ -231,6 +225,45 @@
       </div>
     </section>
 
+    <section v-else class="report-panel receipts-report-panel">
+      <div class="panel-header">
+        <h3>Recibos del corte</h3>
+      </div>
+
+      <div class="filters-grid corte-filters">
+        <div class="form-group m-0">
+          <label class="form-label">Desde</label>
+          <input type="date" v-model="filtrosCorte.inicio" class="input-field">
+        </div>
+        <div class="form-group m-0">
+          <label class="form-label">Hasta</label>
+          <input type="date" v-model="filtrosCorte.fin" class="input-field">
+        </div>
+        <div class="form-group m-0" v-if="canFilterPlantel">
+          <label class="form-label">Plantel</label>
+          <select v-model="filtrosCorte.plantel" class="input-field">
+            <option value="" disabled>Seleccione un plantel</option>
+            <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
+          </select>
+        </div>
+        <button class="btn btn-primary filter-button" type="button" @click="openReceiptStripsPdf">
+          <LucideDownload :size="16" />
+          Generar PDF
+        </button>
+      </div>
+
+      <div class="receipt-export-stage">
+        <div class="receipt-export-icon" aria-hidden="true">
+          <LucideReceipt :size="24" />
+        </div>
+        <div>
+          <span>{{ receiptPeriodLabel }}</span>
+          <strong>Plantel {{ receiptPlantelLabel }}</strong>
+        </div>
+        <span class="receipt-format-chip">2 recibos por hoja</span>
+      </div>
+    </section>
+
     <CorteUserSelectionModal
       v-if="corteUserSelectorOpen"
       :users="corteUserOptions"
@@ -278,7 +311,10 @@ const hasFinancialAccess = computed(() => resolveClientAuthAccess({
   hasFinancialAccess: hasFinancialAccessCookie.value
 }).financialAccess)
 const canFilterPlantel = computed(() => isSuperAdmin.value && activePlantel.value === 'GLOBAL')
-const activeReport = ref(route.query.tipo === 'corte' && hasFinancialAccess.value ? 'corte' : 'concepto')
+const requestedReport = String(route.query.tipo || '').toLowerCase()
+const activeReport = ref(hasFinancialAccess.value && ['corte', 'recibos'].includes(requestedReport)
+  ? requestedReport
+  : 'concepto')
 
 const conceptos = ref([])
 const loadingConceptos = ref(false)
@@ -344,6 +380,15 @@ const corteUserPeriodLabel = computed(() => {
   if (inicio === fin) return formatFilterDate(inicio)
   return `${formatFilterDate(inicio)} al ${formatFilterDate(fin)}`
 })
+const receiptPeriodLabel = computed(() => {
+  const { inicio, fin } = filtrosCorte.value
+  if (!inicio || !fin) return 'Hoy'
+  if (inicio === fin) return formatFilterDate(inicio)
+  return `${formatFilterDate(inicio)} al ${formatFilterDate(fin)}`
+})
+const receiptPlantelLabel = computed(() => canFilterPlantel.value
+  ? (filtrosCorte.value.plantel || '—')
+  : (activePlantel.value || homePlantel.value || '—'))
 
 const formatDate = (value) => {
   if (!value) return ''
@@ -471,6 +516,12 @@ const printCorte = () => {
   window.open(`/print/corte?${q}`, '_blank', 'width=850,height=800')
 }
 
+const openReceiptStripsPdf = () => {
+  if (!hasFinancialAccess.value) return
+  const q = new URLSearchParams(buildCorteParams(filtrosCorte.value)).toString()
+  window.open(`/print/recibos-corte?${q}`, '_blank', 'width=920,height=900')
+}
+
 const executeCorteExcelDownload = async (selectedUserKeys = []) => {
   const query = new URLSearchParams(buildCorteParams(filtrosCorte.value))
   if (selectedUserKeys.length) query.set('usuarios', JSON.stringify(selectedUserKeys))
@@ -567,7 +618,7 @@ onMounted(async () => {
   await loadConceptos()
   if (activeReport.value === 'corte') {
     loadCorte()
-  } else if (filtrosConcepto.value.conceptoId) {
+  } else if (activeReport.value === 'concepto' && filtrosConcepto.value.conceptoId) {
     loadConceptReport()
   }
 })
@@ -592,87 +643,61 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 14px;
-}
-
-.reports-heading,
-.report-panel {
-  border: 1px solid #dfe6ef;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12px 30px rgba(22, 38, 65, 0.06);
+  gap: 12px;
 }
 
 .reports-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 16px 18px;
-}
-
-.section-kicker {
-  display: block;
-  margin-bottom: 4px;
-  color: #3f7e36;
-  font-size: 0.66rem;
-  font-weight: 850;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  gap: 16px;
+  padding: 2px 2px 4px;
 }
 
 .reports-heading h2,
 .panel-header h3,
 .corte-total h3 {
   margin: 0;
-  color: #162641;
-  font-weight: 850;
-  letter-spacing: 0;
+  color: #182235;
+  font-weight: 780;
+  letter-spacing: -0.015em;
 }
 
 .reports-heading h2 {
-  font-size: 1.18rem;
-}
-
-.reports-heading p,
-.panel-header p {
-  margin: 4px 0 0;
-  color: #66728a;
-  font-size: 0.82rem;
-  font-weight: 520;
+  font-size: 1.12rem;
 }
 
 .report-switcher {
   display: inline-flex;
-  height: 38px;
-  overflow: hidden;
-  border: 1px solid #dfe6ef;
+  gap: 2px;
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 8px 20px rgba(22, 38, 65, 0.04);
+  background: #eef2f6;
+  padding: 3px;
 }
 
 .report-switcher button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  height: 34px;
   border: 0;
-  border-right: 1px solid #edf2f7;
+  border-radius: 9px;
   background: transparent;
-  color: #66728a;
-  padding: 0 14px;
-  font-size: 0.76rem;
-  font-weight: 800;
-  transition: background 160ms ease, color 160ms ease;
+  color: #667085;
+  padding: 0 12px;
+  font-size: 0.75rem;
+  font-weight: 720;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
-.report-switcher button:last-child {
-  border-right: 0;
+.report-switcher button:hover {
+  color: #344054;
 }
 
 .report-switcher button.active {
-  background: #eaf8e7;
-  color: #2d6b31;
+  background: #fff;
+  color: #255f32;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
 
 .report-panel {
@@ -681,6 +706,10 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   flex: 1;
   flex-direction: column;
   overflow: hidden;
+  border: 1px solid #e4e9ef;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 .panel-header {
@@ -688,66 +717,68 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  border-bottom: 1px solid #edf2f7;
-  padding: 14px 18px;
+  min-height: 58px;
+  border-bottom: 1px solid #edf0f4;
+  padding: 12px 16px;
 }
 
 .panel-header h3,
 .corte-total h3 {
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .panel-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 7px;
 }
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
   align-items: end;
-  border-bottom: 1px solid #edf2f7;
-  padding: 14px 18px;
-}
-
-.concept-filters {
-  grid-template-columns: minmax(260px, 1.8fr) repeat(3, minmax(150px, 1fr)) auto;
+  border-bottom: 1px solid #edf0f4;
+  background: #fbfcfd;
+  padding: 12px 16px;
 }
 
 .concept-select {
   min-width: 0;
+  grid-column: span 2;
 }
 
 .filter-button {
-  align-self: end;
+  width: max-content;
+  min-width: 116px;
+  justify-self: start;
 }
 
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  padding: 14px 18px;
+  gap: 8px;
+  padding: 12px 16px;
 }
 
 .metric-card {
   min-width: 0;
-  border: 1px solid #dfe6ef;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #ffffff, #f8fcf6);
-  padding: 13px 14px;
+  border: 1px solid #e7ebf0;
+  border-radius: 11px;
+  background: #f8fafb;
+  padding: 11px 12px;
 }
 
 .metric-card.muted {
-  background: linear-gradient(135deg, #ffffff, #f7fbff);
+  background: #fbfcfd;
 }
 
 .metric-card span {
   display: block;
-  color: #66728a;
-  font-size: 0.66rem;
-  font-weight: 820;
+  color: #7a8497;
+  font-size: 0.64rem;
+  font-weight: 720;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
@@ -755,9 +786,9 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   display: block;
   min-width: 0;
   overflow: hidden;
-  color: #162641;
-  font-size: 1.06rem;
-  font-weight: 850;
+  color: #182235;
+  font-size: 1rem;
+  font-weight: 780;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -767,42 +798,43 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 12px;
   overflow: hidden;
-  padding: 0 18px 18px;
+  padding: 0 16px 16px;
 }
 
 .report-table {
   overflow: auto;
+  border-color: #e7ebf0;
+  box-shadow: none;
 }
 
 .breakdown-panel {
   align-self: start;
-  border: 1px solid #dfe6ef;
-  border-radius: 16px;
+  border: 1px solid #e7ebf0;
+  border-radius: 12px;
   background: #fff;
-  padding: 15px;
+  padding: 13px;
 }
 
 .breakdown-panel h4 {
-  margin: 0 0 10px;
-  color: #162641;
-  font-size: 0.8rem;
-  font-weight: 850;
+  margin: 0 0 9px;
+  color: #344054;
+  font-size: 0.72rem;
+  font-weight: 760;
   text-transform: uppercase;
 }
 
 .breakdown-panel p {
   margin: 0;
-  color: #66728a;
-  font-size: 0.78rem;
-  font-weight: 560;
+  color: #7a8497;
+  font-size: 0.76rem;
 }
 
 .breakdown-list {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .breakdown-list div {
@@ -810,8 +842,8 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  border-bottom: 1px solid #edf2f7;
-  padding-bottom: 8px;
+  border-bottom: 1px solid #edf0f4;
+  padding-bottom: 7px;
 }
 
 .breakdown-list div:last-child {
@@ -820,46 +852,108 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
 }
 
 .breakdown-list span {
-  color: #66728a;
-  font-size: 0.78rem;
-  font-weight: 700;
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 650;
 }
 
 .breakdown-list strong {
-  color: #162641;
+  color: #182235;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+}
+
+.report-panel > .card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .corte-total {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #edf2f7;
-  padding: 14px 18px;
+  border-bottom: 1px solid #edf0f4;
+  padding: 12px 16px;
 }
 
 .corte-total-values {
   display: flex;
   align-items: center;
-  gap: 12px;
-  border: 1px solid rgba(101, 167, 68, 0.18);
-  border-radius: 12px;
-  background: rgba(101, 167, 68, 0.1);
-  color: #4e844e;
-  padding: 7px 12px;
-  font-size: 0.82rem;
-  font-weight: 750;
+  gap: 10px;
+  border-radius: 10px;
+  background: #f1f7f1;
+  color: #4d7350;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 680;
 }
 
 .corte-total-values strong {
-  font-size: 0.94rem;
-  font-weight: 900;
+  color: #255f32;
+  font-size: 0.88rem;
+  font-weight: 800;
 }
 
-@media (max-width: 1120px) {
-  .filters-grid,
-  .concept-filters,
+.receipts-report-panel {
+  min-height: 360px;
+}
+
+.receipt-export-stage {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(540px, calc(100% - 32px));
+  margin: auto;
+  border: 1px solid #e7ebf0;
+  border-radius: 14px;
+  background: #fbfcfd;
+  padding: 18px;
+}
+
+.receipt-export-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  place-items: center;
+  border-radius: 12px;
+  background: #eaf4ec;
+  color: #2f6a39;
+}
+
+.receipt-export-stage > div:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+
+.receipt-export-stage span,
+.receipt-export-stage strong {
+  display: block;
+}
+
+.receipt-export-stage > div:nth-child(2) span {
+  color: #7a8497;
+  font-size: 0.74rem;
+}
+
+.receipt-export-stage > div:nth-child(2) strong {
+  color: #182235;
+  font-size: 0.9rem;
+  font-weight: 760;
+}
+
+.receipt-format-chip {
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #667085;
+  padding: 5px 9px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (max-width: 920px) {
   .summary-grid,
   .report-split {
     grid-template-columns: 1fr;
@@ -872,8 +966,31 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
     flex-direction: column;
   }
 
+  .report-switcher {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
   .breakdown-panel {
     width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .report-switcher button {
+    padding: 0 9px;
+  }
+
+  .concept-select {
+    grid-column: auto;
+  }
+
+  .receipt-export-stage {
+    align-items: flex-start;
+  }
+
+  .receipt-format-chip {
+    display: none;
   }
 }
 </style>
