@@ -121,6 +121,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo(defaultRoute)
   }
 
+  if (email.value && to.path === '/dashboard' && !isSuperAdmin) {
+    return navigateTo(defaultRoute)
+  }
+
   if (email.value && isControlEscolarPath && !hasControlEscolar) {
     return navigateTo(hasFinancialAccess ? '/' : '/login')
   }

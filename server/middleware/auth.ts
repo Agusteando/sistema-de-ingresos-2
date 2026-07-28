@@ -56,6 +56,7 @@ export default defineEventHandler(async (event) => {
   event.context.user = user
   event.context.auroraStage = 'authorization'
 
+  const isPlantelDashboardEndpoint = url.pathname === '/api/dashboard/plantel-collections'
   const isControlEscolarEndpoint = url.pathname.startsWith('/api/control-escolar/')
   const isDirectoryEndpoint = url.pathname.startsWith('/api/directory/')
   const isExternalUsersEndpoint = url.pathname === '/api/users' || url.pathname.startsWith('/api/users/')
@@ -68,6 +69,14 @@ export default defineEventHandler(async (event) => {
     url.pathname === '/api/students/bulk-ingreso-cycle' ||
     /^\/api\/students\/[^/]+\/ingreso-cycle$/.test(url.pathname)
 
+
+  if (isPlantelDashboardEndpoint) {
+    if (!user.isSuperAdmin) {
+      throw createError({ statusCode: 403, message: 'Solo superadmin puede consultar este dashboard.' })
+    }
+    event.context.auroraStage = 'api_handler'
+    return
+  }
 
   if (isControlEscolarEndpoint) {
     if (!user.hasControlEscolarRole) {

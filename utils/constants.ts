@@ -4,6 +4,8 @@ export const PLANTELES_LIST = [
   'PREEM', 'PREET', 'CT', 'CM', 'DM', 'CO', 'DC', 'GM', 'PM', 'PT', 'SM', 'ST', 'IS', 'ISM'
 ]
 
+export const DASHBOARD_PLANTELES = ['PM', 'PT', 'SM', 'ST', 'PREEM', 'CT', 'GM', 'CO', 'DC'] as const
+
 export const CONCEPTOS_PLANTELES_LIST = ['PM', 'SM', 'PT', 'ST', 'CT', 'PREEM', 'GM']
 
 export const normalizeConceptosPlantel = (value: string | null | undefined, fallback = CONCEPTOS_PLANTELES_LIST[0]) => {

@@ -48,6 +48,9 @@
         <NuxtLink v-if="showFinancialNav" to="/" class="nav-item group" title="Alumnos" aria-label="Alumnos">
           <LucideUsers :size="22" stroke-width="2.2" /> <span class="nav-label">Alumnos</span>
         </NuxtLink>
+        <NuxtLink v-if="isSuperAdmin" to="/dashboard" class="nav-item group" title="Dashboard" aria-label="Dashboard">
+          <LucideZap :size="22" stroke-width="2" /> <span class="nav-label">Dashboard</span>
+        </NuxtLink>
         <NuxtLink v-if="showFinancialNav" to="/deudores" class="nav-item group" title="Deudores" aria-label="Deudores">
           <LucideAlertTriangle :size="22" stroke-width="2" /> <span class="nav-label">Deudores</span>
         </NuxtLink>
@@ -81,7 +84,7 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div ref="plantelSelectRef" class="plantel-block" v-if="userPlanteles.length > 1 || isSuperAdmin">
+        <div ref="plantelSelectRef" class="plantel-block" v-if="route.path !== '/dashboard' && (userPlanteles.length > 1 || isSuperAdmin)">
           <label id="sidebar-plantel-label">Plantel</label>
           <div class="plantel-picker" :class="{ open: plantelMenuOpen }">
             <button
@@ -614,7 +617,7 @@ const openControlTopbarDiagnostics = () => {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent('control-escolar:open-sync-diagnostics'))
 }
-const showCicloPicker = computed(() => true)
+const showCicloPicker = computed(() => route.path !== '/dashboard')
 const activePlantelLabel = computed(() => activePlantel.value === 'GLOBAL' ? 'CONSOLIDADO' : `PLANTEL ${activePlantel.value || 'PT'}`)
 const activePlantelStatus = computed(() => activePlantel.value === 'GLOBAL'
   ? { status: 'unknown', online: true, label: 'Global', message: 'Vista consolidada', action: '' }
@@ -1117,6 +1120,7 @@ const currentRouteName = computed(() => {
   if (route.path === '/') return 'Alumnos'
   if (route.path === '/deudores') return 'Deudores'
   if (route.path === '/reportes') return 'Centro de reportes'
+  if (route.path === '/dashboard') return 'Dashboard'
   if (route.path === '/cartas-no-adeudo') return 'Historial de cartas de no adeudo'
   if (route.path === '/conceptos') return 'Conceptos'
   if (route.path === '/facturas') return 'Facturas CFDI'
