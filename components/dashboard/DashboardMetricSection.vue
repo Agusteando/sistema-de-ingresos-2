@@ -18,11 +18,14 @@
           :key="`skeleton-${plantel.plantel}`"
           class="plantel-bar skeleton-bar"
         >
-          <div class="skeleton-value" />
+          <div class="bar-heading skeleton-heading">
+            <div class="skeleton-code" />
+            <div class="skeleton-value" />
+          </div>
           <div class="bar-stage">
             <span :style="{ height: `${24 + ((index * 13) % 64)}%` }" />
           </div>
-          <div class="skeleton-code" />
+          <footer><div class="skeleton-movements" /></footer>
         </article>
       </template>
 
@@ -35,7 +38,13 @@
           :style="barStyle(plantel)"
           :aria-label="barLabel(plantel)"
         >
-          <strong>{{ plantel.status === 'online' ? currency(valueFor(plantel)) : '—' }}</strong>
+          <div class="bar-heading">
+            <b class="plantel-code">
+              <i aria-hidden="true" />
+              {{ plantel.plantel }}
+            </b>
+            <strong>{{ plantel.status === 'online' ? currency(valueFor(plantel)) : '—' }}</strong>
+          </div>
 
           <div
             class="bar-stage"
@@ -50,10 +59,6 @@
           </div>
 
           <footer>
-            <b class="plantel-code">
-              <i aria-hidden="true" />
-              {{ plantel.plantel }}
-            </b>
             <small>{{ plantel.status === 'online' ? `${integer(movementsFor(plantel))} mov.` : 'Sin conexión' }}</small>
           </footer>
         </article>
@@ -139,10 +144,11 @@ const barLabel = (plantel: PlantelMetric) => {
 </script>
 
 <style scoped>
-.dashboard-panel {
+.dashboard-panel.metric-panel {
   position: relative;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
+  min-height: 360px;
   padding: 20px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 28px;
@@ -217,7 +223,7 @@ const barLabel = (plantel: PlantelMetric) => {
   align-items: end;
   gap: clamp(6px, 0.9vw, 12px);
   min-width: 0;
-  min-height: 228px;
+  min-height: 246px;
   padding: 3px 2px 0;
 }
 
@@ -225,15 +231,23 @@ const barLabel = (plantel: PlantelMetric) => {
   --plantel-accent: #64748b;
   --bar-height: 0%;
   display: grid;
-  grid-template-rows: 27px minmax(132px, 1fr) 42px;
-  gap: 8px;
+  grid-template-rows: 50px minmax(132px, 1fr) 20px;
+  gap: 7px;
   min-width: 0;
-  height: 218px;
+  height: 238px;
   transition: opacity 180ms ease;
 }
 
-.plantel-bar > strong {
-  align-self: end;
+.bar-heading {
+  display: grid;
+  place-items: center;
+  align-content: end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.bar-heading > strong {
+  max-width: 100%;
   overflow: hidden;
   color: #1e293b;
   font-size: clamp(0.64rem, 0.92vw, 0.83rem);
@@ -283,8 +297,8 @@ const barLabel = (plantel: PlantelMetric) => {
 .plantel-bar footer {
   display: grid;
   place-items: center;
-  align-content: start;
-  gap: 4px;
+  align-content: center;
+  gap: 0;
   min-width: 0;
 }
 
@@ -335,6 +349,7 @@ const barLabel = (plantel: PlantelMetric) => {
 
 .skeleton-value,
 .skeleton-code,
+.skeleton-movements,
 .skeleton-bar .bar-stage span {
   position: relative;
   overflow: hidden;
@@ -344,6 +359,7 @@ const barLabel = (plantel: PlantelMetric) => {
 
 .skeleton-value::after,
 .skeleton-code::after,
+.skeleton-movements::after,
 .skeleton-bar .bar-stage span::after {
   content: '';
   position: absolute;
@@ -354,7 +370,6 @@ const barLabel = (plantel: PlantelMetric) => {
 }
 
 .skeleton-value {
-  align-self: end;
   justify-self: center;
   width: 76%;
   height: 10px;
@@ -362,8 +377,14 @@ const barLabel = (plantel: PlantelMetric) => {
 
 .skeleton-code {
   justify-self: center;
-  width: 38%;
-  height: 8px;
+  width: 44%;
+  height: 18px;
+}
+
+.skeleton-movements {
+  justify-self: center;
+  width: 52%;
+  height: 7px;
 }
 
 .skeleton-bar .bar-stage span {
@@ -423,12 +444,12 @@ const barLabel = (plantel: PlantelMetric) => {
 
   .plantel-chart {
     grid-template-columns: repeat(9, 78px);
-    min-height: 208px;
+    min-height: 230px;
   }
 
   .plantel-bar {
-    grid-template-rows: 25px minmax(118px, 1fr) 40px;
-    height: 198px;
+    grid-template-rows: 48px minmax(118px, 1fr) 18px;
+    height: 220px;
   }
 }
 </style>

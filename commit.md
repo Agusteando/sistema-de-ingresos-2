@@ -1,1 +1,1 @@
-Mejora etiquetas de planteles y ejes del dashboard
+Hace visibles las etiquetas de plantel en todas las barras
