@@ -270,18 +270,16 @@
               :title="isSuperAdmin ? localContextTechnicalTitle : undefined"
               aria-hidden="true"
             >
-              <LucideSettings v-if="localContextBuildPhase" :size="17" class="animate-spin" />
-              <LucideShield v-else-if="localContextVerificationPhase" :size="17" />
-              <LucideRefreshCw v-else-if="localContextIconSpinning" :size="17" class="animate-spin" />
+              <LucideSettings v-if="localSystemRuntime && localContextBuildPhase" :size="17" class="animate-spin" />
+              <LucideShield v-else-if="localSystemRuntime && localContextVerificationPhase" :size="17" />
+              <LucideRefreshCw v-else-if="localSystemRuntime && localContextIconSpinning" :size="17" class="animate-spin" />
               <LucideRefreshCw v-else-if="localContextManualUpdateAvailable" :size="17" />
-              <LucideCheckCircle v-else-if="localSystemRuntime" :size="17" />
-              <LucideMonitor v-else-if="localSystemLaunchAvailable" :size="17" />
-              <LucideRefreshCw v-else :size="17" />
+              <LucideMonitor v-else-if="localSystemRuntime" :size="17" />
+              <LucideCloud v-else :size="17" :class="{ 'local-cloud-pulse': localContextPreparing }" />
             </span>
             <span class="local-context-cta-label local-context-cta-label-full">{{ localContextCtaLabel }}</span>
             <span class="local-context-cta-label local-context-cta-label-compact">{{ localContextCtaCompactLabel }}</span>
           </button>
-          <SyncBadge v-if="showExternalBaseBadge" :icon-only="true" />
           <div v-if="showCicloPicker" ref="cicloPickerRef" class="ciclo-picker" :class="{ open: cicloMenuOpen }">
             <button
               type="button"
@@ -415,7 +413,6 @@ import {
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import ContextMenu from '~/components/ContextMenu.vue'
-import SyncBadge from '~/components/SyncBadge.vue'
 import StudentsCacheSyncIndicator from '~/components/students/StudentsCacheSyncIndicator.vue'
 import ControlEscolarSyncIndicator from '~/components/students/ControlEscolarSyncIndicator.vue'
 import { usePlantelAgentStatuses } from '~/composables/usePlantelAgentStatuses'
@@ -575,7 +572,6 @@ const hasConceptosAdminRole = computed(() => isSuperAdmin.value || roleTokens.va
 const showConceptosNav = computed(() => showFinancialNav.value && hasConceptosAdminRole.value)
 const isControlEscolarPage = computed(() => route.path === '/control-escolar')
 const showLocalSystemControls = computed(() => true)
-const showExternalBaseBadge = computed(() => showFinancialNav.value && !isControlEscolarPage.value)
 const controlEscolarTopbarState = useState('controlEscolarTopbarState', () => ({
   plantel: '',
   studentsCount: 0,
@@ -634,19 +630,19 @@ const localContextCtaState = computed(() => {
   if (localSystemRuntime) return 'active'
   if (localContextPreparing.value) return 'preparing'
   if (localSystemLaunchAvailable.value) return 'open'
-  return 'retry'
+  return 'cloud'
 })
 const localContextCtaLabel = computed(() => {
   if (localSystemRuntime) return 'En este equipo'
   if (localContextPreparing.value) return 'Preparando…'
   if (localSystemLaunchAvailable.value) return 'Abrir en este equipo'
-  return 'Reintentar'
+  return 'En la nube'
 })
 const localContextCtaCompactLabel = computed(() => {
   if (localSystemRuntime) return 'En este equipo'
   if (localContextPreparing.value) return 'Preparando…'
   if (localSystemLaunchAvailable.value) return 'Abrir aquí'
-  return 'Reintentar'
+  return 'En la nube'
 })
 const localContextManualUpdateAvailable = computed(() => Boolean(
   localSystemRuntime
@@ -657,7 +653,7 @@ const localContextManualUpdateAvailable = computed(() => Boolean(
 ))
 const localContextCtaDisabled = computed(() => {
   if (localSystemRuntime) return !localContextManualUpdateAvailable.value
-  return localContextPreparing.value
+  return localContextPreparing.value || !localSystemLaunchAvailable.value
 })
 const localContextOperationPhase = computed(() => String(
   (localSystemRuntime ? localSystemOperation.value : localSystemCloudOperation.value)?.phase || ''
@@ -841,11 +837,7 @@ const handleLocalContextCta = async () => {
     return
   }
 
-  if (activePlantel.value === 'GLOBAL') {
-    show('Selecciona un plantel.', 'danger')
-    return
-  }
-  await loadLocalSystemLaunch(true)
+  // En la nube sin una instalación local elegible: el control es informativo.
 }
 
 const scheduleLocalSystemPoll = (delay = 15000) => {
@@ -2289,8 +2281,19 @@ const logout = async () => {
   color: #5b6b63;
 }
 
-.local-context-cta.is-retry {
-  color: #596861;
+.local-context-cta.is-cloud {
+  border-color: #dce4e9;
+  background: #f8fafb;
+  color: #52636d;
+}
+
+.local-cloud-pulse {
+  animation: local-cloud-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes local-cloud-pulse {
+  0%, 100% { opacity: 0.56; }
+  50% { opacity: 1; }
 }
 
 .local-context-cta-icon {

@@ -1,1 +1,1 @@
-Simplifica el acceso local con un CTA claro y persistente
+Simplifica el indicador de entorno y elimina el acceso a Base externa
