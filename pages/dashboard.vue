@@ -87,6 +87,7 @@
         <PlantelLineChart
           :labels="dayChartLabels"
           :series="daySeries"
+          x-axis-label="Hora del día · 08:00–18:00"
           :loading="loading"
         />
       </section>
@@ -106,6 +107,7 @@
         <PlantelLineChart
           :labels="monthChartLabels"
           :series="monthSeries"
+          :x-axis-label="`Día de ${monthLabel}`"
           :loading="loading"
         />
       </section>
@@ -200,6 +202,11 @@ const generatedAtFormatter = new Intl.DateTimeFormat('es-MX', {
   second: '2-digit',
   hour12: true
 })
+const monthDayFormatter = new Intl.DateTimeFormat('es-MX', {
+  timeZone: 'UTC',
+  day: 'numeric',
+  month: 'short'
+})
 
 const currency = (value: number) => currencyFormatter.format(Number(value || 0))
 const integer = (value: number) => integerFormatter.format(Number(value || 0))
@@ -242,7 +249,14 @@ const daysInSelectedMonth = computed(() => {
 })
 
 const dayChartLabels = Array.from({ length: 11 }, (_, index) => `${String(index + 8).padStart(2, '0')}:00`)
-const monthChartLabels = computed(() => Array.from({ length: daysInSelectedMonth.value }, (_, day) => String(day + 1)))
+const monthChartLabels = computed(() => {
+  const [year, month] = selectedMonth.value.split('-').map(Number)
+  return Array.from({ length: daysInSelectedMonth.value }, (_, day) => (
+    monthDayFormatter
+      .format(new Date(Date.UTC(year, month - 1, day + 1)))
+      .replace('.', '')
+  ))
+})
 
 const daySeries = computed(() => planteles.value.map(item => ({
   plantel: item.plantel,

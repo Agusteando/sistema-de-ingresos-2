@@ -81,6 +81,42 @@
           />
         </g>
 
+        <g class="series-end-labels" aria-hidden="true">
+          <g
+            v-for="item in lineLabels"
+            :key="`end-label-${item.plantel}`"
+          >
+            <line
+              :x1="item.sourceX"
+              :y1="item.sourceY"
+              :x2="labelConnectorX"
+              :y2="item.labelY"
+              :stroke="colorFor(item.plantel)"
+            />
+            <circle
+              :cx="item.sourceX"
+              :cy="item.sourceY"
+              r="3.5"
+              :fill="colorFor(item.plantel)"
+            />
+            <rect
+              :x="labelBoxX"
+              :y="item.labelY - 11"
+              :width="LABEL_BOX_WIDTH"
+              height="22"
+              rx="8"
+              :fill="colorFor(item.plantel)"
+            />
+            <text
+              :x="labelBoxX + (LABEL_BOX_WIDTH / 2)"
+              :y="item.labelY + 4"
+              text-anchor="middle"
+            >
+              {{ item.plantel }}
+            </text>
+          </g>
+        </g>
+
         <g v-if="hoveredIndex !== null" class="chart-hover">
           <line
             :x1="xFor(hoveredIndex)"
@@ -97,6 +133,15 @@
             :fill="colorFor(item.plantel)"
           />
         </g>
+
+        <text
+          class="x-axis-title"
+          :x="PLOT_LEFT + (plotWidth / 2)"
+          :y="VIEW_HEIGHT - 12"
+          text-anchor="middle"
+        >
+          {{ xAxisLabel }}
+        </text>
       </svg>
 
       <div
@@ -134,19 +179,23 @@ type ChartSeries = {
 const props = withDefaults(defineProps<{
   labels: string[]
   series: ChartSeries[]
+  xAxisLabel: string
   loading?: boolean
 }>(), {
   loading: false
 })
 
 const VIEW_WIDTH = 1040
-const VIEW_HEIGHT = 340
+const VIEW_HEIGHT = 364
 const PLOT_LEFT = 72
-const PLOT_RIGHT = 24
+const PLOT_RIGHT = 92
 const PLOT_TOP = 22
-const PLOT_BOTTOM = 48
+const PLOT_BOTTOM = 72
+const LABEL_BOX_WIDTH = 54
 const plotWidth = VIEW_WIDTH - PLOT_LEFT - PLOT_RIGHT
 const plotHeight = VIEW_HEIGHT - PLOT_TOP - PLOT_BOTTOM
+const labelBoxX = PLOT_LEFT + plotWidth + 24
+const labelConnectorX = labelBoxX - 6
 
 const palette: Record<string, string> = {
   PM: '#14b8a6',
@@ -216,6 +265,53 @@ const yFor = (value: number) => {
 const pathFor = (values: number[]) => values.map((value, index) => (
   `${index === 0 ? 'M' : 'L'} ${xFor(index).toFixed(2)} ${yFor(value).toFixed(2)}`
 )).join(' ')
+
+const lastMeaningfulIndex = (values: number[]) => {
+  for (let index = Math.min(values.length, props.labels.length) - 1; index >= 0; index -= 1) {
+    if (Number(values[index] || 0) > 0) return index
+  }
+  return Math.max(0, Math.min(values.length, props.labels.length) - 1)
+}
+
+const lineLabels = computed(() => {
+  const minimumGap = 24
+  const minY = PLOT_TOP + 12
+  const maxY = PLOT_TOP + plotHeight - 12
+  const candidates = onlineSeries.value.map(item => {
+    const index = lastMeaningfulIndex(item.values)
+    return {
+      plantel: item.plantel,
+      sourceX: xFor(index),
+      sourceY: yFor(item.values[index] || 0),
+      labelY: yFor(item.values[index] || 0)
+    }
+  }).sort((a, b) => a.labelY - b.labelY)
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const previous = candidates[index - 1]
+    const lowerBound = previous ? previous.labelY + minimumGap : minY
+    candidates[index].labelY = Math.max(candidates[index].labelY, lowerBound)
+  }
+
+  if (candidates.length && candidates[candidates.length - 1].labelY > maxY) {
+    const overflow = candidates[candidates.length - 1].labelY - maxY
+    candidates.forEach(item => { item.labelY -= overflow })
+  }
+
+  for (let index = candidates.length - 2; index >= 0; index -= 1) {
+    candidates[index].labelY = Math.min(
+      candidates[index].labelY,
+      candidates[index + 1].labelY - minimumGap
+    )
+  }
+
+  if (candidates.length && candidates[0].labelY < minY) {
+    const underflow = minY - candidates[0].labelY
+    candidates.forEach(item => { item.labelY += underflow })
+  }
+
+  return candidates
+})
 
 const currencyFormatter = new Intl.NumberFormat('es-MX', {
   style: 'currency',
@@ -337,6 +433,38 @@ const tooltipStyle = computed(() => {
   stroke-linejoin: round;
   opacity: 0.86;
   transition: opacity 160ms ease, stroke-width 160ms ease;
+}
+
+.series-end-labels line {
+  stroke-width: 1.25;
+  stroke-dasharray: 3 4;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+}
+
+.series-end-labels circle {
+  stroke: white;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.series-end-labels rect {
+  opacity: 0.94;
+}
+
+.series-end-labels text {
+  fill: white;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.x-axis-title {
+  fill: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .chart-series path.offline {

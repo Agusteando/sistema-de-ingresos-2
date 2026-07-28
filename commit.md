@@ -1,1 +1,1 @@
-Detén la actualización automática y muestra la hora del dashboard
+Mejora etiquetas de planteles y ejes del dashboard

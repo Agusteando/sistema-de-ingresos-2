@@ -50,8 +50,11 @@
           </div>
 
           <footer>
-            <b>{{ plantel.plantel }}</b>
-            <small>{{ plantel.status === 'online' ? integer(movementsFor(plantel)) : '—' }}</small>
+            <b class="plantel-code">
+              <i aria-hidden="true" />
+              {{ plantel.plantel }}
+            </b>
+            <small>{{ plantel.status === 'online' ? `${integer(movementsFor(plantel))} mov.` : 'Sin conexión' }}</small>
           </footer>
         </article>
       </template>
@@ -222,7 +225,7 @@ const barLabel = (plantel: PlantelMetric) => {
   --plantel-accent: #64748b;
   --bar-height: 0%;
   display: grid;
-  grid-template-rows: 27px minmax(132px, 1fr) 34px;
+  grid-template-rows: 27px minmax(132px, 1fr) 42px;
   gap: 8px;
   min-width: 0;
   height: 218px;
@@ -281,15 +284,33 @@ const barLabel = (plantel: PlantelMetric) => {
   display: grid;
   place-items: center;
   align-content: start;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
-.plantel-bar footer b {
+.plantel-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 52px;
+  min-height: 25px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--plantel-accent) 24%, transparent);
+  border-radius: 999px;
   color: var(--plantel-accent);
-  font-size: 0.7rem;
+  background: color-mix(in srgb, var(--plantel-accent) 8%, white);
+  font-size: 0.72rem;
   font-weight: 950;
   letter-spacing: 0.09em;
+}
+
+.plantel-code i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .plantel-bar footer small {
@@ -406,7 +427,7 @@ const barLabel = (plantel: PlantelMetric) => {
   }
 
   .plantel-bar {
-    grid-template-rows: 25px minmax(118px, 1fr) 32px;
+    grid-template-rows: 25px minmax(118px, 1fr) 40px;
     height: 198px;
   }
 }
