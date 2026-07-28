@@ -251,14 +251,20 @@
             </button>
             <button
               class="profile-action-button profile-action-button--receipt-compact"
+              :class="{ 'has-selection': selectedReceiptCount > 0 }"
               type="button"
-              title="Seleccionar pagos para regenerar un recibo"
+              :title="selectedReceiptCount
+                ? `Descargar ${selectedReceiptCount} pago${selectedReceiptCount === 1 ? '' : 's'} seleccionado${selectedReceiptCount === 1 ? '' : 's'}`
+                : 'Ver recibos y pagos individuales'"
               :disabled="!receiptablePaymentCount"
-              @click="openPaymentHistory(debts)"
+              @click="selectedReceiptCount ? downloadSelectedPayments() : openReceiptsWorkspace()"
             >
-              <LucideReceiptText :size="15" />
+              <LucideDownload v-if="selectedReceiptCount" :size="15" />
+              <LucideReceiptText v-else :size="15" />
               <span class="profile-action-label">Recibos</span>
-              <span v-if="receiptablePaymentCount" class="profile-action-count">{{ receiptablePaymentCount }}</span>
+              <span v-if="selectedReceiptCount || receiptablePaymentCount" class="profile-action-count">
+                {{ selectedReceiptCount || receiptablePaymentCount }}
+              </span>
             </button>
             <button
               class="profile-action-button"
@@ -593,13 +599,24 @@
                 <article
                   v-for="group in accountTimelineGroups"
                   :key="`timeline-${group.documento}`"
-                  class="timeline-card"
+                  class="timeline-card timeline-card--ledger"
                 >
-                  <header class="timeline-card-header">
-                    <div>
+                  <header v-if="!group.paymentItems.length" class="timeline-card-header timeline-card-header--ledger">
+                    <button
+                      type="button"
+                      class="timeline-card-copy"
+                      :disabled="!group.segments.length"
+                      :title="group.segments.length ? 'Ajustar concepto' : ''"
+                      @click="group.segments.length && openTimelineSegmentChange(group, group.segments[0])"
+                    >
                       <strong>{{ group.conceptoNombre }}</strong>
-                      <span>Doc. {{ group.documento }} · {{ group.rangeLabel }}</span>
-                    </div>
+                      <span>
+                        Doc. {{ group.documento }} · {{ group.rangeLabel }}
+                        <template v-if="group.pendingTotal > 0">
+                          · Saldo ${{ format(group.pendingTotal) }}
+                        </template>
+                      </span>
+                    </button>
                     <div class="timeline-card-actions">
                       <button
                         v-if="group.pendingDebts.length"
@@ -610,14 +627,7 @@
                         Pagar
                       </button>
                       <button
-                        v-if="paymentCountForDebts(group.allDebts)"
-                        class="timeline-action"
-                        type="button"
-                        @click="openPaymentHistory(group.allDebts)"
-                      >
-                        Pagos ({{ paymentCountForDebts(group.allDebts) }})
-                      </button>
-                      <button
+                        v-if="!group.paymentItems.length"
                         class="timeline-action"
                         type="button"
                         @click="invoiceTimelineGroup(group)"
@@ -627,16 +637,29 @@
                     </div>
                   </header>
 
+                  <PaymentLedgerRows
+                    v-if="group.paymentItems.length"
+                    :debts="group.allDebts"
+                    :selected-keys="selectedPaymentKeyList"
+                    :pending-total="group.pendingTotal"
+                    @toggle="togglePaymentSelection"
+                    @receipt="downloadPaymentReceipt"
+                    @invoice="invoicePaymentItem"
+                    @cancel="openPaymentCancellation"
+                    @pay="payTimelineGroup(group)"
+                  />
+
                   <div
-                    class="timeline-track"
-                    :style="{ '--timeline-months': group.totalMonths }"
+                    v-if="group.segments.length > 1"
+                    class="timeline-segment-strip"
+                    aria-label="Cambios del concepto"
                   >
                     <button
                       v-for="segment in group.segments"
                       :key="`${group.documento}-${segment.startMes}-${segment.endMes}-${segment.conceptoNombre}`"
                       type="button"
                       :class="[
-                        'timeline-segment',
+                        'timeline-segment-chip',
                         timelineSegmentTone(segment),
                       ]"
                       :disabled="segment.cancelled"
@@ -644,7 +667,6 @@
                     >
                       <span>{{ timelineSegmentRange(segment) }}</span>
                       <strong>{{ segment.conceptoNombre }}</strong>
-                      <em>{{ timelineSegmentStatus(segment) }}</em>
                     </button>
                   </div>
 
@@ -804,10 +826,12 @@
                           class="payment-summary-button"
                           type="button"
                           title="Ver pagos individuales"
-                          @click.stop="openPaymentHistory([debt])"
+                          @click.stop="toggleDebtPaymentRows(debt)"
                         >
                           <strong>${{ format(debt.pagos) }}</strong>
-                          <small>Ver {{ paymentCountForDebts([debt]) }} pago{{ paymentCountForDebts([debt]) === 1 ? '' : 's' }}</small>
+                          <small>
+                            {{ isDebtPaymentRowsOpen(debt) ? 'Ocultar' : 'Mostrar pagos' }}
+                          </small>
                         </button>
                         <span v-else>${{ format(debt.pagos) }}</span>
                       </td>
@@ -834,11 +858,26 @@
                         </button>
                         <button
                           v-if="debt.historialPagos?.length"
-                          @click="openPaymentHistory([debt])"
+                          @click="toggleDebtPaymentRows(debt)"
                           title="Ver pagos individuales"
                         >
                           <LucideHistory :size="16" />
                         </button>
+                      </td>
+                    </tr>
+                    <tr
+                      v-if="debt.historialPagos?.length && isDebtPaymentRowsOpen(debt)"
+                      class="debt-payment-ledger-row"
+                    >
+                      <td colspan="7" class="debt-payment-ledger-cell">
+                        <PaymentLedgerRows
+                          :debts="[debt]"
+                          :selected-keys="selectedPaymentKeyList"
+                          @toggle="togglePaymentSelection"
+                          @receipt="downloadPaymentReceipt"
+                          @invoice="invoicePaymentItem"
+                          @cancel="openPaymentCancellation"
+                        />
                       </td>
                     </tr>
 
@@ -848,6 +887,37 @@
             </div>
           </Transition>
         </div>
+
+        <Transition name="receipt-selection">
+          <div
+            v-if="selectedReceiptCount"
+            class="receipt-selection-dock"
+            role="status"
+            aria-live="polite"
+          >
+            <span>
+              <strong>{{ selectedReceiptCount }}</strong>
+              seleccionado{{ selectedReceiptCount === 1 ? '' : 's' }}
+            </span>
+            <div>
+              <button
+                type="button"
+                class="receipt-selection-dock__clear"
+                @click="clearPaymentSelection"
+              >
+                Limpiar
+              </button>
+              <button
+                type="button"
+                class="receipt-selection-dock__download"
+                @click="downloadSelectedPayments"
+              >
+                <LucideDownload :size="14" />
+                Descargar recibo
+              </button>
+            </div>
+          </div>
+        </Transition>
 
         <div class="account-footer">
           <span>{{ accountFooterLabel }}</span>
@@ -876,14 +946,6 @@
         :student="accountOverlaySource"
         @close="showInvoiceModal = false"
         @success="handleInvoiceSuccess"
-      />
-      <PaymentHistoryModal
-        v-if="showPaymentHistoryModal && !showPaymentCancelModal"
-        :debts="selectedPaymentDebts"
-        @close="closePaymentHistory"
-        @receipt="handlePaymentReceipt"
-        @invoice="handlePaymentInvoice"
-        @cancel="openPaymentCancellation"
       />
       <PaymentCancelModal
         v-if="showPaymentCancelModal && selectedPaymentForCancel"
@@ -977,6 +1039,7 @@ import {
   LucidePlus,
   LucideBadgeDollarSign,
   LucideReceiptText,
+  LucideDownload,
 } from "lucide-vue-next";
 import { useState, useCookie } from "#app";
 import { useToast } from "~/composables/useToast";
@@ -989,6 +1052,12 @@ import {
   formatTipoIngresoValue,
   resolveTipoIngreso,
 } from "~/shared/utils/tipoIngreso";
+import { MAX_COMBINED_RECEIPT_PAYMENTS } from "~/shared/constants/paymentReceipt";
+import {
+  buildPaymentItems,
+  isPaymentCancelled,
+  paymentItemKey,
+} from "~/shared/utils/paymentItems";
 import {
   gradeVisualTitle,
   studentGroupLabel,
@@ -999,8 +1068,8 @@ import {
 import PaymentModal from "./PaymentModal.vue";
 import DocumentModal from "./DocumentModal.vue";
 import InvoiceModal from "./InvoiceModal.vue";
-import PaymentHistoryModal from "./PaymentHistoryModal.vue";
 import PaymentCancelModal from "./PaymentCancelModal.vue";
+import PaymentLedgerRows from "./PaymentLedgerRows.vue";
 import ConceptChangeModal from "./ConceptChangeModal.vue";
 import ConceptDirectCorrectionModal from "./ConceptDirectCorrectionModal.vue";
 import TuitionAmountModal from "./TuitionAmountModal.vue";
@@ -1087,10 +1156,10 @@ const photoLoading = ref(false);
 const showPaymentModal = ref(false);
 const showDocModal = ref(false);
 const showInvoiceModal = ref(false);
-const showPaymentHistoryModal = ref(false);
 const showPaymentCancelModal = ref(false);
-const selectedPaymentDebts = ref([]);
 const selectedPaymentForCancel = ref(null);
+const selectedPaymentKeys = ref(new Set());
+const expandedPaymentDebtKeys = ref(new Set());
 const showConceptModal = ref(false);
 const showDirectConceptModal = ref(false);
 const showTuitionAmountModal = ref(false);
@@ -1529,6 +1598,15 @@ const accountTimelineGroups = computed(() => {
         (debt) => Number(debt?.parentDocumento || 0) === documentId,
       ),
     ];
+    const resolvedDebts = allDebts.length ? allDebts : visibleRows;
+    const paymentItems = buildPaymentItems(resolvedDebts);
+    const pendingDebts = resolvedDebts.filter(
+      (debt) => Number(debt?.saldo || 0) > 0,
+    );
+    const pendingTotal = pendingDebts.reduce(
+      (sum, debt) => sum + Number(debt?.saldo || 0),
+      0,
+    );
     const totalMonths =
       segments.reduce((max, segment) => Math.max(max, Number(segment.endMes || 1)), 1) ||
       Number(timeline?.totalMonths || 1) ||
@@ -1552,10 +1630,10 @@ const accountTimelineGroups = computed(() => {
       rangeLabel,
       segments,
       linkedDifferentials: Array.from(differentialByDocument.values()),
-      allDebts: allDebts.length ? allDebts : visibleRows,
-      pendingDebts: (allDebts.length ? allDebts : visibleRows).filter(
-        (debt) => Number(debt?.saldo || 0) > 0,
-      ),
+      allDebts: resolvedDebts,
+      paymentItems,
+      pendingDebts,
+      pendingTotal,
     };
   });
 });
@@ -1667,14 +1745,6 @@ const timelineSegmentTone = (segment) => {
   if (segment?.accion === "cambio") return "changed";
   return "base";
 };
-const timelineSegmentStatus = (segment) => {
-  if (segment?.cancelled || segment?.accion === "cancelacion")
-    return "Cancelado";
-  const saldo = Number(segment?.saldo || 0);
-  if (saldo <= 0) return "Cubierto";
-  return `$${format(saldo)}`;
-};
-
 const debtKey = (debt) => `${debt?.documento || ""}-${debt?.mes || ""}`;
 
 const detailShellStyle = computed(() => {
@@ -1816,7 +1886,8 @@ const stopAccountRefresh = () => {
 
 const resetAccountInteraction = () => {
   selectedDebts.value = [];
-  selectedPaymentDebts.value = [];
+  selectedPaymentKeys.value = new Set();
+  expandedPaymentDebtKeys.value = new Set();
   selectedPaymentForCancel.value = null;
   selectedConceptDebt.value = null;
   selectedTuitionDebt.value = null;
@@ -1824,7 +1895,6 @@ const resetAccountInteraction = () => {
   showPaymentModal.value = false;
   showDocModal.value = false;
   showInvoiceModal.value = false;
-  showPaymentHistoryModal.value = false;
   showPaymentCancelModal.value = false;
   showConceptModal.value = false;
   showTuitionAmountModal.value = false;
@@ -1839,9 +1909,6 @@ const applyAccountDebts = async (
   const scrollTop = scrollEl?.scrollTop || 0;
   const selectedKeys = preserveInteraction
     ? new Set(selectedDebts.value.map(debtKey))
-    : new Set();
-  const paymentHistoryKeys = preserveInteraction
-    ? new Set(selectedPaymentDebts.value.map(debtKey))
     : new Set();
   const selectedConceptKey =
     preserveInteraction && selectedConceptDebt.value
@@ -1865,12 +1932,13 @@ const applyAccountDebts = async (
       !refreshedSelection.length
         ? selectedDebts.value
         : refreshedSelection;
-    if (showPaymentHistoryModal.value) {
-      selectedPaymentDebts.value = freshDebts.filter((debt) =>
-        paymentHistoryKeys.has(debtKey(debt)),
-      );
-      if (!selectedPaymentDebts.value.length) closePaymentHistory();
-    }
+    const freshDebtKeys = new Set(freshDebts.map(debtKey));
+    expandedPaymentDebtKeys.value = new Set(
+      Array.from(expandedPaymentDebtKeys.value).filter((key) =>
+        freshDebtKeys.has(key),
+      ),
+    );
+    prunePaymentSelection(freshDebts);
     if (selectedConceptKey) {
       selectedConceptDebt.value =
         freshDebts.find((debt) => debtKey(debt) === selectedConceptKey) ||
@@ -2152,6 +2220,8 @@ watch(
   () => {
     accountSearchQuery.value = "";
     accountFilter.value = "all";
+    selectedPaymentKeys.value = new Set();
+    expandedPaymentDebtKeys.value = new Set();
     photoUrl.value = null;
     photoLoading.value = false;
     if (props.student) {
@@ -2193,72 +2263,115 @@ const toggleAll = (e) => {
     (debt) => !visibleKeys.has(debtKey(debt)),
   );
 };
-const paymentStatusKey = (value) => String(value || "").trim().toLowerCase();
-const isPaymentCancelled = (payment) =>
-  ["cancelada", "cancelado"].includes(paymentStatusKey(payment?.estatus));
-const paymentCountForDebts = (debtList = []) => {
-  const folios = new Set();
-  debtList.forEach((debt) => {
-    (debt?.historialPagos || []).forEach((payment) => {
-      const folio = String(payment?.folio || "").trim();
-      if (folio) folios.add(folio);
-    });
-  });
-  return folios.size;
-};
-const receiptablePaymentCountForDebts = (debtList = []) => {
-  const folios = new Set();
-  debtList.forEach((debt) => {
-    (debt?.historialPagos || []).forEach((payment) => {
-      if (isPaymentCancelled(payment)) return;
-      const folio = String(payment?.folio || "").trim();
-      if (folio) folios.add(folio);
-    });
-  });
-  return folios.size;
-};
+const allPaymentItems = computed(() => buildPaymentItems(debts.value));
 const receiptablePaymentCount = computed(() =>
-  receiptablePaymentCountForDebts(debts.value),
+  allPaymentItems.value.filter((item) => !item.cancelled).length,
+);
+const selectedPaymentKeyList = computed(() =>
+  Array.from(selectedPaymentKeys.value),
+);
+const selectedPaymentItems = computed(() =>
+  allPaymentItems.value.filter(
+    (item) =>
+      !item.cancelled &&
+      selectedPaymentKeys.value.has(paymentItemKey(item)),
+  ),
+);
+const selectedReceiptCount = computed(() => selectedPaymentItems.value.length);
+
+const prunePaymentSelection = (debtList = debts.value) => {
+  const validKeys = new Set(
+    buildPaymentItems(debtList)
+      .filter((item) => !item.cancelled)
+      .map(paymentItemKey),
+  );
+  selectedPaymentKeys.value = new Set(
+    Array.from(selectedPaymentKeys.value).filter((key) => validKeys.has(key)),
+  );
+};
+
+watch(
+  allPaymentItems,
+  () => {
+    prunePaymentSelection();
+  },
+  { immediate: true },
 );
 
-const openPaymentHistory = (debtList) => {
-  const normalized = Array.isArray(debtList)
-    ? debtList.filter(Boolean)
-    : [debtList].filter(Boolean);
-  if (!normalized.some((debt) => debt?.historialPagos?.length)) return;
-  selectedPaymentDebts.value = normalized;
-  showPaymentHistoryModal.value = true;
+const togglePaymentSelection = (item) => {
+  if (!item || item.cancelled) return;
+  const key = paymentItemKey(item);
+  const next = new Set(selectedPaymentKeys.value);
+
+  if (next.has(key)) {
+    next.delete(key);
+  } else if (next.size < MAX_COMBINED_RECEIPT_PAYMENTS) {
+    next.add(key);
+  } else {
+    show(
+      `Solo puedes combinar hasta ${MAX_COMBINED_RECEIPT_PAYMENTS} pagos por recibo.`,
+      "danger",
+    );
+    return;
+  }
+
+  selectedPaymentKeys.value = next;
 };
 
-const closePaymentHistory = () => {
-  showPaymentHistoryModal.value = false;
-  selectedPaymentDebts.value = [];
+const clearPaymentSelection = () => {
+  selectedPaymentKeys.value = new Set();
 };
 
-const handlePaymentReceipt = (payload = {}) => {
-  const folios = Array.isArray(payload?.folios)
-    ? payload.folios
-    : [payload?.payment?.folio];
+const downloadPaymentReceipt = (item) => {
+  const folio = Number(item?.payment?.folio);
+  if (!Number.isInteger(folio) || folio <= 0 || item?.cancelled) return;
+  reprintPayments([folio]);
+};
+
+const downloadSelectedPayments = () => {
+  const folios = selectedPaymentItems.value.map((item) => item.payment?.folio);
+  if (!folios.length) return;
   reprintPayments(folios);
 };
-const handlePaymentInvoice = ({ debt, payment }) => {
-  closePaymentHistory();
-  invoicePaymentReceipt(debt, payment);
+
+const invoicePaymentItem = (item) => {
+  if (!item?.debt || !item?.payment || item?.cancelled) return;
+  invoicePaymentReceipt(item.debt, item.payment);
 };
+
+const openReceiptsWorkspace = async () => {
+  accountViewMode.value = "timeline";
+  await nextTick();
+  accountTableWrap.value
+    ?.querySelector?.(".payment-ledger-row")
+    ?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+};
+
+const isDebtPaymentRowsOpen = (debt) =>
+  expandedPaymentDebtKeys.value.has(debtKey(debt));
+
+const toggleDebtPaymentRows = (debt) => {
+  if (!debt?.historialPagos?.length) return;
+  const key = debtKey(debt);
+  const next = new Set(expandedPaymentDebtKeys.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  expandedPaymentDebtKeys.value = next;
+};
+
 const openPaymentCancellation = (item) => {
   if (!item?.payment || isPaymentCancelled(item.payment)) return;
   selectedPaymentForCancel.value = item;
-  showPaymentHistoryModal.value = false;
   showPaymentCancelModal.value = true;
 };
+
 const closePaymentCancellation = () => {
   showPaymentCancelModal.value = false;
   selectedPaymentForCancel.value = null;
-  if (selectedPaymentDebts.value.length) showPaymentHistoryModal.value = true;
 };
+
 const handlePaymentCancellationSuccess = async () => {
   closePaymentCancellation();
-  closePaymentHistory();
   await loadDebts({ useCache: false });
   emit("refresh");
 };
@@ -2601,10 +2714,10 @@ const showDebtContextMenu = (event, debt) => {
       },
     },
     {
-      label: `Pagos (${paymentCountForDebts([debt])})`,
+      label: "Ver pagos",
       icon: LucideHistory,
       disabled: !debt.historialPagos?.length,
-      action: () => openPaymentHistory([debt]),
+      action: () => toggleDebtPaymentRows(debt),
     },
     { label: "-" },
   ];
@@ -2756,7 +2869,7 @@ const handleInvoiceSuccess = () => {
   border: 0;
   border-bottom: 1px solid #edf2f7;
   border-radius: 0;
-  background: #ffffff;
+  background: #fff;
 }
 
 .timeline-card:last-child {
@@ -2767,46 +2880,64 @@ const handleInvoiceSuccess = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px 7px;
+  gap: 10px;
+  min-height: 42px;
+  padding: 6px 10px;
   background: #fff;
 }
 
-.timeline-card-header strong {
+.timeline-card-copy {
+  display: block;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.timeline-card-copy:disabled {
+  cursor: default;
+}
+
+.timeline-card-copy strong {
   display: block;
   overflow: hidden;
   color: #17243c;
-  font-size: 0.77rem;
+  font-size: 0.72rem;
   font-weight: 860;
   letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.timeline-card-header span {
+.timeline-card-copy span {
   display: block;
-  margin-top: 2px;
+  margin-top: 1px;
+  overflow: hidden;
   color: #7b8798;
-  font-size: 0.66rem;
+  font-size: 0.59rem;
   font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timeline-card-actions {
   display: inline-flex;
   flex: 0 0 auto;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 5px;
 }
 
 .timeline-action {
-  height: 28px;
+  height: 26px;
   border: 1px solid #d7e1ec;
-  border-radius: 10px;
-  background: #ffffff;
+  border-radius: 9px;
+  background: #fff;
   color: #516174;
   cursor: pointer;
   padding: 0 9px;
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   font-weight: 820;
 }
 
@@ -2816,128 +2947,75 @@ const handleInvoiceSuccess = () => {
   color: #2e7d32;
 }
 
-.timeline-track {
-  position: relative;
-  display: grid;
-  gap: 7px;
-  padding: 0 12px 11px 18px;
+.timeline-segment-strip {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  border-top: 1px solid #f0f3f7;
+  padding: 5px 10px;
+  scrollbar-width: thin;
 }
 
-.timeline-track::before {
-  position: absolute;
-  top: 7px;
-  bottom: 18px;
-  left: 18px;
-  width: 1px;
-  background: #dce8d8;
-  content: "";
-}
-
-.timeline-segment {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(72px, 0.58fr) minmax(0, 1.8fr) minmax(72px, 0.62fr);
+.timeline-segment-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 9px;
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid #e2eaf3;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff, #fbfcfe);
-  color: inherit;
+  gap: 6px;
+  height: 26px;
+  border: 1px solid #e0e8f0;
+  border-radius: 9px;
+  background: #fbfcfe;
+  color: #657286;
   cursor: pointer;
-  padding: 8px 10px 8px 18px;
-  text-align: left;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
-}
-
-.timeline-segment::before {
-  position: absolute;
-  top: 50%;
-  left: -6px;
-  width: 9px;
-  height: 9px;
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  background: #45a341;
-  box-shadow: 0 0 0 1px rgba(69, 163, 65, 0.22);
-  content: "";
-  transform: translateY(-50%);
-}
-
-.timeline-segment:hover:not(:disabled) {
-  border-color: rgba(63, 145, 56, 0.25);
-  background: #f9fcf8;
-  box-shadow: 0 8px 18px rgba(21, 35, 60, 0.05);
-  transform: translateY(-1px);
-}
-
-.timeline-segment.changed {
-  background: linear-gradient(180deg, #ffffff, #fbfef9);
-}
-
-.timeline-segment.cancelled {
-  background: #fff9f8;
-  cursor: default;
-  opacity: 0.9;
-}
-
-.timeline-segment.cancelled::before {
-  background: #c86a61;
-  box-shadow: 0 0 0 1px rgba(200, 106, 97, 0.22);
-}
-
-.timeline-segment strong {
-  overflow: hidden;
-  color: #17243c;
-  font-size: 0.74rem;
-  font-weight: 850;
-  text-overflow: ellipsis;
+  padding: 0 8px;
   white-space: nowrap;
 }
 
-.timeline-segment span,
-.timeline-segment em {
-  color: #6b778a;
-  font-size: 0.66rem;
-  font-style: normal;
+.timeline-segment-chip:hover:not(:disabled) {
+  border-color: #c8ddc3;
+  background: #f5faf4;
+}
+
+.timeline-segment-chip span {
+  color: #8a96a8;
+  font-size: 0.55rem;
   font-weight: 760;
 }
 
-.timeline-segment span {
-  color: #8a96a8;
+.timeline-segment-chip strong {
+  max-width: 220px;
+  overflow: hidden;
+  color: #344258;
+  font-size: 0.59rem;
+  font-weight: 820;
+  text-overflow: ellipsis;
 }
 
-.timeline-segment em {
-  justify-self: end;
-  color: #2e7d32;
-}
-
-.timeline-segment.cancelled em {
-  color: #b85a54;
+.timeline-segment-chip.cancelled {
+  border-color: #f0d7d5;
+  background: #fff8f7;
+  cursor: default;
+  opacity: 0.82;
 }
 
 .timeline-differentials {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  padding: 0 12px 11px 18px;
+  gap: 6px;
+  border-top: 1px solid #f0f3f7;
+  padding: 6px 10px;
 }
 
 .timeline-differential {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   border: 1px solid #f0dfb8;
-  border-radius: 10px;
+  border-radius: 9px;
   background: #fffaf0;
   color: #806018;
-  padding: 6px 9px;
-  font-size: 0.68rem;
+  padding: 5px 8px;
+  font-size: 0.61rem;
   font-weight: 820;
 }
 
@@ -2945,74 +3023,172 @@ const handleInvoiceSuccess = () => {
   color: #624808;
 }
 
+.debt-payment-ledger-row {
+  background: #f8fafc;
+}
+
+.debt-payment-ledger-cell {
+  padding: 0 !important;
+}
+
+.debt-payment-ledger-cell :deep(.payment-ledger-rows) {
+  border-top: 0;
+  border-bottom: 1px solid #e8eef4;
+}
+
+.receipt-selection-dock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #dce9d9;
+  background: #f4faf2;
+  padding: 7px 11px;
+}
+
+.receipt-selection-dock > span {
+  color: #526176;
+  font-size: 0.66rem;
+  font-weight: 730;
+}
+
+.receipt-selection-dock > span strong {
+  color: #2e7d32;
+  font-size: 0.78rem;
+}
+
+.receipt-selection-dock > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.receipt-selection-dock button {
+  height: 28px;
+  border-radius: 9px;
+  cursor: pointer;
+  padding: 0 9px;
+  font-size: 0.62rem;
+  font-weight: 820;
+}
+
+.receipt-selection-dock__clear {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #68768a;
+}
+
+.receipt-selection-dock__download {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #bcd9b7;
+  background: #45a341;
+  color: #fff;
+}
+
+.profile-action-button--receipt-compact.has-selection {
+  border-color: #a9d2a2;
+  background: #eaf7e8;
+  color: #28772f;
+}
+
+.receipt-selection-enter-active,
+.receipt-selection-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.receipt-selection-enter-from,
+.receipt-selection-leave-to {
+  opacity: 0;
+  transform: translateY(5px);
+}
+
 .student-details-shell:not(.student-details-shell--expanded) .account-timeline-wrap {
   border-radius: 10px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .timeline-card-header {
-  gap: 8px;
-  padding: 8px 10px 5px;
+  min-height: 36px;
+  padding: 5px 8px;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .timeline-card-header strong {
-  font-size: 0.7rem;
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-copy strong {
+  font-size: 0.66rem;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .timeline-card-header span {
-  font-size: 0.6rem;
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-copy span {
+  font-size: 0.55rem;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .timeline-action {
   height: 24px;
   padding-inline: 8px;
   border-radius: 8px;
-  font-size: 0.61rem;
+  font-size: 0.58rem;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .timeline-track {
-  gap: 5px;
-  padding: 0 10px 9px 16px;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .timeline-track::before {
-  left: 16px;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) .timeline-segment {
-  min-height: 34px;
-  grid-template-columns: minmax(58px, 0.48fr) minmax(0, 1.7fr) minmax(58px, 0.5fr);
+.student-details-shell:not(.student-details-shell--expanded) :deep(.payment-ledger-row) {
+  min-height: 42px;
+  grid-template-columns: 24px minmax(0, 1fr) minmax(70px, auto) 96px;
   gap: 7px;
-  padding: 6px 8px 6px 16px;
-  border-radius: 10px;
+  padding: 5px 8px;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .timeline-segment strong {
-  font-size: 0.66rem;
+.student-details-shell:not(.student-details-shell--expanded) :deep(.payment-ledger-row.has-pay-action) {
+  grid-template-columns: 24px minmax(0, 1fr) minmax(70px, auto) 128px;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .timeline-segment span,
-.student-details-shell:not(.student-details-shell--expanded) .timeline-segment em {
-  font-size: 0.59rem;
+.student-details-shell:not(.student-details-shell--expanded) :deep(.payment-ledger-row__title strong) {
+  font-size: 0.64rem;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) :deep(.payment-ledger-row__subline) {
+  font-size: 0.54rem;
+}
+
+@container student-details (max-width: 520px) {
+  .student-details-shell:not(.student-details-shell--expanded) .debt-payment-ledger-row {
+    display: block;
+    margin: -3px 0 8px;
+    border: 1px solid var(--students-border-soft, #edf2f7);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .debt-payment-ledger-cell {
+    display: block !important;
+    width: 100%;
+    padding: 0 !important;
+  }
 }
 
 @media (max-width: 760px) {
   .timeline-card-header {
-    align-items: flex-start;
-    flex-direction: column;
+    min-height: 40px;
+    gap: 8px;
+  }
+
+  .timeline-card-copy span {
+    max-width: 58vw;
   }
 
   .timeline-card-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .timeline-segment {
-    grid-template-columns: 1fr;
     gap: 4px;
   }
 
-  .timeline-segment em {
-    justify-self: start;
+  .timeline-action {
+    padding-inline: 7px;
+  }
+
+  .receipt-selection-dock {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+  }
+
+  .receipt-selection-dock__clear {
+    display: none;
   }
 }
 </style>

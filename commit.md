@@ -1,1 +1,1 @@
-Agrega dashboard de cobros diario y mensual por plantel
+Rediseña los pagos del estado de cuenta como filas compactas con acciones directas
