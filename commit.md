@@ -1,1 +1,1 @@
-Corrige el desplazamiento y las escalas dinámicas del dashboard
+Detén la actualización automática y muestra la hora del dashboard

@@ -31,15 +31,20 @@
         <button type="button" aria-label="Mes siguiente" :disabled="selectedMonth >= currentMonth" @click="shiftMonth(1)">›</button>
       </div>
 
-      <button
-        type="button"
-        class="refresh-button"
-        aria-label="Actualizar dashboard"
-        :disabled="loading"
-        @click="loadDashboard"
-      >
-        <LucideRefreshCw :size="18" :class="{ spinning: loading }" />
-      </button>
+      <div class="refresh-control">
+        <time v-if="lastGeneratedLabel" :datetime="dashboard?.generatedAt">
+          Generado {{ lastGeneratedLabel }}
+        </time>
+        <button
+          type="button"
+          class="refresh-button"
+          :disabled="loading"
+          @click="loadDashboard"
+        >
+          <LucideRefreshCw :size="17" :class="{ spinning: loading }" />
+          <span>Actualizar</span>
+        </button>
+      </div>
     </div>
 
     <template v-if="viewMode === 'totals'">
@@ -114,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { LucideRefreshCw } from 'lucide-vue-next'
 import PlantelLineChart from '~/components/dashboard/PlantelLineChart.vue'
 import DashboardMetricSection from '~/components/dashboard/DashboardMetricSection.vue'
@@ -166,7 +171,6 @@ const dashboard = ref<DashboardPayload | null>(null)
 const loading = ref(true)
 const loadError = ref(false)
 let requestSequence = 0
-let refreshTimer: ReturnType<typeof window.setInterval> | null = null
 
 const currencyFormatter = new Intl.NumberFormat('es-MX', {
   style: 'currency',
@@ -186,10 +190,27 @@ const monthFormatter = new Intl.DateTimeFormat('es-MX', {
   month: 'long',
   year: 'numeric'
 })
+const generatedAtFormatter = new Intl.DateTimeFormat('es-MX', {
+  timeZone: 'America/Mexico_City',
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true
+})
 
 const currency = (value: number) => currencyFormatter.format(Number(value || 0))
 const integer = (value: number) => integerFormatter.format(Number(value || 0))
 const initialLoading = computed(() => loading.value && !dashboard.value)
+const lastGeneratedLabel = computed(() => {
+  const generatedAt = dashboard.value?.generatedAt
+  if (!generatedAt) return ''
+  const date = new Date(generatedAt)
+  if (Number.isNaN(date.getTime())) return ''
+  return generatedAtFormatter.format(date).replace('.', '')
+})
 
 const planteles = computed(() => DASHBOARD_PLANTELES.map(code => (
   dashboard.value?.planteles.find(item => item.plantel === code) || {
@@ -265,12 +286,6 @@ watch(selectedMonth, () => loadDashboard())
 
 onMounted(() => {
   loadDashboard()
-  refreshTimer = window.setInterval(loadDashboard, 60_000)
-})
-
-onBeforeUnmount(() => {
-  if (refreshTimer) window.clearInterval(refreshTimer)
-  refreshTimer = null
 })
 </script>
 
@@ -339,8 +354,7 @@ onBeforeUnmount(() => {
   gap: 5px;
 }
 
-.toolbar-period > button,
-.refresh-button {
+.toolbar-period > button {
   display: grid;
   place-items: center;
   width: 34px;
@@ -394,9 +408,37 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.refresh-button {
+.refresh-control {
   justify-self: end;
-  font-size: initial;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.refresh-control time {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.refresh-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 112px;
+  height: 36px;
+  padding: 0 13px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 0.75rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition: 150ms ease;
 }
 
 .spinning {
@@ -515,6 +557,23 @@ onBeforeUnmount(() => {
 
   .dashboard-toolbar {
     grid-template-columns: 1fr auto;
+  }
+
+  .refresh-control {
+    display: contents;
+  }
+
+  .refresh-control time {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: end;
+    padding: 0 4px 2px;
+  }
+
+  .refresh-button {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 104px;
   }
 
   .toolbar-period {
