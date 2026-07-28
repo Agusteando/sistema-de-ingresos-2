@@ -1,1 +1,1 @@
-Simplifica el indicador de entorno y elimina el acceso a Base externa
+Restaura la actualización local para usuarios con agente y plantel coincidentes

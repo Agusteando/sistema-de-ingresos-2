@@ -57,6 +57,7 @@ export default defineEventHandler(async (event) => {
   event.context.auroraStage = 'authorization'
 
   const isPlantelDashboardEndpoint = url.pathname === '/api/dashboard/plantel-collections'
+  const isSystemEndpoint = url.pathname.startsWith('/api/system/')
   const isControlEscolarEndpoint = url.pathname.startsWith('/api/control-escolar/')
   const isDirectoryEndpoint = url.pathname.startsWith('/api/directory/')
   const isExternalUsersEndpoint = url.pathname === '/api/users' || url.pathname.startsWith('/api/users/')
@@ -82,6 +83,13 @@ export default defineEventHandler(async (event) => {
     if (!user.hasControlEscolarRole) {
       throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
     }
+    return
+  }
+
+  // Environment status, launch and update actions are available to any
+  // authenticated user. Each handler enforces the active-plantel/agent match
+  // before starting local installation or build work.
+  if (isSystemEndpoint) {
     return
   }
 

@@ -1,6 +1,7 @@
 import { getDbTransport, runRawSqlStatement, runWithBridgeAgentId } from '../../utils/db'
 import { normalizePlantel } from '../../utils/auth-session'
 import { LOCAL_SYSTEM_BRIDGE_COMMAND, localSystemDiagnosticSummary, unwrapLocalSystemBridgeResult } from '../../utils/local-system-handoff'
+import { bridgeAgentMatchesPlantel, localSystemPlantelEligibility } from '../../utils/local-system-eligibility'
 import { isLocalSystemRuntime, requestLocalSystemManager } from '../../utils/local-system-manager'
 
 export default defineEventHandler(async (event) => {
@@ -18,10 +19,11 @@ export default defineEventHandler(async (event) => {
         mode: 'central',
         activePlantel,
         launchAvailable: false,
+        updateEligible: false,
         launchUrl: '',
         code: 'LOCAL_SYSTEM_PLANTEL_REQUIRED',
         requestId,
-        message: 'Selecciona un plantel para abrir Sistema Rápido.',
+        message: 'Selecciona un plantel para abrir en este equipo.',
         localUrl: '',
         installed: null,
         available: null,
@@ -36,10 +38,11 @@ export default defineEventHandler(async (event) => {
         mode: 'central',
         activePlantel,
         launchAvailable: false,
+        updateEligible: false,
         launchUrl: '',
         code: 'LOCAL_SYSTEM_BRIDGE_REQUIRED',
         requestId,
-        message: 'Sistema Rápido requiere el bridge del plantel.',
+        message: 'Este equipo requiere el agente del plantel.',
         localUrl: '',
         installed: null,
         available: null,
@@ -54,11 +57,13 @@ export default defineEventHandler(async (event) => {
       ))
       const result = unwrapLocalSystemBridgeResult(bridgeResponse)
       const diagnostics = localSystemDiagnosticSummary(result)
+      const updateEligible = bridgeAgentMatchesPlantel(result, activePlantel)
       console.info(`[SistemaRapidoDiag] ${JSON.stringify({
         event: 'central_status',
         requestId,
         activePlantel,
         agentId: activePlantel,
+        updateEligible,
         ...diagnostics,
         message: result?.message || ''
       })}`)
@@ -68,13 +73,14 @@ export default defineEventHandler(async (event) => {
         localSystem: false,
         mode: 'central',
         activePlantel,
-        launchAvailable: Boolean(result?.ok && result?.available),
-        launchUrl: result?.ok && result?.available
+        launchAvailable: Boolean(updateEligible && result?.ok && result?.available),
+        updateEligible,
+        launchUrl: updateEligible && result?.ok && result?.available
           ? `/api/system/launch?plantel=${encodeURIComponent(activePlantel)}`
           : '',
         code: result?.code || 'LOCAL_SYSTEM_STATUS_INVALID',
         requestId: result?.requestId || requestId,
-        message: result?.message || 'El agente no devolvió un estado válido de Sistema Rápido.',
+        message: result?.message || 'El agente no devolvió un estado válido.',
         localUrl: result?.localUrl || '',
         installed: result?.installedVersion || result?.installedSha
           ? { version: result?.installedVersion || '', sha: result?.installedSha || '' }
@@ -92,7 +98,7 @@ export default defineEventHandler(async (event) => {
       }
     } catch (error: any) {
       const code = String(error?.code || error?.data?.code || 'LOCAL_SYSTEM_STATUS_FAILED')
-      const message = String(error?.data?.message || error?.message || 'No se pudo consultar Sistema Rápido en el agente.')
+      const message = String(error?.data?.message || error?.message || 'No se pudo consultar el agente del plantel.')
       console.error(`[SistemaRapidoDiag] ${JSON.stringify({
         event: 'central_status_error',
         requestId,
@@ -108,6 +114,7 @@ export default defineEventHandler(async (event) => {
         mode: 'central',
         activePlantel,
         launchAvailable: false,
+        updateEligible: false,
         launchUrl: '',
         code,
         requestId,
@@ -126,13 +133,36 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  const eligibility = localSystemPlantelEligibility(event)
+  if (!eligibility.eligible) {
+    return {
+      ok: true,
+      localSystem: true,
+      mode: 'direct',
+      activePlantel: eligibility.activePlantel,
+      localPlantel: eligibility.localPlantel || String(process.env.LOCAL_SYSTEM_PLANTEL || process.env.AGENT_ID || config.localSystemPlantel || ''),
+      launchAvailable: false,
+      updateEligible: false,
+      launchUrl: '',
+      code: 'LOCAL_SYSTEM_AGENT_MISMATCH',
+      requestId,
+      installed: null,
+      available: null,
+      updateAvailable: false,
+      operation: null,
+      checkError: ''
+    }
+  }
+
   const status = await requestLocalSystemManager<any>('/status')
   return {
     ok: true,
     localSystem: true,
     mode: 'direct',
-    activePlantel: String(process.env.LOCAL_SYSTEM_PLANTEL || process.env.AGENT_ID || config.localSystemPlantel || ''),
+    activePlantel: eligibility.activePlantel,
+    localPlantel: eligibility.localPlantel,
     launchAvailable: false,
+    updateEligible: true,
     launchUrl: '',
     code: status?.localAvailability?.code || '',
     requestId,
