@@ -555,16 +555,28 @@
                           aria-hidden="true"
                         />
                       </span>
-                      <span
+                      <button
+                        type="button"
                         :class="[
                           'ce-student-identity-chip',
                           'is-status',
-                          statusTone(selectedStudent),
+                          'is-baja-toggle',
+                          isStudentBaja ? 'danger' : 'success',
                         ]"
+                        role="switch"
+                        :aria-checked="isStudentBaja"
+                        :aria-label="isStudentBaja ? 'Quitar baja del alumno' : 'Marcar alumno como baja'"
+                        :title="isStudentBaja ? 'Quitar baja' : 'Marcar como baja'"
+                        :disabled="savingStudent"
+                        @click="toggleStudentBaja"
                       >
-                        <LucideShieldCheck :size="14" :stroke-width="2.5" aria-hidden="true" />
-                        {{ selectedStudent.status || "Activo" }}
-                      </span>
+                        <LucideUserX v-if="isStudentBaja" :size="14" aria-hidden="true" />
+                        <LucideUserCheck v-else :size="14" aria-hidden="true" />
+                        <span>{{ isStudentBaja ? 'Baja' : 'Activo' }}</span>
+                        <span class="ce-header-baja-switch" aria-hidden="true">
+                          <span></span>
+                        </span>
+                      </button>
                       <span
                         v-if="selectedHeaderBirthDateLabel"
                         class="ce-student-identity-chip is-birthday"
@@ -838,6 +850,34 @@
                         selectedSchoolStatus.label
                       }}</b>
                     </div>
+                    <section v-if="isStudentBaja" class="ce-baja-details-card" aria-label="Datos de baja">
+                      <div class="ce-baja-details-card__heading">
+                        <span><LucideUserX :size="18" /></span>
+                        <div>
+                          <small>Baja activa</small>
+                          <strong>Datos de seguimiento</strong>
+                        </div>
+                      </div>
+                      <div class="ce-baja-details">
+                        <label>
+                          <span>Motivo de baja</span>
+                          <input
+                            v-model="editForm.motivoBaja"
+                            autocomplete="off"
+                            placeholder="Motivo"
+                          />
+                        </label>
+                        <label>
+                          <span>Categoría</span>
+                          <input
+                            v-model="editForm.categoriaBaja"
+                            autocomplete="off"
+                            placeholder="Categoría"
+                          />
+                        </label>
+                      </div>
+                    </section>
+
                     <div class="ce-school-priority-panel">
                       <article class="ce-school-current-pill">
                         <small>Asignación actual</small>
@@ -926,27 +966,6 @@
                       </div>
                     </section>
 
-                    <div class="ce-form-grid three ce-school-grid-minimal">
-                      <label
-                        ><span>Baja</span
-                        ><select v-model="editForm.baja">
-                          <option :value="0">No</option>
-                          <option :value="1">Sí</option>
-                        </select></label
-                      >
-                      <label
-                        ><span>Motivo baja</span
-                        ><input
-                          v-model="editForm.motivoBaja"
-                          autocomplete="off"
-                      /></label>
-                      <label
-                        ><span>Categoría baja</span
-                        ><input
-                          v-model="editForm.categoriaBaja"
-                          autocomplete="off"
-                      /></label>
-                    </div>
                   </section>
 
                   <section
@@ -2018,6 +2037,11 @@ const filters = reactive({
   recent: "",
 });
 const editForm = reactive({});
+const isStudentBaja = computed(() => Number(editForm.baja || 0) === 1);
+const toggleStudentBaja = () => {
+  if (savingStudent.value) return;
+  editForm.baja = isStudentBaja.value ? 0 : 1;
+};
 const photoCache = ref({});
 const photoLoadingKeys = ref(new Set());
 let searchTimer = null;
@@ -3777,6 +3801,9 @@ const selectedIdentityStatus = computed(() => {
   return { tone: "complete", label: "Listo", count: 0 };
 });
 const selectedSchoolStatus = computed(() => {
+  if (isStudentBaja.value) {
+    return { tone: "danger", label: "Baja", count: 0, summary: "Matrícula marcada como baja." };
+  }
   const schoolKeys = ["nivel", "grado", "grupo"];
   const missing = schoolKeys.filter((key) =>
     normalizedMissingFields(selectedHealthStudent.value, "complete").includes(key),
@@ -10012,6 +10039,148 @@ onBeforeUnmount(() => {
 @media (max-width: 1100px) {
   .control-escolar-screen .ce-family-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Prominent matrícula baja control. */
+.control-escolar-screen .ce-student-identity-chip.is-baja-toggle {
+  gap: 7px;
+  padding-right: 7px;
+  border-width: 1px;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-baja-toggle:hover:not(:disabled),
+.control-escolar-screen .ce-student-identity-chip.is-baja-toggle:focus-visible {
+  outline: 0;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(24, 42, 66, .08);
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-baja-toggle:disabled {
+  cursor: wait;
+  opacity: .62;
+}
+
+.control-escolar-screen .ce-header-baja-switch {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 20px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(47, 123, 55, .22);
+  transition: background .2s ease;
+}
+
+.control-escolar-screen .ce-header-baja-switch > span {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(29, 42, 59, .2);
+  transform: translateX(0);
+  transition: transform .2s ease;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-baja-toggle.danger .ce-header-baja-switch {
+  background: #cf565b;
+}
+
+.control-escolar-screen .ce-student-identity-chip.is-baja-toggle.danger .ce-header-baja-switch > span {
+  transform: translateX(14px);
+}
+
+.control-escolar-screen .ce-baja-details-card {
+  display: grid;
+  grid-template-columns: minmax(180px, .36fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(204, 77, 77, .22);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff9f8, #ffffff);
+}
+
+.control-escolar-screen .ce-baja-details-card__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-baja-details-card__heading > span {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 13px;
+  background: #fff0ed;
+  color: #c34b45;
+}
+
+.control-escolar-screen .ce-baja-details-card__heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.control-escolar-screen .ce-baja-details-card__heading small,
+.control-escolar-screen .ce-baja-details label > span {
+  color: #80606a;
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.control-escolar-screen .ce-baja-details-card__heading strong {
+  color: #6f302d;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.control-escolar-screen .ce-baja-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.control-escolar-screen .ce-baja-details label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.control-escolar-screen .ce-baja-details input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #eadad8;
+  border-radius: 13px;
+  background: #fff;
+  color: #2f2630;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 720;
+  outline: 0;
+}
+
+.control-escolar-screen .ce-baja-details input:focus {
+  border-color: rgba(204, 77, 77, .38);
+  box-shadow: 0 0 0 4px rgba(204, 77, 77, .07);
+}
+
+@media (max-width: 1100px) {
+  .control-escolar-screen .ce-baja-details-card,
+  .control-escolar-screen .ce-baja-details {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
