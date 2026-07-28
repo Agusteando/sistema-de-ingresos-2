@@ -1,1 +1,1 @@
-Compatibiliza Aurora con el agente local sin actualizarlo
+Corrige la selección múltiple de pagos sin alterar el estado de cuenta

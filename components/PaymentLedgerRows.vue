@@ -16,12 +16,13 @@
         class="payment-ledger-row__selector"
         :class="{ 'is-disabled': selectionDisabled(item) }"
         :aria-label="selectionLabel(item)"
+        @click.stop
       >
         <input
           type="checkbox"
           :checked="isSelected(item)"
           :disabled="selectionDisabled(item)"
-          @change="emit('toggle', item)"
+          @change.stop="emit('toggle', item)"
         />
         <span aria-hidden="true"></span>
       </label>

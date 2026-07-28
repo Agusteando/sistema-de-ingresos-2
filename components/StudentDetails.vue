@@ -888,28 +888,35 @@
           </Transition>
         </div>
 
-        <Transition name="receipt-selection">
+        <div
+          :class="[
+            'account-footer',
+            { 'account-footer--receipt-selection': selectedReceiptCount > 0 },
+          ]"
+        >
           <div
             v-if="selectedReceiptCount"
-            class="receipt-selection-dock"
-            role="status"
-            aria-live="polite"
+            class="account-footer-receipts"
           >
-            <span>
-              <strong>{{ selectedReceiptCount }}</strong>
-              seleccionado{{ selectedReceiptCount === 1 ? '' : 's' }}
+            <span
+              class="account-footer-receipts__count"
+              role="status"
+              aria-live="polite"
+            >
+              <span>{{ selectedReceiptCount }}</span>
+              pago{{ selectedReceiptCount === 1 ? '' : 's' }} seleccionado{{ selectedReceiptCount === 1 ? '' : 's' }}
             </span>
-            <div>
+            <div class="account-footer-receipts__actions">
               <button
                 type="button"
-                class="receipt-selection-dock__clear"
+                class="account-footer-receipts__clear"
                 @click="clearPaymentSelection"
               >
                 Limpiar
               </button>
               <button
                 type="button"
-                class="receipt-selection-dock__download"
+                class="account-footer-receipts__download"
                 @click="downloadSelectedPayments"
               >
                 <LucideDownload :size="14" />
@@ -917,11 +924,8 @@
               </button>
             </div>
           </div>
-        </Transition>
-
-        <div class="account-footer">
-          <span>{{ accountFooterLabel }}</span>
-          <strong
+          <span v-else>{{ accountFooterLabel }}</span>
+          <strong class="account-footer__total"
             >Saldo actual <b>${{ format(accountDebtTotal) }}</b></strong
           >
         </div>
@@ -3036,34 +3040,43 @@ const handleInvoiceSuccess = () => {
   border-bottom: 1px solid #e8eef4;
 }
 
-.receipt-selection-dock {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-top: 1px solid #dce9d9;
-  background: #f4faf2;
-  padding: 7px 11px;
+.account-footer--receipt-selection {
+  gap: 10px;
 }
 
-.receipt-selection-dock > span {
+.account-footer-receipts {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 10px;
+}
+
+.account-footer-receipts__count {
+  min-width: 0;
+  overflow: hidden;
   color: #526176;
   font-size: 0.66rem;
   font-weight: 730;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.receipt-selection-dock > span strong {
+.account-footer-receipts__count > span {
   color: #2e7d32;
   font-size: 0.78rem;
+  font-weight: 880;
 }
 
-.receipt-selection-dock > div {
+.account-footer-receipts__actions {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
 }
 
-.receipt-selection-dock button {
+.account-footer-receipts button {
   height: 28px;
   border-radius: 9px;
   cursor: pointer;
@@ -3072,13 +3085,13 @@ const handleInvoiceSuccess = () => {
   font-weight: 820;
 }
 
-.receipt-selection-dock__clear {
+.account-footer-receipts__clear {
   border: 1px solid transparent;
   background: transparent;
   color: #68768a;
 }
 
-.receipt-selection-dock__download {
+.account-footer-receipts__download {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3093,16 +3106,6 @@ const handleInvoiceSuccess = () => {
   color: #28772f;
 }
 
-.receipt-selection-enter-active,
-.receipt-selection-leave-active {
-  transition: opacity 160ms ease, transform 160ms ease;
-}
-
-.receipt-selection-enter-from,
-.receipt-selection-leave-to {
-  opacity: 0;
-  transform: translateY(5px);
-}
 
 .student-details-shell:not(.student-details-shell--expanded) .account-timeline-wrap {
   border-radius: 10px;
@@ -3164,6 +3167,18 @@ const handleInvoiceSuccess = () => {
 }
 
 @media (max-width: 760px) {
+  .account-footer--receipt-selection .account-footer__total {
+    display: none;
+  }
+
+  .account-footer-receipts__clear {
+    display: none;
+  }
+
+  .account-footer-receipts {
+    width: 100%;
+  }
+
   .timeline-card-header {
     min-height: 40px;
     gap: 8px;
@@ -3181,14 +3196,5 @@ const handleInvoiceSuccess = () => {
     padding-inline: 7px;
   }
 
-  .receipt-selection-dock {
-    position: sticky;
-    bottom: 0;
-    z-index: 4;
-  }
-
-  .receipt-selection-dock__clear {
-    display: none;
-  }
 }
 </style>
