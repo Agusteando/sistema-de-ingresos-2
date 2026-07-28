@@ -1,1 +1,1 @@
-Permite seleccionar usuarios antes de generar el Excel del corte de caja
+Corrige el corte de caja para auditar todos los pagos sin filtrar por ciclo

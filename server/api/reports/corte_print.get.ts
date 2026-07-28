@@ -10,6 +10,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     rows: result.rows,
     totales: result.totales,
     total: result.total,
+    totalRegistrado: result.totalRegistrado,
+    totalNoAplicado: result.totalNoAplicado,
     usuario: result.usuario,
     filtros: result.filtros
   }

@@ -152,7 +152,7 @@
       <div class="panel-header">
         <div>
           <h3>Corte de caja</h3>
-          <p>Bitácora de ingresos registrados en el plantel seleccionado para cierre operativo.</p>
+          <p>Bitácora por fecha de registro, independiente del ciclo escolar y del estatus del alumno.</p>
         </div>
         <div class="panel-actions">
           <button class="btn btn-outline" @click="prepareCorteExcel" :disabled="loadingCorte || downloadingCorteExcel">
@@ -193,30 +193,37 @@
       <div class="card table-wrapper">
         <div class="corte-total">
           <h3>Bitácora de ingresos</h3>
-          <div>Cierre: ${{ totalCorte.toFixed(2) }}</div>
+          <div class="corte-total-values">
+            <span>Registrado: ${{ totalRegistradoCorte.toFixed(2) }}</span>
+            <strong>Cierre: ${{ totalCorte.toFixed(2) }}</strong>
+          </div>
         </div>
         <table class="w-full">
           <thead>
             <tr>
-              <th>Fecha</th>
+              <th>Fecha de registro</th>
               <th>Concepto / Tarifa</th>
               <th>Vía de ingreso</th>
+              <th>Estatus</th>
               <th class="text-right">Trx</th>
-              <th class="text-right">Flujo (MXN)</th>
+              <th class="text-right">Registrado (MXN)</th>
+              <th class="text-right">Aplicado al corte (MXN)</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loadingCorte">
-              <td colspan="5" class="text-center font-medium text-gray-500 py-12">Procesando...</td>
+              <td colspan="7" class="text-center font-medium text-gray-500 py-12">Procesando...</td>
             </tr>
             <tr v-else-if="!datosCorte.length">
-              <td colspan="5" class="text-center text-gray-400 py-12">No hay resultados en el periodo.</td>
+              <td colspan="7" class="text-center text-gray-400 py-12">No hay movimientos registrados en el periodo.</td>
             </tr>
             <tr v-else v-for="(row, idx) in datosCorte" :key="idx" class="cursor-context-menu" @contextmenu.prevent="showCorteContextMenu($event, row)">
               <td class="text-gray-600">{{ formatDate(row.fecha) }}</td>
               <td class="font-semibold text-gray-800">{{ row.categoria }}</td>
               <td><span class="badge bg-blue-50 text-blue-700">{{ row.formaDePago }}</span></td>
+              <td><span class="badge" :class="corteStatusClass(row.estatus)">{{ row.estatus }}</span></td>
               <td class="text-right font-semibold text-gray-600">{{ row.transacciones }}</td>
+              <td class="text-right font-semibold text-gray-700 font-mono">${{ Number(row.montoRegistrado).toFixed(2) }}</td>
               <td class="text-right font-bold text-brand-campus font-mono">${{ Number(row.total).toFixed(2) }}</td>
             </tr>
           </tbody>
@@ -300,7 +307,18 @@ const defaultCortePlantel = canFilterPlantel.value
       ? String(homePlantel.value).toUpperCase()
       : (PLANTELES_LIST[0] || ''))
   : ''
-const filtrosCorte = ref({ inicio: '', fin: '', plantel: defaultCortePlantel })
+const currentMexicoDateKey = () => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+const todayCorteKey = currentMexicoDateKey()
+const filtrosCorte = ref({ inicio: todayCorteKey, fin: todayCorteKey, plantel: defaultCortePlantel })
 const datosCorte = ref([])
 const loadingCorte = ref(false)
 const downloadingCorteExcel = ref(false)
@@ -319,15 +337,18 @@ const selectedConcept = computed(() => {
 })
 const selectedConceptName = computed(() => selectedConcept.value?.concepto || 'Sin selección')
 const totalCorte = computed(() => datosCorte.value.reduce((sum, row) => sum + Number(row.total), 0))
+const totalRegistradoCorte = computed(() => datosCorte.value.reduce((sum, row) => sum + Number(row.montoRegistrado || 0), 0))
 const corteUserPeriodLabel = computed(() => {
   const { inicio, fin } = corteUserSelectionContext.value
-  if (!inicio || !fin) return 'Periodo completo del ciclo'
+  if (!inicio || !fin) return 'Hoy'
+  if (inicio === fin) return formatFilterDate(inicio)
   return `${formatFilterDate(inicio)} al ${formatFilterDate(fin)}`
 })
 
 const formatDate = (value) => {
   if (!value) return ''
-  return new Date(value).toLocaleDateString('es-MX')
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value)
 }
 
 const formatFilterDate = (value) => {
@@ -335,10 +356,28 @@ const formatFilterDate = (value) => {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value || '')
 }
 
+const corteStatusClass = (status) => {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized.includes('cancel')) return 'bg-red-50 text-red-700'
+  if (normalized.includes('depur')) return 'bg-amber-50 text-amber-700'
+  return 'bg-emerald-50 text-emerald-700'
+}
+
 const buildParams = (source) => {
   const params = {
     ciclo: normalizeCicloKey(state.value.ciclo)
   }
+
+  Object.entries(source).forEach(([key, value]) => {
+    if (value !== '' && value !== null && value !== undefined) params[key] = String(value)
+  })
+
+  if (!canFilterPlantel.value) delete params.plantel
+  return params
+}
+
+const buildCorteParams = (source) => {
+  const params = {}
 
   Object.entries(source).forEach(([key, value]) => {
     if (value !== '' && value !== null && value !== undefined) params[key] = String(value)
@@ -418,7 +457,7 @@ const loadCorte = async () => {
   loadingCorte.value = true
   try {
     datosCorte.value = await $fetch('/api/reports/corte', {
-      params: buildParams(filtrosCorte.value)
+      params: buildCorteParams(filtrosCorte.value)
     })
   } catch (e) {
     show(e?.data?.message || 'No se pudo cargar el corte de caja', 'danger')
@@ -428,12 +467,12 @@ const loadCorte = async () => {
 }
 
 const printCorte = () => {
-  const q = new URLSearchParams(buildParams(filtrosCorte.value)).toString()
+  const q = new URLSearchParams(buildCorteParams(filtrosCorte.value)).toString()
   window.open(`/print/corte?${q}`, '_blank', 'width=850,height=800')
 }
 
 const executeCorteExcelDownload = async (selectedUserKeys = []) => {
-  const query = new URLSearchParams(buildParams(filtrosCorte.value))
+  const query = new URLSearchParams(buildCorteParams(filtrosCorte.value))
   if (selectedUserKeys.length) query.set('usuarios', JSON.stringify(selectedUserKeys))
 
   const response = await fetch(`/api/reports/corte_excel?${query.toString()}`, {
@@ -469,7 +508,7 @@ const prepareCorteExcel = async () => {
   downloadingCorteExcel.value = true
   try {
     const response = await $fetch('/api/reports/corte_users', {
-      params: buildParams(filtrosCorte.value)
+      params: buildCorteParams(filtrosCorte.value)
     })
     const users = Array.isArray(response?.usuarios) ? response.usuarios : []
 
@@ -536,7 +575,6 @@ onMounted(async () => {
 watch(() => normalizeCicloKey(state.value.ciclo), async () => {
   conceptReport.value = emptyConceptReport()
   await loadConceptos()
-  if (activeReport.value === 'corte') loadCorte()
 })
 
 watch(() => route.query.conceptoId, async (conceptoId) => {
@@ -801,14 +839,22 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   padding: 14px 18px;
 }
 
-.corte-total div {
+.corte-total-values {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   border: 1px solid rgba(101, 167, 68, 0.18);
   border-radius: 12px;
   background: rgba(101, 167, 68, 0.1);
   color: #4e844e;
   padding: 7px 12px;
-  font-size: 0.92rem;
-  font-weight: 850;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.corte-total-values strong {
+  font-size: 0.94rem;
+  font-weight: 900;
 }
 
 @media (max-width: 1120px) {

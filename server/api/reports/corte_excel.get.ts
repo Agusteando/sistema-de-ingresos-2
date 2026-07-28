@@ -9,13 +9,26 @@ const safeFilePart = (value: unknown) => String(value || 'plantel')
   .replace(/^_+|_+$/g, '')
   .slice(0, 60) || 'plantel'
 
-const formatDate = (value: unknown) => {
+const formatDateTime = (value: unknown) => {
   if (!value) return ''
-  const dateKey = value instanceof Date
-    ? value.toISOString().slice(0, 10)
-    : String(value).slice(0, 10)
-  const match = dateKey.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : dateKey
+  if (value instanceof Date) {
+    return new Intl.DateTimeFormat('es-MX', {
+      timeZone: 'America/Mexico_City',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(value)
+  }
+
+  const raw = String(value).trim()
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/)
+  if (!match) return raw
+  const time = match[4] ? ` ${match[4]}:${match[5]}:${match[6] || '00'}` : ''
+  return `${match[3]}/${match[2]}/${match[1]}${time}`
 }
 
 const formatRegisteringUser = (nameValue: unknown, emailValue: unknown) => {
@@ -52,23 +65,26 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   const selectedUsers = availableUsers.usuarios.filter(option => selectedUserKeys.includes(option.key))
   const result = await loadPlantelCorteCaja(user, filters, { userKeys: selectedUserKeys })
-  const periodLabel = result.filtros.inicio && result.filtros.fin
-    ? `${result.filtros.inicio} a ${result.filtros.fin}`
-    : 'Periodo completo del ciclo'
+  const periodLabel = result.filtros.inicio === result.filtros.fin
+    ? result.filtros.inicio
+    : `${result.filtros.inicio} a ${result.filtros.fin}`
 
   const workbook = buildProtectedXlsx({
     sheetName: 'Corte de Caja',
     title: 'Corte de Caja',
-    subtitle: 'Movimientos registrados para el plantel seleccionado.',
+    subtitle: 'Bitácora de movimientos registrados para el plantel seleccionado.',
     metaLines: [
       `Plantel: ${result.filtros.plantel}`,
-      `Ciclo: ${result.filtros.ciclo} | Periodo: ${periodLabel} | Generado por: ${result.usuario.nombre}`,
+      `Periodo por fecha de registro: ${periodLabel} | Generado por: ${result.usuario.nombre}`,
+      'Ciclos incluidos: todos',
       `Usuarios incluidos: ${selectedUsers.map(option => option.label).join(', ') || 'Sin movimientos'}`
     ],
     headers: [
       'Folio',
-      'Fecha',
+      'Fecha de registro',
+      'Fecha efectiva del pago',
       'Matrícula',
+      'Ciclo',
       'Documento',
       'Mes',
       'Alumno',
@@ -76,12 +92,16 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       'Forma de pago',
       'Plantel',
       'Usuario que registró',
-      'Monto (MXN)'
+      'Estatus',
+      'Monto registrado (MXN)',
+      'Importe al corte (MXN)'
     ],
     rows: result.rows.map(row => [
       Number(row.folio || 0),
-      formatDate(row.fecha),
+      formatDateTime(row.fecha),
+      formatDateTime(row.fechaPago),
       row.matricula,
+      row.ciclo || '',
       Number(row.documento || 0),
       row.mesReal || row.mes,
       row.nombreCompleto,
@@ -89,19 +109,25 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       row.formaDePago,
       row.scopePlantel || row.plantel || '',
       formatRegisteringUser(row.usuario, row.usuario_email),
-      Number(row.monto || 0)
+      row.estatusCorte,
+      Number(row.monto || 0),
+      Number(row.montoAplicado || 0)
     ]),
-    numericColumns: [0, 3],
-    currencyColumns: [10],
+    numericColumns: [0, 5],
+    currencyColumns: [13, 14],
     totals: [
-      ...result.totales.map(total => ({ label: total.formaDePago, value: total.total })),
-      { label: 'Importe total', value: result.total }
+      ...result.totales.map(total => ({ label: `${total.formaDePago} aplicado`, value: total.total })),
+      { label: 'Importe registrado', value: result.totalRegistrado },
+      { label: 'Importe no aplicado', value: result.totalNoAplicado },
+      { label: 'Importe total al corte', value: result.total }
     ],
     creator: `${result.usuario.nombre} <${result.usuario.email}>`
   })
 
-  const today = new Date().toISOString().slice(0, 10)
-  const filename = `Corte_de_Caja_Plantel_${safeFilePart(result.filtros.plantel)}_${today}.xlsx`
+  const periodFilePart = result.filtros.inicio === result.filtros.fin
+    ? result.filtros.inicio
+    : `${result.filtros.inicio}_${result.filtros.fin}`
+  const filename = `Corte_de_Caja_Plantel_${safeFilePart(result.filtros.plantel)}_${safeFilePart(periodFilePart)}.xlsx`
   const encodedFilename = encodeURIComponent(filename)
 
   setHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

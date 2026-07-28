@@ -1,4 +1,3 @@
-import { normalizeCicloKey, type CicloInput } from '../../shared/utils/ciclo'
 import { PLANTELES_LIST } from '../../utils/constants'
 import { query } from './db'
 import { hydrateFinancialConceptNames } from './financial-concept'
@@ -8,7 +7,7 @@ type CorteCajaFilters = {
   inicio?: unknown
   fin?: unknown
   plantel?: unknown
-  ciclo?: CicloInput
+  ciclo?: unknown
 }
 
 type CorteCajaLoadOptions = {
@@ -18,6 +17,7 @@ type CorteCajaLoadOptions = {
 export type CorteCajaRow = {
   folio: number
   fecha: Date | string
+  fechaPago?: Date | string | null
   matricula: string
   documento: number
   mes: string
@@ -26,10 +26,17 @@ export type CorteCajaRow = {
   concepto: string
   conceptoNombre: string
   monto: number | string
+  montoAplicado: number
   formaDePago: string
   plantel?: string | null
   plantel_pago?: string | null
   instituto?: unknown
+  ciclo?: string | null
+  estatus?: string | null
+  estatusCorte: string
+  cancelada_por?: string | null
+  depurado?: unknown
+  pago_otro_plantel?: unknown
   usuario?: string | null
   usuario_email?: string | null
   scopePlantel?: string | null
@@ -44,7 +51,9 @@ export type CorteCajaGroupedRow = {
   fecha: string
   formaDePago: string
   categoria: string
+  estatus: string
   transacciones: number
+  montoRegistrado: number
   total: number
 }
 
@@ -58,7 +67,6 @@ export type CorteCajaUserOption = {
 }
 
 type CorteCajaContext = {
-  cicloKey: string
   inicio: string
   fin: string
   scopePlantel: string
@@ -101,12 +109,32 @@ const PAYMENT_PLANTEL_SQL = `UPPER(COALESCE(
   NULLIF(TRIM(A.plantel), '')
 ))`
 
+// El corte es una bitácora de registro. fecha_original es inmutable y evita que un
+// pago capturado hoy desaparezca si su fecha efectiva fue corregida o retroactiva.
+const PAYMENT_REGISTERED_AT_SQL = 'COALESCE(r.fecha_original, r.fecha)'
+
 const REGISTERING_USER_KEY_SQL = `CASE
   WHEN NULLIF(TRIM(r.usuario_email), '') IS NOT NULL
     THEN CONCAT('email:', LOWER(TRIM(r.usuario_email)))
   WHEN NULLIF(TRIM(r.usuario), '') IS NOT NULL
     THEN CONCAT('name:', LOWER(TRIM(r.usuario)))
   ELSE 'unknown:'
+END`
+
+const CANCELED_STATUS_SQL = `LOWER(TRIM(COALESCE(CAST(r.estatus AS CHAR), ''))) IN (
+  'cancelada', 'cancelado', 'cancelled', 'canceled'
+)`
+
+const DEPURATION_ADJUSTMENT_SQL = `(
+  COALESCE(r.depurado, 0) = 1
+  AND LOWER(TRIM(COALESCE(r.formaDePago, ''))) IN ('depuracion', 'depuración')
+  AND COALESCE(r.pago_otro_plantel, 0) = 0
+)`
+
+const APPLIED_AMOUNT_SQL = `CASE
+  WHEN ${CANCELED_STATUS_SQL} THEN 0
+  WHEN ${DEPURATION_ADJUSTMENT_SQL} THEN 0
+  ELSE COALESCE(r.monto, 0)
 END`
 
 export const normalizeCorteUserKeys = (value: unknown): string[] => {
@@ -138,37 +166,66 @@ const formatUserLabel = (nameValue: unknown, emailValue: unknown) => {
   return email || nombre || 'No identificado'
 }
 
-const resolveCorteContext = (user: AuthSessionUser, filters: CorteCajaFilters): CorteCajaContext => {
+const normalizeText = (value: unknown) => String(value || '').trim()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+
+const isCanceledPayment = (row: CorteCajaRow) => {
+  const status = normalizeText(row.estatus)
+  return ['cancelada', 'cancelado', 'cancelled', 'canceled'].includes(status)
+}
+
+const isDepurationAdjustment = (row: CorteCajaRow) => {
+  const depurado = ['1', 'true'].includes(String(row.depurado ?? '').trim().toLowerCase())
+  const otherCampus = ['1', 'true'].includes(String(row.pago_otro_plantel ?? '').trim().toLowerCase())
+  return depurado && normalizeText(row.formaDePago) === 'depuracion' && !otherCampus
+}
+
+const resolveAuditStatus = (row: CorteCajaRow) => {
+  if (isCanceledPayment(row)) return 'Cancelado'
+  if (isDepurationAdjustment(row)) return 'Depuración'
+  return String(row.estatus || 'Vigente').trim() || 'Vigente'
+}
+
+const resolveAppliedAmount = (row: CorteCajaRow) => {
+  if (isCanceledPayment(row) || isDepurationAdjustment(row)) return 0
+  return Number(row.monto || 0)
+}
+
+const resolveCorteContext = async (user: AuthSessionUser, filters: CorteCajaFilters): Promise<CorteCajaContext> => {
   if (!user?.hasFinancialAccess) {
     throw createError({ statusCode: 403, message: 'No tiene permisos financieros para acceder a este reporte.' })
   }
 
-  const cicloKey = normalizeCicloKey(filters.ciclo || '2025')
-  const inicio = normalizeDateFilter(filters.inicio)
-  const fin = normalizeDateFilter(filters.fin)
-  const scopePlantel = resolveCortePlantel(user, filters.plantel)
+  const [clock] = await query<Array<{ currentDate: string }>>(
+    `SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS currentDate`
+  )
+  const currentDate = String(clock?.currentDate || new Date().toISOString().slice(0, 10))
+  const requestedInicio = normalizeDateFilter(filters.inicio)
+  const requestedFin = normalizeDateFilter(filters.fin)
+  const inicio = requestedInicio || requestedFin || currentDate
+  const fin = requestedFin || requestedInicio || currentDate
 
-  let where = `
-    r.estatus = 'Vigente'
-    AND COALESCE(r.depurado, 0) = 0
-    AND r.ciclo = ?
-    AND ${PAYMENT_PLANTEL_SQL} = ?
-  `
-  const params: any[] = [cicloKey, scopePlantel]
-
-  if (inicio && fin) {
-    where += ' AND DATE(r.fecha) BETWEEN ? AND ?'
-    params.push(inicio, fin)
+  if (inicio > fin) {
+    throw createError({ statusCode: 400, message: 'La fecha de apertura no puede ser posterior a la fecha de cierre.' })
   }
 
-  return { cicloKey, inicio, fin, scopePlantel, where, params }
+  const scopePlantel = resolveCortePlantel(user, filters.plantel)
+  const where = `
+    ${PAYMENT_PLANTEL_SQL} = ?
+    AND DATE(${PAYMENT_REGISTERED_AT_SQL}) BETWEEN ? AND ?
+  `
+  const params: any[] = [scopePlantel, inicio, fin]
+
+  return { inicio, fin, scopePlantel, where, params }
 }
 
 export const loadPlantelCorteCajaUsers = async (
   user: AuthSessionUser,
   filters: CorteCajaFilters = {}
 ) => {
-  const context = resolveCorteContext(user, filters)
+  const context = await resolveCorteContext(user, filters)
   const rows = await query<Array<{
     usuarioKey: string
     nombre: string | null
@@ -181,7 +238,7 @@ export const loadPlantelCorteCajaUsers = async (
       MAX(NULLIF(TRIM(r.usuario), '')) AS nombre,
       MAX(NULLIF(TRIM(r.usuario_email), '')) AS email,
       COUNT(*) AS movimientos,
-      COALESCE(SUM(r.monto), 0) AS total
+      COALESCE(SUM(${APPLIED_AMOUNT_SQL}), 0) AS total
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${context.where}
@@ -202,9 +259,8 @@ export const loadPlantelCorteCajaUsers = async (
   return {
     usuarios,
     filtros: {
-      ciclo: context.cicloKey,
-      inicio: context.inicio || null,
-      fin: context.fin || null,
+      inicio: context.inicio,
+      fin: context.fin,
       plantel: context.scopePlantel
     }
   }
@@ -215,7 +271,7 @@ export const loadPlantelCorteCaja = async (
   filters: CorteCajaFilters = {},
   options: CorteCajaLoadOptions = {}
 ) => {
-  const context = resolveCorteContext(user, filters)
+  const context = await resolveCorteContext(user, filters)
   const selectedUserKeys = normalizeCorteUserKeys(options.userKeys)
   let where = context.where
   const params = [...context.params]
@@ -228,7 +284,8 @@ export const loadPlantelCorteCaja = async (
   const rows = await query<CorteCajaRow[]>(`
     SELECT
       r.folio,
-      r.fecha,
+      ${PAYMENT_REGISTERED_AT_SQL} AS fecha,
+      r.fecha AS fechaPago,
       r.matricula,
       r.documento,
       r.mes,
@@ -241,40 +298,64 @@ export const loadPlantelCorteCaja = async (
       r.plantel,
       r.plantel_pago,
       r.instituto,
+      r.ciclo,
+      r.estatus,
+      r.cancelada_por,
+      r.depurado,
+      r.pago_otro_plantel,
       r.usuario,
       r.usuario_email,
-      ${PAYMENT_PLANTEL_SQL} as scopePlantel
+      ${PAYMENT_PLANTEL_SQL} AS scopePlantel
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${where}
-    ORDER BY r.fecha DESC, r.folio ASC
+    ORDER BY ${PAYMENT_REGISTERED_AT_SQL} DESC, r.folio ASC
   `, params)
 
-  await hydrateFinancialConceptNames(rows, { ciclo: context.cicloKey })
+  const rowsByCycle = new Map<string, CorteCajaRow[]>()
+  rows.forEach((row) => {
+    const cycle = String(row.ciclo || '').trim()
+    const cycleRows = rowsByCycle.get(cycle) || []
+    cycleRows.push(row)
+    rowsByCycle.set(cycle, cycleRows)
+  })
+  await Promise.all(Array.from(rowsByCycle.entries()).map(([ciclo, cycleRows]) => (
+    hydrateFinancialConceptNames(cycleRows, { ciclo: ciclo || undefined })
+  )))
+
+  rows.forEach((row) => {
+    row.estatusCorte = resolveAuditStatus(row)
+    row.montoAplicado = resolveAppliedAmount(row)
+  })
 
   const totalsMap = new Map<string, number>()
   const groupedMap = new Map<string, CorteCajaGroupedRow>()
 
   rows.forEach((row) => {
     const paymentMethod = String(row.formaDePago || 'Sin especificar')
-    const amount = Number(row.monto || 0)
-    totalsMap.set(paymentMethod, (totalsMap.get(paymentMethod) || 0) + amount)
+    const registeredAmount = Number(row.monto || 0)
+    const appliedAmount = Number(row.montoAplicado || 0)
+    totalsMap.set(paymentMethod, (totalsMap.get(paymentMethod) || 0) + appliedAmount)
 
     const fecha = row.fecha instanceof Date
       ? row.fecha.toISOString().slice(0, 10)
       : String(row.fecha || '').slice(0, 10)
     const categoria = String(row.conceptoNombre || 'Sin concepto')
-    const key = `${fecha}|${paymentMethod}|${categoria}`
+    const estatus = row.estatusCorte
+    const key = `${fecha}|${paymentMethod}|${categoria}|${estatus}`
     const current = groupedMap.get(key) || {
       fecha,
       formaDePago: paymentMethod,
       categoria,
+      estatus,
       transacciones: 0,
+      montoRegistrado: 0,
       total: 0
     }
 
     current.transacciones += 1
-    current.total += amount
+    current.montoRegistrado += registeredAmount
+    current.total += appliedAmount
     groupedMap.set(key, current)
   })
 
@@ -285,22 +366,26 @@ export const loadPlantelCorteCaja = async (
   const grouped = Array.from(groupedMap.values())
     .sort((a, b) => {
       const dateDiff = new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
-      return dateDiff || Number(b.total || 0) - Number(a.total || 0)
+      return dateDiff || Number(b.montoRegistrado || 0) - Number(a.montoRegistrado || 0)
     })
+
+  const totalRegistrado = rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
+  const total = rows.reduce((sum, row) => sum + Number(row.montoAplicado || 0), 0)
 
   return {
     rows,
     grouped,
     totales,
-    total: rows.reduce((sum, row) => sum + Number(row.monto || 0), 0),
+    total,
+    totalRegistrado,
+    totalNoAplicado: totalRegistrado - total,
     usuario: {
       nombre: String(user.name || user.email),
       email: String(user.email || '')
     },
     filtros: {
-      ciclo: context.cicloKey,
-      inicio: context.inicio || null,
-      fin: context.fin || null,
+      inicio: context.inicio,
+      fin: context.fin,
       plantel: context.scopePlantel
     }
   }
