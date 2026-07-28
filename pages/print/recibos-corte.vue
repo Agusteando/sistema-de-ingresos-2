@@ -1,13 +1,15 @@
 <template>
   <div class="receipt-batch-page min-h-screen bg-slate-50 px-5 py-6 font-sans text-neutral-ink print:bg-white print:p-0">
-    <header class="batch-toolbar print:hidden">
+    <header class="batch-toolbar" aria-label="Acciones de impresión">
       <button class="btn btn-ghost" type="button" @click="closeWindow">Volver</button>
       <div class="batch-toolbar-copy">
         <strong>Tiras de recibos</strong>
         <span v-if="receipts.length">{{ receipts.length }} recibo{{ receipts.length === 1 ? '' : 's' }} · Plantel {{ reportPlantel }} · {{ reportPeriod }}</span>
       </div>
-      <button class="btn btn-primary" type="button" :disabled="loading || !!error || !receipts.length" @click="triggerPrint">
-        <LucideFileDown :size="16" /> Guardar PDF
+      <button class="btn btn-primary" type="button" :disabled="loading || !!error || !receipts.length || preparingPrint" @click="triggerPrint">
+        <LucideLoader2 v-if="preparingPrint" class="animate-spin" :size="16" />
+        <LucideFileDown v-else :size="16" />
+        Guardar PDF
       </button>
     </header>
 
@@ -25,16 +27,29 @@
       <strong>No hay movimientos en el periodo.</strong>
     </section>
 
-    <main v-else class="receipt-strips-list">
-      <div v-for="receipt in receipts" :key="receipt.folio" class="receipt-strip-item">
-        <PaymentReceiptSheet
-          :items="[receipt]"
-          :receipt-data="receipt"
-          :issued-at="generatedAt"
-          :active-user-name="receipt.usuario || generatedBy"
-          variant="strip"
-        />
-      </div>
+    <main v-else ref="receiptListRef" class="receipt-strips-list" :data-receipt-count="receipts.length">
+      <section
+        v-for="(page, pageIndex) in receiptPages"
+        :key="`page-${pageIndex}`"
+        class="receipt-print-page"
+        :data-page="pageIndex + 1"
+      >
+        <div
+          v-for="(receipt, receiptIndex) in page"
+          :key="receiptRenderKey(receipt, pageIndex, receiptIndex)"
+          class="receipt-strip-item"
+          :data-corte-folio="receipt.folio"
+        >
+          <PaymentReceiptSheet
+            :items="[receipt]"
+            :receipt-data="receipt"
+            :issued-at="generatedAt"
+            :active-user-name="receipt.usuario || generatedBy"
+            variant="strip"
+            folio-mode="corte"
+          />
+        </div>
+      </section>
     </main>
   </div>
 </template>
@@ -44,9 +59,13 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { LucideFileDown, LucideLoader2 } from 'lucide-vue-next'
 
+definePageMeta({ layout: false })
+
 const route = useRoute()
+const receiptListRef = ref(null)
 const receipts = ref([])
 const loading = ref(true)
+const preparingPrint = ref(false)
 const error = ref('')
 const reportPlantel = ref('')
 const reportFilters = ref({ inicio: '', fin: '' })
@@ -56,6 +75,14 @@ const generatedAt = new Intl.DateTimeFormat('es-MX', {
   dateStyle: 'short',
   timeStyle: 'short'
 }).format(new Date())
+
+const receiptPages = computed(() => {
+  const pages = []
+  for (let index = 0; index < receipts.value.length; index += 2) {
+    pages.push(receipts.value.slice(index, index + 2))
+  }
+  return pages
+})
 
 const formatDateKey = (value) => {
   const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
@@ -69,8 +96,21 @@ const reportPeriod = computed(() => {
   return `${formatDateKey(inicio)} al ${formatDateKey(fin)}`
 })
 
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve))
+
+const waitForRenderedReceipts = async (expectedCount) => {
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    const renderedCount = receiptListRef.value?.querySelectorAll('.receipt-strip-item').length || 0
+    if (renderedCount === expectedCount) return
+    await nextFrame()
+  }
+
+  const renderedCount = receiptListRef.value?.querySelectorAll('.receipt-strip-item').length || 0
+  throw new Error(`La vista preparó ${renderedCount} de ${expectedCount} recibos.`)
+}
+
 const waitForImages = async () => {
-  const images = Array.from(document.images)
+  const images = Array.from(receiptListRef.value?.querySelectorAll('img') || [])
   await Promise.all(images.map(image => image.complete
     ? Promise.resolve()
     : new Promise(resolve => {
@@ -79,11 +119,49 @@ const waitForImages = async () => {
       })))
 }
 
+const preparePrintDocument = async () => {
+  if (!receipts.value.length) return
+
+  preparingPrint.value = true
+  try {
+    await nextTick()
+    await waitForRenderedReceipts(receipts.value.length)
+    await waitForImages()
+    if (document.fonts?.ready) await document.fonts.ready
+    await nextFrame()
+    await nextFrame()
+  } finally {
+    preparingPrint.value = false
+  }
+}
+
+const triggerPrint = async () => {
+  try {
+    await preparePrintDocument()
+    window.print()
+  } catch (printError) {
+    error.value = printError?.message || 'No fue posible preparar todos los recibos para impresión.'
+  }
+}
+
 onMounted(async () => {
   try {
     const query = new URLSearchParams(route.query).toString()
     const response = await $fetch(`/api/reports/corte_receipts?${query}`)
-    receipts.value = Array.isArray(response?.receipts) ? response.receipts : []
+    const loadedReceipts = Array.isArray(response?.receipts) ? response.receipts : []
+    const sourceFolios = Array.isArray(response?.sourceFolios)
+      ? response.sourceFolios.map(folio => Number(folio))
+      : loadedReceipts.map(receipt => Number(receipt?.folio))
+    const receiptFolios = loadedReceipts.map(receipt => Number(receipt?.folio))
+    const expectedCount = Number(response?.sourceCount ?? sourceFolios.length)
+    const foliosMatch = sourceFolios.length === receiptFolios.length
+      && sourceFolios.every((folio, index) => folio === receiptFolios[index])
+
+    if (expectedCount !== loadedReceipts.length || !foliosMatch) {
+      throw new Error(`El corte contiene ${expectedCount} folios, pero la serie de recibos no coincide completamente.`)
+    }
+
+    receipts.value = loadedReceipts
     reportPlantel.value = response?.filtros?.plantel || ''
     reportFilters.value = {
       inicio: response?.filtros?.inicio || '',
@@ -95,21 +173,31 @@ onMounted(async () => {
       ? reportFilters.value.inicio
       : `${reportFilters.value.inicio}_${reportFilters.value.fin}`
     document.title = `Recibos_Corte_${reportPlantel.value}_${periodPart || 'hoy'}`
+    loading.value = false
 
     if (receipts.value.length) {
-      await nextTick()
-      await waitForImages()
-      setTimeout(() => window.print(), 350)
+      await preparePrintDocument()
+      window.print()
     }
   } catch (requestError) {
     error.value = requestError?.data?.message || requestError?.message || 'No fue posible consultar los movimientos del periodo.'
-  } finally {
     loading.value = false
   }
 })
 
-const closeWindow = () => window.close()
-const triggerPrint = () => window.print()
+const receiptRenderKey = (receipt, pageIndex, receiptIndex) => [
+  receipt.receiptId,
+  receipt.folio,
+  receipt.documento,
+  receipt.fechaRegistro,
+  pageIndex,
+  receiptIndex
+].filter(value => value !== null && value !== undefined && value !== '').join('-')
+
+const closeWindow = () => {
+  if (window.opener) window.close()
+  else window.history.back()
+}
 </script>
 
 <style scoped>
@@ -187,34 +275,75 @@ const triggerPrint = () => window.print()
   margin: 0 auto;
 }
 
+.receipt-print-page {
+  display: grid;
+  gap: 18px;
+}
+
 @media print {
   @page {
     size: letter portrait;
-    margin: 0.25in 0.32in;
+    margin: 0.22in 0.3in;
+  }
+
+  :global(html),
+  :global(body),
+  :global(#__nuxt) {
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  :global(body) {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .batch-toolbar,
+  .batch-state {
+    display: none !important;
   }
 
   .receipt-batch-page,
   .receipt-strips-list {
-    display: block;
-    width: auto;
-    max-width: none;
-    margin: 0;
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
   }
 
-  .receipt-strip-item {
-    min-height: 5.05in;
+  .receipt-print-page {
+    display: grid !important;
+    grid-template-rows: repeat(2, minmax(0, auto));
+    gap: 0.08in;
+    width: 100%;
+    min-height: 10.4in;
+    break-after: page;
+    page-break-after: always;
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .receipt-strip-item:nth-child(2n) {
-    break-after: page;
-    page-break-after: always;
-  }
-
-  .receipt-strip-item:last-child {
+  .receipt-print-page:last-child {
     break-after: auto;
     page-break-after: auto;
+  }
+
+  .receipt-strip-item {
+    width: 100%;
+    min-height: 5.12in;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    overflow: visible;
   }
 }
 

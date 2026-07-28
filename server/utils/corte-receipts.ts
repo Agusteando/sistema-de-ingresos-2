@@ -18,11 +18,6 @@ type StudentPlacementRow = {
   ciclo?: string | null
 }
 
-const timeValue = (value: unknown) => {
-  if (value instanceof Date) return value.getTime()
-  const parsed = new Date(String(value || '')).getTime()
-  return Number.isFinite(parsed) ? parsed : 0
-}
 
 export const loadPlantelCorteReceiptStrips = async (
   user: AuthSessionUser,
@@ -47,6 +42,12 @@ export const loadPlantelCorteReceiptStrips = async (
       const placement = resolveReceiptAcademicPlacement(student, row.ciclo)
 
       return {
+        receiptId: [
+          result.filtros.plantel,
+          row.folio,
+          row.documento,
+          row.fecha instanceof Date ? row.fecha.toISOString() : String(row.fecha || '')
+        ].join(':'),
         folio: row.folio,
         folio_plantel: row.folio_plantel || null,
         documento: row.documento,
@@ -81,10 +82,23 @@ export const loadPlantelCorteReceiptStrips = async (
         cancelada_por: row.cancelada_por || null
       }
     })
-    .sort((a, b) => timeValue(a.fechaRegistro) - timeValue(b.fechaRegistro) || Number(a.folio) - Number(b.folio))
+
+  const sourceFolios = result.rows.map(row => Number(row.folio))
+  const receiptFolios = receipts.map(receipt => Number(receipt.folio))
+  const preservesCorteRows = sourceFolios.length === receiptFolios.length
+    && sourceFolios.every((folio, index) => folio === receiptFolios[index])
+
+  if (!preservesCorteRows) {
+    throw createError({
+      statusCode: 500,
+      message: 'No fue posible preparar la serie completa de recibos del corte de caja.'
+    })
+  }
 
   return {
     receipts,
+    sourceCount: result.rows.length,
+    sourceFolios,
     total: result.total,
     totalRegistrado: result.totalRegistrado,
     totalNoAplicado: result.totalNoAplicado,

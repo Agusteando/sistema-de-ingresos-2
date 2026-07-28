@@ -68,7 +68,7 @@
               <th class="py-1.5 px-2 text-left font-semibold text-gray-500 uppercase text-brand-campus">Pago</th>
             </tr>
             <tr>
-              <td class="py-1.5 px-2 font-mono font-semibold text-gray-800">{{ payment.folio_plantel || payment.folio }}</td>
+              <td class="py-1.5 px-2 font-mono font-semibold text-gray-800">{{ paymentFolio(payment) }}</td>
               <td class="py-1.5 px-2 text-gray-700">{{ paymentMethodLabel(payment) }}</td>
               <td class="py-1.5 px-2 text-gray-700">{{ currency(payment.saldoDespues) }}</td>
               <td class="py-1.5 px-2 text-gray-700">{{ currency(payment.importeTotal) }}</td>
@@ -143,7 +143,8 @@ const props = defineProps({
   issuedAt: { type: String, default: '' },
   activeUserName: { type: String, default: 'Administrador' },
   isPreview: { type: Boolean, default: false },
-  variant: { type: String, default: 'default' }
+  variant: { type: String, default: 'default' },
+  folioMode: { type: String, default: 'preferred' }
 })
 
 const hasMultiplePayments = computed(() => props.items.length > 1)
@@ -172,6 +173,9 @@ const sheetClass = computed(() => {
 })
 
 const currency = (value) => `$${Number(value || 0).toFixed(2)}`
+const paymentFolio = (payment) => props.folioMode === 'corte'
+  ? (payment?.folio ?? '')
+  : (payment?.folio_plantel || payment?.folio || '')
 
 const normalizedMethod = (value) => String(value || '')
   .normalize('NFD')
