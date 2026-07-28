@@ -1,1 +1,1 @@
-Corrige la impresión completa de recibos y sincroniza sus folios con el corte de caja
+Restaura la impresión individual de recibos y evita recortes en conceptos múltiples
