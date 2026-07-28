@@ -1,1 +1,1 @@
-Corrige la selección múltiple de pagos sin alterar el estado de cuenta
+Corrige el handoff de actualización para abrir Aurora solo después de activar la nueva versión
