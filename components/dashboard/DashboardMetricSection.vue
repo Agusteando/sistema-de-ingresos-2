@@ -11,12 +11,18 @@
       </div>
     </header>
 
-    <div class="plantel-grid" :aria-busy="loading || refreshing">
+    <div class="plantel-chart" :aria-busy="loading || refreshing">
       <template v-if="loading">
-        <article v-for="plantel in planteles" :key="`skeleton-${plantel.plantel}`" class="plantel-card skeleton-card">
-          <div class="skeleton-line short" />
-          <div class="skeleton-line total" />
-          <div class="skeleton-line bar" />
+        <article
+          v-for="(plantel, index) in planteles"
+          :key="`skeleton-${plantel.plantel}`"
+          class="plantel-bar skeleton-bar"
+        >
+          <div class="skeleton-value" />
+          <div class="bar-stage">
+            <span :style="{ height: `${24 + ((index * 13) % 64)}%` }" />
+          </div>
+          <div class="skeleton-code" />
         </article>
       </template>
 
@@ -24,22 +30,29 @@
         <article
           v-for="plantel in planteles"
           :key="plantel.plantel"
-          class="plantel-card"
+          class="plantel-bar"
           :class="{ offline: plantel.status !== 'online' }"
-          :style="cardStyle(plantel.plantel)"
+          :style="barStyle(plantel)"
+          :aria-label="barLabel(plantel)"
         >
-          <div class="plantel-card-head">
-            <span>{{ plantel.plantel }}</span>
-            <i :title="plantel.status === 'online' ? 'En línea' : 'Sin conexión'" />
-          </div>
-
           <strong>{{ plantel.status === 'online' ? currency(valueFor(plantel)) : '—' }}</strong>
 
-          <div class="progress-track" aria-hidden="true">
-            <span :style="{ width: `${progressFor(plantel)}%` }" />
+          <div
+            class="bar-stage"
+            role="progressbar"
+            :aria-label="plantel.plantel"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-valuenow="Math.round(percentFor(plantel))"
+          >
+            <span class="bar-fill" />
+            <i class="bar-cap" />
           </div>
 
-          <small>{{ plantel.status === 'online' ? integer(movementsFor(plantel)) : '—' }}</small>
+          <footer>
+            <b>{{ plantel.plantel }}</b>
+            <small>{{ plantel.status === 'online' ? integer(movementsFor(plantel)) : '—' }}</small>
+          </footer>
         </article>
       </template>
 
@@ -99,22 +112,27 @@ const valueFor = (plantel: PlantelMetric) => props.period === 'day' ? plantel.da
 const movementsFor = (plantel: PlantelMetric) => props.period === 'day' ? plantel.dayMovements : plantel.monthMovements
 
 const maximum = computed(() => Math.max(
-  1,
+  0,
   ...props.planteles
     .filter(plantel => plantel.status === 'online')
-    .map(plantel => valueFor(plantel))
+    .map(plantel => Math.max(0, valueFor(plantel)))
 ))
 
-const progressFor = (plantel: PlantelMetric) => {
-  if (plantel.status !== 'online') return 0
-  const value = valueFor(plantel)
-  if (value <= 0) return 0
-  return Math.max(4, Math.min(100, (value / maximum.value) * 100))
+const percentFor = (plantel: PlantelMetric) => {
+  if (plantel.status !== 'online' || maximum.value <= 0) return 0
+  return Math.min(100, Math.max(0, (valueFor(plantel) / maximum.value) * 100))
 }
 
-const cardStyle = (plantel: string) => ({
-  '--plantel-accent': palette[plantel] || '#64748b'
+const barStyle = (plantel: PlantelMetric) => ({
+  '--plantel-accent': palette[plantel.plantel] || '#64748b',
+  '--bar-height': `${percentFor(plantel)}%`,
+  '--bar-opacity': percentFor(plantel) > 0 ? '0.72' : '0'
 })
+
+const barLabel = (plantel: PlantelMetric) => {
+  if (plantel.status !== 'online') return `${plantel.plantel}, sin conexión`
+  return `${plantel.plantel}, ${currency(valueFor(plantel))}, ${integer(movementsFor(plantel))} movimientos`
+}
 </script>
 
 <style scoped>
@@ -189,149 +207,151 @@ const cardStyle = (plantel: string) => ({
   text-align: center;
 }
 
-.plantel-grid {
+.plantel-chart {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(9, minmax(102px, 1fr));
-  gap: 9px;
+  grid-template-columns: repeat(9, minmax(68px, 1fr));
+  align-items: end;
+  gap: clamp(6px, 0.9vw, 12px);
   min-width: 0;
-  overflow-x: auto;
-  padding: 2px 1px 7px;
-  scrollbar-width: thin;
+  min-height: 228px;
+  padding: 3px 2px 0;
 }
 
-.plantel-card {
+.plantel-bar {
   --plantel-accent: #64748b;
-  position: relative;
-  min-width: 102px;
-  min-height: 132px;
-  overflow: hidden;
-  padding: 14px 13px 12px;
-  border: 1px solid color-mix(in srgb, var(--plantel-accent) 18%, rgba(148, 163, 184, 0.2));
-  border-radius: 19px;
-  background:
-    linear-gradient(160deg, color-mix(in srgb, var(--plantel-accent) 8%, white), rgba(255, 255, 255, 0.9));
-  box-shadow: 0 9px 22px rgba(15, 23, 42, 0.045);
-  transition: transform 170ms ease, box-shadow 170ms ease, border-color 170ms ease;
-}
-
-.plantel-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: 100%;
-  height: 3px;
-  background: linear-gradient(90deg, var(--plantel-accent), color-mix(in srgb, var(--plantel-accent) 25%, transparent));
-}
-
-.plantel-card:hover:not(.offline) {
-  z-index: 2;
-  border-color: color-mix(in srgb, var(--plantel-accent) 34%, transparent);
-  box-shadow: 0 16px 30px color-mix(in srgb, var(--plantel-accent) 10%, rgba(15, 23, 42, 0.08));
-  transform: translateY(-3px);
-}
-
-.plantel-card.offline {
-  filter: grayscale(0.35);
-  opacity: 0.48;
-}
-
-.plantel-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  --bar-height: 0%;
+  display: grid;
+  grid-template-rows: 27px minmax(132px, 1fr) 34px;
   gap: 8px;
+  min-width: 0;
+  height: 218px;
+  transition: opacity 180ms ease;
 }
 
-.plantel-card-head span {
-  color: #334155;
-  font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.11em;
-}
-
-.plantel-card-head i {
-  width: 7px;
-  height: 7px;
-  border: 2px solid white;
-  border-radius: 999px;
-  background: var(--plantel-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--plantel-accent) 14%, transparent);
-}
-
-.plantel-card.offline .plantel-card-head i {
-  background: #94a3b8;
-  box-shadow: none;
-}
-
-.plantel-card > strong {
-  display: block;
-  min-height: 30px;
-  margin-top: 15px;
+.plantel-bar > strong {
+  align-self: end;
   overflow: hidden;
-  color: #0f172a;
-  font-size: clamp(0.82rem, 1.15vw, 1.08rem);
+  color: #1e293b;
+  font-size: clamp(0.64rem, 0.92vw, 0.83rem);
   font-weight: 850;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
+  letter-spacing: -0.035em;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.progress-track {
-  height: 6px;
-  margin-top: 14px;
+.bar-stage {
+  position: relative;
+  align-self: stretch;
   overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 16px 16px 10px 10px;
+  background:
+    linear-gradient(to top, rgba(148, 163, 184, 0.09) 1px, transparent 1px) 0 100% / 100% 25%,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(241, 245, 249, 0.72));
+}
+
+.bar-fill {
+  position: absolute;
+  inset: auto 7px 0;
+  height: var(--bar-height);
+  min-height: 0;
+  border-radius: 10px 10px 7px 7px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--plantel-accent) 74%, white), var(--plantel-accent));
+  box-shadow: 0 -8px 24px color-mix(in srgb, var(--plantel-accent) 17%, transparent);
+  transition: height 560ms cubic-bezier(.2,.8,.2,1);
+}
+
+.bar-cap {
+  position: absolute;
+  right: 7px;
+  bottom: var(--bar-height);
+  left: 7px;
+  height: 2px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.14);
+  background: color-mix(in srgb, var(--plantel-accent) 76%, white);
+  opacity: var(--bar-opacity, 0);
+  transform: translateY(1px);
+  transition: bottom 560ms cubic-bezier(.2,.8,.2,1), opacity 160ms ease;
 }
 
-.progress-track span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--plantel-accent) 70%, white), var(--plantel-accent));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--plantel-accent) 28%, transparent);
-  transition: width 460ms cubic-bezier(.2,.8,.2,1);
+.plantel-bar footer {
+  display: grid;
+  place-items: center;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
 }
 
-.plantel-card small {
-  display: block;
-  margin-top: 8px;
+.plantel-bar footer b {
+  color: var(--plantel-accent);
+  font-size: 0.7rem;
+  font-weight: 950;
+  letter-spacing: 0.09em;
+}
+
+.plantel-bar footer small {
   color: #94a3b8;
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 800;
 }
 
-.skeleton-card {
-  border-color: rgba(148, 163, 184, 0.12);
-  background: rgba(248, 250, 252, 0.88);
+.plantel-bar.offline {
+  filter: grayscale(0.6);
+  opacity: 0.38;
 }
 
-.skeleton-card::before {
+.plantel-bar.offline .bar-fill,
+.plantel-bar.offline .bar-cap {
   display: none;
 }
 
-.skeleton-line {
+.skeleton-bar {
+  opacity: 0.68;
+}
+
+.skeleton-value,
+.skeleton-code,
+.skeleton-bar .bar-stage span {
   position: relative;
   overflow: hidden;
-  height: 8px;
   border-radius: 999px;
   background: #e8edf2;
 }
 
-.skeleton-line::after {
+.skeleton-value::after,
+.skeleton-code::after,
+.skeleton-bar .bar-stage span::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.78), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.82), transparent);
   transform: translateX(-100%);
   animation: skeleton-wave 1.15s infinite;
 }
 
-.skeleton-line.short { width: 34%; }
-.skeleton-line.total { width: 82%; height: 18px; margin-top: 20px; }
-.skeleton-line.bar { width: 100%; margin-top: 22px; }
+.skeleton-value {
+  align-self: end;
+  justify-self: center;
+  width: 76%;
+  height: 10px;
+}
+
+.skeleton-code {
+  justify-self: center;
+  width: 38%;
+  height: 8px;
+}
+
+.skeleton-bar .bar-stage span {
+  position: absolute;
+  right: 8px;
+  bottom: 0;
+  left: 8px;
+  border-radius: 10px 10px 7px 7px;
+}
 
 .refresh-layer {
   position: absolute;
@@ -361,6 +381,15 @@ const cardStyle = (plantel: string) => ({
   to { transform: rotate(360deg); }
 }
 
+@media (max-width: 980px) {
+  .plantel-chart {
+    grid-template-columns: repeat(9, 84px);
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: thin;
+  }
+}
+
 @media (max-width: 760px) {
   .dashboard-panel {
     padding: 16px;
@@ -371,8 +400,14 @@ const cardStyle = (plantel: string) => ({
     align-items: flex-start;
   }
 
-  .plantel-grid {
-    grid-template-columns: repeat(9, 112px);
+  .plantel-chart {
+    grid-template-columns: repeat(9, 78px);
+    min-height: 208px;
+  }
+
+  .plantel-bar {
+    grid-template-rows: 25px minmax(118px, 1fr) 32px;
+    height: 198px;
   }
 }
 </style>

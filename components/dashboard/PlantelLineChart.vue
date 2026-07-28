@@ -192,7 +192,7 @@ const yTicks = computed(() => Array.from({ length: 5 }, (_, index) => {
 const xTicks = computed(() => {
   const count = props.labels.length
   if (!count) return []
-  const desired = Math.min(7, count)
+  const desired = count <= 12 ? count : Math.min(7, count)
   const indexes = new Set<number>()
   for (let index = 0; index < desired; index += 1) {
     indexes.add(Math.round((index / Math.max(1, desired - 1)) * (count - 1)))

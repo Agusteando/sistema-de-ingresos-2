@@ -1,1 +1,1 @@
-Rediseña los pagos del estado de cuenta como filas compactas con acciones directas
+Corrige el desplazamiento y las escalas dinámicas del dashboard

@@ -26,6 +26,9 @@ const APPLIED_AMOUNT_SQL = `CASE
 END`
 
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/
+const DAY_START_HOUR = 8
+const DAY_END_HOUR = 18
+const DAY_SERIES_LENGTH = DAY_END_HOUR - DAY_START_HOUR + 1
 
 const mexicoCityDateParts = () => {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -95,10 +98,12 @@ export const aggregateDashboardRows = (
   fallbackCurrentDate: string
 ) => {
   const currentDate = String(rows[0]?.currentDate || fallbackCurrentDate)
-  const daySeries = Array.from({ length: 24 }, () => 0)
+  const daySeries = Array.from({ length: DAY_SERIES_LENGTH }, () => 0)
   const monthSeries = Array.from({ length: daysInMonth }, () => 0)
   let dayMovements = 0
   let monthMovements = 0
+  let dayTotal = 0
+  let monthTotal = 0
 
   for (const row of rows) {
     const dayKey = String(row.dayKey || '')
@@ -109,14 +114,16 @@ export const aggregateDashboardRows = (
 
     if (dayKey === currentDate) {
       const hour = Number(row.hourOfDay)
-      if (Number.isInteger(hour) && hour >= 0 && hour < daySeries.length) {
-        daySeries[hour] += amount
+      dayTotal += amount
+      if (Number.isInteger(hour) && hour >= DAY_START_HOUR && hour <= DAY_END_HOUR) {
+        daySeries[hour - DAY_START_HOUR] += amount
       }
       dayMovements += movements
     }
 
     if (dayKey.startsWith(`${month}-`)) {
       const dayIndex = Number(dayKey.slice(8, 10)) - 1
+      monthTotal += amount
       if (Number.isInteger(dayIndex) && dayIndex >= 0 && dayIndex < monthSeries.length) {
         monthSeries[dayIndex] += amount
       }
@@ -130,8 +137,8 @@ export const aggregateDashboardRows = (
     monthSeries,
     dayMovements,
     monthMovements,
-    dayTotal: daySeries.reduce((sum, value) => sum + value, 0),
-    monthTotal: monthSeries.reduce((sum, value) => sum + value, 0)
+    dayTotal,
+    monthTotal
   }
 }
 
@@ -192,7 +199,7 @@ const loadPlantelCollection = async (
       monthTotal: 0,
       dayMovements: 0,
       monthMovements: 0,
-      daySeries: Array.from({ length: 24 }, () => 0),
+      daySeries: Array.from({ length: DAY_SERIES_LENGTH }, () => 0),
       monthSeries: Array.from({ length: daysInMonth }, () => 0)
     }
   }

@@ -199,7 +199,7 @@ const planteles = computed(() => DASHBOARD_PLANTELES.map(code => (
     monthTotal: 0,
     dayMovements: 0,
     monthMovements: 0,
-    daySeries: Array.from({ length: 24 }, () => 0),
+    daySeries: Array.from({ length: 11 }, () => 0),
     monthSeries: Array.from({ length: daysInSelectedMonth.value }, () => 0)
   }
 )))
@@ -220,7 +220,7 @@ const daysInSelectedMonth = computed(() => {
   return new Date(Date.UTC(year, month, 0)).getUTCDate()
 })
 
-const dayChartLabels = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, '0')}:00`)
+const dayChartLabels = Array.from({ length: 11 }, (_, index) => `${String(index + 8).padStart(2, '0')}:00`)
 const monthChartLabels = computed(() => Array.from({ length: daysInSelectedMonth.value }, (_, day) => String(day + 1)))
 
 const daySeries = computed(() => planteles.value.map(item => ({
@@ -281,8 +281,9 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 18px;
   min-width: 0;
+  align-content: start;
   min-height: calc(100vh - 118px);
-  padding: 4px 0 30px;
+  padding: 4px 0 max(38px, env(safe-area-inset-bottom));
 }
 
 .dashboard-toolbar {
