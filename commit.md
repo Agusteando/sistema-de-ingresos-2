@@ -1,1 +1,1 @@
-Evita la redirección inmediata y detecta instalaciones locales con handoff anterior
+Compacta cada pago del corte de caja para evitar recortes al imprimir
