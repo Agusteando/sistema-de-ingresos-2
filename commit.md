@@ -1,1 +1,1 @@
-Reduce el ruido visual del corte de caja con pagos compactos
+Fija el corte de caja en orientación vertical al imprimir

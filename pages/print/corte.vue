@@ -328,7 +328,7 @@ const triggerPrint = () => window.print()
 }
 
 @media print {
-  @page { margin: 0.35cm; size: letter landscape; }
+  @page { margin: 0.35cm; size: letter portrait; }
 
   :global(html),
   :global(body) {
