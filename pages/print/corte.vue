@@ -33,64 +33,34 @@
           class="payment-card"
           :class="rowClass(r)"
         >
-          <div class="payment-field field-folio">
-            <span class="payment-label">Folio</span>
-            <strong class="payment-value payment-mono">{{ r.folio }}</strong>
-          </div>
-          <div class="payment-field field-registro">
-            <span class="payment-label">Registro</span>
-            <span class="payment-value">{{ formatDateTime(r.fecha) }}</span>
-          </div>
-          <div class="payment-field field-fecha-pago">
-            <span class="payment-label">Fecha pago</span>
-            <span class="payment-value">{{ formatDateTime(r.fechaPago) }}</span>
-          </div>
-          <div class="payment-field field-estatus">
-            <span class="payment-label">Estatus</span>
-            <strong class="payment-value">{{ r.estatusCorte }}</strong>
+          <div class="payment-main">
+            <div class="payment-identity">
+              <span class="payment-folio">Folio {{ r.folio }}</span>
+              <span class="payment-dot">·</span>
+              <span class="payment-matricula">{{ r.matricula }}</span>
+              <span class="payment-dot">·</span>
+              <strong class="payment-student">{{ r.nombreCompleto }}</strong>
+            </div>
+
+            <div class="payment-amount-block">
+              <span class="payment-amount-label">Aplicado</span>
+              <strong class="payment-amount">${{ Number(r.montoAplicado || 0).toFixed(2) }}</strong>
+              <span v-if="amountsDiffer(r)" class="payment-registered">
+                Registrado ${{ Number(r.monto || 0).toFixed(2) }}
+              </span>
+            </div>
           </div>
 
-          <div class="payment-field field-matricula">
-            <span class="payment-label">Matrícula</span>
-            <span class="payment-value payment-mono">{{ r.matricula }}</span>
-          </div>
-          <div class="payment-field field-alumno">
-            <span class="payment-label">Alumno</span>
-            <span class="payment-value">{{ r.nombreCompleto }}</span>
-          </div>
-          <div class="payment-field field-usuario">
-            <span class="payment-label">Usuario</span>
-            <span class="payment-value">{{ formatUser(r) }}</span>
-          </div>
+          <div class="payment-concept">{{ r.conceptoNombre }}</div>
 
-          <div class="payment-field field-ciclo">
-            <span class="payment-label">Ciclo</span>
-            <span class="payment-value">{{ r.ciclo }}</span>
-          </div>
-          <div class="payment-field field-documento">
-            <span class="payment-label">Doc.</span>
-            <span class="payment-value payment-mono">{{ String(r.documento || '').padStart(7, '0') }}</span>
-          </div>
-          <div class="payment-field field-mes">
-            <span class="payment-label">Mes</span>
-            <span class="payment-value">{{ r.mesReal || r.mes }}</span>
-          </div>
-          <div class="payment-field field-forma">
-            <span class="payment-label">Forma</span>
-            <span class="payment-value">{{ r.formaDePago }}</span>
-          </div>
-
-          <div class="payment-field field-concepto">
-            <span class="payment-label">Concepto</span>
-            <span class="payment-value">{{ r.conceptoNombre }}</span>
-          </div>
-          <div class="payment-field field-registrado">
-            <span class="payment-label">Registrado</span>
-            <strong class="payment-value payment-amount">${{ Number(r.monto || 0).toFixed(2) }}</strong>
-          </div>
-          <div class="payment-field field-aplicado">
-            <span class="payment-label">Aplicado</span>
-            <strong class="payment-value payment-amount">${{ Number(r.montoAplicado || 0).toFixed(2) }}</strong>
+          <div class="payment-meta">
+            <span>{{ formatPaymentDates(r) }}</span>
+            <span>Doc. {{ String(r.documento || '').padStart(7, '0') }}</span>
+            <span>Ciclo {{ r.ciclo }}</span>
+            <span>{{ r.mesReal || r.mes }}</span>
+            <span>{{ r.formaDePago }}</span>
+            <span class="payment-user">{{ formatUserCompact(r) }}</span>
+            <strong class="payment-status">{{ r.estatusCorte }}</strong>
           </div>
         </article>
       </section>
@@ -161,12 +131,22 @@ const formatDateTime = (value) => {
   return `${match[3]}/${match[2]}/${match[1]}${match[4] ? ` ${match[4]}:${match[5]}` : ''}`
 }
 
-const formatUser = (row) => {
+const formatUserCompact = (row) => {
   const name = String(row?.usuario || '').trim()
   const email = String(row?.usuario_email || '').trim().toLowerCase()
-  if (name && email && name.toLowerCase() !== email) return `${name} (${email})`
-  return email || name || 'No identificado'
+  return name || email || 'No identificado'
 }
+
+const formatPaymentDates = (row) => {
+  const registered = formatDateTime(row?.fecha)
+  const paid = formatDateTime(row?.fechaPago)
+  if (!paid || paid === registered) return registered
+  return `Registro ${registered} · Pago ${paid}`
+}
+
+const amountsDiffer = (row) => (
+  Math.abs(Number(row?.monto || 0) - Number(row?.montoAplicado || 0)) > 0.005
+)
 
 const rowClass = (row) => {
   const status = String(row?.estatusCorte || '').toLowerCase()
@@ -225,117 +205,125 @@ const triggerPrint = () => window.print()
 }
 
 .payment-card {
-  display: grid;
-  grid-template-columns:
-    minmax(5.8rem, 0.78fr)
-    minmax(7.4rem, 1fr)
-    minmax(9rem, 1.28fr)
-    minmax(7rem, 0.94fr);
-  grid-template-areas:
-    "folio registro fecha-pago estatus"
-    "matricula alumno alumno usuario"
-    "ciclo documento mes forma"
-    "concepto concepto registrado aplicado";
   width: 100%;
   min-width: 0;
-  border-bottom: 1px solid #6b7280;
+  padding: 0.34rem 0.12rem 0.3rem;
+  border-bottom: 1px solid #9ca3af;
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
 .payment-card:first-of-type {
-  border-top: 1px solid #6b7280;
+  border-top: 1px solid #9ca3af;
 }
 
-.payment-field {
+.payment-main {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.65rem;
+}
+
+.payment-identity {
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   min-width: 0;
-  column-gap: 0.28rem;
-  padding: 0.17rem 0.38rem 0.17rem 0;
-  border-right: 1px solid #e5e7eb;
+  gap: 0.12rem 0.24rem;
+  color: #111827;
+  font-size: 0.66rem;
+  line-height: 1.2;
 }
 
-.payment-field:nth-child(4),
-.payment-field:nth-child(7),
-.payment-field:nth-child(11),
-.payment-field:nth-child(14) {
-  border-right: 0;
+.payment-folio,
+.payment-matricula {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-.payment-label {
+.payment-dot {
+  color: #9ca3af;
+}
+
+.payment-student {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.payment-concept {
+  margin-top: 0.08rem;
+  padding-right: 5.2rem;
+  color: #1f2937;
+  font-size: 0.59rem;
+  font-weight: 600;
+  line-height: 1.22;
+  overflow-wrap: anywhere;
+}
+
+.payment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.08rem 0.68rem;
+  margin-top: 0.13rem;
+  color: #6b7280;
+  font-size: 0.49rem;
+  line-height: 1.2;
+}
+
+.payment-meta > span,
+.payment-status {
+  white-space: nowrap;
+}
+
+.payment-user {
+  max-width: 16rem;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+
+.payment-status {
+  color: #374151;
+}
+
+.payment-amount-block {
+  display: grid;
+  justify-items: end;
+  min-width: 4.8rem;
+  text-align: right;
+}
+
+.payment-amount-label {
   color: #6b7280;
   font-size: 0.42rem;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1;
   text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.payment-value {
-  min-width: 0;
-  color: #111827;
-  font-size: 0.48rem;
-  line-height: 1.18;
-  overflow-wrap: anywhere;
-  word-break: normal;
-}
-
-.payment-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .payment-amount {
-  display: block;
-  text-align: right;
+  color: #111827;
+  font-size: 0.7rem;
+  line-height: 1.08;
   white-space: nowrap;
 }
 
-.field-folio { grid-area: folio; }
-.field-registro { grid-area: registro; }
-.field-fecha-pago { grid-area: fecha-pago; }
-.field-estatus { grid-area: estatus; }
-.field-matricula { grid-area: matricula; }
-.field-alumno { grid-area: alumno; }
-.field-usuario { grid-area: usuario; }
-.field-ciclo { grid-area: ciclo; }
-.field-documento { grid-area: documento; }
-.field-mes { grid-area: mes; }
-.field-forma { grid-area: forma; }
-.field-concepto { grid-area: concepto; }
-.field-registrado { grid-area: registrado; }
-.field-aplicado { grid-area: aplicado; }
+.payment-registered {
+  margin-top: 0.03rem;
+  color: #6b7280;
+  font-size: 0.43rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
 
 @media (max-width: 900px) {
-  .payment-card {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "folio estatus"
-      "registro fecha-pago"
-      "matricula ciclo"
-      "alumno alumno"
-      "usuario usuario"
-      "documento mes"
-      "forma forma"
-      "concepto concepto"
-      "registrado aplicado";
+  .payment-concept {
+    padding-right: 0;
   }
 
-  .payment-field {
-    border-right: 1px solid #e5e7eb;
-  }
-
-  .field-estatus,
-  .field-fecha-pago,
-  .field-ciclo,
-  .field-alumno,
-  .field-usuario,
-  .field-mes,
-  .field-forma,
-  .field-concepto,
-  .field-aplicado {
-    border-right: 0;
+  .payment-user {
+    max-width: 11rem;
   }
 }
 
@@ -368,31 +356,52 @@ const triggerPrint = () => window.print()
   }
 
   .payment-card {
-    grid-template-columns:
-      minmax(4.9rem, 0.76fr)
-      minmax(6.5rem, 0.98fr)
-      minmax(8.2rem, 1.3fr)
-      minmax(6.2rem, 0.96fr);
-    grid-template-areas:
-      "folio registro fecha-pago estatus"
-      "matricula alumno alumno usuario"
-      "ciclo documento mes forma"
-      "concepto concepto registrado aplicado";
+    padding: 0.2rem 0.08rem 0.18rem;
   }
 
-  .payment-field {
-    column-gap: 0.16rem;
-    padding: 0.08rem 0.2rem 0.08rem 0;
+  .payment-main {
+    gap: 0.45rem;
   }
 
-  .payment-label {
-    font-size: 5.2pt;
-    line-height: 1.08;
+  .payment-identity {
+    gap: 0.08rem 0.18rem;
+    font-size: 7pt;
+    line-height: 1.14;
   }
 
-  .payment-value {
-    font-size: 6.1pt;
-    line-height: 1.1;
+  .payment-concept {
+    margin-top: 0.04rem;
+    padding-right: 4.8rem;
+    font-size: 6.2pt;
+    line-height: 1.14;
   }
+
+  .payment-meta {
+    gap: 0.04rem 0.48rem;
+    margin-top: 0.07rem;
+    font-size: 5.3pt;
+    line-height: 1.12;
+  }
+
+  .payment-user {
+    max-width: 13rem;
+  }
+
+  .payment-amount-block {
+    min-width: 4.3rem;
+  }
+
+  .payment-amount-label {
+    font-size: 4.6pt;
+  }
+
+  .payment-amount {
+    font-size: 7.2pt;
+  }
+
+  .payment-registered {
+    font-size: 4.7pt;
+  }
+
 }
 </style>

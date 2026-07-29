@@ -1,1 +1,1 @@
-Compacta cada pago del corte de caja para evitar recortes al imprimir
+Reduce el ruido visual del corte de caja con pagos compactos
