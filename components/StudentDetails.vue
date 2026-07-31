@@ -742,8 +742,8 @@
                   </tr>
                   <template
                     v-else
-                    v-for="debt in filteredDebts"
-                    :key="`${debt.documento}-${debt.mes}`"
+                    v-for="(debt, debtIndex) in filteredDebts"
+                    :key="debtRenderKey(debt, debtIndex)"
                   >
                     <tr
                       :class="{
@@ -1750,6 +1750,16 @@ const timelineSegmentTone = (segment) => {
   return "base";
 };
 const debtKey = (debt) => `${debt?.documento || ""}-${debt?.mes || ""}`;
+const debtRenderKey = (debt, index) => {
+  const baseKey = debtKey(debt);
+  let occurrence = 0;
+
+  for (let cursor = 0; cursor < index; cursor += 1) {
+    if (debtKey(filteredDebts.value[cursor]) === baseKey) occurrence += 1;
+  }
+
+  return occurrence ? `${baseKey}::${occurrence}` : baseKey;
+};
 
 const detailShellStyle = computed(() => {
   if (!detailsExpanded.value || !expandedShellBounds.value) return {};

@@ -1,60 +1,71 @@
-import { sendEmail } from '../../utils/mailer'
-import { runWithBridgeAgentId } from '../../utils/db'
-import { loadActiveReceiptPayments } from '../../utils/paymentReceipt'
+import { sendEmailFromUser } from '../../utils/mailer'
+import { runWithBridgeAgentId, query } from '../../utils/db'
+import { loadActiveReceiptPayments, resolveReceiptAcademicPlacement } from '../../utils/paymentReceipt'
+import { generatePaymentReceiptPdf, renderPaymentReceiptEmail } from '../../utils/paymentReceiptDelivery'
+
+const validEmail = (value: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim())
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
-  const { folios, email } = body
+  const email = String(body?.email || '').trim()
+  const user = event.context.user
 
-  if (!email) {
-    throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
+  if (!validEmail(email)) {
+    throw createError({ statusCode: 400, message: 'El correo electrónico destino no es válido.' })
   }
-  const { folios: normalizedFolios, items } = await loadActiveReceiptPayments(folios)
+  if (!user?.email) {
+    throw createError({ statusCode: 401, message: 'No se pudo identificar el correo del usuario autenticado.' })
+  }
+
+  const { folios: normalizedFolios, items, matricula } = await loadActiveReceiptPayments(body?.folios)
   if (!normalizedFolios.length) {
-    throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
+    throw createError({ statusCode: 400, message: 'Faltan los folios del recibo.' })
   }
   if (!items.length) {
     throw createError({ statusCode: 404, message: 'Recibos no vigentes o no encontrados.' })
   }
-  const total = items.reduce((sum, item) => sum + Number(item.monto), 0)
 
-  const templateRows = items.map(i => `
-    <tr>
-      <td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">${i.conceptoNombre}</td>
-      <td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">${i.mesReal || i.mes}</td>
-      <td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: right;">$${Number(i.monto).toFixed(2)}</td>
-    </tr>
-  `).join('')
+  const [studentData] = await query<any[]>(
+    `SELECT grado, grupo, plantel, nivel, ciclo FROM base WHERE matricula = ? LIMIT 1`,
+    [matricula]
+  )
+  const academicPlacement = resolveReceiptAcademicPlacement(studentData, items[0]?.ciclo)
+  const receiptItems = items.map((item) => ({
+    ...item,
+    grado: academicPlacement.grado,
+    grupo: studentData?.grupo || '',
+    nivel: academicPlacement.nivel,
+  }))
 
-  const htmlContent = `
-    <div style="font-family: 'Inter', sans-serif; color: #1F2937; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #E5E7EB; border-radius: 12px;">
-      <h2 style="color: #4E844E; margin-bottom: 20px;">Comprobante de Pago Institucional</h2>
-      <p>Estimado(a), adjunto encontrará el desglose de los pagos seleccionados y procesados en el Instituto.</p>
-      
-      <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px;">
-        <thead>
-          <tr style="background-color: #F9FAFB;">
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #E5E7EB;">Concepto</th>
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #E5E7EB;">Mes</th>
-            <th style="padding: 10px; text-align: right; border-bottom: 2px solid #E5E7EB;">Importe</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${templateRows}
-        </tbody>
-        <tfoot>
-          <tr>
-            <td colspan="2" style="padding: 15px 10px; text-align: right; font-weight: bold;">Total Operación:</td>
-            <td style="padding: 15px 10px; text-align: right; font-weight: bold; color: #4E844E;">$${total.toFixed(2)}</td>
-          </tr>
-        </tfoot>
-      </table>
-      
-      <p style="margin-top: 30px; font-size: 12px; color: #6B7280;">Este documento es de carácter informativo. Conserve su comprobante para futuras aclaraciones.</p>
-    </div>
-  `
+  const issuedAt = new Date()
+  const sentByName = String(user.name || user.email).trim()
+  const delivery = renderPaymentReceiptEmail({
+    items: receiptItems,
+    sentByName,
+    sentByEmail: user.email,
+    issuedAt,
+  })
+  const pdf = generatePaymentReceiptPdf({
+    items: receiptItems,
+    sentByName,
+    sentByEmail: user.email,
+    issuedAt,
+  })
 
-  await sendEmail(email, 'Comprobante de Pago Institucional', htmlContent)
+  await sendEmailFromUser(
+    email,
+    delivery.subject,
+    delivery.html,
+    user.email,
+    [{ filename: delivery.filename, content: pdf, contentType: 'application/pdf' }],
+    delivery.text,
+  )
 
-  return { success: true }
+  return {
+    success: true,
+    sender: user.email,
+    recipient: email,
+    attachment: delivery.filename,
+    payments: receiptItems.length,
+  }
 }))

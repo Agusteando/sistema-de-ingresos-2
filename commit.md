@@ -1,1 +1,1 @@
-Permite modificar el uso de CFDI conservando el valor predeterminado
+feat: envía recibos completos en PDF desde el correo del usuario autenticado

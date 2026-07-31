@@ -145,15 +145,23 @@ const buildMessage = ({
   return parts.join('\r\n')
 }
 
-export const sendEmail = async (to: string, subject: string, html: string, fromUserEmail?: string, attachments: MailAttachment[] = [], text?: string) => {
+const sendWithSenderCandidates = async ({
+  to,
+  subject,
+  html,
+  text,
+  attachments,
+  senderCandidates,
+}: {
+  to: string
+  subject: string
+  html: string
+  text?: string
+  attachments: MailAttachment[]
+  senderCandidates: string[]
+}) => {
   const config = useRuntimeConfig()
   if (!config.googleServiceAccountEmail || !config.googlePrivateKey) return true
-
-  const senderCandidates = [
-    String(fromUserEmail || '').trim(),
-    String(config.adminEmailToImpersonate || '').trim(),
-    ''
-  ].filter((value, idx, arr) => arr.indexOf(value) === idx)
 
   let lastError: any = null
 
@@ -171,4 +179,33 @@ export const sendEmail = async (to: string, subject: string, html: string, fromU
 
   console.error('Mail Error:', lastError)
   throw lastError
+}
+
+export const sendEmail = async (to: string, subject: string, html: string, fromUserEmail?: string, attachments: MailAttachment[] = [], text?: string) => {
+  const config = useRuntimeConfig()
+  const senderCandidates = [
+    String(fromUserEmail || '').trim(),
+    String(config.adminEmailToImpersonate || '').trim(),
+    ''
+  ].filter((value, idx, arr) => arr.indexOf(value) === idx)
+
+  return await sendWithSenderCandidates({ to, subject, html, text, attachments, senderCandidates })
+}
+
+/**
+ * Sends strictly as the authenticated Workspace user. Unlike sendEmail, this
+ * function never falls back to the configured administrator or service account.
+ */
+export const sendEmailFromUser = async (to: string, subject: string, html: string, fromUserEmail: string, attachments: MailAttachment[] = [], text?: string) => {
+  const sender = String(fromUserEmail || '').trim()
+  if (!sender) throw new Error('No se proporcionó el correo del usuario remitente.')
+
+  return await sendWithSenderCandidates({
+    to,
+    subject,
+    html,
+    text,
+    attachments,
+    senderCandidates: [sender],
+  })
 }
