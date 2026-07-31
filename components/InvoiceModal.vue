@@ -66,6 +66,12 @@
                   <option v-for="system in taxSystems" :key="system.value" :value="system.value">{{ system.label }}</option>
                 </select>
               </div>
+              <div class="col-span-12 form-group mb-0">
+                <label class="form-label">Uso de CFDI</label>
+                <select v-model="form.invoice_use" class="input-field" required>
+                  <option v-for="option in invoiceUseOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -192,12 +198,22 @@ const ieduLocks = ref({ nombreCompleto: false, CURP: false, nivelEducativo: fals
 const selectedNivelDefault = computed(() => inferNivelFromBase(props.student?.nivel) || studentNivelLabel(props.student))
 const legacyContext = computed(() => resolveLegacyInvoiceContext({ student: props.student || {}, selectedConcepts: props.debts || [] }))
 
+const defaultInvoiceUseFor = (taxSystem) => {
+  const available = getUseOptions(determineReceiverType(taxSystem))
+  const codes = new Set(available.map(option => option.value))
+  if (codes.has('D10')) return 'D10'
+  if (codes.has('G03')) return 'G03'
+  if (codes.has('S01')) return 'S01'
+  return available[0]?.value || 'S01'
+}
+
 const form = ref({
   legal_name: '',
   tax_id: '',
   email: normalizeText(props.student?.correo),
   zip: '',
   tax_system: '616',
+  invoice_use: defaultInvoiceUseFor('616'),
   invoiceDate: getLocalISOStringNow(),
   nombreCompleto: props.student?.nombreCompleto || '',
   CURP: normalizeCurpForInvoice(props.student?.curp || props.student?.CURP),
@@ -205,14 +221,11 @@ const form = ref({
   autRVOE: ''
 })
 
-const invoiceUse = computed(() => {
-  const available = getUseOptions(determineReceiverType(form.value.tax_system))
-  const codes = new Set(available.map(option => option.value))
-  if (codes.has('D10')) return 'D10'
-  if (codes.has('G03')) return 'G03'
-  if (codes.has('S01')) return 'S01'
-  return available[0]?.value || 'S01'
-})
+const invoiceUseOptions = computed(() => getUseOptions(determineReceiverType(form.value.tax_system)))
+
+watch(() => form.value.tax_system, (taxSystem) => {
+  form.value.invoice_use = defaultInvoiceUseFor(taxSystem)
+}, { immediate: true })
 
 const validationIssues = computed(() => {
   const issues = [...legacyContext.value.blockingErrors]
@@ -223,6 +236,8 @@ const validationIssues = computed(() => {
   else if (!isValidEmail(form.value.email)) issues.push('Email inválido.')
   if (!form.value.zip) issues.push('Falta código postal.')
   if (!form.value.tax_system) issues.push('Falta régimen fiscal.')
+  if (!form.value.invoice_use) issues.push('Falta uso de CFDI.')
+  else if (!invoiceUseOptions.value.some(option => option.value === form.value.invoice_use)) issues.push('El uso de CFDI no corresponde al régimen fiscal seleccionado.')
   if (!form.value.nombreCompleto) issues.push('Falta nombre del alumno.')
   if (!form.value.CURP) issues.push('Falta CURP.')
   else if (!isValidCURP(form.value.CURP)) issues.push('CURP inválida.')
@@ -324,7 +339,7 @@ const buildPayload = () => {
         address: { zip: form.value.zip }
       },
       items,
-      use: invoiceUse.value,
+      use: form.value.invoice_use,
       payment_form: ctx.paymentForm,
       type: 'I',
       payment_method: 'PUE',

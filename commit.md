@@ -1,1 +1,1 @@
-Fija el corte de caja en orientación vertical al imprimir
+Permite modificar el uso de CFDI conservando el valor predeterminado
