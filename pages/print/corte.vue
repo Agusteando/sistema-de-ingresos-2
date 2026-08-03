@@ -10,7 +10,7 @@
         <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo Institucional" class="h-[46px] object-contain" />
         <div class="text-center flex-1 mx-4">
           <h2 class="m-0 text-[12px] font-bold text-gray-900 uppercase tracking-tight">Instituto Educativo para el Desarrollo Integral del Saber SC</h2>
-          <p class="mt-1 text-[9px] text-gray-500">Bitácora completa por fecha de registro · Todos los ciclos y estatus</p>
+          <p class="mt-1 text-[9px] text-gray-500">Bitácora incluida por fecha efectiva de pago · Todos los ciclos y estatus</p>
         </div>
         <div class="text-right text-[9px] text-gray-600">
           <div class="font-bold text-[11px] mb-1 text-gray-900 uppercase">Corte de caja</div>

@@ -7,6 +7,12 @@ import { isWholeMoney, parseNullableMoney } from '../../utils/monto-final'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { finalizeStockReservation, releaseStockReservation, reserveStockForPayment, type StockReservation } from '../../utils/conceptos-stock'
 import { isPlaceholderConceptName, resolveFinancialConcept } from '../../utils/financial-concept'
+import { loadActiveCobranzaConvention } from '../../utils/cobranza-convenio'
+import {
+  getSchoolPeriodDeadlineForCycle,
+  isPastPaymentDeadline,
+  shouldApplyLateFee,
+} from '../../utils/cobranza-period'
 
 const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 
@@ -103,8 +109,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const effectiveTimestamp = requestedPaymentDate
     ? `${requestedPaymentDate} ${originalTime}`
     : originalTimestamp
+  const effectiveDateKey = requestedPaymentDate || originalDateKey
   const paymentDateChanged = Boolean(requestedPaymentDate && requestedPaymentDate !== originalDateKey)
   const paymentDateChangedBy = paymentDateChanged ? (user?.name || user?.email || 'Sistema') : null
+  const activeConvention = await loadActiveCobranzaConvention({
+    matricula,
+    ciclo: cicloKey,
+    currentDate: effectiveDateKey
+  })
 
   const userName = user?.name || user?.email || 'Sistema'
   const effectivePaymentMethod = formaDePago
@@ -114,7 +126,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const paymentStockReservations: StockReservation[] = []
   const finalAmountByTarget = new Map<string, number>()
   const resolvedPaymentConcepts = new Map<string, { concepto: string; conceptoNombre: string }>()
-  const today = dayjs()
 
   try {
   for (const p of pagos) {
@@ -211,11 +222,20 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const isEventual = String(doc.eventual) === '1'
     const hasRecargoManual = pagosDelMes.some(row => String(row.recargo) === '1')
-    const monthOffset = mesNumber > 5 ? (mesNumber - 6) : (mesNumber + 6)
-    const limitDate = dayjs().year(today.year()).month(monthOffset).date(12)
-    const isLate = today.isAfter(limitDate)
+    const hasPayment = pagosDelMes.some(row => Number(row.monto || 0) > 0)
+    const paymentDeadline = getSchoolPeriodDeadlineForCycle(cicloKey, mesNumber, effectiveDateKey)
+    const isLate = isPastPaymentDeadline(paymentDeadline, effectiveDateKey)
+    const appliesLateFee = shouldApplyLateFee({
+      enabled: String(lateFeeActive) !== 'false',
+      isEventual,
+      hasManualLateFee: hasRecargoManual,
+      hasPayment,
+      hasActiveConvention: Boolean(activeConvention),
+      isAfterDeadline: isLate,
+      balanceBeforeLateFee: saldoAntes
+    })
 
-    if (String(lateFeeActive) !== 'false' && !isEventual && (hasRecargoManual || (isLate && saldoAntes > 10))) {
+    if (appliesLateFee) {
       subtotal = Math.trunc(Number(finalAmount) * 1.1)
       saldoAntes = Math.max(0, subtotal - resuelto)
     }

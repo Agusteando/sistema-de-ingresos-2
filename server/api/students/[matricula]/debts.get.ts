@@ -1,5 +1,4 @@
 import { runWithBridgeAgentId, query } from "../../../utils/db";
-import dayjs from "dayjs";
 import { normalizeCicloKey } from "../../../../shared/utils/ciclo";
 import {
   isInProjectedPlantelScopeForCiclo,
@@ -15,6 +14,12 @@ import {
   getDocumentoPeriodoSchema,
   periodoLifecycleSelect,
 } from "../../../utils/documento-periods";
+import { loadActiveCobranzaConvention } from "../../../utils/cobranza-convenio";
+import {
+  getSchoolPeriodDeadlineForCycle,
+  isPastPaymentDeadline,
+  shouldApplyLateFee,
+} from "../../../utils/cobranza-period";
 
 const cicloQueryValues = (cicloKey: string) => {
   const key = String(cicloKey || "").trim();
@@ -202,7 +207,15 @@ export default defineEventHandler(async (event) =>
     const debtRowsByDocumentMes = new Map<string, any>();
 
     const debts = [];
-    const today = dayjs();
+    const [dbClock] = await query<any[]>(
+      `SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS currentDate`,
+    );
+    const currentDateKey = String(dbClock?.currentDate || new Date().toISOString().slice(0, 10));
+    const activeConvention = await loadActiveCobranzaConvention({
+      matricula: normalizedMatricula,
+      ciclo: cicloKey,
+      currentDate: currentDateKey,
+    });
 
     const spanishMonths = [
       "Septiembre",
@@ -286,22 +299,24 @@ export default defineEventHandler(async (event) =>
         const hasRecargoManual = pagosDelMes.some(
           (p) => String(p.recargo) === "1",
         );
+        const hasPayment = pagosDelMes.some((p) => Number(p.monto || 0) > 0);
 
         let subtotal = totalOriginal;
         let saldoAntes = subtotal - resueltoTotalMes;
 
-        const monthOffset = mes > 5 ? mes - 6 : mes + 6;
-        const limitDate = dayjs()
-          .year(today.year())
-          .month(monthOffset)
-          .date(12);
-        const isLate = today.isAfter(limitDate);
+        const paymentDeadline = getSchoolPeriodDeadlineForCycle(cicloKey, mes, currentDateKey);
+        const isLate = isPastPaymentDeadline(paymentDeadline, currentDateKey);
+        const appliesLateFee = shouldApplyLateFee({
+          enabled: lateFeeActive === "true",
+          isEventual,
+          hasManualLateFee: hasRecargoManual,
+          hasPayment,
+          hasActiveConvention: Boolean(activeConvention),
+          isAfterDeadline: isLate,
+          balanceBeforeLateFee: saldoAntes,
+        });
 
-        if (
-          lateFeeActive === "true" &&
-          !isEventual &&
-          (hasRecargoManual || (isLate && saldoAntes > 10))
-        ) {
+        if (appliesLateFee) {
           subtotal = Math.trunc(totalOriginal * 1.1);
           saldoAntes = subtotal - resueltoTotalMes;
         }
@@ -372,6 +387,9 @@ export default defineEventHandler(async (event) =>
           hasRecargo: subtotal > totalOriginal,
           recargoActivo: lateFeeActive === "true",
           recargoManual: hasRecargoManual,
+          hasPayment,
+          convenioActivo: Boolean(activeConvention),
+          fechaLimiteRecargo: paymentDeadline,
           originalConceptoNombre: doc.conceptoNombre,
           isDifferentialDocument: differentialParentByDocument.has(
             Number(doc.documento),

@@ -195,7 +195,7 @@
         <table class="w-full">
           <thead>
             <tr>
-              <th>Fecha de registro</th>
+              <th>Fecha efectiva del pago</th>
               <th>Concepto / Tarifa</th>
               <th>Vía de ingreso</th>
               <th>Estatus</th>

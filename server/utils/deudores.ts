@@ -3,6 +3,14 @@ import { resolveProjectedAmount } from './monto-final'
 import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../shared/utils/grado'
 import { resolveFinancialFamilyContact } from '../../shared/utils/familyContact'
 import { fetchCentralMatriculaOverlays } from './central-matricula-overlay'
+import {
+  getCycleStartYear,
+  getSchoolMonthForCycle,
+  getSchoolPeriodDeadline,
+  isPastPaymentDeadline,
+  normalizeDateKey,
+  padDatePart,
+} from './cobranza-period'
 
 const parsePlazos = (plazoRaw: unknown, mesesRaw: unknown) => {
   const raw = String(plazoRaw || mesesRaw || '1').trim()
@@ -36,37 +44,6 @@ const END_OF_MONTH_ACTION = { action: 'llamada_telefonica', label: 'Llamada de c
 
 const isEventual = (doc: any) => String(doc?.eventual || '') === '1'
 
-const getCycleStartYear = (ciclo: string, fallbackYear: number) => {
-  const parsed = Number.parseInt(String(ciclo || '').match(/\d{4}/)?.[0] || '', 10)
-  return Number.isFinite(parsed) ? parsed : fallbackYear
-}
-
-const getSchoolMonthForCycle = ({
-  year,
-  month,
-  cycleStartYear
-}: {
-  year: number,
-  month: number,
-  cycleStartYear: number
-}) => {
-  if (year < cycleStartYear || (year === cycleStartYear && month < 9)) return 0
-  if (year === cycleStartYear && month >= 9) return month - 8
-  if (year === cycleStartYear + 1 && month <= 8) return month + 4
-  return 12
-}
-
-const getSchoolPeriodDeadline = (cycleStartYear: number, schoolMonth: number) => {
-  const normalized = Math.min(12, Math.max(1, schoolMonth))
-  const calendarYear = normalized <= 4 ? cycleStartYear : cycleStartYear + 1
-  const calendarMonth = normalized <= 4 ? normalized + 8 : normalized - 4
-  return `${calendarYear}-${padDatePart(calendarMonth)}-12`
-}
-
-const isPastPaymentDeadline = (deadline: string, currentDateKey: string) => {
-  return Boolean(deadline) && deadline < currentDateKey
-}
-
 const getDuePeriods = (doc: any, currentSchoolMonth: number, currentDateKey: string, cycleStartYear: number) => {
   if (currentSchoolMonth < 1) return []
 
@@ -99,8 +76,6 @@ const getDuePeriods = (doc: any, currentSchoolMonth: number, currentDateKey: str
   }).filter(period => isPastPaymentDeadline(period.fechaLimitePago, currentDateKey))
 }
 
-const padDatePart = (value: number) => String(value).padStart(2, '0')
-
 const getLastDayOfMonth = (year: number, month: number) => {
   return new Date(Date.UTC(year, month, 0)).getUTCDate()
 }
@@ -128,17 +103,6 @@ const getCobranzaDateParts = () => {
     currentDateKey: `${year}-${padDatePart(month)}-${padDatePart(day)}`,
     standardPaymentLimit: `${year}-${padDatePart(month)}-12`
   }
-}
-
-const normalizeDateKey = (value: unknown) => {
-  if (!value) return ''
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10)
-
-  const raw = String(value).trim()
-  const match = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
-  if (!match) return ''
-
-  return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
 }
 
 const stageByDay = (day: number, lastDay: number) => {

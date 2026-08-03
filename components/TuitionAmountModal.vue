@@ -227,10 +227,14 @@ const projectedSubtotalForRow = (row) => {
   const base = Math.max(0, Number(newAmount.value || 0))
   const resolved = resolvedForRow(row)
   const balanceBeforeLateFee = base - resolved
+  const hasPayment = row?.hasPayment === undefined ? resolved > 0 : Boolean(row.hasPayment)
   const appliesLateFee = Boolean(
     row?.recargoActivo
       && !row?.isEventual
-      && (row?.recargoManual || (row?.isLate && balanceBeforeLateFee > 10)),
+      && (
+        row?.recargoManual
+        || (!hasPayment && !row?.convenioActivo && row?.isLate && balanceBeforeLateFee > 10)
+      ),
   )
   return appliesLateFee ? Math.trunc(base * 1.1) : base
 }

@@ -21,6 +21,7 @@ type ProtectedXlsxOptions = {
   rows: Array<Array<string | number | null | undefined>>
   numericColumns?: number[]
   currencyColumns?: number[]
+  highlightedCells?: Array<{ rowIndex: number; columnIndexes: number[] }>
   totals?: Array<{ label: string; value: number }>
   protectionPassword?: string
   creator?: string
@@ -181,11 +182,12 @@ const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <font><b/><color rgb="FF173D24"/><sz val="10"/><name val="Aptos"/><family val="2"/></font>
     <font><b/><color rgb="FF162641"/><sz val="10"/><name val="Aptos"/><family val="2"/></font>
   </fonts>
-  <fills count="4">
+  <fills count="5">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF173D24"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFEAF4EC"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFE699"/><bgColor indexed="64"/></patternFill></fill>
   </fills>
   <borders count="3">
     <border><left/><right/><top/><bottom/><diagonal/></border>
@@ -193,7 +195,7 @@ const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <border><left/><right/><top style="thin"><color rgb="FF173D24"/></top><bottom/><diagonal/></border>
   </borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="11">
+  <cellXfs count="12">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
     <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
@@ -205,6 +207,7 @@ const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <xf numFmtId="0" fontId="4" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
     <xf numFmtId="164" fontId="4" fillId="0" borderId="2" xfId="0" applyFont="1" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
     <xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>
   </cellXfs>
   <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
   <dxfs count="0"/>
@@ -219,6 +222,10 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
   const passwordHash = hashProtectionPassword(password)
   const numericColumns = new Set(options.numericColumns || [])
   const currencyColumns = new Set(options.currencyColumns || [])
+  const highlightedCells = new Map<number, Set<number>>()
+  for (const item of options.highlightedCells || []) {
+    highlightedCells.set(item.rowIndex, new Set(item.columnIndexes))
+  }
   const rowModels: XlsxRow[] = []
 
   rowModels.push({ cells: [{ value: options.title, style: 1 }], height: 28 })
@@ -235,9 +242,11 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
     height: 24
   })
 
-  for (const sourceRow of options.rows) {
+  for (const [sourceRowIndex, sourceRow] of options.rows.entries()) {
+    const highlightedColumns = highlightedCells.get(sourceRowIndex)
     const cells: XlsxCell[] = options.headers.map((_, columnIndex) => {
       const value = sourceRow[columnIndex]
+      if (highlightedColumns?.has(columnIndex)) return { value, style: 11, type: 'string' }
       if (currencyColumns.has(columnIndex)) return { value, style: 7, type: 'number' }
       if (numericColumns.has(columnIndex)) return { value, style: 6, type: 'number' }
       return { value, style: 5, type: 'string' }

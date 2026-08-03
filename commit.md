@@ -1,1 +1,1 @@
-feat: envía recibos completos en PDF desde el correo del usuario autenticado
+Corrige corte de caja por fecha efectiva y lógica de recargos

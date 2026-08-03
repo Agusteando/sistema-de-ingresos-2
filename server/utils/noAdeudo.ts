@@ -11,6 +11,12 @@ import { sendEmail, type MailAttachment } from './mailer'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 import { getNoAdeudoControlUserForPlantel } from './external-users'
 import { isDepuradoPayment } from './payment-classification'
+import { loadActiveCobranzaConvention } from './cobranza-convenio'
+import {
+  getSchoolPeriodDeadlineForCycle,
+  isPastPaymentDeadline,
+  shouldApplyLateFee,
+} from './cobranza-period'
 
 type RuntimeNoAdeudoConfig = {
   googlePrivateKey?: string
@@ -308,7 +314,15 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
     periodsByDocument.set(key, list)
   })
 
-  const today = dayjs()
+  const [dbClock] = await query<any[]>(`
+    SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS currentDate
+  `)
+  const currentDateKey = String(dbClock?.currentDate || new Date().toISOString().slice(0, 10))
+  const activeConvention = await loadActiveCobranzaConvention({
+    matricula,
+    ciclo: cicloKey,
+    currentDate: currentDateKey
+  })
   const spanishMonths = ['Septiembre', 'Octubre', 'Noviembre', 'Diciembre', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto']
   const concepts: Array<{ documento: string; conceptoNombre: string; mesLabel: string; saldo: number }> = []
 
@@ -342,12 +356,21 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
       const depuradoTotalMes = pagosDelMes.filter(isDepuradoPayment).reduce((sum, p) => sum + Number(p.monto || 0), 0)
       const resueltoTotalMes = pagosTotalMes + depuradoTotalMes
       const hasRecargoManual = pagosDelMes.some(p => String(p.recargo) === '1')
-      const monthOffset = mes > 5 ? (mes - 6) : (mes + 6)
-      const limitDate = dayjs().year(today.year()).month(monthOffset).date(12)
-      const isLate = today.isAfter(limitDate)
+      const hasPayment = pagosDelMes.some(p => Number(p.monto || 0) > 0)
+      const paymentDeadline = getSchoolPeriodDeadlineForCycle(cicloKey, mes, currentDateKey)
+      const isLate = isPastPaymentDeadline(paymentDeadline, currentDateKey)
       let subtotal = totalOriginal
       let saldo = subtotal - resueltoTotalMes
-      if (!isEventual && (hasRecargoManual || (isLate && saldo > 10))) {
+      const appliesLateFee = shouldApplyLateFee({
+        enabled: true,
+        isEventual,
+        hasManualLateFee: hasRecargoManual,
+        hasPayment,
+        hasActiveConvention: Boolean(activeConvention),
+        isAfterDeadline: isLate,
+        balanceBeforeLateFee: saldo
+      })
+      if (appliesLateFee) {
         subtotal = Math.trunc(totalOriginal * 1.1)
         saldo = subtotal - resueltoTotalMes
       }

@@ -88,6 +88,21 @@ const normalizeDateFilter = (value: unknown) => {
 
 const normalizePlantel = (value: unknown) => String(value || '').trim().toUpperCase()
 
+const toMexicoDateKey = (value: unknown) => {
+  if (!value) return ''
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Mexico_City',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(value)
+    const part = (type: string) => parts.find(item => item.type === type)?.value || ''
+    return `${part('year')}-${part('month')}-${part('day')}`
+  }
+  return String(value).trim().slice(0, 10)
+}
+
 const resolveCortePlantel = (user: AuthSessionUser, requestedPlantelValue: unknown) => {
   const activePlantel = normalizePlantel(user.active_plantel)
 
@@ -116,9 +131,10 @@ const PAYMENT_PLANTEL_SQL = `UPPER(COALESCE(
   NULLIF(TRIM(A.plantel), '')
 ))`
 
-// El corte es una bitácora de registro. fecha_original es inmutable y evita que un
-// pago capturado hoy desaparezca si su fecha efectiva fue corregida o retroactiva.
+// La bitácora conserva ambas fechas, pero el periodo del corte se determina por la
+// fecha efectiva del pago. fecha_original permanece como la fecha de registro inmutable.
 const PAYMENT_REGISTERED_AT_SQL = 'COALESCE(r.fecha_original, r.fecha)'
+const PAYMENT_EFFECTIVE_AT_SQL = 'r.fecha'
 
 const REGISTERING_USER_KEY_SQL = `CASE
   WHEN NULLIF(TRIM(r.usuario_email), '') IS NOT NULL
@@ -221,7 +237,7 @@ const resolveCorteContext = async (user: AuthSessionUser, filters: CorteCajaFilt
   const scopePlantel = resolveCortePlantel(user, filters.plantel)
   const where = `
     ${PAYMENT_PLANTEL_SQL} = ?
-    AND DATE(${PAYMENT_REGISTERED_AT_SQL}) BETWEEN ? AND ?
+    AND DATE(${PAYMENT_EFFECTIVE_AT_SQL}) BETWEEN ? AND ?
   `
   const params: any[] = [scopePlantel, inicio, fin]
 
@@ -293,7 +309,7 @@ export const loadPlantelCorteCaja = async (
       r.folio,
       r.folio_plantel,
       ${PAYMENT_REGISTERED_AT_SQL} AS fecha,
-      r.fecha AS fechaPago,
+      ${PAYMENT_EFFECTIVE_AT_SQL} AS fechaPago,
       r.matricula,
       r.documento,
       r.mes,
@@ -323,7 +339,7 @@ export const loadPlantelCorteCaja = async (
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${where}
-    ORDER BY ${PAYMENT_REGISTERED_AT_SQL} DESC, r.folio ASC
+    ORDER BY ${PAYMENT_EFFECTIVE_AT_SQL} DESC, ${PAYMENT_REGISTERED_AT_SQL} DESC, r.folio ASC
   `, params)
 
   const rowsByCycle = new Map<string, CorteCajaRow[]>()
@@ -351,9 +367,7 @@ export const loadPlantelCorteCaja = async (
     const appliedAmount = Number(row.montoAplicado || 0)
     totalsMap.set(paymentMethod, (totalsMap.get(paymentMethod) || 0) + appliedAmount)
 
-    const fecha = row.fecha instanceof Date
-      ? row.fecha.toISOString().slice(0, 10)
-      : String(row.fecha || '').slice(0, 10)
+    const fecha = toMexicoDateKey(row.fechaPago)
     const categoria = String(row.conceptoNombre || 'Sin concepto')
     const estatus = row.estatusCorte
     const key = `${fecha}|${paymentMethod}|${categoria}|${estatus}`
