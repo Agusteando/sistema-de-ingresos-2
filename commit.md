@@ -1,1 +1,1 @@
-Corrige corte de caja por fecha efectiva y lógica de recargos
+Rediseña avance de control escolar con barras simplificadas y detalle avanzado bajo demanda

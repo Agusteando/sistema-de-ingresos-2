@@ -83,99 +83,202 @@
         <span>Expediente básico</span>
         <strong>{{ globalBasic.averagePercent }}%</strong>
       </article>
-      <article class="summary-card is-advanced">
-        <span>Expediente avanzado</span>
-        <strong>{{ globalAdvanced.averagePercent }}%</strong>
+      <article class="summary-card">
+        <span>Básicos completos</span>
+        <strong>{{ formatNumber(globalBasic.completeRecords) }}</strong>
       </article>
     </section>
 
     <section class="chart-section">
       <header class="section-heading">
-        <h2>Comparativo por plantel</h2>
-        <div class="chart-legend" aria-label="Series">
-          <span><i class="is-basic"></i>Básico</span>
-          <span><i class="is-advanced"></i>Avanzado</span>
+        <div class="section-heading-copy">
+          <h2>Avance de expediente básico por plantel</h2>
+          <p>
+            Porcentaje de avance en {{ selectedCiclo }}, ordenado de mayor a menor.
+            La información avanzada se muestra solo bajo demanda.
+          </p>
         </div>
+        <span>{{ scopeMode === 'externos' ? 'Externos' : 'Todos' }}</span>
       </header>
 
-      <div v-if="chartRows.length" class="comparison-chart" role="img" :aria-label="chartAriaLabel">
-        <div class="chart-axis" aria-hidden="true">
-          <span>0%</span>
-          <span>25%</span>
-          <span>50%</span>
-          <span>75%</span>
-          <span>100%</span>
+      <div v-if="basicChartRows.length" class="calm-chart" role="img" :aria-label="basicChartAriaLabel">
+        <div class="calm-chart-axis" aria-hidden="true">
+          <span v-for="tick in chartTicks" :key="tick">{{ tick }}%</span>
         </div>
 
-        <article v-for="row in chartRows" :key="row.plantel" class="chart-row">
-          <div class="chart-plantel">
-            <strong>{{ row.plantel }}</strong>
-            <span>{{ formatNumber(row.evaluated) }}</span>
+        <article v-for="row in basicChartRows" :key="row.plantel" class="calm-chart-row">
+          <div class="calm-row-head">
+            <div class="calm-row-label">
+              <strong>{{ row.plantel }}</strong>
+              <span>{{ formatNumber(row.evaluated) }} evaluados</span>
+            </div>
+            <small>{{ formatNumber(row.basicCompleteRecords) }} completos</small>
           </div>
 
-          <div class="chart-series">
-            <div class="chart-bar-line">
+          <div class="calm-bar-track">
+            <div class="calm-bar-grid" aria-hidden="true">
+              <i v-for="tick in innerGridTicks" :key="tick" :style="{ left: `${tick}%` }"></i>
+            </div>
+            <div class="calm-bar-fill" :style="{ width: `${row.basic}%` }">
+              <span v-if="row.basic >= 18" class="calm-bar-pill">{{ row.basic }}%</span>
+            </div>
+            <span v-if="row.basic < 18" class="calm-bar-pill is-outside" :style="outsideBarPillStyle(row.basic)">
+              {{ row.basic }}%
+            </span>
+          </div>
+        </article>
+      </div>
+
+      <div v-else class="empty-state">
+        No hay datos disponibles para construir la gráfica.
+      </div>
+    </section>
+
+    <details v-if="successfulReports.length" class="advanced-insights">
+      <summary>
+        <div class="advanced-summary-copy">
+          <span>Información avanzada</span>
+          <strong>{{ globalAdvanced.averagePercent }}% promedio</strong>
+          <small>Abre esta sección para ver el comparativo y métricas avanzadas.</small>
+        </div>
+        <LucideChevronDown :size="18" />
+      </summary>
+
+      <div class="advanced-insights-body">
+        <section class="advanced-summary-grid">
+          <article class="advanced-summary-card">
+            <span>Promedio avanzado</span>
+            <strong>{{ globalAdvanced.averagePercent }}%</strong>
+          </article>
+          <article class="advanced-summary-card">
+            <span>Avanzados completos</span>
+            <strong>{{ formatNumber(globalAdvanced.completeRecords) }}</strong>
+          </article>
+          <article class="advanced-summary-card">
+            <span>Incompletos avanzados</span>
+            <strong>{{ formatNumber(globalAdvanced.incompleteRecords) }}</strong>
+          </article>
+        </section>
+
+        <div class="comparison-compact-list">
+          <article v-for="row in advancedChartRows" :key="row.plantel" class="comparison-compact-card">
+            <div class="comparison-compact-head">
+              <div>
+                <strong>{{ row.plantel }}</strong>
+                <span>{{ formatNumber(row.evaluated) }} evaluados</span>
+              </div>
+            </div>
+
+            <div class="comparison-meter">
               <span>Básico</span>
-              <div class="chart-track">
+              <div class="comparison-meter-track">
                 <i class="is-basic" :style="{ width: `${row.basic}%` }"></i>
               </div>
               <strong>{{ row.basic }}%</strong>
             </div>
-            <div class="chart-bar-line">
+
+            <div class="comparison-meter">
               <span>Avanzado</span>
-              <div class="chart-track">
+              <div class="comparison-meter-track">
                 <i class="is-advanced" :style="{ width: `${row.advanced}%` }"></i>
               </div>
               <strong>{{ row.advanced }}%</strong>
             </div>
-          </div>
-        </article>
+          </article>
+        </div>
       </div>
-    </section>
+    </details>
 
-    <section v-if="successfulReports.length" class="plantel-section">
+    <section v-if="orderedReports.length" class="plantel-section">
       <header class="section-heading">
-        <h2>Desglose por plantel</h2>
-        <span>{{ scopeMode === 'externos' ? 'Externos' : 'Todos' }}</span>
+        <div class="section-heading-copy">
+          <h2>Planteles</h2>
+          <p>
+            Vista reducida para revisar rápido el avance básico. El detalle completo y las métricas avanzadas
+            aparecen al interactuar con cada tarjeta.
+          </p>
+        </div>
+        <span>{{ orderedReports.length }} resultados</span>
       </header>
 
       <div class="plantel-list">
-        <article v-for="report in successfulReports" :key="report.agentId" class="plantel-card">
-          <header class="plantel-card-header">
-            <div class="plantel-identity">
-              <span>Plantel</span>
-              <h3>{{ report.agentId }}</h3>
-            </div>
-            <div class="plantel-head-metrics">
-              <div>
-                <span>Evaluados</span>
-                <strong>{{ formatNumber(scopeForReport(report).population.evaluated) }}</strong>
+        <article v-for="report in orderedReports" :key="report.agentId" class="plantel-card">
+          <div class="plantel-card-shell">
+            <div class="plantel-card-top">
+              <div class="plantel-identity">
+                <span>Plantel</span>
+                <h3>{{ report.agentId }}</h3>
+                <small>{{ formatNumber(scopeForReport(report).population.evaluated) }} evaluados</small>
               </div>
-              <div>
-                <span>Básico</span>
+
+              <div class="plantel-score">
+                <span>Expediente básico</span>
                 <strong>{{ scopeForReport(report).basic.averagePercent }}%</strong>
               </div>
-              <div>
-                <span>Avanzado</span>
-                <strong>{{ scopeForReport(report).advanced.averagePercent }}%</strong>
+            </div>
+
+            <div class="plantel-meter">
+              <div class="calm-bar-track">
+                <div class="calm-bar-grid" aria-hidden="true">
+                  <i v-for="tick in innerGridTicks" :key="`${report.agentId}-${tick}`" :style="{ left: `${tick}%` }"></i>
+                </div>
+                <div class="calm-bar-fill" :style="{ width: `${scopeForReport(report).basic.averagePercent}%` }">
+                  <span
+                    v-if="scopeForReport(report).basic.averagePercent >= 18"
+                    class="calm-bar-pill"
+                  >
+                    {{ scopeForReport(report).basic.averagePercent }}%
+                  </span>
+                </div>
+                <span
+                  v-if="scopeForReport(report).basic.averagePercent < 18"
+                  class="calm-bar-pill is-outside"
+                  :style="outsideBarPillStyle(scopeForReport(report).basic.averagePercent)"
+                >
+                  {{ scopeForReport(report).basic.averagePercent }}%
+                </span>
               </div>
             </div>
-          </header>
 
-          <div class="quality-strip" :aria-label="`Calidad de datos del plantel ${report.agentId}`">
-            <div v-for="quality in qualityBreakdown(scopeForReport(report))" :key="quality.key" class="quality-chip">
-              <span>{{ quality.label }}</span>
-              <strong>{{ formatNumber(quality.count) }}</strong>
+            <div class="quality-strip" :aria-label="`Alertas de calidad de datos del plantel ${report.agentId}`">
+              <div
+                v-for="quality in visibleQualityBreakdown(scopeForReport(report))"
+                :key="quality.key"
+                class="quality-chip"
+                :class="{ 'is-empty': quality.isEmpty }"
+              >
+                <span>{{ quality.label }}</span>
+                <strong>{{ formatNumber(quality.count) }}</strong>
+              </div>
             </div>
           </div>
 
           <details class="plantel-breakdown">
             <summary>
-              <span>Campos</span>
+              <span>Ver detalle y métricas avanzadas</span>
               <LucideChevronDown :size="18" />
             </summary>
 
             <div class="breakdown-body">
+              <div class="detail-metric-grid">
+                <article class="detail-metric-card">
+                  <span>Básicos completos</span>
+                  <strong>{{ formatNumber(scopeForReport(report).basic.completeRecords) }}</strong>
+                </article>
+                <article class="detail-metric-card">
+                  <span>Avanzado promedio</span>
+                  <strong>{{ scopeForReport(report).advanced.averagePercent }}%</strong>
+                </article>
+                <article class="detail-metric-card">
+                  <span>Avanzados completos</span>
+                  <strong>{{ formatNumber(scopeForReport(report).advanced.completeRecords) }}</strong>
+                </article>
+                <article class="detail-metric-card is-wide">
+                  <span>Fuente</span>
+                  <strong class="detail-metric-copy">{{ sourceLabel(report.source) }}</strong>
+                </article>
+              </div>
+
               <div class="population-strip">
                 <div v-for="item in populationBreakdown(scopeForReport(report))" :key="item.label">
                   <span>{{ item.label }}</span>
@@ -258,6 +361,9 @@ const currentPlantel = ref('')
 let currentController = null
 let currentRunId = 0
 
+const chartTicks = [0, 25, 50, 75, 100]
+const innerGridTicks = [25, 50, 75]
+
 const emptyTier = () => ({
   fieldCount: 0,
   completedFields: 0,
@@ -303,6 +409,12 @@ const successfulReports = computed(() => planteles.value
   .filter(Boolean)
   .sort((a, b) => String(a.agentId).localeCompare(String(b.agentId), 'es', { numeric: true, sensitivity: 'base' })))
 
+const orderedReports = computed(() => [...successfulReports.value].sort((a, b) => {
+  const percentDifference = Number(scopeForReport(b).basic.averagePercent || 0) - Number(scopeForReport(a).basic.averagePercent || 0)
+  if (percentDifference) return percentDifference
+  return String(a.agentId).localeCompare(String(b.agentId), 'es', { numeric: true, sensitivity: 'base' })
+}))
+
 const processedCount = computed(() => queueRows.value.filter((item) => ['success', 'error', 'cancelled'].includes(item.status)).length)
 const loadingPercent = computed(() => queueRows.value.length ? Math.round((processedCount.value / queueRows.value.length) * 100) : 0)
 const loadSummaryLabel = computed(() => `${successfulReports.value.length} planteles`)
@@ -338,7 +450,17 @@ const globalPopulation = computed(() => successfulReports.value.reduce((total, r
   return total
 }, emptyScope().population))
 
-const chartRows = computed(() => successfulReports.value.map((report) => {
+const basicChartRows = computed(() => orderedReports.value.map((report) => {
+  const scope = scopeForReport(report)
+  return {
+    plantel: report.agentId,
+    evaluated: scope.population.evaluated,
+    basic: scope.basic.averagePercent,
+    basicCompleteRecords: scope.basic.completeRecords,
+  }
+}))
+
+const advancedChartRows = computed(() => orderedReports.value.map((report) => {
   const scope = scopeForReport(report)
   return {
     plantel: report.agentId,
@@ -348,9 +470,9 @@ const chartRows = computed(() => successfulReports.value.map((report) => {
   }
 }))
 
-const chartAriaLabel = computed(() => {
+const basicChartAriaLabel = computed(() => {
   const scope = scopeMode.value === 'externos' ? 'alumnos externos' : 'todos los alumnos'
-  return `Avance de expediente básico y avanzado por plantel para ${scope}`
+  return `Avance de expediente básico por plantel para ${scope}`
 })
 
 const formatNumber = (value) => new Intl.NumberFormat('es-MX').format(Number(value || 0))
@@ -373,6 +495,12 @@ const qualityBreakdown = (scope) => {
   ]
 }
 
+const visibleQualityBreakdown = (scope) => {
+  const items = qualityBreakdown(scope).filter((item) => Number(item.count || 0) > 0)
+  if (items.length) return items
+  return [{ key: 'clean', label: 'Sin alertas visibles', count: 0, isEmpty: true }]
+}
+
 const populationBreakdown = (scope) => {
   const population = scope?.population || emptyScope().population
   if (scopeMode.value === 'externos') {
@@ -391,6 +519,10 @@ const populationBreakdown = (scope) => {
     { label: 'Sin ficha', count: population.withoutOverlay },
   ]
 }
+
+const outsideBarPillStyle = (percent) => ({
+  left: `min(calc(${Math.max(Number(percent || 0), 2)}% + 8px), calc(100% - 48px))`,
+})
 
 const replaceQueueItem = (plantel, patch) => {
   queueRows.value = queueRows.value.map((item) => item.plantel === plantel ? { ...item, ...patch } : item)
@@ -537,7 +669,7 @@ onBeforeUnmount(() => currentController?.abort())
 .progress-report-page {
   box-sizing: border-box;
   display: grid;
-  gap: .85rem;
+  gap: 1rem;
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -553,10 +685,11 @@ onBeforeUnmount(() => currentController?.abort())
 .load-monitor,
 .chart-section,
 .plantel-section,
-.summary-card {
+.summary-card,
+.advanced-insights {
   border: 1px solid rgba(210, 224, 214, .92);
   background: rgba(255, 255, 255, .97);
-  box-shadow: 0 10px 28px rgba(29, 58, 76, .055);
+  box-shadow: 0 14px 34px rgba(29, 58, 76, .055);
 }
 
 .report-toolbar {
@@ -564,7 +697,7 @@ onBeforeUnmount(() => currentController?.abort())
   gap: 1rem;
   align-items: end;
   justify-content: space-between;
-  border-radius: 20px;
+  border-radius: 24px;
   padding: 1rem;
 }
 
@@ -572,7 +705,10 @@ onBeforeUnmount(() => currentController?.abort())
 .cycle-control > span,
 .summary-card > span,
 .plantel-identity > span:first-child,
-.plantel-head-metrics span {
+.plantel-score > span,
+.advanced-summary-copy > span,
+.detail-metric-card > span,
+.advanced-summary-card > span {
   color: #28723a;
   font-size: .67rem;
   font-weight: 900;
@@ -654,8 +790,8 @@ onBeforeUnmount(() => currentController?.abort())
 }
 
 .load-monitor {
-  border-radius: 16px;
-  padding: .72rem .85rem;
+  border-radius: 20px;
+  padding: .78rem .9rem;
 }
 .load-monitor-row {
   display: grid;
@@ -683,9 +819,9 @@ onBeforeUnmount(() => currentController?.abort())
 .field-track {
   overflow: hidden;
   border-radius: 999px;
-  background: #e6eee8;
+  background: #e8efe9;
 }
-.overall-track { height: 7px; margin-top: .6rem; }
+.overall-track { height: 8px; margin-top: .65rem; }
 .overall-track i,
 .field-track i {
   display: block;
@@ -700,7 +836,7 @@ onBeforeUnmount(() => currentController?.abort())
   gap: .65rem;
   align-items: center;
   border: 1px solid #efc6bd;
-  border-radius: 15px;
+  border-radius: 16px;
   background: #fff5f2;
   padding: .8rem .9rem;
   color: #a33d32;
@@ -710,169 +846,294 @@ onBeforeUnmount(() => currentController?.abort())
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: .7rem;
+  gap: .8rem;
 }
 .summary-card {
   display: grid;
-  gap: .25rem;
-  min-height: 86px;
+  gap: .35rem;
+  min-height: 96px;
   align-content: center;
-  border-radius: 17px;
-  padding: .85rem;
+  border-radius: 20px;
+  padding: 1rem;
 }
 .summary-card > strong {
-  font-size: 1.75rem;
+  font-size: 1.9rem;
   font-weight: 950;
   letter-spacing: -.04em;
   line-height: 1;
 }
-.summary-card.is-basic { border-bottom: 3px solid #4f9d56; }
-.summary-card.is-advanced { border-bottom: 3px solid #4d7f9d; }
+.summary-card.is-basic {
+  border-color: rgba(94, 154, 104, .25);
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbf7 100%);
+}
 
 .chart-section,
-.plantel-section {
-  border-radius: 20px;
-  padding: .85rem;
+.plantel-section,
+.advanced-insights {
+  border-radius: 24px;
+  padding: 1rem;
 }
 .section-heading {
   display: flex;
   gap: 1rem;
-  align-items: center;
+  align-items: start;
   justify-content: space-between;
-  padding: .15rem .15rem .75rem;
+  padding: .1rem .1rem .9rem;
+}
+.section-heading-copy {
+  display: grid;
+  gap: .32rem;
 }
 .section-heading h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.08rem;
   font-weight: 920;
   letter-spacing: -.025em;
 }
+.section-heading p,
+.advanced-summary-copy small,
+.comparison-compact-head span,
+.calm-row-label span,
+.calm-row-head small,
+.plantel-identity small,
+.detail-metric-copy {
+  margin: 0;
+  color: #6f7c73;
+  font-size: .72rem;
+  line-height: 1.45;
+}
 .section-heading > span {
+  flex: 0 0 auto;
   border-radius: 999px;
   background: #edf7ee;
-  padding: .35rem .6rem;
+  padding: .38rem .65rem;
   color: #28723a;
-  font-size: .7rem;
+  font-size: .72rem;
   font-weight: 900;
 }
-.chart-legend {
-  display: flex;
-  gap: .8rem;
-  color: #526158;
-  font-size: .7rem;
-  font-weight: 850;
-}
-.chart-legend span {
-  display: inline-flex;
-  gap: .35rem;
-  align-items: center;
-}
-.chart-legend i {
-  width: 18px;
-  height: 8px;
-  border-radius: 999px;
-}
-.chart-legend i.is-basic,
-.chart-track i.is-basic { background: #388447; }
-.chart-legend i.is-advanced,
-.chart-track i.is-advanced { background: #416f91; }
 
-.comparison-chart {
-  display: grid;
-  gap: .35rem;
-  border-top: 1px solid #e8eee9;
-  padding-top: .7rem;
+.empty-state {
+  border: 1px dashed #d8e2da;
+  border-radius: 18px;
+  padding: 1rem;
+  color: #6f7c73;
+  font-size: .85rem;
+  text-align: center;
 }
-.chart-axis {
+
+.calm-chart {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  margin-left: 168px;
-  padding: 0 48px 0 68px;
-  color: #7b877f;
-  font-size: .62rem;
-  font-weight: 750;
-}
-.chart-axis span { text-align: center; }
-.chart-axis span:first-child { text-align: left; }
-.chart-axis span:last-child { text-align: right; }
-.chart-row {
-  display: grid;
-  grid-template-columns: 155px minmax(0, 1fr);
   gap: .8rem;
-  align-items: center;
-  border-radius: 12px;
-  padding: .5rem .6rem;
 }
-.chart-row:nth-child(even) { background: #fafcfb; }
-.chart-plantel {
+.calm-chart-axis {
   display: grid;
-  min-width: 0;
-}
-.chart-plantel strong {
-  overflow: hidden;
-  color: #1c2b43;
-  font-size: .78rem;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.chart-plantel span {
-  color: #7a867e;
-  font-size: .64rem;
-  font-weight: 750;
-}
-.chart-series { display: grid; gap: .32rem; }
-.chart-bar-line {
-  display: grid;
-  grid-template-columns: 60px minmax(0, 1fr) 42px;
-  gap: .5rem;
-  align-items: center;
-}
-.chart-bar-line > span {
-  color: #66736b;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-left: 168px;
+  padding-right: .3rem;
+  color: #7b877f;
   font-size: .64rem;
   font-weight: 800;
 }
-.chart-bar-line > strong {
-  text-align: right;
-  font-size: .7rem;
+.calm-chart-axis span {
+  text-align: center;
+}
+.calm-chart-axis span:first-child { text-align: left; }
+.calm-chart-axis span:last-child { text-align: right; }
+.calm-chart-row {
+  display: grid;
+  gap: .5rem;
+  padding: .85rem .9rem;
+  border: 1px solid #edf2ee;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdfc 100%);
+}
+.calm-row-head {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.calm-row-label {
+  display: grid;
+  gap: .18rem;
+}
+.calm-row-label strong,
+.comparison-compact-head strong {
+  color: #1c2b43;
+  font-size: .9rem;
   font-weight: 900;
 }
-.chart-track {
-  overflow: hidden;
-  height: 10px;
-  border-radius: 999px;
-  background-color: #edf1ee;
-  background-image: linear-gradient(to right, transparent calc(25% - 1px), rgba(135, 151, 141, .2) 25%, transparent calc(25% + 1px));
-  background-size: 25% 100%;
+.calm-row-head small {
+  font-weight: 800;
+  white-space: nowrap;
 }
-.chart-track i {
-  display: block;
-  height: 100%;
+.calm-bar-track {
+  position: relative;
+  overflow: hidden;
+  height: 30px;
+  border-radius: 999px;
+  background: #eef2ef;
+}
+.calm-bar-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.calm-bar-grid i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(127, 142, 132, .23);
+}
+.calm-bar-fill {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   min-width: 0;
+  height: 100%;
   border-radius: inherit;
+  background: linear-gradient(90deg, #5a95e5, #4e88d6);
   transition: width .25s ease;
 }
-
-.plantel-list { display: grid; gap: .72rem; }
-.plantel-card {
-  overflow: hidden;
-  border: 1px solid #dfe8e1;
-  border-radius: 17px;
-  background: #fff;
+.calm-bar-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 24px;
+  margin-right: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  color: #1b3a5d;
+  font-size: .73rem;
+  font-weight: 950;
 }
-.plantel-card-header {
+.calm-bar-pill.is-outside {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 0;
+}
+
+.advanced-insights {
+  padding: 0;
+  overflow: hidden;
+}
+.advanced-insights summary {
   display: flex;
   gap: 1rem;
   align-items: center;
   justify-content: space-between;
-  padding: .8rem .9rem;
-  background: #fbfdfb;
+  padding: 1rem;
+  cursor: pointer;
+  list-style: none;
 }
-.plantel-identity {
-  display: flex;
+.advanced-insights summary::-webkit-details-marker { display: none; }
+.advanced-insights[open] summary svg,
+.plantel-breakdown[open] summary svg { transform: rotate(180deg); }
+.advanced-summary-copy {
+  display: grid;
+  gap: .18rem;
+}
+.advanced-summary-copy strong {
+  font-size: 1rem;
+  font-weight: 920;
+  letter-spacing: -.02em;
+}
+.advanced-insights-body {
+  display: grid;
+  gap: 1rem;
+  border-top: 1px solid #edf2ee;
+  padding: 0 1rem 1rem;
+  background: #fcfdfc;
+}
+.advanced-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+}
+.advanced-summary-card {
+  display: grid;
+  gap: .3rem;
+  border: 1px solid #e5ebe7;
+  border-radius: 18px;
+  background: #fff;
+  padding: .9rem;
+}
+.advanced-summary-card > strong {
+  font-size: 1.45rem;
+  font-weight: 930;
+  letter-spacing: -.03em;
+}
+.comparison-compact-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .8rem;
+}
+.comparison-compact-card {
+  display: grid;
+  gap: .75rem;
+  border: 1px solid #e5ebe7;
+  border-radius: 18px;
+  background: #fff;
+  padding: .9rem;
+}
+.comparison-meter {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 42px;
   gap: .55rem;
   align-items: center;
+}
+.comparison-meter > span {
+  color: #66736b;
+  font-size: .7rem;
+  font-weight: 850;
+}
+.comparison-meter > strong {
+  text-align: right;
+  font-size: .76rem;
+  font-weight: 920;
+}
+.comparison-meter-track {
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: #edf1ee;
+}
+.comparison-meter-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width .25s ease;
+}
+.comparison-meter-track i.is-basic { background: linear-gradient(90deg, #5a95e5, #4e88d6); }
+.comparison-meter-track i.is-advanced { background: linear-gradient(90deg, #5ea0b6, #4f8b9e); }
+
+.plantel-list {
+  display: grid;
+  gap: .85rem;
+}
+.plantel-card {
+  overflow: hidden;
+  border: 1px solid #dfe8e1;
+  border-radius: 22px;
+  background: #fff;
+}
+.plantel-card-shell {
+  display: grid;
+  gap: .85rem;
+  padding: 1rem;
+}
+.plantel-card-top {
+  display: flex;
+  gap: 1rem;
+  align-items: start;
+  justify-content: space-between;
+}
+.plantel-identity {
+  display: grid;
+  gap: .18rem;
   min-width: 0;
 }
 .plantel-identity h3 {
@@ -881,23 +1142,22 @@ onBeforeUnmount(() => currentController?.abort())
   font-weight: 950;
   letter-spacing: -.035em;
 }
-.plantel-head-metrics {
-  display: flex;
-  gap: .8rem;
-}
-.plantel-head-metrics > div {
+.plantel-score {
   display: grid;
-  min-width: 72px;
+  gap: .18rem;
   text-align: right;
 }
-.plantel-head-metrics strong { font-size: 1rem; }
+.plantel-score strong {
+  font-size: 1.6rem;
+  font-weight: 950;
+  letter-spacing: -.04em;
+}
+.plantel-meter { display: grid; }
 
 .quality-strip {
   display: flex;
-  gap: .45rem;
-  overflow-x: auto;
-  padding: .75rem .9rem .85rem;
-  scrollbar-width: thin;
+  flex-wrap: wrap;
+  gap: .5rem;
 }
 .quality-chip {
   display: inline-flex;
@@ -906,9 +1166,9 @@ onBeforeUnmount(() => currentController?.abort())
   align-items: center;
   min-height: 34px;
   border: 1px solid #dbe5e8;
-  border-radius: 10px;
+  border-radius: 999px;
   background: #fff;
-  padding: .32rem .45rem .32rem .72rem;
+  padding: .35rem .45rem .35rem .72rem;
   color: #3b4960;
   font-size: .72rem;
   font-weight: 820;
@@ -916,37 +1176,69 @@ onBeforeUnmount(() => currentController?.abort())
 }
 .quality-chip strong {
   display: grid;
-  min-width: 23px;
-  height: 23px;
+  min-width: 24px;
+  height: 24px;
   place-items: center;
   border-radius: 999px;
-  background: #e4f5e6;
-  color: #25803a;
+  background: #edf3ef;
+  color: #4d5e71;
   font-size: .7rem;
   font-weight: 950;
 }
+.quality-chip.is-empty {
+  border-color: #dfeae2;
+  background: #f8fcf9;
+  color: #4b6b54;
+}
+.quality-chip.is-empty strong {
+  background: #e4f5e6;
+  color: #25803a;
+}
 
-.plantel-breakdown { border-top: 1px solid #e4ebe5; }
+.plantel-breakdown {
+  border-top: 1px solid #e7eee9;
+}
 .plantel-breakdown summary {
   display: flex;
   gap: .55rem;
   align-items: center;
-  justify-content: flex-end;
-  padding: .65rem .9rem;
+  justify-content: space-between;
+  padding: .75rem 1rem;
   color: #526158;
   cursor: pointer;
-  font-size: .73rem;
-  font-weight: 850;
+  font-size: .76rem;
+  font-weight: 860;
   list-style: none;
 }
 .plantel-breakdown summary::-webkit-details-marker { display: none; }
-.plantel-breakdown[open] summary svg { transform: rotate(180deg); }
 .breakdown-body {
   display: grid;
-  gap: .85rem;
+  gap: .95rem;
   border-top: 1px solid #edf1ee;
-  padding: .85rem .9rem 1rem;
+  padding: 1rem;
   background: #fcfdfc;
+}
+.detail-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .65rem;
+}
+.detail-metric-card {
+  display: grid;
+  gap: .25rem;
+  border: 1px solid #e3eae5;
+  border-radius: 14px;
+  background: #fff;
+  padding: .75rem;
+}
+.detail-metric-card > strong {
+  font-size: 1.05rem;
+  font-weight: 920;
+}
+.detail-metric-card.is-wide { grid-column: span 2; }
+.detail-metric-copy {
+  font-size: .78rem;
+  font-weight: 800;
 }
 .population-strip {
   display: grid;
@@ -957,12 +1249,12 @@ onBeforeUnmount(() => currentController?.abort())
   display: grid;
   gap: .18rem;
   border: 1px solid #e3eae5;
-  border-radius: 11px;
+  border-radius: 13px;
   background: #fff;
-  padding: .55rem .65rem;
+  padding: .6rem .7rem;
 }
 .population-strip span { color: #6b786f; font-size: .66rem; font-weight: 800; }
-.population-strip strong { font-size: .95rem; }
+.population-strip strong { font-size: .98rem; }
 
 .field-columns {
   display: grid;
@@ -971,9 +1263,9 @@ onBeforeUnmount(() => currentController?.abort())
 }
 .field-tier {
   border: 1px solid #e2e9e3;
-  border-radius: 14px;
+  border-radius: 18px;
   background: #fff;
-  padding: .75rem;
+  padding: .85rem;
 }
 .field-tier > header {
   display: flex;
@@ -984,7 +1276,7 @@ onBeforeUnmount(() => currentController?.abort())
 }
 .field-tier h4 { margin: 0; font-size: .82rem; font-weight: 900; }
 .field-tier > header strong { color: #247139; font-size: .9rem; }
-.field-tier.is-advanced > header strong { color: #315f82; }
+.field-tier.is-advanced > header strong { color: #3f7386; }
 .field-list { display: grid; gap: .48rem; }
 .field-row {
   display: grid;
@@ -994,47 +1286,55 @@ onBeforeUnmount(() => currentController?.abort())
 .field-row span { display: block; font-size: .7rem; font-weight: 760; }
 .field-row small { color: #7a867e; font-size: .63rem; }
 .field-row > strong { font-size: .7rem; }
-.field-track { grid-column: 1 / -1; height: 6px; }
-.field-tier.is-advanced .field-track i { background: linear-gradient(90deg, #315f82, #5b8fb1); }
+.field-track { grid-column: 1 / -1; height: 7px; }
+.field-tier.is-advanced .field-track i { background: linear-gradient(90deg, #3f7386, #6ca1b2); }
 
 .spinning { animation: reportSpin .9s linear infinite; }
 @keyframes reportSpin { to { transform: rotate(360deg); } }
 
+@media (max-width: 1080px) {
+  .comparison-compact-list,
+  .detail-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .detail-metric-card.is-wide { grid-column: span 2; }
+}
+
 @media (max-width: 900px) {
-  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary-grid,
+  .advanced-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .population-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .calm-chart-axis { margin-left: 0; }
 }
 
 @media (max-width: 720px) {
-  .progress-report-page { padding: .7rem; }
+  .progress-report-page { padding: .75rem; }
   .report-toolbar { align-items: start; flex-direction: column; }
   .report-actions { width: 100%; justify-content: flex-start; }
   .scope-toggle { order: -1; width: 100%; }
   .cycle-control { flex: 1 1 160px; }
   .cycle-control select { width: 100%; }
-  .chart-axis { display: none; }
-  .chart-row {
-    grid-template-columns: 1fr;
-    gap: .35rem;
-    padding: .65rem;
-  }
-  .chart-plantel { grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; }
-  .chart-plantel span { align-self: center; }
-  .plantel-card-header { align-items: start; }
-  .field-columns { grid-template-columns: 1fr; }
+  .section-heading,
+  .plantel-card-top,
+  .calm-row-head { flex-direction: column; align-items: start; }
+  .section-heading > span,
+  .plantel-score { text-align: left; }
+  .comparison-compact-list,
+  .field-columns,
+  .detail-metric-grid { grid-template-columns: 1fr; }
+  .detail-metric-card.is-wide { grid-column: auto; }
   .population-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calm-chart-axis { display: none; }
 }
 
 @media (max-width: 480px) {
-  .summary-grid { grid-template-columns: 1fr 1fr; }
-  .summary-card { min-height: 78px; }
-  .summary-card > strong { font-size: 1.5rem; }
-  .plantel-card-header { display: grid; }
-  .plantel-head-metrics { justify-content: flex-start; flex-wrap: wrap; }
-  .plantel-head-metrics > div { text-align: left; }
-  .plantel-identity { flex-wrap: wrap; }
+  .summary-grid,
+  .advanced-summary-grid,
+  .population-strip { grid-template-columns: 1fr 1fr; }
+  .summary-card { min-height: 84px; }
+  .summary-card > strong,
+  .plantel-score strong { font-size: 1.45rem; }
   .load-monitor-row { grid-template-columns: minmax(0, 1fr) auto; }
   .load-monitor-row > span { display: none; }
-  .chart-bar-line { grid-template-columns: 52px minmax(0, 1fr) 38px; gap: .35rem; }
+  .comparison-meter { grid-template-columns: 58px minmax(0, 1fr) 40px; gap: .45rem; }
+  .quality-strip { gap: .4rem; }
 }
 </style>
