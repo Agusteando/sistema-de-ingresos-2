@@ -1,1 +1,1 @@
-Incluye CO y DC en los planteles disponibles de conceptos y categorías
+Simplifica avance de control escolar con una sola vista unificada y mínima por plantel
