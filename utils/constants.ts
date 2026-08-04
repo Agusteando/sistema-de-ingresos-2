@@ -6,7 +6,7 @@ export const PLANTELES_LIST = [
 
 export const DASHBOARD_PLANTELES = ['PM', 'PT', 'SM', 'ST', 'PREEM', 'CT', 'GM', 'CO', 'DC'] as const
 
-export const CONCEPTOS_PLANTELES_LIST = ['PM', 'SM', 'PT', 'ST', 'CT', 'PREEM', 'GM']
+export const CONCEPTOS_PLANTELES_LIST: string[] = [...DASHBOARD_PLANTELES]
 
 export const normalizeConceptosPlantel = (value: string | null | undefined, fallback = CONCEPTOS_PLANTELES_LIST[0]) => {
   const code = String(value || '').trim().toUpperCase()
