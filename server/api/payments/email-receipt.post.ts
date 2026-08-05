@@ -1,6 +1,6 @@
 import { sendEmailFromUser } from '../../utils/mailer'
-import { runWithBridgeAgentId, query } from '../../utils/db'
-import { loadActiveReceiptPayments, resolveReceiptAcademicPlacement } from '../../utils/paymentReceipt'
+import { runWithBridgeAgentId } from '../../utils/db'
+import { loadPaymentReceiptDocument } from '../../utils/paymentReceipt'
 import { generatePaymentReceiptPdf, renderPaymentReceiptEmail } from '../../utils/paymentReceiptDelivery'
 
 const validEmail = (value: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim())
@@ -17,39 +17,24 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 401, message: 'No se pudo identificar el correo del usuario autenticado.' })
   }
 
-  const { folios: normalizedFolios, items, matricula } = await loadActiveReceiptPayments(body?.folios)
-  if (!normalizedFolios.length) {
+  const receipt = await loadPaymentReceiptDocument(body?.folios)
+  if (!receipt.folios.length) {
     throw createError({ statusCode: 400, message: 'Faltan los folios del recibo.' })
   }
-  if (!items.length) {
+  if (!receipt.items.length) {
     throw createError({ statusCode: 404, message: 'Recibos no vigentes o no encontrados.' })
   }
 
-  const [studentData] = await query<any[]>(
-    `SELECT grado, grupo, plantel, nivel, ciclo FROM base WHERE matricula = ? LIMIT 1`,
-    [matricula]
-  )
-  const academicPlacement = resolveReceiptAcademicPlacement(studentData, items[0]?.ciclo)
-  const receiptItems = items.map((item) => ({
-    ...item,
-    grado: academicPlacement.grado,
-    grupo: studentData?.grupo || '',
-    nivel: academicPlacement.nivel,
-  }))
-
-  const issuedAt = new Date()
   const sentByName = String(user.name || user.email).trim()
   const delivery = renderPaymentReceiptEmail({
-    items: receiptItems,
+    items: receipt.items,
     sentByName,
     sentByEmail: user.email,
-    issuedAt,
+    issuedAt: receipt.issuedAt,
   })
   const pdf = generatePaymentReceiptPdf({
-    items: receiptItems,
-    sentByName,
-    sentByEmail: user.email,
-    issuedAt,
+    items: receipt.items,
+    issuedAt: receipt.issuedAt,
   })
 
   await sendEmailFromUser(
@@ -66,6 +51,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     sender: user.email,
     recipient: email,
     attachment: delivery.filename,
-    payments: receiptItems.length,
+    payments: receipt.items.length,
   }
 }))

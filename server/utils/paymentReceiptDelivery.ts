@@ -1,12 +1,16 @@
+import { institutionNameForRecord } from '../../shared/utils/institution'
 import { numeroALetras } from './numberToWords'
 
 type ReceiptPayment = Record<string, any>
 
-type ReceiptDeliveryInput = {
+type ReceiptDocumentInput = {
   items: ReceiptPayment[]
+  issuedAt?: Date
+}
+
+type ReceiptDeliveryInput = ReceiptDocumentInput & {
   sentByName: string
   sentByEmail: string
-  issuedAt?: Date
 }
 
 type PdfTextOptions = {
@@ -45,6 +49,7 @@ const formatDateTime = (value: unknown) => {
   const date = value instanceof Date ? value : new Date(String(value || ''))
   if (Number.isNaN(date.getTime())) return compact(value) || 'Sin fecha registrada'
   return new Intl.DateTimeFormat('es-MX', {
+    timeZone: 'America/Mexico_City',
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
   }).format(date)
 }
@@ -53,6 +58,7 @@ const formatDate = (value: unknown) => {
   const date = value instanceof Date ? value : new Date(String(value || ''))
   if (Number.isNaN(date.getTime())) return compact(value) || 'Sin fecha registrada'
   return new Intl.DateTimeFormat('es-MX', {
+    timeZone: 'America/Mexico_City',
     day: '2-digit', month: '2-digit', year: 'numeric'
   }).format(date)
 }
@@ -92,9 +98,7 @@ const monthReference = (payment: ReceiptPayment) => payment?.mes === 'ev'
   ? formatDate(payment?.fecha)
   : compact(payment?.mesReal || payment?.mes) || 'Sin referencia'
 
-const institutionName = (payment: ReceiptPayment) => payment?.nivel === 'Secundaria'
-  ? 'INSTITUTO EDUCATIVO PARA EL DESARROLLO INTEGRAL DEL SABER SC'
-  : 'INSTITUTO EDUCATIVO LA CASITA DEL SABER SC'
+const institutionName = (payment: ReceiptPayment) => institutionNameForRecord(payment)
 
 const collectorName = (payment: ReceiptPayment) => compact(payment?.usuario) || 'Administrador no identificado'
 const folioLabel = (payment: ReceiptPayment) => compact(payment?.folio_plantel || payment?.folio) || 'Sin folio'
@@ -106,6 +110,12 @@ const uniqueCollectors = (items: ReceiptPayment[]) => Array.from(new Set(items.m
 const receiptTotal = (items: ReceiptPayment[]) => items.reduce((sum, item) => sum + Number(item?.monto || 0), 0)
 const amountInWords = (payment: ReceiptPayment) => compact(payment?.montoLetra) || numeroALetras(Number(payment?.monto || 0))
 const receiptWords = (items: ReceiptPayment[]) => numeroALetras(receiptTotal(items))
+
+export const paymentReceiptFilename = (items: ReceiptPayment[]) => {
+  const first = items[0] || {}
+  const folios = items.map(folioLabel)
+  return `Comprobante-Pago-${compact(first.matricula) || folios[0] || 'recibo'}.pdf`
+}
 
 const wrapText = (value: unknown, maxChars: number) => {
   const words = sanitizeWinAnsi(value).split(/\s+/).filter(Boolean)
@@ -173,14 +183,10 @@ class ReceiptPdfDocument {
   y = PAGE_H - MARGIN
   pageNumber = 0
   readonly first: ReceiptPayment
-  readonly sentByName: string
-  readonly sentByEmail: string
   readonly issuedAt: Date
 
-  constructor(input: ReceiptDeliveryInput) {
+  constructor(input: ReceiptDocumentInput) {
     this.first = input.items[0] || {}
-    this.sentByName = compact(input.sentByName) || compact(input.sentByEmail) || 'Usuario del sistema'
-    this.sentByEmail = compact(input.sentByEmail)
     this.issuedAt = input.issuedAt || new Date()
     this.page = this.addPage(false)
   }
@@ -320,7 +326,7 @@ const buildPdf = (pages: PdfCanvas[]) => {
   return Buffer.from(header + body + xref, 'latin1')
 }
 
-export const generatePaymentReceiptPdf = (input: ReceiptDeliveryInput) => {
+export const generatePaymentReceiptPdf = (input: ReceiptDocumentInput) => {
   const items = input.items || []
   if (!items.length) throw new Error('No hay pagos para generar el PDF del recibo.')
 
@@ -328,8 +334,7 @@ export const generatePaymentReceiptPdf = (input: ReceiptDeliveryInput) => {
   const first = items[0]
   const collectors = uniqueCollectors(items)
 
-  doc.section('DATOS DEL ENVÍO Y DEL ALUMNO')
-  doc.labelValue('Enviado por', `${compact(input.sentByName) || input.sentByEmail} <${compact(input.sentByEmail)}>`, { bold: true })
+  doc.section('DATOS DEL ALUMNO')
   doc.labelValue('Administrador(es) que cobraron', collectors.join(', '), { bold: true })
   doc.labelValue('Matrícula', compact(first.matricula) || 'Sin matrícula', { bold: true })
   doc.labelValue('Alumno', compact(first.nombreCompleto) || 'Alumno no identificado', { bold: true })
@@ -493,6 +498,6 @@ export const renderPaymentReceiptEmail = (input: ReceiptDeliveryInput) => {
     subject,
     html,
     text: textLines.join('\n'),
-    filename: `Comprobante-Pago-${compact(first.matricula) || folios[0] || 'recibo'}.pdf`
+    filename: paymentReceiptFilename(items)
   }
 }

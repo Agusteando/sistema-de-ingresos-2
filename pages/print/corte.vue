@@ -9,7 +9,7 @@
       <div class="corte-header flex justify-between items-start mb-5 border-b border-gray-200 pb-4">
         <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo Institucional" class="h-[46px] object-contain" />
         <div class="text-center flex-1 mx-4">
-          <h2 class="m-0 text-[12px] font-bold text-gray-900 uppercase tracking-tight">Instituto Educativo para el Desarrollo Integral del Saber SC</h2>
+          <h2 class="m-0 text-[12px] font-bold text-gray-900 uppercase tracking-tight">{{ institutionName }}</h2>
           <p class="mt-1 text-[9px] text-gray-500">Bitácora incluida por fecha efectiva de pago · Todos los ciclos y estatus</p>
         </div>
         <div class="text-right text-[9px] text-gray-600">
@@ -94,6 +94,7 @@ import { computed, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie } from '#app'
 import { LucidePrinter } from 'lucide-vue-next'
+import { institutionNameForPlantel } from '~/shared/utils/institution'
 
 definePageMeta({ layout: false })
 
@@ -106,6 +107,7 @@ const totalAplicado = ref(0)
 const activeUserName = ref(useCookie('auth_name').value || 'Administrador')
 const reportPlantel = ref('')
 const reportFilters = ref({ inicio: '', fin: '' })
+const institutionName = computed(() => institutionNameForPlantel(reportPlantel.value))
 const generatedAt = new Intl.DateTimeFormat('es-MX', {
   timeZone: 'America/Mexico_City',
   dateStyle: 'short',

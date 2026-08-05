@@ -9,7 +9,7 @@
       <div class="flex justify-between items-start mb-8 border-b border-gray-200 pb-5">
         <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo Institucional" class="h-[50px] object-contain" />
         <div class="text-center flex-1 mx-4">
-          <h2 class="m-0 text-[13px] font-bold text-gray-900 uppercase tracking-tight">Instituto Educativo para el Desarrollo Integral del Saber SC</h2>
+          <h2 class="m-0 text-[13px] font-bold text-gray-900 uppercase tracking-tight">{{ institutionName }}</h2>
           <div class="mt-2 text-[12px] font-semibold text-gray-700">Reporte por concepto</div>
           <div class="text-[12px] text-gray-600">{{ concepto?.concepto || 'Concepto' }}</div>
         </div>
@@ -82,10 +82,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie } from '#app'
 import { LucidePrinter } from 'lucide-vue-next'
+import { institutionNameForPlantel } from '~/shared/utils/institution'
 
 definePageMeta({ layout: false })
 
@@ -94,6 +95,8 @@ const rows = ref([])
 const concepto = ref(null)
 const resumen = ref({ total: 0, transacciones: 0, alumnos: 0, formasPago: [] })
 const activeUserName = useCookie('auth_name').value || 'Usuario'
+const reportPlantel = ref('')
+const institutionName = computed(() => institutionNameForPlantel(reportPlantel.value))
 
 onMounted(async () => {
   const query = new URLSearchParams(route.query).toString()
@@ -102,6 +105,7 @@ onMounted(async () => {
     rows.value = res.rows || []
     concepto.value = res.concepto || null
     resumen.value = res.resumen || resumen.value
+    reportPlantel.value = res.filtros?.plantel || res.rows?.[0]?.scopePlantel || res.rows?.[0]?.plantel || route.query.plantel || ''
     setTimeout(() => window.print(), 800)
   } catch (e) {}
 })

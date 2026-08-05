@@ -136,6 +136,7 @@
 import { computed } from 'vue'
 import { numeroALetras } from '~/server/utils/numberToWords'
 import { formatCicloLabel } from '~/shared/utils/ciclo'
+import { institutionNameForRecord } from '~/shared/utils/institution'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -157,9 +158,10 @@ const appliedTotal = computed(() => props.items.reduce((sum, item) => {
 const hasNonAppliedAmount = computed(() => Math.abs(total.value - appliedTotal.value) > 0.004)
 const amountInWords = computed(() => numeroALetras(total.value))
 const logoSrc = computed(() => 'https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp')
-const institutoNombre = computed(() => props.receiptData?.nivel === 'Secundaria'
-  ? 'INSTITUTO EDUCATIVO PARA EL DESARROLLO INTEGRAL DEL SABER SC'
-  : 'INSTITUTO EDUCATIVO LA CASITA DEL SABER SC')
+const institutoNombre = computed(() => institutionNameForRecord({
+  ...props.items[0],
+  ...props.receiptData,
+}))
 const auditStatus = computed(() => String(props.receiptData?.estatusCorte || props.items[0]?.estatusCorte || '').trim())
 const auditStatusClass = computed(() => {
   const status = auditStatus.value.toLowerCase()

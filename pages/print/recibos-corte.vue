@@ -40,7 +40,7 @@
           class="receipt-strip-item"
           :data-corte-folio="receipt.folio"
         >
-          <CorteReceiptStrip
+          <PaymentReceiptSheet
             :items="[receipt]"
             :receipt-data="receipt"
             :issued-at="generatedAt"

@@ -1,1 +1,1 @@
-Simplifica avance de control escolar con una sola vista unificada y mínima por plantel
+Unifica la institución por plantel y el PDF canónico de recibos

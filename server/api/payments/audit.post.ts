@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto'
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { institutionFlagForPlantel } from '../../../shared/utils/institution'
 import { resolvePaymentConceptSnapshot } from '../../utils/payment-concept'
 import { isPlaceholderConceptName, resolveFinancialConcept } from '../../utils/financial-concept'
 
@@ -171,7 +172,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       userEmail,
       nombreCompleto: studentRef.nombreCompleto,
       plantel,
-      instituto: (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0
+      instituto: institutionFlagForPlantel(plantel)
     })
 
     try {

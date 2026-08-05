@@ -8,7 +8,7 @@
     <div class="max-w-[850px] mx-auto border border-gray-200 p-10 rounded-2xl print:border-none print:p-5 relative bg-white min-h-[900px] flex flex-col">
       <div class="text-center mb-10">
         <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo Institucional" class="h-[80px] object-contain inline-block" />
-        <h2 class="mt-4 text-[14px] font-bold tracking-widest uppercase text-gray-900">Instituto Educativo para el Desarrollo Integral del Saber SC</h2>
+        <h2 class="mt-4 text-[14px] font-bold tracking-widest uppercase text-gray-900">{{ institutionName }}</h2>
       </div>
 
       <div class="text-right text-[14px] mb-12 font-medium text-gray-800">
@@ -33,9 +33,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { LucidePrinter } from 'lucide-vue-next'
+import { institutionNameForPlantel } from '~/shared/utils/institution'
 
 definePageMeta({ layout: false })
 
@@ -44,6 +45,7 @@ const student = ref(null)
 const day = ref('')
 const month = ref('')
 const year = ref('')
+const institutionName = computed(() => institutionNameForPlantel(student.value?.plantel))
 
 onMounted(async () => {
   const m = route.query.matricula

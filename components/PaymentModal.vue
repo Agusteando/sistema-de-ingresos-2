@@ -311,6 +311,7 @@ import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { useModalDraftPersistence } from '~/composables/useModalDraftPersistence'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { calculatePromotedGrado, displayGrado } from '~/shared/utils/grado'
+import { institutionFlagForPlantel, normalizePlantelCode } from '~/shared/utils/institution'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
 import { PLANTELES_LIST } from '~/utils/constants'
 
@@ -647,7 +648,8 @@ const previewReceipt = () => {
     grado: academicPlacement.grado,
     grupo: props.student.grupo,
     ciclo: normalizeCicloKey(state.value.ciclo),
-    instituto: props.student.plantel === 'PT' || props.student.plantel === 'PM' || props.student.plantel === 'SM' ? 1 : 0,
+    plantel: normalizePlantelCode(props.student.plantel),
+    instituto: institutionFlagForPlantel(props.student.plantel),
     items: paymentRows().map((d, i) => ({
       folio: 'PREV-' + (i+1),
       folio_plantel: 'PREV-' + (i+1),
@@ -662,7 +664,8 @@ const previewReceipt = () => {
       mes: d.mes,
       mesReal: d.mesLabel,
       conceptoNombre: d.conceptoNombre,
-      fecha: effectivePaymentDateIso()
+      fecha: effectivePaymentDateIso(),
+      plantel: normalizePlantelCode(props.student.plantel)
     }))
   }
   sessionStorage.setItem('receipt_preview', JSON.stringify(previewData))

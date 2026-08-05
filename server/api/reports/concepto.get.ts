@@ -121,6 +121,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   return {
     concepto,
     rows,
+    filtros: {
+      plantel: scopePlantel || '',
+      ciclo: cicloKey,
+      inicio: inicioValue,
+      fin: finValue,
+    },
     resumen: {
       total,
       transacciones: rows.length,

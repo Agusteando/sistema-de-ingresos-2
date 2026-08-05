@@ -3,6 +3,7 @@ import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlState
 import { numeroALetras } from '../../utils/numberToWords'
 import { resolvePaymentConceptSnapshot } from '../../utils/payment-concept'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { institutionFlagForPlantel } from '../../../shared/utils/institution'
 import { isWholeMoney, parseNullableMoney } from '../../utils/monto-final'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { finalizeStockReservation, releaseStockReservation, reserveStockForPayment, type StockReservation } from '../../utils/conceptos-stock'
@@ -97,7 +98,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const nombreCompleto = studentRef.nombreCompleto
   const plantel = studentRef.plantel || 'PT'
 
-  const instituto = (plantel === 'PT' || plantel === 'PM' || plantel === 'SM') ? 1 : 0
+  const instituto = institutionFlagForPlantel(plantel)
   const [dbClock] = await query<any[]>(`
     SELECT
       DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s') AS currentTimestamp,

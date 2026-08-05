@@ -2339,13 +2339,13 @@ const clearPaymentSelection = () => {
 const downloadPaymentReceipt = (item) => {
   const folio = Number(item?.payment?.folio);
   if (!Number.isInteger(folio) || folio <= 0 || item?.cancelled) return;
-  reprintPayments([folio]);
+  downloadReceiptPdf([folio]);
 };
 
 const downloadSelectedPayments = () => {
   const folios = selectedPaymentItems.value.map((item) => item.payment?.folio);
   if (!folios.length) return;
-  reprintPayments(folios);
+  downloadReceiptPdf(folios);
 };
 
 const invoicePaymentItem = (item) => {
@@ -2390,7 +2390,7 @@ const handlePaymentCancellationSuccess = async () => {
   emit("refresh");
 };
 
-const reprintPayments = (folios = []) => {
+const downloadReceiptPdf = (folios = []) => {
   const normalizedFolios = Array.from(
     new Set(
       (Array.isArray(folios) ? folios : [folios])
@@ -2400,11 +2400,17 @@ const reprintPayments = (folios = []) => {
   );
   if (!normalizedFolios.length) return;
 
-  window.open(
-    `/print/recibo?folios=${encodeURIComponent(normalizedFolios.join(","))}`,
-    "_blank",
-    "width=850,height=800",
-  );
+  const params = new URLSearchParams({
+    folios: normalizedFolios.join(","),
+    download: "1",
+  });
+  const link = document.createElement("a");
+  link.href = `/api/payments/receipt-pdf?${params.toString()}`;
+  link.target = "_blank";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 };
 
 const printBeca = () => {
