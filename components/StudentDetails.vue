@@ -400,35 +400,27 @@
 
           <template v-else>
             <template v-if="accountViewMode !== 'services'">
+              <nav class="account-view-tabs" aria-label="Vistas del estado de cuenta">
+                <button type="button" :class="{ active: accountViewMode === 'classic' }" @click="setAccountView('classic')">
+                  <LucideFileText :size="14" /> Documentos
+                </button>
+                <button type="button" :class="{ active: accountViewMode === 'timeline' }" @click="setAccountView('timeline')">
+                  <LucideHistory :size="14" /> Pagos
+                  <span v-if="receiptablePaymentCount">{{ receiptablePaymentCount }}</span>
+                </button>
+                <button type="button" :class="{ active: accountViewMode === 'invoices' }" @click="setAccountView('invoices')">
+                  <LucideReceiptText :size="14" /> Facturas
+                  <span v-if="studentInvoiceCount">{{ studentInvoiceCount }}</span>
+                </button>
+              </nav>
               <label class="account-search-control">
                 <LucideSearch :size="15" aria-hidden="true" />
-                <input
-                  v-model="accountSearchQuery"
-                  type="search"
-                  placeholder="Buscar concepto o mes..."
-                />
+                <input v-model="accountSearchValue" type="search" :placeholder="accountSearchPlaceholder" />
               </label>
-              <button
-                type="button"
-                :class="[
-                  'account-view-toggle',
-                  { active: accountViewMode === 'timeline' },
-                ]"
-                :aria-label="accountViewToggleLabel"
-                :title="accountViewToggleLabel"
-                @click="toggleAccountView"
-              >
-                <LucideHistory
-                  v-if="accountViewMode === 'classic'"
-                  :size="15"
-                  aria-hidden="true"
-                />
-                <LucideFileText v-else :size="15" aria-hidden="true" />
-              </button>
               <div class="account-totals">
                 <span>
-                  <small>Deuda</small>
-                  <b>${{ format(accountDebtTotal) }}</b>
+                  <small>{{ accountViewMode === 'invoices' ? 'Facturado' : 'Deuda' }}</small>
+                  <b>${{ format(accountViewMode === 'invoices' ? studentInvoiceTotal : accountDebtTotal) }}</b>
                 </span>
               </div>
             </template>
@@ -446,7 +438,7 @@
         </div>
 
         <div
-          v-if="detailsExpanded && accountViewMode !== 'services'"
+          v-if="detailsExpanded && !['services', 'invoices'].includes(accountViewMode)"
           class="account-summary-grid"
           aria-label="Resumen del estado de cuenta"
         >
@@ -464,46 +456,23 @@
         </div>
 
         <div v-if="detailsExpanded && accountViewMode !== 'services'" class="account-expanded-controls">
-          <label
-            class="account-search-control account-search-control--expanded"
-          >
+          <nav class="account-view-tabs account-view-tabs--expanded" aria-label="Vistas del estado de cuenta">
+            <button type="button" :class="{ active: accountViewMode === 'classic' }" @click="setAccountView('classic')"><LucideFileText :size="14" /> Documentos</button>
+            <button type="button" :class="{ active: accountViewMode === 'timeline' }" @click="setAccountView('timeline')"><LucideHistory :size="14" /> Pagos <span v-if="receiptablePaymentCount">{{ receiptablePaymentCount }}</span></button>
+            <button type="button" :class="{ active: accountViewMode === 'invoices' }" @click="setAccountView('invoices')"><LucideReceiptText :size="14" /> Facturas <span v-if="studentInvoiceCount">{{ studentInvoiceCount }}</span></button>
+          </nav>
+          <label class="account-search-control account-search-control--expanded">
             <LucideSearch :size="15" aria-hidden="true" />
-            <input
-              v-model="accountSearchQuery"
-              type="search"
-              placeholder="Buscar concepto o mes..."
-            />
+            <input v-model="accountSearchValue" type="search" :placeholder="accountSearchPlaceholder" />
           </label>
-          <button
-            type="button"
-            :class="[
-              'account-view-toggle',
-              { active: accountViewMode === 'timeline' },
-            ]"
-            :aria-label="accountViewToggleLabel"
-            :title="accountViewToggleLabel"
-            @click="toggleAccountView"
-          >
-            <LucideHistory
-              v-if="accountViewMode === 'classic'"
-              :size="15"
-              aria-hidden="true"
-            />
-            <LucideFileText v-else :size="15" aria-hidden="true" />
-          </button>
           <div class="account-totals">
             <span>
-              <small>Deuda</small>
-              <b>${{ format(accountDebtTotal) }}</b>
+              <small>{{ accountViewMode === 'invoices' ? 'Facturado' : 'Deuda' }}</small>
+              <b>${{ format(accountViewMode === 'invoices' ? studentInvoiceTotal : accountDebtTotal) }}</b>
             </span>
           </div>
-          <button
-            class="account-filter-button"
-            type="button"
-            @click="showAccountFilterMenu"
-          >
-            <LucideSlidersHorizontal :size="14" />
-            Filtros
+          <button v-if="accountViewMode !== 'invoices'" class="account-filter-button" type="button" @click="showAccountFilterMenu">
+            <LucideSlidersHorizontal :size="14" /> Filtros
           </button>
         </div>
 
@@ -568,6 +537,26 @@
                 </div>
               </div>
             </section>
+            <div
+              v-else-if="accountViewMode === 'invoices'"
+              ref="accountTableWrap"
+              class="account-invoices-wrap"
+              :key="`${student.matricula}-invoices-${invoiceScope}`"
+            >
+              <StudentInvoiceLedger
+                :invoices="filteredStudentInvoices"
+                :loading="studentInvoicesLoading"
+                :error="studentInvoicesError"
+                :warning="studentInvoicesWarning"
+                :scope="invoiceScope"
+                :highlight-invoice-id="invoiceHighlightId"
+                @refresh="loadStudentInvoices({ sync: true })"
+                @update:scope="invoiceScope = $event"
+                @download="downloadStudentInvoice"
+                @email="emailStudentInvoice"
+                @cancel="cancelStudentInvoice"
+              />
+            </div>
             <div
               v-else-if="accountViewMode === 'timeline'"
               ref="accountTableWrap"
@@ -642,9 +631,11 @@
                     :debts="group.allDebts"
                     :selected-keys="selectedPaymentKeyList"
                     :pending-total="group.pendingTotal"
+                    :invoice-links="studentInvoiceLinks"
                     @toggle="togglePaymentSelection"
                     @receipt="downloadPaymentReceipt"
                     @invoice="invoicePaymentItem"
+                    @open-invoice="openLinkedInvoice"
                     @cancel="openPaymentCancellation"
                     @pay="payTimelineGroup(group)"
                   />
@@ -873,9 +864,11 @@
                         <PaymentLedgerRows
                           :debts="[debt]"
                           :selected-keys="selectedPaymentKeyList"
+                          :invoice-links="studentInvoiceLinks"
                           @toggle="togglePaymentSelection"
                           @receipt="downloadPaymentReceipt"
                           @invoice="invoicePaymentItem"
+                          @open-invoice="openLinkedInvoice"
                           @cancel="openPaymentCancellation"
                         />
                       </td>
@@ -891,11 +884,11 @@
         <div
           :class="[
             'account-footer',
-            { 'account-footer--receipt-selection': selectedReceiptCount > 0 },
+            { 'account-footer--receipt-selection': selectedReceiptCount > 0 && accountViewMode !== 'invoices' },
           ]"
         >
           <div
-            v-if="selectedReceiptCount"
+            v-if="selectedReceiptCount && accountViewMode !== 'invoices'"
             class="account-footer-receipts"
           >
             <span
@@ -924,9 +917,9 @@
               </button>
             </div>
           </div>
-          <span v-else>{{ accountFooterLabel }}</span>
+          <span v-else>{{ accountViewMode === 'invoices' ? `${studentInvoiceCount} factura${studentInvoiceCount === 1 ? '' : 's'} en el periodo` : accountFooterLabel }}</span>
           <strong class="account-footer__total"
-            >Saldo actual <b>${{ format(accountDebtTotal) }}</b></strong
+            >{{ accountViewMode === 'invoices' ? 'Total facturado' : 'Saldo actual' }} <b>${{ format(accountViewMode === 'invoices' ? studentInvoiceTotal : accountDebtTotal) }}</b></strong
           >
         </div>
       </section>
@@ -1074,6 +1067,7 @@ import DocumentModal from "./DocumentModal.vue";
 import InvoiceModal from "./InvoiceModal.vue";
 import PaymentCancelModal from "./PaymentCancelModal.vue";
 import PaymentLedgerRows from "./PaymentLedgerRows.vue";
+import StudentInvoiceLedger from "./StudentInvoiceLedger.vue";
 import ConceptChangeModal from "./ConceptChangeModal.vue";
 import ConceptDirectCorrectionModal from "./ConceptDirectCorrectionModal.vue";
 import TuitionAmountModal from "./TuitionAmountModal.vue";
@@ -1089,6 +1083,7 @@ const props = defineProps({
   tipoIngresoConcepts: { type: Array, default: () => [] },
   // Dev visual lab only: lets auth-heavy layouts render deterministic account rows.
   visualLabDebts: { type: Array, default: null },
+  visualLabInvoices: { type: Array, default: null },
 });
 const emit = defineEmits([
   "refresh",
@@ -1136,22 +1131,43 @@ const reminding = ref(false);
 const selectedDebts = ref([]);
 const depurandoDebt = ref(null);
 const accountSearchQuery = ref("");
+const invoiceSearchQuery = ref("");
 const accountFilter = ref("all");
 const accountViewMode = ref("classic");
+const studentInvoices = ref([]);
+const studentInvoicesLoading = ref(false);
+const studentInvoicesError = ref("");
+const studentInvoicesWarning = ref("");
+const studentInvoicesLoadedKey = ref("");
+const invoiceScope = ref("current");
+const invoiceHighlightId = ref("");
+const studentInvoiceSyncTimes = new Map();
+let studentInvoicesRequestId = 0;
 const detailsExpanded = ref(false);
 const detailTransitioning = ref(false);
 const accountWorkspaceTitle = computed(() =>
   accountViewMode.value === "services" ? "Talleres y Servicios" : "Estado de Cuenta",
 );
-const accountViewToggleLabel = computed(() =>
-  accountViewMode.value === "timeline"
-    ? "Ver Estado de Cuenta"
-    : "Ver historial",
+const accountSearchValue = computed({
+  get: () => accountViewMode.value === "invoices" ? invoiceSearchQuery.value : accountSearchQuery.value,
+  set: (value) => {
+    if (accountViewMode.value === "invoices") invoiceSearchQuery.value = value;
+    else accountSearchQuery.value = value;
+  },
+});
+const accountSearchPlaceholder = computed(() =>
+  accountViewMode.value === "invoices"
+    ? "Buscar folio, RFC o concepto..."
+    : "Buscar concepto o mes...",
 );
-
-const toggleAccountView = () => {
-  accountViewMode.value =
-    accountViewMode.value === "timeline" ? "classic" : "timeline";
+const setAccountView = (mode) => {
+  accountViewMode.value = mode;
+  if (mode === "invoices") {
+    const matricula = String(props.student?.matricula || '').trim();
+    const lastSync = Number(studentInvoiceSyncTimes.get(matricula) || 0);
+    const shouldSync = Boolean(matricula && Date.now() - lastSync > 5 * 60 * 1000);
+    void loadStudentInvoices({ sync: shouldSync });
+  }
 };
 
 const photoUrl = ref(null);
@@ -2292,6 +2308,186 @@ const selectedPaymentItems = computed(() =>
   ),
 );
 const selectedReceiptCount = computed(() => selectedPaymentItems.value.length);
+const studentInvoiceCount = computed(() => studentInvoices.value.length);
+const studentInvoiceTotal = computed(() =>
+  studentInvoices.value
+    .filter((invoice) => {
+      const status = String(invoice?.status || '').toLowerCase();
+      const cancellation = String(invoice?.cancellationStatus || '').toLowerCase();
+      return status !== 'canceled' && cancellation !== 'accepted';
+    })
+    .reduce((sum, invoice) => sum + Number(invoice?.total || 0), 0),
+);
+const filteredStudentInvoices = computed(() => {
+  const queryValue = String(invoiceSearchQuery.value || '').trim().toLowerCase();
+  if (!queryValue) return studentInvoices.value;
+  return studentInvoices.value.filter((invoice) => {
+    const sourceText = (invoice?.sourcePayments || [])
+      .map((source) => [source?.folio, source?.folioPlantel, source?.documento, source?.concepto, source?.ciclo].filter(Boolean).join(' '))
+      .join(' ');
+    return [
+      invoice?.folio,
+      invoice?.uuid,
+      invoice?.providerInvoiceId,
+      invoice?.receiverName,
+      invoice?.receiverTaxId,
+      invoice?.receiverEmail,
+      sourceText,
+    ].some((value) => String(value || '').toLowerCase().includes(queryValue));
+  });
+});
+const studentInvoiceLinks = computed(() => {
+  const links = {};
+  studentInvoices.value.forEach((invoice) => {
+    const status = String(invoice?.status || '').toLowerCase();
+    const cancellation = String(invoice?.cancellationStatus || '').toLowerCase();
+    if (status === 'canceled' || cancellation === 'accepted') return;
+    (invoice?.sourcePayments || []).forEach((source) => {
+      if (source?.folio) links[`folio:${source.folio}`] = invoice;
+      const folioPlantel = String(source?.folioPlantel || '').trim().toUpperCase();
+      if (folioPlantel) links[`plantel:${folioPlantel}`] = invoice;
+    });
+  });
+  return links;
+});
+
+const loadStudentInvoices = async ({ sync = false, silent = false } = {}) => {
+  const matricula = String(props.student?.matricula || '').trim();
+  if (!matricula) return;
+  if (Array.isArray(props.visualLabDebts)) {
+    studentInvoices.value = Array.isArray(props.visualLabInvoices) ? props.visualLabInvoices : [];
+    studentInvoicesLoading.value = false;
+    studentInvoicesError.value = '';
+    studentInvoicesWarning.value = '';
+    studentInvoicesLoadedKey.value = `${matricula}|visual`;
+    return;
+  }
+
+  const cycle = selectedCicloKey.value;
+  const key = `${matricula}|${cycle}|${invoiceScope.value}`;
+  if (!sync && studentInvoicesLoadedKey.value === key) return;
+  const requestId = ++studentInvoicesRequestId;
+  if (!silent || !studentInvoices.value.length) studentInvoicesLoading.value = true;
+  studentInvoicesError.value = '';
+  if (sync) studentInvoicesWarning.value = '';
+
+  try {
+    const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/invoices`, {
+      params: {
+        ciclo: cycle,
+        scope: invoiceScope.value,
+        sync: sync ? '1' : '',
+      },
+    });
+    if (requestId !== studentInvoicesRequestId || String(props.student?.matricula || '') !== matricula) return;
+    studentInvoices.value = Array.isArray(response?.invoices) ? response.invoices : [];
+    studentInvoicesWarning.value = String(response?.warning || '');
+    studentInvoicesLoadedKey.value = key;
+    if (sync) studentInvoiceSyncTimes.set(matricula, Date.now());
+  } catch (error) {
+    if (requestId !== studentInvoicesRequestId) return;
+    studentInvoicesError.value = error?.data?.message || error?.message || 'No se pudo cargar el historial de facturas.';
+    if (studentInvoices.value.length) {
+      studentInvoicesWarning.value = `No se pudo actualizar el historial. Se conservan los datos disponibles. ${studentInvoicesError.value}`;
+    }
+    if (!silent) show(studentInvoicesError.value, 'danger');
+  } finally {
+    if (requestId === studentInvoicesRequestId) studentInvoicesLoading.value = false;
+  }
+};
+
+const downloadStudentInvoice = (invoice, format) => {
+  if (!invoice?.providerInvoiceId) return;
+  const url = `/api/downloadInvoice/${encodeURIComponent(invoice.providerInvoiceId)}/${format}?matricula=${encodeURIComponent(props.student?.matricula || '')}`;
+  window.open(url, '_blank', 'noopener');
+};
+
+const emailStudentInvoice = async (invoice) => {
+  if (!invoice?.providerInvoiceId) return;
+  const email = window.prompt('Correo para enviar la factura:', invoice.receiverEmail || props.student?.correo || '');
+  if (email === null) return;
+  if (!/^\S+@\S+\.\S+$/.test(String(email || '').trim())) {
+    show('El correo electrónico no es válido.', 'danger');
+    return;
+  }
+  try {
+    const response = await $fetch('/api/sendInvoiceEmail', {
+      method: 'POST',
+      body: { invoice_id: invoice.providerInvoiceId, email: String(email).trim(), matricula: props.student?.matricula || '' },
+    });
+    if (response?.success === false) {
+      throw new Error(response?.error || response?.message || 'El proveedor no pudo enviar la factura.');
+    }
+    show('Factura enviada por correo.', 'success');
+  } catch (error) {
+    show(error?.data?.message || error?.message || 'No se pudo enviar la factura.', 'danger');
+  }
+};
+
+const cancelStudentInvoice = async (invoice) => {
+  if (!invoice?.providerInvoiceId) return;
+  const motive = window.prompt('Motivo de cancelación SAT (01, 02, 03, 04):', '03');
+  if (!motive) return;
+  const normalizedMotive = String(motive).trim();
+  if (!['01', '02', '03', '04'].includes(normalizedMotive)) {
+    show('El motivo SAT debe ser 01, 02, 03 o 04.', 'danger');
+    return;
+  }
+  let substitutionFolio = '';
+  if (normalizedMotive === '01') {
+    substitutionFolio = String(window.prompt('UUID de la factura que sustituye:', '') || '').trim();
+    if (!substitutionFolio) {
+      show('El motivo 01 requiere el UUID de sustitución.', 'danger');
+      return;
+    }
+  }
+  if (!window.confirm(`Solicitar la cancelación de la factura ${invoice.folio || invoice.providerInvoiceId}?`)) return;
+
+  try {
+    const response = await $fetch(`/api/invoices/${encodeURIComponent(invoice.providerInvoiceId)}/cancel`, {
+      method: 'POST',
+      body: {
+        matricula: props.student?.matricula || '',
+        motive: normalizedMotive,
+        ...(substitutionFolio ? { substitution_folio: substitutionFolio } : {}),
+      },
+    });
+    if (response?.success === false) {
+      throw new Error(response?.error || response?.message || 'El proveedor rechazó la cancelación.');
+    }
+    show('Solicitud de cancelación enviada.', 'success');
+    await loadStudentInvoices({ sync: true });
+  } catch (error) {
+    show(error?.data?.message || error?.message || 'No se pudo solicitar la cancelación.', 'danger');
+  }
+};
+
+const openLinkedInvoice = (invoice) => {
+  if (!invoice) return;
+  invoiceHighlightId.value = String(invoice.providerInvoiceId || invoice.id || '');
+  invoiceSearchQuery.value = invoice.folio || invoice.providerInvoiceId || '';
+  setAccountView('invoices');
+};
+
+watch(
+  () => [props.student?.matricula, selectedCicloKey.value, invoiceScope.value],
+  (next, previous) => {
+    const contextChanged = !previous || next[0] !== previous[0] || next[1] !== previous[1];
+    const scopeChanged = Boolean(previous && next[2] !== previous[2]);
+    if (contextChanged || scopeChanged) {
+      studentInvoices.value = [];
+      studentInvoicesLoadedKey.value = '';
+      if (contextChanged) {
+        invoiceSearchQuery.value = '';
+        invoiceHighlightId.value = '';
+      }
+    } else {
+      studentInvoicesLoadedKey.value = '';
+    }
+    void loadStudentInvoices({ sync: false, silent: accountViewMode.value !== 'invoices' });
+  },
+  { immediate: true },
+);
 
 const prunePaymentSelection = (debtList = debts.value) => {
   const validKeys = new Set(
@@ -2857,12 +3053,138 @@ const handleSuccess = () => {
   emit("refresh");
 };
 
-const handleInvoiceSuccess = () => {
+const handleInvoiceSuccess = (invoice) => {
+  invoiceHighlightId.value = String(invoice?.invoice_id || invoice?.localInvoiceId || '');
+  studentInvoicesLoadedKey.value = '';
+  void loadStudentInvoices({ sync: false });
   loadDebts({ useCache: false, preserveInteraction: true });
 };
 </script>
 
 <style scoped>
+.account-view-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid #dfe6ee;
+  border-radius: 10px;
+  background: #f7f9fb;
+  padding: 3px;
+}
+
+.account-view-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 29px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0 8px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.account-view-tabs button:hover,
+.account-view-tabs button.active {
+  background: #fff;
+  color: #285d32;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+}
+
+.account-view-tabs button > span {
+  min-width: 16px;
+  border-radius: 999px;
+  background: #e9f4e8;
+  padding: 1px 5px;
+  color: #285d32;
+  font-size: 9px;
+  text-align: center;
+}
+
+.account-view-tabs--expanded {
+  flex: none;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-header {
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 24%) minmax(238px, auto) auto;
+  grid-template-areas: "title search view total";
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .account-view-tabs {
+  grid-area: view;
+  justify-self: center;
+}
+
+.account-expanded-controls {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.account-invoices-wrap {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.account-invoices-wrap :deep(.student-invoice-ledger) {
+  height: 100%;
+}
+
+@container student-detail-panel (max-width: 700px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-header {
+    grid-template-columns: minmax(218px, auto) minmax(110px, 1fr);
+    grid-template-areas:
+      "title total"
+      "view search";
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-view-tabs {
+    justify-self: stretch;
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-view-tabs button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+}
+
+@container student-detail-panel (max-width: 470px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title total"
+      "view view"
+      "search search";
+  }
+
+  .student-details-shell:not(.student-details-shell--expanded) .account-view-tabs {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .account-view-tabs button {
+    padding: 0 6px;
+    font-size: 9px;
+  }
+
+  .account-view-tabs button svg {
+    display: none;
+  }
+
+  .account-expanded-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .account-expanded-controls .account-view-tabs,
+  .account-expanded-controls .account-search-control {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
 .account-timeline-wrap {
   min-height: 0;
   overflow: auto;

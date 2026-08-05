@@ -17,13 +17,15 @@ const sanitizeQuery = (query: Record<string, any>) => {
   return params.toString()
 }
 
-export const proxyCfdiEvent = async (event: any, targetPath: string) => {
+export const proxyCfdiEvent = async (event: any, targetPath: string, options: { body?: unknown } = {}) => {
   if (!targetPath) throw createError({ statusCode: 400, message: 'Ruta CFDI requerida' })
 
   const method = (event.node.req.method || 'GET').toUpperCase()
   const queryString = sanitizeQuery(getQuery(event) as Record<string, any>)
   const url = `${CFDI_BASE_URL}/${targetPath}${queryString ? `?${queryString}` : ''}`
-  const body = method !== 'GET' && method !== 'HEAD' ? await readBody(event) : undefined
+  const body = method !== 'GET' && method !== 'HEAD'
+    ? (Object.prototype.hasOwnProperty.call(options, 'body') ? options.body : await readBody(event))
+    : undefined
   const isDownload = /^downloadInvoice\//i.test(targetPath)
 
   try {

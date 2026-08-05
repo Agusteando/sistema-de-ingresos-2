@@ -69,7 +69,17 @@
           <LucideDownload :size="15" />
         </button>
         <button
-          v-if="!item.payment?.depurado"
+          v-if="!item.payment?.depurado && invoiceForItem(item)"
+          type="button"
+          class="payment-ledger-action payment-ledger-action--invoiced"
+          :title="`Ver factura ${invoiceForItem(item)?.folio || ''}`"
+          :aria-label="`Ver factura ${invoiceForItem(item)?.folio || ''}`"
+          @click="emit('open-invoice', invoiceForItem(item))"
+        >
+          <LucideBadgeCheck :size="15" />
+        </button>
+        <button
+          v-else-if="!item.payment?.depurado"
           type="button"
           class="payment-ledger-action"
           title="Facturar pago"
@@ -97,6 +107,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
+  LucideBadgeCheck,
   LucideBan,
   LucideCreditCard,
   LucideDownload,
@@ -114,15 +125,25 @@ const props = defineProps({
   debts: { type: Array, default: () => [] },
   selectedKeys: { type: Array, default: () => [] },
   pendingTotal: { type: Number, default: 0 },
+  invoiceLinks: { type: Object, default: () => ({}) },
 })
 
-const emit = defineEmits(['toggle', 'receipt', 'invoice', 'cancel', 'pay'])
+const emit = defineEmits(['toggle', 'receipt', 'invoice', 'open-invoice', 'cancel', 'pay'])
 
 const paymentItems = computed(() => buildPaymentItems(props.debts as any[]))
 const selectedKeySet = computed(() => new Set((props.selectedKeys || []).map(String)))
 const selectionLimitReached = computed(
   () => selectedKeySet.value.size >= MAX_COMBINED_RECEIPT_PAYMENTS,
 )
+
+const invoiceForItem = (item: any) => {
+  const payment = item?.payment || {}
+  const folio = String(payment?.folio || '').trim()
+  const folioPlantel = String(payment?.folio_plantel || '').trim().toUpperCase()
+  return (folio && props.invoiceLinks?.[`folio:${folio}`])
+    || (folioPlantel && props.invoiceLinks?.[`plantel:${folioPlantel}`])
+    || null
+}
 
 const isSelected = (item: any) => selectedKeySet.value.has(paymentItemKey(item))
 const selectionDisabled = (item: any) =>
@@ -425,6 +446,13 @@ const formatDate = (value: unknown) => {
     opacity: 1;
     transform: none;
   }
+}
+
+
+.payment-ledger-action--invoiced {
+  border-color: #b7d7b8;
+  background: #f3faf3;
+  color: #285d32;
 }
 
 @media (max-width: 720px) {

@@ -1,1 +1,1 @@
-Corrige la confirmación y los errores del flujo de facturación CFDI
+Integra el historial de facturas por alumno y vincula cada CFDI con sus pagos

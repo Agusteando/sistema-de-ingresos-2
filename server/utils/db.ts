@@ -534,7 +534,15 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
       await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS facturas (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          provider_invoice_id VARCHAR(191) DEFAULT NULL,
+          uuid VARCHAR(64) DEFAULT NULL,
           matricula VARCHAR(50) NOT NULL,
+          plantel VARCHAR(20) DEFAULT NULL,
+          ciclo VARCHAR(50) DEFAULT NULL,
+          series VARCHAR(20) DEFAULT NULL,
+          folio_number BIGINT DEFAULT NULL,
+          folio VARCHAR(100) DEFAULT NULL,
+          external_id VARCHAR(255) DEFAULT NULL,
           rfc VARCHAR(20) NOT NULL,
           razonSocial VARCHAR(255) NOT NULL,
           regimenFiscal VARCHAR(10) DEFAULT NULL,
@@ -543,7 +551,40 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
           correo VARCHAR(255) DEFAULT NULL,
           total DECIMAL(10,2) NOT NULL,
           folios TEXT NOT NULL,
-          fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+          payment_form VARCHAR(20) DEFAULT NULL,
+          status VARCHAR(30) NOT NULL DEFAULT 'valid',
+          cancellation_status VARCHAR(30) NOT NULL DEFAULT 'none',
+          issued_at DATETIME DEFAULT NULL,
+          provider_created_at DATETIME DEFAULT NULL,
+          last_synced_at DATETIME DEFAULT NULL,
+          created_by VARCHAR(255) DEFAULT NULL,
+          provider_snapshot LONGTEXT DEFAULT NULL,
+          fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_facturas_provider_invoice (provider_invoice_id),
+          INDEX idx_facturas_matricula_fecha (matricula, issued_at),
+          INDEX idx_facturas_rfc (rfc),
+          INDEX idx_facturas_status (status, cancellation_status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS factura_pagos (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          factura_id INT NOT NULL,
+          folio BIGINT DEFAULT NULL,
+          folio_plantel VARCHAR(100) DEFAULT NULL,
+          documento BIGINT DEFAULT NULL,
+          matricula VARCHAR(50) NOT NULL,
+          ciclo VARCHAR(50) DEFAULT NULL,
+          concepto VARCHAR(255) DEFAULT NULL,
+          monto DECIMAL(10,2) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_factura_pago_source (factura_id, folio, folio_plantel, documento),
+          INDEX idx_factura_pagos_factura (factura_id),
+          INDEX idx_factura_pagos_matricula (matricula, ciclo),
+          INDEX idx_factura_pagos_folio (folio),
+          INDEX idx_factura_pagos_folio_plantel (folio_plantel),
+          CONSTRAINT fk_factura_pagos_factura FOREIGN KEY (factura_id) REFERENCES facturas(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
 
@@ -892,6 +933,32 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
           await checkAndAddColumn('talleres_servicios_catalogo', 'created_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP")
           await checkAndAddColumn('talleres_servicios_catalogo', 'updated_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
           await runOptionalIndexQuery(`ALTER TABLE talleres_servicios_catalogo ADD INDEX idx_talleres_servicios_activo_orden (activo, orden)`)
+        }
+      } catch (e) {}
+
+      try {
+        const tables = await rawQuery<any[]>(`SHOW TABLES LIKE 'facturas'`)
+        if (tables.length > 0) {
+          await checkAndAddColumn('facturas', 'provider_invoice_id', "VARCHAR(191) DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'uuid', "VARCHAR(64) DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'plantel', "VARCHAR(20) DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'ciclo', "VARCHAR(50) DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'series', "VARCHAR(20) DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'folio_number', "BIGINT DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'folio', "VARCHAR(100) DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'external_id', "VARCHAR(255) DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'payment_form', "VARCHAR(20) DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'status', "VARCHAR(30) NOT NULL DEFAULT 'valid'")
+          await checkAndAddColumn('facturas', 'cancellation_status', "VARCHAR(30) NOT NULL DEFAULT 'none'")
+          await checkAndAddColumn('facturas', 'issued_at', "DATETIME DEFAULT NULL", "UPDATE facturas SET issued_at = fecha WHERE issued_at IS NULL")
+          await checkAndAddColumn('facturas', 'provider_created_at', "DATETIME DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'last_synced_at', "DATETIME DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'created_by', "VARCHAR(255) DEFAULT NULL")
+          await checkAndAddColumn('facturas', 'provider_snapshot', "LONGTEXT DEFAULT NULL")
+          await runOptionalIndexQuery(`ALTER TABLE facturas ADD UNIQUE INDEX uniq_facturas_provider_invoice (provider_invoice_id)`)
+          await runOptionalIndexQuery(`ALTER TABLE facturas ADD INDEX idx_facturas_matricula_fecha (matricula, issued_at)`)
+          await runOptionalIndexQuery(`ALTER TABLE facturas ADD INDEX idx_facturas_rfc (rfc)`)
+          await runOptionalIndexQuery(`ALTER TABLE facturas ADD INDEX idx_facturas_status (status, cancellation_status)`)
         }
       } catch (e) {}
 

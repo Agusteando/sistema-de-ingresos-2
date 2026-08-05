@@ -167,19 +167,60 @@ model Documentos {
 }
 
 model Facturas {
-  id            Int       @id @default(autoincrement())
-  matricula     String    @db.VarChar(50)
-  rfc           String    @db.VarChar(20)
-  razonSocial   String    @db.VarChar(255)
-  regimenFiscal String?   @db.VarChar(10)
-  usoCfdi       String?   @db.VarChar(10)
-  cp            String?   @db.VarChar(10)
-  correo        String?   @db.VarChar(255)
-  total         Decimal   @db.Decimal(10, 2)
-  folios        String    @db.Text
-  fecha         DateTime? @default(now()) @db.DateTime(0)
+  id                  Int       @id @default(autoincrement())
+  providerInvoiceId   String?   @unique(map: "uniq_facturas_provider_invoice") @map("provider_invoice_id") @db.VarChar(191)
+  uuid                String?   @db.VarChar(64)
+  matricula           String    @db.VarChar(50)
+  plantel             String?   @db.VarChar(20)
+  ciclo               String?   @db.VarChar(50)
+  series              String?   @db.VarChar(20)
+  folioNumber         BigInt?   @map("folio_number")
+  folio               String?   @db.VarChar(100)
+  externalId          String?   @map("external_id") @db.VarChar(255)
+  rfc                 String    @db.VarChar(20)
+  razonSocial         String    @db.VarChar(255)
+  regimenFiscal       String?   @db.VarChar(10)
+  usoCfdi             String?   @db.VarChar(10)
+  cp                  String?   @db.VarChar(10)
+  correo              String?   @db.VarChar(255)
+  total               Decimal   @db.Decimal(10, 2)
+  folios              String    @db.Text
+  paymentForm         String?   @map("payment_form") @db.VarChar(20)
+  status              String    @default("valid") @db.VarChar(30)
+  cancellationStatus  String    @default("none") @map("cancellation_status") @db.VarChar(30)
+  issuedAt            DateTime? @map("issued_at") @db.DateTime(0)
+  providerCreatedAt   DateTime? @map("provider_created_at") @db.DateTime(0)
+  lastSyncedAt        DateTime? @map("last_synced_at") @db.DateTime(0)
+  createdBy           String?   @map("created_by") @db.VarChar(255)
+  providerSnapshot    String?   @map("provider_snapshot") @db.LongText
+  fecha               DateTime? @default(now()) @db.DateTime(0)
+  pagos               FacturaPagos[]
 
+  @@index([matricula, issuedAt], map: "idx_facturas_matricula_fecha")
+  @@index([rfc], map: "idx_facturas_rfc")
+  @@index([status, cancellationStatus], map: "idx_facturas_status")
   @@map("facturas")
+}
+
+model FacturaPagos {
+  id            Int       @id @default(autoincrement())
+  facturaId     Int       @map("factura_id")
+  folio         BigInt?
+  folioPlantel  String?   @map("folio_plantel") @db.VarChar(100)
+  documento     BigInt?
+  matricula     String    @db.VarChar(50)
+  ciclo         String?   @db.VarChar(50)
+  concepto      String?   @db.VarChar(255)
+  monto         Decimal?  @db.Decimal(10, 2)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+  factura       Facturas  @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+
+  @@unique([facturaId, folio, folioPlantel, documento], map: "uniq_factura_pago_source")
+  @@index([facturaId], map: "idx_factura_pagos_factura")
+  @@index([matricula, ciclo], map: "idx_factura_pagos_matricula")
+  @@index([folio], map: "idx_factura_pagos_folio")
+  @@index([folioPlantel], map: "idx_factura_pagos_folio_plantel")
+  @@map("factura_pagos")
 }
 
 model FormasPago {

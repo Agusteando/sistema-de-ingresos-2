@@ -53,6 +53,15 @@
               >
                 {{ emailFeedback.message }}
               </div>
+
+              <div
+                v-if="generatedInvoice.indexWarning"
+                class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                role="status"
+              >
+                <strong>Factura emitida, historial pendiente.</strong>
+                {{ generatedInvoice.indexWarning }} La factura puede descargarse desde esta ventana; actualiza el listado de facturas después.
+              </div>
             </div>
           </section>
 
@@ -196,7 +205,7 @@
           </div>
           </template>
         </div>
-        
+
         <div class="modal-footer rounded-b-xl sticky bottom-0 z-10">
           <button class="btn btn-ghost" @click="requestClose" type="button" :disabled="loading || emailing">
             {{ generatedInvoice ? 'Cerrar' : 'Cancelar' }}
@@ -425,7 +434,27 @@ const buildPayload = () => {
     complement: `<iedu:instEducativas xmlns:iedu="http://www.sat.gob.mx/iedu" version="1.0" nombreAlumno="${escapeXml(form.value.nombreCompleto)}" CURP="${escapeXml(studentCurp)}" nivelEducativo="${escapeXml(validatedNivel)}" autRVOE="${escapeXml(form.value.autRVOE)}" />`
   }))
 
+  const sourcePayments = ctx.conceptos.map((concepto) => {
+    const folio = Number(concepto.folio)
+    const documento = Number(concepto.documento)
+    return {
+      folio: Number.isInteger(folio) && folio > 0 ? folio : null,
+      folio_plantel: normalizeText(concepto.folio_plantel || concepto.external_id),
+      documento: Number.isInteger(documento) && documento > 0 ? documento : null,
+      matricula: ctx.matricula,
+      ciclo: normalizeText(concepto.ciclo || props.student?.ciclo),
+      concepto: normalizeText(concepto.conceptoNombre),
+      monto: Number(concepto.monto || 0),
+    }
+  })
+
   return {
+    localTracking: {
+      matricula: ctx.matricula,
+      plantel: ctx.plantel || props.student?.plantel || '',
+      ciclo: normalizeText(ctx.conceptos.find((concepto) => concepto.ciclo)?.ciclo || props.student?.ciclo),
+      sourcePayments,
+    },
     companyData: {
       legal_name: form.value.legal_name,
       tax_id: form.value.tax_id.toUpperCase(),
@@ -511,7 +540,11 @@ const submit = async () => {
     generatedInvoice.value = {
       invoice_id: invoiceId,
       folio,
-      email: form.value.email
+      email: form.value.email,
+      localInvoiceId: res.local_invoice_id || null,
+      indexWarning: res.local_indexed === false
+        ? normalizeErrorText(res.local_index_warning || 'No se pudo guardar la factura en el historial local.')
+        : '',
     }
     emit('success', generatedInvoice.value)
     await focusFeedback(resultPanelRef)

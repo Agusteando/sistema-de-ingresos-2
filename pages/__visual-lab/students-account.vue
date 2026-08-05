@@ -55,6 +55,7 @@
               :external-concepts="externalConcepts"
               :tipo-ingreso-concepts="externalConcepts"
               :visual-lab-debts="selectedVisualDebts"
+              :visual-lab-invoices="selectedVisualInvoices"
             />
           </section>
         </div>
@@ -210,6 +211,53 @@ const selectedCount = computed(() => selectedMatriculas.value.size)
 const allDisplayedSelected = computed(() => selectedCount.value === students.value.length)
 const someDisplayedSelected = computed(() => selectedCount.value > 0 && !allDisplayedSelected.value)
 const selectedVisualDebts = computed(() => accountDebtsByMatricula[selectedStudent.value?.matricula] || [])
+const visualInvoicesByMatricula = {
+  PTO574: [
+    {
+      id: 1,
+      providerInvoiceId: 'visual-invoice-pt-1842',
+      uuid: '9A2764D4-782B-4D67-B561-2B7B2710D982',
+      matricula: 'PTO574',
+      plantel: 'PT',
+      ciclo: '2026',
+      series: 'PT',
+      folioNumber: 1842,
+      folio: 'PT1842',
+      receiverName: 'Tutor Fiscal de Prueba',
+      receiverTaxId: 'XAXX010101000',
+      receiverEmail: 'tutor@example.test',
+      total: 1899.6,
+      paymentForm: '03',
+      status: 'valid',
+      cancellationStatus: 'none',
+      issuedAt: '2026-02-03T13:45:00',
+      actionable: true,
+      sourcePayments: [
+        { folio: 261, folioPlantel: 'PT-0001-A', documento: 'PT-2026-0001', ciclo: '2026', concepto: 'INSCRIPCION 2026-2027 PRIM TOL', monto: 1177.75 },
+        { folio: 262, folioPlantel: 'PT-0001-B', documento: 'PT-2026-0001', ciclo: '2026', concepto: 'INSCRIPCION 2026-2027 PRIM TOL', monto: 721.85 },
+      ],
+    },
+  ],
+  PTO696: [
+    {
+      id: 2,
+      providerInvoiceId: 'visual-invoice-pt-1850',
+      matricula: 'PTO696',
+      plantel: 'PT',
+      ciclo: '2026',
+      folio: 'PT1850',
+      receiverName: 'Empresa Educativa de Prueba',
+      receiverTaxId: 'XEXX010101000',
+      total: 1900,
+      status: 'valid',
+      cancellationStatus: 'pending',
+      issuedAt: '2026-02-04T09:20:00',
+      actionable: true,
+      sourcePayments: [],
+    },
+  ],
+}
+const selectedVisualInvoices = computed(() => visualInvoicesByMatricula[selectedStudent.value?.matricula] || [])
 const photoCache = computed(() => labMatriculas.reduce((cache, matricula) => {
   cache[matricula] = matricula === 'PTO574' ? visualPhotoUrl : 'none'
   return cache
