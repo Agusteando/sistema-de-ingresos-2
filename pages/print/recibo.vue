@@ -44,7 +44,6 @@
       :debts="invoiceDebts"
       :student="invoiceStudent"
       @close="showInvoiceModal = false"
-      @success="handleInvoiceSuccess"
     />
   </div>
 </template>
@@ -257,9 +256,6 @@ const openInvoiceModal = () => {
   showInvoiceModal.value = true
 }
 
-const handleInvoiceSuccess = () => {
-  showInvoiceModal.value = false
-}
 </script>
 
 <style scoped>

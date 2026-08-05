@@ -46,9 +46,24 @@ export const proxyCfdiEvent = async (event: any, targetPath: string) => {
       body: body || undefined
     })
   } catch (err: any) {
+    const providerPayload = err?.data || err?.response?._data || {}
+    const providerStatus = Number(err?.response?.status || err?.statusCode || err?.status || 500)
+    const providerMessage = String(
+      providerPayload?.error
+      || providerPayload?.message
+      || err?.statusMessage
+      || err?.message
+      || 'Error en comunicación con proveedor CFDI'
+    ).trim()
+
     throw createError({
-      statusCode: err?.response?.status || err?.statusCode || 500,
-      message: err?.data?.error || err?.data?.message || err.message || 'Error en comunicación con proveedor CFDI'
+      statusCode: providerStatus,
+      statusMessage: providerStatus >= 500 ? 'Proveedor CFDI no disponible' : 'Solicitud CFDI rechazada',
+      message: providerMessage,
+      data: {
+        providerStatus,
+        providerMessage
+      }
     })
   }
 }

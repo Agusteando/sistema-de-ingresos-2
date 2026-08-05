@@ -1,1 +1,1 @@
-Restaura el recibo compacto y conserva institución y trazabilidad de correo
+Corrige la confirmación y los errores del flujo de facturación CFDI

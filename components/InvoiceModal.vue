@@ -1,35 +1,100 @@
 <template>
   <Teleport to="body">
-    <div class="modal-overlay overflow-y-auto p-4" @click.self="$emit('close')">
-      <div class="modal-container large w-full max-w-4xl h-auto my-auto">
+    <div class="modal-overlay overflow-y-auto p-4" @click.self="requestClose">
+      <div class="modal-container large w-full max-w-4xl h-auto my-auto" role="dialog" aria-modal="true" aria-labelledby="invoice-modal-title">
         <div class="modal-header rounded-t-xl sticky top-0 z-10">
-          <h2 class="text-lg font-bold text-gray-800">Facturación</h2>
+          <h2 id="invoice-modal-title" class="text-lg font-bold text-gray-800">{{ generatedInvoice ? 'Factura generada' : 'Facturación' }}</h2>
         </div>
 
         <div class="modal-content p-6 space-y-4">
-          <div v-if="loadingCompany" class="card p-4 text-sm text-gray-500 flex items-center gap-2">
-            <LucideLoader2 class="animate-spin" :size="16" /> Cargando información...
-          </div>
-
-          <div v-if="generatedInvoice" class="card p-5 border-emerald-200 bg-emerald-50/60">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <span class="text-[10px] font-bold uppercase tracking-wide text-emerald-700">Factura generada</span>
-                <h3 class="text-xl font-bold text-gray-800 m-0">Folio {{ generatedInvoice.folio }}</h3>
+          <section v-if="generatedInvoice" ref="resultPanelRef" class="card border-emerald-200 bg-emerald-50/60 overflow-hidden" aria-live="polite" tabindex="-1">
+            <div class="p-6 md:p-8">
+              <div class="flex items-start gap-4">
+                <span class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+                  <LucideCheckCircle :size="24" />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <span class="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700">Emisión confirmada</span>
+                  <h3 class="mt-1 mb-0 text-2xl font-bold text-gray-900">
+                    {{ generatedInvoice.folio ? `Folio ${generatedInvoice.folio}` : 'Factura generada sin folio devuelto' }}
+                  </h3>
+                  <p class="mt-2 mb-0 text-sm text-gray-600">
+                    La factura quedó registrada. Conserva el identificador y descarga los archivos antes de cerrar esta ventana.
+                  </p>
+                </div>
               </div>
-              <div class="flex flex-wrap gap-2">
+
+              <dl class="mt-6 grid gap-3 rounded-xl border border-emerald-200 bg-white/80 p-4 text-sm md:grid-cols-2">
+                <div class="min-w-0">
+                  <dt class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Identificador CFDI</dt>
+                  <dd class="mt-1 break-all font-mono font-semibold text-gray-900">{{ generatedInvoice.invoice_id }}</dd>
+                </div>
+                <div class="min-w-0">
+                  <dt class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Receptor</dt>
+                  <dd class="mt-1 break-all font-semibold text-gray-900">{{ generatedInvoice.email || 'Sin correo registrado' }}</dd>
+                </div>
+              </dl>
+
+              <div class="mt-5 flex flex-wrap gap-2" aria-label="Archivos de la factura">
                 <button class="btn btn-outline" type="button" @click="openDownload('pdf')"><LucideFileDown :size="14" /> PDF</button>
                 <button class="btn btn-outline" type="button" @click="openDownload('xml')"><LucideFileText :size="14" /> XML</button>
                 <button class="btn btn-outline" type="button" @click="openDownload('zip')"><LucideArchive :size="14" /> ZIP</button>
                 <button class="btn btn-primary" type="button" @click="sendGeneratedByEmail" :disabled="emailing">
                   <LucideLoader2 v-if="emailing" class="animate-spin" :size="14" />
-                  <LucideMail v-else :size="14" /> Email
+                  <LucideMail v-else :size="14" /> {{ emailing ? 'Enviando...' : 'Enviar por email' }}
                 </button>
               </div>
-            </div>
-          </div>
 
-          <div v-if="validationIssues.length" class="card p-4 border-amber-200 bg-amber-50/70">
+              <div
+                v-if="emailFeedback"
+                class="mt-4 rounded-lg border px-4 py-3 text-sm"
+                :class="emailFeedback.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'"
+                role="status"
+              >
+                {{ emailFeedback.message }}
+              </div>
+            </div>
+          </section>
+
+          <template v-else>
+            <div v-if="loadingCompany" class="card p-4 text-sm text-gray-500 flex items-center gap-2" role="status">
+              <LucideLoader2 class="animate-spin" :size="16" /> Cargando información...
+            </div>
+
+            <div v-if="companyLoadError" class="card p-4 border-amber-200 bg-amber-50/70 text-sm text-amber-900">
+              <div class="flex items-start gap-3">
+                <LucideAlertTriangle class="shrink-0 mt-0.5" :size="18" />
+                <div>
+                  <strong>No se pudieron precargar los datos fiscales.</strong>
+                  <p class="m-0 mt-1">{{ companyLoadError }} Puedes completar o corregir los campos manualmente.</p>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="loading" class="card p-5 border-blue-200 bg-blue-50/70" role="status" aria-live="assertive">
+              <div class="flex items-center gap-3 text-blue-900">
+                <LucideLoader2 class="animate-spin shrink-0" :size="20" />
+                <div>
+                  <strong class="block">Generando CFDI...</strong>
+                  <span class="text-sm">No cierres esta ventana hasta recibir el folio o un mensaje de error.</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="submissionError" ref="submissionErrorRef" class="card p-5 border-red-200 bg-red-50/70" role="alert" aria-live="assertive" tabindex="-1">
+              <div class="flex items-start gap-3 text-red-900">
+                <LucideXCircle class="shrink-0 mt-0.5" :size="20" />
+                <div class="min-w-0">
+                  <h3 class="m-0 text-sm font-bold">{{ submissionError.title }}</h3>
+                  <p class="m-0 mt-1 text-sm">{{ submissionError.message }}</p>
+                  <ul v-if="submissionError.details.length" class="mt-2 mb-0 list-disc pl-5 text-xs">
+                    <li v-for="detail in submissionError.details" :key="detail">{{ detail }}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+          <div v-if="!loading && validationIssues.length" class="card p-4 border-amber-200 bg-amber-50/70">
             <div class="flex items-start gap-3">
               <LucideAlertTriangle class="text-amber-600 shrink-0 mt-0.5" :size="18" />
               <div>
@@ -129,11 +194,14 @@
               </table>
             </div>
           </div>
+          </template>
         </div>
         
         <div class="modal-footer rounded-b-xl sticky bottom-0 z-10">
-          <button class="btn btn-ghost" @click="$emit('close')" type="button">Cerrar</button>
-          <button class="btn btn-primary" @click="submit" :disabled="loading || !canSubmit">
+          <button class="btn btn-ghost" @click="requestClose" type="button" :disabled="loading || emailing">
+            {{ generatedInvoice ? 'Cerrar' : 'Cancelar' }}
+          </button>
+          <button v-if="!generatedInvoice" class="btn btn-primary" @click="submit" :disabled="loading || !canSubmit">
             <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
             {{ loading ? 'Generando...' : 'Generar factura' }}
           </button>
@@ -144,10 +212,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   LucideAlertTriangle,
   LucideArchive,
+  LucideCheckCircle,
+  LucideXCircle,
   LucideFileDown,
   LucideFileText,
   LucideLoader2,
@@ -183,7 +253,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'success'])
 
 useModalEscape(() => {
-  if (!loading.value) emit('close')
+  if (!loading.value && !emailing.value) emit('close')
 })
 const { show } = useToast()
 
@@ -193,7 +263,44 @@ const loading = ref(false)
 const loadingCompany = ref(false)
 const emailing = ref(false)
 const generatedInvoice = ref(null)
+const submissionError = ref(null)
+const companyLoadError = ref('')
+const emailFeedback = ref(null)
+const resultPanelRef = ref(null)
+const submissionErrorRef = ref(null)
 const ieduLocks = ref({ nombreCompleto: false, CURP: false, nivelEducativo: false, autRVOE: false })
+
+const requestClose = () => {
+  if (!loading.value && !emailing.value) emit('close')
+}
+
+const normalizeErrorText = (value) => String(value || '').trim()
+
+const requestErrorDetails = (error) => {
+  const payload = error?.data?.data || error?.data || {}
+  const status = Number(payload?.providerStatus || error?.statusCode || error?.status || 0)
+  return status ? [`Código de respuesta: ${status}`] : []
+}
+
+const resolveRequestError = (error, fallback, title = 'No se pudo generar la factura') => {
+  const payload = error?.data?.data || error?.data || {}
+  const message = normalizeErrorText(
+    payload?.providerMessage
+    || payload?.message
+    || payload?.error
+    || error?.statusMessage
+    || error?.message
+    || fallback
+  ) || fallback
+
+  return { title, message, details: requestErrorDetails(error) }
+}
+
+const focusFeedback = async (target) => {
+  await nextTick()
+  target.value?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+  target.value?.focus?.({ preventScroll: true })
+}
 
 const selectedNivelDefault = computed(() => inferNivelFromBase(props.student?.nivel) || studentNivelLabel(props.student))
 const legacyContext = computed(() => resolveLegacyInvoiceContext({ student: props.student || {}, selectedConcepts: props.debts || [] }))
@@ -292,7 +399,9 @@ onMounted(async () => {
     const res = await $fetch(`${INVOICE_BASE_API_URL}/getCompanyData`, { params: { matricula: legacyContext.value.matricula } })
     if (res?.success && res?.data) applyCompanyDefaults(res.data)
   } catch (e) {
-    show('No se pudo cargar la información.', 'danger')
+    const error = resolveRequestError(e, 'No se pudo consultar la información guardada.', 'No se pudieron cargar los datos fiscales')
+    companyLoadError.value = error.message
+    show(error.message, 'danger')
   } finally {
     loadingCompany.value = false
   }
@@ -356,29 +465,62 @@ const buildPayload = () => {
 
 const submit = async () => {
   if (!canSubmit.value) {
-    show(validationIssues.value[0] || 'Revisa la información.', 'danger')
+    const message = validationIssues.value[0] || 'Revisa la información.'
+    submissionError.value = {
+      title: 'Faltan datos para facturar',
+      message,
+      details: []
+    }
+    show(message, 'danger')
+    await focusFeedback(submissionErrorRef)
     return
   }
 
   loading.value = true
   generatedInvoice.value = null
+  submissionError.value = null
+  emailFeedback.value = null
+
   try {
     const res = await $fetch(`${INVOICE_BASE_API_URL}/saveCompanyAndGenerate`, { method: 'POST', body: buildPayload() })
     if (!res?.success) {
-      show(res?.error || 'No se pudo generar la factura.', 'danger')
+      const error = resolveRequestError({ data: res }, 'El proveedor rechazó la solicitud de facturación.')
+      submissionError.value = error
+      show(error.message, 'danger')
+      await focusFeedback(submissionErrorRef)
       return
     }
 
-    const invoiceId = res.invoice_id || res.factura?.id
+    const invoiceId = normalizeErrorText(res.invoice_id || res.factura?.id || res.data?.invoice_id || res.data?.factura?.id)
+    if (!invoiceId) {
+      const error = {
+        title: 'Respuesta incompleta del proveedor',
+        message: 'El proveedor indicó que la operación fue exitosa, pero no devolvió el identificador de la factura. No se puede confirmar ni descargar el CFDI desde esta pantalla.',
+        details: ['No intentes generar otra factura hasta verificar la operación en el listado de facturas.']
+      }
+      submissionError.value = error
+      show(error.message, 'danger', { duration: 8000 })
+      await focusFeedback(submissionErrorRef)
+      return
+    }
+
+    const series = normalizeErrorText(res.series || res.factura?.series || res.data?.series)
+    const folioNumber = normalizeErrorText(res.folio_number || res.factura?.folio_number || res.data?.folio_number)
+    const folio = normalizeErrorText(res.folio || res.factura?.folio || res.data?.folio || `${series}${folioNumber}`)
+
     generatedInvoice.value = {
       invoice_id: invoiceId,
-      folio: res.folio || `${res.series || ''}${res.folio_number || ''}` || invoiceId,
+      folio,
       email: form.value.email
     }
-    show(`Factura generada. Folio ${generatedInvoice.value.folio}`, 'success')
-    emit('success')
+    emit('success', generatedInvoice.value)
+    await focusFeedback(resultPanelRef)
+    show(folio ? `Factura generada. Folio ${folio}` : 'Factura generada correctamente.', 'success', { duration: 6000 })
   } catch (e) {
-    show(e?.data?.message || e?.data?.error || 'No se pudo generar la factura.', 'danger')
+    const error = resolveRequestError(e, 'No se pudo generar la factura.')
+    submissionError.value = error
+    show(error.message, 'danger', { duration: 7000 })
+    await focusFeedback(submissionErrorRef)
   } finally {
     loading.value = false
   }
@@ -387,27 +529,38 @@ const submit = async () => {
 const downloadUrl = (format) => `${INVOICE_BASE_API_URL}/downloadInvoice/${encodeURIComponent(generatedInvoice.value?.invoice_id || '')}/${format}?matricula=${encodeURIComponent(legacyContext.value.matricula)}`
 const openDownload = (format) => {
   if (!generatedInvoice.value?.invoice_id) return
-  window.open(downloadUrl(format), '_blank')
+  window.open(downloadUrl(format), '_blank', 'noopener')
 }
 
 const sendGeneratedByEmail = async () => {
   if (!generatedInvoice.value?.invoice_id) return
   const email = window.prompt('Correo para enviar la factura:', generatedInvoice.value.email || form.value.email)
   if (email === null) return
-  if (email && !isValidEmail(email)) return show('Email inválido.', 'danger')
+  if (email && !isValidEmail(email)) {
+    emailFeedback.value = { type: 'danger', message: 'El correo electrónico no es válido.' }
+    show('Email inválido.', 'danger')
+    return
+  }
 
   emailing.value = true
+  emailFeedback.value = null
   try {
-    await $fetch(`${INVOICE_BASE_API_URL}/sendInvoiceEmail`, {
+    const res = await $fetch(`${INVOICE_BASE_API_URL}/sendInvoiceEmail`, {
       method: 'POST',
       body: { invoice_id: generatedInvoice.value.invoice_id, email: email || null, matricula: legacyContext.value.matricula }
     })
+    if (res?.success === false) throw { data: res }
+
     generatedInvoice.value.email = email || generatedInvoice.value.email
+    emailFeedback.value = { type: 'success', message: `Factura enviada a ${generatedInvoice.value.email || 'la dirección registrada'}.` }
     show('Factura enviada por correo.', 'success')
   } catch (e) {
-    show(e?.data?.message || 'No se pudo enviar la factura.', 'danger')
+    const error = resolveRequestError(e, 'No se pudo enviar la factura.', 'No se pudo enviar el correo')
+    emailFeedback.value = { type: 'danger', message: error.message }
+    show(error.message, 'danger', { duration: 6000 })
   } finally {
     emailing.value = false
   }
 }
+
 </script>
