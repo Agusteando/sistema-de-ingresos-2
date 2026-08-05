@@ -18,9 +18,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 404, message: 'Recibos no vigentes o no encontrados.' })
   }
 
+  const user = event.context.user
+  const sentByEmail = String(user?.email || '').trim()
+  const sentByName = String(user?.name || sentByEmail).trim()
   const pdf = generatePaymentReceiptPdf({
     items: receipt.items,
     issuedAt: receipt.issuedAt,
+    sentByName,
+    sentByEmail,
   })
   const filename = paymentReceiptFilename(receipt.items).replace(/["\\\r\n]/g, '-')
   const download = ['1', 'true', 'attachment'].includes(firstQueryValue(query.download || query.disposition).toLowerCase())

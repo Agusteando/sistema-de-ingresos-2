@@ -98,15 +98,6 @@ export const loadActiveReceiptPayments = async (value: unknown) => {
   }
 }
 
-const resolveReceiptIssuedAt = (items: any[]) => {
-  const validDates = items
-    .map((item) => new Date(String(item?.fecha || '')))
-    .filter((date) => !Number.isNaN(date.getTime()))
-    .sort((left, right) => right.getTime() - left.getTime())
-
-  return validDates[0] || new Date('2000-01-01T00:00:00.000Z')
-}
-
 export const loadPaymentReceiptDocument = async (value: unknown) => {
   const { folios, items, matricula } = await loadActiveReceiptPayments(value)
 
@@ -127,7 +118,7 @@ export const loadPaymentReceiptDocument = async (value: unknown) => {
   )
   const academicPlacement = resolveReceiptAcademicPlacement(studentData, items[0]?.ciclo)
   const documentPlantel = normalizePlantelCode(items[0]?.plantel || studentData?.plantel)
-  const issuedAt = resolveReceiptIssuedAt(items)
+  const issuedAt = new Date()
   const institutionName = institutionNameForPlantel(documentPlantel)
 
   const receiptItems = items.map((ref) => ({

@@ -6,12 +6,9 @@
 
     <div class="max-w-[850px] mx-auto mb-6 print:hidden flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm relative z-20">
       <button class="btn btn-ghost" @click="closeWindow">Volver</button>
-      <div class="flex flex-wrap justify-end gap-2">
+      <div class="flex gap-2">
         <button class="btn btn-outline" @click="emailReceipt" :disabled="emailing || isPreview || loadingReceipt || receiptError || !items.length">
           <LucideMail :size="16" /> {{ emailing ? 'Enviando...' : 'Enviar email' }}
-        </button>
-        <button class="btn btn-outline" @click="downloadReceiptPdf" :disabled="isPreview || loadingReceipt || receiptError || !items.length">
-          <LucideDownload :size="16" /> Descargar PDF
         </button>
         <button class="btn btn-secondary" @click="openInvoiceModal" :disabled="isPreview || loadingReceipt || receiptError || !items.length">
           <LucideFileText :size="16" /> Facturar CFDI
@@ -56,7 +53,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCookie } from '#app'
-import { LucideDownload, LucideFileText, LucideMail, LucidePrinter } from 'lucide-vue-next'
+import { LucideFileText, LucideMail, LucidePrinter } from 'lucide-vue-next'
 import { numeroALetras } from '~/server/utils/numberToWords'
 import { normalizePlantelCode } from '~/shared/utils/institution'
 import InvoiceModal from '~/components/InvoiceModal.vue'
@@ -108,12 +105,6 @@ const issuedAtLabel = computed(() => formatIssuedAt(
   || new Date()
 ))
 
-const receiptPdfUrl = (download = false) => {
-  const params = new URLSearchParams({ folios: normalizedFolios.value.join(',') })
-  if (download) params.set('download', '1')
-  return `/api/payments/receipt-pdf?${params.toString()}`
-}
-
 onMounted(async () => {
   if (isPreview.value) {
     loadingReceipt.value = false
@@ -143,6 +134,7 @@ onMounted(async () => {
     return
   }
 
+  let shouldAutoPrint = false
   try {
     const response = await $fetch('/api/payments/receipt', {
       params: { folios: normalizedFolios.value.join(',') },
@@ -157,30 +149,54 @@ onMounted(async () => {
       montoLetra: item.montoLetra || numeroALetras(Number(item.monto || 0)),
     }))
     receiptData.value = response[0]
+    shouldAutoPrint = true
   } catch (error) {
     receiptError.value = error?.data?.message || error?.message || 'Ocurrió un error al consultar los pagos seleccionados.'
   } finally {
     loadingReceipt.value = false
   }
+
+  if (shouldAutoPrint) await triggerPrint()
 })
 
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve))
 
-const preparePreviewPrint = async () => {
-  await nextTick()
-  const images = Array.from(receiptSheetRef.value?.querySelectorAll('img') || [])
-  await Promise.all(images.map(image => image.complete
-    ? Promise.resolve()
-    : Promise.race([
-        new Promise(resolve => {
-          image.addEventListener('load', resolve, { once: true })
-          image.addEventListener('error', resolve, { once: true })
-        }),
-        new Promise(resolve => setTimeout(resolve, 2500)),
-      ])))
-  if (document.fonts?.ready) {
-    await Promise.race([document.fonts.ready, new Promise(resolve => setTimeout(resolve, 2500))])
+const waitForReceiptItems = async () => {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const renderedItems = receiptSheetRef.value?.querySelectorAll('.receipt-item').length || 0
+    if (renderedItems === items.value.length) return
+    await nextFrame()
   }
+
+  const renderedItems = receiptSheetRef.value?.querySelectorAll('.receipt-item').length || 0
+  throw new Error(`El recibo preparó ${renderedItems} de ${items.value.length} conceptos.`)
+}
+
+const waitForReceiptImages = async () => {
+  const images = Array.from(receiptSheetRef.value?.querySelectorAll('img') || [])
+  await Promise.all(images.map(image => {
+    if (image.complete) return Promise.resolve()
+    return Promise.race([
+      new Promise(resolve => {
+        image.addEventListener('load', resolve, { once: true })
+        image.addEventListener('error', resolve, { once: true })
+      }),
+      new Promise(resolve => setTimeout(resolve, 2500)),
+    ])
+  }))
+}
+
+const prepareReceiptPrint = async () => {
+  await nextTick()
+  await waitForReceiptItems()
+  await waitForReceiptImages()
+  if (document.fonts?.ready) {
+    await Promise.race([
+      document.fonts.ready,
+      new Promise(resolve => setTimeout(resolve, 2500)),
+    ])
+  }
+  await nextFrame()
   await nextFrame()
 }
 
@@ -189,27 +205,12 @@ const closeWindow = () => {
   else window.history.back()
 }
 
-const downloadReceiptPdf = () => {
-  if (isPreview.value || !normalizedFolios.value.length) return
-  const link = document.createElement('a')
-  link.href = receiptPdfUrl(true)
-  link.target = '_blank'
-  link.rel = 'noopener'
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-}
-
 const triggerPrint = async () => {
   if (preparingPrint.value || !items.value.length) return
   preparingPrint.value = true
   try {
-    if (isPreview.value) {
-      await preparePreviewPrint()
-      window.print()
-      return
-    }
-    window.open(receiptPdfUrl(false), '_blank', 'noopener')
+    await prepareReceiptPrint()
+    window.print()
   } catch (error) {
     receiptError.value = error?.message || 'No fue posible preparar el recibo completo para impresión.'
   } finally {

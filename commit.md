@@ -1,1 +1,1 @@
-Unifica la institución por plantel y el PDF canónico de recibos
+Restaura el recibo compacto y conserva institución y trazabilidad de correo

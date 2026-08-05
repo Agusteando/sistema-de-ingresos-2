@@ -35,6 +35,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const pdf = generatePaymentReceiptPdf({
     items: receipt.items,
     issuedAt: receipt.issuedAt,
+    sentByName,
+    sentByEmail: user.email,
   })
 
   await sendEmailFromUser(
