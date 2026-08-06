@@ -2396,6 +2396,49 @@ const normalizeLegacyInvoice = (invoice) => {
   };
 };
 
+const LEGACY_INVOICE_API_URL = 'https://update.casitaapps.com/api';
+
+const fetchLegacyInvoices = async ({
+  tax_id,
+  q = '',
+  status = '',
+  cancel_status = '',
+  date_from = '',
+  date_to = '',
+  series = '',
+  sort_by = 'created_at',
+  sort_dir = 'desc',
+  page = 1,
+  limit = 100,
+}) => {
+  const params = new URLSearchParams({
+    tax_id,
+    q,
+    status,
+    cancel_status,
+    date_from,
+    date_to,
+    series,
+    sort_by,
+    sort_dir,
+    page: String(page),
+    limit: String(limit),
+  });
+
+  // Intentionally preserve the legacy module's query serialization, including
+  // empty filter keys. The provider applies different defaults when those keys
+  // are omitted, so routing this request through the sanitized Nuxt proxy does
+  // not reproduce InvoiceModule.listarFacturas.
+  Object.keys([...params]).forEach((key) => {
+    if (!params.get(key) || params.get(key) === '') params.delete(key);
+  });
+
+  const response = await fetch(`${LEGACY_INVOICE_API_URL}/invoices?${params.toString()}`);
+  const result = await response.json();
+  if (!result?.success) throw new Error(result?.error || 'Error al listar las facturas.');
+  return result;
+};
+
 const loadStudentInvoices = async ({ force = false, silent = false } = {}) => {
   const matricula = String(props.student?.matricula || '').trim();
   if (!matricula) return;
@@ -2408,9 +2451,6 @@ const loadStudentInvoices = async ({ force = false, silent = false } = {}) => {
     return;
   }
 
-  // Match the legacy InvoiceModule flow exactly:
-  // 1) load the student's saved fiscal profile by matrícula;
-  // 2) list provider invoices using that profile's RFC.
   const key = matricula;
   if (!force && studentInvoicesLoadedKey.value === key) return;
   const requestId = ++studentInvoicesRequestId;
@@ -2419,9 +2459,12 @@ const loadStudentInvoices = async ({ force = false, silent = false } = {}) => {
   studentInvoicesWarning.value = '';
 
   try {
-    const companyResult = await $fetch('/api/getCompanyData', {
-      params: { matricula },
-    });
+    // Same browser-to-provider flow used by the legacy InvoiceModule:
+    // getCompanyData by matrícula, then /invoices by the returned RFC.
+    const companyResponse = await fetch(
+      `${LEGACY_INVOICE_API_URL}/getCompanyData?matricula=${encodeURIComponent(matricula)}`,
+    );
+    const companyResult = await companyResponse.json();
     if (!companyResult?.success || !companyResult?.data) {
       throw new Error(companyResult?.error || 'No se pudo cargar la información fiscal del alumno.');
     }
@@ -2431,24 +2474,19 @@ const loadStudentInvoices = async ({ force = false, silent = false } = {}) => {
       throw new Error('El alumno no tiene un RFC fiscal válido guardado.');
     }
 
-    const result = await $fetch('/api/invoices', {
-      params: {
-        tax_id: taxId,
-        q: '',
-        status: '',
-        cancel_status: '',
-        date_from: '',
-        date_to: '',
-        series: '',
-        sort_by: 'created_at',
-        sort_dir: 'desc',
-        page: 1,
-        limit: 100,
-      },
+    const result = await fetchLegacyInvoices({
+      tax_id: taxId,
+      q: '',
+      status: '',
+      cancel_status: '',
+      date_from: '',
+      date_to: '',
+      series: '',
+      sort_by: 'created_at',
+      sort_dir: 'desc',
+      page: 1,
+      limit: 100,
     });
-    if (!result?.success) {
-      throw new Error(result?.error || 'Error al listar las facturas.');
-    }
 
     if (requestId !== studentInvoicesRequestId || String(props.student?.matricula || '').trim() !== matricula) return;
     const invoices = Array.isArray(result?.invoices) ? result.invoices : [];

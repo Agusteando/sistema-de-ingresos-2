@@ -1,1 +1,1 @@
-Usa el listado fiscal legado por RFC en el estado de cuenta
+Corrige el listado de facturas replicando la consulta directa del módulo heredado
