@@ -1,1 +1,1 @@
-Corrige el listado de facturas replicando la consulta directa del módulo heredado
+Corrige el límite y la paginación del listado heredado de facturas

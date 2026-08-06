@@ -550,7 +550,11 @@
                 :warning="studentInvoicesWarning"
                 :highlight-invoice-id="invoiceHighlightId"
                 :compact="!detailsExpanded"
-                @refresh="loadStudentInvoices({ force: true })"
+                :page="studentInvoicePage"
+                :pages="studentInvoicePages"
+                :total="studentInvoiceTotalCount"
+                @refresh="loadStudentInvoices({ force: true, page: studentInvoicePage })"
+                @page-change="changeStudentInvoicePage"
                 @download="downloadStudentInvoice"
                 @email="emailStudentInvoice"
                 @cancel="cancelStudentInvoice"
@@ -1138,6 +1142,9 @@ const studentInvoicesLoading = ref(false);
 const studentInvoicesError = ref("");
 const studentInvoicesWarning = ref("");
 const studentInvoicesLoadedKey = ref("");
+const studentInvoicePage = ref(1);
+const studentInvoicePages = ref(1);
+const studentInvoiceTotalCount = ref(0);
 const invoiceHighlightId = ref("");
 const studentInvoiceFetchTimes = new Map();
 let studentInvoicesRequestId = 0;
@@ -2306,7 +2313,9 @@ const selectedPaymentItems = computed(() =>
   ),
 );
 const selectedReceiptCount = computed(() => selectedPaymentItems.value.length);
-const studentInvoiceCount = computed(() => studentInvoices.value.length);
+const studentInvoiceCount = computed(() =>
+  Math.max(studentInvoiceTotalCount.value, studentInvoices.value.length),
+);
 const studentInvoiceTotal = computed(() =>
   studentInvoices.value
     .filter((invoice) => {
@@ -2409,7 +2418,7 @@ const fetchLegacyInvoices = async ({
   sort_by = 'created_at',
   sort_dir = 'desc',
   page = 1,
-  limit = 100,
+  limit = 20,
 }) => {
   const params = new URLSearchParams({
     tax_id,
@@ -2425,10 +2434,8 @@ const fetchLegacyInvoices = async ({
     limit: String(limit),
   });
 
-  // Intentionally preserve the legacy module's query serialization, including
-  // empty filter keys. The provider applies different defaults when those keys
-  // are omitted, so routing this request through the sanitized Nuxt proxy does
-  // not reproduce InvoiceModule.listarFacturas.
+  // Match InvoiceModule.fetchInvoicesAdv exactly, including its URLSearchParams
+  // serialization, and use the provider-supported page size from the legacy browser.
   Object.keys([...params]).forEach((key) => {
     if (!params.get(key) || params.get(key) === '') params.delete(key);
   });
@@ -2439,11 +2446,17 @@ const fetchLegacyInvoices = async ({
   return result;
 };
 
-const loadStudentInvoices = async ({ force = false, silent = false } = {}) => {
+const LEGACY_INVOICE_PAGE_LIMIT = 20;
+
+const loadStudentInvoices = async ({ force = false, silent = false, page = studentInvoicePage.value } = {}) => {
   const matricula = String(props.student?.matricula || '').trim();
+  const requestedPage = Math.max(1, Number(page) || 1);
   if (!matricula) return;
   if (Array.isArray(props.visualLabDebts)) {
     studentInvoices.value = Array.isArray(props.visualLabInvoices) ? props.visualLabInvoices : [];
+    studentInvoicePage.value = 1;
+    studentInvoicePages.value = 1;
+    studentInvoiceTotalCount.value = studentInvoices.value.length;
     studentInvoicesLoading.value = false;
     studentInvoicesError.value = '';
     studentInvoicesWarning.value = '';
@@ -2451,7 +2464,7 @@ const loadStudentInvoices = async ({ force = false, silent = false } = {}) => {
     return;
   }
 
-  const key = matricula;
+  const key = `${matricula}|${requestedPage}`;
   if (!force && studentInvoicesLoadedKey.value === key) return;
   const requestId = ++studentInvoicesRequestId;
   if (!silent || !studentInvoices.value.length) studentInvoicesLoading.value = true;
@@ -2484,14 +2497,19 @@ const loadStudentInvoices = async ({ force = false, silent = false } = {}) => {
       series: '',
       sort_by: 'created_at',
       sort_dir: 'desc',
-      page: 1,
-      limit: 100,
+      page: requestedPage,
+      limit: LEGACY_INVOICE_PAGE_LIMIT,
     });
 
     if (requestId !== studentInvoicesRequestId || String(props.student?.matricula || '').trim() !== matricula) return;
     const invoices = Array.isArray(result?.invoices) ? result.invoices : [];
+    const resolvedPage = Math.max(1, Number(result?.page) || requestedPage);
+    const resolvedPages = Math.max(1, Number(result?.pages) || 1);
     studentInvoices.value = invoices.map(normalizeLegacyInvoice);
-    studentInvoicesLoadedKey.value = key;
+    studentInvoicePage.value = Math.min(resolvedPage, resolvedPages);
+    studentInvoicePages.value = resolvedPages;
+    studentInvoiceTotalCount.value = Math.max(0, Number(result?.total) || invoices.length);
+    studentInvoicesLoadedKey.value = `${matricula}|${studentInvoicePage.value}`;
     studentInvoiceFetchTimes.set(matricula, Date.now());
   } catch (error) {
     if (requestId !== studentInvoicesRequestId) return;
@@ -2503,6 +2521,13 @@ const loadStudentInvoices = async ({ force = false, silent = false } = {}) => {
   } finally {
     if (requestId === studentInvoicesRequestId) studentInvoicesLoading.value = false;
   }
+};
+
+const changeStudentInvoicePage = (page) => {
+  const nextPage = Math.min(studentInvoicePages.value, Math.max(1, Number(page) || 1));
+  if (nextPage === studentInvoicePage.value || studentInvoicesLoading.value) return;
+  studentInvoicePage.value = nextPage;
+  void loadStudentInvoices({ force: true, page: nextPage });
 };
 
 const downloadStudentInvoice = (invoice, format) => {
@@ -2584,6 +2609,9 @@ watch(
     if (matricula !== previousMatricula) {
       studentInvoices.value = [];
       studentInvoicesLoadedKey.value = '';
+      studentInvoicePage.value = 1;
+      studentInvoicePages.value = 1;
+      studentInvoiceTotalCount.value = 0;
       invoiceSearchQuery.value = '';
       invoiceHighlightId.value = '';
     }
@@ -3159,7 +3187,8 @@ const handleSuccess = () => {
 const handleInvoiceSuccess = (invoice) => {
   invoiceHighlightId.value = String(invoice?.invoice_id || invoice?.localInvoiceId || '');
   studentInvoicesLoadedKey.value = '';
-  void loadStudentInvoices({ force: true });
+  studentInvoicePage.value = 1;
+  void loadStudentInvoices({ force: true, page: 1 });
   loadDebts({ useCache: false, preserveInteraction: true });
 };
 </script>

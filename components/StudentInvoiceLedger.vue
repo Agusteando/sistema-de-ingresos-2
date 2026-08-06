@@ -102,6 +102,30 @@
         </div>
       </article>
     </div>
+
+    <footer v-if="pages > 1 && !loading" class="student-invoice-ledger__pager" aria-label="Paginación de facturas">
+      <span>{{ total }} facturas · Página {{ page }} de {{ pages }}</span>
+      <div>
+        <button
+          type="button"
+          title="Página anterior"
+          aria-label="Página anterior"
+          :disabled="page <= 1"
+          @click="emit('page-change', page - 1)"
+        >
+          <LucideChevronLeft :size="15" />
+        </button>
+        <button
+          type="button"
+          title="Página siguiente"
+          aria-label="Página siguiente"
+          :disabled="page >= pages"
+          @click="emit('page-change', page + 1)"
+        >
+          <LucideChevronRight :size="15" />
+        </button>
+      </div>
+    </footer>
   </section>
 </template>
 
@@ -110,6 +134,8 @@ import {
   LucideAlertTriangle,
   LucideArchive,
   LucideBan,
+  LucideChevronLeft,
+  LucideChevronRight,
   LucideFileDown,
   LucideFileText,
   LucideLoader2,
@@ -126,9 +152,12 @@ const props = defineProps({
   warning: { type: String, default: '' },
   highlightInvoiceId: { type: [String, Number], default: '' },
   compact: { type: Boolean, default: false },
+  page: { type: Number, default: 1 },
+  pages: { type: Number, default: 1 },
+  total: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['refresh', 'download', 'email', 'cancel'])
+const emit = defineEmits(['refresh', 'page-change', 'download', 'email', 'cancel'])
 
 const normalized = (value: unknown) => String(value || '').trim().toLowerCase()
 const statusLabel = (invoice: any) => {
@@ -507,5 +536,44 @@ const sourceKey = (source: any, index: number) => [
     grid-column: 1 / -1;
     justify-content: flex-start;
   }
+}
+
+.student-invoice-ledger__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid #e8edf3;
+  padding: 7px 10px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.student-invoice-ledger__pager > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.student-invoice-ledger__pager button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 27px;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+}
+
+.student-invoice-ledger__pager button:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__pager {
+  padding: 4px 8px;
 }
 </style>
