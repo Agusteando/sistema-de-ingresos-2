@@ -13,8 +13,52 @@ const numberOrNull = (value: unknown) => {
 const dateOrNull = (value: unknown) => {
   const raw = text(value)
   if (!raw) return null
-  const parsed = new Date(raw)
+  const parsed = value instanceof Date ? value : new Date(raw)
   return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+const INVOICE_TIME_ZONE = 'America/Mexico_City'
+const localDateTimePattern = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/
+const explicitTimeZonePattern = /(?:Z|[+-]\d{2}:?\d{2})$/i
+
+/**
+ * MySQL DATETIME is timezone-less and the DB bridge serializes Date objects as
+ * ISO strings. Normalize invoice timestamps before crossing the bridge so the
+ * agent receives `YYYY-MM-DD HH:mm:ss`, while preserving provider timestamps
+ * that are already local and timezone-less.
+ */
+export const formatInvoiceDbDateTime = (value: unknown) => {
+  const raw = text(value)
+  if (!raw && !(value instanceof Date)) return null
+
+  const localMatch = raw.match(localDateTimePattern)
+  if (localMatch && !explicitTimeZonePattern.test(raw)) {
+    const [, year, month, day, hour, minute, second = '00'] = localMatch
+    return `${year}-${month}-${day} ${hour}:${minute}:${second}`
+  }
+
+  const date = dateOrNull(value)
+  if (!date) return null
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: INVOICE_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || ''
+  const year = part('year')
+  const month = part('month')
+  const day = part('day')
+  const hour = part('hour')
+  const minute = part('minute')
+  const second = part('second')
+  return year && month && day && hour && minute && second
+    ? `${year}-${month}-${day} ${hour}:${minute}:${second}`
+    : null
 }
 const safeJson = (value: unknown) => {
   try {
@@ -265,7 +309,9 @@ export const recordGeneratedInvoice = async ({
     || requestedCycle,
   )
   const providerInvoice = providerResponse?.factura || providerResponse?.data?.factura || providerResponse
-  const issuedAt = invoiceDateOf(providerInvoice) || dateOrNull(invoiceData?.date) || new Date()
+  const providerIssuedAt = invoiceDateOf(providerInvoice)
+  const issuedAt = formatInvoiceDbDateTime(providerIssuedAt || invoiceData?.date || new Date())
+  if (!issuedAt) throw new Error('La fecha de emisión de la factura no pudo normalizarse para el historial local.')
 
   const invoiceValues = {
     uuid: uuidOf(providerInvoice) || null,
@@ -287,7 +333,7 @@ export const recordGeneratedInvoice = async ({
     status: providerStatusOf(providerInvoice),
     cancellationStatus: cancellationStatusOf(providerInvoice),
     issuedAt,
-    providerCreatedAt: invoiceDateOf(providerInvoice),
+    providerCreatedAt: formatInvoiceDbDateTime(providerIssuedAt),
     createdBy: text(createdBy) || null,
     snapshot: safeJson(providerResponse),
   }
@@ -396,9 +442,9 @@ const backfillProviderInvoice = async ({ invoice, matricula, taxId }: { invoice:
     const [matchedPayment] = await query<any[]>(
       `SELECT folio, folio_plantel, documento, matricula, ciclo, conceptoNombre, monto
        FROM referenciasdepago
-       WHERE matricula = ? AND folio_plantel = ?
+       WHERE matricula = ? AND UPPER(TRIM(CAST(folio_plantel AS CHAR))) = ?
        ORDER BY folio DESC LIMIT 1`,
-      [matricula, invoice.externalId],
+      [matricula, upper(invoice.externalId)],
     )
     sourcePayment = matchedPayment || null
   }
@@ -408,6 +454,8 @@ const backfillProviderInvoice = async ({ invoice, matricula, taxId }: { invoice:
   )
   const inferredCycle = text(sourcePayment?.ciclo || student?.ciclo)
   const inferredPlantel = upper(student?.plantel)
+  const issuedAt = formatInvoiceDbDateTime(invoice.issuedAt || new Date())
+  if (!issuedAt) return null
 
   await query(
     `INSERT INTO facturas (
@@ -433,10 +481,10 @@ const backfillProviderInvoice = async ({ invoice, matricula, taxId }: { invoice:
       invoice.paymentForm || null,
       invoice.status,
       invoice.cancellationStatus,
-      invoice.issuedAt,
-      invoice.issuedAt,
+      issuedAt,
+      formatInvoiceDbDateTime(invoice.issuedAt),
       safeJson(invoice.raw),
-      invoice.issuedAt || new Date(),
+      issuedAt,
     ],
   )
   const [stored] = await query<any[]>(
@@ -463,6 +511,22 @@ const backfillProviderInvoice = async ({ invoice, matricula, taxId }: { invoice:
   return stored || null
 }
 
+
+const providerInvoiceBelongsToStudent = async (
+  invoice: ReturnType<typeof normalizeProviderInvoice>,
+  matricula: string,
+) => {
+  if (text(invoice.matricula).toUpperCase() === text(matricula).toUpperCase()) return true
+  if (!invoice.externalId) return false
+
+  const [matchedPayment] = await query<any[]>(
+    `SELECT folio FROM referenciasdepago
+     WHERE matricula = ? AND UPPER(TRIM(CAST(folio_plantel AS CHAR))) = ?
+     LIMIT 1`,
+    [matricula, upper(invoice.externalId)],
+  )
+  return Boolean(matchedPayment?.folio)
+}
 
 const providerInvoicesForTaxId = async (taxId: string) => {
   const invoices: any[] = []
@@ -532,7 +596,7 @@ export const syncStudentInvoices = async (matricula: string) => {
         if (!invoice.providerInvoiceId) continue
         let localRow = localByProvider.get(invoice.providerInvoiceId)
         if (!localRow) {
-          if (text(invoice.matricula).toUpperCase() !== text(matricula).toUpperCase()) continue
+          if (!await providerInvoiceBelongsToStudent(invoice, matricula)) continue
           const stored = await backfillProviderInvoice({ invoice, matricula, taxId })
           if (!stored?.id) continue
           localRow = { id: stored.id, provider_invoice_id: invoice.providerInvoiceId, rfc: taxId }
@@ -570,7 +634,7 @@ export const syncStudentInvoices = async (matricula: string) => {
             invoice.cancellationStatus,
             invoice.receiverEmail,
             invoice.paymentForm,
-            invoice.issuedAt,
+            formatInvoiceDbDateTime(invoice.issuedAt),
             safeJson(rawInvoice),
             localRow.id,
           ],

@@ -1,1 +1,1 @@
-Integra el historial de facturas por alumno y vincula cada CFDI con sus pagos
+Corrige el registro de fechas de facturas y recupera CFDI emitidos sin historial

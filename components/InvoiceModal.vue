@@ -59,8 +59,8 @@
                 class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
                 role="status"
               >
-                <strong>Factura emitida, historial pendiente.</strong>
-                {{ generatedInvoice.indexWarning }} La factura puede descargarse desde esta ventana; actualiza el listado de facturas después.
+                <strong>Factura emitida; historial por recuperar.</strong>
+                {{ generatedInvoice.indexWarning }}
               </div>
             </div>
           </section>

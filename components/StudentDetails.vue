@@ -550,6 +550,7 @@
                 :warning="studentInvoicesWarning"
                 :scope="invoiceScope"
                 :highlight-invoice-id="invoiceHighlightId"
+                :compact="!detailsExpanded"
                 @refresh="loadStudentInvoices({ sync: true })"
                 @update:scope="invoiceScope = $event"
                 @download="downloadStudentInvoice"
@@ -3125,11 +3126,11 @@ const handleInvoiceSuccess = (invoice) => {
 
 .account-invoices-wrap {
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .account-invoices-wrap :deep(.student-invoice-ledger) {
-  height: 100%;
+  min-height: 100%;
 }
 
 @container student-detail-panel (max-width: 700px) {

@@ -1,21 +1,30 @@
 <template>
-  <section class="student-invoice-ledger" aria-label="Facturas del alumno">
+  <section :class="['student-invoice-ledger', { 'is-compact': compact }]" aria-label="Facturas del alumno">
     <header class="student-invoice-ledger__toolbar">
-      <div>
+      <div v-if="!compact" class="student-invoice-ledger__heading">
         <span>Historial fiscal</span>
         <strong>{{ invoices.length }} factura{{ invoices.length === 1 ? '' : 's' }}</strong>
       </div>
+      <strong v-else class="student-invoice-ledger__compact-count">
+        {{ invoices.length }} factura{{ invoices.length === 1 ? '' : 's' }}
+      </strong>
       <div class="student-invoice-ledger__toolbar-actions">
         <label>
           <span class="sr-only">Periodo de facturas</span>
           <select :value="scope" @change="emit('update:scope', $event.target.value)">
-            <option value="current">Ciclo seleccionado</option>
-            <option value="all">Todo el historial</option>
+            <option value="current">{{ compact ? 'Ciclo' : 'Ciclo seleccionado' }}</option>
+            <option value="all">{{ compact ? 'Todas' : 'Todo el historial' }}</option>
           </select>
         </label>
-        <button type="button" :disabled="loading" title="Actualizar facturas" @click="emit('refresh')">
+        <button
+          type="button"
+          :disabled="loading"
+          title="Actualizar facturas"
+          aria-label="Actualizar facturas"
+          @click="emit('refresh')"
+        >
           <LucideRefreshCw :class="{ 'animate-spin': loading }" :size="14" />
-          Actualizar
+          <span v-if="!compact">Actualizar</span>
         </button>
       </div>
     </header>
@@ -124,6 +133,7 @@ const props = defineProps({
   warning: { type: String, default: '' },
   scope: { type: String, default: 'current' },
   highlightInvoiceId: { type: [String, Number], default: '' },
+  compact: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['refresh', 'update:scope', 'download', 'email', 'cancel'])
@@ -185,7 +195,7 @@ const sourceKey = (source: any, index: number) => [
 <style scoped>
 .student-invoice-ledger {
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
   border: 1px solid var(--students-border-soft, #edf2f7);
   border-radius: 13px;
   background: #fff;
@@ -204,6 +214,22 @@ const sourceKey = (source: any, index: number) => [
   background: rgba(255, 255, 255, 0.96);
   padding: 10px 12px;
   backdrop-filter: blur(10px);
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__toolbar {
+  min-height: 34px;
+  padding: 3px 8px;
+}
+
+.student-invoice-ledger__compact-count {
+  color: #475569;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__compact-count {
+  font-size: 10px;
 }
 
 .student-invoice-ledger__toolbar span,
@@ -249,6 +275,29 @@ const sourceKey = (source: any, index: number) => [
   padding: 0 10px;
 }
 
+.student-invoice-ledger.is-compact .student-invoice-ledger__toolbar-actions {
+  margin-left: auto;
+  gap: 5px;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__toolbar select,
+.student-invoice-ledger.is-compact .student-invoice-ledger__toolbar button {
+  min-height: 27px;
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__toolbar select {
+  max-width: 82px;
+  padding-inline: 6px 20px;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__toolbar button {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+
 .student-invoice-ledger__warning {
   display: flex;
   gap: 8px;
@@ -257,6 +306,19 @@ const sourceKey = (source: any, index: number) => [
   padding: 9px 12px;
   color: #92400e;
   font-size: 11px;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__warning {
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  font-size: 9px;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__warning span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .student-invoice-ledger__state {
@@ -282,6 +344,28 @@ const sourceKey = (source: any, index: number) => [
 }
 .student-invoice-ledger__state.is-error { color: #b42318; }
 .student-invoice-ledger__state.is-error strong { color: #b42318; }
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__state {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  justify-items: start;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__state strong {
+  font-size: 11px;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__state span {
+  display: none;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-ledger__state button {
+  padding: 4px 8px;
+}
 
 .student-invoice-ledger__list { display: grid; }
 .student-invoice-row {
@@ -381,13 +465,60 @@ const sourceKey = (source: any, index: number) => [
 }
 .student-invoice-row__actions button:disabled { cursor: not-allowed; opacity: .38; }
 
+.student-invoice-ledger.is-compact .student-invoice-row {
+  grid-template-columns: minmax(0, 1fr) minmax(82px, auto) 154px;
+  gap: 8px;
+  min-height: 56px;
+  padding: 6px 9px;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-row__title strong,
+.student-invoice-ledger.is-compact .student-invoice-row__total {
+  font-size: 11px;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-row__meta {
+  gap: 1px 7px;
+  margin-top: 2px;
+  font-size: 9px;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-row__meta > span:nth-child(n + 4),
+.student-invoice-ledger.is-compact .student-invoice-row__sources {
+  display: none;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-row__actions {
+  gap: 3px;
+}
+
+.student-invoice-ledger.is-compact .student-invoice-row__actions button {
+  width: 27px;
+  height: 27px;
+  border-radius: 7px;
+}
+
 @media (max-width: 760px) {
-  .student-invoice-ledger__toolbar { align-items: flex-start; }
-  .student-invoice-ledger__toolbar-actions { align-items: stretch; flex-direction: column; }
-  .student-invoice-row {
+  .student-invoice-ledger:not(.is-compact) .student-invoice-ledger__toolbar { align-items: flex-start; }
+  .student-invoice-ledger:not(.is-compact) .student-invoice-ledger__toolbar-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .student-invoice-ledger:not(.is-compact) .student-invoice-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
-  .student-invoice-row__actions {
+  .student-invoice-ledger:not(.is-compact) .student-invoice-row__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .student-invoice-ledger.is-compact .student-invoice-ledger__compact-count { display: none; }
+  .student-invoice-ledger.is-compact .student-invoice-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .student-invoice-ledger.is-compact .student-invoice-row__actions {
     grid-column: 1 / -1;
     justify-content: flex-start;
   }

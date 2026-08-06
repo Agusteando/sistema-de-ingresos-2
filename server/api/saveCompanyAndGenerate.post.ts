@@ -21,7 +21,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       return {
         ...response,
         local_indexed: false,
-        local_index_warning: error?.message || 'No se pudo guardar la factura en el historial local.',
+        local_index_warning: 'La factura sí fue emitida, pero el historial local no pudo actualizarse. No generes otra factura para estos pagos; abre Facturas y pulsa Actualizar para recuperarla.',
+        local_index_error_code: String(error?.code || error?.diagnostic?.code || '').trim() || undefined,
       }
     }
   }
