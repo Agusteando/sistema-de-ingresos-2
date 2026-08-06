@@ -1,1 +1,1 @@
-Corrige el registro de fechas de facturas y recupera CFDI emitidos sin historial
+Usa el listado fiscal legado por RFC en el estado de cuenta

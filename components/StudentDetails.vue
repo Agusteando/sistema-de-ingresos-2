@@ -541,18 +541,16 @@
               v-else-if="accountViewMode === 'invoices'"
               ref="accountTableWrap"
               class="account-invoices-wrap"
-              :key="`${student.matricula}-invoices-${invoiceScope}`"
+              :key="`${student.matricula}-invoices`"
             >
               <StudentInvoiceLedger
                 :invoices="filteredStudentInvoices"
                 :loading="studentInvoicesLoading"
                 :error="studentInvoicesError"
                 :warning="studentInvoicesWarning"
-                :scope="invoiceScope"
                 :highlight-invoice-id="invoiceHighlightId"
                 :compact="!detailsExpanded"
-                @refresh="loadStudentInvoices({ sync: true })"
-                @update:scope="invoiceScope = $event"
+                @refresh="loadStudentInvoices({ force: true })"
                 @download="downloadStudentInvoice"
                 @email="emailStudentInvoice"
                 @cancel="cancelStudentInvoice"
@@ -918,7 +916,7 @@
               </button>
             </div>
           </div>
-          <span v-else>{{ accountViewMode === 'invoices' ? `${studentInvoiceCount} factura${studentInvoiceCount === 1 ? '' : 's'} en el periodo` : accountFooterLabel }}</span>
+          <span v-else>{{ accountViewMode === 'invoices' ? `${studentInvoiceCount} factura${studentInvoiceCount === 1 ? '' : 's'} encontrada${studentInvoiceCount === 1 ? '' : 's'}` : accountFooterLabel }}</span>
           <strong class="account-footer__total"
             >{{ accountViewMode === 'invoices' ? 'Total facturado' : 'Saldo actual' }} <b>${{ format(accountViewMode === 'invoices' ? studentInvoiceTotal : accountDebtTotal) }}</b></strong
           >
@@ -1140,9 +1138,8 @@ const studentInvoicesLoading = ref(false);
 const studentInvoicesError = ref("");
 const studentInvoicesWarning = ref("");
 const studentInvoicesLoadedKey = ref("");
-const invoiceScope = ref("current");
 const invoiceHighlightId = ref("");
-const studentInvoiceSyncTimes = new Map();
+const studentInvoiceFetchTimes = new Map();
 let studentInvoicesRequestId = 0;
 const detailsExpanded = ref(false);
 const detailTransitioning = ref(false);
@@ -1158,16 +1155,16 @@ const accountSearchValue = computed({
 });
 const accountSearchPlaceholder = computed(() =>
   accountViewMode.value === "invoices"
-    ? "Buscar folio, RFC o concepto..."
+    ? "Buscar folio, RFC o receptor..."
     : "Buscar concepto o mes...",
 );
 const setAccountView = (mode) => {
   accountViewMode.value = mode;
   if (mode === "invoices") {
     const matricula = String(props.student?.matricula || '').trim();
-    const lastSync = Number(studentInvoiceSyncTimes.get(matricula) || 0);
-    const shouldSync = Boolean(matricula && Date.now() - lastSync > 5 * 60 * 1000);
-    void loadStudentInvoices({ sync: shouldSync });
+    const lastFetch = Number(studentInvoiceFetchTimes.get(matricula) || 0);
+    const shouldRefresh = Boolean(matricula && Date.now() - lastFetch > 5 * 60 * 1000);
+    void loadStudentInvoices({ force: shouldRefresh });
   }
 };
 
@@ -2352,7 +2349,54 @@ const studentInvoiceLinks = computed(() => {
   return links;
 });
 
-const loadStudentInvoices = async ({ sync = false, silent = false } = {}) => {
+const legacyInvoiceCancellationStatus = (invoice) => {
+  const raw = String(
+    invoice?.cancellation_status
+      || invoice?.cancel_status
+      || invoice?.cancel_status_code
+      || '',
+  ).trim().toLowerCase();
+  const label = String(
+    invoice?.cancel_status_label
+      || invoice?.cancellation_status_label
+      || '',
+  ).trim().toLowerCase();
+  const combined = `${raw} ${label}`;
+  if (combined.includes('pending') || combined.includes('pendiente')) return 'pending';
+  if (combined.includes('accepted') || combined.includes('acept')) return 'accepted';
+  if (combined.includes('rejected') || combined.includes('rechaz')) return 'rejected';
+  if (combined.includes('cancel')) return 'accepted';
+  return raw && raw !== 'null' ? raw : 'none';
+};
+
+const normalizeLegacyInvoice = (invoice) => {
+  const providerInvoiceId = String(invoice?.invoice_id || invoice?.id || '').trim();
+  const series = String(invoice?.series || invoice?.serie || '').trim().toUpperCase();
+  const folioNumber = invoice?.folio_number ?? invoice?.folioNumber ?? '';
+  const folio = String(invoice?.folio || `${series}${folioNumber || ''}`).trim();
+  const externalId = String(invoice?.external_id || invoice?.externalId || '').trim();
+
+  return {
+    id: providerInvoiceId,
+    providerInvoiceId,
+    uuid: String(invoice?.uuid || invoice?.cfdi_uuid || '').trim(),
+    series,
+    folioNumber,
+    folio,
+    status: String(invoice?.status || '').trim().toLowerCase() || 'valid',
+    cancellationStatus: legacyInvoiceCancellationStatus(invoice),
+    issuedAt: invoice?.created_at || invoice?.issued_at || invoice?.date || '',
+    receiverName: String(invoice?.customer_name || invoice?.customer?.legal_name || '').trim(),
+    receiverTaxId: String(invoice?.customer_tax_id || invoice?.customer?.tax_id || '').trim().toUpperCase(),
+    receiverEmail: String(invoice?.customer_email || invoice?.customer?.email || '').trim(),
+    total: Number(invoice?.total || invoice?.amount || 0),
+    paymentForm: String(invoice?.payment_form || '').trim(),
+    sourcePayments: externalId ? [{ folioPlantel: externalId }] : [],
+    actionable: Boolean(providerInvoiceId),
+  };
+};
+
+const loadStudentInvoices = async ({ force = false, silent = false } = {}) => {
   const matricula = String(props.student?.matricula || '').trim();
   if (!matricula) return;
   if (Array.isArray(props.visualLabDebts)) {
@@ -2364,32 +2408,58 @@ const loadStudentInvoices = async ({ sync = false, silent = false } = {}) => {
     return;
   }
 
-  const cycle = selectedCicloKey.value;
-  const key = `${matricula}|${cycle}|${invoiceScope.value}`;
-  if (!sync && studentInvoicesLoadedKey.value === key) return;
+  // Match the legacy InvoiceModule flow exactly:
+  // 1) load the student's saved fiscal profile by matrícula;
+  // 2) list provider invoices using that profile's RFC.
+  const key = matricula;
+  if (!force && studentInvoicesLoadedKey.value === key) return;
   const requestId = ++studentInvoicesRequestId;
   if (!silent || !studentInvoices.value.length) studentInvoicesLoading.value = true;
   studentInvoicesError.value = '';
-  if (sync) studentInvoicesWarning.value = '';
+  studentInvoicesWarning.value = '';
 
   try {
-    const response = await $fetch(`/api/students/${encodeURIComponent(matricula)}/invoices`, {
+    const companyResult = await $fetch('/api/getCompanyData', {
+      params: { matricula },
+    });
+    if (!companyResult?.success || !companyResult?.data) {
+      throw new Error(companyResult?.error || 'No se pudo cargar la información fiscal del alumno.');
+    }
+
+    const taxId = String(companyResult.data.tax_id || '').trim().toUpperCase();
+    if (!/^([A-ZÑ&]{3,4}) ?(?:- ?)?(\d{2})(\d{2})(\d{2})([A-Z\d]{3})$/i.test(taxId)) {
+      throw new Error('El alumno no tiene un RFC fiscal válido guardado.');
+    }
+
+    const result = await $fetch('/api/invoices', {
       params: {
-        ciclo: cycle,
-        scope: invoiceScope.value,
-        sync: sync ? '1' : '',
+        tax_id: taxId,
+        q: '',
+        status: '',
+        cancel_status: '',
+        date_from: '',
+        date_to: '',
+        series: '',
+        sort_by: 'created_at',
+        sort_dir: 'desc',
+        page: 1,
+        limit: 100,
       },
     });
-    if (requestId !== studentInvoicesRequestId || String(props.student?.matricula || '') !== matricula) return;
-    studentInvoices.value = Array.isArray(response?.invoices) ? response.invoices : [];
-    studentInvoicesWarning.value = String(response?.warning || '');
+    if (!result?.success) {
+      throw new Error(result?.error || 'Error al listar las facturas.');
+    }
+
+    if (requestId !== studentInvoicesRequestId || String(props.student?.matricula || '').trim() !== matricula) return;
+    const invoices = Array.isArray(result?.invoices) ? result.invoices : [];
+    studentInvoices.value = invoices.map(normalizeLegacyInvoice);
     studentInvoicesLoadedKey.value = key;
-    if (sync) studentInvoiceSyncTimes.set(matricula, Date.now());
+    studentInvoiceFetchTimes.set(matricula, Date.now());
   } catch (error) {
     if (requestId !== studentInvoicesRequestId) return;
     studentInvoicesError.value = error?.data?.message || error?.message || 'No se pudo cargar el historial de facturas.';
     if (studentInvoices.value.length) {
-      studentInvoicesWarning.value = `No se pudo actualizar el historial. Se conservan los datos disponibles. ${studentInvoicesError.value}`;
+      studentInvoicesWarning.value = `No se pudo actualizar el listado del proveedor. Se conservan los datos visibles. ${studentInvoicesError.value}`;
     }
     if (!silent) show(studentInvoicesError.value, 'danger');
   } finally {
@@ -2457,7 +2527,7 @@ const cancelStudentInvoice = async (invoice) => {
       throw new Error(response?.error || response?.message || 'El proveedor rechazó la cancelación.');
     }
     show('Solicitud de cancelación enviada.', 'success');
-    await loadStudentInvoices({ sync: true });
+    await loadStudentInvoices({ force: true });
   } catch (error) {
     show(error?.data?.message || error?.message || 'No se pudo solicitar la cancelación.', 'danger');
   }
@@ -2471,21 +2541,15 @@ const openLinkedInvoice = (invoice) => {
 };
 
 watch(
-  () => [props.student?.matricula, selectedCicloKey.value, invoiceScope.value],
-  (next, previous) => {
-    const contextChanged = !previous || next[0] !== previous[0] || next[1] !== previous[1];
-    const scopeChanged = Boolean(previous && next[2] !== previous[2]);
-    if (contextChanged || scopeChanged) {
+  () => props.student?.matricula,
+  (matricula, previousMatricula) => {
+    if (matricula !== previousMatricula) {
       studentInvoices.value = [];
       studentInvoicesLoadedKey.value = '';
-      if (contextChanged) {
-        invoiceSearchQuery.value = '';
-        invoiceHighlightId.value = '';
-      }
-    } else {
-      studentInvoicesLoadedKey.value = '';
+      invoiceSearchQuery.value = '';
+      invoiceHighlightId.value = '';
     }
-    void loadStudentInvoices({ sync: false, silent: accountViewMode.value !== 'invoices' });
+    void loadStudentInvoices({ force: false, silent: accountViewMode.value !== 'invoices' });
   },
   { immediate: true },
 );
@@ -3057,7 +3121,7 @@ const handleSuccess = () => {
 const handleInvoiceSuccess = (invoice) => {
   invoiceHighlightId.value = String(invoice?.invoice_id || invoice?.localInvoiceId || '');
   studentInvoicesLoadedKey.value = '';
-  void loadStudentInvoices({ sync: false });
+  void loadStudentInvoices({ force: true });
   loadDebts({ useCache: false, preserveInteraction: true });
 };
 </script>

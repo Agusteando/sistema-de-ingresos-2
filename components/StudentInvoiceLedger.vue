@@ -9,13 +9,6 @@
         {{ invoices.length }} factura{{ invoices.length === 1 ? '' : 's' }}
       </strong>
       <div class="student-invoice-ledger__toolbar-actions">
-        <label>
-          <span class="sr-only">Periodo de facturas</span>
-          <select :value="scope" @change="emit('update:scope', $event.target.value)">
-            <option value="current">{{ compact ? 'Ciclo' : 'Ciclo seleccionado' }}</option>
-            <option value="all">{{ compact ? 'Todas' : 'Todo el historial' }}</option>
-          </select>
-        </label>
         <button
           type="button"
           :disabled="loading"
@@ -47,7 +40,7 @@
     <div v-else-if="!invoices.length" class="student-invoice-ledger__state">
       <LucideReceiptText :size="22" />
       <strong>Sin facturas registradas</strong>
-      <span>No hay CFDI asociados a esta matrícula en el periodo seleccionado.</span>
+      <span>No hay CFDI para el RFC fiscal guardado del alumno.</span>
     </div>
 
     <div v-else class="student-invoice-ledger__list">
@@ -131,12 +124,11 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
   warning: { type: String, default: '' },
-  scope: { type: String, default: 'current' },
   highlightInvoiceId: { type: [String, Number], default: '' },
   compact: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['refresh', 'update:scope', 'download', 'email', 'cancel'])
+const emit = defineEmits(['refresh', 'download', 'email', 'cancel'])
 
 const normalized = (value: unknown) => String(value || '').trim().toLowerCase()
 const statusLabel = (invoice: any) => {
@@ -256,7 +248,6 @@ const sourceKey = (source: any, index: number) => [
   gap: 7px;
 }
 
-.student-invoice-ledger__toolbar select,
 .student-invoice-ledger__toolbar button {
   min-height: 31px;
   border: 1px solid #dce3eb;
@@ -267,7 +258,6 @@ const sourceKey = (source: any, index: number) => [
   font-weight: 700;
 }
 
-.student-invoice-ledger__toolbar select { padding: 0 8px; }
 .student-invoice-ledger__toolbar button {
   display: inline-flex;
   align-items: center;
@@ -280,17 +270,12 @@ const sourceKey = (source: any, index: number) => [
   gap: 5px;
 }
 
-.student-invoice-ledger.is-compact .student-invoice-ledger__toolbar select,
 .student-invoice-ledger.is-compact .student-invoice-ledger__toolbar button {
   min-height: 27px;
   border-radius: 7px;
   font-size: 10px;
 }
 
-.student-invoice-ledger.is-compact .student-invoice-ledger__toolbar select {
-  max-width: 82px;
-  padding-inline: 6px 20px;
-}
 
 .student-invoice-ledger.is-compact .student-invoice-ledger__toolbar button {
   width: 28px;

@@ -202,7 +202,7 @@ const resolveTrackedSourcePayments = async (
   let rows: any[] = []
   if (folios.length || foliosPlantel.length) {
     const clauses: string[] = []
-    const params: any[] = [matricula]
+    const params: any[] = [upper(matricula)]
     if (folios.length) {
       clauses.push('folio IN (?)')
       params.push(folios)
@@ -214,7 +214,7 @@ const resolveTrackedSourcePayments = async (
     rows = await query<any[]>(
       `SELECT folio, folio_plantel, documento, matricula, ciclo, conceptoNombre, monto
        FROM referenciasdepago
-       WHERE matricula = ? AND (${clauses.join(' OR ')})`,
+       WHERE UPPER(TRIM(CAST(matricula AS CHAR))) = ? AND (${clauses.join(' OR ')})`,
       params,
     )
   }
@@ -424,33 +424,145 @@ const normalizeProviderInvoice = (invoice: any) => ({
   status: providerStatusOf(invoice),
   cancellationStatus: cancellationStatusOf(invoice),
   issuedAt: invoiceDateOf(invoice),
-  receiverName: text(invoice?.customer_name || invoice?.customer?.legal_name || invoice?.legal_name),
-  receiverTaxId: upper(invoice?.customer_tax_id || invoice?.customer?.tax_id || invoice?.tax_id),
-  receiverEmail: text(invoice?.customer_email || invoice?.customer?.email || invoice?.email),
-  total: numberOrNull(invoice?.total || invoice?.amount || invoice?.factura?.total),
-  paymentForm: text(invoice?.payment_form),
-  matricula: text(invoice?.matricula || invoice?.customer?.matricula),
-  externalId: text(invoice?.external_id),
+  receiverName: text(
+    invoice?.customer_name
+    || invoice?.customer?.legal_name
+    || invoice?.legal_name
+    || invoice?.factura?.customer_name
+    || invoice?.factura?.customer?.legal_name
+    || invoice?.data?.customer_name
+    || invoice?.data?.customer?.legal_name,
+  ),
+  receiverTaxId: upper(
+    invoice?.customer_tax_id
+    || invoice?.customer?.tax_id
+    || invoice?.tax_id
+    || invoice?.factura?.customer_tax_id
+    || invoice?.factura?.customer?.tax_id
+    || invoice?.data?.customer_tax_id
+    || invoice?.data?.customer?.tax_id,
+  ),
+  receiverEmail: text(
+    invoice?.customer_email
+    || invoice?.customer?.email
+    || invoice?.email
+    || invoice?.factura?.customer_email
+    || invoice?.factura?.customer?.email
+    || invoice?.data?.customer_email
+    || invoice?.data?.customer?.email,
+  ),
+  receiverTaxSystem: text(
+    invoice?.customer_tax_system
+    || invoice?.customer?.tax_system
+    || invoice?.tax_system
+    || invoice?.factura?.customer_tax_system
+    || invoice?.factura?.customer?.tax_system
+    || invoice?.data?.customer_tax_system
+    || invoice?.data?.customer?.tax_system,
+  ),
+  receiverZip: text(
+    invoice?.customer_zip
+    || invoice?.customer?.address?.zip
+    || invoice?.zip
+    || invoice?.factura?.customer_zip
+    || invoice?.factura?.customer?.address?.zip
+    || invoice?.data?.customer_zip
+    || invoice?.data?.customer?.address?.zip,
+  ),
+  invoiceUse: text(
+    invoice?.use
+    || invoice?.invoice_use
+    || invoice?.factura?.use
+    || invoice?.factura?.invoice_use
+    || invoice?.data?.use
+    || invoice?.data?.invoice_use,
+  ),
+  total: numberOrNull(
+    invoice?.total
+    || invoice?.amount
+    || invoice?.factura?.total
+    || invoice?.data?.total
+    || invoice?.data?.factura?.total,
+  ),
+  paymentForm: text(
+    invoice?.payment_form
+    || invoice?.paymentForm
+    || invoice?.factura?.payment_form
+    || invoice?.data?.payment_form,
+  ),
+  matricula: text(
+    invoice?.matricula
+    || invoice?.student_matricula
+    || invoice?.customer_matricula
+    || invoice?.student?.matricula
+    || invoice?.customer?.matricula
+    || invoice?.metadata?.matricula
+    || invoice?.factura?.matricula
+    || invoice?.factura?.customer?.matricula
+    || invoice?.data?.matricula
+    || invoice?.data?.customer?.matricula
+    || invoice?.data?.factura?.matricula,
+  ),
+  externalId: text(
+    invoice?.external_id
+    || invoice?.externalId
+    || invoice?.reference
+    || invoice?.reference_id
+    || invoice?.factura?.external_id
+    || invoice?.factura?.externalId
+    || invoice?.data?.external_id
+    || invoice?.data?.externalId
+    || invoice?.data?.factura?.external_id,
+  ),
   raw: invoice,
 })
 
-const backfillProviderInvoice = async ({ invoice, matricula, taxId }: { invoice: ReturnType<typeof normalizeProviderInvoice>; matricula: string; taxId: string }) => {
+type StudentFiscalProfile = {
+  legalName?: string
+  taxId?: string
+  email?: string
+  taxSystem?: string
+  zip?: string
+}
+
+const backfillProviderInvoice = async ({
+  invoice,
+  matricula,
+  taxId,
+  profile,
+}: {
+  invoice: ReturnType<typeof normalizeProviderInvoice>
+  matricula: string
+  taxId: string
+  profile?: StudentFiscalProfile | null
+}) => {
   if (!invoice.providerInvoiceId) return null
+
+  const [existingProviderRow] = await query<any[]>(
+    `SELECT id, matricula FROM facturas WHERE provider_invoice_id = ? ORDER BY id ASC LIMIT 1`,
+    [invoice.providerInvoiceId],
+  )
+  if (existingProviderRow?.id) {
+    return upper(existingProviderRow.matricula) === upper(matricula)
+      ? existingProviderRow
+      : null
+  }
 
   let sourcePayment: any = null
   if (invoice.externalId) {
     const [matchedPayment] = await query<any[]>(
       `SELECT folio, folio_plantel, documento, matricula, ciclo, conceptoNombre, monto
        FROM referenciasdepago
-       WHERE matricula = ? AND UPPER(TRIM(CAST(folio_plantel AS CHAR))) = ?
+       WHERE UPPER(TRIM(CAST(matricula AS CHAR))) = ?
+         AND UPPER(TRIM(CAST(folio_plantel AS CHAR))) = ?
        ORDER BY folio DESC LIMIT 1`,
-      [matricula, upper(invoice.externalId)],
+      [upper(matricula), upper(invoice.externalId)],
     )
     sourcePayment = matchedPayment || null
   }
   const [student] = await query<any[]>(
-    `SELECT plantel, ciclo FROM base WHERE matricula = ? LIMIT 1`,
-    [matricula],
+    `SELECT plantel, ciclo FROM base WHERE UPPER(TRIM(CAST(matricula AS CHAR))) = ? LIMIT 1`,
+    [upper(matricula)],
   )
   const inferredCycle = text(sourcePayment?.ciclo || student?.ciclo)
   const inferredPlantel = upper(student?.plantel)
@@ -460,9 +572,10 @@ const backfillProviderInvoice = async ({ invoice, matricula, taxId }: { invoice:
   await query(
     `INSERT INTO facturas (
       provider_invoice_id, uuid, matricula, plantel, ciclo, series, folio_number, folio, external_id,
-      rfc, razonSocial, correo, total, folios, payment_form, status, cancellation_status,
-      issued_at, provider_created_at, last_synced_at, provider_snapshot, fecha
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)` ,
+      rfc, razonSocial, regimenFiscal, usoCfdi, cp, correo, total, folios, payment_form,
+      status, cancellation_status, issued_at, provider_created_at, last_synced_at,
+      provider_snapshot, fecha
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)` ,
     [
       invoice.providerInvoiceId,
       invoice.uuid || null,
@@ -473,9 +586,12 @@ const backfillProviderInvoice = async ({ invoice, matricula, taxId }: { invoice:
       invoice.folioNumber,
       invoice.folio || null,
       invoice.externalId || null,
-      invoice.receiverTaxId || taxId,
-      invoice.receiverName || 'Receptor no identificado',
-      invoice.receiverEmail || null,
+      invoice.receiverTaxId || profile?.taxId || taxId,
+      invoice.receiverName || profile?.legalName || 'Receptor no identificado',
+      invoice.receiverTaxSystem || profile?.taxSystem || '',
+      invoice.invoiceUse || '',
+      invoice.receiverZip || profile?.zip || '',
+      invoice.receiverEmail || profile?.email || '',
       Number(invoice.total || 0),
       invoice.externalId || '',
       invoice.paymentForm || null,
@@ -521,14 +637,24 @@ const providerInvoiceBelongsToStudent = async (
 
   const [matchedPayment] = await query<any[]>(
     `SELECT folio FROM referenciasdepago
-     WHERE matricula = ? AND UPPER(TRIM(CAST(folio_plantel AS CHAR))) = ?
+     WHERE UPPER(TRIM(CAST(matricula AS CHAR))) = ?
+       AND UPPER(TRIM(CAST(folio_plantel AS CHAR))) = ?
      LIMIT 1`,
-    [matricula, upper(invoice.externalId)],
+    [upper(matricula), upper(invoice.externalId)],
   )
   return Boolean(matchedPayment?.folio)
 }
 
-const providerInvoicesForTaxId = async (taxId: string) => {
+const providerInvoiceRows = (response: any) => {
+  if (Array.isArray(response?.invoices)) return response.invoices
+  if (Array.isArray(response?.data?.invoices)) return response.data.invoices
+  if (Array.isArray(response?.data)) return response.data
+  if (Array.isArray(response?.items)) return response.items
+  if (Array.isArray(response?.results)) return response.results
+  return []
+}
+
+const providerInvoicesForTaxId = async (taxId: string, search = '') => {
   const invoices: any[] = []
   const limit = 100
   let page = 1
@@ -538,6 +664,7 @@ const providerInvoicesForTaxId = async (taxId: string) => {
     const response = await $fetch<any>(`${CFDI_BASE_URL}/invoices`, {
       params: {
         tax_id: taxId,
+        ...(search ? { q: search } : {}),
         sort_by: 'created_at',
         sort_dir: 'desc',
         page,
@@ -546,12 +673,9 @@ const providerInvoicesForTaxId = async (taxId: string) => {
     })
     if (response?.success === false) throw new Error(text(response?.error || response?.message) || 'El proveedor rechazó la consulta.')
 
-    const pageInvoices = Array.isArray(response?.invoices)
-      ? response.invoices
-      : (Array.isArray(response?.data?.invoices) ? response.data.invoices : [])
-    invoices.push(...pageInvoices)
+    invoices.push(...providerInvoiceRows(response))
 
-    const reportedPages = Number(response?.pages || response?.data?.pages || 1)
+    const reportedPages = Number(response?.pages || response?.data?.pages || response?.pagination?.pages || 1)
     pages = Number.isFinite(reportedPages) && reportedPages > 0 ? Math.min(reportedPages, 20) : 1
     page += 1
   } while (page <= pages)
@@ -566,41 +690,90 @@ const providerInvoicesForTaxId = async (taxId: string) => {
 
 export const syncStudentInvoices = async (matricula: string) => {
   const local = await query<any[]>(
-    `SELECT id, provider_invoice_id, rfc FROM facturas WHERE matricula = ? ORDER BY fecha DESC`,
-    [matricula],
+    `SELECT id, provider_invoice_id, rfc FROM facturas
+     WHERE UPPER(TRIM(CAST(matricula AS CHAR))) = ?
+     ORDER BY fecha DESC`,
+    [upper(matricula)],
   )
   const taxIdSet = new Set(local.map((row) => upper(row.rfc)).filter(Boolean))
+  const profileByTaxId = new Map<string, StudentFiscalProfile>()
   const warnings: string[] = []
+  let currentProfileTaxId = ''
+
   try {
     const companyResponse = await $fetch<any>(`${CFDI_BASE_URL}/getCompanyData`, { params: { matricula } })
     if (companyResponse?.success === false) {
       throw new Error(text(companyResponse?.error || companyResponse?.message) || 'El proveedor rechazó la consulta del perfil fiscal.')
     }
-    const companyTaxId = upper(companyResponse?.data?.tax_id || companyResponse?.tax_id)
-    if (companyTaxId) taxIdSet.add(companyTaxId)
+    const profileData = companyResponse?.data || companyResponse?.company || companyResponse || {}
+    currentProfileTaxId = upper(profileData?.tax_id)
+    if (currentProfileTaxId) {
+      taxIdSet.add(currentProfileTaxId)
+      profileByTaxId.set(currentProfileTaxId, {
+        legalName: text(profileData?.legal_name),
+        taxId: currentProfileTaxId,
+        email: text(profileData?.email),
+        taxSystem: text(profileData?.tax_system),
+        zip: text(profileData?.zip),
+      })
+    }
   } catch (error: any) {
     warnings.push(`No se pudo consultar el perfil fiscal actual: ${text(error?.data?.message || error?.message) || 'error del proveedor'}`)
   }
 
   const taxIds = Array.from(taxIdSet).slice(0, 5)
-  if (!taxIds.length) return { updated: 0, warning: warnings.join(' ') }
+  if (!taxIds.length) return { updated: 0, imported: 0, warning: warnings.join(' ') }
 
   const localByProvider = new Map(local.map((row) => [text(row.provider_invoice_id), row]))
   let updated = 0
+  let imported = 0
+  let profileAssociated = 0
 
   for (const taxId of taxIds) {
     try {
-      const providerRows = await providerInvoicesForTaxId(taxId)
-      for (const rawInvoice of providerRows) {
+      const broadRows = await providerInvoicesForTaxId(taxId)
+      const studentSearchRows = taxId === currentProfileTaxId
+        ? await providerInvoicesForTaxId(taxId, matricula)
+        : []
+      const broadIds = new Set(broadRows.map(invoiceIdOf).filter(Boolean))
+      const searchWasNarrowed = studentSearchRows.length > 0
+        && (studentSearchRows.length < broadIds.size
+          || studentSearchRows.some((row) => safeJson(row)?.toUpperCase().includes(upper(matricula))))
+      const studentSearchIds = searchWasNarrowed
+        ? new Set(studentSearchRows.map(invoiceIdOf).filter(Boolean))
+        : new Set<string>()
+      const candidates = new Map<string, any>()
+      ;[...studentSearchRows, ...broadRows].forEach((row) => {
+        const id = invoiceIdOf(row)
+        if (id && !candidates.has(id)) candidates.set(id, row)
+      })
+
+      for (const rawInvoice of candidates.values()) {
         const invoice = normalizeProviderInvoice(rawInvoice)
         if (!invoice.providerInvoiceId) continue
         let localRow = localByProvider.get(invoice.providerInvoiceId)
         if (!localRow) {
-          if (!await providerInvoiceBelongsToStudent(invoice, matricula)) continue
-          const stored = await backfillProviderInvoice({ invoice, matricula, taxId })
+          const strictMatch = await providerInvoiceBelongsToStudent(invoice, matricula)
+          const declaredMatricula = upper(invoice.matricula)
+          const studentSearchMatch = studentSearchIds.has(invoice.providerInvoiceId)
+          const profileFallback = taxId === currentProfileTaxId
+            && !declaredMatricula
+            && !invoice.externalId
+
+          if (!strictMatch && !studentSearchMatch && !profileFallback) continue
+          if (declaredMatricula && declaredMatricula !== upper(matricula)) continue
+
+          const stored = await backfillProviderInvoice({
+            invoice,
+            matricula,
+            taxId,
+            profile: profileByTaxId.get(taxId) || null,
+          })
           if (!stored?.id) continue
           localRow = { id: stored.id, provider_invoice_id: invoice.providerInvoiceId, rfc: taxId }
           localByProvider.set(invoice.providerInvoiceId, localRow)
+          imported += 1
+          if (!strictMatch) profileAssociated += 1
         }
 
         await query(
@@ -646,7 +819,13 @@ export const syncStudentInvoices = async (matricula: string) => {
     }
   }
 
-  return { updated, warning: warnings.join(' ') }
+  if (profileAssociated > 0) {
+    warnings.push(
+      `${profileAssociated} factura${profileAssociated === 1 ? '' : 's'} se recuperaron usando el perfil fiscal guardado del alumno porque el listado del proveedor no devolvió la matrícula ni la referencia de pago.`,
+    )
+  }
+
+  return { updated, imported, warning: warnings.join(' ') }
 }
 
 export const updateLocalInvoiceCancellation = async ({
@@ -679,7 +858,7 @@ export const listStudentInvoices = async ({
   scope?: string
 }) => {
   const values = cycleValues(cycle)
-  const params: any[] = [matricula]
+  const params: any[] = [upper(matricula)]
   let cycleWhere = ''
 
   if (scope !== 'all' && values.length) {
@@ -697,7 +876,7 @@ export const listStudentInvoices = async ({
   const rows = await query<any[]>(
     `SELECT f.*
      FROM facturas f
-     WHERE f.matricula = ?
+     WHERE UPPER(TRIM(CAST(f.matricula AS CHAR))) = ?
        ${cycleWhere}
      ORDER BY COALESCE(f.issued_at, f.fecha) DESC, f.id DESC`,
     params,
