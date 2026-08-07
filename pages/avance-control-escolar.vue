@@ -282,7 +282,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   LucideCheck,
   LucideChevronDown,
@@ -292,15 +292,16 @@ import {
   LucideSquare,
   LucideTriangleAlert,
 } from 'lucide-vue-next'
-import { CICLOS_LIST, normalizeCicloOption } from '~/utils/constants'
+import { CICLOS_LIST } from '~/utils/constants'
+import { useActiveCiclo } from '~/composables/useActiveCiclo'
 import { exportToCSV } from '~/utils/export'
 import {
   parseEnrollmentConceptsForPlantelHistory,
   parseEnrollmentConceptsForScope,
 } from '~/shared/utils/studentPresentation'
 
-const activeCicloCookie = useCookie('active_ciclo')
-const selectedCiclo = ref(normalizeCicloOption(activeCicloCookie.value || ''))
+const { activeCicloKey, setActiveCiclo } = useActiveCiclo()
+const selectedCiclo = ref(activeCicloKey.value)
 const scopeMode = ref('all')
 const optionsLoading = ref(false)
 const loading = ref(false)
@@ -568,7 +569,7 @@ const prepareReport = async () => {
       enrollmentConfig.value = null
       console.warn('[Reporte Control Escolar] Configuración de inscripción no disponible.', configError)
     }
-    activeCicloCookie.value = selectedCiclo.value
+    setActiveCiclo(selectedCiclo.value)
     await runQueue(planteles.value.map((item) => ({ plantel: item.agentId })), { reset: true })
   } catch (error) {
     pageError.value = error?.data?.message || error?.message || 'No se pudieron preparar los planteles del reporte.'
@@ -576,6 +577,12 @@ const prepareReport = async () => {
     optionsLoading.value = false
   }
 }
+
+watch(activeCicloKey, (value) => {
+  if (selectedCiclo.value === value) return
+  selectedCiclo.value = value
+  prepareReport()
+})
 
 const refreshReport = () => prepareReport()
 const cancelLoad = () => {

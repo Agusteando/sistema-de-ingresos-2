@@ -44,7 +44,7 @@
 
         <label class="filter-field">
           <span>Ciclo</span>
-          <select v-model="filters.ciclo">
+          <select v-model="filters.ciclo" @change="rememberSelectedCiclo">
             <option value="">Todos los ciclos</option>
             <option v-for="ciclo in CICLOS_LIST" :key="ciclo.value" :value="ciclo.value">{{ ciclo.label }}</option>
           </select>
@@ -187,8 +187,10 @@ import { useCookie } from '#app'
 import { CICLOS_LIST, PLANTELES_LIST } from '~/utils/constants'
 import { exportToExcel } from '~/utils/export'
 import { resolveClientAuthAccess } from '~/utils/authAccess'
+import { useActiveCiclo } from '~/composables/useActiveCiclo'
 
 const PAGE_SIZE = 50
+const { activeCicloKey, setActiveCiclo } = useActiveCiclo()
 const role = useCookie('auth_role')
 const activePlantel = useCookie('auth_active_plantel')
 const access = computed(() => resolveClientAuthAccess({ role: role.value }))
@@ -196,7 +198,7 @@ const canFilterPlantel = computed(() => access.value.isSuperAdmin && activePlant
 
 const filters = ref({
   search: '',
-  ciclo: '',
+  ciclo: activeCicloKey.value,
   inicio: '',
   fin: '',
   plantel: ''
@@ -224,6 +226,14 @@ watch(rows, () => { page.value = 1 })
 watch(totalPages, (value) => {
   if (page.value > value) page.value = value
 })
+
+watch(activeCicloKey, (value) => {
+  if (filters.value.ciclo && filters.value.ciclo !== value) filters.value.ciclo = value
+})
+
+const rememberSelectedCiclo = () => {
+  if (filters.value.ciclo) setActiveCiclo(filters.value.ciclo)
+}
 
 const formatDate = (value) => {
   if (!value) return '—'

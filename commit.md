@@ -1,1 +1,1 @@
-Incluye todos los movimientos del agente en el corte de caja
+Recuerda de forma persistente el último ciclo escolar seleccionado en toda la plataforma

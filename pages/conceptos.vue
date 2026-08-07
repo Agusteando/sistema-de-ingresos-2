@@ -551,7 +551,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useCookie, useState } from '#app'
+import { useCookie } from '#app'
 import {
   LucideAlertTriangle,
   LucideBox,
@@ -577,12 +577,13 @@ import {
   LucideXCircle
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
+import { useActiveCiclo } from '~/composables/useActiveCiclo'
 import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
 import { CONCEPTOS_PLANTELES_LIST, isConceptosPlantel, normalizeConceptosPlantel } from '~/utils/constants'
 import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave } from '~/shared/utils/talleresServicios'
 
 const { show } = useToast()
-const state = useState('globalState')
+const { state, activeCicloKey, setActiveCiclo } = useActiveCiclo()
 const activePlantelCookie = useCookie('auth_active_plantel')
 const authRoleCookie = useCookie('auth_role')
 
@@ -590,7 +591,7 @@ const loading = ref(false)
 const saving = ref(false)
 const syncing = ref(false)
 const adminPayload = ref(null)
-const selectedCiclo = ref('')
+const selectedCiclo = ref(activeCicloKey.value)
 const selectedPlantel = ref(normalizeConceptosPlantel(String(activePlantelCookie.value || 'PM').toUpperCase()))
 const selectedCategory = ref('regular')
 const search = ref('')
@@ -1182,10 +1183,15 @@ watch(selectedPlantel, () => {
   if (viewMode.value === 'mappings') loadAdmin()
 })
 
-watch(selectedCiclo, () => {
+watch(selectedCiclo, (value) => {
+  setActiveCiclo(value)
   pendingAssignments.value = []
   const exists = selectedStockConcept.value && stockRows.value.some((concept) => String(concept.id) === String(selectedStockConcept.value.id))
   if (!exists && stockRows.value.length) selectStockConcept(stockRows.value[0])
+})
+
+watch(activeCicloKey, (value) => {
+  if (selectedCiclo.value !== value) selectedCiclo.value = value
 })
 
 watch(selectedCategory, () => {

@@ -12,14 +12,14 @@
       <div class="audit-hero-actions">
         <label>
           <small>Plantel</small>
-          <select v-model="selectedPlantel" @change="loadAudit({ force: true })">
+          <select v-model="selectedPlantel" @change="loadAudit">
             <option v-if="isSuperAdmin" value="ALL">Todos</option>
             <option v-for="plantel in visiblePlanteles" :key="plantel" :value="plantel">Plantel {{ plantel }}</option>
           </select>
         </label>
         <label>
           <small>Ciclo</small>
-          <select v-model="selectedCiclo" @change="loadAudit({ force: true })">
+          <select v-model="selectedCiclo" @change="handleCicloChange">
             <option value="">Todos</option>
             <option v-for="ciclo in CICLOS_LIST" :key="ciclo.value" :value="ciclo.value">{{ ciclo.label }}</option>
           </select>
@@ -184,7 +184,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useCookie } from '#app'
 import {
   LucideCheckCircle,
@@ -194,7 +194,8 @@ import {
   LucideLogIn,
   LucideRefreshCw,
 } from 'lucide-vue-next'
-import { CICLOS_LIST, PLANTELES_LIST, normalizeCicloOption } from '~/utils/constants'
+import { CICLOS_LIST, PLANTELES_LIST } from '~/utils/constants'
+import { useActiveCiclo } from '~/composables/useActiveCiclo'
 
 const loading = ref(false)
 const error = ref('')
@@ -202,7 +203,7 @@ const audit = ref({ summary: {}, timeline: [], updatedStudents: [], filters: {} 
 const activePlantelCookie = useCookie('auth_active_plantel')
 const plantelesCookie = useCookie('auth_planteles')
 const roleCookie = useCookie('auth_role')
-const activeCicloCookie = useCookie('active_ciclo')
+const { activeCicloKey, setActiveCiclo } = useActiveCiclo()
 
 const roleTokens = computed(() => String(roleCookie.value || '').split(',').map((role) => role.trim().toLowerCase()).filter(Boolean))
 const isSuperAdmin = computed(() => roleTokens.value.includes('superadmin'))
@@ -220,7 +221,7 @@ const defaultPlantel = computed(() => {
   return visiblePlanteles.value.includes(active) ? active : visiblePlanteles.value[0]
 })
 const selectedPlantel = ref(defaultPlantel.value)
-const selectedCiclo = ref(normalizeCicloOption(activeCicloCookie.value || ''))
+const selectedCiclo = ref(activeCicloKey.value)
 
 const summary = computed(() => audit.value.summary || {})
 const timeline = computed(() => audit.value.timeline || [])
@@ -274,6 +275,17 @@ const formatDateTime = (value) => {
     return String(value)
   }
 }
+
+const handleCicloChange = () => {
+  if (selectedCiclo.value) setActiveCiclo(selectedCiclo.value)
+  loadAudit()
+}
+
+watch(activeCicloKey, (value) => {
+  if (selectedCiclo.value === value) return
+  selectedCiclo.value = value
+  loadAudit()
+})
 
 const loadAudit = async () => {
   loading.value = true

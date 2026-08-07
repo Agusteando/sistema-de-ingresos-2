@@ -429,7 +429,8 @@ import ContextMenu from '~/components/ContextMenu.vue'
 import StudentsCacheSyncIndicator from '~/components/students/StudentsCacheSyncIndicator.vue'
 import ControlEscolarSyncIndicator from '~/components/students/ControlEscolarSyncIndicator.vue'
 import { usePlantelAgentStatuses } from '~/composables/usePlantelAgentStatuses'
-import { CICLOS_LIST, PLANTELES_LIST, normalizeCicloOption } from '~/utils/constants'
+import { CICLOS_LIST, PLANTELES_LIST } from '~/utils/constants'
+import { useActiveCiclo } from '~/composables/useActiveCiclo'
 import { authCookieFlagEnabled, resolveClientAuthAccess } from '~/utils/authAccess'
 
 const { toasts, show } = useToast()
@@ -488,29 +489,11 @@ const scheduleSidebarScaleUpdate = () => nextTick(() => {
   sidebarFrame = window.requestAnimationFrame(updateSidebarScale)
 })
 
-const cicloCookie = useCookie('active_ciclo', { maxAge: 31536000 })
+const { state, activeCicloKey, setActiveCiclo } = useActiveCiclo()
 
-const state = useState('globalState', () => ({
-  lateFeeActive: true,
-  ciclo: normalizeCicloOption(cicloCookie.value)
-}))
-
-watch(() => state.value.ciclo, (newVal) => {
-  const cicloKey = normalizeCicloOption(newVal)
-  if (state.value.ciclo !== cicloKey) state.value.ciclo = cicloKey
-  cicloCookie.value = cicloKey
-})
-
-const activeCicloOption = computed(() => {
-  const cicloKey = normalizeCicloOption(state.value.ciclo)
-  return CICLOS_LIST.find(ciclo => ciclo.value === cicloKey) || CICLOS_LIST[0]
-})
-
-const dispatchCicloChanged = (cicloKey) => {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('ingresos:ciclo-changed', { detail: { ciclo: cicloKey } }))
-  }
-}
+const activeCicloOption = computed(() => (
+  CICLOS_LIST.find(ciclo => ciclo.value === activeCicloKey.value) || CICLOS_LIST[0]
+))
 
 const openCicloMenu = () => {
   cicloMenuOpen.value = true
@@ -530,17 +513,8 @@ const toggleCicloMenu = () => {
 }
 
 const selectCiclo = (value) => {
-  const cicloKey = normalizeCicloOption(value)
   closeCicloMenu()
-
-  if (state.value.ciclo === cicloKey) {
-    cicloCookie.value = cicloKey
-    return
-  }
-
-  state.value.ciclo = cicloKey
-  cicloCookie.value = cicloKey
-  dispatchCicloChanged(cicloKey)
+  setActiveCiclo(value)
 }
 
 const adminPhoto = ref(null)
