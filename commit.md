@@ -1,1 +1,1 @@
-Corrige el límite y la paginación del listado heredado de facturas
+Protege pagos en otro plantel con autorización por Telegram sin persistir el plantel

@@ -49,12 +49,24 @@
                 <div class="my-1 border-t border-gray-100"></div>
                 <button
                   type="button"
-                  class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition"
-                  :class="pagoRealizadoEnOtroPlantel ? 'bg-amber-50 text-amber-800' : 'text-gray-700 hover:bg-gray-50'"
-                  @click="toggleOtherCampusPayment"
+                  class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition"
+                  :class="pagoRealizadoEnOtroPlantel
+                    ? 'bg-amber-50 text-amber-800'
+                    : 'bg-gray-50/80 text-gray-400 hover:bg-gray-100 hover:text-gray-600'"
+                  :aria-label="pagoRealizadoEnOtroPlantel ? 'Pago en otro plantel activo' : 'Pagado en otro plantel. No disponible. Requiere contraseña.'"
+                  @click="openOtherCampusAuthorization"
                 >
-                  <LucideBuilding2 :size="16" :class="pagoRealizadoEnOtroPlantel ? 'text-amber-700' : 'text-brand-campus'" />
-                  {{ pagoRealizadoEnOtroPlantel ? 'Pago en otro plantel activo' : 'Pagado en otro plantel' }}
+                  <LucideBuilding2 :size="16" :class="pagoRealizadoEnOtroPlantel ? 'text-amber-700' : 'text-gray-400'" />
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-semibold">{{ pagoRealizadoEnOtroPlantel ? 'Pago en otro plantel activo' : 'Pagado en otro plantel' }}</span>
+                    <span v-if="!pagoRealizadoEnOtroPlantel" class="mt-0.5 block text-[10px] font-bold uppercase tracking-wide text-gray-400">Requiere contraseña</span>
+                  </span>
+                  <span
+                    v-if="!pagoRealizadoEnOtroPlantel"
+                    class="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-gray-400"
+                  >
+                    No disponible
+                  </span>
                 </button>
               </div>
             </Transition>
@@ -149,6 +161,60 @@
           </div>
 
           <div
+            v-if="otherCampusAuthorizationOpen && !pagoRealizadoEnOtroPlantel"
+            class="mb-4 rounded-xl border border-gray-200 bg-gray-50/80 p-4"
+          >
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex min-w-0 items-center gap-3">
+                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-gray-500 shadow-sm ring-1 ring-gray-200">
+                  <LucideLock :size="17" />
+                </span>
+                <div class="min-w-0">
+                  <p class="text-sm font-bold text-gray-700">Pagado en otro plantel</p>
+                  <p class="mt-0.5 text-[10px] font-black uppercase tracking-wide text-gray-400">No disponible · Requiere contraseña</p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 sm:justify-end">
+                <button
+                  v-if="!otherCampusCodeRequested"
+                  type="button"
+                  class="btn btn-outline h-10 px-3 text-xs"
+                  :disabled="otherCampusRequestingCode"
+                  @click="requestOtherCampusAuthorizationCode"
+                >
+                  <LucideLoader2 v-if="otherCampusRequestingCode" class="animate-spin" :size="14" />
+                  {{ otherCampusRequestingCode ? 'Solicitando...' : 'Solicitar código' }}
+                </button>
+                <template v-else>
+                  <input
+                    ref="otherCampusCodeInput"
+                    v-model="otherCampusEnteredCode"
+                    inputmode="numeric"
+                    autocomplete="one-time-code"
+                    maxlength="4"
+                    pattern="[0-9]*"
+                    placeholder="0000"
+                    aria-label="Código de autorización"
+                    class="h-10 w-24 rounded-lg border border-gray-200 bg-white px-2 text-center text-base font-black tracking-[0.18em] text-gray-700 outline-none focus:border-brand-campus"
+                    @input="otherCampusEnteredCode = otherCampusEnteredCode.replace(/\D/g, '').slice(0, 4)"
+                    @keyup.enter="authorizeOtherCampusPayment"
+                  >
+                  <button
+                    type="button"
+                    class="btn btn-primary h-10 px-3 text-xs"
+                    :disabled="otherCampusEnteredCode.length !== 4"
+                    @click="authorizeOtherCampusPayment"
+                  >
+                    Autorizar
+                  </button>
+                </template>
+              </div>
+            </div>
+            <p v-if="otherCampusAuthorizationError" class="mt-2 text-xs font-semibold text-red-600">{{ otherCampusAuthorizationError }}</p>
+          </div>
+
+          <div
             v-if="pagoRealizadoEnOtroPlantel"
             class="mb-4 rounded-xl border border-amber-200 bg-amber-50/70 p-4"
           >
@@ -159,9 +225,6 @@
                 </span>
                 <div class="min-w-0">
                   <p class="text-sm font-bold text-gray-800">Pagado en otro plantel</p>
-                  <p class="mt-0.5 text-xs leading-5 text-gray-600">
-                    El método de pago se conserva. Selecciona por separado el plantel que recibió el pago.
-                  </p>
                 </div>
               </div>
 
@@ -213,7 +276,7 @@
                   <p v-if="paymentCampusError" class="mt-1.5 text-xs font-semibold text-red-600">Selecciona el plantel donde se realizó el pago.</p>
                 </div>
 
-                <button type="button" class="btn btn-ghost h-11 shrink-0 px-3 text-xs" @click="toggleOtherCampusPayment">
+                <button type="button" class="btn btn-ghost h-11 shrink-0 px-3 text-xs" @click="deactivateOtherCampusPayment">
                   Quitar
                 </button>
               </div>
@@ -303,8 +366,8 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, onMounted, onBeforeUnmount, markRaw } from 'vue'
-import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheck, LucideCheckCircle, LucideChevronDown, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideMoreHorizontal, LucideReceiptText, LucideRotateCcw, LucideWalletCards } from 'lucide-vue-next'
+import { ref, watch, computed, onMounted, onBeforeUnmount, markRaw, nextTick } from 'vue'
+import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheck, LucideCheckCircle, LucideChevronDown, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideLock, LucideMoreHorizontal, LucideReceiptText, LucideRotateCcw, LucideWalletCards } from 'lucide-vue-next'
 import { useCookie, useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -314,6 +377,7 @@ import { calculatePromotedGrado, displayGrado } from '~/shared/utils/grado'
 import { institutionFlagForPlantel, normalizePlantelCode } from '~/shared/utils/institution'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
 import { PLANTELES_LIST } from '~/utils/constants'
+import { requestPaymentActionAuthorizationCode, sendPaymentActionAuthorizationNotice } from '~/utils/paymentActionAuthorization'
 
 const props = defineProps({ debts: Array, student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -334,6 +398,13 @@ const paymentMethodEditorOpen = ref(false)
 const pagoRealizadoEnOtroPlantel = ref(false)
 const plantelPago = ref('')
 const paymentCampusError = ref(false)
+const otherCampusAuthorizationOpen = ref(false)
+const otherCampusCodeRequested = ref(false)
+const otherCampusRequestingCode = ref(false)
+const otherCampusEnteredCode = ref('')
+const otherCampusAuthorizationCode = ref('')
+const otherCampusAuthorizationError = ref('')
+const otherCampusCodeInput = ref(null)
 const activePlantelCookie = useCookie('auth_active_plantel')
 
 const localDateKey = (date = new Date()) => {
@@ -378,6 +449,7 @@ const openPaymentMethodEditor = () => {
   paymentOptionsOpen.value = false
   paymentCampusMenuOpen.value = false
   paymentDateEditorOpen.value = false
+  resetOtherCampusAuthorization()
   paymentMethodEditorOpen.value = true
 }
 
@@ -390,6 +462,7 @@ const openPaymentDateEditor = () => {
   paymentOptionsOpen.value = false
   paymentCampusMenuOpen.value = false
   paymentMethodEditorOpen.value = false
+  resetOtherCampusAuthorization()
   paymentDateEditorOpen.value = true
 }
 
@@ -398,20 +471,71 @@ const resetPaymentDate = () => {
   paymentOptionsOpen.value = false
 }
 
-const toggleOtherCampusPayment = () => {
-  const nextValue = !pagoRealizadoEnOtroPlantel.value
-  pagoRealizadoEnOtroPlantel.value = nextValue
+const resetOtherCampusAuthorization = () => {
+  otherCampusAuthorizationOpen.value = false
+  otherCampusCodeRequested.value = false
+  otherCampusRequestingCode.value = false
+  otherCampusEnteredCode.value = ''
+  otherCampusAuthorizationCode.value = ''
+  otherCampusAuthorizationError.value = ''
+}
+
+const openOtherCampusAuthorization = () => {
   paymentOptionsOpen.value = false
   paymentMethodEditorOpen.value = false
   paymentDateEditorOpen.value = false
   paymentCampusError.value = false
 
-  if (nextValue) {
+  if (pagoRealizadoEnOtroPlantel.value) {
     paymentCampusMenuOpen.value = true
-  } else {
-    plantelPago.value = ''
-    paymentCampusMenuOpen.value = false
+    return
   }
+
+  otherCampusAuthorizationOpen.value = true
+}
+
+const requestOtherCampusAuthorizationCode = async () => {
+  if (otherCampusRequestingCode.value || otherCampusCodeRequested.value) return
+  otherCampusRequestingCode.value = true
+  otherCampusAuthorizationError.value = ''
+  const userName = useCookie('auth_name').value || 'Operador'
+  const matricula = String(props.student?.matricula || '').trim() || 'Sin matrícula'
+  const activePlantel = String(activePlantelCookie.value || '').trim().toUpperCase() || 'Sin plantel'
+
+  try {
+    otherCampusAuthorizationCode.value = await requestPaymentActionAuthorizationCode((secret) =>
+      `*${userName}* solicita habilitar _Pagado en otro plantel_ para la matrícula *${matricula}* desde el plantel *${activePlantel}*.
+Código para autorizar: *${secret}*`
+    )
+    otherCampusCodeRequested.value = true
+    await nextTick()
+    otherCampusCodeInput.value?.focus?.()
+  } catch {
+    otherCampusAuthorizationError.value = 'No se pudo solicitar el código.'
+  } finally {
+    otherCampusRequestingCode.value = false
+  }
+}
+
+const authorizeOtherCampusPayment = () => {
+  if (!otherCampusCodeRequested.value || otherCampusEnteredCode.value !== otherCampusAuthorizationCode.value) {
+    otherCampusAuthorizationError.value = 'El código no coincide.'
+    return
+  }
+
+  pagoRealizadoEnOtroPlantel.value = true
+  plantelPago.value = ''
+  paymentCampusError.value = false
+  paymentCampusMenuOpen.value = true
+  resetOtherCampusAuthorization()
+}
+
+const deactivateOtherCampusPayment = () => {
+  pagoRealizadoEnOtroPlantel.value = false
+  plantelPago.value = ''
+  paymentCampusError.value = false
+  paymentCampusMenuOpen.value = false
+  resetOtherCampusAuthorization()
 }
 
 const selectPaymentCampus = (plantel) => {
@@ -484,8 +608,6 @@ const readPaymentDraft = () => ({
   paymentDate: paymentDate.value,
   paymentDateEditorOpen: paymentDateEditorOpen.value,
   paymentMethodEditorOpen: paymentMethodEditorOpen.value,
-  pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
-  plantelPago: plantelPago.value,
   debts: processedDebts.value.map(debt => ({
     key: paymentDebtKey(debt),
     montoPagado: debt.montoPagado,
@@ -502,11 +624,10 @@ const writePaymentDraft = (draft) => {
   }
   paymentDateEditorOpen.value = Boolean(draft.paymentDateEditorOpen || paymentDate.value !== localDateKey())
   paymentMethodEditorOpen.value = Boolean(draft.paymentMethodEditorOpen)
-  pagoRealizadoEnOtroPlantel.value = Boolean(draft.pagoRealizadoEnOtroPlantel)
-  const restoredPlantelPago = String(draft.plantelPago || '').trim().toUpperCase()
-  plantelPago.value = pagoRealizadoEnOtroPlantel.value && paymentCampusOptions.value.includes(restoredPlantelPago)
-    ? restoredPlantelPago
-    : ''
+  pagoRealizadoEnOtroPlantel.value = false
+  plantelPago.value = ''
+  paymentCampusMenuOpen.value = false
+  resetOtherCampusAuthorization()
   const restoredDebts = new Map((Array.isArray(draft.debts) ? draft.debts : []).map(debt => [debt.key, debt]))
 
   processedDebts.value = processedDebts.value.map((debt) => {
@@ -527,8 +648,6 @@ const paymentDraftHasContent = (draft) => {
   if (!draft || typeof draft !== 'object') return false
   if (String(draft.formaDePago || 'Efectivo') !== 'Efectivo') return true
   if (String(draft.paymentDate || localDateKey()) !== localDateKey()) return true
-  if (Boolean(draft.pagoRealizadoEnOtroPlantel)) return true
-  if (String(draft.plantelPago || '').trim()) return true
   return Array.isArray(draft.debts) && draft.debts.length > 0
 }
 
@@ -719,6 +838,13 @@ const submit = async () => {
 
     const folios = Array.isArray(res?.folios) ? res.folios.filter(Boolean) : []
     markSaved()
+
+    if (pagoRealizadoEnOtroPlantel.value && plantelPago.value) {
+      const userName = useCookie('auth_name').value || 'Operador'
+      sendPaymentActionAuthorizationNotice(
+        `El pago en otro plantel autorizado por *${userName}* para la matrícula *${props.student?.matricula || ''}* fue registrado en *${plantelPago.value}*.`
+      ).catch(() => {})
+    }
 
     if (folios.length) {
       const receiptUrl = `/print/recibo?folios=${encodeURIComponent(folios.join(','))}`

@@ -109,6 +109,7 @@ import ModalDiscardDialog from '~/components/ModalDiscardDialog.vue'
 import { useModalEscape } from '~/composables/useModalEscape'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useToast } from '~/composables/useToast'
+import { requestPaymentActionAuthorizationCode, sendPaymentActionAuthorizationNotice } from '~/utils/paymentActionAuthorization'
 
 const props = defineProps({
   payment: { type: Object, required: true },
@@ -151,19 +152,13 @@ const requestAuthorizationCode = async () => {
   if (reason.value.length < 4 || requestingCode.value) return
   requestingCode.value = true
   errorMessage.value = ''
-  const secret = String(Math.floor(Math.random() * 9000) + 1000)
   const userName = useCookie('auth_name').value || 'Operador'
   const concept = props.payment?.conceptoNombre || props.debt?.conceptoNombre || 'Pago'
-  const message = `*${userName}* solicita cancelar el pago _${concept}_ por _$${money(props.payment?.monto)}_ con motivo de _${reason.value}_\nCódigo para cancelar: *${secret}*`
 
   try {
-    const response = await fetch('https://tgbot.casitaapps.com/sendMessages', {
-      method: 'POST',
-      body: JSON.stringify({ chatId: ['-4885991203'], message }),
-      headers: { 'Content-Type': 'application/json' },
-    })
-    if (!response.ok) throw new Error('No se pudo enviar el código')
-    authorizationCode.value = secret
+    authorizationCode.value = await requestPaymentActionAuthorizationCode((secret) =>
+      `*${userName}* solicita cancelar el pago _${concept}_ por _$${money(props.payment?.monto)}_ con motivo de _${reason.value}_\nCódigo para cancelar: *${secret}*`
+    )
     codeRequested.value = true
     await nextTick()
     codeInput.value?.focus?.()
@@ -195,14 +190,9 @@ const confirmCancellation = async () => {
       },
     })
 
-    fetch('https://tgbot.casitaapps.com/sendMessages', {
-      method: 'POST',
-      body: JSON.stringify({
-        chatId: ['-4885991203'],
-        message: `La cancelación solicitada por *${userName}* para el folio *${props.payment?.folio}* fue procesada correctamente.`,
-      }),
-      headers: { 'Content-Type': 'application/json' },
-    }).catch(() => {})
+    sendPaymentActionAuthorizationNotice(
+      `La cancelación solicitada por *${userName}* para el folio *${props.payment?.folio}* fue procesada correctamente.`
+    ).catch(() => {})
 
     show('Pago cancelado', 'success')
     emit('success', props.payment)
