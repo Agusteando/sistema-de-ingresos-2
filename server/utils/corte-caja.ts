@@ -1,5 +1,5 @@
 import { PLANTELES_LIST } from '../../utils/constants'
-import { query } from './db'
+import { getBridgeAgentId, getDbTransport, query } from './db'
 import { hydrateFinancialConceptNames } from './financial-concept'
 import type { AuthSessionUser } from './auth-session'
 
@@ -125,8 +125,9 @@ const resolveCortePlantel = (user: AuthSessionUser, requestedPlantelValue: unkno
   return requestedPlantel
 }
 
-// Un pago normal pertenece al plantel del alumno/documento. Si fue registrado como
-// pago en otro plantel, el corte debe contabilizarlo donde se recibió físicamente el dinero.
+// El plantel almacenado en el pago describe el contexto del alumno/documento y se conserva
+// como metadato. En modo bridge, la base del agente activo ya es el perímetro físico del corte:
+// ningún movimiento de esa caja debe excluirse por r.plantel o plantel_pago.
 const PAYMENT_PLANTEL_SQL = `CASE
   WHEN COALESCE(r.pago_otro_plantel, 0) = 1
     AND NULLIF(TRIM(r.plantel_pago), '') IS NOT NULL
@@ -242,11 +243,22 @@ const resolveCorteContext = async (user: AuthSessionUser, filters: CorteCajaFilt
   }
 
   const scopePlantel = resolveCortePlantel(user, filters.plantel)
-  const where = `
-    ${PAYMENT_PLANTEL_SQL} = ?
-    AND DATE(${PAYMENT_EFFECTIVE_AT_SQL}) BETWEEN ? AND ?
-  `
-  const params: any[] = [scopePlantel, inicio, fin]
+  const bridgeAgent = getDbTransport() === 'bridge'
+    ? normalizePlantel(getBridgeAgentId())
+    : ''
+  const agentOwnsCorteScope = Boolean(bridgeAgent && bridgeAgent === scopePlantel)
+
+  // En producción bridge-first, cada agente/plantel tiene su propia bitácora financiera.
+  // Por eso el corte del agente debe incluir TODOS sus movimientos del periodo, aunque el
+  // pago conserve otro plantel por matrícula, documento o por cualquier dato histórico.
+  // El filtro legado por plantel solo se conserva como resguardo para transporte directo o
+  // para un contexto bridge que no corresponda al plantel solicitado.
+  const where = agentOwnsCorteScope
+    ? `DATE(${PAYMENT_EFFECTIVE_AT_SQL}) BETWEEN ? AND ?`
+    : `${PAYMENT_PLANTEL_SQL} = ? AND DATE(${PAYMENT_EFFECTIVE_AT_SQL}) BETWEEN ? AND ?`
+  const params: any[] = agentOwnsCorteScope
+    ? [inicio, fin]
+    : [scopePlantel, inicio, fin]
 
   return { inicio, fin, scopePlantel, where, params }
 }
