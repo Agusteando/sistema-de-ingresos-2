@@ -1,1 +1,1 @@
-Protege pagos en otro plantel con autorización por Telegram sin persistir el plantel
+Incluye pagos de otros planteles en el corte del plantel receptor

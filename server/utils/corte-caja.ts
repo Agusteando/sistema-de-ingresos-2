@@ -125,13 +125,18 @@ const resolveCortePlantel = (user: AuthSessionUser, requestedPlantelValue: unkno
   return requestedPlantel
 }
 
-// El corte pertenece al plantel del alumno/documento. plantel_pago identifica dónde se
-// recibió físicamente el dinero y no debe sacar un pago cross-campus del corte de origen.
-const PAYMENT_PLANTEL_SQL = `UPPER(COALESCE(
-  NULLIF(TRIM(r.plantel), ''),
-  NULLIF(TRIM(A.plantel), ''),
-  NULLIF(TRIM(r.plantel_pago), '')
-))`
+// Un pago normal pertenece al plantel del alumno/documento. Si fue registrado como
+// pago en otro plantel, el corte debe contabilizarlo donde se recibió físicamente el dinero.
+const PAYMENT_PLANTEL_SQL = `CASE
+  WHEN COALESCE(r.pago_otro_plantel, 0) = 1
+    AND NULLIF(TRIM(r.plantel_pago), '') IS NOT NULL
+    THEN UPPER(TRIM(r.plantel_pago))
+  ELSE UPPER(COALESCE(
+    NULLIF(TRIM(r.plantel), ''),
+    NULLIF(TRIM(A.plantel), ''),
+    NULLIF(TRIM(r.plantel_pago), '')
+  ))
+END`
 
 // La bitácora conserva ambas fechas, pero el periodo del corte se determina por la
 // fecha efectiva del pago. fecha_original permanece como la fecha de registro inmutable.
