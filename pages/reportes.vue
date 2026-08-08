@@ -27,9 +27,10 @@
             <LucidePrinter :size="16" />
             Imprimir
           </button>
-          <button class="btn btn-outline" type="button" @click="exportConceptReport" :disabled="!conceptRows.length || loadingConceptReport">
-            <LucideDownload :size="16" />
-            CSV
+          <button class="btn btn-outline" type="button" @click="exportConceptReport" :disabled="!conceptRows.length || loadingConceptReport || downloadingConceptExcel">
+            <LucideLoader2 v-if="downloadingConceptExcel" class="animate-spin" :size="16" />
+            <LucideDownload v-else :size="16" />
+            Excel
           </button>
         </div>
       </div>
@@ -94,6 +95,7 @@
                 <th>Fecha</th>
                 <th>Matrícula</th>
                 <th>Alumno</th>
+                <th>Grado</th>
                 <th>Mes</th>
                 <th>Forma de pago</th>
                 <th class="text-right">Monto</th>
@@ -101,19 +103,20 @@
             </thead>
             <tbody>
               <tr v-if="loadingConceptReport">
-                <td colspan="7" class="text-center py-12 text-gray-500 font-medium">Generando reporte...</td>
+                <td colspan="8" class="text-center py-12 text-gray-500 font-medium">Generando reporte...</td>
               </tr>
               <tr v-else-if="!filtrosConcepto.conceptoId">
-                <td colspan="7" class="text-center py-12 text-gray-400">Selecciona un concepto para generar el reporte.</td>
+                <td colspan="8" class="text-center py-12 text-gray-400">Selecciona un concepto para generar el reporte.</td>
               </tr>
               <tr v-else-if="!conceptRows.length">
-                <td colspan="7" class="text-center py-12 text-gray-400">No hay ingresos vigentes para este concepto.</td>
+                <td colspan="8" class="text-center py-12 text-gray-400">No hay ingresos vigentes para este concepto.</td>
               </tr>
               <tr v-else v-for="row in conceptRows" :key="row.folio">
                 <td class="font-mono text-gray-500">{{ row.folio }}</td>
                 <td>{{ formatDate(row.fecha) }}</td>
                 <td class="font-mono text-gray-600">{{ row.matricula }}</td>
                 <td class="font-semibold text-gray-800">{{ row.nombreCompleto }}</td>
+                <td>{{ row.grado || '—' }}</td>
                 <td>{{ row.mesReal || row.mes }}</td>
                 <td><span class="badge bg-blue-50 text-blue-700">{{ row.formaDePago }}</span></td>
                 <td class="text-right font-bold font-mono text-brand-campus">${{ Number(row.monto || 0).toFixed(2) }}</td>
@@ -289,7 +292,6 @@ import {
   LucideReceipt
 } from 'lucide-vue-next'
 import { PLANTELES_LIST } from '~/utils/constants'
-import { exportToCSV } from '~/utils/export'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useToast } from '~/composables/useToast'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
@@ -319,6 +321,7 @@ const activeReport = ref(hasFinancialAccess.value && ['corte', 'recibos'].includ
 const conceptos = ref([])
 const loadingConceptos = ref(false)
 const loadingConceptReport = ref(false)
+const downloadingConceptExcel = ref(false)
 const filtrosConcepto = ref({
   conceptoId: route.query.conceptoId ? String(route.query.conceptoId) : '',
   inicio: '',
@@ -472,23 +475,42 @@ const printConceptReport = () => {
   window.open(`/print/concepto?${q}`, '_blank', 'width=920,height=820')
 }
 
-const exportConceptReport = () => {
-  if (!conceptRows.value.length) return
+const exportConceptReport = async () => {
+  if (!conceptRows.value.length || downloadingConceptExcel.value) return
 
-  exportToCSV(
-    `Reporte_concepto_${safeFileName(selectedConceptName.value)}_${normalizeCicloKey(state.value.ciclo)}.csv`,
-    conceptRows.value.map(row => ({
-      Folio: row.folio,
-      Fecha: formatDate(row.fecha),
-      Matricula: row.matricula,
-      Alumno: row.nombreCompleto,
-      Concepto: row.conceptoNombre,
-      Mes: row.mesReal || row.mes,
-      Forma_de_pago: row.formaDePago,
-      Plantel: row.plantel,
-      Monto_MXN: Number(row.monto || 0).toFixed(2)
-    }))
-  )
+  downloadingConceptExcel.value = true
+  try {
+    const query = new URLSearchParams(buildParams(filtrosConcepto.value))
+    const response = await fetch(`/api/reports/concepto_excel?${query.toString()}`, {
+      credentials: 'same-origin'
+    })
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      throw new Error(payload?.message || payload?.statusMessage || 'No se pudo generar el Excel')
+    }
+
+    const blob = await response.blob()
+    const disposition = response.headers.get('content-disposition') || ''
+    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
+    const filename = encodedName
+      ? decodeURIComponent(encodedName)
+      : (plainName || `Reporte_concepto_${safeFileName(selectedConceptName.value)}_${normalizeCicloKey(state.value.ciclo)}.xlsx`)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    show(error?.message || 'No se pudo generar el Excel', 'danger')
+  } finally {
+    downloadingConceptExcel.value = false
+  }
 }
 
 const openCorte = () => {

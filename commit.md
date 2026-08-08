@@ -1,1 +1,1 @@
-Recuerda de forma persistente el último ciclo escolar seleccionado en toda la plataforma
+Agrega grado calculado y exportación Excel al reporte por concepto
