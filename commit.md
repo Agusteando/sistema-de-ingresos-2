@@ -1,1 +1,1 @@
-Permite seleccionar múltiples conceptos en el reporte por concepto
+Garantiza que el reporte por concepto incluya todos los pagos históricos y cancelados

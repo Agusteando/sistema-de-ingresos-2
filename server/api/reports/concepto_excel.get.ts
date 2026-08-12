@@ -2,7 +2,6 @@ import { runWithBridgeAgentId } from '../../utils/db'
 import { loadConceptReport, loadConceptReportUsers } from '../../utils/concept-report'
 import { normalizePaymentUserKeys } from '../../utils/payment-user'
 import { buildProtectedXlsx } from '../../utils/protected-xlsx'
-import { formatCicloLabel } from '../../../shared/utils/ciclo'
 
 const safeFilePart = (value: unknown) => String(value || 'concepto')
   .normalize('NFD')
@@ -25,6 +24,13 @@ const formatDate = (value: unknown) => {
   const raw = String(value).trim()
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
   return match ? `${match[3]}/${match[2]}/${match[1]}` : raw
+}
+
+const formatRegisteringUser = (nameValue: unknown, emailValue: unknown) => {
+  const name = String(nameValue || '').trim()
+  const email = String(emailValue || '').trim().toLowerCase()
+  if (name && email && name.toLowerCase() !== email) return `${name} (${email})`
+  return email || name || 'No identificado'
 }
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
@@ -51,7 +57,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     ...filters,
     usuarios: selectedUserKeys,
   })
-  const cicloLabel = formatCicloLabel(result.filtros.ciclo)
   const conceptNames = (result.conceptos || []).map((concept: any) => String(concept?.concepto || '')).filter(Boolean)
   const conceptName = conceptNames.length <= 3
     ? (conceptNames.join(', ') || 'Concepto')
@@ -68,7 +73,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     Number(row.folio || 0),
     formatDate(row.fecha),
     row.matricula || '',
-    result.filtros.ciclo,
+    row.ciclo || '',
     row.grado || '',
     row.nivel || '',
     row.nombreCompleto || '',
@@ -76,30 +81,36 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     row.mesReal || row.mes || '',
     row.conceptoNombre || conceptNameById.get(String(row.concepto || '')) || conceptName,
     row.formaDePago || '',
-    row.plantel || '',
-    Number(row.monto || 0),
+    row.scopePlantel || row.plantel || '',
+    formatRegisteringUser(row.usuario, row.usuario_email),
+    row.estatusReporte || row.estatus || 'Vigente',
+    row.cancelada_por || '',
+    Number(row.montoRegistrado ?? row.monto ?? 0),
+    Number(row.montoAplicado || 0),
   ])
 
   const periodLine = result.filtros.inicio || result.filtros.fin
     ? `Periodo: ${result.filtros.inicio || 'Inicio'} a ${result.filtros.fin || 'Fin'}`
-    : 'Periodo: todos los movimientos del ciclo'
+    : 'Periodo: todos los movimientos registrados'
 
   const workbook = buildProtectedXlsx({
     sheetName: 'Reporte por concepto',
     title: 'Reporte por concepto',
     subtitle: conceptName,
     metaLines: [
-      `Ciclo escolar: ${cicloLabel}`,
+      'Ciclos incluidos: todos',
       `Plantel: ${result.filtros.plantel || 'Todos'}`,
       periodLine,
       `Movimientos: ${result.resumen.transacciones} | Alumnos: ${result.resumen.alumnos}`,
+      `Cancelados: ${result.resumen.cancelados || 0} | Depuraciones: ${result.resumen.depuraciones || 0}`,
       `Usuarios incluidos: ${selectedUsers.map(option => option.label).join(', ') || 'Sin movimientos'}`,
+      'Los movimientos cancelados y las depuraciones permanecen visibles; su importe aplicado es 0 cuando corresponde, igual que en Corte de caja.',
     ],
     headers: [
       'Folio',
-      'Fecha',
+      'Fecha efectiva del pago',
       'Matrícula',
-      'Ciclo',
+      'Ciclo del pago',
       'Grado',
       'Nivel',
       'Alumno',
@@ -108,20 +119,26 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       'Concepto',
       'Forma de pago',
       'Plantel',
-      'Monto (MXN)',
+      'Usuario que registró',
+      'Estatus',
+      'Cancelado por',
+      'Monto registrado (MXN)',
+      'Importe aplicado (MXN)',
     ],
     rows,
     numericColumns: [0, 7],
-    currencyColumns: [12],
+    currencyColumns: [15, 16],
     totals: [
-      ...result.resumen.formasPago.map(item => ({ label: item.formaDePago, value: Number(item.total || 0) })),
-      { label: 'Importe total', value: Number(result.resumen.total || 0) },
+      ...result.resumen.formasPago.map(item => ({ label: `${item.formaDePago} aplicado`, value: Number(item.total || 0) })),
+      { label: 'Importe registrado', value: Number(result.resumen.totalRegistrado || 0) },
+      { label: 'Importe no aplicado', value: Number(result.resumen.totalNoAplicado || 0) },
+      { label: 'Importe aplicado', value: Number(result.resumen.total || 0) },
     ],
     creator,
   })
 
   const conceptFileLabel = conceptNames.length === 1 ? conceptNames[0] : `${conceptNames.length}_conceptos`
-  const filename = `Reporte_conceptos_${safeFilePart(conceptFileLabel)}_${safeFilePart(result.filtros.ciclo)}.xlsx`
+  const filename = `Reporte_conceptos_${safeFilePart(conceptFileLabel)}_todos_los_ciclos.xlsx`
   const encodedFilename = encodeURIComponent(filename)
 
   setHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

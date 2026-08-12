@@ -3,6 +3,14 @@ import { getBridgeAgentId, getDbTransport, query } from './db'
 import { hydrateFinancialConceptNames } from './financial-concept'
 import type { AuthSessionUser } from './auth-session'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
+import {
+  PAYMENT_APPLIED_AMOUNT_SQL,
+  PAYMENT_EFFECTIVE_AT_SQL,
+  PAYMENT_PLANTEL_SQL,
+  PAYMENT_REGISTERED_AT_SQL,
+  resolvePaymentAppliedAmount,
+  resolvePaymentAuditStatus,
+} from './payment-audit'
 
 type CorteCajaFilters = {
   inicio?: unknown
@@ -126,70 +134,8 @@ const resolveCortePlantel = (user: AuthSessionUser, requestedPlantelValue: unkno
   return requestedPlantel
 }
 
-// El plantel almacenado en el pago describe el contexto del alumno/documento y se conserva
-// como metadato. En modo bridge, la base del agente activo ya es el perímetro físico del corte:
-// ningún movimiento de esa caja debe excluirse por r.plantel o plantel_pago.
-const PAYMENT_PLANTEL_SQL = `CASE
-  WHEN COALESCE(r.pago_otro_plantel, 0) = 1
-    AND NULLIF(TRIM(r.plantel_pago), '') IS NOT NULL
-    THEN UPPER(TRIM(r.plantel_pago))
-  ELSE UPPER(COALESCE(
-    NULLIF(TRIM(r.plantel), ''),
-    NULLIF(TRIM(A.plantel), ''),
-    NULLIF(TRIM(r.plantel_pago), '')
-  ))
-END`
-
-// La bitácora conserva ambas fechas, pero el periodo del corte se determina por la
-// fecha efectiva del pago. fecha_original permanece como la fecha de registro inmutable.
-const PAYMENT_REGISTERED_AT_SQL = 'COALESCE(r.fecha_original, r.fecha)'
-const PAYMENT_EFFECTIVE_AT_SQL = 'r.fecha'
-
-const CANCELED_STATUS_SQL = `LOWER(TRIM(COALESCE(CAST(r.estatus AS CHAR), ''))) IN (
-  'cancelada', 'cancelado', 'cancelled', 'canceled'
-)`
-
-const DEPURATION_ADJUSTMENT_SQL = `(
-  COALESCE(r.depurado, 0) = 1
-  AND LOWER(TRIM(COALESCE(r.formaDePago, ''))) IN ('depuracion', 'depuración')
-  AND COALESCE(r.pago_otro_plantel, 0) = 0
-)`
-
-const APPLIED_AMOUNT_SQL = `CASE
-  WHEN ${CANCELED_STATUS_SQL} THEN 0
-  WHEN ${DEPURATION_ADJUSTMENT_SQL} THEN 0
-  ELSE COALESCE(r.monto, 0)
-END`
-
 export const normalizeCorteUserKeys = normalizePaymentUserKeys
 
-
-const normalizeText = (value: unknown) => String(value || '').trim()
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-
-const isCanceledPayment = (row: CorteCajaRow) => {
-  const status = normalizeText(row.estatus)
-  return ['cancelada', 'cancelado', 'cancelled', 'canceled'].includes(status)
-}
-
-const isDepurationAdjustment = (row: CorteCajaRow) => {
-  const depurado = ['1', 'true'].includes(String(row.depurado ?? '').trim().toLowerCase())
-  const otherCampus = ['1', 'true'].includes(String(row.pago_otro_plantel ?? '').trim().toLowerCase())
-  return depurado && normalizeText(row.formaDePago) === 'depuracion' && !otherCampus
-}
-
-const resolveAuditStatus = (row: CorteCajaRow) => {
-  if (isCanceledPayment(row)) return 'Cancelado'
-  if (isDepurationAdjustment(row)) return 'Depuración'
-  return String(row.estatus || 'Vigente').trim() || 'Vigente'
-}
-
-const resolveAppliedAmount = (row: CorteCajaRow) => {
-  if (isCanceledPayment(row) || isDepurationAdjustment(row)) return 0
-  return Number(row.monto || 0)
-}
 
 const resolveCorteContext = async (user: AuthSessionUser, filters: CorteCajaFilters): Promise<CorteCajaContext> => {
   if (!user?.hasFinancialAccess) {
@@ -247,7 +193,7 @@ export const loadPlantelCorteCajaUsers = async (
       MAX(NULLIF(TRIM(r.usuario), '')) AS nombre,
       MAX(NULLIF(TRIM(r.usuario_email), '')) AS email,
       COUNT(*) AS movimientos,
-      COALESCE(SUM(${APPLIED_AMOUNT_SQL}), 0) AS total
+      COALESCE(SUM(${PAYMENT_APPLIED_AMOUNT_SQL}), 0) AS total
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${context.where}
@@ -340,8 +286,8 @@ export const loadPlantelCorteCaja = async (
   )))
 
   rows.forEach((row) => {
-    row.estatusCorte = resolveAuditStatus(row)
-    row.montoAplicado = resolveAppliedAmount(row)
+    row.estatusCorte = resolvePaymentAuditStatus(row)
+    row.montoAplicado = resolvePaymentAppliedAmount(row)
   })
 
   const totalsMap = new Map<string, number>()

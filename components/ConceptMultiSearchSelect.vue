@@ -133,6 +133,7 @@ const filteredConcepts = computed(() => {
     concept?.concepto,
     concept?.description,
     concept?.ciclo,
+    concept?.ciclos,
     concept?.costo,
   ].some(value => normalize(value).includes(term)))
 })
@@ -144,8 +145,12 @@ const formatMoney = (value) => Number(value || 0).toFixed(2)
 const isTruthyFlag = (value) => ['1', 'true', 'si', 'sí', 'yes'].includes(String(value || '').trim().toLowerCase())
 
 const conceptMeta = (concept) => {
-  const parts = [isTruthyFlag(concept?.eventual) ? 'eventual' : 'recurrente']
+  const parts = []
+  if (concept?.historico) parts.push('histórico')
+  else parts.push(isTruthyFlag(concept?.eventual) ? 'eventual' : 'recurrente')
   if (concept?.plazo) parts.push(`${concept.plazo} meses`)
+  if (concept?.ciclos) parts.push(String(concept.ciclos))
+  else if (concept?.ciclo) parts.push(String(concept.ciclo))
   return parts.join(' · ')
 }
 

@@ -1,18 +1,23 @@
-import { query } from './db'
+import { getBridgeAgentId, getDbTransport, query } from './db'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
-import {
-  calculatePromotedGrado,
-  displayGrado,
-  isInProjectedPlantelScopeForCiclo,
-  plantelCandidatesForProjectedScope,
-} from '../../shared/utils/grado'
+import { calculatePromotedGrado, displayGrado } from '../../shared/utils/grado'
 import { hydrateFinancialConceptNames, loadFinancialConceptMap } from './financial-concept'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
+import {
+  PAYMENT_APPLIED_AMOUNT_SQL,
+  PAYMENT_PLANTEL_SQL,
+  isCanceledPayment,
+  isDepurationAdjustment,
+  resolvePaymentAppliedAmount,
+  resolvePaymentAuditStatus,
+} from './payment-audit'
 
 const firstQueryValue = (value: unknown) => {
   if (Array.isArray(value)) return firstQueryValue(value[0])
   return value === null || value === undefined ? '' : String(value).trim()
 }
+
+const normalizePlantel = (value: unknown) => String(value || '').trim().toUpperCase()
 
 const normalizeConceptIds = (filters: Record<string, unknown>) => {
   const raw = filters?.conceptoIds ?? filters?.conceptoId
@@ -48,11 +53,47 @@ const normalizeConceptIds = (filters: Record<string, unknown>) => {
     .filter(value => Number.isInteger(value) && value > 0)))
 }
 
+type PaymentScope = {
+  scopePlantel: string
+  where: string
+  params: any[]
+}
+
+const resolvePaymentScope = (user: any, requestedPlantel: unknown): PaymentScope => {
+  const activePlantel = normalizePlantel(user?.active_plantel)
+  const requested = normalizePlantel(firstQueryValue(requestedPlantel))
+  const scopePlantel = activePlantel && activePlantel !== 'GLOBAL'
+    ? activePlantel
+    : (user?.isSuperAdmin ? (requested === 'GLOBAL' ? '' : requested) : activePlantel)
+
+  if (!scopePlantel || scopePlantel === 'GLOBAL') {
+    return { scopePlantel: '', where: '', params: [] }
+  }
+
+  const bridgeAgent = getDbTransport() === 'bridge'
+    ? normalizePlantel(getBridgeAgentId())
+    : ''
+  const agentOwnsScope = Boolean(bridgeAgent && bridgeAgent === scopePlantel)
+
+  // Same perimeter rule as Corte de caja: when the active bridge agent owns the plantel,
+  // that database is already the physical ledger scope. Historical r.plantel/base values
+  // are metadata and must never make a payment disappear from the report.
+  if (agentOwnsScope) {
+    return { scopePlantel, where: '', params: [] }
+  }
+
+  return {
+    scopePlantel,
+    where: `${PAYMENT_PLANTEL_SQL} = ?`,
+    params: [scopePlantel],
+  }
+}
+
 type ConceptReportContext = {
   concepto: any
   conceptos: any[]
   conceptoIds: number[]
-  cicloKey: string
+  catalogCicloKey: string
   inicioValue: string
   finValue: string
   scopePlantel: string
@@ -62,22 +103,16 @@ type ConceptReportContext = {
 
 const resolveConceptReportContext = async (user: any, filters: Record<string, unknown>): Promise<ConceptReportContext> => {
   const { inicio, fin, plantel, ciclo = '2025' } = filters || {}
-  const cicloKey = normalizeCicloKey(ciclo as any)
+  const catalogCicloKey = normalizeCicloKey(ciclo as any)
   const conceptoIds = normalizeConceptIds(filters || {})
 
   if (!conceptoIds.length) {
     throw createError({ statusCode: 400, message: 'Seleccione al menos un concepto.' })
   }
 
-  const resolvedMap = await loadFinancialConceptMap(conceptoIds, cicloKey)
-  const missingIds = conceptoIds.filter(id => !resolvedMap.has(id))
-  if (missingIds.length) {
-    throw createError({
-      statusCode: 404,
-      message: 'Uno o más conceptos seleccionados ya no están disponibles. Actualiza el catálogo e inténtalo de nuevo.',
-    })
-  }
-
+  // The catalog is useful metadata, not an eligibility gate. Historical ledger rows must
+  // remain reportable even when a concept was removed from the current catalog.
+  const resolvedMap = await loadFinancialConceptMap(conceptoIds, catalogCicloKey)
   const bridgeMetadataRows = await query<any[]>(`
     SELECT id, concepto, costo, description, plantel, eventual, plazo, ciclo
     FROM conceptos
@@ -85,72 +120,109 @@ const resolveConceptReportContext = async (user: any, filters: Record<string, un
   `, conceptoIds).catch(() => [])
   const bridgeMetadata = new Map(bridgeMetadataRows.map(row => [Number(row.id), row]))
 
+  const ledgerMetadataRows = await query<any[]>(`
+    SELECT
+      CAST(r.concepto AS CHAR) AS id,
+      MAX(NULLIF(TRIM(r.conceptoNombre), '')) AS concepto,
+      MAX(NULLIF(TRIM(r.ciclo), '')) AS ciclo,
+      COUNT(*) AS movimientos
+    FROM referenciasdepago r
+    WHERE CAST(r.concepto AS CHAR) IN (${conceptoIds.map(() => '?').join(', ')})
+    GROUP BY CAST(r.concepto AS CHAR)
+  `, conceptoIds.map(String)).catch(() => [])
+  const ledgerMetadata = new Map(ledgerMetadataRows.map(row => [Number(row.id), row]))
+
+  const missingIds = conceptoIds.filter(id => !resolvedMap.has(id) && !bridgeMetadata.has(id) && !ledgerMetadata.has(id))
+  if (missingIds.length) {
+    throw createError({
+      statusCode: 404,
+      message: 'Uno o más conceptos seleccionados no existen en el catálogo ni en el historial de pagos.',
+    })
+  }
+
   const conceptos = conceptoIds.map((id) => {
-    const resolvedConcept = resolvedMap.get(id)!
+    const resolvedConcept = resolvedMap.get(id)
     const metadata = bridgeMetadata.get(id) || {}
+    const ledger = ledgerMetadata.get(id) || {}
     return {
       ...metadata,
-      id: resolvedConcept.id,
-      concepto: resolvedConcept.concepto,
-      costo: metadata?.costo ?? resolvedConcept.costo,
-      ciclo: metadata?.ciclo || resolvedConcept.ciclo || cicloKey,
+      id,
+      concepto: resolvedConcept?.concepto || metadata?.concepto || ledger?.concepto || `Concepto financiero #${id}`,
+      costo: metadata?.costo ?? resolvedConcept?.costo ?? 0,
+      ciclo: metadata?.ciclo || resolvedConcept?.ciclo || ledger?.ciclo || '',
+      historico: !resolvedConcept && !bridgeMetadata.has(id),
     }
   })
 
-  let where = `
-    r.estatus = 'Vigente'
-    AND COALESCE(r.depurado, 0) = 0
-    AND r.ciclo = ?
-    AND CAST(r.concepto AS CHAR) IN (${conceptoIds.map(() => '?').join(', ')})
-  `
-  const params: any[] = [cicloKey, ...conceptoIds.map(String)]
   const inicioValue = firstQueryValue(inicio)
   const finValue = firstQueryValue(fin)
-  const plantelValue = firstQueryValue(plantel)
+  if (inicioValue && finValue && inicioValue > finValue) {
+    throw createError({ statusCode: 400, message: 'La fecha inicial no puede ser posterior a la fecha final.' })
+  }
+
+  const whereParts = [`CAST(r.concepto AS CHAR) IN (${conceptoIds.map(() => '?').join(', ')})`]
+  const params: any[] = conceptoIds.map(String)
 
   if (inicioValue) {
-    where += ' AND DATE(r.fecha) >= ?'
+    whereParts.push('DATE(r.fecha) >= ?')
     params.push(inicioValue)
   }
 
   if (finValue) {
-    where += ' AND DATE(r.fecha) <= ?'
+    whereParts.push('DATE(r.fecha) <= ?')
     params.push(finValue)
   }
 
-  const scopePlantel = (!user.isSuperAdmin || user.active_plantel !== 'GLOBAL')
-    ? String(user.active_plantel || '')
-    : plantelValue
-
-  if (scopePlantel) {
-    const plantelCandidates = plantelCandidatesForProjectedScope(scopePlantel)
-    where += ` AND COALESCE(A.plantel, r.plantel) IN (${plantelCandidates.map(() => '?').join(',')})`
-    params.push(...plantelCandidates)
+  const paymentScope = resolvePaymentScope(user, plantel)
+  if (paymentScope.where) {
+    whereParts.push(paymentScope.where)
+    params.push(...paymentScope.params)
   }
 
   return {
     concepto: conceptos.length === 1 ? conceptos[0] : null,
     conceptos,
     conceptoIds,
-    cicloKey,
+    catalogCicloKey,
     inicioValue,
     finValue,
-    scopePlantel,
-    where,
+    scopePlantel: paymentScope.scopePlantel,
+    where: whereParts.join(' AND '),
     params,
   }
 }
 
-const rowMatchesProjectedPlantel = (row: any, context: ConceptReportContext) => (
-  isInProjectedPlantelScopeForCiclo(
+const resolveHistoricalGrade = (row: any) => {
+  const hasBaseGrade = String(row.gradoBase ?? '').trim() !== ''
+  if (!hasBaseGrade) return { grado: '', nivel: '' }
+
+  const projected = calculatePromotedGrado(
     row.gradoBase,
-    row.scopePlantel,
+    row.basePlantel || row.scopePlantel || row.plantel,
     row.cicloBase,
-    context.cicloKey,
+    row.ciclo,
     row.nivelBase,
-    context.scopePlantel || 'GLOBAL',
   )
-)
+
+  // A current base row cannot reliably reconstruct a grade for a payment from an earlier
+  // cycle. Leave it blank instead of hiding the payment or inventing historical placement.
+  if (!projected || projected.outOfScope) return { grado: '', nivel: '' }
+  return { grado: displayGrado(projected.grado), nivel: projected.nivel || '' }
+}
+
+type MoneyBreakdown = {
+  total: number
+  montoRegistrado: number
+  movimientos: number
+}
+
+const addMoneyBreakdown = <T extends MoneyBreakdown>(map: Map<string, T>, key: string, create: () => T, registered: number, applied: number) => {
+  const current = map.get(key) || create()
+  current.movimientos += 1
+  current.montoRegistrado += registered
+  current.total += applied
+  map.set(key, current)
+}
 
 export const loadConceptReport = async (user: any, filters: Record<string, unknown>) => {
   const context = await resolveConceptReportContext(user, filters)
@@ -166,6 +238,7 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
   const rawRows = await query<any[]>(`
     SELECT
       r.folio,
+      r.folio_plantel,
       r.fecha,
       r.matricula,
       r.documento,
@@ -177,69 +250,84 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
       r.monto,
       r.formaDePago,
       r.plantel,
+      r.plantel_pago,
       r.ciclo,
-      A.grado as gradoBase,
-      A.nivel as nivelBase,
-      A.ciclo as cicloBase,
-      COALESCE(A.plantel, r.plantel) as scopePlantel
+      r.estatus,
+      r.cancelada_por,
+      r.depurado,
+      r.pago_otro_plantel,
+      r.usuario,
+      r.usuario_email,
+      A.grado AS gradoBase,
+      A.nivel AS nivelBase,
+      A.ciclo AS cicloBase,
+      A.plantel AS basePlantel,
+      ${PAYMENT_PLANTEL_SQL} AS scopePlantel
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${where}
     ORDER BY r.fecha DESC, r.folio DESC
   `, params)
 
-  const rows = rawRows
-    .filter(row => rowMatchesProjectedPlantel(row, context))
-    .map((row) => {
-      const hasBaseGrade = String(row.gradoBase ?? '').trim() !== ''
-      const projected = hasBaseGrade
-        ? calculatePromotedGrado(row.gradoBase, row.scopePlantel, row.cicloBase, context.cicloKey, row.nivelBase)
-        : null
+  // Deliberately no status/cycle/projected-plantel post-filter here. Every ledger row that
+  // matches the user's explicit concept/date/user filters must survive into the report.
+  const rows = rawRows.map((row) => {
+    const historicalGrade = resolveHistoricalGrade(row)
+    const montoRegistrado = Number(row.monto || 0)
+    const montoAplicado = resolvePaymentAppliedAmount(row)
 
-      return {
-        ...row,
-        ciclo: context.cicloKey,
-        grado: projected ? displayGrado(projected.grado) : '',
-        nivel: projected?.nivel || '',
-        plantelProyectado: projected?.plantel || row.scopePlantel || row.plantel || '',
-      }
-    })
-
-  await hydrateFinancialConceptNames(rows, { ciclo: context.cicloKey })
-
-  const formasPagoMap = new Map<string, number>()
-  const plantelesMap = new Map<string, number>()
-  const conceptosMap = new Map<string, { concepto: string, total: number, movimientos: number }>()
-  const alumnos = new Set<string>()
-  let total = 0
-
-  rows.forEach((row) => {
-    const monto = Number(row.monto || 0)
-    const formaDePago = String(row.formaDePago || 'Sin forma de pago')
-    const rowPlantel = String(row.plantel || 'Sin plantel')
-    const conceptKey = String(row.concepto || '')
-    const conceptName = String(row.conceptoNombre || `Concepto ${conceptKey}`)
-    const conceptCurrent = conceptosMap.get(conceptKey) || { concepto: conceptName, total: 0, movimientos: 0 }
-
-    total += monto
-    alumnos.add(String(row.matricula || ''))
-    formasPagoMap.set(formaDePago, (formasPagoMap.get(formaDePago) || 0) + monto)
-    plantelesMap.set(rowPlantel, (plantelesMap.get(rowPlantel) || 0) + monto)
-    conceptCurrent.total += monto
-    conceptCurrent.movimientos += 1
-    conceptosMap.set(conceptKey, conceptCurrent)
+    return {
+      ...row,
+      ...historicalGrade,
+      estatusReporte: resolvePaymentAuditStatus(row),
+      montoRegistrado,
+      montoAplicado,
+    }
   })
 
-  const formasPago = Array.from(formasPagoMap.entries())
-    .map(([formaDePago, total]) => ({ formaDePago, total }))
-    .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
+  await hydrateFinancialConceptNames(rows)
 
-  const planteles = Array.from(plantelesMap.entries())
-    .map(([plantel, total]) => ({ plantel, total }))
-    .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
+  const formasPagoMap = new Map<string, { formaDePago: string } & MoneyBreakdown>()
+  const plantelesMap = new Map<string, { plantel: string } & MoneyBreakdown>()
+  const conceptosMap = new Map<string, { concepto: string } & MoneyBreakdown>()
+  const estatusMap = new Map<string, { estatus: string } & MoneyBreakdown>()
+  const alumnos = new Set<string>()
+  const ciclos = new Set<string>()
+  let totalRegistrado = 0
+  let total = 0
+  let cancelados = 0
+  let depuraciones = 0
 
+  rows.forEach((row) => {
+    const registered = Number(row.montoRegistrado || 0)
+    const applied = Number(row.montoAplicado || 0)
+    const formaDePago = String(row.formaDePago || 'Sin forma de pago')
+    const rowPlantel = String(row.scopePlantel || row.plantel || 'Sin plantel')
+    const conceptKey = String(row.concepto || '')
+    const conceptName = String(row.conceptoNombre || `Concepto ${conceptKey}`)
+    const status = String(row.estatusReporte || row.estatus || 'Vigente')
+
+    totalRegistrado += registered
+    total += applied
+    if (isCanceledPayment(row)) cancelados += 1
+    if (isDepurationAdjustment(row)) depuraciones += 1
+    alumnos.add(String(row.matricula || ''))
+    if (String(row.ciclo || '').trim()) ciclos.add(String(row.ciclo).trim())
+
+    addMoneyBreakdown(formasPagoMap, formaDePago, () => ({ formaDePago, total: 0, montoRegistrado: 0, movimientos: 0 }), registered, applied)
+    addMoneyBreakdown(plantelesMap, rowPlantel, () => ({ plantel: rowPlantel, total: 0, montoRegistrado: 0, movimientos: 0 }), registered, applied)
+    addMoneyBreakdown(conceptosMap, conceptKey, () => ({ concepto: conceptName, total: 0, montoRegistrado: 0, movimientos: 0 }), registered, applied)
+    addMoneyBreakdown(estatusMap, status, () => ({ estatus: status, total: 0, montoRegistrado: 0, movimientos: 0 }), registered, applied)
+  })
+
+  const formasPago = Array.from(formasPagoMap.values())
+    .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
+  const planteles = Array.from(plantelesMap.values())
+    .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
   const porConcepto = Array.from(conceptosMap.values())
-    .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
+    .sort((a, b) => Number(b.montoRegistrado || 0) - Number(a.montoRegistrado || 0))
+  const estatus = Array.from(estatusMap.values())
+    .sort((a, b) => Number(b.movimientos || 0) - Number(a.movimientos || 0))
 
   return {
     concepto: context.concepto,
@@ -247,18 +335,25 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
     rows,
     filtros: {
       plantel: context.scopePlantel || '',
-      ciclo: context.cicloKey,
+      ciclo: 'todos',
+      catalogoCiclo: context.catalogCicloKey,
       inicio: context.inicioValue,
       fin: context.finValue,
       conceptoIds: context.conceptoIds,
     },
     resumen: {
       total,
+      totalRegistrado,
+      totalNoAplicado: totalRegistrado - total,
       transacciones: rows.length,
       alumnos: Array.from(alumnos).filter(Boolean).length,
+      cancelados,
+      depuraciones,
+      ciclos: Array.from(ciclos).sort(),
       formasPago,
       planteles,
       conceptos: porConcepto,
+      estatus,
     },
   }
 }
@@ -268,54 +363,81 @@ export const loadConceptReportUsers = async (user: any, filters: Record<string, 
   const rows = await query<any[]>(`
     SELECT
       ${PAYMENT_REGISTERING_USER_KEY_SQL} AS usuarioKey,
-      r.usuario,
-      r.usuario_email,
-      r.monto,
-      A.grado as gradoBase,
-      A.nivel as nivelBase,
-      A.ciclo as cicloBase,
-      COALESCE(A.plantel, r.plantel) as scopePlantel
+      MAX(NULLIF(TRIM(r.usuario), '')) AS nombre,
+      MAX(NULLIF(TRIM(r.usuario_email), '')) AS email,
+      COUNT(*) AS movimientos,
+      COALESCE(SUM(COALESCE(r.monto, 0)), 0) AS montoRegistrado,
+      COALESCE(SUM(${PAYMENT_APPLIED_AMOUNT_SQL}), 0) AS total
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${context.where}
+    GROUP BY ${PAYMENT_REGISTERING_USER_KEY_SQL}
   `, context.params)
 
-  const userMap = new Map<string, {
-    key: string
-    nombre: string
-    email: string
-    label: string
-    movimientos: number
-    total: number
-  }>()
-
-  rows
-    .filter(row => rowMatchesProjectedPlantel(row, context))
-    .forEach((row) => {
-      const key = String(row.usuarioKey || 'unknown:')
-      const current = userMap.get(key) || {
-        key,
-        nombre: String(row.usuario || '').trim(),
-        email: String(row.usuario_email || '').trim().toLowerCase(),
-        label: formatPaymentUserLabel(row.usuario, row.usuario_email),
-        movimientos: 0,
-        total: 0,
-      }
-
-      current.movimientos += 1
-      current.total += Number(row.monto || 0)
-      userMap.set(key, current)
-    })
-
   return {
-    usuarios: Array.from(userMap.values())
+    usuarios: rows
+      .map((row) => ({
+        key: String(row.usuarioKey || 'unknown:'),
+        nombre: String(row.nombre || '').trim(),
+        email: String(row.email || '').trim().toLowerCase(),
+        label: formatPaymentUserLabel(row.nombre, row.email),
+        movimientos: Number(row.movimientos || 0),
+        montoRegistrado: Number(row.montoRegistrado || 0),
+        total: Number(row.total || 0),
+      }))
       .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' })),
     filtros: {
       plantel: context.scopePlantel || '',
-      ciclo: context.cicloKey,
+      ciclo: 'todos',
       inicio: context.inicioValue,
       fin: context.finValue,
       conceptoIds: context.conceptoIds,
     },
   }
+}
+
+export const loadConceptReportOptions = async (user: any, filters: Record<string, unknown> = {}) => {
+  const paymentScope = resolvePaymentScope(user, filters?.plantel)
+  const where = paymentScope.where ? `WHERE ${paymentScope.where}` : ''
+  const rows = await query<any[]>(`
+    SELECT
+      CAST(r.concepto AS CHAR) AS id,
+      MAX(NULLIF(TRIM(r.conceptoNombre), '')) AS concepto,
+      GROUP_CONCAT(DISTINCT NULLIF(TRIM(r.ciclo), '') ORDER BY r.ciclo SEPARATOR ', ') AS ciclos,
+      COUNT(*) AS movimientos,
+      MIN(DATE(r.fecha)) AS primeraFecha,
+      MAX(DATE(r.fecha)) AS ultimaFecha
+    FROM referenciasdepago r
+    LEFT JOIN base A ON A.matricula = r.matricula
+    ${where}
+    GROUP BY CAST(r.concepto AS CHAR)
+  `, paymentScope.params)
+
+  const byId = new Map<number, any>()
+  rows.forEach((row) => {
+    const id = Number(row.id)
+    if (!Number.isInteger(id) || id <= 0) return
+    const existing = byId.get(id)
+    const conceptName = String(row.concepto || '').trim() || `Concepto financiero #${id}`
+    if (!existing || Number(row.movimientos || 0) > Number(existing.movimientos || 0)) {
+      byId.set(id, {
+        id,
+        concepto: conceptName,
+        costo: 0,
+        description: `Histórico de pagos · ${Number(row.movimientos || 0)} movimiento${Number(row.movimientos || 0) === 1 ? '' : 's'}`,
+        plantel: paymentScope.scopePlantel || '',
+        eventual: 0,
+        plazo: '',
+        ciclo: String(row.ciclos || '').trim(),
+        ciclos: String(row.ciclos || '').trim(),
+        movimientos: Number(row.movimientos || 0),
+        primeraFecha: row.primeraFecha || '',
+        ultimaFecha: row.ultimaFecha || '',
+        historico: true,
+      })
+    }
+  })
+
+  return Array.from(byId.values())
+    .sort((a, b) => String(a.concepto).localeCompare(String(b.concepto), 'es', { sensitivity: 'base' }))
 }

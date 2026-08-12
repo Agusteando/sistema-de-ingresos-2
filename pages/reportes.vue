@@ -70,8 +70,16 @@
 
       <div class="summary-grid">
         <div class="metric-card">
-          <span>Total</span>
+          <span>Registrado</span>
+          <strong>${{ Number(conceptSummary.totalRegistrado || 0).toFixed(2) }}</strong>
+        </div>
+        <div class="metric-card">
+          <span>Aplicado</span>
           <strong>${{ Number(conceptSummary.total || 0).toFixed(2) }}</strong>
+        </div>
+        <div class="metric-card">
+          <span>No aplicado</span>
+          <strong>${{ Number(conceptSummary.totalNoAplicado || 0).toFixed(2) }}</strong>
         </div>
         <div class="metric-card">
           <span>Movimientos</span>
@@ -96,33 +104,39 @@
                 <th>Fecha</th>
                 <th>Matrícula</th>
                 <th>Alumno</th>
+                <th>Ciclo</th>
                 <th>Grado</th>
                 <th>Mes</th>
                 <th>Concepto</th>
                 <th>Forma de pago</th>
-                <th class="text-right">Monto</th>
+                <th>Estatus</th>
+                <th class="text-right">Registrado</th>
+                <th class="text-right">Aplicado</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loadingConceptReport">
-                <td colspan="9" class="text-center py-12 text-gray-500 font-medium">Generando reporte...</td>
+                <td colspan="12" class="text-center py-12 text-gray-500 font-medium">Generando reporte...</td>
               </tr>
               <tr v-else-if="!filtrosConcepto.conceptoIds.length">
-                <td colspan="9" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para generar el reporte.</td>
+                <td colspan="12" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para generar el reporte.</td>
               </tr>
               <tr v-else-if="!conceptRows.length">
-                <td colspan="9" class="text-center py-12 text-gray-400">No hay ingresos vigentes para los conceptos seleccionados.</td>
+                <td colspan="12" class="text-center py-12 text-gray-400">No se encontraron movimientos para los conceptos y filtros seleccionados.</td>
               </tr>
               <tr v-else v-for="row in conceptRows" :key="`${row.folio}-${row.concepto}`">
                 <td class="font-mono text-gray-500">{{ row.folio }}</td>
                 <td>{{ formatDate(row.fecha) }}</td>
                 <td class="font-mono text-gray-600">{{ row.matricula }}</td>
                 <td class="font-semibold text-gray-800">{{ row.nombreCompleto }}</td>
+                <td class="font-mono text-gray-600">{{ row.ciclo || '—' }}</td>
                 <td>{{ row.grado || '—' }}</td>
                 <td>{{ row.mesReal || row.mes }}</td>
                 <td class="font-medium text-gray-700">{{ row.conceptoNombre || row.concepto }}</td>
                 <td><span class="badge bg-blue-50 text-blue-700">{{ row.formaDePago }}</span></td>
-                <td class="text-right font-bold font-mono text-brand-campus">${{ Number(row.monto || 0).toFixed(2) }}</td>
+                <td><span class="badge" :class="corteStatusClass(row.estatusReporte || row.estatus)">{{ row.estatusReporte || row.estatus || 'Vigente' }}</span></td>
+                <td class="text-right font-semibold font-mono text-gray-700">${{ Number(row.montoRegistrado ?? row.monto ?? 0).toFixed(2) }}</td>
+                <td class="text-right font-bold font-mono text-brand-campus">${{ Number(row.montoAplicado || 0).toFixed(2) }}</td>
               </tr>
             </tbody>
           </table>
@@ -137,6 +151,16 @@
             </div>
           </div>
           <p v-else>No hay movimientos para desglosar.</p>
+
+          <template v-if="conceptSummary.estatus?.length">
+            <h4 class="mt-5">Estatus</h4>
+            <div class="breakdown-list">
+              <div v-for="item in conceptSummary.estatus" :key="item.estatus">
+                <span>{{ item.estatus }} · {{ item.movimientos }}</span>
+                <strong>${{ Number(item.montoRegistrado || 0).toFixed(2) }}</strong>
+              </div>
+            </div>
+          </template>
 
           <template v-if="conceptSummary.conceptos?.length > 1">
             <h4 class="mt-5">Conceptos</h4>
@@ -286,7 +310,7 @@
       :plantel="conceptUserSelectionContext.plantel || 'Todos'"
       :period-label="conceptUserPeriodLabel"
       :loading="loadingConceptReport"
-      description="Usuarios incluidos en el reporte."
+      description="Usuarios incluidos en el reporte. Se consideran pagos de todos los ciclos y estatus."
       confirm-label="Generar reporte"
       confirm-icon="filter"
       @cancel="closeConceptUserSelector"
@@ -369,11 +393,17 @@ const emptyConceptReport = () => ({
   rows: [],
   resumen: {
     total: 0,
+    totalRegistrado: 0,
+    totalNoAplicado: 0,
     transacciones: 0,
     alumnos: 0,
+    cancelados: 0,
+    depuraciones: 0,
+    ciclos: [],
     formasPago: [],
     planteles: [],
-    conceptos: []
+    conceptos: [],
+    estatus: []
   }
 })
 const conceptReport = ref(emptyConceptReport())
@@ -422,9 +452,9 @@ const selectedConceptName = computed(() => {
 })
 const conceptUserPeriodLabel = computed(() => {
   const { inicio, fin } = conceptUserSelectionContext.value
-  if (!inicio && !fin) return 'Todos los movimientos del ciclo'
-  if (inicio && fin && inicio === fin) return formatFilterDate(inicio)
-  return `${inicio ? formatFilterDate(inicio) : 'Inicio'} al ${fin ? formatFilterDate(fin) : 'Fin'}`
+  if (!inicio && !fin) return 'Todos los movimientos · todos los ciclos'
+  if (inicio && fin && inicio === fin) return `${formatFilterDate(inicio)} · todos los ciclos`
+  return `${inicio ? formatFilterDate(inicio) : 'Inicio'} al ${fin ? formatFilterDate(fin) : 'Fin'} · todos los ciclos`
 })
 const totalCorte = computed(() => datosCorte.value.reduce((sum, row) => sum + Number(row.total), 0))
 const totalRegistradoCorte = computed(() => datosCorte.value.reduce((sum, row) => sum + Number(row.montoRegistrado || 0), 0))
@@ -459,7 +489,8 @@ const corteStatusClass = (status) => {
   const normalized = String(status || '').toLowerCase()
   if (normalized.includes('cancel')) return 'bg-red-50 text-red-700'
   if (normalized.includes('depur')) return 'bg-amber-50 text-amber-700'
-  return 'bg-emerald-50 text-emerald-700'
+  if (normalized.includes('vigent')) return 'bg-emerald-50 text-emerald-700'
+  return 'bg-gray-100 text-gray-700'
 }
 
 const buildParams = (source) => {
@@ -495,9 +526,30 @@ const safeFileName = (value) => String(value || 'concepto')
 const loadConceptos = async () => {
   loadingConceptos.value = true
   try {
-    conceptos.value = await $fetch('/api/conceptos', {
-      params: { ciclo: normalizeCicloKey(state.value.ciclo) }
+    const [catalogConcepts, historicalConcepts] = await Promise.all([
+      $fetch('/api/conceptos', {
+        params: { ciclo: normalizeCicloKey(state.value.ciclo) }
+      }),
+      $fetch('/api/reports/concepto_options', {
+        params: canFilterPlantel.value && filtrosConcepto.value.plantel
+          ? { plantel: filtrosConcepto.value.plantel }
+          : {}
+      })
+    ])
+
+    const merged = new Map()
+    ;(historicalConcepts || []).forEach((concept) => merged.set(String(concept.id), concept))
+    ;(catalogConcepts || []).forEach((concept) => {
+      const historical = merged.get(String(concept.id)) || {}
+      merged.set(String(concept.id), {
+        ...historical,
+        ...concept,
+        historico: false,
+        tieneHistorial: Boolean(historical.id)
+      })
     })
+    conceptos.value = Array.from(merged.values())
+      .sort((a, b) => String(a.concepto || '').localeCompare(String(b.concepto || ''), 'es', { sensitivity: 'base' }))
   } catch (e) {
     show('No se pudieron cargar los conceptos', 'danger')
   } finally {
@@ -580,7 +632,7 @@ const executeConceptExcelDownload = async (selectedUserKeys = []) => {
   const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
   const filename = encodedName
     ? decodeURIComponent(encodedName)
-    : (plainName || `Reporte_conceptos_${safeFileName(selectedConceptName.value)}_${normalizeCicloKey(state.value.ciclo)}.xlsx`)
+    : (plainName || `Reporte_conceptos_${safeFileName(selectedConceptName.value)}_todos_los_ciclos.xlsx`)
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -908,7 +960,7 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
   gap: 8px;
   padding: 12px 16px;
 }
