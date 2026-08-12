@@ -16,7 +16,7 @@
             <div>
               <h3 id="corte-users-title">Selecciona los usuarios</h3>
               <p id="corte-users-description">
-                Usuarios incluidos en el Excel.
+                {{ description }}
               </p>
             </div>
             <button ref="closeButton" class="corte-users-close" type="button" aria-label="Cerrar" :disabled="loading" @click="closeModal">
@@ -65,8 +65,8 @@
             </button>
             <button class="btn btn-primary" type="button" :disabled="loading || !selectedKeys.length" @click="confirmSelection">
               <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
-              <LucideDownload v-else :size="16" />
-              Generar Excel
+              <component :is="confirmIconComponent" v-else :size="16" />
+              {{ confirmLabel }}
             </button>
           </footer>
         </section>
@@ -77,7 +77,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { LucideCheck, LucideDownload, LucideLoader2, LucideUsers, LucideX } from 'lucide-vue-next'
+import { LucideCheck, LucideDownload, LucideFilter, LucideLoader2, LucideUsers, LucideX } from 'lucide-vue-next'
 import { useModalEscape } from '~/composables/useModalEscape'
 import { useScrollLock } from '~/composables/useScrollLock'
 
@@ -97,6 +97,18 @@ const props = defineProps({
   loading: {
     type: Boolean,
     default: false
+  },
+  description: {
+    type: String,
+    default: 'Usuarios incluidos en el Excel.'
+  },
+  confirmLabel: {
+    type: String,
+    default: 'Generar Excel'
+  },
+  confirmIcon: {
+    type: String,
+    default: 'download'
   }
 })
 
@@ -105,6 +117,7 @@ const closeButton = ref(null)
 const selectedKeys = ref(props.users.map(user => user.key))
 const selectedSet = computed(() => new Set(selectedKeys.value))
 const allSelected = computed(() => props.users.length > 0 && selectedKeys.value.length === props.users.length)
+const confirmIconComponent = computed(() => props.confirmIcon === 'filter' ? LucideFilter : LucideDownload)
 
 const closeModal = () => {
   if (!props.loading) emit('cancel')

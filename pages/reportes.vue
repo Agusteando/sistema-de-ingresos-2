@@ -60,7 +60,7 @@
             <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
           </select>
         </div>
-        <button class="btn btn-primary filter-button" type="button" @click="loadConceptReport" :disabled="loadingConceptReport || !filtrosConcepto.conceptoId">
+        <button class="btn btn-primary filter-button" type="button" @click="prepareConceptReport" :disabled="loadingConceptReport || !filtrosConcepto.conceptoId">
           <LucideLoader2 v-if="loadingConceptReport" class="animate-spin" :size="16" />
           <LucideFilter v-else :size="16" />
           Generar
@@ -272,9 +272,12 @@
       :users="conceptUserOptions"
       :plantel="conceptUserSelectionContext.plantel || 'Todos'"
       :period-label="conceptUserPeriodLabel"
-      :loading="downloadingConceptExcel"
+      :loading="loadingConceptReport"
+      description="Usuarios incluidos en el reporte."
+      confirm-label="Generar reporte"
+      confirm-icon="filter"
       @cancel="closeConceptUserSelector"
-      @confirm="confirmConceptExcelUsers"
+      @confirm="confirmConceptReportUsers"
     />
 
     <CorteUserSelectionModal
@@ -332,6 +335,7 @@ const conceptos = ref([])
 const loadingConceptos = ref(false)
 const loadingConceptReport = ref(false)
 const downloadingConceptExcel = ref(false)
+const selectedConceptUserKeys = ref([])
 const conceptUserSelectorOpen = ref(false)
 const conceptUserOptions = ref([])
 const conceptUserSelectionContext = ref({
@@ -477,16 +481,44 @@ const loadConceptos = async () => {
   }
 }
 
-const loadConceptReport = async () => {
+const buildConceptReportParams = (selectedUserKeys = selectedConceptUserKeys.value) => {
+  const params = buildParams(filtrosConcepto.value)
+  if (selectedUserKeys?.length) params.usuarios = JSON.stringify(selectedUserKeys)
+  return params
+}
+
+const loadConceptReport = async (selectedUserKeys = []) => {
+  conceptReport.value = await $fetch('/api/reports/concepto', {
+    params: buildConceptReportParams(selectedUserKeys)
+  })
+  selectedConceptUserKeys.value = [...selectedUserKeys]
+}
+
+const prepareConceptReport = async () => {
   if (!filtrosConcepto.value.conceptoId) return show('Seleccione un concepto', 'danger')
+  if (loadingConceptReport.value) return
 
   loadingConceptReport.value = true
   try {
-    conceptReport.value = await $fetch('/api/reports/concepto', {
+    const response = await $fetch('/api/reports/concepto_users', {
       params: buildParams(filtrosConcepto.value)
     })
+    const users = Array.isArray(response?.usuarios) ? response.usuarios : []
+
+    if (users.length <= 1) {
+      await loadConceptReport(users.map(user => user.key))
+      return
+    }
+
+    conceptUserOptions.value = users
+    conceptUserSelectionContext.value = {
+      inicio: response?.filtros?.inicio || '',
+      fin: response?.filtros?.fin || '',
+      plantel: response?.filtros?.plantel || ''
+    }
+    conceptUserSelectorOpen.value = true
   } catch (e) {
-    show(e?.data?.message || 'No se pudo generar el reporte por concepto', 'danger')
+    show(e?.data?.message || e?.message || 'No se pudo generar el reporte por concepto', 'danger')
   } finally {
     loadingConceptReport.value = false
   }
@@ -494,7 +526,7 @@ const loadConceptReport = async () => {
 
 const printConceptReport = () => {
   if (!filtrosConcepto.value.conceptoId) return
-  const q = new URLSearchParams(buildParams(filtrosConcepto.value)).toString()
+  const q = new URLSearchParams(buildConceptReportParams()).toString()
   window.open(`/print/concepto?${q}`, '_blank', 'width=920,height=820')
 }
 
@@ -534,50 +566,32 @@ const exportConceptReport = async () => {
 
   downloadingConceptExcel.value = true
   try {
-    const response = await $fetch('/api/reports/concepto_users', {
-      params: buildParams(filtrosConcepto.value)
-    })
-    const users = Array.isArray(response?.usuarios) ? response.usuarios : []
-
-    if (users.length <= 1) {
-      await executeConceptExcelDownload(users.map(user => user.key))
-      return
-    }
-
-    conceptUserOptions.value = users
-    conceptUserSelectionContext.value = {
-      inicio: response?.filtros?.inicio || '',
-      fin: response?.filtros?.fin || '',
-      plantel: response?.filtros?.plantel || ''
-    }
-    conceptUserSelectorOpen.value = true
+    await executeConceptExcelDownload(selectedConceptUserKeys.value)
   } catch (error) {
-    show(error?.data?.message || error?.message || 'No se pudo preparar el Excel', 'danger')
+    show(error?.data?.message || error?.message || 'No se pudo generar el Excel', 'danger')
   } finally {
     downloadingConceptExcel.value = false
   }
 }
 
 const closeConceptUserSelector = () => {
-  if (downloadingConceptExcel.value) return
+  if (loadingConceptReport.value) return
   conceptUserSelectorOpen.value = false
   conceptUserOptions.value = []
 }
 
-const confirmConceptExcelUsers = async (selectedUserKeys) => {
-  if (downloadingConceptExcel.value || !selectedUserKeys?.length) return
+const confirmConceptReportUsers = async (selectedUserKeys) => {
+  if (loadingConceptReport.value || !selectedUserKeys?.length) return
 
-  downloadingConceptExcel.value = true
+  loadingConceptReport.value = true
   try {
-    await executeConceptExcelDownload(selectedUserKeys)
+    await loadConceptReport(selectedUserKeys)
     conceptUserSelectorOpen.value = false
     conceptUserOptions.value = []
   } catch (error) {
-    conceptUserSelectorOpen.value = false
-    conceptUserOptions.value = []
-    show(error?.data?.message || error?.message || 'No se pudo generar el Excel', 'danger')
+    show(error?.data?.message || error?.message || 'No se pudo generar el reporte por concepto', 'danger')
   } finally {
-    downloadingConceptExcel.value = false
+    loadingConceptReport.value = false
   }
 }
 
@@ -710,21 +724,37 @@ onMounted(async () => {
   if (activeReport.value === 'corte') {
     loadCorte()
   } else if (activeReport.value === 'concepto' && filtrosConcepto.value.conceptoId) {
-    loadConceptReport()
+    prepareConceptReport()
   }
 })
 
 watch(() => normalizeCicloKey(state.value.ciclo), async () => {
   conceptReport.value = emptyConceptReport()
+  selectedConceptUserKeys.value = []
   await loadConceptos()
 })
+
+watch(
+  () => [
+    filtrosConcepto.value.conceptoId,
+    filtrosConcepto.value.inicio,
+    filtrosConcepto.value.fin,
+    filtrosConcepto.value.plantel
+  ],
+  () => {
+    conceptReport.value = emptyConceptReport()
+    selectedConceptUserKeys.value = []
+    conceptUserSelectorOpen.value = false
+    conceptUserOptions.value = []
+  }
+)
 
 watch(() => route.query.conceptoId, async (conceptoId) => {
   if (!conceptoId) return
   activeReport.value = 'concepto'
   filtrosConcepto.value.conceptoId = String(conceptoId)
   if (!conceptos.value.length) await loadConceptos()
-  loadConceptReport()
+  prepareConceptReport()
 })
 </script>
 
