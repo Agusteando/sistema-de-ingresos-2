@@ -268,6 +268,16 @@
     </section>
 
     <CorteUserSelectionModal
+      v-if="conceptUserSelectorOpen"
+      :users="conceptUserOptions"
+      :plantel="conceptUserSelectionContext.plantel || 'Todos'"
+      :period-label="conceptUserPeriodLabel"
+      :loading="downloadingConceptExcel"
+      @cancel="closeConceptUserSelector"
+      @confirm="confirmConceptExcelUsers"
+    />
+
+    <CorteUserSelectionModal
       v-if="corteUserSelectorOpen"
       :users="corteUserOptions"
       :plantel="corteUserSelectionContext.plantel"
@@ -322,6 +332,13 @@ const conceptos = ref([])
 const loadingConceptos = ref(false)
 const loadingConceptReport = ref(false)
 const downloadingConceptExcel = ref(false)
+const conceptUserSelectorOpen = ref(false)
+const conceptUserOptions = ref([])
+const conceptUserSelectionContext = ref({
+  inicio: '',
+  fin: '',
+  plantel: ''
+})
 const filtrosConcepto = ref({
   conceptoId: route.query.conceptoId ? String(route.query.conceptoId) : '',
   inicio: '',
@@ -375,6 +392,12 @@ const selectedConcept = computed(() => {
   return conceptos.value.find(concepto => String(concepto.id) === String(filtrosConcepto.value.conceptoId)) || conceptReport.value.concepto
 })
 const selectedConceptName = computed(() => selectedConcept.value?.concepto || 'Sin selección')
+const conceptUserPeriodLabel = computed(() => {
+  const { inicio, fin } = conceptUserSelectionContext.value
+  if (!inicio && !fin) return 'Todos los movimientos del ciclo'
+  if (inicio && fin && inicio === fin) return formatFilterDate(inicio)
+  return `${inicio ? formatFilterDate(inicio) : 'Inicio'} al ${fin ? formatFilterDate(fin) : 'Fin'}`
+})
 const totalCorte = computed(() => datosCorte.value.reduce((sum, row) => sum + Number(row.total), 0))
 const totalRegistradoCorte = computed(() => datosCorte.value.reduce((sum, row) => sum + Number(row.montoRegistrado || 0), 0))
 const corteUserPeriodLabel = computed(() => {
@@ -475,43 +498,89 @@ const printConceptReport = () => {
   window.open(`/print/concepto?${q}`, '_blank', 'width=920,height=820')
 }
 
+const executeConceptExcelDownload = async (selectedUserKeys = []) => {
+  const query = new URLSearchParams(buildParams(filtrosConcepto.value))
+  if (selectedUserKeys.length) query.set('usuarios', JSON.stringify(selectedUserKeys))
+
+  const response = await fetch(`/api/reports/concepto_excel?${query.toString()}`, {
+    credentials: 'same-origin'
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new Error(payload?.message || payload?.statusMessage || 'No se pudo generar el Excel')
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('content-disposition') || ''
+  const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
+  const filename = encodedName
+    ? decodeURIComponent(encodedName)
+    : (plainName || `Reporte_concepto_${safeFileName(selectedConceptName.value)}_${normalizeCicloKey(state.value.ciclo)}.xlsx`)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 const exportConceptReport = async () => {
   if (!conceptRows.value.length || downloadingConceptExcel.value) return
 
   downloadingConceptExcel.value = true
   try {
-    const query = new URLSearchParams(buildParams(filtrosConcepto.value))
-    const response = await fetch(`/api/reports/concepto_excel?${query.toString()}`, {
-      credentials: 'same-origin'
+    const response = await $fetch('/api/reports/concepto_users', {
+      params: buildParams(filtrosConcepto.value)
     })
+    const users = Array.isArray(response?.usuarios) ? response.usuarios : []
 
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      throw new Error(payload?.message || payload?.statusMessage || 'No se pudo generar el Excel')
+    if (users.length <= 1) {
+      await executeConceptExcelDownload(users.map(user => user.key))
+      return
     }
 
-    const blob = await response.blob()
-    const disposition = response.headers.get('content-disposition') || ''
-    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
-    const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
-    const filename = encodedName
-      ? decodeURIComponent(encodedName)
-      : (plainName || `Reporte_concepto_${safeFileName(selectedConceptName.value)}_${normalizeCicloKey(state.value.ciclo)}.xlsx`)
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.style.display = 'none'
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
+    conceptUserOptions.value = users
+    conceptUserSelectionContext.value = {
+      inicio: response?.filtros?.inicio || '',
+      fin: response?.filtros?.fin || '',
+      plantel: response?.filtros?.plantel || ''
+    }
+    conceptUserSelectorOpen.value = true
   } catch (error) {
-    show(error?.message || 'No se pudo generar el Excel', 'danger')
+    show(error?.data?.message || error?.message || 'No se pudo preparar el Excel', 'danger')
   } finally {
     downloadingConceptExcel.value = false
   }
 }
+
+const closeConceptUserSelector = () => {
+  if (downloadingConceptExcel.value) return
+  conceptUserSelectorOpen.value = false
+  conceptUserOptions.value = []
+}
+
+const confirmConceptExcelUsers = async (selectedUserKeys) => {
+  if (downloadingConceptExcel.value || !selectedUserKeys?.length) return
+
+  downloadingConceptExcel.value = true
+  try {
+    await executeConceptExcelDownload(selectedUserKeys)
+    conceptUserSelectorOpen.value = false
+    conceptUserOptions.value = []
+  } catch (error) {
+    conceptUserSelectorOpen.value = false
+    conceptUserOptions.value = []
+    show(error?.data?.message || error?.message || 'No se pudo generar el Excel', 'danger')
+  } finally {
+    downloadingConceptExcel.value = false
+  }
+}
+
 
 const openCorte = () => {
   activeReport.value = 'corte'

@@ -7,13 +7,24 @@ import {
   plantelCandidatesForProjectedScope,
 } from '../../shared/utils/grado'
 import { hydrateFinancialConceptNames, resolveFinancialConcept } from './financial-concept'
+import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
 
 const firstQueryValue = (value: unknown) => {
   if (Array.isArray(value)) return firstQueryValue(value[0])
   return value === null || value === undefined ? '' : String(value).trim()
 }
 
-export const loadConceptReport = async (user: any, filters: Record<string, unknown>) => {
+type ConceptReportContext = {
+  concepto: any
+  cicloKey: string
+  inicioValue: string
+  finValue: string
+  scopePlantel: string
+  where: string
+  params: any[]
+}
+
+const resolveConceptReportContext = async (user: any, filters: Record<string, unknown>): Promise<ConceptReportContext> => {
   const { conceptoId, inicio, fin, plantel, ciclo = '2025' } = filters || {}
   const cicloKey = normalizeCicloKey(ciclo as any)
   const id = Number(firstQueryValue(conceptoId))
@@ -59,13 +70,46 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
   }
 
   const scopePlantel = (!user.isSuperAdmin || user.active_plantel !== 'GLOBAL')
-    ? user.active_plantel
+    ? String(user.active_plantel || '')
     : plantelValue
 
   if (scopePlantel) {
     const plantelCandidates = plantelCandidatesForProjectedScope(scopePlantel)
     where += ` AND COALESCE(A.plantel, r.plantel) IN (${plantelCandidates.map(() => '?').join(',')})`
     params.push(...plantelCandidates)
+  }
+
+  return {
+    concepto,
+    cicloKey,
+    inicioValue,
+    finValue,
+    scopePlantel,
+    where,
+    params,
+  }
+}
+
+const rowMatchesProjectedPlantel = (row: any, context: ConceptReportContext) => (
+  isInProjectedPlantelScopeForCiclo(
+    row.gradoBase,
+    row.scopePlantel,
+    row.cicloBase,
+    context.cicloKey,
+    row.nivelBase,
+    context.scopePlantel || 'GLOBAL',
+  )
+)
+
+export const loadConceptReport = async (user: any, filters: Record<string, unknown>) => {
+  const context = await resolveConceptReportContext(user, filters)
+  const selectedUserKeys = normalizePaymentUserKeys(filters?.usuarios)
+  let where = context.where
+  const params = [...context.params]
+
+  if (selectedUserKeys.length) {
+    where += ` AND ${PAYMENT_REGISTERING_USER_KEY_SQL} IN (${selectedUserKeys.map(() => '?').join(', ')})`
+    params.push(...selectedUserKeys)
   }
 
   const rawRows = await query<any[]>(`
@@ -94,32 +138,23 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
   `, params)
 
   const rows = rawRows
-    .filter(row => (
-      isInProjectedPlantelScopeForCiclo(
-        row.gradoBase,
-        row.scopePlantel,
-        row.cicloBase,
-        cicloKey,
-        row.nivelBase,
-        scopePlantel || 'GLOBAL',
-      )
-    ))
+    .filter(row => rowMatchesProjectedPlantel(row, context))
     .map((row) => {
       const hasBaseGrade = String(row.gradoBase ?? '').trim() !== ''
       const projected = hasBaseGrade
-        ? calculatePromotedGrado(row.gradoBase, row.scopePlantel, row.cicloBase, cicloKey, row.nivelBase)
+        ? calculatePromotedGrado(row.gradoBase, row.scopePlantel, row.cicloBase, context.cicloKey, row.nivelBase)
         : null
 
       return {
         ...row,
-        ciclo: cicloKey,
+        ciclo: context.cicloKey,
         grado: projected ? displayGrado(projected.grado) : '',
         nivel: projected?.nivel || '',
         plantelProyectado: projected?.plantel || row.scopePlantel || row.plantel || '',
       }
     })
 
-  await hydrateFinancialConceptNames(rows, { ciclo: cicloKey })
+  await hydrateFinancialConceptNames(rows, { ciclo: context.cicloKey })
 
   const formasPagoMap = new Map<string, number>()
   const plantelesMap = new Map<string, number>()
@@ -146,13 +181,13 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
     .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
 
   return {
-    concepto,
+    concepto: context.concepto,
     rows,
     filtros: {
-      plantel: scopePlantel || '',
-      ciclo: cicloKey,
-      inicio: inicioValue,
-      fin: finValue,
+      plantel: context.scopePlantel || '',
+      ciclo: context.cicloKey,
+      inicio: context.inicioValue,
+      fin: context.finValue,
     },
     resumen: {
       total,
@@ -160,6 +195,62 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
       alumnos: Array.from(alumnos).filter(Boolean).length,
       formasPago,
       planteles,
+    },
+  }
+}
+
+export const loadConceptReportUsers = async (user: any, filters: Record<string, unknown>) => {
+  const context = await resolveConceptReportContext(user, filters)
+  const rows = await query<any[]>(`
+    SELECT
+      ${PAYMENT_REGISTERING_USER_KEY_SQL} AS usuarioKey,
+      r.usuario,
+      r.usuario_email,
+      r.monto,
+      A.grado as gradoBase,
+      A.nivel as nivelBase,
+      A.ciclo as cicloBase,
+      COALESCE(A.plantel, r.plantel) as scopePlantel
+    FROM referenciasdepago r
+    LEFT JOIN base A ON A.matricula = r.matricula
+    WHERE ${context.where}
+  `, context.params)
+
+  const userMap = new Map<string, {
+    key: string
+    nombre: string
+    email: string
+    label: string
+    movimientos: number
+    total: number
+  }>()
+
+  rows
+    .filter(row => rowMatchesProjectedPlantel(row, context))
+    .forEach((row) => {
+      const key = String(row.usuarioKey || 'unknown:')
+      const current = userMap.get(key) || {
+        key,
+        nombre: String(row.usuario || '').trim(),
+        email: String(row.usuario_email || '').trim().toLowerCase(),
+        label: formatPaymentUserLabel(row.usuario, row.usuario_email),
+        movimientos: 0,
+        total: 0,
+      }
+
+      current.movimientos += 1
+      current.total += Number(row.monto || 0)
+      userMap.set(key, current)
+    })
+
+  return {
+    usuarios: Array.from(userMap.values())
+      .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' })),
+    filtros: {
+      plantel: context.scopePlantel || '',
+      ciclo: context.cicloKey,
+      inicio: context.inicioValue,
+      fin: context.finValue,
     },
   }
 }

@@ -1,5 +1,6 @@
 import { runWithBridgeAgentId } from '../../utils/db'
-import { loadConceptReport } from '../../utils/concept-report'
+import { loadConceptReport, loadConceptReportUsers } from '../../utils/concept-report'
+import { normalizePaymentUserKeys } from '../../utils/payment-user'
 import { buildProtectedXlsx } from '../../utils/protected-xlsx'
 import { formatCicloLabel } from '../../../shared/utils/ciclo'
 
@@ -27,12 +28,34 @@ const formatDate = (value: unknown) => {
 }
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-  const result = await loadConceptReport(event.context.user, getQuery(event))
+  const filters = getQuery(event)
+  const user = event.context.user
+  const availableUsers = await loadConceptReportUsers(user, filters)
+  const requestedUserKeys = normalizePaymentUserKeys(filters.usuarios)
+  const availableKeys = new Set(availableUsers.usuarios.map(option => option.key))
+
+  if (availableUsers.usuarios.length > 1 && !requestedUserKeys.length) {
+    throw createError({ statusCode: 400, message: 'Seleccione los usuarios que desea incluir en el Excel.' })
+  }
+
+  const invalidUserKeys = requestedUserKeys.filter(key => !availableKeys.has(key))
+  if (invalidUserKeys.length) {
+    throw createError({ statusCode: 400, message: 'La selección de usuarios ya no coincide con el reporte. Vuelva a intentarlo.' })
+  }
+
+  const selectedUserKeys = requestedUserKeys.length
+    ? requestedUserKeys
+    : availableUsers.usuarios.map(option => option.key)
+  const selectedUsers = availableUsers.usuarios.filter(option => selectedUserKeys.includes(option.key))
+  const result = await loadConceptReport(user, {
+    ...filters,
+    usuarios: selectedUserKeys,
+  })
   const cicloLabel = formatCicloLabel(result.filtros.ciclo)
   const conceptName = String(result.concepto?.concepto || 'Concepto')
-  const user = event.context.user || {}
-  const creatorName = String(user.nombre || user.name || user.email || 'Usuario')
-  const creatorEmail = String(user.email || user.usuario_email || '').trim()
+  const creatorUser = event.context.user || {}
+  const creatorName = String(creatorUser.nombre || creatorUser.name || creatorUser.email || 'Usuario')
+  const creatorEmail = String(creatorUser.email || creatorUser.usuario_email || '').trim()
   const creator = creatorEmail && creatorEmail.toLowerCase() !== creatorName.toLowerCase()
     ? `${creatorName} <${creatorEmail}>`
     : creatorName
@@ -66,6 +89,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       `Plantel: ${result.filtros.plantel || 'Todos'}`,
       periodLine,
       `Movimientos: ${result.resumen.transacciones} | Alumnos: ${result.resumen.alumnos}`,
+      `Usuarios incluidos: ${selectedUsers.map(option => option.label).join(', ') || 'Sin movimientos'}`,
     ],
     headers: [
       'Folio',

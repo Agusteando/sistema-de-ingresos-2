@@ -2,6 +2,7 @@ import { PLANTELES_LIST } from '../../utils/constants'
 import { getBridgeAgentId, getDbTransport, query } from './db'
 import { hydrateFinancialConceptNames } from './financial-concept'
 import type { AuthSessionUser } from './auth-session'
+import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
 
 type CorteCajaFilters = {
   inicio?: unknown
@@ -144,14 +145,6 @@ END`
 const PAYMENT_REGISTERED_AT_SQL = 'COALESCE(r.fecha_original, r.fecha)'
 const PAYMENT_EFFECTIVE_AT_SQL = 'r.fecha'
 
-const REGISTERING_USER_KEY_SQL = `CASE
-  WHEN NULLIF(TRIM(r.usuario_email), '') IS NOT NULL
-    THEN CONCAT('email:', LOWER(TRIM(r.usuario_email)))
-  WHEN NULLIF(TRIM(r.usuario), '') IS NOT NULL
-    THEN CONCAT('name:', LOWER(TRIM(r.usuario)))
-  ELSE 'unknown:'
-END`
-
 const CANCELED_STATUS_SQL = `LOWER(TRIM(COALESCE(CAST(r.estatus AS CHAR), ''))) IN (
   'cancelada', 'cancelado', 'cancelled', 'canceled'
 )`
@@ -168,34 +161,8 @@ const APPLIED_AMOUNT_SQL = `CASE
   ELSE COALESCE(r.monto, 0)
 END`
 
-export const normalizeCorteUserKeys = (value: unknown): string[] => {
-  let source: unknown[] = Array.isArray(value)
-    ? value
-    : (value === null || value === undefined ? [] : [value])
+export const normalizeCorteUserKeys = normalizePaymentUserKeys
 
-  if (source.length === 1 && typeof source[0] === 'string' && source[0].trim().startsWith('[')) {
-    try {
-      const parsed = JSON.parse(source[0])
-      if (Array.isArray(parsed)) source = parsed
-    } catch {
-      source = []
-    }
-  }
-
-  const keys = source
-    .map(item => String(item || '').trim())
-    .filter(key => /^(email:|name:|unknown:)/.test(key) && key.length <= 320)
-
-  return Array.from(new Set(keys))
-}
-
-const formatUserLabel = (nameValue: unknown, emailValue: unknown) => {
-  const nombre = String(nameValue || '').trim()
-  const email = String(emailValue || '').trim().toLowerCase()
-
-  if (nombre && email && nombre.toLowerCase() !== email) return `${nombre} (${email})`
-  return email || nombre || 'No identificado'
-}
 
 const normalizeText = (value: unknown) => String(value || '').trim()
   .normalize('NFD')
@@ -276,7 +243,7 @@ export const loadPlantelCorteCajaUsers = async (
     total: number | string
   }>>(`
     SELECT
-      ${REGISTERING_USER_KEY_SQL} AS usuarioKey,
+      ${PAYMENT_REGISTERING_USER_KEY_SQL} AS usuarioKey,
       MAX(NULLIF(TRIM(r.usuario), '')) AS nombre,
       MAX(NULLIF(TRIM(r.usuario_email), '')) AS email,
       COUNT(*) AS movimientos,
@@ -284,7 +251,7 @@ export const loadPlantelCorteCajaUsers = async (
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${context.where}
-    GROUP BY ${REGISTERING_USER_KEY_SQL}
+    GROUP BY ${PAYMENT_REGISTERING_USER_KEY_SQL}
   `, context.params)
 
   const usuarios: CorteCajaUserOption[] = rows
@@ -292,7 +259,7 @@ export const loadPlantelCorteCajaUsers = async (
       key: String(row.usuarioKey || 'unknown:'),
       nombre: String(row.nombre || '').trim(),
       email: String(row.email || '').trim().toLowerCase(),
-      label: formatUserLabel(row.nombre, row.email),
+      label: formatPaymentUserLabel(row.nombre, row.email),
       movimientos: Number(row.movimientos || 0),
       total: Number(row.total || 0)
     }))
@@ -319,7 +286,7 @@ export const loadPlantelCorteCaja = async (
   const params = [...context.params]
 
   if (selectedUserKeys.length) {
-    where += ` AND ${REGISTERING_USER_KEY_SQL} IN (${selectedUserKeys.map(() => '?').join(', ')})`
+    where += ` AND ${PAYMENT_REGISTERING_USER_KEY_SQL} IN (${selectedUserKeys.map(() => '?').join(', ')})`
     params.push(...selectedUserKeys)
   }
 
