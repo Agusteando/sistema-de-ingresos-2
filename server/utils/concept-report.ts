@@ -6,7 +6,7 @@ import {
   isInProjectedPlantelScopeForCiclo,
   plantelCandidatesForProjectedScope,
 } from '../../shared/utils/grado'
-import { hydrateFinancialConceptNames, resolveFinancialConcept } from './financial-concept'
+import { hydrateFinancialConceptNames, loadFinancialConceptMap } from './financial-concept'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
 
 const firstQueryValue = (value: unknown) => {
@@ -14,8 +14,44 @@ const firstQueryValue = (value: unknown) => {
   return value === null || value === undefined ? '' : String(value).trim()
 }
 
+const normalizeConceptIds = (filters: Record<string, unknown>) => {
+  const raw = filters?.conceptoIds ?? filters?.conceptoId
+  const values: unknown[] = []
+
+  const collect = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(collect)
+      return
+    }
+
+    if (value === null || value === undefined || value === '') return
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (!trimmed) return
+      if (trimmed.startsWith('[')) {
+        try {
+          collect(JSON.parse(trimmed))
+          return
+        } catch {}
+      }
+      if (trimmed.includes(',')) {
+        trimmed.split(',').forEach(collect)
+        return
+      }
+    }
+    values.push(value)
+  }
+
+  collect(raw)
+  return Array.from(new Set(values
+    .map(value => Number(value))
+    .filter(value => Number.isInteger(value) && value > 0)))
+}
+
 type ConceptReportContext = {
   concepto: any
+  conceptos: any[]
+  conceptoIds: number[]
   cicloKey: string
   inicioValue: string
   finValue: string
@@ -25,36 +61,49 @@ type ConceptReportContext = {
 }
 
 const resolveConceptReportContext = async (user: any, filters: Record<string, unknown>): Promise<ConceptReportContext> => {
-  const { conceptoId, inicio, fin, plantel, ciclo = '2025' } = filters || {}
+  const { inicio, fin, plantel, ciclo = '2025' } = filters || {}
   const cicloKey = normalizeCicloKey(ciclo as any)
-  const id = Number(firstQueryValue(conceptoId))
+  const conceptoIds = normalizeConceptIds(filters || {})
 
-  if (!id) {
-    throw createError({ statusCode: 400, message: 'Seleccione un concepto.' })
+  if (!conceptoIds.length) {
+    throw createError({ statusCode: 400, message: 'Seleccione al menos un concepto.' })
   }
 
-  const resolvedConcept = await resolveFinancialConcept({ conceptoId: id, ciclo: cicloKey })
-  const [bridgeMetadata] = await query<any[]>(`
+  const resolvedMap = await loadFinancialConceptMap(conceptoIds, cicloKey)
+  const missingIds = conceptoIds.filter(id => !resolvedMap.has(id))
+  if (missingIds.length) {
+    throw createError({
+      statusCode: 404,
+      message: 'Uno o más conceptos seleccionados ya no están disponibles. Actualiza el catálogo e inténtalo de nuevo.',
+    })
+  }
+
+  const bridgeMetadataRows = await query<any[]>(`
     SELECT id, concepto, costo, description, plantel, eventual, plazo, ciclo
     FROM conceptos
-    WHERE id = ?
-    LIMIT 1
-  `, [id]).catch(() => [])
-  const concepto = {
-    ...(bridgeMetadata || {}),
-    id: resolvedConcept.id,
-    concepto: resolvedConcept.concepto,
-    costo: bridgeMetadata?.costo ?? resolvedConcept.costo,
-    ciclo: bridgeMetadata?.ciclo || resolvedConcept.ciclo || cicloKey,
-  }
+    WHERE id IN (${conceptoIds.map(() => '?').join(', ')})
+  `, conceptoIds).catch(() => [])
+  const bridgeMetadata = new Map(bridgeMetadataRows.map(row => [Number(row.id), row]))
+
+  const conceptos = conceptoIds.map((id) => {
+    const resolvedConcept = resolvedMap.get(id)!
+    const metadata = bridgeMetadata.get(id) || {}
+    return {
+      ...metadata,
+      id: resolvedConcept.id,
+      concepto: resolvedConcept.concepto,
+      costo: metadata?.costo ?? resolvedConcept.costo,
+      ciclo: metadata?.ciclo || resolvedConcept.ciclo || cicloKey,
+    }
+  })
 
   let where = `
     r.estatus = 'Vigente'
     AND COALESCE(r.depurado, 0) = 0
     AND r.ciclo = ?
-    AND CAST(r.concepto AS CHAR) = ?
+    AND CAST(r.concepto AS CHAR) IN (${conceptoIds.map(() => '?').join(', ')})
   `
-  const params: any[] = [cicloKey, String(concepto.id)]
+  const params: any[] = [cicloKey, ...conceptoIds.map(String)]
   const inicioValue = firstQueryValue(inicio)
   const finValue = firstQueryValue(fin)
   const plantelValue = firstQueryValue(plantel)
@@ -80,7 +129,9 @@ const resolveConceptReportContext = async (user: any, filters: Record<string, un
   }
 
   return {
-    concepto,
+    concepto: conceptos.length === 1 ? conceptos[0] : null,
+    conceptos,
+    conceptoIds,
     cicloKey,
     inicioValue,
     finValue,
@@ -158,6 +209,7 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
 
   const formasPagoMap = new Map<string, number>()
   const plantelesMap = new Map<string, number>()
+  const conceptosMap = new Map<string, { concepto: string, total: number, movimientos: number }>()
   const alumnos = new Set<string>()
   let total = 0
 
@@ -165,11 +217,17 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
     const monto = Number(row.monto || 0)
     const formaDePago = String(row.formaDePago || 'Sin forma de pago')
     const rowPlantel = String(row.plantel || 'Sin plantel')
+    const conceptKey = String(row.concepto || '')
+    const conceptName = String(row.conceptoNombre || `Concepto ${conceptKey}`)
+    const conceptCurrent = conceptosMap.get(conceptKey) || { concepto: conceptName, total: 0, movimientos: 0 }
 
     total += monto
     alumnos.add(String(row.matricula || ''))
     formasPagoMap.set(formaDePago, (formasPagoMap.get(formaDePago) || 0) + monto)
     plantelesMap.set(rowPlantel, (plantelesMap.get(rowPlantel) || 0) + monto)
+    conceptCurrent.total += monto
+    conceptCurrent.movimientos += 1
+    conceptosMap.set(conceptKey, conceptCurrent)
   })
 
   const formasPago = Array.from(formasPagoMap.entries())
@@ -180,14 +238,19 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
     .map(([plantel, total]) => ({ plantel, total }))
     .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
 
+  const porConcepto = Array.from(conceptosMap.values())
+    .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
+
   return {
     concepto: context.concepto,
+    conceptos: context.conceptos,
     rows,
     filtros: {
       plantel: context.scopePlantel || '',
       ciclo: context.cicloKey,
       inicio: context.inicioValue,
       fin: context.finValue,
+      conceptoIds: context.conceptoIds,
     },
     resumen: {
       total,
@@ -195,6 +258,7 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
       alumnos: Array.from(alumnos).filter(Boolean).length,
       formasPago,
       planteles,
+      conceptos: porConcepto,
     },
   }
 }
@@ -251,6 +315,7 @@ export const loadConceptReportUsers = async (user: any, filters: Record<string, 
       ciclo: context.cicloKey,
       inicio: context.inicioValue,
       fin: context.finValue,
+      conceptoIds: context.conceptoIds,
     },
   }
 }

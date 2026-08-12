@@ -11,7 +11,7 @@
         <div class="text-center flex-1 mx-4">
           <h2 class="m-0 text-[13px] font-bold text-gray-900 uppercase tracking-tight">{{ institutionName }}</h2>
           <div class="mt-2 text-[12px] font-semibold text-gray-700">Reporte por concepto</div>
-          <div class="text-[12px] text-gray-600">{{ concepto?.concepto || 'Concepto' }}</div>
+          <div class="text-[12px] text-gray-600">{{ conceptLabel }}</div>
           <div class="text-[11px] text-gray-500">Ciclo escolar {{ cicloLabel }}</div>
         </div>
         <div class="text-right text-[11px] text-gray-600">
@@ -46,13 +46,14 @@
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Mes</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Alumno</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Grado</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Concepto</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Forma</th>
             <th class="py-2 text-right font-semibold text-gray-600 uppercase">Monto</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="!rows.length">
-            <td colspan="9" class="text-center py-6 text-gray-500 font-medium">No se encontraron movimientos.</td>
+            <td colspan="10" class="text-center py-6 text-gray-500 font-medium">No se encontraron movimientos.</td>
           </tr>
           <tr v-else v-for="r in rows" :key="r.folio" class="border-b border-gray-100">
             <td class="py-2 text-gray-900 font-mono">{{ r.folio }}</td>
@@ -62,6 +63,7 @@
             <td class="py-2 text-gray-900">{{ r.mesReal || r.mes }}</td>
             <td class="py-2 text-gray-900">{{ r.nombreCompleto }}</td>
             <td class="py-2 text-gray-900">{{ r.grado || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.conceptoNombre || r.concepto }}</td>
             <td class="py-2 text-gray-900">{{ r.formaDePago }}</td>
             <td class="py-2 text-right font-bold text-gray-900">${{ Number(r.monto).toFixed(2) }}</td>
           </tr>
@@ -96,20 +98,26 @@ definePageMeta({ layout: false })
 
 const route = useRoute()
 const rows = ref([])
-const concepto = ref(null)
+const conceptos = ref([])
 const resumen = ref({ total: 0, transacciones: 0, alumnos: 0, formasPago: [] })
 const activeUserName = useCookie('auth_name').value || 'Usuario'
 const reportPlantel = ref('')
 const reportCiclo = ref(route.query.ciclo || '')
 const institutionName = computed(() => institutionNameForPlantel(reportPlantel.value))
 const cicloLabel = computed(() => formatCicloLabel(reportCiclo.value))
+const conceptLabel = computed(() => {
+  const names = conceptos.value.map(item => item?.concepto).filter(Boolean)
+  if (!names.length) return 'Concepto'
+  if (names.length <= 3) return names.join(', ')
+  return `${names.slice(0, 2).join(', ')} +${names.length - 2}`
+})
 
 onMounted(async () => {
   const query = new URLSearchParams(route.query).toString()
   try {
     const res = await $fetch(`/api/reports/concepto?${query}`)
     rows.value = res.rows || []
-    concepto.value = res.concepto || null
+    conceptos.value = Array.isArray(res.conceptos) ? res.conceptos : (res.concepto ? [res.concepto] : [])
     resumen.value = res.resumen || resumen.value
     reportPlantel.value = res.filtros?.plantel || res.rows?.[0]?.scopePlantel || res.rows?.[0]?.plantel || route.query.plantel || ''
     reportCiclo.value = res.filtros?.ciclo || route.query.ciclo || ''

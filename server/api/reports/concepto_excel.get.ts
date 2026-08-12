@@ -52,7 +52,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     usuarios: selectedUserKeys,
   })
   const cicloLabel = formatCicloLabel(result.filtros.ciclo)
-  const conceptName = String(result.concepto?.concepto || 'Concepto')
+  const conceptNames = (result.conceptos || []).map((concept: any) => String(concept?.concepto || '')).filter(Boolean)
+  const conceptName = conceptNames.length <= 3
+    ? (conceptNames.join(', ') || 'Concepto')
+    : `${conceptNames.slice(0, 2).join(', ')} +${conceptNames.length - 2}`
+  const conceptNameById = new Map((result.conceptos || []).map((concept: any) => [String(concept?.id || ''), String(concept?.concepto || '')]))
   const creatorUser = event.context.user || {}
   const creatorName = String(creatorUser.nombre || creatorUser.name || creatorUser.email || 'Usuario')
   const creatorEmail = String(creatorUser.email || creatorUser.usuario_email || '').trim()
@@ -70,7 +74,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     row.nombreCompleto || '',
     Number(row.documento || 0),
     row.mesReal || row.mes || '',
-    row.conceptoNombre || conceptName,
+    row.conceptoNombre || conceptNameById.get(String(row.concepto || '')) || conceptName,
     row.formaDePago || '',
     row.plantel || '',
     Number(row.monto || 0),
@@ -116,7 +120,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     creator,
   })
 
-  const filename = `Reporte_concepto_${safeFilePart(conceptName)}_${safeFilePart(result.filtros.ciclo)}.xlsx`
+  const conceptFileLabel = conceptNames.length === 1 ? conceptNames[0] : `${conceptNames.length}_conceptos`
+  const filename = `Reporte_conceptos_${safeFilePart(conceptFileLabel)}_${safeFilePart(result.filtros.ciclo)}.xlsx`
   const encodedFilename = encodeURIComponent(filename)
 
   setHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

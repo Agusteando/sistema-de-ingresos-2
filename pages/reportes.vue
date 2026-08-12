@@ -37,14 +37,13 @@
 
       <div class="filters-grid concept-filters">
         <div class="form-group m-0 concept-select-field">
-          <label class="form-label">Concepto</label>
-          <ConceptSearchSelect
-            v-model="filtrosConcepto.conceptoId"
+          <label class="form-label">Conceptos</label>
+          <ConceptMultiSearchSelect
+            v-model="filtrosConcepto.conceptoIds"
             :concepts="conceptos"
             :loading="loadingConceptos"
             :disabled="loadingConceptReport"
-            :enforce-stock-availability="false"
-            placeholder="Buscar concepto..."
+            placeholder="Buscar y seleccionar conceptos..."
           />
         </div>
         <div class="form-group m-0">
@@ -62,7 +61,7 @@
             <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
           </select>
         </div>
-        <button class="btn btn-primary filter-button" type="button" @click="prepareConceptReport" :disabled="loadingConceptReport || !filtrosConcepto.conceptoId">
+        <button class="btn btn-primary filter-button" type="button" @click="prepareConceptReport" :disabled="loadingConceptReport || !filtrosConcepto.conceptoIds.length">
           <LucideLoader2 v-if="loadingConceptReport" class="animate-spin" :size="16" />
           <LucideFilter v-else :size="16" />
           Generar
@@ -83,8 +82,8 @@
           <strong>{{ conceptSummary.alumnos || 0 }}</strong>
         </div>
         <div class="metric-card muted">
-          <span>Concepto</span>
-          <strong>{{ selectedConceptName }}</strong>
+          <span>Conceptos</span>
+          <strong :title="selectedConceptName">{{ selectedConceptName }}</strong>
         </div>
       </div>
 
@@ -99,27 +98,29 @@
                 <th>Alumno</th>
                 <th>Grado</th>
                 <th>Mes</th>
+                <th>Concepto</th>
                 <th>Forma de pago</th>
                 <th class="text-right">Monto</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loadingConceptReport">
-                <td colspan="8" class="text-center py-12 text-gray-500 font-medium">Generando reporte...</td>
+                <td colspan="9" class="text-center py-12 text-gray-500 font-medium">Generando reporte...</td>
               </tr>
-              <tr v-else-if="!filtrosConcepto.conceptoId">
-                <td colspan="8" class="text-center py-12 text-gray-400">Selecciona un concepto para generar el reporte.</td>
+              <tr v-else-if="!filtrosConcepto.conceptoIds.length">
+                <td colspan="9" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para generar el reporte.</td>
               </tr>
               <tr v-else-if="!conceptRows.length">
-                <td colspan="8" class="text-center py-12 text-gray-400">No hay ingresos vigentes para este concepto.</td>
+                <td colspan="9" class="text-center py-12 text-gray-400">No hay ingresos vigentes para los conceptos seleccionados.</td>
               </tr>
-              <tr v-else v-for="row in conceptRows" :key="row.folio">
+              <tr v-else v-for="row in conceptRows" :key="`${row.folio}-${row.concepto}`">
                 <td class="font-mono text-gray-500">{{ row.folio }}</td>
                 <td>{{ formatDate(row.fecha) }}</td>
                 <td class="font-mono text-gray-600">{{ row.matricula }}</td>
                 <td class="font-semibold text-gray-800">{{ row.nombreCompleto }}</td>
                 <td>{{ row.grado || '—' }}</td>
                 <td>{{ row.mesReal || row.mes }}</td>
+                <td class="font-medium text-gray-700">{{ row.conceptoNombre || row.concepto }}</td>
                 <td><span class="badge bg-blue-50 text-blue-700">{{ row.formaDePago }}</span></td>
                 <td class="text-right font-bold font-mono text-brand-campus">${{ Number(row.monto || 0).toFixed(2) }}</td>
               </tr>
@@ -136,6 +137,16 @@
             </div>
           </div>
           <p v-else>No hay movimientos para desglosar.</p>
+
+          <template v-if="conceptSummary.conceptos?.length > 1">
+            <h4 class="mt-5">Conceptos</h4>
+            <div class="breakdown-list">
+              <div v-for="item in conceptSummary.conceptos" :key="item.concepto">
+                <span>{{ item.concepto }}</span>
+                <strong>${{ Number(item.total || 0).toFixed(2) }}</strong>
+              </div>
+            </div>
+          </template>
 
           <template v-if="canFilterPlantel && conceptSummary.planteles?.length">
             <h4 class="mt-5">Planteles</h4>
@@ -347,20 +358,22 @@ const conceptUserSelectionContext = ref({
   plantel: ''
 })
 const filtrosConcepto = ref({
-  conceptoId: route.query.conceptoId ? String(route.query.conceptoId) : '',
+  conceptoIds: route.query.conceptoId ? [String(route.query.conceptoId)] : [],
   inicio: '',
   fin: '',
   plantel: ''
 })
 const emptyConceptReport = () => ({
   concepto: null,
+  conceptos: [],
   rows: [],
   resumen: {
     total: 0,
     transacciones: 0,
     alumnos: 0,
     formasPago: [],
-    planteles: []
+    planteles: [],
+    conceptos: []
   }
 })
 const conceptReport = ref(emptyConceptReport())
@@ -395,10 +408,18 @@ const corteUserSelectionContext = ref({
 
 const conceptRows = computed(() => conceptReport.value.rows || [])
 const conceptSummary = computed(() => conceptReport.value.resumen || emptyConceptReport().resumen)
-const selectedConcept = computed(() => {
-  return conceptos.value.find(concepto => String(concepto.id) === String(filtrosConcepto.value.conceptoId)) || conceptReport.value.concepto
+const selectedConcepts = computed(() => {
+  const selectedKeys = new Set((filtrosConcepto.value.conceptoIds || []).map(id => String(id)))
+  const localMatches = conceptos.value.filter(concepto => selectedKeys.has(String(concepto.id)))
+  if (localMatches.length) return localMatches
+  return Array.isArray(conceptReport.value.conceptos) ? conceptReport.value.conceptos : []
 })
-const selectedConceptName = computed(() => selectedConcept.value?.concepto || 'Sin selección')
+const selectedConceptName = computed(() => {
+  const names = selectedConcepts.value.map(concepto => concepto?.concepto).filter(Boolean)
+  if (!names.length) return 'Sin selección'
+  if (names.length <= 2) return names.join(', ')
+  return `${names[0]}, ${names[1]} +${names.length - 2}`
+})
 const conceptUserPeriodLabel = computed(() => {
   const { inicio, fin } = conceptUserSelectionContext.value
   if (!inicio && !fin) return 'Todos los movimientos del ciclo'
@@ -484,8 +505,15 @@ const loadConceptos = async () => {
   }
 }
 
+const buildConceptBaseParams = () => {
+  const { conceptoIds, ...filters } = filtrosConcepto.value
+  const params = buildParams(filters)
+  if (conceptoIds?.length) params.conceptoIds = JSON.stringify(conceptoIds)
+  return params
+}
+
 const buildConceptReportParams = (selectedUserKeys = selectedConceptUserKeys.value) => {
-  const params = buildParams(filtrosConcepto.value)
+  const params = buildConceptBaseParams()
   if (selectedUserKeys?.length) params.usuarios = JSON.stringify(selectedUserKeys)
   return params
 }
@@ -498,13 +526,13 @@ const loadConceptReport = async (selectedUserKeys = []) => {
 }
 
 const prepareConceptReport = async () => {
-  if (!filtrosConcepto.value.conceptoId) return show('Seleccione un concepto', 'danger')
+  if (!filtrosConcepto.value.conceptoIds.length) return show('Seleccione al menos un concepto', 'danger')
   if (loadingConceptReport.value) return
 
   loadingConceptReport.value = true
   try {
     const response = await $fetch('/api/reports/concepto_users', {
-      params: buildParams(filtrosConcepto.value)
+      params: buildConceptBaseParams()
     })
     const users = Array.isArray(response?.usuarios) ? response.usuarios : []
 
@@ -528,13 +556,13 @@ const prepareConceptReport = async () => {
 }
 
 const printConceptReport = () => {
-  if (!filtrosConcepto.value.conceptoId) return
+  if (!filtrosConcepto.value.conceptoIds.length) return
   const q = new URLSearchParams(buildConceptReportParams()).toString()
   window.open(`/print/concepto?${q}`, '_blank', 'width=920,height=820')
 }
 
 const executeConceptExcelDownload = async (selectedUserKeys = []) => {
-  const query = new URLSearchParams(buildParams(filtrosConcepto.value))
+  const query = new URLSearchParams(buildConceptBaseParams())
   if (selectedUserKeys.length) query.set('usuarios', JSON.stringify(selectedUserKeys))
 
   const response = await fetch(`/api/reports/concepto_excel?${query.toString()}`, {
@@ -552,7 +580,7 @@ const executeConceptExcelDownload = async (selectedUserKeys = []) => {
   const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
   const filename = encodedName
     ? decodeURIComponent(encodedName)
-    : (plainName || `Reporte_concepto_${safeFileName(selectedConceptName.value)}_${normalizeCicloKey(state.value.ciclo)}.xlsx`)
+    : (plainName || `Reporte_conceptos_${safeFileName(selectedConceptName.value)}_${normalizeCicloKey(state.value.ciclo)}.xlsx`)
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -726,7 +754,7 @@ onMounted(async () => {
   await loadConceptos()
   if (activeReport.value === 'corte') {
     loadCorte()
-  } else if (activeReport.value === 'concepto' && filtrosConcepto.value.conceptoId) {
+  } else if (activeReport.value === 'concepto' && filtrosConcepto.value.conceptoIds.length) {
     prepareConceptReport()
   }
 })
@@ -739,7 +767,7 @@ watch(() => normalizeCicloKey(state.value.ciclo), async () => {
 
 watch(
   () => [
-    filtrosConcepto.value.conceptoId,
+    filtrosConcepto.value.conceptoIds.join(','),
     filtrosConcepto.value.inicio,
     filtrosConcepto.value.fin,
     filtrosConcepto.value.plantel
@@ -755,7 +783,7 @@ watch(
 watch(() => route.query.conceptoId, async (conceptoId) => {
   if (!conceptoId) return
   activeReport.value = 'concepto'
-  filtrosConcepto.value.conceptoId = String(conceptoId)
+  filtrosConcepto.value.conceptoIds = [String(conceptoId)]
   if (!conceptos.value.length) await loadConceptos()
   prepareConceptReport()
 })

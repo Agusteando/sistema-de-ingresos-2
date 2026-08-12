@@ -1,1 +1,1 @@
-Agrega búsqueda de conceptos en reporte por concepto
+Permite seleccionar múltiples conceptos en el reporte por concepto
