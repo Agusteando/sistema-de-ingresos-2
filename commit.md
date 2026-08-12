@@ -1,1 +1,1 @@
-fix(reportes): solicitar usuarios al generar reporte por concepto
+Agrega búsqueda de conceptos en reporte por concepto

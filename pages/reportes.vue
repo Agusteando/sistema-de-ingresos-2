@@ -36,14 +36,16 @@
       </div>
 
       <div class="filters-grid concept-filters">
-        <div class="form-group m-0 concept-select">
+        <div class="form-group m-0 concept-select-field">
           <label class="form-label">Concepto</label>
-          <select v-model="filtrosConcepto.conceptoId" class="input-field" :disabled="loadingConceptos">
-            <option value="">{{ loadingConceptos ? 'Cargando conceptos...' : 'Seleccione un concepto' }}</option>
-            <option v-for="concepto in conceptos" :key="concepto.id" :value="String(concepto.id)">
-              {{ concepto.concepto }} - ${{ Number(concepto.costo || 0).toFixed(2) }}
-            </option>
-          </select>
+          <ConceptSearchSelect
+            v-model="filtrosConcepto.conceptoId"
+            :concepts="conceptos"
+            :loading="loadingConceptos"
+            :disabled="loadingConceptReport"
+            :enforce-stock-availability="false"
+            placeholder="Buscar concepto..."
+          />
         </div>
         <div class="form-group m-0">
           <label class="form-label">Desde</label>
@@ -308,6 +310,7 @@ import { PLANTELES_LIST } from '~/utils/constants'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useToast } from '~/composables/useToast'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import ConceptSearchSelect from '~/components/ConceptSearchSelect.vue'
 import { resolveClientAuthAccess } from '~/utils/authAccess'
 
 const state = useState('globalState')
@@ -864,7 +867,7 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   padding: 12px 16px;
 }
 
-.concept-select {
+.concept-select-field {
   min-width: 0;
   grid-column: span 2;
 }

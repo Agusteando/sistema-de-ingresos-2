@@ -86,6 +86,7 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   placeholder: { type: String, default: 'Buscar concepto...' },
   limit: { type: Number, default: 80 },
+  enforceStockAvailability: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['update:modelValue', 'select', 'clear'])
@@ -145,7 +146,12 @@ const stockClass = (stock) => {
   return 'success'
 }
 
-const isStockBlocked = (concept) => Boolean(concept?.stock?.controlled && concept?.stock?.status === 'out' && !concept?.stock?.allow_negative)
+const isStockBlocked = (concept) => Boolean(
+  props.enforceStockAvailability
+  && concept?.stock?.controlled
+  && concept?.stock?.status === 'out'
+  && !concept?.stock?.allow_negative,
+)
 
 const syncSearchFromSelection = () => {
   if (selectedConcept.value) search.value = selectedConcept.value.concepto || String(selectedConcept.value.id)
