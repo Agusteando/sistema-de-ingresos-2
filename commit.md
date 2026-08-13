@@ -1,1 +1,1 @@
-Garantiza que el reporte por concepto incluya todos los pagos históricos y cancelados
+Iguala visualmente los documentos nuevos con las filas de pagos

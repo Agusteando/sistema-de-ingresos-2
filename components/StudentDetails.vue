@@ -594,6 +594,7 @@
                   class="timeline-card timeline-card--ledger"
                 >
                   <header v-if="!group.paymentItems.length" class="timeline-card-header timeline-card-header--ledger">
+                    <span class="timeline-card-selector" aria-hidden="true"><span></span></span>
                     <button
                       type="button"
                       class="timeline-card-copy"
@@ -601,30 +602,37 @@
                       :title="group.segments.length ? 'Ajustar concepto' : ''"
                       @click="group.segments.length && openTimelineSegmentChange(group, group.segments[0])"
                     >
-                      <strong>{{ group.conceptoNombre }}</strong>
-                      <span>
+                      <span class="timeline-card-title-row">
+                        <strong>{{ group.conceptoNombre }}</strong>
+                        <span class="timeline-card-status">Vigente</span>
+                      </span>
+                      <span class="timeline-card-subline">
                         Doc. {{ group.documento }} · {{ group.rangeLabel }}
-                        <template v-if="group.pendingTotal > 0">
-                          · Saldo ${{ format(group.pendingTotal) }}
-                        </template>
                       </span>
                     </button>
+                    <strong class="timeline-card-amount">
+                      ${{ format(group.pendingTotal) }}
+                    </strong>
                     <div class="timeline-card-actions">
                       <button
                         v-if="group.pendingDebts.length"
                         class="timeline-action primary"
                         type="button"
+                        :title="`Pagar saldo de $${format(group.pendingTotal)}`"
+                        aria-label="Pagar saldo pendiente"
                         @click="payTimelineGroup(group)"
                       >
-                        Pagar
+                        <LucideCreditCard :size="15" />
                       </button>
                       <button
                         v-if="!group.paymentItems.length"
                         class="timeline-action"
                         type="button"
+                        title="Facturar documento"
+                        aria-label="Facturar documento"
                         @click="invoiceTimelineGroup(group)"
                       >
-                        Facturar
+                        <LucideFileText :size="15" />
                       </button>
                     </div>
                   </header>
@@ -3360,6 +3368,27 @@ const handleInvoiceSuccess = (invoice) => {
   background: #fff;
 }
 
+.timeline-card-header--ledger {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(78px, auto) 136px;
+  min-height: 48px;
+}
+
+.timeline-card-selector {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+}
+
+.timeline-card-selector > span {
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid #bdcad8;
+  border-radius: 6px;
+  background: #fff;
+}
+
 .timeline-card-copy {
   display: block;
   min-width: 0;
@@ -3374,25 +3403,56 @@ const handleInvoiceSuccess = (invoice) => {
   cursor: default;
 }
 
-.timeline-card-copy strong {
+.timeline-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+}
+
+.timeline-card-copy .timeline-card-title-row > strong {
   display: block;
   overflow: hidden;
   color: #17243c;
-  font-size: 0.72rem;
-  font-weight: 860;
-  letter-spacing: -0.02em;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: -0.015em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.timeline-card-copy span {
+.timeline-card-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin: 0;
+  overflow: visible;
+  border-radius: 999px;
+  background: #eaf7e8;
+  color: #2e7d32;
+  padding: 2px 6px;
+  font-size: 0.52rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  line-height: normal;
+}
+
+.timeline-card-copy .timeline-card-subline {
   display: block;
-  margin-top: 1px;
+  margin-top: 2px;
   overflow: hidden;
-  color: #7b8798;
+  color: #7c8899;
   font-size: 0.59rem;
-  font-weight: 720;
+  font-weight: 690;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-card-amount {
+  color: #2f8040;
+  font-size: 0.72rem;
+  font-weight: 880;
+  text-align: right;
   white-space: nowrap;
 }
 
@@ -3400,25 +3460,56 @@ const handleInvoiceSuccess = (invoice) => {
   display: inline-flex;
   flex: 0 0 auto;
   justify-content: flex-end;
-  gap: 5px;
+  gap: 4px;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.timeline-card-header--ledger:hover,
+.timeline-card-header--ledger:focus-within {
+  background: #f8fbf8;
+  box-shadow: inset 3px 0 0 rgba(69, 163, 65, 0.62);
+}
+
+.timeline-card-header--ledger:hover .timeline-card-actions,
+.timeline-card-header--ledger:focus-within .timeline-card-actions {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .timeline-action {
-  height: 26px;
-  border: 1px solid #d7e1ec;
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #dce5ee;
   border-radius: 9px;
   background: #fff;
-  color: #516174;
+  color: #386f55;
   cursor: pointer;
-  padding: 0 9px;
-  font-size: 0.62rem;
-  font-weight: 820;
+  padding: 0;
+  place-items: center;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.timeline-action:hover:not(:disabled) {
+  border-color: #bcd9c4;
+  background: #eef8f0;
+  color: #246b3d;
+  transform: translateY(-1px);
 }
 
 .timeline-action.primary {
-  border-color: #cae3c3;
-  background: #eff9ed;
+  border-color: #c9e1c5;
+  background: #f2faf0;
   color: #2e7d32;
+}
+
+@media (hover: none) {
+  .timeline-card-actions {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .timeline-segment-strip {
@@ -3586,19 +3677,32 @@ const handleInvoiceSuccess = (invoice) => {
   padding: 5px 8px;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .timeline-card-copy strong {
-  font-size: 0.66rem;
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-header--ledger {
+  grid-template-columns: 24px minmax(0, 1fr) minmax(70px, auto) 128px;
+  gap: 7px;
+  min-height: 42px;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .timeline-card-copy span {
-  font-size: 0.55rem;
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-copy .timeline-card-title-row > strong {
+  font-size: 0.64rem;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-copy .timeline-card-subline {
+  font-size: 0.54rem;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-status {
+  font-size: 0.5rem;
+}
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-amount {
+  font-size: 0.68rem;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .timeline-action {
-  height: 24px;
-  padding-inline: 8px;
-  border-radius: 8px;
-  font-size: 0.58rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) :deep(.payment-ledger-row) {
@@ -3654,16 +3758,26 @@ const handleInvoiceSuccess = (invoice) => {
     gap: 8px;
   }
 
-  .timeline-card-copy span {
+  .timeline-card-header--ledger {
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+  }
+
+  .timeline-card-header--ledger .timeline-card-amount {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .timeline-card-header--ledger .timeline-card-actions {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
+
+  .timeline-card-copy .timeline-card-subline {
     max-width: 58vw;
   }
 
   .timeline-card-actions {
     gap: 4px;
-  }
-
-  .timeline-action {
-    padding-inline: 7px;
   }
 
 }
