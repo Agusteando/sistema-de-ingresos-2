@@ -8,8 +8,9 @@
             <div>
               <h2 id="wa-bulk-title">WhatsApp</h2>
               <span v-if="previewLoading">Preparando…</span>
-              <span v-else-if="session.ready" class="wa-bulk-status ready"><i></i> Conectado</span>
-              <span v-else class="wa-bulk-status"><i></i> Sin vincular</span>
+              <span v-else-if="transportMode === 'public'" class="wa-bulk-status public"><i></i> API pública</span>
+              <span v-else-if="session.ready" class="wa-bulk-status ready"><i></i> QR conectado</span>
+              <span v-else class="wa-bulk-status"><i></i> QR sin vincular</span>
             </div>
           </div>
           <button class="wa-bulk-icon-button" type="button" aria-label="Cerrar" :disabled="sending" @click="closeModal">
@@ -46,102 +47,129 @@
           </footer>
         </template>
 
-        <template v-else-if="!session.ready">
-          <main class="wa-bulk-connect">
-            <div class="wa-bulk-connect__device">
-              <div v-if="qrSvg" class="wa-bulk-qr" v-html="qrSvg"></div>
-              <img v-else-if="qrImageSrc" class="wa-bulk-qr-image" :src="qrImageSrc" alt="QR WhatsApp" />
-              <span v-else class="wa-bulk-connect__mark"><LucideMessageCircle :size="42" /></span>
-            </div>
-
-            <button v-if="!session.clientId" class="wa-bulk-primary connect" type="button" :disabled="connectionLoading" @click="prepareSession">
-              <LucideLoader2 v-if="connectionLoading" class="wa-bulk-spin" :size="18" />
-              <LucideQrCode v-else :size="18" />
-              Vincular WhatsApp
-            </button>
-            <div v-else class="wa-bulk-connect__actions">
-              <button class="wa-bulk-primary connect" type="button" :disabled="connectionLoading" @click="loadQr(false)">
-                <LucideLoader2 v-if="connectionLoading" class="wa-bulk-spin" :size="18" />
-                <LucideQrCode v-else :size="18" />
-                {{ qrSvg || qrImageSrc ? 'Actualizar QR' : 'Mostrar QR' }}
-              </button>
-              <button class="wa-bulk-secondary square" type="button" aria-label="Reiniciar sesión" :disabled="connectionLoading" @click="loadQr(true)">
-                <LucideRefreshCw :size="17" />
-              </button>
-            </div>
-            <span v-if="qrSvg || qrImageSrc" class="wa-bulk-scan-label">Escanear QR</span>
-            <span v-if="errorMessage" class="wa-bulk-error compact">{{ errorMessage }}</span>
-          </main>
-        </template>
-
         <template v-else>
-          <div class="wa-bulk-audience">
-            <div class="wa-bulk-avatars" aria-hidden="true">
-              <span v-for="recipient in avatarRecipients" :key="recipient.matricula">{{ initials(recipient.nombreCompleto) }}</span>
-              <b v-if="summary.chats > avatarRecipients.length">+{{ summary.chats - avatarRecipients.length }}</b>
-            </div>
-            <strong>{{ summary.chats }} {{ summary.chats === 1 ? 'chat' : 'chats' }}</strong>
-            <span v-if="summary.missingPhone" class="wa-bulk-audience__issue"><LucidePhoneOff :size="14" /> {{ summary.missingPhone }}</span>
-            <span v-if="summary.deduplicated" class="wa-bulk-audience__soft"><LucideUsers :size="14" /> {{ summary.deduplicated }}</span>
+          <div class="wa-bulk-transport" role="radiogroup" aria-label="Método de envío">
+            <button
+              type="button"
+              role="radio"
+              :aria-checked="transportMode === 'public'"
+              :class="['wa-bulk-transport__option', { active: transportMode === 'public' }]"
+              @click="selectTransport('public')"
+            >
+              <span class="wa-bulk-transport__icon"><LucideGlobe2 :size="18" /></span>
+              <span><strong>API pública</strong><small>Predeterminada</small></span>
+              <i></i>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              :aria-checked="transportMode === 'qr'"
+              :class="['wa-bulk-transport__option', { active: transportMode === 'qr' }]"
+              @click="selectTransport('qr')"
+            >
+              <span class="wa-bulk-transport__icon"><LucideQrCode :size="18" /></span>
+              <span><strong>Sesión QR</strong><small>{{ session.ready ? 'Conectada' : 'Vincular' }}</small></span>
+              <i></i>
+            </button>
           </div>
 
-          <main class="wa-bulk-composer-grid">
-            <section class="wa-bulk-compose">
-              <div
-                class="wa-bulk-message-input"
-                :class="{ dragging: isDragging }"
-                @dragenter.prevent="isDragging = true"
-                @dragover.prevent="isDragging = true"
-                @dragleave.prevent="isDragging = false"
-                @drop.prevent="handleDrop"
-              >
-                <textarea v-model="message" maxlength="4096" placeholder="Mensaje" aria-label="Mensaje"></textarea>
+          <template v-if="transportMode === 'qr' && !session.ready">
+            <main class="wa-bulk-connect">
+              <div class="wa-bulk-connect__device">
+                <div v-if="qrSvg" class="wa-bulk-qr" v-html="qrSvg"></div>
+                <img v-else-if="qrImageSrc" class="wa-bulk-qr-image" :src="qrImageSrc" alt="QR WhatsApp" />
+                <span v-else class="wa-bulk-connect__mark"><LucideMessageCircle :size="42" /></span>
+              </div>
 
-                <div v-if="imagePreview" class="wa-bulk-image-chip">
-                  <img :src="imagePreview" alt="Imagen seleccionada" />
-                  <div>
-                    <strong>{{ imageFile?.name }}</strong>
-                    <span>{{ formattedFileSize }}</span>
+              <button v-if="!session.clientId" class="wa-bulk-primary connect" type="button" :disabled="connectionLoading" @click="prepareSession">
+                <LucideLoader2 v-if="connectionLoading" class="wa-bulk-spin" :size="18" />
+                <LucideQrCode v-else :size="18" />
+                Vincular por QR
+              </button>
+              <div v-else class="wa-bulk-connect__actions">
+                <button class="wa-bulk-primary connect" type="button" :disabled="connectionLoading" @click="loadQr(false)">
+                  <LucideLoader2 v-if="connectionLoading" class="wa-bulk-spin" :size="18" />
+                  <LucideQrCode v-else :size="18" />
+                  {{ qrSvg || qrImageSrc ? 'Actualizar QR' : 'Mostrar QR' }}
+                </button>
+                <button class="wa-bulk-secondary square" type="button" aria-label="Reiniciar sesión" :disabled="connectionLoading" @click="loadQr(true)">
+                  <LucideRefreshCw :size="17" />
+                </button>
+              </div>
+              <span v-if="qrSvg || qrImageSrc" class="wa-bulk-scan-label">Escanear QR</span>
+              <span v-if="errorMessage" class="wa-bulk-error compact">{{ errorMessage }}</span>
+            </main>
+          </template>
+
+          <template v-else>
+            <div class="wa-bulk-audience">
+              <div class="wa-bulk-avatars" aria-hidden="true">
+                <span v-for="recipient in avatarRecipients" :key="recipient.matricula">{{ initials(recipient.nombreCompleto) }}</span>
+                <b v-if="summary.chats > avatarRecipients.length">+{{ summary.chats - avatarRecipients.length }}</b>
+              </div>
+              <strong>{{ summary.chats }} {{ summary.chats === 1 ? 'chat' : 'chats' }}</strong>
+              <span v-if="summary.missingPhone" class="wa-bulk-audience__issue"><LucidePhoneOff :size="14" /> {{ summary.missingPhone }}</span>
+              <span v-if="summary.deduplicated" class="wa-bulk-audience__soft"><LucideUsers :size="14" /> {{ summary.deduplicated }}</span>
+            </div>
+
+            <main class="wa-bulk-composer-grid">
+              <section class="wa-bulk-compose">
+                <div
+                  class="wa-bulk-message-input"
+                  :class="{ dragging: isDragging }"
+                  @dragenter.prevent="isDragging = true"
+                  @dragover.prevent="isDragging = true"
+                  @dragleave.prevent="isDragging = false"
+                  @drop.prevent="handleDrop"
+                >
+                  <textarea v-model="message" maxlength="4096" placeholder="Mensaje" aria-label="Mensaje"></textarea>
+
+                  <div v-if="imagePreview" class="wa-bulk-image-chip">
+                    <img :src="imagePreview" alt="Imagen seleccionada" />
+                    <div>
+                      <strong>{{ imageFile?.name }}</strong>
+                      <span>{{ formattedFileSize }}</span>
+                    </div>
+                    <button type="button" aria-label="Quitar imagen" @click="clearImage"><LucideX :size="16" /></button>
                   </div>
-                  <button type="button" aria-label="Quitar imagen" @click="clearImage"><LucideX :size="16" /></button>
-                </div>
 
-                <div class="wa-bulk-compose__tools">
-                  <button type="button" :class="{ active: Boolean(imageFile) }" @click="pickImage">
-                    <LucideImagePlus :size="18" />
-                    <span>Imagen</span>
-                  </button>
-                  <span>{{ message.length }}/4096</span>
+                  <div class="wa-bulk-compose__tools">
+                    <button type="button" :class="{ active: Boolean(imageFile) }" @click="pickImage">
+                      <LucideImagePlus :size="18" />
+                      <span>Imagen</span>
+                    </button>
+                    <span>{{ message.length }}/4096</span>
+                  </div>
+                  <input ref="filePicker" class="wa-bulk-file-input" type="file" accept="image/*" @change="handleFileInput" />
                 </div>
-                <input ref="filePicker" class="wa-bulk-file-input" type="file" accept="image/*" @change="handleFileInput" />
-              </div>
-              <span v-if="errorMessage" class="wa-bulk-error">{{ errorMessage }}</span>
-            </section>
+                <span v-if="errorMessage" class="wa-bulk-error">{{ errorMessage }}</span>
+              </section>
 
-            <aside class="wa-bulk-preview" aria-label="Vista previa">
-              <div class="wa-bulk-preview__bar">
-                <span class="wa-bulk-preview__avatar"><LucideUsers :size="16" /></span>
-                <div><strong>{{ recipientPreviewName }}</strong><small>WhatsApp</small></div>
-              </div>
-              <div class="wa-bulk-preview__body">
-                <div v-if="imagePreview || message.trim()" class="wa-bulk-bubble">
-                  <img v-if="imagePreview" :src="imagePreview" alt="" />
-                  <p v-if="message.trim()">{{ message }}</p>
-                  <time>{{ currentTime }}</time>
+              <aside class="wa-bulk-preview" aria-label="Vista previa">
+                <div class="wa-bulk-preview__bar">
+                  <span class="wa-bulk-preview__avatar"><LucideUsers :size="16" /></span>
+                  <div><strong>{{ recipientPreviewName }}</strong><small>WhatsApp</small></div>
                 </div>
-                <span v-else class="wa-bulk-preview__empty"><LucideMessageCircle :size="27" /></span>
-              </div>
-            </aside>
-          </main>
+                <div class="wa-bulk-preview__body">
+                  <div v-if="imagePreview || message.trim()" class="wa-bulk-bubble">
+                    <img v-if="imagePreview" :src="imagePreview" alt="" />
+                    <p v-if="message.trim()">{{ message }}</p>
+                    <time>{{ currentTime }}</time>
+                  </div>
+                  <span v-else class="wa-bulk-preview__empty"><LucideMessageCircle :size="27" /></span>
+                </div>
+              </aside>
+            </main>
 
-          <footer class="wa-bulk-footer">
-            <button class="wa-bulk-secondary" type="button" :disabled="sending" @click="closeModal">Cancelar</button>
-            <button class="wa-bulk-primary" type="button" :disabled="!canSend" @click="sendBulk">
-              <LucideLoader2 v-if="sending" class="wa-bulk-spin" :size="18" />
-              <LucideSend v-else :size="18" />
-              {{ sending ? 'Enviando…' : `Enviar a ${summary.chats}` }}
-            </button>
-          </footer>
+            <footer class="wa-bulk-footer">
+              <button class="wa-bulk-secondary" type="button" :disabled="sending" @click="closeModal">Cancelar</button>
+              <button class="wa-bulk-primary" type="button" :disabled="!canSend" @click="sendBulk">
+                <LucideLoader2 v-if="sending" class="wa-bulk-spin" :size="18" />
+                <LucideSend v-else :size="18" />
+                {{ sending ? 'Enviando…' : `Enviar a ${summary.chats}` }}
+              </button>
+            </footer>
+          </template>
         </template>
       </section>
     </div>
@@ -154,6 +182,7 @@ import { renderSVG } from 'uqr'
 import {
   LucideCircleCheck,
   LucideCircleX,
+  LucideGlobe2,
   LucideImagePlus,
   LucideLoader2,
   LucideMessageCircle,
@@ -173,6 +202,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'sent'])
 
 const previewLoading = ref(true)
+const transportMode = ref('public')
 const connectionLoading = ref(false)
 const sending = ref(false)
 const isDragging = ref(false)
@@ -197,7 +227,7 @@ const recipientPreviewName = computed(() => {
   if (!first) return `${summary.value.chats} chats`
   return summary.value.chats > 1 ? `${first} +${summary.value.chats - 1}` : first
 })
-const canSend = computed(() => session.value.ready && summary.value.chats > 0 && Boolean(message.value.trim() || imageFile.value) && !sending.value)
+const canSend = computed(() => (transportMode.value === 'public' || session.value.ready) && summary.value.chats > 0 && Boolean(message.value.trim() || imageFile.value) && !sending.value)
 const formattedFileSize = computed(() => {
   const size = Number(imageFile.value?.size || 0)
   if (!size) return ''
@@ -220,7 +250,7 @@ const stopStatusPolling = () => {
 
 const startStatusPolling = () => {
   stopStatusPolling()
-  if (!session.value.clientId || session.value.ready) return
+  if (transportMode.value !== 'qr' || !session.value.clientId || session.value.ready) return
   statusTimer = setInterval(async () => {
     try {
       const payload = await $fetch(`/api/whatsapp/instances/${encodeURIComponent(session.value.clientId)}/status`)
@@ -242,17 +272,39 @@ const loadPreview = async () => {
   try {
     const payload = await $fetch('/api/students/whatsapp/preview', {
       method: 'POST',
-      body: { matriculas: selectedMatriculas.value }
+      body: { matriculas: selectedMatriculas.value, transport: transportMode.value }
     })
     recipients.value = Array.isArray(payload?.recipients) ? payload.recipients : []
     summary.value = { ...summary.value, ...(payload?.summary || {}) }
     session.value = { ...session.value, ...(payload?.session || {}) }
     if (session.value.ready) stopStatusPolling()
+    if (payload?.session?.missingRemote) {
+      qrSvg.value = ''
+      qrImageSrc.value = ''
+    }
   } catch (error) {
     errorMessage.value = error?.data?.message || error?.statusMessage || 'No se pudo preparar WhatsApp.'
   } finally {
     previewLoading.value = false
   }
+}
+
+
+const selectTransport = async (mode) => {
+  const nextMode = mode === 'qr' ? 'qr' : 'public'
+  if (transportMode.value === nextMode) return
+  transportMode.value = nextMode
+  errorMessage.value = ''
+  result.value = null
+
+  if (nextMode === 'public') {
+    stopStatusPolling()
+    qrSvg.value = ''
+    qrImageSrc.value = ''
+    return
+  }
+
+  await loadPreview()
 }
 
 const prepareSession = async () => {
@@ -312,7 +364,17 @@ const loadQr = async (forceNew = false) => {
     })
     renderQr(payload)
   } catch (error) {
-    errorMessage.value = error?.data?.message || error?.statusMessage || 'No se pudo abrir el QR.'
+    const rawMessage = error?.data?.message || error?.statusMessage || error?.message || ''
+    const missingInstance = Number(error?.statusCode || error?.status || 0) === 404 || /does not exist|instance not found|not found/i.test(String(rawMessage))
+    if (missingInstance) {
+      session.value = { clientId: '', displayName: '', status: 'disconnected', ready: false }
+      qrSvg.value = ''
+      qrImageSrc.value = ''
+      connectionLoading.value = false
+      await prepareSession()
+      return
+    }
+    errorMessage.value = rawMessage || 'No se pudo abrir el QR.'
   } finally {
     connectionLoading.value = false
   }
@@ -359,6 +421,7 @@ const sendBulk = async () => {
   try {
     const form = new FormData()
     form.append('matriculas', JSON.stringify(selectedMatriculas.value))
+    form.append('transport', transportMode.value)
     if (message.value.trim()) form.append('message', message.value.trim())
     if (imageFile.value) form.append('image', imageFile.value, imageFile.value.name)
     form.append('requestId', typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
@@ -467,8 +530,67 @@ onBeforeUnmount(() => {
   background: #b2bcc8;
 }
 
-.wa-bulk-status.ready { color: #238b4b !important; }
-.wa-bulk-status.ready i { background: #25a55d; box-shadow: 0 0 0 4px rgba(37, 165, 93, .1); }
+.wa-bulk-status.ready,
+.wa-bulk-status.public { color: #238b4b !important; }
+.wa-bulk-status.ready i,
+.wa-bulk-status.public i { background: #25a55d; box-shadow: 0 0 0 4px rgba(37, 165, 93, .1); }
+
+.wa-bulk-transport {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 20px 14px;
+  padding: 5px;
+  border: 1px solid #e5ebe8;
+  border-radius: 16px;
+  background: #f6f8f7;
+}
+
+.wa-bulk-transport__option {
+  min-width: 0;
+  height: 54px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 8px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: #687587;
+  text-align: left;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease;
+}
+
+.wa-bulk-transport__option:hover { background: rgba(255, 255, 255, .7); }
+.wa-bulk-transport__option.active {
+  border-color: #dce7e0;
+  background: #fff;
+  color: #1d2e41;
+  box-shadow: 0 6px 18px rgba(31, 53, 42, .08);
+}
+
+.wa-bulk-transport__icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #edf1ef;
+  color: #647184;
+}
+.wa-bulk-transport__option.active .wa-bulk-transport__icon { background: #e8f7ed; color: #258e4d; }
+.wa-bulk-transport__option > span:nth-child(2) { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.wa-bulk-transport__option strong { color: inherit; font-size: 11.5px; font-weight: 820; }
+.wa-bulk-transport__option small { color: #8b96a4; font-size: 9.5px; font-weight: 680; }
+.wa-bulk-transport__option > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d4dbdf;
+}
+.wa-bulk-transport__option.active > i { background: #28a15a; box-shadow: 0 0 0 4px rgba(40, 161, 90, .1); }
 
 .wa-bulk-icon-button,
 .wa-bulk-image-chip button {
@@ -820,5 +942,7 @@ onBeforeUnmount(() => {
   .wa-bulk-composer-grid { grid-template-columns: 1fr; overflow: auto; }
   .wa-bulk-preview { min-height: 260px; }
   .wa-bulk-message-input { min-height: 250px; }
+  .wa-bulk-transport { margin-inline: 14px; }
+  .wa-bulk-transport__option { grid-template-columns: 32px minmax(0, 1fr) 7px; padding-inline: 9px; }
 }
 </style>

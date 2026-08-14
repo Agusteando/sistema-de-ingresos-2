@@ -204,6 +204,16 @@
                 <div class="ce-list-header-actions">
                   <button
                     type="button"
+                    :class="['ce-bulk-select-button', { active: controlBulkSelectionMode }]"
+                    :aria-pressed="controlBulkSelectionMode"
+                    @click="toggleControlBulkSelectionMode"
+                  >
+                    <LucideListChecks :size="15" />
+                    <span>{{ controlBulkSelectionMode ? 'Cancelar' : 'Seleccionar' }}</span>
+                    <b v-if="controlBulkSelectedCount">{{ controlBulkSelectedCount }}</b>
+                  </button>
+                  <button
+                    type="button"
                     class="ce-excel-export-button"
                     :disabled="!selectedAgentId || studentsLoading || !pagination.total"
                     @click="exportCurrentView"
@@ -313,12 +323,15 @@
                       {
                         selected:
                           selectedStudent?.matricula === student.matricula,
+                        'multi-selected': isControlBulkStudentSelected(student),
+                        'selection-mode': controlBulkSelectionMode,
                         'missing-overlay': !student.overlayExists,
                       },
                       controlStudentMutationClass(student),
                     ]"
                     :style="studentPresentationStyle(student)"
-                    @click="selectStudent(student)"
+                    :aria-pressed="controlBulkSelectionMode ? isControlBulkStudentSelected(student) : undefined"
+                    @click="handleControlStudentRowClick(student)"
                   >
                     <UiGroupIcon
                       class="student-group-watermark"
@@ -335,15 +348,17 @@
                         :class="[
                           'ce-row-check',
                           {
-                            active:
-                              selectedStudent?.matricula === student.matricula,
+                            active: controlBulkSelectionMode
+                              ? isControlBulkStudentSelected(student)
+                              : selectedStudent?.matricula === student.matricula,
+                            'is-bulk-selector': controlBulkSelectionMode,
                           },
                         ]"
                         aria-hidden="true"
                         >{{
-                          selectedStudent?.matricula === student.matricula
-                            ? "✓"
-                            : ""
+                          controlBulkSelectionMode
+                            ? (isControlBulkStudentSelected(student) ? "✓" : "")
+                            : (selectedStudent?.matricula === student.matricula ? "✓" : "")
                         }}</span
                       >
                       <StudentGradePhotoCard
@@ -1686,6 +1701,21 @@
       </section>
     </div>
 
+    <ControlEscolarWhatsappSelectionDock
+      :selected-count="controlBulkSelectedCount"
+      :page-selected="controlCurrentPageFullySelected"
+      @toggle-page="toggleControlCurrentPageSelection"
+      @open-whatsapp="openControlWhatsappBulk"
+      @clear="clearControlBulkSelection"
+    />
+
+    <StudentWhatsappBulkModal
+      v-if="showControlWhatsappBulkModal && controlBulkSelectedCount"
+      :selected-students="controlBulkSelectedStudents"
+      @close="closeControlWhatsappBulk"
+      @sent="handleControlWhatsappBulkSent"
+    />
+
     <IngresoCycleModal
       v-if="showAcademicPositionModal && selectedStudent"
       :student="selectedStudent"
@@ -1855,6 +1885,7 @@ import {
   LucideGraduationCap,
   LucideInfo,
   LucideKeyRound,
+  LucideListChecks,
   LucideLoader2,
   LucideMail,
   LucideMars,
@@ -1882,6 +1913,8 @@ import UiChip from "~/components/ui/UiChip.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.vue";
 import StudentsKpiValue from "~/components/students/StudentsKpiValue.vue";
+import ControlEscolarWhatsappSelectionDock from "~/components/students/ControlEscolarWhatsappSelectionDock.vue";
+import StudentWhatsappBulkModal from "~/components/students/StudentWhatsappBulkModal.vue";
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
 import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
@@ -2002,6 +2035,10 @@ const saveError = ref("");
 const students = ref([]);
 const controlStudentsIndex = ref([]);
 const selectedStudent = ref(null);
+const controlBulkSelectionMode = ref(false);
+const controlBulkSelection = reactive(new Map());
+const showControlWhatsappBulkModal = ref(false);
+const controlWhatsappSent = ref(false);
 const selectedHeaderServices = ref({ matricula: "", servicios: [], raw: "" });
 let selectedHeaderServicesRequestId = 0;
 const kpis = ref(null);
@@ -5561,6 +5598,97 @@ const restoreEditDraft = () => {
   draftSavedAt.value = stored.savedAt || "";
 };
 
+const controlBulkStudentKey = (studentOrMatricula) =>
+  normalizeMatriculaKey(
+    typeof studentOrMatricula === "object"
+      ? studentOrMatricula?.matricula
+      : studentOrMatricula,
+  );
+
+const controlBulkSelectedStudents = computed(() =>
+  Array.from(controlBulkSelection.values()),
+);
+const controlBulkSelectedCount = computed(() => controlBulkSelection.size);
+const isControlBulkStudentSelected = (studentOrMatricula) => {
+  const key = controlBulkStudentKey(studentOrMatricula);
+  return Boolean(key && controlBulkSelection.has(key));
+};
+const controlCurrentPageFullySelected = computed(() =>
+  students.value.length > 0 &&
+  students.value.every((student) => isControlBulkStudentSelected(student)),
+);
+
+const setControlBulkStudentSelected = (student, selected) => {
+  const key = controlBulkStudentKey(student);
+  if (!key) return;
+  if (!selected) {
+    controlBulkSelection.delete(key);
+    return;
+  }
+  if (!controlBulkSelection.has(key) && controlBulkSelection.size >= 250) {
+    show("Máximo 250 alumnos por envío.");
+    return;
+  }
+  controlBulkSelection.set(key, student);
+};
+
+const toggleControlBulkStudent = (student) => {
+  setControlBulkStudentSelected(student, !isControlBulkStudentSelected(student));
+};
+
+const clearControlBulkSelection = () => {
+  controlBulkSelection.clear();
+  controlBulkSelectionMode.value = false;
+  showControlWhatsappBulkModal.value = false;
+  controlWhatsappSent.value = false;
+};
+
+const toggleControlBulkSelectionMode = () => {
+  if (controlBulkSelectionMode.value) {
+    clearControlBulkSelection();
+    return;
+  }
+  selectedStudent.value = null;
+  controlBulkSelectionMode.value = true;
+  nextTick(scheduleWorkspaceScaleUpdate);
+};
+
+const handleControlStudentRowClick = (student) => {
+  if (controlBulkSelectionMode.value) {
+    toggleControlBulkStudent(student);
+    return;
+  }
+  selectStudent(student);
+};
+
+const toggleControlCurrentPageSelection = () => {
+  controlBulkSelectionMode.value = true;
+  const shouldSelect = !controlCurrentPageFullySelected.value;
+  for (const student of students.value) {
+    setControlBulkStudentSelected(student, shouldSelect);
+  }
+};
+
+const openControlWhatsappBulk = () => {
+  if (!controlBulkSelectedCount.value) return;
+  controlWhatsappSent.value = false;
+  showControlWhatsappBulkModal.value = true;
+};
+
+const handleControlWhatsappBulkSent = (result) => {
+  controlWhatsappSent.value = true;
+  const sent = Number(result?.sentChats || 0);
+  const failed = Number(result?.failedChats || 0);
+  show(failed ? `${sent} chats enviados · ${failed} fallidos.` : `${sent} chats enviados por WhatsApp.`);
+};
+
+const closeControlWhatsappBulk = () => {
+  showControlWhatsappBulkModal.value = false;
+  if (controlWhatsappSent.value) {
+    clearControlBulkSelection();
+  }
+};
+
 const selectStudent = (student, copy = true) => {
   selectedStudent.value = student;
   activeDetailTab.value = "summary";
@@ -6246,7 +6374,12 @@ watch(
   },
   { flush: "post" },
 );
-watch(selectedAgentId, () => nextTick(scheduleWorkspaceScaleUpdate));
+watch(selectedAgentId, () => {
+  if (controlBulkSelectedCount.value || controlBulkSelectionMode.value) {
+    clearControlBulkSelection();
+  }
+  nextTick(scheduleWorkspaceScaleUpdate);
+});
 watch(
   () => [
     studentsLoading.value,
@@ -7440,6 +7573,49 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
+}
+
+.control-escolar-screen .ce-bulk-select-button {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(77, 96, 120, 0.18);
+  border-radius: 999px;
+  background: #fff;
+  color: #536277;
+  font-size: 10.5px;
+  font-weight: 880;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.control-escolar-screen .ce-bulk-select-button:hover {
+  border-color: rgba(47, 145, 56, .28);
+  color: #2f7f38;
+  transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-bulk-select-button.active {
+  border-color: rgba(47, 145, 56, .28);
+  background: #eff8f0;
+  color: #257e31;
+  box-shadow: 0 6px 16px rgba(47, 145, 56, .09);
+}
+
+.control-escolar-screen .ce-bulk-select-button b {
+  min-width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #348f3d;
+  color: #fff;
+  font-size: 9px;
+  line-height: 1;
 }
 
 .control-escolar-screen .ce-excel-export-button {
@@ -9883,6 +10059,22 @@ onBeforeUnmount(() => {
   border-color: #4fa346;
   background: #4fa346;
   color: #fff;
+}
+
+.control-escolar-screen .ce-student-row.selection-mode .ce-row-check.is-bulk-selector {
+  border-color: #a9b8c8;
+  background: #fbfcfd;
+  box-shadow: 0 0 0 3px rgba(79, 163, 70, .035);
+}
+
+.control-escolar-screen .ce-student-row.selection-mode .ce-row-check.is-bulk-selector.active {
+  border-color: #4fa346;
+  background: #4fa346;
+  box-shadow: 0 0 0 4px rgba(79, 163, 70, .1);
+}
+
+.control-escolar-screen .ce-student-row.selection-mode:hover {
+  border-color: color-mix(in srgb, var(--grade-accent, var(--ce-green)) 40%, #d7e8d2);
 }
 
 .control-escolar-screen .ce-profile-identity-cues {
@@ -15268,7 +15460,8 @@ onBeforeUnmount(() => {
     gap: 7px;
   }
 
-  .control-escolar-screen .ce-excel-export-button {
+  .control-escolar-screen .ce-excel-export-button,
+  .control-escolar-screen .ce-bulk-select-button {
     width: 38px;
     min-width: 38px;
     height: 38px;
@@ -15276,7 +15469,9 @@ onBeforeUnmount(() => {
     border-radius: 13px;
   }
 
-  .control-escolar-screen .ce-excel-export-button span {
+  .control-escolar-screen .ce-excel-export-button span,
+  .control-escolar-screen .ce-bulk-select-button span,
+  .control-escolar-screen .ce-bulk-select-button b {
     display: none;
   }
 

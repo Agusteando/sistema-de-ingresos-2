@@ -1,1 +1,1 @@
-Integra envíos masivos de WhatsApp para alumnos seleccionados
+Integra WhatsApp masivo en Control Escolar con API pública y sesión QR opcional

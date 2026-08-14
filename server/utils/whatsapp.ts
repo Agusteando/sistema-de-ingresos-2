@@ -1,4 +1,5 @@
 const WHATSAPP_BASE_URL = (process.env.WWEB_BASE_URL || 'https://wweb.casitaapps.com/whatsapp-manager/integration/v1').replace(/\/+$/, '')
+const WHATSAPP_PUBLIC_BASE_URL = (process.env.WWEB_PUBLIC_BASE_URL || 'https://wweb.casitaapps.com/whatsapp-manager/api').replace(/\/+$/, '')
 
 type RequestOptions = {
   method?: string
@@ -6,6 +7,7 @@ type RequestOptions = {
   body?: any
   idempotencyKey?: string
   contentType?: string
+  baseUrl?: string
 }
 
 const request = async <T>(options: RequestOptions): Promise<T> => {
@@ -19,7 +21,7 @@ const request = async <T>(options: RequestOptions): Promise<T> => {
     headers['Idempotency-Key'] = options.idempotencyKey
   }
 
-  const response = await fetch(`${WHATSAPP_BASE_URL}${options.endpoint}`, {
+  const response = await fetch(`${options.baseUrl || WHATSAPP_BASE_URL}${options.endpoint}`, {
     method: options.method || 'GET',
     headers,
     body: options.body == null
@@ -39,6 +41,14 @@ const request = async <T>(options: RequestOptions): Promise<T> => {
   }
 
   return payload as T
+}
+
+const buildMediaForm = (payload: { chatIds: string[]; caption?: string; file: Buffer; filename: string; mimetype: string }) => {
+  const form = new FormData()
+  form.append('chatId', JSON.stringify(payload.chatIds))
+  if (payload.caption) form.append('caption', payload.caption)
+  form.append('file', new Blob([new Uint8Array(payload.file)], { type: payload.mimetype }), payload.filename)
+  return form
 }
 
 export const whatsappApi = {
@@ -68,17 +78,24 @@ export const whatsappApi = {
     idempotencyKey,
     body: payload
   }),
-  sendMedia: (clientId: string, payload: { chatIds: string[]; caption?: string; file: Buffer; filename: string; mimetype: string }, idempotencyKey: string) => {
-    const form = new FormData()
-    form.append('chatId', JSON.stringify(payload.chatIds))
-    if (payload.caption) form.append('caption', payload.caption)
-    form.append('file', new Blob([new Uint8Array(payload.file)], { type: payload.mimetype }), payload.filename)
-
-    return request<any>({
-      method: 'POST',
-      endpoint: `/instances/${encodeURIComponent(clientId)}/messages`,
-      idempotencyKey,
-      body: form
-    })
-  }
+  sendMedia: (clientId: string, payload: { chatIds: string[]; caption?: string; file: Buffer; filename: string; mimetype: string }, idempotencyKey: string) => request<any>({
+    method: 'POST',
+    endpoint: `/instances/${encodeURIComponent(clientId)}/messages`,
+    idempotencyKey,
+    body: buildMediaForm(payload)
+  }),
+  sendPublicMessage: (payload: any, idempotencyKey: string) => request<any>({
+    method: 'POST',
+    endpoint: '/send',
+    baseUrl: WHATSAPP_PUBLIC_BASE_URL,
+    idempotencyKey,
+    body: payload
+  }),
+  sendPublicMedia: (payload: { chatIds: string[]; caption?: string; file: Buffer; filename: string; mimetype: string }, idempotencyKey: string) => request<any>({
+    method: 'POST',
+    endpoint: '/send-media',
+    baseUrl: WHATSAPP_PUBLIC_BASE_URL,
+    idempotencyKey,
+    body: buildMediaForm(payload)
+  })
 }
