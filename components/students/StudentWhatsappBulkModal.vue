@@ -432,7 +432,12 @@ const sendBulk = async () => {
     })
     emit('sent', result.value)
   } catch (error) {
-    errorMessage.value = error?.data?.message || error?.statusMessage || 'No se pudo completar el envío.'
+    errorMessage.value = error?.data?.statusMessage
+      || error?.data?.message
+      || error?.data?.error
+      || error?.statusMessage
+      || error?.message
+      || 'No se pudo completar el envío.'
   } finally {
     sending.value = false
   }

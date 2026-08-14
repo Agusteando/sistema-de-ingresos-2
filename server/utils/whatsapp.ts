@@ -36,12 +36,23 @@ const request = async <T>(options: RequestOptions): Promise<T> => {
   const payload = await response.json().catch(() => null)
 
   if (!response.ok) {
-    const message = payload?.error?.message || payload?.error || payload?.message || `Error HTTP ${response.status}`
+    const firstFailure = Array.isArray(payload?.failures)
+      ? payload.failures.find((item: any) => typeof item?.error === 'string' && item.error.trim())?.error
+      : null
+    const message = firstFailure || payload?.error?.message || payload?.error || payload?.message || `Error HTTP ${response.status}`
     throw createError({ statusCode: response.status, statusMessage: String(message) })
   }
 
   return payload as T
 }
+
+const withSafeSendOptions = (payload: any) => ({
+  ...payload,
+  options: {
+    ...(payload?.options && typeof payload.options === 'object' ? payload.options : {}),
+    sendSeen: false
+  }
+})
 
 const buildMediaForm = (payload: { chatIds: string[]; caption?: string; file: Buffer; filename: string; mimetype: string }) => {
   const form = new FormData()
@@ -76,7 +87,7 @@ export const whatsappApi = {
     method: 'POST',
     endpoint: `/instances/${encodeURIComponent(clientId)}/messages`,
     idempotencyKey,
-    body: payload
+    body: withSafeSendOptions(payload)
   }),
   sendMedia: (clientId: string, payload: { chatIds: string[]; caption?: string; file: Buffer; filename: string; mimetype: string }, idempotencyKey: string) => request<any>({
     method: 'POST',
@@ -89,7 +100,7 @@ export const whatsappApi = {
     endpoint: '/send',
     baseUrl: WHATSAPP_PUBLIC_BASE_URL,
     idempotencyKey,
-    body: payload
+    body: withSafeSendOptions(payload)
   }),
   sendPublicMedia: (payload: { chatIds: string[]; caption?: string; file: Buffer; filename: string; mimetype: string }, idempotencyKey: string) => request<any>({
     method: 'POST',
