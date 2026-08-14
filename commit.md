@@ -1,1 +1,1 @@
-Corrige el envío de WhatsApp desde Aurora y muestra el error real del servicio
+Usa la API versionada de WhatsApp y conserva el error real del servicio

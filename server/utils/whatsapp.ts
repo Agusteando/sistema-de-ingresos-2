@@ -1,5 +1,4 @@
 const WHATSAPP_BASE_URL = (process.env.WWEB_BASE_URL || 'https://wweb.casitaapps.com/whatsapp-manager/integration/v1').replace(/\/+$/, '')
-const WHATSAPP_PUBLIC_BASE_URL = (process.env.WWEB_PUBLIC_BASE_URL || 'https://wweb.casitaapps.com/whatsapp-manager/api').replace(/\/+$/, '')
 
 type RequestOptions = {
   method?: string
@@ -10,9 +9,19 @@ type RequestOptions = {
   baseUrl?: string
 }
 
+const compactUpstreamText = (value: string) => value
+  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+  .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+  .replace(/<[^>]+>/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .slice(0, 700)
+
 const request = async <T>(options: RequestOptions): Promise<T> => {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = {
+    Accept: 'application/json'
+  }
 
   if (!isFormData) {
     headers['Content-Type'] = options.contentType || 'application/json'
@@ -33,14 +42,36 @@ const request = async <T>(options: RequestOptions): Promise<T> => {
           : options.body
   })
 
-  const payload = await response.json().catch(() => null)
+  const rawBody = await response.text()
+  let payload: any = null
+  if (rawBody) {
+    try {
+      payload = JSON.parse(rawBody)
+    } catch {
+      payload = null
+    }
+  }
 
   if (!response.ok) {
     const firstFailure = Array.isArray(payload?.failures)
       ? payload.failures.find((item: any) => typeof item?.error === 'string' && item.error.trim())?.error
       : null
-    const message = firstFailure || payload?.error?.message || payload?.error || payload?.message || `Error HTTP ${response.status}`
-    throw createError({ statusCode: response.status, statusMessage: String(message) })
+    const upstreamText = compactUpstreamText(rawBody)
+    const message = firstFailure
+      || payload?.error?.message
+      || payload?.error
+      || payload?.message
+      || upstreamText
+      || `Error HTTP ${response.status}`
+
+    throw createError({
+      statusCode: response.status,
+      statusMessage: String(message),
+      data: {
+        upstreamStatus: response.status,
+        upstreamMessage: String(message)
+      }
+    })
   }
 
   return payload as T
@@ -61,6 +92,8 @@ const buildMediaForm = (payload: { chatIds: string[]; caption?: string; file: Bu
   form.append('file', new Blob([new Uint8Array(payload.file)], { type: payload.mimetype }), payload.filename)
   return form
 }
+
+const messageEndpoint = (clientId: string) => `/instances/${encodeURIComponent(clientId)}/messages`
 
 export const whatsappApi = {
   createInstance: (clientId: string, displayName: string) => request<any>({
@@ -85,27 +118,25 @@ export const whatsappApi = {
   }),
   sendMessage: (clientId: string, payload: any, idempotencyKey: string) => request<any>({
     method: 'POST',
-    endpoint: `/instances/${encodeURIComponent(clientId)}/messages`,
+    endpoint: messageEndpoint(clientId),
     idempotencyKey,
     body: withSafeSendOptions(payload)
   }),
   sendMedia: (clientId: string, payload: { chatIds: string[]; caption?: string; file: Buffer; filename: string; mimetype: string }, idempotencyKey: string) => request<any>({
     method: 'POST',
-    endpoint: `/instances/${encodeURIComponent(clientId)}/messages`,
+    endpoint: messageEndpoint(clientId),
     idempotencyKey,
     body: buildMediaForm(payload)
   }),
   sendPublicMessage: (payload: any, idempotencyKey: string) => request<any>({
     method: 'POST',
-    endpoint: '/send',
-    baseUrl: WHATSAPP_PUBLIC_BASE_URL,
+    endpoint: messageEndpoint('any'),
     idempotencyKey,
     body: withSafeSendOptions(payload)
   }),
   sendPublicMedia: (payload: { chatIds: string[]; caption?: string; file: Buffer; filename: string; mimetype: string }, idempotencyKey: string) => request<any>({
     method: 'POST',
-    endpoint: '/send-media',
-    baseUrl: WHATSAPP_PUBLIC_BASE_URL,
+    endpoint: messageEndpoint('any'),
     idempotencyKey,
     body: buildMediaForm(payload)
   })
