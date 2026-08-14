@@ -5,6 +5,11 @@ import { resolveFinancialFamilyContact } from '../../shared/utils/familyContact'
 
 const MAX_BULK_RECIPIENTS = 250
 
+type WhatsappAudienceOptions = {
+  contactSource?: 'lookup' | 'selection'
+  students?: any[]
+}
+
 export const normalizeWhatsappMatriculas = (values: unknown) => {
   const input = Array.isArray(values) ? values : []
   const seen = new Set<string>()
@@ -71,20 +76,57 @@ const studentRowsForScope = async (matriculas: string[], user: any) => {
   return await query<any[]>(sql, params)
 }
 
-export const resolveStudentWhatsappAudience = async (values: unknown, user: any) => {
+const selectedStudentRows = (matriculas: string[], students: any[]) => {
+  const requested = new Set(matriculas.map(matricula => matricula.toUpperCase()))
+  const rows = new Map<string, any>()
+
+  for (const student of Array.isArray(students) ? students : []) {
+    const matricula = String(student?.matricula || '').trim()
+    const key = matricula.toUpperCase()
+    if (!matricula || !requested.has(key) || rows.has(key)) continue
+
+    rows.set(key, {
+      matricula,
+      nombreCompleto: String(student?.nombreCompleto || student?.fullName || student?.full_name || student?.name || matricula).trim(),
+      telefonoPadre: student?.telefonoPadre ?? student?.telefono_padre ?? student?.celularPadre ?? student?.celular_padre ?? '',
+      telefonoMadre: student?.telefonoMadre ?? student?.telefono_madre ?? student?.celularMadre ?? student?.celular_madre ?? '',
+      celularPadre: student?.celularPadre ?? student?.celular_padre ?? '',
+      celularMadre: student?.celularMadre ?? student?.celular_madre ?? '',
+      telefono: student?.telefono ?? '',
+      phone: student?.phone ?? ''
+    })
+  }
+
+  return matriculas.map(matricula => rows.get(matricula.toUpperCase())).filter(Boolean)
+}
+
+export const resolveStudentWhatsappAudience = async (
+  values: unknown,
+  user: any,
+  options: WhatsappAudienceOptions = {}
+) => {
   const matriculas = normalizeWhatsappMatriculas(values)
   if (!matriculas.length) {
     throw createError({ statusCode: 400, statusMessage: 'Selecciona al menos un alumno.' })
   }
 
-  const rows = await studentRowsForScope(matriculas, user)
+  const useSelectionContacts = options.contactSource === 'selection'
+  if (useSelectionContacts && !user?.hasControlEscolarRole && !user?.isSuperAdmin) {
+    throw createError({ statusCode: 403, statusMessage: 'No tiene permisos para usar contactos de Control Escolar.' })
+  }
+
+  const rows = useSelectionContacts
+    ? selectedStudentRows(matriculas, options.students || [])
+    : await studentRowsForScope(matriculas, user)
   const rowMap = new Map(rows.map(row => [String(row.matricula || '').trim().toUpperCase(), row]))
 
   let overlays = new Map<string, any>()
-  try {
-    overlays = await fetchCentralMatriculaOverlays(rows.map(row => String(row.matricula || '')))
-  } catch (error) {
-    console.warn('[WhatsApp bulk] Control escolar contact overlay unavailable:', (error as any)?.message || error)
+  if (!useSelectionContacts) {
+    try {
+      overlays = await fetchCentralMatriculaOverlays(rows.map(row => String(row.matricula || '')))
+    } catch (error) {
+      console.warn('[WhatsApp bulk] Control escolar contact overlay unavailable:', (error as any)?.message || error)
+    }
   }
 
   const recipients: any[] = []
@@ -103,8 +145,8 @@ export const resolveStudentWhatsappAudience = async (values: unknown, user: any)
       continue
     }
 
-    const overlay = overlays.get(String(row.matricula || '').trim().toUpperCase())
-    const source = {
+    const overlay = useSelectionContacts ? null : overlays.get(String(row.matricula || '').trim().toUpperCase())
+    const source = useSelectionContacts ? row : {
       ...row,
       ...(overlay?.student || {}),
       matricula: row.matricula,
@@ -112,7 +154,13 @@ export const resolveStudentWhatsappAudience = async (values: unknown, user: any)
       centralMatricula: overlay?.student || null
     }
     const family = resolveFinancialFamilyContact(source)
-    const normalizedPhone = normalizeMexicoWhatsappNumber(family.phone || row.telefono)
+    const normalizedPhone = [
+      family.fatherPhone,
+      family.motherPhone,
+      family.phone,
+      row.telefono,
+      row.phone
+    ].map(normalizeMexicoWhatsappNumber).find(Boolean) || ''
     const chatId = normalizedPhone ? `${normalizedPhone}@c.us` : ''
     const recipient = {
       matricula: String(row.matricula || requestedMatricula),

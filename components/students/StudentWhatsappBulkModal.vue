@@ -196,7 +196,8 @@ import {
 } from 'lucide-vue-next'
 
 const props = defineProps({
-  selectedStudents: { type: Array, default: () => [] }
+  selectedStudents: { type: Array, default: () => [] },
+  contactSource: { type: String, default: 'lookup' }
 })
 
 const emit = defineEmits(['close', 'sent'])
@@ -220,6 +221,17 @@ const session = ref({ clientId: '', displayName: '', status: 'disconnected', rea
 let statusTimer = null
 
 const selectedMatriculas = computed(() => props.selectedStudents.map(student => String(student?.matricula || '').trim()).filter(Boolean))
+const selectedContactStudents = computed(() => props.selectedStudents.map(student => ({
+  matricula: String(student?.matricula || '').trim(),
+  nombreCompleto: String(student?.nombreCompleto || student?.fullName || student?.full_name || student?.name || student?.matricula || '').trim(),
+  telefonoPadre: student?.telefonoPadre ?? student?.telefono_padre ?? student?.celularPadre ?? student?.celular_padre ?? '',
+  telefonoMadre: student?.telefonoMadre ?? student?.telefono_madre ?? student?.celularMadre ?? student?.celular_madre ?? '',
+  celularPadre: student?.celularPadre ?? student?.celular_padre ?? '',
+  celularMadre: student?.celularMadre ?? student?.celular_madre ?? '',
+  telefono: student?.telefono ?? '',
+  phone: student?.phone ?? ''
+})).filter(student => student.matricula))
+const usesSelectionContacts = computed(() => String(props.contactSource || '').toLowerCase() === 'selection')
 const readyRecipients = computed(() => recipients.value.filter(recipient => recipient.status === 'ready'))
 const avatarRecipients = computed(() => readyRecipients.value.slice(0, 4))
 const recipientPreviewName = computed(() => {
@@ -272,7 +284,12 @@ const loadPreview = async () => {
   try {
     const payload = await $fetch('/api/students/whatsapp/preview', {
       method: 'POST',
-      body: { matriculas: selectedMatriculas.value, transport: transportMode.value }
+      body: {
+        matriculas: selectedMatriculas.value,
+        transport: transportMode.value,
+        contactSource: usesSelectionContacts.value ? 'selection' : 'lookup',
+        students: usesSelectionContacts.value ? selectedContactStudents.value : undefined
+      }
     })
     recipients.value = Array.isArray(payload?.recipients) ? payload.recipients : []
     summary.value = { ...summary.value, ...(payload?.summary || {}) }
@@ -421,6 +438,8 @@ const sendBulk = async () => {
   try {
     const form = new FormData()
     form.append('matriculas', JSON.stringify(selectedMatriculas.value))
+    form.append('contactSource', usesSelectionContacts.value ? 'selection' : 'lookup')
+    if (usesSelectionContacts.value) form.append('students', JSON.stringify(selectedContactStudents.value))
     form.append('transport', transportMode.value)
     if (message.value.trim()) form.append('message', message.value.trim())
     if (imageFile.value) form.append('image', imageFile.value, imageFile.value.name)

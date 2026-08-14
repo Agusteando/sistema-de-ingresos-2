@@ -1750,6 +1750,7 @@
     <StudentWhatsappBulkModal
       v-if="showControlWhatsappBulkModal && controlBulkSelectedCount"
       :selected-students="controlBulkSelectedStudents"
+      contact-source="selection"
       @close="closeControlWhatsappBulk"
       @sent="handleControlWhatsappBulkSent"
     />

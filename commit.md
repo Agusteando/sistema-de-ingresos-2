@@ -1,1 +1,1 @@
-Hace visible y consistente el envío masivo por WhatsApp en Control Escolar
+Desacopla WhatsApp de Control Escolar del bridge usando teléfonos seleccionados

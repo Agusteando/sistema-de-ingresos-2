@@ -11,7 +11,7 @@ const extractStatus = (payload: any) => payload?.instance?.status || payload?.st
 const isMissingInstanceError = (error: any) => Number(error?.statusCode || error?.status || 0) === 404
   || /does not exist|instance not found|no encontrada|not found/i.test(String(error?.statusMessage || error?.message || ''))
 
-export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
+export default defineEventHandler(async (event) => {
   const user = event.context.user
   const parts = await readMultipartFormData(event)
   if (!parts) throw createError({ statusCode: 400, statusMessage: 'Solicitud inválida.' })
@@ -21,6 +21,17 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     matriculas = JSON.parse(multipartText(parts, 'matriculas') || '[]')
   } catch {
     throw createError({ statusCode: 400, statusMessage: 'Selección inválida.' })
+  }
+
+  const contactSource = multipartText(parts, 'contactSource').trim().toLowerCase() === 'selection' ? 'selection' : 'lookup'
+  let selectedStudents: any[] = []
+  if (contactSource === 'selection') {
+    try {
+      const parsed = JSON.parse(multipartText(parts, 'students') || '[]')
+      selectedStudents = Array.isArray(parsed) ? parsed : []
+    } catch {
+      throw createError({ statusCode: 400, statusMessage: 'Los contactos seleccionados no son válidos.' })
+    }
   }
 
   const transport = multipartText(parts, 'transport').trim().toLowerCase() === 'qr' ? 'qr' : 'public'
@@ -42,36 +53,43 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     }
   }
 
-  const audience = await resolveStudentWhatsappAudience(matriculas, user)
+  const audience = await resolveStudentWhatsappAudience(matriculas, user, {
+    contactSource,
+    students: selectedStudents
+  })
   if (!audience.chatIds.length) {
     throw createError({ statusCode: 400, statusMessage: 'La selección no tiene teléfonos disponibles para WhatsApp.' })
   }
 
   let clientId = 'public'
   if (transport === 'qr') {
-    const [client] = await query<any[]>(
-      `SELECT client_id, status FROM cobranza_whatsapp_clients WHERE user_email = ? ORDER BY updated_at DESC LIMIT 1`,
-      [user.email]
-    )
-    if (!client?.client_id) {
-      throw createError({ statusCode: 400, statusMessage: 'Vincula una sesión QR antes de enviar.' })
-    }
+    clientId = await runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
+      const [client] = await query<any[]>(
+        `SELECT client_id, status FROM cobranza_whatsapp_clients WHERE user_email = ? ORDER BY updated_at DESC LIMIT 1`,
+        [user.email]
+      )
+      if (!client?.client_id) {
+        throw createError({ statusCode: 400, statusMessage: 'Vincula una sesión QR antes de enviar.' })
+      }
 
-    clientId = String(client.client_id)
-    try {
-      const statusPayload = await whatsappApi.getStatus(clientId)
-      const sessionStatus = String(extractStatus(statusPayload))
-      await query(`UPDATE cobranza_whatsapp_clients SET status = ?, updated_at = NOW() WHERE client_id = ?`, [sessionStatus, clientId])
-      if (sessionStatus.toLowerCase() !== 'ready') {
-        throw createError({ statusCode: 409, statusMessage: 'La sesión QR no está conectada.' })
+      const resolvedClientId = String(client.client_id)
+      try {
+        const statusPayload = await whatsappApi.getStatus(resolvedClientId)
+        const sessionStatus = String(extractStatus(statusPayload))
+        await query(`UPDATE cobranza_whatsapp_clients SET status = ?, updated_at = NOW() WHERE client_id = ?`, [sessionStatus, resolvedClientId])
+        if (sessionStatus.toLowerCase() !== 'ready') {
+          throw createError({ statusCode: 409, statusMessage: 'La sesión QR no está conectada.' })
+        }
+      } catch (error) {
+        if (isMissingInstanceError(error)) {
+          await query(`DELETE FROM cobranza_whatsapp_clients WHERE client_id = ? AND user_email = ?`, [resolvedClientId, user.email])
+          throw createError({ statusCode: 409, statusMessage: 'La sesión QR expiró. Vuelve a vincularla.' })
+        }
+        throw error
       }
-    } catch (error) {
-      if (isMissingInstanceError(error)) {
-        await query(`DELETE FROM cobranza_whatsapp_clients WHERE client_id = ? AND user_email = ?`, [clientId, user.email])
-        throw createError({ statusCode: 409, statusMessage: 'La sesión QR expiró. Vuelve a vincularla.' })
-      }
-      throw error
-    }
+
+      return resolvedClientId
+    })
   }
 
   const requestId = multipartText(parts, 'requestId') || crypto.randomUUID()
@@ -117,4 +135,4 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     skipped: audience.summary.missingPhone + audience.summary.notFound,
     deduplicated: audience.summary.deduplicated
   }
-}))
+})
