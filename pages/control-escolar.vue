@@ -204,15 +204,53 @@
                 <div class="ce-list-header-actions">
                   <button
                     type="button"
-                    :class="['ce-bulk-select-button', { active: controlBulkSelectionMode }]"
+                    :class="[
+                      'ce-bulk-select-button ce-whatsapp-select-button',
+                      { active: controlBulkSelectionMode },
+                    ]"
                     :aria-pressed="controlBulkSelectionMode"
+                    :aria-label="
+                      controlBulkSelectionMode
+                        ? 'Cancelar selección de WhatsApp'
+                        : 'Seleccionar alumnos para WhatsApp'
+                    "
+                    :title="
+                      controlBulkSelectionMode
+                        ? 'Cancelar selección de WhatsApp'
+                        : 'Seleccionar alumnos para WhatsApp'
+                    "
                     @click="toggleControlBulkSelectionMode"
                   >
-                    <LucideListChecks :size="15" />
-                    <span>{{ controlBulkSelectionMode ? 'Cancelar' : 'Seleccionar' }}</span>
+                    <LucideX v-if="controlBulkSelectionMode" :size="15" />
+                    <LucideMessageCircle v-else :size="15" />
+                    <span>{{ controlBulkSelectionMode ? 'Cancelar' : 'WhatsApp' }}</span>
                     <b v-if="controlBulkSelectedCount">{{ controlBulkSelectedCount }}</b>
                   </button>
                   <button
+                    v-if="controlBulkSelectionMode && students.length"
+                    type="button"
+                    :class="[
+                      'ce-bulk-select-button ce-bulk-page-button',
+                      { active: controlCurrentPageFullySelected },
+                    ]"
+                    :aria-pressed="controlCurrentPageFullySelected"
+                    :aria-label="
+                      controlCurrentPageFullySelected
+                        ? 'Quitar alumnos de la página actual de la selección'
+                        : 'Seleccionar alumnos de la página actual'
+                    "
+                    :title="
+                      controlCurrentPageFullySelected
+                        ? 'Quitar página actual de la selección'
+                        : 'Seleccionar página actual'
+                    "
+                    @click="toggleControlCurrentPageSelection"
+                  >
+                    <LucideListChecks :size="15" />
+                    <span>{{ controlCurrentPageFullySelected ? 'Quitar página' : 'Página' }}</span>
+                  </button>
+                  <button
+                    v-if="!controlBulkSelectionMode"
                     type="button"
                     class="ce-excel-export-button"
                     :disabled="!selectedAgentId || studentsLoading || !pagination.total"
@@ -1889,6 +1927,7 @@ import {
   LucideLoader2,
   LucideMail,
   LucideMars,
+  LucideMessageCircle,
   LucideMoreVertical,
   LucidePhone,
   LucideRefreshCw,
@@ -7596,6 +7635,23 @@ onBeforeUnmount(() => {
   border-color: rgba(47, 145, 56, .28);
   color: #2f7f38;
   transform: translateY(-1px);
+}
+
+.control-escolar-screen .ce-whatsapp-select-button:not(.active) {
+  border-color: rgba(37, 165, 93, 0.24);
+  background: linear-gradient(180deg, #f5fbf7, #eef9f2);
+  color: #1d8b49;
+  box-shadow: 0 6px 16px rgba(37, 165, 93, 0.07);
+}
+
+.control-escolar-screen .ce-whatsapp-select-button:not(.active):hover {
+  border-color: rgba(37, 165, 93, 0.38);
+  background: linear-gradient(180deg, #f1faf4, #e9f7ee);
+  color: #17743d;
+}
+
+.control-escolar-screen .ce-bulk-page-button {
+  border-style: dashed;
 }
 
 .control-escolar-screen .ce-bulk-select-button.active {
