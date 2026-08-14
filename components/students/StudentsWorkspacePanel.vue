@@ -47,6 +47,7 @@
       @open-bulk-payment="$emit('open-bulk-payment')"
       @open-section-selection="$emit('open-section-selection')"
       @open-bulk-ingreso-cycle="$emit('open-bulk-ingreso-cycle')"
+      @open-whatsapp="$emit('open-whatsapp')"
       @open-no-adeudo="$emit('open-no-adeudo')"
       @open-bulk-baja="$emit('open-bulk-baja')"
       @clear-selected="$emit('clear-selected')"
@@ -119,6 +120,7 @@ defineEmits([
   'open-bulk-payment',
   'open-section-selection',
   'open-bulk-ingreso-cycle',
+  'open-whatsapp',
   'open-no-adeudo',
   'open-bulk-baja',
   'clear-selected',

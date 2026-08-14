@@ -1,8 +1,7 @@
-const WHATSAPP_BASE_URL = 'https://wweb.casitaapps.com/whatsapp-manager/integration/v1'
+const WHATSAPP_BASE_URL = (process.env.WWEB_BASE_URL || 'https://wweb.casitaapps.com/whatsapp-manager/integration/v1').replace(/\/+$/, '')
 
 type RequestOptions = {
   method?: string
-  clientId?: string
   endpoint: string
   body?: any
   idempotencyKey?: string
@@ -10,10 +9,12 @@ type RequestOptions = {
 }
 
 const request = async <T>(options: RequestOptions): Promise<T> => {
-  const headers: Record<string, string> = {
-    'Content-Type': options.contentType || 'application/json'
-  }
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  const headers: Record<string, string> = {}
 
+  if (!isFormData) {
+    headers['Content-Type'] = options.contentType || 'application/json'
+  }
   if (options.idempotencyKey) {
     headers['Idempotency-Key'] = options.idempotencyKey
   }
@@ -23,16 +24,18 @@ const request = async <T>(options: RequestOptions): Promise<T> => {
     headers,
     body: options.body == null
       ? undefined
-      : (options.contentType === 'application/json' || !options.contentType)
-        ? JSON.stringify(options.body)
-        : options.body
+      : isFormData
+        ? options.body
+        : (options.contentType === 'application/json' || !options.contentType)
+          ? JSON.stringify(options.body)
+          : options.body
   })
 
   const payload = await response.json().catch(() => null)
 
   if (!response.ok) {
-    const message = payload?.error?.message || payload?.message || `Error HTTP ${response.status}`
-    throw createError({ statusCode: response.status, statusMessage: message })
+    const message = payload?.error?.message || payload?.error || payload?.message || `Error HTTP ${response.status}`
+    throw createError({ statusCode: response.status, statusMessage: String(message) })
   }
 
   return payload as T
@@ -64,5 +67,18 @@ export const whatsappApi = {
     endpoint: `/instances/${encodeURIComponent(clientId)}/messages`,
     idempotencyKey,
     body: payload
-  })
+  }),
+  sendMedia: (clientId: string, payload: { chatIds: string[]; caption?: string; file: Buffer; filename: string; mimetype: string }, idempotencyKey: string) => {
+    const form = new FormData()
+    form.append('chatId', JSON.stringify(payload.chatIds))
+    if (payload.caption) form.append('caption', payload.caption)
+    form.append('file', new Blob([new Uint8Array(payload.file)], { type: payload.mimetype }), payload.filename)
+
+    return request<any>({
+      method: 'POST',
+      endpoint: `/instances/${encodeURIComponent(clientId)}/messages`,
+      idempotencyKey,
+      body: form
+    })
+  }
 }

@@ -64,6 +64,7 @@
 
 .bulk-command-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -80,6 +81,18 @@
   color: #2f7f32;
   font-size: 13px;
   font-weight: 780;
+}
+
+
+.bulk-command.whatsapp {
+  border-color: rgba(37, 165, 93, .24);
+  background: #f1fbf5;
+  color: #218d4c;
+}
+
+.bulk-command.whatsapp:hover {
+  border-color: rgba(37, 165, 93, .38);
+  background: #e9f8ef;
 }
 
 .bulk-command.primary {

@@ -144,6 +144,7 @@
             @open-bulk-payment="openBulkPaymentFlow"
             @open-section-selection="openSectionModalForSelection"
             @open-bulk-ingreso-cycle="openBulkIngresoCycleFlow"
+            @open-whatsapp="openWhatsappBulkFlow"
             @open-no-adeudo="openNoAdeudoForSelection"
             @open-bulk-baja="openBulkBajaFlow"
             @clear-selected="clearSelectedStudents"
@@ -163,9 +164,16 @@
       @open-section-selection="openSectionModalForSelection"
       @open-bulk-ingreso-cycle="openBulkIngresoCycleFlow"
       @open-bulk-payment="openBulkPaymentFlow"
+      @open-whatsapp="openWhatsappBulkFlow"
       @open-no-adeudo="openNoAdeudoForSelection"
       @open-bulk-baja="openBulkBajaFlow"
       @clear-selected="clearSelectedStudents"
+    />
+
+    <StudentWhatsappBulkModal
+      v-if="showWhatsappBulkModal && selectedCount"
+      :selected-students="selectedStudents"
+      @close="showWhatsappBulkModal = false"
     />
 
     <NoAdeudoModal
@@ -401,6 +409,7 @@ import StudentsFilterBar from '~/components/students/StudentsFilterBar.vue'
 import StudentsListPanel from '~/components/students/StudentsListPanel.vue'
 import StudentsWorkspacePanel from '~/components/students/StudentsWorkspacePanel.vue'
 import StudentsSelectionDock from '~/components/students/StudentsSelectionDock.vue'
+import StudentWhatsappBulkModal from '~/components/students/StudentWhatsappBulkModal.vue'
 import StudentSectionModal from '~/components/students/StudentSectionModal.vue'
 import BulkIngresoCycleModal from '~/components/BulkIngresoCycleModal.vue'
 import StudentFormModal from '~/components/StudentFormModal.vue'
@@ -757,6 +766,7 @@ const pendingBulkBajaStudents = ref([])
 const bulkBajaSaving = ref(false)
 const operatorInfoStudent = ref(null)
 const noAdeudoStudents = ref([])
+const showWhatsappBulkModal = ref(false)
 const showFinancialDiagnosticsModal = ref(false)
 const bulkWorkspaceMode = ref('none')
 const showBulkIngresoCycleModal = ref(false)
@@ -2103,6 +2113,11 @@ const openSelectionDetails = () => {
   if (target) selectStudent(target)
 }
 
+const openWhatsappBulkFlow = () => {
+  if (!selectedCount.value) return
+  showWhatsappBulkModal.value = true
+}
+
 const openBulkPaymentFlow = async () => {
   if (!selectedCount.value) return
   if (selectedCount.value === 1) {
@@ -2226,6 +2241,7 @@ const closeBulkWorkspace = () => {
 }
 
 const clearSelectedStudents = () => {
+  showWhatsappBulkModal.value = false
   clearStudentSelection()
   bulkWorkspaceMode.value = 'none'
   resetBulkPayments()

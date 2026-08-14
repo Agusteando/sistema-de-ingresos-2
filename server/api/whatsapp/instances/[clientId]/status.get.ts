@@ -1,5 +1,6 @@
 import { runWithBridgeAgentId, query } from '../../../../utils/db'
 import { whatsappApi } from '../../../../utils/whatsapp'
+import { assertWhatsappClientOwnership } from '../../../../utils/whatsappOwnership'
 
 const extractStatus = (payload: any) => {
   return payload?.instance?.status || payload?.status?.status || payload?.status || 'pending'
@@ -8,6 +9,7 @@ const extractStatus = (payload: any) => {
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const clientId = event.context.params?.clientId
   if (!clientId) throw createError({ statusCode: 400, statusMessage: 'clientId requerido' })
+  await assertWhatsappClientOwnership(String(clientId), event.context.user)
 
   const response = await whatsappApi.getStatus(String(clientId))
   const status = String(extractStatus(response))

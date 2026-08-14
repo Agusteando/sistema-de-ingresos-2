@@ -89,6 +89,18 @@
   white-space: nowrap;
 }
 
+
+.dock-action.whatsapp {
+  border-color: rgba(37, 165, 93, .24);
+  background: #f2fbf5;
+  color: #218d4c;
+}
+
+.dock-action.whatsapp:hover {
+  border-color: rgba(37, 165, 93, .38);
+  background: #eaf8ef;
+}
+
 .dock-action.primary {
   min-width: 124px;
   border-color: transparent;

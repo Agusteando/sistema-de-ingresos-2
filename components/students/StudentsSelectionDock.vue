@@ -22,6 +22,10 @@
             <LucideCalendarClock :size="16" />
             <span>Ciclo ingreso</span>
           </button>
+          <button type="button" class="dock-action whatsapp" @click="$emit('open-whatsapp')">
+            <LucideMessageCircle :size="16" />
+            <span>WhatsApp</span>
+          </button>
           <button type="button" class="dock-action secondary" @click="$emit('open-no-adeudo')">
             <LucideShieldCheck :size="16" />
             <span>No adeudo</span>
@@ -42,7 +46,7 @@
 </template>
 
 <script setup>
-import { LucideArrowRight, LucideCalendarClock, LucideCreditCard, LucideShieldCheck, LucideTags, LucideUserX } from 'lucide-vue-next'
+import { LucideArrowRight, LucideCalendarClock, LucideCreditCard, LucideMessageCircle, LucideShieldCheck, LucideTags, LucideUserX } from 'lucide-vue-next'
 import { formatMoney } from '~/shared/utils/studentPresentation'
 
 defineProps({
@@ -55,6 +59,7 @@ defineEmits([
   'open-section-selection',
   'open-bulk-ingreso-cycle',
   'open-bulk-payment',
+  'open-whatsapp',
   'open-no-adeudo',
   'open-bulk-baja',
   'clear-selected'

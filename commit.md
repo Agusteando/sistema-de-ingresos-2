@@ -1,1 +1,1 @@
-Iguala visualmente los documentos nuevos con las filas de pagos
+Integra envíos masivos de WhatsApp para alumnos seleccionados

@@ -1,5 +1,6 @@
 import { runWithBridgeAgentId, query } from '../../../../utils/db'
 import { whatsappApi } from '../../../../utils/whatsapp'
+import { assertWhatsappClientOwnership } from '../../../../utils/whatsappOwnership'
 
 const getQrBody = (payload: any) => payload?.qr || payload || {}
 
@@ -27,6 +28,7 @@ const persistQrState = async (clientId: string, payload: any) => {
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const clientId = event.context.params?.clientId
   if (!clientId) throw createError({ statusCode: 400, statusMessage: 'clientId requerido' })
+  await assertWhatsappClientOwnership(String(clientId), event.context.user)
 
   const { refresh = '1', force = '0' } = getQuery(event)
   const normalizedClientId = String(clientId)
