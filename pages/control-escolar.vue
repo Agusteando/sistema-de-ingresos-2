@@ -227,6 +227,26 @@
                     <b v-if="controlBulkSelectedCount">{{ controlBulkSelectedCount }}</b>
                   </button>
                   <button
+                    v-if="controlBulkSelectionMode && controlFilteredBulkTargetCount"
+                    type="button"
+                    :class="[
+                      'ce-bulk-select-button ce-bulk-filter-button',
+                      { active: controlCurrentFilterFullySelected },
+                    ]"
+                    :aria-pressed="controlCurrentFilterFullySelected"
+                    :aria-label="
+                      controlCurrentFilterFullySelected
+                        ? 'Quitar alumnos que coinciden con los filtros actuales'
+                        : 'Seleccionar todos los alumnos que coinciden con los filtros actuales'
+                    "
+                    :title="controlBulkFilterActionTitle"
+                    @click="toggleControlFilteredSelection"
+                  >
+                    <LucideFilter :size="15" />
+                    <span>{{ controlCurrentFilterFullySelected ? 'Quitar filtro' : 'Todo el filtro' }}</span>
+                    <b>{{ controlFilteredBulkTargetCount }}</b>
+                  </button>
+                  <button
                     v-if="controlBulkSelectionMode && students.length"
                     type="button"
                     :class="[
@@ -1741,7 +1761,11 @@
 
     <ControlEscolarWhatsappSelectionDock
       :selected-count="controlBulkSelectedCount"
+      :filtered-count="controlFilteredStudentCount"
+      :filter-target-count="controlFilteredBulkTargetCount"
+      :filter-selected="controlCurrentFilterFullySelected"
       :page-selected="controlCurrentPageFullySelected"
+      @toggle-filter="toggleControlFilteredSelection"
       @toggle-page="toggleControlCurrentPageSelection"
       @open-whatsapp="openControlWhatsappBulk"
       @clear="clearControlBulkSelection"
@@ -5645,10 +5669,21 @@ const controlBulkStudentKey = (studentOrMatricula) =>
       : studentOrMatricula,
   );
 
+const CONTROL_WHATSAPP_BULK_LIMIT = 250;
 const controlBulkSelectedStudents = computed(() =>
   Array.from(controlBulkSelection.values()),
 );
 const controlBulkSelectedCount = computed(() => controlBulkSelection.size);
+const controlFilteredStudentsForBulk = computed(() => filteredControlStudents());
+const controlFilteredStudentCount = computed(
+  () => controlFilteredStudentsForBulk.value.length,
+);
+const controlFilteredBulkTarget = computed(() =>
+  controlFilteredStudentsForBulk.value.slice(0, CONTROL_WHATSAPP_BULK_LIMIT),
+);
+const controlFilteredBulkTargetCount = computed(
+  () => controlFilteredBulkTarget.value.length,
+);
 const isControlBulkStudentSelected = (studentOrMatricula) => {
   const key = controlBulkStudentKey(studentOrMatricula);
   return Boolean(key && controlBulkSelection.has(key));
@@ -5657,6 +5692,22 @@ const controlCurrentPageFullySelected = computed(() =>
   students.value.length > 0 &&
   students.value.every((student) => isControlBulkStudentSelected(student)),
 );
+const controlCurrentFilterFullySelected = computed(() =>
+  controlFilteredBulkTarget.value.length > 0 &&
+  controlBulkSelection.size === controlFilteredBulkTarget.value.length &&
+  controlFilteredBulkTarget.value.every((student) =>
+    isControlBulkStudentSelected(student),
+  ),
+);
+const controlBulkFilterActionTitle = computed(() => {
+  if (controlCurrentFilterFullySelected.value) {
+    return `Quitar ${controlFilteredBulkTargetCount.value} alumnos filtrados de la selección`;
+  }
+  if (controlFilteredStudentCount.value > CONTROL_WHATSAPP_BULK_LIMIT) {
+    return `Seleccionar los primeros ${CONTROL_WHATSAPP_BULK_LIMIT} de ${controlFilteredStudentCount.value} alumnos filtrados`;
+  }
+  return `Seleccionar los ${controlFilteredBulkTargetCount.value} alumnos que coinciden con los filtros actuales`;
+});
 
 const setControlBulkStudentSelected = (student, selected) => {
   const key = controlBulkStudentKey(student);
@@ -5665,8 +5716,8 @@ const setControlBulkStudentSelected = (student, selected) => {
     controlBulkSelection.delete(key);
     return;
   }
-  if (!controlBulkSelection.has(key) && controlBulkSelection.size >= 250) {
-    show("Máximo 250 alumnos por envío.");
+  if (!controlBulkSelection.has(key) && controlBulkSelection.size >= CONTROL_WHATSAPP_BULK_LIMIT) {
+    show(`Máximo ${CONTROL_WHATSAPP_BULK_LIMIT} alumnos por envío.`);
     return;
   }
   controlBulkSelection.set(key, student);
@@ -5699,6 +5750,30 @@ const handleControlStudentRowClick = (student) => {
     return;
   }
   selectStudent(student);
+};
+
+const toggleControlFilteredSelection = () => {
+  controlBulkSelectionMode.value = true;
+
+  if (controlCurrentFilterFullySelected.value) {
+    controlBulkSelection.clear();
+    return;
+  }
+
+  // A filter-wide action defines the audience. Replace stale selections from
+  // previous filters/pages so hidden students cannot be included by accident.
+  controlBulkSelection.clear();
+  for (const student of controlFilteredBulkTarget.value) {
+    setControlBulkStudentSelected(student, true);
+  }
+
+  if (controlFilteredStudentCount.value > CONTROL_WHATSAPP_BULK_LIMIT) {
+    show(
+      `Seleccionados ${CONTROL_WHATSAPP_BULK_LIMIT} de ${controlFilteredStudentCount.value} alumnos filtrados. Máximo ${CONTROL_WHATSAPP_BULK_LIMIT} por envío.`,
+    );
+  } else if (controlFilteredBulkTargetCount.value) {
+    show(`${controlFilteredBulkTargetCount.value} alumnos filtrados seleccionados.`);
+  }
 };
 
 const toggleControlCurrentPageSelection = () => {
@@ -7649,6 +7724,12 @@ onBeforeUnmount(() => {
   border-color: rgba(37, 165, 93, 0.38);
   background: linear-gradient(180deg, #f1faf4, #e9f7ee);
   color: #17743d;
+}
+
+.control-escolar-screen .ce-bulk-filter-button {
+  border-style: dashed;
+  border-color: rgba(45, 111, 184, .22);
+  color: #356b9d;
 }
 
 .control-escolar-screen .ce-bulk-page-button {

@@ -1,1 +1,1 @@
-Desacopla WhatsApp de Control Escolar del bridge usando teléfonos seleccionados
+Permite seleccionar todos los alumnos filtrados en Control Escolar

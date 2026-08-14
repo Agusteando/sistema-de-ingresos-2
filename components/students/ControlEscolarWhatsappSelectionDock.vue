@@ -10,6 +10,17 @@
           </div>
         </div>
         <div class="selection-action-dock__actions">
+          <button
+            v-if="filterTargetCount > 0"
+            type="button"
+            :class="['dock-action secondary ce-filter-action', { active: filterSelected }]"
+            :title="filterActionTitle"
+            @click="$emit('toggle-filter')"
+          >
+            <LucideFilter :size="16" />
+            <span>{{ filterSelected ? 'Quitar filtro' : 'Todo el filtro' }}</span>
+            <b>{{ filterTargetCount }}</b>
+          </button>
           <button type="button" class="dock-action secondary ce-page-action" @click="$emit('toggle-page')">
             <LucideListChecks :size="16" />
             <span>{{ pageSelected ? 'Quitar página' : 'Página' }}</span>
@@ -29,14 +40,26 @@
 </template>
 
 <script setup>
-import { LucideListChecks, LucideMessageCircle, LucideX } from 'lucide-vue-next'
+import { computed } from 'vue'
+import { LucideFilter, LucideListChecks, LucideMessageCircle, LucideX } from 'lucide-vue-next'
 
-defineProps({
+const props = defineProps({
   selectedCount: { type: Number, default: 0 },
+  filteredCount: { type: Number, default: 0 },
+  filterTargetCount: { type: Number, default: 0 },
+  filterSelected: { type: Boolean, default: false },
   pageSelected: { type: Boolean, default: false }
 })
 
-defineEmits(['toggle-page', 'open-whatsapp', 'clear'])
+const filterActionTitle = computed(() => {
+  if (props.filterSelected) return `Quitar ${props.filterTargetCount} alumnos filtrados de la selección`
+  if (props.filteredCount > props.filterTargetCount) {
+    return `Seleccionar ${props.filterTargetCount} de ${props.filteredCount} alumnos filtrados (máximo por envío)`
+  }
+  return `Seleccionar los ${props.filterTargetCount} alumnos filtrados`
+})
+
+defineEmits(['toggle-filter', 'toggle-page', 'open-whatsapp', 'clear'])
 </script>
 
 <style scoped>
@@ -50,6 +73,28 @@ defineEmits(['toggle-page', 'open-whatsapp', 'clear'])
 
 .ce-whatsapp-selection-dock .dock-action {
   min-width: 104px;
+}
+
+.ce-whatsapp-selection-dock .ce-filter-action {
+  min-width: 142px;
+}
+
+.ce-whatsapp-selection-dock .ce-filter-action.active {
+  border-color: rgba(45, 111, 184, .26);
+  background: #f1f6fc;
+  color: #356b9d;
+}
+
+.ce-whatsapp-selection-dock .ce-filter-action b {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(53, 107, 157, .11);
+  color: inherit;
+  font-size: 10px;
 }
 
 .ce-whatsapp-selection-dock .dock-action.whatsapp {
@@ -77,12 +122,14 @@ defineEmits(['toggle-page', 'open-whatsapp', 'clear'])
   }
 
   .ce-whatsapp-selection-dock .selection-action-dock__copy span,
+  .ce-whatsapp-selection-dock .ce-filter-action span,
   .ce-whatsapp-selection-dock .ce-page-action span,
   .ce-whatsapp-selection-dock .dock-action.ghost span {
     display: none;
   }
 
   .ce-whatsapp-selection-dock .dock-action,
+  .ce-whatsapp-selection-dock .ce-filter-action,
   .ce-whatsapp-selection-dock .dock-action.whatsapp,
   .ce-whatsapp-selection-dock .dock-action.ghost {
     min-width: 40px;
