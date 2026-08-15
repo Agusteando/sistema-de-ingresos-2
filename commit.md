@@ -1,1 +1,1 @@
-Muestra la imagen dentro del cuerpo de los correos de Control Escolar
+Protege el cierre de los diálogos de mensajería con confirmación

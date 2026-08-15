@@ -11,7 +11,7 @@
               <span v-else>Google Workspace · service account</span>
             </div>
           </div>
-          <button class="email-bulk-icon-button" type="button" aria-label="Cerrar" :disabled="sending" @click="requestClose">
+          <button class="email-bulk-icon-button" type="button" aria-label="Cerrar" @click="requestClose">
             <LucideX :size="20" />
           </button>
         </header>
@@ -133,7 +133,7 @@
           </main>
 
           <footer class="email-bulk-footer">
-            <button type="button" class="secondary" :disabled="sending" @click="requestClose">Cancelar</button>
+            <button type="button" class="secondary" @click="requestClose">Cancelar</button>
             <button type="button" class="primary" :disabled="!canSend" @click="sendBulk">
               <LucideLoader2 v-if="sending" class="email-bulk-spin" :size="17" />
               <LucideSend v-else :size="17" />
@@ -142,6 +142,20 @@
           </footer>
         </template>
       </section>
+
+      <div v-if="closeConfirmOpen" class="email-close-confirm-layer">
+        <section class="email-close-confirm" role="alertdialog" aria-modal="true" aria-labelledby="email-close-confirm-title">
+          <div class="email-close-confirm__icon"><LucideX :size="20" /></div>
+          <div class="email-close-confirm__copy">
+            <h3 id="email-close-confirm-title">¿Cerrar este envío?</h3>
+            <p>{{ closeConfirmationText }}</p>
+          </div>
+          <div class="email-close-confirm__actions">
+            <button type="button" class="secondary" @click="cancelClose">Seguir aquí</button>
+            <button type="button" class="danger" @click="confirmClose">{{ sending ? 'Pausar y cerrar' : 'Sí, cerrar' }}</button>
+          </div>
+        </section>
+      </div>
     </div>
   </Teleport>
 </template>
@@ -173,6 +187,8 @@ const draftRestored = ref(false)
 const initialSenderEmail = ref('')
 const previewLoading = ref(true)
 const sending = ref(false)
+const closeConfirmOpen = ref(false)
+const closeAfterCurrentSend = ref(false)
 const errorMessage = ref('')
 const recipients = ref([])
 const recipientGroups = ref([])
@@ -209,6 +225,10 @@ const formattedFileSize = computed(() => {
   if (!size) return ''
   return size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`
 })
+
+const closeConfirmationText = computed(() => sending.value
+  ? 'El envío que ya está en curso terminará primero. Después se pausará la lista antes del siguiente destinatario, se guardará el progreso y se cerrará el diálogo.'
+  : 'El borrador y el progreso actual se conservarán para que puedas continuar después. Esta acción solo cerrará el diálogo.')
 
 const hasClosableState = computed(() => Boolean(
   message.value.trim()
@@ -436,10 +456,16 @@ const runDelivery = async (statuses) => {
           || error?.message
           || 'No se pudo enviar este correo.'
       }
+
+      if (closeAfterCurrentSend.value) break
     }
   } finally {
     sending.value = false
+    persistDraft()
     emit('sent', deliveryResult())
+    if (closeAfterCurrentSend.value) {
+      emit('close')
+    }
   }
 }
 
@@ -451,13 +477,21 @@ const retryFailed = async () => runDelivery(['failed'])
 const continuePending = async () => runDelivery(['pending'])
 
 const requestClose = () => {
-  if (sending.value) return
+  if (closeAfterCurrentSend.value) return
   persistDraft()
-  if (hasClosableState.value && typeof window !== 'undefined') {
-    const confirmed = window.confirm(
-      'Hay un borrador o progreso de envío en este diálogo. Se conservará automáticamente para continuar después. ¿Cerrar de todos modos?'
-    )
-    if (!confirmed) return
+  closeConfirmOpen.value = true
+}
+
+const cancelClose = () => {
+  closeConfirmOpen.value = false
+}
+
+const confirmClose = () => {
+  closeConfirmOpen.value = false
+  persistDraft()
+  if (sending.value) {
+    closeAfterCurrentSend.value = true
+    return
   }
   emit('close')
 }
@@ -472,7 +506,13 @@ const closeAfterSend = () => {
   emit('close')
 }
 
-useModalEscape(requestClose)
+useModalEscape(() => {
+  if (closeConfirmOpen.value) {
+    cancelClose()
+    return
+  }
+  requestClose()
+})
 
 watch(senderEmail, scheduleDraftSave)
 watch(subject, scheduleDraftSave)
@@ -626,4 +666,12 @@ onBeforeUnmount(() => {
   .email-preview { min-height: 250px; border-left: 0; border-top: 1px solid #edf0f3; }
   .email-bulk-audience { flex-wrap: wrap; }
 }
+
+.email-close-confirm-layer { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; padding: 24px; background: rgba(15, 23, 42, .48); backdrop-filter: blur(4px); }
+.email-close-confirm { width: min(440px, 100%); display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 20px; border-radius: 18px; background: #fff; box-shadow: 0 24px 80px rgba(15, 23, 42, .28); }
+.email-close-confirm__icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: #fff1f2; color: #be123c; }
+.email-close-confirm__copy h3 { margin: 0 0 6px; font-size: 17px; color: #172033; }
+.email-close-confirm__copy p { margin: 0; color: #667085; font-size: 13px; line-height: 1.5; }
+.email-close-confirm__actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.email-close-confirm__actions .danger { border: 0; border-radius: 10px; padding: 10px 14px; background: #be123c; color: #fff; font-weight: 700; cursor: pointer; }
 </style>

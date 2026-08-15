@@ -13,7 +13,7 @@
               <span v-else class="wa-bulk-status"><i></i> QR sin vincular</span>
             </div>
           </div>
-          <button class="wa-bulk-icon-button" type="button" aria-label="Cerrar" :disabled="sending" @click="requestClose">
+          <button class="wa-bulk-icon-button" type="button" aria-label="Cerrar" @click="requestClose">
             <LucideX :size="20" />
           </button>
         </header>
@@ -149,7 +149,7 @@
             </main>
 
             <footer class="wa-bulk-footer">
-              <button class="wa-bulk-secondary" type="button" :disabled="sending" @click="requestClose">Cancelar</button>
+              <button class="wa-bulk-secondary" type="button" @click="requestClose">Cancelar</button>
               <button class="wa-bulk-primary" type="button" :disabled="!canSend" @click="sendBulk">
                 <LucideLoader2 v-if="sending" class="wa-bulk-spin" :size="18" />
                 <LucideSend v-else :size="18" />
@@ -159,6 +159,20 @@
           </template>
         </template>
       </section>
+
+      <div v-if="closeConfirmOpen" class="wa-close-confirm-layer">
+        <section class="wa-close-confirm" role="alertdialog" aria-modal="true" aria-labelledby="wa-close-confirm-title">
+          <div class="wa-close-confirm__icon"><LucideX :size="20" /></div>
+          <div class="wa-close-confirm__copy">
+            <h3 id="wa-close-confirm-title">¿Cerrar este envío?</h3>
+            <p>{{ closeConfirmationText }}</p>
+          </div>
+          <div class="wa-close-confirm__actions">
+            <button type="button" class="wa-bulk-secondary" @click="cancelClose">Seguir aquí</button>
+            <button type="button" class="wa-close-confirm__danger" @click="confirmClose">{{ sending ? 'Pausar y cerrar' : 'Sí, cerrar' }}</button>
+          </div>
+        </section>
+      </div>
     </div>
   </Teleport>
 </template>
@@ -191,6 +205,8 @@ const previewLoading = ref(true)
 const transportMode = ref('public')
 const connectionLoading = ref(false)
 const sending = ref(false)
+const closeConfirmOpen = ref(false)
+const closeAfterCurrentSend = ref(false)
 const isDragging = ref(false)
 const message = ref('')
 const imageFile = ref(null)
@@ -239,6 +255,10 @@ const formattedFileSize = computed(() => {
   return size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`
 })
 const currentTime = computed(() => new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()))
+
+const closeConfirmationText = computed(() => sending.value
+  ? 'El envío que ya está en curso terminará primero. Después se pausará la lista antes del siguiente destinatario, se guardará el progreso y se cerrará el diálogo.'
+  : 'El borrador y el progreso actual se conservarán para que puedas continuar después. Esta acción solo cerrará el diálogo.')
 
 const hasClosableState = computed(() => Boolean(message.value.trim() || imageFile.value || deliveryItems.value.length))
 
@@ -578,10 +598,17 @@ const runDelivery = async (statuses) => {
           || error?.message
           || 'No se pudo enviar este chat.'
       }
+
+      if (closeAfterCurrentSend.value) break
     }
   } finally {
     sending.value = false
+    persistDraft()
     emit('sent', deliveryResult())
+    if (closeAfterCurrentSend.value) {
+      stopStatusPolling()
+      emit('close')
+    }
   }
 }
 
@@ -599,13 +626,21 @@ const continuePending = async () => {
 }
 
 const requestClose = () => {
-  if (sending.value) return
+  if (closeAfterCurrentSend.value) return
   persistDraft()
-  if (hasClosableState.value && typeof window !== 'undefined') {
-    const confirmed = window.confirm(
-      'Hay contenido o progreso de envío en este diálogo. El texto y el progreso se guardarán como borrador; las imágenes deben seleccionarse de nuevo al reabrir. ¿Cerrar de todos modos?'
-    )
-    if (!confirmed) return
+  closeConfirmOpen.value = true
+}
+
+const cancelClose = () => {
+  closeConfirmOpen.value = false
+}
+
+const confirmClose = () => {
+  closeConfirmOpen.value = false
+  persistDraft()
+  if (sending.value) {
+    closeAfterCurrentSend.value = true
+    return
   }
   stopStatusPolling()
   emit('close')
@@ -622,7 +657,13 @@ const closeAfterSend = () => {
   emit('close')
 }
 
-useModalEscape(requestClose)
+useModalEscape(() => {
+  if (closeConfirmOpen.value) {
+    cancelClose()
+    return
+  }
+  requestClose()
+})
 
 watch(message, scheduleDraftSave)
 watch(transportMode, scheduleDraftSave)
@@ -1136,4 +1177,12 @@ onBeforeUnmount(() => {
   .wa-bulk-transport { margin-inline: 14px; }
   .wa-bulk-transport__option { grid-template-columns: 32px minmax(0, 1fr) 7px; padding-inline: 9px; }
 }
+
+.wa-close-confirm-layer { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; padding: 24px; background: rgba(15, 23, 42, .48); backdrop-filter: blur(4px); }
+.wa-close-confirm { width: min(440px, 100%); display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 20px; border-radius: 18px; background: #fff; box-shadow: 0 24px 80px rgba(15, 23, 42, .28); }
+.wa-close-confirm__icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: #fff1f2; color: #be123c; }
+.wa-close-confirm__copy h3 { margin: 0 0 6px; font-size: 17px; color: #172033; }
+.wa-close-confirm__copy p { margin: 0; color: #667085; font-size: 13px; line-height: 1.5; }
+.wa-close-confirm__actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.wa-close-confirm__danger { border: 0; border-radius: 10px; padding: 10px 14px; background: #be123c; color: #fff; font-weight: 700; cursor: pointer; }
 </style>
