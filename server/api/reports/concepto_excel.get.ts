@@ -73,9 +73,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     Number(row.folio || 0),
     formatDate(row.fecha),
     row.matricula || '',
-    row.ciclo || '',
-    row.grado || '',
     row.nivel || '',
+    row.grado || '',
     row.nombreCompleto || '',
     Number(row.documento || 0),
     row.mesReal || row.mes || '',
@@ -98,7 +97,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     title: 'Reporte por concepto',
     subtitle: conceptName,
     metaLines: [
-      'Ciclos incluidos: todos',
       `Plantel: ${result.filtros.plantel || 'Todos'}`,
       periodLine,
       `Movimientos: ${result.resumen.transacciones} | Alumnos: ${result.resumen.alumnos}`,
@@ -110,9 +108,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       'Folio',
       'Fecha efectiva del pago',
       'Matrícula',
-      'Ciclo del pago',
-      'Grado',
       'Nivel',
+      'Grado',
       'Alumno',
       'Documento',
       'Mes',
@@ -126,8 +123,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       'Importe aplicado (MXN)',
     ],
     rows,
-    numericColumns: [0, 7],
-    currencyColumns: [15, 16],
+    numericColumns: [0, 6],
+    currencyColumns: [14, 15],
     totals: [
       ...result.resumen.formasPago.map(item => ({ label: `${item.formaDePago} aplicado`, value: Number(item.total || 0) })),
       { label: 'Importe registrado', value: Number(result.resumen.totalRegistrado || 0) },
@@ -138,7 +135,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   })
 
   const conceptFileLabel = conceptNames.length === 1 ? conceptNames[0] : `${conceptNames.length}_conceptos`
-  const filename = `Reporte_conceptos_${safeFilePart(conceptFileLabel)}_todos_los_ciclos.xlsx`
+  const filename = `Reporte_conceptos_${safeFilePart(conceptFileLabel)}.xlsx`
   const encodedFilename = encodeURIComponent(filename)
 
   setHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

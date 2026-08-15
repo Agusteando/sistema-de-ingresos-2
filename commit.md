@@ -1,1 +1,1 @@
-Mejora el selector de remitente con búsqueda y fotos de Workspace
+Unifica nivel y grado calculados en los reportes financieros

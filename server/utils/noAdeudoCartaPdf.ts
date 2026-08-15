@@ -1,4 +1,5 @@
 import { generateQrMatrix, type QrMatrix } from './qr'
+import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
 
 type PdfTextOptions = {
   size?: number
@@ -203,7 +204,13 @@ export const generateNoAdeudoCartaPdf = ({
   const studentName = titleCase(buildStudentName(student))
   const matricula = compact(student.matricula)
   const plantel = compact(student.plantel)
-  const nivelGrado = [student.nivel || student.nivelBase, student.grado || student.gradoBase, student.grupo].filter(Boolean).join(' · ')
+  const academic = resolveFinancialAcademicPlacement({
+    ...student,
+    basePlantel: student.plantel,
+    gradoBase: student.gradoBase ?? student.grado,
+    cicloBase: student.cicloBase ?? student.ciclo,
+  }, ciclo)
+  const nivelGrado = [academic.nivel, academic.grado || student.grado, student.grupo].filter(Boolean).join(' · ')
   const qr = buildValidationQr(validationUrl)
   const shortHash = verificationHash.slice(0, 18).toUpperCase()
 

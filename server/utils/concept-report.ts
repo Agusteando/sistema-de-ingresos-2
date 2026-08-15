@@ -1,6 +1,6 @@
 import { getBridgeAgentId, getDbTransport, query } from './db'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
-import { calculatePromotedGrado, displayGrado } from '../../shared/utils/grado'
+import { omitRawFinancialAcademicFields, resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import { hydrateFinancialConceptNames, loadFinancialConceptMap } from './financial-concept'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
 import {
@@ -114,7 +114,7 @@ const resolveConceptReportContext = async (user: any, filters: Record<string, un
   // remain reportable even when a concept was removed from the current catalog.
   const resolvedMap = await loadFinancialConceptMap(conceptoIds, catalogCicloKey)
   const bridgeMetadataRows = await query<any[]>(`
-    SELECT id, concepto, costo, description, plantel, eventual, plazo, ciclo
+    SELECT id, concepto, costo, description, plantel, eventual, plazo
     FROM conceptos
     WHERE id IN (${conceptoIds.map(() => '?').join(', ')})
   `, conceptoIds).catch(() => [])
@@ -124,7 +124,6 @@ const resolveConceptReportContext = async (user: any, filters: Record<string, un
     SELECT
       CAST(r.concepto AS CHAR) AS id,
       MAX(NULLIF(TRIM(r.conceptoNombre), '')) AS concepto,
-      MAX(NULLIF(TRIM(r.ciclo), '')) AS ciclo,
       COUNT(*) AS movimientos
     FROM referenciasdepago r
     WHERE CAST(r.concepto AS CHAR) IN (${conceptoIds.map(() => '?').join(', ')})
@@ -144,12 +143,12 @@ const resolveConceptReportContext = async (user: any, filters: Record<string, un
     const resolvedConcept = resolvedMap.get(id)
     const metadata = bridgeMetadata.get(id) || {}
     const ledger = ledgerMetadata.get(id) || {}
+    const { ciclo: _metadataCiclo, ...safeMetadata } = metadata
     return {
-      ...metadata,
+      ...safeMetadata,
       id,
       concepto: resolvedConcept?.concepto || metadata?.concepto || ledger?.concepto || `Concepto financiero #${id}`,
       costo: metadata?.costo ?? resolvedConcept?.costo ?? 0,
-      ciclo: metadata?.ciclo || resolvedConcept?.ciclo || ledger?.ciclo || '',
       historico: !resolvedConcept && !bridgeMetadata.has(id),
     }
   })
@@ -190,24 +189,6 @@ const resolveConceptReportContext = async (user: any, filters: Record<string, un
     where: whereParts.join(' AND '),
     params,
   }
-}
-
-const resolveHistoricalGrade = (row: any) => {
-  const hasBaseGrade = String(row.gradoBase ?? '').trim() !== ''
-  if (!hasBaseGrade) return { grado: '', nivel: '' }
-
-  const projected = calculatePromotedGrado(
-    row.gradoBase,
-    row.basePlantel || row.scopePlantel || row.plantel,
-    row.cicloBase,
-    row.ciclo,
-    row.nivelBase,
-  )
-
-  // A current base row cannot reliably reconstruct a grade for a payment from an earlier
-  // cycle. Leave it blank instead of hiding the payment or inventing historical placement.
-  if (!projected || projected.outOfScope) return { grado: '', nivel: '' }
-  return { grado: displayGrado(projected.grado), nivel: projected.nivel || '' }
 }
 
 type MoneyBreakdown = {
@@ -259,7 +240,6 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
       r.usuario,
       r.usuario_email,
       A.grado AS gradoBase,
-      A.nivel AS nivelBase,
       A.ciclo AS cicloBase,
       A.plantel AS basePlantel,
       ${PAYMENT_PLANTEL_SQL} AS scopePlantel
@@ -272,13 +252,13 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
   // Deliberately no status/cycle/projected-plantel post-filter here. Every ledger row that
   // matches the user's explicit concept/date/user filters must survive into the report.
   const rows = rawRows.map((row) => {
-    const historicalGrade = resolveHistoricalGrade(row)
+    const academic = resolveFinancialAcademicPlacement(row, row.ciclo)
     const montoRegistrado = Number(row.monto || 0)
     const montoAplicado = resolvePaymentAppliedAmount(row)
 
     return {
-      ...row,
-      ...historicalGrade,
+      ...omitRawFinancialAcademicFields(row),
+      ...academic,
       estatusReporte: resolvePaymentAuditStatus(row),
       montoRegistrado,
       montoAplicado,
@@ -292,7 +272,6 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
   const conceptosMap = new Map<string, { concepto: string } & MoneyBreakdown>()
   const estatusMap = new Map<string, { estatus: string } & MoneyBreakdown>()
   const alumnos = new Set<string>()
-  const ciclos = new Set<string>()
   let totalRegistrado = 0
   let total = 0
   let cancelados = 0
@@ -312,7 +291,6 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
     if (isCanceledPayment(row)) cancelados += 1
     if (isDepurationAdjustment(row)) depuraciones += 1
     alumnos.add(String(row.matricula || ''))
-    if (String(row.ciclo || '').trim()) ciclos.add(String(row.ciclo).trim())
 
     addMoneyBreakdown(formasPagoMap, formaDePago, () => ({ formaDePago, total: 0, montoRegistrado: 0, movimientos: 0 }), registered, applied)
     addMoneyBreakdown(plantelesMap, rowPlantel, () => ({ plantel: rowPlantel, total: 0, montoRegistrado: 0, movimientos: 0 }), registered, applied)
@@ -335,8 +313,6 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
     rows,
     filtros: {
       plantel: context.scopePlantel || '',
-      ciclo: 'todos',
-      catalogoCiclo: context.catalogCicloKey,
       inicio: context.inicioValue,
       fin: context.finValue,
       conceptoIds: context.conceptoIds,
@@ -349,7 +325,6 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
       alumnos: Array.from(alumnos).filter(Boolean).length,
       cancelados,
       depuraciones,
-      ciclos: Array.from(ciclos).sort(),
       formasPago,
       planteles,
       conceptos: porConcepto,
@@ -388,7 +363,6 @@ export const loadConceptReportUsers = async (user: any, filters: Record<string, 
       .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' })),
     filtros: {
       plantel: context.scopePlantel || '',
-      ciclo: 'todos',
       inicio: context.inicioValue,
       fin: context.finValue,
       conceptoIds: context.conceptoIds,
@@ -403,7 +377,6 @@ export const loadConceptReportOptions = async (user: any, filters: Record<string
     SELECT
       CAST(r.concepto AS CHAR) AS id,
       MAX(NULLIF(TRIM(r.conceptoNombre), '')) AS concepto,
-      GROUP_CONCAT(DISTINCT NULLIF(TRIM(r.ciclo), '') ORDER BY r.ciclo SEPARATOR ', ') AS ciclos,
       COUNT(*) AS movimientos,
       MIN(DATE(r.fecha)) AS primeraFecha,
       MAX(DATE(r.fecha)) AS ultimaFecha
@@ -428,8 +401,6 @@ export const loadConceptReportOptions = async (user: any, filters: Record<string
         plantel: paymentScope.scopePlantel || '',
         eventual: 0,
         plazo: '',
-        ciclo: String(row.ciclos || '').trim(),
-        ciclos: String(row.ciclos || '').trim(),
         movimientos: Number(row.movimientos || 0),
         primeraFecha: row.primeraFecha || '',
         ultimaFecha: row.ultimaFecha || '',

@@ -1,3 +1,5 @@
+import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
+
 export const DEFAULT_COBRANZA_EMAIL_SUBJECT = 'Recordatorio de pago - {{nombre_alumno}}'
 
 export const DEFAULT_COBRANZA_EMAIL_TEMPLATE = `<div style="font-family: Inter, Arial, sans-serif; color: #1f2937; max-width: 680px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden; background: #ffffff;">
@@ -156,7 +158,14 @@ export const renderCobranzaEmail = ({
   const rows = includeDesglose ? getBreakdownRows(deudor) : []
   const tutor = student?.padre || student?.['Nombre del padre o tutor'] || deudor?.padre || 'Padre, madre o tutor'
   const alumno = student?.nombreCompleto || deudor?.nombreCompleto || matricula
-  const gradoGrupo = [student?.grado || deudor?.grado, student?.grupo || deudor?.grupo].filter(Boolean).join(' ')
+  const academic = resolveFinancialAcademicPlacement({
+    matricula,
+    basePlantel: student?.plantel || deudor?.plantel,
+    gradoBase: student?.gradoBase ?? student?.grado ?? deudor?.grado,
+    cicloBase: student?.cicloBase ?? student?.ciclo ?? deudor?.ciclo ?? ciclo,
+  }, ciclo)
+  const grupo = student?.grupo || deudor?.grupo || ''
+  const gradoGrupo = [academic.grado, grupo].filter(Boolean).join(' ')
 
   const context: Record<string, string> = {
     tutor: String(tutor),
@@ -173,9 +182,9 @@ export const renderCobranzaEmail = ({
     fecha_limite_especial: deudor?.fechaLimiteEspecial ? formatDate(deudor.fechaLimiteEspecial) : '',
     fecha_actual: formatDate(new Date()),
     plantel: String(student?.plantel || deudor?.plantel || ''),
-    nivel: String(student?.nivel || deudor?.nivel || ''),
-    grado: String(student?.grado || deudor?.grado || ''),
-    grupo: String(student?.grupo || deudor?.grupo || ''),
+    nivel: String(academic.nivel || ''),
+    grado: String(academic.grado || ''),
+    grupo: String(grupo),
     grado_grupo: gradoGrupo,
     correo: String(student?.correo || deudor?.correo || ''),
     telefono: String(student?.telefono || deudor?.telefono || ''),

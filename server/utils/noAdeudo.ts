@@ -12,6 +12,7 @@ import { controlEscolarCentralQuery } from './control-escolar-central'
 import { getNoAdeudoControlUserForPlantel } from './external-users'
 import { isDepuradoPayment } from './payment-classification'
 import { loadActiveCobranzaConvention } from './cobranza-convenio'
+import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import {
   getSchoolPeriodDeadlineForCycle,
   isPastPaymentDeadline,
@@ -439,7 +440,7 @@ export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: 
     SELECT
       A.matricula, A.nombreCompleto, A.apellidoPaterno, A.apellidoMaterno, A.nombres,
       A.curp, A.grado as gradoBase, A.grado, A.grupo, A.ciclo as cicloBase, A.ciclo,
-      A.plantel, A.nivel as nivelBase, A.nivel, A.estatus, A.correo, A.telefono,
+      A.plantel, A.estatus, A.correo, A.telefono,
       A.\`Nombre del padre o tutor\` as padre
     FROM base A
     WHERE UPPER(TRIM(A.matricula)) = ?
@@ -448,7 +449,18 @@ export const resolveNoAdeudoStudentContext = async (event: any, matriculaValue: 
 
   if (!row) throw createError({ statusCode: 404, message: 'Alumno no encontrado.' })
 
-  const student = await mergeCentralOverlay(row)
+  const mergedStudent = await mergeCentralOverlay(row)
+  const academic = resolveFinancialAcademicPlacement({
+    ...mergedStudent,
+    basePlantel: mergedStudent.plantel || row.plantel,
+    gradoBase: mergedStudent.gradoBase ?? mergedStudent.grado ?? row.gradoBase ?? row.grado,
+    cicloBase: mergedStudent.cicloBase ?? mergedStudent.ciclo ?? row.cicloBase ?? row.ciclo,
+  }, cicloKey)
+  const student = {
+    ...mergedStudent,
+    nivel: academic.nivel,
+    grado: academic.grado || mergedStudent.grado || mergedStudent.gradoBase || '',
+  }
   const debt = await calculateNoAdeudoDebt(row.matricula, cicloKey)
   const deudorCarta = await getNoAdeudoDeudorCartaMark(student.plantel, row.matricula, cicloKey)
   const settings = getNoAdeudoSettings(student.plantel)
@@ -516,7 +528,7 @@ export const createNoAdeudoToken = ({
     n: name,
     c: normalizeCicloKey(ciclo),
     p: normalizeText(student.plantel),
-    gg: [student.nivel || student.nivelBase, student.grado || student.gradoBase, student.grupo].filter(Boolean).join(' · '),
+    gg: [student.nivel, student.grado, student.grupo].filter(Boolean).join(' · '),
     by: normalizeText(generatedBy),
     be: normalizeEmail(generatedByEmail),
     at: issuedAt.toISOString(),

@@ -14,7 +14,6 @@ type StudentPlacementRow = {
   grado?: string | null
   grupo?: string | null
   plantel?: string | null
-  nivel?: string | null
   ciclo?: string | null
 }
 
@@ -30,7 +29,7 @@ export const loadPlantelCorteReceiptStrips = async (
 
   const students = matriculas.length
     ? await query<StudentPlacementRow[]>(
-        `SELECT matricula, grado, grupo, plantel, nivel, ciclo FROM base WHERE matricula IN (?)`,
+        `SELECT matricula, grado, grupo, plantel, ciclo FROM base WHERE matricula IN (?)`,
         [matriculas]
       )
     : []

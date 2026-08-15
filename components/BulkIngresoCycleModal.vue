@@ -344,7 +344,7 @@ const previewRows = computed(() => props.selectedStudents.map((student) => {
   )
   const placementInvalid = academicPositionIndex(selectedPosition.value.nivel, placementGrado) < 0
   const beforeCiclo = normalizeCiclo(student?.cicloBase ?? student?.ciclo)
-  const beforeNivel = student?.nivelBase || student?.nivel || ''
+  const beforeNivel = currentPosition.nivel
   const beforeGrado = student?.gradoBase || student?.grado || ''
   const unchanged = !placementInvalid &&
     beforeCiclo === selectedIngresoCiclo.value &&
@@ -356,7 +356,7 @@ const previewRows = computed(() => props.selectedStudents.map((student) => {
   return {
     matricula: normalizeStudentMatricula(student?.matricula),
     nombreCompleto: student?.nombreCompleto || student?.matricula,
-    beforeLabel: `${formatCicloLabel(beforeCiclo || targetCicloKey.value)} · ${beforeNivel || currentPosition.nivel} · ${displayGrado(beforeGrado || currentPosition.grado)}`,
+    beforeLabel: `${formatCicloLabel(beforeCiclo || targetCicloKey.value)} · ${beforeNivel} · ${displayGrado(beforeGrado || currentPosition.grado)}`,
     afterLabel: placementInvalid
       ? 'No válido'
       : `${formatCicloLabel(selectedIngresoCiclo.value)} · ${selectedPosition.value.nivel} · ${displayGrado(placementGrado)}`,

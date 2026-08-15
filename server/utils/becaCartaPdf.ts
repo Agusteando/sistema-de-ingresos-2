@@ -1,3 +1,5 @@
+import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
+
 type PdfTextOptions = {
   size?: number
   font?: 'regular' | 'bold'
@@ -141,6 +143,13 @@ export const generateBecaCartaPdf = ({ student, documento, becaTipos, motivo, ci
   const descuentoPct = costo > 0 ? (descuento * 100) / costo : 0
   const tipos = becaTipos.length ? becaTipos.join(', ') : 'sin tipo registrado'
   const plantel = student.plantel || documento.plantel || ''
+  const academic = resolveFinancialAcademicPlacement({
+    ...student,
+    matricula: student.matricula || documento.matricula,
+    basePlantel: plantel,
+    gradoBase: student.gradoBase ?? student.grado,
+    cicloBase: student.cicloBase ?? student.ciclo ?? documento.ciclo,
+  }, ciclo)
 
   c.rect(0, 0, PAGE_W, PAGE_H, [248, 251, 248])
   c.rect(0, PAGE_H - 118, PAGE_W, 118, [236, 247, 235])
@@ -165,7 +174,7 @@ export const generateBecaCartaPdf = ({ student, documento, becaTipos, motivo, ci
   c.text('Matrícula', PAGE_W - MARGIN - 170, PAGE_H - 230, { size: 8, color: [102, 116, 137] })
   c.text(student.matricula || documento.matricula, PAGE_W - MARGIN - 170, PAGE_H - 248, { size: 12, font: 'bold', color: [52, 116, 46] })
   c.text('Plantel / nivel / grado', PAGE_W - MARGIN - 170, PAGE_H - 263, { size: 8, color: [102, 116, 137] })
-  c.text([plantel, student.nivel, student.grado].filter(Boolean).join(' · '), PAGE_W - MARGIN - 70, PAGE_H - 263, { size: 9, color: [20, 35, 57], align: 'right' })
+  c.text([plantel, academic.nivel, academic.grado || student.grado].filter(Boolean).join(' · '), PAGE_W - MARGIN - 70, PAGE_H - 263, { size: 9, color: [20, 35, 57], align: 'right' })
 
   const body = `Por medio de la presente se hace constar que el/la alumno(a) ${studentName}, con matrícula ${student.matricula || documento.matricula}, cuenta con una beca aplicada al concepto "${concepto}" correspondiente al ciclo escolar ${ciclo}. El tipo de beca registrado es: ${tipos}. El monto final autorizado para cobro es ${money(montoFinal)}.`
   c.paragraph(body, MARGIN + 8, PAGE_H - 323, 96, 16, { size: 11, color: [41, 54, 73] })

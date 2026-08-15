@@ -2,6 +2,7 @@ import { PLANTELES_LIST } from '../../utils/constants'
 import { getBridgeAgentId, getDbTransport, query } from './db'
 import { hydrateFinancialConceptNames } from './financial-concept'
 import type { AuthSessionUser } from './auth-session'
+import { omitRawFinancialAcademicFields, resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
 import {
   PAYMENT_APPLIED_AMOUNT_SQL,
@@ -48,6 +49,8 @@ export type CorteCajaRow = {
   plantel_pago?: string | null
   instituto?: unknown
   ciclo?: string | null
+  nivel: string
+  grado: string
   estatus?: string | null
   estatusCorte: string
   cancelada_por?: string | null
@@ -56,6 +59,12 @@ export type CorteCajaRow = {
   usuario?: string | null
   usuario_email?: string | null
   scopePlantel?: string | null
+}
+
+type CorteCajaDbRow = Omit<CorteCajaRow, 'nivel' | 'grado' | 'estatusCorte' | 'montoAplicado'> & {
+  gradoBase?: string | null
+  cicloBase?: string | null
+  basePlantel?: string | null
 }
 
 export type CorteCajaTotal = {
@@ -236,7 +245,7 @@ export const loadPlantelCorteCaja = async (
     params.push(...selectedUserKeys)
   }
 
-  const rows = await query<CorteCajaRow[]>(`
+  const rawRows = await query<CorteCajaDbRow[]>(`
     SELECT
       r.folio,
       r.folio_plantel,
@@ -267,12 +276,22 @@ export const loadPlantelCorteCaja = async (
       r.pago_otro_plantel,
       r.usuario,
       r.usuario_email,
+      A.grado AS gradoBase,
+      A.ciclo AS cicloBase,
+      A.plantel AS basePlantel,
       ${PAYMENT_PLANTEL_SQL} AS scopePlantel
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
     WHERE ${where}
     ORDER BY ${PAYMENT_EFFECTIVE_AT_SQL} DESC, ${PAYMENT_REGISTERED_AT_SQL} DESC, r.folio ASC
   `, params)
+
+  const rows: CorteCajaRow[] = rawRows.map((row) => ({
+    ...omitRawFinancialAcademicFields(row),
+    ...resolveFinancialAcademicPlacement(row, row.ciclo),
+    estatusCorte: '',
+    montoAplicado: 0,
+  })) as CorteCajaRow[]
 
   const rowsByCycle = new Map<string, CorteCajaRow[]>()
   rows.forEach((row) => {

@@ -1,6 +1,6 @@
 import { MAX_COMBINED_RECEIPT_PAYMENTS } from '../../shared/constants/paymentReceipt'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
-import { calculatePromotedGrado, displayGrado } from '../../shared/utils/grado'
+import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import { query } from './db'
 import { hydrateFinancialConceptNames } from './financial-concept'
 import { institutionNameForPlantel, normalizePlantelCode } from '../../shared/utils/institution'
@@ -11,19 +11,14 @@ export const resolveReceiptAcademicPlacement = (student: any, receiptCycle: unkn
     return { grado: '', nivel: '' }
   }
 
-  const projected = calculatePromotedGrado(
-    student.grado,
-    student.plantel,
-    student.ciclo,
-    receiptCycle,
-    student.nivel,
-  )
-
-  return {
-    grado: displayGrado(projected.grado),
-    nivel: projected.nivel,
-  }
+  return resolveFinancialAcademicPlacement({
+    matricula: student.matricula,
+    basePlantel: student.plantel,
+    gradoBase: student.grado,
+    cicloBase: student.ciclo,
+  }, receiptCycle)
 }
+
 
 export const normalizeReceiptFolios = (value: unknown): number[] => {
   const rawValues = Array.isArray(value)
@@ -113,7 +108,7 @@ export const loadPaymentReceiptDocument = async (value: unknown) => {
   }
 
   const [studentData] = await query<any[]>(
-    `SELECT grado, grupo, plantel, nivel, ciclo FROM base WHERE matricula = ? LIMIT 1`,
+    `SELECT matricula, grado, grupo, plantel, ciclo FROM base WHERE matricula = ? LIMIT 1`,
     [matricula]
   )
   const academicPlacement = resolveReceiptAcademicPlacement(studentData, items[0]?.ciclo)

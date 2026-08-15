@@ -2,6 +2,7 @@ import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { generateBecaCartaPdf } from '../../../utils/becaCartaPdf'
 import { normalizeBecaTypes } from '../../../utils/becaTypes'
+import { resolveFinancialAcademicPlacement } from '../../../utils/financial-academic-placement'
 
 const safeFilePart = (value: unknown) => String(value || '')
   .normalize('NFD')
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       D.beca, D.becaNombre, D.becaTipos, D.becaMotivo, D.becaMonto, D.becaPorcentaje,
       D.ciclo, D.estatus, D.fecha,
       B.nombreCompleto, B.apellidoPaterno, B.apellidoMaterno, B.nombre,
-      B.plantel, B.nivel, B.grado, B.grupo
+      B.plantel AS basePlantel, B.grado AS gradoBase, B.ciclo AS cicloBase, B.grupo
     FROM documentos D
     LEFT JOIN base B ON B.matricula = D.matricula
     WHERE D.documento = ?
@@ -50,8 +51,21 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     WHERE documento = ?
   `, [documentoId])
 
+  const academic = resolveFinancialAcademicPlacement({
+    matricula: doc.matricula,
+    basePlantel: doc.basePlantel,
+    gradoBase: doc.gradoBase,
+    cicloBase: doc.cicloBase,
+  }, doc.ciclo)
+  const studentForPdf = {
+    ...doc,
+    plantel: doc.basePlantel || '',
+    nivel: academic.nivel,
+    grado: academic.grado || '',
+  }
+
   const pdf = generateBecaCartaPdf({
-    student: doc,
+    student: studentForPdf,
     documento: doc,
     becaTipos,
     motivo: doc.becaMotivo,

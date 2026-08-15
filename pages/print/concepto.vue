@@ -12,7 +12,7 @@
           <h2 class="m-0 text-[13px] font-bold text-gray-900 uppercase tracking-tight">{{ institutionName }}</h2>
           <div class="mt-2 text-[12px] font-semibold text-gray-700">Reporte por concepto</div>
           <div class="text-[12px] text-gray-600">{{ conceptLabel }}</div>
-          <div class="text-[11px] text-gray-500">Ciclos incluidos: todos</div>
+          <div class="text-[11px] text-gray-500">Histórico financiero del periodo seleccionado</div>
         </div>
         <div class="text-right text-[11px] text-gray-600">
           <div class="font-bold text-[12px] mb-1 text-gray-900 uppercase">Reporte</div>
@@ -41,7 +41,7 @@
       </div>
 
       <div class="mb-4 text-[10px] text-gray-600">
-        Incluye movimientos vigentes, cancelados, depurados y de cualquier ciclo escolar. Cancelados y depuraciones permanecen visibles y muestran importe aplicado de $0.00 cuando corresponde.
+        Incluye movimientos vigentes, cancelados y depurados del historial financiero. Cancelados y depuraciones permanecen visibles y muestran importe aplicado de $0.00 cuando corresponde.
       </div>
 
       <table class="w-full text-[9px] border-collapse mb-8">
@@ -50,7 +50,8 @@
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Folio</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Fecha</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Matrícula</th>
-            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Ciclo</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nivel</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Grado</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Doc</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Mes</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Alumno</th>
@@ -63,13 +64,14 @@
         </thead>
         <tbody>
           <tr v-if="!rows.length">
-            <td colspan="12" class="text-center py-6 text-gray-500 font-medium">No se encontraron movimientos.</td>
+            <td colspan="13" class="text-center py-6 text-gray-500 font-medium">No se encontraron movimientos.</td>
           </tr>
           <tr v-else v-for="r in rows" :key="`${r.folio}-${r.concepto}`" class="border-b border-gray-100">
             <td class="py-2 text-gray-900 font-mono">{{ r.folio }}</td>
             <td class="py-2 text-gray-900">{{ formatDate(r.fecha) }}</td>
             <td class="py-2 text-gray-900 font-mono">{{ r.matricula }}</td>
-            <td class="py-2 text-gray-900 font-mono">{{ r.ciclo || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.nivel || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.grado || '—' }}</td>
             <td class="py-2 text-gray-900 font-mono">{{ String(r.documento).padStart(7, '0') }}</td>
             <td class="py-2 text-gray-900">{{ r.mesReal || r.mes }}</td>
             <td class="py-2 text-gray-900">{{ r.nombreCompleto }}</td>

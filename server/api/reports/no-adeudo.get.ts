@@ -1,5 +1,5 @@
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { displayGrado, normalizeNivelEscolar } from '../../../shared/utils/grado'
+import { displayGrado, nivelFromMatricula, nivelFromPlantel } from '../../../shared/utils/grado'
 import { resolveFinancialFamilyContact } from '../../../shared/utils/familyContact'
 import { PLANTELES_LIST } from '../../../utils/constants'
 import { normalizePlantel } from '../../utils/auth-session'
@@ -29,13 +29,6 @@ const isMissingMarkTable = (error: any) => {
   return code === 'ER_NO_SUCH_TABLE' || (
     /no_adeudo_deudor_cartas/i.test(message) && /doesn.?t exist|no existe/i.test(message)
   )
-}
-
-const displayNivel = (value: unknown) => {
-  const normalized = normalizeNivelEscolar(value)
-  if (normalized) return normalized
-  const text = String(value || '').trim()
-  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : ''
 }
 
 export default defineEventHandler(async (event) => {
@@ -129,6 +122,8 @@ export default defineEventHandler(async (event) => {
     const student = centralOverlays.get(matricula)?.student || {}
     const familyContact = resolveFinancialFamilyContact(student)
     const gradoRaw = String(student.grado || '').trim()
+    const academicPlantel = String(student.plantel || row.plantel || '').trim()
+    const currentNivel = academicPlantel ? nivelFromPlantel(academicPlantel) : nivelFromMatricula(matricula)
 
     return {
       plantel: String(row.plantel || '').trim().toUpperCase(),
@@ -141,7 +136,7 @@ export default defineEventHandler(async (event) => {
       currentStudentName: String(
         student.nombreCompleto || student.nombreCompletoAlumno || student.fullName || ''
       ).trim(),
-      currentNivel: displayNivel(student.nivel),
+      currentNivel,
       currentGrado: gradoRaw ? displayGrado(gradoRaw) : '',
       currentGrupo: String(student.grupo || '').trim(),
       currentTutorName: String(familyContact.tutorName || '').trim()

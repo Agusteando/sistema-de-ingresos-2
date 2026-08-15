@@ -2,6 +2,7 @@ import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { getTrustedAuthUser } from '../../../utils/auth-session'
 import { fetchCentralMatriculaOverlay } from '../../../utils/central-matricula-overlay'
 import { resolveFinancialFamilyContact } from '../../../../shared/utils/familyContact'
+import { resolveFinancialAcademicPlacement } from '../../../utils/financial-academic-placement'
 
 const text = (value: unknown) => String(value ?? '').trim()
 
@@ -31,7 +32,6 @@ const normalizeBridgeStudent = (row: any = {}) => {
     curp: text(row.curp).toUpperCase(),
     plantel: text(row.plantel),
     basePlantel: text(row.plantel),
-    nivel: text(row.nivel),
     grado: text(row.grado),
     grupo: text(row.grupo),
     correo: text(row.correo).toLowerCase(),
@@ -59,7 +59,6 @@ const fetchBridgeStudent = async (agentId: string, matricula: string) => {
         nombres,
         curp,
         plantel,
-        nivel,
         grado,
         grupo,
         correo,
@@ -122,9 +121,17 @@ export default defineEventHandler(async (event) => {
     }
   }
   const familyContact = resolveFinancialFamilyContact(merged)
+  const academic = resolveFinancialAcademicPlacement({
+    ...merged,
+    basePlantel: merged.basePlantel || merged.plantel || bridge.student?.plantel || agentId,
+    gradoBase: merged.gradoBase ?? merged.grado,
+    cicloBase: merged.cicloBase ?? merged.ciclo,
+  }, merged.ciclo)
 
   return {
     ...merged,
+    nivel: academic.nivel,
+    grado: academic.grado || text(merged.grado),
     padre: familyContact.tutorName || merged.padre,
     tutor: familyContact.tutorName || merged.tutor,
     telefono: familyContact.phone || merged.telefono,

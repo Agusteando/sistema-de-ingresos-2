@@ -2,6 +2,7 @@ import { PLANTELES_LIST } from '../../utils/constants'
 import { normalizeCicloKey, formatCicloLabel } from '../../shared/utils/ciclo'
 import { resolveProjectedAmount } from './monto-final'
 import { resolvePaymentConceptSnapshot } from './payment-concept'
+import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import {
   checkBridgeAgentAvailability,
   getDbTransport,
@@ -156,7 +157,7 @@ const findStudentInAgent = async (agentId: string, matricula: string) => {
   try {
     return await runWithBridgeAgentId(agentId, async () => {
       const rows = await runRawSqlStatement<any[]>(`
-        SELECT matricula, nombreCompleto, nivel, grado, grupo, plantel, ciclo, estatus
+        SELECT matricula, nombreCompleto, grado, grupo, plantel, ciclo, estatus
         FROM base
         WHERE UPPER(TRIM(matricula)) = ?
         LIMIT 1
@@ -304,7 +305,7 @@ const uniqueServices = (services: any[]) => {
 
 const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matricula: string, ciclo: string, source: any }) => {
   const [student] = await query<any[]>(`
-    SELECT matricula, nombreCompleto, nivel, grado, grupo, plantel, ciclo, estatus
+    SELECT matricula, nombreCompleto, grado, grupo, plantel, ciclo, estatus
     FROM base
     WHERE UPPER(TRIM(matricula)) = ?
     LIMIT 1
@@ -443,6 +444,12 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
   const pendingConciliation = money(conceptos.reduce((sum, item) => sum + Number(item.pendienteConciliacion || 0), 0))
   const paidThisCycle = money(recibos.reduce((sum, row) => sum + Number(row.monto || 0), 0))
   const totalCharges = money(conceptos.reduce((sum, item) => sum + Number(item.monto || 0), 0))
+  const academic = resolveFinancialAcademicPlacement({
+    matricula,
+    basePlantel: student.plantel,
+    gradoBase: student.grado,
+    cicloBase: student.ciclo,
+  }, ciclo)
 
   return {
     ok: true,
@@ -454,8 +461,8 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
     alumno: {
       nombre: text(student.nombreCompleto, 180) || null,
       plantel: text(student.plantel, 40) || null,
-      nivel: text(student.nivel, 80) || null,
-      grado: text(student.grado, 80) || null,
+      nivel: academic.nivel || null,
+      grado: academic.grado || null,
       grupo: text(student.grupo, 80) || null,
       activo: upper(student.estatus, 40) === 'ACTIVO'
     },

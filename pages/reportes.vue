@@ -104,7 +104,7 @@
                 <th>Fecha</th>
                 <th>Matrícula</th>
                 <th>Alumno</th>
-                <th>Ciclo</th>
+                <th>Nivel</th>
                 <th>Grado</th>
                 <th>Mes</th>
                 <th>Concepto</th>
@@ -129,7 +129,7 @@
                 <td>{{ formatDate(row.fecha) }}</td>
                 <td class="font-mono text-gray-600">{{ row.matricula }}</td>
                 <td class="font-semibold text-gray-800">{{ row.nombreCompleto }}</td>
-                <td class="font-mono text-gray-600">{{ row.ciclo || '—' }}</td>
+                <td>{{ row.nivel || '—' }}</td>
                 <td>{{ row.grado || '—' }}</td>
                 <td>{{ row.mesReal || row.mes }}</td>
                 <td class="font-medium text-gray-700">{{ row.conceptoNombre || row.concepto }}</td>
@@ -310,7 +310,7 @@
       :plantel="conceptUserSelectionContext.plantel || 'Todos'"
       :period-label="conceptUserPeriodLabel"
       :loading="loadingConceptReport"
-      description="Usuarios incluidos en el reporte. Se consideran pagos de todos los ciclos y estatus."
+      description="Usuarios incluidos en el reporte. Se consideran todos los movimientos y estatus del periodo seleccionado."
       confirm-label="Generar reporte"
       confirm-icon="filter"
       @cancel="closeConceptUserSelector"
@@ -399,7 +399,6 @@ const emptyConceptReport = () => ({
     alumnos: 0,
     cancelados: 0,
     depuraciones: 0,
-    ciclos: [],
     formasPago: [],
     planteles: [],
     conceptos: [],
@@ -452,9 +451,9 @@ const selectedConceptName = computed(() => {
 })
 const conceptUserPeriodLabel = computed(() => {
   const { inicio, fin } = conceptUserSelectionContext.value
-  if (!inicio && !fin) return 'Todos los movimientos · todos los ciclos'
-  if (inicio && fin && inicio === fin) return `${formatFilterDate(inicio)} · todos los ciclos`
-  return `${inicio ? formatFilterDate(inicio) : 'Inicio'} al ${fin ? formatFilterDate(fin) : 'Fin'} · todos los ciclos`
+  if (!inicio && !fin) return 'Todos los movimientos'
+  if (inicio && fin && inicio === fin) return formatFilterDate(inicio)
+  return `${inicio ? formatFilterDate(inicio) : 'Inicio'} al ${fin ? formatFilterDate(fin) : 'Fin'}`
 })
 const totalCorte = computed(() => datosCorte.value.reduce((sum, row) => sum + Number(row.total), 0))
 const totalRegistradoCorte = computed(() => datosCorte.value.reduce((sum, row) => sum + Number(row.montoRegistrado || 0), 0))
@@ -549,6 +548,7 @@ const loadConceptos = async () => {
       })
     })
     conceptos.value = Array.from(merged.values())
+      .map(({ ciclo: _ciclo, ciclos: _ciclos, ...concept }) => concept)
       .sort((a, b) => String(a.concepto || '').localeCompare(String(b.concepto || ''), 'es', { sensitivity: 'base' }))
   } catch (e) {
     show('No se pudieron cargar los conceptos', 'danger')
@@ -632,7 +632,7 @@ const executeConceptExcelDownload = async (selectedUserKeys = []) => {
   const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
   const filename = encodedName
     ? decodeURIComponent(encodedName)
-    : (plainName || `Reporte_conceptos_${safeFileName(selectedConceptName.value)}_todos_los_ciclos.xlsx`)
+    : (plainName || `Reporte_conceptos_${safeFileName(selectedConceptName.value)}.xlsx`)
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url

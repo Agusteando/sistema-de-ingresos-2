@@ -104,7 +104,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     formatDateTime(row.fecha),
     formatDateTime(row.fechaPago),
     row.matricula,
-    row.ciclo || '',
+    row.nivel || '',
+    row.grado || '',
     Number(row.documento || 0),
     row.mesReal || row.mes,
     row.nombreCompleto,
@@ -130,7 +131,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       `Plantel: ${result.filtros.plantel}`,
       `Periodo por fecha efectiva de pago: ${periodLabel} | Generado por: ${result.usuario.nombre}`,
       'Fechas resaltadas: la fecha de registro difiere de la fecha efectiva del pago.',
-      'Ciclos incluidos: todos',
       `Usuarios incluidos: ${selectedUsers.map(option => option.label).join(', ') || 'Sin movimientos'}`
     ],
     headers: [
@@ -138,7 +138,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       'Fecha de registro',
       'Fecha efectiva del pago',
       'Matrícula',
-      'Ciclo',
+      'Nivel',
+      'Grado',
       'Documento',
       'Mes',
       'Alumno',
@@ -151,9 +152,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       'Importe al corte (MXN)'
     ],
     rows: excelRows,
-    numericColumns: [0, 5],
+    numericColumns: [0, 6],
     highlightedCells,
-    currencyColumns: [13, 14],
+    currencyColumns: [14, 15],
     totals: [
       ...result.totales.map(total => ({ label: `${total.formaDePago} aplicado`, value: total.total })),
       { label: 'Importe registrado', value: result.totalRegistrado },
