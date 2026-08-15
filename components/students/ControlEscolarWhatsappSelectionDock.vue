@@ -25,6 +25,10 @@
             <LucideListChecks :size="16" />
             <span>{{ pageSelected ? 'Quitar página' : 'Página' }}</span>
           </button>
+          <button type="button" class="dock-action email" @click="$emit('open-email')">
+            <LucideMail :size="17" />
+            <span>Email</span>
+          </button>
           <button type="button" class="dock-action whatsapp" @click="$emit('open-whatsapp')">
             <LucideMessageCircle :size="17" />
             <span>WhatsApp</span>
@@ -41,7 +45,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { LucideFilter, LucideListChecks, LucideMessageCircle, LucideX } from 'lucide-vue-next'
+import { LucideFilter, LucideListChecks, LucideMail, LucideMessageCircle, LucideX } from 'lucide-vue-next'
 
 const props = defineProps({
   selectedCount: { type: Number, default: 0 },
@@ -54,12 +58,12 @@ const props = defineProps({
 const filterActionTitle = computed(() => {
   if (props.filterSelected) return `Quitar ${props.filterTargetCount} alumnos filtrados de la selección`
   if (props.filteredCount > props.filterTargetCount) {
-    return `Seleccionar ${props.filterTargetCount} de ${props.filteredCount} alumnos filtrados (máximo por envío)`
+    return `Seleccionar ${props.filterTargetCount} de ${props.filteredCount} alumnos filtrados (máximo por selección)`
   }
   return `Seleccionar los ${props.filterTargetCount} alumnos filtrados`
 })
 
-defineEmits(['toggle-filter', 'toggle-page', 'open-whatsapp', 'clear'])
+defineEmits(['toggle-filter', 'toggle-page', 'open-email', 'open-whatsapp', 'clear'])
 </script>
 
 <style scoped>
@@ -97,6 +101,14 @@ defineEmits(['toggle-filter', 'toggle-page', 'open-whatsapp', 'clear'])
   font-size: 10px;
 }
 
+
+.ce-whatsapp-selection-dock .dock-action.email {
+  min-width: 112px;
+  border-color: rgba(71, 122, 169, .24);
+  background: linear-gradient(180deg, #f4f8fc, #edf4fa);
+  color: #3d70a0;
+}
+
 .ce-whatsapp-selection-dock .dock-action.whatsapp {
   min-width: 126px;
   border-color: rgba(37, 165, 93, .26);
@@ -130,17 +142,17 @@ defineEmits(['toggle-filter', 'toggle-page', 'open-whatsapp', 'clear'])
 
   .ce-whatsapp-selection-dock .dock-action,
   .ce-whatsapp-selection-dock .ce-filter-action,
-  .ce-whatsapp-selection-dock .dock-action.whatsapp,
   .ce-whatsapp-selection-dock .dock-action.ghost {
     min-width: 40px;
     width: 40px;
     padding: 0;
   }
 
+  .ce-whatsapp-selection-dock .dock-action.email,
   .ce-whatsapp-selection-dock .dock-action.whatsapp {
     width: auto;
-    min-width: 110px;
-    padding: 0 13px;
+    min-width: 92px;
+    padding: 0 11px;
   }
 }
 </style>

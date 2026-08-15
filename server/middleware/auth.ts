@@ -70,6 +70,7 @@ export default defineEventHandler(async (event) => {
     url.pathname === '/api/students/bulk-ingreso-cycle' ||
     /^\/api\/students\/[^/]+\/ingreso-cycle$/.test(url.pathname)
   const isStudentWhatsappEndpoint = url.pathname.startsWith('/api/students/whatsapp/')
+  const isStudentEmailEndpoint = url.pathname.startsWith('/api/students/email/')
 
 
   if (isPlantelDashboardEndpoint) {
@@ -111,7 +112,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'No tiene los permisos necesarios.' })
   }
 
-  if (!user.hasFinancialAccess && !isControlEscolarAcademicMutation && !(isStudentWhatsappEndpoint && user.hasControlEscolarRole)) {
+  if (
+    !user.hasFinancialAccess &&
+    !isControlEscolarAcademicMutation &&
+    !(isStudentWhatsappEndpoint && user.hasControlEscolarRole) &&
+    !(isStudentEmailEndpoint && user.hasControlEscolarRole)
+  ) {
     if (isNoAdeudoEndpoint) {
       return noAdeudoMiddlewareDiagnostic(event, {
         title: 'No tiene permisos para generar cartas de no adeudo.',
@@ -131,7 +137,7 @@ export default defineEventHandler(async (event) => {
     event.context.dbBridgeAgentId = bridgeAgentId
     event.context.auroraStage = 'bridge_context'
     enterBridgeAgentId(bridgeAgentId)
-  } else if (getDbTransport() === 'bridge' && !isStudentWhatsappEndpoint) {
+  } else if (getDbTransport() === 'bridge' && !isStudentWhatsappEndpoint && !isStudentEmailEndpoint) {
     if (isNoAdeudoEndpoint) {
       return noAdeudoMiddlewareDiagnostic(event, {
         title: 'No se detectó plantel/agente de datos para preparar la carta.',

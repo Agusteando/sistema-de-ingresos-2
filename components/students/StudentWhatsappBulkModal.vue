@@ -22,29 +22,16 @@
           <span class="wa-bulk-spinner"><LucideLoader2 :size="26" /></span>
         </div>
 
-        <template v-else-if="result">
-          <main class="wa-bulk-result" :class="{ partial: result.partial }">
-            <span class="wa-bulk-result__icon">
-              <LucideCircleCheck v-if="!result.failedChats" :size="34" />
-              <LucideTriangleAlert v-else :size="34" />
-            </span>
-            <strong>{{ result.sentChats }} {{ result.sentChats === 1 ? 'chat enviado' : 'chats enviados' }}</strong>
-            <div class="wa-bulk-result__metrics">
-              <span v-if="result.skipped"><LucidePhoneOff :size="15" /> {{ result.skipped }} omitidos</span>
-              <span v-if="result.deduplicated"><LucideUsers :size="15" /> {{ result.deduplicated }} agrupados</span>
-              <span v-if="result.failedChats"><LucideCircleX :size="15" /> {{ result.failedChats }} fallidos</span>
-            </div>
-
-            <div v-if="result.failures?.length" class="wa-bulk-failures">
-              <article v-for="(failure, index) in result.failures" :key="`wa-failure-${index}`">
-                <span>{{ failure.names?.join(' · ') || failure.matriculas?.join(' · ') }}</span>
-                <small>{{ failure.message }}</small>
-              </article>
-            </div>
-          </main>
-          <footer class="wa-bulk-footer result-footer">
-            <button class="wa-bulk-primary" type="button" @click="closeAfterSend">Listo</button>
-          </footer>
+        <template v-else-if="hasStarted">
+          <StudentBulkDeliveryProgress
+            :items="deliveryItems"
+            :running="sending"
+            :skipped="Number(summary.missingPhone || 0) + Number(summary.notFound || 0)"
+            channel-label="WhatsApp"
+            @retry-failed="retryFailed"
+            @continue-pending="continuePending"
+            @done="closeAfterSend"
+          />
         </template>
 
         <template v-else>
@@ -180,8 +167,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { renderSVG } from 'uqr'
 import {
-  LucideCircleCheck,
-  LucideCircleX,
   LucideGlobe2,
   LucideImagePlus,
   LucideLoader2,
@@ -190,10 +175,10 @@ import {
   LucideQrCode,
   LucideRefreshCw,
   LucideSend,
-  LucideTriangleAlert,
   LucideUsers,
   LucideX
 } from 'lucide-vue-next'
+import StudentBulkDeliveryProgress from './StudentBulkDeliveryProgress.vue'
 
 const props = defineProps({
   selectedStudents: { type: Array, default: () => [] },
@@ -214,8 +199,9 @@ const filePicker = ref(null)
 const qrSvg = ref('')
 const qrImageSrc = ref('')
 const errorMessage = ref('')
-const result = ref(null)
 const recipients = ref([])
+const recipientGroups = ref([])
+const deliveryItems = ref([])
 const summary = ref({ selected: 0, reachableStudents: 0, chats: 0, missingPhone: 0, notFound: 0, deduplicated: 0 })
 const session = ref({ clientId: '', displayName: '', status: 'disconnected', ready: false })
 let statusTimer = null
@@ -233,6 +219,7 @@ const selectedContactStudents = computed(() => props.selectedStudents.map(studen
 })).filter(student => student.matricula))
 const usesSelectionContacts = computed(() => String(props.contactSource || '').toLowerCase() === 'selection')
 const readyRecipients = computed(() => recipients.value.filter(recipient => recipient.status === 'ready'))
+const hasStarted = computed(() => deliveryItems.value.length > 0)
 const avatarRecipients = computed(() => readyRecipients.value.slice(0, 4))
 const recipientPreviewName = computed(() => {
   const first = readyRecipients.value[0]?.nombreCompleto
@@ -292,6 +279,7 @@ const loadPreview = async () => {
       }
     })
     recipients.value = Array.isArray(payload?.recipients) ? payload.recipients : []
+    recipientGroups.value = Array.isArray(payload?.groups) ? payload.groups : []
     summary.value = { ...summary.value, ...(payload?.summary || {}) }
     session.value = { ...session.value, ...(payload?.session || {}) }
     if (session.value.ready) stopStatusPolling()
@@ -312,7 +300,6 @@ const selectTransport = async (mode) => {
   if (transportMode.value === nextMode) return
   transportMode.value = nextMode
   errorMessage.value = ''
-  result.value = null
 
   if (nextMode === 'public') {
     stopStatusPolling()
@@ -431,35 +418,108 @@ const handleDrop = (event) => {
   setImage(event.dataTransfer?.files?.[0])
 }
 
-const sendBulk = async () => {
-  if (!canSend.value) return
+const studentSubsetForMatriculas = (matriculas = []) => {
+  const wanted = new Set(matriculas.map(value => String(value || '').trim().toUpperCase()).filter(Boolean))
+  return selectedContactStudents.value.filter(student => wanted.has(String(student.matricula || '').trim().toUpperCase()))
+}
+
+const initializeDeliveryItems = () => {
+  if (deliveryItems.value.length) return
+  deliveryItems.value = recipientGroups.value.map((group, index) => ({
+    key: `${group.phoneMasked || 'chat'}-${index}-${(group.matriculas || []).join('-')}`,
+    label: Array.isArray(group.names) && group.names.length ? group.names.join(' · ') : (group.matriculas || []).join(' · '),
+    detail: group.phoneMasked || 'WhatsApp',
+    matriculas: Array.isArray(group.matriculas) ? [...group.matriculas] : [],
+    status: 'pending',
+    error: '',
+  }))
+}
+
+const deliveryResult = () => {
+  const sentItems = deliveryItems.value.filter(item => item.status === 'sent')
+  const failedItems = deliveryItems.value.filter(item => item.status === 'failed')
+  const pendingItems = deliveryItems.value.filter(item => item.status === 'pending' || item.status === 'sending')
+  const flattenMatriculas = items => Array.from(new Set(items.flatMap(item => item.matriculas || []).map(value => String(value || '').trim()).filter(Boolean)))
+  return {
+    success: deliveryItems.value.length > 0 && failedItems.length === 0 && pendingItems.length === 0,
+    partial: sentItems.length > 0 && failedItems.length > 0,
+    sentChats: sentItems.length,
+    failedChats: failedItems.length,
+    pendingChats: pendingItems.length,
+    failedMatriculas: flattenMatriculas(failedItems),
+    pendingMatriculas: flattenMatriculas(pendingItems),
+    sentMatriculas: flattenMatriculas(sentItems),
+    failures: failedItems.map(item => ({ matriculas: item.matriculas, names: [item.label], message: item.error || 'No enviado' })),
+    skipped: Number(summary.value.missingPhone || 0) + Number(summary.value.notFound || 0),
+    deduplicated: Number(summary.value.deduplicated || 0),
+    summary: summary.value,
+  }
+}
+
+const runDelivery = async (statuses) => {
+  initializeDeliveryItems()
+  if (!deliveryItems.value.length || sending.value) return
   sending.value = true
   errorMessage.value = ''
-  try {
-    const form = new FormData()
-    form.append('matriculas', JSON.stringify(selectedMatriculas.value))
-    form.append('contactSource', usesSelectionContacts.value ? 'selection' : 'lookup')
-    if (usesSelectionContacts.value) form.append('students', JSON.stringify(selectedContactStudents.value))
-    form.append('transport', transportMode.value)
-    if (message.value.trim()) form.append('message', message.value.trim())
-    if (imageFile.value) form.append('image', imageFile.value, imageFile.value.name)
-    form.append('requestId', typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
 
-    result.value = await $fetch('/api/students/whatsapp/bulk', {
-      method: 'POST',
-      body: form
-    })
-    emit('sent', result.value)
-  } catch (error) {
-    errorMessage.value = error?.data?.statusMessage
-      || error?.data?.message
-      || error?.data?.error
-      || error?.statusMessage
-      || error?.message
-      || 'No se pudo completar el envío.'
+  try {
+    for (const item of deliveryItems.value) {
+      if (!statuses.includes(item.status)) continue
+      item.status = 'sending'
+      item.error = ''
+
+      try {
+        const form = new FormData()
+        form.append('matriculas', JSON.stringify(item.matriculas || []))
+        form.append('contactSource', usesSelectionContacts.value ? 'selection' : 'lookup')
+        if (usesSelectionContacts.value) {
+          form.append('students', JSON.stringify(studentSubsetForMatriculas(item.matriculas)))
+        }
+        form.append('transport', transportMode.value)
+        if (message.value.trim()) form.append('message', message.value.trim())
+        if (imageFile.value) form.append('image', imageFile.value, imageFile.value.name)
+        form.append('requestId', typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
+
+        const response = await $fetch('/api/students/whatsapp/bulk', {
+          method: 'POST',
+          body: form
+        })
+
+        const sent = Number(response?.sentChats || 0)
+        const failed = Number(response?.failedChats || 0)
+        if (sent > 0 && failed === 0) {
+          item.status = 'sent'
+        } else {
+          item.status = 'failed'
+          item.error = response?.failures?.[0]?.message || 'WhatsApp no confirmó el envío.'
+        }
+      } catch (error) {
+        item.status = 'failed'
+        item.error = error?.data?.statusMessage
+          || error?.data?.message
+          || error?.data?.error
+          || error?.statusMessage
+          || error?.message
+          || 'No se pudo enviar este chat.'
+      }
+    }
   } finally {
     sending.value = false
+    emit('sent', deliveryResult())
   }
+}
+
+const sendBulk = async () => {
+  if (!canSend.value) return
+  await runDelivery(['pending'])
+}
+
+const retryFailed = async () => {
+  await runDelivery(['failed'])
+}
+
+const continuePending = async () => {
+  await runDelivery(['pending'])
 }
 
 const closeModal = () => {

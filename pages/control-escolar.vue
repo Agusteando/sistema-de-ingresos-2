@@ -203,42 +203,13 @@
                 </div>
                 <div class="ce-list-header-actions">
                   <button
-                    type="button"
-                    :class="[
-                      'ce-bulk-select-button ce-whatsapp-select-button',
-                      { active: controlBulkSelectionMode },
-                    ]"
-                    :aria-pressed="controlBulkSelectionMode"
-                    :aria-label="
-                      controlBulkSelectionMode
-                        ? 'Cancelar selección de WhatsApp'
-                        : 'Seleccionar alumnos para WhatsApp'
-                    "
-                    :title="
-                      controlBulkSelectionMode
-                        ? 'Cancelar selección de WhatsApp'
-                        : 'Seleccionar alumnos para WhatsApp'
-                    "
-                    @click="toggleControlBulkSelectionMode"
-                  >
-                    <LucideX v-if="controlBulkSelectionMode" :size="15" />
-                    <LucideMessageCircle v-else :size="15" />
-                    <span>{{ controlBulkSelectionMode ? 'Cancelar' : 'WhatsApp' }}</span>
-                    <b v-if="controlBulkSelectedCount">{{ controlBulkSelectedCount }}</b>
-                  </button>
-                  <button
-                    v-if="controlBulkSelectionMode && controlFilteredBulkTargetCount"
+                    v-if="controlFilteredBulkTargetCount"
                     type="button"
                     :class="[
                       'ce-bulk-select-button ce-bulk-filter-button',
                       { active: controlCurrentFilterFullySelected },
                     ]"
                     :aria-pressed="controlCurrentFilterFullySelected"
-                    :aria-label="
-                      controlCurrentFilterFullySelected
-                        ? 'Quitar alumnos que coinciden con los filtros actuales'
-                        : 'Seleccionar todos los alumnos que coinciden con los filtros actuales'
-                    "
                     :title="controlBulkFilterActionTitle"
                     @click="toggleControlFilteredSelection"
                   >
@@ -247,30 +218,42 @@
                     <b>{{ controlFilteredBulkTargetCount }}</b>
                   </button>
                   <button
-                    v-if="controlBulkSelectionMode && students.length"
+                    v-if="students.length"
                     type="button"
                     :class="[
                       'ce-bulk-select-button ce-bulk-page-button',
                       { active: controlCurrentPageFullySelected },
                     ]"
                     :aria-pressed="controlCurrentPageFullySelected"
-                    :aria-label="
-                      controlCurrentPageFullySelected
-                        ? 'Quitar alumnos de la página actual de la selección'
-                        : 'Seleccionar alumnos de la página actual'
-                    "
-                    :title="
-                      controlCurrentPageFullySelected
-                        ? 'Quitar página actual de la selección'
-                        : 'Seleccionar página actual'
-                    "
+                    :title="controlCurrentPageFullySelected ? 'Quitar página actual de la selección' : 'Seleccionar página actual'"
                     @click="toggleControlCurrentPageSelection"
                   >
                     <LucideListChecks :size="15" />
                     <span>{{ controlCurrentPageFullySelected ? 'Quitar página' : 'Página' }}</span>
                   </button>
                   <button
-                    v-if="!controlBulkSelectionMode"
+                    type="button"
+                    class="ce-bulk-select-button ce-email-select-button"
+                    :disabled="!controlBulkSelectedCount"
+                    title="Enviar correo a los alumnos seleccionados"
+                    @click="openControlEmailBulk"
+                  >
+                    <LucideMail :size="15" />
+                    <span>Email</span>
+                    <b v-if="controlBulkSelectedCount">{{ controlBulkSelectedCount }}</b>
+                  </button>
+                  <button
+                    type="button"
+                    class="ce-bulk-select-button ce-whatsapp-select-button"
+                    :disabled="!controlBulkSelectedCount"
+                    title="Enviar WhatsApp a los alumnos seleccionados"
+                    @click="openControlWhatsappBulk"
+                  >
+                    <LucideMessageCircle :size="15" />
+                    <span>WhatsApp</span>
+                    <b v-if="controlBulkSelectedCount">{{ controlBulkSelectedCount }}</b>
+                  </button>
+                  <button
                     type="button"
                     class="ce-excel-export-button"
                     :disabled="!selectedAgentId || studentsLoading || !pagination.total"
@@ -382,13 +365,12 @@
                         selected:
                           selectedStudent?.matricula === student.matricula,
                         'multi-selected': isControlBulkStudentSelected(student),
-                        'selection-mode': controlBulkSelectionMode,
+                        'selection-mode': controlBulkSelectedCount > 0,
                         'missing-overlay': !student.overlayExists,
                       },
                       controlStudentMutationClass(student),
                     ]"
                     :style="studentPresentationStyle(student)"
-                    :aria-pressed="controlBulkSelectionMode ? isControlBulkStudentSelected(student) : undefined"
                     @click="handleControlStudentRowClick(student)"
                   >
                     <UiGroupIcon
@@ -403,22 +385,15 @@
                       class="student-identity ce-student-identity has-group-icon"
                     >
                       <span
-                        :class="[
-                          'ce-row-check',
-                          {
-                            active: controlBulkSelectionMode
-                              ? isControlBulkStudentSelected(student)
-                              : selectedStudent?.matricula === student.matricula,
-                            'is-bulk-selector': controlBulkSelectionMode,
-                          },
-                        ]"
-                        aria-hidden="true"
-                        >{{
-                          controlBulkSelectionMode
-                            ? (isControlBulkStudentSelected(student) ? "✓" : "")
-                            : (selectedStudent?.matricula === student.matricula ? "✓" : "")
-                        }}</span
-                      >
+                        :class="['ce-row-check', 'is-bulk-selector', { active: isControlBulkStudentSelected(student) }]"
+                        role="checkbox"
+                        tabindex="0"
+                        :aria-checked="isControlBulkStudentSelected(student)"
+                        :aria-label="isControlBulkStudentSelected(student) ? `Quitar ${student.fullName || student.matricula} de la selección` : `Agregar ${student.fullName || student.matricula} a la selección`"
+                        @click.stop="toggleControlBulkStudent(student)"
+                        @keydown.enter.prevent.stop="toggleControlBulkStudent(student)"
+                        @keydown.space.prevent.stop="toggleControlBulkStudent(student)"
+                      >{{ isControlBulkStudentSelected(student) ? '✓' : '' }}</span>
                       <StudentGradePhotoCard
                         class="student-row-grade-card"
                         :student="student"
@@ -1767,6 +1742,7 @@
       :page-selected="controlCurrentPageFullySelected"
       @toggle-filter="toggleControlFilteredSelection"
       @toggle-page="toggleControlCurrentPageSelection"
+      @open-email="openControlEmailBulk"
       @open-whatsapp="openControlWhatsappBulk"
       @clear="clearControlBulkSelection"
     />
@@ -1777,6 +1753,13 @@
       contact-source="selection"
       @close="closeControlWhatsappBulk"
       @sent="handleControlWhatsappBulkSent"
+    />
+
+    <StudentEmailBulkModal
+      v-if="showControlEmailBulkModal && controlBulkSelectedCount"
+      :selected-students="controlBulkSelectedStudents"
+      @close="closeControlEmailBulk"
+      @sent="handleControlEmailBulkSent"
     />
 
     <IngresoCycleModal
@@ -1979,6 +1962,7 @@ import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.v
 import StudentsKpiValue from "~/components/students/StudentsKpiValue.vue";
 import ControlEscolarWhatsappSelectionDock from "~/components/students/ControlEscolarWhatsappSelectionDock.vue";
 import StudentWhatsappBulkModal from "~/components/students/StudentWhatsappBulkModal.vue";
+import StudentEmailBulkModal from "~/components/students/StudentEmailBulkModal.vue";
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
 import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
@@ -2099,10 +2083,13 @@ const saveError = ref("");
 const students = ref([]);
 const controlStudentsIndex = ref([]);
 const selectedStudent = ref(null);
-const controlBulkSelectionMode = ref(false);
 const controlBulkSelection = reactive(new Map());
 const showControlWhatsappBulkModal = ref(false);
 const controlWhatsappSent = ref(false);
+const controlWhatsappFailedMatriculas = ref([]);
+const showControlEmailBulkModal = ref(false);
+const controlEmailSent = ref(false);
+const controlEmailFailedMatriculas = ref([]);
 const selectedHeaderServices = ref({ matricula: "", servicios: [], raw: "" });
 let selectedHeaderServicesRequestId = 0;
 const kpis = ref(null);
@@ -5669,7 +5656,7 @@ const controlBulkStudentKey = (studentOrMatricula) =>
       : studentOrMatricula,
   );
 
-const CONTROL_WHATSAPP_BULK_LIMIT = 250;
+const CONTROL_BULK_SELECTION_LIMIT = 250;
 const controlBulkSelectedStudents = computed(() =>
   Array.from(controlBulkSelection.values()),
 );
@@ -5679,7 +5666,7 @@ const controlFilteredStudentCount = computed(
   () => controlFilteredStudentsForBulk.value.length,
 );
 const controlFilteredBulkTarget = computed(() =>
-  controlFilteredStudentsForBulk.value.slice(0, CONTROL_WHATSAPP_BULK_LIMIT),
+  controlFilteredStudentsForBulk.value.slice(0, CONTROL_BULK_SELECTION_LIMIT),
 );
 const controlFilteredBulkTargetCount = computed(
   () => controlFilteredBulkTarget.value.length,
@@ -5703,8 +5690,8 @@ const controlBulkFilterActionTitle = computed(() => {
   if (controlCurrentFilterFullySelected.value) {
     return `Quitar ${controlFilteredBulkTargetCount.value} alumnos filtrados de la selección`;
   }
-  if (controlFilteredStudentCount.value > CONTROL_WHATSAPP_BULK_LIMIT) {
-    return `Seleccionar los primeros ${CONTROL_WHATSAPP_BULK_LIMIT} de ${controlFilteredStudentCount.value} alumnos filtrados`;
+  if (controlFilteredStudentCount.value > CONTROL_BULK_SELECTION_LIMIT) {
+    return `Seleccionar los primeros ${CONTROL_BULK_SELECTION_LIMIT} de ${controlFilteredStudentCount.value} alumnos filtrados`;
   }
   return `Seleccionar los ${controlFilteredBulkTargetCount.value} alumnos que coinciden con los filtros actuales`;
 });
@@ -5716,8 +5703,8 @@ const setControlBulkStudentSelected = (student, selected) => {
     controlBulkSelection.delete(key);
     return;
   }
-  if (!controlBulkSelection.has(key) && controlBulkSelection.size >= CONTROL_WHATSAPP_BULK_LIMIT) {
-    show(`Máximo ${CONTROL_WHATSAPP_BULK_LIMIT} alumnos por envío.`);
+  if (!controlBulkSelection.has(key) && controlBulkSelection.size >= CONTROL_BULK_SELECTION_LIMIT) {
+    show(`Máximo ${CONTROL_BULK_SELECTION_LIMIT} alumnos por selección.`);
     return;
   }
   controlBulkSelection.set(key, student);
@@ -5729,32 +5716,42 @@ const toggleControlBulkStudent = (student) => {
 
 const clearControlBulkSelection = () => {
   controlBulkSelection.clear();
-  controlBulkSelectionMode.value = false;
   showControlWhatsappBulkModal.value = false;
+  showControlEmailBulkModal.value = false;
   controlWhatsappSent.value = false;
+  controlEmailSent.value = false;
+  controlWhatsappFailedMatriculas.value = [];
+  controlEmailFailedMatriculas.value = [];
 };
 
-const toggleControlBulkSelectionMode = () => {
-  if (controlBulkSelectionMode.value) {
-    clearControlBulkSelection();
-    return;
+const replaceControlBulkSelectionWithMatriculas = (values = []) => {
+  const wanted = new Set(
+    values.map((value) => normalizeMatriculaKey(value)).filter(Boolean),
+  );
+  if (!wanted.size) return;
+
+  const available = new Map();
+  for (const student of [
+    ...controlStudentsIndex.value,
+    ...students.value,
+    ...Array.from(controlBulkSelection.values()),
+  ]) {
+    const key = controlBulkStudentKey(student);
+    if (key && !available.has(key)) available.set(key, student);
   }
-  selectedStudent.value = null;
-  controlBulkSelectionMode.value = true;
-  nextTick(scheduleWorkspaceScaleUpdate);
+
+  controlBulkSelection.clear();
+  for (const key of wanted) {
+    const student = available.get(key);
+    if (student) controlBulkSelection.set(key, student);
+  }
 };
 
 const handleControlStudentRowClick = (student) => {
-  if (controlBulkSelectionMode.value) {
-    toggleControlBulkStudent(student);
-    return;
-  }
   selectStudent(student);
 };
 
 const toggleControlFilteredSelection = () => {
-  controlBulkSelectionMode.value = true;
-
   if (controlCurrentFilterFullySelected.value) {
     controlBulkSelection.clear();
     return;
@@ -5767,9 +5764,9 @@ const toggleControlFilteredSelection = () => {
     setControlBulkStudentSelected(student, true);
   }
 
-  if (controlFilteredStudentCount.value > CONTROL_WHATSAPP_BULK_LIMIT) {
+  if (controlFilteredStudentCount.value > CONTROL_BULK_SELECTION_LIMIT) {
     show(
-      `Seleccionados ${CONTROL_WHATSAPP_BULK_LIMIT} de ${controlFilteredStudentCount.value} alumnos filtrados. Máximo ${CONTROL_WHATSAPP_BULK_LIMIT} por envío.`,
+      `Seleccionados ${CONTROL_BULK_SELECTION_LIMIT} de ${controlFilteredStudentCount.value} alumnos filtrados.`,
     );
   } else if (controlFilteredBulkTargetCount.value) {
     show(`${controlFilteredBulkTargetCount.value} alumnos filtrados seleccionados.`);
@@ -5777,7 +5774,6 @@ const toggleControlFilteredSelection = () => {
 };
 
 const toggleControlCurrentPageSelection = () => {
-  controlBulkSelectionMode.value = true;
   const shouldSelect = !controlCurrentPageFullySelected.value;
   for (const student of students.value) {
     setControlBulkStudentSelected(student, shouldSelect);
@@ -5787,13 +5783,17 @@ const toggleControlCurrentPageSelection = () => {
 const openControlWhatsappBulk = () => {
   if (!controlBulkSelectedCount.value) return;
   controlWhatsappSent.value = false;
+  controlWhatsappFailedMatriculas.value = [];
   showControlWhatsappBulkModal.value = true;
 };
 
 const handleControlWhatsappBulkSent = (result) => {
-  controlWhatsappSent.value = true;
   const sent = Number(result?.sentChats || 0);
   const failed = Number(result?.failedChats || 0);
+  controlWhatsappSent.value = Boolean(result?.success);
+  controlWhatsappFailedMatriculas.value = Array.isArray(result?.failedMatriculas)
+    ? result.failedMatriculas
+    : [];
   show(failed ? `${sent} chats enviados · ${failed} fallidos.` : `${sent} chats enviados por WhatsApp.`);
 };
 
@@ -5801,6 +5801,40 @@ const closeControlWhatsappBulk = () => {
   showControlWhatsappBulkModal.value = false;
   if (controlWhatsappSent.value) {
     clearControlBulkSelection();
+    return;
+  }
+  if (controlWhatsappFailedMatriculas.value.length) {
+    replaceControlBulkSelectionWithMatriculas(controlWhatsappFailedMatriculas.value);
+    show(`${controlBulkSelectedCount.value} alumnos fallidos quedaron seleccionados para reintentar.`);
+  }
+};
+
+const openControlEmailBulk = () => {
+  if (!controlBulkSelectedCount.value) return;
+  controlEmailSent.value = false;
+  controlEmailFailedMatriculas.value = [];
+  showControlEmailBulkModal.value = true;
+};
+
+const handleControlEmailBulkSent = (result) => {
+  const sent = Number(result?.sentEmails || 0);
+  const failed = Number(result?.failedEmails || 0);
+  controlEmailSent.value = Boolean(result?.success);
+  controlEmailFailedMatriculas.value = Array.isArray(result?.failedMatriculas)
+    ? result.failedMatriculas
+    : [];
+  show(failed ? `${sent} correos enviados · ${failed} fallidos.` : `${sent} correos enviados.`);
+};
+
+const closeControlEmailBulk = () => {
+  showControlEmailBulkModal.value = false;
+  if (controlEmailSent.value) {
+    clearControlBulkSelection();
+    return;
+  }
+  if (controlEmailFailedMatriculas.value.length) {
+    replaceControlBulkSelectionWithMatriculas(controlEmailFailedMatriculas.value);
+    show(`${controlBulkSelectedCount.value} alumnos fallidos quedaron seleccionados para reintentar.`);
   }
 };
 
@@ -6490,7 +6524,7 @@ watch(
   { flush: "post" },
 );
 watch(selectedAgentId, () => {
-  if (controlBulkSelectedCount.value || controlBulkSelectionMode.value) {
+  if (controlBulkSelectedCount.value) {
     clearControlBulkSelection();
   }
   nextTick(scheduleWorkspaceScaleUpdate);
@@ -7724,6 +7758,26 @@ onBeforeUnmount(() => {
   border-color: rgba(37, 165, 93, 0.38);
   background: linear-gradient(180deg, #f1faf4, #e9f7ee);
   color: #17743d;
+}
+
+.control-escolar-screen .ce-email-select-button {
+  border-color: rgba(71, 122, 169, 0.24);
+  background: linear-gradient(180deg, #f5f8fc, #eef4fa);
+  color: #3f73a3;
+  box-shadow: 0 6px 16px rgba(71, 122, 169, 0.06);
+}
+
+.control-escolar-screen .ce-email-select-button:hover:not(:disabled) {
+  border-color: rgba(71, 122, 169, 0.38);
+  background: linear-gradient(180deg, #f1f6fb, #e9f2fa);
+  color: #315f8a;
+}
+
+.control-escolar-screen .ce-bulk-select-button:disabled {
+  opacity: .45;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
 }
 
 .control-escolar-screen .ce-bulk-filter-button {
@@ -15673,14 +15727,14 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-workspace.is-browsing .ce-student-identity,
   .control-escolar-screen .ce-workspace.has-detail .ce-student-identity {
     grid-area: identity;
-    grid-template-columns: var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
+    grid-template-columns: 28px var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
     gap: 9px;
     align-items: center;
     min-width: 0;
   }
 
   .control-escolar-screen .ce-row-check {
-    display: none;
+    display: inline-flex;
   }
 
   .control-escolar-screen .student-row-grade-card {
@@ -16539,7 +16593,7 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-workspace.has-detail .ce-student-identity {
   grid-area: identity;
-  grid-template-columns: var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
+  grid-template-columns: 28px var(--student-list-grade-size) var(--student-list-crest-size) minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   justify-items: start;
@@ -16547,7 +16601,7 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-workspace.has-detail .ce-row-check {
-  display: none;
+  display: inline-flex;
 }
 
 .control-escolar-screen .student-list-panel.is-compact .ce-student-row .student-copy,

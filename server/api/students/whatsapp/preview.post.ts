@@ -20,6 +20,11 @@ export default defineEventHandler(async (event) => {
     return {
       transport,
       recipients: audience.recipients,
+      groups: audience.groups.map((group) => ({
+        matriculas: group.matriculas,
+        names: group.names,
+        phoneMasked: group.phoneMasked,
+      })),
       summary: audience.summary,
       session: {
         clientId: '',
@@ -63,6 +68,11 @@ export default defineEventHandler(async (event) => {
     return {
       transport,
       recipients: audience.recipients,
+      groups: audience.groups.map((group) => ({
+        matriculas: group.matriculas,
+        names: group.names,
+        phoneMasked: group.phoneMasked,
+      })),
       summary: audience.summary,
       session: clientId ? {
         clientId,

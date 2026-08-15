@@ -1,1 +1,1 @@
-Permite seleccionar todos los alumnos filtrados en Control Escolar
+Integra correo masivo con progreso y corrige la selección múltiple en Control Escolar
