@@ -1,1 +1,1 @@
-Protege los diálogos de mensajería y conserva borradores automáticamente
+Permite adjuntar imágenes en los correos masivos de Control Escolar

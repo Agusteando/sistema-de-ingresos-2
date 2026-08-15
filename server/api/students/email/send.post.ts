@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { sendEmailFromUser } from '../../../utils/mailer'
+import { sendEmailFromUser, type MailAttachment } from '../../../utils/mailer'
 import { isCasitaWorkspaceEmail } from '../../../utils/google-workspace-directory'
 import { resolveStudentEmailAudience } from '../../../utils/studentEmail'
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 const escapeHtml = (value: unknown) => String(value ?? '')
   .replace(/&/g, '&amp;')
@@ -11,6 +13,8 @@ const escapeHtml = (value: unknown) => String(value ?? '')
   .replace(/'/g, '&#039;')
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
+const multipartField = (parts: any[], name: string) => parts.find((part) => part.name === name)
+const multipartText = (parts: any[], name: string) => multipartField(parts, name)?.data?.toString('utf8') || ''
 
 const renderHtml = (message: string) => {
   const paragraphs = String(message || '')
@@ -28,9 +32,41 @@ const renderHtml = (message: string) => {
   `
 }
 
+const parseRequest = async (event: any) => {
+  const contentType = String(getRequestHeader(event, 'content-type') || '').toLowerCase()
+  if (!contentType.includes('multipart/form-data')) {
+    return { body: await readBody(event), image: null as any }
+  }
+
+  const parts = await readMultipartFormData(event)
+  if (!parts) throw createError({ statusCode: 400, statusMessage: 'Solicitud inválida.' })
+
+  let matriculas: unknown = []
+  let students: unknown = []
+  try {
+    matriculas = JSON.parse(multipartText(parts, 'matriculas') || '[]')
+    students = JSON.parse(multipartText(parts, 'students') || '[]')
+  } catch {
+    throw createError({ statusCode: 400, statusMessage: 'La selección de alumnos no es válida.' })
+  }
+
+  return {
+    body: {
+      matriculas,
+      students,
+      senderEmail: multipartText(parts, 'senderEmail'),
+      targetEmail: multipartText(parts, 'targetEmail'),
+      subject: multipartText(parts, 'subject'),
+      message: multipartText(parts, 'message'),
+      requestId: multipartText(parts, 'requestId'),
+    },
+    image: multipartField(parts, 'image') || null,
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const user = event.context.user
-  const body = await readBody(event)
+  const { body, image } = await parseRequest(event)
   const senderEmail = normalizeEmail(body?.senderEmail)
   const targetEmail = normalizeEmail(body?.targetEmail)
   const config = useRuntimeConfig()
@@ -48,6 +84,18 @@ export default defineEventHandler(async (event) => {
   if (!message) throw createError({ statusCode: 400, statusMessage: 'Agrega el contenido del correo.' })
   if (message.length > 30000) throw createError({ statusCode: 400, statusMessage: 'El contenido del correo es demasiado largo.' })
 
+  if (image) {
+    if (!String(image.type || '').startsWith('image/')) {
+      throw createError({ statusCode: 400, statusMessage: 'El archivo adjunto debe ser una imagen.' })
+    }
+    if (!image.data?.length) {
+      throw createError({ statusCode: 400, statusMessage: 'La imagen adjunta está vacía.' })
+    }
+    if (Number(image.data.length) > MAX_IMAGE_BYTES) {
+      throw createError({ statusCode: 400, statusMessage: 'La imagen adjunta supera 10 MB.' })
+    }
+  }
+
   const audience = await resolveStudentEmailAudience(body?.matriculas, user, {
     contactSource: 'selection',
     students: body?.students,
@@ -63,13 +111,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'El correo destino ya no pertenece a la selección.' })
   }
 
+  const attachments: MailAttachment[] = image?.data?.length
+    ? [{
+        filename: String(image.filename || 'imagen-adjunta').trim() || 'imagen-adjunta',
+        content: image.data,
+        contentType: String(image.type || 'image/jpeg'),
+      }]
+    : []
+
   const html = renderHtml(message)
   const sent: any[] = []
   const failures: any[] = []
 
   for (const group of targetGroups) {
     try {
-      await sendEmailFromUser(group.email, subject, html, senderEmail, [], message)
+      await sendEmailFromUser(group.email, subject, html, senderEmail, attachments, message)
       sent.push({
         email: group.email,
         matriculas: group.matriculas,
@@ -92,6 +148,9 @@ export default defineEventHandler(async (event) => {
     requestId: String(body?.requestId || randomUUID()),
     sentEmails: sent.length,
     failedEmails: failures.length,
+    attachment: attachments.length
+      ? { filename: attachments[0].filename, contentType: attachments[0].contentType, bytes: Number(image.data.length) }
+      : null,
     sent,
     failures,
     summary: audience.summary,
