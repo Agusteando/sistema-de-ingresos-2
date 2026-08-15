@@ -60,6 +60,7 @@ const parseRequest = async (event: any) => {
       matriculas,
       students,
       senderEmail: multipartText(parts, 'senderEmail'),
+      senderName: multipartText(parts, 'senderName'),
       targetEmail: multipartText(parts, 'targetEmail'),
       subject: multipartText(parts, 'subject'),
       message: multipartText(parts, 'message'),
@@ -74,6 +75,7 @@ export default defineEventHandler(async (event) => {
   const { body, image } = await parseRequest(event)
   const senderEmail = normalizeEmail(body?.senderEmail)
   const targetEmail = normalizeEmail(body?.targetEmail)
+  const senderName = String(body?.senderName || '').replace(/[\r\n]+/g, ' ').trim()
   const config = useRuntimeConfig()
   if (!config.googleServiceAccountEmail || !config.googlePrivateKey) {
     throw createError({ statusCode: 503, statusMessage: 'El service account de Gmail no está configurado.' })
@@ -83,6 +85,9 @@ export default defineEventHandler(async (event) => {
 
   if (!senderEmail || !isCasitaWorkspaceEmail(senderEmail)) {
     throw createError({ statusCode: 400, statusMessage: 'Selecciona un remitente válido de Google Workspace.' })
+  }
+  if (!senderName || senderName.toLowerCase() === senderEmail.toLowerCase()) {
+    throw createError({ statusCode: 400, statusMessage: 'No se pudo resolver el nombre completo del remitente de Workspace.' })
   }
   if (!subject) throw createError({ statusCode: 400, statusMessage: 'Agrega el asunto del correo.' })
   if (subject.length > 180) throw createError({ statusCode: 400, statusMessage: 'El asunto supera 180 caracteres.' })
@@ -133,7 +138,7 @@ export default defineEventHandler(async (event) => {
 
   for (const group of targetGroups) {
     try {
-      await sendEmailFromUser(group.email, subject, html, senderEmail, inlineImages, message)
+      await sendEmailFromUser(group.email, subject, html, senderEmail, inlineImages, message, senderName)
       sent.push({
         email: group.email,
         matriculas: group.matriculas,
@@ -153,6 +158,7 @@ export default defineEventHandler(async (event) => {
     success: sent.length > 0 && failures.length === 0,
     partial: sent.length > 0 && failures.length > 0,
     senderEmail,
+    senderName,
     requestId: String(body?.requestId || randomUUID()),
     sentEmails: sent.length,
     failedEmails: failures.length,

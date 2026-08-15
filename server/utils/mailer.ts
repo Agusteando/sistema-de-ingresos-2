@@ -67,9 +67,16 @@ const normalizeAttachmentContent = (content: MailAttachment['content']) => {
   return Buffer.from(raw, 'utf8').toString('base64')
 }
 
-const baseHeaders = ({ to, sender, subject }: { to: string; sender?: string; subject: string }) => [
+const formatSenderHeader = (sender?: string, senderName?: string) => {
+  const email = sanitizeHeaderValue(sender || '')
+  if (!email) return ''
+  const name = sanitizeHeaderValue(senderName || '')
+  return name ? `${encodeHeader(name)} <${email}>` : email
+}
+
+const baseHeaders = ({ to, sender, senderName, subject }: { to: string; sender?: string; senderName?: string; subject: string }) => [
   `To: ${sanitizeHeaderValue(to)}`,
-  sender ? `From: ${sanitizeHeaderValue(sender)}` : '',
+  sender ? `From: ${formatSenderHeader(sender, senderName)}` : '',
   `Subject: ${encodeHeader(sanitizeHeaderValue(subject))}`,
   'MIME-Version: 1.0'
 ].filter(Boolean)
@@ -122,6 +129,7 @@ const buildBinaryPart = (attachment: MailAttachment) => {
 const buildMessage = ({
   to,
   sender,
+  senderName,
   subject,
   html,
   text,
@@ -129,6 +137,7 @@ const buildMessage = ({
 }: {
   to: string
   sender?: string
+  senderName?: string
   subject: string
   html: string
   text?: string
@@ -170,14 +179,14 @@ const buildMessage = ({
 
   if (!regularAttachments.length) {
     return [
-      ...baseHeaders({ to, sender, subject }),
+      ...baseHeaders({ to, sender, senderName, subject }),
       ...bodyPart,
     ].join('\r\n')
   }
 
   const mixedBoundary = `aurora_mixed_${Date.now()}_${Math.random().toString(16).slice(2)}`
   const parts = [
-    ...baseHeaders({ to, sender, subject }),
+    ...baseHeaders({ to, sender, senderName, subject }),
     `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
     '',
     `--${mixedBoundary}`,
@@ -204,6 +213,7 @@ const sendWithSenderCandidates = async ({
   text,
   attachments,
   senderCandidates,
+  senderName,
 }: {
   to: string
   subject: string
@@ -211,6 +221,7 @@ const sendWithSenderCandidates = async ({
   text?: string
   attachments: MailAttachment[]
   senderCandidates: string[]
+  senderName?: string
 }) => {
   const config = useRuntimeConfig()
   if (!config.googleServiceAccountEmail || !config.googlePrivateKey) return true
@@ -221,7 +232,7 @@ const sendWithSenderCandidates = async ({
     try {
       const auth = buildJwt(sender || undefined)
       const gmail = google.gmail({ version: 'v1', auth })
-      const raw = encodeRawMessage(buildMessage({ to, sender, subject, html, text, attachments }))
+      const raw = encodeRawMessage(buildMessage({ to, sender, senderName, subject, html, text, attachments }))
       await gmail.users.messages.send({ userId: 'me', requestBody: { raw } })
       return true
     } catch (error) {
@@ -248,7 +259,7 @@ export const sendEmail = async (to: string, subject: string, html: string, fromU
  * Sends strictly as the authenticated Workspace user. Unlike sendEmail, this
  * function never falls back to the configured administrator or service account.
  */
-export const sendEmailFromUser = async (to: string, subject: string, html: string, fromUserEmail: string, attachments: MailAttachment[] = [], text?: string) => {
+export const sendEmailFromUser = async (to: string, subject: string, html: string, fromUserEmail: string, attachments: MailAttachment[] = [], text?: string, fromUserName?: string) => {
   const sender = String(fromUserEmail || '').trim()
   if (!sender) throw new Error('No se proporcionó el correo del usuario remitente.')
 
@@ -259,5 +270,6 @@ export const sendEmailFromUser = async (to: string, subject: string, html: strin
     text,
     attachments,
     senderCandidates: [sender],
+    senderName: String(fromUserName || '').trim() || undefined,
   })
 }

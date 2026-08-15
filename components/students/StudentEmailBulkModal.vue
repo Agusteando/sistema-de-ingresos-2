@@ -63,18 +63,12 @@
                 <span>Enviar como</span>
                 <div class="email-sender-input">
                   <LucideUserRound :size="16" />
-                  <input
-                    v-model.trim="senderEmail"
-                    list="control-email-senders"
-                    type="email"
-                    autocomplete="off"
-                    placeholder="usuario@casitaiedis.edu.mx"
-                  />
+                  <select v-model="senderEmail" aria-label="Cuenta de Workspace a impersonar">
+                    <option value="" disabled>Selecciona un remitente</option>
+                    <option v-for="sender in senders" :key="sender.email" :value="sender.email">{{ sender.name }}</option>
+                  </select>
                 </div>
-                <datalist id="control-email-senders">
-                  <option v-for="sender in senders" :key="sender.email" :value="sender.email">{{ sender.name }}</option>
-                </datalist>
-                <small>El service account enviará impersonando esta cuenta de Workspace.</small>
+                <small>El destinatario verá el nombre completo de esta cuenta de Workspace como remitente.</small>
               </label>
 
               <label class="email-field">
@@ -116,7 +110,7 @@
               <div class="email-preview__bar">
                 <span><LucideMail :size="17" /></span>
                 <div>
-                  <strong>{{ senderEmail || 'Remitente de Workspace' }}</strong>
+                  <strong>{{ senderDisplayName || 'Remitente de Workspace' }}</strong>
                   <small>{{ firstRecipientLabel }}</small>
                 </div>
               </div>
@@ -217,7 +211,9 @@ const selectedContactStudents = computed(() => props.selectedStudents.map((stude
 })).filter((student) => student.matricula))
 
 const hasStarted = computed(() => deliveryItems.value.length > 0)
-const validSender = computed(() => /^[^\s@]+@casitaiedis\.edu\.mx$/i.test(String(senderEmail.value || '').trim()))
+const selectedSender = computed(() => senders.value.find((sender) => String(sender?.email || '').trim().toLowerCase() === String(senderEmail.value || '').trim().toLowerCase()) || null)
+const senderDisplayName = computed(() => String(selectedSender.value?.name || '').trim())
+const validSender = computed(() => /^[^\s@]+@casitaiedis\.edu\.mx$/i.test(String(senderEmail.value || '').trim()) && Boolean(senderDisplayName.value))
 const canSend = computed(() => !sending.value && summary.value.emails > 0 && validSender.value && Boolean(subject.value.trim()) && Boolean(message.value.trim()) && !(draftHadImage.value && !imageFile.value))
 const firstRecipientLabel = computed(() => recipientGroups.value[0]?.email || `${summary.value.emails || 0} destinatarios`)
 const formattedFileSize = computed(() => {
@@ -429,6 +425,7 @@ const runDelivery = async (statuses) => {
         form.append('matriculas', JSON.stringify(item.matriculas || []))
         form.append('students', JSON.stringify(studentSubsetForMatriculas(item.matriculas)))
         form.append('senderEmail', senderEmail.value.trim())
+        form.append('senderName', senderDisplayName.value)
         form.append('targetEmail', item.email)
         form.append('subject', subject.value.trim())
         form.append('message', message.value.trim())
@@ -607,7 +604,8 @@ onBeforeUnmount(() => {
 }
 .email-field > input { height: 41px; padding: 0 12px; font-size: 11.5px; }
 .email-sender-input { height: 41px; display: flex; align-items: center; gap: 8px; padding: 0 11px; color: #6d7b8d; }
-.email-sender-input input { min-width: 0; height: 100%; flex: 1; padding: 0; border: 0; border-radius: 0; font-size: 11.5px; }
+.email-sender-input input, .email-sender-input select { min-width: 0; height: 100%; flex: 1; padding: 0; border: 0; border-radius: 0; background: transparent; color: #2f4055; font-size: 11.5px; outline: 0; }
+.email-sender-input select { cursor: pointer; font-weight: 760; }
 .email-field textarea { min-height: 180px; resize: vertical; padding: 12px; font-size: 11.5px; line-height: 1.5; }
 .email-field input:focus, .email-field textarea:focus, .email-sender-input:focus-within { border-color: #7da3c7; box-shadow: 0 0 0 4px rgba(70, 113, 155, .08); }
 .email-message-field { flex: 1; }

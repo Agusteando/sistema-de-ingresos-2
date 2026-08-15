@@ -1,1 +1,1 @@
-Protege el cierre de los diálogos de mensajería con confirmación
+Muestra el nombre completo del remitente en los correos de Control Escolar
