@@ -1,1 +1,1 @@
-Muestra el nombre completo del remitente en los correos de Control Escolar
+Mejora el selector de remitente con búsqueda y fotos de Workspace

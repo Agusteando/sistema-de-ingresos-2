@@ -15,6 +15,12 @@ type DirectoryUser = {
   suspended?: boolean | null
   archived?: boolean | null
   orgUnitPath?: string | null
+  organizations?: Array<{
+    title?: string | null
+    department?: string | null
+    name?: string | null
+    primary?: boolean | null
+  }> | null
 }
 
 const normalizeEmail = (email: unknown) => String(email || '').trim().toLowerCase()
@@ -68,6 +74,10 @@ const normalizeDirectoryUser = (user: DirectoryUser) => {
   const fullName = normalizeText(user.name?.fullName) || email
   const givenName = normalizeText(user.name?.givenName)
   const familyName = normalizeText(user.name?.familyName)
+  const organizations = Array.isArray(user.organizations) ? user.organizations : []
+  const primaryOrganization = organizations.find((organization) => organization?.primary) || organizations[0] || null
+  const title = normalizeText(primaryOrganization?.title)
+  const department = normalizeText(primaryOrganization?.department || primaryOrganization?.name)
 
   return {
     id: user.id || email,
@@ -79,6 +89,8 @@ const normalizeDirectoryUser = (user: DirectoryUser) => {
     primaryEmail: email,
     domain: WORKSPACE_DOMAIN,
     orgUnitPath: user.orgUnitPath || '',
+    title,
+    department,
     suspended: Boolean(user.suspended),
     archived: Boolean(user.archived),
     available: !user.suspended && !user.archived,
@@ -118,7 +130,7 @@ export const searchWorkspaceDirectoryUsers = async (search: string, maxResults =
       projection: 'full',
       viewType: 'domain_public',
       query,
-      fields: 'users(id,primaryEmail,name,thumbnailPhotoUrl,suspended,archived,orgUnitPath)'
+      fields: 'users(id,primaryEmail,name,thumbnailPhotoUrl,suspended,archived,orgUnitPath,organizations(title,department,name,primary))'
     })
 
     return (response.data.users || [])
@@ -152,7 +164,7 @@ export const getWorkspaceDirectoryUsersByEmails = async (emails: string[]) => {
         userKey: email,
         projection: 'full',
         viewType: 'domain_public',
-        fields: 'id,primaryEmail,name,thumbnailPhotoUrl,suspended,archived,orgUnitPath'
+        fields: 'id,primaryEmail,name,thumbnailPhotoUrl,suspended,archived,orgUnitPath,organizations(title,department,name,primary)'
       })
       users.push(normalizeDirectoryUser(response.data as DirectoryUser))
     } catch (error: any) {

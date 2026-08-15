@@ -1,4 +1,4 @@
-import { searchWorkspaceDirectoryUsers, isCasitaWorkspaceEmail } from '../../../utils/google-workspace-directory'
+import { buildWorkspacePhotoUrl, searchWorkspaceDirectoryUsers, isCasitaWorkspaceEmail } from '../../../utils/google-workspace-directory'
 import { resolveStudentEmailAudience } from '../../../utils/studentEmail'
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase()
@@ -18,12 +18,14 @@ export default defineEventHandler(async (event) => {
       name: String(user?.name || user?.email || '').trim(),
       source: 'session',
       available: true,
+      avatar: buildWorkspacePhotoUrl(normalizeEmail(user?.email), String(user?.name || user?.email || '').trim()),
     },
     {
       email: normalizeEmail(config.adminEmailToImpersonate),
       name: 'Cuenta administrativa',
       source: 'configured-admin',
       available: true,
+      avatar: buildWorkspacePhotoUrl(normalizeEmail(config.adminEmailToImpersonate), 'Cuenta administrativa'),
     },
   ].filter((candidate) => candidate.email && isCasitaWorkspaceEmail(candidate.email))
 
@@ -35,7 +37,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const senderMap = new Map<string, any>()
-  for (const candidate of [...fallbackCandidates, ...directoryUsers]) {
+  for (const candidate of [...directoryUsers, ...fallbackCandidates]) {
     const email = normalizeEmail(candidate?.email || candidate?.primaryEmail)
     if (!email || !isCasitaWorkspaceEmail(email) || senderMap.has(email)) continue
     if (candidate?.available === false || candidate?.suspended || candidate?.archived) continue
@@ -43,6 +45,10 @@ export default defineEventHandler(async (event) => {
       email,
       name: String(candidate?.name || candidate?.displayName || email).trim() || email,
       source: candidate?.source || 'google-workspace-directory',
+      avatar: String(candidate?.avatar || buildWorkspacePhotoUrl(email, candidate?.name || candidate?.displayName || email)),
+      title: String(candidate?.title || '').trim(),
+      department: String(candidate?.department || '').trim(),
+      orgUnitPath: String(candidate?.orgUnitPath || '').trim(),
     })
   }
 
