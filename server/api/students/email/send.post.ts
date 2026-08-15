@@ -16,7 +16,7 @@ const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCas
 const multipartField = (parts: any[], name: string) => parts.find((part) => part.name === name)
 const multipartText = (parts: any[], name: string) => multipartField(parts, name)?.data?.toString('utf8') || ''
 
-const renderHtml = (message: string) => {
+const renderHtml = (message: string, inlineImageCid = '') => {
   const paragraphs = String(message || '')
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
@@ -24,9 +24,14 @@ const renderHtml = (message: string) => {
     .map((paragraph) => `<p style="margin:0 0 14px">${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
     .join('')
 
+  const inlineImage = inlineImageCid
+    ? `<div style="margin:18px 0 0"><img src="cid:${escapeHtml(inlineImageCid)}" alt="Imagen del mensaje" style="display:block;width:100%;max-width:680px;height:auto;border:0;border-radius:10px"></div>`
+    : ''
+
   return `
     <div style="font-family:Arial,sans-serif;color:#17253a;line-height:1.55;max-width:720px;margin:0 auto">
       ${paragraphs || '<p style="margin:0">&nbsp;</p>'}
+      ${inlineImage}
       <p style="margin:22px 0 0;font-size:11px;color:#7a8798">Mensaje enviado desde Control Escolar.</p>
     </div>
   `
@@ -86,13 +91,13 @@ export default defineEventHandler(async (event) => {
 
   if (image) {
     if (!String(image.type || '').startsWith('image/')) {
-      throw createError({ statusCode: 400, statusMessage: 'El archivo adjunto debe ser una imagen.' })
+      throw createError({ statusCode: 400, statusMessage: 'La imagen integrada debe ser un archivo de imagen.' })
     }
     if (!image.data?.length) {
-      throw createError({ statusCode: 400, statusMessage: 'La imagen adjunta está vacía.' })
+      throw createError({ statusCode: 400, statusMessage: 'La imagen integrada está vacía.' })
     }
     if (Number(image.data.length) > MAX_IMAGE_BYTES) {
-      throw createError({ statusCode: 400, statusMessage: 'La imagen adjunta supera 10 MB.' })
+      throw createError({ statusCode: 400, statusMessage: 'La imagen integrada supera 10 MB.' })
     }
   }
 
@@ -111,21 +116,24 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'El correo destino ya no pertenece a la selección.' })
   }
 
-  const attachments: MailAttachment[] = image?.data?.length
+  const inlineImageCid = image?.data?.length ? `control-escolar-${randomUUID()}@aurora` : ''
+  const inlineImages: MailAttachment[] = image?.data?.length
     ? [{
-        filename: String(image.filename || 'imagen-adjunta').trim() || 'imagen-adjunta',
+        filename: String(image.filename || 'imagen-mensaje').trim() || 'imagen-mensaje',
         content: image.data,
         contentType: String(image.type || 'image/jpeg'),
+        disposition: 'inline',
+        contentId: inlineImageCid,
       }]
     : []
 
-  const html = renderHtml(message)
+  const html = renderHtml(message, inlineImageCid)
   const sent: any[] = []
   const failures: any[] = []
 
   for (const group of targetGroups) {
     try {
-      await sendEmailFromUser(group.email, subject, html, senderEmail, attachments, message)
+      await sendEmailFromUser(group.email, subject, html, senderEmail, inlineImages, message)
       sent.push({
         email: group.email,
         matriculas: group.matriculas,
@@ -148,8 +156,8 @@ export default defineEventHandler(async (event) => {
     requestId: String(body?.requestId || randomUUID()),
     sentEmails: sent.length,
     failedEmails: failures.length,
-    attachment: attachments.length
-      ? { filename: attachments[0].filename, contentType: attachments[0].contentType, bytes: Number(image.data.length) }
+    inlineImage: inlineImages.length
+      ? { filename: inlineImages[0].filename, contentType: inlineImages[0].contentType, bytes: Number(image.data.length) }
       : null,
     sent,
     failures,

@@ -4,6 +4,8 @@ export type MailAttachment = {
   filename: string
   content: Buffer | Uint8Array | ArrayBuffer | string
   contentType?: string
+  disposition?: 'attachment' | 'inline'
+  contentId?: string
 }
 
 const buildJwt = (subject?: string) => {
@@ -88,6 +90,35 @@ const buildAlternativePart = ({ html, text, boundary }: { html: string; text: st
   `--${boundary}--`
 ]
 
+const sanitizeContentId = (value: string) => String(value || '').replace(/[<>\r\n]/g, '').trim()
+
+const buildBinaryPart = (attachment: MailAttachment) => {
+  const filename = sanitizeFilename(attachment.filename)
+  const contentType = sanitizeHeaderValue(attachment.contentType || 'application/octet-stream')
+  const contentId = sanitizeContentId(attachment.contentId || '')
+  const inline = attachment.disposition === 'inline' && Boolean(contentId)
+
+  if (inline) {
+    return [
+      `Content-Type: ${contentType}`,
+      'Content-Transfer-Encoding: base64',
+      `Content-ID: <${contentId}>`,
+      `X-Attachment-Id: ${contentId}`,
+      'Content-Disposition: inline',
+      '',
+      chunkBase64(normalizeAttachmentContent(attachment.content)),
+    ]
+  }
+
+  return [
+    `Content-Type: ${contentType}; name="${filename}"`,
+    'Content-Transfer-Encoding: base64',
+    `Content-Disposition: attachment; filename="${filename}"`,
+    '',
+    chunkBase64(normalizeAttachmentContent(attachment.content)),
+  ]
+}
+
 const buildMessage = ({
   to,
   sender,
@@ -105,13 +136,42 @@ const buildMessage = ({
 }) => {
   const safeText = String(text || '').trim() || htmlToText(html)
   const htmlBoundary = `aurora_alt_${Date.now()}_${Math.random().toString(16).slice(2)}`
+  const inlineAttachments = attachments.filter((attachment) => (
+    attachment.disposition === 'inline' && Boolean(sanitizeContentId(attachment.contentId || ''))
+  ))
+  const regularAttachments = attachments.filter((attachment) => !inlineAttachments.includes(attachment))
 
-  if (!attachments.length) {
+  const alternativePart = [
+    `Content-Type: multipart/alternative; boundary="${htmlBoundary}"`,
+    '',
+    ...buildAlternativePart({ html, text: safeText, boundary: htmlBoundary }),
+  ]
+
+  let bodyPart = alternativePart
+  if (inlineAttachments.length) {
+    const relatedBoundary = `aurora_related_${Date.now()}_${Math.random().toString(16).slice(2)}`
+    bodyPart = [
+      `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
+      '',
+      `--${relatedBoundary}`,
+      ...alternativePart,
+      '',
+    ]
+
+    for (const attachment of inlineAttachments) {
+      bodyPart.push(
+        `--${relatedBoundary}`,
+        ...buildBinaryPart(attachment),
+        '',
+      )
+    }
+    bodyPart.push(`--${relatedBoundary}--`)
+  }
+
+  if (!regularAttachments.length) {
     return [
       ...baseHeaders({ to, sender, subject }),
-      `Content-Type: multipart/alternative; boundary="${htmlBoundary}"`,
-      '',
-      ...buildAlternativePart({ html, text: safeText, boundary: htmlBoundary })
+      ...bodyPart,
     ].join('\r\n')
   }
 
@@ -121,25 +181,17 @@ const buildMessage = ({
     `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
     '',
     `--${mixedBoundary}`,
-    `Content-Type: multipart/alternative; boundary="${htmlBoundary}"`,
+    ...bodyPart,
     '',
-    ...buildAlternativePart({ html, text: safeText, boundary: htmlBoundary }),
-    ''
   ]
 
-  attachments.forEach((attachment) => {
-    const filename = sanitizeFilename(attachment.filename)
-    const contentType = sanitizeHeaderValue(attachment.contentType || 'application/octet-stream')
+  for (const attachment of regularAttachments) {
     parts.push(
       `--${mixedBoundary}`,
-      `Content-Type: ${contentType}; name="${filename}"`,
-      'Content-Transfer-Encoding: base64',
-      `Content-Disposition: attachment; filename="${filename}"`,
+      ...buildBinaryPart(attachment),
       '',
-      chunkBase64(normalizeAttachmentContent(attachment.content)),
-      ''
     )
-  })
+  }
 
   parts.push(`--${mixedBoundary}--`)
   return parts.join('\r\n')

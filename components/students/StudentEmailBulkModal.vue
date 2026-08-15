@@ -25,14 +25,14 @@
             <div>
               <LucideImagePlus :size="17" />
               <span>
-                <strong>Este envío tenía una imagen adjunta.</strong>
-                <small>Por seguridad el navegador no conserva archivos. Selecciónala de nuevo antes de reintentar.</small>
+                <strong>Este envío tenía una imagen integrada en el correo.</strong>
+                <small>Por seguridad el navegador no conserva archivos locales. Selecciónala de nuevo para volver a mostrarla dentro del correo.</small>
               </span>
             </div>
-            <button type="button" :disabled="sending" @click="pickImage">Volver a adjuntar</button>
+            <button type="button" :disabled="sending" @click="pickImage">Volver a insertar</button>
           </div>
           <div v-else-if="imageFile" class="email-attachment-progress">
-            <img :src="imagePreview" alt="Imagen adjunta" />
+            <img :src="imagePreview" alt="Imagen integrada en el correo" />
             <span><strong>{{ imageFile.name }}</strong><small>{{ formattedFileSize }}</small></span>
           </div>
           <StudentBulkDeliveryProgress
@@ -91,11 +91,11 @@
 
               <div class="email-attachment-field">
                 <div class="email-attachment-field__heading">
-                  <span>Imagen adjunta</span>
+                  <span>Imagen dentro del correo</span>
                   <small>PNG, JPG, WebP o GIF · máximo 10 MB</small>
                 </div>
                 <div v-if="imageFile" class="email-attachment-card">
-                  <img :src="imagePreview" alt="Vista previa de la imagen adjunta" />
+                  <img :src="imagePreview" alt="Vista previa de la imagen dentro del correo" />
                   <span>
                     <strong>{{ imageFile.name }}</strong>
                     <small>{{ formattedFileSize }}</small>
@@ -103,9 +103,9 @@
                   <button type="button" aria-label="Quitar imagen" @click="clearImage"><LucideX :size="16" /></button>
                 </div>
                 <button v-else type="button" class="email-attachment-button" @click="pickImage">
-                  <LucideImagePlus :size="17" /> Adjuntar imagen
+                  <LucideImagePlus :size="17" /> Insertar imagen
                 </button>
-                <small v-if="draftHadImage && !imageFile" class="email-attachment-draft-note">El borrador tenía una imagen. Vuelve a seleccionarla para conservarla en el envío.</small>
+                <small v-if="draftHadImage && !imageFile" class="email-attachment-draft-note">El borrador tenía una imagen integrada. Vuelve a seleccionarla para mostrarla dentro del correo.</small>
                 <input ref="filePicker" class="email-file-input" type="file" accept="image/*" @change="handleFileInput" />
               </div>
 
@@ -124,9 +124,9 @@
                 <strong>{{ subject || 'Asunto del correo' }}</strong>
                 <p v-if="message.trim()">{{ message }}</p>
                 <p v-else class="empty">El contenido del mensaje aparecerá aquí.</p>
-                <div v-if="imageFile" class="email-preview__attachment">
-                  <img :src="imagePreview" alt="" />
-                  <span><LucidePaperclip :size="14" /><strong>{{ imageFile.name }}</strong><small>{{ formattedFileSize }}</small></span>
+                <div v-if="imageFile" class="email-preview__attachment email-preview__inline-image">
+                  <img :src="imagePreview" alt="Vista previa de la imagen dentro del correo" />
+                  <small>{{ imageFile.name }} · {{ formattedFileSize }}</small>
                 </div>
               </div>
             </aside>
@@ -153,7 +153,6 @@ import {
   LucideLoader2,
   LucideMail,
   LucideMailWarning,
-  LucidePaperclip,
   LucideSend,
   LucideUserRound,
   LucideUsers,
@@ -403,7 +402,7 @@ const runDelivery = async (statuses) => {
       item.error = ''
       try {
         if (draftHadImage.value && !imageFile.value) {
-          throw new Error('Vuelve a seleccionar la imagen adjunta antes de continuar el envío.')
+          throw new Error('Vuelve a seleccionar la imagen integrada antes de continuar el envío.')
         }
 
         const form = new FormData()
@@ -486,8 +485,8 @@ onMounted(async () => {
   restoreDraft()
   if (draftHadImage.value && !imageFile.value && !errorMessage.value) {
     errorMessage.value = draftImageName.value
-      ? `El borrador incluía ${draftImageName.value}. Vuelve a seleccionar esa imagen antes de enviar.`
-      : 'El borrador incluía una imagen. Vuelve a seleccionarla antes de enviar.'
+      ? `El borrador incluía ${draftImageName.value} dentro del correo. Vuelve a seleccionar esa imagen antes de enviar.`
+      : 'El borrador incluía una imagen dentro del correo. Vuelve a seleccionarla antes de enviar.'
   }
   draftReady.value = true
   scheduleDraftSave()
@@ -598,12 +597,9 @@ onBeforeUnmount(() => {
 .email-attachment-restore button { min-height: 32px; padding: 0 11px; border: 1px solid #d7ae75; border-radius: 9px; background: #fff; color: #8b622d; font-size: 9.5px; font-weight: 800; cursor: pointer; }
 .email-attachment-progress { margin: 10px 18px 0; padding: 7px; }
 .email-attachment-progress img { width: 38px; height: 38px; }
-.email-preview__attachment { margin-top: 18px; display: flex; align-items: center; gap: 9px; padding: 8px; border: 1px solid #e1e7ed; border-radius: 11px; background: #f8fafc; }
-.email-preview__attachment img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
-.email-preview__attachment > span { min-width: 0; flex: 1; display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 6px; color: #65758a; }
-.email-preview__attachment strong, .email-preview__attachment small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.email-preview__attachment strong { color: #42556d; font-size: 9.5px; }
-.email-preview__attachment small { grid-column: 2; color: #8c98a6; font-size: 8.5px; }
+.email-preview__attachment { margin-top: 18px; }
+.email-preview__inline-image img { display: block; width: 100%; max-height: 320px; object-fit: contain; border-radius: 10px; background: #f4f6f8; }
+.email-preview__inline-image small { display: block; margin-top: 6px; color: #8c98a6; font-size: 8.5px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .email-bulk-error { color: #a34f43; font-size: 10px; font-weight: 690; }
 
