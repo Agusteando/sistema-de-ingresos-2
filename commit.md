@@ -1,1 +1,1 @@
-Integra correo masivo con progreso y corrige la selección múltiple en Control Escolar
+Protege los diálogos de mensajería y conserva borradores automáticamente

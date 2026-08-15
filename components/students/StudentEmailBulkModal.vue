@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div class="email-bulk-overlay" @click.self="closeModal">
+    <div class="email-bulk-overlay">
       <section class="email-bulk-modal" role="dialog" aria-modal="true" aria-labelledby="email-bulk-title">
         <header class="email-bulk-header">
           <div class="email-bulk-brand">
@@ -11,7 +11,7 @@
               <span v-else>Google Workspace · service account</span>
             </div>
           </div>
-          <button class="email-bulk-icon-button" type="button" aria-label="Cerrar" :disabled="sending" @click="closeModal">
+          <button class="email-bulk-icon-button" type="button" aria-label="Cerrar" :disabled="sending" @click="requestClose">
             <LucideX :size="20" />
           </button>
         </header>
@@ -93,7 +93,7 @@
           </main>
 
           <footer class="email-bulk-footer">
-            <button type="button" class="secondary" :disabled="sending" @click="closeModal">Cancelar</button>
+            <button type="button" class="secondary" :disabled="sending" @click="requestClose">Cancelar</button>
             <button type="button" class="primary" :disabled="!canSend" @click="sendBulk">
               <LucideLoader2 v-if="sending" class="email-bulk-spin" :size="17" />
               <LucideSend v-else :size="17" />
@@ -107,7 +107,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   LucideLoader2,
   LucideMail,
@@ -124,6 +124,12 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'sent'])
+const EMAIL_DRAFT_KEY = 'control-escolar:bulk-email-draft:v1'
+const DEFAULT_EMAIL_SUBJECT = 'Aviso de Control Escolar'
+let draftTimer = null
+const draftReady = ref(false)
+const draftRestored = ref(false)
+const initialSenderEmail = ref('')
 const previewLoading = ref(true)
 const sending = ref(false)
 const errorMessage = ref('')
@@ -131,12 +137,13 @@ const recipients = ref([])
 const recipientGroups = ref([])
 const senders = ref([])
 const senderEmail = ref('')
-const subject = ref('Aviso de Control Escolar')
+const subject = ref(DEFAULT_EMAIL_SUBJECT)
 const message = ref('')
 const deliveryItems = ref([])
 const summary = ref({ selected: 0, reachableStudents: 0, emails: 0, missingEmail: 0, notFound: 0, deduplicated: 0 })
 
 const selectedMatriculas = computed(() => props.selectedStudents.map((student) => String(student?.matricula || '').trim()).filter(Boolean))
+const audienceSignature = computed(() => [...selectedMatriculas.value].map((value) => value.toUpperCase()).sort().join('|'))
 const selectedContactStudents = computed(() => props.selectedStudents.map((student) => ({
   matricula: String(student?.matricula || '').trim(),
   nombreCompleto: String(student?.nombreCompleto || student?.fullName || student?.full_name || student?.name || student?.matricula || '').trim(),
@@ -151,6 +158,79 @@ const hasStarted = computed(() => deliveryItems.value.length > 0)
 const validSender = computed(() => /^[^\s@]+@casitaiedis\.edu\.mx$/i.test(String(senderEmail.value || '').trim()))
 const canSend = computed(() => !sending.value && summary.value.emails > 0 && validSender.value && Boolean(subject.value.trim()) && Boolean(message.value.trim()))
 const firstRecipientLabel = computed(() => recipientGroups.value[0]?.email || `${summary.value.emails || 0} destinatarios`)
+
+const hasClosableState = computed(() => Boolean(
+  message.value.trim()
+  || subject.value.trim() !== DEFAULT_EMAIL_SUBJECT
+  || (initialSenderEmail.value && senderEmail.value.trim() !== initialSenderEmail.value)
+  || deliveryItems.value.length
+))
+
+const serializableDeliveryItems = () => deliveryItems.value.map((item) => ({
+  key: String(item?.key || ''),
+  label: String(item?.label || ''),
+  detail: String(item?.detail || ''),
+  email: String(item?.email || ''),
+  matriculas: Array.isArray(item?.matriculas) ? [...item.matriculas] : [],
+  status: ['pending', 'sending', 'sent', 'failed'].includes(item?.status) ? (item.status === 'sending' ? 'pending' : item.status) : 'pending',
+  error: String(item?.error || ''),
+}))
+
+const persistDraft = () => {
+  if (typeof window === 'undefined' || !draftReady.value) return
+  if (!hasClosableState.value) {
+    window.localStorage.removeItem(EMAIL_DRAFT_KEY)
+    return
+  }
+  window.localStorage.setItem(EMAIL_DRAFT_KEY, JSON.stringify({
+    version: 1,
+    savedAt: new Date().toISOString(),
+    audienceSignature: audienceSignature.value,
+    senderEmail: senderEmail.value,
+    subject: subject.value,
+    message: message.value,
+    deliveryItems: serializableDeliveryItems(),
+  }))
+}
+
+const scheduleDraftSave = () => {
+  if (!draftReady.value) return
+  if (draftTimer) clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => {
+    draftTimer = null
+    persistDraft()
+  }, 180)
+}
+
+const restoreDraft = () => {
+  if (typeof window === 'undefined') return
+  try {
+    const draft = JSON.parse(window.localStorage.getItem(EMAIL_DRAFT_KEY) || 'null')
+    if (!draft || typeof draft !== 'object') return
+    if (typeof draft.senderEmail === 'string' && draft.senderEmail.trim()) senderEmail.value = draft.senderEmail.trim()
+    if (typeof draft.subject === 'string') subject.value = draft.subject
+    if (typeof draft.message === 'string') message.value = draft.message
+    if (draft.audienceSignature === audienceSignature.value && Array.isArray(draft.deliveryItems)) {
+      deliveryItems.value = draft.deliveryItems.map((item) => ({ ...item, status: item?.status === 'sending' ? 'pending' : item?.status }))
+    }
+    draftRestored.value = hasClosableState.value
+  } catch {
+    window.localStorage.removeItem(EMAIL_DRAFT_KEY)
+  }
+}
+
+const clearDraft = () => {
+  if (typeof window !== 'undefined') window.localStorage.removeItem(EMAIL_DRAFT_KEY)
+  draftRestored.value = false
+  draftReady.value = false
+}
+
+const handleBeforeUnload = (event) => {
+  if (!hasClosableState.value) return
+  persistDraft()
+  event.preventDefault()
+  event.returnValue = ''
+}
 
 const loadPreview = async () => {
   previewLoading.value = true
@@ -168,6 +248,7 @@ const loadPreview = async () => {
     senders.value = Array.isArray(payload?.senders) ? payload.senders : []
     summary.value = { ...summary.value, ...(payload?.summary || {}) }
     senderEmail.value = String(payload?.defaultSender || senders.value[0]?.email || '').trim()
+    initialSenderEmail.value = senderEmail.value
   } catch (error) {
     errorMessage.value = error?.data?.message || error?.data?.statusMessage || error?.statusMessage || error?.message || 'No se pudo preparar el correo.'
   } finally {
@@ -269,14 +350,49 @@ const sendBulk = async () => {
 }
 const retryFailed = async () => runDelivery(['failed'])
 const continuePending = async () => runDelivery(['pending'])
-const closeModal = () => {
+
+const requestClose = () => {
   if (sending.value) return
+  persistDraft()
+  if (hasClosableState.value && typeof window !== 'undefined') {
+    const confirmed = window.confirm(
+      'Hay un borrador o progreso de envío en este diálogo. Se conservará automáticamente para continuar después. ¿Cerrar de todos modos?'
+    )
+    if (!confirmed) return
+  }
   emit('close')
 }
-const closeAfterSend = () => emit('close')
 
-useModalEscape(closeModal)
-onMounted(loadPreview)
+const closeAfterSend = () => {
+  const completed = deliveryItems.value.length > 0 && deliveryItems.value.every((item) => item.status === 'sent')
+  if (!completed) {
+    requestClose()
+    return
+  }
+  clearDraft()
+  emit('close')
+}
+
+useModalEscape(requestClose)
+
+watch(senderEmail, scheduleDraftSave)
+watch(subject, scheduleDraftSave)
+watch(message, scheduleDraftSave)
+watch(deliveryItems, scheduleDraftSave, { deep: true })
+
+onMounted(async () => {
+  await loadPreview()
+  restoreDraft()
+  draftReady.value = true
+  scheduleDraftSave()
+  if (typeof window !== 'undefined') window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  if (draftTimer) clearTimeout(draftTimer)
+  persistDraft()
+  if (typeof window !== 'undefined') window.removeEventListener('beforeunload', handleBeforeUnload)
+})
 </script>
 
 <style scoped>

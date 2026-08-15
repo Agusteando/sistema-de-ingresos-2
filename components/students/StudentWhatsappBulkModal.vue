@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div class="wa-bulk-overlay" @click.self="closeModal">
+    <div class="wa-bulk-overlay">
       <section class="wa-bulk-modal" role="dialog" aria-modal="true" aria-labelledby="wa-bulk-title">
         <header class="wa-bulk-header">
           <div class="wa-bulk-brand">
@@ -13,7 +13,7 @@
               <span v-else class="wa-bulk-status"><i></i> QR sin vincular</span>
             </div>
           </div>
-          <button class="wa-bulk-icon-button" type="button" aria-label="Cerrar" :disabled="sending" @click="closeModal">
+          <button class="wa-bulk-icon-button" type="button" aria-label="Cerrar" :disabled="sending" @click="requestClose">
             <LucideX :size="20" />
           </button>
         </header>
@@ -149,7 +149,7 @@
             </main>
 
             <footer class="wa-bulk-footer">
-              <button class="wa-bulk-secondary" type="button" :disabled="sending" @click="closeModal">Cancelar</button>
+              <button class="wa-bulk-secondary" type="button" :disabled="sending" @click="requestClose">Cancelar</button>
               <button class="wa-bulk-primary" type="button" :disabled="!canSend" @click="sendBulk">
                 <LucideLoader2 v-if="sending" class="wa-bulk-spin" :size="18" />
                 <LucideSend v-else :size="18" />
@@ -164,7 +164,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { renderSVG } from 'uqr'
 import {
   LucideGlobe2,
@@ -205,8 +205,14 @@ const deliveryItems = ref([])
 const summary = ref({ selected: 0, reachableStudents: 0, chats: 0, missingPhone: 0, notFound: 0, deduplicated: 0 })
 const session = ref({ clientId: '', displayName: '', status: 'disconnected', ready: false })
 let statusTimer = null
+let draftTimer = null
+const WHATSAPP_DRAFT_KEY = 'control-escolar:bulk-whatsapp-draft:v1'
+const draftReady = ref(false)
+const draftRestored = ref(false)
+const draftHadImage = ref(false)
 
 const selectedMatriculas = computed(() => props.selectedStudents.map(student => String(student?.matricula || '').trim()).filter(Boolean))
+const audienceSignature = computed(() => [...selectedMatriculas.value].map(value => value.toUpperCase()).sort().join('|'))
 const selectedContactStudents = computed(() => props.selectedStudents.map(student => ({
   matricula: String(student?.matricula || '').trim(),
   nombreCompleto: String(student?.nombreCompleto || student?.fullName || student?.full_name || student?.name || student?.matricula || '').trim(),
@@ -233,6 +239,76 @@ const formattedFileSize = computed(() => {
   return size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`
 })
 const currentTime = computed(() => new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()))
+
+const hasClosableState = computed(() => Boolean(message.value.trim() || imageFile.value || deliveryItems.value.length))
+
+const serializableDeliveryItems = () => deliveryItems.value.map(item => ({
+  key: String(item?.key || ''),
+  label: String(item?.label || ''),
+  detail: String(item?.detail || ''),
+  matriculas: Array.isArray(item?.matriculas) ? [...item.matriculas] : [],
+  status: ['pending', 'sending', 'sent', 'failed'].includes(item?.status) ? (item.status === 'sending' ? 'pending' : item.status) : 'pending',
+  error: String(item?.error || ''),
+}))
+
+const persistDraft = () => {
+  if (typeof window === 'undefined' || !draftReady.value) return
+  const shouldKeep = Boolean(message.value.trim() || imageFile.value || deliveryItems.value.length || transportMode.value !== 'public')
+  if (!shouldKeep) {
+    window.localStorage.removeItem(WHATSAPP_DRAFT_KEY)
+    return
+  }
+
+  window.localStorage.setItem(WHATSAPP_DRAFT_KEY, JSON.stringify({
+    version: 1,
+    savedAt: new Date().toISOString(),
+    audienceSignature: audienceSignature.value,
+    message: message.value,
+    transportMode: transportMode.value,
+    hadImage: Boolean(imageFile.value),
+    deliveryItems: serializableDeliveryItems(),
+  }))
+}
+
+const scheduleDraftSave = () => {
+  if (!draftReady.value) return
+  if (draftTimer) clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => {
+    draftTimer = null
+    persistDraft()
+  }, 180)
+}
+
+const restoreDraft = () => {
+  if (typeof window === 'undefined') return
+  try {
+    const draft = JSON.parse(window.localStorage.getItem(WHATSAPP_DRAFT_KEY) || 'null')
+    if (!draft || typeof draft !== 'object') return
+    message.value = typeof draft.message === 'string' ? draft.message : ''
+    transportMode.value = draft.transportMode === 'qr' ? 'qr' : 'public'
+    if (draft.audienceSignature === audienceSignature.value && Array.isArray(draft.deliveryItems)) {
+      deliveryItems.value = draft.deliveryItems.map(item => ({ ...item, status: item?.status === 'sending' ? 'pending' : item?.status }))
+    }
+    draftHadImage.value = Boolean(draft.hadImage)
+    draftRestored.value = Boolean(message.value.trim() || deliveryItems.value.length || draft.transportMode === 'qr' || draftHadImage.value)
+  } catch {
+    window.localStorage.removeItem(WHATSAPP_DRAFT_KEY)
+  }
+}
+
+const clearDraft = () => {
+  if (typeof window !== 'undefined') window.localStorage.removeItem(WHATSAPP_DRAFT_KEY)
+  draftRestored.value = false
+  draftHadImage.value = false
+  draftReady.value = false
+}
+
+const handleBeforeUnload = (event) => {
+  if (!hasClosableState.value) return
+  persistDraft()
+  event.preventDefault()
+  event.returnValue = ''
+}
 
 const initials = (value) => String(value || '')
   .trim()
@@ -522,20 +598,51 @@ const continuePending = async () => {
   await runDelivery(['pending'])
 }
 
-const closeModal = () => {
+const requestClose = () => {
   if (sending.value) return
+  persistDraft()
+  if (hasClosableState.value && typeof window !== 'undefined') {
+    const confirmed = window.confirm(
+      'Hay contenido o progreso de envío en este diálogo. El texto y el progreso se guardarán como borrador; las imágenes deben seleccionarse de nuevo al reabrir. ¿Cerrar de todos modos?'
+    )
+    if (!confirmed) return
+  }
   stopStatusPolling()
   emit('close')
 }
+
 const closeAfterSend = () => {
+  const completed = deliveryItems.value.length > 0 && deliveryItems.value.every(item => item.status === 'sent')
+  if (!completed) {
+    requestClose()
+    return
+  }
+  clearDraft()
   stopStatusPolling()
   emit('close')
 }
 
-useModalEscape(closeModal)
+useModalEscape(requestClose)
 
-onMounted(loadPreview)
+watch(message, scheduleDraftSave)
+watch(transportMode, scheduleDraftSave)
+watch(imageFile, scheduleDraftSave)
+watch(deliveryItems, scheduleDraftSave, { deep: true })
+
+onMounted(async () => {
+  restoreDraft()
+  await loadPreview()
+  if (draftHadImage.value && !errorMessage.value) {
+    errorMessage.value = 'Borrador restaurado: vuelve a seleccionar la imagen antes de enviar.'
+  }
+  draftReady.value = true
+  scheduleDraftSave()
+  if (typeof window !== 'undefined') window.addEventListener('beforeunload', handleBeforeUnload)
+})
 onBeforeUnmount(() => {
+  if (draftTimer) clearTimeout(draftTimer)
+  persistDraft()
+  if (typeof window !== 'undefined') window.removeEventListener('beforeunload', handleBeforeUnload)
   stopStatusPolling()
   revokeImagePreview()
 })
