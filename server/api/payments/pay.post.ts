@@ -10,12 +10,11 @@ import { finalizeStockReservation, releaseStockReservation, reserveStockForPayme
 import { isPlaceholderConceptName, resolveFinancialConcept } from '../../utils/financial-concept'
 import { loadActiveCobranzaConvention } from '../../utils/cobranza-convenio'
 import {
-  getSchoolPeriodDeadlineForCycle,
-  isPastPaymentDeadline,
+  resolveLateFeeTiming,
   shouldApplyLateFee,
 } from '../../utils/cobranza-period'
 import { calculateLateFeeSubtotal } from '../../../shared/utils/recargo'
-import { loadRecargoPolicies, type RecargoPolicy } from '../../utils/recargo-config'
+import { loadRecargoPolicies, markRecargoConceptAsService, type RecargoPolicy } from '../../utils/recargo-config'
 
 const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 
@@ -225,6 +224,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     let saldoAntes = Math.max(0, subtotal - resuelto)
 
     const conceptoId = Number(paymentConcept.concepto || 0)
+    // forzarRecargo is accepted only as a rolling-deploy compatibility alias.
+    // New clients send aplicarRecargo, whose business meaning is explicit: apply
+    // the recargo now and classify the concept globally as a recargo service.
+    const applyLateFeeNow = truthyFlag(p?.aplicarRecargo) || truthyFlag(p?.forzarRecargo)
     let recargoPolicy = recargoPolicyCache.get(conceptoId)
     if (!recargoPolicy) {
       const policies = await loadRecargoPolicies([conceptoId])
@@ -232,21 +235,31 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       if (recargoPolicy) recargoPolicyCache.set(conceptoId, recargoPolicy)
     }
 
+    if (applyLateFeeNow && !recargoPolicy?.esServicio) {
+      recargoPolicy = await markRecargoConceptAsService({
+        conceptoId,
+        updatedBy: user?.email || userName,
+      })
+      recargoPolicyCache.set(conceptoId, recargoPolicy)
+    }
+
     const hasRecargoManual = pagosDelMes.some(row => String(row.recargo) === '1')
     const hasPayment = pagosDelMes.some(row => Number(row.monto || 0) > 0)
-    const paymentDeadline = getSchoolPeriodDeadlineForCycle(
-      cicloKey,
-      mesNumber,
-      effectiveDateKey,
-      recargoPolicy?.diaLimite ?? 12,
-    )
-    const isLate = isPastPaymentDeadline(paymentDeadline, effectiveDateKey)
+    const recargoTiming = resolveLateFeeTiming({
+      ciclo: cicloKey,
+      schoolMonth: mesNumber,
+      currentDateValue: effectiveDateKey,
+      cutoffDay: recargoPolicy?.diaLimite ?? 12,
+      isService: Boolean(recargoPolicy?.esServicio),
+      isEventual: String(mes || '').trim().toLowerCase() === 'ev',
+    })
     const appliesLateFee = shouldApplyLateFee({
       enabled: Boolean(recargoPolicy?.activo),
+      force: applyLateFeeNow,
       hasManualLateFee: hasRecargoManual,
       hasPayment,
       hasActiveConvention: Boolean(activeConvention),
-      isAfterDeadline: isLate,
+      isAfterDeadline: recargoTiming.isAfterDeadline,
       balanceBeforeLateFee: saldoAntes
     })
 

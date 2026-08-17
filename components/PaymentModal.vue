@@ -313,23 +313,24 @@
                     <div class="payment-recargo-control">
                       <button
                         type="button"
-                        class="payment-recargo-switch"
+                        class="payment-recargo-tag"
                         :class="{
-                          enabled: debt.recargoActivo,
                           applied: debtHasRecargoForDate(debt),
                           pending: isRecargoTogglePending(debt),
                         }"
-                        role="switch"
-                        :disabled="isRecargoTogglePending(debt)"
-                        :aria-checked="debt.recargoActivo ? 'true' : 'false'"
-                        :aria-label="`Recargo para ${debt.conceptoNombre}`"
-                        @click.stop="toggleConceptRecargo(debt)"
+                        :disabled="isRecargoTogglePending(debt) || debtHasRecargoForDate(debt)"
+                        :aria-pressed="debtHasRecargoForDate(debt) ? 'true' : 'false'"
+                        :aria-label="recargoActionLabel(debt)"
+                        @click.stop="applyRecargo(debt)"
                       >
-                        <span class="payment-recargo-switch-knob">
-                          <LucideLoader2 v-if="isRecargoTogglePending(debt)" :size="10" class="animate-spin" />
-                        </span>
+                        <LucideLoader2 v-if="isRecargoTogglePending(debt)" :size="12" class="animate-spin" />
+                        <LucideCheckCircle v-else-if="debtHasRecargoForDate(debt)" :size="12" />
+                        <span>{{ recargoActionLabel(debt) }}</span>
                       </button>
-                      <span v-if="debtHasRecargoForDate(debt)" class="payment-recargo-impact">+${{ recargoAmountForDebt(debt).toFixed(0) }}</span>
+                      <div v-if="debt.recargoServicio || debtHasRecargoForDate(debt)" class="payment-recargo-meta">
+                        <span v-if="debt.recargoServicio" class="payment-recargo-service">Servicio</span>
+                        <span v-if="debtHasRecargoForDate(debt)" class="payment-recargo-impact">+${{ recargoAmountForDebt(debt).toFixed(0) }}</span>
+                      </div>
                     </div>
                   </td>
                   <td class="py-2 px-4 text-right">
@@ -384,7 +385,7 @@ import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { calculatePromotedGrado, displayGrado } from '~/shared/utils/grado'
 import { institutionFlagForPlantel, normalizePlantelCode } from '~/shared/utils/institution'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
-import { calculateLateFeeSubtotal, getSchoolPeriodDeadlineForCycle, isPastPaymentDeadline, shouldApplyLateFee } from '~/shared/utils/recargo'
+import { calculateLateFeeSubtotal, resolveLateFeeTiming, shouldApplyLateFee } from '~/shared/utils/recargo'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { requestPaymentActionAuthorizationCode, sendPaymentActionAuthorizationNotice } from '~/utils/paymentActionAuthorization'
 
@@ -608,28 +609,31 @@ const baseAmountForDebt = (debt) => debt?.montoFinalPendiente
 const recargoCalculationForDebt = (debt) => {
   const baseAmount = baseAmountForDebt(debt)
   const pagosPrevios = Number(debt?.pagosPrevios ?? debt?.resuelto ?? debt?.pagos ?? 0)
-  const deadline = getSchoolPeriodDeadlineForCycle(
-    normalizeCicloKey(state.value.ciclo),
-    schoolMonthForDebt(debt),
-    paymentDate.value,
-    debt?.recargoDiaLimite ?? 12,
-  )
-  const isLate = isPastPaymentDeadline(deadline, paymentDate.value)
+  const timing = resolveLateFeeTiming({
+    ciclo: normalizeCicloKey(state.value.ciclo),
+    schoolMonth: schoolMonthForDebt(debt),
+    currentDateValue: paymentDate.value,
+    cutoffDay: debt?.recargoDiaLimite ?? 12,
+    isService: Boolean(debt?.recargoServicio),
+    isEventual: Boolean(debt?.isEventual || String(debt?.mes || '').trim().toLowerCase() === 'ev'),
+  })
   const applies = shouldApplyLateFee({
     enabled: Boolean(debt?.recargoActivo),
+    force: Boolean(debt?.recargoAplicadoAhora),
     hasManualLateFee: Boolean(debt?.recargoManual),
     hasPayment: Boolean(debt?.hasPayment),
     hasActiveConvention: Boolean(debt?.convenioActivo),
-    isAfterDeadline: isLate,
+    isAfterDeadline: timing.isAfterDeadline,
     balanceBeforeLateFee: baseAmount - pagosPrevios,
   })
   const subtotal = applies
     ? calculateLateFeeSubtotal(baseAmount, debt?.recargoPorcentaje ?? 10)
     : baseAmount
 
-  return { subtotal, applies, isLate, deadline }
+  return { subtotal, applies, isLate: timing.isAfterDeadline, deadline: timing.deadline }
 }
 const debtHasRecargoForDate = (debt) => recargoCalculationForDebt(debt).applies
+const recargoActionLabel = (debt) => debtHasRecargoForDate(debt) ? 'Recargo aplicado' : 'Aplicar recargo'
 const recargoAmountForDebt = (debt) => {
   const calculation = recargoCalculationForDebt(debt)
   if (!calculation.applies) return 0
@@ -642,6 +646,7 @@ const buildProcessedDebts = () => (Array.isArray(props.debts) ? props.debts : []
   const resuelto = d.resuelto ?? d.pagos
   return {
     ...d,
+    recargoAplicadoAhora: false,
     saldoFinal: final,
     montoPagado: final,
     montoTouched: false,
@@ -790,51 +795,69 @@ const applyRecargoPolicyToConcept = (conceptoId, policy) => {
   processedDebts.value.forEach((row) => {
     if (conceptIdForDebt(row) !== conceptoId) return
     if (policy.activo !== undefined) row.recargoActivo = Boolean(policy.activo)
+    if (policy.servicio !== undefined) row.recargoServicio = Boolean(policy.servicio)
+    if (policy.esServicio !== undefined) row.recargoServicio = Boolean(policy.esServicio)
     if (policy.porcentaje !== undefined) row.recargoPorcentaje = Number(policy.porcentaje)
     if (policy.diaLimite !== undefined) row.recargoDiaLimite = Number(policy.diaLimite)
     if (policy.pendingSync !== undefined) row.recargoPendingSync = Boolean(policy.pendingSync)
   })
   repriceUntouchedPayments()
 }
-const toggleConceptRecargo = async (debt) => {
+const applyRecargo = async (debt) => {
+  if (debtHasRecargoForDate(debt)) return
+
   const conceptoId = conceptIdForDebt(debt)
   if (!conceptoId || isRecargoTogglePending(debt)) return
+
+  // A concept already classified as Servicio only needs the payment-local
+  // action. The service classification itself is global and persistent.
+  if (debt?.recargoServicio) {
+    debt.recargoAplicadoAhora = true
+    repriceUntouchedPayments()
+    return
+  }
 
   const previous = processedDebts.value
     .filter(row => conceptIdForDebt(row) === conceptoId)
     .map(row => ({
       key: paymentDebtKey(row),
       activo: Boolean(row.recargoActivo),
+      servicio: Boolean(row.recargoServicio),
       porcentaje: Number(row.recargoPorcentaje ?? 10),
       diaLimite: Number(row.recargoDiaLimite ?? 12),
       pendingSync: Boolean(row.recargoPendingSync),
+      applyNow: Boolean(row.recargoAplicadoAhora),
     }))
-  const nextActive = !Boolean(debt.recargoActivo)
   setRecargoTogglePending(conceptoId, true)
 
   try {
     const response = await executeOptimistic(
       () => $fetch('/api/recargos/concepto', {
         method: 'PUT',
-        body: { conceptoId, activo: nextActive },
+        body: { conceptoId, servicio: true },
       }),
-      () => applyRecargoPolicyToConcept(conceptoId, { activo: nextActive }),
+      () => {
+        debt.recargoAplicadoAhora = true
+        applyRecargoPolicyToConcept(conceptoId, { activo: true, servicio: true })
+      },
       () => {
         const previousByKey = new Map(previous.map(item => [item.key, item]))
         processedDebts.value.forEach((row) => {
           const saved = previousByKey.get(paymentDebtKey(row))
           if (!saved) return
           row.recargoActivo = saved.activo
+          row.recargoServicio = saved.servicio
           row.recargoPorcentaje = saved.porcentaje
           row.recargoDiaLimite = saved.diaLimite
           row.recargoPendingSync = saved.pendingSync
+          row.recargoAplicadoAhora = saved.applyNow
         })
         repriceUntouchedPayments()
       },
       {
-        pending: 'Actualizando recargo...',
-        success: 'Recargo actualizado',
-        error: 'No se pudo actualizar el recargo',
+        pending: 'Aplicando recargo...',
+        success: 'Recargo aplicado',
+        error: 'No se pudo aplicar el recargo',
       },
     )
     if (response?.policy) applyRecargoPolicyToConcept(conceptoId, response.policy)
@@ -871,7 +894,8 @@ const paymentRows = () => processedDebts.value.filter(d => Number(d.montoPagado 
     subtotal,
     saldoFinal: saldoAntes,
     saldoAntes,
-    montoFinal: d.montoFinalPendiente ? Number(d.montoFinalInput || 0) : d.montoFinal
+    montoFinal: d.montoFinalPendiente ? Number(d.montoFinalInput || 0) : d.montoFinal,
+    aplicarRecargo: Boolean(d.recargoAplicadoAhora)
   }
 })
 
@@ -1048,7 +1072,7 @@ const submit = async () => {
 }
 
 .payment-col-recargo {
-  width: 7rem;
+  width: 9.75rem;
 }
 
 .payment-col-final,
@@ -1091,64 +1115,74 @@ const submit = async () => {
   color: #2f7449;
 }
 .payment-recargo-heading {
-  width: 96px;
+  width: 9.75rem;
 }
 .payment-recargo-control {
   display: inline-flex;
-  min-width: 74px;
+  min-width: 8.5rem;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 4px;
 }
-.payment-recargo-switch {
-  position: relative;
+.payment-recargo-tag {
   display: inline-flex;
-  width: 34px;
-  height: 20px;
-  flex: 0 0 auto;
-  align-items: center;
-  border: 1px solid #cfd6df;
-  border-radius: 999px;
-  background: #e7ebf0;
-  padding: 2px;
-  transition: border-color 140ms ease, background 140ms ease, opacity 140ms ease;
-}
-.payment-recargo-switch-knob {
-  display: inline-flex;
-  width: 14px;
-  height: 14px;
+  min-height: 28px;
   align-items: center;
   justify-content: center;
+  gap: 5px;
+  border: 1px solid #d2d9e2;
   border-radius: 999px;
   background: #fff;
+  padding: 5px 9px;
+  color: #526173;
+  font-size: .66rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, opacity 140ms ease;
+}
+.payment-recargo-tag:not(:disabled):hover {
+  border-color: #8cad97;
+  background: #f5faf6;
   color: #2f7449;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, .16);
-  transform: translateX(0);
-  transition: transform 140ms ease;
 }
-.payment-recargo-switch.enabled {
-  border-color: #78aa88;
-  background: #5c946d;
+.payment-recargo-tag.applied {
+  border-color: #cfe1d4;
+  background: #f3f8f4;
+  color: #50745a;
 }
-.payment-recargo-switch.enabled .payment-recargo-switch-knob {
-  transform: translateX(14px);
-}
-.payment-recargo-switch.applied {
-  border-color: #4f8b61;
-  background: #4f8b61;
-}
-.payment-recargo-switch.pending {
+.payment-recargo-tag.pending {
   cursor: wait;
   opacity: .68;
 }
-.payment-recargo-switch:disabled {
-  pointer-events: none;
+.payment-recargo-tag:disabled {
+  cursor: default;
+}
+.payment-recargo-meta {
+  display: flex;
+  min-height: 14px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.payment-recargo-service {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #dfe4ea;
+  border-radius: 999px;
+  background: #f7f8fa;
+  padding: 2px 6px;
+  color: #667384;
+  font-size: .58rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 .payment-recargo-impact {
-  min-width: 32px;
   color: #2f7449;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: .66rem;
+  font-size: .64rem;
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;

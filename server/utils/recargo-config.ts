@@ -11,6 +11,7 @@ const CENTRAL_OPERATION_TIMEOUT_MS = 1_800
 export type RecargoPolicy = {
   conceptoId: number
   activo: boolean
+  esServicio: boolean
   porcentaje: number
   diaLimite: number
   version: number
@@ -18,12 +19,12 @@ export type RecargoPolicy = {
   updatedBy: string | null
   source: 'central' | 'bridge'
   pendingSync: boolean
-  explicit: boolean
 }
 
 type StoredRecargoRow = {
   concepto_id?: number | string | null
   activo?: number | string | boolean | null
+  es_servicio?: number | string | boolean | null
   porcentaje?: number | string | null
   dia_limite?: number | string | null
   version?: number | string | null
@@ -56,9 +57,10 @@ const normalizeCutoffDay = (value: unknown) => {
   return Number.isFinite(parsed) && parsed >= 1 && parsed <= 28 ? parsed : DEFAULT_CUTOFF_DAY
 }
 
-const rowToPolicy = (row: StoredRecargoRow, source: RecargoPolicy['source'], explicit = true): RecargoPolicy => ({
+const rowToPolicy = (row: StoredRecargoRow, source: RecargoPolicy['source']): RecargoPolicy => ({
   conceptoId: Number(row.concepto_id || 0),
-  activo: boolFlag(row.activo),
+  activo: boolFlag(row.es_servicio) || boolFlag(row.activo),
+  esServicio: boolFlag(row.es_servicio),
   porcentaje: normalizePercentage(row.porcentaje),
   diaLimite: normalizeCutoffDay(row.dia_limite),
   version: Math.max(0, Number(row.version || 0) || 0),
@@ -66,12 +68,12 @@ const rowToPolicy = (row: StoredRecargoRow, source: RecargoPolicy['source'], exp
   updatedBy: row.updated_by ? String(row.updated_by) : null,
   source,
   pendingSync: boolFlag(row.pending_sync),
-  explicit,
 })
 
 const legacyPolicy = (conceptoId: number, eventual: unknown, source: RecargoPolicy['source']): RecargoPolicy => ({
   conceptoId,
   activo: !boolFlag(eventual),
+  esServicio: false,
   porcentaje: DEFAULT_PERCENTAGE,
   diaLimite: DEFAULT_CUTOFF_DAY,
   version: 0,
@@ -79,12 +81,12 @@ const legacyPolicy = (conceptoId: number, eventual: unknown, source: RecargoPoli
   updatedBy: null,
   source,
   pendingSync: false,
-  explicit: false,
 })
 
 const emptyPolicy = (conceptoId: number, source: RecargoPolicy['source']): RecargoPolicy => ({
   conceptoId,
   activo: false,
+  esServicio: false,
   porcentaje: DEFAULT_PERCENTAGE,
   diaLimite: DEFAULT_CUTOFF_DAY,
   version: 0,
@@ -92,7 +94,6 @@ const emptyPolicy = (conceptoId: number, source: RecargoPolicy['source']): Recar
   updatedBy: null,
   source,
   pendingSync: false,
-  explicit: false,
 })
 
 const placeholders = (ids: number[]) => ids.map(() => '?').join(',')
@@ -129,7 +130,6 @@ const runCentral = async <T>(operation: () => Promise<T>) => {
   }
 }
 
-
 const readLegacyConceptsFromBridge = async (ids: number[]) => {
   if (!ids.length) return new Map<number, LegacyConceptRow>()
   const rows = await query<LegacyConceptRow[]>(
@@ -154,7 +154,7 @@ const readBridgePolicies = async (conceptIds: number[]) => {
   if (!ids.length) return result
 
   const rows = await query<StoredRecargoRow[]>(
-    `SELECT concepto_id, activo, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync
+    `SELECT concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync
      FROM ${RECARGO_TABLE}
      WHERE concepto_id IN (${placeholders(ids)})`,
     ids,
@@ -179,7 +179,7 @@ const readCentralPolicies = async (conceptIds: number[]) => {
   if (!ids.length) return result
 
   const rows = await runCentral(() => controlEscolarCentralQuery<StoredRecargoRow[]>(
-    `SELECT concepto_id, activo, porcentaje, dia_limite, version, updated_at, updated_by
+    `SELECT concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by
      FROM ${RECARGO_TABLE}
      WHERE concepto_id IN (${placeholders(ids)})`,
     ids,
@@ -201,10 +201,11 @@ const readCentralPolicies = async (conceptIds: number[]) => {
 const mirrorPolicyToBridge = async (policy: RecargoPolicy, pendingSync = false) => {
   await query(
     `INSERT INTO ${RECARGO_TABLE}
-      (concepto_id, activo, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync)
-     VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?)
+      (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync)
+     VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?)
      ON DUPLICATE KEY UPDATE
        activo = VALUES(activo),
+       es_servicio = VALUES(es_servicio),
        porcentaje = VALUES(porcentaje),
        dia_limite = VALUES(dia_limite),
        version = VALUES(version),
@@ -214,6 +215,7 @@ const mirrorPolicyToBridge = async (policy: RecargoPolicy, pendingSync = false) 
     [
       policy.conceptoId,
       policy.activo ? 1 : 0,
+      policy.esServicio ? 1 : 0,
       policy.porcentaje,
       policy.diaLimite,
       policy.version,
@@ -226,7 +228,7 @@ const mirrorPolicyToBridge = async (policy: RecargoPolicy, pendingSync = false) 
 
 const readPendingBridgePolicies = async () => {
   const rows = await query<StoredRecargoRow[]>(
-    `SELECT concepto_id, activo, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync
+    `SELECT concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync
      FROM ${RECARGO_TABLE}
      WHERE pending_sync = 1
      ORDER BY updated_at ASC, concepto_id ASC`,
@@ -236,7 +238,7 @@ const readPendingBridgePolicies = async () => {
 
 const readCentralPolicyRow = async (conceptoId: number) => {
   const rows = await runCentral(() => controlEscolarCentralQuery<StoredRecargoRow[]>(
-    `SELECT concepto_id, activo, porcentaje, dia_limite, version, updated_at, updated_by
+    `SELECT concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by
      FROM ${RECARGO_TABLE}
      WHERE concepto_id = ?
      LIMIT 1`,
@@ -248,16 +250,17 @@ const readCentralPolicyRow = async (conceptoId: number) => {
 const pushPolicyToCentral = async (policy: RecargoPolicy) => {
   await runCentral(() => controlEscolarCentralQuery(
     `INSERT INTO ${RECARGO_TABLE}
-      (concepto_id, activo, porcentaje, dia_limite, version, updated_at, updated_by)
-     VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP, ?)
+      (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by)
+     VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, ?)
      ON DUPLICATE KEY UPDATE
        activo = VALUES(activo),
+       es_servicio = VALUES(es_servicio),
        porcentaje = VALUES(porcentaje),
        dia_limite = VALUES(dia_limite),
        version = version + 1,
        updated_at = CURRENT_TIMESTAMP,
        updated_by = VALUES(updated_by)`,
-    [policy.conceptoId, policy.activo ? 1 : 0, policy.porcentaje, policy.diaLimite, policy.updatedBy],
+    [policy.conceptoId, policy.activo ? 1 : 0, policy.esServicio ? 1 : 0, policy.porcentaje, policy.diaLimite, policy.updatedBy],
   ))
   const saved = await readCentralPolicyRow(policy.conceptoId)
   if (!saved) throw new Error('La configuración central de recargo no pudo confirmarse.')
@@ -303,6 +306,19 @@ export const loadRecargoPolicies = async (conceptIds: unknown[]) => {
   }
 }
 
+const readSavedBridgePolicy = async (id: number) => {
+  const rows = await query<StoredRecargoRow[]>(
+    `SELECT concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync
+     FROM ${RECARGO_TABLE}
+     WHERE concepto_id = ?
+     LIMIT 1`,
+    [id],
+  )
+  const fallback = rows[0] ? rowToPolicy(rows[0], 'bridge') : emptyPolicy(id, 'bridge')
+  fallback.pendingSync = true
+  return fallback
+}
+
 export const setRecargoPolicyActive = async ({
   conceptoId,
   activo,
@@ -324,8 +340,8 @@ export const setRecargoPolicyActive = async ({
     try {
       await runCentral(() => controlEscolarCentralQuery(
         `INSERT INTO ${RECARGO_TABLE}
-          (concepto_id, activo, porcentaje, dia_limite, version, updated_at, updated_by)
-         VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP, ?)
+          (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by)
+         VALUES (?, ?, 0, ?, ?, 1, CURRENT_TIMESTAMP, ?)
          ON DUPLICATE KEY UPDATE
            activo = VALUES(activo),
            version = version + 1,
@@ -345,8 +361,8 @@ export const setRecargoPolicyActive = async ({
 
   await query(
     `INSERT INTO ${RECARGO_TABLE}
-      (concepto_id, activo, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync)
-     VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP, ?, 1)
+      (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync)
+     VALUES (?, ?, 0, ?, ?, 1, CURRENT_TIMESTAMP, ?, 1)
      ON DUPLICATE KEY UPDATE
        activo = VALUES(activo),
        version = version + 1,
@@ -356,15 +372,60 @@ export const setRecargoPolicyActive = async ({
     [id, normalizedActive ? 1 : 0, DEFAULT_PERCENTAGE, DEFAULT_CUTOFF_DAY, actor],
   )
 
-  const rows = await query<StoredRecargoRow[]>(
-    `SELECT concepto_id, activo, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync
-     FROM ${RECARGO_TABLE}
-     WHERE concepto_id = ?
-     LIMIT 1`,
-    [id],
+  return await readSavedBridgePolicy(id)
+}
+
+export const markRecargoConceptAsService = async ({
+  conceptoId,
+  updatedBy,
+}: {
+  conceptoId: unknown
+  updatedBy?: string | null
+}) => {
+  const id = Number(conceptoId || 0)
+  if (!Number.isInteger(id) || id <= 0) {
+    throw createError({ statusCode: 400, message: 'Concepto inválido.' })
+  }
+
+  const actor = String(updatedBy || '').trim().slice(0, 255) || null
+
+  if (canTryCentral()) {
+    try {
+      await runCentral(() => controlEscolarCentralQuery(
+        `INSERT INTO ${RECARGO_TABLE}
+          (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by)
+         VALUES (?, 1, 1, ?, ?, 1, CURRENT_TIMESTAMP, ?)
+         ON DUPLICATE KEY UPDATE
+           activo = 1,
+           es_servicio = 1,
+           version = version + 1,
+           updated_at = CURRENT_TIMESTAMP,
+           updated_by = VALUES(updated_by)`,
+        [id, DEFAULT_PERCENTAGE, DEFAULT_CUTOFF_DAY, actor],
+      ))
+      const saved = await readCentralPolicyRow(id)
+      if (!saved) throw new Error('La clasificación central del servicio no pudo confirmarse.')
+      await mirrorPolicyToBridge(saved, false)
+      markCentralAvailable()
+      return saved
+    } catch (error) {
+      markCentralUnavailable(error)
+    }
+  }
+
+  await query(
+    `INSERT INTO ${RECARGO_TABLE}
+      (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync)
+     VALUES (?, 1, 1, ?, ?, 1, CURRENT_TIMESTAMP, ?, 1)
+     ON DUPLICATE KEY UPDATE
+       activo = 1,
+       es_servicio = 1,
+       version = version + 1,
+       updated_at = CURRENT_TIMESTAMP,
+       updated_by = VALUES(updated_by),
+       pending_sync = 1`,
+    [id, DEFAULT_PERCENTAGE, DEFAULT_CUTOFF_DAY, actor],
   )
-  const fallback = rows[0] ? rowToPolicy(rows[0], 'bridge') : emptyPolicy(id, 'bridge')
-  fallback.pendingSync = true
-  fallback.explicit = true
-  return fallback
+
+  return await readSavedBridgePolicy(id)
 }

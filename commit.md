@@ -1,1 +1,1 @@
-Corrige el ancho y la distribución del modal de recepción de pagos
+Clasifica servicios de recargo desde Recibir Pago

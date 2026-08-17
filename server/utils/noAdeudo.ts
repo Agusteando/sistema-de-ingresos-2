@@ -14,8 +14,7 @@ import { isDepuradoPayment } from './payment-classification'
 import { loadActiveCobranzaConvention } from './cobranza-convenio'
 import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import {
-  getSchoolPeriodDeadlineForCycle,
-  isPastPaymentDeadline,
+  resolveLateFeeTiming,
   shouldApplyLateFee,
 } from './cobranza-period'
 import { calculateLateFeeSubtotal } from '../../shared/utils/recargo'
@@ -366,13 +365,16 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
       const recargoPolicy = recargoPolicyByConcept.get(conceptoId)
       const hasRecargoManual = pagosDelMes.some(p => String(p.recargo) === '1')
       const hasPayment = pagosDelMes.some(p => Number(p.monto || 0) > 0)
-      const paymentDeadline = getSchoolPeriodDeadlineForCycle(
-        cicloKey,
-        mes,
-        currentDateKey,
-        recargoPolicy?.diaLimite ?? 12,
-      )
-      const isLate = isPastPaymentDeadline(paymentDeadline, currentDateKey)
+      const recargoTiming = resolveLateFeeTiming({
+        ciclo: cicloKey,
+        schoolMonth: mes,
+        currentDateValue: currentDateKey,
+        cutoffDay: recargoPolicy?.diaLimite ?? 12,
+        isService: Boolean(recargoPolicy?.esServicio),
+        isEventual,
+      })
+      const paymentDeadline = recargoTiming.deadline
+      const isLate = recargoTiming.isAfterDeadline
       let subtotal = totalOriginal
       let saldo = subtotal - resueltoTotalMes
       const appliesLateFee = shouldApplyLateFee({

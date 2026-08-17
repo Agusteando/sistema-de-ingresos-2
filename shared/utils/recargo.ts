@@ -1,5 +1,6 @@
 export type LateFeeDecision = {
   enabled: boolean
+  force?: boolean
   hasManualLateFee: boolean
   hasPayment: boolean
   hasActiveConvention: boolean
@@ -9,13 +10,15 @@ export type LateFeeDecision = {
 
 export const shouldApplyLateFee = ({
   enabled,
+  force = false,
   hasManualLateFee,
   hasPayment,
   hasActiveConvention,
   isAfterDeadline,
   balanceBeforeLateFee,
 }: LateFeeDecision) => Boolean(
-  hasManualLateFee
+  force
+  || hasManualLateFee
   || (
     enabled
     && !hasPayment
@@ -81,7 +84,7 @@ export const getSchoolMonthForDateKey = (ciclo: string, currentDateValue: unknow
   return getSchoolMonthForCycle({ year, month, cycleStartYear })
 }
 
-const normalizeCutoffDay = (value: unknown) => {
+export const normalizeCutoffDay = (value: unknown) => {
   const parsed = Math.trunc(Number(value || 12))
   return Number.isFinite(parsed) && parsed >= 1 && parsed <= 28 ? parsed : 12
 }
@@ -107,4 +110,55 @@ export const getSchoolPeriodDeadlineForCycle = (
 export const isPastPaymentDeadline = (deadline: string, currentDateValue: unknown) => {
   const currentDateKey = normalizeDateKey(currentDateValue)
   return Boolean(deadline && currentDateKey && deadline < currentDateKey)
+}
+
+export type LateFeeTiming = {
+  deadline: string
+  isAfterDeadline: boolean
+  mode: 'school-period' | 'service'
+}
+
+export const resolveLateFeeTiming = ({
+  ciclo,
+  schoolMonth,
+  currentDateValue,
+  cutoffDay = 12,
+  isService = false,
+  isEventual = false,
+}: {
+  ciclo: string
+  schoolMonth: number
+  currentDateValue: unknown
+  cutoffDay?: unknown
+  isService?: boolean
+  isEventual?: boolean
+}): LateFeeTiming => {
+  const currentDateKey = normalizeDateKey(currentDateValue)
+
+  // Servicios de cobro único no tienen un mes académico confiable. Una vez
+  // clasificados explícitamente como servicio, su vencimiento se evalúa contra
+  // el día de corte del mismo mes calendario de la fecha de pago.
+  if (isService && isEventual) {
+    const deadline = currentDateKey
+      ? `${currentDateKey.slice(0, 7)}-${padDatePart(normalizeCutoffDay(cutoffDay))}`
+      : ''
+    return {
+      deadline,
+      isAfterDeadline: isPastPaymentDeadline(deadline, currentDateKey),
+      mode: 'service',
+    }
+  }
+
+  const deadline = getSchoolPeriodDeadlineForCycle(
+    ciclo,
+    schoolMonth,
+    currentDateValue,
+    cutoffDay,
+  )
+
+  return {
+    deadline,
+    isAfterDeadline: isPastPaymentDeadline(deadline, currentDateKey),
+    mode: 'school-period',
+  }
 }

@@ -1,5 +1,5 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
-import { setRecargoPolicyActive } from '../../utils/recargo-config'
+import { markRecargoConceptAsService, setRecargoPolicyActive } from '../../utils/recargo-config'
 
 const normalizeBoolean = (value: unknown) => {
   if (typeof value === 'boolean') return value
@@ -10,9 +10,6 @@ const normalizeBoolean = (value: unknown) => {
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const conceptoId = Number(body?.conceptoId || 0)
-  if (body?.activo === undefined || body?.activo === null) {
-    throw createError({ statusCode: 400, message: 'Estado de recargo requerido.' })
-  }
   if (!Number.isInteger(conceptoId) || conceptoId <= 0) {
     throw createError({ statusCode: 400, message: 'Concepto inválido.' })
   }
@@ -24,17 +21,26 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   const user = event.context.user
   const updatedBy = String(user?.email || user?.name || 'Sistema').trim()
-  const policy = await setRecargoPolicyActive({
-    conceptoId,
-    activo: normalizeBoolean(body?.activo),
-    updatedBy,
-  })
+  const markAsService = normalizeBoolean(body?.servicio)
+
+  if (!markAsService && (body?.activo === undefined || body?.activo === null)) {
+    throw createError({ statusCode: 400, message: 'Configuración de recargo requerida.' })
+  }
+
+  const policy = markAsService
+    ? await markRecargoConceptAsService({ conceptoId, updatedBy })
+    : await setRecargoPolicyActive({
+        conceptoId,
+        activo: normalizeBoolean(body?.activo),
+        updatedBy,
+      })
 
   return {
     ok: true,
     policy: {
       conceptoId: policy.conceptoId,
       activo: policy.activo,
+      servicio: policy.esServicio,
       porcentaje: policy.porcentaje,
       diaLimite: policy.diaLimite,
       pendingSync: policy.pendingSync,

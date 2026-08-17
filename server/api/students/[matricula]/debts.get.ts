@@ -16,9 +16,8 @@ import {
 } from "../../../utils/documento-periods";
 import { loadActiveCobranzaConvention } from "../../../utils/cobranza-convenio";
 import {
-  getSchoolPeriodDeadlineForCycle,
-  isPastPaymentDeadline,
   normalizeDateKey,
+  resolveLateFeeTiming,
   shouldApplyLateFee,
 } from "../../../utils/cobranza-period";
 import { calculateLateFeeSubtotal } from '../../../../shared/utils/recargo';
@@ -318,13 +317,16 @@ export default defineEventHandler(async (event) =>
 
         const conceptoId = Number(activePeriod?.concepto_id || doc.concepto || 0);
         const recargoPolicy = recargoPolicyByConcept.get(conceptoId);
-        const paymentDeadline = getSchoolPeriodDeadlineForCycle(
-          cicloKey,
-          mes,
-          currentDateKey,
-          recargoPolicy?.diaLimite ?? 12,
-        );
-        const isLate = isPastPaymentDeadline(paymentDeadline, currentDateKey);
+        const recargoTiming = resolveLateFeeTiming({
+          ciclo: cicloKey,
+          schoolMonth: mes,
+          currentDateValue: currentDateKey,
+          cutoffDay: recargoPolicy?.diaLimite ?? 12,
+          isService: Boolean(recargoPolicy?.esServicio),
+          isEventual,
+        });
+        const paymentDeadline = recargoTiming.deadline;
+        const isLate = recargoTiming.isAfterDeadline;
         const appliesLateFee = shouldApplyLateFee({
           enabled: Boolean(recargoPolicy?.activo),
           hasManualLateFee: hasRecargoManual,
@@ -404,6 +406,7 @@ export default defineEventHandler(async (event) =>
           isLate,
           hasRecargo: subtotal > totalOriginal,
           recargoActivo: Boolean(recargoPolicy?.activo),
+          recargoServicio: Boolean(recargoPolicy?.esServicio),
           recargoPorcentaje: Number(recargoPolicy?.porcentaje ?? 10),
           recargoDiaLimite: Number(recargoPolicy?.diaLimite ?? 12),
           recargoPendingSync: Boolean(recargoPolicy?.pendingSync),

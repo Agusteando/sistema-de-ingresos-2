@@ -7,5 +7,6 @@ export {
   isPastPaymentDeadline,
   normalizeDateKey,
   padDatePart,
+  resolveLateFeeTiming,
   shouldApplyLateFee,
 } from '../../shared/utils/recargo'

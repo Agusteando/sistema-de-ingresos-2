@@ -536,6 +536,7 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
         CREATE TABLE IF NOT EXISTS concepto_recargo_config (
           concepto_id INT NOT NULL,
           activo TINYINT(1) NOT NULL DEFAULT 0,
+          es_servicio TINYINT(1) NOT NULL DEFAULT 0,
           porcentaje DECIMAL(5,2) NOT NULL DEFAULT 10.00,
           dia_limite TINYINT UNSIGNED NOT NULL DEFAULT 12,
           version BIGINT UNSIGNED NOT NULL DEFAULT 1,
@@ -546,6 +547,7 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
           INDEX idx_recargo_pending_sync (pending_sync)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `)
+      await checkAndAddColumn('concepto_recargo_config', 'es_servicio', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER activo')
 
       await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS facturas (
