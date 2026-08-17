@@ -29,23 +29,6 @@
                   <LucideWalletCards :size="16" class="text-brand-campus" />
                   Cambiar método de pago
                 </button>
-                <button
-                  type="button"
-                  class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-                  @click="openPaymentDateEditor"
-                >
-                  <LucideCalendarDays :size="16" class="text-brand-campus" />
-                  Cambiar fecha
-                </button>
-                <button
-                  v-if="hasCustomPaymentDate"
-                  type="button"
-                  class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-                  @click="resetPaymentDate"
-                >
-                  <LucideRotateCcw :size="15" />
-                  Usar fecha de hoy
-                </button>
                 <div class="my-1 border-t border-gray-100"></div>
                 <button
                   type="button"
@@ -119,45 +102,25 @@
           </div>
 
           <div
-            v-if="paymentDateEditorOpen || hasCustomPaymentDate"
-            class="mb-4 rounded-xl border border-blue-100 bg-blue-50/60 p-4"
+            v-if="paymentDateEditorOpen"
+            class="mb-4 flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3"
           >
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div class="flex min-w-0 items-start gap-3">
-                <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand-campus shadow-sm ring-1 ring-blue-100">
-                  <LucideCalendarDays :size="18" />
-                </span>
-                <div class="min-w-0">
-                  <p class="text-sm font-bold text-gray-800">Fecha del pago</p>
-                  <p class="mt-0.5 text-xs leading-5 text-gray-500">
-                    La hora se registra automáticamente y no se puede editar.
-                  </p>
-                </div>
-              </div>
-              <div class="flex items-center gap-2 sm:justify-end">
-                <input
-                  v-model="paymentDate"
-                  type="date"
-                  class="input-field h-10 min-w-[10.5rem] bg-white text-sm font-semibold"
-                  aria-label="Fecha del pago"
-                >
-                <button
-                  v-if="hasCustomPaymentDate"
-                  type="button"
-                  class="btn btn-ghost h-10 px-3 text-xs"
-                  @click="resetPaymentDate"
-                >
-                  Hoy
-                </button>
-              </div>
-            </div>
-            <div
-              v-if="hasCustomPaymentDate"
-              class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-blue-100 pt-3 text-xs"
+            <LucideCalendarDays :size="17" class="shrink-0 text-brand-campus" />
+            <input
+              v-model="paymentDate"
+              type="date"
+              class="input-field h-10 min-w-[10.5rem] bg-white text-sm font-semibold"
+              aria-label="Fecha del pago"
+              @change="paymentDateEditorOpen = false"
             >
-              <span class="font-semibold text-gray-700">Visible en reportes: {{ formattedEffectivePaymentDate }}</span>
-              <span class="text-gray-500">Registro original: hoy, con hora automática</span>
-            </div>
+            <button
+              v-if="hasCustomPaymentDate"
+              type="button"
+              class="btn btn-ghost h-10 px-3 text-xs"
+              @click="resetPaymentDate"
+            >
+              Hoy
+            </button>
           </div>
 
           <div
@@ -283,24 +246,37 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
-            <div class="form-group mb-0">
+          <div class="mb-6 grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div class="form-group mb-0 min-w-0">
               <label class="form-label">Método de pago</label>
-              <div class="flex h-11 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3">
-                <component :is="selectedPaymentMethodOption.icon" :size="16" class="shrink-0 text-brand-campus" />
-                <span class="min-w-0 flex-1 truncate text-sm font-bold text-gray-800">{{ selectedPaymentMethodOption.label }}</span>
+              <div class="flex items-center gap-2">
+                <div class="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3">
+                  <component :is="selectedPaymentMethodOption.icon" :size="16" class="shrink-0 text-brand-campus" />
+                  <span class="min-w-0 flex-1 truncate text-sm font-bold text-gray-800">{{ selectedPaymentMethodOption.label }}</span>
+                  <button
+                    type="button"
+                    class="rounded-md px-2 py-1 text-xs font-bold text-brand-campus transition hover:bg-brand-campus/5"
+                    @click="openPaymentMethodEditor"
+                  >
+                    Cambiar
+                  </button>
+                </div>
                 <button
                   type="button"
-                  class="rounded-md px-2 py-1 text-xs font-bold text-brand-campus transition hover:bg-brand-campus/5"
-                  @click="openPaymentMethodEditor"
+                  class="payment-date-chip"
+                  :class="{ active: hasCustomPaymentDate }"
+                  :title="formattedEffectivePaymentDate"
+                  aria-label="Cambiar fecha del pago"
+                  @click="openPaymentDateEditor"
                 >
-                  Cambiar
+                  <LucideCalendarDays :size="15" />
+                  <span>{{ paymentDateChipLabel }}</span>
                 </button>
               </div>
             </div>
-            <div class="text-right flex flex-col justify-center">
-              <span class="text-[0.7rem] font-bold text-gray-500 uppercase tracking-wide">Total del pago</span>
-              <span class="text-2xl font-bold text-brand-campus leading-none mt-1 font-mono">${{ totalCobrar.toFixed(2) }}</span>
+            <div class="flex flex-col justify-center text-right">
+              <span class="text-[0.7rem] font-bold uppercase tracking-wide text-gray-500">Total del pago</span>
+              <span class="mt-1 font-mono text-2xl font-bold leading-none text-brand-campus">${{ totalCobrar.toFixed(2) }}</span>
             </div>
           </div>
 
@@ -320,7 +296,25 @@
                 <tr v-for="(debt, i) in processedDebts" :key="i" class="border-t border-gray-100 hover:bg-transparent">
                   <td class="font-semibold text-sm py-2 px-4 text-gray-800">
                     <div class="payment-concept-cell">
-                      <span>{{ debt.conceptoNombre }}</span>
+                      <div class="payment-concept-line">
+                        <span>{{ debt.conceptoNombre }}</span>
+                        <button
+                          type="button"
+                          class="payment-recargo-toggle"
+                          :class="{
+                            enabled: debt.recargoActivo,
+                            applied: debtHasRecargoForDate(debt),
+                            pending: isRecargoTogglePending(debt),
+                          }"
+                          :disabled="isRecargoTogglePending(debt)"
+                          :aria-pressed="debt.recargoActivo ? 'true' : 'false'"
+                          title="Recargo"
+                          @click.stop="toggleConceptRecargo(debt)"
+                        >
+                          <LucideLoader2 v-if="isRecargoTogglePending(debt)" :size="12" class="animate-spin" />
+                          <span v-else>{{ recargoToggleLabel(debt) }}</span>
+                        </button>
+                      </div>
                       <em v-if="debt.stock?.controlled" :class="['payment-stock-chip', stockClass(debt.stock)]">{{ stockLabel(debt.stock) }}</em>
                     </div>
                   </td>
@@ -332,12 +326,13 @@
                       class="input-field text-right font-mono font-semibold py-1 px-2 h-auto text-brand-campus"
                       v-model.number="debt.montoFinalInput"
                       min="0"
+                      @input="handleFinalAmountInput(debt)"
                       step="1"
                     >
-                    <span v-else class="font-mono text-xs font-semibold text-gray-500">${{ Number(debt.subtotal || 0).toFixed(2) }}</span>
+                    <span v-else class="font-mono text-xs font-semibold text-gray-500">${{ effectiveSubtotal(debt).toFixed(2) }}</span>
                   </td>
                   <td class="py-2 px-4 text-right">
-                    <input type="number" class="input-field text-right font-mono font-semibold py-1 px-2 h-auto text-brand-campus" v-model.number="debt.montoPagado" :max="effectiveSaldoFinal(debt)" min="0" step="0.01">
+                    <input type="number" class="input-field text-right font-mono font-semibold py-1 px-2 h-auto text-brand-campus" v-model.number="debt.montoPagado" :max="effectiveSaldoFinal(debt)" @input="debt.montoTouched = true" min="0" step="0.01">
                   </td>
                 </tr>
               </tbody>
@@ -367,7 +362,7 @@
 
 <script setup>
 import { ref, watch, computed, onMounted, onBeforeUnmount, markRaw, nextTick } from 'vue'
-import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheck, LucideCheckCircle, LucideChevronDown, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideLock, LucideMoreHorizontal, LucideReceiptText, LucideRotateCcw, LucideWalletCards } from 'lucide-vue-next'
+import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheck, LucideCheckCircle, LucideChevronDown, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideLock, LucideMoreHorizontal, LucideReceiptText, LucideWalletCards } from 'lucide-vue-next'
 import { useCookie, useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -376,6 +371,7 @@ import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { calculatePromotedGrado, displayGrado } from '~/shared/utils/grado'
 import { institutionFlagForPlantel, normalizePlantelCode } from '~/shared/utils/institution'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
+import { calculateLateFeeSubtotal, getSchoolPeriodDeadlineForCycle, isPastPaymentDeadline, shouldApplyLateFee } from '~/shared/utils/recargo'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { requestPaymentActionAuthorizationCode, sendPaymentActionAuthorizationNotice } from '~/utils/paymentActionAuthorization'
 
@@ -405,6 +401,7 @@ const otherCampusEnteredCode = ref('')
 const otherCampusAuthorizationCode = ref('')
 const otherCampusAuthorizationError = ref('')
 const otherCampusCodeInput = ref(null)
+const recargoTogglingConcepts = ref(new Set())
 const activePlantelCookie = useCookie('auth_active_plantel')
 
 const localDateKey = (date = new Date()) => {
@@ -424,6 +421,14 @@ const formattedEffectivePaymentDate = computed(() => {
     month: 'short',
     year: 'numeric'
   }).format(new Date(year, month - 1, day))
+})
+const paymentDateChipLabel = computed(() => {
+  if (!hasCustomPaymentDate.value) return 'Hoy'
+  const [year, month, day] = String(paymentDate.value || '').split('-').map(Number)
+  if (!year || !month || !day) return 'Fecha'
+  return new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short' })
+    .format(new Date(year, month - 1, day))
+    .replace('.', '')
 })
 
 const paymentMethodOptions = [
@@ -469,6 +474,7 @@ const openPaymentDateEditor = () => {
 const resetPaymentDate = () => {
   paymentDate.value = localDateKey()
   paymentOptionsOpen.value = false
+  paymentDateEditorOpen.value = false
 }
 
 const resetOtherCampusAuthorization = () => {
@@ -576,6 +582,47 @@ const effectivePaymentDateIso = () => {
 }
 
 const paymentDebtKey = (debt) => `${debt?.documento || ''}-${debt?.mes || ''}-${debt?.conceptoId || debt?.conceptoNombre || ''}`
+const conceptIdForDebt = (debt) => Number(debt?.conceptoId || debt?.concepto || 0)
+const schoolMonthForDebt = (debt) => {
+  const raw = String(debt?.mes || '').trim().toLowerCase()
+  if (raw === 'ev') return 1
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+}
+const baseAmountForDebt = (debt) => debt?.montoFinalPendiente
+  ? Math.max(0, Number(debt?.montoFinalInput || 0))
+  : Math.max(0, Number(debt?.costoOriginal ?? debt?.subtotal ?? 0))
+const recargoCalculationForDebt = (debt) => {
+  const baseAmount = baseAmountForDebt(debt)
+  const pagosPrevios = Number(debt?.pagosPrevios ?? debt?.resuelto ?? debt?.pagos ?? 0)
+  const deadline = getSchoolPeriodDeadlineForCycle(
+    normalizeCicloKey(state.value.ciclo),
+    schoolMonthForDebt(debt),
+    paymentDate.value,
+    debt?.recargoDiaLimite ?? 12,
+  )
+  const isLate = isPastPaymentDeadline(deadline, paymentDate.value)
+  const applies = shouldApplyLateFee({
+    enabled: Boolean(debt?.recargoActivo),
+    hasManualLateFee: Boolean(debt?.recargoManual),
+    hasPayment: Boolean(debt?.hasPayment),
+    hasActiveConvention: Boolean(debt?.convenioActivo),
+    isAfterDeadline: isLate,
+    balanceBeforeLateFee: baseAmount - pagosPrevios,
+  })
+  const subtotal = applies
+    ? calculateLateFeeSubtotal(baseAmount, debt?.recargoPorcentaje ?? 10)
+    : baseAmount
+
+  return { subtotal, applies, isLate, deadline }
+}
+const debtHasRecargoForDate = (debt) => recargoCalculationForDebt(debt).applies
+const recargoToggleLabel = (debt) => {
+  if (!debt?.recargoActivo) return '%'
+  const percentage = Number(debt?.recargoPorcentaje ?? 10)
+  return `${debtHasRecargoForDate(debt) ? '+' : ''}${percentage}%`
+}
+const isRecargoTogglePending = (debt) => recargoTogglingConcepts.value.has(conceptIdForDebt(debt))
 
 const buildProcessedDebts = () => (Array.isArray(props.debts) ? props.debts : []).map(d => {
   const final = d.saldo
@@ -584,9 +631,10 @@ const buildProcessedDebts = () => (Array.isArray(props.debts) ? props.debts : []
     ...d,
     saldoFinal: final,
     montoPagado: final,
+    montoTouched: false,
     pagosPrevios: resuelto,
     saldoAntes: d.subtotal - resuelto,
-    montoFinalInput: Math.round(Number(d.subtotal || d.costoOriginal || d.saldo || 0))
+    montoFinalInput: Math.round(Number(d.costoOriginal ?? d.subtotal ?? d.saldo ?? 0))
   }
 })
 
@@ -611,7 +659,8 @@ const readPaymentDraft = () => ({
   debts: processedDebts.value.map(debt => ({
     key: paymentDebtKey(debt),
     montoPagado: debt.montoPagado,
-    montoFinalInput: debt.montoFinalInput
+    montoFinalInput: debt.montoFinalInput,
+    montoTouched: Boolean(debt.montoTouched)
   }))
 })
 
@@ -639,6 +688,7 @@ const writePaymentDraft = (draft) => {
     return {
       ...debt,
       montoPagado: Number.isFinite(montoPagado) ? montoPagado : debt.montoPagado,
+      montoTouched: Boolean(restored.montoTouched),
       montoFinalInput: Number.isFinite(montoFinalInput) ? montoFinalInput : debt.montoFinalInput
     }
   })
@@ -680,8 +730,85 @@ onBeforeUnmount(() => {
 })
 
 const hasPendingFinalAmounts = computed(() => processedDebts.value.some(debt => debt.montoFinalPendiente))
-const effectiveSubtotal = (debt) => debt.montoFinalPendiente ? Number(debt.montoFinalInput || 0) : Number(debt.subtotal || 0)
+const effectiveSubtotal = (debt) => recargoCalculationForDebt(debt).subtotal
 const effectiveSaldoFinal = (debt) => Math.max(0, effectiveSubtotal(debt) - Number(debt.pagosPrevios || 0))
+const repriceUntouchedPayments = () => {
+  processedDebts.value.forEach((debt) => {
+    const nextBalance = effectiveSaldoFinal(debt)
+    if (!debt.montoTouched) debt.montoPagado = nextBalance
+    else if (Number(debt.montoPagado || 0) > nextBalance) debt.montoPagado = nextBalance
+  })
+}
+const handleFinalAmountInput = (debt) => {
+  if (!debt?.montoTouched) debt.montoPagado = effectiveSaldoFinal(debt)
+}
+const setRecargoTogglePending = (conceptoId, pending) => {
+  const next = new Set(recargoTogglingConcepts.value)
+  if (pending) next.add(conceptoId)
+  else next.delete(conceptoId)
+  recargoTogglingConcepts.value = next
+}
+const applyRecargoPolicyToConcept = (conceptoId, policy) => {
+  processedDebts.value.forEach((row) => {
+    if (conceptIdForDebt(row) !== conceptoId) return
+    if (policy.activo !== undefined) row.recargoActivo = Boolean(policy.activo)
+    if (policy.porcentaje !== undefined) row.recargoPorcentaje = Number(policy.porcentaje)
+    if (policy.diaLimite !== undefined) row.recargoDiaLimite = Number(policy.diaLimite)
+    if (policy.pendingSync !== undefined) row.recargoPendingSync = Boolean(policy.pendingSync)
+  })
+  repriceUntouchedPayments()
+}
+const toggleConceptRecargo = async (debt) => {
+  const conceptoId = conceptIdForDebt(debt)
+  if (!conceptoId || isRecargoTogglePending(debt)) return
+
+  const previous = processedDebts.value
+    .filter(row => conceptIdForDebt(row) === conceptoId)
+    .map(row => ({
+      key: paymentDebtKey(row),
+      activo: Boolean(row.recargoActivo),
+      porcentaje: Number(row.recargoPorcentaje ?? 10),
+      diaLimite: Number(row.recargoDiaLimite ?? 12),
+      pendingSync: Boolean(row.recargoPendingSync),
+    }))
+  const nextActive = !Boolean(debt.recargoActivo)
+  setRecargoTogglePending(conceptoId, true)
+
+  try {
+    const response = await executeOptimistic(
+      () => $fetch('/api/recargos/concepto', {
+        method: 'PUT',
+        body: { conceptoId, activo: nextActive },
+      }),
+      () => applyRecargoPolicyToConcept(conceptoId, { activo: nextActive }),
+      () => {
+        const previousByKey = new Map(previous.map(item => [item.key, item]))
+        processedDebts.value.forEach((row) => {
+          const saved = previousByKey.get(paymentDebtKey(row))
+          if (!saved) return
+          row.recargoActivo = saved.activo
+          row.recargoPorcentaje = saved.porcentaje
+          row.recargoDiaLimite = saved.diaLimite
+          row.recargoPendingSync = saved.pendingSync
+        })
+        repriceUntouchedPayments()
+      },
+      {
+        pending: 'Actualizando recargo...',
+        success: 'Recargo actualizado',
+        error: 'No se pudo actualizar el recargo',
+      },
+    )
+    if (response?.policy) applyRecargoPolicyToConcept(conceptoId, response.policy)
+  } catch {
+    // executeOptimistic already restores the visible state.
+  } finally {
+    setRecargoTogglePending(conceptoId, false)
+  }
+}
+watch(paymentDate, () => {
+  repriceUntouchedPayments()
+})
 const totalCobrar = computed(() => processedDebts.value.reduce((a, b) => a + (b.montoPagado || 0), 0))
 const stockLabel = (stock) => {
   if (!stock?.controlled) return ''
@@ -706,7 +833,7 @@ const paymentRows = () => processedDebts.value.filter(d => Number(d.montoPagado 
     subtotal,
     saldoFinal: saldoAntes,
     saldoAntes,
-    montoFinal: d.montoFinalPendiente ? subtotal : d.montoFinal
+    montoFinal: d.montoFinalPendiente ? Number(d.montoFinalInput || 0) : d.montoFinal
   }
 })
 
@@ -807,7 +934,6 @@ const submit = async () => {
     matricula: props.student.matricula,
     formaDePago: formaDePago.value,
     ciclo: normalizeCicloKey(state.value.ciclo),
-    lateFeeActive: state.value.lateFeeActive,
     fechaPago: hasCustomPaymentDate.value ? paymentDate.value : null,
     pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
     plantelPago: pagoRealizadoEnOtroPlantel.value ? plantelPago.value : null,
@@ -877,6 +1003,81 @@ const submit = async () => {
   opacity: 0;
   transform: translateY(-4px) scale(0.98);
 }
+
+.payment-date-chip {
+  display: inline-flex;
+  height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #d7dde6;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 11px;
+  color: #536276;
+  font-size: .72rem;
+  font-weight: 800;
+  line-height: 1;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+.payment-date-chip:hover,
+.payment-date-chip.active {
+  border-color: rgba(50, 120, 78, .42);
+  background: #f4faf5;
+  color: #2f7449;
+}
+.payment-concept-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.payment-concept-line > span {
+  min-width: 0;
+  flex: 1;
+}
+.payment-recargo-toggle {
+  display: inline-flex;
+  min-width: 34px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d8dee7;
+  border-radius: 999px;
+  background: #fff;
+  padding: 0 7px;
+  color: #8a95a5;
+  font-size: .66rem;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.payment-recargo-toggle:hover:not(:disabled) {
+  border-color: #aeb9c7;
+  color: #56657a;
+}
+.payment-recargo-toggle.enabled {
+  border-color: #b8d8c2;
+  background: #f1f8f3;
+  color: #3d7650;
+}
+.payment-recargo-toggle.applied {
+  border-color: #7db58e;
+  background: #e6f4e9;
+  color: #28653e;
+  box-shadow: inset 0 0 0 1px rgba(40, 101, 62, .05);
+}
+.payment-recargo-toggle.pending {
+  cursor: wait;
+  opacity: .7;
+}
+.payment-recargo-toggle:disabled {
+  pointer-events: none;
+}
+
 .payment-concept-cell {
   display: flex;
   min-width: 0;

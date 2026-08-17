@@ -165,20 +165,6 @@
           </p>
         </div>
 
-        <label v-if="showFinancialNav" class="late-fee-toggle group">
-          <span>Recargos Automáticos</span>
-          <div
-            class="toggle-track"
-            :class="{ 'toggle-track-on': state.lateFeeActive }"
-          >
-            <input type="checkbox" v-model="state.lateFeeActive" class="hidden" />
-            <div
-              class="toggle-thumb"
-              :class="{ 'toggle-thumb-on': state.lateFeeActive }"
-            ></div>
-          </div>
-        </label>
-
         <div
           v-if="systemVersionLabel"
           class="system-version-card"
@@ -1726,8 +1712,7 @@ const logout = async () => {
   padding: 0 20px 23px;
 }
 
-.plantel-block label,
-.late-fee-toggle span {
+.plantel-block label {
   display: block;
   margin-bottom: 7px;
   color: #2a5d4a;
@@ -1926,47 +1911,6 @@ const logout = async () => {
   font-size: 0.61rem;
   font-weight: 800;
   line-height: 1.35;
-}
-
-.late-fee-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-}
-
-.late-fee-toggle span {
-  margin-bottom: 0;
-}
-
-.toggle-track {
-  position: relative;
-  width: 40px;
-  height: 22px;
-  border-radius: 999px;
-  background: #d7e6d1;
-  box-shadow: inset 0 1px 3px rgba(22, 38, 65, 0.12);
-  transition: background 180ms ease;
-}
-
-.toggle-track-on {
-  background: linear-gradient(135deg, #9bd04f, #5ca342);
-}
-
-.toggle-thumb {
-  position: absolute;
-  left: 3px;
-  top: 3px;
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 4px 10px rgba(22, 38, 65, 0.18);
-  transition: transform 180ms ease;
-}
-
-.toggle-thumb-on {
-  transform: translateX(18px);
 }
 
 .system-version-card {

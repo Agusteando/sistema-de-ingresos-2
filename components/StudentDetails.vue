@@ -1720,7 +1720,6 @@ const studentGroupInlineLabel = (student) => {
 const accountCacheOptions = computed(() => ({
   matricula: props.student?.matricula || "",
   ciclo: selectedCicloKey.value,
-  lateFeeActive: state.value.lateFeeActive,
 }));
 const currentAccountContextKey = computed(() =>
   getAccountStateCacheKey(accountCacheOptions.value),
@@ -2071,7 +2070,7 @@ const loadDebts = async (options = {}) => {
 
   try {
     const res = await $fetch(`/api/students/${props.student.matricula}/debts`, {
-      params: { ciclo: cicloKey, lateFeeActive: state.value.lateFeeActive },
+      params: { ciclo: cicloKey },
     });
     if (
       requestId !== debtsRequestId ||
@@ -2215,7 +2214,6 @@ const loadPhoto = async () => {
 watch(
   () => [
     props.student?.matricula,
-    state.value.lateFeeActive,
     normalizeCicloKey(state.value.ciclo),
   ],
   () => {

@@ -14,6 +14,8 @@ import {
   isPastPaymentDeadline,
   shouldApplyLateFee,
 } from '../../utils/cobranza-period'
+import { calculateLateFeeSubtotal } from '../../../shared/utils/recargo'
+import { loadRecargoPolicies, type RecargoPolicy } from '../../utils/recargo-config'
 
 const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 
@@ -55,7 +57,7 @@ const normalizePaymentDate = (value: unknown) => {
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
-  const { matricula, pagos, formaDePago, ciclo = '2025', lateFeeActive = true, fechaPago } = body
+  const { matricula, pagos, formaDePago, ciclo = '2025', fechaPago } = body
   const pagoRealizadoEnOtroPlantel = truthyFlag(body.pagoRealizadoEnOtroPlantel)
   const plantelPago = String(body.plantelPago || '').trim().toUpperCase()
   const cicloKey = normalizeCicloKey(ciclo)
@@ -127,6 +129,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const paymentStockReservations: StockReservation[] = []
   const finalAmountByTarget = new Map<string, number>()
   const resolvedPaymentConcepts = new Map<string, { concepto: string; conceptoNombre: string }>()
+  const recargoPolicyCache = new Map<number, RecargoPolicy>()
 
   try {
   for (const p of pagos) {
@@ -221,14 +224,25 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     let subtotal = Number(finalAmount)
     let saldoAntes = Math.max(0, subtotal - resuelto)
 
-    const isEventual = String(doc.eventual) === '1'
+    const conceptoId = Number(paymentConcept.concepto || 0)
+    let recargoPolicy = recargoPolicyCache.get(conceptoId)
+    if (!recargoPolicy) {
+      const policies = await loadRecargoPolicies([conceptoId])
+      recargoPolicy = policies.get(conceptoId)
+      if (recargoPolicy) recargoPolicyCache.set(conceptoId, recargoPolicy)
+    }
+
     const hasRecargoManual = pagosDelMes.some(row => String(row.recargo) === '1')
     const hasPayment = pagosDelMes.some(row => Number(row.monto || 0) > 0)
-    const paymentDeadline = getSchoolPeriodDeadlineForCycle(cicloKey, mesNumber, effectiveDateKey)
+    const paymentDeadline = getSchoolPeriodDeadlineForCycle(
+      cicloKey,
+      mesNumber,
+      effectiveDateKey,
+      recargoPolicy?.diaLimite ?? 12,
+    )
     const isLate = isPastPaymentDeadline(paymentDeadline, effectiveDateKey)
     const appliesLateFee = shouldApplyLateFee({
-      enabled: String(lateFeeActive) !== 'false',
-      isEventual,
+      enabled: Boolean(recargoPolicy?.activo),
       hasManualLateFee: hasRecargoManual,
       hasPayment,
       hasActiveConvention: Boolean(activeConvention),
@@ -237,7 +251,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     })
 
     if (appliesLateFee) {
-      subtotal = Math.trunc(Number(finalAmount) * 1.1)
+      subtotal = calculateLateFeeSubtotal(finalAmount, recargoPolicy?.porcentaje ?? 10)
       saldoAntes = Math.max(0, subtotal - resuelto)
     }
 

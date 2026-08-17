@@ -3,7 +3,6 @@ import { normalizeCicloOption } from '~/utils/constants'
 
 type GlobalState = {
   ciclo?: string
-  lateFeeActive?: boolean
   [key: string]: unknown
 }
 
@@ -46,14 +45,12 @@ export const useActiveCiclo = () => {
   const initialCiclo = normalizeCicloOption(cookieValue || storedValue)
 
   const state = useState<GlobalState>('globalState', () => ({
-    lateFeeActive: true,
     ciclo: initialCiclo,
   }))
 
   if (!state.value || typeof state.value !== 'object') {
-    state.value = { lateFeeActive: true, ciclo: initialCiclo }
+    state.value = { ciclo: initialCiclo }
   }
-  if (typeof state.value.lateFeeActive !== 'boolean') state.value.lateFeeActive = true
 
   if (import.meta.client) {
     const hydratedCiclo = normalizeCicloOption(cookieValue || storedValue || state.value.ciclo)

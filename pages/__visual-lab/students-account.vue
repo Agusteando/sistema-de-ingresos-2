@@ -79,8 +79,8 @@ definePageMeta({ layout: false })
 
 const route = useRoute()
 const showLabChrome = computed(() => route.query.chrome !== '0')
-const globalState = useState('globalState', () => ({ ciclo: '2026', lateFeeActive: true }))
-globalState.value = { ...(globalState.value || {}), ciclo: '2026', lateFeeActive: true }
+const globalState = useState('globalState', () => ({ ciclo: '2026' }))
+globalState.value = { ...(globalState.value || {}), ciclo: '2026' }
 
 const authEmail = useCookie('auth_email')
 const authName = useCookie('auth_name')
@@ -363,19 +363,18 @@ function seedVisualCache() {
     labMatriculas.forEach((matricula) => {
       const key = [
         'account-state-cache',
-        'v1',
+        'v3',
         encodeURIComponent(scopeRole),
         encodeURIComponent(scopePlantel),
         encodeURIComponent(matricula),
         '2026',
-        'recargos-on'
+        'recargos-concepto'
       ].join(':')
       localStorage.setItem(key, JSON.stringify({
-        version: 1,
+        version: 3,
         key,
         matricula,
         ciclo: '2026',
-        lateFeeActive: true,
         savedAt: new Date().toISOString(),
         debts: accountDebtsByMatricula[matricula] || []
       }))
@@ -392,7 +391,7 @@ function seedVisualState() {
 function clearVisualState() {
   if (typeof window === 'undefined') return
   Object.keys(localStorage)
-    .filter((key) => key.startsWith('account-state-cache:v1:') && labMatriculas.some((matricula) => key.includes(`:${matricula}:`)))
+    .filter((key) => key.startsWith('account-state-cache:v3:') && labMatriculas.some((matricula) => key.includes(`:${matricula}:`)))
     .forEach((key) => localStorage.removeItem(key))
   labMatriculas.forEach((matricula) => sessionStorage.removeItem(`foto_${matricula}`))
 }

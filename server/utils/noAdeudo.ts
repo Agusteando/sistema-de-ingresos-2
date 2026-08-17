@@ -18,6 +18,8 @@ import {
   isPastPaymentDeadline,
   shouldApplyLateFee,
 } from './cobranza-period'
+import { calculateLateFeeSubtotal } from '../../shared/utils/recargo'
+import { loadRecargoPolicies } from './recargo-config'
 
 type RuntimeNoAdeudoConfig = {
   googlePrivateKey?: string
@@ -287,7 +289,7 @@ const mergeCentralOverlay = async (student: Record<string, any>) => {
 export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) => {
   const cicloKey = normalizeCicloKey(String(ciclo || ''))
   const documentos = await query<any[]>(`
-    SELECT d.documento, d.matricula, d.costo, d.montoFinal, d.meses, d.plazo, d.ciclo, d.conceptoNombre, d.eventual
+    SELECT d.documento, d.matricula, d.costo, d.montoFinal, d.meses, d.plazo, d.ciclo, d.concepto, d.conceptoNombre, d.eventual
     FROM documentos d
     WHERE d.matricula = ? AND d.ciclo = ? AND d.estatus = 'Activo'
   `, [matricula, cicloKey])
@@ -314,6 +316,10 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
     list.push(period)
     periodsByDocument.set(key, list)
   })
+  const recargoPolicyByConcept = await loadRecargoPolicies([
+    ...documentos.map((doc) => doc.concepto),
+    ...periodRows.map((period) => period.concepto_id),
+  ])
 
   const [dbClock] = await query<any[]>(`
     SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS currentDate
@@ -356,15 +362,21 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
       const pagosTotalMes = pagosDelMes.filter(p => !isDepuradoPayment(p)).reduce((sum, p) => sum + Number(p.monto || 0), 0)
       const depuradoTotalMes = pagosDelMes.filter(isDepuradoPayment).reduce((sum, p) => sum + Number(p.monto || 0), 0)
       const resueltoTotalMes = pagosTotalMes + depuradoTotalMes
+      const conceptoId = Number(activePeriod?.concepto_id || doc.concepto || 0)
+      const recargoPolicy = recargoPolicyByConcept.get(conceptoId)
       const hasRecargoManual = pagosDelMes.some(p => String(p.recargo) === '1')
       const hasPayment = pagosDelMes.some(p => Number(p.monto || 0) > 0)
-      const paymentDeadline = getSchoolPeriodDeadlineForCycle(cicloKey, mes, currentDateKey)
+      const paymentDeadline = getSchoolPeriodDeadlineForCycle(
+        cicloKey,
+        mes,
+        currentDateKey,
+        recargoPolicy?.diaLimite ?? 12,
+      )
       const isLate = isPastPaymentDeadline(paymentDeadline, currentDateKey)
       let subtotal = totalOriginal
       let saldo = subtotal - resueltoTotalMes
       const appliesLateFee = shouldApplyLateFee({
-        enabled: true,
-        isEventual,
+        enabled: Boolean(recargoPolicy?.activo),
         hasManualLateFee: hasRecargoManual,
         hasPayment,
         hasActiveConvention: Boolean(activeConvention),
@@ -372,7 +384,7 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
         balanceBeforeLateFee: saldo
       })
       if (appliesLateFee) {
-        subtotal = Math.trunc(totalOriginal * 1.1)
+        subtotal = calculateLateFeeSubtotal(totalOriginal, recargoPolicy?.porcentaje ?? 10)
         saldo = subtotal - resueltoTotalMes
       }
       saldo = Math.max(0, Number(saldo || 0))

@@ -116,7 +116,7 @@ export const useStudentBulkPayments = ({
         const key = normalizeStudentMatricula(student.matricula)
         if (next[key]) return
         const res: any = await $fetch(`/api/students/${student.matricula}/debts`, {
-          params: { ciclo: normalizeCicloKey(state.value.ciclo), lateFeeActive: state.value.lateFeeActive }
+          params: { ciclo: normalizeCicloKey(state.value.ciclo) }
         })
         next[key] = Array.isArray(res) ? res : []
         next[key].filter(debt => Number(debt?.saldo || 0) > 0).forEach((debt) => {
@@ -161,7 +161,6 @@ export const useStudentBulkPayments = ({
               matricula: student.matricula,
               formaDePago: bulkPaymentMethod.value,
               ciclo: normalizeCicloKey(state.value.ciclo),
-              lateFeeActive: state.value.lateFeeActive,
               pagos: rows.map(buildBulkPaymentRow)
             }
           })

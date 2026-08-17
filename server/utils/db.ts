@@ -531,6 +531,22 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
 
   if (!schemaPromises.has(schemaKey)) {
     const schemaPromise = (async () => {
+      // Bridge/local mirror for global recargo policy. External central DDL stays manual.
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS concepto_recargo_config (
+          concepto_id INT NOT NULL,
+          activo TINYINT(1) NOT NULL DEFAULT 0,
+          porcentaje DECIMAL(5,2) NOT NULL DEFAULT 10.00,
+          dia_limite TINYINT UNSIGNED NOT NULL DEFAULT 12,
+          version BIGINT UNSIGNED NOT NULL DEFAULT 1,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          updated_by VARCHAR(255) DEFAULT NULL,
+          pending_sync TINYINT(1) NOT NULL DEFAULT 0,
+          PRIMARY KEY (concepto_id),
+          INDEX idx_recargo_pending_sync (pending_sync)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
       await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS facturas (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,

@@ -7,7 +7,6 @@ type AccountStateSyncStatus = 'idle' | 'cached' | 'syncing' | 'updated' | 'faile
 type AccountStateCacheOptions = {
   matricula?: string | number | null
   ciclo?: string | number | null
-  lateFeeActive?: string | boolean | number | null
 }
 
 type AccountStateCacheRecord = {
@@ -15,7 +14,6 @@ type AccountStateCacheRecord = {
   key: string
   matricula: string
   ciclo: string
-  lateFeeActive: boolean
   savedAt: string
   debts: unknown[]
 }
@@ -29,19 +27,11 @@ type AccountStateSyncState = {
   error: string | null
 }
 
-const CACHE_VERSION = 2
+const CACHE_VERSION = 3
 const CACHE_NAMESPACE = 'account-state-cache'
 
 const encodeKeySegment = (value: string) => encodeURIComponent(value || 'default')
-
 const normalizeMatricula = (value?: string | number | null) => String(value || '').trim().toUpperCase()
-
-const normalizeLateFeeFlag = (value?: string | boolean | number | null) => {
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'number') return value === 1
-  const normalized = String(value ?? 'true').trim().toLowerCase()
-  return !['false', '0', 'no', 'off'].includes(normalized)
-}
 
 const safeParseRecord = (raw: string | null): AccountStateCacheRecord | null => {
   if (!raw) return null
@@ -77,7 +67,6 @@ export const useAccountStateCacheSync = () => {
   const getAccountStateCacheKey = (options: AccountStateCacheOptions = {}) => {
     const matricula = normalizeMatricula(options.matricula)
     const ciclo = normalizeCicloKey(options.ciclo || '')
-    const lateFeeActive = normalizeLateFeeFlag(options.lateFeeActive) ? 'recargos-on' : 'recargos-off'
 
     return [
       CACHE_NAMESPACE,
@@ -86,7 +75,7 @@ export const useAccountStateCacheSync = () => {
       encodeKeySegment(cacheScope.value.plantel),
       encodeKeySegment(matricula || 'sin-matricula'),
       encodeKeySegment(ciclo || 'default'),
-      lateFeeActive
+      'recargos-concepto'
     ].join(':')
   }
 
@@ -121,7 +110,6 @@ export const useAccountStateCacheSync = () => {
       key,
       matricula: normalizeMatricula(options.matricula),
       ciclo: normalizeCicloKey(options.ciclo || ''),
-      lateFeeActive: normalizeLateFeeFlag(options.lateFeeActive),
       savedAt: new Date().toISOString(),
       debts
     }

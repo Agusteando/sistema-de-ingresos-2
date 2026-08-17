@@ -18,8 +18,11 @@ import { loadActiveCobranzaConvention } from "../../../utils/cobranza-convenio";
 import {
   getSchoolPeriodDeadlineForCycle,
   isPastPaymentDeadline,
+  normalizeDateKey,
   shouldApplyLateFee,
 } from "../../../utils/cobranza-period";
+import { calculateLateFeeSubtotal } from '../../../../shared/utils/recargo';
+import { loadRecargoPolicies } from '../../../utils/recargo-config';
 
 const cicloQueryValues = (cicloKey: string) => {
   const key = String(cicloKey || "").trim();
@@ -39,7 +42,7 @@ const cicloInClause = (values: string[]) => values.map(() => "?").join(",");
 export default defineEventHandler(async (event) =>
   runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
     const matricula = event.context.params?.matricula;
-    const { ciclo = "2025", lateFeeActive = "true" } = getQuery(event);
+    const { ciclo = "2025", fechaPago = "" } = getQuery(event);
     const cicloKey = normalizeCicloKey(ciclo);
     if (!matricula)
       throw createError({ statusCode: 400, message: "Matrícula requerida" });
@@ -205,12 +208,21 @@ export default defineEventHandler(async (event) =>
     });
 
     const debtRowsByDocumentMes = new Map<string, any>();
+    const recargoPolicyByConcept = await loadRecargoPolicies([
+      ...documentos.map((doc) => doc.concepto),
+      ...periodRows.map((period) => period.concepto_id),
+    ]);
 
     const debts = [];
     const [dbClock] = await query<any[]>(
       `SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS currentDate`,
     );
-    const currentDateKey = String(dbClock?.currentDate || new Date().toISOString().slice(0, 10));
+    const dbCurrentDateKey = String(dbClock?.currentDate || new Date().toISOString().slice(0, 10));
+    const requestedDateKey = normalizeDateKey(fechaPago);
+    if (fechaPago && !requestedDateKey) {
+      throw createError({ statusCode: 400, message: 'La fecha del pago no es válida.' });
+    }
+    const currentDateKey = requestedDateKey || dbCurrentDateKey;
     const activeConvention = await loadActiveCobranzaConvention({
       matricula: normalizedMatricula,
       ciclo: cicloKey,
@@ -304,11 +316,17 @@ export default defineEventHandler(async (event) =>
         let subtotal = totalOriginal;
         let saldoAntes = subtotal - resueltoTotalMes;
 
-        const paymentDeadline = getSchoolPeriodDeadlineForCycle(cicloKey, mes, currentDateKey);
+        const conceptoId = Number(activePeriod?.concepto_id || doc.concepto || 0);
+        const recargoPolicy = recargoPolicyByConcept.get(conceptoId);
+        const paymentDeadline = getSchoolPeriodDeadlineForCycle(
+          cicloKey,
+          mes,
+          currentDateKey,
+          recargoPolicy?.diaLimite ?? 12,
+        );
         const isLate = isPastPaymentDeadline(paymentDeadline, currentDateKey);
         const appliesLateFee = shouldApplyLateFee({
-          enabled: lateFeeActive === "true",
-          isEventual,
+          enabled: Boolean(recargoPolicy?.activo),
           hasManualLateFee: hasRecargoManual,
           hasPayment,
           hasActiveConvention: Boolean(activeConvention),
@@ -317,7 +335,7 @@ export default defineEventHandler(async (event) =>
         });
 
         if (appliesLateFee) {
-          subtotal = Math.trunc(totalOriginal * 1.1);
+          subtotal = calculateLateFeeSubtotal(totalOriginal, recargoPolicy?.porcentaje ?? 10);
           saldoAntes = subtotal - resueltoTotalMes;
         }
         if (saldoAntes < 0) saldoAntes = 0;
@@ -329,7 +347,7 @@ export default defineEventHandler(async (event) =>
         debts.push({
           documento: doc.documento,
           concepto: doc.concepto,
-          conceptoId: activePeriod?.concepto_id || doc.concepto,
+          conceptoId,
           periodoId: activePeriod?.id || null,
           conceptoNombre,
           isEventual,
@@ -385,7 +403,10 @@ export default defineEventHandler(async (event) =>
               : 0,
           isLate,
           hasRecargo: subtotal > totalOriginal,
-          recargoActivo: lateFeeActive === "true",
+          recargoActivo: Boolean(recargoPolicy?.activo),
+          recargoPorcentaje: Number(recargoPolicy?.porcentaje ?? 10),
+          recargoDiaLimite: Number(recargoPolicy?.diaLimite ?? 12),
+          recargoPendingSync: Boolean(recargoPolicy?.pendingSync),
           recargoManual: hasRecargoManual,
           hasPayment,
           convenioActivo: Boolean(activeConvention),

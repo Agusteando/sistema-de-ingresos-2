@@ -1,1 +1,1 @@
-Unifica nivel y grado calculados en los reportes financieros
+Centraliza recargos por concepto con sincronización offline en bridge

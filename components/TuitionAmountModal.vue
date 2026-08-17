@@ -152,6 +152,7 @@ import {
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
+import { calculateLateFeeSubtotal, shouldApplyLateFee } from '~/shared/utils/recargo'
 
 const props = defineProps({
   debt: { type: Object, required: true },
@@ -228,15 +229,17 @@ const projectedSubtotalForRow = (row) => {
   const resolved = resolvedForRow(row)
   const balanceBeforeLateFee = base - resolved
   const hasPayment = row?.hasPayment === undefined ? resolved > 0 : Boolean(row.hasPayment)
-  const appliesLateFee = Boolean(
-    row?.recargoActivo
-      && !row?.isEventual
-      && (
-        row?.recargoManual
-        || (!hasPayment && !row?.convenioActivo && row?.isLate && balanceBeforeLateFee > 10)
-      ),
-  )
-  return appliesLateFee ? Math.trunc(base * 1.1) : base
+  const appliesLateFee = shouldApplyLateFee({
+    enabled: Boolean(row?.recargoActivo),
+    hasManualLateFee: Boolean(row?.recargoManual),
+    hasPayment,
+    hasActiveConvention: Boolean(row?.convenioActivo),
+    isAfterDeadline: Boolean(row?.isLate),
+    balanceBeforeLateFee,
+  })
+  return appliesLateFee
+    ? calculateLateFeeSubtotal(base, row?.recargoPorcentaje ?? 10)
+    : base
 }
 
 const currentTotal = computed(() => monthlyAmounts.value.reduce((sum, value) => sum + value, 0))
