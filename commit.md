@@ -1,1 +1,1 @@
-Centraliza recargos por concepto con sincronización offline en bridge
+Aclara el control de recargos y corrige el borrador de pagos

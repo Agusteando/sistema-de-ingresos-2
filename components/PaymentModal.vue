@@ -288,6 +288,7 @@
                 <tr>
                   <th class="text-left">Concepto</th>
                   <th class="text-left">Ref/Mes</th>
+                  <th class="text-center payment-recargo-heading">Recargo</th>
                   <th class="text-right">Monto final</th>
                   <th class="text-right">Monto ($)</th>
                 </tr>
@@ -296,29 +297,34 @@
                 <tr v-for="(debt, i) in processedDebts" :key="i" class="border-t border-gray-100 hover:bg-transparent">
                   <td class="font-semibold text-sm py-2 px-4 text-gray-800">
                     <div class="payment-concept-cell">
-                      <div class="payment-concept-line">
-                        <span>{{ debt.conceptoNombre }}</span>
-                        <button
-                          type="button"
-                          class="payment-recargo-toggle"
-                          :class="{
-                            enabled: debt.recargoActivo,
-                            applied: debtHasRecargoForDate(debt),
-                            pending: isRecargoTogglePending(debt),
-                          }"
-                          :disabled="isRecargoTogglePending(debt)"
-                          :aria-pressed="debt.recargoActivo ? 'true' : 'false'"
-                          title="Recargo"
-                          @click.stop="toggleConceptRecargo(debt)"
-                        >
-                          <LucideLoader2 v-if="isRecargoTogglePending(debt)" :size="12" class="animate-spin" />
-                          <span v-else>{{ recargoToggleLabel(debt) }}</span>
-                        </button>
-                      </div>
+                      <span>{{ debt.conceptoNombre }}</span>
                       <em v-if="debt.stock?.controlled" :class="['payment-stock-chip', stockClass(debt.stock)]">{{ stockLabel(debt.stock) }}</em>
                     </div>
                   </td>
                   <td class="text-xs text-gray-500 py-2 px-4">{{ debt.mesLabel }}</td>
+                  <td class="py-2 px-3 text-center">
+                    <div class="payment-recargo-control">
+                      <button
+                        type="button"
+                        class="payment-recargo-switch"
+                        :class="{
+                          enabled: debt.recargoActivo,
+                          applied: debtHasRecargoForDate(debt),
+                          pending: isRecargoTogglePending(debt),
+                        }"
+                        role="switch"
+                        :disabled="isRecargoTogglePending(debt)"
+                        :aria-checked="debt.recargoActivo ? 'true' : 'false'"
+                        :aria-label="`Recargo para ${debt.conceptoNombre}`"
+                        @click.stop="toggleConceptRecargo(debt)"
+                      >
+                        <span class="payment-recargo-switch-knob">
+                          <LucideLoader2 v-if="isRecargoTogglePending(debt)" :size="10" class="animate-spin" />
+                        </span>
+                      </button>
+                      <span v-if="debtHasRecargoForDate(debt)" class="payment-recargo-impact">+${{ recargoAmountForDebt(debt).toFixed(0) }}</span>
+                    </div>
+                  </td>
                   <td class="py-2 px-4 text-right">
                     <input
                       v-if="debt.montoFinalPendiente"
@@ -617,10 +623,10 @@ const recargoCalculationForDebt = (debt) => {
   return { subtotal, applies, isLate, deadline }
 }
 const debtHasRecargoForDate = (debt) => recargoCalculationForDebt(debt).applies
-const recargoToggleLabel = (debt) => {
-  if (!debt?.recargoActivo) return '%'
-  const percentage = Number(debt?.recargoPorcentaje ?? 10)
-  return `${debtHasRecargoForDate(debt) ? '+' : ''}${percentage}%`
+const recargoAmountForDebt = (debt) => {
+  const calculation = recargoCalculationForDebt(debt)
+  if (!calculation.applies) return 0
+  return Math.max(0, calculation.subtotal - baseAmountForDebt(debt))
 }
 const isRecargoTogglePending = (debt) => recargoTogglingConcepts.value.has(conceptIdForDebt(debt))
 
@@ -632,6 +638,7 @@ const buildProcessedDebts = () => (Array.isArray(props.debts) ? props.debts : []
     saldoFinal: final,
     montoPagado: final,
     montoTouched: false,
+    montoFinalTouched: false,
     pagosPrevios: resuelto,
     saldoAntes: d.subtotal - resuelto,
     montoFinalInput: Math.round(Number(d.costoOriginal ?? d.subtotal ?? d.saldo ?? 0))
@@ -654,14 +661,15 @@ const paymentDraftKey = computed(() => {
 const readPaymentDraft = () => ({
   formaDePago: formaDePago.value,
   paymentDate: paymentDate.value,
-  paymentDateEditorOpen: paymentDateEditorOpen.value,
-  paymentMethodEditorOpen: paymentMethodEditorOpen.value,
-  debts: processedDebts.value.map(debt => ({
-    key: paymentDebtKey(debt),
-    montoPagado: debt.montoPagado,
-    montoFinalInput: debt.montoFinalInput,
-    montoTouched: Boolean(debt.montoTouched)
-  }))
+  debts: processedDebts.value
+    .filter(debt => debt.montoTouched || debt.montoFinalTouched)
+    .map(debt => ({
+      key: paymentDebtKey(debt),
+      montoPagado: debt.montoPagado,
+      montoFinalInput: debt.montoFinalInput,
+      montoTouched: Boolean(debt.montoTouched),
+      montoFinalTouched: Boolean(debt.montoFinalTouched)
+    }))
 })
 
 const writePaymentDraft = (draft) => {
@@ -671,8 +679,8 @@ const writePaymentDraft = (draft) => {
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(draft.paymentDate || ''))) {
     paymentDate.value = String(draft.paymentDate)
   }
-  paymentDateEditorOpen.value = Boolean(draft.paymentDateEditorOpen || paymentDate.value !== localDateKey())
-  paymentMethodEditorOpen.value = Boolean(draft.paymentMethodEditorOpen)
+  paymentDateEditorOpen.value = false
+  paymentMethodEditorOpen.value = false
   pagoRealizadoEnOtroPlantel.value = false
   plantelPago.value = ''
   paymentCampusMenuOpen.value = false
@@ -685,11 +693,20 @@ const writePaymentDraft = (draft) => {
 
     const montoPagado = Number(restored.montoPagado)
     const montoFinalInput = Number(restored.montoFinalInput)
+    const legacyPaidChanged = restored.montoTouched === undefined
+      && Number.isFinite(montoPagado)
+      && Math.abs(montoPagado - Number(debt.montoPagado || 0)) > 0.009
+    const legacyFinalChanged = restored.montoFinalTouched === undefined
+      && Number.isFinite(montoFinalInput)
+      && Math.abs(montoFinalInput - Number(debt.montoFinalInput || 0)) > 0.009
+    const montoTouched = Boolean(restored.montoTouched || legacyPaidChanged)
+    const montoFinalTouched = Boolean(restored.montoFinalTouched || legacyFinalChanged)
     return {
       ...debt,
-      montoPagado: Number.isFinite(montoPagado) ? montoPagado : debt.montoPagado,
-      montoTouched: Boolean(restored.montoTouched),
-      montoFinalInput: Number.isFinite(montoFinalInput) ? montoFinalInput : debt.montoFinalInput
+      montoPagado: montoTouched && Number.isFinite(montoPagado) ? montoPagado : debt.montoPagado,
+      montoTouched,
+      montoFinalInput: montoFinalTouched && Number.isFinite(montoFinalInput) ? montoFinalInput : debt.montoFinalInput,
+      montoFinalTouched
     }
   })
 }
@@ -698,7 +715,20 @@ const paymentDraftHasContent = (draft) => {
   if (!draft || typeof draft !== 'object') return false
   if (String(draft.formaDePago || 'Efectivo') !== 'Efectivo') return true
   if (String(draft.paymentDate || localDateKey()) !== localDateKey()) return true
-  return Array.isArray(draft.debts) && draft.debts.length > 0
+
+  const draftDebts = Array.isArray(draft.debts) ? draft.debts : []
+  return draftDebts.some((saved) => {
+    if (saved?.montoTouched || saved?.montoFinalTouched) return true
+
+    // Backward compatibility: old drafts did not store explicit touch flags.
+    const current = processedDebts.value.find(debt => paymentDebtKey(debt) === saved?.key)
+    if (!current) return false
+
+    const savedPaid = Number(saved?.montoPagado)
+    const savedFinal = Number(saved?.montoFinalInput)
+    return (Number.isFinite(savedPaid) && Math.abs(savedPaid - Number(current.montoPagado || 0)) > 0.009)
+      || (Number.isFinite(savedFinal) && Math.abs(savedFinal - Number(current.montoFinalInput || 0)) > 0.009)
+  })
 }
 
 const {
@@ -740,6 +770,7 @@ const repriceUntouchedPayments = () => {
   })
 }
 const handleFinalAmountInput = (debt) => {
+  debt.montoFinalTouched = true
   if (!debt?.montoTouched) debt.montoPagado = effectiveSaldoFinal(debt)
 }
 const setRecargoTogglePending = (conceptoId, pending) => {
@@ -1027,57 +1058,69 @@ const submit = async () => {
   background: #f4faf5;
   color: #2f7449;
 }
-.payment-concept-line {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
+.payment-recargo-heading {
+  width: 96px;
 }
-.payment-concept-line > span {
-  min-width: 0;
-  flex: 1;
-}
-.payment-recargo-toggle {
+.payment-recargo-control {
   display: inline-flex;
-  min-width: 34px;
-  height: 24px;
-  flex: 0 0 auto;
+  min-width: 74px;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d8dee7;
+  gap: 7px;
+}
+.payment-recargo-switch {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 20px;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid #cfd6df;
+  border-radius: 999px;
+  background: #e7ebf0;
+  padding: 2px;
+  transition: border-color 140ms ease, background 140ms ease, opacity 140ms ease;
+}
+.payment-recargo-switch-knob {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   background: #fff;
-  padding: 0 7px;
-  color: #8a95a5;
-  font-size: .66rem;
-  font-style: normal;
-  font-weight: 850;
-  line-height: 1;
-  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+  color: #2f7449;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .16);
+  transform: translateX(0);
+  transition: transform 140ms ease;
 }
-.payment-recargo-toggle:hover:not(:disabled) {
-  border-color: #aeb9c7;
-  color: #56657a;
+.payment-recargo-switch.enabled {
+  border-color: #78aa88;
+  background: #5c946d;
 }
-.payment-recargo-toggle.enabled {
-  border-color: #b8d8c2;
-  background: #f1f8f3;
-  color: #3d7650;
+.payment-recargo-switch.enabled .payment-recargo-switch-knob {
+  transform: translateX(14px);
 }
-.payment-recargo-toggle.applied {
-  border-color: #7db58e;
-  background: #e6f4e9;
-  color: #28653e;
-  box-shadow: inset 0 0 0 1px rgba(40, 101, 62, .05);
+.payment-recargo-switch.applied {
+  border-color: #4f8b61;
+  background: #4f8b61;
 }
-.payment-recargo-toggle.pending {
+.payment-recargo-switch.pending {
   cursor: wait;
-  opacity: .7;
+  opacity: .68;
 }
-.payment-recargo-toggle:disabled {
+.payment-recargo-switch:disabled {
   pointer-events: none;
 }
-
+.payment-recargo-impact {
+  min-width: 32px;
+  color: #2f7449;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: .66rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
 .payment-concept-cell {
   display: flex;
   min-width: 0;
