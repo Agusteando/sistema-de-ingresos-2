@@ -21,10 +21,13 @@ type ProtectedXlsxOptions = {
   rows: Array<Array<string | number | null | undefined>>
   numericColumns?: number[]
   currencyColumns?: number[]
+  dateColumns?: number[]
   highlightedCells?: Array<{ rowIndex: number; columnIndexes: number[] }>
   totals?: Array<{ label: string; value: number }>
   protectionPassword?: string
   creator?: string
+  columnWidths?: number[]
+  tableName?: string
 }
 
 type ZipEntry = {
@@ -161,6 +164,17 @@ const numberCell = (reference: string, value: unknown, style: number) => {
   return `<c r="${reference}" s="${style}"><v>${Number.isFinite(numeric) ? numeric : 0}</v></c>`
 }
 
+const excelDateSerial = (value: unknown) => {
+  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null
+  return Math.floor((date.getTime() - Date.UTC(1899, 11, 30)) / 86400000)
+}
+
 const renderRow = (rowIndex: number, row: XlsxRow) => {
   const cells = row.cells.map((cell, cellIndex) => {
     const reference = `${columnName(cellIndex)}${rowIndex}`
@@ -174,7 +188,7 @@ const renderRow = (rowIndex: number, row: XlsxRow) => {
 
 const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="${XML_NS}">
-  <numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00"/></numFmts>
+  <numFmts count="2"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00"/><numFmt numFmtId="165" formatCode="dd/mm/yyyy"/></numFmts>
   <fonts count="5">
     <font><sz val="10"/><name val="Aptos"/><family val="2"/></font>
     <font><b/><color rgb="FFFFFFFF"/><sz val="16"/><name val="Aptos Display"/><family val="2"/></font>
@@ -195,7 +209,7 @@ const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <border><left/><right/><top style="thin"><color rgb="FF173D24"/></top><bottom/><diagonal/></border>
   </borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="12">
+  <cellXfs count="13">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
     <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
@@ -208,6 +222,7 @@ const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <xf numFmtId="164" fontId="4" fillId="0" borderId="2" xfId="0" applyFont="1" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
     <xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
     <xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
   </cellXfs>
   <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
   <dxfs count="0"/>
@@ -218,10 +233,15 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
   const sheetName = sanitizeSheetName(options.sheetName)
   const columnCount = Math.max(1, options.headers.length)
   const lastColumn = columnName(columnCount - 1)
+  const tableName = String(options.tableName || 'CorteDeCaja')
+    .replace(/[^A-Za-z0-9_]/g, '_')
+    .replace(/^[^A-Za-z_]+/, '')
+    .slice(0, 255) || 'Reporte'
   const password = options.protectionPassword || process.env.CORTE_CAJA_EXCEL_PASSWORD || randomBytes(16).toString('hex')
   const passwordHash = hashProtectionPassword(password)
   const numericColumns = new Set(options.numericColumns || [])
   const currencyColumns = new Set(options.currencyColumns || [])
+  const dateColumns = new Set(options.dateColumns || [])
   const highlightedCells = new Map<number, Set<number>>()
   for (const item of options.highlightedCells || []) {
     highlightedCells.set(item.rowIndex, new Set(item.columnIndexes))
@@ -247,6 +267,12 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
     const cells: XlsxCell[] = options.headers.map((_, columnIndex) => {
       const value = sourceRow[columnIndex]
       if (highlightedColumns?.has(columnIndex)) return { value, style: 11, type: 'string' }
+      if (dateColumns.has(columnIndex)) {
+        const serial = excelDateSerial(value)
+        return serial === null
+          ? { value: '', style: 5, type: 'string' }
+          : { value: serial, style: 12, type: 'number' }
+      }
       if (currencyColumns.has(columnIndex)) return { value, style: 7, type: 'number' }
       if (numericColumns.has(columnIndex)) return { value, style: 6, type: 'number' }
       return { value, style: 5, type: 'string' }
@@ -277,7 +303,9 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
   const filterEndRow = Math.max(headerRowIndex, dataEndRow)
   const lastRow = rowModels.length
   const rowXml = rowModels.map((row, index) => renderRow(index + 1, row)).join('')
-  const columnWidths = [11, 20, 20, 16, 10, 12, 13, 28, 26, 20, 12, 34, 14, 18, 18]
+  const columnWidths = options.columnWidths?.length
+    ? options.columnWidths
+    : [11, 20, 20, 16, 10, 12, 13, 28, 26, 20, 12, 34, 14, 18, 18]
   const colsXml = Array.from({ length: columnCount }, (_, index) => (
     `<col min="${index + 1}" max="${index + 1}" width="${columnWidths[index] || 18}" customWidth="1"/>`
   )).join('')
@@ -302,7 +330,7 @@ export const buildProtectedXlsx = (options: ProtectedXlsxOptions) => {
 
   const tableRange = `A${headerRowIndex}:${lastColumn}${filterEndRow}`
   const tableXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<table xmlns="${XML_NS}" id="1" name="CorteDeCaja" displayName="CorteDeCaja" ref="${tableRange}" totalsRowShown="0">
+<table xmlns="${XML_NS}" id="1" name="${escapeXml(tableName)}" displayName="${escapeXml(tableName)}" ref="${tableRange}" totalsRowShown="0">
   <autoFilter ref="${tableRange}"/>
   <tableColumns count="${columnCount}">${options.headers.map((header, index) => `<tableColumn id="${index + 1}" name="${escapeXml(header)}"/>`).join('')}</tableColumns>
   <tableStyleInfo name="TableStyleMedium2" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/>

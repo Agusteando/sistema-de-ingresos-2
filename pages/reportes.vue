@@ -12,6 +12,10 @@
           <LucideReceipt :size="16" />
           Corte de caja
         </button>
+        <button type="button" :class="{ active: activeReport === 'alumnos' }" @click="activeReport = 'alumnos'">
+          <LucideUsers :size="16" />
+          Alumnos
+        </button>
         <button type="button" :class="{ active: activeReport === 'recibos' }" @click="activeReport = 'recibos'">
           <LucidePrinter :size="16" />
           Recibos
@@ -265,6 +269,29 @@
       </div>
     </section>
 
+    <section v-else-if="activeReport === 'alumnos'" class="report-panel student-report-panel">
+      <div class="panel-header">
+        <h3>Alumnos</h3>
+        <div class="panel-actions">
+          <button class="btn btn-outline" type="button" @click="downloadStudentsExcel" :disabled="downloadingStudentsExcel">
+            <LucideLoader2 v-if="downloadingStudentsExcel" class="animate-spin" :size="16" />
+            <LucideDownload v-else :size="16" />
+            Excel
+          </button>
+        </div>
+      </div>
+
+      <div v-if="canFilterPlantel" class="filters-grid student-report-filters">
+        <div class="form-group m-0">
+          <label class="form-label">Plantel</label>
+          <select v-model="filtrosAlumnos.plantel" class="input-field">
+            <option value="" disabled>Seleccione un plantel</option>
+            <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
     <section v-else class="report-panel receipts-report-panel">
       <div class="panel-header">
         <h3>Recibos del corte</h3>
@@ -339,7 +366,8 @@ import {
   LucideFilter,
   LucideLoader2,
   LucidePrinter,
-  LucideReceipt
+  LucideReceipt,
+  LucideUsers
 } from 'lucide-vue-next'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { useContextMenu } from '~/composables/useContextMenu'
@@ -365,7 +393,7 @@ const hasFinancialAccess = computed(() => resolveClientAuthAccess({
 }).financialAccess)
 const canFilterPlantel = computed(() => isSuperAdmin.value && activePlantel.value === 'GLOBAL')
 const requestedReport = String(route.query.tipo || '').toLowerCase()
-const activeReport = ref(hasFinancialAccess.value && ['corte', 'recibos'].includes(requestedReport)
+const activeReport = ref(hasFinancialAccess.value && ['corte', 'alumnos', 'recibos'].includes(requestedReport)
   ? requestedReport
   : 'concepto')
 
@@ -424,6 +452,8 @@ const currentMexicoDateKey = () => {
 }
 const todayCorteKey = currentMexicoDateKey()
 const filtrosCorte = ref({ inicio: todayCorteKey, fin: todayCorteKey, plantel: defaultCortePlantel })
+const filtrosAlumnos = ref({ plantel: defaultCortePlantel })
+const downloadingStudentsExcel = ref(false)
 const datosCorte = ref([])
 const loadingCorte = ref(false)
 const downloadingCorteExcel = ref(false)
@@ -679,6 +709,49 @@ const confirmConceptReportUsers = async (selectedUserKeys) => {
 }
 
 
+const downloadStudentsExcel = async () => {
+  if (!hasFinancialAccess.value || downloadingStudentsExcel.value) return
+  if (canFilterPlantel.value && !filtrosAlumnos.value.plantel) {
+    return show('Seleccione un plantel', 'danger')
+  }
+
+  downloadingStudentsExcel.value = true
+  try {
+    const params = { ciclo: normalizeCicloKey(state.value.ciclo) }
+    if (canFilterPlantel.value) params.plantel = filtrosAlumnos.value.plantel
+    const query = new URLSearchParams(params)
+    const response = await fetch(`/api/reports/alumnos_excel?${query.toString()}`, {
+      credentials: 'same-origin'
+    })
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      throw new Error(payload?.message || payload?.statusMessage || 'No se pudo generar el Excel')
+    }
+
+    const blob = await response.blob()
+    const disposition = response.headers.get('content-disposition') || ''
+    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
+    const filename = encodedName
+      ? decodeURIComponent(encodedName)
+      : (plainName || `Alumnos_${normalizeCicloKey(state.value.ciclo)}.xlsx`)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    show(error?.data?.message || error?.message || 'No se pudo generar el Excel', 'danger')
+  } finally {
+    downloadingStudentsExcel.value = false
+  }
+}
+
 const openCorte = () => {
   activeReport.value = 'corte'
   if (!datosCorte.value.length) loadCorte()
@@ -873,10 +946,17 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
 
 .report-switcher {
   display: inline-flex;
+  max-width: 100%;
   gap: 2px;
+  overflow-x: auto;
   border-radius: 12px;
   background: #eef2f6;
   padding: 3px;
+  scrollbar-width: none;
+}
+
+.report-switcher::-webkit-scrollbar {
+  display: none;
 }
 
 .report-switcher button {
@@ -914,6 +994,14 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.student-report-panel {
+  flex: 0 0 auto;
+}
+
+.student-report-filters {
+  grid-template-columns: minmax(220px, 320px);
 }
 
 .panel-header {
