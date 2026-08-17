@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div class="modal-overlay" @click.self="requestClose">
-      <div class="modal-container large">
+      <div class="modal-container payment-modal">
         <div class="modal-header modal-header-with-status relative">
           <h2 class="text-lg font-bold text-gray-800">Recibir Pago</h2>
           <ModalDraftStatus :restored="draftRestored" :status="draftSaveState" :dirty="hasUnsavedChanges" />
@@ -282,8 +282,15 @@
 
           <p v-if="hasPendingFinalAmounts" class="mb-3 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Este debe ser el monto final de tu proyección, sin decimales.</p>
 
-          <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-            <table class="w-full">
+          <div class="payment-table-shell border border-gray-200 rounded-lg shadow-sm">
+            <table class="payment-table w-full">
+              <colgroup>
+                <col class="payment-col-concept">
+                <col class="payment-col-reference">
+                <col class="payment-col-recargo">
+                <col class="payment-col-final">
+                <col class="payment-col-paid">
+              </colgroup>
               <thead class="bg-gray-50/80">
                 <tr>
                   <th class="text-left">Concepto</th>
@@ -1024,6 +1031,31 @@ const submit = async () => {
 </script>
 
 <style scoped>
+.payment-modal {
+  max-width: 64rem;
+}
+
+.payment-table-shell {
+  overflow: hidden;
+}
+
+.payment-table {
+  table-layout: fixed;
+}
+
+.payment-col-reference {
+  width: 9.5rem;
+}
+
+.payment-col-recargo {
+  width: 7rem;
+}
+
+.payment-col-final,
+.payment-col-paid {
+  width: 8rem;
+}
+
 .payment-options-enter-active,
 .payment-options-leave-active {
   transition: opacity 140ms ease, transform 140ms ease;

@@ -1,1 +1,1 @@
-Aclara el control de recargos y corrige el borrador de pagos
+Corrige el ancho y la distribución del modal de recepción de pagos
