@@ -126,14 +126,17 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const statements: SqlStatement[] = []
   const stockReservations: StockReservation[] = []
   const paymentStockReservations: StockReservation[] = []
+  const paymentFolioResultRefs: Array<{ insertIndex: number; selectIndex: number }> = []
+  const paymentReceiptRecoveryKeys: Array<{ documento: number; mes: string; monto: number }> = []
   const finalAmountByTarget = new Map<string, number>()
   const resolvedPaymentConcepts = new Map<string, { concepto: string; conceptoNombre: string }>()
   const recargoPolicyCache = new Map<number, RecargoPolicy>()
 
   try {
   for (const p of pagos) {
-    const requestedAmount = Number(p.montoPagado || 0)
-    if (requestedAmount <= 0) continue
+    const requestedAmountFromClient = Number(p.montoPagado || 0)
+    const automaticAmount = truthyFlag(p?.montoAutomatico)
+    if (!automaticAmount && requestedAmountFromClient <= 0) continue
 
     const documento = Number(p.documento)
     const mes = String(p.mes || '').trim()
@@ -267,6 +270,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       saldoAntes = Math.max(0, subtotal - resuelto)
     }
 
+    // For the default/full-balance path, the server owns the final amount.
+    // This prevents a stale client projection from registering the pre-recargo
+    // amount after the canonical recargo policy has already increased the debt.
+    // Explicitly edited/partial amounts continue to be honored unchanged.
+    const requestedAmount = automaticAmount ? saldoAntes : requestedAmountFromClient
+    if (requestedAmount <= 0) continue
+
     if (requestedAmount > saldoAntes + 0.009) {
       throw createError({ statusCode: 400, message: 'El monto excede el saldo del documento seleccionado.' })
     }
@@ -291,6 +301,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const montoDecimal = Number(requestedAmount.toFixed(2))
     const letra = numeroALetras(montoDecimal)
+    const paymentInsertIndex = statements.length
     statements.push({
       sql: `
         INSERT INTO referenciasdepago (
@@ -373,6 +384,18 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         paymentDateChangedBy
       ]
     })
+
+    // LAST_INSERT_ID() is read in the same transaction/connection immediately
+    // after the payment insert. This is intentionally redundant with insertId:
+    // some Bridge versions do not expose write metadata consistently, and the
+    // receipt must never disappear after a successful payment.
+    const paymentFolioSelectIndex = statements.length
+    statements.push({ sql: 'SELECT LAST_INSERT_ID() AS folio' })
+    paymentFolioResultRefs.push({
+      insertIndex: paymentInsertIndex,
+      selectIndex: paymentFolioSelectIndex,
+    })
+    paymentReceiptRecoveryKeys.push({ documento, mes, monto: montoDecimal })
   }
   } catch (error) {
     await Promise.all(stockReservations.map((reservation) => releaseStockReservation(reservation, 'Pago no confirmado por validación fallida')))
@@ -391,7 +414,64 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw error
   }
 
-  const resultFolios = results.map(result => Number(result.insertId)).filter(Boolean)
+  const resultFolios = paymentFolioResultRefs.map(({ insertIndex, selectIndex }) => {
+    const selectResult: any = results[selectIndex]
+    const selectedFolio = Array.isArray(selectResult)
+      ? Number(selectResult?.[0]?.folio || 0)
+      : Number(selectResult?.folio || 0)
+    if (Number.isInteger(selectedFolio) && selectedFolio > 0) return selectedFolio
+
+    const insertResult: any = results[insertIndex]
+    const insertedFolio = Number(insertResult?.insertId || 0)
+    return Number.isInteger(insertedFolio) && insertedFolio > 0 ? insertedFolio : 0
+  })
+
+  if (resultFolios.some(folio => !folio) || resultFolios.length !== paymentStockReservations.length) {
+    // The transaction has already committed at this point, so do not pretend
+    // the payment failed. Recover each missing folio by the exact payment row
+    // identity rather than by a broad "latest payments" query.
+    const recoveredFolios: number[] = []
+    for (let index = 0; index < paymentReceiptRecoveryKeys.length; index += 1) {
+      const directFolio = resultFolios[index]
+      if (directFolio) {
+        recoveredFolios.push(directFolio)
+        continue
+      }
+
+      const key = paymentReceiptRecoveryKeys[index]
+      const [row] = await query<any[]>(`
+        SELECT folio
+        FROM referenciasdepago
+        WHERE matricula = ?
+          AND documento = ?
+          AND mes = ?
+          AND ciclo = ?
+          AND fecha = ?
+          AND estatus = 'Vigente'
+          AND usuario = ?
+          AND ABS(monto - ?) < 0.005
+        ORDER BY folio DESC
+        LIMIT 1
+      `, [matricula, key.documento, key.mes, cicloKey, effectiveTimestamp, userName, key.monto])
+
+      const folio = Number(row?.folio || 0)
+      if (Number.isInteger(folio) && folio > 0) recoveredFolios.push(folio)
+    }
+
+    if (recoveredFolios.length === paymentStockReservations.length) {
+      resultFolios.splice(0, resultFolios.length, ...recoveredFolios)
+    } else {
+      console.error('[Payments] Pago confirmado sin folios recuperables para recibo.', {
+        matricula,
+        ciclo: cicloKey,
+        fecha: effectiveTimestamp,
+        expected: paymentStockReservations.length,
+        found: resultFolios.filter(Boolean).length,
+        recovered: recoveredFolios.length,
+      })
+    }
+  }
+
   await Promise.all(paymentStockReservations.map((reservation, index) => finalizeStockReservation(reservation, resultFolios[index])))
 
   return {

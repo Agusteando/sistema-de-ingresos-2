@@ -346,7 +346,15 @@
                     <span v-else class="font-mono text-xs font-semibold text-gray-500">${{ effectiveSubtotal(debt).toFixed(2) }}</span>
                   </td>
                   <td class="py-2 px-4 text-right">
-                    <input type="number" class="input-field text-right font-mono font-semibold py-1 px-2 h-auto text-brand-campus" v-model.number="debt.montoPagado" :max="effectiveSaldoFinal(debt)" @input="debt.montoTouched = true" min="0" step="0.01">
+                    <input
+                      type="number"
+                      class="input-field text-right font-mono font-semibold py-1 px-2 h-auto text-brand-campus"
+                      :value="paymentAmountForDebt(debt)"
+                      :max="effectiveSaldoFinal(debt)"
+                      min="0"
+                      step="0.01"
+                      @input="handlePaymentAmountInput(debt, $event)"
+                    >
                   </td>
                 </tr>
               </tbody>
@@ -773,6 +781,24 @@ onBeforeUnmount(() => {
 const hasPendingFinalAmounts = computed(() => processedDebts.value.some(debt => debt.montoFinalPendiente))
 const effectiveSubtotal = (debt) => recargoCalculationForDebt(debt).subtotal
 const effectiveSaldoFinal = (debt) => Math.max(0, effectiveSubtotal(debt) - Number(debt.pagosPrevios || 0))
+
+// Untouched amounts are projections, not stored user input. Derive them directly
+// from the current canonical balance so recargo/date/policy changes cannot leave
+// the visible total or submitted amount stale. Only an explicit operator edit
+// turns the amount into a manual value.
+const paymentAmountForDebt = (debt) => {
+  const balance = effectiveSaldoFinal(debt)
+  if (!debt?.montoTouched) return balance
+
+  const manual = Number(debt?.montoPagado || 0)
+  if (!Number.isFinite(manual)) return 0
+  return Math.max(0, Math.min(manual, balance))
+}
+const handlePaymentAmountInput = (debt, event) => {
+  const value = Number(event?.target?.value ?? 0)
+  debt.montoTouched = true
+  debt.montoPagado = Number.isFinite(value) ? value : 0
+}
 const repriceUntouchedPayments = () => {
   processedDebts.value.forEach((debt) => {
     const nextBalance = effectiveSaldoFinal(debt)
@@ -869,7 +895,7 @@ const applyRecargo = async (debt) => {
 watch(paymentDate, () => {
   repriceUntouchedPayments()
 })
-const totalCobrar = computed(() => processedDebts.value.reduce((a, b) => a + (b.montoPagado || 0), 0))
+const totalCobrar = computed(() => processedDebts.value.reduce((sum, debt) => sum + paymentAmountForDebt(debt), 0))
 const stockLabel = (stock) => {
   if (!stock?.controlled) return ''
   if (stock.status === 'out') return 'agotado'
@@ -885,18 +911,23 @@ const stockClass = (stock) => {
 const isDebtStockBlocked = (debt) => Boolean(Number(debt?.montoPagado || 0) > 0 && debt?.stock?.controlled && debt?.stock?.status === 'out' && !debt?.stock?.allow_negative)
 const hasBlockingStock = computed(() => processedDebts.value.some(isDebtStockBlocked))
 
-const paymentRows = () => processedDebts.value.filter(d => Number(d.montoPagado || 0) > 0).map((d) => {
-  const subtotal = effectiveSubtotal(d)
-  const saldoAntes = effectiveSaldoFinal(d)
-  return {
-    ...d,
-    subtotal,
-    saldoFinal: saldoAntes,
-    saldoAntes,
-    montoFinal: d.montoFinalPendiente ? Number(d.montoFinalInput || 0) : d.montoFinal,
-    aplicarRecargo: Boolean(d.recargoAplicadoAhora)
-  }
-})
+const paymentRows = () => processedDebts.value
+  .map((d) => ({ debt: d, montoPagado: paymentAmountForDebt(d) }))
+  .filter(({ montoPagado }) => montoPagado > 0)
+  .map(({ debt: d, montoPagado }) => {
+    const subtotal = effectiveSubtotal(d)
+    const saldoAntes = effectiveSaldoFinal(d)
+    return {
+      ...d,
+      subtotal,
+      saldoFinal: saldoAntes,
+      saldoAntes,
+      montoPagado,
+      montoAutomatico: !d.montoTouched,
+      montoFinal: d.montoFinalPendiente ? Number(d.montoFinalInput || 0) : d.montoFinal,
+      aplicarRecargo: Boolean(d.recargoAplicadoAhora)
+    }
+  })
 
 const validateFinalAmounts = () => {
   let requiresConfirmation = false
