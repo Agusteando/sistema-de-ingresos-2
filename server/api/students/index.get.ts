@@ -5,6 +5,7 @@ import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipo
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 import { maybeRefreshControlEscolarCacheFromLoadedRows } from '../../utils/control-escolar-cache'
+import { inspectForeignConceptAssignments } from '../../utils/student-duplicates'
 
 const isActiveEstatus = (value: unknown) => String(value || '').trim().toLowerCase() === 'activo'
 const activeEstatusSql = "LOWER(TRIM(CAST(A.estatus AS CHAR))) = 'activo'"
@@ -18,7 +19,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const tipoIngresoConceptIds = parseEnrollmentConceptIds(tipoConcepts).length ? parseEnrollmentConceptIds(tipoConcepts) : enrollmentConceptIds
   const user = event.context.user
   
-  let whereClause = "1=1"
+  let whereClause = "1=1 AND NOT EXISTS (SELECT 1 FROM student_duplicate_resolutions DR WHERE UPPER(TRIM(DR.loser_matricula)) = UPPER(TRIM(A.matricula)) AND DR.status IN ('completed','bridge_applied','central_pending','central_applied','recovery_required'))"
   const params: any[] = []
   const addCurrentEnrollmentScope = () => {
     if (!enrollmentConceptIds.length) {
@@ -88,6 +89,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     addCurrentEnrollmentScope()
   }
 
+  const conceptPlantelColumn = await query<any[]>(`SHOW COLUMNS FROM conceptos LIKE 'plantel'`).then(rows => rows.length > 0).catch(() => false)
+  const conceptPlantelExpr = conceptPlantelColumn ? "COALESCE(CFlag.plantel, '')" : "''"
+
   const sql = `
     SELECT 
       A.matricula, A.nombreCompleto, A.apellidoPaterno, A.apellidoMaterno, A.nombres, A.curp, A.genero,
@@ -107,6 +111,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       BPrev.conceptoIdsPagadosPrevios,
       CPrev.conceptosCargadosPrevios,
       CPrev.conceptoIdsCargadosPrevios,
+      F.conceptPlantelAssignments,
       CONCAT_WS('|', B.conceptosPagados, C.conceptosCargados) AS conceptosCicloActual,
       CONCAT_WS('|', B.conceptoIdsPagados, C.conceptoIdsCargados) AS conceptoIdsCicloActual,
       CONCAT_WS('|', BPrev.conceptosPagadosPrevios, CPrev.conceptosCargadosPrevios) AS conceptosCicloPrevio,
@@ -182,6 +187,29 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       WHERE ciclo = ? AND estatus = 'Activo'
       GROUP BY matricula
     ) CPrev ON A.matricula = CPrev.matricula
+    LEFT JOIN (
+      SELECT
+        DFlag.matricula,
+        GROUP_CONCAT(
+          DISTINCT CONCAT_WS(
+            '~',
+            CAST(COALESCE(PFlag.concepto_id, DFlag.concepto) AS CHAR),
+            ${conceptPlantelExpr},
+            COALESCE(PFlag.conceptoNombre, DFlag.conceptoNombre, '')
+          )
+          SEPARATOR '||'
+        ) AS conceptPlantelAssignments
+      FROM documentos DFlag
+      LEFT JOIN documento_concepto_periodos PFlag
+        ON PFlag.documento = DFlag.documento
+        AND PFlag.estatus = 'Activo'
+      LEFT JOIN conceptos CFlag
+        ON CFlag.id = COALESCE(PFlag.concepto_id, DFlag.concepto)
+      WHERE DFlag.estatus = 'Activo'
+        AND DFlag.ciclo = ?
+        AND (PFlag.accion IS NULL OR PFlag.accion <> 'cancelacion')
+      GROUP BY DFlag.matricula
+    ) F ON A.matricula = F.matricula
     LEFT JOIN alumno_matricula_links Prev ON Prev.successor_matricula = A.matricula
     LEFT JOIN alumno_matricula_links Next ON Next.previous_matricula = A.matricula
     LEFT JOIN student_tipo_ingreso_overrides TIO ON TIO.matricula = A.matricula
@@ -190,7 +218,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     LIMIT 5000;
   `
   
-  const queryParams = [cicloKey, cicloKey, previousCiclo, previousCiclo, ...params]
+  const queryParams = [cicloKey, cicloKey, previousCiclo, previousCiclo, cicloKey, ...params]
   const rows = await query<any[]>(sql, queryParams)
   const historicalEnrollmentEvidence = await getHistoricalEnrollmentConceptEvidence(rows.map(r => r.matricula), tipoIngresoConceptIds)
   
@@ -215,15 +243,22 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       ? (hasCurrentEnrollmentEvidence ? 'inscrito' : 'no_inscrito')
       : (hasCurrentEnrollmentEvidence ? 'baja_inscrita' : 'baja')
 
+    const effectivePlantel = promoted.outOfScope && hasCurrentEnrollmentEvidence && isScopedToActivePlantel
+      ? normalizePlantel(user.active_plantel)
+      : promoted.plantel
+    const foreignPlantelConcepts = inspectForeignConceptAssignments(r.conceptPlantelAssignments, effectivePlantel)
+
     return {
       ...r,
+      hasForeignPlantelConcept: foreignPlantelConcepts.length > 0,
+      foreignPlantelConcepts: foreignPlantelConcepts.slice(0, 8),
       enrollmentState,
       conceptoIdsTodos: historicalConceptIds,
       conceptoIdsHistoricos: historicalConceptIds,
       currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,
       inscritoCicloActual: hasCurrentEnrollmentEvidence,
       plantelBase: r.plantel,
-      plantel: promoted.outOfScope && hasCurrentEnrollmentEvidence && isScopedToActivePlantel ? normalizePlantel(user.active_plantel) : promoted.plantel,
+      plantel: effectivePlantel,
       grado: displayGrado(promoted.grado),
       nivel: promoted.nivel,
       tipoIngreso

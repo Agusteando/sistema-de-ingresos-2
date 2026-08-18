@@ -116,6 +116,14 @@
                 </strong>
                 <em class="student-meta">
                   <span>{{ student.matricula }}</span>
+                  <span
+                    v-if="student.hasForeignPlantelConcept"
+                    class="student-plantel-warning"
+                    :title="foreignConceptTitle(student)"
+                    aria-label="Concepto de otro plantel"
+                  >
+                    <LucideFlag :size="11" :stroke-width="2.5" />
+                  </span>
                 </em>
                 <span class="student-type-line">
                   <span :class="['student-tipo-chip', resolvedTipoIngreso(student).value]" :title="resolvedTipoIngreso(student).reason">
@@ -155,7 +163,7 @@
 </template>
 
 <script setup>
-import { LucideBuilding2, LucideChevronRight, LucideGlobe2, LucideInfo, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
+import { LucideBuilding2, LucideChevronRight, LucideFlag, LucideGlobe2, LucideInfo, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
@@ -200,6 +208,13 @@ const studentMissingGroup = (student) => !studentGroupLabel(student)
 const studentGroupTitle = (student) => {
   const group = studentGroupLabel(student)
   return group ? `Grupo ${group}` : 'Sin grupo'
+}
+
+
+const foreignConceptTitle = (student) => {
+  const rows = Array.isArray(student?.foreignPlantelConcepts) ? student.foreignPlantelConcepts : []
+  if (!rows.length) return 'Concepto de otro plantel'
+  return rows.slice(0, 4).map((row) => `${row.nombre || `Concepto ${row.conceptoId || ''}`} · ${row.plantelLabel || row.plantel || ''}`.trim()).join('\n')
 }
 
 const activeStudentPhotoUrl = (student) => {

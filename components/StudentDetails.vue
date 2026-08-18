@@ -129,6 +129,14 @@
                 </h2>
                 <p>
                   <span class="student-code">{{ student.matricula }}</span>
+                  <span
+                    v-if="student.hasForeignPlantelConcept"
+                    class="student-plantel-warning"
+                    :title="foreignConceptTitle(student)"
+                    aria-label="Concepto de otro plantel"
+                  >
+                    <LucideFlag :size="11" :stroke-width="2.5" />
+                  </span>
                   <i></i>
                   {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} ·
                   {{ studentGroupInlineLabel(student) }}
@@ -965,12 +973,14 @@
       <ConceptChangeModal
         v-if="showConceptModal"
         :debt="selectedConceptDebt"
+        :student="student"
         @close="closeConceptModal"
         @success="handleSuccess"
       />
       <ConceptDirectCorrectionModal
         v-if="showDirectConceptModal"
         :debt="selectedDirectConceptDebt"
+        :student="student"
         @close="closeDirectConceptModal"
         @success="handleSuccess"
       />
@@ -1048,6 +1058,7 @@ import {
   LucideBadgeDollarSign,
   LucideReceiptText,
   LucideDownload,
+  LucideFlag,
 } from "lucide-vue-next";
 import { useState, useCookie } from "#app";
 import { useToast } from "~/composables/useToast";
@@ -1713,6 +1724,11 @@ const selectedCicloLabel = computed(() =>
 );
 const resolvedNivelLabel = computed(() => studentNivelLabel(props.student));
 const studentMissingGroup = (student) => !studentGroupLabel(student);
+const foreignConceptTitle = (student) => {
+  const rows = Array.isArray(student?.foreignPlantelConcepts) ? student.foreignPlantelConcepts : []
+  if (!rows.length) return 'Concepto de otro plantel'
+  return rows.slice(0, 4).map((row) => `${row.nombre || `Concepto ${row.conceptoId || ''}`} · ${row.plantelLabel || row.plantel || ''}`.trim()).join('\n')
+}
 const studentGroupInlineLabel = (student) => {
   const group = studentGroupLabel(student);
   return group ? group : "Sin grupo";

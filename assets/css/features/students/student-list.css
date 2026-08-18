@@ -892,3 +892,17 @@
     font-size: 13.4px;
   }
 }
+
+.student-plantel-warning {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  flex: 0 0 18px;
+  border: 1px solid rgba(183, 126, 38, 0.28);
+  border-radius: 6px;
+  background: rgba(250, 245, 231, 0.92);
+  color: #9a6b24;
+  font-style: normal;
+  vertical-align: middle;
+}

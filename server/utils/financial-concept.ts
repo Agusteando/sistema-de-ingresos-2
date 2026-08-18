@@ -7,6 +7,7 @@ type CatalogConceptRow = {
   concepto?: unknown
   costo?: unknown
   ciclo?: unknown
+  plantel?: unknown
 }
 
 export type FinancialConcept = {
@@ -14,6 +15,7 @@ export type FinancialConcept = {
   concepto: string
   costo: number
   ciclo: string
+  plantel: string
   source: 'central' | 'bridge'
 }
 
@@ -74,6 +76,7 @@ const mapRows = (rows: CatalogConceptRow[], source: FinancialConcept['source']) 
     concepto,
     costo: toMoney(row?.costo),
     ciclo: normalizeText(row?.ciclo),
+    plantel: normalizeText(row?.plantel),
     source,
   })
   return map
@@ -88,6 +91,7 @@ const readCentralConcepts = async (ids: number[], ciclo: unknown) => {
     'concepto',
     columns.has('costo') ? 'costo' : '0 AS costo',
     columns.has('ciclo') ? 'ciclo' : "'' AS ciclo",
+    columns.has('plantel') ? 'plantel' : "'' AS plantel",
   ]
   const cicloCandidates = cicloCandidatesFor(ciclo)
   const params: any[] = [ids]
@@ -129,6 +133,13 @@ const readCentralConcepts = async (ids: number[], ciclo: unknown) => {
 const readBridgeConcepts = async (ids: number[], ciclo: unknown) => {
   if (!ids.length) return new Map<number, FinancialConcept>()
 
+  // `conceptos.plantel` exists in some deployments but is legacy/optional metadata.
+  // Never make the financial catalog unreadable on an older Bridge just to validate it.
+  const hasPlantelColumn = await query<any[]>(`SHOW COLUMNS FROM conceptos LIKE 'plantel'`)
+    .then((rows) => rows.length > 0)
+    .catch(() => false)
+  const select = `id, concepto, costo, ciclo, ${hasPlantelColumn ? 'plantel' : "'' AS plantel"}`
+
   const cicloCandidates = cicloCandidatesFor(ciclo)
   const params: any[] = [ids]
   let cycleWhere = ''
@@ -139,7 +150,7 @@ const readBridgeConcepts = async (ids: number[], ciclo: unknown) => {
   }
 
   let rows = await query<CatalogConceptRow[]>(`
-    SELECT id, concepto, costo, ciclo
+    SELECT ${select}
     FROM conceptos
     WHERE id IN (?)
       AND concepto IS NOT NULL
@@ -152,7 +163,7 @@ const readBridgeConcepts = async (ids: number[], ciclo: unknown) => {
 
   if (missingIds.length) {
     const fallbackRows = await query<CatalogConceptRow[]>(`
-      SELECT id, concepto, costo, ciclo
+      SELECT ${select}
       FROM conceptos
       WHERE id IN (?)
         AND concepto IS NOT NULL

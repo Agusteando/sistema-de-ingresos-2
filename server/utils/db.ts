@@ -830,6 +830,39 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
       `)
 
       await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS student_duplicate_resolutions (
+          id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          resolution_key VARCHAR(64) NOT NULL,
+          winner_matricula VARCHAR(255) NOT NULL,
+          loser_matricula VARCHAR(255) NOT NULL,
+          winner_name VARCHAR(255) DEFAULT NULL,
+          loser_name VARCHAR(255) DEFAULT NULL,
+          status VARCHAR(32) NOT NULL DEFAULT 'completed',
+          bridge_snapshot LONGTEXT NULL,
+          central_patch LONGTEXT NULL,
+          created_by VARCHAR(255) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          reverted_by VARCHAR(255) DEFAULT NULL,
+          reverted_at DATETIME DEFAULT NULL,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_student_duplicate_resolution_key (resolution_key),
+          INDEX idx_student_duplicate_winner (winner_matricula(64), status),
+          INDEX idx_student_duplicate_loser (loser_matricula(64), status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
+        CREATE TABLE IF NOT EXISTS student_duplicate_ignored_pairs (
+          id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          matricula_a VARCHAR(255) NOT NULL,
+          matricula_b VARCHAR(255) NOT NULL,
+          created_by VARCHAR(255) DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_student_duplicate_ignored_pair (matricula_a(64), matricula_b(64))
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `)
+
+      await runSafeQuery(`
         CREATE TABLE IF NOT EXISTS student_tipo_ingreso_overrides (
           matricula VARCHAR(255) NOT NULL PRIMARY KEY,
           override_activo TINYINT(1) NOT NULL DEFAULT 0,

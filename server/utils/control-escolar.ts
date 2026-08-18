@@ -930,7 +930,15 @@ const fetchLocalBaseRows = async (
   fields.push(selectAs(expr(schema.base, "b", "ciclo", "NULL"), "baseCiclo"));
 
   const params: any[] = [];
-  const whereParts = ["1=1"];
+  const whereParts = [
+    "1=1",
+    `NOT EXISTS (
+      SELECT 1
+      FROM student_duplicate_resolutions DR
+      WHERE UPPER(TRIM(DR.loser_matricula)) = UPPER(TRIM(b.matricula))
+        AND DR.status IN ('completed','bridge_applied','central_pending','central_applied','recovery_required')
+    )`,
+  ];
   const plantelCandidates = plantelCandidatesForProjectedScope(agentId);
   if (plantelCandidates.length && schema.base.has("plantel")) {
     whereParts.push(

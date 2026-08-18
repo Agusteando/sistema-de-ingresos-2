@@ -2,6 +2,7 @@ import { executeStatementTransaction, query, runWithBridgeAgentId, type SqlState
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { assertStockAvailableForConcept } from '../../../utils/conceptos-stock'
 import { resolveFinancialConcept } from '../../../utils/financial-concept'
+import { assertConceptBelongsToStudentPlantel } from '../../../utils/concept-plantel'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
@@ -61,6 +62,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const concepto = await resolveFinancialConcept({
     conceptoId,
     ciclo: effectiveCiclo,
+  })
+
+  assertConceptBelongsToStudentPlantel({
+    conceptoId: concepto.id,
+    conceptoNombre: concepto.concepto,
+    conceptoPlantel: concepto.plantel,
+    studentPlantel: doc.plantel,
   })
 
   if (String(doc.concepto) === String(concepto.id) && String(doc.conceptoNombre || '') === String(concepto.concepto || '')) {

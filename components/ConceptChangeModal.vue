@@ -40,6 +40,8 @@
                 :concepts="conceptos"
                 :loading="loadingConcepts"
                 :disabled="busy"
+                :is-concept-disabled="isForeignPlantelConcept"
+                :concept-disabled-label="() => 'Otro plantel'"
                 placeholder="Buscar concepto..."
               />
             </label>
@@ -143,8 +145,9 @@ import { useScrollLock } from "~/composables/useScrollLock";
 import { useToast } from "~/composables/useToast";
 import ConceptSearchSelect from "~/components/ConceptSearchSelect.vue";
 import { normalizeCicloKey } from "~/shared/utils/ciclo";
+import { conceptBelongsToPlantel } from "~/shared/utils/conceptPlantel";
 
-const props = defineProps({ debt: Object });
+const props = defineProps({ debt: Object, student: Object });
 const emit = defineEmits(["close", "success"]);
 
 useModalEscape(() => {
@@ -166,6 +169,7 @@ const diferenciaMonto = computed(() => {
   const value = Number(diferenciaMontoInput.value || 0);
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 });
+const isForeignPlantelConcept = (concepto) => !conceptBelongsToPlantel(concepto?.plantel, props.student?.plantel || props.student?.plantelBase)
 const selectedConcept = computed(
   () =>
     conceptos.value.find(

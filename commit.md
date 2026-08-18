@@ -1,1 +1,1 @@
-fix: hace autoritativa la clasificación de servicio para recargos
+Agrega resolución reversible de alumnos duplicados y valida conceptos por plantel

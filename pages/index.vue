@@ -5,6 +5,8 @@
       @new-student="openAlta"
     />
 
+    <StudentsDuplicateResolutionEntry />
+
     <StudentsKpiSummary
       :user-role="userRole"
       :kpi-counts="kpiCounts"
@@ -404,6 +406,7 @@ import {
   resolveControlEscolarProgress
 } from '~/shared/utils/studentPresentation'
 import StudentsHero from '~/components/students/StudentsHero.vue'
+import StudentsDuplicateResolutionEntry from '~/components/students/StudentsDuplicateResolutionEntry.vue'
 import StudentsKpiSummary from '~/components/students/StudentsKpiSummary.vue'
 import StudentsFilterBar from '~/components/students/StudentsFilterBar.vue'
 import StudentsListPanel from '~/components/students/StudentsListPanel.vue'

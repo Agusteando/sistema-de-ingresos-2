@@ -822,6 +822,11 @@ export const processExternalRowsBatch = async (
     [matriculas]
   )
 
+  const duplicateRows = await query<any[]>(
+    `SELECT loser_matricula FROM student_duplicate_resolutions WHERE status IN ('completed','bridge_applied','central_pending','central_applied','recovery_required')`
+  ).catch(() => [])
+  const duplicateMatriculas = new Set(duplicateRows.map(row => String(row.loser_matricula || '').trim().toUpperCase()).filter(Boolean))
+
   const localByMatricula = new Map(
     localRows.map(row => [String(row.matricula || '').trim().toUpperCase(), row])
   )
@@ -856,13 +861,15 @@ export const processExternalRowsBatch = async (
       continue
     }
 
-    const finalEstatus = resolveFinalEstatus(
-      entry.row,
-      String(localStudent?.estatus || '').trim(),
-      entry.matricula,
-      runId,
-      plantel
-    )
+    const finalEstatus = duplicateMatriculas.has(entry.matriculaKey)
+      ? 'Duplicado'
+      : resolveFinalEstatus(
+          entry.row,
+          String(localStudent?.estatus || '').trim(),
+          entry.matricula,
+          runId,
+          plantel
+        )
 
     const fullName = [
       entry.mapped.apellidoPaterno,

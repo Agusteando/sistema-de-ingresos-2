@@ -52,7 +52,7 @@
           class="concept-select-option"
           type="button"
           role="option"
-          :disabled="isStockBlocked(concept)"
+          :disabled="isConceptBlocked(concept)"
           :aria-selected="String(concept.id) === String(modelValue)"
           @mousedown.prevent
           @click="select(concept)"
@@ -63,7 +63,7 @@
           </span>
           <span class="concept-select-meta">
             <b>${{ formatMoney(concept.costo) }}</b>
-            <em>{{ conceptMeta(concept) }}</em>
+            <em>{{ disabledReason(concept) || conceptMeta(concept) }}</em>
             <i v-if="concept.stock?.controlled" :class="['concept-stock-chip', stockClass(concept.stock)]">{{ stockLabel(concept.stock) }}</i>
           </span>
         </button>
@@ -87,6 +87,8 @@ const props = defineProps({
   placeholder: { type: String, default: 'Buscar concepto...' },
   limit: { type: Number, default: 80 },
   enforceStockAvailability: { type: Boolean, default: true },
+  isConceptDisabled: { type: Function, default: null },
+  conceptDisabledLabel: { type: Function, default: null },
 })
 
 const emit = defineEmits(['update:modelValue', 'select', 'clear'])
@@ -153,6 +155,12 @@ const isStockBlocked = (concept) => Boolean(
   && !concept?.stock?.allow_negative,
 )
 
+const isConceptBlocked = (concept) => isStockBlocked(concept) || Boolean(props.isConceptDisabled?.(concept))
+const disabledReason = (concept) => {
+  if (props.isConceptDisabled?.(concept)) return String(props.conceptDisabledLabel?.(concept) || 'No disponible')
+  return ''
+}
+
 const syncSearchFromSelection = () => {
   if (selectedConcept.value) search.value = selectedConcept.value.concepto || String(selectedConcept.value.id)
 }
@@ -182,7 +190,7 @@ const focusFirstOption = async () => {
 }
 
 const select = (concept) => {
-  if (isStockBlocked(concept)) return
+  if (isConceptBlocked(concept)) return
   emit('update:modelValue', String(concept.id))
   emit('select', concept)
   search.value = concept.concepto || String(concept.id)
