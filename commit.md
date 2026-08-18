@@ -1,1 +1,1 @@
-Usa la CURP autoritativa de Control Escolar en el reporte de alumnos
+Aclara el cambio entre la versión rápida y la nube

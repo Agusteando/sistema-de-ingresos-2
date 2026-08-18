@@ -256,8 +256,8 @@
                 :title="isSuperAdmin ? localContextTechnicalTitle : undefined"
                 aria-hidden="true"
               >
-                <LucideMonitor v-if="localSystemRuntime" :size="17" />
-                <LucideCloud v-else :size="17" :class="{ 'local-cloud-pulse': localContextPreparing }" />
+                <LucideCloud v-if="localSystemRuntime" :size="17" />
+                <LucideMonitor v-else :size="17" :class="{ 'local-cloud-pulse': localContextPreparing }" />
               </span>
               <span class="local-context-cta-label local-context-cta-label-full">{{ localContextCtaLabel }}</span>
               <span class="local-context-cta-label local-context-cta-label-compact">{{ localContextCtaCompactLabel }}</span>
@@ -274,9 +274,11 @@
               :title="localUpdateActionTitle"
               @click="startLocalSystemUpdate"
             >
-              <LucideSettings v-if="localContextBuildPhase" :size="17" class="animate-spin" />
-              <LucideShield v-else-if="localContextVerificationPhase" :size="17" />
-              <LucideRefreshCw v-else :size="17" :class="{ 'animate-spin': localUpdateActionPending }" />
+              <LucideSettings v-if="localContextBuildPhase" :size="16" class="animate-spin" />
+              <LucideShield v-else-if="localContextVerificationPhase" :size="16" />
+              <LucideRefreshCw v-else :size="16" :class="{ 'animate-spin': localUpdateActionPending }" />
+              <span class="local-update-action-label local-update-action-label-full">{{ localUpdateActionLabel }}</span>
+              <span class="local-update-action-label local-update-action-label-compact">{{ localUpdateActionCompactLabel }}</span>
             </button>
           </div>
           <div v-if="showCicloPicker" ref="cicloPickerRef" class="ciclo-picker" :class="{ open: cicloMenuOpen }">
@@ -604,33 +606,35 @@ const localSystemCloudUpdateEligible = computed(() => Boolean(localSystemCloudSt
 const localContextPreparing = computed(() => !localSystemRuntime && (
   localSystemLaunchPending.value || localSystemCloudUpdating.value
 ))
+const AURORA_CLOUD_URL = 'https://aurora.casitaiedis.edu.mx'
+
 const localContextCtaState = computed(() => {
-  if (localSystemRuntime) return 'active'
+  if (localSystemRuntime) return 'cloud'
   if (localContextPreparing.value) return 'preparing'
   if (localSystemLaunchAvailable.value) return 'open'
   return 'cloud'
 })
 const localContextCtaLabel = computed(() => {
-  if (localSystemRuntime) return 'En este equipo'
-  if (localContextPreparing.value) return 'Preparando…'
-  if (localSystemLaunchAvailable.value) return 'Abrir en este equipo'
-  return 'En la nube'
+  if (localSystemRuntime) return 'Regresar a versión en la nube'
+  return 'Entrar a versión rápida'
 })
 const localContextCtaCompactLabel = computed(() => {
-  if (localSystemRuntime) return 'En este equipo'
-  if (localContextPreparing.value) return 'Preparando…'
-  if (localSystemLaunchAvailable.value) return 'Abrir aquí'
-  return 'En la nube'
+  if (localSystemRuntime) return 'Versión en la nube'
+  return 'Versión rápida'
 })
-const localUpdateActionVisible = computed(() => localSystemRuntime
-  ? localSystemLocalUpdateEligible.value
-  : localSystemCloudUpdateEligible.value)
 const localUpdateActionPending = computed(() => localSystemRuntime
   ? localSystemUpdating.value
   : localSystemCloudUpdating.value)
 const localUpdateAvailable = computed(() => localSystemRuntime
   ? localSystemUpdateAvailable.value
   : localSystemCloudUpdateAvailable.value)
+const localUpdateActionVisible = computed(() => (
+  localUpdateActionPending.value
+  || localSystemLegacyUpdateRequired.value
+  || (localUpdateAvailable.value && (localSystemRuntime
+    ? localSystemLocalUpdateEligible.value
+    : localSystemCloudUpdateEligible.value))
+))
 const localUpdateActionDisabled = computed(() => (
   !localUpdateActionVisible.value
   || localUpdateActionPending.value
@@ -638,7 +642,7 @@ const localUpdateActionDisabled = computed(() => (
   || (!localSystemRuntime && localSystemLaunchPending.value)
 ))
 const localContextCtaDisabled = computed(() => {
-  if (localSystemRuntime) return true
+  if (localSystemRuntime) return false
   return localContextPreparing.value || !localSystemLaunchAvailable.value
 })
 const localContextOperationPhase = computed(() => String(
@@ -657,14 +661,7 @@ const localContextPhaseLabel = computed(() => {
   if (phase === 'failed') return 'La actualización local falló'
   return ''
 })
-const localContextCtaAriaLabel = computed(() => {
-  if (localSystemRuntime) {
-    return localContextPhaseLabel.value
-      ? `En este equipo. ${localContextPhaseLabel.value}.`
-      : 'En este equipo.'
-  }
-  return localContextCtaLabel.value
-})
+const localContextCtaAriaLabel = computed(() => localContextCtaLabel.value)
 const localContextTechnicalTitle = computed(() => {
   if (localContextPhaseLabel.value) return localContextPhaseLabel.value
   if (localSystemRuntime) {
@@ -676,20 +673,22 @@ const localContextTechnicalTitle = computed(() => {
   if (localSystemLaunchAvailable.value) return `Disponible para ${activePlantel.value}`
   return `No disponible${localSystemDiagnosticSuffix.value}`
 })
+const localUpdateActionLabel = computed(() => {
+  if (localSystemLegacyUpdateRequired.value) return 'Completar actualización'
+  return localUpdateActionPending.value ? 'Actualizando…' : 'Actualización disponible'
+})
+const localUpdateActionCompactLabel = computed(() => {
+  if (localSystemLegacyUpdateRequired.value) return 'Completar'
+  return localUpdateActionPending.value ? 'Actualizando…' : 'Actualización'
+})
 const localUpdateActionTitle = computed(() => {
   if (localSystemLegacyUpdateRequired.value) return 'Completar actualización en la ventana local'
-  if (localUpdateActionPending.value) {
-    return isSuperAdmin.value && localContextPhaseLabel.value
-      ? localContextPhaseLabel.value
-      : 'Actualizando en este equipo'
+  if (localUpdateActionPending.value && isSuperAdmin.value && localContextPhaseLabel.value) {
+    return localContextPhaseLabel.value
   }
-  return localUpdateAvailable.value
-    ? 'Actualizar en este equipo'
-    : 'Buscar actualizaciones'
+  return localUpdateActionLabel.value
 })
-const localUpdateActionAriaLabel = computed(() => localUpdateActionPending.value
-  ? 'Actualizando en este equipo'
-  : localUpdateActionTitle.value)
+const localUpdateActionAriaLabel = computed(() => localUpdateActionLabel.value)
 
 const applyLocalSystemVersion = (status) => {
   const current = status?.current
@@ -837,16 +836,21 @@ const openLocalSystem = async () => {
   }
 }
 
+const openCloudSystem = () => {
+  if (typeof window === 'undefined') return
+  window.location.assign(AURORA_CLOUD_URL)
+}
+
 const handleLocalContextCta = async () => {
-  if (localSystemRuntime) return
+  if (localSystemRuntime) {
+    openCloudSystem()
+    return
+  }
 
   if (localContextPreparing.value) return
   if (localSystemLaunchAvailable.value) {
     await openLocalSystem()
-    return
   }
-
-  // En la nube sin una instalación local elegible: el control es informativo.
 }
 
 const scheduleLocalSystemPoll = (delay = 15000) => {
@@ -2410,17 +2414,31 @@ const logout = async () => {
 }
 
 .local-update-action {
-  display: inline-grid;
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  place-items: center;
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   border: 1px solid #dbe4df;
   border-radius: 12px;
   background: #fff;
+  padding: 0 13px;
   color: #52636d;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.local-update-action-label {
+  line-height: 1;
+}
+
+.local-update-action-label-compact {
+  display: none;
 }
 
 .local-update-action:hover:not(:disabled) {
@@ -3411,9 +3429,18 @@ const logout = async () => {
   }
 
   .local-update-action {
-    width: 38px;
-    height: 38px;
-    flex-basis: 38px;
+    min-height: 38px;
+    gap: 6px;
+    padding-inline: 9px;
+    font-size: 0.72rem;
+  }
+
+  .local-update-action-label-full {
+    display: none;
+  }
+
+  .local-update-action-label-compact {
+    display: inline;
   }
 
   .local-context-cta-icon {
