@@ -18,6 +18,14 @@
           </button>
           <button
             type="button"
+            :class="{ active: scopeMode === 'internos' }"
+            :aria-pressed="scopeMode === 'internos'"
+            @click="scopeMode = 'internos'"
+          >
+            Internos
+          </button>
+          <button
+            type="button"
             :class="{ active: scopeMode === 'externos' }"
             :aria-pressed="scopeMode === 'externos'"
             @click="scopeMode = 'externos'"
@@ -76,7 +84,7 @@
         <strong>{{ successfulReports.length }}</strong>
       </article>
       <article class="summary-card">
-        <span>{{ scopeMode === 'externos' ? 'Externos evaluados' : 'Evaluados' }}</span>
+        <span>{{ scopeMode === 'internos' ? 'Internos evaluados' : scopeMode === 'externos' ? 'Externos evaluados' : 'Evaluados' }}</span>
         <strong>{{ formatNumber(globalPopulation.evaluated) }}</strong>
       </article>
       <article class="summary-card is-basic">
@@ -92,7 +100,7 @@
     <section class="chart-section">
       <header class="section-heading">
         <h2>Básico</h2>
-        <span>{{ scopeMode === 'externos' ? 'Externos' : 'Todos' }}</span>
+        <span>{{ scopeMode === 'internos' ? 'Internos' : scopeMode === 'externos' ? 'Externos' : 'Todos' }}</span>
       </header>
 
       <div v-if="basicChartRows.length" class="calm-chart" role="img" :aria-label="basicChartAriaLabel">
@@ -347,6 +355,7 @@ const emptyScope = () => ({
 
 const scopeForReport = (report, mode = scopeMode.value) => {
   if (!report) return emptyScope()
+  if (mode === 'internos') return report.scopes?.internos || emptyScope()
   if (mode === 'externos') return report.scopes?.externos || emptyScope()
   return report.scopes?.all || {
     population: report.population || emptyScope().population,
@@ -424,7 +433,11 @@ const advancedChartRows = computed(() => orderedReports.value.map((report) => {
 }))
 
 const basicChartAriaLabel = computed(() => {
-  const scope = scopeMode.value === 'externos' ? 'alumnos externos' : 'todos los alumnos'
+  const scope = scopeMode.value === 'internos'
+    ? 'alumnos internos'
+    : scopeMode.value === 'externos'
+      ? 'alumnos externos'
+      : 'todos los alumnos'
   return `Avance de expediente básico por plantel para ${scope}`
 })
 
@@ -456,6 +469,14 @@ const visibleQualityBreakdown = (scope) => {
 
 const populationBreakdown = (scope) => {
   const population = scope?.population || emptyScope().population
+  if (scopeMode.value === 'internos') {
+    return [
+      { label: 'Internos', count: population.internos },
+      { label: 'Completos B', count: scope?.basic?.completeRecords || 0 },
+      { label: 'Completos A', count: scope?.advanced?.completeRecords || 0 },
+      { label: 'Sin ficha', count: population.withoutOverlay },
+    ]
+  }
   if (scopeMode.value === 'externos') {
     return [
       { label: 'Externos', count: population.externos },
@@ -598,7 +619,7 @@ const downloadCsv = () => {
     return {
       Plantel: report.agentId,
       Ciclo: selectedCiclo.value,
-      Vista: scopeMode.value === 'externos' ? 'Externos' : 'Todos',
+      Vista: scopeMode.value === 'internos' ? 'Internos' : scopeMode.value === 'externos' ? 'Externos' : 'Todos',
       Evaluados: scope.population.evaluated,
       Internos: scope.population.internos,
       Externos: scope.population.externos,
@@ -616,7 +637,7 @@ const downloadCsv = () => {
       Fuente: sourceLabel(report.source),
     }
   })
-  const scopeSuffix = scopeMode.value === 'externos' ? 'externos' : 'todos'
+  const scopeSuffix = scopeMode.value === 'internos' ? 'internos' : scopeMode.value === 'externos' ? 'externos' : 'todos'
   exportToCSV(`avance-control-escolar-${scopeSuffix}-${selectedCiclo.value}.csv`, rows)
 }
 
@@ -726,7 +747,7 @@ onBeforeUnmount(() => currentController?.abort())
 
 .scope-toggle {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(76px, 1fr));
+  grid-template-columns: repeat(3, minmax(76px, 1fr));
   gap: 3px;
   border: 1px solid #cfdcd1;
   border-radius: 13px;

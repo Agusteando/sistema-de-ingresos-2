@@ -2662,6 +2662,9 @@ export const fetchControlEscolarProgressReport = async (
   };
 
   const allScope = summarizeScope(allEvaluatedStudents);
+  const internalScope = summarizeScope(
+    allEvaluatedStudents.filter((student) => student.tipoIngresoValue === "interno"),
+  );
   const externalScope = summarizeScope(externalEvaluatedStudents);
   const inscritos = allEvaluatedStudents.length;
   const internos = allEvaluatedStudents.filter(
@@ -2704,6 +2707,7 @@ export const fetchControlEscolarProgressReport = async (
         ...allScope,
         population,
       },
+      internos: internalScope,
       externos: externalScope,
     },
     source: loaded.source,
