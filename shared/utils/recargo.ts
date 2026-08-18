@@ -124,21 +124,19 @@ export const resolveLateFeeTiming = ({
   currentDateValue,
   cutoffDay = 12,
   isService = false,
-  isEventual = false,
 }: {
   ciclo: string
   schoolMonth: number
   currentDateValue: unknown
   cutoffDay?: unknown
   isService?: boolean
-  isEventual?: boolean
 }): LateFeeTiming => {
   const currentDateKey = normalizeDateKey(currentDateValue)
 
-  // Servicios de cobro único no tienen un mes académico confiable. Una vez
-  // clasificados explícitamente como servicio, su vencimiento se evalúa contra
-  // el día de corte del mismo mes calendario de la fecha de pago.
-  if (isService && isEventual) {
+  // Una clasificación explícita como servicio es autoritativa para recargos.
+  // No dependemos de eventual, plazo ni del mes académico heredado: el corte
+  // se evalúa contra el mes calendario de la fecha efectiva de pago.
+  if (isService) {
     const deadline = currentDateKey
       ? `${currentDateKey.slice(0, 7)}-${padDatePart(normalizeCutoffDay(cutoffDay))}`
       : ''

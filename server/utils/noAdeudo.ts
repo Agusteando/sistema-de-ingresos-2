@@ -371,7 +371,6 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
         currentDateValue: currentDateKey,
         cutoffDay: recargoPolicy?.diaLimite ?? 12,
         isService: Boolean(recargoPolicy?.esServicio),
-        isEventual,
       })
       const paymentDeadline = recargoTiming.deadline
       const isLate = recargoTiming.isAfterDeadline

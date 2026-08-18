@@ -615,7 +615,6 @@ const recargoCalculationForDebt = (debt) => {
     currentDateValue: paymentDate.value,
     cutoffDay: debt?.recargoDiaLimite ?? 12,
     isService: Boolean(debt?.recargoServicio),
-    isEventual: Boolean(debt?.isEventual || String(debt?.mes || '').trim().toLowerCase() === 'ev'),
   })
   const applies = shouldApplyLateFee({
     enabled: Boolean(debt?.recargoActivo),

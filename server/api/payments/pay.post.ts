@@ -251,7 +251,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       currentDateValue: effectiveDateKey,
       cutoffDay: recargoPolicy?.diaLimite ?? 12,
       isService: Boolean(recargoPolicy?.esServicio),
-      isEventual: String(mes || '').trim().toLowerCase() === 'ev',
     })
     const appliesLateFee = shouldApplyLateFee({
       enabled: Boolean(recargoPolicy?.activo),
