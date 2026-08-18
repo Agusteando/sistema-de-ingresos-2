@@ -9,6 +9,7 @@ import {
 } from '../../shared/utils/grado'
 import { normalizeCurp } from '../../shared/utils/curp'
 import type { AuthSessionUser } from './auth-session'
+import { fetchCentralMatriculaOverlays } from './central-matricula-overlay'
 import { query } from './db'
 
 type StudentIdentityReportFilters = {
@@ -126,6 +127,15 @@ export const loadStudentIdentityReport = async (
       AND A.plantel IN (${plantelCandidates.map(() => '?').join(', ')})
   `, plantelCandidates)
 
+  // CONTROL_ESCOLAR_MYSQL.matricula is the authoritative CURP source.
+  // The local/Bridge base CURP remains only as an offline or missing-record fallback.
+  let centralMatricula = new Map<string, any>()
+  try {
+    centralMatricula = await fetchCentralMatriculaOverlays(rows.map((row) => row.matricula))
+  } catch {
+    // Reports must remain available while a plantel is operating through Bridge offline.
+  }
+
   const mapped: StudentIdentityReportRow[] = rows.flatMap((row) => {
     const placement = calculatePromotedGrado(
       row.gradoBase,
@@ -137,13 +147,17 @@ export const loadStudentIdentityReport = async (
 
     if (placement.outOfScope || normalizePlantel(placement.plantel) !== plantel) return []
 
+    const matriculaKey = normalizeText(row.matricula).toUpperCase()
+    const centralCurp = normalizeCurp(centralMatricula.get(matriculaKey)?.student?.curp)
+    const resolvedCurp = centralCurp || normalizeCurp(row.curp)
+
     return [{
       apellidoPaterno: normalizeText(row.apellidoPaterno),
       apellidoMaterno: normalizeText(row.apellidoMaterno),
       nombres: normalizeText(row.nombres),
       grado: displayGrado(placement.grado),
-      curp: normalizeCurp(row.curp),
-      fechaNacimiento: birthDateFromCurp(row.curp),
+      curp: resolvedCurp,
+      fechaNacimiento: birthDateFromCurp(resolvedCurp),
       gradoOrden: gradoOrder(placement.grado)
     }]
   })

@@ -1,1 +1,1 @@
-Agrega reporte Excel de alumnos con grado calculado y nacimiento derivado de CURP
+Usa la CURP autoritativa de Control Escolar en el reporte de alumnos
