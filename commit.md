@@ -1,1 +1,1 @@
-Permitir conceptos de cualquier plantel al asignar o corregir
+Aplicar recargos automáticos al abrir pagos y destacar el total

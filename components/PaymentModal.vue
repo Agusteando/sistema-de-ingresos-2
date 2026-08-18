@@ -274,9 +274,12 @@
                 </button>
               </div>
             </div>
-            <div class="flex flex-col justify-center text-right">
+            <div
+              class="payment-total-block flex flex-col justify-center text-right"
+              :class="{ 'recargo-attention': recargoTotalAttention }"
+            >
               <span class="text-[0.7rem] font-bold uppercase tracking-wide text-gray-500">Total del pago</span>
-              <span class="mt-1 font-mono text-2xl font-bold leading-none text-brand-campus">${{ totalCobrar.toFixed(2) }}</span>
+              <span class="payment-total-value mt-1 font-mono text-2xl font-bold leading-none text-brand-campus">${{ totalCobrar.toFixed(2) }}</span>
             </div>
           </div>
 
@@ -301,7 +304,13 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(debt, i) in processedDebts" :key="i" class="border-t border-gray-100 hover:bg-transparent">
+                <tr
+                  v-for="(debt, i) in processedDebts"
+                  :key="paymentDebtKey(debt) || i"
+                  class="payment-row border-t border-gray-100 hover:bg-transparent"
+                  :class="{ 'recargo-attention': isRecargoAttentionActive(debt) }"
+                  :style="isRecargoAttentionActive(debt) ? { '--recargo-delay': `${Math.min(i, 6) * 90}ms` } : undefined"
+                >
                   <td class="font-semibold text-sm py-2 px-4 text-gray-800">
                     <div class="payment-concept-cell">
                       <span>{{ debt.conceptoNombre }}</span>
@@ -317,6 +326,7 @@
                         :class="{
                           applied: debtHasRecargoForDate(debt),
                           pending: isRecargoTogglePending(debt),
+                          attention: isRecargoAttentionActive(debt),
                         }"
                         :disabled="isRecargoTogglePending(debt) || debtHasRecargoForDate(debt)"
                         :aria-pressed="debtHasRecargoForDate(debt) ? 'true' : 'false'"
@@ -424,6 +434,11 @@ const otherCampusAuthorizationCode = ref('')
 const otherCampusAuthorizationError = ref('')
 const otherCampusCodeInput = ref(null)
 const recargoTogglingConcepts = ref(new Set())
+const recargoAttentionKeys = ref(new Set())
+const recargoTotalAttention = ref(false)
+const recargoExperienceReady = ref(false)
+let recargoAttentionTimer = null
+let lastAutomaticRecargoKeys = new Set()
 const activePlantelCookie = useCookie('auth_active_plantel')
 
 const localDateKey = (date = new Date()) => {
@@ -624,20 +639,28 @@ const recargoCalculationForDebt = (debt) => {
     cutoffDay: debt?.recargoDiaLimite ?? 12,
     isService: Boolean(debt?.recargoServicio),
   })
-  const applies = shouldApplyLateFee({
+  const decision = {
     enabled: Boolean(debt?.recargoActivo),
-    force: Boolean(debt?.recargoAplicadoAhora),
-    hasManualLateFee: Boolean(debt?.recargoManual),
     hasPayment: Boolean(debt?.hasPayment),
     hasActiveConvention: Boolean(debt?.convenioActivo),
     isAfterDeadline: timing.isAfterDeadline,
     balanceBeforeLateFee: baseAmount - pagosPrevios,
+  }
+  const automatic = shouldApplyLateFee({
+    ...decision,
+    force: false,
+    hasManualLateFee: false,
+  })
+  const applies = shouldApplyLateFee({
+    ...decision,
+    force: Boolean(debt?.recargoAplicadoAhora),
+    hasManualLateFee: Boolean(debt?.recargoManual),
   })
   const subtotal = applies
     ? calculateLateFeeSubtotal(baseAmount, debt?.recargoPorcentaje ?? 10)
     : baseAmount
 
-  return { subtotal, applies, isLate: timing.isAfterDeadline, deadline: timing.deadline }
+  return { subtotal, applies, automatic, isLate: timing.isAfterDeadline, deadline: timing.deadline }
 }
 const debtHasRecargoForDate = (debt) => recargoCalculationForDebt(debt).applies
 const recargoActionLabel = (debt) => debtHasRecargoForDate(debt) ? 'Recargo aplicado' : 'Aplicar recargo'
@@ -647,6 +670,7 @@ const recargoAmountForDebt = (debt) => {
   return Math.max(0, calculation.subtotal - baseAmountForDebt(debt))
 }
 const isRecargoTogglePending = (debt) => recargoTogglingConcepts.value.has(conceptIdForDebt(debt))
+const isRecargoAttentionActive = (debt) => recargoAttentionKeys.value.has(paymentDebtKey(debt))
 
 const buildProcessedDebts = () => (Array.isArray(props.debts) ? props.debts : []).map(d => {
   const final = d.saldo
@@ -666,6 +690,7 @@ const buildProcessedDebts = () => (Array.isArray(props.debts) ? props.debts : []
 
 watch(() => props.debts, () => {
   processedDebts.value = buildProcessedDebts()
+  if (recargoExperienceReady.value) void syncAutomaticRecargoState()
 }, { immediate: true })
 
 const paymentDraftCicloScope = normalizeCicloKey(state.value.ciclo)
@@ -772,10 +797,12 @@ const {
 onMounted(() => {
   initializeDraft()
   document.addEventListener('pointerdown', closePaymentOptionsOnOutsideClick)
+  void initializeRecargoExperience()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', closePaymentOptionsOnOutsideClick)
+  if (recargoAttentionTimer) window.clearTimeout(recargoAttentionTimer)
 })
 
 const hasPendingFinalAmounts = computed(() => processedDebts.value.some(debt => debt.montoFinalPendiente))
@@ -806,6 +833,70 @@ const repriceUntouchedPayments = () => {
     else if (Number(debt.montoPagado || 0) > nextBalance) debt.montoPagado = nextBalance
   })
 }
+
+const automaticRecargoKeys = () => new Set(
+  processedDebts.value
+    .filter(debt => recargoCalculationForDebt(debt).automatic)
+    .map(paymentDebtKey),
+)
+
+const showRecargoAttention = async (keys) => {
+  const normalizedKeys = Array.from(keys || []).filter(Boolean)
+  if (!normalizedKeys.length) return
+
+  if (recargoAttentionTimer) window.clearTimeout(recargoAttentionTimer)
+  recargoAttentionKeys.value = new Set()
+  recargoTotalAttention.value = false
+  await nextTick()
+
+  recargoAttentionKeys.value = new Set(normalizedKeys)
+  recargoTotalAttention.value = true
+  recargoAttentionTimer = window.setTimeout(() => {
+    recargoAttentionKeys.value = new Set()
+    recargoTotalAttention.value = false
+    recargoAttentionTimer = null
+  }, 2800)
+}
+
+const syncAutomaticRecargoState = async ({ initial = false } = {}) => {
+  repriceUntouchedPayments()
+
+  const currentKeys = automaticRecargoKeys()
+  const newlyApplied = initial
+    ? Array.from(currentKeys)
+    : Array.from(currentKeys).filter(key => !lastAutomaticRecargoKeys.has(key))
+
+  lastAutomaticRecargoKeys = currentKeys
+  if (newlyApplied.length) await showRecargoAttention(newlyApplied)
+}
+
+const refreshRecargoPolicies = async () => {
+  const conceptIds = Array.from(new Set(
+    processedDebts.value
+      .map(conceptIdForDebt)
+      .filter(id => Number.isInteger(id) && id > 0),
+  ))
+  if (!conceptIds.length) return
+
+  try {
+    const response = await $fetch('/api/recargos/conceptos', {
+      params: { ids: conceptIds.join(',') },
+    })
+    const policies = Array.isArray(response?.policies) ? response.policies : []
+    policies.forEach(policy => applyRecargoPolicyToConcept(Number(policy?.conceptoId || 0), policy))
+    await syncAutomaticRecargoState()
+  } catch {
+    // The debt payload already carries the latest available Bridge projection.
+    // A policy refresh is best-effort so offline payments stay frictionless.
+  }
+}
+
+const initializeRecargoExperience = async () => {
+  recargoExperienceReady.value = true
+  await syncAutomaticRecargoState({ initial: true })
+  void refreshRecargoPolicies()
+}
+
 const handleFinalAmountInput = (debt) => {
   debt.montoFinalTouched = true
   if (!debt?.montoTouched) debt.montoPagado = effectiveSaldoFinal(debt)
@@ -893,7 +984,11 @@ const applyRecargo = async (debt) => {
   }
 }
 watch(paymentDate, () => {
-  repriceUntouchedPayments()
+  if (!recargoExperienceReady.value) {
+    repriceUntouchedPayments()
+    return
+  }
+  void syncAutomaticRecargoState()
 })
 const totalCobrar = computed(() => processedDebts.value.reduce((sum, debt) => sum + paymentAmountForDebt(debt), 0))
 const stockLabel = (stock) => {
@@ -1144,6 +1239,48 @@ const submit = async () => {
   background: #f4faf5;
   color: #2f7449;
 }
+@keyframes payment-recargo-row-attention {
+  0% { background: transparent; box-shadow: inset 0 0 0 0 rgba(47, 116, 73, 0); }
+  18% { background: rgba(237, 248, 240, .95); box-shadow: inset 3px 0 0 rgba(47, 116, 73, .7); }
+  68% { background: rgba(243, 249, 245, .72); box-shadow: inset 3px 0 0 rgba(47, 116, 73, .42); }
+  100% { background: transparent; box-shadow: inset 0 0 0 0 rgba(47, 116, 73, 0); }
+}
+
+@keyframes payment-recargo-tag-attention {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(47, 116, 73, 0); }
+  30% { transform: scale(1.045); box-shadow: 0 0 0 5px rgba(47, 116, 73, .11); }
+}
+
+@keyframes payment-recargo-total-attention {
+  0%, 100% { transform: translateY(0) scale(1); }
+  28% { transform: translateY(-1px) scale(1.055); }
+  55% { transform: translateY(0) scale(1.015); }
+}
+
+.payment-row.recargo-attention {
+  animation: payment-recargo-row-attention 1700ms ease-out var(--recargo-delay, 0ms) both;
+}
+
+.payment-recargo-tag.attention {
+  animation: payment-recargo-tag-attention 980ms ease-out var(--recargo-delay, 0ms) 2;
+}
+
+.payment-total-block {
+  transform-origin: right center;
+}
+
+.payment-total-block.recargo-attention .payment-total-value {
+  animation: payment-recargo-total-attention 720ms cubic-bezier(.2, .8, .2, 1) 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payment-row.recargo-attention,
+  .payment-recargo-tag.attention,
+  .payment-total-block.recargo-attention .payment-total-value {
+    animation: none;
+  }
+}
+
 .payment-recargo-heading {
   width: 9.75rem;
 }
