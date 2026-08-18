@@ -1,1 +1,1 @@
-Aclara el cambio entre la versión rápida y la nube
+feat: agrega revisión editable antes de emitir facturas

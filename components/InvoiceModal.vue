@@ -1,9 +1,11 @@
 <template>
   <Teleport to="body">
-    <div class="modal-overlay overflow-y-auto p-4" @click.self="requestClose">
+    <div ref="modalOverlayRef" class="modal-overlay overflow-y-auto p-4" @click.self="requestClose">
       <div class="modal-container large w-full max-w-4xl h-auto my-auto" role="dialog" aria-modal="true" aria-labelledby="invoice-modal-title">
         <div class="modal-header rounded-t-xl sticky top-0 z-10">
-          <h2 id="invoice-modal-title" class="text-lg font-bold text-gray-800">{{ generatedInvoice ? 'Factura generada' : 'Facturación' }}</h2>
+          <h2 id="invoice-modal-title" class="text-lg font-bold text-gray-800">
+            {{ generatedInvoice ? 'Factura generada' : invoiceStage === 'review' ? 'Revisar factura' : 'Facturación' }}
+          </h2>
         </div>
 
         <div class="modal-content p-6 space-y-4">
@@ -66,11 +68,11 @@
           </section>
 
           <template v-else>
-            <div v-if="loadingCompany" class="card p-4 text-sm text-gray-500 flex items-center gap-2" role="status">
+            <div v-if="invoiceStage === 'prepare' && loadingCompany" class="card p-4 text-sm text-gray-500 flex items-center gap-2" role="status">
               <LucideLoader2 class="animate-spin" :size="16" /> Cargando información...
             </div>
 
-            <div v-if="companyLoadError" class="card p-4 border-amber-200 bg-amber-50/70 text-sm text-amber-900">
+            <div v-if="invoiceStage === 'prepare' && companyLoadError" class="card p-4 border-amber-200 bg-amber-50/70 text-sm text-amber-900">
               <div class="flex items-start gap-3">
                 <LucideAlertTriangle class="shrink-0 mt-0.5" :size="18" />
                 <div>
@@ -84,7 +86,7 @@
               <div class="flex items-center gap-3 text-blue-900">
                 <LucideLoader2 class="animate-spin shrink-0" :size="20" />
                 <div>
-                  <strong class="block">Generando CFDI...</strong>
+                  <strong class="block">Emitiendo CFDI...</strong>
                   <span class="text-sm">No cierres esta ventana hasta recibir el folio o un mensaje de error.</span>
                 </div>
               </div>
@@ -103,7 +105,7 @@
               </div>
             </div>
 
-          <div v-if="!loading && validationIssues.length" class="card p-4 border-amber-200 bg-amber-50/70">
+          <div v-if="invoiceStage === 'prepare' && !loading && validationIssues.length" class="card p-4 border-amber-200 bg-amber-50/70">
             <div class="flex items-start gap-3">
               <LucideAlertTriangle class="text-amber-600 shrink-0 mt-0.5" :size="18" />
               <div>
@@ -115,6 +117,7 @@
             </div>
           </div>
 
+          <template v-if="invoiceStage === 'prepare'">
           <div class="card p-5">
             <h3 class="text-xs font-bold text-brand-teal uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Datos fiscales</h3>
             <div class="grid grid-cols-12 gap-4">
@@ -204,16 +207,142 @@
             </div>
           </div>
           </template>
+
+          <template v-else>
+            <div class="card overflow-hidden">
+              <div class="grid gap-px bg-gray-100 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="min-w-0 bg-white px-5 py-4 sm:col-span-2">
+                  <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Receptor</span>
+                  <span class="mt-1 block truncate text-sm font-bold text-gray-900">{{ form.legal_name }}</span>
+                  <span class="mt-0.5 block truncate text-xs text-gray-500"><span class="font-mono">{{ form.tax_id }}</span> · {{ form.email }}</span>
+                </div>
+                <div class="min-w-0 bg-white px-5 py-4">
+                  <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Uso CFDI</span>
+                  <span class="mt-1 block truncate text-sm font-semibold text-gray-800">{{ form.invoice_use }}</span>
+                  <span class="mt-0.5 block truncate text-xs text-gray-500">{{ selectedInvoiceUseLabel }}</span>
+                </div>
+                <div class="min-w-0 bg-white px-5 py-4">
+                  <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Alumno</span>
+                  <span class="mt-1 block truncate text-sm font-semibold text-gray-800">{{ form.nombreCompleto }}</span>
+                  <span class="mt-0.5 block truncate font-mono text-xs text-gray-500">{{ form.CURP }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card overflow-hidden">
+              <div class="flex items-end justify-between gap-4 border-b border-gray-100 px-5 py-4">
+                <div>
+                  <h3 class="m-0 text-xs font-bold uppercase tracking-wide text-gray-800">Conceptos en CFDI</h3>
+                </div>
+                <div class="text-right">
+                  <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Total</span>
+                  <span class="font-mono text-xl font-bold text-brand-campus">${{ reviewTotal.toFixed(2) }}</span>
+                </div>
+              </div>
+
+              <div class="hidden grid-cols-12 gap-3 border-b border-gray-100 bg-gray-50/70 px-5 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-400 md:grid">
+                <span class="col-span-8">Concepto</span>
+                <span class="col-span-3 text-right">Monto</span>
+              </div>
+
+              <div class="divide-y divide-gray-100">
+                <div
+                  v-for="(item, index) in reviewItems"
+                  :key="item.key"
+                  class="grid grid-cols-12 items-start gap-3 px-5 py-4 transition-colors"
+                  :class="isReviewItemChanged(item) ? 'bg-amber-50/35' : 'bg-white'"
+                >
+                  <div class="col-span-12 md:col-span-8">
+                    <label class="sr-only" :for="`invoice-description-${index}`">Concepto en factura</label>
+                    <input
+                      :id="`invoice-description-${index}`"
+                      v-model="item.description"
+                      type="text"
+                      :disabled="loading"
+                      class="input-field font-semibold"
+                      :class="!isReviewDescriptionValid(item) ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : ''"
+                      :aria-invalid="!isReviewDescriptionValid(item)"
+                      autocomplete="off"
+                    >
+                  </div>
+                  <div class="col-span-10 md:col-span-3">
+                    <label class="sr-only" :for="`invoice-amount-${index}`">Monto en factura</label>
+                    <div class="relative">
+                      <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center font-mono text-sm text-gray-400">$</span>
+                      <input
+                        :id="`invoice-amount-${index}`"
+                        v-model.number="item.amount"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        inputmode="decimal"
+                        :disabled="loading"
+                        class="input-field pl-7 text-right font-mono font-semibold"
+                        :class="!isReviewAmountValid(item) ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : ''"
+                        :aria-invalid="!isReviewAmountValid(item)"
+                      >
+                    </div>
+                  </div>
+                  <div class="col-span-2 flex h-[42px] items-center justify-end md:col-span-1">
+                    <button
+                      v-if="isReviewItemChanged(item)"
+                      type="button"
+                      class="grid h-8 w-8 place-items-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                      title="Restaurar"
+                      :aria-label="`Restaurar concepto ${index + 1}`"
+                      :disabled="loading"
+                      @click="restoreReviewItem(item)"
+                    >
+                      <LucideRotateCcw :size="15" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card overflow-hidden">
+              <div class="grid gap-px bg-gray-100 sm:grid-cols-2 lg:grid-cols-5">
+                <div class="bg-white px-5 py-4">
+                  <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Régimen</span>
+                  <span class="mt-1 block font-mono text-sm font-semibold text-gray-800">{{ form.tax_system }}</span>
+                </div>
+                <div class="bg-white px-5 py-4">
+                  <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">C.P.</span>
+                  <span class="mt-1 block font-mono text-sm font-semibold text-gray-800">{{ form.zip }}</span>
+                </div>
+                <div class="bg-white px-5 py-4">
+                  <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Forma de pago</span>
+                  <span class="mt-1 block text-sm font-semibold text-gray-800"><span class="font-mono">{{ legacyContext.paymentForm }}</span> · {{ legacyContext.primaryFormaDePago }}</span>
+                </div>
+                <div class="bg-white px-5 py-4">
+                  <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Nivel</span>
+                  <span class="mt-1 block text-sm font-semibold text-gray-800">{{ form.nivelEducativo }}</span>
+                </div>
+                <div class="bg-white px-5 py-4">
+                  <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">RVOE</span>
+                  <span class="mt-1 block font-mono text-sm font-semibold text-gray-800">{{ form.autRVOE }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+          </template>
         </div>
 
         <div class="modal-footer rounded-b-xl sticky bottom-0 z-10">
-          <button class="btn btn-ghost" @click="requestClose" type="button" :disabled="loading || emailing">
-            {{ generatedInvoice ? 'Cerrar' : 'Cancelar' }}
-          </button>
-          <button v-if="!generatedInvoice" class="btn btn-primary" @click="submit" :disabled="loading || !canSubmit">
-            <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
-            {{ loading ? 'Generando...' : 'Generar factura' }}
-          </button>
+          <template v-if="generatedInvoice">
+            <button class="btn btn-ghost" @click="requestClose" type="button" :disabled="emailing">Cerrar</button>
+          </template>
+          <template v-else-if="invoiceStage === 'prepare'">
+            <button class="btn btn-ghost" @click="requestClose" type="button" :disabled="loading">Cancelar</button>
+            <button class="btn btn-primary" @click="openReview" type="button" :disabled="loading || !canReview">Revisar factura</button>
+          </template>
+          <template v-else>
+            <button class="btn btn-ghost" @click="returnToPrepare" type="button" :disabled="loading">Volver</button>
+            <button class="btn btn-primary" @click="submit" type="button" :disabled="loading || !canSubmit">
+              <LucideLoader2 v-if="loading" class="animate-spin" :size="16" />
+              {{ loading ? 'Emitiendo...' : 'Emitir CFDI' }}
+            </button>
+          </template>
         </div>
       </div>
     </div>
@@ -230,7 +359,8 @@ import {
   LucideFileDown,
   LucideFileText,
   LucideLoader2,
-  LucideMail
+  LucideMail,
+  LucideRotateCcw
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
@@ -271,10 +401,12 @@ useScrollLock()
 const loading = ref(false)
 const loadingCompany = ref(false)
 const emailing = ref(false)
+const invoiceStage = ref('prepare')
 const generatedInvoice = ref(null)
 const submissionError = ref(null)
 const companyLoadError = ref('')
 const emailFeedback = ref(null)
+const modalOverlayRef = ref(null)
 const resultPanelRef = ref(null)
 const submissionErrorRef = ref(null)
 const ieduLocks = ref({ nombreCompleto: false, CURP: false, nivelEducativo: false, autRVOE: false })
@@ -312,7 +444,44 @@ const focusFeedback = async (target) => {
 }
 
 const selectedNivelDefault = computed(() => inferNivelFromBase(props.student?.nivel) || studentNivelLabel(props.student))
-const legacyContext = computed(() => resolveLegacyInvoiceContext({ student: props.student || {}, selectedConcepts: props.debts || [] }))
+const legacyContext = ref(resolveLegacyInvoiceContext({ student: props.student || {}, selectedConcepts: props.debts || [] }))
+
+const makeReviewItems = () => legacyContext.value.conceptos.map((concepto, index) => {
+  const description = normalizeText(concepto.conceptoNombre)
+  const amount = Number(Number(concepto.monto || 0).toFixed(2))
+  return {
+    key: normalizeText(concepto.id) || `${concepto.documento || 'concepto'}-${concepto.mes || index}-${index}`,
+    description,
+    amount,
+    originalDescription: description,
+    originalAmount: amount
+  }
+})
+
+const reviewItems = ref(makeReviewItems())
+
+const isReviewDescriptionValid = (item) => Boolean(normalizeText(item?.description))
+const normalizedReviewAmount = (value) => Number(Number(value || 0).toFixed(2))
+const isReviewAmountValid = (item) => {
+  const amount = normalizedReviewAmount(item?.amount)
+  return Number.isFinite(amount) && amount >= 0.01
+}
+
+const isReviewItemChanged = (item) => (
+  normalizeText(item?.description) !== normalizeText(item?.originalDescription)
+  || normalizedReviewAmount(item?.amount) !== normalizedReviewAmount(item?.originalAmount)
+)
+
+const restoreReviewItem = (item) => {
+  if (!item) return
+  item.description = item.originalDescription
+  item.amount = item.originalAmount
+}
+
+const reviewTotal = computed(() => Number(reviewItems.value.reduce((sum, item) => {
+  const amount = normalizedReviewAmount(item?.amount)
+  return sum + (Number.isFinite(amount) && amount >= 0.01 ? amount : 0)
+}, 0).toFixed(2)))
 
 const defaultInvoiceUseFor = (taxSystem) => {
   const available = getUseOptions(determineReceiverType(taxSystem))
@@ -338,13 +507,17 @@ const form = ref({
 })
 
 const invoiceUseOptions = computed(() => getUseOptions(determineReceiverType(form.value.tax_system)))
+const selectedInvoiceUseLabel = computed(() => {
+  const option = invoiceUseOptions.value.find(item => item.value === form.value.invoice_use)
+  return normalizeText(option?.label).replace(new RegExp(`^${form.value.invoice_use}\\s*-\\s*`, 'i'), '')
+})
 
 watch(() => form.value.tax_system, (taxSystem) => {
   form.value.invoice_use = defaultInvoiceUseFor(taxSystem)
 }, { immediate: true })
 
 const validationIssues = computed(() => {
-  const issues = [...legacyContext.value.blockingErrors]
+  const issues = legacyContext.value.blockingErrors.filter(issue => !/^Concepto\s+\d+:/i.test(issue))
   if (!form.value.legal_name) issues.push('Falta razón social.')
   if (!form.value.tax_id) issues.push('Falta RFC.')
   else if (!isValidRFC(form.value.tax_id)) issues.push('RFC inválido.')
@@ -363,7 +536,43 @@ const validationIssues = computed(() => {
   return Array.from(new Set(issues))
 })
 
-const canSubmit = computed(() => !loadingCompany.value && validationIssues.value.length === 0)
+const reviewValidationIssues = computed(() => {
+  const issues = []
+  if (!reviewItems.value.length) issues.push('No hay conceptos para facturar.')
+  reviewItems.value.forEach((item, index) => {
+    if (!isReviewDescriptionValid(item)) issues.push(`Concepto ${index + 1}: falta descripción.`)
+    if (!isReviewAmountValid(item)) issues.push(`Concepto ${index + 1}: revisa el monto.`)
+  })
+  return issues
+})
+
+const canReview = computed(() => !loadingCompany.value && validationIssues.value.length === 0)
+const canSubmit = computed(() => canReview.value && reviewValidationIssues.value.length === 0)
+
+const scrollModalTop = async () => {
+  await nextTick()
+  modalOverlayRef.value?.scrollTo?.({ top: 0, behavior: 'smooth' })
+}
+
+const openReview = async () => {
+  if (!canReview.value) {
+    const message = validationIssues.value[0] || 'Revisa la información.'
+    submissionError.value = { title: 'Faltan datos para facturar', message, details: [] }
+    show(message, 'danger')
+    await focusFeedback(submissionErrorRef)
+    return
+  }
+  submissionError.value = null
+  invoiceStage.value = 'review'
+  await scrollModalTop()
+}
+
+const returnToPrepare = async () => {
+  if (loading.value) return
+  submissionError.value = null
+  invoiceStage.value = 'prepare'
+  await scrollModalTop()
+}
 
 watch(() => [legacyContext.value.plantel, form.value.nivelEducativo], ([plantel, nivel]) => {
   if (!ieduLocks.value.autRVOE) {
@@ -420,13 +629,13 @@ const buildPayload = () => {
   const ctx = legacyContext.value
   const validatedNivel = validateNivelEducativo(form.value.nivelEducativo)
   const studentCurp = normalizeCurpForInvoice(form.value.CURP)
-  const items = ctx.conceptos.map(concepto => ({
+  const items = reviewItems.value.map(item => ({
     quantity: 1,
     product: {
-      description: normalizeText(concepto.conceptoNombre),
+      description: normalizeText(item.description),
       product_key: ctx.productKey,
       unit_key: 'E48',
-      price: Number.parseFloat(concepto.monto),
+      price: normalizedReviewAmount(item.amount),
       tax_included: true,
       taxability: '02',
       taxes: [{ type: 'IVA', rate: 0, factor: 'Exento' }]
@@ -494,7 +703,7 @@ const buildPayload = () => {
 
 const submit = async () => {
   if (!canSubmit.value) {
-    const message = validationIssues.value[0] || 'Revisa la información.'
+    const message = [...validationIssues.value, ...reviewValidationIssues.value][0] || 'Revisa la información.'
     submissionError.value = {
       title: 'Faltan datos para facturar',
       message,
