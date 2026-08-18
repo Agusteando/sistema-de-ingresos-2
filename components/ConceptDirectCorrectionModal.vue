@@ -37,8 +37,6 @@
               :concepts="conceptos"
               :loading="loadingConcepts"
               :disabled="busy"
-              :is-concept-disabled="isForeignPlantelConcept"
-              :concept-disabled-label="() => 'Otro plantel'"
               placeholder="Buscar concepto..."
             />
           </label>
@@ -79,7 +77,6 @@ import ConceptSearchSelect from '~/components/ConceptSearchSelect.vue'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useToast } from '~/composables/useToast'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
-import { conceptBelongsToPlantel } from '~/shared/utils/conceptPlantel'
 
 const props = defineProps({ debt: Object, student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -98,7 +95,6 @@ const selectedConceptId = ref('')
 const loadingConcepts = ref(false)
 const busy = ref(false)
 
-const isForeignPlantelConcept = (concepto) => !conceptBelongsToPlantel(concepto?.plantel, props.student?.plantel || props.student?.plantelBase)
 const selectedConcept = computed(() =>
   conceptos.value.find((item) => String(item.id) === String(selectedConceptId.value)) || null,
 )

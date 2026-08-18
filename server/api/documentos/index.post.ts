@@ -5,7 +5,6 @@ import { normalizeBecaTypes } from '../../utils/becaTypes'
 import { appendConceptMappedServicioToMatricula } from '../../utils/talleres-servicios'
 import { assertStockAvailableForConcept } from '../../utils/conceptos-stock'
 import { resolveFinancialConcept } from '../../utils/financial-concept'
-import { assertConceptBelongsToStudentPlantel } from '../../utils/concept-plantel'
 
 const clampMotivo = (value: unknown) => {
   const text = String(value || '').trim()
@@ -32,12 +31,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const conceptoRef = await resolveFinancialConcept({
     conceptoId: body.conceptoId,
     ciclo: cicloKey,
-  })
-  assertConceptBelongsToStudentPlantel({
-    conceptoId: conceptoRef.id,
-    conceptoNombre: conceptoRef.concepto,
-    conceptoPlantel: conceptoRef.plantel,
-    studentPlantel: studentRef.plantel,
   })
   const conceptoNombre = conceptoRef.concepto
   const meses = Math.max(1, Number(body.meses) || 1)

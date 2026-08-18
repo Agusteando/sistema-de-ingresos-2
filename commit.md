@@ -1,1 +1,1 @@
-Corrige recargos automáticos y generación de recibos
+Permitir conceptos de cualquier plantel al asignar o corregir

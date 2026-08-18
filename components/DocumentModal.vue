@@ -93,8 +93,7 @@
                       type="button"
                       role="option"
                       :aria-selected="String(c.id) === String(selectedDocumentoId)"
-                      :disabled="isConceptBlocked(c)"
-                      :title="isForeignPlantelConcept(c) ? `Otro plantel · ${c.plantel}` : undefined"
+                      :disabled="isStockBlocked(c)"
                       @mousedown.prevent
                       @click="selectConcept(c)"
                     >
@@ -242,7 +241,6 @@ import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave } from '~/shared/utils/talleresServicios'
-import { conceptBelongsToPlantel } from '~/shared/utils/conceptPlantel'
 
 const props = defineProps({ student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -381,8 +379,6 @@ const stockClass = (stock) => {
 }
 
 const isStockBlocked = (concepto) => Boolean(concepto?.stock?.controlled && concepto?.stock?.status === 'out' && !concepto?.stock?.allow_negative)
-const isForeignPlantelConcept = (concepto) => !conceptBelongsToPlantel(concepto?.plantel, props.student?.plantel || props.student?.plantelBase)
-const isConceptBlocked = (concepto) => isStockBlocked(concepto) || isForeignPlantelConcept(concepto)
 
 const setFirstConceptOptionRef = (el) => {
   firstConceptOptionRef.value = el
@@ -408,10 +404,6 @@ const applyConceptToForm = (concepto) => {
 }
 
 const selectConcept = (concepto) => {
-  if (isForeignPlantelConcept(concepto)) {
-    show('Este concepto corresponde a otro plantel.', 'danger')
-    return
-  }
   if (isStockBlocked(concepto)) {
     show('Este concepto está agotado para el plantel activo.', 'danger')
     return
@@ -509,7 +501,6 @@ const openCartaWindow = () => {
 
 const submit = async () => {
   if (!selectedDocumentoId.value) return show('Seleccione un concepto', 'danger')
-  if (isForeignPlantelConcept(selectedConcept.value)) return show('Este concepto corresponde a otro plantel.', 'danger')
   if (isStockBlocked(selectedConcept.value)) return show('No hay stock disponible para este concepto en el plantel activo.', 'danger')
   const montoFinal = Number(montoFinalInput.value)
   if (!Number.isFinite(montoFinal) || montoFinal < 0 || Math.floor(montoFinal) !== montoFinal) {

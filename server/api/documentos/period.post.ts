@@ -9,7 +9,6 @@ import { isWholeMoney } from "../../utils/monto-final";
 import { assertDocumentoPeriodoLifecycleSchema } from "../../utils/documento-periods";
 import { assertStockAvailableForConcept } from '../../utils/conceptos-stock';
 import { resolveFinancialConcept } from '../../utils/financial-concept';
-import { assertConceptBelongsToStudentPlantel } from '../../utils/concept-plantel';
 
 const toMesNumber = (value: unknown) => {
   const raw = String(value || "")
@@ -203,13 +202,6 @@ export default defineEventHandler(async (event) =>
       const concepto = await resolveFinancialConcept({
         conceptoId,
         ciclo: cicloKey,
-      });
-
-      assertConceptBelongsToStudentPlantel({
-        conceptoId: concepto.id,
-        conceptoNombre: concepto.concepto,
-        conceptoPlantel: concepto.plantel,
-        studentPlantel: doc.plantel,
       });
 
       await assertStockAvailableForConcept({ conceptoId: concepto.id, plantel: doc.plantel, quantity: 1, operation: 'cambiar a este concepto' });
