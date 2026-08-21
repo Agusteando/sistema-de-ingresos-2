@@ -1077,6 +1077,7 @@ import {
   isPaymentCancelled,
   paymentItemKey,
 } from "~/shared/utils/paymentItems";
+import { dedupePaymentTargets } from "~/shared/utils/paymentTarget";
 import {
   gradeVisualTitle,
   studentGroupLabel,
@@ -1972,7 +1973,7 @@ const applyAccountDebts = async (
     preserveInteraction && selectedConceptDebt.value
       ? debtKey(selectedConceptDebt.value)
       : null;
-  const freshDebts = Array.isArray(nextDebts) ? nextDebts : [];
+  const freshDebts = dedupePaymentTargets(Array.isArray(nextDebts) ? nextDebts : []);
 
   debts.value = freshDebts;
   hasRenderedAccountState.value = true;

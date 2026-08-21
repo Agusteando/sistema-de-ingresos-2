@@ -22,6 +22,7 @@ import {
 } from "../../../utils/cobranza-period";
 import { calculateLateFeeSubtotal } from '../../../../shared/utils/recargo';
 import { loadRecargoPolicies } from '../../../utils/recargo-config';
+import { dedupePaymentTargets } from '../../../../shared/utils/paymentTarget';
 
 const cicloQueryValues = (cicloKey: string) => {
   const key = String(cicloKey || "").trim();
@@ -249,7 +250,7 @@ export default defineEventHandler(async (event) =>
 
       let plazos = 1;
       const plazoRaw = doc.plazo || doc.meses;
-      if (plazoRaw) {
+      if (!isEventual && plazoRaw) {
         const plazoStr = String(plazoRaw).trim();
         if (plazoStr.startsWith("[")) {
           try {
@@ -435,6 +436,7 @@ export default defineEventHandler(async (event) =>
     }
 
     const countMonthsForTimeline = (doc: any) => {
+      if (String(doc?.eventual) === "1") return 1;
       const raw = doc?.plazo || doc?.meses;
       if (!raw) return 1;
       const str = String(raw).trim();
@@ -610,6 +612,17 @@ export default defineEventHandler(async (event) =>
       debt.stock = stockByConcept.get(conceptoId) || uncontrolledStockSnapshot(conceptoId, stockPlantel, stockPayload.source);
     });
 
+    const uniqueDebts = dedupePaymentTargets(debts);
+
+    if (uniqueDebts.length !== debts.length) {
+      console.warn("[Payments] Se descartaron adeudos duplicados para el mismo documento/mes.", {
+        matricula: normalizedMatricula,
+        ciclo: cicloKey,
+        received: debts.length,
+        unique: uniqueDebts.length,
+      });
+    }
+
     console.info("[EstadoCuentaDebug] Estado de Cuenta DB result", {
       matricula: normalizedMatricula,
       selectedCicloRaw: ciclo,
@@ -617,9 +630,9 @@ export default defineEventHandler(async (event) =>
       cicloQueryValues: cicloValues,
       returnedDocumentosCount: documentos.length,
       returnedReferenciasCount: pagosRows.length,
-      renderedConceptosCount: debts.length,
+      renderedConceptosCount: uniqueDebts.length,
     });
 
-    return debts;
+    return uniqueDebts;
   }),
 );

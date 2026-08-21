@@ -1,1 +1,1 @@
-feat: exponer talleres y días persistentes para Portal Tallerista
+Evita pagos duplicados por cargos eventuales y bloquea objetivos repetidos

@@ -404,6 +404,7 @@ import { calculatePromotedGrado, displayGrado } from '~/shared/utils/grado'
 import { institutionFlagForPlantel, normalizePlantelCode } from '~/shared/utils/institution'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
 import { calculateLateFeeSubtotal, resolveLateFeeTiming, shouldApplyLateFee } from '~/shared/utils/recargo'
+import { dedupePaymentTargets } from '~/shared/utils/paymentTarget'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { requestPaymentActionAuthorizationCode, sendPaymentActionAuthorizationNotice } from '~/utils/paymentActionAuthorization'
 
@@ -672,7 +673,7 @@ const recargoAmountForDebt = (debt) => {
 const isRecargoTogglePending = (debt) => recargoTogglingConcepts.value.has(conceptIdForDebt(debt))
 const isRecargoAttentionActive = (debt) => recargoAttentionKeys.value.has(paymentDebtKey(debt))
 
-const buildProcessedDebts = () => (Array.isArray(props.debts) ? props.debts : []).map(d => {
+const buildProcessedDebts = () => dedupePaymentTargets(Array.isArray(props.debts) ? props.debts : []).map(d => {
   const final = d.saldo
   const resuelto = d.resuelto ?? d.pagos
   return {
@@ -1106,6 +1107,7 @@ const previewReceipt = () => {
 }
 
 const submit = async () => {
+  if (processing.value) return
   if (hasBlockingStock.value) {
     window.alert('Uno o más conceptos seleccionados están agotados para este plantel.')
     return

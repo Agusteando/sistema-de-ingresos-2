@@ -336,7 +336,7 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
     const isEventual = String(doc.eventual) === '1'
     let plazos = 1
     const plazoRaw = doc.plazo || doc.meses
-    if (plazoRaw) {
+    if (!isEventual && plazoRaw) {
       const plazoStr = String(plazoRaw).trim()
       if (plazoStr.startsWith('[')) {
         try { plazos = JSON.parse(plazoStr).length || 1 } catch (e) {}

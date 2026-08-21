@@ -33,7 +33,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     ciclo: cicloKey,
   })
   const conceptoNombre = conceptoRef.concepto
-  const meses = Math.max(1, Number(body.meses) || 1)
+  const eventual = truthyFlag(body.eventual)
+  const meses = eventual ? 1 : Math.max(1, Number(body.meses) || 1)
   const plazoLegacy = Array.from({ length: meses }, (_, i) => i + 1).join(',')
   const costo = Number(body.costo || 0)
   const montoFinal = Number(body.montoFinal)
@@ -54,7 +55,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 400, message: 'El monto final no puede ser mayor al costo del concepto cuando se registra una beca.' })
   }
 
-  const eventual = truthyFlag(body.eventual)
   const userName = user?.name || 'Sistema'
   const plantel = studentRef.plantel || user?.active_plantel || 'PT'
   const cartaFecha = body.generarCartaBeca && becaTipos.length ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null

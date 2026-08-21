@@ -15,6 +15,7 @@ import {
 } from '../../utils/cobranza-period'
 import { calculateLateFeeSubtotal } from '../../../shared/utils/recargo'
 import { loadRecargoPolicies, markRecargoConceptAsService, type RecargoPolicy } from '../../utils/recargo-config'
+import { paymentTargetKey } from '../../../shared/utils/paymentTarget'
 
 const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 
@@ -131,6 +132,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const finalAmountByTarget = new Map<string, number>()
   const resolvedPaymentConcepts = new Map<string, { concepto: string; conceptoNombre: string }>()
   const recargoPolicyCache = new Map<number, RecargoPolicy>()
+  const seenPaymentTargets = new Set<string>()
 
   try {
   for (const p of pagos) {
@@ -143,6 +145,15 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     if (!documento || !mes) {
       throw createError({ statusCode: 400, message: 'Cada pago debe apuntar a un documento y mes.' })
     }
+
+    const targetKey = paymentTargetKey({ documento, mes })
+    if (seenPaymentTargets.has(targetKey)) {
+      throw createError({
+        statusCode: 409,
+        message: 'El pago contiene el mismo documento y mes más de una vez. No se registró ningún cargo para evitar duplicados.'
+      })
+    }
+    seenPaymentTargets.add(targetKey)
 
     const [doc] = await query<any[]>(`
       SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, ciclo, concepto, conceptoNombre, eventual, estatus
