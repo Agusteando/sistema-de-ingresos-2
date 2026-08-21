@@ -1,6 +1,7 @@
 import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
 import { normalizePlantel } from './auth-session'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { normalizeServicioClave, parseServiciosCsv } from '../../shared/utils/talleresServicios'
 
 const CANONICAL_PLANTELES = ['PREEM', 'PREET', 'GM', 'PM', 'PT', 'SM', 'ST'] as const
 const CANONICAL_SET = new Set<string>(CANONICAL_PLANTELES)
@@ -89,6 +90,12 @@ const sanitizeStudent = (studentValue: any) => {
     telefono: clean(student.telefonoPadre || student.telefonoMadre || student.phone, 80),
     correo: clean(student.emailPadre || student.emailMadre || student.email, 255)
   }
+  const servicios = parseServiciosCsv(student.servicio)
+  student.servicios = servicios
+  student.talleres = servicios.map((nombre) => ({
+    clave: normalizeServicioClave(nombre),
+    nombre
+  }))
   return student
 }
 

@@ -1,1 +1,1 @@
-Aplicar recargos automáticos al abrir pagos y destacar el total
+feat: exponer talleres y días persistentes para Portal Tallerista
