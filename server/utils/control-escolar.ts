@@ -1031,6 +1031,18 @@ const fetchLocalBaseRows = async (
   });
 };
 
+export const fetchControlEscolarBridgePopulationRows = async (
+  agentId: string,
+  filters: any = {},
+) => {
+  assertControlEscolarDynamicBridge(agentId);
+  const schema = await getControlEscolarSchema(agentId, {
+    requireCentral: false,
+    skipCentral: true,
+  });
+  return await fetchLocalBaseRows(agentId, schema, filters);
+};
+
 const centralSelectColumns = (schema: ControlEscolarSchema) => {
   const wanted = [
     "matricula",

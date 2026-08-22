@@ -1,32 +1,20 @@
 import { PLANTELES_LIST } from '../../utils/constants'
 import { formatCicloLabel, normalizeCicloKey } from '../../shared/utils/ciclo'
-import {
-  GRADOS_NORMALIZADOS,
-  calculatePromotedGrado,
-  displayGrado,
-  normalizePlantel,
-  plantelCandidatesForProjectedScope
-} from '../../shared/utils/grado'
+import { GRADOS_NORMALIZADOS, displayGrado, normalizePlantel } from '../../shared/utils/grado'
 import { normalizeCurp } from '../../shared/utils/curp'
+import {
+  parseEnrollmentConceptsForPlantelHistory,
+  parseEnrollmentConceptsForScope
+} from '../../shared/utils/studentPresentation'
 import type { AuthSessionUser } from './auth-session'
 import { fetchCentralMatriculaOverlays } from './central-matricula-overlay'
-import { query } from './db'
+import { readBestConceptosConfigPayload } from './conceptos-config'
+import { fetchControlEscolarBridgePopulationRows } from './control-escolar'
+import { runWithBridgeAgentId } from './db'
 
 type StudentIdentityReportFilters = {
   ciclo?: unknown
   plantel?: unknown
-}
-
-type StudentIdentityDbRow = {
-  matricula: string
-  apellidoPaterno?: string | null
-  apellidoMaterno?: string | null
-  nombres?: string | null
-  curp?: string | null
-  gradoBase?: string | null
-  cicloBase?: string | null
-  plantel?: string | null
-  nivelBase?: string | null
 }
 
 export type StudentIdentityReportRow = {
@@ -105,82 +93,69 @@ export const loadStudentIdentityReport = async (
 
   const ciclo = normalizeCicloKey(filters.ciclo as any)
   const plantel = resolveReportPlantel(user, filters.plantel)
-  const plantelCandidates = plantelCandidatesForProjectedScope(plantel)
 
-  if (!plantelCandidates.length) {
-    throw createError({ statusCode: 400, message: 'No se pudo resolver el plantel del reporte.' })
-  }
+  return await runWithBridgeAgentId(plantel, async () => {
+    // Use the same enrollment configuration and Bridge population/projection rules
+    // as the canonical Alumnos/Control Escolar flow. This makes Bridge base the
+    // authority for inclusion, ciclo, plantel and grado instead of maintaining a
+    // second report-only interpretation of the student population.
+    const enrollmentConfig = await readBestConceptosConfigPayload()
+    const enrollmentConceptIds = parseEnrollmentConceptsForScope(enrollmentConfig, { ciclo, plantel })
+    const tipoIngresoConceptIds = parseEnrollmentConceptsForPlantelHistory(enrollmentConfig, { plantel })
 
-  const rows = await query<StudentIdentityDbRow[]>(`
-    SELECT
-      A.matricula,
-      A.apellidoPaterno,
-      A.apellidoMaterno,
-      A.nombres,
-      A.curp,
-      A.grado AS gradoBase,
-      A.ciclo AS cicloBase,
-      A.plantel,
-      A.nivel AS nivelBase
-    FROM base A
-    WHERE LOWER(TRIM(CAST(A.estatus AS CHAR))) = 'activo'
-      AND A.plantel IN (${plantelCandidates.map(() => '?').join(', ')})
-  `, plantelCandidates)
-
-  // CONTROL_ESCOLAR_MYSQL.matricula is the authoritative CURP source.
-  // The local/Bridge base CURP remains only as an offline or missing-record fallback.
-  let centralMatricula = new Map<string, any>()
-  try {
-    centralMatricula = await fetchCentralMatriculaOverlays(rows.map((row) => row.matricula))
-  } catch {
-    // Reports must remain available while a plantel is operating through Bridge offline.
-  }
-
-  const mapped: StudentIdentityReportRow[] = rows.flatMap((row) => {
-    const placement = calculatePromotedGrado(
-      row.gradoBase,
-      row.plantel,
-      row.cicloBase,
+    const bridgeRows = await fetchControlEscolarBridgePopulationRows(plantel, {
       ciclo,
-      row.nivelBase
-    )
+      concepts: enrollmentConceptIds.join(','),
+      tipoConcepts: (tipoIngresoConceptIds.length ? tipoIngresoConceptIds : enrollmentConceptIds).join(',')
+    })
 
-    if (placement.outOfScope || normalizePlantel(placement.plantel) !== plantel) return []
-
-    const matriculaKey = normalizeText(row.matricula).toUpperCase()
-    const centralCurp = normalizeCurp(centralMatricula.get(matriculaKey)?.student?.curp)
-    const resolvedCurp = centralCurp || normalizeCurp(row.curp)
-
-    return [{
-      apellidoPaterno: normalizeText(row.apellidoPaterno),
-      apellidoMaterno: normalizeText(row.apellidoMaterno),
-      nombres: normalizeText(row.nombres),
-      grado: displayGrado(placement.grado),
-      curp: resolvedCurp,
-      fechaNacimiento: birthDateFromCurp(resolvedCurp),
-      gradoOrden: gradoOrder(placement.grado)
-    }]
-  })
-
-  const collator = new Intl.Collator('es-MX', { sensitivity: 'base', numeric: true })
-  mapped.sort((left, right) => (
-    left.gradoOrden - right.gradoOrden ||
-    collator.compare(left.apellidoPaterno, right.apellidoPaterno) ||
-    collator.compare(left.apellidoMaterno, right.apellidoMaterno) ||
-    collator.compare(left.nombres, right.nombres)
-  ))
-
-  return {
-    filtros: {
-      ciclo,
-      cicloLabel: formatCicloLabel(ciclo),
-      plantel
-    },
-    rows: mapped,
-    total: mapped.length,
-    usuario: {
-      nombre: normalizeText(user.name) || normalizeText(user.email),
-      email: normalizeText(user.email)
+    // CONTROL_ESCOLAR_MYSQL.matricula enriches CURP only. It never determines
+    // the report population or academic placement; those remain Bridge-owned.
+    let centralMatricula = new Map<string, any>()
+    try {
+      centralMatricula = await fetchCentralMatriculaOverlays(bridgeRows.map((row) => row.matricula))
+    } catch {
+      // The report remains usable when central matrícula is unavailable because
+      // Bridge base still contains the identity fallback and authoritative scope.
     }
-  }
+
+    const mapped: StudentIdentityReportRow[] = bridgeRows.map((row) => {
+      const matriculaKey = normalizeText(row.matricula).toUpperCase()
+      const centralCurp = normalizeCurp(centralMatricula.get(matriculaKey)?.student?.curp)
+      const resolvedCurp = centralCurp || normalizeCurp(row.baseCurp)
+      const resolvedGrado = displayGrado(row.baseGrado)
+
+      return {
+        apellidoPaterno: normalizeText(row.baseApellidoPaterno),
+        apellidoMaterno: normalizeText(row.baseApellidoMaterno),
+        nombres: normalizeText(row.baseNombres),
+        grado: resolvedGrado,
+        curp: resolvedCurp,
+        fechaNacimiento: birthDateFromCurp(resolvedCurp),
+        gradoOrden: gradoOrder(resolvedGrado)
+      }
+    })
+
+    const collator = new Intl.Collator('es-MX', { sensitivity: 'base', numeric: true })
+    mapped.sort((left, right) => (
+      left.gradoOrden - right.gradoOrden ||
+      collator.compare(left.apellidoPaterno, right.apellidoPaterno) ||
+      collator.compare(left.apellidoMaterno, right.apellidoMaterno) ||
+      collator.compare(left.nombres, right.nombres)
+    ))
+
+    return {
+      filtros: {
+        ciclo,
+        cicloLabel: formatCicloLabel(ciclo),
+        plantel
+      },
+      rows: mapped,
+      total: mapped.length,
+      usuario: {
+        nombre: normalizeText(user.name) || normalizeText(user.email),
+        email: normalizeText(user.email)
+      }
+    }
+  })
 }

@@ -1,1 +1,1 @@
-Evita pagos duplicados por cargos eventuales y bloquea objetivos repetidos
+Alinea el reporte de alumnos con la población autoritativa del Bridge

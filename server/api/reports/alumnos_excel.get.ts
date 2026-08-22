@@ -1,4 +1,3 @@
-import { runWithBridgeAgentId } from '../../utils/db'
 import { buildProtectedXlsx } from '../../utils/protected-xlsx'
 import { loadStudentIdentityReport } from '../../utils/student-identity-report'
 
@@ -9,7 +8,7 @@ const safeFilePart = (value: unknown) => String(value || 'reporte')
   .replace(/^_+|_+$/g, '')
   .slice(0, 60) || 'reporte'
 
-export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
+export default defineEventHandler(async (event) => {
   const result = await loadStudentIdentityReport(event.context.user, getQuery(event))
 
   const workbook = buildProtectedXlsx({
@@ -48,5 +47,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   setHeader(event, 'Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`)
   setHeader(event, 'Content-Length', String(workbook.length))
   setHeader(event, 'Cache-Control', 'private, no-store')
+  setHeader(event, 'X-Aurora-Students-Count', String(result.total))
+  setHeader(event, 'X-Aurora-Students-Source', 'bridge-canonical-population')
   return workbook
-}))
+})
