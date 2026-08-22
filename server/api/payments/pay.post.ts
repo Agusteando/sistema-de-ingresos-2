@@ -146,14 +146,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       throw createError({ statusCode: 400, message: 'Cada pago debe apuntar a un documento y mes.' })
     }
 
-    const targetKey = paymentTargetKey({ documento, mes })
-    if (seenPaymentTargets.has(targetKey)) {
+    const paymentDuplicateKey = paymentTargetKey({ documento, mes })
+    if (seenPaymentTargets.has(paymentDuplicateKey)) {
       throw createError({
         statusCode: 409,
         message: 'El pago contiene el mismo documento y mes más de una vez. No se registró ningún cargo para evitar duplicados.'
       })
     }
-    seenPaymentTargets.add(targetKey)
+    seenPaymentTargets.add(paymentDuplicateKey)
 
     const [doc] = await query<any[]>(`
       SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, ciclo, concepto, conceptoNombre, eventual, estatus
@@ -199,11 +199,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     }
 
     const periodIsChangedConcept = period?.accion === 'cambio'
-    const targetKey = periodIsChangedConcept ? `period:${period.id}` : `doc:${doc.documento}`
+    const finalAmountTargetKey = periodIsChangedConcept ? `period:${period.id}` : `doc:${doc.documento}`
     let finalAmount = periodIsChangedConcept ? parseNullableMoney(period.montoFinal) : parseNullableMoney(doc.montoFinal)
 
-    if (finalAmount === null && finalAmountByTarget.has(targetKey)) {
-      finalAmount = finalAmountByTarget.get(targetKey) as number
+    if (finalAmount === null && finalAmountByTarget.has(finalAmountTargetKey)) {
+      finalAmount = finalAmountByTarget.get(finalAmountTargetKey) as number
     }
 
     if (finalAmount === null) {
@@ -211,7 +211,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         throw createError({ statusCode: 400, message: 'Define el monto final sin decimales antes de registrar el pago.' })
       }
       finalAmount = Number(p.montoFinal)
-      finalAmountByTarget.set(targetKey, finalAmount)
+      finalAmountByTarget.set(finalAmountTargetKey, finalAmount)
       statements.push(periodIsChangedConcept
         ? {
             sql: `UPDATE documento_concepto_periodos SET montoFinal = ? WHERE id = ? AND montoFinal IS NULL`,
