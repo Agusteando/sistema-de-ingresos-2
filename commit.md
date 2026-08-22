@@ -1,1 +1,1 @@
-Alinea el reporte de alumnos con la población autoritativa del Bridge
+Amplía el reporte por concepto con datos de identidad del alumno

@@ -44,17 +44,21 @@
         Incluye movimientos vigentes, cancelados y depurados del historial financiero. Cancelados y depuraciones permanecen visibles y muestran importe aplicado de $0.00 cuando corresponde.
       </div>
 
-      <table class="w-full text-[9px] border-collapse mb-8">
+      <table class="w-full text-[8px] border-collapse mb-8">
         <thead>
           <tr class="border-b border-gray-300">
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Folio</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Fecha</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Matrícula</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nombres</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">A. paterno</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">A. materno</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nivel</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Grado</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">CURP</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nacimiento</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Doc</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Mes</th>
-            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Alumno</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Concepto</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Forma</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Estatus</th>
@@ -64,17 +68,21 @@
         </thead>
         <tbody>
           <tr v-if="!rows.length">
-            <td colspan="13" class="text-center py-6 text-gray-500 font-medium">No se encontraron movimientos.</td>
+            <td colspan="17" class="text-center py-6 text-gray-500 font-medium">No se encontraron movimientos.</td>
           </tr>
           <tr v-else v-for="r in rows" :key="`${r.folio}-${r.concepto}`" class="border-b border-gray-100">
             <td class="py-2 text-gray-900 font-mono">{{ r.folio }}</td>
             <td class="py-2 text-gray-900">{{ formatDate(r.fecha) }}</td>
             <td class="py-2 text-gray-900 font-mono">{{ r.matricula }}</td>
+            <td class="py-2 text-gray-900">{{ r.nombres || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.apellidoPaterno || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.apellidoMaterno || '—' }}</td>
             <td class="py-2 text-gray-900">{{ r.nivel || '—' }}</td>
             <td class="py-2 text-gray-900">{{ r.grado || '—' }}</td>
+            <td class="py-2 text-gray-900 font-mono">{{ r.curp || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ formatDate(r.fechaNacimiento) || '—' }}</td>
             <td class="py-2 text-gray-900 font-mono">{{ String(r.documento).padStart(7, '0') }}</td>
             <td class="py-2 text-gray-900">{{ r.mesReal || r.mes }}</td>
-            <td class="py-2 text-gray-900">{{ r.nombreCompleto }}</td>
             <td class="py-2 text-gray-900">{{ r.conceptoNombre || r.concepto }}</td>
             <td class="py-2 text-gray-900">{{ r.formaDePago }}</td>
             <td class="py-2 text-gray-900 font-semibold">{{ r.estatusReporte || r.estatus || 'Vigente' }}</td>

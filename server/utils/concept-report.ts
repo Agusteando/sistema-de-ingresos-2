@@ -1,8 +1,11 @@
 import { getBridgeAgentId, getDbTransport, query } from './db'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { normalizeCurp } from '../../shared/utils/curp'
 import { omitRawFinancialAcademicFields, resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import { hydrateFinancialConceptNames, loadFinancialConceptMap } from './financial-concept'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
+import { fetchCentralMatriculaOverlays } from './central-matricula-overlay'
+import { birthDateFromCurp } from './student-identity-report'
 import {
   PAYMENT_APPLIED_AMOUNT_SQL,
   PAYMENT_PLANTEL_SQL,
@@ -242,6 +245,10 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
       A.grado AS gradoBase,
       A.ciclo AS cicloBase,
       A.plantel AS basePlantel,
+      A.nombres AS nombresBase,
+      A.apellidoPaterno AS apellidoPaternoBase,
+      A.apellidoMaterno AS apellidoMaternoBase,
+      A.curp AS curpBase,
       ${PAYMENT_PLANTEL_SQL} AS scopePlantel
     FROM referenciasdepago r
     LEFT JOIN base A ON A.matricula = r.matricula
@@ -249,16 +256,41 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
     ORDER BY r.fecha DESC, r.folio DESC
   `, params)
 
+  // Match the Alumno report's identity source contract: Bridge `base` owns the
+  // student names and academic placement, while central matrícula may enrich CURP only.
+  // A central outage must never remove a financial movement from this report.
+  let centralMatricula = new Map<string, any>()
+  try {
+    centralMatricula = await fetchCentralMatriculaOverlays(rawRows.map((row) => String(row.matricula || '')))
+  } catch {
+    // Bridge data remains sufficient for the report and is authoritative for placement.
+  }
+
   // Deliberately no status/cycle/projected-plantel post-filter here. Every ledger row that
   // matches the user's explicit concept/date/user filters must survive into the report.
   const rows = rawRows.map((row) => {
     const academic = resolveFinancialAcademicPlacement(row, row.ciclo)
     const montoRegistrado = Number(row.monto || 0)
     const montoAplicado = resolvePaymentAppliedAmount(row)
+    const matriculaKey = String(row.matricula || '').trim().toUpperCase()
+    const centralCurp = normalizeCurp(centralMatricula.get(matriculaKey)?.student?.curp)
+    const resolvedCurp = centralCurp || normalizeCurp(row.curpBase)
+    const {
+      nombresBase,
+      apellidoPaternoBase,
+      apellidoMaternoBase,
+      curpBase: _curpBase,
+      ...safeRow
+    } = omitRawFinancialAcademicFields(row)
 
     return {
-      ...omitRawFinancialAcademicFields(row),
+      ...safeRow,
       ...academic,
+      nombres: String(nombresBase || '').trim(),
+      apellidoPaterno: String(apellidoPaternoBase || '').trim(),
+      apellidoMaterno: String(apellidoMaternoBase || '').trim(),
+      curp: resolvedCurp,
+      fechaNacimiento: birthDateFromCurp(resolvedCurp),
       estatusReporte: resolvePaymentAuditStatus(row),
       montoRegistrado,
       montoAplicado,

@@ -58,7 +58,7 @@ const isRealDate = (year: number, month: number, day: number) => {
 }
 
 // La fecha se deriva exclusivamente de la CURP. No usa el campo de nacimiento de base.
-const birthDateFromCurp = (value: unknown) => {
+export const birthDateFromCurp = (value: unknown) => {
   const curp = normalizeCurp(value)
   if (curp.length < 17) return ''
 
