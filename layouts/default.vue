@@ -241,30 +241,40 @@
             </button>
           </div>
 
-          <div v-if="showLocalSystemControls" class="local-context-controls">
-            <button
-              type="button"
-              class="local-context-cta"
-              :class="`is-${localContextCtaState}`"
-              :disabled="localContextCtaDisabled"
-              :aria-busy="localContextPreparing ? 'true' : 'false'"
-              :aria-label="localContextCtaAriaLabel"
-              @click="handleLocalContextCta"
-            >
-              <span
-                class="local-context-cta-icon"
-                :title="isSuperAdmin ? localContextTechnicalTitle : undefined"
-                aria-hidden="true"
+          <div v-if="showLocalSystemControls" class="aurora-runtime-controls">
+            <div class="aurora-runtime-switch" role="group" aria-label="Versión de Aurora">
+              <button
+                type="button"
+                class="aurora-runtime-option"
+                :class="{ 'is-active': !localSystemRuntime }"
+                :aria-pressed="!localSystemRuntime ? 'true' : 'false'"
+                title="Abrir Aurora en la nube"
+                @click="selectCloudSystem"
               >
-                <LucideCloud v-if="localSystemRuntime" :size="17" />
-                <LucideMonitor v-else :size="17" :class="{ 'local-cloud-pulse': localContextPreparing }" />
-              </span>
-              <span class="local-context-cta-label local-context-cta-label-full">{{ localContextCtaLabel }}</span>
-              <span class="local-context-cta-label local-context-cta-label-compact">{{ localContextCtaCompactLabel }}</span>
-            </button>
+                <LucideCloud :size="16" aria-hidden="true" />
+                <span class="aurora-runtime-label aurora-runtime-label-full">Aurora En la nube</span>
+                <span class="aurora-runtime-label aurora-runtime-label-compact">Aurora Nube</span>
+              </button>
+
+              <button
+                v-if="localRuntimeOptionVisible"
+                type="button"
+                class="aurora-runtime-option"
+                :class="{ 'is-active': localSystemRuntime }"
+                :disabled="localRuntimeSelectionPending"
+                :aria-pressed="localSystemRuntime ? 'true' : 'false'"
+                :aria-busy="localRuntimeSelectionPending ? 'true' : 'false'"
+                :title="localSystemRuntime ? 'Aurora Local activa' : `Abrir Aurora Local · ${activePlantel.value}`"
+                @click="selectLocalSystem"
+              >
+                <LucideMonitor :size="16" aria-hidden="true" />
+                <span class="aurora-runtime-label aurora-runtime-label-full">Aurora Local</span>
+                <span class="aurora-runtime-label aurora-runtime-label-compact">Aurora Local</span>
+              </button>
+            </div>
 
             <button
-              v-if="localUpdateActionVisible"
+              v-if="localRuntimeOptionVisible && localUpdateActionVisible"
               type="button"
               class="local-update-action"
               :class="{ 'is-running': localUpdateActionPending, 'has-update': localUpdateAvailable }"
@@ -583,6 +593,7 @@ const localSystemLaunchAvailable = ref(false)
 const localSystemLaunchUrl = ref('')
 const localSystemLaunchMessage = ref('')
 const localSystemLaunchPending = ref(!localSystemRuntime)
+const localSystemOpenPending = ref(false)
 const localSystemLaunchCode = ref('')
 const localSystemLaunchRequestId = ref('')
 const localSystemStatus = ref(null)
@@ -603,46 +614,36 @@ const localSystemCloudUpdating = computed(() => Boolean(localSystemCloudOperatio
 const localSystemCloudUpdateAvailable = computed(() => Boolean(localSystemCloudStatus.value?.updateAvailable))
 const localSystemLocalUpdateEligible = computed(() => Boolean(localSystemStatus.value?.updateEligible))
 const localSystemCloudUpdateEligible = computed(() => Boolean(localSystemCloudStatus.value?.updateEligible))
-const localContextPreparing = computed(() => !localSystemRuntime && localSystemLaunchPending.value)
 const AURORA_CLOUD_URL = 'https://aurora.casitaiedis.edu.mx'
 
-const localContextCtaState = computed(() => {
-  if (localSystemRuntime) return 'cloud'
-  if (localContextPreparing.value) return 'preparing'
-  if (localSystemLaunchAvailable.value) return 'open'
-  return 'cloud'
-})
-const localContextCtaLabel = computed(() => {
-  if (localSystemRuntime) return 'Regresar a versión en la nube'
-  return 'Entrar a versión rápida'
-})
-const localContextCtaCompactLabel = computed(() => {
-  if (localSystemRuntime) return 'Versión en la nube'
-  return 'Versión rápida'
-})
+// Aurora Local is a real runtime choice, not a generic navigation affordance.
+// In the cloud it only exists after the routed agent proves that this exact
+// plantel has a launchable local installation. While already local, it remains
+// visible because that is the active runtime even if the current session changes.
+const localRuntimeOptionVisible = computed(() => localSystemRuntime || localSystemLaunchAvailable.value)
+const localRuntimeSelectionPending = computed(() => !localSystemRuntime && localSystemOpenPending.value)
+const localSystemUpdateEligible = computed(() => localSystemRuntime
+  ? localSystemLocalUpdateEligible.value
+  : (localSystemLaunchAvailable.value && localSystemCloudUpdateEligible.value))
 const localUpdateActionPending = computed(() => localSystemRuntime
   ? localSystemUpdating.value
   : localSystemCloudUpdating.value)
 const localUpdateAvailable = computed(() => localSystemRuntime
   ? localSystemUpdateAvailable.value
   : localSystemCloudUpdateAvailable.value)
-const localUpdateActionVisible = computed(() => (
-  localUpdateActionPending.value
-  || localSystemLegacyUpdateRequired.value
-  || (localUpdateAvailable.value && (localSystemRuntime
-    ? localSystemLocalUpdateEligible.value
-    : localSystemCloudUpdateEligible.value))
+const localUpdateActionVisible = computed(() => Boolean(
+  localSystemUpdateEligible.value
+  && (
+    localUpdateActionPending.value
+    || localSystemLegacyUpdateRequired.value
+    || localUpdateAvailable.value
+  )
 ))
 const localUpdateActionDisabled = computed(() => (
-  !localUpdateActionVisible.value
+  !localSystemUpdateEligible.value
+  || !localUpdateActionVisible.value
   || localUpdateActionPending.value
-  || localSystemStatusPending.value
-  || (!localSystemRuntime && localSystemLaunchPending.value)
 ))
-const localContextCtaDisabled = computed(() => {
-  if (localSystemRuntime) return false
-  return localContextPreparing.value || !localSystemLaunchAvailable.value
-})
 const localContextOperationPhase = computed(() => String(
   (localSystemRuntime ? localSystemOperation.value : localSystemCloudOperation.value)?.phase || ''
 ))
@@ -659,24 +660,13 @@ const localContextPhaseLabel = computed(() => {
   if (phase === 'failed') return 'La actualización local falló'
   return ''
 })
-const localContextCtaAriaLabel = computed(() => localContextCtaLabel.value)
-const localContextTechnicalTitle = computed(() => {
-  if (localSystemRuntime) {
-    if (localSystemStatus.value?.checkError) return 'No se pudo consultar el servicio local'
-    const version = localSystemStatus.value?.current?.version || ''
-    return version ? `Ejecución local · ${version}` : 'Ejecución local'
-  }
-  if (localSystemLaunchPending.value) return 'Consultando disponibilidad local'
-  if (localSystemLaunchAvailable.value) return `Disponible para ${activePlantel.value}`
-  return `No disponible${localSystemDiagnosticSuffix.value}`
-})
 const localUpdateActionLabel = computed(() => {
-  if (localSystemLegacyUpdateRequired.value) return 'Completar actualización'
-  return localUpdateActionPending.value ? 'Actualizando…' : 'Actualización disponible'
+  if (localSystemLegacyUpdateRequired.value) return 'Completar actualización local'
+  return localUpdateActionPending.value ? 'Actualizando Aurora Local…' : 'Actualizar Aurora Local'
 })
 const localUpdateActionCompactLabel = computed(() => {
   if (localSystemLegacyUpdateRequired.value) return 'Completar'
-  return localUpdateActionPending.value ? 'Actualizando…' : 'Actualización'
+  return localUpdateActionPending.value ? 'Actualizando…' : 'Actualizar'
 })
 const localUpdateActionTitle = computed(() => {
   if (localSystemLegacyUpdateRequired.value) return 'Completar actualización en la ventana local'
@@ -713,9 +703,10 @@ const loadLocalSystemLaunch = async (refresh = false) => {
     localSystemCloudStatus.value = {
       ...(localSystemCloudStatus.value || {}),
       updateEligible: false,
+      updateAvailable: false,
       operation: null
     }
-    localSystemLaunchMessage.value = 'Selecciona un plantel para abrir en este equipo.'
+    localSystemLaunchMessage.value = 'Selecciona un plantel para usar Aurora Local.'
     localSystemLaunchCode.value = 'LOCAL_SYSTEM_PLANTEL_REQUIRED'
     localSystemLaunchRequestId.value = ''
     return null
@@ -742,8 +733,8 @@ const loadLocalSystemLaunch = async (refresh = false) => {
     localSystemLaunchMessage.value = String(
       info?.message
       || (info?.launchAvailable
-        ? 'La opción de este equipo está disponible.'
-        : 'La opción de este equipo todavía no está disponible en este plantel.')
+        ? 'Aurora Local está disponible.'
+        : 'Aurora Local no está disponible en este equipo.')
     )
     localSystemLaunchCode.value = String(info?.code || '')
     localSystemLaunchRequestId.value = String(info?.requestId || '')
@@ -763,13 +754,14 @@ const loadLocalSystemLaunch = async (refresh = false) => {
     localSystemCloudStatus.value = {
       ...(localSystemCloudStatus.value || {}),
       updateEligible: false,
+      updateAvailable: false,
       operation: null
     }
     const payload = error?.data?.data || error?.data || {}
     localSystemLaunchMessage.value = String(
       payload?.message
       || error?.message
-      || 'No se pudo verificar la opción de este equipo.'
+      || 'No se pudo verificar Aurora Local.'
     )
     localSystemLaunchCode.value = String(payload?.code || 'LOCAL_SYSTEM_STATUS_FAILED')
     localSystemLaunchRequestId.value = String(payload?.requestId || '')
@@ -788,13 +780,13 @@ const loadLocalSystemLaunch = async (refresh = false) => {
 }
 
 const openLocalSystem = async () => {
-  if (localSystemLaunchPending.value) return
+  if (localSystemOpenPending.value || !localSystemLaunchAvailable.value) return
   if (activePlantel.value === 'GLOBAL') {
     show('Selecciona un plantel.', 'danger')
     return
   }
 
-  localSystemLaunchPending.value = true
+  localSystemOpenPending.value = true
   try {
     const result = await $fetch('/api/system/launch', {
       query: {
@@ -803,7 +795,7 @@ const openLocalSystem = async () => {
       }
     })
     const launchUrl = String(result?.launchUrl || '')
-    if (!launchUrl) throw new Error('El agente no devolvió una dirección local.')
+    if (!launchUrl) throw new Error('El agente no devolvió el acceso a Aurora Local.')
     localSystemLaunchCode.value = String(result?.code || 'LOCAL_SYSTEM_READY')
     localSystemLaunchRequestId.value = String(result?.requestId || '')
     console.info('[SistemaRapidoDiag]', { event: 'launch_ready', plantel: activePlantel.value, code: localSystemLaunchCode.value, requestId: localSystemLaunchRequestId.value, launchUrl })
@@ -813,7 +805,7 @@ const openLocalSystem = async () => {
     const message = String(
       payload?.message
       || error?.message
-      || 'No se pudo abrir en este equipo.'
+      || 'No se pudo abrir Aurora Local.'
     )
     localSystemLaunchAvailable.value = false
     localSystemLaunchMessage.value = message
@@ -827,9 +819,9 @@ const openLocalSystem = async () => {
       message,
       diagnostics: payload?.diagnostics || null
     })
-    show(`No se pudo abrir en este equipo.${isSuperAdmin.value ? localSystemDiagnosticSuffix.value : ''}`, 'danger')
+    show(`No se pudo abrir Aurora Local.${isSuperAdmin.value ? localSystemDiagnosticSuffix.value : ''}`, 'danger')
   } finally {
-    localSystemLaunchPending.value = false
+    localSystemOpenPending.value = false
   }
 }
 
@@ -838,16 +830,14 @@ const openCloudSystem = () => {
   window.location.assign(AURORA_CLOUD_URL)
 }
 
-const handleLocalContextCta = async () => {
-  if (localSystemRuntime) {
-    openCloudSystem()
-    return
-  }
+const selectCloudSystem = () => {
+  if (!localSystemRuntime) return
+  openCloudSystem()
+}
 
-  if (localContextPreparing.value) return
-  if (localSystemLaunchAvailable.value) {
-    await openLocalSystem()
-  }
+const selectLocalSystem = async () => {
+  if (localSystemRuntime || !localSystemLaunchAvailable.value || localSystemOpenPending.value) return
+  await openLocalSystem()
 }
 
 const scheduleLocalSystemPoll = (delay = 15000) => {
@@ -2404,10 +2394,77 @@ const logout = async () => {
   opacity: 0.82;
 }
 
-.local-context-controls {
+.aurora-runtime-controls {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+}
+
+.aurora-runtime-switch {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 3px;
+  border: 1px solid #dce5e0;
+  border-radius: 14px;
+  background: #f4f7f5;
+  box-shadow: inset 0 1px 2px rgba(32, 55, 43, 0.04);
+}
+
+.aurora-runtime-option {
+  position: relative;
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  padding: 0 12px;
+  color: #64716a;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 820;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.aurora-runtime-option:hover:not(.is-active):not(:disabled) {
+  background: rgba(255, 255, 255, 0.68);
+  color: #33483c;
+}
+
+.aurora-runtime-option:focus-visible {
+  z-index: 1;
+  outline: 3px solid rgba(77, 145, 87, 0.2);
+  outline-offset: 2px;
+}
+
+.aurora-runtime-option.is-active {
+  background: #edf7ef;
+  color: #1f6632;
+  box-shadow: 0 1px 3px rgba(35, 70, 47, 0.08), 0 0 0 1px rgba(91, 151, 106, 0.2);
+  cursor: default;
+}
+
+.aurora-runtime-option.is-active::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 999px;
+  background: #3f8a51;
+}
+
+.aurora-runtime-option:disabled {
+  cursor: wait;
+  opacity: 0.64;
+}
+
+.aurora-runtime-label-compact {
+  display: none;
 }
 
 .local-update-action {
@@ -2460,82 +2517,6 @@ const logout = async () => {
   cursor: default;
   color: #65766d;
   background: #f8faf9;
-}
-
-.local-context-cta {
-  display: inline-flex;
-  min-height: 42px;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  border: 1px solid #dbe4df;
-  border-radius: 12px;
-  background: #fff;
-  padding: 0 14px;
-  color: #263b31;
-  font: inherit;
-  font-size: 0.84rem;
-  font-weight: 850;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
-}
-
-.local-context-cta:hover:not(:disabled) {
-  border-color: #92b79b;
-  background: #f8fbf8;
-  color: #245d33;
-}
-
-.local-context-cta:focus-visible {
-  outline: 3px solid rgba(77, 145, 87, 0.2);
-  outline-offset: 2px;
-}
-
-.local-context-cta:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.local-context-cta.is-active {
-  border-color: #cfe1d3;
-  background: #f6faf7;
-  color: #28633a;
-}
-
-.local-context-cta.is-preparing {
-  border-color: #d8e1dd;
-  background: #f8faf9;
-  color: #5b6b63;
-}
-
-.local-context-cta.is-cloud {
-  border-color: #dce4e9;
-  background: #f8fafb;
-  color: #52636d;
-}
-
-.local-cloud-pulse {
-  animation: local-cloud-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes local-cloud-pulse {
-  0%, 100% { opacity: 0.56; }
-  50% { opacity: 1; }
-}
-
-.local-context-cta-icon {
-  display: inline-grid;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  place-items: center;
-  color: currentColor;
-}
-
-.local-context-cta-label-compact {
-  display: none;
 }
 
 .header-home-button {
@@ -2812,10 +2793,22 @@ const logout = async () => {
     height: 38px;
   }
 
-  .local-context-cta {
-    min-height: 40px;
-    padding-inline: 11px;
-    font-size: 0.78rem;
+  .aurora-runtime-switch {
+    padding: 2px;
+  }
+
+  .aurora-runtime-option {
+    min-height: 36px;
+    padding-inline: 9px;
+    font-size: 0.73rem;
+  }
+
+  .aurora-runtime-label-full {
+    display: none;
+  }
+
+  .aurora-runtime-label-compact {
+    display: inline;
   }
 
   .ciclo-picker {
@@ -3418,11 +3411,24 @@ const logout = async () => {
     max-width: 24vw;
   }
 
-  .local-context-cta {
-    min-height: 38px;
-    gap: 6px;
+  .aurora-runtime-switch {
+    padding: 2px;
+    border-radius: 12px;
+  }
+
+  .aurora-runtime-option {
+    min-height: 34px;
+    gap: 5px;
     padding-inline: 8px;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
+  }
+
+  .aurora-runtime-label-full {
+    display: none;
+  }
+
+  .aurora-runtime-label-compact {
+    display: inline;
   }
 
   .local-update-action {
@@ -3437,20 +3443,6 @@ const logout = async () => {
   }
 
   .local-update-action-label-compact {
-    display: inline;
-  }
-
-  .local-context-cta-icon {
-    width: 17px;
-    height: 17px;
-    flex-basis: 17px;
-  }
-
-  .local-context-cta-label-full {
-    display: none;
-  }
-
-  .local-context-cta-label-compact {
     display: inline;
   }
 

@@ -1,1 +1,1 @@
-Corrige el bloqueo y el estado persistente de Sistema Rápido
+Rediseña el selector de Aurora y limita la actualización al agente local válido
