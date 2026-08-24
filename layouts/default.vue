@@ -603,9 +603,7 @@ const localSystemCloudUpdating = computed(() => Boolean(localSystemCloudOperatio
 const localSystemCloudUpdateAvailable = computed(() => Boolean(localSystemCloudStatus.value?.updateAvailable))
 const localSystemLocalUpdateEligible = computed(() => Boolean(localSystemStatus.value?.updateEligible))
 const localSystemCloudUpdateEligible = computed(() => Boolean(localSystemCloudStatus.value?.updateEligible))
-const localContextPreparing = computed(() => !localSystemRuntime && (
-  localSystemLaunchPending.value || localSystemCloudUpdating.value
-))
+const localContextPreparing = computed(() => !localSystemRuntime && localSystemLaunchPending.value)
 const AURORA_CLOUD_URL = 'https://aurora.casitaiedis.edu.mx'
 
 const localContextCtaState = computed(() => {
@@ -663,7 +661,6 @@ const localContextPhaseLabel = computed(() => {
 })
 const localContextCtaAriaLabel = computed(() => localContextCtaLabel.value)
 const localContextTechnicalTitle = computed(() => {
-  if (localContextPhaseLabel.value) return localContextPhaseLabel.value
   if (localSystemRuntime) {
     if (localSystemStatus.value?.checkError) return 'No se pudo consultar el servicio local'
     const version = localSystemStatus.value?.current?.version || ''

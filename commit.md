@@ -1,1 +1,1 @@
-Corrige colisión de variables en registro de pagos
+Corrige el bloqueo y el estado persistente de Sistema Rápido

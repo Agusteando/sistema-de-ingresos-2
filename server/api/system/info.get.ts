@@ -60,14 +60,11 @@ export default defineEventHandler(async (event) => {
       const diagnostics = { ...localSystemDiagnosticSummary(result), protocol }
       const agentMatchesPlantel = bridgeAgentMatchesPlantel(result, activePlantel)
       const launchAvailable = Boolean(agentMatchesPlantel && result?.ok && result?.available)
-      const operation = result?.operation || (diagnostics.phase || diagnostics.running || diagnostics.operationError
-        ? {
-            phase: diagnostics.phase,
-            running: diagnostics.running,
-            message: result?.message || '',
-            error: diagnostics.operationError
-          }
-        : null)
+      // Only an explicit manager operation is authoritative. Legacy V1 agents
+      // also expose diagnostic phase/running fields, but those can describe a
+      // previous manager observation and must not keep the central UI stuck in
+      // an update state. Diagnostics remain available below for troubleshooting.
+      const operation = result?.operation || null
       // The deployed V1 agent can create a handoff only when a local Aurora
       // release is already active. Initial installation remains the manager's
       // automatic responsibility; do not expose a manual action that cannot run.
