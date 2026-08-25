@@ -1,1 +1,1 @@
-Restaura el handoff compatible hacia Aurora Local
+Restaura el cambio directo entre Aurora En la nube y Aurora Local

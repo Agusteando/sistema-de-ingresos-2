@@ -261,9 +261,7 @@
                 type="button"
                 class="aurora-runtime-option"
                 :class="{ 'is-active': localSystemRuntime }"
-                :disabled="localRuntimeSelectionPending"
                 :aria-pressed="localSystemRuntime ? 'true' : 'false'"
-                :aria-busy="localRuntimeSelectionPending ? 'true' : 'false'"
                 :title="localSystemRuntime ? 'Aurora Local activa' : `Cambiar a Aurora Local · ${activePlantel}`"
                 @click="selectLocalSystem"
               >
@@ -594,7 +592,6 @@ const localSystemLaunchAvailable = ref(false)
 const localSystemLaunchUrl = ref('')
 const localSystemLaunchMessage = ref('')
 const localSystemLaunchPending = ref(!localSystemRuntime)
-const localSystemOpenPending = ref(false)
 const localSystemLaunchCode = ref('')
 const localSystemLaunchRequestId = ref('')
 const localSystemStatus = ref(null)
@@ -622,7 +619,6 @@ const AURORA_CLOUD_URL = 'https://aurora.casitaiedis.edu.mx'
 // the launch command may recover/start it, so transient availability must never
 // make the Local choice disappear from the selector.
 const localRuntimeOptionVisible = computed(() => localSystemRuntime || localSystemAgentPresent.value)
-const localRuntimeSelectionPending = computed(() => !localSystemRuntime && localSystemOpenPending.value)
 const localSystemUpdateEligible = computed(() => localSystemRuntime
   ? localSystemLocalUpdateEligible.value
   : (localSystemLaunchAvailable.value && localSystemCloudUpdateEligible.value))
@@ -783,50 +779,19 @@ const loadLocalSystemLaunch = async (refresh = false) => {
   }
 }
 
-const openLocalSystem = async () => {
-  if (localSystemOpenPending.value || (!localSystemRuntime && !localSystemAgentPresent.value)) return
+const openLocalSystem = () => {
+  if (localSystemRuntime || !localSystemAgentPresent.value || typeof window === 'undefined') return
   if (activePlantel.value === 'GLOBAL') {
     show('Selecciona un plantel.', 'danger')
     return
   }
 
-  localSystemOpenPending.value = true
-  try {
-    const result = await $fetch('/api/system/launch', {
-      query: {
-        plantel: activePlantel.value,
-        format: 'json'
-      }
-    })
-    const launchUrl = String(result?.launchUrl || '')
-    if (!launchUrl) throw new Error('El agente no devolvió el acceso a Aurora Local.')
-    localSystemLaunchCode.value = String(result?.code || 'LOCAL_SYSTEM_READY')
-    localSystemLaunchRequestId.value = String(result?.requestId || '')
-    console.info('[SistemaRapidoDiag]', { event: 'launch_ready', plantel: activePlantel.value, code: localSystemLaunchCode.value, requestId: localSystemLaunchRequestId.value, launchUrl })
-    window.location.assign(launchUrl)
-  } catch (error) {
-    const payload = error?.data?.data || error?.data || {}
-    const message = String(
-      payload?.message
-      || error?.message
-      || 'No se pudo abrir Aurora Local.'
-    )
-    localSystemLaunchAvailable.value = false
-    localSystemLaunchMessage.value = message
-    localSystemLaunchCode.value = String(payload?.code || 'LOCAL_SYSTEM_LAUNCH_FAILED')
-    localSystemLaunchRequestId.value = String(payload?.requestId || '')
-    console.error('[SistemaRapidoDiag]', {
-      event: 'launch_error',
-      plantel: activePlantel.value,
-      code: localSystemLaunchCode.value,
-      requestId: localSystemLaunchRequestId.value,
-      message,
-      diagnostics: payload?.diagnostics || null
-    })
-    show(`No se pudo abrir Aurora Local.${isSuperAdmin.value ? localSystemDiagnosticSuffix.value : ''}`, 'danger')
-  } finally {
-    localSystemOpenPending.value = false
-  }
+  // Environment switching is intentionally a plain browser navigation.
+  // /api/system/launch asks the already-routed plantel agent for a one-time
+  // handoff URL and answers with HTTP 302. Update/build work is independent and
+  // must never sit in front of this navigation path.
+  const launchPath = `/api/system/launch?plantel=${encodeURIComponent(activePlantel.value)}`
+  window.location.assign(launchPath)
 }
 
 const openCloudSystem = () => {
@@ -839,9 +804,9 @@ const selectCloudSystem = () => {
   openCloudSystem()
 }
 
-const selectLocalSystem = async () => {
-  if (localSystemRuntime || !localSystemAgentPresent.value || localSystemOpenPending.value) return
-  await openLocalSystem()
+const selectLocalSystem = () => {
+  if (localSystemRuntime || !localSystemAgentPresent.value) return
+  openLocalSystem()
 }
 
 const scheduleLocalSystemPoll = (delay = 15000) => {
