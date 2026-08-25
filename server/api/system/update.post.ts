@@ -72,12 +72,23 @@ export default defineEventHandler(async (event) => {
     activePlantel,
   )
   const launchResult = launchExecution.result
-  if (!bridgeAgentMatchesPlantel(launchResult, activePlantel) || !launchResult?.ok || !launchResult.launchUrl) {
+  const launchReportedPlantel = String(
+    launchResult?.plantel || launchResult?.diagnostics?.echoedPlantel || ''
+  ).trim()
+  const launchPlantelMismatch = Boolean(
+    launchReportedPlantel
+    && !bridgeAgentMatchesPlantel(launchResult, activePlantel)
+  )
+  if (launchPlantelMismatch || !launchResult?.ok || !launchResult.launchUrl) {
     throw createError({
-      statusCode: 503,
-      message: launchResult?.message || 'La instalación de este equipo no está disponible para actualizarse.',
+      statusCode: launchPlantelMismatch ? 409 : 503,
+      message: launchPlantelMismatch
+        ? 'El agente devolvió un acceso para otro plantel.'
+        : (launchResult?.message || 'La instalación de este equipo no está disponible para actualizarse.'),
       data: {
-        code: launchResult?.code || 'LOCAL_SYSTEM_UPDATE_HANDOFF_REJECTED',
+        code: launchPlantelMismatch
+          ? 'LOCAL_SYSTEM_AGENT_MISMATCH'
+          : (launchResult?.code || 'LOCAL_SYSTEM_UPDATE_HANDOFF_REJECTED'),
         requestId: launchResult?.requestId || requestId,
         plantel: activePlantel,
         protocol: launchExecution.protocol,

@@ -112,22 +112,38 @@ export const unwrapLocalSystemBridgeResult = (value: unknown): LocalSystemBridge
 
   for (let depth = 0; depth < 7; depth += 1) {
     if (Array.isArray(current)) {
-      const first = current[0] || null
-      const echo = commandEcho(first)
-      if (echo) return unsupportedAgentResult(echo)
-      current = first
+      // Do not classify the first row before checking whether it is an explicit
+      // intercepted response. V1 agents commonly return their response as a
+      // one-row array and may include operation/email/plantel in that row.
+      current = current[0] || null
       continue
     }
 
     const object = objectValue(current)
     if (!object) return null
 
-    const echo = commandEcho(object)
-    if (echo) return unsupportedAgentResult(echo)
-
-    if (typeof object.ok === 'boolean' && ('available' in object || 'launchUrl' in object || 'diagnostics' in object || 'code' in object || 'operation' in object || 'accepted' in object)) {
+    // A real intercepted response is authoritative whenever the agent returns
+    // `ok` plus response metadata. V1 launch responses may legitimately echo
+    // operation/email/plantel, so checking for a SQL echo first can discard a
+    // valid one-time launchUrl as "command not intercepted". The raw SQL echo
+    // never contains `ok`, therefore accepting explicit responses first is safe.
+    if (typeof object.ok === 'boolean' && (
+      'available' in object
+      || 'launchUrl' in object
+      || 'expiresAt' in object
+      || 'localUrl' in object
+      || 'diagnostics' in object
+      || 'code' in object
+      || 'operation' in object
+      || 'accepted' in object
+      || 'installedVersion' in object
+      || 'installedSha' in object
+    )) {
       return object as LocalSystemBridgeResult
     }
+
+    const echo = commandEcho(object)
+    if (echo) return unsupportedAgentResult(echo)
 
     if (Array.isArray(object.rows)) {
       current = object.rows
