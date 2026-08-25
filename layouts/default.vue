@@ -264,7 +264,7 @@
                 :disabled="localRuntimeSelectionPending"
                 :aria-pressed="localSystemRuntime ? 'true' : 'false'"
                 :aria-busy="localRuntimeSelectionPending ? 'true' : 'false'"
-                :title="localSystemRuntime ? 'Aurora Local activa' : `Cambiar a Aurora Local · ${activePlantel.value}`"
+                :title="localSystemRuntime ? 'Aurora Local activa' : `Cambiar a Aurora Local · ${activePlantel}`"
                 @click="selectLocalSystem"
               >
                 <LucideMonitor :size="16" aria-hidden="true" />
@@ -589,6 +589,7 @@ const activePlantelStatus = computed(() => activePlantel.value === 'GLOBAL'
 
 const runtimeConfig = useRuntimeConfig()
 const localSystemRuntime = String(runtimeConfig.public?.localSystemMode || '').toLowerCase() === 'true'
+const localSystemAgentPresent = ref(localSystemRuntime)
 const localSystemLaunchAvailable = ref(false)
 const localSystemLaunchUrl = ref('')
 const localSystemLaunchMessage = ref('')
@@ -616,11 +617,11 @@ const localSystemLocalUpdateEligible = computed(() => Boolean(localSystemStatus.
 const localSystemCloudUpdateEligible = computed(() => Boolean(localSystemCloudStatus.value?.updateEligible))
 const AURORA_CLOUD_URL = 'https://aurora.casitaiedis.edu.mx'
 
-// Aurora Local is a real runtime choice, not a generic navigation affordance.
-// In the cloud it only exists after the routed agent proves that this exact
-// plantel has a launchable local installation. While already local, it remains
-// visible because that is the active runtime even if the current session changes.
-const localRuntimeOptionVisible = computed(() => localSystemRuntime || localSystemLaunchAvailable.value)
+// Aurora Local is a runtime choice whenever this plantel owns a matching agent.
+// Whether the local web process is already answering is deliberately separate:
+// the launch command may recover/start it, so transient availability must never
+// make the Local choice disappear from the selector.
+const localRuntimeOptionVisible = computed(() => localSystemRuntime || localSystemAgentPresent.value)
 const localRuntimeSelectionPending = computed(() => !localSystemRuntime && localSystemOpenPending.value)
 const localSystemUpdateEligible = computed(() => localSystemRuntime
   ? localSystemLocalUpdateEligible.value
@@ -698,6 +699,7 @@ const localSystemDiagnosticSuffix = computed(() => {
 const loadLocalSystemLaunch = async (refresh = false) => {
   if (localSystemRuntime) return null
   if (activePlantel.value === 'GLOBAL') {
+    localSystemAgentPresent.value = false
     localSystemLaunchAvailable.value = false
     localSystemLaunchUrl.value = ''
     localSystemCloudStatus.value = {
@@ -717,6 +719,7 @@ const loadLocalSystemLaunch = async (refresh = false) => {
     const info = await $fetch('/api/system/info', {
       query: refresh ? { refresh: Date.now() } : undefined
     })
+    localSystemAgentPresent.value = Boolean(info?.agentPresent)
     localSystemLaunchAvailable.value = Boolean(info?.launchAvailable)
     localSystemLaunchUrl.value = String(info?.launchUrl || '')
     localSystemCloudStatus.value = {
@@ -749,6 +752,7 @@ const loadLocalSystemLaunch = async (refresh = false) => {
     })
     return info
   } catch (error) {
+    localSystemAgentPresent.value = false
     localSystemLaunchAvailable.value = false
     localSystemLaunchUrl.value = ''
     localSystemCloudStatus.value = {
@@ -780,7 +784,7 @@ const loadLocalSystemLaunch = async (refresh = false) => {
 }
 
 const openLocalSystem = async () => {
-  if (localSystemOpenPending.value || !localSystemLaunchAvailable.value) return
+  if (localSystemOpenPending.value || (!localSystemRuntime && !localSystemAgentPresent.value)) return
   if (activePlantel.value === 'GLOBAL') {
     show('Selecciona un plantel.', 'danger')
     return
@@ -836,7 +840,7 @@ const selectCloudSystem = () => {
 }
 
 const selectLocalSystem = async () => {
-  if (localSystemRuntime || !localSystemLaunchAvailable.value || localSystemOpenPending.value) return
+  if (localSystemRuntime || !localSystemAgentPresent.value || localSystemOpenPending.value) return
   await openLocalSystem()
 }
 

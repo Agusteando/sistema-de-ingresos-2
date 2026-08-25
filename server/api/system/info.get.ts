@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
         localSystem: false,
         mode: 'central',
         activePlantel,
+        agentPresent: false,
         launchAvailable: false,
         updateEligible: false,
         launchUrl: '',
@@ -37,6 +38,7 @@ export default defineEventHandler(async (event) => {
         localSystem: false,
         mode: 'central',
         activePlantel,
+        agentPresent: false,
         launchAvailable: false,
         updateEligible: false,
         launchUrl: '',
@@ -59,6 +61,7 @@ export default defineEventHandler(async (event) => {
       )
       const diagnostics = { ...localSystemDiagnosticSummary(result), protocol }
       const agentMatchesPlantel = bridgeAgentMatchesPlantel(result, activePlantel)
+      const agentPresent = Boolean(agentMatchesPlantel)
       const launchAvailable = Boolean(agentMatchesPlantel && result?.ok && result?.available)
       // Update state belongs to the verified local installation only. Never
       // surface an operation from an unavailable or mismatched routed agent.
@@ -75,6 +78,7 @@ export default defineEventHandler(async (event) => {
         activePlantel,
         agentId: activePlantel,
         agentMatchesPlantel,
+        agentPresent,
         updateEligible,
         ...diagnostics,
         message: result?.message || ''
@@ -85,6 +89,7 @@ export default defineEventHandler(async (event) => {
         localSystem: false,
         mode: 'central',
         activePlantel,
+        agentPresent,
         launchAvailable,
         updateEligible,
         launchUrl: launchAvailable
@@ -125,6 +130,7 @@ export default defineEventHandler(async (event) => {
         localSystem: false,
         mode: 'central',
         activePlantel,
+        agentPresent: false,
         launchAvailable: false,
         updateEligible: false,
         launchUrl: '',
@@ -153,6 +159,7 @@ export default defineEventHandler(async (event) => {
       mode: 'direct',
       activePlantel: eligibility.activePlantel,
       localPlantel: eligibility.localPlantel || String(process.env.LOCAL_SYSTEM_PLANTEL || process.env.AGENT_ID || config.localSystemPlantel || ''),
+      agentPresent: true,
       launchAvailable: false,
       updateEligible: false,
       launchUrl: '',
@@ -173,6 +180,7 @@ export default defineEventHandler(async (event) => {
     mode: 'direct',
     activePlantel: eligibility.activePlantel,
     localPlantel: eligibility.localPlantel,
+    agentPresent: true,
     launchAvailable: false,
     updateEligible: true,
     launchUrl: '',

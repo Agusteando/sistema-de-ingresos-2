@@ -1,1 +1,1 @@
-Agrega reporte inverso de alumnos inscritos sin conceptos seleccionados
+Mantiene visibles las opciones Nube y Local cuando existe un agente del plantel
