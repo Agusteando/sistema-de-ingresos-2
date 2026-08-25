@@ -1,11 +1,16 @@
-import { getBridgeAgentId, getDbTransport, query } from './db'
-import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { getBridgeAgentId, getDbTransport, query, runWithBridgeAgentId } from './db'
+import { formatCicloLabel, normalizeCicloKey } from '../../shared/utils/ciclo'
 import { normalizeCurp } from '../../shared/utils/curp'
 import { omitRawFinancialAcademicFields, resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import { hydrateFinancialConceptNames, loadFinancialConceptMap } from './financial-concept'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
 import { fetchCentralMatriculaOverlays } from './central-matricula-overlay'
 import { birthDateFromCurp } from './student-identity-report'
+import { PLANTELES_LIST } from '../../utils/constants'
+import { displayGrado } from '../../shared/utils/grado'
+import { parseEnrollmentConceptsForPlantelHistory, parseEnrollmentConceptsForScope } from '../../shared/utils/studentPresentation'
+import { readBestConceptosConfigPayload } from './conceptos-config'
+import { fetchControlEscolarBridgePopulationRows } from './control-escolar'
 import {
   PAYMENT_APPLIED_AMOUNT_SQL,
   PAYMENT_PLANTEL_SQL,
@@ -208,7 +213,251 @@ const addMoneyBreakdown = <T extends MoneyBreakdown>(map: Map<string, T>, key: s
   map.set(key, current)
 }
 
+
+const conceptReportMode = (filters: Record<string, unknown>) => {
+  const value = firstQueryValue(filters?.modo ?? filters?.mode).toLowerCase()
+  return ['missing', 'sin-concepto', 'sin_concepto', 'faltantes'].includes(value) ? 'missing' : 'movements'
+}
+
+const resolveMissingConceptPlantel = (user: any, requestedPlantel: unknown) => {
+  const active = normalizePlantel(user?.active_plantel)
+  if (active && active !== 'GLOBAL') {
+    if (!PLANTELES_LIST.includes(active)) {
+      throw createError({ statusCode: 400, message: 'El plantel activo no es válido.' })
+    }
+    return active
+  }
+
+  if (!user?.isSuperAdmin) {
+    throw createError({ statusCode: 403, message: 'No tiene permisos para consultar otro plantel.' })
+  }
+
+  const requested = normalizePlantel(firstQueryValue(requestedPlantel))
+  if (!requested || requested === 'GLOBAL' || !PLANTELES_LIST.includes(requested)) {
+    throw createError({
+      statusCode: 400,
+      message: 'Seleccione un plantel para consultar alumnos inscritos sin el concepto.'
+    })
+  }
+
+  return requested
+}
+
+const CONCEPT_EVIDENCE_CHUNK_SIZE = 400
+
+const loadSelectedConceptEvidence = async (
+  matriculas: string[],
+  ciclo: string,
+  conceptoIds: number[],
+) => {
+  const result = new Map<string, Set<string>>()
+  const uniqueMatriculas = Array.from(new Set(matriculas.map(value => String(value || '').trim()).filter(Boolean)))
+  const conceptStrings = conceptoIds.map(String)
+  const cicloLabel = formatCicloLabel(ciclo)
+
+  const append = (row: any) => {
+    const matricula = String(row?.matricula || '').trim().toUpperCase()
+    const conceptId = String(row?.conceptId || '').trim()
+    if (!matricula || !conceptId) return
+    const current = result.get(matricula) || new Set<string>()
+    current.add(conceptId)
+    result.set(matricula, current)
+  }
+
+  for (let index = 0; index < uniqueMatriculas.length; index += CONCEPT_EVIDENCE_CHUNK_SIZE) {
+    const chunk = uniqueMatriculas.slice(index, index + CONCEPT_EVIDENCE_CHUNK_SIZE)
+    const matriculaPlaceholders = chunk.map(() => '?').join(', ')
+    const conceptPlaceholders = conceptStrings.map(() => '?').join(', ')
+
+    const [documentRows, paymentRows] = await Promise.all([
+      query<any[]>(`
+        SELECT DISTINCT
+          D.matricula,
+          CAST(COALESCE(P.concepto_id, D.concepto) AS CHAR) AS conceptId
+        FROM documentos D
+        LEFT JOIN documento_concepto_periodos P
+          ON P.documento = D.documento
+          AND P.estatus = 'Activo'
+        WHERE CAST(D.ciclo AS CHAR) IN (?, ?)
+          AND D.estatus = 'Activo'
+          AND (P.accion IS NULL OR P.accion <> 'cancelacion')
+          AND D.matricula IN (${matriculaPlaceholders})
+          AND CAST(COALESCE(P.concepto_id, D.concepto) AS CHAR) IN (${conceptPlaceholders})
+      `, [ciclo, cicloLabel, ...chunk, ...conceptStrings]),
+      query<any[]>(`
+        SELECT DISTINCT
+          R.matricula,
+          CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) AS conceptId
+        FROM referenciasdepago R
+        LEFT JOIN documentos D ON D.documento = R.documento
+        LEFT JOIN documento_concepto_periodos P
+          ON P.documento = R.documento
+          AND P.estatus = 'Activo'
+          AND CAST(R.mes AS UNSIGNED) >= P.start_mes
+          AND (P.end_mes IS NULL OR CAST(R.mes AS UNSIGNED) <= P.end_mes)
+        WHERE CAST(R.ciclo AS CHAR) IN (?, ?)
+          AND R.estatus = 'Vigente'
+          AND R.matricula IN (${matriculaPlaceholders})
+          AND CAST(COALESCE(P.concepto_id, D.concepto, R.concepto) AS CHAR) IN (${conceptPlaceholders})
+      `, [ciclo, cicloLabel, ...chunk, ...conceptStrings]),
+    ])
+
+    documentRows.forEach(append)
+    paymentRows.forEach(append)
+  }
+
+  return result
+}
+
+const displayStudentName = (row: any) => {
+  const direct = String(row?.baseNombreCompleto || '').trim()
+  if (direct) return direct
+  return [
+    String(row?.baseNombres || '').trim(),
+    String(row?.baseApellidoPaterno || '').trim(),
+    String(row?.baseApellidoMaterno || '').trim(),
+  ].filter(Boolean).join(' ')
+}
+
+export const loadMissingConceptReport = async (user: any, filters: Record<string, unknown>) => {
+  if (!user?.hasFinancialAccess) {
+    throw createError({ statusCode: 403, message: 'No tiene permisos financieros para acceder a este reporte.' })
+  }
+
+  const ciclo = normalizeCicloKey(filters?.ciclo as any)
+  const plantel = resolveMissingConceptPlantel(user, filters?.plantel)
+
+  return await runWithBridgeAgentId(plantel, async () => {
+    const context = await resolveConceptReportContext(user, {
+      ciclo,
+      plantel,
+      conceptoIds: filters?.conceptoIds ?? filters?.conceptoId,
+    })
+
+    const enrollmentConfig = await readBestConceptosConfigPayload()
+    const enrollmentConceptIds = parseEnrollmentConceptsForScope(enrollmentConfig, { ciclo, plantel })
+    const tipoIngresoConceptIds = parseEnrollmentConceptsForPlantelHistory(enrollmentConfig, { plantel })
+
+    const populationRows = await fetchControlEscolarBridgePopulationRows(plantel, {
+      ciclo,
+      concepts: enrollmentConceptIds.join(','),
+      tipoConcepts: (tipoIngresoConceptIds.length ? tipoIngresoConceptIds : enrollmentConceptIds).join(','),
+    })
+
+    const enrolledRows = populationRows.filter((row: any) => (
+      String(row?.operatorEnrollmentState || '').trim().toLowerCase() === 'inscrito'
+    ))
+    const matriculas = enrolledRows.map((row: any) => String(row?.matricula || '').trim()).filter(Boolean)
+    const selectedEvidence = await loadSelectedConceptEvidence(matriculas, ciclo, context.conceptoIds)
+
+    let centralMatricula = new Map<string, any>()
+    try {
+      centralMatricula = await fetchCentralMatriculaOverlays(matriculas)
+    } catch {
+      // Bridge identity remains authoritative for the population; central matrícula only enriches CURP.
+    }
+
+    const conceptById = new Map(context.conceptos.map((concept: any) => [String(concept.id), concept]))
+    const missingByConcept = new Map<string, number>(context.conceptoIds.map(id => [String(id), 0]))
+    const missingByGrade = new Map<string, number>()
+    let completeStudents = 0
+    let studentsWithoutAny = 0
+    let presentAssignments = 0
+
+    const rows = enrolledRows.flatMap((row: any) => {
+      const matricula = String(row?.matricula || '').trim()
+      const present = selectedEvidence.get(matricula.toUpperCase()) || new Set<string>()
+      const missingIds = context.conceptoIds.map(String).filter(id => !present.has(id))
+      presentAssignments += context.conceptoIds.length - missingIds.length
+
+      if (!missingIds.length) {
+        completeStudents += 1
+        return []
+      }
+
+      if (present.size === 0) studentsWithoutAny += 1
+      missingIds.forEach((id) => missingByConcept.set(id, (missingByConcept.get(id) || 0) + 1))
+
+      const centralCurp = normalizeCurp(centralMatricula.get(matricula.toUpperCase())?.student?.curp)
+      const curp = centralCurp || normalizeCurp(row?.baseCurp)
+      const grado = displayGrado(row?.baseGrado)
+      const nivel = String(row?.baseNivel || '').trim()
+      const gradeKey = [nivel, grado].filter(Boolean).join(' · ') || 'Sin grado'
+      missingByGrade.set(gradeKey, (missingByGrade.get(gradeKey) || 0) + 1)
+
+      const missingConcepts = missingIds.map(id => ({
+        id: Number(id),
+        concepto: String(conceptById.get(id)?.concepto || `Concepto financiero #${id}`),
+      }))
+
+      return [{
+        matricula,
+        nombres: String(row?.baseNombres || '').trim(),
+        apellidoPaterno: String(row?.baseApellidoPaterno || '').trim(),
+        apellidoMaterno: String(row?.baseApellidoMaterno || '').trim(),
+        nombreCompleto: displayStudentName(row),
+        nivel,
+        grado,
+        grupo: String(row?.baseGrupo || '').trim(),
+        curp,
+        fechaNacimiento: birthDateFromCurp(curp),
+        plantel: String(row?.basePlantel || plantel).trim().toUpperCase(),
+        ciclo,
+        conceptosFaltantes: missingConcepts,
+        conceptosFaltantesTexto: missingConcepts.map(item => item.concepto).join(', '),
+        faltantes: missingConcepts.length,
+      }]
+    })
+
+    const collator = new Intl.Collator('es-MX', { sensitivity: 'base', numeric: true })
+    rows.sort((left: any, right: any) => (
+      collator.compare(String(left.nivel || ''), String(right.nivel || '')) ||
+      collator.compare(String(left.grado || ''), String(right.grado || '')) ||
+      collator.compare(String(left.apellidoPaterno || ''), String(right.apellidoPaterno || '')) ||
+      collator.compare(String(left.apellidoMaterno || ''), String(right.apellidoMaterno || '')) ||
+      collator.compare(String(left.nombres || ''), String(right.nombres || ''))
+    ))
+
+    const expectedAssignments = enrolledRows.length * context.conceptoIds.length
+    const missingAssignments = Math.max(0, expectedAssignments - presentAssignments)
+    const coverage = expectedAssignments > 0 ? Math.round((presentAssignments / expectedAssignments) * 1000) / 10 : 0
+
+    return {
+      modo: 'missing',
+      concepto: context.concepto,
+      conceptos: context.conceptos,
+      rows,
+      filtros: {
+        plantel,
+        ciclo,
+        cicloLabel: formatCicloLabel(ciclo),
+        conceptoIds: context.conceptoIds,
+      },
+      resumen: {
+        inscritos: enrolledRows.length,
+        alumnos: rows.length,
+        completos: completeStudents,
+        sinNinguno: studentsWithoutAny,
+        asignacionesEsperadas: expectedAssignments,
+        asignacionesPresentes: presentAssignments,
+        asignacionesFaltantes: missingAssignments,
+        cobertura: coverage,
+        conceptos: context.conceptos.map((concept: any) => ({
+          id: concept.id,
+          concepto: concept.concepto,
+          faltantes: missingByConcept.get(String(concept.id)) || 0,
+        })).sort((a: any, b: any) => Number(b.faltantes || 0) - Number(a.faltantes || 0)),
+        grados: Array.from(missingByGrade.entries())
+          .map(([grado, total]) => ({ grado, total }))
+          .sort((a, b) => Number(b.total || 0) - Number(a.total || 0) || collator.compare(a.grado, b.grado)),
+      },
+    }
+  })
+}
+
 export const loadConceptReport = async (user: any, filters: Record<string, unknown>) => {
+  if (conceptReportMode(filters) === 'missing') return await loadMissingConceptReport(user, filters)
+
   const context = await resolveConceptReportContext(user, filters)
   const selectedUserKeys = normalizePaymentUserKeys(filters?.usuarios)
   let where = context.where
@@ -340,6 +589,7 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
     .sort((a, b) => Number(b.movimientos || 0) - Number(a.movimientos || 0))
 
   return {
+    modo: 'movements',
     concepto: context.concepto,
     conceptos: context.conceptos,
     rows,
@@ -404,7 +654,18 @@ export const loadConceptReportUsers = async (user: any, filters: Record<string, 
 
 export const loadConceptReportOptions = async (user: any, filters: Record<string, unknown> = {}) => {
   const paymentScope = resolvePaymentScope(user, filters?.plantel)
-  const where = paymentScope.where ? `WHERE ${paymentScope.where}` : ''
+  const whereParts = paymentScope.where ? [paymentScope.where] : []
+  const params = [...paymentScope.params]
+  const requestedCiclo = firstQueryValue(filters?.ciclo)
+
+  if (requestedCiclo) {
+    const cicloKey = normalizeCicloKey(requestedCiclo)
+    const cicloLabel = formatCicloLabel(cicloKey)
+    whereParts.push('CAST(r.ciclo AS CHAR) IN (?, ?)')
+    params.push(cicloKey, cicloLabel)
+  }
+
+  const where = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : ''
   const rows = await query<any[]>(`
     SELECT
       CAST(r.concepto AS CHAR) AS id,
@@ -416,7 +677,7 @@ export const loadConceptReportOptions = async (user: any, filters: Record<string
     LEFT JOIN base A ON A.matricula = r.matricula
     ${where}
     GROUP BY CAST(r.concepto AS CHAR)
-  `, paymentScope.params)
+  `, params)
 
   const byId = new Map<number, any>()
   rows.forEach((row) => {

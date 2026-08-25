@@ -24,14 +24,37 @@
     </section>
 
     <section v-if="activeReport === 'concepto'" class="report-panel">
-      <div class="panel-header">
-        <h3>Reporte por concepto</h3>
+      <div class="panel-header concept-panel-header">
+        <div class="concept-heading">
+          <div>
+            <h3>Reporte por concepto</h3>
+            <p>{{ conceptReportMode === 'missing' ? 'Detecta inscritos que todavía no tienen uno o más conceptos seleccionados.' : 'Consulta los movimientos registrados para los conceptos seleccionados.' }}</p>
+          </div>
+          <div class="concept-mode-switch" role="group" aria-label="Tipo de reporte por concepto">
+            <button
+              type="button"
+              :class="{ active: conceptReportMode === 'movements' }"
+              :aria-pressed="conceptReportMode === 'movements'"
+              @click="setConceptReportMode('movements')"
+            >
+              Con concepto
+            </button>
+            <button
+              type="button"
+              :class="{ active: conceptReportMode === 'missing' }"
+              :aria-pressed="conceptReportMode === 'missing'"
+              @click="setConceptReportMode('missing')"
+            >
+              Sin concepto
+            </button>
+          </div>
+        </div>
         <div class="panel-actions">
-          <button class="btn btn-outline" type="button" @click="printConceptReport" :disabled="!conceptRows.length || loadingConceptReport">
+          <button class="btn btn-outline" type="button" @click="printConceptReport" :disabled="!conceptReportReady || loadingConceptReport">
             <LucidePrinter :size="16" />
             Imprimir
           </button>
-          <button class="btn btn-outline" type="button" @click="exportConceptReport" :disabled="!conceptRows.length || loadingConceptReport || downloadingConceptExcel">
+          <button class="btn btn-outline" type="button" @click="exportConceptReport" :disabled="!conceptReportReady || loadingConceptReport || downloadingConceptExcel">
             <LucideLoader2 v-if="downloadingConceptExcel" class="animate-spin" :size="16" />
             <LucideDownload v-else :size="16" />
             Excel
@@ -39,9 +62,9 @@
         </div>
       </div>
 
-      <div class="filters-grid concept-filters">
+      <div class="filters-grid concept-filters" :class="{ 'is-missing-mode': conceptReportMode === 'missing' }">
         <div class="form-group m-0 concept-select-field">
-          <label class="form-label">Conceptos</label>
+          <label class="form-label">{{ conceptReportMode === 'missing' ? 'Conceptos a revisar' : 'Conceptos' }}</label>
           <ConceptMultiSearchSelect
             v-model="filtrosConcepto.conceptoIds"
             :concepts="conceptos"
@@ -50,29 +73,34 @@
             placeholder="Buscar y seleccionar conceptos..."
           />
         </div>
-        <div class="form-group m-0">
+        <div v-if="conceptReportMode === 'movements'" class="form-group m-0">
           <label class="form-label">Desde</label>
           <input type="date" v-model="filtrosConcepto.inicio" class="input-field">
         </div>
-        <div class="form-group m-0">
+        <div v-if="conceptReportMode === 'movements'" class="form-group m-0">
           <label class="form-label">Hasta</label>
           <input type="date" v-model="filtrosConcepto.fin" class="input-field">
+        </div>
+        <div v-else class="concept-cycle-context">
+          <span>Ciclo escolar</span>
+          <strong>{{ conceptCycleLabel }}</strong>
+          <small>Solo alumnos inscritos</small>
         </div>
         <div class="form-group m-0" v-if="canFilterPlantel">
           <label class="form-label">Plantel</label>
           <select v-model="filtrosConcepto.plantel" class="input-field">
-            <option value="">Todos</option>
+            <option value="">{{ conceptReportMode === 'missing' ? 'Selecciona un plantel' : 'Todos' }}</option>
             <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
           </select>
         </div>
-        <button class="btn btn-primary filter-button" type="button" @click="prepareConceptReport" :disabled="loadingConceptReport || !filtrosConcepto.conceptoIds.length">
+        <button class="btn btn-primary filter-button" type="button" @click="prepareConceptReport" :disabled="loadingConceptReport || loadingConceptos || !filtrosConcepto.conceptoIds.length || (conceptReportMode === 'missing' && canFilterPlantel && !filtrosConcepto.plantel)">
           <LucideLoader2 v-if="loadingConceptReport" class="animate-spin" :size="16" />
           <LucideFilter v-else :size="16" />
-          Generar
+          {{ conceptReportMode === 'missing' ? 'Buscar faltantes' : 'Generar' }}
         </button>
       </div>
 
-      <div class="summary-grid">
+      <div v-if="conceptReportMode === 'movements'" class="summary-grid">
         <div class="metric-card">
           <span>Registrado</span>
           <strong>${{ Number(conceptSummary.totalRegistrado || 0).toFixed(2) }}</strong>
@@ -99,7 +127,30 @@
         </div>
       </div>
 
-      <div class="report-split">
+      <div v-else-if="conceptReport.modo === 'missing'" class="summary-grid missing-summary-grid">
+        <div class="metric-card">
+          <span>Inscritos revisados</span>
+          <strong>{{ conceptSummary.inscritos || 0 }}</strong>
+        </div>
+        <div class="metric-card attention">
+          <span>Con faltantes</span>
+          <strong>{{ conceptSummary.alumnos || 0 }}</strong>
+        </div>
+        <div class="metric-card">
+          <span>Selección completa</span>
+          <strong>{{ conceptSummary.completos || 0 }}</strong>
+        </div>
+        <div class="metric-card">
+          <span>Cobertura</span>
+          <strong>{{ Number(conceptSummary.cobertura || 0).toFixed(1) }}%</strong>
+        </div>
+        <div class="metric-card muted">
+          <span>Conceptos revisados</span>
+          <strong>{{ selectedConcepts.length || 0 }}</strong>
+        </div>
+      </div>
+
+      <div v-if="conceptReportMode === 'movements'" class="report-split">
         <div class="card table-wrapper report-table">
           <table>
             <thead>
@@ -185,6 +236,91 @@
               </div>
             </div>
           </template>
+        </aside>
+      </div>
+
+      <div v-else class="report-split missing-report-split">
+        <div class="card table-wrapper report-table missing-concept-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Matrícula</th>
+                <th>Alumno</th>
+                <th>Nivel</th>
+                <th>Grado</th>
+                <th>CURP</th>
+                <th>Nacimiento</th>
+                <th v-if="canFilterPlantel">Plantel</th>
+                <th>Concepto faltante</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loadingConceptReport">
+                <td :colspan="canFilterPlantel ? 8 : 7" class="text-center py-12 text-gray-500 font-medium">Revisando alumnos inscritos...</td>
+              </tr>
+              <tr v-else-if="!filtrosConcepto.conceptoIds.length">
+                <td :colspan="canFilterPlantel ? 8 : 7" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para revisar faltantes.</td>
+              </tr>
+              <tr v-else-if="canFilterPlantel && !filtrosConcepto.plantel">
+                <td :colspan="8" class="text-center py-12 text-gray-400">Selecciona un plantel. La población inscrita se valida contra el agente de ese plantel.</td>
+              </tr>
+              <tr v-else-if="conceptReport.modo !== 'missing'">
+                <td :colspan="canFilterPlantel ? 8 : 7" class="text-center py-12 text-gray-400">Genera el reporte para revisar la población inscrita del ciclo.</td>
+              </tr>
+              <tr v-else-if="Number(conceptSummary.inscritos || 0) === 0">
+                <td :colspan="canFilterPlantel ? 8 : 7" class="missing-empty-state">
+                  <strong>Sin alumnos inscritos</strong>
+                  <span>No hay población con estado “inscrito” para {{ conceptCycleLabel }} en el plantel seleccionado.</span>
+                </td>
+              </tr>
+              <tr v-else-if="!conceptRows.length">
+                <td :colspan="canFilterPlantel ? 8 : 7" class="missing-empty-state">
+                  <strong>Selección completa</strong>
+                  <span>Todos los alumnos inscritos tienen los conceptos seleccionados para {{ conceptCycleLabel }}.</span>
+                </td>
+              </tr>
+              <tr v-else v-for="row in conceptRows" :key="`${row.matricula}-${row.conceptosFaltantesTexto}`">
+                <td class="font-mono text-gray-600">{{ row.matricula }}</td>
+                <td class="font-semibold text-gray-800">
+                  <span class="student-name-cell">{{ row.nombreCompleto || '—' }}</span>
+                </td>
+                <td>{{ row.nivel || '—' }}</td>
+                <td>{{ row.grado || '—' }}</td>
+                <td class="font-mono text-gray-600">{{ row.curp || '—' }}</td>
+                <td>{{ formatDate(row.fechaNacimiento) || '—' }}</td>
+                <td v-if="canFilterPlantel">{{ row.plantel || '—' }}</td>
+                <td>
+                  <div class="missing-concept-chips">
+                    <span v-for="concept in row.conceptosFaltantes" :key="concept.id">{{ concept.concepto }}</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <aside class="breakdown-panel missing-breakdown-panel">
+          <h4>Faltantes por concepto</h4>
+          <div v-if="conceptSummary.conceptos?.length" class="breakdown-list missing-breakdown-list">
+            <div v-for="item in conceptSummary.conceptos" :key="item.id">
+              <span>{{ item.concepto }}</span>
+              <strong>{{ item.faltantes }}</strong>
+            </div>
+          </div>
+
+          <template v-if="conceptSummary.grados?.length">
+            <h4 class="mt-5">Alumnos por grado</h4>
+            <div class="breakdown-list missing-breakdown-list">
+              <div v-for="item in conceptSummary.grados" :key="item.grado">
+                <span>{{ item.grado }}</span>
+                <strong>{{ item.total }}</strong>
+              </div>
+            </div>
+          </template>
+
+          <div class="missing-report-note">
+            Un alumno cuenta como “con concepto” si tiene una asignación activa en el ciclo o evidencia de pago vigente para ese mismo concepto.
+          </div>
         </aside>
       </div>
     </section>
@@ -372,7 +508,7 @@ import {
 import { PLANTELES_LIST } from '~/utils/constants'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useToast } from '~/composables/useToast'
-import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
 import ConceptSearchSelect from '~/components/ConceptSearchSelect.vue'
 import { resolveClientAuthAccess } from '~/utils/authAccess'
 
@@ -401,6 +537,7 @@ const conceptos = ref([])
 const loadingConceptos = ref(false)
 const loadingConceptReport = ref(false)
 const downloadingConceptExcel = ref(false)
+const conceptReportMode = ref('movements')
 const selectedConceptUserKeys = ref([])
 const conceptUserSelectorOpen = ref(false)
 const conceptUserOptions = ref([])
@@ -430,7 +567,15 @@ const emptyConceptReport = () => ({
     formasPago: [],
     planteles: [],
     conceptos: [],
-    estatus: []
+    estatus: [],
+    inscritos: 0,
+    completos: 0,
+    sinNinguno: 0,
+    asignacionesEsperadas: 0,
+    asignacionesPresentes: 0,
+    asignacionesFaltantes: 0,
+    cobertura: 0,
+    grados: []
   }
 })
 const conceptReport = ref(emptyConceptReport())
@@ -466,6 +611,7 @@ const corteUserSelectionContext = ref({
 })
 
 const conceptRows = computed(() => conceptReport.value.rows || [])
+const conceptReportReady = computed(() => conceptReportMode.value === 'missing' ? conceptReport.value?.modo === 'missing' : conceptRows.value.length > 0)
 const conceptSummary = computed(() => conceptReport.value.resumen || emptyConceptReport().resumen)
 const selectedConcepts = computed(() => {
   const selectedKeys = new Set((filtrosConcepto.value.conceptoIds || []).map(id => String(id)))
@@ -479,6 +625,7 @@ const selectedConceptName = computed(() => {
   if (names.length <= 2) return names.join(', ')
   return `${names[0]}, ${names[1]} +${names.length - 2}`
 })
+const conceptCycleLabel = computed(() => formatCicloLabel(state.value.ciclo))
 const conceptUserPeriodLabel = computed(() => {
   const { inicio, fin } = conceptUserSelectionContext.value
   if (!inicio && !fin) return 'Todos los movimientos'
@@ -557,12 +704,16 @@ const loadConceptos = async () => {
   try {
     const [catalogConcepts, historicalConcepts] = await Promise.all([
       $fetch('/api/conceptos', {
-        params: { ciclo: normalizeCicloKey(state.value.ciclo) }
+        params: {
+          ciclo: normalizeCicloKey(state.value.ciclo),
+          ...(canFilterPlantel.value && filtrosConcepto.value.plantel ? { plantel: filtrosConcepto.value.plantel } : {})
+        }
       }),
       $fetch('/api/reports/concepto_options', {
-        params: canFilterPlantel.value && filtrosConcepto.value.plantel
-          ? { plantel: filtrosConcepto.value.plantel }
-          : {}
+        params: {
+          ...(canFilterPlantel.value && filtrosConcepto.value.plantel ? { plantel: filtrosConcepto.value.plantel } : {}),
+          ...(conceptReportMode.value === 'missing' ? { ciclo: normalizeCicloKey(state.value.ciclo) } : {})
+        }
       })
     ])
 
@@ -580,6 +731,10 @@ const loadConceptos = async () => {
     conceptos.value = Array.from(merged.values())
       .map(({ ciclo: _ciclo, ciclos: _ciclos, ...concept }) => concept)
       .sort((a, b) => String(a.concepto || '').localeCompare(String(b.concepto || ''), 'es', { sensitivity: 'base' }))
+    if (conceptReportMode.value === 'missing' && filtrosConcepto.value.conceptoIds.length) {
+      const validIds = new Set(conceptos.value.map(concept => String(concept.id)))
+      filtrosConcepto.value.conceptoIds = filtrosConcepto.value.conceptoIds.filter(id => validIds.has(String(id)))
+    }
   } catch (e) {
     show('No se pudieron cargar los conceptos', 'danger')
   } finally {
@@ -587,16 +742,47 @@ const loadConceptos = async () => {
   }
 }
 
+const setConceptReportMode = (mode) => {
+  const normalized = mode === 'missing' ? 'missing' : 'movements'
+  if (conceptReportMode.value === normalized) return
+
+  conceptReportMode.value = normalized
+  conceptReport.value = emptyConceptReport()
+  selectedConceptUserKeys.value = []
+  conceptUserSelectorOpen.value = false
+  conceptUserOptions.value = []
+
+  let plantelChanged = false
+  if (normalized === 'missing' && canFilterPlantel.value && !filtrosConcepto.value.plantel) {
+    const preferredPlantel = String(homePlantel.value || '').toUpperCase()
+    filtrosConcepto.value.plantel = PLANTELES_LIST.includes(preferredPlantel)
+      ? preferredPlantel
+      : (PLANTELES_LIST[0] || '')
+    plantelChanged = true
+  }
+
+  if (!plantelChanged) loadConceptos()
+}
+
 const buildConceptBaseParams = () => {
-  const { conceptoIds, ...filters } = filtrosConcepto.value
+  const { conceptoIds, ...sourceFilters } = filtrosConcepto.value
+  const filters = { ...sourceFilters }
+  if (conceptReportMode.value === 'missing') {
+    delete filters.inicio
+    delete filters.fin
+  }
+
   const params = buildParams(filters)
+  params.modo = conceptReportMode.value
   if (conceptoIds?.length) params.conceptoIds = JSON.stringify(conceptoIds)
   return params
 }
 
 const buildConceptReportParams = (selectedUserKeys = selectedConceptUserKeys.value) => {
   const params = buildConceptBaseParams()
-  if (selectedUserKeys?.length) params.usuarios = JSON.stringify(selectedUserKeys)
+  if (conceptReportMode.value === 'movements' && selectedUserKeys?.length) {
+    params.usuarios = JSON.stringify(selectedUserKeys)
+  }
   return params
 }
 
@@ -604,7 +790,7 @@ const loadConceptReport = async (selectedUserKeys = []) => {
   conceptReport.value = await $fetch('/api/reports/concepto', {
     params: buildConceptReportParams(selectedUserKeys)
   })
-  selectedConceptUserKeys.value = [...selectedUserKeys]
+  selectedConceptUserKeys.value = conceptReportMode.value === 'movements' ? [...selectedUserKeys] : []
 }
 
 const prepareConceptReport = async () => {
@@ -613,6 +799,14 @@ const prepareConceptReport = async () => {
 
   loadingConceptReport.value = true
   try {
+    if (conceptReportMode.value === 'missing') {
+      if (canFilterPlantel.value && !filtrosConcepto.value.plantel) {
+        return show('Seleccione un plantel para revisar alumnos inscritos', 'danger')
+      }
+      await loadConceptReport([])
+      return
+    }
+
     const response = await $fetch('/api/reports/concepto_users', {
       params: buildConceptBaseParams()
     })
@@ -645,7 +839,9 @@ const printConceptReport = () => {
 
 const executeConceptExcelDownload = async (selectedUserKeys = []) => {
   const query = new URLSearchParams(buildConceptBaseParams())
-  if (selectedUserKeys.length) query.set('usuarios', JSON.stringify(selectedUserKeys))
+  if (conceptReportMode.value === 'movements' && selectedUserKeys.length) {
+    query.set('usuarios', JSON.stringify(selectedUserKeys))
+  }
 
   const response = await fetch(`/api/reports/concepto_excel?${query.toString()}`, {
     credentials: 'same-origin'
@@ -662,7 +858,7 @@ const executeConceptExcelDownload = async (selectedUserKeys = []) => {
   const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
   const filename = encodedName
     ? decodeURIComponent(encodedName)
-    : (plainName || `Reporte_conceptos_${safeFileName(selectedConceptName.value)}.xlsx`)
+    : (plainName || `${conceptReportMode.value === 'missing' ? 'Alumnos_sin_concepto' : 'Reporte_conceptos'}_${safeFileName(selectedConceptName.value)}.xlsx`)
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -675,7 +871,7 @@ const executeConceptExcelDownload = async (selectedUserKeys = []) => {
 }
 
 const exportConceptReport = async () => {
-  if (!conceptRows.value.length || downloadingConceptExcel.value) return
+  if (!conceptReportReady.value || downloadingConceptExcel.value) return
 
   downloadingConceptExcel.value = true
   try {
@@ -905,6 +1101,11 @@ watch(
   }
 )
 
+watch(() => filtrosConcepto.value.plantel, async (plantel, previousPlantel) => {
+  if (!canFilterPlantel.value || plantel === previousPlantel) return
+  await loadConceptos()
+})
+
 watch(() => route.query.conceptoId, async (conceptoId) => {
   if (!conceptoId) return
   activeReport.value = 'concepto'
@@ -1025,6 +1226,61 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   gap: 7px;
 }
 
+.concept-panel-header {
+  align-items: center;
+}
+
+.concept-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 16px;
+}
+
+.concept-heading > div:first-child {
+  min-width: 0;
+}
+
+.concept-heading p {
+  margin: 3px 0 0;
+  color: #7a8497;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.concept-mode-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  border-radius: 10px;
+  background: #eef2f6;
+  padding: 3px;
+}
+
+.concept-mode-switch button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #667085;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 760;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.concept-mode-switch button:hover {
+  color: #344054;
+}
+
+.concept-mode-switch button.active {
+  background: #fff;
+  color: #255f32;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
 .filters-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -1046,6 +1302,34 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   justify-self: start;
 }
 
+.concept-cycle-context {
+  display: grid;
+  min-height: 58px;
+  align-content: center;
+  border: 1px solid #e4e9ef;
+  border-radius: 10px;
+  background: #fff;
+  padding: 7px 11px;
+}
+
+.concept-cycle-context span,
+.concept-cycle-context small {
+  color: #7a8497;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.concept-cycle-context span {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.concept-cycle-context strong {
+  color: #182235;
+  font-size: 0.84rem;
+  line-height: 1.25;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
@@ -1063,6 +1347,15 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
 
 .metric-card.muted {
   background: #fbfcfd;
+}
+
+.metric-card.attention {
+  border-color: #eadfc7;
+  background: #fffaf0;
+}
+
+.metric-card.attention strong {
+  color: #8a5a17;
 }
 
 .metric-card span {
@@ -1086,6 +1379,10 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   white-space: nowrap;
 }
 
+.missing-summary-grid {
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+}
+
 .report-split {
   display: grid;
   min-height: 0;
@@ -1100,6 +1397,57 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   overflow: auto;
   border-color: #e7ebf0;
   box-shadow: none;
+}
+
+.missing-concept-table table {
+  min-width: 980px;
+}
+
+.student-name-cell {
+  display: block;
+  min-width: 190px;
+}
+
+.missing-concept-chips {
+  display: flex;
+  min-width: 210px;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.missing-concept-chips span {
+  display: inline-flex;
+  max-width: 260px;
+  align-items: center;
+  border: 1px solid #eadfc7;
+  border-radius: 999px;
+  background: #fffaf0;
+  color: #7a5118;
+  padding: 3px 7px;
+  font-size: 0.68rem;
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.missing-empty-state {
+  padding: 40px 16px;
+  text-align: center;
+}
+
+.missing-empty-state strong,
+.missing-empty-state span {
+  display: block;
+}
+
+.missing-empty-state strong {
+  color: #255f32;
+  font-size: 0.86rem;
+}
+
+.missing-empty-state span {
+  margin-top: 4px;
+  color: #7a8497;
+  font-size: 0.75rem;
 }
 
 .breakdown-panel {
@@ -1153,6 +1501,23 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   color: #182235;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.78rem;
+}
+
+.missing-breakdown-list div {
+  align-items: flex-start;
+}
+
+.missing-breakdown-list span {
+  line-height: 1.3;
+}
+
+.missing-report-note {
+  margin-top: 14px;
+  border-top: 1px solid #edf0f4;
+  padding-top: 11px;
+  color: #7a8497;
+  font-size: 0.68rem;
+  line-height: 1.45;
 }
 
 .report-panel > .card {
@@ -1256,6 +1621,21 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   .corte-total {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .concept-heading {
+    width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .concept-mode-switch {
+    width: 100%;
+  }
+
+  .concept-mode-switch button {
+    flex: 1;
   }
 
   .report-switcher {

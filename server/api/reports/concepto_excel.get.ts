@@ -36,6 +36,78 @@ const formatRegisteringUser = (nameValue: unknown, emailValue: unknown) => {
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const filters = getQuery(event)
   const user = event.context.user
+  const mode = String(filters?.modo || filters?.mode || '').trim().toLowerCase()
+
+  if (['missing', 'sin-concepto', 'sin_concepto', 'faltantes'].includes(mode)) {
+    const result: any = await loadConceptReport(user, filters)
+    const conceptNames = (result.conceptos || []).map((concept: any) => String(concept?.concepto || '')).filter(Boolean)
+    const conceptName = conceptNames.length <= 3
+      ? (conceptNames.join(', ') || 'Concepto')
+      : `${conceptNames.slice(0, 2).join(', ')} +${conceptNames.length - 2}`
+    const creatorUser = event.context.user || {}
+    const creatorName = String(creatorUser.nombre || creatorUser.name || creatorUser.email || 'Usuario')
+    const creatorEmail = String(creatorUser.email || creatorUser.usuario_email || '').trim()
+    const creator = creatorEmail && creatorEmail.toLowerCase() !== creatorName.toLowerCase()
+      ? `${creatorName} <${creatorEmail}>`
+      : creatorName
+
+    const rows = result.rows.map((row: any) => [
+      row.matricula || '',
+      row.nombres || '',
+      row.apellidoPaterno || '',
+      row.apellidoMaterno || '',
+      row.nivel || '',
+      row.grado || '',
+      row.curp || '',
+      row.fechaNacimiento || '',
+      row.plantel || result.filtros?.plantel || '',
+      row.conceptosFaltantesTexto || '',
+      Number(row.faltantes || 0),
+    ])
+
+    const workbook = buildProtectedXlsx({
+      sheetName: 'Sin concepto',
+      title: 'Alumnos inscritos sin concepto',
+      subtitle: conceptName,
+      metaLines: [
+        `Plantel: ${result.filtros?.plantel || '—'} | Ciclo: ${result.filtros?.cicloLabel || result.filtros?.ciclo || '—'}`,
+        `Inscritos revisados: ${result.resumen?.inscritos || 0} | Alumnos con faltantes: ${result.resumen?.alumnos || 0}`,
+        `Selección completa: ${result.resumen?.completos || 0} | Cobertura: ${Number(result.resumen?.cobertura || 0).toFixed(1)}%`,
+        `Asignaciones faltantes: ${result.resumen?.asignacionesFaltantes || 0}`,
+        'La población incluye únicamente alumnos con estado de inscripción "inscrito" para el ciclo seleccionado.',
+      ],
+      headers: [
+        'Matrícula',
+        'Nombres',
+        'Apellido paterno',
+        'Apellido materno',
+        'Nivel',
+        'Grado',
+        'CURP',
+        'Fecha de nacimiento',
+        'Plantel',
+        'Concepto(s) faltante(s)',
+        'Cantidad faltante',
+      ],
+      rows,
+      numericColumns: [10],
+      dateColumns: [7],
+      columnWidths: [16, 28, 23, 23, 15, 14, 22, 18, 12, 42, 16],
+      tableName: 'AlumnosSinConcepto',
+      creator,
+    })
+
+    const conceptFileLabel = conceptNames.length === 1 ? conceptNames[0] : `${conceptNames.length}_conceptos`
+    const filename = `Alumnos_sin_concepto_${safeFilePart(conceptFileLabel)}_${safeFilePart(result.filtros?.cicloLabel || result.filtros?.ciclo)}.xlsx`
+    const encodedFilename = encodeURIComponent(filename)
+
+    setHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    setHeader(event, 'Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`)
+    setHeader(event, 'Content-Length', String(workbook.length))
+    setHeader(event, 'Cache-Control', 'private, no-store')
+    return workbook
+  }
+
   const availableUsers = await loadConceptReportUsers(user, filters)
   const requestedUserKeys = normalizePaymentUserKeys(filters.usuarios)
   const availableKeys = new Set(availableUsers.usuarios.map(option => option.key))
