@@ -66,6 +66,7 @@ export default defineNuxtConfig({
     localSystemBuildDate: process.env.LOCAL_SYSTEM_BUILD_DATE || '',
     localSystemPlantel: process.env.LOCAL_SYSTEM_PLANTEL || process.env.AGENT_ID || '',
     localSystemCookieSecure: process.env.LOCAL_SYSTEM_COOKIE_SECURE || '',
+    localSystemCloudUrl: process.env.LOCAL_SYSTEM_CLOUD_URL || 'https://aurora.casitaiedis.edu.mx',
 
     public: {
       googleClientId: process.env.GOOGLE_CLIENT_ID || '',

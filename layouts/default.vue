@@ -248,7 +248,7 @@
                 class="aurora-runtime-option"
                 :class="{ 'is-active': !localSystemRuntime }"
                 :aria-pressed="!localSystemRuntime ? 'true' : 'false'"
-                title="Abrir Aurora en la nube"
+                :title="localSystemRuntime ? 'Cambiar a Aurora En la nube' : 'Aurora En la nube activa'"
                 @click="selectCloudSystem"
               >
                 <LucideCloud :size="16" aria-hidden="true" />
@@ -264,7 +264,7 @@
                 :disabled="localRuntimeSelectionPending"
                 :aria-pressed="localSystemRuntime ? 'true' : 'false'"
                 :aria-busy="localRuntimeSelectionPending ? 'true' : 'false'"
-                :title="localSystemRuntime ? 'Aurora Local activa' : `Abrir Aurora Local · ${activePlantel.value}`"
+                :title="localSystemRuntime ? 'Aurora Local activa' : `Cambiar a Aurora Local · ${activePlantel.value}`"
                 @click="selectLocalSystem"
               >
                 <LucideMonitor :size="16" aria-hidden="true" />

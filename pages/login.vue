@@ -56,14 +56,14 @@
           <h2>Bienvenido</h2>
           <p class="auth-subtitle">Continúa con tu cuenta institucional.</p>
 
-          <div ref="plantelSelectRef" class="plantel-field">
+          <div v-if="!localSystemRuntime" ref="plantelSelectRef" class="plantel-field">
             <span id="plantel-login-label" class="plantel-label">Plantel</span>
             <div class="plantel-picker" :class="{ open: plantelMenuOpen }">
               <button
                 id="plantel-login"
                 type="button"
                 class="plantel-select-shell plantel-select-button"
-                :disabled="isBusy"
+                :disabled="isBusy || isLocalHandoffMode"
                 aria-haspopup="listbox"
                 :aria-expanded="plantelMenuOpen ? 'true' : 'false'"
                 aria-labelledby="plantel-login-label plantel-login-value"
@@ -130,7 +130,27 @@
             </p>
           </div>
 
-          <div class="google-card">
+          <div v-if="localSystemRuntime" class="local-broker-card">
+            <button
+              type="button"
+              class="local-broker-button"
+              :disabled="isBusy"
+              @click="beginLocalCloudLogin"
+            >
+              <span v-if="isBusy" class="button-spinner" aria-hidden="true" />
+              <span v-else class="local-broker-cloud" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M7.4 18.5h9.3a4.3 4.3 0 0 0 .5-8.6A6 6 0 0 0 5.8 8.1a5.2 5.2 0 0 0 1.6 10.4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+              <span>{{ isBusy ? primaryButtonText : 'Continuar con Google Workspace' }}</span>
+            </button>
+            <p class="local-broker-note">
+              Tu acceso se valida en Aurora En la nube y regresa automáticamente a este equipo.
+            </p>
+          </div>
+
+          <div v-else class="google-card">
             <div
               v-show="authPhase === 'loadingGoogle' || isBusy"
               class="google-busy-row"
@@ -358,11 +378,17 @@ const PHASES = {
   }
 }
 
-const errorMsg = ref('')
-const authPhase = ref('loadingGoogle')
-const currentStepIndex = ref(0)
 const config = useRuntimeConfig()
 const route = useRoute()
+const localSystemRuntime = String(config.public?.localSystemMode || '').trim().toLowerCase() === 'true'
+const isLocalHandoffMode = computed(() => (
+  !localSystemRuntime
+  && String(Array.isArray(route.query.handoff) ? route.query.handoff[0] : route.query.handoff || '').trim().toLowerCase() === 'local'
+))
+
+const errorMsg = ref('')
+const authPhase = ref(localSystemRuntime ? 'ready' : 'loadingGoogle')
+const currentStepIndex = ref(0)
 let googleIntentTimer = null
 
 const bridgeAgentCookie = useCookie('db_bridge_agent_id', {
@@ -488,7 +514,7 @@ const persistSelectedPlantel = () => {
 }
 
 const openPlantelMenu = () => {
-  if (isBusy.value) return
+  if (isBusy.value || isLocalHandoffMode.value) return
 
   plantelMenuOpen.value = true
   loadPlantelStatuses({ force: true })
@@ -570,10 +596,55 @@ const markGoogleIntent = () => {
 const resetLoginState = () => {
   errorMsg.value = ''
   clearGoogleIntentTimer()
+  if (localSystemRuntime) {
+    setPhase('ready', 0)
+    return
+  }
   setPhase(window.google?.accounts?.id ? 'ready' : 'loadingGoogle', 0)
 }
 
+const beginLocalCloudLogin = () => {
+  if (!localSystemRuntime || isBusy.value || typeof window === 'undefined') return
+  errorMsg.value = ''
+  setPhase('redirecting', 4)
+  window.location.assign('/api/auth/local-login')
+}
+
+const completeLocalHandoff = async () => {
+  if (!isLocalHandoffMode.value) return false
+  if (!PLANTELES_LIST.includes(routePlantel)) {
+    throw new Error('No se pudo identificar el plantel de Aurora Local.')
+  }
+
+  setPhase('session', 3)
+  const result = await $fetch('/api/system/launch', {
+    query: { plantel: routePlantel, format: 'json' }
+  })
+  const launchUrl = String(result?.launchUrl || '')
+  if (!launchUrl) throw new Error('Aurora Local no devolvió un acceso válido.')
+
+  setPhase('redirecting', 4)
+  window.location.assign(launchUrl)
+  return true
+}
+
+const tryExistingCloudSessionHandoff = async () => {
+  if (!isLocalHandoffMode.value) return false
+  try {
+    await $fetch('/api/auth/session', { retry: 0 })
+    await completeLocalHandoff()
+    return true
+  } catch (error) {
+    const status = Number(error?.statusCode || error?.status || error?.response?.status || 0)
+    if (status === 401 || status === 403) return false
+    errorMsg.value = getErrorMessage(error)
+    setPhase('error', 0)
+    return true
+  }
+}
+
 const initializeGoogle = () => {
+  if (localSystemRuntime) return
   if (!window.google?.accounts?.id) {
     errorMsg.value = 'No se pudo cargar Google. Recarga la página.'
     setPhase('error', 0)
@@ -601,6 +672,10 @@ const initializeGoogle = () => {
         })
 
         setPhase('session', 3)
+        if (isLocalHandoffMode.value) {
+          await completeLocalHandoff()
+          return
+        }
         setPhase('redirecting', 4)
         window.location.href = result?.redirectTo || '/'
       } catch (e) {
@@ -634,14 +709,23 @@ const initializeGoogle = () => {
   if (!errorMsg.value) setPhase('ready', 0)
 }
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   if (route.query.session === 'expired') {
     errorMsg.value = 'Tu sesión expiró o ya no es válida. Inicia sesión nuevamente para cargar los datos.'
   }
-  loadPersistedPlantel()
-  loadPlantelStatuses({ force: true, plantel: selectedPlantel.value })
+  if (!localSystemRuntime) {
+    loadPersistedPlantel()
+    loadPlantelStatuses({ force: true, plantel: selectedPlantel.value })
+  }
   loadLoginUpdates()
+
+  if (localSystemRuntime) {
+    setPhase('ready', 0)
+    return
+  }
+
+  if (await tryExistingCloudSessionHandoff()) return
 
   if (!config.public.googleClientId) {
     errorMsg.value = 'Credenciales de Google no configuradas.'
@@ -1162,6 +1246,70 @@ onBeforeUnmount(() => {
   width: 100%;
   height: clamp(58px, 8dvh, 75px);
   margin-top: clamp(16px, 2.85dvh, 28px);
+}
+
+.local-broker-card {
+  display: grid;
+  width: 100%;
+  gap: 10px;
+  margin-top: clamp(16px, 2.85dvh, 28px);
+}
+
+.local-broker-button {
+  display: flex;
+  width: 100%;
+  min-height: clamp(58px, 8dvh, 75px);
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  border: 1px solid #d8e0ea;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #17263f;
+  font: inherit;
+  font-size: clamp(15.5px, 1.1vw, 17px);
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(15, 32, 62, 0.035);
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.local-broker-button:hover:not(:disabled) {
+  border-color: #afc3da;
+  background: #fbfdff;
+  box-shadow: 0 10px 26px rgba(15, 32, 62, 0.065);
+}
+
+.local-broker-button:focus-visible {
+  outline: 3px solid rgba(40, 105, 168, 0.2);
+  outline-offset: 2px;
+}
+
+.local-broker-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.local-broker-cloud {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: #2869a8;
+}
+
+.local-broker-cloud svg {
+  width: 100%;
+  height: 100%;
+}
+
+.local-broker-note {
+  margin: 0;
+  color: #6b778c;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+  text-align: center;
 }
 
 .google-design-button,

@@ -68,6 +68,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const isPublicPath = to.path === '/login' || to.path.startsWith('/print')
   const isControlEscolarPath = ['/control-escolar', '/avance-control-escolar', '/auditoria-control-escolar'].includes(to.path)
   const isExpiredLogin = to.path === '/login' && loginExpiredQuery(to.query?.session)
+  const isLocalHandoffLogin = to.path === '/login' && String(Array.isArray(to.query?.handoff) ? to.query.handoff[0] : to.query?.handoff || '').toLowerCase() === 'local'
 
   // Permanent dev-only visual lab. Do not remove without replacing docs/visual-testing.md.
   if (isVisualLabPath) {
@@ -90,7 +91,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
         retry: 0,
         headers: process.server ? useRequestHeaders(['cookie']) : undefined
       })
-      if (to.path === '/login') return navigateTo(sessionDefaultRoute(session, defaultRoute))
+      if (to.path === '/login' && !isLocalHandoffLogin) return navigateTo(sessionDefaultRoute(session, defaultRoute))
     } catch (error) {
       if (isAuthSessionFailure(error)) {
         clearRouteAuthCookies()
@@ -101,7 +102,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     }
   }
 
-  if (process.client && email.value && to.path === '/login') {
+  if (process.client && email.value && to.path === '/login' && !isLocalHandoffLogin) {
     return navigateTo(defaultRoute)
   }
 
