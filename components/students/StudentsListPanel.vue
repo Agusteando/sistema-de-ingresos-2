@@ -109,13 +109,16 @@
               </span>
               <span class="student-copy">
                 <strong
+                  class="student-name"
                   :title="student.nombreCompleto"
                   :class="student.estatus !== 'Activo' ? 'line-through decoration-red-400/50' : ''"
                 >
                   {{ student.nombreCompleto }}
                 </strong>
-                <em class="student-meta">
-                  <span>{{ student.matricula }}</span>
+                <span class="student-meta-line">
+                  <em class="student-matricula-chip">
+                    <span>{{ student.matricula }}</span>
+                  </em>
                   <span
                     v-if="student.hasForeignPlantelConcept"
                     class="student-plantel-warning"
@@ -124,11 +127,11 @@
                   >
                     <LucideFlag :size="11" :stroke-width="2.5" />
                   </span>
-                </em>
-                <span class="student-type-line">
-                  <span :class="['student-tipo-chip', resolvedTipoIngreso(student).value]" :title="resolvedTipoIngreso(student).reason">
-                    <component :is="tipoIngresoIcon(student)" :size="11" :stroke-width="2.4" />
-                    {{ resolvedTipoIngresoLabel(student) }}
+                  <span class="student-type-line">
+                    <span :class="['student-tipo-chip', resolvedTipoIngreso(student).value]" :title="resolvedTipoIngreso(student).reason">
+                      <component :is="tipoIngresoIcon(student)" :size="11" :stroke-width="2.4" />
+                      {{ resolvedTipoIngresoLabel(student) }}
+                    </span>
                   </span>
                 </span>
                 <span v-if="student.customSections?.length" class="student-section-badges" :title="sectionBadgeTitle(student)">

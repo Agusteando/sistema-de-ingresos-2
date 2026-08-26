@@ -227,6 +227,7 @@
 
 .student-copy strong {
   display: block;
+  width: 100%;
   max-width: 100%;
   overflow: visible;
   color: #15233c;
@@ -240,8 +241,19 @@
   word-break: normal;
 }
 
-.student-meta {
+.student-meta-line {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.student-matricula-chip {
   display: inline-flex;
+  min-width: 0;
   align-items: center;
   gap: 6px;
   height: clamp(20px, 1.5vw, 22px);
@@ -253,6 +265,7 @@
   font-size: clamp(10px, .78vw, 11px);
   font-style: normal;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .student-type-line {
@@ -477,12 +490,11 @@
   }
 
   .student-copy strong {
-    font-size: 13px;
-    white-space: normal;
     display: block;
+    font-size: 13px;
   }
 
-  .student-meta,
+  .student-matricula-chip,
   .student-tipo-chip {
     min-height: 20px;
     font-size: 9.5px;
@@ -549,6 +561,7 @@
 
   .student-copy strong {
     font-size: 12.5px;
+    overflow-wrap: anywhere;
   }
 
   .student-type-line {
@@ -670,44 +683,48 @@
 }
 
 .student-list-panel.is-compact .student-copy {
-  display: grid;
-  grid-template-columns: minmax(44px, 62px) minmax(0, 76px);
-  grid-template-areas:
-    "name name"
-    "meta type";
-  align-items: center;
-  gap: 3px 6px;
+  display: flex;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
 }
 
 .student-list-panel.is-compact .student-copy strong {
-  grid-area: name;
+  width: 100%;
   font-size: 12.7px;
   line-height: 1.08;
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
 }
 
-.student-list-panel.is-compact .student-meta {
-  grid-area: meta;
-  width: 100%;
-  max-width: 62px;
+.student-list-panel.is-compact .student-meta-line {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.student-list-panel.is-compact .student-matricula-chip {
+  flex: 0 1 auto;
+  max-width: 72px;
   padding-inline: 6px;
-  justify-self: start;
   overflow: hidden;
+}
+
+.student-list-panel.is-compact .student-plantel-warning {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
 }
 
 .student-list-panel.is-compact .student-type-line {
-  grid-area: type;
+  flex: 0 1 auto;
   min-width: 0;
   max-width: 76px;
-  justify-self: start;
   overflow: hidden;
 }
 
-.student-list-panel.is-compact .student-meta,
+.student-list-panel.is-compact .student-matricula-chip,
 .student-list-panel.is-compact .student-tipo-chip {
   min-height: 17px;
   font-size: 8.5px;
@@ -724,7 +741,7 @@
   white-space: nowrap;
 }
 
-.student-list-panel.is-compact .student-meta span,
+.student-list-panel.is-compact .student-matricula-chip span,
 .student-list-panel.is-compact .student-tipo-chip {
   min-width: 0;
   overflow: hidden;
@@ -732,7 +749,7 @@
   white-space: nowrap;
 }
 
-.student-list-panel.is-compact .student-meta span {
+.student-list-panel.is-compact .student-matricula-chip span {
   display: block;
 }
 
@@ -803,16 +820,19 @@
 
   .student-list-panel.is-compact .student-copy strong {
     display: block;
-    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .student-list-panel.is-compact .student-copy {
-    grid-template-columns: minmax(40px, 56px) minmax(0, 70px);
-    gap: 3px 4px;
+    gap: 3px;
   }
 
-  .student-list-panel.is-compact .student-meta {
-    max-width: 56px;
+  .student-list-panel.is-compact .student-meta-line {
+    gap: 3px;
+  }
+
+  .student-list-panel.is-compact .student-matricula-chip {
+    max-width: 64px;
     padding-inline: 5px;
   }
 
@@ -877,7 +897,7 @@
     --student-grade-photo-number-size: 25px;
   }
 
-  .student-list-panel.is-compact .student-meta,
+  .student-list-panel.is-compact .student-matricula-chip,
   .student-list-panel.is-compact .student-tipo-chip {
     min-height: 16px;
     font-size: 8.2px;
@@ -895,14 +915,15 @@
 
 .student-plantel-warning {
   display: inline-grid;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   place-items: center;
-  flex: 0 0 18px;
-  border: 1px solid rgba(183, 126, 38, 0.28);
-  border-radius: 6px;
-  background: rgba(250, 245, 231, 0.92);
+  flex: 0 0 20px;
+  border: 1px solid rgba(183, 126, 38, 0.24);
+  border-radius: 999px;
+  background: #fff9ec;
   color: #9a6b24;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .92);
   font-style: normal;
   vertical-align: middle;
 }

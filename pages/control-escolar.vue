@@ -414,18 +414,20 @@
                         />
                       </span>
                       <span class="student-copy">
-                        <strong :title="student.fullName">{{
+                        <strong class="student-name" :title="student.fullName">{{
                           student.fullName || "Alumno sin nombre"
                         }}</strong>
-                        <span class="student-type-line student-matricula-line">
-                          <span
-                            :class="[
-                              'student-tipo-chip',
-                              'student-matricula-token',
-                              student.overlayExists ? 'interno' : 'externo',
-                            ]"
-                          >
-                            {{ student.matricula }}
+                        <span class="student-meta-line">
+                          <span class="student-type-line student-matricula-line">
+                            <span
+                              :class="[
+                                'student-tipo-chip',
+                                'student-matricula-token',
+                                student.overlayExists ? 'interno' : 'externo',
+                              ]"
+                            >
+                              {{ student.matricula }}
+                            </span>
                           </span>
                         </span>
                       </span>
@@ -8134,6 +8136,7 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-student-row .student-copy strong {
   display: block;
+  width: 100%;
   max-width: 100%;
   overflow: visible;
   color: var(--ce-ink);
@@ -8144,6 +8147,12 @@ onBeforeUnmount(() => {
   white-space: normal;
   overflow-wrap: break-word;
   word-break: normal;
+}
+
+.control-escolar-screen .ce-student-row .student-meta-line {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
 }
 
 .control-escolar-screen .student-tipo-chip {
@@ -16799,18 +16808,18 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
-.control-escolar-screen .student-list-panel.is-compact .ce-student-row .student-copy strong,
-.control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-copy strong {
+.control-escolar-screen .ce-student-row .student-copy strong {
   grid-area: auto;
   width: 100%;
   max-width: 100%;
+  overflow: visible;
   color: #14223b;
   font-size: 13.6px;
   font-weight: 930;
   line-height: 1.12;
   letter-spacing: -0.012em;
   text-align: left;
-  text-wrap: pretty;
+  text-overflow: clip;
   white-space: normal;
   overflow-wrap: break-word;
   word-break: normal;
@@ -16885,7 +16894,7 @@ onBeforeUnmount(() => {
   border-radius: 11px;
 }
 
-@media (max-width: 820px) {
+@container student-list (max-width: 430px) {
   .control-escolar-screen .student-list-panel.is-compact .ce-list-card {
     --student-list-grade-size: 48px;
     --student-list-grade-height: 52px;
@@ -16907,7 +16916,7 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-copy strong {
     width: 100%;
     text-align: left;
-    text-wrap: pretty;
+    overflow-wrap: anywhere;
   }
 
   .control-escolar-screen .ce-student-row .student-type-line,

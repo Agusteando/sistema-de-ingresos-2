@@ -1,1 +1,1 @@
-Agrega generación y envío masivo seguro de Husky Pass
+Mejora la composición visual de alumnos y Control Escolar
