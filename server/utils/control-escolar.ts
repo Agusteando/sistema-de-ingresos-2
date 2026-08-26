@@ -131,6 +131,10 @@ const centralSchemaCache = new Map<
   string,
   { columns: Set<string>; loadedAt: number }
 >();
+const centralColumnRowsCache = new Map<
+  string,
+  { rows: TableColumn[]; loadedAt: number }
+>();
 const SCHEMA_CACHE_MS = 1000 * 60 * 5;
 const MAX_LOCAL_ROWS = 25000;
 const CENTRAL_CHUNK_SIZE = 600;
@@ -353,14 +357,19 @@ const getCentralOptionalTableColumnRows = async (tableName: string) => {
   const normalized = normalizeText(tableName, 80);
   if (!normalized) return [] as TableColumn[];
 
+  const cached = centralColumnRowsCache.get(normalized);
+  if (cached && Date.now() - cached.loadedAt < SCHEMA_CACHE_MS) return cached.rows;
+
   const tableRows = await controlEscolarCentralQuery<any[]>(
     `SHOW TABLES LIKE ${sqlLiteral(normalized)}`,
   );
   if (!tableRows.length) return [] as TableColumn[];
 
-  return await controlEscolarCentralQuery<TableColumn[]>(
+  const rows = await controlEscolarCentralQuery<TableColumn[]>(
     `SHOW COLUMNS FROM ${escapeColumn(normalized)}`,
   );
+  centralColumnRowsCache.set(normalized, { rows, loadedAt: Date.now() });
+  return rows;
 };
 
 const getCentralOptionalTableColumns = async (tableName: string) => {
@@ -1836,6 +1845,29 @@ export const updateControlEscolarHuskyPass = async (
 
   const centralStudent = await fetchFullCentralMatriculaRow(normalizedMatricula);
   const action = normalizeText(body?.action || body?.mode || "generate", 32).toLowerCase();
+  const usersColumns = schema.users;
+  const usersColumnRows = await getCentralOptionalTableColumnRows("users");
+  const existing = await fetchHuskyPassRow(normalizedMatricula, schema);
+  const existingProfile = centralStudentProfilePatch(
+    agentId,
+    normalizedMatricula,
+    centralStudent,
+    existing,
+  );
+
+  // `generate` is intentionally idempotent: it fills only missing Husky Pass
+  // credentials and can never rotate an existing password. Regeneration must
+  // always be an explicit `regenerate` action. This makes bulk generation safe
+  // even when the client has stale account-status data.
+  if (action === "generate" && existingProfile.huskyPassAvailable) {
+    return {
+      success: true,
+      action: "existing",
+      plaintext: existingProfile.huskyPassPlaintext,
+      student: existingProfile,
+    };
+  }
+
   const manualPlaintext = normalizeHuskyPassPlaintext(
     body?.plaintext || body?.password || body?.contraseña || body?.contrasena,
   );
@@ -1849,10 +1881,6 @@ export const updateControlEscolarHuskyPass = async (
       message: "La contraseña Husky Pass debe tener entre 6 y 64 caracteres.",
     });
   }
-
-  const usersColumns = schema.users;
-  const usersColumnRows = await getCentralOptionalTableColumnRows("users");
-  const existing = await fetchHuskyPassRow(normalizedMatricula, schema);
   const contactEmail = firstDisplayEmail(
     centralStudent?.email_padre,
     centralStudent?.correo_padre,
@@ -1939,7 +1967,9 @@ export const updateControlEscolarHuskyPass = async (
   const updatedHuskyPass = await fetchHuskyPassRow(normalizedMatricula, schema);
   return {
     success: true,
-    action: existing ? (action === "manual" ? "manual" : "regenerate") : "generate",
+    action: existing
+      ? (action === "manual" ? "manual" : action === "regenerate" ? "regenerate" : "generate")
+      : "generate",
     plaintext: nextPlaintext,
     student: centralStudentProfilePatch(
       agentId,

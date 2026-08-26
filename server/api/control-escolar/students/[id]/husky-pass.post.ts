@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
       ciclo: String(queryParams.ciclo || queryParams.cicloKey || queryParams.targetCiclo || ''),
       matricula,
       user: auth.user,
-      summary: `${result.action === 'manual' ? 'Cambió' : result.action === 'regenerate' ? 'Regeneró' : 'Generó'} contraseña Husky Pass de ${matricula}`,
+      summary: `${result.action === 'manual' ? 'Cambió' : result.action === 'regenerate' ? 'Regeneró' : result.action === 'existing' ? 'Conservó' : 'Generó'} contraseña Husky Pass de ${matricula}`,
       progress: {
         percent: student.huskyPassAvailable ? 100 : 0,
         total: 1,

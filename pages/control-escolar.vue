@@ -1734,17 +1734,37 @@
       </section>
     </div>
 
-    <ControlEscolarWhatsappSelectionDock
+    <ControlEscolarSelectionDock
       :selected-count="controlBulkSelectedCount"
       :filtered-count="controlFilteredStudentCount"
       :filter-target-count="controlFilteredBulkTargetCount"
       :filter-selected="controlCurrentFilterFullySelected"
       :page-selected="controlCurrentPageFullySelected"
+      :missing-husky-count="controlBulkMissingHuskyCount"
+      :husky-busy="controlHuskyBulkRunning"
       @toggle-filter="toggleControlFilteredSelection"
       @toggle-page="toggleControlCurrentPageSelection"
+      @generate-husky-missing="openControlHuskyGenerateMissing"
+      @send-husky="openControlHuskySend"
       @open-email="openControlEmailBulk"
       @open-whatsapp="openControlWhatsappBulk"
       @clear="clearControlBulkSelection"
+    />
+
+    <ControlEscolarHuskyBulkModal
+      v-if="showControlHuskyBulkModal && controlBulkSelectedCount"
+      :mode="controlHuskyBulkMode"
+      :selected-count="controlBulkSelectedCount"
+      :estimated-missing="controlBulkMissingHuskyCount"
+      :estimated-with-access="controlBulkSelectedCount - controlBulkMissingHuskyCount"
+      :running="controlHuskyBulkRunning"
+      :done="controlHuskyBulkDone"
+      :processed="controlHuskyBulkProcessed"
+      :counts="controlHuskyBulkCounts"
+      :results="controlHuskyBulkResults"
+      :selected-students="controlBulkSelectedStudents"
+      @start="runControlHuskyBulk"
+      @close="closeControlHuskyBulk"
     />
 
     <StudentWhatsappBulkModal
@@ -1960,7 +1980,8 @@ import UiChip from "~/components/ui/UiChip.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.vue";
 import StudentsKpiValue from "~/components/students/StudentsKpiValue.vue";
-import ControlEscolarWhatsappSelectionDock from "~/components/students/ControlEscolarWhatsappSelectionDock.vue";
+import ControlEscolarSelectionDock from "~/components/students/ControlEscolarSelectionDock.vue";
+import ControlEscolarHuskyBulkModal from "~/components/students/ControlEscolarHuskyBulkModal.vue";
 import StudentWhatsappBulkModal from "~/components/students/StudentWhatsappBulkModal.vue";
 import StudentEmailBulkModal from "~/components/students/StudentEmailBulkModal.vue";
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
@@ -2090,6 +2111,20 @@ const controlWhatsappFailedMatriculas = ref([]);
 const showControlEmailBulkModal = ref(false);
 const controlEmailSent = ref(false);
 const controlEmailFailedMatriculas = ref([]);
+const showControlHuskyBulkModal = ref(false);
+const controlHuskyBulkMode = ref("generate_missing");
+const controlHuskyBulkRunning = ref(false);
+const controlHuskyBulkDone = ref(false);
+const controlHuskyBulkProcessed = ref(0);
+const controlHuskyBulkResults = ref([]);
+const controlHuskyBulkCounts = reactive({
+  generated: 0,
+  existing: 0,
+  sent: 0,
+  missingPass: 0,
+  missingEmail: 0,
+  failed: 0,
+});
 const selectedHeaderServices = ref({ matricula: "", servicios: [], raw: "" });
 let selectedHeaderServicesRequestId = 0;
 const kpis = ref(null);
@@ -5661,6 +5696,9 @@ const controlBulkSelectedStudents = computed(() =>
   Array.from(controlBulkSelection.values()),
 );
 const controlBulkSelectedCount = computed(() => controlBulkSelection.size);
+const controlBulkMissingHuskyCount = computed(() =>
+  controlBulkSelectedStudents.value.filter((student) => !student?.huskyPassAvailable).length,
+);
 const controlFilteredStudentsForBulk = computed(() => filteredControlStudents());
 const controlFilteredStudentCount = computed(
   () => controlFilteredStudentsForBulk.value.length,
@@ -5715,9 +5753,11 @@ const toggleControlBulkStudent = (student) => {
 };
 
 const clearControlBulkSelection = () => {
+  if (controlHuskyBulkRunning.value) return;
   controlBulkSelection.clear();
   showControlWhatsappBulkModal.value = false;
   showControlEmailBulkModal.value = false;
+  showControlHuskyBulkModal.value = false;
   controlWhatsappSent.value = false;
   controlEmailSent.value = false;
   controlWhatsappFailedMatriculas.value = [];
@@ -5835,6 +5875,127 @@ const closeControlEmailBulk = () => {
   if (controlEmailFailedMatriculas.value.length) {
     replaceControlBulkSelectionWithMatriculas(controlEmailFailedMatriculas.value);
     show(`${controlBulkSelectedCount.value} alumnos fallidos quedaron seleccionados para reintentar.`);
+  }
+};
+
+
+const CONTROL_HUSKY_BULK_CHUNK_SIZE = 25;
+
+const resetControlHuskyBulkState = (mode) => {
+  controlHuskyBulkMode.value = mode;
+  controlHuskyBulkRunning.value = false;
+  controlHuskyBulkDone.value = false;
+  controlHuskyBulkProcessed.value = 0;
+  controlHuskyBulkResults.value = [];
+  Object.assign(controlHuskyBulkCounts, {
+    generated: 0,
+    existing: 0,
+    sent: 0,
+    missingPass: 0,
+    missingEmail: 0,
+    failed: 0,
+  });
+};
+
+const openControlHuskyBulk = (mode) => {
+  if (!controlBulkSelectedCount.value || controlHuskyBulkRunning.value) return;
+  resetControlHuskyBulkState(mode);
+  showControlHuskyBulkModal.value = true;
+};
+
+const openControlHuskyGenerateMissing = () => openControlHuskyBulk("generate_missing");
+const openControlHuskySend = () => openControlHuskyBulk("send_existing");
+
+const closeControlHuskyBulk = () => {
+  if (controlHuskyBulkRunning.value) return;
+  showControlHuskyBulkModal.value = false;
+};
+
+const addControlHuskyBulkCounts = (counts = {}) => {
+  controlHuskyBulkCounts.generated += Number(counts.generated || 0);
+  controlHuskyBulkCounts.existing += Number(counts.existing || 0);
+  controlHuskyBulkCounts.sent += Number(counts.sent || 0);
+  controlHuskyBulkCounts.missingPass += Number(counts.missingPass || 0);
+  controlHuskyBulkCounts.missingEmail += Number(counts.missingEmail || 0);
+  controlHuskyBulkCounts.failed += Number(counts.failed || 0);
+};
+
+const runControlHuskyBulk = async () => {
+  if (controlHuskyBulkRunning.value || !controlBulkSelectedCount.value || !selectedAgentId.value) return;
+
+  const mode = controlHuskyBulkMode.value;
+  const selectedSnapshot = controlBulkSelectedStudents.value
+    .map((student) => normalizeMatriculaKey(student?.matricula))
+    .filter(Boolean);
+  if (!selectedSnapshot.length) return;
+
+  controlHuskyBulkRunning.value = true;
+  controlHuskyBulkDone.value = false;
+  controlHuskyBulkProcessed.value = 0;
+  controlHuskyBulkResults.value = [];
+  Object.assign(controlHuskyBulkCounts, {
+    generated: 0,
+    existing: 0,
+    sent: 0,
+    missingPass: 0,
+    missingEmail: 0,
+    failed: 0,
+  });
+
+  try {
+    for (let offset = 0; offset < selectedSnapshot.length; offset += CONTROL_HUSKY_BULK_CHUNK_SIZE) {
+      const batch = selectedSnapshot.slice(offset, offset + CONTROL_HUSKY_BULK_CHUNK_SIZE);
+      try {
+        const response = await $fetch("/api/control-escolar/husky-pass/bulk", {
+          method: "POST",
+          query: buildScopeQuery(),
+          body: { action: mode, matriculas: batch },
+        });
+        addControlHuskyBulkCounts(response?.counts);
+        const batchResults = Array.isArray(response?.results) ? response.results : [];
+        controlHuskyBulkResults.value.push(...batchResults);
+        for (const item of batchResults) {
+          if (item?.student) applyHuskyPassStudentUpdate(item.student);
+        }
+      } catch (error) {
+        const message = error?.data?.message || error?.message || "No se pudo procesar este lote.";
+        controlHuskyBulkCounts.failed += batch.length;
+        controlHuskyBulkResults.value.push(
+          ...batch.map((matricula) => ({ matricula, status: "failed", message })),
+        );
+      } finally {
+        controlHuskyBulkProcessed.value += batch.length;
+      }
+    }
+
+    kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
+    controlHuskyBulkDone.value = true;
+
+    if (mode === "generate_missing") {
+      const generated = controlHuskyBulkCounts.generated;
+      const existing = controlHuskyBulkCounts.existing;
+      const failed = controlHuskyBulkCounts.failed;
+      show(
+        failed
+          ? `${generated} accesos generados · ${existing} conservados · ${failed} fallidos.`
+          : `${generated} accesos generados · ${existing} ya existían.`,
+        failed ? "danger" : "success",
+      );
+    } else {
+      const sent = controlHuskyBulkCounts.sent;
+      const skipped = controlHuskyBulkCounts.missingPass + controlHuskyBulkCounts.missingEmail;
+      const failed = controlHuskyBulkCounts.failed;
+      show(
+        failed
+          ? `${sent} accesos enviados · ${skipped} omitidos · ${failed} fallidos.`
+          : skipped
+            ? `${sent} accesos enviados · ${skipped} omitidos sin modificar.`
+            : `${sent} accesos Husky Pass enviados.`,
+        failed ? "danger" : "success",
+      );
+    }
+  } finally {
+    controlHuskyBulkRunning.value = false;
   }
 };
 
@@ -6316,6 +6477,7 @@ const applyHuskyPassStudentUpdate = (student) => {
     huskyPassEmail: student.huskyPassEmail || current?.huskyPassEmail || "",
   };
   replaceControlStudentInIndex(merged);
+  if (controlBulkSelection.has(key)) controlBulkSelection.set(key, merged);
   if (normalizeMatriculaKey(selectedStudent.value?.matricula) === key) {
     selectedStudent.value = merged;
     pendingSelectedStudentRefresh.value = null;

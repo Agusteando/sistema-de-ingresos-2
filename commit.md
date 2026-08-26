@@ -1,1 +1,1 @@
-Desacopla las ediciones externas de Control Escolar del Bridge
+Agrega generación y envío masivo seguro de Husky Pass
