@@ -1,4 +1,4 @@
-import { resolveControlEscolarAuth, runControlEscolar, updateControlEscolarStudent } from '../../../utils/control-escolar'
+import { resolveControlEscolarAuth, updateControlEscolarStudent } from '../../../utils/control-escolar'
 import { logControlEscolarAuditEvent } from '../../../utils/control-escolar-audit'
 
 const cleanFieldName = (value: unknown) => String(value || '').trim().slice(0, 80)
@@ -24,46 +24,47 @@ export default defineEventHandler(async (event) => {
   const matricula = String(event.context.params?.id || '').trim()
   const body = await readBody(event)
 
-  return await runControlEscolar(event, auth.agentId, async () => {
-    try {
-      const result = await updateControlEscolarStudent(auth.agentId, matricula, body, auth.user, queryParams)
-      const fields = editableFieldNames(body)
-      const progressPercent = completionFromStudent(result?.student)
-      logControlEscolarAuditEvent({
-        eventType: 'student_update',
-        plantel: auth.agentId,
-        ciclo: String(queryParams.ciclo || queryParams.cicloKey || queryParams.targetCiclo || ''),
-        matricula,
-        user: auth.user,
-        summary: `Actualizó ${fields.length || 1} campo${fields.length === 1 ? '' : 's'} de ${matricula}`,
-        progress: {
-          percent: progressPercent,
-          total: 1,
-          completed: progressPercent === 100 ? 1 : 0,
-          pending: progressPercent === 100 ? 0 : 1,
-        },
-        source: {
-          base: result?.student?.sourceBase || result?.student?.baseSource || '',
-          flow: 'student_patch_matricula_overlay',
-        },
-        payload: {
-          fields,
-          missingFields: result?.student?.missingFields || [],
-          missingLabels: result?.student?.missingLabels || [],
-          completenessTiers: result?.student?.completenessTiers || null,
-          overlayExists: Boolean(result?.student?.overlayExists),
-          enrollmentState: result?.student?.enrollmentState || '',
-        },
-      }).catch((error: any) => {
-        console.warn('[Control Escolar Audit] Student update audit skipped', error?.message || error)
-      })
-      return result
-    } catch (error: any) {
-      if (error?.statusCode) throw error
-      throw createError({
-        statusCode: error?.name === 'AbortError' ? 504 : 502,
-        message: error?.message || 'No se pudo guardar la ficha de Control Escolar.'
-      })
-    }
-  })
+  try {
+    const result = await updateControlEscolarStudent(auth.agentId, matricula, body, auth.user, queryParams)
+    const student: any = result?.student || null
+    const fields = editableFieldNames(body)
+    const progressPercent = completionFromStudent(student)
+
+    logControlEscolarAuditEvent({
+      eventType: 'student_update',
+      plantel: auth.agentId,
+      ciclo: String(queryParams.ciclo || queryParams.cicloKey || queryParams.targetCiclo || ''),
+      matricula,
+      user: auth.user,
+      summary: `Actualizó ${fields.length || 1} campo${fields.length === 1 ? '' : 's'} de ${matricula}`,
+      progress: {
+        percent: progressPercent,
+        total: 1,
+        completed: progressPercent === 100 ? 1 : 0,
+        pending: progressPercent === 100 ? 0 : 1,
+      },
+      source: {
+        base: student?.sourceBase || student?.baseSource || '',
+        flow: 'student_patch_matricula_overlay',
+      },
+      payload: {
+        fields,
+        missingFields: student?.missingFields || [],
+        missingLabels: student?.missingLabels || [],
+        completenessTiers: student?.completenessTiers || null,
+        overlayExists: Boolean(student?.overlayExists),
+        enrollmentState: student?.enrollmentState || '',
+      },
+    }).catch((error: any) => {
+      console.warn('[Control Escolar Audit] Student update audit skipped', error?.message || error)
+    })
+
+    return result
+  } catch (error: any) {
+    if (error?.statusCode) throw error
+    throw createError({
+      statusCode: error?.name === 'AbortError' ? 504 : 502,
+      message: error?.message || 'No se pudo guardar la ficha de Control Escolar.'
+    })
+  }
 })

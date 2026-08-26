@@ -6105,18 +6105,20 @@ const saveStudent = async () => {
     );
     if (controlStudentMutationState(selectedKey)?.operationId !== operationId) return;
 
-    if (response.student) {
-      replaceControlStudentInIndex(response.student);
-      clearEditDraftForStudent(rollbackStudent.matricula);
-      if (normalizeMatriculaKey(selectedStudent.value?.matricula) === selectedKey) {
-        selectedStudent.value = response.student;
-        pendingSelectedStudentRefresh.value = null;
-        clearEditDraft();
-        resetEditForm(response.student, { restoreDraft: false });
-      }
-      persistCurrentControlStudentsCache();
-      kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
+    // The authoritative write is the external matricula overlay. Keep the
+    // already-normalized optimistic row so base/Bridge projection fields are
+    // not replaced by a partial external-only response.
+    const savedStudent = optimisticStudent;
+    replaceControlStudentInIndex(savedStudent);
+    clearEditDraftForStudent(rollbackStudent.matricula);
+    if (normalizeMatriculaKey(selectedStudent.value?.matricula) === selectedKey) {
+      selectedStudent.value = savedStudent;
+      pendingSelectedStudentRefresh.value = null;
+      clearEditDraft();
+      resetEditForm(savedStudent, { restoreDraft: false });
     }
+    persistCurrentControlStudentsCache();
+    kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
     setControlStudentMutationState(selectedKey, { status: "saved", operationId });
     scheduleControlStudentMutationClear(selectedKey, operationId);
     show("Ficha de Control Escolar guardada.", "success");
@@ -6302,9 +6304,22 @@ const uploadAdvancedFile = async (field, event) => {
 
 const applyHuskyPassStudentUpdate = (student) => {
   if (!student?.matricula) return;
-  replaceControlStudentInIndex(student);
-  selectedStudent.value = student;
-  pendingSelectedStudentRefresh.value = null;
+  const key = normalizeMatriculaKey(student.matricula);
+  const current = normalizeMatriculaKey(selectedStudent.value?.matricula) === key
+    ? selectedStudent.value
+    : controlStudentsIndex.value.find((item) => normalizeMatriculaKey(item?.matricula) === key);
+  const merged = {
+    ...(current || {}),
+    huskyPassUsername: student.huskyPassUsername || "",
+    huskyPassPlaintext: student.huskyPassPlaintext || "",
+    huskyPassAvailable: Boolean(student.huskyPassAvailable),
+    huskyPassEmail: student.huskyPassEmail || current?.huskyPassEmail || "",
+  };
+  replaceControlStudentInIndex(merged);
+  if (normalizeMatriculaKey(selectedStudent.value?.matricula) === key) {
+    selectedStudent.value = merged;
+    pendingSelectedStudentRefresh.value = null;
+  }
   persistCurrentControlStudentsCache();
 };
 
@@ -6333,8 +6348,13 @@ const saveHuskyPassPassword = async (body) => {
     );
     if (response.student) applyHuskyPassStudentUpdate(response.student);
     closeManualHuskyPassForm();
+    kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
     show("Husky Pass actualizado.", "success");
-    await loadKpis();
+    // KPI reconciliation is optional. A Bridge outage must never turn a
+    // successful external Husky Pass write into a user-visible failure.
+    loadKpis().catch((error) => {
+      console.warn("[Control Escolar] KPI refresh skipped after Husky Pass update.", error?.message || error);
+    });
   } catch (error) {
     show(
       error?.data?.message || error?.message || "No se pudo actualizar Husky Pass.",

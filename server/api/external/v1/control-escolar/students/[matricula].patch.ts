@@ -1,7 +1,7 @@
 import { getHeader, getQuery, readBody } from 'h3'
 import { assertAuroraExternalApiToken, setExternalApiResponseHeaders } from '../../../../../utils/external-api-auth'
 import { logControlEscolarAuditEvent } from '../../../../../utils/control-escolar-audit'
-import { runControlEscolar, updateControlEscolarStudent } from '../../../../../utils/control-escolar'
+import { updateControlEscolarStudent } from '../../../../../utils/control-escolar'
 import { sanitizeExternalLiveStudent } from '../../../../../utils/control-escolar-external-live'
 import type { AuthSessionUser } from '../../../../../utils/auth-session'
 
@@ -72,31 +72,29 @@ export default defineEventHandler(async (event) => {
   if (!Object.keys(patch).length) throw createError({ statusCode: 400, statusMessage: 'NO_EDITABLE_FIELDS', message: 'No hay datos familiares para actualizar.' })
 
   const actor = actorFromRequest(event, plantel)
-  return await runControlEscolar(event, plantel, async () => {
-    const result = await updateControlEscolarStudent(plantel, matricula, patch, actor, { ...query, ciclo, cicloKey: ciclo })
-    const student = result?.student ? sanitizeExternalLiveStudent(result.student) : null
+  const result = await updateControlEscolarStudent(plantel, matricula, patch, actor, { ...query, ciclo, cicloKey: ciclo })
+  const student = result?.student ? sanitizeExternalLiveStudent(result.student) : null
 
-    logControlEscolarAuditEvent({
-      eventType: 'student_update',
+  logControlEscolarAuditEvent({
+    eventType: 'student_update',
+    plantel,
+    ciclo,
+    matricula,
+    user: actor,
+    summary: `Mercadotecnia actualizó información familiar de ${matricula}`,
+    source: { base: (student as any)?.sourceBase || (student as any)?.baseSource || '', flow: 'husky_pass_marketing_parent_update' },
+    payload: { fields: Object.keys(patch), client: 'husky-pass-marketing' }
+  }).catch(() => null)
+
+  return {
+    success: true,
+    data: student,
+    meta: {
+      source: 'aurora-control-escolar',
+      freshness: 'fresh',
       plantel,
       ciclo,
-      matricula,
-      user: actor,
-      summary: `Mercadotecnia actualizó información familiar de ${matricula}`,
-      source: { base: (student as any)?.sourceBase || (student as any)?.baseSource || '', flow: 'husky_pass_marketing_parent_update' },
-      payload: { fields: Object.keys(patch), client: 'husky-pass-marketing' }
-    }).catch(() => null)
-
-    return {
-      success: true,
-      data: student,
-      meta: {
-        source: 'aurora-control-escolar',
-        freshness: 'fresh',
-        plantel,
-        ciclo,
-        generatedAt: new Date().toISOString()
-      }
+      generatedAt: new Date().toISOString()
     }
-  })
+  }
 })

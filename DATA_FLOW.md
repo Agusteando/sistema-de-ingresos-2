@@ -96,7 +96,7 @@ Control Escolar must not use browser student cache as an authoritative source.
 
 Control Escolar must not write to the bridge/local `base` as part of normal Control Escolar editing.
 
-Control Escolar writes should go to external `matricula` only, after confirming that the matrícula is inside the current valid scope.
+Control Escolar writes go to external `matricula` only. The valid student scope is established by the read/list flow; write endpoints keep user/plantel authorization but must not re-query Bridge to revalidate a student that is already being edited.
 
 ```txt
 Control Escolar edit

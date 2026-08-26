@@ -9,10 +9,7 @@ import {
   normalizePlantel,
 } from '../../../utils/auth-session'
 import { logControlEscolarAuditEvent } from '../../../utils/control-escolar-audit'
-import {
-  runControlEscolar,
-  updateControlEscolarStudent,
-} from '../../../utils/control-escolar'
+import { updateControlEscolarStudent } from '../../../utils/control-escolar'
 
 const FAMILY_EMAIL_FIELDS = ['emailPadre', 'emailMadre'] as const
 const VALID_PLANTELES = new Set(PLANTELES_LIST)
@@ -90,39 +87,37 @@ export default defineEventHandler(async (event) => {
   const plantel = resolveFinancialPlantel(user, body?.plantel || body?.agentId)
   const ciclo = normalizeCicloKey(body?.ciclo || body?.cicloKey || body?.targetCiclo)
 
-  return await runControlEscolar(event, plantel, async () => {
-    const result = await updateControlEscolarStudent(
-      plantel,
-      matricula,
-      patch,
-      user,
-      { ciclo, cicloKey: ciclo, targetCiclo: ciclo },
-    )
-    const updatedStudent: any = result?.student || null
+  const result = await updateControlEscolarStudent(
+    plantel,
+    matricula,
+    patch,
+    user,
+    { ciclo, cicloKey: ciclo, targetCiclo: ciclo },
+  )
+  const updatedStudent: any = result?.student || null
 
-    logControlEscolarAuditEvent({
-      eventType: 'student_update',
-      plantel,
-      ciclo,
-      matricula,
-      user,
-      summary: `Administración actualizó correos familiares de ${matricula}`,
-      source: {
-        base: updatedStudent?.sourceBase || updatedStudent?.baseSource || '',
-        flow: 'financial_parent_email_update',
-      },
-      payload: {
-        fields: providedFields,
-        actorDomain: 'financial',
-      },
-    }).catch((error: any) => {
-      console.warn('[Control Escolar Audit] Financial family email audit skipped', error?.message || error)
-    })
-
-    return {
-      success: true,
-      emails: patch,
-      student: updatedStudent,
-    }
+  logControlEscolarAuditEvent({
+    eventType: 'student_update',
+    plantel,
+    ciclo,
+    matricula,
+    user,
+    summary: `Administración actualizó correos familiares de ${matricula}`,
+    source: {
+      base: updatedStudent?.sourceBase || updatedStudent?.baseSource || '',
+      flow: 'financial_parent_email_update',
+    },
+    payload: {
+      fields: providedFields,
+      actorDomain: 'financial',
+    },
+  }).catch((error: any) => {
+    console.warn('[Control Escolar Audit] Financial family email audit skipped', error?.message || error)
   })
+
+  return {
+    success: true,
+    emails: patch,
+    student: updatedStudent,
+  }
 })

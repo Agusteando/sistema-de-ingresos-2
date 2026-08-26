@@ -1,1 +1,1 @@
-Restaura el cambio directo entre Aurora En la nube y Aurora Local
+Desacopla las ediciones externas de Control Escolar del Bridge

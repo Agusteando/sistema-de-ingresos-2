@@ -1565,6 +1565,156 @@ const fetchFullCentralMatriculaRow = async (matricula: string) => {
   return rows[0] || null;
 };
 
+
+const centralStudentProfilePatch = (
+  agentId: string,
+  matricula: string,
+  row: any = null,
+  huskyPass: any = null,
+) => {
+  const normalizedMatricula = normalizeText(matricula, 64);
+  const nombres = normalizeNameText(row?.nombres);
+  const apellidoPaterno = normalizeNameText(row?.apellido_paterno);
+  const apellidoMaterno = normalizeNameText(row?.apellido_materno);
+  const fullName = normalizeNameText(firstText(
+    [apellidoPaterno, apellidoMaterno, nombres].filter(Boolean).join(" "),
+    row?.nombre_completo_alumno,
+    row?.nombre_verificado,
+    normalizedMatricula,
+  ));
+  const curp = firstUpper(row?.curp).slice(0, 18);
+  const derivedCurpIdentity = inferMexicanCurpIdentity(curp);
+  const fatherName = normalizeNameText(firstText(
+    [
+      row?.nombre_padre,
+      row?.apellido_paterno_padre,
+      row?.apellido_materno_padre,
+    ].map(normalizeNameText).filter(Boolean).join(" "),
+    row?.nombre_padre_completo,
+    row?.padre,
+    row?.tutor,
+    row?.padre_tutor,
+  ));
+  const motherName = normalizeNameText(firstText(
+    [
+      row?.nombre_madre,
+      row?.apellido_paterno_madre,
+      row?.apellido_materno_madre,
+    ].map(normalizeNameText).filter(Boolean).join(" "),
+    row?.nombre_madre_completo,
+    row?.madre,
+  ));
+  const baja = truthyBaja(row?.baja) ? 1 : 0;
+  const address = firstText(row?.direccion, row?.domicilio, row?.domicilio_calle);
+  const huskyPassUsername = normalizeText(huskyPass?.username, 64);
+  const huskyPassPlaintext = normalizeText(huskyPass?.plaintext, 255);
+
+  return {
+    agentId: normalizePlantel(agentId),
+    plantel: normalizePlantel(row?.plantel || agentId) || normalizePlantel(agentId),
+    matricula: normalizedMatricula,
+    studentId: normalizedMatricula,
+    nombres,
+    apellidoPaterno,
+    apellidoMaterno,
+    fullName,
+    nombreCompleto: fullName,
+    nombreCompletoAlumno: normalizeNameText(firstText(row?.nombre_completo_alumno, fullName)),
+    nombreVerificado: normalizeNameText(row?.nombre_verificado),
+    curp,
+    fechaNacimiento: derivedCurpIdentity.fechaNacimiento || normalizeText(row?.fecha_nacimiento),
+    sexo: normalizeText(row?.sexo) || derivedCurpIdentity.sexo || "",
+    lugarNacimiento: normalizeText(row?.lugar_nacimiento),
+    talla: normalizeText(row?.talla),
+    peso: normalizeText(row?.peso),
+    tipoSangre: normalizeText(row?.tipo_sangre),
+    alergias: normalizeText(row?.alergias),
+    baja,
+    status: baja ? "Baja" : "Activo",
+    motivoBaja: normalizeText(row?.motivo_baja, 500),
+    categoriaBaja: normalizeText(row?.categoria_baja),
+    seguimientoBaja: normalizeText(row?.seguimiento_baja, 500),
+    fatherName,
+    motherName,
+    guardianName: normalizeNameText(firstText(fatherName, motherName)),
+    nombrePadre: normalizeNameText(firstText(row?.nombre_padre, row?.nombre_padre_completo, row?.padre, row?.tutor, row?.padre_tutor)),
+    apellidoPaternoPadre: normalizeNameText(row?.apellido_paterno_padre),
+    apellidoMaternoPadre: normalizeNameText(row?.apellido_materno_padre),
+    nombreMadre: normalizeNameText(firstText(row?.nombre_madre, row?.nombre_madre_completo, row?.madre)),
+    apellidoPaternoMadre: normalizeNameText(row?.apellido_paterno_madre),
+    apellidoMaternoMadre: normalizeNameText(row?.apellido_materno_madre),
+    telefonoPadre: firstText(row?.telefono_padre, row?.celular_padre),
+    telefonoMadre: firstText(row?.telefono_madre, row?.celular_madre),
+    emailPadre: firstDisplayEmail(row?.email_padre, row?.correo_padre),
+    emailMadre: firstDisplayEmail(row?.email_madre, row?.correo_madre),
+    email: firstDisplayEmail(row?.email_padre, row?.correo_padre, row?.email_madre, row?.correo_madre),
+    lugarTrabajoPadre: normalizeText(row?.lugar_trabajo_padre),
+    puestoPadre: normalizeText(row?.puesto_padre),
+    estadoCivilPadre: normalizeText(row?.estado_civil_padre),
+    fechaNacimientoPadre: normalizeText(row?.fecha_nacimiento_padre),
+    inePadre: normalizeText(row?.ine_padre),
+    curpPadre: normalizeText(row?.curp_padre),
+    lugarTrabajoMadre: normalizeText(row?.lugar_trabajo_madre),
+    puestoMadre: normalizeText(row?.puesto_madre),
+    estadoCivilMadre: normalizeText(row?.estado_civil_madre),
+    fechaNacimientoMadre: normalizeText(row?.fecha_nacimiento_madre),
+    ineMadre: normalizeText(row?.ine_madre),
+    curpMadre: normalizeText(row?.curp_madre),
+    servicio: normalizeText(row?.servicio),
+    servicioNotas: normalizeText(row?.servicio_notas, 1000),
+    address,
+    direccion: address,
+    domicilioCalle: normalizeText(row?.domicilio_calle),
+    domicilioNumero: normalizeText(row?.domicilio_num || row?.domicio_num),
+    domicilioNum: normalizeText(row?.domicilio_num || row?.domicio_num),
+    domicioNum: normalizeText(row?.domicio_num || row?.domicilio_num),
+    domicilioColonia: normalizeText(row?.domicilio_colonia),
+    domicilioCp: normalizeText(row?.domicilio_cp),
+    domicilioMunicipio: normalizeText(row?.domicilio_municipio),
+    certificadoMedicoAdjunto: normalizeText(row?.certificado_medico_adjunto, 2048),
+    certificadoVacunacionCovid19Adjunto: normalizeText(row?.certificado_vacunacion_covid19_adjunto, 2048),
+    actaNacimientoAdjunta: normalizeText(row?.acta_nacimiento_adjunta, 2048),
+    curpAlumnoAdjunto: normalizeText(row?.curp_alumno_adjunto, 2048),
+    certificadoPrimariaAdjunto: normalizeText(row?.certificado_primaria_adjunto, 2048),
+    boletaSextoPrimariaAdjunta: normalizeText(row?.boleta_sexto_primaria_adjunta, 2048),
+    boletaPrimeroSecundariaAdjunta: normalizeText(row?.boleta_primero_secundaria_adjunta, 2048),
+    boletaSegundoSecundariaAdjunta: normalizeText(row?.boleta_segundo_secundaria_adjunta, 2048),
+    overlayExists: Boolean(row?.matricula),
+    updatedAt: firstText(row?.updated_at, row?.updatedAt, row?.fecha_actualizacion, row?.created_at) || null,
+    huskyPassUsername,
+    huskyPassPlaintext,
+    huskyPassAvailable: Boolean(huskyPassUsername && huskyPassPlaintext),
+    huskyPassEmail: firstLower(huskyPass?.email, huskyPass?.correo),
+  };
+};
+
+export const fetchControlEscolarExternalStudentProfile = async (
+  agentId: string,
+  matricula: string,
+) => {
+  const normalizedMatricula = normalizeText(matricula, 64);
+  if (!normalizedMatricula) {
+    throw createError({ statusCode: 400, message: "Matrícula inválida." });
+  }
+
+  const schema = await getControlEscolarCentralOnlySchema(agentId, {
+    requireCentral: true,
+  });
+  const row = await fetchFullCentralMatriculaRow(normalizedMatricula);
+  const huskyPass = schema.usersAvailable
+    ? await fetchHuskyPassRow(normalizedMatricula, schema)
+    : null;
+
+  if (!row && !huskyPass) {
+    throw createError({
+      statusCode: 404,
+      message: "El alumno no tiene información externa registrada.",
+    });
+  }
+
+  return centralStudentProfilePatch(agentId, normalizedMatricula, row, huskyPass);
+};
+
 export const fetchControlEscolarStudentDetail = async (
   agentId: string,
   matricula: string,
@@ -1655,14 +1805,6 @@ const generateHuskyPassPassword = () =>
 
 const normalizeHuskyPassPlaintext = (value: unknown) => normalizeText(value, 64);
 
-const pickHuskyPassContactEmail = (student: any) =>
-  firstDisplayEmail(
-    student?.emailPadre,
-    student?.emailMadre,
-    student?.email,
-    student?.huskyPassEmail,
-  ).toLowerCase();
-
 const columnValueMode = (column: TableColumn | undefined) => ({
   nullable: String(column?.Null || "").toUpperCase() === "YES",
   hasDefault: column?.Default !== null && column?.Default !== undefined,
@@ -1679,10 +1821,8 @@ export const updateControlEscolarHuskyPass = async (
     throw createError({ statusCode: 400, message: "Matrícula inválida." });
   }
 
-  const currentStudent = await fetchControlEscolarStudentDetail(
-    agentId,
-    normalizedMatricula,
-  );
+  // Husky Pass lives in the external/central users table. This write path must
+  // never depend on the plantel Bridge or on the local base table being online.
   const schema = await getControlEscolarCentralOnlySchema(agentId, {
     requireCentral: true,
   });
@@ -1694,6 +1834,7 @@ export const updateControlEscolarHuskyPass = async (
     });
   }
 
+  const centralStudent = await fetchFullCentralMatriculaRow(normalizedMatricula);
   const action = normalizeText(body?.action || body?.mode || "generate", 32).toLowerCase();
   const manualPlaintext = normalizeHuskyPassPlaintext(
     body?.plaintext || body?.password || body?.contraseña || body?.contrasena,
@@ -1712,7 +1853,24 @@ export const updateControlEscolarHuskyPass = async (
   const usersColumns = schema.users;
   const usersColumnRows = await getCentralOptionalTableColumnRows("users");
   const existing = await fetchHuskyPassRow(normalizedMatricula, schema);
-  const contactEmail = pickHuskyPassContactEmail(currentStudent);
+  const contactEmail = firstDisplayEmail(
+    centralStudent?.email_padre,
+    centralStudent?.correo_padre,
+    centralStudent?.email_madre,
+    centralStudent?.correo_madre,
+    existing?.email,
+    existing?.correo,
+  ).toLowerCase();
+  const displayName = normalizeNameText(firstText(
+    [
+      centralStudent?.apellido_paterno,
+      centralStudent?.apellido_materno,
+      centralStudent?.nombres,
+    ].map(normalizeNameText).filter(Boolean).join(" "),
+    centralStudent?.nombre_completo_alumno,
+    centralStudent?.nombre_verificado,
+    normalizedMatricula,
+  ));
   const writeEntries: Array<{ column: string; value?: string; raw?: string }> = [
     { column: "plaintext", value: nextPlaintext },
   ];
@@ -1757,7 +1915,7 @@ export const updateControlEscolarHuskyPass = async (
       } else if (normalizedField.includes("password") || normalizedField.includes("pass")) {
         insertEntries.push({ column: column.Field, value: nextPlaintext });
       } else if (normalizedField.includes("name") || normalizedField.includes("nombre")) {
-        insertEntries.push({ column: column.Field, value: currentStudent.fullName || normalizedMatricula });
+        insertEntries.push({ column: column.Field, value: displayName || normalizedMatricula });
       } else if (normalizedField.includes("role") || normalizedField.includes("rol")) {
         insertEntries.push({ column: column.Field, value: "student" });
       } else if (normalizedField.includes("created") || normalizedField.includes("updated")) {
@@ -1778,15 +1936,17 @@ export const updateControlEscolarHuskyPass = async (
     );
   }
 
-  const updatedStudent = await fetchControlEscolarStudentDetail(
-    agentId,
-    normalizedMatricula,
-  );
+  const updatedHuskyPass = await fetchHuskyPassRow(normalizedMatricula, schema);
   return {
     success: true,
     action: existing ? (action === "manual" ? "manual" : "regenerate") : "generate",
     plaintext: nextPlaintext,
-    student: updatedStudent,
+    student: centralStudentProfilePatch(
+      agentId,
+      normalizedMatricula,
+      centralStudent,
+      updatedHuskyPass,
+    ),
   };
 };
 
@@ -3296,35 +3456,20 @@ export const updateControlEscolarStudent = async (
   matricula: string,
   body: MatriculaPatch,
   user: AuthSessionUser,
-  filters: any = {},
+  _filters: any = {},
 ) => {
   const normalizedMatricula = normalizeText(matricula, 64);
   if (!normalizedMatricula) {
     throw createError({ statusCode: 400, message: "Matrícula inválida." });
   }
 
+  // Profile data belongs to the external/central matricula table. A student
+  // selected in Control Escolar must never become uneditable because the
+  // plantel Bridge changed, went offline, or a cycle projection no longer
+  // returns the same row between read and save.
   const schema = await getControlEscolarCentralOnlySchema(agentId, {
     requireCentral: true,
   });
-  const scopeFilters = {
-    ciclo: filters.ciclo,
-    cicloKey: filters.cicloKey,
-    targetCiclo: filters.targetCiclo,
-    concepts: filters.concepts,
-    enrollmentConcepts: filters.enrollmentConcepts,
-  };
-  const visibleScope = await fetchAllNormalizedStudents(agentId, scopeFilters);
-  const normalizedMatriculaKey = canonicalMatriculaKey(normalizedMatricula);
-  const visibleStudent = visibleScope.students.find(
-    (student) => canonicalMatriculaKey(student.matricula) === normalizedMatriculaKey,
-  );
-  if (!visibleStudent) {
-    throw createError({
-      statusCode: 403,
-      message:
-        "El alumno no está dentro del alcance visible de Control Escolar para este ciclo y plantel.",
-    });
-  }
 
   const restrictedDirectFields = Object.keys(body || {}).filter((field) =>
     CONTROL_ESCOLAR_DIRECT_RESTRICTED_FIELDS.has(field),
@@ -3354,24 +3499,25 @@ export const updateControlEscolarStudent = async (
     normalizedMatricula,
     editableEntries,
     user,
-    visibleStudent.plantel || visibleStudent.basePlantel || agentId,
+    agentId,
     schema,
   );
 
-  const result = await fetchControlEscolarStudents(agentId, {
-    ...scopeFilters,
-    search: normalizedMatricula,
-    page: 1,
-    limit: 10,
-  });
+  const [updatedRow, huskyPass] = await Promise.all([
+    fetchFullCentralMatriculaRow(normalizedMatricula),
+    schema.usersAvailable
+      ? fetchHuskyPassRow(normalizedMatricula, schema)
+      : Promise.resolve(null),
+  ]);
+
   return {
     success: true,
-    student:
-      result.data.find(
-        (student) => canonicalMatriculaKey(student.matricula) === normalizedMatriculaKey,
-      ) ||
-      result.data[0] ||
-      null,
+    student: centralStudentProfilePatch(
+      agentId,
+      normalizedMatricula,
+      updatedRow,
+      huskyPass,
+    ),
   };
 };
 
