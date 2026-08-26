@@ -1,5 +1,6 @@
 import { PLANTELES_LIST } from '../../utils/constants'
 import { normalizeCicloKey, formatCicloLabel } from '../../shared/utils/ciclo'
+import { normalizeCurp } from '../../shared/utils/curp'
 import { resolveProjectedAmount } from './monto-final'
 import { resolvePaymentConceptSnapshot } from './payment-concept'
 import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
@@ -10,6 +11,7 @@ import {
   runRawSqlStatement,
   runWithBridgeAgentId
 } from './db'
+import { fetchCentralMatriculaOverlay } from './central-matricula-overlay'
 import {
   findTallerServicioForConcept,
   readCentralMatriculaServicios,
@@ -269,6 +271,36 @@ const readMappedService = async (conceptoId: unknown, ciclo: string, plantel: un
   }
 }
 
+const readBaseCurp = async (matricula: string) => {
+  try {
+    const rows = await query<Array<{ curp?: unknown }>>(`
+      SELECT curp
+      FROM base
+      WHERE UPPER(TRIM(matricula)) = ?
+      LIMIT 1
+    `, [matricula])
+    return normalizeCurp(rows[0]?.curp)
+  } catch {
+    // Some bridge/base variants may not expose CURP. The account endpoint must
+    // remain usable and can still resolve it from the central matricula table.
+    return ''
+  }
+}
+
+const readAvailableStudentCurp = async (matricula: string) => {
+  const [centralResult, baseResult] = await Promise.allSettled([
+    fetchCentralMatriculaOverlay(matricula),
+    readBaseCurp(matricula)
+  ])
+
+  const centralCurp = centralResult.status === 'fulfilled'
+    ? normalizeCurp(centralResult.value?.student?.curp)
+    : ''
+  const baseCurp = baseResult.status === 'fulfilled' ? normalizeCurp(baseResult.value) : ''
+
+  return centralCurp || baseCurp || null
+}
+
 const readCentralServices = async (matricula: string) => {
   try {
     const current = await readCentralMatriculaServicios(matricula)
@@ -436,8 +468,11 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
       plantelPago: row.plantel_pago ? text(row.plantel_pago, 40) : null
     }))
 
-  const centralServices = await readCentralServices(matricula)
-  const ciclos = await readAvailableCyclesForStudent(matricula, ciclo)
+  const [centralServices, ciclos, curp] = await Promise.all([
+    readCentralServices(matricula),
+    readAvailableCyclesForStudent(matricula, ciclo),
+    readAvailableStudentCurp(matricula)
+  ])
   const servicios = uniqueServices([...mappedServices, ...centralServices])
   const balanceDue = money(conceptos.reduce((sum, item) => sum + Number(item.saldo || 0), 0))
   const overdueBalance = money(conceptos.filter(item => item.estatus === 'overdue').reduce((sum, item) => sum + Number(item.saldo || 0), 0))
@@ -460,6 +495,7 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
     },
     alumno: {
       nombre: text(student.nombreCompleto, 180) || null,
+      curp,
       plantel: text(student.plantel, 40) || null,
       nivel: academic.nivel || null,
       grado: academic.grado || null,

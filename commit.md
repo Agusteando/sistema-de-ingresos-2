@@ -1,1 +1,1 @@
-Mejora la composición visual de alumnos y Control Escolar
+Expone la CURP disponible en la API de Husky Pass
