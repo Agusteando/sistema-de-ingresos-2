@@ -1,1 +1,1 @@
-Expone la CURP disponible en la API de Husky Pass
+Expone CURP desde Bridge cuando falta en matrícula

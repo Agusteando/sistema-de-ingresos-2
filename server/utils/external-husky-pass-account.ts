@@ -271,7 +271,7 @@ const readMappedService = async (conceptoId: unknown, ciclo: string, plantel: un
   }
 }
 
-const readBaseCurp = async (matricula: string) => {
+const readBaseCurpInCurrentSource = async (matricula: string) => {
   try {
     const rows = await query<Array<{ curp?: unknown }>>(`
       SELECT curp
@@ -281,24 +281,40 @@ const readBaseCurp = async (matricula: string) => {
     `, [matricula])
     return normalizeCurp(rows[0]?.curp)
   } catch {
-    // Some bridge/base variants may not expose CURP. The account endpoint must
-    // remain usable and can still resolve it from the central matricula table.
+    // CURP enrichment must never make the account endpoint unavailable.
     return ''
   }
 }
 
-const readAvailableStudentCurp = async (matricula: string) => {
-  const [centralResult, baseResult] = await Promise.allSettled([
-    fetchCentralMatriculaOverlay(matricula),
-    readBaseCurp(matricula)
-  ])
+const readBridgeBaseCurp = async (agentId: string, matricula: string) => {
+  const normalizedAgentId = upper(agentId, 40)
+  if (!normalizedAgentId || getDbTransport() !== 'bridge') return ''
 
-  const centralCurp = centralResult.status === 'fulfilled'
-    ? normalizeCurp(centralResult.value?.student?.curp)
-    : ''
-  const baseCurp = baseResult.status === 'fulfilled' ? normalizeCurp(baseResult.value) : ''
+  try {
+    return await runWithBridgeAgentId(normalizedAgentId, async () => await readBaseCurpInCurrentSource(matricula))
+  } catch {
+    return ''
+  }
+}
 
-  return centralCurp || baseCurp || null
+const readAvailableStudentCurp = async (matricula: string, source?: { tipo?: unknown; agentId?: unknown }) => {
+  let centralCurp = ''
+  try {
+    const central = await fetchCentralMatriculaOverlay(matricula)
+    centralCurp = normalizeCurp(central?.student?.curp)
+  } catch {
+    // Central matricula is primary, but Bridge remains a valid enrichment source.
+  }
+
+  if (centralCurp) return centralCurp
+
+  const sourceType = text(source?.tipo, 20).toLowerCase()
+  const sourceAgentId = upper(source?.agentId, 40)
+  const bridgeCurp = sourceType === 'bridge' && sourceAgentId
+    ? await readBridgeBaseCurp(sourceAgentId, matricula)
+    : await readBaseCurpInCurrentSource(matricula)
+
+  return normalizeCurp(bridgeCurp) || null
 }
 
 const readCentralServices = async (matricula: string) => {
@@ -471,7 +487,7 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
   const [centralServices, ciclos, curp] = await Promise.all([
     readCentralServices(matricula),
     readAvailableCyclesForStudent(matricula, ciclo),
-    readAvailableStudentCurp(matricula)
+    readAvailableStudentCurp(matricula, source)
   ])
   const servicios = uniqueServices([...mappedServices, ...centralServices])
   const balanceDue = money(conceptos.reduce((sum, item) => sum + Number(item.saldo || 0), 0))

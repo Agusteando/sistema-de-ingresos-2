@@ -1,6 +1,7 @@
 import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
 import { normalizePlantel } from './auth-session'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { normalizeCurp } from '../../shared/utils/curp'
 import { normalizeServicioClave, parseServiciosCsv } from '../../shared/utils/talleresServicios'
 
 const CANONICAL_PLANTELES = ['PREEM', 'PREET', 'GM', 'PM', 'PT', 'SM', 'ST'] as const
@@ -60,6 +61,7 @@ const sanitizeStudent = (studentValue: any) => {
   ]) delete student[key]
 
   student.matricula = clean(student.matricula, 64).toUpperCase()
+  student.curp = normalizeCurp(student.curp || student.baseCurp) || null
   student.fullName = clean(student.fullName || student.nombreCompleto, 255)
   student.plantel = normalizeExternalLivePlantel(student.plantel || student.basePlantel)
   student.display = {
