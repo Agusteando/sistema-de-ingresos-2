@@ -319,7 +319,7 @@
           </template>
 
           <div class="missing-report-note">
-            Un alumno cuenta como “con concepto” si tiene una asignación activa en el ciclo o evidencia de pago vigente para ese mismo concepto.
+            “Sin concepto” usa la misma identidad financiera que “Con concepto”: se considera presente cuando existe un movimiento de ese concepto en el ciclo seleccionado.
           </div>
         </aside>
       </div>
@@ -571,6 +571,9 @@ const emptyConceptReport = () => ({
     inscritos: 0,
     completos: 0,
     sinNinguno: 0,
+    conceptosEsperados: 0,
+    conceptosPresentes: 0,
+    conceptosFaltantes: 0,
     asignacionesEsperadas: 0,
     asignacionesPresentes: 0,
     asignacionesFaltantes: 0,

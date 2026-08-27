@@ -2505,6 +2505,14 @@ const buildCatalogs = (students: ControlEscolarStudentRow[]) => {
   };
 };
 
+export const fetchControlEscolarEnrolledStudents = async (
+  agentId: string,
+  filters: any = {},
+): Promise<ControlEscolarStudentRow[]> => {
+  const loaded = await fetchAllNormalizedStudents(agentId, filters)
+  return loaded.students.filter((student) => student.enrollmentState === 'inscrito')
+}
+
 export const fetchControlEscolarStudents = async (
   agentId: string,
   filters: any,

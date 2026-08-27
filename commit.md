@@ -1,1 +1,1 @@
-Corrige la población inscrita del reporte por concepto usando la configuración institucional y evidencia real del ciclo
+Alinea el reporte sin concepto con inscritos y movimientos financieros del ciclo

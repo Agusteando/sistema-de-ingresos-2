@@ -73,7 +73,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         `Plantel: ${result.filtros?.plantel || '—'} | Ciclo: ${result.filtros?.cicloLabel || result.filtros?.ciclo || '—'}`,
         `Inscritos revisados: ${result.resumen?.inscritos || 0} | Alumnos con faltantes: ${result.resumen?.alumnos || 0}`,
         `Selección completa: ${result.resumen?.completos || 0} | Cobertura: ${Number(result.resumen?.cobertura || 0).toFixed(1)}%`,
-        `Asignaciones faltantes: ${result.resumen?.asignacionesFaltantes || 0}`,
+        `Conceptos faltantes: ${result.resumen?.conceptosFaltantes ?? result.resumen?.asignacionesFaltantes ?? 0}`,
         'La población incluye únicamente alumnos con estado de inscripción "inscrito" para el ciclo seleccionado.',
       ],
       headers: [

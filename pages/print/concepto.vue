@@ -170,7 +170,7 @@
       </div>
       <div v-else class="mt-auto border-t border-gray-300 pt-4 text-[10px] text-gray-600 flex justify-between gap-6">
         <span>Plantel: {{ reportPlantel || '—' }} · {{ cycleLabel }}</span>
-        <span>Asignaciones faltantes: {{ resumen.asignacionesFaltantes || 0 }}</span>
+        <span>Conceptos faltantes: {{ resumen.conceptosFaltantes ?? resumen.asignacionesFaltantes ?? 0 }}</span>
       </div>
     </div>
   </div>
@@ -188,7 +188,7 @@ definePageMeta({ layout: false })
 const route = useRoute()
 const rows = ref([])
 const conceptos = ref([])
-const resumen = ref({ total: 0, totalRegistrado: 0, totalNoAplicado: 0, transacciones: 0, alumnos: 0, formasPago: [], inscritos: 0, completos: 0, cobertura: 0, asignacionesFaltantes: 0 })
+const resumen = ref({ total: 0, totalRegistrado: 0, totalNoAplicado: 0, transacciones: 0, alumnos: 0, formasPago: [], inscritos: 0, completos: 0, cobertura: 0, conceptosFaltantes: 0, asignacionesFaltantes: 0 })
 const reportMode = ref('movements')
 const reportCycleLabel = ref('')
 const activeUserName = useCookie('auth_name').value || 'Usuario'
