@@ -1,1 +1,1 @@
-Centraliza el ciclo escolar actual y la proyección académica para integraciones
+Sincronizar catálogo central de conceptos hacia Bridge al actualizar

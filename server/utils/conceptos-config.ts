@@ -44,6 +44,8 @@ type ConceptRow = {
   meses?: number | string | null
   plazo?: string | null
   eventual?: number | boolean | null
+  description?: string | null
+  plantel?: string | null
   image_url?: string | null
   imagen_url?: string | null
 }
@@ -118,6 +120,8 @@ const normalizeConceptRow = (row: any): ConceptRow => ({
   meses: row.meses ?? null,
   plazo: row.plazo ?? null,
   eventual: row.eventual ?? null,
+  description: normalizeText(row.description || row.descripcion || '', 1000) || null,
+  plantel: normalizePlantel(row.plantel || '') || null,
   image_url: normalizeText(row.image_url || row.imagen_url || row.imagen || row.foto_url || '', 1000) || null
 })
 
@@ -305,12 +309,18 @@ export const readCentralConceptos = async () => {
   const selectParts = [
     'id',
     'concepto',
-    columns.has('ciclo') ? 'CAST(ciclo AS CHAR) AS ciclo_escolar' : `'' AS ciclo_escolar`,
+    columns.has('ciclo')
+      ? 'CAST(ciclo AS CHAR) AS ciclo_escolar'
+      : (columns.has('ciclo_escolar') ? 'CAST(ciclo_escolar AS CHAR) AS ciclo_escolar' : `'' AS ciclo_escolar`),
     optionalCentralColumn(columns, 'costo', 'NULL'),
-    optionalCentralColumn(columns, 'montoFinal', 'NULL'),
+    columns.has('montoFinal')
+      ? '`montoFinal` AS montoFinal'
+      : (columns.has('monto_final') ? '`monto_final` AS montoFinal' : 'NULL AS montoFinal'),
     optionalCentralColumn(columns, 'meses', 'NULL'),
     optionalCentralColumn(columns, 'plazo', 'NULL'),
     optionalCentralColumn(columns, 'eventual', 'NULL'),
+    optionalCentralColumn(columns, 'description', 'NULL'),
+    optionalCentralColumn(columns, 'plantel', 'NULL'),
     imageColumn ? `\`${imageColumn}\` AS image_url` : 'NULL AS image_url'
   ]
   const rows = await controlEscolarCentralQuery<any[]>(
@@ -503,6 +513,109 @@ export const readBestConceptosConfigPayload = async () => {
   let conceptos: ConceptRow[] = []
   try { conceptos = await readCentralConceptos() } catch (e) {}
   return buildConceptosConfigPayload({ ...config, conceptos })
+}
+
+
+const LOCAL_CONCEPTO_MIRROR_COLUMNS = [
+  'id',
+  'concepto',
+  'costo',
+  'description',
+  'plantel',
+  'eventual',
+  'plazo',
+  'ciclo',
+  'ciclo_escolar',
+  'meses',
+  'montoFinal',
+  'monto_final',
+  'image_url',
+  'imagen_url',
+  'imagen',
+  'foto_url'
+] as const
+
+const localConceptMirrorValue = (column: string, row: ConceptRow) => {
+  if (column === 'ciclo' || column === 'ciclo_escolar') return row.ciclo_escolar || null
+  if (column === 'montoFinal' || column === 'monto_final') return row.montoFinal ?? null
+  if (['image_url', 'imagen_url', 'imagen', 'foto_url'].includes(column)) return row.image_url || null
+  return (row as any)[column] ?? null
+}
+
+/**
+ * Mirrors the authoritative external conceptos catalog into the active Bridge.
+ * This is intentionally an upsert-only refresh: central rows repair missing or
+ * stale Bridge rows, while Bridge-only/history rows are never deleted here.
+ */
+export const syncCentralConceptosCatalogToBridge = async (preloaded?: ConceptRow[]) => {
+  const centralRows = preloaded || await readCentralConceptos()
+  const localColumns = await getLocalTableColumns('conceptos')
+  const mirrorColumns = LOCAL_CONCEPTO_MIRROR_COLUMNS.filter((column) => localColumns.has(column))
+
+  if (!localColumns.has('id') || !localColumns.has('concepto')) {
+    throw createError({
+      statusCode: 503,
+      message: 'El Bridge activo no tiene una tabla conceptos compatible para recibir la actualización.'
+    })
+  }
+
+  if (!mirrorColumns.includes('id') || !mirrorColumns.includes('concepto')) {
+    throw createError({
+      statusCode: 503,
+      message: 'El Bridge activo no expone id y concepto como columnas sincronizables.'
+    })
+  }
+
+  const updateColumns = mirrorColumns.filter((column) => column !== 'id')
+  const quotedColumns = mirrorColumns.map((column) => `\`${column}\``).join(', ')
+  const placeholders = mirrorColumns.map(() => '?').join(', ')
+  const updateSql = updateColumns.length
+    ? ` ON DUPLICATE KEY UPDATE ${updateColumns.map((column) => `\`${column}\` = VALUES(\`${column}\`)`).join(', ')}`
+    : ''
+
+  const statements: SqlStatement[] = centralRows
+    .filter((row) => Number(row.id || 0) > 0 && normalizeText(row.concepto))
+    .map((row) => ({
+      sql: `INSERT INTO conceptos (${quotedColumns}) VALUES (${placeholders})${updateSql}`,
+      params: mirrorColumns.map((column) => localConceptMirrorValue(column, row))
+    }))
+
+  // Some Bridge schemas keep concept artwork in concepto_media rather than on
+  // conceptos. Mirror only available central artwork when that local table is
+  // already present; never create schema as part of this refresh.
+  const mediaColumns = await getLocalTableColumns('concepto_media')
+  const canMirrorMedia = mediaColumns.has('concepto_id') && mediaColumns.has('image_url')
+  let mediaCount = 0
+  if (canMirrorMedia) {
+    for (const row of centralRows) {
+      const conceptoId = Number(row.id || 0)
+      const imageUrl = normalizeText(row.image_url || '', 1000)
+      if (!conceptoId || !imageUrl) continue
+      const insertColumns = ['concepto_id', 'image_url']
+      const params: any[] = [conceptoId, imageUrl]
+      if (mediaColumns.has('activo')) {
+        insertColumns.push('activo')
+        params.push(1)
+      }
+      statements.push({
+        sql: `INSERT INTO concepto_media (${insertColumns.map((column) => `\`${column}\``).join(', ')})
+              VALUES (${insertColumns.map(() => '?').join(', ')})
+              ON DUPLICATE KEY UPDATE image_url = VALUES(image_url)${mediaColumns.has('activo') ? ', activo = 1' : ''}`,
+        params
+      })
+      mediaCount += 1
+    }
+  }
+
+  if (statements.length) await executeStatementTransaction(statements)
+
+  return {
+    ok: true,
+    source: 'central',
+    conceptos: centralRows.filter((row) => Number(row.id || 0) > 0 && normalizeText(row.concepto)).length,
+    media: mediaCount,
+    columns: mirrorColumns
+  }
 }
 
 export const syncCentralConceptosConfigToBridge = async (preloaded?: Awaited<ReturnType<typeof readCentralConceptosConfig>>) => {

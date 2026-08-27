@@ -260,8 +260,8 @@
               <strong>{{ sourceLabel === 'Base externa' ? 'Central' : 'Local' }}</strong>
               <LucideChevronDown :size="15" />
             </div>
-            <button type="button" class="btn btn-outline category-refresh-button" :disabled="loading" @click="loadAdmin">
-              <LucideRefreshCw :size="17" :class="{ 'animate-spin': loading }" />
+            <button type="button" class="btn btn-outline category-refresh-button" :disabled="loading || syncing" @click="refreshFromCentral">
+              <LucideRefreshCw :size="17" :class="{ 'animate-spin': loading || syncing }" />
               Actualizar
             </button>
           </div>
@@ -313,8 +313,8 @@
             <LucideSearch :size="20" />
             <input v-model="search" type="search" placeholder="Buscar concepto o taller..." />
           </div>
-          <button type="button" class="btn btn-outline category-filter-refresh" :disabled="loading" @click="loadAdmin">
-            <LucideRefreshCw :size="17" :class="{ 'animate-spin': loading }" />
+          <button type="button" class="btn btn-outline category-filter-refresh" :disabled="loading || syncing" @click="refreshFromCentral">
+            <LucideRefreshCw :size="17" :class="{ 'animate-spin': loading || syncing }" />
             Actualizar
           </button>
         </section>
@@ -1008,12 +1008,15 @@ const submitStockSheet = async () => {
 const syncStockCentralToBridge = async () => {
   syncingStock.value = true
   try {
+    // Refresh the catalog/config first so stock rows never reference concepts
+    // that are still missing from the active Bridge.
+    await $fetch('/api/conceptos-config/sync/central-to-bridge', { method: 'POST' })
     await $fetch('/api/conceptos-stock/sync/central-to-bridge', { method: 'POST' })
-    show('Existencias actualizadas', 'success')
+    show('Conceptos y existencias actualizados', 'success')
     await loadAdmin()
     refreshSelectedStockConcept()
   } catch (error) {
-    show(error?.data?.message || 'No se pudo actualizar existencias', 'danger')
+    show(error?.data?.message || 'No se pudieron actualizar conceptos y existencias', 'danger')
   } finally {
     syncingStock.value = false
   }
@@ -1202,14 +1205,14 @@ const removeMapping = async (mapping) => {
   }
 }
 
-const syncCentralToBridge = async () => {
+const refreshFromCentral = async () => {
   syncing.value = true
   try {
-    await $fetch('/api/conceptos-config/sync/central-to-bridge', { method: 'POST' })
-    show('Bridge sincronizado', 'success')
+    const result = await $fetch('/api/conceptos-config/sync/central-to-bridge', { method: 'POST' })
+    show(result?.skipped ? 'Conceptos actualizados' : 'Conceptos actualizados en el Bridge', 'success')
     await loadAdmin()
   } catch (error) {
-    show('No se pudo sincronizar', 'danger')
+    show(error?.data?.message || 'No se pudieron actualizar los conceptos', 'danger')
   } finally {
     syncing.value = false
   }
