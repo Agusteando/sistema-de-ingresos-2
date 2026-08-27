@@ -1,6 +1,6 @@
 import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { controlEscolarCentralQuery, getCentralTableColumns } from '../../../utils/control-escolar-central'
-import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo } from '../../../../shared/utils/grado'
 import { buildParentSiblingSignature } from '../../../../shared/utils/parentSiblingMatch'
 
@@ -145,7 +145,7 @@ const loadControlEscolarParentNameSiblings = async (matricula: string, cicloKey:
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const matricula = event.context.params?.matricula
-  const { ciclo = '2025' } = getQuery(event)
+  const { ciclo = automaticSchoolCycleKey() } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
 

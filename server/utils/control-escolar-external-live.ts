@@ -1,16 +1,12 @@
 import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
 import { normalizePlantel } from './auth-session'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { readInstitutionalSchoolCycle } from './school-cycle'
 import { normalizeCurp } from '../../shared/utils/curp'
 import { normalizeServicioClave, parseServiciosCsv } from '../../shared/utils/talleresServicios'
 
 const CANONICAL_PLANTELES = ['PREEM', 'PREET', 'GM', 'PM', 'PT', 'SM', 'ST'] as const
 const CANONICAL_SET = new Set<string>(CANONICAL_PLANTELES)
-const DEFAULT_CICLOS = [
-  { value: '2026', label: '2026-2027' },
-  { value: '2025', label: '2025-2026' }
-]
-
 const clean = (value: unknown, max = 255) => String(value ?? '').trim().slice(0, max)
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
 
@@ -113,13 +109,17 @@ const sourceMeta = (source: any, plantel: string, ciclo: string) => ({
   cacheRows: Number(source?.cacheRows || 0)
 })
 
-export const readExternalLiveHealth = () => ({
-  status: 'ok',
-  mode: 'live-bridge',
-  canonicalPlanteles: CANONICAL_PLANTELES.map((plantel) => ({ plantel })),
-  schoolYears: DEFAULT_CICLOS,
-  scopes: []
-})
+export const readExternalLiveHealth = async () => {
+  const cycle = await readInstitutionalSchoolCycle()
+  return {
+    status: 'ok',
+    mode: 'live-bridge',
+    canonicalPlanteles: CANONICAL_PLANTELES.map((plantel) => ({ plantel })),
+    currentCycle: { value: cycle.key, label: cycle.label },
+    schoolYears: cycle.schoolYears.map((item) => ({ value: item.value, label: item.label, isCurrent: item.isCurrent })),
+    scopes: []
+  }
+}
 
 export const readExternalLiveStudents = async (event: any, query: any = {}) => {
   const { plantel, ciclo } = resolveScope(query)

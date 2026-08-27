@@ -591,7 +591,7 @@ const resolveOperatorScope = (
   filters: any = {},
 ): ControlEscolarOperatorScope => {
   const cicloKey = normalizeCicloKey(
-    filters.ciclo || filters.cicloKey || filters.targetCiclo || "2025",
+    filters.ciclo || filters.cicloKey || filters.targetCiclo,
   );
   return {
     cicloKey,

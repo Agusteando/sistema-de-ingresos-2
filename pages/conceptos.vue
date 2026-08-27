@@ -50,7 +50,19 @@
 
         <section class="inventory-toolbar card">
           <label class="toolbar-field compact">
-            <span>Ciclo</span>
+            <div class="cycle-label-row">
+              <span>Ciclo</span>
+              <button
+                type="button"
+                class="cycle-current-action"
+                :class="{ current: selectedCiclo === adminPayload?.cicloActual }"
+                :disabled="settingCurrentCycle || selectedCiclo === adminPayload?.cicloActual"
+                @click.prevent="setCurrentFamilyCycle"
+              >
+                <LucideCheck v-if="selectedCiclo === adminPayload?.cicloActual" :size="12" />
+                {{ selectedCiclo === adminPayload?.cicloActual ? 'Predeterminado' : 'Usar para familias' }}
+              </button>
+            </div>
             <select v-model="selectedCiclo">
               <option v-for="cycle in cycleOptions" :key="cycle.value" :value="cycle.value">{{ cycle.label }}</option>
             </select>
@@ -268,7 +280,19 @@
 
         <section class="category-filter-bar card">
           <label class="category-select-field">
-            <span>Ciclo</span>
+            <div class="cycle-label-row">
+              <span>Ciclo</span>
+              <button
+                type="button"
+                class="cycle-current-action"
+                :class="{ current: selectedCiclo === adminPayload?.cicloActual }"
+                :disabled="settingCurrentCycle || selectedCiclo === adminPayload?.cicloActual"
+                @click.prevent="setCurrentFamilyCycle"
+              >
+                <LucideCheck v-if="selectedCiclo === adminPayload?.cicloActual" :size="12" />
+                {{ selectedCiclo === adminPayload?.cicloActual ? 'Predeterminado' : 'Usar para familias' }}
+              </button>
+            </div>
             <select v-model="selectedCiclo">
               <option v-for="cycle in cycleOptions" :key="cycle.value" :value="cycle.value">{{ cycle.label }}</option>
             </select>
@@ -590,6 +614,7 @@ const authRoleCookie = useCookie('auth_role')
 const loading = ref(false)
 const saving = ref(false)
 const syncing = ref(false)
+const settingCurrentCycle = ref(false)
 const adminPayload = ref(null)
 const selectedCiclo = ref(activeCicloKey.value)
 const selectedPlantel = ref(normalizeConceptosPlantel(String(activePlantelCookie.value || 'PM').toUpperCase()))
@@ -1068,6 +1093,24 @@ const removeAssignedItem = (item) => {
   if (item?.mapping) removeMapping(item.mapping)
 }
 
+const setCurrentFamilyCycle = async () => {
+  if (!selectedCiclo.value || selectedCiclo.value === adminPayload.value?.cicloActual || settingCurrentCycle.value) return
+  settingCurrentCycle.value = true
+  try {
+    await $fetch('/api/conceptos-config/current-cycle', {
+      method: 'PUT',
+      body: { ciclo: selectedCiclo.value }
+    })
+    setActiveCiclo(selectedCiclo.value)
+    await loadAdmin()
+    show(`${formatCicloLabel(selectedCiclo.value)} será el ciclo predeterminado para familias.`, 'success')
+  } catch (error) {
+    show(error?.data?.message || error?.data?.error || 'No se pudo cambiar el ciclo predeterminado.', 'danger')
+  } finally {
+    settingCurrentCycle.value = false
+  }
+}
+
 const savePendingAssignments = async () => {
   if (!pendingAssignments.value.length || !canStageConcept.value) return
   saving.value = true
@@ -1269,6 +1312,12 @@ onMounted(loadAdmin)
 .inventory-toolbar { display: grid; grid-template-columns: 190px 160px auto minmax(260px, 1fr) auto auto; gap: 12px; align-items: end; flex-shrink: 0; padding: 13px 14px; }
 .toolbar-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .toolbar-field span, .modal-field span, .stock-sheet-label, .service-editor label span { color: #66758a; font-size: .64rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.cycle-label-row { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
+.cycle-current-action { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; color: #73839a; padding: 0; font-size: .61rem; font-weight: 900; letter-spacing: 0; text-transform: none; cursor: pointer; white-space: nowrap; }
+.cycle-current-action:hover:not(:disabled) { color: #2f8632; }
+.cycle-current-action.current { color: #2f8632; }
+.cycle-current-action:disabled { cursor: default; opacity: 1; }
+.category-select-field > .cycle-label-row > span { color: #65758c; font-size: .67rem; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
 .toolbar-field select, .modal-field input, .modal-field select, .service-editor input { width: 100%; height: 39px; border: 1px solid #d8e1ec; border-radius: 13px; background: #fff; color: var(--ink); padding: 0 12px; font-size: .85rem; font-weight: 800; outline: none; }
 .filter-chips { display: flex; min-width: 0; flex-wrap: wrap; gap: 8px; align-items: center; padding-bottom: 1px; }
 .filter-chips button { min-height: 32px; border: 1px solid #dfe6ef; border-radius: 999px; background: #fff; color: #64738a; padding: 0 13px; font-size: .76rem; font-weight: 850; box-shadow: 0 7px 15px rgba(22,38,65,.035); }

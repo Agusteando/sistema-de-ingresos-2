@@ -1,4 +1,4 @@
-import { normalizeCicloKey } from '../shared/utils/ciclo'
+import { automaticSchoolCycleKey, formatCicloLabel, normalizeCicloKey } from '../shared/utils/ciclo'
 
 export const PLANTELES_LIST = [
   'PREEM', 'PREET', 'CT', 'CM', 'DM', 'CO', 'DC', 'GM', 'PM', 'PT', 'SM', 'ST', 'IS', 'ISM'
@@ -18,10 +18,10 @@ export const isConceptosPlantel = (value: string | null | undefined) => {
   return CONCEPTOS_PLANTELES_LIST.includes(code)
 }
 
-export const CICLOS_LIST = [
-  { value: '2025', label: '2025-2026' },
-  { value: '2026', label: '2026-2027' }
-]
+const automaticCycle = Number(automaticSchoolCycleKey())
+export const CICLOS_LIST = [automaticCycle, automaticCycle + 1, automaticCycle - 1, automaticCycle - 2, automaticCycle - 3]
+  .filter((value, index, values) => Number.isFinite(value) && values.indexOf(value) === index)
+  .map((value) => ({ value: String(value), label: formatCicloLabel(String(value)) }))
 
 export const GRADOS_ORDEN: Record<string, number> = {
   'Primero': 1,
@@ -33,7 +33,5 @@ export const GRADOS_ORDEN: Record<string, number> = {
   'Egresado': 99
 }
 
-export const normalizeCicloOption = (value: string | number | null | undefined) => {
-  const cicloKey = normalizeCicloKey(value)
-  return CICLOS_LIST.find(c => c.value === cicloKey) ? cicloKey : CICLOS_LIST[0].value
-}
+export const normalizeCicloOption = (value: string | number | null | undefined) =>
+  normalizeCicloKey(value, automaticSchoolCycleKey())

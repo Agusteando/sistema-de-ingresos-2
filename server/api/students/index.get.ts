@@ -1,6 +1,6 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { calculatePromotedGrado, displayGrado, normalizePlantel, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
-import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
@@ -12,7 +12,7 @@ const activeEstatusSql = "LOWER(TRIM(CAST(A.estatus AS CHAR))) = 'activo'"
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   setResponseHeader(event, 'Cache-Control', 'no-store')
-  const { q = '', ciclo = '2025', concepts = '', tipoConcepts = '' } = getQuery(event)
+  const { q = '', ciclo = automaticSchoolCycleKey(), concepts = '', tipoConcepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
   const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)

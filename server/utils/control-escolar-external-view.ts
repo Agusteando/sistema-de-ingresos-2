@@ -3,7 +3,7 @@ import { normalizePlantel } from './auth-session'
 import { runWithBridgeAgentId } from './db'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 import { buildControlEscolarScopeDescriptor, type ControlEscolarScopeDescriptor } from './control-escolar-cache'
-import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, formatCicloLabel, normalizeCicloKey } from '../../shared/utils/ciclo'
 import { previousCicloKey } from '../../shared/utils/tipoIngreso'
 import { parseEnrollmentConceptIds } from './enrollment-evidence'
 
@@ -15,10 +15,10 @@ const MAX_LIMIT = 500
 const DEFAULT_LIMIT = 100
 const SCHEMA_CACHE_MS = 1000 * 60 * 5
 const CANONICAL_STUDENT_PLANTELES = ['PREEM', 'PREET', 'GM', 'PM', 'PT', 'SM', 'ST']
-const DEFAULT_EXTERNAL_CICLOS = [
-  { value: '2025', label: '2025-2026' },
-  { value: '2026', label: '2026-2027' }
-]
+const automaticCycle = Number(automaticSchoolCycleKey())
+const DEFAULT_EXTERNAL_CICLOS = [automaticCycle, automaticCycle + 1, automaticCycle - 1, automaticCycle - 2, automaticCycle - 3]
+  .filter((value, index, values) => Number.isFinite(value) && values.indexOf(value) === index)
+  .map((value) => ({ value: String(value), label: formatCicloLabel(String(value)) }))
 const WARM_LIMIT = 10000
 
 let schemaVerifiedAt = 0

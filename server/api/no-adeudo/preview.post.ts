@@ -43,7 +43,7 @@ export default defineEventHandler(async (event) => {
           : [body?.matricula].filter(Boolean)
         if (!matriculas.length) throw createError({ statusCode: 400, message: 'Selecciona al menos un alumno.' })
         if (matriculas.length > 300) throw createError({ statusCode: 413, message: 'Máximo 300 cartas por lote.' })
-        return await buildNoAdeudoPreviewPayload(event, matriculas.slice(0, 300), body?.ciclo || getQuery(event).ciclo || '2025')
+        return await buildNoAdeudoPreviewPayload(event, matriculas.slice(0, 300), body?.ciclo || getQuery(event).ciclo)
       } catch (error) {
         return await previewErrorResponse(event, error)
       }

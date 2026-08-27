@@ -1,11 +1,11 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
-import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-  const { ciclo = '2025', concepts = '', tipoConcepts = '' } = getQuery(event)
+  const { ciclo = automaticSchoolCycleKey(), concepts = '', tipoConcepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
   const user = event.context.user

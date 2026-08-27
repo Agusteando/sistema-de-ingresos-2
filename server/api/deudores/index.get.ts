@@ -1,10 +1,10 @@
 import { runWithBridgeAgentId } from '../../utils/db'
-import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { getDeudoresGlobal } from '../../utils/deudores'
 import { calculatePromotedGrado, displayGrado } from '../../../shared/utils/grado'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-  const { ciclo = '2025', estatus = 'deudores', detalles = '0' } = getQuery(event)
+  const { ciclo = automaticSchoolCycleKey(), estatus = 'deudores', detalles = '0' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const user = event.context.user
   const includeDesglose = detalles === '1' || detalles === 'true'

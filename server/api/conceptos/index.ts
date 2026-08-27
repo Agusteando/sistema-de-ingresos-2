@@ -1,6 +1,6 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { controlEscolarCentralQuery, getCentralTableColumns } from '../../utils/control-escolar-central'
-import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { enrichConceptosWithStock } from '../../utils/conceptos-stock'
 import { createCentralConcepto, readCentralConceptMediaForIds, requireConceptosAdmin } from '../../utils/conceptos-config'
 
@@ -114,7 +114,7 @@ export default defineEventHandler(async (event) => {
   const method = event.node.req.method
 
   if (method === 'GET') {
-    const { ciclo = '2025', q = '' } = getQuery(event)
+    const { ciclo = automaticSchoolCycleKey(), q = '' } = getQuery(event)
     const search = String(Array.isArray(q) ? q[0] : q || '').trim()
 
     const plantel = String(getQuery(event).plantel || event.context.user?.active_plantel || event.context.dbBridgeAgentId || '').trim().toUpperCase()

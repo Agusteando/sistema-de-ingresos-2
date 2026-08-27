@@ -2,7 +2,7 @@ import dayjs from 'dayjs'
 import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { resolvePaymentConceptSnapshot } from '../../utils/payment-concept'
-import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { institutionFlagForPlantel } from '../../../shared/utils/institution'
 import { isWholeMoney, parseNullableMoney } from '../../utils/monto-final'
 import { PLANTELES_LIST } from '../../../utils/constants'
@@ -57,7 +57,7 @@ const normalizePaymentDate = (value: unknown) => {
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
-  const { matricula, pagos, formaDePago, ciclo = '2025', fechaPago } = body
+  const { matricula, pagos, formaDePago, ciclo = automaticSchoolCycleKey(), fechaPago } = body
   const pagoRealizadoEnOtroPlantel = truthyFlag(body.pagoRealizadoEnOtroPlantel)
   const plantelPago = String(body.plantelPago || '').trim().toUpperCase()
   const cicloKey = normalizeCicloKey(ciclo)

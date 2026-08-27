@@ -1,5 +1,5 @@
-import { computed, watch } from 'vue'
-import { normalizeCicloOption } from '~/utils/constants'
+import { computed, onMounted, watch } from 'vue'
+import { CICLOS_LIST, normalizeCicloOption } from '~/utils/constants'
 
 type GlobalState = {
   ciclo?: string
@@ -48,6 +48,10 @@ export const useActiveCiclo = () => {
     ciclo: initialCiclo,
   }))
 
+  const cycleOptions = useState<Array<{ value: string; label: string; isCurrent?: boolean }>>('activeCicloOptions', () =>
+    CICLOS_LIST.map((item) => ({ ...item })),
+  )
+
   if (!state.value || typeof state.value !== 'object') {
     state.value = { ciclo: initialCiclo }
   }
@@ -94,9 +98,34 @@ export const useActiveCiclo = () => {
     return cicloKey
   }
 
+  onMounted(async () => {
+    try {
+      const response = await $fetch<{
+        currentCycle?: { key?: string; label?: string }
+        schoolYears?: Array<{ value?: string; label?: string; isCurrent?: boolean }>
+      }>('/api/school-cycle/current')
+      const options = (response?.schoolYears || [])
+        .map((item) => ({
+          value: normalizeCicloOption(item.value),
+          label: String(item.label || '').trim() || `${normalizeCicloOption(item.value)}-${Number(normalizeCicloOption(item.value)) + 1}`,
+          isCurrent: Boolean(item.isCurrent)
+        }))
+        .filter((item, index, values) => item.value && values.findIndex((candidate) => candidate.value === item.value) === index)
+      if (options.length) cycleOptions.value = options
+
+      if (!cookieValue && !storedValue && state.value.ciclo === initialCiclo) {
+        const current = normalizeCicloOption(response?.currentCycle?.key)
+        if (current) setActiveCiclo(current)
+      }
+    } catch {
+      // The calendar-based July rollover remains the safe fallback when the server policy is unavailable.
+    }
+  })
+
   return {
     state,
     activeCicloKey,
     setActiveCiclo,
+    cycleOptions,
   }
 }

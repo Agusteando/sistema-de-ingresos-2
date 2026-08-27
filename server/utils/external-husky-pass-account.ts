@@ -1,6 +1,8 @@
 import { PLANTELES_LIST } from '../../utils/constants'
-import { normalizeCicloKey, formatCicloLabel } from '../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey, formatCicloLabel } from '../../shared/utils/ciclo'
+import { readInstitutionalSchoolCycle } from './school-cycle'
 import { normalizeCurp } from '../../shared/utils/curp'
+import { calculatePromotedGrado, displayGrado } from '../../shared/utils/grado'
 import { resolveProjectedAmount } from './monto-final'
 import { resolvePaymentConceptSnapshot } from './payment-concept'
 import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
@@ -63,10 +65,7 @@ const currentMexicoDate = () => {
   return { year, month, day, key: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` }
 }
 
-const currentSchoolCycleKey = () => {
-  const date = currentMexicoDate()
-  return String(date.month >= 9 ? date.year : date.year - 1)
-}
+const currentSchoolCycleKey = () => automaticSchoolCycleKey()
 
 const cycleKeyFromValue = (value: unknown) => {
   const match = text(value, 30).match(/\d{4}/)
@@ -171,7 +170,7 @@ const findStudentInAgent = async (agentId: string, matricula: string) => {
   }
 }
 
-const readAvailableCyclesForStudent = async (matricula: string, selectedCycle: string) => {
+const readAvailableCyclesForStudent = async (matricula: string, selectedCycle: string, institutionalCurrent = '') => {
   type CycleOption = { clave: string; nombre: string; actual: boolean; seleccionado: boolean; conMovimientos: boolean }
   const dynamicCurrent = currentSchoolCycleKey()
   const configuredCurrent = new Set<string>()
@@ -212,7 +211,7 @@ const readAvailableCyclesForStudent = async (matricula: string, selectedCycle: s
     // Cycle availability is decorative for Husky Pass; account data remains the source of truth.
   }
 
-  const current = Array.from(configuredCurrent).sort((a, b) => Number(b) - Number(a))[0] || dynamicCurrent
+  const current = cycleKeyFromValue(institutionalCurrent) || Array.from(configuredCurrent).sort((a, b) => Number(b) - Number(a))[0] || dynamicCurrent
   const keys = new Set<string>([...configuredCycles, ...movementCycles, selectedCycle, current, dynamicCurrent].filter(Boolean))
 
   return Array.from(keys)
@@ -351,7 +350,7 @@ const uniqueServices = (services: any[]) => {
   return Array.from(byKey.values()).sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'))
 }
 
-const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matricula: string, ciclo: string, source: any }) => {
+const readAccountInCurrentSource = async ({ matricula, ciclo, currentCycle, source }: { matricula: string, ciclo: string, currentCycle: string, source: any }) => {
   const [student] = await query<any[]>(`
     SELECT matricula, nombreCompleto, grado, grupo, plantel, ciclo, estatus
     FROM base
@@ -486,7 +485,7 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
 
   const [centralServices, ciclos, curp] = await Promise.all([
     readCentralServices(matricula),
-    readAvailableCyclesForStudent(matricula, ciclo),
+    readAvailableCyclesForStudent(matricula, ciclo, currentCycle),
     readAvailableStudentCurp(matricula, source)
   ])
   const servicios = uniqueServices([...mappedServices, ...centralServices])
@@ -501,6 +500,7 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
     gradoBase: student.grado,
     cicloBase: student.ciclo,
   }, ciclo)
+  const projectedAcademic = calculatePromotedGrado(student.grado, student.plantel, student.ciclo, ciclo)
 
   return {
     ok: true,
@@ -509,12 +509,16 @@ const readAccountInCurrentSource = async ({ matricula, ciclo, source }: { matric
       clave: ciclo,
       nombre: formatCicloLabel(ciclo)
     },
+    cicloActual: {
+      clave: currentCycle,
+      nombre: formatCicloLabel(currentCycle)
+    },
     alumno: {
       nombre: text(student.nombreCompleto, 180) || null,
       curp,
-      plantel: text(student.plantel, 40) || null,
-      nivel: academic.nivel || null,
-      grado: academic.grado || null,
+      plantel: text(projectedAcademic.plantel || student.plantel, 40) || null,
+      nivel: projectedAcademic.nivel || academic.nivel || null,
+      grado: displayGrado(projectedAcademic.grado) || academic.grado || null,
       grupo: text(student.grupo, 80) || null,
       activo: upper(student.estatus, 40) === 'ACTIVO'
     },
@@ -553,16 +557,20 @@ export const readExternalHuskyPassAccount = async (queryParams: Record<string, a
     })
   }
 
-  const ciclo = normalizeCicloKey(queryParams.ciclo, currentSchoolCycleKey())
+  const institutionalCycle = await readInstitutionalSchoolCycle()
+  const requestedCycle = cycleKeyFromValue(queryParams.ciclo)
+  const currentCycle = institutionalCycle.key || currentSchoolCycleKey()
+  const ciclo = normalizeCicloKey(requestedCycle || currentCycle, currentCycle)
 
   if (getDbTransport() === 'direct') {
-    return await readAccountInCurrentSource({ matricula, ciclo, source: { tipo: 'direct' } })
+    return await readAccountInCurrentSource({ matricula, ciclo, currentCycle, source: { tipo: 'direct' } })
   }
 
   const source = await resolveBridgeSource(matricula)
   return await runWithBridgeAgentId(source.agentId, async () => await readAccountInCurrentSource({
     matricula,
     ciclo,
+    currentCycle,
     source: { tipo: source.type, agentId: source.agentId }
   }))
 }

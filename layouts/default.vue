@@ -319,7 +319,7 @@
               aria-labelledby="header-ciclo-label"
             >
               <button
-                v-for="c in CICLOS_LIST"
+                v-for="c in cycleOptions"
                 :key="c.value"
                 type="button"
                 class="ciclo-option"
@@ -425,7 +425,7 @@ import ContextMenu from '~/components/ContextMenu.vue'
 import StudentsCacheSyncIndicator from '~/components/students/StudentsCacheSyncIndicator.vue'
 import ControlEscolarSyncIndicator from '~/components/students/ControlEscolarSyncIndicator.vue'
 import { usePlantelAgentStatuses } from '~/composables/usePlantelAgentStatuses'
-import { CICLOS_LIST, PLANTELES_LIST } from '~/utils/constants'
+import { PLANTELES_LIST } from '~/utils/constants'
 import { useActiveCiclo } from '~/composables/useActiveCiclo'
 import { authCookieFlagEnabled, resolveClientAuthAccess } from '~/utils/authAccess'
 
@@ -485,10 +485,10 @@ const scheduleSidebarScaleUpdate = () => nextTick(() => {
   sidebarFrame = window.requestAnimationFrame(updateSidebarScale)
 })
 
-const { state, activeCicloKey, setActiveCiclo } = useActiveCiclo()
+const { state, activeCicloKey, setActiveCiclo, cycleOptions } = useActiveCiclo()
 
 const activeCicloOption = computed(() => (
-  CICLOS_LIST.find(ciclo => ciclo.value === activeCicloKey.value) || CICLOS_LIST[0]
+  cycleOptions.value.find(ciclo => ciclo.value === activeCicloKey.value) || cycleOptions.value[0]
 ))
 
 const openCicloMenu = () => {

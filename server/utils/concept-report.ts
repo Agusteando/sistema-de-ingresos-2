@@ -1,5 +1,5 @@
 import { getBridgeAgentId, getDbTransport, query, runWithBridgeAgentId } from './db'
-import { formatCicloLabel, normalizeCicloKey } from '../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, formatCicloLabel, normalizeCicloKey } from '../../shared/utils/ciclo'
 import { normalizeCurp } from '../../shared/utils/curp'
 import { omitRawFinancialAcademicFields, resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import { hydrateFinancialConceptNames, loadFinancialConceptMap } from './financial-concept'
@@ -110,7 +110,7 @@ type ConceptReportContext = {
 }
 
 const resolveConceptReportContext = async (user: any, filters: Record<string, unknown>): Promise<ConceptReportContext> => {
-  const { inicio, fin, plantel, ciclo = '2025' } = filters || {}
+  const { inicio, fin, plantel, ciclo = automaticSchoolCycleKey() } = filters || {}
   const catalogCicloKey = normalizeCicloKey(ciclo as any)
   const conceptoIds = normalizeConceptIds(filters || {})
 

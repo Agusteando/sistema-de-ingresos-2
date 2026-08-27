@@ -218,7 +218,7 @@ useModalEscape(() => {
   if (!props.saving) emit('close')
 })
 
-const fallbackCiclo = normalizeCicloForTipoIngreso(CICLOS_LIST[0]?.value) || '2025'
+const fallbackCiclo = normalizeCicloForTipoIngreso(CICLOS_LIST[0]?.value) || normalizeCicloForTipoIngreso(new Date().getFullYear()) || ''
 const targetCicloKey = computed(() => normalizeCicloForTipoIngreso(props.targetCiclo) || fallbackCiclo)
 const selectedIngresoCiclo = ref(targetCicloKey.value)
 const selectedSearch = ref('')

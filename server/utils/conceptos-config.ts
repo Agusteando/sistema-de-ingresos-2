@@ -1,7 +1,8 @@
 import { query, executeStatementTransaction, type SqlStatement } from './db'
 import { controlEscolarCentralQuery, getControlEscolarCentralDb, getCentralTableColumns } from './control-escolar-central'
 import { getTrustedAuthUser, type AuthSessionUser } from './auth-session'
-import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey } from '../../shared/utils/ciclo'
+import { invalidateInstitutionalSchoolCycleCache } from './school-cycle'
 
 export const CONCEPTO_CATEGORIES = [
   { key: 'regular', legacyKey: 'planteles', label: 'Inscripción', order: 10 },
@@ -447,7 +448,8 @@ export const buildConceptosConfigPayload = (input: { source?: string; cycles: an
   }
 
   if (!response.cicloActual) {
-    response.cicloActual = Object.keys(response.ciclos).sort().reverse()[0] || null
+    const automatic = automaticSchoolCycleKey()
+    response.cicloActual = response.ciclos[automatic] ? automatic : (Object.keys(response.ciclos).sort().reverse()[0] || automatic)
   }
 
   return response
@@ -651,6 +653,7 @@ export const saveCycle = async (ciclo: unknown, current = false, user?: AuthSess
       [cycle, Date.now(), user?.email || null]
     )
   }
+  invalidateInstitutionalSchoolCycleCache()
   const synced = await syncCentralConceptosConfigToBridgeBestEffort()
   return { ok: true, ciclo: cycle, synced }
 }
@@ -659,6 +662,7 @@ export const deleteCycle = async (ciclo: unknown) => {
   const cycle = normalizeCicloKey(ciclo)
   if (!cycle) throw createError({ statusCode: 400, message: 'Ciclo requerido.' })
   await controlEscolarCentralQuery(`DELETE FROM config_school_cycles WHERE cycle_name = ?`, [cycle])
+  invalidateInstitutionalSchoolCycleCache()
   const synced = await syncCentralConceptosConfigToBridgeBestEffort()
   return { ok: true, ciclo: cycle, synced }
 }

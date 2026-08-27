@@ -1,6 +1,6 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { calculatePromotedGrado, displayGrado, normalizeGradoForPlantel, normalizePlantel, plantelCandidatesForProjectedScope, projectPlantelForNivel, resolveNivelEscolar } from '../../../shared/utils/grado'
-import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { parseCurp } from '../../../shared/utils/curp'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { attachCustomSectionsToStudents } from '../../utils/student-sections'
@@ -217,7 +217,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   if (method === 'GET') {
     setResponseHeader(event, 'Cache-Control', 'no-store')
-    const { q = '', ciclo = '2025', nivel = '', grado = '', grupo = '', concepts = '', tipoConcepts = '' } = getQuery(event)
+    const { q = '', ciclo = automaticSchoolCycleKey(), nivel = '', grado = '', grupo = '', concepts = '', tipoConcepts = '' } = getQuery(event)
     const cicloKey = normalizeCicloKey(ciclo)
     const previousCiclo = previousCicloKey(cicloKey)
     const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)

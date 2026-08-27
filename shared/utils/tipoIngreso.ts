@@ -1,4 +1,4 @@
-import { formatCicloLabel } from "./ciclo";
+import { automaticSchoolCycleKey, formatCicloLabel } from "./ciclo";
 
 export type TipoIngresoValue = "interno" | "externo";
 export type TipoIngresoSource =
@@ -19,7 +19,7 @@ export interface TipoIngresoResolverOptions {
   ignoreManualOverride?: boolean;
 }
 
-const DEFAULT_CICLO = "2025";
+const defaultCiclo = () => automaticSchoolCycleKey();
 const truthyOverride = (value: unknown): boolean => {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value === 1;
@@ -71,12 +71,12 @@ export const normalizeCicloForTipoIngreso = (value: unknown): string | null => {
 };
 
 export const previousCicloKey = (value: unknown): string => {
-  const key = normalizeCicloForTipoIngreso(value) || DEFAULT_CICLO;
+  const key = normalizeCicloForTipoIngreso(value) || defaultCiclo();
   return String(Number(key) - 1);
 };
 
 export const nextCicloKey = (value: unknown): string => {
-  const key = normalizeCicloForTipoIngreso(value) || DEFAULT_CICLO;
+  const key = normalizeCicloForTipoIngreso(value) || defaultCiclo();
   return String(Number(key) + 1);
 };
 
@@ -227,7 +227,7 @@ export const resolveTipoIngreso = (
 
   if (!targetCicloKey) {
     return fallbackResult(
-      DEFAULT_CICLO,
+      defaultCiclo(),
       "El ciclo seleccionado no se pudo normalizar.",
     );
   }

@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
         const matriculas = Array.isArray(body?.matriculas)
           ? body.matriculas
           : [body?.matricula].filter(Boolean)
-        const ciclo = normalizeCicloKey(body?.ciclo || getQuery(event).ciclo || '2025')
+        const ciclo = normalizeCicloKey(body?.ciclo || getQuery(event).ciclo)
         const mode = String(body?.mode || 'parents_control')
         const force = Boolean(body?.force)
         const blockOnDebt = body?.blockOnDebt === undefined ? undefined : Boolean(body.blockOnDebt)

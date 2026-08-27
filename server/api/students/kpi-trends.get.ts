@@ -1,5 +1,5 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
-import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { previousCicloKey, resolveTipoIngreso } from '../../../shared/utils/tipoIngreso'
 import { isInProjectedPlantelScopeForCiclo, plantelCandidatesForProjectedScope } from '../../../shared/utils/grado'
 import { getHistoricalEnrollmentConceptEvidence, parseEnrollmentConceptIds } from '../../utils/enrollment-evidence'
@@ -47,7 +47,7 @@ const increment = (map: Map<string, number>, bucket: string, amount = 1) => {
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
-  const { ciclo = '2025', concepts = '', tipoConcepts = '' } = getQuery(event)
+  const { ciclo = automaticSchoolCycleKey(), concepts = '', tipoConcepts = '' } = getQuery(event)
   const cicloKey = normalizeCicloKey(ciclo)
   const previousCiclo = previousCicloKey(cicloKey)
   const enrollmentConceptIds = parseEnrollmentConceptIds(concepts)

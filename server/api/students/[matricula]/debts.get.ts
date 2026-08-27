@@ -1,5 +1,5 @@
 import { runWithBridgeAgentId, query } from "../../../utils/db";
-import { normalizeCicloKey } from "../../../../shared/utils/ciclo";
+import { automaticSchoolCycleKey, normalizeCicloKey } from "../../../../shared/utils/ciclo";
 import {
   isInProjectedPlantelScopeForCiclo,
   normalizePlantel,
@@ -42,7 +42,7 @@ const cicloInClause = (values: string[]) => values.map(() => "?").join(",");
 export default defineEventHandler(async (event) =>
   runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
     const matricula = event.context.params?.matricula;
-    const { ciclo = "2025", fechaPago = "" } = getQuery(event);
+    const { ciclo = automaticSchoolCycleKey(), fechaPago = "" } = getQuery(event);
     const cicloKey = normalizeCicloKey(ciclo);
     if (!matricula)
       throw createError({ statusCode: 400, message: "Matrícula requerida" });

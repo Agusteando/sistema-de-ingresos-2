@@ -396,7 +396,7 @@ useModalEscape(() => {
 });
 
 const fallbackCiclo =
-  normalizeCicloForTipoIngreso(CICLOS_LIST[0]?.value) || "2025";
+  normalizeCicloForTipoIngreso(CICLOS_LIST[0]?.value) || normalizeCicloForTipoIngreso(new Date().getFullYear()) || "";
 const targetCicloKey = computed(
   () => normalizeCicloForTipoIngreso(props.targetCiclo) || fallbackCiclo,
 );

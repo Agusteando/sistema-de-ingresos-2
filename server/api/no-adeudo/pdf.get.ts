@@ -1,5 +1,5 @@
 import { runWithBridgeAgentId } from '../../utils/db'
-import { normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/utils/ciclo'
 
 const safeFilePart = (value: unknown) => String(value || '')
   .normalize('NFD')
@@ -81,7 +81,7 @@ export default defineEventHandler(async (event) => {
       try {
         const { buildNoAdeudoValidationUrl, createNoAdeudoToken, resolveNoAdeudoStudentContext } = await import('../../utils/noAdeudo')
         const { generateNoAdeudoCartaPdf } = await import('../../utils/noAdeudoCartaPdf')
-        const { matricula, ciclo = '2025', preview = '1' } = getQuery(event)
+        const { matricula, ciclo = automaticSchoolCycleKey(), preview = '1' } = getQuery(event)
         const cicloKey = normalizeCicloKey(ciclo)
         const context = await resolveNoAdeudoStudentContext(event, matricula, cicloKey)
         const user = event.context.user || {}
