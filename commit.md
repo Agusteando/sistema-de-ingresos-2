@@ -1,1 +1,1 @@
-Define el catálogo final de talleres sin alterar servicios
+Corrige faltantes por concepto para excluir alumnos con cualquier concepto seleccionado

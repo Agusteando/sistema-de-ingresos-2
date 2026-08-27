@@ -269,57 +269,49 @@ const resolveCanonicalEnrollmentScope = async (ciclo: string, plantel: string): 
   }
 }
 
-const loadSelectedConceptEvidence = async (
+const loadStudentsWithAnySelectedConcept = async (
   user: any,
   plantel: string,
   matriculas: string[],
-  ciclo: string,
   conceptoIds: number[],
 ) => {
-  const result = new Map<string, Set<string>>()
+  const result = new Set<string>()
   const uniqueMatriculas = Array.from(new Set(matriculas.map(value => String(value || '').trim()).filter(Boolean)))
   const conceptStrings = conceptoIds.map(String)
-  const cicloLabel = formatCicloLabel(ciclo)
   const paymentScope = resolvePaymentScope(user, plantel)
-
-  const append = (row: any) => {
-    const matricula = String(row?.matricula || '').trim().toUpperCase()
-    const conceptId = String(row?.conceptId || '').trim()
-    if (!matricula || !conceptId) return
-    const current = result.get(matricula) || new Set<string>()
-    current.add(conceptId)
-    result.set(matricula, current)
-  }
 
   for (let index = 0; index < uniqueMatriculas.length; index += CONCEPT_EVIDENCE_CHUNK_SIZE) {
     const chunk = uniqueMatriculas.slice(index, index + CONCEPT_EVIDENCE_CHUNK_SIZE)
     const matriculaPlaceholders = chunk.map(() => '?').join(', ')
     const whereParts = [
-      'CAST(r.ciclo AS CHAR) IN (?, ?)',
       `r.matricula IN (${matriculaPlaceholders})`,
       financialConceptPredicate('r', conceptStrings.length),
     ]
-    const params: any[] = [ciclo, cicloLabel, ...chunk, ...conceptStrings]
+    const params: any[] = [...chunk, ...conceptStrings]
 
     if (paymentScope.where) {
       whereParts.push(paymentScope.where)
       params.push(...paymentScope.params)
     }
 
-    // "Sin concepto" must use the exact same financial concept identity as the
-    // normal Reporte por concepto: referenciasdepago.concepto. Do not infer a
-    // concept from documentos or documento_concepto_periodos because that makes
-    // both report modes disagree about the same student/concept.
+    // Eligibility for "Sin concepto" is the exact complement of normal
+    // Reporte por concepto within the enrolled population. The normal financial
+    // report identifies a concept exclusively through referenciasdepago.concepto
+    // and does not require r.ciclo to match the catalog cycle. Selected concept
+    // IDs already identify the intended concepts; adding a cycle predicate here
+    // creates false faltantes for legacy rows whose ciclo is blank or normalized
+    // differently. Any ledger row for ANY selected concept excludes the student.
     const rows = await query<any[]>(`
-      SELECT DISTINCT
-        r.matricula,
-        CAST(r.concepto AS CHAR) AS conceptId
+      SELECT DISTINCT r.matricula
       FROM referenciasdepago r
       LEFT JOIN base A ON A.matricula = r.matricula
       WHERE ${whereParts.join(' AND ')}
     `, params)
 
-    rows.forEach(append)
+    rows.forEach((row: any) => {
+      const matricula = String(row?.matricula || '').trim().toUpperCase()
+      if (matricula) result.add(matricula)
+    })
   }
 
   return result
@@ -360,7 +352,7 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
       tipoConcepts: enrollmentScope.tipoIngresoConceptIds.join(','),
     })
     const matriculas = enrolledRows.map((row: any) => String(row?.matricula || '').trim()).filter(Boolean)
-    const selectedEvidence = await loadSelectedConceptEvidence(user, plantel, matriculas, ciclo, context.conceptoIds)
+    const studentsWithSelectedConcept = await loadStudentsWithAnySelectedConcept(user, plantel, matriculas, context.conceptoIds)
 
     const selectedConcepts = context.conceptos.map((concept: any) => ({
       id: Number(concept.id),
@@ -371,12 +363,10 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
 
     const rows = enrolledRows.flatMap((row: any) => {
       const matricula = String(row?.matricula || '').trim()
-      const present = selectedEvidence.get(matricula.toUpperCase()) || new Set<string>()
-
-      // Multiselect semantics are OR for presence and NOT-ANY for this report:
-      // if the student has at least ONE of the selected concepts, they are not
-      // part of "Sin concepto". Only students with zero selected concepts remain.
-      if (present.size > 0) {
+      // This is intentionally a single student-level anti-join against the UNION
+      // of every selected concept. Having one selected concept is enough to exclude
+      // the student; only students with none of them remain.
+      if (studentsWithSelectedConcept.has(matricula.toUpperCase())) {
         studentsWithAny += 1
         return []
       }
