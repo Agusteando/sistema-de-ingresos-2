@@ -1,1 +1,1 @@
-Sincronizar catálogo central de conceptos hacia Bridge al actualizar
+Permitir adjuntar documentos en envíos masivos por correo y WhatsApp

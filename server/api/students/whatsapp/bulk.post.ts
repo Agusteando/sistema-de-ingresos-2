@@ -2,8 +2,11 @@ import crypto from 'node:crypto'
 import { runWithBridgeAgentId, query } from '../../../utils/db'
 import { whatsappApi } from '../../../utils/whatsapp'
 import { resolveStudentWhatsappAudience } from '../../../utils/studentWhatsapp'
-
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+import {
+  COMMUNICATION_ATTACHMENT_MAX_BYTES,
+  isSupportedCommunicationAttachment,
+  resolveCommunicationAttachmentContentType,
+} from '../../../../utils/communicationAttachments'
 
 const multipartField = (parts: any[], name: string) => parts.find(part => part.name === name)
 const multipartText = (parts: any[], name: string) => multipartField(parts, name)?.data?.toString('utf8') || ''
@@ -36,20 +39,23 @@ export default defineEventHandler(async (event) => {
 
   const transport = multipartText(parts, 'transport').trim().toLowerCase() === 'qr' ? 'qr' : 'public'
   const message = multipartText(parts, 'message').trim()
-  const image = multipartField(parts, 'image')
+  const attachment = multipartField(parts, 'attachment') || multipartField(parts, 'image')
 
-  if (!message && !image?.data?.length) {
-    throw createError({ statusCode: 400, statusMessage: 'Agrega un mensaje, una imagen o ambos.' })
+  if (!message && !attachment?.data?.length) {
+    throw createError({ statusCode: 400, statusMessage: 'Agrega un mensaje, un archivo adjunto o ambos.' })
   }
   if (message.length > 4096) {
     throw createError({ statusCode: 400, statusMessage: 'El mensaje supera 4096 caracteres.' })
   }
-  if (image) {
-    if (!String(image.type || '').startsWith('image/')) {
-      throw createError({ statusCode: 400, statusMessage: 'El archivo debe ser una imagen.' })
+  if (attachment) {
+    if (!isSupportedCommunicationAttachment({ filename: attachment.filename, type: attachment.type })) {
+      throw createError({ statusCode: 400, statusMessage: 'El archivo debe ser una imagen, PDF o documento compatible.' })
     }
-    if (Number(image.data?.length || 0) > MAX_IMAGE_BYTES) {
-      throw createError({ statusCode: 400, statusMessage: 'La imagen supera 10 MB.' })
+    if (!attachment.data?.length) {
+      throw createError({ statusCode: 400, statusMessage: 'El archivo adjunto está vacío.' })
+    }
+    if (Number(attachment.data.length) > COMMUNICATION_ATTACHMENT_MAX_BYTES) {
+      throw createError({ statusCode: 400, statusMessage: 'El archivo adjunto supera 10 MB.' })
     }
   }
 
@@ -97,12 +103,12 @@ export default defineEventHandler(async (event) => {
     .update(`${transport}:${clientId}:${user.email}:${requestId}:${audience.chatIds.join('|')}`)
     .digest('hex')
 
-  const mediaPayload = image?.data?.length ? {
+  const mediaPayload = attachment?.data?.length ? {
     chatIds: audience.chatIds,
     caption: message,
-    file: image.data,
-    filename: image.filename || 'imagen',
-    mimetype: image.type || 'image/jpeg'
+    file: attachment.data,
+    filename: attachment.filename || 'archivo-adjunto',
+    mimetype: resolveCommunicationAttachmentContentType({ filename: attachment.filename, type: attachment.type })
   } : null
 
   const response = transport === 'qr'

@@ -111,23 +111,24 @@
                 >
                   <textarea v-model="message" maxlength="4096" placeholder="Mensaje" aria-label="Mensaje"></textarea>
 
-                  <div v-if="imagePreview" class="wa-bulk-image-chip">
-                    <img :src="imagePreview" alt="Imagen seleccionada" />
+                  <div v-if="attachmentFile" class="wa-bulk-attachment-chip">
+                    <img v-if="attachmentIsImage" :src="attachmentPreview" alt="Imagen seleccionada" />
+                    <span v-else class="wa-bulk-file-icon" aria-hidden="true"><LucideFileText :size="22" /></span>
                     <div>
-                      <strong>{{ imageFile?.name }}</strong>
-                      <span>{{ formattedFileSize }}</span>
+                      <strong>{{ attachmentFile.name }}</strong>
+                      <span>{{ attachmentIsImage ? 'Imagen' : 'Documento' }} · {{ formattedFileSize }}</span>
                     </div>
-                    <button type="button" aria-label="Quitar imagen" @click="clearImage"><LucideX :size="16" /></button>
+                    <button type="button" aria-label="Quitar archivo" @click="clearAttachment"><LucideX :size="16" /></button>
                   </div>
 
                   <div class="wa-bulk-compose__tools">
-                    <button type="button" :class="{ active: Boolean(imageFile) }" @click="pickImage">
-                      <LucideImagePlus :size="18" />
-                      <span>Imagen</span>
+                    <button type="button" :class="{ active: Boolean(attachmentFile) }" @click="pickAttachment">
+                      <LucidePaperclip :size="18" />
+                      <span>Adjuntar</span>
                     </button>
                     <span>{{ message.length }}/4096</span>
                   </div>
-                  <input ref="filePicker" class="wa-bulk-file-input" type="file" accept="image/*" @change="handleFileInput" />
+                  <input ref="filePicker" class="wa-bulk-file-input" type="file" :accept="COMMUNICATION_ATTACHMENT_ACCEPT" @change="handleFileInput" />
                 </div>
                 <span v-if="errorMessage" class="wa-bulk-error">{{ errorMessage }}</span>
               </section>
@@ -138,8 +139,12 @@
                   <div><strong>{{ recipientPreviewName }}</strong><small>WhatsApp</small></div>
                 </div>
                 <div class="wa-bulk-preview__body">
-                  <div v-if="imagePreview || message.trim()" class="wa-bulk-bubble">
-                    <img v-if="imagePreview" :src="imagePreview" alt="" />
+                  <div v-if="attachmentFile || message.trim()" class="wa-bulk-bubble">
+                    <img v-if="attachmentIsImage" :src="attachmentPreview" alt="" />
+                    <div v-else-if="attachmentFile" class="wa-bulk-document-preview">
+                      <span><LucideFileText :size="22" /></span>
+                      <div><strong>{{ attachmentFile.name }}</strong><small>{{ formattedFileSize }}</small></div>
+                    </div>
                     <p v-if="message.trim()">{{ message }}</p>
                     <time>{{ currentTime }}</time>
                   </div>
@@ -181,8 +186,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { renderSVG } from 'uqr'
 import {
+  LucideFileText,
   LucideGlobe2,
-  LucideImagePlus,
+  LucidePaperclip,
   LucideLoader2,
   LucideMessageCircle,
   LucidePhoneOff,
@@ -193,6 +199,12 @@ import {
   LucideX
 } from 'lucide-vue-next'
 import StudentBulkDeliveryProgress from './StudentBulkDeliveryProgress.vue'
+import {
+  COMMUNICATION_ATTACHMENT_ACCEPT,
+  COMMUNICATION_ATTACHMENT_MAX_BYTES,
+  isCommunicationAttachmentImage,
+  isSupportedCommunicationAttachment,
+} from '~/utils/communicationAttachments'
 
 const props = defineProps({
   selectedStudents: { type: Array, default: () => [] },
@@ -209,8 +221,8 @@ const closeConfirmOpen = ref(false)
 const closeAfterCurrentSend = ref(false)
 const isDragging = ref(false)
 const message = ref('')
-const imageFile = ref(null)
-const imagePreview = ref('')
+const attachmentFile = ref(null)
+const attachmentPreview = ref('')
 const filePicker = ref(null)
 const qrSvg = ref('')
 const qrImageSrc = ref('')
@@ -225,7 +237,7 @@ let draftTimer = null
 const WHATSAPP_DRAFT_KEY = 'control-escolar:bulk-whatsapp-draft:v1'
 const draftReady = ref(false)
 const draftRestored = ref(false)
-const draftHadImage = ref(false)
+const draftHadAttachment = ref(false)
 
 const selectedMatriculas = computed(() => props.selectedStudents.map(student => String(student?.matricula || '').trim()).filter(Boolean))
 const audienceSignature = computed(() => [...selectedMatriculas.value].map(value => value.toUpperCase()).sort().join('|'))
@@ -248,9 +260,10 @@ const recipientPreviewName = computed(() => {
   if (!first) return `${summary.value.chats} chats`
   return summary.value.chats > 1 ? `${first} +${summary.value.chats - 1}` : first
 })
-const canSend = computed(() => (transportMode.value === 'public' || session.value.ready) && summary.value.chats > 0 && Boolean(message.value.trim() || imageFile.value) && !sending.value)
+const canSend = computed(() => (transportMode.value === 'public' || session.value.ready) && summary.value.chats > 0 && Boolean(message.value.trim() || attachmentFile.value) && !sending.value)
+const attachmentIsImage = computed(() => isCommunicationAttachmentImage(attachmentFile.value))
 const formattedFileSize = computed(() => {
-  const size = Number(imageFile.value?.size || 0)
+  const size = Number(attachmentFile.value?.size || 0)
   if (!size) return ''
   return size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`
 })
@@ -260,7 +273,7 @@ const closeConfirmationText = computed(() => sending.value
   ? 'El envío que ya está en curso terminará primero. Después se pausará la lista antes del siguiente destinatario, se guardará el progreso y se cerrará el diálogo.'
   : 'El borrador y el progreso actual se conservarán para que puedas continuar después. Esta acción solo cerrará el diálogo.')
 
-const hasClosableState = computed(() => Boolean(message.value.trim() || imageFile.value || deliveryItems.value.length))
+const hasClosableState = computed(() => Boolean(message.value.trim() || attachmentFile.value || draftHadAttachment.value || deliveryItems.value.length))
 
 const serializableDeliveryItems = () => deliveryItems.value.map(item => ({
   key: String(item?.key || ''),
@@ -273,7 +286,7 @@ const serializableDeliveryItems = () => deliveryItems.value.map(item => ({
 
 const persistDraft = () => {
   if (typeof window === 'undefined' || !draftReady.value) return
-  const shouldKeep = Boolean(message.value.trim() || imageFile.value || deliveryItems.value.length || transportMode.value !== 'public')
+  const shouldKeep = Boolean(message.value.trim() || attachmentFile.value || draftHadAttachment.value || deliveryItems.value.length || transportMode.value !== 'public')
   if (!shouldKeep) {
     window.localStorage.removeItem(WHATSAPP_DRAFT_KEY)
     return
@@ -285,7 +298,7 @@ const persistDraft = () => {
     audienceSignature: audienceSignature.value,
     message: message.value,
     transportMode: transportMode.value,
-    hadImage: Boolean(imageFile.value),
+    hadAttachment: Boolean(attachmentFile.value || draftHadAttachment.value),
     deliveryItems: serializableDeliveryItems(),
   }))
 }
@@ -309,8 +322,8 @@ const restoreDraft = () => {
     if (draft.audienceSignature === audienceSignature.value && Array.isArray(draft.deliveryItems)) {
       deliveryItems.value = draft.deliveryItems.map(item => ({ ...item, status: item?.status === 'sending' ? 'pending' : item?.status }))
     }
-    draftHadImage.value = Boolean(draft.hadImage)
-    draftRestored.value = Boolean(message.value.trim() || deliveryItems.value.length || draft.transportMode === 'qr' || draftHadImage.value)
+    draftHadAttachment.value = Boolean(draft.hadAttachment ?? draft.hadImage)
+    draftRestored.value = Boolean(message.value.trim() || deliveryItems.value.length || draft.transportMode === 'qr' || draftHadAttachment.value)
   } catch {
     window.localStorage.removeItem(WHATSAPP_DRAFT_KEY)
   }
@@ -319,7 +332,7 @@ const restoreDraft = () => {
 const clearDraft = () => {
   if (typeof window !== 'undefined') window.localStorage.removeItem(WHATSAPP_DRAFT_KEY)
   draftRestored.value = false
-  draftHadImage.value = false
+  draftHadAttachment.value = false
   draftReady.value = false
 }
 
@@ -480,38 +493,40 @@ const loadQr = async (forceNew = false) => {
   }
 }
 
-const revokeImagePreview = () => {
-  if (imagePreview.value?.startsWith('blob:')) URL.revokeObjectURL(imagePreview.value)
+const revokeAttachmentPreview = () => {
+  if (attachmentPreview.value?.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview.value)
 }
 
-const clearImage = () => {
-  revokeImagePreview()
-  imageFile.value = null
-  imagePreview.value = ''
+const clearAttachment = () => {
+  revokeAttachmentPreview()
+  attachmentFile.value = null
+  attachmentPreview.value = ''
+  draftHadAttachment.value = false
   if (filePicker.value) filePicker.value.value = ''
 }
 
-const setImage = (file) => {
+const setAttachment = (file) => {
   errorMessage.value = ''
   if (!file) return
-  if (!String(file.type || '').startsWith('image/')) {
-    errorMessage.value = 'Selecciona una imagen.'
+  if (!isSupportedCommunicationAttachment(file)) {
+    errorMessage.value = 'Selecciona una imagen, PDF o documento compatible.'
     return
   }
-  if (file.size > 10 * 1024 * 1024) {
-    errorMessage.value = 'La imagen supera 10 MB.'
+  if (file.size > COMMUNICATION_ATTACHMENT_MAX_BYTES) {
+    errorMessage.value = 'El archivo supera 10 MB.'
     return
   }
-  revokeImagePreview()
-  imageFile.value = file
-  imagePreview.value = URL.createObjectURL(file)
+  revokeAttachmentPreview()
+  attachmentFile.value = file
+  attachmentPreview.value = isCommunicationAttachmentImage(file) ? URL.createObjectURL(file) : ''
+  draftHadAttachment.value = true
 }
 
-const pickImage = () => filePicker.value?.click()
-const handleFileInput = (event) => setImage(event.target?.files?.[0])
+const pickAttachment = () => filePicker.value?.click()
+const handleFileInput = (event) => setAttachment(event.target?.files?.[0])
 const handleDrop = (event) => {
   isDragging.value = false
-  setImage(event.dataTransfer?.files?.[0])
+  setAttachment(event.dataTransfer?.files?.[0])
 }
 
 const studentSubsetForMatriculas = (matriculas = []) => {
@@ -573,7 +588,7 @@ const runDelivery = async (statuses) => {
         }
         form.append('transport', transportMode.value)
         if (message.value.trim()) form.append('message', message.value.trim())
-        if (imageFile.value) form.append('image', imageFile.value, imageFile.value.name)
+        if (attachmentFile.value) form.append('attachment', attachmentFile.value, attachmentFile.value.name)
         form.append('requestId', typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
 
         const response = await $fetch('/api/students/whatsapp/bulk', {
@@ -667,14 +682,14 @@ useModalEscape(() => {
 
 watch(message, scheduleDraftSave)
 watch(transportMode, scheduleDraftSave)
-watch(imageFile, scheduleDraftSave)
+watch(attachmentFile, scheduleDraftSave)
 watch(deliveryItems, scheduleDraftSave, { deep: true })
 
 onMounted(async () => {
   restoreDraft()
   await loadPreview()
-  if (draftHadImage.value && !errorMessage.value) {
-    errorMessage.value = 'Borrador restaurado: vuelve a seleccionar la imagen antes de enviar.'
+  if (draftHadAttachment.value && !errorMessage.value) {
+    errorMessage.value = 'Borrador restaurado: vuelve a seleccionar el archivo adjunto antes de enviar.'
   }
   draftReady.value = true
   scheduleDraftSave()
@@ -685,7 +700,7 @@ onBeforeUnmount(() => {
   persistDraft()
   if (typeof window !== 'undefined') window.removeEventListener('beforeunload', handleBeforeUnload)
   stopStatusPolling()
-  revokeImagePreview()
+  revokeAttachmentPreview()
 })
 </script>
 
@@ -825,7 +840,7 @@ onBeforeUnmount(() => {
 .wa-bulk-transport__option.active > i { background: #28a15a; box-shadow: 0 0 0 4px rgba(40, 161, 90, .1); }
 
 .wa-bulk-icon-button,
-.wa-bulk-image-chip button {
+.wa-bulk-attachment-chip button {
   border: 0;
   background: transparent;
   color: #7b8798;
@@ -931,7 +946,7 @@ onBeforeUnmount(() => {
 }
 .wa-bulk-message-input textarea::placeholder { color: #a5aeb9; }
 
-.wa-bulk-image-chip {
+.wa-bulk-attachment-chip {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr) 30px;
   align-items: center;
@@ -941,13 +956,14 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   background: #f5f8f6;
 }
-.wa-bulk-image-chip img { width: 52px; height: 42px; border-radius: 9px; object-fit: cover; }
-.wa-bulk-image-chip strong,
-.wa-bulk-image-chip span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wa-bulk-image-chip strong { color: #26364a; font-size: 11.5px; font-weight: 800; }
-.wa-bulk-image-chip span { margin-top: 2px; color: #8a94a3; font-size: 10px; }
-.wa-bulk-image-chip button { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; }
-.wa-bulk-image-chip button:hover { background: #e8ece9; }
+.wa-bulk-attachment-chip img { width: 52px; height: 42px; border-radius: 9px; object-fit: cover; }
+.wa-bulk-file-icon { width: 52px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; background: #e8efeb; color: #506b5a; }
+.wa-bulk-attachment-chip > div strong,
+.wa-bulk-attachment-chip > div span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-bulk-attachment-chip > div strong { color: #26364a; font-size: 11.5px; font-weight: 800; }
+.wa-bulk-attachment-chip > div span { margin-top: 2px; color: #8a94a3; font-size: 10px; }
+.wa-bulk-attachment-chip button { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; }
+.wa-bulk-attachment-chip button:hover { background: #e8ece9; }
 
 .wa-bulk-compose__tools {
   height: 48px;
@@ -1028,6 +1044,12 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 2px rgba(38, 61, 47, .13);
 }
 .wa-bulk-bubble img { width: 100%; max-height: 176px; display: block; border-radius: 8px; object-fit: cover; }
+.wa-bulk-document-preview { display: flex; align-items: center; gap: 9px; margin: 2px 2px 7px; padding: 9px; border-radius: 8px; background: rgba(255,255,255,.6); }
+.wa-bulk-document-preview > span { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 7px; background: #e6ece8; color: #506b5a; }
+.wa-bulk-document-preview > div { min-width: 0; }
+.wa-bulk-document-preview strong, .wa-bulk-document-preview small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-bulk-document-preview strong { max-width: 230px; color: #26352c; font-size: 10.5px; }
+.wa-bulk-document-preview small { margin-top: 2px; color: #77847b; font-size: 9px; }
 .wa-bulk-bubble p { margin: 5px 6px 0; color: #233128; font-size: 11.5px; line-height: 1.42; white-space: pre-wrap; overflow-wrap: anywhere; }
 .wa-bulk-bubble time { position: absolute; right: 7px; bottom: 4px; color: #748277; font-size: 8.5px; }
 .wa-bulk-preview__empty { margin: auto; color: rgba(74, 91, 82, .28); }

@@ -21,19 +21,20 @@
         </div>
 
         <div v-else-if="hasStarted" class="email-bulk-progress-shell">
-          <div v-if="draftHadImage && !imageFile" class="email-attachment-restore" role="status">
+          <div v-if="draftHadAttachment && !attachmentFile" class="email-attachment-restore" role="status">
             <div>
-              <LucideImagePlus :size="17" />
+              <LucidePaperclip :size="17" />
               <span>
-                <strong>Este envío tenía una imagen integrada en el correo.</strong>
-                <small>Por seguridad el navegador no conserva archivos locales. Selecciónala de nuevo para volver a mostrarla dentro del correo.</small>
+                <strong>Este envío tenía un archivo adjunto.</strong>
+                <small>Por seguridad el navegador no conserva archivos locales. Selecciónalo de nuevo antes de continuar el envío.</small>
               </span>
             </div>
-            <button type="button" :disabled="sending" @click="pickImage">Volver a insertar</button>
+            <button type="button" :disabled="sending" @click="pickAttachment">Volver a adjuntar</button>
           </div>
-          <div v-else-if="imageFile" class="email-attachment-progress">
-            <img :src="imagePreview" alt="Imagen integrada en el correo" />
-            <span><strong>{{ imageFile.name }}</strong><small>{{ formattedFileSize }}</small></span>
+          <div v-else-if="attachmentFile" class="email-attachment-progress">
+            <img v-if="attachmentIsImage" :src="attachmentPreview" alt="Imagen integrada en el correo" />
+            <span v-else class="email-attachment-file-icon" aria-hidden="true"><LucideFileText :size="20" /></span>
+            <span><strong>{{ attachmentFile.name }}</strong><small>{{ formattedFileSize }}</small></span>
           </div>
           <StudentBulkDeliveryProgress
             :items="deliveryItems"
@@ -44,7 +45,7 @@
             @continue-pending="continuePending"
             @done="closeAfterSend"
           />
-          <input ref="filePicker" class="email-file-input" type="file" accept="image/*" @change="handleFileInput" />
+          <input ref="filePicker" class="email-file-input" type="file" :accept="COMMUNICATION_ATTACHMENT_ACCEPT" @change="handleFileInput" />
         </div>
 
         <template v-else>
@@ -208,22 +209,23 @@
 
               <div class="email-attachment-field">
                 <div class="email-attachment-field__heading">
-                  <span>Imagen dentro del correo</span>
-                  <small>PNG, JPG, WebP o GIF · máximo 10 MB</small>
+                  <span>Archivo adjunto</span>
+                  <small>Imágenes, PDF y documentos de Office · máximo 10 MB</small>
                 </div>
-                <div v-if="imageFile" class="email-attachment-card">
-                  <img :src="imagePreview" alt="Vista previa de la imagen dentro del correo" />
+                <div v-if="attachmentFile" class="email-attachment-card">
+                  <img v-if="attachmentIsImage" :src="attachmentPreview" alt="Vista previa de la imagen dentro del correo" />
+                  <span v-else class="email-attachment-file-icon" aria-hidden="true"><LucideFileText :size="22" /></span>
                   <span>
-                    <strong>{{ imageFile.name }}</strong>
-                    <small>{{ formattedFileSize }}</small>
+                    <strong>{{ attachmentFile.name }}</strong>
+                    <small>{{ attachmentIsImage ? 'Imagen integrada' : 'Documento adjunto' }} · {{ formattedFileSize }}</small>
                   </span>
-                  <button type="button" aria-label="Quitar imagen" @click="clearImage"><LucideX :size="16" /></button>
+                  <button type="button" aria-label="Quitar archivo" @click="clearAttachment"><LucideX :size="16" /></button>
                 </div>
-                <button v-else type="button" class="email-attachment-button" @click="pickImage">
-                  <LucideImagePlus :size="17" /> Insertar imagen
+                <button v-else type="button" class="email-attachment-button" @click="pickAttachment">
+                  <LucidePaperclip :size="17" /> Adjuntar archivo
                 </button>
-                <small v-if="draftHadImage && !imageFile" class="email-attachment-draft-note">El borrador tenía una imagen integrada. Vuelve a seleccionarla para mostrarla dentro del correo.</small>
-                <input ref="filePicker" class="email-file-input" type="file" accept="image/*" @change="handleFileInput" />
+                <small v-if="draftHadAttachment && !attachmentFile" class="email-attachment-draft-note">El borrador tenía un archivo adjunto. Vuelve a seleccionarlo antes de enviar.</small>
+                <input ref="filePicker" class="email-file-input" type="file" :accept="COMMUNICATION_ATTACHMENT_ACCEPT" @change="handleFileInput" />
               </div>
 
               <span v-if="errorMessage" class="email-bulk-error">{{ errorMessage }}</span>
@@ -252,9 +254,10 @@
                 <strong>{{ subject || 'Asunto del correo' }}</strong>
                 <p v-if="message.trim()">{{ message }}</p>
                 <p v-else class="empty">El contenido del mensaje aparecerá aquí.</p>
-                <div v-if="imageFile" class="email-preview__attachment email-preview__inline-image">
-                  <img :src="imagePreview" alt="Vista previa de la imagen dentro del correo" />
-                  <small>{{ imageFile.name }} · {{ formattedFileSize }}</small>
+                <div v-if="attachmentFile" :class="['email-preview__attachment', { 'email-preview__inline-image': attachmentIsImage, 'email-preview__document': !attachmentIsImage }]">
+                  <img v-if="attachmentIsImage" :src="attachmentPreview" alt="Vista previa de la imagen dentro del correo" />
+                  <span v-else class="email-preview__document-icon"><LucideFileText :size="22" /></span>
+                  <small>{{ attachmentFile.name }} · {{ formattedFileSize }}</small>
                 </div>
               </div>
             </aside>
@@ -293,7 +296,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   LucideCheck,
   LucideChevronDown,
-  LucideImagePlus,
+  LucideFileText,
+  LucidePaperclip,
   LucideLoader2,
   LucideMail,
   LucideMailWarning,
@@ -305,6 +309,12 @@ import {
   LucideX,
 } from 'lucide-vue-next'
 import StudentBulkDeliveryProgress from './StudentBulkDeliveryProgress.vue'
+import {
+  COMMUNICATION_ATTACHMENT_ACCEPT,
+  COMMUNICATION_ATTACHMENT_MAX_BYTES,
+  isCommunicationAttachmentImage,
+  isSupportedCommunicationAttachment,
+} from '~/utils/communicationAttachments'
 
 const props = defineProps({
   selectedStudents: { type: Array, default: () => [] },
@@ -340,11 +350,11 @@ let senderSearchTimer = null
 let senderSearchSequence = 0
 const subject = ref(DEFAULT_EMAIL_SUBJECT)
 const message = ref('')
-const imageFile = ref(null)
-const imagePreview = ref('')
+const attachmentFile = ref(null)
+const attachmentPreview = ref('')
 const filePicker = ref(null)
-const draftHadImage = ref(false)
-const draftImageName = ref('')
+const draftHadAttachment = ref(false)
+const draftAttachmentName = ref('')
 const deliveryItems = ref([])
 const summary = ref({ selected: 0, reachableStudents: 0, emails: 0, missingEmail: 0, notFound: 0, deduplicated: 0 })
 
@@ -364,10 +374,11 @@ const hasStarted = computed(() => deliveryItems.value.length > 0)
 const selectedSender = computed(() => senders.value.find((sender) => String(sender?.email || '').trim().toLowerCase() === String(senderEmail.value || '').trim().toLowerCase()) || null)
 const senderDisplayName = computed(() => String(selectedSender.value?.name || '').trim())
 const validSender = computed(() => /^[^\s@]+@casitaiedis\.edu\.mx$/i.test(String(senderEmail.value || '').trim()) && Boolean(senderDisplayName.value))
-const canSend = computed(() => !sending.value && summary.value.emails > 0 && validSender.value && Boolean(subject.value.trim()) && Boolean(message.value.trim()) && !(draftHadImage.value && !imageFile.value))
+const canSend = computed(() => !sending.value && summary.value.emails > 0 && validSender.value && Boolean(subject.value.trim()) && Boolean(message.value.trim()) && !(draftHadAttachment.value && !attachmentFile.value))
+const attachmentIsImage = computed(() => isCommunicationAttachmentImage(attachmentFile.value))
 const firstRecipientLabel = computed(() => recipientGroups.value[0]?.email || `${summary.value.emails || 0} destinatarios`)
 const formattedFileSize = computed(() => {
-  const size = Number(imageFile.value?.size || 0)
+  const size = Number(attachmentFile.value?.size || 0)
   if (!size) return ''
   return size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`
 })
@@ -563,8 +574,8 @@ const closeConfirmationText = computed(() => sending.value
 
 const hasClosableState = computed(() => Boolean(
   message.value.trim()
-  || imageFile.value
-  || draftHadImage.value
+  || attachmentFile.value
+  || draftHadAttachment.value
   || subject.value.trim() !== DEFAULT_EMAIL_SUBJECT
   || (initialSenderEmail.value && senderEmail.value.trim() !== initialSenderEmail.value)
   || deliveryItems.value.length
@@ -593,8 +604,8 @@ const persistDraft = () => {
     senderEmail: senderEmail.value,
     subject: subject.value,
     message: message.value,
-    hadImage: Boolean(imageFile.value || draftHadImage.value),
-    imageName: String(imageFile.value?.name || draftImageName.value || ''),
+    hadAttachment: Boolean(attachmentFile.value || draftHadAttachment.value),
+    attachmentName: String(attachmentFile.value?.name || draftAttachmentName.value || ''),
     deliveryItems: serializableDeliveryItems(),
   }))
 }
@@ -616,8 +627,8 @@ const restoreDraft = () => {
     if (typeof draft.senderEmail === 'string' && draft.senderEmail.trim()) senderEmail.value = draft.senderEmail.trim()
     if (typeof draft.subject === 'string') subject.value = draft.subject
     if (typeof draft.message === 'string') message.value = draft.message
-    draftHadImage.value = Boolean(draft.hadImage)
-    draftImageName.value = String(draft.imageName || '')
+    draftHadAttachment.value = Boolean(draft.hadAttachment ?? draft.hadImage)
+    draftAttachmentName.value = String(draft.attachmentName || draft.imageName || '')
     if (draft.audienceSignature === audienceSignature.value && Array.isArray(draft.deliveryItems)) {
       deliveryItems.value = draft.deliveryItems.map((item) => ({ ...item, status: item?.status === 'sending' ? 'pending' : item?.status }))
     }
@@ -630,8 +641,8 @@ const restoreDraft = () => {
 const clearDraft = () => {
   if (typeof window !== 'undefined') window.localStorage.removeItem(EMAIL_DRAFT_KEY)
   draftRestored.value = false
-  draftHadImage.value = false
-  draftImageName.value = ''
+  draftHadAttachment.value = false
+  draftAttachmentName.value = ''
   draftReady.value = false
 }
 
@@ -667,39 +678,39 @@ const loadPreview = async () => {
   }
 }
 
-const revokeImagePreview = () => {
-  if (imagePreview.value?.startsWith('blob:')) URL.revokeObjectURL(imagePreview.value)
+const revokeAttachmentPreview = () => {
+  if (attachmentPreview.value?.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview.value)
 }
 
-const clearImage = () => {
-  revokeImagePreview()
-  imageFile.value = null
-  imagePreview.value = ''
-  draftHadImage.value = false
-  draftImageName.value = ''
+const clearAttachment = () => {
+  revokeAttachmentPreview()
+  attachmentFile.value = null
+  attachmentPreview.value = ''
+  draftHadAttachment.value = false
+  draftAttachmentName.value = ''
   if (filePicker.value) filePicker.value.value = ''
 }
 
-const setImage = (file) => {
+const setAttachment = (file) => {
   errorMessage.value = ''
   if (!file) return
-  if (!String(file.type || '').startsWith('image/')) {
-    errorMessage.value = 'Selecciona un archivo de imagen.'
+  if (!isSupportedCommunicationAttachment(file)) {
+    errorMessage.value = 'Selecciona una imagen, PDF o documento compatible.'
     return
   }
-  if (file.size > 10 * 1024 * 1024) {
-    errorMessage.value = 'La imagen supera 10 MB.'
+  if (file.size > COMMUNICATION_ATTACHMENT_MAX_BYTES) {
+    errorMessage.value = 'El archivo supera 10 MB.'
     return
   }
-  revokeImagePreview()
-  imageFile.value = file
-  imagePreview.value = URL.createObjectURL(file)
-  draftHadImage.value = true
-  draftImageName.value = file.name
+  revokeAttachmentPreview()
+  attachmentFile.value = file
+  attachmentPreview.value = isCommunicationAttachmentImage(file) ? URL.createObjectURL(file) : ''
+  draftHadAttachment.value = true
+  draftAttachmentName.value = file.name
 }
 
-const pickImage = () => filePicker.value?.click()
-const handleFileInput = (event) => setImage(event.target?.files?.[0])
+const pickAttachment = () => filePicker.value?.click()
+const handleFileInput = (event) => setAttachment(event.target?.files?.[0])
 
 const studentSubsetForMatriculas = (matriculas = []) => {
   const wanted = new Set(matriculas.map((value) => String(value || '').trim().toUpperCase()).filter(Boolean))
@@ -753,8 +764,8 @@ const runDelivery = async (statuses) => {
       item.status = 'sending'
       item.error = ''
       try {
-        if (draftHadImage.value && !imageFile.value) {
-          throw new Error('Vuelve a seleccionar la imagen integrada antes de continuar el envío.')
+        if (draftHadAttachment.value && !attachmentFile.value) {
+          throw new Error('Vuelve a seleccionar el archivo adjunto antes de continuar el envío.')
         }
 
         const form = new FormData()
@@ -766,7 +777,7 @@ const runDelivery = async (statuses) => {
         form.append('subject', subject.value.trim())
         form.append('message', message.value.trim())
         form.append('requestId', typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
-        if (imageFile.value) form.append('image', imageFile.value, imageFile.value.name)
+        if (attachmentFile.value) form.append('attachment', attachmentFile.value, attachmentFile.value.name)
 
         const response = await $fetch('/api/students/email/send', {
           method: 'POST',
@@ -855,17 +866,17 @@ watch(senderEmail, scheduleDraftSave)
 watch(senderSearch, scheduleSenderSearch)
 watch(subject, scheduleDraftSave)
 watch(message, scheduleDraftSave)
-watch(imageFile, scheduleDraftSave)
+watch(attachmentFile, scheduleDraftSave)
 watch(deliveryItems, scheduleDraftSave, { deep: true })
 
 onMounted(async () => {
   await loadPreview()
   restoreDraft()
   await ensureSelectedSenderLoaded()
-  if (draftHadImage.value && !imageFile.value && !errorMessage.value) {
-    errorMessage.value = draftImageName.value
-      ? `El borrador incluía ${draftImageName.value} dentro del correo. Vuelve a seleccionar esa imagen antes de enviar.`
-      : 'El borrador incluía una imagen dentro del correo. Vuelve a seleccionarla antes de enviar.'
+  if (draftHadAttachment.value && !attachmentFile.value && !errorMessage.value) {
+    errorMessage.value = draftAttachmentName.value
+      ? `El borrador incluía ${draftAttachmentName.value}. Vuelve a seleccionar ese archivo antes de enviar.`
+      : 'El borrador incluía un archivo adjunto. Vuelve a seleccionarlo antes de enviar.'
   }
   draftReady.value = true
   scheduleDraftSave()
@@ -879,7 +890,7 @@ onBeforeUnmount(() => {
   if (draftTimer) clearTimeout(draftTimer)
   if (senderSearchTimer) clearTimeout(senderSearchTimer)
   persistDraft()
-  revokeImagePreview()
+  revokeAttachmentPreview()
   if (typeof window !== 'undefined') {
     window.removeEventListener('beforeunload', handleBeforeUnload)
     document.removeEventListener('pointerdown', handleSenderPickerPointerDown)
@@ -1030,6 +1041,7 @@ onBeforeUnmount(() => {
 .email-attachment-button:hover { border-color: #7da3c7; background: #f3f8fc; }
 .email-attachment-card, .email-attachment-progress { min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid #dfe6ed; border-radius: 12px; background: #f9fbfd; }
 .email-attachment-card img, .email-attachment-progress img { width: 52px; height: 52px; object-fit: cover; border-radius: 9px; background: #eef2f6; }
+.email-attachment-file-icon { width: 52px; height: 52px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; background: #eef3f8; color: #5d7895; }
 .email-attachment-card > span, .email-attachment-progress > span { min-width: 0; flex: 1; }
 .email-attachment-card strong, .email-attachment-card small, .email-attachment-progress strong, .email-attachment-progress small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .email-attachment-card strong, .email-attachment-progress strong { color: #31445b; font-size: 10px; }
@@ -1048,9 +1060,13 @@ onBeforeUnmount(() => {
 .email-attachment-restore button { min-height: 32px; padding: 0 11px; border: 1px solid #d7ae75; border-radius: 9px; background: #fff; color: #8b622d; font-size: 9.5px; font-weight: 800; cursor: pointer; }
 .email-attachment-progress { margin: 10px 18px 0; padding: 7px; }
 .email-attachment-progress img { width: 38px; height: 38px; }
+.email-attachment-progress .email-attachment-file-icon { width: 38px; height: 38px; }
 .email-preview__attachment { margin-top: 18px; }
 .email-preview__inline-image img { display: block; width: 100%; max-height: 320px; object-fit: contain; border-radius: 10px; background: #f4f6f8; }
 .email-preview__inline-image small { display: block; margin-top: 6px; color: #8c98a6; font-size: 8.5px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.email-preview__document { margin-top: 10px; display: flex; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid #e0e7ee; border-radius: 10px; background: #f7f9fb; }
+.email-preview__document-icon { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; background: #eaf0f6; color: #597794; }
+.email-preview__document small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #66788a; font-size: 9px; }
 
 .email-bulk-error { color: #a34f43; font-size: 10px; font-weight: 690; }
 

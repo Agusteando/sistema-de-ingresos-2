@@ -2,8 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { sendEmailFromUser, type MailAttachment } from '../../../utils/mailer'
 import { isCasitaWorkspaceEmail } from '../../../utils/google-workspace-directory'
 import { resolveStudentEmailAudience } from '../../../utils/studentEmail'
-
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+import {
+  COMMUNICATION_ATTACHMENT_MAX_BYTES,
+  isCommunicationAttachmentImage,
+  isSupportedCommunicationAttachment,
+  resolveCommunicationAttachmentContentType,
+} from '../../../../utils/communicationAttachments'
 
 const escapeHtml = (value: unknown) => String(value ?? '')
   .replace(/&/g, '&amp;')
@@ -40,7 +44,7 @@ const renderHtml = (message: string, inlineImageCid = '') => {
 const parseRequest = async (event: any) => {
   const contentType = String(getRequestHeader(event, 'content-type') || '').toLowerCase()
   if (!contentType.includes('multipart/form-data')) {
-    return { body: await readBody(event), image: null as any }
+    return { body: await readBody(event), attachment: null as any }
   }
 
   const parts = await readMultipartFormData(event)
@@ -66,13 +70,13 @@ const parseRequest = async (event: any) => {
       message: multipartText(parts, 'message'),
       requestId: multipartText(parts, 'requestId'),
     },
-    image: multipartField(parts, 'image') || null,
+    attachment: multipartField(parts, 'attachment') || multipartField(parts, 'image') || null,
   }
 }
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
-  const { body, image } = await parseRequest(event)
+  const { body, attachment } = await parseRequest(event)
   const senderEmail = normalizeEmail(body?.senderEmail)
   const targetEmail = normalizeEmail(body?.targetEmail)
   const senderName = String(body?.senderName || '').replace(/[\r\n]+/g, ' ').trim()
@@ -94,15 +98,15 @@ export default defineEventHandler(async (event) => {
   if (!message) throw createError({ statusCode: 400, statusMessage: 'Agrega el contenido del correo.' })
   if (message.length > 30000) throw createError({ statusCode: 400, statusMessage: 'El contenido del correo es demasiado largo.' })
 
-  if (image) {
-    if (!String(image.type || '').startsWith('image/')) {
-      throw createError({ statusCode: 400, statusMessage: 'La imagen integrada debe ser un archivo de imagen.' })
+  if (attachment) {
+    if (!isSupportedCommunicationAttachment({ filename: attachment.filename, type: attachment.type })) {
+      throw createError({ statusCode: 400, statusMessage: 'El archivo adjunto debe ser una imagen, PDF o documento compatible.' })
     }
-    if (!image.data?.length) {
-      throw createError({ statusCode: 400, statusMessage: 'La imagen integrada está vacía.' })
+    if (!attachment.data?.length) {
+      throw createError({ statusCode: 400, statusMessage: 'El archivo adjunto está vacío.' })
     }
-    if (Number(image.data.length) > MAX_IMAGE_BYTES) {
-      throw createError({ statusCode: 400, statusMessage: 'La imagen integrada supera 10 MB.' })
+    if (Number(attachment.data.length) > COMMUNICATION_ATTACHMENT_MAX_BYTES) {
+      throw createError({ statusCode: 400, statusMessage: 'El archivo adjunto supera 10 MB.' })
     }
   }
 
@@ -121,14 +125,18 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'El correo destino ya no pertenece a la selección.' })
   }
 
-  const inlineImageCid = image?.data?.length ? `control-escolar-${randomUUID()}@aurora` : ''
-  const inlineImages: MailAttachment[] = image?.data?.length
+  const attachmentIsImage = Boolean(attachment?.data?.length) && isCommunicationAttachmentImage({
+    filename: attachment?.filename,
+    type: attachment?.type,
+  })
+  const inlineImageCid = attachmentIsImage ? `control-escolar-${randomUUID()}@aurora` : ''
+  const mailAttachments: MailAttachment[] = attachment?.data?.length
     ? [{
-        filename: String(image.filename || 'imagen-mensaje').trim() || 'imagen-mensaje',
-        content: image.data,
-        contentType: String(image.type || 'image/jpeg'),
-        disposition: 'inline',
-        contentId: inlineImageCid,
+        filename: String(attachment.filename || (attachmentIsImage ? 'imagen-mensaje' : 'documento-adjunto')).trim() || (attachmentIsImage ? 'imagen-mensaje' : 'documento-adjunto'),
+        content: attachment.data,
+        contentType: resolveCommunicationAttachmentContentType({ filename: attachment.filename, type: attachment.type }),
+        disposition: attachmentIsImage ? 'inline' : 'attachment',
+        ...(attachmentIsImage ? { contentId: inlineImageCid } : {}),
       }]
     : []
 
@@ -138,7 +146,7 @@ export default defineEventHandler(async (event) => {
 
   for (const group of targetGroups) {
     try {
-      await sendEmailFromUser(group.email, subject, html, senderEmail, inlineImages, message, senderName)
+      await sendEmailFromUser(group.email, subject, html, senderEmail, mailAttachments, message, senderName)
       sent.push({
         email: group.email,
         matriculas: group.matriculas,
@@ -162,8 +170,16 @@ export default defineEventHandler(async (event) => {
     requestId: String(body?.requestId || randomUUID()),
     sentEmails: sent.length,
     failedEmails: failures.length,
-    inlineImage: inlineImages.length
-      ? { filename: inlineImages[0].filename, contentType: inlineImages[0].contentType, bytes: Number(image.data.length) }
+    attachment: mailAttachments.length
+      ? {
+          filename: mailAttachments[0].filename,
+          contentType: mailAttachments[0].contentType,
+          bytes: Number(attachment.data.length),
+          disposition: attachmentIsImage ? 'inline' : 'attachment',
+        }
+      : null,
+    inlineImage: attachmentIsImage && mailAttachments.length
+      ? { filename: mailAttachments[0].filename, contentType: mailAttachments[0].contentType, bytes: Number(attachment.data.length) }
       : null,
     sent,
     failures,
