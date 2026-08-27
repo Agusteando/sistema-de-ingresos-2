@@ -3,6 +3,10 @@ import { controlEscolarCentralQuery, getCentralTableColumns } from './control-es
 import { normalizeCicloKey, formatCicloLabel } from '../../shared/utils/ciclo'
 import {
   DEFAULT_TALLERES_SERVICIOS,
+  FINAL_TALLERES,
+  canonicalTallerKey,
+  finalTallerSeed,
+  isKnownTallerCatalogKey,
   DEFAULT_TALLER_SERVICIO_IMAGE,
   addServicioToCsv,
   normalizeServicioClave,
@@ -41,16 +45,20 @@ const defaultCatalogRows = () => DEFAULT_TALLERES_SERVICIOS.map((item) => ({
   updated_by: null,
 }))
 
-const normalizeCatalogRow = (row: any): TallerServicioCatalogRow => {
-  const seed = serviceSeedByKey(row?.servicio_clave) || serviceSeedByName(row?.servicio_nombre)
-  const clave = normalizeServicioClave(row?.servicio_clave || row?.clave || row?.servicio_nombre || seed?.clave)
-  const nombre = normalizeServicioNombre(row?.servicio_nombre || row?.nombre || seed?.nombre || clave)
+const normalizeCatalogRow = (row: any): TallerServicioCatalogRow | null => {
+  const rawKey = normalizeServicioClave(row?.servicio_clave || row?.clave || row?.servicio_nombre || row?.nombre)
+  const tallerSeed = isKnownTallerCatalogKey(rawKey) ? finalTallerSeed(rawKey) : null
+  if (isKnownTallerCatalogKey(rawKey) && !tallerSeed) return null
+
+  const seed = tallerSeed || serviceSeedByKey(rawKey) || serviceSeedByName(row?.servicio_nombre)
+  const clave = tallerSeed?.clave || normalizeServicioClave(row?.servicio_clave || row?.clave || row?.servicio_nombre || seed?.clave)
+  const nombre = tallerSeed?.nombre || normalizeServicioNombre(row?.servicio_nombre || row?.nombre || seed?.nombre || clave)
   return {
     servicio_clave: clave,
     servicio_nombre: nombre,
     imagen_url: compactText(row?.imagen_url || row?.imagen || seed?.imagen || (clave ? `/talleres-servicios/${clave}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE), 255),
     activo: truthy(row?.activo) ? 1 : 0,
-    orden: Number(row?.orden || seed?.orden || 9999),
+    orden: Number(tallerSeed?.orden ? 500 + tallerSeed.orden : (row?.orden || seed?.orden || 9999)),
     sync_version: Number(row?.sync_version || 1),
     updated_by: row?.updated_by || null,
   }
@@ -62,8 +70,9 @@ const sortCatalog = (rows: TallerServicioCatalogRow[]) => [...rows]
 
 const dedupeCatalog = (rows: TallerServicioCatalogRow[]) => {
   const map = new Map<string, TallerServicioCatalogRow>()
-  for (const row of rows.map(normalizeCatalogRow)) {
-    if (!row.servicio_clave) continue
+  for (const rawRow of rows) {
+    const row = normalizeCatalogRow(rawRow)
+    if (!row?.servicio_clave) continue
     const existing = map.get(row.servicio_clave)
     if (!existing || Number(row.orden || 9999) < Number(existing.orden || 9999)) map.set(row.servicio_clave, row)
   }
@@ -120,6 +129,32 @@ export const readBestTalleresServiciosCatalog = async () => {
   return await readLocalTalleresServiciosCatalog()
 }
 
+export const readFinalTalleresCatalog = async () => {
+  const combined = await readBestTalleresServiciosCatalog()
+  const byCanonicalKey = new Map<string, TallerServicioCatalogRow>()
+
+  for (const row of combined.catalog) {
+    const key = canonicalTallerKey(row.servicio_clave || row.servicio_nombre)
+    if (!key || byCanonicalKey.has(key)) continue
+    byCanonicalKey.set(key, row)
+  }
+
+  const catalog = FINAL_TALLERES.map((seed) => {
+    const existing = byCanonicalKey.get(seed.clave)
+    return {
+      servicio_clave: seed.clave,
+      servicio_nombre: seed.nombre,
+      imagen_url: compactText(existing?.imagen_url || seed.imagen || DEFAULT_TALLER_SERVICIO_IMAGE, 255),
+      activo: 1,
+      orden: seed.orden,
+      sync_version: existing?.sync_version || 1,
+      updated_by: existing?.updated_by || null,
+    } satisfies TallerServicioCatalogRow
+  })
+
+  return { source: combined.source, catalog }
+}
+
 export const syncCentralTalleresServiciosCatalogToBridge = async (preloaded?: TallerServicioCatalogRow[]) => {
   const central = preloaded || (await readCentralTalleresServiciosCatalog()).catalog
   const statements: SqlStatement[] = [{ sql: 'DELETE FROM talleres_servicios_catalogo' }]
@@ -159,11 +194,11 @@ export const resolveServiciosWithCatalog = async (servicios: unknown[]) => {
   const byKey = new Map(catalog.map((item) => [item.servicio_clave, item]))
   const resolved = servicios.map((value) => {
     const nombre = normalizeServicioNombre(value)
-    const key = normalizeServicioClave(nombre)
+    const key = canonicalTallerKey(nombre)
     const catalogItem = byKey.get(key) || serviceSeedByKey(key)
     return {
       clave: key,
-      nombre: catalogItem?.servicio_nombre || nombre,
+      nombre: catalogItem?.servicio_nombre || finalTallerSeed(key)?.nombre || nombre,
       imagen: catalogItem?.imagen_url || (key ? `/talleres-servicios/${key}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE),
       source: catalogItem ? 'catalog' : 'legacy'
     }
@@ -251,7 +286,7 @@ export const findTallerServicioForConcept = async ({
   const row = rows[0]
   if (!row) return null
   const catalog = await readBestTalleresServiciosCatalog()
-  const normalizedKey = normalizeServicioClave(row.servicio_clave || row.servicio_nombre)
+  const normalizedKey = canonicalTallerKey(row.servicio_clave || row.servicio_nombre)
   const match = catalog.catalog.find((item) => item.servicio_clave === normalizedKey) || serviceSeedByKey(normalizedKey)
   return {
     clave: normalizedKey,

@@ -389,7 +389,7 @@
                 <span>Taller/servicio</span>
                 <select v-model="serviceName">
                   <option value="">Selecciona taller</option>
-                  <option v-for="service in serviciosCatalogo" :key="service.clave" :value="service.nombre">{{ service.nombre }}</option>
+                  <option v-for="service in talleresCatalogo" :key="service.clave" :value="service.nombre">{{ service.nombre }}</option>
                 </select>
               </label>
             </div>
@@ -462,7 +462,7 @@
                 <LucideGrid3X3 :size="18" />
                 <h3>Catálogo de talleres</h3>
               </div>
-              <strong>{{ serviciosCatalogo.length }}</strong>
+              <strong>{{ talleresCatalogo.length }}</strong>
             </header>
             <div class="workshop-chip-grid">
               <button
@@ -475,7 +475,7 @@
                 <img :src="service.imagen" alt="" loading="lazy" />
                 <span>{{ service.nombre }}</span>
               </button>
-              <button v-if="serviciosCatalogo.length > servicePreviewLimit" type="button" class="more-services-button" @click="showAllServices = !showAllServices">
+              <button v-if="talleresCatalogo.length > servicePreviewLimit" type="button" class="more-services-button" @click="showAllServices = !showAllServices">
                 <LucideMoreVertical :size="18" />
                 <span>{{ showAllServices ? 'Ver menos' : 'Ver más' }}</span>
               </button>
@@ -663,7 +663,7 @@ const sourceLabel = computed(() => adminPayload.value?.source === 'central' ? 'B
 const categories = computed(() => adminPayload.value?.categorias?.length ? adminPayload.value.categorias.map((item) => ({ key: item.key, label: item.label })) : fallbackCategories)
 const mappings = computed(() => Array.isArray(adminPayload.value?.mappings) ? adminPayload.value.mappings : [])
 const conceptos = computed(() => Array.isArray(adminPayload.value?.conceptos) ? adminPayload.value.conceptos : [])
-const serviciosCatalogo = computed(() => Array.isArray(adminPayload.value?.serviciosCatalogo) ? adminPayload.value.serviciosCatalogo : [])
+const talleresCatalogo = computed(() => Array.isArray(adminPayload.value?.talleresCatalogo) ? adminPayload.value.talleresCatalogo : [])
 const stockPayload = computed(() => adminPayload.value?.stock || { source: 'bridge', snapshots: [], movements: [] })
 const stockSourceLabel = computed(() => stockPayload.value?.source === 'central' ? 'Base externa' : 'Respaldo local')
 const plantelOptions = computed(() => [...CONCEPTOS_PLANTELES_LIST])
@@ -690,7 +690,7 @@ const parseMonths = (value) => {
 const serviceKey = (name) => normalizeServicioClave(name)
 const serviceImage = (value) => {
   const key = serviceKey(value)
-  return serviciosCatalogo.value.find((service) => service.clave === key)?.imagen || (key ? `/talleres-servicios/${key}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE)
+  return talleresCatalogo.value.find((service) => service.clave === key)?.imagen || (key ? `/talleres-servicios/${key}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE)
 }
 
 const visibleMappings = computed(() => {
@@ -758,7 +758,7 @@ const categoryAssignedItems = computed(() => [
 const canStageConcept = computed(() => selectedCategory.value !== 'talleres_servicios' || Boolean(selectedService.value?.clave))
 const uncategorizedPreview = computed(() => uncategorizedConcepts.value.slice(0, 6))
 const uncategorizedRemainder = computed(() => Math.max(0, uncategorizedConcepts.value.length - uncategorizedPreview.value.length))
-const categoryServicePreview = computed(() => showAllServices.value ? serviciosCatalogo.value : serviciosCatalogo.value.slice(0, servicePreviewLimit))
+const categoryServicePreview = computed(() => showAllServices.value ? talleresCatalogo.value : talleresCatalogo.value.slice(0, servicePreviewLimit))
 
 const configuredConceptIds = computed(() => new Set(mappings.value
   .filter((mapping) => normalizeCicloKey(mapping.cycle_name) === selectedCiclo.value && Number(mapping.concepto_id || 0) > 0)
@@ -768,10 +768,10 @@ const uncategorizedConcepts = computed(() => conceptos.value
   .filter((concept) => (!selectedCiclo.value || normalizeCicloKey(concept.ciclo_escolar) === selectedCiclo.value) && !configuredConceptIds.value.has(String(Number(concept.id))))
   .slice(0, 80)
 )
-const selectedService = computed(() => serviciosCatalogo.value.find((service) => service.clave === serviceKey(serviceName.value)) || null)
+const selectedService = computed(() => talleresCatalogo.value.find((service) => service.clave === serviceKey(serviceName.value)) || null)
 const visibleCatalogServices = computed(() => {
   const term = normalizeText(serviceSearch.value)
-  return serviciosCatalogo.value
+  return talleresCatalogo.value
     .filter((service) => !term || [service.nombre, service.clave].some((value) => normalizeText(value).includes(term)))
     .slice(0, 48)
 })
@@ -864,7 +864,7 @@ const categoryKpiCards = computed(() => [
   { key: 'assigned', label: 'Asignados', value: formatInteger(visibleMappings.value.length), caption: activeCategoryLabel.value, tone: 'green', icon: LucideTag },
   { key: 'concepts', label: 'Conceptos', value: formatInteger(stockRows.value.length), caption: 'En el ciclo', tone: 'blue', icon: LucideBox },
   { key: 'uncat', label: 'Sin categoría', value: formatInteger(uncategorizedConcepts.value.length), caption: 'Pendientes', tone: 'amber', icon: LucideAlertTriangle },
-  { key: 'services', label: 'Talleres', value: formatInteger(serviciosCatalogo.value.length), caption: 'Catálogo activo', tone: 'purple', icon: LucideGrid3X3 }
+  { key: 'services', label: 'Talleres', value: formatInteger(talleresCatalogo.value.length), caption: 'Catálogo activo', tone: 'purple', icon: LucideGrid3X3 }
 ])
 
 const selectedPlantelStates = computed(() => selectedStockConcept.value ? plantelStatesForConcept(selectedStockConcept.value) : [])
@@ -1255,7 +1255,7 @@ const selectService = (service) => {
 
 watch(selectedCategory, () => {
   if (selectedCategory.value !== 'talleres_servicios') return
-  if (!serviceName.value && serviciosCatalogo.value.length) selectService(serviciosCatalogo.value[0])
+  if (!serviceName.value && talleresCatalogo.value.length) selectService(talleresCatalogo.value[0])
 })
 
 onMounted(loadAdmin)

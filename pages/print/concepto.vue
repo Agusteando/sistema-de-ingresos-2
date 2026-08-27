@@ -46,12 +46,12 @@
           <div class="text-gray-900 font-bold text-[14px]">{{ resumen.inscritos || 0 }}</div>
         </div>
         <div class="border border-gray-200 rounded-lg p-3">
-          <div class="text-gray-500 uppercase font-bold">Con faltantes</div>
+          <div class="text-gray-500 uppercase font-bold">Sin ninguno</div>
           <div class="text-gray-900 font-bold text-[14px]">{{ resumen.alumnos || 0 }}</div>
         </div>
         <div class="border border-gray-200 rounded-lg p-3">
-          <div class="text-gray-500 uppercase font-bold">Selección completa</div>
-          <div class="text-gray-900 font-bold text-[14px]">{{ resumen.completos || 0 }}</div>
+          <div class="text-gray-500 uppercase font-bold">Con al menos uno</div>
+          <div class="text-gray-900 font-bold text-[14px]">{{ resumen.conAlguno ?? resumen.completos ?? 0 }}</div>
         </div>
         <div class="border border-gray-200 rounded-lg p-3">
           <div class="text-gray-500 uppercase font-bold">Cobertura</div>
@@ -63,7 +63,7 @@
         Incluye movimientos vigentes, cancelados y depurados del historial financiero. Cancelados y depuraciones permanecen visibles y muestran importe aplicado de $0.00 cuando corresponde.
       </div>
       <div v-else class="mb-4 text-[10px] text-gray-600">
-        Se incluyen únicamente alumnos con estado de inscripción “inscrito” en {{ cycleLabel }}. Una asignación activa o un pago vigente del mismo ciclo cuenta como presencia del concepto.
+        Se incluyen únicamente alumnos con estado de inscripción “inscrito” en {{ cycleLabel }} que no tienen ninguno de los conceptos seleccionados. Si existe al menos uno, el alumno queda fuera del reporte.
       </div>
 
       <table v-if="!isMissingMode" class="w-full text-[8px] border-collapse mb-8">
@@ -126,12 +126,12 @@
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">CURP</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nacimiento</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Plantel</th>
-            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Concepto(s) faltante(s)</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Conceptos seleccionados ausentes</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="!rows.length">
-            <td colspan="10" class="text-center py-6 text-gray-500 font-medium">{{ Number(resumen.inscritos || 0) === 0 ? 'No hay alumnos inscritos para el ciclo y plantel seleccionados.' : 'Todos los alumnos inscritos tienen la selección completa.' }}</td>
+            <td colspan="10" class="text-center py-6 text-gray-500 font-medium">{{ Number(resumen.inscritos || 0) === 0 ? 'No hay alumnos inscritos para el ciclo y plantel seleccionados.' : 'Todos los alumnos inscritos tienen al menos uno de los conceptos seleccionados.' }}</td>
           </tr>
           <tr v-else v-for="r in rows" :key="`${r.matricula}-${r.conceptosFaltantesTexto}`" class="border-b border-gray-100">
             <td class="py-2 text-gray-900 font-mono">{{ r.matricula }}</td>

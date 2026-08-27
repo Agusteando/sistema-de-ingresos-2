@@ -71,10 +71,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       subtitle: conceptName,
       metaLines: [
         `Plantel: ${result.filtros?.plantel || '—'} | Ciclo: ${result.filtros?.cicloLabel || result.filtros?.ciclo || '—'}`,
-        `Inscritos revisados: ${result.resumen?.inscritos || 0} | Alumnos con faltantes: ${result.resumen?.alumnos || 0}`,
-        `Selección completa: ${result.resumen?.completos || 0} | Cobertura: ${Number(result.resumen?.cobertura || 0).toFixed(1)}%`,
+        `Inscritos revisados: ${result.resumen?.inscritos || 0} | Sin ninguno: ${result.resumen?.alumnos || 0}`,
+        `Con al menos uno: ${result.resumen?.conAlguno ?? result.resumen?.completos ?? 0} | Cobertura: ${Number(result.resumen?.cobertura || 0).toFixed(1)}%`,
         `Conceptos faltantes: ${result.resumen?.conceptosFaltantes ?? result.resumen?.asignacionesFaltantes ?? 0}`,
-        'La población incluye únicamente alumnos con estado de inscripción "inscrito" para el ciclo seleccionado.',
+        'La población incluye únicamente alumnos inscritos que no tienen ninguno de los conceptos seleccionados; tener al menos uno los excluye.',
       ],
       headers: [
         'Matrícula',
@@ -86,7 +86,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         'CURP',
         'Fecha de nacimiento',
         'Plantel',
-        'Concepto(s) faltante(s)',
+        'Conceptos seleccionados ausentes',
         'Cantidad faltante',
       ],
       rows,

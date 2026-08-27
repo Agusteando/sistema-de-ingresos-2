@@ -1,6 +1,6 @@
 import { readCentralConceptos, readCentralConceptosConfig, buildConceptosConfigPayload, canManageConceptosConfig } from '../../utils/conceptos-config'
 import { getTrustedAuthUser } from '../../utils/auth-session'
-import { readBestTalleresServiciosCatalog } from '../../utils/talleres-servicios'
+import { readBestTalleresServiciosCatalog, readFinalTalleresCatalog } from '../../utils/talleres-servicios'
 import { readBestStockSnapshots, readStockMovements, stockMapByConceptId, uncontrolledStockSnapshot } from '../../utils/conceptos-stock'
 import { CONCEPTOS_PLANTELES_LIST, isConceptosPlantel, normalizeConceptosPlantel } from '../../../utils/constants'
 
@@ -9,7 +9,10 @@ export default defineEventHandler(async (event) => {
   const canManage = canManageConceptosConfig(user)
   const config = await readCentralConceptosConfig()
   const conceptos = await readCentralConceptos()
-  const serviciosCatalogo = await readBestTalleresServiciosCatalog()
+  const [serviciosCatalogo, talleresCatalogo] = await Promise.all([
+    readBestTalleresServiciosCatalog(),
+    readFinalTalleresCatalog(),
+  ])
   const requestedPlantel = String(getQuery(event).plantel || '').trim().toUpperCase()
   const fallbackPlantel = String(user.active_plantel || event.context.dbBridgeAgentId || CONCEPTOS_PLANTELES_LIST[0]).toUpperCase()
   const activePlantel = requestedPlantel && requestedPlantel !== 'GLOBAL'
@@ -41,6 +44,8 @@ export default defineEventHandler(async (event) => {
     stock: { source: stock.source, plantel: activePlantel, snapshots: activeSnapshots, allSnapshots: visibleSnapshots, movements: visibleMovements },
     serviciosCatalogo: serviciosCatalogo.catalog.map((item) => ({ clave: item.servicio_clave, nombre: item.servicio_nombre, imagen: item.imagen_url, activo: Number(item.activo || 0) !== 0, orden: Number(item.orden || 9999) })),
     serviciosCatalogoSource: serviciosCatalogo.source,
+    talleresCatalogo: talleresCatalogo.catalog.map((item) => ({ clave: item.servicio_clave, nombre: item.servicio_nombre, imagen: item.imagen_url, activo: true, orden: Number(item.orden || 9999) })),
+    talleresCatalogoSource: talleresCatalogo.source,
     ...buildConceptosConfigPayload({ ...config, conceptos: conceptosWithStock })
   }
 })

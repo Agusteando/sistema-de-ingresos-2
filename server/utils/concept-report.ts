@@ -362,37 +362,30 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
     const matriculas = enrolledRows.map((row: any) => String(row?.matricula || '').trim()).filter(Boolean)
     const selectedEvidence = await loadSelectedConceptEvidence(user, plantel, matriculas, ciclo, context.conceptoIds)
 
-    const conceptById = new Map(context.conceptos.map((concept: any) => [String(concept.id), concept]))
-    const missingByConcept = new Map<string, number>(context.conceptoIds.map(id => [String(id), 0]))
+    const selectedConcepts = context.conceptos.map((concept: any) => ({
+      id: Number(concept.id),
+      concepto: String(concept.concepto || `Concepto financiero #${concept.id}`),
+    }))
     const missingByGrade = new Map<string, number>()
-    let completeStudents = 0
-    let studentsWithoutAny = 0
-    let presentConceptMatches = 0
+    let studentsWithAny = 0
 
     const rows = enrolledRows.flatMap((row: any) => {
       const matricula = String(row?.matricula || '').trim()
       const present = selectedEvidence.get(matricula.toUpperCase()) || new Set<string>()
-      const missingIds = context.conceptoIds.map(String).filter(id => !present.has(id))
-      presentConceptMatches += context.conceptoIds.length - missingIds.length
 
-      if (!missingIds.length) {
-        completeStudents += 1
+      // Multiselect semantics are OR for presence and NOT-ANY for this report:
+      // if the student has at least ONE of the selected concepts, they are not
+      // part of "Sin concepto". Only students with zero selected concepts remain.
+      if (present.size > 0) {
+        studentsWithAny += 1
         return []
       }
-
-      if (present.size === 0) studentsWithoutAny += 1
-      missingIds.forEach((id) => missingByConcept.set(id, (missingByConcept.get(id) || 0) + 1))
 
       const curp = normalizeCurp(row?.curp)
       const grado = String(row?.grado || '').trim()
       const nivel = String(row?.nivel || '').trim()
       const gradeKey = [nivel, grado].filter(Boolean).join(' · ') || 'Sin grado'
       missingByGrade.set(gradeKey, (missingByGrade.get(gradeKey) || 0) + 1)
-
-      const missingConcepts = missingIds.map(id => ({
-        id: Number(id),
-        concepto: String(conceptById.get(id)?.concepto || `Concepto financiero #${id}`),
-      }))
 
       return [{
         matricula,
@@ -407,9 +400,9 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
         fechaNacimiento: birthDateFromCurp(curp),
         plantel: String(row?.plantel || row?.basePlantel || plantel).trim().toUpperCase(),
         ciclo,
-        conceptosFaltantes: missingConcepts,
-        conceptosFaltantesTexto: missingConcepts.map(item => item.concepto).join(', '),
-        faltantes: missingConcepts.length,
+        conceptosFaltantes: selectedConcepts,
+        conceptosFaltantesTexto: selectedConcepts.map(item => item.concepto).join(', '),
+        faltantes: selectedConcepts.length,
       }]
     })
 
@@ -422,9 +415,12 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
       collator.compare(String(left.nombres || ''), String(right.nombres || ''))
     ))
 
-    const expectedConceptMatches = enrolledRows.length * context.conceptoIds.length
-    const missingConceptMatches = Math.max(0, expectedConceptMatches - presentConceptMatches)
-    const coverage = expectedConceptMatches > 0 ? Math.round((presentConceptMatches / expectedConceptMatches) * 1000) / 10 : 0
+    const studentsWithoutAny = rows.length
+    const coverage = enrolledRows.length > 0
+      ? Math.round((studentsWithAny / enrolledRows.length) * 1000) / 10
+      : 0
+    const missingConceptMatches = studentsWithoutAny * selectedConcepts.length
+    const presentConceptMatches = enrolledRows.length - studentsWithoutAny
 
     return {
       modo: 'missing',
@@ -439,22 +435,22 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
       },
       resumen: {
         inscritos: enrolledRows.length,
-        alumnos: rows.length,
-        completos: completeStudents,
+        alumnos: studentsWithoutAny,
         sinNinguno: studentsWithoutAny,
-        conceptosEsperados: expectedConceptMatches,
+        conAlguno: studentsWithAny,
+        // Keep compatibility aliases consumed by existing print/export views.
+        completos: studentsWithAny,
+        conceptosEsperados: enrolledRows.length,
         conceptosPresentes: presentConceptMatches,
         conceptosFaltantes: missingConceptMatches,
-        // Compatibility aliases for existing print/export consumers.
-        asignacionesEsperadas: expectedConceptMatches,
+        asignacionesEsperadas: enrolledRows.length,
         asignacionesPresentes: presentConceptMatches,
         asignacionesFaltantes: missingConceptMatches,
         cobertura: coverage,
-        conceptos: context.conceptos.map((concept: any) => ({
-          id: concept.id,
-          concepto: concept.concepto,
-          faltantes: missingByConcept.get(String(concept.id)) || 0,
-        })).sort((a: any, b: any) => Number(b.faltantes || 0) - Number(a.faltantes || 0)),
+        conceptos: selectedConcepts.map((concept: any) => ({
+          ...concept,
+          faltantes: studentsWithoutAny,
+        })),
         grados: Array.from(missingByGrade.entries())
           .map(([grado, total]) => ({ grado, total }))
           .sort((a, b) => Number(b.total || 0) - Number(a.total || 0) || collator.compare(a.grado, b.grado)),

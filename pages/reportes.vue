@@ -28,7 +28,7 @@
         <div class="concept-heading">
           <div>
             <h3>Reporte por concepto</h3>
-            <p>{{ conceptReportMode === 'missing' ? 'Detecta inscritos que todavía no tienen uno o más conceptos seleccionados.' : 'Consulta los movimientos registrados para los conceptos seleccionados.' }}</p>
+            <p>{{ conceptReportMode === 'missing' ? 'Muestra únicamente inscritos que no tienen ninguno de los conceptos seleccionados.' : 'Consulta los movimientos registrados para los conceptos seleccionados.' }}</p>
           </div>
           <div class="concept-mode-switch" role="group" aria-label="Tipo de reporte por concepto">
             <button
@@ -133,12 +133,12 @@
           <strong>{{ conceptSummary.inscritos || 0 }}</strong>
         </div>
         <div class="metric-card attention">
-          <span>Con faltantes</span>
+          <span>Sin ninguno</span>
           <strong>{{ conceptSummary.alumnos || 0 }}</strong>
         </div>
         <div class="metric-card">
-          <span>Selección completa</span>
-          <strong>{{ conceptSummary.completos || 0 }}</strong>
+          <span>Con al menos uno</span>
+          <strong>{{ conceptSummary.conAlguno ?? conceptSummary.completos ?? 0 }}</strong>
         </div>
         <div class="metric-card">
           <span>Cobertura</span>
@@ -251,7 +251,7 @@
                 <th>CURP</th>
                 <th>Nacimiento</th>
                 <th v-if="canFilterPlantel">Plantel</th>
-                <th>Concepto faltante</th>
+                <th>Conceptos seleccionados ausentes</th>
               </tr>
             </thead>
             <tbody>
@@ -275,8 +275,8 @@
               </tr>
               <tr v-else-if="!conceptRows.length">
                 <td :colspan="canFilterPlantel ? 8 : 7" class="missing-empty-state">
-                  <strong>Selección completa</strong>
-                  <span>Todos los alumnos inscritos tienen los conceptos seleccionados para {{ conceptCycleLabel }}.</span>
+                  <strong>Todos tienen al menos uno</strong>
+                  <span>No hay alumnos inscritos sin ninguno de los conceptos seleccionados para {{ conceptCycleLabel }}.</span>
                 </td>
               </tr>
               <tr v-else v-for="row in conceptRows" :key="`${row.matricula}-${row.conceptosFaltantesTexto}`">
@@ -300,7 +300,7 @@
         </div>
 
         <aside class="breakdown-panel missing-breakdown-panel">
-          <h4>Faltantes por concepto</h4>
+          <h4>Conceptos seleccionados</h4>
           <div v-if="conceptSummary.conceptos?.length" class="breakdown-list missing-breakdown-list">
             <div v-for="item in conceptSummary.conceptos" :key="item.id">
               <span>{{ item.concepto }}</span>
@@ -319,7 +319,7 @@
           </template>
 
           <div class="missing-report-note">
-            “Sin concepto” usa la misma identidad financiera que “Con concepto”: se considera presente cuando existe un movimiento de ese concepto en el ciclo seleccionado.
+            “Sin concepto” muestra solo alumnos inscritos sin ninguno de los conceptos seleccionados. Tener al menos uno de ellos excluye al alumno del reporte.
           </div>
         </aside>
       </div>

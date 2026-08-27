@@ -1,1 +1,1 @@
-Alinea el reporte sin concepto con inscritos y movimientos financieros del ciclo
+Define el catálogo final de talleres sin alterar servicios

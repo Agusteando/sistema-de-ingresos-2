@@ -1,13 +1,15 @@
 import { PLANTELES_LIST } from '../../utils/constants'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import {
+  canonicalTallerKey,
+  finalTallerSeed,
   normalizeServicioClave,
   normalizeServicioNombre,
   parseServiciosCsv,
 } from '../../shared/utils/talleresServicios'
 import { controlEscolarCentralQuery, getCentralTableColumns } from './control-escolar-central'
 import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
-import { readBestTalleresServiciosCatalog, updateCentralMatriculaServicio } from './talleres-servicios'
+import { readFinalTalleresCatalog, updateCentralMatriculaServicio } from './talleres-servicios'
 
 export const TALLERES_PORTAL_PLANTELES = [
   'PREET', 'PREEM', 'PT', 'PM', 'ST', 'SM', 'ISM', 'DM', 'CM', 'CT'
@@ -24,7 +26,7 @@ let labelsSchemaCache = { checkedAt: 0, ready: false }
 
 const clean = (value: unknown, max = 255) => String(value ?? '').trim().slice(0, max)
 const matriculaKey = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
-const studentMapKey = (matricula: unknown, servicioClave: unknown) => `${matriculaKey(matricula)}::${normalizeServicioClave(servicioClave)}`
+const studentMapKey = (matricula: unknown, servicioClave: unknown) => `${matriculaKey(matricula)}::${canonicalTallerKey(servicioClave)}`
 const truthy = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes'].includes(String(value ?? '').trim().toLowerCase()) || Number(value) === 1
 
 const normalizeDayCodes = (value: unknown): TallerDayCode[] => {
@@ -126,7 +128,7 @@ const readLabelsForStudents = async (matriculas: string[], ciclo: string) => {
 }
 
 const readCatalog = async () => {
-  const result = await readBestTalleresServiciosCatalog()
+  const result = await readFinalTalleresCatalog()
   return {
     source: result.source,
     catalog: result.catalog.map((item) => ({
@@ -142,14 +144,14 @@ const readCatalog = async () => {
 const makeServiceResolver = (catalog: Awaited<ReturnType<typeof readCatalog>>['catalog']) => {
   const byKey = new Map(catalog.map((item) => [item.clave, item]))
   return (value: unknown) => {
-    const nombre = normalizeServicioNombre(value)
-    const clave = normalizeServicioClave(nombre)
+    const rawName = normalizeServicioNombre(value)
+    const clave = canonicalTallerKey(rawName)
     const item = byKey.get(clave)
     return {
       clave,
-      nombre: item?.nombre || nombre,
+      nombre: item?.nombre || rawName,
       imagen: item?.imagen || '',
-      activo: item ? item.activo : true,
+      activo: Boolean(item?.activo),
       orden: item?.orden || 9999,
     }
   }
@@ -262,7 +264,7 @@ export const readTalleresPortalRoster = async (event: any, input: any = {}) => {
     data[entry.plantel] = {}
     for (const rawStudent of entry.students) {
       if (String(rawStudent?.status || '').toLowerCase() === 'baja' || Number(rawStudent?.baja || 0) === 1) continue
-      const services = parseServiciosCsv(rawStudent?.servicio).map(resolveService).filter((service) => service.clave && service.nombre)
+      const services = parseServiciosCsv(rawStudent?.servicio).map(resolveService).filter((service) => service.activo && service.clave && service.nombre)
       if (!services.length) continue
       const student = compactStudent(rawStudent, entry.plantel, ciclo, services, labels.map)
       for (const service of services) {
@@ -318,7 +320,7 @@ export const searchTalleresPortalStudents = async (event: any, input: any = {}) 
   for (const entry of flattened) {
     const mat = matriculaKey(entry.student?.matricula)
     if (!mat || unique.has(mat) || String(entry.student?.status || '').toLowerCase() === 'baja' || Number(entry.student?.baja || 0) === 1) continue
-    const services = parseServiciosCsv(entry.student?.servicio).map(resolveService).filter((service) => service.clave && service.nombre)
+    const services = parseServiciosCsv(entry.student?.servicio).map(resolveService).filter((service) => service.activo && service.clave && service.nombre)
     const student = compactStudent(entry.student, entry.plantel, ciclo, services, labels.map)
     unique.set(mat, student)
     if (unique.size >= MAX_SEARCH_RESULTS) break
@@ -346,13 +348,14 @@ export const saveTalleresStudentDays = async ({
   const matriculaValue = matriculaKey(matricula)
   const plantelValue = normalizePortalPlantel(plantel)
   const ciclo = await resolveCurrentCiclo(cicloInput)
-  const servicioNombre = normalizeServicioNombre(servicio)
-  const servicioClave = normalizeServicioClave(servicioNombre)
+  const taller = finalTallerSeed(servicio)
+  const servicioNombre = taller?.nombre || ''
+  const servicioClave = taller?.clave || ''
   const normalizedDays = normalizeDayCodes(dias)
 
   if (!matriculaValue) throw createError({ statusCode: 400, message: 'Matrícula requerida.' })
   if (!plantelValue) throw createError({ statusCode: 400, message: 'Plantel inválido.' })
-  if (!servicioClave) throw createError({ statusCode: 400, message: 'Taller requerido.' })
+  if (!servicioClave) throw createError({ statusCode: 400, message: 'Selecciona un taller vigente.' })
 
   await controlEscolarCentralQuery(
     `INSERT INTO ${LABELS_TABLE}
@@ -409,9 +412,11 @@ export const mutateTalleresStudentWorkshop = async ({
   const matriculaValue = matriculaKey(matricula)
   const plantelValue = normalizePortalPlantel(plantel)
   const ciclo = await resolveCurrentCiclo(cicloInput)
-  const servicioNombre = normalizeServicioNombre(servicio)
+  const taller = finalTallerSeed(servicio)
+  const servicioNombre = action === 'add' ? (taller?.nombre || '') : normalizeServicioNombre(servicio)
   if (!matriculaValue || !plantelValue || !servicioNombre) throw createError({ statusCode: 400, message: 'Matrícula, plantel y taller son obligatorios.' })
   if (!['add', 'remove'].includes(action)) throw createError({ statusCode: 400, message: 'Acción inválida.' })
+  if (action === 'add' && !taller) throw createError({ statusCode: 400, message: 'Selecciona un taller vigente.' })
 
   const updated = await updateCentralMatriculaServicio({
     matricula: matriculaValue,
@@ -424,7 +429,7 @@ export const mutateTalleresStudentWorkshop = async ({
   if (action === 'remove' && await labelsTableReady()) {
     await controlEscolarCentralQuery(
       `DELETE FROM ${LABELS_TABLE} WHERE ciclo = ? AND matricula = ? AND servicio_clave = ?`,
-      [ciclo, matriculaValue, normalizeServicioClave(servicioNombre)]
+      [ciclo, matriculaValue, canonicalTallerKey(servicioNombre)]
     )
   }
 
