@@ -1,1 +1,1 @@
-Permitir adjuntar documentos en envíos masivos por correo y WhatsApp
+Corrige la población inscrita del reporte por concepto usando la configuración institucional y evidencia real del ciclo

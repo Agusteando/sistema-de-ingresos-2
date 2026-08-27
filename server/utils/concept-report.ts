@@ -9,7 +9,7 @@ import { birthDateFromCurp } from './student-identity-report'
 import { PLANTELES_LIST } from '../../utils/constants'
 import { displayGrado } from '../../shared/utils/grado'
 import { parseEnrollmentConceptsForPlantelHistory, parseEnrollmentConceptsForScope } from '../../shared/utils/studentPresentation'
-import { readBestConceptosConfigPayload } from './conceptos-config'
+import { buildConceptosConfigPayload, readBestConceptosConfigPayload, readCentralConceptosConfig } from './conceptos-config'
 import { fetchControlEscolarBridgePopulationRows } from './control-escolar'
 import {
   PAYMENT_APPLIED_AMOUNT_SQL,
@@ -245,6 +245,42 @@ const resolveMissingConceptPlantel = (user: any, requestedPlantel: unknown) => {
 
 const CONCEPT_EVIDENCE_CHUNK_SIZE = 400
 
+type EnrollmentPopulationScope = {
+  enrollmentConceptIds: string[]
+  tipoIngresoConceptIds: string[]
+  source: 'central' | 'local-fallback'
+}
+
+/**
+ * Enrollment is an institutional definition, so report population must use the
+ * authoritative central mapping whenever it is reachable. A Bridge-local copy
+ * remains a resilience fallback for offline operation, but it must not silently
+ * override a more complete central configuration.
+ */
+const resolveEnrollmentPopulationScope = async (ciclo: string, plantel: string): Promise<EnrollmentPopulationScope> => {
+  try {
+    const central = await readCentralConceptosConfig()
+    const payload = buildConceptosConfigPayload({ ...central, conceptos: [] })
+    const enrollmentConceptIds = parseEnrollmentConceptsForScope(payload, { ciclo, plantel })
+    const tipoIngresoConceptIds = parseEnrollmentConceptsForPlantelHistory(payload, { plantel })
+
+    return {
+      enrollmentConceptIds,
+      tipoIngresoConceptIds: tipoIngresoConceptIds.length ? tipoIngresoConceptIds : enrollmentConceptIds,
+      source: 'central',
+    }
+  } catch {
+    const localPayload = await readBestConceptosConfigPayload()
+    const enrollmentConceptIds = parseEnrollmentConceptsForScope(localPayload, { ciclo, plantel })
+    const tipoIngresoConceptIds = parseEnrollmentConceptsForPlantelHistory(localPayload, { plantel })
+    return {
+      enrollmentConceptIds,
+      tipoIngresoConceptIds: tipoIngresoConceptIds.length ? tipoIngresoConceptIds : enrollmentConceptIds,
+      source: 'local-fallback',
+    }
+  }
+}
+
 const loadSelectedConceptEvidence = async (
   matriculas: string[],
   ciclo: string,
@@ -334,18 +370,22 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
       conceptoIds: filters?.conceptoIds ?? filters?.conceptoId,
     })
 
-    const enrollmentConfig = await readBestConceptosConfigPayload()
-    const enrollmentConceptIds = parseEnrollmentConceptsForScope(enrollmentConfig, { ciclo, plantel })
-    const tipoIngresoConceptIds = parseEnrollmentConceptsForPlantelHistory(enrollmentConfig, { plantel })
+    const enrollmentScope = await resolveEnrollmentPopulationScope(ciclo, plantel)
 
     const populationRows = await fetchControlEscolarBridgePopulationRows(plantel, {
       ciclo,
-      concepts: enrollmentConceptIds.join(','),
-      tipoConcepts: (tipoIngresoConceptIds.length ? tipoIngresoConceptIds : enrollmentConceptIds).join(','),
+      concepts: enrollmentScope.enrollmentConceptIds.join(','),
+      tipoConcepts: enrollmentScope.tipoIngresoConceptIds.join(','),
     })
 
+    // Match the canonical student list exactly: a student is enrolled for the
+    // selected cycle only when the Bridge base row is active AND there is
+    // current-cycle evidence for one of the configured enrollment concepts.
+    // Do not use operatorEnrollmentState here because its no-config fallback is
+    // intentionally permissive for other Control Escolar recovery flows.
     const enrolledRows = populationRows.filter((row: any) => (
-      String(row?.operatorEnrollmentState || '').trim().toLowerCase() === 'inscrito'
+      String(row?.baseEstatus || '').trim().toLowerCase() === 'activo'
+      && row?.currentEnrollmentConceptMatch === true
     ))
     const matriculas = enrolledRows.map((row: any) => String(row?.matricula || '').trim()).filter(Boolean)
     const selectedEvidence = await loadSelectedConceptEvidence(matriculas, ciclo, context.conceptoIds)
@@ -432,6 +472,7 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
         ciclo,
         cicloLabel: formatCicloLabel(ciclo),
         conceptoIds: context.conceptoIds,
+        enrollmentConfigSource: enrollmentScope.source,
       },
       resumen: {
         inscritos: enrolledRows.length,
