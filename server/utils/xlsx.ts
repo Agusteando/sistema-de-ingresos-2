@@ -241,8 +241,11 @@ const createWorksheetXml = (sheet: XlsxSheet) => {
   const mergedRefs = [`A1:${lastColumn}1`, `A2:${lastColumn}2`];
   const dimensionLastRow = sheet.totalRow ? lastDataRow + 1 : lastDataRow;
 
+  const orientation = columnCount > 6 ? "landscape" : "portrait";
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="${XMLNS_MAIN}" xmlns:r="${XMLNS_REL}">
+  <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
   <dimension ref="A1:${lastColumn}${dimensionLastRow}"/>
   <sheetViews><sheetView workbookViewId="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A5" sqref="A5"/></sheetView></sheetViews>
   <sheetFormatPr defaultRowHeight="18"/>
@@ -250,14 +253,20 @@ const createWorksheetXml = (sheet: XlsxSheet) => {
   <sheetData>${rows.join("")}</sheetData>
   <autoFilter ref="A4:${lastColumn}${autoFilterLastRow}"/>
   <mergeCells count="${mergeCount}">${mergedRefs.map((ref) => `<mergeCell ref="${ref}"/>`).join("")}</mergeCells>
-  <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+  <printOptions horizontalCentered="1"/>
+  <pageMargins left="0.35" right="0.35" top="0.55" bottom="0.55" header="0.2" footer="0.25"/>
+  <pageSetup paperSize="9" orientation="${orientation}" fitToWidth="1" fitToHeight="0"/>
+  <headerFooter><oddFooter>&amp;LIECS-IEDIS · Control Escolar&amp;C&amp;P / &amp;N&amp;RReporte institucional</oddFooter></headerFooter>
 </worksheet>`;
 };
+
+const printTitleReference = (name: string) => `'${name.replace(/'/g, "''")}'!$1:$4`;
 
 const workbookXml = (sheetNames: string[]) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="${XMLNS_MAIN}" xmlns:r="${XMLNS_REL}">
   <bookViews><workbookView xWindow="0" yWindow="0" windowWidth="19200" windowHeight="12000"/></bookViews>
   <sheets>${sheetNames.map((name, index) => `<sheet name="${escapeXml(name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets>
+  <definedNames>${sheetNames.map((name, index) => `<definedName name="_xlnm.Print_Titles" localSheetId="${index}">${escapeXml(printTitleReference(name))}</definedName>`).join("")}</definedNames>
 </workbook>`;
 
 const workbookRelsXml = (sheetCount: number) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -328,20 +337,22 @@ const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 const coreXml = (createdAt: Date) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:creator>Control Escolar</dc:creator>
-  <cp:lastModifiedBy>Control Escolar</cp:lastModifiedBy>
+  <dc:title>Reporte institucional de Control Escolar</dc:title>
+  <dc:subject>Control Escolar</dc:subject>
+  <dc:creator>IECS-IEDIS · Control Escolar</dc:creator>
+  <cp:lastModifiedBy>IECS-IEDIS · Control Escolar</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">${createdAt.toISOString()}</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">${createdAt.toISOString()}</dcterms:modified>
 </cp:coreProperties>`;
 
 const appXml = (sheetNames: string[]) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>Control Escolar</Application>
+  <Application>Aurora · Control Escolar</Application>
   <DocSecurity>0</DocSecurity>
   <ScaleCrop>false</ScaleCrop>
   <HeadingPairs><vt:vector size="2" baseType="variant"><vt:variant><vt:lpstr>Worksheets</vt:lpstr></vt:variant><vt:variant><vt:i4>${sheetNames.length}</vt:i4></vt:variant></vt:vector></HeadingPairs>
   <TitlesOfParts><vt:vector size="${sheetNames.length}" baseType="lpstr">${sheetNames.map((name) => `<vt:lpstr>${escapeXml(name)}</vt:lpstr>`).join("")}</vt:vector></TitlesOfParts>
-  <Company>Casita Apps</Company>
+  <Company>IECS-IEDIS</Company>
   <LinksUpToDate>false</LinksUpToDate>
   <SharedDoc>false</SharedDoc>
   <HyperlinksChanged>false</HyperlinksChanged>

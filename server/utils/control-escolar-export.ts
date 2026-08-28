@@ -1,5 +1,7 @@
 import { createXlsxWorkbook } from './xlsx'
 import { fetchControlEscolarExportRows } from './control-escolar'
+import { formatCicloLabel } from '../../shared/utils/ciclo'
+import { CONTROL_ESCOLAR_REPORT_FIELDS, CONTROL_ESCOLAR_REPORT_FIELD_KEYS } from '../../shared/constants/controlEscolarReport'
 
 const gradeAliases: Record<string, number> = {
   primero: 1,
@@ -65,11 +67,21 @@ const toExportValue = (value: unknown): any => {
   return value as any
 }
 
+const filterLabels: Record<string, string> = {
+  search: 'Búsqueda',
+  status: 'Estado',
+  quality: 'Expediente',
+  grado: 'Grado',
+  group: 'Grupo',
+  grupo: 'Grupo',
+  recent: 'Actividad',
+}
+
 const filterSummary = (queryParams: Record<string, any>) => {
   const entries = Object.entries(queryParams)
-    .filter(([key, value]) => !['agentId', 'page', 'limit'].includes(key) && normalize(value))
-    .map(([key, value]) => `${key}: ${value}`)
-  return entries.length ? entries.join(' · ') : 'Sin filtros adicionales'
+    .filter(([key, value]) => Object.prototype.hasOwnProperty.call(filterLabels, key) && normalize(value))
+    .map(([key, value]) => `${filterLabels[key]}: ${value}`)
+  return entries.length ? entries.join(' · ') : 'Población completa del alcance seleccionado'
 }
 
 const knownColumns: Array<[string, string, number]> = [
@@ -174,7 +186,17 @@ const EXTERNAL_EXPORT_EXCLUDED_KEYS = new Set([
 const isExternalExportSafeKey = (key: string) =>
   !key.startsWith('huskyPass') && !EXTERNAL_EXPORT_EXCLUDED_KEYS.has(key)
 
-const buildDataColumns = (rows: any[], options: { includeSensitive?: boolean } = {}) => {
+const buildDataColumns = (
+  rows: any[],
+  options: { includeSensitive?: boolean; selectedFields?: string[] } = {},
+) => {
+  if (options.selectedFields?.length) {
+    const selected = new Set(options.selectedFields.filter((key) => CONTROL_ESCOLAR_REPORT_FIELD_KEYS.has(key)))
+    return CONTROL_ESCOLAR_REPORT_FIELDS
+      .filter((field) => selected.has(field.key) && (options.includeSensitive !== false || !field.sensitive))
+      .map((field) => ({ key: field.key, label: field.label, width: field.width }))
+  }
+
   const knownKeys = new Set<string>(knownColumns.map(([key]) => key))
   const extraKeySet = new Set<string>()
   rows.forEach((row) => {
@@ -196,19 +218,27 @@ const buildDataColumns = (rows: any[], options: { includeSensitive?: boolean } =
   ]
 }
 
-const normalizeRowsForSheet = (rows: any[], columns: Array<{ key: string }>) => rows.map((row) => {
-  const record: Record<string, any> = {}
-  columns.forEach((column) => {
-    record[column.key] = toExportValue(row?.[column.key])
+const normalizeRowsForSheet = (
+  rows: any[],
+  columns: Array<{ key: string }>,
+  queryParams: Record<string, any>,
+) => {
+  const cicloEscolar = formatCicloLabel(queryParams.ciclo || queryParams.cicloKey)
+  return rows.map((row) => {
+    const record: Record<string, any> = {}
+    columns.forEach((column) => {
+      const value = column.key === 'cicloEscolar' ? cicloEscolar : row?.[column.key]
+      record[column.key] = toExportValue(value)
+    })
+    return record
   })
-  return record
-})
+}
 
 
 export const buildControlEscolarExportWorkbook = async (
   agentId: string,
   queryParams: Record<string, any>,
-  options: { includeSensitive?: boolean; filenamePrefix?: string; titlePrefix?: string } = {}
+  options: { includeSensitive?: boolean; filenamePrefix?: string; titlePrefix?: string; selectedFields?: string[] } = {}
 ) => {
     const rows = (await fetchControlEscolarExportRows(agentId, queryParams))
       .slice()
@@ -221,7 +251,9 @@ export const buildControlEscolarExportWorkbook = async (
       })
 
     const generatedAt = new Date()
-    const subtitle = `Plantel ${agentId} · ${rows.length} alumno${rows.length === 1 ? '' : 's'} · ${filterSummary(queryParams as Record<string, any>)} · ${generatedAt.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`
+    const cicloLabel = formatCicloLabel(queryParams.ciclo || queryParams.cicloKey)
+    const generatedLabel = generatedAt.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })
+    const subtitle = `Plantel ${agentId} · Ciclo ${cicloLabel} · ${rows.length} alumno${rows.length === 1 ? '' : 's'} · ${filterSummary(queryParams as Record<string, any>)} · Generado ${generatedLabel}`
     const gradeMap = new Map<string, { grado: string; interno: number; externo: number; total: number }>()
 
     rows.forEach((row: any) => {
@@ -241,7 +273,7 @@ export const buildControlEscolarExportWorkbook = async (
       total: acc.total + row.total,
     }), { grado: 'Total', interno: 0, externo: 0, total: 0 })
 
-    const dataColumns = buildDataColumns(rows, { includeSensitive: options.includeSensitive })
+    const dataColumns = buildDataColumns(rows, { includeSensitive: options.includeSensitive, selectedFields: options.selectedFields })
     const groupMap = new Map<string, { grado: string; grupo: string; rows: any[] }>()
     rows.forEach((row: any) => {
       const grado = titleValue(row.grado, 'Sin grado')
@@ -260,10 +292,20 @@ export const buildControlEscolarExportWorkbook = async (
       .map((group) => ({
         name: safeSheetLabel(group.grado, group.grupo),
         title: `${String(options.titlePrefix || 'Control Escolar')} · ${safeSheetLabel(group.grado, group.grupo)}`,
-        subtitle: `Plantel ${agentId} · ${group.rows.length} alumno${group.rows.length === 1 ? '' : 's'} · exportado con los filtros activos`,
+        subtitle: `Plantel ${agentId} · Ciclo ${cicloLabel} · ${group.rows.length} alumno${group.rows.length === 1 ? '' : 's'} · ${filterSummary(queryParams as Record<string, any>)}`,
         columns: dataColumns,
-        rows: normalizeRowsForSheet(group.rows, dataColumns),
+        rows: normalizeRowsForSheet(group.rows, dataColumns, queryParams),
       }))
+
+    const reportSheets = options.selectedFields?.length
+      ? [{
+          name: 'General',
+          title: `${String(options.titlePrefix || 'Control Escolar')} · Reporte general`,
+          subtitle,
+          columns: dataColumns,
+          rows: normalizeRowsForSheet(rows, dataColumns, queryParams),
+        }]
+      : []
 
     const workbook = createXlsxWorkbook([
       {
@@ -279,6 +321,7 @@ export const buildControlEscolarExportWorkbook = async (
         rows: summaryRows,
         totalRow: summaryTotal,
       },
+      ...reportSheets,
       ...groupSheets,
     ])
 
@@ -287,6 +330,8 @@ export const buildControlEscolarExportWorkbook = async (
   const titlePrefix = String(options.titlePrefix || 'Control Escolar').trim() || 'Control Escolar'
   // Keep workbook titles institutional while allowing external consumers to identify the product.
   const normalizedWorkbook = workbook
-  const filename = `${prefix}-${agentId}-${generatedAt.toISOString().slice(0, 10)}.xlsx`
+  const filename = options.selectedFields?.length
+    ? `${prefix}-${agentId}-${cicloLabel}-${generatedAt.toISOString().slice(0, 10)}.xlsx`
+    : `${prefix}-${agentId}-${generatedAt.toISOString().slice(0, 10)}.xlsx`
   return { workbook: normalizedWorkbook, filename, titlePrefix }
 }

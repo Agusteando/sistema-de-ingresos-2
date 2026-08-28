@@ -47,7 +47,14 @@ export const readInstitutionalSchoolCycle = async (force = false): Promise<Insti
     .filter(Boolean)
     .sort((left, right) => Number(right) - Number(left))[0] || ''
 
-  const key = normalizeCicloKey(configuredCurrent || automatic, automatic)
+  // A configured cycle may intentionally open a future year early, but it must never
+  // keep the institutional current cycle behind the calendar rollover. This prevents
+  // stale is_current rows (for example 2025 during August 2026) from leaking into
+  // parent-facing integrations while still allowing an explicitly configured future cycle.
+  const configuredIsCurrentOrFuture = configuredCurrent && Number(configuredCurrent) >= Number(automatic)
+    ? configuredCurrent
+    : ''
+  const key = normalizeCicloKey(configuredIsCurrentOrFuture || automatic, automatic)
   const others = Array.from(new Set([...configuredKeys, ...calendarCycleKeys(key), automatic]))
     .filter((value) => Boolean(value) && value !== key)
     .sort((left, right) => Number(right) - Number(left))
@@ -56,7 +63,7 @@ export const readInstitutionalSchoolCycle = async (force = false): Promise<Insti
   const value: InstitutionalSchoolCycle = {
     key,
     label: formatCicloLabel(key),
-    source: configuredCurrent ? 'configured' : 'calendar',
+    source: configuredIsCurrentOrFuture ? 'configured' : 'calendar',
     schoolYears: values.map((value) => ({
       value,
       label: formatCicloLabel(value),

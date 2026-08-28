@@ -257,7 +257,7 @@
                     type="button"
                     class="ce-excel-export-button"
                     :disabled="!selectedAgentId || studentsLoading || !pagination.total"
-                    @click="exportCurrentView"
+                    @click="showControlReportModal = true"
                   >
                     <LucideFileSpreadsheet :size="15" />
                     <span>Exportar Excel</span>
@@ -1753,6 +1753,15 @@
       @clear="clearControlBulkSelection"
     />
 
+    <ControlEscolarReportModal
+      :show="showControlReportModal"
+      :plantel="selectedAgentId"
+      :ciclo-label="currentCicloLabel"
+      :total="pagination.total"
+      @close="showControlReportModal = false"
+      @confirm="exportCurrentView"
+    />
+
     <ControlEscolarHuskyBulkModal
       v-if="showControlHuskyBulkModal && controlBulkSelectedCount"
       :mode="controlHuskyBulkMode"
@@ -1984,6 +1993,7 @@ import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.v
 import StudentsKpiValue from "~/components/students/StudentsKpiValue.vue";
 import ControlEscolarSelectionDock from "~/components/students/ControlEscolarSelectionDock.vue";
 import ControlEscolarHuskyBulkModal from "~/components/students/ControlEscolarHuskyBulkModal.vue";
+import ControlEscolarReportModal from "~/components/students/ControlEscolarReportModal.vue";
 import StudentWhatsappBulkModal from "~/components/students/StudentWhatsappBulkModal.vue";
 import StudentEmailBulkModal from "~/components/students/StudentEmailBulkModal.vue";
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
@@ -2114,6 +2124,7 @@ const showControlEmailBulkModal = ref(false);
 const controlEmailSent = ref(false);
 const controlEmailFailedMatriculas = ref([]);
 const showControlHuskyBulkModal = ref(false);
+const showControlReportModal = ref(false);
 const controlHuskyBulkMode = ref("generate_missing");
 const controlHuskyBulkRunning = ref(false);
 const controlHuskyBulkDone = ref(false);
@@ -6309,15 +6320,17 @@ const saveStudent = async () => {
   }
 };
 
-const exportCurrentView = () => {
-  if (!selectedAgentId.value) return;
+const exportCurrentView = (fields = []) => {
+  if (!selectedAgentId.value || !Array.isArray(fields) || !fields.length) return;
   const params = new URLSearchParams();
   Object.entries(buildQuery({ page: undefined, limit: undefined })).forEach(
     ([key, value]) => {
       if (value !== undefined && value !== "") params.set(key, value);
     },
   );
+  params.set("fields", fields.join(","));
   params.set("_scope", String(Date.now()));
+  showControlReportModal.value = false;
   window.open(`/api/control-escolar/export?${params.toString()}`, "_blank");
 };
 
