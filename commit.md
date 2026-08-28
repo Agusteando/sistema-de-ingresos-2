@@ -1,1 +1,1 @@
-Corrige faltantes por concepto para excluir alumnos con cualquier concepto seleccionado
+Resolver credenciales centrales en tiempo de ejecución para soportar rotaciones de usuario sin recompilar Aurora.

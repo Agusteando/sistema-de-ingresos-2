@@ -24,7 +24,29 @@ let controlEscolarPool: mysql.Pool | null = null
 const centralColumnCache = new Map<string, { columns: Set<string>; loadedAt: number }>()
 const CENTRAL_SCHEMA_CACHE_MS = 1000 * 60 * 5
 
-const getConfig = () => useRuntimeConfig() as unknown as RuntimeCentralDbConfig
+const runtimeEnvValue = (name: string, fallback: unknown) => {
+  const nuxtValue = process.env[`NUXT_${name}`]
+  if (nuxtValue !== undefined) return nuxtValue
+
+  const value = process.env[name]
+  return value === undefined ? fallback : value
+}
+
+const getConfig = (): RuntimeCentralDbConfig => {
+  const config = useRuntimeConfig() as unknown as RuntimeCentralDbConfig
+
+  return {
+    controlEscolarMysqlHost: runtimeEnvValue('CONTROL_ESCOLAR_MYSQL_HOST', config.controlEscolarMysqlHost),
+    controlEscolarMysqlPort: runtimeEnvValue('CONTROL_ESCOLAR_MYSQL_PORT', config.controlEscolarMysqlPort),
+    controlEscolarMysqlUser: runtimeEnvValue('CONTROL_ESCOLAR_MYSQL_USER', config.controlEscolarMysqlUser),
+    controlEscolarMysqlPassword: runtimeEnvValue('CONTROL_ESCOLAR_MYSQL_PASSWORD', config.controlEscolarMysqlPassword),
+    controlEscolarMysqlDatabase: runtimeEnvValue('CONTROL_ESCOLAR_MYSQL_DATABASE', config.controlEscolarMysqlDatabase),
+    controlEscolarMysqlConnectionLimit: runtimeEnvValue(
+      'CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT',
+      config.controlEscolarMysqlConnectionLimit
+    )
+  }
+}
 
 const requiredValue = (value: unknown, name: string) => {
   const normalized = String(value || '').trim()
