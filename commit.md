@@ -1,1 +1,1 @@
-Personalizar reportes oficiales de Control Escolar por campos
+Corrige el enrutamiento académico de Husky Pass por ciclo vigente

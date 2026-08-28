@@ -1,22 +1,19 @@
 import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
-import { normalizePlantel } from './auth-session'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import { readInstitutionalSchoolCycle } from './school-cycle'
 import { normalizeCurp } from '../../shared/utils/curp'
 import { normalizeServicioClave, parseServiciosCsv } from '../../shared/utils/talleresServicios'
+import {
+  EXTERNAL_CONTROL_ESCOLAR_PLANTELES,
+  controlEscolarBridgeAgentCandidates,
+  normalizeExternalControlEscolarPlantel
+} from './control-escolar-plantel-routing'
 
-const CANONICAL_PLANTELES = ['PREEM', 'PREET', 'GM', 'PM', 'PT', 'SM', 'ST'] as const
-const CANONICAL_SET = new Set<string>(CANONICAL_PLANTELES)
+const CANONICAL_PLANTELES = EXTERNAL_CONTROL_ESCOLAR_PLANTELES
 const clean = (value: unknown, max = 255) => String(value ?? '').trim().slice(0, max)
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
 
-export const normalizeExternalLivePlantel = (value: unknown) => {
-  const plantel = normalizePlantel(value || '')
-  if (plantel === 'CT') return 'PREET'
-  if (plantel === 'CM') return 'PREEM'
-  if (plantel === 'PMA' || plantel === 'PMB') return 'PM'
-  return CANONICAL_SET.has(plantel) ? plantel : ''
-}
+export const normalizeExternalLivePlantel = normalizeExternalControlEscolarPlantel
 
 const resolveScope = (query: any = {}) => {
   const plantel = normalizeExternalLivePlantel(query.plantel || query.agentId)
@@ -97,17 +94,42 @@ const sanitizeStudent = (studentValue: any) => {
   return student
 }
 
-const sourceMeta = (source: any, plantel: string, ciclo: string) => ({
+const sourceMeta = (source: any, plantel: string, ciclo: string, bridgeAgentId = '') => ({
   source: clean(source?.source || source?.mode || source?.kind || 'aurora-control-escolar', 80),
   freshness: clean(source?.freshness || (source?.cacheRefreshDue ? 'stale' : 'fresh'), 40) || 'fresh',
   plantel,
   ciclo,
+  bridgeAgentId: clean(bridgeAgentId, 40) || null,
   generatedAt: source?.generatedAt || source?.updatedAt || new Date().toISOString(),
   staleAfter: source?.staleAfter || null,
   expiresAt: source?.expiresAt || null,
   bridge: Boolean(source?.bridge || source?.bridgeSource || source?.localBridge),
   cacheRows: Number(source?.cacheRows || 0)
 })
+
+const runExternalControlEscolarScope = async <T>(
+  event: any,
+  plantel: string,
+  callback: (bridgeAgentId: string) => Promise<T>
+) => {
+  const candidates = controlEscolarBridgeAgentCandidates(plantel)
+  let lastError: any = null
+
+  for (const bridgeAgentId of candidates) {
+    try {
+      return await runControlEscolar(event, bridgeAgentId, async () => await callback(bridgeAgentId))
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  if (lastError) throw lastError
+  throw createError({
+    statusCode: 503,
+    statusMessage: 'BRIDGE_SCOPE_UNAVAILABLE',
+    message: 'No existe una ruta Bridge disponible para el plantel solicitado.'
+  })
+}
 
 export const readExternalLiveHealth = async () => {
   const cycle = await readInstitutionalSchoolCycle()
@@ -125,20 +147,21 @@ export const readExternalLiveStudents = async (event: any, query: any = {}) => {
   const { plantel, ciclo } = resolveScope(query)
   const page = decodeCursor(query.cursor)
   const limit = Math.min(100, Math.max(25, Number(query.limit || 100) || 100))
-  const filters = {
-    ...query,
-    plantel,
-    agentId: plantel,
-    ciclo,
-    cicloKey: ciclo,
-    page,
-    limit,
-    group: query.grupo || query.group || ''
-  }
-  delete filters.cursor
 
-  return await runControlEscolar(event, plantel, async () => {
-    const result = await fetchControlEscolarStudents(plantel, filters)
+  return await runExternalControlEscolarScope(event, plantel, async (bridgeAgentId) => {
+    const filters = {
+      ...query,
+      plantel: bridgeAgentId,
+      agentId: bridgeAgentId,
+      ciclo,
+      cicloKey: ciclo,
+      page,
+      limit,
+      group: query.grupo || query.group || ''
+    }
+    delete filters.cursor
+
+    const result = await fetchControlEscolarStudents(bridgeAgentId, filters)
     const total = Number(result?.pagination?.total || 0)
     const pages = Number(result?.pagination?.pages || Math.max(1, Math.ceil(total / limit)))
     return {
@@ -150,7 +173,7 @@ export const readExternalLiveStudents = async (event: any, query: any = {}) => {
         nextCursor: page < pages ? encodeCursor(page + 1) : null
       },
       catalogs: result?.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} },
-      meta: sourceMeta(result?.source, plantel, ciclo)
+      meta: sourceMeta(result?.source, plantel, ciclo, bridgeAgentId)
     }
   })
 }
@@ -162,10 +185,10 @@ export const readExternalLiveStudentDetail = async (event: any, query: any = {},
     throw createError({ statusCode: 400, statusMessage: 'MATRICULA_REQUIRED', message: 'La matrícula es obligatoria.' })
   }
 
-  return await runControlEscolar(event, plantel, async () => {
-    const result = await fetchControlEscolarStudents(plantel, {
-      plantel,
-      agentId: plantel,
+  return await runExternalControlEscolarScope(event, plantel, async (bridgeAgentId) => {
+    const result = await fetchControlEscolarStudents(bridgeAgentId, {
+      plantel: bridgeAgentId,
+      agentId: bridgeAgentId,
       ciclo,
       cicloKey: ciclo,
       search: matricula,
@@ -178,7 +201,7 @@ export const readExternalLiveStudentDetail = async (event: any, query: any = {},
     }
     return {
       data: sanitizeStudent(student),
-      meta: sourceMeta(result?.source, plantel, ciclo)
+      meta: sourceMeta(result?.source, plantel, ciclo, bridgeAgentId)
     }
   })
 }

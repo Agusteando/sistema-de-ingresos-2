@@ -1,11 +1,15 @@
 import crypto from 'node:crypto'
-import { normalizePlantel } from './auth-session'
 import { runWithBridgeAgentId } from './db'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 import { buildControlEscolarScopeDescriptor, type ControlEscolarScopeDescriptor } from './control-escolar-cache'
 import { automaticSchoolCycleKey, formatCicloLabel, normalizeCicloKey } from '../../shared/utils/ciclo'
 import { previousCicloKey } from '../../shared/utils/tipoIngreso'
 import { parseEnrollmentConceptIds } from './enrollment-evidence'
+import {
+  EXTERNAL_CONTROL_ESCOLAR_PLANTELES,
+  controlEscolarBridgeAgentCandidates,
+  normalizeExternalControlEscolarPlantel
+} from './control-escolar-plantel-routing'
 
 const EXTERNAL_VIEW_TABLE = 'control_external_student_view'
 const VIEW_VERSION = 'control-escolar-student-view-v1'
@@ -14,7 +18,7 @@ const EXPIRED_HOURS = 24
 const MAX_LIMIT = 500
 const DEFAULT_LIMIT = 100
 const SCHEMA_CACHE_MS = 1000 * 60 * 5
-const CANONICAL_STUDENT_PLANTELES = ['PREEM', 'PREET', 'GM', 'PM', 'PT', 'SM', 'ST']
+const CANONICAL_STUDENT_PLANTELES = [...EXTERNAL_CONTROL_ESCOLAR_PLANTELES]
 const automaticCycle = Number(automaticSchoolCycleKey())
 const DEFAULT_EXTERNAL_CICLOS = [automaticCycle, automaticCycle + 1, automaticCycle - 1, automaticCycle - 2, automaticCycle - 3]
   .filter((value, index, values) => Number.isFinite(value) && values.indexOf(value) === index)
@@ -99,13 +103,7 @@ const decodeCursor = (value: unknown) => {
 
 const sqlLike = (value: string) => `%${value}%`
 
-const normalizeExternalStudentPlantel = (value: unknown) => {
-  const plantel = normalizePlantel(value || '')
-  if (plantel === 'CT') return 'PREET'
-  if (plantel === 'CM') return 'PREEM'
-  if (plantel === 'PMA' || plantel === 'PMB') return 'PM'
-  return plantel
-}
+const normalizeExternalStudentPlantel = normalizeExternalControlEscolarPlantel
 
 export const getExternalStudentPlanteles = () => [...CANONICAL_STUDENT_PLANTELES]
 
@@ -388,41 +386,48 @@ export const warmExternalControlEscolarStudentScope = async (input: any = {}) =>
 
   const promise = (async () => {
     const { fetchControlEscolarStudents } = await import('./control-escolar')
-    const filters = {
-      ...input,
-      plantel: scope.plantel,
-      agentId: scope.plantel,
-      ciclo: scope.cicloKey,
-      cicloKey: scope.cicloKey,
-      previousCiclo: scope.previousCiclo,
-      all: 'snapshot',
-      mode: 'snapshot',
-      limit: WARM_LIMIT,
-      search: '',
-      q: '',
-      status: '',
-      grado: '',
-      grupo: '',
-      group: '',
-      quality: '',
-      recent: ''
-    }
-    try {
-      const result: any = await runWithBridgeAgentId(scope.plantel, async () => await fetchControlEscolarStudents(scope.plantel, filters))
-      const rows = Array.isArray(result?.data) ? result.data : []
-      const written = await writeControlEscolarExternalStudentView(scope.plantel, filters, rows, result?.source || { onDemand: true })
-      return { ...written, rows: rows.length, plantel: scope.plantel, ciclo: scope.cicloKey }
-    } catch (error: any) {
-      throwExternalStudentScopeError({
-        statusCode: 502,
-        statusMessage: 'AURORA_STUDENT_SCOPE_WARM_FAILED',
-        message: `Aurora no pudo preparar la base de alumnos de ${scope.plantel} para ciclo ${scope.cicloKey}.`,
-        plantel: scope.plantel,
+    let lastError: any = null
+
+    for (const bridgeAgentId of controlEscolarBridgeAgentCandidates(scope.plantel)) {
+      const filters = {
+        ...input,
+        plantel: bridgeAgentId,
+        agentId: bridgeAgentId,
         ciclo: scope.cicloKey,
-        cause: error,
-        extra: { phase: 'on-demand-warm' }
-      })
+        cicloKey: scope.cicloKey,
+        previousCiclo: scope.previousCiclo,
+        all: 'snapshot',
+        mode: 'snapshot',
+        limit: WARM_LIMIT,
+        search: '',
+        q: '',
+        status: '',
+        grado: '',
+        grupo: '',
+        group: '',
+        quality: '',
+        recent: ''
+      }
+
+      try {
+        const result: any = await runWithBridgeAgentId(bridgeAgentId, async () => await fetchControlEscolarStudents(bridgeAgentId, filters))
+        const rows = Array.isArray(result?.data) ? result.data : []
+        const written = await writeControlEscolarExternalStudentView(bridgeAgentId, filters, rows, result?.source || { onDemand: true })
+        return { ...written, rows: rows.length, plantel: scope.plantel, bridgeAgentId, ciclo: scope.cicloKey }
+      } catch (error: any) {
+        lastError = error
+      }
     }
+
+    throwExternalStudentScopeError({
+      statusCode: 502,
+      statusMessage: 'AURORA_STUDENT_SCOPE_WARM_FAILED',
+      message: `Aurora no pudo preparar la base de alumnos de ${scope.plantel} para ciclo ${scope.cicloKey}.`,
+      plantel: scope.plantel,
+      ciclo: scope.cicloKey,
+      cause: lastError,
+      extra: { phase: 'on-demand-warm' }
+    })
   })().finally(() => warmingScopes.delete(warmKey))
 
   warmingScopes.set(warmKey, promise)

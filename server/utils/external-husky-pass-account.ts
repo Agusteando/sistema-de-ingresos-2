@@ -6,6 +6,7 @@ import { calculatePromotedGrado, displayGrado } from '../../shared/utils/grado'
 import { resolveProjectedAmount } from './monto-final'
 import { resolvePaymentConceptSnapshot } from './payment-concept'
 import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
+import { expandControlEscolarBridgeAgentIds } from './control-escolar-plantel-routing'
 import {
   checkBridgeAgentAvailability,
   getDbTransport,
@@ -142,7 +143,7 @@ const configuredAgents = () => {
     .map(value => upper(value, 40))
     .filter(Boolean)
   const fallback = configured.length ? configured : PLANTELES_LIST
-  return Array.from(new Set(fallback.map(value => upper(value, 40)).filter(Boolean)))
+  return expandControlEscolarBridgeAgentIds(fallback)
 }
 
 const orderAgentsForMatricula = (matricula: string) => {

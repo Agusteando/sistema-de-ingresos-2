@@ -53,6 +53,11 @@ const SECUNDARIA_TO_PRIMARIA_PLANTEL: Record<string, string> =
 const PREESCOLAR_TO_PRIMARIA_PLANTEL: Record<string, string> = {
   PREEM: "PM",
   PREET: "PT",
+  // CT is the operational Control Escolar code for the same academic
+  // preescolar scope exposed externally as PREET. Keeping it in the
+  // projection map prevents CT students from disappearing when they advance
+  // to Primaria Toluca.
+  CT: "PT",
 };
 
 const PRIMARIA_TO_PREESCOLAR_PLANTEL: Record<string, string> =
