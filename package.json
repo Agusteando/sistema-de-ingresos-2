@@ -3,12 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --max-old-space-size=4096 ./node_modules/nuxt/bin/nuxt.mjs build",
+    "build": "npm run verify:academic-source && node --max-old-space-size=4096 ./node_modules/nuxt/bin/nuxt.mjs build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "verify:academic-source": "node scripts/verify-academic-source.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.10.2",

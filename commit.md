@@ -1,1 +1,1 @@
-Corrige el enrutamiento académico de Husky Pass por ciclo vigente
+Aísla la colocación académica calculada y elimina la lectura de matrícula.grado

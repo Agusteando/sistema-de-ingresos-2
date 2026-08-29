@@ -1052,6 +1052,95 @@ export const fetchControlEscolarBridgePopulationRows = async (
   return await fetchLocalBaseRows(agentId, schema, filters);
 };
 
+export type ControlEscolarCalculatedAcademicPlacement = {
+  matricula: string;
+  ciclo: string;
+  plantel: string;
+  sourcePlantel: string;
+  nivel: string;
+  grado: string;
+  grupo: string | null;
+  baseCiclo: string;
+};
+
+/**
+ * Resolves one student's academic placement directly from the active Bridge
+ * `base` record. The target grade is projected from base.grado + base.ciclo;
+ * the centralized `matricula` table is deliberately not queried here.
+ */
+export const fetchControlEscolarCalculatedAcademicPlacement = async (
+  agentId: string,
+  matriculaValue: unknown,
+  cicloValue: unknown,
+): Promise<ControlEscolarCalculatedAcademicPlacement | null> => {
+  assertControlEscolarDynamicBridge(agentId);
+  const matricula = canonicalMatriculaKey(matriculaValue);
+  const ciclo = normalizeCicloKey(cicloValue as any);
+  if (!matricula || !ciclo) return null;
+
+  const schema = await getControlEscolarSchema(agentId, {
+    requireCentral: false,
+    skipCentral: true,
+  });
+  if (!schema.base.has("matricula")) return null;
+
+  const fields = [
+    selectAs(col("b", "matricula"), "matricula"),
+    selectAs(
+      coalesceExpr(
+        nullIfTrim(expr(schema.base, "b", "plantel")),
+        sqlLiteral(agentId),
+      ),
+      "basePlantel",
+    ),
+    selectAs(expr(schema.base, "b", "grado"), "baseGrado"),
+    selectAs(expr(schema.base, "b", "grupo"), "baseGrupo"),
+    selectAs(expr(schema.base, "b", "nivel"), "baseNivel"),
+    selectAs(expr(schema.base, "b", "ciclo"), "baseCiclo"),
+  ];
+
+  const rows = await query<any[]>(
+    `
+      SELECT ${fields.join(",\n        ")}
+      FROM base b
+      WHERE UPPER(TRIM(b.matricula)) = ?
+      LIMIT 1
+    `,
+    [matricula],
+  );
+  const row = rows[0];
+  if (!row) return null;
+
+  // Do not let calculatePromotedGrado's compatibility defaults invent a grade.
+  // A calculable placement requires a real base grade and a real base cycle.
+  const baseGrado = normalizeText(row.baseGrado, 80);
+  const baseCicloRaw = normalizeText(row.baseCiclo, 40);
+  if (!baseGrado || !baseCicloRaw) return null;
+
+  const baseCiclo = normalizeCicloKey(baseCicloRaw);
+  const sourcePlantel = firstText(row.basePlantel, agentId);
+  const promoted = calculatePromotedGrado(
+    baseGrado,
+    sourcePlantel,
+    baseCiclo,
+    ciclo,
+    row.baseNivel,
+  );
+
+  if (promoted.outOfScope || !promoted.grado || !promoted.nivel) return null;
+
+  return {
+    matricula: normalizeUpper(row.matricula, 64),
+    ciclo,
+    plantel: normalizePlantel(promoted.plantel || sourcePlantel || agentId),
+    sourcePlantel: normalizePlantel(sourcePlantel || agentId),
+    nivel: String(promoted.nivel),
+    grado: displayGrado(promoted.grado),
+    grupo: normalizeText(row.baseGrupo, 40) || null,
+    baseCiclo,
+  };
+};
+
 const centralSelectColumns = (schema: ControlEscolarSchema) => {
   const wanted = [
     "matricula",
@@ -1063,7 +1152,6 @@ const centralSelectColumns = (schema: ControlEscolarSchema) => {
     "apellido_paterno",
     "apellido_materno",
     "nombres",
-    "grado",
     "grupo",
     "foto",
     "fecha_nacimiento",
@@ -1441,7 +1529,7 @@ const overlayStudentRow = (
     seguimientoBaja: normalizeText(overlay?.seguimiento_baja, 500),
     program: firstText(overlay?.servicio, base.baseNivel, overlay?.nivel),
     nivel: firstLower(base.baseNivel, overlay?.nivel),
-    grado: firstLower(base.baseGrado, overlay?.grado),
+    grado: firstLower(base.baseGrado),
     group: resolvedGroup,
     grupo: resolvedGroup,
     guardianName: normalizeNameText(firstText(fatherName, motherName, base.baseGuardian)),
@@ -1498,7 +1586,6 @@ const overlayStudentRow = (
   Object.assign(normalized as any, {
     matriculaPlantel: normalizeText(overlay?.plantel),
     matriculaNivel: normalizeText(overlay?.nivel),
-    matriculaGrado: normalizeText(overlay?.grado),
     matriculaGrupo: normalizeText(overlay?.grupo),
     academicPlacementSource: "base-projection",
     lastGrade: normalizeText(overlay?.last_grade),

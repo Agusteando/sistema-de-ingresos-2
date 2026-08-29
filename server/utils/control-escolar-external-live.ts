@@ -1,4 +1,4 @@
-import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
+import { fetchControlEscolarCalculatedAcademicPlacement, fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import { readInstitutionalSchoolCycle } from './school-cycle'
 import { normalizeCurp } from '../../shared/utils/curp'
@@ -14,6 +14,13 @@ const clean = (value: unknown, max = 255) => String(value ?? '').trim().slice(0,
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
 
 export const normalizeExternalLivePlantel = normalizeExternalControlEscolarPlantel
+
+
+const inferExternalScopeFromMatricula = (matricula: string) => {
+  const prefix = canonicalMatricula(matricula).match(/^[A-Z]+/)?.[0] || ''
+  return normalizeExternalLivePlantel(prefix)
+}
+
 
 const resolveScope = (query: any = {}) => {
   const plantel = normalizeExternalLivePlantel(query.plantel || query.agentId)
@@ -186,24 +193,126 @@ export const readExternalLiveStudentDetail = async (event: any, query: any = {},
   }
 
   return await runExternalControlEscolarScope(event, plantel, async (bridgeAgentId) => {
-    const result = await fetchControlEscolarStudents(bridgeAgentId, {
-      plantel: bridgeAgentId,
-      agentId: bridgeAgentId,
-      ciclo,
-      cicloKey: ciclo,
-      search: matricula,
-      page: 1,
-      limit: 100
-    })
-    const student = (result?.data || []).find((item: any) => canonicalMatricula(item?.matricula) === matricula)
-    if (!student) {
-      throw createError({ statusCode: 404, statusMessage: 'STUDENT_NOT_FOUND', message: 'Alumno no encontrado en el plantel y ciclo seleccionados.' })
+    const academic = await fetchControlEscolarCalculatedAcademicPlacement(bridgeAgentId, matricula, ciclo)
+    if (!academic) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'STUDENT_ACADEMIC_PLACEMENT_NOT_FOUND',
+        message: 'No se encontró una colocación académica calculable para el alumno y ciclo seleccionados.'
+      })
     }
+
+    // Rich profile data is optional here. Academic placement must remain
+    // available even when the central matricula overlay cannot be read.
+    let student: any = null
+    let source: any = null
+    try {
+      const result = await fetchControlEscolarStudents(bridgeAgentId, {
+        plantel: bridgeAgentId,
+        agentId: bridgeAgentId,
+        ciclo,
+        cicloKey: ciclo,
+        search: matricula,
+        page: 1,
+        limit: 100
+      })
+      student = (result?.data || []).find((item: any) => canonicalMatricula(item?.matricula) === matricula) || null
+      source = result?.source || null
+    } catch {
+      student = null
+      source = null
+    }
+
+    const data = sanitizeStudent({
+      ...(student || {}),
+      matricula: academic.matricula,
+      plantel: academic.plantel,
+      nivel: academic.nivel,
+      grado: academic.grado,
+      group: clean(student?.group || student?.grupo || academic.grupo, 80),
+      grupo: clean(student?.grupo || student?.group || academic.grupo, 80),
+      ciclo: academic.ciclo,
+      academicPlacementSource: 'base-projection'
+    })
+
     return {
-      data: sanitizeStudent(student),
-      meta: sourceMeta(result?.source, plantel, ciclo, bridgeAgentId)
+      data,
+      meta: {
+        ...sourceMeta(source, plantel, ciclo, bridgeAgentId),
+        academicPlacementSource: 'base-projection',
+        academicBaseCycle: academic.baseCiclo,
+        academicSourcePlantel: academic.sourcePlantel
+      }
     }
   })
 }
 
 export const sanitizeExternalLiveStudent = sanitizeStudent
+
+
+/**
+ * Returns the academic placement calculated from the live Bridge `base` row
+ * for the requested school cycle. This path deliberately does not load the
+ * centralized `matricula.grado` field: grade is projected from base grade +
+ * base cycle by Control Escolar's promotion logic.
+ */
+export const readExternalCalculatedAcademicPlacement = async (
+  event: any,
+  query: any = {},
+  matriculaValue: unknown
+) => {
+  const matricula = canonicalMatricula(matriculaValue)
+  const ciclo = normalizeCicloKey(query.ciclo || query.cicloKey || query.schoolYear || '')
+  if (!matricula) {
+    throw createError({ statusCode: 400, statusMessage: 'MATRICULA_REQUIRED', message: 'La matrícula es obligatoria.' })
+  }
+  if (!ciclo) {
+    throw createError({ statusCode: 400, statusMessage: 'CICLO_INVALID', message: 'El ciclo escolar no es válido.' })
+  }
+
+  const requestedScope = normalizeExternalLivePlantel(query.plantel || query.agentId)
+  const inferredScope = inferExternalScopeFromMatricula(matricula)
+  const scopes = Array.from(new Set([requestedScope, inferredScope].filter(Boolean)))
+  if (!scopes.length) scopes.push(...CANONICAL_PLANTELES)
+
+  let lastError: any = null
+  for (const scope of scopes) {
+    try {
+      const found = await runExternalControlEscolarScope(event, scope, async (bridgeAgentId) => {
+        const academic = await fetchControlEscolarCalculatedAcademicPlacement(bridgeAgentId, matricula, ciclo)
+        if (!academic) return null
+        return {
+          data: {
+            matricula: academic.matricula,
+            ciclo: academic.ciclo,
+            plantel: academic.plantel,
+            nivel: academic.nivel,
+            grado: academic.grado,
+            grupo: academic.grupo
+          },
+          meta: {
+            source: 'aurora-control-escolar-base-projection',
+            plantel: scope,
+            ciclo,
+            bridgeAgentId,
+            academicPlacementSource: 'base-projection',
+            academicBaseCycle: academic.baseCiclo,
+            academicSourcePlantel: academic.sourcePlantel,
+            generatedAt: new Date().toISOString()
+          }
+        }
+      })
+      if (found?.data) return found
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  if (lastError && scopes.length === 1) throw lastError
+  throw createError({
+    statusCode: 404,
+    statusMessage: 'STUDENT_ACADEMIC_PLACEMENT_NOT_FOUND',
+    message: 'No se encontró la colocación académica calculada del alumno para el ciclo solicitado.'
+  })
+}
+
