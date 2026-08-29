@@ -1,19 +1,23 @@
-import { PLANTELES_LIST } from '../../utils/constants'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import {
   canonicalTallerKey,
   finalTallerSeed,
+  isFinalTaller,
   normalizeServicioClave,
   normalizeServicioNombre,
   parseServiciosCsv,
 } from '../../shared/utils/talleresServicios'
 import { controlEscolarCentralQuery, getCentralTableColumns } from './control-escolar-central'
 import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
-import { readFinalTalleresCatalog, updateCentralMatriculaServicio } from './talleres-servicios'
+import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
+import { readBestTalleresServiciosCatalog, updateCentralMatriculaServicio } from './talleres-servicios'
+import { readTalleresAssignmentSummaries, readTalleresContracts, recordTalleresAssignmentChange } from './talleres-contracts'
 
+// Public Talleres codes stay stable even when Aurora routes them to a legacy
+// Control Escolar agent (PMA/PMB -> PM and CT -> PREET internally).
 export const TALLERES_PORTAL_PLANTELES = [
-  'PREET', 'PREEM', 'PT', 'PM', 'ST', 'SM', 'ISM', 'DM', 'CM', 'CT'
-].filter((plantel) => PLANTELES_LIST.includes(plantel))
+  'SM', 'PMB', 'CO', 'CT', 'DM', 'PT', 'ST', 'PMA', 'GM'
+]
 
 export const TALLER_DAY_OPTIONS = ['L', 'M', 'MIE', 'J', 'V'] as const
 export type TallerDayCode = typeof TALLER_DAY_OPTIONS[number]
@@ -128,16 +132,20 @@ const readLabelsForStudents = async (matriculas: string[], ciclo: string) => {
 }
 
 const readCatalog = async () => {
-  const result = await readFinalTalleresCatalog()
+  const result = await readBestTalleresServiciosCatalog()
   return {
     source: result.source,
-    catalog: result.catalog.map((item) => ({
-      clave: normalizeServicioClave(item.servicio_clave || item.servicio_nombre),
-      nombre: normalizeServicioNombre(item.servicio_nombre),
-      imagen: clean(item.imagen_url, 500),
-      activo: Number(item.activo || 0) !== 0,
-      orden: Number(item.orden || 9999),
-    })).filter((item) => item.clave && item.nombre)
+    catalog: result.catalog.map((item) => {
+      const clave = normalizeServicioClave(item.servicio_clave || item.servicio_nombre)
+      return {
+        clave,
+        nombre: normalizeServicioNombre(item.servicio_nombre),
+        imagen: clean(item.imagen_url, 500),
+        activo: Number(item.activo || 0) !== 0,
+        orden: Number(item.orden || 9999),
+        tipo: isFinalTaller(clave) ? 'taller' : 'servicio',
+      }
+    }).filter((item) => item.activo && item.clave && item.nombre)
   }
 }
 
@@ -157,15 +165,32 @@ const makeServiceResolver = (catalog: Awaited<ReturnType<typeof readCatalog>>['c
   }
 }
 
+const primaryGradeNumber = (student: any) => {
+  const raw = clean(student?.gradoNumero || student?.grado || student?.grade, 80).toLowerCase()
+  const numeric = Number(raw.match(/\d+/)?.[0] || 0)
+  if (numeric) return numeric
+  return ({ primero: 1, segundo: 2, tercero: 3, cuarto: 4, quinto: 5, sexto: 6 } as Record<string, number>)[raw] || 0
+}
+
+const splitPrimariaMetepec = (students: any[], publicPlantel: string) => {
+  if (!['PMB', 'PMA'].includes(publicPlantel)) return students
+  return students.filter((student) => {
+    const grade = primaryGradeNumber(student)
+    return !grade || (publicPlantel === 'PMB' ? grade <= 3 : grade >= 4)
+  })
+}
+
 const readOnePlantelStudents = async (event: any, plantel: string, ciclo: string, search = '') => {
-  return await runControlEscolar(event, plantel, async () => {
-    const result = await fetchControlEscolarStudents(plantel, search
-      ? { plantel, agentId: plantel, ciclo, cicloKey: ciclo, search, page: 1, limit: 100 }
-      : { plantel, agentId: plantel, ciclo, cicloKey: ciclo, all: '1', limit: 10000 })
+  const sourcePlantel = normalizeExternalControlEscolarPlantel(plantel) || plantel
+  return await runControlEscolar(event, sourcePlantel, async () => {
+    const result = await fetchControlEscolarStudents(sourcePlantel, search
+      ? { plantel: sourcePlantel, agentId: sourcePlantel, ciclo, cicloKey: ciclo, search, page: 1, limit: 100 }
+      : { plantel: sourcePlantel, agentId: sourcePlantel, ciclo, cicloKey: ciclo, all: '1', limit: 10000 })
+    const students = splitPrimariaMetepec(Array.isArray(result?.data) ? result.data : [], plantel)
     return {
-      students: Array.isArray(result?.data) ? result.data : [],
+      students,
       source: result?.source || null,
-      total: Number(result?.pagination?.total || result?.data?.length || 0),
+      total: students.length,
     }
   })
 }
@@ -183,12 +208,12 @@ const runLimited = async <T>(items: string[], worker: (item: string) => Promise<
   return result
 }
 
-const compactStudent = (student: any, plantel: string, ciclo: string, services: ReturnType<ReturnType<typeof makeServiceResolver>>[], labels: Map<string, TallerDayCode[]>) => {
+const compactStudent = (student: any, plantel: string, ciclo: string, services: ReturnType<ReturnType<typeof makeServiceResolver>>[], labels: Map<string, TallerDayCode[]>, contract?: { hasContract: boolean | null, observations: string, updatedAt: string | null }, assignmentSummary: Record<string, any> = {}) => {
   const tallerDias: Record<string, TallerDayCode[]> = {}
   const talleres = services.map((service) => {
     const dias = labels.get(studentMapKey(student?.matricula, service.clave)) || []
     tallerDias[service.nombre] = dias
-    return { ...service, dias }
+    return { ...service, dias, joined: assignmentSummary[service.clave] || null }
   })
 
   return {
@@ -208,13 +233,19 @@ const compactStudent = (student: any, plantel: string, ciclo: string, services: 
     emailMadre: clean(student?.emailMadre || student?.madre?.correo, 255),
     foto: clean(student?.photoUrl || student?.foto, 1000),
     photoUrl: clean(student?.photoUrl || student?.foto, 1000),
-    observaciones: clean(student?.servicioNotas, 1000),
+    observaciones: contract?.observations || clean(student?.servicioNotas, 1000),
     servicioNotas: clean(student?.servicioNotas, 1000),
+    contrato: contract?.hasContract ?? null,
+    contratoObservaciones: contract?.observations || '',
+    contratoActualizadoAt: contract?.updatedAt || null,
     eventual: truthy(student?.eventual) ? 1 : 0,
+    status: String(student?.status || '').toLowerCase() === 'baja' || Number(student?.baja || 0) === 1 ? 'withdrawn' : 'active',
+    baja: String(student?.status || '').toLowerCase() === 'baja' || Number(student?.baja || 0) === 1,
     ciclo,
     servicios: services.map((service) => service.nombre),
     talleres,
     tallerDias,
+    joined: assignmentSummary,
   }
 }
 
@@ -226,7 +257,9 @@ export const readTalleresPortalMeta = async (requestedCiclo?: unknown) => {
     source: 'aurora',
     ciclo,
     planteles: [...TALLERES_PORTAL_PLANTELES],
-    talleres: catalog.catalog,
+    catalog: catalog.catalog,
+    talleres: catalog.catalog.filter((item) => item.tipo === 'taller'),
+    servicios: catalog.catalog.filter((item) => item.tipo === 'servicio'),
     catalogSource: catalog.source,
     dayLabelsSchemaReady: await labelsTableReady(),
     dayLabels: [...TALLER_DAY_OPTIONS],
@@ -257,16 +290,20 @@ export const readTalleresPortalRoster = async (event: any, input: any = {}) => {
   }
 
   const allMatriculas = loaded.flatMap((entry) => entry.students.map((student: any) => matriculaKey(student?.matricula))).filter(Boolean)
-  const labels = await readLabelsForStudents(allMatriculas, ciclo)
+  const [labels, contracts, assignments] = await Promise.all([
+    readLabelsForStudents(allMatriculas, ciclo),
+    readTalleresContracts(allMatriculas),
+    readTalleresAssignmentSummaries(allMatriculas),
+  ])
   const data: Record<string, Record<string, any[]>> = {}
+  const students: any[] = []
 
   for (const entry of loaded) {
     data[entry.plantel] = {}
     for (const rawStudent of entry.students) {
-      if (String(rawStudent?.status || '').toLowerCase() === 'baja' || Number(rawStudent?.baja || 0) === 1) continue
       const services = parseServiciosCsv(rawStudent?.servicio).map(resolveService).filter((service) => service.activo && service.clave && service.nombre)
-      if (!services.length) continue
-      const student = compactStudent(rawStudent, entry.plantel, ciclo, services, labels.map)
+      const student = compactStudent(rawStudent, entry.plantel, ciclo, services, labels.map, contracts.result.get(matriculaKey(rawStudent?.matricula)), assignments.result.get(matriculaKey(rawStudent?.matricula)) || {})
+      students.push(student)
       for (const service of services) {
         if (!data[entry.plantel][service.nombre]) data[entry.plantel][service.nombre] = []
         data[entry.plantel][service.nombre].push({ ...student, servicio: service.nombre, servicioClave: service.clave })
@@ -279,9 +316,12 @@ export const readTalleresPortalRoster = async (event: any, input: any = {}) => {
     source: 'aurora',
     ciclo,
     planteles: [...TALLERES_PORTAL_PLANTELES],
-    talleres: catalog.catalog,
+    catalog: catalog.catalog,
+    talleres: catalog.catalog.filter((item) => item.tipo === 'taller'),
+    servicios: catalog.catalog.filter((item) => item.tipo === 'servicio'),
     catalogSource: catalog.source,
     dayLabelsSchemaReady: labels.ready,
+    students,
     data,
     meta: {
       sources: loaded.map((entry) => ({ plantel: entry.plantel, ok: !entry.error, total: entry.total, error: entry.error, source: entry.source })),
@@ -314,19 +354,30 @@ export const searchTalleresPortalStudents = async (event: any, input: any = {}) 
     throw createError({ statusCode: 502, statusMessage: 'TALLERES_SEARCH_UNAVAILABLE', message: 'Aurora no pudo buscar alumnos en los planteles de Portal Tallerista.' })
   }
   const flattened = loaded.flatMap((entry) => entry.students.map((student: any) => ({ student, plantel: entry.plantel })))
-  const labels = await readLabelsForStudents(flattened.map((entry) => matriculaKey(entry.student?.matricula)), ciclo)
+  const searchMatriculas = flattened.map((entry) => matriculaKey(entry.student?.matricula))
+  const [labels, contracts, assignments] = await Promise.all([
+    readLabelsForStudents(searchMatriculas, ciclo),
+    readTalleresContracts(searchMatriculas),
+    readTalleresAssignmentSummaries(searchMatriculas),
+  ])
   const unique = new Map<string, any>()
 
   for (const entry of flattened) {
     const mat = matriculaKey(entry.student?.matricula)
-    if (!mat || unique.has(mat) || String(entry.student?.status || '').toLowerCase() === 'baja' || Number(entry.student?.baja || 0) === 1) continue
+    if (!mat || unique.has(mat)) continue
     const services = parseServiciosCsv(entry.student?.servicio).map(resolveService).filter((service) => service.activo && service.clave && service.nombre)
-    const student = compactStudent(entry.student, entry.plantel, ciclo, services, labels.map)
+    const student = compactStudent(entry.student, entry.plantel, ciclo, services, labels.map, contracts.result.get(mat), assignments.result.get(mat) || {})
     unique.set(mat, student)
     if (unique.size >= MAX_SEARCH_RESULTS) break
   }
 
   return { ok: true, source: 'aurora', ciclo, data: Array.from(unique.values()), dayLabelsSchemaReady: labels.ready }
+}
+
+const resolveActivePortalCatalogItem = async (value: unknown) => {
+  const key = canonicalTallerKey(value)
+  const catalog = await readCatalog()
+  return catalog.catalog.find((item) => item.clave === key || canonicalTallerKey(item.nombre) === key) || null
 }
 
 export const saveTalleresStudentDays = async ({
@@ -348,14 +399,14 @@ export const saveTalleresStudentDays = async ({
   const matriculaValue = matriculaKey(matricula)
   const plantelValue = normalizePortalPlantel(plantel)
   const ciclo = await resolveCurrentCiclo(cicloInput)
-  const taller = finalTallerSeed(servicio)
+  const taller = await resolveActivePortalCatalogItem(servicio)
   const servicioNombre = taller?.nombre || ''
   const servicioClave = taller?.clave || ''
   const normalizedDays = normalizeDayCodes(dias)
 
   if (!matriculaValue) throw createError({ statusCode: 400, message: 'Matrícula requerida.' })
   if (!plantelValue) throw createError({ statusCode: 400, message: 'Plantel inválido.' })
-  if (!servicioClave) throw createError({ statusCode: 400, message: 'Selecciona un taller vigente.' })
+  if (!servicioClave) throw createError({ statusCode: 400, message: 'Selecciona un taller o servicio vigente.' })
 
   await controlEscolarCentralQuery(
     `INSERT INTO ${LABELS_TABLE}
@@ -412,11 +463,11 @@ export const mutateTalleresStudentWorkshop = async ({
   const matriculaValue = matriculaKey(matricula)
   const plantelValue = normalizePortalPlantel(plantel)
   const ciclo = await resolveCurrentCiclo(cicloInput)
-  const taller = finalTallerSeed(servicio)
+  const taller = action === 'add' ? await resolveActivePortalCatalogItem(servicio) : null
   const servicioNombre = action === 'add' ? (taller?.nombre || '') : normalizeServicioNombre(servicio)
   if (!matriculaValue || !plantelValue || !servicioNombre) throw createError({ statusCode: 400, message: 'Matrícula, plantel y taller son obligatorios.' })
   if (!['add', 'remove'].includes(action)) throw createError({ statusCode: 400, message: 'Acción inválida.' })
-  if (action === 'add' && !taller) throw createError({ statusCode: 400, message: 'Selecciona un taller vigente.' })
+  if (action === 'add' && !taller) throw createError({ statusCode: 400, message: 'Selecciona un taller o servicio vigente.' })
 
   const updated = await updateCentralMatriculaServicio({
     matricula: matriculaValue,
@@ -431,6 +482,18 @@ export const mutateTalleresStudentWorkshop = async ({
       `DELETE FROM ${LABELS_TABLE} WHERE ciclo = ? AND matricula = ? AND servicio_clave = ?`,
       [ciclo, matriculaValue, canonicalTallerKey(servicioNombre)]
     )
+  }
+
+  if (updated.changed) {
+    await recordTalleresAssignmentChange({
+      matricula: matriculaValue,
+      plantel: plantelValue,
+      workshopKey: canonicalTallerKey(servicioNombre),
+      workshopName: servicioNombre,
+      action: action === 'add' ? 'assigned' : 'removed',
+      actorEmail: updatedBy,
+      metadata: { source: 'aurora_portal' },
+    })
   }
 
   return { ...updated, ciclo, plantel: plantelValue, matricula: matriculaValue, servicio: servicioNombre }

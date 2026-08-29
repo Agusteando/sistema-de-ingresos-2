@@ -1,5 +1,6 @@
 import { query, executeStatementTransaction, type SqlStatement } from './db'
 import { controlEscolarCentralQuery, getCentralTableColumns } from './control-escolar-central'
+import { recordTalleresAssignmentChange } from './talleres-contracts'
 import { normalizeCicloKey, formatCicloLabel } from '../../shared/utils/ciclo'
 import {
   DEFAULT_TALLERES_SERVICIOS,
@@ -317,6 +318,17 @@ export const appendConceptMappedServicioToMatricula = async ({
   const mapped = await findTallerServicioForConcept({ conceptoId, ciclo, plantel })
   if (!mapped) return { ok: true, mapped: false, changed: false, servicio: null }
   const updated = await updateCentralMatriculaServicio({ matricula, action: 'add', servicio: mapped.nombre, userEmail })
+  if (updated.changed) {
+    await recordTalleresAssignmentChange({
+      matricula,
+      plantel: plantel || 'GLOBAL',
+      workshopKey: mapped.clave,
+      workshopName: mapped.nombre,
+      action: 'assigned',
+      actorEmail: userEmail,
+      metadata: { source: 'financial_concept', conceptoId: Number(conceptoId || 0), ciclo: ciclo || null },
+    })
+  }
   return { ok: true, mapped: true, changed: updated.changed, servicio: mapped, servicios: updated.servicios }
 }
 

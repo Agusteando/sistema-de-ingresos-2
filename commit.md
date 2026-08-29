@@ -1,1 +1,1 @@
-Aísla la colocación académica calculada y elimina la lectura de matrícula.grado
+Aurora: expone catálogo completo y registra historial de talleres y servicios

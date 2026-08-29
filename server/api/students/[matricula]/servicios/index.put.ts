@@ -1,6 +1,7 @@
 import { getTrustedAuthUser } from '../../../../utils/auth-session'
 import { readBestTalleresServiciosCatalog, resolveServiciosWithCatalog, updateCentralMatriculaServicio } from '../../../../utils/talleres-servicios'
-import { normalizeServicioClave, normalizeServicioNombre } from '../../../../../shared/utils/talleresServicios'
+import { canonicalTallerKey, normalizeServicioClave, normalizeServicioNombre } from '../../../../../shared/utils/talleresServicios'
+import { recordTalleresAssignmentChange } from '../../../../utils/talleres-contracts'
 
 export default defineEventHandler(async (event) => {
   const user = await getTrustedAuthUser(event)
@@ -33,6 +34,17 @@ export default defineEventHandler(async (event) => {
     servicio: serviceName,
     userEmail: user.email,
   })
+  if (updated.changed) {
+    await recordTalleresAssignmentChange({
+      matricula,
+      plantel: body?.plantel || 'GLOBAL',
+      workshopKey: canonicalTallerKey(serviceName),
+      workshopName: serviceName,
+      action: action === 'add' ? 'assigned' : 'removed',
+      actorEmail: user.email,
+      metadata: { source: 'aurora_manual' },
+    })
+  }
   const resolved = await resolveServiciosWithCatalog(updated.servicios)
 
   return {

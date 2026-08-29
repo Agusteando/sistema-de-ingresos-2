@@ -526,6 +526,35 @@
               </div>
               <div v-else class="student-services-empty">Sin talleres o servicios registrados.</div>
 
+              <button class="student-talleres-info-trigger" type="button" @click="showTalleresInfo = !showTalleresInfo">
+                <span>Requiere información de Talleres</span>
+                <small v-if="talleresHasContract !== null">Contrato: {{ talleresHasContract ? 'Sí' : 'No' }}</small>
+                <LucidePlus v-if="!showTalleresInfo" :size="14" />
+                <LucideX v-else :size="14" />
+              </button>
+
+              <section v-if="showTalleresInfo" class="student-talleres-info" aria-label="Información para Talleres">
+                <header>
+                  <strong>¿El alumno cuenta con contrato?</strong>
+                  <LucideLoader2 v-if="talleresInfoLoading" :size="16" class="spin" aria-label="Cargando" />
+                </header>
+                <div class="student-contract-choice" role="group" aria-label="Estado del contrato">
+                  <button type="button" :class="{ active: talleresHasContract === true }" @click="talleresHasContract = true">
+                    <LucideShieldCheck :size="15" /> Sí
+                  </button>
+                  <button type="button" :class="{ active: talleresHasContract === false }" @click="talleresHasContract = false">
+                    <LucideX :size="15" /> No
+                  </button>
+                </div>
+                <label>
+                  <span>Observaciones del contrato</span>
+                  <textarea v-model="talleresContractObservations" rows="2" maxlength="2000" placeholder="Observaciones" />
+                </label>
+                <button class="student-talleres-info-save" type="button" :disabled="savingTalleresInfo" @click="saveTalleresInfo">
+                  <LucideShieldCheck :size="14" /> {{ savingTalleresInfo ? 'Guardando…' : 'Guardar' }}
+                </button>
+              </section>
+
               <div v-if="showServiciosPanel" class="student-services-picker">
                 <label class="student-services-search">
                   <LucideSearch :size="14" />
@@ -1149,6 +1178,11 @@ const serviciosLoading = ref(false);
 const showServiciosPanel = ref(false);
 const servicioSearch = ref("");
 const savingServicio = ref("");
+const talleresInfoLoading = ref(false);
+const showTalleresInfo = ref(false);
+const savingTalleresInfo = ref(false);
+const talleresHasContract = ref(null);
+const talleresContractObservations = ref("");
 const loading = ref(false);
 const reminding = ref(false);
 const selectedDebts = ref([]);
@@ -1383,6 +1417,41 @@ const loadServicios = async () => {
     resolveLocalServicios();
   } finally {
     if (normalizeAccountMatricula(props.student?.matricula) === matricula) serviciosLoading.value = false;
+  }
+};
+const loadTalleresInfo = async () => {
+  const matricula = normalizeAccountMatricula(props.student?.matricula);
+  if (!matricula) return;
+  talleresInfoLoading.value = true;
+  try {
+    const payload = await $fetch(`/api/students/${encodeURIComponent(matricula)}/talleres-info`);
+    if (normalizeAccountMatricula(props.student?.matricula) !== matricula) return;
+    talleresHasContract.value = payload?.hasContract ?? null;
+    talleresContractObservations.value = payload?.observations || "";
+  } catch (error) {
+    talleresHasContract.value = null;
+    talleresContractObservations.value = "";
+  } finally {
+    if (normalizeAccountMatricula(props.student?.matricula) === matricula) talleresInfoLoading.value = false;
+  }
+};
+const saveTalleresInfo = async () => {
+  const matricula = normalizeAccountMatricula(props.student?.matricula);
+  if (!matricula || savingTalleresInfo.value) return;
+  savingTalleresInfo.value = true;
+  try {
+    const payload = await $fetch(`/api/students/${encodeURIComponent(matricula)}/talleres-info`, {
+      method: "PUT",
+      body: { hasContract: talleresHasContract.value, observations: talleresContractObservations.value },
+    });
+    talleresHasContract.value = payload?.hasContract ?? null;
+    talleresContractObservations.value = payload?.observations || "";
+    showTalleresInfo.value = false;
+    show("Guardado", "success");
+  } catch (error) {
+    show(error?.data?.message || "No se pudo guardar la información para Talleres", "danger");
+  } finally {
+    savingTalleresInfo.value = false;
   }
 };
 const toggleServiciosPanel = () => {
@@ -2234,10 +2303,12 @@ watch(
     normalizeCicloKey(state.value.ciclo),
   ],
   () => {
+    showTalleresInfo.value = false;
     if (props.student) {
       loadDebts({ useCache: true });
       loadSiblings();
       loadServicios();
+      loadTalleresInfo();
     }
   },
   { immediate: true },
@@ -3796,4 +3867,44 @@ const handleInvoiceSuccess = (invoice) => {
   }
 
 }
+
+.student-talleres-info-trigger {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 38px;
+  border: 1px solid var(--color-border, #dfe4e8);
+  border-radius: 10px;
+  background: #fff;
+  color: #27323a;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.student-talleres-info-trigger small { color: #73808a; font-size: 10px; font-weight: 650; }
+.student-talleres-info {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-border, #dfe4e8);
+  border-radius: 12px;
+  background: #f8fafb;
+}
+.student-talleres-info header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.student-talleres-info header strong { font-size: 11px; }
+.student-contract-choice { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; }
+.student-contract-choice button {
+  min-height: 34px; border:1px solid #dfe4e8; background:#fff; border-radius:9px;
+  display:flex; align-items:center; justify-content:center; gap:5px; font-weight:750; font-size:11px; cursor:pointer;
+}
+.student-contract-choice button.active { border-color:#7ca98a; background:#edf6ef; color:#2f6b42; }
+.student-talleres-info label { display:block; }
+.student-talleres-info label > span { display:block; font-size:9px; font-weight:800; color:#73808a; text-transform:uppercase; margin-bottom:5px; }
+.student-talleres-info textarea { width:100%; resize:vertical; border:1px solid #dfe4e8; border-radius:9px; padding:8px 9px; font:inherit; font-size:11px; background:#fff; }
+.student-talleres-info-save { margin-top:8px; min-height:34px; padding:0 12px; border:0; border-radius:9px; background:#27323a; color:#fff; display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; cursor:pointer; }
+.student-talleres-info-save:disabled { opacity:.55; cursor:default; }
 </style>
