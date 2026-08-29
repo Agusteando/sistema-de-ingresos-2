@@ -117,14 +117,19 @@ const submit = async () => {
   if (!props.debt?.documento || !selectedConceptId.value || busy.value) return
   busy.value = true
   try {
-    await $fetch(`/api/documentos/${props.debt.documento}/concepto`, {
+    const result = await $fetch(`/api/documentos/${props.debt.documento}/concepto`, {
       method: 'PUT',
       body: {
         conceptoId: selectedConceptId.value,
         ciclo: normalizeCicloKey(state.value.ciclo),
       },
     })
-    show('Concepto actualizado', 'success')
+    if (result?.servicio?.ok === false) {
+      show('Concepto actualizado, pero Control Escolar no confirmó el taller. Revísalo en Talleres.', 'danger', { duration: 6500 })
+    } else {
+      const serviceText = result?.servicio?.mapped ? ` · ${result.servicio.servicio?.nombre || 'Taller actualizado'}` : ''
+      show(`Concepto actualizado${serviceText}`, 'success')
+    }
     emit('success')
   } catch (error) {
     show(error?.data?.message || 'No se pudo cambiar el concepto', 'danger')

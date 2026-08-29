@@ -99,6 +99,30 @@ export const finalTallerSeed = (value: unknown) => {
   return FINAL_TALLERES.find((item) => item.clave === key) || null
 }
 
+/**
+ * Resolves only unambiguous financial-concept names to the workshop they
+ * represent. Cycle suffixes and the explicit "Taller (de)" prefix are
+ * accepted, but broad names such as "1 taller", uniforms or league fees are
+ * intentionally left unmatched.
+ */
+export const financialConceptTallerSeed = (value: unknown) => {
+  let key = normalizeServicioClave(value)
+  if (!key) return null
+
+  key = key
+    .replace(/_(?:CICLO_)?20\d{2}_20\d{2}$/, '')
+    .replace(/_(?:CICLO_)?20\d{2}$/, '')
+    .replace(/^TALLER_DE_/, '')
+    .replace(/^TALLER_/, '')
+    .replace(/^_+|_+$/g, '')
+
+  const direct = finalTallerSeed(key)
+  if (direct) return direct
+
+  const withoutSchedule = key.replace(/_(?:4|CUATRO)_DIAS?$/, '')
+  return withoutSchedule !== key ? finalTallerSeed(withoutSchedule) : null
+}
+
 export const isFinalTaller = (value: unknown) => Boolean(finalTallerSeed(value))
 
 export const DEFAULT_SERVICIOS: TallerServicioSeed[] = [

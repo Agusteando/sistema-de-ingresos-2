@@ -2,6 +2,7 @@ import { executeStatementTransaction, query, runWithBridgeAgentId, type SqlState
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { assertStockAvailableForConcept } from '../../../utils/conceptos-stock'
 import { resolveFinancialConcept } from '../../../utils/financial-concept'
+import { appendConceptMappedServicioToMatricula } from '../../../utils/talleres-servicios'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
@@ -122,11 +123,31 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   await executeStatementTransaction(statements)
 
+  let servicioSync: any = { ok: true, mapped: false, changed: false, servicio: null }
+  try {
+    servicioSync = await appendConceptMappedServicioToMatricula({
+      matricula: doc.matricula,
+      conceptoId: concepto.id,
+      ciclo: effectiveCiclo,
+      plantel: doc.plantel,
+      userEmail: user?.email || usuario,
+    })
+  } catch (error: any) {
+    console.warn('[Documentos] Concepto corregido; no se pudo anexar taller/servicio a matricula.servicios.', {
+      documento,
+      matricula: doc.matricula,
+      conceptoId: concepto.id,
+      message: error?.message || error,
+    })
+    servicioSync = { ok: false, mapped: false, changed: false, servicio: null, message: error?.message || 'servicio_sync_failed' }
+  }
+
   return {
     success: true,
     documento,
     concepto: concepto.id,
     conceptoNombre: concepto.concepto,
     referenciasAfectadas: affectedRefs,
+    servicio: servicioSync,
   }
 }))

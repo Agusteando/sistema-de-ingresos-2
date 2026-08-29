@@ -536,11 +536,19 @@ const submit = async () => {
       if (cartaWindow) cartaWindow.location.href = result.becaCartaUrl
       else window.open(result.becaCartaUrl, '_blank', 'noopener')
       const serviceText = result?.servicio?.mapped ? ` Servicio: ${result.servicio.servicio?.nombre || result.servicio.servicio?.clave || ''}.` : ''
-      show('Documento agregado y carta de beca generada.' + serviceText)
+      if (result?.servicio?.ok === false) {
+        show('Documento agregado y carta generada, pero Control Escolar no confirmó el taller. Revísalo en Talleres.', 'danger', { duration: 6500 })
+      } else {
+        show('Documento agregado y carta de beca generada.' + serviceText)
+      }
     } else {
       cartaWindow?.close?.()
       const serviceText = result?.servicio?.mapped ? ` Servicio: ${result.servicio.servicio?.nombre || result.servicio.servicio?.clave || ''}.` : ''
-      show('Documento agregado.' + serviceText)
+      if (result?.servicio?.ok === false) {
+        show('Documento agregado, pero Control Escolar no confirmó el taller. Revísalo en Talleres.', 'danger', { duration: 6500 })
+      } else {
+        show('Documento agregado.' + serviceText)
+      }
     }
     emit('success')
   } catch (e) {

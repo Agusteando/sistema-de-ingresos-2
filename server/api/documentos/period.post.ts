@@ -9,6 +9,7 @@ import { isWholeMoney } from "../../utils/monto-final";
 import { assertDocumentoPeriodoLifecycleSchema } from "../../utils/documento-periods";
 import { assertStockAvailableForConcept } from '../../utils/conceptos-stock';
 import { resolveFinancialConcept } from '../../utils/financial-concept';
+import { appendConceptMappedServicioToMatricula } from '../../utils/talleres-servicios';
 
 const toMesNumber = (value: unknown) => {
   const raw = String(value || "")
@@ -287,12 +288,32 @@ export default defineEventHandler(async (event) =>
 
       await executeStatementTransaction(statements);
 
+      let servicioSync: any = { ok: true, mapped: false, changed: false, servicio: null };
+      try {
+        servicioSync = await appendConceptMappedServicioToMatricula({
+          matricula: doc.matricula,
+          conceptoId: concepto.id,
+          ciclo: cicloKey,
+          plantel: doc.plantel,
+          userEmail: user?.email || createdBy,
+        });
+      } catch (error: any) {
+        console.warn('[Documentos] Concepto ajustado; no se pudo anexar taller/servicio a matricula.servicios.', {
+          documento,
+          matricula: doc.matricula,
+          conceptoId: concepto.id,
+          message: error?.message || error,
+        });
+        servicioSync = { ok: false, mapped: false, changed: false, servicio: null, message: error?.message || 'servicio_sync_failed' };
+      }
+
       return {
         success: true,
         action,
         fromMes: normalizedFromMes,
         paymentPolicy,
         diferenciaMonto,
+        servicio: servicioSync,
       };
     }
 

@@ -255,6 +255,27 @@
             <p>Administra y organiza los conceptos que requieren control físico.</p>
           </div>
           <div class="category-hero-actions">
+            <!-- TEMPORARY 2026-2027 seed control. Remove after the production run is verified. -->
+            <template v-if="isTemporaryWorkshopSeedScope">
+              <button
+                v-if="temporaryWorkshopSeed?.ready && temporaryWorkshopSeed.pendingMappings > 0"
+                type="button"
+                class="btn workshop-seed-button"
+                :disabled="seedingWorkshopMappings"
+                @click="showWorkshopSeedConfirm = true"
+              >
+                <LucideWandSparkles :size="17" />
+                Preparar talleres 2026–2027
+              </button>
+              <span v-else-if="temporaryWorkshopSeed?.complete" class="workshop-seed-complete">
+                <LucideShieldCheck :size="17" />
+                Talleres listos en {{ temporaryWorkshopSeed.plantelesCount }} planteles
+              </span>
+              <button v-else type="button" class="btn workshop-seed-button unavailable" disabled>
+                <LucideWandSparkles :size="17" />
+                Sin conceptos de taller 2026–2027
+              </button>
+            </template>
             <div class="reference-source-chip">
               <span>Fuente</span>
               <strong>{{ sourceLabel === 'Base externa' ? 'Central' : 'Local' }}</strong>
@@ -486,6 +507,48 @@
     </template>
 
     <Teleport to="body">
+      <div v-if="showWorkshopSeedConfirm" class="stock-sheet-overlay" @click.self="showWorkshopSeedConfirm = false">
+        <div class="concept-modal workshop-seed-modal" role="dialog" aria-modal="true" aria-labelledby="workshop-seed-title">
+          <header>
+            <div>
+              <span>Acción temporal · 2026–2027</span>
+              <strong id="workshop-seed-title">Asociar conceptos con Talleres</strong>
+            </div>
+            <button type="button" class="stock-sheet-close" aria-label="Cerrar" :disabled="seedingWorkshopMappings" @click="showWorkshopSeedConfirm = false">
+              <LucideX :size="18" />
+            </button>
+          </header>
+
+          <div class="workshop-seed-summary">
+            <span class="workshop-seed-icon"><LucideWandSparkles :size="24" /></span>
+            <div>
+              <strong>{{ temporaryWorkshopSeed?.conceptosCount || 0 }} conceptos financieros</strong>
+              <p>
+                Se crearán o corregirán {{ temporaryWorkshopSeed?.pendingMappings || 0 }} asociaciones en
+                {{ temporaryWorkshopSeed?.plantelesCount || 0 }} planteles. No se cambian costos ni matrículas existentes.
+              </p>
+            </div>
+          </div>
+
+          <div class="workshop-seed-preview" aria-label="Talleres detectados">
+            <span v-for="candidate in temporaryWorkshopSeedCandidates" :key="candidate.concepto_id">
+              {{ candidate.concepto_nombre }} → {{ candidate.servicio_nombre }}
+            </span>
+          </div>
+
+          <footer>
+            <button type="button" class="btn btn-outline" :disabled="seedingWorkshopMappings" @click="showWorkshopSeedConfirm = false">Cancelar</button>
+            <button type="button" class="btn btn-primary" :disabled="seedingWorkshopMappings" @click="seedWorkshopMappings">
+              <LucideRefreshCw v-if="seedingWorkshopMappings" :size="16" class="animate-spin" />
+              <LucideCheck v-else :size="16" />
+              {{ seedingWorkshopMappings ? 'Asociando…' : 'Asociar en todos los planteles' }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
       <div v-if="stockSheet.open" class="stock-sheet-overlay" @click.self="closeStockSheet">
         <div class="stock-sheet" role="dialog" aria-modal="true">
           <header>
@@ -594,9 +657,11 @@ import {
   LucidePlus,
   LucideRefreshCw,
   LucideSearch,
+  LucideShieldCheck,
   LucideSlidersHorizontal,
   LucideTag,
   LucideTrash2,
+  LucideWandSparkles,
   LucideX,
   LucideXCircle
 } from 'lucide-vue-next'
@@ -605,6 +670,12 @@ import { useActiveCiclo } from '~/composables/useActiveCiclo'
 import { formatCicloLabel, normalizeCicloKey } from '~/shared/utils/ciclo'
 import { CONCEPTOS_PLANTELES_LIST, isConceptosPlantel, normalizeConceptosPlantel } from '~/utils/constants'
 import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave } from '~/shared/utils/talleresServicios'
+
+const props = defineProps({
+  visualLabPayload: { type: Object, default: null },
+  initialViewMode: { type: String, default: 'stock' },
+  initialCategory: { type: String, default: 'regular' },
+})
 
 const { show } = useToast()
 const { state, activeCicloKey, setActiveCiclo } = useActiveCiclo()
@@ -615,17 +686,17 @@ const loading = ref(false)
 const saving = ref(false)
 const syncing = ref(false)
 const settingCurrentCycle = ref(false)
-const adminPayload = ref(null)
-const selectedCiclo = ref(activeCicloKey.value)
+const adminPayload = ref(props.visualLabPayload || null)
+const selectedCiclo = ref(props.visualLabPayload?.cicloActual || activeCicloKey.value)
 const selectedPlantel = ref(normalizeConceptosPlantel(String(activePlantelCookie.value || 'PM').toUpperCase()))
-const selectedCategory = ref('regular')
+const selectedCategory = ref(props.initialCategory)
 const search = ref('')
 const conceptSearch = ref('')
 const selectedConcept = ref(null)
 const serviceName = ref('')
 const serviceSearch = ref('')
 const selectedMonths = ref([])
-const viewMode = ref('stock')
+const viewMode = ref(props.initialViewMode)
 const stockFilter = ref('all')
 const selectedStockConcept = ref(null)
 const detailTab = ref('distribution')
@@ -639,6 +710,8 @@ const pendingAssignments = ref([])
 const draggedConceptId = ref(null)
 const dropReceiving = ref(false)
 const showAllServices = ref(false)
+const showWorkshopSeedConfirm = ref(false)
+const seedingWorkshopMappings = ref(false)
 const servicePreviewLimit = 11
 
 const months = ['Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul']
@@ -678,6 +751,9 @@ const cycleOptions = computed(() => {
 })
 const activeCategoryLabel = computed(() => categories.value.find((entry) => entry.key === selectedCategory.value)?.label || 'Categoría')
 const adminScopeLabel = computed(() => String(authRoleCookie.value || '').toLowerCase().includes('super') ? 'SUPER ADMIN' : 'ADMIN')
+const temporaryWorkshopSeed = computed(() => adminPayload.value?.temporaryWorkshopSeed || null)
+const isTemporaryWorkshopSeedScope = computed(() => canManage.value && selectedCiclo.value === '2026' && selectedCategory.value === 'talleres_servicios')
+const temporaryWorkshopSeedCandidates = computed(() => (temporaryWorkshopSeed.value?.conceptos || []).slice(0, 8))
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase()
 const parseMonths = (value) => {
@@ -1143,12 +1219,53 @@ const savePendingAssignments = async () => {
   }
 }
 
+// TEMPORARY 2026-2027 UI action. The endpoint is idempotent and this button
+// hides itself once all expected plantel mappings are complete.
+const seedWorkshopMappings = async () => {
+  if (!temporaryWorkshopSeed.value?.ready || seedingWorkshopMappings.value) return
+  seedingWorkshopMappings.value = true
+  try {
+    if (props.visualLabPayload) {
+      adminPayload.value = {
+        ...adminPayload.value,
+        temporaryWorkshopSeed: {
+          ...temporaryWorkshopSeed.value,
+          completeMappings: temporaryWorkshopSeed.value.expectedMappings,
+          pendingMappings: 0,
+          complete: true,
+        },
+      }
+      showWorkshopSeedConfirm.value = false
+      show('Talleres asociados en todos los planteles', 'success')
+      return
+    }
+
+    const result = await $fetch('/api/conceptos-config/seed/talleres-2026-2027', { method: 'POST' })
+    showWorkshopSeedConfirm.value = false
+    await loadAdmin()
+    const pendingBridges = Number(result?.bridges?.pending?.length || 0)
+    show(
+      pendingBridges
+        ? `Asociaciones guardadas. ${pendingBridges} planteles actualizarán su espejo cuando vuelvan a estar en línea.`
+        : 'Talleres asociados y actualizados en todos los planteles.',
+      'success',
+      { duration: 6000 },
+    )
+  } catch (error) {
+    show(error?.data?.message || error?.data?.error || 'No se pudieron asociar los talleres.', 'danger', { duration: 6500 })
+  } finally {
+    seedingWorkshopMappings.value = false
+  }
+}
+
 const canSaveMapping = computed(() => Boolean(selectedConcept.value?.id && selectedCiclo.value && selectedPlantel.value && selectedCategory.value && (selectedCategory.value !== 'talleres_servicios' || selectedService.value?.clave)))
 
 const loadAdmin = async () => {
   loading.value = true
   try {
-    const result = await $fetch('/api/conceptos-config/admin', { params: { plantel: selectedPlantel.value } })
+    const result = props.visualLabPayload
+      ? props.visualLabPayload
+      : await $fetch('/api/conceptos-config/admin', { params: { plantel: selectedPlantel.value } })
     adminPayload.value = result
     if (!selectedCiclo.value) selectedCiclo.value = result?.cicloActual || cycleOptions.value[0]?.value || normalizeCicloKey(state.value?.ciclo)
     if (!selectedStockConcept.value && stockRows.value.length) selectStockConcept(stockRows.value[0])
@@ -1432,7 +1549,7 @@ onMounted(loadAdmin)
 .months-grid button.selected { border-color: #7fb069; background: #f4faef; color: #3f7e36; }
 .btn.full { width: 100%; justify-content: center; margin-top: 12px; flex-shrink: 0; }
 .stock-sheet-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: end center; background: rgba(9,20,36,.42); padding: 18px; }
-.stock-sheet, .concept-modal { width: min(460px, 100%); border: 1px solid rgba(255,255,255,.5); border-radius: 24px; background: #fff; box-shadow: 0 24px 68px rgba(7,18,34,.22); padding: 16px; }
+.stock-sheet, .concept-modal { box-sizing: border-box; width: min(460px, 100%); max-width: 100%; border: 1px solid rgba(255,255,255,.5); border-radius: 24px; background: #fff; box-shadow: 0 24px 68px rgba(7,18,34,.22); padding: 16px; }
 .concept-modal { width: min(560px, 100%); }
 .stock-sheet header, .stock-sheet footer, .concept-modal header, .concept-modal footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .stock-sheet header span, .concept-modal header span { display: block; color: #3d7f36; font-size: .72rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
@@ -1472,6 +1589,47 @@ onMounted(loadAdmin)
   font-weight: 760;
 }
 .category-hero-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.workshop-seed-button {
+  min-height: 50px;
+  border: 1px solid #c8e3bd;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f4fbf0, #eaf7e5);
+  color: #2e8033;
+  padding-inline: 18px;
+  font-weight: 930;
+  box-shadow: 0 11px 24px rgba(63, 140, 60, .12);
+}
+.workshop-seed-button.unavailable { color: #78879a; border-color: #e0e7ee; background: #f8fafc; box-shadow: none; opacity: .85; }
+.workshop-seed-complete {
+  display: inline-flex;
+  min-height: 50px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #c8e3bd;
+  border-radius: 16px;
+  background: #f1faed;
+  color: #2f8034;
+  padding: 0 17px;
+  font-size: .78rem;
+  font-weight: 930;
+}
+.workshop-seed-modal { width: min(620px, 100%); }
+.workshop-seed-summary {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  margin: 18px 0 14px;
+  padding: 16px;
+  border: 1px solid #d9e9d3;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f7fcf4, #fff);
+}
+.workshop-seed-icon { display: grid; width: 54px; height: 54px; place-items: center; border-radius: 18px; background: #e5f5df; color: #378737; }
+.workshop-seed-summary strong { display: block; color: var(--ink); font-size: 1rem; font-weight: 950; }
+.workshop-seed-summary p { margin: 6px 0 0; color: #627188; font-size: .83rem; line-height: 1.52; font-weight: 740; }
+.workshop-seed-preview { display: flex; max-height: 174px; flex-direction: column; gap: 7px; overflow: auto; margin-bottom: 18px; }
+.workshop-seed-preview span { border: 1px solid #e0e8ef; border-radius: 12px; background: #fbfcfe; color: #44566d; padding: 9px 11px; font-size: .75rem; font-weight: 850; }
 .reference-source-chip {
   display: inline-grid;
   grid-template-columns: auto auto auto;
@@ -1981,6 +2139,7 @@ onMounted(loadAdmin)
   .category-reference-hero { align-items: stretch; flex-direction: column; padding: 17px; }
   .category-hero-actions { display: grid; grid-template-columns: 1fr; }
   .reference-source-chip, .category-refresh-button { width: 100%; justify-content: center; }
+  .workshop-seed-button, .workshop-seed-complete { width: 100%; justify-content: center; }
   .category-mode-tabs { grid-template-columns: 1fr 1fr; }
   .category-mode-tabs button { min-height: 52px; }
   .category-filter-bar { grid-template-columns: 1fr; gap: 12px; padding: 14px; }
@@ -2000,6 +2159,13 @@ onMounted(loadAdmin)
   .add-concept-id { display: none; }
   .category-months-grid { grid-template-columns: repeat(4, 1fr); }
   .workshop-chip-grid { grid-template-columns: 1fr 1fr; }
+  .workshop-seed-summary { grid-template-columns: 1fr; }
+  .workshop-seed-modal { max-height: calc(100dvh - 20px); overflow: auto; }
+  .workshop-seed-modal header > div { min-width: 0; }
+  .workshop-seed-modal header strong { font-size: 1.02rem; }
+  .workshop-seed-modal .stock-sheet-close { flex: 0 0 auto; }
+  .workshop-seed-modal footer { align-items: stretch; flex-direction: column-reverse; }
+  .workshop-seed-modal footer .btn { width: 100%; flex: none; }
 }
 
 </style>

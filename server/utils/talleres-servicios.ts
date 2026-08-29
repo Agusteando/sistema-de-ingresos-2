@@ -185,6 +185,9 @@ export const readCentralMatriculaServicios = async (matricula: unknown) => {
     `SELECT ${escapeIdentifier(field)} AS servicios FROM matricula WHERE UPPER(TRIM(matricula)) = ? LIMIT 1`,
     [key]
   )
+  if (!rows.length) {
+    throw createError({ statusCode: 404, message: 'La matrícula no existe en Control Escolar; no se pudo actualizar Talleres.' })
+  }
   const raw = rows[0]?.servicios || ''
   return { field, raw: compactText(raw, 5000), servicios: parseServiciosCsv(raw) }
 }
@@ -237,10 +240,13 @@ export const updateCentralMatriculaServicio = async ({
       params.push(userEmail || 'sistema')
     }
     params.push(key)
-    await controlEscolarCentralQuery(
+    const result = await controlEscolarCentralQuery<any>(
       `UPDATE matricula SET ${assignments.join(', ')} WHERE UPPER(TRIM(matricula)) = ?`,
       params
     )
+    if (Number(result?.affectedRows || 0) < 1) {
+      throw createError({ statusCode: 409, message: 'Control Escolar no confirmó la actualización de Talleres para esta matrícula.' })
+    }
   }
 
   return {

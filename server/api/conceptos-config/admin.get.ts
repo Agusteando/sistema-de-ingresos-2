@@ -3,6 +3,7 @@ import { getTrustedAuthUser } from '../../utils/auth-session'
 import { readBestTalleresServiciosCatalog, readFinalTalleresCatalog } from '../../utils/talleres-servicios'
 import { readBestStockSnapshots, readStockMovements, stockMapByConceptId, uncontrolledStockSnapshot } from '../../utils/conceptos-stock'
 import { CONCEPTOS_PLANTELES_LIST, isConceptosPlantel, normalizeConceptosPlantel } from '../../../utils/constants'
+import { buildWorkshopSeedPreview, TEMPORARY_WORKSHOP_SEED_CYCLE } from '../../utils/conceptos-workshop-seed'
 
 export default defineEventHandler(async (event) => {
   const user = await getTrustedAuthUser(event)
@@ -29,6 +30,12 @@ export default defineEventHandler(async (event) => {
   })
   const movements = await readStockMovements({ limit: 240 })
   const visibleMovements = (movements.movements || []).filter((movement: any) => isConceptosPlantel(String(movement.plantel || '')))
+  const temporaryWorkshopSeed = buildWorkshopSeedPreview({
+    conceptos,
+    mappings: config.mappings,
+    ciclo: TEMPORARY_WORKSHOP_SEED_CYCLE,
+    planteles: CONCEPTOS_PLANTELES_LIST,
+  })
 
   return {
     canManage,
@@ -46,6 +53,7 @@ export default defineEventHandler(async (event) => {
     serviciosCatalogoSource: serviciosCatalogo.source,
     talleresCatalogo: talleresCatalogo.catalog.map((item) => ({ clave: item.servicio_clave, nombre: item.servicio_nombre, imagen: item.imagen_url, activo: true, orden: Number(item.orden || 9999) })),
     talleresCatalogoSource: talleresCatalogo.source,
+    temporaryWorkshopSeed,
     ...buildConceptosConfigPayload({ ...config, conceptos: conceptosWithStock })
   }
 })

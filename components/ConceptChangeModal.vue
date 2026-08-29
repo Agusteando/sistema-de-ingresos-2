@@ -202,7 +202,7 @@ const runOperation = async (action, extraBody = {}) => {
 
   busyAction.value = action;
   try {
-    await $fetch("/api/documentos/period", {
+    const result = await $fetch("/api/documentos/period", {
       method: "POST",
       body: {
         action,
@@ -212,7 +212,12 @@ const runOperation = async (action, extraBody = {}) => {
         ...extraBody,
       },
     });
-    show("Concepto actualizado", "success");
+    if (result?.servicio?.ok === false) {
+      show("Concepto actualizado, pero Control Escolar no confirmó el taller. Revísalo en Talleres.", "danger", { duration: 6500 });
+    } else {
+      const serviceText = result?.servicio?.mapped ? ` · ${result.servicio.servicio?.nombre || "Taller actualizado"}` : "";
+      show(`Concepto actualizado${serviceText}`, "success");
+    }
     emit("success");
   } catch (e) {
     show(e?.data?.message || "No se pudo ajustar el concepto", "danger");

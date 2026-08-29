@@ -6,6 +6,8 @@ This repo intentionally includes permanent dev-only visual testing tools for aut
 
 - Dev route: `/__visual-lab/students-account`
 - Chrome-free route for screenshots: `/__visual-lab/students-account?chrome=0`
+- Conceptos/talleres route: `/__visual-lab/conceptos`
+- Conceptos chrome-free route: `/__visual-lab/conceptos?chrome=0`
 - Production behavior: the route is blocked by `middleware/auth.global.ts` outside `import.meta.dev`.
 
 The route renders the real `StudentsListPanel`, `StudentDetails`, `DocumentModal`, and global `ContextMenu` host with synthetic data. `StudentDetails` receives deterministic `visualLabDebts` so the account table is never blocked by auth, bridge state, or browser-storage quirks. The route also seeds:
@@ -15,6 +17,8 @@ The route renders the real `StudentsListPanel`, `StudentDetails`, `DocumentModal
 - local Estado de Cuenta cache records for four synthetic students
 - a synthetic photo cache entry for `PTO574` so the detail-panel photo preview can be tested, with the other photo entries set to `none`
 - `visual_lab=students-account` cookie for any future dev-only API fixtures
+
+The conceptos route renders the real `/conceptos` page with a synthetic 2026–2027 financial catalog, workshop mappings, all nine configured planteles, and the temporary one-time seed confirmation. Its confirm action is simulated locally and never calls a database.
 
 After opening the route, agents can navigate to `/`, `/control-escolar`, or other protected pages in the same browser context without hitting the login redirect first.
 
@@ -51,6 +55,8 @@ After opening the route, agents can navigate to `/`, `/control-escolar`, or othe
    - `Agregar documento`, the document modal, and `Mas` menu remain usable
 
 5. Run `npm run build` before finishing.
+
+For changes to `/conceptos`, also verify `/__visual-lab/conceptos?chrome=0` at desktop and mobile widths. Confirm that the temporary action is visible only for cycle 2026–2027 plus `Talleres y Servicios`, its confirmation explains the exact scope, and the action becomes a non-clickable completion status after the simulated run.
 
 ## Notes
 
