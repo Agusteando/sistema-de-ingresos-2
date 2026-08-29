@@ -1174,7 +1174,6 @@ const centralSelectColumns = (schema: ControlEscolarSchema) => {
     "telefono_madre",
     "celular_madre",
     "verified",
-    "nivel",
     "ciclo",
     "nombre_completo_alumno",
     "lugar_nacimiento",
@@ -1527,8 +1526,10 @@ const overlayStudentRow = (
     motivoBaja: normalizeText(overlay?.motivo_baja, 500),
     categoriaBaja: normalizeText(overlay?.categoria_baja),
     seguimientoBaja: normalizeText(overlay?.seguimiento_baja, 500),
-    program: firstText(overlay?.servicio, base.baseNivel, overlay?.nivel),
-    nivel: firstLower(base.baseNivel, overlay?.nivel),
+    program: firstText(overlay?.servicio, base.baseNivel),
+    // Academic level is the projected Control Escolar level. Never use the
+    // centralized raw level value as a current-school-cycle fallback.
+    nivel: firstLower(base.baseNivel),
     grado: firstLower(base.baseGrado),
     group: resolvedGroup,
     grupo: resolvedGroup,
@@ -1585,7 +1586,6 @@ const overlayStudentRow = (
 
   Object.assign(normalized as any, {
     matriculaPlantel: normalizeText(overlay?.plantel),
-    matriculaNivel: normalizeText(overlay?.nivel),
     matriculaGrupo: normalizeText(overlay?.grupo),
     academicPlacementSource: "base-projection",
     lastGrade: normalizeText(overlay?.last_grade),
