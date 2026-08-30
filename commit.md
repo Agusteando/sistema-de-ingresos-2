@@ -1,1 +1,1 @@
-Garantizar que el nivel vigente se calcule con la proyección académica de Control Escolar
+Corrige la API externa de alumnos con búsqueda global y fallback resiliente

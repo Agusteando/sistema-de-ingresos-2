@@ -2608,12 +2608,13 @@ export const fetchControlEscolarStudents = async (
   const wantsAll = ["1", "true", "all", "snapshot", "index"].includes(
     String(filters.all || filters.mode || "").toLowerCase(),
   );
+  const normalLimitMax = filters.externalApi ? 500 : 100;
   const limit = wantsAll
     ? Math.min(
         MAX_LOCAL_ROWS,
         Math.max(1, Number(filters.limit || MAX_LOCAL_ROWS) || MAX_LOCAL_ROWS),
       )
-    : Math.min(100, Math.max(8, Number(filters.limit || 25) || 25));
+    : Math.min(normalLimitMax, Math.max(8, Number(filters.limit || 25) || 25));
   const loaded = await fetchAllNormalizedStudents(agentId, filters);
   const allStudents = loaded.students;
   if (wantsAll && !normalizeText(filters.search || filters.q || "", 80)) {

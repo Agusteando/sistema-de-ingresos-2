@@ -153,7 +153,7 @@ export const readExternalLiveHealth = async () => {
 export const readExternalLiveStudents = async (event: any, query: any = {}) => {
   const { plantel, ciclo } = resolveScope(query)
   const page = decodeCursor(query.cursor)
-  const limit = Math.min(100, Math.max(25, Number(query.limit || 100) || 100))
+  const limit = Math.min(500, Math.max(25, Number(query.limit || 100) || 100))
 
   return await runExternalControlEscolarScope(event, plantel, async (bridgeAgentId) => {
     const filters = {
@@ -164,7 +164,8 @@ export const readExternalLiveStudents = async (event: any, query: any = {}) => {
       cicloKey: ciclo,
       page,
       limit,
-      group: query.grupo || query.group || ''
+      group: query.grupo || query.group || '',
+      externalApi: true
     }
     delete filters.cursor
 
