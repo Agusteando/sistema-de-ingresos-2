@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Asociar los conceptos financieros 2026–2027 cuyo nombre identifica de forma inequívoca un taller con el catálogo operativo de Talleres y Servicios. Cada asociación se crea para los nueve planteles visibles en `/conceptos`.
+Asociar los conceptos financieros 2026–2027 cuyo nombre identifica de forma inequívoca un taller con el catálogo operativo de Talleres y Servicios. Cada asociación se crea para los planteles visibles en `/conceptos`, incluido `DM` aunque no aparezca en las tarjetas del dashboard financiero.
 
 El proceso no crea conceptos financieros, no cambia costos y no modifica matrículas existentes. Los conceptos deben existir primero en la tabla central `conceptos` con ciclo `2026` o `2026-2027`.
 
@@ -13,7 +13,7 @@ El proceso no crea conceptos financieros, no cambia costos y no modifica matríc
 3. Seleccionar ciclo `2026-2027` y categoría `Talleres y Servicios`.
 4. Pulsar `Preparar talleres 2026–2027`.
 5. Revisar la cantidad de conceptos, asociaciones y planteles; confirmar una sola vez.
-6. Verificar que aparezca `Talleres listos en 9 planteles` y que cada concepto se vea asociado en al menos dos planteles de control.
+6. Verificar el total de planteles informado y que cada concepto se vea asociado en al menos dos planteles de control.
 
 La operación es idempotente: si se repite, no crea duplicados. Los Bridges fuera de línea conservan la configuración central como fuente y actualizarán su espejo cuando vuelvan a sincronizar.
 

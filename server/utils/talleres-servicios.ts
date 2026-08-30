@@ -31,10 +31,42 @@ export type TallerServicioCatalogRow = {
 
 type MatriculaServicioField = 'servicio' | 'servicios'
 
+export type ConceptMappedServicioEvidence = {
+  conceptoId: number
+  conceptoNombre: string
+  documentosActivos: number
+}
+
+export type ConceptMappedServicioAssignment = {
+  clave: string
+  nombre: string
+  imagen: string
+  conceptosFinancieros: ConceptMappedServicioEvidence[]
+}
+
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 const compactText = (value: unknown, maxLength = 500) => String(value ?? '').trim().slice(0, maxLength)
 const normalizeMatricula = (value: unknown) => compactText(value, 64).toUpperCase()
 const truthy = (value: unknown) => value === undefined || value === null ? true : Number(value) !== 0
+
+// /conceptos uses the financial campus code while Portal Tallerista keeps
+// public, grade-split campus codes. Prefer an exact mapping when one exists,
+// then its financial alias, and finally GLOBAL.
+const conceptMappingPlantelCandidates = (value: unknown) => {
+  const raw = compactText(value, 40).toUpperCase()
+  const aliases: Record<string, string> = {
+    PMA: 'PM',
+    PMB: 'PM',
+    PREET: 'CT',
+    CM: 'PREEM',
+  }
+  return Array.from(new Set([raw, aliases[raw], 'GLOBAL'].filter(Boolean)))
+}
+
+const cycleCandidatesFor = (value: unknown) => {
+  const cicloKey = normalizeCicloKey(value)
+  return Array.from(new Set([cicloKey, formatCicloLabel(cicloKey)].filter(Boolean)))
+}
 
 const defaultCatalogRows = () => DEFAULT_TALLERES_SERVICIOS.map((item) => ({
   servicio_clave: item.clave,
@@ -270,15 +302,13 @@ export const findTallerServicioForConcept = async ({
 }) => {
   const id = Number(conceptoId || 0)
   if (!id) return null
-  const cicloKey = normalizeCicloKey(ciclo)
-  const cycleCandidates = Array.from(new Set([cicloKey, formatCicloLabel(cicloKey)].filter(Boolean)))
-  const plantelKey = compactText(plantel, 40).toUpperCase()
-  const plantelCandidates = Array.from(new Set([plantelKey, 'GLOBAL'].filter(Boolean)))
+  const cycleCandidates = cycleCandidatesFor(ciclo)
+  const plantelCandidates = conceptMappingPlantelCandidates(plantel)
   const cycleWhere = cycleCandidates.length ? `AND cycle_name IN (${cycleCandidates.map(() => '?').join(',')})` : ''
   const plantelWhere = plantelCandidates.length ? `AND UPPER(TRIM(plantel)) IN (${plantelCandidates.map(() => '?').join(',')})` : ''
 
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT servicio_clave, servicio_nombre
+    `SELECT id, plantel, servicio_clave, servicio_nombre
        FROM config_enrollment_mappings
       WHERE concepto_id = ?
         AND IFNULL(activo, 1) = 1
@@ -286,11 +316,14 @@ export const findTallerServicioForConcept = async ({
         AND IFNULL(servicio_clave, '') <> ''
         ${cycleWhere}
         ${plantelWhere}
-      ORDER BY CASE WHEN UPPER(TRIM(plantel)) = ? THEN 0 ELSE 1 END, id DESC
-      LIMIT 1`,
-    [id, ...cycleCandidates, ...plantelCandidates, plantelKey]
+       ORDER BY id DESC`,
+    [id, ...cycleCandidates, ...plantelCandidates]
   )
-  const row = rows[0]
+  const row = [...rows].sort((left, right) => {
+    const leftRank = plantelCandidates.indexOf(compactText(left?.plantel, 40).toUpperCase())
+    const rightRank = plantelCandidates.indexOf(compactText(right?.plantel, 40).toUpperCase())
+    return leftRank - rightRank || Number(right?.id || 0) - Number(left?.id || 0)
+  })[0]
   if (!row) return null
   const catalog = await readBestTalleresServiciosCatalog()
   const normalizedKey = canonicalTallerKey(row.servicio_clave || row.servicio_nombre)
@@ -300,6 +333,145 @@ export const findTallerServicioForConcept = async ({
     nombre: match?.servicio_nombre || normalizeServicioNombre(row.servicio_nombre),
     imagen: match?.imagen_url || (normalizedKey ? `/talleres-servicios/${normalizedKey}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE),
   }
+}
+
+const readConceptMappedServicios = async ({ ciclo, plantel }: { ciclo?: unknown, plantel?: unknown }) => {
+  const cycleCandidates = cycleCandidatesFor(ciclo)
+  const plantelCandidates = conceptMappingPlantelCandidates(plantel)
+  const rows = await controlEscolarCentralQuery<any[]>(
+    `SELECT id, plantel, concepto_id, concepto_nombre, servicio_clave, servicio_nombre
+       FROM config_enrollment_mappings
+      WHERE IFNULL(activo, 1) = 1
+        AND IFNULL(enrollment_type, 'regular') = 'talleres_servicios'
+        AND IFNULL(servicio_clave, '') <> ''
+        AND cycle_name IN (${cycleCandidates.map(() => '?').join(',')})
+        AND UPPER(TRIM(plantel)) IN (${plantelCandidates.map(() => '?').join(',')})
+      ORDER BY id DESC`,
+    [...cycleCandidates, ...plantelCandidates]
+  )
+
+  const selected = new Map<number, any>()
+  for (const row of rows) {
+    const conceptoId = Number(row?.concepto_id || 0)
+    if (!conceptoId) continue
+    const candidate = {
+      ...row,
+      plantelRank: plantelCandidates.indexOf(compactText(row?.plantel, 40).toUpperCase()),
+    }
+    const current = selected.get(conceptoId)
+    if (!current || candidate.plantelRank < current.plantelRank || (
+      candidate.plantelRank === current.plantelRank && Number(candidate.id || 0) > Number(current.id || 0)
+    )) selected.set(conceptoId, candidate)
+  }
+
+  return new Map(Array.from(selected.entries()).map(([conceptoId, row]) => {
+    const clave = canonicalTallerKey(row.servicio_clave || row.servicio_nombre)
+    // The portal already has the authoritative active catalog loaded once per
+    // request and resolves this key there. Seeds keep this bridge-side evidence
+    // lookup cheap while still supporting every built-in service.
+    const item = serviceSeedByKey(clave)
+    return [conceptoId, {
+      conceptoId,
+      conceptoNombre: compactText(row.concepto_nombre, 255),
+      clave,
+      nombre: item?.servicio_nombre || finalTallerSeed(clave)?.nombre || normalizeServicioNombre(row.servicio_nombre),
+      imagen: item?.imagen_url || (clave ? `/talleres-servicios/${clave}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE),
+    }]
+  }).filter(([, row]) => row.clave && row.nombre))
+}
+
+const readActiveMappedConceptRows = async (matriculas: string[], ciclo: unknown, conceptIds: number[]) => {
+  if (!matriculas.length || !conceptIds.length) return []
+  const cycleCandidates = cycleCandidatesFor(ciclo)
+  let hasPeriodTable = false
+  try {
+    const tables = await query<any[]>(`SHOW TABLES LIKE 'documento_concepto_periodos'`)
+    hasPeriodTable = tables.length > 0
+  } catch {}
+
+  const rows: any[] = []
+  for (let offset = 0; offset < matriculas.length; offset += 250) {
+    const chunk = matriculas.slice(offset, offset + 250)
+    const periodJoin = hasPeriodTable
+      ? `LEFT JOIN documento_concepto_periodos P
+           ON P.id = (
+             SELECT P2.id
+               FROM documento_concepto_periodos P2
+              WHERE P2.documento = D.documento
+                AND LOWER(TRIM(CAST(P2.estatus AS CHAR))) = 'activo'
+              ORDER BY P2.start_mes DESC, P2.id DESC
+              LIMIT 1
+           )`
+      : ''
+    const effectiveConcept = hasPeriodTable ? 'COALESCE(P.concepto_id, D.concepto)' : 'D.concepto'
+    const activePeriod = hasPeriodTable
+      ? `AND (P.id IS NULL OR LOWER(TRIM(CAST(P.accion AS CHAR))) <> 'cancelacion')`
+      : ''
+    const batch = await query<any[]>(
+      `SELECT UPPER(TRIM(D.matricula)) AS matricula,
+              CAST(${effectiveConcept} AS UNSIGNED) AS concepto_id,
+              COUNT(DISTINCT D.documento) AS documentos_activos
+         FROM documentos D
+         ${periodJoin}
+        WHERE CAST(D.ciclo AS CHAR) IN (${cycleCandidates.map(() => '?').join(',')})
+          AND LOWER(TRIM(CAST(D.estatus AS CHAR))) = 'activo'
+          AND UPPER(TRIM(D.matricula)) IN (${chunk.map(() => '?').join(',')})
+          AND CAST(${effectiveConcept} AS UNSIGNED) IN (${conceptIds.map(() => '?').join(',')})
+          ${activePeriod}
+        GROUP BY UPPER(TRIM(D.matricula)), CAST(${effectiveConcept} AS UNSIGNED)`,
+      [...cycleCandidates, ...chunk, ...conceptIds]
+    )
+    rows.push(...batch)
+  }
+  return rows
+}
+
+/**
+ * Resolves legacy/current financial workshop assignments without mutating
+ * matricula.servicio(s). This is intentionally read-time evidence so existing
+ * production charges become visible even if they predate the write-through
+ * performed by appendConceptMappedServicioToMatricula.
+ */
+export const readConceptMappedServiciosForMatriculas = async ({
+  matriculas,
+  ciclo,
+  plantel,
+}: {
+  matriculas: unknown[]
+  ciclo?: unknown
+  plantel?: unknown
+}) => {
+  const unique = Array.from(new Set(matriculas.map(normalizeMatricula).filter(Boolean)))
+  const result = new Map<string, ConceptMappedServicioAssignment[]>()
+  const mappings = await readConceptMappedServicios({ ciclo, plantel })
+  if (!unique.length || !mappings.size) return { result, mappingCount: mappings.size, evidenceCount: 0 }
+
+  const rows = await readActiveMappedConceptRows(unique, ciclo, Array.from(mappings.keys()))
+  const byStudent = new Map<string, Map<string, ConceptMappedServicioAssignment>>()
+  for (const row of rows) {
+    const matricula = normalizeMatricula(row?.matricula)
+    const mapped = mappings.get(Number(row?.concepto_id || 0))
+    if (!matricula || !mapped) continue
+    const services = byStudent.get(matricula) || new Map<string, ConceptMappedServicioAssignment>()
+    const service = services.get(mapped.clave) || {
+      clave: mapped.clave,
+      nombre: mapped.nombre,
+      imagen: mapped.imagen,
+      conceptosFinancieros: [],
+    }
+    service.conceptosFinancieros.push({
+      conceptoId: mapped.conceptoId,
+      conceptoNombre: mapped.conceptoNombre,
+      documentosActivos: Number(row?.documentos_activos || 0),
+    })
+    services.set(mapped.clave, service)
+    byStudent.set(matricula, services)
+  }
+
+  for (const [matricula, services] of byStudent) {
+    result.set(matricula, Array.from(services.values()).sort((left, right) => left.nombre.localeCompare(right.nombre, 'es')))
+  }
+  return { result, mappingCount: mappings.size, evidenceCount: rows.length }
 }
 
 export const appendConceptMappedServicioToMatricula = async ({

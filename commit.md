@@ -1,1 +1,1 @@
-Corrige la API externa de alumnos con búsqueda global y fallback resiliente
+Unifica asignaciones directas y conceptos financieros en la API de Talleres

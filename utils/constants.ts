@@ -6,7 +6,10 @@ export const PLANTELES_LIST = [
 
 export const DASHBOARD_PLANTELES = ['PM', 'PT', 'SM', 'ST', 'PREEM', 'CT', 'GM', 'CO', 'DC'] as const
 
-export const CONCEPTOS_PLANTELES_LIST: string[] = [...DASHBOARD_PLANTELES]
+// Concept configuration also drives Portal Tallerista. DM is not part of the
+// dashboard collection cards, but it must be configurable here so its
+// workshop/service concepts can be resolved by the external Talleres API.
+export const CONCEPTOS_PLANTELES_LIST: string[] = [...DASHBOARD_PLANTELES, 'DM']
 
 export const normalizeConceptosPlantel = (value: string | null | undefined, fallback = CONCEPTOS_PLANTELES_LIST[0]) => {
   const code = String(value || '').trim().toUpperCase()

@@ -10,7 +10,12 @@ import {
 import { controlEscolarCentralQuery, getCentralTableColumns } from './control-escolar-central'
 import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
 import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
-import { readBestTalleresServiciosCatalog, updateCentralMatriculaServicio } from './talleres-servicios'
+import {
+  readBestTalleresServiciosCatalog,
+  readConceptMappedServiciosForMatriculas,
+  updateCentralMatriculaServicio,
+  type ConceptMappedServicioAssignment,
+} from './talleres-servicios'
 import { readTalleresAssignmentSummaries, readTalleresContracts, recordTalleresAssignmentChange } from './talleres-contracts'
 
 // Public Talleres codes stay stable even when Aurora routes them to a legacy
@@ -187,8 +192,16 @@ const readOnePlantelStudents = async (event: any, plantel: string, ciclo: string
       ? { plantel: sourcePlantel, agentId: sourcePlantel, ciclo, cicloKey: ciclo, search, page: 1, limit: 100 }
       : { plantel: sourcePlantel, agentId: sourcePlantel, ciclo, cicloKey: ciclo, all: '1', limit: 10000 })
     const students = splitPrimariaMetepec(Array.isArray(result?.data) ? result.data : [], plantel)
+    const financialAssignments = await readConceptMappedServiciosForMatriculas({
+      matriculas: students.map((student: any) => student?.matricula),
+      ciclo,
+      plantel,
+    })
     return {
       students,
+      financialAssignments: financialAssignments.result,
+      assignmentMappingCount: financialAssignments.mappingCount,
+      assignmentEvidenceCount: financialAssignments.evidenceCount,
       source: result?.source || null,
       total: students.length,
     }
@@ -208,7 +221,43 @@ const runLimited = async <T>(items: string[], worker: (item: string) => Promise<
   return result
 }
 
-const compactStudent = (student: any, plantel: string, ciclo: string, services: ReturnType<ReturnType<typeof makeServiceResolver>>[], labels: Map<string, TallerDayCode[]>, contract?: { hasContract: boolean | null, observations: string, updatedAt: string | null }, assignmentSummary: Record<string, any> = {}) => {
+const mergeStudentServices = (
+  directValue: unknown,
+  financialAssignments: ConceptMappedServicioAssignment[],
+  resolveService: ReturnType<typeof makeServiceResolver>,
+) => {
+  const merged = new Map<string, any>()
+  const ensure = (value: unknown) => {
+    const resolved = resolveService(value)
+    if (!resolved.activo || !resolved.clave || !resolved.nombre) return null
+    const current = merged.get(resolved.clave) || {
+      ...resolved,
+      fuentes: [] as string[],
+      conceptosFinancieros: [] as any[],
+    }
+    merged.set(resolved.clave, current)
+    return current
+  }
+
+  for (const name of parseServiciosCsv(directValue)) {
+    const service = ensure(name)
+    if (service && !service.fuentes.includes('matricula')) service.fuentes.push('matricula')
+  }
+  for (const assignment of financialAssignments) {
+    const service = ensure(assignment.clave || assignment.nombre)
+    if (!service) continue
+    if (!service.fuentes.includes('concepto_financiero')) service.fuentes.push('concepto_financiero')
+    for (const evidence of assignment.conceptosFinancieros || []) {
+      if (!service.conceptosFinancieros.some((item: any) => item.conceptoId === evidence.conceptoId)) {
+        service.conceptosFinancieros.push(evidence)
+      }
+    }
+  }
+
+  return Array.from(merged.values()).sort((left, right) => left.orden - right.orden || left.nombre.localeCompare(right.nombre, 'es'))
+}
+
+const compactStudent = (student: any, plantel: string, ciclo: string, services: any[], labels: Map<string, TallerDayCode[]>, contract?: { hasContract: boolean | null, observations: string, updatedAt: string | null }, assignmentSummary: Record<string, any> = {}) => {
   const tallerDias: Record<string, TallerDayCode[]> = {}
   const talleres = services.map((service) => {
     const dias = labels.get(studentMapKey(student?.matricula, service.clave)) || []
@@ -244,6 +293,15 @@ const compactStudent = (student: any, plantel: string, ciclo: string, services: 
     ciclo,
     servicios: services.map((service) => service.nombre),
     talleres,
+    asignaciones: talleres.map((service) => ({
+      clave: service.clave,
+      nombre: service.nombre,
+      imagen: service.imagen,
+      fuentes: service.fuentes,
+      directa: service.fuentes.includes('matricula'),
+      conceptosFinancieros: service.conceptosFinancieros,
+    })),
+    asignacionesCompletas: true,
     tallerDias,
     joined: assignmentSummary,
   }
@@ -261,6 +319,11 @@ export const readTalleresPortalMeta = async (requestedCiclo?: unknown) => {
     talleres: catalog.catalog.filter((item) => item.tipo === 'taller'),
     servicios: catalog.catalog.filter((item) => item.tipo === 'servicio'),
     catalogSource: catalog.source,
+    assignmentResolution: {
+      policy: 'union',
+      sources: ['matricula', 'concepto_financiero'],
+      description: 'Una asignación existe si está en matrícula o en un cargo activo con concepto financiero mapeado.',
+    },
     dayLabelsSchemaReady: await labelsTableReady(),
     dayLabels: [...TALLER_DAY_OPTIONS],
   }
@@ -278,7 +341,7 @@ export const readTalleresPortalRoster = async (event: any, input: any = {}) => {
       const result = await readOnePlantelStudents(event, plantel, ciclo)
       return { plantel, ...result, error: null }
     } catch (error: any) {
-      return { plantel, students: [], source: null, total: 0, error: clean(error?.message || error?.statusMessage || 'No disponible', 1000) }
+      return { plantel, students: [], financialAssignments: new Map(), assignmentMappingCount: 0, assignmentEvidenceCount: 0, source: null, total: 0, error: clean(error?.message || error?.statusMessage || 'No disponible', 1000) }
     }
   })
 
@@ -301,7 +364,8 @@ export const readTalleresPortalRoster = async (event: any, input: any = {}) => {
   for (const entry of loaded) {
     data[entry.plantel] = {}
     for (const rawStudent of entry.students) {
-      const services = parseServiciosCsv(rawStudent?.servicio).map(resolveService).filter((service) => service.activo && service.clave && service.nombre)
+      const matricula = matriculaKey(rawStudent?.matricula)
+      const services = mergeStudentServices(rawStudent?.servicio, entry.financialAssignments.get(matricula) || [], resolveService)
       const student = compactStudent(rawStudent, entry.plantel, ciclo, services, labels.map, contracts.result.get(matriculaKey(rawStudent?.matricula)), assignments.result.get(matriculaKey(rawStudent?.matricula)) || {})
       students.push(student)
       for (const service of services) {
@@ -320,11 +384,24 @@ export const readTalleresPortalRoster = async (event: any, input: any = {}) => {
     talleres: catalog.catalog.filter((item) => item.tipo === 'taller'),
     servicios: catalog.catalog.filter((item) => item.tipo === 'servicio'),
     catalogSource: catalog.source,
+    assignmentResolution: {
+      complete: loaded.every((entry) => !entry.error),
+      policy: 'union',
+      sources: ['matricula', 'concepto_financiero'],
+    },
     dayLabelsSchemaReady: labels.ready,
     students,
     data,
     meta: {
-      sources: loaded.map((entry) => ({ plantel: entry.plantel, ok: !entry.error, total: entry.total, error: entry.error, source: entry.source })),
+      sources: loaded.map((entry) => ({
+        plantel: entry.plantel,
+        ok: !entry.error,
+        total: entry.total,
+        error: entry.error,
+        source: entry.source,
+        conceptosMapeados: entry.assignmentMappingCount,
+        evidenciasFinancieras: entry.assignmentEvidenceCount,
+      })),
       generatedAt: new Date().toISOString(),
     }
   }
@@ -344,7 +421,7 @@ export const searchTalleresPortalStudents = async (event: any, input: any = {}) 
       const result = await readOnePlantelStudents(event, plantel, ciclo, search)
       return { plantel, ...result, error: null }
     } catch (error: any) {
-      return { plantel, students: [], source: null, total: 0, error: clean(error?.message || error?.statusMessage || 'No disponible', 1000) }
+      return { plantel, students: [], financialAssignments: new Map(), assignmentMappingCount: 0, assignmentEvidenceCount: 0, source: null, total: 0, error: clean(error?.message || error?.statusMessage || 'No disponible', 1000) }
     }
   })
   if (requested && loaded[0]?.error) {
@@ -365,13 +442,36 @@ export const searchTalleresPortalStudents = async (event: any, input: any = {}) 
   for (const entry of flattened) {
     const mat = matriculaKey(entry.student?.matricula)
     if (!mat || unique.has(mat)) continue
-    const services = parseServiciosCsv(entry.student?.servicio).map(resolveService).filter((service) => service.activo && service.clave && service.nombre)
+    const financialAssignments = loaded.find((item) => item.plantel === entry.plantel)?.financialAssignments.get(mat) || []
+    const services = mergeStudentServices(entry.student?.servicio, financialAssignments, resolveService)
     const student = compactStudent(entry.student, entry.plantel, ciclo, services, labels.map, contracts.result.get(mat), assignments.result.get(mat) || {})
     unique.set(mat, student)
     if (unique.size >= MAX_SEARCH_RESULTS) break
   }
 
-  return { ok: true, source: 'aurora', ciclo, data: Array.from(unique.values()), dayLabelsSchemaReady: labels.ready }
+  return {
+    ok: true,
+    source: 'aurora',
+    ciclo,
+    data: Array.from(unique.values()),
+    assignmentResolution: {
+      complete: loaded.every((entry) => !entry.error),
+      policy: 'union',
+      sources: ['matricula', 'concepto_financiero'],
+    },
+    meta: {
+      sources: loaded.map((entry) => ({
+        plantel: entry.plantel,
+        ok: !entry.error,
+        total: entry.total,
+        error: entry.error,
+        source: entry.source,
+        conceptosMapeados: entry.assignmentMappingCount,
+        evidenciasFinancieras: entry.assignmentEvidenceCount,
+      })),
+    },
+    dayLabelsSchemaReady: labels.ready,
+  }
 }
 
 const resolveActivePortalCatalogItem = async (value: unknown) => {
