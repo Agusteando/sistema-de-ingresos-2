@@ -65,7 +65,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
   })
   const { isSuperAdmin, controlAccess: hasControlEscolar, financialAccess: hasFinancialAccess } = access
   const defaultRoute = hasFinancialAccess ? '/' : '/control-escolar'
-  const isPublicPath = to.path === '/login' || to.path.startsWith('/print')
+  const isHuskyPassNeutralPath = to.path === '/husky-pass'
+  const isPublicPath = to.path === '/login' || isHuskyPassNeutralPath || to.path.startsWith('/print')
   const isControlEscolarPath = ['/control-escolar', '/avance-control-escolar', '/auditoria-control-escolar'].includes(to.path)
   const isExpiredLogin = to.path === '/login' && loginExpiredQuery(to.query?.session)
   const isLocalHandoffLogin = to.path === '/login' && String(Array.isArray(to.query?.handoff) ? to.query.handoff[0] : to.query?.handoff || '').toLowerCase() === 'local'
@@ -80,6 +81,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
     clearRouteAuthCookies()
     return
   }
+
+  if (isHuskyPassNeutralPath) return
 
   if (!email.value && !isPublicPath) {
     return navigateTo('/login')
