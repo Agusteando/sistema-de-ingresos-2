@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "app": "Aurora",
+  "branch": "main",
+  "environment": {
+    "file": ".env",
+    "vercel": {
+      "project": "sistema-de-ingresos-2",
+      "refreshOnDeploy": false
+    }
+  },
+  "mysql": {
+    "recommendedMode": "ddl",
+    "accounts": [
+      {
+        "id": "primary",
+        "maxMode": "ddl",
+        "schemas": [
+          { "id": "app", "name": "sistema_ingresos" }
+        ],
+        "bindings": [
+          {
+            "schema": "app",
+            "env": {
+              "host": "MYSQL_HOST",
+              "port": "MYSQL_PORT",
+              "user": "MYSQL_USER",
+              "password": "MYSQL_PASSWORD",
+              "database": "MYSQL_DATABASE"
+            }
+          }
+        ]
+      },
+      {
+        "id": "central",
+        "maxMode": "default",
+        "schemas": [
+          { "id": "central", "fromEnv": "CONTROL_ESCOLAR_MYSQL_DATABASE" }
+        ],
+        "bindings": [
+          {
+            "schema": "central",
+            "env": {
+              "host": "CONTROL_ESCOLAR_MYSQL_HOST",
+              "port": "CONTROL_ESCOLAR_MYSQL_PORT",
+              "user": "CONTROL_ESCOLAR_MYSQL_USER",
+              "password": "CONTROL_ESCOLAR_MYSQL_PASSWORD",
+              "database": "CONTROL_ESCOLAR_MYSQL_DATABASE"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "podman": {
+    "preset": "nuxt",
+    "nodeVersion": 22,
+    "containerPort": 3000,
+    "hostPort": "auto",
+    "networks": ["database_database_net"],
+    "labels": {
+      "com.casita.service": "aurora"
+    }
+  },
+  "health": { "path": "/", "timeoutSeconds": 120 },
+  "observability": { "enabled": true },
+  "domains": [
+    {
+      "hostname": "aurora.casitaiedis.edu.mx",
+      "zone": "casitaiedis.edu.mx",
+      "type": "A",
+      "proxied": true
+    }
+  ]
+}
