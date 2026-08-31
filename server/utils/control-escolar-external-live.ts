@@ -1,5 +1,6 @@
 import { fetchControlEscolarCalculatedAcademicPlacement, fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { isExternalFreshReadRequested } from './external-fresh-read'
 import { readInstitutionalSchoolCycle } from './school-cycle'
 import { normalizeCurp } from '../../shared/utils/curp'
 import { normalizeServicioClave, parseServiciosCsv } from '../../shared/utils/talleresServicios'
@@ -160,6 +161,7 @@ export const readExternalLiveHealth = async () => {
 
 export const readExternalLiveStudents = async (event: any, query: any = {}) => {
   const { plantel, ciclo } = resolveScope(query)
+  const freshRequested = isExternalFreshReadRequested(query)
   const page = decodeCursor(query.cursor)
   const limit = Math.min(500, Math.max(25, Number(query.limit || 100) || 100))
 
@@ -173,7 +175,8 @@ export const readExternalLiveStudents = async (event: any, query: any = {}) => {
       page,
       limit,
       group: query.grupo || query.group || '',
-      externalApi: true
+      externalApi: true,
+      requireLive: freshRequested
     }
     delete filters.cursor
 
@@ -189,13 +192,18 @@ export const readExternalLiveStudents = async (event: any, query: any = {}) => {
         nextCursor: page < pages ? encodeCursor(page + 1) : null
       },
       catalogs: result?.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} },
-      meta: sourceMeta(result?.source, plantel, ciclo, bridgeAgentId)
+      meta: {
+        ...sourceMeta(result?.source, plantel, ciclo, bridgeAgentId),
+        freshRequested,
+        cachePolicy: freshRequested ? 'bypass' : 'default'
+      }
     }
   })
 }
 
 export const readExternalLiveStudentDetail = async (event: any, query: any = {}, matriculaValue: unknown) => {
   const { plantel, ciclo } = resolveScope(query)
+  const freshRequested = isExternalFreshReadRequested(query)
   const matricula = canonicalMatricula(matriculaValue)
   if (!matricula) {
     throw createError({ statusCode: 400, statusMessage: 'MATRICULA_REQUIRED', message: 'La matrícula es obligatoria.' })
@@ -223,11 +231,13 @@ export const readExternalLiveStudentDetail = async (event: any, query: any = {},
         cicloKey: ciclo,
         search: matricula,
         page: 1,
-        limit: 100
+        limit: 100,
+        requireLive: freshRequested
       })
       student = (result?.data || []).find((item: any) => canonicalMatricula(item?.matricula) === matricula) || null
       source = result?.source || null
-    } catch {
+    } catch (error) {
+      if (freshRequested) throw error
       student = null
       source = null
     }
@@ -250,7 +260,9 @@ export const readExternalLiveStudentDetail = async (event: any, query: any = {},
         ...sourceMeta(source, plantel, ciclo, bridgeAgentId),
         academicPlacementSource: 'base-projection',
         academicBaseCycle: academic.baseCiclo,
-        academicSourcePlantel: academic.sourcePlantel
+        academicSourcePlantel: academic.sourcePlantel,
+        freshRequested,
+        cachePolicy: freshRequested ? 'bypass' : 'default'
       }
     }
   })
@@ -279,7 +291,8 @@ export const readExternalCalculatedAcademicPlacement = async (
     throw createError({ statusCode: 400, statusMessage: 'CICLO_INVALID', message: 'El ciclo escolar no es válido.' })
   }
 
-  const cached = await readCachedAcademicPlacement(matricula, ciclo).catch(() => null)
+  const freshRequested = isExternalFreshReadRequested(query)
+  const cached = freshRequested ? null : await readCachedAcademicPlacement(matricula, ciclo).catch(() => null)
   if (cached?.freshness === 'fresh') {
     return {
       ...cached.response,
@@ -294,6 +307,65 @@ export const readExternalCalculatedAcademicPlacement = async (
   const inferredScope = inferExternalScopeFromMatricula(matricula)
   const scopes = Array.from(new Set([requestedScope, inferredScope].filter(Boolean)))
   if (!scopes.length) scopes.push(...CANONICAL_PLANTELES)
+
+  if (freshRequested) {
+    let lastError: any = null
+    for (const scope of scopes) {
+      try {
+        const found = await runExternalControlEscolarScope(event, scope, async (bridgeAgentId) => {
+          const academic = await fetchControlEscolarCalculatedAcademicPlacement(bridgeAgentId, matricula, ciclo)
+          if (!academic) return null
+          return {
+            data: {
+              matricula: academic.matricula,
+              ciclo: academic.ciclo,
+              plantel: academic.plantel,
+              nivel: academic.nivel,
+              grado: academic.grado,
+              grupo: academic.grupo
+            },
+            meta: {
+              source: 'aurora-control-escolar-base-projection',
+              plantel: scope,
+              ciclo,
+              bridgeAgentId,
+              academicPlacementSource: 'base-projection',
+              academicBaseCycle: academic.baseCiclo,
+              academicSourcePlantel: academic.sourcePlantel,
+              generatedAt: new Date().toISOString(),
+              freshRequested: true,
+              cachePolicy: 'bypass'
+            }
+          }
+        })
+        if (found?.data) {
+          // A strict read never consumes shared cache, but its verified live result
+          // can still refresh that cache for consumers that do allow snapshots.
+          const write = await writeCachedAcademicPlacement(found).catch(() => ({ written: false }))
+          return {
+            ...found,
+            meta: {
+              ...(found.meta || {}),
+              cache: {
+                status: write.written ? 'refreshed-from-live' : 'bypassed',
+                servedFromCache: false,
+                shared: Boolean(write.written)
+              }
+            }
+          }
+        }
+      } catch (error) {
+        lastError = error
+      }
+    }
+
+    if (lastError && scopes.length === 1) throw lastError
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'STUDENT_ACADEMIC_PLACEMENT_NOT_FOUND',
+      message: 'No se encontró la colocación académica calculada del alumno para el ciclo solicitado.'
+    })
+  }
 
   const refreshKey = `${matricula}:${ciclo}`
   let refresh = academicRefreshes.get(refreshKey)

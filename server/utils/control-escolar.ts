@@ -2334,6 +2334,13 @@ const fetchAllNormalizedStudents = async (
     markStep("live-base-selector", "Leer base local por bridge", requestStartedAt, "failed", {
       error: toErrorMessage(error),
     });
+    if (filters.requireLive === true) {
+      console.warn("[Control Escolar] Strict live read failed; cache fallback is disabled for this request.", {
+        agentId,
+        message: toErrorMessage(error),
+      });
+      throw error;
+    }
     console.warn("[Control Escolar] Live bridge read failed; trying verified snapshot fallback.", {
       agentId,
       message: toErrorMessage(error),

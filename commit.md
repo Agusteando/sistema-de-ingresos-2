@@ -1,1 +1,1 @@
-Autoguarda los cambios de grupo y normaliza grupos en mayúsculas sin duplicados
+Implementa bypass de caché para lecturas frescas de Husky Pass

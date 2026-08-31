@@ -5,6 +5,7 @@ import {
   readExternalControlEscolarStudents,
 } from './control-escolar-external-view'
 import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
+import { isExternalFreshReadRequested } from './external-fresh-read'
 
 const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
 const normalizeSearch = (value: unknown) => clean(value, 500).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -28,6 +29,23 @@ const withFallbackMeta = (response: any, liveError: any) => ({
 
 const readOneScope = async (event: any, query: any, plantel: string) => {
   const scopedQuery = { ...query, plantel }
+
+  // Some consumers (Husky Pass) cannot tolerate even a valid warm snapshot.
+  // `fresh=1` makes this a strict live read: no warm-view read and no stale fallback.
+  if (isExternalFreshReadRequested(scopedQuery)) {
+    const live = await readExternalLiveStudents(event, scopedQuery)
+    return {
+      ...(live || {}),
+      meta: {
+        ...(live?.meta || {}),
+        source: live?.meta?.source || 'aurora-control-escolar-live',
+        fallback: false,
+        freshRequested: true,
+        cachePolicy: 'bypass',
+      },
+    }
+  }
+
   try {
     const cached = await readExternalControlEscolarStudents(scopedQuery)
     if (cached?.meta?.freshness === 'fresh') {
