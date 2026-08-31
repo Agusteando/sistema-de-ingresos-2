@@ -29,20 +29,43 @@ const withFallbackMeta = (response: any, liveError: any) => ({
 const readOneScope = async (event: any, query: any, plantel: string) => {
   const scopedQuery = { ...query, plantel }
   try {
-    const response = await readExternalLiveStudents(event, scopedQuery)
-    return {
-      ...(response || {}),
-      meta: {
-        ...(response?.meta || {}),
-        source: response?.meta?.source || 'aurora-control-escolar-live',
-        fallback: false,
-      },
+    const cached = await readExternalControlEscolarStudents(scopedQuery)
+    if (cached?.meta?.freshness === 'fresh') {
+      return {
+        ...(cached || {}),
+        meta: {
+          ...(cached?.meta || {}),
+          source: 'warm-cache',
+          fallback: false,
+        },
+      }
     }
-  } catch (liveError: any) {
+
     try {
-      const cached = await readExternalControlEscolarStudents(scopedQuery)
+      const live = await readExternalLiveStudents(event, scopedQuery)
+      return {
+        ...(live || {}),
+        meta: {
+          ...(live?.meta || {}),
+          source: live?.meta?.source || 'aurora-control-escolar-live',
+          fallback: false,
+        },
+      }
+    } catch (liveError: any) {
       return withFallbackMeta(cached, liveError)
-    } catch (cacheError: any) {
+    }
+  } catch (cacheError: any) {
+    try {
+      const live = await readExternalLiveStudents(event, scopedQuery)
+      return {
+        ...(live || {}),
+        meta: {
+          ...(live?.meta || {}),
+          source: live?.meta?.source || 'aurora-control-escolar-live',
+          fallback: false,
+        },
+      }
+    } catch (liveError: any) {
       throw createError({
         statusCode: 502,
         statusMessage: 'AURORA_STUDENT_SCOPE_UNAVAILABLE',
@@ -51,8 +74,8 @@ const readOneScope = async (event: any, query: any, plantel: string) => {
           code: 'AURORA_STUDENT_SCOPE_UNAVAILABLE',
           plantel,
           ciclo: normalizeCicloKey(query.ciclo || query.cicloKey || query.schoolYear || ''),
-          live: publicFailure(liveError),
           fallback: publicFailure(cacheError),
+          live: publicFailure(liveError),
         },
       })
     }

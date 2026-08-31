@@ -37,3 +37,21 @@ CREATE TABLE IF NOT EXISTS control_external_student_view (
   KEY idx_external_student_view_updated (updated_at),
   FULLTEXT KEY ft_external_student_view_search (search_text)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Positive-only, shared cache for calculated academic placements. Every
+-- Aurora consumer warms the same row; null/error responses are never inserted.
+CREATE TABLE IF NOT EXISTS control_external_academic_cache (
+  matricula VARCHAR(64) NOT NULL,
+  ciclo_key VARCHAR(20) NOT NULL,
+  plantel VARCHAR(40) NOT NULL DEFAULT '',
+  nivel VARCHAR(80) NOT NULL DEFAULT '',
+  grado VARCHAR(80) NOT NULL,
+  grupo VARCHAR(80) NOT NULL DEFAULT '',
+  payload_json JSON NOT NULL,
+  generated_at DATETIME NOT NULL,
+  fresh_until DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (matricula, ciclo_key),
+  KEY idx_external_academic_fresh_until (fresh_until),
+  KEY idx_external_academic_plantel_cycle (plantel, ciclo_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

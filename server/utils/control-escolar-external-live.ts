@@ -8,10 +8,18 @@ import {
   controlEscolarBridgeAgentCandidates,
   normalizeExternalControlEscolarPlantel
 } from './control-escolar-plantel-routing'
+import {
+  academicCacheMeta,
+  readCachedAcademicPlacement,
+  withAcademicCacheRefreshLock,
+  writeCachedAcademicPlacement
+} from './control-escolar-academic-cache'
 
 const CANONICAL_PLANTELES = EXTERNAL_CONTROL_ESCOLAR_PLANTELES
 const clean = (value: unknown, max = 255) => String(value ?? '').trim().slice(0, max)
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
+const academicRefreshes = new Map<string, Promise<any>>()
+const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
 export const normalizeExternalLivePlantel = normalizeExternalControlEscolarPlantel
 
@@ -271,49 +279,133 @@ export const readExternalCalculatedAcademicPlacement = async (
     throw createError({ statusCode: 400, statusMessage: 'CICLO_INVALID', message: 'El ciclo escolar no es válido.' })
   }
 
+  const cached = await readCachedAcademicPlacement(matricula, ciclo).catch(() => null)
+  if (cached?.freshness === 'fresh') {
+    return {
+      ...cached.response,
+      meta: {
+        ...(cached.response?.meta || {}),
+        cache: academicCacheMeta(cached)
+      }
+    }
+  }
+
   const requestedScope = normalizeExternalLivePlantel(query.plantel || query.agentId)
   const inferredScope = inferExternalScopeFromMatricula(matricula)
   const scopes = Array.from(new Set([requestedScope, inferredScope].filter(Boolean)))
   if (!scopes.length) scopes.push(...CANONICAL_PLANTELES)
 
-  let lastError: any = null
-  for (const scope of scopes) {
-    try {
-      const found = await runExternalControlEscolarScope(event, scope, async (bridgeAgentId) => {
-        const academic = await fetchControlEscolarCalculatedAcademicPlacement(bridgeAgentId, matricula, ciclo)
-        if (!academic) return null
-        return {
-          data: {
-            matricula: academic.matricula,
-            ciclo: academic.ciclo,
-            plantel: academic.plantel,
-            nivel: academic.nivel,
-            grado: academic.grado,
-            grupo: academic.grupo
-          },
-          meta: {
-            source: 'aurora-control-escolar-base-projection',
-            plantel: scope,
-            ciclo,
-            bridgeAgentId,
-            academicPlacementSource: 'base-projection',
-            academicBaseCycle: academic.baseCiclo,
-            academicSourcePlantel: academic.sourcePlantel,
-            generatedAt: new Date().toISOString()
+  const refreshKey = `${matricula}:${ciclo}`
+  let refresh = academicRefreshes.get(refreshKey)
+  if (!refresh) {
+    refresh = (async () => {
+      const locked = await withAcademicCacheRefreshLock(matricula, ciclo, async () => {
+        const doubleChecked = await readCachedAcademicPlacement(matricula, ciclo).catch(() => null)
+        if (doubleChecked?.freshness === 'fresh') {
+          return {
+            ...doubleChecked.response,
+            meta: {
+              ...(doubleChecked.response?.meta || {}),
+              cache: academicCacheMeta(doubleChecked)
+            }
           }
         }
+
+        let lastError: any = null
+        for (const scope of scopes) {
+          try {
+            const found = await runExternalControlEscolarScope(event, scope, async (bridgeAgentId) => {
+              const academic = await fetchControlEscolarCalculatedAcademicPlacement(bridgeAgentId, matricula, ciclo)
+              if (!academic) return null
+              return {
+                data: {
+                  matricula: academic.matricula,
+                  ciclo: academic.ciclo,
+                  plantel: academic.plantel,
+                  nivel: academic.nivel,
+                  grado: academic.grado,
+                  grupo: academic.grupo
+                },
+                meta: {
+                  source: 'aurora-control-escolar-base-projection',
+                  plantel: scope,
+                  ciclo,
+                  bridgeAgentId,
+                  academicPlacementSource: 'base-projection',
+                  academicBaseCycle: academic.baseCiclo,
+                  academicSourcePlantel: academic.sourcePlantel,
+                  generatedAt: new Date().toISOString()
+                }
+              }
+            })
+            if (found?.data) {
+              const write = await writeCachedAcademicPlacement(found).catch(() => ({ written: false }))
+              return {
+                ...found,
+                meta: {
+                  ...(found.meta || {}),
+                  cache: {
+                    status: write.written ? 'refreshed' : 'bypassed',
+                    shared: Boolean(write.written),
+                    ttlHours: 12,
+                    positiveOnly: true,
+                    generatedAt: (write as any).generatedAt || found.meta.generatedAt,
+                    freshUntil: (write as any).freshUntil || null
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            lastError = error
+          }
+        }
+
+        if (lastError && scopes.length === 1) throw lastError
+        throw createError({
+          statusCode: 404,
+          statusMessage: 'STUDENT_ACADEMIC_PLACEMENT_NOT_FOUND',
+          message: 'No se encontró la colocación académica calculada del alumno para el ciclo solicitado.'
+        })
       })
-      if (found?.data) return found
-    } catch (error) {
-      lastError = error
-    }
+
+      if (locked.acquired && locked.value) return locked.value
+
+      let warmedByPeer = await readCachedAcademicPlacement(matricula, ciclo).catch(() => null)
+      for (let attempt = 0; !warmedByPeer && attempt < 20; attempt += 1) {
+        await wait(250)
+        warmedByPeer = await readCachedAcademicPlacement(matricula, ciclo).catch(() => null)
+      }
+      if (warmedByPeer) {
+        return {
+          ...warmedByPeer.response,
+          meta: {
+            ...(warmedByPeer.response?.meta || {}),
+            cache: academicCacheMeta(warmedByPeer)
+          }
+        }
+      }
+
+      throw createError({
+        statusCode: 503,
+        statusMessage: 'ACADEMIC_CACHE_REFRESH_BUSY',
+        message: 'La colocación académica se está actualizando.'
+      })
+    })().finally(() => academicRefreshes.delete(refreshKey))
+    academicRefreshes.set(refreshKey, refresh)
   }
 
-  if (lastError && scopes.length === 1) throw lastError
-  throw createError({
-    statusCode: 404,
-    statusMessage: 'STUDENT_ACADEMIC_PLACEMENT_NOT_FOUND',
-    message: 'No se encontró la colocación académica calculada del alumno para el ciclo solicitado.'
-  })
+  try {
+    return await refresh
+  } catch (error) {
+    if (cached) {
+      return {
+        ...cached.response,
+        meta: {
+          ...(cached.response?.meta || {}),
+          cache: academicCacheMeta(cached, true)
+        }
+      }
+    }
+    throw error
+  }
 }
-

@@ -13,8 +13,8 @@ import {
 
 const EXTERNAL_VIEW_TABLE = 'control_external_student_view'
 const VIEW_VERSION = 'control-escolar-student-view-v1'
-const FRESH_MINUTES = 15
-const EXPIRED_HOURS = 24
+const FRESH_HOURS = 12
+const EXPIRED_HOURS = 168
 const MAX_LIMIT = 500
 const DEFAULT_LIMIT = 100
 const SCHEMA_CACHE_MS = 1000 * 60 * 5
@@ -266,10 +266,16 @@ export const writeControlEscolarExternalStudentView = async (
     return { skipped: true, reason: 'scope_not_cacheable' }
   }
 
+  // A Bridge maintenance window must never turn a healthy shared snapshot
+  // into a cached empty result.
+  if (students.length === 0) {
+    return { skipped: true, reason: 'empty_rows_preserved', rows: 0 }
+  }
+
   await ensureControlEscolarExternalViewSchema()
 
   const generatedAt = nowDate()
-  const staleAfter = dateMinutesFromNow(FRESH_MINUTES)
+  const staleAfter = dateHoursFromNow(FRESH_HOURS)
   const expiresAt = dateHoursFromNow(EXPIRED_HOURS)
   const rows = students
     .map((student) => sanitizeExternalStudentPayload(student))
@@ -583,7 +589,7 @@ export const refreshExternalControlEscolarStudentViewRow = async (input: any, st
   }
 
   const generatedAt = nowDate()
-  const staleAfter = dateMinutesFromNow(FRESH_MINUTES)
+  const staleAfter = dateHoursFromNow(FRESH_HOURS)
   const expiresAt = dateHoursFromNow(EXPIRED_HOURS)
   const payloadJson = JSON.stringify(payload)
 
