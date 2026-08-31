@@ -323,7 +323,10 @@ export default defineEventHandler(async (event) =>
           schoolMonth: mes,
           currentDateValue: currentDateKey,
           cutoffDay: recargoPolicy?.diaLimite ?? 12,
-          isService: Boolean(recargoPolicy?.esServicio),
+          // A recurring debt belongs to its own school month even if the concept
+          // carries a persistent service classification. This prevents future
+          // monthly charges from becoming overdue before their own day 12.
+          isService: Boolean(recargoPolicy?.esServicio) && isEventual,
         });
         const paymentDeadline = recargoTiming.deadline;
         const isLate = recargoTiming.isAfterDeadline;

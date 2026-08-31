@@ -325,15 +325,18 @@
                         class="payment-recargo-tag"
                         :class="{
                           applied: debtHasRecargoForDate(debt),
+                          omitted: debtRecargoOmitted(debt),
                           pending: isRecargoTogglePending(debt),
                           attention: isRecargoAttentionActive(debt),
                         }"
-                        :disabled="isRecargoTogglePending(debt) || debtHasRecargoForDate(debt)"
+                        :disabled="isRecargoTogglePending(debt) || (debtHasRecargoForDate(debt) && !canOmitRecargo(debt))"
                         :aria-pressed="debtHasRecargoForDate(debt) ? 'true' : 'false'"
-                        :aria-label="recargoActionLabel(debt)"
-                        @click.stop="applyRecargo(debt)"
+                        :aria-label="recargoActionAriaLabel(debt)"
+                        :title="recargoActionAriaLabel(debt)"
+                        @click.stop="toggleRecargo(debt)"
                       >
                         <LucideLoader2 v-if="isRecargoTogglePending(debt)" :size="12" class="animate-spin" />
+                        <LucideXCircle v-else-if="debtRecargoOmitted(debt)" :size="12" />
                         <LucideCheckCircle v-else-if="debtHasRecargoForDate(debt)" :size="12" />
                         <span>{{ recargoActionLabel(debt) }}</span>
                       </button>
@@ -394,7 +397,7 @@
 
 <script setup>
 import { ref, watch, computed, onMounted, onBeforeUnmount, markRaw, nextTick } from 'vue'
-import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheck, LucideCheckCircle, LucideChevronDown, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideLock, LucideMoreHorizontal, LucideReceiptText, LucideWalletCards } from 'lucide-vue-next'
+import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheck, LucideCheckCircle, LucideChevronDown, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideLock, LucideMoreHorizontal, LucideReceiptText, LucideWalletCards, LucideXCircle } from 'lucide-vue-next'
 import { useCookie, useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -638,7 +641,10 @@ const recargoCalculationForDebt = (debt) => {
     schoolMonth: schoolMonthForDebt(debt),
     currentDateValue: paymentDate.value,
     cutoffDay: debt?.recargoDiaLimite ?? 12,
-    isService: Boolean(debt?.recargoServicio),
+    // Recurring charges always belong to their own school month. A persistent
+    // service classification must never make a future monthly charge overdue
+    // against the current calendar month (for example, September on August 31).
+    isService: Boolean(debt?.recargoServicio) && Boolean(debt?.isEventual),
   })
   const decision = {
     enabled: Boolean(debt?.recargoActivo),
@@ -647,12 +653,13 @@ const recargoCalculationForDebt = (debt) => {
     isAfterDeadline: timing.isAfterDeadline,
     balanceBeforeLateFee: baseAmount - pagosPrevios,
   }
-  const automatic = shouldApplyLateFee({
+  const omitted = Boolean(debt?.recargoOmitidoAhora) && !Boolean(debt?.recargoManual)
+  const automatic = !omitted && shouldApplyLateFee({
     ...decision,
     force: false,
     hasManualLateFee: false,
   })
-  const applies = shouldApplyLateFee({
+  const applies = !omitted && shouldApplyLateFee({
     ...decision,
     force: Boolean(debt?.recargoAplicadoAhora),
     hasManualLateFee: Boolean(debt?.recargoManual),
@@ -664,7 +671,17 @@ const recargoCalculationForDebt = (debt) => {
   return { subtotal, applies, automatic, isLate: timing.isAfterDeadline, deadline: timing.deadline }
 }
 const debtHasRecargoForDate = (debt) => recargoCalculationForDebt(debt).applies
-const recargoActionLabel = (debt) => debtHasRecargoForDate(debt) ? 'Recargo aplicado' : 'Aplicar recargo'
+const debtRecargoOmitted = (debt) => Boolean(debt?.recargoOmitidoAhora) && !Boolean(debt?.recargoManual)
+const canOmitRecargo = (debt) => !Boolean(debt?.recargoManual)
+const recargoActionLabel = (debt) => {
+  if (debtRecargoOmitted(debt)) return 'Sin recargo'
+  return debtHasRecargoForDate(debt) ? 'Recargo aplicado' : 'Aplicar recargo'
+}
+const recargoActionAriaLabel = (debt) => {
+  if (debtRecargoOmitted(debt)) return 'Restaurar recargo para este pago'
+  if (debtHasRecargoForDate(debt) && canOmitRecargo(debt)) return 'Quitar recargo de este pago'
+  return recargoActionLabel(debt)
+}
 const recargoAmountForDebt = (debt) => {
   const calculation = recargoCalculationForDebt(debt)
   if (!calculation.applies) return 0
@@ -679,6 +696,7 @@ const buildProcessedDebts = () => dedupePaymentTargets(Array.isArray(props.debts
   return {
     ...d,
     recargoAplicadoAhora: false,
+    recargoOmitidoAhora: false,
     saldoFinal: final,
     montoPagado: final,
     montoTouched: false,
@@ -707,13 +725,15 @@ const readPaymentDraft = () => ({
   formaDePago: formaDePago.value,
   paymentDate: paymentDate.value,
   debts: processedDebts.value
-    .filter(debt => debt.montoTouched || debt.montoFinalTouched)
+    .filter(debt => debt.montoTouched || debt.montoFinalTouched || debt.recargoAplicadoAhora || debt.recargoOmitidoAhora)
     .map(debt => ({
       key: paymentDebtKey(debt),
       montoPagado: debt.montoPagado,
       montoFinalInput: debt.montoFinalInput,
       montoTouched: Boolean(debt.montoTouched),
-      montoFinalTouched: Boolean(debt.montoFinalTouched)
+      montoFinalTouched: Boolean(debt.montoFinalTouched),
+      recargoAplicadoAhora: Boolean(debt.recargoAplicadoAhora),
+      recargoOmitidoAhora: Boolean(debt.recargoOmitidoAhora)
     }))
 })
 
@@ -751,7 +771,9 @@ const writePaymentDraft = (draft) => {
       montoPagado: montoTouched && Number.isFinite(montoPagado) ? montoPagado : debt.montoPagado,
       montoTouched,
       montoFinalInput: montoFinalTouched && Number.isFinite(montoFinalInput) ? montoFinalInput : debt.montoFinalInput,
-      montoFinalTouched
+      montoFinalTouched,
+      recargoAplicadoAhora: Boolean(restored.recargoAplicadoAhora),
+      recargoOmitidoAhora: Boolean(restored.recargoOmitidoAhora) && !Boolean(debt.recargoManual)
     }
   })
 }
@@ -763,7 +785,7 @@ const paymentDraftHasContent = (draft) => {
 
   const draftDebts = Array.isArray(draft.debts) ? draft.debts : []
   return draftDebts.some((saved) => {
-    if (saved?.montoTouched || saved?.montoFinalTouched) return true
+    if (saved?.montoTouched || saved?.montoFinalTouched || saved?.recargoAplicadoAhora || saved?.recargoOmitidoAhora) return true
 
     // Backward compatibility: old drafts did not store explicit touch flags.
     const current = processedDebts.value.find(debt => paymentDebtKey(debt) === saved?.key)
@@ -984,6 +1006,23 @@ const applyRecargo = async (debt) => {
     setRecargoTogglePending(conceptoId, false)
   }
 }
+const toggleRecargo = async (debt) => {
+  if (!debt || isRecargoTogglePending(debt)) return
+
+  if (debtRecargoOmitted(debt)) {
+    debt.recargoOmitidoAhora = false
+    repriceUntouchedPayments()
+    return
+  }
+
+  if (debtHasRecargoForDate(debt) && canOmitRecargo(debt)) {
+    debt.recargoOmitidoAhora = true
+    repriceUntouchedPayments()
+    return
+  }
+
+  await applyRecargo(debt)
+}
 watch(paymentDate, () => {
   if (!recargoExperienceReady.value) {
     repriceUntouchedPayments()
@@ -1021,7 +1060,8 @@ const paymentRows = () => processedDebts.value
       montoPagado,
       montoAutomatico: !d.montoTouched,
       montoFinal: d.montoFinalPendiente ? Number(d.montoFinalInput || 0) : d.montoFinal,
-      aplicarRecargo: Boolean(d.recargoAplicadoAhora)
+      aplicarRecargo: Boolean(d.recargoAplicadoAhora) && !debtRecargoOmitted(d),
+      omitirRecargo: debtRecargoOmitted(d)
     }
   })
 
@@ -1320,6 +1360,19 @@ const submit = async () => {
   border-color: #cfe1d4;
   background: #f3f8f4;
   color: #50745a;
+}
+.payment-recargo-tag.applied:not(:disabled) {
+  cursor: pointer;
+}
+.payment-recargo-tag.omitted {
+  border-color: #d8dee6;
+  background: #f7f8fa;
+  color: #697586;
+}
+.payment-recargo-tag.omitted:hover {
+  border-color: #bdc6d1;
+  background: #f1f3f5;
+  color: #4f5d6c;
 }
 .payment-recargo-tag.pending {
   cursor: wait;

@@ -239,9 +239,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const conceptoId = Number(paymentConcept.concepto || 0)
     // forzarRecargo is accepted only as a rolling-deploy compatibility alias.
-    // New clients send aplicarRecargo, whose business meaning is explicit: apply
-    // the recargo now and classify the concept globally as a recargo service.
-    const applyLateFeeNow = truthyFlag(p?.aplicarRecargo) || truthyFlag(p?.forzarRecargo)
+    // New clients can also omit an otherwise automatic recargo for this payment
+    // without changing the concept's persistent recargo policy.
+    const omitLateFeeRequested = truthyFlag(p?.omitirRecargo)
+    const applyLateFeeNow = !omitLateFeeRequested && (truthyFlag(p?.aplicarRecargo) || truthyFlag(p?.forzarRecargo))
     let recargoPolicy = recargoPolicyCache.get(conceptoId)
     if (!recargoPolicy) {
       const policies = await loadRecargoPolicies([conceptoId])
@@ -259,14 +260,17 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const hasRecargoManual = pagosDelMes.some(row => String(row.recargo) === '1')
     const hasPayment = pagosDelMes.some(row => Number(row.monto || 0) > 0)
+    const omitLateFeeNow = omitLateFeeRequested && !hasRecargoManual
     const recargoTiming = resolveLateFeeTiming({
       ciclo: cicloKey,
       schoolMonth: mesNumber,
       currentDateValue: effectiveDateKey,
       cutoffDay: recargoPolicy?.diaLimite ?? 12,
-      isService: Boolean(recargoPolicy?.esServicio),
+      // Only one-off/eventual documents use the calendar-month service rule.
+      // Recurring charges must wait until after day 12 of their own school month.
+      isService: Boolean(recargoPolicy?.esServicio) && String(doc.eventual) === '1',
     })
-    const appliesLateFee = shouldApplyLateFee({
+    const appliesLateFee = !omitLateFeeNow && shouldApplyLateFee({
       enabled: Boolean(recargoPolicy?.activo),
       force: applyLateFeeNow,
       hasManualLateFee: hasRecargoManual,

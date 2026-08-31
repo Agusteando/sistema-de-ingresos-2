@@ -1,1 +1,1 @@
-Protege los QR de Husky Pass con una pantalla pública neutra sin datos personales
+Permite omitir recargos por pago y corrige el corte mensual después del día 12
