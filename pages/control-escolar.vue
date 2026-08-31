@@ -203,6 +203,19 @@
                 </div>
                 <div class="ce-list-header-actions">
                   <button
+                    v-if="pendingGroupDraftCount"
+                    type="button"
+                    class="ce-bulk-select-button ce-pending-save-button"
+                    :disabled="savingPendingGroups"
+                    :title="`${pendingGroupDraftCount} cambio${pendingGroupDraftCount === 1 ? '' : 's'} de grupo pendiente${pendingGroupDraftCount === 1 ? '' : 's'}`"
+                    @click="saveAllPendingGroupDrafts"
+                  >
+                    <LucideLoader2 v-if="savingPendingGroups" :size="15" class="spinning" />
+                    <LucideSave v-else :size="15" />
+                    <span>{{ savingPendingGroups ? 'Guardando' : 'Guardar' }}</span>
+                    <b>{{ pendingGroupDraftCount }}</b>
+                  </button>
+                  <button
                     v-if="controlFilteredBulkTargetCount"
                     type="button"
                     :class="[
@@ -428,6 +441,12 @@
                             >
                               {{ student.matricula }}
                             </span>
+                            <span
+                              v-if="pendingGroupDraftForStudent(student)"
+                              class="ce-row-draft-label"
+                            >
+                              Sin guardar
+                            </span>
                           </span>
                         </span>
                       </span>
@@ -466,7 +485,7 @@
 
                     <span class="row-actions">
                       <span
-                        v-if="controlStudentMutationStatus(student)"
+                        v-if="controlStudentMutationStatus(student) && !(controlStudentMutationStatus(student) === 'failed' && pendingGroupDraftForStudent(student))"
                         :class="[
                           'ce-row-save-indicator',
                           `is-${controlStudentMutationStatus(student)}`,
@@ -485,6 +504,19 @@
                           :size="16"
                         />
                         <LucideCheck v-else :size="16" />
+                      </span>
+                      <span
+                        v-else-if="pendingGroupDraftForStudent(student)"
+                        class="ce-row-draft-save"
+                        role="button"
+                        tabindex="0"
+                        title="Guardar cambio de grupo"
+                        aria-label="Guardar cambio de grupo"
+                        @click.stop="savePendingGroupDraft(student)"
+                        @keydown.enter.prevent.stop="savePendingGroupDraft(student)"
+                        @keydown.space.prevent.stop="savePendingGroupDraft(student)"
+                      >
+                        <LucideSave :size="15" />
                       </span>
                       <span v-else class="ce-row-action"
                         ><LucideChevronRight :size="18"
@@ -948,6 +980,12 @@
                         <div>
                           <small>Grupo</small>
                           <strong>{{ editForm.grupo || 'Sin grupo' }}</strong>
+                          <span :class="['ce-group-save-state', `is-${selectedGroupSaveState.tone}`]" role="status">
+                            <LucideLoader2 v-if="selectedGroupSaveState.tone === 'saving'" :size="12" class="spinning" />
+                            <LucideAlertTriangle v-else-if="selectedGroupSaveState.tone === 'error'" :size="12" />
+                            <LucideCheck v-else :size="12" />
+                            {{ selectedGroupSaveState.label }}
+                          </span>
                         </div>
                       </div>
                       <div
@@ -1661,7 +1699,6 @@
             <div>
               <small>Sigil seleccionado</small>
               <strong>{{ groupLabelForUi(groupModalDraft) }}</strong>
-              <p>{{ groupModalDraft ? 'Este cambio se aplicará al guardar la ficha.' : 'Elige un sigil para identificar rápidamente al alumno.' }}</p>
             </div>
           </div>
 
@@ -1729,8 +1766,8 @@
         <footer class="ce-group-modal__footer">
           <button type="button" class="ce-group-modal__secondary" @click="closeGroupModal">Cerrar</button>
           <button type="button" class="ce-group-modal__primary" @click="confirmGroupModal">
-            <LucideCheck :size="16" />
-            Aplicar grupo
+            <LucideSave :size="16" />
+            Guardar grupo
           </button>
         </footer>
       </section>
@@ -2097,6 +2134,8 @@ const kpisLoading = ref(false);
 const studentsLoading = ref(false);
 const controlStudentMutationStates = reactive({});
 const controlStudentMutationTimers = new Map();
+const groupAutosaveChains = new Map();
+const latestGroupAutosaveTargets = new Map();
 let controlStudentMutationSequence = 0;
 const CONTROL_STUDENT_SUCCESS_BADGE_MS = 1400;
 const savingStudent = computed(() =>
@@ -2162,6 +2201,8 @@ const uploadingAdvancedField = ref("");
 const advancedUploadErrors = reactive({});
 const draftRestored = ref(false);
 const draftSavedAt = ref("");
+const controlDraftIndex = ref({});
+const savingPendingGroups = ref(false);
 const pendingSelectedStudentRefresh = ref(null);
 const pagination = reactive({ page: 1, limit: 8, total: 0, pages: 1 });
 const filters = reactive({
@@ -2736,9 +2777,9 @@ const activeFilterLabel = computed(() => {
 const availableGroups = computed(() => {
   if (!filters.grado) return [];
   const byGrade = catalogs.gruposPorGrado || {};
-  return Array.isArray(byGrade[filters.grado])
-    ? byGrade[filters.grado]
-    : catalogs.grupos;
+  return mergeGroupOptions(
+    Array.isArray(byGrade[filters.grado]) ? byGrade[filters.grado] : catalogs.grupos,
+  );
 });
 
 const mergeOptions = (...groups) =>
@@ -2749,6 +2790,29 @@ const mergeOptions = (...groups) =>
         .map((value) => String(value || "").trim())
         .filter(Boolean),
     ),
+  );
+const normalizeGroupPickerText = (value) =>
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleUpperCase("es-MX")
+    .slice(0, 40);
+const mergeGroupOptions = (...groups) => {
+  const seen = new Set();
+  const values = [];
+  groups.flat().forEach((value) => {
+    const normalized = normalizeGroupPickerText(value);
+    if (!normalized) return;
+    const key = normalizeClientText(normalized);
+    if (seen.has(key)) return;
+    seen.add(key);
+    values.push(normalized);
+  });
+  return values;
+};
+const catalogHasGroup = (value) =>
+  (catalogs.grupos || []).some(
+    (candidate) => normalizeClientText(candidate) === normalizeClientText(value),
   );
 const labelize = (value) => {
   const text = String(value || "").trim();
@@ -2779,10 +2843,10 @@ const knownGroupOptions = computed(() => {
     editForm.grado && Array.isArray(byGrade[editForm.grado])
       ? byGrade[editForm.grado]
       : [];
-  return mergeOptions(scopedGroups, catalogs.grupos, STUDENT_GROUP_ICON_LABELS);
+  return mergeGroupOptions(scopedGroups, catalogs.grupos, STUDENT_GROUP_ICON_LABELS);
 });
 const groupOptions = computed(() =>
-  mergeOptions(knownGroupOptions.value, [editForm.grupo]),
+  mergeGroupOptions(knownGroupOptions.value, [editForm.grupo]),
 );
 const groupPickerOpen = ref(false);
 const groupModalOpen = ref(false);
@@ -2801,13 +2865,8 @@ const closeGroupModal = () => {
   groupPickerOpen.value = false;
 };
 const confirmGroupModal = () => {
-  editForm.grupo = normalizeGroupPickerText(groupModalDraft.value).slice(0, 40);
-  closeGroupModal();
+  commitSelectedGroupChange(groupModalDraft.value, { closeModal: true });
 };
-const normalizeGroupPickerText = (value) =>
-  String(value || "")
-    .replace(/\s+/g, " ")
-    .trim();
 const groupLabelForUi = (value) => {
   const normalized = normalizeGroupPickerText(value);
   if (!normalized) return "Sin grupo asignado";
@@ -2841,7 +2900,7 @@ const filteredGroupModalOptions = computed(() => {
       label: groupLabelForUi(value),
       selected:
         normalizeClientText(value) === normalizeClientText(groupModalDraft.value),
-      sourceLabel: catalogs.grupos.includes(value)
+      sourceLabel: catalogHasGroup(value)
         ? "Grupo del plantel"
         : "Sigil disponible",
     }));
@@ -2856,10 +2915,12 @@ const customGroupModalOption = computed(() => {
   return { value, label: `Usar “${value}”` };
 });
 const selectGroupModalOption = (value) => {
-  groupModalDraft.value = normalizeGroupPickerText(value).slice(0, 40);
+  groupModalDraft.value = normalizeGroupPickerText(value);
+  commitSelectedGroupChange(groupModalDraft.value, { closeModal: true });
 };
 const clearGroupModalPicker = () => {
   groupModalDraft.value = "";
+  commitSelectedGroupChange("", { closeModal: true });
 };
 const filteredGroupOptions = computed(() => {
   const query = normalizedGroupPickerSearch.value;
@@ -2871,7 +2932,7 @@ const filteredGroupOptions = computed(() => {
       label: value,
       selected:
         normalizeClientText(value) === normalizeClientText(editForm.grupo),
-      sourceLabel: catalogs.grupos.includes(value)
+      sourceLabel: catalogHasGroup(value)
         ? "Grupo del plantel"
         : "Opción con icono",
     }));
@@ -2888,22 +2949,41 @@ const customGroupOption = computed(() => {
 const openGroupPicker = () => {
   groupPickerOpen.value = true;
 };
-const closeGroupPickerSoon = () => {
+const autosaveSelectedGroupIfDirty = () => {
+  if (!selectedStudent.value?.matricula) return;
+  const snapshot = parseEditSnapshot();
+  const current = normalizeGroupPickerText(editForm.grupo);
+  const saved = normalizeGroupPickerText(snapshot.grupo);
+  if (current === saved) return;
+  persistEditDraft();
+  void queueGroupAutosave(selectedStudent.value, current);
+};
+const commitSelectedGroupChange = (value, options = {}) => {
+  editForm.grupo = normalizeGroupPickerText(value);
+  if (options.closeModal) closeGroupModal();
+  if (options.closePicker !== false) groupPickerOpen.value = false;
+  autosaveSelectedGroupIfDirty();
+};
+const closeGroupPickerSoon = (event) => {
   if (!process.client) return;
+  const nextTarget = event?.relatedTarget;
+  if (nextTarget && event?.currentTarget?.contains?.(nextTarget)) return;
+
+  // Start the write before a fast click can move the detail panel to another
+  // student. This is the core sequential-editing path for operators.
+  autosaveSelectedGroupIfDirty();
   window.setTimeout(() => {
     groupPickerOpen.value = false;
   }, 120);
 };
 const selectGroupOption = (value) => {
-  editForm.grupo = normalizeGroupPickerText(value).slice(0, 40);
-  groupPickerOpen.value = false;
+  commitSelectedGroupChange(value);
 };
 const commitGroupPickerInput = () => {
-  editForm.grupo = normalizeGroupPickerText(groupPickerInput.value).slice(0, 40);
-  groupPickerOpen.value = false;
+  commitSelectedGroupChange(groupPickerInput.value);
 };
 const clearGroupPicker = () => {
-  editForm.grupo = "";
+  commitSelectedGroupChange("", { closePicker: false });
   groupPickerOpen.value = true;
 };
 
@@ -3112,7 +3192,7 @@ const qualityLabel = (value) =>
     contact: "Sin contacto válido",
   })[value] || value;
 const controlGroupLabel = (student) => {
-  const value = String(student?.group ?? student?.grupo ?? "")
+  const value = normalizeGroupPickerText(student?.group ?? student?.grupo)
     .replaceAll('"', "")
     .trim();
   return value && value.toLowerCase() !== "null" ? value : "";
@@ -4303,19 +4383,41 @@ const hasUnsavedChanges = computed(() =>
     formSnapshot() !== editSnapshot.value,
   ),
 );
+const selectedGroupSaveState = computed(() => {
+  const state = selectedStudent.value
+    ? controlStudentMutationState(selectedStudent.value)
+    : null;
+  const touchesGroup = Array.isArray(state?.fields) && state.fields.includes("grupo");
+  if (touchesGroup && state?.status === "saving") return { tone: "saving", label: "Guardando" };
+  if (touchesGroup && state?.status === "failed") return { tone: "error", label: "Sin guardar" };
+  if (touchesGroup && state?.status === "saved") return { tone: "saved", label: "Guardado" };
+
+  const snapshot = parseEditSnapshot();
+  if (
+    selectedStudent.value &&
+    !editFieldValuesEqual("grupo", normalizeGroupPickerText(editForm.grupo), normalizeGroupPickerText(snapshot.grupo))
+  ) {
+    return { tone: "dirty", label: "Sin guardar" };
+  }
+  return { tone: "saved", label: "Guardado" };
+});
 const saveStateTone = computed(() =>
   saveError.value
     ? "error"
-    : hasUnsavedChanges.value
-      ? "dirty"
-      : "clean",
+    : savingStudent.value
+      ? "saving"
+      : hasUnsavedChanges.value
+        ? "dirty"
+        : "clean",
 );
 const saveStatusText = computed(() => {
   if (saveError.value) return "Error al guardar";
+  if (savingStudent.value) return "Guardando...";
   if (hasUnsavedChanges.value)
     return draftSavedAt.value
       ? `Borrador local ${draftSavedAt.value}`
       : "Cambios sin guardar";
+  if (controlStudentMutationStatus(selectedStudent.value) === "saved") return "Guardado";
   return selectedStudent.value?.overlayExists ? "Al día" : "Guardar";
 });
 const draftKey = computed(() =>
@@ -4685,6 +4787,53 @@ const draftStorageKeyFor = (agentId, matricula) => {
   if (!agentId || !key) return "";
   return `control-escolar:draft:${agentId}:${key}`;
 };
+const refreshControlDraftIndex = () => {
+  if (!process.client || !selectedAgentId.value) {
+    controlDraftIndex.value = {};
+    return;
+  }
+  const prefix = `control-escolar:draft:${selectedAgentId.value}:`;
+  const next = {};
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key || !key.startsWith(prefix)) continue;
+      const matriculaKey = key.slice(prefix.length);
+      if (!matriculaKey) continue;
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || "null");
+        if (parsed?.values && typeof parsed.values === "object") next[matriculaKey] = parsed;
+      } catch {
+        // Ignore one malformed browser draft without hiding the rest.
+      }
+    }
+  } catch (error) {
+    console.warn("[Control Escolar] No se pudo revisar cambios locales pendientes.", error);
+  }
+  controlDraftIndex.value = next;
+};
+const pendingGroupDraftForStudent = (student) => {
+  const key = normalizeMatriculaKey(student?.matricula);
+  const stored = key ? controlDraftIndex.value[key] : null;
+  if (!stored?.values || typeof stored.values !== "object") return null;
+
+  if (stored.dirty && typeof stored.dirty === "object" &&
+      !Object.prototype.hasOwnProperty.call(stored.dirty, "grupo")) return null;
+
+  const draftGroup = normalizeGroupPickerText(stored.values.grupo);
+  const currentGroup = normalizeGroupPickerText(student?.group ?? student?.grupo);
+  if (draftGroup === currentGroup) return null;
+  return {
+    matricula: student.matricula,
+    grupo: draftGroup,
+    savedAt: stored.savedAt || "",
+    legacy: !stored.dirty || typeof stored.dirty !== "object",
+  };
+};
+const pendingGroupDraftStudents = computed(() =>
+  controlStudentsIndex.value.filter((student) => pendingGroupDraftForStudent(student)),
+);
+const pendingGroupDraftCount = computed(() => pendingGroupDraftStudents.value.length);
 
 const mutationKeyFor = (studentOrMatricula) =>
   normalizeMatriculaKey(
@@ -5094,7 +5243,7 @@ const queueControlStudentPhotos = (sourceStudents = [], options = {}) => {
 const filteredControlStudents = () => {
   const search = normalizeClientText(filters.search);
   const grado = normalizeClientText(filters.grado);
-  const grupo = String(filters.group || "").trim();
+  const grupo = normalizeGroupPickerText(filters.group);
 
   return controlStudentsIndex.value.filter((student) => {
     if (search && !controlStudentSearchHaystack(student).includes(search))
@@ -5104,7 +5253,7 @@ const filteredControlStudents = () => {
     if (
       grupo &&
       grupo !== "all" &&
-      String(student.group || student.grupo || "").trim() !== grupo
+      normalizeGroupPickerText(student.group || student.grupo) !== grupo
     )
       return false;
     if (!localStudentMatchesQuality(student, filters.quality)) return false;
@@ -5653,6 +5802,7 @@ const clearEditDraftForStudent = (matricula, agentId = selectedAgentId.value) =>
   if (!process.client || !key) return;
   try {
     localStorage.removeItem(key);
+    if (agentId === selectedAgentId.value) refreshControlDraftIndex();
   } catch (error) {
     console.warn(
       "[Control Escolar] No se pudo limpiar el borrador local.",
@@ -5678,9 +5828,14 @@ const persistEditDraft = () => {
   try {
     localStorage.setItem(
       draftKey.value,
-      JSON.stringify({ savedAt, values: readEditForm() }),
+      JSON.stringify({
+        savedAt,
+        values: readEditForm(),
+        dirty: readDirtyEditForm(),
+      }),
     );
     draftSavedAt.value = savedAt;
+    refreshControlDraftIndex();
   } catch (error) {
     console.warn(
       "[Control Escolar] No se pudo guardar el borrador local.",
@@ -5693,6 +5848,9 @@ const restoreEditDraft = () => {
   const stored = readStoredDraft();
   if (!stored?.values || typeof stored.values !== "object") return;
   Object.assign(editForm, stored.values);
+  if (Object.prototype.hasOwnProperty.call(stored.values, "grupo")) {
+    editForm.grupo = normalizeGroupPickerText(stored.values.grupo);
+  }
   draftRestored.value = true;
   draftSavedAt.value = stored.savedAt || "";
 };
@@ -6043,7 +6201,7 @@ const resetEditForm = (student = selectedStudent.value, options = {}) => {
     foto: student.foto || "",
     nivel: student.nivel || "",
     grado: student.grado || "",
-    grupo: student.group || student.grupo || "",
+    grupo: normalizeGroupPickerText(student.group || student.grupo),
     ciclo: student.ciclo || currentCicloKey.value || "",
     servicio: student.servicio || "",
     interno: Number(student.interno || 0),
@@ -6117,7 +6275,7 @@ const readEditFormFromStudent = (student = {}) => ({
   tipoSangre: student.tipoSangre || "",
   alergias: student.alergias || "",
   foto: student.foto || "",
-  grupo: student.group || student.grupo || "",
+  grupo: normalizeGroupPickerText(student.group || student.grupo),
   baja: Number(student.baja || 0),
   motivoBaja: student.motivoBaja || "",
   categoriaBaja: student.categoriaBaja || "",
@@ -6173,8 +6331,8 @@ const buildOptimisticControlStudent = (baseStudent = {}, payload = {}) => {
     : baseStudent.address ?? baseStudent.direccion ?? "";
   next.direccion = next.address;
   next.group = hasPayloadField("grupo")
-    ? payload.grupo
-    : baseStudent.group ?? baseStudent.grupo ?? "";
+    ? normalizeGroupPickerText(payload.grupo)
+    : normalizeGroupPickerText(baseStudent.group ?? baseStudent.grupo ?? "");
   next.grupo = next.group;
   next.baja = Number(hasPayloadField("baja") ? payload.baja : baseStudent.baja || 0);
   next.status = next.baja
@@ -6198,7 +6356,8 @@ const persistEditDraftForStudent = (matricula, values) => {
     minute: "2-digit",
   });
   try {
-    localStorage.setItem(key, JSON.stringify({ savedAt, values }));
+    localStorage.setItem(key, JSON.stringify({ savedAt, values, dirty: values }));
+    refreshControlDraftIndex();
     if (normalizeMatriculaKey(selectedStudent.value?.matricula) === normalizeMatriculaKey(matricula)) {
       draftSavedAt.value = savedAt;
       draftRestored.value = true;
@@ -6208,6 +6367,280 @@ const persistEditDraftForStudent = (matricula, values) => {
       "[Control Escolar] No se pudo conservar el borrador fallido.",
       error,
     );
+  }
+};
+
+const writeGroupDraftForStudent = (studentOrMatricula, groupValue, agentId = selectedAgentId.value) => {
+  const matricula = typeof studentOrMatricula === "object"
+    ? studentOrMatricula?.matricula
+    : studentOrMatricula;
+  const key = draftStorageKeyFor(agentId, matricula);
+  if (!process.client || !key) return;
+
+  const normalizedGroup = normalizeGroupPickerText(groupValue);
+  const savedAt = new Date().toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  try {
+    let stored = null;
+    try {
+      stored = JSON.parse(localStorage.getItem(key) || "null");
+    } catch {
+      stored = null;
+    }
+    const values = stored?.values && typeof stored.values === "object"
+      ? { ...stored.values, grupo: normalizedGroup }
+      : { grupo: normalizedGroup };
+    const dirty = stored?.dirty && typeof stored.dirty === "object"
+      ? { ...stored.dirty, grupo: normalizedGroup }
+      : { grupo: normalizedGroup };
+
+    localStorage.setItem(key, JSON.stringify({ savedAt, values, dirty }));
+    if (normalizeMatriculaKey(selectedStudent.value?.matricula) === normalizeMatriculaKey(matricula)) {
+      draftSavedAt.value = savedAt;
+      draftRestored.value = true;
+    }
+    refreshControlDraftIndex();
+  } catch (error) {
+    console.warn("[Control Escolar] No se pudo conservar el cambio de grupo pendiente.", error);
+  }
+};
+
+const settleGroupDraftForStudent = (studentOrMatricula, savedGroupValue, agentId = selectedAgentId.value) => {
+  const matricula = typeof studentOrMatricula === "object"
+    ? studentOrMatricula?.matricula
+    : studentOrMatricula;
+  const key = draftStorageKeyFor(agentId, matricula);
+  if (!process.client || !key) return;
+
+  const normalizedGroup = normalizeGroupPickerText(savedGroupValue);
+  try {
+    const stored = JSON.parse(localStorage.getItem(key) || "null");
+    if (!stored?.values || typeof stored.values !== "object") {
+      refreshControlDraftIndex();
+      return;
+    }
+
+    const values = { ...stored.values, grupo: normalizedGroup };
+    if (stored.dirty && typeof stored.dirty === "object") {
+      const dirty = { ...stored.dirty };
+      delete dirty.grupo;
+      if (!Object.keys(dirty).length) {
+        localStorage.removeItem(key);
+        if (normalizeMatriculaKey(selectedStudent.value?.matricula) === normalizeMatriculaKey(matricula)) {
+          draftRestored.value = false;
+          draftSavedAt.value = "";
+        }
+      } else {
+        localStorage.setItem(key, JSON.stringify({ ...stored, values, dirty }));
+      }
+    } else {
+      // Drafts created by earlier versions did not track dirty fields. Keep any
+      // unrelated values intact, but align the group with the committed value.
+      localStorage.setItem(key, JSON.stringify({ ...stored, values }));
+    }
+    refreshControlDraftIndex();
+  } catch (error) {
+    console.warn("[Control Escolar] No se pudo reconciliar el borrador de grupo.", error);
+  }
+};
+
+const updateSelectedGroupSnapshot = (matricula, savedGroupValue) => {
+  const selectedKey = normalizeMatriculaKey(selectedStudent.value?.matricula);
+  if (!selectedKey || selectedKey !== normalizeMatriculaKey(matricula)) return;
+
+  const snapshot = parseEditSnapshot();
+  snapshot.grupo = normalizeGroupPickerText(savedGroupValue);
+  editSnapshot.value = JSON.stringify(snapshot);
+
+  if (hasUnsavedChanges.value) persistEditDraft();
+  else clearEditDraft();
+};
+
+const groupStudentFromIndex = (studentOrMatricula) => {
+  const key = mutationKeyFor(studentOrMatricula);
+  if (!key) return null;
+  return controlStudentsIndex.value.find(
+    (candidate) => normalizeMatriculaKey(candidate?.matricula) === key,
+  ) || (typeof studentOrMatricula === "object" ? studentOrMatricula : null);
+};
+
+const saveGroupChange = async (studentOrMatricula, groupValue, options = {}, context = {}) => {
+  const agentIdAtStart = context.agentId || selectedAgentId.value;
+  if (!agentIdAtStart) return false;
+  const scopeQuery = context.scopeQuery || buildScopeQuery();
+  const scopeSignature = context.scopeSignature || controlScopeSignatureFromQuery(scopeQuery);
+  const scopeIsCurrent = () => isCurrentControlScopeSignature(scopeSignature);
+  const matricula = typeof studentOrMatricula === "object"
+    ? studentOrMatricula?.matricula
+    : studentOrMatricula;
+  const selectedKey = normalizeMatriculaKey(matricula);
+  if (!selectedKey) return false;
+
+  const normalizedGroup = normalizeGroupPickerText(groupValue);
+  const currentStudent = scopeIsCurrent()
+    ? groupStudentFromIndex(studentOrMatricula)
+    : (typeof studentOrMatricula === "object" ? studentOrMatricula : null);
+  if (!currentStudent) return false;
+
+  const currentSavedGroup = normalizeGroupPickerText(currentStudent.group ?? currentStudent.grupo);
+  if (scopeIsCurrent() && currentSavedGroup === normalizedGroup) {
+    settleGroupDraftForStudent(matricula, normalizedGroup, agentIdAtStart);
+    if (scopeIsCurrent()) updateSelectedGroupSnapshot(matricula, normalizedGroup);
+    return true;
+  }
+
+  const rollbackStudent = { ...currentStudent };
+  const optimisticStudent = buildOptimisticControlStudent(rollbackStudent, { grupo: normalizedGroup });
+  const operationId = ++controlStudentMutationSequence;
+
+  if (scopeIsCurrent()) {
+    setControlStudentMutationState(selectedKey, {
+      status: "saving",
+      operationId,
+      fields: ["grupo"],
+    });
+    replaceControlStudentInIndex(optimisticStudent);
+    if (normalizeMatriculaKey(selectedStudent.value?.matricula) === selectedKey) {
+      selectedStudent.value = { ...selectedStudent.value, group: normalizedGroup, grupo: normalizedGroup };
+      saveError.value = "";
+    }
+    persistCurrentControlStudentsCache({ optimistic: true, field: "grupo" });
+  }
+
+  try {
+    await $fetch(
+      `/api/control-escolar/students/${encodeURIComponent(matricula)}`,
+      {
+        method: "PATCH",
+        query: scopeQuery,
+        body: { grupo: normalizedGroup },
+      },
+    );
+
+    settleGroupDraftForStudent(matricula, normalizedGroup, agentIdAtStart);
+    if (scopeIsCurrent()) {
+      replaceControlStudentInIndex(optimisticStudent);
+      updateSelectedGroupSnapshot(matricula, normalizedGroup);
+      persistCurrentControlStudentsCache({ field: "grupo" });
+      kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
+      setControlStudentMutationState(selectedKey, {
+        status: "saved",
+        operationId,
+        fields: ["grupo"],
+      });
+      scheduleControlStudentMutationClear(selectedKey, operationId);
+      reconcileControlKpisInBackground();
+    }
+    return true;
+  } catch (error) {
+    const message = error?.data?.message || error?.message || "No se pudo guardar el grupo.";
+    writeGroupDraftForStudent(matricula, normalizedGroup, agentIdAtStart);
+    if (scopeIsCurrent()) {
+      replaceControlStudentInIndex(rollbackStudent);
+      persistCurrentControlStudentsCache({ rollback: true, field: "grupo" });
+      kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
+      setControlStudentMutationState(selectedKey, {
+        status: "failed",
+        operationId,
+        fields: ["grupo"],
+        message,
+      });
+      if (normalizeMatriculaKey(selectedStudent.value?.matricula) === selectedKey) {
+        selectedStudent.value = rollbackStudent;
+        // Keep the user's chosen value in the picker so retrying never requires
+        // re-entering it, even though the list row returns to persisted data.
+        editForm.grupo = normalizedGroup;
+        saveError.value = message;
+      }
+      if (!options.silentFailure) show(message, "error");
+    }
+    return false;
+  }
+};
+
+const runQueuedGroupAutosaves = async (key) => {
+  let allSaved = true;
+  while (latestGroupAutosaveTargets.has(key)) {
+    const target = latestGroupAutosaveTargets.get(key);
+    latestGroupAutosaveTargets.delete(key);
+    if (!target) continue;
+    const saved = await saveGroupChange(target.student, target.grupo, target.options, target.context);
+    allSaved = saved && allSaved;
+  }
+  return allSaved;
+};
+
+const queueGroupAutosave = (studentOrMatricula, groupValue, options = {}) => {
+  const studentKey = mutationKeyFor(studentOrMatricula);
+  const agentId = selectedAgentId.value;
+  if (!studentKey || !agentId) return Promise.resolve(false);
+
+  const scopeQuery = buildScopeQuery();
+  const scopeSignature = controlScopeSignatureFromQuery(scopeQuery);
+  const queueKey = `${scopeSignature}::${studentKey}`;
+  const context = { agentId, scopeQuery, scopeSignature };
+
+  latestGroupAutosaveTargets.set(queueKey, {
+    student: studentOrMatricula,
+    grupo: normalizeGroupPickerText(groupValue),
+    options,
+    context,
+  });
+
+  const activeChain = groupAutosaveChains.get(queueKey);
+  if (activeChain) return activeChain;
+
+  const chain = runQueuedGroupAutosaves(queueKey)
+    .finally(() => {
+      groupAutosaveChains.delete(queueKey);
+      // JavaScript events cannot interleave inside this microtask, so any target
+      // present here was queued before completion and is safe to restart.
+      if (latestGroupAutosaveTargets.has(queueKey)) {
+        const restart = runQueuedGroupAutosaves(queueKey)
+          .finally(() => groupAutosaveChains.delete(queueKey));
+        groupAutosaveChains.set(queueKey, restart);
+      }
+    });
+  groupAutosaveChains.set(queueKey, chain);
+  return chain;
+};
+
+const savePendingGroupDraft = async (student, options = {}) => {
+  const pending = pendingGroupDraftForStudent(student);
+  if (!pending) return true;
+  return queueGroupAutosave(student, pending.grupo, options);
+};
+
+const saveAllPendingGroupDrafts = async () => {
+  if (savingPendingGroups.value) return;
+  const pendingStudents = pendingGroupDraftStudents.value.slice();
+  if (!pendingStudents.length) return;
+
+  savingPendingGroups.value = true;
+  const total = pendingStudents.length;
+  let saved = 0;
+  let cursor = 0;
+  const workerCount = Math.min(4, total);
+
+  const worker = async () => {
+    while (cursor < total) {
+      const student = pendingStudents[cursor];
+      cursor += 1;
+      if (await savePendingGroupDraft(student, { silentFailure: true })) saved += 1;
+    }
+  };
+
+  try {
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    refreshControlDraftIndex();
+    const failed = total - saved;
+    if (failed) show(`${saved} guardados · ${failed} pendientes`, "error");
+    else show(`${saved} cambios de grupo guardados.`, "success");
+  } finally {
+    savingPendingGroups.value = false;
   }
 };
 
@@ -6260,7 +6693,7 @@ const saveStudent = async () => {
   const operationId = ++controlStudentMutationSequence;
 
   saveError.value = "";
-  setControlStudentMutationState(selectedKey, { status: "saving", operationId });
+  setControlStudentMutationState(selectedKey, { status: "saving", operationId, fields: dirtyFields });
   replaceControlStudentInIndex(optimisticStudent);
   selectedStudent.value = optimisticStudent;
   pendingSelectedStudentRefresh.value = null;
@@ -6293,7 +6726,7 @@ const saveStudent = async () => {
     }
     persistCurrentControlStudentsCache();
     kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
-    setControlStudentMutationState(selectedKey, { status: "saved", operationId });
+    setControlStudentMutationState(selectedKey, { status: "saved", operationId, fields: dirtyFields });
     scheduleControlStudentMutationClear(selectedKey, operationId);
     show("Ficha de Control Escolar guardada.", "success");
     reconcileControlKpisInBackground();
@@ -6308,6 +6741,7 @@ const saveStudent = async () => {
     setControlStudentMutationState(selectedKey, {
       status: "failed",
       operationId,
+      fields: dirtyFields,
       message,
     });
     if (normalizeMatriculaKey(selectedStudent.value?.matricula) === selectedKey) {
@@ -6724,6 +7158,7 @@ watch(selectedAgentId, () => {
   if (controlBulkSelectedCount.value) {
     clearControlBulkSelection();
   }
+  refreshControlDraftIndex();
   nextTick(scheduleWorkspaceScaleUpdate);
 });
 watch(
@@ -6813,6 +7248,7 @@ onMounted(async () => {
 
   try {
     await loadOptions();
+    refreshControlDraftIndex();
 
     if (selectedAgentId.value) {
       await reloadControlStudentsForCurrentScope({
@@ -6839,6 +7275,8 @@ onBeforeUnmount(() => {
     groupSigilSwapTimer = null;
   }
   clearControlStudentMutationStates();
+  latestGroupAutosaveTargets.clear();
+  groupAutosaveChains.clear();
   controlEscolarDetailOpen.value = false;
   resetControlTopbarState();
 });
@@ -8007,6 +8445,23 @@ onBeforeUnmount(() => {
   line-height: 1;
 }
 
+.control-escolar-screen .ce-pending-save-button {
+  border-color: rgba(205, 133, 28, .28);
+  background: #fff9ee;
+  color: #996515;
+  box-shadow: 0 6px 16px rgba(180, 113, 18, .07);
+}
+
+.control-escolar-screen .ce-pending-save-button:hover:not(:disabled) {
+  border-color: rgba(181, 112, 17, .42);
+  background: #fff6e4;
+  color: #7d500e;
+}
+
+.control-escolar-screen .ce-pending-save-button b {
+  background: #a86d17;
+}
+
 .control-escolar-screen .ce-excel-export-button {
   display: inline-flex;
   height: 28px;
@@ -8379,6 +8834,45 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-row-save-indicator.is-failed {
   --ce-row-save-accent: var(--ce-danger);
   --ce-row-save-soft: #fff0ef;
+}
+
+.control-escolar-screen .ce-row-draft-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 17px;
+  padding: 0 6px;
+  border: 1px solid rgba(190, 121, 22, .22);
+  border-radius: 999px;
+  background: #fff8eb;
+  color: #916014;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.control-escolar-screen .ce-row-draft-save {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(190, 121, 22, .28);
+  border-radius: 11px;
+  background: #fff8eb;
+  color: #916014;
+  box-shadow: 0 8px 16px rgba(180, 113, 18, .07);
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+}
+
+.control-escolar-screen .ce-row-draft-save:hover,
+.control-escolar-screen .ce-row-draft-save:focus-visible {
+  border-color: rgba(165, 100, 12, .46);
+  background: #fff3dc;
+  color: #754a0b;
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .control-escolar-screen .ce-student-row.is-mutation-saving {
@@ -10881,6 +11375,27 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.control-escolar-screen .ce-group-save-state {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  color: #3f8b43;
+  font-size: 9px;
+  font-weight: 880;
+  line-height: 1.1;
+}
+
+.control-escolar-screen .ce-group-save-state.is-saving {
+  color: #376ea6;
+}
+
+.control-escolar-screen .ce-group-save-state.is-dirty,
+.control-escolar-screen .ce-group-save-state.is-error {
+  color: #a36b16;
+}
+
 .control-escolar-screen .ce-group-combobox {
   position: relative;
   min-width: 0;
@@ -12071,7 +12586,8 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-row-action,
-.control-escolar-screen .ce-row-save-indicator {
+.control-escolar-screen .ce-row-save-indicator,
+.control-escolar-screen .ce-row-draft-save {
   width: 40px;
   height: 40px;
   border-radius: 13px;
@@ -16026,7 +16542,8 @@ onBeforeUnmount(() => {
   }
 
   .control-escolar-screen .ce-row-action,
-  .control-escolar-screen .ce-row-save-indicator {
+  .control-escolar-screen .ce-row-save-indicator,
+  .control-escolar-screen .ce-row-draft-save {
     width: 34px;
     height: 34px;
     border-radius: 13px;
@@ -16901,7 +17418,8 @@ onBeforeUnmount(() => {
 }
 
 .control-escolar-screen .ce-workspace.has-detail .ce-row-action,
-.control-escolar-screen .ce-workspace.has-detail .ce-row-save-indicator {
+.control-escolar-screen .ce-workspace.has-detail .ce-row-save-indicator,
+.control-escolar-screen .ce-workspace.has-detail .ce-row-draft-save {
   width: 30px;
   height: 30px;
   border-radius: 11px;

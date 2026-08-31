@@ -178,8 +178,8 @@ const resolveControlEscolarGroup = (baseGroup: unknown, overlay: any) => {
     overlay.grupo !== null &&
     overlay.grupo !== undefined;
   return hasCentralGroup
-    ? normalizeText(overlay.grupo, 40)
-    : normalizeText(baseGroup, 40);
+    ? normalizeUpper(overlay.grupo, 40)
+    : normalizeUpper(baseGroup, 40);
 };
 
 const sqlLiteral = (value: string) => `'${String(value).replace(/'/g, "''")}'`;
@@ -1136,7 +1136,7 @@ export const fetchControlEscolarCalculatedAcademicPlacement = async (
     sourcePlantel: normalizePlantel(sourcePlantel || agentId),
     nivel: String(promoted.nivel),
     grado: displayGrado(promoted.grado),
-    grupo: normalizeText(row.baseGrupo, 40) || null,
+    grupo: normalizeUpper(row.baseGrupo, 40) || null,
     baseCiclo,
   };
 };
@@ -2495,9 +2495,9 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
   if (grado && grado !== "all")
     result = result.filter((student) => student.grado.toLowerCase() === grado);
 
-  const grupo = normalizeText(filters.group || filters.grupo || "");
-  if (grupo && grupo !== "all")
-    result = result.filter((student) => student.group === grupo);
+  const grupo = normalizeUpper(filters.group || filters.grupo || "");
+  if (grupo && grupo !== "ALL")
+    result = result.filter((student) => normalizeUpper(student.group, 40) === grupo);
 
   const quality = normalizeText(
     filters.quality || filters.calidad || filters.missing || "",
@@ -3133,7 +3133,7 @@ const normalizePatchValue = (field: string, value: unknown) => {
   if (field === "grado" || field === "lastGrade")
     return normalizeText(value, 80) ? displayGrado(value).toLowerCase() : null;
   if (field === "nivel") return normalizeNivelEscolar(value) || null;
-  if (field === "grupo") return normalizeText(value, 40);
+  if (field === "grupo") return normalizeUpper(value, 40);
   if (field === "domicilioCp") return normalizeText(value, 12).replace(/\D/g, "").slice(0, 5) || null;
   if (ADVANCED_FILE_PATCH_FIELDS.has(field)) return normalizeNullable(value, 2048);
   if (["tipoSangre", "talla", "peso"].includes(field)) return normalizeNullable(value, 40);
