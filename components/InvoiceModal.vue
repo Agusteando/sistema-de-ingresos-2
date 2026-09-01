@@ -174,21 +174,21 @@
             <div class="grid grid-cols-12 gap-4">
               <div class="col-span-12 md:col-span-5 form-group mb-0">
                 <label class="form-label">Alumno</label>
-                <input type="text" v-model.trim="form.nombreCompleto" :readonly="ieduLocks.nombreCompleto" :class="['input-field', ieduLocks.nombreCompleto ? 'bg-gray-50 text-gray-600' : '']">
+                <input type="text" v-model.trim="form.nombreCompleto" class="input-field">
               </div>
               <div class="col-span-12 md:col-span-3 form-group mb-0">
                 <label class="form-label">CURP</label>
-                <input type="text" v-model.trim="form.CURP" :readonly="ieduLocks.CURP" :class="['input-field uppercase font-mono', ieduLocks.CURP ? 'bg-gray-50 text-gray-600' : '']" @input="form.CURP = normalizeCurpForInvoice(form.CURP)">
+                <input type="text" v-model.trim="form.CURP" class="input-field uppercase font-mono" @input="form.CURP = normalizeCurpForInvoice(form.CURP)">
               </div>
               <div class="col-span-12 md:col-span-2 form-group mb-0">
                 <label class="form-label">Nivel</label>
-                <select v-model="form.nivelEducativo" class="input-field" :disabled="ieduLocks.nivelEducativo">
+                <select v-model="form.nivelEducativo" class="input-field">
                   <option v-for="option in nivelEducativoOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                 </select>
               </div>
               <div class="col-span-12 md:col-span-2 form-group mb-0">
                 <label class="form-label">RVOE</label>
-                <input type="text" v-model.trim="form.autRVOE" :readonly="ieduLocks.autRVOE" :class="['input-field font-mono', ieduLocks.autRVOE ? 'bg-gray-50 text-gray-600' : '']">
+                <input type="text" v-model.trim="form.autRVOE" class="input-field font-mono">
               </div>
             </div>
           </div>
@@ -198,7 +198,7 @@
               <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wide m-0">Conceptos</h3>
               <div class="text-right">
                 <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Total</span>
-                <span class="text-lg font-bold text-brand-campus font-mono">${{ legacyContext.total.toFixed(2) }}</span>
+                <span class="text-lg font-bold text-brand-campus font-mono">${{ reviewTotal.toFixed(2) }}</span>
               </div>
             </div>
             <div class="overflow-x-auto">
@@ -211,12 +211,41 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(concepto, index) in legacyContext.conceptos" :key="concepto.id || index" class="border-b border-gray-50 last:border-0">
-                    <td class="py-2 pr-3 font-semibold text-gray-800">{{ concepto.conceptoNombre }}</td>
-                    <td class="py-2 px-3 text-gray-500">{{ concepto.mesLabel || concepto.mes || '—' }}</td>
-                    <td class="py-2 pl-3 text-right font-mono font-semibold text-brand-campus">${{ Number(concepto.monto || 0).toFixed(2) }}</td>
+                  <tr v-for="(item, index) in reviewItems" :key="item.key" class="border-b border-gray-50 last:border-0 align-top">
+                    <td class="py-2 pr-3">
+                      <label class="sr-only" :for="`invoice-prepare-description-${index}`">Concepto en factura</label>
+                      <input
+                        :id="`invoice-prepare-description-${index}`"
+                        v-model="item.description"
+                        type="text"
+                        :disabled="loading"
+                        class="input-field font-semibold"
+                        :class="!isReviewDescriptionValid(item) ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : ''"
+                        :aria-invalid="!isReviewDescriptionValid(item)"
+                        autocomplete="off"
+                      >
+                    </td>
+                    <td class="py-2 px-3 text-gray-500">{{ legacyContext.conceptos[index]?.mesLabel || legacyContext.conceptos[index]?.mes || '—' }}</td>
+                    <td class="py-2 pl-3">
+                      <label class="sr-only" :for="`invoice-prepare-amount-${index}`">Monto en factura</label>
+                      <div class="relative min-w-[132px]">
+                        <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center font-mono text-sm text-gray-400">$</span>
+                        <input
+                          :id="`invoice-prepare-amount-${index}`"
+                          v-model.number="item.amount"
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          inputmode="decimal"
+                          :disabled="loading"
+                          class="input-field pl-7 text-right font-mono font-semibold"
+                          :class="!isReviewAmountValid(item) ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : ''"
+                          :aria-invalid="!isReviewAmountValid(item)"
+                        >
+                      </div>
+                    </td>
                   </tr>
-                  <tr v-if="!legacyContext.conceptos.length">
+                  <tr v-if="!reviewItems.length">
                     <td colspan="3" class="py-6 text-center text-gray-400">No hay conceptos seleccionados.</td>
                   </tr>
                 </tbody>
@@ -432,7 +461,6 @@ const emailFeedback = ref(null)
 const modalOverlayRef = ref(null)
 const resultPanelRef = ref(null)
 const submissionErrorRef = ref(null)
-const ieduLocks = ref({ nombreCompleto: false, CURP: false, nivelEducativo: false, autRVOE: false })
 
 const requestClose = () => {
   if (!loading.value && !emailing.value) emit('close')
@@ -599,8 +627,8 @@ const reviewValidationIssues = computed(() => {
   return issues
 })
 
-const canReview = computed(() => !loadingCompany.value && validationIssues.value.length === 0)
-const canSubmit = computed(() => canReview.value && reviewValidationIssues.value.length === 0)
+const canReview = computed(() => !loadingCompany.value && validationIssues.value.length === 0 && reviewValidationIssues.value.length === 0)
+const canSubmit = computed(() => canReview.value)
 
 const scrollModalTop = async () => {
   await nextTick()
@@ -609,7 +637,7 @@ const scrollModalTop = async () => {
 
 const openReview = async () => {
   if (!canReview.value) {
-    const message = validationIssues.value[0] || 'Revisa la información.'
+    const message = [...validationIssues.value, ...reviewValidationIssues.value][0] || 'Revisa la información.'
     submissionError.value = { title: 'Faltan datos para facturar', message, details: [] }
     show(message, 'danger')
     await focusFeedback(submissionErrorRef)
@@ -627,24 +655,14 @@ const returnToPrepare = async () => {
   await scrollModalTop()
 }
 
-watch(() => [legacyContext.value.plantel, form.value.nivelEducativo], ([plantel, nivel]) => {
-  if (!ieduLocks.value.autRVOE) {
-    form.value.autRVOE = defaultRvoeFor(plantel, nivel) || legacyContext.value.defaultRvoe || form.value.autRVOE
+watch(() => [legacyContext.value.plantel, form.value.nivelEducativo], ([plantel, nivel], previous = []) => {
+  const [previousPlantel, previousNivel] = previous || []
+  const previousDefault = defaultRvoeFor(previousPlantel, previousNivel) || legacyContext.value.defaultRvoe
+  const nextDefault = defaultRvoeFor(plantel, nivel) || legacyContext.value.defaultRvoe
+  if (!form.value.autRVOE || form.value.autRVOE === previousDefault) {
+    form.value.autRVOE = nextDefault || form.value.autRVOE
   }
 })
-
-const lockIeduFromSources = (data = {}) => {
-  const sourceNombre = normalizeText(data.nombreCompleto || data.nombreAlumno || props.student?.nombreCompleto)
-  const sourceCurp = normalizeCurpForInvoice(data.CURP || props.student?.curp || props.student?.CURP)
-  const sourceNivel = normalizeText(data.nivelEducativo || selectedNivelDefault.value)
-  const sourceRvoe = normalizeText(data.autRVOE || defaultRvoeFor(legacyContext.value.plantel, sourceNivel))
-  ieduLocks.value = {
-    nombreCompleto: Boolean(sourceNombre),
-    CURP: isValidCURP(sourceCurp),
-    nivelEducativo: Boolean(sourceNivel),
-    autRVOE: Boolean(sourceRvoe)
-  }
-}
 
 const applyCompanyDefaults = (data = {}) => {
   form.value.legal_name = normalizeText(data.legal_name || form.value.legal_name)
@@ -656,14 +674,11 @@ const applyCompanyDefaults = (data = {}) => {
   form.value.CURP = normalizeCurpForInvoice(data.CURP || form.value.CURP || props.student?.curp || props.student?.CURP)
   form.value.nivelEducativo = validateNivelEducativo(data.nivelEducativo || form.value.nivelEducativo || selectedNivelDefault.value)
   form.value.autRVOE = normalizeText(data.autRVOE || form.value.autRVOE || defaultRvoeFor(legacyContext.value.plantel, form.value.nivelEducativo))
-  lockIeduFromSources(data)
 }
 
 onMounted(async () => {
   form.value.invoiceDate = getLocalISOStringNow()
   form.value.autRVOE = defaultRvoeFor(legacyContext.value.plantel, form.value.nivelEducativo)
-  lockIeduFromSources({})
-
   if (!legacyContext.value.matricula) return
   loadingCompany.value = true
   try {

@@ -1,1 +1,1 @@
-Unifica planteles equivalentes en reporte de talleres y corrige desplazamiento vertical
+Permite editar todos los datos del CFDI, incluidos concepto y monto
