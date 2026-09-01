@@ -143,11 +143,22 @@
                   <option v-for="system in taxSystems" :key="system.value" :value="system.value">{{ system.label }}</option>
                 </select>
               </div>
-              <div class="col-span-12 form-group mb-0">
+              <div class="col-span-12 md:col-span-9 form-group mb-0">
                 <label class="form-label">Uso de CFDI</label>
                 <select v-model="form.invoice_use" class="input-field" required>
                   <option v-for="option in invoiceUseOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                 </select>
+              </div>
+              <div class="col-span-12 md:col-span-3 form-group mb-0">
+                <label class="form-label">Fecha de emisión</label>
+                <input
+                  v-model="invoiceDateDay"
+                  type="date"
+                  class="input-field font-mono"
+                  :min="invoiceDateMin"
+                  :max="invoiceDateMax"
+                  required
+                >
               </div>
             </div>
           </div>
@@ -210,7 +221,7 @@
 
           <template v-else>
             <div class="card overflow-hidden">
-              <div class="grid gap-px bg-gray-100 sm:grid-cols-2 lg:grid-cols-4">
+              <div class="grid gap-px bg-gray-100 sm:grid-cols-2 lg:grid-cols-5">
                 <div class="min-w-0 bg-white px-5 py-4 sm:col-span-2">
                   <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Receptor</span>
                   <span class="mt-1 block truncate text-sm font-bold text-gray-900">{{ form.legal_name }}</span>
@@ -220,6 +231,10 @@
                   <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Uso CFDI</span>
                   <span class="mt-1 block truncate text-sm font-semibold text-gray-800">{{ form.invoice_use }}</span>
                   <span class="mt-0.5 block truncate text-xs text-gray-500">{{ selectedInvoiceUseLabel }}</span>
+                </div>
+                <div class="min-w-0 bg-white px-5 py-4">
+                  <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Fecha</span>
+                  <span class="mt-1 block font-mono text-sm font-semibold text-gray-800">{{ invoiceDateDay }}</span>
                 </div>
                 <div class="min-w-0 bg-white px-5 py-4">
                   <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Alumno</span>
@@ -504,6 +519,32 @@ const form = ref({
   CURP: normalizeCurpForInvoice(props.student?.curp || props.student?.CURP),
   nivelEducativo: validateNivelEducativo(selectedNivelDefault.value),
   autRVOE: ''
+})
+
+const localDatePart = (value) => {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const invoiceDateMax = localDatePart(new Date())
+const invoiceDateMin = localDatePart(new Date(Date.now() - (72 * 60 * 60 * 1000)))
+const invoiceDateDay = computed({
+  get: () => normalizeText(form.value.invoiceDate).slice(0, 10),
+  set: (value) => {
+    const selectedDay = normalizeText(value)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDay)) {
+      form.value.invoiceDate = ''
+      return
+    }
+
+    const currentTime = normalizeText(form.value.invoiceDate).match(/T(\d{2}:\d{2})/)?.[1]
+      || getLocalISOStringNow().slice(11, 16)
+    form.value.invoiceDate = `${selectedDay}T${currentTime}`
+  }
 })
 
 const invoiceUseOptions = computed(() => getUseOptions(determineReceiverType(form.value.tax_system)))
