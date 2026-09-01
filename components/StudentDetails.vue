@@ -3124,7 +3124,7 @@ const invoicePaymentReceipt = (debt, payment) => {
       pagos: Number(payment.monto || 0),
       saldo: Number(payment.monto || 0),
       saldoAntes: Number(payment.monto || 0),
-      formaDePago: payment.formaDePago || debt.formaDePago || "Efectivo",
+      formaDePago: payment.formaDePago || debt.formaDePago || "99",
       folio_plantel: payment.folio_plantel || "",
       external_id: payment.folio_plantel || "",
       mesLabel: debt.mesLabel || payment.mesReal || payment.mes,

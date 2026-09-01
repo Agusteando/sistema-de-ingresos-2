@@ -143,10 +143,16 @@
                   <option v-for="system in taxSystems" :key="system.value" :value="system.value">{{ system.label }}</option>
                 </select>
               </div>
-              <div class="col-span-12 md:col-span-9 form-group mb-0">
+              <div class="col-span-12 md:col-span-6 form-group mb-0">
                 <label class="form-label">Uso de CFDI</label>
                 <select v-model="form.invoice_use" class="input-field" required>
                   <option v-for="option in invoiceUseOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </div>
+              <div class="col-span-12 md:col-span-3 form-group mb-0">
+                <label class="form-label">Forma de pago</label>
+                <select v-model="form.payment_form" class="input-field" required>
+                  <option v-for="option in paymentFormOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                 </select>
               </div>
               <div class="col-span-12 md:col-span-3 form-group mb-0">
@@ -327,7 +333,7 @@
                 </div>
                 <div class="bg-white px-5 py-4">
                   <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Forma de pago</span>
-                  <span class="mt-1 block text-sm font-semibold text-gray-800"><span class="font-mono">{{ legacyContext.paymentForm }}</span> · {{ legacyContext.primaryFormaDePago }}</span>
+                  <span class="mt-1 block text-sm font-semibold text-gray-800">{{ selectedPaymentFormLabel }}</span>
                 </div>
                 <div class="bg-white px-5 py-4">
                   <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Nivel</span>
@@ -395,6 +401,8 @@ import {
   nivelEducativoOptions,
   normalizeText,
   normalizeCurpForInvoice,
+  paymentFormOptions,
+  paymentFormLabel,
   resolveLegacyInvoiceContext,
   taxSystems,
   validateNivelEducativo
@@ -514,6 +522,7 @@ const form = ref({
   zip: '',
   tax_system: '616',
   invoice_use: defaultInvoiceUseFor('616'),
+  payment_form: legacyContext.value.paymentForm || '99',
   invoiceDate: getLocalISOStringNow(),
   nombreCompleto: props.student?.nombreCompleto || '',
   CURP: normalizeCurpForInvoice(props.student?.curp || props.student?.CURP),
@@ -553,6 +562,8 @@ const selectedInvoiceUseLabel = computed(() => {
   return normalizeText(option?.label).replace(new RegExp(`^${form.value.invoice_use}\\s*-\\s*`, 'i'), '')
 })
 
+const selectedPaymentFormLabel = computed(() => paymentFormLabel(form.value.payment_form))
+
 watch(() => form.value.tax_system, (taxSystem) => {
   form.value.invoice_use = defaultInvoiceUseFor(taxSystem)
 }, { immediate: true })
@@ -568,6 +579,7 @@ const validationIssues = computed(() => {
   if (!form.value.tax_system) issues.push('Falta régimen fiscal.')
   if (!form.value.invoice_use) issues.push('Falta uso de CFDI.')
   else if (!invoiceUseOptions.value.some(option => option.value === form.value.invoice_use)) issues.push('El uso de CFDI no corresponde al régimen fiscal seleccionado.')
+  if (!form.value.payment_form || !paymentFormOptions.some(option => option.value === form.value.payment_form)) issues.push('Selecciona una forma de pago válida.')
   if (!form.value.nombreCompleto) issues.push('Falta nombre del alumno.')
   if (!form.value.CURP) issues.push('Falta CURP.')
   else if (!isValidCURP(form.value.CURP)) issues.push('CURP inválida.')
@@ -728,7 +740,7 @@ const buildPayload = () => {
       },
       items,
       use: form.value.invoice_use,
-      payment_form: ctx.paymentForm,
+      payment_form: form.value.payment_form,
       type: 'I',
       payment_method: 'PUE',
       currency: 'MXN',

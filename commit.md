@@ -1,1 +1,1 @@
-Permitir seleccionar la fecha de emisión del CFDI con el día actual por defecto.
+Agrega reporte consolidado de Talleres y corrige forma de pago predeterminada en CFDI

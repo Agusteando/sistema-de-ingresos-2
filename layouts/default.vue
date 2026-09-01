@@ -57,6 +57,9 @@
         <NuxtLink v-if="showFinancialNav" to="/reportes" class="nav-item group" title="Reportes" aria-label="Reportes">
           <LucidePieChart :size="22" stroke-width="2" /> <span class="nav-label">Reportes</span>
         </NuxtLink>
+        <NuxtLink v-if="showTalleresReportNav" to="/reporte-talleres" class="nav-item group" title="Reporte Talleres" aria-label="Reporte Talleres">
+          <LucideClipboardList :size="22" stroke-width="2" /> <span class="nav-label">Reporte Talleres</span>
+        </NuxtLink>
         <NuxtLink v-if="showFinancialNav" to="/cartas-no-adeudo" class="nav-item group" title="Historial de cartas de no adeudo" aria-label="Historial de cartas de no adeudo">
           <LucideHistory :size="22" stroke-width="2" /> <span class="nav-label">Historial de cartas</span>
         </NuxtLink>
@@ -582,6 +585,7 @@ const userPlanteles = computed(() => {
 
   return planteles
 })
+const showTalleresReportNav = computed(() => isSuperAdmin.value || userPlanteles.value.length > 0)
 const showFinancialNav = computed(() => hasFinancialAccess.value)
 const hasConceptosAdminRole = computed(() => isSuperAdmin.value || roleTokens.value.some(role => ['admin', 'role_admin', 'conceptos_admin', 'role_conceptos'].includes(role)))
 const showConceptosNav = computed(() => showFinancialNav.value && hasConceptosAdminRole.value)
@@ -1368,6 +1372,7 @@ const currentRouteName = computed(() => {
   if (route.path === '/') return 'Alumnos'
   if (route.path === '/deudores') return 'Deudores'
   if (route.path === '/reportes') return 'Centro de reportes'
+  if (route.path === '/reporte-talleres') return 'Reporte Talleres'
   if (route.path === '/dashboard') return 'Dashboard'
   if (route.path === '/cartas-no-adeudo') return 'Historial de cartas de no adeudo'
   if (route.path === '/conceptos') return 'Conceptos'
@@ -1385,7 +1390,7 @@ const switchPlantel = async (plantel = activePlantel.value) => {
 
   try {
     const response = await $fetch('/api/auth/switch', { method: 'POST', body: { plantel } })
-    if (response?.redirectTo && response.redirectTo !== route.path && route.path !== '/control-escolar' && route.path !== '/avance-control-escolar' && route.path !== '/auditoria-control-escolar') {
+    if (response?.redirectTo && response.redirectTo !== route.path && route.path !== '/control-escolar' && route.path !== '/avance-control-escolar' && route.path !== '/auditoria-control-escolar' && route.path !== '/reporte-talleres') {
       window.location.href = response.redirectTo
       return
     }

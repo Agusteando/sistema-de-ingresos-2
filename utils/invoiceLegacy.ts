@@ -106,6 +106,36 @@ export const validateNivelEducativo = (nivel: unknown) => {
   return nivelEducativoOptions.some(option => option.value === value && value) ? value : 'Primaria'
 }
 
+export const paymentFormOptions = [
+  { value: '01', label: '01 - Efectivo' },
+  { value: '02', label: '02 - Cheque nominativo' },
+  { value: '03', label: '03 - Transferencia electrónica de fondos' },
+  { value: '04', label: '04 - Tarjeta de crédito' },
+  { value: '05', label: '05 - Monedero electrónico' },
+  { value: '06', label: '06 - Dinero electrónico' },
+  { value: '08', label: '08 - Vales de despensa' },
+  { value: '12', label: '12 - Dación en pago' },
+  { value: '13', label: '13 - Pago por subrogación' },
+  { value: '14', label: '14 - Pago por consignación' },
+  { value: '15', label: '15 - Condonación' },
+  { value: '17', label: '17 - Compensación' },
+  { value: '23', label: '23 - Novación' },
+  { value: '24', label: '24 - Confusión' },
+  { value: '25', label: '25 - Remisión de deuda' },
+  { value: '26', label: '26 - Prescripción o caducidad' },
+  { value: '27', label: '27 - A satisfacción del acreedor' },
+  { value: '28', label: '28 - Tarjeta de débito' },
+  { value: '29', label: '29 - Tarjeta de servicios' },
+  { value: '30', label: '30 - Aplicación de anticipos' },
+  { value: '31', label: '31 - Intermediario pagos' },
+  { value: '99', label: '99 - Por definir' },
+]
+
+export const paymentFormLabel = (value: unknown) => {
+  const code = mapPaymentForm(value)
+  return paymentFormOptions.find(option => option.value === code)?.label || `${code} - Forma de pago`
+}
+
 export const mapPaymentForm = (formaDePago: unknown) => {
   const mapping: Record<string, string> = {
     'Efectivo': '01',
@@ -349,7 +379,7 @@ export const resolveLegacyInvoiceContext = ({ student = {}, selectedConcepts = [
     conceptos.find(concepto => normalizeText(concepto.formaDePago || concepto.payment_form || concepto.forma_pago))?.formaDePago
     || conceptos.find(concepto => normalizeText(concepto.payment_form))?.payment_form
     || conceptos.find(concepto => normalizeText(concepto.forma_pago))?.forma_pago
-    || 'Efectivo'
+    || '99'
   )
   const paymentForm = mapPaymentForm(primaryFormaDePago)
   const seriesCandidate = ['PT', 'ST'].includes(plantel) ? plantel : matriculaPrefix
