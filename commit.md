@@ -1,1 +1,1 @@
-Implementa bypass de caché para lecturas frescas de Husky Pass
+Añade resumen administrativo de talleres con acceso desde la barra superior

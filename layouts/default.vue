@@ -241,6 +241,24 @@
             </button>
           </div>
 
+          <button
+            v-if="showTalleresOverview"
+            ref="talleresTopbarButton"
+            type="button"
+            class="talleres-topbar-action"
+            :class="{ 'is-returning': talleresReturnPulse }"
+            title="Talleres"
+            aria-label="Talleres"
+            @pointerenter="prefetchTalleresOverview"
+            @focus="prefetchTalleresOverview"
+            @pointerdown="prefetchTalleresOverview"
+            @click="openTalleresOverview"
+          >
+            <span class="talleres-topbar-glyph" aria-hidden="true">
+              <i></i><i></i><i></i><i></i>
+            </span>
+          </button>
+
           <div v-if="showLocalSystemControls" class="aurora-runtime-controls">
             <div class="aurora-runtime-switch" role="group" aria-label="Versión de Aurora">
               <button
@@ -345,6 +363,18 @@
       </div>
     </main>
 
+    <TalleresOverviewDialog
+      ref="talleresDialog"
+      :eligible="showTalleresOverview"
+      :auto-open="isStudentsPage"
+      :plantel="activePlantel"
+      :ciclo="activeCicloKey"
+      :ciclo-label="activeCicloOption.label"
+      :user-key="adminEmail"
+      :target-element="talleresTopbarButton"
+      @returned="handleTalleresReturned"
+    />
+
     <ContextMenu />
 
     <div class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none">
@@ -424,6 +454,7 @@ import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import ContextMenu from '~/components/ContextMenu.vue'
 import StudentsCacheSyncIndicator from '~/components/students/StudentsCacheSyncIndicator.vue'
 import ControlEscolarSyncIndicator from '~/components/students/ControlEscolarSyncIndicator.vue'
+import TalleresOverviewDialog from '~/components/talleres/TalleresOverviewDialog.vue'
 import { usePlantelAgentStatuses } from '~/composables/usePlantelAgentStatuses'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { useActiveCiclo } from '~/composables/useActiveCiclo'
@@ -515,6 +546,7 @@ const selectCiclo = (value) => {
 
 const adminPhoto = ref(null)
 const adminName = ref(useCookie('auth_name').value || 'Usuario')
+const adminEmail = ref(useCookie('auth_email').value || 'usuario')
 const impersonatingCookie = useCookie('auth_impersonating')
 const impersonatorNameCookie = useCookie('auth_impersonator_name')
 const isImpersonating = computed(() => authCookieFlagEnabled(impersonatingCookie.value))
@@ -553,6 +585,24 @@ const userPlanteles = computed(() => {
 const showFinancialNav = computed(() => hasFinancialAccess.value)
 const hasConceptosAdminRole = computed(() => isSuperAdmin.value || roleTokens.value.some(role => ['admin', 'role_admin', 'conceptos_admin', 'role_conceptos'].includes(role)))
 const showConceptosNav = computed(() => showFinancialNav.value && hasConceptosAdminRole.value)
+const isStudentsPage = computed(() => route.path === '/' || route.path === '/alumnos')
+const showTalleresOverview = computed(() => showFinancialNav.value && activePlantel.value !== 'GLOBAL')
+const talleresTopbarButton = ref(null)
+const talleresDialog = ref(null)
+const talleresReturnPulse = ref(false)
+let talleresReturnTimer = null
+const prefetchTalleresOverview = () => talleresDialog.value?.prefetch?.(false)
+const openTalleresOverview = () => talleresDialog.value?.open?.({ automatic: false, refresh: true })
+const handleTalleresReturned = () => {
+  talleresReturnPulse.value = false
+  if (talleresReturnTimer && typeof window !== 'undefined') window.clearTimeout(talleresReturnTimer)
+  nextTick(() => {
+    talleresReturnPulse.value = true
+    if (typeof window !== 'undefined') {
+      talleresReturnTimer = window.setTimeout(() => { talleresReturnPulse.value = false }, 720)
+    }
+  })
+}
 const isControlEscolarPage = computed(() => route.path === '/control-escolar')
 const showLocalSystemControls = computed(() => true)
 const controlEscolarTopbarState = useState('controlEscolarTopbarState', () => ({
@@ -1302,6 +1352,8 @@ onBeforeUnmount(() => {
   clearLocalSystemUpdateWatch()
   if (localSystemPollTimer && typeof window !== 'undefined') window.clearTimeout(localSystemPollTimer)
   localSystemPollTimer = null
+  if (talleresReturnTimer && typeof window !== 'undefined') window.clearTimeout(talleresReturnTimer)
+  talleresReturnTimer = null
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', scheduleSidebarScaleUpdate)
     window.removeEventListener('message', handleLocalSystemUpdateMessage)
@@ -2303,6 +2355,64 @@ const logout = async () => {
   gap: 12px;
 }
 
+.talleres-topbar-action {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(195, 219, 194, 0.96);
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(242, 251, 239, 0.98), #ffffff);
+  color: #35743b;
+  box-shadow: 0 8px 18px rgba(35, 91, 45, 0.06);
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.talleres-topbar-action:hover {
+  border-color: rgba(86, 151, 71, 0.55);
+  background: #fff;
+  box-shadow: 0 12px 24px rgba(35, 91, 45, 0.12);
+  transform: translateY(-1px);
+}
+
+.talleres-topbar-action:active {
+  transform: translateY(0) scale(.96);
+}
+
+.talleres-topbar-glyph {
+  width: 19px;
+  height: 19px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+  padding: 1px;
+}
+
+.talleres-topbar-glyph i {
+  display: block;
+  border-radius: 3px;
+}
+
+.talleres-topbar-glyph i:nth-child(1) { background: #72b64f; border-radius: 5px 2px 2px; }
+.talleres-topbar-glyph i:nth-child(2) { background: #33a57d; border-radius: 2px 5px 2px 2px; }
+.talleres-topbar-glyph i:nth-child(3) { background: #2a8fa4; border-radius: 2px 2px 2px 5px; }
+.talleres-topbar-glyph i:nth-child(4) { background: #e6a635; border-radius: 2px 2px 5px; }
+
+.talleres-topbar-action.is-returning {
+  animation: talleresTopbarReceive 680ms cubic-bezier(.22, .9, .24, 1) both;
+}
+
+@keyframes talleresTopbarReceive {
+  0% { transform: scale(.84); box-shadow: 0 0 0 0 rgba(83, 151, 72, .34); }
+  42% { transform: scale(1.12); box-shadow: 0 0 0 8px rgba(83, 151, 72, .11); }
+  72% { transform: scale(.97); box-shadow: 0 0 0 4px rgba(83, 151, 72, .06); }
+  100% { transform: scale(1); box-shadow: 0 8px 18px rgba(35, 91, 45, 0.06); }
+}
+
 .control-header-tools {
   display: inline-flex;
   align-items: center;
@@ -3141,6 +3251,13 @@ const logout = async () => {
 
   .header-icon-action {
     width: 38px;
+  }
+
+  .talleres-topbar-action {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    border-radius: 13px;
   }
 
   .ciclo-picker {
