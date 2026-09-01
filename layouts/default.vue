@@ -361,7 +361,13 @@
         </div>
       </header>
 
-      <div class="income-content" :class="{ 'income-content-dashboard': route.path === '/dashboard' }">
+      <div
+        class="income-content"
+        :class="{
+          'income-content-dashboard': route.path === '/dashboard',
+          'income-content-talleres-report': route.path === '/reporte-talleres',
+        }"
+      >
         <slot />
       </div>
     </main>
@@ -2790,7 +2796,8 @@ const logout = async () => {
   padding: 18px 30px 16px;
 }
 
-.income-content.income-content-dashboard {
+.income-content.income-content-dashboard,
+.income-content.income-content-talleres-report {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -3204,7 +3211,8 @@ const logout = async () => {
   }
 
 
-  .income-content.income-content-dashboard {
+  .income-content.income-content-dashboard,
+  .income-content.income-content-talleres-report {
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-y: contain;

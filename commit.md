@@ -1,1 +1,1 @@
-Corrige la ruta de importación del ciclo en el reporte de talleres
+Unifica planteles equivalentes en reporte de talleres y corrige desplazamiento vertical

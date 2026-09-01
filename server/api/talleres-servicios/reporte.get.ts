@@ -10,12 +10,21 @@ const errorMessage = (error: any) => String(
   || 'No fue posible consultar este plantel.'
 ).trim()
 
+// CT/PREET and CM/PREEM are two names for the same campus in Aurora.
+// The report must expose one column and execute one summary read per campus.
+const reportPlantel = (value: unknown) => {
+  const plantel = normalizePlantel(value)
+  if (plantel === 'PREET' || plantel === 'CT') return 'CT'
+  if (plantel === 'PREEM' || plantel === 'CM') return 'CM'
+  return plantel
+}
+
 export default defineEventHandler(async (event) => {
   const user = await getTrustedAuthUser(event)
   const query = getQuery(event)
   const ciclo = normalizeCicloKey(query.ciclo)
   const allowedPlanteles = (user.isSuperAdmin ? PLANTELES_LIST : user.plantelesList)
-    .map(normalizePlantel)
+    .map(reportPlantel)
     .filter((plantel, index, values) => plantel && plantel !== 'GLOBAL' && values.indexOf(plantel) === index)
 
   if (!allowedPlanteles.length) {
