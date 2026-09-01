@@ -4,7 +4,7 @@
       <div>
         <span class="talleres-report-eyebrow">Talleres</span>
         <h1>Reporte de Talleres</h1>
-        <p>Consolidado por taller y plantel para los planteles disponibles en tu sesión.</p>
+        <p>Comparativo consolidado por taller entre todos los planteles disponibles en tu sesión.</p>
       </div>
       <button type="button" class="report-refresh" :disabled="pending" @click="refreshReport">
         <LucideRefreshCw :size="16" :class="{ 'animate-spin': pending }" />
@@ -44,7 +44,7 @@
     <template v-else>
       <div v-if="report?.failures?.length" class="report-warning" role="status">
         <LucideTriangleAlert :size="18" />
-        <span>No fue posible consultar: {{ report.failures.map(item => item.plantel).join(', ') }}. Los demás planteles permanecen visibles.</span>
+        <span>No fue posible consultar: {{ report.failures.map(item => item.plantel).join(', ') }}. Esas columnas se muestran como no disponibles.</span>
       </div>
 
       <section class="report-table-card">
@@ -52,31 +52,62 @@
           <table class="report-table">
             <thead>
               <tr>
-                <th scope="col">Taller</th>
-                <th scope="col">Plantel</th>
-                <th scope="col" class="numeric">Alumnos</th>
+                <th scope="col" class="workshop-column">Taller</th>
+                <th
+                  v-for="plantel in reportPlanteles"
+                  :key="plantel"
+                  scope="col"
+                  class="plantel-column numeric"
+                  :class="{ 'is-unavailable': failedPlanteles.has(plantel) }"
+                  :title="plantelName(plantel)"
+                >
+                  <span class="plantel-code">{{ plantel }}</span>
+                  <span class="plantel-name">{{ plantelName(plantel) }}</span>
+                </th>
+                <th scope="col" class="total-column numeric">Total</th>
               </tr>
             </thead>
+
             <tbody v-if="report?.groups?.length">
-              <template v-for="group in report.groups" :key="group.clave">
-                <tr v-for="(row, index) in group.planteles" :key="`${group.clave}-${row.plantel}`" class="taller-row" :class="{ 'group-start': index === 0 }">
-                  <td v-if="index === 0" class="taller-cell" :rowspan="group.planteles.length">
-                    <div class="taller-identity">
-                      <img :src="group.imagen" :alt="''" loading="lazy" @error="hideBrokenImage" />
-                      <div>
-                        <strong>{{ group.nombre }}</strong>
-                        <span>{{ formatNumber(group.totalAlumnos) }} alumnos en {{ group.planteles.length }} {{ group.planteles.length === 1 ? 'plantel' : 'planteles' }}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="plantel-cell">
-                    <strong>{{ row.plantel }}</strong>
-                    <span>{{ plantelName(row.plantel) }}</span>
-                  </td>
-                  <td class="numeric alumnos-cell">{{ formatNumber(row.alumnos) }}</td>
-                </tr>
-              </template>
+              <tr v-for="group in report.groups" :key="group.clave" class="matrix-row">
+                <th scope="row" class="workshop-cell">
+                  <div class="taller-identity">
+                    <img v-if="group.imagen" :src="group.imagen" :alt="''" loading="lazy" @error="hideBrokenImage" />
+                    <strong>{{ group.nombre }}</strong>
+                  </div>
+                </th>
+                <td
+                  v-for="plantel in reportPlanteles"
+                  :key="`${group.clave}-${plantel}`"
+                  class="numeric matrix-value"
+                  :class="{
+                    'has-value': workshopCount(group, plantel) > 0,
+                    'is-unavailable': failedPlanteles.has(plantel),
+                  }"
+                >
+                  <span v-if="failedPlanteles.has(plantel)" class="unavailable-value" title="Plantel no disponible">N/D</span>
+                  <span v-else-if="workshopCount(group, plantel) > 0">{{ formatNumber(workshopCount(group, plantel)) }}</span>
+                  <span v-else class="zero-value">—</span>
+                </td>
+                <td class="numeric matrix-value row-total">{{ formatNumber(group.totalAlumnos) }}</td>
+              </tr>
             </tbody>
+
+            <tfoot v-if="report?.groups?.length">
+              <tr>
+                <th scope="row">Total</th>
+                <td
+                  v-for="plantel in reportPlanteles"
+                  :key="`total-${plantel}`"
+                  class="numeric"
+                  :class="{ 'is-unavailable': failedPlanteles.has(plantel) }"
+                >
+                  <span v-if="failedPlanteles.has(plantel)" class="unavailable-value">N/D</span>
+                  <span v-else>{{ formatNumber(plantelTotal(plantel)) }}</span>
+                </td>
+                <td class="numeric grand-total">{{ formatNumber(report?.totals?.asignaciones || 0) }}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
@@ -125,6 +156,18 @@ const PLANTEL_NAMES = {
 const plantelName = (plantel) => PLANTEL_NAMES[String(plantel || '').toUpperCase()] || 'Plantel'
 const formatNumber = (value) => new Intl.NumberFormat('es-MX').format(Number(value || 0))
 const requestErrorMessage = computed(() => error.value?.data?.message || error.value?.message || 'Ocurrió un error inesperado.')
+const reportPlanteles = computed(() => Array.isArray(report.value?.planteles) ? report.value.planteles : [])
+const failedPlanteles = computed(() => new Set((report.value?.failures || []).map(item => String(item?.plantel || '').toUpperCase())))
+
+const workshopCount = (group, plantel) => {
+  const row = (group?.planteles || []).find(item => String(item?.plantel || '').toUpperCase() === String(plantel || '').toUpperCase())
+  return Number(row?.alumnos || 0)
+}
+
+const plantelTotal = (plantel) => (report.value?.groups || []).reduce(
+  (sum, group) => sum + workshopCount(group, plantel),
+  0,
+)
 
 const loadReport = async () => {
   const sequence = ++requestSequence
@@ -153,7 +196,7 @@ onMounted(loadReport)
 
 <style scoped>
 .talleres-report-page {
-  width: min(1180px, 100%);
+  width: min(1480px, 100%);
   margin: 0 auto;
   padding: 28px 28px 48px;
 }
@@ -243,39 +286,208 @@ onMounted(loadReport)
   box-shadow: 0 14px 34px rgba(31, 53, 46, .06);
 }
 
-.report-table-scroll { overflow-x: auto; }
-.report-table { width: 100%; min-width: 720px; border-collapse: collapse; }
-.report-table thead { background: #f8faf9; }
-.report-table th {
-  padding: 13px 18px;
-  border-bottom: 1px solid #e7ece9;
-  color: #7b8490;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .075em;
-  text-align: left;
-  text-transform: uppercase;
+.report-table-scroll {
+  max-width: 100%;
+  overflow: auto;
 }
 
+.report-table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.report-table th,
 .report-table td {
-  padding: 14px 18px;
-  border-top: 1px solid #edf0ee;
+  border-right: 1px solid #edf1ef;
+}
+
+.report-table th:last-child,
+.report-table td:last-child { border-right: 0; }
+
+.report-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 62px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #dfe7e3;
+  background: #f8faf9;
+  color: #707b77;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-align: left;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.report-table .workshop-column {
+  left: 0;
+  z-index: 5;
+  width: 300px;
+  min-width: 300px;
+}
+
+.report-table .plantel-column {
+  width: 112px;
+  min-width: 112px;
+  text-align: center !important;
+}
+
+.plantel-code {
+  display: block;
+  color: #315f50;
+  font-size: 12px;
+  line-height: 1.1;
+}
+
+.plantel-name {
+  display: block;
+  max-width: 96px;
+  margin: 4px auto 0;
+  overflow: hidden;
+  color: #909895;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.report-table .total-column {
+  right: 0;
+  z-index: 5;
+  width: 104px;
+  min-width: 104px;
+  background: #f3f7f5;
+}
+
+.report-table tbody th,
+.report-table tbody td {
+  height: 58px;
+  padding: 9px 14px;
+  border-bottom: 1px solid #edf0ee;
+  background: #fff;
   color: #34413d;
   font-size: 13px;
   vertical-align: middle;
 }
 
-.taller-row.group-start td { border-top-color: #d8e2dd; }
-.report-table tbody > .taller-row:first-child td { border-top: 0; }
-.taller-cell { width: 52%; background: #fcfdfc; vertical-align: top !important; }
-.taller-identity { display: flex; align-items: center; gap: 13px; }
-.taller-identity img { width: 42px; height: 42px; border-radius: 10px; object-fit: cover; background: #f1f5f3; }
-.taller-identity strong { display: block; color: #23332e; font-size: 14px; font-weight: 800; }
-.taller-identity span { display: block; margin-top: 3px; color: #8a938f; font-size: 11px; }
-.plantel-cell strong { display: inline-block; min-width: 48px; color: #2f6e59; font-size: 12px; font-weight: 900; }
-.plantel-cell span { color: #737d79; font-size: 12px; }
-.numeric { text-align: right !important; font-variant-numeric: tabular-nums; }
-.alumnos-cell { color: #315f50 !important; font-size: 15px !important; font-weight: 900; }
+.report-table tbody tr:hover th,
+.report-table tbody tr:hover td { background: #fbfdfc; }
+
+.report-table tbody .workshop-cell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 300px;
+  min-width: 300px;
+  background: #fff;
+  box-shadow: 1px 0 0 #edf1ef;
+  text-align: left;
+}
+
+.report-table tbody tr:hover .workshop-cell { background: #fbfdfc; }
+
+.taller-identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.taller-identity img {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #f1f5f3;
+  object-fit: cover;
+}
+
+.taller-identity strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #23332e;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.numeric {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.matrix-value {
+  width: 112px;
+  min-width: 112px;
+  text-align: center !important;
+}
+
+.matrix-value.has-value {
+  color: #2f6654;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.zero-value { color: #c0c7c4; }
+
+.row-total {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  width: 104px;
+  min-width: 104px;
+  background: #f8fbf9 !important;
+  color: #244c3f !important;
+  font-size: 14px;
+  font-weight: 900;
+  text-align: right !important;
+  box-shadow: -1px 0 0 #e4ebe7;
+}
+
+.is-unavailable { background: #fffaf3 !important; }
+.unavailable-value { color: #ad7a2e; font-size: 10px; font-weight: 900; letter-spacing: .04em; }
+
+.report-table tfoot th,
+.report-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  height: 50px;
+  padding: 10px 14px;
+  border-top: 1px solid #d8e3de;
+  background: #f3f7f5;
+  color: #315f50;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.report-table tfoot th {
+  left: 0;
+  z-index: 4;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.report-table tfoot td { text-align: center !important; }
+
+.report-table tfoot .grand-total {
+  right: 0;
+  z-index: 4;
+  background: #eaf2ee;
+  color: #244c3f;
+  font-size: 14px;
+  text-align: right !important;
+}
 
 .report-state,
 .report-warning,
@@ -304,5 +516,7 @@ onMounted(loadReport)
   .report-refresh { min-width: 40px; padding: 0 11px; font-size: 0; }
   .report-stats { grid-template-columns: 1fr; }
   .report-stats article { min-height: 54px; }
+  .report-table .workshop-column,
+  .report-table tbody .workshop-cell { width: 220px; min-width: 220px; }
 }
 </style>

@@ -1,1 +1,1 @@
-Agrega reporte consolidado de Talleres y corrige forma de pago predeterminada en CFDI
+Convierte el reporte de talleres en una matriz comparativa por plantel
