@@ -28,7 +28,7 @@
         <div class="concept-heading">
           <div>
             <h3>Reporte por concepto</h3>
-            <p>{{ conceptReportMode === 'missing' ? 'Muestra únicamente inscritos que no tienen ninguno de los conceptos seleccionados.' : 'Consulta los movimientos registrados para los conceptos seleccionados.' }}</p>
+            <p>{{ conceptReportDescription }}</p>
           </div>
           <div class="concept-mode-switch" role="group" aria-label="Tipo de reporte por concepto">
             <button
@@ -46,6 +46,14 @@
               @click="setConceptReportMode('missing')"
             >
               Sin concepto
+            </button>
+            <button
+              type="button"
+              :class="{ active: conceptReportMode === 'debtors' }"
+              :aria-pressed="conceptReportMode === 'debtors'"
+              @click="setConceptReportMode('debtors')"
+            >
+              Deudores
             </button>
           </div>
         </div>
@@ -84,19 +92,31 @@
         <div v-else class="concept-cycle-context">
           <span>Ciclo escolar</span>
           <strong>{{ conceptCycleLabel }}</strong>
-          <small>Solo alumnos inscritos</small>
+          <small>{{ conceptReportMode === 'debtors' ? 'Adeudo exigible del ciclo' : 'Solo alumnos inscritos' }}</small>
+        </div>
+        <div v-if="conceptReportMode === 'debtors'" class="form-group m-0 threshold-field">
+          <label class="form-label">Umbral de adeudo</label>
+          <input
+            v-model.number="filtrosConcepto.threshold"
+            type="number"
+            min="0"
+            step="0.01"
+            class="input-field"
+            inputmode="decimal"
+          >
+          <small class="field-help">Solo saldos mayores a este monto.</small>
         </div>
         <div class="form-group m-0" v-if="canFilterPlantel">
           <label class="form-label">Plantel</label>
           <select v-model="filtrosConcepto.plantel" class="input-field">
-            <option value="">{{ conceptReportMode === 'missing' ? 'Selecciona un plantel' : 'Todos' }}</option>
+            <option value="">{{ conceptReportMode !== 'movements' ? 'Selecciona un plantel' : 'Todos' }}</option>
             <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
           </select>
         </div>
-        <button class="btn btn-primary filter-button" type="button" @click="prepareConceptReport" :disabled="loadingConceptReport || loadingConceptos || !filtrosConcepto.conceptoIds.length || (conceptReportMode === 'missing' && canFilterPlantel && !filtrosConcepto.plantel)">
+        <button class="btn btn-primary filter-button" type="button" @click="prepareConceptReport" :disabled="loadingConceptReport || loadingConceptos || !filtrosConcepto.conceptoIds.length || (conceptReportMode !== 'movements' && canFilterPlantel && !filtrosConcepto.plantel)">
           <LucideLoader2 v-if="loadingConceptReport" class="animate-spin" :size="16" />
           <LucideFilter v-else :size="16" />
-          {{ conceptReportMode === 'missing' ? 'Buscar faltantes' : 'Generar' }}
+          {{ conceptReportMode === 'missing' ? 'Buscar faltantes' : (conceptReportMode === 'debtors' ? 'Ver deudores' : 'Generar') }}
         </button>
       </div>
 
@@ -124,6 +144,29 @@
         <div class="metric-card muted">
           <span>Conceptos</span>
           <strong :title="selectedConceptName">{{ selectedConceptName }}</strong>
+        </div>
+      </div>
+
+      <div v-else-if="conceptReport.modo === 'debtors'" class="summary-grid debtor-summary-grid">
+        <div class="metric-card attention">
+          <span>Deudores</span>
+          <strong>{{ conceptSummary.alumnos || 0 }}</strong>
+        </div>
+        <div class="metric-card">
+          <span>Saldo pendiente</span>
+          <strong>${{ Number(conceptSummary.saldoPendiente || 0).toFixed(2) }}</strong>
+        </div>
+        <div class="metric-card">
+          <span>Cargos exigibles</span>
+          <strong>${{ Number(conceptSummary.totalCargos || 0).toFixed(2) }}</strong>
+        </div>
+        <div class="metric-card">
+          <span>Pagado</span>
+          <strong>${{ Number(conceptSummary.totalPagado || 0).toFixed(2) }}</strong>
+        </div>
+        <div class="metric-card muted">
+          <span>Umbral</span>
+          <strong>&gt; ${{ Number(conceptSummary.threshold ?? filtrosConcepto.threshold ?? 0).toFixed(2) }}</strong>
         </div>
       </div>
 
@@ -236,6 +279,80 @@
               </div>
             </div>
           </template>
+        </aside>
+      </div>
+
+      <div v-else-if="conceptReportMode === 'debtors'" class="report-split debtor-report-split">
+        <div class="card table-wrapper report-table debtor-concept-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Matrícula</th>
+                <th>Alumno</th>
+                <th>Nivel</th>
+                <th>Grado</th>
+                <th>Grupo</th>
+                <th v-if="canFilterPlantel">Plantel</th>
+                <th>Conceptos con adeudo</th>
+                <th class="text-right">Cargos</th>
+                <th class="text-right">Pagado</th>
+                <th class="text-right">Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loadingConceptReport">
+                <td :colspan="canFilterPlantel ? 10 : 9" class="text-center py-12 text-gray-500 font-medium">Calculando adeudos...</td>
+              </tr>
+              <tr v-else-if="!filtrosConcepto.conceptoIds.length">
+                <td :colspan="canFilterPlantel ? 10 : 9" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para consultar deudores.</td>
+              </tr>
+              <tr v-else-if="canFilterPlantel && !filtrosConcepto.plantel">
+                <td colspan="10" class="text-center py-12 text-gray-400">Selecciona un plantel para calcular la cartera con la misma lógica de cobranza.</td>
+              </tr>
+              <tr v-else-if="conceptReport.modo !== 'debtors'">
+                <td :colspan="canFilterPlantel ? 10 : 9" class="text-center py-12 text-gray-400">Genera el reporte para consultar los adeudos de los conceptos seleccionados.</td>
+              </tr>
+              <tr v-else-if="!conceptRows.length">
+                <td :colspan="canFilterPlantel ? 10 : 9" class="missing-empty-state">
+                  <strong>Sin deudores para este filtro</strong>
+                  <span>No hay alumnos con saldo exigible mayor a ${{ Number(conceptSummary.threshold ?? filtrosConcepto.threshold ?? 0).toFixed(2) }} en los conceptos seleccionados.</span>
+                </td>
+              </tr>
+              <tr v-else v-for="row in conceptRows" :key="row.matricula">
+                <td class="font-mono text-gray-600">{{ row.matricula }}</td>
+                <td><span class="student-name-cell font-semibold text-gray-800">{{ row.nombreCompleto }}</span></td>
+                <td>{{ row.nivel || '—' }}</td>
+                <td>{{ row.grado || '—' }}</td>
+                <td>{{ row.grupo || '—' }}</td>
+                <td v-if="canFilterPlantel">{{ row.plantel || filtrosConcepto.plantel || '—' }}</td>
+                <td>
+                  <div class="missing-concept-chips debtor-concept-chips">
+                    <span v-for="concept in row.conceptosPendientes" :key="concept.id">
+                      {{ concept.concepto }} · ${{ Number(concept.saldo || 0).toFixed(2) }}
+                    </span>
+                  </div>
+                </td>
+                <td class="text-right font-mono text-gray-700">${{ Number(row.totalCargos || 0).toFixed(2) }}</td>
+                <td class="text-right font-mono text-gray-700">${{ Number(row.totalPagado || 0).toFixed(2) }}</td>
+                <td class="text-right font-bold font-mono text-brand-campus">${{ Number(row.saldoPendiente || 0).toFixed(2) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <aside class="breakdown-panel">
+          <h4>Conceptos con adeudo</h4>
+          <div v-if="conceptSummary.conceptos?.length" class="breakdown-list debtor-breakdown-list">
+            <div v-for="item in conceptSummary.conceptos" :key="item.id">
+              <span>{{ item.concepto }} · {{ item.alumnos }} alumno{{ item.alumnos === 1 ? '' : 's' }}</span>
+              <strong>${{ Number(item.saldo || 0).toFixed(2) }}</strong>
+            </div>
+          </div>
+          <p v-else>No hay saldos pendientes para desglosar.</p>
+
+          <div class="missing-report-note">
+            “Deudores” usa la misma lógica de la cartera Deudores de Aurora: solo incluye saldo exigible y conserva sus reglas de pagos registrados, conciliaciones pendientes y fechas límite especiales. El umbral se aplica al saldo total del alumno para los conceptos seleccionados.
+          </div>
         </aside>
       </div>
 
@@ -550,7 +667,8 @@ const filtrosConcepto = ref({
   conceptoIds: route.query.conceptoId ? [String(route.query.conceptoId)] : [],
   inicio: '',
   fin: '',
-  plantel: ''
+  plantel: '',
+  threshold: 0
 })
 const emptyConceptReport = () => ({
   concepto: null,
@@ -578,7 +696,11 @@ const emptyConceptReport = () => ({
     asignacionesPresentes: 0,
     asignacionesFaltantes: 0,
     cobertura: 0,
-    grados: []
+    grados: [],
+    saldoPendiente: 0,
+    totalCargos: 0,
+    totalPagado: 0,
+    threshold: 0
   }
 })
 const conceptReport = ref(emptyConceptReport())
@@ -614,8 +736,15 @@ const corteUserSelectionContext = ref({
 })
 
 const conceptRows = computed(() => conceptReport.value.rows || [])
-const conceptReportReady = computed(() => conceptReportMode.value === 'missing' ? conceptReport.value?.modo === 'missing' : conceptRows.value.length > 0)
+const conceptReportReady = computed(() => conceptReportMode.value === 'movements'
+  ? conceptRows.value.length > 0
+  : conceptReport.value?.modo === conceptReportMode.value)
 const conceptSummary = computed(() => conceptReport.value.resumen || emptyConceptReport().resumen)
+const conceptReportDescription = computed(() => {
+  if (conceptReportMode.value === 'missing') return 'Muestra únicamente inscritos que no tienen ninguno de los conceptos seleccionados.'
+  if (conceptReportMode.value === 'debtors') return 'Muestra únicamente alumnos con saldo exigible pendiente en los conceptos seleccionados.'
+  return 'Consulta los movimientos registrados para los conceptos seleccionados.'
+})
 const selectedConcepts = computed(() => {
   const selectedKeys = new Set((filtrosConcepto.value.conceptoIds || []).map(id => String(id)))
   const localMatches = conceptos.value.filter(concepto => selectedKeys.has(String(concepto.id)))
@@ -715,7 +844,7 @@ const loadConceptos = async () => {
       $fetch('/api/reports/concepto_options', {
         params: {
           ...(canFilterPlantel.value && filtrosConcepto.value.plantel ? { plantel: filtrosConcepto.value.plantel } : {}),
-          ...(conceptReportMode.value === 'missing' ? { ciclo: normalizeCicloKey(state.value.ciclo) } : {})
+          ...(conceptReportMode.value !== 'movements' ? { ciclo: normalizeCicloKey(state.value.ciclo) } : {})
         }
       })
     ])
@@ -734,7 +863,7 @@ const loadConceptos = async () => {
     conceptos.value = Array.from(merged.values())
       .map(({ ciclo: _ciclo, ciclos: _ciclos, ...concept }) => concept)
       .sort((a, b) => String(a.concepto || '').localeCompare(String(b.concepto || ''), 'es', { sensitivity: 'base' }))
-    if (conceptReportMode.value === 'missing' && filtrosConcepto.value.conceptoIds.length) {
+    if (conceptReportMode.value !== 'movements' && filtrosConcepto.value.conceptoIds.length) {
       const validIds = new Set(conceptos.value.map(concept => String(concept.id)))
       filtrosConcepto.value.conceptoIds = filtrosConcepto.value.conceptoIds.filter(id => validIds.has(String(id)))
     }
@@ -746,7 +875,7 @@ const loadConceptos = async () => {
 }
 
 const setConceptReportMode = (mode) => {
-  const normalized = mode === 'missing' ? 'missing' : 'movements'
+  const normalized = mode === 'missing' ? 'missing' : (mode === 'debtors' ? 'debtors' : 'movements')
   if (conceptReportMode.value === normalized) return
 
   conceptReportMode.value = normalized
@@ -756,7 +885,7 @@ const setConceptReportMode = (mode) => {
   conceptUserOptions.value = []
 
   let plantelChanged = false
-  if (normalized === 'missing' && canFilterPlantel.value && !filtrosConcepto.value.plantel) {
+  if (normalized !== 'movements' && canFilterPlantel.value && !filtrosConcepto.value.plantel) {
     const preferredPlantel = String(homePlantel.value || '').toUpperCase()
     filtrosConcepto.value.plantel = PLANTELES_LIST.includes(preferredPlantel)
       ? preferredPlantel
@@ -770,10 +899,11 @@ const setConceptReportMode = (mode) => {
 const buildConceptBaseParams = () => {
   const { conceptoIds, ...sourceFilters } = filtrosConcepto.value
   const filters = { ...sourceFilters }
-  if (conceptReportMode.value === 'missing') {
+  if (conceptReportMode.value !== 'movements') {
     delete filters.inicio
     delete filters.fin
   }
+  if (conceptReportMode.value !== 'debtors') delete filters.threshold
 
   const params = buildParams(filters)
   params.modo = conceptReportMode.value
@@ -802,9 +932,11 @@ const prepareConceptReport = async () => {
 
   loadingConceptReport.value = true
   try {
-    if (conceptReportMode.value === 'missing') {
+    if (conceptReportMode.value !== 'movements') {
       if (canFilterPlantel.value && !filtrosConcepto.value.plantel) {
-        return show('Seleccione un plantel para revisar alumnos inscritos', 'danger')
+        return show(conceptReportMode.value === 'debtors'
+          ? 'Seleccione un plantel para consultar deudores'
+          : 'Seleccione un plantel para revisar alumnos inscritos', 'danger')
       }
       await loadConceptReport([])
       return
@@ -861,7 +993,7 @@ const executeConceptExcelDownload = async (selectedUserKeys = []) => {
   const plainName = disposition.match(/filename="([^"]+)"/i)?.[1]
   const filename = encodedName
     ? decodeURIComponent(encodedName)
-    : (plainName || `${conceptReportMode.value === 'missing' ? 'Alumnos_sin_concepto' : 'Reporte_conceptos'}_${safeFileName(selectedConceptName.value)}.xlsx`)
+    : (plainName || `${conceptReportMode.value === 'missing' ? 'Alumnos_sin_concepto' : (conceptReportMode.value === 'debtors' ? 'Deudores_por_concepto' : 'Reporte_conceptos')}_${safeFileName(selectedConceptName.value)}.xlsx`)
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -1094,7 +1226,8 @@ watch(
     filtrosConcepto.value.conceptoIds.join(','),
     filtrosConcepto.value.inicio,
     filtrosConcepto.value.fin,
-    filtrosConcepto.value.plantel
+    filtrosConcepto.value.plantel,
+    filtrosConcepto.value.threshold
   ],
   () => {
     conceptReport.value = emptyConceptReport()
@@ -1333,6 +1466,18 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   line-height: 1.25;
 }
 
+.threshold-field {
+  min-width: 150px;
+}
+
+.field-help {
+  display: block;
+  margin-top: 4px;
+  color: #8a94a6;
+  font-size: 0.62rem;
+  line-height: 1.25;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
@@ -1386,6 +1531,10 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   grid-template-columns: repeat(5, minmax(120px, 1fr));
 }
 
+.debtor-summary-grid {
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+}
+
 .report-split {
   display: grid;
   min-height: 0;
@@ -1404,6 +1553,10 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
 
 .missing-concept-table table {
   min-width: 980px;
+}
+
+.debtor-concept-table table {
+  min-width: 1120px;
 }
 
 .student-name-cell {
@@ -1430,6 +1583,20 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
   font-size: 0.68rem;
   font-weight: 720;
   line-height: 1.25;
+}
+
+.debtor-concept-chips span {
+  border-color: #e7dbc5;
+  background: #fff9ef;
+  color: #7a5118;
+}
+
+.debtor-breakdown-list div {
+  align-items: flex-start;
+}
+
+.debtor-breakdown-list span {
+  line-height: 1.3;
 }
 
 .missing-empty-state {

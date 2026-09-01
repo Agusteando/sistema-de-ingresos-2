@@ -267,16 +267,22 @@ export const getDeudoresGlobal = async ({
   plantel,
   userEmail,
   includeDesglose = true,
-  matricula
+  matricula,
+  conceptoIds
 }: {
   ciclo: string,
   plantel?: string,
   userEmail?: string,
   includeDesglose?: boolean,
-  matricula?: string
+  matricula?: string,
+  conceptoIds?: Array<number | string>
 }) => {
   let documentos: any[] = []
   const matriculaFiltro = String(matricula || '').trim()
+  const selectedConceptIds = new Set((conceptoIds || [])
+    .map(value => Number(value || 0))
+    .filter(value => Number.isInteger(value) && value > 0))
+  const hasConceptFilter = selectedConceptIds.size > 0
   const plantelCandidates = plantel ? plantelCandidatesForProjectedScope(plantel) : []
   const plantelWhere = plantelCandidates.length ? `AND plantel IN (${plantelCandidates.map(() => '?').join(',')})` : ''
 
@@ -291,7 +297,7 @@ export const getDeudoresGlobal = async ({
 
     const alumno = alumnosActivos[0]
     const docs = await query<any[]>(`
-      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, conceptoNombre, eventual
+      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, concepto, conceptoNombre, eventual
       FROM documentos
       WHERE ciclo = ? AND estatus = 'Activo' AND matricula = ?
     `, [ciclo, matriculaFiltro])
@@ -309,7 +315,7 @@ export const getDeudoresGlobal = async ({
     const alumnosByMatricula = new Map<string, any>(alumnosActivos.map(alumno => [String(alumno.matricula), alumno]))
     const matriculasPlantel = [...alumnosByMatricula.keys()]
     const docs = await query<any[]>(`
-      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, conceptoNombre, eventual
+      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, concepto, conceptoNombre, eventual
       FROM documentos
       WHERE ciclo = ? AND estatus = 'Activo' AND matricula IN (${matriculasPlantel.map(() => '?').join(',')})
     `, [ciclo, ...matriculasPlantel])
@@ -319,7 +325,7 @@ export const getDeudoresGlobal = async ({
       .filter(doc => doc.nombreCompleto)
   } else {
     const docs = await query<any[]>(`
-      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, conceptoNombre, eventual
+      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, concepto, conceptoNombre, eventual
       FROM documentos
       WHERE ciclo = ? AND estatus = 'Activo'
     `, [ciclo])
@@ -372,7 +378,7 @@ export const getDeudoresGlobal = async ({
 
   const [periodRows, pagosRows, excepciones, observaciones, eventos] = await Promise.all([
     query<any[]>(`
-      SELECT documento, start_mes, end_mes, costo, montoFinal, accion, estatus
+      SELECT documento, start_mes, end_mes, concepto_id, conceptoNombre, costo, montoFinal, accion, estatus
       FROM documento_concepto_periodos
       WHERE documento IN (${docIds.map(() => '?').join(',')}) AND estatus = 'Activo'
       ORDER BY documento ASC, start_mes ASC, id ASC
@@ -459,6 +465,9 @@ export const getDeudoresGlobal = async ({
       })
       if (activePeriod?.accion === 'cancelacion') continue
 
+      const conceptoId = Number(activePeriod?.concepto_id || doc.concepto || 0)
+      if (hasConceptFilter && !selectedConceptIds.has(conceptoId)) continue
+
       const projected = resolveProjectedAmount(doc, activePeriod)
       const costoBase = projected.baseCost
       const subtotal = projected.amount
@@ -480,6 +489,7 @@ export const getDeudoresGlobal = async ({
       const existing = bucket.get(key) || {
         matricula: String(doc.matricula),
         nombreCompleto: doc.nombreCompleto,
+        nivel: doc.nivel,
         grado: doc.grado,
         grupo: doc.grupo,
         plantel: doc.plantel,
@@ -535,7 +545,8 @@ export const getDeudoresGlobal = async ({
       if (includeDesglose) {
         existing.desglose.push({
           documento: doc.documento,
-          conceptoNombre: doc.conceptoNombre,
+          conceptoId,
+          conceptoNombre: hasConceptFilter ? (activePeriod?.conceptoNombre || doc.conceptoNombre) : doc.conceptoNombre,
           mesCargo: periodo.mesCargo,
           mesLabel: periodo.mesLabel,
           costoBase: money(costoBase),

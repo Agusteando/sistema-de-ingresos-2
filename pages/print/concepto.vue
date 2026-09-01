@@ -10,9 +10,9 @@
         <img src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp" alt="Logo Institucional" class="h-[50px] object-contain" />
         <div class="text-center flex-1 mx-4">
           <h2 class="m-0 text-[13px] font-bold text-gray-900 uppercase tracking-tight">{{ institutionName }}</h2>
-          <div class="mt-2 text-[12px] font-semibold text-gray-700">{{ isMissingMode ? 'Alumnos inscritos sin concepto' : 'Reporte por concepto' }}</div>
+          <div class="mt-2 text-[12px] font-semibold text-gray-700">{{ reportTitle }}</div>
           <div class="text-[12px] text-gray-600">{{ conceptLabel }}</div>
-          <div class="text-[11px] text-gray-500">{{ isMissingMode ? `${cycleLabel} · Solo alumnos inscritos` : 'Histórico financiero del periodo seleccionado' }}</div>
+          <div class="text-[11px] text-gray-500">{{ reportContextLabel }}</div>
         </div>
         <div class="text-right text-[11px] text-gray-600">
           <div class="font-bold text-[12px] mb-1 text-gray-900 uppercase">Reporte</div>
@@ -21,7 +21,7 @@
         </div>
       </div>
 
-      <div v-if="!isMissingMode" class="grid grid-cols-4 gap-3 mb-6 text-[11px]">
+      <div v-if="isMovementsMode" class="grid grid-cols-4 gap-3 mb-6 text-[11px]">
         <div class="border border-gray-200 rounded-lg p-3">
           <div class="text-gray-500 uppercase font-bold">Registrado</div>
           <div class="text-gray-900 font-bold text-[14px]">${{ Number(resumen.totalRegistrado || 0).toFixed(2) }}</div>
@@ -37,6 +37,25 @@
         <div class="border border-gray-200 rounded-lg p-3">
           <div class="text-gray-500 uppercase font-bold">Movimientos</div>
           <div class="text-gray-900 font-bold text-[14px]">{{ resumen.transacciones || 0 }}</div>
+        </div>
+      </div>
+
+      <div v-else-if="isDebtorsMode" class="grid grid-cols-4 gap-3 mb-6 text-[11px]">
+        <div class="border border-gray-200 rounded-lg p-3">
+          <div class="text-gray-500 uppercase font-bold">Deudores</div>
+          <div class="text-gray-900 font-bold text-[14px]">{{ resumen.alumnos || 0 }}</div>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-3">
+          <div class="text-gray-500 uppercase font-bold">Saldo pendiente</div>
+          <div class="text-gray-900 font-bold text-[14px]">${{ Number(resumen.saldoPendiente || 0).toFixed(2) }}</div>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-3">
+          <div class="text-gray-500 uppercase font-bold">Cargos exigibles</div>
+          <div class="text-gray-900 font-bold text-[14px]">${{ Number(resumen.totalCargos || 0).toFixed(2) }}</div>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-3">
+          <div class="text-gray-500 uppercase font-bold">Umbral</div>
+          <div class="text-gray-900 font-bold text-[14px]">&gt; ${{ Number(resumen.threshold || 0).toFixed(2) }}</div>
         </div>
       </div>
 
@@ -59,14 +78,17 @@
         </div>
       </div>
 
-      <div v-if="!isMissingMode" class="mb-4 text-[10px] text-gray-600">
+      <div v-if="isMovementsMode" class="mb-4 text-[10px] text-gray-600">
         Incluye movimientos vigentes, cancelados y depurados del historial financiero. Cancelados y depuraciones permanecen visibles y muestran importe aplicado de $0.00 cuando corresponde.
+      </div>
+      <div v-else-if="isDebtorsMode" class="mb-4 text-[10px] text-gray-600">
+        Incluye únicamente alumnos con saldo exigible mayor al umbral en los conceptos seleccionados. El cálculo usa la misma lógica de la cartera Deudores de Aurora, incluidos sus pagos registrados, conciliaciones pendientes y fechas límite especiales.
       </div>
       <div v-else class="mb-4 text-[10px] text-gray-600">
         Se incluyen únicamente alumnos con estado de inscripción “inscrito” en {{ cycleLabel }} que no tienen ninguno de los conceptos seleccionados. Si existe al menos uno, el alumno queda fuera del reporte.
       </div>
 
-      <table v-if="!isMissingMode" class="w-full text-[8px] border-collapse mb-8">
+      <table v-if="isMovementsMode" class="w-full text-[8px] border-collapse mb-8">
         <thead>
           <tr class="border-b border-gray-300">
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Folio</th>
@@ -114,6 +136,40 @@
         </tbody>
       </table>
 
+      <table v-else-if="isDebtorsMode" class="w-full text-[8px] border-collapse mb-8">
+        <thead>
+          <tr class="border-b border-gray-300">
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Matrícula</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Alumno</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nivel</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Grado</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Grupo</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Plantel</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Conceptos con adeudo</th>
+            <th class="py-2 text-right font-semibold text-gray-600 uppercase">Cargos</th>
+            <th class="py-2 text-right font-semibold text-gray-600 uppercase">Pagado</th>
+            <th class="py-2 text-right font-semibold text-gray-600 uppercase">Saldo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="!rows.length">
+            <td colspan="10" class="text-center py-6 text-gray-500 font-medium">No hay alumnos con saldo exigible mayor al umbral para los conceptos seleccionados.</td>
+          </tr>
+          <tr v-else v-for="r in rows" :key="r.matricula" class="border-b border-gray-100">
+            <td class="py-2 text-gray-900 font-mono">{{ r.matricula }}</td>
+            <td class="py-2 text-gray-900 font-semibold">{{ r.nombreCompleto || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.nivel || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.grado || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.grupo || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.plantel || reportPlantel || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ formatDebtorConcepts(r.conceptosPendientes) }}</td>
+            <td class="py-2 text-right text-gray-900">${{ Number(r.totalCargos || 0).toFixed(2) }}</td>
+            <td class="py-2 text-right text-gray-900">${{ Number(r.totalPagado || 0).toFixed(2) }}</td>
+            <td class="py-2 text-right font-bold text-gray-900">${{ Number(r.saldoPendiente || 0).toFixed(2) }}</td>
+          </tr>
+        </tbody>
+      </table>
+
       <table v-else class="w-full text-[8px] border-collapse mb-8">
         <thead>
           <tr class="border-b border-gray-300">
@@ -148,7 +204,7 @@
         </tbody>
       </table>
 
-      <div v-if="!isMissingMode" class="mt-auto border-t border-gray-300 pt-5 flex justify-end">
+      <div v-if="isMovementsMode" class="mt-auto border-t border-gray-300 pt-5 flex justify-end">
         <div class="w-[360px] text-[11px]">
           <div v-for="t in resumen.formasPago" :key="t.formaDePago" class="flex justify-between py-1 border-b border-gray-100">
             <span class="font-semibold text-gray-600 uppercase">{{ t.formaDePago }} aplicado:</span>
@@ -167,6 +223,10 @@
             <span>${{ Number(resumen.total || 0).toFixed(2) }}</span>
           </div>
         </div>
+      </div>
+      <div v-else-if="isDebtorsMode" class="mt-auto border-t border-gray-300 pt-4 text-[10px] text-gray-600 flex justify-between gap-6">
+        <span>Plantel: {{ reportPlantel || '—' }} · {{ cycleLabel }}</span>
+        <span>{{ resumen.alumnos || 0 }} deudores · Saldo: ${{ Number(resumen.saldoPendiente || 0).toFixed(2) }}</span>
       </div>
       <div v-else class="mt-auto border-t border-gray-300 pt-4 text-[10px] text-gray-600 flex justify-between gap-6">
         <span>Plantel: {{ reportPlantel || '—' }} · {{ cycleLabel }}</span>
@@ -188,14 +248,22 @@ definePageMeta({ layout: false })
 const route = useRoute()
 const rows = ref([])
 const conceptos = ref([])
-const resumen = ref({ total: 0, totalRegistrado: 0, totalNoAplicado: 0, transacciones: 0, alumnos: 0, formasPago: [], inscritos: 0, completos: 0, cobertura: 0, conceptosFaltantes: 0, asignacionesFaltantes: 0 })
+const resumen = ref({ total: 0, totalRegistrado: 0, totalNoAplicado: 0, transacciones: 0, alumnos: 0, formasPago: [], inscritos: 0, completos: 0, cobertura: 0, conceptosFaltantes: 0, asignacionesFaltantes: 0, saldoPendiente: 0, totalCargos: 0, totalPagado: 0, threshold: 0 })
 const reportMode = ref('movements')
 const reportCycleLabel = ref('')
 const activeUserName = useCookie('auth_name').value || 'Usuario'
 const reportPlantel = ref('')
 const institutionName = computed(() => institutionNameForPlantel(reportPlantel.value))
+const isMovementsMode = computed(() => reportMode.value === 'movements')
 const isMissingMode = computed(() => reportMode.value === 'missing')
+const isDebtorsMode = computed(() => reportMode.value === 'debtors')
 const cycleLabel = computed(() => reportCycleLabel.value || String(route.query.ciclo || 'Ciclo escolar'))
+const reportTitle = computed(() => isMissingMode.value
+  ? 'Alumnos inscritos sin concepto'
+  : (isDebtorsMode.value ? 'Deudores por concepto' : 'Reporte por concepto'))
+const reportContextLabel = computed(() => isMissingMode.value
+  ? `${cycleLabel.value} · Solo alumnos inscritos`
+  : (isDebtorsMode.value ? `${cycleLabel.value} · Saldo exigible` : 'Histórico financiero del periodo seleccionado'))
 const conceptLabel = computed(() => {
   const names = conceptos.value.map(item => item?.concepto).filter(Boolean)
   if (!names.length) return 'Concepto'
@@ -209,6 +277,10 @@ const formatDate = (value) => {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value)
 }
 
+const formatDebtorConcepts = (items) => (Array.isArray(items) ? items : [])
+  .map(item => `${item.concepto || 'Concepto'} ($${Number(item.saldo || 0).toFixed(2)})`)
+  .join(', ') || '—'
+
 onMounted(async () => {
   const query = new URLSearchParams(route.query).toString()
   try {
@@ -216,7 +288,7 @@ onMounted(async () => {
     rows.value = res.rows || []
     conceptos.value = Array.isArray(res.conceptos) ? res.conceptos : (res.concepto ? [res.concepto] : [])
     resumen.value = res.resumen || resumen.value
-    reportMode.value = res.modo === 'missing' ? 'missing' : 'movements'
+    reportMode.value = ['missing', 'debtors'].includes(res.modo) ? res.modo : 'movements'
     reportCycleLabel.value = res.filtros?.cicloLabel || res.filtros?.ciclo || ''
     reportPlantel.value = res.filtros?.plantel || res.rows?.[0]?.scopePlantel || res.rows?.[0]?.plantel || route.query.plantel || ''
     setTimeout(() => window.print(), 800)

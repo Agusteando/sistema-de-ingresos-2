@@ -1,1 +1,1 @@
-Permite editar todos los datos del CFDI, incluidos concepto y monto
+Agrega reporte de deudores por concepto con selección múltiple y umbral de saldo

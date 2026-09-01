@@ -38,6 +38,81 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const user = event.context.user
   const mode = String(filters?.modo || filters?.mode || '').trim().toLowerCase()
 
+  if (['debtors', 'deudores', 'deudor', 'adeudos'].includes(mode)) {
+    const result: any = await loadConceptReport(user, filters)
+    const conceptNames = (result.conceptos || []).map((concept: any) => String(concept?.concepto || '')).filter(Boolean)
+    const conceptName = conceptNames.length <= 3
+      ? (conceptNames.join(', ') || 'Concepto')
+      : `${conceptNames.slice(0, 2).join(', ')} +${conceptNames.length - 2}`
+    const creatorUser = event.context.user || {}
+    const creatorName = String(creatorUser.nombre || creatorUser.name || creatorUser.email || 'Usuario')
+    const creatorEmail = String(creatorUser.email || creatorUser.usuario_email || '').trim()
+    const creator = creatorEmail && creatorEmail.toLowerCase() !== creatorName.toLowerCase()
+      ? `${creatorName} <${creatorEmail}>`
+      : creatorName
+
+    const rows = result.rows.map((row: any) => [
+      row.matricula || '',
+      row.nombreCompleto || '',
+      row.nivel || '',
+      row.grado || '',
+      row.grupo || '',
+      row.plantel || result.filtros?.plantel || '',
+      row.conceptosPendientesTexto || '',
+      Number(row.totalCargos || 0),
+      Number(row.totalPagado || 0),
+      Number(row.saldoPendiente || 0),
+      row.fechaLimitePago || '',
+    ])
+
+    const workbook = buildProtectedXlsx({
+      sheetName: 'Deudores por concepto',
+      title: 'Deudores por concepto',
+      subtitle: conceptName,
+      metaLines: [
+        `Plantel: ${result.filtros?.plantel || '—'} | Ciclo: ${result.filtros?.cicloLabel || result.filtros?.ciclo || '—'}`,
+        `Umbral: saldo total mayor a $${Number(result.filtros?.threshold || 0).toFixed(2)}`,
+        `Deudores: ${result.resumen?.alumnos || 0} | Saldo pendiente: $${Number(result.resumen?.saldoPendiente || 0).toFixed(2)}`,
+        `Cargos exigibles: $${Number(result.resumen?.totalCargos || 0).toFixed(2)} | Pagado: $${Number(result.resumen?.totalPagado || 0).toFixed(2)}`,
+        'Se usa la misma lógica de la cartera Deudores de Aurora, incluidos sus pagos registrados, conciliaciones pendientes y fechas límite especiales.',
+      ],
+      headers: [
+        'Matrícula',
+        'Alumno',
+        'Nivel',
+        'Grado',
+        'Grupo',
+        'Plantel',
+        'Conceptos con adeudo',
+        'Cargos exigibles (MXN)',
+        'Pagado (MXN)',
+        'Saldo pendiente (MXN)',
+        'Fecha límite de pago',
+      ],
+      rows,
+      currencyColumns: [7, 8, 9],
+      dateColumns: [10],
+      columnWidths: [16, 34, 15, 14, 12, 12, 45, 20, 18, 20, 19],
+      totals: [
+        { label: 'Cargos exigibles', value: Number(result.resumen?.totalCargos || 0) },
+        { label: 'Pagado', value: Number(result.resumen?.totalPagado || 0) },
+        { label: 'Saldo pendiente', value: Number(result.resumen?.saldoPendiente || 0) },
+      ],
+      tableName: 'DeudoresPorConcepto',
+      creator,
+    })
+
+    const conceptFileLabel = conceptNames.length === 1 ? conceptNames[0] : `${conceptNames.length}_conceptos`
+    const filename = `Deudores_por_concepto_${safeFilePart(conceptFileLabel)}_${safeFilePart(result.filtros?.cicloLabel || result.filtros?.ciclo)}.xlsx`
+    const encodedFilename = encodeURIComponent(filename)
+
+    setHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    setHeader(event, 'Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`)
+    setHeader(event, 'Content-Length', String(workbook.length))
+    setHeader(event, 'Cache-Control', 'private, no-store')
+    return workbook
+  }
+
   if (['missing', 'sin-concepto', 'sin_concepto', 'faltantes'].includes(mode)) {
     const result: any = await loadConceptReport(user, filters)
     const conceptNames = (result.conceptos || []).map((concept: any) => String(concept?.concepto || '')).filter(Boolean)

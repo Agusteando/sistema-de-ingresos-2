@@ -10,6 +10,7 @@ import { PLANTELES_LIST } from '../../utils/constants'
 import { parseEnrollmentConceptsForPlantelHistory, parseEnrollmentConceptsForScope } from '../../shared/utils/studentPresentation'
 import { readBestConceptosConfigPayload } from './conceptos-config'
 import { fetchControlEscolarEnrolledStudents } from './control-escolar'
+import { getDeudoresGlobal } from './deudores'
 import {
   PAYMENT_APPLIED_AMOUNT_SQL,
   PAYMENT_PLANTEL_SQL,
@@ -218,7 +219,9 @@ const addMoneyBreakdown = <T extends MoneyBreakdown>(map: Map<string, T>, key: s
 
 const conceptReportMode = (filters: Record<string, unknown>) => {
   const value = firstQueryValue(filters?.modo ?? filters?.mode).toLowerCase()
-  return ['missing', 'sin-concepto', 'sin_concepto', 'faltantes'].includes(value) ? 'missing' : 'movements'
+  if (['missing', 'sin-concepto', 'sin_concepto', 'faltantes'].includes(value)) return 'missing'
+  if (['debtors', 'deudores', 'deudor', 'adeudos'].includes(value)) return 'debtors'
+  return 'movements'
 }
 
 const resolveMissingConceptPlantel = (user: any, requestedPlantel: unknown) => {
@@ -243,6 +246,40 @@ const resolveMissingConceptPlantel = (user: any, requestedPlantel: unknown) => {
   }
 
   return requested
+}
+
+const resolveDebtorConceptPlantel = (user: any, requestedPlantel: unknown) => {
+  const active = normalizePlantel(user?.active_plantel)
+  if (active && active !== 'GLOBAL') {
+    if (!PLANTELES_LIST.includes(active)) {
+      throw createError({ statusCode: 400, message: 'El plantel activo no es válido.' })
+    }
+    return active
+  }
+
+  if (!user?.isSuperAdmin) {
+    throw createError({ statusCode: 403, message: 'No tiene permisos para consultar otro plantel.' })
+  }
+
+  const requested = normalizePlantel(firstQueryValue(requestedPlantel))
+  if (!requested || requested === 'GLOBAL' || !PLANTELES_LIST.includes(requested)) {
+    throw createError({
+      statusCode: 400,
+      message: 'Seleccione un plantel para consultar deudores por concepto.'
+    })
+  }
+
+  return requested
+}
+
+const normalizeDebtThreshold = (value: unknown) => {
+  const raw = firstQueryValue(value)
+  if (!raw) return 0
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw createError({ statusCode: 400, message: 'El umbral de adeudo debe ser un monto igual o mayor a 0.' })
+  }
+  return Math.round(parsed * 100) / 100
 }
 
 const CONCEPT_EVIDENCE_CHUNK_SIZE = 400
@@ -449,8 +486,217 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
   })
 }
 
+export const loadDebtorConceptReport = async (user: any, filters: Record<string, unknown>) => {
+  if (!user?.hasFinancialAccess) {
+    throw createError({ statusCode: 403, message: 'No tiene permisos financieros para acceder a este reporte.' })
+  }
+
+  const ciclo = normalizeCicloKey(filters?.ciclo as any)
+  const plantel = resolveDebtorConceptPlantel(user, filters?.plantel)
+  const threshold = normalizeDebtThreshold(filters?.threshold ?? filters?.umbral)
+
+  return await runWithBridgeAgentId(plantel, async () => {
+    const context = await resolveConceptReportContext(user, {
+      ciclo,
+      plantel,
+      conceptoIds: filters?.conceptoIds ?? filters?.conceptoId,
+    })
+    const selectedIds = new Set(context.conceptoIds.map(Number))
+    const conceptNameById = new Map(context.conceptos.map((concept: any) => [
+      Number(concept.id),
+      String(concept.concepto || `Concepto financiero #${concept.id}`),
+    ]))
+
+    const debtRows = await getDeudoresGlobal({
+      ciclo,
+      plantel,
+      userEmail: user?.email,
+      includeDesglose: true,
+      conceptoIds: context.conceptoIds,
+    })
+
+    const studentRows = new Map<string, {
+      matricula: string
+      nombreCompleto: string
+      nivel: string
+      grado: string
+      grupo: string
+      plantel: string
+      saldoPendiente: number
+      totalCargos: number
+      totalPagado: number
+      fechaLimitePago: string
+      conceptos: Map<number, {
+        id: number
+        concepto: string
+        saldo: number
+        cargos: number
+        pagado: number
+        periodos: string[]
+      }>
+    }>()
+
+    debtRows
+      .filter((row: any) => Boolean(row?.isDeudor))
+      .forEach((row: any) => {
+        const matricula = String(row?.matricula || '').trim()
+        if (!matricula) return
+
+        const current = studentRows.get(matricula) || {
+          matricula,
+          nombreCompleto: String(row?.nombreCompleto || '').trim(),
+          nivel: String(row?.nivel || '').trim(),
+          grado: String(row?.grado || '').trim(),
+          grupo: String(row?.grupo || '').trim(),
+          plantel: String(row?.plantel || plantel).trim().toUpperCase(),
+          saldoPendiente: 0,
+          totalCargos: 0,
+          totalPagado: 0,
+          fechaLimitePago: '',
+          conceptos: new Map<number, {
+            id: number
+            concepto: string
+            saldo: number
+            cargos: number
+            pagado: number
+            periodos: string[]
+          }>(),
+        }
+
+        current.saldoPendiente += Number(row?.saldoPendiente || 0)
+        current.totalCargos += Number(row?.totalCargos || 0)
+        current.totalPagado += Number(row?.totalPagado || 0)
+        const rowDeadline = String(row?.fechaLimitePago || '').trim()
+        if (rowDeadline && (!current.fechaLimitePago || rowDeadline < current.fechaLimitePago)) {
+          current.fechaLimitePago = rowDeadline
+        }
+
+        ;(row?.desglose || []).forEach((item: any) => {
+          const id = Number(item?.conceptoId || 0)
+          if (!selectedIds.has(id)) return
+          const saldo = Number(item?.saldo || 0)
+          if (saldo <= 0) return
+
+          const concept = current.conceptos.get(id) || {
+            id,
+            concepto: conceptNameById.get(id) || String(item?.conceptoNombre || `Concepto financiero #${id}`),
+            saldo: 0,
+            cargos: 0,
+            pagado: 0,
+            periodos: [],
+          }
+          concept.saldo += saldo
+          concept.cargos += Number(item?.subtotal || 0)
+          concept.pagado += Number(item?.pagado || 0)
+          const periodo = String(item?.mesLabel || item?.mesCargo || '').trim()
+          if (periodo && !concept.periodos.includes(periodo)) concept.periodos.push(periodo)
+          current.conceptos.set(id, concept)
+        })
+
+        studentRows.set(matricula, current)
+      })
+
+    const rows = Array.from(studentRows.values())
+      .map((row) => {
+        const conceptosPendientes = Array.from(row.conceptos.values())
+          .map(item => ({
+            ...item,
+            saldo: Math.round(item.saldo * 100) / 100,
+            cargos: Math.round(item.cargos * 100) / 100,
+            pagado: Math.round(item.pagado * 100) / 100,
+          }))
+          .sort((a, b) => b.saldo - a.saldo || a.concepto.localeCompare(b.concepto, 'es', { sensitivity: 'base' }))
+
+        return {
+          matricula: row.matricula,
+          nombreCompleto: row.nombreCompleto,
+          nivel: row.nivel,
+          grado: row.grado,
+          grupo: row.grupo,
+          plantel: row.plantel,
+          saldoPendiente: Math.round(row.saldoPendiente * 100) / 100,
+          totalCargos: Math.round(row.totalCargos * 100) / 100,
+          totalPagado: Math.round(row.totalPagado * 100) / 100,
+          fechaLimitePago: row.fechaLimitePago,
+          conceptosPendientes,
+          conceptosPendientesTexto: conceptosPendientes.map(item => item.concepto).join(', '),
+        }
+      })
+      .filter(row => row.saldoPendiente > threshold && row.conceptosPendientes.length > 0)
+      .sort((left, right) => (
+        right.saldoPendiente - left.saldoPendiente ||
+        left.nombreCompleto.localeCompare(right.nombreCompleto, 'es', { sensitivity: 'base' })
+      ))
+
+    const conceptSummaryMap = new Map<number, {
+      id: number
+      concepto: string
+      alumnos: Set<string>
+      saldo: number
+      cargos: number
+      pagado: number
+    }>()
+
+    rows.forEach((row) => {
+      row.conceptosPendientes.forEach((item) => {
+        const summary = conceptSummaryMap.get(item.id) || {
+          id: item.id,
+          concepto: item.concepto,
+          alumnos: new Set<string>(),
+          saldo: 0,
+          cargos: 0,
+          pagado: 0,
+        }
+        summary.alumnos.add(row.matricula)
+        summary.saldo += item.saldo
+        summary.cargos += item.cargos
+        summary.pagado += item.pagado
+        conceptSummaryMap.set(item.id, summary)
+      })
+    })
+
+    const totalSaldo = rows.reduce((sum: number, row: any) => sum + Number(row.saldoPendiente || 0), 0)
+    const totalCargos = rows.reduce((sum: number, row: any) => sum + Number(row.totalCargos || 0), 0)
+    const totalPagado = rows.reduce((sum: number, row: any) => sum + Number(row.totalPagado || 0), 0)
+    const conceptos = Array.from(conceptSummaryMap.values())
+      .map(item => ({
+        id: item.id,
+        concepto: item.concepto,
+        alumnos: item.alumnos.size,
+        saldo: Math.round(item.saldo * 100) / 100,
+        cargos: Math.round(item.cargos * 100) / 100,
+        pagado: Math.round(item.pagado * 100) / 100,
+      }))
+      .sort((a, b) => b.saldo - a.saldo || a.concepto.localeCompare(b.concepto, 'es', { sensitivity: 'base' }))
+
+    return {
+      modo: 'debtors',
+      concepto: context.concepto,
+      conceptos: context.conceptos,
+      rows,
+      filtros: {
+        plantel,
+        ciclo,
+        cicloLabel: formatCicloLabel(ciclo),
+        conceptoIds: context.conceptoIds,
+        threshold,
+      },
+      resumen: {
+        alumnos: rows.length,
+        saldoPendiente: Math.round(totalSaldo * 100) / 100,
+        totalCargos: Math.round(totalCargos * 100) / 100,
+        totalPagado: Math.round(totalPagado * 100) / 100,
+        threshold,
+        conceptos,
+      },
+    }
+  })
+}
+
 export const loadConceptReport = async (user: any, filters: Record<string, unknown>) => {
-  if (conceptReportMode(filters) === 'missing') return await loadMissingConceptReport(user, filters)
+  const mode = conceptReportMode(filters)
+  if (mode === 'missing') return await loadMissingConceptReport(user, filters)
+  if (mode === 'debtors') return await loadDebtorConceptReport(user, filters)
 
   const context = await resolveConceptReportContext(user, filters)
   const selectedUserKeys = normalizePaymentUserKeys(filters?.usuarios)
