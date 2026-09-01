@@ -1,1 +1,1 @@
-Convierte el reporte de talleres en una matriz comparativa por plantel
+Corrige la ruta de importación del ciclo en el reporte de talleres

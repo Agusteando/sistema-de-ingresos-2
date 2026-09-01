@@ -1,6 +1,6 @@
 import { getTrustedAuthUser, normalizePlantel } from '../../utils/auth-session'
 import { readTalleresAdminSummary } from '../../utils/talleres-admin-summary'
-import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { PLANTELES_LIST } from '../../../utils/constants'
 
 const errorMessage = (error: any) => String(
