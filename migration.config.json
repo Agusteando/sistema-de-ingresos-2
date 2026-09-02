@@ -10,29 +10,11 @@
     }
   },
   "mysql": {
-    "recommendedMode": "ddl",
+    "recommendedMode": "default",
     "accounts": [
       {
-        "id": "primary",
-        "maxMode": "ddl",
-        "schemas": [
-          { "id": "app", "name": "sistema_ingresos" }
-        ],
-        "bindings": [
-          {
-            "schema": "app",
-            "env": {
-              "host": "MYSQL_HOST",
-              "port": "MYSQL_PORT",
-              "user": "MYSQL_USER",
-              "password": "MYSQL_PASSWORD",
-              "database": "MYSQL_DATABASE"
-            }
-          }
-        ]
-      },
-      {
         "id": "central",
+        "host": "%",
         "maxMode": "default",
         "schemas": [
           { "id": "central", "fromEnv": "CONTROL_ESCOLAR_MYSQL_DATABASE" }

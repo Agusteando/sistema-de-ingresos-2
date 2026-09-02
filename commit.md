@@ -1,1 +1,1 @@
-Agrega reporte de deudores por concepto con selección múltiple y umbral de saldo
+Corrige las conexiones MySQL administradas de Aurora
