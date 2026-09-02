@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useCookie, useState } from '#app'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
+import { canonicalizeStudentGroups } from '~/shared/utils/group'
 import { normalizeEnrollmentConceptIds } from '~/shared/utils/studentPresentation'
 
 type StudentsCacheSyncStatus = 'idle' | 'cached' | 'syncing' | 'updated' | 'failed' | 'unavailable'
@@ -34,7 +35,7 @@ type StudentsSyncState = {
   error: string | null
 }
 
-const CACHE_VERSION = 5
+const CACHE_VERSION = 6
 const LEGACY_CACHE_VERSIONS = []
 const CACHE_NAMESPACE = 'students-cache'
 
@@ -136,12 +137,13 @@ export const useStudentsCacheSync = () => {
     for (const key of getStudentsCacheReadKeys(options)) {
       const record = safeParseRecord(localStorage.getItem(key))
       if (!record || !isCacheRecordConceptCompatible(record, options)) continue
+      const normalizedStudents = canonicalizeStudentGroups(record.students as Array<Record<string, any>>)
 
       return {
         key,
-        students: record.students,
+        students: normalizedStudents,
         savedAt: record.savedAt,
-        count: record.students.length,
+        count: normalizedStudents.length,
         isLegacy: Number(record.version) !== CACHE_VERSION,
         enrollmentConceptSignature: record.enrollmentConceptSignature || '',
         enrollmentConcepts: Array.isArray(record.enrollmentConcepts)
@@ -161,13 +163,14 @@ export const useStudentsCacheSync = () => {
     if (!process.client || !Array.isArray(students)) return false
 
     const key = getStudentsCacheKey(options)
+    const normalizedStudents = canonicalizeStudentGroups(students as Array<Record<string, any>>)
     const record: StudentsCacheRecord = {
       version: CACHE_VERSION,
       key,
       ciclo: normalizeCicloKey(options.ciclo || ''),
       query: normalizeQuery(options.q),
       savedAt: new Date().toISOString(),
-      students,
+      students: normalizedStudents,
       enrollmentConceptSignature: enrollmentConceptSignature(options.enrollmentConcepts),
       enrollmentConcepts: normalizeEnrollmentConceptIds(options.enrollmentConcepts),
       tipoIngresoConceptSignature: enrollmentConceptSignature(options.tipoIngresoConcepts),

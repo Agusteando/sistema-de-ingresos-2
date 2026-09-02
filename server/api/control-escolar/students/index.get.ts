@@ -1,4 +1,5 @@
-import { fetchControlEscolarStudents, refreshVerifiedControlEscolarCacheForScope, resolveControlEscolarAuth, runControlEscolar } from '../../../utils/control-escolar'
+import { refreshVerifiedControlEscolarCacheForScope, resolveControlEscolarAuth, runControlEscolar } from '../../../utils/control-escolar'
+import { fetchControlEscolarStudentsWithCanonicalGroups } from '../../../utils/control-escolar-groups'
 
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'Cache-Control', 'no-store')
@@ -7,7 +8,7 @@ export default defineEventHandler(async (event) => {
 
   return await runControlEscolar(event, auth.agentId, async () => {
     try {
-      const result = await fetchControlEscolarStudents(auth.agentId, queryParams)
+      const result = await fetchControlEscolarStudentsWithCanonicalGroups(auth.agentId, queryParams)
       const source: any = result?.source || {}
       if (source.cacheRefreshDue && source.cacheRows > 0) {
         const refreshPromise = refreshVerifiedControlEscolarCacheForScope(auth.agentId, queryParams).catch((error: any) => {

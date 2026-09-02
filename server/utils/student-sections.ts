@@ -1,12 +1,14 @@
+import { canonicalizeStudentGroups } from '../../shared/utils/group'
 import { query } from './db'
 
 export const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 
 export const attachCustomSectionsToStudents = async <T extends Record<string, any>>(students: T[], user: any): Promise<Array<T & { customSections: any[] }>> => {
-  if (!students.length) return students.map((student) => ({ ...student, customSections: [] }))
+  const canonicalStudents = canonicalizeStudentGroups(students)
+  if (!canonicalStudents.length) return canonicalStudents.map((student) => ({ ...student, customSections: [] }))
 
-  const matriculas = Array.from(new Set(students.map((student) => String(student.matricula || '').trim()).filter(Boolean)))
-  if (!matriculas.length) return students.map((student) => ({ ...student, customSections: [] }))
+  const matriculas = Array.from(new Set(canonicalStudents.map((student) => String(student.matricula || '').trim()).filter(Boolean)))
+  if (!matriculas.length) return canonicalStudents.map((student) => ({ ...student, customSections: [] }))
 
   const params: any[] = [...matriculas]
   let scopeSql = ''
@@ -44,7 +46,7 @@ export const attachCustomSectionsToStudents = async <T extends Record<string, an
     byMatricula.set(key, list)
   })
 
-  return students.map((student) => ({
+  return canonicalStudents.map((student) => ({
     ...student,
     customSections: byMatricula.get(String(student.matricula || '').trim()) || []
   }))
