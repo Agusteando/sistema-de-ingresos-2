@@ -18,6 +18,7 @@ type CorteCajaFilters = {
   fin?: unknown
   plantel?: unknown
   ciclo?: unknown
+  seccion?: unknown
 }
 
 type CorteCajaLoadOptions = {
@@ -95,6 +96,8 @@ type CorteCajaContext = {
   inicio: string
   fin: string
   scopePlantel: string
+  sectionId: number | null
+  sectionName: string
   where: string
   params: any[]
 }
@@ -175,14 +178,46 @@ const resolveCorteContext = async (user: AuthSessionUser, filters: CorteCajaFilt
   // pago conserve otro plantel por matrícula, documento o por cualquier dato histórico.
   // El filtro legado por plantel solo se conserva como resguardo para transporte directo o
   // para un contexto bridge que no corresponda al plantel solicitado.
-  const where = agentOwnsCorteScope
+  let where = agentOwnsCorteScope
     ? `DATE(${PAYMENT_EFFECTIVE_AT_SQL}) BETWEEN ? AND ?`
     : `${PAYMENT_PLANTEL_SQL} = ? AND DATE(${PAYMENT_EFFECTIVE_AT_SQL}) BETWEEN ? AND ?`
   const params: any[] = agentOwnsCorteScope
     ? [inicio, fin]
     : [scopePlantel, inicio, fin]
 
-  return { inicio, fin, scopePlantel, where, params }
+  const requestedSection = String(filters.seccion || '').trim()
+  let sectionId: number | null = null
+  let sectionName = ''
+
+  if (requestedSection) {
+    const parsedSectionId = Number(requestedSection)
+    if (!Number.isInteger(parsedSectionId) || parsedSectionId <= 0) {
+      throw createError({ statusCode: 400, message: 'La sección seleccionada no es válida.' })
+    }
+
+    const [section] = await query<Array<{ id: number | string; name: string | null }>>(`
+      SELECT id, name
+      FROM student_custom_sections
+      WHERE id = ? AND plantel = ? AND is_active = 1
+      LIMIT 1
+    `, [parsedSectionId, scopePlantel])
+
+    if (!section) {
+      throw createError({ statusCode: 400, message: 'La sección seleccionada ya no está disponible para este plantel.' })
+    }
+
+    sectionId = Number(section.id)
+    sectionName = String(section.name || '').trim()
+    where += ` AND EXISTS (
+      SELECT 1
+      FROM student_custom_section_memberships CorteSectionMembership
+      WHERE CorteSectionMembership.section_id = ?
+        AND CorteSectionMembership.matricula = r.matricula
+    )`
+    params.push(sectionId)
+  }
+
+  return { inicio, fin, scopePlantel, sectionId, sectionName, where, params }
 }
 
 export const loadPlantelCorteCajaUsers = async (
@@ -225,7 +260,9 @@ export const loadPlantelCorteCajaUsers = async (
     filtros: {
       inicio: context.inicio,
       fin: context.fin,
-      plantel: context.scopePlantel
+      plantel: context.scopePlantel,
+      seccion: context.sectionId ? String(context.sectionId) : '',
+      seccionNombre: context.sectionName
     }
   }
 }
@@ -365,7 +402,9 @@ export const loadPlantelCorteCaja = async (
     filtros: {
       inicio: context.inicio,
       fin: context.fin,
-      plantel: context.scopePlantel
+      plantel: context.scopePlantel,
+      seccion: context.sectionId ? String(context.sectionId) : '',
+      seccionNombre: context.sectionName
     }
   }
 }

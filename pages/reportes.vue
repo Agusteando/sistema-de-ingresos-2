@@ -474,6 +474,13 @@
             <option v-for="p in PLANTELES_LIST" :key="p" :value="p">Plantel {{ p }}</option>
           </select>
         </div>
+        <div class="form-group m-0" v-if="corteSections.length">
+          <label class="form-label">Sección</label>
+          <select v-model="selectedCorteSection" class="input-field">
+            <option value="">Todo el plantel</option>
+            <option v-for="section in corteSections" :key="section.id" :value="String(section.id)">{{ section.name }}</option>
+          </select>
+        </div>
         <button class="btn btn-secondary filter-button" @click="loadCorte" :disabled="loadingCorte">
           <LucideLoader2 v-if="loadingCorte" class="animate-spin" :size="16" />
           <LucideFilter v-else :size="16" />
@@ -726,6 +733,9 @@ const filtrosAlumnos = ref({ plantel: defaultCortePlantel })
 const downloadingStudentsExcel = ref(false)
 const datosCorte = ref([])
 const loadingCorte = ref(false)
+const corteSections = ref([])
+const selectedCorteSection = ref('')
+const loadingCorteSections = ref(false)
 const downloadingCorteExcel = ref(false)
 const corteUserSelectorOpen = ref(false)
 const corteUserOptions = ref([])
@@ -822,6 +832,12 @@ const buildCorteParams = (source) => {
   })
 
   if (!canFilterPlantel.value) delete params.plantel
+  return params
+}
+
+const buildCorteReportParams = () => {
+  const params = buildCorteParams(filtrosCorte.value)
+  if (selectedCorteSection.value) params.seccion = selectedCorteSection.value
   return params
 }
 
@@ -1083,8 +1099,46 @@ const downloadStudentsExcel = async () => {
   }
 }
 
-const openCorte = () => {
+const corteSectionPlantel = () => String(
+  canFilterPlantel.value
+    ? filtrosCorte.value.plantel
+    : (activePlantel.value || homePlantel.value)
+).trim().toUpperCase()
+
+const loadCorteSections = async () => {
+  if (!hasFinancialAccess.value || loadingCorteSections.value) return
+
+  const plantel = corteSectionPlantel()
+  if (!plantel || plantel === 'GLOBAL') {
+    corteSections.value = []
+    selectedCorteSection.value = ''
+    return
+  }
+
+  loadingCorteSections.value = true
+  try {
+    const response = await $fetch('/api/student-sections')
+    corteSections.value = (Array.isArray(response) ? response : [])
+      .filter(section => String(section?.plantel || '').trim().toUpperCase() === plantel)
+      .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'es', { sensitivity: 'base' }))
+
+    if (
+      selectedCorteSection.value &&
+      !corteSections.value.some(section => String(section.id) === selectedCorteSection.value)
+    ) {
+      selectedCorteSection.value = ''
+    }
+  } catch (e) {
+    corteSections.value = []
+    selectedCorteSection.value = ''
+  } finally {
+    loadingCorteSections.value = false
+  }
+}
+
+const openCorte = async () => {
   activeReport.value = 'corte'
+  await loadCorteSections()
   if (!datosCorte.value.length) loadCorte()
 }
 
@@ -1094,7 +1148,7 @@ const loadCorte = async () => {
   loadingCorte.value = true
   try {
     datosCorte.value = await $fetch('/api/reports/corte', {
-      params: buildCorteParams(filtrosCorte.value)
+      params: buildCorteReportParams()
     })
   } catch (e) {
     show(e?.data?.message || 'No se pudo cargar el corte de caja', 'danger')
@@ -1104,7 +1158,7 @@ const loadCorte = async () => {
 }
 
 const printCorte = () => {
-  const q = new URLSearchParams(buildCorteParams(filtrosCorte.value)).toString()
+  const q = new URLSearchParams(buildCorteReportParams()).toString()
   window.open(`/print/corte?${q}`, '_blank', 'width=850,height=800')
 }
 
@@ -1115,7 +1169,7 @@ const openReceiptStripsPdf = () => {
 }
 
 const executeCorteExcelDownload = async (selectedUserKeys = []) => {
-  const query = new URLSearchParams(buildCorteParams(filtrosCorte.value))
+  const query = new URLSearchParams(buildCorteReportParams())
   if (selectedUserKeys.length) query.set('usuarios', JSON.stringify(selectedUserKeys))
 
   const response = await fetch(`/api/reports/corte_excel?${query.toString()}`, {
@@ -1151,7 +1205,7 @@ const prepareCorteExcel = async () => {
   downloadingCorteExcel.value = true
   try {
     const response = await $fetch('/api/reports/corte_users', {
-      params: buildCorteParams(filtrosCorte.value)
+      params: buildCorteReportParams()
     })
     const users = Array.isArray(response?.usuarios) ? response.usuarios : []
 
@@ -1209,6 +1263,7 @@ const showCorteContextMenu = (event, row) => {
 onMounted(async () => {
   await loadConceptos()
   if (activeReport.value === 'corte') {
+    await loadCorteSections()
     loadCorte()
   } else if (activeReport.value === 'concepto' && filtrosConcepto.value.conceptoIds.length) {
     prepareConceptReport()
@@ -1240,6 +1295,12 @@ watch(
 watch(() => filtrosConcepto.value.plantel, async (plantel, previousPlantel) => {
   if (!canFilterPlantel.value || plantel === previousPlantel) return
   await loadConceptos()
+})
+
+watch(() => filtrosCorte.value.plantel, async (plantel, previousPlantel) => {
+  if (!canFilterPlantel.value || plantel === previousPlantel) return
+  selectedCorteSection.value = ''
+  await loadCorteSections()
 })
 
 watch(() => route.query.conceptoId, async (conceptoId) => {

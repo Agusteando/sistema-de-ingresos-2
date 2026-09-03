@@ -1,1 +1,1 @@
-Corrige las conexiones MySQL administradas de Aurora
+Permite filtrar el corte de caja por secciones
