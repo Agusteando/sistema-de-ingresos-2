@@ -4,6 +4,7 @@ import { hydrateFinancialConceptNames } from './financial-concept'
 import type { AuthSessionUser } from './auth-session'
 import { omitRawFinancialAcademicFields, resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
+import { isLocalSystemRuntime } from './local-system-manager'
 import {
   PAYMENT_APPLIED_AMOUNT_SQL,
   PAYMENT_EFFECTIVE_AT_SQL,
@@ -168,20 +169,26 @@ const resolveCorteContext = async (user: AuthSessionUser, filters: CorteCajaFilt
   }
 
   const scopePlantel = resolveCortePlantel(user, filters.plantel)
-  const bridgeAgent = getDbTransport() === 'bridge'
+  const transport = getDbTransport()
+  const bridgeAgent = transport === 'bridge'
     ? normalizePlantel(getBridgeAgentId())
     : ''
-  const agentOwnsCorteScope = Boolean(bridgeAgent && bridgeAgent === scopePlantel)
+  const localSystemPlantel = transport === 'direct' && isLocalSystemRuntime()
+    ? normalizePlantel(useRuntimeConfig().localSystemPlantel)
+    : ''
+  const physicalDatabaseOwnsCorteScope = Boolean(
+    (bridgeAgent && bridgeAgent === scopePlantel)
+    || (localSystemPlantel && localSystemPlantel === scopePlantel)
+  )
 
-  // En producción bridge-first, cada agente/plantel tiene su propia bitácora financiera.
-  // Por eso el corte del agente debe incluir TODOS sus movimientos del periodo, aunque el
-  // pago conserve otro plantel por matrícula, documento o por cualquier dato histórico.
-  // El filtro legado por plantel solo se conserva como resguardo para transporte directo o
-  // para un contexto bridge que no corresponda al plantel solicitado.
-  let where = agentOwnsCorteScope
+  // Tanto el agente Bridge como Aurora Local tienen una base física por plantel.
+  // Esa base es el perímetro real de caja: ningún movimiento debe excluirse porque
+  // r.plantel, plantel_pago o la matrícula conserven metadatos de otro plantel.
+  // El filtro por plantel se conserva únicamente para conexiones centrales/directas.
+  let where = physicalDatabaseOwnsCorteScope
     ? `DATE(${PAYMENT_EFFECTIVE_AT_SQL}) BETWEEN ? AND ?`
     : `${PAYMENT_PLANTEL_SQL} = ? AND DATE(${PAYMENT_EFFECTIVE_AT_SQL}) BETWEEN ? AND ?`
-  const params: any[] = agentOwnsCorteScope
+  const params: any[] = physicalDatabaseOwnsCorteScope
     ? [inicio, fin]
     : [scopePlantel, inicio, fin]
 
