@@ -1,1 +1,1 @@
-Agrega listas institucionales de talleres y exportación a Excel
+Corrige la exportación Excel de listas de talleres
