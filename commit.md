@@ -1,1 +1,1 @@
-Permite filtrar el corte de caja por secciones
+Agrega listas institucionales de talleres y exportación a Excel

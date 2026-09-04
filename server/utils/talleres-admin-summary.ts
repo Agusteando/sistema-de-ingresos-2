@@ -21,21 +21,54 @@ const isActiveStudent = (student: any) => {
   return !['baja', 'withdrawn', 'inactive', 'inactivo'].includes(status)
 }
 
+export type TalleresAdminStudentRow = {
+  matricula: string
+  nombre: string
+  grado: string
+  grupo: string
+}
+
 export type TalleresAdminSummaryRow = {
   clave: string
   nombre: string
   imagen: string
   alumnos: number
+  students?: TalleresAdminStudentRow[]
 }
+
+const toStudentRow = (student: any, matricula: string): TalleresAdminStudentRow => {
+  const nombre = text(
+    student?.fullName
+    || student?.nombreCompleto
+    || [student?.nombres, student?.apellidoPaterno, student?.apellidoMaterno].filter(Boolean).join(' '),
+    220,
+  )
+
+  return {
+    matricula,
+    nombre,
+    grado: text(student?.grado, 80),
+    grupo: text(student?.grupo || student?.group, 40).toUpperCase(),
+  }
+}
+
+const compareStudentRows = (left: TalleresAdminStudentRow, right: TalleresAdminStudentRow) => (
+  left.grado.localeCompare(right.grado, 'es', { numeric: true, sensitivity: 'base' })
+  || left.grupo.localeCompare(right.grupo, 'es', { numeric: true, sensitivity: 'base' })
+  || left.nombre.localeCompare(right.nombre, 'es', { sensitivity: 'base' })
+  || left.matricula.localeCompare(right.matricula, 'es', { numeric: true })
+)
 
 export const readTalleresAdminSummary = async ({
   event,
   plantel,
   ciclo,
+  includeStudents = false,
 }: {
   event: any
   plantel: unknown
   ciclo?: unknown
+  includeStudents?: boolean
 }) => {
   const publicPlantel = text(plantel, 40).toUpperCase()
   if (!publicPlantel || publicPlantel === 'GLOBAL') {
@@ -90,16 +123,31 @@ export const readTalleresAdminSummary = async ({
       }
     }
 
+    const studentsByMatricula = new Map<string, any>()
+    if (includeStudents) {
+      for (const student of students) {
+        const matricula = matriculaKey(student?.matricula)
+        if (matricula) studentsByMatricula.set(matricula, student)
+      }
+    }
+
     const talleres: TalleresAdminSummaryRow[] = Array.from(counts.entries())
       .map(([clave, members]) => {
         const item = catalog.get(clave)
         const seed = finalTallerSeed(clave)
+        const detailRows = includeStudents
+          ? Array.from(members)
+              .map((matricula) => toStudentRow(studentsByMatricula.get(matricula), matricula))
+              .sort(compareStudentRows)
+          : undefined
+
         return {
           clave,
           nombre: text(item?.servicio_nombre || seed?.nombre || clave, 160),
           imagen: text(item?.imagen_url || seed?.imagen || `/talleres-servicios/${clave}.svg`, 500),
           alumnos: members.size,
           orden: Number(item?.orden || seed?.orden || 9999),
+          ...(includeStudents ? { students: detailRows } : {}),
         }
       })
       .filter((item) => item.alumnos > 0)
