@@ -34,15 +34,41 @@ watch(section, (value) => {
 </script>
 
 <style scoped>
-.conceptos-shell { display: grid; gap: 14px; width: 100%; }
+.conceptos-shell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 18px;
+  box-sizing: border-box;
+}
+.conceptos-shell > :not(.conceptos-section-switch) {
+  width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
+}
 .conceptos-section-switch {
+  position: sticky;
+  top: 0;
+  z-index: 12;
   width: fit-content;
+  flex: 0 0 auto;
   display: flex;
   gap: 5px;
   padding: 5px;
-  background: #eef3f6;
+  background: rgba(238, 243, 246, .96);
   border: 1px solid #dfe7ed;
   border-radius: 14px;
+  backdrop-filter: blur(10px);
 }
 .conceptos-section-switch button {
   min-height: 40px;
@@ -63,6 +89,9 @@ watch(section, (value) => {
   box-shadow: 0 3px 10px rgba(32, 65, 86, .1);
 }
 @media (max-width: 560px) {
+  .conceptos-shell {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
   .conceptos-section-switch { width: 100%; }
   .conceptos-section-switch button { flex: 1; justify-content: center; padding-inline: 8px; }
 }
