@@ -1,1 +1,1 @@
-Completa el mapeo crítico de servicios y ajedrez
+Globaliza y simplifica las asociaciones de talleres y servicios

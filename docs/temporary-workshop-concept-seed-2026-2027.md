@@ -1,39 +1,37 @@
-# Sembrado temporal de talleres 2026–2027
+# Asociación global de Talleres y Servicios
 
 ## Objetivo
 
-Asociar los conceptos financieros 2026–2027 cuyo nombre identifica de forma inequívoca un taller con el catálogo operativo de Talleres y Servicios. Cada asociación se crea para los planteles visibles en `/conceptos`, incluido `DM` aunque no aparezca en las tarjetas del dashboard financiero.
+La configuración de Talleres y Servicios es institucional. Un concepto financiero debe asociarse una sola vez a su taller o servicio mediante una fila `GLOBAL`; esa asociación se aplica a todos los planteles. Las asociaciones específicas por plantel se conservan únicamente como excepciones y tienen precedencia sobre `GLOBAL`.
 
-El proceso no crea conceptos financieros, no cambia costos y no modifica matrículas existentes. Los conceptos deben existir primero en la tabla central `conceptos` con ciclo `2026` o `2026-2027`.
+## Interfaz
 
-## Ejecución
+En `/conceptos`, abrir `Talleres y servicios`. La vista muestra:
 
-1. Iniciar sesión como super admin o administrador de conceptos.
-2. Abrir `/conceptos` y entrar a `Categorías`.
-3. Seleccionar ciclo `2026-2027` y categoría `Talleres y Servicios`.
-4. Pulsar `Preparar talleres 2026–2027`.
-5. Revisar la cantidad de conceptos, asociaciones y planteles; confirmar una sola vez.
-6. Verificar el total de planteles informado y que cada concepto se vea asociado en al menos dos planteles de control.
+- ciclo escolar;
+- asociaciones GLOBAL existentes;
+- sugerencias seguras pendientes;
+- excepciones específicas por plantel;
+- búsqueda y asociación manual con guardado inmediato.
 
-La operación es idempotente: si se repite, no crea duplicados. Los Bridges fuera de línea conservan la configuración central como fuente y actualizarán su espejo cuando vuelvan a sincronizar.
+No es necesario repetir la misma asociación plantel por plantel.
 
-## Coincidencias aceptadas
+## Migración automática
 
-El sembrado sólo acepta nombres exactos del catálogo, con estas variaciones seguras:
+El botón `Migrar asociaciones seguras` analiza los conceptos financieros del ciclo seleccionado y crea o corrige una asociación GLOBAL sólo cuando el nombre identifica de forma inequívoca un Taller o Servicio.
 
-- sufijo de ciclo, por ejemplo `BALLET 2026-2027`;
-- prefijo `TALLER` o `TALLER DE`;
-- alias canónicos como `TENNIS` → `TENIS` y `TOCHO BANDERA` → `TOCHITO BANDERA`;
-- variante `4 DÍAS` cuando el nombre base identifica un taller vigente.
+La operación es idempotente. No cambia costos, documentos, pagos ni matrículas. Después de escribir la configuración central, intenta sincronizarla a los Bridges disponibles.
 
-Nombres ambiguos como `1 TALLER`, ligas, uniformes o cuotas no se asocian automáticamente.
+Se reconocen los Talleres del catálogo vigente, variantes seguras como `AJEDREZ 4 DÍAS` → `AJEDREZ`, y los servicios institucionales críticos `DESAYUNO`, `COMIDA`, `CENA` y `CLUB DE TAREAS`, incluyendo sufijos inequívocos de nivel o sede como `DESAYUNO PRIMARIA Y SECUNDARIA`.
 
-## Retirada después de producción
+Nombres ambiguos no se migran automáticamente; permanecen disponibles para asociación manual desde la misma pantalla.
 
-Cuando la ejecución y la verificación estén confirmadas, retirar:
+## Precedencia
 
-- `server/api/conceptos-config/seed/talleres-2026-2027.post.ts`;
-- el bloque marcado `TEMPORARY 2026-2027` y su modal/estado en `pages/conceptos.vue`;
-- la exposición `temporaryWorkshopSeed` de `server/api/conceptos-config/admin.get.ts`.
+Al resolver una asignación financiera:
 
-Después de retirarlo, conservar `server/utils/conceptos-workshop-seed.ts` sólo si se desea mantener la lógica como herramienta auditable de diagnóstico; de lo contrario puede eliminarse junto con su fixture visual. La escritura normal de conceptos financieros hacia `matricula.servicios` vive en `server/utils/talleres-servicios.ts` y no debe retirarse.
+1. asociación exacta del plantel;
+2. alias financiero correspondiente;
+3. asociación `GLOBAL`.
+
+Esto permite que la operación normal sea global y que un plantel sólo requiera configuración propia cuando exista una excepción real.
