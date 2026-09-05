@@ -1,1 +1,1 @@
-Corrige la exportación Excel de listas de talleres
+Corrige definitivamente el Excel institucional de talleres

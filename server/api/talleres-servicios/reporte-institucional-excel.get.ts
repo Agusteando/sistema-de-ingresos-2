@@ -1,5 +1,5 @@
 import { formatCicloLabel } from '../../../shared/utils/ciclo'
-import { buildTalleresInstitutionalXlsx } from '../../utils/talleres-institutional-xlsx'
+import { buildTalleresInstitutionalXlsxV2 } from '../../utils/talleres-institutional-xlsx-v2'
 import { loadTalleresReport, normalizeTalleresReportPlantel } from '../../utils/talleres-report'
 
 const PLANTEL_NAMES: Record<string, string> = {
@@ -24,9 +24,41 @@ const safeFilePart = (value: unknown) => String(value || 'reporte')
   .replace(/^_+|_+$/g, '')
   .slice(0, 60) || 'reporte'
 
-const excelSafeText = (value: unknown) => String(value ?? '')
-  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
+const cleanWorkbookText = (value: unknown, max = 240) => String(value ?? '')
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+  .replace(/\s+/g, ' ')
   .trim()
+  .slice(0, max)
+
+const studentKey = (student: any) => {
+  const matricula = cleanWorkbookText(student?.matricula, 64).toUpperCase().replace(/\s+/g, '')
+  if (matricula) return `M:${matricula}`
+  return `N:${cleanWorkbookText(student?.nombre, 220)}|${cleanWorkbookText(student?.grado, 80)}|${cleanWorkbookText(student?.grupo, 40)}`
+}
+
+const studentsForExport = (group: any) => {
+  const seen = new Set<string>()
+  const students = (group?.planteles || [])
+    .flatMap((campus: any) => Array.isArray(campus?.students) ? campus.students : [])
+    .map((student: any) => ({
+      matricula: cleanWorkbookText(student?.matricula, 64),
+      nombre: cleanWorkbookText(student?.nombre, 220),
+      grado: cleanWorkbookText(student?.grado, 80),
+      grupo: cleanWorkbookText(student?.grupo, 40).toUpperCase(),
+    }))
+    .filter((student: any) => {
+      const key = studentKey(student)
+      if (!student.nombre || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+  return students.sort((left: any, right: any) => (
+    left.grado.localeCompare(right.grado, 'es', { numeric: true, sensitivity: 'base' })
+    || left.grupo.localeCompare(right.grupo, 'es', { numeric: true, sensitivity: 'base' })
+    || left.nombre.localeCompare(right.nombre, 'es', { sensitivity: 'base' })
+  ))
+}
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -42,63 +74,48 @@ export default defineEventHandler(async (event) => {
     includeStudents: true,
   })
 
-  // The detailed API already returned the exact student arrays shown in the UI.
-  // Flatten them before XLSX generation so the export never depends on a second
-  // plantel-code lookup (aliases such as CT/PREET and CM/PREEM cannot drop rows).
-  const workbookGroups = (result.groups || []).map((group: any) => {
-    const students = (group?.planteles || [])
-      .flatMap((row: any) => Array.isArray(row?.students) ? row.students : [])
-      .map((student: any) => ({
-        matricula: excelSafeText(student?.matricula),
-        nombre: excelSafeText(student?.nombre),
-        grado: excelSafeText(student?.grado),
-        grupo: excelSafeText(student?.grupo),
-      }))
+  const groups = (result.groups || []).map((group: any) => ({
+    ...group,
+    planteles: [{
+      plantel,
+      alumnos: Number(group?.totalAlumnos || 0),
+      students: studentsForExport(group),
+    }],
+  }))
 
-    const expectedRows = Number(group?.totalAlumnos || 0)
-    if (expectedRows > 0 && students.length === 0) {
-      throw createError({
-        statusCode: 500,
-        message: `El Taller ${excelSafeText(group?.nombre || group?.clave)} tiene ${expectedRows} alumno(s) en pantalla, pero la exportación no recibió sus filas.`,
-      })
-    }
+  const sourceAssignments = (result.groups || []).reduce(
+    (sum: number, group: any) => sum + Number(group?.totalAlumnos || 0),
+    0,
+  )
+  const exportedRows = groups.reduce(
+    (sum: number, group: any) => sum + Number(group?.planteles?.[0]?.students?.length || 0),
+    0,
+  )
 
-    return {
-      ...group,
-      planteles: [{
-        plantel,
-        alumnos: expectedRows,
-        students,
-      }],
-    }
-  })
-
-  const expectedAssignments = workbookGroups.reduce((sum: number, group: any) => sum + Number(group?.totalAlumnos || 0), 0)
-  const exportedRows = workbookGroups.reduce((sum: number, group: any) => (
-    sum + ((group?.planteles?.[0]?.students || []).length)
-  ), 0)
-
-  if (expectedAssignments > 0 && exportedRows === 0) {
+  if (sourceAssignments > 0 && exportedRows === 0) {
     throw createError({
       statusCode: 500,
-      message: 'El reporte tiene alumnos en pantalla, pero no fue posible obtener las filas para Excel. Actualiza el reporte e inténtalo de nuevo.',
+      message: 'El reporte tiene alumnos, pero no fue posible preparar sus filas para Excel. Intenta nuevamente.',
     })
   }
 
-  const workbook = buildTalleresInstitutionalXlsx({
+  const workbook = buildTalleresInstitutionalXlsxV2({
     plantel,
     plantelNombre: PLANTEL_NAMES[plantel] || `Plantel ${plantel}`,
     cicloLabel: formatCicloLabel(result.ciclo),
-    groups: workbookGroups,
+    groups,
     generatedAt: result.generatedAt,
   })
 
   const filename = `Talleres_${safeFilePart(plantel)}_${safeFilePart(result.ciclo)}.xlsx`
   const encodedFilename = encodeURIComponent(filename)
 
-  setHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  setHeader(event, 'Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`)
-  setHeader(event, 'Content-Length', String(workbook.length))
-  setHeader(event, 'Cache-Control', 'private, no-store')
-  return send(event, workbook)
+  // Send the XLSX as raw bytes. Avoid H3/Nitro body serialization for binary OOXML.
+  event.node.res.statusCode = 200
+  event.node.res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  event.node.res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`)
+  event.node.res.setHeader('Content-Length', String(workbook.length))
+  event.node.res.setHeader('Cache-Control', 'private, no-store')
+  event.node.res.setHeader('X-Content-Type-Options', 'nosniff')
+  event.node.res.end(workbook)
 })
