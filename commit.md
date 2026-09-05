@@ -1,1 +1,1 @@
-Corrige definitivamente el Excel institucional de talleres
+Completa el mapeo crítico de servicios y ajedrez
