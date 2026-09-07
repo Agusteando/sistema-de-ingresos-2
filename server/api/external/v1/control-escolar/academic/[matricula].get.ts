@@ -1,8 +1,8 @@
 import { assertAuroraExternalApiToken, setExternalApiResponseHeaders } from '../../../../../utils/external-api-auth'
-import { readExternalCalculatedAcademicPlacement } from '../../../../../utils/control-escolar-external-live'
+import { readExternalSnapshotAcademicPlacement } from '../../../../../utils/control-escolar-external-snapshot'
 
 export default defineEventHandler(async (event) => {
   assertAuroraExternalApiToken(event)
   setExternalApiResponseHeaders(event, 0)
-  return await readExternalCalculatedAcademicPlacement(event, getQuery(event), getRouterParam(event, 'matricula'))
+  return await readExternalSnapshotAcademicPlacement(getQuery(event), getRouterParam(event, 'matricula'))
 })

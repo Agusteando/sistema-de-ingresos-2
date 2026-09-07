@@ -1,1 +1,1 @@
-Corrige Google runtime y estabiliza conceptos centrales en Linux
+Sirve API externa de Control Escolar desde snapshots centrales

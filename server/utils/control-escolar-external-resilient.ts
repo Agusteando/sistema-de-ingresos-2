@@ -1,11 +1,7 @@
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
-import { readExternalLiveStudents } from './control-escolar-external-live'
-import {
-  getExternalStudentPlanteles,
-  readExternalControlEscolarStudents,
-} from './control-escolar-external-view'
+import { getExternalStudentPlanteles } from './control-escolar-external-view'
+import { readExternalSnapshotStudents } from './control-escolar-external-snapshot'
 import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
-import { isExternalFreshReadRequested } from './external-fresh-read'
 
 const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
 const normalizeSearch = (value: unknown) => clean(value, 500).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -14,89 +10,25 @@ const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().re
 const publicFailure = (error: any) => ({
   statusCode: Number(error?.statusCode || error?.status || error?.response?.status || 500) || 500,
   code: clean(error?.data?.code || error?.code || error?.statusMessage || error?.name || 'AURORA_ERROR', 120),
-  message: clean(error?.message || error?.statusMessage || 'Aurora no pudo consultar el origen solicitado.', 700),
+  message: clean(error?.message || error?.statusMessage || 'Aurora no pudo consultar el snapshot central solicitado.', 700)
 })
 
-const withFallbackMeta = (response: any, liveError: any) => ({
-  ...(response || {}),
-  meta: {
-    ...(response?.meta || {}),
-    source: 'warm-cache-fallback',
-    fallback: true,
-    liveFailure: publicFailure(liveError),
-  },
-})
-
-const readOneScope = async (event: any, query: any, plantel: string) => {
-  const scopedQuery = { ...query, plantel }
-
-  // Some consumers (Husky Pass) cannot tolerate even a valid warm snapshot.
-  // `fresh=1` makes this a strict live read: no warm-view read and no stale fallback.
-  if (isExternalFreshReadRequested(scopedQuery)) {
-    const live = await readExternalLiveStudents(event, scopedQuery)
-    return {
-      ...(live || {}),
-      meta: {
-        ...(live?.meta || {}),
-        source: live?.meta?.source || 'aurora-control-escolar-live',
-        fallback: false,
-        freshRequested: true,
-        cachePolicy: 'bypass',
-      },
-    }
-  }
-
+const readOneScope = async (query: any, plantel: string) => {
   try {
-    const cached = await readExternalControlEscolarStudents(scopedQuery)
-    if (cached?.meta?.freshness === 'fresh') {
-      return {
-        ...(cached || {}),
-        meta: {
-          ...(cached?.meta || {}),
-          source: 'warm-cache',
-          fallback: false,
-        },
+    return await readExternalSnapshotStudents({ ...query, plantel })
+  } catch (error: any) {
+    throw createError({
+      statusCode: Number(error?.statusCode || 503) || 503,
+      statusMessage: error?.statusMessage || 'AURORA_STUDENT_SCOPE_UNAVAILABLE',
+      message: `Aurora no pudo consultar el snapshot central de ${plantel}.`,
+      data: {
+        code: error?.data?.code || error?.statusMessage || 'AURORA_STUDENT_SCOPE_UNAVAILABLE',
+        plantel,
+        ciclo: normalizeCicloKey(query.ciclo || query.cicloKey || query.schoolYear || ''),
+        source: 'central-snapshot',
+        snapshot: publicFailure(error)
       }
-    }
-
-    try {
-      const live = await readExternalLiveStudents(event, scopedQuery)
-      return {
-        ...(live || {}),
-        meta: {
-          ...(live?.meta || {}),
-          source: live?.meta?.source || 'aurora-control-escolar-live',
-          fallback: false,
-        },
-      }
-    } catch (liveError: any) {
-      return withFallbackMeta(cached, liveError)
-    }
-  } catch (cacheError: any) {
-    try {
-      const live = await readExternalLiveStudents(event, scopedQuery)
-      return {
-        ...(live || {}),
-        meta: {
-          ...(live?.meta || {}),
-          source: live?.meta?.source || 'aurora-control-escolar-live',
-          fallback: false,
-        },
-      }
-    } catch (liveError: any) {
-      throw createError({
-        statusCode: 502,
-        statusMessage: 'AURORA_STUDENT_SCOPE_UNAVAILABLE',
-        message: `Aurora no pudo consultar ${plantel} ni desde el Bridge live ni desde el snapshot de respaldo.`,
-        data: {
-          code: 'AURORA_STUDENT_SCOPE_UNAVAILABLE',
-          plantel,
-          ciclo: normalizeCicloKey(query.ciclo || query.cicloKey || query.schoolYear || ''),
-          fallback: publicFailure(cacheError),
-          live: publicFailure(liveError),
-        },
-      })
-    }
+    })
   }
 }
 
@@ -114,7 +46,7 @@ const rankRows = (rows: any[], query: any) => {
       row?.fullName,
       row?.curp,
       row?.padre?.nombreCompleto,
-      row?.madre?.nombreCompleto,
+      row?.madre?.nombreCompleto
     ].filter(Boolean).join(' '))
 
     if (matricula === needle) return 0
@@ -128,7 +60,8 @@ const rankRows = (rows: any[], query: any) => {
 
   return [...rows].sort((left, right) =>
     score(left) - score(right)
-    || normalizeSearch(left?.nombreCompleto || left?.fullName).localeCompare(normalizeSearch(right?.nombreCompleto || right?.fullName), 'es')
+    || normalizeSearch(left?.nombreCompleto || left?.fullName)
+      .localeCompare(normalizeSearch(right?.nombreCompleto || right?.fullName), 'es')
   )
 }
 
@@ -144,24 +77,20 @@ const dedupeRows = (rows: any[]) => {
 }
 
 /**
- * External Control Escolar read contract used by server-to-server consumers.
- *
- * - Scoped reads prefer the live Bridge but transparently fall back to Aurora's
- *   already-existing warm student view when the Bridge is unavailable.
- * - Search without a plantel is owned by Aurora: all canonical scopes are
- *   queried concurrently, partial scope failures do not destroy valid matches,
- *   and results are deduplicated/ranked before returning to the consumer.
+ * External Control Escolar reads are intentionally central-snapshot only.
+ * Bridge traffic belongs to the background snapshot producer, never to an
+ * API consumer request.
  */
-export const readExternalResilientStudents = async (event: any, query: any = {}) => {
+export const readExternalResilientStudents = async (_event: any, query: any = {}) => {
   const requestedPlantel = normalizeExternalControlEscolarPlantel(query.plantel || query.agentId || '')
-  if (requestedPlantel) return await readOneScope(event, query, requestedPlantel)
+  if (requestedPlantel) return await readOneScope(query, requestedPlantel)
 
   const search = clean(query.search || query.q, 120)
   if (!search) {
     throw createError({
       statusCode: 400,
       statusMessage: 'PLANTEL_OR_SEARCH_REQUIRED',
-      message: 'Indica un plantel para listar alumnos o una búsqueda para consultar globalmente.',
+      message: 'Indica un plantel para listar alumnos o una búsqueda para consultar globalmente.'
     })
   }
 
@@ -169,7 +98,7 @@ export const readExternalResilientStudents = async (event: any, query: any = {})
   const requestedLimit = Math.min(100, Math.max(1, Number(query.limit || 25) || 25))
   const perScopeLimit = Math.min(100, Math.max(requestedLimit, 25))
   const settled = await Promise.allSettled(
-    planteles.map((plantel) => readOneScope(event, { ...query, limit: perScopeLimit }, plantel))
+    planteles.map((plantel) => readOneScope({ ...query, limit: perScopeLimit }, plantel))
   )
 
   const successful: Array<{ plantel: string; response: any }> = []
@@ -182,20 +111,21 @@ export const readExternalResilientStudents = async (event: any, query: any = {})
 
   if (!successful.length) {
     throw createError({
-      statusCode: 502,
+      statusCode: 503,
       statusMessage: 'AURORA_GLOBAL_STUDENT_SEARCH_UNAVAILABLE',
-      message: 'Aurora no pudo consultar ningún plantel para la búsqueda global de alumnos.',
+      message: 'Aurora no tiene snapshots centrales disponibles para la búsqueda global de alumnos.',
       data: {
         code: 'AURORA_GLOBAL_STUDENT_SEARCH_UNAVAILABLE',
         ciclo: normalizeCicloKey(query.ciclo || query.cicloKey || query.schoolYear || ''),
-        failedScopes: failed,
-      },
+        source: 'central-snapshot',
+        failedScopes: failed
+      }
     })
   }
 
   const rows = rankRows(
     dedupeRows(successful.flatMap(({ response }) => Array.isArray(response?.data) ? response.data : [])),
-    query,
+    query
   ).slice(0, requestedLimit)
 
   return {
@@ -203,22 +133,23 @@ export const readExternalResilientStudents = async (event: any, query: any = {})
     pagination: {
       limit: requestedLimit,
       nextCursor: null,
-      total: rows.length,
+      total: rows.length
     },
     catalogs: successful.length === 1 ? successful[0].response?.catalogs || null : null,
     meta: {
       version: 'v1',
-      source: 'aurora-global-resilient-search',
+      source: 'aurora-global-central-snapshot-search',
       ciclo: normalizeCicloKey(query.ciclo || query.cicloKey || query.schoolYear || ''),
       partial: failed.length > 0,
       searchedPlanteles: planteles,
       successfulScopes: successful.map(({ plantel, response }) => ({
         plantel,
-        source: response?.meta?.source || null,
-        fallback: Boolean(response?.meta?.fallback),
+        source: response?.meta?.source || 'aurora-control-escolar-central-snapshot',
         rows: Array.isArray(response?.data) ? response.data.length : 0,
+        freshness: response?.meta?.freshness || null,
+        generatedAt: response?.meta?.generatedAt || null
       })),
-      failedScopes: failed,
-    },
+      failedScopes: failed
+    }
   }
 }
