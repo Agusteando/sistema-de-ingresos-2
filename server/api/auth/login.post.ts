@@ -7,6 +7,7 @@ import { logControlEscolarAuditEvent } from '../../utils/control-escolar-audit'
 import { clearImpersonationCookies } from '../../utils/impersonation-session'
 import { authCookieOptions } from '../../utils/auth-cookie-options'
 import { setAuthSessionToken } from '../../utils/auth-session-token'
+import { getRuntimeGoogleClientId } from '../../utils/google-client-id'
 
 const SUPERADMIN_EMAILS = new Set([
   'desarrollo.tecnologico@casitaiedis.edu.mx',
@@ -47,14 +48,14 @@ const resolveAllowedPlanteles = (user: DbUser, isSuperAdmin: boolean) => {
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const config = useRuntimeConfig()
+  const googleClientId = getRuntimeGoogleClientId()
   const requestedPlantel = getRequestedPlantel(event, body) || PLANTELES_LIST[0] || ''
 
   if (requestedPlantel && !PLANTELES_LIST.includes(requestedPlantel)) {
     throw createError({ statusCode: 400, message: 'Plantel inválido.' })
   }
 
-  if (!config.public.googleClientId) {
+  if (!googleClientId) {
     throw createError({ statusCode: 500, message: 'Configuración de Google ausente' })
   }
 
@@ -62,12 +63,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Credencial ausente' })
   }
 
-  const client = new OAuth2Client(config.public.googleClientId)
+  const client = new OAuth2Client(googleClientId)
 
   try {
     const ticket = await client.verifyIdToken({
       idToken: body.credential,
-      audience: config.public.googleClientId
+      audience: googleClientId
     })
 
     const payload = ticket.getPayload()
