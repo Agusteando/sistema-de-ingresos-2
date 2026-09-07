@@ -1,1 +1,1 @@
-Restaura el padrón externo de Aurora con refresco bajo demanda
+Integra Facturapi en Aurora y corrige el envío de CFDI
