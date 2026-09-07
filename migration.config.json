@@ -8,7 +8,10 @@
       "CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT": "30"
     },
     "aliases": {
-      "NUXT_PUBLIC_GOOGLE_CLIENT_ID": "GOOGLE_CLIENT_ID"
+      "NUXT_PUBLIC_GOOGLE_CLIENT_ID": "GOOGLE_CLIENT_ID",
+      "NUXT_DB_TRANSPORT": "DB_TRANSPORT",
+      "NUXT_DB_BRIDGE_URL": "DB_BRIDGE_URL",
+      "NUXT_DB_BRIDGE_TOKEN": "DB_BRIDGE_TOKEN"
     },
     "vercel": {
       "project": "sistema-de-ingresos-2",
