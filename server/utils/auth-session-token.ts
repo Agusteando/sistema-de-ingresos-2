@@ -25,6 +25,9 @@ const decode = (value: string) => Buffer.from(value, 'base64url').toString('utf8
 const getAuthSessionSecret = () => {
   const config = useRuntimeConfig()
   const secret = String(
+    process.env.AUTH_SESSION_SECRET ||
+    process.env.AUTH_IMPERSONATION_SECRET ||
+    process.env.LOCAL_SYSTEM_MANAGER_TOKEN ||
     config.authSessionSecret ||
     config.authImpersonationSecret ||
     config.localSystemManagerToken ||
