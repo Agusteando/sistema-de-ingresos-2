@@ -5,7 +5,8 @@
   "environment": {
     "file": ".env",
     "runtime": {
-      "CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT": "30"
+      "CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT": "30",
+      "DB_TRANSPORT": "bridge"
     },
     "aliases": {
       "NUXT_PUBLIC_GOOGLE_CLIENT_ID": "GOOGLE_CLIENT_ID",
