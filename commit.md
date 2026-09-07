@@ -1,1 +1,1 @@
-Globaliza y simplifica las asociaciones de talleres y servicios
+Restaura acceso runtime de Aurora a la base central casitaiedis

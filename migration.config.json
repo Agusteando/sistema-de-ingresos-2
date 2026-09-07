@@ -17,7 +17,7 @@
         "host": "%",
         "maxMode": "default",
         "schemas": [
-          { "id": "central", "fromEnv": "CONTROL_ESCOLAR_MYSQL_DATABASE" }
+          { "id": "central", "name": "casitaiedis" }
         ],
         "bindings": [
           {

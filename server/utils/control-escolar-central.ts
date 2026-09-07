@@ -26,6 +26,11 @@ const CENTRAL_SCHEMA_CACHE_MS = 1000 * 60 * 5
 
 const getConfig = () => useRuntimeConfig() as unknown as RuntimeCentralDbConfig
 
+const runtimeValue = (envName: string, configValue: unknown) => {
+  const envValue = process.env[envName]
+  return envValue === undefined ? configValue : envValue
+}
+
 const requiredValue = (value: unknown, name: string) => {
   const normalized = String(value || '').trim()
   if (!normalized) {
@@ -62,16 +67,33 @@ const assertCentralStatementIsDataOnly = (sql: string) => {
 export const getControlEscolarCentralDb = () => {
   if (!controlEscolarPool) {
     const config = getConfig()
+    const host = requiredValue(runtimeValue('CONTROL_ESCOLAR_MYSQL_HOST', config.controlEscolarMysqlHost), 'CONTROL_ESCOLAR_MYSQL_HOST')
+    const port = Number(runtimeValue('CONTROL_ESCOLAR_MYSQL_PORT', config.controlEscolarMysqlPort) || 3306)
+    const user = requiredValue(runtimeValue('CONTROL_ESCOLAR_MYSQL_USER', config.controlEscolarMysqlUser), 'CONTROL_ESCOLAR_MYSQL_USER')
+    const password = String(runtimeValue('CONTROL_ESCOLAR_MYSQL_PASSWORD', config.controlEscolarMysqlPassword) || '')
+    const database = requiredValue(runtimeValue('CONTROL_ESCOLAR_MYSQL_DATABASE', config.controlEscolarMysqlDatabase), 'CONTROL_ESCOLAR_MYSQL_DATABASE')
+    const connectionLimit = Math.max(
+      1,
+      Number(runtimeValue('CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT', config.controlEscolarMysqlConnectionLimit) || 10) || 10
+    )
+
     controlEscolarPool = mysql.createPool({
-      host: requiredValue(config.controlEscolarMysqlHost, 'CONTROL_ESCOLAR_MYSQL_HOST'),
-      port: Number(config.controlEscolarMysqlPort || 3306),
-      user: requiredValue(config.controlEscolarMysqlUser, 'CONTROL_ESCOLAR_MYSQL_USER'),
-      password: String(config.controlEscolarMysqlPassword || ''),
-      database: requiredValue(config.controlEscolarMysqlDatabase, 'CONTROL_ESCOLAR_MYSQL_DATABASE'),
+      host,
+      port,
+      user,
+      password,
+      database,
       waitForConnections: true,
-      connectionLimit: Math.max(1, Number(config.controlEscolarMysqlConnectionLimit || 10) || 10),
+      connectionLimit,
       queueLimit: 0,
       charset: 'utf8mb4'
+    })
+
+    console.info('[control-escolar-central] MySQL pool ready', {
+      host,
+      port,
+      database,
+      connectionLimit
     })
   }
 
