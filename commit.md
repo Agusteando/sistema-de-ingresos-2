@@ -1,1 +1,1 @@
-Restaura aislamiento directo de Sistema Rápido
+Restaura el padrón externo de Aurora con refresco bajo demanda
