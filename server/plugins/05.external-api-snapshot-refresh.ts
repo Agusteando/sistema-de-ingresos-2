@@ -1,3 +1,4 @@
+import { getDbTransport } from '../utils/db'
 import { runExternalControlEscolarSnapshotRefreshPass } from '../utils/control-escolar-external-snapshot-refresh'
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000
@@ -8,7 +9,10 @@ const enabled = () => {
 }
 
 export default defineNitroPlugin(() => {
-  if (!enabled() || process.env.NODE_ENV === 'test') return
+  // This producer belongs to the online Aurora runtime. Sistema Rápido must
+  // remain a direct-MySQL runtime and must not spend local resources warming
+  // the shared external API snapshots.
+  if (!enabled() || process.env.NODE_ENV === 'test' || getDbTransport() !== 'bridge') return
 
   const run = async () => {
     const startedAt = Date.now()

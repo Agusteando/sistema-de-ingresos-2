@@ -1,1 +1,1 @@
-Sirve API externa de Control Escolar desde snapshots centrales
+Restaura aislamiento directo de Sistema Rápido
