@@ -10,21 +10,6 @@ const optionalConceptColumn = (columns: Set<string>, column: string, fallbackSql
   return columns.has(column) ? `${escapeIdentifier(column)} AS ${escapeIdentifier(alias)}` : `${fallbackSql} AS ${escapeIdentifier(alias)}`
 }
 
-const cicloCandidatesFor = (value: unknown) => {
-  const key = normalizeCicloKey(value)
-  const candidates = new Set<string>()
-  if (key) {
-    candidates.add(key)
-    const numeric = Number(key)
-    if (Number.isFinite(numeric) && numeric > 1900 && numeric < 2200) {
-      candidates.add(`${numeric}-${numeric + 1}`)
-    }
-  }
-  const raw = String(value || '').trim()
-  if (raw) candidates.add(raw)
-  return [...candidates].filter(Boolean)
-}
-
 const buildConceptSearchWhere = (search: string, params: any[], columns: Set<string>, sourceAlias = '') => {
   const prefix = sourceAlias ? `${sourceAlias}.` : ''
   if (!search) return ''
@@ -40,7 +25,7 @@ const buildConceptSearchWhere = (search: string, params: any[], columns: Set<str
 
 const readCentralConceptosForCycle = async (ciclo: unknown, search: string) => {
   const columns = await getCentralTableColumns('conceptos')
-  const cicloCandidates = cicloCandidatesFor(ciclo)
+  const cicloKey = normalizeCicloKey(ciclo)
   const selectParts = [
     'id',
     'concepto',
@@ -56,9 +41,11 @@ const readCentralConceptosForCycle = async (ciclo: unknown, search: string) => {
   const params: any[] = []
   let where = `WHERE concepto IS NOT NULL AND TRIM(concepto) <> ''`
 
-  if (columns.has('ciclo') && cicloCandidates.length) {
-    where += ` AND CAST(ciclo AS CHAR) IN (${cicloCandidates.map(() => '?').join(', ')})`
-    params.push(...cicloCandidates)
+  if (columns.has('ciclo') && cicloKey) {
+    // Legacy databases have stored the same school year as 2026, 2026-2027,
+    // 2026 - 2027 and other textual variants. The start year is the stable key.
+    where += ` AND CAST(ciclo AS CHAR) LIKE ?`
+    params.push(`%${cicloKey}%`)
   }
 
   where += buildConceptSearchWhere(search, params, columns)
@@ -69,6 +56,19 @@ const readCentralConceptosForCycle = async (ciclo: unknown, search: string) => {
       ${where}
      ORDER BY concepto ASC
   `, params)
+
+  if (!rows.length && !search) {
+    const totals = await controlEscolarCentralQuery<any[]>(`
+      SELECT COUNT(*) AS total
+      FROM conceptos
+      WHERE concepto IS NOT NULL AND TRIM(concepto) <> ''
+    `)
+    console.warn('[conceptos] central returned no rows for requested cycle', {
+      ciclo: cicloKey,
+      totalConceptos: Number(totals?.[0]?.total || 0)
+    })
+  }
+
   const media = await readCentralConceptMediaForIds(rows.map((row) => Number(row?.id || 0)))
   return rows.map((row) => ({ ...row, image_url: row.image_url || media.get(Number(row?.id || 0)) || null }))
 }

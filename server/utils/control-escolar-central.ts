@@ -20,7 +20,26 @@ type TableColumn = {
   Extra?: string
 }
 
+const MAX_READ_ATTEMPTS = 3
+const READ_RETRY_DELAYS_MS = [75, 200]
+const TRANSIENT_MYSQL_CODES = new Set([
+  'PROTOCOL_CONNECTION_LOST',
+  'PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR',
+  'PROTOCOL_ENQUEUE_AFTER_QUIT',
+  'PROTOCOL_ENQUEUE_AFTER_END',
+  'PROTOCOL_PACKETS_OUT_OF_ORDER',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EPIPE',
+  'ETIMEDOUT',
+  'ERR_STREAM_WRITE_AFTER_END',
+  'ER_CON_COUNT_ERROR',
+  'ER_LOCK_DEADLOCK',
+  'ER_LOCK_WAIT_TIMEOUT'
+])
+
 let controlEscolarPool: mysql.Pool | null = null
+let configuredConnectionLimit = 10
 const centralColumnCache = new Map<string, { columns: Set<string>; loadedAt: number }>()
 const CENTRAL_SCHEMA_CACHE_MS = 1000 * 60 * 5
 
@@ -53,6 +72,21 @@ const stripLeadingSqlComments = (sql: string) => {
   }
 }
 
+const statementOperation = (sql: string) => String(stripLeadingSqlComments(sql).match(/^([A-Za-z]+)/)?.[1] || 'UNKNOWN').toUpperCase()
+const isReadOnlyStatement = (sql: string) => /^(?:SELECT|SHOW|DESCRIBE|DESC|EXPLAIN)\b/i.test(stripLeadingSqlComments(sql))
+
+const isTransientMysqlError = (error: any) => {
+  const code = String(error?.code || error?.cause?.code || '').toUpperCase()
+  if (TRANSIENT_MYSQL_CODES.has(code)) return true
+  const message = String(error?.message || '').toLowerCase()
+  return /connection.*(?:lost|closed|reset|refused)|socket.*(?:closed|hang up)|write after end|pool is closed|closed state|timed?\s*out|too many connections/.test(message)
+}
+
+const waitBeforeRetry = async (attempt: number) => {
+  const delay = READ_RETRY_DELAYS_MS[Math.min(attempt, READ_RETRY_DELAYS_MS.length - 1)] || 100
+  await new Promise((resolve) => setTimeout(resolve, delay))
+}
+
 const assertCentralStatementIsDataOnly = (sql: string) => {
   const statement = stripLeadingSqlComments(sql)
   if (!/^(?:CREATE|ALTER|DROP|TRUNCATE|RENAME)\b/i.test(statement)) return
@@ -74,8 +108,9 @@ export const getControlEscolarCentralDb = () => {
     const database = requiredValue(runtimeValue('CONTROL_ESCOLAR_MYSQL_DATABASE', config.controlEscolarMysqlDatabase), 'CONTROL_ESCOLAR_MYSQL_DATABASE')
     const connectionLimit = Math.max(
       1,
-      Number(runtimeValue('CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT', config.controlEscolarMysqlConnectionLimit) || 10) || 10
+      Number(runtimeValue('CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT', config.controlEscolarMysqlConnectionLimit) || 30) || 30
     )
+    configuredConnectionLimit = connectionLimit
 
     controlEscolarPool = mysql.createPool({
       host,
@@ -85,8 +120,13 @@ export const getControlEscolarCentralDb = () => {
       database,
       waitForConnections: true,
       connectionLimit,
+      maxIdle: connectionLimit,
+      idleTimeout: 10 * 60 * 1000,
       queueLimit: 0,
-      charset: 'utf8mb4'
+      charset: 'utf8mb4',
+      connectTimeout: 10_000,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 0
     })
 
     console.info('[control-escolar-central] MySQL pool ready', {
@@ -103,8 +143,57 @@ export const getControlEscolarCentralDb = () => {
 export const controlEscolarCentralQuery = async <T>(sql: string, params?: SqlParams): Promise<T> => {
   assertCentralStatementIsDataOnly(sql)
   const db = getControlEscolarCentralDb()
-  const [rows] = await db.query(sql, params as never)
-  return rows as T
+  const readOnly = isReadOnlyStatement(sql)
+  const maxAttempts = readOnly ? MAX_READ_ATTEMPTS : 1
+  const operation = statementOperation(sql)
+  let lastError: any = null
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const startedAt = Date.now()
+    try {
+      const [rows] = await db.query(sql, params as never)
+      const durationMs = Date.now() - startedAt
+      if (durationMs >= 1000) {
+        console.warn('[control-escolar-central] slow query', {
+          operation,
+          durationMs,
+          attempt: attempt + 1
+        })
+      }
+      return rows as T
+    } catch (error: any) {
+      lastError = error
+      const durationMs = Date.now() - startedAt
+      const retryable = readOnly && isTransientMysqlError(error) && attempt < maxAttempts - 1
+      console.warn('[control-escolar-central] query failed', {
+        operation,
+        code: String(error?.code || ''),
+        durationMs,
+        attempt: attempt + 1,
+        retryable
+      })
+      if (!retryable) throw error
+      await waitBeforeRetry(attempt)
+    }
+  }
+
+  throw lastError
+}
+
+export const warmControlEscolarCentralDb = async (targetConnections = 6) => {
+  const db = getControlEscolarCentralDb()
+  const count = Math.max(1, Math.min(configuredConnectionLimit, Number(targetConnections || 1)))
+  const connections: mysql.PoolConnection[] = []
+
+  try {
+    for (let index = 0; index < count; index += 1) {
+      connections.push(await db.getConnection())
+    }
+    await Promise.all(connections.map((connection) => connection.query('SELECT 1')))
+    return { connections: connections.length }
+  } finally {
+    connections.forEach((connection) => connection.release())
+  }
 }
 
 export const withControlEscolarCentralConnection = async <T>(

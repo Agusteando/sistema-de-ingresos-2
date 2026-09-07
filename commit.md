@@ -1,1 +1,1 @@
-Restaura acceso runtime de Aurora a la base central casitaiedis
+Corrige Google runtime y estabiliza conceptos centrales en Linux
