@@ -7,6 +7,9 @@
     "runtime": {
       "CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT": "30"
     },
+    "aliases": {
+      "NUXT_PUBLIC_GOOGLE_CLIENT_ID": "GOOGLE_CLIENT_ID"
+    },
     "vercel": {
       "project": "sistema-de-ingresos-2",
       "refreshOnDeploy": false
