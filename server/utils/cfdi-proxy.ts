@@ -28,6 +28,10 @@ type ProviderCallOptions = {
 
 const text = (value: unknown) => String(value ?? '').trim()
 const upper = (value: unknown) => text(value).toUpperCase()
+const normalizeTaxId = (value: unknown) => String(value ?? '')
+  .normalize('NFKC')
+  .replace(/[\p{White_Space}\p{Cf}]+/gu, '')
+  .toUpperCase()
 const bool = (value: unknown) => value === true || ['1', 'true', 'yes', 'si', 'sí'].includes(text(value).toLowerCase())
 
 export const resolveCfdiPath = (pathParam: unknown) => Array.isArray(pathParam)
@@ -297,6 +301,7 @@ const normalizeInvoicePayload = (body: any) => {
   delete invoiceData.test_mode
   if (customer && typeof customer === 'object') {
     delete customer.matricula
+    if (customer.tax_id !== undefined) customer.tax_id = normalizeTaxId(customer.tax_id)
     invoiceData.customer = customer
   }
 
@@ -340,7 +345,7 @@ const persistCompanyData = async (body: any, matricula: string, facturaCon: unkn
     [
       matricula,
       text(companyData.legal_name),
-      upper(companyData.tax_id),
+      normalizeTaxId(companyData.tax_id),
       text(companyData.tax_system),
       text(companyData.email),
       text(companyData.zip),
@@ -465,7 +470,7 @@ const localCompanyData = async (matricula: unknown) => {
     success: true,
     data: {
       legal_name: text(row.razonSocial),
-      tax_id: upper(row.rfc),
+      tax_id: normalizeTaxId(row.rfc),
       email: text(row.correo),
       tax_system: text(row.regimenFiscal),
       zip: text(row.cp),
@@ -498,7 +503,7 @@ const listInvoices = async (queryParams: Record<string, any>) => {
     matricula: queryParams.matricula,
     series: queryParams.series,
   })
-  const requestedTaxId = upper(queryParams.tax_id)
+  const requestedTaxId = normalizeTaxId(queryParams.tax_id)
   const requestedSeries = upper(queryParams.series)
   const requestedSearch = text(queryParams.q).toLowerCase()
   const requestedStatus = text(queryParams.status).toLowerCase()
@@ -606,7 +611,7 @@ const listInvoices = async (queryParams: Record<string, any>) => {
       payment_form: text(invoice?.payment_form),
       currency: text(invoice?.currency || 'MXN'),
       total: invoice?.total ?? null,
-      customer_tax_id: upper(customer?.tax_id || customer?.rfc || local?.rfc),
+      customer_tax_id: normalizeTaxId(customer?.tax_id || customer?.rfc || local?.rfc),
       customer_name: text(customer?.legal_name || customer?.name),
       customer_email: text(customer?.email || local?.correo),
       uuid: text(invoice?.uuid),
