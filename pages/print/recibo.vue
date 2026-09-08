@@ -7,8 +7,8 @@
     <div class="max-w-[850px] mx-auto mb-6 print:hidden flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm relative z-20">
       <button class="btn btn-ghost" @click="closeWindow">Volver</button>
       <div class="flex gap-2">
-        <button class="btn btn-outline" @click="emailReceipt" :disabled="emailing || isPreview || loadingReceipt || receiptError || !items.length">
-          <LucideMail :size="16" /> {{ emailing ? 'Enviando...' : 'Enviar email' }}
+        <button class="btn btn-outline" @click="emailReceipt" :disabled="isPreview || loadingReceipt || receiptError || !items.length">
+          <LucideMail :size="16" /> Enviar email
         </button>
         <button class="btn btn-secondary" @click="openInvoiceModal" :disabled="isPreview || loadingReceipt || receiptError || !items.length">
           <LucideFileText :size="16" /> Facturar CFDI
@@ -45,6 +45,12 @@
       :student="invoiceStudent"
       @close="showInvoiceModal = false"
     />
+
+    <ReceiptEmailModal
+      v-if="showEmailModal"
+      :folios="normalizedFolios"
+      @close="showEmailModal = false"
+    />
   </div>
 </template>
 
@@ -56,6 +62,7 @@ import { LucideFileText, LucideMail, LucidePrinter } from 'lucide-vue-next'
 import { numeroALetras } from '~/server/utils/numberToWords'
 import { normalizePlantelCode } from '~/shared/utils/institution'
 import InvoiceModal from '~/components/InvoiceModal.vue'
+import ReceiptEmailModal from '~/components/ReceiptEmailModal.vue'
 
 definePageMeta({ layout: false })
 
@@ -64,13 +71,13 @@ const items = ref([])
 const receiptData = ref({})
 const isPreview = computed(() => route.query.preview === 'true')
 const activeUserName = useCookie('auth_name').value || 'Administrador'
-const emailing = ref(false)
 const loadingReceipt = ref(!isPreview.value)
 const receiptError = ref('')
 const preparingPrint = ref(false)
 const receiptSheetRef = ref(null)
 
 const showInvoiceModal = ref(false)
+const showEmailModal = ref(false)
 const invoiceDebts = ref([])
 const invoiceStudent = ref({})
 
@@ -217,22 +224,9 @@ const triggerPrint = async () => {
   }
 }
 
-const emailReceipt = async () => {
-  const destination = prompt('Ingrese el correo electrónico destino para enviar el comprobante:', '')
-  if (!destination || !destination.includes('@')) return
-
-  emailing.value = true
-  try {
-    await $fetch('/api/payments/email-receipt', {
-      method: 'POST',
-      body: { folios: normalizedFolios.value, email: destination },
-    })
-    alert('Comprobante enviado exitosamente.')
-  } catch (error) {
-    alert(error?.data?.message || error?.message || 'Error enviando correo.')
-  } finally {
-    emailing.value = false
-  }
+const emailReceipt = () => {
+  if (!normalizedFolios.value.length || isPreview.value) return
+  showEmailModal.value = true
 }
 
 const openInvoiceModal = () => {
