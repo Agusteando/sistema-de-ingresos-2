@@ -29,7 +29,12 @@ const FINAL_TALLER_NAMES = [
   'FOLKLORE',
   'MANOS CREATIVAS',
   'GIMNASIA RITMICA',
+  'DISEÑO GRÁFICO',
   'HUSKY BAND',
+  'ROBÓTICA',
+  'INGLÉS',
+  'FRANCÉS',
+  'CATECISMO',
 ] as const
 
 const tallerImageOverrides: Record<string, string> = {
