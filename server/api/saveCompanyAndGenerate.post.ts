@@ -1,11 +1,11 @@
-import { proxyCfdiEvent } from '../utils/cfdi-proxy'
+import { proxyCfdiCompatEvent } from '../utils/cfdi-compat'
 import { runWithBridgeAgentId } from '../utils/db'
 import { recordGeneratedInvoice } from '../utils/student-invoices'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const { localTracking, ...providerBody } = body || {}
-  const response = await proxyCfdiEvent(event, 'saveCompanyAndGenerate', { body: providerBody }) as any
+  const response = await proxyCfdiCompatEvent(event, 'saveCompanyAndGenerate', { body: providerBody }) as any
 
   if (response?.success) {
     try {
@@ -26,6 +26,5 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       }
     }
   }
-
   return response
 }))

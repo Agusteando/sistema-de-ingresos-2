@@ -1,4 +1,4 @@
-import { proxyCfdiEvent } from '../../../utils/cfdi-proxy'
+import { proxyCfdiCompatEvent } from '../../../utils/cfdi-compat'
 import { runWithBridgeAgentId } from '../../../utils/db'
 import { updateLocalInvoiceCancellation } from '../../../utils/student-invoices'
 
@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   if (!id) throw createError({ statusCode: 400, message: 'Identificador de factura requerido.' })
 
   const body = await readBody(event)
-  const response = await proxyCfdiEvent(event, `invoices/${encodeURIComponent(id)}/cancel`, { body }) as any
+  const response = await proxyCfdiCompatEvent(event, `invoices/${encodeURIComponent(id)}/cancel`, { body }) as any
 
   if (response?.success !== false) {
     try {

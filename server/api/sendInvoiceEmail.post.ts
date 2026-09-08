@@ -1,3 +1,3 @@
-import { proxyCfdiEvent } from '../utils/cfdi-proxy'
+import { proxyCfdiCompatEvent } from '../utils/cfdi-compat'
 
-export default defineEventHandler(async (event) => proxyCfdiEvent(event, 'sendInvoiceEmail'))
+export default defineEventHandler(async (event) => proxyCfdiCompatEvent(event, 'sendInvoiceEmail'))

@@ -1,1 +1,1 @@
-Integra Facturapi en Aurora y corrige el envío de CFDI
+Restaura compatibilidad segura de facturación durante la migración a Aurora

@@ -1,6 +1,7 @@
 import { runWithBridgeAgentId } from '../../utils/db'
-import { proxyCfdiEvent, resolveCfdiPath } from '../../utils/cfdi-proxy'
+import { proxyCfdiCompatEvent } from '../../utils/cfdi-compat'
+import { resolveCfdiPath } from '../../utils/cfdi-proxy'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-  return proxyCfdiEvent(event, resolveCfdiPath(event.context.params?.path))
+  return proxyCfdiCompatEvent(event, resolveCfdiPath(event.context.params?.path))
 }))
