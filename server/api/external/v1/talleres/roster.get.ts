@@ -1,7 +1,7 @@
 import { assertTalleresPortalAccess } from '../../../../utils/talleres-portal-auth'
-import { readTalleresPortalRoster } from '../../../../utils/talleres-portal'
+import { readTalleresSnapshotRoster } from '../../../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => {
   await assertTalleresPortalAccess(event)
-  return await readTalleresPortalRoster(event, getQuery(event))
+  return await readTalleresSnapshotRoster(getQuery(event))
 })

@@ -1,11 +1,11 @@
 import { assertTalleresPortalAccess } from '../../../../../../utils/talleres-portal-auth'
-import { mutateTalleresStudentWorkshop } from '../../../../../../utils/talleres-portal'
+import { mutateTalleresSnapshotStudentWorkshop } from '../../../../../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => {
   const user = await assertTalleresPortalAccess(event)
   const body = await readBody(event)
   const action = String(body?.action || '').toLowerCase() as 'add' | 'remove'
-  return await mutateTalleresStudentWorkshop({
+  return await mutateTalleresSnapshotStudentWorkshop({
     matricula: getRouterParam(event, 'matricula'),
     plantel: body?.plantel,
     ciclo: body?.ciclo,

@@ -1,8 +1,8 @@
 import { assertTalleresPortalAccess } from '../../../../utils/talleres-portal-auth'
-import { readTalleresPortalMeta } from '../../../../utils/talleres-portal'
+import { readTalleresSnapshotMeta } from '../../../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => {
   await assertTalleresPortalAccess(event)
   const query = getQuery(event)
-  return await readTalleresPortalMeta(query.ciclo)
+  return await readTalleresSnapshotMeta(query.ciclo)
 })

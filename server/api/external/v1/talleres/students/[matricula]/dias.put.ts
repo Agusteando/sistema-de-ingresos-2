@@ -1,10 +1,10 @@
 import { assertTalleresPortalAccess } from '../../../../../../utils/talleres-portal-auth'
-import { saveTalleresStudentDays } from '../../../../../../utils/talleres-portal'
+import { saveTalleresSnapshotStudentDays } from '../../../../../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => {
   const user = await assertTalleresPortalAccess(event)
   const body = await readBody(event)
-  return await saveTalleresStudentDays({
+  return await saveTalleresSnapshotStudentDays({
     matricula: getRouterParam(event, 'matricula'),
     plantel: body?.plantel,
     ciclo: body?.ciclo,
