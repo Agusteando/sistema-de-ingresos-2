@@ -6,7 +6,9 @@
     "file": ".env",
     "runtime": {
       "CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT": "30",
-      "DB_TRANSPORT": "bridge"
+      "DB_TRANSPORT": "bridge",
+      "AURORA_TALLERES_SNAPSHOT_REFRESH_ENABLED": "true",
+      "AURORA_TALLERES_SNAPSHOT_REFRESH_MINUTES": "10"
     },
     "aliases": {
       "NUXT_PUBLIC_GOOGLE_CLIENT_ID": "GOOGLE_CLIENT_ID",
