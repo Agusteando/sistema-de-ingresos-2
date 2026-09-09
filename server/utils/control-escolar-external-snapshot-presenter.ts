@@ -70,16 +70,33 @@ const normalizeSnapshotResponseData = (response: any) => {
   return response
 }
 
-export const withExternalSnapshotMeta = (responseValue: any, query: any = {}) => {
+type ExternalSnapshotAvailability = {
+  fallback?: boolean
+  fallbackReason?: string | null
+  requestedScopeKey?: string | null
+  servedScopeKey?: string | null
+  refreshPending?: boolean
+}
+
+export const withExternalSnapshotMeta = (
+  responseValue: any,
+  query: any = {},
+  availability: ExternalSnapshotAvailability = {}
+) => {
   const response = normalizeSnapshotResponseData(responseValue)
+  const fallback = Boolean(availability.fallback)
   return {
     ...(response || {}),
     meta: {
       ...(response?.meta || {}),
       source: 'aurora-control-escolar-central-snapshot',
-      fallback: false,
+      fallback,
+      fallbackReason: fallback ? clean(availability.fallbackReason, 120) || 'compatible-scope' : null,
+      requestedScopeKey: clean(availability.requestedScopeKey, 64) || null,
+      servedScopeKey: clean(availability.servedScopeKey, 64) || null,
+      refreshPending: Boolean(availability.refreshPending),
       freshRequested: isExternalFreshReadRequested(query),
-      cachePolicy: 'central-snapshot-only'
+      cachePolicy: 'central-snapshot-stale-while-revalidate'
     }
   }
 }
