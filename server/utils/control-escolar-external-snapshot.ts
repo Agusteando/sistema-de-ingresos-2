@@ -43,13 +43,10 @@ const snapshotNeedsWarm = (row: any, query: any = {}) => {
   return !Number.isFinite(generatedAt) || Date.now() - generatedAt > FRESH_REQUEST_MAX_AGE_MS
 }
 
-const readLatestSnapshotScope = async (
-  scope: ReturnType<typeof buildExternalControlEscolarScope>,
-  exactScope = true
-) => {
+const readLatestSnapshotScope = async (scope: ReturnType<typeof buildExternalControlEscolarScope>) => {
   const params: any[] = [scope.plantel, scope.cicloKey, VIEW_VERSION]
   let scopeSql = ''
-  if (exactScope && scope.hasExplicitConcepts) {
+  if (scope.hasExplicitConcepts) {
     scopeSql = ' AND scope_key = ?'
     params.push(scope.descriptor.scopeKey)
   }
@@ -65,55 +62,6 @@ const readLatestSnapshotScope = async (
   return rows[0] || null
 }
 
-const withoutExplicitEnrollmentScope = (query: any = {}) => {
-  const compatibleQuery = { ...(query || {}) }
-  delete compatibleQuery.concepts
-  delete compatibleQuery.enrollmentConcepts
-  delete compatibleQuery.conceptIds
-  return compatibleQuery
-}
-
-const scheduleExactScopeWarm = (
-  query: any,
-  scope: ReturnType<typeof buildExternalControlEscolarScope>
-) => {
-  setTimeout(() => {
-    void warmExternalControlEscolarStudentScope({
-      ...query,
-      plantel: scope.plantel,
-      ciclo: scope.cicloKey,
-      cicloKey: scope.cicloKey
-    }).catch((error: any) => {
-      console.warn(
-        `[Aurora external snapshot] No se pudo refrescar ${scope.plantel}/${scope.cicloKey}/${scope.descriptor.scopeKey}:`,
-        clean(error?.statusMessage || error?.message || error, 500)
-      )
-    })
-  }, 0)
-}
-
-const compatibleAvailability = (
-  scope: ReturnType<typeof buildExternalControlEscolarScope>,
-  row: any
-) => ({
-  fallback: true,
-  fallbackReason: 'requested-scope-not-yet-warmed',
-  requestedScopeKey: clean(scope.descriptor.scopeKey, 64) || null,
-  servedScopeKey: clean(row?.scope_key, 64) || null,
-  refreshPending: true
-})
-
-const exactAvailability = (
-  scope: ReturnType<typeof buildExternalControlEscolarScope>,
-  row: any
-) => ({
-  fallback: false,
-  fallbackReason: null,
-  requestedScopeKey: clean(scope.descriptor.scopeKey, 64) || null,
-  servedScopeKey: clean(row?.scope_key, 64) || null,
-  refreshPending: false
-})
-
 export const assertExternalControlEscolarSnapshotReady = async (query: any = {}) => {
   const scope = buildExternalControlEscolarScope(query)
   if (!scope.plantel) {
@@ -125,25 +73,7 @@ export const assertExternalControlEscolarSnapshotReady = async (query: any = {})
 
   await ensureControlEscolarExternalViewSchema()
 
-  let row = await readLatestSnapshotScope(scope, true)
-
-  // Scope configuration changes must never turn an already available plantel/cycle
-  // into a 503. If the exact concept scope has never been warmed, immediately serve
-  // the latest compatible snapshot for the same plantel/cycle and warm the new scope
-  // asynchronously. This is the last-known-good layer of the external API.
-  if (!row?.scope_key && scope.hasExplicitConcepts) {
-    const compatibleRow = await readLatestSnapshotScope(scope, false)
-    if (compatibleRow?.scope_key) {
-      scheduleExactScopeWarm(query, scope)
-      return {
-        scope,
-        row: compatibleRow,
-        readQuery: withoutExplicitEnrollmentScope(query),
-        availability: compatibleAvailability(scope, compatibleRow)
-      }
-    }
-  }
-
+  let row = await readLatestSnapshotScope(scope)
   if (snapshotNeedsWarm(row, query)) {
     try {
       await warmExternalControlEscolarStudentScope({
@@ -152,51 +82,26 @@ export const assertExternalControlEscolarSnapshotReady = async (query: any = {})
         ciclo: scope.cicloKey,
         cicloKey: scope.cicloKey
       })
-      row = await readLatestSnapshotScope(scope, true)
+      row = await readLatestSnapshotScope(scope)
     } catch (error) {
-      // A failed refresh must never erase availability. Prefer the exact previous
-      // snapshot; if that scope did not exist yet, fall back to any last-known-good
-      // snapshot for the same plantel/cycle before considering the API unavailable.
-      if (!row?.scope_key) {
-        const compatibleRow = await readLatestSnapshotScope(scope, false)
-        if (compatibleRow?.scope_key) {
-          return {
-            scope,
-            row: compatibleRow,
-            readQuery: withoutExplicitEnrollmentScope(query),
-            availability: compatibleAvailability(scope, compatibleRow)
-          }
-        }
-        throw error
-      }
+      // A failed refresh must not erase a previously valid roster. If there is
+      // no snapshot at all, propagate the real Aurora/Bridge failure instead.
+      if (!row?.scope_key) throw error
     }
   }
 
   if (!row?.scope_key) throw snapshotUnavailable(scope.plantel, scope.cicloKey)
-  return {
-    scope,
-    row,
-    readQuery: query,
-    availability: exactAvailability(scope, row)
-  }
+  return { scope, row }
 }
 
 export const readExternalSnapshotStudents = async (query: any = {}) => {
-  const ready = await assertExternalControlEscolarSnapshotReady(query)
-  return withExternalSnapshotMeta(
-    await readExternalControlEscolarStudents(ready.readQuery),
-    query,
-    ready.availability
-  )
+  await assertExternalControlEscolarSnapshotReady(query)
+  return withExternalSnapshotMeta(await readExternalControlEscolarStudents(query), query)
 }
 
 export const readExternalSnapshotChanges = async (query: any = {}) => {
-  const ready = await assertExternalControlEscolarSnapshotReady(query)
-  return withExternalSnapshotMeta(
-    await readExternalControlEscolarChanges(ready.readQuery),
-    query,
-    ready.availability
-  )
+  await assertExternalControlEscolarSnapshotReady(query)
+  return withExternalSnapshotMeta(await readExternalControlEscolarChanges(query), query)
 }
 
 export const readExternalSnapshotStudentDetail = async (query: any = {}, matriculaValue: unknown) => {
@@ -207,24 +112,22 @@ export const readExternalSnapshotStudentDetail = async (query: any = {}, matricu
 
   const requestedPlantel = normalizeExternalControlEscolarPlantel(query.plantel || query.agentId || '')
   if (requestedPlantel) {
-    const ready = await assertExternalControlEscolarSnapshotReady({ ...query, plantel: requestedPlantel })
+    await assertExternalControlEscolarSnapshotReady({ ...query, plantel: requestedPlantel })
     return withExternalSnapshotMeta(
-      await readExternalControlEscolarStudentDetail(ready.readQuery, matricula),
-      query,
-      ready.availability
+      await readExternalControlEscolarStudentDetail({ ...query, plantel: requestedPlantel }, matricula),
+      query
     )
   }
 
   let readyScopes = 0
   for (const plantel of getExternalStudentPlanteles()) {
     try {
-      const ready = await assertExternalControlEscolarSnapshotReady({ ...query, plantel })
+      await assertExternalControlEscolarSnapshotReady({ ...query, plantel })
       readyScopes += 1
       try {
         return withExternalSnapshotMeta(
-          await readExternalControlEscolarStudentDetail(ready.readQuery, matricula),
-          query,
-          ready.availability
+          await readExternalControlEscolarStudentDetail({ ...query, plantel }, matricula),
+          query
         )
       } catch (error: any) {
         if (Number(error?.statusCode || 0) !== 404) throw error
