@@ -1,8 +1,6 @@
 import { executeStatementTransaction, query, type SqlStatement } from './db'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
-import { getCfdiCompanyData } from './cfdi-proxy'
-
-const CFDI_BASE_URL = 'https://update.casitaapps.com/api'
+import { getCfdiCompanyData, listCfdiInvoices } from './cfdi-proxy'
 
 const text = (value: unknown) => String(value ?? '').trim()
 const upper = (value: unknown) => text(value).toUpperCase()
@@ -628,7 +626,6 @@ const backfillProviderInvoice = async ({
   return stored || null
 }
 
-
 const providerInvoiceBelongsToStudent = async (
   invoice: ReturnType<typeof normalizeProviderInvoice>,
   matricula: string,
@@ -655,30 +652,25 @@ const providerInvoiceRows = (response: any) => {
   return []
 }
 
-const providerInvoicesForTaxId = async (taxId: string, search = '') => {
+const providerInvoicesForTaxId = async (taxId: string) => {
   const invoices: any[] = []
   const limit = 100
   let page = 1
   let pages = 1
 
   do {
-    const response = await $fetch<any>(`${CFDI_BASE_URL}/invoices`, {
-      timeout: 60_000,
-      retry: 0,
-      params: {
-        tax_id: taxId,
-        ...(search ? { q: search } : {}),
-        sort_by: 'created_at',
-        sort_dir: 'desc',
-        page,
-        limit,
-      },
+    const response = await listCfdiInvoices({
+      tax_id: taxId,
+      sort_by: 'created_at',
+      sort_dir: 'desc',
+      page,
+      limit,
     })
-    if (response?.success === false) throw new Error(text(response?.error || response?.message) || 'El proveedor rechazó la consulta.')
+    if (response?.success === false) throw new Error(text((response as any)?.error || (response as any)?.message) || 'El proveedor rechazó la consulta.')
 
     invoices.push(...providerInvoiceRows(response))
 
-    const reportedPages = Number(response?.pages || response?.data?.pages || response?.pagination?.pages || 1)
+    const reportedPages = Number((response as any)?.pages || (response as any)?.data?.pages || (response as any)?.pagination?.pages || 1)
     pages = Number.isFinite(reportedPages) && reportedPages > 0 ? Math.min(reportedPages, 20) : 1
     page += 1
   } while (page <= pages)
@@ -726,23 +718,12 @@ export const syncStudentInvoices = async (matricula: string) => {
   const localByProvider = new Map(local.map((row) => [text(row.provider_invoice_id), row]))
   let updated = 0
   let imported = 0
-  let profileAssociated = 0
 
   for (const taxId of taxIds) {
     try {
-      const [broadRows, studentSearchRows] = await Promise.all([
-        providerInvoicesForTaxId(taxId),
-        taxId === currentProfileTaxId ? providerInvoicesForTaxId(taxId, matricula) : Promise.resolve([]),
-      ])
-      const broadIds = new Set(broadRows.map(invoiceIdOf).filter(Boolean))
-      const searchWasNarrowed = studentSearchRows.length > 0
-        && (studentSearchRows.length < broadIds.size
-          || studentSearchRows.some((row) => safeJson(row)?.toUpperCase().includes(upper(matricula))))
-      const studentSearchIds = searchWasNarrowed
-        ? new Set(studentSearchRows.map(invoiceIdOf).filter(Boolean))
-        : new Set<string>()
+      const broadRows = await providerInvoicesForTaxId(taxId)
       const candidates = new Map<string, any>()
-      ;[...studentSearchRows, ...broadRows].forEach((row) => {
+      broadRows.forEach((row) => {
         const id = invoiceIdOf(row)
         if (id && !candidates.has(id)) candidates.set(id, row)
       })
@@ -754,12 +735,11 @@ export const syncStudentInvoices = async (matricula: string) => {
         if (!localRow) {
           const strictMatch = await providerInvoiceBelongsToStudent(invoice, matricula)
           const declaredMatricula = upper(invoice.matricula)
-          const studentSearchMatch = studentSearchIds.has(invoice.providerInvoiceId)
-          const profileFallback = taxId === currentProfileTaxId
-            && !declaredMatricula
-            && !invoice.externalId
 
-          if (!strictMatch && !studentSearchMatch && !profileFallback) continue
+          // Never assign ownership from RFC alone. Families can legitimately share
+          // the same receptor RFC across siblings, so a provider row must carry a
+          // matching matrícula or a payment reference that resolves to this student.
+          if (!strictMatch) continue
           if (declaredMatricula && declaredMatricula !== upper(matricula)) continue
 
           const stored = await backfillProviderInvoice({
@@ -772,7 +752,6 @@ export const syncStudentInvoices = async (matricula: string) => {
           localRow = { id: stored.id, provider_invoice_id: invoice.providerInvoiceId, rfc: taxId }
           localByProvider.set(invoice.providerInvoiceId, localRow)
           imported += 1
-          if (!strictMatch) profileAssociated += 1
         }
 
         await query(
@@ -816,12 +795,6 @@ export const syncStudentInvoices = async (matricula: string) => {
     } catch (error: any) {
       warnings.push(`No se pudo sincronizar el RFC ${taxId}: ${text(error?.data?.message || error?.message) || 'error del proveedor'}`)
     }
-  }
-
-  if (profileAssociated > 0) {
-    warnings.push(
-      `${profileAssociated} factura${profileAssociated === 1 ? '' : 's'} se recuperaron usando el perfil fiscal guardado del alumno porque el listado del proveedor no devolvió la matrícula ni la referencia de pago.`,
-    )
   }
 
   return { updated, imported, warning: warnings.join(' ') }
