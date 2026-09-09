@@ -1,4 +1,7 @@
 import { query } from './db'
+// Fiscal profiles belong to the existing centralized database (casitaiedis),
+// not the selected campus's bridge DB. Reuse its pooled data-only connection.
+import { controlEscolarCentralQuery as queryCompanyData } from './control-escolar-central'
 
 const FACTURAPI_BASE_URL = 'https://www.facturapi.io/v2'
 const DEFAULT_TIMEOUT_MS = 60_000
@@ -147,23 +150,29 @@ const providerCall = async (
       })
     }
 
-    if (options.download) return response
+    // Keep the deadline active while receiving the PDF/XML, not just headers.
+    if (options.download) return { headers: response.headers, buffer: await response.arrayBuffer() }
     if (response.status === 204) return { ok: true }
     const responseText = await response.text()
     return responseText ? JSON.parse(responseText) : { ok: true }
   } catch (error: any) {
     if (error?.statusCode) throw error
+    const uncertainMutation = method !== 'GET' && method !== 'HEAD'
+      && /^invoices(?:\/|$)/.test(path)
+    const guidance = uncertainMutation
+      ? ' No repitas la operación sin verificar primero el estado de la factura en Facturas.'
+      : ''
     if (error?.name === 'AbortError') {
       throw createError({
         statusCode: 504,
         statusMessage: 'Facturapi tardó demasiado',
-        message: 'Facturapi no respondió dentro de 60 segundos.',
+        message: `Facturapi no respondió dentro de 60 segundos.${guidance}`,
       })
     }
     throw createError({
       statusCode: 502,
       statusMessage: 'No se pudo comunicar con Facturapi',
-      message: text(error?.message) || 'Falló la comunicación directa con Facturapi.',
+      message: `Falló la comunicación directa con Facturapi.${guidance}`,
     })
   } finally {
     clearTimeout(timeout)
@@ -183,7 +192,7 @@ const resolveInvoiceAccount = async ({
   series?: unknown
   testMode?: boolean
 }): Promise<FacturapiAccount> => {
-  const hinted = accountFromHints({ facturaCon, matricula, series })
+  const hinted = accountFromHints({ facturaCon, series })
   // Never fall through to another tenant when the caller already identifies the emitter.
   // If its key is missing, keyFor() will surface the exact missing environment variable.
   if (hinted) return hinted
@@ -191,12 +200,12 @@ const resolveInvoiceAccount = async ({
   const normalizedMatricula = text(matricula)
   if (normalizedMatricula) {
     try {
-      const [profile] = await query<any[]>(
+      const [profile] = await queryCompanyData<any[]>(
         `SELECT factura_con FROM company_data WHERE matricula = ? LIMIT 1`,
         [normalizedMatricula],
       )
-      const profileAccount = accountFromHints({ facturaCon: profile?.factura_con, matricula: normalizedMatricula })
-      if (profileAccount && configuredAccounts(testMode).includes(profileAccount)) return profileAccount
+      const profileAccount = accountFromHints({ facturaCon: profile?.factura_con })
+      if (profileAccount) return profileAccount
     } catch (error) {
       console.warn('[Facturapi] No se pudo resolver la cuenta desde company_data:', error)
     }
@@ -206,24 +215,34 @@ const resolveInvoiceAccount = async ({
   if (id) {
     try {
       const [stored] = await query<any[]>(
-        `SELECT f.matricula, f.series, c.factura_con
-         FROM facturas f
-         LEFT JOIN company_data c ON c.matricula = f.matricula
-         WHERE f.provider_invoice_id = ?
-         ORDER BY f.id DESC
+        `SELECT matricula, series
+         FROM facturas
+         WHERE provider_invoice_id = ?
+         ORDER BY id DESC
          LIMIT 1`,
         [id],
       )
+      // The invoice index is campus-local; fiscal profiles are central. Never
+      // join company_data through the campus-selected bridge connection.
+      const [profile] = stored?.matricula
+        ? await queryCompanyData<any[]>(
+          `SELECT factura_con FROM company_data WHERE matricula = ? LIMIT 1`,
+          [stored.matricula],
+        )
+        : []
       const storedAccount = accountFromHints({
-        facturaCon: stored?.factura_con,
+        facturaCon: profile?.factura_con,
         matricula: stored?.matricula,
         series: stored?.series,
       })
-      if (storedAccount && configuredAccounts(testMode).includes(storedAccount)) return storedAccount
+      if (storedAccount) return storedAccount
     } catch (error) {
       console.warn('[Facturapi] No se pudo resolver la cuenta desde el índice local:', error)
     }
   }
+
+  const inferred = accountFromHints({ matricula })
+  if (inferred) return inferred
 
   const available = configuredAccounts(testMode)
   if (id && available.length > 1) {
@@ -325,7 +344,7 @@ const persistCompanyData = async (body: any, matricula: string, facturaCon: unkn
     })
   }
 
-  await query(
+  await queryCompanyData(
     `INSERT INTO company_data (
        matricula, legal_name, tax_id, tax_system, email, zip,
        nombreAlumno, CURP, nivelEducativo, autRVOE, factura_con
@@ -412,6 +431,8 @@ const createInvoice = async (body: any) => {
     testMode,
   })
 
+  // Fail before a DB round trip if this deployment cannot use the direct account.
+  keyFor(account, testMode)
   await persistCompanyData(body, matricula, account)
   await ensureSeries(account, series, invoiceData?.folio_number || body?.companyData?.folio_number, testMode)
 
@@ -439,43 +460,19 @@ const createInvoice = async (body: any) => {
   }
 }
 
-const localCompanyData = async (matricula: unknown) => {
+export const getCfdiCompanyData = async (matricula: unknown) => {
   const normalized = text(matricula)
   if (!normalized) return { success: true, data: null }
 
-  try {
-    const [profile] = await query<any[]>(
-      `SELECT matricula, legal_name, tax_id, tax_system, email, zip,
-              nombreAlumno, CURP, nivelEducativo, autRVOE, factura_con
-       FROM company_data
-       WHERE matricula = ?
-       LIMIT 1`,
-      [normalized],
-    )
-    if (profile) return { success: true, data: profile }
-  } catch (error) {
-    console.warn('[Facturapi] No se pudo leer company_data; se usará el historial local:', error)
-  }
-
-  const [row] = await query<any[]>(
-    `SELECT razonSocial, rfc, correo, regimenFiscal, cp
-     FROM facturas
-     WHERE UPPER(TRIM(CAST(matricula AS CHAR))) = ?
-     ORDER BY COALESCE(issued_at, fecha) DESC, id DESC
+  const [profile] = await queryCompanyData<any[]>(
+    `SELECT matricula, legal_name, tax_id, tax_system, email, zip,
+            nombreAlumno, CURP, nivelEducativo, autRVOE, factura_con
+     FROM company_data
+     WHERE matricula = ?
      LIMIT 1`,
-    [upper(normalized)],
+    [normalized],
   )
-  if (!row) return { success: true, data: null }
-  return {
-    success: true,
-    data: {
-      legal_name: text(row.razonSocial),
-      tax_id: normalizeTaxId(row.rfc),
-      email: text(row.correo),
-      tax_system: text(row.regimenFiscal),
-      zip: text(row.cp),
-    },
-  }
+  return { success: true, data: profile || null }
 }
 
 const invoiceCancelLabel = (invoice: any) => {
@@ -514,7 +511,7 @@ const listInvoices = async (queryParams: Record<string, any>) => {
   let companyRows: any[] = []
   if (requestedTaxId) {
     try {
-      companyRows = await query<any[]>(
+      companyRows = await queryCompanyData<any[]>(
         `SELECT DISTINCT matricula, factura_con
          FROM company_data
          WHERE UPPER(TRIM(tax_id)) = ?`,
@@ -545,8 +542,7 @@ const listInvoices = async (queryParams: Record<string, any>) => {
   }
   if (!accounts.length) keyFor('IEDIS', testMode)
 
-  const collected: any[] = []
-  for (const account of accounts) {
+  const batches = await Promise.all(accounts.map(async (account) => {
     // Facturapi caps list pages; over-fetch a bounded recent window per emitter and
     // merge/paginate in Aurora so IECS + IEDIS behave like the legacy aggregate API.
     const providerQuery: Record<string, unknown> = {
@@ -562,14 +558,13 @@ const listInvoices = async (queryParams: Record<string, any>) => {
     const rows = Array.isArray(response?.data) ? response.data : []
     const fallbackMatricula = candidates.get(account)?.[0] || text(queryParams.matricula)
 
-    rows.forEach((invoice: any) => {
-      collected.push({
-        ...invoice,
-        facturaCon: account,
-        fallbackMatricula,
-      })
-    })
-  }
+    return rows.map((invoice: any) => ({
+      ...invoice,
+      facturaCon: account,
+      fallbackMatricula,
+    }))
+  }))
+  const collected: any[] = batches.flat()
 
   const unique = new Map<string, any>()
   collected.forEach((invoice) => {
@@ -682,13 +677,13 @@ const downloadInvoice = async (event: any, invoiceId: string, format: string, hi
     method: 'GET',
     download: true,
     testMode: Boolean(hints.testMode),
-  }) as Response
+  }) as { headers: Headers, buffer: ArrayBuffer }
   const contentType = response.headers.get('content-type') || 'application/octet-stream'
   const disposition = response.headers.get('content-disposition') || `attachment; filename="factura-${invoiceId}.${normalizedFormat}"`
   setHeader(event, 'content-type', contentType)
   setHeader(event, 'content-disposition', disposition)
   setHeader(event, 'cache-control', 'private, no-store')
-  return Buffer.from(await response.arrayBuffer())
+  return Buffer.from(response.buffer)
 }
 
 const cancelInvoice = async (invoiceId: string, body: any, queryParams: Record<string, any>) => {
@@ -722,7 +717,7 @@ export const proxyCfdiEvent = async (event: any, targetPath: string, options: { 
     : undefined
 
   if (targetPath === 'getCompanyData' && method === 'GET') {
-    return localCompanyData(queryParams.matricula)
+    return getCfdiCompanyData(queryParams.matricula)
   }
 
   if (targetPath === 'saveCompanyAndGenerate' && method === 'POST') {

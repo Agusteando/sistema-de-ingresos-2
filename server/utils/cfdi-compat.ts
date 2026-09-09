@@ -69,6 +69,8 @@ const legacyCfdiRequest = async (event: any, targetPath: string, body: unknown) 
         method: method as any,
         body: body === undefined ? undefined : body,
         responseType: 'arrayBuffer',
+        timeout: 60_000,
+        retry: 0,
       })
       const contentType = response.headers.get('content-type') || 'application/octet-stream'
       const disposition = response.headers.get('content-disposition')
@@ -80,6 +82,8 @@ const legacyCfdiRequest = async (event: any, targetPath: string, body: unknown) 
     return await $fetch(url, {
       method: method as any,
       body: body === undefined ? undefined : body,
+      timeout: 60_000,
+      retry: 0,
     })
   } catch (error: any) {
     const providerPayload = error?.data || error?.response?._data || {}

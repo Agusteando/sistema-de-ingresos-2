@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:cfdi": "node --experimental-vm-modules --test tests/cfdi-operations.test.mjs",
     "build": "npm run verify:academic-source && node --max-old-space-size=4096 ./node_modules/nuxt/bin/nuxt.mjs build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",

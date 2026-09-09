@@ -1,5 +1,6 @@
 import { executeStatementTransaction, query, type SqlStatement } from './db'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { getCfdiCompanyData } from './cfdi-proxy'
 
 const CFDI_BASE_URL = 'https://update.casitaapps.com/api'
 
@@ -662,6 +663,8 @@ const providerInvoicesForTaxId = async (taxId: string, search = '') => {
 
   do {
     const response = await $fetch<any>(`${CFDI_BASE_URL}/invoices`, {
+      timeout: 60_000,
+      retry: 0,
       params: {
         tax_id: taxId,
         ...(search ? { q: search } : {}),
@@ -701,11 +704,7 @@ export const syncStudentInvoices = async (matricula: string) => {
   let currentProfileTaxId = ''
 
   try {
-    const companyResponse = await $fetch<any>(`${CFDI_BASE_URL}/getCompanyData`, { params: { matricula } })
-    if (companyResponse?.success === false) {
-      throw new Error(text(companyResponse?.error || companyResponse?.message) || 'El proveedor rechazó la consulta del perfil fiscal.')
-    }
-    const profileData = companyResponse?.data || companyResponse?.company || companyResponse || {}
+    const { data: profileData } = await getCfdiCompanyData(matricula)
     currentProfileTaxId = upper(profileData?.tax_id)
     if (currentProfileTaxId) {
       taxIdSet.add(currentProfileTaxId)
@@ -731,10 +730,10 @@ export const syncStudentInvoices = async (matricula: string) => {
 
   for (const taxId of taxIds) {
     try {
-      const broadRows = await providerInvoicesForTaxId(taxId)
-      const studentSearchRows = taxId === currentProfileTaxId
-        ? await providerInvoicesForTaxId(taxId, matricula)
-        : []
+      const [broadRows, studentSearchRows] = await Promise.all([
+        providerInvoicesForTaxId(taxId),
+        taxId === currentProfileTaxId ? providerInvoicesForTaxId(taxId, matricula) : Promise.resolve([]),
+      ])
       const broadIds = new Set(broadRows.map(invoiceIdOf).filter(Boolean))
       const searchWasNarrowed = studentSearchRows.length > 0
         && (studentSearchRows.length < broadIds.size
