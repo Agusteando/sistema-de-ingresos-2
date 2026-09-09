@@ -1,9 +1,4 @@
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
-import {
-  parseEnrollmentConceptsForPlantelHistory,
-  parseEnrollmentConceptsForScope
-} from '../../shared/utils/studentPresentation'
-import { readBestConceptosConfigPayload } from './conceptos-config'
 import { getExternalStudentPlanteles } from './control-escolar-external-view'
 import { readExternalSnapshotStudents } from './control-escolar-external-snapshot'
 import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
@@ -18,52 +13,9 @@ const publicFailure = (error: any) => ({
   message: clean(error?.message || error?.statusMessage || 'Aurora no pudo consultar el snapshot central solicitado.', 700)
 })
 
-const enrollmentStatusRequested = (query: any = {}) => {
-  const status = clean(query.status, 80).toLowerCase()
-  return status === 'inscrito' || status === 'inscritos'
-}
-
-const hasExplicitEnrollmentConcepts = (query: any = {}) => Boolean(
-  clean(query.concepts || query.enrollmentConcepts || query.conceptIds || '', 4000)
-)
-
-const withConfiguredEnrollmentScope = async (query: any, plantel: string) => {
-  if (!enrollmentStatusRequested(query) || hasExplicitEnrollmentConcepts(query)) {
-    return query
-  }
-
-  const ciclo = normalizeCicloKey(query.ciclo || query.cicloKey || query.schoolYear || '')
-  if (!ciclo) return query
-
-  const config = await readBestConceptosConfigPayload()
-  const concepts = parseEnrollmentConceptsForScope(config, { ciclo, plantel })
-  if (!concepts.length) {
-    throw createError({
-      statusCode: 503,
-      statusMessage: 'AURORA_ENROLLMENT_SCOPE_NOT_CONFIGURED',
-      message: `Aurora no encontró conceptos de inscripción configurados para ${plantel} en el ciclo ${ciclo}.`,
-      data: {
-        code: 'AURORA_ENROLLMENT_SCOPE_NOT_CONFIGURED',
-        plantel,
-        ciclo,
-        source: 'control-escolar-enrollment-config'
-      }
-    })
-  }
-
-  const historicalConcepts = parseEnrollmentConceptsForPlantelHistory(config, { plantel })
-  return {
-    ...query,
-    status: 'inscrito',
-    concepts: concepts.join(','),
-    tipoConcepts: (historicalConcepts.length ? historicalConcepts : concepts).join(',')
-  }
-}
-
 const readOneScope = async (query: any, plantel: string) => {
   try {
-    const scopedQuery = await withConfiguredEnrollmentScope(query, plantel)
-    return await readExternalSnapshotStudents({ ...scopedQuery, plantel })
+    return await readExternalSnapshotStudents({ ...query, plantel })
   } catch (error: any) {
     throw createError({
       statusCode: Number(error?.statusCode || 503) || 503,
