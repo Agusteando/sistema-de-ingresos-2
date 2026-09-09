@@ -192,24 +192,38 @@ const resolveInvoiceAccount = async ({
   series?: unknown
   testMode?: boolean
 }): Promise<FacturapiAccount> => {
-  const hinted = accountFromHints({ facturaCon, series })
+  const explicitAccount = accountFromHints({ facturaCon })
   // Never fall through to another tenant when the caller already identifies the emitter.
   // If its key is missing, keyFor() will surface the exact missing environment variable.
-  if (hinted) return hinted
+  if (explicitAccount) return explicitAccount
 
   const normalizedMatricula = text(matricula)
   if (normalizedMatricula) {
-    try {
-      const [profile] = await queryCompanyData<any[]>(
-        `SELECT factura_con FROM company_data WHERE matricula = ? LIMIT 1`,
-        [normalizedMatricula],
-      )
-      const profileAccount = accountFromHints({ facturaCon: profile?.factura_con })
-      if (profileAccount) return profileAccount
-    } catch (error) {
-      console.warn('[Facturapi] No se pudo resolver la cuenta desde company_data:', error)
+    const [profile] = await queryCompanyData<any[]>(
+      `SELECT factura_con FROM company_data WHERE matricula = ? LIMIT 1`,
+      [normalizedMatricula],
+    )
+    if (!profile) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Perfil fiscal no encontrado',
+        message: 'No se encontró la empresa con la matrícula proporcionada.',
+      })
     }
+
+    const profileAccount = accountFromHints({ facturaCon: profile.factura_con })
+    if (!profileAccount) {
+      throw createError({
+        statusCode: 422,
+        statusMessage: 'Emisor CFDI no definido',
+        message: 'El perfil fiscal de la matrícula no tiene un emisor CFDI válido.',
+      })
+    }
+    return profileAccount
   }
+
+  const hintedAccount = accountFromHints({ series })
+  if (hintedAccount) return hintedAccount
 
   const id = text(invoiceId)
   if (id) {
@@ -241,9 +255,6 @@ const resolveInvoiceAccount = async ({
     }
   }
 
-  const inferred = accountFromHints({ matricula })
-  if (inferred) return inferred
-
   const available = configuredAccounts(testMode)
   if (id && available.length > 1) {
     for (const account of available) {
@@ -260,7 +271,6 @@ const resolveInvoiceAccount = async ({
     }
   }
   if (available.length === 1) return available[0]
-  if (hinted) return hinted
   throw createError({
     statusCode: 500,
     statusMessage: 'No se pudo resolver el emisor CFDI',
@@ -497,8 +507,6 @@ const listInvoices = async (queryParams: Record<string, any>) => {
   const testMode = bool(queryParams.test_mode)
   const requestedAccount = accountFromHints({
     facturaCon: queryParams.facturaCon || queryParams.factura_con,
-    matricula: queryParams.matricula,
-    series: queryParams.series,
   })
   const requestedTaxId = normalizeTaxId(queryParams.tax_id)
   const requestedSeries = upper(queryParams.series)
@@ -510,16 +518,12 @@ const listInvoices = async (queryParams: Record<string, any>) => {
 
   let companyRows: any[] = []
   if (requestedTaxId) {
-    try {
-      companyRows = await queryCompanyData<any[]>(
-        `SELECT DISTINCT matricula, factura_con
-         FROM company_data
-         WHERE UPPER(TRIM(tax_id)) = ?`,
-        [requestedTaxId],
-      )
-    } catch (error) {
-      console.warn('[Facturapi] No se pudo cargar company_data para el listado:', error)
-    }
+    companyRows = await queryCompanyData<any[]>(
+      `SELECT DISTINCT matricula, factura_con
+       FROM company_data
+       WHERE UPPER(TRIM(tax_id)) = ?`,
+      [requestedTaxId],
+    )
   }
 
   const candidates = new Map<FacturapiAccount, string[]>()
@@ -535,12 +539,16 @@ const listInvoices = async (queryParams: Record<string, any>) => {
   let accounts: FacturapiAccount[]
   if (requestedAccount) {
     accounts = [requestedAccount]
-  } else if (candidates.size) {
+  } else if (requestedTaxId) {
     accounts = Array.from(candidates.keys())
   } else {
-    accounts = configuredAccounts(testMode)
+    const inferredAccount = accountFromHints({
+      matricula: queryParams.matricula,
+      series: queryParams.series,
+    })
+    accounts = inferredAccount ? [inferredAccount] : configuredAccounts(testMode)
   }
-  if (!accounts.length) keyFor('IEDIS', testMode)
+  if (!accounts.length && !requestedTaxId) keyFor('IEDIS', testMode)
 
   const batches = await Promise.all(accounts.map(async (account) => {
     // Facturapi caps list pages; over-fetch a bounded recent window per emitter and
@@ -615,7 +623,7 @@ const listInvoices = async (queryParams: Record<string, any>) => {
       cancel_status_label: invoiceCancelLabel(invoice),
     }
   }).filter((invoice) => {
-    if (requestedTaxId && invoice.customer_tax_id && invoice.customer_tax_id !== requestedTaxId) return false
+    if (requestedTaxId && invoice.customer_tax_id !== requestedTaxId) return false
     if (requestedSeries && upper(invoice.series) !== requestedSeries) return false
     if (requestedStatus) {
       if (requestedStatus === 'canceled') {
