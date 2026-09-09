@@ -1,5 +1,3 @@
-import { proxyCfdiEvent } from './cfdi-proxy'
-
 const LEGACY_CFDI_BASE_URL = String(
   process.env.CFDI_LEGACY_BASE_URL || 'https://update.casitaapps.com/api',
 ).replace(/\/+$/, '')
@@ -17,44 +15,6 @@ const sanitizeQuery = (query: Record<string, any>) => {
     params.append(key, String(value))
   })
   return params.toString()
-}
-
-const errorStatus = (error: any) => Number(
-  error?.statusCode
-  || error?.status
-  || error?.response?.status
-  || error?.data?.statusCode
-  || error?.data?.status
-  || 0,
-)
-
-const errorText = (error: any) => [
-  error?.message,
-  error?.statusMessage,
-  error?.data?.message,
-  error?.data?.providerMessage,
-  error?.data?.diagnostic?.message,
-  error?.data?.diagnostic?.code,
-  error?.code,
-].map(text).filter(Boolean).join(' ')
-
-const isSafeLegacyFallback = (targetPath: string, error: any) => {
-  const status = errorStatus(error)
-  const detail = errorText(error)
-
-  // The direct adapter has not contacted Facturapi when keyFor() throws.
-  if (/Falta FACTURAPI_(?:LIVE|TEST)_KEY_(?:IEDIS|IECS|SILVIA)/i.test(detail)) return true
-
-  // Authentication rejection cannot have emitted/cancelled/sent a CFDI.
-  if (status === 401 && /Facturapi|autentic/i.test(detail)) return true
-
-  // These local DB failures happen before the provider mutation in the save/create flow.
-  if (/^(?:getCompanyData|saveCompanyAndGenerate|createInvoice)$/i.test(targetPath)) {
-    if (/DB_BRIDGE_|DB bridge request failed|agent_mysql|ER_[A-Z0-9_]+/i.test(detail)) return true
-  }
-
-  // Preserve the pre-migration compatibility surface for routes not yet implemented directly.
-  return status === 404 && /ya no se delega al servicio factura-api/i.test(detail)
 }
 
 const legacyCfdiRequest = async (event: any, targetPath: string, body: unknown) => {
@@ -122,15 +82,9 @@ export const proxyCfdiCompatEvent = async (
     ? undefined
     : (hasExplicitBody ? options.body : await readBody(event))
 
-  try {
-    return await proxyCfdiEvent(
-      event,
-      targetPath,
-      method === 'GET' || method === 'HEAD' ? {} : { body },
-    )
-  } catch (error: any) {
-    if (!isSafeLegacyFallback(targetPath, error)) throw error
-    console.warn(`[CFDI] Compatibilidad factura-api activada para ${targetPath}: ${errorText(error)}`)
-    return legacyCfdiRequest(event, targetPath, body)
-  }
+  // Production CFDI operations must preserve the contract that was proven before
+  // the native migration. Do not mix native and legacy semantics per request: a
+  // successful-but-different native response cannot safely trigger a fallback and
+  // mutations such as create/cancel/email must never be attempted twice.
+  return legacyCfdiRequest(event, targetPath, body)
 }
