@@ -1,6 +1,24 @@
 import { normalizePlantel } from '../../utils/auth-session'
 import { isLocalSystemRuntime } from '../../utils/local-system-manager'
 
+const CANONICAL_CLOUD_URL = 'https://aurora.casitaiedis.edu.mx'
+const LEGACY_CLOUD_HOSTS = new Set([
+  'aurora.casitaapps.com'
+])
+
+const resolveCloudLoginBase = (value: unknown) => {
+  const configured = new URL(String(value || CANONICAL_CLOUD_URL))
+  if (!['http:', 'https:'].includes(configured.protocol)) {
+    throw new Error('Unsupported Aurora cloud protocol.')
+  }
+
+  if (LEGACY_CLOUD_HOSTS.has(configured.hostname.toLowerCase())) {
+    return new URL(CANONICAL_CLOUD_URL)
+  }
+
+  return configured
+}
+
 export default defineEventHandler((event) => {
   setResponseHeader(event, 'Cache-Control', 'no-store')
 
@@ -21,7 +39,7 @@ export default defineEventHandler((event) => {
 
   let cloudLogin: URL
   try {
-    cloudLogin = new URL('/login', String(config.localSystemCloudUrl || 'https://aurora.casitaiedis.edu.mx'))
+    cloudLogin = new URL('/login', resolveCloudLoginBase(config.localSystemCloudUrl))
   } catch {
     throw createError({ statusCode: 503, message: 'La dirección de Aurora En la nube no es válida.' })
   }
