@@ -2499,9 +2499,10 @@ const normalizeLegacyInvoice = (invoice) => {
   };
 };
 
-const LEGACY_INVOICE_API_URL = 'https://update.casitaapps.com/api';
+const LEGACY_INVOICE_API_URL = '/api';
 
 const fetchLegacyInvoices = async ({
+  matricula = '',
   tax_id,
   q = '',
   status = '',
@@ -2515,6 +2516,7 @@ const fetchLegacyInvoices = async ({
   limit = 20,
 }) => {
   const params = new URLSearchParams({
+    matricula,
     tax_id,
     q,
     status,
@@ -2528,8 +2530,6 @@ const fetchLegacyInvoices = async ({
     limit: String(limit),
   });
 
-  // Match InvoiceModule.fetchInvoicesAdv exactly, including its URLSearchParams
-  // serialization, and use the provider-supported page size from the legacy browser.
   Object.keys([...params]).forEach((key) => {
     if (!params.get(key) || params.get(key) === '') params.delete(key);
   });
@@ -2566,8 +2566,6 @@ const loadStudentInvoices = async ({ force = false, silent = false, page = stude
   studentInvoicesWarning.value = '';
 
   try {
-    // Same browser-to-provider flow used by the legacy InvoiceModule:
-    // getCompanyData by matrícula, then /invoices by the returned RFC.
     const companyResponse = await fetch(
       `${LEGACY_INVOICE_API_URL}/getCompanyData?matricula=${encodeURIComponent(matricula)}`,
     );
@@ -2582,6 +2580,7 @@ const loadStudentInvoices = async ({ force = false, silent = false, page = stude
     }
 
     const result = await fetchLegacyInvoices({
+      matricula,
       tax_id: taxId,
       q: '',
       status: '',

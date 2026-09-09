@@ -56,6 +56,9 @@ const keyFor = (account: FacturapiAccount, testMode = false) => {
       statusCode: 500,
       statusMessage: 'Facturapi no configurado en Aurora',
       message: `Falta FACTURAPI_${suffix}_KEY_${account} en el entorno de Aurora.`,
+      data: {
+        providerMessage: `Falta FACTURAPI_${suffix}_KEY_${account} en el entorno de Aurora.`,
+      },
     })
   }
   return key
@@ -79,6 +82,19 @@ const accountFromHints = ({
   const prefix = upper(matricula).slice(0, 2)
   if (prefix) return IEDIS_PREFIXES.has(prefix) ? 'IEDIS' : 'IECS'
   return null
+}
+
+const fiscalProfileForMatricula = async (matricula: unknown) => {
+  const normalized = text(matricula)
+  if (!normalized) return null
+  const [profile] = await queryCompanyData<any[]>(
+    `SELECT matricula, tax_id, factura_con
+     FROM company_data
+     WHERE matricula = ?
+     LIMIT 1`,
+    [normalized],
+  )
+  return profile || null
 }
 
 const parseProviderError = async (response: Response) => {
@@ -138,12 +154,21 @@ const providerCall = async (
 
     if (!response.ok) {
       const { payload, message } = await parseProviderError(response)
+      console.error('[CFDI] Facturapi rechazó la operación', {
+        account,
+        method,
+        path,
+        status: response.status,
+        code: text(payload?.code) || undefined,
+        message,
+      })
       throw createError({
         statusCode: response.status,
         statusMessage: response.status >= 500 ? 'Facturapi no disponible' : 'Facturapi rechazó la solicitud',
         message,
         data: {
           providerStatus: response.status,
+          providerMessage: message,
           providerCode: text(payload?.code) || undefined,
           providerPath: text(payload?.path) || undefined,
         },
@@ -163,16 +188,27 @@ const providerCall = async (
       ? ' No repitas la operación sin verificar primero el estado de la factura en Facturas.'
       : ''
     if (error?.name === 'AbortError') {
+      const message = `Facturapi no respondió dentro de 60 segundos.${guidance}`
+      console.error('[CFDI] Timeout con Facturapi', { account, method, path })
       throw createError({
         statusCode: 504,
         statusMessage: 'Facturapi tardó demasiado',
-        message: `Facturapi no respondió dentro de 60 segundos.${guidance}`,
+        message,
+        data: { providerStatus: 504, providerMessage: message },
       })
     }
+    const message = `Falló la comunicación directa con Facturapi.${guidance}`
+    console.error('[CFDI] Error de comunicación con Facturapi', {
+      account,
+      method,
+      path,
+      error: text(error?.message),
+    })
     throw createError({
       statusCode: 502,
       statusMessage: 'No se pudo comunicar con Facturapi',
-      message: `Falló la comunicación directa con Facturapi.${guidance}`,
+      message,
+      data: { providerStatus: 502, providerMessage: message },
     })
   } finally {
     clearTimeout(timeout)
@@ -193,21 +229,19 @@ const resolveInvoiceAccount = async ({
   testMode?: boolean
 }): Promise<FacturapiAccount> => {
   const explicitAccount = accountFromHints({ facturaCon })
-  // Never fall through to another tenant when the caller already identifies the emitter.
-  // If its key is missing, keyFor() will surface the exact missing environment variable.
-  if (explicitAccount) return explicitAccount
+  // Explicit account hints are used by administrative/global operations. Student
+  // operations normally carry matrícula and are resolved from the saved profile.
+  if (explicitAccount && !text(matricula)) return explicitAccount
 
   const normalizedMatricula = text(matricula)
   if (normalizedMatricula) {
-    const [profile] = await queryCompanyData<any[]>(
-      `SELECT factura_con FROM company_data WHERE matricula = ? LIMIT 1`,
-      [normalizedMatricula],
-    )
+    const profile = await fiscalProfileForMatricula(normalizedMatricula)
     if (!profile) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Perfil fiscal no encontrado',
         message: 'No se encontró la empresa con la matrícula proporcionada.',
+        data: { providerMessage: 'No se encontró la empresa con la matrícula proporcionada.' },
       })
     }
 
@@ -217,10 +251,13 @@ const resolveInvoiceAccount = async ({
         statusCode: 422,
         statusMessage: 'Emisor CFDI no definido',
         message: 'El perfil fiscal de la matrícula no tiene un emisor CFDI válido.',
+        data: { providerMessage: 'El perfil fiscal de la matrícula no tiene un emisor CFDI válido.' },
       })
     }
     return profileAccount
   }
+
+  if (explicitAccount) return explicitAccount
 
   const hintedAccount = accountFromHints({ series })
   if (hintedAccount) return hintedAccount
@@ -238,12 +275,9 @@ const resolveInvoiceAccount = async ({
       )
       // The invoice index is campus-local; fiscal profiles are central. Never
       // join company_data through the campus-selected bridge connection.
-      const [profile] = stored?.matricula
-        ? await queryCompanyData<any[]>(
-          `SELECT factura_con FROM company_data WHERE matricula = ? LIMIT 1`,
-          [stored.matricula],
-        )
-        : []
+      const profile = stored?.matricula
+        ? await fiscalProfileForMatricula(stored.matricula)
+        : null
       const storedAccount = accountFromHints({
         facturaCon: profile?.factura_con,
         matricula: stored?.matricula,
@@ -275,6 +309,48 @@ const resolveInvoiceAccount = async ({
     statusCode: 500,
     statusMessage: 'No se pudo resolver el emisor CFDI',
     message: 'Aurora no pudo determinar qué cuenta de Facturapi corresponde a esta factura.',
+    data: { providerMessage: 'Aurora no pudo determinar qué cuenta de Facturapi corresponde a esta factura.' },
+  })
+}
+
+const resolveCreationAccount = async ({
+  matricula,
+  facturaCon,
+  testMode = false,
+}: {
+  matricula?: unknown
+  facturaCon?: unknown
+  testMode?: boolean
+}): Promise<FacturapiAccount> => {
+  const requested = upper(facturaCon)
+  if (requested && !['IEDIS', 'IECS', 'SILVIA'].includes(requested)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Emisor CFDI inválido',
+      message: 'Valor de facturaCon no válido. Debe ser "IECS", "IEDIS" o "SILVIA".',
+      data: { providerMessage: 'Valor de facturaCon no válido. Debe ser "IECS", "IEDIS" o "SILVIA".' },
+    })
+  }
+
+  // The browser always sends a prefix-derived default. Once a student already has
+  // a fiscal profile, its saved emitter is authoritative (notably DM + IECS).
+  const profile = await fiscalProfileForMatricula(matricula)
+  const savedAccount = accountFromHints({ facturaCon: profile?.factura_con })
+  if (savedAccount) return savedAccount
+
+  const requestedAccount = accountFromHints({ facturaCon })
+  if (requestedAccount) return requestedAccount
+
+  const inferred = accountFromHints({ matricula })
+  if (inferred) return inferred
+
+  const available = configuredAccounts(testMode)
+  if (available.length === 1) return available[0]
+  throw createError({
+    statusCode: 400,
+    statusMessage: 'Emisor CFDI no definido',
+    message: 'No se pudo determinar el emisor fiscal para esta factura.',
+    data: { providerMessage: 'No se pudo determinar el emisor fiscal para esta factura.' },
   })
 }
 
@@ -347,10 +423,12 @@ const persistCompanyData = async (body: any, matricula: string, facturaCon: unkn
   ]
   const missing = requiredFields.find((field) => !text(companyData?.[field]))
   if (missing) {
+    const message = `El campo '${missing}' en companyData es requerido.`
     throw createError({
       statusCode: 400,
       statusMessage: 'Datos fiscales incompletos',
-      message: `El campo '${missing}' en companyData es requerido.`,
+      message,
+      data: { providerMessage: message },
     })
   }
 
@@ -398,10 +476,15 @@ const resolveSeries = (body: any, invoiceData: any, matricula: string, facturaCo
         throw createError({
           statusCode: 400,
           message: 'No se puede seleccionar una serie cuando la matrícula no comienza con "PT".',
+          data: { providerMessage: 'No se puede seleccionar una serie cuando la matrícula no comienza con "PT".' },
         })
       }
       if (!['PT', 'ST'].includes(requested)) {
-        throw createError({ statusCode: 400, message: 'Serie inválida. Debe ser "PT" o "ST".' })
+        throw createError({
+          statusCode: 400,
+          message: 'Serie inválida. Debe ser "PT" o "ST".',
+          data: { providerMessage: 'Serie inválida. Debe ser "PT" o "ST".' },
+        })
       }
     } else {
       series = upper(matricula).slice(0, 2)
@@ -412,34 +495,55 @@ const resolveSeries = (body: any, invoiceData: any, matricula: string, facturaCo
   }
 
   if (!series) {
-    throw createError({ statusCode: 400, message: 'No se pudo determinar la serie de la factura.' })
+    throw createError({
+      statusCode: 400,
+      message: 'No se pudo determinar la serie de la factura.',
+      data: { providerMessage: 'No se pudo determinar la serie de la factura.' },
+    })
   }
   return series
 }
 
 const createInvoice = async (body: any) => {
   const { invoiceData, facturaCon, matricula, testMode } = normalizeInvoicePayload(body)
-  const series = resolveSeries(body, invoiceData, matricula, facturaCon)
+  const isSaveCompanyFlow = Boolean(body?.companyData && body?.invoiceData)
+
+  if (isSaveCompanyFlow && invoiceData.external_id !== undefined && typeof invoiceData.external_id !== 'string') {
+    throw createError({
+      statusCode: 400,
+      message: "El campo 'external_id' debe ser una cadena si se proporciona.",
+      data: { providerMessage: "El campo 'external_id' debe ser una cadena si se proporciona." },
+    })
+  }
+  if (invoiceData.external_id !== undefined) invoiceData.external_id = String(invoiceData.external_id)
+
+  const account = isSaveCompanyFlow
+    ? await resolveCreationAccount({ matricula, facturaCon, testMode })
+    : await resolveInvoiceAccount({ facturaCon, matricula, series: invoiceData?.series, testMode })
+  const series = resolveSeries(body, invoiceData, matricula, account)
   invoiceData.series = series
 
-  const requiredInvoiceFields = body?.companyData && body?.invoiceData
+  const requiredInvoiceFields = isSaveCompanyFlow
     ? ['customer', 'items', 'payment_form', 'use']
     : ['customer', 'items', 'use']
   const missingInvoiceField = requiredInvoiceFields.find((field) => !invoiceData?.[field])
   if (missingInvoiceField) {
+    const message = `El campo '${missingInvoiceField}' en invoiceData es requerido.`
     throw createError({
       statusCode: 400,
       statusMessage: 'Datos de factura incompletos',
-      message: `El campo '${missingInvoiceField}' en invoiceData es requerido.`,
+      message,
+      data: { providerMessage: message },
     })
   }
-
-  const account = await resolveInvoiceAccount({
-    facturaCon,
-    matricula,
-    series,
-    testMode,
-  })
+  if (Array.isArray(invoiceData.items) && invoiceData.items.length === 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Factura sin conceptos',
+      message: 'La factura debe incluir al menos un concepto.',
+      data: { providerMessage: 'La factura debe incluir al menos un concepto.' },
+    })
+  }
 
   // Fail before a DB round trip if this deployment cannot use the direct account.
   keyFor(account, testMode)
@@ -503,12 +607,47 @@ const dateInRange = (value: unknown, from: unknown, to: unknown) => {
   return timestamp >= fromTime && timestamp <= toTime
 }
 
-const listInvoices = async (queryParams: Record<string, any>) => {
+export const listCfdiInvoices = async (queryParams: Record<string, any>) => {
   const testMode = bool(queryParams.test_mode)
+  const requestedMatricula = text(queryParams.matricula)
+  let requestedTaxId = normalizeTaxId(queryParams.tax_id)
+  let studentProfile: any = null
+  let studentAccount: FacturapiAccount | null = null
+
+  if (requestedMatricula) {
+    studentProfile = await fiscalProfileForMatricula(requestedMatricula)
+    if (!studentProfile) {
+      return {
+        success: true,
+        total: 0,
+        pages: 1,
+        page: 1,
+        limit: Math.min(100, Math.max(1, Number.parseInt(text(queryParams.limit) || '50', 10) || 50)),
+        sort_by: text(queryParams.sort_by || 'created_at'),
+        sort_dir: text(queryParams.sort_dir || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc',
+        invoices: [],
+      }
+    }
+    const profileTaxId = normalizeTaxId(studentProfile.tax_id)
+    if (requestedTaxId && profileTaxId && requestedTaxId !== profileTaxId) {
+      return {
+        success: true,
+        total: 0,
+        pages: 1,
+        page: 1,
+        limit: Math.min(100, Math.max(1, Number.parseInt(text(queryParams.limit) || '50', 10) || 50)),
+        sort_by: text(queryParams.sort_by || 'created_at'),
+        sort_dir: text(queryParams.sort_dir || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc',
+        invoices: [],
+      }
+    }
+    if (!requestedTaxId) requestedTaxId = profileTaxId
+    studentAccount = accountFromHints({ facturaCon: studentProfile.factura_con })
+  }
+
   const requestedAccount = accountFromHints({
     facturaCon: queryParams.facturaCon || queryParams.factura_con,
   })
-  const requestedTaxId = normalizeTaxId(queryParams.tax_id)
   const requestedSeries = upper(queryParams.series)
   const requestedSearch = text(queryParams.q).toLowerCase()
   const requestedStatus = text(queryParams.status).toLowerCase()
@@ -539,11 +678,13 @@ const listInvoices = async (queryParams: Record<string, any>) => {
   let accounts: FacturapiAccount[]
   if (requestedAccount) {
     accounts = [requestedAccount]
+  } else if (studentAccount) {
+    accounts = [studentAccount]
   } else if (requestedTaxId) {
     accounts = Array.from(candidates.keys())
   } else {
     const inferredAccount = accountFromHints({
-      matricula: queryParams.matricula,
+      matricula: requestedMatricula,
       series: queryParams.series,
     })
     accounts = inferredAccount ? [inferredAccount] : configuredAccounts(testMode)
@@ -552,7 +693,7 @@ const listInvoices = async (queryParams: Record<string, any>) => {
 
   const batches = await Promise.all(accounts.map(async (account) => {
     // Facturapi caps list pages; over-fetch a bounded recent window per emitter and
-    // merge/paginate in Aurora so IECS + IEDIS behave like the legacy aggregate API.
+    // merge/paginate in Aurora so IECS + IEDIS behave like the old aggregate API.
     const providerQuery: Record<string, unknown> = {
       type: 'I',
       page: 1,
@@ -564,7 +705,12 @@ const listInvoices = async (queryParams: Record<string, any>) => {
 
     const response = await providerCall(account, 'invoices', { query: providerQuery, testMode })
     const rows = Array.isArray(response?.data) ? response.data : []
-    const fallbackMatricula = candidates.get(account)?.[0] || text(queryParams.matricula)
+    const accountCandidates = candidates.get(account) || []
+    // A requested matrícula may share the same RFC with siblings. Never stamp its
+    // matrícula onto an account-wide provider row unless ownership is unambiguous.
+    const fallbackMatricula = requestedTaxId && accountCandidates.length === 1
+      ? accountCandidates[0]
+      : ''
 
     return rows.map((invoice: any) => ({
       ...invoice,
@@ -596,18 +742,45 @@ const listInvoices = async (queryParams: Record<string, any>) => {
     }
   }
 
+  const externalIds = Array.from(new Set(Array.from(unique.values())
+    .map((invoice: any) => upper(invoice?.external_id))
+    .filter(Boolean)))
+  const paymentOwnerByExternalId = new Map<string, string>()
+  if (externalIds.length) {
+    try {
+      const paymentRows = await query<any[]>(
+        `SELECT folio_plantel, matricula
+         FROM referenciasdepago
+         WHERE UPPER(TRIM(CAST(folio_plantel AS CHAR))) IN (?)`,
+        [externalIds],
+      )
+      paymentRows.forEach((row) => {
+        const externalId = upper(row?.folio_plantel)
+        const matricula = text(row?.matricula)
+        if (externalId && matricula && !paymentOwnerByExternalId.has(externalId)) {
+          paymentOwnerByExternalId.set(externalId, matricula)
+        }
+      })
+    } catch (error) {
+      console.warn('[Facturapi] No se pudo resolver matrícula desde folio_plantel:', error)
+    }
+  }
+
   const normalized = Array.from(unique.values()).map((invoice: any) => {
     const id = text(invoice?.id)
     const local = localByProvider.get(id)
     const series = text(invoice?.series)
     const folioNumber = invoice?.folio_number ?? ''
     const customer = invoice?.customer || {}
+    const externalId = upper(invoice?.external_id)
+    const paymentOwner = externalId ? paymentOwnerByExternalId.get(externalId) : ''
     return {
       id,
       invoice_id: id,
       series,
       folio_number: folioNumber,
       folio: text(invoice?.folio) || `${series}${folioNumber}`,
+      external_id: text(invoice?.external_id),
       created_at: invoice?.created_at || invoice?.date || null,
       status: text(invoice?.status),
       cancellation_status: text(invoice?.cancellation_status || 'none'),
@@ -618,12 +791,13 @@ const listInvoices = async (queryParams: Record<string, any>) => {
       customer_name: text(customer?.legal_name || customer?.name),
       customer_email: text(customer?.email || local?.correo),
       uuid: text(invoice?.uuid),
-      matricula: text(local?.matricula || invoice?.matricula || invoice?.fallbackMatricula),
+      matricula: text(local?.matricula || paymentOwner || invoice?.matricula || invoice?.fallbackMatricula),
       factura_con: invoice?.facturaCon,
       cancel_status_label: invoiceCancelLabel(invoice),
     }
   }).filter((invoice) => {
     if (requestedTaxId && invoice.customer_tax_id !== requestedTaxId) return false
+    if (requestedMatricula && upper(invoice.matricula) !== upper(requestedMatricula)) return false
     if (requestedSeries && upper(invoice.series) !== requestedSeries) return false
     if (requestedStatus) {
       if (requestedStatus === 'canceled') {
@@ -767,7 +941,7 @@ export const proxyCfdiEvent = async (event: any, targetPath: string, options: { 
   }
 
   if (targetPath === 'invoices' && method === 'GET') {
-    return listInvoices(queryParams)
+    return listCfdiInvoices(queryParams)
   }
 
   if (targetPath === 'invoices' && method === 'POST') {
@@ -796,6 +970,6 @@ export const proxyCfdiEvent = async (event: any, targetPath: string, options: { 
   throw createError({
     statusCode: 404,
     statusMessage: 'Ruta CFDI no soportada',
-    message: `La ruta ${targetPath} ya no se delega al servicio factura-api.`,
+    message: `La ruta ${targetPath} no está implementada en el adaptador nativo de Aurora.`,
   })
 }
