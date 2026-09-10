@@ -13,52 +13,54 @@
       <LucideChevronDown :size="16" :class="{ rotated: open }" />
     </button>
 
-    <div v-if="open" class="searchable-select__menu">
-      <label class="searchable-select__search">
-        <LucideSearch :size="16" />
-        <input
-          ref="searchInput"
-          v-model="query"
-          type="search"
-          :placeholder="searchPlaceholder"
-          autocomplete="off"
-          @keydown.down.prevent="move(1)"
-          @keydown.up.prevent="move(-1)"
-          @keydown.enter.prevent="chooseActive"
-          @keydown.esc.prevent="close"
-        />
-      </label>
+    <Teleport to="body">
+      <div v-if="open" ref="menu" class="searchable-select__menu" :style="menuStyle">
+        <label class="searchable-select__search">
+          <LucideSearch :size="16" />
+          <input
+            ref="searchInput"
+            v-model="query"
+            type="search"
+            :placeholder="searchPlaceholder"
+            autocomplete="off"
+            @keydown.down.prevent="move(1)"
+            @keydown.up.prevent="move(-1)"
+            @keydown.enter.prevent="chooseActive"
+            @keydown.esc.prevent="close"
+          />
+        </label>
 
-      <div class="searchable-select__options" role="listbox">
-        <button
-          v-if="clearable"
-          type="button"
-          class="searchable-select__option clear-option"
-          :class="{ selected: !modelValue }"
-          @click="choose('')"
-        >
-          {{ clearLabel }}
-          <LucideCheck v-if="!modelValue" :size="15" />
-        </button>
+        <div class="searchable-select__options" role="listbox">
+          <button
+            v-if="clearable"
+            type="button"
+            class="searchable-select__option clear-option"
+            :class="{ selected: !modelValue }"
+            @click="choose('')"
+          >
+            {{ clearLabel }}
+            <LucideCheck v-if="!modelValue" :size="15" />
+          </button>
 
-        <button
-          v-for="(option, index) in filteredOptions"
-          :key="String(option.value)"
-          type="button"
-          class="searchable-select__option"
-          :class="{ active: index === activeIndex, selected: String(option.value) === String(modelValue) }"
-          role="option"
-          :aria-selected="String(option.value) === String(modelValue) ? 'true' : 'false'"
-          @mouseenter="activeIndex = index"
-          @click="choose(option.value)"
-        >
-          <span>{{ option.label }}</span>
-          <LucideCheck v-if="String(option.value) === String(modelValue)" :size="15" />
-        </button>
+          <button
+            v-for="(option, index) in filteredOptions"
+            :key="String(option.value)"
+            type="button"
+            class="searchable-select__option"
+            :class="{ active: index === activeIndex, selected: String(option.value) === String(modelValue) }"
+            role="option"
+            :aria-selected="String(option.value) === String(modelValue) ? 'true' : 'false'"
+            @mouseenter="activeIndex = index"
+            @click="choose(option.value)"
+          >
+            <span>{{ option.label }}</span>
+            <LucideCheck v-if="String(option.value) === String(modelValue)" :size="15" />
+          </button>
 
-        <div v-if="!filteredOptions.length" class="searchable-select__empty">Sin resultados</div>
+          <div v-if="!filteredOptions.length" class="searchable-select__empty">Sin resultados</div>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -78,10 +80,12 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'change'])
 const root = ref(null)
+const menu = ref(null)
 const searchInput = ref(null)
 const open = ref(false)
 const query = ref('')
 const activeIndex = ref(0)
+const menuStyle = ref({})
 
 const normalizedOptions = computed(() => (props.options || [])
   .map((option) => ({
@@ -106,11 +110,45 @@ const filteredOptions = computed(() => {
   return normalizedOptions.value.filter((option) => normalizeSearch(`${option.label} ${option.value} ${option.search}`).includes(needle))
 })
 
-watch(query, () => { activeIndex.value = 0 })
+const updatePosition = () => {
+  if (!open.value || !root.value || typeof window === 'undefined') return
+  const rect = root.value.getBoundingClientRect()
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const margin = 8
+  const gap = 6
+  const width = Math.min(Math.max(rect.width, 280), Math.max(0, viewportWidth - margin * 2))
+  const left = Math.min(Math.max(rect.left, margin), Math.max(margin, viewportWidth - width - margin))
+  const below = Math.max(0, viewportHeight - rect.bottom - gap - margin)
+  const above = Math.max(0, rect.top - gap - margin)
+  const measuredHeight = menu.value?.offsetHeight || 316
+  const placeAbove = below < Math.min(measuredHeight, 220) && above > below
+  const available = placeAbove ? above : below
+  const optionsMaxHeight = Math.max(96, Math.min(260, available - 58))
+  const visibleMenuHeight = Math.min(measuredHeight, Math.max(154, available))
+  const top = placeAbove
+    ? Math.max(margin, rect.top - gap - visibleMenuHeight)
+    : Math.min(rect.bottom + gap, Math.max(margin, viewportHeight - visibleMenuHeight - margin))
+
+  menuStyle.value = {
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+    width: `${Math.round(width)}px`,
+    '--searchable-select-options-max-height': `${Math.round(optionsMaxHeight)}px`,
+  }
+}
+
+watch(query, async () => {
+  activeIndex.value = 0
+  await nextTick()
+  updatePosition()
+})
 watch(() => props.disabled, (value) => { if (value) close() })
-watch(filteredOptions, (items) => {
+watch(filteredOptions, async (items) => {
   if (!items.length) activeIndex.value = 0
   else if (activeIndex.value >= items.length) activeIndex.value = items.length - 1
+  await nextTick()
+  updatePosition()
 })
 
 const openMenu = async () => {
@@ -120,12 +158,16 @@ const openMenu = async () => {
   const selectedIndex = normalizedOptions.value.findIndex((option) => String(option.value) === String(props.modelValue))
   activeIndex.value = selectedIndex >= 0 ? selectedIndex : 0
   await nextTick()
+  updatePosition()
+  await nextTick()
+  updatePosition()
   searchInput.value?.focus()
 }
 
 const close = () => {
   open.value = false
   query.value = ''
+  menuStyle.value = {}
 }
 
 const toggle = () => open.value ? close() : openMenu()
@@ -147,14 +189,24 @@ const chooseActive = () => {
 }
 
 const handleOutside = (event) => {
-  if (root.value && !root.value.contains(event.target)) close()
+  const target = event.target
+  if (root.value?.contains(target) || menu.value?.contains(target)) return
+  close()
 }
 
-onMounted(() => document.addEventListener('pointerdown', handleOutside))
-onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutside))
+onMounted(() => {
+  document.addEventListener('pointerdown', handleOutside)
+  window.addEventListener('resize', updatePosition)
+  window.addEventListener('scroll', updatePosition, true)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleOutside)
+  window.removeEventListener('resize', updatePosition)
+  window.removeEventListener('scroll', updatePosition, true)
+})
 </script>
 
 <style scoped>
-.searchable-select{position:relative;width:100%;min-width:0}.searchable-select.open{z-index:90}.searchable-select__trigger{width:100%;height:42px;border:1px solid #d5dfe9;border-radius:12px;background:#fff;padding:0 11px 0 12px;color:#27374a;font:inherit;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;cursor:pointer;outline:0}.searchable-select__trigger span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.searchable-select__trigger .placeholder{color:#8b98a8;font-weight:650}.searchable-select__trigger svg{flex:0 0 auto;color:#718096;transition:transform .15s ease}.searchable-select__trigger svg.rotated{transform:rotate(180deg)}.searchable-select.open .searchable-select__trigger,.searchable-select__trigger:focus-visible{border-color:#77b9cb;box-shadow:0 0 0 3px rgba(11,136,177,.1)}.searchable-select__trigger:disabled{opacity:.55;cursor:not-allowed}.searchable-select__menu{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:100;min-width:min(360px,calc(100vw - 32px));padding:6px;background:#fff;border:1px solid #dce5ec;border-radius:14px;box-shadow:0 18px 48px rgba(27,48,66,.18)}.searchable-select__search{height:40px;display:flex;align-items:center;gap:7px;padding:0 10px;color:#748294;border:1px solid #dbe4eb;border-radius:10px;background:#fafdff}.searchable-select__search:focus-within{border-color:#77b9cb;box-shadow:0 0 0 2px rgba(11,136,177,.08)}.searchable-select__search input{width:100%;height:36px!important;padding:0!important;border:0!important;box-shadow:none!important;outline:0;background:transparent;color:#27374a;font:inherit;font-weight:650}.searchable-select__options{display:grid;gap:2px;max-height:260px;overflow-y:auto;margin-top:5px}.searchable-select__option{width:100%;min-height:38px;border:0;border-radius:9px;background:transparent;padding:7px 9px;color:#34465a;font:inherit;font-weight:700;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer}.searchable-select__option span{min-width:0;overflow:hidden;text-overflow:ellipsis}.searchable-select__option:hover,.searchable-select__option.active{background:#f1f7fa}.searchable-select__option.selected{color:#087fa8;background:#eef8fb}.searchable-select__option svg{flex:0 0 auto}.searchable-select__option.clear-option{color:#728093}.searchable-select__empty{padding:16px 10px;color:#8b98a8;font-size:.78rem;text-align:center}.disabled{pointer-events:none}
-@media(max-width:620px){.searchable-select__menu{min-width:100%}}
+.searchable-select{position:relative;width:100%;min-width:0}.searchable-select__trigger{width:100%;height:42px;border:1px solid #d5dfe9;border-radius:12px;background:#fff;padding:0 11px 0 12px;color:#27374a;font:inherit;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;cursor:pointer;outline:0}.searchable-select__trigger span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.searchable-select__trigger .placeholder{color:#8b98a8;font-weight:650}.searchable-select__trigger svg{flex:0 0 auto;color:#718096;transition:transform .15s ease}.searchable-select__trigger svg.rotated{transform:rotate(180deg)}.searchable-select.open .searchable-select__trigger,.searchable-select__trigger:focus-visible{border-color:#77b9cb;box-shadow:0 0 0 3px rgba(11,136,177,.1)}.searchable-select__trigger:disabled{opacity:.55;cursor:not-allowed}.searchable-select__menu{position:fixed;z-index:2147483000;min-width:0;box-sizing:border-box;padding:6px;background:#fff;border:1px solid #dce5ec;border-radius:14px;box-shadow:0 18px 48px rgba(27,48,66,.22)}.searchable-select__search{height:40px;display:flex;align-items:center;gap:7px;padding:0 10px;color:#748294;border:1px solid #dbe4eb;border-radius:10px;background:#fafdff}.searchable-select__search:focus-within{border-color:#77b9cb;box-shadow:0 0 0 2px rgba(11,136,177,.08)}.searchable-select__search input{width:100%;height:36px!important;padding:0!important;border:0!important;box-shadow:none!important;outline:0;background:transparent;color:#27374a;font:inherit;font-weight:650}.searchable-select__options{display:grid;gap:2px;max-height:var(--searchable-select-options-max-height,260px);overflow-y:auto;margin-top:5px}.searchable-select__option{width:100%;min-height:38px;border:0;border-radius:9px;background:transparent;padding:7px 9px;color:#34465a;font:inherit;font-weight:700;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer}.searchable-select__option span{min-width:0;overflow:hidden;text-overflow:ellipsis}.searchable-select__option:hover,.searchable-select__option.active{background:#f1f7fa}.searchable-select__option.selected{color:#087fa8;background:#eef8fb}.searchable-select__option svg{flex:0 0 auto}.searchable-select__option.clear-option{color:#728093}.searchable-select__empty{padding:16px 10px;color:#8b98a8;font-size:.78rem;text-align:center}.disabled{pointer-events:none}
+@media(max-width:620px){.searchable-select__menu{max-width:calc(100vw - 16px)}}
 </style>
