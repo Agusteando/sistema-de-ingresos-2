@@ -7,12 +7,18 @@
         <p>Agrega talleres y define manualmente qué taller o servicio corresponde a cada concepto financiero.</p>
       </div>
       <div class="hero-actions">
-        <label class="field cycle-field">
+        <div class="field cycle-field">
           <span>Ciclo escolar</span>
-          <select v-model="selectedCiclo">
-            <option v-for="cycle in cycleOptions" :key="cycle.value" :value="cycle.value">{{ cycle.label }}</option>
-          </select>
-        </label>
+          <SearchableSelect
+            v-model="selectedCiclo"
+            :options="cycleOptions"
+            :disabled="loading"
+            :clearable="false"
+            placeholder="Selecciona un ciclo..."
+            search-placeholder="Buscar ciclo..."
+            accessible-label="Ciclo escolar"
+          />
+        </div>
         <button class="btn subtle" type="button" :disabled="loading" @click="load">
           <LucideRefreshCw :size="17" :class="{ spin: loading }" /> Actualizar
         </button>
@@ -34,23 +40,30 @@
         </span>
       </div>
       <div class="manual-fields">
-        <label class="field">
+        <div class="field">
           <span>Concepto financiero</span>
-          <select v-model="manualConceptId" :disabled="loading">
-            <option value="">Selecciona un concepto...</option>
-            <option v-for="row in rows" :key="row.concepto_id" :value="String(row.concepto_id)">#{{ row.concepto_id }} · {{ row.concepto_nombre }}</option>
-          </select>
-        </label>
-        <label class="field">
+          <SearchableSelect
+            v-model="manualConceptId"
+            :options="conceptOptions"
+            :disabled="loading"
+            placeholder="Selecciona un concepto..."
+            search-placeholder="Buscar concepto por nombre o número..."
+            clear-label="Sin concepto"
+            accessible-label="Concepto financiero"
+          />
+        </div>
+        <div class="field">
           <span>Taller o servicio</span>
-          <div class="service-search">
-            <LucideSearch :size="16" />
-            <input v-model="manualServiceSearch" :disabled="loading" list="talleres-catalog-options" placeholder="Buscar taller o servicio..." autocomplete="off" @input="syncManualServiceFromSearch" />
-          </div>
-          <datalist id="talleres-catalog-options">
-            <option v-for="item in catalog" :key="item.clave" :value="item.nombre" />
-          </datalist>
-        </label>
+          <SearchableSelect
+            v-model="manualServiceKey"
+            :options="catalogOptions"
+            :disabled="loading || !manualConceptId"
+            placeholder="Selecciona del catálogo..."
+            search-placeholder="Buscar taller o servicio..."
+            clear-label="Sin taller o servicio"
+            accessible-label="Taller o servicio"
+          />
+        </div>
         <button class="btn primary" type="button" :disabled="!canSaveManual || savingIds.has(Number(manualConceptId))" @click="saveManualAssociation">
           <LucideLoaderCircle v-if="savingIds.has(Number(manualConceptId))" :size="17" class="spin" />
           <LucideLink2 v-else :size="17" />
@@ -115,13 +128,19 @@
             </div>
           </div>
           <div class="mapping">
-            <label class="field">
+            <div class="field">
               <span>Asociación global</span>
-              <select :value="row.global?.servicio_clave || ''" :disabled="savingIds.has(row.concepto_id)" @change="saveFromSelect(row, $event)">
-                <option value="">Sin asociación global</option>
-                <option v-for="item in catalog" :key="item.clave" :value="item.clave">{{ item.nombre }}</option>
-              </select>
-            </label>
+              <SearchableSelect
+                :model-value="row.global?.servicio_clave || ''"
+                :options="catalogOptions"
+                :disabled="savingIds.has(row.concepto_id)"
+                placeholder="Sin asociación global"
+                search-placeholder="Buscar taller o servicio..."
+                clear-label="Sin asociación global"
+                :accessible-label="`Asociación global de ${row.concepto_nombre}`"
+                @update:model-value="saveFromSelect(row, $event)"
+              />
+            </div>
             <button v-if="row.suggestion && !row.global" class="btn suggest" type="button" :disabled="savingIds.has(row.concepto_id)" @click="saveMapping(row, row.suggestion.servicio_clave)">
               <LucideSparkles :size="15" /> Usar {{ row.suggestion.servicio_nombre }}
             </button>
@@ -173,7 +192,6 @@ const filter = ref('all')
 const savingIds = reactive(new Set())
 const manualConceptId = ref('')
 const manualServiceKey = ref('')
-const manualServiceSearch = ref('')
 const removingWorkshopKey = ref('')
 const showAllPreview = ref(false)
 const showWorkshopModal = ref(false)
@@ -182,7 +200,9 @@ const creatingWorkshop = ref(false)
 
 const rows = computed(() => payload.value?.rows || [])
 const catalog = computed(() => [...(payload.value?.catalog || [])].sort((a, b) => Number(a?.orden || 9999) - Number(b?.orden || 9999) || String(a?.nombre || '').localeCompare(String(b?.nombre || ''), 'es')))
-const cycleOptions = computed(() => Array.from(new Set([selectedCiclo.value, ...(payload.value?.cycles || []).map(c => normalizeCicloKey(c?.cycle_name))])).filter(Boolean).sort((a, b) => b.localeCompare(a)).map(value => ({ value, label: formatCicloLabel(value) })))
+const cycleOptions = computed(() => Array.from(new Set([selectedCiclo.value, ...(payload.value?.cycles || []).map(c => normalizeCicloKey(c?.cycle_name))])).filter(Boolean).sort((a, b) => b.localeCompare(a)).map(value => ({ value, label: formatCicloLabel(value), search: value })))
+const conceptOptions = computed(() => rows.value.map(row => ({ value: String(row.concepto_id), label: `#${row.concepto_id} · ${row.concepto_nombre}`, search: `${row.concepto_id} ${row.concepto_nombre}` })))
+const catalogOptions = computed(() => catalog.value.map(item => ({ value: item.clave, label: item.nombre, search: `${item.clave} ${item.nombre}` })))
 const selectedManualRow = computed(() => rows.value.find(row => String(row.concepto_id) === String(manualConceptId.value)) || null)
 const selectedManualService = computed(() => catalog.value.find(item => item.clave === manualServiceKey.value) || null)
 const canSaveManual = computed(() => Boolean(selectedManualRow.value && manualServiceKey.value))
@@ -202,21 +222,13 @@ const visibleRows = computed(() => {
   })
 })
 
-const syncManualServiceFromSearch = () => {
-  const needle = String(manualServiceSearch.value || '').trim().toLocaleLowerCase('es')
-  const match = catalog.value.find(item => String(item?.nombre || '').trim().toLocaleLowerCase('es') === needle || String(item?.clave || '').trim().toLocaleLowerCase('es') === needle)
-  manualServiceKey.value = match?.clave || ''
-}
-
 const load = async () => {
   loading.value = true
   error.value = ''
   try {
     payload.value = await $fetch('/api/conceptos-config/talleres-servicios', { query: { ciclo: selectedCiclo.value } })
-    if (manualServiceKey.value && !catalog.value.some(item => item.clave === manualServiceKey.value)) {
-      manualServiceKey.value = ''
-      manualServiceSearch.value = ''
-    }
+    if (manualServiceKey.value && !catalog.value.some(item => item.clave === manualServiceKey.value)) manualServiceKey.value = ''
+    if (manualConceptId.value && !rows.value.some(row => String(row.concepto_id) === String(manualConceptId.value))) manualConceptId.value = ''
   } catch (e) {
     error.value = e?.data?.message || e?.data?.statusMessage || 'No se pudieron cargar las asociaciones.'
   } finally {
@@ -237,14 +249,16 @@ const saveMapping = async (row, key) => {
     savingIds.delete(row.concepto_id)
   }
 }
+
 const saveManualAssociation = async () => {
   if (selectedManualRow.value && manualServiceKey.value) await saveMapping(selectedManualRow.value, manualServiceKey.value)
 }
-const saveFromSelect = async (row, event) => {
-  const key = event?.target?.value || ''
+
+const saveFromSelect = async (row, key) => {
   if (key) await saveMapping(row, key)
   else if (row.global) await removeGlobal(row)
 }
+
 const removeGlobal = async (row) => {
   if (!row?.global?.id || savingIds.has(row.concepto_id)) return
   savingIds.add(row.concepto_id)
@@ -266,10 +280,7 @@ const removeWorkshop = async (item) => {
   removingWorkshopKey.value = item.clave
   try {
     await $fetch(`/api/conceptos-config/services/${encodeURIComponent(item.clave)}`, { method: 'DELETE' })
-    if (manualServiceKey.value === item.clave) {
-      manualServiceKey.value = ''
-      manualServiceSearch.value = ''
-    }
+    if (manualServiceKey.value === item.clave) manualServiceKey.value = ''
     show(`${item.nombre} retirado del catálogo.`, 'success')
     await load()
   } catch (e) {
@@ -288,7 +299,6 @@ const createWorkshop = async () => {
   const existing = catalog.value.find(item => normalizeServicioClave(item?.clave || item?.nombre) === clave)
   if (existing) {
     manualServiceKey.value = existing.clave
-    manualServiceSearch.value = existing.nombre
     show('Ese taller ya existe; quedó seleccionado para asociarlo.', 'success')
     closeWorkshopModal()
     return
@@ -298,7 +308,6 @@ const createWorkshop = async () => {
     await $fetch('/api/conceptos-config/services', { method: 'POST', body: { servicio_clave: clave, servicio_nombre: nombre, imagen_url: '/talleres-servicios/default.svg', orden: 9999 } })
     await load()
     manualServiceKey.value = clave
-    manualServiceSearch.value = nombre
     show(`${nombre} agregado al catálogo.`, 'success')
     showWorkshopModal.value = false
     newWorkshopName.value = ''
@@ -309,21 +318,12 @@ const createWorkshop = async () => {
   }
 }
 
-watch(manualConceptId, () => {
-  manualServiceKey.value = selectedManualRow.value?.global?.servicio_clave || ''
-  manualServiceSearch.value = selectedManualRow.value?.global?.servicio_nombre || ''
-})
-watch(manualServiceKey, (value) => {
-  if (!value) return
-  const item = catalog.value.find(candidate => candidate.clave === value)
-  if (item) manualServiceSearch.value = item.nombre
-})
+watch(manualConceptId, () => { manualServiceKey.value = selectedManualRow.value?.global?.servicio_clave || '' })
 watch(selectedCiclo, async (value, previous) => {
   if (!value || value === previous) return
   setActiveCiclo(value)
   manualConceptId.value = ''
   manualServiceKey.value = ''
-  manualServiceSearch.value = ''
   showAllPreview.value = false
   await load()
 })
@@ -331,6 +331,6 @@ onMounted(load)
 </script>
 
 <style scoped>
-.ts-admin{display:grid;gap:16px;width:100%}.card{background:#fff;border:1px solid #e3e9ef;border-radius:18px;box-shadow:0 8px 24px rgba(28,55,83,.055)}.hero{padding:22px 24px;display:flex;justify-content:space-between;gap:24px;align-items:center}.hero h1,.manual-title h2,.modal h2{margin:4px 0 6px;color:#17263a}.hero h1{font-size:clamp(1.45rem,2vw,2rem)}.hero p,.manual-title p,.suggestions p,.modal p{margin:0;color:#65758a;line-height:1.45}.eyebrow{color:#0b88b1;font-size:.68rem;font-weight:900;letter-spacing:.12em}.hero-actions{display:flex;align-items:end;gap:10px;flex-wrap:wrap;justify-content:flex-end}.field{display:grid;gap:5px}.field>span{font-size:.68rem;color:#718096;font-weight:800;text-transform:uppercase;letter-spacing:.07em}.field select,.field input{height:42px;border:1px solid #d5dfe9;border-radius:12px;background:#fff;padding:0 12px;color:#27374a;font-weight:700;outline:0;min-width:0}.field select:focus,.field input:focus{border-color:#77b9cb;box-shadow:0 0 0 3px rgba(11,136,177,.1)}.cycle-field select{min-width:175px}.service-search{height:42px;border:1px solid #d5dfe9;border-radius:12px;background:#fff;display:flex;align-items:center;gap:7px;padding:0 10px;color:#718096}.service-search:focus-within{border-color:#77b9cb;box-shadow:0 0 0 3px rgba(11,136,177,.1)}.service-search input{height:38px!important;border:0!important;box-shadow:none!important;padding:0!important;width:100%}.btn,.icon-btn{border:0;border-radius:12px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:0 15px}.btn:disabled,.icon-btn:disabled,select:disabled,input:disabled{opacity:.55;cursor:not-allowed}.primary{background:#55aa3e;color:#fff}.subtle{background:#f2f5f7;color:#697687}.btn.remove{background:#fff0ee;color:#a64038}.manual-card{padding:18px 20px;border-color:#cfe4d0;background:linear-gradient(135deg,#fbfffa,#fff 75%)}.manual-title{display:flex;justify-content:space-between;gap:16px;align-items:start;margin-bottom:15px}.manual-title h2{font-size:1.05rem}.manual-fields{display:grid;grid-template-columns:minmax(240px,1.5fr) minmax(210px,1fr) auto auto auto;gap:10px;align-items:end}.manual-fields select,.manual-fields .service-search{width:100%;box-sizing:border-box}.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:4px 8px;background:#f2f4f6;color:#74808e;font-size:.68rem;font-weight:850;white-space:nowrap}.mapped-pill{background:#eaf8e8;color:#32853a}.suggestion-pill{background:#e9f7fd;color:#087fa7}.override-pill{background:#fff3df;color:#946507}.suggestions{padding:16px 20px;display:grid;grid-template-columns:auto 1fr;gap:12px;color:#0784ad;background:#fbfeff}.suggestion-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#1f3045}.suggestions p{font-size:.86rem;margin-top:3px}.preview{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.preview span,.preview button{border:0;border-radius:999px;padding:5px 8px;background:#eef7fb;color:#3d6273;font-size:.68rem;font-weight:750}.preview button{cursor:pointer;color:#087fa6}.association-card{overflow:hidden}.toolbar{padding:14px 16px;border-bottom:1px solid #e8edf2;display:flex;justify-content:space-between;gap:14px}.tabs{display:flex;gap:5px;background:#f4f7f9;padding:4px;border-radius:12px}.tabs button{border:0;background:transparent;color:#637287;border-radius:9px;padding:8px 12px;font-weight:800;cursor:pointer}.tabs button.active{background:#fff;color:#0b789d;box-shadow:0 2px 8px rgba(26,68,94,.09)}.tabs span{font-size:.68rem;opacity:.7}.search{min-width:min(390px,46vw);height:40px;border:1px solid #dce4eb;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 12px;color:#7a8797}.search input{border:0;outline:0;width:100%;background:transparent}.rows{display:grid}.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,440px);gap:24px;align-items:center;padding:15px 18px;border-bottom:1px solid #edf1f4}.row:last-child{border-bottom:0}.row.mapped{box-shadow:inset 3px 0 #62b966}.concept-title{display:flex;gap:8px;align-items:baseline}.concept-title span{color:#8b98a8;font-size:.7rem;font-weight:800}.concept-title strong{color:#26374b;font-size:.93rem}.meta,.overrides{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.overrides span{font-size:.67rem;color:#6e5a28;background:#fff9ed;border:1px solid #f2e5c8;border-radius:7px;padding:3px 6px}.mapping{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}.mapping select{width:100%}.suggest{background:#e7f7fd;color:#087ea5;white-space:nowrap}.state{min-height:170px;display:flex;align-items:center;justify-content:center;gap:8px;color:#738195}.state.error{color:#b24c4c}.backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:rgba(19,35,50,.38);backdrop-filter:blur(4px)}.modal{width:min(520px,100%);box-sizing:border-box;background:#fff;border:1px solid #dfe7ec;border-radius:20px;box-shadow:0 24px 70px rgba(24,42,58,.22);padding:20px;display:grid;gap:17px}.modal-title{display:flex;justify-content:space-between;gap:14px}.modal-title h2{font-size:1.25rem}.icon-btn{width:38px;height:38px;min-height:38px;padding:0;background:#f3f5f7;color:#697687}.modal p{font-size:.82rem}.modal-actions{display:flex;justify-content:flex-end;gap:9px}.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:1180px){.manual-fields{grid-template-columns:1fr 1fr auto}.manual-fields .btn{width:100%}}@media(max-width:900px){.hero{align-items:stretch;flex-direction:column}.hero-actions{justify-content:flex-start}.toolbar{flex-direction:column}.search{min-width:0;width:100%;box-sizing:border-box}.row{grid-template-columns:1fr;gap:11px}}@media(max-width:620px){.hero,.manual-card,.suggestions{padding:16px}.hero-actions{display:grid;grid-template-columns:1fr 1fr}.cycle-field{grid-column:1/-1}.cycle-field select,.hero-actions .btn{width:100%}.manual-title{flex-direction:column}.manual-fields{grid-template-columns:1fr}.mapping{grid-template-columns:1fr}.mapping .btn{width:100%}.tabs{width:100%;overflow:auto;box-sizing:border-box}.tabs button{flex:1 0 auto}.modal-actions{display:grid;grid-template-columns:1fr 1fr}}
+.ts-admin{display:grid;gap:16px;width:100%}.card{background:#fff;border:1px solid #e3e9ef;border-radius:18px;box-shadow:0 8px 24px rgba(28,55,83,.055)}.hero{padding:22px 24px;display:flex;justify-content:space-between;gap:24px;align-items:center}.hero h1,.manual-title h2,.modal h2{margin:4px 0 6px;color:#17263a}.hero h1{font-size:clamp(1.45rem,2vw,2rem)}.hero p,.manual-title p,.suggestions p,.modal p{margin:0;color:#65758a;line-height:1.45}.eyebrow{color:#0b88b1;font-size:.68rem;font-weight:900;letter-spacing:.12em}.hero-actions{display:flex;align-items:end;gap:10px;flex-wrap:wrap;justify-content:flex-end}.field{display:grid;gap:5px;min-width:0}.field>span{font-size:.68rem;color:#718096;font-weight:800;text-transform:uppercase;letter-spacing:.07em}.field>input{height:42px;border:1px solid #d5dfe9;border-radius:12px;background:#fff;padding:0 12px;color:#27374a;font-weight:700;outline:0;min-width:0}.field>input:focus{border-color:#77b9cb;box-shadow:0 0 0 3px rgba(11,136,177,.1)}.cycle-field{min-width:190px}.btn,.icon-btn{border:0;border-radius:12px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:0 15px}.btn:disabled,.icon-btn:disabled,input:disabled{opacity:.55;cursor:not-allowed}.primary{background:#55aa3e;color:#fff}.subtle{background:#f2f5f7;color:#697687}.btn.remove{background:#fff0ee;color:#a64038}.manual-card{padding:18px 20px;border-color:#cfe4d0;background:linear-gradient(135deg,#fbfffa,#fff 75%)}.manual-title{display:flex;justify-content:space-between;gap:16px;align-items:start;margin-bottom:15px}.manual-title h2{font-size:1.05rem}.manual-fields{display:grid;grid-template-columns:minmax(270px,1.5fr) minmax(230px,1fr) auto auto auto;gap:10px;align-items:end}.manual-fields .searchable-select{width:100%}.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:4px 8px;background:#f2f4f6;color:#74808e;font-size:.68rem;font-weight:850;white-space:nowrap}.mapped-pill{background:#eaf8e8;color:#32853a}.suggestion-pill{background:#e9f7fd;color:#087fa7}.override-pill{background:#fff3df;color:#946507}.suggestions{padding:16px 20px;display:grid;grid-template-columns:auto 1fr;gap:12px;color:#0784ad;background:#fbfeff}.suggestion-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#1f3045}.suggestions p{font-size:.86rem;margin-top:3px}.preview{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.preview span,.preview button{border:0;border-radius:999px;padding:5px 8px;background:#eef7fb;color:#3d6273;font-size:.68rem;font-weight:750}.preview button{cursor:pointer;color:#087fa6}.association-card{overflow:visible}.toolbar{padding:14px 16px;border-bottom:1px solid #e8edf2;display:flex;justify-content:space-between;gap:14px}.tabs{display:flex;gap:5px;background:#f4f7f9;padding:4px;border-radius:12px}.tabs button{border:0;background:transparent;color:#637287;border-radius:9px;padding:8px 12px;font-weight:800;cursor:pointer}.tabs button.active{background:#fff;color:#0b789d;box-shadow:0 2px 8px rgba(26,68,94,.09)}.tabs span{font-size:.68rem;opacity:.7}.search{min-width:min(390px,46vw);height:40px;border:1px solid #dce4eb;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 12px;color:#7a8797}.search input{border:0;outline:0;width:100%;background:transparent}.rows{display:grid}.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,440px);gap:24px;align-items:center;padding:15px 18px;border-bottom:1px solid #edf1f4}.row:last-child{border-bottom:0}.row.mapped{box-shadow:inset 3px 0 #62b966}.concept-title{display:flex;gap:8px;align-items:baseline}.concept-title span{color:#8b98a8;font-size:.7rem;font-weight:800}.concept-title strong{color:#26374b;font-size:.93rem}.meta,.overrides{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.overrides span{font-size:.67rem;color:#6e5a28;background:#fff9ed;border:1px solid #f2e5c8;border-radius:7px;padding:3px 6px}.mapping{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}.mapping .searchable-select{width:100%}.suggest{background:#e7f7fd;color:#087ea5;white-space:nowrap}.state{min-height:170px;display:flex;align-items:center;justify-content:center;gap:8px;color:#738195}.state.error{color:#b24c4c}.backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:rgba(19,35,50,.38);backdrop-filter:blur(4px)}.modal{width:min(520px,100%);box-sizing:border-box;background:#fff;border:1px solid #dfe7ec;border-radius:20px;box-shadow:0 24px 70px rgba(24,42,58,.22);padding:20px;display:grid;gap:17px}.modal-title{display:flex;justify-content:space-between;gap:14px}.modal-title h2{font-size:1.25rem}.icon-btn{width:38px;height:38px;min-height:38px;padding:0;background:#f3f5f7;color:#697687}.modal p{font-size:.82rem}.modal-actions{display:flex;justify-content:flex-end;gap:9px}.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:1180px){.manual-fields{grid-template-columns:1fr 1fr auto}.manual-fields .btn{width:100%}}@media(max-width:900px){.hero{align-items:stretch;flex-direction:column}.hero-actions{justify-content:flex-start}.toolbar{flex-direction:column}.search{min-width:0;width:100%;box-sizing:border-box}.row{grid-template-columns:1fr;gap:11px}}@media(max-width:620px){.hero,.manual-card,.suggestions{padding:16px}.hero-actions{display:grid;grid-template-columns:1fr 1fr}.cycle-field{grid-column:1/-1;width:100%}.hero-actions .btn{width:100%}.manual-title{flex-direction:column}.manual-fields{grid-template-columns:1fr}.mapping{grid-template-columns:1fr}.mapping .btn{width:100%}.tabs{width:100%;overflow:auto;box-sizing:border-box}.tabs button{flex:1 0 auto}.modal-actions{display:grid;grid-template-columns:1fr 1fr}}
 </style>
