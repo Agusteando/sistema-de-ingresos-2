@@ -23,6 +23,7 @@ const FINAL_TALLER_NAMES = [
   'BASQUETBOL',
   'TOCHITO BANDERA',
   'TECLADO',
+  'TEATRO',
   'TEATRO MUSICAL',
   'AJEDREZ',
   'VOLEIBOL',
@@ -44,6 +45,7 @@ const tallerImageOverrides: Record<string, string> = {
   TENIS: publicImage('TENNIS'),
   TOCHITO_BANDERA: publicImage('TOCHO_BANDERA'),
   GIMNASIA_RITMICA: publicImage('GIMNASIA'),
+  TEATRO: publicImage('TEATRO_MUSICAL'),
   FOLKLORE: publicImage('default'),
   MANOS_CREATIVAS: publicImage('default'),
 }
