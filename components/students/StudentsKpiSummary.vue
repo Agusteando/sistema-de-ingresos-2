@@ -16,14 +16,25 @@
         <UiKpiSparkline :values="item.sparkline" />
       </button>
 
-      <div v-if="isSuperAdmin" class="kpi-card kpi-income-card" aria-label="Ingresos del mes">
+      <button
+        v-if="isSuperAdmin"
+        type="button"
+        :class="['kpi-card', 'kpi-income-card', { 'is-income-hidden': !incomeVisible }]"
+        :aria-label="incomeVisible ? 'Ocultar ingresos del mes' : 'Mostrar ingresos del mes'"
+        :aria-pressed="incomeVisible"
+        @click="toggleIncomeVisibility"
+      >
         <span class="kpi-icon"><LucideCircleDollarSign :size="24" /></span>
         <span class="kpi-text">
           <span>Ingresos del mes</span>
-          <StudentsKpiValue :value="formattedIncome" />
+          <StudentsKpiValue
+            :value="formattedIncome"
+            :class="['kpi-income-value', { 'is-blurred': !incomeVisible }]"
+            :aria-hidden="incomeVisible ? undefined : 'true'"
+          />
         </span>
         <UiKpiSparkline :values="kpiSparklines.ingresos" />
-      </div>
+      </button>
     </div>
 
     <div v-if="customSections.length" class="section-kpi-rail" aria-label="Secciones personalizadas">
@@ -42,7 +53,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import StudentsKpiValue from '~/components/students/StudentsKpiValue.vue'
 import { LucideCircleDollarSign, LucideGlobe2, LucideTag, LucideUserCheck, LucideUsers, LucideUserX } from 'lucide-vue-next'
 import UiKpiSparkline from '~/components/ui/UiKpiSparkline.vue'
@@ -60,6 +71,35 @@ const props = defineProps({
 })
 
 defineEmits(['set-filter'])
+
+const INCOME_REVEAL_MS = 5000
+const incomeVisible = ref(false)
+let incomeVisibilityTimer = null
+
+const clearIncomeVisibilityTimer = () => {
+  if (incomeVisibilityTimer === null) return
+  clearTimeout(incomeVisibilityTimer)
+  incomeVisibilityTimer = null
+}
+
+const hideIncome = () => {
+  incomeVisible.value = false
+  clearIncomeVisibilityTimer()
+}
+
+const toggleIncomeVisibility = () => {
+  if (incomeVisible.value) {
+    hideIncome()
+    return
+  }
+
+  clearIncomeVisibilityTimer()
+  incomeVisible.value = true
+  incomeVisibilityTimer = setTimeout(() => {
+    incomeVisible.value = false
+    incomeVisibilityTimer = null
+  }, INCOME_REVEAL_MS)
+}
 
 const roleTokens = computed(() => String(props.userRole || '').split(',').map(role => role.trim().toLowerCase()).filter(Boolean))
 const isSuperAdmin = computed(() => roleTokens.value.some(role => ['superadmin'].includes(role)))
@@ -119,4 +159,18 @@ const enrollmentKpis = computed(() => [
 ])
 
 const sectionFilterKey = (id) => `section:${Number(id)}`
+
+onBeforeUnmount(clearIncomeVisibilityTimer)
 </script>
+
+<style scoped>
+.kpi-income-value {
+  transition: filter 160ms ease, opacity 160ms ease;
+}
+
+.kpi-income-value.is-blurred {
+  filter: blur(9px);
+  opacity: 0.55;
+  user-select: none;
+}
+</style>
