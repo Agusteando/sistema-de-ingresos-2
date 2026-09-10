@@ -48,15 +48,22 @@ const tallerImageOverrides: Record<string, string> = {
   MANOS_CREATIVAS: publicImage('default'),
 }
 
-export const normalizeServicioClave = (value: unknown) => String(value || '')
-  .trim()
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toUpperCase()
-  .replace(/[^A-Z0-9]+/g, '_')
-  .replace(/^_+|_+$/g, '')
+export const normalizeServicioClave = (value: unknown) => {
+  const key = String(value || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  const withoutSchedule = key.replace(/_(?:4|CUATRO)_DIAS?$/, '')
+  return withoutSchedule === 'AJEDREZ' ? 'AJEDREZ' : key
+}
 
-export const normalizeServicioNombre = (value: unknown) => String(value || '').trim().replace(/\s+/g, ' ').toUpperCase()
+export const normalizeServicioNombre = (value: unknown) => {
+  const nombre = String(value || '').trim().replace(/\s+/g, ' ').toUpperCase()
+  return normalizeServicioClave(nombre) === 'AJEDREZ' ? 'AJEDREZ' : nombre
+}
 
 export const FINAL_TALLERES: TallerServicioSeed[] = FINAL_TALLER_NAMES.map((nombre, index) => {
   const clave = normalizeServicioClave(nombre)
@@ -73,7 +80,6 @@ export const FINAL_TALLER_KEYS = new Set(FINAL_TALLERES.map((item) => item.clave
 const LEGACY_TALLER_ALIASES: Record<string, string> = {
   TENNIS: 'TENIS',
   TOCHO_BANDERA: 'TOCHITO_BANDERA',
-  AJEDREZ_4_DIAS: 'AJEDREZ',
   BE_AN_ARTIST_4_DIAS: 'BE_AN_ARTIST',
   JAZZ_REPRESENTATIVO_4_DIAS: 'JAZZ_REPRESENTATIVO',
 }
@@ -84,7 +90,6 @@ export const KNOWN_TALLER_CATALOG_KEYS = new Set([
   'TOCHO_BANDERA',
   'DISENO_GRAFICO',
   'ROBOTICA',
-  'AJEDREZ_4_DIAS',
   'BE_AN_ARTIST_4_DIAS',
   'JAZZ_REPRESENTATIVO_4_DIAS',
   'INGLES',
