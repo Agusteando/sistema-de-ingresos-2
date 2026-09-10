@@ -1,6 +1,7 @@
 import { requireConceptosAdmin } from '../../../utils/conceptos-config'
 import { controlEscolarCentralQuery } from '../../../utils/control-escolar-central'
-import { readBestTalleresServiciosCatalog, syncCentralTalleresServiciosCatalogToBridge } from '../../../utils/talleres-servicios'
+import { readAuthoritativeTalleresCatalog } from '../../../utils/talleres-catalog-authority'
+import { syncCentralTalleresServiciosCatalogToBridge } from '../../../utils/talleres-servicios'
 import { normalizeServicioClave, normalizeServicioNombre } from '../../../../shared/utils/talleresServicios'
 
 export default defineEventHandler(async (event) => {
@@ -30,7 +31,7 @@ export default defineEventHandler(async (event) => {
 
   let synced: any = { ok: false, skipped: true, reason: 'bridge_sync_unavailable' }
   try {
-    const catalog = await readBestTalleresServiciosCatalog()
+    const catalog = await readAuthoritativeTalleresCatalog()
     synced = await syncCentralTalleresServiciosCatalogToBridge(catalog.catalog)
   } catch (error: any) {
     synced = { ok: false, skipped: true, reason: 'bridge_sync_unavailable', message: error?.message || String(error || '') }

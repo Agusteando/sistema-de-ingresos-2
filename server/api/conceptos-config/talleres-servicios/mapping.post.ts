@@ -3,7 +3,7 @@ import { canonicalTallerKey, normalizeServicioClave } from '../../../../shared/u
 import { resolveDataBridgeAgentId } from '../../../utils/auth-session'
 import { createOrUpdateMapping, readCentralConceptos, requireConceptosAdmin } from '../../../utils/conceptos-config'
 import { runWithBridgeAgentId } from '../../../utils/db'
-import { readBestTalleresServiciosCatalog } from '../../../utils/talleres-servicios'
+import { readAuthoritativeTalleresCatalog } from '../../../utils/talleres-catalog-authority'
 
 const clean = (value: unknown, max = 255) => String(value ?? '').trim().slice(0, max)
 
@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
 
   const [conceptos, catalogResult] = await Promise.all([
     readCentralConceptos(),
-    readBestTalleresServiciosCatalog(),
+    readAuthoritativeTalleresCatalog(),
   ])
   const concepto = conceptos.find((row: any) =>
     Number(row?.id || 0) === conceptoId
