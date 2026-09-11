@@ -2,6 +2,9 @@ import { timingSafeEqual } from 'node:crypto'
 import { getDbTransport, runRawSqlStatement } from '../../utils/db'
 import { controlEscolarCentralQuery } from '../../utils/control-escolar-central'
 
+const DEFAULT_PROBE_TIMEOUT_MS = 2500
+const MAX_PROBE_TIMEOUT_MS = 3000
+
 const safeTokenEquals = (provided: string, expected: string) => {
   if (!provided || !expected || provided.length !== expected.length) return false
   try {
@@ -12,6 +15,40 @@ const safeTokenEquals = (provided: string, expected: string) => {
 }
 
 const errorMessage = (error: any) => String(error?.message || error?.code || 'Error de conexión').trim()
+
+const probeTimeoutMs = () => {
+  const configured = Number(process.env.LOCAL_SYSTEM_HEALTH_PROBE_TIMEOUT_MS || DEFAULT_PROBE_TIMEOUT_MS)
+  if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_PROBE_TIMEOUT_MS
+  return Math.max(500, Math.min(Math.floor(configured), MAX_PROBE_TIMEOUT_MS))
+}
+
+const withDeadline = async <T>(operation: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<T>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error: any = new Error(`${label} no respondió antes de ${timeoutMs}ms`)
+      error.code = 'LOCAL_SYSTEM_HEALTH_PROBE_TIMEOUT'
+      reject(error)
+    }, timeoutMs)
+    timer.unref?.()
+  })
+
+  try {
+    return await Promise.race([operation, deadline])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+const runProbe = async <T>(label: string, operation: () => Promise<T>) => {
+  const startedAt = Date.now()
+  try {
+    const result = await withDeadline(operation(), probeTimeoutMs(), label)
+    return { result, error: '', latencyMs: Date.now() - startedAt }
+  } catch (error) {
+    return { result: null as T | null, error: errorMessage(error), latencyMs: Date.now() - startedAt }
+  }
+}
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -27,40 +64,34 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 503, message: 'Sistema Rápido requiere DB_TRANSPORT=direct.' })
   }
 
-  const localStartedAt = Date.now()
-  let localRow: any = null
-  let localError = ''
-  try {
-    const rows = await runRawSqlStatement<any[]>('SELECT 1 AS ok, DATABASE() AS databaseName, NOW() AS serverTime')
-    localRow = Array.isArray(rows) ? rows[0] : null
-  } catch (error) {
-    localError = errorMessage(error)
-  }
-  const localLatencyMs = Date.now() - localStartedAt
+  // The agent gives this endpoint a 3.5s availability budget. Probe both
+  // databases concurrently and bound each probe so an unreachable MySQL host
+  // cannot make a healthy runner look like an unresponsive process.
+  const [localProbe, centralProbe] = await Promise.all([
+    runProbe<any[]>('MySQL local', () =>
+      runRawSqlStatement<any[]>('SELECT 1 AS ok, DATABASE() AS databaseName, NOW() AS serverTime')
+    ),
+    runProbe<any[]>('Base central', () =>
+      controlEscolarCentralQuery<any[]>('SELECT 1 AS ok, DATABASE() AS databaseName')
+    )
+  ])
 
-  const centralStartedAt = Date.now()
-  let centralRow: any = null
-  let centralError = ''
-  try {
-    const rows = await controlEscolarCentralQuery<any[]>('SELECT 1 AS ok, DATABASE() AS databaseName')
-    centralRow = Array.isArray(rows) ? rows[0] : null
-  } catch (error) {
-    centralError = errorMessage(error)
-  }
-  const centralLatencyMs = Date.now() - centralStartedAt
-
+  const localRow = Array.isArray(localProbe.result) ? localProbe.result[0] : null
+  const centralRow = Array.isArray(centralProbe.result) ? centralProbe.result[0] : null
   const mysqlOk = Number(localRow?.ok || 0) === 1
   const centralOk = Number(centralRow?.ok || 0) === 1
   const ok = mysqlOk && centralOk
+
   if (!ok) setResponseStatus(event, 503)
+  setHeader(event, 'Cache-Control', 'no-store')
 
   return {
     ok,
     message: ok
       ? 'Sistema Rápido está listo.'
       : [
-          !mysqlOk ? `MySQL local: ${localError || 'sin respuesta válida'}` : '',
-          !centralOk ? `Base central: ${centralError || 'sin respuesta válida'}` : ''
+          !mysqlOk ? `MySQL local: ${localProbe.error || 'sin respuesta válida'}` : '',
+          !centralOk ? `Base central: ${centralProbe.error || 'sin respuesta válida'}` : ''
         ].filter(Boolean).join(' · '),
     service: 'sistema-rapido',
     transport,
@@ -73,14 +104,14 @@ export default defineEventHandler(async (event) => {
       ok: mysqlOk,
       database: localRow?.databaseName || null,
       serverTime: localRow?.serverTime || null,
-      latencyMs: localLatencyMs,
-      error: localError || null
+      latencyMs: localProbe.latencyMs,
+      error: localProbe.error || null
     },
     central: {
       ok: centralOk,
       database: centralRow?.databaseName || null,
-      latencyMs: centralLatencyMs,
-      error: centralError || null
+      latencyMs: centralProbe.latencyMs,
+      error: centralProbe.error || null
     }
   }
 })
