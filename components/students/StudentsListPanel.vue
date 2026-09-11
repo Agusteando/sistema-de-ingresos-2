@@ -48,15 +48,40 @@
           Cargando estudiantes...
         </div>
         <section v-else-if="sourceUnavailable" class="student-source-unavailable" aria-live="polite">
-          <span class="source-status-icon" aria-hidden="true"><LucideInfo :size="18" /></span>
+          <figure class="source-visual" aria-hidden="true">
+            <img src="/brand/plantel-offline-visual.png" alt="" />
+          </figure>
+
           <div class="source-copy">
-            <h3>No disponible de momento</h3>
-            <p>Intenta nuevamente más tarde.</p>
+            <span class="source-eyebrow">Conexión temporalmente pausada</span>
+            <h3>Intenta hacer un Refresh en unos momentos más</h3>
+            <p>Verifica tu Internet y que el equipo central esté despierto.</p>
           </div>
-          <button type="button" class="source-retry" @click="$emit('refresh-source')">
-            <LucideRotateCcw :size="15" />
-            Volver a intentar
-          </button>
+
+          <p class="source-contingency-copy">
+            O puedes usar tu <strong>Sistema de Contingencia</strong> mientras lo intentas nuevamente.
+          </p>
+
+          <div class="source-retry-status" role="status">
+            <LucideRotateCcw :size="15" aria-hidden="true" />
+            <span>Reintentando automáticamente en <strong>{{ retryCountdown }} s</strong></span>
+          </div>
+
+          <div class="source-actions">
+            <button type="button" class="source-retry" @click="retryNow">
+              <LucideRotateCcw :size="16" />
+              Reintentar ahora
+            </button>
+            <a
+              class="source-contingency"
+              href="http://localhost/Sistema%20de%20ingresos/login.php"
+              target="_blank"
+              rel="noopener"
+            >
+              <LucideExternalLink :size="16" />
+              Sistema de Contingencia
+            </a>
+          </div>
         </section>
         <div v-else-if="!displayedStudents.length" class="empty-state muted">No hay registros bajo los filtros actuales.</div>
         <template v-else>
@@ -166,7 +191,8 @@
 </template>
 
 <script setup>
-import { LucideBuilding2, LucideChevronRight, LucideFlag, LucideGlobe2, LucideInfo, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
+import { onBeforeUnmount, ref, watch } from 'vue'
+import { LucideBuilding2, LucideChevronRight, LucideExternalLink, LucideFlag, LucideGlobe2, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
@@ -203,6 +229,57 @@ const props = defineProps({
   sourceUnavailableDetail: { type: String, default: '' }
 })
 
+const emit = defineEmits([
+  'open-section-selection',
+  'clear-filters',
+  'toggle-displayed-selection',
+  'toggle-student-selection',
+  'student-row-click',
+  'select-student',
+  'show-student-menu',
+  'refresh-source',
+  'restart-session'
+])
+
+const RETRY_INTERVAL_SECONDS = 20
+const retryCountdown = ref(RETRY_INTERVAL_SECONDS)
+let retryTimer = null
+
+const stopAutoRetry = () => {
+  if (retryTimer) clearInterval(retryTimer)
+  retryTimer = null
+}
+
+const startAutoRetry = () => {
+  stopAutoRetry()
+  retryCountdown.value = RETRY_INTERVAL_SECONDS
+  if (!process.client) return
+
+  retryTimer = window.setInterval(() => {
+    retryCountdown.value -= 1
+    if (retryCountdown.value > 0) return
+
+    retryCountdown.value = RETRY_INTERVAL_SECONDS
+    emit('refresh-source')
+  }, 1000)
+}
+
+const retryNow = () => {
+  retryCountdown.value = RETRY_INTERVAL_SECONDS
+  emit('refresh-source')
+}
+
+watch(
+  () => props.sourceUnavailable,
+  (unavailable) => {
+    if (unavailable) startAutoRetry()
+    else stopAutoRetry()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(stopAutoRetry)
+
 const isSelected = (student) => props.selectedMatriculas.has(normalizeStudentMatricula(student?.matricula))
 const resolvedTipoIngreso = (student) => resolveTipoIngreso(student, props.targetCiclo, { enrollmentConcepts: props.tipoIngresoConcepts.length ? props.tipoIngresoConcepts : props.externalConcepts })
 const resolvedTipoIngresoLabel = (student) => formatTipoIngresoValue(resolvedTipoIngreso(student))
@@ -212,7 +289,6 @@ const studentGroupTitle = (student) => {
   const group = studentGroupLabel(student)
   return group ? `Grupo ${group}` : 'Sin grupo'
 }
-
 
 const foreignConceptTitle = (student) => {
   const rows = Array.isArray(student?.foreignPlantelConcepts) ? student.foreignPlantelConcepts : []
@@ -232,93 +308,227 @@ const activeStudentPhotoUrl = (student) => {
   }
   return ''
 }
-
-defineEmits([
-  'open-section-selection',
-  'clear-filters',
-  'toggle-displayed-selection',
-  'toggle-student-selection',
-  'student-row-click',
-  'select-student',
-  'show-student-menu',
-  'refresh-source',
-  'restart-session'
-])
 </script>
 
 <style scoped>
 .student-list-scroll.is-source-unavailable {
+  position: relative;
   display: flex;
-  min-height: 0;
-  align-items: center;
+  min-height: clamp(360px, 54vh, 560px);
+  align-items: stretch;
   justify-content: center;
-  padding: 20px;
+  padding: clamp(12px, 1.5vw, 20px);
   background: #fff;
 }
 
 .student-source-unavailable {
+  position: relative;
   display: flex;
-  width: min(100%, 360px);
-  min-height: 180px;
+  width: 100%;
+  min-height: 100%;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(198, 221, 204, 0.9);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 20% 18%, rgba(112, 180, 73, 0.16), transparent 12rem),
+    radial-gradient(circle at 84% 12%, rgba(0, 126, 148, 0.12), transparent 13rem),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(247, 252, 248, 0.97));
+  padding: clamp(24px, 3vw, 38px) clamp(18px, 4vw, 52px);
   text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 22px 55px rgba(22, 64, 46, 0.08);
 }
 
-.source-status-icon {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border: 1px solid #e1e8e0;
-  border-radius: 12px;
-  background: #f7faf6;
-  color: #688064;
+.student-source-unavailable::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  width: 280px;
+  height: 280px;
+  right: -118px;
+  bottom: -126px;
+  border: 34px solid rgba(47, 125, 56, 0.06);
+  border-radius: 999px;
+}
+
+.source-visual {
+  position: relative;
+  z-index: 1;
+  width: min(48%, 220px);
+  margin: -12px auto 4px;
+}
+
+.source-visual img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 28px rgba(27, 99, 85, 0.12));
+}
+
+.source-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 720px;
+}
+
+.source-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(47, 125, 56, 0.14);
+  border-radius: 999px;
+  background: rgba(235, 248, 236, 0.84);
+  padding: 7px 12px;
+  color: #2f7d38;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .source-copy h3 {
-  margin: 0;
-  color: #26364b;
-  font-size: 14px;
-  font-weight: 820;
-  letter-spacing: -0.01em;
+  margin: 14px 0 8px;
+  color: #16213b;
+  font-size: clamp(1.55rem, 2.8vw, 2.35rem);
+  font-weight: 950;
+  letter-spacing: -0.045em;
+  line-height: 1.08;
 }
 
 .source-copy p {
-  margin: 4px 0 0;
-  color: #7a8593;
-  font-size: 11.5px;
-  line-height: 1.45;
+  margin: 0 auto;
+  color: #64748b;
+  font-size: clamp(0.92rem, 1.15vw, 1.06rem);
+  font-weight: 650;
+  line-height: 1.55;
 }
 
-.source-retry {
+.source-contingency-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
+  margin: 16px 0 0;
+  color: #40566b;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.source-contingency-copy strong {
+  color: #285f35;
+  font-weight: 900;
+}
+
+.source-retry-status {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
-  min-height: 34px;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  margin-top: 2px;
-  border: 1px solid #dce5dc;
-  border-radius: 10px;
-  background: #fff;
-  padding: 0 12px;
-  color: #486544;
-  font-size: 11.5px;
-  font-weight: 780;
+  margin-top: 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  padding: 7px 12px;
+  color: #667788;
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(193, 211, 198, 0.75);
+}
+
+.source-retry-status svg {
+  color: #4d8c53;
+}
+
+.source-retry-status strong {
+  color: #2f6d39;
+  font-variant-numeric: tabular-nums;
+}
+
+.source-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.source-retry,
+.source-contingency {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 13px;
+  padding: 0 16px;
+  font-size: 0.88rem;
+  font-weight: 900;
+  text-decoration: none;
   cursor: pointer;
-  transition: border-color 140ms ease, background-color 140ms ease;
+  transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease, border-color 150ms ease;
 }
 
-.source-retry:hover {
-  border-color: #c8d8c6;
-  background: #f7faf6;
+.source-retry {
+  border: 0;
+  background: linear-gradient(135deg, #2f8f46, #52b343);
+  color: #fff;
+  box-shadow: 0 16px 28px rgba(45, 142, 66, 0.2);
 }
 
-.source-retry:focus-visible {
-  outline: 3px solid rgba(83, 133, 70, 0.18);
+.source-contingency {
+  border: 1px solid rgba(82, 112, 126, 0.24);
+  background: rgba(255, 255, 255, 0.9);
+  color: #34495e;
+  box-shadow: 0 10px 22px rgba(32, 63, 78, 0.07);
+}
+
+.source-retry:hover,
+.source-contingency:hover {
+  transform: translateY(-1px);
+}
+
+.source-contingency:hover {
+  border-color: rgba(47, 125, 56, 0.28);
+  background: #fff;
+}
+
+.source-retry:focus-visible,
+.source-contingency:focus-visible {
+  outline: 3px solid rgba(47, 143, 70, 0.22);
   outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .student-list-scroll.is-source-unavailable {
+    min-height: 420px;
+    padding: 10px;
+  }
+
+  .student-source-unavailable {
+    border-radius: 20px;
+    padding: 24px 18px;
+  }
+
+  .source-visual {
+    width: min(68%, 190px);
+  }
+
+  .source-copy h3 {
+    font-size: clamp(1.4rem, 8vw, 1.85rem);
+  }
+
+  .source-actions {
+    width: min(100%, 360px);
+  }
+
+  .source-retry,
+  .source-contingency {
+    width: 100%;
+  }
 }
 </style>
