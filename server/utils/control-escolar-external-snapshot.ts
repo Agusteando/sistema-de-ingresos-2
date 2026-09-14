@@ -17,6 +17,7 @@ const VIEW_VERSION = 'control-escolar-student-view-v1'
 const MAX_PAGE_SIZE = 500
 const FRESH_REQUEST_MAX_AGE_MS = 60_000
 const FALLBACK_SNAPSHOT_MAX_AGE_MS = 168 * 60 * 60 * 1000
+const STALE_IF_ERROR_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
@@ -51,6 +52,12 @@ const snapshotExpired = (row: any, now = Date.now()) => {
   if (Number.isFinite(expiresAt)) return now >= expiresAt
   const generatedAt = timestamp(row.generated_at)
   return !Number.isFinite(generatedAt) || now - generatedAt >= FALLBACK_SNAPSHOT_MAX_AGE_MS
+}
+
+const snapshotBeyondStaleIfErrorWindow = (row: any, now = Date.now()) => {
+  if (!row?.scope_key) return true
+  const generatedAt = timestamp(row.generated_at)
+  return !Number.isFinite(generatedAt) || now - generatedAt >= STALE_IF_ERROR_MAX_AGE_MS
 }
 
 const snapshotExpiredError = (plantel: string, ciclo: string, row: any, refreshFailure: any = null) => {
@@ -88,7 +95,7 @@ const snapshotNeedsWarm = (row: any, query: any = {}) => {
   if (wantsFreshSnapshot(query) && ageMs > FRESH_REQUEST_MAX_AGE_MS) return true
 
   // Normal reads keep the central view warm once stale_after is reached. If a
-  // refresh fails, the last-known-good snapshot remains usable until expires_at.
+  // refresh fails, the last-known-good snapshot remains usable as Aurora data.
   const staleAt = timestamp(row.stale_after)
   return Number.isFinite(staleAt) && now >= staleAt
 }
@@ -209,8 +216,8 @@ export const assertExternalControlEscolarSnapshotReady = async (query: any = {})
       })
       row = await readLatestSnapshotScope(scope)
     } catch (error) {
-      // A failed proactive refresh may use the previous view while its own
-      // expires_at validity window remains open.
+      // The external API is intentionally stale-while-revalidate. A Bridge or
+      // campus outage must not erase the last roster already stored in Aurora.
       if (!row?.scope_key) throw error
       refreshFailure = publicFailure(error)
     }
@@ -218,7 +225,14 @@ export const assertExternalControlEscolarSnapshotReady = async (query: any = {})
 
   if (!row?.scope_key) throw snapshotUnavailable(scope.plantel, scope.cicloKey)
   if (snapshotExpired(row)) {
-    throw snapshotExpiredError(scope.plantel, scope.cicloKey, row, refreshFailure)
+    if (snapshotBeyondStaleIfErrorWindow(row)) {
+      throw snapshotExpiredError(scope.plantel, scope.cicloKey, row, refreshFailure)
+    }
+    refreshFailure ||= {
+      statusCode: 503,
+      code: 'AURORA_STUDENT_REFRESH_DID_NOT_ADVANCE',
+      message: 'Aurora no pudo renovar el padrón; se sirve el último snapshot Aurora disponible.'
+    }
   }
   return { scope, row, refreshFailure }
 }
