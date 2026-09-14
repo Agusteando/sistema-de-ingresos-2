@@ -19,6 +19,11 @@ const FRESH_REQUEST_MAX_AGE_MS = 60_000
 
 const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
+const publicFailure = (error: any) => ({
+  statusCode: Number(error?.statusCode || error?.status || error?.response?.status || 500) || 500,
+  code: clean(error?.data?.code || error?.code || error?.statusMessage || error?.name || 'AURORA_ERROR', 120),
+  message: clean(error?.message || error?.statusMessage || 'Aurora no pudo actualizar el snapshot central solicitado.', 700)
+})
 
 const snapshotUnavailable = (plantel: string, ciclo: string) => createError({
   statusCode: 503,
