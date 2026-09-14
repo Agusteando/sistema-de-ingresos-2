@@ -16,7 +16,7 @@ const EXTERNAL_VIEW_TABLE = 'control_external_student_view'
 const VIEW_VERSION = 'control-escolar-student-view-v1'
 const MAX_PAGE_SIZE = 500
 const FRESH_REQUEST_MAX_AGE_MS = 60_000
-const MAX_SNAPSHOT_AGE_MS = 24 * 60 * 60 * 1000
+const FALLBACK_SNAPSHOT_MAX_AGE_MS = 168 * 60 * 60 * 1000
 
 const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
@@ -45,26 +45,29 @@ const timestamp = (value: unknown) => {
   return Number.isFinite(time) ? time : Number.NaN
 }
 
-const snapshotExceedsMaxAge = (row: any, now = Date.now()) => {
+const snapshotExpired = (row: any, now = Date.now()) => {
   if (!row?.scope_key) return true
+  const expiresAt = timestamp(row.expires_at)
+  if (Number.isFinite(expiresAt)) return now >= expiresAt
   const generatedAt = timestamp(row.generated_at)
-  return !Number.isFinite(generatedAt) || now - generatedAt >= MAX_SNAPSHOT_AGE_MS
+  return !Number.isFinite(generatedAt) || now - generatedAt >= FALLBACK_SNAPSHOT_MAX_AGE_MS
 }
 
-const snapshotTooOld = (plantel: string, ciclo: string, row: any, refreshFailure: any = null) => {
+const snapshotExpiredError = (plantel: string, ciclo: string, row: any, refreshFailure: any = null) => {
   const generatedAt = timestamp(row?.generated_at)
+  const expiresAt = timestamp(row?.expires_at)
   return createError({
     statusCode: 503,
     statusMessage: 'AURORA_STUDENT_SNAPSHOT_TOO_OLD',
-    message: `El snapshot central de ${plantel} para ciclo ${ciclo} supera el límite de 24 horas y no se entregará hasta renovarlo.`,
+    message: `El snapshot central de ${plantel} para ciclo ${ciclo} ya expiró y no pudo renovarse.`,
     data: {
       code: 'AURORA_STUDENT_SNAPSHOT_TOO_OLD',
       plantel,
       ciclo,
       retryable: true,
       source: 'central-snapshot',
-      maxAgeHours: 24,
       generatedAt: Number.isFinite(generatedAt) ? new Date(generatedAt).toISOString() : null,
+      expiresAt: Number.isFinite(expiresAt) ? new Date(expiresAt).toISOString() : null,
       refreshFailure
     }
   })
@@ -79,14 +82,13 @@ const snapshotNeedsWarm = (row: any, query: any = {}) => {
   const now = Date.now()
   const generatedAt = timestamp(row.generated_at)
   if (!Number.isFinite(generatedAt)) return true
+  if (snapshotExpired(row, now)) return true
 
   const ageMs = now - generatedAt
-  if (ageMs >= MAX_SNAPSHOT_AGE_MS) return true
   if (wantsFreshSnapshot(query) && ageMs > FRESH_REQUEST_MAX_AGE_MS) return true
 
-  // Normal reads also keep the central view warm. Writers currently mark a
-  // snapshot stale before the 24-hour hard limit, so ordinary consumers get a
-  // proactive refresh window instead of waiting until the snapshot expires.
+  // Normal reads keep the central view warm once stale_after is reached. If a
+  // refresh fails, the last-known-good snapshot remains usable until expires_at.
   const staleAt = timestamp(row.stale_after)
   return Number.isFinite(staleAt) && now >= staleAt
 }
@@ -137,7 +139,6 @@ const readCanonicalMatriculaGroups = async (students: any[]) => {
   })
   return groups
 }
-
 const overlayCanonicalMatriculaGroups = async (response: any) => {
   const responseData = response?.data
   const students = Array.isArray(responseData)
@@ -208,16 +209,16 @@ export const assertExternalControlEscolarSnapshotReady = async (query: any = {})
       })
       row = await readLatestSnapshotScope(scope)
     } catch (error) {
-      // A failed proactive refresh may still use the previous view while it is
-      // under 24 hours old. Once it reaches the hard limit, it must fail closed.
+      // A failed proactive refresh may use the previous view while its own
+      // expires_at validity window remains open.
       if (!row?.scope_key) throw error
       refreshFailure = publicFailure(error)
     }
   }
 
   if (!row?.scope_key) throw snapshotUnavailable(scope.plantel, scope.cicloKey)
-  if (snapshotExceedsMaxAge(row)) {
-    throw snapshotTooOld(scope.plantel, scope.cicloKey, row, refreshFailure)
+  if (snapshotExpired(row)) {
+    throw snapshotExpiredError(scope.plantel, scope.cicloKey, row, refreshFailure)
   }
   return { scope, row, refreshFailure }
 }
