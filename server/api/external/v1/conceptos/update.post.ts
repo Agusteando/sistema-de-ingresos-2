@@ -8,6 +8,19 @@ const columnOrder = [
 const placeholders = columnOrder.map(() => '?').join(', ')
 const upsertSql = `INSERT INTO conceptos (${columnOrder.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${columnOrder.map((col) => `\`${col}\`=VALUES(\`${col}\`)`).join(', ')}`
 
+const isBlank = (value: unknown) => value === null || value === undefined || String(value).trim() === ''
+
+const isEffectivelyEmptyRow = (row: unknown) => {
+  if (!Array.isArray(row)) return false
+
+  return row.every((value, index) => {
+    if (index === 2 || index === 5) {
+      return isBlank(value) || Number(value) === 0
+    }
+    return isBlank(value)
+  })
+}
+
 export default defineEventHandler(async (event) => {
   setExternalApiResponseHeaders(event, 0)
   setResponseHeader(event, 'Cache-Control', 'no-store')
@@ -31,11 +44,20 @@ export default defineEventHandler(async (event) => {
   }
 
   const errors: string[] = []
+  let skippedEmptyRows = 0
 
   try {
     await withControlEscolarCentralConnection(async (connection) => {
       for (const row of data) {
+        if (isEffectivelyEmptyRow(row)) {
+          skippedEmptyRows += 1
+          continue
+        }
+
         const values = row.map((value: any, index: number) => {
+          if (columnOrder[index] === 'id' && isBlank(value)) {
+            return null
+          }
           if (columnOrder[index] === 'costo') {
             return parseFloat(value)
           }
@@ -54,6 +76,10 @@ export default defineEventHandler(async (event) => {
         }
       }
     })
+
+    if (skippedEmptyRows > 0) {
+      console.info(`[conceptos/update] Ignored ${skippedEmptyRows} empty spreadsheet rows.`)
+    }
 
     if (errors.length > 0) {
       setResponseStatus(event, 207)
