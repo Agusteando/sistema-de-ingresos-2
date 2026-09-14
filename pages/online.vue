@@ -591,3 +591,4 @@ onBeforeUnmount(() => {
   .online-user-card dd { margin: 0; color: #344155; font-size: 12px; font-weight: 700; }
   .mobile-ip { display: flex; flex-wrap: wrap; gap: 4px; }
 }
+</style>
