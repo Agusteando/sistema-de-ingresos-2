@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { isIP } from 'node:net'
 import type { AuthSessionUser } from './auth-session'
 
 export const ONLINE_PRESENCE_TTL_MS = 120_000
@@ -41,17 +42,26 @@ const getStore = () => {
   return state.__auroraOnlinePresence
 }
 
-const normalizeIp = (value: unknown) => {
-  const ip = String(value || '').split(',')[0].trim()
-  if (!ip) return 'No disponible'
-  return ip.startsWith('::ffff:') ? ip.slice(7) : ip
+const normalizeIpv4 = (value: unknown) => {
+  let ip = String(value || '').split(',')[0].trim()
+  if (!ip) return ''
+  if (ip === '::1') return '127.0.0.1'
+  if (ip.startsWith('::ffff:')) ip = ip.slice(7)
+  return isIP(ip) === 4 ? ip : ''
 }
 
 const resolveClientIp = (event: any) => {
+  const cloudflarePseudoIpv4 = normalizeIpv4(getRequestHeader(event, 'cf-pseudo-ipv4'))
+  if (cloudflarePseudoIpv4) return cloudflarePseudoIpv4
+
   const cloudflareIp = getRequestHeader(event, 'cf-connecting-ip')
+  if (cloudflareIp) return normalizeIpv4(cloudflareIp) || 'No disponible'
+
   const forwardedIp = getRequestHeader(event, 'x-forwarded-for')
+  if (forwardedIp) return normalizeIpv4(forwardedIp) || 'No disponible'
+
   const socketIp = event?.node?.req?.socket?.remoteAddress
-  return normalizeIp(cloudflareIp || forwardedIp || socketIp)
+  return normalizeIpv4(socketIp) || 'No disponible'
 }
 
 const prunePresence = (now = Date.now()) => {
