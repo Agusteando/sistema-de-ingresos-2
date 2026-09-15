@@ -76,10 +76,10 @@ export const withExternalSnapshotMeta = (responseValue: any, query: any = {}) =>
     ...(response || {}),
     meta: {
       ...(response?.meta || {}),
-      source: 'aurora-control-escolar-central-snapshot',
+      source: 'aurora-control-escolar-canonical-snapshot',
       fallback: false,
       freshRequested: isExternalFreshReadRequested(query),
-      cachePolicy: 'central-snapshot-only'
+      cachePolicy: 'control-escolar-canonical-snapshot-v2'
     }
   }
 }

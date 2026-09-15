@@ -3,60 +3,22 @@ import { controlEscolarCentralQuery } from './control-escolar-central'
 import {
   buildExternalControlEscolarScope,
   ensureControlEscolarExternalViewSchema,
+  EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION,
   getExternalStudentPlanteles,
   readExternalControlEscolarChanges,
   readExternalControlEscolarStudentDetail,
   readExternalControlEscolarStudents,
-  warmExternalControlEscolarStudentScope,
-  writeControlEscolarExternalStudentView
+  warmExternalControlEscolarStudentScope
 } from './control-escolar-external-view'
 import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
-import { withExternalCanonicalMeta, withExternalSnapshotMeta } from './control-escolar-external-snapshot-presenter'
-import {
-  readCanonicalExternalControlEscolarAllStudents,
-  readCanonicalExternalControlEscolarStudentDetail,
-  readCanonicalExternalControlEscolarStudents
-} from './control-escolar-external-canonical'
+import { withExternalSnapshotMeta } from './control-escolar-external-snapshot-presenter'
 
 const EXTERNAL_VIEW_TABLE = 'control_external_student_view'
-const VIEW_VERSION = 'control-escolar-student-view-v1'
 const MAX_PAGE_SIZE = 500
 const FRESH_REQUEST_MAX_AGE_MS = 60_000
-const FALLBACK_SNAPSHOT_MAX_AGE_MS = 168 * 60 * 60 * 1000
-const STALE_IF_ERROR_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
-const publicFailure = (error: any) => ({
-  statusCode: Number(error?.statusCode || error?.status || error?.response?.status || 500) || 500,
-  code: clean(error?.data?.code || error?.code || error?.statusMessage || error?.name || 'AURORA_ERROR', 120),
-  message: clean(error?.message || error?.statusMessage || 'Aurora no pudo actualizar el snapshot central solicitado.', 700)
-})
-
-const withCanonicalFallbackMeta = (response: any, error: any) => ({
-  ...(response || {}),
-  meta: {
-    ...(response?.meta || {}),
-    source: 'aurora-control-escolar-central-snapshot-fallback',
-    fallback: true,
-    primarySource: 'aurora-control-escolar-canonical',
-    cachePolicy: 'control-escolar-canonical-primary',
-    primaryFailure: publicFailure(error)
-  }
-})
-
-const snapshotUnavailable = (plantel: string, ciclo: string) => createError({
-  statusCode: 503,
-  statusMessage: 'AURORA_STUDENT_SNAPSHOT_NOT_READY',
-  message: `El snapshot central de ${plantel} para ciclo ${ciclo} todavía no está disponible.`,
-  data: {
-    code: 'AURORA_STUDENT_SNAPSHOT_NOT_READY',
-    plantel,
-    ciclo,
-    retryable: true,
-    source: 'central-snapshot'
-  }
-})
 
 const timestamp = (value: unknown) => {
   if (!value) return Number.NaN
@@ -64,62 +26,24 @@ const timestamp = (value: unknown) => {
   return Number.isFinite(time) ? time : Number.NaN
 }
 
-const snapshotExpired = (row: any, now = Date.now()) => {
-  if (!row?.scope_key) return true
-  const expiresAt = timestamp(row.expires_at)
-  if (Number.isFinite(expiresAt)) return now >= expiresAt
-  const generatedAt = timestamp(row.generated_at)
-  return !Number.isFinite(generatedAt) || now - generatedAt >= FALLBACK_SNAPSHOT_MAX_AGE_MS
-}
-
-const snapshotBeyondStaleIfErrorWindow = (row: any, now = Date.now()) => {
-  if (!row?.scope_key) return true
-  const generatedAt = timestamp(row.generated_at)
-  return !Number.isFinite(generatedAt) || now - generatedAt >= STALE_IF_ERROR_MAX_AGE_MS
-}
-
-const snapshotExpiredError = (plantel: string, ciclo: string, row: any, refreshFailure: any = null) => {
-  const generatedAt = timestamp(row?.generated_at)
-  const expiresAt = timestamp(row?.expires_at)
-  return createError({
-    statusCode: 503,
-    statusMessage: 'AURORA_STUDENT_SNAPSHOT_TOO_OLD',
-    message: `El snapshot central de ${plantel} para ciclo ${ciclo} ya expiró y no pudo renovarse.`,
-    data: {
-      code: 'AURORA_STUDENT_SNAPSHOT_TOO_OLD',
-      plantel,
-      ciclo,
-      retryable: true,
-      source: 'central-snapshot',
-      generatedAt: Number.isFinite(generatedAt) ? new Date(generatedAt).toISOString() : null,
-      expiresAt: Number.isFinite(expiresAt) ? new Date(expiresAt).toISOString() : null,
-      refreshFailure
-    }
-  })
-}
-
 const wantsFreshSnapshot = (query: any = {}) =>
   ['1', 'true', 'yes', 'fresh'].includes(clean(query.fresh, 20).toLowerCase())
 
 const snapshotNeedsWarm = (row: any, query: any = {}) => {
   if (!row?.scope_key) return true
-
   const now = Date.now()
   const generatedAt = timestamp(row.generated_at)
-  if (!Number.isFinite(generatedAt)) return true
-  if (snapshotExpired(row, now)) return true
-
-  const ageMs = now - generatedAt
-  if (wantsFreshSnapshot(query) && ageMs > FRESH_REQUEST_MAX_AGE_MS) return true
-
-  // Normal reads keep the central view warm once stale_after is reached. If a
-  // refresh fails, the last-known-good snapshot remains usable as Aurora data.
   const staleAt = timestamp(row.stale_after)
-  return Number.isFinite(staleAt) && now >= staleAt
+  const expiresAt = timestamp(row.expires_at)
+  if (!Number.isFinite(generatedAt)) return true
+  if (Number.isFinite(expiresAt) && now >= expiresAt) return true
+  if (Number.isFinite(staleAt) && now >= staleAt) return true
+  if (wantsFreshSnapshot(query) && now - generatedAt > FRESH_REQUEST_MAX_AGE_MS) return true
+  return false
 }
 
 const readLatestSnapshotScope = async (scope: ReturnType<typeof buildExternalControlEscolarScope>) => {
-  const params: any[] = [scope.plantel, scope.cicloKey, VIEW_VERSION]
+  const params: any[] = [scope.plantel, scope.cicloKey, EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION]
   let scopeSql = ''
   if (scope.hasExplicitConcepts) {
     scopeSql = ' AND scope_key = ?'
@@ -137,272 +61,77 @@ const readLatestSnapshotScope = async (scope: ReturnType<typeof buildExternalCon
   return rows[0] || null
 }
 
-const readCanonicalMatriculaGroups = async (students: any[]) => {
-  const matriculas = Array.from(new Set(
-    students
-      .map((student) => canonicalMatricula(student?.matricula || student?.studentId))
-      .filter(Boolean)
-  ))
-  const groups = new Map<string, string>()
-  if (!matriculas.length) return groups
-
-  const placeholders = matriculas.map(() => '?').join(',')
-  const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT matricula, grupo
-     FROM matricula
-     WHERE UPPER(TRIM(matricula)) IN (${placeholders})`,
-    matriculas
-  )
-
-  rows.forEach((row) => {
-    const matricula = canonicalMatricula(row?.matricula)
-    if (!matricula) return
-    // matricula.grupo is intentionally authoritative for the current group.
-    // An empty value is also authoritative and must not resurrect a stale
-    // group from an old Control Escolar snapshot.
-    groups.set(matricula, clean(row?.grupo, 80))
-  })
-  return groups
-}
-const overlayCanonicalMatriculaGroups = async (response: any) => {
-  const responseData = response?.data
-  const students = Array.isArray(responseData)
-    ? responseData
-    : responseData && typeof responseData === 'object'
-      ? [responseData]
-      : []
-  if (!students.length) return response
-
-  const groups = await readCanonicalMatriculaGroups(students)
-  if (!groups.size) return response
-
-  const applyGroup = (student: any) => {
-    const matricula = canonicalMatricula(student?.matricula || student?.studentId)
-    if (!groups.has(matricula)) return student
-    const grupo = groups.get(matricula) ?? ''
-    return {
-      ...student,
-      group: grupo,
-      grupo,
-      matriculaGrupo: grupo,
-      display: {
-        ...(student?.display && typeof student.display === 'object' ? student.display : {}),
-        gradoGrupo: [clean(student?.grado, 80), grupo].filter(Boolean).join(' ')
-      }
-    }
-  }
-
-  return {
-    ...(response || {}),
-    data: Array.isArray(responseData) ? responseData.map(applyGroup) : applyGroup(responseData),
-    meta: {
-      ...(response?.meta || {}),
-      groupSource: 'matricula.grupo-live'
-    }
-  }
-}
-
-const withRefreshFailureMeta = (response: any, refreshFailure: any) => ({
-  ...(response || {}),
-  meta: {
-    ...(response?.meta || {}),
-    refreshFailed: Boolean(refreshFailure),
-    refreshFailure: refreshFailure || null
-  }
+const snapshotUnavailable = (plantel: string, ciclo: string) => createError({
+  statusCode: 503,
+  statusMessage: 'AURORA_CANONICAL_SNAPSHOT_NOT_READY',
+  message: `Aurora no pudo generar un snapshot canónico de ${plantel} para ciclo ${ciclo}.`,
+  data: { code: 'AURORA_CANONICAL_SNAPSHOT_NOT_READY', plantel, ciclo, retryable: true, source: 'aurora-control-escolar-canonical-snapshot' }
 })
 
 export const assertExternalControlEscolarSnapshotReady = async (query: any = {}) => {
   const scope = buildExternalControlEscolarScope(query)
-  if (!scope.plantel) {
-    throw createError({ statusCode: 400, statusMessage: 'PLANTEL_REQUIRED', message: 'El plantel es obligatorio.' })
-  }
-  if (!scope.cicloKey) {
-    throw createError({ statusCode: 400, statusMessage: 'CICLO_REQUIRED', message: 'El ciclo escolar es obligatorio.' })
-  }
+  if (!scope.plantel) throw createError({ statusCode: 400, statusMessage: 'PLANTEL_REQUIRED', message: 'El plantel es obligatorio.' })
+  if (!scope.cicloKey) throw createError({ statusCode: 400, statusMessage: 'CICLO_REQUIRED', message: 'El ciclo escolar es obligatorio.' })
 
   await ensureControlEscolarExternalViewSchema()
-
   let row = await readLatestSnapshotScope(scope)
-  let refreshFailure: any = null
   if (snapshotNeedsWarm(row, query)) {
-    try {
-      await warmExternalControlEscolarStudentScope({
-        ...query,
-        plantel: scope.plantel,
-        ciclo: scope.cicloKey,
-        cicloKey: scope.cicloKey
-      })
-      row = await readLatestSnapshotScope(scope)
-    } catch (error) {
-      // The external API is intentionally stale-while-revalidate. A Bridge or
-      // campus outage must not erase the last roster already stored in Aurora.
-      if (!row?.scope_key) throw error
-      refreshFailure = publicFailure(error)
-    }
+    await warmExternalControlEscolarStudentScope({ ...query, plantel: scope.plantel, ciclo: scope.cicloKey, cicloKey: scope.cicloKey })
+    row = await readLatestSnapshotScope(scope)
   }
-
-  if (!row?.scope_key) throw snapshotUnavailable(scope.plantel, scope.cicloKey)
-  if (snapshotExpired(row)) {
-    if (snapshotBeyondStaleIfErrorWindow(row)) {
-      throw snapshotExpiredError(scope.plantel, scope.cicloKey, row, refreshFailure)
-    }
-    refreshFailure ||= {
-      statusCode: 503,
-      code: 'AURORA_STUDENT_REFRESH_DID_NOT_ADVANCE',
-      message: 'Aurora no pudo renovar el padrón; se sirve el último snapshot Aurora disponible.'
-    }
-  }
-  return { scope, row, refreshFailure }
+  if (!row?.scope_key || snapshotNeedsWarm(row, query)) throw snapshotUnavailable(scope.plantel, scope.cicloKey)
+  return { scope, row }
 }
 
 export const readExternalSnapshotStudents = async (query: any = {}) => {
-  let canonicalFailure: any = null
-  try {
-    const canonical = await readCanonicalExternalControlEscolarStudents(query)
-    const { controlScope: _controlScope, ...publicResponse } = canonical
-    return withExternalCanonicalMeta(publicResponse, query)
-  } catch (error: any) {
-    canonicalFailure = error
-  }
-
-  const ready = await assertExternalControlEscolarSnapshotReady(query)
-  const response = withExternalSnapshotMeta(await readExternalControlEscolarStudents(query), query)
-  const fallback = await overlayCanonicalMatriculaGroups(withRefreshFailureMeta(response, ready.refreshFailure))
-  return withCanonicalFallbackMeta(fallback, canonicalFailure)
+  await assertExternalControlEscolarSnapshotReady(query)
+  return withExternalSnapshotMeta(await readExternalControlEscolarStudents(query), query)
 }
 
 export const readExternalSnapshotChanges = async (query: any = {}) => {
-  let canonicalFailure: any = null
-  try {
-    const canonical = await readCanonicalExternalControlEscolarAllStudents(query)
-    const scope = canonical.controlScope
-    await writeControlEscolarExternalStudentView(
-      scope.bridgeAgentId,
-      {
-        ...query,
-        plantel: scope.bridgeAgentId,
-        agentId: scope.bridgeAgentId,
-        ciclo: scope.ciclo,
-        cicloKey: scope.ciclo,
-        concepts: scope.concepts.join(',') || undefined,
-        tipoConcepts: scope.tipoConcepts.join(',') || undefined,
-        all: 'snapshot',
-        mode: 'snapshot'
-      },
-      canonical.data,
-      { canonical: true, source: 'aurora-control-escolar-canonical' }
-    )
-    const response = withExternalSnapshotMeta(
-      await readExternalControlEscolarChanges({
-        ...query,
-        plantel: scope.plantel,
-        ciclo: scope.ciclo,
-        cicloKey: scope.ciclo,
-        concepts: scope.concepts.join(',') || undefined
-      }),
-      query
-    )
-    return {
-      ...response,
-      meta: {
-        ...(response?.meta || {}),
-        source: 'aurora-control-escolar-canonical-change-feed',
-        fallback: false,
-        cachePolicy: 'control-escolar-canonical-primary'
-      }
-    }
-  } catch (error: any) {
-    canonicalFailure = error
-  }
-
-  const ready = await assertExternalControlEscolarSnapshotReady(query)
-  const fallback = withExternalSnapshotMeta(
-    withRefreshFailureMeta(await readExternalControlEscolarChanges(query), ready.refreshFailure),
-    query
-  )
-  return withCanonicalFallbackMeta(fallback, canonicalFailure)
+  await assertExternalControlEscolarSnapshotReady(query)
+  return withExternalSnapshotMeta(await readExternalControlEscolarChanges(query), query)
 }
 
 export const readExternalSnapshotStudentDetail = async (query: any = {}, matriculaValue: unknown) => {
-  let canonicalFailure: any = null
-  try {
-    const canonical = await readCanonicalExternalControlEscolarStudentDetail(query, matriculaValue)
-    const { controlScope: _controlScope, ...publicResponse } = canonical
-    return withExternalCanonicalMeta(publicResponse, query)
-  } catch (error: any) {
-    canonicalFailure = error
-  }
-
-  const presentFallback = async (response: any) =>
-    withCanonicalFallbackMeta(await overlayCanonicalMatriculaGroups(response), canonicalFailure)
-
   const matricula = canonicalMatricula(matriculaValue)
-  if (!matricula) {
-    throw createError({ statusCode: 400, statusMessage: 'MATRICULA_REQUIRED', message: 'La matrícula es obligatoria.' })
-  }
+  if (!matricula) throw createError({ statusCode: 400, statusMessage: 'MATRICULA_REQUIRED', message: 'La matrícula es obligatoria.' })
 
   const requestedPlantel = normalizeExternalControlEscolarPlantel(query.plantel || query.agentId || '')
   if (requestedPlantel) {
-    const ready = await assertExternalControlEscolarSnapshotReady({ ...query, plantel: requestedPlantel })
-    const response = withExternalSnapshotMeta(
-      await readExternalControlEscolarStudentDetail({ ...query, plantel: requestedPlantel }, matricula),
-      query
-    )
-    return await presentFallback(withRefreshFailureMeta(withExternalSnapshotMeta(await readExternalControlEscolarStudentDetail(query, matricula), query), ready.refreshFailure))
+    await assertExternalControlEscolarSnapshotReady({ ...query, plantel: requestedPlantel })
+    return withExternalSnapshotMeta(await readExternalControlEscolarStudentDetail({ ...query, plantel: requestedPlantel }, matricula), query)
   }
 
+  let lastInfrastructureError = null
   let readyScopes = 0
   for (const plantel of getExternalStudentPlanteles()) {
     try {
-      const ready = await assertExternalControlEscolarSnapshotReady({ ...query, plantel })
+      await assertExternalControlEscolarSnapshotReady({ ...query, plantel })
       readyScopes += 1
       try {
-        const response = withExternalSnapshotMeta(
-          await readExternalControlEscolarStudentDetail({ ...query, plantel }, matricula),
-          query
-        )
-            return await presentFallback(withRefreshFailureMeta(withExternalSnapshotMeta(await readExternalControlEscolarStudentDetail({ ...query, plantel: scope.plantel }, matricula), query), scope.refreshFailure))
-      } catch (error: any) {
+        return withExternalSnapshotMeta(await readExternalControlEscolarStudentDetail({ ...query, plantel }, matricula), query)
+      } catch (error) {
         if (Number(error?.statusCode || 0) !== 404) throw error
       }
-    } catch (error: any) {
-      if (String(error?.statusMessage || error?.data?.code || '') !== 'AURORA_STUDENT_SNAPSHOT_NOT_READY') throw error
+    } catch (error) {
+      lastInfrastructureError = error
     }
   }
 
-  if (!readyScopes) {
-    throw createError({
-      statusCode: 503,
-      statusMessage: 'AURORA_STUDENT_SNAPSHOTS_NOT_READY',
-      message: 'Los snapshots centrales de Control Escolar todavía no están disponibles.',
-      data: { code: 'AURORA_STUDENT_SNAPSHOTS_NOT_READY', retryable: true, source: 'central-snapshot' }
-    })
-  }
-
-  throw createError({
-    statusCode: 404,
-    statusMessage: 'STUDENT_NOT_FOUND',
-    message: `No se encontró la matrícula ${matricula} en los snapshots centrales disponibles.`
-  })
+  if (!readyScopes && lastInfrastructureError) throw lastInfrastructureError
+  throw createError({ statusCode: 404, statusMessage: 'STUDENT_NOT_FOUND', message: `No se encontró la matrícula ${matricula} en los snapshots canónicos disponibles.` })
 }
 
 export const readAllExternalSnapshotStudents = async (query: any = {}) => {
   const plantel = normalizeExternalControlEscolarPlantel(query.plantel || query.agentId || '')
-  if (!plantel) {
-    throw createError({ statusCode: 400, statusMessage: 'PLANTEL_REQUIRED', message: 'El plantel es obligatorio.' })
-  }
+  if (!plantel) throw createError({ statusCode: 400, statusMessage: 'PLANTEL_REQUIRED', message: 'El plantel es obligatorio.' })
 
-  const data: any[] = []
+  const data = []
   let cursor = ''
-  let firstResponse: any = null
-
+  let firstResponse = null
   do {
-    const response = await readExternalSnapshotStudents({
-      ...query,
-      plantel,
-      limit: MAX_PAGE_SIZE,
-      cursor
-    })
+    const response = await readExternalSnapshotStudents({ ...query, plantel, limit: MAX_PAGE_SIZE, cursor })
     firstResponse ||= response
     data.push(...(Array.isArray(response?.data) ? response.data : []))
     cursor = clean(response?.pagination?.nextCursor, 500)
@@ -411,18 +140,13 @@ export const readAllExternalSnapshotStudents = async (query: any = {}) => {
   return {
     data,
     catalogs: firstResponse?.catalogs || { niveles: [], grados: [], grupos: [], gruposPorGrado: {} },
-    meta: {
-      ...(firstResponse?.meta || {}),
-      rows: data.length
-    }
+    meta: { ...(firstResponse?.meta || {}), rows: data.length }
   }
 }
 
 export const readExternalSnapshotAcademicPlacement = async (query: any = {}, matriculaValue: unknown) => {
   const ciclo = normalizeCicloKey(query.ciclo || query.cicloKey || query.schoolYear || '')
-  if (!ciclo) {
-    throw createError({ statusCode: 400, statusMessage: 'CICLO_INVALID', message: 'El ciclo escolar no es válido.' })
-  }
+  if (!ciclo) throw createError({ statusCode: 400, statusMessage: 'CICLO_INVALID', message: 'El ciclo escolar no es válido.' })
 
   const response = await readExternalSnapshotStudentDetail(query, matriculaValue)
   const student = response?.data || {}
@@ -437,8 +161,8 @@ export const readExternalSnapshotAcademicPlacement = async (query: any = {}, mat
     },
     meta: {
       ...(response?.meta || {}),
-      academicPlacementSource: clean(student?.academicPlacementSource, 120) || (response?.meta?.fallback ? 'central-student-snapshot-fallback' : 'base-projection'),
-      groupSource: response?.meta?.fallback ? 'central-matricula-live-overlay' : 'control-escolar-canonical',
+      academicPlacementSource: 'control-escolar-canonical-snapshot',
+      groupSource: 'control-escolar-canonical',
       generatedAt: response?.meta?.generatedAt || null
     }
   }

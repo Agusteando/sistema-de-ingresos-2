@@ -1,5 +1,4 @@
 import crypto from 'node:crypto'
-import { runWithBridgeAgentId } from './db'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 import { buildControlEscolarScopeDescriptor, type ControlEscolarScopeDescriptor } from './control-escolar-cache'
 import { automaticSchoolCycleKey, formatCicloLabel, normalizeCicloKey } from '../../shared/utils/ciclo'
@@ -12,7 +11,8 @@ import {
 } from './control-escolar-plantel-routing'
 
 const EXTERNAL_VIEW_TABLE = 'control_external_student_view'
-const VIEW_VERSION = 'control-escolar-student-view-v1'
+export const EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION = 'control-escolar-student-view-v2-canonical'
+const VIEW_VERSION = EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION
 const FRESH_HOURS = 12
 const EXPIRED_HOURS = 168
 const MAX_LIMIT = 500
@@ -261,15 +261,30 @@ export const writeControlEscolarExternalStudentView = async (
   students: any[],
   source: any = {}
 ) => {
+  if (source?.canonical !== true) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'AURORA_NON_CANONICAL_SNAPSHOT_WRITE_BLOCKED',
+      message: 'Los snapshots externos solo pueden escribirse desde el resolver canónico de Control Escolar.'
+    })
+  }
+
   const scope = buildExternalControlEscolarScope({ ...filters, plantel: agentId, agentId })
   if (!scope.plantel || !scope.cicloKey || !scope.descriptor.cacheable || !Array.isArray(students)) {
     return { skipped: true, reason: 'scope_not_cacheable' }
   }
 
-  // A Bridge maintenance window must never turn a healthy shared snapshot
-  // into a cached empty result.
   if (students.length === 0) {
-    return { skipped: true, reason: 'empty_rows_preserved', rows: 0 }
+    await ensureControlEscolarExternalViewSchema()
+    await controlEscolarCentralQuery(
+      `DELETE FROM ${EXTERNAL_VIEW_TABLE} WHERE plantel = ? AND ciclo_key = ? AND view_version = ?`,
+      [scope.plantel, scope.cicloKey, VIEW_VERSION]
+    )
+    throw createError({
+      statusCode: 503,
+      statusMessage: 'AURORA_CANONICAL_SNAPSHOT_EMPTY',
+      message: `Control Escolar canónico no produjo alumnos para ${scope.plantel} en ciclo ${scope.cicloKey}; Aurora no conservará un snapshot anterior.`
+    })
   }
 
   await ensureControlEscolarExternalViewSchema()
@@ -351,6 +366,12 @@ export const writeControlEscolarExternalStudentView = async (
     [scope.plantel, scope.descriptor.scopeKey, VIEW_VERSION, generatedAt]
   )
 
+  await controlEscolarCentralQuery(
+    `DELETE FROM ${EXTERNAL_VIEW_TABLE}
+     WHERE plantel = ? AND ciclo_key = ? AND view_version <> ?`,
+    [scope.plantel, scope.cicloKey, VIEW_VERSION]
+  )
+
   return {
     success: true,
     rows: rows.length,
@@ -386,25 +407,32 @@ export const warmExternalControlEscolarStudentScope = async (input: any = {}) =>
       message: 'Plantel y ciclo son obligatorios para preparar la base de alumnos.'
     })
   }
-  const warmKey = `${scope.plantel}:${scope.cicloKey}:${scope.descriptor.conceptHash}`
+
+  const warmKey = `${scope.plantel}:${scope.cicloKey}:${VIEW_VERSION}`
   const existing = warmingScopes.get(warmKey)
   if (existing) return await existing
 
   const promise = (async () => {
-    const { fetchControlEscolarStudents } = await import('./control-escolar')
-    let lastError: any = null
-
-    for (const bridgeAgentId of controlEscolarBridgeAgentCandidates(scope.plantel)) {
+    try {
+      const { readCanonicalExternalControlEscolarAllStudents } = await import('./control-escolar-external-canonical')
+      const canonical = await readCanonicalExternalControlEscolarAllStudents({
+        ...input,
+        plantel: scope.plantel,
+        ciclo: scope.cicloKey,
+        cicloKey: scope.cicloKey
+      })
+      const controlScope = canonical.controlScope
+      const rows = Array.isArray(canonical?.data) ? canonical.data : []
       const filters = {
         ...input,
-        plantel: bridgeAgentId,
-        agentId: bridgeAgentId,
-        ciclo: scope.cicloKey,
-        cicloKey: scope.cicloKey,
-        previousCiclo: scope.previousCiclo,
+        plantel: controlScope.bridgeAgentId,
+        agentId: controlScope.bridgeAgentId,
+        ciclo: controlScope.ciclo,
+        cicloKey: controlScope.ciclo,
+        concepts: controlScope.concepts.join(',') || undefined,
+        tipoConcepts: controlScope.tipoConcepts.join(',') || undefined,
         all: 'snapshot',
         mode: 'snapshot',
-        limit: WARM_LIMIT,
         search: '',
         q: '',
         status: '',
@@ -414,26 +442,33 @@ export const warmExternalControlEscolarStudentScope = async (input: any = {}) =>
         quality: '',
         recent: ''
       }
-
-      try {
-        const result: any = await runWithBridgeAgentId(bridgeAgentId, async () => await fetchControlEscolarStudents(bridgeAgentId, filters))
-        const rows = Array.isArray(result?.data) ? result.data : []
-        const written = await writeControlEscolarExternalStudentView(bridgeAgentId, filters, rows, result?.source || { onDemand: true })
-        return { ...written, rows: rows.length, plantel: scope.plantel, bridgeAgentId, ciclo: scope.cicloKey }
-      } catch (error: any) {
-        lastError = error
+      const written = await writeControlEscolarExternalStudentView(
+        controlScope.bridgeAgentId,
+        filters,
+        rows,
+        { canonical: true, source: 'aurora-control-escolar-canonical' }
+      )
+      return {
+        ...written,
+        rows: rows.length,
+        plantel: controlScope.plantel,
+        bridgeAgentId: controlScope.bridgeAgentId,
+        ciclo: controlScope.ciclo,
+        concepts: controlScope.concepts,
+        tipoConcepts: controlScope.tipoConcepts,
+        catalogs: canonical.catalogs || {}
       }
+    } catch (error: any) {
+      throwExternalStudentScopeError({
+        statusCode: 502,
+        statusMessage: 'AURORA_STUDENT_SCOPE_WARM_FAILED',
+        message: `Aurora no pudo generar el snapshot canónico de ${scope.plantel} para ciclo ${scope.cicloKey}.`,
+        plantel: scope.plantel,
+        ciclo: scope.cicloKey,
+        cause: error,
+        extra: { phase: 'canonical-snapshot-v2' }
+      })
     }
-
-    throwExternalStudentScopeError({
-      statusCode: 502,
-      statusMessage: 'AURORA_STUDENT_SCOPE_WARM_FAILED',
-      message: `Aurora no pudo preparar la base de alumnos de ${scope.plantel} para ciclo ${scope.cicloKey}.`,
-      plantel: scope.plantel,
-      ciclo: scope.cicloKey,
-      cause: lastError,
-      extra: { phase: 'on-demand-warm' }
-    })
   })().finally(() => warmingScopes.delete(warmKey))
 
   warmingScopes.set(warmKey, promise)
@@ -581,67 +616,18 @@ const readExternalControlEscolarCatalogs = async (scope: any) => {
 }
 
 export const refreshExternalControlEscolarStudentViewRow = async (input: any, student: any) => {
-  const scope = await resolveScopeForRead(input)
-  const payload = sanitizeExternalStudentPayload(student)
-  const matricula = normalizeText(payload?.matricula, 64)
+  const matricula = normalizeText(student?.matricula || student?.studentId || input?.matricula, 64)
   if (!matricula) {
     throw createError({ statusCode: 400, statusMessage: 'MATRICULA_REQUIRED', message: 'La matrícula es obligatoria.' })
   }
 
-  const generatedAt = nowDate()
-  const staleAfter = dateHoursFromNow(FRESH_HOURS)
-  const expiresAt = dateHoursFromNow(EXPIRED_HOURS)
-  const payloadJson = JSON.stringify(payload)
-
-  await controlEscolarCentralQuery(
-    `INSERT INTO ${EXTERNAL_VIEW_TABLE}
-      (scope_key, plantel, ciclo_key, previous_ciclo, concept_hash, concept_ids, view_version,
-       matricula, nombre_completo, nivel, grado, grupo, status, enrollment_state, tipo_ingreso,
-       search_text, payload_json, payload_hash, generated_at, payload_changed_at, stale_after, expires_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-     ON DUPLICATE KEY UPDATE
-       nombre_completo = VALUES(nombre_completo),
-       nivel = VALUES(nivel),
-       grado = VALUES(grado),
-       grupo = VALUES(grupo),
-       status = VALUES(status),
-       enrollment_state = VALUES(enrollment_state),
-       tipo_ingreso = VALUES(tipo_ingreso),
-       search_text = VALUES(search_text),
-       payload_json = VALUES(payload_json),
-       payload_changed_at = IF(payload_hash <> VALUES(payload_hash), CURRENT_TIMESTAMP, payload_changed_at),
-       payload_hash = VALUES(payload_hash),
-       generated_at = VALUES(generated_at),
-       stale_after = VALUES(stale_after),
-       expires_at = VALUES(expires_at),
-       updated_at = CURRENT_TIMESTAMP`,
-    [
-      scope.descriptor.scopeKey,
-      scope.plantel,
-      scope.cicloKey,
-      scope.previousCiclo,
-      scope.descriptor.conceptHash,
-      scope.descriptor.conceptIdsPipe,
-      VIEW_VERSION,
-      matricula,
-      normalizeText(payload.nombreCompleto || payload.fullName, 255),
-      normalizeText(payload.nivel, 80),
-      normalizeText(payload.grado, 80).toLowerCase(),
-      normalizeText(payload.group || payload.grupo, 80),
-      normalizeText(payload.status, 80),
-      normalizeText(payload.enrollmentState, 80),
-      normalizeText(payload.tipoIngresoValue || payload.tipoIngreso, 80),
-      buildSearchText(payload),
-      payloadJson,
-      computeHash(payloadJson),
-      generatedAt,
-      generatedAt,
-      staleAfter,
-      expiresAt
-    ]
-  )
-
-  return { success: true, data: payload, meta: buildExternalMeta(scope, { generated_at: generatedAt, stale_after: staleAfter, expires_at: expiresAt }, 1) }
+  const refreshed = await warmExternalControlEscolarStudentScope(input)
+  return {
+    success: true,
+    matricula,
+    refreshedSnapshot: true,
+    ...refreshed
+  }
 }
 
 export const readExternalControlEscolarStudents = async (query: any = {}) => {
