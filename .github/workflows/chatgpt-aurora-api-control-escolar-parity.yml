@@ -44,6 +44,24 @@ jobs:
             echo "main cambió: esperado $expected, actual $current" >&2
             exit 1
           fi
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('server/utils/control-escolar-external-snapshot.ts')
+          text = path.read_text(encoding='utf-8')
+          needle = "    return await overlayCanonicalMatriculaGroups(withRefreshFailureMeta(response, ready.refreshFailure))"
+          if text.count(needle) != 2:
+              raise SystemExit(f'expected two detail fallback returns, found {text.count(needle)}')
+          explicit = "    return await overlayCanonicalMatriculaGroups(withRefreshFailureMeta(withExternalSnapshotMeta(await readExternalControlEscolarStudentDetail(query, matricula), query), ready.refreshFailure))"
+          global_scope = "        return await overlayCanonicalMatriculaGroups(withRefreshFailureMeta(withExternalSnapshotMeta(await readExternalControlEscolarStudentDetail({ ...query, plantel: scope.plantel }, matricula), query), scope.refreshFailure))"
+          text = text.replace(needle, explicit, 1)
+          text = text.replace(needle, global_scope, 1)
+          academic = "      academicPlacementSource: 'central-student-snapshot',\n      groupSource: response?.meta?.groupSource || 'matricula.grupo-live',"
+          normalized = "      academicPlacementSource: 'central-student-snapshot',\n      groupSource: 'central-matricula-live-overlay',"
+          if text.count(academic) != 1:
+              raise SystemExit('academic metadata anchor not found')
+          text = text.replace(academic, normalized, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
           python3 /tmp/patch-aurora-api-control-escolar-parity.py
           actual="$(git status --porcelain | sed -E 's/^.. //' | sort)"
           expected_files="$(printf '%s\n' \
