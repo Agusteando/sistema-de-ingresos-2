@@ -54,14 +54,15 @@
             'students-workspace ce-workspace',
             {
               'has-detail': Boolean(selectedStudent),
-              'is-browsing': !selectedStudent,
+              'has-empty-detail': showControlEnrollmentSummary,
+              'is-browsing': !selectedStudent && !showControlEnrollmentSummary,
             },
           ]"
         >
           <section
             :class="[
               'student-list-panel',
-              selectedStudent ? 'is-compact' : 'is-full',
+              selectedStudent || showControlEnrollmentSummary ? 'is-compact' : 'is-full',
             ]"
           >
             <div
@@ -300,7 +301,7 @@
               <div
                 :class="[
                   'list-columns ce-list-columns',
-                  selectedStudent ? 'compact' : 'full',
+                  selectedStudent || showControlEnrollmentSummary ? 'compact' : 'full',
                 ]"
               >
                 <span>Alumno</span>
@@ -1567,6 +1568,21 @@
               </footer>
             </div>
           </section>
+
+          <StudentsEnrollmentSummary
+            v-if="showControlEnrollmentSummary"
+            class="ce-enrollment-summary"
+            :summary="controlEnrollmentSummary"
+            :plantel-label="selectedAgentId"
+            :ciclo-label="currentCicloLabel"
+            :active-grade="filters.grado"
+            :active-group="filters.group"
+            :loading="studentsLoading"
+            :unavailable="controlEnrollmentSummaryUnavailable"
+            @select-grade="selectSummaryGrade"
+            @select-group="selectSummaryGroup"
+            @clear="clearAcademicFilters"
+          />
         </div>
       </div>
     </div>
@@ -2028,6 +2044,7 @@ import UiChip from "~/components/ui/UiChip.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.vue";
 import StudentsKpiValue from "~/components/students/StudentsKpiValue.vue";
+import StudentsEnrollmentSummary from "~/components/students/StudentsEnrollmentSummary.vue";
 import ControlEscolarSelectionDock from "~/components/students/ControlEscolarSelectionDock.vue";
 import ControlEscolarHuskyBulkModal from "~/components/students/ControlEscolarHuskyBulkModal.vue";
 import ControlEscolarReportModal from "~/components/students/ControlEscolarReportModal.vue";
@@ -2036,6 +2053,7 @@ import StudentEmailBulkModal from "~/components/students/StudentEmailBulkModal.v
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
 import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
+import { buildEnrollmentSummary } from "~/shared/utils/enrollmentSummary";
 import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave, parseServiciosCsv } from "~/shared/utils/talleresServicios";
 import {
   normalizeEnrollmentConceptIds,
@@ -5867,6 +5885,38 @@ const controlBulkSelectedStudents = computed(() =>
   Array.from(controlBulkSelection.values()),
 );
 const controlBulkSelectedCount = computed(() => controlBulkSelection.size);
+
+const controlEnrollmentSummaryUnavailable = computed(
+  () =>
+    !studentsLoading.value &&
+    (studentsSourceUnavailable.value || controlCompleteStage.value === "failed"),
+);
+
+const controlEnrollmentSummary = computed(() =>
+  buildEnrollmentSummary(controlStudentsIndex.value, {
+    include: (student) => student?.enrollmentState === "inscrito",
+    type: (student) =>
+      student?.tipoIngresoValue === "interno" ? "interno" : "externo",
+    grade: (student) => student?.grado,
+    group: (student) => student?.group || student?.grupo,
+    matricula: (student) => student?.matricula,
+  }),
+);
+
+const showControlEnrollmentSummary = computed(
+  () => !selectedStudent.value && controlBulkSelectedCount.value === 0,
+);
+
+const selectSummaryGrade = (grado) => {
+  selectGrade(grado);
+};
+
+const selectSummaryGroup = ({ grade, group } = {}) => {
+  const sameSelection = filters.grado === grade && filters.group === group;
+  filters.grado = sameSelection ? "" : String(grade || "");
+  filters.group = sameSelection ? "" : String(group || "");
+  pagination.page = 1;
+};
 const controlBulkMissingHuskyCount = computed(() =>
   controlBulkSelectedStudents.value.filter((student) => !student?.huskyPassAvailable).length,
 );
@@ -17520,6 +17570,56 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-matricula-token {
     font-size: 11.4px;
     letter-spacing: 0.016em;
+  }
+}
+
+
+/* El resumen comparte la misma segunda columna útil que /alumnos antes de abrir un alumno. */
+@media (min-width: 821px) {
+  .control-escolar-screen .ce-workspace.has-empty-detail {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel {
+    display: contents;
+  }
+
+  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel > .ce-filter-bar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel > .ce-list-card {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .control-escolar-screen .ce-workspace.has-empty-detail > :deep(.ce-enrollment-summary) {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 820px) {
+  .control-escolar-screen .ce-workspace.has-empty-detail {
+    grid-template-rows: minmax(360px, 48vh) minmax(420px, 58vh) !important;
+    gap: 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+  }
+
+  .control-escolar-screen .ce-workspace.has-empty-detail > .student-list-panel,
+  .control-escolar-screen .ce-workspace.has-empty-detail > :deep(.ce-enrollment-summary) {
+    width: 100%;
+    min-width: 0 !important;
+    height: 100%;
+    min-height: 0;
   }
 }
 
