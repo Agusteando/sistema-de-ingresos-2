@@ -61,31 +61,38 @@ replace_once(
     "modo de columnas",
 )
 
-summary_markup = '''      </section>
-
-      <StudentsEnrollmentSummary
-        v-else-if="showControlEnrollmentSummary"
-        class="ce-enrollment-summary"
-        :summary="controlEnrollmentSummary"
-        :plantel-label="selectedAgentId"
-        :ciclo-label="currentCicloLabel"
-        :active-grade="filters.grado"
-        :active-group="filters.group"
-        :loading="studentsLoading"
-        :unavailable="controlEnrollmentSummaryUnavailable"
-        @select-grade="selectSummaryGrade"
-        @select-group="selectSummaryGroup"
-        @clear="clearAcademicFilters"
-      />
+workspace_tail = '''          </section>
+        </div>
+      </div>
     </div>
 
-    <ControlEscolarSelectionDock'''
+    <div
+      v-if="showMassImportModal"'''
 
-replace_once(
-    "      </section>\n    </div>\n\n    <ControlEscolarSelectionDock",
-    summary_markup,
-    "panel de resumen",
-)
+summary_markup = '''          </section>
+
+          <StudentsEnrollmentSummary
+            v-if="showControlEnrollmentSummary"
+            class="ce-enrollment-summary"
+            :summary="controlEnrollmentSummary"
+            :plantel-label="selectedAgentId"
+            :ciclo-label="currentCicloLabel"
+            :active-grade="filters.grado"
+            :active-group="filters.group"
+            :loading="studentsLoading"
+            :unavailable="controlEnrollmentSummaryUnavailable"
+            @select-grade="selectSummaryGrade"
+            @select-group="selectSummaryGroup"
+            @clear="clearAcademicFilters"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="showMassImportModal"'''
+
+replace_once(workspace_tail, summary_markup, "panel de resumen")
 
 summary_logic = '''const controlBulkSelectedCount = computed(() => controlBulkSelection.size);
 
@@ -193,6 +200,7 @@ checks = {
     "estado vacío": "'has-empty-detail': showControlEnrollmentSummary",
     "browsing excluye resumen": "'is-browsing': !selectedStudent && !showControlEnrollmentSummary",
     "evento de grupo": '@select-group="selectSummaryGroup"',
+    "resumen dentro del workspace": '<StudentsEnrollmentSummary\n            v-if="showControlEnrollmentSummary"',
 }
 for label, needle in checks.items():
     if needle not in text:
@@ -204,5 +212,7 @@ if text.count("import StudentsEnrollmentSummary from") != 1:
     raise SystemExit("el componente debe importarse exactamente una vez")
 if text.count("import { buildEnrollmentSummary }") != 1:
     raise SystemExit("el builder debe importarse exactamente una vez")
+if 'v-else-if="showControlEnrollmentSummary"' in text:
+    raise SystemExit("el resumen no debe depender de adyacencia v-else-if")
 
 path.write_text(text, encoding="utf-8")
