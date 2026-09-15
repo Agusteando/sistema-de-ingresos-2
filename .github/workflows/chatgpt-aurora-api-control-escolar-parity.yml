@@ -1,0 +1,89 @@
+name: Aurora API Control Escolar parity
+
+on:
+  push:
+    branches:
+      - chatgpt/aurora-api-control-escolar-parity
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout runner branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Aplicar cambio sobre main exacto
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='5591ea875a3081696fec26ff7f394842c4ff959f'
+          cp .github/scripts/patch-aurora-api-control-escolar-parity.py /tmp/patch-aurora-api-control-escolar-parity.py
+          git fetch origin main
+          git checkout --detach origin/main
+          current="$(git rev-parse HEAD)"
+          if [ "$current" != "$expected" ]; then
+            echo "main cambió: esperado $expected, actual $current" >&2
+            exit 1
+          fi
+          python3 /tmp/patch-aurora-api-control-escolar-parity.py
+          actual="$(git status --porcelain | sed -E 's/^.. //' | sort)"
+          expected_files="$(printf '%s\n' \
+            scripts/verify-academic-source.mjs \
+            server/utils/control-escolar-external-canonical.ts \
+            server/utils/control-escolar-external-snapshot-presenter.ts \
+            server/utils/control-escolar-external-snapshot.ts | sort)"
+          if [ "$actual" != "$expected_files" ]; then
+            echo 'Archivos modificados inesperados:' >&2
+            printf '%s\n' "$actual" >&2
+            exit 1
+          fi
+          git diff --check
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Verificar fuente académica
+        run: npm run verify:academic-source
+
+      - name: Build de producción
+        run: npm run build
+
+      - name: Publicar un único commit en main
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='5591ea875a3081696fec26ff7f394842c4ff959f'
+          git fetch origin main
+          remote="$(git rev-parse origin/main)"
+          if [ "$remote" != "$expected" ]; then
+            echo "main cambió durante la verificación: esperado $expected, remoto $remote" >&2
+            exit 1
+          fi
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            scripts/verify-academic-source.mjs \
+            server/utils/control-escolar-external-canonical.ts \
+            server/utils/control-escolar-external-snapshot-presenter.ts \
+            server/utils/control-escolar-external-snapshot.ts
+          changed="$(git diff --cached --name-only | sort)"
+          expected_files="$(printf '%s\n' \
+            scripts/verify-academic-source.mjs \
+            server/utils/control-escolar-external-canonical.ts \
+            server/utils/control-escolar-external-snapshot-presenter.ts \
+            server/utils/control-escolar-external-snapshot.ts | sort)"
+          test "$changed" = "$expected_files"
+          git commit -m 'Unifica API pública con Control Escolar'
+          git push origin HEAD:main
