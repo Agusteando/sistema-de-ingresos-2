@@ -1,0 +1,73 @@
+name: Control Escolar visual check
+
+on:
+  push:
+    branches: ["chatgpt/control-escolar-resumen"]
+
+permissions:
+  contents: read
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout runner branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout main verificado
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='5591ea875a3081696fec26ff7f394842c4ff959f'
+          cp .github/scripts/verify-control-escolar-summary.cjs /tmp/verify-control-escolar-summary.cjs
+          git fetch origin main
+          git checkout --detach origin/main
+          current="$(git rev-parse HEAD)"
+          test "$current" = "$expected"
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar aplicación y navegador
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Iniciar laboratorio dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run dev -- --host 127.0.0.1 --port 3001 > /tmp/nuxt-dev.log 2>&1 &
+          echo $! > /tmp/nuxt-dev.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3001/__visual-lab/students-account?chrome=0 >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/nuxt-dev.log
+          exit 1
+
+      - name: Verificar desktop y móvil
+        env:
+          BASE_URL: http://127.0.0.1:3001
+        run: node /tmp/verify-control-escolar-summary.cjs
+
+      - name: Adjuntar capturas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-escolar-summary-visual
+          path: |
+            /tmp/control-escolar-summary-desktop.png
+            /tmp/control-escolar-summary-mobile.png
+            /tmp/nuxt-dev.log
+          if-no-files-found: warn
