@@ -23,6 +23,20 @@ jobs:
           set -euo pipefail
           expected='5591ea875a3081696fec26ff7f394842c4ff959f'
           cp .github/scripts/patch-aurora-api-control-escolar-parity.py /tmp/patch-aurora-api-control-escolar-parity.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/patch-aurora-api-control-escolar-parity.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              "error?.httpStatus || 502) || 502",
+              "error?.response?.status || 500) || 500",
+          )
+          text = text.replace(
+              "  statusMessage: clean(error?.statusMessage || error?.code || error?.name || 'AURORA_ERROR', 120),\\n  message: clean(error?.message || error?.statusMessage || 'Error interno de Aurora.', 1000),\\n  code: clean(error?.data?.code || error?.code || error?.statusMessage || '', 120) || null",
+              "  code: clean(error?.data?.code || error?.code || error?.statusMessage || error?.name || 'AURORA_ERROR', 120),\\n  message: clean(error?.message || error?.statusMessage || 'Aurora no pudo actualizar el snapshot central solicitado.', 700)",
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
           git fetch origin main
           git checkout --detach origin/main
           current="$(git rev-parse HEAD)"
