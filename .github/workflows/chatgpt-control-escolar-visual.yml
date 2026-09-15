@@ -59,6 +59,7 @@ jobs:
       - name: Verificar desktop y móvil
         env:
           BASE_URL: http://127.0.0.1:3001
+          NODE_PATH: ${{ github.workspace }}/node_modules
         run: node /tmp/verify-control-escolar-summary.cjs
 
       - name: Adjuntar capturas
