@@ -97,7 +97,7 @@ export const usePlantelAgentStatuses = () => {
     const lastCheck = normalizedPlantel ? statusChecks.value[normalizedPlantel] : lastFullCheck.value
     const statusAge = Date.now() - Number(lastCheck || 0)
 
-    if (!force && lastCheck && statusAge < 15000) return
+    if (!force && lastCheck && statusAge < 120000) return
 
     requestCount.value += 1
     error.value = ''
