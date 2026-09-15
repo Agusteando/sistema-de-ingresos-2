@@ -3,7 +3,13 @@ import { join } from 'node:path'
 
 const root = process.cwd()
 const controlEscolarPath = join(root, 'server/utils/control-escolar.ts')
-const text = await readFile(controlEscolarPath, 'utf8')
+const externalCanonicalPath = join(root, 'server/utils/control-escolar-external-canonical.ts')
+const externalSnapshotPath = join(root, 'server/utils/control-escolar-external-snapshot.ts')
+const [text, externalCanonicalText, externalSnapshotText] = await Promise.all([
+  readFile(controlEscolarPath, 'utf8'),
+  readFile(externalCanonicalPath, 'utf8'),
+  readFile(externalSnapshotPath, 'utf8')
+])
 const failures = []
 
 const directPatterns = [
@@ -30,10 +36,23 @@ if (centralSelect && /["']nivel["']/.test(centralSelect[0])) {
   failures.push('server/utils/control-escolar.ts: centralSelectColumns no puede seleccionar matricula.nivel')
 }
 
+if (!externalCanonicalText.includes('fetchControlEscolarStudentsWithCanonicalGroups')) {
+  failures.push('server/utils/control-escolar-external-canonical.ts: la API pública debe reutilizar el resolver canónico de Control Escolar')
+}
+if (!externalCanonicalText.includes('readBestConceptosConfigPayload') || !externalCanonicalText.includes('parseEnrollmentConceptsForScope')) {
+  failures.push('server/utils/control-escolar-external-canonical.ts: la API pública debe resolver la misma configuración de inscripción que Control Escolar')
+}
+if (!externalSnapshotText.includes('readCanonicalExternalControlEscolarStudents(query)')) {
+  failures.push('server/utils/control-escolar-external-snapshot.ts: el snapshot no puede ser la fuente primaria de alumnos públicos')
+}
+if (!externalSnapshotText.includes('readCanonicalExternalControlEscolarStudentDetail(query, matriculaValue)')) {
+  failures.push('server/utils/control-escolar-external-snapshot.ts: el detalle/academic público debe usar Control Escolar canónico primero')
+}
+
 if (failures.length) {
   console.error('Fuente académica inválida: grado y nivel vigentes deben salir de la proyección de Control Escolar, nunca de matricula.grado/matricula.nivel.')
   failures.forEach((failure) => console.error(`- ${failure}`))
   process.exit(1)
 }
 
-console.log('Fuente académica válida: Control Escolar no lee matricula.grado ni matricula.nivel para resolver la colocación vigente.')
+console.log('Fuente académica válida: Control Escolar y la API pública comparten la misma proyección canónica de grado, grupo, ciclo y alcance de inscripción.')

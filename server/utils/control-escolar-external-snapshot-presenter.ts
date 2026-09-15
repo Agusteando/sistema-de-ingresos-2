@@ -60,7 +60,7 @@ const normalizeSnapshotStudentForExternalApi = (studentValue: any) => {
   return student
 }
 
-const normalizeSnapshotResponseData = (response: any) => {
+export const normalizeControlEscolarExternalResponse = (response: any) => {
   if (Array.isArray(response?.data)) {
     return { ...response, data: response.data.map(normalizeSnapshotStudentForExternalApi) }
   }
@@ -71,7 +71,7 @@ const normalizeSnapshotResponseData = (response: any) => {
 }
 
 export const withExternalSnapshotMeta = (responseValue: any, query: any = {}) => {
-  const response = normalizeSnapshotResponseData(responseValue)
+  const response = normalizeControlEscolarExternalResponse(responseValue)
   return {
     ...(response || {}),
     meta: {
@@ -80,6 +80,21 @@ export const withExternalSnapshotMeta = (responseValue: any, query: any = {}) =>
       fallback: false,
       freshRequested: isExternalFreshReadRequested(query),
       cachePolicy: 'central-snapshot-only'
+    }
+  }
+}
+
+
+export const withExternalCanonicalMeta = (responseValue: any, query: any = {}) => {
+  const response = normalizeControlEscolarExternalResponse(responseValue)
+  return {
+    ...(response || {}),
+    meta: {
+      ...(response?.meta || {}),
+      source: 'aurora-control-escolar-canonical',
+      fallback: false,
+      freshRequested: true,
+      cachePolicy: 'control-escolar-canonical-primary'
     }
   }
 }
