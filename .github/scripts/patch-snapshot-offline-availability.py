@@ -60,9 +60,20 @@ regex_once(
 )
 
 view = ROOT / 'server/utils/control-escolar-external-view.ts'
-regex_once(
+replace_once(
     view,
-    r"  if \(students\.length === 0\) \{\n    await ensureControlEscolarExternalViewSchema\(\)\n    await controlEscolarCentralQuery\([\s\S]*?\n    \)\n    throw createError\(\{\n      statusCode: 503,\n      statusMessage: 'AURORA_CANONICAL_SNAPSHOT_EMPTY',\n      message: `Control Escolar canónico no produjo alumnos para \$\{scope\.plantel\} en ciclo \$\{scope\.cicloKey\}; Aurora no conservará un snapshot anterior\.`,\n    \}\)\n  \}",
+    """  if (students.length === 0) {
+    await ensureControlEscolarExternalViewSchema()
+    await controlEscolarCentralQuery(
+      `DELETE FROM ${EXTERNAL_VIEW_TABLE} WHERE plantel = ? AND ciclo_key = ? AND view_version = ?`,
+      [scope.plantel, scope.cicloKey, VIEW_VERSION]
+    )
+    throw createError({
+      statusCode: 503,
+      statusMessage: 'AURORA_CANONICAL_SNAPSHOT_EMPTY',
+      message: `Control Escolar canónico no produjo alumnos para ${scope.plantel} en ciclo ${scope.cicloKey}; Aurora no conservará un snapshot anterior.`
+    })
+  }""",
     """  if (students.length === 0) {
     // Never destroy the last-known-good snapshot because a refresh returned an
     // empty dataset. Availability is the reason this persisted snapshot exists.
