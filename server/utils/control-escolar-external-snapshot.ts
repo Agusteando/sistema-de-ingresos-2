@@ -7,7 +7,8 @@ import {
   getExternalStudentPlanteles,
   readExternalControlEscolarChanges,
   readExternalControlEscolarStudentDetail,
-  readExternalControlEscolarStudents
+  readExternalControlEscolarStudents,
+  warmExternalControlEscolarStudentScope
 } from './control-escolar-external-view'
 import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
 import { withExternalSnapshotMeta } from './control-escolar-external-snapshot-presenter'
@@ -17,7 +18,6 @@ const MAX_PAGE_SIZE = 500
 
 const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
-
 
 const readLatestSnapshotScope = async (scope: ReturnType<typeof buildExternalControlEscolarScope>) => {
   const params: any[] = [scope.plantel, scope.cicloKey, EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION]
@@ -51,10 +51,20 @@ export const assertExternalControlEscolarSnapshotReady = async (query: any = {})
   if (!scope.cicloKey) throw createError({ statusCode: 400, statusMessage: 'CICLO_REQUIRED', message: 'El ciclo escolar es obligatorio.' })
 
   await ensureControlEscolarExternalViewSchema()
-  const row = await readLatestSnapshotScope(scope)
-  // Consumer reads are snapshot-only by design. Refreshing belongs to the
-  // background producer; stale/expired timestamps describe freshness, never
-  // whether the last-known-good snapshot is allowed to be read.
+  let row = await readLatestSnapshotScope(scope)
+
+  // Existing snapshots are always readable, even when stale/expired. The bridge
+  // is used here only to bootstrap a scope that has never been persisted yet.
+  if (!row?.scope_key) {
+    await warmExternalControlEscolarStudentScope({
+      ...query,
+      plantel: scope.plantel,
+      ciclo: scope.cicloKey,
+      cicloKey: scope.cicloKey
+    })
+    row = await readLatestSnapshotScope(scope)
+  }
+
   if (!row?.scope_key) throw snapshotUnavailable(scope.plantel, scope.cicloKey)
   return { scope, row }
 }
