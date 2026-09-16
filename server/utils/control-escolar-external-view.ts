@@ -80,7 +80,7 @@ const toIsoOrNull = (value: unknown) => {
   return Number.isFinite(time) ? date.toISOString() : null
 }
 
-const nowDate = () => new Date()
+const mysqlSecondPrecisionNow = () => new Date(Math.floor(Date.now() / 1000) * 1000)
 
 const dateMinutesFromNow = (minutes: number) => new Date(Date.now() + minutes * 60 * 1000)
 const dateHoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000)
@@ -286,7 +286,7 @@ export const writeControlEscolarExternalStudentView = async (
 
   await ensureControlEscolarExternalViewSchema()
 
-  const generatedAt = nowDate()
+  const generatedAt = mysqlSecondPrecisionNow()
   const staleAfter = dateHoursFromNow(FRESH_HOURS)
   const expiresAt = dateHoursFromNow(EXPIRED_HOURS)
   const rows = students

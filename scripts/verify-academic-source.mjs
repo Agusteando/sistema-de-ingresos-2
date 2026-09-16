@@ -6,11 +6,13 @@ const controlEscolarPath = join(root, 'server/utils/control-escolar.ts')
 const externalCanonicalPath = join(root, 'server/utils/control-escolar-external-canonical.ts')
 const externalViewPath = join(root, 'server/utils/control-escolar-external-view.ts')
 const externalSnapshotPath = join(root, 'server/utils/control-escolar-external-snapshot.ts')
-const [text, externalCanonicalText, externalViewText, externalSnapshotText] = await Promise.all([
+const talleresSnapshotPath = join(root, 'server/utils/talleres-snapshot.ts')
+const [text, externalCanonicalText, externalViewText, externalSnapshotText, talleresSnapshotText] = await Promise.all([
   readFile(controlEscolarPath, 'utf8'),
   readFile(externalCanonicalPath, 'utf8'),
   readFile(externalViewPath, 'utf8'),
-  readFile(externalSnapshotPath, 'utf8')
+  readFile(externalSnapshotPath, 'utf8'),
+  readFile(talleresSnapshotPath, 'utf8')
 ])
 const failures = []
 
@@ -39,6 +41,11 @@ if (!externalViewText.includes('readCanonicalExternalControlEscolarAllStudents')
 if (!externalViewText.includes('source?.canonical !== true')) failures.push('server/utils/control-escolar-external-view.ts: las escrituras no canónicas de snapshot deben estar bloqueadas')
 if (!externalSnapshotText.includes('EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION')) failures.push('server/utils/control-escolar-external-snapshot.ts: los lectores deben compartir la misma versión de snapshot')
 if (externalSnapshotText.includes('withCanonicalFallbackMeta') || externalSnapshotText.includes('overlayCanonicalMatriculaGroups')) failures.push('server/utils/control-escolar-external-snapshot.ts: no se permite rescatar snapshots viejos ni superponer una segunda interpretación')
+if (!externalViewText.includes('mysqlSecondPrecisionNow') || !externalViewText.includes('const generatedAt = mysqlSecondPrecisionNow()')) failures.push('server/utils/control-escolar-external-view.ts: el marcador de generación debe respetar la precisión DATETIME de MySQL para no borrar filas recién escritas')
+if (!talleresSnapshotText.includes('readCanonicalExternalControlEscolarAllStudents') || !talleresSnapshotText.includes('canonicalStudents: any[]')) failures.push('server/utils/talleres-snapshot.ts: Talleres debe sembrar su roster desde Control Escolar canónico')
+if (talleresSnapshotText.includes('current.base = mergeDefined(current.base, raw)')) failures.push('server/utils/talleres-snapshot.ts: una fuente de enriquecimiento no puede reemplazar la base académica canónica')
+if (talleresSnapshotText.includes('...mergeDefined(current, incoming)')) failures.push('server/utils/talleres-snapshot.ts: una fila preservada no puede sobrescribir grado/grupo canónicos frescos')
+if (!talleresSnapshotText.includes('mysqlSecondPrecisionNow') || !talleresSnapshotText.includes('const generatedAt = mysqlSecondPrecisionNow()')) failures.push('server/utils/talleres-snapshot.ts: el snapshot de Talleres debe usar un marcador compatible con DATETIME')
 if (failures.length) {
   console.error('Fuente académica inválida: Control Escolar, snapshots y API pública deben compartir una sola proyección canónica.')
   failures.forEach((failure) => console.error(`- ${failure}`))
