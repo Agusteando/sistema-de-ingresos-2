@@ -1,0 +1,64 @@
+name: Canonical consumer pipeline
+
+on:
+  push:
+    branches:
+      - chatgpt/canonical-consumer-pipeline
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout runner branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare exact main
+        env:
+          EXPECTED_MAIN: d9001cf001314dbe212097561501bc3a60f02911
+        run: |
+          cp .github/scripts/patch-canonical-consumer-pipeline.py /tmp/patch-canonical-consumer-pipeline.py
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          git checkout --detach "$EXPECTED_MAIN"
+
+      - name: Apply canonical pipeline patch
+        run: python /tmp/patch-canonical-consumer-pipeline.py
+
+      - name: Verify patch scope
+        run: |
+          git diff --check
+          git diff --name-only | sort
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "scripts/verify-academic-source.mjs server/utils/control-escolar-external-view.ts server/utils/talleres-snapshot.ts "
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify academic source
+        run: npm run verify:academic-source
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit guarded change
+        env:
+          EXPECTED_MAIN: d9001cf001314dbe212097561501bc3a60f02911
+        run: |
+          git add scripts/verify-academic-source.mjs server/utils/control-escolar-external-view.ts server/utils/talleres-snapshot.ts
+          git diff --cached --check
+          git config user.name "Alejandro Jurado"
+          git config user.email "desarrollo.tecnologico@casitaiedis.edu.mx"
+          git commit -m "Alinea consumidores con Control Escolar canónico"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          git push origin HEAD:main
