@@ -7,40 +7,17 @@ import {
   getExternalStudentPlanteles,
   readExternalControlEscolarChanges,
   readExternalControlEscolarStudentDetail,
-  readExternalControlEscolarStudents,
-  warmExternalControlEscolarStudentScope
+  readExternalControlEscolarStudents
 } from './control-escolar-external-view'
 import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
 import { withExternalSnapshotMeta } from './control-escolar-external-snapshot-presenter'
 
 const EXTERNAL_VIEW_TABLE = 'control_external_student_view'
 const MAX_PAGE_SIZE = 500
-const FRESH_REQUEST_MAX_AGE_MS = 60_000
 
 const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
 
-const timestamp = (value: unknown) => {
-  if (!value) return Number.NaN
-  const time = value instanceof Date ? value.getTime() : new Date(String(value)).getTime()
-  return Number.isFinite(time) ? time : Number.NaN
-}
-
-const wantsFreshSnapshot = (query: any = {}) =>
-  ['1', 'true', 'yes', 'fresh'].includes(clean(query.fresh, 20).toLowerCase())
-
-const snapshotNeedsWarm = (row: any, query: any = {}) => {
-  if (!row?.scope_key) return true
-  const now = Date.now()
-  const generatedAt = timestamp(row.generated_at)
-  const staleAt = timestamp(row.stale_after)
-  const expiresAt = timestamp(row.expires_at)
-  if (!Number.isFinite(generatedAt)) return true
-  if (Number.isFinite(expiresAt) && now >= expiresAt) return true
-  if (Number.isFinite(staleAt) && now >= staleAt) return true
-  if (wantsFreshSnapshot(query) && now - generatedAt > FRESH_REQUEST_MAX_AGE_MS) return true
-  return false
-}
 
 const readLatestSnapshotScope = async (scope: ReturnType<typeof buildExternalControlEscolarScope>) => {
   const params: any[] = [scope.plantel, scope.cicloKey, EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION]
@@ -64,7 +41,7 @@ const readLatestSnapshotScope = async (scope: ReturnType<typeof buildExternalCon
 const snapshotUnavailable = (plantel: string, ciclo: string) => createError({
   statusCode: 503,
   statusMessage: 'AURORA_CANONICAL_SNAPSHOT_NOT_READY',
-  message: `Aurora no pudo generar un snapshot canónico de ${plantel} para ciclo ${ciclo}.`,
+  message: `Aurora no tiene un snapshot canónico persistido de ${plantel} para ciclo ${ciclo}.`,
   data: { code: 'AURORA_CANONICAL_SNAPSHOT_NOT_READY', plantel, ciclo, retryable: true, source: 'aurora-control-escolar-canonical-snapshot' }
 })
 
@@ -74,12 +51,11 @@ export const assertExternalControlEscolarSnapshotReady = async (query: any = {})
   if (!scope.cicloKey) throw createError({ statusCode: 400, statusMessage: 'CICLO_REQUIRED', message: 'El ciclo escolar es obligatorio.' })
 
   await ensureControlEscolarExternalViewSchema()
-  let row = await readLatestSnapshotScope(scope)
-  if (snapshotNeedsWarm(row, query)) {
-    await warmExternalControlEscolarStudentScope({ ...query, plantel: scope.plantel, ciclo: scope.cicloKey, cicloKey: scope.cicloKey })
-    row = await readLatestSnapshotScope(scope)
-  }
-  if (!row?.scope_key || snapshotNeedsWarm(row, query)) throw snapshotUnavailable(scope.plantel, scope.cicloKey)
+  const row = await readLatestSnapshotScope(scope)
+  // Consumer reads are snapshot-only by design. Refreshing belongs to the
+  // background producer; stale/expired timestamps describe freshness, never
+  // whether the last-known-good snapshot is allowed to be read.
+  if (!row?.scope_key) throw snapshotUnavailable(scope.plantel, scope.cicloKey)
   return { scope, row }
 }
 
