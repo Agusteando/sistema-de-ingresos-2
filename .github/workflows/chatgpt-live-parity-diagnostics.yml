@@ -1,0 +1,59 @@
+name: Live parity diagnostics
+on:
+  push:
+    branches: [chatgpt/live-parity-diagnostics]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TOKEN_A: ${{ secrets.AURORA_API_TOKEN }}
+      TOKEN_B: ${{ secrets.TALLERES_AURORA_API_TOKEN }}
+      TOKEN_C: ${{ secrets.HUSKY_PASS_AURORA_API_TOKEN }}
+      TOKEN_D: ${{ secrets.EXTERNAL_CONTROL_ESCOLAR_API_TOKEN }}
+      TOKEN_E: ${{ secrets.AURORA_STUDENTS_API_TOKEN }}
+    steps:
+      - name: Probe live Aurora without PII
+        shell: bash
+        run: |
+          node <<'NODE'
+          const origin = 'https://aurora.casitaiedis.edu.mx';
+          const token = [process.env.TOKEN_A, process.env.TOKEN_B, process.env.TOKEN_C, process.env.TOKEN_D, process.env.TOKEN_E].find(v => String(v || '').trim());
+          console.log(`TOKEN_PRESENT=${Boolean(token)}`);
+          if (!token) process.exit(2);
+          const headers = {authorization:`Bearer ${token}`, accept:'application/json'};
+          async function get(path) {
+            try {
+              const r = await fetch(origin + path, {headers, signal: AbortSignal.timeout(20000)});
+              let body = null;
+              try { body = await r.json(); } catch {}
+              return {status:r.status, body};
+            } catch (e) {
+              return {status:0, body:{message:e?.message || String(e)}};
+            }
+          }
+          const cycleResp = await get('/api/external/v1/school-cycle');
+          const cycle = String(cycleResp.body?.currentCycle?.key || '');
+          console.log(JSON.stringify({route:'school-cycle', status:cycleResp.status, cycle, source:cycleResp.body?.source || null, code:cycleResp.body?.data?.code || cycleResp.body?.statusMessage || null, message:cycleResp.body?.message || null}));
+          if (!cycle) process.exit(3);
+          for (const plantel of ['PREEM','PREET','GM','PM','PT','SM','ST']) {
+            for (const status of ['', 'inscrito']) {
+              const q = new URLSearchParams({plantel,ciclo:cycle,limit:'1'});
+              if (status) q.set('status', status);
+              const res = await get('/api/external/v1/control-escolar/students?' + q);
+              console.log(JSON.stringify({
+                route:'students', plantel, filter:status || 'all', http:res.status,
+                total:res.body?.pagination?.total ?? null,
+                rows:Array.isArray(res.body?.data) ? res.body.data.length : null,
+                source:res.body?.meta?.source || null,
+                viewVersion:res.body?.meta?.viewVersion || null,
+                freshness:res.body?.meta?.freshness || null,
+                generatedAt:res.body?.meta?.generatedAt || null,
+                code:res.body?.data?.code || res.body?.statusMessage || null,
+                message:res.body?.message || null
+              }));
+            }
+          }
+          NODE
