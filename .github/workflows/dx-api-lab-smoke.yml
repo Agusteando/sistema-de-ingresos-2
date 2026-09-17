@@ -1,0 +1,29 @@
+name: DX API Lab smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'chatgpt/dx-smoke/**'
+      - 'chatgpt/dx-matrix'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify DX contract
+        run: node scripts/verify-dx-api-lab.mjs
+      - name: Verify academic source
+        run: npm run verify:academic-source
+      - name: Build
+        run: npm run build

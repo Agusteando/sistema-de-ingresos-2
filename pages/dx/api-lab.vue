@@ -1,237 +1,326 @@
 <template>
   <main class="dx-shell">
-    <header class="dx-header">
+    <header class="topbar">
       <div>
         <p class="eyebrow">AURORA · DX</p>
-        <h1>API Lab</h1>
-        <p class="sub">Contratos externos, simulaciones reales y payloads.</p>
+        <h1>Estado de integraciones</h1>
       </div>
-      <div class="header-actions">
-        <button class="secondary" :disabled="autoTesting || !catalog" @click="autoTestEndpoints">{{ autoTesting ? 'Probando…' : 'Auto-test GET seguros' }}</button>
-        <span class="hidden-badge">Ruta oculta</span>
+      <div class="actions">
+        <label class="cycle-field">
+          <span>Ciclo</span>
+          <input v-model.trim="cycle" aria-label="Ciclo escolar">
+        </label>
+        <div class="plantel-filter">
+          <span>Plantel</span>
+          <div class="search-select">
+            <input v-model.trim="plantelQuery" list="aurora-planteles" placeholder="Todos los planteles" aria-label="Buscar plantel">
+            <button v-if="plantelQuery" class="clear" type="button" aria-label="Limpiar plantel" @click="plantelQuery = ''">×</button>
+          </div>
+          <datalist id="aurora-planteles">
+            <option v-for="plantel in planteles" :key="plantel" :value="plantel" />
+          </datalist>
+        </div>
+        <button class="auto" :disabled="autoRunning || !catalog" @click="runAutoDx">
+          <span class="auto-dot" :class="{ pulse: autoRunning }" />
+          {{ autoRunning ? `Auto-DX ${progress.done}/${progress.total}` : 'Auto-DX' }}
+        </button>
       </div>
     </header>
 
-    <section class="controls card">
-      <label>Plantel<input v-model.trim="params.plantel" placeholder="PREEM"></label>
-      <label>Ciclo<input v-model.trim="params.ciclo" placeholder="2026-2027"></label>
-      <label>Matrícula<input v-model.trim="params.matricula" placeholder="Opcional"></label>
-      <label>Búsqueda<input v-model.trim="params.q" placeholder="Nombre / matrícula"></label>
-      <label>Estado<input v-model.trim="params.status" placeholder="inscrito"></label>
-      <label>Límite<input v-model.trim="params.limit" inputmode="numeric" placeholder="500"></label>
+    <section class="summary-row" aria-live="polite">
+      <div class="summary-chip"><span class="dot ok" />{{ stats.ok }} OK</div>
+      <div class="summary-chip"><span class="dot partial" />{{ stats.partial }} parcial</div>
+      <div class="summary-chip"><span class="dot error" />{{ stats.error }} error</div>
+      <div class="summary-chip muted">{{ visiblePlanteles.length }} planteles · {{ apps.length }} apps</div>
     </section>
 
-    <section class="workspace">
-      <aside class="card side">
-        <div class="mode-switch">
-          <button :class="{ active: mode === 'simulation' }" @click="mode = 'simulation'">Apps</button>
-          <button :class="{ active: mode === 'endpoint' }" @click="mode = 'endpoint'">Endpoints</button>
-        </div>
-
-        <template v-if="mode === 'simulation'">
-          <button
-            v-for="sim in catalog?.simulations || []"
-            :key="sim.id"
-            class="pick"
-            :class="{ selected: selectedSimulation === sim.id }"
-            @click="selectedSimulation = sim.id"
-          >
-            <span>{{ sim.app }}</span>
-            <strong>{{ sim.label }}</strong>
-            <small>{{ sim.verifiedDirect ? 'Llamada directa verificada' : 'Contrato Aurora · no llamada directa detectada' }}</small>
-          </button>
-        </template>
-        <template v-else>
-          <button
-            v-for="endpoint in catalog?.endpoints || []"
-            :key="endpoint.id"
-            class="pick"
-            :class="{ selected: selectedEndpoint === endpoint.id }"
-            @click="selectedEndpoint = endpoint.id"
-          >
-            <span><b :class="methodClass(endpoint.method)">{{ endpoint.method }}</b> {{ endpoint.group }}</span>
-            <strong>{{ endpoint.label }}</strong>
-            <small>{{ endpoint.path }}</small>
-          </button>
-        </template>
-      </aside>
-
-      <section class="card runner">
-        <div v-if="activeItem" class="runner-head">
-          <div>
-            <p class="eyebrow">{{ mode === 'simulation' ? activeSimulation?.app : activeEndpoint?.group }}</p>
-            <h2>{{ activeItem.label }}</h2>
-            <code>{{ activeEndpoint?.method }} {{ activeEndpoint?.path }}</code>
-            <p class="note">{{ mode === 'simulation' ? activeSimulation?.note : activeEndpoint?.description }}</p>
-          </div>
-          <button class="primary" :disabled="running || !activeEndpoint?.runnable" @click="runCurrent">{{ running ? 'Ejecutando…' : 'Ejecutar' }}</button>
-        </div>
-        <div v-else class="empty">Cargando catálogo…</div>
-        <p v-if="activeEndpoint && !activeEndpoint.runnable" class="blocked">{{ activeEndpoint.reason }}</p>
-
-        <div v-if="result" class="result">
-          <div class="metrics">
-            <div><span>HTTP</span><strong :class="result.ok ? 'ok' : 'bad'">{{ result.status }}</strong></div>
-            <div><span>Latencia</span><strong>{{ result.latencyMs }} ms</strong></div>
-            <div><span>Filas</span><strong>{{ result.rowCount }}</strong></div>
-            <div><span>Páginas</span><strong>{{ result.pages || 1 }}</strong></div>
-            <div><span>Source</span><strong>{{ result.source ?? '—' }}</strong></div>
-            <div><span>Fallback</span><strong>{{ result.fallback ?? '—' }}</strong></div>
-          </div>
-          <div class="request-line"><code>{{ result.request }}</code><span>{{ result.header }}</span></div>
-          <p v-if="result.error" class="error-box"><b>{{ result.error.code }}</b> · {{ result.error.message }}</p>
-          <p v-if="result.truncated" class="warning">Vista limitada a 5,000 filas / 20 páginas para proteger operación.</p>
-
-          <div class="table-toolbar">
-            <input v-model="rowFilter" placeholder="Buscar en cualquier columna / string match">
-            <span>{{ filteredRows.length }} coincidencias</span>
-            <button class="secondary" :disabled="!filteredRows.length" @click="downloadCsv">CSV</button>
-          </div>
-          <div class="table-wrap" v-if="filteredRows.length">
-            <table>
-              <thead><tr><th v-for="column in tableColumns" :key="column">{{ column }}</th></tr></thead>
-              <tbody>
-                <tr v-for="(row, index) in visibleRows" :key="index">
-                  <td v-for="column in tableColumns" :key="column" :title="cell(row?.[column])">{{ cell(row?.[column]) }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <p v-if="filteredRows.length > visibleRows.length" class="table-foot">Mostrando 200 de {{ filteredRows.length }}. El CSV incluye todas las coincidencias.</p>
-          </div>
-          <div v-else class="empty compact">Sin filas para mostrar.</div>
-
-          <details class="payload">
-            <summary>Payload JSON</summary>
-            <pre>{{ rawPayloadText }}</pre>
-          </details>
-        </div>
-      </section>
-    </section>
-
-    <section class="card inventory">
-      <div class="inventory-head">
-        <div><p class="eyebrow">INVENTARIO</p><h2>API externa disponible</h2></div>
-        <input v-model="endpointFilter" placeholder="Filtrar endpoint">
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Método</th><th>Grupo</th><th>Endpoint</th><th>Prueba</th><th>Estado</th></tr></thead>
+    <section class="matrix-card">
+      <div class="matrix-wrap">
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th class="app-col">App</th>
+              <th v-for="plantel in visiblePlanteles" :key="plantel" class="plantel-head">{{ plantel }}</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr v-for="endpoint in filteredEndpoints" :key="endpoint.id">
-              <td><b :class="methodClass(endpoint.method)">{{ endpoint.method }}</b></td>
-              <td>{{ endpoint.group }}</td>
-              <td><code>{{ endpoint.path }}</code><small class="desc">{{ endpoint.description }}</small></td>
-              <td>
-                <button v-if="endpoint.runnable" class="mini" :disabled="runningEndpoint === endpoint.id" @click="runEndpoint(endpoint.id)">Probar</button>
-                <span v-else class="muted">Bloqueado</span>
+            <tr v-for="app in apps" :key="app.id">
+              <th class="app-col app-name">
+                <strong>{{ app.label }}</strong>
+                <small>{{ app.simulationIds.length }} endpoint{{ app.simulationIds.length === 1 ? '' : 's' }}</small>
+              </th>
+              <td v-for="plantel in visiblePlanteles" :key="`${app.id}-${plantel}`">
+                <button class="matrix-cell" :class="cellClass(app.id, plantel)" type="button" @click="openCell(app.id, plantel)">
+                  <span class="dot" :class="cellStatus(app.id, plantel)" />
+                  <span class="cell-main">{{ cellLabel(app.id, plantel) }}</span>
+                  <small>{{ cellMeta(app.id, plantel) }}</small>
+                </button>
               </td>
-              <td><span v-if="testStatus[endpoint.id]" :class="testStatus[endpoint.id].ok ? 'status-ok' : 'status-bad'">{{ testStatus[endpoint.id].status }} · {{ testStatus[endpoint.id].latencyMs }}ms</span><span v-else>—</span></td>
             </tr>
           </tbody>
         </table>
       </div>
+      <div v-if="!visiblePlanteles.length" class="empty">No hay planteles que coincidan con “{{ plantelQuery }}”.</div>
     </section>
+
+    <Teleport to="body">
+      <div v-if="drawerOpen" class="drawer-backdrop" @click.self="closeDrawer">
+        <aside class="drawer" role="dialog" aria-modal="true" aria-label="Detalle DX">
+          <header class="drawer-head">
+            <div>
+              <p class="eyebrow">{{ selectedPlantel }}</p>
+              <h2>{{ selectedAppResult?.app || selectedApp?.label }}</h2>
+              <p class="drawer-status"><span class="dot" :class="selectedAppResult?.status || 'idle'" />{{ drawerStatusText }}</p>
+            </div>
+            <button class="icon-btn" type="button" aria-label="Cerrar" @click="closeDrawer">×</button>
+          </header>
+
+          <div class="endpoint-tabs">
+            <button
+              v-for="endpoint in selectedAppResult?.endpoints || []"
+              :key="endpoint.simulationId"
+              type="button"
+              :class="{ active: selectedEndpoint?.simulationId === endpoint.simulationId }"
+              @click="selectEndpoint(endpoint)"
+            >
+              <span class="dot" :class="endpoint.ok ? 'ok' : 'error'" />
+              <span>{{ endpoint.label }}</span>
+              <small>{{ endpoint.status || '—' }}</small>
+            </button>
+          </div>
+
+          <section v-if="selectedEndpoint" class="endpoint-info">
+            <div class="endpoint-line">
+              <code>{{ selectedEndpoint.request }}</code>
+              <button class="ghost" type="button" :disabled="detailLoading" @click="loadFullData(selectedEndpoint)">{{ detailLoading ? 'Cargando…' : 'Actualizar datos' }}</button>
+            </div>
+            <div class="mini-metrics">
+              <span><b>{{ selectedEndpoint.status || '—' }}</b> HTTP</span>
+              <span><b>{{ selectedEndpoint.latencyMs || 0 }} ms</b></span>
+              <span><b>{{ activeResult?.rowCount ?? selectedEndpoint.rowCount ?? 0 }}</b> filas</span>
+              <span><b>{{ activeResult?.source || selectedEndpoint.source || '—' }}</b> source</span>
+            </div>
+            <p v-if="selectedEndpoint.error" class="error-box"><b>{{ selectedEndpoint.error.code }}</b> · {{ selectedEndpoint.error.message }}</p>
+            <p v-if="selectedEndpoint.params" class="params">{{ compactParams(selectedEndpoint.params) }}</p>
+          </section>
+
+          <section class="data-section">
+            <div class="data-toolbar">
+              <input v-model="rowFilter" placeholder="Buscar cualquier string en las filas" aria-label="Buscar en datos">
+              <select v-model.number="pageSize" aria-label="Filas por página">
+                <option :value="25">25</option>
+                <option :value="50">50</option>
+                <option :value="100">100</option>
+              </select>
+              <button class="ghost" type="button" :disabled="!filteredRows.length" @click="downloadCsv">CSV</button>
+            </div>
+
+            <div v-if="detailLoading" class="loading-box">Consultando datos reales…</div>
+            <div v-else-if="filteredRows.length" class="data-table-wrap">
+              <table class="data-table">
+                <thead><tr><th v-for="column in tableColumns" :key="column">{{ column }}</th></tr></thead>
+                <tbody>
+                  <tr v-for="(row, index) in pageRows" :key="index">
+                    <td v-for="column in tableColumns" :key="column" :title="cell(row?.[column])">{{ cell(row?.[column]) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="empty compact">Sin filas para mostrar.</div>
+
+            <footer class="pager" v-if="filteredRows.length">
+              <span>{{ filteredRows.length }} coincidencias</span>
+              <div>
+                <button class="ghost" type="button" :disabled="page <= 1" @click="page--">Anterior</button>
+                <span>{{ page }} / {{ totalPages }}</span>
+                <button class="ghost" type="button" :disabled="page >= totalPages" @click="page++">Siguiente</button>
+              </div>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </Teleport>
   </main>
 </template>
 
 <script setup lang="ts">
 definePageMeta({ layout: false })
 
+type MatrixCell = { appId: string; app: string; status: 'ok' | 'partial' | 'error'; okEndpoints: number; totalEndpoints: number; latencyMs: number; rowCount: number; endpoints: any[] }
+
 const catalog = ref<any>(null)
-const mode = ref<'simulation' | 'endpoint'>('simulation')
-const selectedSimulation = ref('lista-roster')
-const selectedEndpoint = ref('school-cycle')
-const running = ref(false)
-const runningEndpoint = ref('')
-const autoTesting = ref(false)
-const result = ref<any>(null)
+const cycle = ref('')
+const plantelQuery = ref('')
+const autoRunning = ref(false)
+const progress = reactive({ done: 0, total: 0 })
+const matrixResults = reactive<Record<string, any>>({})
+const runningPlanteles = reactive<Record<string, boolean>>({})
+
+const drawerOpen = ref(false)
+const selectedPlantel = ref('')
+const selectedAppId = ref('')
+const selectedEndpoint = ref<any>(null)
+const detailLoading = ref(false)
+const detailCache = reactive<Record<string, any>>({})
 const rowFilter = ref('')
-const endpointFilter = ref('')
-const testStatus = reactive<Record<string, any>>({})
-
-const defaultCycle = () => {
-  const now = new Date()
-  const year = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1
-  return `${year}-${year + 1}`
-}
-
-const params = reactive<Record<string, string>>({ plantel: 'PREEM', ciclo: defaultCycle(), matricula: '', q: '', status: 'inscrito', limit: '500', fresh: '1' })
+const page = ref(1)
+const pageSize = ref(25)
 
 onMounted(async () => {
   catalog.value = await $fetch('/api/control-escolar/dx-api-lab/catalog')
-  Object.assign(params, catalog.value?.defaults || {})
+  cycle.value = catalog.value?.defaults?.ciclo || ''
+  window.addEventListener('keydown', onKeydown)
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+
+const onKeydown = (event: KeyboardEvent) => { if (event.key === 'Escape') closeDrawer() }
+const apps = computed(() => catalog.value?.apps || [])
+const planteles = computed<string[]>(() => catalog.value?.planteles || [])
+const visiblePlanteles = computed(() => {
+  const needle = plantelQuery.value.trim().toUpperCase()
+  if (!needle) return planteles.value
+  return planteles.value.filter(plantel => plantel.includes(needle))
 })
 
-const activeSimulation = computed(() => catalog.value?.simulations?.find((item: any) => item.id === selectedSimulation.value) || null)
-const activeEndpoint = computed(() => {
-  const endpointId = mode.value === 'simulation' ? activeSimulation.value?.endpointId : selectedEndpoint.value
-  return catalog.value?.endpoints?.find((item: any) => item.id === endpointId) || null
-})
-const activeItem = computed(() => mode.value === 'simulation' ? activeSimulation.value : activeEndpoint.value)
-
-const execute = async (payload: any) => await $fetch<any>('/api/control-escolar/dx-api-lab/run', { method: 'POST', body: payload })
-
-const runCurrent = async () => {
-  if (!activeEndpoint.value?.runnable) return
-  running.value = true
-  rowFilter.value = ''
-  try {
-    result.value = await execute(mode.value === 'simulation'
-      ? { simulationId: selectedSimulation.value, params: { ...params } }
-      : { endpointId: selectedEndpoint.value, params: { ...params } })
-  } catch (error: any) {
-    result.value = error?.data || { ok: false, status: error?.statusCode || 500, rows: [], rowCount: 0, error: { code: 'DX_UI_ERROR', message: error?.message || 'Error DX' } }
-  } finally {
-    running.value = false
-  }
+const getCell = (appId: string, plantel: string): MatrixCell | null => matrixResults[plantel]?.apps?.find((item: MatrixCell) => item.appId === appId) || null
+const cellStatus = (appId: string, plantel: string) => runningPlanteles[plantel] ? 'running' : getCell(appId, plantel)?.status || 'idle'
+const cellClass = (appId: string, plantel: string) => `state-${cellStatus(appId, plantel)}`
+const cellLabel = (appId: string, plantel: string) => {
+  if (runningPlanteles[plantel]) return 'Probando'
+  const value = getCell(appId, plantel)
+  if (!value) return '—'
+  return `${value.okEndpoints}/${value.totalEndpoints}`
+}
+const cellMeta = (appId: string, plantel: string) => {
+  if (runningPlanteles[plantel]) return 'en tiempo real'
+  const value = getCell(appId, plantel)
+  if (!value) return 'sin prueba'
+  return `${value.latencyMs} ms`
 }
 
-const runEndpoint = async (endpointId: string) => {
-  runningEndpoint.value = endpointId
-  try {
-    const value = await execute({ endpointId, params: { ...params } })
-    testStatus[endpointId] = value
-    result.value = value
-    mode.value = 'endpoint'
-    selectedEndpoint.value = endpointId
-    rowFilter.value = ''
-  } catch (error: any) {
-    testStatus[endpointId] = error?.data || { ok: false, status: error?.statusCode || 500, latencyMs: 0 }
-  } finally {
-    runningEndpoint.value = ''
-  }
-}
+const allCells = computed(() => Object.values(matrixResults).flatMap((result: any) => result?.apps || []))
+const stats = computed(() => ({
+  ok: allCells.value.filter((cell: any) => cell.status === 'ok').length,
+  partial: allCells.value.filter((cell: any) => cell.status === 'partial').length,
+  error: allCells.value.filter((cell: any) => cell.status === 'error').length
+}))
 
-const autoTestEndpoints = async () => {
-  if (!catalog.value) return
-  autoTesting.value = true
+const runPlantel = async (plantel: string) => {
+  runningPlanteles[plantel] = true
   try {
-    for (const endpoint of catalog.value.endpoints.filter((item: any) => item.runnable && item.autoTest)) {
-      const value = await execute({ endpointId: endpoint.id, params: { ...params } })
-      testStatus[endpoint.id] = value
+    matrixResults[plantel] = await $fetch('/api/control-escolar/dx-api-lab/auto', {
+      method: 'POST',
+      body: { plantel, ciclo: cycle.value }
+    })
+  } catch (error: any) {
+    matrixResults[plantel] = {
+      plantel,
+      ciclo: cycle.value,
+      apps: apps.value.map((app: any) => ({
+        appId: app.id,
+        app: app.label,
+        status: 'error',
+        okEndpoints: 0,
+        totalEndpoints: app.simulationIds.length,
+        latencyMs: 0,
+        rowCount: 0,
+        endpoints: app.simulationIds.map((simulationId: string) => ({ simulationId, label: simulationId, ok: false, status: error?.statusCode || 500, error: { code: 'DX_AUTO_FAILED', message: error?.message || 'Auto-DX falló.' }, params: { plantel, ciclo: cycle.value } }))
+      }))
     }
   } finally {
-    autoTesting.value = false
+    runningPlanteles[plantel] = false
+    progress.done += 1
   }
 }
 
-const rows = computed<any[]>(() => Array.isArray(result.value?.rows) ? result.value.rows : [])
+const runAutoDx = async () => {
+  if (autoRunning.value || !catalog.value) return
+  const targets = [...visiblePlanteles.value]
+  if (!targets.length) return
+  autoRunning.value = true
+  progress.done = 0
+  progress.total = targets.length
+  const queue = [...targets]
+  const workers = Array.from({ length: Math.min(2, queue.length) }, async () => {
+    while (queue.length) {
+      const plantel = queue.shift()
+      if (plantel) await runPlantel(plantel)
+    }
+  })
+  await Promise.all(workers)
+  autoRunning.value = false
+}
+
+const selectedApp = computed(() => apps.value.find((app: any) => app.id === selectedAppId.value) || null)
+const selectedAppResult = computed(() => getCell(selectedAppId.value, selectedPlantel.value))
+const drawerStatusText = computed(() => {
+  const value = selectedAppResult.value
+  if (!value) return 'Sin prueba'
+  if (value.status === 'ok') return `${value.okEndpoints}/${value.totalEndpoints} endpoints OK`
+  if (value.status === 'partial') return `${value.okEndpoints}/${value.totalEndpoints} endpoints OK`
+  return 'Endpoints con error'
+})
+
+const openCell = (appId: string, plantel: string) => {
+  selectedAppId.value = appId
+  selectedPlantel.value = plantel
+  selectedEndpoint.value = selectedAppResult.value?.endpoints?.[0] || null
+  drawerOpen.value = true
+  rowFilter.value = ''
+  page.value = 1
+  if (selectedEndpoint.value) void loadFullData(selectedEndpoint.value)
+}
+const closeDrawer = () => { drawerOpen.value = false }
+
+const selectEndpoint = (endpoint: any) => {
+  selectedEndpoint.value = endpoint
+  rowFilter.value = ''
+  page.value = 1
+  void loadFullData(endpoint)
+}
+
+const detailKey = (endpoint: any) => `${selectedPlantel.value}:${cycle.value}:${endpoint?.simulationId || endpoint?.endpointId || ''}`
+const loadFullData = async (endpoint: any) => {
+  if (!endpoint?.simulationId) return
+  const key = detailKey(endpoint)
+  if (detailCache[key]) return
+  detailLoading.value = true
+  try {
+    detailCache[key] = await $fetch('/api/control-escolar/dx-api-lab/run', {
+      method: 'POST',
+      body: { simulationId: endpoint.simulationId, params: endpoint.params || { plantel: selectedPlantel.value, ciclo: cycle.value } }
+    })
+  } catch (error: any) {
+    detailCache[key] = error?.data || { ok: false, rows: [], rowCount: 0, error: { code: 'DX_DETAIL_FAILED', message: error?.message || 'No se pudo consultar el endpoint.' } }
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const activeResult = computed(() => selectedEndpoint.value ? detailCache[detailKey(selectedEndpoint.value)] || null : null)
+const activeRows = computed<any[]>(() => {
+  if (Array.isArray(activeResult.value?.rows)) return activeResult.value.rows
+  return Array.isArray(selectedEndpoint.value?.previewRows) ? selectedEndpoint.value.previewRows : []
+})
 const filteredRows = computed(() => {
   const needle = rowFilter.value.trim().toLocaleLowerCase('es')
-  if (!needle) return rows.value
-  return rows.value.filter(row => {
+  if (!needle) return activeRows.value
+  return activeRows.value.filter(row => {
     try { return JSON.stringify(row).toLocaleLowerCase('es').includes(needle) } catch { return String(row).toLocaleLowerCase('es').includes(needle) }
   })
 })
-const visibleRows = computed(() => filteredRows.value.slice(0, 200))
+watch([rowFilter, pageSize], () => { page.value = 1 })
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)))
+watch(totalPages, value => { if (page.value > value) page.value = value })
+const pageRows = computed(() => filteredRows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 const tableColumns = computed(() => {
   const keys = new Set<string>()
-  for (const row of filteredRows.value.slice(0, 50)) {
+  for (const row of filteredRows.value.slice(0, 100)) {
     if (row && typeof row === 'object' && !Array.isArray(row)) Object.keys(row).forEach(key => keys.add(key))
     else keys.add('value')
-    if (keys.size >= 14) break
+    if (keys.size >= 16) break
   }
-  return Array.from(keys).slice(0, 14)
+  return Array.from(keys).slice(0, 16)
 })
 
 const cell = (value: any) => {
@@ -241,35 +330,21 @@ const cell = (value: any) => {
   }
   return String(value)
 }
-
+const compactParams = (params: Record<string, any>) => Object.entries(params || {}).filter(([, value]) => value !== '').map(([key, value]) => `${key}=${value}`).join(' · ')
 const csvEscape = (value: any) => `"${cell(value).replace(/"/g, '""')}"`
 const downloadCsv = () => {
-  const allColumns = Array.from(new Set(filteredRows.value.flatMap(row => row && typeof row === 'object' ? Object.keys(row) : ['value'])))
-  const lines = [allColumns.map(csvEscape).join(','), ...filteredRows.value.map(row => allColumns.map(column => csvEscape(row?.[column])).join(','))]
+  const columns = Array.from(new Set(filteredRows.value.flatMap(row => row && typeof row === 'object' ? Object.keys(row) : ['value'])))
+  const lines = [columns.map(csvEscape).join(','), ...filteredRows.value.map(row => columns.map(column => csvEscape(row?.[column])).join(','))]
   const blob = new Blob([`\ufeff${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `aurora-dx-${result.value?.simulationId || result.value?.endpointId || 'data'}.csv`
+  anchor.download = `aurora-dx-${selectedPlantel.value}-${selectedEndpoint.value?.simulationId || 'datos'}.csv`
   anchor.click()
   URL.revokeObjectURL(url)
 }
-
-const rawPayloadText = computed(() => {
-  let text = ''
-  try { text = JSON.stringify(result.value?.rawPayload ?? null, null, 2) } catch { text = String(result.value?.rawPayload ?? '') }
-  return text.length > 120000 ? `${text.slice(0, 120000)}\n… payload recortado solo en vista` : text
-})
-
-const filteredEndpoints = computed(() => {
-  const needle = endpointFilter.value.trim().toLocaleLowerCase('es')
-  if (!needle) return catalog.value?.endpoints || []
-  return (catalog.value?.endpoints || []).filter((item: any) => `${item.method} ${item.group} ${item.label} ${item.path}`.toLocaleLowerCase('es').includes(needle))
-})
-
-const methodClass = (method: string) => `method method-${String(method || '').toLowerCase()}`
 </script>
 
 <style scoped>
-:global(body){margin:0;background:#f5f7fa;color:#172033;font-family:Montserrat,system-ui,-apple-system,sans-serif}.dx-shell{max-width:1500px;margin:0 auto;padding:28px}.dx-header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:18px}.eyebrow{margin:0 0 6px;font-size:11px;font-weight:800;letter-spacing:.14em;color:#667085}.dx-header h1,.runner h2,.inventory h2{margin:0;font-family:Fredoka,Montserrat,sans-serif}.dx-header h1{font-size:34px}.sub,.note{margin:6px 0 0;color:#667085}.header-actions{display:flex;align-items:center;gap:10px}.hidden-badge{font-size:12px;padding:7px 10px;border:1px solid #d0d5dd;border-radius:999px;color:#667085}.card{background:#fff;border:1px solid #e4e7ec;border-radius:16px;box-shadow:0 2px 8px rgba(16,24,40,.04)}.controls{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding:14px;margin-bottom:16px}.controls label{font-size:11px;font-weight:700;color:#667085}.controls input,.table-toolbar input,.inventory-head input{display:block;width:100%;box-sizing:border-box;margin-top:5px;border:1px solid #d0d5dd;border-radius:9px;padding:9px 10px;font:inherit;color:#172033;background:#fff}.workspace{display:grid;grid-template-columns:310px minmax(0,1fr);gap:16px}.side{padding:10px;max-height:690px;overflow:auto}.mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:4px;background:#f2f4f7;border-radius:10px;margin-bottom:8px}.mode-switch button{border:0;background:transparent;padding:8px;border-radius:8px;font-weight:700;color:#667085}.mode-switch button.active{background:#fff;color:#172033;box-shadow:0 1px 3px rgba(16,24,40,.12)}.pick{width:100%;text-align:left;border:0;border-radius:10px;background:transparent;padding:10px;margin:2px 0;color:#344054}.pick:hover,.pick.selected{background:#f2f4f7}.pick span,.pick strong,.pick small{display:block}.pick span{font-size:11px;color:#667085}.pick strong{font-size:13px;margin:3px 0}.pick small{font-size:10px;color:#98a2b3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.runner{padding:20px;min-width:0}.runner-head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}.runner h2{font-size:24px;margin-bottom:5px}.runner code,.inventory code,.request-line code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}.primary,.secondary,.mini{border-radius:9px;font:inherit;font-weight:700;cursor:pointer}.primary{border:0;background:#172033;color:#fff;padding:10px 16px}.secondary{border:1px solid #d0d5dd;background:#fff;color:#344054;padding:8px 12px}.mini{border:1px solid #d0d5dd;background:#fff;padding:5px 8px;font-size:11px}.primary:disabled,.secondary:disabled,.mini:disabled{opacity:.45;cursor:not-allowed}.blocked,.error-box,.warning{padding:10px 12px;border-radius:9px;font-size:12px}.blocked,.warning{background:#fffaeb;color:#93370d}.error-box{background:#fef3f2;color:#b42318}.metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:18px 0 10px}.metrics div{background:#f8fafc;border:1px solid #eaecf0;border-radius:10px;padding:10px;min-width:0}.metrics span,.metrics strong{display:block}.metrics span{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#98a2b3}.metrics strong{font-size:13px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ok,.status-ok{color:#067647}.bad,.status-bad{color:#b42318}.request-line{display:flex;justify-content:space-between;gap:10px;color:#667085;font-size:11px}.table-toolbar{display:grid;grid-template-columns:minmax(200px,1fr) auto auto;align-items:center;gap:10px;margin-top:16px}.table-toolbar input{margin:0}.table-toolbar span{font-size:11px;color:#667085}.table-wrap{overflow:auto;margin-top:10px;border:1px solid #eaecf0;border-radius:10px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{padding:8px 10px;border-bottom:1px solid #eaecf0;text-align:left;vertical-align:top;max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}th{position:sticky;top:0;background:#f8fafc;color:#667085;font-size:10px;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}.table-foot{padding:0 10px 10px;color:#667085;font-size:11px}.payload{margin-top:14px;border-top:1px solid #eaecf0;padding-top:12px}.payload summary{cursor:pointer;font-size:12px;font-weight:700}.payload pre{max-height:420px;overflow:auto;background:#101828;color:#e4e7ec;border-radius:10px;padding:14px;font-size:11px;line-height:1.45}.empty{padding:50px;text-align:center;color:#98a2b3}.empty.compact{padding:24px}.inventory{margin-top:16px;padding:16px}.inventory-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}.inventory-head h2{font-size:20px}.inventory-head input{width:320px;margin:0}.desc{display:block;color:#98a2b3;margin-top:3px}.muted{color:#98a2b3}.method{font-size:10px;padding:3px 5px;border-radius:5px;background:#f2f4f7;color:#475467}.method-get{background:#ecfdf3;color:#067647}.method-post,.method-put,.method-patch{background:#fff6ed;color:#b54708}@media(max-width:1000px){.controls{grid-template-columns:repeat(3,1fr)}.workspace{grid-template-columns:1fr}.side{max-height:300px}.metrics{grid-template-columns:repeat(3,1fr)}}@media(max-width:640px){.dx-shell{padding:16px}.dx-header,.runner-head,.inventory-head{align-items:stretch;flex-direction:column}.controls{grid-template-columns:repeat(2,1fr)}.metrics{grid-template-columns:repeat(2,1fr)}.inventory-head input{width:100%}.request-line{flex-direction:column}}
+:global(body){margin:0;background:#f6f7f9;color:#182230;font-family:Montserrat,system-ui,-apple-system,sans-serif}.dx-shell{max-width:1800px;margin:0 auto;padding:24px}.topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:14px}.eyebrow{margin:0 0 5px;font-size:10px;font-weight:800;letter-spacing:.15em;color:#7c8799}.topbar h1,.drawer h2{margin:0;font-family:Fredoka,Montserrat,sans-serif}.topbar h1{font-size:30px}.actions{display:flex;align-items:flex-end;gap:10px}.cycle-field,.plantel-filter{display:block;font-size:10px;font-weight:800;color:#7c8799;text-transform:uppercase;letter-spacing:.06em}.cycle-field input,.search-select input,.data-toolbar input,.data-toolbar select{box-sizing:border-box;border:1px solid #d8dde6;border-radius:10px;background:#fff;color:#182230;font:inherit}.cycle-field input{display:block;width:124px;padding:9px 10px;margin-top:4px}.search-select{position:relative;margin-top:4px}.search-select input{width:190px;padding:9px 34px 9px 10px}.clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);border:0;background:transparent;font-size:18px;color:#98a2b3;cursor:pointer}.auto{display:flex;align-items:center;gap:8px;border:0;border-radius:11px;background:#172033;color:#fff;padding:11px 16px;font:inherit;font-weight:800;cursor:pointer}.auto:disabled{opacity:.55;cursor:not-allowed}.auto-dot{width:8px;height:8px;border-radius:50%;background:#65d6a6}.pulse{animation:pulse 1s infinite}.summary-row{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}.summary-chip{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #e4e7ec;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:700}.summary-chip.muted{color:#7c8799;font-weight:600}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#c5ccd7;flex:0 0 auto}.dot.ok{background:#12a66a}.dot.partial{background:#f5a524}.dot.error{background:#e5484d}.dot.running{background:#5b8def;animation:pulse 1s infinite}.dot.idle{background:#c5ccd7}.matrix-card{background:#fff;border:1px solid #e4e7ec;border-radius:15px;overflow:hidden;box-shadow:0 2px 8px rgba(16,24,40,.035)}.matrix-wrap{overflow:auto}.matrix{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:11px}.matrix th,.matrix td{border-right:1px solid #edf0f4;border-bottom:1px solid #edf0f4;padding:0}.matrix tr:last-child th,.matrix tr:last-child td{border-bottom:0}.matrix th:last-child,.matrix td:last-child{border-right:0}.app-col{position:sticky;left:0;z-index:2;background:#fff;min-width:190px;text-align:left;padding:12px 14px!important}.matrix thead .app-col{z-index:4;background:#f8fafc}.plantel-head{position:sticky;top:0;z-index:3;background:#f8fafc;min-width:115px;padding:10px!important;text-align:center;color:#667085;font-size:10px;letter-spacing:.05em}.app-name strong,.app-name small{display:block}.app-name strong{font-size:12px}.app-name small{margin-top:3px;color:#98a2b3;font-weight:500}.matrix-cell{width:100%;min-width:115px;min-height:68px;border:0;background:#fff;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;color:#344054}.matrix-cell:hover{background:#f8fafc}.matrix-cell .cell-main{font-weight:800}.matrix-cell small{font-size:9px;color:#98a2b3}.state-ok{background:#f3fbf7}.state-partial{background:#fffaf0}.state-error{background:#fff5f5}.empty{padding:36px;text-align:center;color:#98a2b3;font-size:12px}.empty.compact{padding:20px}.drawer-backdrop{position:fixed;inset:0;background:rgba(16,24,40,.28);z-index:1000;display:flex;justify-content:flex-end}.drawer{width:min(860px,92vw);height:100%;background:#fff;box-shadow:-18px 0 40px rgba(16,24,40,.12);padding:20px;box-sizing:border-box;overflow:auto}.drawer-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.drawer h2{font-size:25px}.drawer-status{display:flex;align-items:center;gap:6px;margin:5px 0 0;color:#667085;font-size:11px}.icon-btn{border:0;background:#f2f4f7;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer}.endpoint-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px;margin:18px 0}.endpoint-tabs button{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px;border:1px solid #e4e7ec;background:#fff;border-radius:10px;padding:9px;text-align:left;cursor:pointer;font:inherit;font-size:11px}.endpoint-tabs button.active{border-color:#172033;box-shadow:0 0 0 1px #172033}.endpoint-tabs small{color:#98a2b3}.endpoint-info{border-top:1px solid #edf0f4;border-bottom:1px solid #edf0f4;padding:13px 0}.endpoint-line{display:flex;justify-content:space-between;align-items:center;gap:12px}.endpoint-line code{font-size:11px;word-break:break-all}.mini-metrics{display:flex;gap:12px;flex-wrap:wrap;margin-top:9px;color:#667085;font-size:10px}.mini-metrics b{color:#344054}.params{font-size:10px;color:#7c8799;margin:8px 0 0;word-break:break-all}.error-box{background:#fff2f2;color:#b42318;border-radius:9px;padding:9px 10px;font-size:11px}.ghost{border:1px solid #d8dde6;background:#fff;border-radius:9px;padding:7px 9px;font:inherit;font-size:10px;font-weight:700;cursor:pointer}.ghost:disabled{opacity:.45}.data-section{margin-top:14px}.data-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) 80px auto;gap:8px}.data-toolbar input,.data-toolbar select{padding:9px 10px;width:100%}.data-table-wrap{overflow:auto;border:1px solid #e4e7ec;border-radius:10px;margin-top:10px;max-height:55vh}.data-table{border-collapse:collapse;width:100%;font-size:10px}.data-table th,.data-table td{padding:8px 9px;border-bottom:1px solid #edf0f4;text-align:left;white-space:nowrap;max-width:300px;overflow:hidden;text-overflow:ellipsis}.data-table th{position:sticky;top:0;background:#f8fafc;color:#667085;z-index:1}.pager{display:flex;justify-content:space-between;align-items:center;margin-top:10px;color:#667085;font-size:10px}.pager>div{display:flex;gap:8px;align-items:center}.loading-box{padding:28px;text-align:center;color:#667085;font-size:11px}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}@media(max-width:900px){.topbar{align-items:stretch;flex-direction:column}.actions{align-items:stretch;flex-wrap:wrap}.cycle-field input,.search-select input{width:100%}.cycle-field,.plantel-filter{flex:1;min-width:150px}.auto{justify-content:center}.dx-shell{padding:14px}.app-col{min-width:155px}.drawer{width:100vw}.data-toolbar{grid-template-columns:1fr 72px auto}}@media(max-width:560px){.actions{display:grid;grid-template-columns:1fr 1fr}.auto{grid-column:1/-1}.summary-row{gap:5px}.topbar h1{font-size:25px}.endpoint-line{align-items:flex-start;flex-direction:column}.data-toolbar{grid-template-columns:1fr 72px}.data-toolbar .ghost{grid-column:1/-1}.pager{align-items:flex-start;flex-direction:column;gap:8px}}
 </style>
