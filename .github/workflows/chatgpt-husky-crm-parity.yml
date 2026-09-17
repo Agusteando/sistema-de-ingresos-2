@@ -26,5 +26,7 @@ jobs:
             echo "AURORA_API_TOKEN is not configured."
             exit 3
           fi
-      - name: Compare Husky CRM student lookup semantics against Aurora canonical scopes
+      - name: Compare Husky CRM lookup semantics against Aurora canonical scopes
         run: node scripts/probe-husky-crm-parity-live.mjs
+      - name: Verify real per-student Husky CRM endpoint contract
+        run: node scripts/probe-husky-crm-student-routes-live.mjs
