@@ -113,8 +113,9 @@ async function readAll(plantel, ciclo, { fresh = false } = {}) {
 function applyListaTransform(rows, requestedPlantel) {
   const students = []
   const rejectionReasons = new Map()
+  const sourcePlantelMismatches = new Map()
   for (const row of rows) {
-    const plantel = normalizeRosterPlantel(row?.plantel || row?.basePlantel, requestedPlantel)
+    const sourcePlantel = normalizeRosterPlantel(row?.plantel || row?.basePlantel, requestedPlantel)
     const grado = normalizeRosterGrade(row?.grado)
     const grupo = normalizeGroup(row?.grupo || row?.group)
     const nombre = studentName(row)
@@ -122,16 +123,20 @@ function applyListaTransform(rows, requestedPlantel) {
     if (!nombre) reason = 'nombre vacío'
     else if (!grado) reason = 'grado vacío'
     else if (!grupo) reason = 'grupo vacío'
-    else if (plantel && plantel !== requestedPlantel) reason = `plantel distinto (${plantel})`
     if (reason) {
       rejectionReasons.set(reason, (rejectionReasons.get(reason) || 0) + 1)
       continue
+    }
+    if (sourcePlantel && sourcePlantel !== requestedPlantel) {
+      const key = `${sourcePlantel}->${requestedPlantel}`
+      sourcePlantelMismatches.set(key, (sourcePlantelMismatches.get(key) || 0) + 1)
     }
     students.push({ grado, grupo, plantel: requestedPlantel })
   }
   return {
     students,
-    rejections: Object.fromEntries([...rejectionReasons.entries()].sort(([a], [b]) => a.localeCompare(b, 'es')))
+    rejections: Object.fromEntries([...rejectionReasons.entries()].sort(([a], [b]) => a.localeCompare(b, 'es'))),
+    sourcePlantelMismatches: Object.fromEntries([...sourcePlantelMismatches.entries()].sort(([a], [b]) => a.localeCompare(b, 'es')))
   }
 }
 
@@ -146,8 +151,8 @@ for (const plantel of PLANTELES) {
     await api('/api/external/v1/control-escolar/warm', { method: 'POST', body: { plantel, ciclo: cycleLabel } })
 
     const canonical = await readAll(plantel, cycleLabel, { fresh: true })
-    // This intentionally reproduces the current Lista implementation: ciclo key
-    // is the starting year and the request does NOT include fresh=1.
+    // Mirrors Lista after the fix: the requested endpoint scope owns membership;
+    // row-level plantel/basePlantel is retained only as source metadata.
     const listaSource = await readAll(plantel, cycleKey, { fresh: false })
     const transformed = applyListaTransform(listaSource.rows, plantel)
 
@@ -167,6 +172,7 @@ for (const plantel of PLANTELES) {
       canonicalGeneratedAt: canonical.meta?.generatedAt || null,
       listaGeneratedAt: listaSource.meta?.generatedAt || null,
       rejections: transformed.rejections,
+      sourcePlantelMismatches: transformed.sourcePlantelMismatches,
       gradeDiffs,
       bucketDiffs
     }
