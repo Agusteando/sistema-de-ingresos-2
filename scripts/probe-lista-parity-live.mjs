@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 
 const BASE = 'https://aurora.casitaiedis.edu.mx'
 const TOKEN = String(process.env.AURORA_API_TOKEN || '').trim()
-const PLANTELES = ['PREEM', 'PREET', 'GM', 'PM', 'PT', 'SM', 'ST']
+const PLANTELES = ['PREEM', 'PREET', 'PM', 'PT', 'SM', 'ST']
 const EXPECTED_VIEW = 'control-escolar-student-view-v2-canonical'
 
 if (!TOKEN) {
