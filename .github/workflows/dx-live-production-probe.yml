@@ -11,79 +11,79 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+      TALLERES_AURORA_API_TOKEN: ${{ secrets.TALLERES_AURORA_API_TOKEN }}
+      HUSKY_PASS_AURORA_API_TOKEN: ${{ secrets.HUSKY_PASS_AURORA_API_TOKEN }}
+      AURORA_STUDENTS_API_TOKEN: ${{ secrets.AURORA_STUDENTS_API_TOKEN }}
+      EXTERNAL_CONTROL_ESCOLAR_API_TOKEN: ${{ secrets.EXTERNAL_CONTROL_ESCOLAR_API_TOKEN }}
     steps:
-      - name: Probe production Auto-DX without exposing row data
+      - name: Probe authenticated public APIs without exposing data
         shell: bash
         run: |
           python - <<'PY'
           import json
+          import os
           import sys
           import urllib.error
+          import urllib.parse
           import urllib.request
 
-          URL = 'https://aurora.casitaiedis.edu.mx/api/control-escolar/dx-api-lab/auto'
+          BASE = 'https://aurora.casitaiedis.edu.mx'
           CYCLE = '2026-2027'
           PLANTELES = ['PREEM','PREET','CT','CM','DM','CO','DC','GM','PM','PT','SM','ST','IS','ISM']
+          general = next((os.environ.get(k,'').strip() for k in ['AURORA_API_TOKEN','AURORA_STUDENTS_API_TOKEN','EXTERNAL_CONTROL_ESCOLAR_API_TOKEN','HUSKY_PASS_AURORA_API_TOKEN'] if os.environ.get(k,'').strip()), '')
+          talleres = os.environ.get('TALLERES_AURORA_API_TOKEN','').strip() or general
+          print('credential_available=' + ('yes' if general else 'no'))
+          print('talleres_credential_available=' + ('yes' if talleres else 'no'))
+          if not general:
+              print('NO_CI_AURORA_CREDENTIAL')
+              sys.exit(3)
 
-          failures = []
-          total_apps = 0
-          ok_apps = 0
+          def get(path, token, header='x-api-key'):
+              req = urllib.request.Request(BASE + path, headers={'Accept':'application/json', header:token, 'User-Agent':'Aurora-DX-Live-Probe/2.0'})
+              try:
+                  with urllib.request.urlopen(req, timeout=90) as r:
+                      return r.status, json.loads(r.read().decode())
+              except urllib.error.HTTPError as e:
+                  raw=e.read()
+                  try: data=json.loads(raw.decode())
+                  except Exception: data={'message':'non-json'}
+                  return e.code, data
+
+          failures=[]
+          checks=[
+              ('school-cycle','/api/external/v1/school-cycle',general,'x-api-key'),
+              ('ce-health','/api/external/v1/control-escolar/health',general,'x-api-key'),
+              ('ce-auth-diagnostics','/api/external/v1/control-escolar/auth/diagnostics',general,'x-api-key'),
+              ('ce-auth-echo','/api/external/v1/control-escolar/auth/echo',general,'x-api-key'),
+              ('summer-health','/api/external/v1/summer/health',general,'x-api-key'),
+              ('summer-diagnostics','/api/external/v1/summer/diagnostics',general,'x-api-key'),
+              ('talleres-health','/api/external/v1/talleres/health',talleres,'x-aurora-token'),
+              ('talleres-meta','/api/external/v1/talleres/meta',talleres,'x-aurora-token'),
+          ]
+          for name,path,token,header in checks:
+              status,data=get(path,token,header)
+              print(f'{name}: HTTP {status}')
+              if not (200 <= status < 300): failures.append((name,status))
 
           for plantel in PLANTELES:
-              payload = json.dumps({'plantel': plantel, 'ciclo': CYCLE}).encode()
-              req = urllib.request.Request(URL, data=payload, method='POST', headers={
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                  'User-Agent': 'Aurora-DX-Live-Probe/1.0',
-              })
-              try:
-                  with urllib.request.urlopen(req, timeout=120) as response:
-                      status = response.status
-                      raw = response.read()
-              except urllib.error.HTTPError as exc:
-                  status = exc.code
-                  raw = exc.read()
-              except Exception as exc:
-                  print(f'{plantel}: TRANSPORT_ERROR {type(exc).__name__}: {exc}')
-                  failures.append((plantel, 'transport', str(exc)))
-                  continue
+              qs=urllib.parse.urlencode({'plantel':plantel,'ciclo':CYCLE,'status':'inscrito','limit':'1'})
+              status,data=get('/api/external/v1/control-escolar/students?'+qs,general,'x-api-key')
+              meta=data.get('meta') if isinstance(data,dict) else {}
+              rows=(data.get('data') if isinstance(data,dict) else None)
+              count=len(rows) if isinstance(rows,list) else -1
+              source=(meta or {}).get('source') if isinstance(meta,dict) else None
+              freshness=(meta or {}).get('freshness') if isinstance(meta,dict) else None
+              fallback=(meta or {}).get('fallback') if isinstance(meta,dict) else None
+              print(f'{plantel}: students HTTP {status} rows={count} source={source} freshness={freshness} fallback={fallback}')
+              if not (200 <= status < 300):
+                  code=((data.get('data') or {}).get('code') if isinstance(data,dict) else None) or (data.get('statusMessage') if isinstance(data,dict) else None) or 'ERROR'
+                  print(f'  code={code}')
+                  failures.append((plantel,status,code))
 
-              try:
-                  data = json.loads(raw.decode('utf-8'))
-              except Exception:
-                  print(f'{plantel}: HTTP {status} NON_JSON bytes={len(raw)}')
-                  failures.append((plantel, f'http-{status}', 'non-json'))
-                  continue
-
-              apps = data.get('apps') if isinstance(data, dict) else None
-              if not isinstance(apps, list):
-                  code = ((data.get('data') or {}).get('code') if isinstance(data, dict) else None) or (data.get('statusMessage') if isinstance(data, dict) else None) or 'NO_APPS'
-                  print(f'{plantel}: HTTP {status} {code}')
-                  failures.append((plantel, f'http-{status}', str(code)))
-                  continue
-
-              print(f'\n[{plantel}] HTTP {status} apps={len(apps)}')
-              for app in apps:
-                  total_apps += 1
-                  state = str(app.get('status') or 'unknown')
-                  label = str(app.get('app') or app.get('appId') or 'app')
-                  ok_count = int(app.get('okEndpoints') or 0)
-                  total_count = int(app.get('totalEndpoints') or 0)
-                  latency = int(app.get('latencyMs') or 0)
-                  print(f'  {label}: {state} {ok_count}/{total_count} {latency}ms')
-                  if state == 'ok':
-                      ok_apps += 1
-                  else:
-                      for endpoint in app.get('endpoints') or []:
-                          if not endpoint.get('ok'):
-                              err = endpoint.get('error') or {}
-                              print(f"    FAIL {endpoint.get('label') or endpoint.get('simulationId')} HTTP={endpoint.get('status')} code={err.get('code') or '-'}")
-                      failures.append((plantel, label, state))
-
-          print(f'\nSUMMARY app_cells_ok={ok_apps}/{total_apps} failures={len(failures)}')
+          print('failures=' + str(len(failures)))
           if failures:
-              print('FAILURES:')
-              for item in failures:
-                  print('  ' + ' | '.join(map(str, item)))
+              for f in failures: print('FAIL ' + ' | '.join(map(str,f)))
               sys.exit(2)
           PY
