@@ -21,7 +21,7 @@ import {
 import { readTalleresAssignmentSummaries, readTalleresContracts, recordTalleresAssignmentChange } from './talleres-contracts'
 
 const SNAPSHOT_TABLE = 'control_external_student_view'
-export const TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v3-canonical'
+export const TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v2'
 export const TALLERES_SNAPSHOT_PLANTELES = [...DASHBOARD_PLANTELES] as string[]
 const SNAPSHOT_MAX_ROWS = 10000
 const MAX_SEARCH_RESULTS = 50
@@ -45,7 +45,6 @@ const toIso = (value: unknown) => {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null
 }
 const dateHoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000)
-const mysqlSecondPrecisionNow = () => new Date(Math.floor(Date.now() / 1000) * 1000)
 const refreshMinutes = () => {
   const value = Number(process.env.AURORA_TALLERES_SNAPSHOT_REFRESH_MINUTES || 30)
   return Math.max(5, Math.min(180, Number.isFinite(value) ? value : 30))
@@ -296,10 +295,8 @@ const mergeFinalStudent = (current: any, incoming: any) => {
   const talleres = Array.from(serviceMap.values())
   const sources = Array.from(new Set([...(current.snapshotSourcePlanteles || []), ...(incoming.snapshotSourcePlanteles || [])]))
   return {
-    // A preserved workshop row may contribute stale assignments, never stale
-    // academic placement. Fresh canonical Control Escolar fields always win.
-    ...mergeDefined(incoming, current),
-    plantel: current.plantel || incoming.plantel,
+    ...mergeDefined(current, incoming),
+    plantel: incoming.plantel || current.plantel,
     servicios: talleres.map((item: any) => item.nombre || item.clave).filter(Boolean),
     talleres,
     asignaciones: talleres,
@@ -307,36 +304,20 @@ const mergeFinalStudent = (current: any, incoming: any) => {
   }
 }
 
-const buildFreshStudents = async (plantel: string, ciclo: string, canonicalStudents: any[], loads: SourceLoad[], catalog: any[]) => {
+const buildFreshStudents = async (plantel: string, ciclo: string, loads: SourceLoad[], catalog: any[]) => {
   const resolve = assignmentResolver(catalog)
   const aggregate = new Map<string, { base: any, direct: unknown[], financial: ConceptMappedServicioAssignment[], sources: Set<string> }>()
 
-  // The roster and every academic field start from the exact same canonical
-  // Control Escolar projection exposed by the public student API. Source/Bridge
-  // reads below are enrichment-only and cannot replace grado/grupo/nivel/status.
-  for (const raw of canonicalStudents) {
-    const mat = matriculaKey(raw?.matricula)
-    if (!mat) continue
-    aggregate.set(mat, {
-      base: raw,
-      direct: [raw?.servicio, raw?.servicios],
-      financial: [],
-      sources: new Set<string>(),
-    })
-  }
-
   for (const load of loads) {
-    const sourceByMatricula = new Map<string, any>()
     for (const raw of load.students) {
       const mat = matriculaKey(raw?.matricula)
-      if (mat) sourceByMatricula.set(mat, raw)
-    }
-    for (const [mat, current] of aggregate) {
-      const sourceRow = sourceByMatricula.get(mat)
-      if (sourceRow) current.direct.push(sourceRow?.servicio, sourceRow?.servicios)
-      const financial = load.financialAssignments.get(mat) || []
-      if (financial.length) current.financial.push(...financial)
-      if (sourceRow || financial.length) current.sources.add(load.sourcePlantel)
+      if (!mat) continue
+      const current = aggregate.get(mat) || { base: {}, direct: [], financial: [], sources: new Set<string>() }
+      current.base = mergeDefined(current.base, raw)
+      current.direct.push(raw?.servicio, raw?.servicios)
+      current.financial.push(...(load.financialAssignments.get(mat) || []))
+      current.sources.add(load.sourcePlantel)
+      aggregate.set(mat, current)
     }
   }
 
@@ -429,7 +410,7 @@ const writeSnapshot = async (plantel: string, ciclo: string, students: any[], so
     return { success: true, skipped: true, reason: 'empty_refresh_preserved', rows: previous.students.length, plantel, ciclo }
   }
 
-  const generatedAt = mysqlSecondPrecisionNow()
+  const generatedAt = new Date()
   const staleAfter = dateHoursFromNow(FRESH_HOURS)
   const expiresAt = dateHoursFromNow(EXPIRES_HOURS)
   const scopeKey = scopeKeyFor(plantel, ciclo)
@@ -528,22 +509,6 @@ export const refreshTalleresSnapshotPlantel = async (input: { plantel: unknown, 
         }
       }
 
-      const { readCanonicalExternalControlEscolarAllStudents } = await import('./control-escolar-external-canonical')
-      const canonical = await readCanonicalExternalControlEscolarAllStudents({
-        plantel,
-        ciclo,
-        cicloKey: ciclo,
-      })
-      const canonicalStudents = Array.isArray(canonical?.data) ? canonical.data : []
-      if (!canonicalStudents.length) {
-        throw createError({
-          statusCode: 503,
-          statusMessage: 'TALLERES_CANONICAL_ROSTER_EMPTY',
-          message: `Control Escolar canónico no produjo alumnos para ${plantel} en ciclo ${ciclo}; Talleres no generará una verdad académica alternativa.`,
-          data: { plantel, ciclo, source: canonical?.meta?.source || 'aurora-control-escolar-canonical' },
-        })
-      }
-
       const catalog = await readCatalog()
       const loads: SourceLoad[] = []
       const failedSources: Array<{ sourcePlantel: string, message: string }> = []
@@ -565,10 +530,14 @@ export const refreshTalleresSnapshotPlantel = async (input: { plantel: unknown, 
         }
       }
 
-      // Enrichment sources may all be unavailable; the academic roster still
-      // comes from canonical Control Escolar. Previous rows can contribute only
-      // workshop assignments through mergeFinalStudent below.
-      const fresh = await buildFreshStudents(plantel, ciclo, canonicalStudents, loads, catalog.catalog)
+      if (!loads.length && previous.students.length) {
+        return { success: true, skipped: true, reason: 'all_sources_failed_preserved', plantel, ciclo, rows: previous.students.length, failedSources }
+      }
+      if (!loads.length && !previous.students.length) {
+        throw createError({ statusCode: 502, statusMessage: 'TALLERES_SNAPSHOT_SOURCE_UNAVAILABLE', message: `No se pudo crear el snapshot de ${plantel}.`, data: { plantel, ciclo, failedSources } })
+      }
+
+      const fresh = await buildFreshStudents(plantel, ciclo, loads, catalog.catalog)
       const merged = new Map<string, any>()
       for (const student of fresh.students) merged.set(matriculaKey(student?.matricula), student)
 
@@ -582,8 +551,6 @@ export const refreshTalleresSnapshotPlantel = async (input: { plantel: unknown, 
 
       const sourceMeta = {
         canonicalPlantel: plantel,
-        academicSource: canonical?.meta?.source || 'aurora-control-escolar-canonical',
-        canonicalRows: canonicalStudents.length,
         sourceCandidates,
         successfulSources: loads.map((load) => load.sourcePlantel),
         preservedSources,
