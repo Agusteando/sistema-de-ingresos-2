@@ -596,67 +596,21 @@ const readExternalControlEscolarCatalogs = async (scope: any) => {
 }
 
 export const refreshExternalControlEscolarStudentViewRow = async (input: any, student: any) => {
-  const scope = await resolveScopeForRead(input)
-  const payload = sanitizeExternalStudentPayload(student)
-  const matricula = normalizeText(payload?.matricula, 64)
+  const matricula = normalizeText(student?.matricula || student?.studentId || input?.matricula, 64)
   if (!matricula) {
     throw createError({ statusCode: 400, statusMessage: 'MATRICULA_REQUIRED', message: 'La matrícula es obligatoria.' })
   }
 
-  const generatedAt = mysqlSecondPrecisionNow()
-  const staleAfter = dateHoursFromNow(FRESH_HOURS)
-  const expiresAt = dateHoursFromNow(EXPIRED_HOURS)
-  const payloadJson = JSON.stringify(payload)
-
-  await controlEscolarCentralQuery(
-    `INSERT INTO ${EXTERNAL_VIEW_TABLE}
-      (scope_key, plantel, ciclo_key, previous_ciclo, concept_hash, concept_ids, view_version,
-       matricula, nombre_completo, nivel, grado, grupo, status, enrollment_state, tipo_ingreso,
-       search_text, payload_json, payload_hash, generated_at, payload_changed_at, stale_after, expires_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-     ON DUPLICATE KEY UPDATE
-       nombre_completo = VALUES(nombre_completo),
-       nivel = VALUES(nivel),
-       grado = VALUES(grado),
-       grupo = VALUES(grupo),
-       status = VALUES(status),
-       enrollment_state = VALUES(enrollment_state),
-       tipo_ingreso = VALUES(tipo_ingreso),
-       search_text = VALUES(search_text),
-       payload_json = VALUES(payload_json),
-       payload_changed_at = IF(payload_hash <> VALUES(payload_hash), CURRENT_TIMESTAMP, payload_changed_at),
-       payload_hash = VALUES(payload_hash),
-       generated_at = VALUES(generated_at),
-       stale_after = VALUES(stale_after),
-       expires_at = VALUES(expires_at),
-       updated_at = CURRENT_TIMESTAMP`,
-    [
-      scope.descriptor.scopeKey,
-      scope.plantel,
-      scope.cicloKey,
-      scope.previousCiclo,
-      scope.descriptor.conceptHash,
-      scope.descriptor.conceptIdsPipe,
-      VIEW_VERSION,
-      matricula,
-      normalizeText(payload.nombreCompleto || payload.fullName, 255),
-      normalizeText(payload.nivel, 80),
-      normalizeText(payload.grado, 80).toLowerCase(),
-      normalizeText(payload.group || payload.grupo, 80),
-      normalizeText(payload.status, 80),
-      normalizeText(payload.enrollmentState, 80),
-      normalizeText(payload.tipoIngresoValue || payload.tipoIngreso, 80),
-      buildSearchText(payload),
-      payloadJson,
-      computeHash(payloadJson),
-      generatedAt,
-      generatedAt,
-      staleAfter,
-      expiresAt
-    ]
-  )
-
-  return { success: true, data: payload, meta: buildExternalMeta(scope, { generated_at: generatedAt, stale_after: staleAfter, expires_at: expiresAt }, 1) }
+  // A canonical snapshot is an indivisible plantel/ciclo projection. Updating
+  // one supplied row would let a caller bypass enrollment-scope and group
+  // canonicalization, so a punctual refresh always regenerates the full scope.
+  const refreshed = await warmExternalControlEscolarStudentScope(input)
+  return {
+    success: true,
+    matricula,
+    refreshedSnapshot: true,
+    ...refreshed
+  }
 }
 
 export const readExternalControlEscolarStudents = async (query: any = {}) => {

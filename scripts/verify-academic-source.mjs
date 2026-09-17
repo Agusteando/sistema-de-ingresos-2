@@ -30,5 +30,6 @@ expect(externalView.includes('fetchCanonicalExternalSnapshotScope'), 'El warm ex
 expect(canonical.includes('fetchControlEscolarStudentsWithCanonicalGroups'), 'El snapshot debe usar el mismo resolver de grupos que Control Escolar.')
 expect(canonical.includes('parseEnrollmentConceptsForScope') && canonical.includes('readBestConceptosConfigPayload'), 'El snapshot debe resolver la misma configuración de conceptos de inscripción.')
 expect(refresh.includes('EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION') && !refresh.includes("const VIEW_VERSION = 'control-escolar-student-view-v1'"), 'El refresh no puede fijar una versión vieja del snapshot.')
+expect(externalView.includes('const refreshed = await warmExternalControlEscolarStudentScope(input)') && !externalView.includes('const payload = sanitizeExternalStudentPayload(student)'), 'El refresh puntual debe regenerar el scope canónico completo; no puede inyectar una fila.')
 if (failures.length) { console.error('Fuente académica inválida:'); failures.forEach(failure => console.error(`- ${failure}`)); process.exit(1) }
 console.log('Fuente académica válida: snapshot público y Control Escolar comparten conceptos, población y grupos canónicos.')
