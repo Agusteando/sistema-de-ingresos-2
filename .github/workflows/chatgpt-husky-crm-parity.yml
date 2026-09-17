@@ -1,0 +1,30 @@
+name: Husky CRM exact parity audit
+
+on:
+  push:
+    branches:
+      - 'chatgpt/live/husky-crm-parity'
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require Aurora credential
+        shell: bash
+        run: |
+          if [ -z "$AURORA_API_TOKEN" ]; then
+            echo "AURORA_API_TOKEN is not configured."
+            exit 3
+          fi
+      - name: Compare Husky CRM student lookup semantics against Aurora canonical scopes
+        run: node scripts/probe-husky-crm-parity-live.mjs
