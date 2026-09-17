@@ -1,0 +1,103 @@
+name: Hotfix Talleres snapshot readiness
+
+on:
+  push:
+    branches:
+      - chatgpt/dx-live-probe
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Patch exact main
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="02805e5146d27f8bfdd2838bf657f1c951750efb"
+          git fetch origin main
+          CURRENT="$(git rev-parse origin/main)"
+          test "$CURRENT" = "$EXPECTED"
+          git checkout -B snapshot-hotfix origin/main
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('server/utils/talleres-snapshot.ts')
+          s = p.read_text()
+
+          old = "import { ensureControlEscolarExternalViewSchema } from './control-escolar-external-view'\nimport { fetchControlEscolarStudents } from './control-escolar'"
+          new = "import { ensureControlEscolarExternalViewSchema } from './control-escolar-external-view'\nimport { readAllExternalSnapshotStudents } from './control-escolar-external-snapshot'\nimport { fetchControlEscolarStudents } from './control-escolar'"
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = "const dateHoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000)\nconst refreshMinutes = () => {"
+          new = "const dateHoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000)\nconst mysqlSecondPrecisionNow = () => {\n  const value = new Date()\n  value.setMilliseconds(0)\n  return value\n}\nconst refreshMinutes = () => {"
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = "const sourceCandidatesFor = (plantel: string) => {\n  if (plantel === 'PREEM') return ['CM', 'DM', 'PREEM']\n  if (plantel === 'PM') return ['PM', 'PMA', 'PMB']\n  if (plantel === 'CT') return ['CT', 'PREET']\n  return [plantel]\n}\n"
+          new = old + "\nconst controlEscolarSnapshotPlantelFor = (plantel: string) => plantel === 'CT' ? 'PREET' : plantel\n"
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          anchor = "const readSnapshotRows = async (plantel: string, ciclo: string) => {"
+          insert = """const readCentralControlEscolarSnapshot = async (plantel: string, ciclo: string): Promise<SourceLoad> => {\n  const controlEscolarPlantel = controlEscolarSnapshotPlantelFor(plantel)\n  const result: any = await readAllExternalSnapshotStudents({\n    plantel: controlEscolarPlantel,\n    ciclo,\n    status: '',\n    fresh: '0',\n  })\n  const students = Array.isArray(result?.data) ? result.data : []\n  return {\n    sourcePlantel: plantel,\n    students,\n    financialAssignments: new Map(),\n    mappingCount: 0,\n    evidenceCount: 0,\n    source: {\n      type: 'aurora-control-escolar-central-snapshot',\n      controlEscolarPlantel,\n      generatedAt: result?.meta?.generatedAt || null,\n      freshness: result?.meta?.freshness || null,\n    },\n  }\n}\n\n"""
+          assert anchor in s
+          s = s.replace(anchor, insert + anchor, 1)
+
+          old = "  const generatedAt = new Date()\n  const staleAfter = dateHoursFromNow(FRESH_HOURS)"
+          new = "  const generatedAt = mysqlSecondPrecisionNow()\n  const staleAfter = dateHoursFromNow(FRESH_HOURS)"
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = """      if (!loads.length && previous.students.length) {\n        return { success: true, skipped: true, reason: 'all_sources_failed_preserved', plantel, ciclo, rows: previous.students.length, failedSources }\n      }\n      if (!loads.length && !previous.students.length) {\n        throw createError({ statusCode: 502, statusMessage: 'TALLERES_SNAPSHOT_SOURCE_UNAVAILABLE', message: `No se pudo crear el snapshot de ${plantel}.`, data: { plantel, ciclo, failedSources } })\n      }\n"""
+          new = """      const loadedStudentRows = loads.reduce((total, load) => total + load.students.length, 0)\n      if (!loadedStudentRows) {\n        try {\n          const centralSnapshot = await readCentralControlEscolarSnapshot(plantel, ciclo)\n          if (centralSnapshot.students.length) loads.push(centralSnapshot)\n        } catch (error: any) {\n          failedSources.push({\n            sourcePlantel: 'central-control-escolar-snapshot',\n            message: clean(error?.message || error?.statusMessage || 'Snapshot central no disponible', 500),\n          })\n        }\n      }\n\n      const availableStudentRows = loads.reduce((total, load) => total + load.students.length, 0)\n      if (!availableStudentRows && previous.students.length) {\n        return { success: true, skipped: true, reason: 'all_sources_failed_preserved', plantel, ciclo, rows: previous.students.length, failedSources }\n      }\n      if (!availableStudentRows && !previous.students.length) {\n        throw createError({ statusCode: 502, statusMessage: 'TALLERES_SNAPSHOT_SOURCE_UNAVAILABLE', message: `No se pudo crear el snapshot de ${plantel}.`, data: { plantel, ciclo, failedSources } })\n      }\n"""
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = """    let snapshot = await readSnapshotRows(plantel, ciclo)\n    if (!snapshot.rows.length) {\n      try { await refreshTalleresSnapshotPlantel({ plantel, ciclo, force: true }) } catch {}\n      snapshot = await readSnapshotRows(plantel, ciclo)\n    } else {\n"""
+          new = """    let snapshot = await readSnapshotRows(plantel, ciclo)\n    let refreshFailure: any = null\n    if (!snapshot.rows.length) {\n      try {\n        await refreshTalleresSnapshotPlantel({ plantel, ciclo, force: true })\n      } catch (error: any) {\n        refreshFailure = {\n          code: clean(error?.statusMessage || error?.data?.code || error?.code || 'TALLERES_SNAPSHOT_REFRESH_FAILED', 120),\n          message: clean(error?.message || 'No se pudo preparar el snapshot.', 500),\n        }\n      }\n      snapshot = await readSnapshotRows(plantel, ciclo)\n    } else {\n"""
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = """      freshness: !first ? 'missing' : (new Date(first.stale_after).getTime() >= Date.now() ? 'fresh' : 'stale'),\n    })\n"""
+          new = """      freshness: !first ? 'missing' : (new Date(first.stale_after).getTime() >= Date.now() ? 'fresh' : 'stale'),\n      refreshFailure,\n    })\n"""
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = """  if (requested && result.meta.sources[0]?.ok === false) {\n    throw createError({ statusCode: 502, statusMessage: 'TALLERES_SNAPSHOT_UNAVAILABLE', message: `Aurora todavía no tiene un snapshot disponible de ${requested}.` })\n  }\n"""
+          new = """  if (requested && result.meta.sources[0]?.ok === false) {\n    const source = result.meta.sources[0]\n    throw createError({\n      statusCode: 502,\n      statusMessage: 'TALLERES_SNAPSHOT_UNAVAILABLE',\n      message: `Aurora todavía no tiene un snapshot disponible de ${requested}.`,\n      data: { plantel: requested, ciclo, refreshFailure: source?.refreshFailure || null },\n    })\n  }\n"""
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+          git diff --check
+          git diff -- server/utils/talleres-snapshot.ts
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify academic source
+        run: npm run verify:academic-source
+      - name: Verify DX
+        run: node scripts/verify-dx-api-lab.mjs
+      - name: Build
+        run: npm run build
+      - name: Commit and guarded push to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Alejandro Jurado"
+          git config user.email "desarrollo.tecnologico@casitaiedis.edu.mx"
+          git add server/utils/talleres-snapshot.ts
+          git commit -m "Garantiza snapshots de Talleres desde fuente central"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "02805e5146d27f8bfdd2838bf657f1c951750efb"
+          git push origin HEAD:main
