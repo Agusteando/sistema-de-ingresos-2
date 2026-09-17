@@ -1,7 +1,7 @@
 import { automaticSchoolCycleKey, normalizeCicloKey } from '../../shared/utils/ciclo'
 import { controlEscolarCentralQuery, withControlEscolarCentralConnection } from './control-escolar-central'
 import {
-  buildExternalControlEscolarScope,
+  EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION,
   ensureControlEscolarExternalViewSchema,
   getExternalStudentPlanteles,
   warmExternalControlEscolarStudentScope
@@ -9,7 +9,7 @@ import {
 import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
 
 const EXTERNAL_VIEW_TABLE = 'control_external_student_view'
-const VIEW_VERSION = 'control-escolar-student-view-v1'
+const VIEW_VERSION = EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION
 const REFRESH_LOCK_NAME = 'aurora:external-student-snapshot-refresh'
 
 const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
@@ -28,25 +28,19 @@ const refreshPauseMs = () => {
 const latestSnapshotTimes = async (ciclo: string, planteles: string[]): Promise<Map<string, number>> => {
   await ensureControlEscolarExternalViewSchema()
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT plantel, scope_key, MAX(generated_at) AS generated_at
+    `SELECT plantel, MAX(generated_at) AS generated_at
      FROM ${EXTERNAL_VIEW_TABLE}
      WHERE ciclo_key = ? AND view_version = ?
-     GROUP BY plantel, scope_key`,
+     GROUP BY plantel`,
     [ciclo, VIEW_VERSION]
   )
-  const byScope = new Map<string, number>(
+  const latest = new Map<string, number>(
     rows.map((row) => [
-      `${normalizeExternalControlEscolarPlantel(row.plantel)}:${clean(row.scope_key, 64)}`,
+      normalizeExternalControlEscolarPlantel(row.plantel),
       row?.generated_at ? new Date(row.generated_at).getTime() : 0
     ])
   )
-
-  return new Map<string, number>(
-    planteles.map((plantel): [string, number] => {
-      const scope = buildExternalControlEscolarScope({ plantel, ciclo })
-      return [plantel, byScope.get(`${plantel}:${scope.descriptor.scopeKey}`) || 0]
-    })
-  )
+  return new Map<string, number>(planteles.map((plantel) => [plantel, latest.get(plantel) || 0]))
 }
 
 export const runExternalControlEscolarSnapshotRefreshPass = async (input: {

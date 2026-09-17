@@ -1,11 +1,14 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-
 const root = process.cwd()
-const controlEscolarPath = join(root, 'server/utils/control-escolar.ts')
-const text = await readFile(controlEscolarPath, 'utf8')
+const [control, externalView, refresh, canonical] = await Promise.all([
+  'server/utils/control-escolar.ts',
+  'server/utils/control-escolar-external-view.ts',
+  'server/utils/control-escolar-external-snapshot-refresh.ts',
+  'server/utils/control-escolar-external-canonical-scope.ts'
+].map(path => readFile(join(root, path), 'utf8')))
 const failures = []
-
+const expect = (condition, message) => { if (!condition) failures.push(message) }
 const directPatterns = [
   { label: 'lectura directa de matricula.grado', pattern: /\b(?:matricula|m)\??\.grado\b/i },
   { label: 'lectura directa de matricula.nivel', pattern: /\b(?:matricula|m)\??\.nivel\b/i },
@@ -14,26 +17,18 @@ const directPatterns = [
   { label: 'alias matriculaGrado', pattern: /\bmatriculaGrado\b/i },
   { label: 'alias matriculaNivel', pattern: /\bmatriculaNivel\b/i }
 ]
-
 for (const rule of directPatterns) {
-  const match = text.match(rule.pattern)
-  if (!match || match.index === undefined) continue
-  const line = text.slice(0, match.index).split('\n').length
-  failures.push(`server/utils/control-escolar.ts:${line}: ${rule.label}`)
+  const match = control.match(rule.pattern)
+  if (match?.index !== undefined) failures.push(`server/utils/control-escolar.ts:${control.slice(0, match.index).split('\n').length}: ${rule.label}`)
 }
-
-const centralSelect = text.match(/const centralSelectColumns[\s\S]*?const canonicalMatriculaKey/)
-if (centralSelect && /["']grado["']/.test(centralSelect[0])) {
-  failures.push('server/utils/control-escolar.ts: centralSelectColumns no puede seleccionar matricula.grado')
-}
-if (centralSelect && /["']nivel["']/.test(centralSelect[0])) {
-  failures.push('server/utils/control-escolar.ts: centralSelectColumns no puede seleccionar matricula.nivel')
-}
-
-if (failures.length) {
-  console.error('Fuente académica inválida: grado y nivel vigentes deben salir de la proyección de Control Escolar, nunca de matricula.grado/matricula.nivel.')
-  failures.forEach((failure) => console.error(`- ${failure}`))
-  process.exit(1)
-}
-
-console.log('Fuente académica válida: Control Escolar no lee matricula.grado ni matricula.nivel para resolver la colocación vigente.')
+const centralSelect = control.match(/const centralSelectColumns[\s\S]*?const canonicalMatriculaKey/)
+if (centralSelect && /["']grado["']/.test(centralSelect[0])) failures.push('server/utils/control-escolar.ts: centralSelectColumns no puede seleccionar matricula.grado')
+if (centralSelect && /["']nivel["']/.test(centralSelect[0])) failures.push('server/utils/control-escolar.ts: centralSelectColumns no puede seleccionar matricula.nivel')
+expect(!control.includes('writeControlEscolarExternalStudentView'), 'El loader base no puede publicar snapshots antes de canonicalizar grupos.')
+expect(externalView.includes("EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION = 'control-escolar-student-view-v2-canonical'"), 'El snapshot vigente debe ser v2 canonical.')
+expect(externalView.includes('fetchCanonicalExternalSnapshotScope'), 'El warm externo debe usar el resolver canónico compartido.')
+expect(canonical.includes('fetchControlEscolarStudentsWithCanonicalGroups'), 'El snapshot debe usar el mismo resolver de grupos que Control Escolar.')
+expect(canonical.includes('parseEnrollmentConceptsForScope') && canonical.includes('readBestConceptosConfigPayload'), 'El snapshot debe resolver la misma configuración de conceptos de inscripción.')
+expect(refresh.includes('EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION') && !refresh.includes("const VIEW_VERSION = 'control-escolar-student-view-v1'"), 'El refresh no puede fijar una versión vieja del snapshot.')
+if (failures.length) { console.error('Fuente académica inválida:'); failures.forEach(failure => console.error(`- ${failure}`)); process.exit(1) }
+console.log('Fuente académica válida: snapshot público y Control Escolar comparten conceptos, población y grupos canónicos.')
