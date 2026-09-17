@@ -2442,7 +2442,9 @@ const studentInvoiceLinks = computed(() => {
   studentInvoices.value.forEach((invoice) => {
     const status = String(invoice?.status || '').toLowerCase();
     const cancellation = String(invoice?.cancellationStatus || '').toLowerCase();
-    if (status === 'canceled' || cancellation === 'accepted') return;
+    // A cancellation already in progress must not reserve the payment: users can
+    // refacture immediately while the SAT/provider finishes resolving the prior CFDI.
+    if (status === 'canceled' || ['accepted', 'pending', 'verifying'].includes(cancellation)) return;
     (invoice?.sourcePayments || []).forEach((source) => {
       if (source?.folio) links[`folio:${source.folio}`] = invoice;
       const folioPlantel = String(source?.folioPlantel || '').trim().toUpperCase();
