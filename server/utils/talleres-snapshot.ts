@@ -12,6 +12,7 @@ import {
 import { runWithBridgeAgentId } from './db'
 import { controlEscolarCentralQuery, getCentralTableColumns, withControlEscolarCentralConnection } from './control-escolar-central'
 import { ensureControlEscolarExternalViewSchema } from './control-escolar-external-view'
+import { readAllExternalSnapshotStudents } from './control-escolar-external-snapshot'
 import { fetchControlEscolarStudents } from './control-escolar'
 import {
   readConceptMappedServiciosForMatriculas,
@@ -45,6 +46,11 @@ const toIso = (value: unknown) => {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null
 }
 const dateHoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000)
+const mysqlSecondPrecisionNow = () => {
+  const value = new Date()
+  value.setMilliseconds(0)
+  return value
+}
 const refreshMinutes = () => {
   const value = Number(process.env.AURORA_TALLERES_SNAPSHOT_REFRESH_MINUTES || 30)
   return Math.max(5, Math.min(180, Number.isFinite(value) ? value : 30))
@@ -64,6 +70,8 @@ const sourceCandidatesFor = (plantel: string) => {
   if (plantel === 'CT') return ['CT', 'PREET']
   return [plantel]
 }
+
+const controlEscolarSnapshotPlantelFor = (plantel: string) => plantel === 'CT' ? 'PREET' : plantel
 
 const resolveCurrentCiclo = async (requested?: unknown) => {
   const raw = Array.isArray(requested) ? requested[0] : requested
@@ -260,6 +268,30 @@ const readSource = async (sourcePlantel: string, ciclo: string): Promise<SourceL
   })
 }
 
+const readCentralControlEscolarSnapshot = async (plantel: string, ciclo: string): Promise<SourceLoad> => {
+  const controlEscolarPlantel = controlEscolarSnapshotPlantelFor(plantel)
+  const result: any = await readAllExternalSnapshotStudents({
+    plantel: controlEscolarPlantel,
+    ciclo,
+    status: '',
+    fresh: '0',
+  })
+  const students = Array.isArray(result?.data) ? result.data : []
+  return {
+    sourcePlantel: plantel,
+    students,
+    financialAssignments: new Map(),
+    mappingCount: 0,
+    evidenceCount: 0,
+    source: {
+      type: 'aurora-control-escolar-central-snapshot',
+      controlEscolarPlantel,
+      generatedAt: result?.meta?.generatedAt || null,
+      freshness: result?.meta?.freshness || null,
+    },
+  }
+}
+
 const readSnapshotRows = async (plantel: string, ciclo: string) => {
   await ensureControlEscolarExternalViewSchema()
   const rows = await controlEscolarCentralQuery<any[]>(
@@ -410,7 +442,7 @@ const writeSnapshot = async (plantel: string, ciclo: string, students: any[], so
     return { success: true, skipped: true, reason: 'empty_refresh_preserved', rows: previous.students.length, plantel, ciclo }
   }
 
-  const generatedAt = new Date()
+  const generatedAt = mysqlSecondPrecisionNow()
   const staleAfter = dateHoursFromNow(FRESH_HOURS)
   const expiresAt = dateHoursFromNow(EXPIRES_HOURS)
   const scopeKey = scopeKeyFor(plantel, ciclo)
@@ -530,10 +562,24 @@ export const refreshTalleresSnapshotPlantel = async (input: { plantel: unknown, 
         }
       }
 
-      if (!loads.length && previous.students.length) {
+      const loadedStudentRows = loads.reduce((total, load) => total + load.students.length, 0)
+      if (!loadedStudentRows) {
+        try {
+          const centralSnapshot = await readCentralControlEscolarSnapshot(plantel, ciclo)
+          if (centralSnapshot.students.length) loads.push(centralSnapshot)
+        } catch (error: any) {
+          failedSources.push({
+            sourcePlantel: 'central-control-escolar-snapshot',
+            message: clean(error?.message || error?.statusMessage || 'Snapshot central no disponible', 500),
+          })
+        }
+      }
+
+      const availableStudentRows = loads.reduce((total, load) => total + load.students.length, 0)
+      if (!availableStudentRows && previous.students.length) {
         return { success: true, skipped: true, reason: 'all_sources_failed_preserved', plantel, ciclo, rows: previous.students.length, failedSources }
       }
-      if (!loads.length && !previous.students.length) {
+      if (!availableStudentRows && !previous.students.length) {
         throw createError({ statusCode: 502, statusMessage: 'TALLERES_SNAPSHOT_SOURCE_UNAVAILABLE', message: `No se pudo crear el snapshot de ${plantel}.`, data: { plantel, ciclo, failedSources } })
       }
 
@@ -610,8 +656,16 @@ const buildRosterFromSnapshots = async (planteles: string[], ciclo: string) => {
 
   for (const plantel of planteles) {
     let snapshot = await readSnapshotRows(plantel, ciclo)
+    let refreshFailure: any = null
     if (!snapshot.rows.length) {
-      try { await refreshTalleresSnapshotPlantel({ plantel, ciclo, force: true }) } catch {}
+      try {
+        await refreshTalleresSnapshotPlantel({ plantel, ciclo, force: true })
+      } catch (error: any) {
+        refreshFailure = {
+          code: clean(error?.statusMessage || error?.data?.code || error?.code || 'TALLERES_SNAPSHOT_REFRESH_FAILED', 120),
+          message: clean(error?.message || 'No se pudo preparar el snapshot.', 500),
+        }
+      }
       snapshot = await readSnapshotRows(plantel, ciclo)
     } else {
       const generatedAt = snapshot.rows[0]?.generated_at ? new Date(snapshot.rows[0].generated_at).getTime() : 0
@@ -642,6 +696,7 @@ const buildRosterFromSnapshots = async (planteles: string[], ciclo: string) => {
       staleAfter: toIso(first?.stale_after),
       expiresAt: toIso(first?.expires_at),
       freshness: !first ? 'missing' : (new Date(first.stale_after).getTime() >= Date.now() ? 'fresh' : 'stale'),
+      refreshFailure,
     })
   }
 
@@ -675,7 +730,13 @@ export const readTalleresSnapshotRoster = async (input: any = {}) => {
   const planteles = requested ? [requested] : [...TALLERES_SNAPSHOT_PLANTELES]
   const result = await buildRosterFromSnapshots(planteles, ciclo)
   if (requested && result.meta.sources[0]?.ok === false) {
-    throw createError({ statusCode: 502, statusMessage: 'TALLERES_SNAPSHOT_UNAVAILABLE', message: `Aurora todavía no tiene un snapshot disponible de ${requested}.` })
+    const source = result.meta.sources[0]
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'TALLERES_SNAPSHOT_UNAVAILABLE',
+      message: `Aurora todavía no tiene un snapshot disponible de ${requested}.`,
+      data: { plantel: requested, ciclo, refreshFailure: source?.refreshFailure || null },
+    })
   }
   if (!requested && !result.ok) {
     throw createError({ statusCode: 502, statusMessage: 'TALLERES_SNAPSHOT_UNAVAILABLE', message: 'Aurora todavía no tiene un snapshot de Talleres disponible.' })
