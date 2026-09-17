@@ -8,6 +8,9 @@ on:
         required: false
         default: ''
         type: string
+  push:
+    branches:
+      - 'chatgpt/live/lista-parity-runtime'
 
 permissions:
   contents: read
@@ -32,4 +35,8 @@ jobs:
             exit 3
           fi
       - name: Probe live consumer contracts
+        if: github.event_name == 'workflow_dispatch'
         run: node scripts/probe-aurora-live.mjs
+      - name: Verify Lista canonical parity
+        if: github.event_name == 'push'
+        run: node scripts/probe-lista-parity-live.mjs
