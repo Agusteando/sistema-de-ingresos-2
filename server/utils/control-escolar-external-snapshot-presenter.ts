@@ -72,14 +72,16 @@ const normalizeSnapshotResponseData = (response: any) => {
 
 export const withExternalSnapshotMeta = (responseValue: any, query: any = {}) => {
   const response = normalizeSnapshotResponseData(responseValue)
+  const freshness = String(response?.meta?.freshness || '').toLowerCase()
+  const persistedFallback = freshness === 'stale' || freshness === 'expired'
   return {
     ...(response || {}),
     meta: {
       ...(response?.meta || {}),
       source: 'aurora-control-escolar-central-snapshot',
-      fallback: false,
+      fallback: persistedFallback,
       freshRequested: isExternalFreshReadRequested(query),
-      cachePolicy: 'central-snapshot-only'
+      cachePolicy: 'persistent-compatible-snapshot'
     }
   }
 }

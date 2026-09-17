@@ -12,7 +12,12 @@ import {
 } from './control-escolar-plantel-routing'
 
 const EXTERNAL_VIEW_TABLE = 'control_external_student_view'
-const VIEW_VERSION = 'control-escolar-student-view-v1'
+export const EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION = 'control-escolar-student-view-v1'
+const VIEW_VERSION = EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION
+export const EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS = [
+  VIEW_VERSION,
+  'control-escolar-student-view-v2-canonical'
+] as const
 const FRESH_HOURS = 12
 const EXPIRED_HOURS = 168
 const MAX_LIMIT = 500
@@ -32,6 +37,7 @@ const normalizeText = (value: unknown, max = 255) =>
   String(value ?? '').trim().slice(0, max)
 
 const normalizeLower = (value: unknown, max = 255) => normalizeText(value, max).toLowerCase()
+const readViewVersion = (scope: any) => normalizeText(scope?.viewVersion, 80) || VIEW_VERSION
 
 const errorStatusCode = (error: any, fallback = 500) => Number(error?.statusCode || error?.status || error?.httpStatus || error?.response?.status || fallback) || fallback
 
@@ -81,6 +87,11 @@ const toIsoOrNull = (value: unknown) => {
 }
 
 const nowDate = () => new Date()
+const mysqlSecondPrecisionNow = () => {
+  const value = new Date()
+  value.setMilliseconds(0)
+  return value
+}
 
 const dateMinutesFromNow = (minutes: number) => new Date(Date.now() + minutes * 60 * 1000)
 const dateHoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000)
@@ -274,7 +285,7 @@ export const writeControlEscolarExternalStudentView = async (
 
   await ensureControlEscolarExternalViewSchema()
 
-  const generatedAt = nowDate()
+  const generatedAt = mysqlSecondPrecisionNow()
   const staleAfter = dateHoursFromNow(FRESH_HOURS)
   const expiresAt = dateHoursFromNow(EXPIRED_HOURS)
   const rows = students
@@ -365,14 +376,21 @@ export const writeControlEscolarExternalStudentView = async (
 
 
 const findLatestWarmScopeRow = async (scope: any) => {
+  const versionPlaceholders = EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS.map(() => '?').join(',')
+  const params: any[] = [scope.plantel, scope.cicloKey, ...EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS]
+  let scopeSql = ''
+  if (scope.hasExplicitConcepts) {
+    scopeSql = ' AND scope_key = ?'
+    params.push(scope.descriptor.scopeKey)
+  }
   const latest = await controlEscolarCentralQuery<any[]>(
-    `SELECT scope_key, previous_ciclo, concept_hash, concept_ids, MAX(generated_at) AS generated_at, COUNT(*) AS rows_count
+    `SELECT view_version, scope_key, previous_ciclo, concept_hash, concept_ids, MAX(generated_at) AS generated_at, COUNT(*) AS rows_count
      FROM ${EXTERNAL_VIEW_TABLE}
-     WHERE plantel = ? AND ciclo_key = ? AND view_version = ?
-     GROUP BY scope_key, previous_ciclo, concept_hash, concept_ids
+     WHERE plantel = ? AND ciclo_key = ? AND view_version IN (${versionPlaceholders})${scopeSql}
+     GROUP BY view_version, scope_key, previous_ciclo, concept_hash, concept_ids
      ORDER BY generated_at DESC
      LIMIT 1`,
-    [scope.plantel, scope.cicloKey, VIEW_VERSION]
+    params
   )
   return latest[0] || null
 }
@@ -484,18 +502,13 @@ const resolveScopeForRead = async (input: any = {}) => {
   }
   await ensureControlEscolarExternalViewSchema()
 
-  if (scope.hasExplicitConcepts) return scope
-
-  let row = await findLatestWarmScopeRow(scope)
-  if (!row?.scope_key) {
-    await warmExternalControlEscolarStudentScope(input)
-    row = await findLatestWarmScopeRow(scope)
-  }
+  const row = await findLatestWarmScopeRow(scope)
 
   if (!row?.scope_key) {
     return {
       ...scope,
       warmedEmptyScope: true,
+      viewVersion: VIEW_VERSION,
       descriptor: {
         ...scope.descriptor,
         cacheable: true
@@ -505,6 +518,7 @@ const resolveScopeForRead = async (input: any = {}) => {
 
   return {
     ...scope,
+    viewVersion: normalizeText(row.view_version, 80) || VIEW_VERSION,
     previousCiclo: normalizeText(row.previous_ciclo, 20) || scope.previousCiclo,
     descriptor: {
       ...scope.descriptor,
@@ -557,7 +571,7 @@ const readExternalControlEscolarCatalogs = async (scope: any) => {
      WHERE plantel = ? AND scope_key = ? AND view_version = ?
      GROUP BY nivel, grado, grupo
      ORDER BY grado ASC, grupo ASC`,
-    [scope.plantel, scope.descriptor.scopeKey, VIEW_VERSION]
+    [scope.plantel, scope.descriptor.scopeKey, readViewVersion(scope)]
   )
 
   const gruposPorGrado: Record<string, string[]> = {}
@@ -588,7 +602,7 @@ export const refreshExternalControlEscolarStudentViewRow = async (input: any, st
     throw createError({ statusCode: 400, statusMessage: 'MATRICULA_REQUIRED', message: 'La matrícula es obligatoria.' })
   }
 
-  const generatedAt = nowDate()
+  const generatedAt = mysqlSecondPrecisionNow()
   const staleAfter = dateHoursFromNow(FRESH_HOURS)
   const expiresAt = dateHoursFromNow(EXPIRED_HOURS)
   const payloadJson = JSON.stringify(payload)
@@ -675,7 +689,7 @@ export const readExternalControlEscolarStudents = async (query: any = {}) => {
       catalogs: mergeExternalCatalogs(results.map((result) => result?.catalogs).filter(Boolean)),
       meta: {
         version: 'v1',
-        viewVersion: VIEW_VERSION,
+        viewVersion: Array.from(new Set(results.map((result) => String(result?.meta?.viewVersion || '')).filter(Boolean))).join(',') || VIEW_VERSION,
         source: 'warm-cache',
         freshness: freshnessRank(results.map((result) => String(result?.meta?.freshness || '')).filter(Boolean)),
         rows: data.length,
@@ -689,7 +703,7 @@ export const readExternalControlEscolarStudents = async (query: any = {}) => {
   const catalogs = await readExternalControlEscolarCatalogs(scope)
   const limit = Math.min(MAX_LIMIT, Math.max(1, Number(query.limit || DEFAULT_LIMIT) || DEFAULT_LIMIT))
   const offset = decodeCursor(query.cursor)
-  const params: any[] = [scope.plantel, scope.descriptor.scopeKey, VIEW_VERSION]
+  const params: any[] = [scope.plantel, scope.descriptor.scopeKey, readViewVersion(scope)]
   const whereParts = ['plantel = ?', 'scope_key = ?', 'view_version = ?']
 
   const search = normalizeLower(query.search || query.q || '', 120)
@@ -797,7 +811,7 @@ export const readExternalControlEscolarStudentDetail = async (query: any = {}, m
      FROM ${EXTERNAL_VIEW_TABLE}
      WHERE plantel = ? AND scope_key = ? AND view_version = ? AND matricula = ?
      LIMIT 1`,
-    [scope.plantel, scope.descriptor.scopeKey, VIEW_VERSION, matricula]
+    [scope.plantel, scope.descriptor.scopeKey, readViewVersion(scope), matricula]
   )
   const row = rows[0]
   if (!row) {
@@ -838,7 +852,7 @@ export const readExternalControlEscolarChanges = async (query: any = {}) => {
      WHERE plantel = ? AND scope_key = ? AND view_version = ? AND payload_changed_at > ?
      ORDER BY payload_changed_at ASC, matricula ASC
      LIMIT ?`,
-    [scope.plantel, scope.descriptor.scopeKey, VIEW_VERSION, sinceDate, limit]
+    [scope.plantel, scope.descriptor.scopeKey, readViewVersion(scope), sinceDate, limit]
   )
   const last = rows[rows.length - 1]
   return {
@@ -854,6 +868,7 @@ export const readExternalControlEscolarChanges = async (query: any = {}) => {
 
 export const readExternalControlEscolarHealth = async () => {
   await ensureControlEscolarExternalViewSchema()
+  const versionPlaceholders = EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS.map(() => '?').join(',')
   const rows = await controlEscolarCentralQuery<any[]>(
     `SELECT plantel, ciclo_key, scope_key, concept_ids, view_version,
             COUNT(*) AS rows_count,
@@ -862,18 +877,20 @@ export const readExternalControlEscolarHealth = async () => {
             MIN(expires_at) AS expires_at,
             MAX(updated_at) AS updated_at
      FROM ${EXTERNAL_VIEW_TABLE}
-     WHERE view_version = ?
+     WHERE view_version IN (${versionPlaceholders})
      GROUP BY plantel, ciclo_key, scope_key, concept_ids, view_version
      ORDER BY plantel ASC, ciclo_key DESC, generated_at DESC`,
-    [VIEW_VERSION]
+    [...EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS]
   )
   return {
     status: 'ok',
     viewVersion: VIEW_VERSION,
+    readableViewVersions: [...EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS],
     canonicalPlanteles: CANONICAL_STUDENT_PLANTELES.map((plantel) => ({ plantel })),
     schoolYears: DEFAULT_EXTERNAL_CICLOS,
     scopes: rows.map((row) => ({
       plantel: normalizeText(row.plantel, 40),
+      viewVersion: normalizeText(row.view_version, 80),
       ciclo: normalizeText(row.ciclo_key, 20),
       scopeKey: normalizeText(row.scope_key, 64),
       conceptIds: parseEnrollmentConceptIds(row.concept_ids),
@@ -893,7 +910,7 @@ const buildExternalMeta = (scope: any, row: any, rows: number) => {
   const expiresAt = row?.expires_at || null
   return {
     version: 'v1',
-    viewVersion: VIEW_VERSION,
+    viewVersion: readViewVersion(scope),
     source: 'warm-cache',
     freshness: row ? freshnessForRow(row) : 'empty',
     rows,

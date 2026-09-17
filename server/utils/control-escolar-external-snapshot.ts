@@ -7,7 +7,7 @@ import {
   readExternalControlEscolarChanges,
   readExternalControlEscolarStudentDetail,
   readExternalControlEscolarStudents,
-  warmExternalControlEscolarStudentScope
+  EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS
 } from './control-escolar-external-view'
 import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
 import { withExternalSnapshotMeta } from './control-escolar-external-snapshot-presenter'
@@ -101,7 +101,8 @@ const snapshotNeedsWarm = (row: any, query: any = {}) => {
 }
 
 const readLatestSnapshotScope = async (scope: ReturnType<typeof buildExternalControlEscolarScope>) => {
-  const params: any[] = [scope.plantel, scope.cicloKey, VIEW_VERSION]
+  const versionPlaceholders = EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS.map(() => '?').join(',')
+  const params: any[] = [scope.plantel, scope.cicloKey, ...EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS]
   let scopeSql = ''
   if (scope.hasExplicitConcepts) {
     scopeSql = ' AND scope_key = ?'
@@ -109,9 +110,9 @@ const readLatestSnapshotScope = async (scope: ReturnType<typeof buildExternalCon
   }
 
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT scope_key, generated_at, stale_after, expires_at
+    `SELECT view_version, scope_key, generated_at, stale_after, expires_at
      FROM ${EXTERNAL_VIEW_TABLE}
-     WHERE plantel = ? AND ciclo_key = ? AND view_version = ?${scopeSql}
+     WHERE plantel = ? AND ciclo_key = ? AND view_version IN (${versionPlaceholders})${scopeSql}
      ORDER BY generated_at DESC
      LIMIT 1`,
     params
@@ -204,37 +205,12 @@ export const assertExternalControlEscolarSnapshotReady = async (query: any = {})
 
   await ensureControlEscolarExternalViewSchema()
 
-  let row = await readLatestSnapshotScope(scope)
-  let refreshFailure: any = null
-  if (snapshotNeedsWarm(row, query)) {
-    try {
-      await warmExternalControlEscolarStudentScope({
-        ...query,
-        plantel: scope.plantel,
-        ciclo: scope.cicloKey,
-        cicloKey: scope.cicloKey
-      })
-      row = await readLatestSnapshotScope(scope)
-    } catch (error) {
-      // The external API is intentionally stale-while-revalidate. A Bridge or
-      // campus outage must not erase the last roster already stored in Aurora.
-      if (!row?.scope_key) throw error
-      refreshFailure = publicFailure(error)
-    }
-  }
-
+  const row = await readLatestSnapshotScope(scope)
   if (!row?.scope_key) throw snapshotUnavailable(scope.plantel, scope.cicloKey)
-  if (snapshotExpired(row)) {
-    if (snapshotBeyondStaleIfErrorWindow(row)) {
-      throw snapshotExpiredError(scope.plantel, scope.cicloKey, row, refreshFailure)
-    }
-    refreshFailure ||= {
-      statusCode: 503,
-      code: 'AURORA_STUDENT_REFRESH_DID_NOT_ADVANCE',
-      message: 'Aurora no pudo renovar el padrón; se sirve el último snapshot Aurora disponible.'
-    }
-  }
-  return { scope, row, refreshFailure }
+
+  // Consumer reads are snapshot-only. Age is telemetry, never a permission to
+  // read, and a request must never depend on a campus bridge being online.
+  return { scope, row, refreshFailure: null }
 }
 
 export const readExternalSnapshotStudents = async (query: any = {}) => {
