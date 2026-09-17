@@ -1,0 +1,85 @@
+name: Talleres canonical snapshot v3
+
+on:
+  push:
+    branches:
+      - chatgpt/talleres-v3-canonical
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout runner branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare exact main
+        env:
+          EXPECTED_MAIN: a399da6b4ee309931e1cb606f5ec4a57adc190db
+        run: |
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          git checkout --detach "$EXPECTED_MAIN"
+
+      - name: Apply Talleres v3 patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('server/utils/talleres-snapshot.ts')
+          text = path.read_text()
+          old = "export const TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v2'"
+          new = "export const TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v3-canonical'"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one Talleres v2 constant, found {text.count(old)}')
+          path.write_text(text.replace(old, new))
+
+          verify = Path('scripts/verify-academic-source.mjs')
+          vtext = verify.read_text()
+          anchor = "if (!talleresSnapshotText.includes('readCanonicalExternalControlEscolarAllStudents') || !talleresSnapshotText.includes('canonicalStudents: any[]')) failures.push('server/utils/talleres-snapshot.ts: Talleres debe sembrar su roster desde Control Escolar canónico')"
+          guard = "if (!talleresSnapshotText.includes(\"TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v3-canonical'\")) failures.push('server/utils/talleres-snapshot.ts: Talleres debe publicar una versión nueva del snapshot canónico y no reutilizar v2')"
+          if anchor not in vtext:
+              raise SystemExit('academic-source verifier anchor not found')
+          if guard not in vtext:
+              vtext = vtext.replace(anchor, anchor + "\n" + guard)
+          verify.write_text(vtext)
+          PY
+
+      - name: Verify patch scope
+        run: |
+          git diff --check
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "scripts/verify-academic-source.mjs server/utils/talleres-snapshot.ts "
+          grep -F "talleres-roster-v3-canonical" server/utils/talleres-snapshot.ts
+          ! grep -F "TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v2'" server/utils/talleres-snapshot.ts
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Academic source verification
+        run: npm run verify:academic-source
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit guarded change
+        env:
+          EXPECTED_MAIN: a399da6b4ee309931e1cb606f5ec4a57adc190db
+        run: |
+          git add scripts/verify-academic-source.mjs server/utils/talleres-snapshot.ts
+          git diff --cached --check
+          git config user.name "Alejandro Jurado"
+          git config user.email "desarrollo.tecnologico@casitaiedis.edu.mx"
+          git commit -m "Versiona snapshot canónico de Talleres"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          git push origin HEAD:main
