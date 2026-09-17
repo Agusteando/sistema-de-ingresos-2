@@ -12,8 +12,10 @@ expect(page.includes('DxProofPanel') && page.includes("drawerView === 'proof'"),
 expect(util.includes("import { PLANTELES_LIST } from '../../utils/constants'") && util.includes('runDxPlantelAutoDx'), 'El catálogo Auto-DX debe conservar su contrato.')
 for (const appId of ['lista','talleres','scanner','husky']) expect(util.includes(`id: '${appId}'`), `Falta app DX: ${appId}`)
 expect(proof.includes('fetchCanonicalExternalSnapshotScope') && proof.includes('rows: canonical.rows.map'), 'Proof debe devolver filas canónicas sin pre-agregar.')
-expect(proofPanel.includes('gradeGroupCounts') && proofPanel.includes('distributionDiffs'), 'Proof debe calcular grado × grupo en frontend.')
+expect(proofPanel.includes('endpointRows.value.length') && proofPanel.includes('gradeRows') && proofPanel.includes('proofRows'), 'Proof debe calcular total, grado y grado × grupo en frontend.')
+expect(proofPanel.includes('endpointGradeCounts') && proofPanel.includes('baselineGradeCounts') && proofPanel.includes('distributionDiffs'), 'Proof debe conservar conteos frontend separados por grado y grupo.')
 expect(proofPanel.includes("simulationId === 'lista-roster'") && proofPanel.includes('missingMatriculas') && proofPanel.includes('extraMatriculas'), 'Proof debe validar el padrón exacto de Lista.')
+expect(proofPanel.includes('matches Control Escolar'), 'Proof debe mostrar estado compacto de paridad exacta.')
 expect(auto.includes('runDxPlantelAutoDx'), 'Auto-DX debe seguir delegando al orquestador.')
 if (failures.length) { console.error('DX API Lab inválido:'); failures.forEach(failure => console.error(`- ${failure}`)); process.exit(1) }
-console.log('DX API Lab válido: matriz, datos reales y Proof frontend de grado/grupo contra Control Escolar.')
+console.log('DX API Lab válido: matriz, datos reales y Proof frontend de total/grado/grupo contra Control Escolar.')
