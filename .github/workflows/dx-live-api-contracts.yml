@@ -1,0 +1,35 @@
+name: DX live API contracts
+
+on:
+  workflow_dispatch:
+    inputs:
+      cycle:
+        description: 'Ciclo opcional, por ejemplo 2026-2027. Vacío = ciclo reportado por Aurora.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  live-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+      AURORA_TEST_CYCLE: ${{ inputs.cycle }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require Aurora CI credential
+        shell: bash
+        run: |
+          if [ -z "$AURORA_API_TOKEN" ]; then
+            echo "AURORA_API_TOKEN is not configured as a repository Actions secret."
+            exit 3
+          fi
+      - name: Probe live consumer contracts
+        run: node scripts/probe-aurora-live.mjs
