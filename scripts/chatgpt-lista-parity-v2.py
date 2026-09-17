@@ -1,0 +1,442 @@
+from pathlib import Path
+import re
+
+
+def replace_once(path, old, new, label):
+    p = Path(path)
+    text = p.read_text()
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f'{label}: expected 1 match, got {count}')
+    p.write_text(text.replace(old, new, 1))
+
+
+# 1. Raw Control Escolar loader must not publish the external snapshot before
+# canonical group and enrollment-scope resolution.
+control_path = Path('server/utils/control-escolar.ts')
+control = control_path.read_text()
+import_line = 'import { writeControlEscolarExternalStudentView } from "./control-escolar-external-view";\n'
+if control.count(import_line) != 1:
+    raise SystemExit('control-escolar writer import drifted')
+control = control.replace(import_line, '', 1)
+pattern = re.compile(r'\n  if \(wantsAll && !normalizeText\(filters\.search \|\| filters\.q \|\| "", 80\)\) \{\n    writeControlEscolarExternalStudentView\([\s\S]*?\n  \}\n')
+control, count = pattern.subn('\n', control, count=1)
+if count != 1:
+    raise SystemExit(f'raw snapshot side-effect: expected 1 match, got {count}')
+control_path.write_text(control)
+
+
+# 2. Current snapshot version is canonical v2. v1 remains readable during
+# regeneration, but only the canonical producer writes new rows.
+external_path = Path('server/utils/control-escolar-external-view.ts')
+external = external_path.read_text()
+old_versions = "export const EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION = 'control-escolar-student-view-v1'\nconst VIEW_VERSION = EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION\nexport const EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS = [\n  VIEW_VERSION,\n  'control-escolar-student-view-v2-canonical'\n] as const"
+new_versions = "export const EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION = 'control-escolar-student-view-v2-canonical'\nconst VIEW_VERSION = EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION\nexport const EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS = [\n  VIEW_VERSION,\n  'control-escolar-student-view-v1'\n] as const"
+if external.count(old_versions) != 1:
+    raise SystemExit('external view version block drifted')
+external = external.replace(old_versions, new_versions, 1)
+
+warm_start = "  const promise = (async () => {\n    const { fetchControlEscolarStudents } = await import('./control-escolar')\n    let lastError: any = null\n"
+if warm_start not in external:
+    raise SystemExit('external warm implementation drifted')
+start = external.index(warm_start)
+end_marker = "  })().finally(() => warmingScopes.delete(warmKey))"
+end = external.index(end_marker, start) + len(end_marker)
+warm_new = """  const promise = (async () => {
+    const { fetchCanonicalExternalSnapshotScope } = await import('./control-escolar-external-canonical-scope')
+    const canonical = await fetchCanonicalExternalSnapshotScope({
+      ...input,
+      plantel: scope.plantel,
+      agentId: scope.plantel,
+      ciclo: scope.cicloKey,
+      cicloKey: scope.cicloKey
+    })
+    const filters = {
+      ...input,
+      plantel: canonical.bridgeAgentId,
+      agentId: canonical.bridgeAgentId,
+      ciclo: canonical.ciclo,
+      cicloKey: canonical.ciclo,
+      previousCiclo: scope.previousCiclo,
+      concepts: canonical.concepts.join(','),
+      enrollmentConcepts: canonical.concepts.join(','),
+      tipoConcepts: canonical.tipoConcepts.join(','),
+      all: 'snapshot',
+      mode: 'snapshot',
+      limit: WARM_LIMIT,
+      search: '',
+      q: '',
+      status: '',
+      grado: '',
+      grupo: '',
+      group: '',
+      quality: '',
+      recent: ''
+    }
+    const written = await writeControlEscolarExternalStudentView(
+      canonical.bridgeAgentId,
+      filters,
+      canonical.rows,
+      { ...(canonical.result?.source || {}), canonical: true }
+    )
+    return {
+      ...written,
+      rows: canonical.rows.length,
+      plantel: scope.plantel,
+      bridgeAgentId: canonical.bridgeAgentId,
+      ciclo: canonical.ciclo,
+      concepts: canonical.concepts
+    }
+  })().finally(() => warmingScopes.delete(warmKey))"""
+external = external[:start] + warm_new + external[end:]
+external_path.write_text(external)
+
+
+# 3. Refresh scheduler follows the writer version and tracks latest per campus,
+# regardless of the concept-derived scope key.
+refresh_path = Path('server/utils/control-escolar-external-snapshot-refresh.ts')
+refresh = refresh_path.read_text()
+old_import = "import {\n  buildExternalControlEscolarScope,\n  ensureControlEscolarExternalViewSchema,\n  getExternalStudentPlanteles,\n  warmExternalControlEscolarStudentScope\n} from './control-escolar-external-view'"
+new_import = "import {\n  EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION,\n  ensureControlEscolarExternalViewSchema,\n  getExternalStudentPlanteles,\n  warmExternalControlEscolarStudentScope\n} from './control-escolar-external-view'"
+if refresh.count(old_import) != 1:
+    raise SystemExit('snapshot refresh import drifted')
+refresh = refresh.replace(old_import, new_import, 1)
+if refresh.count("const VIEW_VERSION = 'control-escolar-student-view-v1'") != 1:
+    raise SystemExit('snapshot refresh version drifted')
+refresh = refresh.replace("const VIEW_VERSION = 'control-escolar-student-view-v1'", 'const VIEW_VERSION = EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION', 1)
+latest_pattern = re.compile(r"const latestSnapshotTimes = async \(ciclo: string, planteles: string\[\]\): Promise<Map<string, number>> => \{[\s\S]*?\n\}\n\nexport const runExternalControlEscolarSnapshotRefreshPass")
+latest_new = """const latestSnapshotTimes = async (ciclo: string, planteles: string[]): Promise<Map<string, number>> => {
+  await ensureControlEscolarExternalViewSchema()
+  const rows = await controlEscolarCentralQuery<any[]>(
+    `SELECT plantel, MAX(generated_at) AS generated_at
+     FROM ${EXTERNAL_VIEW_TABLE}
+     WHERE ciclo_key = ? AND view_version = ?
+     GROUP BY plantel`,
+    [ciclo, VIEW_VERSION]
+  )
+  const latest = new Map<string, number>(
+    rows.map((row) => [
+      normalizeExternalControlEscolarPlantel(row.plantel),
+      row?.generated_at ? new Date(row.generated_at).getTime() : 0
+    ])
+  )
+  return new Map<string, number>(planteles.map((plantel) => [plantel, latest.get(plantel) || 0]))
+}
+
+export const runExternalControlEscolarSnapshotRefreshPass"""
+refresh, count = latest_pattern.subn(latest_new, refresh, count=1)
+if count != 1:
+    raise SystemExit(f'latest snapshot refresh block: expected 1 match, got {count}')
+refresh_path.write_text(refresh)
+
+
+# 4. One canonical producer resolves exactly the same configured enrollment
+# concepts and canonical groups used by Control Escolar.
+Path('server/utils/control-escolar-external-canonical-scope.ts').write_text("""import { runWithBridgeAgentId } from './db'
+import { readBestConceptosConfigPayload } from './conceptos-config'
+import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import {
+  normalizeEnrollmentConceptIds,
+  normalizeEnrollmentPlantelKey,
+  parseEnrollmentConceptsForPlantelHistory,
+  parseEnrollmentConceptsForScope
+} from '../../shared/utils/studentPresentation'
+import {
+  controlEscolarBridgeAgentCandidates,
+  normalizeExternalControlEscolarPlantel
+} from './control-escolar-plantel-routing'
+import { fetchControlEscolarStudentsWithCanonicalGroups } from './control-escolar-groups'
+
+const MAX_ALL_ROWS = 25000
+const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
+const explicitCurrentConcepts = (query: any = {}) => normalizeEnrollmentConceptIds(
+  query.concepts || query.enrollmentConcepts || query.conceptIds || ''
+)
+const explicitTipoConcepts = (query: any = {}) => normalizeEnrollmentConceptIds(
+  query.tipoConcepts || query.tipoIngresoConcepts || ''
+)
+
+const resolveConceptScope = async (query: any, bridgeAgentId: string, ciclo: string) => {
+  let concepts = explicitCurrentConcepts(query)
+  let tipoConcepts = explicitTipoConcepts(query)
+  if (!concepts.length || !tipoConcepts.length) {
+    const config = await readBestConceptosConfigPayload()
+    const plantel = normalizeEnrollmentPlantelKey(bridgeAgentId)
+    if (!concepts.length) concepts = parseEnrollmentConceptsForScope(config, { ciclo, plantel })
+    if (!tipoConcepts.length) tipoConcepts = parseEnrollmentConceptsForPlantelHistory(config, { plantel })
+  }
+  if (!tipoConcepts.length) tipoConcepts = [...concepts]
+  return {
+    concepts: Array.from(new Set(concepts)),
+    tipoConcepts: Array.from(new Set(tipoConcepts))
+  }
+}
+
+export const fetchCanonicalExternalSnapshotScope = async (query: any = {}) => {
+  const plantel = normalizeExternalControlEscolarPlantel(query.plantel || query.agentId || '')
+  const ciclo = normalizeCicloKey(query.ciclo || query.cicloKey || query.schoolYear || '')
+  if (!plantel) throw createError({ statusCode: 400, statusMessage: 'PLANTEL_REQUIRED', message: 'El plantel es obligatorio.' })
+  if (!ciclo) throw createError({ statusCode: 400, statusMessage: 'CICLO_REQUIRED', message: 'El ciclo escolar es obligatorio.' })
+
+  let lastError: any = null
+  for (const bridgeAgentId of controlEscolarBridgeAgentCandidates(plantel)) {
+    try {
+      const conceptScope = await resolveConceptScope(query, bridgeAgentId, ciclo)
+      const filters = {
+        ...query,
+        agentId: bridgeAgentId,
+        plantel: bridgeAgentId,
+        ciclo,
+        cicloKey: ciclo,
+        concepts: conceptScope.concepts.join(',') || undefined,
+        enrollmentConcepts: conceptScope.concepts.join(',') || undefined,
+        tipoConcepts: conceptScope.tipoConcepts.join(',') || undefined,
+        externalApi: true,
+        all: '1',
+        mode: 'index',
+        page: 1,
+        limit: MAX_ALL_ROWS,
+        search: '',
+        q: '',
+        status: '',
+        grado: '',
+        group: '',
+        grupo: '',
+        nivel: '',
+        quality: '',
+        calidad: '',
+        missing: '',
+        recent: ''
+      }
+      const result: any = await runWithBridgeAgentId(
+        bridgeAgentId,
+        async () => await fetchControlEscolarStudentsWithCanonicalGroups(bridgeAgentId, filters)
+      )
+      return {
+        result,
+        rows: Array.isArray(result?.data) ? result.data : [],
+        plantel,
+        bridgeAgentId,
+        ciclo,
+        concepts: conceptScope.concepts,
+        tipoConcepts: conceptScope.tipoConcepts
+      }
+    } catch (error: any) {
+      lastError = error
+    }
+  }
+
+  throw createError({
+    statusCode: Number(lastError?.statusCode || lastError?.response?.status || 502) || 502,
+    statusMessage: 'AURORA_CONTROL_ESCOLAR_CANONICAL_UNAVAILABLE',
+    message: `Aurora no pudo resolver Control Escolar canónico para ${plantel} en ciclo ${ciclo}.`,
+    data: {
+      code: 'AURORA_CONTROL_ESCOLAR_CANONICAL_UNAVAILABLE',
+      plantel,
+      ciclo,
+      cause: clean(lastError?.statusMessage || lastError?.code || lastError?.message || 'control_escolar_unavailable', 240)
+    }
+  })
+}
+""")
+
+
+# 5. DX baseline returns unaggregated canonical academic rows. The browser does
+# all grade/group counting and set comparison.
+Path('server/api/control-escolar/dx-api-lab/proof.post.ts').write_text("""import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
+import { resolveControlEscolarAuth } from '../../../utils/control-escolar'
+import { fetchCanonicalExternalSnapshotScope } from '../../../utils/control-escolar-external-canonical-scope'
+
+export default defineEventHandler(async (event) => {
+  setResponseHeader(event, 'Cache-Control', 'no-store')
+  const body = await readBody(event)
+  const auth = await resolveControlEscolarAuth(event, body?.plantel)
+  const ciclo = normalizeCicloKey(body?.ciclo || body?.cicloKey || '')
+  if (!ciclo) throw createError({ statusCode: 400, statusMessage: 'CICLO_REQUIRED', message: 'El ciclo escolar es obligatorio.' })
+
+  const canonical = await fetchCanonicalExternalSnapshotScope({
+    plantel: auth.agentId,
+    ciclo,
+    cicloKey: ciclo
+  })
+
+  return {
+    plantel: canonical.plantel,
+    ciclo: canonical.ciclo,
+    source: 'aurora-control-escolar-ui-canonical',
+    rows: canonical.rows.map((row: any) => ({
+      matricula: String(row?.matricula || '').trim(),
+      grado: String(row?.grado || '').trim(),
+      grupo: String(row?.grupo || row?.group || '').trim(),
+      enrollmentState: String(row?.enrollmentState || '').trim()
+    }))
+  }
+})
+""")
+
+
+# 6. Frontend-only proof component.
+Path('components/DxProofPanel.vue').write_text("""<template>
+  <section class=\"proof-panel\">
+    <header class=\"proof-head\">
+      <div><strong>Proof · grado × grupo</strong><p>Conteo calculado en este navegador con filas reales.</p></div>
+      <span class=\"proof-state\" :class=\"proofClass\">{{ proofLabel }}</span>
+    </header>
+    <div class=\"proof-metrics\">
+      <div><span>Endpoint</span><b>{{ endpointRows.length }}</b></div>
+      <div><span>Control Escolar</span><b>{{ baselineEnrolledRows.length }}</b></div>
+      <div v-if=\"strictParity\"><span>Faltan</span><b>{{ missingMatriculas }}</b></div>
+      <div v-if=\"strictParity\"><span>Sobran</span><b>{{ extraMatriculas }}</b></div>
+      <div><span>Grupos distintos</span><b>{{ distributionDiffs }}</b></div>
+    </div>
+    <p v-if=\"loading\" class=\"proof-note\">Consultando el padrón canónico de Control Escolar…</p>
+    <p v-else-if=\"error\" class=\"proof-error\">{{ error }}</p>
+    <p v-else-if=\"!strictParity\" class=\"proof-note\">Este endpoint no promete el mismo universo que Lista de Caritas; Control Escolar se muestra como referencia.</p>
+    <p v-else-if=\"isExact\" class=\"proof-ok\">Mismo padrón y misma distribución que Control Escolar.</p>
+    <p v-else class=\"proof-error\">Discrepancia detectada. Revisa las filas marcadas y los alumnos faltantes/sobrantes.</p>
+    <div class=\"proof-table-wrap\" v-if=\"proofRows.length\">
+      <table class=\"proof-table\">
+        <thead><tr><th>Grado</th><th>Grupo</th><th>Endpoint</th><th>Control Escolar</th><th>Δ</th></tr></thead>
+        <tbody><tr v-for=\"row in proofRows\" :key=\"row.key\" :class=\"{ mismatch: row.delta !== 0 }\"><td>{{ row.grado }}</td><td>{{ row.grupo }}</td><td>{{ row.endpoint }}</td><td>{{ row.baseline }}</td><td>{{ row.delta > 0 ? `+${row.delta}` : row.delta }}</td></tr></tbody>
+      </table>
+    </div>
+    <div v-else-if=\"!loading\" class=\"proof-empty\">Sin filas académicas para contar.</div>
+  </section>
+</template>
+
+<script setup lang=\"ts\">
+const props = defineProps<{ rows: any[]; plantel: string; ciclo: string; simulationId?: string }>()
+const loading = ref(false)
+const error = ref('')
+const baseline = ref<any[]>([])
+const strictParity = computed(() => props.simulationId === 'lista-roster')
+const endpointRows = computed(() => Array.isArray(props.rows) ? props.rows : [])
+const baselineEnrolledRows = computed(() => baseline.value.filter(row => String(row?.enrollmentState || '').trim().toLowerCase() === 'inscrito'))
+const clean = (value: unknown) => String(value ?? '').trim()
+const academicKey = (row: any) => `${clean(row?.grado || row?.grade).toLocaleLowerCase('es') || 'sin grado'}\\u0000${clean(row?.grupo || row?.group).toLocaleUpperCase('es') || 'SIN GRUPO'}`
+const gradeGroupCounts = (rows: any[]) => {
+  const counts = new Map<string, number>()
+  rows.forEach(row => { const key = academicKey(row); counts.set(key, (counts.get(key) || 0) + 1) })
+  return counts
+}
+const endpointCounts = computed(() => gradeGroupCounts(endpointRows.value))
+const baselineCounts = computed(() => gradeGroupCounts(baselineEnrolledRows.value))
+const proofRows = computed(() => Array.from(new Set([...endpointCounts.value.keys(), ...baselineCounts.value.keys()]))
+  .sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' }))
+  .map(key => { const [grado, grupo] = key.split('\\u0000'); const endpoint = endpointCounts.value.get(key) || 0; const baselineCount = baselineCounts.value.get(key) || 0; return { key, grado, grupo, endpoint, baseline: baselineCount, delta: endpoint - baselineCount } }))
+const distributionDiffs = computed(() => proofRows.value.filter(row => row.delta !== 0).length)
+const matriculaSet = (rows: any[]) => new Set(rows.map(row => clean(row?.matricula).toUpperCase()).filter(Boolean))
+const endpointMatriculas = computed(() => matriculaSet(endpointRows.value))
+const baselineMatriculas = computed(() => matriculaSet(baselineEnrolledRows.value))
+const missingMatriculas = computed(() => Array.from(baselineMatriculas.value).filter(value => !endpointMatriculas.value.has(value)).length)
+const extraMatriculas = computed(() => Array.from(endpointMatriculas.value).filter(value => !baselineMatriculas.value.has(value)).length)
+const isExact = computed(() => !loading.value && !error.value && endpointRows.value.length === baselineEnrolledRows.value.length && distributionDiffs.value === 0 && missingMatriculas.value === 0 && extraMatriculas.value === 0)
+const proofClass = computed(() => loading.value ? 'loading' : error.value ? 'error' : strictParity.value ? (isExact.value ? 'ok' : 'error') : 'reference')
+const proofLabel = computed(() => loading.value ? 'probando' : error.value ? 'sin baseline' : strictParity.value ? (isExact.value ? 'MATCH' : `${distributionDiffs.value} diferencias`) : 'referencia')
+const loadBaseline = async () => {
+  if (!props.plantel || !props.ciclo) return
+  loading.value = true; error.value = ''
+  try {
+    const result: any = await $fetch('/api/control-escolar/dx-api-lab/proof', { method: 'POST', body: { plantel: props.plantel, ciclo: props.ciclo } })
+    baseline.value = Array.isArray(result?.rows) ? result.rows : []
+  } catch (caught: any) {
+    baseline.value = []; error.value = caught?.data?.message || caught?.message || 'No se pudo consultar Control Escolar.'
+  } finally { loading.value = false }
+}
+watch(() => [props.plantel, props.ciclo], loadBaseline, { immediate: true })
+</script>
+
+<style scoped>
+.proof-panel{margin-top:14px}.proof-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.proof-head strong{font-size:12px}.proof-head p{margin:3px 0 0;color:#7c8799;font-size:10px}.proof-state{border-radius:999px;padding:5px 8px;font-size:9px;font-weight:800;text-transform:uppercase}.proof-state.ok{background:#eaf8f1;color:#087a4b}.proof-state.error{background:#fff0f0;color:#b42318}.proof-state.loading,.proof-state.reference{background:#f2f4f7;color:#667085}.proof-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:7px;margin:12px 0}.proof-metrics div{border:1px solid #e4e7ec;border-radius:10px;padding:9px;background:#fafbfc}.proof-metrics span,.proof-metrics b{display:block}.proof-metrics span{font-size:9px;color:#7c8799}.proof-metrics b{margin-top:3px;font-size:16px}.proof-note,.proof-ok,.proof-error{border-radius:9px;padding:9px 10px;font-size:10px;margin:8px 0}.proof-note{background:#f5f7fa;color:#667085}.proof-ok{background:#eefaf4;color:#087a4b}.proof-error{background:#fff2f2;color:#b42318}.proof-table-wrap{overflow:auto;border:1px solid #e4e7ec;border-radius:10px;max-height:42vh}.proof-table{border-collapse:collapse;width:100%;font-size:10px}.proof-table th,.proof-table td{padding:8px 9px;border-bottom:1px solid #edf0f4;text-align:left}.proof-table th{position:sticky;top:0;background:#f8fafc;color:#667085}.proof-table tr.mismatch{background:#fff6f6}.proof-empty{padding:24px;text-align:center;color:#98a2b3;font-size:10px}
+</style>
+""")
+
+
+# 7. Minimal page integration: Proof/Data tabs, default to Proof on drill-down.
+page_path = Path('pages/dx/api-lab.vue')
+page = page_path.read_text()
+marker = '          <section class="data-section">'
+if page.count(marker) != 1:
+    raise SystemExit(f'DX data section marker: expected 1, got {page.count(marker)}')
+page = page.replace(marker, '''          <div class="drawer-view-tabs" v-if="selectedEndpoint">
+            <button type="button" :class="{ active: drawerView === 'proof' }" @click="drawerView = 'proof'">Proof</button>
+            <button type="button" :class="{ active: drawerView === 'data' }" @click="drawerView = 'data'">Datos</button>
+          </div>
+          <DxProofPanel v-if="drawerView === 'proof' && selectedEndpoint" :rows="activeRows" :plantel="selectedPlantel" :ciclo="cycle" :simulation-id="selectedEndpoint.simulationId" />
+          <section v-else class="data-section">''', 1)
+state_marker = "const rowFilter = ref('')\nconst page = ref(1)"
+if page.count(state_marker) != 1:
+    raise SystemExit('DX drawer state marker drifted')
+page = page.replace(state_marker, "const rowFilter = ref('')\nconst drawerView = ref<'proof' | 'data'>('proof')\nconst page = ref(1)", 1)
+open_marker = "  drawerOpen.value = true\n  rowFilter.value = ''\n  page.value = 1"
+if page.count(open_marker) != 1:
+    raise SystemExit('DX openCell marker drifted')
+page = page.replace(open_marker, "  drawerOpen.value = true\n  drawerView.value = 'proof'\n  rowFilter.value = ''\n  page.value = 1", 1)
+select_marker = "  selectedEndpoint.value = endpoint\n  rowFilter.value = ''\n  page.value = 1"
+if page.count(select_marker) != 1:
+    raise SystemExit('DX selectEndpoint marker drifted')
+page = page.replace(select_marker, "  selectedEndpoint.value = endpoint\n  drawerView.value = 'proof'\n  rowFilter.value = ''\n  page.value = 1", 1)
+style_marker = '.data-section{margin-top:14px}'
+if page.count(style_marker) != 1:
+    raise SystemExit('DX style marker drifted')
+page = page.replace(style_marker, ".drawer-view-tabs{display:flex;gap:5px;margin-top:14px;border-bottom:1px solid #edf0f4}.drawer-view-tabs button{border:0;background:transparent;padding:8px 10px;font:inherit;font-size:10px;font-weight:800;color:#98a2b3;cursor:pointer;border-bottom:2px solid transparent}.drawer-view-tabs button.active{color:#172033;border-bottom-color:#172033}.data-section{margin-top:14px}", 1)
+page_path.write_text(page)
+
+
+# 8. Permanent guards.
+Path('scripts/verify-academic-source.mjs').write_text("""import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+const root = process.cwd()
+const [control, externalView, refresh, canonical] = await Promise.all([
+  'server/utils/control-escolar.ts',
+  'server/utils/control-escolar-external-view.ts',
+  'server/utils/control-escolar-external-snapshot-refresh.ts',
+  'server/utils/control-escolar-external-canonical-scope.ts'
+].map(path => readFile(join(root, path), 'utf8')))
+const failures = []
+const expect = (condition, message) => { if (!condition) failures.push(message) }
+const directPatterns = [
+  { label: 'lectura directa de matricula.grado', pattern: /\\b(?:matricula|m)\\??\\.grado\\b/i },
+  { label: 'lectura directa de matricula.nivel', pattern: /\\b(?:matricula|m)\\??\\.nivel\\b/i },
+  { label: 'uso de grado desde el overlay central de matricula', pattern: /\\boverlay\\??\\.grado\\b/i },
+  { label: 'uso de nivel desde el overlay central de matricula', pattern: /\\boverlay\\??\\.nivel\\b/i },
+  { label: 'alias matriculaGrado', pattern: /\\bmatriculaGrado\\b/i },
+  { label: 'alias matriculaNivel', pattern: /\\bmatriculaNivel\\b/i }
+]
+for (const rule of directPatterns) {
+  const match = control.match(rule.pattern)
+  if (match?.index !== undefined) failures.push(`server/utils/control-escolar.ts:${control.slice(0, match.index).split('\\n').length}: ${rule.label}`)
+}
+const centralSelect = control.match(/const centralSelectColumns[\\s\\S]*?const canonicalMatriculaKey/)
+if (centralSelect && /[\"']grado[\"']/.test(centralSelect[0])) failures.push('server/utils/control-escolar.ts: centralSelectColumns no puede seleccionar matricula.grado')
+if (centralSelect && /[\"']nivel[\"']/.test(centralSelect[0])) failures.push('server/utils/control-escolar.ts: centralSelectColumns no puede seleccionar matricula.nivel')
+expect(!control.includes('writeControlEscolarExternalStudentView'), 'El loader base no puede publicar snapshots antes de canonicalizar grupos.')
+expect(externalView.includes(\"EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION = 'control-escolar-student-view-v2-canonical'\"), 'El snapshot vigente debe ser v2 canonical.')
+expect(externalView.includes('fetchCanonicalExternalSnapshotScope'), 'El warm externo debe usar el resolver canónico compartido.')
+expect(canonical.includes('fetchControlEscolarStudentsWithCanonicalGroups'), 'El snapshot debe usar el mismo resolver de grupos que Control Escolar.')
+expect(canonical.includes('parseEnrollmentConceptsForScope') && canonical.includes('readBestConceptosConfigPayload'), 'El snapshot debe resolver la misma configuración de conceptos de inscripción.')
+expect(refresh.includes('EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION') && !refresh.includes(\"const VIEW_VERSION = 'control-escolar-student-view-v1'\"), 'El refresh no puede fijar una versión vieja del snapshot.')
+if (failures.length) { console.error('Fuente académica inválida:'); failures.forEach(failure => console.error(`- ${failure}`)); process.exit(1) }
+console.log('Fuente académica válida: snapshot público y Control Escolar comparten conceptos, población y grupos canónicos.')
+""")
+
+Path('scripts/verify-dx-api-lab.mjs').write_text("""import { readFile } from 'node:fs/promises'
+const files = {
+  page: 'pages/dx/api-lab.vue', util: 'server/utils/dx-api-lab.ts', auto: 'server/api/control-escolar/dx-api-lab/auto.post.ts',
+  proof: 'server/api/control-escolar/dx-api-lab/proof.post.ts', proofPanel: 'components/DxProofPanel.vue'
+}
+const [page, util, auto, proof, proofPanel] = await Promise.all(Object.values(files).map(path => readFile(path, 'utf8')))
+const failures = []; const expect = (condition, message) => { if (!condition) failures.push(message) }
+expect(page.includes('Estado de integraciones') && page.includes('Auto-DX'), 'DX debe seguir matrix-first con Auto-DX.')
+expect(page.includes('list=\"aurora-planteles\"') && page.includes('visiblePlanteles'), 'Plantel debe seguir siendo un selector buscable.')
+expect(page.includes('pageRows') && page.includes('filteredRows') && page.includes('downloadCsv'), 'Datos debe conservar búsqueda, paginación frontend y CSV.')
+expect(page.includes('DxProofPanel') && page.includes(\"drawerView === 'proof'\"), 'El drawer debe incluir la pestaña Proof.')
+expect(util.includes(\"import { PLANTELES_LIST } from '../../utils/constants'\") && util.includes('runDxPlantelAutoDx'), 'El catálogo Auto-DX debe conservar su contrato.')
+for (const appId of ['lista','talleres','scanner','husky']) expect(util.includes(`id: '${appId}'`), `Falta app DX: ${appId}`)
+expect(proof.includes('fetchCanonicalExternalSnapshotScope') && proof.includes('rows: canonical.rows.map'), 'Proof debe devolver filas canónicas sin pre-agregar.')
+expect(proofPanel.includes('gradeGroupCounts') && proofPanel.includes('distributionDiffs'), 'Proof debe calcular grado × grupo en frontend.')
+expect(proofPanel.includes(\"simulationId === 'lista-roster'\") && proofPanel.includes('missingMatriculas') && proofPanel.includes('extraMatriculas'), 'Proof debe validar el padrón exacto de Lista.')
+expect(auto.includes('runDxPlantelAutoDx'), 'Auto-DX debe seguir delegando al orquestador.')
+if (failures.length) { console.error('DX API Lab inválido:'); failures.forEach(failure => console.error(`- ${failure}`)); process.exit(1) }
+console.log('DX API Lab válido: matriz, datos reales y Proof frontend de grado/grupo contra Control Escolar.')
+""")
