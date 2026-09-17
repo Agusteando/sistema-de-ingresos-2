@@ -1,0 +1,53 @@
+name: DX consumer proxy probe
+
+on:
+  push:
+    branches:
+      - chatgpt/dx-live-probe
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe Escaner production Aurora preload
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.request
+          import urllib.error
+          import sys
+
+          url='https://escaner.casitaapps.com/api/preload-academics'
+          req=urllib.request.Request(url,headers={'Accept':'application/json','User-Agent':'Aurora-DX-Consumer-Probe/1.0'})
+          try:
+              with urllib.request.urlopen(req,timeout=90) as r:
+                  status=r.status
+                  data=json.loads(r.read().decode())
+          except urllib.error.HTTPError as e:
+              status=e.code
+              raw=e.read()
+              try:data=json.loads(raw.decode())
+              except Exception:data={}
+          items=data.get('items') if isinstance(data,dict) else None
+          items=items if isinstance(items,list) else []
+          missing_grado=sum(1 for x in items if not str((x or {}).get('grado') or '').strip())
+          missing_grupo=sum(1 for x in items if not str((x or {}).get('grupo') or (x or {}).get('group') or '').strip())
+          sources={}
+          for x in items:
+              source=str((x or {}).get('groupSource') or (x or {}).get('source') or '')
+              sources[source]=sources.get(source,0)+1
+          print('HTTP',status)
+          print('ciclo',data.get('ciclo'))
+          print('complete',data.get('complete'))
+          print('failedPlanteles',json.dumps(data.get('failedPlanteles') or []))
+          print('rows',len(items))
+          print('missing_grado',missing_grado)
+          print('missing_grupo',missing_grupo)
+          print('sources',json.dumps(sources,sort_keys=True))
+          if status != 200 or data.get('complete') is False or data.get('failedPlanteles') or not items or missing_grado or missing_grupo:
+              sys.exit(2)
+          PY
