@@ -79,7 +79,7 @@ console.log(`cycle=${cycle}`)
 let failed = false
 for (const plantel of PLANTELES) {
   try {
-    const warmed = await api('/api/external/v1/control-escolar/warm', { method: 'POST', body: { plantel, ciclo } })
+    const warmed = await api('/api/external/v1/control-escolar/warm', { method: 'POST', body: { plantel, ciclo: cycle } })
     const warmResult = Array.isArray(warmed?.results) ? warmed.results.find((row) => clean(row?.plantel) === plantel) || warmed.results[0] : null
     if (!warmResult) throw new Error(`${plantel}: warm returned no result`)
 
