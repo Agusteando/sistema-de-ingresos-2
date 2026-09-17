@@ -21,7 +21,7 @@ import {
 import { readTalleresAssignmentSummaries, readTalleresContracts, recordTalleresAssignmentChange } from './talleres-contracts'
 
 const SNAPSHOT_TABLE = 'control_external_student_view'
-export const TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v2'
+export const TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v3-canonical'
 export const TALLERES_SNAPSHOT_PLANTELES = [...DASHBOARD_PLANTELES] as string[]
 const SNAPSHOT_MAX_ROWS = 10000
 const MAX_SEARCH_RESULTS = 50
