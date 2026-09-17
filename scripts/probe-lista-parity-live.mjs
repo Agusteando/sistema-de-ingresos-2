@@ -1,29 +1,70 @@
-import { createHash } from 'node:crypto'
-
 const BASE = 'https://aurora.casitaiedis.edu.mx'
 const TOKEN = String(process.env.AURORA_API_TOKEN || '').trim()
 const PLANTELES = ['PREEM', 'PREET', 'PM', 'PT', 'SM', 'ST']
-const EXPECTED_VIEW = 'control-escolar-student-view-v2-canonical'
 
 if (!TOKEN) {
   console.error('AURORA_API_TOKEN missing')
   process.exit(3)
 }
 
-const clean = (value) => String(value ?? '').trim()
-const normalizeMatricula = (value) => clean(value).toUpperCase().replace(/\s+/g, '')
-const normalizeGrade = (value) => clean(value).toLocaleLowerCase('es') || 'sin grado'
-const normalizeGroup = (value) => clean(value).toLocaleUpperCase('es') || 'SIN GRUPO'
-const sortedObject = (map) => Object.fromEntries([...map.entries()].sort(([a], [b]) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })))
-const hashSet = (values) => createHash('sha256').update([...new Set(values)].sort().join('\n')).digest('hex')
-const count = (rows, keyFor) => {
+const clean = (value, max = 1000) => String(value ?? '').trim().slice(0, max)
+const normalizePlantel = (value) => clean(value, 80).toUpperCase()
+const normalizeGroup = (value) => clean(value, 80).toUpperCase()
+const normalizeRosterPlantel = (value, fallback) => {
+  const raw = normalizePlantel(value || fallback)
+  if (raw === 'CT') return 'PREET'
+  if (raw === 'CM' || raw === 'DM') return 'PREEM'
+  if (raw === 'PMA' || raw === 'PMB') return 'PM'
+  return raw
+}
+const normalizeRosterGrade = (value) => {
+  const raw = clean(value, 80)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[º°]/g, '')
+    .trim()
+  const map = {
+    '1': 'primero', '01': 'primero', primer: 'primero', primero: 'primero',
+    '2': 'segundo', '02': 'segundo', segundo: 'segundo',
+    '3': 'tercero', '03': 'tercero', tercer: 'tercero', tercero: 'tercero',
+    '4': 'cuarto', '04': 'cuarto', cuarto: 'cuarto',
+    '5': 'quinto', '05': 'quinto', quinto: 'quinto',
+    '6': 'sexto', '06': 'sexto', sexto: 'sexto'
+  }
+  return map[raw] || raw
+}
+const studentName = (row) => {
+  const direct = clean(row?.fullName || row?.nombreCompleto, 255)
+  if (direct) return direct.replace(/\s+/g, ' ')
+  return [row?.apellidoPaterno, row?.apellidoMaterno, row?.nombres]
+    .map((value) => clean(value, 120))
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+const bucketKey = (row) => `${normalizeRosterGrade(row?.grado)} / ${normalizeGroup(row?.grupo ?? row?.group)}`
+const countBuckets = (rows) => {
   const map = new Map()
   for (const row of rows) {
-    const key = keyFor(row)
+    const key = bucketKey(row)
     map.set(key, (map.get(key) || 0) + 1)
   }
-  return sortedObject(map)
+  return map
 }
+const countGrades = (rows) => {
+  const map = new Map()
+  for (const row of rows) {
+    const key = normalizeRosterGrade(row?.grado)
+    map.set(key, (map.get(key) || 0) + 1)
+  }
+  return map
+}
+const diffMaps = (expected, actual) => [...new Set([...expected.keys(), ...actual.keys()])]
+  .sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' }))
+  .map((key) => ({ bucket: key, aurora: expected.get(key) || 0, lista: actual.get(key) || 0 }))
+  .filter((row) => row.aurora !== row.lista)
 
 async function api(path, { method = 'GET', body } = {}) {
   const response = await fetch(new URL(path, BASE), {
@@ -32,7 +73,8 @@ async function api(path, { method = 'GET', body } = {}) {
       accept: 'application/json',
       'content-type': 'application/json',
       'x-api-key': TOKEN,
-      'user-agent': 'Aurora-Lista-Parity-Runtime/1.0'
+      authorization: `Bearer ${TOKEN}`,
+      'user-agent': 'Aurora-Lista-Exact-Parity/1.0'
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(120000)
@@ -47,77 +89,94 @@ async function api(path, { method = 'GET', body } = {}) {
   return payload
 }
 
-async function readAll(plantel, ciclo, status = '') {
+async function readAll(plantel, ciclo, { fresh = false } = {}) {
   const rows = []
   let cursor = ''
-  let firstMeta = null
-  let pages = 0
+  let meta = null
   do {
     const url = new URL('/api/external/v1/control-escolar/students', BASE)
     url.searchParams.set('plantel', plantel)
     url.searchParams.set('ciclo', ciclo)
-    url.searchParams.set('fresh', '1')
+    url.searchParams.set('status', 'inscrito')
     url.searchParams.set('limit', '500')
-    if (status) url.searchParams.set('status', status)
+    if (fresh) url.searchParams.set('fresh', '1')
     if (cursor) url.searchParams.set('cursor', cursor)
     const payload = await api(`${url.pathname}${url.search}`)
-    if (!Array.isArray(payload?.data)) throw new Error(`${plantel}: public students response has no data[]`)
-    firstMeta ||= payload?.meta || {}
+    if (!Array.isArray(payload?.data)) throw new Error(`${plantel}: response missing data[]`)
+    meta ||= payload?.meta || {}
     rows.push(...payload.data)
-    cursor = clean(payload?.pagination?.nextCursor)
-    pages += 1
-    if (pages > 100) throw new Error(`${plantel}: pagination exceeded 100 pages`)
+    cursor = clean(payload?.pagination?.nextCursor, 500)
   } while (cursor)
-  return { rows, meta: firstMeta || {}, pages }
+  return { rows, meta: meta || {} }
+}
+
+function applyListaTransform(rows, requestedPlantel) {
+  const students = []
+  const rejectionReasons = new Map()
+  for (const row of rows) {
+    const plantel = normalizeRosterPlantel(row?.plantel || row?.basePlantel, requestedPlantel)
+    const grado = normalizeRosterGrade(row?.grado)
+    const grupo = normalizeGroup(row?.grupo || row?.group)
+    const nombre = studentName(row)
+    let reason = ''
+    if (!nombre) reason = 'nombre vacío'
+    else if (!grado) reason = 'grado vacío'
+    else if (!grupo) reason = 'grupo vacío'
+    else if (plantel && plantel !== requestedPlantel) reason = `plantel distinto (${plantel})`
+    if (reason) {
+      rejectionReasons.set(reason, (rejectionReasons.get(reason) || 0) + 1)
+      continue
+    }
+    students.push({ grado, grupo, plantel: requestedPlantel })
+  }
+  return {
+    students,
+    rejections: Object.fromEntries([...rejectionReasons.entries()].sort(([a], [b]) => a.localeCompare(b, 'es')))
+  }
 }
 
 const cyclePayload = await api('/api/external/v1/school-cycle')
-const cycle = clean(cyclePayload?.currentCycle?.label || cyclePayload?.currentCycle?.key || cyclePayload?.ciclo)
-if (!/^20\d{2}-20\d{2}$/.test(cycle)) throw new Error(`Invalid cycle from Aurora: ${cycle || '(empty)'}`)
-console.log(`cycle=${cycle}`)
+const cycleLabel = clean(cyclePayload?.currentCycle?.label || cyclePayload?.currentCycle?.key || cyclePayload?.ciclo)
+const cycleKey = cycleLabel.match(/\d{4}/)?.[0] || cycleLabel
+console.log(JSON.stringify({ cycleLabel, listaCycleKey: cycleKey }))
 
 let failed = false
 for (const plantel of PLANTELES) {
   try {
-    const warmed = await api('/api/external/v1/control-escolar/warm', { method: 'POST', body: { plantel, ciclo: cycle } })
-    const warmResult = Array.isArray(warmed?.results) ? warmed.results.find((row) => clean(row?.plantel) === plantel) || warmed.results[0] : null
-    if (!warmResult) throw new Error(`${plantel}: warm returned no result`)
+    await api('/api/external/v1/control-escolar/warm', { method: 'POST', body: { plantel, ciclo: cycleLabel } })
 
-    const all = await readAll(plantel, cycle)
-    const enrolled = await readAll(plantel, cycle, 'inscrito')
-    const warmRows = Number(warmResult?.rows)
-    if (!Number.isFinite(warmRows)) throw new Error(`${plantel}: warm row count missing`)
-    if (all.rows.length !== warmRows) throw new Error(`${plantel}: persisted total ${all.rows.length} != canonical warm total ${warmRows}`)
-    if (clean(all.meta?.viewVersion) !== EXPECTED_VIEW) throw new Error(`${plantel}: viewVersion=${clean(all.meta?.viewVersion) || '(empty)'}`)
-    if (clean(enrolled.meta?.viewVersion) !== EXPECTED_VIEW) throw new Error(`${plantel}: enrolled viewVersion=${clean(enrolled.meta?.viewVersion) || '(empty)'}`)
-    if (clean(all.meta?.groupSource).toLowerCase() === 'matricula.grupo-live' || clean(enrolled.meta?.groupSource).toLowerCase() === 'matricula.grupo-live') {
-      throw new Error(`${plantel}: legacy matricula.grupo overlay is still active`)
-    }
+    const canonical = await readAll(plantel, cycleLabel, { fresh: true })
+    // This intentionally reproduces the current Lista implementation: ciclo key
+    // is the starting year and the request does NOT include fresh=1.
+    const listaSource = await readAll(plantel, cycleKey, { fresh: false })
+    const transformed = applyListaTransform(listaSource.rows, plantel)
 
-    const invalidEnrolled = enrolled.rows.filter((row) => {
-      const state = clean(row?.enrollmentState).toLowerCase()
-      return state !== 'inscrito' || !normalizeMatricula(row?.matricula || row?.studentId) || !clean(row?.nombreCompleto || row?.fullName) || !clean(row?.grado) || !clean(row?.grupo || row?.group)
-    })
-    if (invalidEnrolled.length) throw new Error(`${plantel}: ${invalidEnrolled.length} enrolled rows fail Lista contract fields`)
-
-    const matriculas = enrolled.rows.map((row) => normalizeMatricula(row?.matricula || row?.studentId)).filter(Boolean)
-    if (new Set(matriculas).size !== matriculas.length) throw new Error(`${plantel}: duplicate matriculas in enrolled roster`)
-
-    console.log(JSON.stringify({
+    const expectedBuckets = countBuckets(canonical.rows)
+    const actualBuckets = countBuckets(transformed.students)
+    const expectedGrades = countGrades(canonical.rows)
+    const actualGrades = countGrades(transformed.students)
+    const bucketDiffs = diffMaps(expectedBuckets, actualBuckets)
+    const gradeDiffs = diffMaps(expectedGrades, actualGrades)
+    const result = {
       plantel,
-      canonicalWarmTotal: warmRows,
-      externalTotal: all.rows.length,
-      enrolledTotal: enrolled.rows.length,
-      enrolledMatriculaSetSha256: hashSet(matriculas),
-      gradeCounts: count(enrolled.rows, (row) => normalizeGrade(row?.grado)),
-      gradeGroupCounts: count(enrolled.rows, (row) => `${normalizeGrade(row?.grado)} / ${normalizeGroup(row?.grupo || row?.group)}`),
-      viewVersion: all.meta?.viewVersion || null,
-      pages: { all: all.pages, enrolled: enrolled.pages }
-    }))
+      auroraTotal: canonical.rows.length,
+      listaSourceTotal: listaSource.rows.length,
+      listaTotal: transformed.students.length,
+      canonicalFreshness: canonical.meta?.freshness || null,
+      listaFreshness: listaSource.meta?.freshness || null,
+      canonicalGeneratedAt: canonical.meta?.generatedAt || null,
+      listaGeneratedAt: listaSource.meta?.generatedAt || null,
+      rejections: transformed.rejections,
+      gradeDiffs,
+      bucketDiffs
+    }
+    console.log(JSON.stringify(result))
+    if (canonical.rows.length !== transformed.students.length || gradeDiffs.length || bucketDiffs.length) failed = true
   } catch (error) {
     failed = true
     console.error(`FAIL ${plantel}: ${error?.message || error}`)
   }
 }
+
 if (failed) process.exit(2)
-console.log('RUNTIME_PARITY_CONTRACT_OK')
+console.log('LISTA_EXACT_BUCKET_PARITY_OK')
