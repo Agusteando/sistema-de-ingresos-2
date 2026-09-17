@@ -13,19 +13,10 @@ import { normalizeExternalControlEscolarPlantel } from './control-escolar-plante
 import { withExternalSnapshotMeta } from './control-escolar-external-snapshot-presenter'
 
 const EXTERNAL_VIEW_TABLE = 'control_external_student_view'
-const VIEW_VERSION = 'control-escolar-student-view-v1'
 const MAX_PAGE_SIZE = 500
-const FRESH_REQUEST_MAX_AGE_MS = 60_000
-const FALLBACK_SNAPSHOT_MAX_AGE_MS = 168 * 60 * 60 * 1000
-const STALE_IF_ERROR_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 const clean = (value: unknown, max = 1000) => String(value ?? '').trim().slice(0, max)
 const canonicalMatricula = (value: unknown) => clean(value, 64).toUpperCase().replace(/\s+/g, '')
-const publicFailure = (error: any) => ({
-  statusCode: Number(error?.statusCode || error?.status || error?.response?.status || 500) || 500,
-  code: clean(error?.data?.code || error?.code || error?.statusMessage || error?.name || 'AURORA_ERROR', 120),
-  message: clean(error?.message || error?.statusMessage || 'Aurora no pudo actualizar el snapshot central solicitado.', 700)
-})
 
 const snapshotUnavailable = (plantel: string, ciclo: string) => createError({
   statusCode: 503,
@@ -39,66 +30,6 @@ const snapshotUnavailable = (plantel: string, ciclo: string) => createError({
     source: 'central-snapshot'
   }
 })
-
-const timestamp = (value: unknown) => {
-  if (!value) return Number.NaN
-  const time = value instanceof Date ? value.getTime() : new Date(String(value)).getTime()
-  return Number.isFinite(time) ? time : Number.NaN
-}
-
-const snapshotExpired = (row: any, now = Date.now()) => {
-  if (!row?.scope_key) return true
-  const expiresAt = timestamp(row.expires_at)
-  if (Number.isFinite(expiresAt)) return now >= expiresAt
-  const generatedAt = timestamp(row.generated_at)
-  return !Number.isFinite(generatedAt) || now - generatedAt >= FALLBACK_SNAPSHOT_MAX_AGE_MS
-}
-
-const snapshotBeyondStaleIfErrorWindow = (row: any, now = Date.now()) => {
-  if (!row?.scope_key) return true
-  const generatedAt = timestamp(row.generated_at)
-  return !Number.isFinite(generatedAt) || now - generatedAt >= STALE_IF_ERROR_MAX_AGE_MS
-}
-
-const snapshotExpiredError = (plantel: string, ciclo: string, row: any, refreshFailure: any = null) => {
-  const generatedAt = timestamp(row?.generated_at)
-  const expiresAt = timestamp(row?.expires_at)
-  return createError({
-    statusCode: 503,
-    statusMessage: 'AURORA_STUDENT_SNAPSHOT_TOO_OLD',
-    message: `El snapshot central de ${plantel} para ciclo ${ciclo} ya expiró y no pudo renovarse.`,
-    data: {
-      code: 'AURORA_STUDENT_SNAPSHOT_TOO_OLD',
-      plantel,
-      ciclo,
-      retryable: true,
-      source: 'central-snapshot',
-      generatedAt: Number.isFinite(generatedAt) ? new Date(generatedAt).toISOString() : null,
-      expiresAt: Number.isFinite(expiresAt) ? new Date(expiresAt).toISOString() : null,
-      refreshFailure
-    }
-  })
-}
-
-const wantsFreshSnapshot = (query: any = {}) =>
-  ['1', 'true', 'yes', 'fresh'].includes(clean(query.fresh, 20).toLowerCase())
-
-const snapshotNeedsWarm = (row: any, query: any = {}) => {
-  if (!row?.scope_key) return true
-
-  const now = Date.now()
-  const generatedAt = timestamp(row.generated_at)
-  if (!Number.isFinite(generatedAt)) return true
-  if (snapshotExpired(row, now)) return true
-
-  const ageMs = now - generatedAt
-  if (wantsFreshSnapshot(query) && ageMs > FRESH_REQUEST_MAX_AGE_MS) return true
-
-  // Normal reads keep the central view warm once stale_after is reached. If a
-  // refresh fails, the last-known-good snapshot remains usable as Aurora data.
-  const staleAt = timestamp(row.stale_after)
-  return Number.isFinite(staleAt) && now >= staleAt
-}
 
 const readLatestSnapshotScope = async (scope: ReturnType<typeof buildExternalControlEscolarScope>) => {
   const versionPlaceholders = EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS.map(() => '?').join(',')
@@ -118,71 +49,6 @@ const readLatestSnapshotScope = async (scope: ReturnType<typeof buildExternalCon
     params
   )
   return rows[0] || null
-}
-
-const readCanonicalMatriculaGroups = async (students: any[]) => {
-  const matriculas = Array.from(new Set(
-    students
-      .map((student) => canonicalMatricula(student?.matricula || student?.studentId))
-      .filter(Boolean)
-  ))
-  const groups = new Map<string, string>()
-  if (!matriculas.length) return groups
-
-  const placeholders = matriculas.map(() => '?').join(',')
-  const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT matricula, grupo
-     FROM matricula
-     WHERE UPPER(TRIM(matricula)) IN (${placeholders})`,
-    matriculas
-  )
-
-  rows.forEach((row) => {
-    const matricula = canonicalMatricula(row?.matricula)
-    if (!matricula) return
-    // matricula.grupo is intentionally authoritative for the current group.
-    // An empty value is also authoritative and must not resurrect a stale
-    // group from an old Control Escolar snapshot.
-    groups.set(matricula, clean(row?.grupo, 80))
-  })
-  return groups
-}
-const overlayCanonicalMatriculaGroups = async (response: any) => {
-  const responseData = response?.data
-  const students = Array.isArray(responseData)
-    ? responseData
-    : responseData && typeof responseData === 'object'
-      ? [responseData]
-      : []
-  if (!students.length) return response
-
-  const groups = await readCanonicalMatriculaGroups(students)
-  if (!groups.size) return response
-
-  const applyGroup = (student: any) => {
-    const matricula = canonicalMatricula(student?.matricula || student?.studentId)
-    if (!groups.has(matricula)) return student
-    const grupo = groups.get(matricula) ?? ''
-    return {
-      ...student,
-      group: grupo,
-      grupo,
-      matriculaGrupo: grupo,
-      display: {
-        ...(student?.display && typeof student.display === 'object' ? student.display : {}),
-        gradoGrupo: [clean(student?.grado, 80), grupo].filter(Boolean).join(' ')
-      }
-    }
-  }
-
-  return {
-    ...(response || {}),
-    data: Array.isArray(responseData) ? responseData.map(applyGroup) : applyGroup(responseData),
-    meta: {
-      ...(response?.meta || {}),
-      groupSource: 'matricula.grupo-live'
-    }
-  }
 }
 
 const withRefreshFailureMeta = (response: any, refreshFailure: any) => ({
@@ -208,15 +74,20 @@ export const assertExternalControlEscolarSnapshotReady = async (query: any = {})
   const row = await readLatestSnapshotScope(scope)
   if (!row?.scope_key) throw snapshotUnavailable(scope.plantel, scope.cicloKey)
 
-  // Consumer reads are snapshot-only. Age is telemetry, never a permission to
-  // read, and a request must never depend on a campus bridge being online.
+  // Consumer reads are snapshot-only. Snapshot age is telemetry only: a
+  // persisted last-known-good snapshot remains readable even if Bridge is
+  // offline or a refresh is overdue.
   return { scope, row, refreshFailure: null }
 }
 
 export const readExternalSnapshotStudents = async (query: any = {}) => {
   const ready = await assertExternalControlEscolarSnapshotReady(query)
   const response = withExternalSnapshotMeta(await readExternalControlEscolarStudents(query), query)
-  return await overlayCanonicalMatriculaGroups(withRefreshFailureMeta(response, ready.refreshFailure))
+
+  // grado/grupo are already canonicalized before the snapshot is persisted.
+  // Never overlay matricula.grupo (or another legacy academic source) here:
+  // doing so would make the public contract diverge from Control Escolar UI.
+  return withRefreshFailureMeta(response, ready.refreshFailure)
 }
 
 export const readExternalSnapshotChanges = async (query: any = {}) => {
@@ -237,7 +108,7 @@ export const readExternalSnapshotStudentDetail = async (query: any = {}, matricu
       await readExternalControlEscolarStudentDetail({ ...query, plantel: requestedPlantel }, matricula),
       query
     )
-    return await overlayCanonicalMatriculaGroups(withRefreshFailureMeta(response, ready.refreshFailure))
+    return withRefreshFailureMeta(response, ready.refreshFailure)
   }
 
   let readyScopes = 0
@@ -250,7 +121,7 @@ export const readExternalSnapshotStudentDetail = async (query: any = {}, matricu
           await readExternalControlEscolarStudentDetail({ ...query, plantel }, matricula),
           query
         )
-        return await overlayCanonicalMatriculaGroups(withRefreshFailureMeta(response, ready.refreshFailure))
+        return withRefreshFailureMeta(response, ready.refreshFailure)
       } catch (error: any) {
         if (Number(error?.statusCode || 0) !== 404) throw error
       }
@@ -327,7 +198,7 @@ export const readExternalSnapshotAcademicPlacement = async (query: any = {}, mat
     meta: {
       ...(response?.meta || {}),
       academicPlacementSource: 'central-student-snapshot',
-      groupSource: response?.meta?.groupSource || 'matricula.grupo-live',
+      groupSource: response?.meta?.groupSource || 'control-escolar-canonical-snapshot',
       generatedAt: response?.meta?.generatedAt || null
     }
   }
