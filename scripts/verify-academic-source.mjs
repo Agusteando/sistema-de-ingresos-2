@@ -1,9 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 const root = process.cwd()
-const [control, externalView, refresh, canonical] = await Promise.all([
+const [control, externalView, externalSnapshot, refresh, canonical] = await Promise.all([
   'server/utils/control-escolar.ts',
   'server/utils/control-escolar-external-view.ts',
+  'server/utils/control-escolar-external-snapshot.ts',
   'server/utils/control-escolar-external-snapshot-refresh.ts',
   'server/utils/control-escolar-external-canonical-scope.ts'
 ].map(path => readFile(join(root, path), 'utf8')))
@@ -31,5 +32,7 @@ expect(canonical.includes('fetchControlEscolarStudentsWithCanonicalGroups'), 'El
 expect(canonical.includes('parseEnrollmentConceptsForScope') && canonical.includes('readBestConceptosConfigPayload'), 'El snapshot debe resolver la misma configuración de conceptos de inscripción.')
 expect(refresh.includes('EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION') && !refresh.includes("const VIEW_VERSION = 'control-escolar-student-view-v1'"), 'El refresh no puede fijar una versión vieja del snapshot.')
 expect(externalView.includes('const refreshed = await warmExternalControlEscolarStudentScope(input)') && !externalView.includes('const payload = sanitizeExternalStudentPayload(student)'), 'El refresh puntual debe regenerar el scope canónico completo; no puede inyectar una fila.')
+expect(!externalSnapshot.includes('overlayCanonicalMatriculaGroups') && !externalSnapshot.includes('matricula.grupo-live') && !externalSnapshot.includes('SELECT matricula, grupo'), 'La lectura pública no puede reemplazar el grupo canónico del snapshot con matricula.grupo ni otra fuente legacy.')
+expect(externalSnapshot.includes('Snapshot age is telemetry only') && !externalSnapshot.includes('AURORA_STUDENT_SNAPSHOT_TOO_OLD'), 'La edad del snapshot debe ser telemetría; nunca debe impedir servir el last-known-good persistido.')
 if (failures.length) { console.error('Fuente académica inválida:'); failures.forEach(failure => console.error(`- ${failure}`)); process.exit(1) }
-console.log('Fuente académica válida: snapshot público y Control Escolar comparten conceptos, población y grupos canónicos.')
+console.log('Fuente académica válida: snapshot público y Control Escolar comparten conceptos, población y grupos canónicos sin overlay posterior.')
