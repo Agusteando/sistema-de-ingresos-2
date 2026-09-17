@@ -1,0 +1,89 @@
+name: DX live production probe
+
+on:
+  push:
+    branches:
+      - chatgpt/dx-live-probe
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe production Auto-DX without exposing row data
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          import urllib.error
+          import urllib.request
+
+          URL = 'https://aurora.casitaiedis.edu.mx/api/control-escolar/dx-api-lab/auto'
+          CYCLE = '2026-2027'
+          PLANTELES = ['PREEM','PREET','CT','CM','DM','CO','DC','GM','PM','PT','SM','ST','IS','ISM']
+
+          failures = []
+          total_apps = 0
+          ok_apps = 0
+
+          for plantel in PLANTELES:
+              payload = json.dumps({'plantel': plantel, 'ciclo': CYCLE}).encode()
+              req = urllib.request.Request(URL, data=payload, method='POST', headers={
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'User-Agent': 'Aurora-DX-Live-Probe/1.0',
+              })
+              try:
+                  with urllib.request.urlopen(req, timeout=120) as response:
+                      status = response.status
+                      raw = response.read()
+              except urllib.error.HTTPError as exc:
+                  status = exc.code
+                  raw = exc.read()
+              except Exception as exc:
+                  print(f'{plantel}: TRANSPORT_ERROR {type(exc).__name__}: {exc}')
+                  failures.append((plantel, 'transport', str(exc)))
+                  continue
+
+              try:
+                  data = json.loads(raw.decode('utf-8'))
+              except Exception:
+                  print(f'{plantel}: HTTP {status} NON_JSON bytes={len(raw)}')
+                  failures.append((plantel, f'http-{status}', 'non-json'))
+                  continue
+
+              apps = data.get('apps') if isinstance(data, dict) else None
+              if not isinstance(apps, list):
+                  code = ((data.get('data') or {}).get('code') if isinstance(data, dict) else None) or (data.get('statusMessage') if isinstance(data, dict) else None) or 'NO_APPS'
+                  print(f'{plantel}: HTTP {status} {code}')
+                  failures.append((plantel, f'http-{status}', str(code)))
+                  continue
+
+              print(f'\n[{plantel}] HTTP {status} apps={len(apps)}')
+              for app in apps:
+                  total_apps += 1
+                  state = str(app.get('status') or 'unknown')
+                  label = str(app.get('app') or app.get('appId') or 'app')
+                  ok_count = int(app.get('okEndpoints') or 0)
+                  total_count = int(app.get('totalEndpoints') or 0)
+                  latency = int(app.get('latencyMs') or 0)
+                  print(f'  {label}: {state} {ok_count}/{total_count} {latency}ms')
+                  if state == 'ok':
+                      ok_apps += 1
+                  else:
+                      for endpoint in app.get('endpoints') or []:
+                          if not endpoint.get('ok'):
+                              err = endpoint.get('error') or {}
+                              print(f"    FAIL {endpoint.get('label') or endpoint.get('simulationId')} HTTP={endpoint.get('status')} code={err.get('code') or '-'}")
+                      failures.append((plantel, label, state))
+
+          print(f'\nSUMMARY app_cells_ok={ok_apps}/{total_apps} failures={len(failures)}')
+          if failures:
+              print('FAILURES:')
+              for item in failures:
+                  print('  ' + ' | '.join(map(str, item)))
+              sys.exit(2)
+          PY
