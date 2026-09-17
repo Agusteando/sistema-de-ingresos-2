@@ -1,0 +1,67 @@
+name: ChatGPT Lista parity validation
+
+on:
+  push:
+    branches:
+      - chatgpt/lista-parity-proof
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-push:
+    runs-on: ubuntu-24.04
+    env:
+      BASE_SHA: bbd7507fb73b6bcb819c10b59d90da97227818a0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve patch script
+        run: cp scripts/chatgpt-lista-parity-v2.py /tmp/lista-parity.py
+
+      - name: Guard exact main and reset
+        run: |
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$BASE_SHA"
+          git reset --hard origin/main
+
+      - name: Apply patch
+        run: python /tmp/lista-parity.py
+
+      - name: Guard changed files
+        run: |
+          git status --short
+          changed="$(git status --short | awk '{print $2}' | sort)"
+          allowed="$(printf '%s\n' components/DxProofPanel.vue pages/dx/api-lab.vue scripts/verify-academic-source.mjs scripts/verify-dx-api-lab.mjs server/api/control-escolar/dx-api-lab/proof.post.ts server/utils/control-escolar-external-canonical-scope.ts server/utils/control-escolar-external-snapshot-refresh.ts server/utils/control-escolar-external-view.ts server/utils/control-escolar.ts | sort)"
+          test "$changed" = "$allowed"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify academic parity contract
+        run: npm run verify:academic-source
+
+      - name: Verify DX proof
+        run: node scripts/verify-dx-api-lab.mjs
+
+      - name: Production build
+        run: npm run build
+
+      - name: Guard main and push one commit
+        run: |
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$BASE_SHA"
+          git config user.name "ChatGPT"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/DxProofPanel.vue pages/dx/api-lab.vue scripts/verify-academic-source.mjs scripts/verify-dx-api-lab.mjs server/api/control-escolar/dx-api-lab/proof.post.ts server/utils/control-escolar-external-canonical-scope.ts server/utils/control-escolar-external-snapshot-refresh.ts server/utils/control-escolar-external-view.ts server/utils/control-escolar.ts
+          git commit -m "Unifica Lista con Control Escolar canónico"
+          git push origin HEAD:main
