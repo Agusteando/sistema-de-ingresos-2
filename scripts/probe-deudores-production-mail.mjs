@@ -74,9 +74,16 @@ for (let attempt = 1; attempt <= retryCount; attempt++) {
       process.exit(5)
     }
 
-    const retryable = response.status === 404 || response.status === 405 || response.status >= 500
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+    const staleSpaShell = response.ok
+      && !data
+      && (contentType.includes('text/html') || /<!doctype html|<html/i.test(raw))
+    const retryable = staleSpaShell
+      || response.status === 404
+      || response.status === 405
+      || response.status >= 500
     console.log(
-      `DEUDORES_PRODUCTION_GMAIL_PENDING attempt=${attempt}/${retryCount} status=${response.status} retryable=${retryable}`
+      `DEUDORES_PRODUCTION_GMAIL_PENDING attempt=${attempt}/${retryCount} status=${response.status} staleSpaShell=${staleSpaShell} retryable=${retryable}`
     )
     if (!retryable) break
   } catch (error) {

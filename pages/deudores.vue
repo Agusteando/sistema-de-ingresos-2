@@ -391,7 +391,7 @@
                 </label>
 
                 <div class="template-helper" v-pre>
-                  Variables: {{tutor}}, {{nombre_alumno}}, {{matricula}}, {{periodo_cobranza}}, {{saldo_total_formateado}}, {{fecha_limite_pago}}, {{desglose_table}}.
+                  Identidad IECS-IEDIS aplicada automáticamente · Variables: {{tutor}}, {{nombre_alumno}}, {{matricula}}, {{periodo_cobranza}}, {{saldo_total_formateado}}, {{fecha_limite_pago}}, {{ubicacion_academica}}, {{desglose_table}}.
                 </div>
               </section>
 
