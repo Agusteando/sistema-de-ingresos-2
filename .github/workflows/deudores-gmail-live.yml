@@ -1,0 +1,71 @@
+name: Deudores Gmail production proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/utils/mailer.ts'
+      - 'server/api/deudores/**'
+      - 'server/api/external/v1/deudores/**'
+      - 'nuxt.config.ts'
+      - 'scripts/test-deudores-gmail.mjs'
+      - 'scripts/probe-deudores-production-mail.mjs'
+      - '.github/workflows/deudores-gmail-live.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server/utils/mailer.ts'
+      - 'server/api/deudores/**'
+      - 'server/api/external/v1/deudores/**'
+      - 'nuxt.config.ts'
+      - 'scripts/test-deudores-gmail.mjs'
+      - 'scripts/probe-deudores-production-mail.mjs'
+      - '.github/workflows/deudores-gmail-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deudores-gmail-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-production-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN || secrets.HUSKY_PASS_AURORA_API_TOKEN || secrets.EXTERNAL_CONTROL_ESCOLAR_API_TOKEN }}
+      AURORA_BASE_URL: https://aurora.casitaiedis.edu.mx
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build production bundle
+        run: npm run build
+      - name: Verify /deudores mail contract
+        run: node --experimental-strip-types scripts/test-deudores-gmail.mjs --contract
+      - name: Verify Actions can authenticate to Aurora production
+        run: node scripts/probe-deudores-production-mail.mjs auth
+
+  production-gmail:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    needs: build-and-production-auth
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN || secrets.HUSKY_PASS_AURORA_API_TOKEN || secrets.EXTERNAL_CONTROL_ESCOLAR_API_TOKEN }}
+      AURORA_BASE_URL: https://aurora.casitaiedis.edu.mx
+      AURORA_MAIL_PROBE_ATTEMPTS: '30'
+      AURORA_MAIL_PROBE_DELAY_MS: '10000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Send real email through deployed Aurora runtime
+        run: node scripts/probe-deudores-production-mail.mjs mail
