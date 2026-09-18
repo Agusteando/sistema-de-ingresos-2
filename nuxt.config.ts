@@ -37,9 +37,20 @@ export default defineNuxtConfig({
     controlEscolarMysqlDatabase: process.env.CONTROL_ESCOLAR_MYSQL_DATABASE || '',
     controlEscolarMysqlConnectionLimit: process.env.CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT || '10',
 
-    googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    googlePrivateKey: process.env.GOOGLE_PRIVATE_KEY,
-    adminEmailToImpersonate: process.env.GOOGLE_ADMIN_EMAIL || 'desarrollo.tecnologico@casitaiedis.edu.mx',
+    googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+      || process.env.GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL
+      || process.env.GOOGLE_CLIENT_EMAIL
+      || process.env.GCP_SERVICE_ACCOUNT_EMAIL
+      || process.env.GCP_CLIENT_EMAIL
+      || '',
+    googlePrivateKey: process.env.GOOGLE_PRIVATE_KEY
+      || process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+      || process.env.GCP_SERVICE_ACCOUNT_PRIVATE_KEY
+      || process.env.GCP_PRIVATE_KEY
+      || '',
+    adminEmailToImpersonate: process.env.GOOGLE_ADMIN_EMAIL
+      || process.env.GCP_ADMIN_SUBJECT
+      || 'desarrollo.tecnologico@casitaiedis.edu.mx',
     gcpClientEmail: process.env.GCP_CLIENT_EMAIL,
     gcpPrivateKey: process.env.GCP_PRIVATE_KEY,
     gcpAdminSubject: process.env.GCP_ADMIN_SUBJECT,
