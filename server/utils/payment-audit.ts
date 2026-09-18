@@ -22,6 +22,8 @@ END`
 
 export const PAYMENT_REGISTERED_AT_SQL = 'COALESCE(r.fecha_original, r.fecha)'
 export const PAYMENT_EFFECTIVE_AT_SQL = 'r.fecha'
+export const PAYMENT_REGISTERED_UNIX_SQL = `UNIX_TIMESTAMP(${PAYMENT_REGISTERED_AT_SQL})`
+export const PAYMENT_EFFECTIVE_UNIX_SQL = `UNIX_TIMESTAMP(${PAYMENT_EFFECTIVE_AT_SQL})`
 
 export const PAYMENT_CANCELED_STATUS_SQL = `LOWER(TRIM(COALESCE(CAST(r.estatus AS CHAR), ''))) IN (
   'cancelada', 'cancelado', 'cancelled', 'canceled'

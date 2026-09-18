@@ -2,14 +2,21 @@ import { PLANTELES_LIST } from '../../utils/constants'
 import { getBridgeAgentId, getDbTransport, query } from './db'
 import { hydrateFinancialConceptNames } from './financial-concept'
 import type { AuthSessionUser } from './auth-session'
+import {
+  formatMexicoCityDateKeyFromUnix,
+  formatMexicoCityDateTimeFromUnix,
+  mexicoCityDateRangeToUnix,
+} from './payment-time'
 import { omitRawFinancialAcademicFields, resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
 import { isLocalSystemRuntime } from './local-system-manager'
 import {
   PAYMENT_APPLIED_AMOUNT_SQL,
   PAYMENT_EFFECTIVE_AT_SQL,
+  PAYMENT_EFFECTIVE_UNIX_SQL,
   PAYMENT_PLANTEL_SQL,
   PAYMENT_REGISTERED_AT_SQL,
+  PAYMENT_REGISTERED_UNIX_SQL,
   resolvePaymentAppliedAmount,
   resolvePaymentAuditStatus,
 } from './payment-audit'
@@ -64,6 +71,8 @@ export type CorteCajaRow = {
 }
 
 type CorteCajaDbRow = Omit<CorteCajaRow, 'nivel' | 'grado' | 'estatusCorte' | 'montoAplicado'> & {
+  fechaUnix?: number | string | null
+  fechaPagoUnix?: number | string | null
   gradoBase?: string | null
   cicloBase?: string | null
   basePlantel?: string | null
@@ -101,6 +110,8 @@ type CorteCajaContext = {
   sectionName: string
   where: string
   params: any[]
+  inicioUnix: number
+  finExclusiveUnix: number
 }
 
 const normalizeDateFilter = (value: unknown) => {
@@ -155,10 +166,11 @@ const resolveCorteContext = async (user: AuthSessionUser, filters: CorteCajaFilt
     throw createError({ statusCode: 403, message: 'No tiene permisos financieros para acceder a este reporte.' })
   }
 
-  const [clock] = await query<Array<{ currentDate: string }>>(
-    `SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS currentDate`
+  const [clock] = await query<Array<{ currentUnix: number | string }>>(
+    `SELECT UNIX_TIMESTAMP() AS currentUnix`
   )
-  const currentDate = String(clock?.currentDate || new Date().toISOString().slice(0, 10))
+  const currentUnix = Number(clock?.currentUnix || Math.floor(Date.now() / 1000))
+  const currentDate = formatMexicoCityDateKeyFromUnix(currentUnix)
   const requestedInicio = normalizeDateFilter(filters.inicio)
   const requestedFin = normalizeDateFilter(filters.fin)
   const inicio = requestedInicio || requestedFin || currentDate
@@ -167,6 +179,8 @@ const resolveCorteContext = async (user: AuthSessionUser, filters: CorteCajaFilt
   if (inicio > fin) {
     throw createError({ statusCode: 400, message: 'La fecha de apertura no puede ser posterior a la fecha de cierre.' })
   }
+
+  const { startUnix: inicioUnix, endExclusiveUnix: finExclusiveUnix } = mexicoCityDateRangeToUnix(inicio, fin)
 
   const scopePlantel = resolveCortePlantel(user, filters.plantel)
   const transport = getDbTransport()
@@ -185,12 +199,14 @@ const resolveCorteContext = async (user: AuthSessionUser, filters: CorteCajaFilt
   // Esa base es el perímetro real de caja: ningún movimiento debe excluirse porque
   // r.plantel, plantel_pago o la matrícula conserven metadatos de otro plantel.
   // El filtro por plantel se conserva únicamente para conexiones centrales/directas.
+  // Filter by absolute instants, never by DATE(TIMESTAMP). Bridge agents can run
+  // with UTC sessions while the caja day belongs to America/Mexico_City.
   let where = physicalDatabaseOwnsCorteScope
-    ? `DATE(${PAYMENT_EFFECTIVE_AT_SQL}) BETWEEN ? AND ?`
-    : `${PAYMENT_PLANTEL_SQL} = ? AND DATE(${PAYMENT_EFFECTIVE_AT_SQL}) BETWEEN ? AND ?`
+    ? `${PAYMENT_EFFECTIVE_UNIX_SQL} >= ? AND ${PAYMENT_EFFECTIVE_UNIX_SQL} < ?`
+    : `${PAYMENT_PLANTEL_SQL} = ? AND ${PAYMENT_EFFECTIVE_UNIX_SQL} >= ? AND ${PAYMENT_EFFECTIVE_UNIX_SQL} < ?`
   const params: any[] = physicalDatabaseOwnsCorteScope
-    ? [inicio, fin]
-    : [scopePlantel, inicio, fin]
+    ? [inicioUnix, finExclusiveUnix]
+    : [scopePlantel, inicioUnix, finExclusiveUnix]
 
   const requestedSection = String(filters.seccion || '').trim()
   let sectionId: number | null = null
@@ -224,7 +240,7 @@ const resolveCorteContext = async (user: AuthSessionUser, filters: CorteCajaFilt
     params.push(sectionId)
   }
 
-  return { inicio, fin, scopePlantel, sectionId, sectionName, where, params }
+  return { inicio, fin, scopePlantel, sectionId, sectionName, where, params, inicioUnix, finExclusiveUnix }
 }
 
 export const loadPlantelCorteCajaUsers = async (
@@ -295,6 +311,8 @@ export const loadPlantelCorteCaja = async (
       r.folio_plantel,
       ${PAYMENT_REGISTERED_AT_SQL} AS fecha,
       ${PAYMENT_EFFECTIVE_AT_SQL} AS fechaPago,
+      ${PAYMENT_REGISTERED_UNIX_SQL} AS fechaUnix,
+      ${PAYMENT_EFFECTIVE_UNIX_SQL} AS fechaPagoUnix,
       r.matricula,
       r.documento,
       r.mes,
@@ -330,12 +348,23 @@ export const loadPlantelCorteCaja = async (
     ORDER BY ${PAYMENT_EFFECTIVE_AT_SQL} DESC, ${PAYMENT_REGISTERED_AT_SQL} DESC, r.folio ASC
   `, params)
 
-  const rows: CorteCajaRow[] = rawRows.map((row) => ({
-    ...omitRawFinancialAcademicFields(row),
-    ...resolveFinancialAcademicPlacement(row, row.ciclo),
-    estatusCorte: '',
-    montoAplicado: 0,
-  })) as CorteCajaRow[]
+  const rows: CorteCajaRow[] = rawRows.map((row) => {
+    const normalized = omitRawFinancialAcademicFields(row) as CorteCajaRow & {
+      fechaUnix?: number | string | null
+      fechaPagoUnix?: number | string | null
+    }
+    const registeredUnix = Number(row.fechaUnix || 0)
+    const effectiveUnix = Number(row.fechaPagoUnix || 0)
+
+    return {
+      ...normalized,
+      ...resolveFinancialAcademicPlacement(row, row.ciclo),
+      fecha: registeredUnix > 0 ? formatMexicoCityDateTimeFromUnix(registeredUnix) : row.fecha,
+      fechaPago: effectiveUnix > 0 ? formatMexicoCityDateTimeFromUnix(effectiveUnix) : row.fechaPago,
+      estatusCorte: '',
+      montoAplicado: 0,
+    }
+  }) as CorteCajaRow[]
 
   const rowsByCycle = new Map<string, CorteCajaRow[]>()
   rows.forEach((row) => {

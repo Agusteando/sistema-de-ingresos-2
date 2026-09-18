@@ -16,6 +16,11 @@ import {
 import { calculateLateFeeSubtotal } from '../../../shared/utils/recargo'
 import { loadRecargoPolicies, markRecargoConceptAsService, type RecargoPolicy } from '../../utils/recargo-config'
 import { paymentTargetKey } from '../../../shared/utils/paymentTarget'
+import {
+  formatMexicoCityDateKeyFromUnix,
+  formatMexicoCityDateTimeFromUnix,
+  mexicoCityDateTimeToUnix,
+} from '../../utils/payment-time'
 
 const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 
@@ -101,18 +106,21 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const plantel = studentRef.plantel || 'PT'
 
   const instituto = institutionFlagForPlantel(plantel)
+  // Epoch time is the only stable clock contract across direct MySQL and Bridge.
+  // MySQL TIMESTAMP values are session-timezone aware; formatted NOW()/DATE() strings
+  // are not, which used to move evening payments into the following cash-box day.
   const [dbClock] = await query<any[]>(`
-    SELECT
-      DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s') AS currentTimestamp,
-      DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS currentDate
+    SELECT UNIX_TIMESTAMP() AS currentUnix
   `)
-  const originalTimestamp = String(dbClock?.currentTimestamp || dayjs().format('YYYY-MM-DD HH:mm:ss'))
-  const originalDateKey = String(dbClock?.currentDate || originalTimestamp.slice(0, 10))
+  const originalUnix = Number(dbClock?.currentUnix || Math.floor(Date.now() / 1000))
+  const originalTimestamp = formatMexicoCityDateTimeFromUnix(originalUnix)
+  const originalDateKey = formatMexicoCityDateKeyFromUnix(originalUnix)
   const originalTime = originalTimestamp.slice(11, 19) || '00:00:00'
-  const effectiveTimestamp = requestedPaymentDate
-    ? `${requestedPaymentDate} ${originalTime}`
-    : originalTimestamp
-  const effectiveDateKey = requestedPaymentDate || originalDateKey
+  const effectiveUnix = requestedPaymentDate
+    ? mexicoCityDateTimeToUnix(requestedPaymentDate, originalTime)
+    : originalUnix
+  const effectiveTimestamp = formatMexicoCityDateTimeFromUnix(effectiveUnix)
+  const effectiveDateKey = formatMexicoCityDateKeyFromUnix(effectiveUnix)
   const paymentDateChanged = Boolean(requestedPaymentDate && requestedPaymentDate !== originalDateKey)
   const paymentDateChangedBy = paymentDateChanged ? (user?.name || user?.email || 'Sistema') : null
   const activeConvention = await loadActiveCobranzaConvention({
@@ -357,7 +365,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           fecha_original,
           fecha_modificada_at,
           fecha_modificada_por
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?)
       `,
       params: [
         matricula,
@@ -384,7 +392,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         'Vigente',
         pagoRealizadoEnOtroPlantel ? 1 : 0,
         pagoRealizadoEnOtroPlantel ? userName : null,
-        pagoRealizadoEnOtroPlantel ? originalTimestamp : null,
+        pagoRealizadoEnOtroPlantel ? originalUnix : null,
         pagoRealizadoEnOtroPlantel ? 1 : 0,
         pagoRealizadoEnOtroPlantel ? plantelPago : null,
         stockReservation.controlled ? 1 : 0,
@@ -393,9 +401,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         stockReservation.controlled ? stockReservation.plantel : null,
         stockReservation.controlled ? stockReservation.quantity : 0,
         stockReservation.controlled ? stockReservation.movement_id || null : null,
-        effectiveTimestamp,
-        originalTimestamp,
-        paymentDateChanged ? originalTimestamp : null,
+        effectiveUnix,
+        originalUnix,
+        paymentDateChanged ? originalUnix : null,
         paymentDateChangedBy
       ]
     })
@@ -461,13 +469,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           AND documento = ?
           AND mes = ?
           AND ciclo = ?
-          AND fecha = ?
+          AND UNIX_TIMESTAMP(fecha) = ?
           AND estatus = 'Vigente'
           AND usuario = ?
           AND ABS(monto - ?) < 0.005
         ORDER BY folio DESC
         LIMIT 1
-      `, [matricula, key.documento, key.mes, cicloKey, effectiveTimestamp, userName, key.monto])
+      `, [matricula, key.documento, key.mes, cicloKey, effectiveUnix, userName, key.monto])
 
       const folio = Number(row?.folio || 0)
       if (Number.isInteger(folio) && folio > 0) recoveredFolios.push(folio)

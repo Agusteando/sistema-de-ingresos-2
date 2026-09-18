@@ -1,0 +1,37 @@
+name: Payment timezone regression
+
+on:
+  push:
+    branches:
+      - main
+      - 'chatgpt/payment-timezone/**'
+    paths:
+      - 'server/api/payments/pay.post.ts'
+      - 'server/utils/corte-caja.ts'
+      - 'server/utils/payment-audit.ts'
+      - 'server/utils/payment-time.ts'
+      - 'scripts/verify-payment-timezone.mjs'
+      - '.github/workflows/payment-timezone-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  timezone-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify Mexico City payment-day semantics
+        run: node --experimental-strip-types scripts/verify-payment-timezone.mjs
+      - name: Verify academic source
+        run: npm run verify:academic-source
+      - name: Build
+        run: npm run build
