@@ -12,6 +12,11 @@ if (!deudoresAction.includes('await sendEmail(contactStudent.correo, rendered.su
   throw new Error('/deudores no longer sends reminder email through the shared Aurora mailer.')
 }
 
+if (process.argv.includes('--contract')) {
+  console.log('DEUDORES_MAIL_CONTRACT_OK /deudores uses server/utils/mailer.ts')
+  process.exit(0)
+}
+
 const { sendEmail } = await import('../server/utils/mailer.ts')
 
 const recipient = String(
