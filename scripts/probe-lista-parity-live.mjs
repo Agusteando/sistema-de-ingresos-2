@@ -140,6 +140,31 @@ function applyListaTransform(rows, requestedPlantel) {
   }
 }
 
+
+function applyAttendanceReportCurrentTransform(rows, requestedPlantel) {
+  const students = []
+  const rejections = new Map()
+  const reject = (reason) => rejections.set(reason, (rejections.get(reason) || 0) + 1)
+  for (const row of rows) {
+    const rawPlantel = normalizeRosterPlantel(row?.plantel || row?.basePlantel, '')
+    const grado = clean(row?.grado, 80)
+    const grupo = clean(row?.grupo ?? row?.group, 80)
+    const nombre = studentName(row)
+    const matricula = clean(row?.matricula || row?.id || row?.studentId || row?.student_id, 80)
+    const enrollmentState = clean(row?.enrollmentState || row?.estadoInscripcion || row?.inscripcionEstado || row?.estadoIngreso || row?.tipoIngresoValue || row?.tipoIngreso, 120)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '_')
+    const status = clean(row?.status || row?.estatus || row?.estado, 120)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+    if (rawPlantel && rawPlantel !== requestedPlantel) { reject(`plantel ${rawPlantel}->${requestedPlantel}`); continue }
+    if (!matricula) { reject('matricula vacia'); continue }
+    if (!nombre) { reject('nombre vacio'); continue }
+    if (enrollmentState !== 'inscrito' || status.includes('baja')) { reject(`estado local ${enrollmentState || '(vacio)'}/${status || '(vacio)'}`); continue }
+    students.push({ grado, grupo, plantel: requestedPlantel })
+  }
+  return { students, rejections: Object.fromEntries([...rejections.entries()].sort(([a],[b]) => a.localeCompare(b,'es'))) }
+}
+
 const cyclePayload = await api('/api/external/v1/school-cycle')
 const cycleLabel = clean(cyclePayload?.currentCycle?.label || cyclePayload?.currentCycle?.key || cyclePayload?.ciclo)
 const cycleKey = cycleLabel.match(/\d{4}/)?.[0] || cycleLabel
@@ -155,29 +180,35 @@ for (const plantel of PLANTELES) {
     // row-level plantel/basePlantel is retained only as source metadata.
     const listaSource = await readAll(plantel, cycleKey, { fresh: false })
     const transformed = applyListaTransform(listaSource.rows, plantel)
+    const attendanceCurrent = applyAttendanceReportCurrentTransform(listaSource.rows, plantel)
 
     const expectedBuckets = countBuckets(canonical.rows)
-    const actualBuckets = countBuckets(transformed.students)
+    const listaBuckets = countBuckets(transformed.students)
+    const reportBuckets = countBuckets(attendanceCurrent.students)
     const expectedGrades = countGrades(canonical.rows)
-    const actualGrades = countGrades(transformed.students)
-    const bucketDiffs = diffMaps(expectedBuckets, actualBuckets)
-    const gradeDiffs = diffMaps(expectedGrades, actualGrades)
+    const listaGrades = countGrades(transformed.students)
+    const reportGrades = countGrades(attendanceCurrent.students)
+    const listaBucketDiffs = diffMaps(expectedBuckets, listaBuckets)
+    const listaGradeDiffs = diffMaps(expectedGrades, listaGrades)
+    const reportBucketDiffs = diffMaps(expectedBuckets, reportBuckets)
+    const reportGradeDiffs = diffMaps(expectedGrades, reportGrades)
     const result = {
       plantel,
       auroraTotal: canonical.rows.length,
-      listaSourceTotal: listaSource.rows.length,
       listaTotal: transformed.students.length,
-      canonicalFreshness: canonical.meta?.freshness || null,
-      listaFreshness: listaSource.meta?.freshness || null,
-      canonicalGeneratedAt: canonical.meta?.generatedAt || null,
-      listaGeneratedAt: listaSource.meta?.generatedAt || null,
-      rejections: transformed.rejections,
-      sourcePlantelMismatches: transformed.sourcePlantelMismatches,
-      gradeDiffs,
-      bucketDiffs
+      attendanceReportCurrentTotal: attendanceCurrent.students.length,
+      reportRejections: attendanceCurrent.rejections,
+      listaGradeDiffs,
+      listaBucketDiffs,
+      reportGradeDiffs,
+      reportBucketDiffs
     }
     console.log(JSON.stringify(result))
-    if (canonical.rows.length !== transformed.students.length || gradeDiffs.length || bucketDiffs.length) failed = true
+    if (canonical.rows.length !== transformed.students.length || listaGradeDiffs.length || listaBucketDiffs.length) {
+      console.error(`Lista parity unexpectedly failed for ${plantel}`)
+      failed = true
+    }
+    if (canonical.rows.length !== attendanceCurrent.students.length || reportGradeDiffs.length || reportBucketDiffs.length) failed = true
   } catch (error) {
     failed = true
     console.error(`FAIL ${plantel}: ${error?.message || error}`)
@@ -185,4 +216,4 @@ for (const plantel of PLANTELES) {
 }
 
 if (failed) process.exit(2)
-console.log('LISTA_EXACT_BUCKET_PARITY_OK')
+console.log('ATTENDANCE_REPORT_CURRENT_PARITY_OK')
