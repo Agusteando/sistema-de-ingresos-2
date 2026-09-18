@@ -72,6 +72,9 @@
         <a v-if="showFinancialNav" href="http://localhost/Sistema%20de%20ingresos/login.php" class="nav-item group" target="_blank" rel="noopener" title="Sistema de Contingencia" aria-label="Sistema de Contingencia">
           <LucideExternalLink :size="22" stroke-width="2" /> <span class="nav-label">Sistema de Contingencia</span>
         </a>
+        <NuxtLink to="/buscador" class="nav-item group" title="Buscador" aria-label="Buscador">
+          <LucideSearch :size="22" stroke-width="2" /> <span class="nav-label">Buscador</span>
+        </NuxtLink>
         <NuxtLink v-if="showControlEscolarNav" to="/control-escolar" class="nav-item group" title="Control Escolar" aria-label="Control Escolar">
           <LucideSchool :size="22" stroke-width="2" /> <span class="nav-label">Control Escolar</span>
         </NuxtLink>
@@ -430,6 +433,7 @@ import { useRoute } from 'vue-router'
 import { useCookie, useState } from '#app'
 import {
   LucideUsers,
+  LucideSearch,
   LucidePieChart,
   LucideSettings,
   LucideFileText,
@@ -639,7 +643,7 @@ const openControlTopbarDiagnostics = () => {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent('control-escolar:open-sync-diagnostics'))
 }
-const showCicloPicker = computed(() => route.path !== '/dashboard')
+const showCicloPicker = computed(() => route.path !== '/dashboard' && route.path !== '/buscador')
 const activePlantelLabel = computed(() => activePlantel.value === 'GLOBAL' ? 'CONSOLIDADO' : `PLANTEL ${activePlantel.value || 'PT'}`)
 const activePlantelStatus = computed(() => activePlantel.value === 'GLOBAL'
   ? { status: 'unknown', online: true, label: 'Global', message: 'Vista consolidada', action: '' }
@@ -1376,6 +1380,7 @@ onBeforeUnmount(() => {
 
 const currentRouteName = computed(() => {
   if (route.path === '/') return 'Alumnos'
+  if (route.path === '/buscador') return 'Buscador'
   if (route.path === '/deudores') return 'Deudores'
   if (route.path === '/reportes') return 'Centro de reportes'
   if (route.path === '/reporte-talleres') return 'Reporte Talleres'
@@ -1396,7 +1401,7 @@ const switchPlantel = async (plantel = activePlantel.value) => {
 
   try {
     const response = await $fetch('/api/auth/switch', { method: 'POST', body: { plantel } })
-    if (response?.redirectTo && response.redirectTo !== route.path && route.path !== '/control-escolar' && route.path !== '/avance-control-escolar' && route.path !== '/auditoria-control-escolar' && route.path !== '/reporte-talleres') {
+    if (response?.redirectTo && response.redirectTo !== route.path && route.path !== '/control-escolar' && route.path !== '/avance-control-escolar' && route.path !== '/auditoria-control-escolar' && route.path !== '/reporte-talleres' && route.path !== '/buscador') {
       window.location.href = response.redirectTo
       return
     }

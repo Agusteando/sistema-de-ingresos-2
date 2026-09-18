@@ -68,7 +68,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const isHuskyPassNeutralPath = to.path === '/husky-pass'
   const isPublicPath = to.path === '/login' || isHuskyPassNeutralPath || to.path.startsWith('/print')
   const isControlEscolarPath = ['/control-escolar', '/avance-control-escolar', '/auditoria-control-escolar'].includes(to.path)
-  const isSharedAuthenticatedPath = to.path === '/reporte-talleres'
+  const isSharedAuthenticatedPath = ['/reporte-talleres', '/buscador'].includes(to.path)
   const isExpiredLogin = to.path === '/login' && loginExpiredQuery(to.query?.session)
   const isLocalHandoffLogin = to.path === '/login' && String(Array.isArray(to.query?.handoff) ? to.query.handoff[0] : to.query?.handoff || '').toLowerCase() === 'local'
 

@@ -65,3 +65,14 @@ For changes to `/conceptos`, also verify `/__visual-lab/conceptos?chrome=0` at d
 - If the cache key format changes, update the visual lab seeding logic in `pages/__visual-lab/students-account.vue`.
 - If auth middleware changes, preserve the dev-only bypass for `/__visual-lab/*`.
 - Keep `visualLabDebts` scoped to the visual lab. It is a deterministic layout/testing seam, not a production data path.
+
+
+## Buscador familiar
+
+Ruta determinista para revisar búsqueda por familia, ficha de alumno y personas autorizadas sin depender de datos reales:
+
+```text
+http://localhost:3000/__visual-lab/buscador
+```
+
+Valida al menos los mismos viewports compactos anteriores y confirma que resultados, ficha, datos familiares y fotos de personas autorizadas no generan scroll horizontal.

@@ -25,5 +25,13 @@ jobs:
         run: node scripts/verify-dx-api-lab.mjs
       - name: Verify academic source
         run: npm run verify:academic-source
+      - name: Verify Buscador contract
+        run: node scripts/verify-buscador-contract.mjs
       - name: Build
         run: npm run build
+      - name: Verify Buscador rendered fixture
+        run: node scripts/verify-buscador-render.mjs
+      - name: Verify live parent-name source
+        env:
+          AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+        run: node scripts/probe-buscador-live.mjs

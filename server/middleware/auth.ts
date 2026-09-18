@@ -59,6 +59,7 @@ export default defineEventHandler(async (event) => {
   const isPlantelDashboardEndpoint = url.pathname === '/api/dashboard/plantel-collections'
   const isSystemEndpoint = url.pathname.startsWith('/api/system/')
   const isControlEscolarEndpoint = url.pathname.startsWith('/api/control-escolar/')
+  const isBuscadorEndpoint = url.pathname === '/api/buscador' || url.pathname.startsWith('/api/buscador/')
   const isDirectoryEndpoint = url.pathname.startsWith('/api/directory/')
   const isExternalUsersEndpoint = url.pathname === '/api/users' || url.pathname.startsWith('/api/users/')
   const isProfileEndpoint = url.pathname === '/api/admin/profile'
@@ -114,6 +115,7 @@ export default defineEventHandler(async (event) => {
 
   if (
     !user.hasFinancialAccess &&
+    !isBuscadorEndpoint &&
     !isControlEscolarAcademicMutation &&
     !(isStudentWhatsappEndpoint && user.hasControlEscolarRole) &&
     !(isStudentEmailEndpoint && user.hasControlEscolarRole)
@@ -137,7 +139,7 @@ export default defineEventHandler(async (event) => {
     event.context.dbBridgeAgentId = bridgeAgentId
     event.context.auroraStage = 'bridge_context'
     enterBridgeAgentId(bridgeAgentId)
-  } else if (getDbTransport() === 'bridge' && !isStudentWhatsappEndpoint && !isStudentEmailEndpoint) {
+  } else if (getDbTransport() === 'bridge' && !isBuscadorEndpoint && !isStudentWhatsappEndpoint && !isStudentEmailEndpoint) {
     if (isNoAdeudoEndpoint) {
       return noAdeudoMiddlewareDiagnostic(event, {
         title: 'No se detectó plantel/agente de datos para preparar la carta.',
