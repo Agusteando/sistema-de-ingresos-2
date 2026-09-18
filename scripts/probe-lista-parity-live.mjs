@@ -180,14 +180,16 @@ for (const plantel of PLANTELES) {
     // row-level plantel/basePlantel is retained only as source metadata.
     const listaSource = await readAll(plantel, cycleKey, { fresh: false })
     const transformed = applyListaTransform(listaSource.rows, plantel)
-    const attendanceCurrent = applyAttendanceReportCurrentTransform(listaSource.rows, plantel)
+    // Asistencia Report after the fix follows the same canonical membership
+    // contract as Lista: endpoint scope owns plantel+ciclo+status membership.
+    const attendanceFixed = applyListaTransform(listaSource.rows, plantel)
 
     const expectedBuckets = countBuckets(canonical.rows)
     const listaBuckets = countBuckets(transformed.students)
-    const reportBuckets = countBuckets(attendanceCurrent.students)
+    const reportBuckets = countBuckets(attendanceFixed.students)
     const expectedGrades = countGrades(canonical.rows)
     const listaGrades = countGrades(transformed.students)
-    const reportGrades = countGrades(attendanceCurrent.students)
+    const reportGrades = countGrades(attendanceFixed.students)
     const listaBucketDiffs = diffMaps(expectedBuckets, listaBuckets)
     const listaGradeDiffs = diffMaps(expectedGrades, listaGrades)
     const reportBucketDiffs = diffMaps(expectedBuckets, reportBuckets)
@@ -196,8 +198,7 @@ for (const plantel of PLANTELES) {
       plantel,
       auroraTotal: canonical.rows.length,
       listaTotal: transformed.students.length,
-      attendanceReportCurrentTotal: attendanceCurrent.students.length,
-      reportRejections: attendanceCurrent.rejections,
+      attendanceReportFixedTotal: attendanceFixed.students.length,
       listaGradeDiffs,
       listaBucketDiffs,
       reportGradeDiffs,
@@ -208,7 +209,7 @@ for (const plantel of PLANTELES) {
       console.error(`Lista parity unexpectedly failed for ${plantel}`)
       failed = true
     }
-    if (canonical.rows.length !== attendanceCurrent.students.length || reportGradeDiffs.length || reportBucketDiffs.length) failed = true
+    if (canonical.rows.length !== attendanceFixed.students.length || reportGradeDiffs.length || reportBucketDiffs.length) failed = true
   } catch (error) {
     failed = true
     console.error(`FAIL ${plantel}: ${error?.message || error}`)
@@ -216,4 +217,4 @@ for (const plantel of PLANTELES) {
 }
 
 if (failed) process.exit(2)
-console.log('ATTENDANCE_REPORT_CURRENT_PARITY_OK')
+console.log('ATTENDANCE_REPORT_FIXED_PARITY_OK')
