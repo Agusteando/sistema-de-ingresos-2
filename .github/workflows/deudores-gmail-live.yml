@@ -1,4 +1,4 @@
-name: Deudores Gmail live smoke
+name: Deudores Gmail production proof
 
 on:
   pull_request:
@@ -6,50 +6,37 @@ on:
     paths:
       - 'server/utils/mailer.ts'
       - 'server/api/deudores/**'
+      - 'server/api/external/v1/deudores/**'
       - 'nuxt.config.ts'
       - 'scripts/test-deudores-gmail.mjs'
+      - 'scripts/probe-deudores-production-mail.mjs'
+      - '.github/workflows/deudores-gmail-live.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server/utils/mailer.ts'
+      - 'server/api/deudores/**'
+      - 'server/api/external/v1/deudores/**'
+      - 'nuxt.config.ts'
+      - 'scripts/test-deudores-gmail.mjs'
+      - 'scripts/probe-deudores-production-mail.mjs'
       - '.github/workflows/deudores-gmail-live.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: deudores-gmail-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  live-gmail:
+  build-and-production-auth:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      GOOGLE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
-      GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL }}
-      GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
-      GOOGLE_CLOUD_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GOOGLE_CLOUD_SERVICE_ACCOUNT_EMAIL }}
-      GCP_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
-      GCP_CLIENT_EMAIL: ${{ secrets.GCP_CLIENT_EMAIL }}
-      GCLOUD_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_EMAIL }}
-      GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
-      GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY }}
-      GOOGLE_CLOUD_PRIVATE_KEY: ${{ secrets.GOOGLE_CLOUD_PRIVATE_KEY }}
-      GCP_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_PRIVATE_KEY }}
-      GCP_PRIVATE_KEY: ${{ secrets.GCP_PRIVATE_KEY }}
-      GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_BASE64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_BASE64 }}
-      GOOGLE_PRIVATE_KEY_BASE64: ${{ secrets.GOOGLE_PRIVATE_KEY_BASE64 }}
-      GCP_SERVICE_ACCOUNT_PRIVATE_KEY_BASE64: ${{ secrets.GCP_SERVICE_ACCOUNT_PRIVATE_KEY_BASE64 }}
-      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-      GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 }}
-      GOOGLE_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS }}
-      GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
-      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-      GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-      GOOGLE_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_CREDENTIALS_BASE64 }}
-      GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
-      GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
-      GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
-      GCP_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCP_SERVICE_ACCOUNT_CREDENTIALS }}
-      GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
-      GOOGLE_ADMIN_EMAIL: ${{ secrets.GOOGLE_ADMIN_EMAIL }}
-      GCP_ADMIN_SUBJECT: ${{ secrets.GCP_ADMIN_SUBJECT }}
-      AURORA_MAIL_TEST_TO: desarrollo.tecnologico@casitaiedis.edu.mx
-      AURORA_MAIL_TEST_SENDER: desarrollo.tecnologico@casitaiedis.edu.mx
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN || secrets.HUSKY_PASS_AURORA_API_TOKEN || secrets.EXTERNAL_CONTROL_ESCOLAR_API_TOKEN }}
+      AURORA_BASE_URL: https://aurora.casitaiedis.edu.mx
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -60,5 +47,25 @@ jobs:
         run: npm ci
       - name: Build production bundle
         run: npm run build
-      - name: Send real /deudores Gmail smoke
-        run: node --experimental-strip-types scripts/test-deudores-gmail.mjs
+      - name: Verify /deudores mail contract
+        run: node --experimental-strip-types scripts/test-deudores-gmail.mjs --contract
+      - name: Verify Actions can authenticate to Aurora production
+        run: node scripts/probe-deudores-production-mail.mjs auth
+
+  production-gmail:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    needs: build-and-production-auth
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN || secrets.HUSKY_PASS_AURORA_API_TOKEN || secrets.EXTERNAL_CONTROL_ESCOLAR_API_TOKEN }}
+      AURORA_BASE_URL: https://aurora.casitaiedis.edu.mx
+      AURORA_MAIL_PROBE_ATTEMPTS: '30'
+      AURORA_MAIL_PROBE_DELAY_MS: '10000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Send real email through deployed Aurora runtime
+        run: node scripts/probe-deudores-production-mail.mjs mail
