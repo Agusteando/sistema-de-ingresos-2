@@ -2,13 +2,12 @@ import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import {
   canonicalTallerKey,
   finalTallerSeed,
-  isFinalTaller,
   parseServiciosCsv,
 } from '../../shared/utils/talleresServicios'
 import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
 import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
+import { readAuthoritativeTalleresCatalog } from './talleres-catalog-authority'
 import {
-  readBestTalleresServiciosCatalog,
   readConceptMappedServiciosForMatriculas,
 } from './talleres-servicios'
 
@@ -91,20 +90,24 @@ export const readTalleresAdminSummary = async ({
     const matriculas = students.map((student: any) => matriculaKey(student?.matricula)).filter(Boolean)
 
     const [catalogResult, financialAssignments] = await Promise.all([
-      readBestTalleresServiciosCatalog(),
+      readAuthoritativeTalleresCatalog(),
       readConceptMappedServiciosForMatriculas({ matriculas, ciclo: cycle, plantel: publicPlantel }),
     ])
 
+    // /conceptos uses this same active central catalog as its source of truth.
+    // Report every active catalog entry that has direct or financial evidence;
+    // do not narrow the report to the historical FINAL_TALLERES allowlist.
     const catalog = new Map<string, any>()
     for (const item of catalogResult.catalog || []) {
       const key = canonicalTallerKey(item?.servicio_clave || item?.servicio_nombre)
-      if (!key || !isFinalTaller(key) || Number(item?.activo ?? 1) === 0) continue
+      if (!key || Number(item?.activo ?? 1) === 0) continue
       catalog.set(key, item)
     }
 
     const counts = new Map<string, Set<string>>()
-    const ensureCount = (key: string, matricula: string) => {
-      if (!key || !matricula || !isFinalTaller(key)) return
+    const ensureCount = (value: unknown, matricula: string) => {
+      const key = canonicalTallerKey(value)
+      if (!key || !matricula || !catalog.has(key)) return
       const members = counts.get(key) || new Set<string>()
       members.add(matricula)
       counts.set(key, members)
@@ -115,11 +118,11 @@ export const readTalleresAdminSummary = async ({
       if (!matricula) continue
 
       for (const direct of parseServiciosCsv(student?.servicio)) {
-        ensureCount(canonicalTallerKey(direct), matricula)
+        ensureCount(direct, matricula)
       }
 
       for (const assignment of financialAssignments.result.get(matricula) || []) {
-        ensureCount(canonicalTallerKey(assignment?.clave || assignment?.nombre), matricula)
+        ensureCount(assignment?.clave || assignment?.nombre, matricula)
       }
     }
 
