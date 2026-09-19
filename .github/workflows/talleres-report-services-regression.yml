@@ -1,0 +1,49 @@
+name: Talleres report services regression
+
+on:
+  push:
+    branches:
+      - main
+      - 'chatgpt/talleres-report-services-**'
+    paths:
+      - 'server/utils/talleres-admin-summary.ts'
+      - 'server/utils/talleres-catalog-authority.ts'
+      - 'server/api/talleres-servicios/reporte.get.ts'
+      - 'server/api/talleres-servicios/reporte-institucional-excel.get.ts'
+      - 'server/utils/talleres-report.ts'
+      - 'shared/utils/talleresServicios.ts'
+      - 'tests/talleres-report-services.test.mjs'
+      - '.github/workflows/talleres-report-services-regression.yml'
+  pull_request:
+    paths:
+      - 'server/utils/talleres-admin-summary.ts'
+      - 'server/utils/talleres-catalog-authority.ts'
+      - 'server/api/talleres-servicios/reporte.get.ts'
+      - 'server/api/talleres-servicios/reporte-institucional-excel.get.ts'
+      - 'server/utils/talleres-report.ts'
+      - 'shared/utils/talleresServicios.ts'
+      - 'tests/talleres-report-services.test.mjs'
+      - '.github/workflows/talleres-report-services-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  talleres-report-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify workshops and services parity
+        run: node --experimental-vm-modules --test tests/talleres-report-services.test.mjs
+      - name: Verify academic source
+        run: npm run verify:academic-source
+      - name: Build
+        run: npm run build
