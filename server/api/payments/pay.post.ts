@@ -9,11 +9,7 @@ import { PLANTELES_LIST } from '../../../utils/constants'
 import { finalizeStockReservation, releaseStockReservation, reserveStockForPayment, type StockReservation } from '../../utils/conceptos-stock'
 import { isPlaceholderConceptName, resolveFinancialConcept } from '../../utils/financial-concept'
 import { loadActiveCobranzaConvention } from '../../utils/cobranza-convenio'
-import {
-  resolveLateFeeTiming,
-  shouldApplyLateFee,
-} from '../../utils/cobranza-period'
-import { calculateLateFeeSubtotal } from '../../../shared/utils/recargo'
+import { resolveLateFeeBalance } from '../../../shared/utils/recargo'
 import { loadRecargoPolicies, markRecargoConceptAsService, type RecargoPolicy } from '../../utils/recargo-config'
 import { paymentTargetKey } from '../../../shared/utils/paymentTarget'
 import {
@@ -269,7 +265,15 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     const hasRecargoManual = pagosDelMes.some(row => String(row.recargo) === '1')
     const hasPayment = pagosDelMes.some(row => Number(row.monto || 0) > 0)
     const omitLateFeeNow = omitLateFeeRequested && !hasRecargoManual
-    const recargoTiming = resolveLateFeeTiming({
+    const lateFee = resolveLateFeeBalance({
+      baseAmount: finalAmount,
+      paidAmount: resuelto,
+      enabled: Boolean(recargoPolicy?.activo),
+      force: applyLateFeeNow,
+      suppress: omitLateFeeNow,
+      hasManualLateFee: hasRecargoManual,
+      hasPayment,
+      hasActiveConvention: Boolean(activeConvention),
       ciclo: cicloKey,
       schoolMonth: mesNumber,
       currentDateValue: effectiveDateKey,
@@ -277,21 +281,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       // Only one-off/eventual documents use the calendar-month service rule.
       // Recurring charges must wait until after day 12 of their own school month.
       isService: Boolean(recargoPolicy?.esServicio) && String(doc.eventual) === '1',
+      percentage: recargoPolicy?.porcentaje ?? 10,
     })
-    const appliesLateFee = !omitLateFeeNow && shouldApplyLateFee({
-      enabled: Boolean(recargoPolicy?.activo),
-      force: applyLateFeeNow,
-      hasManualLateFee: hasRecargoManual,
-      hasPayment,
-      hasActiveConvention: Boolean(activeConvention),
-      isAfterDeadline: recargoTiming.isAfterDeadline,
-      balanceBeforeLateFee: saldoAntes
-    })
-
-    if (appliesLateFee) {
-      subtotal = calculateLateFeeSubtotal(finalAmount, recargoPolicy?.porcentaje ?? 10)
-      saldoAntes = Math.max(0, subtotal - resuelto)
-    }
+    const appliesLateFee = lateFee.appliesLateFee
+    subtotal = lateFee.subtotal
+    saldoAntes = lateFee.balance
 
     // For the default/full-balance path, the server owns the final amount.
     // This prevents a stale client projection from registering the pre-recargo

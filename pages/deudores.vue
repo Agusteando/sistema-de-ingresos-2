@@ -250,6 +250,7 @@
               <div class="amount-cell">
                 <strong>{{ formatMoney(saldoValue(d)) }}</strong>
                 <span>{{ d.desglose?.length || 0 }} conceptos</span>
+                <em v-if="Number(d.totalRecargos || 0) > 0">Incluye {{ formatMoney(d.totalRecargos) }} de recargos</em>
               </div>
 
               <div class="contact-cell">
@@ -501,7 +502,10 @@
             <h4>Desglose</h4>
             <div v-if="detailsTarget.desglose?.length" class="drawer-list">
               <div v-for="item in detailsTarget.desglose" :key="`${item.documento}-${item.mesCargo}`">
-                <span>{{ item.conceptoNombre }} - {{ item.mesLabel || item.mesCargo }}</span>
+                <span>
+                  {{ item.conceptoNombre }} - {{ item.mesLabel || item.mesCargo }}
+                  <small v-if="Number(item.recargoMonto || 0) > 0">Recargo {{ Number(item.recargoPorcentaje || 10) }}% · +{{ formatMoney(item.recargoMonto) }}</small>
+                </span>
                 <strong>{{ formatMoney(item.saldo) }}</strong>
               </div>
             </div>
@@ -1238,6 +1242,7 @@ const exportColumns = [
   { key: 'Correo', label: 'Correo', type: 'text' },
   { key: 'Telefono', label: 'Telefono', type: 'text' },
   { key: 'Saldo_Total_MXN', label: 'Saldo total MXN', type: 'currency' },
+  { key: 'Recargos_Total_MXN', label: 'Recargos incluidos MXN', type: 'currency' },
   { key: 'Fecha_Limite', label: 'Fecha limite', type: 'date' },
   { key: 'Fecha_Especial', label: 'Fecha especial vigente', type: 'text' },
   { key: 'Pago_Por_Conciliar', label: 'Pago por conciliar', type: 'text' },
@@ -1246,6 +1251,7 @@ const exportColumns = [
   { key: 'Concepto', label: 'Concepto', type: 'text' },
   { key: 'Periodo', label: 'Periodo', type: 'text' },
   { key: 'Saldo_Concepto_MXN', label: 'Saldo concepto MXN', type: 'currency' },
+  { key: 'Recargo_Concepto_MXN', label: 'Recargo concepto MXN', type: 'currency' },
   { key: 'Total_Pagado_MXN', label: 'Total pagado MXN', type: 'currency' },
   { key: 'Nota', label: 'Nota', type: 'text' }
 ]
@@ -1297,6 +1303,7 @@ const buildExportRows = (rows) => rows.flatMap((d) => {
     Correo: d.correo || 'Sin correo',
     Telefono: d.telefono || 'Sin telefono',
     Saldo_Total_MXN: saldoValue(d).toFixed(2),
+    Recargos_Total_MXN: Number(d.totalRecargos || 0).toFixed(2),
     Fecha_Limite: d.fechaLimitePago || '',
     Fecha_Especial: d.fechaLimiteEspecialVigente ? 'Si' : 'No',
     Pago_Por_Conciliar: d.pagoPendienteConciliacion ? 'Si' : 'No',
@@ -1306,13 +1313,14 @@ const buildExportRows = (rows) => rows.flatMap((d) => {
     Nota: d.notaFechaLimiteEspecial || ''
   }
 
-  if (!d.desglose?.length) return [{ ...base, Concepto: '', Periodo: '', Saldo_Concepto_MXN: '' }]
+  if (!d.desglose?.length) return [{ ...base, Concepto: '', Periodo: '', Saldo_Concepto_MXN: '', Recargo_Concepto_MXN: '' }]
 
   return d.desglose.map(item => ({
     ...base,
     Concepto: item.conceptoNombre || '',
     Periodo: item.mesLabel || item.mesCargo || '',
-    Saldo_Concepto_MXN: Number(item.saldo || 0).toFixed(2)
+    Saldo_Concepto_MXN: Number(item.saldo || 0).toFixed(2),
+    Recargo_Concepto_MXN: Number(item.recargoMonto || 0).toFixed(2)
   }))
 })
 
@@ -2175,6 +2183,14 @@ input[type="checkbox"] {
   gap: 3px;
 }
 
+.amount-cell em {
+  color: #9a6700;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
 .amount-cell strong {
   color: var(--debt-coral);
   font-size: 1rem;
@@ -2640,6 +2656,14 @@ input[type="checkbox"] {
   color: var(--debt-muted);
   font-size: 0.78rem;
   font-weight: 650;
+}
+
+.drawer-list span small {
+  display: block;
+  margin-top: 4px;
+  color: #9a6700;
+  font-size: 0.68rem;
+  font-weight: 850;
 }
 
 .drawer-list strong {

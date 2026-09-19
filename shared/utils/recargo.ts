@@ -160,3 +160,67 @@ export const resolveLateFeeTiming = ({
     mode: 'school-period',
   }
 }
+
+
+export type LateFeeBalanceInput = {
+  baseAmount: unknown
+  paidAmount?: unknown
+  enabled: boolean
+  force?: boolean
+  suppress?: boolean
+  hasManualLateFee: boolean
+  hasPayment: boolean
+  hasActiveConvention: boolean
+  ciclo: string
+  schoolMonth: number
+  currentDateValue: unknown
+  cutoffDay?: unknown
+  isService?: boolean
+  percentage?: unknown
+}
+
+export const resolveLateFeeBalance = ({
+  baseAmount,
+  paidAmount = 0,
+  enabled,
+  force = false,
+  suppress = false,
+  hasManualLateFee,
+  hasPayment,
+  hasActiveConvention,
+  ciclo,
+  schoolMonth,
+  currentDateValue,
+  cutoffDay = 12,
+  isService = false,
+  percentage = 10,
+}: LateFeeBalanceInput) => {
+  const base = Math.max(0, Number(baseAmount || 0))
+  const paid = Math.max(0, Number(paidAmount || 0))
+  const balanceBeforeLateFee = Math.max(0, base - paid)
+  const timing = resolveLateFeeTiming({
+    ciclo,
+    schoolMonth,
+    currentDateValue,
+    cutoffDay,
+    isService,
+  })
+  const appliesLateFee = !suppress && shouldApplyLateFee({
+    enabled,
+    force,
+    hasManualLateFee,
+    hasPayment,
+    hasActiveConvention,
+    isAfterDeadline: timing.isAfterDeadline,
+    balanceBeforeLateFee,
+  })
+  const subtotal = appliesLateFee ? calculateLateFeeSubtotal(base, percentage) : base
+  return {
+    appliesLateFee,
+    subtotal,
+    lateFeeAmount: Math.max(0, subtotal - base),
+    balanceBeforeLateFee,
+    balance: Math.max(0, subtotal - paid),
+    timing,
+  }
+}
