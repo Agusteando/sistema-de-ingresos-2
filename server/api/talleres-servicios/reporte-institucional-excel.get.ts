@@ -3,6 +3,7 @@ import { buildTalleresInstitutionalXlsxV2 } from '../../utils/talleres-instituti
 import { loadTalleresReport, normalizeTalleresReportPlantel } from '../../utils/talleres-report'
 
 const PLANTEL_NAMES: Record<string, string> = {
+  PREEM: 'Preescolar Metepec',
   CT: 'Casita Toluca',
   CM: 'Casita Metepec',
   DM: 'Desarrollo Metepec',
