@@ -8,6 +8,7 @@ import {
   normalizeServicioClave,
   normalizeServicioNombre,
   parseServiciosCsv,
+  shouldIncludeDirectTallerAssignment,
 } from '../../shared/utils/talleresServicios'
 import { runWithBridgeAgentId } from './db'
 import { controlEscolarCentralQuery, getCentralTableColumns, withControlEscolarCentralConnection } from './control-escolar-central'
@@ -183,8 +184,12 @@ const mergeServices = (
   directValues: unknown[],
   financial: ConceptMappedServicioAssignment[],
   resolve: ReturnType<typeof assignmentResolver>,
+  history: Record<string, any> = {},
 ) => {
   const merged = new Map<string, any>()
+  const financialKeys = new Set((financial || [])
+    .map((assignment) => canonicalTallerKey(assignment?.clave || assignment?.nombre))
+    .filter(Boolean))
   const ensure = (value: unknown) => {
     const item = resolve(value)
     if (!item.clave || !item.nombre || !item.activo) return null
@@ -198,6 +203,7 @@ const mergeServices = (
   }
   for (const direct of directValues) {
     for (const name of parseServiciosCsv(direct)) {
+      if (!shouldIncludeDirectTallerAssignment({ value: name, financialKeys, history })) continue
       const item = ensure(name)
       if (item && !item.fuentes.includes('matricula')) item.fuentes.push('matricula')
     }
@@ -362,9 +368,9 @@ const buildFreshStudents = async (plantel: string, ciclo: string, loads: SourceL
 
   const result: any[] = []
   for (const [matricula, entry] of aggregate) {
-    const services = mergeServices(entry.direct, entry.financial, resolve)
     const contract = contracts.result.get(matricula)
     const joined = assignmentSummaries.result.get(matricula) || {}
+    const services = mergeServices(entry.direct, entry.financial, resolve, joined)
     const tallerDias: Record<string, string[]> = {}
     const talleres = services.map((service) => {
       const dias = labels.result.get(`${matricula}::${service.clave}`) || []

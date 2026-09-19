@@ -35,6 +35,8 @@ El roster y la búsqueda incluyen `assignmentResolution.policy = "union"`. Si Au
 
 ## Altas, bajas y cambios
 
-Quitar un nombre de `matricula.servicio(s)` sólo elimina la fuente directa. Si queda un cargo financiero activo y mapeado, la asignación continúa vigente en la API. Para retirarla por completo se debe cancelar/corregir el cargo o cambiar/eliminar su asociación financiera, según corresponda.
+Quitar un nombre de `matricula.servicio(s)` sólo elimina la fuente directa. Si queda un cargo financiero activo y mapeado, la asignación continúa vigente en la API.
 
-Los documentos con `estatus` distinto de `Activo` no cuentan. Cuando existen ajustes por periodo, se toma el ajuste activo más reciente; una cancelación activa más reciente impide que ese documento cuente como asignación actual.
+Cuando un cargo financiero cambia de concepto o se cancela, Aurora registra el cambio de pertenencia y fuerza la regeneración de `talleres-roster-v2`. El write-through histórico en `matricula.servicio(s)` no puede conservar por sí solo un taller que fue administrado por un concepto financiero si ya no existe evidencia financiera vigente. Las asignaciones directas/manuales sin esa procedencia se conservan.
+
+Los documentos con `estatus` distinto de `Activo` no cuentan. Cuando existen ajustes por periodo, se toma el ajuste activo más reciente; una cancelación activa más reciente impide que ese documento cuente como asignación actual. Si otro documento activo todavía respalda el mismo taller, la pertenencia permanece.

@@ -18,12 +18,6 @@ const errorMessage = (error: any) => String(
   || 'No fue posible consultar este plantel.'
 ).trim()
 
-const isActiveStudent = (student: any) => {
-  if (Number(student?.baja || 0) === 1) return false
-  const status = clean(student?.status, 40).toLowerCase()
-  return !['baja', 'withdrawn', 'inactive', 'inactivo'].includes(status)
-}
-
 const assignmentsFor = (student: any) => {
   if (Array.isArray(student?.asignaciones) && student.asignaciones.length) return student.asignaciones
   if (Array.isArray(student?.talleres) && student.talleres.length) return student.talleres
@@ -46,6 +40,7 @@ const toReportStudent = (student: any) => ({
   ),
   grado: clean(student?.grado, 80),
   grupo: clean(student?.grupo || student?.group, 40).toUpperCase(),
+  ...(student?.baja || clean(student?.status, 40).toLowerCase() === 'withdrawn' ? { baja: true } : {}),
 })
 
 const compareStudents = (left: any, right: any) => (
@@ -80,7 +75,6 @@ const summarizeRoster = (roster: any, plantel: string, includeStudents: boolean)
 
   const membersByService = new Map<string, Map<string, any>>()
   for (const student of Array.isArray(roster?.students) ? roster.students : []) {
-    if (!isActiveStudent(student)) continue
     const matricula = matriculaKey(student?.matricula)
     if (!matricula) continue
 

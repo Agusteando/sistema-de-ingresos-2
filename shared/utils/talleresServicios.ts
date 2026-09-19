@@ -104,6 +104,38 @@ export const canonicalTallerKey = (value: unknown) => {
   return LEGACY_TALLER_ALIASES[key] || key
 }
 
+export type TallerAssignmentHistoryState = {
+  lastAction?: unknown
+  lastSource?: unknown
+} | null | undefined
+
+export const shouldIncludeDirectTallerAssignment = ({
+  value,
+  financialKeys = [],
+  history = {},
+}: {
+  value: unknown
+  financialKeys?: Iterable<string>
+  history?: Record<string, TallerAssignmentHistoryState>
+}) => {
+  const key = canonicalTallerKey(value)
+  if (!key) return false
+
+  const financial = financialKeys instanceof Set
+    ? financialKeys
+    : new Set(Array.from(financialKeys || []).map((item) => canonicalTallerKey(item)).filter(Boolean))
+
+  if (financial.has(key)) return true
+
+  const state = history?.[key]
+  const lastAction = String(state?.lastAction || '').trim().toLowerCase()
+  const lastSource = String(state?.lastSource || '').trim().toLowerCase()
+
+  if (lastAction === 'removed') return false
+  if (lastSource.startsWith('financial_concept')) return false
+  return true
+}
+
 export const finalTallerSeed = (value: unknown) => {
   const key = canonicalTallerKey(value)
   return FINAL_TALLERES.find((item) => item.clave === key) || null

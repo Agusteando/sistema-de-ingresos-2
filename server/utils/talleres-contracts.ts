@@ -104,14 +104,14 @@ export const recordTalleresAssignmentChange = async ({ matricula, plantel, works
 
 export const readTalleresAssignmentSummaries = async (matriculas: unknown[]) => {
   const schema = await readSchema()
-  const result = new Map<string, Record<string, { workshopName: string, joinedAt: string | null, removedAt: string | null, lastAction: string, lastChangedAt: string | null, actorEmail: string | null }>>()
+  const result = new Map<string, Record<string, { workshopName: string, joinedAt: string | null, removedAt: string | null, lastAction: string, lastChangedAt: string | null, actorEmail: string | null, lastSource: string | null }>>()
   if (!schema.history) return { ready: false, result }
   const unique = Array.from(new Set(matriculas.map(cleanMatricula).filter(Boolean)))
   if (!unique.length) return { ready: true, result }
   for (let offset = 0; offset < unique.length; offset += 250) {
     const chunk = unique.slice(offset, offset + 250)
     const rows = await controlEscolarCentralQuery<any[]>(
-      `SELECT matricula, workshop_key, workshop_name, action, effective_at, actor_email
+      `SELECT matricula, workshop_key, workshop_name, action, effective_at, actor_email, metadata_json
          FROM ${HISTORY_TABLE}
         WHERE matricula IN (${chunk.map(() => '?').join(',')})
           AND action IN ('assigned','removed')
@@ -122,7 +122,7 @@ export const readTalleresAssignmentSummaries = async (matriculas: unknown[]) => 
       const key = clean(row.workshop_key, 120).toUpperCase()
       if (!matricula || !key) continue
       const byWorkshop = result.get(matricula) || {}
-      const current = byWorkshop[key] || { workshopName: clean(row.workshop_name, 180) || key.replace(/_/g, ' '), joinedAt: null, removedAt: null, lastAction: '', lastChangedAt: null, actorEmail: null }
+      const current = byWorkshop[key] || { workshopName: clean(row.workshop_name, 180) || key.replace(/_/g, ' '), joinedAt: null, removedAt: null, lastAction: '', lastChangedAt: null, actorEmail: null, lastSource: null }
       const at = row.effective_at ? new Date(row.effective_at).toISOString() : null
       if (row.action === 'assigned') {
         current.joinedAt = at || current.joinedAt
@@ -134,6 +134,11 @@ export const readTalleresAssignmentSummaries = async (matriculas: unknown[]) => 
       current.lastAction = String(row.action || '')
       current.lastChangedAt = at
       current.actorEmail = clean(row.actor_email, 255) || null
+      let metadata: any = row?.metadata_json
+      if (typeof metadata === 'string') {
+        try { metadata = JSON.parse(metadata) } catch { metadata = null }
+      }
+      current.lastSource = clean(metadata?.source, 120) || null
       byWorkshop[key] = current
       result.set(matricula, byWorkshop)
     }

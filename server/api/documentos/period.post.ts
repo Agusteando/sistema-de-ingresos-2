@@ -9,7 +9,11 @@ import { isWholeMoney } from "../../utils/monto-final";
 import { assertDocumentoPeriodoLifecycleSchema } from "../../utils/documento-periods";
 import { assertStockAvailableForConcept } from '../../utils/conceptos-stock';
 import { resolveFinancialConcept } from '../../utils/financial-concept';
-import { appendConceptMappedServicioToMatricula } from '../../utils/talleres-servicios';
+import {
+  syncCancelledConceptMappedServicioOnMatricula,
+  syncChangedConceptMappedServicioToMatricula,
+} from '../../utils/talleres-servicios';
+import { refreshTalleresSnapshotPlantel } from '../../utils/talleres-snapshot';
 
 const toMesNumber = (value: unknown) => {
   const raw = String(value || "")
@@ -61,6 +65,45 @@ const hasPaymentsFrom = async (documento: number, fromMes?: number) => {
   );
 
   return Boolean(payment);
+};
+
+const effectiveConceptIdAt = async (
+  documento: number,
+  month: number,
+  fallbackConceptoId: unknown,
+) => {
+  const [period] = await query<any[]>(
+    `
+      SELECT concepto_id, accion
+      FROM documento_concepto_periodos
+      WHERE documento = ?
+        AND estatus = 'Activo'
+        AND start_mes <= ?
+        AND (end_mes IS NULL OR end_mes >= ?)
+      ORDER BY start_mes DESC, id DESC
+      LIMIT 1
+    `,
+    [documento, month, month],
+  );
+
+  if (String(period?.accion || '').toLowerCase() === 'cambio' && Number(period?.concepto_id || 0)) {
+    return Number(period.concepto_id);
+  }
+  return Number(fallbackConceptoId || 0);
+};
+
+const refreshTalleresAfterFinancialWrite = async (plantel: unknown, ciclo: string, shouldRefresh = true) => {
+  if (!shouldRefresh) return { success: true, skipped: true, reason: 'not_talleres_servicios' }
+  try {
+    return await refreshTalleresSnapshotPlantel({ plantel, ciclo, force: true });
+  } catch (error: any) {
+    console.warn('[Documentos] Cambio financiero aplicado; no se pudo refrescar Talleres inmediatamente.', {
+      plantel,
+      ciclo,
+      message: error?.message || error,
+    });
+    return { success: false, message: error?.message || 'snapshot_refresh_failed' };
+  }
 };
 
 const periodBoundaryStatements = (
@@ -150,6 +193,8 @@ export default defineEventHandler(async (event) =>
         });
       }
 
+      const previousConceptoId = await effectiveConceptIdAt(documento, maxMes, doc.concepto);
+
       await executeStatementTransaction([
         {
           sql: `UPDATE documentos SET estatus = 'Cancelado' WHERE documento = ?`,
@@ -161,7 +206,31 @@ export default defineEventHandler(async (event) =>
         },
       ]);
 
-      return { success: true, action };
+      let servicioSync: any = { ok: true, mapped: false, changed: false, previousServicio: null };
+      try {
+        servicioSync = await syncCancelledConceptMappedServicioOnMatricula({
+          matricula: doc.matricula,
+          previousConceptoId,
+          ciclo: cicloKey,
+          plantel: doc.plantel,
+          userEmail: user?.email || user?.name || 'Sistema',
+        });
+      } catch (error: any) {
+        console.warn('[Documentos] Cargo cancelado; no se pudo reconciliar Talleres.', {
+          documento,
+          matricula: doc.matricula,
+          previousConceptoId,
+          message: error?.message || error,
+        });
+        servicioSync = { ok: false, mapped: false, changed: false, previousServicio: null, message: error?.message || 'servicio_sync_failed' };
+      }
+
+      const snapshotRefresh = await refreshTalleresAfterFinancialWrite(
+        doc.plantel,
+        cicloKey,
+        Boolean(servicioSync?.mapped || servicioSync?.previousServicio || servicioSync?.servicio || servicioSync?.ok === false),
+      );
+      return { success: true, action, servicio: servicioSync, snapshotRefresh };
     }
 
     if (action === "cancel_from") {
@@ -172,6 +241,8 @@ export default defineEventHandler(async (event) =>
             "Seleccione un mes posterior a los pagos vigentes para conservar el historial.",
         });
       }
+
+      const previousConceptoId = await effectiveConceptIdAt(documento, normalizedFromMes, doc.concepto);
 
       await executeStatementTransaction([
         ...periodBoundaryStatements(documento, normalizedFromMes),
@@ -185,7 +256,31 @@ export default defineEventHandler(async (event) =>
         },
       ]);
 
-      return { success: true, action, fromMes: normalizedFromMes };
+      let servicioSync: any = { ok: true, mapped: false, changed: false, previousServicio: null };
+      try {
+        servicioSync = await syncCancelledConceptMappedServicioOnMatricula({
+          matricula: doc.matricula,
+          previousConceptoId,
+          ciclo: cicloKey,
+          plantel: doc.plantel,
+          userEmail: user?.email || user?.name || 'Sistema',
+        });
+      } catch (error: any) {
+        console.warn('[Documentos] Cargo cancelado desde periodo; no se pudo reconciliar Talleres.', {
+          documento,
+          matricula: doc.matricula,
+          previousConceptoId,
+          message: error?.message || error,
+        });
+        servicioSync = { ok: false, mapped: false, changed: false, previousServicio: null, message: error?.message || 'servicio_sync_failed' };
+      }
+
+      const snapshotRefresh = await refreshTalleresAfterFinancialWrite(
+        doc.plantel,
+        cicloKey,
+        Boolean(servicioSync?.mapped || servicioSync?.previousServicio || servicioSync?.servicio || servicioSync?.ok === false),
+      );
+      return { success: true, action, fromMes: normalizedFromMes, servicio: servicioSync, snapshotRefresh };
     }
 
     if (action === "change") {
@@ -204,6 +299,8 @@ export default defineEventHandler(async (event) =>
         conceptoId,
         ciclo: cicloKey,
       });
+
+      const previousConceptoId = await effectiveConceptIdAt(documento, normalizedFromMes, doc.concepto);
 
       await assertStockAvailableForConcept({ conceptoId: concepto.id, plantel: doc.plantel, quantity: 1, operation: 'cambiar a este concepto' });
 
@@ -290,9 +387,10 @@ export default defineEventHandler(async (event) =>
 
       let servicioSync: any = { ok: true, mapped: false, changed: false, servicio: null };
       try {
-        servicioSync = await appendConceptMappedServicioToMatricula({
+        servicioSync = await syncChangedConceptMappedServicioToMatricula({
           matricula: doc.matricula,
-          conceptoId: concepto.id,
+          previousConceptoId,
+          nextConceptoId: concepto.id,
           ciclo: cicloKey,
           plantel: doc.plantel,
           userEmail: user?.email || createdBy,
@@ -307,6 +405,12 @@ export default defineEventHandler(async (event) =>
         servicioSync = { ok: false, mapped: false, changed: false, servicio: null, message: error?.message || 'servicio_sync_failed' };
       }
 
+      const snapshotRefresh = await refreshTalleresAfterFinancialWrite(
+        doc.plantel,
+        cicloKey,
+        Boolean(servicioSync?.mapped || servicioSync?.previousServicio || servicioSync?.servicio || servicioSync?.ok === false),
+      );
+
       return {
         success: true,
         action,
@@ -314,6 +418,7 @@ export default defineEventHandler(async (event) =>
         paymentPolicy,
         diferenciaMonto,
         servicio: servicioSync,
+        snapshotRefresh,
       };
     }
 

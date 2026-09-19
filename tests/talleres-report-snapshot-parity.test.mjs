@@ -22,8 +22,9 @@ const catalog = [
   { clave: 'DESAYUNO', nombre: 'DESAYUNO', imagen: '/desayuno.svg', activo: true, orden: 20 },
   { clave: 'TRANSPORTE_REDONDO_R1', nombre: 'TRANSPORTE REDONDO R1', imagen: '/transporte.svg', activo: true, orden: 30 },
   { clave: 'ROBOTICA', nombre: 'ROBÓTICA', imagen: '/robotica.svg', activo: true, orden: 40 },
-  { clave: 'AJEDREZ', nombre: 'AJEDREZ', imagen: '/ajedrez.svg', activo: true, orden: 50 },
-  { clave: 'INACTIVO', nombre: 'INACTIVO', activo: false, orden: 60 },
+  { clave: 'FUTBOL', nombre: 'FÚTBOL', imagen: '/futbol.svg', activo: true, orden: 50 },
+  { clave: 'AJEDREZ', nombre: 'AJEDREZ', imagen: '/ajedrez.svg', activo: true, orden: 60 },
+  { clave: 'INACTIVO', nombre: 'INACTIVO', activo: false, orden: 70 },
 ]
 
 const rosters = {
@@ -46,6 +47,10 @@ const rosters = {
     {
       matricula: 'P1', fullName: 'Carla Tres', grado: '3', grupo: 'C', status: 'active',
       talleres: [{ clave: 'DESAYUNO', nombre: 'DESAYUNO' }],
+    },
+    {
+      matricula: 'PM1018', fullName: 'Lopez Rosas Emilio Alejandro', grado: '4', grupo: 'A', baja: true, status: 'withdrawn',
+      asignaciones: [{ clave: 'FUTBOL', nombre: 'FÚTBOL', fuentes: ['matricula', 'concepto_financiero'] }],
     },
   ],
   CT: [
@@ -143,12 +148,14 @@ test('report categories and counts are derived only from the Talleres roster v2 
 
   assert.equal(result.source, 'talleres-roster-v2')
   assert.equal(result.sourceViewVersion, 'talleres-roster-v2')
-  assert.deepEqual([...byKey.keys()].sort(), ['AJEDREZ', 'COMIDA', 'DESAYUNO', 'ROBOTICA'].sort())
+  assert.deepEqual([...byKey.keys()].sort(), ['AJEDREZ', 'COMIDA', 'DESAYUNO', 'FUTBOL', 'ROBOTICA', 'TRANSPORTE_REDONDO_R1'].sort())
   assert.equal(byKey.get('ROBOTICA').totalAlumnos, 1, 'duplicate assignment rows must not double count a student')
-  assert.equal(byKey.has('TRANSPORTE_REDONDO_R1'), false, 'withdrawn students are not active report membership')
+  assert.equal(byKey.get('TRANSPORTE_REDONDO_R1').totalAlumnos, 1, 'report must preserve the same withdrawn member that Talleres keeps in the official roster')
+  assert.equal(byKey.get('FUTBOL').totalAlumnos, 1)
+  assert.equal(byKey.get('FUTBOL').planteles[0].plantel, 'PM')
   assert.equal(byKey.has('FUERA_DE_CATALOGO'), false, 'Talleres active catalog remains authoritative')
   assert.equal(byKey.has('INACTIVO'), false)
-  assert.equal(result.totals.asignaciones, 4)
+  assert.equal(result.totals.asignaciones, 6)
 })
 
 test('institutional detail resolves aliases to the same Talleres canonical campus and exports roster students', async () => {
@@ -178,4 +185,27 @@ test('external Talleres API and Aurora report are wired to the same roster imple
   assert.match(reportSource, /readTalleresSnapshotRoster/)
   assert.match(reportSource, /TALLERES_SNAPSHOT_VIEW_VERSION/)
   assert.doesNotMatch(reportSource, /readTalleresAdminSummary/)
+})
+
+
+test('Lopez Rosas Emilio Alejandro remains in FUTBOL exactly as Talleres roster exposes him', async () => {
+  requestedPlanteles.length = 0
+  const module = await harness()
+  const result = await module.loadTalleresReport({
+    event: {},
+    ciclo: '2026-2027',
+    requestedPlantel: 'PM',
+    includeStudents: true,
+  })
+
+  const futbol = result.groups.find(row => row.clave === 'FUTBOL')
+  assert.ok(futbol)
+  const emilio = futbol.planteles[0].students.find(row => row.matricula === 'PM1018')
+  assert.deepEqual(JSON.parse(JSON.stringify(emilio)), {
+    matricula: 'PM1018',
+    nombre: 'Lopez Rosas Emilio Alejandro',
+    grado: '4',
+    grupo: 'A',
+    baja: true,
+  })
 })

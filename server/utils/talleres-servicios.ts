@@ -1,6 +1,6 @@
 import { query, executeStatementTransaction, type SqlStatement } from './db'
 import { controlEscolarCentralQuery, getCentralTableColumns } from './control-escolar-central'
-import { recordTalleresAssignmentChange } from './talleres-contracts'
+import { readTalleresAssignmentSummaries, recordTalleresAssignmentChange } from './talleres-contracts'
 import { normalizeCicloKey, formatCicloLabel } from '../../shared/utils/ciclo'
 import {
   DEFAULT_TALLERES_SERVICIOS,
@@ -474,6 +474,20 @@ export const readConceptMappedServiciosForMatriculas = async ({
   return { result, mappingCount: mappings.size, evidenceCount: rows.length }
 }
 
+const readCurrentFinancialTallerKeys = async ({
+  matricula,
+  ciclo,
+  plantel,
+}: {
+  matricula: unknown
+  ciclo?: unknown
+  plantel?: unknown
+}) => {
+  const key = normalizeMatricula(matricula)
+  const financial = await readConceptMappedServiciosForMatriculas({ matriculas: [key], ciclo, plantel })
+  return new Set((financial.result.get(key) || []).map((item) => canonicalTallerKey(item?.clave || item?.nombre)).filter(Boolean))
+}
+
 export const appendConceptMappedServicioToMatricula = async ({
   matricula,
   conceptoId,
@@ -502,6 +516,163 @@ export const appendConceptMappedServicioToMatricula = async ({
     })
   }
   return { ok: true, mapped: true, changed: updated.changed, servicio: mapped, servicios: updated.servicios }
+}
+
+export const syncChangedConceptMappedServicioToMatricula = async ({
+  matricula,
+  previousConceptoId,
+  nextConceptoId,
+  ciclo,
+  plantel,
+  userEmail,
+}: {
+  matricula: unknown
+  previousConceptoId: unknown
+  nextConceptoId: unknown
+  ciclo?: unknown
+  plantel?: unknown
+  userEmail?: string | null
+}) => {
+  const [previousMapped, nextMapped] = await Promise.all([
+    findTallerServicioForConcept({ conceptoId: previousConceptoId, ciclo, plantel }),
+    findTallerServicioForConcept({ conceptoId: nextConceptoId, ciclo, plantel }),
+  ])
+
+  let updated: any = { ok: true, changed: false, servicios: undefined }
+  if (nextMapped) {
+    updated = await updateCentralMatriculaServicio({
+      matricula,
+      action: 'add',
+      servicio: nextMapped.nombre,
+      userEmail,
+    })
+  }
+
+  const matriculaKey = normalizeMatricula(matricula)
+  const [financialKeys, assignmentHistory] = await Promise.all([
+    readCurrentFinancialTallerKeys({ matricula, ciclo, plantel }),
+    readTalleresAssignmentSummaries([matriculaKey]),
+  ])
+  const history = assignmentHistory.result.get(matriculaKey) || {}
+  const previousKey = canonicalTallerKey(previousMapped?.clave || previousMapped?.nombre)
+  const nextKey = canonicalTallerKey(nextMapped?.clave || nextMapped?.nombre)
+  const previousState = previousKey ? history[previousKey] : null
+  const nextState = nextKey ? history[nextKey] : null
+  const previousFinanciallyManaged = String(previousState?.lastSource || '').startsWith('financial_concept')
+  const nextFinanciallyManaged = String(nextState?.lastSource || '').startsWith('financial_concept')
+
+  if (
+    previousMapped
+    && previousKey
+    && previousKey !== nextKey
+    && !financialKeys.has(previousKey)
+    && previousFinanciallyManaged
+    && String(previousState?.lastAction || '').toLowerCase() !== 'removed'
+  ) {
+    await recordTalleresAssignmentChange({
+      matricula,
+      plantel: plantel || 'GLOBAL',
+      workshopKey: previousMapped.clave,
+      workshopName: previousMapped.nombre,
+      action: 'removed',
+      actorEmail: userEmail,
+      metadata: {
+        source: 'financial_concept_change',
+        conceptoId: Number(previousConceptoId || 0),
+        nextConceptoId: Number(nextConceptoId || 0),
+        ciclo: ciclo || null,
+      },
+    })
+  }
+
+  if (
+    nextMapped
+    && nextKey
+    && financialKeys.has(nextKey)
+    && previousKey !== nextKey
+    && (Boolean(updated?.changed) || nextFinanciallyManaged)
+  ) {
+    await recordTalleresAssignmentChange({
+      matricula,
+      plantel: plantel || 'GLOBAL',
+      workshopKey: nextMapped.clave,
+      workshopName: nextMapped.nombre,
+      action: 'assigned',
+      actorEmail: userEmail,
+      metadata: {
+        source: 'financial_concept_change',
+        conceptoId: Number(nextConceptoId || 0),
+        previousConceptoId: Number(previousConceptoId || 0),
+        ciclo: ciclo || null,
+      },
+    })
+  }
+
+  return {
+    ok: true,
+    mapped: Boolean(nextMapped),
+    changed: Boolean(updated?.changed),
+    previousServicio: previousMapped || null,
+    servicio: nextMapped || null,
+    servicios: updated?.servicios,
+    financialKeys: Array.from(financialKeys),
+  }
+}
+
+export const syncCancelledConceptMappedServicioOnMatricula = async ({
+  matricula,
+  previousConceptoId,
+  ciclo,
+  plantel,
+  userEmail,
+}: {
+  matricula: unknown
+  previousConceptoId: unknown
+  ciclo?: unknown
+  plantel?: unknown
+  userEmail?: string | null
+}) => {
+  const previousMapped = await findTallerServicioForConcept({ conceptoId: previousConceptoId, ciclo, plantel })
+  if (!previousMapped) return { ok: true, mapped: false, changed: false, previousServicio: null }
+
+  const matriculaKey = normalizeMatricula(matricula)
+  const [financialKeys, assignmentHistory] = await Promise.all([
+    readCurrentFinancialTallerKeys({ matricula, ciclo, plantel }),
+    readTalleresAssignmentSummaries([matriculaKey]),
+  ])
+  const previousKey = canonicalTallerKey(previousMapped.clave || previousMapped.nombre)
+  const previousState = previousKey ? (assignmentHistory.result.get(matriculaKey) || {})[previousKey] : null
+  const financiallyManaged = String(previousState?.lastSource || '').startsWith('financial_concept')
+  const removed = Boolean(
+    previousKey
+    && !financialKeys.has(previousKey)
+    && financiallyManaged
+    && String(previousState?.lastAction || '').toLowerCase() !== 'removed'
+  )
+
+  if (removed) {
+    await recordTalleresAssignmentChange({
+      matricula,
+      plantel: plantel || 'GLOBAL',
+      workshopKey: previousMapped.clave,
+      workshopName: previousMapped.nombre,
+      action: 'removed',
+      actorEmail: userEmail,
+      metadata: {
+        source: 'financial_concept_cancel',
+        conceptoId: Number(previousConceptoId || 0),
+        ciclo: ciclo || null,
+      },
+    })
+  }
+
+  return {
+    ok: true,
+    mapped: true,
+    changed: removed,
+    previousServicio: previousMapped,
+    financialKeys: Array.from(financialKeys),
+  }
 }
 
 export const serializeServicios = serializeServiciosCsv
