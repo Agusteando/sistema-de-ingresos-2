@@ -1,6 +1,9 @@
 name: DX live API contracts
 
 on:
+  push:
+    branches:
+      - 'chatgpt/live/talleres-report-runtime-**'
   workflow_dispatch:
     inputs:
       cycle:
