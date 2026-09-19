@@ -104,6 +104,8 @@ type BreakdownRow = {
   cargo: number
   pagado: number
   saldo: number
+  recargo: number
+  recargoPorcentaje: number
 }
 
 export const escapeHtml = (value: unknown) => String(value ?? '')
@@ -166,13 +168,15 @@ const getBreakdownRows = (deudor?: Record<string, any> | null): BreakdownRow[] =
     periodo: String(item?.mesLabel || item?.mesCargo || ''),
     cargo: Number(item?.subtotal || 0),
     pagado: Number(item?.pagado || 0),
-    saldo: Number(item?.saldo || 0)
+    saldo: Number(item?.saldo || 0),
+    recargo: Number(item?.recargoMonto || 0),
+    recargoPorcentaje: Number(item?.recargoPorcentaje || 0)
   }))
 
 const buildBreakdownText = (rows: BreakdownRow[]) => {
   if (!rows.length) return ''
   return rows
-    .map((item: BreakdownRow) => `${escapeHtml(item.concepto)} (${escapeHtml(item.periodo)}): ${formatCobranzaMoney(item.saldo)}`)
+    .map((item: BreakdownRow) => `${escapeHtml(item.concepto)} (${escapeHtml(item.periodo)}): ${formatCobranzaMoney(item.saldo)}${item.recargo > 0 ? ` · recargo +${formatCobranzaMoney(item.recargo)}` : ``}`)
     .join('<br>')
 }
 
@@ -182,7 +186,10 @@ const buildBreakdownTable = (rows: BreakdownRow[]) => {
   const total = rows.reduce((sum: number, item: BreakdownRow) => sum + Number(item.saldo || 0), 0)
   const body = rows.map((item: BreakdownRow) => `
     <tr>
-      <td style="padding:11px 12px;border-bottom:1px solid #E6E9E8;color:#40454A;font-family:Montserrat,Arial,Helvetica,sans-serif;font-size:13px;line-height:1.45;">${escapeHtml(item.concepto)}</td>
+      <td style="padding:11px 12px;border-bottom:1px solid #E6E9E8;color:#40454A;font-family:Montserrat,Arial,Helvetica,sans-serif;font-size:13px;line-height:1.45;">
+        ${escapeHtml(item.concepto)}
+        ${item.recargo > 0 ? `<div style="margin-top:4px;color:#9A6700;font-size:11px;font-weight:700;">Recargo ${item.recargoPorcentaje || 10}% · +${formatCobranzaMoney(item.recargo)}</div>` : ''}
+      </td>
       <td style="padding:11px 12px;border-bottom:1px solid #E6E9E8;color:#686D72;font-family:Montserrat,Arial,Helvetica,sans-serif;font-size:13px;line-height:1.45;">${escapeHtml(item.periodo)}</td>
       <td style="padding:11px 12px;border-bottom:1px solid #E6E9E8;color:#30343B;font-family:Montserrat,Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;line-height:1.45;text-align:right;white-space:nowrap;">${formatCobranzaMoney(item.saldo)}</td>
     </tr>
@@ -306,6 +313,7 @@ export const renderCobranzaEmail = ({
 }: CobranzaEmailRenderInput) => {
   const saldo = Number(deudor?.saldoPendiente ?? deudor?.saldoColegiatura ?? 0)
   const rows = includeDesglose ? getBreakdownRows(deudor) : []
+  const totalRecargos = Number(deudor?.totalRecargos || rows.reduce((sum, item) => sum + Number(item.recargo || 0), 0))
   const tutor = student?.padre || student?.['Nombre del padre o tutor'] || deudor?.padre || 'Padre, madre o tutor'
   const alumno = student?.nombreCompleto || deudor?.nombreCompleto || matricula
   const academic = resolveFinancialAcademicPlacement({
@@ -330,6 +338,8 @@ export const renderCobranzaEmail = ({
     deuda: saldo.toFixed(2),
     saldo_total: saldo.toFixed(2),
     saldo_total_formateado: formatCobranzaMoney(saldo),
+    recargos_total: totalRecargos.toFixed(2),
+    recargos_total_formateado: formatCobranzaMoney(totalRecargos),
     fecha_limite_pago: formatDate(deudor?.fechaLimitePago),
     fecha_limite_especial: deudor?.fechaLimiteEspecial ? formatDate(deudor.fechaLimiteEspecial) : '',
     fecha_actual: formatDate(new Date()),

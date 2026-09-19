@@ -44,7 +44,9 @@ const buildPlainBreakdown = (deudor: any) => {
     .map((item: any) => ({
       concepto: String(item.conceptoNombre || 'Concepto'),
       periodo: String(item.mesLabel || item.mesCargo || ''),
-      saldo: Number(item.saldo || 0)
+      saldo: Number(item.saldo || 0),
+      recargo: Number(item.recargoMonto || 0),
+      recargoPorcentaje: Number(item.recargoPorcentaje || 0)
     }))
 }
 
@@ -94,6 +96,7 @@ const processAction = async ({
 
   const deudor = await getDeudorContext(matricula, ciclo, mes, user)
   const saldo = Number(deudor?.saldoPendiente || deudor?.saldoColegiatura || 0)
+  const totalRecargos = Number(deudor?.totalRecargos || 0)
   const desglose = buildPlainBreakdown(deudor)
   let emailMetadata: Record<string, any> | null = null
 
@@ -142,7 +145,7 @@ const processAction = async ({
 
     await whatsappApi.sendMessage(client.client_id, {
       chatId: [chatId],
-      message: `Hola, le recordamos que ${contactStudent?.nombreCompleto || matricula} presenta un saldo pendiente por $${saldo.toFixed(2)} MXN correspondiente al periodo ${mes}/${ciclo}. Favor de revisar su estado de cuenta con Administración.`
+      message: `Hola, le recordamos que ${contactStudent?.nombreCompleto || matricula} presenta un saldo pendiente por ${saldo.toFixed(2)} MXN${totalRecargos > 0 ? ` (incluye ${totalRecargos.toFixed(2)} MXN de recargos)` : ''} correspondiente al periodo ${mes}/${ciclo}. Favor de revisar su estado de cuenta con Administración.`
     }, idem)
   }
 
@@ -159,13 +162,14 @@ const processAction = async ({
         origen: 'manual',
         iniciadoPorHumano: true,
         saldo,
+        totalRecargos,
         desglose,
         email: emailMetadata
       })
     ]
   )
 
-  return { matricula, mes, success: true, duplicated: false, saldo, desglose }
+  return { matricula, mes, success: true, duplicated: false, saldo, totalRecargos, desglose }
 }
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {

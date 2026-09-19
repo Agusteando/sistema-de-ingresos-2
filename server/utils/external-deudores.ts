@@ -152,6 +152,8 @@ const summarizeRows = ({
         mes: text(item.mesCargo),
         periodo: text(item.mesLabel),
         monto: money(item.subtotal),
+        recargo: money(item.recargoMonto),
+        recargoPorcentaje: Number(item.recargoPorcentaje || 0),
         pagado: money(item.pagado),
         pendienteConciliacion,
         saldo,
@@ -165,6 +167,7 @@ const summarizeRows = ({
   const saldoExigible = money(rows.filter(row => Boolean(row.isDeudor)).reduce((sum, row) => sum + Number(row.saldoPendiente || 0), 0))
   const totalCargosVencidos = money(rows.reduce((sum, row) => sum + Number(row.totalCargos || 0), 0))
   const totalPagado = money(rows.reduce((sum, row) => sum + Number(row.totalPagado || 0), 0))
+  const totalRecargos = money(rows.reduce((sum, row) => sum + Number(row.totalRecargos || 0), 0))
   const pendienteConciliacion = money(rows.reduce((sum, row) => sum + Number(row.totalPendienteConciliacion || 0), 0))
   const esDeudor = saldoExigible > 0
   const tieneExcepcion = rows.some(row => Boolean(row.fechaLimiteEspecialVigente))
@@ -189,6 +192,7 @@ const summarizeRows = ({
       exigible: saldoExigible,
       cargosVencidos: totalCargosVencidos,
       pagadoAplicado: totalPagado,
+      recargos: totalRecargos,
       pendienteConciliacion
     },
     condiciones: {

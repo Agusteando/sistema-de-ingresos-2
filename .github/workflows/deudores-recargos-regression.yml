@@ -1,0 +1,52 @@
+name: Deudores recargos regression
+
+on:
+  push:
+    branches:
+      - main
+      - 'chatgpt/deudores-**'
+    paths:
+      - 'shared/utils/recargo.ts'
+      - 'server/utils/deudores.ts'
+      - 'server/api/payments/pay.post.ts'
+      - 'server/utils/cobranzaEmail.ts'
+      - 'server/api/deudores/**'
+      - 'server/utils/external-deudores.ts'
+      - 'pages/deudores.vue'
+      - 'tests/deudores-recargos.test.mjs'
+      - '.github/workflows/deudores-recargos-regression.yml'
+  pull_request:
+    paths:
+      - 'shared/utils/recargo.ts'
+      - 'server/utils/deudores.ts'
+      - 'server/api/payments/pay.post.ts'
+      - 'server/utils/cobranzaEmail.ts'
+      - 'server/api/deudores/**'
+      - 'server/utils/external-deudores.ts'
+      - 'pages/deudores.vue'
+      - 'tests/deudores-recargos.test.mjs'
+      - '.github/workflows/deudores-recargos-regression.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deudores-recargos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify canonical recargo parity
+        run: node --experimental-vm-modules --test tests/deudores-recargos.test.mjs
+      - name: Verify deudores mail contract
+        run: node --experimental-strip-types scripts/test-deudores-gmail.mjs --contract
+      - name: Verify institutional cobranza rendering
+        run: node --experimental-strip-types scripts/verify-cobranza-institutional-email.mjs
+      - name: Build
+        run: npm run build

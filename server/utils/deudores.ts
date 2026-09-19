@@ -11,6 +11,8 @@ import {
   normalizeDateKey,
   padDatePart,
 } from './cobranza-period'
+import { resolveLateFeeBalance } from '../../shared/utils/recargo'
+import { loadRecargoPolicies } from './recargo-config'
 
 const parsePlazos = (plazoRaw: unknown, mesesRaw: unknown) => {
   const raw = String(plazoRaw || mesesRaw || '1').trim()
@@ -384,7 +386,7 @@ export const getDeudoresGlobal = async ({
       ORDER BY documento ASC, start_mes ASC, id ASC
     `, docIds),
     query<any[]>(`
-      SELECT matricula, documento, mes, monto, estatus
+      SELECT matricula, documento, mes, monto, recargo, estatus
       FROM referenciasdepago
       WHERE ciclo = ?
         AND matricula IN (${matriculas.map(() => '?').join(',')})
@@ -410,6 +412,12 @@ export const getDeudoresGlobal = async ({
       ORDER BY fecha DESC
     `, [ciclo, ...matriculas])
   ])
+
+  const recargoConceptIds = Array.from(new Set([
+    ...documentos.map((doc) => Number(doc.concepto || 0)),
+    ...periodRows.map((period) => Number(period.concepto_id || 0)),
+  ].filter((id) => Number.isInteger(id) && id > 0)))
+  const recargoPolicies = await loadRecargoPolicies(recargoConceptIds)
 
   const periodByDoc = new Map<number, any[]>()
   periodRows.forEach((row) => {
@@ -470,7 +478,7 @@ export const getDeudoresGlobal = async ({
 
       const projected = resolveProjectedAmount(doc, activePeriod)
       const costoBase = projected.baseCost
-      const subtotal = projected.amount
+      const subtotalBase = projected.amount
 
       const pagos = periodo.paymentKeys.flatMap((mesKey) => pagosByKey.get(`${doc.matricula}-${doc.documento}-${mesKey}`) || [])
       const pagosVigentes = pagos.filter(p => String(p.estatus) === 'Vigente')
@@ -478,12 +486,30 @@ export const getDeudoresGlobal = async ({
 
       const pagado = pagosVigentes.reduce((sum, p) => sum + Number.parseFloat(p.monto || 0), 0)
       const pendienteConciliacion = pagosPendientesConciliacion.reduce((sum, p) => sum + Number.parseFloat(p.monto || 0), 0)
-      const saldo = Math.max(0, subtotal - pagado)
 
       const excepcionMes = (excepcionByKey.get(`${doc.matricula}-${periodo.mesCobranza}`) || []).find((e) => {
         const limite = normalizeDateKey(e.fecha_limite_especial)
         return Boolean(limite) && limite >= currentDateKey
       })
+
+      const recargoPolicy = recargoPolicies.get(conceptoId)
+      const lateFee = resolveLateFeeBalance({
+        baseAmount: subtotalBase,
+        paidAmount: pagado,
+        enabled: Boolean(recargoPolicy?.activo),
+        hasManualLateFee: pagosVigentes.some((p) => String(p.recargo) === '1'),
+        hasPayment: pagosVigentes.some((p) => Number(p.monto || 0) > 0),
+        hasActiveConvention: Boolean(excepcionMes),
+        ciclo,
+        schoolMonth: mesCargoNumber,
+        currentDateValue: currentDateKey,
+        cutoffDay: recargoPolicy?.diaLimite ?? 12,
+        isService: Boolean(recargoPolicy?.esServicio) && isEventual(doc),
+        percentage: recargoPolicy?.porcentaje ?? 10,
+      })
+      const subtotal = lateFee.subtotal
+      const saldo = lateFee.balance
+      const recargoMonto = lateFee.lateFeeAmount
 
       const key = `${doc.matricula}-${periodo.mesCobranza}`
       const existing = bucket.get(key) || {
@@ -505,6 +531,7 @@ export const getDeudoresGlobal = async ({
         totalAntesBeca: 0,
         totalPagado: 0,
         totalPendienteConciliacion: 0,
+        totalRecargos: 0,
         desglose: [],
         hasBeca100: false,
         todoCubiertoPorBeca100: false,
@@ -529,6 +556,7 @@ export const getDeudoresGlobal = async ({
       existing.totalAntesBeca += costoBase
       existing.totalPagado += pagado
       existing.totalPendienteConciliacion += pendienteConciliacion
+      existing.totalRecargos += recargoMonto
       existing.hasBeca100 = existing.hasBeca100 || beca >= 100
       existing.conceptosConBeca100 += beca >= 100 ? 1 : 0
       existing.conceptosCobrables += subtotal > 0 ? 1 : 0
@@ -551,6 +579,11 @@ export const getDeudoresGlobal = async ({
           mesLabel: periodo.mesLabel,
           costoBase: money(costoBase),
           beca: money(beca),
+          subtotalSinRecargo: money(subtotalBase),
+          recargoAplicado: lateFee.appliesLateFee,
+          recargoPorcentaje: Number(recargoPolicy?.porcentaje ?? 10),
+          recargoMonto: money(recargoMonto),
+          recargoFechaLimite: lateFee.timing.deadline,
           subtotal: money(subtotal),
           pagado: money(pagado),
           pendienteConciliacion: money(pendienteConciliacion),
@@ -593,6 +626,8 @@ export const getDeudoresGlobal = async ({
       totalAntesBeca: money(row.totalAntesBeca),
       totalPagado: money(row.totalPagado),
       totalPendienteConciliacion: money(row.totalPendienteConciliacion),
+      totalRecargos: money(row.totalRecargos),
+      tieneRecargos: Number(row.totalRecargos || 0) > 0,
       desglose: desgloseVisible,
       desgloseCorte: flow.stage === 'corte_deudores' || day >= 14 ? desgloseVisible : [],
       estatusFlujo: isDeudor ? flow.stage : 'sin_adeudo',
