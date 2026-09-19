@@ -1,0 +1,41 @@
+name: CFDI SAT error UI regression
+
+on:
+  push:
+    branches:
+      - main
+      - 'chatgpt/cfdi-sat-error-feedback'
+    paths:
+      - 'components/InvoiceModal.vue'
+      - 'utils/invoiceSubmissionError.js'
+      - 'tests/invoice-submission-error.test.mjs'
+      - '.github/workflows/cfdi-sat-error-ui-regression.yml'
+  pull_request:
+    paths:
+      - 'components/InvoiceModal.vue'
+      - 'utils/invoiceSubmissionError.js'
+      - 'tests/invoice-submission-error.test.mjs'
+      - '.github/workflows/cfdi-sat-error-ui-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cfdi-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify SAT error presentation contract
+        run: node --test tests/invoice-submission-error.test.mjs
+      - name: Verify academic source
+        run: npm run verify:academic-source
+      - name: Build
+        run: npm run build
