@@ -4,31 +4,45 @@ on:
   push:
     branches:
       - main
-      - 'chatgpt/talleres-report-**'
+      - 'chatgpt/talleres-**'
     paths:
       - 'server/utils/talleres-admin-summary.ts'
       - 'server/utils/talleres-catalog-authority.ts'
       - 'server/utils/talleres-snapshot.ts'
+      - 'server/utils/talleres-report.ts'
+      - 'server/utils/talleres-contracts.ts'
+      - 'server/utils/talleres-servicios.ts'
       - 'server/api/external/v1/talleres/roster.get.ts'
       - 'server/api/talleres-servicios/reporte.get.ts'
       - 'server/api/talleres-servicios/reporte-institucional-excel.get.ts'
-      - 'server/utils/talleres-report.ts'
+      - 'server/api/documentos/index.post.ts'
+      - 'server/api/documentos/[id].delete.ts'
+      - 'server/api/documentos/[id]/concepto.put.ts'
+      - 'server/api/documentos/period.post.ts'
       - 'shared/utils/talleresServicios.ts'
       - 'tests/talleres-report-services.test.mjs'
       - 'tests/talleres-report-snapshot-parity.test.mjs'
+      - 'tests/talleres-financial-change-regression.test.mjs'
       - '.github/workflows/talleres-report-services-regression.yml'
   pull_request:
     paths:
       - 'server/utils/talleres-admin-summary.ts'
       - 'server/utils/talleres-catalog-authority.ts'
       - 'server/utils/talleres-snapshot.ts'
+      - 'server/utils/talleres-report.ts'
+      - 'server/utils/talleres-contracts.ts'
+      - 'server/utils/talleres-servicios.ts'
       - 'server/api/external/v1/talleres/roster.get.ts'
       - 'server/api/talleres-servicios/reporte.get.ts'
       - 'server/api/talleres-servicios/reporte-institucional-excel.get.ts'
-      - 'server/utils/talleres-report.ts'
+      - 'server/api/documentos/index.post.ts'
+      - 'server/api/documentos/[id].delete.ts'
+      - 'server/api/documentos/[id]/concepto.put.ts'
+      - 'server/api/documentos/period.post.ts'
       - 'shared/utils/talleresServicios.ts'
       - 'tests/talleres-report-services.test.mjs'
       - 'tests/talleres-report-snapshot-parity.test.mjs'
+      - 'tests/talleres-financial-change-regression.test.mjs'
       - '.github/workflows/talleres-report-services-regression.yml'
   workflow_dispatch:
 
@@ -48,7 +62,7 @@ jobs:
       - name: Install
         run: npm ci --no-audit --no-fund
       - name: Verify Talleres roster/report parity
-        run: node --experimental-vm-modules --test tests/talleres-report-services.test.mjs tests/talleres-report-snapshot-parity.test.mjs
+        run: node --experimental-vm-modules --test tests/talleres-report-services.test.mjs tests/talleres-report-snapshot-parity.test.mjs tests/talleres-financial-change-regression.test.mjs
       - name: Verify academic source
         run: npm run verify:academic-source
       - name: Build

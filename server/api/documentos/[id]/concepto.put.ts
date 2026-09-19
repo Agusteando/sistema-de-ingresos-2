@@ -2,7 +2,8 @@ import { executeStatementTransaction, query, runWithBridgeAgentId, type SqlState
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
 import { assertStockAvailableForConcept } from '../../../utils/conceptos-stock'
 import { resolveFinancialConcept } from '../../../utils/financial-concept'
-import { appendConceptMappedServicioToMatricula } from '../../../utils/talleres-servicios'
+import { syncChangedConceptMappedServicioToMatricula } from '../../../utils/talleres-servicios'
+import { refreshTalleresSnapshotPlantel } from '../../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const user = event.context.user
@@ -125,9 +126,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
   let servicioSync: any = { ok: true, mapped: false, changed: false, servicio: null }
   try {
-    servicioSync = await appendConceptMappedServicioToMatricula({
+    servicioSync = await syncChangedConceptMappedServicioToMatricula({
       matricula: doc.matricula,
-      conceptoId: concepto.id,
+      previousConceptoId: doc.concepto,
+      nextConceptoId: concepto.id,
       ciclo: effectiveCiclo,
       plantel: doc.plantel,
       userEmail: user?.email || usuario,
@@ -142,6 +144,19 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     servicioSync = { ok: false, mapped: false, changed: false, servicio: null, message: error?.message || 'servicio_sync_failed' }
   }
 
+  let snapshotRefresh: any = { success: true, skipped: true, reason: 'not_talleres_servicios' }
+  if (servicioSync?.mapped || servicioSync?.previousServicio || servicioSync?.servicio || servicioSync?.ok === false) try {
+    snapshotRefresh = await refreshTalleresSnapshotPlantel({ plantel: doc.plantel, ciclo: effectiveCiclo, force: true })
+  } catch (error: any) {
+    console.warn('[Documentos] Concepto corregido; no se pudo refrescar Talleres inmediatamente.', {
+      documento,
+      matricula: doc.matricula,
+      plantel: doc.plantel,
+      message: error?.message || error,
+    })
+    snapshotRefresh = { success: false, message: error?.message || 'snapshot_refresh_failed' }
+  }
+
   return {
     success: true,
     documento,
@@ -149,5 +164,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     conceptoNombre: concepto.concepto,
     referenciasAfectadas: affectedRefs,
     servicio: servicioSync,
+    snapshotRefresh,
   }
 }))

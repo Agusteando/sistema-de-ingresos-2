@@ -5,6 +5,7 @@ import { normalizeBecaTypes } from '../../utils/becaTypes'
 import { appendConceptMappedServicioToMatricula } from '../../utils/talleres-servicios'
 import { assertStockAvailableForConcept } from '../../utils/conceptos-stock'
 import { resolveFinancialConcept } from '../../utils/financial-concept'
+import { refreshTalleresSnapshotPlantel } from '../../utils/talleres-snapshot'
 
 const clampMotivo = (value: unknown) => {
   const text = String(value || '').trim()
@@ -117,10 +118,24 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     servicioSync = { ok: false, mapped: false, changed: false, servicio: null, message: error?.message || 'servicio_sync_failed' }
   }
 
+  let snapshotRefresh: any = { success: true, skipped: true, reason: 'not_talleres_servicios' }
+  if (servicioSync?.mapped || servicioSync?.ok === false) try {
+    snapshotRefresh = await refreshTalleresSnapshotPlantel({ plantel, ciclo: cicloKey, force: true })
+  } catch (error: any) {
+    console.warn('[Documentos] Documento creado; no se pudo refrescar Talleres inmediatamente.', {
+      documento,
+      matricula: body.matricula,
+      plantel,
+      message: error?.message || error,
+    })
+    snapshotRefresh = { success: false, message: error?.message || 'snapshot_refresh_failed' }
+  }
+
   return {
     success: true,
     documento,
     servicio: servicioSync,
+    snapshotRefresh,
     becaCartaUrl: body.generarCartaBeca && becaTipos.length
       ? `/api/documentos/${documento}/beca-carta?ciclo=${encodeURIComponent(cicloKey)}`
       : null
