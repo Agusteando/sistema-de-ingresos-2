@@ -1,0 +1,26 @@
+name: Talleres full catalog live diagnostic
+
+on:
+  push:
+    branches:
+      - 'chatgpt/live/talleres-catalog-parity-20260921'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+      AURORA_BASE_URL: https://aurora.casitaiedis.edu.mx
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require Aurora token
+        run: test -n "$AURORA_API_TOKEN"
+      - name: Verify complete Talleres catalog
+        run: node scripts/probe-talleres-catalog-live.mjs
