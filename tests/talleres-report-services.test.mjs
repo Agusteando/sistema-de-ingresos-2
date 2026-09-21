@@ -38,8 +38,11 @@ async function loadSummaryHarness() {
   )
 
   const routing = new vm.SyntheticModule(
-    ['normalizeExternalControlEscolarPlantel'],
-    function () { this.setExport('normalizeExternalControlEscolarPlantel', value => value) },
+    ['controlEscolarBridgeAgentCandidates', 'normalizeExternalControlEscolarPlantel'],
+    function () {
+      this.setExport('controlEscolarBridgeAgentCandidates', value => [value])
+      this.setExport('normalizeExternalControlEscolarPlantel', value => value)
+    },
     { context },
   )
 
@@ -129,4 +132,16 @@ test('external Talleres summary is the exact same source as the /alumnos popup s
   assert.match(externalApi, /assertTalleresPortalAccess/)
   assert.match(externalApi, /includeStudents:\s*true/)
   assert.match(externalApi, /Cache-Control', 'no-store, max-age=0'/)
+})
+
+
+test('Talleres summary follows the canonical Bridge candidate routing instead of hard-wiring the academic alias', async () => {
+  const [summarySource, routingSource] = await Promise.all([
+    readFile(summaryPath, 'utf8'),
+    readFile(resolve(root, 'server/utils/control-escolar-plantel-routing.ts'), 'utf8'),
+  ])
+
+  assert.match(summarySource, /controlEscolarBridgeAgentCandidates\(publicPlantel\)/)
+  assert.match(summarySource, /for \(const sourcePlantel of sourceCandidates\)/)
+  assert.match(routingSource, /if \(canonical === 'PREET'\)[\s\S]*add\('CT'\)[\s\S]*add\('PREET'\)/)
 })
