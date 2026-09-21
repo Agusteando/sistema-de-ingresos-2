@@ -16,7 +16,7 @@ const activeCatalog = [
   { servicio_clave: 'SERVICIO_ESPECIAL', servicio_nombre: 'SERVICIO ESPECIAL', imagen_url: '/especial.svg', activo: 1, orden: 50 },
 ]
 
-async function loadSummaryHarness() {
+async function loadSummaryHarness(options = {}) {
   const context = vm.createContext({
     console,
     createError: value => Object.assign(new Error(value.message), value),
@@ -26,7 +26,15 @@ async function loadSummaryHarness() {
   const controlEscolar = new vm.SyntheticModule(
     ['fetchControlEscolarStudents', 'runControlEscolar'],
     function () {
-      this.setExport('runControlEscolar', async (_event, _plantel, callback) => callback())
+      this.setExport('runControlEscolar', async (_event, _plantel, callback) => {
+        if (options.bridgeUnavailable) {
+          throw Object.assign(new Error('Bridge unavailable'), {
+            statusCode: 503,
+            data: { diagnostic: { code: 'DB_BRIDGE_AGENT_STALE', status: 503 } },
+          })
+        }
+        return callback()
+      })
       this.setExport('fetchControlEscolarStudents', async () => ({
         data: [
           { matricula: 'A1', nombres: 'Ana', apellidoPaterno: 'Uno', grado: '1', grupo: 'A', servicio: 'FUTBOL, DESAYUNO, TRANSPORTE REDONDO R1' },
@@ -42,6 +50,43 @@ async function loadSummaryHarness() {
     function () {
       this.setExport('controlEscolarBridgeAgentCandidates', value => [value])
       this.setExport('normalizeExternalControlEscolarPlantel', value => value)
+    },
+    { context },
+  )
+
+  const snapshot = new vm.SyntheticModule(
+    ['readTalleresSnapshotRoster'],
+    function () {
+      this.setExport('readTalleresSnapshotRoster', async ({ plantel, ciclo }) => ({
+        ok: true,
+        plantel,
+        ciclo,
+        catalog: activeCatalog,
+        assignmentResolution: {
+          complete: true,
+          policy: 'materialized-union',
+          sources: ['matricula', 'concepto_financiero'],
+        },
+        students: [
+          {
+            matricula: 'DC1',
+            nombreCompleto: 'Dana Snapshot',
+            grado: '1',
+            grupo: 'A',
+            status: 'active',
+            asignaciones: [{ clave: 'COMIDA', nombre: 'COMIDA', fuentes: ['concepto_financiero'] }],
+          },
+        ],
+        meta: {
+          generatedAt: '2026-09-21T21:26:35.000Z',
+          sources: [{
+            plantel,
+            ok: true,
+            freshness: 'fresh',
+            generatedAt: '2026-09-21T21:26:35.000Z',
+          }],
+        },
+      }))
     },
     { context },
   )
@@ -80,6 +125,7 @@ async function loadSummaryHarness() {
       if (specifier === './control-escolar') return controlEscolar
       if (specifier === './control-escolar-plantel-routing') return routing
       if (specifier === './talleres-catalog-authority') return catalog
+      if (specifier === './talleres-snapshot') return snapshot
       if (specifier === './talleres-servicios') return talleresServicios
       const candidate = resolve(dirname(parent.identifier), specifier.endsWith('.ts') ? specifier : `${specifier}.ts`)
       return load(candidate)
@@ -144,4 +190,27 @@ test('Talleres summary follows the canonical Bridge candidate routing instead of
   assert.match(summarySource, /controlEscolarBridgeAgentCandidates\(publicPlantel\)/)
   assert.match(summarySource, /for \(const sourcePlantel of sourceCandidates\)/)
   assert.match(routingSource, /if \(canonical === 'PREET'\)[\s\S]*add\('CT'\)[\s\S]*add\('PREET'\)/)
+})
+
+
+test('summary falls back only to a fresh complete Talleres snapshot when the live Bridge is unavailable', async () => {
+  const summaryModule = await loadSummaryHarness({ bridgeUnavailable: true })
+  const result = await summaryModule.readTalleresAdminSummary({
+    event: {},
+    plantel: 'DC',
+    ciclo: '2026',
+    includeStudents: true,
+  })
+
+  assert.equal(result.plantel, 'DC')
+  assert.equal(result.ciclo, '2026')
+  assert.equal(result.totals.talleres, 1)
+  assert.equal(result.talleres[0].clave, 'COMIDA')
+  assert.equal(result.talleres[0].alumnos, 1)
+  assert.equal(result.talleres[0].students[0].matricula, 'DC1')
+
+  const source = await readFile(summaryPath, 'utf8')
+  assert.match(source, /sourceErrors\.every\(isBridgeAvailabilityError\)/)
+  assert.match(source, /assignmentResolution\?\.complete !== true/)
+  assert.match(source, /source\?\.freshness !== 'fresh'/)
 })
