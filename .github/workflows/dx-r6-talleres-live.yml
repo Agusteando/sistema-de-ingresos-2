@@ -1,0 +1,27 @@
+name: DX Transporte Sencillo R6 live diagnostic
+on:
+  push:
+    branches:
+      - 'chatgpt/live/talleres-r6-diagnostic-**'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require Aurora CI credential
+        shell: bash
+        run: |
+          if [ -z "$AURORA_API_TOKEN" ]; then
+            echo "AURORA_API_TOKEN missing"
+            exit 3
+          fi
+      - name: Probe Transporte Sencillo R6 live
+        run: node scripts/probe-talleres-r6-live.mjs
