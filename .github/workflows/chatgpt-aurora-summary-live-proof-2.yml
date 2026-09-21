@@ -53,7 +53,7 @@ jobs:
             const response = await fetch(url, { headers, signal: AbortSignal.timeout(120000) })
             const payload = await response.json().catch(() => ({}))
             if (!response.ok || payload?.ok !== true) {
-              console.error('SUMMARY_HTTP_FAIL', plantel, response.status, payload?.data?.code || payload?.statusMessage || '', payload?.message || '')
+              console.error('SUMMARY_HTTP_FAIL', plantel, response.status, JSON.stringify(payload))
               failed = true
               continue
             }
