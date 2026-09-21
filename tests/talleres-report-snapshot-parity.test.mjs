@@ -24,7 +24,8 @@ const catalog = [
   { clave: 'ROBOTICA', nombre: 'ROBÓTICA', imagen: '/robotica.svg', activo: true, orden: 40 },
   { clave: 'FUTBOL', nombre: 'FÚTBOL', imagen: '/futbol.svg', activo: true, orden: 50 },
   { clave: 'AJEDREZ', nombre: 'AJEDREZ', imagen: '/ajedrez.svg', activo: true, orden: 60 },
-  { clave: 'INACTIVO', nombre: 'INACTIVO', activo: false, orden: 70 },
+  { clave: 'TRANSPORTE_SENCILLO_R6', nombre: 'TRANSPORTE SENCILLO R6', imagen: '/transporte-r6.svg', activo: true, orden: 70 },
+  { clave: 'INACTIVO', nombre: 'INACTIVO', activo: false, orden: 80 },
 ]
 
 const rosters = {
@@ -57,6 +58,12 @@ const rosters = {
     {
       matricula: 'T1', nombres: 'Diego', apellidoPaterno: 'Cuatro', grado: '4', grupo: 'D', status: 'active',
       servicios: ['AJEDREZ'],
+    },
+  ],
+  SM: [
+    {
+      matricula: 'SM-R6-ACCEPTANCE', fullName: 'Caso Transporte R6', grado: '6', grupo: 'A', status: 'active',
+      asignaciones: [{ clave: 'TRANSPORTE_SENCILLO_R6', nombre: 'TRANSPORTE SENCILLO R6', fuentes: ['concepto_financiero'] }],
     },
   ],
 }
@@ -148,14 +155,16 @@ test('report categories and counts are derived only from the Talleres roster v2 
 
   assert.equal(result.source, 'talleres-roster-v2')
   assert.equal(result.sourceViewVersion, 'talleres-roster-v2')
-  assert.deepEqual([...byKey.keys()].sort(), ['AJEDREZ', 'COMIDA', 'DESAYUNO', 'FUTBOL', 'ROBOTICA', 'TRANSPORTE_REDONDO_R1'].sort())
+  assert.deepEqual([...byKey.keys()].sort(), ['AJEDREZ', 'COMIDA', 'DESAYUNO', 'FUTBOL', 'ROBOTICA', 'TRANSPORTE_REDONDO_R1', 'TRANSPORTE_SENCILLO_R6'].sort())
   assert.equal(byKey.get('ROBOTICA').totalAlumnos, 1, 'duplicate assignment rows must not double count a student')
   assert.equal(byKey.get('TRANSPORTE_REDONDO_R1').totalAlumnos, 1, 'report must preserve the same withdrawn member that Talleres keeps in the official roster')
   assert.equal(byKey.get('FUTBOL').totalAlumnos, 1)
   assert.equal(byKey.get('FUTBOL').planteles[0].plantel, 'PM')
+  assert.equal(byKey.get('TRANSPORTE_SENCILLO_R6').totalAlumnos, 1, 'TRANSPORTE SENCILLO R6 must survive the generic catalog/roster path')
+  assert.equal(byKey.get('TRANSPORTE_SENCILLO_R6').planteles[0].plantel, 'SM')
   assert.equal(byKey.has('FUERA_DE_CATALOGO'), false, 'Talleres active catalog remains authoritative')
   assert.equal(byKey.has('INACTIVO'), false)
-  assert.equal(result.totals.asignaciones, 6)
+  assert.equal(result.totals.asignaciones, 7)
 })
 
 test('institutional detail resolves aliases to the same Talleres canonical campus and exports roster students', async () => {
@@ -208,4 +217,24 @@ test('Lopez Rosas Emilio Alejandro remains in FUTBOL exactly as Talleres roster 
     grupo: 'A',
     baja: true,
   })
+})
+
+
+test('ultimate acceptance case keeps TRANSPORTE SENCILLO R6 from Aurora catalog through report parity', async () => {
+  requestedPlanteles.length = 0
+  const module = await harness()
+  const result = await module.loadTalleresReport({
+    event: {},
+    ciclo: '2026-2027',
+    requestedPlantel: 'SM',
+    includeStudents: true,
+  })
+
+  const r6 = result.groups.find(row => row.clave === 'TRANSPORTE_SENCILLO_R6')
+  assert.ok(r6, 'R6 must exist whenever Aurora active catalog exposes it')
+  assert.equal(r6.nombre, 'TRANSPORTE SENCILLO R6')
+  assert.equal(r6.planteles[0].plantel, 'SM')
+  assert.deepEqual(JSON.parse(JSON.stringify(r6.planteles[0].students)), [
+    { matricula: 'SM-R6-ACCEPTANCE', nombre: 'Caso Transporte R6', grado: '6', grupo: 'A' },
+  ])
 })

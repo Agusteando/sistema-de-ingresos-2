@@ -3,6 +3,7 @@ import { controlEscolarCentralQuery, getControlEscolarCentralDb, getCentralTable
 import { getTrustedAuthUser, type AuthSessionUser } from './auth-session'
 import { automaticSchoolCycleKey, normalizeCicloKey } from '../../shared/utils/ciclo'
 import { invalidateInstitutionalSchoolCycleCache } from './school-cycle'
+import { ensureCurrentTalleresSnapshots } from './talleres-snapshot'
 
 export const CONCEPTO_CATEGORIES = [
   { key: 'regular', legacyKey: 'planteles', label: 'Inscripción', order: 10 },
@@ -731,15 +732,35 @@ export const createOrUpdateMapping = async (input: any, user: AuthSessionUser) =
   }
 
   const synced = await syncCentralConceptosConfigToBridgeBestEffort()
-  return { ok: true, synced }
+  const snapshotRefresh = type === 'talleres_servicios'
+    ? await ensureCurrentTalleresSnapshots({
+        ciclo,
+        planteles: plantel === 'GLOBAL' ? undefined : [plantel],
+      })
+    : { success: true, skipped: true, reason: 'not_talleres_servicios' }
+  return { ok: true, synced, snapshotRefresh }
 }
 
 export const deleteMapping = async (id: unknown) => {
   const mappingId = Number(id || 0)
   if (!mappingId) throw createError({ statusCode: 400, message: 'Mapeo inválido.' })
+  const rows = await controlEscolarCentralQuery<any[]>(
+    `SELECT cycle_name, plantel, IFNULL(enrollment_type, 'regular') AS enrollment_type
+       FROM config_enrollment_mappings
+      WHERE id = ?
+      LIMIT 1`,
+    [mappingId]
+  )
+  const previous = rows[0] || null
   await controlEscolarCentralQuery(`DELETE FROM config_enrollment_mappings WHERE id = ?`, [mappingId])
   const synced = await syncCentralConceptosConfigToBridgeBestEffort()
-  return { ok: true, synced }
+  const snapshotRefresh = String(previous?.enrollment_type || '').toLowerCase() === 'talleres_servicios'
+    ? await ensureCurrentTalleresSnapshots({
+        ciclo: previous?.cycle_name,
+        planteles: String(previous?.plantel || '').toUpperCase() === 'GLOBAL' ? undefined : [previous?.plantel],
+      })
+    : { success: true, skipped: true, reason: 'not_talleres_servicios' }
+  return { ok: true, synced, snapshotRefresh }
 }
 
 export const saveCycle = async (ciclo: unknown, current = false, user?: AuthSessionUser) => {
