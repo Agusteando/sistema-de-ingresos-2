@@ -97,7 +97,29 @@
                   <LucideRefreshCw :size="20" />
                 </span>
                 <div class="min-w-0 flex-1">
-                  <h3 class="m-0 text-base font-bold">SAT no respondió</h3>
+                  <h3 class="m-0 text-base font-bold">{{ submissionError.title || 'SAT no respondió' }}</h3>
+                  <div
+                    v-if="submissionError.message"
+                    class="mt-3 rounded-xl border border-sky-200/80 bg-white/90 px-4 py-3 shadow-sm"
+                  >
+                    <div class="flex items-start gap-3">
+                      <LucideAlertTriangle class="mt-0.5 shrink-0 text-sky-700" :size="17" />
+                      <div class="min-w-0">
+                        <span class="block text-[10px] font-bold uppercase tracking-[0.11em] text-sky-700">
+                          Detalle del SAT
+                        </span>
+                        <p class="m-0 mt-1 text-sm leading-5 text-slate-800">
+                          {{ submissionError.message }}
+                        </p>
+                        <span
+                          v-if="submissionError.fieldLabel"
+                          class="mt-2 inline-flex max-w-full rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800"
+                        >
+                          Campo relacionado: {{ submissionError.fieldLabel }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                   <button class="btn btn-primary mt-3" type="button" @click="retrySubmission">
                     Haz click aquí para intentarlo de nuevo
                   </button>
@@ -431,6 +453,7 @@ import {
 import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
+import { buildInvoiceSubmissionError } from '~/utils/invoiceSubmissionError'
 import {
   INVOICE_BASE_API_URL,
   defaultRvoeFor,
@@ -485,25 +508,6 @@ const requestClose = () => {
 
 const normalizeErrorText = (value) => String(value || '').trim()
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms))
-const requestPayload = (error) => error?.data?.data || error?.data || {}
-
-const isUncertainWriteFailure = (error) => {
-  const payload = requestPayload(error)
-  const status = Number(payload?.providerStatus || error?.statusCode || error?.status || 0)
-  const internalMessage = normalizeErrorText(
-    payload?.providerMessage
-    || payload?.message
-    || payload?.error
-    || error?.statusMessage
-    || error?.message
-  )
-  return status >= 500 || /No repitas la operación/i.test(internalMessage)
-}
-
-const retryStateFor = (error) => ({
-  retryableUi: true,
-  mutationUncertain: isUncertainWriteFailure(error),
-})
 
 const focusFeedback = async (target) => {
   await nextTick()
@@ -885,7 +889,7 @@ const submit = async (isRetry = false) => {
     })
   } catch (e) {
     console.error('[CFDI UI] Emisión no confirmada', e)
-    submissionError.value = retryStateFor(e)
+    submissionError.value = buildInvoiceSubmissionError(e)
     await focusFeedback(submissionErrorRef)
   } finally {
     loading.value = false
