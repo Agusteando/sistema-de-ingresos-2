@@ -1,0 +1,124 @@
+name: ChatGPT Talleres live diagnostic
+
+on:
+  push:
+    branches:
+      - chatgpt/aurora-talleres-live-diagnostic-20260921
+
+permissions:
+  contents: read
+
+jobs:
+  live-truth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+      AURORA_BASE_URL: https://aurora.casitaiedis.edu.mx
+      EXPECTED_TOKEN_FINGERPRINT: d37323ed17c7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify supplied credential is the configured live credential
+        run: |
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto'
+          const token = String(process.env.AURORA_API_TOKEN || '').trim()
+          if (!token) {
+            console.error('AURORA_API_TOKEN missing')
+            process.exit(1)
+          }
+          const fingerprint = createHash('sha256').update(token).digest('hex').slice(0, 12)
+          console.log('configured token fingerprint:', fingerprint)
+          if (fingerprint !== process.env.EXPECTED_TOKEN_FINGERPRINT) {
+            console.error('Configured Aurora Actions secret does not match the supplied production key fingerprint.')
+            process.exit(1)
+          }
+          NODE
+      - name: Force current Talleres snapshots and verify live catalog/rosters
+        run: |
+          node --input-type=module <<'NODE'
+          const base = String(process.env.AURORA_BASE_URL).replace(/\/+$/, '')
+          const token = String(process.env.AURORA_API_TOKEN || '').trim()
+          const headers = { Accept: 'application/json', 'x-aurora-token': token }
+          const planteles = ['PM','PT','SM','ST','PREEM','CT','GM','CO','DC']
+          const norm = (v) => String(v || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '')
+          const request = async (path, options = {}) => {
+            const response = await fetch(base + path, {
+              ...options,
+              headers: { ...headers, ...(options.headers || {}) },
+              signal: AbortSignal.timeout(120000),
+            })
+            const payload = await response.json().catch(() => ({}))
+            if (!response.ok) {
+              console.error(path, 'HTTP', response.status, payload?.data?.code || payload?.statusMessage || '')
+              process.exit(1)
+            }
+            return payload
+          }
+
+          const warm = await request('/api/external/v1/talleres/warm', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ planteles }),
+          })
+          console.log('warm:', JSON.stringify({ success: warm?.success, current: warm?.current, refreshed: warm?.refreshed, ciclo: warm?.ciclo }))
+
+          const meta = await request('/api/external/v1/talleres/meta')
+          const catalog = Array.isArray(meta?.catalog) ? meta.catalog : []
+          const byKey = new Map(catalog.map(item => [norm(item?.clave || item?.nombre), item]))
+          for (const required of ['TRANSPORTE_SENCILLO_R6','BE_AN_ARTIST']) {
+            if (!byKey.has(required)) {
+              console.error('LIVE_CATALOG_MISSING', required)
+              process.exit(1)
+            }
+          }
+          console.log('catalog-count:', catalog.length)
+          console.log('catalog-r6:', JSON.stringify(byKey.get('TRANSPORTE_SENCILLO_R6')))
+          console.log('catalog-be-an-artist:', JSON.stringify(byKey.get('BE_AN_ARTIST')))
+
+          const targetCounts = { TRANSPORTE_SENCILLO_R6: {}, BE_AN_ARTIST: {} }
+          let totalStudents = 0
+          for (const plantel of planteles) {
+            const roster = await request('/api/external/v1/talleres/roster?plantel=' + encodeURIComponent(plantel))
+            const students = Array.isArray(roster?.students) ? roster.students : []
+            totalStudents += students.length
+            const counts = { TRANSPORTE_SENCILLO_R6: 0, BE_AN_ARTIST: 0 }
+            for (const student of students) {
+              const assignments = Array.isArray(student?.asignaciones) ? student.asignaciones
+                : Array.isArray(student?.talleres) ? student.talleres
+                : Array.isArray(student?.servicios) ? student.servicios : []
+              for (const assignment of assignments) {
+                const key = norm(typeof assignment === 'string' ? assignment : (assignment?.clave || assignment?.nombre || assignment?.servicio))
+                if (key in counts) counts[key] += 1
+              }
+            }
+            for (const key of Object.keys(counts)) targetCounts[key][plantel] = counts[key]
+            console.log('roster', plantel, 'students=' + students.length, 'R6=' + counts.TRANSPORTE_SENCILLO_R6, 'BE_AN_ARTIST=' + counts.BE_AN_ARTIST)
+          }
+          console.log('target-counts:', JSON.stringify(targetCounts))
+          if (Object.values(targetCounts.TRANSPORTE_SENCILLO_R6).reduce((a,b)=>a+b,0) < 1) {
+            console.error('LIVE_ROSTER_MISSING_TRANSPORTE_SENCILLO_R6_ASSIGNMENTS')
+            process.exit(1)
+          }
+          if (Object.values(targetCounts.BE_AN_ARTIST).reduce((a,b)=>a+b,0) < 1) {
+            console.error('LIVE_ROSTER_MISSING_BE_AN_ARTIST_ASSIGNMENTS')
+            process.exit(1)
+          }
+          console.log('AURORA_LIVE_TALLERES_GROUND_TRUTH_OK totalStudents=' + totalStudents)
+          NODE
+
+  production-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install
+      - name: Production build
+        run: npm run build
