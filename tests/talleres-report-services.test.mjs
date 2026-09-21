@@ -116,3 +116,17 @@ test('institutional Excel is fed by the same report loader as the on-screen repo
   assert.match(source, /loadTalleresReport/)
   assert.match(source, /includeStudents:\s*true/)
 })
+
+
+test('external Talleres summary is the exact same source as the /alumnos popup summary', async () => {
+  const [popupApi, externalApi] = await Promise.all([
+    readFile(resolve(root, 'server/api/talleres-servicios/resumen.get.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/external/v1/talleres/summary.get.ts'), 'utf8'),
+  ])
+
+  assert.match(popupApi, /readTalleresAdminSummary/)
+  assert.match(externalApi, /readTalleresAdminSummary/)
+  assert.match(externalApi, /assertTalleresPortalAccess/)
+  assert.match(externalApi, /includeStudents:\s*true/)
+  assert.match(externalApi, /Cache-Control', 'no-store, max-age=0'/)
+})
