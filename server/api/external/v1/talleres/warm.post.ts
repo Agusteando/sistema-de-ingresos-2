@@ -1,35 +1,26 @@
 import { assertTalleresPortalAccess } from '../../../../utils/talleres-portal-auth'
-import { refreshTalleresSnapshots } from '../../../../utils/talleres-snapshot'
+import { ensureCurrentTalleresSnapshots } from '../../../../utils/talleres-snapshot'
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
+/**
+ * SNAPSHOT CONTRACT — PUBLIC API STAYS v1
+ *
+ * /warm is an explicit currentness barrier, not a cache hint. It waits until
+ * the requested ready snapshot has been rebuilt and verified current. It never
+ * returns success merely because an older snapshot exists.
+ */
 export default defineEventHandler(async (event) => {
   await assertTalleresPortalAccess(event)
+  setResponseHeader(event, 'Cache-Control', 'no-store, max-age=0')
   const body = await readBody(event).catch(() => ({}))
   const rawPlanteles = Array.isArray(body?.planteles)
     ? body.planteles
     : String(body?.planteles || body?.plantel || '').split(',').map((value) => value.trim()).filter(Boolean)
-  const input = {
+
+  const result = await ensureCurrentTalleresSnapshots({
     ciclo: body?.ciclo,
-    force: body?.force !== false,
     planteles: rawPlanteles,
-  }
+  })
 
-  let result: any = await refreshTalleresSnapshots(input)
-
-  // La ruta primaria de Talleres usa /warm antes de leer el roster. Si otro
-  // refresco ya posee el lock del plantel, esperar aquí evita que el primer
-  // intento continúe con el snapshot anterior. El snapshot existente sigue
-  // siendo el fallback si la fuente autoritativa realmente falla.
-  if (input.force && rawPlanteles.length === 1) {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      const refreshInProgress = (Array.isArray(result?.results) ? result.results : [])
-        .some((row: any) => row?.reason === 'refresh_in_progress')
-      if (!refreshInProgress) break
-      await wait(500)
-      result = await refreshTalleresSnapshots(input)
-    }
-  }
-
-  return result
+  // Keep the existing v1 result shape additive/backwards-compatible.
+  return { ...result, failures: [] }
 })

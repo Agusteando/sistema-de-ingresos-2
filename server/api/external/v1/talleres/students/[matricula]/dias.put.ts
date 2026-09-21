@@ -1,18 +1,5 @@
 import { assertTalleresPortalAccess } from '../../../../../../utils/talleres-portal-auth'
-import { refreshTalleresSnapshotPlantel, saveTalleresSnapshotStudentDays } from '../../../../../../utils/talleres-snapshot'
-
-const refreshAfterWrite = async (plantel: string, ciclo: string) => {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      const result: any = await refreshTalleresSnapshotPlantel({ plantel, ciclo, force: true })
-      if (result?.reason !== 'refresh_in_progress') return result
-    } catch (error: any) {
-      return { success: false, message: String(error?.message || 'No se pudo refrescar el snapshot.').slice(0, 500) }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
-  return { success: true, skipped: true, reason: 'refresh_still_in_progress' }
-}
+import { ensureCurrentTalleresSnapshotPlantel, saveTalleresSnapshotStudentDays } from '../../../../../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => {
   const user = await assertTalleresPortalAccess(event)
@@ -25,5 +12,5 @@ export default defineEventHandler(async (event) => {
     dias: body?.dias,
     updatedBy: user.email,
   })
-  return { ...result, snapshotRefresh: await refreshAfterWrite(result.plantel, result.ciclo) }
+  return { ...result, snapshotRefresh: await ensureCurrentTalleresSnapshotPlantel({ plantel: result.plantel, ciclo: result.ciclo, force: true }) }
 })

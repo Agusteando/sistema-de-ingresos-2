@@ -13,7 +13,7 @@ import {
   syncCancelledConceptMappedServicioOnMatricula,
   syncChangedConceptMappedServicioToMatricula,
 } from '../../utils/talleres-servicios';
-import { refreshTalleresSnapshotPlantel } from '../../utils/talleres-snapshot';
+import { ensureCurrentTalleresSnapshotPlantel } from '../../utils/talleres-snapshot';
 
 const toMesNumber = (value: unknown) => {
   const raw = String(value || "")
@@ -94,16 +94,7 @@ const effectiveConceptIdAt = async (
 
 const refreshTalleresAfterFinancialWrite = async (plantel: unknown, ciclo: string, shouldRefresh = true) => {
   if (!shouldRefresh) return { success: true, skipped: true, reason: 'not_talleres_servicios' }
-  try {
-    return await refreshTalleresSnapshotPlantel({ plantel, ciclo, force: true });
-  } catch (error: any) {
-    console.warn('[Documentos] Cambio financiero aplicado; no se pudo refrescar Talleres inmediatamente.', {
-      plantel,
-      ciclo,
-      message: error?.message || error,
-    });
-    return { success: false, message: error?.message || 'snapshot_refresh_failed' };
-  }
+  return await ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo, force: true });
 };
 
 const periodBoundaryStatements = (

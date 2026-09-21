@@ -85,16 +85,16 @@ test('financial lifecycle endpoints reconcile assignment history and force Talle
   ])
 
   assert.match(directChange, /syncChangedConceptMappedServicioToMatricula/)
-  assert.match(directChange, /refreshTalleresSnapshotPlantel\(\{ plantel: doc\.plantel, ciclo: effectiveCiclo, force: true \}\)/)
+  assert.match(directChange, /ensureCurrentTalleresSnapshotPlantel\(\{ plantel: doc\.plantel, ciclo: effectiveCiclo, force: true \}\)/)
 
   assert.match(periodChange, /syncChangedConceptMappedServicioToMatricula/)
   assert.match(periodChange, /syncCancelledConceptMappedServicioOnMatricula/)
   assert.match(periodChange, /effectiveConceptIdAt/)
-  assert.match(periodChange, /refreshTalleresSnapshotPlantel\(\{ plantel, ciclo, force: true \}\)/)
+  assert.match(periodChange, /ensureCurrentTalleresSnapshotPlantel\(\{ plantel, ciclo, force: true \}\)/)
 
   assert.match(deleteDoc, /syncCancelledConceptMappedServicioOnMatricula/)
-  assert.match(deleteDoc, /refreshTalleresSnapshotPlantel/)
-  assert.match(createDoc, /refreshTalleresSnapshotPlantel/)
+  assert.match(deleteDoc, /ensureCurrentTalleresSnapshotPlantel/)
+  assert.match(createDoc, /ensureCurrentTalleresSnapshotPlantel/)
 
   assert.match(servicios, /source: 'financial_concept_change'/)
   assert.match(servicios, /source: 'financial_concept_cancel'/)
@@ -105,4 +105,31 @@ test('financial lifecycle endpoints reconcile assignment history and force Talle
   assert.match(snapshot, /shouldIncludeDirectTallerAssignment/)
   assert.match(contracts, /metadata_json/)
   assert.match(contracts, /lastSource/)
+})
+
+
+test('snapshot-backed Talleres v1 never knowingly serves stale data or seed catalog fallbacks', async () => {
+  const [snapshot, rosterApi, metaApi, searchApi, warmApi] = await Promise.all([
+    readFile(resolve(root, 'server/utils/talleres-snapshot.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/external/v1/talleres/roster.get.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/external/v1/talleres/meta.get.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/external/v1/talleres/students/search.get.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/external/v1/talleres/warm.post.ts'), 'utf8'),
+  ])
+
+  assert.match(snapshot, /SNAPSHOT CONTRACT/)
+  assert.match(snapshot, /ensureCurrentTalleresSnapshotPlantel/)
+  assert.match(snapshot, /invalidateTalleresSnapshotPlantel/)
+  assert.match(snapshot, /readAuthoritativeTalleresCatalog/)
+  assert.doesNotMatch(snapshot, /empty_refresh_preserved/)
+  assert.doesNotMatch(snapshot, /all_sources_failed_preserved/)
+  assert.doesNotMatch(snapshot, /DEFAULT_TALLERES_SERVICIOS/)
+  assert.doesNotMatch(snapshot, /source: 'seed'/)
+  assert.doesNotMatch(snapshot, /void refreshTalleresSnapshotPlantel\(\{ plantel, ciclo \}/)
+
+  for (const source of [rosterApi, metaApi, searchApi, warmApi]) {
+    assert.match(source, /PUBLIC API STAYS v1|PUBLIC API STAYS v1|SNAPSHOT CONTRACT/)
+    assert.match(source, /Cache-Control', 'no-store, max-age=0'/)
+    assert.doesNotMatch(source, /external\/v[2-9]/)
+  }
 })

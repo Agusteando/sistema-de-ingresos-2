@@ -8,6 +8,7 @@ import {
 import { readCentralTalleresServiciosCatalog, syncCentralTalleresServiciosCatalogToBridge } from '../../../utils/talleres-servicios'
 import { resolveDataBridgeAgentId } from '../../../utils/auth-session'
 import { getDbTransport, runWithBridgeAgentId } from '../../../utils/db'
+import { ensureCurrentTalleresSnapshots } from '../../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => {
   const user = await requireConceptosAdmin(event)
@@ -39,6 +40,7 @@ export default defineEventHandler(async (event) => {
     const conceptos = await syncCentralConceptosCatalogToBridge(centralConceptos)
     const config = await syncCentralConceptosConfigToBridge(centralConfig)
     const servicios = await syncCentralTalleresServiciosCatalogToBridge(serviciosCentral.catalog)
+    const snapshotRefresh = await ensureCurrentTalleresSnapshots({ planteles: [bridgeAgentId] })
 
     return {
       ok: true,
@@ -46,6 +48,7 @@ export default defineEventHandler(async (event) => {
       conceptos,
       config,
       servicios,
+      snapshotRefresh,
     }
   })
 })

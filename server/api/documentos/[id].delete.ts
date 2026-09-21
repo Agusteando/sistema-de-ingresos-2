@@ -1,7 +1,7 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { syncCancelledConceptMappedServicioOnMatricula } from '../../utils/talleres-servicios'
-import { refreshTalleresSnapshotPlantel } from '../../utils/talleres-snapshot'
+import { ensureCurrentTalleresSnapshotPlantel } from '../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const id = Number(event.context.params?.id)
@@ -78,16 +78,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   let snapshotRefresh: any = { success: true, skipped: true, reason: 'not_talleres_servicios' }
-  if (servicioSync?.mapped || servicioSync?.previousServicio || servicioSync?.ok === false) try {
-    snapshotRefresh = await refreshTalleresSnapshotPlantel({ plantel: doc.plantel, ciclo: cicloKey, force: true })
-  } catch (error: any) {
-    console.warn('[Documentos] Documento cancelado; no se pudo refrescar Talleres inmediatamente.', {
-      documento: id,
-      matricula: doc.matricula,
-      plantel: doc.plantel,
-      message: error?.message || error,
-    })
-    snapshotRefresh = { success: false, message: error?.message || 'snapshot_refresh_failed' }
+  if (servicioSync?.mapped || servicioSync?.previousServicio || servicioSync?.ok === false) {
+    snapshotRefresh = await ensureCurrentTalleresSnapshotPlantel({ plantel: doc.plantel, ciclo: cicloKey, force: true })
   }
 
   return { success: true, servicio: servicioSync, snapshotRefresh }

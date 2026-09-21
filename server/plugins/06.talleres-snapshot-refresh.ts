@@ -1,6 +1,14 @@
 import { getDbTransport } from '../utils/db'
 import { refreshTalleresSnapshots } from '../utils/talleres-snapshot'
 
+/**
+ * Safety-net refresh only.
+ *
+ * Snapshot correctness must NOT depend on this timer. Aurora-managed mutations
+ * refresh affected snapshots synchronously before their current state is exposed,
+ * and snapshot readers synchronously refresh known-old payloads. This interval
+ * only catches out-of-band database changes or missed external writes.
+ */
 const CHECK_INTERVAL_MS = 5 * 60 * 1000
 
 const enabled = () => {

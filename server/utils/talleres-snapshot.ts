@@ -2,9 +2,7 @@ import crypto from 'node:crypto'
 import { DASHBOARD_PLANTELES } from '../../utils/constants'
 import { automaticSchoolCycleKey, normalizeCicloKey } from '../../shared/utils/ciclo'
 import {
-  DEFAULT_TALLERES_SERVICIOS,
   canonicalTallerKey,
-  isFinalTaller,
   normalizeServicioClave,
   normalizeServicioNombre,
   parseServiciosCsv,
@@ -21,8 +19,23 @@ import {
   type ConceptMappedServicioAssignment,
 } from './talleres-servicios'
 import { readTalleresAssignmentSummaries, readTalleresContracts, recordTalleresAssignmentChange } from './talleres-contracts'
+import { readAuthoritativeTalleresCatalog } from './talleres-catalog-authority'
 
 const SNAPSHOT_TABLE = 'control_external_student_view'
+
+/**
+ * SNAPSHOT CONTRACT
+ * -----------------
+ * Public consumers always use the stable /api/external/v1/talleres contract.
+ * TALLERES_SNAPSHOT_VIEW_VERSION is an INTERNAL storage/payload identifier only;
+ * it is not an API version and must never cause consumers to migrate to /v2, /v3, etc.
+ *
+ * The snapshot exists only to make reads fast. It is not permission to return
+ * stale business data. Aurora-managed writes that affect Talleres must refresh
+ * the relevant snapshot before they report a successful, current state. Reads
+ * that detect an old snapshot refresh synchronously or fail; they never knowingly
+ * return the old payload as if it were current.
+ */
 export const TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v2'
 export const TALLERES_SNAPSHOT_PLANTELES = [...DASHBOARD_PLANTELES] as string[]
 const SNAPSHOT_MAX_ROWS = 10000
@@ -94,40 +107,23 @@ const scopeKeyFor = (plantel: string, ciclo: string) => hash(`${TALLERES_SNAPSHO
 const conceptHash = hash(TALLERES_SNAPSHOT_VIEW_VERSION).slice(0, 64)
 
 const readCatalog = async () => {
-  try {
-    const rows = await controlEscolarCentralQuery<any[]>(
-      `SELECT servicio_clave, servicio_nombre, imagen_url, IFNULL(activo, 1) AS activo, IFNULL(orden, 9999) AS orden
-         FROM talleres_servicios_catalogo
-        WHERE IFNULL(activo, 1) = 1
-        ORDER BY IFNULL(orden, 9999) ASC, servicio_nombre ASC`
-    )
-    const normalized = rows.map((row) => {
-      const clave = normalizeServicioClave(row?.servicio_clave || row?.servicio_nombre)
-      const nombre = normalizeServicioNombre(row?.servicio_nombre || clave)
-      return {
-        clave,
-        nombre,
-        imagen: clean(row?.imagen_url, 500),
-        activo: Number(row?.activo ?? 1) !== 0,
-        orden: Number(row?.orden || 9999),
-        tipo: isFinalTaller(clave) ? 'taller' : 'servicio',
-      }
-    }).filter((item) => item.clave && item.nombre && item.activo)
-    if (normalized.length) return { source: 'central', catalog: normalized }
-  } catch {}
-
-  const catalog = DEFAULT_TALLERES_SERVICIOS.map((item: any, index: number) => {
-    const clave = normalizeServicioClave(item?.clave || item?.nombre)
-    return {
-      clave,
-      nombre: normalizeServicioNombre(item?.nombre || clave),
-      imagen: clean(item?.imagen, 500),
-      activo: true,
-      orden: Number(item?.orden || index + 1),
-      tipo: isFinalTaller(clave) ? 'taller' : 'servicio',
-    }
-  }).filter((item) => item.clave && item.nombre)
-  return { source: 'seed', catalog }
+  // The central Aurora catalogue is the only authority. Do not fall back to a
+  // compiled seed list: newly created/renamed entries must be visible without a
+  // deployment, and a database failure must be visible rather than disguised by
+  // an older hardcoded catalogue.
+  const authoritative = await readAuthoritativeTalleresCatalog()
+  return {
+    source: authoritative.source || 'central',
+    catalog: (authoritative.catalog || []).map((item: any) => ({
+      clave: normalizeServicioClave(item?.clave || item?.servicio_clave || item?.nombre || item?.servicio_nombre),
+      nombre: normalizeServicioNombre(item?.nombre || item?.servicio_nombre || item?.clave || item?.servicio_clave),
+      imagen: clean(item?.imagen || item?.imagen_url, 500),
+      activo: Number(item?.activo ?? 1) !== 0,
+      orden: Number(item?.orden || 9999),
+      // Kept only for backwards-compatible public v1 response fields.
+      tipo: item?.tipo || 'servicio',
+    })).filter((item: any) => item.clave && item.nombre && item.activo),
+  }
 }
 
 const normalizeDays = (value: unknown) => {
@@ -173,9 +169,12 @@ const assignmentResolver = (catalog: any[]) => {
       clave,
       nombre: item?.nombre || nombre,
       imagen: item?.imagen || '',
-      activo: item ? item.activo !== false : Boolean(clave && nombre),
+      // Catalogue membership is authoritative. A matrícula/financial string that
+      // is not currently present in Aurora's active catalogue cannot invent a
+      // workshop/service in the snapshot.
+      activo: Boolean(item && item.activo !== false),
       orden: Number(item?.orden || 9999),
-      tipo: item?.tipo || (isFinalTaller(clave) ? 'taller' : 'servicio'),
+      tipo: item?.tipo || 'servicio',
     }
   }
 }
@@ -444,10 +443,10 @@ const searchTextFor = (student: any) => [
 const writeSnapshot = async (plantel: string, ciclo: string, students: any[], sourceMeta: any) => {
   await ensureControlEscolarExternalViewSchema()
   const previous = await readSnapshotRows(plantel, ciclo)
-  if (!students.length && previous.students.length) {
-    return { success: true, skipped: true, reason: 'empty_refresh_preserved', rows: previous.students.length, plantel, ciclo }
-  }
 
+  // An authoritative empty result is a real state transition, not a reason to
+  // retain old members. Persist an explicit empty marker so removed assignments
+  // cannot survive indefinitely in a "protective" stale snapshot.
   const generatedAt = mysqlSecondPrecisionNow()
   const staleAfter = dateHoursFromNow(FRESH_HOURS)
   const expiresAt = dateHoursFromNow(EXPIRES_HOURS)
@@ -556,10 +555,6 @@ export const refreshTalleresSnapshotPlantel = async (input: { plantel: unknown, 
       for (const sourcePlantel of sourceCandidates) {
         try {
           const load = await readSource(sourcePlantel, ciclo)
-          if (!load.students.length) {
-            const hadPrevious = previous.students.some((student) => (student?.snapshotSourcePlanteles || []).includes(sourcePlantel))
-            if (hadPrevious) preservedSources.push(sourcePlantel)
-          }
           loads.push(load)
         } catch (error: any) {
           failedSources.push({ sourcePlantel, message: clean(error?.message || error?.statusMessage || 'No disponible', 500) })
@@ -582,10 +577,24 @@ export const refreshTalleresSnapshotPlantel = async (input: { plantel: unknown, 
       }
 
       const availableStudentRows = loads.reduce((total, load) => total + load.students.length, 0)
-      if (!availableStudentRows && previous.students.length) {
-        return { success: true, skipped: true, reason: 'all_sources_failed_preserved', plantel, ciclo, rows: previous.students.length, failedSources }
+
+      // Never repackage known-old source rows with a new generated_at. If a
+      // source that previously contributed students is unavailable now, the
+      // refresh cannot prove currentness and must fail instead of preserving it.
+      const failedPreviousSources = failedSources
+        .map((row) => row.sourcePlantel)
+        .filter((sourcePlantel) => previous.students.some((student) =>
+          (student?.snapshotSourcePlanteles || []).includes(sourcePlantel)))
+      if (failedPreviousSources.length) {
+        throw createError({
+          statusCode: 503,
+          statusMessage: 'TALLERES_SNAPSHOT_SOURCE_NOT_CURRENT',
+          message: `No se pudo verificar información vigente de ${plantel}.`,
+          data: { plantel, ciclo, failedSources, failedPreviousSources },
+        })
       }
-      if (!availableStudentRows && !previous.students.length) {
+
+      if (!availableStudentRows && failedSources.length && !loads.length) {
         throw createError({ statusCode: 502, statusMessage: 'TALLERES_SNAPSHOT_SOURCE_UNAVAILABLE', message: `No se pudo crear el snapshot de ${plantel}.`, data: { plantel, ciclo, failedSources } })
       }
 
@@ -593,19 +602,11 @@ export const refreshTalleresSnapshotPlantel = async (input: { plantel: unknown, 
       const merged = new Map<string, any>()
       for (const student of fresh.students) merged.set(matriculaKey(student?.matricula), student)
 
-      for (const previousStudent of previous.students) {
-        const sources = Array.isArray(previousStudent?.snapshotSourcePlanteles) ? previousStudent.snapshotSourcePlanteles : []
-        if (!sources.some((source: string) => preservedSources.includes(source))) continue
-        const mat = matriculaKey(previousStudent?.matricula)
-        if (!mat) continue
-        merged.set(mat, mergeFinalStudent(merged.get(mat), previousStudent))
-      }
-
       const sourceMeta = {
         canonicalPlantel: plantel,
         sourceCandidates,
         successfulSources: loads.map((load) => load.sourcePlantel),
-        preservedSources,
+        preservedSources: [],
         failedSources,
         sources: loads.map((load) => ({
           plantel: load.sourcePlantel,
@@ -624,6 +625,115 @@ export const refreshTalleresSnapshotPlantel = async (input: { plantel: unknown, 
       await connection.query('SELECT RELEASE_LOCK(?) AS released', [lockName]).catch(() => null)
     }
   })
+}
+
+export const invalidateTalleresSnapshotPlantel = async (input: { plantel: unknown, ciclo?: unknown }) => {
+  const plantel = canonicalTalleresPlantel(input.plantel)
+  if (!plantel) throw createError({ statusCode: 400, statusMessage: 'TALLERES_PLANTEL_INVALID', message: 'Plantel inválido para el snapshot de Talleres.' })
+  const ciclo = await resolveCurrentCiclo(input.ciclo)
+  await ensureControlEscolarExternalViewSchema()
+  await controlEscolarCentralQuery(
+    `UPDATE ${SNAPSHOT_TABLE}
+        SET stale_after = LEAST(COALESCE(stale_after, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP),
+            updated_at = CURRENT_TIMESTAMP
+      WHERE plantel = ? AND ciclo_key = ? AND view_version = ?`,
+    [plantel, ciclo, TALLERES_SNAPSHOT_VIEW_VERSION]
+  )
+  return { success: true, invalidated: true, plantel, ciclo }
+}
+
+export const invalidateTalleresSnapshots = async (input: { ciclo?: unknown, planteles?: unknown[] } = {}) => {
+  const ciclo = await resolveCurrentCiclo(input.ciclo)
+  const requested = Array.isArray(input.planteles) && input.planteles.length
+    ? input.planteles.map(canonicalTalleresPlantel).filter(Boolean)
+    : [...TALLERES_SNAPSHOT_PLANTELES]
+  const planteles = Array.from(new Set(requested))
+  const results = []
+  for (const plantel of planteles) results.push(await invalidateTalleresSnapshotPlantel({ plantel, ciclo }))
+  return { success: true, invalidated: true, ciclo, results }
+}
+
+const snapshotCurrent = (snapshot: Awaited<ReturnType<typeof readSnapshotRows>>) => {
+  const first = snapshot.rows[0]
+  if (!first) return false
+  const generatedAt = first?.generated_at ? new Date(first.generated_at).getTime() : 0
+  const staleAfter = first?.stale_after ? new Date(first.stale_after).getTime() : 0
+  return Boolean(
+    generatedAt
+    && generatedAt >= Date.now() - refreshMinutes() * 60 * 1000
+    && staleAfter > Date.now()
+  )
+}
+
+/**
+ * Ensures the ready-to-serve Talleres snapshot is current before returning.
+ * This helper waits through a concurrent refresh lock instead of falling back
+ * to an older payload. It is the mutation/read consistency barrier.
+ */
+export const ensureCurrentTalleresSnapshotPlantel = async (input: { plantel: unknown, ciclo?: unknown, force?: boolean }) => {
+  const plantel = canonicalTalleresPlantel(input.plantel)
+  if (!plantel) throw createError({ statusCode: 400, statusMessage: 'TALLERES_PLANTEL_INVALID', message: 'Plantel inválido para el snapshot de Talleres.' })
+  const ciclo = await resolveCurrentCiclo(input.ciclo)
+  const startedAt = Date.now()
+  let lastResult: any = null
+
+  // Force means the caller knows a mutation happened (or has detected an old
+  // payload). Invalidate first so a failed rebuild can never leave the previous
+  // snapshot looking current to another reader.
+  if (input.force !== false) {
+    await invalidateTalleresSnapshotPlantel({ plantel, ciclo })
+  }
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    lastResult = await refreshTalleresSnapshotPlantel({ plantel, ciclo, force: input.force !== false })
+    if (lastResult?.reason === 'refresh_in_progress') {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      continue
+    }
+
+    const snapshot = await readSnapshotRows(plantel, ciclo)
+    if (snapshotCurrent(snapshot)) {
+      return {
+        success: true,
+        current: true,
+        plantel,
+        ciclo,
+        rows: snapshot.students.length,
+        generatedAt: toIso(snapshot.rows[0]?.generated_at),
+        waitedMs: Date.now() - startedAt,
+        refresh: lastResult,
+      }
+    }
+
+    // A completed refresh that cannot produce a current payload is a hard
+    // consistency failure. Do not expose the older snapshot.
+    throw createError({
+      statusCode: 503,
+      statusMessage: 'TALLERES_SNAPSHOT_NOT_CURRENT',
+      message: `Aurora no pudo verificar un snapshot vigente de ${plantel}.`,
+      data: { plantel, ciclo, refresh: lastResult },
+    })
+  }
+
+  throw createError({
+    statusCode: 503,
+    statusMessage: 'TALLERES_SNAPSHOT_REFRESH_TIMEOUT',
+    message: `Aurora no pudo confirmar el snapshot vigente de ${plantel} dentro del tiempo esperado.`,
+    data: { plantel, ciclo, refresh: lastResult },
+  })
+}
+
+export const ensureCurrentTalleresSnapshots = async (input: { ciclo?: unknown, planteles?: unknown[] } = {}) => {
+  const ciclo = await resolveCurrentCiclo(input.ciclo)
+  const requested = Array.isArray(input.planteles) && input.planteles.length
+    ? input.planteles.map(canonicalTalleresPlantel).filter(Boolean)
+    : [...TALLERES_SNAPSHOT_PLANTELES]
+  const planteles = Array.from(new Set(requested))
+  const results = []
+  for (const plantel of planteles) {
+    results.push(await ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo, force: true }))
+  }
+  return { success: true, current: true, ciclo, results, refreshed: results.length }
 }
 
 export const refreshTalleresSnapshots = async (input: { ciclo?: unknown, force?: boolean, planteles?: unknown[] } = {}) => {
@@ -662,26 +772,25 @@ const buildRosterFromSnapshots = async (planteles: string[], ciclo: string) => {
 
   for (const plantel of planteles) {
     let snapshot = await readSnapshotRows(plantel, ciclo)
-    let refreshFailure: any = null
-    if (!snapshot.rows.length) {
-      try {
-        await refreshTalleresSnapshotPlantel({ plantel, ciclo, force: true })
-      } catch (error: any) {
-        refreshFailure = {
-          code: clean(error?.statusMessage || error?.data?.code || error?.code || 'TALLERES_SNAPSHOT_REFRESH_FAILED', 120),
-          message: clean(error?.message || 'No se pudo preparar el snapshot.', 500),
-        }
-      }
+
+    // SNAPSHOT CONTRACT: serve the prebuilt payload only when it is current.
+    // If it is missing/old, rebuild synchronously before responding. Never start
+    // a background refresh and then hand the caller the known-old payload.
+    if (!snapshotCurrent(snapshot)) {
+      await ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo, force: true })
       snapshot = await readSnapshotRows(plantel, ciclo)
-    } else {
-      const generatedAt = snapshot.rows[0]?.generated_at ? new Date(snapshot.rows[0].generated_at).getTime() : 0
-      if (generatedAt < Date.now() - refreshMinutes() * 60 * 1000) {
-        void refreshTalleresSnapshotPlantel({ plantel, ciclo }).catch(() => null)
-      }
+    }
+    if (!snapshotCurrent(snapshot)) {
+      throw createError({
+        statusCode: 503,
+        statusMessage: 'TALLERES_SNAPSHOT_NOT_CURRENT',
+        message: `Aurora no tiene un snapshot vigente de ${plantel}.`,
+        data: { plantel, ciclo },
+      })
     }
 
     data[plantel] = {}
-    const available = snapshot.rows.length > 0
+    const available = true
     for (const student of snapshot.students) {
       students.push(student)
       for (const service of serviceEntriesForStudent(student)) {
@@ -701,8 +810,8 @@ const buildRosterFromSnapshots = async (planteles: string[], ciclo: string) => {
       generatedAt: toIso(first?.generated_at),
       staleAfter: toIso(first?.stale_after),
       expiresAt: toIso(first?.expires_at),
-      freshness: !first ? 'missing' : (new Date(first.stale_after).getTime() >= Date.now() ? 'fresh' : 'stale'),
-      refreshFailure,
+      freshness: 'fresh',
+      refreshFailure: null,
     })
   }
 
@@ -820,8 +929,7 @@ export const saveTalleresSnapshotStudentDays = async ({ matricula, plantel, cicl
      ON DUPLICATE KEY UPDATE plantel=VALUES(plantel), servicio_nombre=VALUES(servicio_nombre), dias_json=VALUES(dias_json), updated_by=VALUES(updated_by), updated_at=CURRENT_TIMESTAMP`,
     [ciclo, plantelValue, matriculaValue, item.clave, item.nombre, JSON.stringify(normalizedDays), clean(updatedBy, 255) || null]
   )
-  void refreshTalleresSnapshotPlantel({ plantel: plantelValue, ciclo, force: true }).catch(() => null)
-  return { ok: true, ciclo, plantel: plantelValue, matricula: matriculaValue, servicio: item.nombre, servicioClave: item.clave, dias: normalizedDays }
+  return { ok: true, ciclo, plantel: plantelValue, matricula: matriculaValue, servicio: item.nombre, servicioClave: item.clave, dias: normalizedDays, snapshotRefreshRequired: true }
 }
 
 export const mutateTalleresSnapshotStudentWorkshop = async ({ matricula, plantel, ciclo: cicloInput, servicio, action, eventual, notas, updatedBy }: any) => {
@@ -859,6 +967,5 @@ export const mutateTalleresSnapshotStudentWorkshop = async ({ matricula, plantel
       metadata: { source: 'aurora_portal_snapshot_v2' },
     })
   }
-  void refreshTalleresSnapshotPlantel({ plantel: plantelValue, ciclo, force: true }).catch(() => null)
-  return { ...updated, ciclo, plantel: plantelValue, matricula: matriculaValue, servicio: item.nombre, snapshotRefreshQueued: true }
+  return { ...updated, ciclo, plantel: plantelValue, matricula: matriculaValue, servicio: item.nombre, snapshotRefreshRequired: true }
 }
