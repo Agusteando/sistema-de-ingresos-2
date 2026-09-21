@@ -97,3 +97,5 @@ jobs:
           if (failed) process.exit(1)
           console.log('AURORA_ALUMNOS_SUMMARY_LIVE_OK')
           NODE
+
+# rerun after fresh-snapshot fallback merge 7244e482
