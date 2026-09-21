@@ -35,9 +35,12 @@ jobs:
           const results = {}
           for (const plantel of planteles) {
             const response = await fetch(base + '/summary?plantel=' + encodeURIComponent(plantel), { headers, signal: AbortSignal.timeout(120000) })
-            const payload = await response.json().catch(() => ({}))
-            if (!response.ok) {
-              console.error('SUMMARY_HTTP_FAIL', plantel, response.status, payload?.data?.code || payload?.statusMessage || '')
+            const text = await response.text()
+            let payload = {}
+            try { payload = JSON.parse(text) } catch {}
+            console.log('response', plantel, 'status=' + response.status, 'type=' + (response.headers.get('content-type') || ''), 'keys=' + Object.keys(payload || {}).join(','), 'prefix=' + text.slice(0, 120).replace(/\s+/g, ' '))
+            if (!response.ok || payload?.ok !== true || String(payload?.plantel || '').toUpperCase() !== plantel) {
+              console.error('SUMMARY_HTTP_FAIL', plantel, response.status, payload?.data?.code || payload?.statusMessage || '', 'payloadOk=' + payload?.ok, 'payloadPlantel=' + payload?.plantel)
               process.exit(1)
             }
             const talleres = Array.isArray(payload?.talleres) ? payload.talleres : []
