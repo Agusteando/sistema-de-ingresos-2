@@ -81,7 +81,7 @@ async function harness() {
       this.setExport('normalizePlantel', value => String(value || '').trim().toUpperCase())
       this.setExport('getTrustedAuthUser', async () => ({
         isSuperAdmin: false,
-        plantelesList: ['CM', 'DM', 'PMA', 'PREET', 'IS'],
+        plantelesList: ['CM', 'DM', 'PMA', 'PREET', 'SM', 'IS'],
       }))
     },
     { context },
