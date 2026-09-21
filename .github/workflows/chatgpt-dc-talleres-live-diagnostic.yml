@@ -1,0 +1,58 @@
+name: DC Talleres live diagnostic
+
+on:
+  push:
+    branches:
+      - chatgpt/dc-talleres-live-diagnostic-20260921
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+      BASE: https://aurora.casitaiedis.edu.mx/api/external/v1/talleres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect DC v1 sources
+        run: |
+          node --input-type=module <<'NODE'
+          const headers = { Accept: 'application/json', 'x-aurora-token': process.env.AURORA_API_TOKEN }
+          const norm = (v) => String(v || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+          for (const path of ['/roster?plantel=DC&ciclo=2026', '/summary?plantel=DC&ciclo=2026']) {
+            const response = await fetch(process.env.BASE + path, { headers, signal: AbortSignal.timeout(120000) })
+            const payload = await response.json().catch(() => ({}))
+            console.log('ENDPOINT', path, 'HTTP', response.status, 'ok=' + payload?.ok, 'ciclo=' + payload?.ciclo)
+            if (path.startsWith('/roster')) {
+              const students = Array.isArray(payload?.students) ? payload.students : []
+              const counts = {}
+              for (const student of students) {
+                const assignments = Array.isArray(student?.asignaciones) ? student.asignaciones : []
+                const seen = new Set()
+                for (const item of assignments) {
+                  const key = norm(item?.clave || item?.nombre)
+                  if (!key || seen.has(key)) continue
+                  seen.add(key)
+                  counts[key] = (counts[key] || 0) + 1
+                }
+              }
+              console.log('ROSTER_STUDENTS', students.length)
+              console.log('ROSTER_COUNTS', JSON.stringify(counts))
+              console.log('ROSTER_META', JSON.stringify(payload?.meta || {}))
+              console.log('ROSTER_RESOLUTION', JSON.stringify(payload?.assignmentResolution || {}))
+            } else {
+              console.log('SUMMARY_ERROR', JSON.stringify({
+                statusCode: payload?.statusCode,
+                statusMessage: payload?.statusMessage,
+                message: payload?.message,
+                data: payload?.data,
+              }))
+            }
+          }
+          NODE
