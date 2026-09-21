@@ -33,6 +33,7 @@ jobs:
           const planteles = ['PM','PT','SM','ST','PREEM','CT','GM','CO','DC']
           const norm = (v) => String(v || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
           const results = {}
+          const failures = []
           for (const plantel of planteles) {
             const response = await fetch(base + '/summary?plantel=' + encodeURIComponent(plantel), { headers, signal: AbortSignal.timeout(120000) })
             const text = await response.text()
@@ -41,7 +42,8 @@ jobs:
             console.log('response', plantel, 'status=' + response.status, 'type=' + (response.headers.get('content-type') || ''), 'keys=' + Object.keys(payload || {}).join(','), 'prefix=' + text.slice(0, 120).replace(/\s+/g, ' '))
             if (!response.ok || payload?.ok !== true || String(payload?.plantel || '').toUpperCase() !== plantel) {
               console.error('SUMMARY_HTTP_FAIL', plantel, response.status, payload?.data?.code || payload?.statusMessage || '', 'payloadOk=' + payload?.ok, 'payloadPlantel=' + payload?.plantel)
-              process.exit(1)
+              failures.push({ plantel, status: response.status, code: payload?.data?.code || payload?.statusMessage || '' })
+              continue
             }
             const talleres = Array.isArray(payload?.talleres) ? payload.talleres : []
             const map = {}
@@ -60,11 +62,12 @@ jobs:
               process.exit(1)
             }
             results[plantel] = map
-            console.log('summary', plantel, 'talleres=' + talleres.length)
+            console.log('summary', plantel, 'talleres=' + talleres.length, 'keys=' + Object.entries(map).map(([key,count]) => key + ':' + count).join(','))
           }
           console.log('SM R6=', results.SM?.TRANSPORTE_SENCILLO_R6 || 0)
           console.log('PM BE_AN_ARTIST=', results.PM?.BE_AN_ARTIST || 0)
-          if ((results.SM?.TRANSPORTE_SENCILLO_R6 || 0) < 1) process.exit(1)
-          if ((results.PM?.BE_AN_ARTIST || 0) < 1) process.exit(1)
+          if ((results.SM?.TRANSPORTE_SENCILLO_R6 || 0) < 1) failures.push({ marker: 'SM:TRANSPORTE_SENCILLO_R6' })
+          if ((results.PM?.BE_AN_ARTIST || 0) < 1) failures.push({ marker: 'PM:BE_AN_ARTIST' })
+          if (failures.length) { console.error('LIVE_FAILURES', JSON.stringify(failures)); process.exit(1) }
           console.log('AURORA_ALUMNOS_SUMMARY_LIVE_OK')
           NODE
