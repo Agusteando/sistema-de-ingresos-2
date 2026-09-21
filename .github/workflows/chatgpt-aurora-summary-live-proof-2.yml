@@ -26,6 +26,17 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$AURORA_API_TOKEN" || { echo "::error::AURORA_API_TOKEN is missing"; exit 1; }
+      - name: Inspect live Bridge availability
+        run: |
+          node --input-type=module <<'NODE'
+          const response = await fetch('https://aurora.casitaiedis.edu.mx/api/auth/planteles-status', { signal: AbortSignal.timeout(30000) })
+          const payload = await response.json().catch(() => ({}))
+          console.log('BRIDGE_STATUS_HTTP', response.status)
+          for (const row of (Array.isArray(payload?.statuses) ? payload.statuses : [])) {
+            console.log('BRIDGE_STATUS', row.plantel, row.status, row.code || '', row.httpStatus || '', row.message || '')
+          }
+          if (!response.ok) process.exit(1)
+          NODE
       - name: Prove exact live /alumnos summary
         run: |
           node --input-type=module <<'NODE'
