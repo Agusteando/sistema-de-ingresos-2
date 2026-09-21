@@ -19,6 +19,25 @@ const loadShared = async () => {
   return module.namespace
 }
 
+
+test('one-way transport aliases use one canonical SENCILLO identity for every route', async () => {
+  const shared = await loadShared()
+
+  assert.equal(shared.normalizeServicioClave('TRANSPORTE SIMPLE R4'), 'TRANSPORTE_SENCILLO_R4')
+  assert.equal(shared.normalizeServicioClave('TRANSPORTE_SIMPLE_R6'), 'TRANSPORTE_SENCILLO_R6')
+  assert.equal(shared.normalizeServicioClave('Transporte Simple R10'), 'TRANSPORTE_SENCILLO_R10')
+  assert.equal(shared.canonicalTallerKey('TRANSPORTE SIMPLE R7'), 'TRANSPORTE_SENCILLO_R7')
+
+  assert.equal(shared.normalizeServicioNombre('TRANSPORTE SIMPLE R6'), 'TRANSPORTE SENCILLO R6')
+  assert.equal(shared.normalizeServicioNombre('TRANSPORTE SENCILLO R6'), 'TRANSPORTE SENCILLO R6')
+
+  assert.deepEqual(
+    Array.from(shared.parseServiciosCsv('TRANSPORTE SIMPLE R6, TRANSPORTE SENCILLO R6')),
+    ['TRANSPORTE SENCILLO R6'],
+    'legacy SIMPLE and canonical SENCILLO must not create duplicate memberships',
+  )
+})
+
 test('stale financial write-through does not survive a workshop change', async () => {
   const shared = await loadShared()
   const history = {

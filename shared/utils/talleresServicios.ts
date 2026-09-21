@@ -49,20 +49,33 @@ const tallerImageOverrides: Record<string, string> = {
 }
 
 export const normalizeServicioClave = (value: unknown) => {
-  const key = String(value || '')
+  let key = String(value || '')
     .trim()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
+
+  // "TRANSPORTE SIMPLE Rn" is a legacy/data-entry synonym of the
+  // institutional "TRANSPORTE SENCILLO Rn" family. Keep one identity so
+  // catalog rows, financial mappings, matricula assignments and consumers
+  // cannot split the same route into two services.
+  key = key.replace(/^TRANSPORTE_SIMPLE_(R\d+)$/, 'TRANSPORTE_SENCILLO_$1')
+
   const withoutSchedule = key.replace(/_(?:4|CUATRO)_DIAS?$/, '')
   return withoutSchedule === 'AJEDREZ' ? 'AJEDREZ' : key
 }
 
 export const normalizeServicioNombre = (value: unknown) => {
   const nombre = String(value || '').trim().replace(/\s+/g, ' ').toUpperCase()
-  return normalizeServicioClave(nombre) === 'AJEDREZ' ? 'AJEDREZ' : nombre
+  const clave = normalizeServicioClave(nombre)
+  if (clave === 'AJEDREZ') return 'AJEDREZ'
+
+  const transporteSencillo = clave.match(/^TRANSPORTE_SENCILLO_(R\d+)$/)
+  if (transporteSencillo) return `TRANSPORTE SENCILLO ${transporteSencillo[1]}`
+
+  return nombre
 }
 
 export const FINAL_TALLERES: TallerServicioSeed[] = FINAL_TALLER_NAMES.map((nombre, index) => {
