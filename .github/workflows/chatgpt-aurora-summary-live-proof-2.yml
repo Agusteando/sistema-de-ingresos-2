@@ -1,0 +1,88 @@
+name: Aurora summary live proof 2
+
+on:
+  push:
+    branches:
+      - chatgpt/aurora-summary-live-proof-2-20260921
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+      AURORA_BASE_URL: https://aurora.casitaiedis.edu.mx/api/external/v1/talleres
+      CICLO: "2026"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require configured Aurora token
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$AURORA_API_TOKEN" || { echo "::error::AURORA_API_TOKEN is missing"; exit 1; }
+      - name: Prove exact live /alumnos summary
+        run: |
+          node --input-type=module <<'NODE'
+          const base = process.env.AURORA_BASE_URL
+          const ciclo = process.env.CICLO
+          const headers = { Accept: 'application/json', 'x-aurora-token': process.env.AURORA_API_TOKEN }
+          const planteles = ['PM','PT','SM','ST','PREEM','CT','GM','CO','DC']
+          const norm = (v) => String(v || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+          const results = {}
+          let failed = false
+
+          for (const plantel of planteles) {
+            const url = base + '/summary?plantel=' + encodeURIComponent(plantel) + '&ciclo=' + encodeURIComponent(ciclo)
+            const response = await fetch(url, { headers, signal: AbortSignal.timeout(120000) })
+            const payload = await response.json().catch(() => ({}))
+            if (!response.ok || payload?.ok !== true) {
+              console.error('SUMMARY_HTTP_FAIL', plantel, response.status, payload?.data?.code || payload?.statusMessage || '', payload?.message || '')
+              failed = true
+              continue
+            }
+
+            if (String(payload?.plantel || '').toUpperCase() !== plantel || String(payload?.ciclo || '') !== ciclo) {
+              console.error('SUMMARY_SCOPE_FAIL', plantel, payload?.plantel, payload?.ciclo)
+              failed = true
+            }
+
+            const talleres = Array.isArray(payload?.talleres) ? payload.talleres : []
+            const map = {}
+            const seen = new Set()
+            for (const row of talleres) {
+              const key = norm(row?.clave || row?.nombre)
+              const students = Array.isArray(row?.students) ? row.students : []
+              const unique = new Set(students.map(s => String(s?.matricula || '').trim().toUpperCase()).filter(Boolean))
+              if (!key || seen.has(key) || unique.size !== Number(row?.alumnos || 0)) {
+                console.error('SUMMARY_DETAIL_MISMATCH', plantel, key, row?.alumnos, unique.size, 'duplicate=' + seen.has(key))
+                failed = true
+              }
+              seen.add(key)
+              map[key] = unique.size
+            }
+
+            if (Number(payload?.totals?.talleres || 0) !== talleres.length) {
+              console.error('SUMMARY_TOTAL_MISMATCH', plantel, payload?.totals?.talleres, talleres.length)
+              failed = true
+            }
+
+            results[plantel] = map
+            console.log('SUMMARY', plantel, JSON.stringify(map))
+          }
+
+          const r6 = Number(results.SM?.TRANSPORTE_SENCILLO_R6 || 0)
+          const beAnArtist = Number(results.PM?.BE_AN_ARTIST || 0)
+          console.log('MARKER SM:TRANSPORTE_SENCILLO_R6=' + r6)
+          console.log('MARKER PM:BE_AN_ARTIST=' + beAnArtist)
+          if (r6 < 1) { console.error('MISSING_R6'); failed = true }
+          if (beAnArtist < 1) { console.error('MISSING_BE_AN_ARTIST'); failed = true }
+
+          if (failed) process.exit(1)
+          console.log('AURORA_ALUMNOS_SUMMARY_LIVE_OK')
+          NODE
