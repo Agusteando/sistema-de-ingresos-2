@@ -5,7 +5,7 @@ import {
   parseServiciosCsv,
 } from '../../shared/utils/talleresServicios'
 import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
-import { normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
+import { controlEscolarBridgeAgentCandidates, normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
 import { readAuthoritativeTalleresCatalog } from './talleres-catalog-authority'
 import {
   readConceptMappedServiciosForMatriculas,
@@ -75,9 +75,11 @@ export const readTalleresAdminSummary = async ({
   }
 
   const cycle = normalizeCicloKey(ciclo)
-  const sourcePlantel = normalizeExternalControlEscolarPlantel(publicPlantel) || publicPlantel
+  const canonicalSource = normalizeExternalControlEscolarPlantel(publicPlantel) || publicPlantel
+  const routedCandidates = controlEscolarBridgeAgentCandidates(publicPlantel)
+  const sourceCandidates = routedCandidates.length ? routedCandidates : [canonicalSource]
 
-  return await runControlEscolar(event, sourcePlantel, async () => {
+  const readFromSource = async (sourcePlantel: string) => await runControlEscolar(event, sourcePlantel, async () => {
     const studentsResult = await fetchControlEscolarStudents(sourcePlantel, {
       plantel: sourcePlantel,
       agentId: sourcePlantel,
@@ -94,9 +96,6 @@ export const readTalleresAdminSummary = async ({
       readConceptMappedServiciosForMatriculas({ matriculas, ciclo: cycle, plantel: publicPlantel }),
     ])
 
-    // /conceptos uses this same active central catalog as its source of truth.
-    // Report every active catalog entry that has direct or financial evidence;
-    // do not narrow the report to the historical FINAL_TALLERES allowlist.
     const catalog = new Map<string, any>()
     for (const item of catalogResult.catalog || []) {
       const key = canonicalTallerKey(item?.servicio_clave || item?.servicio_nombre)
@@ -117,10 +116,7 @@ export const readTalleresAdminSummary = async ({
       const matricula = matriculaKey(student?.matricula)
       if (!matricula) continue
 
-      for (const direct of parseServiciosCsv(student?.servicio)) {
-        ensureCount(direct, matricula)
-      }
-
+      for (const direct of parseServiciosCsv(student?.servicio)) ensureCount(direct, matricula)
       for (const assignment of financialAssignments.result.get(matricula) || []) {
         ensureCount(assignment?.clave || assignment?.nombre, matricula)
       }
@@ -174,4 +170,14 @@ export const readTalleresAdminSummary = async ({
       generatedAt: new Date().toISOString(),
     }
   })
+
+  let lastError: any = null
+  for (const sourcePlantel of sourceCandidates) {
+    try {
+      return await readFromSource(sourcePlantel)
+    } catch (error: any) {
+      lastError = error
+    }
+  }
+  throw lastError || createError({ statusCode: 502, message: `No se pudo consultar Talleres de ${publicPlantel}.` })
 }
