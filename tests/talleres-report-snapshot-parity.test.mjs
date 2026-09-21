@@ -137,8 +137,8 @@ test('Aurora report uses the same canonical campus families as talleres-vue', as
   const module = await harness()
   const result = await module.loadTalleresReport({ event: {}, ciclo: '2026-2027' })
 
-  assert.deepEqual(Array.from(result.planteles), ['PM', 'PREEM', 'CT'])
-  assert.deepEqual(requestedPlanteles.map(row => row.plantel), ['PM', 'PREEM', 'CT'])
+  assert.deepEqual(Array.from(result.planteles), ['PM', 'SM', 'PREEM', 'CT'])
+  assert.deepEqual(requestedPlanteles.map(row => row.plantel), ['PM', 'SM', 'PREEM', 'CT'])
   assert.equal(module.normalizeTalleresReportPlantel('CM'), 'PREEM')
   assert.equal(module.normalizeTalleresReportPlantel('DM'), 'PREEM')
   assert.equal(module.normalizeTalleresReportPlantel('PMA'), 'PM')
