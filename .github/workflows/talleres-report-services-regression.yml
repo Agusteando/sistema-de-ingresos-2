@@ -67,6 +67,10 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Verify Talleres roster/report parity
         run: node --experimental-vm-modules --test tests/talleres-report-services.test.mjs tests/talleres-report-snapshot-parity.test.mjs tests/talleres-financial-change-regression.test.mjs tests/talleres-summary-membership.test.mjs
+      - name: Probe PT1271 live Talleres assignment
+        env:
+          AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+        run: node scripts/probe-pt1271-talleres-live.mjs
       - name: Verify academic source
         run: npm run verify:academic-source
       - name: Build
