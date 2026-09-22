@@ -46,8 +46,27 @@ test('legacy Talleres mappings with servicio_nombre but no servicio_clave remain
     /AND IFNULL\(servicio_clave, ''\) <> ''/,
     'Talleres must not discard legacy mappings just because servicio_clave is empty',
   )
-  const compatiblePredicates = source.match(/COALESCE\(NULLIF\(TRIM\(servicio_clave\), ''\), NULLIF\(TRIM\(servicio_nombre\), ''\)\) IS NOT NULL/g) || []
+  const compatiblePredicates = source.match(/COALESCE\(NULLIF\(TRIM\((?:M\.)?servicio_clave\), ''\), NULLIF\(TRIM\((?:M\.)?servicio_nombre\), ''\)\) IS NOT NULL/g) || []
   assert.equal(compatiblePredicates.length, 2, 'both concept lookup paths must accept servicio_nombre as the legacy identity')
+})
+
+test('financial concept identity ignores cycle suffixes but preserves business name', async () => {
+  const shared = await loadShared()
+  assert.equal(
+    shared.normalizeFinancialConceptIdentity('Gimnasia Rítmica 2026-2027'),
+    shared.normalizeFinancialConceptIdentity('GIMNASIA RITMICA'),
+  )
+  assert.equal(
+    shared.normalizeFinancialConceptIdentity('GIMNASIA RITMICA CICLO 2026-2027'),
+    shared.normalizeFinancialConceptIdentity('GIMNASIA RITMICA'),
+  )
+})
+
+test('financial resolver uses the authoritative current concept name from central conceptos', async () => {
+  const source = await readFile(resolve(root, 'server/utils/talleres-servicios.ts'), 'utf8')
+  assert.match(source, /LEFT JOIN conceptos C ON C\.id = M\.concepto_id/)
+  assert.match(source, /COALESCE\(NULLIF\(TRIM\(C\.concepto\), ''\), M\.concepto_nombre\) AS concepto_nombre/)
+  assert.match(source, /readTalleresFinancialDiagnosticsForStudent/)
 })
 
 test('financial mappings survive Bridge concept-id drift by unambiguous concept name', async () => {

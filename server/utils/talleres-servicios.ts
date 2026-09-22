@@ -8,6 +8,7 @@ import {
   canonicalTallerKey,
   buildFinancialConceptMappingIndexes,
   resolveFinancialConceptMapping,
+  normalizeFinancialConceptIdentity,
   finalTallerSeed,
   isKnownTallerCatalogKey,
   DEFAULT_TALLER_SERVICIO_IMAGE,
@@ -356,14 +357,18 @@ const readConceptMappedServicios = async ({ ciclo, plantel }: { ciclo?: unknown,
   const cycleCandidates = cycleCandidatesFor(ciclo)
   const plantelCandidates = conceptMappingPlantelCandidates(plantel)
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT id, plantel, concepto_id, concepto_nombre, servicio_clave, servicio_nombre
-       FROM config_enrollment_mappings
-      WHERE IFNULL(activo, 1) = 1
-        AND IFNULL(enrollment_type, 'regular') = 'talleres_servicios'
-        AND COALESCE(NULLIF(TRIM(servicio_clave), ''), NULLIF(TRIM(servicio_nombre), '')) IS NOT NULL
-        AND cycle_name IN (${cycleCandidates.map(() => '?').join(',')})
-        AND UPPER(TRIM(plantel)) IN (${plantelCandidates.map(() => '?').join(',')})
-      ORDER BY id DESC`,
+    `SELECT M.id, M.cycle_name, M.plantel, M.concepto_id,
+            COALESCE(NULLIF(TRIM(C.concepto), ''), M.concepto_nombre) AS concepto_nombre,
+            M.concepto_nombre AS stored_concepto_nombre,
+            M.servicio_clave, M.servicio_nombre
+       FROM config_enrollment_mappings M
+       LEFT JOIN conceptos C ON C.id = M.concepto_id
+      WHERE IFNULL(M.activo, 1) = 1
+        AND IFNULL(M.enrollment_type, 'regular') = 'talleres_servicios'
+        AND COALESCE(NULLIF(TRIM(M.servicio_clave), ''), NULLIF(TRIM(M.servicio_nombre), '')) IS NOT NULL
+        AND M.cycle_name IN (${cycleCandidates.map(() => '?').join(',')})
+        AND UPPER(TRIM(M.plantel)) IN (${plantelCandidates.map(() => '?').join(',')})
+      ORDER BY M.id DESC`,
     [...cycleCandidates, ...plantelCandidates]
   )
 
@@ -389,6 +394,9 @@ const readConceptMappedServicios = async ({ ciclo, plantel }: { ciclo?: unknown,
     return {
       conceptoId,
       conceptoNombre: compactText(row.concepto_nombre, 255),
+      storedConceptoNombre: compactText(row.stored_concepto_nombre, 255) || undefined,
+      cycleName: compactText(row.cycle_name, 40),
+      plantel: compactText(row.plantel, 40).toUpperCase(),
       clave,
       nombre: item?.servicio_nombre || finalTallerSeed(clave)?.nombre || normalizeServicioNombre(row.servicio_nombre),
       imagen: item?.imagen_url || (clave ? `/talleres-servicios/${clave}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE),
@@ -397,6 +405,7 @@ const readConceptMappedServicios = async ({ ciclo, plantel }: { ciclo?: unknown,
 
   return {
     ...buildFinancialConceptMappingIndexes(mappings),
+    mappings,
     mappingCount: mappings.length,
   }
 }
@@ -507,6 +516,101 @@ export const readConceptMappedServiciosForMatriculas = async ({
     result.set(matricula, Array.from(services.values()).sort((left, right) => left.nombre.localeCompare(right.nombre, 'es')))
   }
   return { result, mappingCount: mappings.mappingCount, evidenceCount }
+}
+
+export const readTalleresFinancialDiagnosticsForStudent = async ({
+  matricula,
+  ciclo,
+  plantel,
+}: {
+  matricula: unknown
+  ciclo?: unknown
+  plantel?: unknown
+}) => {
+  const key = normalizeMatricula(matricula)
+  if (!key) throw createError({ statusCode: 400, message: 'Matrícula requerida.' })
+
+  const cycleCandidates = cycleCandidatesFor(ciclo)
+  const scoped = await readConceptMappedServicios({ ciclo, plantel })
+  const evidence = await readActiveMappedConceptRows([key], ciclo)
+  const evidenceIds = new Set(evidence.map((row: any) => Number(row?.concepto_id || 0)).filter(Boolean))
+  const evidenceNames = new Set(evidence.map((row: any) => normalizeFinancialConceptIdentity(row?.concepto_nombre)).filter(Boolean))
+
+  const allCurrentCycleRows = await controlEscolarCentralQuery<any[]>(
+    `SELECT M.id, M.cycle_name, M.plantel, M.concepto_id,
+            COALESCE(NULLIF(TRIM(C.concepto), ''), M.concepto_nombre) AS concepto_nombre,
+            M.concepto_nombre AS stored_concepto_nombre,
+            M.servicio_clave, M.servicio_nombre,
+            IFNULL(M.activo, 1) AS activo
+       FROM config_enrollment_mappings M
+       LEFT JOIN conceptos C ON C.id = M.concepto_id
+      WHERE IFNULL(M.activo, 1) = 1
+        AND IFNULL(M.enrollment_type, 'regular') = 'talleres_servicios'
+        AND M.cycle_name IN (${cycleCandidates.map(() => '?').join(',')})
+      ORDER BY M.id DESC`,
+    [...cycleCandidates]
+  )
+
+  const relatedMappings = allCurrentCycleRows
+    .filter((row: any) => {
+      const id = Number(row?.concepto_id || 0)
+      const name = normalizeFinancialConceptIdentity(row?.concepto_nombre)
+      const storedName = normalizeFinancialConceptIdentity(row?.stored_concepto_nombre)
+      return evidenceIds.has(id) || evidenceNames.has(name) || evidenceNames.has(storedName)
+    })
+    .map((row: any) => ({
+      id: Number(row?.id || 0),
+      cycleName: compactText(row?.cycle_name, 40),
+      plantel: compactText(row?.plantel, 40).toUpperCase(),
+      conceptoId: Number(row?.concepto_id || 0),
+      conceptoNombre: compactText(row?.concepto_nombre, 255),
+      storedConceptoNombre: compactText(row?.stored_concepto_nombre, 255),
+      servicioClave: canonicalTallerKey(row?.servicio_clave || row?.servicio_nombre),
+      servicioNombre: normalizeServicioNombre(row?.servicio_nombre || row?.servicio_clave),
+    }))
+
+  const resolutions = evidence.map((row: any) => {
+    const resolution = resolveFinancialConceptMapping(scoped, {
+      conceptoId: row?.concepto_id,
+      conceptoNombre: row?.concepto_nombre,
+    })
+    return {
+      documentoConceptoId: Number(row?.concepto_id || 0),
+      documentoConceptoNombre: compactText(row?.concepto_nombre, 255),
+      documentosActivos: Number(row?.documentos_activos || 0),
+      normalizedName: normalizeFinancialConceptIdentity(row?.concepto_nombre),
+      matched: Boolean(resolution?.mapping),
+      matchedBy: resolution?.matchedBy || null,
+      servicioClave: resolution?.mapping ? canonicalTallerKey(resolution.mapping?.clave || resolution.mapping?.nombre) : null,
+      servicioNombre: resolution?.mapping?.nombre || null,
+    }
+  })
+
+  return {
+    matricula: key,
+    ciclo: normalizeCicloKey(ciclo),
+    plantel: compactText(plantel, 40).toUpperCase(),
+    cycleCandidates,
+    plantelCandidates: conceptMappingPlantelCandidates(plantel),
+    evidence: evidence.map((row: any) => ({
+      conceptoId: Number(row?.concepto_id || 0),
+      conceptoNombre: compactText(row?.concepto_nombre, 255),
+      documentosActivos: Number(row?.documentos_activos || 0),
+      normalizedName: normalizeFinancialConceptIdentity(row?.concepto_nombre),
+    })),
+    scopedMappings: (scoped.mappings || []).map((row: any) => ({
+      conceptoId: Number(row?.conceptoId || 0),
+      conceptoNombre: compactText(row?.conceptoNombre, 255),
+      storedConceptoNombre: compactText(row?.storedConceptoNombre, 255),
+      cycleName: compactText(row?.cycleName, 40),
+      plantel: compactText(row?.plantel, 40).toUpperCase(),
+      servicioClave: canonicalTallerKey(row?.clave || row?.nombre),
+      servicioNombre: row?.nombre || null,
+      normalizedName: normalizeFinancialConceptIdentity(row?.conceptoNombre),
+    })),
+    relatedMappings,
+    resolutions,
+  }
 }
 
 export const readEffectiveStudentServicios = async ({
