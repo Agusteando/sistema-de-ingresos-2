@@ -1,0 +1,52 @@
+name: CFDI error-message regression
+
+on:
+  push:
+    branches:
+      - main
+      - 'chatgpt/cfdi-*'
+    paths:
+      - 'components/InvoiceModal.vue'
+      - 'server/api/saveCompanyAndGenerate.post.ts'
+      - 'server/utils/cfdi-proxy.ts'
+      - 'tests/cfdi-operations.test.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/cfdi-error-message-regression.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'components/InvoiceModal.vue'
+      - 'server/api/saveCompanyAndGenerate.post.ts'
+      - 'server/utils/cfdi-proxy.ts'
+      - 'tests/cfdi-operations.test.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/cfdi-error-message-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cfdi-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify CFDI error-message behavior
+        run: >-
+          node --experimental-vm-modules --test
+          --test-name-pattern='invoice UI surfaces SAT/provider validation messages|provider validation details remain available'
+          tests/cfdi-operations.test.mjs
+      - name: Verify academic source
+        run: npm run verify:academic-source
+      - name: Build
+        run: npm run build

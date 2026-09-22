@@ -97,7 +97,12 @@
                   <LucideRefreshCw :size="20" />
                 </span>
                 <div class="min-w-0 flex-1">
-                  <h3 class="m-0 text-base font-bold">SAT no respondió</h3>
+                  <h3 class="m-0 text-base font-bold">
+                    {{ submissionError.providerResponded ? 'SAT respondió con el siguiente mensaje:' : 'SAT no respondió' }}
+                  </h3>
+                  <p v-if="submissionError.message" class="m-0 mt-1 text-sm leading-5 break-words">
+                    {{ submissionError.message }}
+                  </p>
                   <button class="btn btn-primary mt-3" type="button" @click="retrySubmission">
                     Haz click aquí para intentarlo de nuevo
                   </button>
@@ -500,10 +505,24 @@ const isUncertainWriteFailure = (error) => {
   return status >= 500 || /No repitas la operación/i.test(internalMessage)
 }
 
-const retryStateFor = (error) => ({
-  retryableUi: true,
-  mutationUncertain: isUncertainWriteFailure(error),
-})
+const retryStateFor = (error) => {
+  const payload = requestPayload(error)
+  const providerStatus = Number(payload?.providerStatus || 0)
+  const message = normalizeErrorText(
+    payload?.message
+    || payload?.error
+    || payload?.providerMessage
+    || error?.statusMessage
+    || error?.message,
+  )
+
+  return {
+    retryableUi: true,
+    mutationUncertain: isUncertainWriteFailure(error),
+    providerResponded: providerStatus >= 400 && providerStatus < 500,
+    message,
+  }
+}
 
 const focusFeedback = async (target) => {
   await nextTick()

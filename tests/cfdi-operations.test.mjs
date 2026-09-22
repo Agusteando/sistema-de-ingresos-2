@@ -233,3 +233,37 @@ test('download timeout covers body consumption after response headers arrive', a
     error => error.statusCode === 504)
   assert.equal(h.calls.filter(c => c.kind === 'legacy').length, 0)
 })
+
+test('invoice UI surfaces SAT/provider validation messages and preserves the retry CTA', async () => {
+  const source = await readFile(resolve('components/InvoiceModal.vue'), 'utf8')
+  assert.match(source, /SAT respondió con el siguiente mensaje:/)
+  assert.match(source, /\{\{\s*submissionError\.message\s*\}\}/)
+  assert.match(source, /providerResponded:\s*providerStatus\s*>=\s*400\s*&&\s*providerStatus\s*<\s*500/)
+  assert.match(source, /Haz click aquí para intentarlo de nuevo/)
+})
+
+test('provider validation details remain available to the invoice UI contract', async () => {
+  const providerMessage = 'El campo "customer.tax_id" tiene un formato inválido.'
+  const h = await harness({
+    fetch: async url => {
+      if (url.includes('series-group')) return Response.json([{ series: 'CM' }])
+      return Response.json({ message: providerMessage, code: 'validation_error', path: 'customer.tax_id' }, { status: 400 })
+    },
+  })
+
+  const body = payload()
+  body.invoiceData.items = [{
+    quantity: 1,
+    product: { description: 'TEST', product_key: '86121500', price: 1 },
+  }]
+
+  await assert.rejects(h.request('saveCompanyAndGenerate', body), error => {
+    assert.equal(error.statusCode, 400)
+    assert.equal(error.message, providerMessage)
+    assert.equal(error.data.providerMessage, providerMessage)
+    assert.equal(error.data.providerStatus, 400)
+    assert.equal(error.data.providerPath, 'customer.tax_id')
+    return true
+  })
+})
+
