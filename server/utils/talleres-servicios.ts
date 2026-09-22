@@ -6,6 +6,8 @@ import {
   DEFAULT_TALLERES_SERVICIOS,
   FINAL_TALLERES,
   canonicalTallerKey,
+  buildFinancialConceptMappingIndexes,
+  resolveFinancialConceptMapping,
   finalTallerSeed,
   isKnownTallerCatalogKey,
   DEFAULT_TALLER_SERVICIO_IMAGE,
@@ -35,6 +37,9 @@ export type ConceptMappedServicioEvidence = {
   conceptoId: number
   conceptoNombre: string
   documentosActivos: number
+  documentoConceptoId?: number
+  documentoConceptoNombre?: string
+  matchedBy?: 'id' | 'name'
 }
 
 export type ConceptMappedServicioAssignment = {
@@ -214,15 +219,27 @@ export const readCentralMatriculaServicios = async (matricula: unknown) => {
   const key = normalizeMatricula(matricula)
   if (!key) throw createError({ statusCode: 400, message: 'Matrícula requerida.' })
   const field = await resolveMatriculaServicioField()
+  const columns = await getCentralTableColumns('matricula')
+  const plantelSql = columns.has('plantel') ? 'plantel' : 'NULL AS plantel'
+  const cicloSql = columns.has('ciclo') ? 'CAST(ciclo AS CHAR) AS ciclo' : 'NULL AS ciclo'
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT ${escapeIdentifier(field)} AS servicios FROM matricula WHERE UPPER(TRIM(matricula)) = ? LIMIT 1`,
+    `SELECT ${escapeIdentifier(field)} AS servicios, ${plantelSql}, ${cicloSql}
+       FROM matricula
+      WHERE UPPER(TRIM(matricula)) = ?
+      LIMIT 1`,
     [key]
   )
   if (!rows.length) {
     throw createError({ statusCode: 404, message: 'La matrícula no existe en Control Escolar; no se pudo actualizar Talleres.' })
   }
   const raw = rows[0]?.servicios || ''
-  return { field, raw: compactText(raw, 5000), servicios: parseServiciosCsv(raw) }
+  return {
+    field,
+    raw: compactText(raw, 5000),
+    servicios: parseServiciosCsv(raw),
+    plantel: compactText(rows[0]?.plantel, 40).toUpperCase(),
+    ciclo: compactText(rows[0]?.ciclo, 40),
+  }
 }
 
 export const resolveServiciosWithCatalog = async (servicios: unknown[]) => {
@@ -364,24 +381,28 @@ const readConceptMappedServicios = async ({ ciclo, plantel }: { ciclo?: unknown,
     )) selected.set(conceptoId, candidate)
   }
 
-  return new Map(Array.from(selected.entries()).map(([conceptoId, row]) => {
+  const mappings = Array.from(selected.entries()).map(([conceptoId, row]) => {
     const clave = canonicalTallerKey(row.servicio_clave || row.servicio_nombre)
-    // The portal already has the authoritative active catalog loaded once per
-    // request and resolves this key there. Seeds keep this bridge-side evidence
-    // lookup cheap while still supporting every built-in service.
+    // The active Aurora catalog remains authoritative for business identity.
+    // This row only describes how a financial concept maps into that identity.
     const item = serviceSeedByKey(clave)
-    return [conceptoId, {
+    return {
       conceptoId,
       conceptoNombre: compactText(row.concepto_nombre, 255),
       clave,
       nombre: item?.servicio_nombre || finalTallerSeed(clave)?.nombre || normalizeServicioNombre(row.servicio_nombre),
       imagen: item?.imagen_url || (clave ? `/talleres-servicios/${clave}.svg` : DEFAULT_TALLER_SERVICIO_IMAGE),
-    }]
-  }).filter(([, row]) => row.clave && row.nombre))
+    }
+  }).filter((row) => row.clave && row.nombre)
+
+  return {
+    ...buildFinancialConceptMappingIndexes(mappings),
+    mappingCount: mappings.length,
+  }
 }
 
-const readActiveMappedConceptRows = async (matriculas: string[], ciclo: unknown, conceptIds: number[]) => {
-  if (!matriculas.length || !conceptIds.length) return []
+const readActiveMappedConceptRows = async (matriculas: string[], ciclo: unknown) => {
+  if (!matriculas.length) return []
   const cycleCandidates = cycleCandidatesFor(ciclo)
   let hasPeriodTable = false
   try {
@@ -404,22 +425,27 @@ const readActiveMappedConceptRows = async (matriculas: string[], ciclo: unknown,
            )`
       : ''
     const effectiveConcept = hasPeriodTable ? 'COALESCE(P.concepto_id, D.concepto)' : 'D.concepto'
+    const effectiveConceptName = hasPeriodTable
+      ? "COALESCE(NULLIF(TRIM(CAST(P.conceptoNombre AS CHAR)), ''), D.conceptoNombre)"
+      : 'D.conceptoNombre'
     const activePeriod = hasPeriodTable
       ? `AND (P.id IS NULL OR LOWER(TRIM(CAST(P.accion AS CHAR))) <> 'cancelacion')`
       : ''
     const batch = await query<any[]>(
       `SELECT UPPER(TRIM(D.matricula)) AS matricula,
               CAST(${effectiveConcept} AS UNSIGNED) AS concepto_id,
+              TRIM(CAST(${effectiveConceptName} AS CHAR)) AS concepto_nombre,
               COUNT(DISTINCT D.documento) AS documentos_activos
          FROM documentos D
          ${periodJoin}
         WHERE CAST(D.ciclo AS CHAR) IN (${cycleCandidates.map(() => '?').join(',')})
           AND LOWER(TRIM(CAST(D.estatus AS CHAR))) = 'activo'
           AND UPPER(TRIM(D.matricula)) IN (${chunk.map(() => '?').join(',')})
-          AND CAST(${effectiveConcept} AS UNSIGNED) IN (${conceptIds.map(() => '?').join(',')})
           ${activePeriod}
-        GROUP BY UPPER(TRIM(D.matricula)), CAST(${effectiveConcept} AS UNSIGNED)`,
-      [...cycleCandidates, ...chunk, ...conceptIds]
+        GROUP BY UPPER(TRIM(D.matricula)),
+                 CAST(${effectiveConcept} AS UNSIGNED),
+                 TRIM(CAST(${effectiveConceptName} AS CHAR))`,
+      [...cycleCandidates, ...chunk]
     )
     rows.push(...batch)
   }
@@ -444,14 +470,20 @@ export const readConceptMappedServiciosForMatriculas = async ({
   const unique = Array.from(new Set(matriculas.map(normalizeMatricula).filter(Boolean)))
   const result = new Map<string, ConceptMappedServicioAssignment[]>()
   const mappings = await readConceptMappedServicios({ ciclo, plantel })
-  if (!unique.length || !mappings.size) return { result, mappingCount: mappings.size, evidenceCount: 0 }
+  if (!unique.length || !mappings.mappingCount) return { result, mappingCount: mappings.mappingCount, evidenceCount: 0 }
 
-  const rows = await readActiveMappedConceptRows(unique, ciclo, Array.from(mappings.keys()))
+  const rows = await readActiveMappedConceptRows(unique, ciclo)
   const byStudent = new Map<string, Map<string, ConceptMappedServicioAssignment>>()
+  let evidenceCount = 0
   for (const row of rows) {
     const matricula = normalizeMatricula(row?.matricula)
-    const mapped = mappings.get(Number(row?.concepto_id || 0))
-    if (!matricula || !mapped) continue
+    const resolution = resolveFinancialConceptMapping(mappings, {
+      conceptoId: row?.concepto_id,
+      conceptoNombre: row?.concepto_nombre,
+    })
+    const mapped = resolution?.mapping
+    if (!matricula || !mapped || !resolution) continue
+    evidenceCount += 1
     const services = byStudent.get(matricula) || new Map<string, ConceptMappedServicioAssignment>()
     const service = services.get(mapped.clave) || {
       clave: mapped.clave,
@@ -460,9 +492,12 @@ export const readConceptMappedServiciosForMatriculas = async ({
       conceptosFinancieros: [],
     }
     service.conceptosFinancieros.push({
-      conceptoId: mapped.conceptoId,
-      conceptoNombre: mapped.conceptoNombre,
+      conceptoId: Number(mapped.conceptoId || 0),
+      conceptoNombre: compactText(mapped.conceptoNombre, 255),
       documentosActivos: Number(row?.documentos_activos || 0),
+      documentoConceptoId: Number(row?.concepto_id || 0) || undefined,
+      documentoConceptoNombre: compactText(row?.concepto_nombre, 255) || undefined,
+      matchedBy: resolution.matchedBy,
     })
     services.set(mapped.clave, service)
     byStudent.set(matricula, services)
@@ -471,7 +506,72 @@ export const readConceptMappedServiciosForMatriculas = async ({
   for (const [matricula, services] of byStudent) {
     result.set(matricula, Array.from(services.values()).sort((left, right) => left.nombre.localeCompare(right.nombre, 'es')))
   }
-  return { result, mappingCount: mappings.size, evidenceCount: rows.length }
+  return { result, mappingCount: mappings.mappingCount, evidenceCount }
+}
+
+export const readEffectiveStudentServicios = async ({
+  matricula,
+  ciclo,
+  plantel,
+}: {
+  matricula: unknown
+  ciclo?: unknown
+  plantel?: unknown
+}) => {
+  const key = normalizeMatricula(matricula)
+  const current = await readCentralMatriculaServicios(key)
+  const resolved = await resolveServiciosWithCatalog(current.servicios)
+  const effectiveCiclo = normalizeCicloKey(ciclo || current.ciclo)
+  const effectivePlantel = compactText(plantel || current.plantel, 40).toUpperCase()
+  const financial = await readConceptMappedServiciosForMatriculas({
+    matriculas: [key],
+    ciclo: effectiveCiclo,
+    plantel: effectivePlantel,
+  })
+
+  const byKey = new Map<string, any>()
+  for (const item of resolved.servicios) {
+    const clave = canonicalTallerKey(item?.clave || item?.nombre)
+    if (!clave) continue
+    byKey.set(clave, {
+      ...item,
+      clave,
+      source: 'matricula',
+      fuentes: ['matricula'],
+      directa: true,
+      conceptosFinancieros: [],
+    })
+  }
+
+  for (const item of financial.result.get(key) || []) {
+    const clave = canonicalTallerKey(item?.clave || item?.nombre)
+    if (!clave) continue
+    const existing = byKey.get(clave)
+    if (existing) {
+      byKey.set(clave, {
+        ...existing,
+        fuentes: Array.from(new Set([...(existing.fuentes || []), 'concepto_financiero'])),
+        conceptosFinancieros: item.conceptosFinancieros || [],
+      })
+      continue
+    }
+    byKey.set(clave, {
+      ...item,
+      clave,
+      source: 'concepto_financiero',
+      fuentes: ['concepto_financiero'],
+      directa: false,
+    })
+  }
+
+  return {
+    current,
+    resolved,
+    financial,
+    ciclo: effectiveCiclo,
+    plantel: effectivePlantel,
+    servicios: Array.from(byKey.values()).sort((left, right) => left.nombre.localeCompare(right.nombre, 'es')),
+  }
 }
 
 const readCurrentFinancialTallerKeys = async ({

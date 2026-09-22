@@ -38,6 +38,56 @@ test('one-way transport aliases use one canonical SENCILLO identity for every ro
   )
 })
 
+test('financial mappings survive Bridge concept-id drift by unambiguous concept name', async () => {
+  const shared = await loadShared()
+  const indexes = shared.buildFinancialConceptMappingIndexes([
+    { conceptoId: 501, conceptoNombre: 'GIMNASIA RITMICA', clave: 'GIMNASIA', nombre: 'GIMNASIA' },
+    { conceptoId: 1069, conceptoNombre: 'TRANSPORTE SENCILLO RUTA 2 2026-2027', clave: 'TRANSPORTE_SENCILLO_R2', nombre: 'TRANSPORTE SENCILLO R2' },
+  ])
+
+  const exact = shared.resolveFinancialConceptMapping(indexes, {
+    conceptoId: 1069,
+    conceptoNombre: 'TRANSPORTE SENCILLO RUTA 2 2026-2027',
+  })
+  assert.equal(exact?.mapping?.clave, 'TRANSPORTE_SENCILLO_R2')
+  assert.equal(exact?.matchedBy, 'id')
+
+  const drifted = shared.resolveFinancialConceptMapping(indexes, {
+    conceptoId: 999501,
+    conceptoNombre: 'Gimnasia Rítmica',
+  })
+  assert.equal(drifted?.mapping?.clave, 'GIMNASIA', 'PT1271 marker: GIMNASIA RITMICA must resolve to GIMNASIA even when Bridge concept ID drifted')
+  assert.equal(drifted?.matchedBy, 'name')
+
+  const ambiguous = shared.buildFinancialConceptMappingIndexes([
+    { conceptoId: 1, conceptoNombre: 'TALLER DUPLICADO', clave: 'FUTBOL', nombre: 'FUTBOL' },
+    { conceptoId: 2, conceptoNombre: 'TALLER DUPLICADO', clave: 'TENIS', nombre: 'TENIS' },
+  ])
+  assert.equal(
+    shared.resolveFinancialConceptMapping(ambiguous, { conceptoId: 999, conceptoNombre: 'Taller Duplicado' }),
+    null,
+    'name fallback must never guess when the same concept name maps to different workshops',
+  )
+})
+
+test('Aurora student Talleres UI unions manual and financial assignments', async () => {
+  const [getApi, putApi, details, servicios] = await Promise.all([
+    readFile(resolve(root, 'server/api/students/[matricula]/servicios/index.get.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/students/[matricula]/servicios/index.put.ts'), 'utf8'),
+    readFile(resolve(root, 'components/StudentDetails.vue'), 'utf8'),
+    readFile(resolve(root, 'server/utils/talleres-servicios.ts'), 'utf8'),
+  ])
+
+  assert.match(getApi, /readEffectiveStudentServicios/)
+  assert.match(putApi, /readEffectiveStudentServicios/)
+  assert.match(servicios, /resolveFinancialConceptMapping/)
+  assert.match(servicios, /concepto_nombre/)
+  assert.doesNotMatch(servicios, /CAST\(\$\{effectiveConcept\} AS UNSIGNED\) IN/)
+  assert.match(details, /servicio\.directa === false/)
+  assert.match(details, />Concepto<\/small>/)
+  assert.match(details, /servicio\.directa !== false/)
+})
+
 test('stale financial write-through does not survive a workshop change', async () => {
   const shared = await loadShared()
   const history = {

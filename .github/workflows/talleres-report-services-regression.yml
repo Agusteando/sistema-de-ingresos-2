@@ -12,6 +12,14 @@ on:
       - 'server/utils/talleres-report.ts'
       - 'server/utils/talleres-contracts.ts'
       - 'server/utils/talleres-servicios.ts'
+      - 'server/api/students/[matricula]/servicios/index.get.ts'
+      - 'server/api/students/[matricula]/servicios/index.put.ts'
+      - 'components/StudentDetails.vue'
+      - 'scripts/verify-pt1271-financial-live.mjs'
+      - 'server/api/students/[matricula]/servicios/index.get.ts'
+      - 'server/api/students/[matricula]/servicios/index.put.ts'
+      - 'components/StudentDetails.vue'
+      - 'scripts/verify-pt1271-financial-live.mjs'
       - 'server/api/external/v1/talleres/roster.get.ts'
       - 'server/api/external/v1/talleres/summary.get.ts'
       - 'server/api/talleres-servicios/reporte.get.ts'
@@ -71,3 +79,9 @@ jobs:
         run: npm run verify:academic-source
       - name: Build
         run: npm run build
+      - name: Verify PT1271 financial Talleres parity in deployed Aurora
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+          AURORA_TEST_CYCLE: '2026'
+        run: node scripts/verify-pt1271-financial-live.mjs
