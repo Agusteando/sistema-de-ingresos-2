@@ -39,6 +39,16 @@ async function loadSummaryHarness(options = {}) {
         data: [
           { matricula: 'A1', nombres: 'Ana', apellidoPaterno: 'Uno', grado: '1', grupo: 'A', servicio: 'FUTBOL, DESAYUNO, TRANSPORTE REDONDO R1' },
           { matricula: 'A2', nombres: 'Beto', apellidoPaterno: 'Dos', grado: '2', grupo: 'B', servicio: 'COMIDA, SERVICIO FUERA DE CATALOGO' },
+          {
+            matricula: 'PM1018',
+            nombres: 'Emilio Alejandro',
+            apellidoPaterno: 'Lopez Rosas',
+            grado: 'quinto',
+            grupo: 'ASIA',
+            servicio: 'FUTBOL',
+            baja: 1,
+            status: 'Baja',
+          },
         ],
       }))
     },
@@ -73,7 +83,8 @@ async function loadSummaryHarness(options = {}) {
             nombreCompleto: 'Dana Snapshot',
             grado: '1',
             grupo: 'A',
-            status: 'active',
+            status: 'withdrawn',
+            baja: true,
             asignaciones: [{ clave: 'COMIDA', nombre: 'COMIDA', fuentes: ['concepto_financiero'] }],
           },
         ],
@@ -158,6 +169,37 @@ test('Reporte Talleres includes every active /conceptos workshop and service, in
   assert.equal(byKey.has('NO_ACTIVO'), false)
   assert.equal(byKey.has('SERVICIO_FUERA_DE_CATALOGO'), false)
   assert.equal(byKey.get('COMIDA').students[0].matricula, 'A2')
+  assert.equal(byKey.get('FUTBOL').alumnos, 2)
+  assert.ok(
+    byKey.get('FUTBOL').students.some(student => student.matricula === 'PM1018'),
+    'PM1018 must remain in FUTBOL even when Control Escolar marks the student as school-wide Baja',
+  )
+})
+
+test('Talleres summary never treats school-wide Baja as workshop removal', async () => {
+  const summaryModule = await loadSummaryHarness()
+  const result = await summaryModule.readTalleresAdminSummary({
+    event: {},
+    plantel: 'PM',
+    ciclo: '2026',
+    includeStudents: true,
+  })
+
+  const futbol = result.talleres.find(row => row.clave === 'FUTBOL')
+  assert.ok(futbol, 'FUTBOL must exist')
+  const emilio = futbol.students.find(student => student.matricula === 'PM1018')
+  assert.ok(emilio, 'PM1018 is the hard acceptance marker: an active FUTBOL assignment must survive school Baja metadata')
+})
+
+test('snapshot fallback also keeps workshop assignments regardless of school-wide Baja', async () => {
+  const summaryModule = await loadSummaryHarness({ bridgeUnavailable: true })
+  const result = await summaryModule.readTalleresAdminSummary({
+    event: {},
+    plantel: 'DC',
+    ciclo: '2026',
+    includeStudents: true,
+  })
+  assert.equal(result.talleres[0].students[0].matricula, 'DC1')
 })
 
 test('institutional Excel is fed by the same report loader as the on-screen report', async () => {
