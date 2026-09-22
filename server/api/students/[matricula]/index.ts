@@ -10,6 +10,12 @@ import {
 } from "../../../../shared/utils/grado";
 import { normalizeCicloKey } from "../../../../shared/utils/ciclo";
 import { parseCurp } from "../../../../shared/utils/curp";
+import { updateControlEscolarStudent } from "../../../utils/control-escolar";
+import {
+  STUDENT_NAME_FIELDS,
+  scheduleStudentNameSync,
+  studentNameFieldsChanged,
+} from "../../../utils/student-name-sync";
 
 export default defineEventHandler(async (event) =>
   runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
@@ -21,7 +27,10 @@ export default defineEventHandler(async (event) =>
       const body = await readBody(event);
       const cicloKey = normalizeCicloKey(body.ciclo);
       const [currentStudent] = await query<any[]>(
-        `SELECT plantel, nivel, grado, ciclo FROM base WHERE matricula = ? LIMIT 1`,
+        `SELECT plantel, nivel, grado, ciclo, apellidoPaterno, apellidoMaterno, nombres
+         FROM base
+         WHERE matricula = ?
+         LIMIT 1`,
         [matricula],
       );
 
@@ -82,6 +91,18 @@ export default defineEventHandler(async (event) =>
         : academicChangedByValue;
       const shouldWriteCiclo =
         academicChangedByClient && academicChangedByValue;
+      const namePatch = Object.fromEntries(
+        STUDENT_NAME_FIELDS.map((field) => [
+          field,
+          Object.prototype.hasOwnProperty.call(body, field)
+            ? body[field]
+            : currentStudent[field],
+        ]),
+      );
+      const changedNameFields = studentNameFieldsChanged(
+        currentStudent,
+        namePatch,
+      );
       const setClauses = [
         "apellidoPaterno = ?",
         "apellidoMaterno = ?",
@@ -199,6 +220,26 @@ export default defineEventHandler(async (event) =>
       }
 
       await executeStatementTransaction(statements);
+
+      if (changedNameFields.length) {
+        scheduleStudentNameSync(
+          event,
+          () =>
+            updateControlEscolarStudent(
+              plantel,
+              String(matricula || "").trim(),
+              namePatch,
+              user,
+            ),
+          {
+            direction: "bridge-to-central",
+            matricula: String(matricula || "").trim(),
+            plantel,
+            fields: changedNameFields,
+          },
+        );
+      }
+
       return { success: true };
     }
 
