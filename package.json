@@ -10,7 +10,8 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "prisma:push": "prisma db push",
-    "verify:academic-source": "node scripts/verify-academic-source.mjs"
+    "verify:academic-source": "node scripts/verify-academic-source.mjs",
+    "verify:talleres-artwork": "node --experimental-strip-types scripts/verify-talleres-artwork.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.10.2",

@@ -1,0 +1,51 @@
+name: Talleres artwork regression
+
+on:
+  push:
+    branches:
+      - main
+      - 'chatgpt/branded-workshop-**'
+    paths:
+      - 'assets/css/components/student-details.css'
+      - 'components/ConceptosLegacy.vue'
+      - 'components/StudentDetails.vue'
+      - 'components/TallerServicioArtwork.vue'
+      - 'components/talleres/TalleresOverviewDialog.vue'
+      - 'public/talleres-servicios/workshops-services-sprite-v1.webp'
+      - 'shared/utils/talleresArtwork.manifest.json'
+      - 'shared/utils/talleresArtwork.ts'
+      - 'scripts/verify-talleres-artwork.mjs'
+      - '.github/workflows/talleres-artwork-regression.yml'
+  pull_request:
+    paths:
+      - 'assets/css/components/student-details.css'
+      - 'components/ConceptosLegacy.vue'
+      - 'components/StudentDetails.vue'
+      - 'components/TallerServicioArtwork.vue'
+      - 'components/talleres/TalleresOverviewDialog.vue'
+      - 'public/talleres-servicios/workshops-services-sprite-v1.webp'
+      - 'shared/utils/talleresArtwork.manifest.json'
+      - 'shared/utils/talleresArtwork.ts'
+      - 'scripts/verify-talleres-artwork.mjs'
+      - '.github/workflows/talleres-artwork-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  artwork-contract-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify sprite, manifest, catalog, and generic fallback
+        run: npm run verify:talleres-artwork
+      - name: Build
+        run: npm run build
