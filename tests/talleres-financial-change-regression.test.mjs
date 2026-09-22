@@ -46,7 +46,7 @@ test('legacy Talleres mappings with servicio_nombre but no servicio_clave remain
     /AND IFNULL\(servicio_clave, ''\) <> ''/,
     'Talleres must not discard legacy mappings just because servicio_clave is empty',
   )
-  const compatiblePredicates = source.match(/COALESCE\(NULLIF\(TRIM\(servicio_clave\), ''\), NULLIF\(TRIM\(servicio_nombre\), ''\)\) IS NOT NULL/g) || []
+  const compatiblePredicates = source.match(/COALESCE\(NULLIF\(TRIM\((?:M\.)?servicio_clave\), ''\), NULLIF\(TRIM\((?:M\.)?servicio_nombre\), ''\)\) IS NOT NULL/g) || []
   assert.equal(compatiblePredicates.length, 2, 'both concept lookup paths must accept servicio_nombre as the legacy identity')
 })
 
