@@ -519,7 +519,8 @@
                 <span v-for="servicio in serviciosTags" :key="`service-tag-${servicio.clave}`" class="student-service-tag">
                   <TallerServicioArtwork :catalog-key="servicio.clave || servicio.nombre" :size="28" />
                   {{ servicio.nombre }}
-                  <button type="button" :disabled="savingServicio === servicio.clave" title="Quitar" @click="removeServicio(servicio)">
+                  <small v-if="servicio.directa === false" class="student-service-source">Concepto</small>
+                  <button v-if="servicio.directa !== false" type="button" :disabled="savingServicio === servicio.clave" title="Quitar" @click="removeServicio(servicio)">
                     <LucideX :size="11" />
                   </button>
                 </span>
@@ -1399,6 +1400,9 @@ const applyServiciosPayload = (payload) => {
     nombre: item.nombre || item.clave,
     imagen: item.imagen || serviceImageFor(item.clave || item.nombre),
     source: item.source || 'catalog',
+    fuentes: Array.isArray(item.fuentes) ? item.fuentes : [],
+    directa: item.directa !== false,
+    conceptosFinancieros: Array.isArray(item.conceptosFinancieros) ? item.conceptosFinancieros : [],
   })) : serviciosTags.value;
 };
 const loadServicios = async () => {
@@ -1473,7 +1477,12 @@ const mutateServicio = async (servicio, action) => {
   try {
     const payload = await $fetch(`/api/students/${encodeURIComponent(props.student.matricula)}/servicios`, {
       method: 'PUT',
-      body: { action, servicio_clave: servicio.clave, servicio_nombre: servicio.nombre },
+      body: {
+        action,
+        servicio_clave: servicio.clave,
+        servicio_nombre: servicio.nombre,
+        plantel: props.student?.plantel || accountOverlaySource.value?.plantel || '',
+      },
     });
     applyServiciosPayload(payload);
     servicioSearch.value = '';
@@ -3869,6 +3878,18 @@ const handleInvoiceSuccess = (invoice) => {
 
 }
 
+.student-service-source {
+  display:inline-flex;
+  align-items:center;
+  min-height:18px;
+  padding:0 5px;
+  border-radius:999px;
+  background:#eef5ff;
+  color:#486d9d;
+  font-size:8px;
+  font-weight:850;
+  letter-spacing:.02em;
+}
 .student-talleres-info-trigger {
   width: 100%;
   margin-top: 10px;

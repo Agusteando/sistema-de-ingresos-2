@@ -1,5 +1,6 @@
 import { getTrustedAuthUser } from '../../../../utils/auth-session'
-import { readBestTalleresServiciosCatalog, resolveServiciosWithCatalog, updateCentralMatriculaServicio } from '../../../../utils/talleres-servicios'
+import { readBestTalleresServiciosCatalog, readEffectiveStudentServicios, updateCentralMatriculaServicio } from '../../../../utils/talleres-servicios'
+import { readInstitutionalSchoolCycle } from '../../../../utils/school-cycle'
 import { canonicalTallerKey, normalizeServicioClave, normalizeServicioNombre } from '../../../../../shared/utils/talleresServicios'
 import { recordTalleresAssignmentChange } from '../../../../utils/talleres-contracts'
 
@@ -45,22 +46,30 @@ export default defineEventHandler(async (event) => {
       metadata: { source: 'aurora_manual' },
     })
   }
-  const resolved = await resolveServiciosWithCatalog(updated.servicios)
+  const institutional = await readInstitutionalSchoolCycle()
+  const effective = await readEffectiveStudentServicios({
+    matricula,
+    ciclo: body?.ciclo || institutional.key,
+    plantel: body?.plantel,
+  })
 
   return {
     ok: true,
     action,
     changed: updated.changed,
-    source: 'central',
+    source: 'central+financial',
     field: updated.field,
     raw: updated.raw,
-    servicios: resolved.servicios,
-    catalog: resolved.catalog.map((item) => ({
+    ciclo: effective.ciclo,
+    plantel: effective.plantel,
+    servicios: effective.servicios,
+    catalog: effective.resolved.catalog.map((item) => ({
       clave: item.servicio_clave,
       nombre: item.servicio_nombre,
       imagen: item.imagen_url,
       activo: Number(item.activo || 0) !== 0,
       orden: Number(item.orden || 9999),
     })),
+    financialEvidenceCount: effective.financial.evidenceCount,
   }
 })

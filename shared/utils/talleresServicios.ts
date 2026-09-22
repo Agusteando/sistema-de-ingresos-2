@@ -117,6 +117,63 @@ export const canonicalTallerKey = (value: unknown) => {
   return LEGACY_TALLER_ALIASES[key] || key
 }
 
+export type FinancialConceptMappingCandidate = {
+  conceptoId?: unknown
+  conceptoNombre?: unknown
+  clave?: unknown
+  nombre?: unknown
+}
+
+export const normalizeFinancialConceptIdentity = (value: unknown) => String(value || '')
+  .trim()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toUpperCase()
+  .replace(/[^A-Z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '')
+
+export const buildFinancialConceptMappingIndexes = <T extends FinancialConceptMappingCandidate>(mappings: T[] = []) => {
+  const byId = new Map<number, T>()
+  const byNameBuckets = new Map<string, T[]>()
+
+  for (const mapping of mappings) {
+    const id = Number(mapping?.conceptoId || 0)
+    if (id) byId.set(id, mapping)
+
+    const nameKey = normalizeFinancialConceptIdentity(mapping?.conceptoNombre)
+    if (!nameKey) continue
+    const bucket = byNameBuckets.get(nameKey) || []
+    bucket.push(mapping)
+    byNameBuckets.set(nameKey, bucket)
+  }
+
+  const byName = new Map<string, T>()
+  for (const [nameKey, bucket] of byNameBuckets) {
+    const serviceKeys = new Set(
+      bucket
+        .map((mapping) => canonicalTallerKey(mapping?.clave || mapping?.nombre))
+        .filter(Boolean),
+    )
+    if (serviceKeys.size === 1 && bucket[0]) byName.set(nameKey, bucket[0])
+  }
+
+  return { byId, byName }
+}
+
+export const resolveFinancialConceptMapping = <T extends FinancialConceptMappingCandidate>(
+  indexes: { byId: Map<number, T>, byName: Map<string, T> },
+  evidence: { conceptoId?: unknown, conceptoNombre?: unknown },
+) => {
+  const id = Number(evidence?.conceptoId || 0)
+  if (id && indexes.byId.has(id)) {
+    return { mapping: indexes.byId.get(id) as T, matchedBy: 'id' as const }
+  }
+
+  const nameKey = normalizeFinancialConceptIdentity(evidence?.conceptoNombre)
+  const mapping = nameKey ? indexes.byName.get(nameKey) : null
+  return mapping ? { mapping, matchedBy: 'name' as const } : null
+}
+
 export type TallerAssignmentHistoryState = {
   lastAction?: unknown
   lastSource?: unknown
