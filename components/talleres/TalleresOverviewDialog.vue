@@ -77,14 +77,11 @@
                     <tr v-for="taller in summary.talleres" :key="taller.clave">
                       <td>
                         <span class="talleres-row-main">
-                          <span class="talleres-row-image">
-                            <img
-                              :src="taller.imagen || fallbackImage"
-                              :alt="''"
-                              loading="lazy"
-                              @error="onImageError"
-                            />
-                          </span>
+                          <TallerServicioArtwork
+                            class="talleres-row-image"
+                            :catalog-key="taller.clave || taller.nombre"
+                            :size="48"
+                          />
                           <strong>{{ taller.nombre }}</strong>
                         </span>
                       </td>
@@ -152,8 +149,6 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const ACKNOWLEDGE_MS = 7 * DAY_MS
 const AUTO_DELAY_MS = 720
 const COLLAPSE_MS = 480
-const fallbackImage = '/talleres-servicios/default.svg'
-
 const panelRef = ref<HTMLElement | null>(null)
 const closeButtonRef = ref<HTMLButtonElement | null>(null)
 const isOpen = ref(false)
@@ -314,13 +309,6 @@ const scheduleAutoOpen = () => {
   autoTimer = setTimeout(() => {
     if (shouldAutoOpen()) void open({ automatic: true })
   }, AUTO_DELAY_MS)
-}
-
-const onImageError = (event: Event) => {
-  const image = event.currentTarget as HTMLImageElement | null
-  if (!image || image.dataset.fallbackApplied === '1') return
-  image.dataset.fallbackApplied = '1'
-  image.src = fallbackImage
 }
 
 watch(
@@ -588,20 +576,7 @@ defineExpose({ open, prefetch: loadSummary })
 }
 
 .talleres-row-image {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  overflow: hidden;
-  border: 1px solid #e0e9dd;
-  border-radius: 13px;
-  background: #f1f7ef;
-}
-
-.talleres-row-image img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
+  flex: 0 0 48px;
 }
 
 .talleres-count {
@@ -889,9 +864,8 @@ defineExpose({ open, prefetch: loadSummary })
   }
 
   .talleres-row-image {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
+    --taller-artwork-size: 44px !important;
+    flex-basis: 44px;
   }
 
   .talleres-row-main strong {

@@ -493,7 +493,7 @@
                 :class="{ selected: selectedService?.clave === service.clave }"
                 @click="selectService(service)"
               >
-                <img :src="service.imagen" alt="" loading="lazy" />
+                <TallerServicioArtwork :catalog-key="service.clave || service.nombre" :size="42" />
                 <span>{{ service.nombre }}</span>
               </button>
               <button v-if="talleresCatalogo.length > servicePreviewLimit" type="button" class="more-services-button" @click="showAllServices = !showAllServices">
@@ -2053,29 +2053,27 @@ onMounted(loadAdmin)
 .workshop-chip-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(122px, 1fr));
-  gap: 9px;
+  gap: 2px 14px;
 }
 .workshop-chip-grid button {
   display: flex;
   align-items: center;
   gap: 9px;
   min-width: 0;
-  min-height: 48px;
-  border: 1px solid #dfe7ef;
-  border-radius: 15px;
-  background: #fff;
+  min-height: 58px;
+  border: 0;
+  border-bottom: 1px solid #e6ece7;
+  border-radius: 0;
+  background: transparent;
   color: #263952;
-  padding: 8px 10px;
+  padding: 6px 2px;
   text-align: left;
-  box-shadow: 0 8px 16px rgba(22,38,65,.03);
 }
-.workshop-chip-grid button.selected { border-color: #93c77e; background: #f6fcf3; color: #2e7f33; }
-.workshop-chip-grid img {
-  width: 32px;
-  height: 32px;
-  border-radius: 12px;
-  object-fit: cover;
-  flex: 0 0 auto;
+.workshop-chip-grid button:hover { color: #2e7f33; }
+.workshop-chip-grid button.selected {
+  border-bottom-color: #618b2f;
+  color: #2e7f33;
+  box-shadow: inset 0 -2px #618b2f;
 }
 .workshop-chip-grid span {
   overflow: hidden;
@@ -2084,7 +2082,7 @@ onMounted(loadAdmin)
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.more-services-button { justify-content: center; border-style: dashed !important; }
+.more-services-button { justify-content: center; border-bottom-style: dashed !important; }
 
 @media (max-width: 1440px) {
   .inventory-kpis { grid-template-columns: repeat(5, minmax(150px, 1fr)); overflow-x: auto; padding-bottom: 2px; }

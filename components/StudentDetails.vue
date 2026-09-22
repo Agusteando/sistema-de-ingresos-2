@@ -175,7 +175,7 @@
                     class="student-service-mini"
                     :title="servicio.nombre"
                   >
-                    <img :src="servicio.imagen" alt="" loading="lazy" />
+                    <TallerServicioArtwork :catalog-key="servicio.clave || servicio.nombre" :size="22" />
                     {{ servicio.nombre }}
                   </span>
                   <button
@@ -517,7 +517,7 @@
 
               <div v-if="serviciosTags.length" class="student-services-tags">
                 <span v-for="servicio in serviciosTags" :key="`service-tag-${servicio.clave}`" class="student-service-tag">
-                  <img :src="servicio.imagen" alt="" loading="lazy" />
+                  <TallerServicioArtwork :catalog-key="servicio.clave || servicio.nombre" :size="28" />
                   {{ servicio.nombre }}
                   <button type="button" :disabled="savingServicio === servicio.clave" title="Quitar" @click="removeServicio(servicio)">
                     <LucideX :size="11" />
@@ -568,7 +568,7 @@
                     :disabled="savingServicio === servicio.clave"
                     @click="addServicio(servicio)"
                   >
-                    <img :src="servicio.imagen" alt="" loading="lazy" />
+                    <TallerServicioArtwork :catalog-key="servicio.clave || servicio.nombre" :size="38" />
                     <span>{{ servicio.nombre }}</span>
                   </button>
                 </div>
