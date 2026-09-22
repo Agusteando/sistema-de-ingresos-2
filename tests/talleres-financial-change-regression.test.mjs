@@ -38,6 +38,18 @@ test('one-way transport aliases use one canonical SENCILLO identity for every ro
   )
 })
 
+test('legacy Talleres category aliases remain authoritative for financial mappings', async () => {
+  const source = await readFile(resolve(root, 'server/utils/talleres-servicios.ts'), 'utf8')
+
+  assert.doesNotMatch(
+    source,
+    /IFNULL\(enrollment_type, 'regular'\) = 'talleres_servicios'/,
+    'resolver must not require only the newest raw category literal',
+  )
+  const aliases = source.match(/IN \('talleres_servicios', 'talleres', 'talleres_y_servicios'\)/g) || []
+  assert.equal(aliases.length, 2, 'both mapping lookup paths must accept the category aliases normalized by /conceptos')
+})
+
 test('legacy Talleres mappings with servicio_nombre but no servicio_clave remain authoritative', async () => {
   const source = await readFile(resolve(root, 'server/utils/talleres-servicios.ts'), 'utf8')
 
