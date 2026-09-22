@@ -15,12 +15,6 @@ import {
 const text = (value: unknown, max = 255) => String(value ?? '').trim().slice(0, max)
 const matriculaKey = (value: unknown) => text(value, 64).toUpperCase().replace(/\s+/g, '')
 
-const isActiveStudent = (student: any) => {
-  if (Number(student?.baja || 0) === 1) return false
-  const status = text(student?.status, 40).toLowerCase()
-  return !['baja', 'withdrawn', 'inactive', 'inactivo'].includes(status)
-}
-
 export type TalleresAdminStudentRow = {
   matricula: string
   nombre: string
@@ -100,7 +94,9 @@ const readSummaryFromCurrentSnapshot = async ({
     catalog.set(key, item)
   }
 
-  const students = (Array.isArray(roster?.students) ? roster.students : []).filter(isActiveStudent)
+  // Talleres membership is its own domain. School-level baja/status metadata
+  // must never veto a current workshop/service assignment.
+  const students = Array.isArray(roster?.students) ? roster.students : []
   const studentsByMatricula = new Map<string, any>()
   const counts = new Map<string, Set<string>>()
 
@@ -202,7 +198,9 @@ export const readTalleresAdminSummary = async ({
       all: '1',
       limit: 10000,
     })
-    const students = (Array.isArray(studentsResult?.data) ? studentsResult.data : []).filter(isActiveStudent)
+    // Do not filter by school-level baja/status here. A student belongs in this
+    // summary whenever a current workshop/service assignment says so.
+    const students = Array.isArray(studentsResult?.data) ? studentsResult.data : []
     const matriculas = students.map((student: any) => matriculaKey(student?.matricula)).filter(Boolean)
 
     const [catalogResult, financialAssignments] = await Promise.all([
