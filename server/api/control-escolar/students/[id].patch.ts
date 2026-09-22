@@ -1,5 +1,10 @@
 import { resolveControlEscolarAuth, updateControlEscolarStudent } from '../../../utils/control-escolar'
 import { logControlEscolarAuditEvent } from '../../../utils/control-escolar-audit'
+import {
+  scheduleStudentNameSync,
+  studentNameFieldsInPatch,
+  syncStudentNamePatchToBridgeBase,
+} from '../../../utils/student-name-sync'
 
 const cleanFieldName = (value: unknown) => String(value || '').trim().slice(0, 80)
 const editableFieldNames = (body: any) => Object.keys(body || {})
@@ -29,6 +34,34 @@ export default defineEventHandler(async (event) => {
     const student: any = result?.student || null
     const fields = editableFieldNames(body)
     const progressPercent = completionFromStudent(student)
+    const changedNameFields = studentNameFieldsInPatch(body)
+
+    if (changedNameFields.length) {
+      const nameValues = Object.fromEntries(
+        changedNameFields.map((field) => [
+          field,
+          student && Object.prototype.hasOwnProperty.call(student, field)
+            ? student[field]
+            : body?.[field],
+        ]),
+      )
+
+      scheduleStudentNameSync(
+        event,
+        () => syncStudentNamePatchToBridgeBase({
+          agentId: auth.agentId,
+          matricula,
+          fields: changedNameFields,
+          values: nameValues,
+        }),
+        {
+          direction: 'central-to-bridge',
+          matricula,
+          plantel: auth.agentId,
+          fields: changedNameFields,
+        },
+      )
+    }
 
     logControlEscolarAuditEvent({
       eventType: 'student_update',

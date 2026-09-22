@@ -1,0 +1,51 @@
+name: Student name dual-write regression
+
+on:
+  push:
+    branches:
+      - main
+      - 'chatgpt/student-name-*'
+    paths:
+      - 'server/api/students/[matricula]/index.ts'
+      - 'server/api/control-escolar/students/[id].patch.ts'
+      - 'server/utils/student-name-sync.ts'
+      - 'tests/student-name-dual-write.test.mjs'
+      - 'scripts/verify-academic-source.mjs'
+      - '.github/workflows/student-name-dual-write-regression.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'server/api/students/[matricula]/index.ts'
+      - 'server/api/control-escolar/students/[id].patch.ts'
+      - 'server/utils/student-name-sync.ts'
+      - 'tests/student-name-dual-write.test.mjs'
+      - 'scripts/verify-academic-source.mjs'
+      - '.github/workflows/student-name-dual-write-regression.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  name-dual-write:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify narrow student-name dual write
+        run: node --experimental-vm-modules --test tests/student-name-dual-write.test.mjs
+      - name: Verify academic source invariants
+        run: npm run verify:academic-source
+      - name: Build
+        run: npm run build
