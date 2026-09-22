@@ -131,6 +131,8 @@ export const normalizeFinancialConceptIdentity = (value: unknown) => String(valu
   .toUpperCase()
   .replace(/[^A-Z0-9]+/g, '_')
   .replace(/^_+|_+$/g, '')
+  .replace(/_(?:CICLO_)?20\d{2}_20\d{2}$/, '')
+  .replace(/_(?:CICLO_)?20\d{2}$/, '')
 
 export const buildFinancialConceptMappingIndexes = <T extends FinancialConceptMappingCandidate>(mappings: T[] = []) => {
   const byId = new Map<number, T>()

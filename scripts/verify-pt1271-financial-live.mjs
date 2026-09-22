@@ -69,5 +69,18 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
   if (attempt < MAX_ATTEMPTS) await sleep(WAIT_MS)
 }
 
-console.error(JSON.stringify({ ok: false, matricula: MATRICULA, plantel: PLANTEL, expected: 'GIMNASIA via GIMNASIA RITMICA financial concept', last }, null, 2))
+let diagnostics = null
+try {
+  diagnostics = await request(`/api/external/v1/talleres/diagnostics/student?plantel=${PLANTEL}&ciclo=${encodeURIComponent(CICLO)}&matricula=${MATRICULA}`)
+} catch (error) {
+  diagnostics = { error: String(error?.message || error) }
+}
+console.error(JSON.stringify({
+  ok: false,
+  matricula: MATRICULA,
+  plantel: PLANTEL,
+  expected: 'GIMNASIA via GIMNASIA RITMICA financial concept',
+  last,
+  diagnostics: diagnostics?.diagnostics || diagnostics,
+}, null, 2))
 throw new Error('PT1271 did not reach GIMNASIA financial parity in deployed Aurora')
