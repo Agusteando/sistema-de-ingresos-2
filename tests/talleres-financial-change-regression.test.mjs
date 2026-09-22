@@ -38,6 +38,18 @@ test('one-way transport aliases use one canonical SENCILLO identity for every ro
   )
 })
 
+test('legacy Talleres mappings with servicio_nombre but no servicio_clave remain authoritative', async () => {
+  const source = await readFile(resolve(root, 'server/utils/talleres-servicios.ts'), 'utf8')
+
+  assert.doesNotMatch(
+    source,
+    /AND IFNULL\(servicio_clave, ''\) <> ''/,
+    'Talleres must not discard legacy mappings just because servicio_clave is empty',
+  )
+  const compatiblePredicates = source.match(/COALESCE\(NULLIF\(TRIM\(servicio_clave\), ''\), NULLIF\(TRIM\(servicio_nombre\), ''\)\) IS NOT NULL/g) || []
+  assert.equal(compatiblePredicates.length, 2, 'both concept lookup paths must accept servicio_nombre as the legacy identity')
+})
+
 test('financial mappings survive Bridge concept-id drift by unambiguous concept name', async () => {
   const shared = await loadShared()
   const indexes = shared.buildFinancialConceptMappingIndexes([

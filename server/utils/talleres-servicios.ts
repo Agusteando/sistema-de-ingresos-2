@@ -330,7 +330,7 @@ export const findTallerServicioForConcept = async ({
       WHERE concepto_id = ?
         AND IFNULL(activo, 1) = 1
         AND IFNULL(enrollment_type, 'regular') = 'talleres_servicios'
-        AND IFNULL(servicio_clave, '') <> ''
+        AND COALESCE(NULLIF(TRIM(servicio_clave), ''), NULLIF(TRIM(servicio_nombre), '')) IS NOT NULL
         ${cycleWhere}
         ${plantelWhere}
        ORDER BY id DESC`,
@@ -360,7 +360,7 @@ const readConceptMappedServicios = async ({ ciclo, plantel }: { ciclo?: unknown,
        FROM config_enrollment_mappings
       WHERE IFNULL(activo, 1) = 1
         AND IFNULL(enrollment_type, 'regular') = 'talleres_servicios'
-        AND IFNULL(servicio_clave, '') <> ''
+        AND COALESCE(NULLIF(TRIM(servicio_clave), ''), NULLIF(TRIM(servicio_nombre), '')) IS NOT NULL
         AND cycle_name IN (${cycleCandidates.map(() => '?').join(',')})
         AND UPPER(TRIM(plantel)) IN (${plantelCandidates.map(() => '?').join(',')})
       ORDER BY id DESC`,
