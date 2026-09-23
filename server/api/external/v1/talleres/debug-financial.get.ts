@@ -1,6 +1,6 @@
-import { assertTalleresPortalAccess } from '../../../../../utils/talleres-portal-auth'
-import { runWithBridgeAgentId } from '../../../../../utils/db'
-import { debugFinancialTalleresResolution } from '../../../../../utils/talleres-servicios'
+import { assertTalleresPortalAccess } from '../../../../utils/talleres-portal-auth'
+import { runWithBridgeAgentId } from '../../../../utils/db'
+import { debugFinancialTalleresResolution } from '../../../../utils/talleres-servicios'
 
 export default defineEventHandler(async (event) => {
   await assertTalleresPortalAccess(event)
