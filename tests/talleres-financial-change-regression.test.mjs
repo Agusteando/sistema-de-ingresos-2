@@ -50,6 +50,18 @@ test('legacy Talleres category aliases remain authoritative for financial mappin
   assert.equal(aliases.length, 2, 'both mapping lookup paths must accept the category aliases normalized by /conceptos')
 })
 
+test('workshop seed never overwrites an active configured association', async () => {
+  const source = await readFile(resolve(root, 'server/utils/conceptos-workshop-seed.ts'), 'utf8')
+
+  assert.match(source, /const activeExisting = existing\.filter\(\(row\) => active\(row\?\.activo\)\)/)
+  assert.match(source, /if \(activeExisting\.length\) \{[\s\S]*?unchanged \+= 1[\s\S]*?continue/)
+  assert.match(
+    source,
+    /Boolean\(normalizeServicioClave\(row\.servicio_clave \|\| row\.servicio_nombre\)\)/,
+    'seed preview must treat an existing active mapped workshop as complete even when it differs from name inference',
+  )
+})
+
 test('financial mapping selection is recency-first, not permanently campus-first', async () => {
   const source = await readFile(resolve(root, 'server/utils/talleres-servicios.ts'), 'utf8')
   assert.match(source, /selectPreferredFinancialMapping/)
