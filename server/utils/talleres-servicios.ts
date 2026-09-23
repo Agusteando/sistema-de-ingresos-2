@@ -509,6 +509,69 @@ export const readConceptMappedServiciosForMatriculas = async ({
   return { result, mappingCount: mappings.mappingCount, evidenceCount }
 }
 
+export const debugFinancialTalleresResolution = async ({
+  matricula,
+  ciclo,
+  plantel,
+}: {
+  matricula: unknown
+  ciclo?: unknown
+  plantel?: unknown
+}) => {
+  const key = normalizeMatricula(matricula)
+  if (!key) throw createError({ statusCode: 400, message: 'Matrícula requerida.' })
+
+  const cycleCandidates = cycleCandidatesFor(ciclo)
+  const plantelCandidates = conceptMappingPlantelCandidates(plantel)
+  const evidence = await readActiveMappedConceptRows([key], ciclo)
+  const conceptIds = Array.from(new Set(evidence.map((row: any) => Number(row?.concepto_id || 0)).filter(Boolean)))
+  const conceptNames = Array.from(new Set(evidence.map((row: any) => compactText(row?.concepto_nombre, 255)).filter(Boolean)))
+
+  const mappingRows = await controlEscolarCentralQuery<any[]>(
+    `SELECT id, cycle_name, plantel, concepto_id, concepto_nombre, enrollment_type,
+            servicio_clave, servicio_nombre, activo
+       FROM config_enrollment_mappings
+      WHERE (${conceptIds.length ? `concepto_id IN (${conceptIds.map(() => '?').join(',')})` : '0=1'}
+         OR ${conceptNames.length ? `UPPER(TRIM(concepto_nombre)) IN (${conceptNames.map(() => '?').join(',')})` : '0=1'})
+      ORDER BY concepto_nombre ASC, cycle_name DESC, plantel ASC, id DESC`,
+    [...conceptIds, ...conceptNames.map((name) => name.toUpperCase())],
+  )
+
+  const mappings = await readConceptMappedServicios({ ciclo, plantel })
+  const resolutions = evidence.map((row: any) => {
+    const resolved = resolveFinancialConceptMapping(mappings, {
+      conceptoId: row?.concepto_id,
+      conceptoNombre: row?.concepto_nombre,
+    })
+    return {
+      matricula: key,
+      documentoConceptoId: Number(row?.concepto_id || 0) || null,
+      documentoConceptoNombre: compactText(row?.concepto_nombre, 255),
+      documentosActivos: Number(row?.documentos_activos || 0),
+      matched: Boolean(resolved),
+      matchedBy: resolved?.matchedBy || null,
+      mapping: resolved?.mapping ? {
+        conceptoId: resolved.mapping.conceptoId,
+        conceptoNombre: resolved.mapping.conceptoNombre,
+        clave: resolved.mapping.clave,
+        nombre: resolved.mapping.nombre,
+      } : null,
+    }
+  })
+
+  return {
+    matricula: key,
+    ciclo: normalizeCicloKey(ciclo),
+    cycleCandidates,
+    plantel: compactText(plantel, 40).toUpperCase(),
+    plantelCandidates,
+    evidence,
+    mappingRows,
+    selectedMappingCount: mappings.mappingCount,
+    resolutions,
+  }
+}
+
 export const readEffectiveStudentServicios = async ({
   matricula,
   ciclo,
