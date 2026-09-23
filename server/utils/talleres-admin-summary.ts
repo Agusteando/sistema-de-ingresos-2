@@ -3,6 +3,8 @@ import {
   canonicalTallerKey,
   finalTallerSeed,
   parseServiciosCsv,
+  shouldIncludeDirectTallerAssignment,
+  shouldIncludeFinancialTallerAssignment,
 } from '../../shared/utils/talleresServicios'
 import { fetchControlEscolarStudents, runControlEscolar } from './control-escolar'
 import { controlEscolarBridgeAgentCandidates, normalizeExternalControlEscolarPlantel } from './control-escolar-plantel-routing'
@@ -11,6 +13,7 @@ import { readTalleresSnapshotRoster } from './talleres-snapshot'
 import {
   readConceptMappedServiciosForMatriculas,
 } from './talleres-servicios'
+import { readTalleresAssignmentSummaries } from './talleres-contracts'
 
 const text = (value: unknown, max = 255) => String(value ?? '').trim().slice(0, max)
 const matriculaKey = (value: unknown) => text(value, 64).toUpperCase().replace(/\s+/g, '')
@@ -203,9 +206,10 @@ export const readTalleresAdminSummary = async ({
     const students = Array.isArray(studentsResult?.data) ? studentsResult.data : []
     const matriculas = students.map((student: any) => matriculaKey(student?.matricula)).filter(Boolean)
 
-    const [catalogResult, financialAssignments] = await Promise.all([
+    const [catalogResult, financialAssignments, assignmentSummaries] = await Promise.all([
       readAuthoritativeTalleresCatalog(),
       readConceptMappedServiciosForMatriculas({ matriculas, ciclo: cycle, plantel: publicPlantel }),
+      readTalleresAssignmentSummaries(matriculas),
     ])
 
     const catalog = new Map<string, any>()
@@ -228,8 +232,18 @@ export const readTalleresAdminSummary = async ({
       const matricula = matriculaKey(student?.matricula)
       if (!matricula) continue
 
-      for (const direct of parseServiciosCsv(student?.servicio)) ensureCount(direct, matricula)
-      for (const assignment of financialAssignments.result.get(matricula) || []) {
+      const history = assignmentSummaries.result.get(matricula) || {}
+      const financial = financialAssignments.result.get(matricula) || []
+      const financialKeys = new Set(financial
+        .map((assignment) => canonicalTallerKey(assignment?.clave || assignment?.nombre))
+        .filter(Boolean))
+
+      for (const direct of parseServiciosCsv(student?.servicio)) {
+        if (!shouldIncludeDirectTallerAssignment({ value: direct, financialKeys, history })) continue
+        ensureCount(direct, matricula)
+      }
+      for (const assignment of financial) {
+        if (!shouldIncludeFinancialTallerAssignment({ value: assignment?.clave || assignment?.nombre, history })) continue
         ensureCount(assignment?.clave || assignment?.nombre, matricula)
       }
     }

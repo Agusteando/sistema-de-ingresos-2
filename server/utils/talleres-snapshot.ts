@@ -7,6 +7,7 @@ import {
   normalizeServicioNombre,
   parseServiciosCsv,
   shouldIncludeDirectTallerAssignment,
+  shouldIncludeFinancialTallerAssignment,
 } from '../../shared/utils/talleresServicios'
 import { runWithBridgeAgentId } from './db'
 import { controlEscolarCentralQuery, getCentralTableColumns, withControlEscolarCentralConnection } from './control-escolar-central'
@@ -208,6 +209,7 @@ const mergeServices = (
     }
   }
   for (const assignment of financial || []) {
+    if (!shouldIncludeFinancialTallerAssignment({ value: assignment?.clave || assignment?.nombre, history })) continue
     const item = ensure(assignment?.clave || assignment?.nombre)
     if (!item) continue
     if (!item.fuentes.includes('concepto_financiero')) item.fuentes.push('concepto_financiero')

@@ -299,8 +299,6 @@ export default defineEventHandler(async (event) =>
       const coverageAmount = isWholeMoney(body.montoFinal)
         ? toWholeMoney(body.montoFinal, baseCoverageAmount)
         : baseCoverageAmount;
-      const diferenciaMonto = toWholeMoney(body.diferenciaMonto, 0);
-
       if (!isWholeMoney(coverageAmount)) {
         throw createError({
           statusCode: 400,
@@ -309,12 +307,6 @@ export default defineEventHandler(async (event) =>
         });
       }
 
-      if (!isWholeMoney(diferenciaMonto)) {
-        throw createError({
-          statusCode: 400,
-          message: "La diferencia debe ser un numero entero, sin decimales.",
-        });
-      }
 
       const createdBy = user?.name || "Sistema";
       const paymentPolicy = "mantener_pagos_existentes";
@@ -336,43 +328,10 @@ export default defineEventHandler(async (event) =>
             coverageAmount,
             createdBy,
             paymentPolicy,
-            diferenciaMonto,
+            0,
           ],
         },
       ];
-
-      if (diferenciaMonto > 0) {
-        const diferenciaConceptoNombre =
-          `Diferencia · ${concepto.concepto}`.slice(0, 255);
-        statements.push({ sql: "SET @periodo_cambio_id := LAST_INSERT_ID()" });
-        statements.push({
-          sql: `
-          INSERT INTO documentos (
-            concepto, conceptoNombre, matricula, costo, montoFinal, plazo, meses,
-            beca, becaNombre, becaTipos, becaMotivo, becaMonto, becaPorcentaje,
-            becaCartaGenerada, becaCartaFecha, ciclo, eventual, responsable, estatus
-          ) VALUES (?, ?, ?, ?, ?, '1', 1, '0', NULL, NULL, NULL, 0, 0, 0, NULL, ?, 1, 'Admin', 'Activo')
-        `,
-          params: [
-            concepto.id,
-            diferenciaConceptoNombre,
-            doc.matricula,
-            diferenciaMonto,
-            diferenciaMonto,
-            cicloKey,
-          ],
-        });
-        statements.push({
-          sql: "SET @documento_diferencial_id := LAST_INSERT_ID()",
-        });
-        statements.push({
-          sql: `
-          UPDATE documento_concepto_periodos
-          SET diferencial_documento = @documento_diferencial_id
-          WHERE id = @periodo_cambio_id
-        `,
-        });
-      }
 
       await executeStatementTransaction(statements);
 
@@ -407,7 +366,7 @@ export default defineEventHandler(async (event) =>
         action,
         fromMes: normalizedFromMes,
         paymentPolicy,
-        diferenciaMonto,
+        diferenciaMonto: 0,
         servicio: servicioSync,
         snapshotRefresh,
       };

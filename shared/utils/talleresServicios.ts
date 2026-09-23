@@ -238,6 +238,28 @@ export const shouldIncludeDirectTallerAssignment = ({
   return true
 }
 
+export const shouldIncludeFinancialTallerAssignment = ({
+  value,
+  history = {},
+}: {
+  value: unknown
+  history?: Record<string, TallerAssignmentHistoryState>
+}) => {
+  const key = canonicalTallerKey(value)
+  if (!key) return false
+
+  const state = history?.[key]
+  const lastAction = String(state?.lastAction || '').trim().toLowerCase()
+  const lastSource = String(state?.lastSource || '').trim().toLowerCase()
+
+  if (lastAction !== 'removed') return true
+
+  // A financial lifecycle removal must still yield to another active financial
+  // document. An explicit/manual removal is membership authority and suppresses
+  // the service without modifying its accounting history.
+  return lastSource.startsWith('financial_concept')
+}
+
 export const finalTallerSeed = (value: unknown) => {
   const key = canonicalTallerKey(value)
   return FINAL_TALLERES.find((item) => item.clave === key) || null

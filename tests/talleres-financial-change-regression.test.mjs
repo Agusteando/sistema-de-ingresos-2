@@ -174,7 +174,8 @@ test('Aurora student Talleres UI unions manual and financial assignments', async
   assert.doesNotMatch(servicios, /CAST\(\$\{effectiveConcept\} AS UNSIGNED\) IN/)
   assert.match(details, /servicio\.directa === false/)
   assert.match(details, />Concepto<\/small>/)
-  assert.match(details, /servicio\.directa !== false/)
+  assert.doesNotMatch(details, /v-if="servicio\.directa !== false"/)
+  assert.match(details, /Quitar de Talleres; conserva cargos y pagos/)
 })
 
 test('stale financial write-through does not survive a workshop change', async () => {
@@ -239,13 +240,56 @@ test('financial lifecycle endpoints reconcile assignment history and force Talle
   assert.match(servicios, /source: 'financial_concept_cancel'/)
   assert.match(servicios, /readCurrentFinancialTallerKeys/)
   assert.match(servicios, /readTalleresAssignmentSummaries/)
-  assert.match(servicios, /previousFinanciallyManaged/)
-  assert.match(servicios, /financiallyManaged/)
+  assert.match(servicios, /shouldRemovePrevious/)
+  assert.match(servicios, /previousRemovedFromMatricula/)
   assert.match(snapshot, /shouldIncludeDirectTallerAssignment/)
+  assert.match(snapshot, /shouldIncludeFinancialTallerAssignment/)
   assert.match(contracts, /metadata_json/)
   assert.match(contracts, /lastSource/)
 })
 
+
+test('concept adjustment never creates standalone Diferencia documents', async () => {
+  const [modal, period] = await Promise.all([
+    readFile(resolve(root, 'components/ConceptChangeModal.vue'), 'utf8'),
+    readFile(resolve(root, 'server/api/documentos/period.post.ts'), 'utf8'),
+  ])
+
+  assert.doesNotMatch(modal, /diferenciaMontoInput|differential-pill|>Diferencia</)
+  assert.doesNotMatch(period, /diferenciaConceptoNombre|@documento_diferencial_id|SET @periodo_cambio_id/)
+  assert.doesNotMatch(period, /Diferencia ·/)
+  assert.match(period, /diferenciaMonto: 0/)
+})
+
+test('explicit removal suppresses paid financial membership without cancelling accounting evidence', async () => {
+  const shared = await loadShared()
+  assert.equal(shared.shouldIncludeFinancialTallerAssignment({ value: 'FUTBOL', history: { FUTBOL: { lastAction: 'removed', lastSource: 'aurora_manual' } } }), false)
+  assert.equal(shared.shouldIncludeFinancialTallerAssignment({ value: 'FUTBOL', history: { FUTBOL: { lastAction: 'removed', lastSource: 'aurora_portal_snapshot_v2' } } }), false)
+  assert.equal(shared.shouldIncludeFinancialTallerAssignment({ value: 'FUTBOL', history: { FUTBOL: { lastAction: 'removed', lastSource: 'financial_concept_change' } } }), true)
+  assert.equal(shared.shouldIncludeFinancialTallerAssignment({ value: 'FUTBOL', history: { FUTBOL: { lastAction: 'assigned', lastSource: 'aurora_manual' } } }), true)
+})
+
+test('concept changes physically reconcile matricula and all Talleres read paths share the same removal rule', async () => {
+  const [servicios, snapshot, summary, putApi, details] = await Promise.all([
+    readFile(resolve(root, 'server/utils/talleres-servicios.ts'), 'utf8'),
+    readFile(resolve(root, 'server/utils/talleres-snapshot.ts'), 'utf8'),
+    readFile(resolve(root, 'server/utils/talleres-admin-summary.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/students/[matricula]/servicios/index.put.ts'), 'utf8'),
+    readFile(resolve(root, 'components/StudentDetails.vue'), 'utf8'),
+  ])
+  assert.match(servicios, /shouldRemovePrevious/)
+  assert.match(servicios, /action: 'remove',[\s\S]*?servicio: previousMapped\.nombre/)
+  assert.match(servicios, /previousRemovedFromMatricula/)
+  assert.match(servicios, /shouldIncludeFinancialTallerAssignment/)
+  assert.match(snapshot, /shouldIncludeFinancialTallerAssignment/)
+  assert.match(summary, /shouldIncludeFinancialTallerAssignment/)
+  assert.match(summary, /readTalleresAssignmentSummaries/)
+  assert.match(putApi, /const historyWrite = await recordTalleresAssignmentChange/)
+  assert.match(putApi, /ensureCurrentTalleresSnapshotPlantel/)
+  assert.doesNotMatch(putApi, /if \(updated\.changed\) \{\s*await recordTalleresAssignmentChange/)
+  assert.match(details, /Quitar de Talleres; conserva cargos y pagos/)
+  assert.match(details, /El cargo y los pagos registrados se conservarán sin cambios/)
+})
 
 test('snapshot-backed Talleres v1 never knowingly serves stale data or seed catalog fallbacks', async () => {
   const [snapshot, rosterApi, metaApi, searchApi, warmApi] = await Promise.all([
