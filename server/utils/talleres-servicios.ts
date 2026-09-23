@@ -8,6 +8,7 @@ import {
   canonicalTallerKey,
   buildFinancialConceptMappingIndexes,
   resolveFinancialConceptMapping,
+  selectPreferredFinancialMapping,
   finalTallerSeed,
   isKnownTallerCatalogKey,
   DEFAULT_TALLER_SERVICIO_IMAGE,
@@ -55,8 +56,10 @@ const normalizeMatricula = (value: unknown) => compactText(value, 64).toUpperCas
 const truthy = (value: unknown) => value === undefined || value === null ? true : Number(value) !== 0
 
 // /conceptos uses the financial campus code while Portal Tallerista keeps
-// public, grade-split campus codes. Prefer an exact mapping when one exists,
-// then its financial alias, and finally GLOBAL.
+// public, grade-split campus codes. Exact/alias/GLOBAL rows are all eligible;
+// the most recently configured mapping wins, with scope specificity only as a
+// final tie-breaker. This prevents stale seeded campus rows from overriding a
+// newer corrected global business mapping.
 const conceptMappingPlantelCandidates = (value: unknown) => {
   const raw = compactText(value, 40).toUpperCase()
   const aliases: Record<string, string> = {
@@ -325,7 +328,7 @@ export const findTallerServicioForConcept = async ({
   const plantelWhere = plantelCandidates.length ? `AND UPPER(TRIM(plantel)) IN (${plantelCandidates.map(() => '?').join(',')})` : ''
 
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT id, plantel, servicio_clave, servicio_nombre
+    `SELECT id, plantel, IFNULL(sync_version, 0) AS sync_version, servicio_clave, servicio_nombre
        FROM config_enrollment_mappings
       WHERE concepto_id = ?
         AND IFNULL(activo, 1) = 1
@@ -336,11 +339,7 @@ export const findTallerServicioForConcept = async ({
        ORDER BY id DESC`,
     [id, ...cycleCandidates, ...plantelCandidates]
   )
-  const row = [...rows].sort((left, right) => {
-    const leftRank = plantelCandidates.indexOf(compactText(left?.plantel, 40).toUpperCase())
-    const rightRank = plantelCandidates.indexOf(compactText(right?.plantel, 40).toUpperCase())
-    return leftRank - rightRank || Number(right?.id || 0) - Number(left?.id || 0)
-  })[0]
+  const row = selectPreferredFinancialMapping(rows, plantelCandidates)
   if (!row) return null
   const catalog = await readBestTalleresServiciosCatalog()
   const normalizedKey = canonicalTallerKey(row.servicio_clave || row.servicio_nombre)
@@ -356,7 +355,8 @@ const readConceptMappedServicios = async ({ ciclo, plantel }: { ciclo?: unknown,
   const cycleCandidates = cycleCandidatesFor(ciclo)
   const plantelCandidates = conceptMappingPlantelCandidates(plantel)
   const rows = await controlEscolarCentralQuery<any[]>(
-    `SELECT id, plantel, concepto_id, concepto_nombre, servicio_clave, servicio_nombre
+    `SELECT id, plantel, IFNULL(sync_version, 0) AS sync_version,
+            concepto_id, concepto_nombre, servicio_clave, servicio_nombre
        FROM config_enrollment_mappings
       WHERE IFNULL(activo, 1) = 1
         AND LOWER(TRIM(IFNULL(enrollment_type, 'regular'))) IN ('talleres_servicios', 'talleres', 'talleres_y_servicios')
@@ -367,18 +367,19 @@ const readConceptMappedServicios = async ({ ciclo, plantel }: { ciclo?: unknown,
     [...cycleCandidates, ...plantelCandidates]
   )
 
-  const selected = new Map<number, any>()
+  const rowsByConcept = new Map<number, any[]>()
   for (const row of rows) {
     const conceptoId = Number(row?.concepto_id || 0)
     if (!conceptoId) continue
-    const candidate = {
-      ...row,
-      plantelRank: plantelCandidates.indexOf(compactText(row?.plantel, 40).toUpperCase()),
-    }
-    const current = selected.get(conceptoId)
-    if (!current || candidate.plantelRank < current.plantelRank || (
-      candidate.plantelRank === current.plantelRank && Number(candidate.id || 0) > Number(current.id || 0)
-    )) selected.set(conceptoId, candidate)
+    const bucket = rowsByConcept.get(conceptoId) || []
+    bucket.push(row)
+    rowsByConcept.set(conceptoId, bucket)
+  }
+
+  const selected = new Map<number, any>()
+  for (const [conceptoId, candidates] of rowsByConcept) {
+    const preferred = selectPreferredFinancialMapping(candidates, plantelCandidates)
+    if (preferred) selected.set(conceptoId, preferred)
   }
 
   const mappings = Array.from(selected.entries()).map(([conceptoId, row]) => {
@@ -507,69 +508,6 @@ export const readConceptMappedServiciosForMatriculas = async ({
     result.set(matricula, Array.from(services.values()).sort((left, right) => left.nombre.localeCompare(right.nombre, 'es')))
   }
   return { result, mappingCount: mappings.mappingCount, evidenceCount }
-}
-
-export const debugFinancialTalleresResolution = async ({
-  matricula,
-  ciclo,
-  plantel,
-}: {
-  matricula: unknown
-  ciclo?: unknown
-  plantel?: unknown
-}) => {
-  const key = normalizeMatricula(matricula)
-  if (!key) throw createError({ statusCode: 400, message: 'Matrícula requerida.' })
-
-  const cycleCandidates = cycleCandidatesFor(ciclo)
-  const plantelCandidates = conceptMappingPlantelCandidates(plantel)
-  const evidence = await readActiveMappedConceptRows([key], ciclo)
-  const conceptIds = Array.from(new Set(evidence.map((row: any) => Number(row?.concepto_id || 0)).filter(Boolean)))
-  const conceptNames = Array.from(new Set(evidence.map((row: any) => compactText(row?.concepto_nombre, 255)).filter(Boolean)))
-
-  const mappingRows = await controlEscolarCentralQuery<any[]>(
-    `SELECT id, cycle_name, plantel, concepto_id, concepto_nombre, enrollment_type,
-            servicio_clave, servicio_nombre, activo
-       FROM config_enrollment_mappings
-      WHERE (${conceptIds.length ? `concepto_id IN (${conceptIds.map(() => '?').join(',')})` : '0=1'}
-         OR ${conceptNames.length ? `UPPER(TRIM(concepto_nombre)) IN (${conceptNames.map(() => '?').join(',')})` : '0=1'})
-      ORDER BY concepto_nombre ASC, cycle_name DESC, plantel ASC, id DESC`,
-    [...conceptIds, ...conceptNames.map((name) => name.toUpperCase())],
-  )
-
-  const mappings = await readConceptMappedServicios({ ciclo, plantel })
-  const resolutions = evidence.map((row: any) => {
-    const resolved = resolveFinancialConceptMapping(mappings, {
-      conceptoId: row?.concepto_id,
-      conceptoNombre: row?.concepto_nombre,
-    })
-    return {
-      matricula: key,
-      documentoConceptoId: Number(row?.concepto_id || 0) || null,
-      documentoConceptoNombre: compactText(row?.concepto_nombre, 255),
-      documentosActivos: Number(row?.documentos_activos || 0),
-      matched: Boolean(resolved),
-      matchedBy: resolved?.matchedBy || null,
-      mapping: resolved?.mapping ? {
-        conceptoId: resolved.mapping.conceptoId,
-        conceptoNombre: resolved.mapping.conceptoNombre,
-        clave: resolved.mapping.clave,
-        nombre: resolved.mapping.nombre,
-      } : null,
-    }
-  })
-
-  return {
-    matricula: key,
-    ciclo: normalizeCicloKey(ciclo),
-    cycleCandidates,
-    plantel: compactText(plantel, 40).toUpperCase(),
-    plantelCandidates,
-    evidence,
-    mappingRows,
-    selectedMappingCount: mappings.mappingCount,
-    resolutions,
-  }
 }
 
 export const readEffectiveStudentServicios = async ({
