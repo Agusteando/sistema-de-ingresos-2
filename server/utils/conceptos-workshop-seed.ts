@@ -161,8 +161,7 @@ export const discoverWorkshopFinancialConcepts = (
 const mappingIsComplete = (row: ConceptosConfigRow, candidate: TallerServicioSeedCandidate) =>
   active(row.activo)
   && compact(row.plantel, 40).toUpperCase() === GLOBAL_TALLERES_SERVICIOS_PLANTEL
-  && normalizeServicioClave(row.servicio_clave || row.servicio_nombre) === candidate.servicio_clave
-  && normalizeServicioNombre(row.servicio_nombre) === candidate.servicio_nombre
+  && Boolean(normalizeServicioClave(row.servicio_clave || row.servicio_nombre))
   && compact(row.concepto_nombre) === candidate.concepto_nombre
 
 export const buildWorkshopSeedPreview = ({
@@ -307,11 +306,18 @@ export const seedWorkshopFinancialMappings = async (
 
     for (const candidate of preview.conceptos) {
       const existing = existingByConcept.get(candidate.concepto_id) || []
-      if (existing.some((row) => sameStoredMapping(row, candidate))) {
+      const activeExisting = existing.filter((row) => active(row?.activo))
+
+      // A seed may fill a missing mapping, but it must never reinterpret an
+      // already-active business association. /conceptos is the authority for
+      // deliberate financial-concept -> workshop mapping choices.
+      if (activeExisting.length) {
         unchanged += 1
         continue
       }
 
+      // Reuse an inactive placeholder when one exists; there is no active
+      // business association to preserve in this case.
       if (existing.length) {
         await connection.query(
           `UPDATE config_enrollment_mappings
