@@ -249,6 +249,17 @@ test('financial lifecycle endpoints reconcile assignment history and force Talle
 })
 
 
+test('financial reconciliation preserves an explicit manual assignment of the same workshop', async () => {
+  const servicios = await readFile(resolve(root, 'server/utils/talleres-servicios.ts'), 'utf8')
+
+  assert.match(servicios, /const isExplicitManualTallerAssignment/)
+  assert.match(servicios, /previousExplicitManualAssignment = isExplicitManualTallerAssignment\(previousState\)/)
+  const guards = servicios.match(/&& !previousExplicitManualAssignment/g) || []
+  assert.equal(guards.length, 2, 'both concept change and concept cancellation must preserve an explicit manual assignment')
+  assert.match(servicios, /lastAction === 'assigned'/)
+  assert.match(servicios, /!lastSource\.startsWith\('financial_concept'\)/)
+})
+
 test('concept adjustment never creates standalone Diferencia documents', async () => {
   const [modal, period] = await Promise.all([
     readFile(resolve(root, 'components/ConceptChangeModal.vue'), 'utf8'),

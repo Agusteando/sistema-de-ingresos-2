@@ -587,6 +587,14 @@ export const readEffectiveStudentServicios = async ({
   }
 }
 
+const isExplicitManualTallerAssignment = (state: any) => {
+  const lastAction = String(state?.lastAction || '').trim().toLowerCase()
+  const lastSource = String(state?.lastSource || '').trim().toLowerCase()
+  return lastAction === 'assigned'
+    && Boolean(lastSource)
+    && !lastSource.startsWith('financial_concept')
+}
+
 const readCurrentFinancialTallerKeys = async ({
   matricula,
   ciclo,
@@ -669,7 +677,9 @@ export const syncChangedConceptMappedServicioToMatricula = async ({
   const history = assignmentHistory.result.get(matriculaKey) || {}
   const previousKey = canonicalTallerKey(previousMapped?.clave || previousMapped?.nombre)
   const nextKey = canonicalTallerKey(nextMapped?.clave || nextMapped?.nombre)
+  const previousState = previousKey ? history[previousKey] : null
   const nextState = nextKey ? history[nextKey] : null
+  const previousExplicitManualAssignment = isExplicitManualTallerAssignment(previousState)
   const nextFinanciallyManaged = String(nextState?.lastSource || '').startsWith('financial_concept')
 
   let previousRemoval: any = { ok: true, changed: false, servicios: updated?.servicios }
@@ -678,6 +688,7 @@ export const syncChangedConceptMappedServicioToMatricula = async ({
     && previousKey
     && previousKey !== nextKey
     && !financialKeys.has(previousKey)
+    && !previousExplicitManualAssignment
   )
 
   if (shouldRemovePrevious) {
@@ -754,9 +765,20 @@ export const syncCancelledConceptMappedServicioOnMatricula = async ({
   const previousMapped = await findTallerServicioForConcept({ conceptoId: previousConceptoId, ciclo, plantel })
   if (!previousMapped) return { ok: true, mapped: false, changed: false, previousServicio: null }
 
-  const financialKeys = await readCurrentFinancialTallerKeys({ matricula, ciclo, plantel })
+  const matriculaKey = normalizeMatricula(matricula)
+  const [financialKeys, assignmentHistory] = await Promise.all([
+    readCurrentFinancialTallerKeys({ matricula, ciclo, plantel }),
+    readTalleresAssignmentSummaries([matriculaKey]),
+  ])
+  const history = assignmentHistory.result.get(matriculaKey) || {}
   const previousKey = canonicalTallerKey(previousMapped.clave || previousMapped.nombre)
-  const shouldRemove = Boolean(previousKey && !financialKeys.has(previousKey))
+  const previousState = previousKey ? history[previousKey] : null
+  const previousExplicitManualAssignment = isExplicitManualTallerAssignment(previousState)
+  const shouldRemove = Boolean(
+    previousKey
+    && !financialKeys.has(previousKey)
+    && !previousExplicitManualAssignment
+  )
   let removal: any = { ok: true, changed: false, servicios: undefined }
 
   if (shouldRemove) {
