@@ -1,0 +1,27 @@
+name: Husky SM1027 Aurora source probe
+
+on:
+  push:
+    branches:
+      - probe/husky-sm1027-source
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+      AURORA_BASE_URL: https://aurora.casitaiedis.edu.mx
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require Aurora token
+        run: |
+          test -n "$AURORA_API_TOKEN" || { echo "::error::AURORA_API_TOKEN missing"; exit 1; }
+      - name: Verify SM1027 real Aurora source contract
+        run: node scripts/probe-husky-sm1027-source.mjs
