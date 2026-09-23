@@ -113,6 +113,17 @@ async function loadSummaryHarness(options = {}) {
     { context },
   )
 
+  const talleresContracts = new vm.SyntheticModule(
+    ['readTalleresAssignmentSummaries'],
+    function () {
+      this.setExport('readTalleresAssignmentSummaries', async matriculas => ({
+        ready: true,
+        result: new Map((matriculas || []).map(value => [String(value || '').trim().toUpperCase(), {}])),
+      }))
+    },
+    { context },
+  )
+
   async function load(path) {
     if (modules.has(path)) return modules.get(path)
     const source = await readFile(path, 'utf8')
@@ -127,6 +138,7 @@ async function loadSummaryHarness(options = {}) {
       if (specifier === './talleres-catalog-authority') return catalog
       if (specifier === './talleres-snapshot') return snapshot
       if (specifier === './talleres-servicios') return talleresServicios
+      if (specifier === './talleres-contracts') return talleresContracts
       const candidate = resolve(dirname(parent.identifier), specifier.endsWith('.ts') ? specifier : `${specifier}.ts`)
       return load(candidate)
     })

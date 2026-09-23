@@ -3,6 +3,7 @@ import { readBestTalleresServiciosCatalog, readEffectiveStudentServicios, update
 import { readInstitutionalSchoolCycle } from '../../../../utils/school-cycle'
 import { canonicalTallerKey, normalizeServicioClave, normalizeServicioNombre } from '../../../../../shared/utils/talleresServicios'
 import { recordTalleresAssignmentChange } from '../../../../utils/talleres-contracts'
+import { canonicalTalleresPlantel, ensureCurrentTalleresSnapshotPlantel } from '../../../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => {
   const user = await getTrustedAuthUser(event)
@@ -35,15 +36,19 @@ export default defineEventHandler(async (event) => {
     servicio: serviceName,
     userEmail: user.email,
   })
-  if (updated.changed) {
-    await recordTalleresAssignmentChange({
-      matricula,
-      plantel: body?.plantel || 'GLOBAL',
-      workshopKey: canonicalTallerKey(serviceName),
-      workshopName: serviceName,
-      action: action === 'add' ? 'assigned' : 'removed',
-      actorEmail: user.email,
-      metadata: { source: 'aurora_manual' },
+  const historyWrite = await recordTalleresAssignmentChange({
+    matricula,
+    plantel: body?.plantel || 'GLOBAL',
+    workshopKey: canonicalTallerKey(serviceName),
+    workshopName: serviceName,
+    action: action === 'add' ? 'assigned' : 'removed',
+    actorEmail: user.email,
+    metadata: { source: 'aurora_manual' },
+  })
+  if (action === 'remove' && historyWrite?.ready === false) {
+    throw createError({
+      statusCode: 503,
+      message: 'No se pudo registrar la baja del taller; la operación no puede confirmarse de forma consistente.',
     })
   }
   const institutional = await readInstitutionalSchoolCycle()
@@ -52,6 +57,10 @@ export default defineEventHandler(async (event) => {
     ciclo: body?.ciclo || institutional.key,
     plantel: body?.plantel,
   })
+  const snapshotPlantel = canonicalTalleresPlantel(effective.plantel)
+  const snapshotRefresh = snapshotPlantel
+    ? await ensureCurrentTalleresSnapshotPlantel({ plantel: snapshotPlantel, ciclo: effective.ciclo, force: true })
+    : { success: true, skipped: true, reason: 'plantel_not_in_talleres_snapshot' }
 
   return {
     ok: true,
@@ -71,5 +80,6 @@ export default defineEventHandler(async (event) => {
       orden: Number(item.orden || 9999),
     })),
     financialEvidenceCount: effective.financial.evidenceCount,
+    snapshotRefresh,
   }
 })

@@ -24,11 +24,13 @@ async function harness() {
   }, { context })
 
   const talleresServicios = new vm.SyntheticModule(
-    ['canonicalTallerKey', 'finalTallerSeed', 'parseServiciosCsv'],
+    ['canonicalTallerKey', 'finalTallerSeed', 'parseServiciosCsv', 'shouldIncludeDirectTallerAssignment', 'shouldIncludeFinancialTallerAssignment'],
     function () {
       this.setExport('canonicalTallerKey', canonicalKey)
       this.setExport('finalTallerSeed', () => null)
       this.setExport('parseServiciosCsv', value => String(value || '').split(',').map(v => v.trim()).filter(Boolean))
+      this.setExport('shouldIncludeDirectTallerAssignment', () => true)
+      this.setExport('shouldIncludeFinancialTallerAssignment', () => true)
     },
     { context },
   )
@@ -78,6 +80,17 @@ async function harness() {
     }))
   }, { context })
 
+  const talleresContracts = new vm.SyntheticModule(
+    ['readTalleresAssignmentSummaries'],
+    function () {
+      this.setExport('readTalleresAssignmentSummaries', async matriculas => ({
+        ready: true,
+        result: new Map((matriculas || []).map(value => [String(value || '').trim().toUpperCase(), {}])),
+      }))
+    },
+    { context },
+  )
+
   async function load(path) {
     if (modules.has(path)) return modules.get(path)
     const source = await readFile(path, 'utf8')
@@ -94,6 +107,7 @@ async function harness() {
       if (specifier === './talleres-catalog-authority') return catalog
       if (specifier === './talleres-snapshot') return snapshot
       if (specifier === './talleres-servicios') return servicios
+      if (specifier === './talleres-contracts') return talleresContracts
       const candidate = resolve(dirname(parent.identifier), specifier.endsWith('.ts') ? specifier : `${specifier}.ts`)
       return load(candidate)
     })

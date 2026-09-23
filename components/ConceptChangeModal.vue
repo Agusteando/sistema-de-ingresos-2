@@ -43,17 +43,6 @@
                 placeholder="Buscar concepto..."
               />
             </label>
-
-            <label class="field-block compact-field">
-              <span>Diferencia</span>
-              <input
-                v-model.number="diferenciaMontoInput"
-                type="number"
-                min="0"
-                step="1"
-                class="input-field"
-              />
-            </label>
           </section>
 
           <section class="preview-card">
@@ -67,10 +56,6 @@
                 <strong>{{ segment.conceptoNombre }}</strong>
                 <span>{{ segment.rangeLabel }}</span>
               </div>
-            </div>
-            <div v-if="diferenciaMonto > 0" class="differential-pill">
-              <LucidePlus :size="13" /> ${{ format(diferenciaMonto) }} ·
-              Diferencia
             </div>
           </section>
 
@@ -128,7 +113,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useState } from "#app";
 import {
   LucideArrowRight,
@@ -136,7 +121,6 @@ import {
   LucideCalendarX,
   LucideCheckCircle,
   LucideLoader2,
-  LucidePlus,
   LucideX,
 } from "lucide-vue-next";
 import { useScrollLock } from "~/composables/useScrollLock";
@@ -159,13 +143,7 @@ const conceptos = ref([]);
 const selectedConceptId = ref("");
 const loadingConcepts = ref(false);
 const busyAction = ref("");
-const diferenciaMontoInput = ref(0);
-
 const busy = computed(() => Boolean(busyAction.value));
-const diferenciaMonto = computed(() => {
-  const value = Number(diferenciaMontoInput.value || 0);
-  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
-});
 const selectedConcept = computed(
   () =>
     conceptos.value.find(
@@ -226,10 +204,6 @@ const runOperation = async (action, extraBody = {}) => {
   }
 };
 
-watch(selectedConceptId, () => {
-  diferenciaMontoInput.value = 0;
-});
-
 const format = (value) => Number(value || 0).toFixed(2);
 const rangeLabel = (start, end) =>
   start === end ? `Mes ${start}` : `Mes ${start}-${end}`;
@@ -278,15 +252,11 @@ const previewSegments = computed(() => {
 
 const submitChange = () => {
   if (!selectedConceptId.value) return;
-  if (diferenciaMonto.value !== Number(diferenciaMontoInput.value || 0)) {
-    diferenciaMontoInput.value = diferenciaMonto.value;
-  }
   runOperation("change", {
     conceptoId: selectedConceptId.value,
     montoFinal: Math.round(
       Number(props.debt?.montoFinal || props.debt?.costoOriginal || 0),
     ),
-    diferenciaMonto: diferenciaMonto.value,
   });
 };
 
@@ -405,7 +375,7 @@ onMounted(loadConcepts);
 
 .change-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -462,18 +432,6 @@ onMounted(loadConcepts);
   font-weight: 720;
 }
 
-.differential-pill {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  gap: 6px;
-  border-radius: 999px;
-  background: #fff4db;
-  color: #8a6616;
-  padding: 6px 10px;
-  font-size: 0.72rem;
-  font-weight: 820;
-}
 
 .modal-action-row,
 .cancel-card {

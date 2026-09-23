@@ -520,7 +520,12 @@
                   <TallerServicioArtwork :catalog-key="servicio.clave || servicio.nombre" :size="28" />
                   {{ servicio.nombre }}
                   <small v-if="servicio.directa === false" class="student-service-source">Concepto</small>
-                  <button v-if="servicio.directa !== false" type="button" :disabled="savingServicio === servicio.clave" title="Quitar" @click="removeServicio(servicio)">
+                  <button
+                    type="button"
+                    :disabled="savingServicio === servicio.clave"
+                    :title="servicio.conceptosFinancieros?.length ? 'Quitar de Talleres; conserva cargos y pagos' : 'Quitar'"
+                    @click="removeServicio(servicio)"
+                  >
                     <LucideX :size="11" />
                   </button>
                 </span>
@@ -1496,7 +1501,15 @@ const mutateServicio = async (servicio, action) => {
   }
 };
 const addServicio = (servicio) => mutateServicio(servicio, 'add');
-const removeServicio = (servicio) => mutateServicio(servicio, 'remove');
+const removeServicio = (servicio) => {
+  const backedByFinancialConcept = Array.isArray(servicio?.conceptosFinancieros)
+    && servicio.conceptosFinancieros.length > 0;
+  if (
+    backedByFinancialConcept
+    && !confirm(`Quitar ${servicio?.nombre || 'este taller'} de Talleres? El cargo y los pagos registrados se conservarán sin cambios.`)
+  ) return;
+  return mutateServicio(servicio, 'remove');
+};
 
 const accountExpedienteProgress = computed(() =>
   resolveControlEscolarProgress(accountOverlaySource.value),

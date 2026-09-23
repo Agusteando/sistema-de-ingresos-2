@@ -16,6 +16,8 @@ import {
   normalizeServicioClave,
   normalizeServicioNombre,
   parseServiciosCsv,
+  shouldIncludeDirectTallerAssignment,
+  shouldIncludeFinancialTallerAssignment,
   removeServicioFromCsv,
   serializeServiciosCsv,
   serviceSeedByKey,
@@ -524,16 +526,25 @@ export const readEffectiveStudentServicios = async ({
   const resolved = await resolveServiciosWithCatalog(current.servicios)
   const effectiveCiclo = normalizeCicloKey(ciclo || current.ciclo)
   const effectivePlantel = compactText(plantel || current.plantel, 40).toUpperCase()
-  const financial = await readConceptMappedServiciosForMatriculas({
-    matriculas: [key],
-    ciclo: effectiveCiclo,
-    plantel: effectivePlantel,
-  })
+  const [financial, assignmentHistory] = await Promise.all([
+    readConceptMappedServiciosForMatriculas({
+      matriculas: [key],
+      ciclo: effectiveCiclo,
+      plantel: effectivePlantel,
+    }),
+    readTalleresAssignmentSummaries([key]),
+  ])
+  const history = assignmentHistory.result.get(key) || {}
+  const financialAssignments = financial.result.get(key) || []
+  const financialKeys = new Set(financialAssignments
+    .map((item) => canonicalTallerKey(item?.clave || item?.nombre))
+    .filter(Boolean))
 
   const byKey = new Map<string, any>()
   for (const item of resolved.servicios) {
     const clave = canonicalTallerKey(item?.clave || item?.nombre)
     if (!clave) continue
+    if (!shouldIncludeDirectTallerAssignment({ value: clave, financialKeys, history })) continue
     byKey.set(clave, {
       ...item,
       clave,
@@ -544,9 +555,10 @@ export const readEffectiveStudentServicios = async ({
     })
   }
 
-  for (const item of financial.result.get(key) || []) {
+  for (const item of financialAssignments) {
     const clave = canonicalTallerKey(item?.clave || item?.nombre)
     if (!clave) continue
+    if (!shouldIncludeFinancialTallerAssignment({ value: clave, history })) continue
     const existing = byKey.get(clave)
     if (existing) {
       byKey.set(clave, {
@@ -657,19 +669,24 @@ export const syncChangedConceptMappedServicioToMatricula = async ({
   const history = assignmentHistory.result.get(matriculaKey) || {}
   const previousKey = canonicalTallerKey(previousMapped?.clave || previousMapped?.nombre)
   const nextKey = canonicalTallerKey(nextMapped?.clave || nextMapped?.nombre)
-  const previousState = previousKey ? history[previousKey] : null
   const nextState = nextKey ? history[nextKey] : null
-  const previousFinanciallyManaged = String(previousState?.lastSource || '').startsWith('financial_concept')
   const nextFinanciallyManaged = String(nextState?.lastSource || '').startsWith('financial_concept')
 
-  if (
+  let previousRemoval: any = { ok: true, changed: false, servicios: updated?.servicios }
+  const shouldRemovePrevious = Boolean(
     previousMapped
     && previousKey
     && previousKey !== nextKey
     && !financialKeys.has(previousKey)
-    && previousFinanciallyManaged
-    && String(previousState?.lastAction || '').toLowerCase() !== 'removed'
-  ) {
+  )
+
+  if (shouldRemovePrevious) {
+    previousRemoval = await updateCentralMatriculaServicio({
+      matricula,
+      action: 'remove',
+      servicio: previousMapped.nombre,
+      userEmail,
+    })
     await recordTalleresAssignmentChange({
       matricula,
       plantel: plantel || 'GLOBAL',
@@ -712,10 +729,11 @@ export const syncChangedConceptMappedServicioToMatricula = async ({
   return {
     ok: true,
     mapped: Boolean(nextMapped),
-    changed: Boolean(updated?.changed),
+    changed: Boolean(updated?.changed || previousRemoval?.changed),
     previousServicio: previousMapped || null,
+    previousRemovedFromMatricula: Boolean(previousRemoval?.changed),
     servicio: nextMapped || null,
-    servicios: updated?.servicios,
+    servicios: previousRemoval?.servicios || updated?.servicios,
     financialKeys: Array.from(financialKeys),
   }
 }
@@ -736,22 +754,18 @@ export const syncCancelledConceptMappedServicioOnMatricula = async ({
   const previousMapped = await findTallerServicioForConcept({ conceptoId: previousConceptoId, ciclo, plantel })
   if (!previousMapped) return { ok: true, mapped: false, changed: false, previousServicio: null }
 
-  const matriculaKey = normalizeMatricula(matricula)
-  const [financialKeys, assignmentHistory] = await Promise.all([
-    readCurrentFinancialTallerKeys({ matricula, ciclo, plantel }),
-    readTalleresAssignmentSummaries([matriculaKey]),
-  ])
+  const financialKeys = await readCurrentFinancialTallerKeys({ matricula, ciclo, plantel })
   const previousKey = canonicalTallerKey(previousMapped.clave || previousMapped.nombre)
-  const previousState = previousKey ? (assignmentHistory.result.get(matriculaKey) || {})[previousKey] : null
-  const financiallyManaged = String(previousState?.lastSource || '').startsWith('financial_concept')
-  const removed = Boolean(
-    previousKey
-    && !financialKeys.has(previousKey)
-    && financiallyManaged
-    && String(previousState?.lastAction || '').toLowerCase() !== 'removed'
-  )
+  const shouldRemove = Boolean(previousKey && !financialKeys.has(previousKey))
+  let removal: any = { ok: true, changed: false, servicios: undefined }
 
-  if (removed) {
+  if (shouldRemove) {
+    removal = await updateCentralMatriculaServicio({
+      matricula,
+      action: 'remove',
+      servicio: previousMapped.nombre,
+      userEmail,
+    })
     await recordTalleresAssignmentChange({
       matricula,
       plantel: plantel || 'GLOBAL',
@@ -770,8 +784,10 @@ export const syncCancelledConceptMappedServicioOnMatricula = async ({
   return {
     ok: true,
     mapped: true,
-    changed: removed,
+    changed: Boolean(removal?.changed),
     previousServicio: previousMapped,
+    previousRemovedFromMatricula: Boolean(removal?.changed),
+    servicios: removal?.servicios,
     financialKeys: Array.from(financialKeys),
   }
 }
