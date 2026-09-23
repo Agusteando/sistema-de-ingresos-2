@@ -174,6 +174,38 @@ export const resolveFinancialConceptMapping = <T extends FinancialConceptMapping
   return mapping ? { mapping, matchedBy: 'name' as const } : null
 }
 
+export type ScopedFinancialMappingCandidate = {
+  id?: unknown
+  plantel?: unknown
+  sync_version?: unknown
+  syncVersion?: unknown
+}
+
+export const selectPreferredFinancialMapping = <T extends ScopedFinancialMappingCandidate>(
+  rows: T[] = [],
+  plantelCandidates: string[] = [],
+): T | null => {
+  if (!rows.length) return null
+
+  return [...rows].sort((left, right) => {
+    const leftVersion = Number(left?.sync_version ?? left?.syncVersion ?? 0)
+    const rightVersion = Number(right?.sync_version ?? right?.syncVersion ?? 0)
+    if (leftVersion !== rightVersion) return rightVersion - leftVersion
+
+    const leftId = Number(left?.id || 0)
+    const rightId = Number(right?.id || 0)
+    if (leftId !== rightId) return rightId - leftId
+
+    const leftPlantel = String(left?.plantel || '').trim().toUpperCase()
+    const rightPlantel = String(right?.plantel || '').trim().toUpperCase()
+    const leftRank = plantelCandidates.indexOf(leftPlantel)
+    const rightRank = plantelCandidates.indexOf(rightPlantel)
+    const safeLeftRank = leftRank < 0 ? Number.MAX_SAFE_INTEGER : leftRank
+    const safeRightRank = rightRank < 0 ? Number.MAX_SAFE_INTEGER : rightRank
+    return safeLeftRank - safeRightRank
+  })[0] || null
+}
+
 export type TallerAssignmentHistoryState = {
   lastAction?: unknown
   lastSource?: unknown

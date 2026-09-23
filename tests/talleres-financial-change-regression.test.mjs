@@ -50,6 +50,13 @@ test('legacy Talleres category aliases remain authoritative for financial mappin
   assert.equal(aliases.length, 2, 'both mapping lookup paths must accept the category aliases normalized by /conceptos')
 })
 
+test('financial mapping selection is recency-first, not permanently campus-first', async () => {
+  const source = await readFile(resolve(root, 'server/utils/talleres-servicios.ts'), 'utf8')
+  assert.match(source, /selectPreferredFinancialMapping/)
+  assert.match(source, /IFNULL\(sync_version, 0\) AS sync_version/)
+  assert.doesNotMatch(source, /candidate\.plantelRank < current\.plantelRank/)
+})
+
 test('legacy Talleres mappings with servicio_nombre but no servicio_clave remain authoritative', async () => {
   const source = await readFile(resolve(root, 'server/utils/talleres-servicios.ts'), 'utf8')
 
@@ -60,6 +67,52 @@ test('legacy Talleres mappings with servicio_nombre but no servicio_clave remain
   )
   const compatiblePredicates = source.match(/COALESCE\(NULLIF\(TRIM\(servicio_clave\), ''\), NULLIF\(TRIM\(servicio_nombre\), ''\)\) IS NOT NULL/g) || []
   assert.equal(compatiblePredicates.length, 2, 'both concept lookup paths must accept servicio_nombre as the legacy identity')
+})
+
+test('newer global Talleres mapping overrides stale seeded campus rows, while later campus overrides still win', async () => {
+  const shared = await loadShared()
+  const scopes = ['PT', 'GLOBAL']
+
+  const staleCampus = {
+    id: 84,
+    plantel: 'PT',
+    sync_version: 100,
+    servicio_clave: 'GIMNASIA_RITMICA',
+  }
+  const correctedGlobal = {
+    id: 189,
+    plantel: 'GLOBAL',
+    sync_version: 200,
+    servicio_clave: 'GIMNASIA',
+  }
+
+  assert.equal(
+    shared.selectPreferredFinancialMapping([staleCampus, correctedGlobal], scopes)?.servicio_clave,
+    'GIMNASIA',
+    'PT1271 marker: newer GLOBAL GIMNASIA mapping must supersede stale PT GIMNASIA_RITMICA seed row',
+  )
+
+  const laterCampusOverride = {
+    id: 250,
+    plantel: 'PT',
+    sync_version: 300,
+    servicio_clave: 'GIMNASIA_RITMICA',
+  }
+  assert.equal(
+    shared.selectPreferredFinancialMapping([correctedGlobal, laterCampusOverride], scopes)?.servicio_clave,
+    'GIMNASIA_RITMICA',
+    'a genuinely newer plantel-specific override must still supersede GLOBAL',
+  )
+
+  const noVersions = [
+    { id: 84, plantel: 'PT', servicio_clave: 'OLD' },
+    { id: 189, plantel: 'GLOBAL', servicio_clave: 'NEW' },
+  ]
+  assert.equal(
+    shared.selectPreferredFinancialMapping(noVersions, scopes)?.servicio_clave,
+    'NEW',
+    'row id is the safe recency fallback when sync_version is unavailable',
+  )
 })
 
 test('financial mappings survive Bridge concept-id drift by unambiguous concept name', async () => {
