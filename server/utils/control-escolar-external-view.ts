@@ -12,10 +12,11 @@ import {
 } from './control-escolar-plantel-routing'
 
 const EXTERNAL_VIEW_TABLE = 'control_external_student_view'
-export const EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION = 'control-escolar-student-view-v2-canonical'
+export const EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION = 'control-escolar-student-view-v3-sections'
 const VIEW_VERSION = EXTERNAL_CONTROL_ESCOLAR_VIEW_VERSION
 export const EXTERNAL_CONTROL_ESCOLAR_COMPATIBLE_VIEW_VERSIONS = [
   VIEW_VERSION,
+  'control-escolar-student-view-v2-canonical',
   'control-escolar-student-view-v1'
 ] as const
 const FRESH_HOURS = 12

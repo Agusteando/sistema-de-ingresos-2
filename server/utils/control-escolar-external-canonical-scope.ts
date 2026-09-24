@@ -21,6 +21,14 @@ const explicitCurrentConcepts = (query: any = {}) => normalizeEnrollmentConceptI
 const explicitTipoConcepts = (query: any = {}) => normalizeEnrollmentConceptIds(
   query.tipoConcepts || query.tipoIngresoConcepts || ''
 )
+const isBajaStudent = (student: any) => {
+  const status = clean(student?.status, 80).toLowerCase()
+  const enrollmentState = clean(student?.enrollmentState, 80).toLowerCase()
+  return Number(student?.baja || 0) === 1
+    || status === 'baja'
+    || enrollmentState === 'baja'
+    || enrollmentState === 'baja_inscrita'
+}
 
 const resolveConceptScope = async (query: any, bridgeAgentId: string, ciclo: string) => {
   let concepts = explicitCurrentConcepts(query)
@@ -78,9 +86,14 @@ export const fetchCanonicalExternalSnapshotScope = async (query: any = {}) => {
         bridgeAgentId,
         async () => await fetchControlEscolarStudentsWithCanonicalGroups(bridgeAgentId, filters)
       )
+      const rows = (Array.isArray(result?.data) ? result.data : [])
+        .filter((student: any) => !isBajaStudent(student))
       return {
-        result,
-        rows: Array.isArray(result?.data) ? result.data : [],
+        result: {
+          ...result,
+          data: rows
+        },
+        rows,
         plantel,
         bridgeAgentId,
         ciclo,
