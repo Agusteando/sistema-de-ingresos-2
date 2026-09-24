@@ -299,6 +299,8 @@ export default defineEventHandler(async (event) =>
       const coverageAmount = isWholeMoney(body.montoFinal)
         ? toWholeMoney(body.montoFinal, baseCoverageAmount)
         : baseCoverageAmount;
+      const diferenciaMonto = toWholeMoney(body.diferenciaMonto, 0);
+
       if (!isWholeMoney(coverageAmount)) {
         throw createError({
           statusCode: 400,
@@ -307,6 +309,12 @@ export default defineEventHandler(async (event) =>
         });
       }
 
+      if (!isWholeMoney(diferenciaMonto)) {
+        throw createError({
+          statusCode: 400,
+          message: "La diferencia debe ser un numero entero, sin decimales.",
+        });
+      }
 
       const createdBy = user?.name || "Sistema";
       const paymentPolicy = "mantener_pagos_existentes";
@@ -328,7 +336,7 @@ export default defineEventHandler(async (event) =>
             coverageAmount,
             createdBy,
             paymentPolicy,
-            0,
+            diferenciaMonto,
           ],
         },
       ];
@@ -366,7 +374,7 @@ export default defineEventHandler(async (event) =>
         action,
         fromMes: normalizedFromMes,
         paymentPolicy,
-        diferenciaMonto: 0,
+        diferenciaMonto,
         servicio: servicioSync,
         snapshotRefresh,
       };

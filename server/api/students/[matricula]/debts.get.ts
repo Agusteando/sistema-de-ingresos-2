@@ -284,6 +284,14 @@ export default defineEventHandler(async (event) =>
         const projected = resolveProjectedAmount(doc, activePeriod);
         const costoBase = projected.baseCost;
         const totalOriginal = projected.amount;
+        const rawInlineDifference = Number(activePeriod?.diferencia_monto || 0);
+        const diferenciaMonto =
+          activePeriod?.accion === "cambio" &&
+          Number(activePeriod?.start_mes || 1) === mesNumber &&
+          !Number(activePeriod?.diferencial_documento || 0) &&
+          Number.isFinite(rawInlineDifference)
+            ? Math.max(0, rawInlineDifference)
+            : 0;
 
         // Preserve the full payment history for audit/actions, but only vigente rows affect balances.
         const historialPagosDelMes = pagosRows.filter(
@@ -313,7 +321,10 @@ export default defineEventHandler(async (event) =>
         );
         const hasPayment = pagosDelMes.some((p) => Number(p.monto || 0) > 0);
 
-        let subtotal = totalOriginal;
+        // The optional Diferencia belongs to the transition month of this same
+        // documento. It is not a second financial document. Legacy adjustments
+        // that already have diferencial_documento keep their historical behavior.
+        let subtotal = totalOriginal + diferenciaMonto;
         let saldoAntes = subtotal - resueltoTotalMes;
 
         const conceptoId = Number(activePeriod?.concepto_id || doc.concepto || 0);
@@ -340,7 +351,9 @@ export default defineEventHandler(async (event) =>
         });
 
         if (appliesLateFee) {
-          subtotal = calculateLateFeeSubtotal(totalOriginal, recargoPolicy?.porcentaje ?? 10);
+          subtotal =
+            calculateLateFeeSubtotal(totalOriginal, recargoPolicy?.porcentaje ?? 10) +
+            diferenciaMonto;
           saldoAntes = subtotal - resueltoTotalMes;
         }
         if (saldoAntes < 0) saldoAntes = 0;
@@ -363,6 +376,7 @@ export default defineEventHandler(async (event) =>
           mesLabel,
           costoOriginal: totalOriginal,
           costoBase,
+          diferenciaMonto,
           montoFinal:
             projected.source === "period"
               ? activePeriod?.montoFinal
@@ -407,7 +421,7 @@ export default defineEventHandler(async (event) =>
               ? Math.min(100, (depuradoTotalMes * 100) / subtotal).toFixed(1)
               : 0,
           isLate,
-          hasRecargo: subtotal > totalOriginal,
+          hasRecargo: appliesLateFee,
           recargoActivo: Boolean(recargoPolicy?.activo),
           recargoServicio: Boolean(recargoPolicy?.esServicio),
           recargoPorcentaje: Number(recargoPolicy?.porcentaje ?? 10),
