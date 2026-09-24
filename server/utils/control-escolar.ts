@@ -85,6 +85,7 @@ export type ControlEscolarStudentRow = {
   enrollmentState: string;
   currentEnrollmentConceptMatch: boolean;
   inscritoCicloActual: boolean;
+  inSections: boolean;
   tipoIngreso: string;
   tipoIngresoValue: string;
   huskyPassUsername: string;
@@ -729,21 +730,30 @@ const applyOperatorProjection = async (
     const baseCiclo = normalizeText(row.baseCiclo)
       ? normalizeCicloKey(row.baseCiclo)
       : "";
+    const includedByExternalSection = Boolean(row.externalSectionMember);
     const includedByOperatorScope =
       firstText(row.baseEstatus, "Activo") === "Activo" ||
       baseCiclo === scope.cicloKey ||
-      hasCurrentEnrollmentEvidence;
+      hasCurrentEnrollmentEvidence ||
+      includedByExternalSection;
 
     if (!options.searchActive && !includedByOperatorScope) return [];
-    if (promoted.outOfScope && !hasCurrentEnrollmentEvidence) return [];
+    if (
+      promoted.outOfScope &&
+      !hasCurrentEnrollmentEvidence &&
+      !includedByExternalSection
+    )
+      return [];
 
     const projectedPlantel =
-      promoted.outOfScope && hasCurrentEnrollmentEvidence
+      promoted.outOfScope &&
+      (hasCurrentEnrollmentEvidence || includedByExternalSection)
         ? normalizePlantel(agentId)
         : normalizePlantel(promoted.plantel);
 
     if (
       !hasCurrentEnrollmentEvidence &&
+      !includedByExternalSection &&
       projectedPlantel !== normalizePlantel(agentId)
     )
       return [];
@@ -796,6 +806,7 @@ const applyOperatorProjection = async (
         conceptoIdsHistoricos: historicalConceptIds,
         currentEnrollmentConceptMatch: hasCurrentEnrollmentEvidence,
         inscritoCicloActual: hasCurrentEnrollmentEvidence,
+        externalSectionMember: includedByExternalSection,
         operatorEnrollmentState: resolveOperatorEnrollmentState(
           row,
           scope,
@@ -993,6 +1004,44 @@ const fetchLocalBaseRows = async (
     });
   }
 
+  const externalSectionMatriculas = new Set<string>();
+  if (filters.externalApi === true) {
+    try {
+      const [sectionsTableExists, membershipsTableExists] = await Promise.all([
+        localTableExists("student_custom_sections"),
+        localTableExists("student_custom_section_memberships"),
+      ]);
+      if (sectionsTableExists && membershipsTableExists) {
+        const sectionPlanteles = (
+          plantelCandidates.length ? plantelCandidates : [agentId]
+        )
+          .map((plantel) => normalizeUpper(plantel, 40))
+          .filter(Boolean);
+        if (sectionPlanteles.length) {
+          const sectionRows = await query<Array<{ matricula: string }>>(
+            `
+              SELECT DISTINCT M.matricula
+              FROM student_custom_section_memberships M
+              JOIN student_custom_sections S ON S.id = M.section_id
+              WHERE S.is_active = 1
+                AND UPPER(TRIM(S.plantel)) IN (${sectionPlanteles.map(() => "?").join(",")})
+            `,
+            sectionPlanteles,
+          );
+          sectionRows.forEach((row) => {
+            const matricula = normalizeUpper(row.matricula, 64);
+            if (matricula) externalSectionMatriculas.add(matricula);
+          });
+        }
+      }
+    } catch (error: any) {
+      console.warn("[Control Escolar External] Section membership lookup unavailable.", {
+        agentId: normalizePlantel(agentId),
+        message: toErrorMessage(error),
+      });
+    }
+  }
+
   const [currentEvidence, previousEvidence] = await Promise.all([
     fetchCycleConceptEvidence(
       rows.map((row) => row.matricula),
@@ -1019,6 +1068,9 @@ const fetchLocalBaseRows = async (
 
     return {
       ...row,
+      externalSectionMember: externalSectionMatriculas.has(
+        normalizeUpper(row.matricula, 64),
+      ),
       conceptoIdsPagados,
       conceptoIdsCargados,
       conceptoIdsPagadosPrevios,
@@ -1567,6 +1619,7 @@ const overlayStudentRow = (
     enrollmentState: normalizeText(base.operatorEnrollmentState || "inscrito"),
     currentEnrollmentConceptMatch: Boolean(base.currentEnrollmentConceptMatch),
     inscritoCicloActual: Boolean(base.inscritoCicloActual),
+    inSections: Boolean(base.externalSectionMember),
     tipoIngresoValue:
       normalizeText(base.operatorTipoIngreso || "").toLowerCase() === "interno"
         ? "interno"
