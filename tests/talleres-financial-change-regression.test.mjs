@@ -260,16 +260,30 @@ test('financial reconciliation preserves an explicit manual assignment of the sa
   assert.match(servicios, /!lastSource\.startsWith\('financial_concept'\)/)
 })
 
-test('concept adjustment never creates standalone Diferencia documents', async () => {
-  const [modal, period] = await Promise.all([
+test('concept adjustment keeps optional Diferencia on the same document without creating another document', async () => {
+  const [modal, period, debts] = await Promise.all([
     readFile(resolve(root, 'components/ConceptChangeModal.vue'), 'utf8'),
     readFile(resolve(root, 'server/api/documentos/period.post.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/students/[matricula]/debts.get.ts'), 'utf8'),
   ])
 
-  assert.doesNotMatch(modal, /diferenciaMontoInput|differential-pill|>Diferencia</)
-  assert.doesNotMatch(period, /diferenciaConceptoNombre|@documento_diferencial_id|SET @periodo_cambio_id/)
+  assert.match(modal, /diferenciaMontoInput/)
+  assert.match(modal, />Diferencia<\/span>/)
+  assert.match(modal, /diferenciaMonto: diferenciaMonto\.value/)
+
+  assert.match(period, /const diferenciaMonto = toWholeMoney\(body\.diferenciaMonto, 0\)/)
+  assert.match(period, /paymentPolicy,[\s\S]*?diferenciaMonto,[\s\S]*?\],/)
+  assert.match(period, /diferenciaMonto,[\s\S]*?servicio: servicioSync/)
   assert.doesNotMatch(period, /Diferencia ·/)
-  assert.match(period, /diferenciaMonto: 0/)
+  assert.doesNotMatch(period, /INSERT\s+INTO\s+documentos\s*\(/i)
+  assert.doesNotMatch(period, /diferencial_documento\s*=\s*@documento_diferencial_id/)
+
+  assert.match(debts, /Number\(activePeriod\?\.start_mes \|\| 1\) === mesNumber/)
+  assert.match(debts, /!Number\(activePeriod\?\.diferencial_documento \|\| 0\)/)
+  assert.match(debts, /let subtotal = totalOriginal \+ diferenciaMonto/)
+  assert.match(debts, /calculateLateFeeSubtotal\(totalOriginal,[\s\S]*?\+\s*diferenciaMonto/)
+  assert.match(debts, /diferenciaMonto,/)
+  assert.match(debts, /hasRecargo: appliesLateFee/)
 })
 
 test('explicit removal suppresses paid financial membership without cancelling accounting evidence', async () => {
