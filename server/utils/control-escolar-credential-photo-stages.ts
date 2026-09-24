@@ -10,7 +10,7 @@ type CredentialPhotoStageRow = {
 
 const clean = (value:unknown,max=255) => String(value ?? '').trim().slice(0,max)
 const normalizeField = (value:unknown) => clean(value,255).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-const quoteIdentifier = (value:string) => `\`${String(value).replace(/\`/g,'\`\`')}\``
+const quoteIdentifier = (value:string) => `\`${String(value).replace(/\`/g,'\`\`')}\``\nconst isoDate = (value:unknown) => {\n  if(!value)return ''\n  const date=new Date(value as any)\n  return Number.isNaN(date.getTime()) ? '' : date.toISOString()\n}
 
 const CREDENTIAL_ALIASES = {
   matricula:['matricula','matrícula'],
@@ -132,7 +132,7 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     const matricula=clean(row.matricula,64).toUpperCase().replace(/\s+/g,'')
     if(!key||!matricula)continue
     allCurrent.add(matricula)
-    const submitted=row.submitted_at ? new Date(row.submitted_at).toISOString() : ''
+    const submitted=isoDate(row.submitted_at)
     const current=stages.get(key) || {
       key,
       label:clean(row.stage_label,120) || `ETAPA ${key}`,
