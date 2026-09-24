@@ -10,7 +10,12 @@ type CredentialPhotoStageRow = {
 
 const clean = (value:unknown,max=255) => String(value ?? '').trim().slice(0,max)
 const normalizeField = (value:unknown) => clean(value,255).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-const quoteIdentifier = (value:string) => `\`${String(value).replace(/\`/g,'\`\`')}\``\nconst isoDate = (value:unknown) => {\n  if(!value)return ''\n  const date=new Date(value as any)\n  return Number.isNaN(date.getTime()) ? '' : date.toISOString()\n}
+const quoteIdentifier = (value:string) => `\`${String(value).replace(/`/g,'``')}\``
+const isoDate = (value:unknown) => {
+  if(!value)return ''
+  const date=new Date(value as any)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
 
 const CREDENTIAL_ALIASES = {
   matricula:['matricula','matrícula'],
