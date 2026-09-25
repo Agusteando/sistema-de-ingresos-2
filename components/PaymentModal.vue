@@ -405,7 +405,7 @@ import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { calculatePromotedGrado, displayGrado } from '~/shared/utils/grado'
 import { institutionFlagForPlantel, normalizePlantelCode } from '~/shared/utils/institution'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
-import { calculateLateFeeSubtotal, canRemoveLateFee, resolveLateFeeTiming, shouldApplyLateFee } from '~/shared/utils/recargo'
+import { calculateLateFeeSubtotal, resolveLateFeeTiming, shouldApplyLateFee } from '~/shared/utils/recargo'
 import { dedupePaymentTargets } from '~/shared/utils/paymentTarget'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { requestPaymentActionAuthorizationCode, sendPaymentActionAuthorizationNotice } from '~/utils/paymentActionAuthorization'
@@ -443,12 +443,7 @@ const recargoExperienceReady = ref(false)
 let recargoAttentionTimer = null
 let lastAutomaticRecargoKeys = new Set()
 const activePlantelCookie = useCookie('auth_active_plantel')
-const authRoleCookie = useCookie('auth_role')
-const financialPlantelesCookie = useCookie('auth_financial_planteles')
-const canRemoveRecargo = computed(() => canRemoveLateFee({
-  roles: authRoleCookie.value,
-  financialPlanteles: financialPlantelesCookie.value,
-}))
+const canRemoveRecargo = ref(false)
 
 const localDateKey = (date = new Date()) => {
   const year = date.getFullYear()
@@ -693,7 +688,7 @@ const recargoActionAriaLabel = (debt) => {
   if (!isRecargoEligibleDebt(debt)) return 'Los conceptos financieros eventuales no generan recargos'
   if (debtRecargoOmitted(debt)) return 'Restaurar recargo para este pago'
   if (debtHasRecargoForDate(debt) && canOmitRecargo(debt)) return 'Quitar recargo de este pago'
-  if (debtHasRecargoForDate(debt)) return 'Recargo aplicado; solo administradores multi-plantel pueden quitarlo'
+  if (debtHasRecargoForDate(debt)) return 'Recargo aplicado; no está disponible para quitar en este momento'
   return 'Aplicar recargo'
 }
 const recargoAmountForDebt = (debt) => {
@@ -922,9 +917,11 @@ const refreshRecargoPolicies = async () => {
       params: { ids: conceptIds.join(',') },
     })
     const policies = Array.isArray(response?.policies) ? response.policies : []
+    canRemoveRecargo.value = Boolean(response?.capabilities?.canRemoveRecargo)
     policies.forEach(policy => applyRecargoPolicyToConcept(Number(policy?.conceptoId || 0), policy))
     await syncAutomaticRecargoState()
   } catch {
+    canRemoveRecargo.value = false
     // The debt payload already carries the latest available Bridge projection.
     // A policy refresh is best-effort so offline payments stay frictionless.
   }

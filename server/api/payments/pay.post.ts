@@ -64,10 +64,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const cicloKey = normalizeCicloKey(ciclo)
   const requestedPaymentDate = normalizePaymentDate(fechaPago)
   const user = event.context.user
-  const canRemoveRecargo = canRemoveLateFee({
-    roles: user?.roles || user?.role,
-    financialPlanteles: user?.financialPlantelesList || user?.financialPlanteles,
-  })
 
   if (!matricula || !pagos || !pagos.length) {
     throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
@@ -115,6 +111,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const originalUnix = Number(dbClock?.currentUnix || Math.floor(Date.now() / 1000))
   const originalTimestamp = formatMexicoCityDateTimeFromUnix(originalUnix)
   const originalDateKey = formatMexicoCityDateKeyFromUnix(originalUnix)
+  // Recargo removal is governed by the real server day in Mexico City.
+  // The editable payment date must never reopen a closed removal window.
+  const canRemoveRecargo = canRemoveLateFee({
+    roles: user?.roles || user?.role,
+    financialPlanteles: user?.financialPlantelesList || user?.financialPlanteles,
+    currentDateValue: originalDateKey,
+  })
   const originalTime = originalTimestamp.slice(11, 19) || '00:00:00'
   const effectiveUnix = requestedPaymentDate
     ? mexicoCityDateTimeToUnix(requestedPaymentDate, originalTime)
@@ -257,7 +260,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       throw createError({ statusCode: 400, message: 'Los conceptos eventuales no admiten recargos.' })
     }
     if (omitLateFeeRequested && !isEventual && !canRemoveRecargo) {
-      throw createError({ statusCode: 403, message: 'Solo administradores con acceso financiero a múltiples planteles pueden quitar recargos.' })
+      throw createError({
+        statusCode: 403,
+        message: 'Los recargos solo pueden quitarse por administradoras con acceso financiero a múltiples planteles antes del día 15.',
+      })
     }
 
     const applyLateFeeNow = !isEventual && applyLateFeeRequested
