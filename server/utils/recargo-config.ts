@@ -83,6 +83,21 @@ const legacyPolicy = (conceptoId: number, eventual: unknown, source: RecargoPoli
   pendingSync: false,
 })
 
+const enforceConceptEligibility = (policy: RecargoPolicy, concept?: LegacyConceptRow | null): RecargoPolicy => {
+  if (!concept) return policy
+  if (boolFlag(concept.eventual)) {
+    return {
+      ...policy,
+      activo: false,
+      esServicio: false,
+    }
+  }
+  return {
+    ...policy,
+    activo: true,
+  }
+}
+
 const emptyPolicy = (conceptoId: number, source: RecargoPolicy['source']): RecargoPolicy => ({
   conceptoId,
   activo: false,
@@ -153,21 +168,23 @@ const readBridgePolicies = async (conceptIds: number[]) => {
   const result = new Map<number, RecargoPolicy>()
   if (!ids.length) return result
 
-  const rows = await query<StoredRecargoRow[]>(
-    `SELECT concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync
-     FROM ${RECARGO_TABLE}
-     WHERE concepto_id IN (${placeholders(ids)})`,
-    ids,
-  )
+  const [rows, concepts] = await Promise.all([
+    query<StoredRecargoRow[]>(
+      `SELECT concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync
+       FROM ${RECARGO_TABLE}
+       WHERE concepto_id IN (${placeholders(ids)})`,
+      ids,
+    ),
+    readLegacyConceptsFromBridge(ids),
+  ])
   rows.forEach(row => {
     const policy = rowToPolicy(row, 'bridge')
-    if (policy.conceptoId) result.set(policy.conceptoId, policy)
+    if (policy.conceptoId) result.set(policy.conceptoId, enforceConceptEligibility(policy, concepts.get(policy.conceptoId)))
   })
 
   const missing = ids.filter(id => !result.has(id))
-  const legacy = await readLegacyConceptsFromBridge(missing)
   missing.forEach((id) => {
-    const concept = legacy.get(id)
+    const concept = concepts.get(id)
     result.set(id, concept ? legacyPolicy(id, concept.eventual, 'bridge') : emptyPolicy(id, 'bridge'))
   })
   return result
@@ -184,15 +201,15 @@ const readCentralPolicies = async (conceptIds: number[]) => {
      WHERE concepto_id IN (${placeholders(ids)})`,
     ids,
   ))
+  const concepts = await readLegacyConceptsFromCentral(ids)
   rows.forEach(row => {
     const policy = rowToPolicy(row, 'central')
-    if (policy.conceptoId) result.set(policy.conceptoId, policy)
+    if (policy.conceptoId) result.set(policy.conceptoId, enforceConceptEligibility(policy, concepts.get(policy.conceptoId)))
   })
 
   const missing = ids.filter(id => !result.has(id))
-  const legacy = await readLegacyConceptsFromCentral(missing)
   missing.forEach((id) => {
-    const concept = legacy.get(id)
+    const concept = concepts.get(id)
     result.set(id, concept ? legacyPolicy(id, concept.eventual, 'central') : emptyPolicy(id, 'central'))
   })
   return result

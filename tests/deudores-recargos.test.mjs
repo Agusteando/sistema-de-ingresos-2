@@ -116,7 +116,13 @@ test('/deudores propagates recargos to UI, email, WhatsApp and external contract
 })
 
 
-test('payment operators cannot disable or omit recargos', async () => {
+test('only multi-plantel financial admins can remove recargos', async () => {
+  const recargo = await loadRecargo()
+  assert.equal(recargo.canRemoveLateFee({ roles: 'ROLE_ADMON', financialPlanteles: 'PT,ST' }), true)
+  assert.equal(recargo.canRemoveLateFee({ roles: 'ROLE_ADMON', financialPlanteles: 'PT' }), false)
+  assert.equal(recargo.canRemoveLateFee({ roles: 'ROLE_CTRL', financialPlanteles: 'PT,ST' }), false)
+  assert.equal(recargo.canRemoveLateFee({ roles: 'superadmin', financialPlanteles: ['PT', 'ST'] }), true)
+
   const [modal, pay, recargoApi, recargoConfig] = await Promise.all([
     readFile(resolve(root, 'components/PaymentModal.vue'), 'utf8'),
     readFile(resolve(root, 'server/api/payments/pay.post.ts'), 'utf8'),
@@ -124,10 +130,58 @@ test('payment operators cannot disable or omit recargos', async () => {
     readFile(resolve(root, 'server/utils/recargo-config.ts'), 'utf8'),
   ])
 
-  assert.doesNotMatch(modal, /omitirRecargo|recargoOmitidoAhora|Quitar recargo|Sin recargo/)
-  assert.match(modal, /:disabled="isRecargoTogglePending\(debt\) \|\| debtHasRecargoForDate\(debt\)"/)
-  assert.match(pay, /Los recargos no se pueden omitir\./)
-  assert.doesNotMatch(pay, /suppress:\s*omitLateFee/)
+  assert.match(modal, /canRemoveLateFee/)
+  assert.match(modal, /Quitar recargo de este pago/)
+  assert.match(modal, /omitirRecargo: debtRecargoOmitted/)
+  assert.match(pay, /canRemoveLateFee/)
+  assert.match(pay, /Solo administradores con acceso financiero a múltiples planteles pueden quitar recargos\./)
+  assert.match(pay, /suppress: omitLateFeeNow/)
   assert.match(recargoApi, /Los recargos no se pueden desactivar\./)
   assert.match(recargoConfig, /Los recargos no se pueden desactivar\./)
+  assert.match(recargoConfig, /activo: true/)
+})
+
+test('eventual financial concepts never receive automatic or manual recargos', async () => {
+  const recargo = await loadRecargo()
+
+  const forcedEventual = recargo.resolveLateFeeBalance({
+    baseAmount: 1000,
+    paidAmount: 0,
+    eligible: false,
+    enabled: true,
+    force: true,
+    hasManualLateFee: true,
+    hasPayment: false,
+    hasActiveConvention: false,
+    ciclo: '2026-2027',
+    schoolMonth: 1,
+    currentDateValue: '2026-09-19',
+    cutoffDay: 12,
+    percentage: 10,
+  })
+  assert.equal(forcedEventual.appliesLateFee, false)
+  assert.equal(forcedEventual.subtotal, 1000)
+  assert.equal(forcedEventual.lateFeeAmount, 0)
+  assert.equal(forcedEventual.balance, 1000)
+
+  const [debts, deudores, pay, modal, documentCreate, financialConcept, recargoApi] = await Promise.all([
+    readFile(resolve(root, 'server/api/students/[matricula]/debts.get.ts'), 'utf8'),
+    readFile(resolve(root, 'server/utils/deudores.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/payments/pay.post.ts'), 'utf8'),
+    readFile(resolve(root, 'components/PaymentModal.vue'), 'utf8'),
+    readFile(resolve(root, 'server/api/documentos/index.post.ts'), 'utf8'),
+    readFile(resolve(root, 'server/utils/financial-concept.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/recargos/concepto.put.ts'), 'utf8'),
+  ])
+
+  assert.match(debts, /eligible: recargoEligible/)
+  assert.match(debts, /recargoEligible,/)
+  assert.match(deudores, /eligible: recargoEligible/)
+  assert.match(pay, /eligible: !isEventual/)
+  assert.match(pay, /Los conceptos eventuales no admiten recargos\./)
+  assert.match(modal, /isRecargoEligibleDebt/)
+  assert.match(modal, /Los conceptos financieros eventuales no generan recargos/)
+  assert.match(documentCreate, /const eventual = Boolean\(conceptoRef\.eventual\)/)
+  assert.match(financialConcept, /eventual: boolean/)
+  assert.match(recargoApi, /Los conceptos eventuales no admiten recargos\./)
 })

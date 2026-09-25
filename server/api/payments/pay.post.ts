@@ -9,8 +9,8 @@ import { PLANTELES_LIST } from '../../../utils/constants'
 import { finalizeStockReservation, releaseStockReservation, reserveStockForPayment, type StockReservation } from '../../utils/conceptos-stock'
 import { isPlaceholderConceptName, resolveFinancialConcept } from '../../utils/financial-concept'
 import { loadActiveCobranzaConvention } from '../../utils/cobranza-convenio'
-import { resolveLateFeeBalance } from '../../../shared/utils/recargo'
-import { loadRecargoPolicies, markRecargoConceptAsService, type RecargoPolicy } from '../../utils/recargo-config'
+import { canRemoveLateFee, resolveLateFeeBalance } from '../../../shared/utils/recargo'
+import { loadRecargoPolicies, type RecargoPolicy } from '../../utils/recargo-config'
 import { paymentTargetKey } from '../../../shared/utils/paymentTarget'
 import {
   formatMexicoCityDateKeyFromUnix,
@@ -64,6 +64,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const cicloKey = normalizeCicloKey(ciclo)
   const requestedPaymentDate = normalizePaymentDate(fechaPago)
   const user = event.context.user
+  const canRemoveRecargo = canRemoveLateFee({
+    roles: user?.roles || user?.role,
+    financialPlanteles: user?.financialPlantelesList || user?.financialPlanteles,
+  })
 
   if (!matricula || !pagos || !pagos.length) {
     throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
@@ -134,7 +138,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const paymentFolioResultRefs: Array<{ insertIndex: number; selectIndex: number }> = []
   const paymentReceiptRecoveryKeys: Array<{ documento: number; mes: string; monto: number }> = []
   const finalAmountByTarget = new Map<string, number>()
-  const resolvedPaymentConcepts = new Map<string, { concepto: string; conceptoNombre: string }>()
+  const resolvedPaymentConcepts = new Map<string, { concepto: string; conceptoNombre: string; eventual: boolean }>()
   const recargoPolicyCache = new Map<number, RecargoPolicy>()
   const seenPaymentTargets = new Set<string>()
 
@@ -183,23 +187,26 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     `, [documento, mesNumber, mesNumber])
 
     const storedPaymentConcept = resolvePaymentConceptSnapshot(doc, period)
-    let paymentConcept = storedPaymentConcept
-    if (isPlaceholderConceptName(storedPaymentConcept.conceptoNombre)) {
-      const conceptCacheKey = `${normalizeCicloKey(doc.ciclo || cicloKey)}:${storedPaymentConcept.concepto}`
-      const cachedConcept = resolvedPaymentConcepts.get(conceptCacheKey)
-      if (cachedConcept) {
-        paymentConcept = cachedConcept
-      } else {
-        const resolvedConcept = await resolveFinancialConcept({
-          conceptoId: storedPaymentConcept.concepto,
-          ciclo: doc.ciclo || cicloKey,
-        })
-        paymentConcept = {
-          concepto: String(resolvedConcept.id),
-          conceptoNombre: resolvedConcept.concepto,
-        }
-        resolvedPaymentConcepts.set(conceptCacheKey, paymentConcept)
+    const conceptCacheKey = `${normalizeCicloKey(doc.ciclo || cicloKey)}:${storedPaymentConcept.concepto}`
+    let catalogConcept = resolvedPaymentConcepts.get(conceptCacheKey)
+    if (!catalogConcept) {
+      const resolvedConcept = await resolveFinancialConcept({
+        conceptoId: storedPaymentConcept.concepto,
+        ciclo: doc.ciclo || cicloKey,
+      })
+      catalogConcept = {
+        concepto: String(resolvedConcept.id),
+        conceptoNombre: resolvedConcept.concepto,
+        eventual: Boolean(resolvedConcept.eventual),
       }
+      resolvedPaymentConcepts.set(conceptCacheKey, catalogConcept)
+    }
+    const paymentConcept = {
+      concepto: storedPaymentConcept.concepto,
+      conceptoNombre: isPlaceholderConceptName(storedPaymentConcept.conceptoNombre)
+        ? catalogConcept.conceptoNombre
+        : storedPaymentConcept.conceptoNombre,
+      eventual: catalogConcept.eventual,
     }
 
     const periodIsChangedConcept = period?.accion === 'cambio'
@@ -242,12 +249,18 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     let saldoAntes = Math.max(0, subtotal - resuelto)
 
     const conceptoId = Number(paymentConcept.concepto || 0)
-    // forzarRecargo remains a rolling-deploy compatibility alias. Omitting an
-    // otherwise automatic recargo is no longer an operator-supported action.
-    if (truthyFlag(p?.omitirRecargo)) {
-      throw createError({ statusCode: 400, message: 'Los recargos no se pueden omitir.' })
+    const isEventual = truthyFlag(doc.eventual) || Boolean(paymentConcept.eventual)
+    const omitLateFeeRequested = truthyFlag(p?.omitirRecargo)
+    const applyLateFeeRequested = truthyFlag(p?.aplicarRecargo) || truthyFlag(p?.forzarRecargo)
+
+    if (applyLateFeeRequested && isEventual) {
+      throw createError({ statusCode: 400, message: 'Los conceptos eventuales no admiten recargos.' })
     }
-    const applyLateFeeNow = truthyFlag(p?.aplicarRecargo) || truthyFlag(p?.forzarRecargo)
+    if (omitLateFeeRequested && !isEventual && !canRemoveRecargo) {
+      throw createError({ statusCode: 403, message: 'Solo administradores con acceso financiero a múltiples planteles pueden quitar recargos.' })
+    }
+
+    const applyLateFeeNow = !isEventual && applyLateFeeRequested
     let recargoPolicy = recargoPolicyCache.get(conceptoId)
     if (!recargoPolicy) {
       const policies = await loadRecargoPolicies([conceptoId])
@@ -255,21 +268,16 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       if (recargoPolicy) recargoPolicyCache.set(conceptoId, recargoPolicy)
     }
 
-    if (applyLateFeeNow && !recargoPolicy?.esServicio) {
-      recargoPolicy = await markRecargoConceptAsService({
-        conceptoId,
-        updatedBy: user?.email || userName,
-      })
-      recargoPolicyCache.set(conceptoId, recargoPolicy)
-    }
-
-    const hasRecargoManual = pagosDelMes.some(row => String(row.recargo) === '1')
+    const hasRecargoManual = !isEventual && pagosDelMes.some(row => String(row.recargo) === '1')
     const hasPayment = pagosDelMes.some(row => Number(row.monto || 0) > 0)
+    const omitLateFeeNow = !isEventual && omitLateFeeRequested && canRemoveRecargo && !hasRecargoManual
     const lateFee = resolveLateFeeBalance({
       baseAmount: finalAmount,
       paidAmount: resuelto,
-      enabled: Boolean(recargoPolicy?.activo),
+      eligible: !isEventual,
+      enabled: !isEventual && Boolean(recargoPolicy?.activo),
       force: applyLateFeeNow,
+      suppress: omitLateFeeNow,
       hasManualLateFee: hasRecargoManual,
       hasPayment,
       hasActiveConvention: Boolean(activeConvention),
@@ -277,9 +285,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       schoolMonth: mesNumber,
       currentDateValue: effectiveDateKey,
       cutoffDay: recargoPolicy?.diaLimite ?? 12,
-      // Only one-off/eventual documents use the calendar-month service rule.
-      // Recurring charges must wait until after day 12 of their own school month.
-      isService: Boolean(recargoPolicy?.esServicio) && String(doc.eventual) === '1',
+      isService: false,
       percentage: recargoPolicy?.porcentaje ?? 10,
     })
     const appliesLateFee = lateFee.appliesLateFee

@@ -13,6 +13,7 @@ import {
 } from './cobranza-period'
 import { resolveLateFeeBalance } from '../../shared/utils/recargo'
 import { loadRecargoPolicies } from './recargo-config'
+import { loadFinancialConceptMap } from './financial-concept'
 
 const parsePlazos = (plazoRaw: unknown, mesesRaw: unknown) => {
   const raw = String(plazoRaw || mesesRaw || '1').trim()
@@ -417,7 +418,10 @@ export const getDeudoresGlobal = async ({
     ...documentos.map((doc) => Number(doc.concepto || 0)),
     ...periodRows.map((period) => Number(period.concepto_id || 0)),
   ].filter((id) => Number.isInteger(id) && id > 0)))
-  const recargoPolicies = await loadRecargoPolicies(recargoConceptIds)
+  const [recargoPolicies, financialConcepts] = await Promise.all([
+    loadRecargoPolicies(recargoConceptIds),
+    loadFinancialConceptMap(recargoConceptIds, ciclo),
+  ])
 
   const periodByDoc = new Map<number, any[]>()
   periodRows.forEach((row) => {
@@ -493,18 +497,20 @@ export const getDeudoresGlobal = async ({
       })
 
       const recargoPolicy = recargoPolicies.get(conceptoId)
+      const recargoEligible = !isEventual(doc) && !Boolean(financialConcepts.get(conceptoId)?.eventual)
       const lateFee = resolveLateFeeBalance({
         baseAmount: subtotalBase,
         paidAmount: pagado,
-        enabled: Boolean(recargoPolicy?.activo),
-        hasManualLateFee: pagosVigentes.some((p) => String(p.recargo) === '1'),
+        eligible: recargoEligible,
+        enabled: recargoEligible && Boolean(recargoPolicy?.activo),
+        hasManualLateFee: recargoEligible && pagosVigentes.some((p) => String(p.recargo) === '1'),
         hasPayment: pagosVigentes.some((p) => Number(p.monto || 0) > 0),
         hasActiveConvention: Boolean(excepcionMes),
         ciclo,
         schoolMonth: mesCargoNumber,
         currentDateValue: currentDateKey,
         cutoffDay: recargoPolicy?.diaLimite ?? 12,
-        isService: Boolean(recargoPolicy?.esServicio) && isEventual(doc),
+        isService: false,
         percentage: recargoPolicy?.porcentaje ?? 10,
       })
       const subtotal = lateFee.subtotal
@@ -581,9 +587,9 @@ export const getDeudoresGlobal = async ({
           beca: money(beca),
           subtotalSinRecargo: money(subtotalBase),
           recargoAplicado: lateFee.appliesLateFee,
-          recargoPorcentaje: Number(recargoPolicy?.porcentaje ?? 10),
+          recargoPorcentaje: recargoEligible ? Number(recargoPolicy?.porcentaje ?? 10) : 0,
           recargoMonto: money(recargoMonto),
-          recargoFechaLimite: lateFee.timing.deadline,
+          recargoFechaLimite: recargoEligible ? lateFee.timing.deadline : null,
           subtotal: money(subtotal),
           pagado: money(pagado),
           pendienteConciliacion: money(pendienteConciliacion),

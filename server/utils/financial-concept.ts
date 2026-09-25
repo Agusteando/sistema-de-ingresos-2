@@ -8,6 +8,7 @@ type CatalogConceptRow = {
   costo?: unknown
   ciclo?: unknown
   plantel?: unknown
+  eventual?: unknown
 }
 
 export type FinancialConcept = {
@@ -16,6 +17,7 @@ export type FinancialConcept = {
   costo: number
   ciclo: string
   plantel: string
+  eventual: boolean
   source: 'central' | 'bridge'
 }
 
@@ -49,6 +51,8 @@ const toMoney = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
+
 const cicloCandidatesFor = (value: unknown) => {
   const key = normalizeCicloKey(value)
   const candidates = new Set<string>()
@@ -77,6 +81,7 @@ const mapRows = (rows: CatalogConceptRow[], source: FinancialConcept['source']) 
     costo: toMoney(row?.costo),
     ciclo: normalizeText(row?.ciclo),
     plantel: normalizeText(row?.plantel),
+    eventual: truthyFlag(row?.eventual),
     source,
   })
   return map
@@ -92,6 +97,7 @@ const readCentralConcepts = async (ids: number[], ciclo: unknown) => {
     columns.has('costo') ? 'costo' : '0 AS costo',
     columns.has('ciclo') ? 'ciclo' : "'' AS ciclo",
     columns.has('plantel') ? 'plantel' : "'' AS plantel",
+    columns.has('eventual') ? 'eventual' : '0 AS eventual',
   ]
   const cicloCandidates = cicloCandidatesFor(ciclo)
   const params: any[] = [ids]
@@ -135,10 +141,11 @@ const readBridgeConcepts = async (ids: number[], ciclo: unknown) => {
 
   // `conceptos.plantel` exists in some deployments but is legacy/optional metadata.
   // Never make the financial catalog unreadable on an older Bridge just to validate it.
-  const hasPlantelColumn = await query<any[]>(`SHOW COLUMNS FROM conceptos LIKE 'plantel'`)
-    .then((rows) => rows.length > 0)
-    .catch(() => false)
-  const select = `id, concepto, costo, ciclo, ${hasPlantelColumn ? 'plantel' : "'' AS plantel"}`
+  const [hasPlantelColumn, hasEventualColumn] = await Promise.all([
+    query<any[]>(`SHOW COLUMNS FROM conceptos LIKE 'plantel'`).then((rows) => rows.length > 0).catch(() => false),
+    query<any[]>(`SHOW COLUMNS FROM conceptos LIKE 'eventual'`).then((rows) => rows.length > 0).catch(() => false),
+  ])
+  const select = `id, concepto, costo, ciclo, ${hasPlantelColumn ? 'plantel' : "'' AS plantel"}, ${hasEventualColumn ? 'eventual' : '0 AS eventual'}`
 
   const cicloCandidates = cicloCandidatesFor(ciclo)
   const params: any[] = [ids]
