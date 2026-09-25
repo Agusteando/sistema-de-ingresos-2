@@ -116,12 +116,41 @@ test('/deudores propagates recargos to UI, email, WhatsApp and external contract
 })
 
 
-test('only multi-plantel financial admins can remove recargos', async () => {
+test('multi-plantel financial admins can remove recargos only before day 15', async () => {
   const recargo = await loadRecargo()
-  assert.equal(recargo.canRemoveLateFee({ roles: 'ROLE_ADMON', financialPlanteles: 'PT,ST' }), true)
-  assert.equal(recargo.canRemoveLateFee({ roles: 'ROLE_ADMON', financialPlanteles: 'PT' }), false)
-  assert.equal(recargo.canRemoveLateFee({ roles: 'ROLE_CTRL', financialPlanteles: 'PT,ST' }), false)
-  assert.equal(recargo.canRemoveLateFee({ roles: 'superadmin', financialPlanteles: ['PT', 'ST'] }), true)
+  assert.equal(recargo.canRemoveLateFee({
+    roles: 'ROLE_ADMON',
+    financialPlanteles: 'PT,ST',
+    currentDateValue: '2026-09-14',
+  }), true)
+  assert.equal(recargo.canRemoveLateFee({
+    roles: 'ROLE_ADMON',
+    financialPlanteles: 'PT,ST',
+    currentDateValue: '2026-09-15',
+  }), false)
+  assert.equal(recargo.canRemoveLateFee({
+    roles: 'ROLE_ADMON',
+    financialPlanteles: 'PT,ST',
+    currentDateValue: '2026-09-16',
+  }), false)
+  assert.equal(recargo.canRemoveLateFee({
+    roles: 'ROLE_ADMON',
+    financialPlanteles: 'PT',
+    currentDateValue: '2026-09-14',
+  }), false)
+  assert.equal(recargo.canRemoveLateFee({
+    roles: 'ROLE_CTRL',
+    financialPlanteles: 'PT,ST',
+    currentDateValue: '2026-09-14',
+  }), false)
+  assert.equal(recargo.canRemoveLateFee({
+    roles: 'superadmin',
+    financialPlanteles: ['PT', 'ST'],
+    currentDateValue: '2026-09-14',
+  }), true)
+  assert.equal(recargo.isLateFeeRemovalWindowOpen('2026-10-01'), true)
+  assert.equal(recargo.isLateFeeRemovalWindowOpen('2026-10-14'), true)
+  assert.equal(recargo.isLateFeeRemovalWindowOpen('2026-10-15'), false)
 
   const manualRecargoRemovedByAuthorizedAdmin = recargo.resolveLateFeeBalance({
     baseAmount: 1000,
@@ -141,18 +170,25 @@ test('only multi-plantel financial admins can remove recargos', async () => {
   assert.equal(manualRecargoRemovedByAuthorizedAdmin.appliesLateFee, false)
   assert.equal(manualRecargoRemovedByAuthorizedAdmin.balance, 900)
 
-  const [modal, pay, recargoApi, recargoConfig] = await Promise.all([
+  const [modal, pay, recargoApi, recargoPoliciesApi, recargoConfig] = await Promise.all([
     readFile(resolve(root, 'components/PaymentModal.vue'), 'utf8'),
     readFile(resolve(root, 'server/api/payments/pay.post.ts'), 'utf8'),
     readFile(resolve(root, 'server/api/recargos/concepto.put.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/recargos/conceptos.get.ts'), 'utf8'),
     readFile(resolve(root, 'server/utils/recargo-config.ts'), 'utf8'),
   ])
 
-  assert.match(modal, /canRemoveLateFee/)
+  assert.doesNotMatch(modal, /canRemoveLateFee/)
+  assert.match(modal, /capabilities\?\.canRemoveRecargo/)
   assert.match(modal, /Quitar recargo de este pago/)
   assert.match(modal, /omitirRecargo: debtRecargoOmitted/)
   assert.match(pay, /canRemoveLateFee/)
-  assert.match(pay, /Solo administradores con acceso financiero a múltiples planteles pueden quitar recargos\./)
+  assert.match(pay, /const canRemoveRecargo = canRemoveLateFee\(\{[\s\S]*?currentDateValue: originalDateKey,[\s\S]*?\}\)/)
+  assert.match(pay, /currentDateValue: effectiveDateKey/)
+  assert.match(pay, /antes del día 15/)
+  assert.match(recargoPoliciesApi, /SELECT UNIX_TIMESTAMP\(\) AS currentUnix/)
+  assert.match(recargoPoliciesApi, /canRemoveRecargo: canRemoveLateFee/)
+  assert.match(recargoPoliciesApi, /removalLockDay: LATE_FEE_REMOVAL_LOCK_DAY/)
   assert.match(pay, /suppress: omitLateFeeNow/)
   assert.match(pay, /omitLateFeeNow = !isEventual && omitLateFeeRequested && canRemoveRecargo/)
   assert.doesNotMatch(pay, /omitLateFeeNow = .*hasRecargoManual/)

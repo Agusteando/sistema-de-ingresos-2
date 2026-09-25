@@ -33,7 +33,9 @@ export const shouldApplyLateFee = ({
   )
 )
 
-export const canRemoveLateFee = ({
+export const LATE_FEE_REMOVAL_LOCK_DAY = 15
+
+export const hasLateFeeRemovalAccess = ({
   roles,
   financialPlanteles,
 }: {
@@ -49,6 +51,25 @@ export const canRemoveLateFee = ({
   const isFinancialAdmin = roleTokens.includes('superadmin') || roleTokens.includes('role_admon')
   return isFinancialAdmin && new Set(plantelTokens).size > 1
 }
+
+export const isLateFeeRemovalWindowOpen = (currentDateValue: unknown) => {
+  const currentDateKey = normalizeDateKey(currentDateValue)
+  const day = Number.parseInt(currentDateKey.slice(8, 10), 10)
+  return Number.isInteger(day) && day >= 1 && day < LATE_FEE_REMOVAL_LOCK_DAY
+}
+
+export const canRemoveLateFee = ({
+  roles,
+  financialPlanteles,
+  currentDateValue,
+}: {
+  roles: unknown
+  financialPlanteles: unknown
+  currentDateValue: unknown
+}) => (
+  hasLateFeeRemovalAccess({ roles, financialPlanteles })
+  && isLateFeeRemovalWindowOpen(currentDateValue)
+)
 
 export const normalizeLateFeePercentage = (value: unknown, fallback = 10) => {
   const parsed = Number(value)
