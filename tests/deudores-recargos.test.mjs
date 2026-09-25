@@ -123,6 +123,24 @@ test('only multi-plantel financial admins can remove recargos', async () => {
   assert.equal(recargo.canRemoveLateFee({ roles: 'ROLE_CTRL', financialPlanteles: 'PT,ST' }), false)
   assert.equal(recargo.canRemoveLateFee({ roles: 'superadmin', financialPlanteles: ['PT', 'ST'] }), true)
 
+  const manualRecargoRemovedByAuthorizedAdmin = recargo.resolveLateFeeBalance({
+    baseAmount: 1000,
+    paidAmount: 100,
+    eligible: true,
+    enabled: true,
+    suppress: true,
+    hasManualLateFee: true,
+    hasPayment: true,
+    hasActiveConvention: false,
+    ciclo: '2026-2027',
+    schoolMonth: 1,
+    currentDateValue: '2026-09-19',
+    cutoffDay: 12,
+    percentage: 10,
+  })
+  assert.equal(manualRecargoRemovedByAuthorizedAdmin.appliesLateFee, false)
+  assert.equal(manualRecargoRemovedByAuthorizedAdmin.balance, 900)
+
   const [modal, pay, recargoApi, recargoConfig] = await Promise.all([
     readFile(resolve(root, 'components/PaymentModal.vue'), 'utf8'),
     readFile(resolve(root, 'server/api/payments/pay.post.ts'), 'utf8'),
@@ -136,6 +154,8 @@ test('only multi-plantel financial admins can remove recargos', async () => {
   assert.match(pay, /canRemoveLateFee/)
   assert.match(pay, /Solo administradores con acceso financiero a múltiples planteles pueden quitar recargos\./)
   assert.match(pay, /suppress: omitLateFeeNow/)
+  assert.match(pay, /omitLateFeeNow = !isEventual && omitLateFeeRequested && canRemoveRecargo/)
+  assert.doesNotMatch(pay, /omitLateFeeNow = .*hasRecargoManual/)
   assert.match(recargoApi, /Los recargos no se pueden desactivar\./)
   assert.match(recargoConfig, /Los recargos no se pueden desactivar\./)
   assert.match(recargoConfig, /activo: true/)

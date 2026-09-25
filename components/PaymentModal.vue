@@ -682,10 +682,8 @@ const debtHasRecargoForDate = (debt) => recargoCalculationForDebt(debt).applies
 const debtRecargoOmitted = (debt) => Boolean(debt?.recargoOmitidoAhora)
   && canRemoveRecargo.value
   && isRecargoEligibleDebt(debt)
-  && !Boolean(debt?.recargoManual)
 const canOmitRecargo = (debt) => canRemoveRecargo.value
   && isRecargoEligibleDebt(debt)
-  && !Boolean(debt?.recargoManual)
 const recargoActionLabel = (debt) => {
   if (!isRecargoEligibleDebt(debt)) return 'No aplica'
   if (debtRecargoOmitted(debt)) return 'Sin recargo'
@@ -791,7 +789,6 @@ const writePaymentDraft = (draft) => {
       recargoAplicadoAhora: isRecargoEligibleDebt(debt) && Boolean(restored.recargoAplicadoAhora),
       recargoOmitidoAhora: canRemoveRecargo.value
         && isRecargoEligibleDebt(debt)
-        && !Boolean(debt.recargoManual)
         && Boolean(restored.recargoOmitidoAhora)
     }
   })

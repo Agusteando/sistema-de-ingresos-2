@@ -270,7 +270,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const hasRecargoManual = !isEventual && pagosDelMes.some(row => String(row.recargo) === '1')
     const hasPayment = pagosDelMes.some(row => Number(row.monto || 0) > 0)
-    const omitLateFeeNow = !isEventual && omitLateFeeRequested && canRemoveRecargo && !hasRecargoManual
+    const omitLateFeeNow = !isEventual && omitLateFeeRequested && canRemoveRecargo
     const lateFee = resolveLateFeeBalance({
       baseAmount: finalAmount,
       paidAmount: resuelto,
