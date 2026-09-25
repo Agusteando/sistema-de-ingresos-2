@@ -242,11 +242,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     let saldoAntes = Math.max(0, subtotal - resuelto)
 
     const conceptoId = Number(paymentConcept.concepto || 0)
-    // forzarRecargo is accepted only as a rolling-deploy compatibility alias.
-    // New clients can also omit an otherwise automatic recargo for this payment
-    // without changing the concept's persistent recargo policy.
-    const omitLateFeeRequested = truthyFlag(p?.omitirRecargo)
-    const applyLateFeeNow = !omitLateFeeRequested && (truthyFlag(p?.aplicarRecargo) || truthyFlag(p?.forzarRecargo))
+    // forzarRecargo remains a rolling-deploy compatibility alias. Omitting an
+    // otherwise automatic recargo is no longer an operator-supported action.
+    if (truthyFlag(p?.omitirRecargo)) {
+      throw createError({ statusCode: 400, message: 'Los recargos no se pueden omitir.' })
+    }
+    const applyLateFeeNow = truthyFlag(p?.aplicarRecargo) || truthyFlag(p?.forzarRecargo)
     let recargoPolicy = recargoPolicyCache.get(conceptoId)
     if (!recargoPolicy) {
       const policies = await loadRecargoPolicies([conceptoId])
@@ -264,13 +265,11 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const hasRecargoManual = pagosDelMes.some(row => String(row.recargo) === '1')
     const hasPayment = pagosDelMes.some(row => Number(row.monto || 0) > 0)
-    const omitLateFeeNow = omitLateFeeRequested && !hasRecargoManual
     const lateFee = resolveLateFeeBalance({
       baseAmount: finalAmount,
       paidAmount: resuelto,
       enabled: Boolean(recargoPolicy?.activo),
       force: applyLateFeeNow,
-      suppress: omitLateFeeNow,
       hasManualLateFee: hasRecargoManual,
       hasPayment,
       hasActiveConvention: Boolean(activeConvention),

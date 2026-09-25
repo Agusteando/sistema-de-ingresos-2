@@ -7,7 +7,10 @@ on:
       - 'chatgpt/deudores-**'
     paths:
       - 'shared/utils/recargo.ts'
+      - 'components/PaymentModal.vue'
       - 'server/utils/deudores.ts'
+      - 'server/utils/recargo-config.ts'
+      - 'server/api/recargos/**'
       - 'server/api/payments/pay.post.ts'
       - 'server/utils/cobranzaEmail.ts'
       - 'server/api/deudores/**'
@@ -18,7 +21,10 @@ on:
   pull_request:
     paths:
       - 'shared/utils/recargo.ts'
+      - 'components/PaymentModal.vue'
       - 'server/utils/deudores.ts'
+      - 'server/utils/recargo-config.ts'
+      - 'server/api/recargos/**'
       - 'server/api/payments/pay.post.ts'
       - 'server/utils/cobranzaEmail.ts'
       - 'server/api/deudores/**'

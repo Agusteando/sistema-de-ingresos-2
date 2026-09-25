@@ -114,3 +114,20 @@ test('/deudores propagates recargos to UI, email, WhatsApp and external contract
   assert.match(page, /Recargo_Concepto_MXN/)
   assert.match(external, /recargos: totalRecargos/)
 })
+
+
+test('payment operators cannot disable or omit recargos', async () => {
+  const [modal, pay, recargoApi, recargoConfig] = await Promise.all([
+    readFile(resolve(root, 'components/PaymentModal.vue'), 'utf8'),
+    readFile(resolve(root, 'server/api/payments/pay.post.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/recargos/concepto.put.ts'), 'utf8'),
+    readFile(resolve(root, 'server/utils/recargo-config.ts'), 'utf8'),
+  ])
+
+  assert.doesNotMatch(modal, /omitirRecargo|recargoOmitidoAhora|Quitar recargo|Sin recargo/)
+  assert.match(modal, /:disabled="isRecargoTogglePending\(debt\) \|\| debtHasRecargoForDate\(debt\)"/)
+  assert.match(pay, /Los recargos no se pueden omitir\./)
+  assert.doesNotMatch(pay, /suppress:\s*omitLateFee/)
+  assert.match(recargoApi, /Los recargos no se pueden desactivar\./)
+  assert.match(recargoConfig, /Los recargos no se pueden desactivar\./)
+})

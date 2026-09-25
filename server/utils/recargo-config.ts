@@ -334,6 +334,9 @@ export const setRecargoPolicyActive = async ({
   }
 
   const normalizedActive = typeof activo === 'boolean' ? activo : boolFlag(activo)
+  if (!normalizedActive) {
+    throw createError({ statusCode: 403, message: 'Los recargos no se pueden desactivar.' })
+  }
   const actor = String(updatedBy || '').trim().slice(0, 255) || null
 
   if (canTryCentral()) {
