@@ -26,12 +26,15 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   if (!markAsService && (body?.activo === undefined || body?.activo === null)) {
     throw createError({ statusCode: 400, message: 'Configuración de recargo requerida.' })
   }
+  if (!markAsService && !normalizeBoolean(body?.activo)) {
+    throw createError({ statusCode: 403, message: 'Los recargos no se pueden desactivar.' })
+  }
 
   const policy = markAsService
     ? await markRecargoConceptAsService({ conceptoId, updatedBy })
     : await setRecargoPolicyActive({
         conceptoId,
-        activo: normalizeBoolean(body?.activo),
+        activo: true,
         updatedBy,
       })
 
