@@ -1,4 +1,5 @@
 export type LateFeeDecision = {
+  eligible?: boolean
   enabled: boolean
   force?: boolean
   hasManualLateFee: boolean
@@ -9,6 +10,7 @@ export type LateFeeDecision = {
 }
 
 export const shouldApplyLateFee = ({
+  eligible = true,
   enabled,
   force = false,
   hasManualLateFee,
@@ -17,16 +19,36 @@ export const shouldApplyLateFee = ({
   isAfterDeadline,
   balanceBeforeLateFee,
 }: LateFeeDecision) => Boolean(
-  force
-  || hasManualLateFee
-  || (
-    enabled
-    && !hasPayment
-    && !hasActiveConvention
-    && isAfterDeadline
-    && Number(balanceBeforeLateFee || 0) > 10
+  eligible
+  && (
+    force
+    || hasManualLateFee
+    || (
+      enabled
+      && !hasPayment
+      && !hasActiveConvention
+      && isAfterDeadline
+      && Number(balanceBeforeLateFee || 0) > 10
+    )
   )
 )
+
+export const canRemoveLateFee = ({
+  roles,
+  financialPlanteles,
+}: {
+  roles: unknown
+  financialPlanteles: unknown
+}) => {
+  const roleTokens = (Array.isArray(roles) ? roles : String(roles || '').split(','))
+    .map((role) => String(role || '').trim().toLowerCase())
+    .filter(Boolean)
+  const plantelTokens = (Array.isArray(financialPlanteles) ? financialPlanteles : String(financialPlanteles || '').split(','))
+    .map((plantel) => String(plantel || '').trim().toUpperCase())
+    .filter(Boolean)
+  const isFinancialAdmin = roleTokens.includes('superadmin') || roleTokens.includes('role_admon')
+  return isFinancialAdmin && new Set(plantelTokens).size > 1
+}
 
 export const normalizeLateFeePercentage = (value: unknown, fallback = 10) => {
   const parsed = Number(value)
@@ -165,6 +187,7 @@ export const resolveLateFeeTiming = ({
 export type LateFeeBalanceInput = {
   baseAmount: unknown
   paidAmount?: unknown
+  eligible?: boolean
   enabled: boolean
   force?: boolean
   suppress?: boolean
@@ -182,6 +205,7 @@ export type LateFeeBalanceInput = {
 export const resolveLateFeeBalance = ({
   baseAmount,
   paidAmount = 0,
+  eligible = true,
   enabled,
   force = false,
   suppress = false,
@@ -206,6 +230,7 @@ export const resolveLateFeeBalance = ({
     isService,
   })
   const appliesLateFee = !suppress && shouldApplyLateFee({
+    eligible,
     enabled,
     force,
     hasManualLateFee,

@@ -325,22 +325,23 @@
                         class="payment-recargo-tag"
                         :class="{
                           applied: debtHasRecargoForDate(debt),
+                          omitted: debtRecargoOmitted(debt),
                           pending: isRecargoTogglePending(debt),
                           attention: isRecargoAttentionActive(debt),
                         }"
-                        :disabled="isRecargoTogglePending(debt) || debtHasRecargoForDate(debt)"
+                        :disabled="isRecargoTogglePending(debt) || !isRecargoEligibleDebt(debt) || (debtHasRecargoForDate(debt) && !canOmitRecargo(debt))"
                         :aria-pressed="debtHasRecargoForDate(debt) ? 'true' : 'false'"
                         :aria-label="recargoActionAriaLabel(debt)"
                         :title="recargoActionAriaLabel(debt)"
-                        @click.stop="applyRecargo(debt)"
+                        @click.stop="toggleRecargo(debt)"
                       >
                         <LucideLoader2 v-if="isRecargoTogglePending(debt)" :size="12" class="animate-spin" />
+                        <LucideXCircle v-else-if="debtRecargoOmitted(debt)" :size="12" />
                         <LucideCheckCircle v-else-if="debtHasRecargoForDate(debt)" :size="12" />
                         <span>{{ recargoActionLabel(debt) }}</span>
                       </button>
-                      <div v-if="debt.recargoServicio || debtHasRecargoForDate(debt)" class="payment-recargo-meta">
-                        <span v-if="debt.recargoServicio" class="payment-recargo-service">Servicio</span>
-                        <span v-if="debtHasRecargoForDate(debt)" class="payment-recargo-impact">+${{ recargoAmountForDebt(debt).toFixed(0) }}</span>
+                      <div v-if="debtHasRecargoForDate(debt)" class="payment-recargo-meta">
+                        <span class="payment-recargo-impact">+${{ recargoAmountForDebt(debt).toFixed(0) }}</span>
                       </div>
                     </div>
                   </td>
@@ -404,7 +405,7 @@ import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { calculatePromotedGrado, displayGrado } from '~/shared/utils/grado'
 import { institutionFlagForPlantel, normalizePlantelCode } from '~/shared/utils/institution'
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
-import { calculateLateFeeSubtotal, resolveLateFeeTiming, shouldApplyLateFee } from '~/shared/utils/recargo'
+import { calculateLateFeeSubtotal, canRemoveLateFee, resolveLateFeeTiming, shouldApplyLateFee } from '~/shared/utils/recargo'
 import { dedupePaymentTargets } from '~/shared/utils/paymentTarget'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { requestPaymentActionAuthorizationCode, sendPaymentActionAuthorizationNotice } from '~/utils/paymentActionAuthorization'
@@ -442,6 +443,12 @@ const recargoExperienceReady = ref(false)
 let recargoAttentionTimer = null
 let lastAutomaticRecargoKeys = new Set()
 const activePlantelCookie = useCookie('auth_active_plantel')
+const authRoleCookie = useCookie('auth_role')
+const financialPlantelesCookie = useCookie('auth_financial_planteles')
+const canRemoveRecargo = computed(() => canRemoveLateFee({
+  roles: authRoleCookie.value,
+  financialPlanteles: financialPlantelesCookie.value,
+}))
 
 const localDateKey = (date = new Date()) => {
   const year = date.getFullYear()
@@ -631,6 +638,8 @@ const schoolMonthForDebt = (debt) => {
 const baseAmountForDebt = (debt) => debt?.montoFinalPendiente
   ? Math.max(0, Number(debt?.montoFinalInput || 0))
   : Math.max(0, Number(debt?.costoOriginal ?? debt?.subtotal ?? 0))
+const isEventualDebt = (debt) => Boolean(debt?.isEventual)
+const isRecargoEligibleDebt = (debt) => debt?.recargoEligible !== false && !isEventualDebt(debt)
 const recargoCalculationForDebt = (debt) => {
   const baseAmount = baseAmountForDebt(debt)
   const pagosPrevios = Number(debt?.pagosPrevios ?? debt?.resuelto ?? debt?.pagos ?? 0)
@@ -639,24 +648,26 @@ const recargoCalculationForDebt = (debt) => {
     schoolMonth: schoolMonthForDebt(debt),
     currentDateValue: paymentDate.value,
     cutoffDay: debt?.recargoDiaLimite ?? 12,
-    // Recurring charges always belong to their own school month. A persistent
-    // service classification must never make a future monthly charge overdue
-    // against the current calendar month (for example, September on August 31).
-    isService: Boolean(debt?.recargoServicio) && Boolean(debt?.isEventual),
+    isService: false,
   })
   const decision = {
-    enabled: Boolean(debt?.recargoActivo),
+    eligible: isRecargoEligibleDebt(debt),
+    enabled: isRecargoEligibleDebt(debt) && Boolean(debt?.recargoActivo),
     hasPayment: Boolean(debt?.hasPayment),
     hasActiveConvention: Boolean(debt?.convenioActivo),
     isAfterDeadline: timing.isAfterDeadline,
     balanceBeforeLateFee: baseAmount - pagosPrevios,
   }
-  const automatic = shouldApplyLateFee({
+  const omitted = Boolean(debt?.recargoOmitidoAhora)
+    && canRemoveRecargo.value
+    && isRecargoEligibleDebt(debt)
+    && !Boolean(debt?.recargoManual)
+  const automatic = !omitted && shouldApplyLateFee({
     ...decision,
     force: false,
     hasManualLateFee: false,
   })
-  const applies = shouldApplyLateFee({
+  const applies = !omitted && shouldApplyLateFee({
     ...decision,
     force: Boolean(debt?.recargoAplicadoAhora),
     hasManualLateFee: Boolean(debt?.recargoManual),
@@ -668,10 +679,25 @@ const recargoCalculationForDebt = (debt) => {
   return { subtotal, applies, automatic, isLate: timing.isAfterDeadline, deadline: timing.deadline }
 }
 const debtHasRecargoForDate = (debt) => recargoCalculationForDebt(debt).applies
-const recargoActionLabel = (debt) => debtHasRecargoForDate(debt) ? 'Recargo aplicado' : 'Aplicar recargo'
-const recargoActionAriaLabel = (debt) => debtHasRecargoForDate(debt)
-  ? 'Recargo aplicado; no se puede quitar desde el pago'
-  : 'Aplicar recargo'
+const debtRecargoOmitted = (debt) => Boolean(debt?.recargoOmitidoAhora)
+  && canRemoveRecargo.value
+  && isRecargoEligibleDebt(debt)
+  && !Boolean(debt?.recargoManual)
+const canOmitRecargo = (debt) => canRemoveRecargo.value
+  && isRecargoEligibleDebt(debt)
+  && !Boolean(debt?.recargoManual)
+const recargoActionLabel = (debt) => {
+  if (!isRecargoEligibleDebt(debt)) return 'No aplica'
+  if (debtRecargoOmitted(debt)) return 'Sin recargo'
+  return debtHasRecargoForDate(debt) ? 'Recargo aplicado' : 'Aplicar recargo'
+}
+const recargoActionAriaLabel = (debt) => {
+  if (!isRecargoEligibleDebt(debt)) return 'Los conceptos financieros eventuales no generan recargos'
+  if (debtRecargoOmitted(debt)) return 'Restaurar recargo para este pago'
+  if (debtHasRecargoForDate(debt) && canOmitRecargo(debt)) return 'Quitar recargo de este pago'
+  if (debtHasRecargoForDate(debt)) return 'Recargo aplicado; solo administradores multi-plantel pueden quitarlo'
+  return 'Aplicar recargo'
+}
 const recargoAmountForDebt = (debt) => {
   const calculation = recargoCalculationForDebt(debt)
   if (!calculation.applies) return 0
@@ -686,6 +712,7 @@ const buildProcessedDebts = () => dedupePaymentTargets(Array.isArray(props.debts
   return {
     ...d,
     recargoAplicadoAhora: false,
+    recargoOmitidoAhora: false,
     saldoFinal: final,
     montoPagado: final,
     montoTouched: false,
@@ -714,14 +741,15 @@ const readPaymentDraft = () => ({
   formaDePago: formaDePago.value,
   paymentDate: paymentDate.value,
   debts: processedDebts.value
-    .filter(debt => debt.montoTouched || debt.montoFinalTouched || debt.recargoAplicadoAhora)
+    .filter(debt => debt.montoTouched || debt.montoFinalTouched || debt.recargoAplicadoAhora || debt.recargoOmitidoAhora)
     .map(debt => ({
       key: paymentDebtKey(debt),
       montoPagado: debt.montoPagado,
       montoFinalInput: debt.montoFinalInput,
       montoTouched: Boolean(debt.montoTouched),
       montoFinalTouched: Boolean(debt.montoFinalTouched),
-      recargoAplicadoAhora: Boolean(debt.recargoAplicadoAhora)
+      recargoAplicadoAhora: Boolean(debt.recargoAplicadoAhora),
+      recargoOmitidoAhora: Boolean(debt.recargoOmitidoAhora)
     }))
 })
 
@@ -760,7 +788,11 @@ const writePaymentDraft = (draft) => {
       montoTouched,
       montoFinalInput: montoFinalTouched && Number.isFinite(montoFinalInput) ? montoFinalInput : debt.montoFinalInput,
       montoFinalTouched,
-      recargoAplicadoAhora: Boolean(restored.recargoAplicadoAhora)
+      recargoAplicadoAhora: isRecargoEligibleDebt(debt) && Boolean(restored.recargoAplicadoAhora),
+      recargoOmitidoAhora: canRemoveRecargo.value
+        && isRecargoEligibleDebt(debt)
+        && !Boolean(debt.recargoManual)
+        && Boolean(restored.recargoOmitidoAhora)
     }
   })
 }
@@ -772,7 +804,7 @@ const paymentDraftHasContent = (draft) => {
 
   const draftDebts = Array.isArray(draft.debts) ? draft.debts : []
   return draftDebts.some((saved) => {
-    if (saved?.montoTouched || saved?.montoFinalTouched || saved?.recargoAplicadoAhora) return true
+    if (saved?.montoTouched || saved?.montoFinalTouched || saved?.recargoAplicadoAhora || saved?.recargoOmitidoAhora) return true
 
     // Backward compatibility: old drafts did not store explicit touch flags.
     const current = processedDebts.value.find(debt => paymentDebtKey(debt) === saved?.key)
@@ -920,6 +952,13 @@ const setRecargoTogglePending = (conceptoId, pending) => {
 const applyRecargoPolicyToConcept = (conceptoId, policy) => {
   processedDebts.value.forEach((row) => {
     if (conceptIdForDebt(row) !== conceptoId) return
+    if (!isRecargoEligibleDebt(row)) {
+      row.recargoActivo = false
+      row.recargoServicio = false
+      row.recargoAplicadoAhora = false
+      row.recargoOmitidoAhora = false
+      return
+    }
     if (policy.activo !== undefined) row.recargoActivo = Boolean(policy.activo)
     if (policy.servicio !== undefined) row.recargoServicio = Boolean(policy.servicio)
     if (policy.esServicio !== undefined) row.recargoServicio = Boolean(policy.esServicio)
@@ -930,68 +969,28 @@ const applyRecargoPolicyToConcept = (conceptoId, policy) => {
   repriceUntouchedPayments()
 }
 const applyRecargo = async (debt) => {
-  if (debtHasRecargoForDate(debt)) return
+  if (!debt || !isRecargoEligibleDebt(debt) || debtHasRecargoForDate(debt)) return
+  debt.recargoOmitidoAhora = false
+  debt.recargoAplicadoAhora = true
+  repriceUntouchedPayments()
+}
+const toggleRecargo = async (debt) => {
+  if (!debt || !isRecargoEligibleDebt(debt) || isRecargoTogglePending(debt)) return
 
-  const conceptoId = conceptIdForDebt(debt)
-  if (!conceptoId || isRecargoTogglePending(debt)) return
-
-  // A concept already classified as Servicio only needs the payment-local
-  // action. The service classification itself is global and persistent.
-  if (debt?.recargoServicio) {
-    debt.recargoAplicadoAhora = true
+  if (debtRecargoOmitted(debt)) {
+    debt.recargoOmitidoAhora = false
     repriceUntouchedPayments()
     return
   }
 
-  const previous = processedDebts.value
-    .filter(row => conceptIdForDebt(row) === conceptoId)
-    .map(row => ({
-      key: paymentDebtKey(row),
-      activo: Boolean(row.recargoActivo),
-      servicio: Boolean(row.recargoServicio),
-      porcentaje: Number(row.recargoPorcentaje ?? 10),
-      diaLimite: Number(row.recargoDiaLimite ?? 12),
-      pendingSync: Boolean(row.recargoPendingSync),
-      applyNow: Boolean(row.recargoAplicadoAhora),
-    }))
-  setRecargoTogglePending(conceptoId, true)
-
-  try {
-    const response = await executeOptimistic(
-      () => $fetch('/api/recargos/concepto', {
-        method: 'PUT',
-        body: { conceptoId, servicio: true },
-      }),
-      () => {
-        debt.recargoAplicadoAhora = true
-        applyRecargoPolicyToConcept(conceptoId, { activo: true, servicio: true })
-      },
-      () => {
-        const previousByKey = new Map(previous.map(item => [item.key, item]))
-        processedDebts.value.forEach((row) => {
-          const saved = previousByKey.get(paymentDebtKey(row))
-          if (!saved) return
-          row.recargoActivo = saved.activo
-          row.recargoServicio = saved.servicio
-          row.recargoPorcentaje = saved.porcentaje
-          row.recargoDiaLimite = saved.diaLimite
-          row.recargoPendingSync = saved.pendingSync
-          row.recargoAplicadoAhora = saved.applyNow
-        })
-        repriceUntouchedPayments()
-      },
-      {
-        pending: 'Aplicando recargo...',
-        success: 'Recargo aplicado',
-        error: 'No se pudo aplicar el recargo',
-      },
-    )
-    if (response?.policy) applyRecargoPolicyToConcept(conceptoId, response.policy)
-  } catch {
-    // executeOptimistic already restores the visible state.
-  } finally {
-    setRecargoTogglePending(conceptoId, false)
+  if (debtHasRecargoForDate(debt)) {
+    if (!canOmitRecargo(debt)) return
+    debt.recargoOmitidoAhora = true
+    repriceUntouchedPayments()
+    return
   }
+
+  await applyRecargo(debt)
 }
 watch(paymentDate, () => {
   if (!recargoExperienceReady.value) {
@@ -1030,7 +1029,8 @@ const paymentRows = () => processedDebts.value
       montoPagado,
       montoAutomatico: !d.montoTouched,
       montoFinal: d.montoFinalPendiente ? Number(d.montoFinalInput || 0) : d.montoFinal,
-      aplicarRecargo: Boolean(d.recargoAplicadoAhora)
+      aplicarRecargo: isRecargoEligibleDebt(d) && Boolean(d.recargoAplicadoAhora) && !debtRecargoOmitted(d),
+      omitirRecargo: debtRecargoOmitted(d)
     }
   })
 
@@ -1332,6 +1332,16 @@ const submit = async () => {
 }
 .payment-recargo-tag.applied:not(:disabled) {
   cursor: pointer;
+}
+.payment-recargo-tag.omitted {
+  border-color: #d8dee6;
+  background: #f7f8fa;
+  color: #697586;
+}
+.payment-recargo-tag.omitted:hover {
+  border-color: #bdc6d1;
+  background: #f1f3f5;
+  color: #4f5d6c;
 }
 .payment-recargo-tag.pending {
   cursor: wait;

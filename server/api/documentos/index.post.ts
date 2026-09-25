@@ -13,8 +13,6 @@ const clampMotivo = (value: unknown) => {
 }
 
 
-const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
-
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const cicloKey = normalizeCicloKey(body.ciclo)
@@ -34,7 +32,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     ciclo: cicloKey,
   })
   const conceptoNombre = conceptoRef.concepto
-  const eventual = truthyFlag(body.eventual)
+  const eventual = Boolean(conceptoRef.eventual)
   const meses = eventual ? 1 : Math.max(1, Number(body.meses) || 1)
   const plazoLegacy = Array.from({ length: meses }, (_, i) => i + 1).join(',')
   const costo = Number(body.costo || 0)

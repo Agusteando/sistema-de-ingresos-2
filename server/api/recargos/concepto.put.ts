@@ -14,9 +14,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 400, message: 'Concepto inválido.' })
   }
 
-  const [concept] = await query<any[]>(`SELECT id FROM conceptos WHERE id = ? LIMIT 1`, [conceptoId])
+  const [concept] = await query<any[]>(`SELECT id, eventual FROM conceptos WHERE id = ? LIMIT 1`, [conceptoId])
   if (!concept) {
     throw createError({ statusCode: 404, message: 'Concepto no encontrado.' })
+  }
+  if (normalizeBoolean(concept.eventual)) {
+    throw createError({ statusCode: 400, message: 'Los conceptos eventuales no admiten recargos.' })
   }
 
   const user = event.context.user

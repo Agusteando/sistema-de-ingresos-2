@@ -316,7 +316,10 @@ export default defineEventHandler(async (event) =>
           0,
         );
         const resueltoTotalMes = pagosTotalMes + depuradoTotalMes;
-        const hasRecargoManual = pagosDelMes.some(
+        const conceptoId = Number(activePeriod?.concepto_id || doc.concepto || 0);
+        const catalogConcept = conceptMap.get(conceptoId);
+        const recargoEligible = !isEventual && !Boolean(catalogConcept?.eventual);
+        const hasRecargoManual = recargoEligible && pagosDelMes.some(
           (p) => String(p.recargo) === "1",
         );
         const hasPayment = pagosDelMes.some((p) => Number(p.monto || 0) > 0);
@@ -327,22 +330,19 @@ export default defineEventHandler(async (event) =>
         let subtotal = totalOriginal + diferenciaMonto;
         let saldoAntes = subtotal - resueltoTotalMes;
 
-        const conceptoId = Number(activePeriod?.concepto_id || doc.concepto || 0);
         const recargoPolicy = recargoPolicyByConcept.get(conceptoId);
         const recargoTiming = resolveLateFeeTiming({
           ciclo: cicloKey,
           schoolMonth: mes,
           currentDateValue: currentDateKey,
           cutoffDay: recargoPolicy?.diaLimite ?? 12,
-          // A recurring debt belongs to its own school month even if the concept
-          // carries a persistent service classification. This prevents future
-          // monthly charges from becoming overdue before their own day 12.
-          isService: Boolean(recargoPolicy?.esServicio) && isEventual,
+          isService: false,
         });
         const paymentDeadline = recargoTiming.deadline;
         const isLate = recargoTiming.isAfterDeadline;
         const appliesLateFee = shouldApplyLateFee({
-          enabled: Boolean(recargoPolicy?.activo),
+          eligible: recargoEligible,
+          enabled: recargoEligible && Boolean(recargoPolicy?.activo),
           hasManualLateFee: hasRecargoManual,
           hasPayment,
           hasActiveConvention: Boolean(activeConvention),
@@ -422,15 +422,16 @@ export default defineEventHandler(async (event) =>
               : 0,
           isLate,
           hasRecargo: appliesLateFee,
-          recargoActivo: Boolean(recargoPolicy?.activo),
-          recargoServicio: Boolean(recargoPolicy?.esServicio),
-          recargoPorcentaje: Number(recargoPolicy?.porcentaje ?? 10),
+          recargoEligible,
+          recargoActivo: recargoEligible && Boolean(recargoPolicy?.activo),
+          recargoServicio: false,
+          recargoPorcentaje: recargoEligible ? Number(recargoPolicy?.porcentaje ?? 10) : 0,
           recargoDiaLimite: Number(recargoPolicy?.diaLimite ?? 12),
           recargoPendingSync: Boolean(recargoPolicy?.pendingSync),
-          recargoManual: hasRecargoManual,
+          recargoManual: recargoEligible && hasRecargoManual,
           hasPayment,
           convenioActivo: Boolean(activeConvention),
-          fechaLimiteRecargo: paymentDeadline,
+          fechaLimiteRecargo: recargoEligible ? paymentDeadline : null,
           originalConceptoNombre: doc.conceptoNombre,
           isDifferentialDocument: differentialParentByDocument.has(
             Number(doc.documento),
