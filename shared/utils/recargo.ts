@@ -37,20 +37,14 @@ export const LATE_FEE_REMOVAL_LOCK_DAY = 15
 
 export const hasLateFeeRemovalAccess = ({
   roles,
-  financialPlanteles,
 }: {
   roles: unknown
-  financialPlanteles: unknown
+  financialPlanteles?: unknown
 }) => {
   const roleTokens = (Array.isArray(roles) ? roles : String(roles || '').split(','))
     .map((role) => String(role || '').trim().toLowerCase())
     .filter(Boolean)
-  const plantelTokens = (Array.isArray(financialPlanteles) ? financialPlanteles : String(financialPlanteles || '').split(','))
-    .map((plantel) => String(plantel || '').trim().toUpperCase())
-    .filter(Boolean)
-  const isSuperAdmin = roleTokens.includes('superadmin')
-  const isFinancialAdmin = isSuperAdmin || roleTokens.includes('role_admon')
-  return isFinancialAdmin && (isSuperAdmin || new Set(plantelTokens).size >= 1)
+  return roleTokens.includes('superadmin') || roleTokens.includes('role_admon')
 }
 
 export const isLateFeeRemovalWindowOpen = (currentDateValue: unknown) => {
