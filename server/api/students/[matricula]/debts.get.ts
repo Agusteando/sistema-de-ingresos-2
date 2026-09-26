@@ -38,6 +38,8 @@ const cicloQueryValues = (cicloKey: string) => {
 };
 
 const cicloInClause = (values: string[]) => values.map(() => "?").join(",");
+const truthyFlag = (value: unknown) =>
+  ["1", "true", "si", "sí", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
 
 export default defineEventHandler(async (event) =>
   runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
@@ -245,7 +247,7 @@ export default defineEventHandler(async (event) =>
     ];
 
     for (const doc of documentos) {
-      const isEventual = String(doc.eventual) === "1";
+      const isEventual = truthyFlag(doc.eventual);
       const beca = parseFloat(doc.beca) || 0;
 
       let plazos = 1;
@@ -486,7 +488,7 @@ export default defineEventHandler(async (event) =>
 
     documentos.forEach((doc: any) => {
       const documentoId = Number(doc.documento);
-      const isEventual = String(doc.eventual) === "1";
+      const isEventual = truthyFlag(doc.eventual);
       const totalMonths = countMonthsForTimeline(doc);
       const docPeriods = periodsByDocument.get(documentoId) || [];
       const monthStates: any[] = [];

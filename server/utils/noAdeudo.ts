@@ -19,6 +19,7 @@ import {
 } from './cobranza-period'
 import { calculateLateFeeSubtotal } from '../../shared/utils/recargo'
 import { loadRecargoPolicies } from './recargo-config'
+import { loadFinancialConceptMap } from './financial-concept'
 
 type RuntimeNoAdeudoConfig = {
   googlePrivateKey?: string
@@ -68,6 +69,7 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const normalizeText = (value: unknown) => String(value || '').trim()
 const normalizeMatricula = (value: unknown) => normalizeText(value).toUpperCase()
 const normalizeEmail = (value: unknown) => normalizeText(value).toLowerCase()
+const truthyFlag = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase())
 const unique = <T>(values: T[]) => Array.from(new Set(values.filter(Boolean)))
 const formatMoney = (value: unknown) => Number(value || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 const safeFilePart = (value: unknown) => normalizeText(value)
@@ -315,9 +317,13 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
     list.push(period)
     periodsByDocument.set(key, list)
   })
-  const recargoPolicyByConcept = await loadRecargoPolicies([
+  const recargoConceptIds = [
     ...documentos.map((doc) => doc.concepto),
     ...periodRows.map((period) => period.concepto_id),
+  ]
+  const [recargoPolicyByConcept, financialConcepts] = await Promise.all([
+    loadRecargoPolicies(recargoConceptIds),
+    loadFinancialConceptMap(recargoConceptIds, cicloKey),
   ])
 
   const [dbClock] = await query<any[]>(`
@@ -333,7 +339,7 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
   const concepts: Array<{ documento: string; conceptoNombre: string; mesLabel: string; saldo: number }> = []
 
   for (const doc of documentos) {
-    const isEventual = String(doc.eventual) === '1'
+    const isEventual = truthyFlag(doc.eventual)
     let plazos = 1
     const plazoRaw = doc.plazo || doc.meses
     if (!isEventual && plazoRaw) {
@@ -363,7 +369,8 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
       const resueltoTotalMes = pagosTotalMes + depuradoTotalMes
       const conceptoId = Number(activePeriod?.concepto_id || doc.concepto || 0)
       const recargoPolicy = recargoPolicyByConcept.get(conceptoId)
-      const hasRecargoManual = pagosDelMes.some(p => String(p.recargo) === '1')
+      const recargoEligible = !isEventual && !Boolean(financialConcepts.get(conceptoId)?.eventual)
+      const hasRecargoManual = recargoEligible && pagosDelMes.some(p => String(p.recargo) === '1')
       const hasPayment = pagosDelMes.some(p => Number(p.monto || 0) > 0)
       const recargoTiming = resolveLateFeeTiming({
         ciclo: cicloKey,
@@ -377,7 +384,8 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
       let subtotal = totalOriginal
       let saldo = subtotal - resueltoTotalMes
       const appliesLateFee = shouldApplyLateFee({
-        enabled: Boolean(recargoPolicy?.activo),
+        eligible: recargoEligible,
+        enabled: recargoEligible && Boolean(recargoPolicy?.activo),
         hasManualLateFee: hasRecargoManual,
         hasPayment,
         hasActiveConvention: Boolean(activeConvention),

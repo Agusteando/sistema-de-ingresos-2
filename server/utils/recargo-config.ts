@@ -3,6 +3,7 @@ import { query } from './db'
 
 // External schema is intentionally manual; this module only reads/writes central data.
 const RECARGO_TABLE = 'concepto_recargo_config'
+const GLOBAL_RECARGO_OVERRIDE_ID = 0
 const DEFAULT_PERCENTAGE = 10
 const DEFAULT_CUTOFF_DAY = 12
 const CENTRAL_RETRY_MS = 15_000
@@ -15,6 +16,14 @@ export type RecargoPolicy = {
   porcentaje: number
   diaLimite: number
   version: number
+  updatedAt: string | null
+  updatedBy: string | null
+  source: 'central' | 'bridge'
+  pendingSync: boolean
+}
+
+export type GlobalRecargoSettings = {
+  allowRemovalAnyTime: boolean
   updatedAt: string | null
   updatedBy: string | null
   source: 'central' | 'bridge'
@@ -321,6 +330,81 @@ export const loadRecargoPolicies = async (conceptIds: unknown[]) => {
     markCentralUnavailable(error)
     return bridgePolicies
   }
+}
+
+const globalSettingsFromPolicy = (policy: RecargoPolicy): GlobalRecargoSettings => ({
+  allowRemovalAnyTime: Boolean(policy.activo),
+  updatedAt: policy.updatedAt,
+  updatedBy: policy.updatedBy,
+  source: policy.source,
+  pendingSync: policy.pendingSync,
+})
+
+const readBridgeGlobalRecargoSettings = async () => {
+  const rows = await query<StoredRecargoRow[]>(
+    `SELECT concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync
+     FROM ${RECARGO_TABLE}
+     WHERE concepto_id = ?
+     LIMIT 1`,
+    [GLOBAL_RECARGO_OVERRIDE_ID],
+  )
+  return globalSettingsFromPolicy(
+    rows[0] ? rowToPolicy(rows[0], 'bridge') : emptyPolicy(GLOBAL_RECARGO_OVERRIDE_ID, 'bridge'),
+  )
+}
+
+export const loadGlobalRecargoSettings = async (): Promise<GlobalRecargoSettings> => {
+  const bridgeSettings = await readBridgeGlobalRecargoSettings()
+  if (!canTryCentral()) return bridgeSettings
+
+  try {
+    await flushPendingRecargoPolicies()
+    if (!canTryCentral()) return bridgeSettings
+
+    const centralPolicy = await readCentralPolicyRow(GLOBAL_RECARGO_OVERRIDE_ID)
+    if (!centralPolicy) {
+      markCentralAvailable()
+      return bridgeSettings
+    }
+
+    await mirrorPolicyToBridge(centralPolicy, false)
+    markCentralAvailable()
+    return globalSettingsFromPolicy(centralPolicy)
+  } catch (error) {
+    markCentralUnavailable(error)
+    return bridgeSettings
+  }
+}
+
+export const setGlobalRecargoRemovalOverride = async ({
+  enabled,
+  updatedBy,
+}: {
+  enabled: unknown
+  updatedBy?: string | null
+}) => {
+  const actor = String(updatedBy || '').trim().slice(0, 255) || null
+  const policy: RecargoPolicy = {
+    ...emptyPolicy(GLOBAL_RECARGO_OVERRIDE_ID, 'bridge'),
+    activo: typeof enabled === 'boolean' ? enabled : boolFlag(enabled),
+    version: 1,
+    updatedAt: null,
+    updatedBy: actor,
+  }
+
+  if (canTryCentral()) {
+    try {
+      const saved = await pushPolicyToCentral(policy)
+      await mirrorPolicyToBridge(saved, false)
+      markCentralAvailable()
+      return globalSettingsFromPolicy(saved)
+    } catch (error) {
+      markCentralUnavailable(error)
+    }
+  }
+
+  await mirrorPolicyToBridge(policy, true)
+  return await readBridgeGlobalRecargoSettings()
 }
 
 const readSavedBridgePolicy = async (id: number) => {

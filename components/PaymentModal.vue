@@ -283,6 +283,32 @@
             </div>
           </div>
 
+          <div
+            v-if="canManageGlobalRecargoOverride"
+            class="mb-3 flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3"
+          >
+            <div class="min-w-0">
+              <p class="text-xs font-black text-gray-800">Quitar recargos en cualquier fecha</p>
+              <p class="mt-0.5 text-[11px] leading-4 text-gray-500">
+                {{ globalRecargoRemovalOverride ? 'Excepción global activa' : 'Regla normal: solo antes del día 15' }}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:cursor-wait disabled:opacity-60"
+              :class="globalRecargoRemovalOverride ? 'bg-emerald-600' : 'bg-gray-300'"
+              :aria-checked="globalRecargoRemovalOverride ? 'true' : 'false'"
+              :disabled="globalRecargoOverrideUpdating"
+              @click="toggleGlobalRecargoOverride"
+            >
+              <span
+                class="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition"
+                :class="globalRecargoRemovalOverride ? 'translate-x-5' : 'translate-x-0.5'"
+              ></span>
+            </button>
+          </div>
+
           <p v-if="hasPendingFinalAmounts" class="mb-3 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Este debe ser el monto final de tu proyección, sin decimales.</p>
 
           <div class="payment-table-shell border border-gray-200 rounded-lg shadow-sm">
@@ -444,6 +470,9 @@ let recargoAttentionTimer = null
 let lastAutomaticRecargoKeys = new Set()
 const activePlantelCookie = useCookie('auth_active_plantel')
 const canRemoveRecargo = ref(false)
+const canManageGlobalRecargoOverride = ref(false)
+const globalRecargoRemovalOverride = ref(false)
+const globalRecargoOverrideUpdating = ref(false)
 
 const localDateKey = (date = new Date()) => {
   const year = date.getFullYear()
@@ -656,7 +685,6 @@ const recargoCalculationForDebt = (debt) => {
   const omitted = Boolean(debt?.recargoOmitidoAhora)
     && canRemoveRecargo.value
     && isRecargoEligibleDebt(debt)
-    && !Boolean(debt?.recargoManual)
   const automatic = !omitted && shouldApplyLateFee({
     ...decision,
     force: false,
@@ -918,10 +946,13 @@ const refreshRecargoPolicies = async () => {
     })
     const policies = Array.isArray(response?.policies) ? response.policies : []
     canRemoveRecargo.value = Boolean(response?.capabilities?.canRemoveRecargo)
+    canManageGlobalRecargoOverride.value = Boolean(response?.capabilities?.canManageGlobalRemovalOverride)
+    globalRecargoRemovalOverride.value = Boolean(response?.capabilities?.globalRemovalOverride)
     policies.forEach(policy => applyRecargoPolicyToConcept(Number(policy?.conceptoId || 0), policy))
     await syncAutomaticRecargoState()
   } catch {
     canRemoveRecargo.value = false
+    canManageGlobalRecargoOverride.value = false
     // The debt payload already carries the latest available Bridge projection.
     // A policy refresh is best-effort so offline payments stay frictionless.
   }
@@ -931,6 +962,25 @@ const initializeRecargoExperience = async () => {
   recargoExperienceReady.value = true
   await syncAutomaticRecargoState({ initial: true })
   void refreshRecargoPolicies()
+}
+
+const toggleGlobalRecargoOverride = async () => {
+  if (!canManageGlobalRecargoOverride.value || globalRecargoOverrideUpdating.value) return
+
+  globalRecargoOverrideUpdating.value = true
+  const nextEnabled = !globalRecargoRemovalOverride.value
+  try {
+    const response = await $fetch('/api/recargos/global', {
+      method: 'PUT',
+      body: { enabled: nextEnabled },
+    })
+    globalRecargoRemovalOverride.value = Boolean(response?.settings?.allowRemovalAnyTime)
+    await refreshRecargoPolicies()
+  } catch (error) {
+    console.error('[Recargos] No se pudo actualizar la excepción global.', error)
+  } finally {
+    globalRecargoOverrideUpdating.value = false
+  }
 }
 
 const handleFinalAmountInput = (debt) => {

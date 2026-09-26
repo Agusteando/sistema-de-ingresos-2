@@ -116,7 +116,7 @@ test('/deudores propagates recargos to UI, email, WhatsApp and external contract
 })
 
 
-test('multi-plantel financial admins can remove recargos only before day 15', async () => {
+test('multi-plantel financial admins use day-15 rule unless global override is active', async () => {
   const recargo = await loadRecargo()
   assert.equal(recargo.canRemoveLateFee({
     roles: 'ROLE_ADMON',
@@ -132,6 +132,18 @@ test('multi-plantel financial admins can remove recargos only before day 15', as
     roles: 'ROLE_ADMON',
     financialPlanteles: 'PT,ST',
     currentDateValue: '2026-09-16',
+  }), false)
+  assert.equal(recargo.canRemoveLateFee({
+    roles: 'ROLE_ADMON',
+    financialPlanteles: 'PT,ST',
+    currentDateValue: '2026-09-26',
+    allowAnyTime: true,
+  }), true)
+  assert.equal(recargo.canRemoveLateFee({
+    roles: 'ROLE_CTRL',
+    financialPlanteles: 'PT,ST',
+    currentDateValue: '2026-09-26',
+    allowAnyTime: true,
   }), false)
   assert.equal(recargo.canRemoveLateFee({
     roles: 'ROLE_ADMON',
@@ -170,25 +182,35 @@ test('multi-plantel financial admins can remove recargos only before day 15', as
   assert.equal(manualRecargoRemovedByAuthorizedAdmin.appliesLateFee, false)
   assert.equal(manualRecargoRemovedByAuthorizedAdmin.balance, 900)
 
-  const [modal, pay, recargoApi, recargoPoliciesApi, recargoConfig] = await Promise.all([
+  const [modal, pay, recargoApi, recargoPoliciesApi, globalRecargoApi, recargoConfig] = await Promise.all([
     readFile(resolve(root, 'components/PaymentModal.vue'), 'utf8'),
     readFile(resolve(root, 'server/api/payments/pay.post.ts'), 'utf8'),
     readFile(resolve(root, 'server/api/recargos/concepto.put.ts'), 'utf8'),
     readFile(resolve(root, 'server/api/recargos/conceptos.get.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/recargos/global.put.ts'), 'utf8'),
     readFile(resolve(root, 'server/utils/recargo-config.ts'), 'utf8'),
   ])
 
   assert.doesNotMatch(modal, /canRemoveLateFee/)
   assert.match(modal, /capabilities\?\.canRemoveRecargo/)
+  assert.match(modal, /Quitar recargos en cualquier fecha/)
+  assert.match(modal, /\/api\/recargos\/global/)
   assert.match(modal, /Quitar recargo de este pago/)
   assert.match(modal, /omitirRecargo: debtRecargoOmitted/)
+  assert.doesNotMatch(modal, /isRecargoEligibleDebt\(debt\)\s*&&\s*!Boolean\(debt\?\.recargoManual\)/)
   assert.match(pay, /canRemoveLateFee/)
-  assert.match(pay, /const canRemoveRecargo = canRemoveLateFee\(\{[\s\S]*?currentDateValue: originalDateKey,[\s\S]*?\}\)/)
+  assert.match(pay, /const globalRecargoSettings = await loadGlobalRecargoSettings\(\)/)
+  assert.match(pay, /const canRemoveRecargo = canRemoveLateFee\(\{[\s\S]*?currentDateValue: originalDateKey,[\s\S]*?allowAnyTime: globalRecargoSettings\.allowRemovalAnyTime,[\s\S]*?\}\)/)
   assert.match(pay, /currentDateValue: effectiveDateKey/)
-  assert.match(pay, /antes del día 15/)
   assert.match(recargoPoliciesApi, /SELECT UNIX_TIMESTAMP\(\) AS currentUnix/)
-  assert.match(recargoPoliciesApi, /canRemoveRecargo: canRemoveLateFee/)
+  assert.match(recargoPoliciesApi, /globalRemovalOverride: globalSettings\.allowRemovalAnyTime/)
+  assert.match(recargoPoliciesApi, /canManageGlobalRemovalOverride: hasLateFeeRemovalAccess/)
   assert.match(recargoPoliciesApi, /removalLockDay: LATE_FEE_REMOVAL_LOCK_DAY/)
+  assert.match(globalRecargoApi, /setGlobalRecargoRemovalOverride/)
+  assert.match(globalRecargoApi, /hasLateFeeRemovalAccess/)
+  assert.match(recargoConfig, /GLOBAL_RECARGO_OVERRIDE_ID = 0/)
+  assert.match(recargoConfig, /loadGlobalRecargoSettings/)
+  assert.match(recargoConfig, /setGlobalRecargoRemovalOverride/)
   assert.match(pay, /suppress: omitLateFeeNow/)
   assert.match(pay, /omitLateFeeNow = !isEventual && omitLateFeeRequested && canRemoveRecargo/)
   assert.doesNotMatch(pay, /omitLateFeeNow = .*hasRecargoManual/)
@@ -220,9 +242,11 @@ test('eventual financial concepts never receive automatic or manual recargos', a
   assert.equal(forcedEventual.lateFeeAmount, 0)
   assert.equal(forcedEventual.balance, 1000)
 
-  const [debts, deudores, pay, modal, documentCreate, financialConcept, recargoApi] = await Promise.all([
+  const [debts, deudores, noAdeudo, tuitionModal, pay, modal, documentCreate, financialConcept, recargoApi] = await Promise.all([
     readFile(resolve(root, 'server/api/students/[matricula]/debts.get.ts'), 'utf8'),
     readFile(resolve(root, 'server/utils/deudores.ts'), 'utf8'),
+    readFile(resolve(root, 'server/utils/noAdeudo.ts'), 'utf8'),
+    readFile(resolve(root, 'components/TuitionAmountModal.vue'), 'utf8'),
     readFile(resolve(root, 'server/api/payments/pay.post.ts'), 'utf8'),
     readFile(resolve(root, 'components/PaymentModal.vue'), 'utf8'),
     readFile(resolve(root, 'server/api/documentos/index.post.ts'), 'utf8'),
@@ -233,6 +257,10 @@ test('eventual financial concepts never receive automatic or manual recargos', a
   assert.match(debts, /eligible: recargoEligible/)
   assert.match(debts, /recargoEligible,/)
   assert.match(deudores, /eligible: recargoEligible/)
+  assert.match(noAdeudo, /loadFinancialConceptMap/)
+  assert.match(noAdeudo, /const recargoEligible = !isEventual && !Boolean\(financialConcepts\.get\(conceptoId\)\?\.eventual\)/)
+  assert.match(noAdeudo, /eligible: recargoEligible/)
+  assert.match(tuitionModal, /eligible: recargoEligible/)
   assert.match(pay, /eligible: !isEventual/)
   assert.match(pay, /Los conceptos eventuales no admiten recargos\./)
   assert.match(modal, /isRecargoEligibleDebt/)

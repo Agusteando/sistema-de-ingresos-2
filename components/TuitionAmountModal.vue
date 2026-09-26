@@ -229,9 +229,11 @@ const projectedSubtotalForRow = (row) => {
   const resolved = resolvedForRow(row)
   const balanceBeforeLateFee = base - resolved
   const hasPayment = row?.hasPayment === undefined ? resolved > 0 : Boolean(row.hasPayment)
+  const recargoEligible = row?.recargoEligible !== false && !Boolean(row?.isEventual)
   const appliesLateFee = shouldApplyLateFee({
-    enabled: Boolean(row?.recargoActivo),
-    hasManualLateFee: Boolean(row?.recargoManual),
+    eligible: recargoEligible,
+    enabled: recargoEligible && Boolean(row?.recargoActivo),
+    hasManualLateFee: recargoEligible && Boolean(row?.recargoManual),
     hasPayment,
     hasActiveConvention: Boolean(row?.convenioActivo),
     isAfterDeadline: Boolean(row?.isLate),

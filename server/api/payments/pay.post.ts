@@ -10,7 +10,7 @@ import { finalizeStockReservation, releaseStockReservation, reserveStockForPayme
 import { isPlaceholderConceptName, resolveFinancialConcept } from '../../utils/financial-concept'
 import { loadActiveCobranzaConvention } from '../../utils/cobranza-convenio'
 import { canRemoveLateFee, resolveLateFeeBalance } from '../../../shared/utils/recargo'
-import { loadRecargoPolicies, type RecargoPolicy } from '../../utils/recargo-config'
+import { loadGlobalRecargoSettings, loadRecargoPolicies, type RecargoPolicy } from '../../utils/recargo-config'
 import { paymentTargetKey } from '../../../shared/utils/paymentTarget'
 import {
   formatMexicoCityDateKeyFromUnix,
@@ -111,12 +111,15 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const originalUnix = Number(dbClock?.currentUnix || Math.floor(Date.now() / 1000))
   const originalTimestamp = formatMexicoCityDateTimeFromUnix(originalUnix)
   const originalDateKey = formatMexicoCityDateKeyFromUnix(originalUnix)
-  // Recargo removal is governed by the real server day in Mexico City.
-  // The editable payment date must never reopen a closed removal window.
+  // Recargo removal is governed by the real server day in Mexico City unless
+  // the explicit global override is enabled. The editable payment date never
+  // changes this permission.
+  const globalRecargoSettings = await loadGlobalRecargoSettings()
   const canRemoveRecargo = canRemoveLateFee({
     roles: user?.roles || user?.role,
     financialPlanteles: user?.financialPlantelesList || user?.financialPlanteles,
     currentDateValue: originalDateKey,
+    allowAnyTime: globalRecargoSettings.allowRemovalAnyTime,
   })
   const originalTime = originalTimestamp.slice(11, 19) || '00:00:00'
   const effectiveUnix = requestedPaymentDate
@@ -262,7 +265,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     if (omitLateFeeRequested && !isEventual && !canRemoveRecargo) {
       throw createError({
         statusCode: 403,
-        message: 'Los recargos solo pueden quitarse por administradoras con acceso financiero a múltiples planteles antes del día 15.',
+        message: 'No está permitido quitar este recargo en este momento.',
       })
     }
 

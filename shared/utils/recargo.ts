@@ -62,13 +62,15 @@ export const canRemoveLateFee = ({
   roles,
   financialPlanteles,
   currentDateValue,
+  allowAnyTime = false,
 }: {
   roles: unknown
   financialPlanteles: unknown
   currentDateValue: unknown
+  allowAnyTime?: boolean
 }) => (
   hasLateFeeRemovalAccess({ roles, financialPlanteles })
-  && isLateFeeRemovalWindowOpen(currentDateValue)
+  && (allowAnyTime || isLateFeeRemovalWindowOpen(currentDateValue))
 )
 
 export const normalizeLateFeePercentage = (value: unknown, fallback = 10) => {
