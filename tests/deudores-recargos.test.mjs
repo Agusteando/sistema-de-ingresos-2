@@ -116,7 +116,7 @@ test('/deudores propagates recargos to UI, email, WhatsApp and external contract
 })
 
 
-test('multi-plantel financial admins use day-15 rule unless global override is active', async () => {
+test('financial admins including single-plantel admins use day-15 rule unless global override is active', async () => {
   const recargo = await loadRecargo()
   assert.equal(recargo.canRemoveLateFee({
     roles: 'ROLE_ADMON',
@@ -149,7 +149,18 @@ test('multi-plantel financial admins use day-15 rule unless global override is a
     roles: 'ROLE_ADMON',
     financialPlanteles: 'PT',
     currentDateValue: '2026-09-14',
+  }), true)
+  assert.equal(recargo.canRemoveLateFee({
+    roles: 'ROLE_ADMON',
+    financialPlanteles: 'PT',
+    currentDateValue: '2026-09-15',
   }), false)
+  assert.equal(recargo.canRemoveLateFee({
+    roles: 'ROLE_ADMON',
+    financialPlanteles: 'PT',
+    currentDateValue: '2026-09-26',
+    allowAnyTime: true,
+  }), true)
   assert.equal(recargo.canRemoveLateFee({
     roles: 'ROLE_CTRL',
     financialPlanteles: 'PT,ST',
@@ -208,6 +219,7 @@ test('multi-plantel financial admins use day-15 rule unless global override is a
   assert.match(recargoPoliciesApi, /removalLockDay: LATE_FEE_REMOVAL_LOCK_DAY/)
   assert.match(globalRecargoApi, /setGlobalRecargoRemovalOverride/)
   assert.match(globalRecargoApi, /hasLateFeeRemovalAccess/)
+  assert.doesNotMatch(globalRecargoApi, /múltiples planteles/)
   assert.match(recargoConfig, /GLOBAL_RECARGO_OVERRIDE_ID = 0/)
   assert.match(recargoConfig, /loadGlobalRecargoSettings/)
   assert.match(recargoConfig, /setGlobalRecargoRemovalOverride/)

@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   if (!hasLateFeeRemovalAccess({ roles, financialPlanteles })) {
     throw createError({
       statusCode: 403,
-      message: 'Solo administradoras con acceso financiero a múltiples planteles pueden cambiar esta regla global.',
+      message: 'Solo administradoras con acceso financiero pueden cambiar esta regla global.',
     })
   }
 

@@ -48,8 +48,9 @@ export const hasLateFeeRemovalAccess = ({
   const plantelTokens = (Array.isArray(financialPlanteles) ? financialPlanteles : String(financialPlanteles || '').split(','))
     .map((plantel) => String(plantel || '').trim().toUpperCase())
     .filter(Boolean)
-  const isFinancialAdmin = roleTokens.includes('superadmin') || roleTokens.includes('role_admon')
-  return isFinancialAdmin && new Set(plantelTokens).size > 1
+  const isSuperAdmin = roleTokens.includes('superadmin')
+  const isFinancialAdmin = isSuperAdmin || roleTokens.includes('role_admon')
+  return isFinancialAdmin && (isSuperAdmin || new Set(plantelTokens).size >= 1)
 }
 
 export const isLateFeeRemovalWindowOpen = (currentDateValue: unknown) => {
