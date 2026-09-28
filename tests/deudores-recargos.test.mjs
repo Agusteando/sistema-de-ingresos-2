@@ -297,3 +297,39 @@ test('eventual financial concepts never receive automatic or manual recargos', a
   assert.match(financialConcept, /eventual: boolean/)
   assert.match(recargoApi, /Los conceptos eventuales no admiten recargos\./)
 })
+
+
+test('Deudores supports a persisted per-plantel whole-peso saldo tolerance without schema changes', async () => {
+  const [settingsUtil, settingsGet, settingsPost, deudores, actions, page, external] = await Promise.all([
+    readFile(resolve(root, 'server/utils/deudores-settings.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/deudores/settings.get.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/deudores/settings.post.ts'), 'utf8'),
+    readFile(resolve(root, 'server/utils/deudores.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/deudores/actions.post.ts'), 'utf8'),
+    readFile(resolve(root, 'pages/deudores.vue'), 'utf8'),
+    readFile(resolve(root, 'server/utils/external-deudores.ts'), 'utf8'),
+  ])
+
+  assert.match(settingsUtil, /CONFIG_MATRICULA = '__COBRANZA_CONFIG__'/)
+  assert.match(settingsUtil, /saldo_tolerancia_/)
+  assert.match(settingsUtil, /Math\.trunc\(numeric\)/)
+  assert.doesNotMatch(settingsUtil, /CREATE TABLE|ALTER TABLE/i)
+
+  assert.match(settingsGet, /defaultSaldoMargin: 0/)
+  assert.match(settingsPost, /Number\.isInteger\(rawMargin\)/)
+  assert.match(settingsPost, /igual o mayor a 0/)
+
+  assert.match(deudores, /loadDeudoresSaldoMargins/)
+  assert.match(deudores, /saldoPendiente > 0 && saldoPendiente <= saldoTolerancia/)
+  assert.match(deudores, /toleranciaSaldo: saldoDentroTolerancia/)
+  assert.match(deudores, /Dentro de tolerancia/)
+
+  assert.match(actions, /if \(!deudor\?\.isDeudor\)/)
+  assert.match(external, /dentro_tolerancia/)
+
+  assert.match(page, /Tolerancia de saldo/)
+  assert.match(page, /Ignorar diferencias de hasta \(MXN\)/)
+  assert.match(page, /0 = sin tolerancia/)
+  assert.match(page, /\$0\.01 a \$1\.00/)
+  assert.match(page, /\/api\/deudores\/settings/)
+})

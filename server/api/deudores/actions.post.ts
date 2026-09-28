@@ -95,6 +95,12 @@ const processAction = async ({
   }
 
   const deudor = await getDeudorContext(matricula, ciclo, mes, user)
+  if (!deudor?.isDeudor) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'El alumno ya no tiene adeudo exigible para este periodo.'
+    })
+  }
   const saldo = Number(deudor?.saldoPendiente || deudor?.saldoColegiatura || 0)
   const totalRecargos = Number(deudor?.totalRecargos || 0)
   const desglose = buildPlainBreakdown(deudor)

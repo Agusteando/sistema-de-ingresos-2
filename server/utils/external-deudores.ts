@@ -140,11 +140,14 @@ const summarizeRows = ({
       const saldo = money(item.saldo)
       const pendienteConciliacion = money(item.pendienteConciliacion)
       const exigible = Boolean(row.isDeudor) && saldo > 0
+      const dentroTolerancia = Boolean(row?.razonesNoDeudor?.toleranciaSaldo)
       const estatus = saldo <= 0
         ? 'pagado'
-        : (pendienteConciliacion > 0
-            ? 'pendiente_conciliacion'
-            : (row.fechaLimiteEspecialVigente ? 'fecha_especial' : (exigible ? 'vencido' : 'pendiente')))
+        : (dentroTolerancia
+            ? 'dentro_tolerancia'
+            : (pendienteConciliacion > 0
+                ? 'pendiente_conciliacion'
+                : (row.fechaLimiteEspecialVigente ? 'fecha_especial' : (exigible ? 'vencido' : 'pendiente'))))
 
       return {
         documento: Number(item.documento),
@@ -172,6 +175,7 @@ const summarizeRows = ({
   const esDeudor = saldoExigible > 0
   const tieneExcepcion = rows.some(row => Boolean(row.fechaLimiteEspecialVigente))
   const tieneConciliacionPendiente = rows.some(row => Boolean(row.pagoPendienteConciliacion))
+  const tieneSaldoEnTolerancia = rows.some(row => Boolean(row?.razonesNoDeudor?.toleranciaSaldo))
 
   return {
     ok: true,
@@ -197,7 +201,8 @@ const summarizeRows = ({
     },
     condiciones: {
       pagoPendienteConciliacion: tieneConciliacionPendiente,
-      fechaLimiteEspecialVigente: tieneExcepcion
+      fechaLimiteEspecialVigente: tieneExcepcion,
+      saldoDentroTolerancia: tieneSaldoEnTolerancia
     },
     detalle: detail,
     consultadoEn: new Date().toISOString(),

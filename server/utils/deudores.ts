@@ -14,6 +14,8 @@ import {
 import { resolveLateFeeBalance } from '../../shared/utils/recargo'
 import { loadRecargoPolicies } from './recargo-config'
 import { loadFinancialConceptMap } from './financial-concept'
+import { normalizePlantel } from './auth-session'
+import { loadDeudoresSaldoMargins } from './deudores-settings'
 
 const parsePlazos = (plazoRaw: unknown, mesesRaw: unknown) => {
   const raw = String(plazoRaw || mesesRaw || '1').trim()
@@ -418,9 +420,13 @@ export const getDeudoresGlobal = async ({
     ...documentos.map((doc) => Number(doc.concepto || 0)),
     ...periodRows.map((period) => Number(period.concepto_id || 0)),
   ].filter((id) => Number.isInteger(id) && id > 0)))
-  const [recargoPolicies, financialConcepts] = await Promise.all([
+  const saldoMarginPlanteles = Array.from(new Set(
+    documentos.map((doc) => normalizePlantel(doc.plantel)).filter(Boolean)
+  ))
+  const [recargoPolicies, financialConcepts, saldoMargins] = await Promise.all([
     loadRecargoPolicies(recargoConceptIds),
     loadFinancialConceptMap(recargoConceptIds, ciclo),
+    loadDeudoresSaldoMargins(saldoMarginPlanteles),
   ])
 
   const periodByDoc = new Map<number, any[]>()
@@ -610,7 +616,10 @@ export const getDeudoresGlobal = async ({
     row.todoCubiertoPorBeca100 = row.totalAntesBeca > 0 && row.conceptosCobrables === 0 && row.conceptosConBeca100 > 0
 
     const saldoPendiente = Number(row.saldoPendiente || 0)
-    const noEsDeudorPorSaldo = saldoPendiente <= 0
+    const saldoTolerancia = saldoMargins.get(normalizePlantel(row.plantel)) ?? 0
+    const saldoCero = saldoPendiente <= 0
+    const saldoDentroTolerancia = saldoPendiente > 0 && saldoPendiente <= saldoTolerancia
+    const noEsDeudorPorSaldo = saldoCero || saldoDentroTolerancia
     const noEsDeudorPorBeca = row.todoCubiertoPorBeca100
     const noEsDeudorPorConciliacion = !noEsDeudorPorSaldo && row.pagoPendienteConciliacion
     const noEsDeudorPorExcepcion = !noEsDeudorPorSaldo && !noEsDeudorPorConciliacion && row.fechaLimiteEspecialVigente
@@ -621,12 +630,16 @@ export const getDeudoresGlobal = async ({
     const desgloseVisible = includeDesglose ? (row.desglose || []).filter(shouldExposeBreakdownItem) : []
     const estatusFlujoLabel = isDeudor && flow.stage === 'periodo_pago'
       ? 'Adeudo vencido'
-      : (isDeudor ? flow.stageLabel : 'Sin adeudo exigible')
+      : (isDeudor
+          ? flow.stageLabel
+          : (saldoDentroTolerancia ? 'Dentro de tolerancia' : 'Sin adeudo exigible'))
 
     return {
       ...row,
       saldoPendiente: Number(saldoPendiente.toFixed(2)),
       saldoColegiatura: Number(saldoPendiente.toFixed(2)),
+      saldoTolerancia,
+      saldoDentroTolerancia,
       saldoConceptos: Number(saldoPendiente.toFixed(2)),
       totalCargos: money(row.totalCargos),
       totalAntesBeca: money(row.totalAntesBeca),
@@ -655,7 +668,8 @@ export const getDeudoresGlobal = async ({
       proximaAccion: accionesPendientes[0]?.action || null,
       alcance: 'global_conceptos',
       razonesNoDeudor: {
-        saldoCero: noEsDeudorPorSaldo,
+        saldoCero,
+        toleranciaSaldo: saldoDentroTolerancia,
         beca100: noEsDeudorPorBeca,
         pagoPendienteConciliacion: noEsDeudorPorConciliacion,
         fechaLimiteEspecial: noEsDeudorPorExcepcion

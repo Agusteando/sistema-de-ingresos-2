@@ -8,6 +8,10 @@
         <div class="command-topline">
           <span class="kicker">Cobranza guiada</span>
           <div class="command-buttons">
+            <button class="quiet-button" @click="openSaldoMarginSettings" :disabled="saldoMarginLoading">
+              <LucideSlidersHorizontal :size="16" />
+              {{ saldoMarginButtonLabel }}
+            </button>
             <button class="quiet-button" @click="loadData" :disabled="loading">
               <LucideRefreshCw :size="16" :class="{ 'animate-spin': loading }" />
               Actualizar
@@ -303,6 +307,66 @@
     </div>
 
     <Teleport to="body">
+      <div v-if="showSaldoMarginSettings" class="dialog-overlay" @click.self="closeSaldoMarginSettings">
+        <div class="dialog">
+          <header class="dialog-header">
+            <div>
+              <span class="kicker">Cobranza</span>
+              <h3>Tolerancia de saldo</h3>
+            </div>
+            <button class="icon-button" @click="closeSaldoMarginSettings"><LucideX :size="16" /></button>
+          </header>
+          <div class="dialog-body">
+            <p class="drawer-note">
+              Los saldos de hasta este monto no se consideran adeudo exigible en Deudores. No modifica pagos, recargos ni el saldo contable.
+            </p>
+
+            <label v-if="saldoMarginSettings.options.length > 1" class="form-row">
+              <span>Plantel</span>
+              <select v-model="saldoMarginPlantel">
+                <option v-for="option in saldoMarginSettings.options" :key="option.plantel" :value="option.plantel">
+                  {{ option.plantel }}
+                </option>
+              </select>
+            </label>
+
+            <div v-else-if="selectedSaldoMarginSetting" class="exception-summary">
+              <strong>{{ selectedSaldoMarginSetting.plantel }}</strong>
+              <span>Configuración compartida por el plantel</span>
+            </div>
+
+            <label class="form-row">
+              <span>Ignorar diferencias de hasta (MXN)</span>
+              <input
+                v-model.number="saldoMarginDraft"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                step="1"
+                placeholder="0"
+              >
+            </label>
+
+            <p class="drawer-muted">
+              0 = sin tolerancia. Con 1, saldos de $0.01 a $1.00 se consideran cubiertos para efectos de cobranza; $1.01 sí cuenta como adeudo.
+            </p>
+          </div>
+          <footer class="dialog-footer">
+            <button class="quiet-button" @click="closeSaldoMarginSettings" :disabled="saldoMarginSaving">Cancelar</button>
+            <button
+              class="primary-action"
+              @click="saveSaldoMargin"
+              :disabled="saldoMarginSaving || !selectedSaldoMarginSetting"
+            >
+              <LucideCheckCircle :size="16" />
+              {{ saldoMarginSaving ? 'Guardando' : 'Guardar' }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
       <div v-if="showExceptionModal" class="dialog-overlay" @click.self="closeException">
         <div class="dialog">
           <header class="dialog-header">
@@ -560,6 +624,7 @@ import {
   LucideRefreshCw,
   LucideSearch,
   LucideShieldCheck,
+  LucideSlidersHorizontal,
   LucideUsers,
   LucideX
 } from 'lucide-vue-next'
@@ -586,6 +651,16 @@ const showExceptionModal = ref(false)
 const savingException = ref(false)
 const showWhatsappSetup = ref(false)
 const exceptionForm = ref({ fecha: '', motivo: '' })
+const showSaldoMarginSettings = ref(false)
+const saldoMarginLoading = ref(false)
+const saldoMarginSaving = ref(false)
+const saldoMarginPlantel = ref('')
+const saldoMarginDraft = ref(0)
+const saldoMarginSettings = ref({
+  activePlantel: '',
+  defaultSaldoMargin: 0,
+  options: []
+})
 const emailComposer = ref({
   open: false,
   loading: false,
@@ -730,6 +805,15 @@ const formatMoney = (value) => Number(value || 0).toLocaleString('es-MX', {
   style: 'currency',
   currency: 'MXN',
   minimumFractionDigits: 2
+})
+
+const selectedSaldoMarginSetting = computed(() => (
+  saldoMarginSettings.value.options.find(option => option.plantel === saldoMarginPlantel.value) || null
+))
+const saldoMarginButtonLabel = computed(() => {
+  if (saldoMarginSettings.value.options.length !== 1) return 'Tolerancia por plantel'
+  const margin = Number(saldoMarginSettings.value.options[0]?.saldoMargin || 0)
+  return `Tolerancia $${margin.toFixed(0)}`
 })
 
 const formatDate = (value) => {
@@ -877,9 +961,10 @@ const activeEmailPreviewHtml = computed(() => activeEmailPreview.value?.success
 
 const actionReadyCount = (action) => filteredDeudores.value.filter(d => canRunAction(d, action)).length
 
-const hasBlockingOverlay = computed(() => showExceptionModal.value || showWhatsappSetup.value || emailComposer.value.open || Boolean(detailsTarget.value))
+const hasBlockingOverlay = computed(() => showSaldoMarginSettings.value || showExceptionModal.value || showWhatsappSetup.value || emailComposer.value.open || Boolean(detailsTarget.value))
 
 useModalEscape(() => {
+  if (showSaldoMarginSettings.value) return closeSaldoMarginSettings()
   if (detailsTarget.value) return closeDetails()
   if (emailComposer.value.open) return closeEmailComposer()
   if (showWhatsappSetup.value) return closeWhatsappSetup()
@@ -901,6 +986,11 @@ watch([
 
 watch(() => normalizeCicloKey(state.value.ciclo), () => loadData())
 watch(estatusFiltro, () => loadData())
+
+watch(saldoMarginPlantel, () => {
+  const selected = selectedSaldoMarginSetting.value
+  saldoMarginDraft.value = Number(selected?.saldoMargin || 0)
+})
 
 watch(deudores, () => {
   const validKeys = new Set(deudores.value.map(rowKey))
@@ -928,6 +1018,7 @@ onMounted(() => {
       }
     }
   }
+  void loadSaldoMarginSettings()
   loadData()
 })
 
@@ -958,6 +1049,84 @@ const loadData = async () => {
     show('No se pudo cargar la cartera de deudores.', 'danger')
   } finally {
     loading.value = false
+  }
+}
+
+const loadSaldoMarginSettings = async () => {
+  saldoMarginLoading.value = true
+  try {
+    const response = await $fetch('/api/deudores/settings')
+    const options = Array.isArray(response?.options) ? response.options : []
+    saldoMarginSettings.value = {
+      activePlantel: String(response?.activePlantel || ''),
+      defaultSaldoMargin: Number(response?.defaultSaldoMargin || 0),
+      options: options.map(option => ({
+        plantel: String(option?.plantel || ''),
+        saldoMargin: Number(option?.saldoMargin || 0)
+      })).filter(option => option.plantel)
+    }
+
+    const current = saldoMarginSettings.value.options.find(option => option.plantel === saldoMarginPlantel.value)
+    const preferred = current
+      || saldoMarginSettings.value.options.find(option => option.plantel === saldoMarginSettings.value.activePlantel)
+      || saldoMarginSettings.value.options[0]
+      || null
+
+    saldoMarginPlantel.value = preferred?.plantel || ''
+    saldoMarginDraft.value = Number(preferred?.saldoMargin || 0)
+  } catch (e) {
+    show(e?.statusMessage || 'No se pudo cargar la tolerancia de saldo.', 'danger')
+  } finally {
+    saldoMarginLoading.value = false
+  }
+}
+
+const openSaldoMarginSettings = async () => {
+  await loadSaldoMarginSettings()
+  if (!saldoMarginSettings.value.options.length) {
+    show('No hay un plantel disponible para configurar.', 'danger')
+    return
+  }
+  showSaldoMarginSettings.value = true
+}
+
+const closeSaldoMarginSettings = () => {
+  if (saldoMarginSaving.value) return
+  showSaldoMarginSettings.value = false
+}
+
+const saveSaldoMargin = async () => {
+  const selected = selectedSaldoMarginSetting.value
+  const value = Number(saldoMarginDraft.value)
+
+  if (!selected) return
+  if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
+    show('La tolerancia debe ser un monto entero en pesos, igual o mayor a 0.', 'danger')
+    return
+  }
+
+  saldoMarginSaving.value = true
+  try {
+    const response = await $fetch('/api/deudores/settings', {
+      method: 'POST',
+      body: {
+        plantel: selected.plantel,
+        saldoMargin: value
+      }
+    })
+
+    saldoMarginSettings.value.options = saldoMarginSettings.value.options.map(option => (
+      option.plantel === selected.plantel
+        ? { ...option, saldoMargin: Number(response?.saldoMargin ?? value) }
+        : option
+    ))
+    saldoMarginDraft.value = Number(response?.saldoMargin ?? value)
+    show(`Tolerancia de saldo guardada para ${selected.plantel}.`)
+    await loadData()
+  } catch (e) {
+    show(e?.statusMessage || 'No se pudo guardar la tolerancia de saldo.', 'danger')
+  } finally {
+    saldoMarginSaving.value = false
   }
 }
 
@@ -992,6 +1161,7 @@ const readinessClass = (d) => {
 }
 
 const readinessLabel = (d) => {
+  if (d?.razonesNoDeudor?.toleranciaSaldo) return 'Dentro de tolerancia'
   if (!d.isDeudor) return 'Sin adeudo exigible'
   if (d.pagoPendienteConciliacion) return 'Pago por conciliar'
   if (d.fechaLimiteEspecialVigente) return 'Fecha especial'
@@ -1011,6 +1181,7 @@ const rowNextCopy = (d) => {
   if (d.fechaLimiteEspecialVigente) return `Esperar hasta ${formatDate(d.fechaLimitePago)}.`
   const missing = missingRequirementForAction(d)
   if (missing) return `Actualiza ${missing} para continuar.`
+  if (d?.razonesNoDeudor?.toleranciaSaldo) return `Saldo dentro de la tolerancia de ${formatMoney(d.saldoTolerancia)} del plantel.`
   if (!d.isDeudor) return 'No requiere cobranza.'
   return 'Sin accion disponible por regla de dia.'
 }
