@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div class="modal-overlay" @click.self="requestClose">
-      <div class="modal-container payment-modal">
+      <div class="modal-container payment-modal relative">
         <div class="modal-header modal-header-with-status relative">
           <h2 class="text-lg font-bold text-gray-800">Recibir Pago</h2>
           <ModalDraftStatus :restored="draftRestored" :status="draftSaveState" :dirty="hasUnsavedChanges" />
@@ -19,7 +19,7 @@
             <Transition name="payment-options">
               <div
                 v-if="paymentOptionsOpen"
-                class="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl"
+                class="absolute right-0 top-11 z-30 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl"
               >
                 <button
                   type="button"
@@ -29,7 +29,21 @@
                   <LucideWalletCards :size="16" class="text-brand-campus" />
                   Cambiar método de pago
                 </button>
-                <div class="my-1 border-t border-gray-100"></div>
+                <template v-if="canManageGlobalRecargoOverride">
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                    @click="openRecargoSettings"
+                  >
+                    <LucideSettings2 :size="16" class="text-brand-campus" />
+                    <span class="min-w-0 flex-1">
+                      <span class="block">Configuración de recargos</span>
+                      <span class="mt-0.5 block text-[10px] font-semibold leading-4 text-gray-400">Política para administradoras</span>
+                    </span>
+                  </button>
+                  <div class="my-1 border-t border-gray-100"></div>
+                </template>
+                <div v-else class="my-1 border-t border-gray-100"></div>
                 <button
                   type="button"
                   class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition"
@@ -283,32 +297,6 @@
             </div>
           </div>
 
-          <div
-            v-if="canManageGlobalRecargoOverride"
-            class="mb-3 flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3"
-          >
-            <div class="min-w-0">
-              <p class="text-xs font-black text-gray-800">Quitar recargos en cualquier fecha</p>
-              <p class="mt-0.5 text-[11px] leading-4 text-gray-500">
-                {{ globalRecargoRemovalOverride ? 'Excepción global activa' : 'Regla normal: solo antes del día 15' }}
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:cursor-wait disabled:opacity-60"
-              :class="globalRecargoRemovalOverride ? 'bg-emerald-600' : 'bg-gray-300'"
-              :aria-checked="globalRecargoRemovalOverride ? 'true' : 'false'"
-              :disabled="globalRecargoOverrideUpdating"
-              @click="toggleGlobalRecargoOverride"
-            >
-              <span
-                class="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition"
-                :class="globalRecargoRemovalOverride ? 'translate-x-5' : 'translate-x-0.5'"
-              ></span>
-            </button>
-          </div>
-
           <p v-if="hasPendingFinalAmounts" class="mb-3 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Este debe ser el monto final de tu proyección, sin decimales.</p>
 
           <div class="payment-table-shell border border-gray-200 rounded-lg shadow-sm">
@@ -399,6 +387,86 @@
             </table>
           </div>
         </div>
+        <Transition name="payment-options">
+          <div
+            v-if="recargoSettingsOpen && canManageGlobalRecargoOverride"
+            class="absolute inset-0 z-40 flex justify-end"
+          >
+            <button
+              type="button"
+              class="absolute inset-0 cursor-default bg-slate-950/15 backdrop-blur-[1px]"
+              aria-label="Cerrar configuración de recargos"
+              @click="recargoSettingsOpen = false"
+            ></button>
+            <aside
+              class="relative z-10 flex h-full w-full max-w-sm flex-col border-l border-gray-200 bg-white shadow-2xl"
+              aria-label="Configuración de recargos"
+            >
+              <div class="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+                <div class="flex min-w-0 items-start gap-3">
+                  <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-brand-campus ring-1 ring-gray-200">
+                    <LucideSettings2 :size="18" />
+                  </span>
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-sm font-black text-gray-800">Configuración de recargos</h3>
+                      <span class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-gray-500">Global</span>
+                    </div>
+                    <p class="mt-1 text-xs leading-5 text-gray-500">
+                      Esta política aplica a todos los cobros realizados por administradoras.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-50 hover:text-gray-700"
+                  aria-label="Cerrar configuración de recargos"
+                  @click="recargoSettingsOpen = false"
+                >
+                  <LucideX :size="17" />
+                </button>
+              </div>
+
+              <div class="flex-1 p-5">
+                <div class="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-4">
+                  <div class="min-w-0">
+                    <p class="text-sm font-bold text-gray-800">Permitir retirar recargos después del día 14</p>
+                    <p class="mt-1 text-xs leading-5 text-gray-500">
+                      {{ globalRecargoRemovalOverride
+                        ? 'Activado: las administradoras pueden retirar recargos durante todo el mes.'
+                        : 'Desactivado: las administradoras solo pueden retirarlos del día 1 al 14.' }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    class="relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:cursor-wait disabled:opacity-60"
+                    :class="globalRecargoRemovalOverride ? 'bg-emerald-600' : 'bg-gray-300'"
+                    :aria-checked="globalRecargoRemovalOverride ? 'true' : 'false'"
+                    aria-label="Permitir retirar recargos después del día 14"
+                    :disabled="globalRecargoOverrideUpdating"
+                    @click="toggleGlobalRecargoOverride"
+                  >
+                    <span
+                      class="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition"
+                      :class="globalRecargoRemovalOverride ? 'translate-x-5' : 'translate-x-0.5'"
+                    ></span>
+                  </button>
+                </div>
+
+                <p class="mt-3 text-[11px] leading-5 text-gray-400">
+                  Esta opción no quita recargos automáticamente. Solo cambia hasta qué fecha una administradora puede retirarlos desde un cobro.
+                </p>
+              </div>
+
+              <div class="border-t border-gray-100 p-4">
+                <button type="button" class="btn btn-primary w-full" @click="recargoSettingsOpen = false">
+                  Listo
+                </button>
+              </div>
+            </aside>
+          </div>
+        </Transition>
         <ModalDiscardDialog
           :show="showDiscardConfirmation"
           @continue="continueEditing"
@@ -422,7 +490,7 @@
 
 <script setup>
 import { ref, watch, computed, onMounted, onBeforeUnmount, markRaw, nextTick } from 'vue'
-import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheck, LucideCheckCircle, LucideChevronDown, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideLock, LucideMoreHorizontal, LucideReceiptText, LucideWalletCards, LucideXCircle } from 'lucide-vue-next'
+import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheck, LucideCheckCircle, LucideChevronDown, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideLock, LucideMoreHorizontal, LucideReceiptText, LucideSettings2, LucideWalletCards, LucideX, LucideXCircle } from 'lucide-vue-next'
 import { useCookie, useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -452,6 +520,7 @@ const paymentOptionsOpen = ref(false)
 const paymentCampusMenuOpen = ref(false)
 const paymentDateEditorOpen = ref(false)
 const paymentMethodEditorOpen = ref(false)
+const recargoSettingsOpen = ref(false)
 const pagoRealizadoEnOtroPlantel = ref(false)
 const plantelPago = ref('')
 const paymentCampusError = ref(false)
@@ -524,8 +593,19 @@ const openPaymentMethodEditor = () => {
   paymentOptionsOpen.value = false
   paymentCampusMenuOpen.value = false
   paymentDateEditorOpen.value = false
+  recargoSettingsOpen.value = false
   resetOtherCampusAuthorization()
   paymentMethodEditorOpen.value = true
+}
+
+const openRecargoSettings = () => {
+  if (!canManageGlobalRecargoOverride.value) return
+  paymentOptionsOpen.value = false
+  paymentCampusMenuOpen.value = false
+  paymentMethodEditorOpen.value = false
+  paymentDateEditorOpen.value = false
+  resetOtherCampusAuthorization()
+  recargoSettingsOpen.value = true
 }
 
 const selectPaymentMethod = (value) => {
@@ -537,6 +617,7 @@ const openPaymentDateEditor = () => {
   paymentOptionsOpen.value = false
   paymentCampusMenuOpen.value = false
   paymentMethodEditorOpen.value = false
+  recargoSettingsOpen.value = false
   resetOtherCampusAuthorization()
   paymentDateEditorOpen.value = true
 }
@@ -560,6 +641,7 @@ const openOtherCampusAuthorization = () => {
   paymentOptionsOpen.value = false
   paymentMethodEditorOpen.value = false
   paymentDateEditorOpen.value = false
+  recargoSettingsOpen.value = false
   paymentCampusError.value = false
 
   if (pagoRealizadoEnOtroPlantel.value) {
@@ -709,8 +791,9 @@ const canOmitRecargo = (debt) => canRemoveRecargo.value
   && isRecargoEligibleDebt(debt)
 const recargoActionLabel = (debt) => {
   if (!isRecargoEligibleDebt(debt)) return 'No aplica'
-  if (debtRecargoOmitted(debt)) return 'Sin recargo'
-  return debtHasRecargoForDate(debt) ? 'Recargo aplicado' : 'Aplicar recargo'
+  if (debtRecargoOmitted(debt)) return 'Restaurar recargo'
+  if (debtHasRecargoForDate(debt)) return canOmitRecargo(debt) ? 'Quitar recargo' : 'Recargo aplicado'
+  return 'Aplicar recargo'
 }
 const recargoActionAriaLabel = (debt) => {
   if (!isRecargoEligibleDebt(debt)) return 'Los conceptos financieros eventuales no generan recargos'
@@ -783,6 +866,7 @@ const writePaymentDraft = (draft) => {
   }
   paymentDateEditorOpen.value = false
   paymentMethodEditorOpen.value = false
+  recargoSettingsOpen.value = false
   pagoRealizadoEnOtroPlantel.value = false
   plantelPago.value = ''
   paymentCampusMenuOpen.value = false

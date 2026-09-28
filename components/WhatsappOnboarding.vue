@@ -93,7 +93,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { renderSVG } from 'uqr'
 import {
   LucideCheckCircle,
@@ -133,6 +133,9 @@ const qrVisible = ref(false)
 const qrStatus = ref('')
 const lastMessage = ref('')
 const lastMessageType = ref('success')
+let qrLinkTimer = null
+let qrLinkBusy = false
+let lastQrUpdatedAt = ''
 
 const activeClient = computed(() => clients.value[0] || null)
 const headerTitle = computed(() => props.compact ? 'WhatsApp para seguimiento' : 'WhatsApp Cobranza')
@@ -180,11 +183,18 @@ const setMessage = (message, type = 'success') => {
 
 const getQrBody = (payload) => payload?.qr || payload || {}
 
+const stopQrLinkWatch = () => {
+  if (qrLinkTimer) window.clearInterval(qrLinkTimer)
+  qrLinkTimer = null
+}
+
 const renderQr = (payload) => {
   const qr = getQrBody(payload)
   qrStatus.value = qr.status || payload?.status || ''
+  lastQrUpdatedAt = String(qr.qrUpdatedAt || qr.updatedAt || lastQrUpdatedAt || '')
 
   if (qr.sessionReady) {
+    stopQrLinkWatch()
     sessionStatus.value = 'ready'
     qrVisible.value = false
     qrSvg.value = ''
@@ -194,12 +204,29 @@ const renderQr = (payload) => {
     return
   }
 
+  const upstreamImage = String(qr.qrImage || '')
   const raw = String(qr.qr || '')
-  if (!raw) {
+  if (!upstreamImage && !raw) {
+    const runtimeState = String(qr.runtimeState || '').toLowerCase()
+    if (qr.sessionAuthenticated || ['authenticated', 'initializing', 'recovering'].includes(runtimeState)) {
+      qrVisible.value = true
+      qrSvg.value = ''
+      qrImageSrc.value = ''
+      qrStatus.value = qr.sessionAuthenticated || runtimeState === 'authenticated'
+        ? 'Vinculando WhatsApp…'
+        : 'Preparando QR…'
+      return
+    }
     throw new Error('La API no devolvió un QR disponible.')
   }
 
   qrVisible.value = true
+
+  if (upstreamImage.startsWith('data:image')) {
+    qrImageSrc.value = upstreamImage
+    qrSvg.value = ''
+    return
+  }
 
   if (raw.startsWith('data:image') || raw.startsWith('http://') || raw.startsWith('https://')) {
     qrImageSrc.value = raw
@@ -215,6 +242,55 @@ const renderQr = (payload) => {
     whiteColor: '#ffffff',
     blackColor: '#111827'
   })
+}
+
+const syncQrLinkState = async () => {
+  if (!activeClient.value?.client_id || !qrVisible.value || isReady.value || qrLinkBusy) return
+
+  qrLinkBusy = true
+  try {
+    const statusPayload = await $fetch(`/api/whatsapp/instances/${encodeURIComponent(activeClient.value.client_id)}/status`)
+    const nextStatus = statusPayload?.instance?.status || statusPayload?.status?.status || statusPayload?.status || 'pending'
+    const session = statusPayload?.instance?.session || {}
+    sessionStatus.value = nextStatus
+
+    if (String(nextStatus).toLowerCase() === 'ready' || session?.state === 'ready') {
+      qrVisible.value = false
+      qrSvg.value = ''
+      qrImageSrc.value = ''
+      stopQrLinkWatch()
+      emit('ready')
+      setMessage('WhatsApp vinculado y listo.')
+      return
+    }
+
+    if (session?.authenticated || session?.state === 'authenticated') {
+      qrStatus.value = 'Vinculando WhatsApp…'
+      return
+    }
+
+    const upstreamQr = statusPayload?.instance?.qr || {}
+    const upstreamUpdatedAt = String(upstreamQr?.updatedAt || '')
+    if (upstreamQr?.available && upstreamUpdatedAt && upstreamUpdatedAt !== lastQrUpdatedAt) {
+      const qrPayload = await $fetch(`/api/whatsapp/instances/${encodeURIComponent(activeClient.value.client_id)}/qr`, {
+        params: { refresh: '0', force: '0' }
+      })
+      renderQr(qrPayload)
+    }
+  } catch {
+    // Keep the currently displayed QR. Manual controls remain available if the
+    // transient status poll cannot reach wweb.
+  } finally {
+    qrLinkBusy = false
+  }
+}
+
+const startQrLinkWatch = () => {
+  stopQrLinkWatch()
+  if (!qrVisible.value || isReady.value) return
+  qrLinkTimer = window.setInterval(() => {
+    void syncQrLinkState()
+  }, 1500)
 }
 
 const loadClients = async () => {
@@ -264,7 +340,8 @@ const showQr = async (forceNew) => {
       params: { refresh: '1', force: forceNew ? '1' : '0' }
     })
     renderQr(payload)
-    setMessage(payload?.refreshed ? 'QR renovado.' : 'QR listo.')
+    startQrLinkWatch()
+    setMessage(payload?.refreshed ? 'QR renovado.' : 'QR listo para escanear.')
   } catch (error) {
     setMessage(error?.statusMessage || 'No se pudo obtener el QR.', 'danger')
   } finally {
@@ -281,6 +358,9 @@ const checkStatus = async () => {
     sessionStatus.value = nextStatus
     if (String(nextStatus).toLowerCase() === 'ready') {
       qrVisible.value = false
+      qrSvg.value = ''
+      qrImageSrc.value = ''
+      stopQrLinkWatch()
       emit('ready')
     }
     setMessage(String(nextStatus).toLowerCase() === 'ready' ? 'Sesión lista.' : 'Sesión pendiente.')
@@ -331,6 +411,10 @@ const startAutomaticSetup = async () => {
     autoStarting.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  stopQrLinkWatch()
+})
 
 onMounted(async () => {
   if (props.autoStart) {

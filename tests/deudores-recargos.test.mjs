@@ -215,7 +215,11 @@ test('ROLE_ADMON can remove recargos regardless of plantel scope, subject to day
 
   assert.doesNotMatch(modal, /canRemoveLateFee/)
   assert.match(modal, /capabilities\?\.canRemoveRecargo/)
-  assert.match(modal, /Quitar recargos en cualquier fecha/)
+  assert.match(modal, /Configuración de recargos/)
+  assert.match(modal, /Permitir retirar recargos después del día 14/)
+  assert.doesNotMatch(modal, /Quitar recargos en cualquier fecha/)
+  assert.match(modal, /return canOmitRecargo\(debt\) \? 'Quitar recargo' : 'Recargo aplicado'/)
+  assert.match(modal, /return 'Restaurar recargo'/)
   assert.match(modal, /\/api\/recargos\/global/)
   assert.match(modal, /Quitar recargo de este pago/)
   assert.match(modal, /omitirRecargo: debtRecargoOmitted/)

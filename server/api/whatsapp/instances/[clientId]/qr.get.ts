@@ -6,11 +6,18 @@ const getQrBody = (payload: any) => payload?.qr || payload || {}
 
 const shouldRefreshQr = (payload: any) => {
   const qr = getQrBody(payload)
-  const status = String(qr.status || payload?.status || '').toLowerCase()
+  const status = String(qr.status || payload?.status || '').trim().toLowerCase()
+  const runtimeState = String(qr.runtimeState || payload?.runtimeState || '').trim().toLowerCase()
 
-  if (qr.sessionReady) return false
-  if (qr.qrAvailable === false) return true
-  return ['expired', 'error', 'timeout', 'qr_expired'].includes(status)
+  if (qr.sessionReady || runtimeState === 'ready') return false
+  if (qr.qrAvailable || qr.qr) return false
+
+  // After scanning, wweb transitions through authenticated before ready and
+  // intentionally clears the QR. Reconnecting here would interrupt pairing.
+  if (['authenticated', 'initializing', 'recovering', 'degraded'].includes(runtimeState)) return false
+
+  return ['expired', 'error', 'fatal', 'timeout', 'qr_expired', 'unpaired'].includes(runtimeState)
+    || ['expired', 'error', 'timeout', 'qr_expired', 'unpaired'].includes(status)
 }
 
 const persistQrState = async (clientId: string, payload: any) => {
