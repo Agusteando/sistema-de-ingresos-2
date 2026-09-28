@@ -3,7 +3,7 @@ import { readBestTalleresServiciosCatalog, readEffectiveStudentServicios, update
 import { readInstitutionalSchoolCycle } from '../../../../utils/school-cycle'
 import { canonicalTallerKey, normalizeServicioClave, normalizeServicioNombre } from '../../../../../shared/utils/talleresServicios'
 import { recordTalleresAssignmentChange } from '../../../../utils/talleres-contracts'
-import { canonicalTalleresPlantel, ensureCurrentTalleresSnapshotPlantel } from '../../../../utils/talleres-snapshot'
+import { canonicalTalleresPlantel, ensureCurrentTalleresSnapshotPlantel, invalidateTalleresSnapshotPlantel } from '../../../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => {
   const user = await getTrustedAuthUser(event)
@@ -30,37 +30,150 @@ export default defineEventHandler(async (event) => {
     ? catalogMatch!.servicio_nombre
     : (catalogMatch?.servicio_nombre || requestedName || requestedKey)
 
+  // Resolve the cycle before the authoritative write. Once matricula is changed,
+  // every remaining enrichment/refresh step below is best-effort and must not
+  // turn that successful write into a generic 500.
+  const institutional = await readInstitutionalSchoolCycle()
+  const requestedCiclo = body?.ciclo || institutional.key
+
   const updated = await updateCentralMatriculaServicio({
     matricula,
     action,
     servicio: serviceName,
     userEmail: user.email,
   })
-  const historyWrite = await recordTalleresAssignmentChange({
-    matricula,
-    plantel: body?.plantel || 'GLOBAL',
-    workshopKey: canonicalTallerKey(serviceName),
-    workshopName: serviceName,
-    action: action === 'add' ? 'assigned' : 'removed',
-    actorEmail: user.email,
-    metadata: { source: 'aurora_manual' },
-  })
+
+  let historyWrite: any = { ready: false }
+  try {
+    historyWrite = await recordTalleresAssignmentChange({
+      matricula,
+      plantel: body?.plantel || 'GLOBAL',
+      workshopKey: canonicalTallerKey(serviceName),
+      workshopName: serviceName,
+      action: action === 'add' ? 'assigned' : 'removed',
+      actorEmail: user.email,
+      metadata: { source: 'aurora_manual' },
+    })
+  } catch (error: any) {
+    console.error('[StudentServicios] No se pudo registrar historial de Talleres.', {
+      matricula,
+      action,
+      servicio: serviceName,
+      plantel: body?.plantel || 'GLOBAL',
+      message: error?.message || error,
+      code: error?.code || error?.statusMessage || null,
+    })
+    if (action === 'remove') {
+      throw createError({
+        statusCode: 503,
+        message: 'El taller se actualizó en Control Escolar, pero no se pudo confirmar su baja en el historial de Talleres. Vuelve a intentarlo.',
+      })
+    }
+    historyWrite = { ready: false, error: error?.message || 'history_write_failed' }
+  }
+
   if (action === 'remove' && historyWrite?.ready === false) {
     throw createError({
       statusCode: 503,
-      message: 'No se pudo registrar la baja del taller; la operación no puede confirmarse de forma consistente.',
+      message: 'El taller se actualizó en Control Escolar, pero no se pudo confirmar su baja en el historial de Talleres. Vuelve a intentarlo.',
     })
   }
-  const institutional = await readInstitutionalSchoolCycle()
-  const effective = await readEffectiveStudentServicios({
-    matricula,
-    ciclo: body?.ciclo || institutional.key,
-    plantel: body?.plantel,
-  })
-  const snapshotPlantel = canonicalTalleresPlantel(effective.plantel)
-  const snapshotRefresh = snapshotPlantel
-    ? await ensureCurrentTalleresSnapshotPlantel({ plantel: snapshotPlantel, ciclo: effective.ciclo, force: true })
-    : { success: true, skipped: true, reason: 'plantel_not_in_talleres_snapshot' }
+
+  let effective: any
+  try {
+    effective = await readEffectiveStudentServicios({
+      matricula,
+      ciclo: requestedCiclo,
+      plantel: body?.plantel,
+    })
+  } catch (error: any) {
+    console.error('[StudentServicios] La asignación se guardó, pero falló la lectura enriquecida posterior.', {
+      matricula,
+      action,
+      servicio: serviceName,
+      plantel: body?.plantel || null,
+      ciclo: requestedCiclo,
+      message: error?.message || error,
+      code: error?.code || error?.statusMessage || null,
+    })
+    const catalogByKey = new Map(catalog.map((item) => [item.servicio_clave, item]))
+    const resolved = {
+      catalog,
+      catalogSource: 'mutation-fallback',
+      servicios: updated.servicios.map((value) => {
+        const nombre = normalizeServicioNombre(value)
+        const clave = canonicalTallerKey(nombre)
+        const item = catalogByKey.get(clave)
+        return {
+          clave,
+          nombre: item?.servicio_nombre || nombre,
+          imagen: item?.imagen_url || (clave ? `/talleres-servicios/${clave}.svg` : ''),
+          source: item ? 'catalog' : 'legacy',
+        }
+      }),
+    }
+    effective = {
+      current: {
+        field: updated.field,
+        raw: updated.raw,
+      },
+      resolved,
+      financial: { evidenceCount: 0 },
+      ciclo: String(requestedCiclo || ''),
+      plantel: String(body?.plantel || '').trim().toUpperCase(),
+      servicios: resolved.servicios.map((item) => ({
+        ...item,
+        fuentes: ['matricula'],
+        directa: true,
+        conceptosFinancieros: [],
+      })),
+    }
+  }
+
+  const snapshotPlantel = canonicalTalleresPlantel(effective.plantel || body?.plantel)
+  let snapshotRefresh: any = { success: true, skipped: true, reason: 'plantel_not_in_talleres_snapshot' }
+  if (snapshotPlantel) {
+    try {
+      await invalidateTalleresSnapshotPlantel({ plantel: snapshotPlantel, ciclo: effective.ciclo })
+      snapshotRefresh = { success: true, invalidated: true, queued: true, plantel: snapshotPlantel, ciclo: effective.ciclo }
+
+      // The authoritative matricula/history write is already complete. Rebuilding
+      // the materialized Talleres roster must not hold the operator request open
+      // or turn a successful assignment into a 500. The invalidation above means
+      // no consumer may knowingly serve the previous snapshot meanwhile.
+      void ensureCurrentTalleresSnapshotPlantel({
+        plantel: snapshotPlantel,
+        ciclo: effective.ciclo,
+        force: false,
+      }).catch((error: any) => {
+        console.error('[StudentServicios] Falló el refresh asíncrono del snapshot de Talleres.', {
+          matricula,
+          action,
+          servicio: serviceName,
+          plantel: snapshotPlantel,
+          ciclo: effective.ciclo,
+          message: error?.message || error,
+          code: error?.code || error?.statusMessage || null,
+        })
+      })
+    } catch (error: any) {
+      console.error('[StudentServicios] La asignación se guardó, pero no se pudo invalidar el snapshot de Talleres.', {
+        matricula,
+        action,
+        servicio: serviceName,
+        plantel: snapshotPlantel,
+        ciclo: effective.ciclo,
+        message: error?.message || error,
+        code: error?.code || error?.statusMessage || null,
+      })
+      snapshotRefresh = {
+        success: false,
+        invalidated: false,
+        queued: false,
+        message: error?.message || 'snapshot_invalidation_failed',
+      }
+    }
+  }
 
   return {
     ok: true,
@@ -80,6 +193,7 @@ export default defineEventHandler(async (event) => {
       orden: Number(item.orden || 9999),
     })),
     financialEvidenceCount: effective.financial.evidenceCount,
+    historyReady: historyWrite?.ready !== false,
     snapshotRefresh,
   }
 })

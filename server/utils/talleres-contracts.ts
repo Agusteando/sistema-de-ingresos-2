@@ -7,7 +7,12 @@ const cleanMatricula = (value: unknown) => String(value || '').trim().toUpperCas
 const clean = (value: unknown, max = 2000) => String(value ?? '').trim().slice(0, max)
 const truthy = (value: unknown) => ['1', 'true', 'si', 'sí', 'yes'].includes(String(value ?? '').trim().toLowerCase()) || Number(value) === 1
 
-let schemaCache = { checkedAt: 0, contracts: false, history: false }
+let schemaCache = {
+  checkedAt: 0,
+  contracts: false,
+  history: false,
+  historyMetadataJson: false,
+}
 const SCHEMA_CACHE_MS = 60_000
 
 const readSchema = async () => {
@@ -17,7 +22,28 @@ const readSchema = async () => {
       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?, ?)`, [CONTRACTS_TABLE, HISTORY_TABLE],
   )
   const names = new Set(rows.map((row) => String(row.TABLE_NAME || row.table_name || '')))
-  schemaCache = { checkedAt: Date.now(), contracts: names.has(CONTRACTS_TABLE), history: names.has(HISTORY_TABLE) }
+  const history = names.has(HISTORY_TABLE)
+  let historyMetadataJson = false
+
+  if (history) {
+    const columns = await controlEscolarCentralQuery<any[]>(
+      `SELECT COLUMN_NAME
+         FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?`,
+      [HISTORY_TABLE],
+    )
+    historyMetadataJson = columns.some((row) =>
+      String(row.COLUMN_NAME || row.column_name || '').trim().toLowerCase() === 'metadata_json'
+    )
+  }
+
+  schemaCache = {
+    checkedAt: Date.now(),
+    contracts: names.has(CONTRACTS_TABLE),
+    history,
+    historyMetadataJson,
+  }
   return schemaCache
 }
 
@@ -92,13 +118,35 @@ export const recordTalleresAssignmentChange = async ({ matricula, plantel, works
 }) => {
   const schema = await readSchema()
   if (!schema.history) return { ready: false }
-  await controlEscolarCentralQuery(
-    `INSERT INTO ${HISTORY_TABLE}
-      (id, matricula, plantel_code, workshop_key, workshop_name, action, effective_at, actor_email, metadata_json)
-     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`,
-    [randomUUID(), cleanMatricula(matricula), clean(plantel, 10).toUpperCase(), clean(workshopKey, 120), clean(workshopName, 180), action, clean(actorEmail, 255) || null, JSON.stringify(metadata)],
-  )
-  return { ready: true }
+  const baseParams = [
+    randomUUID(),
+    cleanMatricula(matricula),
+    clean(plantel, 10).toUpperCase(),
+    clean(workshopKey, 120),
+    clean(workshopName, 180),
+    action,
+    clean(actorEmail, 255) || null,
+  ]
+
+  if (schema.historyMetadataJson) {
+    await controlEscolarCentralQuery(
+      `INSERT INTO ${HISTORY_TABLE}
+        (id, matricula, plantel_code, workshop_key, workshop_name, action, effective_at, actor_email, metadata_json)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`,
+      [...baseParams, JSON.stringify(metadata)],
+    )
+  } else {
+    // Older production installations predate metadata_json. Assignment history
+    // is still valid without provenance metadata; do not make a normal add/remove
+    // fail just because that optional column has not been added there.
+    await controlEscolarCentralQuery(
+      `INSERT INTO ${HISTORY_TABLE}
+        (id, matricula, plantel_code, workshop_key, workshop_name, action, effective_at, actor_email)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)`,
+      baseParams,
+    )
+  }
+  return { ready: true, metadataReady: schema.historyMetadataJson }
 }
 
 
@@ -111,7 +159,8 @@ export const readTalleresAssignmentSummaries = async (matriculas: unknown[]) => 
   for (let offset = 0; offset < unique.length; offset += 250) {
     const chunk = unique.slice(offset, offset + 250)
     const rows = await controlEscolarCentralQuery<any[]>(
-      `SELECT matricula, workshop_key, workshop_name, action, effective_at, actor_email, metadata_json
+      `SELECT matricula, workshop_key, workshop_name, action, effective_at, actor_email,
+              ${schema.historyMetadataJson ? 'metadata_json' : 'NULL AS metadata_json'}
          FROM ${HISTORY_TABLE}
         WHERE matricula IN (${chunk.map(() => '?').join(',')})
           AND action IN ('assigned','removed')

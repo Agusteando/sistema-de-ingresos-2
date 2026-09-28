@@ -316,6 +316,33 @@ test('concept changes physically reconcile matricula and all Talleres read paths
   assert.match(details, /El cargo y los pagos registrados se conservarán sin cambios/)
 })
 
+test('manual Talleres mutation cannot become a 500 because the derived snapshot refresh is slow or unavailable', async () => {
+  const [putApi, contracts] = await Promise.all([
+    readFile(resolve(root, 'server/api/students/[matricula]/servicios/index.put.ts'), 'utf8'),
+    readFile(resolve(root, 'server/utils/talleres-contracts.ts'), 'utf8'),
+  ])
+
+  assert.match(putApi, /await updateCentralMatriculaServicio/)
+  assert.match(putApi, /invalidateTalleresSnapshotPlantel/)
+  assert.match(putApi, /void ensureCurrentTalleresSnapshotPlantel\(\{[\s\S]*?force: false/)
+  assert.match(putApi, /Falló el refresh asíncrono del snapshot de Talleres/)
+  assert.doesNotMatch(
+    putApi,
+    /const snapshotRefresh = snapshotPlantel[\s\S]*?\? await ensureCurrentTalleresSnapshotPlantel/,
+    'a full snapshot rebuild must not be part of the synchronous operator write path',
+  )
+  assert.match(putApi, /La asignación se guardó, pero falló la lectura enriquecida posterior/)
+  assert.match(putApi, /catalogSource: 'mutation-fallback'/)
+  assert.match(putApi, /updated\.servicios\.map/)
+  assert.doesNotMatch(putApi, /resolveServiciosWithCatalog/)
+
+  assert.match(contracts, /historyMetadataJson/)
+  assert.match(contracts, /NULL AS metadata_json/)
+  assert.match(contracts, /if \(schema\.historyMetadataJson\)/)
+  assert.match(contracts, /Older production installations predate metadata_json/)
+  assert.doesNotMatch(contracts, /ALTER TABLE|CREATE TABLE/i)
+})
+
 test('snapshot-backed Talleres v1 never knowingly serves stale data or seed catalog fallbacks', async () => {
   const [snapshot, rosterApi, metaApi, searchApi, warmApi] = await Promise.all([
     readFile(resolve(root, 'server/utils/talleres-snapshot.ts'), 'utf8'),
