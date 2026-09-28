@@ -23,6 +23,7 @@ import {
 import { calculateLateFeeSubtotal } from '../../../../shared/utils/recargo';
 import { loadRecargoPolicies } from '../../../utils/recargo-config';
 import { dedupePaymentTargets } from '../../../../shared/utils/paymentTarget';
+import { parseDocumentMonths, schoolMonthLabel } from '../../../../shared/utils/documentMonths';
 
 const cicloQueryValues = (cicloKey: string) => {
   const key = String(cicloKey || "").trim();
@@ -231,41 +232,15 @@ export default defineEventHandler(async (event) =>
       currentDate: currentDateKey,
     });
 
-    const spanishMonths = [
-      "Septiembre",
-      "Octubre",
-      "Noviembre",
-      "Diciembre",
-      "Enero",
-      "Febrero",
-      "Marzo",
-      "Abril",
-      "Mayo",
-      "Junio",
-      "Julio",
-      "Agosto",
-    ];
-
     for (const doc of documentos) {
       const isEventual = truthyFlag(doc.eventual);
       const beca = parseFloat(doc.beca) || 0;
 
-      let plazos = 1;
-      const plazoRaw = doc.plazo || doc.meses;
-      if (!isEventual && plazoRaw) {
-        const plazoStr = String(plazoRaw).trim();
-        if (plazoStr.startsWith("[")) {
-          try {
-            plazos = JSON.parse(plazoStr).length || 1;
-          } catch (e) {}
-        } else if (plazoStr.includes(",")) {
-          plazos = plazoStr.split(",").filter(Boolean).length || 1;
-        } else {
-          plazos = parseInt(plazoStr) || 1;
-        }
-      }
+      const documentMonths = isEventual
+        ? [1]
+        : parseDocumentMonths(doc.plazo, doc.meses);
 
-      for (let mes = 1; mes <= plazos; mes++) {
+      for (const mes of documentMonths) {
         const mesStr = isEventual ? "ev" : String(mes);
         const mesNumber = isEventual ? 1 : mes;
         const activePeriod = (
@@ -362,7 +337,7 @@ export default defineEventHandler(async (event) =>
 
         const mesLabel = isEventual
           ? "Cargo Único"
-          : spanishMonths[mes - 1] || `Mensualidad ${mes}`;
+          : schoolMonthLabel(mes);
 
         debts.push({
           documento: doc.documento,
@@ -371,8 +346,9 @@ export default defineEventHandler(async (event) =>
           periodoId: activePeriod?.id || null,
           conceptoNombre,
           isEventual,
-          recurring: !isEventual && plazos > 1,
-          totalMonths: plazos,
+          recurring: !isEventual && documentMonths.length > 1,
+          totalMonths: documentMonths.length,
+          applicableMonths: isEventual ? ['ev'] : documentMonths,
           periodoAccion: activePeriod?.accion || 'original',
           mes: mesStr, // Pass the parsed mes value ('ev' or numeric string) for reliable future binding
           mesLabel,
@@ -455,28 +431,8 @@ export default defineEventHandler(async (event) =>
       }
     }
 
-    const countMonthsForTimeline = (doc: any) => {
-      if (String(doc?.eventual) === "1") return 1;
-      const raw = doc?.plazo || doc?.meses;
-      if (!raw) return 1;
-      const str = String(raw).trim();
-      if (str.startsWith("[")) {
-        try {
-          const parsed = JSON.parse(str);
-          return Array.isArray(parsed) ? Math.max(1, parsed.length) : 1;
-        } catch (e) {
-          return 1;
-        }
-      }
-      if (str.includes(","))
-        return Math.max(1, str.split(",").filter(Boolean).length);
-      return Math.max(1, Number.parseInt(str, 10) || 1);
-    };
-
     const monthLabelFor = (mes: number, isEventual = false) =>
-      isEventual
-        ? "Cargo Único"
-        : spanishMonths[mes - 1] || `Mensualidad ${mes}`;
+      isEventual ? "Cargo Único" : schoolMonthLabel(mes);
     debts.forEach((debt: any) => {
       debtRowsByDocumentMes.set(
         `${Number(debt.documento)}:${debt.mes === "ev" ? 1 : Number(debt.mes || 1)}`,
@@ -489,11 +445,14 @@ export default defineEventHandler(async (event) =>
     documentos.forEach((doc: any) => {
       const documentoId = Number(doc.documento);
       const isEventual = truthyFlag(doc.eventual);
-      const totalMonths = countMonthsForTimeline(doc);
+      const applicableMonths = isEventual ? [1] : parseDocumentMonths(doc.plazo, doc.meses);
+      const totalMonths = applicableMonths.length;
+      const firstMonth = applicableMonths[0] || 1;
+      const lastMonth = applicableMonths[applicableMonths.length - 1] || firstMonth;
       const docPeriods = periodsByDocument.get(documentoId) || [];
       const monthStates: any[] = [];
 
-      for (let mes = 1; mes <= totalMonths; mes++) {
+      for (const mes of applicableMonths) {
         const activePeriod = docPeriods.find((period) => {
           const startMes = Number(period.start_mes || 1);
           const endMes =
@@ -592,6 +551,9 @@ export default defineEventHandler(async (event) =>
         documento: documentoId,
         conceptoNombre: doc.conceptoNombre,
         totalMonths,
+        applicableMonths: isEventual ? ['ev'] : applicableMonths,
+        firstMonth: isEventual ? 1 : firstMonth,
+        lastMonth: isEventual ? 1 : lastMonth,
         isEventual,
         segments,
         linkedDifferentials,

@@ -123,8 +123,37 @@
               <input type="number" v-model="form.costo" class="input-field font-semibold text-gray-500 bg-gray-50" step="0.01" disabled>
             </div>
             <div class="form-group mb-0">
-              <label class="form-label">Meses</label>
-              <input type="number" v-model="form.meses" class="input-field" min="1" max="12" required>
+              <label class="form-label">Periodo</label>
+              <div class="document-period-summary">
+                <strong>{{ form.eventual ? 'Cargo único' : `${periodCount} mensualidad${periodCount === 1 ? '' : 'es'}` }}</strong>
+                <span v-if="!form.eventual">{{ selectedPeriodLabel }}</span>
+                <span v-else>No requiere selección de meses</span>
+              </div>
+            </div>
+
+            <div v-if="!form.eventual" class="form-group col-span-2 mb-0 month-start-card">
+              <div class="month-start-header">
+                <div>
+                  <label class="form-label">Mes de inicio</label>
+                  <p>Elige desde qué mensualidad se generará este documento. Los meses posteriores quedan incluidos automáticamente hasta el final configurado del concepto.</p>
+                </div>
+                <span>{{ selectedPeriodLabel }}</span>
+              </div>
+              <div class="month-start-options" role="radiogroup" aria-label="Mes de inicio del documento">
+                <button
+                  v-for="month in availableDocumentMonths"
+                  :key="month"
+                  type="button"
+                  role="radio"
+                  :aria-checked="month === mesInicio ? 'true' : 'false'"
+                  :class="['month-start-option', { selected: month === mesInicio }]"
+                  :disabled="loading"
+                  @click="mesInicio = month"
+                >
+                  <strong>{{ schoolMonthLabel(month) }}</strong>
+                  <small>{{ month === mesInicio ? 'Inicia aquí' : `Mes ${month}` }}</small>
+                </button>
+              </div>
             </div>
 
             <div class="form-group col-span-2 mb-0 scholarship-card">
@@ -241,6 +270,7 @@ import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave } from '~/shared/utils/talleresServicios'
+import { documentMonthsFromStart, parseDocumentMonths, schoolMonthLabel } from '~/shared/utils/documentMonths'
 
 const props = defineProps({ student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -260,6 +290,7 @@ const loading = ref(false)
 const loadingConcepts = ref(false)
 const conceptLoadError = ref('')
 const form = ref({ costo: 0, meses: 1, eventual: false })
+const mesInicio = ref(1)
 const selectedBecaTypes = ref([])
 const becaMotivo = ref('')
 const generarCartaBeca = ref(false)
@@ -284,8 +315,22 @@ const scholarshipPercent = computed(() => {
   const costo = Number(form.value.costo || 0)
   return costo > 0 ? (scholarshipDiscount.value * 100) / costo : 0
 })
-const periodCount = computed(() => form.value.eventual ? 1 : Math.max(1, Number(form.value.meses || 1) || 1))
-const isRecurringDocument = computed(() => !form.value.eventual && periodCount.value > 1)
+const availableDocumentMonths = computed(() => (
+  form.value.eventual ? [1] : parseDocumentMonths(selectedConcept.value?.plazo, form.value.meses)
+))
+const selectedDocumentMonths = computed(() => (
+  form.value.eventual ? [1] : documentMonthsFromStart(availableDocumentMonths.value, mesInicio.value)
+))
+const periodCount = computed(() => selectedDocumentMonths.value.length)
+const isRecurringDocument = computed(() => !form.value.eventual)
+const selectedPeriodLabel = computed(() => {
+  if (form.value.eventual) return 'Cargo único'
+  const months = selectedDocumentMonths.value
+  if (!months.length) return ''
+  const first = schoolMonthLabel(months[0])
+  const last = schoolMonthLabel(months[months.length - 1])
+  return months.length === 1 ? first : `${first} – ${last}`
+})
 const amountFieldLabel = computed(() => isRecurringDocument.value ? 'Monto mensual' : 'Total del cargo')
 const amountFieldHelp = computed(() => isRecurringDocument.value
   ? 'Este es el importe real de cada mensualidad, después de beca o convenio.'
@@ -298,6 +343,7 @@ const hasDraftChanges = computed(() => {
     conceptSearch.value.trim() ||
     Number(form.value.costo || 0) > 0 ||
     Number(form.value.meses || 1) !== 1 ||
+    mesInicio.value !== (availableDocumentMonths.value[0] || 1) ||
     form.value.eventual ||
     selectedBecaTypes.value.length ||
     becaMotivo.value.trim() ||
@@ -397,8 +443,10 @@ const deferCloseDropdown = () => {
 
 const applyConceptToForm = (concepto) => {
   form.value.costo = Number(concepto?.costo || 0)
-  form.value.meses = Number(concepto?.plazo || 1) || 1
+  const configuredMonths = parseDocumentMonths(concepto?.plazo, 1)
+  form.value.meses = configuredMonths.length
   form.value.eventual = isTruthyFlag(concepto?.eventual)
+  mesInicio.value = configuredMonths[0] || 1
   montoFinalInput.value = Math.round(Number(concepto?.costo || 0))
   montoFinalConfirmed.value = false
 }
@@ -418,6 +466,7 @@ const clearConceptSelection = () => {
   selectedDocumentoId.value = ''
   conceptSearch.value = ''
   form.value = { costo: 0, meses: 1, eventual: false }
+  mesInicio.value = 1
   montoFinalInput.value = 0
   montoFinalConfirmed.value = false
   conceptDropdownOpen.value = true
@@ -523,7 +572,8 @@ const submit = async () => {
         conceptoId: selectedDocumentoId.value, 
         costo: form.value.costo, 
         montoFinal,
-        meses: form.value.meses,
+        meses: periodCount.value,
+        mesInicio: form.value.eventual ? null : mesInicio.value,
         becaTipos: selectedBecaTypes.value,
         becaMotivo: becaMotivo.value,
         generarCartaBeca: generarCartaBeca.value,
@@ -817,6 +867,127 @@ onMounted(() => {
   justify-content: flex-start;
   border-top: 1px solid #edf2f7;
   padding: 9px 10px 6px;
+}
+
+.document-period-summary {
+  display: flex;
+  min-height: 42px;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid #d8e0ea;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 7px 12px;
+}
+
+.document-period-summary strong {
+  color: #334155;
+  font-size: .8rem;
+  font-weight: 820;
+}
+
+.document-period-summary span {
+  margin-top: 1px;
+  color: #7a8798;
+  font-size: .68rem;
+  font-weight: 650;
+}
+
+.month-start-card {
+  border: 1px solid #dce8d9;
+  border-radius: 14px;
+  background: #fbfefb;
+  padding: 14px;
+}
+
+.month-start-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.month-start-header p {
+  max-width: 520px;
+  margin-top: 2px;
+  color: #738196;
+  font-size: .72rem;
+  font-weight: 620;
+  line-height: 1.4;
+}
+
+.month-start-header > span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #eef8ec;
+  color: #44723d;
+  font-size: .68rem;
+  font-weight: 800;
+  padding: 5px 9px;
+}
+
+.month-start-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.month-start-option {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 1px solid #dce4ed;
+  border-radius: 11px;
+  background: #fff;
+  color: #506078;
+  padding: 8px 9px;
+  text-align: left;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.month-start-option:hover:not(:disabled) {
+  border-color: #a9cfa3;
+  background: #f8fcf6;
+}
+
+.month-start-option.selected {
+  border-color: #78b66f;
+  background: #edf8ea;
+  color: #326d35;
+  box-shadow: 0 5px 14px rgba(73, 137, 67, .10);
+}
+
+.month-start-option strong {
+  overflow: hidden;
+  width: 100%;
+  font-size: .7rem;
+  font-weight: 820;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.month-start-option small {
+  margin-top: 2px;
+  color: #8b97aa;
+  font-size: .61rem;
+  font-weight: 650;
+}
+
+.month-start-option.selected small {
+  color: #5d8b57;
+}
+
+@media (max-width: 680px) {
+  .month-start-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .month-start-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .scholarship-card,

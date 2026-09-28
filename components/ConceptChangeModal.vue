@@ -171,8 +171,13 @@ const selectedConcept = computed(
       (item) => String(item.id) === String(selectedConceptId.value),
     ) || null,
 );
-const totalMonths = computed(() =>
-  Number(props.debt?.documentTimeline?.totalMonths || 1),
+const lastApplicableMonth = computed(() =>
+  Number(
+    props.debt?.documentTimeline?.lastMonth ||
+    props.debt?.applicableMonths?.[props.debt?.applicableMonths?.length - 1] ||
+    props.debt?.mes ||
+    1
+  ),
 );
 const fromMes = computed(() => {
   const raw = String(props.debt?.mes || "")
@@ -261,7 +266,7 @@ const buildBeforeSegments = () => {
 const previewSegments = computed(() => {
   const nextConcept = selectedConcept.value?.concepto || "Nuevo concepto";
   const start = fromMes.value;
-  const end = totalMonths.value;
+  const end = lastApplicableMonth.value;
   return [
     ...buildBeforeSegments(),
     {

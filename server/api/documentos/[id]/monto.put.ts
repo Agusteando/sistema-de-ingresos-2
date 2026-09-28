@@ -6,27 +6,7 @@ import {
 } from '../../../utils/db'
 import { isWholeMoney, legacyProjectedAmount } from '../../../utils/monto-final'
 import { normalizeCicloKey } from '../../../../shared/utils/ciclo'
-
-const countDocumentPeriods = (doc: any) => {
-  const raw = doc?.plazo || doc?.meses
-  if (!raw) return 1
-  const value = String(raw).trim()
-
-  if (value.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(value)
-      return Array.isArray(parsed) ? Math.max(1, parsed.length) : 1
-    } catch {
-      return 1
-    }
-  }
-
-  if (value.includes(',')) {
-    return Math.max(1, value.split(',').filter(Boolean).length)
-  }
-
-  return Math.max(1, Number.parseInt(value, 10) || 1)
-}
+import { parseDocumentMonths } from '../../../../shared/utils/documentMonths'
 
 const monthNumber = (value: unknown) => {
   const raw = String(value || '').trim().toLowerCase()
@@ -89,7 +69,8 @@ export default defineEventHandler(async (event) =>
       throw createError({ statusCode: 409, message: 'El documento no está activo.' })
     }
 
-    const totalMonths = countDocumentPeriods(doc)
+    const applicableMonths = parseDocumentMonths(doc.plazo, doc.meses)
+    const totalMonths = applicableMonths.length
     if (String(doc.eventual || '') === '1' || totalMonths <= 1) {
       throw createError({
         statusCode: 409,
@@ -142,7 +123,7 @@ export default defineEventHandler(async (event) =>
       [documento],
     )
 
-    const activeMonths = Array.from({ length: totalMonths }, (_, index) => index + 1)
+    const activeMonths = applicableMonths
       .filter((month) => !periods.some((period) => {
         if (String(period?.accion || '').trim().toLowerCase() !== 'cancelacion') return false
         const start = Number(period.start_mes || 1)

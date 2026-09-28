@@ -14,6 +14,7 @@ import {
   syncChangedConceptMappedServicioToMatricula,
 } from '../../utils/talleres-servicios';
 import { ensureCurrentTalleresSnapshotPlantel } from '../../utils/talleres-snapshot';
+import { parseDocumentMonths } from '../../../shared/utils/documentMonths';
 
 const toMesNumber = (value: unknown) => {
   const raw = String(value || "")
@@ -22,27 +23,6 @@ const toMesNumber = (value: unknown) => {
   if (raw === "ev") return 1;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-};
-
-const countPlazos = (doc: any) => {
-  const raw = doc?.plazo || doc?.meses;
-  if (!raw) return 1;
-  const str = String(raw).trim();
-
-  if (str.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(str);
-      return Array.isArray(parsed) ? Math.max(1, parsed.length) : 1;
-    } catch (e) {
-      return 1;
-    }
-  }
-
-  if (str.includes(",")) {
-    return Math.max(1, str.split(",").filter(Boolean).length);
-  }
-
-  return Math.max(1, Number.parseInt(str, 10) || 1);
 };
 
 const hasPaymentsFrom = async (documento: number, fromMes?: number) => {
@@ -172,8 +152,21 @@ export default defineEventHandler(async (event) =>
       });
     }
 
-    const maxMes = countPlazos(doc);
-    const normalizedFromMes = Math.min(Math.max(1, fromMes), maxMes);
+    const isEventualDocument = ["1", "true", "si", "sí", "yes", "on"].includes(
+      String(doc.eventual ?? "").trim().toLowerCase(),
+    );
+    const applicableMonths = isEventualDocument
+      ? [1]
+      : parseDocumentMonths(doc.plazo, doc.meses);
+    const maxMes = applicableMonths[applicableMonths.length - 1] || 1;
+    const normalizedFromMes = fromMes;
+
+    if (action !== "cancel_full" && !applicableMonths.includes(normalizedFromMes)) {
+      throw createError({
+        statusCode: 400,
+        message: "El mes seleccionado no pertenece a este documento.",
+      });
+    }
 
     if (action === "cancel_full") {
       if (await hasPaymentsFrom(documento)) {

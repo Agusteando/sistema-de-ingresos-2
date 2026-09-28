@@ -19,6 +19,19 @@ async function loadRecargo() {
   return module.namespace
 }
 
+
+async function loadDocumentMonths() {
+  const source = await readFile(resolve(root, 'shared/utils/documentMonths.ts'), 'utf8')
+  const js = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+  }).outputText
+  const context = vm.createContext({ console, JSON, Number, String, Array, Set })
+  const module = new vm.SourceTextModule(js, { context, identifier: 'documentMonths.ts' })
+  await module.link(() => { throw new Error('documentMonths must remain dependency-free') })
+  await module.evaluate()
+  return module.namespace
+}
+
 test('deudores and payment use the same canonical late-fee balance rules', async () => {
   const recargo = await loadRecargo()
 
@@ -332,4 +345,51 @@ test('Deudores supports a persisted per-plantel whole-peso saldo tolerance witho
   assert.match(page, /0 = sin tolerancia/)
   assert.match(page, /\$0\.01 a \$1\.00/)
   assert.match(page, /\/api\/deudores\/settings/)
+})
+
+
+test('monthly documents preserve their real school-month range when starting later', async () => {
+  const months = await loadDocumentMonths()
+
+  assert.deepEqual(Array.from(months.parseDocumentMonths('10', 10)), [1,2,3,4,5,6,7,8,9,10])
+  assert.deepEqual(Array.from(months.documentMonthsFromStart([1,2,3,4,5,6,7,8,9,10], 3)), [3,4,5,6,7,8,9,10])
+  assert.equal(months.serializeDocumentMonths([3,4,5,6,7,8,9,10]), '3,4,5,6,7,8,9,10')
+  assert.deepEqual(Array.from(months.parseDocumentMonths('3,4,5,6,7,8,9,10', 8)), [3,4,5,6,7,8,9,10])
+  assert.equal(months.schoolMonthLabel(3), 'Noviembre')
+  assert.equal(months.schoolMonthLabel(10), 'Junio')
+
+  const [modal, createDocument, debts, deudores, noAdeudo, payment, periodApi, amountApi, conceptChange, financialConcept] = await Promise.all([
+    readFile(resolve(root, 'components/DocumentModal.vue'), 'utf8'),
+    readFile(resolve(root, 'server/api/documentos/index.post.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/students/[matricula]/debts.get.ts'), 'utf8'),
+    readFile(resolve(root, 'server/utils/deudores.ts'), 'utf8'),
+    readFile(resolve(root, 'server/utils/noAdeudo.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/payments/pay.post.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/documentos/period.post.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/documentos/[id]/monto.put.ts'), 'utf8'),
+    readFile(resolve(root, 'components/ConceptChangeModal.vue'), 'utf8'),
+    readFile(resolve(root, 'server/utils/financial-concept.ts'), 'utf8'),
+  ])
+
+  assert.match(modal, /Mes de inicio/)
+  assert.match(modal, /mesInicio:/)
+  assert.match(modal, /documentMonthsFromStart/)
+  assert.doesNotMatch(modal, /v-model="form\.meses"[^>]*type="number"/)
+
+  assert.match(financialConcept, /plazo: string/)
+  assert.match(createDocument, /parseDocumentMonths\(conceptoRef\.plazo, 1\)/)
+  assert.match(createDocument, /configuredMonths\.includes\(requestedStartMonth\)/)
+  assert.match(createDocument, /serializeDocumentMonths\(documentMonths\)/)
+  assert.match(createDocument, /mesesAplicables:/)
+
+  assert.match(debts, /for \(const mes of documentMonths\)/)
+  assert.match(debts, /applicableMonths:/)
+  assert.match(debts, /lastMonth:/)
+  assert.match(deudores, /parseDocumentMonths\(doc\.plazo, doc\.meses\)/)
+  assert.match(noAdeudo, /for \(const mes of applicableMonths\)/)
+
+  assert.match(payment, /!applicableMonths\.includes\(mesNumber\)/)
+  assert.match(periodApi, /!applicableMonths\.includes\(normalizedFromMes\)/)
+  assert.match(amountApi, /const activeMonths = applicableMonths/)
+  assert.match(conceptChange, /documentTimeline\?\.lastMonth/)
 })

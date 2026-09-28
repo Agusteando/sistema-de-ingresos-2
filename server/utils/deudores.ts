@@ -16,27 +16,7 @@ import { loadRecargoPolicies } from './recargo-config'
 import { loadFinancialConceptMap } from './financial-concept'
 import { normalizePlantel } from './auth-session'
 import { loadDeudoresSaldoMargins } from './deudores-settings'
-
-const parsePlazos = (plazoRaw: unknown, mesesRaw: unknown) => {
-  const raw = String(plazoRaw || mesesRaw || '1').trim()
-  if (!raw) return 1
-  if (raw.startsWith('[')) {
-    try {
-      return Math.max(1, JSON.parse(raw).length || 1)
-    } catch {
-      return 1
-    }
-  }
-  if (raw.includes(',')) return Math.max(1, raw.split(',').filter(Boolean).length)
-  const parsed = Number.parseInt(raw, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
-}
-
-const spanishMonths = [
-  'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-  'Enero', 'Febrero', 'Marzo', 'Abril',
-  'Mayo', 'Junio', 'Julio', 'Agosto'
-]
+import { parseDocumentMonths, schoolMonthLabel } from '../../shared/utils/documentMonths'
 
 const ACTION_SEQUENCE = [
   { action: 'correo_recordatorio', thresholdDay: 13, label: 'Correo de recordatorio' },
@@ -65,20 +45,21 @@ const getDuePeriods = (doc: any, currentSchoolMonth: number, currentDateKey: str
     }]
   }
 
-  const plazos = parsePlazos(doc.plazo, doc.meses)
-  const dueUntil = Math.min(plazos, currentSchoolMonth)
+  const applicableMonths = parseDocumentMonths(doc.plazo, doc.meses)
 
-  return Array.from({ length: dueUntil }, (_, index) => {
-    const mes = index + 1
-    const fechaLimitePago = getSchoolPeriodDeadline(cycleStartYear, mes)
-    return {
-      mesCargo: String(mes),
-      mesCobranza: currentSchoolMonth,
-      mesLabel: spanishMonths[index] || `Mensualidad ${mes}`,
-      fechaLimitePago,
-      paymentKeys: [String(mes)]
-    }
-  }).filter(period => isPastPaymentDeadline(period.fechaLimitePago, currentDateKey))
+  return applicableMonths
+    .filter((mes) => mes <= currentSchoolMonth)
+    .map((mes) => {
+      const fechaLimitePago = getSchoolPeriodDeadline(cycleStartYear, mes)
+      return {
+        mesCargo: String(mes),
+        mesCobranza: currentSchoolMonth,
+        mesLabel: schoolMonthLabel(mes),
+        fechaLimitePago,
+        paymentKeys: [String(mes)]
+      }
+    })
+    .filter(period => isPastPaymentDeadline(period.fechaLimitePago, currentDateKey))
 }
 
 const getLastDayOfMonth = (year: number, month: number) => {

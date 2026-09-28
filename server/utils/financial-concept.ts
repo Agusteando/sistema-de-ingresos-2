@@ -9,6 +9,7 @@ type CatalogConceptRow = {
   ciclo?: unknown
   plantel?: unknown
   eventual?: unknown
+  plazo?: unknown
 }
 
 export type FinancialConcept = {
@@ -18,6 +19,7 @@ export type FinancialConcept = {
   ciclo: string
   plantel: string
   eventual: boolean
+  plazo: string
   source: 'central' | 'bridge'
 }
 
@@ -82,6 +84,7 @@ const mapRows = (rows: CatalogConceptRow[], source: FinancialConcept['source']) 
     ciclo: normalizeText(row?.ciclo),
     plantel: normalizeText(row?.plantel),
     eventual: truthyFlag(row?.eventual),
+    plazo: normalizeText(row?.plazo || '1') || '1',
     source,
   })
   return map
@@ -98,6 +101,7 @@ const readCentralConcepts = async (ids: number[], ciclo: unknown) => {
     columns.has('ciclo') ? 'ciclo' : "'' AS ciclo",
     columns.has('plantel') ? 'plantel' : "'' AS plantel",
     columns.has('eventual') ? 'eventual' : '0 AS eventual',
+    columns.has('plazo') ? 'plazo' : "'1' AS plazo",
   ]
   const cicloCandidates = cicloCandidatesFor(ciclo)
   const params: any[] = [ids]
@@ -141,11 +145,12 @@ const readBridgeConcepts = async (ids: number[], ciclo: unknown) => {
 
   // `conceptos.plantel` exists in some deployments but is legacy/optional metadata.
   // Never make the financial catalog unreadable on an older Bridge just to validate it.
-  const [hasPlantelColumn, hasEventualColumn] = await Promise.all([
+  const [hasPlantelColumn, hasEventualColumn, hasPlazoColumn] = await Promise.all([
     query<any[]>(`SHOW COLUMNS FROM conceptos LIKE 'plantel'`).then((rows) => rows.length > 0).catch(() => false),
     query<any[]>(`SHOW COLUMNS FROM conceptos LIKE 'eventual'`).then((rows) => rows.length > 0).catch(() => false),
+    query<any[]>(`SHOW COLUMNS FROM conceptos LIKE 'plazo'`).then((rows) => rows.length > 0).catch(() => false),
   ])
-  const select = `id, concepto, costo, ciclo, ${hasPlantelColumn ? 'plantel' : "'' AS plantel"}, ${hasEventualColumn ? 'eventual' : '0 AS eventual'}`
+  const select = `id, concepto, costo, ciclo, ${hasPlantelColumn ? 'plantel' : "'' AS plantel"}, ${hasEventualColumn ? 'eventual' : '0 AS eventual'}, ${hasPlazoColumn ? 'plazo' : "'1' AS plazo"}`
 
   const cicloCandidates = cicloCandidatesFor(ciclo)
   const params: any[] = [ids]

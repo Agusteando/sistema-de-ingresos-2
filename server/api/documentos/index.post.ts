@@ -6,6 +6,7 @@ import { appendConceptMappedServicioToMatricula } from '../../utils/talleres-ser
 import { assertStockAvailableForConcept } from '../../utils/conceptos-stock'
 import { resolveFinancialConcept } from '../../utils/financial-concept'
 import { ensureCurrentTalleresSnapshotPlantel } from '../../utils/talleres-snapshot'
+import { documentMonthsFromStart, parseDocumentMonths, serializeDocumentMonths } from '../../../shared/utils/documentMonths'
 
 const clampMotivo = (value: unknown) => {
   const text = String(value || '').trim()
@@ -33,8 +34,20 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   })
   const conceptoNombre = conceptoRef.concepto
   const eventual = Boolean(conceptoRef.eventual)
-  const meses = eventual ? 1 : Math.max(1, Number(body.meses) || 1)
-  const plazoLegacy = Array.from({ length: meses }, (_, i) => i + 1).join(',')
+  const configuredMonths = eventual ? [1] : parseDocumentMonths(conceptoRef.plazo, 1)
+  const requestedStartMonth = eventual
+    ? 1
+    : Number.parseInt(String(body.mesInicio ?? configuredMonths[0] ?? 1), 10)
+
+  if (!eventual && (!Number.isInteger(requestedStartMonth) || !configuredMonths.includes(requestedStartMonth))) {
+    throw createError({ statusCode: 400, message: 'El mes de inicio no pertenece al periodo configurado para este concepto.' })
+  }
+
+  const documentMonths = eventual
+    ? [1]
+    : documentMonthsFromStart(configuredMonths, requestedStartMonth)
+  const meses = documentMonths.length
+  const plazoLegacy = serializeDocumentMonths(documentMonths)
   const costo = Number(body.costo || 0)
   const montoFinal = Number(body.montoFinal)
   const { selected: becaTipos, invalid: invalidBecaTipos } = normalizeBecaTypes(body.becaTipos)
@@ -124,6 +137,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   return {
     success: true,
     documento,
+    mesesAplicables: eventual ? ['ev'] : documentMonths,
+    mesInicio: eventual ? null : documentMonths[0],
     servicio: servicioSync,
     snapshotRefresh,
     becaCartaUrl: body.generarCartaBeca && becaTipos.length

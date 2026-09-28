@@ -20,6 +20,7 @@ import {
 import { calculateLateFeeSubtotal } from '../../shared/utils/recargo'
 import { loadRecargoPolicies } from './recargo-config'
 import { loadFinancialConceptMap } from './financial-concept'
+import { parseDocumentMonths, schoolMonthLabel } from '../../shared/utils/documentMonths'
 
 type RuntimeNoAdeudoConfig = {
   googlePrivateKey?: string
@@ -335,22 +336,13 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
     ciclo: cicloKey,
     currentDate: currentDateKey
   })
-  const spanishMonths = ['Septiembre', 'Octubre', 'Noviembre', 'Diciembre', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto']
   const concepts: Array<{ documento: string; conceptoNombre: string; mesLabel: string; saldo: number }> = []
 
   for (const doc of documentos) {
     const isEventual = truthyFlag(doc.eventual)
-    let plazos = 1
-    const plazoRaw = doc.plazo || doc.meses
-    if (!isEventual && plazoRaw) {
-      const plazoStr = String(plazoRaw).trim()
-      if (plazoStr.startsWith('[')) {
-        try { plazos = JSON.parse(plazoStr).length || 1 } catch (e) {}
-      } else if (plazoStr.includes(',')) plazos = plazoStr.split(',').filter(Boolean).length || 1
-      else plazos = parseInt(plazoStr) || 1
-    }
+    const applicableMonths = isEventual ? [1] : parseDocumentMonths(doc.plazo, doc.meses)
 
-    for (let mes = 1; mes <= plazos; mes++) {
+    for (const mes of applicableMonths) {
       const mesStr = isEventual ? 'ev' : String(mes)
       const mesNumber = isEventual ? 1 : mes
       const activePeriod = (periodsByDocument.get(Number(doc.documento)) || []).find((period) => {
@@ -401,7 +393,7 @@ export const calculateNoAdeudoDebt = async (matricula: string, ciclo: string) =>
         concepts.push({
           documento: String(doc.documento || ''),
           conceptoNombre,
-          mesLabel: isEventual ? 'Cargo Único' : (spanishMonths[mes - 1] || `Mensualidad ${mes}`),
+          mesLabel: isEventual ? 'Cargo Único' : schoolMonthLabel(mes),
           saldo
         })
       }

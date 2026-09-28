@@ -12,6 +12,7 @@ import { loadActiveCobranzaConvention } from '../../utils/cobranza-convenio'
 import { canRemoveLateFee, resolveLateFeeBalance } from '../../../shared/utils/recargo'
 import { loadGlobalRecargoSettings, loadRecargoPolicies, type RecargoPolicy } from '../../utils/recargo-config'
 import { paymentTargetKey } from '../../../shared/utils/paymentTarget'
+import { parseDocumentMonths } from '../../../shared/utils/documentMonths'
 import {
   formatMexicoCityDateKeyFromUnix,
   formatMexicoCityDateTimeFromUnix,
@@ -181,6 +182,16 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     }
 
     const mesNumber = toMesNumber(mes)
+    if (!truthyFlag(doc.eventual)) {
+      const applicableMonths = parseDocumentMonths(doc.plazo, doc.meses)
+      if (!applicableMonths.includes(mesNumber)) {
+        throw createError({
+          statusCode: 409,
+          message: 'El pago apunta a un mes que no pertenece a este documento.'
+        })
+      }
+    }
+
     const [period] = await query<any[]>(`
       SELECT id, documento, start_mes, end_mes, concepto_id, conceptoNombre, costo, montoFinal, accion, estatus
       FROM documento_concepto_periodos
