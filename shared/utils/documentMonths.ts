@@ -19,6 +19,46 @@ const normalizeMonthNumbers = (values: unknown[]) => Array.from(new Set(
     .filter((value) => Number.isInteger(value) && value >= 1 && value <= 12)
 )).sort((a, b) => a - b)
 
+const isTruthyConceptFlag = (value: unknown) =>
+  ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase())
+
+/**
+ * Canonical financial meaning of conceptos.plazo:
+ * - plazo = 1 (or [1]) => eventual / one-time charge
+ * - any other configured plazo => recurring concept
+ *
+ * eventual is only a legacy fallback when plazo is missing.
+ */
+export const isEventualConceptPlazo = (plazoRaw: unknown, fallbackEventual: unknown = false): boolean => {
+  if (Array.isArray(plazoRaw)) {
+    const parsed = normalizeMonthNumbers(plazoRaw)
+    return parsed.length ? parsed.length === 1 && parsed[0] === 1 : isTruthyConceptFlag(fallbackEventual)
+  }
+
+  const raw = String(plazoRaw ?? '').trim()
+  if (!raw) return isTruthyConceptFlag(fallbackEventual)
+
+  if (raw.startsWith('[')) {
+    try {
+      const decoded = JSON.parse(raw)
+      if (Array.isArray(decoded)) {
+        const parsed = normalizeMonthNumbers(decoded)
+        if (parsed.length) return parsed.length === 1 && parsed[0] === 1
+      }
+    } catch {
+      // Fall through to legacy scalar parsing.
+    }
+  }
+
+  if (raw.includes(',')) {
+    const parsed = normalizeMonthNumbers(raw.split(','))
+    if (parsed.length) return parsed.length === 1 && parsed[0] === 1
+  }
+
+  const numeric = Number(raw)
+  return Number.isFinite(numeric) && numeric === 1
+}
+
 export const parseDocumentMonths = (plazoRaw: unknown, mesesRaw: unknown = 1): number[] => {
   const source = plazoRaw !== undefined && plazoRaw !== null && String(plazoRaw).trim() !== ''
     ? plazoRaw

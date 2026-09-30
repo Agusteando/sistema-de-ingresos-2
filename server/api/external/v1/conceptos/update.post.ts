@@ -1,9 +1,12 @@
 import { assertAuroraExternalApiToken, setExternalApiResponseHeaders } from '../../../../utils/external-api-auth'
 import { withControlEscolarCentralConnection } from '../../../../utils/control-escolar-central'
+import { isEventualConceptPlazo } from '../../../../../shared/utils/documentMonths'
 
 const columnOrder = [
   'id', 'concepto', 'costo', 'description', 'plantel', 'eventual', 'plazo', 'ciclo'
 ]
+const EVENTUAL_INDEX = columnOrder.indexOf('eventual')
+const PLAZO_INDEX = columnOrder.indexOf('plazo')
 
 const placeholders = columnOrder.map(() => '?').join(', ')
 const upsertSql = `INSERT INTO conceptos (${columnOrder.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${columnOrder.map((col) => `\`${col}\`=VALUES(\`${col}\`)`).join(', ')}`
@@ -54,6 +57,7 @@ export default defineEventHandler(async (event) => {
           continue
         }
 
+        const canonicalEventual = isEventualConceptPlazo(row[PLAZO_INDEX], row[EVENTUAL_INDEX]) ? 1 : 0
         const values = row.map((value: any, index: number) => {
           if (columnOrder[index] === 'id' && isBlank(value)) {
             return null
@@ -62,7 +66,7 @@ export default defineEventHandler(async (event) => {
             return parseFloat(value)
           }
           if (columnOrder[index] === 'eventual') {
-            return value ? parseInt(value, 10) : 0
+            return canonicalEventual
           }
           return value
         })

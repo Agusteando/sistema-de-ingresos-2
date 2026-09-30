@@ -2,6 +2,7 @@ import { query, executeStatementTransaction, type SqlStatement } from './db'
 import { controlEscolarCentralQuery, getControlEscolarCentralDb, getCentralTableColumns } from './control-escolar-central'
 import { getTrustedAuthUser, type AuthSessionUser } from './auth-session'
 import { automaticSchoolCycleKey, normalizeCicloKey } from '../../shared/utils/ciclo'
+import { isEventualConceptPlazo } from '../../shared/utils/documentMonths'
 import { invalidateInstitutionalSchoolCycleCache } from './school-cycle'
 import { ensureCurrentTalleresSnapshots } from './talleres-snapshot'
 
@@ -112,19 +113,22 @@ const normalizeMappingRow = (row: any): ConceptosConfigRow => ({
   updated_by: row.updated_by || null
 })
 
-const normalizeConceptRow = (row: any): ConceptRow => ({
-  id: Number(row.id || 0),
-  concepto: normalizeText(row.concepto || row.concepto_nombre || 'Sin concepto'),
-  ciclo_escolar: normalizeCicloKey(row.ciclo_escolar || row.ciclo || ''),
-  costo: row.costo ?? null,
-  montoFinal: row.montoFinal ?? row.monto_final ?? null,
-  meses: row.meses ?? null,
-  plazo: row.plazo ?? null,
-  eventual: row.eventual ?? null,
-  description: normalizeText(row.description || row.descripcion || '', 1000) || null,
-  plantel: normalizePlantel(row.plantel || '') || null,
-  image_url: normalizeText(row.image_url || row.imagen_url || row.imagen || row.foto_url || '', 1000) || null
-})
+const normalizeConceptRow = (row: any): ConceptRow => {
+  const plazo = row.plazo ?? null
+  return {
+    id: Number(row.id || 0),
+    concepto: normalizeText(row.concepto || row.concepto_nombre || 'Sin concepto'),
+    ciclo_escolar: normalizeCicloKey(row.ciclo_escolar || row.ciclo || ''),
+    costo: row.costo ?? null,
+    montoFinal: row.montoFinal ?? row.monto_final ?? null,
+    meses: row.meses ?? null,
+    plazo,
+    eventual: isEventualConceptPlazo(plazo, row.eventual) ? 1 : 0,
+    description: normalizeText(row.description || row.descripcion || '', 1000) || null,
+    plantel: normalizePlantel(row.plantel || '') || null,
+    image_url: normalizeText(row.image_url || row.imagen_url || row.imagen || row.foto_url || '', 1000) || null
+  }
+}
 
 const normalizeCycleRows = (rows: CycleRow[] = []) => {
   const byCycle = new Map<string, { cycle_name: string; is_current: number }>()
@@ -220,6 +224,11 @@ export const createCentralConcepto = async (input: any, user: AuthSessionUser) =
   const description = normalizeText(input?.description || input?.descripcion || '', 255)
   const plantel = normalizePlantel(input?.plantel || 'global') || 'global'
   const imageUrl = normalizeText(input?.image_url || input?.imagen_url || input?.imagen || '', 1000)
+  const plazo = normalizeText(
+    input?.plazo ?? (input?.eventual === undefined ? '[1]' : (Number(input.eventual) ? '[1]' : '11')),
+    255,
+  ) || '[1]'
+  const eventual = isEventualConceptPlazo(plazo, input?.eventual) ? 1 : 0
 
   if (!nombre) throw createError({ statusCode: 400, message: 'Escribe el nombre del concepto.' })
   if (!Number.isFinite(costo) || costo < 0) throw createError({ statusCode: 400, message: 'Costo inválido.' })
@@ -242,8 +251,8 @@ export const createCentralConcepto = async (input: any, user: AuthSessionUser) =
   add('plantel', plantel)
   if (columns.has('ciclo')) add('ciclo', ciclo)
   else add('ciclo_escolar', ciclo)
-  add('eventual', input?.eventual === undefined ? 1 : (Number(input.eventual) ? 1 : 0))
-  add('plazo', normalizeText(input?.plazo || '[1]', 255) || '[1]')
+  add('eventual', eventual)
+  add('plazo', plazo)
   add('meses', input?.meses ?? null)
 
   const imageColumn = imageColumnFor(columns)
