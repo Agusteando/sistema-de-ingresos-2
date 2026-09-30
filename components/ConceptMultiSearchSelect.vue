@@ -99,7 +99,7 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
 import { LucideCheck, LucideLoader2, LucideSearch, LucideX } from 'lucide-vue-next'
-import { isEventualConceptPlazo } from '~/shared/utils/documentMonths'
+import { isEventualConcept } from '~/shared/utils/conceptEventual'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -146,7 +146,7 @@ const formatMoney = (value) => Number(value || 0).toFixed(2)
 const conceptMeta = (concept) => {
   const parts = []
   if (concept?.historico) parts.push('histórico')
-  else parts.push(isEventualConceptPlazo(concept?.plazo, concept?.eventual) ? 'eventual' : 'recurrente')
+  else parts.push(isEventualConcept(concept?.eventual) ? 'eventual' : 'recurrente')
   if (concept?.plazo) parts.push(`${concept.plazo} meses`)
   if (concept?.ciclos) parts.push(String(concept.ciclos))
   else if (concept?.ciclo) parts.push(String(concept.ciclo))

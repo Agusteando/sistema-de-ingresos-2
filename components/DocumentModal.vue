@@ -270,7 +270,8 @@ import { useToast } from '~/composables/useToast'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave } from '~/shared/utils/talleresServicios'
-import { documentMonthsFromStart, isEventualConceptPlazo, parseDocumentMonths, schoolMonthLabel } from '~/shared/utils/documentMonths'
+import { documentMonthsFromStart, parseDocumentMonths, schoolMonthLabel } from '~/shared/utils/documentMonths'
+import { isEventualConcept } from '~/shared/utils/conceptEventual'
 
 const props = defineProps({ student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -401,7 +402,7 @@ const formatMoney = (value) => Number(value || 0).toFixed(2)
 
 const conceptMeta = (concepto) => {
   const parts = []
-  if (isEventualConceptPlazo(concepto?.plazo, concepto?.eventual)) parts.push('eventual')
+  if (isEventualConcept(concepto?.eventual)) parts.push('eventual')
   else parts.push('recurrente')
   if (concepto?.plazo) parts.push(`${concepto.plazo} meses`)
   if (concepto?.plantel) parts.push(concepto.plantel)
@@ -443,7 +444,7 @@ const applyConceptToForm = (concepto) => {
   form.value.costo = Number(concepto?.costo || 0)
   const configuredMonths = parseDocumentMonths(concepto?.plazo, 1)
   form.value.meses = configuredMonths.length
-  form.value.eventual = isEventualConceptPlazo(concepto?.plazo, concepto?.eventual)
+  form.value.eventual = isEventualConcept(concepto?.eventual)
   mesInicio.value = configuredMonths[0] || 1
   montoFinalInput.value = Math.round(Number(concepto?.costo || 0))
   montoFinalConfirmed.value = false

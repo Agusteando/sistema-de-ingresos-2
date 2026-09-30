@@ -1,4 +1,4 @@
-name: Concept eventual plazo regression
+name: Concept eventual flag regression
 
 on:
   push:
@@ -6,34 +6,38 @@ on:
       - main
       - 'chatgpt/**'
     paths:
+      - 'shared/utils/conceptEventual.ts'
       - 'shared/utils/documentMonths.ts'
       - 'server/utils/financial-concept.ts'
       - 'server/utils/conceptos-config.ts'
       - 'server/api/conceptos/**'
       - 'server/api/external/v1/conceptos/**'
+      - 'server/api/documentos/index.post.ts'
       - 'components/DocumentModal.vue'
       - 'components/ConceptSearchSelect.vue'
       - 'components/ConceptMultiSearchSelect.vue'
-      - 'tests/concept-eventual-plazo.test.mjs'
-      - '.github/workflows/concept-eventual-plazo-regression.yml'
+      - 'tests/concept-eventual-flag.test.mjs'
+      - '.github/workflows/concept-eventual-flag-regression.yml'
   pull_request:
     paths:
+      - 'shared/utils/conceptEventual.ts'
       - 'shared/utils/documentMonths.ts'
       - 'server/utils/financial-concept.ts'
       - 'server/utils/conceptos-config.ts'
       - 'server/api/conceptos/**'
       - 'server/api/external/v1/conceptos/**'
+      - 'server/api/documentos/index.post.ts'
       - 'components/DocumentModal.vue'
       - 'components/ConceptSearchSelect.vue'
       - 'components/ConceptMultiSearchSelect.vue'
-      - 'tests/concept-eventual-plazo.test.mjs'
-      - '.github/workflows/concept-eventual-plazo-regression.yml'
+      - 'tests/concept-eventual-flag.test.mjs'
+      - '.github/workflows/concept-eventual-flag-regression.yml'
 
 permissions:
   contents: read
 
 jobs:
-  concept-semantics:
+  concept-eventual-flag:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -44,7 +48,7 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci --no-audit --no-fund
-      - name: Verify plazo/eventual contract
-        run: node --experimental-vm-modules --test tests/concept-eventual-plazo.test.mjs
+      - name: Verify eventual 0/1 contract
+        run: node --experimental-vm-modules --test tests/concept-eventual-flag.test.mjs
       - name: Build
         run: npm run build
