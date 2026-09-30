@@ -1,5 +1,5 @@
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
-import { isEventualConceptPlazo } from '../../shared/utils/documentMonths'
+import { isEventualConcept } from '../../shared/utils/conceptEventual'
 import { controlEscolarCentralQuery, getCentralTableColumns } from './control-escolar-central'
 import { query } from './db'
 
@@ -74,7 +74,6 @@ const cicloCandidatesFor = (value: unknown) => {
 const mapRows = (rows: CatalogConceptRow[], source: FinancialConcept['source']) => rows.reduce((map, row) => {
   const id = toConceptId(row?.id)
   const concepto = normalizeText(row?.concepto)
-  const plazo = normalizeText(row?.plazo)
   if (!id || !concepto || isPlaceholderConceptName(concepto)) return map
 
   map.set(id, {
@@ -83,8 +82,8 @@ const mapRows = (rows: CatalogConceptRow[], source: FinancialConcept['source']) 
     costo: toMoney(row?.costo),
     ciclo: normalizeText(row?.ciclo),
     plantel: normalizeText(row?.plantel),
-    eventual: isEventualConceptPlazo(plazo, row?.eventual),
-    plazo: plazo || '1',
+    eventual: isEventualConcept(row?.eventual),
+    plazo: normalizeText(row?.plazo || '1') || '1',
     source,
   })
   return map
@@ -101,7 +100,7 @@ const readCentralConcepts = async (ids: number[], ciclo: unknown) => {
     columns.has('ciclo') ? 'ciclo' : "'' AS ciclo",
     columns.has('plantel') ? 'plantel' : "'' AS plantel",
     columns.has('eventual') ? 'eventual' : '0 AS eventual',
-    columns.has('plazo') ? 'plazo' : 'NULL AS plazo',
+    columns.has('plazo') ? 'plazo' : "'1' AS plazo",
   ]
   const cicloCandidates = cicloCandidatesFor(ciclo)
   const params: any[] = [ids]
@@ -150,7 +149,7 @@ const readBridgeConcepts = async (ids: number[], ciclo: unknown) => {
     query<any[]>(`SHOW COLUMNS FROM conceptos LIKE 'eventual'`).then((rows) => rows.length > 0).catch(() => false),
     query<any[]>(`SHOW COLUMNS FROM conceptos LIKE 'plazo'`).then((rows) => rows.length > 0).catch(() => false),
   ])
-  const select = `id, concepto, costo, ciclo, ${hasPlantelColumn ? 'plantel' : "'' AS plantel"}, ${hasEventualColumn ? 'eventual' : '0 AS eventual'}, ${hasPlazoColumn ? 'plazo' : 'NULL AS plazo'}`
+  const select = `id, concepto, costo, ciclo, ${hasPlantelColumn ? 'plantel' : "'' AS plantel"}, ${hasEventualColumn ? 'eventual' : '0 AS eventual'}, ${hasPlazoColumn ? 'plazo' : "'1' AS plazo"}`
 
   const cicloCandidates = cicloCandidatesFor(ciclo)
   const params: any[] = [ids]

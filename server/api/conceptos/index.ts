@@ -1,7 +1,7 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { controlEscolarCentralQuery, getCentralTableColumns } from '../../utils/control-escolar-central'
 import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/utils/ciclo'
-import { isEventualConceptPlazo } from '../../../shared/utils/documentMonths'
+import { normalizeEventualFlag } from '../../../shared/utils/conceptEventual'
 import { enrichConceptosWithStock } from '../../utils/conceptos-stock'
 import { createCentralConcepto, readCentralConceptMediaForIds, requireConceptosAdmin } from '../../utils/conceptos-config'
 
@@ -13,7 +13,7 @@ const optionalConceptColumn = (columns: Set<string>, column: string, fallbackSql
 
 const normalizeConceptSemantics = <T extends Record<string, any>>(rows: T[]) => rows.map((row) => ({
   ...row,
-  eventual: isEventualConceptPlazo(row?.plazo, row?.eventual) ? 1 : 0,
+  eventual: normalizeEventualFlag(row?.eventual),
 }))
 
 const buildConceptSearchWhere = (search: string, params: any[], columns: Set<string>, sourceAlias = '') => {
@@ -39,7 +39,7 @@ const readCentralConceptosForCycle = async (ciclo: unknown, search: string) => {
     optionalConceptColumn(columns, 'description', "''"),
     optionalConceptColumn(columns, 'plantel', "''"),
     optionalConceptColumn(columns, 'eventual', '0'),
-    optionalConceptColumn(columns, 'plazo', 'NULL'),
+    optionalConceptColumn(columns, 'plazo', "'1'"),
     optionalConceptColumn(columns, 'ciclo', "''"),
     columns.has('image_url') ? '`image_url` AS `image_url`' : columns.has('imagen_url') ? '`imagen_url` AS `image_url`' : columns.has('imagen') ? '`imagen` AS `image_url`' : 'NULL AS `image_url`'
   ]
