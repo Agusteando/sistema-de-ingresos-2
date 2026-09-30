@@ -1,6 +1,7 @@
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { controlEscolarCentralQuery, getCentralTableColumns } from '../../utils/control-escolar-central'
 import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/utils/ciclo'
+import { isEventualConceptPlazo } from '../../../shared/utils/documentMonths'
 import { enrichConceptosWithStock } from '../../utils/conceptos-stock'
 import { createCentralConcepto, readCentralConceptMediaForIds, requireConceptosAdmin } from '../../utils/conceptos-config'
 
@@ -9,6 +10,11 @@ const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``
 const optionalConceptColumn = (columns: Set<string>, column: string, fallbackSql: string, alias = column) => {
   return columns.has(column) ? `${escapeIdentifier(column)} AS ${escapeIdentifier(alias)}` : `${fallbackSql} AS ${escapeIdentifier(alias)}`
 }
+
+const normalizeConceptSemantics = <T extends Record<string, any>>(rows: T[]) => rows.map((row) => ({
+  ...row,
+  eventual: isEventualConceptPlazo(row?.plazo, row?.eventual) ? 1 : 0,
+}))
 
 const buildConceptSearchWhere = (search: string, params: any[], columns: Set<string>, sourceAlias = '') => {
   const prefix = sourceAlias ? `${sourceAlias}.` : ''
@@ -33,7 +39,7 @@ const readCentralConceptosForCycle = async (ciclo: unknown, search: string) => {
     optionalConceptColumn(columns, 'description', "''"),
     optionalConceptColumn(columns, 'plantel', "''"),
     optionalConceptColumn(columns, 'eventual', '0'),
-    optionalConceptColumn(columns, 'plazo', "'1'"),
+    optionalConceptColumn(columns, 'plazo', 'NULL'),
     optionalConceptColumn(columns, 'ciclo', "''"),
     columns.has('image_url') ? '`image_url` AS `image_url`' : columns.has('imagen_url') ? '`imagen_url` AS `image_url`' : columns.has('imagen') ? '`imagen` AS `image_url`' : 'NULL AS `image_url`'
   ]
@@ -122,12 +128,12 @@ export default defineEventHandler(async (event) => {
 
     try {
       const rows = await readCentralConceptosForCycle(ciclo, search)
-      const enriched = await enrichConceptosWithStock(rows, stockPlantel)
+      const enriched = await enrichConceptosWithStock(normalizeConceptSemantics(rows as any[]), stockPlantel)
       return enriched.conceptos
     } catch (error) {
       console.warn('[conceptos] central unavailable; falling back to Bridge conceptos.', error)
       const rows = await readBridgeConceptosForCycle(event, ciclo, search)
-      const enriched = await enrichConceptosWithStock(rows as any[], stockPlantel)
+      const enriched = await enrichConceptosWithStock(normalizeConceptSemantics(rows as any[]), stockPlantel)
       return enriched.conceptos
     }
   }
