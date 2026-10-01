@@ -5,17 +5,27 @@ type CredentialPhotoStageRow = {
   stage_key: string | number | null
   stage_label?: string | null
   matricula: string | null
+  photo_url?: string | null
   submitted_at?: string | Date | null
+  is_current_photo?: number | string | boolean | null
+}
+
+type CredentialStagePhoto = {
+  matricula:string
+  photoUrl:string
+  submittedAt:string | null
+  isCurrentMatriculaPhoto:boolean
 }
 
 const clean = (value:unknown,max=255) => String(value ?? '').trim().slice(0,max)
 const normalizeField = (value:unknown) => clean(value,255).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-const quoteIdentifier = (value:string) => `\`${String(value).replace(/`/g,'``')}\``
+const quoteIdentifier = (value:string) => `\`${String(value).replace(/\`/g,'\`\`')}\``
 const isoDate = (value:unknown) => {
   if(!value)return ''
   const date=new Date(value as any)
   return Number.isNaN(date.getTime()) ? '' : date.toISOString()
 }
+const truthy = (value:unknown) => value === true || value === 1 || value === '1' || String(value || '').toLowerCase() === 'true'
 
 const CREDENTIAL_ALIASES = {
   matricula:['matricula','matrícula'],
@@ -86,7 +96,16 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     ])
   }catch(error:any){
     console.warn('[credential-photo-stages] source unavailable',String(error?.code||error?.message||error))
-    return {available:false,plantel,ciclo:clean(input.ciclo,30),stages:[],currentPhotoCount:0}
+    return {
+      contract:'credential-photo-stages-v2',
+      available:false,
+      plantel,
+      ciclo:clean(input.ciclo,30),
+      stages:[],
+      defaultStageKey:'',
+      currentPhotoCount:0,
+      submissionCount:0
+    }
   }
 
   const cMatricula=alias(credentialColumns,CREDENTIAL_ALIASES.matricula)
@@ -100,7 +119,16 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
   const mPlantel=alias(matriculaColumns,MATRICULA_ALIASES.plantel)
 
   if(!cMatricula||!cFoto||!cCiclo||!cEtapa||!mMatricula||!mFoto||!mPlantel){
-    return {available:false,plantel,ciclo:clean(input.ciclo,30),stages:[],currentPhotoCount:0}
+    return {
+      contract:'credential-photo-stages-v2',
+      available:false,
+      plantel,
+      ciclo:clean(input.ciclo,30),
+      stages:[],
+      defaultStageKey:'',
+      currentPhotoCount:0,
+      submissionCount:0
+    }
   }
 
   const cycleSql=ciclos.map(()=>'?').join(',')
@@ -110,13 +138,22 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     ? `CAST(c.${quoteIdentifier(cEtapaLabel)} AS CHAR)`
     : `CONCAT('ETAPA ', CAST(c.${quoteIdentifier(cEtapa)} AS CHAR))`
   const dateSql=cFecha ? `c.${quoteIdentifier(cFecha)}` : 'NULL'
+  const currentSql=`
+    CASE WHEN TRIM(COALESCE(CAST(m.${quoteIdentifier(mFoto)} AS CHAR),''))
+      = TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) THEN 1 ELSE 0 END
+  `
 
+  // IMPORTANT: stage history is sourced from credenciales, not matricula.foto.
+  // matricula.foto is only the latest global picture and must never erase or
+  // redefine which photograph belonged to a previous credentialization stage.
   const rows=await controlEscolarCentralQuery<CredentialPhotoStageRow[]>(`
     SELECT
       CAST(c.${quoteIdentifier(cEtapa)} AS CHAR) AS stage_key,
       ${labelSql} AS stage_label,
       UPPER(CAST(c.${quoteIdentifier(cMatricula)} AS CHAR)) AS matricula,
-      ${dateSql} AS submitted_at
+      CAST(c.${quoteIdentifier(cFoto)} AS CHAR) AS photo_url,
+      ${dateSql} AS submitted_at,
+      ${currentSql} AS is_current_photo
     FROM credenciales c
     INNER JOIN matricula m
       ON UPPER(CAST(m.${quoteIdentifier(mMatricula)} AS CHAR))
@@ -124,42 +161,72 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     WHERE CAST(c.${quoteIdentifier(cCiclo)} AS CHAR) IN (${cycleSql})
       AND UPPER(CAST(m.${quoteIdentifier(mPlantel)} AS CHAR)) IN (${plantelSql})
       AND TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) <> ''
-      AND TRIM(COALESCE(CAST(m.${quoteIdentifier(mFoto)} AS CHAR),'')) <> ''
-      AND TRIM(CAST(c.${quoteIdentifier(cFoto)} AS CHAR))
-        = TRIM(CAST(m.${quoteIdentifier(mFoto)} AS CHAR))
     ORDER BY ${cFecha ? `c.${quoteIdentifier(cFecha)} DESC` : `CAST(c.${quoteIdentifier(cEtapa)} AS CHAR) DESC`}
   `,[...ciclos,...aliases])
 
-  const stages=new Map<string,{key:string;label:string;matriculas:Set<string>;submittedAt:string}>()
+  const stages=new Map<string,{
+    key:string
+    label:string
+    photos:Map<string,CredentialStagePhoto>
+    submittedAt:string
+  }>()
   const allCurrent=new Set<string>()
+
   for(const row of rows){
     const key=clean(row.stage_key,80)
     const matricula=clean(row.matricula,64).toUpperCase().replace(/\s+/g,'')
-    if(!key||!matricula)continue
-    allCurrent.add(matricula)
+    const photoUrl=clean(row.photo_url,2048)
+    if(!key||!matricula||!photoUrl)continue
+
     const submitted=isoDate(row.submitted_at)
+    const isCurrentMatriculaPhoto=truthy(row.is_current_photo)
+    if(isCurrentMatriculaPhoto)allCurrent.add(matricula)
+
     const current=stages.get(key) || {
       key,
       label:clean(row.stage_label,120) || `ETAPA ${key}`,
-      matriculas:new Set<string>(),
+      photos:new Map<string,CredentialStagePhoto>(),
       submittedAt:submitted
     }
-    current.matriculas.add(matricula)
+
+    // Query is newest-first. Keep the latest submission for a student inside
+    // each stage while preserving older stages independently.
+    if(!current.photos.has(matricula)){
+      current.photos.set(matricula,{
+        matricula,
+        photoUrl,
+        submittedAt:submitted || null,
+        isCurrentMatriculaPhoto
+      })
+    }
     if(!current.submittedAt&&submitted)current.submittedAt=submitted
     stages.set(key,current)
   }
 
+  const stageList=Array.from(stages.values())
+    .map((stage)=>({
+      key:stage.key,
+      label:stage.label,
+      count:stage.photos.size,
+      submittedAt:stage.submittedAt || null,
+      matriculas:Array.from(stage.photos.keys()),
+      photos:Array.from(stage.photos.values())
+    }))
+    .sort((left,right)=>{
+      const leftTime=Date.parse(left.submittedAt || '') || 0
+      const rightTime=Date.parse(right.submittedAt || '') || 0
+      if(rightTime!==leftTime)return rightTime-leftTime
+      return right.key.localeCompare(left.key,'es',{numeric:true,sensitivity:'base'})
+    })
+
   return {
+    contract:'credential-photo-stages-v2',
     available:true,
     plantel,
     ciclo:clean(input.ciclo,30),
+    defaultStageKey:stageList[0]?.key || '',
     currentPhotoCount:allCurrent.size,
-    stages:Array.from(stages.values()).map((stage)=>({
-      key:stage.key,
-      label:stage.label,
-      count:stage.matriculas.size,
-      submittedAt:stage.submittedAt || null,
-      matriculas:Array.from(stage.matriculas)
-    }))
+    submissionCount:stageList.reduce((sum,stage)=>sum+stage.count,0),
+    stages:stageList
   }
 }
