@@ -39,7 +39,12 @@ expect(externalView.includes('const refreshed = await warmExternalControlEscolar
 expect(!externalSnapshot.includes('overlayCanonicalMatriculaGroups') && !externalSnapshot.includes('matricula.grupo-live') && !externalSnapshot.includes('SELECT matricula, grupo'), 'La lectura pública no puede reemplazar el grupo canónico del snapshot con matricula.grupo ni otra fuente legacy.')
 expect(externalSnapshot.includes('Snapshot age is telemetry only') && !externalSnapshot.includes('AURORA_STUDENT_SNAPSHOT_TOO_OLD'), 'La edad del snapshot debe ser telemetría; nunca debe impedir servir el last-known-good persistido.')
 expect(credentialPhotos.includes("getCentralTableColumns('credenciales')") && credentialPhotos.includes("getCentralTableColumns('matricula')"), 'El filtro de fotos por etapa debe resolver credenciales y matricula desde la fuente central.')
-expect(credentialPhotos.includes('TRIM(CAST(c.') && credentialPhotos.includes('= TRIM(CAST(m.'), 'Una foto de etapa solo cuenta cuando credenciales.foto coincide con la foto actual de matricula.')
+expect(credentialPhotos.includes("contract:'credential-photo-stages-v2'"), 'El historial de fotos por etapa debe exponer el contrato v2.')
+expect(credentialPhotos.includes('AS photo_url') && credentialPhotos.includes('cFoto'), 'Cada etapa debe publicar su propia foto desde credenciales.')
+expect(credentialPhotos.includes('is_current_photo'), 'La coincidencia con matricula.foto debe conservarse sólo como telemetría.')
+expect(credentialPhotos.includes('matricula.foto is only the latest global picture') && credentialPhotos.includes('const currentSql='), 'matricula.foto sólo puede usarse como telemetría; no como filtro que borre etapas históricas.')
+expect(credentialPhotos.includes('photos:Array.from(stage.photos.values())'), 'Cada etapa debe publicar snapshots de foto por matrícula.')
+expect(credentialPhotos.includes('defaultStageKey') && credentialPhotos.includes('submissionCount'), 'El contrato v2 debe publicar etapa predeterminada y total de envíos.')
 expect(credentialPhotos.includes('plantelAliases') && credentialPhotos.includes('cycleCandidates'), 'El filtro de etapa debe respetar plantel y ciclo.')
 expect(credentialPhotosRoute.includes('assertAuroraExternalApiToken'), 'El endpoint de fotos por etapa debe conservar la autenticación de la API externa.')
 if (failures.length) { console.error('Fuente académica inválida:'); failures.forEach(failure => console.error(`- ${failure}`)); process.exit(1) }
