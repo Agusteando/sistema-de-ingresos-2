@@ -46,6 +46,11 @@ expect(credentialPhotos.includes('matricula.foto is only the latest global pictu
 expect(credentialPhotos.includes('photos:Array.from(stage.photos.values())'), 'Cada etapa debe publicar snapshots de foto por matrícula.')
 expect(credentialPhotos.includes('defaultStageKey') && credentialPhotos.includes('submissionCount'), 'El contrato v2 debe publicar etapa predeterminada y total de envíos.')
 expect(credentialPhotos.includes('plantelAliases') && credentialPhotos.includes('cycleCandidates'), 'El filtro de etapa debe respetar plantel y ciclo.')
+expect(credentialPhotos.includes("cycleMode:'column'|'date'|'unavailable'"), 'El lector de etapas debe declarar cómo resolvió el alcance de ciclo.')
+expect(credentialPhotos.includes("reason:'missing_required_columns'") && credentialPhotos.includes("reason:'cycle_scope_unavailable'"), 'El historial debe explicar por qué no está disponible en vez de aparentar cero fotos.')
+expect(credentialPhotos.includes('else if(cFecha&&cycleWindow)'), 'Si credenciales no tiene ciclo, el lector debe poder acotar de forma segura por fecha del ciclo escolar.')
+expect(credentialPhotos.includes("const currentSql=mFoto") && credentialPhotos.includes(": 'NULL'"), 'matricula.foto debe ser telemetría opcional, no requisito para leer etapas.')
+expect(!credentialPhotos.includes('!cMatricula||!cFoto||!cCiclo||!cEtapa||!mMatricula||!mFoto||!mPlantel'), 'El lector no puede volver a exigir ciclo y matricula.foto como columnas duras.')
 expect(credentialPhotosRoute.includes('assertAuroraExternalApiToken'), 'El endpoint de fotos por etapa debe conservar la autenticación de la API externa.')
 if (failures.length) { console.error('Fuente académica inválida:'); failures.forEach(failure => console.error(`- ${failure}`)); process.exit(1) }
 console.log('Fuente académica válida: snapshot público y Control Escolar comparten conceptos, población y grupos canónicos sin overlay posterior.')

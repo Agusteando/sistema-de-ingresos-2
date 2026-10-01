@@ -57,10 +57,24 @@ function cycleCandidates(value:unknown) {
   const values=new Set<string>()
   if(raw)values.add(raw)
   if(year){
+    const next=Number(year)+1
     values.add(year)
-    values.add(`${year}-${Number(year)+1}`)
+    values.add(`${year}-${next}`)
+    values.add(`${year}/${next}`)
+    values.add(`${year} - ${next}`)
+    values.add(`${year}_${next}`)
   }
   return Array.from(values)
+}
+
+function academicDateWindow(value:unknown) {
+  const raw=clean(value,30)
+  const year=Number(raw.match(/(?:19|20)\d{2}/)?.[0] || 0)
+  if(!Number.isFinite(year)||year<2000)return null
+  return {
+    start:`${year}-07-01 00:00:00`,
+    end:`${year+1}-07-01 00:00:00`
+  }
 }
 
 function plantelAliases(value:unknown) {
@@ -99,12 +113,15 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     return {
       contract:'credential-photo-stages-v2',
       available:false,
+      reason:'source_unavailable',
       plantel,
       ciclo:clean(input.ciclo,30),
+      cycleMode:'unavailable',
       stages:[],
       defaultStageKey:'',
       currentPhotoCount:0,
-      submissionCount:0
+      submissionCount:0,
+      diagnostics:{message:String(error?.code||error?.message||error)}
     }
   }
 
@@ -118,30 +135,82 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
   const mFoto=alias(matriculaColumns,MATRICULA_ALIASES.foto)
   const mPlantel=alias(matriculaColumns,MATRICULA_ALIASES.plantel)
 
-  if(!cMatricula||!cFoto||!cCiclo||!cEtapa||!mMatricula||!mFoto||!mPlantel){
+  const requiredColumns={
+    credentialMatricula:Boolean(cMatricula),
+    credentialPhoto:Boolean(cFoto),
+    credentialStage:Boolean(cEtapa),
+    matriculaMatricula:Boolean(mMatricula),
+    matriculaPlantel:Boolean(mPlantel)
+  }
+  const missingRequired=Object.entries(requiredColumns).filter(([,present])=>!present).map(([name])=>name)
+  if(missingRequired.length){
     return {
       contract:'credential-photo-stages-v2',
       available:false,
+      reason:'missing_required_columns',
       plantel,
       ciclo:clean(input.ciclo,30),
+      cycleMode:'unavailable',
       stages:[],
       defaultStageKey:'',
       currentPhotoCount:0,
-      submissionCount:0
+      submissionCount:0,
+      diagnostics:{
+        missingRequired,
+        hasCycleColumn:Boolean(cCiclo),
+        hasDateColumn:Boolean(cFecha),
+        hasMatriculaPhotoColumn:Boolean(mFoto)
+      }
     }
   }
 
-  const cycleSql=ciclos.map(()=>'?').join(',')
   const aliases=plantelAliases(plantel)
   const plantelSql=aliases.map(()=>'?').join(',')
   const labelSql=cEtapaLabel
     ? `CAST(c.${quoteIdentifier(cEtapaLabel)} AS CHAR)`
     : `CONCAT('ETAPA ', CAST(c.${quoteIdentifier(cEtapa)} AS CHAR))`
   const dateSql=cFecha ? `c.${quoteIdentifier(cFecha)}` : 'NULL'
-  const currentSql=`
-    CASE WHEN TRIM(COALESCE(CAST(m.${quoteIdentifier(mFoto)} AS CHAR),''))
-      = TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) THEN 1 ELSE 0 END
-  `
+  const currentSql=mFoto
+    ? `
+      CASE WHEN TRIM(COALESCE(CAST(m.${quoteIdentifier(mFoto)} AS CHAR),''))
+        = TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) THEN 1 ELSE 0 END
+    `
+    : 'NULL'
+
+  const cycleWindow=academicDateWindow(input.ciclo)
+  let cycleMode:'column'|'date'|'unavailable'='unavailable'
+  let cycleWhere=''
+  const params:any[]=[]
+  if(cCiclo){
+    const cycleSql=ciclos.map(()=>'?').join(',')
+    cycleWhere=`CAST(c.${quoteIdentifier(cCiclo)} AS CHAR) IN (${cycleSql})`
+    params.push(...ciclos)
+    cycleMode='column'
+  }else if(cFecha&&cycleWindow){
+    cycleWhere=`c.${quoteIdentifier(cFecha)} >= ? AND c.${quoteIdentifier(cFecha)} < ?`
+    params.push(cycleWindow.start,cycleWindow.end)
+    cycleMode='date'
+  }else{
+    return {
+      contract:'credential-photo-stages-v2',
+      available:false,
+      reason:'cycle_scope_unavailable',
+      plantel,
+      ciclo:clean(input.ciclo,30),
+      cycleMode:'unavailable',
+      stages:[],
+      defaultStageKey:'',
+      currentPhotoCount:0,
+      submissionCount:0,
+      diagnostics:{
+        hasCycleColumn:Boolean(cCiclo),
+        hasDateColumn:Boolean(cFecha),
+        hasMatriculaPhotoColumn:Boolean(mFoto)
+      }
+    }
+  }
+
+  params.push(...aliases)
 
   // IMPORTANT: stage history is sourced from credenciales, not matricula.foto.
   // matricula.foto is only the latest global picture and must never erase or
@@ -158,11 +227,11 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     INNER JOIN matricula m
       ON UPPER(CAST(m.${quoteIdentifier(mMatricula)} AS CHAR))
        = UPPER(CAST(c.${quoteIdentifier(cMatricula)} AS CHAR))
-    WHERE CAST(c.${quoteIdentifier(cCiclo)} AS CHAR) IN (${cycleSql})
+    WHERE ${cycleWhere}
       AND UPPER(CAST(m.${quoteIdentifier(mPlantel)} AS CHAR)) IN (${plantelSql})
       AND TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) <> ''
     ORDER BY ${cFecha ? `c.${quoteIdentifier(cFecha)} DESC` : `CAST(c.${quoteIdentifier(cEtapa)} AS CHAR) DESC`}
-  `,[...ciclos,...aliases])
+  `,params)
 
   const stages=new Map<string,{
     key:string
@@ -222,11 +291,19 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
   return {
     contract:'credential-photo-stages-v2',
     available:true,
+    reason:'',
     plantel,
     ciclo:clean(input.ciclo,30),
+    cycleMode,
     defaultStageKey:stageList[0]?.key || '',
     currentPhotoCount:allCurrent.size,
     submissionCount:stageList.reduce((sum,stage)=>sum+stage.count,0),
+    diagnostics:{
+      matchedRows:rows.length,
+      hasCycleColumn:Boolean(cCiclo),
+      hasDateColumn:Boolean(cFecha),
+      hasMatriculaPhotoColumn:Boolean(mFoto)
+    },
     stages:stageList
   }
 }
