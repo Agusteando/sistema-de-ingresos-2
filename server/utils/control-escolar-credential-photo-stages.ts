@@ -114,9 +114,10 @@ function plantelAliases(value:unknown) {
   return map[canonical] || [canonical]
 }
 
-export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unknown}) {
+export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unknown;stage?:unknown}) {
   const plantel=normalizeExternalControlEscolarPlantel(input.plantel)
   const ciclos=cycleCandidates(input.ciclo)
+  const requestedStage=clean(input.stage,80)
   if(!plantel)throw createError({statusCode:400,statusMessage:'PLANTEL_REQUIRED',message:'El plantel es obligatorio.'})
   if(!ciclos.length)throw createError({statusCode:400,statusMessage:'CICLO_REQUIRED',message:'El ciclo escolar es obligatorio.'})
 
@@ -197,10 +198,14 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     : 'NULL'
 
   const cycleWindow=academicDateWindow(input.ciclo)
-  let cycleMode:'column'|'date'|'current-photo'|'unavailable'='unavailable'
+  let cycleMode:'stage'|'column'|'date'|'current-photo'|'unavailable'='unavailable'
   let cycleWhere=''
   const params:any[]=[]
-  if(cCiclo){
+  if(requestedStage){
+    cycleWhere=`CAST(c.${quoteIdentifier(cEtapa)} AS CHAR) = ?`
+    params.push(requestedStage)
+    cycleMode='stage'
+  }else if(cCiclo){
     const cycleSql=ciclos.map(()=>'?').join(',')
     cycleWhere=`CAST(c.${quoteIdentifier(cCiclo)} AS CHAR) IN (${cycleSql})`
     params.push(...ciclos)
@@ -320,6 +325,16 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
       return right.key.localeCompare(left.key,'es',{numeric:true,sensitivity:'base'})
     })
 
+  console.info('[credential-photo-stages] resolved',JSON.stringify({
+    plantel,
+    ciclo:clean(input.ciclo,30),
+    requestedStage,
+    cycleMode,
+    rawMatchedRows:rows.length,
+    matchedRows:stageList.reduce((sum,stage)=>sum+stage.count,0),
+    stageCount:stageList.length
+  }))
+
   return {
     contract:'credential-photo-stages-v2',
     available:true,
@@ -334,6 +349,8 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     diagnostics:{
       matchedRows:stageList.reduce((sum,stage)=>sum+stage.count,0),
       rawMatchedRows:rows.length,
+      requestedStage,
+      explicitStageScope:cycleMode==='stage',
       currentPhotoFallback:cycleMode==='current-photo',
       currentPhotoTimestampRejected,
       hasCycleColumn:Boolean(cCiclo),
