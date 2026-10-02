@@ -5,6 +5,8 @@ import { PLANTELES_LIST } from '../../../utils/constants'
 import { normalizePlantel } from '../../utils/auth-session'
 import { fetchCentralMatriculaOverlays } from '../../utils/central-matricula-overlay'
 import { controlEscolarCentralQuery } from '../../utils/control-escolar-central'
+import { runWithBridgeAgentId } from '../../utils/db'
+import { attachSectionLabelsToRows } from '../../utils/student-sections'
 
 const NO_ADEUDO_MARK_TABLE = 'no_adeudo_deudor_cartas'
 const VALID_PLANTELES = new Set(PLANTELES_LIST)
@@ -143,6 +145,38 @@ export default defineEventHandler(async (event) => {
     }
   })
 
+  const sectionByStudent = new Map<string, string>()
+  const rowsByPlantel = new Map<string, any[]>()
+  rows.forEach((row) => {
+    const key = String(row.plantel || '').trim().toUpperCase()
+    const list = rowsByPlantel.get(key) || []
+    list.push(row)
+    rowsByPlantel.set(key, list)
+  })
+
+  for (const [plantel, plantelRows] of rowsByPlantel.entries()) {
+    if (!plantel) continue
+    try {
+      const enriched = await runWithBridgeAgentId(plantel, async () => (
+        attachSectionLabelsToRows(plantelRows, { plantel })
+      ))
+      enriched.forEach((row) => {
+        sectionByStudent.set(`${plantel}::${row.matricula}`, String(row.seccion || ''))
+      })
+    } catch (error: any) {
+      console.warn('[No Adeudo Report] Section lookup unavailable.', {
+        plantel,
+        students: plantelRows.length,
+        message: error?.message || error
+      })
+    }
+  }
+
+  rows = rows.map((row) => ({
+    ...row,
+    seccion: sectionByStudent.get(`${row.plantel}::${row.matricula}`) || ''
+  }))
+
   if (search) {
     rows = rows.filter((row) => [
       row.plantel,
@@ -155,6 +189,7 @@ export default defineEventHandler(async (event) => {
       row.currentNivel,
       row.currentGrado,
       row.currentGrupo,
+      row.seccion,
       row.currentTutorName
     ].some((value) => String(value || '').toLowerCase().includes(search)))
   }

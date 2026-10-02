@@ -46,6 +46,7 @@ const studentsForExport = (group: any) => {
       nombre: cleanWorkbookText(student?.nombre, 220),
       grado: cleanWorkbookText(student?.grado, 80),
       grupo: cleanWorkbookText(student?.grupo, 40).toUpperCase(),
+      seccion: cleanWorkbookText(student?.seccion, 240),
     }))
     .filter((student: any) => {
       const key = studentKey(student)

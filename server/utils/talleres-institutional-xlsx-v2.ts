@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 
-type Student = { nombre?: unknown; grado?: unknown; grupo?: unknown }
+type Student = { nombre?: unknown; grado?: unknown; grupo?: unknown; seccion?: unknown }
 type Group = { clave?: unknown; nombre?: unknown; totalAlumnos?: unknown; planteles?: Array<{ plantel?: unknown; students?: Student[] }> }
 type Options = { plantel: string; plantelNombre: string; cicloLabel: string; groups: Group[]; generatedAt?: string }
 type ZipEntry = { name: string; data: Buffer }
@@ -55,7 +55,7 @@ export const buildTalleresInstitutionalXlsxV2 = (o: Options) => {
     const name = clean(g.nombre) || clean(g.clave) || 'Taller'
     const campus = (g.planteles || []).find(p => clean(p.plantel).toUpperCase() === plantel)
     const students = Array.isArray(campus?.students) ? campus!.students! : []
-    sheets.push({ name: uniqueName(name, used), title: name.toUpperCase(), subtitle: `IECS · IEDIS | ${clean(o.plantelNombre)} · CICLO ESCOLAR ${clean(o.cicloLabel)}`, headers: ['NO.', 'GRADO Y GRUPO', 'NOMBRE'], rows: students.map((s, i) => [i + 1, [clean(s.grado), clean(s.grupo)].filter(Boolean).join(' ') || '—', clean(s.nombre) || '—']), widths: [8, 20, 52] })
+    sheets.push({ name: uniqueName(name, used), title: name.toUpperCase(), subtitle: `IECS · IEDIS | ${clean(o.plantelNombre)} · CICLO ESCOLAR ${clean(o.cicloLabel)}`, headers: ['NO.', 'GRADO Y GRUPO', 'SECCIÓN', 'NOMBRE'], rows: students.map((s, i) => [i + 1, [clean(s.grado), clean(s.grupo)].filter(Boolean).join(' ') || '—', clean(s.seccion) || '—', clean(s.nombre) || '—']), widths: [8, 20, 24, 46] })
   }
   const sheetXml = sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: Buffer.from(worksheet(s), 'utf8') }))
   const overrides = sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')
