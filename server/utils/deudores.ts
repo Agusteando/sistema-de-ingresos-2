@@ -17,6 +17,7 @@ import { loadFinancialConceptMap } from './financial-concept'
 import { normalizePlantel } from './auth-session'
 import { loadDeudoresSaldoMargins } from './deudores-settings'
 import { parseDocumentMonths, schoolMonthLabel } from '../../shared/utils/documentMonths'
+import { attachSectionLabelsToRows } from './student-sections'
 
 const ACTION_SEQUENCE = [
   { action: 'correo_recordatorio', thresholdDay: 13, label: 'Correo de recordatorio' },
@@ -344,6 +345,7 @@ export const getDeudoresGlobal = async ({
   if (!documentos.length) return []
 
   documentos = await mergeControlEscolarContactIntoRows(documentos)
+  documentos = await attachSectionLabelsToRows(documentos, { plantel })
 
   const docIds = documentos.map(doc => Number(doc.documento))
   const matriculas = [...new Set(documentos.map(doc => String(doc.matricula)))]
@@ -510,6 +512,7 @@ export const getDeudoresGlobal = async ({
         nivel: doc.nivel,
         grado: doc.grado,
         grupo: doc.grupo,
+        seccion: doc.seccion || '',
         plantel: doc.plantel,
         correo: doc.correo,
         telefono: doc.telefono,

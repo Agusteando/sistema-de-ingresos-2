@@ -10,6 +10,7 @@ import {
 import { omitRawFinancialAcademicFields, resolveFinancialAcademicPlacement } from './financial-academic-placement'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
 import { isLocalSystemRuntime } from './local-system-manager'
+import { attachSectionLabelsToRows } from './student-sections'
 import {
   PAYMENT_APPLIED_AMOUNT_SQL,
   PAYMENT_EFFECTIVE_AT_SQL,
@@ -60,6 +61,7 @@ export type CorteCajaRow = {
   ciclo?: string | null
   nivel: string
   grado: string
+  seccion: string
   estatus?: string | null
   estatusCorte: string
   cancelada_por?: string | null
@@ -85,6 +87,7 @@ export type CorteCajaTotal = {
 
 export type CorteCajaGroupedRow = {
   fecha: string
+  seccion: string
   formaDePago: string
   categoria: string
   estatus: string
@@ -348,7 +351,7 @@ export const loadPlantelCorteCaja = async (
     ORDER BY ${PAYMENT_EFFECTIVE_AT_SQL} DESC, ${PAYMENT_REGISTERED_AT_SQL} DESC, r.folio ASC
   `, params)
 
-  const rows: CorteCajaRow[] = rawRows.map((row) => {
+  let rows: CorteCajaRow[] = rawRows.map((row) => {
     const normalized = omitRawFinancialAcademicFields(row) as CorteCajaRow & {
       fechaUnix?: number | string | null
       fechaPagoUnix?: number | string | null
@@ -365,6 +368,8 @@ export const loadPlantelCorteCaja = async (
       montoAplicado: 0,
     }
   }) as CorteCajaRow[]
+
+  rows = await attachSectionLabelsToRows(rows, { plantel: context.scopePlantel }) as CorteCajaRow[]
 
   const rowsByCycle = new Map<string, CorteCajaRow[]>()
   rows.forEach((row) => {
@@ -393,10 +398,12 @@ export const loadPlantelCorteCaja = async (
 
     const fecha = toMexicoDateKey(row.fechaPago)
     const categoria = String(row.conceptoNombre || 'Sin concepto')
+    const seccion = String(row.seccion || 'Sin sección')
     const estatus = row.estatusCorte
-    const key = `${fecha}|${paymentMethod}|${categoria}|${estatus}`
+    const key = `${fecha}|${seccion}|${paymentMethod}|${categoria}|${estatus}`
     const current = groupedMap.get(key) || {
       fecha,
+      seccion,
       formaDePago: paymentMethod,
       categoria,
       estatus,

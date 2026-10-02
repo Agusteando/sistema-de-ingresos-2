@@ -5,6 +5,7 @@ import { omitRawFinancialAcademicFields, resolveFinancialAcademicPlacement } fro
 import { hydrateFinancialConceptNames, loadFinancialConceptMap } from './financial-concept'
 import { PAYMENT_REGISTERING_USER_KEY_SQL, formatPaymentUserLabel, normalizePaymentUserKeys } from './payment-user'
 import { fetchCentralMatriculaOverlays } from './central-matricula-overlay'
+import { attachSectionLabelsToRows } from './student-sections'
 import { birthDateFromCurp } from './student-identity-report'
 import { PLANTELES_LIST } from '../../utils/constants'
 import { parseEnrollmentConceptsForPlantelHistory, parseEnrollmentConceptsForScope } from '../../shared/utils/studentPresentation'
@@ -398,7 +399,7 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
     const missingByGrade = new Map<string, number>()
     let studentsWithAny = 0
 
-    const rows = enrolledRows.flatMap((row: any) => {
+    let rows = enrolledRows.flatMap((row: any) => {
       const matricula = String(row?.matricula || '').trim()
       // This is intentionally a single student-level anti-join against the UNION
       // of every selected concept. Having one selected concept is enough to exclude
@@ -432,6 +433,8 @@ export const loadMissingConceptReport = async (user: any, filters: Record<string
         faltantes: selectedConcepts.length,
       }]
     })
+
+    rows = await attachSectionLabelsToRows(rows, { plantel })
 
     const collator = new Intl.Collator('es-MX', { sensitivity: 'base', numeric: true })
     rows.sort((left: any, right: any) => (
@@ -521,6 +524,7 @@ export const loadDebtorConceptReport = async (user: any, filters: Record<string,
       nivel: string
       grado: string
       grupo: string
+      seccion: string
       plantel: string
       saldoPendiente: number
       totalCargos: number
@@ -548,6 +552,7 @@ export const loadDebtorConceptReport = async (user: any, filters: Record<string,
           nivel: String(row?.nivel || '').trim(),
           grado: String(row?.grado || '').trim(),
           grupo: String(row?.grupo || '').trim(),
+          seccion: String(row?.seccion || '').trim(),
           plantel: String(row?.plantel || plantel).trim().toUpperCase(),
           saldoPendiente: 0,
           totalCargos: 0,
@@ -613,6 +618,7 @@ export const loadDebtorConceptReport = async (user: any, filters: Record<string,
           nivel: row.nivel,
           grado: row.grado,
           grupo: row.grupo,
+          seccion: row.seccion,
           plantel: row.plantel,
           saldoPendiente: Math.round(row.saldoPendiente * 100) / 100,
           totalCargos: Math.round(row.totalCargos * 100) / 100,
@@ -757,7 +763,7 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
 
   // Deliberately no status/cycle/projected-plantel post-filter here. Every ledger row that
   // matches the user's explicit concept/date/user filters must survive into the report.
-  const rows = rawRows.map((row) => {
+  let rows = rawRows.map((row) => {
     const academic = resolveFinancialAcademicPlacement(row, row.ciclo)
     const montoRegistrado = Number(row.monto || 0)
     const montoAplicado = resolvePaymentAppliedAmount(row)
@@ -786,6 +792,7 @@ export const loadConceptReport = async (user: any, filters: Record<string, unkno
     }
   })
 
+  rows = await attachSectionLabelsToRows(rows, { plantel: context.scopePlantel || undefined })
   await hydrateFinancialConceptNames(rows)
 
   const formasPagoMap = new Map<string, { formaDePago: string } & MoneyBreakdown>()

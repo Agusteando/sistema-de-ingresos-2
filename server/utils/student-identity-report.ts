@@ -11,6 +11,7 @@ import { fetchCentralMatriculaOverlays } from './central-matricula-overlay'
 import { readBestConceptosConfigPayload } from './conceptos-config'
 import { fetchControlEscolarBridgePopulationRows } from './control-escolar'
 import { runWithBridgeAgentId } from './db'
+import { attachSectionLabelsToRows } from './student-sections'
 
 type StudentIdentityReportFilters = {
   ciclo?: unknown
@@ -18,6 +19,9 @@ type StudentIdentityReportFilters = {
 }
 
 export type StudentIdentityReportRow = {
+  matricula: string
+  plantel: string
+  seccion: string
   apellidoPaterno: string
   apellidoMaterno: string
   nombres: string
@@ -126,6 +130,9 @@ export const loadStudentIdentityReport = async (
       const resolvedGrado = displayGrado(row.baseGrado)
 
       return {
+        matricula: normalizeText(row.matricula),
+        plantel,
+        seccion: '',
         apellidoPaterno: normalizeText(row.baseApellidoPaterno),
         apellidoMaterno: normalizeText(row.baseApellidoMaterno),
         nombres: normalizeText(row.baseNombres),
@@ -136,8 +143,9 @@ export const loadStudentIdentityReport = async (
       }
     })
 
+    const withSections = await attachSectionLabelsToRows(mapped, { plantel })
     const collator = new Intl.Collator('es-MX', { sensitivity: 'base', numeric: true })
-    mapped.sort((left, right) => (
+    withSections.sort((left, right) => (
       left.gradoOrden - right.gradoOrden ||
       collator.compare(left.apellidoPaterno, right.apellidoPaterno) ||
       collator.compare(left.apellidoMaterno, right.apellidoMaterno) ||
@@ -150,8 +158,8 @@ export const loadStudentIdentityReport = async (
         cicloLabel: formatCicloLabel(ciclo),
         plantel
       },
-      rows: mapped,
-      total: mapped.length,
+      rows: withSections,
+      total: withSections.length,
       usuario: {
         nombre: normalizeText(user.name) || normalizeText(user.email),
         email: normalizeText(user.email)
