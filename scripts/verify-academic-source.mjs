@@ -42,7 +42,7 @@ expect(credentialPhotos.includes("getCentralTableColumns('credenciales')") && cr
 expect(credentialPhotos.includes("contract:'credential-photo-stages-v2'"), 'El historial de fotos por etapa debe exponer el contrato v2.')
 expect(credentialPhotos.includes('AS photo_url') && credentialPhotos.includes('cFoto'), 'Cada etapa debe publicar su propia foto desde credenciales.')
 expect(credentialPhotos.includes('is_current_photo'), 'La coincidencia con matricula.foto debe conservarse sólo como telemetría.')
-expect(credentialPhotos.includes('matricula.foto is only the latest global picture') && credentialPhotos.includes('const currentSql='), 'matricula.foto sólo puede usarse como telemetría; no como filtro que borre etapas históricas.')
+expect(credentialPhotos.includes('never make a second legacy matricula row a prerequisite for a valid photo') && credentialPhotos.includes("const currentSql=!requestedStage && mFoto"), 'La etapa explícita debe leer credenciales directamente; matricula.foto sólo puede participar en el camino legacy.')
 expect(credentialPhotos.includes('photos:Array.from(stage.photos.values())'), 'Cada etapa debe publicar snapshots de foto por matrícula.')
 expect(credentialPhotos.includes('defaultStageKey') && credentialPhotos.includes('submissionCount'), 'El contrato v2 debe publicar etapa predeterminada y total de envíos.')
 expect(credentialPhotos.includes('plantelAliases') && credentialPhotos.includes('cycleCandidates'), 'El filtro de etapa debe respetar plantel y ciclo.')
@@ -55,7 +55,7 @@ expect(credentialPhotos.includes("currentPhotoFallback:cycleMode==='current-phot
 expect(credentialPhotos.includes('credentialPhotoTimestamp') && credentialPhotos.includes('photoBelongsToAcademicWindow'), 'El fallback por foto actual debe demostrar que el archivo pertenece a la ventana del ciclo.')
 expect(credentialPhotos.includes("cycleMode==='current-photo' && !photoBelongsToAcademicWindow"), 'Una foto vigente pero antigua no puede contar como foto reciente de la etapa.')
 expect(credentialPhotos.includes('currentPhotoTimestampRejected'), 'El contrato debe trazar cuántas fotos vigentes fueron rechazadas por antigüedad.')
-expect(credentialPhotos.includes("const currentSql=mFoto") && credentialPhotos.includes(": 'NULL'"), 'matricula.foto debe ser telemetría opcional, no requisito para leer etapas.')
+expect(credentialPhotos.includes("const currentSql=!requestedStage && mFoto") && credentialPhotos.includes(": 'NULL'"), 'matricula.foto debe ser telemetría opcional y nunca requisito para una etapa explícita.')
 expect(!credentialPhotos.includes('!cMatricula||!cFoto||!cCiclo||!cEtapa||!mMatricula||!mFoto||!mPlantel'), 'El lector no puede volver a exigir ciclo y matricula.foto como columnas duras.')
 expect(credentialPhotosRoute.includes('assertAuroraExternalApiToken'), 'El endpoint de fotos por etapa debe conservar la autenticación de la API externa.')
 if (failures.length) { console.error('Fuente académica inválida:'); failures.forEach(failure => console.error(`- ${failure}`)); process.exit(1) }

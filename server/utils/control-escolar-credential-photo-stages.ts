@@ -6,6 +6,7 @@ type CredentialPhotoStageRow = {
   stage_label?: string | null
   matricula: string | null
   photo_url?: string | null
+  receipt_url?: string | null
   submitted_at?: string | Date | null
   is_current_photo?: number | string | boolean | null
 }
@@ -13,6 +14,7 @@ type CredentialPhotoStageRow = {
 type CredentialStagePhoto = {
   matricula:string
   photoUrl:string
+  receiptUrl:string
   submittedAt:string | null
   isCurrentMatriculaPhoto:boolean
 }
@@ -30,6 +32,8 @@ const truthy = (value:unknown) => value === true || value === 1 || value === '1'
 const CREDENTIAL_ALIASES = {
   matricula:['matricula','matrícula'],
   foto:['foto','photo','photo_url','foto_url'],
+  recibo:['recibo','receipt','receipt_url','comprobante','comprobante_url'],
+  campus:['campus','plantel'],
   ciclo:['ciclo','ciclo_escolar','cicloescolar','school_year','schoolyear'],
   etapa:['etapa','fase','stage','etapa_credencializacion','etapa_credencialización'],
   etapaLabel:['etapa_nombre','stage_label','nombre_etapa'],
@@ -147,6 +151,8 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
 
   const cMatricula=alias(credentialColumns,CREDENTIAL_ALIASES.matricula)
   const cFoto=alias(credentialColumns,CREDENTIAL_ALIASES.foto)
+  const cRecibo=alias(credentialColumns,CREDENTIAL_ALIASES.recibo)
+  const cCampus=alias(credentialColumns,CREDENTIAL_ALIASES.campus)
   const cCiclo=alias(credentialColumns,CREDENTIAL_ALIASES.ciclo)
   const cEtapa=alias(credentialColumns,CREDENTIAL_ALIASES.etapa)
   const cEtapaLabel=alias(credentialColumns,CREDENTIAL_ALIASES.etapaLabel)
@@ -155,13 +161,19 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
   const mFoto=alias(matriculaColumns,MATRICULA_ALIASES.foto)
   const mPlantel=alias(matriculaColumns,MATRICULA_ALIASES.plantel)
 
-  const requiredColumns={
-    credentialMatricula:Boolean(cMatricula),
-    credentialPhoto:Boolean(cFoto),
-    credentialStage:Boolean(cEtapa),
-    matriculaMatricula:Boolean(mMatricula),
-    matriculaPlantel:Boolean(mPlantel)
-  }
+  const requiredColumns=requestedStage
+    ? {
+        credentialMatricula:Boolean(cMatricula),
+        credentialPhoto:Boolean(cFoto),
+        credentialStage:Boolean(cEtapa)
+      }
+    : {
+        credentialMatricula:Boolean(cMatricula),
+        credentialPhoto:Boolean(cFoto),
+        credentialStage:Boolean(cEtapa),
+        matriculaMatricula:Boolean(mMatricula),
+        matriculaPlantel:Boolean(mPlantel)
+      }
   const missingRequired=Object.entries(requiredColumns).filter(([,present])=>!present).map(([name])=>name)
   if(missingRequired.length){
     return {
@@ -190,12 +202,13 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     ? `CAST(c.${quoteIdentifier(cEtapaLabel)} AS CHAR)`
     : `CONCAT('ETAPA ', CAST(c.${quoteIdentifier(cEtapa)} AS CHAR))`
   const dateSql=cFecha ? `c.${quoteIdentifier(cFecha)}` : 'NULL'
-  const currentSql=mFoto
+  const currentSql=!requestedStage && mFoto
     ? `
       CASE WHEN TRIM(COALESCE(CAST(m.${quoteIdentifier(mFoto)} AS CHAR),''))
         = TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) THEN 1 ELSE 0 END
     `
     : 'NULL'
+  const receiptSql=cRecibo ? `CAST(c.${quoteIdentifier(cRecibo)} AS CHAR)` : 'NULL'
 
   const cycleWindow=academicDateWindow(input.ciclo)
   let cycleMode:'stage'|'column'|'date'|'current-photo'|'unavailable'='unavailable'
@@ -247,26 +260,45 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     }
   }
 
-  params.push(...aliases)
+  const sourceMode=requestedStage ? 'credentials-direct' : 'credentials-with-matricula'
+  let fromSql='FROM credenciales c'
+  let plantelWhere=''
+  if(requestedStage){
+    if(cCampus){
+      plantelWhere=`AND UPPER(CAST(c.${quoteIdentifier(cCampus)} AS CHAR)) IN (${plantelSql})`
+      params.push(...aliases)
+    }
+  }else{
+    fromSql=`FROM credenciales c
+    INNER JOIN matricula m
+      ON UPPER(CAST(m.${quoteIdentifier(mMatricula)} AS CHAR))
+       = UPPER(CAST(c.${quoteIdentifier(cMatricula)} AS CHAR))`
+    plantelWhere=`AND UPPER(CAST(m.${quoteIdentifier(mPlantel)} AS CHAR)) IN (${plantelSql})`
+    params.push(...aliases)
+  }
+  const artifactWhere=cRecibo
+    ? `AND (
+        TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) <> ''
+        OR TRIM(COALESCE(CAST(c.${quoteIdentifier(cRecibo)} AS CHAR),'')) <> ''
+      )`
+    : `AND TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) <> ''`
 
-  // IMPORTANT: stage history is sourced from credenciales, not matricula.foto.
-  // matricula.foto is only the latest global picture and must never erase or
-  // redefine which photograph belonged to a previous credentialization stage.
+  // With an explicit campaign stage the roster is already authoritative in the
+  // caller. Read credenciales directly and let Identity intersect by matrícula;
+  // never make a second legacy matricula row a prerequisite for a valid photo.
   const rows=await controlEscolarCentralQuery<CredentialPhotoStageRow[]>(`
     SELECT
       CAST(c.${quoteIdentifier(cEtapa)} AS CHAR) AS stage_key,
       ${labelSql} AS stage_label,
       UPPER(CAST(c.${quoteIdentifier(cMatricula)} AS CHAR)) AS matricula,
       CAST(c.${quoteIdentifier(cFoto)} AS CHAR) AS photo_url,
+      ${receiptSql} AS receipt_url,
       ${dateSql} AS submitted_at,
       ${currentSql} AS is_current_photo
-    FROM credenciales c
-    INNER JOIN matricula m
-      ON UPPER(CAST(m.${quoteIdentifier(mMatricula)} AS CHAR))
-       = UPPER(CAST(c.${quoteIdentifier(cMatricula)} AS CHAR))
+    ${fromSql}
     WHERE ${cycleWhere}
-      AND UPPER(CAST(m.${quoteIdentifier(mPlantel)} AS CHAR)) IN (${plantelSql})
-      AND TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) <> ''
+      ${plantelWhere}
+      ${artifactWhere}
     ORDER BY ${cFecha ? `c.${quoteIdentifier(cFecha)} DESC` : `CAST(c.${quoteIdentifier(cEtapa)} AS CHAR) DESC`}
   `,params)
 
@@ -287,7 +319,8 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     const key=clean(row.stage_key,80)
     const matricula=clean(row.matricula,64).toUpperCase().replace(/\s+/g,'')
     const photoUrl=clean(row.photo_url,2048)
-    if(!key||!matricula||!photoUrl)continue
+    const receiptUrl=clean(row.receipt_url,2048)
+    if(!key||!matricula||(!photoUrl&&!receiptUrl))continue
 
     const submitted=isoDate(row.submitted_at)
     const isCurrentMatriculaPhoto=truthy(row.is_current_photo)
@@ -306,6 +339,7 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
       current.photos.set(matricula,{
         matricula,
         photoUrl,
+        receiptUrl,
         submittedAt:submitted || null,
         isCurrentMatriculaPhoto
       })
@@ -318,9 +352,10 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     .map((stage)=>({
       key:stage.key,
       label:stage.label,
-      count:stage.photos.size,
+      count:Array.from(stage.photos.values()).filter((photo)=>Boolean(photo.photoUrl)).length,
+      receiptCount:Array.from(stage.photos.values()).filter((photo)=>Boolean(photo.receiptUrl)).length,
       submittedAt:stage.submittedAt || null,
-      matriculas:Array.from(stage.photos.keys()),
+      matriculas:Array.from(stage.photos.values()).filter((photo)=>Boolean(photo.photoUrl)).map((photo)=>photo.matricula),
       photos:Array.from(stage.photos.values())
     }))
     .sort((left,right)=>{
@@ -335,6 +370,8 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     ciclo:clean(input.ciclo,30),
     requestedStage,
     cycleMode,
+    sourceMode,
+    campusScoped:Boolean(requestedStage&&cCampus),
     rawMatchedRows:rows.length,
     matchedRows:stageList.reduce((sum,stage)=>sum+stage.count,0),
     stageCount:stageList.length
@@ -356,6 +393,11 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
       rawMatchedRows:rows.length,
       requestedStage,
       explicitStageScope:cycleMode==='stage',
+      sourceMode,
+      campusScoped:Boolean(requestedStage&&cCampus),
+      hasCredentialCampusColumn:Boolean(cCampus),
+      hasReceiptColumn:Boolean(cRecibo),
+      receiptRows:stageList.reduce((sum,stage)=>sum+Number((stage as any).receiptCount||0),0),
       currentPhotoFallback:cycleMode==='current-photo',
       currentPhotoTimestampRejected,
       hasCycleColumn:Boolean(cCiclo),
