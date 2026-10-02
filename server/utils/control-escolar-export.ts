@@ -2,6 +2,7 @@ import { createXlsxWorkbook } from './xlsx'
 import { fetchControlEscolarExportRows } from './control-escolar'
 import { formatCicloLabel } from '../../shared/utils/ciclo'
 import { CONTROL_ESCOLAR_REPORT_FIELDS, CONTROL_ESCOLAR_REPORT_FIELD_KEYS } from '../../shared/constants/controlEscolarReport'
+import { attachSectionLabelsToRows } from './student-sections'
 
 const gradeAliases: Record<string, number> = {
   primero: 1,
@@ -106,6 +107,7 @@ const knownColumns: Array<[string, string, number]> = [
   ['nivel', 'Nivel', 16],
   ['grado', 'Grado', 12],
   ['group', 'Grupo', 10],
+  ['seccion', 'Sección', 22],
   ['program', 'Programa', 22],
   ['servicio', 'Servicio', 22],
   ['servicioNotas', 'Notas servicio', 28],
@@ -240,7 +242,8 @@ export const buildControlEscolarExportWorkbook = async (
   queryParams: Record<string, any>,
   options: { includeSensitive?: boolean; filenamePrefix?: string; titlePrefix?: string; selectedFields?: string[] } = {}
 ) => {
-    const rows = (await fetchControlEscolarExportRows(agentId, queryParams))
+    const sourceRows = await fetchControlEscolarExportRows(agentId, queryParams)
+    const rows = (await attachSectionLabelsToRows(sourceRows, { plantel: agentId }))
       .slice()
       .sort((a: any, b: any) => {
         const gradeResult = compareGrade(a.grado, b.grado)

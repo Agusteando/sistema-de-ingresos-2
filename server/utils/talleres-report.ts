@@ -1,6 +1,8 @@
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import { canonicalTallerKey } from '../../shared/utils/talleresServicios'
 import { getTrustedAuthUser, normalizePlantel } from './auth-session'
+import { runWithBridgeAgentId } from './db'
+import { attachSectionLabelsToRows } from './student-sections'
 import {
   canonicalTalleresPlantel,
   readTalleresSnapshotRoster,
@@ -170,9 +172,33 @@ export const loadTalleresReport = async ({
         freshness: source?.freshness || null,
         assignmentsComplete: roster?.assignmentResolution?.complete !== false,
       })
+      let talleres = summarizeRoster(roster, plantel, includeStudents)
+      if (includeStudents) {
+        const uniqueStudents = new Map<string, any>()
+        talleres.forEach((taller: any) => {
+          ;(taller?.students || []).forEach((student: any) => {
+            const key = matriculaKey(student?.matricula)
+            if (key && !uniqueStudents.has(key)) uniqueStudents.set(key, student)
+          })
+        })
+        const enrichedStudents = await runWithBridgeAgentId(plantel, async () => (
+          attachSectionLabelsToRows(Array.from(uniqueStudents.values()), { plantel })
+        ))
+        const sectionByMatricula = new Map(
+          enrichedStudents.map((student: any) => [matriculaKey(student?.matricula), clean(student?.seccion, 240)])
+        )
+        talleres = talleres.map((taller: any) => ({
+          ...taller,
+          students: (taller?.students || []).map((student: any) => ({
+            ...student,
+            seccion: sectionByMatricula.get(matriculaKey(student?.matricula)) || '',
+          })),
+        }))
+      }
+
       summaries.push({
         plantel,
-        talleres: summarizeRoster(roster, plantel, includeStudents),
+        talleres,
       })
     } catch (error: any) {
       failures.push({ plantel, message: errorMessage(error) })

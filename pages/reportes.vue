@@ -204,6 +204,7 @@
                 <th>Alumno</th>
                 <th>Nivel</th>
                 <th>Grado</th>
+                <th>Sección</th>
                 <th>Mes</th>
                 <th>Concepto</th>
                 <th>Forma de pago</th>
@@ -214,13 +215,13 @@
             </thead>
             <tbody>
               <tr v-if="loadingConceptReport">
-                <td colspan="12" class="text-center py-12 text-gray-500 font-medium">Generando reporte...</td>
+                <td colspan="13" class="text-center py-12 text-gray-500 font-medium">Generando reporte...</td>
               </tr>
               <tr v-else-if="!filtrosConcepto.conceptoIds.length">
-                <td colspan="12" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para generar el reporte.</td>
+                <td colspan="13" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para generar el reporte.</td>
               </tr>
               <tr v-else-if="!conceptRows.length">
-                <td colspan="12" class="text-center py-12 text-gray-400">No se encontraron movimientos para los conceptos y filtros seleccionados.</td>
+                <td colspan="13" class="text-center py-12 text-gray-400">No se encontraron movimientos para los conceptos y filtros seleccionados.</td>
               </tr>
               <tr v-else v-for="row in conceptRows" :key="`${row.folio}-${row.concepto}`">
                 <td class="font-mono text-gray-500">{{ row.folio }}</td>
@@ -229,6 +230,7 @@
                 <td class="font-semibold text-gray-800">{{ row.nombreCompleto }}</td>
                 <td>{{ row.nivel || '—' }}</td>
                 <td>{{ row.grado || '—' }}</td>
+                <td>{{ row.seccion || '—' }}</td>
                 <td>{{ row.mesReal || row.mes }}</td>
                 <td class="font-medium text-gray-700">{{ row.conceptoNombre || row.concepto }}</td>
                 <td><span class="badge bg-blue-50 text-blue-700">{{ row.formaDePago }}</span></td>
@@ -292,6 +294,7 @@
                 <th>Nivel</th>
                 <th>Grado</th>
                 <th>Grupo</th>
+                <th>Sección</th>
                 <th v-if="canFilterPlantel">Plantel</th>
                 <th>Conceptos con adeudo</th>
                 <th class="text-right">Cargos</th>
@@ -301,19 +304,19 @@
             </thead>
             <tbody>
               <tr v-if="loadingConceptReport">
-                <td :colspan="canFilterPlantel ? 10 : 9" class="text-center py-12 text-gray-500 font-medium">Calculando adeudos...</td>
+                <td :colspan="canFilterPlantel ? 11 : 10" class="text-center py-12 text-gray-500 font-medium">Calculando adeudos...</td>
               </tr>
               <tr v-else-if="!filtrosConcepto.conceptoIds.length">
-                <td :colspan="canFilterPlantel ? 10 : 9" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para consultar deudores.</td>
+                <td :colspan="canFilterPlantel ? 11 : 10" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para consultar deudores.</td>
               </tr>
               <tr v-else-if="canFilterPlantel && !filtrosConcepto.plantel">
-                <td colspan="10" class="text-center py-12 text-gray-400">Selecciona un plantel para calcular la cartera con la misma lógica de cobranza.</td>
+                <td colspan="11" class="text-center py-12 text-gray-400">Selecciona un plantel para calcular la cartera con la misma lógica de cobranza.</td>
               </tr>
               <tr v-else-if="conceptReport.modo !== 'debtors'">
-                <td :colspan="canFilterPlantel ? 10 : 9" class="text-center py-12 text-gray-400">Genera el reporte para consultar los adeudos de los conceptos seleccionados.</td>
+                <td :colspan="canFilterPlantel ? 11 : 10" class="text-center py-12 text-gray-400">Genera el reporte para consultar los adeudos de los conceptos seleccionados.</td>
               </tr>
               <tr v-else-if="!conceptRows.length">
-                <td :colspan="canFilterPlantel ? 10 : 9" class="missing-empty-state">
+                <td :colspan="canFilterPlantel ? 11 : 10" class="missing-empty-state">
                   <strong>Sin deudores para este filtro</strong>
                   <span>No hay alumnos con saldo exigible mayor a ${{ Number(conceptSummary.threshold ?? filtrosConcepto.threshold ?? 0).toFixed(2) }} en los conceptos seleccionados.</span>
                 </td>
@@ -324,6 +327,7 @@
                 <td>{{ row.nivel || '—' }}</td>
                 <td>{{ row.grado || '—' }}</td>
                 <td>{{ row.grupo || '—' }}</td>
+                <td>{{ row.seccion || '—' }}</td>
                 <td v-if="canFilterPlantel">{{ row.plantel || filtrosConcepto.plantel || '—' }}</td>
                 <td>
                   <div class="missing-concept-chips debtor-concept-chips">
@@ -365,6 +369,7 @@
                 <th>Alumno</th>
                 <th>Nivel</th>
                 <th>Grado</th>
+                <th>Sección</th>
                 <th>CURP</th>
                 <th>Nacimiento</th>
                 <th v-if="canFilterPlantel">Plantel</th>
@@ -373,25 +378,25 @@
             </thead>
             <tbody>
               <tr v-if="loadingConceptReport">
-                <td :colspan="canFilterPlantel ? 8 : 7" class="text-center py-12 text-gray-500 font-medium">Revisando alumnos inscritos...</td>
+                <td :colspan="canFilterPlantel ? 9 : 8" class="text-center py-12 text-gray-500 font-medium">Revisando alumnos inscritos...</td>
               </tr>
               <tr v-else-if="!filtrosConcepto.conceptoIds.length">
-                <td :colspan="canFilterPlantel ? 8 : 7" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para revisar faltantes.</td>
+                <td :colspan="canFilterPlantel ? 9 : 8" class="text-center py-12 text-gray-400">Selecciona uno o más conceptos para revisar faltantes.</td>
               </tr>
               <tr v-else-if="canFilterPlantel && !filtrosConcepto.plantel">
-                <td :colspan="8" class="text-center py-12 text-gray-400">Selecciona un plantel. La población inscrita se valida contra el agente de ese plantel.</td>
+                <td :colspan="9" class="text-center py-12 text-gray-400">Selecciona un plantel. La población inscrita se valida contra el agente de ese plantel.</td>
               </tr>
               <tr v-else-if="conceptReport.modo !== 'missing'">
-                <td :colspan="canFilterPlantel ? 8 : 7" class="text-center py-12 text-gray-400">Genera el reporte para revisar la población inscrita del ciclo.</td>
+                <td :colspan="canFilterPlantel ? 9 : 8" class="text-center py-12 text-gray-400">Genera el reporte para revisar la población inscrita del ciclo.</td>
               </tr>
               <tr v-else-if="Number(conceptSummary.inscritos || 0) === 0">
-                <td :colspan="canFilterPlantel ? 8 : 7" class="missing-empty-state">
+                <td :colspan="canFilterPlantel ? 9 : 8" class="missing-empty-state">
                   <strong>Sin alumnos inscritos</strong>
                   <span>No hay población con estado “inscrito” para {{ conceptCycleLabel }} en el plantel seleccionado.</span>
                 </td>
               </tr>
               <tr v-else-if="!conceptRows.length">
-                <td :colspan="canFilterPlantel ? 8 : 7" class="missing-empty-state">
+                <td :colspan="canFilterPlantel ? 9 : 8" class="missing-empty-state">
                   <strong>Todos tienen al menos uno</strong>
                   <span>No hay alumnos inscritos sin ninguno de los conceptos seleccionados para {{ conceptCycleLabel }}.</span>
                 </td>
@@ -403,6 +408,7 @@
                 </td>
                 <td>{{ row.nivel || '—' }}</td>
                 <td>{{ row.grado || '—' }}</td>
+                <td>{{ row.seccion || '—' }}</td>
                 <td class="font-mono text-gray-600">{{ row.curp || '—' }}</td>
                 <td>{{ formatDate(row.fechaNacimiento) || '—' }}</td>
                 <td v-if="canFilterPlantel">{{ row.plantel || '—' }}</td>
@@ -501,6 +507,7 @@
             <tr>
               <th>Fecha efectiva del pago</th>
               <th>Concepto / Tarifa</th>
+              <th>Sección</th>
               <th>Vía de ingreso</th>
               <th>Estatus</th>
               <th class="text-right">Trx</th>
@@ -510,14 +517,15 @@
           </thead>
           <tbody>
             <tr v-if="loadingCorte">
-              <td colspan="7" class="text-center font-medium text-gray-500 py-12">Procesando...</td>
+              <td colspan="8" class="text-center font-medium text-gray-500 py-12">Procesando...</td>
             </tr>
             <tr v-else-if="!datosCorte.length">
-              <td colspan="7" class="text-center text-gray-400 py-12">No hay movimientos registrados en el periodo.</td>
+              <td colspan="8" class="text-center text-gray-400 py-12">No hay movimientos registrados en el periodo.</td>
             </tr>
             <tr v-else v-for="(row, idx) in datosCorte" :key="idx" class="cursor-context-menu" @contextmenu.prevent="showCorteContextMenu($event, row)">
               <td class="text-gray-600">{{ formatDate(row.fecha) }}</td>
               <td class="font-semibold text-gray-800">{{ row.categoria }}</td>
+              <td>{{ row.seccion || 'Sin sección' }}</td>
               <td><span class="badge bg-blue-50 text-blue-700">{{ row.formaDePago }}</span></td>
               <td><span class="badge" :class="corteStatusClass(row.estatus)">{{ row.estatus }}</span></td>
               <td class="text-right font-semibold text-gray-600">{{ row.transacciones }}</td>

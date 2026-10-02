@@ -1,0 +1,71 @@
+name: Report section regression
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/report-section-**'
+    paths:
+      - 'server/utils/student-sections.ts'
+      - 'server/utils/corte-caja.ts'
+      - 'server/utils/concept-report.ts'
+      - 'server/utils/student-identity-report.ts'
+      - 'server/utils/control-escolar-export.ts'
+      - 'server/utils/deudores.ts'
+      - 'server/utils/talleres-report.ts'
+      - 'server/utils/talleres-institutional-xlsx-v2.ts'
+      - 'server/api/reports/**'
+      - 'server/api/talleres-servicios/reporte-institucional-excel.get.ts'
+      - 'pages/reportes.vue'
+      - 'pages/print/concepto.vue'
+      - 'pages/print/corte.vue'
+      - 'pages/deudores.vue'
+      - 'pages/cartas-no-adeudo.vue'
+      - 'pages/reporte-talleres.vue'
+      - 'shared/constants/controlEscolarReport.ts'
+      - 'tests/report-section-column.test.mjs'
+      - '.github/workflows/report-section-regression.yml'
+  pull_request:
+    paths:
+      - 'server/utils/student-sections.ts'
+      - 'server/utils/corte-caja.ts'
+      - 'server/utils/concept-report.ts'
+      - 'server/utils/student-identity-report.ts'
+      - 'server/utils/control-escolar-export.ts'
+      - 'server/utils/deudores.ts'
+      - 'server/utils/talleres-report.ts'
+      - 'server/utils/talleres-institutional-xlsx-v2.ts'
+      - 'server/api/reports/**'
+      - 'server/api/talleres-servicios/reporte-institucional-excel.get.ts'
+      - 'pages/reportes.vue'
+      - 'pages/print/concepto.vue'
+      - 'pages/print/corte.vue'
+      - 'pages/deudores.vue'
+      - 'pages/cartas-no-adeudo.vue'
+      - 'pages/reporte-talleres.vue'
+      - 'shared/constants/controlEscolarReport.ts'
+      - 'tests/report-section-column.test.mjs'
+      - '.github/workflows/report-section-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report-section-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify canonical section propagation
+        run: node --experimental-vm-modules --test tests/report-section-column.test.mjs
+      - name: Verify academic source
+        run: npm run verify:academic-source
+      - name: Build
+        run: npm run build

@@ -128,6 +128,7 @@
                 <th>Nivel actual</th>
                 <th>Grado actual</th>
                 <th>Grupo actual</th>
+                <th>Sección actual</th>
                 <th>Tutor actual</th>
                 <th>Ciclo marcado</th>
                 <th>Folio</th>
@@ -137,10 +138,10 @@
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="12" class="empty-state">Cargando marcas existentes...</td>
+                <td colspan="13" class="empty-state">Cargando marcas existentes...</td>
               </tr>
               <tr v-else-if="!rows.length">
-                <td colspan="12" class="empty-state">No hay marcas existentes con los filtros seleccionados.</td>
+                <td colspan="13" class="empty-state">No hay marcas existentes con los filtros seleccionados.</td>
               </tr>
               <tr v-for="row in paginatedRows" v-else :key="`${row.plantel}-${row.matricula}-${row.ciclo}-${row.folio}`">
                 <td class="date-cell">{{ formatDate(row.sentAt) }}</td>
@@ -150,6 +151,7 @@
                 <td>{{ row.currentNivel || '—' }}</td>
                 <td>{{ row.currentGrado || '—' }}</td>
                 <td>{{ row.currentGrupo || '—' }}</td>
+                <td>{{ row.seccion || '—' }}</td>
                 <td class="student-cell">{{ row.currentTutorName || '—' }}</td>
                 <td>{{ row.ciclo || '—' }}</td>
                 <td class="mono">{{ row.folio || '—' }}</td>
@@ -277,6 +279,7 @@ const downloadReport = () => {
     'Nivel actual': row.currentNivel || '',
     'Grado actual': row.currentGrado || '',
     'Grupo actual': row.currentGrupo || '',
+    'Sección actual': row.seccion || '',
     'Tutor actual': row.currentTutorName || '',
     'Ciclo marcado': row.ciclo || '',
     Folio: row.folio || '',
@@ -301,6 +304,7 @@ const downloadReport = () => {
       { key: 'Nivel actual', label: 'Nivel actual' },
       { key: 'Grado actual', label: 'Grado actual' },
       { key: 'Grupo actual', label: 'Grupo actual' },
+      { key: 'Sección actual', label: 'Sección actual' },
       { key: 'Tutor actual', label: 'Tutor actual' },
       { key: 'Ciclo marcado', label: 'Ciclo marcado' },
       { key: 'Folio', label: 'Folio' },

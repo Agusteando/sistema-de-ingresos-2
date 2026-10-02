@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
       'Apellido paterno',
       'Apellido materno',
       'Grado',
+      'Sección',
       'CURP',
       'Fecha de nacimiento'
     ],
@@ -31,11 +32,12 @@ export default defineEventHandler(async (event) => {
       row.apellidoPaterno,
       row.apellidoMaterno,
       row.grado,
+      row.seccion,
       row.curp,
       row.fechaNacimiento
     ]),
-    dateColumns: [5],
-    columnWidths: [30, 24, 24, 14, 22, 20],
+    dateColumns: [6],
+    columnWidths: [30, 24, 24, 14, 22, 22, 20],
     tableName: 'Alumnos',
     creator: `${result.usuario.nombre} <${result.usuario.email}>`
   })

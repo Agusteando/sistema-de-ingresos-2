@@ -263,6 +263,7 @@
                   <tr>
                     <th>No.</th>
                     <th>Grado y grupo</th>
+                    <th>Sección</th>
                     <th>Nombre</th>
                   </tr>
                 </thead>
@@ -270,6 +271,7 @@
                   <tr v-for="(student, index) in selectedWorkshopStudents" :key="`${student.matricula}-${index}`">
                     <td>{{ index + 1 }}</td>
                     <td>{{ gradeAndGroup(student) }}</td>
+                    <td>{{ student.seccion || '—' }}</td>
                     <td class="student-name">{{ student.nombre || '—' }}</td>
                   </tr>
                 </tbody>

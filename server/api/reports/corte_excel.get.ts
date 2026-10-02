@@ -106,6 +106,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     row.matricula,
     row.nivel || '',
     row.grado || '',
+    row.seccion || '',
     Number(row.documento || 0),
     row.mesReal || row.mes,
     row.nombreCompleto,
@@ -140,6 +141,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       'Matrícula',
       'Nivel',
       'Grado',
+      'Sección',
       'Documento',
       'Mes',
       'Alumno',
@@ -152,9 +154,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       'Importe al corte (MXN)'
     ],
     rows: excelRows,
-    numericColumns: [0, 6],
+    numericColumns: [0, 7],
     highlightedCells,
-    currencyColumns: [14, 15],
+    currencyColumns: [15, 16],
     totals: [
       ...result.totales.map(total => ({ label: `${total.formaDePago} aplicado`, value: total.total })),
       { label: 'Importe registrado', value: result.totalRegistrado },

@@ -30,6 +30,7 @@ export const CONTROL_ESCOLAR_REPORT_FIELDS: ControlEscolarReportField[] = [
   { key: 'nivel', label: 'Nivel', width: 17, group: 'academic', default: true },
   { key: 'grado', label: 'Grado', width: 13, group: 'academic', default: true },
   { key: 'group', label: 'Grupo', width: 11, group: 'academic', default: true },
+  { key: 'seccion', label: 'Sección', width: 22, group: 'academic', default: true },
   { key: 'tipoIngreso', label: 'Tipo de ingreso', width: 16, group: 'academic' },
   { key: 'enrollmentState', label: 'Estado de inscripción', width: 19, group: 'academic' },
   { key: 'servicio', label: 'Servicio', width: 24, group: 'academic' },
