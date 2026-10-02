@@ -283,6 +283,13 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
       )`
     : `AND TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) <> ''`
 
+  // PRODUCTION CONTRACT — DO NOT "SIMPLIFY" THIS BACK INTO A JOIN WITH matricula.
+  // Identity already obtains the authoritative academic roster from Aurora and then
+  // intersects this result by matrícula. For an explicit campaign stage, credenciales
+  // is the source of truth for campaign artifacts (foto/recibo). Re-introducing an
+  // INNER JOIN or plantel filter through matricula here can silently turn valid rows
+  // such as etapa='1' + foto into "Sin foto" in Identity. Any future change to this
+  // branch MUST keep the direct credenciales read and the regression guard below.
   // With an explicit campaign stage the roster is already authoritative in the
   // caller. Read credenciales directly and let Identity intersect by matrícula;
   // never make a second legacy matricula row a prerequisite for a valid photo.
