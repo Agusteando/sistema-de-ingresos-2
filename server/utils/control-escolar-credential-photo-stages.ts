@@ -77,6 +77,25 @@ function academicDateWindow(value:unknown) {
   }
 }
 
+function credentialPhotoTimestamp(value:unknown) {
+  const source=clean(value,2048)
+  // Husky Pass stores credential photos as:
+  // credencial-(original|final)-<matricula>-<Date.now()>-<uuid>.<ext>
+  const match=source.match(/credencial-(?:original|final)-[^/?#]+-(\d{13})-[A-Za-z0-9]+\.(?:jpe?g|png|webp)(?:[?#].*)?$/i)
+  if(!match)return 0
+  const timestamp=Number(match[1])
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function photoBelongsToAcademicWindow(value:unknown,window:{start:string;end:string}|null) {
+  if(!window)return false
+  const timestamp=credentialPhotoTimestamp(value)
+  if(!timestamp)return false
+  const start=Date.parse(window.start.replace(' ','T')+'Z')
+  const end=Date.parse(window.end.replace(' ','T')+'Z')
+  return Number.isFinite(start)&&Number.isFinite(end)&&timestamp>=start&&timestamp<end
+}
+
 function plantelAliases(value:unknown) {
   const canonical=normalizeExternalControlEscolarPlantel(value)
   if(!canonical)return []
@@ -178,7 +197,7 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     : 'NULL'
 
   const cycleWindow=academicDateWindow(input.ciclo)
-  let cycleMode:'column'|'date'|'unavailable'='unavailable'
+  let cycleMode:'column'|'date'|'current-photo'|'unavailable'='unavailable'
   let cycleWhere=''
   const params:any[]=[]
   if(cCiclo){
@@ -190,6 +209,14 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     cycleWhere=`c.${quoteIdentifier(cFecha)} >= ? AND c.${quoteIdentifier(cFecha)} < ?`
     params.push(cycleWindow.start,cycleWindow.end)
     cycleMode='date'
+  }else if(mFoto){
+    // Some live credential tables predate a school-year column. Husky Pass still
+    // persists stage and synchronizes the accepted campaign photo into matricula.foto.
+    // In that schema we can identify the student's CURRENT credentialization stage
+    // without inventing historical membership: only rows whose stored credential
+    // photo still equals matricula.foto qualify.
+    cycleWhere=`TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) = TRIM(COALESCE(CAST(m.${quoteIdentifier(mFoto)} AS CHAR),''))`
+    cycleMode='current-photo'
   }else{
     return {
       contract:'credential-photo-stages-v2',
@@ -240,8 +267,13 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     submittedAt:string
   }>()
   const allCurrent=new Set<string>()
+  let currentPhotoTimestampRejected=0
 
   for(const row of rows){
+    if(cycleMode==='current-photo' && !photoBelongsToAcademicWindow(row.photo_url,cycleWindow)){
+      currentPhotoTimestampRejected+=1
+      continue
+    }
     const key=clean(row.stage_key,80)
     const matricula=clean(row.matricula,64).toUpperCase().replace(/\s+/g,'')
     const photoUrl=clean(row.photo_url,2048)
@@ -292,6 +324,7 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     contract:'credential-photo-stages-v2',
     available:true,
     reason:'',
+    historyComplete:cycleMode!=='current-photo',
     plantel,
     ciclo:clean(input.ciclo,30),
     cycleMode,
@@ -299,7 +332,10 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     currentPhotoCount:allCurrent.size,
     submissionCount:stageList.reduce((sum,stage)=>sum+stage.count,0),
     diagnostics:{
-      matchedRows:rows.length,
+      matchedRows:stageList.reduce((sum,stage)=>sum+stage.count,0),
+      rawMatchedRows:rows.length,
+      currentPhotoFallback:cycleMode==='current-photo',
+      currentPhotoTimestampRejected,
       hasCycleColumn:Boolean(cCiclo),
       hasDateColumn:Boolean(cFecha),
       hasMatriculaPhotoColumn:Boolean(mFoto)
