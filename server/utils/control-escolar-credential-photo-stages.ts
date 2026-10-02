@@ -178,7 +178,7 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     : 'NULL'
 
   const cycleWindow=academicDateWindow(input.ciclo)
-  let cycleMode:'column'|'date'|'unavailable'='unavailable'
+  let cycleMode:'column'|'date'|'current-photo'|'unavailable'='unavailable'
   let cycleWhere=''
   const params:any[]=[]
   if(cCiclo){
@@ -190,6 +190,14 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     cycleWhere=`c.${quoteIdentifier(cFecha)} >= ? AND c.${quoteIdentifier(cFecha)} < ?`
     params.push(cycleWindow.start,cycleWindow.end)
     cycleMode='date'
+  }else if(mFoto){
+    // Some live credential tables predate a school-year column. Husky Pass still
+    // persists stage and synchronizes the accepted campaign photo into matricula.foto.
+    // In that schema we can identify the student's CURRENT credentialization stage
+    // without inventing historical membership: only rows whose stored credential
+    // photo still equals matricula.foto qualify.
+    cycleWhere=`TRIM(COALESCE(CAST(c.${quoteIdentifier(cFoto)} AS CHAR),'')) = TRIM(COALESCE(CAST(m.${quoteIdentifier(mFoto)} AS CHAR),''))`
+    cycleMode='current-photo'
   }else{
     return {
       contract:'credential-photo-stages-v2',
@@ -292,6 +300,7 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     contract:'credential-photo-stages-v2',
     available:true,
     reason:'',
+    historyComplete:cycleMode!=='current-photo',
     plantel,
     ciclo:clean(input.ciclo,30),
     cycleMode,
@@ -300,6 +309,7 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     submissionCount:stageList.reduce((sum,stage)=>sum+stage.count,0),
     diagnostics:{
       matchedRows:rows.length,
+      currentPhotoFallback:cycleMode==='current-photo',
       hasCycleColumn:Boolean(cCiclo),
       hasDateColumn:Boolean(cFecha),
       hasMatriculaPhotoColumn:Boolean(mFoto)
