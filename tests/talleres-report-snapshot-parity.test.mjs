@@ -110,6 +110,25 @@ async function harness() {
     { context },
   )
 
+  const db = new vm.SyntheticModule(
+    ['runWithBridgeAgentId'],
+    function () {
+      this.setExport('runWithBridgeAgentId', async (_agentId, callback) => callback())
+    },
+    { context },
+  )
+
+  const studentSections = new vm.SyntheticModule(
+    ['attachSectionLabelsToRows'],
+    function () {
+      this.setExport('attachSectionLabelsToRows', async rows => rows.map(row => ({
+        ...row,
+        seccion: row?.matricula ? `Sección ${row.matricula}` : '',
+      })))
+    },
+    { context },
+  )
+
   async function load(path) {
     if (modules.has(path)) return modules.get(path)
     const source = await readFile(path, 'utf8')
@@ -121,6 +140,8 @@ async function harness() {
     await module.link(async (specifier, parent) => {
       if (specifier === './auth-session') return auth
       if (specifier === './talleres-snapshot') return snapshot
+      if (specifier === './db') return db
+      if (specifier === './student-sections') return studentSections
       const candidate = resolve(dirname(parent.identifier), specifier.endsWith('.ts') ? specifier : `${specifier}.ts`)
       return load(candidate)
     })
@@ -182,7 +203,7 @@ test('institutional detail resolves aliases to the same Talleres canonical campu
   const comida = result.groups.find(row => row.clave === 'COMIDA')
   assert.equal(comida.planteles[0].plantel, 'PREEM')
   assert.deepEqual(JSON.parse(JSON.stringify(comida.planteles[0].students)), [
-    { matricula: 'M1', nombre: 'Ana Uno', grado: '1', grupo: 'A' },
+    { matricula: 'M1', nombre: 'Ana Uno', grado: '1', grupo: 'A', seccion: 'Sección M1' },
   ])
 })
 
@@ -216,6 +237,7 @@ test('Lopez Rosas Emilio Alejandro remains in FUTBOL exactly as Talleres roster 
     grado: '4',
     grupo: 'A',
     baja: true,
+    seccion: 'Sección PM1018',
   })
 })
 
@@ -235,6 +257,6 @@ test('ultimate acceptance case keeps TRANSPORTE SENCILLO R6 from Aurora catalog 
   assert.equal(r6.nombre, 'TRANSPORTE SENCILLO R6')
   assert.equal(r6.planteles[0].plantel, 'SM')
   assert.deepEqual(JSON.parse(JSON.stringify(r6.planteles[0].students)), [
-    { matricula: 'SM-R6-ACCEPTANCE', nombre: 'Caso Transporte R6', grado: '6', grupo: 'A' },
+    { matricula: 'SM-R6-ACCEPTANCE', nombre: 'Caso Transporte R6', grado: '6', grupo: 'A', seccion: 'Sección SM-R6-ACCEPTANCE' },
   ])
 })
