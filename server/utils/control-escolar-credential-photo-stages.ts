@@ -204,6 +204,11 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
   if(requestedStage){
     cycleWhere=`CAST(c.${quoteIdentifier(cEtapa)} AS CHAR) = ?`
     params.push(requestedStage)
+    if(cCiclo){
+      const cycleSql=ciclos.map(()=>'?').join(',')
+      cycleWhere+=` AND CAST(c.${quoteIdentifier(cCiclo)} AS CHAR) IN (${cycleSql})`
+      params.push(...ciclos)
+    }
     cycleMode='stage'
   }else if(cCiclo){
     const cycleSql=ciclos.map(()=>'?').join(',')
