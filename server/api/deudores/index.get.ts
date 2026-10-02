@@ -31,7 +31,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     }
   })
 
-  if (estatus === 'todos') return enriched
-  if (estatus === 'no_deudores') return enriched.filter(r => !r.isDeudor)
-  return enriched.filter(r => r.isDeudor)
+  const visibleRows = enriched.filter(row => !row.todoCubiertoPorBeca100)
+
+  if (estatus === 'todos') return visibleRows
+  if (estatus === 'no_deudores') return visibleRows.filter(r => !r.isDeudor)
+  return visibleRows.filter(r => r.isDeudor)
 }))

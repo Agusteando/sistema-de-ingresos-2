@@ -244,8 +244,7 @@ const mergeControlEscolarContactIntoRows = async (rows: any[] = []) => {
 
 const shouldExposeBreakdownItem = (item: any) => {
   return Number(item.saldo || 0) > 0 ||
-    Number(item.pendienteConciliacion || 0) > 0 ||
-    Number(item.beca || 0) >= 100
+    Number(item.pendienteConciliacion || 0) > 0
 }
 
 export const getDeudoresGlobal = async ({
@@ -604,7 +603,7 @@ export const getDeudoresGlobal = async ({
     const noEsDeudorPorBeca = row.todoCubiertoPorBeca100
     const noEsDeudorPorConciliacion = !noEsDeudorPorSaldo && row.pagoPendienteConciliacion
     const noEsDeudorPorExcepcion = !noEsDeudorPorSaldo && !noEsDeudorPorConciliacion && row.fechaLimiteEspecialVigente
-    const isDeudor = !(noEsDeudorPorSaldo || noEsDeudorPorConciliacion || noEsDeudorPorExcepcion)
+    const isDeudor = !(noEsDeudorPorSaldo || noEsDeudorPorBeca || noEsDeudorPorConciliacion || noEsDeudorPorExcepcion)
     const completedActions = new Set((row.accionesRealizadas || []).map((evt: any) => String(evt.accion)))
     const accionesEsperadas = isDeudor ? flow.accionesEsperadas : []
     const accionesPendientes = accionesEsperadas.filter((item: any) => !completedActions.has(item.action))

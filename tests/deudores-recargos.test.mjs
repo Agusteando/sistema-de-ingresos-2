@@ -312,6 +312,23 @@ test('eventual financial concepts never receive automatic or manual recargos', a
 })
 
 
+test('100% scholarship rows stay out of the Deudores collection workspace', async () => {
+  const [deudores, endpoint] = await Promise.all([
+    readFile(resolve(root, 'server/utils/deudores.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/deudores/index.get.ts'), 'utf8'),
+  ])
+
+  assert.match(
+    deudores,
+    /const isDeudor = !\(noEsDeudorPorSaldo \|\| noEsDeudorPorBeca \|\| noEsDeudorPorConciliacion \|\| noEsDeudorPorExcepcion\)/
+  )
+  assert.doesNotMatch(deudores, /Number\(item\.beca \|\| 0\) >= 100/)
+  assert.match(endpoint, /const visibleRows = enriched\.filter\(row => !row\.todoCubiertoPorBeca100\)/)
+  assert.match(endpoint, /if \(estatus === 'todos'\) return visibleRows/)
+  assert.match(endpoint, /return visibleRows\.filter\(r => r\.isDeudor\)/)
+})
+
+
 test('Deudores supports a persisted per-plantel whole-peso saldo tolerance without schema changes', async () => {
   const [settingsUtil, settingsGet, settingsPost, deudores, actions, page, external] = await Promise.all([
     readFile(resolve(root, 'server/utils/deudores-settings.ts'), 'utf8'),
