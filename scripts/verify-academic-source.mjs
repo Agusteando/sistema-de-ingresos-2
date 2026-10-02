@@ -46,7 +46,7 @@ expect(credentialPhotos.includes('matricula.foto is only the latest global pictu
 expect(credentialPhotos.includes('photos:Array.from(stage.photos.values())'), 'Cada etapa debe publicar snapshots de foto por matrícula.')
 expect(credentialPhotos.includes('defaultStageKey') && credentialPhotos.includes('submissionCount'), 'El contrato v2 debe publicar etapa predeterminada y total de envíos.')
 expect(credentialPhotos.includes('plantelAliases') && credentialPhotos.includes('cycleCandidates'), 'El filtro de etapa debe respetar plantel y ciclo.')
-expect(credentialPhotos.includes("cycleMode:'column'|'date'|'current-photo'|'unavailable'"), 'El lector de etapas debe declarar cómo resolvió el alcance de ciclo.')
+expect(credentialPhotos.includes("cycleMode:'stage'|'column'|'date'|'current-photo'|'unavailable'"), 'El lector de etapas debe declarar cómo resolvió el alcance de ciclo o etapa.')
 expect(credentialPhotos.includes("reason:'missing_required_columns'") && credentialPhotos.includes("reason:'cycle_scope_unavailable'"), 'El historial debe explicar por qué no está disponible en vez de aparentar cero fotos.')
 expect(credentialPhotos.includes('else if(cFecha&&cycleWindow)'), 'Si credenciales no tiene ciclo, el lector debe poder acotar de forma segura por fecha del ciclo escolar.')
 expect(credentialPhotos.includes("else if(mFoto)") && credentialPhotos.includes("cycleMode='current-photo'"), 'Si no hay ciclo ni fecha, el lector debe poder identificar únicamente la etapa vigente comparando credenciales.foto contra matricula.foto.')
