@@ -7,6 +7,7 @@ export default defineEventHandler(async (event) => {
   const query=getQuery(event)
   return await readCredentialPhotoStages({
     plantel:query.plantel || query.agentId,
-    ciclo:query.ciclo || query.cicloKey || query.schoolYear
+    ciclo:query.ciclo || query.cicloKey || query.schoolYear,
+    stage:query.stage || query.etapa || query.stageKey
   })
 })
