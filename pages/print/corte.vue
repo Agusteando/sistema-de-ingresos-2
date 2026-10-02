@@ -57,6 +57,7 @@
             <span>{{ formatPaymentDates(r) }}</span>
             <span>Doc. {{ String(r.documento || '').padStart(7, '0') }}</span>
             <span v-if="r.nivel || r.grado">{{ academicPlacementLabel(r) }}</span>
+            <span v-if="r.seccion">Sección {{ r.seccion }}</span>
             <span>{{ r.mesReal || r.mes }}</span>
             <span>{{ r.formaDePago }}</span>
             <span class="payment-user">{{ formatUserCompact(r) }}</span>

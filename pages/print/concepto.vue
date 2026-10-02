@@ -99,6 +99,7 @@
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">A. materno</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nivel</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Grado</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Sección</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">CURP</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nacimiento</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Doc</th>
@@ -112,7 +113,7 @@
         </thead>
         <tbody>
           <tr v-if="!rows.length">
-            <td colspan="17" class="text-center py-6 text-gray-500 font-medium">No se encontraron movimientos.</td>
+            <td colspan="18" class="text-center py-6 text-gray-500 font-medium">No se encontraron movimientos.</td>
           </tr>
           <tr v-else v-for="r in rows" :key="`${r.folio}-${r.concepto}`" class="border-b border-gray-100">
             <td class="py-2 text-gray-900 font-mono">{{ r.folio }}</td>
@@ -123,6 +124,7 @@
             <td class="py-2 text-gray-900">{{ r.apellidoMaterno || '—' }}</td>
             <td class="py-2 text-gray-900">{{ r.nivel || '—' }}</td>
             <td class="py-2 text-gray-900">{{ r.grado || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.seccion || '—' }}</td>
             <td class="py-2 text-gray-900 font-mono">{{ r.curp || '—' }}</td>
             <td class="py-2 text-gray-900">{{ formatDate(r.fechaNacimiento) || '—' }}</td>
             <td class="py-2 text-gray-900 font-mono">{{ String(r.documento).padStart(7, '0') }}</td>
@@ -144,6 +146,7 @@
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nivel</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Grado</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Grupo</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Sección</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Plantel</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Conceptos con adeudo</th>
             <th class="py-2 text-right font-semibold text-gray-600 uppercase">Cargos</th>
@@ -153,7 +156,7 @@
         </thead>
         <tbody>
           <tr v-if="!rows.length">
-            <td colspan="10" class="text-center py-6 text-gray-500 font-medium">No hay alumnos con saldo exigible mayor al umbral para los conceptos seleccionados.</td>
+            <td colspan="11" class="text-center py-6 text-gray-500 font-medium">No hay alumnos con saldo exigible mayor al umbral para los conceptos seleccionados.</td>
           </tr>
           <tr v-else v-for="r in rows" :key="r.matricula" class="border-b border-gray-100">
             <td class="py-2 text-gray-900 font-mono">{{ r.matricula }}</td>
@@ -161,6 +164,7 @@
             <td class="py-2 text-gray-900">{{ r.nivel || '—' }}</td>
             <td class="py-2 text-gray-900">{{ r.grado || '—' }}</td>
             <td class="py-2 text-gray-900">{{ r.grupo || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.seccion || '—' }}</td>
             <td class="py-2 text-gray-900">{{ r.plantel || reportPlantel || '—' }}</td>
             <td class="py-2 text-gray-900">{{ formatDebtorConcepts(r.conceptosPendientes) }}</td>
             <td class="py-2 text-right text-gray-900">${{ Number(r.totalCargos || 0).toFixed(2) }}</td>
@@ -179,6 +183,7 @@
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">A. materno</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nivel</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Grado</th>
+            <th class="py-2 text-left font-semibold text-gray-600 uppercase">Sección</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">CURP</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Nacimiento</th>
             <th class="py-2 text-left font-semibold text-gray-600 uppercase">Plantel</th>
@@ -187,7 +192,7 @@
         </thead>
         <tbody>
           <tr v-if="!rows.length">
-            <td colspan="10" class="text-center py-6 text-gray-500 font-medium">{{ Number(resumen.inscritos || 0) === 0 ? 'No hay alumnos inscritos para el ciclo y plantel seleccionados.' : 'Todos los alumnos inscritos tienen al menos uno de los conceptos seleccionados.' }}</td>
+            <td colspan="11" class="text-center py-6 text-gray-500 font-medium">{{ Number(resumen.inscritos || 0) === 0 ? 'No hay alumnos inscritos para el ciclo y plantel seleccionados.' : 'Todos los alumnos inscritos tienen al menos uno de los conceptos seleccionados.' }}</td>
           </tr>
           <tr v-else v-for="r in rows" :key="`${r.matricula}-${r.conceptosFaltantesTexto}`" class="border-b border-gray-100">
             <td class="py-2 text-gray-900 font-mono">{{ r.matricula }}</td>
@@ -196,6 +201,7 @@
             <td class="py-2 text-gray-900">{{ r.apellidoMaterno || '—' }}</td>
             <td class="py-2 text-gray-900">{{ r.nivel || '—' }}</td>
             <td class="py-2 text-gray-900">{{ r.grado || '—' }}</td>
+            <td class="py-2 text-gray-900">{{ r.seccion || '—' }}</td>
             <td class="py-2 text-gray-900 font-mono">{{ r.curp || '—' }}</td>
             <td class="py-2 text-gray-900">{{ formatDate(r.fechaNacimiento) || '—' }}</td>
             <td class="py-2 text-gray-900">{{ r.plantel || '—' }}</td>
