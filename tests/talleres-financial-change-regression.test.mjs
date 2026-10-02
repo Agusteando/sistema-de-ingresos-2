@@ -309,7 +309,7 @@ test('concept changes physically reconcile matricula and all Talleres read paths
   assert.match(snapshot, /shouldIncludeFinancialTallerAssignment/)
   assert.match(summary, /shouldIncludeFinancialTallerAssignment/)
   assert.match(summary, /readTalleresAssignmentSummaries/)
-  assert.match(putApi, /historyWrite\\s*=\\s*await recordTalleresAssignmentChange/)
+  assert.match(putApi, /historyWrite\s*=\s*await recordTalleresAssignmentChange/)
   assert.match(putApi, /ensureCurrentTalleresSnapshotPlantel/)
   assert.doesNotMatch(putApi, /if \(updated\.changed\) \{\s*await recordTalleresAssignmentChange/)
   assert.match(details, /Quitar de Talleres; conserva cargos y pagos/)
