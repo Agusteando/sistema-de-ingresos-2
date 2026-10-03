@@ -9,10 +9,12 @@
         :class="['kpi-card', item.toneClass, { active: activeFilter === item.filter }]"
         :aria-pressed="activeFilter === item.filter"
       >
+        <span class="kpi-icon"><component :is="item.icon" :size="20" /></span>
         <span class="kpi-text">
           <span>{{ item.label }}</span>
           <StudentsKpiValue :value="item.value" />
         </span>
+        <UiKpiSparkline :values="item.sparkline || []" />
       </button>
 
       <button
@@ -23,6 +25,7 @@
         :aria-pressed="incomeVisible"
         @click="toggleIncomeVisibility"
       >
+        <span class="kpi-icon"><LucideCircleDollarSign :size="20" /></span>
         <span class="kpi-text">
           <span>Ingresos del mes</span>
           <StudentsKpiValue
@@ -51,6 +54,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue'
+import UiKpiSparkline from '~/components/ui/UiKpiSparkline.vue'
 import StudentsKpiValue from '~/components/students/StudentsKpiValue.vue'
 import { LucideCircleDollarSign, LucideGlobe2, LucideTag, LucideUserCheck, LucideUsers, LucideUserX } from 'lucide-vue-next'
 

@@ -1,5 +1,5 @@
 <template>
-  <main class="visual-lab-page students-screen">
+  <main class="visual-lab-page students-screen" :class="{ 'with-app-chrome': route.query.appchrome === '1' }">
     <!-- Permanent iteration/debugging tool. Do not remove without replacing docs/visual-testing.md. -->
     <header v-if="showLabChrome" class="visual-lab-toolbar">
       <div>
@@ -17,7 +17,7 @@
 
     <template v-if="isClientReady && route.query.workspace === '1'">
       <StudentsHero><button class="lab-duplicate-link" type="button">62 posibles duplicados · Revisar</button></StudentsHero>
-      <StudentsKpiSummary user-role="superadmin" :kpi-counts="{ inscritos: 460, internos: 334, externos: 126, no_inscritos: 25, bajas: 33 }" :global-kpis="{ ingresosMes: 265400 }" />
+      <StudentsKpiSummary user-role="superadmin" :active-filter="labActiveFilter" @set-filter="labActiveFilter = $event" :kpi-counts="{ inscritos: 460, internos: 334, externos: 126, no_inscritos: 25, bajas: 33 }" :global-kpis="{ ingresosMes: 265400 }" :kpi-sparklines="{ inscritos: [420, 434, 442, 460], internos: [310, 319, 328, 334], externos: [110, 115, 114, 126], no_inscritos: [35, 32, 29, 25], bajas: [22, 24, 30, 33] }" />
       <StudentsFilterBar :search-query="labSearch" :active-grado="activeSummaryGrade" :active-grupo="activeSummaryGroup" :available-grados="['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto']" :available-grupos="['AMERICA', 'CANADA', 'DINAMARCA']" @update-search-query="labSearch = $event" @update-active-grado="activeSummaryGrade = $event" @update-active-grupo="activeSummaryGroup = $event" />
     </template>
     <button v-if="selectedStudent || showLabSummary" type="button" class="students-back-button" @click="selectedStudent = null; showLabSummary = false">← Alumnos</button>
@@ -76,7 +76,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import StudentsHero from '~/components/students/StudentsHero.vue'
 import StudentsKpiSummary from '~/components/students/StudentsKpiSummary.vue'
 import StudentsFilterBar from '~/components/students/StudentsFilterBar.vue'
@@ -90,6 +90,7 @@ definePageMeta({ layout: false })
 
 const route = useRoute()
 const labSearch = ref('')
+const labActiveFilter = ref('inscritos')
 const showLabSummary = ref(false)
 const showLabChrome = computed(() => route.query.chrome !== '0')
 const globalState = useState('globalState', () => ({ ciclo: '2026' }))
@@ -212,6 +213,19 @@ const accountDebtsByMatricula = {
 const selectedStudent = ref(route.query.summary === '1' ? null : students.value[0])
 const activeSummaryGrade = ref('')
 const activeSummaryGroup = ref('')
+// Optional dense fixture measures real row capacity without touching production data.
+if (route.query.dense === '1') {
+  const templates = [...students.value]
+  for (let index = 0; index < 48; index++) {
+    students.value.push({ ...templates[index % templates.length],
+      matricula: `LAB${String(index).padStart(4, '0')}`,
+      nombreCompleto: `${templates[index % templates.length].nombreCompleto} ${index + 1}`,
+      grado: String(index % 6 + 1), grupo: ['AMERICA', 'CANADA', 'DINAMARCA', 'OCEANIA'][Math.floor(index / 6) % 4],
+      tipoIngreso: index % 3 === 0 ? 'externo' : 'interno',
+    })
+  }
+}
+
 const enrollmentSummary = computed(() => buildEnrollmentSummary(students.value, {
   include: () => true,
   type: (student) => student.tipoIngreso === 'interno' ? 'interno' : 'externo',
@@ -223,7 +237,10 @@ const selectedMatriculas = ref(new Set(['PTO574']))
 const selectedCount = computed(() => selectedMatriculas.value.size)
 const allDisplayedSelected = computed(() => selectedCount.value === students.value.length)
 const someDisplayedSelected = computed(() => selectedCount.value > 0 && !allDisplayedSelected.value)
-const selectedVisualDebts = computed(() => accountDebtsByMatricula[selectedStudent.value?.matricula] || [])
+const selectedVisualDebts = computed(() => {
+  const debts = accountDebtsByMatricula[selectedStudent.value?.matricula] || []
+  return route.query.dense === '1' ? Array.from({ length: 6 }, (_, index) => debts.map(debt => ({ ...debt, documento: `${debt.documento}-lab-${index}` }))).flat() : debts
+})
 const visualInvoicesByMatricula = {
   PTO574: [
     {
@@ -412,7 +429,14 @@ function clearVisualState() {
 seedVisualAuth()
 onMounted(() => {
   seedVisualState()
+  if (route.query.appchrome === '1') {
+    setPageLayout('default')
+    document.body.classList.add('students-route-active')
+  }
   isClientReady.value = true
+})
+onBeforeUnmount(() => {
+  if (route.query.appchrome === '1') document.body.classList.remove('students-route-active')
 })
 </script>
 
@@ -430,6 +454,8 @@ onMounted(() => {
   color: #15233c;
   font-family: var(--students-font, Montserrat, ui-sans-serif, system-ui, sans-serif);
 }
+
+.visual-lab-page.with-app-chrome { width: 100%; height: 100%; padding: 0; }
 
 .visual-lab-toolbar {
   display: flex;

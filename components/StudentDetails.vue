@@ -3363,10 +3363,6 @@ const handleInvoiceSuccess = (invoice) => {
   flex: none;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) .account-header {
-  grid-template-columns: minmax(0, 1fr) minmax(150px, 24%) minmax(238px, auto) auto;
-  grid-template-areas: "title search view total";
-}
 
 .student-details-shell:not(.student-details-shell--expanded) .account-view-tabs {
   grid-area: view;
@@ -3387,12 +3383,6 @@ const handleInvoiceSuccess = (invoice) => {
 }
 
 @container student-detail-panel (max-width: 700px) {
-  .student-details-shell:not(.student-details-shell--expanded) .account-header {
-    grid-template-columns: minmax(218px, auto) minmax(110px, 1fr);
-    grid-template-areas:
-      "title total"
-      "view search";
-  }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-view-tabs {
     justify-self: stretch;
@@ -3405,13 +3395,6 @@ const handleInvoiceSuccess = (invoice) => {
 }
 
 @container student-detail-panel (max-width: 470px) {
-  .student-details-shell:not(.student-details-shell--expanded) .account-header {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "title total"
-      "view view"
-      "search search";
-  }
 
   .student-details-shell:not(.student-details-shell--expanded) .account-view-tabs {
     width: 100%;

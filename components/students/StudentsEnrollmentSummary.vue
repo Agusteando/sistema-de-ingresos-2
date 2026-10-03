@@ -57,6 +57,7 @@
                       @click.stop="$emit('select-group', { grade: row.gradeValue, group: group.value })"
                     >
                       <UiGroupIcon :label="group.value" />
+                      <span class="enrollment-group-name">{{ group.label.length > 4 ? group.label.slice(0, 3) : group.label }}</span>
                       <b>{{ formatNumber(group.total) }}</b>
                     </button>
                   </div>

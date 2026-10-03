@@ -84,3 +84,10 @@ Add `&workspace=1` to the students-account lab URL to render the real page title
 The Students composition uses readable text instead of scaling a desktop canvas. It defaults to a 35% student list on desktop, preserving saved user splits and keyboard/pointer resizing. Below 900px of available workspace width, or on a viewport shorter than 550px with an open record, it presents one pane at a time. Returning to Alumnos restores metrics, filters and page actions. Resumen por grado keeps the enrollment summary reachable in this mode. Scroll belongs to the student list and account body.
 
 Verify 1920×1080, 1366×768, 1024×768, 900×640, 390×844 and 1150×410. Check the list and detail states, complete names and balances, reachable actions, document modal, Más, payment history, invoices, filtering and return to the list. Use the lab for layout proof; its synthetic records and invalid production session are not evidence of live database/API health.
+
+
+## Row-density comparisons
+
+Use `&workspace=1&dense=1` for a 52-student synthetic fixture covering six grades and four named groups. Compare complete rows inside `.student-list-scroll`, the account body height, metadata readability, and unclipped group chips against the current main. Also use `&summary=1` to inspect grade totals. The fixture repeats representative account documents to exercise normalization; measured account capacity must not be confused with distinct normalized document counts. Preserve the four-record fixture without `dense=1` for dialog, payment-history and invoice interaction checks.
+
+Add `&appchrome=1` to include the real default sidebar and top bar; test both the summary and selected record with the reduced available workspace width.
