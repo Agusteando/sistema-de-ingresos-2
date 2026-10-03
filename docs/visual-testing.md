@@ -76,3 +76,11 @@ http://localhost:3000/__visual-lab/buscador
 ```
 
 Valida al menos los mismos viewports compactos anteriores y confirma que resultados, ficha, datos familiares y fotos de personas autorizadas no generan scroll horizontal.
+
+## Complete Students workspace
+
+Add `&workspace=1` to the students-account lab URL to render the real page title, metrics and filter controls around the same deterministic student/account components. Use `&summary=1` to start with the list and enrollment summary. Search, list selection, the back control and the enrollment summary are available in the fixture.
+
+The Students composition uses readable text instead of scaling a desktop canvas. It defaults to a 35% student list on desktop, preserving saved user splits and keyboard/pointer resizing. Below 900px of available workspace width, or on a viewport shorter than 550px with an open record, it presents one pane at a time. Returning to Alumnos restores metrics, filters and page actions. Resumen por grado keeps the enrollment summary reachable in this mode. Scroll belongs to the student list and account body.
+
+Verify 1920×1080, 1366×768, 1024×768, 900×640, 390×844 and 1150×410. Check the list and detail states, complete names and balances, reachable actions, document modal, Más, payment history, invoices, filtering and return to the list. Use the lab for layout proof; its synthetic records and invalid production session are not evidence of live database/API health.

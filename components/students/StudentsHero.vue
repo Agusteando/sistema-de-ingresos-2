@@ -2,9 +2,9 @@
   <header class="students-hero">
     <div class="hero-copy">
       <h1>Gestión de Alumnos</h1>
-      <p>Administración general de matrícula y estado de cuenta financiero.</p>
     </div>
     <div class="hero-actions">
+      <slot />
       <UiButton variant="secondary" class="section-manage-button" @click="$emit('manage-sections')">
         <LucideTags :size="18" /> Secciones
       </UiButton>

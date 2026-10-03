@@ -206,7 +206,11 @@
               </div>
             </div>
 
-            <div class="profile-top-actions">
+            <div class="profile-financial-summary" :class="{ 'is-invoice': accountViewMode === 'invoices' }" :aria-label="accountViewMode === 'invoices' ? 'Total facturado' : 'Saldo pendiente'">
+            <strong>${{ format(accountViewMode === 'invoices' ? studentInvoiceTotal : accountDebtTotal) }}</strong>
+            <span>{{ accountViewMode === 'invoices' ? 'Facturado' : 'Saldo pendiente' }}</span>
+          </div>
+          <div class="profile-top-actions">
               <button
                 class="ingreso-icon-button"
                 type="button"
@@ -2907,6 +2911,7 @@ const showAccountFilterMenu = (event) => {
 
 const showStudentActionsMenu = (event) => {
   const menuItems = [
+    { label: detailsExpanded.value ? "Contraer estado de cuenta" : "Ampliar estado de cuenta", icon: LucideMaximize2, action: toggleDetailsExpanded },
     {
       label: "Editar",
       icon: LucideSettings,
@@ -3316,9 +3321,9 @@ const handleInvoiceSuccess = (invoice) => {
   align-items: center;
   gap: 3px;
   min-width: 0;
-  border: 1px solid #dfe6ee;
-  border-radius: 10px;
-  background: #f7f9fb;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   padding: 3px;
 }
 
@@ -3332,8 +3337,8 @@ const handleInvoiceSuccess = (invoice) => {
   background: transparent;
   padding: 0 8px;
   color: #64748b;
-  font-size: 10px;
-  font-weight: 750;
+  font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -3341,7 +3346,7 @@ const handleInvoiceSuccess = (invoice) => {
 .account-view-tabs button.active {
   background: #fff;
   color: #285d32;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+  box-shadow: inset 0 -2px #3f9138;
 }
 
 .account-view-tabs button > span {
@@ -3350,7 +3355,7 @@ const handleInvoiceSuccess = (invoice) => {
   background: #e9f4e8;
   padding: 1px 5px;
   color: #285d32;
-  font-size: 9px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -3416,7 +3421,7 @@ const handleInvoiceSuccess = (invoice) => {
 @media (max-width: 760px) {
   .account-view-tabs button {
     padding: 0 6px;
-    font-size: 9px;
+    font-size: 12px;
   }
 
   .account-view-tabs button svg {

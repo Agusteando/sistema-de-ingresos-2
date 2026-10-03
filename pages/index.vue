@@ -3,9 +3,9 @@
     <StudentsHero
       @manage-sections="openSectionModal(null)"
       @new-student="openAlta"
-    />
-
-    <StudentsDuplicateResolutionEntry />
+    >
+      <StudentsDuplicateResolutionEntry />
+    </StudentsHero>
 
     <StudentsKpiSummary
       :user-role="userRole"
@@ -38,6 +38,9 @@
       @export="exportData"
     />
 
+    <button v-if="accountWorkspaceMode !== 'summary' || showMobileSummary" type="button" class="students-back-button" @click="selectedStudent = null; closeBulkWorkspace(); showMobileSummary = false">← Alumnos</button>
+    <button v-else type="button" class="students-back-button" @click="showMobileSummary = true">Resumen por grado</button>
+
     <div class="students-scale-shell">
       <div class="students-design-canvas">
         <div
@@ -46,6 +49,7 @@
             'students-workspace',
             {
               'has-detail': hasAccountWorkspace,
+              'has-focus': accountWorkspaceMode !== 'summary' || showMobileSummary,
               'is-resizing': workspaceResizing,
             },
           ]"
@@ -861,14 +865,15 @@ const selectedSectionSummary = computed(() => {
   return values.length > 2 ? `${values.slice(0, 2).join(', ')} +${values.length - 2}` : values.join(', ')
 })
 const hasAccountWorkspace = computed(() => true)
+const showMobileSummary = ref(false)
 const studentsWorkspaceEl = ref(null)
-const workspaceSplitPercent = ref(51)
+const workspaceSplitPercent = ref(35)
 const workspaceStackPercent = ref(46)
 const workspaceIsStacked = ref(false)
 const workspaceResizing = ref(false)
 const WORKSPACE_SPLIT_STORAGE_KEY = 'students:workspace-split-percent:v1'
 const WORKSPACE_STACK_STORAGE_KEY = 'students:workspace-stack-percent:v1'
-const WORKSPACE_SPLIT_DEFAULT = 51
+const WORKSPACE_SPLIT_DEFAULT = 35
 const WORKSPACE_STACK_DEFAULT = 46
 const WORKSPACE_SPLIT_MIN = 24
 const WORKSPACE_SPLIT_MAX = 76
@@ -2491,8 +2496,10 @@ const loadEnrollmentConfig = async ({ refreshStudents = false, refreshKpis = tru
 
 onMounted(async () => {
   if (process.client) {
-    const savedWorkspaceSplit = Number(localStorage.getItem(WORKSPACE_SPLIT_STORAGE_KEY))
-    const savedWorkspaceStack = Number(localStorage.getItem(WORKSPACE_STACK_STORAGE_KEY))
+    const savedWorkspaceSplitRaw = localStorage.getItem(WORKSPACE_SPLIT_STORAGE_KEY)
+    const savedWorkspaceSplit = savedWorkspaceSplitRaw === null ? NaN : Number(savedWorkspaceSplitRaw)
+    const savedWorkspaceStackRaw = localStorage.getItem(WORKSPACE_STACK_STORAGE_KEY)
+    const savedWorkspaceStack = savedWorkspaceStackRaw === null ? NaN : Number(savedWorkspaceStackRaw)
     if (Number.isFinite(savedWorkspaceSplit)) workspaceSplitPercent.value = clampWorkspaceSplit(savedWorkspaceSplit)
     if (Number.isFinite(savedWorkspaceStack)) workspaceStackPercent.value = clampWorkspaceStack(savedWorkspaceStack)
     scheduleWorkspaceOrientationUpdate()

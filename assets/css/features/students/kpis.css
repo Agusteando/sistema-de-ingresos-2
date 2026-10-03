@@ -78,8 +78,8 @@
   max-width: 100%;
   overflow: hidden;
   color: #657088;
-  font-size: 9.8px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.035em;
   text-overflow: ellipsis;
   text-transform: uppercase;
@@ -89,7 +89,7 @@
 .kpi-text strong {
   color: #16243d;
   font-size: 22px;
-  font-weight: 880;
+  font-weight: 600;
   letter-spacing: -0.045em;
   line-height: 1;
 }
@@ -198,8 +198,8 @@
   border-radius: 10px;
   background: color-mix(in srgb, var(--section-color) 7%, #fff);
   color: var(--section-color);
-  font-size: 11px;
-  font-weight: 790;
+  font-size: 12px;
+  font-weight: 600;
   box-shadow: 0 6px 13px rgba(21, 35, 60, 0.04);
 }
 
@@ -225,7 +225,7 @@
 .section-kpi-card strong {
   margin-left: auto;
   color: #15233c;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 
@@ -353,7 +353,7 @@
   }
   .kpi-icon { width: 56px; height: 56px; }
   .kpi-icon svg { width: 24px; height: 24px; }
-  .kpi-text span { font-size: 11px; }
+  .kpi-text span { font-size: 12px; }
   .kpi-text strong { font-size: 27px; }
   .ui-kpi-sparkline { right: 13px; bottom: 8px; width: min(54%, 140px); height: 52px; }
   .section-kpi-rail { min-height: 40px; margin-top: 12px; gap: 14px; }

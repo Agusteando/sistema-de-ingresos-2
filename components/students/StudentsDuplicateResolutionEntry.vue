@@ -4,7 +4,7 @@
       <span class="duplicate-entry__icon" aria-hidden="true">
         <LucideGitMerge :size="18" stroke-width="1.8" />
       </span>
-      <span>Resolver posibles duplicados<span v-if="count !== null"> ({{ count }})</span></span>
+      <span>Posibles duplicados<span v-if="count !== null"> ({{ count }})</span></span>
       <LucideChevronRight class="duplicate-entry__arrow" :size="17" stroke-width="1.8" aria-hidden="true" />
     </button>
   </section>
@@ -33,25 +33,25 @@ onMounted(loadCount)
 
 <style scoped>
 .duplicate-entry {
-  width: 100%;
-  padding: 0 0 8px;
+  width: auto;
+  padding: 0;
 }
 
 .duplicate-entry__button {
-  width: 100%;
+  width: auto;
   min-height: 36px;
   display: flex;
   align-items: center;
   gap: 11px;
   padding: 4px 10px;
-  border: 1px solid #e1e7e3;
+  border: 0;
   border-radius: 11px;
-  background: rgba(255, 255, 255, 0.9);
+  background: transparent;
   color: #47534c;
-  box-shadow: 0 5px 18px rgba(45, 61, 51, 0.035);
+  box-shadow: none;
   font: inherit;
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;

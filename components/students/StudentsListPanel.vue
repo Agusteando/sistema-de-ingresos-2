@@ -159,6 +159,7 @@
                     </span>
                   </span>
                 </span>
+                <span class="student-academic-line">{{ gradeVisualTitle(student) }} · {{ studentGroupLabel(student) }}</span>
                 <span v-if="student.customSections?.length" class="student-section-badges" :title="sectionBadgeTitle(student)">
                   <b v-for="section in visibleStudentSections(student)" :key="`row-section-${student.matricula}-${section.id}`">{{ section.name }}</b>
                   <b v-if="hiddenStudentSectionsCount(student)" class="badge-more">+{{ hiddenStudentSectionsCount(student) }}</b>

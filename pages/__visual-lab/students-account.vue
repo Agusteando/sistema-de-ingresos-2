@@ -1,5 +1,5 @@
 <template>
-  <main class="visual-lab-page">
+  <main class="visual-lab-page students-screen">
     <!-- Permanent iteration/debugging tool. Do not remove without replacing docs/visual-testing.md. -->
     <header v-if="showLabChrome" class="visual-lab-toolbar">
       <div>
@@ -15,11 +15,18 @@
       </nav>
     </header>
 
+    <template v-if="isClientReady && route.query.workspace === '1'">
+      <StudentsHero><button class="lab-duplicate-link" type="button">62 posibles duplicados · Revisar</button></StudentsHero>
+      <StudentsKpiSummary user-role="superadmin" :kpi-counts="{ inscritos: 460, internos: 334, externos: 126, no_inscritos: 25, bajas: 33 }" :global-kpis="{ ingresosMes: 265400 }" />
+      <StudentsFilterBar :search-query="labSearch" :active-grado="activeSummaryGrade" :active-grupo="activeSummaryGroup" :available-grados="['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto']" :available-grupos="['AMERICA', 'CANADA', 'DINAMARCA']" @update-search-query="labSearch = $event" @update-active-grado="activeSummaryGrade = $event" @update-active-grupo="activeSummaryGroup = $event" />
+    </template>
+    <button v-if="selectedStudent || showLabSummary" type="button" class="students-back-button" @click="selectedStudent = null; showLabSummary = false">← Alumnos</button>
+    <button v-else type="button" class="students-back-button" @click="showLabSummary = true">Resumen por grado</button>
     <div v-if="isClientReady" class="students-scale-shell visual-lab-frame">
       <div class="students-design-canvas">
-        <div class="students-workspace has-detail visual-lab-workspace">
+        <div :class="['students-workspace has-detail visual-lab-workspace', { 'has-focus': selectedStudent || showLabSummary }]">
           <StudentsListPanel
-            :displayed-students="students"
+            :displayed-students="students.filter(s => s.nombreCompleto.toLowerCase().includes(labSearch.toLowerCase()))"
             :selected-student="selectedStudent"
             :selected-matriculas="selectedMatriculas"
             :selected-count="selectedCount"
@@ -56,6 +63,7 @@
               :tipo-ingreso-concepts="externalConcepts"
               :visual-lab-debts="selectedVisualDebts"
               :visual-lab-invoices="selectedVisualInvoices"
+              @close="selectedStudent = null"
             />
           </section>
         </div>
@@ -69,6 +77,9 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import StudentsHero from '~/components/students/StudentsHero.vue'
+import StudentsKpiSummary from '~/components/students/StudentsKpiSummary.vue'
+import StudentsFilterBar from '~/components/students/StudentsFilterBar.vue'
 import ContextMenu from '~/components/ContextMenu.vue'
 import StudentDetails from '~/components/StudentDetails.vue'
 import StudentsListPanel from '~/components/students/StudentsListPanel.vue'
@@ -78,6 +89,8 @@ import { buildEnrollmentSummary } from '~/shared/utils/enrollmentSummary'
 definePageMeta({ layout: false })
 
 const route = useRoute()
+const labSearch = ref('')
+const showLabSummary = ref(false)
 const showLabChrome = computed(() => route.query.chrome !== '0')
 const globalState = useState('globalState', () => ({ ciclo: '2026' }))
 globalState.value = { ...(globalState.value || {}), ciclo: '2026' }
@@ -487,7 +500,7 @@ onMounted(() => {
 }
 
 .visual-lab-workspace {
-  --students-list-panel-size: 40%;
-  --students-detail-panel-size: 60%;
+  --students-list-panel-size: 35%;
+  --students-detail-panel-size: 65%;
 }
 </style>
