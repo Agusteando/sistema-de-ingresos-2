@@ -16,7 +16,7 @@
       <button type="button" class="sidebar-collapse-button" :aria-label="sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'" @click="toggleSidebar">
         <component :is="sidebarCollapsed ? LucidePanelLeftOpen : LucidePanelLeftClose" :size="18" />
       </button>
-      <div ref="sidebarScaleShell" class="sidebar-scale-shell">
+      <div class="sidebar-scale-shell">
         <div class="sidebar-design-canvas" :style="sidebarDesignCanvasStyle">
       <div class="sidebar-sheen"></div>
       <div class="sidebar-rings sidebar-rings-top"></div>
@@ -33,7 +33,7 @@
 
       <NuxtLink to="/" class="sidebar-brand sidebar-brand-link" title="Inicio" aria-label="Inicio">
         <img
-          src="https://casitaiedis.edu.mx/assets/img/IECS-IEDIS%20IMAGES/IMAGOTIPO-IECS-IEDIS-23-24.webp"
+          src="/brand/institutional-logo.webp"
           alt="IECS IEDIS"
           class="sidebar-logo"
         />
@@ -477,57 +477,20 @@ const { toasts, show } = useToast()
 const { syncState, syncMessage } = useOptimisticSync()
 const route = useRoute()
 
-const SIDEBAR_DESIGN_WIDTH = 260
+const SIDEBAR_WIDTH = 220
 const SIDEBAR_COLLAPSED_WIDTH = 84
-const SIDEBAR_DESIGN_HEIGHT = 860
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'income-sidebar-collapsed'
-const sidebarScaleShell = ref(null)
-const sidebarScale = ref(1)
 const sidebarCollapsed = ref(false)
 const controlEscolarDetailOpen = useState('controlEscolarDetailOpen', () => false)
 const controlDetailAutoCollapsed = ref(false)
 const controlDetailRestoreCollapsed = ref(false)
 const controlDetailUserOverride = ref(false)
+// Natural sidebar flow keeps navigation readable without scaling an entire artboard.
 const sidebarRootStyle = computed(() => {
-  if (sidebarCollapsed.value) {
-    return { width: `${SIDEBAR_COLLAPSED_WIDTH}px`, flexBasis: `${SIDEBAR_COLLAPSED_WIDTH}px` }
-  }
-  return {
-    width: `${Math.ceil(SIDEBAR_DESIGN_WIDTH * sidebarScale.value)}px`,
-    flexBasis: `${Math.ceil(SIDEBAR_DESIGN_WIDTH * sidebarScale.value)}px`
-  }
+  const width = sidebarCollapsed.value ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH
+  return { width: `${width}px`, flexBasis: `${width}px` }
 })
-const sidebarDesignCanvasStyle = computed(() => {
-  if (sidebarCollapsed.value) {
-    return {
-      width: `${SIDEBAR_COLLAPSED_WIDTH}px`,
-      height: '100%',
-      transform: 'none'
-    }
-  }
-
-  return {
-    width: `${SIDEBAR_DESIGN_WIDTH}px`,
-    height: `${SIDEBAR_DESIGN_HEIGHT}px`,
-    transform: `scale(${sidebarScale.value})`
-  }
-})
-
-let sidebarResizeObserver = null
-let sidebarFrame = null
-const updateSidebarScale = () => {
-  if (typeof window === 'undefined') return
-  const availableHeight = Math.max(360, window.innerHeight || SIDEBAR_DESIGN_HEIGHT)
-  const availableWidth = Math.max(260, window.innerWidth || SIDEBAR_DESIGN_WIDTH)
-  const widthGuard = availableWidth <= 720 ? Math.max(0.58, availableWidth / 1040) : 0
-  const nextScale = Math.min(1, Math.max(0.56, availableHeight / SIDEBAR_DESIGN_HEIGHT, widthGuard))
-  sidebarScale.value = Number(nextScale.toFixed(4))
-}
-const scheduleSidebarScaleUpdate = () => nextTick(() => {
-  if (typeof window === 'undefined') return
-  if (sidebarFrame) window.cancelAnimationFrame(sidebarFrame)
-  sidebarFrame = window.requestAnimationFrame(updateSidebarScale)
-})
+const sidebarDesignCanvasStyle = { width: '100%', height: '100%', transform: 'none' }
 
 const { state, activeCicloKey, setActiveCiclo, cycleOptions } = useActiveCiclo()
 
@@ -1274,7 +1237,6 @@ const setSidebarCollapsed = (collapsed, options = {}) => {
   if (persist && typeof window !== 'undefined') {
     localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, sidebarCollapsed.value ? '1' : '0')
   }
-  scheduleSidebarScaleUpdate()
 }
 
 const toggleSidebar = () => {
@@ -1329,16 +1291,10 @@ onMounted(async () => {
     sidebarCollapsed.value = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === '1'
   }
   reconcileControlDetailSidebar(Boolean(isControlEscolarPage.value && controlEscolarDetailOpen.value))
-  scheduleSidebarScaleUpdate()
   if (typeof window !== 'undefined') {
-    window.addEventListener('resize', scheduleSidebarScaleUpdate, { passive: true })
     window.addEventListener('message', handleLocalSystemUpdateMessage)
     document.addEventListener('pointerdown', handlePlantelDocumentPointerDown)
     document.addEventListener('pointerdown', handleCicloDocumentPointerDown)
-    if (typeof ResizeObserver !== 'undefined' && sidebarScaleShell.value) {
-      sidebarResizeObserver = new ResizeObserver(scheduleSidebarScaleUpdate)
-      sidebarResizeObserver.observe(sidebarScaleShell.value)
-    }
   }
 
   if (activePlantel.value !== 'GLOBAL') {
@@ -1369,13 +1325,10 @@ onBeforeUnmount(() => {
   if (talleresReturnTimer && typeof window !== 'undefined') window.clearTimeout(talleresReturnTimer)
   talleresReturnTimer = null
   if (typeof window !== 'undefined') {
-    window.removeEventListener('resize', scheduleSidebarScaleUpdate)
     window.removeEventListener('message', handleLocalSystemUpdateMessage)
     document.removeEventListener('pointerdown', handlePlantelDocumentPointerDown)
     document.removeEventListener('pointerdown', handleCicloDocumentPointerDown)
-    if (sidebarFrame) window.cancelAnimationFrame(sidebarFrame)
   }
-  sidebarResizeObserver?.disconnect?.()
 })
 
 const currentRouteName = computed(() => {
@@ -3565,4 +3518,35 @@ const logout = async () => {
   }
 }
 
+
+/* Readable desktop navigation: brand, flexible route list, then compact context. */
+@media (min-width: 761px) {
+  .income-sidebar { border-radius: 0; background: linear-gradient(180deg, #fff, #f5faf4); box-shadow: none; }
+  .sidebar-design-canvas { min-height: 0; will-change: auto; }
+  .sidebar-design-canvas .sidebar-brand { display: flex; align-items: center; gap: 9px; min-height: 86px; flex: 0 0 auto; padding: 16px 12px; }
+  .sidebar-design-canvas .sidebar-logo { width: 43px; max-height: 40px; margin: 0; flex: 0 0 auto; }
+  .sidebar-design-canvas .sidebar-system-logo { width: 142px; margin: 0; }
+  .sidebar-design-canvas .sidebar-nav { min-height: 0; flex: 1 1 0; gap: 3px; padding: 4px 10px 10px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .sidebar-design-canvas .nav-item { min-height: 38px; flex: 0 0 auto; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 500; line-height: 1.3; box-shadow: none; transform: none; }
+  .sidebar-design-canvas .nav-item svg { width: 18px; height: 18px; flex: 0 0 auto; }
+  .sidebar-design-canvas .nav-item.router-link-active { background: #edf3e6; color: var(--brand-iecs-secondary); font-weight: 600; box-shadow: inset 3px 0 var(--brand-iecs); }
+  .sidebar-design-canvas .sidebar-footer { flex: 0 0 auto; gap: 6px; padding: 10px; border-top: 1px solid #e2eae2; }
+  .sidebar-design-canvas .plantel-block > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+  .sidebar-design-canvas .plantel-select { min-height: 44px; padding: 7px 9px; gap: 7px; border-radius: 8px; box-shadow: none; }
+  .sidebar-design-canvas .plantel-current strong { font-size: 12px; font-weight: 600; }
+  .sidebar-design-canvas .plantel-current small { font-size: 11px; font-weight: 500; }
+  .sidebar-design-canvas .system-version-card { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 7px; padding: 5px 8px; border: 0; border-radius: 6px; box-shadow: none; background: transparent; }
+  .sidebar-design-canvas .system-version-card > span { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+  .sidebar-design-canvas .system-version-card > strong { font-size: 12px; font-weight: 600; }
+  .sidebar-design-canvas .system-version-card > small { grid-column: 1 / -1; font-size: 11px; font-weight: 400; }
+  .sidebar-design-canvas .admin-card { min-height: 46px; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; box-shadow: none; }
+  .sidebar-design-canvas .admin-profile { gap: 8px; }
+  .sidebar-design-canvas .admin-avatar { width: 30px; height: 30px; }
+  .sidebar-design-canvas .admin-meta span { font-size: 12px; font-weight: 500; }
+  .sidebar-design-canvas .admin-meta strong { font-size: 11px; font-weight: 500; }
+  .sidebar-design-canvas .sidebar-footer :deep(.students-cache-sync) { min-height: 28px; padding-block: 4px; box-shadow: none; }
+  .income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-brand { min-height: 86px; padding: 18px 0; }
+  .income-shell.sidebar-collapsed .sidebar-design-canvas .sidebar-nav { min-height: 0; overflow-y: auto; padding-inline: 10px; gap: 5px; }
+  .income-shell.sidebar-collapsed .sidebar-design-canvas .nav-item { min-height: 40px; height: 40px; width: 44px; min-width: 44px; border-radius: 9px; }
+}
 </style>

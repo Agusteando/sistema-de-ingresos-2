@@ -10,9 +10,9 @@
     --soft-line: #edf2f7;
     --canvas: #f9fbfa;
     --mint: #eaf8e7;
-    --leaf: #65a744;
-    --leaf-dark: #3f7e36;
-    --teal: #1ca99e;
+    --leaf: #618b2f;
+    --leaf-dark: #00692f;
+    --teal: #007f92;
     --sky: #397fe8;
     --coral: #ff4d38;
     --shadow-soft: 0 16px 42px rgba(22, 38, 65, 0.08);
@@ -117,12 +117,12 @@
   }
   .btn-primary {
     @apply text-white focus:ring-brand-leaf;
-    background: linear-gradient(135deg, #86c85b 0%, #4e9443 100%);
+    background: linear-gradient(135deg, #547a29 0%, #507728 100%);
     box-shadow: 0 12px 24px rgba(78, 148, 67, 0.22);
   }
   .btn-secondary {
     @apply bg-white focus:ring-brand-campus;
-    color: #2d6b31;
+    color: var(--brand-iecs-secondary, #00692f);
     border-color: rgba(78, 132, 78, 0.28);
     box-shadow: 0 8px 20px rgba(22, 38, 65, 0.05);
   }

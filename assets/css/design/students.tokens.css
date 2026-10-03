@@ -5,10 +5,10 @@ body.students-route-active {
   --students-surface: #ffffff;
   --students-border: #dfe7f0;
   --students-border-soft: #edf2f7;
-  --students-green: #3f9138;
-  --students-green-strong: #2f7f32;
+  --students-green: var(--brand-iecs, #618b2f);
+  --students-green-strong: var(--brand-iecs-secondary, #00692f);
   --students-green-soft: #eef8eb;
-  --students-teal: #159f96;
+  --students-teal: var(--brand-iedis, #007f92);
   --students-blue: #3478d8;
   --students-red: #c8423b;
   --students-gray: #6b7280;

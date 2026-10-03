@@ -18,7 +18,7 @@
     <template v-if="isClientReady && route.query.workspace === '1'">
       <StudentsHero><button class="lab-duplicate-link" type="button">62 posibles duplicados · Revisar</button></StudentsHero>
       <StudentsKpiSummary user-role="superadmin" :active-filter="labActiveFilter" @set-filter="labActiveFilter = $event" :kpi-counts="{ inscritos: 460, internos: 334, externos: 126, no_inscritos: 25, bajas: 33 }" :global-kpis="{ ingresosMes: 265400 }" :kpi-sparklines="{ inscritos: [420, 434, 442, 460], internos: [310, 319, 328, 334], externos: [110, 115, 114, 126], no_inscritos: [35, 32, 29, 25], bajas: [22, 24, 30, 33] }" />
-      <StudentsFilterBar :search-query="labSearch" :active-grado="activeSummaryGrade" :active-grupo="activeSummaryGroup" :available-grados="['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto']" :available-grupos="['AMERICA', 'CANADA', 'DINAMARCA']" @update-search-query="labSearch = $event" @update-active-grado="activeSummaryGrade = $event" @update-active-grupo="activeSummaryGroup = $event" />
+      <StudentsFilterBar :search-query="labSearch" :active-grado="activeSummaryGrade" :active-grupo="activeSummaryGroup" :available-grados="['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto']" :available-grupos="['AMERICA', 'ASIA', 'EUROPA']" @update-search-query="labSearch = $event" @update-active-grado="activeSummaryGrade = $event" @update-active-grupo="activeSummaryGroup = $event" />
     </template>
     <button v-if="selectedStudent || showLabSummary" type="button" class="students-back-button" @click="selectedStudent = null; showLabSummary = false">← Alumnos</button>
     <button v-else type="button" class="students-back-button" @click="showLabSummary = true">Resumen por grado</button>
@@ -71,7 +71,7 @@
     </div>
     <div v-else class="visual-lab-loading">Preparando visual lab...</div>
 
-    <ContextMenu v-if="isClientReady" />
+    <ContextMenu v-if="isClientReady && route.query.appchrome !== '1'" />
   </main>
 </template>
 
@@ -96,6 +96,7 @@ const showLabChrome = computed(() => route.query.chrome !== '0')
 const globalState = useState('globalState', () => ({ ciclo: '2026' }))
 globalState.value = { ...(globalState.value || {}), ciclo: '2026' }
 
+const fixtureRole = route.query.role === 'admon' ? 'role_admon' : route.query.role === 'ctrl' ? 'role_ctrl' : 'superadmin,role_ctrl'
 const authEmail = useCookie('auth_email')
 const authName = useCookie('auth_name')
 const authRole = useCookie('auth_role')
@@ -133,7 +134,7 @@ const students = ref([
     matricula: 'PTO574',
     nombreCompleto: 'Acra Ayllon Kaleb Alexander',
     grado: '4',
-    grupo: 'DINAMARCA',
+    grupo: 'EUROPA',
     estatus: 'Activo',
     plantel: 'PT',
     cicloBase: '2024',
@@ -146,7 +147,7 @@ const students = ref([
     matricula: 'PTO696',
     nombreCompleto: 'Adan Gutierrez Melissa',
     grado: '5',
-    grupo: 'CANADA',
+    grupo: 'ASIA',
     estatus: 'Activo',
     plantel: 'PT',
     cicloBase: '2024',
@@ -220,7 +221,7 @@ if (route.query.dense === '1') {
     students.value.push({ ...templates[index % templates.length],
       matricula: `LAB${String(index).padStart(4, '0')}`,
       nombreCompleto: `${templates[index % templates.length].nombreCompleto} ${index + 1}`,
-      grado: String(index % 6 + 1), grupo: ['AMERICA', 'CANADA', 'DINAMARCA', 'OCEANIA'][Math.floor(index / 6) % 4],
+      grado: String(index % 6 + 1), grupo: ['AMERICA', 'ASIA', 'EUROPA', 'OCEANIA'][Math.floor(index / 6) % 4],
       tipoIngreso: index % 3 === 0 ? 'externo' : 'interno',
     })
   }
@@ -363,8 +364,8 @@ function toggleSelection(student) {
 function seedVisualAuth() {
   authEmail.value = 'visual-lab@example.test'
   authName.value = 'Visual Lab'
-  authRole.value = 'superadmin,role_ctrl'
-  authPlanteles.value = 'PT'
+  authRole.value = fixtureRole
+  authPlanteles.value = 'PT,SM'
   authActivePlantel.value = 'PT'
   authHasControlEscolar.value = 'true'
   visualLabCookie.value = 'students-account'
@@ -372,8 +373,8 @@ function seedVisualAuth() {
     document.cookie = 'visual_lab=students-account; path=/; SameSite=Lax'
     document.cookie = 'auth_email=visual-lab%40example.test; path=/; SameSite=Lax'
     document.cookie = 'auth_name=Visual%20Lab; path=/; SameSite=Lax'
-    document.cookie = 'auth_role=superadmin%2Crole_ctrl; path=/; SameSite=Lax'
-    document.cookie = 'auth_planteles=PT; path=/; SameSite=Lax'
+    document.cookie = `auth_role=${encodeURIComponent(fixtureRole)}; path=/; SameSite=Lax`
+    document.cookie = 'auth_planteles=PT%2CSM; path=/; SameSite=Lax'
     document.cookie = 'auth_active_plantel=PT; path=/; SameSite=Lax'
     document.cookie = 'auth_has_control_escolar=true; path=/; SameSite=Lax'
   }
