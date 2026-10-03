@@ -1,0 +1,43 @@
+/* IECS–IEDIS institutional identity. Source inventory: docs/institutional-identity.md. */
+:root {
+  --brand-iecs: #618b2f;
+  --brand-iecs-secondary: #00692f;
+  --brand-iecs-tertiary: #6d5f24;
+  --brand-iedis: #007f92;
+  --brand-iedis-secondary: #00497b;
+  --brand-iedis-tertiary: #762728;
+  --brand-gray: #50535a;
+  --brand-gray-light: #86888c;
+  --brand-daycare: #8ec152;
+  --brand-preschool: #e83f4b;
+  --brand-elementary: #fcbf2c;
+  --brand-middle: #66a8d8;
+  --brand-pattern: url('/brand/institutional-pattern.webp');
+}
+
+/* The shared shell carries the identity; data and financial statuses stay clear. */
+.income-shell.font-sans .income-sidebar .sidebar-design-canvas .sidebar-sheen {
+  inset: 0;
+  background: var(--brand-pattern) center top / auto 100% no-repeat;
+  opacity: .09;
+  pointer-events: none;
+}
+.income-shell.font-sans .income-sidebar .sidebar-design-canvas .sidebar-rings,
+.income-shell.font-sans .income-sidebar .sidebar-design-canvas .sidebar-arc,
+.income-shell.font-sans .income-sidebar .sidebar-design-canvas .sidebar-leaves { display: none; }
+.income-shell .app-header {
+  border-top: 2px solid transparent;
+  border-image: linear-gradient(90deg, var(--brand-iecs), var(--brand-iedis)) 1;
+}
+body.students-route-active .ui-button--primary,
+body.students-route-active .new-student-button,
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--document-primary {
+  background: linear-gradient(180deg, #547a29, #507728);
+  border-color: transparent;
+  color: #fff;
+}
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--document-primary:hover { background: #507728; }
+
+@media (max-width: 760px) {
+  .income-shell.font-sans .income-sidebar .sidebar-design-canvas .sidebar-sheen { display: none; }
+}

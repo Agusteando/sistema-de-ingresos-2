@@ -91,3 +91,34 @@ Verify 1920×1080, 1366×768, 1024×768, 900×640, 390×844 and 1150×410. Check
 Use `&workspace=1&dense=1` for a 52-student synthetic fixture covering six grades and four named groups. Compare complete rows inside `.student-list-scroll`, the account body height, metadata readability, and unclipped group chips against the current main. Also use `&summary=1` to inspect grade totals. The fixture repeats representative account documents to exercise normalization; measured account capacity must not be confused with distinct normalized document counts. Preserve the four-record fixture without `dense=1` for dialog, payment-history and invoice interaction checks.
 
 Add `&appchrome=1` to include the real default sidebar and top bar; test both the summary and selected record with the reduced available workspace width.
+
+
+## Sidebar and identity checks
+
+For app chrome, `&role=admon` seeds the financial sidebar and `&role=ctrl` seeds Control Escolar; the default seeds superadmin. These are dev-only display fixtures, never signed backend sessions. Verify all 14 superadmin, 8 financial and 4 Control Escolar navigation links against their existing permission conditions, including scroll reachability, collapse/reload persistence, plantel options and keyboard/outside-click dismissal. Mobile keeps the existing bottom dock.
+
+A browser harness may return an explicit synthetic 401 response for `/api/**` to keep the invalid lab session from clearing display cookies while inspecting the sidebar. Do not alter production auth/session code or interpret these screenshots as live API validation. Merely stripping `Set-Cookie` after `route.fetch()` is insufficient: that fetch may already have updated the browser cookie jar. Seed role cookies before opening app chrome, and label this isolation in test results.
+
+The dense lab now uses EUROPA and ASIA in place of its unsupported country labels so the existing local group masks can be inspected in both rows and selected details. This changes synthetic fixture labels only. Inspect original mask URLs, opacity and zero contribution to row height; test full names/balances and table control overlap.
+
+Detail actions: default toolbar has document, receipts and Más. Selecting pending debt rows exposes payment and invoice actions; both remain discoverable through Más. Cycle correction, baja for active students, edit, sections, scholarship/no-adeudo letters and reminders retain their existing handlers. Open and close dialogs without submitting payments, invoices, notifications or destructive changes. Test Más at 1150×410: it must stay on screen and allow scrolling without closing itself.
+
+Identity asset sources, palette roles and application rules are recorded in `docs/institutional-identity.md`.
+
+
+### Sidebar/detail refinement validation (2026-10-03)
+
+Compared with main `abe3c986` using Montserrat/Fredoka and the same synthetic dense fixture. Chrome-free account body heights increased while complete student row counts stayed unchanged:
+
+| Viewport | Before account body | After account body | Complete list rows before/after |
+| --- | ---: | ---: | ---: |
+| 1366×768 | 355px | 362px | 8 / 8 |
+| 1920×1080 | 667px | 674px | 13 / 13 |
+| 1024×768 | 286px | 362px | 5 / 5 |
+| 900×640 | 369px | 376px | focused detail |
+| 390×844 | 409px | 482px | focused detail |
+| 1150×410 | 157px | 163px | focused detail |
+
+All six enrollment summary grades remained visible without clipped groups. Real app chrome also passed at 1536×760, 1366×768 and 1920×1080 with no horizontal overflow or overlapping account controls. Sidebar role routes, plantel options, keyboard/outside dismissal, collapse persistence, footer visibility and last-link scroll reachability were checked at seven sizes. The browser harness supplied a synthetic version/date for `/api/login/updates` and synthetic 401 responses for authenticated APIs; none of this proves production connectivity.
+
+Interaction checks covered document dialogs on desktop/mobile, KPI filtering and timed income reveal, back/list/search/summary, cycle correction, contextual payment/invoice dialogs, receipt history, invoice history, expanded detail and short-height Más. No payment, invoice, baja, email or other transaction was submitted. On narrow screens contextual action rows wrap when debt selection adds actions; the default receipts label and count stay inline.

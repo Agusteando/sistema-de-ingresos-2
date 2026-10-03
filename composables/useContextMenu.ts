@@ -33,8 +33,8 @@ export const useContextMenu = () => {
       targetY = window.innerHeight - menuHeight - 8
     }
 
-    x.value = targetX
-    y.value = targetY
+    x.value = Math.max(8, targetX)
+    y.value = Math.max(8, targetY)
   }
 
   const closeMenu = () => {

@@ -1,8 +1,8 @@
 <template>
   <Transition name="fade-scale">
-    <div v-if="isVisible" 
-         class="fixed z-[9999] w-48 bg-white/95 backdrop-blur-xl rounded-xl shadow-lg border border-gray-100 overflow-hidden py-1.5"
-         :style="{ top: `${y}px`, left: `${x}px` }"
+    <div v-if="isVisible" ref="menuRef"
+         class="fixed z-[9999] w-48 bg-white/95 backdrop-blur-xl rounded-xl shadow-lg border border-gray-100 overflow-y-auto py-1.5"
+         :style="{ top: `${y}px`, left: `${x}px`, maxHeight: 'calc(100dvh - 16px)' }"
          @click.stop>
       <div v-for="(item, index) in items" :key="index">
         <div v-if="item.label === '-'" class="h-px bg-gray-100 my-1 mx-2"></div>
@@ -20,10 +20,11 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useContextMenu } from '~/composables/useContextMenu'
 
 const { isVisible, x, y, items, closeMenu } = useContextMenu()
+const menuRef = ref(null)
 
 const executeAction = (item) => {
   if (item.disabled || item.label === '-') return
@@ -35,7 +36,8 @@ const handleClickOutside = () => {
   if (isVisible.value) closeMenu()
 }
 
-const handleScroll = () => {
+const handleScroll = (event) => {
+  if (menuRef.value?.contains(event.target)) return
   if (isVisible.value) closeMenu()
 }
 

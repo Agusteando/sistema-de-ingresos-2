@@ -212,23 +212,6 @@
           </div>
           <div class="profile-top-actions">
               <button
-                class="ingreso-icon-button"
-                type="button"
-                aria-label="Corregir ciclo de ingreso"
-                title="Ciclo de ingreso"
-                @click="showIngresoCycleModal = true"
-              >
-                <LucideCalendarClock :size="18" />
-              </button>
-              <button
-                v-if="student.estatus === 'Activo'"
-                class="danger-icon-button"
-                title="Dar de baja"
-                @click="$emit('baja', student)"
-              >
-                <LucideUserX :size="19" />
-              </button>
-              <button
                 class="plain-icon-button"
                 @click="$emit('close')"
                 title="Cerrar detalles"
@@ -240,6 +223,7 @@
 
           <div
             class="profile-actions profile-toolbar"
+            :class="{ 'has-selection': selectedDebts.length }"
             role="toolbar"
             aria-label="Acciones del alumno"
           >
@@ -252,6 +236,7 @@
               <span class="profile-action-label">Agregar documento</span>
             </button>
             <button
+              v-if="selectedDebts.length"
               class="profile-action-button profile-action-button--pay-compact"
               title="Pagar conceptos seleccionados"
               :disabled="!selectedDebts.length"
@@ -280,21 +265,13 @@
             </button>
             <button
               class="profile-action-button"
+              v-if="selectedDebts.length"
               title="Facturar conceptos seleccionados"
               :disabled="!selectedDebts.length"
               @click="showInvoiceModal = true"
             >
               <LucideFileText :size="15" />
               <span class="profile-action-label">Facturar</span>
-            </button>
-            <button
-              class="profile-action-button"
-              type="button"
-              title="Carta de no adeudo"
-              @click="showNoAdeudoModal = true"
-            >
-              <LucideShieldCheck :size="15" />
-              <span class="profile-action-label">No adeudo</span>
             </button>
             <button
               class="profile-action-button profile-action-button--menu"
@@ -332,7 +309,7 @@
           </section>
         </section>
 
-        <div class="account-header">
+        <div class="account-header" :class="{ 'account-header--ledger': !detailsExpanded && accountViewMode !== 'services' }">
           <div class="account-title-area">
             <div class="account-title-copy">
               <div class="account-title-row">
@@ -2912,6 +2889,10 @@ const showAccountFilterMenu = (event) => {
 const showStudentActionsMenu = (event) => {
   const menuItems = [
     { label: detailsExpanded.value ? "Contraer estado de cuenta" : "Ampliar estado de cuenta", icon: LucideMaximize2, action: toggleDetailsExpanded },
+    { label: "Pagar conceptos seleccionados", icon: LucideCreditCard, disabled: !selectedDebts.value.length, action: () => { showPaymentModal.value = true; } },
+    { label: "Facturar conceptos seleccionados", icon: LucideFileText, disabled: !selectedDebts.value.length, action: () => { showInvoiceModal.value = true; } },
+    { label: "Ciclo de ingreso", icon: LucideCalendarClock, action: () => { showIngresoCycleModal.value = true; } },
+    ...(props.student.estatus === "Activo" ? [{ label: "Dar de baja", icon: LucideUserX, class: "text-red-700 hover:bg-red-50", action: () => emit("baja", props.student) }] : []),
     {
       label: "Editar",
       icon: LucideSettings,
