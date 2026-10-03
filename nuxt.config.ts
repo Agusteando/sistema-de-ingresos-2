@@ -4,7 +4,7 @@ const clientAppManifestFallback = fileURLToPath(new URL('./node_modules/mocked-e
 
 export default defineNuxtConfig({
   devtools: { enabled: false },
-  css: ['~/assets/css/main.css', '~/assets/css/pages/students.css', '~/assets/css/components/student-details.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/pages/students.css', '~/assets/css/components/student-details.css', '~/assets/css/features/students/workspace.css'],
   modules: ['@nuxtjs/tailwindcss'],
   vite: {
     $client: {

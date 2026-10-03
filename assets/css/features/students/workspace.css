@@ -1,0 +1,219 @@
+/* Final composition shared by the production route and its dev-only visual lab.
+   Layout adapts to available space; type is never scaled to fit the viewport. */
+.students-screen { gap: 0; }
+body.students-route-active .income-main { background: #f8faf9; }
+body.students-route-active .income-content { padding: 12px 16px; }
+.students-hero { align-items: center; min-height: 44px; margin-bottom: 8px; }
+.hero-copy h1 { font-size: 24px; font-weight: 600; line-height: 1.2; }
+.hero-actions { flex-wrap: wrap; justify-content: flex-end; }
+.students-screen .ui-button { min-height: 38px; font-size: 14px; font-weight: 500; box-shadow: none; }
+.kpi-summary-system { margin-bottom: 8px; }
+.kpi-summary-system .kpi-strip { display: flex; min-height: 52px; border: 0; border-bottom: 1px solid #e3e9e5; border-radius: 0; background: transparent; box-shadow: none; overflow-x: auto; }
+.kpi-strip .kpi-card { display: flex; flex: 1 0 auto; height: 44px; gap: 0; padding: 6px 16px; border: 0; border-radius: 6px; background: transparent; }
+.kpi-strip .kpi-card.active { background: #eaf3e8; box-shadow: inset 0 -2px #3f9138; }
+.kpi-strip .kpi-card:hover { background: #f0f5f1; }
+.kpi-strip .kpi-icon, .kpi-strip .ui-kpi-sparkline { display: none; }
+.kpi-strip .kpi-text { flex-direction: row-reverse; align-items: center; gap: 8px; }
+.kpi-strip .kpi-text > span { font-size: 13px; font-weight: 400; text-transform: none; letter-spacing: 0; color: #56645c; }
+.kpi-strip .kpi-text strong { font-size: 20px; font-weight: 600; letter-spacing: -.02em; color: #23372b; }
+.section-kpi-card { box-shadow: none; font-size: 13px; font-weight: 500; }
+.filter-bar { grid-template-columns: minmax(220px, 1fr) minmax(0, auto) auto; min-height: 46px; padding: 0; gap: 12px; margin-bottom: 12px; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.search-control { height: 40px; border-radius: 8px; box-shadow: none; }
+.search-control input { min-width: 0; font-size: 14px; font-weight: 400; }
+.search-filter-icon { display: none; }
+.search-filter-token { font-size: 12px; font-weight: 500; }
+.grade-tabs .ui-chip, .group-tabs .ui-chip { font-size: 14px; font-weight: 500; box-shadow: none; }
+.responsive-grade-filter { display: none; align-items: center; gap: 8px; min-width: 0; }
+.responsive-grade-filter select { min-width: 0; max-width: 180px; height: 40px; padding: 0 28px 0 10px; border: 1px solid #dce4df; border-radius: 8px; background: white; font: inherit; font-size: 14px; }
+.responsive-grade-filter button { font-size: 13px; }
+.students-workspace.has-detail { --students-list-min: 300px; --students-detail-min: 480px; grid-template-columns: minmax(var(--students-list-min), var(--students-list-panel-size, 35%)) 12px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card, .student-detail-panel { border-radius: 10px; box-shadow: none; }
+.students-workspace-resizer { width: 12px; min-width: 12px; color: #95a89a; }
+.students-workspace-resizer::before { inset: 10px 5px; background: #dce5df; }
+.students-workspace-resizer-rail { width: 10px; height: 44px; border: 0; box-shadow: none; background: transparent; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card { --student-list-grade-size: 44px; --student-list-grade-height: 44px; --student-list-row-height: 80px; --student-list-balance-col: 110px; --student-list-action-col: 28px; grid-template-rows: 32px 40px minmax(0, 1fr); }
+.student-list-scroll { padding: 0; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-row { grid-template-columns: minmax(0, 1fr) 110px 28px; grid-template-areas: 'identity financial action'; min-height: 80px; padding: 10px 12px; margin: 0; border: 0; border-bottom: 1px solid #edf1ee; border-radius: 0; box-shadow: none; background: white; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-row.selected { background: #eef5ec; box-shadow: inset 3px 0 #3f9138; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-row.multi-selected { background: #f2f6f0; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-identity { grid-area: identity; grid-template-columns: 22px 44px minmax(0, 1fr); gap: 9px; }
+.student-group-watermark, .account-card-watermark, .account-student-watermark, .student-group-sigil { display: none; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-copy strong { font-size: 15px; line-height: 1.35; font-weight: 600; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-copy { gap: 5px; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-matricula-chip, .student-list-panel:is(.is-compact, .is-full) .student-list-card .student-tipo-chip { padding: 0; min-height: 18px; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 12px; font-weight: 400; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .financial-cell { grid-area: financial; display: flex; flex-direction: column; gap: 4px; padding: 0 8px 0 4px; border: 0; }
+.financial-label { display: none; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .financial-balance { font-size: 15px; font-weight: 600; color: #283d2e; white-space: nowrap; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .row-actions { grid-area: action; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .row-actions button { width: 28px; height: 36px; min-height: 36px; border: 0; box-shadow: none; background: transparent; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .list-columns { padding: 0 40px 0 90px; font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.select-visible-row-control { font-size: 13px; font-weight: 400; gap: 9px; }
+.select-box, .row-select-toggle { width: 22px; height: 22px; border-width: 1px; border-radius: 5px; }
+.students-back-button { display: none; text-align: left; min-height: 40px; padding: 0 8px; color: #2f7f32; font-size: 14px; font-weight: 500; }
+.student-details-shell:not(.student-details-shell--expanded) { padding: 0; gap: 0; --account-student-row-min: 0px; --account-tools-row-min: 0px; --account-footer-row-min: 40px; }
+.student-details-shell:not(.student-details-shell--expanded) .detail-expand-rail { min-height: 24px; margin: 0; }
+.student-details-shell:not(.student-details-shell--expanded) .detail-expand-zone { height: 24px; cursor: pointer; }
+.student-details-shell:not(.student-details-shell--expanded) .account-card { border: 0; border-radius: 0; box-shadow: none; background: white; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.student-details-shell:not(.student-details-shell--expanded) .account-card:hover { box-shadow: none; }
+.student-details-shell:not(.student-details-shell--expanded) .account-student-composition { padding: 8px 18px 12px; gap: 12px; border: 0; border-bottom: 1px solid #e8ede9; border-radius: 0; background: white; box-shadow: none; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-main { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-identity { flex: 1 1 240px; grid-template-columns: 54px minmax(0, 1fr); gap: 12px; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-copy h2 { font-size: 20px; line-height: 1.3; font-weight: 600; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-copy p { font-size: 13px; line-height: 1.5; font-weight: 400; }
+.student-details-shell:not(.student-details-shell--expanded) .student-code { height: auto; padding: 0; border: 0; background: transparent; font-size: 13px; font-weight: 500; }
+.student-details-shell:not(.student-details-shell--expanded) .tipo-ingreso-badge { min-height: 22px; border: 0; background: transparent; padding: 0 6px 0 0; font-size: 12px; font-weight: 500; box-shadow: none; }
+.profile-financial-summary { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; margin-left: auto; }
+.profile-financial-summary strong { color: #9b3636; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.profile-financial-summary span { font-size: 12px; color: #66736b; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-top-actions { gap: 4px; }
+.student-details-shell:not(.student-details-shell--expanded) .plain-icon-button, .student-details-shell:not(.student-details-shell--expanded) .danger-icon-button, .student-details-shell:not(.student-details-shell--expanded) .ingreso-icon-button { width: 32px; height: 32px; box-shadow: none; border: 0; background: transparent; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button { width: auto; min-width: 36px; height: 36px; padding: 0 10px; font-size: 14px; font-weight: 500; border-radius: 7px; box-shadow: none; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button:not(.profile-action-button--primary) { width: auto; padding: 0 10px; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button .profile-action-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: nowrap; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-count { font-size: 12px; }
+.student-details-shell:not(.student-details-shell--expanded) .account-header { display: flex; flex-wrap: wrap; min-height: 0; gap: 8px 12px; padding: 10px 18px; }
+.student-details-shell:not(.student-details-shell--expanded) .account-header h3 { font-size: 16px; font-weight: 600; }
+.student-details-shell:not(.student-details-shell--expanded) .account-search-control { width: auto; min-width: 160px; height: 34px; flex: 1 1 160px; margin: 0; }
+.student-details-shell:not(.student-details-shell--expanded) .account-search-control input { font-size: 14px; }
+.student-details-shell:not(.student-details-shell--expanded) .account-expediente-button { height: 28px; font-size: 12px; }
+.account-view-tabs { min-width: 0; overflow-x: auto; }
+.account-view-tabs button { font-size: 14px; font-weight: 500; min-height: 34px; white-space: nowrap; }
+.student-details-shell:not(.student-details-shell--expanded) .account-totals { display: none; }
+.student-details-shell:is(:not(.student-details-shell--expanded), .student-details-shell--expanded) .account-table-wrap thead th { height: 34px; padding: 0 10px; font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; position: sticky; top: 0; z-index: 2; }
+.student-details-shell:is(:not(.student-details-shell--expanded), .student-details-shell--expanded) .account-table-wrap tbody td { height: 48px; padding: 6px 10px; font-size: 14px; font-weight: 400; }
+.student-details-shell:is(:not(.student-details-shell--expanded), .student-details-shell--expanded) .account-table-wrap .concept-cell strong { font-size: 14px; font-weight: 500; line-height: 1.4; }
+.student-details-shell:is(:not(.student-details-shell--expanded), .student-details-shell--expanded) .account-table-wrap .concept-cell small { font-size: 12px; line-height: 1.4; }
+.student-details-shell:is(:not(.student-details-shell--expanded), .student-details-shell--expanded) .account-table-wrap .progress-cell em { font-size: 12px; width: 48px; height: 24px; font-weight: 500; }
+.student-details-shell:is(:not(.student-details-shell--expanded), .student-details-shell--expanded) .account-table-wrap .debt-check { width: 18px; height: 18px; }
+.student-details-shell:is(:not(.student-details-shell--expanded), .student-details-shell--expanded) .account-table-wrap .menu-cell button { width: 28px; height: 28px; }
+.student-details-shell:not(.student-details-shell--expanded) .account-footer { min-height: 40px; padding: 8px 18px; font-size: 13px; }
+.student-details-shell:not(.student-details-shell--expanded) .account-footer strong { font-size: 13px; font-weight: 500; }
+@media (max-width: 1599px) {
+  .filter-bar { grid-template-columns: minmax(180px, 1fr) auto auto; }
+  .grade-filter { display: none; }
+  .responsive-grade-filter { display: flex; }
+}
+@container students-shell (max-width: 900px) {
+  .students-workspace.has-detail { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .students-workspace.has-detail > .students-workspace-resizer { display: none; }
+  .students-workspace.has-detail:not(.has-focus) > :not(.student-list-panel) { display: none; }
+  .students-workspace.has-focus > .student-list-panel { display: none; }
+  .students-workspace.has-focus > .student-detail-panel { display: flex; }
+}
+@media (max-width: 1100px) {
+  .hero-copy h1 { font-size: 22px; }
+  .hero-actions { gap: 6px; }
+  .responsive-grade-filter { flex-wrap: wrap; }
+}
+@media (max-width: 720px) {
+  body.students-route-active, body.students-route-active .income-shell { overflow: hidden; }
+  body.students-route-active .income-content { height: 100%; overflow: hidden; padding: 8px; }
+  .students-screen { height: 100%; min-height: 0; overflow: hidden; }
+  .students-scale-shell, .students-design-canvas, .students-workspace { min-height: 0; height: 100%; overflow: hidden; }
+  .students-hero { flex-wrap: wrap; gap: 8px; }
+  .hero-actions { justify-content: flex-start; width: 100%; }
+  .filter-bar { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .filter-bar .search-control { grid-column: 1 / -1; }
+  .filter-bar .responsive-grade-filter { flex-wrap: wrap; }
+  .responsive-grade-filter select { max-width: 150px; }
+  .kpi-strip .kpi-card { flex: 0 0 auto; padding: 6px 10px; }
+  .kpi-strip .kpi-text strong { font-size: 18px; }
+  .student-details-shell:not(.student-details-shell--expanded) .account-student-composition { padding: 8px 12px; }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-copy h2 { font-size: 18px; }
+  .student-details-shell:not(.student-details-shell--expanded) .account-header { padding: 8px 12px; }
+  .student-details-shell:not(.student-details-shell--expanded) .account-footer { padding-inline: 12px; }
+}
+@media (max-height: 650px) {
+  .students-hero { min-height: 36px; margin-bottom: 4px; }
+  .kpi-summary-system .kpi-strip { min-height: 40px; }
+  .kpi-strip .kpi-card { height: 38px; }
+  .filter-bar { margin-bottom: 6px; }
+  .student-details-shell:not(.student-details-shell--expanded) .account-student-composition { gap: 6px; }
+  .student-details-shell:not(.student-details-shell--expanded) .detail-expand-rail { min-height: 20px; }
+}
+
+.lab-duplicate-link { font-size: 13px; color: #66736b; }
+@container student-detail-panel (min-width: 760px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .col-amount,
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .col-payments { display: table-column; width: 96px; }
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .amount-cell,
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .payments-cell { display: table-cell; }
+}
+@container student-list (max-width: 420px) {
+  .student-list-panel:is(.is-compact, .is-full) .student-list-card .student-row { grid-template-columns: minmax(0, 1fr) 28px; grid-template-areas: 'identity action' 'financial action'; row-gap: 6px; }
+  .student-list-panel:is(.is-compact, .is-full) .student-list-card .financial-cell { padding-left: 75px; align-items: flex-start; }
+}
+@container student-detail-panel (max-width: 600px) {
+  .student-details-shell:not(.student-details-shell--expanded) .profile-main { position: relative; padding-right: 0; }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-top-actions { order: -1; width: 100%; justify-content: flex-end; }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button:not(.profile-action-button--primary) { width: 36px; padding: 0; }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button:not(.profile-action-button--primary) .profile-action-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button--menu { width: auto; padding: 0 10px; }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button--menu .profile-action-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+}
+/* On a narrow or short display, entering a record gives it the full working
+   surface. Returning to the list restores its filters, metrics and actions. */
+.students-screen { container: students-page / inline-size; }
+@container students-page (max-width: 900px) {
+  .students-back-button { display: block; }
+  .students-screen:has(.students-workspace.has-focus) > .students-hero,
+  .students-screen:has(.students-workspace.has-focus) > .kpi-summary-system,
+  .students-screen:has(.students-workspace.has-focus) > .filter-bar { display: none; }
+}
+@media (max-height: 550px) {
+  .students-back-button { display: block; }
+  .students-screen:has(.students-workspace.has-focus) > .students-hero,
+  .students-screen:has(.students-workspace.has-focus) > .kpi-summary-system,
+  .students-screen:has(.students-workspace.has-focus) > .filter-bar { display: none; }
+  .students-workspace.has-focus { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .students-workspace.has-focus > .student-list-panel,
+  .students-workspace.has-focus > .students-workspace-resizer { display: none; }
+}
+@media (max-height: 550px) {
+  .students-back-button { display: block; }
+}
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-row .financial-balance { overflow: visible; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-row .row-actions { min-width: 0; }
+.student-details-shell:not(.student-details-shell--expanded) .account-student-composition { overflow: visible; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-actions { min-width: 0; }
+.student-details-shell:not(.student-details-shell--expanded) .account-view-tabs button { font-size: 14px; font-weight: 500; }
+.student-details-shell:not(.student-details-shell--expanded) .account-view-tabs button > span { font-size: 12px; }
+
+.student-academic-line { font-size: 12px; font-weight: 400; line-height: 1.4; color: #64736b; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button:not(.profile-action-button--primary) .profile-action-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+@container student-detail-panel (max-width: 600px) {
+  .student-details-shell:not(.student-details-shell--expanded) .profile-main { gap: 8px; }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-identity { flex-basis: 100%; }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-financial-summary { margin-left: 66px; flex: 1; align-items: flex-start; }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-top-actions { order: 0; width: auto; }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-actions { gap: 6px; }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button:not(.profile-action-button--primary) .profile-action-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button[title="Carta de no adeudo"] { display: none; }
+}
+@container student-detail-panel (max-width: 520px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tbody { padding: 0; }
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row { grid-template-columns: 26px minmax(0, 1fr) 86px 28px; gap: 6px 8px; margin: 0; padding: 12px; border: 0; border-bottom: 1px solid #edf1ee; border-radius: 0; box-shadow: none; }
+  .student-details-shell:not(.student-details-shell--expanded) .debt-row .check-cell { grid-column: 1; grid-row: 1; }
+  .student-details-shell:not(.student-details-shell--expanded) .debt-row .concept-cell { grid-column: 2 / 4; grid-row: 1; }
+  .student-details-shell:not(.student-details-shell--expanded) .debt-row .concept-cell strong { overflow: visible; white-space: normal; }
+  .student-details-shell:not(.student-details-shell--expanded) .debt-row .menu-cell { grid-column: 4; grid-row: 1; }
+  .student-details-shell:not(.student-details-shell--expanded) .debt-row .progress-cell { grid-column: 2; grid-row: 2; justify-content: flex-start; border: 0; padding: 0; }
+  .student-details-shell:not(.student-details-shell--expanded) .debt-row .balance-cell { grid-column: 3 / 5; grid-row: 2; justify-content: flex-end; border: 0; padding: 0; }
+  .student-details-shell:not(.student-details-shell--expanded) .debt-row .progress-cell::before,
+  .student-details-shell:not(.student-details-shell--expanded) .debt-row .money-cell::before { content: none; }
+}
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-row.inactive { background: #fff7f7; }
+.student-list-panel:is(.is-compact, .is-full) .student-list-card .student-row.unenrolled { background: #fffaf0; }
+
+@container student-detail-panel (max-width: 520px) {
+  .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tr.debt-row td { height: auto; min-height: 0; padding: 0; }
+}
+.student-list-panel .student-list-card .student-grade-photo-card__grade span { display: none; }
+.student-list-panel .student-list-card .student-grade-photo-card__grade strong { font-size: 24px; font-weight: 600; text-shadow: none; }
+/* Monetary columns must fit the readable type, including larger balances. */
+.student-details-shell:is(:not(.student-details-shell--expanded), .student-details-shell--expanded) .account-table-wrap .col-money { width: 110px; }
+.student-details-shell--expanded .account-table-wrap table { min-width: 680px; }
+/* Use the same working typeface for titles and data within this workspace. */
+.students-screen, .student-details-shell { --font-display: var(--students-font, Montserrat, ui-sans-serif, system-ui, sans-serif); }
+.profile-financial-summary.is-invoice strong { color: #283d2e; }

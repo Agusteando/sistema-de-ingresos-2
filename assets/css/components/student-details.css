@@ -124,8 +124,8 @@
   position: relative;
   z-index: 1;
   color: #2f7f32;
-  font-size: 10.5px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
   opacity: 0;
   transform: translateY(7px);
@@ -273,7 +273,7 @@
   margin: 0 0 6px;
   color: #14233c;
   font-size: 15.5px;
-  font-weight: 870;
+  font-weight: 600;
   letter-spacing: -.035em;
   line-height: 1.12;
 }
@@ -293,7 +293,7 @@
   margin: 0;
   overflow: hidden;
   color: #6f7b95;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 610;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -316,8 +316,8 @@
   border-radius: 999px;
   background: rgba(22, 159, 150, .09);
   color: #16877f;
-  font-size: 10.5px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .state-badge,
@@ -329,8 +329,8 @@
   height: 21px;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 9.5px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -383,8 +383,8 @@
   background: linear-gradient(180deg, #fff, #fbfef9);
   color: #2f7f32;
   font-family: var(--students-font, Montserrat, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
-  font-size: 10.8px;
-  font-weight: 820;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: -.01em;
   line-height: 1;
   white-space: nowrap;
@@ -473,8 +473,8 @@
 .account-family-header h4 {
   margin: 0;
   color: #15233c;
-  font-size: 11px;
-  font-weight: 820;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .account-family-clear,
@@ -486,8 +486,8 @@
   border-radius: 999px;
   background: #fff;
   color: #3f7f38;
-  font-size: 11px;
-  font-weight: 780;
+  font-size: 12px;
+  font-weight: 600;
   padding: 5px 9px;
 }
 
@@ -610,7 +610,7 @@
   overflow: hidden;
   color: #14233c;
   font-size: 13.5px;
-  font-weight: 890;
+  font-weight: 600;
   letter-spacing: -.03em;
   line-height: 1.08;
   text-overflow: ellipsis;
@@ -625,7 +625,7 @@
   margin: 0;
   overflow: hidden;
   color: #6f7b95;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 640;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -656,8 +656,8 @@
   gap: 4px;
   overflow: hidden;
   color: #475569;
-  font-size: 10.25px;
-  font-weight: 720;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -666,8 +666,8 @@
 .account-student-meta small {
   flex: 0 0 auto;
   color: #8b97aa;
-  font-size: 9px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
@@ -699,8 +699,8 @@
   background: linear-gradient(180deg, #fff, #fbfef9);
   color: #2f7f32;
   font-family: var(--students-font, Montserrat, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   box-shadow: 0 7px 16px rgba(21, 35, 60, .04);
   cursor: pointer;
 }
@@ -768,7 +768,7 @@
   margin: 0;
   color: #17243c;
   font-size: 15px;
-  font-weight: 850;
+  font-weight: 600;
   letter-spacing: -.025em;
 }
 
@@ -809,12 +809,12 @@
   outline: 0;
   background: transparent;
   color: #17243c;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 620;
 }
 
 .account-card--workspace .account-search-control input {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .account-search-control input::placeholder {
@@ -833,15 +833,15 @@
   border-radius: 9px;
   background: #fff0f0;
   color: #c93b44;
-  font-size: 11.5px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .account-card--workspace .account-totals span {
   min-height: 32px;
   padding-inline: 14px;
   border-radius: 10px;
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 .account-summary-grid {
@@ -870,14 +870,14 @@
 
 .account-summary-card span {
   color: #6f7b95;
-  font-size: 9.5px;
-  font-weight: 760;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .account-summary-card strong {
   overflow: hidden;
   font-size: 15.5px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -.045em;
   line-height: 1;
   text-overflow: ellipsis;
@@ -955,8 +955,8 @@
   border-bottom: 1px solid var(--students-border-soft, #edf2f7);
   background: #fbfcfd;
   color: #6e7890;
-  font-size: 10px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: .055em;
   text-align: left;
   text-transform: uppercase;
@@ -975,14 +975,14 @@
 .account-card--workspace .account-table-wrap thead th {
   height: 28px;
   padding-inline: 7px;
-  font-size: 8.5px;
+  font-size: 12px;
   letter-spacing: .055em;
 }
 
 .account-card--workspace .account-table-wrap tbody td {
   height: 38px;
   padding-inline: 7px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .account-table-wrap tbody tr:hover {
@@ -1037,9 +1037,9 @@
   border-radius: 999px;
   background: #fff7f8;
   color: #e04b5b;
-  font-size: 10.5px;
+  font-size: 12px;
   font-style: normal;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -.03em;
   line-height: 1;
 }
@@ -1059,8 +1059,8 @@
   margin: 0 0 3px;
   overflow: hidden;
   color: #1d2a43;
-  font-size: 11.5px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: -.015em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1070,7 +1070,7 @@
   display: block;
   overflow: hidden;
   color: #7c879e;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 560;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1081,17 +1081,17 @@
   align-items: center;
   margin-left: 6px;
   color: #68758d;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .account-card--workspace .concept-cell strong {
   margin-bottom: 2px;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.08;
 }
 
 .account-card--workspace .concept-cell small {
-  font-size: 8.8px;
+  font-size: 12px;
   line-height: 1.1;
 }
 
@@ -1099,7 +1099,7 @@
   width: 43px;
   height: 19px;
   border-width: 1.4px;
-  font-size: 8.8px;
+  font-size: 12px;
 }
 
 .account-card--workspace .menu-cell button {
@@ -1115,7 +1115,7 @@
   padding-inline: 7px;
   background: #fff3e6;
   color: #cf6a16;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .money-cell {
@@ -1126,12 +1126,12 @@
 
 .money-cell.paid {
   color: #328333;
-  font-weight: 780;
+  font-weight: 600;
 }
 
 .money-cell.danger {
   color: #ff3845;
-  font-weight: 860;
+  font-weight: 600;
 }
 
 .final-amount-link {
@@ -1139,8 +1139,8 @@
   border: 0;
   background: transparent;
   color: #3f9138;
-  font-size: 10px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .account-table-wrap .menu-cell {
@@ -1199,7 +1199,7 @@
 .account-footer b {
   color: #e0323d;
   font-size: 17px;
-  font-weight: 880;
+  font-weight: 600;
   letter-spacing: -.04em;
 }
 
@@ -1209,7 +1209,7 @@
   padding-inline: 0;
   border-top: 0;
   border-radius: 10px 10px 0 0;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .account-card--workspace .account-footer b {
@@ -1250,8 +1250,8 @@
   border-radius: 8px;
   background: #fff;
   color: #2f7f32;
-  font-size: 10px;
-  font-weight: 780;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .history-action-danger {
@@ -1263,7 +1263,7 @@
 .history-table th,
 .history-table td {
   height: 34px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .account-flow-enter-active,
@@ -1299,8 +1299,8 @@
   border-radius: 999px;
   background: rgba(255,255,255,.86);
   box-shadow: 0 7px 16px rgba(21, 35, 60, .05), inset 0 1px 0 rgba(255,255,255,.92);
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0;
   line-height: 1;
   white-space: nowrap;
@@ -1355,8 +1355,8 @@
   gap: 6px;
   opacity: .82;
   color: #6d7890;
-  font-size: 10px;
-  font-weight: 760;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   transition: opacity 240ms ease, color 240ms ease;
@@ -1509,13 +1509,13 @@
 .account-card--workspace .tipo-ingreso-badge {
   min-height: 22px;
   padding-inline: 7px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .account-card--workspace .student-code {
   height: 17px;
   padding-inline: 7px;
-  font-size: 9.5px;
+  font-size: 12px;
 }
 
 .account-card--workspace .debt-check {
@@ -1525,12 +1525,12 @@
 
 .account-card--workspace .final-amount-link {
   margin-left: 3px;
-  font-size: 8.8px;
+  font-size: 12px;
 }
 
 .account-card--workspace .account-footer strong {
   gap: 9px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .account-expediente-button {
@@ -1545,8 +1545,8 @@
   background: linear-gradient(180deg, #fff, #fbfef9);
   color: #2f7f32;
   font-family: var(--students-font, Montserrat, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
-  font-size: 10px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: .015em;
   white-space: nowrap;
   box-shadow: 0 6px 14px rgba(21, 35, 60, .04);
@@ -1565,7 +1565,7 @@
 .account-card--workspace .account-expediente-button {
   height: 22px;
   padding-inline: 8px;
-  font-size: 9.5px;
+  font-size: 12px;
 }
 
 @media (max-width: 860px) {
@@ -1862,7 +1862,7 @@
     align-items: center;
     border-bottom: 0;
     padding: 0;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .debt-row .check-cell {
@@ -1899,8 +1899,8 @@
   .student-details-shell:not(.student-details-shell--expanded) .debt-row .money-cell::before {
     content: attr(data-label);
     color: #768198;
-    font-size: 9px;
-    font-weight: 850;
+    font-size: 12px;
+    font-weight: 600;
     letter-spacing: .07em;
     text-transform: uppercase;
   }
@@ -1954,8 +1954,8 @@
 
 .account-totals small {
   color: inherit;
-  font-size: 9px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: .055em;
   line-height: 1;
   text-transform: uppercase;
@@ -2019,14 +2019,14 @@
 
 .student-details-shell:not(.student-details-shell--expanded) .profile-copy p {
   gap: 5px;
-  font-size: 10.25px;
+  font-size: 12px;
   line-height: 1.15;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .student-code {
   height: 17px;
   padding-inline: 7px;
-  font-size: 9.5px;
+  font-size: 12px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .tipo-ingreso-row {
@@ -2036,7 +2036,7 @@
 .student-details-shell:not(.student-details-shell--expanded) .tipo-ingreso-badge {
   min-height: 21px;
   padding-inline: 7px;
-  font-size: 9.8px;
+  font-size: 12px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .tipo-ingreso-badge svg {
@@ -2071,7 +2071,7 @@
   height: 30px;
   padding-inline: 8px;
   border-radius: 9px;
-  font-size: 10.2px;
+  font-size: 12px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .profile-action-button--primary {
@@ -2108,8 +2108,8 @@
   border-radius: 999px;
   background: #3f9138;
   color: #fff;
-  font-size: 8px;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
   box-shadow: 0 4px 10px rgba(31, 82, 29, .18);
 }
@@ -2159,7 +2159,7 @@
   gap: 4px;
   padding-inline: 7px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0;
 }
 
@@ -2177,7 +2177,7 @@
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-search-control input {
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-view-toggle {
@@ -2191,19 +2191,19 @@
   min-height: 30px;
   padding-inline: 9px;
   border-radius: 9px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap thead th {
   height: 27px;
   padding-inline: 7px;
-  font-size: 8.5px;
+  font-size: 12px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap tbody td {
   height: 35px;
   padding-inline: 7px;
-  font-size: 10.2px;
+  font-size: 12px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-table-wrap .col-check {
@@ -2224,12 +2224,12 @@
 
 .student-details-shell:not(.student-details-shell--expanded) .concept-cell strong {
   margin-bottom: 1px;
-  font-size: 10.3px;
+  font-size: 12px;
   line-height: 1.08;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .concept-cell small {
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.08;
 }
 
@@ -2237,7 +2237,7 @@
   width: 42px;
   height: 19px;
   border-width: 1.4px;
-  font-size: 8.7px;
+  font-size: 12px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .debt-check {
@@ -2259,12 +2259,12 @@
 .student-details-shell:not(.student-details-shell--expanded) .account-footer {
   min-height: 36px;
   padding-inline: 10px;
-  font-size: 10.8px;
+  font-size: 12px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-footer strong {
   gap: 8px;
-  font-size: 10.7px;
+  font-size: 12px;
 }
 
 .student-details-shell:not(.student-details-shell--expanded) .account-footer b {
@@ -2342,7 +2342,7 @@
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .profile-copy p {
-    font-size: 9.8px;
+    font-size: 12px;
   }
 
   .student-details-shell:not(.student-details-shell--expanded) .tipo-ingreso-row {
@@ -2400,8 +2400,8 @@
   background: rgba(255, 255, 255, .88);
   color: #40506a;
   padding: 0 8px 0 4px;
-  font-size: 10.5px;
-  font-weight: 820;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2476,8 +2476,8 @@ button.student-service-mini {
 
 .student-services-head span {
   color: #8190a4;
-  font-size: 10px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
@@ -2485,7 +2485,7 @@ button.student-service-mini {
 .student-services-head strong {
   color: #1d2d47;
   font-size: 12.5px;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .student-services-toggle {
@@ -2499,8 +2499,8 @@ button.student-service-mini {
   color: #44723d;
   cursor: pointer;
   padding: 0 10px;
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .student-services-tags {
@@ -2519,8 +2519,8 @@ button.student-service-mini {
   background: #fff;
   color: #35455e;
   padding: 3px 4px 3px 5px;
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .student-service-tag .taller-servicio-artwork {
@@ -2551,8 +2551,8 @@ button.student-service-mini {
   background: rgba(255,255,255,.62);
   color: #7e8a9d;
   padding: 10px;
-  font-size: 11.5px;
-  font-weight: 720;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .student-services-picker {
@@ -2596,7 +2596,7 @@ button.student-service-mini {
   outline: none;
   padding: 0 10px 0 32px;
   font-size: 12px;
-  font-weight: 720;
+  font-weight: 600;
 }
 
 .student-services-search input:focus {
@@ -2653,8 +2653,8 @@ button.student-service-mini {
   min-width: 0;
   overflow: hidden;
   color: #25354d;
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2697,8 +2697,8 @@ button.student-service-mini {
 .student-talleres-info > header span,
 .student-talleres-info label > span {
   color: #718078;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .35px;
 }
@@ -2722,8 +2722,8 @@ button.student-service-mini {
   border-radius: 11px;
   background: white;
   color: #68766f;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -2747,7 +2747,7 @@ button.student-service-mini {
   background: white;
   color: #26352f;
   font: inherit;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .student-talleres-info textarea:focus {
@@ -2767,8 +2767,8 @@ button.student-service-mini {
   border-radius: 11px;
   background: #245f49;
   color: white;
-  font-size: 10px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -2797,7 +2797,7 @@ button.student-service-mini {
   background: rgba(239, 246, 255, 0.9);
   color: #1d4ed8;
   font-size: 0.62rem;
-  font-weight: 750;
+  font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1;
   padding: 0.24rem 0.42rem;
@@ -2824,14 +2824,14 @@ button.student-service-mini {
 
 .payment-summary-button strong {
   color: #2f7f4d;
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .payment-summary-button small {
   color: #6f7f93;
-  font-size: 8.5px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
