@@ -1,3 +1,5 @@
+@import '../../design/institutional.css';
+
 /* Final composition shared by the production route and its dev-only visual lab.
    Layout adapts to available space; type is never scaled to fit the viewport. */
 .students-screen { gap: 0; }
@@ -325,8 +327,8 @@ body.students-route-active .income-content { padding: 12px 16px; }
 .student-details-shell:not(.student-details-shell--expanded) .tipo-ingreso-badge { border-radius: 0; border: 0; background: transparent; box-shadow: none; padding: 0 5px 0 0; font-weight: 400; }
 .student-details-shell:not(.student-details-shell--expanded) .profile-actions { flex-wrap: nowrap; align-items: center; gap: 6px; }
 .student-details-shell:not(.student-details-shell--expanded) .profile-action-button { min-width: 32px; height: 32px; border: 1px solid transparent; box-shadow: none; background: transparent; }
-.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--document-primary { background: #45983b; border-color: #45983b; color: #fff; }
-.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--document-primary:hover { background: #37832f; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--document-primary { background: linear-gradient(180deg, #547a29, #507728); border-color: #507728; color: #fff; }
+.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--document-primary:hover { background: #507728; }
 .student-details-shell:not(.student-details-shell--expanded) .profile-action-button--menu { margin-left: auto; }
 .student-details-shell:not(.student-details-shell--expanded) .profile-action-button--pay-compact { background: #edf6e8; color: #2d762f; }
 .student-details-shell:not(.student-details-shell--expanded) .profile-action-button:hover { border-color: #dce7d7; }
