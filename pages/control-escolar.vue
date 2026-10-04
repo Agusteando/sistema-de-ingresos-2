@@ -107,10 +107,11 @@
                   <b v-if="advancedFilterCount">{{ advancedFilterCount }}</b>
                 </button>
 
-                <div
-                  class="ce-chip-cluster ce-chip-cluster--quality ce-scrollable-filter-strip"
-                  aria-label="Calidad del expediente. Desplázate horizontalmente para ver más filtros."
-                  tabindex="0"
+                <UiSlideSelect
+                  class="ce-chip-cluster ce-chip-cluster--quality"
+                  label="Calidad del expediente"
+                  :selection="filters.quality"
+                  :active-index="qualityFilters.findIndex(filter => filter.key === filters.quality)"
                 >
                   <UiChip
                     v-for="filter in qualityFilters"
@@ -119,9 +120,9 @@
                     @click="toggleQualityFilter(filter.key)"
                   >
                     <span>{{ filter.label }}</span
-                    ><b class="ce-chip-count">{{ formatNumber(filter.count) }}</b>
+                    ><b v-if="filter.count !== undefined" class="ce-chip-count">{{ formatNumber(filter.count) }}</b>
                   </UiChip>
-                </div>
+                </UiSlideSelect>
 
                 <button
                   v-if="hasActiveFilters"
@@ -136,7 +137,7 @@
               </div>
 
               <div class="ce-secondary-filter-row">
-                <div class="ce-status-tabs ce-scrollable-filter-strip" aria-label="Filtros principales" tabindex="0">
+                <UiSlideSelect class="ce-status-tabs" label="Filtros principales" :selection="filters.status" :active-index="primaryFilters.findIndex(filter => filter.key === filters.status)">
                   <button
                     v-for="filter in primaryFilters"
                     :key="filter.key"
@@ -149,13 +150,14 @@
                   >
                     {{ filter.label }}
                   </button>
-                </div>
+                </UiSlideSelect>
 
-                <div
+                <UiSlideSelect
                   v-if="catalogs.grados.length"
-                  class="ce-chip-cluster ce-chip-cluster--grade ce-scrollable-filter-strip"
-                  aria-label="Filtrar por grado"
-                  tabindex="0"
+                  class="ce-chip-cluster ce-chip-cluster--grade"
+                  label="Filtrar por grado"
+                  :selection="filters.grado"
+                  :active-index="filters.grado ? catalogs.grados.indexOf(filters.grado) + 1 : 0"
                 >
                   <span class="ce-chip-label">Grado</span>
                   <UiChip
@@ -170,13 +172,14 @@
                     @click="selectGrade(grado)"
                     >{{ grado }}</UiChip
                   >
-                </div>
+                </UiSlideSelect>
 
-                <div
+                <UiSlideSelect
                   v-if="filters.grado && availableGroups.length"
-                  class="ce-chip-cluster ce-chip-cluster--group ce-scrollable-filter-strip"
-                  aria-label="Filtrar por grupo"
-                  tabindex="0"
+                  class="ce-chip-cluster ce-chip-cluster--group"
+                  label="Filtrar por grupo"
+                  :selection="filters.group"
+                  :active-index="filters.group ? availableGroups.indexOf(filters.group) + 1 : 0"
                 >
                   <span class="ce-chip-label">Grupo</span>
                   <UiChip
@@ -191,7 +194,7 @@
                     @click="toggleFilter('group', grupo)"
                     >{{ grupo }}</UiChip
                   >
-                </div>
+                </UiSlideSelect>
               </div>
             </div>
 
@@ -639,28 +642,10 @@
                           aria-hidden="true"
                         />
                       </span>
-                      <button
-                        type="button"
-                        :class="[
-                          'ce-student-identity-chip',
-                          'is-status',
-                          'is-baja-toggle',
-                          isStudentBaja ? 'danger' : 'success',
-                        ]"
-                        role="switch"
-                        :aria-checked="isStudentBaja"
-                        :aria-label="isStudentBaja ? 'Quitar baja del alumno' : 'Marcar alumno como baja'"
-                        :title="isStudentBaja ? 'Quitar baja' : 'Marcar como baja'"
-                        :disabled="savingStudent"
-                        @click="toggleStudentBaja"
-                      >
-                        <LucideUserX v-if="isStudentBaja" :size="14" aria-hidden="true" />
-                        <LucideUserCheck v-else :size="14" aria-hidden="true" />
-                        <span>{{ isStudentBaja ? 'Baja' : 'Activo' }}</span>
-                        <span class="ce-header-baja-switch" aria-hidden="true">
-                          <span></span>
-                        </span>
-                      </button>
+                      <div class="ce-student-status-select" role="group" aria-label="Estado del alumno. Los cambios se aplican al guardar.">
+                        <button type="button" :aria-pressed="!isStudentBaja" :class="{ active: !isStudentBaja }" :disabled="savingStudent" @click="editForm.baja = 0"><LucideUserCheck :size="14" /> Activo</button>
+                        <button type="button" :aria-pressed="isStudentBaja" :class="{ active: isStudentBaja }" :disabled="savingStudent" @click="editForm.baja = 1"><LucideUserX :size="14" /> Baja</button>
+                      </div>
                       <span
                         v-if="selectedHeaderBirthDateLabel"
                         class="ce-student-identity-chip is-birthday"
@@ -2042,6 +2027,7 @@ import {
 } from "lucide-vue-next";
 import UiButton from "~/components/ui/UiButton.vue";
 import UiChip from "~/components/ui/UiChip.vue";
+import UiSlideSelect from "~/components/ui/UiSlideSelect.vue";
 import UiGroupIcon from "~/components/ui/UiGroupIcon.vue";
 import StudentGradePhotoCard from "~/components/students/StudentGradePhotoCard.vue";
 import StudentsKpiValue from "~/components/students/StudentsKpiValue.vue";
@@ -2239,10 +2225,6 @@ const filters = reactive({
 });
 const editForm = reactive({});
 const isStudentBaja = computed(() => Number(editForm.baja || 0) === 1);
-const toggleStudentBaja = () => {
-  if (savingStudent.value) return;
-  editForm.baja = isStudentBaja.value ? 0 : 1;
-};
 const photoCache = ref({});
 const photoLoadingKeys = ref(new Set());
 let searchTimer = null;
@@ -3079,6 +3061,7 @@ const qualityFilters = computed(() => {
     { key: "padre", label: "Sin datos de padre", count: data.sinPadre || 0 },
     { key: "madre", label: "Sin datos de madre", count: data.sinMadre || 0 },
     { key: "contact", label: "Sin contacto válido", count: data.sinContacto || 0 },
+    { key: "husky_password", label: "Sin contraseña Husky Pass" },
   ];
 });
 
@@ -3214,6 +3197,7 @@ const qualityLabel = (value) =>
     padre: "Sin datos de padre",
     madre: "Sin datos de madre",
     contact: "Sin contacto válido",
+    husky_password: "Sin contraseña Husky Pass",
   })[value] || value;
 const controlGroupLabel = (student) => {
   const value = normalizeGroupPickerText(student?.group ?? student?.grupo)
@@ -5072,6 +5056,7 @@ const localStudentMatchesStatus = (student, status) => {
 const localStudentMatchesQuality = (student, quality) => {
   const normalized = normalizeClientText(quality);
   if (!normalized || normalized === "all") return true;
+  if (normalized === "husky_password") return !String(student.huskyPassPlaintext || "").trim();
   if (!isInscritoForControlProgress(student)) return false;
   const missing = normalizedMissingFields(student);
   if (normalized === "complete" || normalized === "completo")
@@ -17987,5 +17972,87 @@ onBeforeUnmount(() => {
  .control-escolar-screen .ce-detail-shell .ce-student-hero-copy { gap: 2px; }
  .control-escolar-screen .ce-detail-shell .ce-student-hero-meta { padding-bottom: 0; }
  .control-escolar-screen .ce-detail-shell .ce-student-identity-chip { min-height: 22px; padding-block: 0; }
+}
+
+/* Bounded filter lanes: every pill remains reachable without a scrolling toolbar. */
+.control-escolar-screen .ce-workspace .student-list-panel { container: control-filters / inline-size; }
+.control-escolar-screen .ce-workspace .ce-primary-filter-row { display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(160px, 1fr) auto; overflow: visible; align-items: center; }
+.control-escolar-screen .ce-workspace .ce-filter-bar .search-control { width: 100%; max-width: none; min-width: 0; overflow: hidden; }
+.control-escolar-screen .ce-workspace .search-filter-token { max-width: 40%; flex-shrink: 1; overflow: hidden; }
+.control-escolar-screen .ce-workspace .search-filter-token span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.control-escolar-screen .ce-workspace .search-control input { width: 0; min-width: 32px; flex: 1; }
+.control-escolar-screen .ce-workspace .ce-chip-cluster--quality { min-width: 0; max-width: 100%; overflow-x: auto; }
+.control-escolar-screen .ce-workspace .ce-clear-link { display: flex; grid-column: 4; grid-row: 1; min-width: 24px; padding: 3px; }
+.control-escolar-screen .ce-workspace .ce-clear-link span { display: none; }
+.control-escolar-screen .ce-workspace .ce-secondary-filter-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(150px, .8fr); overflow: visible; align-items: center; }
+.control-escolar-screen .ce-workspace .ce-secondary-filter-row > * { min-width: 0; max-width: 100%; margin: 0; mask-image: none; }
+.control-escolar-screen .ce-workspace .ce-chip-label { display: none; }
+.control-escolar-screen .ce-workspace .ce-status-tabs { border: 0; background: transparent; }
+.control-escolar-screen .ce-workspace .ce-status-tab { white-space: nowrap; }
+.control-escolar-screen .ce-workspace .ce-row-health .ce-quality-score { width: 32px; height: 32px; flex: 0 0 32px; box-shadow: 0 8px 18px color-mix(in srgb, var(--ce-health-accent, var(--ce-green)) 13%, rgba(15, 23, 42, 0.08)) !important; }
+.control-escolar-screen .ce-workspace .ce-row-health .ce-quality-score::after { inset: 4px; }
+.control-escolar-screen .ce-workspace .ce-row-health .ce-quality-score b { position: relative; inset: auto; transform: none; font-size: 7.8px; line-height: 1; }
+.control-escolar-screen .ce-student-status-select { display: inline-flex; align-items: center; gap: 2px; padding: 1px; border: 1px solid #dce5df; border-radius: 9px; background: #f5f8f5; }
+.control-escolar-screen .ce-student-status-select button { display: inline-flex; align-items: center; gap: 4px; min-height: 20px; padding: 1px 7px; border: 0; border-radius: 6px; background: transparent; color: #637167; font-size: 11px; font-weight: 500; cursor: pointer; }
+.control-escolar-screen .ce-student-status-select button.active { background: var(--action-primary); color: white; }
+.control-escolar-screen .ce-student-status-select button:last-child.active { background: var(--ce-danger); }
+.control-escolar-screen .ce-student-status-select button:focus-visible { outline: 2px solid var(--action-primary); outline-offset: 2px; }
+@container control-filters (max-width: 650px) {
+ .control-escolar-screen .ce-workspace .ce-primary-filter-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+ .control-escolar-screen .ce-workspace .ce-clear-link { grid-column: 3; }
+ .control-escolar-screen .ce-workspace .ce-chip-cluster--quality { grid-column: 1 / -1; }
+ .control-escolar-screen .ce-workspace .ce-secondary-filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+ .control-escolar-screen .ce-workspace .ce-status-tabs { grid-column: 1 / -1; }
+}
+
+.control-escolar-screen .ce-workspace .ce-chip-cluster--grade::before,
+.control-escolar-screen .ce-workspace .ce-chip-cluster--group::before { position: static; inset: auto; width: auto; height: auto; background: none; white-space: nowrap; flex: none; font-size: 10px; font-weight: 500; color: #637167; }
+.control-escolar-screen .ce-workspace .ce-chip-cluster--grade::before { content: 'Grado'; }
+.control-escolar-screen .ce-workspace .ce-chip-cluster--group::before { content: 'Grupo'; }
+@media (max-width: 820px) {
+ .control-escolar-screen .ce-workspace .ce-filter-bar.is-filter-expanded .ce-secondary-filter-row { display: grid !important; overflow: visible; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+ .control-escolar-screen .ce-workspace .ce-filter-bar.is-filter-expanded .ce-secondary-filter-row > * { min-width: 0 !important; }
+ .control-escolar-screen .ce-workspace .ce-filter-bar.is-filter-expanded .ce-status-tabs { grid-column: 1 / -1; }
+ .control-escolar-screen .ce-workspace .ce-filter-bar.is-filter-expanded .ce-chip-cluster--quality { overflow: hidden; padding: 2px; }
+}
+@media (min-width: 821px) and (max-height: 550px) {
+ .control-escolar-screen .ce-workspace .ce-filter-bar { padding: 0; gap: 0; }
+ .control-escolar-screen .ce-workspace .ce-secondary-filter-row { gap: 4px; }
+ .control-escolar-screen .ce-workspace .ce-status-tab,
+ .control-escolar-screen .ce-workspace :deep(.ui-chip) { min-height: 24px; padding-block: 2px; }
+ .control-escolar-screen .ce-workspace :deep(.slide-select__arrow) { height: 26px; }
+ .control-escolar-screen .ce-workspace :deep(.slide-select__viewport) { padding-block: 1px; }
+}
+
+.control-escolar-screen .ce-workspace .ce-secondary-filter-row > *,
+.control-escolar-screen .ce-workspace .ce-chip-cluster--quality { min-height: 0 !important; padding-block: 2px !important; }
+@media (min-width: 821px) and (max-height: 550px) {
+ .control-escolar-screen .ce-student-status-select { padding: 1px; }
+ .control-escolar-screen .ce-student-status-select button { min-height: 18px; padding-block: 0; }
+}
+
+@container control-filters (min-width: 391px) and (max-width: 650px) {
+ .control-escolar-screen .ce-workspace .ce-primary-filter-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+ .control-escolar-screen .ce-workspace .ce-chip-cluster--quality { display: none; }
+ .control-escolar-screen .ce-workspace .ce-filter-bar.is-filter-expanded .ce-chip-cluster--quality { display: flex; grid-column: 1 / -1; }
+ .control-escolar-screen .ce-workspace .ce-secondary-filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+ .control-escolar-screen .ce-workspace .ce-secondary-filter-row:has(.ce-chip-cluster--group) { grid-template-columns: minmax(110px, .85fr) minmax(128px, 1fr) minmax(140px, 1fr); }
+ .control-escolar-screen .ce-workspace .ce-status-tabs { grid-column: auto; }
+ .control-escolar-screen .ce-workspace .ce-secondary-filter-row :deep(.slide-select__arrow) { width: 18px; }
+ .control-escolar-screen .ce-workspace .ce-status-tab,
+ .control-escolar-screen .ce-workspace .ce-secondary-filter-row :deep(.ui-chip) { padding-inline: 8px; font-size: 11px; }
+}
+
+.control-escolar-screen .ce-workspace .ce-secondary-filter-row > * { min-width: 0 !important; overflow: hidden !important; mask-image: none !important; }
+.control-escolar-screen .ce-workspace .ce-chip-cluster--quality { mask-image: none !important; }
+@container control-filters (max-width: 650px) {
+ .control-escolar-screen .ce-workspace .ce-secondary-filter-row :deep(.slide-select__arrow) { width: 18px; }
+ .control-escolar-screen .ce-workspace .ce-status-tab,
+ .control-escolar-screen .ce-workspace .ce-secondary-filter-row :deep(.ui-chip) { min-height: 28px !important; padding-inline: 8px !important; font-size: 11px !important; }
+}
+
+.control-escolar-screen .ce-workspace .ce-secondary-filter-row > * { gap: 3px !important; padding-inline: 2px !important; }
+@container control-filters (min-width: 391px) and (max-width: 450px) {
+ .control-escolar-screen .ce-workspace .ce-secondary-filter-row :deep(.ui-chip) { padding-inline: 6px !important; font-size: 10px !important; }
 }
 </style>

@@ -2562,7 +2562,9 @@ const applyFilters = (students: ControlEscolarStudentRow[], filters: any) => {
     filters.quality || filters.calidad || filters.missing || "",
   );
   if (quality && quality !== "all") {
-    result = result.filter(isInscritoForControlProgress);
+    if (quality === "husky_password")
+      result = result.filter((student) => !normalizeText(student.huskyPassPlaintext));
+    else result = result.filter(isInscritoForControlProgress);
     if (quality === "complete" || quality === "completo")
       result = result.filter((student) => student.missingFields.length === 0);
     if (quality === "incomplete" || quality === "incompleto")

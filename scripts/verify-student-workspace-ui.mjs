@@ -19,7 +19,7 @@ try {
  return `@font-face{font-family:'${family==='montserrat'?'Montserrat':'Fredoka'}';font-style:normal;font-weight:${weight};src:url(data:font/woff2;base64,${readFileSync(path).toString('base64')}) format('woff2');}`;
  })).join('');
  await p.route('https://fonts.googleapis.com/**',route=>route.fulfill({contentType:'text/css',body:fontCss}));
- const data=Array.from({length:48},(_,i)=>({matricula:`VIS${String(i).padStart(3,'0')}`,fullName:i===0?'Alumno Prueba Apellido Largo Completo':`Alumno Prueba ${i+1} Apellido`,nombreCompleto:`Alumno Prueba ${i+1} Apellido`,nombreCompletoAlumno:`Alumno Prueba ${i+1} Apellido`,nombres:'Alumno Prueba',apellidoPaterno:'Apellido',apellidoMaterno:'Completo',status:'Activo',estatus:'Activo',enrollmentState:'inscrito',tipoIngresoValue:i%3?'interno':'externo',overlayExists:true,nivel:'primaria',grado:['primero','segundo','tercero','cuarto','quinto','sexto'][i%6],group:['AFRICA','AMERICA','ASIA','EUROPA'][i%4],grupo:['AFRICA','AMERICA','ASIA','EUROPA'][i%4],sexo:'Masculino',curp:'VISUAL000000HMCXXX00',nombrePadre:i<2?'Padre Prueba':`Padre Prueba ${i}`,telefonoPadre:String(7220000000+(i<2?0:i)),emailPadre:'visual@example.invalid',nombreMadre:i<2?'Madre Prueba':`Madre Prueba ${i}`,telefonoMadre:String(7230000000+(i<2?0:i)),emailMadre:'visual2@example.invalid',missingFields:[],missingBasicFields:[],recordCompleteness:100}));
+ const data=Array.from({length:48},(_,i)=>({matricula:`VIS${String(i).padStart(3,'0')}`,fullName:i===0?'Alumno Prueba Apellido Largo Completo':`Alumno Prueba ${i+1} Apellido`,nombreCompleto:`Alumno Prueba ${i+1} Apellido`,nombreCompletoAlumno:`Alumno Prueba ${i+1} Apellido`,nombres:'Alumno Prueba',apellidoPaterno:'Apellido',apellidoMaterno:'Completo',status:'Activo',estatus:'Activo',enrollmentState:'inscrito',tipoIngresoValue:i%3?'interno':'externo',overlayExists:true,nivel:'primaria',grado:['primero','segundo','tercero','cuarto','quinto','sexto'][i%6],group:['AFRICA','AMERICA','ASIA','EUROPA'][i%4],grupo:['AFRICA','AMERICA','ASIA','EUROPA'][i%4],sexo:'Masculino',curp:'VISUAL000000HMCXXX00',nombrePadre:i<2?'Padre Prueba':`Padre Prueba ${i}`,telefonoPadre:String(7220000000+(i<2?0:i)),emailPadre:'visual@example.invalid',nombreMadre:i<2?'Madre Prueba':`Madre Prueba ${i}`,telefonoMadre:String(7230000000+(i<2?0:i)),emailMadre:'visual2@example.invalid',huskyPassUsername:`fixture-${i}`,huskyPassPlaintext:i%2?'fixture-password':'',huskyPassAvailable:Boolean(i%2),missingFields:[],missingBasicFields:[],recordCompleteness:100}));
  const kpis={inscritos:48,internos:32,externos:16,noInscritos:0,bajas:0};
  const photoFixture = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="200"><rect width="160" height="200" fill="#eef3e8"/><circle cx="80" cy="70" r="38" fill="#c89775"/><path d="M18 200V155Q80 95 142 155V200" fill="#507728"/></svg>');
  // Exercise the real face-image processor with synthetic geometry and pixels.
@@ -185,6 +185,29 @@ try {
  const m=await p.evaluate(()=>{const row=document.querySelector('.ce-student-row'),copy=row.querySelector('.student-copy'),r=copy.getBoundingClientRect(),s=getComputedStyle(row.querySelector('.student-identity')),box=document.querySelector('.student-list-scroll').getBoundingClientRect();return {width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth+1,copyWidth:r.width,rowHeight:row.getBoundingClientRect().height,identityColumns:s.gridTemplateColumns,visibleRows:[...document.querySelectorAll('.ce-student-row')].filter(e=>{const r=e.getBoundingClientRect();return r.top>=box.top&&r.bottom<=box.bottom}).length,sigil:getComputedStyle(row.querySelector('.student-group-sigil')).display};});results.push(m);console.log('CONTROL',JSON.stringify(m));await p.screenshot({path:`${output}/${label}-control-${w}.png`,timeout:10000});
  if(m.copyWidth<90||m.overflow||m.visibleRows<({1920:4,1366:4,1024:5,900:3,390:1,1150:1})[w])throw Error('Control Escolar row layout gate failed');
  }
+
+ // Slide selectors remain bounded with a selected record and without one.
+ for(const width of [1920,1366,1024,900,390]) {
+   await p.setViewportSize({width,height:844});await p.waitForTimeout(200);
+   if(width<=820)await p.locator('.ce-filter-button').click();
+   const grade=p.locator('.ce-chip-cluster--grade .ui-chip');
+   await grade.first().focus();await grade.first().press('End');await p.waitForTimeout(200);
+   const last=grade.last();
+   const geometry=await last.evaluate(e=>{const r=e.getBoundingClientRect(),v=e.closest('.slide-select__viewport').getBoundingClientRect();return {fits:r.left>=v.left-2&&r.right<=v.right+2,pressed:e.getAttribute('aria-pressed')};});
+   if(!geometry.fits||geometry.pressed!=='true')throw Error(`Control final grade inaccessible at ${width}: ${JSON.stringify(geometry)}`);
+   const group=p.locator('.ce-chip-cluster--group .ui-chip');await group.first().press('End');await p.waitForTimeout(150);
+   if(!await group.last().evaluate(e=>{const r=e.getBoundingClientRect(),v=e.closest('.slide-select__viewport').getBoundingClientRect();return r.left>=v.left-2&&r.right<=v.right+2;}))throw Error(`Control final group clipped at ${width}`);
+   await grade.first().press('Home');
+   if(width<=820)await p.locator('.ce-filter-button').click();
+ }
+ await p.setViewportSize({width:1366,height:768});
+ const quality=p.locator('.ce-chip-cluster--quality .ui-chip');await quality.first().focus();await quality.first().press('End');await p.waitForTimeout(250);
+ // Rendering uses the normal local filter path against mixed synthetic credentials.
+ const filteredNames=await p.locator('.ce-student-row .student-name').allTextContents();
+ if(!filteredNames.length||filteredNames.some(name=>{const n=Number(name.match(/Prueba (\d+)/)?.[1]);return n && n%2===0;}))throw Error(`Missing-password filter included a configured fixture: ${JSON.stringify(filteredNames)}`);
+ await p.locator('.ce-status-tabs .ce-status-tab').first().press('Home');await p.waitForTimeout(200);
+ console.log('CONTROL SLIDE SELECTORS AND MISSING PASSWORD FILTER PASSED');
+ const controlRing=await p.locator('.ce-row-health .ce-quality-score').first().evaluate(e=>({size:e.getBoundingClientRect().width,shadow:getComputedStyle(e).boxShadow,font:getComputedStyle(e.querySelector('b')).fontSize}));
  const controlPhases=[];
  await p.locator('.ce-student-row .student-grade-photo-card.has-photo').first().waitFor();
  for(const time of [0,5500,8750])controlPhases.push(await p.locator('.ce-student-row .student-grade-photo-card.has-photo').first().evaluate((e,time)=>{
@@ -198,6 +221,42 @@ try {
    await p.setViewportSize({width:w,height:h});await p.waitForTimeout(500);
    const detail=await p.evaluate(()=>({width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth+1,bodyHeight:Math.max(0,Math.min(document.querySelector('.ce-detail-body').getBoundingClientRect().bottom,document.querySelector('.ce-detail-footer').getBoundingClientRect().top)-document.querySelector('.ce-detail-body').getBoundingClientRect().top),titleWeight:getComputedStyle(document.querySelector('.ce-student-hero-copy h2')).fontWeight,nameWeight:getComputedStyle(document.querySelector('.student-name')).fontWeight,tabs:[...document.querySelectorAll('.ce-detail-tabs button')].map(e=>e.textContent.trim())}));
    if(detail.overflow||detail.bodyHeight<120||Number(detail.titleWeight)>600){await p.screenshot({path:`${output}/failure-detail-${w}.png`});console.log('DETAIL GEOMETRY',await p.evaluate(()=>['.ce-detail-shell','.ce-student-hero-main','.ce-student-hero-side','.ce-student-hero-progress','.ce-detail-tabs','.ce-detail-footer'].map(sel=>{const e=document.querySelector(sel),r=e.getBoundingClientRect(),s=getComputedStyle(e);return{sel,width:r.width,height:r.height,gridRow:s.gridRow,gridColumns:s.gridTemplateColumns,minHeight:s.minHeight}})));throw Error(`Control detail gate failed: ${JSON.stringify(detail)}`);}
+   if(w===1366) {
+     const capacity=await p.evaluate(()=>{const box=document.querySelector('.ce-list-scroll').getBoundingClientRect();return [...document.querySelectorAll('.ce-student-row')].filter(e=>{const r=e.getBoundingClientRect();return r.top>=box.top&&r.bottom<=box.bottom;}).length;});
+     if(capacity<5)throw Error(`Selected Control list lost row capacity: ${capacity}`);
+   }
+   if(w===1920||w===1366) {
+     const selectedGrades=p.locator('.ce-chip-cluster--grade .ui-chip');await selectedGrades.first().press('End');await p.waitForTimeout(150);
+     const selectedGroups=p.locator('.ce-chip-cluster--group .ui-chip');await selectedGroups.first().press('End');await p.waitForTimeout(150);
+     if(!await p.locator('.ce-detail-shell').isVisible())throw Error('Academic filter unexpectedly closed the selected record');
+     await p.screenshot({path:`${output}/control-detail-filter-pills-${w}.png`,timeout:10000});
+     const bounded=await p.evaluate(()=>{
+       const panel=document.querySelector('.student-list-panel').getBoundingClientRect();
+       return [...document.querySelectorAll('.ce-secondary-filter-row > *')].filter(e=>e.getBoundingClientRect().height>0).every(e=>{const r=e.getBoundingClientRect();return r.left>=panel.left-2&&r.right<=panel.right+2;});
+     });
+     if(!bounded)throw Error(`Selected Control filter lanes exceed the panel at ${w}`);
+     const groupLabel=await p.locator('.ce-chip-cluster--group').evaluate(e=>({position:getComputedStyle(e,'::before').position,nowrap:getComputedStyle(e,'::before').whiteSpace}));
+     if(groupLabel.position!=='static'||groupLabel.nowrap!=='nowrap')throw Error('Group label overlays the selector arrow');
+     if(!await selectedGroups.last().evaluate(e=>{const r=e.getBoundingClientRect(),v=e.closest('.slide-select__viewport').getBoundingClientRect();return r.left>=v.left-2&&r.right<=v.right+2;}))throw Error('Selected record clips the final group pill');
+     const score=await p.locator('.ce-row-health .ce-quality-score').first().evaluate(e=>{const r=e.getBoundingClientRect(),b=e.querySelector('b').getBoundingClientRect();return {size:r.width,shadow:getComputedStyle(e).boxShadow,font:getComputedStyle(e.querySelector('b')).fontSize,centered:Math.abs((r.left+r.right-b.left-b.right)/2)<1&&Math.abs((r.top+r.bottom-b.top-b.bottom)/2)<1};});
+     if(score.size!==controlRing.size||score.shadow!==controlRing.shadow||score.font!==controlRing.font||score.size!==32||!score.centered)throw Error(`Control percentage ring changed/clipped: ${JSON.stringify(score)}`);
+     if(w===1366) {
+       await p.locator('.sidebar-collapse-button').click();await p.waitForTimeout(350);
+       if(await p.locator('.ce-chip-cluster--quality').isVisible())throw Error('Expanded sidebar consumes a default quality-filter row');
+       const expandedGroup=await selectedGroups.last().evaluate(e=>{const r=e.getBoundingClientRect(),v=e.closest('.slide-select__viewport').getBoundingClientRect();return {fits:r.left>=v.left-2&&r.right<=v.right+2,pill:r.width,space:v.width};});
+       if(!expandedGroup.fits)throw Error(`Expanded sidebar clips final group: ${JSON.stringify(expandedGroup)}`);
+       await p.screenshot({path:`${output}/control-detail-expanded-sidebar.png`,timeout:10000});
+       await p.locator('.sidebar-collapse-button').click();await p.waitForTimeout(350);
+     }
+     await selectedGrades.first().press('Home');
+     if(w===1366) {
+       const hiddenQuality=p.locator('.ce-chip-cluster--quality');if(await hiddenQuality.isVisible())throw Error('Compact list exposes an extra default quality row');
+       await p.locator('.ce-filter-button').click();await hiddenQuality.waitFor({state:'visible'});
+       const compactQuality=hiddenQuality.locator('.ui-chip');await compactQuality.first().press('End');await p.waitForTimeout(150);
+       if(await compactQuality.last().getAttribute('aria-pressed')!=='true')throw Error('Compact Husky filter is unreachable');
+       await p.locator('.ce-clear-link').click();await p.locator('.ce-filter-button').click();
+     }
+   }
    if(w===1366) {
      const identityVisible=await p.evaluate(()=>{const footer=document.querySelector('.ce-detail-footer').getBoundingClientRect();return [...document.querySelectorAll('.ce-identity-panel input')].every(e=>{const r=e.getBoundingClientRect();return r.height>0&&r.bottom<=footer.top;});});
      if(!identityVisible)throw Error('Default record view hides identity fields below the footer');
@@ -214,6 +273,12 @@ try {
  if(fixedNavigation.insideBody||fixedNavigation.before!==fixedNavigation.after||fixedNavigation.count!==7)throw Error(`Record navigation regressed: ${JSON.stringify(fixedNavigation)}`);
  console.log('FIXED RECORD NAVIGATION',fixedNavigation);
  await p.setViewportSize({width:1366,height:768});
+
+ const state=p.locator('.ce-student-status-select button');
+ await state.last().click();if(await state.last().getAttribute('aria-pressed')!=='true')throw Error('Baja state selection failed');
+ const draftSave=p.locator('.ce-detail-footer-actions .btn-primary');if(!await draftSave.isEnabled())throw Error('Status change does not remain an editable draft');
+ await p.locator('.ce-detail-footer-actions .btn-secondary').click();if(await state.first().getAttribute('aria-pressed')!=='true'||await draftSave.isEnabled())throw Error('Discard failed to restore Activo');
+ console.log('EXPLICIT STATUS SELECTION AND DISCARD PASSED');
  const tabs=p.locator('.ce-detail-tabs button');
  for(let i=0;i<await tabs.count();i++) {
    await tabs.nth(i).click();await p.waitForTimeout(100);
