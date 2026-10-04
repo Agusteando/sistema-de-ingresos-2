@@ -1,0 +1,44 @@
+name: Student workspace UI regression
+
+on:
+  pull_request:
+    paths:
+      - 'assets/css/**'
+      - 'layouts/default.vue'
+      - 'components/students/**'
+      - 'components/StudentDetails.vue'
+      - 'components/ui/UiVisionFaceImage.vue'
+      - 'pages/control-escolar.vue'
+      - 'pages/login.vue'
+      - 'pages/__visual-lab/**'
+      - 'public/brand/**'
+      - 'scripts/verify-student-workspace-ui.mjs'
+      - '.github/workflows/student-workspace-ui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  responsive-student-workspaces:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.1 @fontsource/montserrat@5 @fontsource/fredoka@5
+      - run: npx playwright install --with-deps chromium
+      - name: Verify financial and Control Escolar layouts, photos and identity
+        run: node scripts/verify-student-workspace-ui.mjs
+        env:
+          VISUAL_EVIDENCE_DIR: ui-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: student-workspace-visual-proof
+          path: ui-evidence

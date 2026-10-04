@@ -299,15 +299,14 @@ const foreignConceptTitle = (student) => {
 
 const activeStudentPhotoUrl = (student) => {
   const matricula = normalizeStudentMatricula(student?.matricula)
-  const selectedMatricula = normalizeStudentMatricula(props.selectedStudent?.matricula)
-  if (!matricula || matricula !== selectedMatricula) return ''
+  if (!matricula) return ''
   const cached = props.photoCache?.[matricula]
   if (cached && cached !== 'none') return cached
   if (process.client) {
     const stored = sessionStorage.getItem(photoStorageKey(matricula))
     if (stored && stored !== 'none') return stored
   }
-  return ''
+  return student?.photoUrl && student.photoUrl !== 'none' ? student.photoUrl : ''
 }
 </script>
 
