@@ -38,7 +38,8 @@ try {
  else if(u.pathname==='/api/auth/session')body={email:'visual@example.invalid',role:'superadmin,role_ctrl',planteles:['PT','SM'],activePlantel:'PT',hasFinancialAccess:true,hasControlEscolarRole:true,isSuperAdmin:true};
  else if(u.pathname==='/api/login/updates')body={ok:true,versionLabel:'visual',totalCount:48,lastUpdatedLabel:'Synthetic fixture',updates:[]};
  else if(u.pathname.endsWith('/photo')) {
-   if(/PTO|LAB/.test(u.pathname)) {
+   const measure = /PTO|LAB/.test(u.pathname) && (route.request().headers().referer || '').includes('photos=uncached');
+   if(measure) {
      activePhotos++;maxActivePhotos=Math.max(maxActivePhotos,activePhotos);
      await new Promise(resolve=>setTimeout(resolve,150));
      activePhotos--;
@@ -99,7 +100,7 @@ try {
  }
  if(phases[0].grade!=='1'||phases[1].photo!=='1'||phases[2].grade!=='1')throw Error(`Grade/photo cycle failed: ${JSON.stringify(phases)}`);
  const photoCache=await p.evaluate(()=>({failed:sessionStorage.getItem('foto_PTO161'),missing:sessionStorage.getItem('foto_PTO799'),missingChecked:sessionStorage.getItem('foto_PTO799_checked')}));
- if(photoCache.failed||photoCache.missing!=='none'||!photoCache.missingChecked||maxActivePhotos>3||visibleRequests.filter(x=>x==='/api/students/PTO574/photo').length!==1)throw Error(`Photo cache/concurrency gate failed: ${JSON.stringify({photoCache,maxActivePhotos,visibleRequests})}`);
+ if(photoCache.failed||photoCache.missing!=='none'||!photoCache.missingChecked||maxActivePhotos<1||maxActivePhotos>3||visibleRequests.filter(x=>x==='/api/students/PTO574/photo').length!==1)throw Error(`Photo cache/concurrency gate failed: ${JSON.stringify({photoCache,maxActivePhotos,visibleRequests})}`);
  console.log('FRESH PHOTO CYCLE',JSON.stringify({visibleRequests,phases,photoCache,maxActivePhotos}));
  await p.locator('.student-row[data-matricula="PTO696"] .student-grade-photo-card').evaluate(e=>{for(const animation of e.getAnimations({subtree:true}))animation.currentTime=5500;});
  await p.screenshot({path:`${output}/fresh-row-photos.png`,timeout:10000});
