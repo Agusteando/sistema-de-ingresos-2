@@ -298,7 +298,21 @@ const visualInvoicesByMatricula = {
     },
   ],
 }
-const selectedVisualInvoices = computed(() => visualInvoicesByMatricula[selectedStudent.value?.matricula] || [])
+const selectedVisualInvoices = computed(() => {
+  const invoices = visualInvoicesByMatricula[selectedStudent.value?.matricula] || []
+  if (route.query.ledgerdense !== '1' || !invoices.length) return invoices
+  return Array.from({ length: 18 }, (_, index) => index === 0 ? invoices[0] : ({
+    ...invoices[0],
+    id: index + 100,
+    providerInvoiceId: `visual-ledger-${index}`,
+    folio: `PT${1842 + index}`,
+    receiverName: index % 3 ? 'Tutor Fiscal de Prueba' : 'Empresa Educativa con Nombre Fiscal Extenso de Prueba',
+    status: index === 3 ? 'canceled' : 'valid',
+    cancellationStatus: index === 1 ? 'pending' : index === 2 ? 'rejected' : index === 3 ? 'accepted' : 'none',
+    actionable: index !== 4,
+    sourcePayments: [{ folio: 10000 + index, folioPlantel: `PT-LAB-${index}`, documento: `PT-LAB-DOC-${index}`, concepto: 'Pago de prueba', monto: invoices[0].total }],
+  }))
+})
 const photoCache = computed(() => route.query.photos === 'uncached' ? {} : labMatriculas.reduce((cache, matricula) => {
   cache[matricula] = ['PTO574', 'PTO696'].includes(matricula) ? visualPhotoUrl : 'none'
   return cache

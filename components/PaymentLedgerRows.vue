@@ -4,7 +4,7 @@
       v-for="(item, itemIndex) in paymentItems"
       :key="paymentItemKey(item)"
       :class="[
-        'payment-ledger-row',
+        'payment-ledger-row account-ledger-row',
         {
           'is-selected': isSelected(item),
           'is-cancelled': item.cancelled,
@@ -28,13 +28,13 @@
       </label>
 
       <div class="payment-ledger-row__identity">
-        <div class="payment-ledger-row__title">
-          <strong>{{ paymentConceptLabel(item) }}</strong>
-          <span :class="['payment-ledger-status', paymentStatusClass(item)]">
+        <div class="payment-ledger-row__title account-ledger-title">
+          <strong :title="paymentConceptLabel(item)">{{ paymentConceptLabel(item) }}</strong>
+          <span :class="['payment-ledger-status account-ledger-status', paymentStatusClass(item)]">
             {{ paymentStatusLabel(item) }}
           </span>
         </div>
-        <div class="payment-ledger-row__subline">
+        <div class="payment-ledger-row__subline account-ledger-meta">
           <b>Folio {{ displayFolio(item.payment) }}</b>
           <span v-if="item.debt?.documento">Doc. {{ item.debt.documento }}</span>
           <span>{{ paymentPeriodLabel(item) }}</span>
@@ -43,11 +43,11 @@
         </div>
       </div>
 
-      <strong class="payment-ledger-row__amount">
+      <strong class="payment-ledger-row__amount account-ledger-amount">
         ${{ money(item.payment?.monto) }}
       </strong>
 
-      <div class="payment-ledger-row__actions" @click.stop>
+      <div class="payment-ledger-row__actions account-ledger-actions" @click.stop>
         <button
           v-if="itemIndex === 0 && pendingTotal > 0"
           type="button"
@@ -196,284 +196,29 @@ const formatDate = (value: unknown) => {
 }
 </script>
 
+
+<style scoped src="./students/accountLedger.css"></style>
 <style scoped>
-.payment-ledger-rows {
-  display: grid;
-  border-top: 1px solid #edf2f7;
+.payment-ledger-rows { container: payment-ledger / inline-size; display: grid; }
+.payment-ledger-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto auto; }
+.payment-ledger-row__identity { min-width: 0; }
+.payment-ledger-row.is-cancelled { background: #fffafa; }
+.payment-ledger-row.is-cancelled .payment-ledger-row__amount { color: #a84d45; text-decoration: line-through; }
+.payment-ledger-row__selector { position: relative; display: grid; width: 24px; height: 28px; place-items: center; cursor: pointer; }
+.payment-ledger-row__selector input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.payment-ledger-row__selector span { position: relative; width: 17px; height: 17px; border: 1px solid #b9c8bc; border-radius: 5px; background: #fff; }
+.payment-ledger-row__selector span::after { position: absolute; top: 2px; left: 5px; width: 4px; height: 8px; border-right: 2px solid #fff; border-bottom: 2px solid #fff; content: ''; opacity: 0; transform: rotate(45deg); }
+.payment-ledger-row__selector input:checked + span { border-color: var(--action-primary, #4e844e); background: var(--action-primary, #4e844e); }
+.payment-ledger-row__selector input:checked + span::after { opacity: 1; }
+.payment-ledger-row__selector input:focus-visible + span { outline: 2px solid var(--action-primary, #4e844e); outline-offset: 2px; }
+.payment-ledger-row__selector.is-disabled { opacity: .42; cursor: not-allowed; }
+.payment-ledger-action--invoiced { color: var(--action-primary, #4e844e) !important; background: #edf5e8 !important; }
+@container payment-ledger (max-width: 420px) {
+ .payment-ledger-row { grid-template-columns: 24px minmax(0, 1fr) auto; gap: 5px 8px; }
+ .payment-ledger-row__actions { grid-column: 2 / -1; justify-content: flex-start; }
 }
-
-.payment-ledger-row {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) minmax(78px, auto) 104px;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  border-bottom: 1px solid #f0f3f7;
-  background: #fff;
-  padding: 6px 10px;
-  transition: background 150ms ease, box-shadow 150ms ease;
-}
-
-.payment-ledger-row:last-child {
-  border-bottom: 0;
-}
-
-.payment-ledger-row.has-pay-action {
-  grid-template-columns: 28px minmax(0, 1fr) minmax(78px, auto) 136px;
-}
-
-.payment-ledger-row:hover,
-.payment-ledger-row:focus-within {
-  background: #f8fbf8;
-  box-shadow: inset 3px 0 0 rgba(69, 163, 65, 0.62);
-}
-
-.payment-ledger-row.is-selected {
-  background: #f1f9ef;
-  box-shadow: inset 3px 0 0 #45a341;
-}
-
-.payment-ledger-row.is-cancelled {
-  background: #fffafa;
-}
-
-.payment-ledger-row__selector {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  cursor: pointer;
-}
-
-.payment-ledger-row__selector input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.payment-ledger-row__selector span {
-  position: relative;
-  width: 17px;
-  height: 17px;
-  border: 1.5px solid #bdcad8;
-  border-radius: 6px;
-  background: #fff;
-  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
-}
-
-.payment-ledger-row__selector span::after {
-  position: absolute;
-  top: 3px;
-  left: 5px;
-  width: 4px;
-  height: 7px;
-  border-right: 2px solid #fff;
-  border-bottom: 2px solid #fff;
-  content: '';
-  opacity: 0;
-  transform: rotate(45deg);
-}
-
-.payment-ledger-row__selector input:checked + span {
-  border-color: #3d9238;
-  background: #45a341;
-}
-
-.payment-ledger-row__selector input:checked + span::after {
-  opacity: 1;
-}
-
-.payment-ledger-row__selector input:focus-visible + span {
-  box-shadow: 0 0 0 3px rgba(69, 163, 65, 0.17);
-}
-
-.payment-ledger-row__selector.is-disabled {
-  cursor: not-allowed;
-  opacity: 0.42;
-}
-
-.payment-ledger-row__identity {
-  min-width: 0;
-}
-
-.payment-ledger-row__title,
-.payment-ledger-row__subline {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.payment-ledger-row__title {
-  gap: 7px;
-}
-
-.payment-ledger-row__title strong {
-  overflow: hidden;
-  color: #17243c;
-  font-size: 0.7rem;
-  font-weight: 850;
-  letter-spacing: -0.015em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.payment-ledger-row__subline {
-  gap: 6px;
-  margin-top: 2px;
-  overflow: hidden;
-  color: #7c8899;
-  font-size: 0.59rem;
-  font-weight: 690;
-  white-space: nowrap;
-}
-
-.payment-ledger-row__subline > * {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.payment-ledger-row__subline > * + *::before {
-  margin-right: 6px;
-  color: #c0c9d4;
-  content: '·';
-}
-
-.payment-ledger-row__subline b {
-  flex: 0 0 auto;
-  color: #526176;
-  font-weight: 800;
-}
-
-.payment-ledger-status {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  padding: 2px 6px;
-  font-size: 0.52rem;
-  font-weight: 850;
-  letter-spacing: 0.02em;
-}
-
-.payment-ledger-status.is-active {
-  background: #eaf7e8;
-  color: #2e7d32;
-}
-
-.payment-ledger-status.is-audit {
-  background: #fff5dd;
-  color: #8a6816;
-}
-
-.payment-ledger-status.is-cancelled {
-  background: #fff0ef;
-  color: #b94b45;
-}
-
-.payment-ledger-row__amount {
-  color: #2f8040;
-  font-size: 0.72rem;
-  font-weight: 880;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.payment-ledger-row.is-cancelled .payment-ledger-row__amount {
-  color: #9a5960;
-  text-decoration: line-through;
-}
-
-.payment-ledger-row__actions {
-  display: inline-flex;
-  justify-content: flex-end;
-  gap: 4px;
-  opacity: 0;
-  transform: translateX(4px);
-  transition: opacity 150ms ease, transform 150ms ease;
-}
-
-.payment-ledger-row:hover .payment-ledger-row__actions,
-.payment-ledger-row:focus-within .payment-ledger-row__actions,
-.payment-ledger-row.is-selected .payment-ledger-row__actions {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-.payment-ledger-action {
-  display: inline-grid;
-  width: 28px;
-  height: 28px;
-  border: 1px solid #dce5ee;
-  border-radius: 9px;
-  background: #fff;
-  color: #386f55;
-  cursor: pointer;
-  place-items: center;
-  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
-}
-
-.payment-ledger-action:hover:not(:disabled) {
-  border-color: #bcd9c4;
-  background: #eef8f0;
-  color: #246b3d;
-  transform: translateY(-1px);
-}
-
-.payment-ledger-action--pay {
-  border-color: #c9e1c5;
-  background: #f2faf0;
-  color: #2e7d32;
-}
-
-.payment-ledger-action--danger {
-  color: #b54a46;
-}
-
-.payment-ledger-action--danger:hover:not(:disabled) {
-  border-color: #efc9c6;
-  background: #fff3f2;
-  color: #a73531;
-}
-
-.payment-ledger-action:disabled {
-  cursor: not-allowed;
-  opacity: 0.34;
-}
-
-@media (hover: none) {
-  .payment-ledger-row__actions {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-
-.payment-ledger-action--invoiced {
-  border-color: #b7d7b8;
-  background: #f3faf3;
-  color: #285d32;
-}
-
-@media (max-width: 720px) {
-  .payment-ledger-row {
-    grid-template-columns: 26px minmax(0, 1fr) auto;
-    gap: 8px;
-    padding: 7px 8px;
-  }
-
-  .payment-ledger-row__amount {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
-  .payment-ledger-row__actions {
-    grid-column: 2 / -1;
-    justify-content: flex-start;
-  }
-
-  .payment-ledger-row__subline span:nth-last-child(-n + 2) {
-    display: none;
-  }
+@container payment-ledger (max-width: 350px) {
+ .payment-ledger-row__title { align-items: flex-start; }
+ .payment-ledger-row__amount { font-size: 12px; }
 }
 </style>
