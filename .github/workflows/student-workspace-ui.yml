@@ -7,6 +7,8 @@ on:
       - 'layouts/default.vue'
       - 'components/students/**'
       - 'utils/studentPhotos.js'
+      - 'server/api/students/**/photo.get.ts'
+      - 'tests/student-photo-source.test.mjs'
       - 'components/StudentDetails.vue'
       - 'components/ui/UiVisionFaceImage.vue'
       - 'pages/control-escolar.vue'
@@ -32,6 +34,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - run: node --test tests/student-photo-source.test.mjs
       - run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.1 @fontsource/montserrat@5 @fontsource/fredoka@5
       - run: npx playwright install --with-deps chromium
       - name: Verify financial and Control Escolar layouts, photos and identity

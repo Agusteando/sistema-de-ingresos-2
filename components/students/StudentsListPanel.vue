@@ -303,8 +303,30 @@ const rowPhotos = ref({})
 const listScroll = ref(null)
 const rows = new Map()
 const attempts = new Map()
+const visibleRows = new Set()
+const pendingPhotos = new Set()
+const retryTimers = new Map()
 let photoObserver
 let disposed = false
+
+function loadVisiblePhoto(matricula) {
+  const student = props.displayedStudents.find(row => normalizeStudentMatricula(row.matricula) === matricula)
+  if (disposed || !visibleRows.has(matricula) || !student || activeStudentPhotoUrl(student) || pendingPhotos.has(matricula) || retryTimers.has(matricula)) return
+  const attempt = attempts.get(matricula) || 0
+  if (attempt >= 4) return
+  attempts.set(matricula, attempt + 1)
+  pendingPhotos.add(matricula)
+  loadStudentPhoto(matricula).then(photo => {
+    if (!disposed) rowPhotos.value[matricula] = photo || 'none'
+  }).catch(() => {
+    // A temporary source/auth/network failure must recover without a scroll.
+    if (disposed || attempt >= 3) return
+    retryTimers.set(matricula, setTimeout(() => {
+      retryTimers.delete(matricula)
+      loadVisiblePhoto(matricula)
+    }, [4000, 12000, 30000][attempt]))
+  }).finally(() => pendingPhotos.delete(matricula))
+}
 
 function observeStudentRow(element, student) {
   const matricula = normalizeStudentMatricula(student?.matricula)
@@ -314,27 +336,32 @@ function observeStudentRow(element, student) {
   if (element) {
     rows.set(matricula, element)
     photoObserver?.observe(element)
-  } else rows.delete(matricula)
+  } else {
+    rows.delete(matricula)
+    visibleRows.delete(matricula)
+  }
 }
 
 onMounted(() => {
   photoObserver = new IntersectionObserver(entries => {
     for (const entry of entries) {
-      if (!entry.isIntersecting) continue
       const matricula = normalizeStudentMatricula(entry.target.dataset.matricula)
-      const student = props.displayedStudents.find(row => normalizeStudentMatricula(row.matricula) === matricula)
-      if (!student || activeStudentPhotoUrl(student)) continue
-      if (Date.now() - (attempts.get(matricula) || 0) < 30000) continue
-      attempts.set(matricula, Date.now())
-      loadStudentPhoto(matricula).then(photo => {
-        if (!disposed) rowPhotos.value[matricula] = photo || 'none'
-      }).catch(() => { /* Keep the grade tile; a later visibility change can retry. */ })
+      if (!entry.isIntersecting) { visibleRows.delete(matricula); continue }
+      visibleRows.add(matricula)
+      loadVisiblePhoto(matricula)
     }
   }, { root: listScroll.value, threshold: 0.01 })
   for (const element of rows.values()) photoObserver.observe(element)
 })
 
-onBeforeUnmount(() => { disposed = true; photoObserver?.disconnect(); rows.clear() })
+onBeforeUnmount(() => {
+  disposed = true
+  photoObserver?.disconnect()
+  rows.clear()
+  visibleRows.clear()
+  for (const timer of retryTimers.values()) clearTimeout(timer)
+  retryTimers.clear()
+})
 
 const activeStudentPhotoUrl = (student) => {
   const matricula = normalizeStudentMatricula(student?.matricula)

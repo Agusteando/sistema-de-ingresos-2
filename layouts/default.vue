@@ -38,7 +38,7 @@
           class="sidebar-logo"
         />
         <img
-          src="/brand/aurora-logo-v2.webp"
+          src="/brand/aurora-logo-classic.webp"
           alt="Aurora"
           class="sidebar-system-logo"
         />

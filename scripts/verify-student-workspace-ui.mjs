@@ -28,7 +28,7 @@ try {
    headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,OPTIONS'},
    body:route.request().url().includes('/image/') ? decodeURIComponent(photoFixture.split(',')[1]) : JSON.stringify({ok:true,imageKey:'visual-fixture',maskAvailable:false})
  }));
- let activePhotos=0,maxActivePhotos=0;
+ let activePhotos=0,maxActivePhotos=0, transientPhotoAttempts=0;
  const requests=[];
  await p.route('http://127.0.0.1:3004/api/**',async route=>{const u=new URL(route.request().url());requests.push(u.pathname);let body={};let status=200;
  if(u.pathname==='/api/control-escolar/options')body={activePlantel:'PT',planteles:[{id:'PT',nombre:'Primaria Toluca'}],access:{controlEscolar:true,financial:true,superAdmin:true}};
@@ -44,7 +44,7 @@ try {
      await new Promise(resolve=>setTimeout(resolve,150));
      activePhotos--;
    }
-   if(u.pathname.includes('/PTO161/')) { status=503;body={message:'Synthetic transient photo failure'}; }
+   if(u.pathname.includes('/PTO161/') && (!measure || ++transientPhotoAttempts===1)) { status=503;body={message:'Synthetic transient photo failure'}; }
    else if(u.pathname.includes('/PTO799/')) { status=404;body={message:'Synthetic missing photo'}; }
    else body={photoUrl: /PTO|LAB/.test(u.pathname) ? photoFixture : ''};
  }
@@ -77,13 +77,14 @@ try {
  const reduced=await p.evaluate(()=>({photo:getComputedStyle(document.querySelector('.student-grade-photo-card.has-photo .student-grade-photo-card__photo')).opacity,animation:getComputedStyle(document.querySelector('.income-sidebar')).animationName}));
  if(reduced.photo!=='1'||reduced.animation!=='none')throw Error('Reduced-motion gate failed');await p.emulateMedia({reducedMotion:'no-preference'});
  const identity=await p.evaluate(()=>({logo:document.querySelector('.sidebar-logo').getAttribute('src'),aurora:document.querySelector('.sidebar-system-logo').getAttribute('src'),pattern:getComputedStyle(document.querySelector('.sidebar-sheen')).backgroundImage,animation:getComputedStyle(document.querySelector('.income-sidebar')).animationDuration}));
- if(identity.logo!=='/brand/institutional-logo.webp'||identity.aurora!=='/brand/aurora-logo-v2.webp'||!identity.pattern.includes('institutional-pattern')||identity.animation!=='0s')throw Error('Institutional identity gate failed');console.log('IDENTITY',identity);
+ if(identity.logo!=='/brand/institutional-logo.webp'||identity.aurora!=='/brand/aurora-logo-classic.webp'||!identity.pattern.includes('institutional-pattern')||identity.animation!=='0s')throw Error('Institutional identity gate failed');console.log('IDENTITY',identity);
  const fills=await p.evaluate(()=>[document.querySelector('.new-student-button'),document.querySelector('.profile-action-button--document-primary')].map(e=>({background:getComputedStyle(e).backgroundColor,image:getComputedStyle(e).backgroundImage})));
  if(fills[0].background!==fills[1].background||fills.some(x=>x.image!=='none'))throw Error(`Inconsistent filled CTA colors: ${JSON.stringify(fills)}`);
  console.log('CTA FILLS',fills);
  await p.screenshot({path:`${output}/identity-restored.png`,timeout:10000});
  // Fresh session exercises production loading, not seeded photo-cache entries.
  await p.evaluate(()=>sessionStorage.clear());
+ transientPhotoAttempts=0;
  const startRequests=requests.length;
  await p.goto('http://127.0.0.1:3004/__visual-lab/students-account?chrome=0&workspace=1&dense=1&photos=uncached',{waitUntil:'domcontentloaded'});
  await p.locator('.student-row[data-matricula="PTO696"] .has-photo').waitFor();
@@ -102,6 +103,9 @@ try {
  const photoCache=await p.evaluate(()=>({failed:sessionStorage.getItem('foto_PTO161'),missing:sessionStorage.getItem('foto_PTO799'),missingChecked:sessionStorage.getItem('foto_PTO799_checked')}));
  if(photoCache.failed||photoCache.missing!=='none'||!photoCache.missingChecked||maxActivePhotos<1||maxActivePhotos>3||visibleRequests.filter(x=>x==='/api/students/PTO574/photo').length!==1)throw Error(`Photo cache/concurrency gate failed: ${JSON.stringify({photoCache,maxActivePhotos,visibleRequests})}`);
  console.log('FRESH PHOTO CYCLE',JSON.stringify({visibleRequests,phases,photoCache,maxActivePhotos}));
+ await p.locator('.student-row[data-matricula="PTO161"] .has-photo').waitFor({timeout:15000});
+ if(transientPhotoAttempts!==2)throw Error(`Visible transient photo retry failed: ${transientPhotoAttempts}`);
+ console.log('VISIBLE PHOTO RECOVERED WITHOUT SCROLL');
  await p.locator('.student-row[data-matricula="PTO696"] .student-grade-photo-card').evaluate(e=>{for(const animation of e.getAnimations({subtree:true}))animation.currentTime=5500;});
  await p.screenshot({path:`${output}/fresh-row-photos.png`,timeout:10000});
  await p.locator('.student-list-scroll').evaluate(e=>e.scrollTop=e.scrollHeight);
@@ -150,7 +154,7 @@ try {
  await p.setViewportSize({width:900,height:640});await p.locator('.ce-mobile-detail-back').click();await p.locator('.ce-student-row').first().waitFor({state:'visible'});await p.locator('.ce-student-row').first().click();await p.locator('.ce-detail-shell').waitFor({state:'visible'});
  console.log('CONTROL EDIT, DISCARD AND RETURN PASSED');
  if(requests.some(path=>path.includes('/save')))throw Error('Visual check unexpectedly submitted a record');
- await p.context().clearCookies();await p.goto('http://127.0.0.1:3004/login',{waitUntil:'domcontentloaded'});await p.locator('.brand-system-logo').waitFor();if(await p.locator('.brand-system-logo').getAttribute('src')!=='/brand/aurora-logo-v2.webp')throw Error('Login logo regressed');await p.screenshot({path:`${output}/login.png`,timeout:10000});
+ await p.context().clearCookies();await p.goto('http://127.0.0.1:3004/login',{waitUntil:'domcontentloaded'});await p.locator('.brand-system-logo').waitFor();if(await p.locator('.brand-system-logo').getAttribute('src')!=='/brand/aurora-logo-classic.webp')throw Error('Login logo regressed');await p.screenshot({path:`${output}/login.png`,timeout:10000});
  console.log('ERRORS',errors);console.log('ENDPOINTS',[...new Set(requests)]);writeFileSync(`${output}/${label}-control-results.json`,JSON.stringify({results,errors,requests},null,2));if(errors.length)throw Error(errors.join(';'));
 } catch(e) { console.error(e.stack); process.exitCode=1; }
 finally { if(b)await b.close();try{process.kill(-server.pid,'SIGTERM')}catch{}setTimeout(()=>process.exit(process.exitCode||0),1500); }
