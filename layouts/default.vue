@@ -33,12 +33,12 @@
 
       <NuxtLink to="/" class="sidebar-brand sidebar-brand-link" title="Inicio" aria-label="Inicio">
         <img
-          src="/brand/institutional-logo.webp"
+          src="/brand/institutional-emblem.webp"
           alt="IECS IEDIS"
           class="sidebar-logo"
         />
         <img
-          src="/brand/aurora-logo-classic.webp"
+          src="/brand/aurora-logo-institutional.svg"
           alt="Aurora"
           class="sidebar-system-logo"
         />
@@ -478,7 +478,7 @@ const { syncState, syncMessage } = useOptimisticSync()
 const route = useRoute()
 
 const SIDEBAR_WIDTH = 220
-const SIDEBAR_COLLAPSED_WIDTH = 84
+const SIDEBAR_COLLAPSED_WIDTH = 72
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'income-sidebar-collapsed'
 const sidebarCollapsed = ref(false)
 const controlEscolarDetailOpen = useState('controlEscolarDetailOpen', () => false)

@@ -10,7 +10,7 @@
           />
 
           <img
-            src="/brand/aurora-logo-classic.webp"
+            src="/brand/aurora-logo-institutional.svg"
             alt="AURORA - Administración Unificada de Recursos, Operación y Registro Académico"
             class="brand-system-logo"
           />

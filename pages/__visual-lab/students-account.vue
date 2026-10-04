@@ -18,7 +18,7 @@
     <template v-if="isClientReady && route.query.workspace === '1'">
       <StudentsHero><button class="lab-duplicate-link" type="button">62 posibles duplicados · Revisar</button></StudentsHero>
       <StudentsKpiSummary user-role="superadmin" :active-filter="labActiveFilter" @set-filter="labActiveFilter = $event" :kpi-counts="{ inscritos: 460, internos: 334, externos: 126, no_inscritos: 25, bajas: 33 }" :global-kpis="{ ingresosMes: 265400 }" :kpi-sparklines="{ inscritos: [420, 434, 442, 460], internos: [310, 319, 328, 334], externos: [110, 115, 114, 126], no_inscritos: [35, 32, 29, 25], bajas: [22, 24, 30, 33] }" />
-      <StudentsFilterBar :search-query="labSearch" :active-grado="activeSummaryGrade" :active-grupo="activeSummaryGroup" :available-grados="['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto']" :available-grupos="['AMERICA', 'ASIA', 'EUROPA']" @update-search-query="labSearch = $event" @update-active-grado="activeSummaryGrade = $event" @update-active-grupo="activeSummaryGroup = $event" />
+      <StudentsFilterBar :search-query="labSearch" :active-saldo-filter="labSaldoFilter" @toggle-debt="labSaldoFilter = labSaldoFilter === 'debt' ? 'all' : 'debt'" @update-active-saldo-filter="labSaldoFilter = $event" :active-grado="activeSummaryGrade" :active-grupo="activeSummaryGroup" :available-grados="['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto']" :available-grupos="['AMERICA', 'ASIA', 'EUROPA']" @update-search-query="labSearch = $event" @update-active-grado="activeSummaryGrade = $event" @update-active-grupo="activeSummaryGroup = $event" />
     </template>
     <button v-if="selectedStudent || showLabSummary" type="button" class="students-back-button" @click="selectedStudent = null; showLabSummary = false">← Alumnos</button>
     <button v-else type="button" class="students-back-button" @click="showLabSummary = true">Resumen por grado</button>
@@ -26,7 +26,7 @@
       <div class="students-design-canvas">
         <div :class="['students-workspace has-detail visual-lab-workspace', { 'has-focus': selectedStudent || showLabSummary }]">
           <StudentsListPanel
-            :displayed-students="students.filter(s => s.nombreCompleto.toLowerCase().includes(labSearch.toLowerCase()))"
+            :displayed-students="filteredLabStudents"
             :selected-student="selectedStudent"
             :selected-matriculas="selectedMatriculas"
             :selected-count="selectedCount"
@@ -226,6 +226,12 @@ if (route.query.dense === '1') {
     })
   }
 }
+
+const labSaldoFilter = ref('all')
+const filteredLabStudents = computed(() => students.value.filter(student => {
+ const grade = ['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto'].indexOf(activeSummaryGrade.value) + 1
+ return student.nombreCompleto.toLowerCase().includes(labSearch.value.toLowerCase()) && (!grade || Number(student.grado) === grade) && (!activeSummaryGroup.value || student.grupo === activeSummaryGroup.value) && (labSaldoFilter.value !== 'debt' || Number(student.saldoNeto) > 0)
+}))
 
 const enrollmentSummary = computed(() => buildEnrollmentSummary(students.value, {
   include: () => true,

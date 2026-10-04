@@ -117,7 +117,7 @@
   }
   .btn-primary {
     @apply text-white focus:ring-brand-leaf;
-    background: var(--action-primary, #507728);
+    background: var(--action-primary, #00692f);
     box-shadow: 0 12px 24px rgba(78, 148, 67, 0.22);
   }
   .btn-secondary {

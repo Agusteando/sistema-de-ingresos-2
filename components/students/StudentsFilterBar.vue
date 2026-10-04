@@ -25,18 +25,6 @@
       />
     </div>
 
-    <div class="responsive-grade-filter">
-      <UiChip debt :active="activeSaldoFilter === 'debt'" @click="$emit('toggle-debt')">Con adeudo</UiChip>
-      <select aria-label="Filtrar por grado" :value="activeGrado" @change="selectGrade($event.target.value)">
-        <option value="">Todos los grados</option>
-        <option v-for="g in availableGrados" :key="g" :value="g">{{ g }}</option>
-      </select>
-      <select v-if="activeGrado && availableGrupos.length" aria-label="Filtrar por grupo" :value="activeGrupo" @change="$emit('update-active-grupo', $event.target.value)">
-        <option value="">Todos los grupos</option>
-        <option v-for="grp in availableGrupos" :key="grp" :value="grp">Grupo {{ grp }}</option>
-      </select>
-      <button v-if="activeGrado || activeGrupo || activeSaldoFilter !== 'all'" type="button" aria-label="Quitar filtros de grado, grupo y adeudo" @click="clearGradeFilters">Limpiar</button>
-    </div>
     <div class="grade-filter">
       <div class="grade-tabs" aria-label="Filtrar por grado">
         <UiChip :active="activeGrado === '' && activeSaldoFilter === 'all'" @click="clearGradeFilters">Todos</UiChip>

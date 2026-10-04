@@ -739,7 +739,7 @@
                       aria-label="Cerrar detalle"
                       @click="selectedStudent = null"
                     >
-                      <LucideMoreVertical :size="28" />
+                      <LucideX :size="20" />
                     </button>
                   </div>
                 </div>
@@ -771,31 +771,32 @@
                 </div>
               </header>
 
+              <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
+                <button
+                  v-for="tab in detailTabs"
+                  :key="tab.key"
+                  :aria-pressed="activeDetailTab === tab.key"
+                  type="button"
+                  :class="[
+                    { active: activeDetailTab === tab.key },
+                    `is-${detailTabState(tab.key).tone}`,
+                  ]"
+                  @click="selectDetailTab(tab.key)"
+                >
+                  <span class="ce-tab-main">
+                    <component :is="tab.icon" :size="15" /> {{ tab.label }}
+                  </span>
+                  <b v-if="detailTabState(tab.key).count" class="ce-tab-badge">{{
+                    detailTabState(tab.key).count
+                  }}</b>
+                </button>
+              </nav>
+
               <div
                 ref="detailBodyRef"
                 class="ce-detail-body"
                 @scroll="handleDetailBodyScroll"
               >
-                <nav class="ce-detail-tabs" aria-label="Secciones de ficha">
-                  <button
-                    v-for="tab in detailTabs"
-                    :key="tab.key"
-                    type="button"
-                    :class="[
-                      { active: activeDetailTab === tab.key },
-                      `is-${detailTabState(tab.key).tone}`,
-                    ]"
-                    @click="activeDetailTab = tab.key"
-                  >
-                    <span class="ce-tab-main">
-                      <component :is="tab.icon" :size="15" /> {{ tab.label }}
-                    </span>
-                    <b v-if="detailTabState(tab.key).count" class="ce-tab-badge">{{
-                      detailTabState(tab.key).count
-                    }}</b>
-                  </button>
-                </nav>
-
                 <form class="ce-edit-form" @submit.prevent="saveStudent">
                   <section
                     v-show="activeDetailTab === 'summary'"
@@ -870,7 +871,6 @@
                     <div class="ce-panel-heading">
                       <div>
                         <h3>Datos de identidad</h3>
-                        <p>Revisa y actualiza la identidad principal del alumno.</p>
                       </div>
                       <span :class="['ce-panel-status', selectedIdentityStatus.tone]">{{
                         selectedIdentityStatus.label
@@ -2213,6 +2213,11 @@ const massImportFile = ref(null);
 const massImportResult = ref(null);
 const massImportError = ref("");
 const activeDetailTab = ref("summary");
+const selectDetailTab = async (key) => {
+  activeDetailTab.value = key;
+  await nextTick();
+  if (detailBodyRef.value) detailBodyRef.value.scrollTop = 0;
+};
 const editSnapshot = ref("");
 const showAcademicPositionModal = ref(false);
 const savingAcademicPosition = ref(false);
@@ -7623,7 +7628,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #2f9138;
+  background: var(--brand-iecs-secondary);
   color: #fff;
   font-size: 9px;
 }
@@ -8269,8 +8274,8 @@ onBeforeUnmount(() => {
 
 /* Control Escolar selected record layout */
 .control-escolar-screen {
-  --ce-green: #2f9138;
-  --ce-green-strong: #20842f;
+  --ce-green: #618b2f;
+  --ce-green-strong: #00692f;
   --ce-ink: #13213a;
   --ce-muted: #66758c;
   --ce-line: #dfe8f1;
@@ -10426,7 +10431,7 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(64, 149, 73, 0.2);
   border-radius: 24px;
   background: #f2fbf1;
-  color: #2f9138;
+  color: var(--brand-iecs);
   box-shadow: 0 16px 36px rgba(63, 145, 56, 0.12);
 }
 
@@ -14436,7 +14441,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-primary-pending-card.is-complete {
   border-color: #dcebdc;
   background: linear-gradient(180deg, #fcfffc, #fff);
-  color: #20842f;
+  color: var(--brand-iecs-secondary);
 }
 
 .control-escolar-screen .ce-primary-pending-card.is-warning {
@@ -17853,4 +17858,134 @@ onBeforeUnmount(() => {
   .control-escolar-screen .ce-edit-form textarea { font-size: 16px; }
 }
 
+
+/* Compact institutional workbench: identity first, stable section navigation. */
+.control-escolar-screen .ce-detail-shell { container: control-record / inline-size; }
+.control-escolar-screen .ce-detail-tabs { flex: 0 0 auto; position: relative; top: auto; min-height: 38px; padding: 0 10px; margin: 0; border: 0; border-bottom: 1px solid var(--ce-line); border-radius: 0; background: #fff; box-shadow: none; mask-image: none; gap: 4px; }
+.control-escolar-screen .ce-detail-tabs button { height: 38px; border-radius: 0; padding: 0 9px; font-size: 12px; color: #586675; }
+.control-escolar-screen .ce-detail-tabs button.active { background: #fff; color: var(--brand-iedis-secondary); box-shadow: inset 0 -2px var(--brand-iedis); }
+.control-escolar-screen .ce-detail-tabs::-webkit-scrollbar { height: 3px; }
+.control-escolar-screen .ce-detail-body { padding: 10px 12px; scroll-padding-top: 12px; }
+.control-escolar-screen .ce-edit-form { gap: 10px; }
+.control-escolar-screen .ce-edit-form .ce-identity-panel { order: -1; }
+.control-escolar-screen .ce-student-hero-main { padding: 10px 14px; gap: 10px; }
+.control-escolar-screen .ce-student-hero-copy h2 { font-size: 20px; line-height: 1.25; font-weight: 600; }
+.control-escolar-screen .ce-student-hero-meta { gap: 6px; }
+.control-escolar-screen .ce-student-hero-meta-token { min-height: 24px; height: auto; padding: 2px 7px; border-color: #e4eae6; background: #f8faf9; font-size: 12px; color: #586675; }
+.control-escolar-screen .ce-student-hero-meta-token.is-matricula { color: var(--brand-iecs-secondary); background: #eef5ea; }
+.control-escolar-screen .ce-student-hero-cues { gap: 5px; }
+.control-escolar-screen .ce-student-identity-chip { min-height: 24px; padding: 2px 7px; font-size: 11px; border-color: #e5eae7; box-shadow: none; }
+.control-escolar-screen .ce-student-hero-side { gap: 6px; align-items: center; }
+.control-escolar-screen .ce-student-hero-group-sigil { gap: 6px; width: auto; min-width: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.control-escolar-screen .ce-student-hero-group-art { width: 38px; height: 38px; }
+.control-escolar-screen .ce-student-hero-group-art .ui-group-icon { --group-icon-size: 38px; width: 38px; height: 38px; }
+.control-escolar-screen .ce-student-hero-group-action { min-width: 0; padding: 4px 8px; border: 1px solid #e1e8e4; border-radius: 8px; }
+.control-escolar-screen .ce-student-hero-group-action small { font-size: 10px; font-weight: 500; }
+.control-escolar-screen .ce-student-hero-group-action strong { font-size: 11px; font-weight: 500; }
+.control-escolar-screen .ce-student-hero-menu { width: 28px; height: 28px; border: 0; background: transparent; }
+.control-escolar-screen .ce-student-hero-progress { min-height: 28px; padding: 4px 14px; gap: 8px; background: #f7faf8; border-block: 1px solid #e6ede8; }
+.control-escolar-screen .ce-student-hero-progress > strong, .control-escolar-screen .ce-student-hero-progress-state b { font-size: 12px; font-weight: 500; }
+.control-escolar-screen .ce-student-hero-progress-percent { font-size: 13px; font-weight: 600; color: var(--brand-iecs-secondary); }
+.control-escolar-screen .ce-student-hero-progress-state svg { width: 14px; height: 14px; }
+.control-escolar-screen .ce-student-hero-progress-track { height: 4px; }
+.control-escolar-screen .ce-student-hero-progress-track i { background: var(--brand-iecs); }
+.control-escolar-screen .ce-detail-footer { min-height: 42px; padding: 4px 12px; border-top: 1px solid #e2e9e5; background: #fff; }
+.control-escolar-screen .ce-detail-footer-actions button { min-height: 32px; padding: 0 12px; font-size: 12px; box-shadow: none; }
+.control-escolar-screen .ce-pending-summary-strip { padding: 10px; gap: 8px; border-color: #e1e9e3; background: #fbfdfb; }
+.control-escolar-screen .ce-pending-summary-primary-copy strong { color: var(--brand-iecs-secondary); font-size: 14px; font-weight: 600; }
+.control-escolar-screen .ce-pending-summary-primary-copy p { margin-top: 3px; font-size: 12px; }
+.control-escolar-screen .ce-pending-summary-metric { padding: 2px 6px; border: 0; }
+.control-escolar-screen .ce-pending-summary-metric strong { font-size: 13px; font-weight: 600; }
+.control-escolar-screen .ce-pending-summary-metric small, .control-escolar-screen .ce-pending-summary-metric em { font-size: 11px; line-height: 1.3; font-weight: 400; }
+.control-escolar-screen .ce-primary-pending-panel { padding: 0; border: 0; background: transparent; }
+.control-escolar-screen .ce-primary-pending-grid { margin-top: 10px; gap: 8px; }
+.control-escolar-screen .ce-primary-pending-card { min-height: 0; padding: 10px; border-radius: 10px; background: #fff; border-color: #dfe8e2; }
+.control-escolar-screen .ce-primary-pending-icon { width: 24px; height: 24px; }
+.control-escolar-screen .ce-primary-pending-card-head { gap: 6px; }
+.control-escolar-screen .ce-primary-pending-copy b { color: var(--brand-iecs-secondary); font-size: 13px; }
+.control-escolar-screen .ce-primary-pending-card-body { margin-top: 6px; min-height: 0; padding: 6px 0; }
+.control-escolar-screen .ce-primary-pending-meta { font-size: 11px; line-height: 1.35; }
+.control-escolar-screen .ce-primary-pending-card-footer { min-height: 18px; padding: 0; }
+.control-escolar-screen .ce-primary-pending-checkmark svg { width: 16px; height: 16px; }
+.control-escolar-screen .ce-form-card.ce-tab-panel { padding: 12px; }
+.control-escolar-screen .ce-panel-heading { margin-bottom: 8px; gap: 6px; }
+.control-escolar-screen .ce-panel-heading h3 { font-size: 14px; font-weight: 600; }
+.control-escolar-screen .ce-form-grid { gap: 8px 10px; }
+.control-escolar-screen .ce-form-grid input, .control-escolar-screen .ce-form-grid select { min-height: 36px; padding: 0 10px; border-radius: 8px; }
+.control-escolar-screen .ce-derived-card { min-height: 36px; padding: 6px 10px; }
+.control-escolar-screen .ce-kpi-strip { gap: 0; min-height: 64px; border: 1px solid #dfe8e3; border-radius: 12px; background: #fff; overflow: hidden; }
+.control-escolar-screen .ce-kpi-strip .kpi-card { --kpi-color: var(--brand-iecs); min-height: 64px; height: 64px; padding: 8px 12px; grid-template-columns: 34px minmax(0, 1fr); gap: 9px; border: 0; border-right: 1px solid #e8eee9; background: #fff; box-shadow: none; border-radius: 0; }
+.control-escolar-screen .ce-kpi-strip .kpi-card.kpi-teal { --kpi-color: var(--brand-iedis); }
+.control-escolar-screen .ce-kpi-strip .kpi-card.kpi-blue { --kpi-color: var(--brand-iedis-secondary); }
+.control-escolar-screen .ce-kpi-strip .kpi-card.kpi-red { --kpi-color: #e83f4b; }
+.control-escolar-screen .ce-kpi-strip .kpi-card.kpi-gray { --kpi-color: #86888c; }
+.control-escolar-screen .ce-kpi-strip .kpi-card:last-child { border-right: 0; }
+.control-escolar-screen .ce-kpi-strip .kpi-card::after { background: var(--kpi-color); }
+.control-escolar-screen .ce-kpi-strip .kpi-card.active { background: color-mix(in srgb, var(--kpi-color) 7%, white); box-shadow: inset 0 -2px var(--kpi-color); }
+.control-escolar-screen .ce-kpi-strip .kpi-icon { width: 32px; height: 32px; color: var(--kpi-color); border: 1px solid color-mix(in srgb, var(--kpi-color) 25%, white); background: color-mix(in srgb, var(--kpi-color) 6%, white); box-shadow: 0 0 0 4px color-mix(in srgb, var(--kpi-color) 5%, transparent); }
+.control-escolar-screen .ce-kpi-strip .kpi-icon svg { width: 18px; height: 18px; }
+.control-escolar-screen .ce-kpi-strip .kpi-text > span { font-size: 11px; text-transform: none; font-weight: 500; color: #60716b; }
+.control-escolar-screen .ce-kpi-strip .kpi-text strong { font-size: 24px; line-height: 1.05; font-weight: 600; color: #20362c; }
+.control-escolar-screen .ce-kpi-system .ce-kpi-mass { right: 10px; bottom: 8px; width: 54px; max-width: 28%; opacity: .55; }
+.control-escolar-screen .ce-kpi-system .ce-kpi-mass i { max-width: 3px; }
+@container control-record (min-width: 740px) {
+ .control-escolar-screen .ce-pending-summary-strip { grid-template-columns: minmax(180px, .8fr) minmax(0, 1.8fr); align-items: center; }
+ .control-escolar-screen .ce-primary-pending-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@container control-record (max-width: 739px) {
+ .control-escolar-screen .ce-student-hero-main { grid-template-columns: 48px minmax(0, 1fr); align-items: start; }
+ .control-escolar-screen .ce-student-hero-side { grid-row: 2; grid-column: 2; justify-self: start; }
+ .control-escolar-screen .ce-student-hero-photo { --student-grade-photo-width: 48px; --student-grade-photo-height: 56px; }
+ .control-escolar-screen .ce-student-hero-copy h2 { font-size: 18px; }
+ .control-escolar-screen .ce-primary-pending-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container control-record (max-width: 440px) {
+ .control-escolar-screen .ce-primary-pending-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+ .control-escolar-screen .ce-edit-form input, .control-escolar-screen .ce-edit-form select, .control-escolar-screen .ce-edit-form textarea { font-size: 16px; }
+ .control-escolar-screen .ce-student-hero-main { padding: 8px 10px; }
+ .control-escolar-screen .ce-student-hero-copy h2 { font-size: 17px; }
+ .control-escolar-screen .ce-student-hero-meta { flex-wrap: wrap; }
+}
+@media (max-height: 550px) and (min-width: 761px) {
+ .control-escolar-screen .ce-student-hero-main { padding: 6px 10px; }
+ .control-escolar-screen .ce-student-hero-copy h2 { font-size: 17px; }
+ .control-escolar-screen .ce-student-hero-progress { min-height: 24px; padding: 2px 10px; }
+ .control-escolar-screen .ce-detail-tabs, .control-escolar-screen .ce-detail-tabs button { min-height: 32px; height: 32px; }
+ .control-escolar-screen .ce-detail-body { padding: 8px; }
+ .control-escolar-screen .ce-detail-footer { min-height: 36px; padding: 2px 8px; }
+ .control-escolar-screen .ce-kpi-strip, .control-escolar-screen .ce-kpi-strip .kpi-card { min-height: 52px; height: 52px; }
+}
+
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-card { padding: 9px; min-height: 0; gap: 4px; }
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-card-head { min-height: 0; }
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-card-body { flex: 0 0 auto; min-height: 0; padding: 4px 0; margin-top: 3px; border: 0; }
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-card-footer { margin-top: auto; min-height: 24px; }
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-checkmark { width: 22px; height: 22px; min-width: 22px; border: 0; background: transparent; box-shadow: none; }
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-action { min-height: 24px; padding: 0 8px; }
+@media (max-height: 550px) and (min-width: 761px) {
+ .control-escolar-screen .ce-detail-shell .ce-student-hero-main { grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; }
+ .control-escolar-screen .ce-detail-shell .ce-student-hero-side { grid-row: 1; grid-column: 3; }
+ .control-escolar-screen .ce-detail-shell .ce-student-hero-photo { --student-grade-photo-width: 42px; --student-grade-photo-height: 46px; }
+ .control-escolar-screen .ce-detail-shell .ce-student-hero-group-art, .control-escolar-screen .ce-detail-shell .ce-student-hero-group-art .ui-group-icon { --group-icon-size: 28px; width: 28px; height: 28px; }
+}
+
+.control-escolar-screen .ce-detail-shell .ce-student-hero-group-sigil { display: flex; min-height: 0; height: 40px; }
+.control-escolar-screen .ce-detail-shell .ce-student-hero-group-action { min-height: 0; }
+.control-escolar-screen .ce-detail-shell .ce-student-hero-menu { min-width: 28px; min-height: 28px; }
+.control-escolar-screen .ce-detail-shell .ce-student-hero-side { min-height: 0; }
+
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-card-head { grid-template-columns: 24px minmax(0, 1fr); }
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-count { position: absolute; top: 10px; right: 9px; font-size: 11px; }
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-copy strong { padding-right: 22px; font-size: 12px; font-weight: 500; }
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-copy b { color: currentColor; font-size: 12px; line-height: 1.2; }
+.control-escolar-screen .ce-detail-shell .ce-primary-pending-card-body { align-items: start; }
+@container control-record (min-width: 740px) {
+ .control-escolar-screen .ce-pending-summary-metrics { grid-template-columns: .9fr .9fr 1.4fr; }
+}
+@media (max-height: 550px) and (min-width: 761px) {
+ .control-escolar-screen .ce-detail-shell .ce-student-hero-main { padding-block: 2px; }
+ .control-escolar-screen .ce-detail-shell .ce-student-hero-copy { gap: 2px; }
+ .control-escolar-screen .ce-detail-shell .ce-student-hero-meta { padding-bottom: 0; }
+ .control-escolar-screen .ce-detail-shell .ce-student-identity-chip { min-height: 22px; padding-block: 0; }
+}
 </style>

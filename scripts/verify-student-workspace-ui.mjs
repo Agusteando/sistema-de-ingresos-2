@@ -46,7 +46,7 @@ try {
    }
    if(u.pathname.includes('/PTO161/') && (!measure || ++transientPhotoAttempts===1)) { status=503;body={message:'Synthetic transient photo failure'}; }
    else if(u.pathname.includes('/PTO799/')) { status=404;body={message:'Synthetic missing photo'}; }
-   else body={photoUrl: /PTO|LAB/.test(u.pathname) ? photoFixture : ''};
+   else body={photoUrl: photoFixture};
  }
 
  else {status=401;body={statusCode:401,message:'Synthetic fixture: no backend session'};}
@@ -68,6 +68,26 @@ try {
  if([1366,1920,1024].includes(w)&&financial.listRows<({1366:8,1920:13,1024:5})[w])throw Error(`List capacity regressed: ${JSON.stringify(financial)}`);
  console.log('FINANCIAL',JSON.stringify(financial));results.push(financial);await p.screenshot({path:`${output}/${label}-financial-${w}.png`,timeout:10000});
  }
+ // Original grade/group/debt pills must remain interactive at every breakpoint.
+ for(const [w,h] of [[1920,1080],[1366,768],[1024,768],[900,640],[390,844]]) {
+   await p.setViewportSize({width:w,height:h});
+   await p.goto('http://127.0.0.1:3004/__visual-lab/students-account?chrome=0&workspace=1&dense=1',{waitUntil:'domcontentloaded'});
+   await p.locator('.grade-tabs button').last().waitFor({state:'attached'});
+   await p.locator('.students-back-button').evaluate(e=>e.click());
+   await p.locator('.grade-filter').waitFor({state:'visible'});
+   const pills=p.locator('.grade-tabs button');
+   if(await pills.count()!==8||await p.locator('.filter-bar select').count()||!await p.locator('.grade-filter').isVisible())throw Error(`Original pills unavailable at ${w}`);
+   await pills.filter({hasText:/^Primero$/}).click();
+   if(await pills.filter({hasText:/^Primero$/}).getAttribute('aria-pressed')!=='true')throw Error('Grade pill does not activate');
+   const group=p.locator('.group-tabs button').filter({hasText:'Grupo ASIA'});await group.click();
+   if(await group.getAttribute('aria-pressed')!=='true'||await p.locator('.student-row').count()<1)throw Error('Group pill does not filter');
+   await pills.filter({hasText:/^Todos$/}).click();
+   await p.locator('.group-tabs').waitFor({state:'detached'});
+   await pills.filter({hasText:'Con adeudo'}).click();
+   if(await pills.filter({hasText:'Con adeudo'}).getAttribute('aria-pressed')!=='true')throw Error('Debt pill does not activate');
+   await pills.filter({hasText:/^Todos$/}).click();
+   console.log('ORIGINAL FILTER PILLS',w,'passed');
+ }
  await p.setViewportSize({width:1366,height:768});
  await p.goto('http://127.0.0.1:3004/__visual-lab/students-account?chrome=0&workspace=1&appchrome=1',{waitUntil:'domcontentloaded'});
  await p.locator('.student-account-photo-card.has-photo').waitFor();await p.locator('.student-account-photo-card').hover();await p.locator('.student-account-photo-preview').waitFor({state:'visible'});await p.mouse.move(1000,500);await p.locator('.student-account-photo-preview').waitFor({state:'hidden'});
@@ -77,10 +97,19 @@ try {
  const reduced=await p.evaluate(()=>({photo:getComputedStyle(document.querySelector('.student-grade-photo-card.has-photo .student-grade-photo-card__photo')).opacity,animation:getComputedStyle(document.querySelector('.income-sidebar')).animationName}));
  if(reduced.photo!=='1'||reduced.animation!=='none')throw Error('Reduced-motion gate failed');await p.emulateMedia({reducedMotion:'no-preference'});
  const identity=await p.evaluate(()=>({logo:document.querySelector('.sidebar-logo').getAttribute('src'),aurora:document.querySelector('.sidebar-system-logo').getAttribute('src'),pattern:getComputedStyle(document.querySelector('.sidebar-sheen')).backgroundImage,animation:getComputedStyle(document.querySelector('.income-sidebar')).animationDuration}));
- if(identity.logo!=='/brand/institutional-logo.webp'||identity.aurora!=='/brand/aurora-logo-classic.webp'||!identity.pattern.includes('institutional-pattern')||identity.animation!=='0s')throw Error('Institutional identity gate failed');console.log('IDENTITY',identity);
+ if(identity.logo!=='/brand/institutional-emblem.webp'||identity.aurora!=='/brand/aurora-logo-institutional.svg'||!identity.pattern.includes('institutional-fingerprint')||identity.animation!=='0s')throw Error('Institutional identity gate failed');console.log('IDENTITY',identity);
  const fills=await p.evaluate(()=>[document.querySelector('.new-student-button'),document.querySelector('.profile-action-button--document-primary')].map(e=>({background:getComputedStyle(e).backgroundColor,image:getComputedStyle(e).backgroundImage})));
  if(fills[0].background!==fills[1].background||fills.some(x=>x.image!=='none'))throw Error(`Inconsistent filled CTA colors: ${JSON.stringify(fills)}`);
  console.log('CTA FILLS',fills);
+ const logoPalette=await p.locator('.sidebar-system-logo').evaluate(async img=>{
+   await img.decode();const canvas=document.createElement('canvas');canvas.width=600;canvas.height=200;
+   const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,600,200);const pixels=ctx.getImageData(0,0,600,200).data;
+   const counts={};for(let i=0;i<pixels.length;i+=4){if(pixels[i+3]!==255)continue;const key=[pixels[i],pixels[i+1],pixels[i+2]].join(',');counts[key]=(counts[key]||0)+1;}
+   return counts;
+ });
+ if((logoPalette['97,139,47']||0)<100||(logoPalette['0,127,146']||0)<100)throw Error(`Logo does not render the institutional palette: ${JSON.stringify(logoPalette)}`);
+ console.log('EXACT RENDERED LOGO COLORS',logoPalette);
+
  await p.screenshot({path:`${output}/identity-restored.png`,timeout:10000});
  // Fresh session exercises production loading, not seeded photo-cache entries.
  await p.evaluate(()=>sessionStorage.clear());
@@ -121,17 +150,39 @@ try {
  const m=await p.evaluate(()=>{const row=document.querySelector('.ce-student-row'),copy=row.querySelector('.student-copy'),r=copy.getBoundingClientRect(),s=getComputedStyle(row.querySelector('.student-identity')),box=document.querySelector('.student-list-scroll').getBoundingClientRect();return {width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth+1,copyWidth:r.width,rowHeight:row.getBoundingClientRect().height,identityColumns:s.gridTemplateColumns,visibleRows:[...document.querySelectorAll('.ce-student-row')].filter(e=>{const r=e.getBoundingClientRect();return r.top>=box.top&&r.bottom<=box.bottom}).length,sigil:getComputedStyle(row.querySelector('.student-group-sigil')).display};});results.push(m);console.log('CONTROL',JSON.stringify(m));await p.screenshot({path:`${output}/${label}-control-${w}.png`,timeout:10000});
  if(m.copyWidth<90||m.overflow||m.visibleRows<({1920:4,1366:4,1024:5,900:3,390:1,1150:1})[w])throw Error('Control Escolar row layout gate failed');
  }
+ const controlPhases=[];
+ await p.locator('.ce-student-row .student-grade-photo-card.has-photo').first().waitFor();
+ for(const time of [0,5500,8750])controlPhases.push(await p.locator('.ce-student-row .student-grade-photo-card.has-photo').first().evaluate((e,time)=>{
+   for(const a of e.getAnimations({subtree:true})){a.pause();a.currentTime=time;}
+   return {grade:getComputedStyle(e.querySelector('.student-grade-photo-card__grade')).opacity,photo:getComputedStyle(e.querySelector('.student-grade-photo-card__photo')).opacity};
+ },time));
+ if(controlPhases[0].grade!=='1'||controlPhases[1].photo!=='1'||controlPhases[2].grade!=='1')throw Error(`Control grade/photo cycle lost: ${JSON.stringify(controlPhases)}`);
+ console.log('CONTROL GRADE/PHOTO CYCLE',controlPhases);
  await p.setViewportSize({width:1366,height:768});await p.locator('.sidebar-nav a[href="/control-escolar"]').click();await p.locator('.ce-student-row').first().waitFor();await p.locator('.ce-student-row').first().click();await p.locator('.ce-detail-shell').waitFor({state:'visible'});await p.waitForTimeout(500);await p.screenshot({path:`${output}/${label}-control-detail.png`,timeout:10000});
  for(const [w,h] of [[1920,1080],[1366,768],[1024,768],[900,640],[390,844],[1150,410]]) {
    await p.setViewportSize({width:w,height:h});await p.waitForTimeout(500);
    const detail=await p.evaluate(()=>({width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth+1,bodyHeight:Math.max(0,Math.min(document.querySelector('.ce-detail-body').getBoundingClientRect().bottom,document.querySelector('.ce-detail-footer').getBoundingClientRect().top)-document.querySelector('.ce-detail-body').getBoundingClientRect().top),titleWeight:getComputedStyle(document.querySelector('.ce-student-hero-copy h2')).fontWeight,nameWeight:getComputedStyle(document.querySelector('.student-name')).fontWeight,tabs:[...document.querySelectorAll('.ce-detail-tabs button')].map(e=>e.textContent.trim())}));
-   if(detail.overflow||detail.bodyHeight<120||Number(detail.titleWeight)>600)throw Error(`Control detail gate failed: ${JSON.stringify(detail)}`);
+   if(detail.overflow||detail.bodyHeight<120||Number(detail.titleWeight)>600){await p.screenshot({path:`${output}/failure-detail-${w}.png`});console.log('DETAIL GEOMETRY',await p.evaluate(()=>['.ce-detail-shell','.ce-student-hero-main','.ce-student-hero-side','.ce-student-hero-progress','.ce-detail-tabs','.ce-detail-footer'].map(sel=>{const e=document.querySelector(sel),r=e.getBoundingClientRect(),s=getComputedStyle(e);return{sel,width:r.width,height:r.height,gridRow:s.gridRow,gridColumns:s.gridTemplateColumns,minHeight:s.minHeight}})));throw Error(`Control detail gate failed: ${JSON.stringify(detail)}`);}
+   if(w===1366) {
+     const identityVisible=await p.evaluate(()=>{const footer=document.querySelector('.ce-detail-footer').getBoundingClientRect();return [...document.querySelectorAll('.ce-identity-panel input')].every(e=>{const r=e.getBoundingClientRect();return r.height>0&&r.bottom<=footer.top;});});
+     if(!identityVisible)throw Error('Default record view hides identity fields below the footer');
+     console.log('DEFAULT IDENTITY FIELDS VISIBLE WITHOUT SCROLL');
+   }
    console.log('CONTROL DETAIL',JSON.stringify(detail));results.push(detail);await p.screenshot({path:`${output}/control-detail-${w}.png`,timeout:10000});
  }
+ // The section navigation and save/discard footer remain outside the scrolling record.
+ const fixedNavigation=await p.evaluate(()=>{
+   const tabs=document.querySelector('.ce-detail-tabs'),body=document.querySelector('.ce-detail-body');
+   const top=tabs.getBoundingClientRect().top;body.scrollTop=body.scrollHeight;
+   return {insideBody:body.contains(tabs),before:top,after:tabs.getBoundingClientRect().top,count:tabs.querySelectorAll('button').length};
+ });
+ if(fixedNavigation.insideBody||fixedNavigation.before!==fixedNavigation.after||fixedNavigation.count!==7)throw Error(`Record navigation regressed: ${JSON.stringify(fixedNavigation)}`);
+ console.log('FIXED RECORD NAVIGATION',fixedNavigation);
  await p.setViewportSize({width:1366,height:768});
  const tabs=p.locator('.ce-detail-tabs button');
  for(let i=0;i<await tabs.count();i++) {
    await tabs.nth(i).click();await p.waitForTimeout(100);
+   if(await p.locator('.ce-detail-body').evaluate(e=>e.scrollTop)>1)throw Error('Section switch retained the previous scroll position');
    if(await p.locator('.ce-tab-panel:visible').count()<1)throw Error(`Control tab ${i} has no visible content`);
    const clipped=await p.evaluate(()=>{const box=document.querySelector('.ce-detail-body').getBoundingClientRect();return [...document.querySelectorAll('.ce-tab-panel input,.ce-family-readiness-card')].filter(e=>e.getBoundingClientRect().height>0).filter(e=>{const r=e.getBoundingClientRect();return r.left<box.left-1||r.right>box.right+1}).map(e=>e.className);});
    if(clipped.length)throw Error(`Control tab ${i} clipped fields: ${JSON.stringify(clipped)}`);
@@ -149,12 +200,12 @@ try {
  const nameInput=p.locator('[data-ce-field="nombres"] input');const originalName=await nameInput.inputValue();
  await nameInput.fill('Alumno Prueba Editado');
  const save=p.locator('.ce-detail-footer-actions .btn-primary');if(!await save.isEnabled())throw Error('Editing no longer enables save');
- if(await save.evaluate(e=>getComputedStyle(e).backgroundColor)!=='rgb(80, 119, 40)')throw Error('Control Escolar save fill differs from primary CTAs');
+ if(await save.evaluate(e=>getComputedStyle(e).backgroundColor)!=='rgb(0, 105, 47)')throw Error('Control Escolar save fill differs from primary CTAs');
  await p.locator('.ce-detail-footer-actions .btn-secondary').click();if(await nameInput.inputValue()!==originalName||await save.isEnabled())throw Error('Discard did not restore the record');
  await p.setViewportSize({width:900,height:640});await p.locator('.ce-mobile-detail-back').click();await p.locator('.ce-student-row').first().waitFor({state:'visible'});await p.locator('.ce-student-row').first().click();await p.locator('.ce-detail-shell').waitFor({state:'visible'});
  console.log('CONTROL EDIT, DISCARD AND RETURN PASSED');
  if(requests.some(path=>path.includes('/save')))throw Error('Visual check unexpectedly submitted a record');
- await p.context().clearCookies();await p.goto('http://127.0.0.1:3004/login',{waitUntil:'domcontentloaded'});await p.locator('.brand-system-logo').waitFor();if(await p.locator('.brand-system-logo').getAttribute('src')!=='/brand/aurora-logo-classic.webp')throw Error('Login logo regressed');await p.screenshot({path:`${output}/login.png`,timeout:10000});
+ await p.context().clearCookies();await p.goto('http://127.0.0.1:3004/login',{waitUntil:'domcontentloaded'});await p.locator('.brand-system-logo').waitFor();if(await p.locator('.brand-system-logo').getAttribute('src')!=='/brand/aurora-logo-institutional.svg')throw Error('Login logo regressed');await p.screenshot({path:`${output}/login.png`,timeout:10000});
  console.log('ERRORS',errors);console.log('ENDPOINTS',[...new Set(requests)]);writeFileSync(`${output}/${label}-control-results.json`,JSON.stringify({results,errors,requests},null,2));if(errors.length)throw Error(errors.join(';'));
 } catch(e) { console.error(e.stack); process.exitCode=1; }
 finally { if(b)await b.close();try{process.kill(-server.pid,'SIGTERM')}catch{}setTimeout(()=>process.exit(process.exitCode||0),1500); }
