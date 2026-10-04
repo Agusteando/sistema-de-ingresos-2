@@ -1,6 +1,6 @@
 import { runWithBridgeAgentId } from '../../../utils/db'
 import crypto from 'node:crypto'
-import { buildExternalHeaders, getExternalSyncConfig } from '../../../utils/externalBaseSync'
+import { buildExternalHeaders, cleanApiKey, getExternalSyncConfig } from '../../../utils/externalBaseSync'
 
 type PhotoCacheEntry = {
   matricula: string
@@ -48,8 +48,11 @@ const getPhotoBaseUrl = () => {
 // and x-api-key headers produced by buildExternalHeaders().
 const buildExternalPhotoHeaders = () => {
   const syncConfig = getExternalSyncConfig()
-  if (!syncConfig.apiKey) return null
-  return buildExternalHeaders(syncConfig)
+  const apiKey = cleanApiKey((useRuntimeConfig() as any).studentPhotoApiKey) || syncConfig.apiKey
+  if (!apiKey) {
+    throw new ExternalPhotoError(503, 'EXTERNAL_PHOTO_NOT_CONFIGURED', 'El servicio de fotos no está configurado.')
+  }
+  return buildExternalHeaders({ ...syncConfig, apiKey })
 }
 
 // IMPORTANT: this endpoint shape is the external matricula photo contract.
@@ -138,11 +141,9 @@ const extractPhotoUrl = (payload: any) => {
 }
 
 const fetchExternalPhoto = async (matricula: string): Promise<PhotoCacheEntry | null> => {
+  const headers = buildExternalPhotoHeaders()
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), EXTERNAL_TIMEOUT_MS)
-  const headers = buildExternalPhotoHeaders()
-
-  if (!headers) return null
 
   try {
     const response = await fetch(buildExternalPhotoUrl(matricula), {
